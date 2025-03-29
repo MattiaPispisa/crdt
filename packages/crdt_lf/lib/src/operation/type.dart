@@ -28,4 +28,19 @@ class OperationType {
 
   /// Operation type
   final String type;
+
+  /// Compares two [OperationType]s for equality
+  @override
+  bool operator ==(Object other) {
+    if (identical(this, other)) {
+      return true;
+    }
+    return other is OperationType &&
+        other.handler == handler &&
+        other.type == type;
+  }
+
+  /// Returns a hash code for this [OperationType]
+  @override
+  int get hashCode => Object.hash(handler, type);
 }

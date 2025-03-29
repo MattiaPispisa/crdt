@@ -13,7 +13,7 @@ class ChangeStore {
   const ChangeStore._(this._changes);
 
   /// Creates a new empty ChangeStore
-  factory ChangeStore.empty() => ChangeStore._(const {});
+  factory ChangeStore.empty() => ChangeStore._(Map<OperationId, Change>());
 
   /// The changes stored in this [ChangeStore], indexed by their [OperationId]
   final Map<OperationId, Change> _changes;

@@ -10,8 +10,10 @@ import 'node.dart';
 /// A [DAG] tracks the causal relationships between operations in the CRDT system.
 class DAG {
   /// Creates a new DAG with the given nodes and frontiers
-  DAG({required Map<OperationId, DAGNode> nodes, required Frontiers frontiers})
-      : _nodes = nodes,
+  DAG({
+    required Map<OperationId, DAGNode> nodes,
+    required Frontiers frontiers,
+  })  : _nodes = nodes,
         _frontiers = frontiers;
 
   /// Creates a new empty DAG

@@ -21,6 +21,13 @@ class Change {
     required this.payload,
   });
 
+  /// Creates a new [Change] with the given properties
+  ///
+  /// [id] the operation id of the change
+  /// [operation] the operation that is being applied
+  /// [deps] the dependencies of the change ([OperationId]s that this change depends on)
+  /// [hlc] the hybrid logical clock of the change
+  /// [author] the author of the change
   factory Change({
     required OperationId id,
     required Operation operation,
@@ -56,7 +63,7 @@ class Change {
   /// The unique identifier for this change
   final OperationId id;
 
-  /// The dependencies of this change (operation IDs that this change depends on)
+  /// The dependencies of this change ([OperationId]s that this change depends on)
   final Set<OperationId> deps;
 
   /// The timestamp when this change was created
