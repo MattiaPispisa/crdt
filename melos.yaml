@@ -1,0 +1,8 @@
+name: crcd
+
+packages:
+  - packages/**
+
+repository: https://github.com/invertase/melos
+
+sdkPath: .fvm/flutter_sdk
