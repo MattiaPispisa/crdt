@@ -3,6 +3,7 @@
 /// A CRDTText is a text data structure that uses CRDT for conflict-free collaboration.
 /// It provides methods for inserting, deleting, and accessing text content.
 
+import 'package:crdt_lf/src/change/change.dart';
 import 'package:crdt_lf/src/operation/type.dart';
 
 import '../../document.dart';
@@ -74,10 +75,7 @@ class CRDTTextHandler extends Handler {
     final buffer = StringBuffer();
 
     // Get all changes from the document
-    final changes = _doc.exportChanges();
-
-    // Sort changes by timestamp
-    changes.sort((a, b) => a.hlc.compareTo(b.hlc));
+    final changes = _doc.exportChanges().sortedByHlc();
 
     // Apply changes in order
     final opFactory = _TextOperationFactory(this);

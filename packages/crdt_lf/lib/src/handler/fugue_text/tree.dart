@@ -2,92 +2,165 @@ import 'element_id.dart';
 import 'node.dart';
 import 'node_triple.dart';
 
+// TODO: LazyFugueTree ?
+
 /// Implementation of the Fugue tree for collaborative text editing
 class FugueTree {
-  /// Constructor that initializes a new empty Fugue tree
-  FugueTree() {
+  FugueTree._({
+    required Map<FugueElementID, FugueNodeTriple> nodes,
+    required FugueElementID rootID,
+  })  : _nodes = nodes,
+        _rootID = rootID;
+
+  /// Initializes a new empty Fugue tree
+  factory FugueTree.empty() {
     // Initialize the tree with a root node
     final rootID = FugueElementID.nullID();
-    final rootNode = FugueNode(rootID, null, FugueElementID.nullID(), FugueSide.left);
-    _nodes[rootID] = FugueNodeTriple(rootNode, [], []);
+    final rootNode = FugueNode(
+      id: rootID,
+      value: null,
+      parentID: FugueElementID.nullID(),
+      side: FugueSide.left,
+    );
+    final nodes = {
+      rootID: FugueNodeTriple(
+        node: rootNode,
+        leftChildren: [],
+        rightChildren: [],
+      )
+    };
+
+    return FugueTree._(
+      nodes: nodes,
+      rootID: rootID,
+    );
   }
-  
+
+  /// Creates a tree from a JSON object
+  factory FugueTree.fromJson(Map<String, dynamic> json) {
+    // Add nodes from the JSON object
+    final nodesJson = json['nodes'] as Map<String, dynamic>;
+    final nodes = <FugueElementID, FugueNodeTriple>{};
+
+    for (final entry in nodesJson.entries) {
+      final id = FugueElementID.parse(entry.key);
+      final triple = FugueNodeTriple.fromJson(entry.value);
+      nodes[id] = triple;
+    }
+
+    return FugueTree._(
+      nodes: nodes,
+      rootID: FugueElementID.nullID(),
+    );
+  }
+
   /// The nodes in the tree, indexed by ID
-  final Map<FugueElementID, FugueNodeTriple> _nodes = {};
-  
+  final Map<FugueElementID, FugueNodeTriple> _nodes;
+
   /// Root node ID
-  final FugueElementID _rootID = FugueElementID.nullID();
-  
+  final FugueElementID _rootID;
+
   /// Returns all non-deleted values in the correct order
   List<String> values() {
     return _traverse(_rootID);
   }
-  
+
   /// Traverses the tree starting from the specified node
+  ///
+  /// Visits recursively the left children, then the node itself, then the right children
+  /// Collects the non-deleted values (different from `⊥`)
   List<String> _traverse(FugueElementID nodeID) {
     List<String> result = [];
-    
-    if (!_nodes.containsKey(nodeID)) return result;
-    
+
+    if (!_nodes.containsKey(nodeID)) {
+      return result;
+    }
+
     final nodeTriple = _nodes[nodeID]!;
     final node = nodeTriple.node;
     final leftChildren = nodeTriple.leftChildren;
     final rightChildren = nodeTriple.rightChildren;
-    
+
     // Recursively visit left children
     for (final childID in leftChildren) {
       result.addAll(_traverse(childID));
     }
-    
+
     // Visit the node itself if not deleted
     if (node.value != null) {
       result.add(node.value!);
     }
-    
+
     // Recursively visit right children
     for (final childID in rightChildren) {
       result.addAll(_traverse(childID));
     }
-    
+
     return result;
   }
-  
-  /// Inserts a new node into the tree
-  void insert(FugueElementID newID, String value, FugueElementID leftOrigin, FugueElementID rightOrigin) {
+
+  /// Inserts a new [FugueNode] into the tree with [newID] and [value]
+  ///
+  /// [leftOrigin] is the node at position `index-1`
+  ///
+  /// [rightOrigin] node after [leftOrigin] in traversal order
+  ///
+  /// if [rightOrigin] exists, the new node will be a left child of [rightOrigin]
+  /// otherwise, the new node will be a right child of [leftOrigin]
+  void insert({
+    required FugueElementID newID,
+    required String value,
+    required FugueElementID leftOrigin,
+    required FugueElementID rightOrigin,
+  }) {
     // Determine if the new node should be a left or right child
     FugueNode newNode;
-    
+
     if (!rightOrigin.isNull && _nodes.containsKey(rightOrigin)) {
       // The new node will be a left child of rightOrigin
-      newNode = FugueNode(newID, value, rightOrigin, FugueSide.left);
+      newNode = FugueNode(
+        id: newID,
+        value: value,
+        parentID: rightOrigin,
+        side: FugueSide.left,
+      );
     } else {
       // The new node will be a right child of leftOrigin
-      newNode = FugueNode(newID, value, leftOrigin, FugueSide.right);
+      newNode = FugueNode(
+        id: newID,
+        value: value,
+        parentID: leftOrigin,
+        side: FugueSide.right,
+      );
     }
-    
+
     // Add the node to the tree
     _addNodeToTree(newNode);
   }
-  
-  /// Deletes a node from the tree (marks it as deleted)
+
+  /// Deletes a node from the tree (marks it as deleted, `⊥`)
   void delete(FugueElementID nodeID) {
     if (_nodes.containsKey(nodeID)) {
       _nodes[nodeID]!.node.value = null;
     }
   }
-  
+
   /// Adds a node to the tree
   void _addNodeToTree(FugueNode node) {
     final parentID = node.parentID;
-    
+
     if (!_nodes.containsKey(parentID)) {
       throw Exception('Parent node not found: $parentID');
     }
-    
+
     // Create a new triple for the node
-    final nodeTriple = FugueNodeTriple(node, [], []);
+    final nodeTriple = FugueNodeTriple(
+      node: node,
+      leftChildren: [],
+      rightChildren: [],
+    );
     _nodes[node.id] = nodeTriple;
-    
+
     // Update the parent's children list
     if (node.side == FugueSide.left) {
       _nodes[parentID]!.leftChildren.add(node.id);
@@ -99,31 +172,45 @@ class FugueTree {
       _nodes[parentID]!.rightChildren.sort((a, b) => a.compareTo(b));
     }
   }
-  
+
   /// Finds the node at the specified position in the tree
   FugueElementID findNodeAtPosition(int position) {
     int currentPos = -1;
-    return _findNodeAtPositionHelper(_rootID, position, currentPos);
+    return _findNodeAtPositionRecursive(
+      nodeID: _rootID,
+      targetPos: position,
+      currentPos: currentPos,
+    );
   }
-  
+
   /// Recursive helper to find the node at the specified position
-  FugueElementID _findNodeAtPositionHelper(FugueElementID nodeID, int targetPos, int currentPos) {
-    if (!_nodes.containsKey(nodeID)) return FugueElementID.nullID();
-    
+  FugueElementID _findNodeAtPositionRecursive({
+    required FugueElementID nodeID,
+    required int targetPos,
+    required int currentPos,
+  }) {
+    if (!_nodes.containsKey(nodeID)) {
+      return FugueElementID.nullID();
+    }
+
     final nodeTriple = _nodes[nodeID]!;
     final node = nodeTriple.node;
     final leftChildren = nodeTriple.leftChildren;
     final rightChildren = nodeTriple.rightChildren;
-    
+
     // Check left children
     for (final childID in leftChildren) {
-      final result = _findNodeAtPositionHelper(childID, targetPos, currentPos);
+      final result = _findNodeAtPositionRecursive(
+        nodeID: childID,
+        targetPos: targetPos,
+        currentPos: currentPos,
+      );
       if (!result.isNull) {
         return result;
       }
       currentPos += _countVisibleNodes(childID);
     }
-    
+
     // Check the node itself
     if (node.value != null) {
       currentPos++;
@@ -131,35 +218,41 @@ class FugueTree {
         return nodeID;
       }
     }
-    
+
     // Check right children
     for (final childID in rightChildren) {
-      final result = _findNodeAtPositionHelper(childID, targetPos, currentPos);
+      final result = _findNodeAtPositionRecursive(
+        nodeID: childID,
+        targetPos: targetPos,
+        currentPos: currentPos,
+      );
       if (!result.isNull) {
         return result;
       }
       currentPos += _countVisibleNodes(childID);
     }
-    
+
     return FugueElementID.nullID();
   }
-  
+
   /// Counts visible nodes in the subtree rooted at nodeID
   int _countVisibleNodes(FugueElementID nodeID) {
     return _traverse(nodeID).length;
   }
-  
-  /// Finds the next node after nodeID in the traversal
+
+  /// Finds the next node after [nodeID] in the traversal
   FugueElementID findNextNode(FugueElementID nodeID) {
-    if (!_nodes.containsKey(nodeID)) return FugueElementID.nullID();
-    
+    if (!_nodes.containsKey(nodeID)) {
+      return FugueElementID.nullID();
+    }
+
     final nodeTriple = _nodes[nodeID]!;
-    
+
     // If it has right children, the next is the first right child
     if (nodeTriple.rightChildren.isNotEmpty) {
       return nodeTriple.rightChildren.first;
     }
-    
+
     // Otherwise, climb up the tree until finding a node that is a left child
     // and return its parent
     FugueElementID current = nodeID;
@@ -168,8 +261,10 @@ class FugueTree {
       if (node.side == FugueSide.left) {
         // Find the right sibling
         final parent = node.parentID;
-        if (!_nodes.containsKey(parent)) break;
-        
+        if (!_nodes.containsKey(parent)) {
+          break;
+        }
+
         final parentTriple = _nodes[parent]!;
         final rightSiblings = parentTriple.rightChildren;
         if (rightSiblings.isNotEmpty) {
@@ -178,66 +273,51 @@ class FugueTree {
       }
       current = _nodes[current]!.node.parentID;
     }
-    
+
     return FugueElementID.nullID();
   }
-  
+
   /// Serializes the tree to JSON format
   Map<String, dynamic> toJson() {
     final nodesJson = <String, dynamic>{};
     for (final entry in _nodes.entries) {
       nodesJson[entry.key.toString()] = entry.value.toJson();
     }
-    
+
     return {
       'nodes': nodesJson,
     };
   }
-  
-  /// Creates a tree from a JSON object
-  factory FugueTree.fromJson(Map<String, dynamic> json) {
-    final tree = FugueTree();
-    
-    // Clear the tree (remove the default root node)
-    tree._nodes.clear();
-    
-    // Add nodes from the JSON object
-    final nodesJson = json['nodes'] as Map<String, dynamic>;
-    for (final entry in nodesJson.entries) {
-      final id = FugueElementID.parse(entry.key);
-      final triple = FugueNodeTriple.fromJson(entry.value);
-      tree._nodes[id] = triple;
-    }
-    
-    return tree;
+
+  /// Returns a string representation of the tree for debugging
+  @override
+  String toString() {
+    final buffer = StringBuffer();
+    buffer.writeln('Tree:');
+    _buildTreeString(_rootID, 0, buffer);
+    return buffer.toString();
   }
-  
-  /// Prints the tree for debugging
-  void printTree() {
-    print('Tree:');
-    _printNodeAndChildren(_rootID, 0);
-  }
-  
-  /// Helper to print a node and its children
-  void _printNodeAndChildren(FugueElementID nodeID, int depth) {
+
+  /// Helper to build the string representation of a node and its children
+  void _buildTreeString(FugueElementID nodeID, int depth, StringBuffer buffer) {
     if (!_nodes.containsKey(nodeID)) return;
-    
+
     final nodeTriple = _nodes[nodeID]!;
     final node = nodeTriple.node;
     final leftChildren = nodeTriple.leftChildren;
     final rightChildren = nodeTriple.rightChildren;
-    
+
     final indent = '  ' * depth;
-    print('$indent${node.toString()}');
-    
-    print('$indent Left children:');
+    buffer.writeln('$indent${node.toString()}');
+
+    buffer.writeln('$indent Left children:');
     for (final childID in leftChildren) {
-      _printNodeAndChildren(childID, depth + 1);
+      _buildTreeString(childID, depth + 1, buffer);
     }
-    
-    print('$indent Right children:');
+
+    buffer.writeln('$indent Right children:');
     for (final childID in rightChildren) {
-      _printNodeAndChildren(childID, depth + 1);
+      _buildTreeString(childID, depth + 1, buffer);
     }
   }
 }

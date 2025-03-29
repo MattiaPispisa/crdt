@@ -1,7 +1,5 @@
 part of 'handler.dart';
 
-// TODO: terminare parte di list
-
 class _ListOperationFactory {
   final Handler handler;
 
@@ -18,10 +16,10 @@ class _ListOperationFactory {
   }
 }
 
-class _ListInsertOperation extends Operation {
+class _ListInsertOperation<T> extends Operation {
   const _ListInsertOperation({
     required this.index,
-    required this.text,
+    required this.value,
     required super.id,
     required super.type,
   });
@@ -29,25 +27,25 @@ class _ListInsertOperation extends Operation {
   factory _ListInsertOperation.fromHandler(
     Handler handler, {
     required int index,
-    required String text,
+    required T value,
   }) {
     return _ListInsertOperation(
       id: handler.id,
       type: OperationType.insert(handler),
       index: index,
-      text: text,
+      value: value,
     );
   }
 
   final int index;
-  final String text;
+  final T value;
 
   @override
   dynamic toPayload() => {
         'type': type.toString(),
         'id': id,
         'index': index,
-        'text': text,
+        'value': value,
       };
 
   static _ListInsertOperation fromPayload(dynamic payload) =>
@@ -55,11 +53,11 @@ class _ListInsertOperation extends Operation {
         id: payload['id'],
         type: payload['type'],
         index: payload['index'],
-        text: payload['text'],
+        value: payload['value'],
       );
 }
 
-class _ListDeleteOperation extends Operation {
+class _ListDeleteOperation<T> extends Operation {
   const _ListDeleteOperation({
     required this.index,
     required this.count,

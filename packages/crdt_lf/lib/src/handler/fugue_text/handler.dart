@@ -1,12 +1,20 @@
+/// CRDT Text implementation with the Fugue algorithm
+///
+/// A CRDTFugueText is a text data structure that uses the Fugue algorithm to minimize interleaving.
+/// It provides methods for inserting, deleting, and accessing text content.
+import 'package:crdt_lf/src/change/change.dart';
 import 'package:crdt_lf/src/document.dart';
 import 'package:crdt_lf/src/handler/handler.dart';
 import 'package:crdt_lf/src/operation/id.dart';
+import 'package:crdt_lf/src/operation/operation.dart';
+import 'package:crdt_lf/src/operation/type.dart';
 
 import 'element_id.dart';
-import 'operation.dart';
 import 'tree.dart';
 
-/// Text handler that uses the Fugue algorithm to minimize interleaving
+part 'operation.dart';
+
+/// Text handler that uses the Fugue algorithm ([The Art of the Fugue: Minimizing Interleaving in Collaborative Text Editing" di Matthew Weidner e Martin Kleppmann](https://arxiv.org/abs/2305.00583)) to minimize interleaving
 class CRDTFugueTextHandler extends Handler {
   /// Constructor that initializes a new Fugue text handler
   CRDTFugueTextHandler(this._doc, this._id);
@@ -18,7 +26,7 @@ class CRDTFugueTextHandler extends Handler {
   final String _id;
 
   /// The Fugue tree that represents the text
-  final FugueTree _tree = FugueTree();
+  final FugueTree _tree = FugueTree.empty();
 
   /// Counter to generate unique IDs for elements
   int _counter = 0;
@@ -47,7 +55,7 @@ class CRDTFugueTextHandler extends Handler {
 
     // Create and apply the insert operation
     _doc.createChange(
-      FugueInsertOperation.fromHandler(
+      _FugueInsertOperation.fromHandler(
         this,
         newNodeID: newNodeID,
         text: text,
@@ -69,7 +77,7 @@ class CRDTFugueTextHandler extends Handler {
       // If the node exists, create a delete operation
       if (!nodeID.isNull) {
         _doc.createChange(
-          FugueDeleteOperation.fromHandler(
+          _FugueDeleteOperation.fromHandler(
             this,
             nodeID: nodeID,
           ),
@@ -104,24 +112,21 @@ class CRDTFugueTextHandler extends Handler {
   /// Computes the current state of the text from document operations
   String _computeState() {
     // Get all operations from the document
-    final changes = _doc.exportChanges();
-
-    // Sort operations by timestamp
-    changes.sort((a, b) => a.hlc.compareTo(b.hlc));
+    final changes = _doc.exportChanges().sortedByHlc();
 
     // Apply operations in order
-    final opFactory = FugueOperationFactory(this);
+    final opFactory = _FugueOperationFactory(this);
     for (final change in changes) {
       final operation = opFactory.fromPayload(change.payload);
 
-      if (operation is FugueInsertOperation) {
+      if (operation is _FugueInsertOperation) {
         _tree.insert(
-          operation.newNodeID,
-          operation.text,
-          operation.leftOrigin,
-          operation.rightOrigin,
+          newID: operation.newNodeID,
+          value: operation.text,
+          leftOrigin: operation.leftOrigin,
+          rightOrigin: operation.rightOrigin,
         );
-      } else if (operation is FugueDeleteOperation) {
+      } else if (operation is _FugueDeleteOperation) {
         _tree.delete(operation.nodeID);
       }
     }

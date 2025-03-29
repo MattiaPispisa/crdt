@@ -1,7 +1,7 @@
 import 'package:crdt_lf/src/peer_id.dart';
 
 /// Represents the ID of an element in the Fugue algorithm
-class FugueElementID {
+class FugueElementID with Comparable<FugueElementID> {
   /// ID of the replica that generated this element
   final PeerId replicaID;
 
@@ -20,15 +20,23 @@ class FugueElementID {
   bool get isNull => counter == null;
 
   /// Compares two element IDs
+  @override
   int compareTo(FugueElementID other) {
-    if (isNull && other.isNull) return 0;
-    if (isNull) return -1;
-    if (other.isNull) return 1;
+    if (isNull && other.isNull) {
+      return 0;
+    }
+    if (isNull) {
+      return -1;
+    }
+    if (other.isNull) {
+      return 1;
+    }
 
     // Compare first by replicaID
-    final replicaCompare =
-        replicaID.toString().compareTo(other.replicaID.toString());
-    if (replicaCompare != 0) return replicaCompare;
+    final replicaCompare = replicaID.compareTo(other.replicaID);
+    if (replicaCompare != 0) {
+      return replicaCompare;
+    }
 
     // Then by counter
     return counter!.compareTo(other.counter!);

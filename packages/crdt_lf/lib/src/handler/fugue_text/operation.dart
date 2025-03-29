@@ -1,13 +1,10 @@
-import 'package:crdt_lf/src/handler/handler.dart';
-import 'package:crdt_lf/src/operation/operation.dart';
-import 'package:crdt_lf/src/operation/type.dart';
 
-import 'element_id.dart';
+part of 'handler.dart';
 
 /// Insert operation for the Fugue algorithm
-class FugueInsertOperation extends Operation {
+class _FugueInsertOperation extends Operation {
   /// Constructor that initializes an insert operation
-  FugueInsertOperation({
+  _FugueInsertOperation({
     required this.newNodeID,
     required this.text,
     required this.leftOrigin,
@@ -17,14 +14,14 @@ class FugueInsertOperation extends Operation {
   });
 
   /// Factory to create an insert operation from a handler
-  factory FugueInsertOperation.fromHandler(
+  factory _FugueInsertOperation.fromHandler(
     Handler handler, {
     required FugueElementID newNodeID,
     required String text,
     required FugueElementID leftOrigin,
     required FugueElementID rightOrigin,
   }) {
-    return FugueInsertOperation(
+    return _FugueInsertOperation(
       id: handler.id,
       type: OperationType.insert(handler),
       newNodeID: newNodeID,
@@ -57,8 +54,8 @@ class FugueInsertOperation extends Operation {
       };
 
   /// Creates an insert operation from a payload
-  static FugueInsertOperation fromPayload(dynamic payload) =>
-      FugueInsertOperation(
+  static _FugueInsertOperation fromPayload(dynamic payload) =>
+      _FugueInsertOperation(
         id: payload['id'],
         type: payload['type'],
         newNodeID: FugueElementID.fromJson(payload['newNodeID']),
@@ -69,20 +66,20 @@ class FugueInsertOperation extends Operation {
 }
 
 /// Delete operation for the Fugue algorithm
-class FugueDeleteOperation extends Operation {
+class _FugueDeleteOperation extends Operation {
   /// Constructor that initializes a delete operation
-  FugueDeleteOperation({
+  _FugueDeleteOperation({
     required this.nodeID,
     required super.id,
     required super.type,
   });
 
   /// Factory to create a delete operation from a handler
-  factory FugueDeleteOperation.fromHandler(
+  factory _FugueDeleteOperation.fromHandler(
     Handler handler, {
     required FugueElementID nodeID,
   }) {
-    return FugueDeleteOperation(
+    return _FugueDeleteOperation(
       id: handler.id,
       type: OperationType.delete(handler),
       nodeID: nodeID,
@@ -100,8 +97,8 @@ class FugueDeleteOperation extends Operation {
       };
 
   /// Creates a delete operation from a payload
-  static FugueDeleteOperation fromPayload(dynamic payload) =>
-      FugueDeleteOperation(
+  static _FugueDeleteOperation fromPayload(dynamic payload) =>
+      _FugueDeleteOperation(
         id: payload['id'],
         type: payload['type'],
         nodeID: FugueElementID.fromJson(payload['nodeID']),
@@ -109,9 +106,9 @@ class FugueDeleteOperation extends Operation {
 }
 
 /// Factory for Fugue operations
-class FugueOperationFactory {
+class _FugueOperationFactory {
   /// Constructor that initializes the factory
-  FugueOperationFactory(this.handler);
+  _FugueOperationFactory(this.handler);
 
   /// The handler associated with this factory
   final Handler handler;
@@ -119,9 +116,9 @@ class FugueOperationFactory {
   /// Creates an operation from a payload
   Operation? fromPayload(dynamic payload) {
     if (payload['type'] == OperationType.insert(handler).toString()) {
-      return FugueInsertOperation.fromPayload(payload);
+      return _FugueInsertOperation.fromPayload(payload);
     } else if (payload['type'] == OperationType.delete(handler).toString()) {
-      return FugueDeleteOperation.fromPayload(payload);
+      return _FugueDeleteOperation.fromPayload(payload);
     }
 
     return null;

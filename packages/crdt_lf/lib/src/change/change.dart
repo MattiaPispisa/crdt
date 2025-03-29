@@ -113,3 +113,11 @@ class Change {
         payload,
       );
 }
+
+/// Utilities on [List] of [Change]s
+extension ChangeList on List<Change> {
+  /// Sort changes by hlc
+  List<Change> sortedByHlc() {
+    return List.from(this)..sort((a, b) => a.hlc.compareTo(b.hlc));
+  }
+}

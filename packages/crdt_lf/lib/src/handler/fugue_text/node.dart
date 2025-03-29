@@ -1,10 +1,19 @@
 import 'element_id.dart';
+import 'tree.dart';
 
-/// Represents the side of a node in the Fugue tree (left or right)
+/// Represents the side of a node in the [FugueTree] (left or right)
 enum FugueSide { left, right }
 
-/// Represents a node in the Fugue tree
+/// Represents a node in the [FugueTree]
 class FugueNode {
+  /// Constructor that initializes a node
+  FugueNode({
+    required this.id,
+    required this.value,
+    required this.parentID,
+    required this.side,
+  });
+
   /// Unique ID of the node
   final FugueElementID id;
 
@@ -16,9 +25,6 @@ class FugueNode {
 
   /// Side of the node relative to its parent (left or right)
   final FugueSide side;
-
-  /// Constructor that initializes a node
-  FugueNode(this.id, this.value, this.parentID, this.side);
 
   /// Checks if the node has been deleted
   bool get isDeleted => value == null;
@@ -34,10 +40,10 @@ class FugueNode {
   /// Creates a node from a JSON object
   factory FugueNode.fromJson(Map<String, dynamic> json) {
     return FugueNode(
-      FugueElementID.fromJson(json['id']),
-      json['value'],
-      FugueElementID.fromJson(json['parentID']),
-      json['side'] == 'left' ? FugueSide.left : FugueSide.right,
+      id: FugueElementID.fromJson(json['id']),
+      value: json['value'],
+      parentID: FugueElementID.fromJson(json['parentID']),
+      side: json['side'] == 'left' ? FugueSide.left : FugueSide.right,
     );
   }
 

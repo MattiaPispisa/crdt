@@ -1,3 +1,5 @@
+import 'package:crdt_lf/src/change/change.dart';
+
 import '../../document.dart';
 import '../../operation/id.dart';
 import '../../operation/operation.dart';
@@ -33,27 +35,25 @@ class CRDTListHandler<T> extends Handler {
 
   /// Inserts an element at the specified index
   void insert(int index, T value) {
-    final payload = {
-      'type': 'list_insert',
-      'id': _id,
-      'index': index,
-      'value': value,
-    };
-
-    _doc.createChange(payload);
+    _doc.createChange(
+      _ListInsertOperation<T>.fromHandler(
+        this,
+        index: index,
+        value: value,
+      ),
+    );
     _invalidateCache();
   }
 
   /// Deletes elements starting at the specified index
   void delete(int index, int count) {
-    final payload = {
-      'type': 'list_delete',
-      'id': _id,
-      'index': index,
-      'count': count,
-    };
-
-    _doc.createChange(payload);
+    _doc.createChange(
+      _ListDeleteOperation.fromHandler(
+        this,
+        index: index,
+        count: count,
+      ),
+    );
     _invalidateCache();
   }
 
@@ -86,36 +86,35 @@ class CRDTListHandler<T> extends Handler {
     final state = <T>[];
 
     // Get all changes from the document
-    final changes = _doc.exportChanges();
-
-    // Sort changes by timestamp
-    changes
-        .sort((a, b) => a.timestamp.toInt64().compareTo(b.timestamp.toInt64()));
+    final changes = _doc.exportChanges().sortedByHlc();
 
     // Apply changes in order
+    final opFactory = _ListOperationFactory(this);
+
     for (final change in changes) {
       final payload = change.payload;
-      if (payload is Map && payload['id'] == _id) {
-        if (payload['type'] == 'list_insert') {
-          final index = payload['index'] as int;
-          final value = payload['value'] as T;
 
-          // Insert at the specified index, or at the end if the index is out of bounds
-          if (index <= state.length) {
-            state.insert(index, value);
-          } else {
-            state.add(value);
-          }
-        } else if (payload['type'] == 'list_delete') {
-          final index = payload['index'] as int;
-          final count = payload['count'] as int;
+      final operation = opFactory.fromPayload(payload);
 
-          // Delete elements if the index is valid
-          if (index < state.length) {
-            final actualCount =
-                index + count > state.length ? state.length - index : count;
-            state.removeRange(index, index + actualCount);
-          }
+      if (operation is _ListInsertOperation<T>) {
+        final index = operation.index;
+        final value = operation.value;
+
+        // Insert at the specified index, or at the end if the index is out of bounds
+        if (index <= state.length) {
+          state.insert(index, value);
+        } else {
+          state.add(value);
+        }
+      } else if (operation is _ListDeleteOperation) {
+        final index = operation.index;
+        final count = operation.count;
+
+        // Delete elements if the index is valid
+        if (index < state.length) {
+          final actualCount =
+              index + count > state.length ? state.length - index : count;
+          state.removeRange(index, index + actualCount);
         }
       }
     }

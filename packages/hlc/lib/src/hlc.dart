@@ -1,8 +1,7 @@
 import 'dart:math';
 
 /// Hybrid Logical Clock implementation based on the paper
-/// "Logical Physical Clocks and Consistent Snapshots in Globally Distributed Databases"
-/// https://cse.buffalo.edu/tech-reports/2014-04.pdf
+/// [Logical Physical Clocks and Consistent Snapshots in Globally Distributed Databases](https://cse.buffalo.edu/tech-reports/2014-04.pdf)
 ///
 /// [HybridLogicalClock] combines the benefits of logical clocks and physical clocks:
 /// - Captures causality like logical clocks (e hb f => l.e < l.f)
@@ -14,7 +13,8 @@ class HybridLogicalClock with Comparable<HybridLogicalClock> {
   HybridLogicalClock({
     required int l,
     required int c,
-  }) : _c = c, _l = l;
+  })  : _c = c,
+        _l = l;
 
   /// Creates a new [HybridLogicalClock] initialized to zero
   factory HybridLogicalClock.initialize() => HybridLogicalClock(
@@ -59,6 +59,7 @@ class HybridLogicalClock with Comparable<HybridLogicalClock> {
   /// The counter part of the timestamp
   int _c;
   int get c => _c;
+
   /// Handles a local event or send event
   ///
   /// Updates the [HybridLogicalClock] based on the current physical time
