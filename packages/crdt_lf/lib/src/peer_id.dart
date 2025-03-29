@@ -10,7 +10,7 @@ class PeerId with Comparable<PeerId> {
   static final Random _random = Random.secure();
 
   /// Creates a new [PeerId] with the given identifier
-  const PeerId(this.id);
+  const PeerId._(this.id);
 
   /// Generates a random UUID v4
   factory PeerId.generate() {
@@ -23,7 +23,7 @@ class PeerId with Comparable<PeerId> {
 
     final hex = bytes.map((b) => b.toRadixString(16).padLeft(2, '0')).join('');
 
-    return PeerId('${hex.substring(0, 8)}-'
+    return PeerId.parse('${hex.substring(0, 8)}-'
         '${hex.substring(8, 12)}-'
         '${hex.substring(12, 16)}-'
         '${hex.substring(16, 20)}-'
@@ -43,7 +43,7 @@ class PeerId with Comparable<PeerId> {
       throw FormatException('Invalid PeerId format: $value');
     }
 
-    return PeerId(value);
+    return PeerId._(value);
   }
 
   /// Returns a string representation of this [PeerId]
