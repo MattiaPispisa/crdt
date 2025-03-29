@@ -26,7 +26,7 @@ class CRDTFugueTextHandler extends Handler {
   final String _id;
 
   /// The Fugue tree that represents the text
-  final FugueTree _tree = FugueTree.empty();
+  FugueTree _tree = FugueTree.empty();
 
   /// Counter to generate unique IDs for elements
   int _counter = 0;
@@ -42,27 +42,31 @@ class CRDTFugueTextHandler extends Handler {
 
   /// Inserts [text] at position [index]
   void insert(int index, String text) {
-    // Find the node at position index - 1 (or root node if index is 0)
-    final leftOrigin = index == 0
-        ? FugueElementID.nullID()
-        : _tree.findNodeAtPosition(index - 1);
+    // Insert each character one by one
+    for (int i = 0; i < text.length; i++) {
+      // Find the node at position index + i - 1 (or root node if index + i is 0)
+      final leftOrigin = (index + i) == 0
+          ? FugueElementID.nullID()
+          : _tree.findNodeAtPosition(index + i - 1);
 
-    // Find the next node after leftOrigin
-    final rightOrigin = _tree.findNextNode(leftOrigin);
+      // Find the next node after leftOrigin
+      final rightOrigin = _tree.findNextNode(leftOrigin);
 
-    // Generate a new ID for the node
-    final newNodeID = FugueElementID(_doc.peerId, _counter++);
+      // Generate a new ID for the node
+      final newNodeID = FugueElementID(_doc.peerId, _counter);
+      _counter++;
 
-    // Create and apply the insert operation
-    _doc.createChange(
-      _FugueInsertOperation.fromHandler(
-        this,
-        newNodeID: newNodeID,
-        text: text,
-        leftOrigin: leftOrigin,
-        rightOrigin: rightOrigin,
-      ),
-    );
+      // Create and apply the insert operation for this character
+      _doc.createChange(
+        _FugueInsertOperation.fromHandler(
+          this,
+          newNodeID: newNodeID,
+          text: text[i],
+          leftOrigin: leftOrigin,
+          rightOrigin: rightOrigin,
+        ),
+      );
+    }
 
     _invalidateCache();
   }
@@ -71,8 +75,8 @@ class CRDTFugueTextHandler extends Handler {
   void delete(int index, int count) {
     // For each character to delete
     for (int i = 0; i < count; i++) {
-      // Find the node at position index
-      final nodeID = _tree.findNodeAtPosition(index);
+      // Find the node at position index (which is now index + i since we've deleted i characters)
+      final nodeID = _tree.findNodeAtPosition(index + i);
 
       // If the node exists, create a delete operation
       if (!nodeID.isNull) {
@@ -111,6 +115,8 @@ class CRDTFugueTextHandler extends Handler {
 
   /// Computes the current state of the text from document operations
   String _computeState() {
+    _tree = FugueTree.empty();
+
     // Get all operations from the document
     final changes = _doc.exportChanges().sortedByHlc();
 

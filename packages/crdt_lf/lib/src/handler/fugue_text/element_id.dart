@@ -13,7 +13,7 @@ class FugueElementID with Comparable<FugueElementID> {
 
   /// Constructor to create a null ID (used for the root)
   FugueElementID.nullID()
-      : replicaID = PeerId.generate(),
+      : replicaID = PeerId.empty(),
         counter = null;
 
   /// Checks if this is a null ID
@@ -89,7 +89,9 @@ class FugueElementID with Comparable<FugueElementID> {
 
   @override
   String toString() {
-    if (isNull) return 'null';
+    if (isNull) {
+      return 'null';
+    }
     return '$replicaID:$counter';
   }
 }

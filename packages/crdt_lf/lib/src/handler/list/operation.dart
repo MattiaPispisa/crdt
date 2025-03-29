@@ -6,9 +6,9 @@ class _ListOperationFactory {
   _ListOperationFactory(this.handler);
 
   Operation? fromPayload(dynamic payload) {
-    if (payload['type'] == OperationType.insert(handler)) {
+    if (payload['type'] == OperationType.insert(handler).toPayload()) {
       return _ListInsertOperation.fromPayload(payload);
-    } else if (payload['type'] == OperationType.delete(handler)) {
+    } else if (payload['type'] == OperationType.delete(handler).toPayload()) {
       return _ListDeleteOperation.fromPayload(payload);
     }
 
@@ -42,7 +42,7 @@ class _ListInsertOperation<T> extends Operation {
 
   @override
   dynamic toPayload() => {
-        'type': type.toString(),
+        'type': type.toPayload(),
         'id': id,
         'index': index,
         'value': value,
@@ -51,7 +51,7 @@ class _ListInsertOperation<T> extends Operation {
   static _ListInsertOperation fromPayload(dynamic payload) =>
       _ListInsertOperation(
         id: payload['id'],
-        type: payload['type'],
+        type: OperationType.fromPayload(payload['type']),
         index: payload['index'],
         value: payload['value'],
       );
@@ -83,7 +83,7 @@ class _ListDeleteOperation<T> extends Operation {
 
   @override
   dynamic toPayload() => {
-        'type': type.toString(),
+        'type': type.toPayload(),
         'id': id,
         'index': index,
         'count': count,
@@ -92,7 +92,7 @@ class _ListDeleteOperation<T> extends Operation {
   static _ListDeleteOperation fromPayload(dynamic payload) =>
       _ListDeleteOperation(
         id: payload['id'],
-        type: payload['type'],
+        type: OperationType.fromPayload(payload['type']),
         index: payload['index'],
         count: payload['count'],
       );

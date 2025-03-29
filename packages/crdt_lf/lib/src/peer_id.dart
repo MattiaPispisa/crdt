@@ -17,6 +17,11 @@ class PeerId with Comparable<PeerId> {
   /// Creates a new [PeerId] with the given identifier
   const PeerId._(this.id);
 
+  /// Create an empty [PeerId]
+  factory PeerId.empty() {
+    return PeerId._('');
+  }
+
   /// Generates a random [PeerId]
   factory PeerId.generate() {
     final bytes = List<int>.generate(16, (_) => _random.nextInt(256));

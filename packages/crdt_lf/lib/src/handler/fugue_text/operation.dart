@@ -1,5 +1,24 @@
-
 part of 'handler.dart';
+
+/// Factory for Fugue operations
+class _FugueOperationFactory {
+  /// Constructor that initializes the factory
+  _FugueOperationFactory(this.handler);
+
+  /// The handler associated with this factory
+  final Handler handler;
+
+  /// Creates an operation from a payload
+  Operation? fromPayload(dynamic payload) {
+    if (payload['type'] == OperationType.insert(handler).toPayload()) {
+      return _FugueInsertOperation.fromPayload(payload);
+    } else if (payload['type'] == OperationType.delete(handler).toPayload()) {
+      return _FugueDeleteOperation.fromPayload(payload);
+    }
+
+    return null;
+  }
+}
 
 /// Insert operation for the Fugue algorithm
 class _FugueInsertOperation extends Operation {
@@ -45,7 +64,7 @@ class _FugueInsertOperation extends Operation {
 
   @override
   dynamic toPayload() => {
-        'type': type.toString(),
+        'type': type.toPayload(),
         'id': id,
         'newNodeID': newNodeID.toJson(),
         'text': text,
@@ -57,7 +76,7 @@ class _FugueInsertOperation extends Operation {
   static _FugueInsertOperation fromPayload(dynamic payload) =>
       _FugueInsertOperation(
         id: payload['id'],
-        type: payload['type'],
+        type: OperationType.fromPayload(payload['type']),
         newNodeID: FugueElementID.fromJson(payload['newNodeID']),
         text: payload['text'],
         leftOrigin: FugueElementID.fromJson(payload['leftOrigin']),
@@ -91,7 +110,7 @@ class _FugueDeleteOperation extends Operation {
 
   @override
   dynamic toPayload() => {
-        'type': type.toString(),
+        'type': type.toPayload(),
         'id': id,
         'nodeID': nodeID.toJson(),
       };
@@ -100,27 +119,7 @@ class _FugueDeleteOperation extends Operation {
   static _FugueDeleteOperation fromPayload(dynamic payload) =>
       _FugueDeleteOperation(
         id: payload['id'],
-        type: payload['type'],
+        type: OperationType.fromPayload(payload['type']),
         nodeID: FugueElementID.fromJson(payload['nodeID']),
       );
-}
-
-/// Factory for Fugue operations
-class _FugueOperationFactory {
-  /// Constructor that initializes the factory
-  _FugueOperationFactory(this.handler);
-
-  /// The handler associated with this factory
-  final Handler handler;
-
-  /// Creates an operation from a payload
-  Operation? fromPayload(dynamic payload) {
-    if (payload['type'] == OperationType.insert(handler).toString()) {
-      return _FugueInsertOperation.fromPayload(payload);
-    } else if (payload['type'] == OperationType.delete(handler).toString()) {
-      return _FugueDeleteOperation.fromPayload(payload);
-    }
-
-    return null;
-  }
 }

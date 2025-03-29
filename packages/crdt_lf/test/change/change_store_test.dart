@@ -1,5 +1,5 @@
 import 'package:test/test.dart';
-import 'package:crdt_lf/src/change/chage_store.dart';
+import 'package:crdt_lf/src/change/change_store.dart';
 import 'package:crdt_lf/src/change/change.dart';
 import 'package:crdt_lf/src/operation/id.dart';
 import 'package:crdt_lf/src/peer_id.dart';

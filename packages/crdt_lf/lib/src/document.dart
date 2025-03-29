@@ -8,7 +8,7 @@ import 'dart:convert';
 
 import 'package:hlc/hlc.dart';
 
-import 'change/chage_store.dart';
+import 'change/change_store.dart';
 import 'change/change.dart';
 import 'dag/graph.dart';
 import 'operation/operation.dart';
@@ -147,7 +147,6 @@ class CRDTDocument {
         }
       } catch (e) {
         // Skip changes that can't be applied
-        print('Failed to apply change ${change.id}: $e');
       }
     }
 

@@ -1,5 +1,4 @@
-import 'package:crdt_lf/src/operation/type.dart';
-import 'package:crdt_lf/src/handler/handler.dart';
+import 'package:crdt_lf/crdt_lf.dart';
 import 'package:test/test.dart';
 
 class TestHandler implements Handler {
@@ -57,6 +56,57 @@ void main() {
       expect(operationType1.hashCode, equals(operationType2.hashCode));
       expect(operationType1.hashCode, isNot(equals(operationType3.hashCode)));
       expect(operationType1.hashCode, equals(operationType4.hashCode));
+    });
+
+    test('toPayload returns correct string format', () {
+      final operationType = OperationType.insert(handler);
+      expect(operationType.toPayload(), equals('TestHandler:insert'));
+    });
+
+    test('fromPayload creates correct operation type', () {
+      final payload = 'TestHandler:insert';
+      final operationType = OperationType.fromPayload(payload);
+      expect(operationType.handler, equals('TestHandler'));
+      expect(operationType.type, equals('insert'));
+    });
+
+    test('fromPayload creates correct operation type for delete', () {
+      final payload = 'TestHandler:delete';
+      final operationType = OperationType.fromPayload(payload);
+      expect(operationType.handler, equals('TestHandler'));
+      expect(operationType.type, equals('delete'));
+    });
+
+    test('fromPayload with invalid format throws FormatException', () {
+      final payload = 'invalid-format';
+      expect(
+        () => OperationType.fromPayload(payload),
+        throwsA(isA<FormatException>()),
+      );
+    });
+
+    test('fromPayload with missing handler throws FormatException', () {
+      final payload = ':insert';
+      expect(
+        () => OperationType.fromPayload(payload),
+        throwsA(isA<FormatException>()),
+      );
+    });
+
+    test('fromPayload with missing type throws FormatException', () {
+      final payload = 'TestHandler:';
+      expect(
+        () => OperationType.fromPayload(payload),
+        throwsA(isA<FormatException>()),
+      );
+    });
+
+    test('fromPayload with multiple colons throws FormatException', () {
+      final payload = 'TestHandler:insert:extra';
+      expect(
+        () => OperationType.fromPayload(payload),
+        throwsA(isA<FormatException>()),
+      );
     });
   });
 }

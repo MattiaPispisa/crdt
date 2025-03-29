@@ -23,6 +23,22 @@ class OperationType {
     );
   }
 
+  factory OperationType.fromPayload(String payload) {
+    final parts = payload.split(':');
+
+    if (parts.length != 2 ||
+        parts[0].isEmpty ||
+        parts[1].isEmpty ||
+        (parts[1] != 'insert' && parts[1] != 'delete')) {
+      throw FormatException('Invalid payload: $payload');
+    }
+
+    return OperationType._(
+      handler: parts[0],
+      type: parts[1],
+    );
+  }
+
   /// Handler type
   final String handler;
 
@@ -43,4 +59,12 @@ class OperationType {
   /// Returns a hash code for this [OperationType]
   @override
   int get hashCode => Object.hash(handler, type);
+
+  String toPayload() {
+    return '${handler}:${type}';
+  }
+
+  String toString() {
+    return 'OperationType(handler: $handler, type: $type)';
+  }
 }

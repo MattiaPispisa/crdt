@@ -6,9 +6,9 @@ class _TextOperationFactory {
   _TextOperationFactory(this.handler);
 
   Operation? fromPayload(dynamic payload) {
-    if (payload['type'] == OperationType.insert(handler)) {
+    if (payload['type'] == OperationType.insert(handler).toPayload()) {
       return _TextInsertOperation.fromPayload(payload);
-    } else if (payload['type'] == OperationType.delete(handler)) {
+    } else if (payload['type'] == OperationType.delete(handler).toPayload()) {
       return _TextDeleteOperation.fromPayload(payload);
     }
 
@@ -42,7 +42,7 @@ class _TextInsertOperation extends Operation {
 
   @override
   dynamic toPayload() => {
-        'type': type.toString(),
+        'type': type.toPayload(),
         'id': id,
         'index': index,
         'text': text,
@@ -50,7 +50,7 @@ class _TextInsertOperation extends Operation {
 
   static _TextInsertOperation fromPayload(dynamic payload) => _TextInsertOperation(
         id: payload['id'],
-        type: payload['type'],
+        type: OperationType.fromPayload(payload['type']),
         index: payload['index'],
         text: payload['text'],
       );
@@ -82,7 +82,7 @@ class _TextDeleteOperation extends Operation {
 
   @override
   dynamic toPayload() => {
-        'type': type.toString(),
+        'type': type.toPayload(),
         'id': id,
         'index': index,
         'count': count,
@@ -90,7 +90,7 @@ class _TextDeleteOperation extends Operation {
 
   static _TextDeleteOperation fromPayload(dynamic payload) => _TextDeleteOperation(
         id: payload['id'],
-        type: payload['type'],
+        type: OperationType.fromPayload(payload['type']),
         index: payload['index'],
         count: payload['count'],
       );

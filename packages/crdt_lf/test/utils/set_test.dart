@@ -1,4 +1,4 @@
-import 'package:crdt_lf/src/utils/set.dart';
+import 'package:crdt_lf/crdt_lf.dart';
 import 'package:test/test.dart';
 
 void main() {

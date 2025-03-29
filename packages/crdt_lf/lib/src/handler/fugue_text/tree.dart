@@ -105,8 +105,8 @@ class FugueTree {
   ///
   /// [rightOrigin] node after [leftOrigin] in traversal order
   ///
-  /// if [rightOrigin] exists, the new node will be a left child of [rightOrigin]
-  /// otherwise, the new node will be a right child of [leftOrigin]
+  /// if [leftOrigin] exists, the new node will be a right child of [leftOrigin]
+  /// otherwise, the new node will be a left child of [rightOrigin]
   void insert({
     required FugueElementID newID,
     required String value,
@@ -116,21 +116,21 @@ class FugueTree {
     // Determine if the new node should be a left or right child
     FugueNode newNode;
 
-    if (!rightOrigin.isNull && _nodes.containsKey(rightOrigin)) {
-      // The new node will be a left child of rightOrigin
-      newNode = FugueNode(
-        id: newID,
-        value: value,
-        parentID: rightOrigin,
-        side: FugueSide.left,
-      );
-    } else {
+    if (!leftOrigin.isNull && _nodes.containsKey(leftOrigin)) {
       // The new node will be a right child of leftOrigin
       newNode = FugueNode(
         id: newID,
         value: value,
         parentID: leftOrigin,
         side: FugueSide.right,
+      );
+    } else {
+      // The new node will be a left child of rightOrigin
+      newNode = FugueNode(
+        id: newID,
+        value: value,
+        parentID: rightOrigin,
+        side: FugueSide.left,
       );
     }
 
@@ -151,6 +151,12 @@ class FugueTree {
 
     if (!_nodes.containsKey(parentID)) {
       throw Exception('Parent node not found: $parentID');
+    }
+
+    if (_nodes.containsKey(node.id)) {
+      if (_nodes[node.id]!.node.value != null) {
+        throw Exception('Node already exists: ${node.id}');
+      }
     }
 
     // Create a new triple for the node
@@ -175,11 +181,10 @@ class FugueTree {
 
   /// Finds the node at the specified position in the tree
   FugueElementID findNodeAtPosition(int position) {
-    int currentPos = -1;
     return _findNodeAtPositionRecursive(
       nodeID: _rootID,
       targetPos: position,
-      currentPos: currentPos,
+      currentPos: _CurrentPosition(-1),
     );
   }
 
@@ -187,7 +192,7 @@ class FugueTree {
   FugueElementID _findNodeAtPositionRecursive({
     required FugueElementID nodeID,
     required int targetPos,
-    required int currentPos,
+    required _CurrentPosition currentPos,
   }) {
     if (!_nodes.containsKey(nodeID)) {
       return FugueElementID.nullID();
@@ -208,13 +213,12 @@ class FugueTree {
       if (!result.isNull) {
         return result;
       }
-      currentPos += _countVisibleNodes(childID);
     }
 
     // Check the node itself
     if (node.value != null) {
-      currentPos++;
-      if (currentPos == targetPos) {
+      currentPos.increment();
+      if (currentPos.value == targetPos) {
         return nodeID;
       }
     }
@@ -229,15 +233,9 @@ class FugueTree {
       if (!result.isNull) {
         return result;
       }
-      currentPos += _countVisibleNodes(childID);
     }
 
     return FugueElementID.nullID();
-  }
-
-  /// Counts visible nodes in the subtree rooted at nodeID
-  int _countVisibleNodes(FugueElementID nodeID) {
-    return _traverse(nodeID).length;
   }
 
   /// Finds the next node after [nodeID] in the traversal
@@ -319,5 +317,15 @@ class FugueTree {
     for (final childID in rightChildren) {
       _buildTreeString(childID, depth + 1, buffer);
     }
+  }
+}
+
+class _CurrentPosition {
+  _CurrentPosition(this.value);
+
+  int value;
+
+  void increment() {
+    value++;
   }
 }
