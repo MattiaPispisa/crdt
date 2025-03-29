@@ -1,4 +1,8 @@
 name: hlc
+description: Hybrid Logical Clock implementation
+homepage: https://mattiapispisa.github.io/
+repository: https://github.com/MattiaPispisa/crdt/packages/hlc
+topics: [crdt, local-first, fugue, hlc]
 
 environment:
   sdk: ">=2.17.0 <4.0.0"
