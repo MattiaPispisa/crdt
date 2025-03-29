@@ -5,6 +5,11 @@
 
 import 'dart:math';
 
+final peerIdRegex = RegExp(
+  r'^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$',
+  caseSensitive: false,
+);
+
 /// A unique identifier for a peer in the CRDT network
 class PeerId with Comparable<PeerId> {
   static final Random _random = Random.secure();
@@ -12,7 +17,7 @@ class PeerId with Comparable<PeerId> {
   /// Creates a new [PeerId] with the given identifier
   const PeerId._(this.id);
 
-  /// Generates a random UUID v4
+  /// Generates a random [PeerId]
   factory PeerId.generate() {
     final bytes = List<int>.generate(16, (_) => _random.nextInt(256));
 
@@ -36,10 +41,7 @@ class PeerId with Comparable<PeerId> {
   /// Parses a [PeerId] from a string
   factory PeerId.parse(String value) {
     // Check if the string matches UUID v4 format
-    if (!RegExp(
-      r'^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$',
-      caseSensitive: false,
-    ).hasMatch(value)) {
+    if (!peerIdRegex.hasMatch(value)) {
       throw FormatException('Invalid PeerId format: $value');
     }
 
@@ -53,7 +55,9 @@ class PeerId with Comparable<PeerId> {
   /// Compares two [PeerId]s for equality
   @override
   bool operator ==(Object other) {
-    if (identical(this, other)) return true;
+    if (identical(this, other)) {
+      return true;
+    }
     return other is PeerId && other.id == id;
   }
 
