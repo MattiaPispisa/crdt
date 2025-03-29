@@ -2,8 +2,6 @@ import 'element_id.dart';
 import 'node.dart';
 import 'node_triple.dart';
 
-// TODO: LazyFugueTree ?
-
 /// Implementation of the Fugue tree for collaborative text editing
 class FugueTree {
   FugueTree._({
