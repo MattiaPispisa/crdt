@@ -66,10 +66,9 @@ void main() {
       expect(finalText.contains('Dart'), isTrue);
 
       // The exact order might depend on the HLC timestamps, but they should not be interleaved
-      // TODO: check if this is correct, i think the inteleaving is not correct ("Hello World Dart"?)
       expect(
         finalText,
-        'Hello  WorldDart',
+        'Hello World Dart',
       );
     });
 
@@ -124,15 +123,16 @@ void main() {
 
       // Check that the insertions are not interleaved
       final finalText = handler1.value;
-      print('finalText: $finalText');
       expect(finalText.contains(' - Edited by User1'), true);
       expect(finalText.contains(' - Modified by User2'), true);
-      // expect(finalText.contains(' - Updated by User3'), true);
+      expect(finalText.contains(' - Updated by User3'), true);
 
-      // // Verify that each user's text is contiguous (not interleaved)
-      // expect(finalText.contains('Edited by User1'), true);
-      // expect(finalText.contains('Modified by User2'), true);
-      // expect(finalText.contains('Updated by User3'), true);
+      // Verify that each user's text is contiguous (not interleaved)
+      expect(finalText.contains(' - Edited by User1'), true);
+      expect(finalText.contains(' - Modified by User2'), true);
+      expect(finalText.contains(' - Updated by User3'), true);
+
+      print(finalText);
     });
   });
 }

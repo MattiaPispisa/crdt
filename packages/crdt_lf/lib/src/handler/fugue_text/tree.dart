@@ -103,7 +103,7 @@ class FugueTree {
   ///
   /// [rightOrigin] node after [leftOrigin] in traversal order
   ///
-  /// if [leftOrigin] exists, the new node will be a right child of [leftOrigin]
+  /// if [leftOrigin] exists, the new node will be a right child of leftOrigin
   /// otherwise, the new node will be a left child of [rightOrigin]
   void insert({
     required FugueElementID newID,
@@ -122,12 +122,20 @@ class FugueTree {
         parentID: leftOrigin,
         side: FugueSide.right,
       );
-    } else {
+    } else if (!rightOrigin.isNull && _nodes.containsKey(rightOrigin)) {
       // The new node will be a left child of rightOrigin
       newNode = FugueNode(
         id: newID,
         value: value,
         parentID: rightOrigin,
+        side: FugueSide.left,
+      );
+    } else {
+      // If neither leftOrigin nor rightOrigin exists, insert at the beginning
+      newNode = FugueNode(
+        id: newID,
+        value: value,
+        parentID: _rootID,
         side: FugueSide.left,
       );
     }
@@ -168,12 +176,8 @@ class FugueTree {
     // Update the parent's children list
     if (node.side == FugueSide.left) {
       _nodes[parentID]!.leftChildren.add(node.id);
-      // Sort left children by ID
-      _nodes[parentID]!.leftChildren.sort((a, b) => a.compareTo(b));
     } else {
       _nodes[parentID]!.rightChildren.add(node.id);
-      // Sort right children by ID
-      _nodes[parentID]!.rightChildren.sort((a, b) => a.compareTo(b));
     }
   }
 
@@ -244,19 +248,19 @@ class FugueTree {
 
     final nodeTriple = _nodes[nodeID]!;
 
-    // If it has right children, the next is the first right child
+    // 1. If it has right children, the next is the first right child
     if (nodeTriple.rightChildren.isNotEmpty) {
       return nodeTriple.rightChildren.first;
     }
 
-    // Otherwise, climb up the tree until finding a node that is a left child
-    // and return its parent
+    // 2. Otherwise, climb up the tree until finding a node that is a left child
+    // and return its right sibling
     FugueElementID current = nodeID;
     while (!current.isNull) {
-      final node = _nodes[current]!.node;
-      if (node.side == FugueSide.left) {
+      final currentNode = _nodes[current]!.node;
+      if (currentNode.side == FugueSide.left) {
         // Find the right sibling
-        final parent = node.parentID;
+        final parent = currentNode.parentID;
         if (!_nodes.containsKey(parent)) {
           break;
         }
@@ -267,9 +271,10 @@ class FugueTree {
           return rightSiblings.first;
         }
       }
-      current = _nodes[current]!.node.parentID;
+      current = currentNode.parentID;
     }
 
+    // 3. If no right sibling is found, return null
     return FugueElementID.nullID();
   }
 

@@ -42,30 +42,42 @@ class CRDTFugueTextHandler extends Handler {
 
   /// Inserts [text] at position [index]
   void insert(int index, String text) {
-    // Insert each character one by one
-    for (int i = 0; i < text.length; i++) {
-      // Find the node at position index + i - 1 (or root node if index + i is 0)
-      final leftOrigin = (index + i) == 0
-          ? FugueElementID.nullID()
-          : _tree.findNodeAtPosition(index + i - 1);
+    if (text.isEmpty) return;
 
-      // Find the next node after leftOrigin
-      final rightOrigin = _tree.findNextNode(leftOrigin);
+    // Find the node at position index - 1 (or root node if index is 0)
+    final leftOrigin = index == 0
+        ? FugueElementID.nullID()
+        : _tree.findNodeAtPosition(index - 1);
 
-      // Generate a new ID for the node
-      final newNodeID = FugueElementID(_doc.peerId, _counter);
-      _counter++;
+    // Find the next node after leftOrigin
+    final rightOrigin = _tree.findNextNode(leftOrigin);
 
-      // Create and apply the insert operation for this character
+    // Insert first character
+    final firstNodeID = FugueElementID(_doc.peerId, _counter++);
+    _doc.createChange(
+      _FugueInsertOperation.fromHandler(
+        this,
+        newNodeID: firstNodeID,
+        text: text[0],
+        leftOrigin: leftOrigin,
+        rightOrigin: rightOrigin,
+      ),
+    );
+
+    // Insert remaining characters as right children of the previous character
+    FugueElementID previousID = firstNodeID;
+    for (int i = 1; i < text.length; i++) {
+      final newNodeID = FugueElementID(_doc.peerId, _counter++);
       _doc.createChange(
         _FugueInsertOperation.fromHandler(
           this,
           newNodeID: newNodeID,
           text: text[i],
-          leftOrigin: leftOrigin,
-          rightOrigin: rightOrigin,
+          leftOrigin: previousID,
+          rightOrigin: FugueElementID.nullID(), // No right origin needed for chain
         ),
       );
+      previousID = newNodeID;
     }
 
     _invalidateCache();
