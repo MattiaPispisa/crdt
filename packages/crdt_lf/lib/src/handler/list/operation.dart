@@ -6,6 +6,10 @@ class _ListOperationFactory {
   _ListOperationFactory(this.handler);
 
   Operation? fromPayload(dynamic payload) {
+    if (payload['id'] != handler.id) {
+      return null;
+    }
+
     if (payload['type'] == OperationType.insert(handler).toPayload()) {
       return _ListInsertOperation.fromPayload(payload);
     } else if (payload['type'] == OperationType.delete(handler).toPayload()) {
