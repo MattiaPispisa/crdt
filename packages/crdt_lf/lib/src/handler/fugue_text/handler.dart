@@ -74,7 +74,8 @@ class CRDTFugueTextHandler extends Handler {
           newNodeID: newNodeID,
           text: text[i],
           leftOrigin: previousID,
-          rightOrigin: FugueElementID.nullID(), // No right origin needed for chain
+          rightOrigin:
+              rightOrigin, // Use the same rightOrigin for all characters in the chain
         ),
       );
       previousID = newNodeID;
@@ -130,7 +131,7 @@ class CRDTFugueTextHandler extends Handler {
     _tree = FugueTree.empty();
 
     // Get all operations from the document
-    final changes = _doc.exportChanges().sortedByHlc();
+    final changes = _doc.exportChanges().sorted();
 
     // Apply operations in order
     final opFactory = _FugueOperationFactory(this);

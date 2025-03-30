@@ -1,4 +1,4 @@
-name: crcd
+name: crdt
 
 packages:
   - packages/**
@@ -6,3 +6,11 @@ packages:
 repository: https://github.com/invertase/melos
 
 sdkPath: .fvm/flutter_sdk
+
+scripts:
+  test:
+    name: Test
+    description: Run the tests
+    run: dart test
+    exec:
+      concurrency: 1

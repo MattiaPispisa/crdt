@@ -123,8 +123,15 @@ class Change {
 
 /// Utilities on [List] of [Change]s
 extension ChangeList on List<Change> {
-  /// Sort changes by hlc
-  List<Change> sortedByHlc() {
-    return List.from(this)..sort((a, b) => a.hlc.compareTo(b.hlc));
+  /// Sort changes first by hlc then for author
+  List<Change> sorted() {
+    return List.from(this)
+      ..sort((a, b) {
+        final hlcCompare = a.hlc.compareTo(b.hlc);
+        if (hlcCompare != 0) {
+          return hlcCompare;
+        }
+        return a.author.compareTo(b.author);
+      });
   }
 }

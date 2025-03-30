@@ -75,7 +75,7 @@ class CRDTTextHandler extends Handler {
     final buffer = StringBuffer();
 
     // Get all changes from the document
-    final changes = _doc.exportChanges().sortedByHlc();
+    final changes = _doc.exportChanges().sorted();
 
     // Apply changes in order
     final opFactory = _TextOperationFactory(this);

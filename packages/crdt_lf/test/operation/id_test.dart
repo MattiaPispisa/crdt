@@ -21,7 +21,6 @@ void main() {
     test('parse accepts valid operation id string', () {
       const validString = '1c8e0bd3-174e-4d2b-b1ea-eabf98a299cf@1.2';
       final operationId = OperationId.parse(validString);
-      print(operationId);
       expect(operationId.peerId, equals(peerId));
       expect(operationId.hlc, equals(hlc));
     });

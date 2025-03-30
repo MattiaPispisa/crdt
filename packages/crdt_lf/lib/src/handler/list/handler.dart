@@ -86,7 +86,7 @@ class CRDTListHandler<T> extends Handler {
     final state = <T>[];
 
     // Get all changes from the document
-    final changes = _doc.exportChanges().sortedByHlc();
+    final changes = _doc.exportChanges().sorted();
 
     // Apply changes in order
     final opFactory = _ListOperationFactory(this);

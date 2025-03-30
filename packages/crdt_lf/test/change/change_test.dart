@@ -136,7 +136,7 @@ void main() {
       );
 
       final changes = [change2, change1];
-      final sorted = changes.sortedByHlc();
+      final sorted = changes.sorted();
 
       expect(sorted[0], equals(change1));
       expect(sorted[1], equals(change2));

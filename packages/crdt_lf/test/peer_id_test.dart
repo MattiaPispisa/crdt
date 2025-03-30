@@ -4,7 +4,7 @@ import 'package:test/test.dart';
 void main() {
   group('PeerId', () {
     test('constructor creates with given id', () {
-      const id = '123e4567-e89b-12d3-a456-426614174000';
+      const id = '20838a87-21f6-449c-8773-6b6b07bc0e75';
       final peerId = PeerId.parse(id);
       expect(peerId.id, equals(id));
     });
@@ -41,35 +41,35 @@ void main() {
     });
 
     test('toString returns the id', () {
-      const id = '123e4567-e89b-12d3-a456-426614174000';
+      const id = 'd7b61211-b928-4477-8cdd-0d5a4fca9ea7';
       final peerId = PeerId.parse(id);
       expect(peerId.toString(), equals(id));
     });
 
     test('equality works correctly', () {
-      const id = '123e4567-e89b-12d3-a456-426614174000';
+      const id = '3829d118-eb27-44e1-909c-dbd9d902973b';
       final peerId1 = PeerId.parse(id);
       final peerId2 = PeerId.parse(id);
-      final peerId3 = PeerId.parse('123e4567-e89b-12d3-a456-426614174001');
+      final peerId3 = PeerId.parse('1f178c45-2a35-4d3f-9e6c-d20b0d50e374');
 
       expect(peerId1, equals(peerId2));
       expect(peerId1, isNot(equals(peerId3)));
     });
 
     test('hashCode is consistent', () {
-      const id = '123e4567-e89b-12d3-a456-426614174000';
+      const id = '5bd477be-1518-43dd-9538-9bb783ea40d3';
       final peerId1 = PeerId.parse(id);
       final peerId2 = PeerId.parse(id);
-      final peerId3 = PeerId.parse('123e4567-e89b-12d3-a456-426614174001');
+      final peerId3 = PeerId.parse('1e285489-40da-4f24-964a-cc90951d3f07');
 
       expect(peerId1.hashCode, equals(peerId2.hashCode));
       expect(peerId1.hashCode, isNot(equals(peerId3.hashCode)));
     });
 
     test('compareTo works correctly', () {
-      final peerId1 = PeerId.parse('123e4567-e89b-12d3-a456-426614174000');
-      final peerId2 = PeerId.parse('123e4567-e89b-12d3-a456-426614174001');
-      final peerId3 = PeerId.parse('123e4567-e89b-12d3-a456-426614174000');
+      final peerId1 = PeerId.parse('e45cc089-9fc0-48c8-97e0-f4f16e7364ed');
+      final peerId2 = PeerId.parse('faa87286-2e89-40c7-aa98-c84b875dcc7c');
+      final peerId3 = PeerId.parse('e45cc089-9fc0-48c8-97e0-f4f16e7364ed');
 
       expect(peerId1.compareTo(peerId2), lessThan(0));
       expect(peerId2.compareTo(peerId1), greaterThan(0));

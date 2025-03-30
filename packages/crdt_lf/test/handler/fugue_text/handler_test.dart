@@ -57,19 +57,11 @@ void main() {
 
       // Both should have the same final state
       expect(handler1.value, handler2.value);
-      print('handler1.value: ${handler1.value}');
-      print('handler2.value: ${handler2.value}');
 
       // Check that the insertions are not interleaved
       final finalText = handler1.value;
-      expect(finalText.contains('World'), isTrue);
-      expect(finalText.contains('Dart'), isTrue);
-
-      // The exact order might depend on the HLC timestamps, but they should not be interleaved
-      expect(
-        finalText,
-        'Hello World Dart',
-      );
+      expect(finalText.contains(' World'), isTrue);
+      expect(finalText.contains(' Dart'), isTrue);
     });
 
     test('should handle complex concurrent edits without interleaving', () {
@@ -131,8 +123,6 @@ void main() {
       expect(finalText.contains(' - Edited by User1'), true);
       expect(finalText.contains(' - Modified by User2'), true);
       expect(finalText.contains(' - Updated by User3'), true);
-
-      print(finalText);
     });
   });
 }

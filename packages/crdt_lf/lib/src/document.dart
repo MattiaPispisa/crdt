@@ -183,6 +183,7 @@ class CRDTDocument {
 
     while (queue.isNotEmpty) {
       final id = queue.removeAt(0);
+      // TODO: where is expensive
       final change = changes.firstWhere((c) => c.id == id);
       result.add(change);
 

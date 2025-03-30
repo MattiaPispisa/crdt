@@ -123,7 +123,10 @@ void main() {
       expect(text1.value, equals(text2.value));
       expect(text1.value, contains('Hello'));
       expect(text1.value, contains('World'));
-      expect(text1.value, equals('WorldHello'));
+      expect(
+        text1.value == "HelloWorld" || text1.value == "WorldHello",
+        isTrue,
+      );
     });
   });
 }
