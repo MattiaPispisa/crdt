@@ -1,6 +1,6 @@
 part of 'handler.dart';
 
-class _ListOperationFactory {
+class _ListOperationFactory<T> {
   final Handler handler;
 
   _ListOperationFactory(this.handler);
@@ -11,9 +11,9 @@ class _ListOperationFactory {
     }
 
     if (payload['type'] == OperationType.insert(handler).toPayload()) {
-      return _ListInsertOperation.fromPayload(payload);
+      return _ListInsertOperation.fromPayload<T>(payload);
     } else if (payload['type'] == OperationType.delete(handler).toPayload()) {
-      return _ListDeleteOperation.fromPayload(payload);
+      return _ListDeleteOperation.fromPayload<T>(payload);
     }
 
     return null;
@@ -52,8 +52,8 @@ class _ListInsertOperation<T> extends Operation {
         'value': value,
       };
 
-  static _ListInsertOperation fromPayload(dynamic payload) =>
-      _ListInsertOperation(
+  static _ListInsertOperation<T> fromPayload<T>(dynamic payload) =>
+      _ListInsertOperation<T>(
         id: payload['id'],
         type: OperationType.fromPayload(payload['type']),
         index: payload['index'],
@@ -93,8 +93,8 @@ class _ListDeleteOperation<T> extends Operation {
         'count': count,
       };
 
-  static _ListDeleteOperation fromPayload(dynamic payload) =>
-      _ListDeleteOperation(
+  static _ListDeleteOperation<T> fromPayload<T>(dynamic payload) =>
+      _ListDeleteOperation<T>(
         id: payload['id'],
         type: OperationType.fromPayload(payload['type']),
         index: payload['index'],

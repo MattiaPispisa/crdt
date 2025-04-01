@@ -89,7 +89,7 @@ class CRDTListHandler<T> extends Handler {
     final changes = _doc.exportChanges().sorted();
 
     // Apply changes in order
-    final opFactory = _ListOperationFactory(this);
+    final opFactory = _ListOperationFactory<T>(this);
 
     for (final change in changes) {
       final payload = change.payload;
