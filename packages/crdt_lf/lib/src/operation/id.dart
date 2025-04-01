@@ -4,7 +4,7 @@
 /// An [OperationId] uniquely identifies an operation in the CRDT system.
 /// It combines a [PeerId] and an [HybridLogicalClock] timestamp to create a globally unique identifier.
 
-import 'package:hlc/hlc.dart';
+import 'package:hlc_dart/hlc_dart.dart';
 import '../peer_id.dart';
 
 /// A [OperationId] uniquely identifies an operation in the CRDT system.

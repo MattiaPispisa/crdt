@@ -1,4 +1,4 @@
-# melos_managed_dependency_overrides: hlc
+# melos_managed_dependency_overrides: hlc_dart
 dependency_overrides:
-  hlc:
+  hlc_dart:
     path: ../hlc

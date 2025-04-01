@@ -1,7 +1,7 @@
 import 'package:crdt_lf/src/frontiers/frontiers.dart';
 import 'package:crdt_lf/src/operation/id.dart';
 import 'package:crdt_lf/src/peer_id.dart';
-import 'package:hlc/hlc.dart';
+import 'package:hlc_dart/hlc_dart.dart';
 import 'package:test/test.dart';
 
 void main() {

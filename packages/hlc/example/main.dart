@@ -1,4 +1,4 @@
-import 'package:hlc/hlc.dart';
+import 'package:hlc_dart/hlc_dart.dart';
 
 void main() {
   // Simulate two peers in a distributed system

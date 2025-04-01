@@ -4,7 +4,7 @@
 /// It includes an operation ID, dependencies, timestamp, author, and payload.
 
 import 'package:crdt_lf/src/operation/operation.dart';
-import 'package:hlc/hlc.dart';
+import 'package:hlc_dart/hlc_dart.dart';
 
 import '../operation/id.dart';
 import '../peer_id.dart';

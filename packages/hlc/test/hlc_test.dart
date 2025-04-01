@@ -1,5 +1,5 @@
 import 'package:test/test.dart';
-import 'package:hlc/hlc.dart';
+import 'package:hlc_dart/hlc_dart.dart';
 
 void main() {
   group('HybridLogicalClock', () {

@@ -3,7 +3,7 @@ import 'package:crdt_lf/src/change/change_store.dart';
 import 'package:crdt_lf/src/change/change.dart';
 import 'package:crdt_lf/src/operation/id.dart';
 import 'package:crdt_lf/src/peer_id.dart';
-import 'package:hlc/hlc.dart';
+import 'package:hlc_dart/hlc_dart.dart';
 import 'package:crdt_lf/src/operation/operation.dart';
 import 'package:crdt_lf/src/operation/type.dart';
 import 'package:crdt_lf/src/handler/handler.dart';

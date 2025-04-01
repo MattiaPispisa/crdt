@@ -24,7 +24,7 @@ Add this to your package's `pubspec.yaml` file:
 
 ```yaml
 dependencies:
-  hlc: ^1.0.0
+  hlc_dart: ^1.0.0
 ```
 
 ## Usage
@@ -32,7 +32,7 @@ dependencies:
 ### Basic Usage
 
 ```dart
-import 'package:hlc/hlc.dart';
+import 'package:hlc_dart/hlc_dart.dart';
 
 // Create a new HLC initialized to the current time
 final clock = HybridLogicalClock.now();

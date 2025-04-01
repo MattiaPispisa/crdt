@@ -2,7 +2,7 @@ import 'package:test/test.dart';
 import 'package:crdt_lf/src/dag/node.dart';
 import 'package:crdt_lf/src/operation/id.dart';
 import 'package:crdt_lf/src/peer_id.dart';
-import 'package:hlc/hlc.dart';
+import 'package:hlc_dart/hlc_dart.dart';
 
 void main() {
   group('DAGNode', () {

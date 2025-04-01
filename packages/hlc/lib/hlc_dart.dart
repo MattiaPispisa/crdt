@@ -1,3 +1,3 @@
-library hlc;
+library hlc_dart;
 
 export './src/hlc.dart';
