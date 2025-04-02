@@ -71,10 +71,10 @@ class HybridLogicalClock with Comparable<HybridLogicalClock> {
   /// else c := 0
   /// ```
   void localEvent(int physicalTime) {
-    final l_old = _l;
-    _l = max(l_old, physicalTime);
+    final lOld = _l;
+    _l = max(lOld, physicalTime);
 
-    if (_l == l_old) {
+    if (_l == lOld) {
       _c += 1;
       return;
     }
@@ -95,12 +95,12 @@ class HybridLogicalClock with Comparable<HybridLogicalClock> {
   /// else c := 0
   /// ```
   void receiveEvent(int physicalTime, HybridLogicalClock received) {
-    final l_old = _l;
-    _l = max(max(l_old, received._l), physicalTime);
+    final lOld = _l;
+    _l = max(max(lOld, received._l), physicalTime);
 
-    if (_l == l_old && _l == received._l) {
+    if (_l == lOld && _l == received._l) {
       _c = max(_c, received._c) + 1;
-    } else if (_l == l_old) {
+    } else if (_l == lOld) {
       _c += 1;
     } else if (_l == received._l) {
       _c = received._c + 1;

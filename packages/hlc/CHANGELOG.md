@@ -1,3 +1,18 @@
+## [0.1.1] - 2025-04-02
+
+### Added
+
+- Tests, 100% coverage
+
+### Changed
+
+- Improved static analysis
+- chore: update README
+
+### Fixed
+
+- chore: fix repository link
+
 ## [0.1.0] - 2025-04-01
 
 Initial release

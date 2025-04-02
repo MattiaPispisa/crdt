@@ -8,8 +8,7 @@ environment:
   sdk: ">=2.17.0 <4.0.0"
 
 dependencies:
-  hlc_dart:
-    path: ../hlc
+  hlc_dart: ^0.1.0
 
 dev_dependencies:
   test: ^1.24.0

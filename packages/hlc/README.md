@@ -1,5 +1,16 @@
 # Hybrid Logical Clock
 
+[![coverage][coverage_badge]][coverage_badge]
+[![License: MIT][license_badge]][license_link]
+
+- [Hybrid Logical Clock](#hybrid-logical-clock)
+  - [Features](#features)
+  - [Getting Started](#getting-started)
+  - [Usage](#usage)
+    - [Basic Usage](#basic-usage)
+    - [Complete Example](#complete-example)
+
+
 A hybrid logical clock implementation in Dart based on the paper
 [Logical Physical Clocks and Consistent Snapshots in Globally Distributed Databases](https://cse.buffalo.edu/tech-reports/2014-04.pdf).
 
@@ -54,3 +65,7 @@ final deserialized = HybridLogicalClock.fromInt64(serialized);
 ```
 
 ### [Complete Example](https://github.com/MattiaPispisa/crdt/packages/hlc/example/main.dart)
+
+[license_badge]: https://img.shields.io/badge/license-MIT-blue.svg
+[license_link]: https://opensource.org/licenses/MIT
+[coverage_badge]: https://img.shields.io/badge/coverage-100%25-green

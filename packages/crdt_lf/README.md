@@ -1,5 +1,22 @@
 # CRDT LF
 
+- [CRDT LF](#crdt-lf)
+  - [Features](#features)
+  - [Getting Started](#getting-started)
+  - [Usage](#usage)
+    - [Basic Usage](#basic-usage)
+    - [Distributed Collaboration Example](#distributed-collaboration-example)
+  - [Architecture](#architecture)
+    - [CRDTDocument](#crdtdocument)
+    - [Handlers](#handlers)
+    - [DAG](#dag)
+    - [Change](#change)
+    - [Frontiers](#frontiers)
+  - [Project Status](#project-status)
+    - [Contributing](#contributing)
+  - [Acknowledgments](#acknowledgments)
+
+
 A Conflict-free Replicated Data Type (CRDT) implementation in Dart. 
 This library provides solutions for:
 - Text Editing.
@@ -50,7 +67,6 @@ void main() {
 
 ### [Distributed Collaboration Example](https://github.com/MattiaPispisa/crdt/packages/crdt_lf/example/main.dart)
 
-
 ## Architecture
 
 The library is built around several key components:
@@ -73,6 +89,23 @@ Represents a modification to the CRDT state, including operation ID, dependencie
 
 ### Frontiers
 A structure that manages the frontiers (latest operations) of the CRDT.
+
+## Project Status
+
+This library is currently **in progress** and under active development. While all existing functionality is thoroughly tested, we are continuously working on improvements and new features.
+
+### Contributing
+We welcome contributions! Whether you want to:
+- Fix bugs
+- Add new features
+- Improve documentation
+- Optimize performance
+- Or something else
+
+Feel free to:
+1. Check out our [GitHub repository](https://github.com/MattiaPispisa/crdt)
+2. Look at the [open issues](https://github.com/MattiaPispisa/crdt/issues)
+3. Submit a Pull Request
 
 ## Acknowledgments
 
