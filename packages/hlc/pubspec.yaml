@@ -1,5 +1,5 @@
 name: hlc_dart
-description: A Hybrid Logical Clock implementation in Dart that combines logical and physical clocks, based on the paper "Logical Physical Clocks and Consistent Snapshots in Globally Distributed Databases".
+description: A Hybrid Logical Clock implementation in Dart, based on the paper "Logical Physical Clocks and Consistent Snapshots in Globally Distributed Databases".
 homepage: https://mattiapispisa.github.io/
 repository: https://github.com/MattiaPispisa/crdt/tree/main/packages/hlc
 topics: [local-first, hlc, logical-clocks, distributed-systems]
