@@ -1,5 +1,8 @@
 # CRDT LF
 
+[![coverage][coverage_badge]][coverage_badge]
+[![License: MIT][license_badge]][license_link]
+
 - [CRDT LF](#crdt-lf)
   - [Features](#features)
   - [Getting Started](#getting-started)
@@ -13,6 +16,7 @@
     - [Change](#change)
     - [Frontiers](#frontiers)
   - [Project Status](#project-status)
+    - [Roadmap](#roadmap)
     - [Contributing](#contributing)
   - [Acknowledgments](#acknowledgments)
 
@@ -94,6 +98,8 @@ A structure that manages the frontiers (latest operations) of the CRDT.
 
 This library is currently **in progress** and under active development. While all existing functionality is thoroughly tested, we are continuously working on improvements and new features.
 
+### [Roadmap](https://github.com/users/MattiaPispisa/projects/1)
+
 ### Contributing
 We welcome contributions! Whether you want to:
 - Fix bugs
@@ -111,3 +117,7 @@ Feel free to:
 
 - [Fugue Algorithm](https://arxiv.org/abs/2005.05914)
 - [Hybrid Logical Clock](https://cse.buffalo.edu/tech-reports/2014-04.pdf)
+
+[license_badge]: https://img.shields.io/badge/license-MIT-blue.svg
+[license_link]: https://opensource.org/licenses/MIT
+[coverage_badge]: https://img.shields.io/badge/coverage-87%25-green
