@@ -1,12 +1,10 @@
-/// [Frontiers] implementation for CRDT
-///
-/// [Frontiers] represent the latest operations in a DAG.
-/// They are used to efficiently track the latest state of the system.
-
 import '../operation/id.dart';
 import '../utils/set.dart';
 
-/// A [Frontiers] represents the latest operations in a [DAG].
+/// [Frontiers] implementation for CRDT
+///
+/// [Frontiers] represent the latest operations in a [DAG].
+/// They are used to efficiently track the latest state of the system.
 class Frontiers {
   /// Creates a new empty [Frontiers]
   Frontiers() : _frontiers = {};

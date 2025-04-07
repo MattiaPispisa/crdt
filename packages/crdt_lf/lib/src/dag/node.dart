@@ -1,11 +1,9 @@
-/// Directed Acyclic Graph (DAG) Node implementation for CRDT
-///
-/// A DAGNode represents a node in the Directed Acyclic Graph (DAG)
-/// that tracks the causal relationships between operations.
 
 import '../operation/id.dart';
 import '../utils/set.dart';
 
+/// Directed Acyclic Graph (DAG) Node implementation for CRDT
+///
 /// A [DAGNode] represents a node in the [DAG] that tracks the causal relationships
 /// between operations.
 class DAGNode {

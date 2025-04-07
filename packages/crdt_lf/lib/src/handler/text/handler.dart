@@ -1,8 +1,3 @@
-/// CRDT Text implementation
-///
-/// A CRDTText is a text data structure that uses CRDT for conflict-free collaboration.
-/// It provides methods for inserting, deleting, and accessing text content.
-
 import 'package:crdt_lf/src/change/change.dart';
 import 'package:crdt_lf/src/operation/type.dart';
 
@@ -13,7 +8,10 @@ import '../handler.dart';
 
 part 'operation.dart';
 
-/// A text data structure that uses CRDT for conflict-free collaboration
+/// CRDT Text implementation
+///
+/// A CRDTText is a text data structure that uses CRDT for conflict-free collaboration.
+/// It provides methods for inserting, deleting, and accessing text content.
 class CRDTTextHandler extends Handler {
   /// Creates a new CRDTText with the given document and ID
   CRDTTextHandler(this._doc, this._id);

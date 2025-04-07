@@ -1,14 +1,12 @@
-/// ChangeStore implementation for CRDT
-///
-/// A ChangeStore stores and manages changes to the CRDT state.
-/// It provides methods for adding, retrieving, and exporting changes.
-
 import 'package:crdt_lf/src/operation/id.dart';
 
 import '../dag/graph.dart';
 import 'change.dart';
 
-/// A store for changes to the CRDT state
+/// ChangeStore implementation for CRDT
+///
+/// A ChangeStore stores and manages changes to the CRDT state.
+/// It provides methods for adding, retrieving, and exporting changes.
 class ChangeStore {
   const ChangeStore._(this._changes);
 

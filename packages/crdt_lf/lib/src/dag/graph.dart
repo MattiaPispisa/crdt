@@ -1,13 +1,11 @@
-/// DAG (Directed Acyclic Graph) implementation for CRDT
-///
-/// The [DAG] tracks the causal relationships between operations in the CRDT system.
-/// It is used to determine which operations are causally ready to be applied.
-
 import '../frontiers/frontiers.dart';
 import '../operation/id.dart';
 import 'node.dart';
 
-/// A [DAG] tracks the causal relationships between operations in the CRDT system.
+/// DAG (Directed Acyclic Graph) implementation for CRDT
+///
+/// The [DAG] tracks the causal relationships between operations in the CRDT system.
+/// It is used to determine which operations are causally ready to be applied.
 class DAG {
   /// Creates a new DAG with the given nodes and frontiers
   DAG({

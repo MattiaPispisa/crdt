@@ -1,8 +1,3 @@
-/// Change implementation for CRDT
-///
-/// A Change represents a modification to the CRDT state.
-/// It includes an operation ID, dependencies, timestamp, author, and payload.
-
 import 'package:crdt_lf/src/operation/operation.dart';
 import 'package:hlc_dart/hlc_dart.dart';
 
@@ -10,7 +5,10 @@ import '../operation/id.dart';
 import '../peer_id.dart';
 import '../utils/set.dart';
 
-/// A change to the CRDT state
+/// Change implementation for CRDT
+///
+/// A Change represents a modification to the CRDT state.
+/// It includes an operation ID, dependencies, timestamp, author, and payload.
 class Change {
   /// Creates a new [Change] with the given properties
   const Change._({

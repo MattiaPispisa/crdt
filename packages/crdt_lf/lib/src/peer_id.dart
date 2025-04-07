@@ -1,8 +1,3 @@
-/// [PeerId] implementation for CRDT
-///
-/// A [PeerId] uniquely identifies a peer in the CRDT network.
-/// It is used to distinguish between different peers when merging changes.
-
 import 'dart:math';
 
 final peerIdRegex = RegExp(
@@ -10,7 +5,10 @@ final peerIdRegex = RegExp(
   caseSensitive: false,
 );
 
-/// A unique identifier for a peer in the CRDT network
+/// [PeerId] implementation for CRDT
+///
+/// A [PeerId] uniquely identifies a peer in the CRDT network.
+/// It is used to distinguish between different peers when merging changes.
 class PeerId with Comparable<PeerId> {
   static final Random _random = Random.secure();
 

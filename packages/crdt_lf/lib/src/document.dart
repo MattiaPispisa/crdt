@@ -1,9 +1,3 @@
-/// CRDT Document implementation
-///
-/// A CRDTDocument is the main entry point for the CRDT system.
-/// It manages the DAG, ChangeStore, and provides methods for creating,
-/// applying, exporting, and importing changes.
-
 import 'dart:convert';
 
 import 'package:hlc_dart/hlc_dart.dart';
@@ -15,7 +9,11 @@ import 'operation/operation.dart';
 import 'peer_id.dart';
 import 'operation/id.dart';
 
-/// A document that uses CRDT for conflict-free collaboration
+/// CRDT Document implementation
+///
+/// A CRDTDocument is the main entry point for the CRDT system.
+/// It manages the DAG, ChangeStore, and provides methods for creating,
+/// applying, exporting, and importing changes.
 class CRDTDocument {
   /// Creates a new [CRDTDocument] with the given [peerId]
   CRDTDocument({

@@ -12,8 +12,6 @@ part 'operation.dart';
 ///
 /// A CRDTList is a list data structure that uses CRDT for conflict-free collaboration.
 /// It provides methods for inserting, deleting, and accessing elements.
-
-/// A list data structure that uses CRDT for conflict-free collaboration
 class CRDTListHandler<T> extends Handler {
   /// Creates a new CRDTList with the given document and ID
   CRDTListHandler(this._doc, this._id);
