@@ -1,13 +1,6 @@
 import 'package:crdt_lf/crdt_lf.dart';
-import 'package:crdt_lf/src/change/change.dart';
-
-import '../../document.dart';
-import '../../operation/id.dart';
-import '../../operation/operation.dart';
-import '../../operation/type.dart';
-import '../handler.dart';
-
 part 'operation.dart';
+
 
 /// CRDT List implementation
 ///
