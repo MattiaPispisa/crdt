@@ -35,5 +35,95 @@ void main() {
       node.value = null;
       expect(node.isDeleted, true);
     });
+
+    test('should serialize to JSON correctly', () {
+      final id = FugueElementID(PeerId.parse('fb089be6-cc76-4208-b7e3-bff39194b3b6'), 1);
+      final parentId = FugueElementID.nullID();
+      final node = FugueNode(
+        id: id,
+        value: 'a',
+        parentID: parentId,
+        side: FugueSide.right,
+      );
+
+      final json = node.toJson();
+      expect(json['id'], equals(id.toJson()));
+      expect(json['value'], equals('a'));
+      expect(json['parentID'], equals(parentId.toJson()));
+      expect(json['side'], equals('right'));
+    });
+
+    test('should deserialize from JSON correctly', () {
+      final id = FugueElementID(PeerId.parse('fb089be6-cc76-4208-b7e3-bff39194b3b6'), 1);
+      final parentId = FugueElementID.nullID();
+      final json = {
+        'id': id.toJson(),
+        'value': 'a',
+        'parentID': parentId.toJson(),
+        'side': 'right',
+      };
+
+      final node = FugueNode.fromJson(json);
+      expect(node.id, equals(id));
+      expect(node.value, equals('a'));
+      expect(node.parentID, equals(parentId));
+      expect(node.side, equals(FugueSide.right));
+    });
+
+    test('should handle null value in JSON serialization', () {
+      final id = FugueElementID(PeerId.parse('fb089be6-cc76-4208-b7e3-bff39194b3b6'), 1);
+      final parentId = FugueElementID.nullID();
+      final node = FugueNode(
+        id: id,
+        value: null,
+        parentID: parentId,
+        side: FugueSide.right,
+      );
+
+      final json = node.toJson();
+      expect(json['value'], isNull);
+    });
+
+    test('should handle null value in JSON deserialization', () {
+      final id = FugueElementID(PeerId.parse('fb089be6-cc76-4208-b7e3-bff39194b3b6'), 1);
+      final parentId = FugueElementID.nullID();
+      final json = {
+        'id': id.toJson(),
+        'value': null,
+        'parentID': parentId.toJson(),
+        'side': 'right',
+      };
+
+      final node = FugueNode.fromJson(json);
+      expect(node.value, isNull);
+    });
+
+    test('toString returns correct format', () {
+      final id = FugueElementID(PeerId.parse('fb089be6-cc76-4208-b7e3-bff39194b3b6'), 1);
+      final parentId = FugueElementID.nullID();
+      final node = FugueNode(
+        id: id,
+        value: 'a',
+        parentID: parentId,
+        side: FugueSide.right,
+      );
+
+      final expected = 'FugueNode(id: $id, value: a, parentID: $parentId, side: ${FugueSide.right})';
+      expect(node.toString(), equals(expected));
+    });
+
+    test('toString handles null value correctly', () {
+      final id = FugueElementID(PeerId.parse('fb089be6-cc76-4208-b7e3-bff39194b3b6'), 1);
+      final parentId = FugueElementID.nullID();
+      final node = FugueNode(
+        id: id,
+        value: null,
+        parentID: parentId,
+        side: FugueSide.right,
+      );
+
+      final expected = 'FugueNode(id: $id, value: null, parentID: $parentId, side: ${FugueSide.right})';
+      expect(node.toString(), equals(expected));
+    });
   });
 }
