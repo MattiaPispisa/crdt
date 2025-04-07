@@ -13,6 +13,15 @@ void main() {
       expect(handler.value, 'Hello World');
     });
 
+    test('should handle empty text insertion', () {
+      final doc = CRDTDocument();
+      final handler = CRDTFugueTextHandler(doc, 'text1');
+
+      handler.insert(0, '');
+      expect(handler.value, '');
+      expect(handler.length, 0);
+    });
+
     test('should delete text', () {
       final doc = CRDTDocument();
       final handler = CRDTFugueTextHandler(doc, 'text1');
@@ -22,6 +31,80 @@ void main() {
 
       handler.delete(5, 6); // Delete " World"
       expect(handler.value, 'Hello');
+    });
+
+    test('should handle out of bounds deletion', () {
+      final doc = CRDTDocument();
+      final handler = CRDTFugueTextHandler(doc, 'text1');
+
+      handler.insert(0, 'Hello');
+      handler.delete(10, 5); // Try to delete out of bounds
+      expect(handler.value, 'Hello');
+    });
+
+    test('should handle value caching', () {
+      final doc = CRDTDocument();
+      final handler = CRDTFugueTextHandler(doc, 'text1');
+
+      handler.insert(0, 'Hello');
+      final value1 = handler.value;
+      final value2 = handler.value;
+      expect(identical(value1, value2), isTrue);
+
+      // Modify the text to invalidate cache
+      handler.insert(5, ' World');
+      final value3 = handler.value;
+      expect(identical(value1, value3), isFalse);
+    });
+
+    test('should handle value cache invalidation on document change', () {
+      final doc = CRDTDocument();
+      final handler1 = CRDTFugueTextHandler(doc, 'text1');
+      final handler2 = CRDTFugueTextHandler(doc, 'text2');
+
+      handler1.insert(0, 'Hello');
+      final value1 = handler1.value;
+
+      // Modify through another handler to change document version
+      handler2.insert(0, 'World');
+
+      final value2 = handler1.value;
+      expect(identical(value1, value2), isFalse);
+    });
+
+    test('should maintain correct counter for element IDs', () {
+      final doc = CRDTDocument();
+      final handler = CRDTFugueTextHandler(doc, 'text1');
+
+      // Insert multiple characters
+      handler.insert(0, 'Hello');
+      handler.insert(5, ' World');
+      handler.insert(11, '!');
+
+      // Each character should have a unique ID
+      final changes = doc.exportChanges();
+      final ids =
+          changes.map((c) => c.payload['newNodeID']['counter']).toList();
+      expect(ids, equals([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]));
+    });
+
+    test('toString returns correct string representation', () {
+      final doc = CRDTDocument();
+      final handler = CRDTFugueTextHandler(doc, 'text1');
+
+      handler.insert(0, 'Hello World');
+      expect(handler.toString(), equals('CRDTFugueText(text1, "Hello World")'));
+    });
+
+    test('toString truncates long text', () {
+      final doc = CRDTDocument();
+      final handler = CRDTFugueTextHandler(doc, 'text1');
+
+      handler.insert(0, 'This is a very long text that should be truncated');
+      expect(
+        handler.toString(),
+        equals('CRDTFugueText(text1, "This is a very long ...")'),
+      );
     });
 
     test('should handle concurrent insertions without interleaving', () {

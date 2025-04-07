@@ -63,8 +63,4 @@ class OperationType {
   String toPayload() {
     return '${handler}:${type}';
   }
-
-  String toString() {
-    return 'OperationType(handler: $handler, type: $type)';
-  }
 }

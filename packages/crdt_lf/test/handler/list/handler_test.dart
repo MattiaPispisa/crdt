@@ -180,5 +180,25 @@ void main() {
       expect(finalState.contains('World'), isTrue);
       expect(finalState.contains('Dart'), isTrue);
     });
+
+    test('toString returns correct string representation for empty list', () {
+      final doc = CRDTDocument(
+        peerId: PeerId.parse('37f1ec87-6ea5-430b-a627-a6b92b56a02d'),
+      );
+      final handler = CRDTListHandler<String>(doc, 'list1');
+      expect(handler.toString(), equals('CRDTList(list1, [])'));
+    });
+
+    test(
+        'toString returns correct string representation for list with elements',
+        () {
+      final doc = CRDTDocument(
+        peerId: PeerId.parse('37f1ec87-6ea5-430b-a627-a6b92b56a02d'),
+      );
+      final handler = CRDTListHandler<String>(doc, 'list1');
+      handler.insert(0, 'Hello');
+      handler.insert(1, 'World');
+      expect(handler.toString(), equals('CRDTList(list1, [Hello, World])'));
+    });
   });
 }

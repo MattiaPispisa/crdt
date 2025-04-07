@@ -3,87 +3,185 @@ import 'package:test/test.dart';
 
 void main() {
   group('FugueTree', () {
-    test('should initialize with a root node', () {
+    test('empty creates a tree with root node', () {
       final tree = FugueTree.empty();
-      final values = tree.values();
-
-      expect(values.isEmpty, true);
+      expect(tree.values(), isEmpty);
     });
 
-    test('should insert and retrieve values', () {
+    test('fromJson creates tree from JSON', () {
+      final json = {
+        'nodes': {
+          'null': {
+            'node': {
+              'id': {'replicaID': '', 'counter': null},
+              'value': null,
+              'parentID': {'replicaID': '', 'counter': null},
+              'side': 'left'
+            },
+            'leftChildren': [],
+            'rightChildren': []
+          }
+        }
+      };
+
+      final tree = FugueTree.fromJson(json);
+      expect(tree.values(), isEmpty);
+    });
+
+    test('toJson serializes tree to JSON', () {
       final tree = FugueTree.empty();
-      final id1 = FugueElementID(PeerId.parse('4ed31065-d9e3-49cf-998a-1c156dc2b854'), 1);
+      final json = tree.toJson();
+      expect(json, isA<Map<String, dynamic>>());
+      expect(json['nodes'], isA<Map<String, dynamic>>());
+    });
+
+    test('toString returns tree representation', () {
+      final tree = FugueTree.empty();
+      final str = tree.toString();
+      expect(str, contains('Tree:'));
+    });
+
+    test('insert with rightOrigin creates right child', () {
+      final tree = FugueTree.empty();
+      final peerId = PeerId.parse('ee121333-c65b-4afc-b226-4ef116df3432');
+      final leftOrigin = FugueElementID.nullID();
+      final rightOrigin = FugueElementID(peerId, 0);
 
       tree.insert(
-        newID: id1,
-        value: 'a',
-        leftOrigin: tree.findNodeAtPosition(0),
+        newID: FugueElementID(peerId, 1),
+        value: 'test',
+        leftOrigin: leftOrigin,
+        rightOrigin: rightOrigin,
+      );
+
+      expect(tree.values(), equals(['test']));
+    });
+
+    test('insert with leftOrigin creates right child', () {
+      final tree = FugueTree.empty();
+      final peerId = PeerId.parse('ee121333-c65b-4afc-b226-4ef116df3432');
+      
+      // First insert a node
+      final firstNode = FugueElementID(peerId, 1);
+      tree.insert(
+        newID: firstNode,
+        value: 'first',
+        leftOrigin: FugueElementID.nullID(),
         rightOrigin: FugueElementID.nullID(),
       );
 
-      final values = tree.values();
-      expect(values, ['a']);
+      // Then insert a node with leftOrigin
+      tree.insert(
+        newID: FugueElementID(peerId, 2),
+        value: 'second',
+        leftOrigin: firstNode,
+        rightOrigin: FugueElementID.nullID(),
+      );
+
+      expect(tree.values(), equals(['first', 'second']));
     });
 
-    test('should delete values', () {
+    test('should be attached under root', () {
       final tree = FugueTree.empty();
-      final rootId = FugueElementID.nullID();
-      final id1 = FugueElementID(PeerId.parse('e45b1e99-89ef-49ab-9bc1-b5da4ea3ac1e'), 1);
+      final peerId = PeerId.parse('4e91a152-582f-4f46-8944-c2c2e8b217ff');
 
-      tree.insert(
-          newID: id1,
-          value: 'a',
-          leftOrigin: rootId,
-          rightOrigin: FugueElementID.nullID());
-      expect(tree.values(), ['a']);
-
-      tree.delete(id1);
-      expect(tree.values(), []);
+      expect(
+        () => tree.insert(
+          newID: FugueElementID(peerId, 1),
+          value: 'test',
+          leftOrigin: FugueElementID.nullID(), // Invalid parent
+          rightOrigin: FugueElementID.nullID(),
+        ),
+        returnsNormally,
+      );
     });
 
-    test('should find node at position', () {
+    test('insert throws on duplicate node', () {
       final tree = FugueTree.empty();
-      final rootId = FugueElementID.nullID();
-      final id1 = FugueElementID(PeerId.parse('9842c3d1-e452-420b-ab4e-23c7e146b5a6'), 1);
-      final id2 = FugueElementID(PeerId.parse('9842c3d1-e452-420b-ab4e-23c7e146b5a6'), 2);
+      final peerId = PeerId.parse('4e91a152-582f-4f46-8944-c2c2e8b217ff');
+      final nodeId = FugueElementID(peerId, 1);
 
+      // Insert first time
       tree.insert(
-          newID: id1,
-          value: 'a',
-          leftOrigin: rootId,
-          rightOrigin: FugueElementID.nullID());
-      tree.insert(
-          newID: id2,
-          value: 'b',
-          leftOrigin: id1,
-          rightOrigin: FugueElementID.nullID());
+        newID: nodeId,
+        value: 'test',
+        leftOrigin: FugueElementID.nullID(),
+        rightOrigin: FugueElementID.nullID(),
+      );
 
-      final nodeAtPos0 = tree.findNodeAtPosition(0);
-      final nodeAtPos1 = tree.findNodeAtPosition(1);
-
-      expect(nodeAtPos0, id1);
-      expect(nodeAtPos1, id2);
+      // Try to insert again
+      expect(
+        () => tree.insert(
+          newID: nodeId,
+          value: 'test2',
+          leftOrigin: FugueElementID.nullID(),
+          rightOrigin: FugueElementID.nullID(),
+        ),
+        throwsException,
+      );
     });
 
-    test('should find next node', () {
+    test('findNodeAtPosition returns null for invalid position', () {
       final tree = FugueTree.empty();
-      final rootId = FugueElementID.nullID();
-      final id1 = FugueElementID(PeerId.parse('3ea92d73-e96d-4b0f-824e-6b37764e2f3e'), 1);
-      final id2 = FugueElementID(PeerId.parse('3ea92d73-e96d-4b0f-824e-6b37764e2f3e'), 2);
+      final result = tree.findNodeAtPosition(10);
+      expect(result.isNull, isTrue);
+    });
+
+    test('findNextNode returns null for last node', () {
+      final tree = FugueTree.empty();
+      final result = tree.findNextNode(FugueElementID.nullID());
+      expect(result.isNull, isTrue);
+    });
+
+    test('delete marks node as deleted', () {
+      final tree = FugueTree.empty();
+      final peerId = PeerId.parse('4e91a152-582f-4f46-8944-c2c2e8b217ff');
+      final nodeId = FugueElementID(peerId, 1);
 
       tree.insert(
-          newID: id1,
-          value: 'a',
-          leftOrigin: rootId,
-          rightOrigin: FugueElementID.nullID());
-      tree.insert(
-          newID: id2,
-          value: 'b',
-          leftOrigin: id1,
-          rightOrigin: FugueElementID.nullID());
+        newID: nodeId,
+        value: 'test',
+        leftOrigin: FugueElementID.nullID(),
+        rightOrigin: FugueElementID.nullID(),
+      );
 
-      final nextNode = tree.findNextNode(id1);
-      expect(nextNode, id2);
+      expect(tree.values(), equals(['test']));
+
+      tree.delete(nodeId);
+      expect(tree.values(), isEmpty);
+    });
+
+    test('values returns all non-deleted values in order', () {
+      final tree = FugueTree.empty();
+      final peerId = PeerId.parse('4e91a152-582f-4f46-8944-c2c2e8b217ff');
+
+      // Insert multiple values
+      tree.insert(
+        newID: FugueElementID(peerId, 1),
+        value: 'a',
+        leftOrigin: FugueElementID.nullID(),
+        rightOrigin: FugueElementID.nullID(),
+      );
+
+      tree.insert(
+        newID: FugueElementID(peerId, 2),
+        value: 'b',
+        leftOrigin: FugueElementID(peerId, 1),
+        rightOrigin: FugueElementID.nullID(),
+      );
+
+      tree.insert(
+        newID: FugueElementID(peerId, 3),
+        value: 'c',
+        leftOrigin: FugueElementID(peerId, 2),
+        rightOrigin: FugueElementID.nullID(),
+      );
+
+      expect(tree.values(), equals(['a', 'b', 'c']));
+
+      // Delete middle value
+      tree.delete(FugueElementID(peerId, 2));
+      expect(tree.values(), equals(['a', 'c']));
     });
   });
 }

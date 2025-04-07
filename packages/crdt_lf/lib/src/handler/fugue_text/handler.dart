@@ -2,6 +2,7 @@
 ///
 /// A CRDTFugueText is a text data structure that uses the Fugue algorithm to minimize interleaving.
 /// It provides methods for inserting, deleting, and accessing text content.
+import 'package:crdt_lf/crdt_lf.dart';
 import 'package:crdt_lf/src/change/change.dart';
 import 'package:crdt_lf/src/document.dart';
 import 'package:crdt_lf/src/handler/handler.dart';
@@ -109,7 +110,7 @@ class CRDTFugueTextHandler extends Handler {
   String get value {
     // Check if cache is still valid
     final currentVersion = _doc.version;
-    if (_cachedText != null && _cachedVersion == currentVersion) {
+    if (_cachedText != null && setEquals(_cachedVersion, currentVersion)) {
       return _cachedText!;
     }
 
