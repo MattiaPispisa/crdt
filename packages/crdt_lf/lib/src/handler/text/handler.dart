@@ -1,11 +1,4 @@
-import 'package:crdt_lf/src/change/change.dart';
-import 'package:crdt_lf/src/operation/type.dart';
-
-import '../../document.dart';
-import '../../operation/id.dart';
-import '../../operation/operation.dart';
-import '../handler.dart';
-
+import 'package:crdt_lf/crdt_lf.dart';
 part 'operation.dart';
 
 /// CRDT Text implementation
@@ -51,7 +44,7 @@ class CRDTTextHandler extends Handler {
   String get value {
     // Check if the cached state is still valid
     final currentVersion = _doc.version;
-    if (_cachedState != null && _cachedVersion == currentVersion) {
+    if (_cachedState != null && setEquals(_cachedVersion, currentVersion)) {
       return _cachedState!;
     }
 

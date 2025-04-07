@@ -9,7 +9,7 @@ class FugueElementID with Comparable<FugueElementID> {
   final int? counter;
 
   /// Constructor that initializes the element ID
-  FugueElementID(this.replicaID, this.counter);
+  const FugueElementID(this.replicaID, this.counter);
 
   /// Constructor to create a null ID (used for the root)
   FugueElementID.nullID()
@@ -78,7 +78,9 @@ class FugueElementID with Comparable<FugueElementID> {
 
   @override
   bool operator ==(Object other) {
-    if (identical(this, other)) return true;
+    if (identical(this, other)) {
+      return true;
+    }
     return other is FugueElementID &&
         other.replicaID == replicaID &&
         other.counter == counter;

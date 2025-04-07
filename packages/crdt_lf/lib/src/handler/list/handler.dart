@@ -1,3 +1,4 @@
+import 'package:crdt_lf/crdt_lf.dart';
 import 'package:crdt_lf/src/change/change.dart';
 
 import '../../document.dart';
@@ -59,7 +60,7 @@ class CRDTListHandler<T> extends Handler {
   List<T> get value {
     // Check if the cached state is still valid
     final currentVersion = _doc.version;
-    if (_cachedState != null && _cachedVersion == currentVersion) {
+    if (_cachedState != null && setEquals(_cachedVersion, currentVersion)) {
       return List.from(_cachedState!);
     }
 

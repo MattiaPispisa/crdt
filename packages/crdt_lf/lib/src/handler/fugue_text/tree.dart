@@ -155,10 +155,6 @@ class FugueTree {
   void _addNodeToTree(FugueNode node) {
     final parentID = node.parentID;
 
-    if (!_nodes.containsKey(parentID)) {
-      throw Exception('Parent node not found: $parentID');
-    }
-
     if (_nodes.containsKey(node.id)) {
       if (_nodes[node.id]!.node.value != null) {
         throw Exception('Node already exists: ${node.id}');

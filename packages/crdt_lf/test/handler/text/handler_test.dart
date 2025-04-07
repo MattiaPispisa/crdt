@@ -68,20 +68,42 @@ void main() {
       expect(text.length, equals(11));
     });
 
-    test('value caches result until invalidated', () {
+    test('value uses cached state when version matches', () {
       text.insert(0, 'Hello');
       final value1 = text.value;
       final value2 = text.value;
       expect(identical(value1, value2), isTrue);
     });
 
-    test('value recomputes after cache invalidation', () {
+    test('value recomputes when version changes', () {
       text.insert(0, 'Hello');
       final value1 = text.value;
       text.insert(5, ' World');
       final value2 = text.value;
       expect(identical(value1, value2), isFalse);
       expect(value2, equals('Hello World'));
+    });
+
+    test('value recomputes after cache invalidation', () {
+      text.insert(0, 'Hello');
+      final value1 = text.value;
+
+      // Force cache invalidation
+      text.insert(5, ' World');
+
+      final value2 = text.value;
+      expect(identical(value1, value2), isFalse);
+      expect(value2, equals('Hello World'));
+    });
+
+    test('value maintains cache across multiple reads', () {
+      text.insert(0, 'Hello');
+      final value1 = text.value;
+      final value2 = text.value;
+      final value3 = text.value;
+
+      expect(identical(value1, value2), isTrue);
+      expect(identical(value2, value3), isTrue);
     });
 
     test('toString returns correct string representation', () {

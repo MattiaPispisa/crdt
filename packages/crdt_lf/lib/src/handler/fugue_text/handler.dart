@@ -1,13 +1,4 @@
-import 'package:crdt_lf/src/change/change.dart';
-import 'package:crdt_lf/src/document.dart';
-import 'package:crdt_lf/src/handler/handler.dart';
-import 'package:crdt_lf/src/operation/id.dart';
-import 'package:crdt_lf/src/operation/operation.dart';
-import 'package:crdt_lf/src/operation/type.dart';
-
-import 'element_id.dart';
-import 'tree.dart';
-
+import 'package:crdt_lf/crdt_lf.dart';
 part 'operation.dart';
 
 /// CRDT Text implementation with the Fugue algorithm
@@ -108,7 +99,7 @@ class CRDTFugueTextHandler extends Handler {
   String get value {
     // Check if cache is still valid
     final currentVersion = _doc.version;
-    if (_cachedText != null && _cachedVersion == currentVersion) {
+    if (_cachedText != null && setEquals(_cachedVersion, currentVersion)) {
       return _cachedText!;
     }
 

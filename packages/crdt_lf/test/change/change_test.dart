@@ -141,5 +141,70 @@ void main() {
       expect(sorted[0], equals(change1));
       expect(sorted[1], equals(change2));
     });
+
+    test('toString returns correct format', () {
+      final change = Change(
+        id: id,
+        operation: operation,
+        deps: deps,
+        hlc: hlc,
+        author: author,
+      );
+
+      final expected = 'Change(id: $id, deps: [${deps.first}], hlc: $hlc, author: $author, payload: ${operation.toPayload()})';
+      expect(change.toString(), equals(expected));
+    });
+
+    test('hashCode is consistent with equality', () {
+      final change1 = Change(
+        id: id,
+        operation: operation,
+        deps: deps,
+        hlc: hlc,
+        author: author,
+      );
+
+      final change2 = Change(
+        id: id,
+        operation: operation,
+        deps: deps,
+        hlc: hlc,
+        author: author,
+      );
+
+      final change3 = Change(
+        id: OperationId.parse('b7353649-1b52-43b0-9dbc-a843e3308cb0@1.3'),
+        operation: operation,
+        deps: deps,
+        hlc: hlc,
+        author: author,
+      );
+
+      expect(change1.hashCode, equals(change2.hashCode));
+      expect(change1.hashCode, isNot(equals(change3.hashCode)));
+    });
+
+    test('hashCode handles different dependencies correctly', () {
+      final deps1 = {OperationId.parse('3a5cd393-813c-46c8-97f3-9e99a6f2c8be@1.1')};
+      final deps2 = {OperationId.parse('b7353649-1b52-43b0-9dbc-a843e3308cb0@1.3')};
+
+      final change1 = Change(
+        id: id,
+        operation: operation,
+        deps: deps1,
+        hlc: hlc,
+        author: author,
+      );
+
+      final change2 = Change(
+        id: id,
+        operation: operation,
+        deps: deps2,
+        hlc: hlc,
+        author: author,
+      );
+
+      expect(change1.hashCode, isNot(equals(change2.hashCode)));
+    });
   });
 }
