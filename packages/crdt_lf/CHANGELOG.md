@@ -1,7 +1,7 @@
 ## [Unreleased]
 
 ### Added
-- Tests
+- Tests [6](https://github.com/MattiaPispisa/crdt/issues/6)
   
 ### Fixed
 - Fix cached value in handlers

@@ -7,6 +7,11 @@ repository: https://github.com/invertase/melos
 
 sdkPath: .fvm/flutter_sdk
 
+command:
+  publish:
+    hooks:
+      pre: dart analyze --fatal-infos --fatal-warnings && melos run test
+
 scripts:
   test:
     name: Test
