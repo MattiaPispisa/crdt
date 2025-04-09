@@ -1,4 +1,4 @@
-## [Unreleased]
+## [0.2.0] - 2025-04-09
 
 ### Added
 - Tests [6](https://github.com/MattiaPispisa/crdt/issues/6)
