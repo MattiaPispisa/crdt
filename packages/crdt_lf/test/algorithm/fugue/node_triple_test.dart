@@ -10,7 +10,7 @@ void main() {
     setUp(() {
       final nodeId = FugueElementID(PeerId.parse('ed97101d-a3f6-45a9-bf56-d5e67a0bc2e0'), 1);
       final parentId = FugueElementID.nullID();
-      node = FugueNode(
+      node = FugueNode<String>(
         id: nodeId,
         value: 'a',
         parentID: parentId,

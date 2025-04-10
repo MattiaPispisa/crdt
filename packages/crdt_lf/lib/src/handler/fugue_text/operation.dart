@@ -1,9 +1,9 @@
 part of 'handler.dart';
 
 /// Factory for Fugue operations
-class _FugueOperationFactory {
+class _FugueTextOperationFactory {
   /// Constructor that initializes the factory
-  _FugueOperationFactory(this.handler);
+  _FugueTextOperationFactory(this.handler);
 
   /// The handler associated with this factory
   final Handler handler;
@@ -15,9 +15,9 @@ class _FugueOperationFactory {
     }
 
     if (payload['type'] == OperationType.insert(handler).toPayload()) {
-      return _FugueInsertOperation.fromPayload(payload);
+      return _FugueTextInsertOperation.fromPayload(payload);
     } else if (payload['type'] == OperationType.delete(handler).toPayload()) {
-      return _FugueDeleteOperation.fromPayload(payload);
+      return _FugueTextDeleteOperation.fromPayload(payload);
     }
 
     return null;
@@ -25,9 +25,9 @@ class _FugueOperationFactory {
 }
 
 /// Insert operation for the Fugue algorithm
-class _FugueInsertOperation extends Operation {
+class _FugueTextInsertOperation extends Operation {
   /// Constructor that initializes an insert operation
-  _FugueInsertOperation({
+  _FugueTextInsertOperation({
     required this.newNodeID,
     required this.text,
     required this.leftOrigin,
@@ -37,14 +37,14 @@ class _FugueInsertOperation extends Operation {
   });
 
   /// Factory to create an insert operation from a handler
-  factory _FugueInsertOperation.fromHandler(
+  factory _FugueTextInsertOperation.fromHandler(
     Handler handler, {
     required FugueElementID newNodeID,
     required String text,
     required FugueElementID leftOrigin,
     required FugueElementID rightOrigin,
   }) {
-    return _FugueInsertOperation(
+    return _FugueTextInsertOperation(
       id: handler.id,
       type: OperationType.insert(handler),
       newNodeID: newNodeID,
@@ -77,8 +77,8 @@ class _FugueInsertOperation extends Operation {
       };
 
   /// Creates an insert operation from a payload
-  static _FugueInsertOperation fromPayload(dynamic payload) =>
-      _FugueInsertOperation(
+  static _FugueTextInsertOperation fromPayload(dynamic payload) =>
+      _FugueTextInsertOperation(
         id: payload['id'],
         type: OperationType.fromPayload(payload['type']),
         newNodeID: FugueElementID.fromJson(payload['newNodeID']),
@@ -89,20 +89,20 @@ class _FugueInsertOperation extends Operation {
 }
 
 /// Delete operation for the Fugue algorithm
-class _FugueDeleteOperation extends Operation {
+class _FugueTextDeleteOperation extends Operation {
   /// Constructor that initializes a delete operation
-  _FugueDeleteOperation({
+  _FugueTextDeleteOperation({
     required this.nodeID,
     required super.id,
     required super.type,
   });
 
   /// Factory to create a delete operation from a handler
-  factory _FugueDeleteOperation.fromHandler(
+  factory _FugueTextDeleteOperation.fromHandler(
     Handler handler, {
     required FugueElementID nodeID,
   }) {
-    return _FugueDeleteOperation(
+    return _FugueTextDeleteOperation(
       id: handler.id,
       type: OperationType.delete(handler),
       nodeID: nodeID,
@@ -120,8 +120,8 @@ class _FugueDeleteOperation extends Operation {
       };
 
   /// Creates a delete operation from a payload
-  static _FugueDeleteOperation fromPayload(dynamic payload) =>
-      _FugueDeleteOperation(
+  static _FugueTextDeleteOperation fromPayload(dynamic payload) =>
+      _FugueTextDeleteOperation(
         id: payload['id'],
         type: OperationType.fromPayload(payload['type']),
         nodeID: FugueElementID.fromJson(payload['nodeID']),

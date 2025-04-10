@@ -1,4 +1,12 @@
-import 'package:crdt_lf/crdt_lf.dart';
+import 'package:crdt_lf/src/algorithm/fugue/element_id.dart';
+import 'package:crdt_lf/src/algorithm/fugue/tree.dart';
+import 'package:crdt_lf/src/change/change.dart';
+import 'package:crdt_lf/src/document.dart';
+import 'package:crdt_lf/src/handler/handler.dart';
+import 'package:crdt_lf/src/operation/id.dart';
+import 'package:crdt_lf/src/operation/operation.dart';
+import 'package:crdt_lf/src/operation/type.dart';
+import 'package:crdt_lf/src/utils/set.dart';
 part 'operation.dart';
 
 /// CRDT Text implementation with the Fugue algorithm
@@ -16,7 +24,7 @@ class CRDTFugueTextHandler extends Handler {
   final String _id;
 
   /// The Fugue tree that represents the text
-  FugueTree _tree = FugueTree.empty();
+  FugueTree<String> _tree = FugueTree<String>.empty();
 
   /// Counter to generate unique IDs for elements
   int _counter = 0;
@@ -45,7 +53,7 @@ class CRDTFugueTextHandler extends Handler {
     // Insert first character
     final firstNodeID = FugueElementID(_doc.peerId, _counter++);
     _doc.createChange(
-      _FugueInsertOperation.fromHandler(
+      _FugueTextInsertOperation.fromHandler(
         this,
         newNodeID: firstNodeID,
         text: text[0],
@@ -56,10 +64,10 @@ class CRDTFugueTextHandler extends Handler {
 
     // Insert remaining characters as right children of the previous character
     FugueElementID previousID = firstNodeID;
-    for (int i = 1; i < text.length; i++) {
+    for (int i = 1; i < text.runes.length; i++) {
       final newNodeID = FugueElementID(_doc.peerId, _counter++);
       _doc.createChange(
-        _FugueInsertOperation.fromHandler(
+        _FugueTextInsertOperation.fromHandler(
           this,
           newNodeID: newNodeID,
           text: text[i],
@@ -84,7 +92,7 @@ class CRDTFugueTextHandler extends Handler {
       // If the node exists, create a delete operation
       if (!nodeID.isNull) {
         _doc.createChange(
-          _FugueDeleteOperation.fromHandler(
+          _FugueTextDeleteOperation.fromHandler(
             this,
             nodeID: nodeID,
           ),
@@ -124,18 +132,18 @@ class CRDTFugueTextHandler extends Handler {
     final changes = _doc.exportChanges().sorted();
 
     // Apply operations in order
-    final opFactory = _FugueOperationFactory(this);
+    final opFactory = _FugueTextOperationFactory(this);
     for (final change in changes) {
       final operation = opFactory.fromPayload(change.payload);
 
-      if (operation is _FugueInsertOperation) {
+      if (operation is _FugueTextInsertOperation) {
         _tree.insert(
           newID: operation.newNodeID,
           value: operation.text,
           leftOrigin: operation.leftOrigin,
           rightOrigin: operation.rightOrigin,
         );
-      } else if (operation is _FugueDeleteOperation) {
+      } else if (operation is _FugueTextDeleteOperation) {
         _tree.delete(operation.nodeID);
       }
     }

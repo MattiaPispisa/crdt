@@ -1,11 +1,9 @@
-import 'element_id.dart';
-import 'node.dart';
-import 'node_triple.dart';
+import 'package:crdt_lf/crdt_lf.dart';
 
 /// Implementation of the Fugue tree for collaborative text editing
-class FugueTree {
+class FugueTree<T> {
   FugueTree._({
-    required Map<FugueElementID, FugueNodeTriple> nodes,
+    required Map<FugueElementID, FugueNodeTriple<T>> nodes,
     required FugueElementID rootID,
   })  : _nodes = nodes,
         _rootID = rootID;
@@ -14,14 +12,14 @@ class FugueTree {
   factory FugueTree.empty() {
     // Initialize the tree with a root node
     final rootID = FugueElementID.nullID();
-    final rootNode = FugueNode(
+    final rootNode = FugueNode<T>(
       id: rootID,
       value: null,
       parentID: FugueElementID.nullID(),
       side: FugueSide.left,
     );
     final nodes = {
-      rootID: FugueNodeTriple(
+      rootID: FugueNodeTriple<T>(
         node: rootNode,
         leftChildren: [],
         rightChildren: [],
@@ -35,14 +33,16 @@ class FugueTree {
   }
 
   /// Creates a tree from a JSON object
-  factory FugueTree.fromJson(Map<String, dynamic> json) {
+  factory FugueTree.fromJson(
+    Map<String, dynamic> json,
+  ) {
     // Add nodes from the JSON object
     final nodesJson = json['nodes'] as Map<String, dynamic>;
-    final nodes = <FugueElementID, FugueNodeTriple>{};
+    final nodes = <FugueElementID, FugueNodeTriple<T>>{};
 
     for (final entry in nodesJson.entries) {
       final id = FugueElementID.parse(entry.key);
-      final triple = FugueNodeTriple.fromJson(entry.value);
+      final triple = FugueNodeTriple<T>.fromJson(entry.value);
       nodes[id] = triple;
     }
 
@@ -53,13 +53,13 @@ class FugueTree {
   }
 
   /// The nodes in the tree, indexed by ID
-  final Map<FugueElementID, FugueNodeTriple> _nodes;
+  final Map<FugueElementID, FugueNodeTriple<T>> _nodes;
 
   /// Root node ID
   final FugueElementID _rootID;
 
   /// Returns all non-deleted values in the correct order
-  List<String> values() {
+  List<T> values() {
     return _traverse(_rootID);
   }
 
@@ -67,8 +67,8 @@ class FugueTree {
   ///
   /// Visits recursively the left children, then the node itself, then the right children
   /// Collects the non-deleted values (different from `⊥`)
-  List<String> _traverse(FugueElementID nodeID) {
-    List<String> result = [];
+  List<T> _traverse(FugueElementID nodeID) {
+    List<T> result = [];
 
     if (!_nodes.containsKey(nodeID)) {
       return result;
@@ -107,16 +107,16 @@ class FugueTree {
   /// otherwise, the new node will be a left child of [rightOrigin]
   void insert({
     required FugueElementID newID,
-    required String value,
+    required T value,
     required FugueElementID leftOrigin,
     required FugueElementID rightOrigin,
   }) {
     // Determine if the new node should be a left or right child
-    FugueNode newNode;
+    FugueNode<T> newNode;
 
     if (!leftOrigin.isNull && _nodes.containsKey(leftOrigin)) {
       // The new node will be a right child of leftOrigin
-      newNode = FugueNode(
+      newNode = FugueNode<T>(
         id: newID,
         value: value,
         parentID: leftOrigin,
@@ -124,7 +124,7 @@ class FugueTree {
       );
     } else if (!rightOrigin.isNull && _nodes.containsKey(rightOrigin)) {
       // The new node will be a left child of rightOrigin
-      newNode = FugueNode(
+      newNode = FugueNode<T>(
         id: newID,
         value: value,
         parentID: rightOrigin,
@@ -132,7 +132,7 @@ class FugueTree {
       );
     } else {
       // If neither leftOrigin nor rightOrigin exists, insert at the beginning
-      newNode = FugueNode(
+      newNode = FugueNode<T>(
         id: newID,
         value: value,
         parentID: _rootID,
@@ -152,7 +152,7 @@ class FugueTree {
   }
 
   /// Adds a node to the tree
-  void _addNodeToTree(FugueNode node) {
+  void _addNodeToTree(FugueNode<T> node) {
     final parentID = node.parentID;
 
     if (_nodes.containsKey(node.id)) {
@@ -162,7 +162,7 @@ class FugueTree {
     }
 
     // Create a new triple for the node
-    final nodeTriple = FugueNodeTriple(
+    final nodeTriple = FugueNodeTriple<T>(
       node: node,
       leftChildren: [],
       rightChildren: [],
