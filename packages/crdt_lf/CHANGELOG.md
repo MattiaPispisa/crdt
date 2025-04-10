@@ -1,3 +1,9 @@
+## [Unreleased]
+
+### Changed
+
+- Split Fugue algorithm from text handler [4](https://github.com/MattiaPispisa/crdt/issues/4)
+
 ## [0.2.0] - 2025-04-09
 
 ### Added
