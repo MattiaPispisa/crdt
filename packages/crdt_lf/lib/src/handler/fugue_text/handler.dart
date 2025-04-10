@@ -64,7 +64,7 @@ class CRDTFugueTextHandler extends Handler {
 
     // Insert remaining characters as right children of the previous character
     FugueElementID previousID = firstNodeID;
-    for (int i = 1; i < text.runes.length; i++) {
+    for (int i = 1; i < text.length; i++) {
       final newNodeID = FugueElementID(_doc.peerId, _counter++);
       _doc.createChange(
         _FugueTextInsertOperation.fromHandler(
