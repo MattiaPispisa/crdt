@@ -1,0 +1,5 @@
+name: crdt_lf
+version: 0.0.1
+issueTracker: https://github.com/mattiapispisa/crdt/issues
+materialIconCodePoint: '0xe1b7'
+requiresConnection: false 
