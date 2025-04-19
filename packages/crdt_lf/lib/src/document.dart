@@ -9,6 +9,8 @@ import 'operation/operation.dart';
 import 'peer_id.dart';
 import 'operation/id.dart';
 
+import 'devtools/devtools.dart' as devtools;
+
 /// CRDT Document implementation
 ///
 /// A CRDTDocument is the main entry point for the CRDT system.
@@ -21,7 +23,9 @@ class CRDTDocument {
   })  : _dag = DAG.empty(),
         _changeStore = ChangeStore.empty(),
         _peerId = peerId ?? PeerId.generate(),
-        _clock = HybridLogicalClock.initialize();
+        _clock = HybridLogicalClock.initialize() {
+    devtools.handleCreated(this);
+  }
 
   /// The DAG that tracks causal relationships between operations
   final DAG _dag;
@@ -86,6 +90,7 @@ class CRDTDocument {
 
     // Add the change to the store
     _changeStore.addChange(change);
+    devtools.postChangedEvent();
 
     // Add the change to the DAG
     _dag.addNode(change.id, change.deps);

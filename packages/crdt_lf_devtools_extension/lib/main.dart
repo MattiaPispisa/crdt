@@ -17,9 +17,14 @@ class CrdtLfDevToolsExtension extends StatelessWidget {
   }
 }
 
-class CrdtLfExtensionBody extends StatelessWidget {
+class CrdtLfExtensionBody extends StatefulWidget {
   const CrdtLfExtensionBody({super.key});
 
+  @override
+  State<CrdtLfExtensionBody> createState() => _CrdtLfExtensionBodyState();
+}
+
+class _CrdtLfExtensionBodyState extends State<CrdtLfExtensionBody> {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
@@ -32,7 +37,11 @@ class CrdtLfExtensionBody extends StatelessWidget {
         appBar: AppBar(
           title: const Text('CRDT LF Document Visualizer'),
         ),
-        body: const DAGVisualizer(),
+        body: !serviceManager.hasConnection
+            ? const Center(
+                child: Text('Connect to a Dart application to visualize CRDT documents'),
+              )
+            : const DAGVisualizer(),
       ),
     );
   }

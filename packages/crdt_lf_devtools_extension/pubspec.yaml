@@ -9,11 +9,21 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-
+  
+  # DevTools
   devtools_extensions: ^0.1.0
   devtools_app_shared: ^0.1.0
+  vm_service:
+
+  # state management
+  bloc:
+  flutter_bloc:
+  equatable: 
+
+  # presentation
   graphview: ^1.2.0
 
+  # extension for
   crdt_lf: ^0.2.0
 
 dev_dependencies:
