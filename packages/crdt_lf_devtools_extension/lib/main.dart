@@ -1,6 +1,7 @@
+import 'package:crdt_lf_devtools_extension/src/presentation/ui/document_changes/document_changes.dart';
+import 'package:crdt_lf_devtools_extension/src/presentation/ui/widgets/bootstrap/bootstrap.dart';
 import 'package:devtools_extensions/devtools_extensions.dart';
 import 'package:flutter/material.dart';
-import 'src/dag_visualizer.dart';
 
 void main() {
   runApp(const CrdtLfDevToolsExtension());
@@ -17,14 +18,9 @@ class CrdtLfDevToolsExtension extends StatelessWidget {
   }
 }
 
-class CrdtLfExtensionBody extends StatefulWidget {
+class CrdtLfExtensionBody extends StatelessWidget {
   const CrdtLfExtensionBody({super.key});
 
-  @override
-  State<CrdtLfExtensionBody> createState() => _CrdtLfExtensionBodyState();
-}
-
-class _CrdtLfExtensionBodyState extends State<CrdtLfExtensionBody> {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
@@ -33,15 +29,13 @@ class _CrdtLfExtensionBodyState extends State<CrdtLfExtensionBody> {
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
         useMaterial3: true,
       ),
-      home: Scaffold(
-        appBar: AppBar(
-          title: const Text('CRDT LF Document Visualizer'),
+      home: Bootstrap(
+        child: Scaffold(
+          appBar: AppBar(
+            title: const Text('CRDT LF Document Visualizer'),
+          ),
+          body: const DocumentChangesWidget(),
         ),
-        body: !serviceManager.hasConnection
-            ? const Center(
-                child: Text('Connect to a Dart application to visualize CRDT documents'),
-              )
-            : const DAGVisualizer(),
       ),
     );
   }

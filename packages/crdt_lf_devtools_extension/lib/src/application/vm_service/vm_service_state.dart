@@ -13,7 +13,7 @@ class VmServiceState extends Equatable {
 
   factory VmServiceState.initial() {
     return const VmServiceState(
-      loading: true,
+      loading: false,
       error: null,
       service: null,
     );

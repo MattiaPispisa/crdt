@@ -4,44 +4,34 @@ class DocumentChangesState extends Equatable {
   const DocumentChangesState({
     required this.loading,
     required this.error,
-    required this.descriptors,
+    required this.changes,
   });
 
   factory DocumentChangesState.initial() {
     return const DocumentChangesState(
-      loading: true,
+      loading: false,
       error: null,
-      descriptors: [],
+      changes: [],
     );
   }
 
   final bool loading;
   final String? error;
-  final List<DocumentChangeDescriptor> descriptors;
+  final List<crdt_lf.Change> changes;
 
   DocumentChangesState copyWith({
     bool? loading,
     String? error,
-    List<DocumentChangeDescriptor>? descriptors,
+    List<crdt_lf.Change>? changes,
   }) {
     return DocumentChangesState(
       loading: loading ?? this.loading,
       error: error ?? this.error,
-      descriptors: descriptors ?? this.descriptors,
+      changes: changes ?? this.changes,
     );
   }
 
   @override
-  List<Object?> get props => [loading, error, descriptors];
+  List<Object?> get props => [loading, error, changes];
 }
 
-class DocumentChangeDescriptor extends Equatable {
-  const DocumentChangeDescriptor({
-    required this.description,
-  });
-
-  final String description;
-
-  @override
-  List<Object?> get props => [description];
-}

@@ -5,8 +5,13 @@ import 'package:vm_service/vm_service.dart';
 
 part 'vm_service_state.dart';
 
+/// Cubit for the VM service
+///
+/// This cubit listens for the connected state of the VM service and emits the
+/// state of the VM service.
 class VmServiceCubit extends Cubit<VmServiceState> {
   VmServiceCubit() : super(VmServiceState.initial()) {
+    _onConnectedStateChange();
     _observeState();
   }
 
@@ -19,12 +24,18 @@ class VmServiceCubit extends Cubit<VmServiceState> {
 
     if (connectedState.connected) {
       return emit(
-        state.copyWith(loading: false, service: serviceManager.service!),
+        state.copyWith(
+          loading: false,
+          service: serviceManager.service!,
+        ),
       );
     }
 
     return emit(
-      state.copyWith(loading: false, error: 'Not connected to a VM'),
+      state.copyWith(
+        loading: false,
+        error: 'Not connected to a VM',
+      ),
     );
   }
 

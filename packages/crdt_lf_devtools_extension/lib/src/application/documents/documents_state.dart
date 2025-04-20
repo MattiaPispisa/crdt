@@ -10,16 +10,16 @@ class DocumentsState extends Equatable {
 
   factory DocumentsState.initial() {
     return const DocumentsState(
-      loading: true,
+      loading: false,
       error: null,
-      documents: [],
+      documents: null,
       selectedDocument: null,
     );
   }
 
   final bool loading;
   final String? error;
-  final List<TrackedDocument> documents;
+  final List<TrackedDocument>? documents;
 
   final TrackedDocument? selectedDocument;
 
@@ -45,6 +45,8 @@ class DocumentsState extends Equatable {
         selectedDocument,
       ];
 }
+
+// TODO: need a name property
 
 class TrackedDocument extends Equatable {
   const TrackedDocument({

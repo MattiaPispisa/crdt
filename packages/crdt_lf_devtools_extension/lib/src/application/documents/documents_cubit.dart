@@ -17,8 +17,13 @@ class DocumentsCubitArgs {
   });
 }
 
+/// Cubit for loading the documents from the VM service
+///
+/// This cubit listens for document created events and loads the documents from the
+/// VM service.
 class DocumentsCubit extends Cubit<DocumentsState> {
   DocumentsCubit(this.args) : super(DocumentsState.initial()) {
+    load();
     _setupEventSubscription();
   }
 
@@ -35,6 +40,10 @@ class DocumentsCubit extends Cubit<DocumentsState> {
   }
 
   void load() async {
+    if (state.loading) {
+      return;
+    }
+
     try {
       emit(DocumentsState(
         loading: true,
@@ -52,15 +61,16 @@ class DocumentsCubit extends Cubit<DocumentsState> {
 
       final trackedDocuments = await Future.wait(
           result.elements!.cast<InstanceRef>().map((element) async {
-        final trackedDatabase = await eval.safeGetInstance(element, _alive);
+        final trackedDocumentInstance =
+            await eval.safeGetInstance(element, _alive);
         final idField =
-            trackedDatabase.fields!.firstWhere((f) => f.name == 'id');
-        final databaseField =
-            trackedDatabase.fields!.firstWhere((f) => f.name == 'database');
+            trackedDocumentInstance.fields!.firstWhere((f) => f.name == 'id');
+        final documentField = trackedDocumentInstance.fields!
+            .firstWhere((f) => f.name == 'document');
 
         final responses = await Future.wait([
           eval.safeGetInstance(idField.value, _alive),
-          eval.safeGetInstance(databaseField.value, _alive)
+          eval.safeGetInstance(documentField.value, _alive)
         ]);
 
         return TrackedDocument(
@@ -86,20 +96,29 @@ class DocumentsCubit extends Cubit<DocumentsState> {
       emit(DocumentsState(
         loading: false,
         error: e.toString(),
-        documents: const [],
+        documents: null,
         selectedDocument: null,
       ));
     }
   }
 
-  bool _exists(List<TrackedDocument> documents, int documentId) {
-    return documents.any((d) => d.id == documentId);
+  bool _exists(List<TrackedDocument>? documents, int documentId) {
+    return documents?.any((d) => d.id == documentId) ?? false;
   }
 
-  void select(int id) {
+  void select(int? id) {
+    if (id == null) {
+      return emit(DocumentsState(
+        selectedDocument: null,
+        documents: state.documents,
+        loading: state.loading,
+        error: state.error,
+      ));
+    }
+
     if (_exists(state.documents, id)) {
       emit(state.copyWith(
-        selectedDocument: state.documents.firstWhere((d) => d.id == id),
+        selectedDocument: state.documents?.firstWhere((d) => d.id == id),
       ));
     }
   }

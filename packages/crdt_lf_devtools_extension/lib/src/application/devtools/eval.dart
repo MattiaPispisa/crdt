@@ -4,6 +4,7 @@ import 'package:vm_service/vm_service.dart';
 import 'package:devtools_extensions/devtools_extensions.dart' as devtools;
 
 extension CrdtLfEvalExtension on EvalOnDartLibrary {
+  /// Setup the [EvalOnDartLibrary] for the CRDT LF extension
   static EvalOnDartLibrary setup(VmService service) {
     return EvalOnDartLibrary(
       'package:crdt_lf/src/devtools/devtools.dart',
@@ -12,6 +13,9 @@ extension CrdtLfEvalExtension on EvalOnDartLibrary {
     );
   }
 
+  /// `TrackedDocument.all`
+  ///
+  /// Returns a list of all tracked documents.
   Future<Instance> evalDocuments(Disposable? isAlive) async {
     return evalInstance(
       'TrackedDocument.all',
@@ -19,6 +23,9 @@ extension CrdtLfEvalExtension on EvalOnDartLibrary {
     );
   }
 
+  /// `describeChanges(document)`
+  ///
+  /// Returns a string describing the changes to the document.
   Future<Instance> evalDocumentChanges(
     TrackedDocument document,
     Disposable? isAlive,
