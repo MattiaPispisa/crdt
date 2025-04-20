@@ -1,6 +1,6 @@
-name: flutter_example
+name: crdt_lf_flutter_example
 description: "A new Flutter project."
-publish_to: 'none' # Remove this line if you wish to publish to pub.dev
+publish_to: "none"
 
 version: 1.0.0+1
 
