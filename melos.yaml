@@ -3,7 +3,7 @@ name: crdt
 packages:
   - packages/**
 
-repository: https://github.com/invertase/melos
+repository: https://github.com/MattiaPispisa/crdt
 
 sdkPath: .fvm/flutter_sdk
 
