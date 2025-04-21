@@ -35,7 +35,7 @@ Add this to your package's `pubspec.yaml` file:
 
 ```yaml
 dependencies:
-  hlc_dart: ^1.0.0
+  hlc_dart: 
 ```
 
 ## Usage
@@ -64,7 +64,7 @@ final serialized = clock.toInt64();
 final deserialized = HybridLogicalClock.fromInt64(serialized);
 ```
 
-### [Complete Example](https://github.com/MattiaPispisa/crdt/packages/hlc/example/main.dart)
+### [Complete Example](https://github.com/MattiaPispisa/crdt/blob/main/packages/hlc/example/main.dart)
 
 [license_badge]: https://img.shields.io/badge/license-MIT-blue.svg
 [license_link]: https://opensource.org/licenses/MIT

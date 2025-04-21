@@ -41,7 +41,8 @@ class DocumentChangesCubit extends Cubit<DocumentChangesState> {
 
   void _setupEventSubscription() {
     _eventStreamSubscription = args.service.onExtensionEvent.listen((event) {
-      if (event.isDocumentChangedEvent) {
+      if (event.isDocumentChangedEvent &&
+          event.documentId == args.document.id) {
         _loadDocumentChanges();
       }
     });

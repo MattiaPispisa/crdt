@@ -1,4 +1,5 @@
 import 'package:crdt_lf_devtools_extension/src/application/application.dart';
+import 'package:crdt_lf_devtools_extension/src/presentation/ui/widgets/common/extension_status.dart';
 import 'package:crdt_lf_devtools_extension/src/presentation/ui/widgets/layout/data_builder.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -15,24 +16,26 @@ class Bootstrap extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return BlocProvider(
-      create: (_) => VmServiceCubit(),
-      child: BlocBuilder<VmServiceCubit, VmServiceState>(
-        builder: (context, state) {
-          return AppDataBuilder<VmService>(
-            data: state.service,
-            error: state.error,
-            loading: state.loading,
-            builder: (context, vmService) {
-              return BlocProvider(
-                create: (context) => DocumentsCubit(
-                  DocumentsCubitArgs(service: vmService),
-                ),
-                child: child,
-              );
-            },
-          );
-        },
+    return ExtensionStatus(
+      child: BlocProvider(
+        create: (_) => VmServiceCubit(),
+        child: BlocBuilder<VmServiceCubit, VmServiceState>(
+          builder: (context, state) {
+            return AppDataBuilder<VmService>(
+              data: state.service,
+              error: state.error,
+              loading: state.loading,
+              builder: (context, vmService) {
+                return BlocProvider(
+                  create: (context) => DocumentsCubit(
+                    DocumentsCubitArgs(service: vmService),
+                  ),
+                  child: child,
+                );
+              },
+            );
+          },
+        ),
       ),
     );
   }

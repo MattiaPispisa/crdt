@@ -15,8 +15,17 @@ void _postCreatedEvent() {
   _postEvent('documents:created', {});
 }
 
-void postChangedEvent() {
-  _postEvent('document:changed', {});
+void postChangedEvent(CRDTDocument document) {
+  if (!_enable) {
+    return;
+  }
+  final trackedDocument = TrackedDocument._byDocument[document];
+  if (trackedDocument == null) {
+    return;
+  }
+  _postEvent('document:changed', {
+    "id": trackedDocument.id,
+  });
 }
 
 class TrackedDocument {

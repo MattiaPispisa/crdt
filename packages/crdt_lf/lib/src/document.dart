@@ -90,7 +90,7 @@ class CRDTDocument {
 
     // Add the change to the store
     _changeStore.addChange(change);
-    devtools.postChangedEvent();
+    devtools.postChangedEvent(this);
 
     // Add the change to the DAG
     _dag.addNode(change.id, change.deps);

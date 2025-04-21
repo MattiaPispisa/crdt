@@ -1,3 +1,8 @@
+## [Unreleased]
+
+### Added
+- An initial draft of the devtools extension [6](https://github.com/MattiaPispisa/crdt/issues/6)
+
 ## [0.2.0] - 2025-04-09
 
 ### Added
