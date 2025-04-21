@@ -1,5 +1,8 @@
 ## [Unreleased]
 
+### Added
+- An initial draft of the devtools extension 
+
 ### Changed
 
 - Split Fugue algorithm from text handler [4](https://github.com/MattiaPispisa/crdt/issues/4)

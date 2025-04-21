@@ -1,0 +1,37 @@
+name: crdt_lf_devtools_extension
+description: DevTools extension for crdt_lf package
+version: 0.0.1
+publish_to: none
+
+environment:
+  sdk: ">=3.7.0 <4.0.0"
+  flutter: ">=3.29.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  
+  # DevTools
+  devtools_extensions: ^0.3.1
+  devtools_app_shared: ^0.3.1
+  vm_service: ^14.3.1
+
+  # state management
+  bloc: ^9.0.0
+  flutter_bloc: ^9.1.0
+  equatable: ^2.0.7
+
+  # presentation
+  graphview: ^1.2.0
+
+  # extension for
+  crdt_lf: ^0.2.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^5.0.0
+  test:
+  
+flutter:
+  uses-material-design: true

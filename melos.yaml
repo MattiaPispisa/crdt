@@ -10,7 +10,7 @@ sdkPath: .fvm/flutter_sdk
 command:
   publish:
     hooks:
-      pre: dart analyze --fatal-infos --fatal-warnings && melos run test
+      pre: melos run analyze && melos run test && melos run devtools_build
 
 scripts:
   test:
@@ -19,3 +19,14 @@ scripts:
     run: dart test
     exec:
       concurrency: 1
+  analyze:
+    name: Analyze
+    description: Analyze the code
+    run: dart analyze --fatal-infos --fatal-warnings
+    exec:
+      concurrency: 1
+
+  devtools_build:
+    name: Devtools Build
+    description: Build the devtools extension
+    run: cd ./packages/crdt_lf_devtools_extension && dart run devtools_extensions build_and_copy --source=. --dest=../crdt_lf/extension/devtools && dart run devtools_extensions validate --package=../crdt_lf
