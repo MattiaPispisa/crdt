@@ -1,4 +1,4 @@
-## [Unreleased]
+## [0.3.0] - 2025-04-21
 
 ### Added
 - An initial draft of the devtools extension 

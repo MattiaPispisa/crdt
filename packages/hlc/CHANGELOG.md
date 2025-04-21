@@ -1,4 +1,11 @@
+## [0.1.3] - 2025-04-21
+
+### Changed
+
+- Updated `CHANGELOG.md`
+
 ## [0.1.2] - 2025-04-04
+
 ### Changed
 
 - Shorter `pubspec.yaml` description

@@ -9,6 +9,7 @@
   - [Usage](#usage)
     - [Basic Usage](#basic-usage)
     - [Complete Example](#complete-example)
+  - [Roadmap](#roadmap)
 
 
 A hybrid logical clock implementation in Dart based on the paper
@@ -65,6 +66,9 @@ final deserialized = HybridLogicalClock.fromInt64(serialized);
 ```
 
 ### [Complete Example](https://github.com/MattiaPispisa/crdt/blob/main/packages/hlc/example/main.dart)
+
+## [Roadmap](https://github.com/users/MattiaPispisa/projects/1)
+
 
 [license_badge]: https://img.shields.io/badge/license-MIT-blue.svg
 [license_link]: https://opensource.org/licenses/MIT
