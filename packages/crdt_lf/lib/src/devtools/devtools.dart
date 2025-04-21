@@ -1,3 +1,4 @@
+// coverage:ignore-file
 import 'dart:convert';
 import 'dart:developer' as developer;
 
@@ -15,6 +16,7 @@ void _postCreatedEvent() {
   _postEvent('documents:created', {});
 }
 
+/// post a [document] changed event
 void postChangedEvent(CRDTDocument document) {
   if (!_enable) {
     return;
@@ -28,10 +30,12 @@ void postChangedEvent(CRDTDocument document) {
   });
 }
 
+/// a tracked document
 class TrackedDocument {
   final CRDTDocument document;
   final int id;
 
+  /// create a new tracked document
   TrackedDocument(this.document) : id = _nextId++ {
     _byDocument[document] = this;
     all.add(this);
@@ -39,10 +43,14 @@ class TrackedDocument {
 
   static int _nextId = 0;
 
+  /// all tracked documents
   static List<TrackedDocument> all = [];
+
+  /// map of documents to their tracked document
   static final Expando<TrackedDocument> _byDocument = Expando();
 }
 
+/// handle a [document] created event
 void handleCreated(CRDTDocument document) {
   if (_enable) {
     TrackedDocument(document);
@@ -50,6 +58,7 @@ void handleCreated(CRDTDocument document) {
   }
 }
 
+/// describe the changes of [document]
 String describeChanges(CRDTDocument document) {
   return json.encode(document.exportChanges().map((e) => e.toJson()).toList());
 }
