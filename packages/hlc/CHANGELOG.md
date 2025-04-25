@@ -1,3 +1,13 @@
+## [Unreleased]
+
+### Added
+
+- `happenedAfter`
+- `operator >=`
+- `operator <=`
+- `operator >`
+- `operator <`
+
 ## [0.1.3] - 2025-04-21
 
 ### Changed

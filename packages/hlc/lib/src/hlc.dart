@@ -117,6 +117,13 @@ class HybridLogicalClock with Comparable<HybridLogicalClock> {
     return compareTo(other) < 0;
   }
 
+  /// Checks if this [HybridLogicalClock] happened after another [HybridLogicalClock]
+  ///
+  /// Returns true if this [HybridLogicalClock] happened after the other [HybridLogicalClock]
+  bool happenedAfter(HybridLogicalClock other) {
+    return compareTo(other) > 0;
+  }
+
   /// Checks if this [HybridLogicalClock] is concurrent with another [HybridLogicalClock]
   ///
   /// Returns true if neither [HybridLogicalClock] happened before the other
@@ -175,5 +182,26 @@ class HybridLogicalClock with Comparable<HybridLogicalClock> {
       return 1;
     }
     return 0;
+  }
+
+  /// shortcut for [happenedAfter]
+  bool operator >(HybridLogicalClock other) {
+    return happenedAfter(other);
+  }
+
+  /// shortcut for [happenedBefore]
+  bool operator <(HybridLogicalClock other) {
+    return happenedBefore(other);
+  }
+
+  /// shortcut for [happenedAfter] or [isConcurrentWith]
+
+  bool operator >=(HybridLogicalClock other) {
+    return happenedAfter(other) || isConcurrentWith(other);
+  }
+
+  /// shortcut for [happenedBefore] or [isConcurrentWith]
+  bool operator <=(HybridLogicalClock other) {
+    return happenedBefore(other) || isConcurrentWith(other);
   }
 }
