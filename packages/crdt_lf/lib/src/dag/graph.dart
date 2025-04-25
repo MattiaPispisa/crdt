@@ -44,6 +44,12 @@ class DAG {
     return _nodes[id];
   }
 
+  /// Clears the [DAG]
+  void clear() {
+    _nodes.clear();
+    _frontiers.clear();
+  }
+
   /// Adds a new node to the [DAG]
   ///
   /// The node's [OperationId] must not already exist in the [DAG].

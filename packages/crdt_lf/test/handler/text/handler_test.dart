@@ -138,8 +138,8 @@ void main() {
       text2.insert(0, 'World');
 
       // Merge changes
-      doc2.import(doc1.export());
-      doc1.import(doc2.export());
+      doc2.binaryImportChanges(doc1.binaryExportChanges());
+      doc1.binaryImportChanges(doc2.binaryExportChanges());
 
       // Both documents should have the same state
       expect(text1.value, equals(text2.value));

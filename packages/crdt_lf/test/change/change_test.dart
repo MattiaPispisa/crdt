@@ -1,3 +1,4 @@
+import 'package:crdt_lf/src/document.dart';
 import 'package:test/test.dart';
 import 'package:crdt_lf/src/change/change.dart';
 import 'package:crdt_lf/src/operation/id.dart';
@@ -7,9 +8,16 @@ import 'package:crdt_lf/src/operation/operation.dart';
 import 'package:crdt_lf/src/operation/type.dart';
 import 'package:crdt_lf/src/handler/handler.dart';
 
-class TestHandler implements Handler {
+class TestHandler extends Handler {
+  TestHandler(CRDTDocument doc) : super(doc);
+
   @override
   String get id => 'test-handler';
+
+  @override
+  String getState() {
+    return '';
+  }
 }
 
 class TestOperation extends Operation {
@@ -39,7 +47,8 @@ void main() {
     late Handler handler;
 
     setUp(() {
-      handler = TestHandler();
+      final doc = CRDTDocument();
+      handler = TestHandler(doc);
       deps = {OperationId.parse('3a5cd393-813c-46c8-97f3-9e99a6f2c8be@1.1')};
       hlc = HybridLogicalClock(l: 1, c: 2);
       author = PeerId.generate();
@@ -151,7 +160,8 @@ void main() {
         author: author,
       );
 
-      final expected = 'Change(id: $id, deps: [${deps.first}], hlc: $hlc, author: $author, payload: ${operation.toPayload()})';
+      final expected =
+          'Change(id: $id, deps: [${deps.first}], hlc: $hlc, author: $author, payload: ${operation.toPayload()})';
       expect(change.toString(), equals(expected));
     });
 
@@ -185,8 +195,12 @@ void main() {
     });
 
     test('hashCode handles different dependencies correctly', () {
-      final deps1 = {OperationId.parse('3a5cd393-813c-46c8-97f3-9e99a6f2c8be@1.1')};
-      final deps2 = {OperationId.parse('b7353649-1b52-43b0-9dbc-a843e3308cb0@1.3')};
+      final deps1 = {
+        OperationId.parse('3a5cd393-813c-46c8-97f3-9e99a6f2c8be@1.1')
+      };
+      final deps2 = {
+        OperationId.parse('b7353649-1b52-43b0-9dbc-a843e3308cb0@1.3')
+      };
 
       final change1 = Change(
         id: id,

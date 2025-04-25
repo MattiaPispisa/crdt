@@ -15,7 +15,7 @@ part 'operation.dart';
 /// It provides methods for inserting, deleting, and accessing text content.
 class CRDTFugueTextHandler extends Handler {
   /// Constructor that initializes a new Fugue text handler
-  CRDTFugueTextHandler(this._doc, this._id);
+  CRDTFugueTextHandler(this._doc, this._id) : super(_doc);
 
   /// The document that owns this handler
   final CRDTDocument _doc;
@@ -121,12 +121,18 @@ class CRDTFugueTextHandler extends Handler {
     return state;
   }
 
+  @override
+  String getState() {
+    return value;
+  }
+
   /// Gets the length of the text
   int get length => value.length;
 
   /// Computes the current state of the text from document operations
   String _computeState() {
     _tree = FugueTree.empty();
+    insert(0, _initialState());
 
     // Get all operations from the document
     final changes = _doc.exportChanges().sorted();
@@ -150,6 +156,16 @@ class CRDTFugueTextHandler extends Handler {
 
     // Return the resulting text
     return _tree.values().join('');
+  }
+
+  /// Gets the initial state of the text
+  String _initialState() {
+    final snapshot = lastSnapshot();
+    if (snapshot is String) {
+      return snapshot;
+    }
+
+    return '';
   }
 
   /// Invalidates the cache

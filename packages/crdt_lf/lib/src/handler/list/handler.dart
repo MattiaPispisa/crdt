@@ -7,14 +7,13 @@ import 'package:crdt_lf/src/operation/type.dart';
 import 'package:crdt_lf/src/utils/set.dart';
 part 'operation.dart';
 
-
 /// CRDT List implementation
 ///
 /// A CRDTList is a list data structure that uses CRDT for conflict-free collaboration.
 /// It provides methods for inserting, deleting, and accessing elements.
 class CRDTListHandler<T> extends Handler {
   /// Creates a new CRDTList with the given document and ID
-  CRDTListHandler(this._doc, this._id);
+  CRDTListHandler(this._doc, this._id) : super(_doc);
 
   /// The document that owns this list
   final CRDTDocument _doc;
@@ -73,6 +72,11 @@ class CRDTListHandler<T> extends Handler {
     return List.from(state);
   }
 
+  @override
+  List<T> getState() {
+    return value;
+  }
+
   /// Gets the length of the list
   int get length => value.length;
 
@@ -81,7 +85,7 @@ class CRDTListHandler<T> extends Handler {
 
   /// Computes the current state of the list from the document's changes
   List<T> _computeState() {
-    final state = <T>[];
+    final state = _initialState();
 
     // Get all changes from the document
     final changes = _doc.exportChanges().sorted();
@@ -118,6 +122,16 @@ class CRDTListHandler<T> extends Handler {
     }
 
     return state;
+  }
+
+  /// Gets the initial state of the list
+  List<T> _initialState() {
+    final snapshot = lastSnapshot();
+    if (snapshot is List<T>) {
+      return snapshot;
+    }
+
+    return [];
   }
 
   /// Invalidates the cached state

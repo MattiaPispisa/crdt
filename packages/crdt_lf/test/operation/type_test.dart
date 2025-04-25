@@ -1,17 +1,28 @@
 import 'package:crdt_lf/crdt_lf.dart';
 import 'package:test/test.dart';
 
-class TestHandler implements Handler {
+class TestHandler extends Handler {
+  TestHandler(CRDTDocument doc) : super(doc);
+
   @override
   String get id => 'test-handler';
+
+  @override
+  String getState() {
+    return '';
+  }
 }
 
 void main() {
   group('OperationType', () {
     late Handler handler;
+    late CRDTDocument doc;
+    late PeerId author;
 
     setUp(() {
-      handler = TestHandler();
+      author = PeerId.generate();
+      doc = CRDTDocument(peerId: author);
+      handler = TestHandler(doc);
     });
 
     test('insert factory creates correct operation type', () {
@@ -39,8 +50,8 @@ void main() {
     });
 
     test('same operation types with different handlers are not equal', () {
-      final handler1 = TestHandler();
-      final handler2 = TestHandler();
+      final handler1 = TestHandler(doc);
+      final handler2 = TestHandler(doc);
       final operationType1 = OperationType.insert(handler1);
       final operationType2 = OperationType.insert(handler2);
       expect(operationType1, equals(operationType2));
@@ -50,7 +61,7 @@ void main() {
       final operationType1 = OperationType.insert(handler);
       final operationType2 = OperationType.insert(handler);
       final operationType3 = OperationType.delete(handler);
-      final handler2 = TestHandler();
+      final handler2 = TestHandler(doc);
       final operationType4 = OperationType.insert(handler2);
 
       expect(operationType1.hashCode, equals(operationType2.hashCode));

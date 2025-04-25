@@ -1,3 +1,4 @@
+import 'package:crdt_lf/src/document.dart';
 import 'package:test/test.dart';
 import 'package:crdt_lf/src/change/change_store.dart';
 import 'package:crdt_lf/src/change/change.dart';
@@ -9,9 +10,16 @@ import 'package:crdt_lf/src/operation/type.dart';
 import 'package:crdt_lf/src/handler/handler.dart';
 import 'package:crdt_lf/src/dag/graph.dart';
 
-class TestHandler implements Handler {
+class TestHandler extends Handler {
+  TestHandler(CRDTDocument doc) : super(doc);
+
   @override
   String get id => 'test-handler';
+
+  @override
+  String getState() {
+    return '';
+  }
 }
 
 class TestOperation extends Operation {
@@ -43,7 +51,8 @@ void main() {
     late DAG dag;
 
     setUp(() {
-      handler = TestHandler();
+      final doc = CRDTDocument();
+      handler = TestHandler(doc);
       author = PeerId.generate();
       operation = TestOperation.fromHandler(handler);
 

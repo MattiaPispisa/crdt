@@ -2,9 +2,16 @@ import 'package:test/test.dart';
 import 'package:crdt_lf/crdt_lf.dart';
 import 'package:hlc_dart/hlc_dart.dart';
 
-class TestHandler implements Handler {
+class TestHandler extends Handler {
+  TestHandler(CRDTDocument doc) : super(doc);
+
   @override
   String get id => 'test-handler';
+
+  @override
+  String getState() {
+    return '';
+  }
 }
 
 class TestOperation extends Operation {
@@ -32,10 +39,10 @@ void main() {
     late Operation operation;
 
     setUp(() {
-      handler = TestHandler();
       author = PeerId.generate();
-      operation = TestOperation.fromHandler(handler);
       doc = CRDTDocument(peerId: author);
+      handler = TestHandler(doc);
+      operation = TestOperation.fromHandler(handler);
     });
 
     test('constructor creates document with generated peerId', () {
@@ -148,9 +155,9 @@ void main() {
       doc.createChange(operation);
       doc.createChange(operation);
 
-      final data = doc.export();
+      final data = doc.binaryExportChanges();
       final newDoc = CRDTDocument();
-      final imported = newDoc.import(data);
+      final imported = newDoc.binaryImportChanges(data);
 
       expect(imported, equals(2));
       expect(newDoc.version, equals(doc.version));

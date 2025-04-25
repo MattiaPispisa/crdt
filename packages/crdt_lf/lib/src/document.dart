@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:crdt_lf/src/snapshot/snapshot.dart';
 import 'package:hlc_dart/hlc_dart.dart';
 
 import 'change/change_store.dart';
@@ -25,7 +26,8 @@ class CRDTDocument {
         _changeStore = ChangeStore.empty(),
         _peerId = peerId ?? PeerId.generate(),
         _clock = HybridLogicalClock.initialize(),
-        _localChangesController = StreamController<Change>.broadcast() {
+        _localChangesController = StreamController<Change>.broadcast(),
+        _providers = {} {
     devtools.handleCreated(this);
   }
 
@@ -55,6 +57,18 @@ class CRDTDocument {
 
   /// A stream that emits [Change]s created locally by this document.
   Stream<Change> get localChanges => _localChangesController.stream;
+
+  /// The registered snapshot providers
+  final Map<String, SnapshotProvider> _providers;
+
+  /// The last snapshot of this document
+  Snapshot? _lastSnapshot;
+
+  /// Register a [SnapshotProvider]
+  void registerHandler(SnapshotProvider provider) {
+    _providers[provider.id] = provider;
+    provider._document = this;
+  }
 
   /// Creates a new [Change] with the given [payload]
   ///
@@ -115,6 +129,36 @@ class CRDTDocument {
     return true;
   }
 
+  /// Takes a snapshot of the document, compacting its history.
+  ///
+  /// This operation captures the current state of the document, represented by its version (frontiers).
+  /// [Change]s that are causally included in this version are removed from the internal [ChangeStore],
+  /// effectively pruning the history up to the snapshot point. The internal [DAG] is also updated.
+  /// Use [Snapshot]s to reduce memory usage and improve performance for long-lived documents.
+  ///
+  /// Returns a [Snapshot] representing the document's state at the current version.
+  Snapshot takeSnapshot() {
+    final state = <String, dynamic>{};
+    for (final provider in _providers.values) {
+      state[provider.id] = provider.getState();
+    }
+    final snapshot = Snapshot.create(version: version, data: state);
+    _changeStore.clear();
+    _dag.clear();
+
+    _lastSnapshot = snapshot;
+    return snapshot;
+  }
+
+  int import({Snapshot? snapshot, List<Change> changes = const []}) {
+    if (snapshot == null) {
+      return importChanges(changes);
+    }
+
+    _lastSnapshot = snapshot;
+    return importChanges(changes);
+  }
+
   /// Exports [Change]s from a specific version
   ///
   /// Returns a list of [Change]s that are not ancestors of the given version.
@@ -126,7 +170,7 @@ class CRDTDocument {
   /// Exports [Change]s as a binary format
   ///
   /// Returns a binary representation of the [Change]s that can be imported by another document.
-  List<int> export({Set<OperationId>? from}) {
+  List<int> binaryExportChanges({Set<OperationId>? from}) {
     final changes = exportChanges(from: from);
     final jsonChanges = changes.map((c) => c.toJson()).toList();
     return utf8.encode(jsonEncode(jsonChanges));
@@ -135,7 +179,7 @@ class CRDTDocument {
   /// Imports [Change]s from a binary format
   ///
   /// Returns the number of [Change]s that were applied.
-  int import(List<int> data) {
+  int binaryImportChanges(List<int> data) {
     final jsonStr = utf8.decode(data);
     final jsonList = jsonDecode(jsonStr) as List;
     final changes = jsonList
@@ -150,7 +194,7 @@ class CRDTDocument {
   /// Returns the number of [Change]s that were applied.
   int importChanges(List<Change> changes) {
     // Sort changes topologically
-    final sorted = _topologicalSort(changes);
+    final sorted = _topologicalSort(_afterSnapshot(changes));
 
     // Apply changes
     int applied = 0;
@@ -165,6 +209,22 @@ class CRDTDocument {
     }
 
     return applied;
+  }
+
+  List<Change> _afterSnapshot(List<Change> changes) {
+    final snapshot = _lastSnapshot;
+    if (snapshot == null) {
+      return changes;
+    }
+
+    final changesAfterSnapshot = <Change>[];
+    for (final change in changes) {
+      final hlc = snapshot.versionVector[change.author];
+      if (hlc == null || change.hlc.compareTo(hlc) > 0) {
+        changesAfterSnapshot.add(change);
+      }
+    }
+    return changesAfterSnapshot;
   }
 
   /// Sorts [Change]s topologically
@@ -226,5 +286,20 @@ class CRDTDocument {
   /// Disposes of the document
   void dispose() {
     _localChangesController.close();
+  }
+}
+
+/// A provider that can provide a snapshot of the state of a CRDT
+mixin SnapshotProvider {
+  /// The unique identifier for this provider
+  String get id;
+
+  CRDTDocument? _document;
+
+  /// Returns the current state of the provider
+  dynamic getState();
+
+  dynamic lastSnapshot() {
+    return _document?._lastSnapshot?.data[id];
   }
 }

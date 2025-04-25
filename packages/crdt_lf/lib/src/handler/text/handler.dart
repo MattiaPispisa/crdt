@@ -14,7 +14,7 @@ part 'operation.dart';
 /// It provides methods for inserting, deleting, and accessing text content.
 class CRDTTextHandler extends Handler {
   /// Creates a new CRDTText with the given document and ID
-  CRDTTextHandler(this._doc, this._id);
+  CRDTTextHandler(this._doc, this._id) : super(_doc);
 
   /// The document that owns this text
   final CRDTDocument _doc;
@@ -65,12 +65,17 @@ class CRDTTextHandler extends Handler {
     return state;
   }
 
+  @override
+  String getState() {
+    return value;
+  }
+
   /// Gets the length of the text
   int get length => value.length;
 
   /// Computes the current state of the text from the document's changes
   String _computeState() {
-    final buffer = StringBuffer();
+    final buffer = StringBuffer(_initialState());
 
     // Get all changes from the document
     final changes = _doc.exportChanges().sorted();
@@ -114,6 +119,16 @@ class CRDTTextHandler extends Handler {
     }
 
     return buffer.toString();
+  }
+
+  /// Gets the initial state of the text
+  String _initialState() {
+    final snapshot = lastSnapshot();
+    if (snapshot is String) {
+      return snapshot;
+    }
+
+    return '';
   }
 
   /// Invalidates the cached state
