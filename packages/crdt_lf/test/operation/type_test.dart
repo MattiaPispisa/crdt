@@ -1,17 +1,8 @@
 import 'package:crdt_lf/crdt_lf.dart';
 import 'package:test/test.dart';
 
-class TestHandler extends Handler {
-  TestHandler(CRDTDocument doc) : super(doc);
+import '../helpers/handler.dart';
 
-  @override
-  String get id => 'test-handler';
-
-  @override
-  String getState() {
-    return '';
-  }
-}
 
 void main() {
   group('OperationType', () {

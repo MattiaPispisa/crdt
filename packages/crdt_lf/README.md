@@ -16,6 +16,7 @@
     - [DAG](#dag)
     - [Change](#change)
     - [Frontiers](#frontiers)
+    - [Snapshot](#snapshot)
   - [Project Status](#project-status)
     - [Roadmap](#roadmap)
     - [Contributing](#contributing)
@@ -95,6 +96,9 @@ Represents a modification to the CRDT state, including operation ID, dependencie
 
 ### Frontiers
 A structure that manages the frontiers (latest operations) of the CRDT.
+
+### Snapshot
+A snapshot of the CRDT state, including the version vector and the data.
 
 ## Project Status
 

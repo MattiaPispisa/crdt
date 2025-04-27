@@ -1,15 +1,8 @@
 import 'dart:async';
 import 'dart:convert';
 
-import 'package:crdt_lf/src/snapshot/snapshot.dart';
+import 'package:crdt_lf/crdt_lf.dart';
 import 'package:hlc_dart/hlc_dart.dart';
-
-import 'change/change_store.dart';
-import 'change/change.dart';
-import 'dag/graph.dart';
-import 'operation/operation.dart';
-import 'peer_id.dart';
-import 'operation/id.dart';
 
 import 'devtools/devtools.dart' as devtools;
 
@@ -63,6 +56,10 @@ class CRDTDocument {
 
   /// The last snapshot of this document
   Snapshot? _lastSnapshot;
+
+  /// Whether this document is empty.
+  /// (no changes and no snapshot)
+  bool get isEmpty => _changeStore.changeCount == 0 && _lastSnapshot == null;
 
   /// Register a [SnapshotProvider]
   void registerHandler(SnapshotProvider provider) {
@@ -142,7 +139,11 @@ class CRDTDocument {
     for (final provider in _providers.values) {
       state[provider.id] = provider.getState();
     }
-    final snapshot = Snapshot.create(version: version, data: state);
+    var snapshot = Snapshot.create(version: version, data: state);
+    if (_lastSnapshot != null) {
+      snapshot = snapshot.merged(_lastSnapshot!);
+    }
+
     _changeStore.clear();
     _dag.clear();
 
@@ -150,13 +151,36 @@ class CRDTDocument {
     return snapshot;
   }
 
-  int import({Snapshot? snapshot, List<Change> changes = const []}) {
-    if (snapshot == null) {
-      return importChanges(changes);
+  /// Import [Snapshot] and [Change]s
+  ///
+  /// Returns the number of [Change]s that were applied.
+  /// [Change]s that are already in the snapshot are not applied.
+  ///
+  /// [snapshot] is applied only if it is newer than document version.
+  /// Use [shouldApplySnapshot] to check if the snapshot should be applied.
+  bool importSnapshot(Snapshot snapshot) {
+    if (shouldApplySnapshot(snapshot)) {
+      _lastSnapshot = snapshot;
+      return true;
     }
 
-    _lastSnapshot = snapshot;
-    return importChanges(changes);
+    return false;
+  }
+
+  /// Whether the given [snapshot] should be applied.
+  ///
+  /// Returns `true` if the snapshot can be applied to the document.
+  bool shouldApplySnapshot(Snapshot snapshot) {
+    if (isEmpty) {
+      return true;
+    }
+
+    var versionVector = VersionVector.create(version);
+    if (_lastSnapshot != null) {
+      versionVector = versionVector.merged(_lastSnapshot!.versionVector);
+    }
+
+    return snapshot.versionVector.isStrictlyNewerThan(versionVector);
   }
 
   /// Exports [Change]s from a specific version
@@ -299,6 +323,7 @@ mixin SnapshotProvider {
   /// Returns the current state of the provider
   dynamic getState();
 
+  /// Return the last snapshot of the document
   dynamic lastSnapshot() {
     return _document?._lastSnapshot?.data[id];
   }

@@ -1,35 +1,7 @@
 import 'package:test/test.dart';
 import 'package:crdt_lf/crdt_lf.dart';
 import 'package:hlc_dart/hlc_dart.dart';
-
-class TestHandler extends Handler {
-  TestHandler(CRDTDocument doc) : super(doc);
-
-  @override
-  String get id => 'test-handler';
-
-  @override
-  String getState() {
-    return '';
-  }
-}
-
-class TestOperation extends Operation {
-  const TestOperation({
-    required super.id,
-    required super.type,
-  });
-
-  factory TestOperation.fromHandler(Handler handler) {
-    return TestOperation(
-      id: handler.id,
-      type: OperationType.insert(handler),
-    );
-  }
-
-  @override
-  dynamic toPayload() => id;
-}
+import 'helpers/handler.dart';
 
 void main() {
   group('CRDTDocument', () {
@@ -56,6 +28,11 @@ void main() {
     test('constructor creates document with provided peerId', () {
       final doc = CRDTDocument(peerId: author);
       expect(doc.peerId, equals(author));
+    });
+
+    test('document should be empty', () {
+      final doc = CRDTDocument(peerId: author);
+      expect(doc.isEmpty, isTrue);
     });
 
     test('createChange creates and applies a new change', () {
@@ -220,6 +197,7 @@ void main() {
       );
     });
 
+<<<<<<< HEAD
     test('localChanges stream emits change on createChange', () async {
       // Expect one change to be emitted
       final expectation = expectLater(
@@ -259,6 +237,109 @@ void main() {
 
       // Wait for the stream to close
       await expectation;
+=======
+    test('import should not accept changes already in snapshot', () {
+      final change1 = Change(
+        id: OperationId(author, HybridLogicalClock(l: 1, c: 1)),
+        operation: operation,
+        deps: {},
+        hlc: HybridLogicalClock(l: 1, c: 1),
+        author: author,
+      );
+
+      final change2 = Change(
+        id: OperationId(author, HybridLogicalClock(l: 1, c: 3)),
+        operation: operation,
+        deps: {},
+        hlc: HybridLogicalClock(l: 1, c: 3),
+        author: author,
+      );
+
+      final snapshot = Snapshot(
+        id: 'id',
+        versionVector: VersionVector({author: change2.hlc}),
+        data: {},
+      );
+
+      final imported = doc.importSnapshot(snapshot);
+      final applied = doc.importChanges([change1, change2]);
+
+      expect(imported, isTrue);
+      expect(applied, equals(0));
+      expect(doc.version, isEmpty);
+      expect(doc.exportChanges(), isEmpty);
+    });
+
+    test('import accept old changes not in snapshot', () {
+      final author1 = PeerId.generate();
+      final author2 = PeerId.generate();
+
+      final change1 = Change(
+        id: OperationId(author1, HybridLogicalClock(l: 1, c: 1)),
+        operation: operation,
+        deps: {},
+        hlc: HybridLogicalClock(l: 1, c: 1),
+        author: author1,
+      );
+
+      final change2 = Change(
+        id: OperationId(author2, HybridLogicalClock(l: 1, c: 1)),
+        operation: operation,
+        deps: {},
+        hlc: HybridLogicalClock(l: 1, c: 2),
+        author: author2,
+      );
+
+      final change3 = Change(
+        id: OperationId(author1, HybridLogicalClock(l: 1, c: 3)),
+        operation: operation,
+        deps: {},
+        hlc: HybridLogicalClock(l: 1, c: 3),
+        author: author1,
+      );
+
+      final snapshot = Snapshot(
+        id: 'id',
+        versionVector: VersionVector({author1: change3.hlc}),
+        data: {},
+      );
+
+      expect(doc.shouldApplySnapshot(snapshot), isTrue);
+
+      final imported = doc.importSnapshot(snapshot);
+      final applied = doc.importChanges([change1, change2, change3]);
+
+      expect(imported, isTrue);
+      expect(applied, equals(1));
+      expect(doc.version, equals({change2.id}));
+      expect(doc.exportChanges(), containsAll([change2]));
+    });
+
+    test('should not accept snapshot if divergent ', () {
+      final author1 = PeerId.generate();
+      final author2 = PeerId.generate();
+
+      doc.importSnapshot(
+        Snapshot(
+          id: "id",
+          versionVector: VersionVector({
+            author1: HybridLogicalClock(l: 1, c: 1),
+          }),
+          data: {},
+        ),
+      );
+
+      final snapshot = Snapshot(
+        id: "id2",
+        versionVector: VersionVector({
+          author2: HybridLogicalClock(l: 1, c: 2),
+        }),
+        data: {},
+      );
+
+      // author2 is not in the version vector
+      expect(doc.shouldApplySnapshot(snapshot), isFalse);
+>>>>>>> e601e54 (snapshot)
     });
 
     test('toString returns correct string representation', () {

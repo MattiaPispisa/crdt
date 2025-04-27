@@ -5,37 +5,9 @@ import 'package:crdt_lf/src/operation/id.dart';
 import 'package:crdt_lf/src/peer_id.dart';
 import 'package:hlc_dart/hlc_dart.dart';
 import 'package:crdt_lf/src/operation/operation.dart';
-import 'package:crdt_lf/src/operation/type.dart';
 import 'package:crdt_lf/src/handler/handler.dart';
 
-class TestHandler extends Handler {
-  TestHandler(CRDTDocument doc) : super(doc);
-
-  @override
-  String get id => 'test-handler';
-
-  @override
-  String getState() {
-    return '';
-  }
-}
-
-class TestOperation extends Operation {
-  const TestOperation({
-    required super.id,
-    required super.type,
-  });
-
-  factory TestOperation.fromHandler(Handler handler) {
-    return TestOperation(
-      id: handler.id,
-      type: OperationType.insert(handler),
-    );
-  }
-
-  @override
-  dynamic toPayload() => id;
-}
+import '../helpers/handler.dart';
 
 void main() {
   group('Change', () {

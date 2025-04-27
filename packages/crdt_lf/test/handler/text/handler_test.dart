@@ -1,14 +1,20 @@
 import 'package:test/test.dart';
 import 'package:crdt_lf/crdt_lf.dart';
 
+import '../../helpers/string.dart';
+
 void main() {
   group('CRDTTextHandler', () {
+    late String handlerId;
+    late PeerId author;
     late CRDTDocument doc;
     late CRDTTextHandler text;
 
     setUp(() {
-      doc = CRDTDocument();
-      text = CRDTTextHandler(doc, 'test-text');
+      author = PeerId.generate();
+      doc = CRDTDocument(peerId: author);
+      handlerId = 'test-text';
+      text = CRDTTextHandler(doc, handlerId);
     });
 
     test('constructor creates text handler with correct id', () {
@@ -150,5 +156,71 @@ void main() {
         isTrue,
       );
     });
+
+    test('should be able to create snapshot', () {
+      text.insert(0, 'Hello');
+      text.insert(5, ' World');
+      text.delete(5, 1);
+
+      final snapshot = doc.takeSnapshot();
+
+      expect(snapshot.id, isString);
+      expect(
+          snapshot.versionVector,
+          isMap.having(
+            (map) => map.keys,
+            'keys',
+            equals([author]),
+          ));
+      expect(snapshot.data, isMap);
+      expect(snapshot.data[handlerId], equals('HelloWorld'));
+    });
+
+    test('should be able to continue from snapshot', () {
+      text.insert(0, 'Hello');
+      text.insert(5, ' World');
+      text.delete(5, 1);
+
+      doc.takeSnapshot();
+
+      text.insert(0, 'Beautiful');
+
+      expect(text.value, equals('BeautifulHelloWorld'));
+    });
+
+    test('operations from different peers merge correctly using snapshots', () {
+      final doc1 = CRDTDocument();
+      final doc2 = CRDTDocument();
+      final text1 = CRDTTextHandler(doc1, 'test-text');
+      final text2 = CRDTTextHandler(doc2, 'test-text');
+
+      text1.insert(0, 'Hello');
+      text2.insert(0, 'World');
+
+      doc1.importChanges(doc2.exportChanges());
+      doc2.importChanges(doc1.exportChanges());
+
+      final snapshot1 = doc1.takeSnapshot();
+      final snapshot2 = doc2.takeSnapshot();
+
+      // Merge changes
+      doc2.importSnapshot(snapshot1);
+      doc1.importSnapshot(snapshot2);
+
+      // Both documents should have the same state.
+      // snapshot does not preserve changes so the newest snapshot is used.
+      expect(text1.value, equals(text2.value));
+      expect(text1.value, contains('World'));
+      expect(text2.value, contains('Hello'));
+      expect(
+        text1.value == "HelloWorld" || text1.value == "WorldHello",
+        isTrue,
+      );
+    });
+
+    test(
+      'operations from different peers merge correctly using snapshots ',
+      () {},
+    );
   });
 }

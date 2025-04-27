@@ -132,6 +132,8 @@ class CRDTFugueTextHandler extends Handler {
   /// Computes the current state of the text from document operations
   String _computeState() {
     _tree = FugueTree.empty();
+
+    // TODO: this is wrong, we should not need to insert the initial state
     insert(0, _initialState());
 
     // Get all operations from the document
