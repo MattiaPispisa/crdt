@@ -165,6 +165,30 @@ void main() {
         expect(hlc1.isConcurrentWith(hlc2), isTrue);
         expect(hlc1.isConcurrentWith(hlc3), isFalse);
       });
+
+      test('happenedAfter correctly identifies causal ordering', () {
+        final hlc1 = HybridLogicalClock(l: 1000, c: 5);
+        final hlc2 = HybridLogicalClock(l: 1000, c: 6);
+        final hlc3 = HybridLogicalClock(l: 2000, c: 0);
+
+        expect(hlc1.happenedAfter(hlc2), isFalse);
+        expect(hlc1.happenedAfter(hlc3), isFalse);
+        expect(hlc3.happenedAfter(hlc1), isTrue);
+      });
+
+      test('operators work correctly', () {
+        final hlc1 = HybridLogicalClock(l: 1000, c: 5);
+        final hlc2 = HybridLogicalClock(l: 1000, c: 6);
+        final hlc3 = HybridLogicalClock(l: 2000, c: 0);
+
+        expect(hlc1 > hlc2, isFalse);
+        expect(hlc1 < hlc2, isTrue);
+        expect(hlc1 == hlc2, isFalse);
+        expect(hlc1 >= hlc2, isFalse);
+        expect(hlc1 <= hlc2, isTrue);
+        expect(hlc1 != hlc2, isTrue);
+        expect(hlc1 >= hlc3, isFalse);
+      });
     });
 
     test('toInt64 correctly converts to 64-bit integer', () {

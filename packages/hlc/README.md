@@ -58,7 +58,10 @@ clock.receiveEvent(DateTime.now().millisecondsSinceEpoch, receivedClock);
 
 // Check causality
 print(clock.happenedBefore(receivedClock));
+print(clock.happenedAfter(receivedClock));
 print(clock.isConcurrentWith(receivedClock));
+print(clock >= receivedClock);
+print(clock < receivedClock);
 
 // Serialize/deserialize
 final serialized = clock.toInt64();
