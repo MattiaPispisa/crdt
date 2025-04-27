@@ -58,6 +58,16 @@ void main() {
       expect(doc.version, equals({change.id}));
     });
 
+    test('clock increment on createChange', () {
+      doc.createChange(operation);
+      final clock1 = doc.hlc;
+      doc.createChange(operation);
+      final clock2 = doc.hlc;
+
+      expect(clock1, isNot(equals(clock2)));
+      expect(clock1.happenedBefore(clock2), isTrue);
+    });
+
     test('createChange with physical time uses provided time', () {
       final physicalTime = 1000;
       final change = doc.createChange(operation, physicalTime: physicalTime);
