@@ -14,32 +14,29 @@ class TodoList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final network = context.read<Network>();
-
     return AppLayout(
       example: 'Todo List',
       leftBody: ChangeNotifierProvider<DocumentState>(
         create:
-            (context) => DocumentState.create(
-              author1,
-              networkChanges: network.listen(author1),
-            ),
-        child: const TodoDocument(),
+            (context) =>
+                DocumentState.create(author1, network: context.read<Network>()),
+        child: 
+         TodoDocument(author: author1),
       ),
       rightBody: ChangeNotifierProvider<DocumentState>(
         create:
-            (context) => DocumentState.create(
-              author2,
-              networkChanges: network.listen(author2),
-            ),
-        child: const TodoDocument(),
+            (context) =>
+                DocumentState.create(author2, network: context.read<Network>()),
+        child:  TodoDocument(author: author2),
       ),
     );
   }
 }
 
 class TodoDocument extends StatelessWidget {
-  const TodoDocument({super.key});
+  const TodoDocument({super.key, required this.author});
+
+  final PeerId author;
 
   Future<void> _showAddTodoDialog(BuildContext context) async {
     return showDialog<void>(
@@ -95,6 +92,7 @@ class TodoDocument extends StatelessWidget {
 
   Widget _fab(BuildContext context) {
     return FloatingActionButton(
+      heroTag: author.toString(),
       onPressed: () => _showAddTodoDialog(context),
       tooltip: 'Add Todo',
       child: const Icon(Icons.add),

@@ -59,6 +59,7 @@ class Network extends ChangeNotifier {
       _changesController.add(changeTuple);
     } else {
       _offlineQueue.add(changeTuple);
+      notifyListeners();
     }
   }
 
@@ -74,7 +75,7 @@ class Network extends ChangeNotifier {
   ///
   /// Returns a stream that emits [Change] objects sent by any actor
   /// whose ID does not match the provided [listenerId].
-  Stream<Change> listen(PeerId listenerId) {
+  Stream<Change> stream(PeerId listenerId) {
     return _changesController.stream
         // Filter out changes sent by the listener itself
         .where((event) => event.$1 != listenerId)

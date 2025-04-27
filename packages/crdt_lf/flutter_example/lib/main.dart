@@ -18,8 +18,11 @@ class MyApp extends StatelessWidget {
         debugShowCheckedModeBanner: false,
         title: 'CRDT LF Example',
         theme: ThemeData(primarySwatch: Colors.blue),
-        home: const Examples(),
-        routes: {'todo-list': (context) => const TodoList()},
+        initialRoute: '/',
+        routes: {
+          '/': (context) => const Examples(),
+          'todo-list': (context) => const TodoList(),
+        },
       ),
     );
   }
@@ -31,14 +34,17 @@ class Examples extends StatelessWidget {
   Widget _listTile(BuildContext context, String title, String route) {
     return ListTile(
       title: Text(title),
-      onTap: () => Navigator.pushNamed(context, route),
+      onTap: () => Navigator.of(context).pushNamed(route),
     );
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('CRDT LF Examples')),
+      appBar: AppBar(
+        leading: const SizedBox(),
+        title: const Text('CRDT LF Examples'),
+      ),
       body: ListView(children: [_listTile(context, 'Todo List', 'todo-list')]),
     );
   }

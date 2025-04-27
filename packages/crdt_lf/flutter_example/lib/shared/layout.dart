@@ -15,6 +15,13 @@ class AppLayout extends StatelessWidget {
   final Widget leftBody;
   final Widget rightBody;
 
+  Widget _leading(BuildContext context) {
+    return IconButton(
+      icon: const Icon(Icons.arrow_back),
+      onPressed: () => Navigator.of(context).pushNamed('/'),
+    );
+  }
+
   Widget _switch() {
     return Consumer<Network>(
       builder: (context, network, __) {
@@ -40,7 +47,11 @@ class AppLayout extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text('CRDT LF: $example'), actions: [_switch()]),
+      appBar: AppBar(
+        leading: _leading(context),
+        title: Text('CRDT LF: $example'),
+        actions: [_switch()],
+      ),
       body: Row(
         children: [
           Expanded(child: _padded(leftBody)),
