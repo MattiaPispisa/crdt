@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:hlc_dart/hlc_dart.dart';
@@ -23,7 +24,8 @@ class CRDTDocument {
   })  : _dag = DAG.empty(),
         _changeStore = ChangeStore.empty(),
         _peerId = peerId ?? PeerId.generate(),
-        _clock = HybridLogicalClock.initialize() {
+        _clock = HybridLogicalClock.initialize(),
+        _localChangesController = StreamController<Change>.broadcast() {
     devtools.handleCreated(this);
   }
 
@@ -48,6 +50,12 @@ class CRDTDocument {
   /// Gets the current version of this document (the frontiers of the DAG)
   Set<OperationId> get version => _dag.frontiers;
 
+  /// A stream controller for locally generated changes.
+  final StreamController<Change> _localChangesController;
+
+  /// A stream that emits [Change]s created locally by this document.
+  Stream<Change> get localChanges => _localChangesController.stream;
+
   /// Creates a new [Change] with the given [payload]
   ///
   /// The [Change] is automatically applied to this document.
@@ -69,7 +77,10 @@ class CRDTDocument {
       operation: operation,
     );
 
-    applyChange(change);
+    final applied = applyChange(change);
+    if (applied) {
+      _localChangesController.add(change);
+    }
     return change;
   }
 
@@ -210,5 +221,10 @@ class CRDTDocument {
   @override
   String toString() {
     return 'CRDTDocument(peerId: $_peerId, changes: ${_changeStore.changeCount}, version: ${version.length} frontiers)';
+  }
+
+  /// Disposes of the document
+  void dispose() {
+    _localChangesController.close();
   }
 }

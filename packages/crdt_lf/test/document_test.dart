@@ -203,6 +203,47 @@ void main() {
       );
     });
 
+    test('localChanges stream emits change on createChange', () async {
+      // Expect one change to be emitted
+      final expectation = expectLater(
+        doc.localChanges,
+        emits(isA<Change>()),
+      );
+
+      // Create a change
+      doc.createChange(operation);
+
+      // Wait for the stream to emit
+      await expectation;
+
+      // Optional: Further verification of the emitted change
+      doc.localChanges.listen(
+        expectAsync1(
+          (emittedChange) {
+            expect(emittedChange.author, equals(author));
+          },
+          count: 1,
+        ),
+      ); // Ensure the listener is called exactly once
+
+      // Create another change to trigger the listener above
+      doc.createChange(operation);
+    });
+
+    test('localChanges stream is closed on dispose', () async {
+      // Expect the stream to be done (closed)
+      final expectation = expectLater(
+        doc.localChanges,
+        emitsDone,
+      );
+
+      // Dispose the document
+      doc.dispose();
+
+      // Wait for the stream to close
+      await expectation;
+    });
+
     test('toString returns correct string representation', () {
       doc.createChange(operation);
       doc.createChange(operation);
