@@ -1,0 +1,103 @@
+import 'package:crdt_lf/crdt_lf.dart';
+import 'package:crdt_lf_flutter_example/shared/layout.dart';
+import 'package:crdt_lf_flutter_example/shared/network.dart';
+import 'package:crdt_lf_flutter_example/todo_list/_add_item_dialog.dart';
+import 'package:crdt_lf_flutter_example/todo_list/state.dart';
+import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+
+final author1 = PeerId.parse('79a716de-176e-4347-ba6e-1d9a2de02e15');
+final author2 = PeerId.parse('79a716de-176e-4347-ba6e-1d9a2de02e16');
+
+class TodoList extends StatelessWidget {
+  const TodoList({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final network = context.read<Network>();
+
+    return AppLayout(
+      example: 'Todo List',
+      leftBody: ChangeNotifierProvider<DocumentState>(
+        create:
+            (context) => DocumentState.create(
+              author1,
+              networkChanges: network.listen(author1),
+            ),
+        child: const TodoDocument(),
+      ),
+      rightBody: ChangeNotifierProvider<DocumentState>(
+        create:
+            (context) => DocumentState.create(
+              author2,
+              networkChanges: network.listen(author2),
+            ),
+        child: const TodoDocument(),
+      ),
+    );
+  }
+}
+
+class TodoDocument extends StatelessWidget {
+  const TodoDocument({super.key});
+
+  Future<void> _showAddTodoDialog(BuildContext context) async {
+    return showDialog<void>(
+      context: context,
+      barrierDismissible: true, // Allow dismissing by tapping outside
+      builder: (BuildContext dialogContext) {
+        return AddItemDialog(
+          onAdd: (text) {
+            context.read<DocumentState>().addTodo(text);
+          },
+        );
+      },
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: Consumer<DocumentState>(
+        builder: (context, state, child) {
+          if (state.todos.isEmpty) {
+            return const Center(
+              child: Text('No todos yet. Add one using the button below!'),
+            );
+          }
+          // Build the list if not empty
+          return ListView.builder(
+            itemCount: state.todos.length,
+            itemBuilder: (context, index) {
+              final todoText = state.todos[index];
+
+              return _item(context, todoText, index);
+            },
+          );
+        },
+      ),
+      floatingActionButton: _fab(context),
+    );
+  }
+
+  Widget _item(BuildContext context, String todo, int index) {
+    return ListTile(
+      title: Text(todo),
+      trailing: IconButton(
+        icon: const Icon(Icons.delete_outline),
+        tooltip: 'Delete Todo',
+        onPressed: () {
+          context.read<DocumentState>().removeTodo(index);
+        },
+      ),
+    );
+  }
+
+  Widget _fab(BuildContext context) {
+    return FloatingActionButton(
+      onPressed: () => _showAddTodoDialog(context),
+      tooltip: 'Add Todo',
+      child: const Icon(Icons.add),
+    );
+  }
+}

@@ -1,62 +1,45 @@
-   import 'package:flutter/material.dart';
-   import 'package:crdt_lf/crdt_lf.dart';
+import 'package:crdt_lf_flutter_example/shared/network.dart';
+import 'package:crdt_lf_flutter_example/todo_list/todo_list.dart';
+import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
-   void main() {
-     runApp(const MyApp());
-   }
+void main() {
+  runApp(const MyApp());
+}
 
-   class MyApp extends StatelessWidget {
-     const MyApp({super.key});
+class MyApp extends StatelessWidget {
+  const MyApp({super.key});
 
-     @override
-     Widget build(BuildContext context) {
-       return MaterialApp(
-         title: 'CRDT Test',
-         theme: ThemeData(primarySwatch: Colors.blue),
-         home: const MyHomePage(),
-       );
-     }
-   }
+  @override
+  Widget build(BuildContext context) {
+    return ChangeNotifierProvider(
+      create: (context) => Network(),
+      child: MaterialApp(
+        debugShowCheckedModeBanner: false,
+        title: 'CRDT LF Example',
+        theme: ThemeData(primarySwatch: Colors.blue),
+        home: const Examples(),
+        routes: {'todo-list': (context) => const TodoList()},
+      ),
+    );
+  }
+}
 
-   class MyHomePage extends StatefulWidget {
-     const MyHomePage({super.key});
+class Examples extends StatelessWidget {
+  const Examples({super.key});
 
-     @override
-     State<MyHomePage> createState() => _MyHomePageState();
-   }
+  Widget _listTile(BuildContext context, String title, String route) {
+    return ListTile(
+      title: Text(title),
+      onTap: () => Navigator.pushNamed(context, route),
+    );
+  }
 
-   class _MyHomePageState extends State<MyHomePage> {
-     final CRDTDocument _document = CRDTDocument();
-     late CRDTTextHandler _textHandler;
-
-     @override
-     void initState() {
-       super.initState();
-       _textHandler = CRDTTextHandler(_document, 'test-text');
-       _textHandler.insert(0, 'Hello');
-     }
-
-     @override
-     Widget build(BuildContext context) {
-       return Scaffold(
-         appBar: AppBar(title: const Text('CRDT Test')),
-         body: Center(
-           child: Column(
-             mainAxisAlignment: MainAxisAlignment.center,
-             children: [
-               Text('Current text: ${_textHandler.value}'),
-               const SizedBox(height: 20),
-               ElevatedButton(
-                 onPressed: () {
-                   setState(() {
-                     _textHandler.insert(_textHandler.length, ' World!');
-                   });
-                 },
-                 child: const Text('Add Text'),
-               ),
-             ],
-           ),
-         ),
-       );
-     }
-   }
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('CRDT LF Examples')),
+      body: ListView(children: [_listTile(context, 'Todo List', 'todo-list')]),
+    );
+  }
+}
