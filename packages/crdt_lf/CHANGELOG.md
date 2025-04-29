@@ -1,4 +1,4 @@
-[Unreleased]
+[0.4.0] - 2025-04-29
 
 ### Added
 - `CRDTDocument` expose `localChanges` stream to listen to local changes [18](https://github.com/MattiaPispisa/crdt/issues/18)
