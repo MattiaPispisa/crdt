@@ -8,7 +8,8 @@
   - [Getting Started](#getting-started)
   - [Usage](#usage)
     - [Basic Usage](#basic-usage)
-    - [Distributed Collaboration Example](#distributed-collaboration-example)
+    - [Dart Distributed Collaboration Example](#dart-distributed-collaboration-example)
+    - [Flutter Distributed Collaboration Example](#flutter-distributed-collaboration-example)
   - [Architecture](#architecture)
     - [CRDTDocument](#crdtdocument)
     - [Handlers](#handlers)
@@ -69,7 +70,8 @@ void main() {
 }
 ```
 
-### [Distributed Collaboration Example](https://github.com/MattiaPispisa/crdt/packages/crdt_lf/example/main.dart)
+### [Dart Distributed Collaboration Example](https://github.com/MattiaPispisa/crdt/tree/main/packages/crdt_lf/example/main.dart)
+### [Flutter Distributed Collaboration Example](https://github.com/MattiaPispisa/crdt/tree/main/packages/crdt_lf/flutter_example)
 
 ## Architecture
 
