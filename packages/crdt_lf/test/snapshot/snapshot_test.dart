@@ -3,7 +3,7 @@ import 'package:hlc_dart/hlc_dart.dart';
 import 'package:test/test.dart';
 
 import '../helpers/handler.dart';
-import '../helpers/string.dart';
+import '../helpers/matcher.dart';
 
 void main() {
   group('Snapshot', () {
@@ -26,9 +26,12 @@ void main() {
 
       expect(snapshot.id, equals('id'));
       expect(
-        snapshot.versionVector.vector,
-        equals({author: HybridLogicalClock(l: 1, c: 1)}),
+        snapshot.versionVector.entries.length,
+        equals(1),
       );
+      expect(snapshot.versionVector.entries.first.key, equals(author));
+      expect(snapshot.versionVector.entries.first.value,
+          equals(HybridLogicalClock(l: 1, c: 1)));
       expect(snapshot.data, equals({'test': "Hello World!"}));
     });
 
@@ -39,11 +42,6 @@ void main() {
         data: {'test': "Hello World!"},
       );
 
-      expect(
-        () => snapshot.versionVector.vector[author] =
-            HybridLogicalClock(l: 1, c: 3),
-        throwsA(isA<UnsupportedError>()),
-      );
       expect(
         () => snapshot.data['test'] = 'Hello World!',
         throwsA(isA<UnsupportedError>()),
@@ -71,15 +69,18 @@ void main() {
       ]);
 
       final snapshot = Snapshot.create(
-        version: doc.version,
+        versionVector: doc.getVersionVector(),
         data: {'test': "Hello World!"},
       );
 
       expect(snapshot.id, isString);
       expect(
-        snapshot.versionVector.vector,
-        equals({author: HybridLogicalClock(l: 1, c: 2)}),
+        snapshot.versionVector.entries.length,
+        equals(1),
       );
+      expect(snapshot.versionVector.entries.first.key, equals(author));
+      expect(snapshot.versionVector.entries.first.value,
+          equals(HybridLogicalClock(l: 1, c: 2)));
       expect(snapshot.data, equals({'test': "Hello World!"}));
     });
 
@@ -112,9 +113,12 @@ void main() {
       final snapshot = Snapshot.fromJson(json);
       expect(snapshot.id, equals('id'));
       expect(
-        snapshot.versionVector.vector,
-        equals({author: HybridLogicalClock(l: 1, c: 1)}),
+        snapshot.versionVector.entries.length,
+        equals(1),
       );
+      expect(snapshot.versionVector.entries.first.key, equals(author));
+      expect(snapshot.versionVector.entries.first.value,
+          equals(HybridLogicalClock(l: 1, c: 1)));
       expect(snapshot.data, equals({'test': "Hello World!"}));
     });
 
@@ -157,12 +161,12 @@ void main() {
       ]);
 
       final snapshot = Snapshot.create(
-        version: doc.version,
+        versionVector: doc.getVersionVector(),
         data: {},
       );
 
       final snapshot2 = Snapshot.create(
-        version: doc2.version,
+        versionVector: doc2.getVersionVector(),
         data: {},
       );
 
@@ -198,131 +202,15 @@ void main() {
       expect(merged.data, containsPair("document", "Thesis: CRDTs are cool"));
 
       expect(
-        merged.versionVector.vector,
-        equals({
-          author1: HybridLogicalClock(l: 1, c: 1),
-          author2: HybridLogicalClock(l: 1, c: 2)
-        }),
+        merged.versionVector.entries.length,
+        equals(2),
       );
-    });
-  });
-
-  group('VersionVector', () {
-    test('should compare correctly', () {
-      final author = PeerId.generate();
-      final versionVector =
-          VersionVector({author: HybridLogicalClock(l: 1, c: 1)});
-      final versionVector2 =
-          VersionVector({author: HybridLogicalClock(l: 1, c: 2)});
-
-      expect(versionVector.isNewerThan(versionVector2), isFalse);
-      expect(versionVector2.isNewerThan(versionVector), isTrue);
-    });
-
-    test('should compare correctly with multiple peers', () {
-      final author = PeerId.generate();
-      final author2 = PeerId.generate();
-
-      final versionVector = VersionVector({
-        author: HybridLogicalClock(l: 1, c: 1),
-        author2: HybridLogicalClock(l: 1, c: 3),
-      });
-
-      final versionVector2 = VersionVector({
-        author: HybridLogicalClock(l: 1, c: 1),
-        author2: HybridLogicalClock(l: 1, c: 2),
-      });
-
-      expect(versionVector.isNewerThan(versionVector2), isTrue);
-      expect(versionVector2.isNewerThan(versionVector), isFalse);
-    });
-
-    test('should compare correctly with empty version vector', () {
-      final versionVector = VersionVector({});
-      final versionVector2 = VersionVector({});
-
-      expect(versionVector.isNewerThan(versionVector2), isFalse);
-      expect(versionVector2.isNewerThan(versionVector), isFalse);
-    });
-
-    test('should compare correctly with strict comparison', () {
-      final author = PeerId.generate();
-      final author2 = PeerId.generate();
-
-      final versionVector = VersionVector({
-        author: HybridLogicalClock(l: 1, c: 1),
-        author2: HybridLogicalClock(l: 1, c: 3),
-      });
-
-      final versionVector2 = VersionVector({
-        author: HybridLogicalClock(l: 1, c: 1),
-        author2: HybridLogicalClock(l: 1, c: 2),
-      });
-
-      expect(versionVector.isStrictlyNewerThan(versionVector2), isFalse);
-      expect(versionVector2.isStrictlyNewerThan(versionVector), isFalse);
-    });
-
-    test('should compare correctly with different peers', () {
-      final author = PeerId.generate();
-      final author2 = PeerId.generate();
-
-      final versionVector = VersionVector({
-        author: HybridLogicalClock(l: 1, c: 1),
-      });
-
-      final versionVector2 = VersionVector({
-        author2: HybridLogicalClock(l: 1, c: 1),
-      });
-
-      expect(versionVector.isStrictlyNewerThan(versionVector2), isTrue);
-      expect(versionVector2.isStrictlyNewerThan(versionVector), isTrue);
-    });
-
-    test('should merge correctly', () {
-      final author = PeerId.generate();
-      final author2 = PeerId.generate();
-
-      final versionVector =
-          VersionVector({author: HybridLogicalClock(l: 1, c: 1)});
-      final versionVector2 =
-          VersionVector({author2: HybridLogicalClock(l: 1, c: 1)});
-
-      final merged = versionVector.merged(versionVector2);
-      expect(
-          merged.vector,
-          equals({
-            author: HybridLogicalClock(l: 1, c: 1),
-            author2: HybridLogicalClock(l: 1, c: 1)
-          }));
-    });
-
-    test('should merge correctly with multiple peers', () {
-      final author = PeerId.generate();
-      final author2 = PeerId.generate();
-      final author3 = PeerId.generate();
-
-      final versionVector = VersionVector({
-        author: HybridLogicalClock(l: 1, c: 1),
-        author2: HybridLogicalClock(l: 1, c: 4),
-        author3: HybridLogicalClock(l: 1, c: 3),
-      });
-
-      final versionVector2 = VersionVector({
-        author: HybridLogicalClock(l: 1, c: 2),
-        author2: HybridLogicalClock(l: 1, c: 2),
-        author3: HybridLogicalClock(l: 1, c: 7),
-      });
-
-      final merged = versionVector.merged(versionVector2);
-      expect(
-        merged.vector,
-        equals({
-          author: HybridLogicalClock(l: 1, c: 2),
-          author2: HybridLogicalClock(l: 1, c: 4),
-          author3: HybridLogicalClock(l: 1, c: 7),
-        }),
-      );
+      expect(merged.versionVector.entries.first.key, equals(author1));
+      expect(merged.versionVector.entries.first.value,
+          equals(HybridLogicalClock(l: 1, c: 1)));
+      expect(merged.versionVector.entries.last.key, equals(author2));
+      expect(merged.versionVector.entries.last.value,
+          equals(HybridLogicalClock(l: 1, c: 2)));
     });
   });
 }

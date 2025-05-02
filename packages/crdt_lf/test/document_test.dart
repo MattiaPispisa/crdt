@@ -197,7 +197,6 @@ void main() {
       );
     });
 
-<<<<<<< HEAD
     test('localChanges stream emits change on createChange', () async {
       // Expect one change to be emitted
       final expectation = expectLater(
@@ -237,8 +236,9 @@ void main() {
 
       // Wait for the stream to close
       await expectation;
-=======
-    test('import should not accept changes already in snapshot', () {
+    });
+
+    test('import should not accept changes already in version vector', () {
       final change1 = Change(
         id: OperationId(author, HybridLogicalClock(l: 1, c: 1)),
         operation: operation,
@@ -315,7 +315,7 @@ void main() {
       expect(doc.exportChanges(), containsAll([change2]));
     });
 
-    test('should not accept snapshot if divergent ', () {
+    test('should not accept snapshot if divergent', () {
       final author1 = PeerId.generate();
       final author2 = PeerId.generate();
 
@@ -339,7 +339,6 @@ void main() {
 
       // author2 is not in the version vector
       expect(doc.shouldApplySnapshot(snapshot), isFalse);
->>>>>>> e601e54 (snapshot)
     });
 
     test('toString returns correct string representation', () {

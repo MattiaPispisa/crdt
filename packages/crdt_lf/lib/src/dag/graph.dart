@@ -1,6 +1,5 @@
-import '../frontiers/frontiers.dart';
-import '../operation/id.dart';
-import 'node.dart';
+import 'package:crdt_lf/crdt_lf.dart';
+import 'package:hlc_dart/hlc_dart.dart';
 
 /// DAG (Directed Acyclic Graph) implementation for CRDT
 ///
@@ -48,6 +47,45 @@ class DAG {
   void clear() {
     _nodes.clear();
     _frontiers.clear();
+  }
+
+  /// Prunes the [DAG] history, keeping only nodes that happened after the given [version].
+  ///
+  /// Returns the number of nodes removed.
+  int prune(VersionVector version) {
+    final toRemove = <OperationId>[];
+    final frontier = <OperationId>[];
+
+    for (final entry in _nodes.entries) {
+      final clock = version[entry.key.peerId];
+      if (clock != null && entry.key.hlc.compareTo(clock) <= 0) {
+        toRemove.add(entry.key);
+      } else {
+        if (entry.value.childCount == 0) {
+          frontier.add(entry.key);
+        }
+      }
+    }
+
+    _removeNodes(toRemove);
+
+    _frontiers
+      ..clear()
+      ..merge(Frontiers.from(frontier));
+
+    return toRemove.length;
+  }
+
+  void _removeNodes(List<OperationId> operations) {
+    for (final id in operations) {
+      for (final parent in _nodes[id]!.parents) {
+        _nodes[parent]?.removeChild(id);
+      }
+      for (final child in _nodes[id]!.children) {
+        _nodes[child]?.removeParent(id);
+      }
+      _nodes.remove(id);
+    }
   }
 
   /// Adds a new node to the [DAG]
@@ -192,6 +230,22 @@ class DAG {
 
     // Merge the frontiers
     _frontiers.merge(other._frontiers);
+  }
+
+  // TODO: cache version vector
+  /// Returns the version vector of the [DAG]
+  VersionVector getVersionVector() {
+    final vector = <PeerId, HybridLogicalClock>{};
+    for (final entry in _nodes.entries) {
+      final id = entry.key;
+      final node = entry.value;
+      final currentHlc = vector[id.peerId];
+
+      if (currentHlc == null || node.id.hlc.compareTo(currentHlc) > 0) {
+        vector[id.peerId] = node.id.hlc;
+      }
+    }
+    return VersionVector(vector);
   }
 
   /// Returns a string representation of the DAG

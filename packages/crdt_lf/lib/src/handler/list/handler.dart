@@ -73,7 +73,7 @@ class CRDTListHandler<T> extends Handler {
   }
 
   @override
-  List<T> getState() {
+  List<T> getSnapshotState() {
     return value;
   }
 
@@ -145,4 +145,6 @@ class CRDTListHandler<T> extends Handler {
   String toString() {
     return 'CRDTList($_id, ${value.toString()})';
   }
+
+
 }

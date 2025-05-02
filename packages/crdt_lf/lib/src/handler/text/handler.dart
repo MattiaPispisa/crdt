@@ -66,7 +66,7 @@ class CRDTTextHandler extends Handler {
   }
 
   @override
-  String getState() {
+  String getSnapshotState() {
     return value;
   }
 

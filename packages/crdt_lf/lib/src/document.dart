@@ -67,6 +67,14 @@ class CRDTDocument {
     provider._document = this;
   }
 
+  /// It represents the **latest operation for each peer** of this document
+  VersionVector getVersionVector() {
+    if (_lastSnapshot != null) {
+      return _dag.getVersionVector().merged(_lastSnapshot!.versionVector);
+    }
+    return _dag.getVersionVector();
+  }
+
   /// Creates a new [Change] with the given [payload]
   ///
   /// The [Change] is automatically applied to this document.
@@ -137,15 +145,14 @@ class CRDTDocument {
   Snapshot takeSnapshot() {
     final state = <String, dynamic>{};
     for (final provider in _providers.values) {
-      state[provider.id] = provider.getState();
+      state[provider.id] = provider.getSnapshotState();
     }
-    var snapshot = Snapshot.create(version: version, data: state);
-    if (_lastSnapshot != null) {
-      snapshot = snapshot.merged(_lastSnapshot!);
-    }
+    var snapshot = Snapshot.create(
+      versionVector: getVersionVector(),
+      data: state,
+    );
 
-    _changeStore.clear();
-    _dag.clear();
+    _prune(snapshot.versionVector);
 
     _lastSnapshot = snapshot;
     return snapshot;
@@ -160,6 +167,7 @@ class CRDTDocument {
   /// Use [shouldApplySnapshot] to check if the snapshot should be applied.
   bool importSnapshot(Snapshot snapshot) {
     if (shouldApplySnapshot(snapshot)) {
+      _prune(snapshot.versionVector);
       _lastSnapshot = snapshot;
       return true;
     }
@@ -175,12 +183,8 @@ class CRDTDocument {
       return true;
     }
 
-    var versionVector = VersionVector.create(version);
-    if (_lastSnapshot != null) {
-      versionVector = versionVector.merged(_lastSnapshot!.versionVector);
-    }
-
-    return snapshot.versionVector.isStrictlyNewerThan(versionVector);
+    return snapshot.versionVector
+        .isStrictlyNewerOrEqualThan(getVersionVector());
   }
 
   /// Exports [Change]s from a specific version
@@ -218,7 +222,7 @@ class CRDTDocument {
   /// Returns the number of [Change]s that were applied.
   int importChanges(List<Change> changes) {
     // Sort changes topologically
-    final sorted = _topologicalSort(_afterSnapshot(changes));
+    final sorted = _topologicalSort(_neverReceived(changes));
 
     // Apply changes
     int applied = 0;
@@ -235,20 +239,26 @@ class CRDTDocument {
     return applied;
   }
 
-  List<Change> _afterSnapshot(List<Change> changes) {
-    final snapshot = _lastSnapshot;
-    if (snapshot == null) {
-      return changes;
-    }
+  void _prune(VersionVector version) {
+    _dag.prune(version);
+    _changeStore.prune(version);
+  }
 
-    final changesAfterSnapshot = <Change>[];
+  /// Returns a list of [Change]s never received from this document:
+  /// - the clock of the change is greater than the clock of the version vector
+  /// - the change is not in the version vector
+  List<Change> _neverReceived(List<Change> changes) {
+    final versionVector = getVersionVector();
+    final newChanges = <Change>[];
+
     for (final change in changes) {
-      final hlc = snapshot.versionVector[change.author];
-      if (hlc == null || change.hlc.compareTo(hlc) > 0) {
-        changesAfterSnapshot.add(change);
+      final clock = versionVector[change.id.peerId];
+      if (clock == null || change.id.hlc.compareTo(clock) > 0) {
+        newChanges.add(change);
       }
     }
-    return changesAfterSnapshot;
+
+    return newChanges;
   }
 
   /// Sorts [Change]s topologically
@@ -321,7 +331,7 @@ mixin SnapshotProvider {
   CRDTDocument? _document;
 
   /// Returns the current state of the provider
-  dynamic getState();
+  dynamic getSnapshotState();
 
   /// Return the last snapshot of the document
   dynamic lastSnapshot() {

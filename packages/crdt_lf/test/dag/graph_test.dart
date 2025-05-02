@@ -1,3 +1,4 @@
+import 'package:crdt_lf/crdt_lf.dart';
 import 'package:test/test.dart';
 import 'package:crdt_lf/src/dag/graph.dart';
 import 'package:crdt_lf/src/operation/id.dart';
@@ -158,6 +159,21 @@ void main() {
       expect(dag.containsNode(id3), isTrue);
       expect(dag.containsNode(id4), isTrue);
       expect(dag.frontiers, equals({id4}));
+    });
+
+    test('prune removes nodes older than the given version vector', () {
+      dag.addNode(id1, {});
+      dag.addNode(id2, {id1});
+      dag.addNode(id3, {id2});
+      dag.addNode(id4, {id2});
+
+      dag.prune(VersionVector({author: id2.hlc}));
+
+      expect(dag.nodeCount, equals(2));
+      expect(dag.containsNode(id3), isTrue);
+      expect(dag.containsNode(id4), isTrue);
+      expect(dag.containsNode(id1), isFalse);
+      expect(dag.containsNode(id2), isFalse);
     });
 
     test('toString returns correct string representation', () {

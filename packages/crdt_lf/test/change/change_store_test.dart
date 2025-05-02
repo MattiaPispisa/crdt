@@ -1,13 +1,6 @@
-import 'package:crdt_lf/src/document.dart';
+import 'package:crdt_lf/crdt_lf.dart';
 import 'package:test/test.dart';
-import 'package:crdt_lf/src/change/change_store.dart';
-import 'package:crdt_lf/src/change/change.dart';
-import 'package:crdt_lf/src/operation/id.dart';
-import 'package:crdt_lf/src/peer_id.dart';
 import 'package:hlc_dart/hlc_dart.dart';
-import 'package:crdt_lf/src/operation/operation.dart';
-import 'package:crdt_lf/src/handler/handler.dart';
-import 'package:crdt_lf/src/dag/graph.dart';
 
 import '../helpers/handler.dart';
 
@@ -143,6 +136,19 @@ void main() {
 
       store.clear();
       expect(store.changeCount, equals(0));
+    });
+
+    test('prune removes changes older than the given version vector', () {
+      store.addChange(change1);
+      store.addChange(change2);
+      store.addChange(change3);
+
+      store.prune(VersionVector({author: change2.hlc}));
+
+      expect(store.changeCount, equals(1));
+      expect(store.containsChange(change3.id), isTrue);
+      expect(store.containsChange(change2.id), isFalse);
+      expect(store.containsChange(change1.id), isFalse);
     });
 
     test('toString returns correct string representation', () {

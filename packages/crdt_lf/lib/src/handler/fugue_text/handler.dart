@@ -1,12 +1,4 @@
-import 'package:crdt_lf/src/algorithm/fugue/element_id.dart';
-import 'package:crdt_lf/src/algorithm/fugue/tree.dart';
-import 'package:crdt_lf/src/change/change.dart';
-import 'package:crdt_lf/src/document.dart';
-import 'package:crdt_lf/src/handler/handler.dart';
-import 'package:crdt_lf/src/operation/id.dart';
-import 'package:crdt_lf/src/operation/operation.dart';
-import 'package:crdt_lf/src/operation/type.dart';
-import 'package:crdt_lf/src/utils/set.dart';
+import 'package:crdt_lf/crdt_lf.dart';
 part 'operation.dart';
 
 /// CRDT Text implementation with the Fugue algorithm
@@ -33,13 +25,18 @@ class CRDTFugueTextHandler extends Handler {
   Set<OperationId>? _cachedVersion;
 
   /// The text stored in cache
-  String? _cachedText;
+  List<FugueValueNode<String>>? _cachedState;
+
+  /// The cached value of the text
+  String? _cachedValue;
 
   @override
   String get id => _id;
 
   /// Inserts [text] at position [index]
   void insert(int index, String text) {
+
+    // TODO: questo insert lo uso in due punti, metterlo nel fugue tree l'insert di un iterable di T
     if (text.isEmpty) return;
 
     // Find the node at position index - 1 (or root node if index is 0)
@@ -107,40 +104,71 @@ class CRDTFugueTextHandler extends Handler {
   String get value {
     // Check if cache is still valid
     final currentVersion = _doc.version;
-    if (_cachedText != null && setEquals(_cachedVersion, currentVersion)) {
-      return _cachedText!;
+    if (_cachedValue != null && setEquals(_cachedVersion, currentVersion)) {
+      return _cachedValue!;
     }
 
     // Compute state from scratch
     final state = _computeState();
 
     // Store state in cache
-    _cachedText = state;
+    _cachedState = state;
+    _cachedValue = state.map((node) => node.value).join('');
     _cachedVersion = Set.from(currentVersion);
 
-    return state;
+    return _cachedValue!;
   }
 
   @override
-  String getState() {
-    return value;
+  List<FugueValueNode<String>> getSnapshotState() {
+    return _cachedState!;
   }
 
   /// Gets the length of the text
   int get length => value.length;
 
   /// Computes the current state of the text from document operations
-  String _computeState() {
+  List<FugueValueNode<String>> _computeState() {
     _tree = FugueTree.empty();
 
-    // TODO: this is wrong, we should not need to insert the initial state
-    insert(0, _initialState());
+    final initialState = _initialState();
+
+    if (initialState.isNotEmpty) {
+      // Find the node at position index - 1 (or root node if index is 0)
+      final leftOrigin = FugueElementID.nullID();
+
+      // Find the next node after leftOrigin
+      final rightOrigin = _tree.findNextNode(leftOrigin);
+
+      // Insert first character
+      final firstNodeID = initialState[0].id;
+      _tree.insert(
+        newID: firstNodeID,
+        value: initialState[0].value,
+        leftOrigin: leftOrigin,
+        rightOrigin: rightOrigin,
+      );
+
+      // Insert remaining characters as right children of the previous character
+      FugueElementID previousID = firstNodeID;
+      for (int i = 1; i < initialState.length; i++) {
+        final newNodeID = initialState[i].id;
+        _tree.insert(
+          newID: newNodeID,
+          value: initialState[i].value,
+          leftOrigin: previousID,
+          rightOrigin: rightOrigin,
+        );
+        previousID = newNodeID;
+      }
+    }
 
     // Get all operations from the document
     final changes = _doc.exportChanges().sorted();
 
     // Apply operations in order
     final opFactory = _FugueTextOperationFactory(this);
+
     for (final change in changes) {
       final operation = opFactory.fromPayload(change.payload);
 
@@ -157,22 +185,22 @@ class CRDTFugueTextHandler extends Handler {
     }
 
     // Return the resulting text
-    return _tree.values().join('');
+    return _tree.nodes();
   }
 
   /// Gets the initial state of the text
-  String _initialState() {
+  List<FugueValueNode<String>> _initialState() {
     final snapshot = lastSnapshot();
-    if (snapshot is String) {
+    if (snapshot is List<FugueValueNode<String>>) {
       return snapshot;
     }
 
-    return '';
+    return [];
   }
 
   /// Invalidates the cache
   void _invalidateCache() {
-    _cachedText = null;
+    _cachedState = null;
     _cachedVersion = null;
   }
 

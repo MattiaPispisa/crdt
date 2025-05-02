@@ -7,14 +7,14 @@
 ### Added
 - Snapshot implementation 
 
-<<<<<<< HEAD
-[0.4.0] - 2025-04-29
-=======
+### Fixed
+- Fix Fugue tree insertion on index 0
+
+## [0.4.0] - 2025-04-29
 ### Changed
 - chore: move test utils under `helpers` folder
 
 ## [0.3.0] - 2025-04-21
->>>>>>> e601e54 (snapshot)
 
 ### Added
 - `CRDTDocument` expose `localChanges` stream to listen to local changes [18](https://github.com/MattiaPispisa/crdt/issues/18)

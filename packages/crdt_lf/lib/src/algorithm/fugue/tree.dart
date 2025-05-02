@@ -60,15 +60,29 @@ class FugueTree<T> {
 
   /// Returns all non-deleted values in the correct order
   List<T> values() {
-    return _traverse(_rootID);
+    return _traverse(_rootID, (node) => node.value!);
+  }
+
+  /// Returns all non-deleted nodes in the correct order
+  List<FugueValueNode<T>> nodes() {
+    return _traverse(
+      _rootID,
+      (node) => FugueValueNode(
+        id: node.id,
+        value: node.value!,
+      ),
+    );
   }
 
   /// Traverses the tree starting from the specified node
   ///
   /// Visits recursively the left children, then the node itself, then the right children
   /// Collects the non-deleted values (different from `⊥`)
-  List<T> _traverse(FugueElementID nodeID) {
-    List<T> result = [];
+  List<K> _traverse<K>(
+    FugueElementID nodeID,
+    K Function(FugueNode<T> node) transform,
+  ) {
+    List<K> result = [];
 
     if (!_nodes.containsKey(nodeID)) {
       return result;
@@ -81,17 +95,17 @@ class FugueTree<T> {
 
     // Recursively visit left children
     for (final childID in leftChildren) {
-      result.addAll(_traverse(childID));
+      result.addAll(_traverse<K>(childID, transform));
     }
 
     // Visit the node itself if not deleted
     if (node.value != null) {
-      result.add(node.value!);
+      result.add(transform(node));
     }
 
     // Recursively visit right children
     for (final childID in rightChildren) {
-      result.addAll(_traverse(childID));
+      result.addAll(_traverse<K>(childID, transform));
     }
 
     return result;
@@ -130,6 +144,14 @@ class FugueTree<T> {
         parentID: rightOrigin,
         side: FugueSide.left,
       );
+    } else if (leftOrigin.isNull) {
+      // If leftOrigin is null, the new node will be a right child of the root
+      newNode = FugueNode<T>(
+        id: newID,
+        value: value,
+        parentID: _rootID,
+        side: FugueSide.right,
+      );
     } else {
       // If neither leftOrigin nor rightOrigin exists, insert at the beginning
       newNode = FugueNode<T>(
@@ -148,6 +170,8 @@ class FugueTree<T> {
   void delete(FugueElementID nodeID) {
     if (_nodes.containsKey(nodeID)) {
       _nodes[nodeID]!.node.value = null;
+    } else {
+      print("no delete $nodeID");
     }
   }
 

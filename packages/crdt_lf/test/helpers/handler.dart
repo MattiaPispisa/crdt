@@ -9,7 +9,7 @@ class TestHandler extends Handler {
   String get id => 'test-handler';
 
   @override
-  String getState() {
+  String getSnapshotState() {
     return '';
   }
 }

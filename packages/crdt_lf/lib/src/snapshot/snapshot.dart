@@ -1,8 +1,6 @@
 import 'dart:convert';
 import 'package:crdt_lf/crdt_lf.dart';
-import 'package:crdt_lf/src/snapshot/version_vector.dart';
 import 'package:crypto/crypto.dart';
-import 'package:crdt_lf/src/operation/id.dart';
 import 'package:hlc_dart/hlc_dart.dart';
 
 /// Represents a snapshot of a CRDTDocument's state at a specific version.
@@ -25,13 +23,11 @@ class Snapshot {
 
   /// Creates a [Snapshot] from a [version].
   factory Snapshot.create({
-    required Set<OperationId> version,
+    required VersionVector versionVector,
     required Map<String, dynamic> data,
   }) {
-    final versionVector = VersionVector.create(version);
-
     return Snapshot(
-      id: _generateIdFromVersion(versionVector.vector),
+      id: _generateIdFromVersion(versionVector),
       versionVector: versionVector,
       data: data,
     );
@@ -43,7 +39,7 @@ class Snapshot {
   /// will overwrite the data of the older snapshot.
   Snapshot merged(Snapshot other) {
     var data = this.data;
-    if (other.versionVector.isStrictlyNewerThan(this.versionVector)) {
+    if (other.versionVector.isStrictlyNewerOrEqualThan(this.versionVector)) {
       data = {...data, ...other.data};
     } else {
       data = {...other.data, ...data};
@@ -51,7 +47,7 @@ class Snapshot {
     final versionVector = this.versionVector.merged(other.versionVector);
 
     return Snapshot(
-      id: _generateIdFromVersion(versionVector.vector),
+      id: _generateIdFromVersion(versionVector),
       versionVector: versionVector,
       data: {...data, ...other.data},
     );
@@ -74,9 +70,7 @@ class Snapshot {
       );
 
   /// Generates a stable SHA-256 hash ID from the version set.
-  static String _generateIdFromVersion(
-    Map<PeerId, HybridLogicalClock> version,
-  ) {
+  static String _generateIdFromVersion(VersionVector version) {
     if (version.isEmpty) {
       // Define a specific ID for the empty version state
       // Hashing an empty string or using a constant are options.
