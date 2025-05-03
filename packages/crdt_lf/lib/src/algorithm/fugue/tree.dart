@@ -111,6 +111,44 @@ class FugueTree<T> {
     return result;
   }
 
+  void iterableInsert(
+    int index,
+    Iterable<FugueValueNode<T>> nodes,
+  ) {
+    if (nodes.isEmpty) {
+      return;
+    }
+
+    // Find the node at position index - 1 (or root node if index is 0)
+    final leftOrigin =
+        index == 0 ? FugueElementID.nullID() : findNodeAtPosition(index - 1);
+
+    // Find the next node after leftOrigin
+    final rightOrigin = findNextNode(leftOrigin);
+
+    // Insert first node
+    final firstNodeID = nodes.first.id;
+    insert(
+      newID: firstNodeID,
+      value: nodes.first.value,
+      leftOrigin: leftOrigin,
+      rightOrigin: rightOrigin,
+    );
+
+    // Insert remaining nodes as right children of the previous node
+    FugueElementID previousID = firstNodeID;
+    for (final value in nodes.skip(1)) {
+      final newNodeID = value.id;
+      insert(
+        newID: newNodeID,
+        value: value.value,
+        leftOrigin: previousID,
+        rightOrigin: rightOrigin,
+      );
+      previousID = newNodeID;
+    }
+  }
+
   /// Inserts a new [FugueNode] into the tree with [newID] and [value]
   ///
   /// [leftOrigin] is the node at position `index-1`

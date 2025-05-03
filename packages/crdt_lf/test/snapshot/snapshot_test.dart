@@ -5,6 +5,8 @@ import 'package:test/test.dart';
 import '../helpers/handler.dart';
 import '../helpers/matcher.dart';
 
+// TODO: id version empty
+
 void main() {
   group('Snapshot', () {
     late Operation operation;
@@ -15,6 +17,17 @@ void main() {
       author = PeerId.generate();
       handler = TestHandler(CRDTDocument(peerId: author));
       operation = TestOperation.fromHandler(handler);
+    });
+
+    test('should create empty snapshot', () {
+      final snapshot = Snapshot.create(
+        versionVector: VersionVector({}),
+        data: {},
+      );
+
+      expect(snapshot.id, isString);
+      expect(snapshot.versionVector.isEmpty, isTrue);
+      expect(snapshot.data.isEmpty, isTrue);
     });
 
     test('should create correctly', () {
@@ -211,6 +224,59 @@ void main() {
       expect(merged.versionVector.entries.last.key, equals(author2));
       expect(merged.versionVector.entries.last.value,
           equals(HybridLogicalClock(l: 1, c: 2)));
+    });
+
+    test(
+        'merged should prefer data from the other snapshot when version vector is newer',
+        () {
+      final author1 = PeerId.generate();
+      final author2 = PeerId.generate();
+
+      final snapshotBase = Snapshot(
+        id: 'base_id',
+        versionVector: VersionVector({author1: HybridLogicalClock(l: 1, c: 1)}),
+        data: {
+          'common_key': 'value from base',
+          'base_only_key': 'base only',
+        },
+      );
+
+      final snapshotOther = Snapshot(
+        id: 'other_id',
+        versionVector: VersionVector({author2: HybridLogicalClock(l: 2, c: 1)}),
+        data: {
+          'common_key': 'value from other', // This should overwrite base
+          'other_only_key': 'other only',
+        },
+      );
+
+      // Merge other into base
+      final merged = snapshotBase.merged(snapshotOther);
+
+      // Verify data merge preference
+      expect(merged.data, containsPair('common_key', 'value from other'));
+      expect(merged.data, containsPair('base_only_key', 'base only'));
+      expect(merged.data, containsPair('other_only_key', 'other only'));
+      expect(merged.data.length, 3);
+
+      // Verify version vector merge (should contain both authors)
+      expect(
+        merged.versionVector.entries.length, // Check number of entries
+        equals(2),
+      );
+
+      // Find entries by key
+      final entry1 = merged.versionVector.entries.firstWhere(
+        (entry) => entry.key == author1,
+        orElse: () => throw StateError('Author1 not found in merged VV'),
+      );
+      final entry2 = merged.versionVector.entries.firstWhere(
+        (entry) => entry.key == author2,
+        orElse: () => throw StateError('Author2 not found in merged VV'),
+      );
+
+      expect(entry1.value, equals(HybridLogicalClock(l: 1, c: 1)));
+      expect(entry2.value, equals(HybridLogicalClock(l: 2, c: 1)));
     });
   });
 }

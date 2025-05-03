@@ -200,5 +200,37 @@ void main() {
       handler.insert(1, 'World');
       expect(handler.toString(), equals('CRDTList(list1, [Hello, World])'));
     });
+
+    /* test('should use snapshot correctly', () {
+      final doc1 = CRDTDocument(
+        peerId: PeerId.parse('45ee6b65-b393-40b7-9755-8b66dc7d0518'),
+      );
+      final handler1 = CRDTListHandler<String>(doc1, 'list1');
+
+      final doc2 = CRDTDocument(
+        peerId: PeerId.parse('a90dfced-cbf0-4a49-9c64-f5b7b62fdc18'),
+      );
+      final handler2 = CRDTListHandler<String>(doc2, 'list1');
+
+      // Insert numbers
+      handler1.insert(0, 'Hello');
+      handler1.insert(1, 'World');
+      handler2.insert(0, 'Dart!');
+
+      final changes1 = doc1.exportChanges();
+
+      expect(doc1.shouldApplySnapshot(doc2.takeSnapshot()), isFalse);
+      expect(doc2.shouldApplySnapshot(doc1.takeSnapshot()), isFalse);
+
+      expect(doc2.importChanges(changes1), equals(2));
+
+      expect(doc1.shouldApplySnapshot(doc2.takeSnapshot()), isTrue);
+      expect(doc2.shouldApplySnapshot(doc1.takeSnapshot()), ifFalse);
+
+      doc2.importSnapshot(doc1.takeSnapshot());
+      doc1.importChanges(doc2.exportChanges());
+
+      expect(handler2.value, handler1.value);
+    }); */
   });
 }

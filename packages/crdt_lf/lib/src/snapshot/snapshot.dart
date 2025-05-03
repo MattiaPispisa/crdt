@@ -1,7 +1,6 @@
 import 'dart:convert';
 import 'package:crdt_lf/crdt_lf.dart';
 import 'package:crypto/crypto.dart';
-import 'package:hlc_dart/hlc_dart.dart';
 
 /// Represents a snapshot of a CRDTDocument's state at a specific version.
 class Snapshot {

@@ -233,6 +233,8 @@ class DAG {
   }
 
   // TODO: cache version vector
+  // TODO: update id when node are inserted/removed
+  // TODO: return an immutable version vector
   /// Returns the version vector of the [DAG]
   VersionVector getVersionVector() {
     final vector = <PeerId, HybridLogicalClock>{};
@@ -245,7 +247,7 @@ class DAG {
         vector[id.peerId] = node.id.hlc;
       }
     }
-    return VersionVector(vector);
+    return VersionVector.immutable(vector);
   }
 
   /// Returns a string representation of the DAG

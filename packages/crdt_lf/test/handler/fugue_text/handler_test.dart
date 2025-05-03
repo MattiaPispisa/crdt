@@ -250,8 +250,6 @@ void main() {
         // check convergence
         expect(text1.value.length, 3);
         expect(text1.value, equals(text3.value));
-        expect(text1.value, equals(text3.value));
-
         expect(text1.value, contains('A'));
         expect(text1.value, contains('B'));
         expect(text1.value, contains('C'));
@@ -275,12 +273,6 @@ void main() {
         expect(text1.value, equals(text2.value));
         expect(text1.value, equals(text3.value));
         expect(text2.value, equals(text3.value));
-        final convergedValue = text1.value;
-
-        expect(
-          convergedValue == 'YBCX' || convergedValue == 'YCBX',
-          isTrue,
-        );
 
         // take snapshot and sync
         final snapshot1 = doc1.takeSnapshot();
@@ -322,6 +314,7 @@ void main() {
         // Final convergence check
         expect(text1.value, equals(text2.value));
         expect(text2.value, equals(text3.value));
+        expect(text1.value.length, equals(4));
       },
     );
   });

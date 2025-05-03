@@ -35,8 +35,6 @@ class CRDTFugueTextHandler extends Handler {
 
   /// Inserts [text] at position [index]
   void insert(int index, String text) {
-
-    // TODO: questo insert lo uso in due punti, metterlo nel fugue tree l'insert di un iterable di T
     if (text.isEmpty) return;
 
     // Find the node at position index - 1 (or root node if index is 0)
@@ -131,37 +129,8 @@ class CRDTFugueTextHandler extends Handler {
   List<FugueValueNode<String>> _computeState() {
     _tree = FugueTree.empty();
 
-    final initialState = _initialState();
-
-    if (initialState.isNotEmpty) {
-      // Find the node at position index - 1 (or root node if index is 0)
-      final leftOrigin = FugueElementID.nullID();
-
-      // Find the next node after leftOrigin
-      final rightOrigin = _tree.findNextNode(leftOrigin);
-
-      // Insert first character
-      final firstNodeID = initialState[0].id;
-      _tree.insert(
-        newID: firstNodeID,
-        value: initialState[0].value,
-        leftOrigin: leftOrigin,
-        rightOrigin: rightOrigin,
-      );
-
-      // Insert remaining characters as right children of the previous character
-      FugueElementID previousID = firstNodeID;
-      for (int i = 1; i < initialState.length; i++) {
-        final newNodeID = initialState[i].id;
-        _tree.insert(
-          newID: newNodeID,
-          value: initialState[i].value,
-          leftOrigin: previousID,
-          rightOrigin: rightOrigin,
-        );
-        previousID = newNodeID;
-      }
-    }
+    // Insert initial state
+    _tree.iterableInsert(0, _initialState());
 
     // Get all operations from the document
     final changes = _doc.exportChanges().sorted();

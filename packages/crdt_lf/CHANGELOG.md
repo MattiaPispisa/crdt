@@ -5,10 +5,11 @@
 - rename `document.export` in `document.binaryExportChanges`
 
 ### Added
-- Snapshot implementation 
+- Snapshot implementation git [14](https://github.com/MattiaPispisa/crdt/issues/14)
+- Version vector (foundational for building snapshots)
 
 ### Fixed
-- Fix Fugue tree insertion on index 0
+- Fix Fugue tree insertion on index
 
 ## [0.4.0] - 2025-04-29
 ### Changed
