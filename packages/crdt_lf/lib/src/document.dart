@@ -52,7 +52,7 @@ class CRDTDocument {
   Stream<Change> get localChanges => _localChangesController.stream;
 
   /// The registered snapshot providers
-  final Map<String, SnapshotProvider> _providers;
+  final Map<String, Handler> _providers;
 
   /// The last snapshot of this document
   Snapshot? _lastSnapshot;
@@ -62,7 +62,7 @@ class CRDTDocument {
   bool get isEmpty => _changeStore.changeCount == 0 && _lastSnapshot == null;
 
   /// Register a [SnapshotProvider]
-  void registerHandler(SnapshotProvider provider) {
+  void registerHandler(Handler provider) {
     _providers[provider.id] = provider;
     provider._document = this;
   }
@@ -168,7 +168,13 @@ class CRDTDocument {
   bool importSnapshot(Snapshot snapshot) {
     if (shouldApplySnapshot(snapshot)) {
       _prune(snapshot.versionVector);
+      
       _lastSnapshot = snapshot;
+
+      for (final provider in _providers.values) {
+        provider.invalidateCache();
+      }
+
       return true;
     }
 

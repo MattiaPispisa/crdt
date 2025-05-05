@@ -208,8 +208,6 @@ class FugueTree<T> {
   void delete(FugueElementID nodeID) {
     if (_nodes.containsKey(nodeID)) {
       _nodes[nodeID]!.node.value = null;
-    } else {
-      print("no delete $nodeID");
     }
   }
 

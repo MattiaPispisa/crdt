@@ -201,7 +201,7 @@ void main() {
       expect(handler.toString(), equals('CRDTList(list1, [Hello, World])'));
     });
 
-    /* test('should use snapshot correctly', () {
+    test('should use snapshot correctly', () {
       final doc1 = CRDTDocument(
         peerId: PeerId.parse('45ee6b65-b393-40b7-9755-8b66dc7d0518'),
       );
@@ -219,18 +219,35 @@ void main() {
 
       final changes1 = doc1.exportChanges();
 
-      expect(doc1.shouldApplySnapshot(doc2.takeSnapshot()), isFalse);
-      expect(doc2.shouldApplySnapshot(doc1.takeSnapshot()), isFalse);
+      expect(
+        doc1.shouldApplySnapshot(doc2.takeSnapshot()),
+        isFalse,
+      );
+      expect(
+        doc2.shouldApplySnapshot(doc1.takeSnapshot()),
+        isFalse,
+      );
 
-      expect(doc2.importChanges(changes1), equals(2));
+      expect(
+        doc2.importChanges(changes1),
+        equals(2),
+      );
 
-      expect(doc1.shouldApplySnapshot(doc2.takeSnapshot()), isTrue);
-      expect(doc2.shouldApplySnapshot(doc1.takeSnapshot()), ifFalse);
+      expect(
+        doc1.shouldApplySnapshot(
+          doc2.takeSnapshot(),
+        ),
+        isTrue,
+      );
+      expect(
+        doc2.shouldApplySnapshot(doc1.takeSnapshot()),
+        isFalse,
+      );
 
-      doc2.importSnapshot(doc1.takeSnapshot());
+      expect(doc1.importSnapshot(doc2.takeSnapshot()), isTrue);
       doc1.importChanges(doc2.exportChanges());
 
       expect(handler2.value, handler1.value);
-    }); */
+    });
   });
 }
