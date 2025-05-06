@@ -20,7 +20,7 @@ class CRDTDocument {
         _peerId = peerId ?? PeerId.generate(),
         _clock = HybridLogicalClock.initialize(),
         _localChangesController = StreamController<Change>.broadcast(),
-        _providers = {} {
+        _handlers = {} {
     devtools.handleCreated(this);
   }
 
@@ -52,7 +52,7 @@ class CRDTDocument {
   Stream<Change> get localChanges => _localChangesController.stream;
 
   /// The registered snapshot providers
-  final Map<String, Handler> _providers;
+  final Map<String, Handler> _handlers;
 
   /// The last snapshot of this document
   Snapshot? _lastSnapshot;
@@ -62,17 +62,17 @@ class CRDTDocument {
   bool get isEmpty => _changeStore.changeCount == 0 && _lastSnapshot == null;
 
   /// Register a [SnapshotProvider]
-  void registerHandler(Handler provider) {
-    _providers[provider.id] = provider;
-    provider._document = this;
+  void registerHandler(Handler handler) {
+    _handlers[handler.id] = handler;
+    handler._document = this;
   }
 
   /// It represents the **latest operation for each peer** of this document
   VersionVector getVersionVector() {
     if (_lastSnapshot != null) {
-      return _dag.getVersionVector().merged(_lastSnapshot!.versionVector);
+      return _dag.versionVector.merged(_lastSnapshot!.versionVector);
     }
-    return _dag.getVersionVector();
+    return _dag.versionVector;
   }
 
   /// Creates a new [Change] with the given [payload]
@@ -144,7 +144,7 @@ class CRDTDocument {
   /// Returns a [Snapshot] representing the document's state at the current version.
   Snapshot takeSnapshot() {
     final state = <String, dynamic>{};
-    for (final provider in _providers.values) {
+    for (final provider in _handlers.values) {
       state[provider.id] = provider.getSnapshotState();
     }
     var snapshot = Snapshot.create(
@@ -168,10 +168,10 @@ class CRDTDocument {
   bool importSnapshot(Snapshot snapshot) {
     if (shouldApplySnapshot(snapshot)) {
       _prune(snapshot.versionVector);
-      
+
       _lastSnapshot = snapshot;
 
-      for (final provider in _providers.values) {
+      for (final provider in _handlers.values) {
         provider.invalidateCache();
       }
 

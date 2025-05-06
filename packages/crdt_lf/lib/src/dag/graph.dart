@@ -1,5 +1,4 @@
 import 'package:crdt_lf/crdt_lf.dart';
-import 'package:hlc_dart/hlc_dart.dart';
 
 /// DAG (Directed Acyclic Graph) implementation for CRDT
 ///
@@ -11,7 +10,12 @@ class DAG {
     required Map<OperationId, DAGNode> nodes,
     required Frontiers frontiers,
   })  : _nodes = nodes,
-        _frontiers = frontiers;
+        _frontiers = frontiers,
+        _versionVector = VersionVector(
+          Map.fromIterable(
+            nodes.entries.map((e) => MapEntry(e.key.peerId, e.key.hlc)),
+          ),
+        );
 
   /// Creates a new empty DAG
   factory DAG.empty() {
@@ -33,6 +37,12 @@ class DAG {
   /// Gets the current frontiers of the [DAG]
   Set<OperationId> get frontiers => _frontiers.get();
 
+  /// The version vector of the [DAG]
+  final VersionVector _versionVector;
+
+  /// Returns the version vector of the [DAG]
+  VersionVector get versionVector => _versionVector.immutable();
+
   /// Checks if the [DAG] contains a [DAGNode] with the given [OperationId]
   bool containsNode(OperationId id) {
     return _nodes.containsKey(id);
@@ -47,6 +57,7 @@ class DAG {
   void clear() {
     _nodes.clear();
     _frontiers.clear();
+    _versionVector.clear();
   }
 
   /// Prunes the [DAG] history, keeping only nodes that happened after the given [version].
@@ -86,6 +97,8 @@ class DAG {
       }
       _nodes.remove(id);
     }
+
+    _versionVector.remove(operations.map((e) => e.peerId));
   }
 
   /// Adds a new node to the [DAG]
@@ -100,6 +113,7 @@ class DAG {
     // Create the new node
     final node = DAGNode(id);
     _nodes.putIfAbsent(id, () => node);
+    _versionVector.update(id.peerId, id.hlc);
 
     // Connect the node to its parents
     for (final depId in deps) {
@@ -217,7 +231,7 @@ class DAG {
         // Create a new node
         final newNode = DAGNode(id);
         _nodes[id] = newNode;
-
+        _versionVector.update(id.peerId, id.hlc);
         // Connect the node to its parents
         for (final parentId in node.parents) {
           if (_nodes.containsKey(parentId)) {
@@ -230,24 +244,6 @@ class DAG {
 
     // Merge the frontiers
     _frontiers.merge(other._frontiers);
-  }
-
-  // TODO: cache version vector
-  // TODO: update id when node are inserted/removed
-  // TODO: return an immutable version vector
-  /// Returns the version vector of the [DAG]
-  VersionVector getVersionVector() {
-    final vector = <PeerId, HybridLogicalClock>{};
-    for (final entry in _nodes.entries) {
-      final id = entry.key;
-      final node = entry.value;
-      final currentHlc = vector[id.peerId];
-
-      if (currentHlc == null || node.id.hlc.compareTo(currentHlc) > 0) {
-        vector[id.peerId] = node.id.hlc;
-      }
-    }
-    return VersionVector.immutable(vector);
   }
 
   /// Returns a string representation of the DAG
