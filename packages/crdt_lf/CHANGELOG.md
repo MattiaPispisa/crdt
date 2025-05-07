@@ -1,3 +1,9 @@
+
+## [0.5.1] - 2025-05-08
+
+### Fixed
+- Fix folder name clash with gitignore rules 
+
 ## [0.5.0] - 2025-05-07
 
 **Breaking**
