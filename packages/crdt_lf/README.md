@@ -126,4 +126,4 @@ Feel free to:
 
 [license_badge]: https://img.shields.io/badge/license-MIT-blue.svg
 [license_link]: https://opensource.org/licenses/MIT
-[coverage_badge]: https://img.shields.io/badge/coverage-99%25-green
+[coverage_badge]: https://img.shields.io/badge/coverage-98%25-green

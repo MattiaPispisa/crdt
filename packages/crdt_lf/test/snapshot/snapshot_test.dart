@@ -5,8 +5,6 @@ import 'package:test/test.dart';
 import '../helpers/handler.dart';
 import '../helpers/matcher.dart';
 
-// TODO: id version empty
-
 void main() {
   group('Snapshot', () {
     late Operation operation;
@@ -199,16 +197,19 @@ void main() {
         },
       );
 
-      final snapshot2 = Snapshot(
+      final newerSnapshot = Snapshot(
         id: 'id2',
-        versionVector: VersionVector({author2: HybridLogicalClock(l: 1, c: 2)}),
+        versionVector: VersionVector({
+          author1: HybridLogicalClock(l: 1, c: 1),
+          author2: HybridLogicalClock(l: 1, c: 2)
+        }),
         data: {
           'test': "Hello World!",
           "document": "Thesis: CRDTs are cool",
         },
       );
 
-      final merged = snapshot.merged(snapshot2);
+      final merged = snapshot.merged(newerSnapshot);
 
       expect(merged.data, containsPair('test', 'Hello World!'));
       expect(merged.data, containsPair('todo-list', ["apple", "banana"]));
@@ -224,6 +225,27 @@ void main() {
       expect(merged.versionVector.entries.last.key, equals(author2));
       expect(merged.versionVector.entries.last.value,
           equals(HybridLogicalClock(l: 1, c: 2)));
+    });
+
+    test('should prefer data if other is not strictly newer', () {
+      final author1 = PeerId.generate();
+      final author2 = PeerId.generate();
+
+      final snapshot = Snapshot(
+        id: 'id1',
+        versionVector: VersionVector({author1: HybridLogicalClock(l: 1, c: 1)}),
+        data: {'test': "Hello"},
+      );
+
+      final newerSnapshot = Snapshot(
+        id: 'id2',
+        versionVector: VersionVector({author2: HybridLogicalClock(l: 1, c: 2)}),
+        data: {'test': "Hello World!"},
+      );
+
+      final merged = snapshot.merged(newerSnapshot);
+
+      expect(merged.data, containsPair('test', 'Hello'));
     });
 
     test(
@@ -243,7 +265,10 @@ void main() {
 
       final snapshotOther = Snapshot(
         id: 'other_id',
-        versionVector: VersionVector({author2: HybridLogicalClock(l: 2, c: 1)}),
+        versionVector: VersionVector({
+          author1: HybridLogicalClock(l: 1, c: 1),
+          author2: HybridLogicalClock(l: 2, c: 1)
+        }),
         data: {
           'common_key': 'value from other', // This should overwrite base
           'other_only_key': 'other only',

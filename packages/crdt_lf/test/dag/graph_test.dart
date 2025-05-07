@@ -61,6 +61,14 @@ void main() {
       );
     });
 
+    test('should clear all nodes', () {
+      dag.addNode(id1, {});
+      dag.addNode(id2, {id1});
+      dag.clear();
+      expect(dag.nodeCount, equals(0));
+      expect(dag.containsNode(id1), isFalse);
+    });
+
     test('addNode throws when dependency does not exist', () {
       expect(
         () => dag.addNode(id1, {id2}),

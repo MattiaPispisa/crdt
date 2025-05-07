@@ -96,6 +96,11 @@ class CRDTFugueTextHandler extends Handler<List<FugueValueNode<String>>> {
       return _cachedValue!;
     }
 
+    if (cachedState != null) {
+      _cachedValue = cachedState!.map((node) => node.value).join('');
+      return _cachedValue!;
+    }
+
     // Compute state from scratch
     final state = _computeState();
 

@@ -48,7 +48,7 @@ class Snapshot {
     return Snapshot(
       id: _generateIdFromVersion(versionVector),
       versionVector: versionVector,
-      data: {...data, ...other.data},
+      data: data,
     );
   }
 
