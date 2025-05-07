@@ -1,4 +1,4 @@
-## [Unreleased]
+## [0.5.0] - 2025-05-07
 
 **Breaking**
 - rename `document.import` in `document.binaryImportChanges`
