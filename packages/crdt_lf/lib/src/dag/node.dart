@@ -28,9 +28,24 @@ class DAGNode {
     parents.add(parentId);
   }
 
+  /// Removes a parent from this node
+  void removeParent(OperationId parentId) {
+    parents.remove(parentId);
+  }
+
+  /// Removes all parents from this node
+  void removeParents() {
+    parents.clear();
+  }
+
   /// Adds a child to this node
   void addChild(OperationId childId) {
     children.add(childId);
+  }
+
+  /// Removes a child from this node
+  void removeChild(OperationId childId) {
+    children.remove(childId);
   }
 
   /// Checks if this node has the given parent

@@ -1,33 +1,13 @@
+import 'package:crdt_lf/src/document.dart';
 import 'package:test/test.dart';
 import 'package:crdt_lf/src/change/change.dart';
 import 'package:crdt_lf/src/operation/id.dart';
 import 'package:crdt_lf/src/peer_id.dart';
 import 'package:hlc_dart/hlc_dart.dart';
 import 'package:crdt_lf/src/operation/operation.dart';
-import 'package:crdt_lf/src/operation/type.dart';
 import 'package:crdt_lf/src/handler/handler.dart';
 
-class TestHandler implements Handler {
-  @override
-  String get id => 'test-handler';
-}
-
-class TestOperation extends Operation {
-  const TestOperation({
-    required super.id,
-    required super.type,
-  });
-
-  factory TestOperation.fromHandler(Handler handler) {
-    return TestOperation(
-      id: handler.id,
-      type: OperationType.insert(handler),
-    );
-  }
-
-  @override
-  dynamic toPayload() => id;
-}
+import '../helpers/handler.dart';
 
 void main() {
   group('Change', () {
@@ -39,7 +19,8 @@ void main() {
     late Handler handler;
 
     setUp(() {
-      handler = TestHandler();
+      final doc = CRDTDocument();
+      handler = TestHandler(doc);
       deps = {OperationId.parse('3a5cd393-813c-46c8-97f3-9e99a6f2c8be@1.1')};
       hlc = HybridLogicalClock(l: 1, c: 2);
       author = PeerId.generate();
@@ -151,7 +132,8 @@ void main() {
         author: author,
       );
 
-      final expected = 'Change(id: $id, deps: [${deps.first}], hlc: $hlc, author: $author, payload: ${operation.toPayload()})';
+      final expected =
+          'Change(id: $id, deps: [${deps.first}], hlc: $hlc, author: $author, payload: ${operation.toPayload()})';
       expect(change.toString(), equals(expected));
     });
 
@@ -185,8 +167,12 @@ void main() {
     });
 
     test('hashCode handles different dependencies correctly', () {
-      final deps1 = {OperationId.parse('3a5cd393-813c-46c8-97f3-9e99a6f2c8be@1.1')};
-      final deps2 = {OperationId.parse('b7353649-1b52-43b0-9dbc-a843e3308cb0@1.3')};
+      final deps1 = {
+        OperationId.parse('3a5cd393-813c-46c8-97f3-9e99a6f2c8be@1.1')
+      };
+      final deps2 = {
+        OperationId.parse('b7353649-1b52-43b0-9dbc-a843e3308cb0@1.3')
+      };
 
       final change1 = Change(
         id: id,

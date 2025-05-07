@@ -1,24 +1,13 @@
-import 'package:crdt_lf/src/algorithm/fugue/element_id.dart';
-import 'package:crdt_lf/src/algorithm/fugue/tree.dart';
-import 'package:crdt_lf/src/change/change.dart';
-import 'package:crdt_lf/src/document.dart';
-import 'package:crdt_lf/src/handler/handler.dart';
-import 'package:crdt_lf/src/operation/id.dart';
-import 'package:crdt_lf/src/operation/operation.dart';
-import 'package:crdt_lf/src/operation/type.dart';
-import 'package:crdt_lf/src/utils/set.dart';
+import 'package:crdt_lf/crdt_lf.dart';
 part 'operation.dart';
 
 /// CRDT Text implementation with the Fugue algorithm
 ///
 /// A CRDTFugueText is a text data structure that uses the Fugue algorithm ([The Art of the Fugue: Minimizing Interleaving in Collaborative Text Editing](https://arxiv.org/abs/2305.00583)) to minimize interleaving.
 /// It provides methods for inserting, deleting, and accessing text content.
-class CRDTFugueTextHandler extends Handler {
+class CRDTFugueTextHandler extends Handler<List<FugueValueNode<String>>> {
   /// Constructor that initializes a new Fugue text handler
-  CRDTFugueTextHandler(this._doc, this._id);
-
-  /// The document that owns this handler
-  final CRDTDocument _doc;
+  CRDTFugueTextHandler(CRDTDocument doc, this._id) : super(doc);
 
   /// The ID of this handler in the document
   final String _id;
@@ -29,11 +18,8 @@ class CRDTFugueTextHandler extends Handler {
   /// Counter to generate unique IDs for elements
   int _counter = 0;
 
-  /// The version stored in cache
-  Set<OperationId>? _cachedVersion;
-
-  /// The text stored in cache
-  String? _cachedText;
+  /// The cached value of the text
+  String? _cachedValue;
 
   @override
   String get id => _id;
@@ -51,8 +37,8 @@ class CRDTFugueTextHandler extends Handler {
     final rightOrigin = _tree.findNextNode(leftOrigin);
 
     // Insert first character
-    final firstNodeID = FugueElementID(_doc.peerId, _counter++);
-    _doc.createChange(
+    final firstNodeID = FugueElementID(doc.peerId, _counter++);
+    doc.createChange(
       _FugueTextInsertOperation.fromHandler(
         this,
         newNodeID: firstNodeID,
@@ -65,8 +51,8 @@ class CRDTFugueTextHandler extends Handler {
     // Insert remaining characters as right children of the previous character
     FugueElementID previousID = firstNodeID;
     for (int i = 1; i < text.length; i++) {
-      final newNodeID = FugueElementID(_doc.peerId, _counter++);
-      _doc.createChange(
+      final newNodeID = FugueElementID(doc.peerId, _counter++);
+      doc.createChange(
         _FugueTextInsertOperation.fromHandler(
           this,
           newNodeID: newNodeID,
@@ -91,7 +77,7 @@ class CRDTFugueTextHandler extends Handler {
 
       // If the node exists, create a delete operation
       if (!nodeID.isNull) {
-        _doc.createChange(
+        doc.createChange(
           _FugueTextDeleteOperation.fromHandler(
             this,
             nodeID: nodeID,
@@ -106,17 +92,36 @@ class CRDTFugueTextHandler extends Handler {
   /// Gets the current value of the text
   String get value {
     // Check if cache is still valid
-    final currentVersion = _doc.version;
-    if (_cachedText != null && setEquals(_cachedVersion, currentVersion)) {
-      return _cachedText!;
+    if (cachedState != null && _cachedValue != null) {
+      return _cachedValue!;
+    }
+
+    if (cachedState != null) {
+      _cachedValue = cachedState!.map((node) => node.value).join('');
+      return _cachedValue!;
     }
 
     // Compute state from scratch
     final state = _computeState();
 
     // Store state in cache
-    _cachedText = state;
-    _cachedVersion = Set.from(currentVersion);
+    updateCachedState(state);
+    _cachedValue = state.map((node) => node.value).join('');
+
+    return _cachedValue!;
+  }
+
+  @override
+  List<FugueValueNode<String>> getSnapshotState() {
+    if (cachedState != null) {
+      return cachedState!;
+    }
+
+    // Compute state from scratch
+    final state = _computeState();
+
+    // Store state in cache
+    updateCachedState(state);
 
     return state;
   }
@@ -125,14 +130,18 @@ class CRDTFugueTextHandler extends Handler {
   int get length => value.length;
 
   /// Computes the current state of the text from document operations
-  String _computeState() {
+  List<FugueValueNode<String>> _computeState() {
     _tree = FugueTree.empty();
 
+    // Insert initial state
+    _tree.iterableInsert(0, _initialState());
+
     // Get all operations from the document
-    final changes = _doc.exportChanges().sorted();
+    final changes = doc.exportChanges().sorted();
 
     // Apply operations in order
     final opFactory = _FugueTextOperationFactory(this);
+
     for (final change in changes) {
       final operation = opFactory.fromPayload(change.payload);
 
@@ -149,13 +158,23 @@ class CRDTFugueTextHandler extends Handler {
     }
 
     // Return the resulting text
-    return _tree.values().join('');
+    return _tree.nodes();
+  }
+
+  /// Gets the initial state of the text
+  List<FugueValueNode<String>> _initialState() {
+    final snapshot = lastSnapshot();
+    if (snapshot is List<FugueValueNode<String>>) {
+      return snapshot;
+    }
+
+    return [];
   }
 
   /// Invalidates the cache
   void _invalidateCache() {
-    _cachedText = null;
-    _cachedVersion = null;
+    invalidateCache();
+    _cachedValue = null;
   }
 
   /// Returns a text representation of this handler

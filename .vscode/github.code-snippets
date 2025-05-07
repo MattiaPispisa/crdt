@@ -1,0 +1,10 @@
+{
+  "GitHub Issue Link": {
+    "prefix": "github_issue",
+    "scope": "markdown",
+    "body": [
+      "[$1](https://github.com/MattiaPispisa/crdt/issues/$1)"
+    ],
+    "description": "Insert Markdown link to GitHub issue"
+  }
+}

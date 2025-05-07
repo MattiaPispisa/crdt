@@ -16,6 +16,7 @@
     - [DAG](#dag)
     - [Change](#change)
     - [Frontiers](#frontiers)
+    - [Snapshot](#snapshot)
   - [Project Status](#project-status)
     - [Roadmap](#roadmap)
     - [Contributing](#contributing)
@@ -96,6 +97,9 @@ Represents a modification to the CRDT state, including operation ID, dependencie
 ### Frontiers
 A structure that manages the frontiers (latest operations) of the CRDT.
 
+### Snapshot
+A snapshot of the CRDT state, including the version vector and the data.
+
 ## Project Status
 
 This library is currently **in progress** and under active development. While all existing functionality is thoroughly tested, we are continuously working on improvements and new features.
@@ -122,4 +126,4 @@ Feel free to:
 
 [license_badge]: https://img.shields.io/badge/license-MIT-blue.svg
 [license_link]: https://opensource.org/licenses/MIT
-[coverage_badge]: https://img.shields.io/badge/coverage-99%25-green
+[coverage_badge]: https://img.shields.io/badge/coverage-98%25-green

@@ -120,8 +120,24 @@ void main() {
       node.addParent(parentId1);
       node.addChild(childId1);
 
-      final expected = 'DAGNode(id: $id, parents: [$parentId1], children: [$childId1])';
+      final expected =
+          'DAGNode(id: $id, parents: [$parentId1], children: [$childId1])';
       expect(node.toString(), equals(expected));
+    });
+
+    test('should remove nodes', () {
+      final node = DAGNode(id);
+      node.addParent(parentId1);
+      node.addChild(childId1);
+
+      expect(node.parentCount, equals(1));
+      expect(node.childCount, equals(1));
+
+      node.removeParent(parentId1);
+      node.removeChild(childId1);
+
+      expect(node.parentCount, equals(0));
+      expect(node.childCount, equals(0));
     });
 
     test('equality works correctly', () {

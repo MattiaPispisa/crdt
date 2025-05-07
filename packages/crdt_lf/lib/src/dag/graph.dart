@@ -1,6 +1,4 @@
-import '../frontiers/frontiers.dart';
-import '../operation/id.dart';
-import 'node.dart';
+import 'package:crdt_lf/crdt_lf.dart';
 
 /// DAG (Directed Acyclic Graph) implementation for CRDT
 ///
@@ -12,7 +10,12 @@ class DAG {
     required Map<OperationId, DAGNode> nodes,
     required Frontiers frontiers,
   })  : _nodes = nodes,
-        _frontiers = frontiers;
+        _frontiers = frontiers,
+        _versionVector = VersionVector(
+          Map.fromIterable(
+            nodes.entries.map((e) => MapEntry(e.key.peerId, e.key.hlc)),
+          ),
+        );
 
   /// Creates a new empty DAG
   factory DAG.empty() {
@@ -34,6 +37,12 @@ class DAG {
   /// Gets the current frontiers of the [DAG]
   Set<OperationId> get frontiers => _frontiers.get();
 
+  /// The version vector of the [DAG]
+  final VersionVector _versionVector;
+
+  /// Returns the version vector of the [DAG]
+  VersionVector get versionVector => _versionVector.immutable();
+
   /// Checks if the [DAG] contains a [DAGNode] with the given [OperationId]
   bool containsNode(OperationId id) {
     return _nodes.containsKey(id);
@@ -42,6 +51,54 @@ class DAG {
   /// Gets a [DAGNode] by its [OperationId]
   DAGNode? getNode(OperationId id) {
     return _nodes[id];
+  }
+
+  /// Clears the [DAG]
+  void clear() {
+    _nodes.clear();
+    _frontiers.clear();
+    _versionVector.clear();
+  }
+
+  /// Prunes the [DAG] history, keeping only nodes that happened after the given [version].
+  ///
+  /// Returns the number of nodes removed.
+  int prune(VersionVector version) {
+    final toRemove = <OperationId>[];
+    final frontier = <OperationId>[];
+
+    for (final entry in _nodes.entries) {
+      final clock = version[entry.key.peerId];
+      if (clock != null && entry.key.hlc.compareTo(clock) <= 0) {
+        toRemove.add(entry.key);
+      } else {
+        if (entry.value.childCount == 0) {
+          frontier.add(entry.key);
+        }
+      }
+    }
+
+    _removeNodes(toRemove);
+
+    _frontiers
+      ..clear()
+      ..merge(Frontiers.from(frontier));
+
+    return toRemove.length;
+  }
+
+  void _removeNodes(List<OperationId> operations) {
+    for (final id in operations) {
+      for (final parent in _nodes[id]!.parents) {
+        _nodes[parent]?.removeChild(id);
+      }
+      for (final child in _nodes[id]!.children) {
+        _nodes[child]?.removeParent(id);
+      }
+      _nodes.remove(id);
+    }
+
+    _versionVector.remove(operations.map((e) => e.peerId));
   }
 
   /// Adds a new node to the [DAG]
@@ -56,6 +113,7 @@ class DAG {
     // Create the new node
     final node = DAGNode(id);
     _nodes.putIfAbsent(id, () => node);
+    _versionVector.update(id.peerId, id.hlc);
 
     // Connect the node to its parents
     for (final depId in deps) {
@@ -173,7 +231,7 @@ class DAG {
         // Create a new node
         final newNode = DAGNode(id);
         _nodes[id] = newNode;
-
+        _versionVector.update(id.peerId, id.hlc);
         // Connect the node to its parents
         for (final parentId in node.parents) {
           if (_nodes.containsKey(parentId)) {

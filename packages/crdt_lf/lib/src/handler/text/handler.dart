@@ -1,10 +1,8 @@
 import 'package:crdt_lf/src/change/change.dart';
 import 'package:crdt_lf/src/document.dart';
 import 'package:crdt_lf/src/handler/handler.dart';
-import 'package:crdt_lf/src/operation/id.dart';
 import 'package:crdt_lf/src/operation/operation.dart';
 import 'package:crdt_lf/src/operation/type.dart';
-import 'package:crdt_lf/src/utils/set.dart';
 
 part 'operation.dart';
 
@@ -12,12 +10,9 @@ part 'operation.dart';
 ///
 /// A CRDTText is a text data structure that uses CRDT for conflict-free collaboration.
 /// It provides methods for inserting, deleting, and accessing text content.
-class CRDTTextHandler extends Handler {
+class CRDTTextHandler extends Handler<String> {
   /// Creates a new CRDTText with the given document and ID
-  CRDTTextHandler(this._doc, this._id);
-
-  /// The document that owns this text
-  final CRDTDocument _doc;
+  CRDTTextHandler(CRDTDocument doc, this._id) : super(doc);
 
   /// The ID of this text in the document
   final String _id;
@@ -25,44 +20,41 @@ class CRDTTextHandler extends Handler {
   @override
   String get id => _id;
 
-  /// The cached state of the text
-  String? _cachedState;
-
-  /// The version at which the cached state was computed
-  Set<OperationId>? _cachedVersion;
-
   /// Inserts [text] at the specified [index]
   void insert(int index, String text) {
-    _doc.createChange(
+    doc.createChange(
       _TextInsertOperation.fromHandler(this, index: index, text: text),
     );
-    _invalidateCache();
+    invalidateCache();
   }
 
   /// Deletes [count] characters starting at the specified [index]
   void delete(int index, int count) {
-    _doc.createChange(
+    doc.createChange(
       _TextDeleteOperation.fromHandler(this, index: index, count: count),
     );
-    _invalidateCache();
+    invalidateCache();
   }
 
   /// Gets the current state of the text
   String get value {
     // Check if the cached state is still valid
-    final currentVersion = _doc.version;
-    if (_cachedState != null && setEquals(_cachedVersion, currentVersion)) {
-      return _cachedState!;
+    if (cachedState != null) {
+      return cachedState!;
     }
 
     // Compute the state from scratch
     final state = _computeState();
 
     // Cache the state
-    _cachedState = state;
-    _cachedVersion = Set.from(currentVersion);
+    updateCachedState(state);
 
     return state;
+  }
+
+  @override
+  String getSnapshotState() {
+    return value;
   }
 
   /// Gets the length of the text
@@ -70,10 +62,10 @@ class CRDTTextHandler extends Handler {
 
   /// Computes the current state of the text from the document's changes
   String _computeState() {
-    final buffer = StringBuffer();
+    final buffer = StringBuffer(_initialState());
 
     // Get all changes from the document
-    final changes = _doc.exportChanges().sorted();
+    final changes = doc.exportChanges().sorted();
 
     // Apply changes in order
     final opFactory = _TextOperationFactory(this);
@@ -116,10 +108,14 @@ class CRDTTextHandler extends Handler {
     return buffer.toString();
   }
 
-  /// Invalidates the cached state
-  void _invalidateCache() {
-    _cachedState = null;
-    _cachedVersion = null;
+  /// Gets the initial state of the text
+  String _initialState() {
+    final snapshot = lastSnapshot();
+    if (snapshot is String) {
+      return snapshot;
+    }
+
+    return '';
   }
 
   /// Returns a string representation of this text

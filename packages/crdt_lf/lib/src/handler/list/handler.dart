@@ -1,23 +1,17 @@
 import 'package:crdt_lf/src/change/change.dart';
 import 'package:crdt_lf/src/document.dart';
 import 'package:crdt_lf/src/handler/handler.dart';
-import 'package:crdt_lf/src/operation/id.dart';
 import 'package:crdt_lf/src/operation/operation.dart';
 import 'package:crdt_lf/src/operation/type.dart';
-import 'package:crdt_lf/src/utils/set.dart';
 part 'operation.dart';
-
 
 /// CRDT List implementation
 ///
 /// A CRDTList is a list data structure that uses CRDT for conflict-free collaboration.
 /// It provides methods for inserting, deleting, and accessing elements.
-class CRDTListHandler<T> extends Handler {
+class CRDTListHandler<T> extends Handler<List<T>> {
   /// Creates a new CRDTList with the given document and ID
-  CRDTListHandler(this._doc, this._id);
-
-  /// The document that owns this list
-  final CRDTDocument _doc;
+  CRDTListHandler(CRDTDocument doc, this._id) : super(doc);
 
   /// The ID of this list in the document
   final String _id;
@@ -25,52 +19,49 @@ class CRDTListHandler<T> extends Handler {
   @override
   String get id => _id;
 
-  /// The cached state of the list
-  List<T>? _cachedState;
-
-  /// The version at which the cached state was computed
-  Set<OperationId>? _cachedVersion;
-
   /// Inserts an element at the specified index
   void insert(int index, T value) {
-    _doc.createChange(
+    doc.createChange(
       _ListInsertOperation<T>.fromHandler(
         this,
         index: index,
         value: value,
       ),
     );
-    _invalidateCache();
+    invalidateCache();
   }
 
   /// Deletes elements starting at the specified index
   void delete(int index, int count) {
-    _doc.createChange(
+    doc.createChange(
       _ListDeleteOperation.fromHandler(
         this,
         index: index,
         count: count,
       ),
     );
-    _invalidateCache();
+    invalidateCache();
   }
 
   /// Gets the current state of the list
   List<T> get value {
     // Check if the cached state is still valid
-    final currentVersion = _doc.version;
-    if (_cachedState != null && setEquals(_cachedVersion, currentVersion)) {
-      return List.from(_cachedState!);
+    if (cachedState != null) {
+      return cachedState!;
     }
 
     // Compute the state from scratch
     final state = _computeState();
 
     // Cache the state
-    _cachedState = state;
-    _cachedVersion = Set.from(currentVersion);
+    updateCachedState(state);
 
     return List.from(state);
+  }
+
+  @override
+  List<T> getSnapshotState() {
+    return value;
   }
 
   /// Gets the length of the list
@@ -81,10 +72,10 @@ class CRDTListHandler<T> extends Handler {
 
   /// Computes the current state of the list from the document's changes
   List<T> _computeState() {
-    final state = <T>[];
+    final state = _initialState();
 
     // Get all changes from the document
-    final changes = _doc.exportChanges().sorted();
+    final changes = doc.exportChanges().sorted();
 
     // Apply changes in order
     final opFactory = _ListOperationFactory<T>(this);
@@ -120,10 +111,14 @@ class CRDTListHandler<T> extends Handler {
     return state;
   }
 
-  /// Invalidates the cached state
-  void _invalidateCache() {
-    _cachedState = null;
-    _cachedVersion = null;
+  /// Gets the initial state of the list
+  List<T> _initialState() {
+    final snapshot = lastSnapshot();
+    if (snapshot is List<T>) {
+      return snapshot;
+    }
+
+    return [];
   }
 
   /// Returns a string representation of this list

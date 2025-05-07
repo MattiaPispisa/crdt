@@ -1,7 +1,4 @@
-import 'package:crdt_lf/src/operation/id.dart';
-
-import '../dag/graph.dart';
-import 'change.dart';
+import 'package:crdt_lf/crdt_lf.dart';
 
 /// ChangeStore implementation for CRDT
 ///
@@ -81,6 +78,24 @@ class ChangeStore {
     }
 
     return added;
+  }
+
+  /// Removes [Change]s that are causally **older than** the provided [version] vector.
+  ///
+  /// Returns the number of changes pruned.
+  int prune(VersionVector version) {
+    var removedCount = 0;
+
+    final ids = _changes.keys.toList();
+    for (final id in ids) {
+      final clock = version[id.peerId];
+      if (clock != null && id.hlc.compareTo(clock) <= 0) {
+        _changes.remove(id);
+        removedCount++;
+      }
+    }
+
+    return removedCount;
   }
 
   /// Clears all [Change]s from the store

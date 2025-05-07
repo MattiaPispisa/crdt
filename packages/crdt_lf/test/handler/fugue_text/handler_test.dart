@@ -145,6 +145,11 @@ void main() {
       final finalText = handler1.value;
       expect(finalText.contains(' World'), isTrue);
       expect(finalText.contains(' Dart'), isTrue);
+
+      handler1.insert(0, 'Z');
+      expect(handler1.value, 'ZHello World Dart');
+      doc2.importChanges(doc1.exportChanges());
+      expect(handler2.value, 'ZHello World Dart');
     });
 
     test('should handle complex concurrent edits without interleaving', () {
@@ -207,5 +212,110 @@ void main() {
       expect(finalText.contains(' - Modified by User2'), true);
       expect(finalText.contains(' - Updated by User3'), true);
     });
+
+    test(
+      'complex scenario with 3 peers, changes, and snapshots',
+      () {
+        // setup
+        final peerId1 = PeerId.generate();
+        final peerId2 = PeerId.generate();
+        final peerId3 = PeerId.generate();
+
+        final doc1 = CRDTDocument(peerId: peerId1);
+        final doc2 = CRDTDocument(peerId: peerId2);
+        final doc3 = CRDTDocument(peerId: peerId3);
+
+        final handlerId = 'complex-text';
+        final text1 = CRDTFugueTextHandler(doc1, handlerId);
+        final text2 = CRDTFugueTextHandler(doc2, handlerId);
+        final text3 = CRDTFugueTextHandler(doc3, handlerId);
+
+        //initial edits
+        text1.insert(0, 'A');
+        text2.insert(0, 'B');
+        text3.insert(0, 'C');
+
+        expect(text1.value, 'A');
+        expect(text2.value, 'B');
+        expect(text3.value, 'C');
+
+        // sync changes (partial: doc2 does not have changes from doc3)
+        // 1 -> 2
+        expect(doc2.importChanges(doc1.exportChanges()), equals(1));
+        // 2 -> 3
+        expect(doc3.importChanges(doc2.exportChanges()), equals(2));
+        // 3 -> 1
+        expect(doc1.importChanges(doc3.exportChanges()), equals(2));
+
+        // check convergence
+        expect(text1.value.length, 3);
+        expect(text1.value, equals(text3.value));
+        expect(text1.value, contains('A'));
+        expect(text1.value, contains('B'));
+        expect(text1.value, contains('C'));
+
+        expect(text1.value, isNot(equals(text2.value)));
+
+        //concurrent edits
+        text1.insert(text1.length, 'X');
+        text2.delete(0, 1);
+        text3.insert(0, 'Y');
+
+        // sync all changes
+        var changes1 = doc1.exportChanges();
+        var changes2 = doc2.exportChanges();
+        var changes3 = doc3.exportChanges();
+
+        expect(doc1.importChanges([...changes2, ...changes3]), equals(2));
+        expect(doc2.importChanges([...changes1, ...changes3]), equals(3));
+        expect(doc3.importChanges([...changes1, ...changes2]), equals(2));
+
+        expect(text1.value, equals(text2.value));
+        expect(text1.value, equals(text3.value));
+        expect(text2.value, equals(text3.value));
+
+        // take snapshot and sync
+        final snapshot1 = doc1.takeSnapshot();
+
+        // Verify snapshot data (simple check)
+        expect(snapshot1.data[handlerId], isNotNull);
+
+        // Check if snapshots should be applied
+        expect(doc2.shouldApplySnapshot(snapshot1), isTrue);
+        expect(doc3.shouldApplySnapshot(snapshot1), isTrue);
+
+        final applied2 = doc2.importSnapshot(snapshot1);
+        final applied3 = doc3.importSnapshot(snapshot1);
+
+        expect(applied2, isTrue);
+        expect(applied3, isTrue);
+
+        // edits post-snapshot & final sync
+        text2.insert(0, 'Z');
+        expect(text2.value.contains('Z'), isTrue);
+        text3.delete(text3.length - 1, 1);
+        expect(text3.value.contains('Y'), isTrue);
+
+        // sync all changes again
+        changes1 =
+            doc1.exportChanges(); // Should be empty as no new changes in doc1
+        changes2 =
+            doc2.exportChanges(); // Should contain only 'Z' insertion ops
+        changes3 = doc3.exportChanges(); // Should contain only deletion ops
+
+        expect(changes1, isEmpty);
+        expect(changes2, isNotEmpty);
+        expect(changes3, isNotEmpty);
+
+        expect(doc1.importChanges([...changes2, ...changes3]), equals(2));
+        expect(doc2.importChanges([...changes1, ...changes3]), equals(1));
+        expect(doc3.importChanges([...changes1, ...changes2]), equals(1));
+
+        // Final convergence check
+        expect(text1.value, equals(text2.value));
+        expect(text2.value, equals(text3.value));
+        expect(text1.value.length, equals(4));
+      },
+    );
   });
 }

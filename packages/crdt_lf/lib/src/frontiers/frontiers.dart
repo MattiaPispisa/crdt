@@ -61,6 +61,11 @@ class Frontiers {
     _frontiers.addAll(result);
   }
 
+  /// Clears the [Frontiers]
+  void clear() {
+    _frontiers.clear();
+  }
+
   /// Returns a string representation of the [Frontiers]
   @override
   String toString() {

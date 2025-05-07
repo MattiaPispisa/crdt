@@ -1,14 +1,8 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:crdt_lf/crdt_lf.dart';
 import 'package:hlc_dart/hlc_dart.dart';
-
-import 'change/change_store.dart';
-import 'change/change.dart';
-import 'dag/graph.dart';
-import 'operation/operation.dart';
-import 'peer_id.dart';
-import 'operation/id.dart';
 
 import 'devtools/devtools.dart' as devtools;
 
@@ -25,7 +19,8 @@ class CRDTDocument {
         _changeStore = ChangeStore.empty(),
         _peerId = peerId ?? PeerId.generate(),
         _clock = HybridLogicalClock.initialize(),
-        _localChangesController = StreamController<Change>.broadcast() {
+        _localChangesController = StreamController<Change>.broadcast(),
+        _handlers = {} {
     devtools.handleCreated(this);
   }
 
@@ -55,6 +50,30 @@ class CRDTDocument {
 
   /// A stream that emits [Change]s created locally by this document.
   Stream<Change> get localChanges => _localChangesController.stream;
+
+  /// The registered snapshot providers
+  final Map<String, Handler> _handlers;
+
+  /// The last snapshot of this document
+  Snapshot? _lastSnapshot;
+
+  /// Whether this document is empty.
+  /// (no changes and no snapshot)
+  bool get isEmpty => _changeStore.changeCount == 0 && _lastSnapshot == null;
+
+  /// Register a [SnapshotProvider]
+  void registerHandler(Handler handler) {
+    _handlers[handler.id] = handler;
+    handler._document = this;
+  }
+
+  /// It represents the **latest operation for each peer** of this document
+  VersionVector getVersionVector() {
+    if (_lastSnapshot != null) {
+      return _dag.versionVector.merged(_lastSnapshot!.versionVector);
+    }
+    return _dag.versionVector;
+  }
 
   /// Creates a new [Change] with the given [payload]
   ///
@@ -115,6 +134,64 @@ class CRDTDocument {
     return true;
   }
 
+  /// Takes a snapshot of the document, compacting its history.
+  ///
+  /// This operation captures the current state of the document, represented by its version (frontiers).
+  /// [Change]s that are causally included in this version are removed from the internal [ChangeStore],
+  /// effectively pruning the history up to the snapshot point. The internal [DAG] is also updated.
+  /// Use [Snapshot]s to reduce memory usage and improve performance for long-lived documents.
+  ///
+  /// Returns a [Snapshot] representing the document's state at the current version.
+  Snapshot takeSnapshot() {
+    final state = <String, dynamic>{};
+    for (final provider in _handlers.values) {
+      state[provider.id] = provider.getSnapshotState();
+    }
+    var snapshot = Snapshot.create(
+      versionVector: getVersionVector(),
+      data: state,
+    );
+
+    _prune(snapshot.versionVector);
+
+    _lastSnapshot = snapshot;
+    return snapshot;
+  }
+
+  /// Import [Snapshot]
+  ///
+  /// Returns true if the snapshot was applied.
+  ///
+  /// [snapshot] is applied only if it is newer than document version.
+  /// Use [shouldApplySnapshot] to check if the snapshot should be applied.
+  bool importSnapshot(Snapshot snapshot) {
+    if (shouldApplySnapshot(snapshot)) {
+      _prune(snapshot.versionVector);
+
+      _lastSnapshot = snapshot;
+
+      for (final provider in _handlers.values) {
+        provider.invalidateCache();
+      }
+
+      return true;
+    }
+
+    return false;
+  }
+
+  /// Whether the given [snapshot] should be applied.
+  ///
+  /// Returns `true` if the snapshot can be applied to the document.
+  bool shouldApplySnapshot(Snapshot snapshot) {
+    if (isEmpty) {
+      return true;
+    }
+
+    return snapshot.versionVector
+        .isStrictlyNewerOrEqualThan(getVersionVector());
+  }
+
   /// Exports [Change]s from a specific version
   ///
   /// Returns a list of [Change]s that are not ancestors of the given version.
@@ -126,7 +203,7 @@ class CRDTDocument {
   /// Exports [Change]s as a binary format
   ///
   /// Returns a binary representation of the [Change]s that can be imported by another document.
-  List<int> export({Set<OperationId>? from}) {
+  List<int> binaryExportChanges({Set<OperationId>? from}) {
     final changes = exportChanges(from: from);
     final jsonChanges = changes.map((c) => c.toJson()).toList();
     return utf8.encode(jsonEncode(jsonChanges));
@@ -135,7 +212,7 @@ class CRDTDocument {
   /// Imports [Change]s from a binary format
   ///
   /// Returns the number of [Change]s that were applied.
-  int import(List<int> data) {
+  int binaryImportChanges(List<int> data) {
     final jsonStr = utf8.decode(data);
     final jsonList = jsonDecode(jsonStr) as List;
     final changes = jsonList
@@ -150,7 +227,7 @@ class CRDTDocument {
   /// Returns the number of [Change]s that were applied.
   int importChanges(List<Change> changes) {
     // Sort changes topologically
-    final sorted = _topologicalSort(changes);
+    final sorted = _topologicalSort(_neverReceived(changes));
 
     // Apply changes
     int applied = 0;
@@ -165,6 +242,28 @@ class CRDTDocument {
     }
 
     return applied;
+  }
+
+  void _prune(VersionVector version) {
+    _dag.prune(version);
+    _changeStore.prune(version);
+  }
+
+  /// Returns a list of [Change]s never received from this document:
+  /// - the clock of the change is greater than the clock of the version vector
+  /// - the change is not in the version vector
+  List<Change> _neverReceived(List<Change> changes) {
+    final versionVector = getVersionVector();
+    final newChanges = <Change>[];
+
+    for (final change in changes) {
+      final clock = versionVector[change.id.peerId];
+      if (clock == null || change.id.hlc.compareTo(clock) > 0) {
+        newChanges.add(change);
+      }
+    }
+
+    return newChanges;
   }
 
   /// Sorts [Change]s topologically
@@ -226,5 +325,21 @@ class CRDTDocument {
   /// Disposes of the document
   void dispose() {
     _localChangesController.close();
+  }
+}
+
+/// A provider that can provide a snapshot of the state of a CRDT
+mixin SnapshotProvider {
+  /// The unique identifier for this provider
+  String get id;
+
+  CRDTDocument? _document;
+
+  /// Returns the current state of the provider
+  dynamic getSnapshotState();
+
+  /// Return the last snapshot of the document
+  dynamic lastSnapshot() {
+    return _document?._lastSnapshot?.data[id];
   }
 }
