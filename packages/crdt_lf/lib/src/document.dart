@@ -158,10 +158,9 @@ class CRDTDocument {
     return snapshot;
   }
 
-  /// Import [Snapshot] and [Change]s
+  /// Import [Snapshot]
   ///
-  /// Returns the number of [Change]s that were applied.
-  /// [Change]s that are already in the snapshot are not applied.
+  /// Returns true if the snapshot was applied.
   ///
   /// [snapshot] is applied only if it is newer than document version.
   /// Use [shouldApplySnapshot] to check if the snapshot should be applied.
