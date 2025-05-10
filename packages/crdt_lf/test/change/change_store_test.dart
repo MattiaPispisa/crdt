@@ -156,9 +156,10 @@ void main() {
     });
 
     test('toString returns correct string representation', () {
-      store..addChange(change1)
-      ..addChange(change2)
-      ..addChange(change3);
+      store
+        ..addChange(change1)
+        ..addChange(change2)
+        ..addChange(change3);
 
       expect(store.toString(), equals('ChangeStore(changes: 3)'));
     });

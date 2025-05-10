@@ -8,12 +8,6 @@ class CrdtLfChangeCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      child: Column(
-        children: [
-          Text(change.payload.toString()),
-        ],
-      ),
-    );
+    return Card(child: Column(children: [Text(change.payload.toString())]));
   }
 }

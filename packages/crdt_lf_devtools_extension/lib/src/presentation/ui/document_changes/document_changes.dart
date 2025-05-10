@@ -21,9 +21,10 @@ class DocumentChangesWidget extends StatelessWidget {
           children: [
             const DocumentsToolbar(),
             Expanded(
-              child: selectedDocument != null
-                  ? _selectedDocument(context, selectedDocument)
-                  : _noSelection(),
+              child:
+                  selectedDocument != null
+                      ? _selectedDocument(context, selectedDocument)
+                      : _noSelection(),
             ),
           ],
         );
@@ -37,12 +38,13 @@ class DocumentChangesWidget extends StatelessWidget {
   ) {
     return BlocProvider(
       key: ValueKey(selectedDocument.id),
-      create: (_) => DocumentChangesCubit(
-        DocumentChangesCubitArgs(
-          service: context.vmService,
-          document: selectedDocument,
-        ),
-      ),
+      create:
+          (_) => DocumentChangesCubit(
+            DocumentChangesCubitArgs(
+              service: context.vmService,
+              document: selectedDocument,
+            ),
+          ),
       child: BlocBuilder<DocumentChangesCubit, DocumentChangesState>(
         builder: (context, state) {
           return AppDataBuilder<List<crdt_lf.Change>>(
@@ -53,9 +55,7 @@ class DocumentChangesWidget extends StatelessWidget {
               return ListView.builder(
                 itemCount: changes.length,
                 itemBuilder: (context, index) {
-                  return CrdtLfChangeCard(
-                    change: changes[index],
-                  );
+                  return CrdtLfChangeCard(change: changes[index]);
                 },
               );
             },

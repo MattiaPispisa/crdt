@@ -12,9 +12,7 @@ part 'documents_state.dart';
 class DocumentsCubitArgs {
   final VmService service;
 
-  DocumentsCubitArgs({
-    required this.service,
-  });
+  DocumentsCubitArgs({required this.service});
 }
 
 /// Cubit for loading the documents from the VM service
@@ -45,12 +43,14 @@ class DocumentsCubit extends Cubit<DocumentsState> {
     }
 
     try {
-      emit(DocumentsState(
-        loading: true,
-        documents: state.documents,
-        error: null,
-        selectedDocument: state.selectedDocument,
-      ));
+      emit(
+        DocumentsState(
+          loading: true,
+          documents: state.documents,
+          error: null,
+          selectedDocument: state.selectedDocument,
+        ),
+      );
 
       _alive?.dispose();
       _alive = Disposable();
@@ -60,24 +60,29 @@ class DocumentsCubit extends Cubit<DocumentsState> {
       final result = await eval.evalDocuments(_alive);
 
       final trackedDocuments = await Future.wait(
-          result.elements!.cast<InstanceRef>().map((element) async {
-        final trackedDocumentInstance =
-            await eval.safeGetInstance(element, _alive);
-        final idField =
-            trackedDocumentInstance.fields!.firstWhere((f) => f.name == 'id');
-        final documentField = trackedDocumentInstance.fields!
-            .firstWhere((f) => f.name == 'document');
+        result.elements!.cast<InstanceRef>().map((element) async {
+          final trackedDocumentInstance = await eval.safeGetInstance(
+            element,
+            _alive,
+          );
+          final idField = trackedDocumentInstance.fields!.firstWhere(
+            (f) => f.name == 'id',
+          );
+          final documentField = trackedDocumentInstance.fields!.firstWhere(
+            (f) => f.name == 'document',
+          );
 
-        final responses = await Future.wait([
-          eval.safeGetInstance(idField.value, _alive),
-          eval.safeGetInstance(documentField.value, _alive)
-        ]);
+          final responses = await Future.wait([
+            eval.safeGetInstance(idField.value, _alive),
+            eval.safeGetInstance(documentField.value, _alive),
+          ]);
 
-        return TrackedDocument(
-          id: int.parse(responses[0].valueAsString!),
-          document: responses[1],
-        );
-      }));
+          return TrackedDocument(
+            id: int.parse(responses[0].valueAsString!),
+            document: responses[1],
+          );
+        }),
+      );
 
       var selectedDocument = state.selectedDocument;
 
@@ -86,19 +91,23 @@ class DocumentsCubit extends Cubit<DocumentsState> {
         selectedDocument = null;
       }
 
-      emit(DocumentsState(
-        loading: false,
-        documents: trackedDocuments,
-        selectedDocument: selectedDocument,
-        error: null,
-      ));
+      emit(
+        DocumentsState(
+          loading: false,
+          documents: trackedDocuments,
+          selectedDocument: selectedDocument,
+          error: null,
+        ),
+      );
     } catch (e) {
-      emit(DocumentsState(
-        loading: false,
-        error: e.toString(),
-        documents: null,
-        selectedDocument: null,
-      ));
+      emit(
+        DocumentsState(
+          loading: false,
+          error: e.toString(),
+          documents: null,
+          selectedDocument: null,
+        ),
+      );
     }
   }
 
@@ -108,18 +117,22 @@ class DocumentsCubit extends Cubit<DocumentsState> {
 
   void select(int? id) {
     if (id == null) {
-      return emit(DocumentsState(
-        selectedDocument: null,
-        documents: state.documents,
-        loading: state.loading,
-        error: state.error,
-      ));
+      return emit(
+        DocumentsState(
+          selectedDocument: null,
+          documents: state.documents,
+          loading: state.loading,
+          error: state.error,
+        ),
+      );
     }
 
     if (_exists(state.documents, id)) {
-      emit(state.copyWith(
-        selectedDocument: state.documents?.firstWhere((d) => d.id == id),
-      ));
+      emit(
+        state.copyWith(
+          selectedDocument: state.documents?.firstWhere((d) => d.id == id),
+        ),
+      );
     }
   }
 

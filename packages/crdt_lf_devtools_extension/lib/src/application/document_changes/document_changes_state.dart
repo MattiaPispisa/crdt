@@ -8,11 +8,7 @@ class DocumentChangesState extends Equatable {
   });
 
   factory DocumentChangesState.initial() {
-    return const DocumentChangesState(
-      loading: false,
-      error: null,
-      changes: [],
-    );
+    return const DocumentChangesState(loading: false, error: null, changes: []);
   }
 
   final bool loading;
@@ -34,4 +30,3 @@ class DocumentChangesState extends Equatable {
   @override
   List<Object?> get props => [loading, error, changes];
 }
-

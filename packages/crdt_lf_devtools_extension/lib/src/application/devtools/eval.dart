@@ -17,10 +17,7 @@ extension CrdtLfEvalExtension on EvalOnDartLibrary {
   ///
   /// Returns a list of all tracked documents.
   Future<Instance> evalDocuments(Disposable? isAlive) async {
-    return evalInstance(
-      'TrackedDocument.all',
-      isAlive: isAlive,
-    );
+    return evalInstance('TrackedDocument.all', isAlive: isAlive);
   }
 
   /// `describeChanges(document)`
@@ -33,9 +30,7 @@ extension CrdtLfEvalExtension on EvalOnDartLibrary {
     return evalInstance(
       'describeChanges(document)',
       isAlive: isAlive,
-      scope: {
-        'document': document.document.id!,
-      },
+      scope: {'document': document.document.id!},
     );
   }
 }

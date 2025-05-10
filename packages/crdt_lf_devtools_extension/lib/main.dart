@@ -12,9 +12,7 @@ class CrdtLfDevToolsExtension extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const DevToolsExtension(
-      child: CrdtLfExtensionBody(),
-    );
+    return const DevToolsExtension(child: CrdtLfExtensionBody());
   }
 }
 
@@ -31,9 +29,7 @@ class CrdtLfExtensionBody extends StatelessWidget {
       ),
       home: Bootstrap(
         child: Scaffold(
-          appBar: AppBar(
-            title: const Text('CRDT LF Document Visualizer'),
-          ),
+          appBar: AppBar(title: const Text('CRDT LF Document Visualizer')),
           body: const DocumentChangesWidget(),
         ),
       ),

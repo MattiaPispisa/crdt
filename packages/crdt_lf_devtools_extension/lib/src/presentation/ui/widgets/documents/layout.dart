@@ -4,16 +4,14 @@ import 'package:flutter/widgets.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 class TrackedDocumentsLayout extends StatelessWidget {
-  const TrackedDocumentsLayout({
-    super.key,
-    required this.builder,
-  });
+  const TrackedDocumentsLayout({super.key, required this.builder});
 
   final Widget Function(
     BuildContext context,
     List<TrackedDocument> documents,
     TrackedDocument? selectedDocument,
-  ) builder;
+  )
+  builder;
 
   @override
   Widget build(BuildContext context) {

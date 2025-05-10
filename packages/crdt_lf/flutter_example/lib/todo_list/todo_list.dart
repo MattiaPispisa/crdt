@@ -20,14 +20,13 @@ class TodoList extends StatelessWidget {
         create:
             (context) =>
                 DocumentState.create(author1, network: context.read<Network>()),
-        child: 
-         TodoDocument(author: author1),
+        child: TodoDocument(author: author1),
       ),
       rightBody: ChangeNotifierProvider<DocumentState>(
         create:
             (context) =>
                 DocumentState.create(author2, network: context.read<Network>()),
-        child:  TodoDocument(author: author2),
+        child: TodoDocument(author: author2),
       ),
     );
   }

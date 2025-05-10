@@ -1,6 +1,6 @@
 import 'package:crdt_lf/crdt_lf.dart';
 
-/// Represents a node within the logical sequence 
+/// Represents a node within the logical sequence
 /// maintained by a Fugue-based CRDT.
 ///
 /// This class encapsulates an actual value (`T`) present in the sequence,
@@ -8,7 +8,7 @@ import 'package:crdt_lf/crdt_lf.dart';
 /// It's used when traversing the internal tree structure
 /// to reconstruct the effective, user-visible sequence.
 ///
-/// It contrasts with internal structural nodes of the tree 
+/// It contrasts with internal structural nodes of the tree
 /// that might not hold user values.
 class FugueValueNode<T> {
   /// Constructor that initializes a node

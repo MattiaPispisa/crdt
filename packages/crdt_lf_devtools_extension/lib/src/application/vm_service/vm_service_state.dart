@@ -12,18 +12,10 @@ class VmServiceState extends Equatable {
   });
 
   factory VmServiceState.initial() {
-    return const VmServiceState(
-      loading: false,
-      error: null,
-      service: null,
-    );
+    return const VmServiceState(loading: false, error: null, service: null);
   }
 
-  VmServiceState copyWith({
-    bool? loading,
-    String? error,
-    VmService? service,
-  }) {
+  VmServiceState copyWith({bool? loading, String? error, VmService? service}) {
     return VmServiceState(
       loading: loading ?? this.loading,
       error: error ?? this.error,

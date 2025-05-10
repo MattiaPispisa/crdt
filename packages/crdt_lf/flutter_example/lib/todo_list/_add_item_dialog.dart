@@ -42,10 +42,7 @@ class _AddItemDialogState extends State<AddItemDialog> {
             Navigator.of(context).pop(); // Close the dialog
           },
         ),
-        TextButton(
-          onPressed: _addAndPop,
-          child: const Text('Add'),
-        ),
+        TextButton(onPressed: _addAndPop, child: const Text('Add')),
       ],
     );
   }

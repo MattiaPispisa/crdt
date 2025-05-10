@@ -343,8 +343,9 @@ void main() {
     });
 
     test('toString returns correct string representation', () {
-      doc..createChange(operation)
-      ..createChange(operation);
+      doc
+        ..createChange(operation)
+        ..createChange(operation);
 
       expect(
         doc.toString(),

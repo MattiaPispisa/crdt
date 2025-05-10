@@ -54,37 +54,45 @@ class DocumentChangesCubit extends Cubit<DocumentChangesState> {
     }
 
     try {
-      emit(DocumentChangesState(
-        loading: true,
-        error: null,
-        changes: state.changes,
-      ));
+      emit(
+        DocumentChangesState(
+          loading: true,
+          error: null,
+          changes: state.changes,
+        ),
+      );
 
       _alive?.dispose();
       _alive = devtools.Disposable();
 
       final eval = CrdtLfEvalExtension.setup(args.service);
-      final documentChangesInstance =
-          await eval.evalDocumentChanges(args.document, _alive);
+      final documentChangesInstance = await eval.evalDocumentChanges(
+        args.document,
+        _alive,
+      );
 
-      final encodedChanges = (await eval.service.retrieveFullStringValue(
-          eval.isolateRef!.id!, documentChangesInstance))!;
+      final encodedChanges =
+          (await eval.service.retrieveFullStringValue(
+            eval.isolateRef!.id!,
+            documentChangesInstance,
+          ))!;
 
-      final descriptors = (jsonDecode(encodedChanges) as List<dynamic>)
-          .map((e) => crdt_lf.Change.fromJson(e))
-          .toList();
+      final descriptors =
+          (jsonDecode(encodedChanges) as List<dynamic>)
+              .map((e) => crdt_lf.Change.fromJson(e))
+              .toList();
 
-      emit(DocumentChangesState(
-        changes: descriptors,
-        error: null,
-        loading: false,
-      ));
+      emit(
+        DocumentChangesState(changes: descriptors, error: null, loading: false),
+      );
     } catch (e) {
-      emit(DocumentChangesState(
-        changes: state.changes,
-        error: e.toString(),
-        loading: false,
-      ));
+      emit(
+        DocumentChangesState(
+          changes: state.changes,
+          error: e.toString(),
+          loading: false,
+        ),
+      );
     }
   }
 

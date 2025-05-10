@@ -26,7 +26,6 @@ class _FugueTextOperationFactory {
 
 /// Insert operation for the Fugue algorithm
 class _FugueTextInsertOperation extends Operation {
-
   /// Constructor that initializes an insert operation
   _FugueTextInsertOperation({
     required this.newNodeID,
@@ -36,6 +35,7 @@ class _FugueTextInsertOperation extends Operation {
     required super.id,
     required super.type,
   });
+
   /// Creates an insert operation from a payload
   factory _FugueTextInsertOperation.fromPayload(Map<String, dynamic> payload) =>
       _FugueTextInsertOperation(

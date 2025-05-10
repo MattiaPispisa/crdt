@@ -7,10 +7,7 @@ import 'package:vm_service/vm_service.dart';
 
 /// Loads the VM service and the documents
 class Bootstrap extends StatelessWidget {
-  const Bootstrap({
-    super.key,
-    required this.child,
-  });
+  const Bootstrap({super.key, required this.child});
 
   final Widget child;
 
@@ -27,9 +24,10 @@ class Bootstrap extends StatelessWidget {
               loading: state.loading,
               builder: (context, vmService) {
                 return BlocProvider(
-                  create: (context) => DocumentsCubit(
-                    DocumentsCubitArgs(service: vmService),
-                  ),
+                  create:
+                      (context) => DocumentsCubit(
+                        DocumentsCubitArgs(service: vmService),
+                      ),
                   child: child,
                 );
               },

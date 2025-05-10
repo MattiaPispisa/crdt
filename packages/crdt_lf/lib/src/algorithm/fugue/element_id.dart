@@ -2,7 +2,6 @@ import 'package:crdt_lf/src/peer_id.dart';
 
 /// Represents the ID of an element in the Fugue algorithm
 class FugueElementID with Comparable<FugueElementID> {
-
   /// Constructor that initializes the element ID
   const FugueElementID(this.replicaID, this.counter);
 
@@ -38,6 +37,7 @@ class FugueElementID with Comparable<FugueElementID> {
       int.parse(parts[1]),
     );
   }
+
   /// ID of the replica that generated this element
   final PeerId replicaID;
 
