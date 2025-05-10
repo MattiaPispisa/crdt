@@ -48,14 +48,17 @@ void main() {
         );
       });
 
-      test('throws FormatException for invalid format - non-numeric logical time', () {
+      test(
+          'throws FormatException for invalid format '
+          '- non-numeric logical time', () {
         expect(
           () => HybridLogicalClock.parse('abc.42'),
           throwsA(isA<FormatException>()),
         );
       });
 
-      test('throws FormatException for invalid format - non-numeric counter', () {
+      test('throws FormatException for invalid format - non-numeric counter',
+          () {
         expect(
           () => HybridLogicalClock.parse('1234567890.abc'),
           throwsA(isA<FormatException>()),
@@ -73,8 +76,7 @@ void main() {
     group('localEvent', () {
       test('increments counter when physical time is less than logical time',
           () {
-        final hlc = HybridLogicalClock(l: 1000, c: 5);
-        hlc.localEvent(500);
+        final hlc = HybridLogicalClock(l: 1000, c: 5)..localEvent(500);
 
         expect(hlc.l, equals(1000));
         expect(hlc.c, equals(6));
@@ -82,8 +84,7 @@ void main() {
 
       test('resets counter when physical time is greater than logical time',
           () {
-        final hlc = HybridLogicalClock(l: 1000, c: 5);
-        hlc.localEvent(2000);
+        final hlc = HybridLogicalClock(l: 1000, c: 5)..localEvent(2000);
 
         expect(hlc.l, equals(2000));
         expect(hlc.c, equals(0));

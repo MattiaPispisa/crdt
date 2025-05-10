@@ -3,12 +3,15 @@ import 'package:test/test.dart';
 
 void main() {
   group('FugueNodeTriple', () {
-    late FugueNode node;
+    late FugueNode<String> node;
     late List<FugueElementID> leftChildren;
     late List<FugueElementID> rightChildren;
 
     setUp(() {
-      final nodeId = FugueElementID(PeerId.parse('ed97101d-a3f6-45a9-bf56-d5e67a0bc2e0'), 1);
+      final nodeId = FugueElementID(
+        PeerId.parse('ed97101d-a3f6-45a9-bf56-d5e67a0bc2e0'),
+        1,
+      );
       final parentId = FugueElementID.nullID();
       node = FugueNode<String>(
         id: nodeId,
@@ -49,8 +52,14 @@ void main() {
 
       final json = triple.toJson();
       expect(json['node'], equals(node.toJson()));
-      expect(json['leftChildren'], equals(leftChildren.map((id) => id.toJson()).toList()));
-      expect(json['rightChildren'], equals(rightChildren.map((id) => id.toJson()).toList()));
+      expect(
+        json['leftChildren'],
+        equals(leftChildren.map((id) => id.toJson()).toList()),
+      );
+      expect(
+        json['rightChildren'],
+        equals(rightChildren.map((id) => id.toJson()).toList()),
+      );
     });
 
     test('should deserialize from JSON correctly', () {
@@ -60,7 +69,7 @@ void main() {
         'rightChildren': rightChildren.map((id) => id.toJson()).toList(),
       };
 
-      final triple = FugueNodeTriple.fromJson(json);
+      final triple = FugueNodeTriple<String>.fromJson(json);
       expect(triple.node.id, equals(node.id));
       expect(triple.node.value, equals(node.value));
       expect(triple.node.parentID, equals(node.parentID));
@@ -84,11 +93,11 @@ void main() {
     test('should handle empty children lists in JSON deserialization', () {
       final json = {
         'node': node.toJson(),
-        'leftChildren': [],
-        'rightChildren': [],
+        'leftChildren': <dynamic>[],
+        'rightChildren': <dynamic>[],
       };
 
-      final triple = FugueNodeTriple.fromJson(json);
+      final triple = FugueNodeTriple<String>.fromJson(json);
       expect(triple.leftChildren, isEmpty);
       expect(triple.rightChildren, isEmpty);
     });
@@ -104,10 +113,16 @@ void main() {
       );
 
       final json = triple.toJson();
-      expect(json['leftChildren'], equals(singleLeftChild.map((id) => id.toJson()).toList()));
-      expect(json['rightChildren'], equals(singleRightChild.map((id) => id.toJson()).toList()));
+      expect(
+        json['leftChildren'],
+        equals(singleLeftChild.map((id) => id.toJson()).toList()),
+      );
+      expect(
+        json['rightChildren'],
+        equals(singleRightChild.map((id) => id.toJson()).toList()),
+      );
 
-      final deserialized = FugueNodeTriple.fromJson(json);
+      final deserialized = FugueNodeTriple<String>.fromJson(json);
       expect(deserialized.leftChildren, equals(singleLeftChild));
       expect(deserialized.rightChildren, equals(singleRightChild));
     });

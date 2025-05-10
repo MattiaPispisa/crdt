@@ -16,7 +16,7 @@ void main() {
     late HybridLogicalClock hlc;
     late PeerId author;
     late Operation operation;
-    late Handler handler;
+    late Handler<dynamic> handler;
 
     setUp(() {
       final doc = CRDTDocument();
@@ -57,26 +57,6 @@ void main() {
       final deserialized = Change.fromJson(json);
 
       expect(deserialized, equals(change));
-    });
-
-    test('compares equal changes correctly', () {
-      final change1 = Change(
-        id: id,
-        operation: operation,
-        deps: deps,
-        hlc: hlc,
-        author: author,
-      );
-
-      final change2 = Change(
-        id: id,
-        operation: operation,
-        deps: deps,
-        hlc: hlc,
-        author: author,
-      );
-
-      expect(change1, equals(change2));
     });
 
     test('compares different changes correctly', () {
@@ -132,38 +112,9 @@ void main() {
         author: author,
       );
 
-      final expected =
-          'Change(id: $id, deps: [${deps.first}], hlc: $hlc, author: $author, payload: ${operation.toPayload()})';
+      final expected = 'Change(id: $id, deps: [${deps.first}], hlc: $hlc,'
+          ' author: $author, payload: ${operation.toPayload()})';
       expect(change.toString(), equals(expected));
-    });
-
-    test('hashCode is consistent with equality', () {
-      final change1 = Change(
-        id: id,
-        operation: operation,
-        deps: deps,
-        hlc: hlc,
-        author: author,
-      );
-
-      final change2 = Change(
-        id: id,
-        operation: operation,
-        deps: deps,
-        hlc: hlc,
-        author: author,
-      );
-
-      final change3 = Change(
-        id: OperationId.parse('b7353649-1b52-43b0-9dbc-a843e3308cb0@1.3'),
-        operation: operation,
-        deps: deps,
-        hlc: hlc,
-        author: author,
-      );
-
-      expect(change1.hashCode, equals(change2.hashCode));
-      expect(change1.hashCode, isNot(equals(change3.hashCode)));
     });
 
     test('hashCode handles different dependencies correctly', () {

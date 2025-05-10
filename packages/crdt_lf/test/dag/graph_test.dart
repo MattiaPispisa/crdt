@@ -39,9 +39,10 @@ void main() {
     });
 
     test('addNode adds a node with dependencies', () {
-      dag.addNode(id1, {});
-      dag.addNode(id2, {id1});
-      dag.addNode(id3, {id2});
+      dag
+        ..addNode(id1, {})
+        ..addNode(id2, {id1})
+        ..addNode(id3, {id2});
 
       expect(dag.nodeCount, equals(3));
       expect(dag.containsNode(id1), isTrue);
@@ -59,9 +60,10 @@ void main() {
     });
 
     test('should clear all nodes', () {
-      dag.addNode(id1, {});
-      dag.addNode(id2, {id1});
-      dag.clear();
+      dag
+        ..addNode(id1, {})
+        ..addNode(id2, {id1})
+        ..clear();
       expect(dag.nodeCount, equals(0));
       expect(dag.containsNode(id1), isFalse);
     });
@@ -74,8 +76,9 @@ void main() {
     });
 
     test('getNode returns correct node', () {
-      dag.addNode(id1, {});
-      dag.addNode(id2, {id1});
+      dag
+        ..addNode(id1, {})
+        ..addNode(id2, {id1});
 
       final node1 = dag.getNode(id1);
       final node2 = dag.getNode(id2);
@@ -93,8 +96,9 @@ void main() {
     });
 
     test('isReady checks if dependencies exist', () {
-      dag.addNode(id1, {});
-      dag.addNode(id2, {id1});
+      dag
+        ..addNode(id1, {})
+        ..addNode(id2, {id1});
 
       expect(dag.isReady({}), isTrue);
       expect(dag.isReady({id1}), isTrue);
@@ -103,10 +107,11 @@ void main() {
     });
 
     test('getAncestors returns all ancestors', () {
-      dag.addNode(id1, {});
-      dag.addNode(id2, {id1});
-      dag.addNode(id3, {id2});
-      dag.addNode(id4, {id2});
+      dag
+        ..addNode(id1, {})
+        ..addNode(id2, {id1})
+        ..addNode(id3, {id2})
+        ..addNode(id4, {id2});
 
       final ancestors1 = dag.getAncestors(id1);
       final ancestors2 = dag.getAncestors(id2);
@@ -127,10 +132,11 @@ void main() {
     });
 
     test('getLCA finds lowest common ancestors', () {
-      dag.addNode(id1, {});
-      dag.addNode(id2, {id1});
-      dag.addNode(id3, {id2});
-      dag.addNode(id4, {id2});
+      dag
+        ..addNode(id1, {})
+        ..addNode(id2, {id1})
+        ..addNode(id3, {id2})
+        ..addNode(id4, {id2});
 
       final lca1 = dag.getLCA({id3}, {id4});
       final lca2 = dag.getLCA({id1}, {id3});
@@ -147,13 +153,14 @@ void main() {
 
     test('merge combines two DAGs', () {
       // Create first DAG
-      dag.addNode(id1, {});
-      dag.addNode(id2, {id1});
+      dag
+        ..addNode(id1, {})
+        ..addNode(id2, {id1});
 
       // Create second DAG
-      final otherDag = DAG.empty();
-      otherDag.addNode(id3, {});
-      otherDag.addNode(id4, {id3});
+      final otherDag = DAG.empty()
+        ..addNode(id3, {})
+        ..addNode(id4, {id3});
 
       // Merge DAGs
       dag.merge(otherDag);
@@ -167,12 +174,12 @@ void main() {
     });
 
     test('prune removes nodes older than the given version vector', () {
-      dag.addNode(id1, {});
-      dag.addNode(id2, {id1});
-      dag.addNode(id3, {id2});
-      dag.addNode(id4, {id2});
-
-      dag.prune(VersionVector({author: id2.hlc}));
+      dag
+        ..addNode(id1, {})
+        ..addNode(id2, {id1})
+        ..addNode(id3, {id2})
+        ..addNode(id4, {id2})
+        ..prune(VersionVector({author: id2.hlc}));
 
       expect(dag.nodeCount, equals(2));
       expect(dag.containsNode(id3), isTrue);
@@ -182,12 +189,13 @@ void main() {
     });
 
     test('toString returns correct string representation', () {
-      dag.addNode(id1, {});
-      dag.addNode(id2, {id1});
+      dag
+        ..addNode(id1, {})
+        ..addNode(id2, {id1});
 
-      final expected =
-          'DAG(nodes: [\nDAGNode(id: $id1, parents: [], children: [$id2])\nDAGNode(id: $id2, parents: [$id1], children: [])\n], frontiers: $id2
-      )';
+      final expected = 'DAG(nodes: [\nDAGNode(id: $id1, parents: [], '
+          'children: [$id2])\nDAGNode(id: $id2, parents: [$id1],'
+          ' children: [])\n], frontiers: $id2)';
       expect(dag.toString(), equals(expected));
     });
   });

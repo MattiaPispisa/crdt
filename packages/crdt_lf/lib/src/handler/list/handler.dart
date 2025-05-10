@@ -6,7 +6,8 @@ part 'operation.dart';
 
 /// CRDT List implementation
 ///
-/// A CRDTList is a list data structure that uses CRDT for conflict-free collaboration.
+/// A CRDTList is a list data structure that uses CRDT
+/// for conflict-free collaboration.
 /// It provides methods for inserting, deleting, and accessing elements.
 class CRDTListHandler<T> extends Handler<List<T>> {
   /// Creates a new CRDTList with the given document and ID
@@ -33,7 +34,7 @@ class CRDTListHandler<T> extends Handler<List<T>> {
   /// Deletes elements starting at the specified index
   void delete(int index, int count) {
     doc.createChange(
-      _ListDeleteOperation.fromHandler(
+      _ListDeleteOperation<T>.fromHandler(
         this,
         index: index,
         count: count,
@@ -88,7 +89,8 @@ class CRDTListHandler<T> extends Handler<List<T>> {
         final index = operation.index;
         final value = operation.value;
 
-        // Insert at the specified index, or at the end if the index is out of bounds
+        // Insert at the specified index,
+        // or at the end if the index is out of bounds
         if (index <= state.length) {
           state.insert(index, value);
         } else {

@@ -47,7 +47,10 @@ void main() {
 
     test('parse creates ID from string', () {
       final id = FugueElementID.parse('5793b4b7-52f9-4d64-ae17-86161ee30e65:1');
-      expect(id.replicaID.toString(), equals('5793b4b7-52f9-4d64-ae17-86161ee30e65'));
+      expect(
+        id.replicaID.toString(),
+        equals('5793b4b7-52f9-4d64-ae17-86161ee30e65'),
+      );
       expect(id.counter, equals(1));
     });
 
@@ -79,7 +82,10 @@ void main() {
       };
 
       final id = FugueElementID.fromJson(json);
-      expect(id.replicaID.toString(), equals('2ff4de6c-5add-42b6-b5f5-e6b7404cbf68'));
+      expect(
+        id.replicaID.toString(),
+        equals('2ff4de6c-5add-42b6-b5f5-e6b7404cbf68'),
+      );
       expect(id.counter, equals(1));
     });
 

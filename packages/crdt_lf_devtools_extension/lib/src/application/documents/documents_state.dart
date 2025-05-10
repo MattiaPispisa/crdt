@@ -38,21 +38,13 @@ class DocumentsState extends Equatable {
   }
 
   @override
-  List<Object?> get props => [
-        loading,
-        error,
-        documents,
-        selectedDocument,
-      ];
+  List<Object?> get props => [loading, error, documents, selectedDocument];
 }
 
-// TODO: need a name property
+// TODO(mattia): need a name property
 
 class TrackedDocument extends Equatable {
-  const TrackedDocument({
-    required this.id,
-    required this.document,
-  });
+  const TrackedDocument({required this.id, required this.document});
 
   final int id;
   final Instance document;

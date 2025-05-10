@@ -45,7 +45,8 @@ class Frontiers {
   /// Merges another [Frontiers] into this one
   ///
   /// The result is a new [Frontiers] that contains only the [OperationId]s
-  /// that are not causally before any other [OperationId] in either [Frontiers].
+  /// that are not causally before
+  /// any other [OperationId] in either [Frontiers].
   void merge(Frontiers other) {
     final result = <OperationId>{};
 
@@ -61,8 +62,9 @@ class Frontiers {
       }
     }
 
-    _frontiers.clear();
-    _frontiers.addAll(result);
+    _frontiers
+      ..clear()
+      ..addAll(result);
   }
 
   /// Clears the [Frontiers]

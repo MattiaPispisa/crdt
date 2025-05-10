@@ -42,30 +42,28 @@ void main() {
     });
 
     test('addParent adds a parent', () {
-      final node = DAGNode(id);
-      node.addParent(parentId1);
+      final node = DAGNode(id)..addParent(parentId1);
       expect(node.hasParent(parentId1), isTrue);
       expect(node.parentCount, equals(1));
     });
 
     test('addParent does not add duplicate parent', () {
-      final node = DAGNode(id);
-      node.addParent(parentId1);
-      node.addParent(parentId1);
+      final node = DAGNode(id)
+        ..addParent(parentId1)
+        ..addParent(parentId1);
       expect(node.parentCount, equals(1));
     });
 
     test('addChild adds a child', () {
-      final node = DAGNode(id);
-      node.addChild(childId1);
+      final node = DAGNode(id)..addChild(childId1);
       expect(node.hasChild(childId1), isTrue);
       expect(node.childCount, equals(1));
     });
 
     test('addChild does not add duplicate child', () {
-      final node = DAGNode(id);
-      node.addChild(childId1);
-      node.addChild(childId1);
+      final node = DAGNode(id)
+        ..addChild(childId1)
+        ..addChild(childId1);
       expect(node.childCount, equals(1));
     });
 
@@ -116,9 +114,9 @@ void main() {
     });
 
     test('toString returns correct string representation', () {
-      final node = DAGNode(id);
-      node.addParent(parentId1);
-      node.addChild(childId1);
+      final node = DAGNode(id)
+        ..addParent(parentId1)
+        ..addChild(childId1);
 
       final expected =
           'DAGNode(id: $id, parents: [$parentId1], children: [$childId1])';
@@ -126,15 +124,16 @@ void main() {
     });
 
     test('should remove nodes', () {
-      final node = DAGNode(id);
-      node.addParent(parentId1);
-      node.addChild(childId1);
+      final node = DAGNode(id)
+        ..addParent(parentId1)
+        ..addChild(childId1);
 
       expect(node.parentCount, equals(1));
       expect(node.childCount, equals(1));
 
-      node.removeParent(parentId1);
-      node.removeChild(childId1);
+      node
+        ..removeParent(parentId1)
+        ..removeChild(childId1);
 
       expect(node.parentCount, equals(0));
       expect(node.childCount, equals(0));

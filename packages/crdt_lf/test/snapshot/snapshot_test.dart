@@ -8,7 +8,7 @@ import '../helpers/matcher.dart';
 void main() {
   group('Snapshot', () {
     late Operation operation;
-    late Handler handler;
+    late Handler<dynamic> handler;
     late PeerId author;
 
     setUp(() {
@@ -41,8 +41,10 @@ void main() {
         equals(1),
       );
       expect(snapshot.versionVector.entries.first.key, equals(author));
-      expect(snapshot.versionVector.entries.first.value,
-          equals(HybridLogicalClock(l: 1, c: 1)),);
+      expect(
+        snapshot.versionVector.entries.first.value,
+        equals(HybridLogicalClock(l: 1, c: 1)),
+      );
       expect(snapshot.data, equals({'test': 'Hello World!'}));
     });
 
@@ -60,24 +62,23 @@ void main() {
     });
 
     test('should create from document version correctly', () {
-      final doc = CRDTDocument(peerId: author);
-
-      doc.importChanges([
-        Change(
-          id: OperationId(author, HybridLogicalClock(l: 1, c: 1)),
-          operation: operation,
-          deps: {},
-          author: author,
-          hlc: HybridLogicalClock(l: 1, c: 1),
-        ),
-        Change(
-          id: OperationId(author, HybridLogicalClock(l: 1, c: 2)),
-          operation: operation,
-          deps: {},
-          author: author,
-          hlc: HybridLogicalClock(l: 1, c: 2),
-        ),
-      ]);
+      final doc = CRDTDocument(peerId: author)
+        ..importChanges([
+          Change(
+            id: OperationId(author, HybridLogicalClock(l: 1, c: 1)),
+            operation: operation,
+            deps: {},
+            author: author,
+            hlc: HybridLogicalClock(l: 1, c: 1),
+          ),
+          Change(
+            id: OperationId(author, HybridLogicalClock(l: 1, c: 2)),
+            operation: operation,
+            deps: {},
+            author: author,
+            hlc: HybridLogicalClock(l: 1, c: 2),
+          ),
+        ]);
 
       final snapshot = Snapshot.create(
         versionVector: doc.getVersionVector(),
@@ -90,8 +91,10 @@ void main() {
         equals(1),
       );
       expect(snapshot.versionVector.entries.first.key, equals(author));
-      expect(snapshot.versionVector.entries.first.value,
-          equals(HybridLogicalClock(l: 1, c: 2)),);
+      expect(
+        snapshot.versionVector.entries.first.value,
+        equals(HybridLogicalClock(l: 1, c: 2)),
+      );
       expect(snapshot.data, equals({'test': 'Hello World!'}));
     });
 
@@ -128,48 +131,49 @@ void main() {
         equals(1),
       );
       expect(snapshot.versionVector.entries.first.key, equals(author));
-      expect(snapshot.versionVector.entries.first.value,
-          equals(HybridLogicalClock(l: 1, c: 1)),);
+      expect(
+        snapshot.versionVector.entries.first.value,
+        equals(HybridLogicalClock(l: 1, c: 1)),
+      );
       expect(snapshot.data, equals({'test': 'Hello World!'}));
     });
 
     test('same version should produce same id', () {
-      final doc = CRDTDocument(peerId: author);
+      final doc = CRDTDocument(peerId: author)
+        ..importChanges([
+          Change(
+            id: OperationId(author, HybridLogicalClock(l: 1, c: 1)),
+            operation: operation,
+            deps: {},
+            author: author,
+            hlc: HybridLogicalClock(l: 1, c: 1),
+          ),
+          Change(
+            id: OperationId(author, HybridLogicalClock(l: 1, c: 2)),
+            operation: operation,
+            deps: {},
+            author: author,
+            hlc: HybridLogicalClock(l: 1, c: 2),
+          ),
+        ]);
 
-      doc.importChanges([
-        Change(
-          id: OperationId(author, HybridLogicalClock(l: 1, c: 1)),
-          operation: operation,
-          deps: {},
-          author: author,
-          hlc: HybridLogicalClock(l: 1, c: 1),
-        ),
-        Change(
-          id: OperationId(author, HybridLogicalClock(l: 1, c: 2)),
-          operation: operation,
-          deps: {},
-          author: author,
-          hlc: HybridLogicalClock(l: 1, c: 2),
-        ),
-      ]);
-
-      final doc2 = CRDTDocument(peerId: PeerId.generate());
-      doc2.importChanges([
-        Change(
-          id: OperationId(author, HybridLogicalClock(l: 1, c: 1)),
-          operation: operation,
-          deps: {},
-          author: author,
-          hlc: HybridLogicalClock(l: 1, c: 1),
-        ),
-        Change(
-          id: OperationId(author, HybridLogicalClock(l: 1, c: 2)),
-          operation: operation,
-          deps: {},
-          author: author,
-          hlc: HybridLogicalClock(l: 1, c: 2),
-        ),
-      ]);
+      final doc2 = CRDTDocument(peerId: PeerId.generate())
+        ..importChanges([
+          Change(
+            id: OperationId(author, HybridLogicalClock(l: 1, c: 1)),
+            operation: operation,
+            deps: {},
+            author: author,
+            hlc: HybridLogicalClock(l: 1, c: 1),
+          ),
+          Change(
+            id: OperationId(author, HybridLogicalClock(l: 1, c: 2)),
+            operation: operation,
+            deps: {},
+            author: author,
+            hlc: HybridLogicalClock(l: 1, c: 2),
+          ),
+        ]);
 
       final snapshot = Snapshot.create(
         versionVector: doc.getVersionVector(),
@@ -220,11 +224,15 @@ void main() {
         equals(2),
       );
       expect(merged.versionVector.entries.first.key, equals(author1));
-      expect(merged.versionVector.entries.first.value,
-          equals(HybridLogicalClock(l: 1, c: 1)),);
+      expect(
+        merged.versionVector.entries.first.value,
+        equals(HybridLogicalClock(l: 1, c: 1)),
+      );
       expect(merged.versionVector.entries.last.key, equals(author2));
-      expect(merged.versionVector.entries.last.value,
-          equals(HybridLogicalClock(l: 1, c: 2)),);
+      expect(
+        merged.versionVector.entries.last.value,
+        equals(HybridLogicalClock(l: 1, c: 2)),
+      );
     });
 
     test('should prefer data if other is not strictly newer', () {
@@ -249,8 +257,8 @@ void main() {
     });
 
     test(
-        'merged should prefer data from the other snapshot when version vector is newer',
-        () {
+        'merged should prefer data from the other snapshot'
+        ' when version vector is newer', () {
       final author1 = PeerId.generate();
       final author2 = PeerId.generate();
 

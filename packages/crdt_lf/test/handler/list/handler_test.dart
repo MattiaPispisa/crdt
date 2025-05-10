@@ -7,12 +7,12 @@ void main() {
       final doc = CRDTDocument(
         peerId: PeerId.parse('37f1ec87-6ea5-430b-a627-a6b92b56a02d'),
       );
-      final handler = CRDTListHandler<String>(doc, 'list1');
+      final handler = CRDTListHandler<String>(doc, 'list1')
 
-      // Insert elements
-      handler.insert(0, 'Hello');
-      handler.insert(1, 'World');
-      handler.insert(2, '!');
+        // Insert elements
+        ..insert(0, 'Hello')
+        ..insert(1, 'World')
+        ..insert(2, '!');
 
       expect(handler.value, ['Hello', 'World', '!']);
       expect(handler.length, 3);
@@ -80,9 +80,10 @@ void main() {
       final handler2 = CRDTListHandler<String>(doc2, 'list1');
 
       // Initial state
-      handler1.insert(0, 'Hello');
-      handler1.insert(1, 'World');
-      handler1.insert(2, 'Dart');
+      handler1
+        ..insert(0, 'Hello')
+        ..insert(1, 'World')
+        ..insert(2, 'Dart');
 
       // Sync doc1 to doc2
       final changes1 = doc1.exportChanges();
@@ -111,12 +112,12 @@ void main() {
       final doc = CRDTDocument(
         peerId: PeerId.parse('45ee6b65-b393-40b7-9755-8b66dc7d0518'),
       );
-      final handler = CRDTListHandler<int>(doc, 'list1');
+      final handler = CRDTListHandler<int>(doc, 'list1')
 
-      // Insert numbers
-      handler.insert(0, 1);
-      handler.insert(1, 2);
-      handler.insert(2, 3);
+        // Insert numbers
+        ..insert(0, 1)
+        ..insert(1, 2)
+        ..insert(2, 3);
 
       expect(handler.value, [1, 2, 3]);
       expect(handler[0], 1);
@@ -128,10 +129,10 @@ void main() {
       final doc = CRDTDocument(
         peerId: PeerId.parse('45ee6b65-b393-40b7-9755-8b66dc7d0518'),
       );
-      final handler = CRDTListHandler<String>(doc, 'list1');
+      final handler = CRDTListHandler<String>(doc, 'list1')
 
-      // Insert at out of bounds index
-      handler.insert(5, 'Hello');
+        // Insert at out of bounds index
+        ..insert(5, 'Hello');
       expect(handler.value, ['Hello']);
 
       // Delete at out of bounds index
@@ -140,7 +141,7 @@ void main() {
 
       // Delete more elements than available
       handler.delete(0, 10);
-      expect(handler.value, []);
+      expect(handler.value, <String>[]);
     });
 
     test('should maintain causal ordering', () {
@@ -195,9 +196,9 @@ void main() {
       final doc = CRDTDocument(
         peerId: PeerId.parse('37f1ec87-6ea5-430b-a627-a6b92b56a02d'),
       );
-      final handler = CRDTListHandler<String>(doc, 'list1');
-      handler.insert(0, 'Hello');
-      handler.insert(1, 'World');
+      final handler = CRDTListHandler<String>(doc, 'list1')
+        ..insert(0, 'Hello')
+        ..insert(1, 'World');
       expect(handler.toString(), equals('CRDTList(list1, [Hello, World])'));
     });
 
@@ -213,8 +214,9 @@ void main() {
       final handler2 = CRDTListHandler<String>(doc2, 'list1');
 
       // Insert numbers
-      handler1.insert(0, 'Hello');
-      handler1.insert(1, 'World');
+      handler1
+        ..insert(0, 'Hello')
+        ..insert(1, 'World');
       handler2.insert(0, 'Dart!');
 
       final changes1 = doc1.exportChanges();

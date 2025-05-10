@@ -58,8 +58,8 @@ class CRDTFugueTextHandler extends Handler<List<FugueValueNode<String>>> {
           newNodeID: newNodeID,
           text: text[i],
           leftOrigin: previousID,
-          rightOrigin:
-              rightOrigin, // Use the same rightOrigin for all characters in the chain
+          // Use the same rightOrigin for all characters in the chain
+          rightOrigin: rightOrigin,
         ),
       );
       previousID = newNodeID;
@@ -72,7 +72,8 @@ class CRDTFugueTextHandler extends Handler<List<FugueValueNode<String>>> {
   void delete(int index, int count) {
     // For each character to delete
     for (var i = 0; i < count; i++) {
-      // Find the node at position index (which is now index + i since we've deleted i characters)
+      // Find the node at position index
+      // (which is now index + i since we've deleted i characters)
       final nodeID = _tree.findNodeAtPosition(index + i);
 
       // If the node exists, create a delete operation
@@ -180,6 +181,7 @@ class CRDTFugueTextHandler extends Handler<List<FugueValueNode<String>>> {
   /// Returns a text representation of this handler
   @override
   String toString() {
-    return 'CRDTFugueText($_id, "${value.length > 20 ? "${value.substring(0, 20)}..." : value}")';
+    return 'CRDTFugueText($_id, '
+        '"${value.length > 20 ? "${value.substring(0, 20)}..." : value}")';
   }
 }

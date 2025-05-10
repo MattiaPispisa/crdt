@@ -15,12 +15,12 @@ class FugueNodeTriple<T> {
     Map<String, dynamic> json,
   ) {
     return FugueNodeTriple<T>(
-      node: FugueNode<T>.fromJson(json['node']),
+      node: FugueNode<T>.fromJson(json['node'] as Map<String, dynamic>),
       leftChildren: (json['leftChildren'] as List)
-          .map((j) => FugueElementID.fromJson(j))
+          .map((j) => FugueElementID.fromJson(j as Map<String, dynamic>))
           .toList(),
       rightChildren: (json['rightChildren'] as List)
-          .map((j) => FugueElementID.fromJson(j))
+          .map((j) => FugueElementID.fromJson(j as Map<String, dynamic>))
           .toList(),
     );
   }

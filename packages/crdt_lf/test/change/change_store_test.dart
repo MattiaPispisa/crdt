@@ -7,7 +7,7 @@ import '../helpers/handler.dart';
 void main() {
   group('ChangeStore', () {
     late ChangeStore store;
-    late Handler handler;
+    late Handler<dynamic> handler;
     late PeerId author;
     late Operation operation;
     late Change change1;
@@ -77,9 +77,10 @@ void main() {
     });
 
     test('getAllChanges returns all changes', () {
-      store.addChange(change1);
-      store.addChange(change2);
-      store.addChange(change3);
+      store
+        ..addChange(change1)
+        ..addChange(change2)
+        ..addChange(change3);
 
       final changes = store.getAllChanges();
       expect(changes.length, equals(3));
@@ -87,9 +88,10 @@ void main() {
     });
 
     test('exportChanges with empty version returns all changes', () {
-      store.addChange(change1);
-      store.addChange(change2);
-      store.addChange(change3);
+      store
+        ..addChange(change1)
+        ..addChange(change2)
+        ..addChange(change3);
 
       final changes = store.exportChanges({}, dag);
       expect(changes.length, equals(3));
@@ -97,14 +99,16 @@ void main() {
     });
 
     test('exportChanges with version returns non-ancestor changes', () {
-      store.addChange(change1);
-      store.addChange(change2);
-      store.addChange(change3);
+      store
+        ..addChange(change1)
+        ..addChange(change2)
+        ..addChange(change3);
 
       // Add changes to DAG
-      dag.addNode(change1.id, {});
-      dag.addNode(change2.id, {change1.id});
-      dag.addNode(change3.id, {change2.id});
+      dag
+        ..addNode(change1.id, {})
+        ..addNode(change2.id, {change1.id})
+        ..addNode(change3.id, {change2.id});
 
       // Export changes from version containing change2
       final changes = store.exportChanges({change2.id}, dag);
@@ -130,20 +134,20 @@ void main() {
     });
 
     test('clear removes all changes', () {
-      store.addChange(change1);
-      store.addChange(change2);
-      store.addChange(change3);
-
-      store.clear();
+      store
+        ..addChange(change1)
+        ..addChange(change2)
+        ..addChange(change3)
+        ..clear();
       expect(store.changeCount, equals(0));
     });
 
     test('prune removes changes older than the given version vector', () {
-      store.addChange(change1);
-      store.addChange(change2);
-      store.addChange(change3);
-
-      store.prune(VersionVector({author: change2.hlc}));
+      store
+        ..addChange(change1)
+        ..addChange(change2)
+        ..addChange(change3)
+        ..prune(VersionVector({author: change2.hlc}));
 
       expect(store.changeCount, equals(1));
       expect(store.containsChange(change3.id), isTrue);
@@ -152,9 +156,9 @@ void main() {
     });
 
     test('toString returns correct string representation', () {
-      store.addChange(change1);
-      store.addChange(change2);
-      store.addChange(change3);
+      store..addChange(change1)
+      ..addChange(change2)
+      ..addChange(change3);
 
       expect(store.toString(), equals('ChangeStore(changes: 3)'));
     });

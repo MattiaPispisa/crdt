@@ -7,7 +7,7 @@ import 'helpers/handler.dart';
 void main() {
   group('CRDTDocument', () {
     late CRDTDocument doc;
-    late Handler handler;
+    late Handler<dynamic> handler;
     late PeerId author;
     late Operation operation;
 
@@ -130,8 +130,9 @@ void main() {
     });
 
     test('export and import work correctly', () {
-      doc.createChange(operation);
-      doc.createChange(operation);
+      doc
+        ..createChange(operation)
+        ..createChange(operation);
 
       final data = doc.binaryExportChanges();
       final newDoc = CRDTDocument();
@@ -342,13 +343,14 @@ void main() {
     });
 
     test('toString returns correct string representation', () {
-      doc.createChange(operation);
-      doc.createChange(operation);
+      doc..createChange(operation)
+      ..createChange(operation);
 
       expect(
         doc.toString(),
         equals(
-            'CRDTDocument(peerId: $author, changes: 2, version: 1 frontiers)',),
+          'CRDTDocument(peerId: $author, changes: 2, version: 1 frontiers)',
+        ),
       );
     });
   });

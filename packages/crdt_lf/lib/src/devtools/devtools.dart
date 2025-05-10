@@ -32,13 +32,16 @@ void postChangedEvent(CRDTDocument document) {
 
 /// a tracked document
 class TrackedDocument {
-
   /// create a new tracked document
   TrackedDocument(this.document) : id = _nextId++ {
     _byDocument[document] = this;
     all.add(this);
   }
+
+  /// the document
   final CRDTDocument document;
+
+  /// the id
   final int id;
 
   static int _nextId = 0;

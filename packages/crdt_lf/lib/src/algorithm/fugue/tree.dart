@@ -42,7 +42,8 @@ class FugueTree<T> {
 
     for (final entry in nodesJson.entries) {
       final id = FugueElementID.parse(entry.key);
-      final triple = FugueNodeTriple<T>.fromJson(entry.value);
+      final triple =
+          FugueNodeTriple<T>.fromJson(entry.value as Map<String, dynamic>);
       nodes[id] = triple;
     }
 
@@ -76,7 +77,8 @@ class FugueTree<T> {
 
   /// Traverses the tree starting from the specified node
   ///
-  /// Visits recursively the left children, then the node itself, then the right children
+  /// Visits recursively the left children,
+  /// then the node itself, then the right children
   /// Collects the non-deleted values (different from `⊥`)
   List<K> _traverse<K>(
     FugueElementID nodeID,
@@ -111,6 +113,7 @@ class FugueTree<T> {
     return result;
   }
 
+  /// Inserts a list of nodes into the tree at the specified index
   void iterableInsert(
     int index,
     Iterable<FugueValueNode<T>> nodes,
@@ -349,8 +352,7 @@ class FugueTree<T> {
   /// Returns a string representation of the tree for debugging
   @override
   String toString() {
-    final buffer = StringBuffer();
-    buffer.writeln('Tree:');
+    final buffer = StringBuffer()..writeln('Tree:');
     _buildTreeString(_rootID, 0, buffer);
     return buffer.toString();
   }
@@ -365,9 +367,9 @@ class FugueTree<T> {
     final rightChildren = nodeTriple.rightChildren;
 
     final indent = '  ' * depth;
-    buffer.writeln('$indent$node');
-
-    buffer.writeln('$indent Left children:');
+    buffer
+      ..writeln('$indent$node')
+      ..writeln('$indent Left children:');
     for (final childID in leftChildren) {
       _buildTreeString(childID, depth + 1, buffer);
     }

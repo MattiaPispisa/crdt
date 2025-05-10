@@ -1,11 +1,10 @@
 part of 'handler.dart';
 
 class _ListOperationFactory<T> {
-
   _ListOperationFactory(this.handler);
-  final Handler handler;
+  final Handler<dynamic> handler;
 
-  Operation? fromPayload(dynamic payload) {
+  Operation? fromPayload(Map<String, dynamic> payload) {
     if (payload['id'] != handler.id) {
       return null;
     }
@@ -29,7 +28,7 @@ class _ListInsertOperation<T> extends Operation {
   });
 
   factory _ListInsertOperation.fromHandler(
-    Handler handler, {
+    Handler<dynamic> handler, {
     required int index,
     required T value,
   }) {
@@ -45,19 +44,19 @@ class _ListInsertOperation<T> extends Operation {
   final T value;
 
   @override
-  dynamic toPayload() => {
+  Map<String, dynamic> toPayload() => {
         'type': type.toPayload(),
         'id': id,
         'index': index,
         'value': value,
       };
 
-  static _ListInsertOperation<T> fromPayload<T>(dynamic payload) =>
+  static _ListInsertOperation<T> fromPayload<T>(Map<String, dynamic> payload) =>
       _ListInsertOperation<T>(
-        id: payload['id'],
-        type: OperationType.fromPayload(payload['type']),
-        index: payload['index'],
-        value: payload['value'],
+        id: payload['id'] as String,
+        type: OperationType.fromPayload(payload['type'] as String),
+        index: payload['index'] as int,
+        value: payload['value'] as T,
       );
 }
 
@@ -70,7 +69,7 @@ class _ListDeleteOperation<T> extends Operation {
   });
 
   factory _ListDeleteOperation.fromHandler(
-    Handler handler, {
+    Handler<dynamic> handler, {
     required int index,
     required int count,
   }) {
@@ -86,18 +85,18 @@ class _ListDeleteOperation<T> extends Operation {
   final int count;
 
   @override
-  dynamic toPayload() => {
+  Map<String, dynamic> toPayload() => {
         'type': type.toPayload(),
         'id': id,
         'index': index,
         'count': count,
       };
 
-  static _ListDeleteOperation<T> fromPayload<T>(dynamic payload) =>
+  static _ListDeleteOperation<T> fromPayload<T>(Map<String, dynamic> payload) =>
       _ListDeleteOperation<T>(
-        id: payload['id'],
-        type: OperationType.fromPayload(payload['type']),
-        index: payload['index'],
-        count: payload['count'],
+        id: payload['id'] as String,
+        type: OperationType.fromPayload(payload['type'] as String),
+        index: payload['index'] as int,
+        count: payload['count'] as int,
       );
 }

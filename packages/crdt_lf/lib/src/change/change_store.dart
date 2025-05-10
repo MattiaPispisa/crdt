@@ -5,10 +5,10 @@ import 'package:crdt_lf/crdt_lf.dart';
 /// A ChangeStore stores and manages changes to the CRDT state.
 /// It provides methods for adding, retrieving, and exporting changes.
 class ChangeStore {
-  const ChangeStore._(this._changes);
+  ChangeStore._(this._changes);
 
   /// Creates a new empty ChangeStore
-  factory ChangeStore.empty() => const ChangeStore._(<OperationId, Change>{});
+  factory ChangeStore.empty() => ChangeStore._(<OperationId, Change>{});
 
   /// The changes stored in this [ChangeStore], indexed by their [OperationId]
   final Map<OperationId, Change> _changes;
@@ -28,7 +28,7 @@ class ChangeStore {
 
   /// Adds a [Change] to the store
   ///
-  /// If a change with the same [id] already exists, it is not replaced.
+  /// If a change with the same [Change.id] already exists, it is not replaced.
   /// Returns `true` if the [change] was added, `false` if it already existed.
   bool addChange(Change change) {
     if (_changes.containsKey(change.id)) {
@@ -80,7 +80,8 @@ class ChangeStore {
     return added;
   }
 
-  /// Removes [Change]s that are causally **older than** the provided [version] vector.
+  /// Removes [Change]s that are causally **older than**
+  /// the provided [version] vector.
   ///
   /// Returns the number of changes pruned.
   int prune(VersionVector version) {

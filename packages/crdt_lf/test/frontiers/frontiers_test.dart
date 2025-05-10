@@ -42,24 +42,23 @@ void main() {
     });
 
     test('update removes dependencies and adds new operation', () {
-      final frontiers = Frontiers.from([op1, op2]);
+      final frontiers = Frontiers.from([op1, op2])
 
-      // op3 depends on op1 and op2
-      frontiers.update(
-        newOperationId: op3,
-        oldDependencies: {op1, op2},
-      );
+        // op3 depends on op1 and op2
+        ..update(
+          newOperationId: op3,
+          oldDependencies: {op1, op2},
+        );
 
       expect(frontiers.get(), equals({op3}));
     });
 
     test('update with no dependencies only adds new operation', () {
-      final frontiers = Frontiers.from([op1]);
-
-      frontiers.update(
-        newOperationId: op2,
-        oldDependencies: {},
-      );
+      final frontiers = Frontiers.from([op1])
+        ..update(
+          newOperationId: op2,
+          oldDependencies: {},
+        );
 
       expect(frontiers.get(), equals({op1, op2}));
     });
@@ -69,11 +68,11 @@ void main() {
       final frontiers2 = Frontiers.from([op2]);
 
       // op3 depends on op1 and op2
-      final frontiers3 = Frontiers.from([op3]);
-      frontiers3.update(
-        newOperationId: op3,
-        oldDependencies: {op1, op2},
-      );
+      final frontiers3 = Frontiers.from([op3])
+        ..update(
+          newOperationId: op3,
+          oldDependencies: {op1, op2},
+        );
 
       frontiers1.merge(frontiers2);
       expect(frontiers1.get(), equals({op2}));

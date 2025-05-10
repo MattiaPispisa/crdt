@@ -11,10 +11,16 @@ void main() {
 
     test('generate creates valid UUID v4', () {
       final peerId = PeerId.generate();
-      expect(peerId.id, matches(RegExp(
-        r'^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$',
-        caseSensitive: false,
-      ),),);
+      expect(
+        peerId.id,
+        matches(
+          RegExp(
+            // ignore: lines_longer_than_80_chars regexp
+            r'^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$',
+            caseSensitive: false,
+          ),
+        ),
+      );
     });
 
     test('parse accepts valid UUID v4', () {
@@ -27,7 +33,7 @@ void main() {
       const invalidIds = [
         '123e4567-e89b-02d3-a456-426614174000', // Invalid version
         '123e4567-e89b-12d3-c456-426614174000', // Invalid variant
-        '123e4567-e89b-12d3-a456-42661417400',  // Too short
+        '123e4567-e89b-12d3-a456-42661417400', // Too short
         '123e4567-e89b-12d3-a456-4266141740000', // Too long
         'invalid-uuid', // Invalid format
       ];

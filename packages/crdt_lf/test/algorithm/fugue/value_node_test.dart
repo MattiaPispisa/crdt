@@ -9,7 +9,9 @@ void main() {
 
     setUp(() {
       testId = FugueElementID(
-          PeerId.parse('01b23a30-2b3c-461a-871e-0d0b8a38e7a4'), 10,);
+        PeerId.parse('01b23a30-2b3c-461a-871e-0d0b8a38e7a4'),
+        10,
+      );
       testValue = 'Hello';
       node = FugueValueNode<String>(
         id: testId,
@@ -41,28 +43,27 @@ void main() {
       expect(deserializedNode.value, equals(testValue));
     });
 
-     test('should handle different value types in JSON', () {
-        const intValue = 123;
-        final intNode = FugueValueNode<int>(id: testId, value: intValue);
-        final intJson = intNode.toJson();
-        final deserializedIntNode = FugueValueNode<int>.fromJson(intJson);
+    test('should handle different value types in JSON', () {
+      const intValue = 123;
+      final intNode = FugueValueNode<int>(id: testId, value: intValue);
+      final intJson = intNode.toJson();
+      final deserializedIntNode = FugueValueNode<int>.fromJson(intJson);
 
-        expect(deserializedIntNode.id, equals(testId));
-        expect(deserializedIntNode.value, equals(intValue));
+      expect(deserializedIntNode.id, equals(testId));
+      expect(deserializedIntNode.value, equals(intValue));
 
-        const boolValue = true;
-        final boolNode = FugueValueNode<bool>(id: testId, value: boolValue);
-        final boolJson = boolNode.toJson();
-        final deserializedBoolNode = FugueValueNode<bool>.fromJson(boolJson);
+      const boolValue = true;
+      final boolNode = FugueValueNode<bool>(id: testId, value: boolValue);
+      final boolJson = boolNode.toJson();
+      final deserializedBoolNode = FugueValueNode<bool>.fromJson(boolJson);
 
-        expect(deserializedBoolNode.id, equals(testId));
-        expect(deserializedBoolNode.value, equals(boolValue));
-     });
-
+      expect(deserializedBoolNode.id, equals(testId));
+      expect(deserializedBoolNode.value, equals(boolValue));
+    });
 
     test('toString returns correct format', () {
       final expected = 'FugueValueNode(id: $testId, value: $testValue)';
       expect(node.toString(), equals(expected));
     });
   });
-} 
+}

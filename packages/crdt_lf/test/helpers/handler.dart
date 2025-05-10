@@ -1,7 +1,7 @@
 import 'package:crdt_lf/crdt_lf.dart';
 
 /// A test handler for CRDT operations
-class TestHandler extends Handler {
+class TestHandler extends Handler<dynamic> {
   /// Create a new test handler
   TestHandler(super.doc);
 
@@ -23,7 +23,7 @@ class TestOperation extends Operation {
   });
 
   /// Create a new test operation from a handler
-  factory TestOperation.fromHandler(Handler handler) {
+  factory TestOperation.fromHandler(Handler<dynamic> handler) {
     return TestOperation(
       id: handler.id,
       type: OperationType.insert(handler),
@@ -32,5 +32,5 @@ class TestOperation extends Operation {
 
   /// Return the payload of the operation
   @override
-  dynamic toPayload() => id;
+  Map<String, dynamic> toPayload() => {'id': id};
 }

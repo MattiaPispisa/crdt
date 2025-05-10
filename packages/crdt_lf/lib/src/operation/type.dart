@@ -8,7 +8,7 @@ class OperationType {
   });
 
   /// Insert operation
-  factory OperationType.insert(Handler handler) {
+  factory OperationType.insert(Handler<dynamic> handler) {
     return OperationType._(
       handler: handler.runtimeType.toString(),
       type: 'insert',
@@ -16,13 +16,14 @@ class OperationType {
   }
 
   /// Delete operation
-  factory OperationType.delete(Handler handler) {
+  factory OperationType.delete(Handler<dynamic> handler) {
     return OperationType._(
       handler: handler.runtimeType.toString(),
       type: 'delete',
     );
   }
 
+  /// Factory to create an operation type from a payload
   factory OperationType.fromPayload(String payload) {
     final parts = payload.split(':');
 
@@ -60,6 +61,7 @@ class OperationType {
   @override
   int get hashCode => Object.hash(handler, type);
 
+  /// Returns a payload for this [OperationType]
   String toPayload() {
     return '$handler:$type';
   }

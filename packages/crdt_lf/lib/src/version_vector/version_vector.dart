@@ -1,7 +1,8 @@
 import 'package:crdt_lf/crdt_lf.dart';
 import 'package:hlc_dart/hlc_dart.dart';
 
-/// A version vector is a map of [PeerId]s to their corresponding [HybridLogicalClock].
+/// A version vector is a map of [PeerId]s
+/// to their corresponding [HybridLogicalClock].
 ///
 /// It represents the **latest operation for each peer** in the document.
 class VersionVector {
@@ -10,12 +11,13 @@ class VersionVector {
       : _vector = vector,
         _immutable = false;
 
+  /// Creates an immutable [VersionVector].
   VersionVector.immutable(Map<PeerId, HybridLogicalClock> vector)
       : _vector = Map.unmodifiable(vector),
         _immutable = true;
 
   /// Converts a JSON object to a [VersionVector]
-  static VersionVector fromJson(Map<String, dynamic> json) => VersionVector(
+  factory VersionVector.fromJson(Map<String, dynamic> json) => VersionVector(
         (json['vector'] as Map<String, dynamic>).map(
           (peerIdStr, hlcInt64) => MapEntry(
             PeerId.parse(peerIdStr),
@@ -72,7 +74,8 @@ class VersionVector {
 
   /// Merges two version vectors.
   ///
-  /// Returns a new version vector that is the result of merging the two input vectors.
+  /// Returns a new version vector that
+  /// is the result of merging the two input vectors.
   /// The merged vector contains the most recent clock for each peer.
   VersionVector merged(VersionVector other) {
     final immutable = _immutable || other._immutable;
@@ -111,7 +114,8 @@ class VersionVector {
 
   /// Whether this version vector is strictly newer than the other.
   ///
-  /// This is true if this version vector has a **more recent clock** for **every peer**.
+  /// This is true if this version vector
+  /// has a **more recent clock** for **every peer**.
   bool isStrictlyNewerThan(VersionVector other) {
     for (final otherEntry in other._vector.entries) {
       final current = _vector[otherEntry.key];
@@ -128,7 +132,8 @@ class VersionVector {
 
   /// Whether this version vector is **strictly newer or equal** than the other.
   ///
-  /// This is true if this version vector has a **more recent or equal clock** for **every peer**.
+  /// This is true if this version vector
+  /// has a **more recent or equal clock** for **every peer**.
   bool isStrictlyNewerOrEqualThan(VersionVector other) {
     for (final otherEntry in other._vector.entries) {
       final current = _vector[otherEntry.key];

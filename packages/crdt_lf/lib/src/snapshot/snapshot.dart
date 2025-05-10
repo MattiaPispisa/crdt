@@ -11,7 +11,16 @@ class Snapshot {
     required Map<String, dynamic> data,
   }) : data = Map.unmodifiable(data);
 
-  /// Creates a [Snapshot] from a [version].
+  /// Converts a JSON object to a [Snapshot]
+  factory Snapshot.fromJson(Map<String, dynamic> json) => Snapshot(
+        id: json['id'] as String,
+        data: Map<String, dynamic>.from(json['data'] as Map),
+        versionVector: VersionVector.fromJson(
+          json['versionVector'] as Map<String, dynamic>,
+        ),
+      );
+
+  /// Creates a [Snapshot] from a [versionVector].
   factory Snapshot.create({
     required VersionVector versionVector,
     required Map<String, dynamic> data,
@@ -59,15 +68,6 @@ class Snapshot {
         'versionVector': versionVector.toJson(),
       };
 
-  /// Converts a JSON object to a [Snapshot]
-  static Snapshot fromJson(Map<String, dynamic> json) => Snapshot(
-        id: json['id'] as String,
-        data: Map<String, dynamic>.from(json['data'] as Map),
-        versionVector: VersionVector.fromJson(
-          json['versionVector'] as Map<String, dynamic>,
-        ),
-      );
-
   /// Generates a stable SHA-256 hash ID from the version set.
   static String _generateIdFromVersion(VersionVector version) {
     if (version.isEmpty) {
@@ -76,11 +76,10 @@ class Snapshot {
       return sha256.convert(utf8.encode('')).toString();
     }
     // 1. Convert OperationIds to stable strings
-    final versionStrings = version.entries
-        .map((entry) => '${entry.key}:${entry.value}')
-        .toList()
-      // 2. Sort the strings for stability
-      ..sort();
+    final versionStrings =
+        version.entries.map((entry) => '${entry.key}:${entry.value}').toList()
+          // 2. Sort the strings for stability
+          ..sort();
 
     // 3. Concatenate into a single string
     final concatenatedString = versionStrings.join();

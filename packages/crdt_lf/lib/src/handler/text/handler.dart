@@ -7,7 +7,8 @@ part 'operation.dart';
 
 /// CRDT Text implementation
 ///
-/// A CRDTText is a text data structure that uses CRDT for conflict-free collaboration.
+/// A CRDTText is a text data structure
+/// that uses CRDT for conflict-free collaboration.
 /// It provides methods for inserting, deleting, and accessing text content.
 class CRDTTextHandler extends Handler<String> {
   /// Creates a new CRDTText with the given document and ID
@@ -77,13 +78,15 @@ class CRDTTextHandler extends Handler<String> {
         final index = operation.index;
         final text = operation.text;
 
-        // Insert at the specified index, or at the end if the index is out of bounds
+        // Insert at the specified index,
+        // or at the end if the index is out of bounds
         final currentText = buffer.toString();
         if (index <= currentText.length) {
-          buffer.clear();
-          buffer.write(currentText.substring(0, index));
-          buffer.write(text);
-          buffer.write(currentText.substring(index));
+          buffer
+            ..clear()
+            ..write(currentText.substring(0, index))
+            ..write(text)
+            ..write(currentText.substring(index));
         } else {
           buffer.write(text);
         }
@@ -97,9 +100,10 @@ class CRDTTextHandler extends Handler<String> {
           final actualCount = index + count > currentText.length
               ? currentText.length - index
               : count;
-          buffer.clear();
-          buffer.write(currentText.substring(0, index));
-          buffer.write(currentText.substring(index + actualCount));
+          buffer
+            ..clear()
+            ..write(currentText.substring(0, index))
+            ..write(currentText.substring(index + actualCount));
         }
       }
     }
@@ -120,6 +124,8 @@ class CRDTTextHandler extends Handler<String> {
   /// Returns a string representation of this text
   @override
   String toString() {
-    return 'CRDTText($_id, "${value.length > 20 ? "${value.substring(0, 20)}..." : value}")';
+    final truncated =
+        value.length > 20 ? '${value.substring(0, 20)}...' : value;
+    return 'CRDTText($_id, "$truncated")';
   }
 }

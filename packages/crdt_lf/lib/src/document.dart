@@ -51,7 +51,7 @@ class CRDTDocument {
   Stream<Change> get localChanges => _localChangesController.stream;
 
   /// The registered snapshot providers
-  final Map<String, Handler> _handlers;
+  final Map<String, Handler<dynamic>> _handlers;
 
   /// The last snapshot of this document
   Snapshot? _lastSnapshot;
@@ -61,7 +61,7 @@ class CRDTDocument {
   bool get isEmpty => _changeStore.changeCount == 0 && _lastSnapshot == null;
 
   /// Register a [SnapshotProvider]
-  void registerHandler(Handler handler) {
+  void registerHandler(Handler<dynamic> handler) {
     _handlers[handler.id] = handler;
     handler._document = this;
   }
@@ -74,7 +74,7 @@ class CRDTDocument {
     return _dag.versionVector;
   }
 
-  /// Creates a new [Change] with the given [payload]
+  /// Creates a new [Change] with the given [operation]
   ///
   /// The [Change] is automatically applied to this document.
   Change createChange(
@@ -104,7 +104,8 @@ class CRDTDocument {
 
   /// Applies a [Change] to this document
   ///
-  /// The [Change] must be causally ready (all its dependencies must exist in the DAG).
+  /// The [Change] must be causally ready (all its dependencies must exist
+  /// in the DAG).
   /// Returns `true` if the [Change] was applied, `false` if it already existed.
   bool applyChange(Change change) {
     // Check if the change already exists
@@ -135,12 +136,17 @@ class CRDTDocument {
 
   /// Takes a snapshot of the document, compacting its history.
   ///
-  /// This operation captures the current state of the document, represented by its version (frontiers).
-  /// [Change]s that are causally included in this version are removed from the internal [ChangeStore],
-  /// effectively pruning the history up to the snapshot point. The internal [DAG] is also updated.
-  /// Use [Snapshot]s to reduce memory usage and improve performance for long-lived documents.
+  /// This operation captures the current state of the document,
+  /// represented by its version (frontiers).
+  /// [Change]s that are causally included in this version are removed from the
+  /// internal [ChangeStore],
+  /// effectively pruning the history up to the snapshot point.
+  /// The internal [DAG] is also updated.
+  /// Use [Snapshot]s to reduce memory usage and
+  /// improve performance for long-lived documents.
   ///
-  /// Returns a [Snapshot] representing the document's state at the current version.
+  /// Returns a [Snapshot] representing the document's
+  /// state at the current version.
   Snapshot takeSnapshot() {
     final state = <String, dynamic>{};
     for (final provider in _handlers.values) {
@@ -201,7 +207,8 @@ class CRDTDocument {
 
   /// Exports [Change]s as a binary format
   ///
-  /// Returns a binary representation of the [Change]s that can be imported by another document.
+  /// Returns a binary representation of the [Change]s
+  /// that can be imported by another document.
   List<int> binaryExportChanges({Set<OperationId>? from}) {
     final changes = exportChanges(from: from);
     final jsonChanges = changes.map((c) => c.toJson()).toList();
@@ -267,7 +274,8 @@ class CRDTDocument {
 
   /// Sorts [Change]s topologically
   ///
-  /// Returns a list of [Change]s sorted such that dependencies come before dependents.
+  /// Returns a list of [Change]s sorted such that
+  /// dependencies come before dependents.
   List<Change> _topologicalSort(List<Change> changes) {
     // Build a graph of dependencies
     final graph = <OperationId, Set<OperationId>>{};
@@ -295,7 +303,7 @@ class CRDTDocument {
 
     while (queue.isNotEmpty) {
       final id = queue.removeAt(0);
-      // TODO: where is expensive
+      // TODO(mattia): where is expensive
       final change = changes.firstWhere((c) => c.id == id);
       result.add(change);
 
@@ -318,7 +326,8 @@ class CRDTDocument {
   /// Returns a string representation of this document
   @override
   String toString() {
-    return 'CRDTDocument(peerId: $_peerId, changes: ${_changeStore.changeCount}, version: ${version.length} frontiers)';
+    return 'CRDTDocument(peerId: $_peerId, changes: '
+        '${_changeStore.changeCount}, version: ${version.length} frontiers)';
   }
 
   /// Disposes of the document

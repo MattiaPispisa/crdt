@@ -1,3 +1,5 @@
+// ignore_for_file: avoid_print example file
+
 import 'package:hlc_dart/hlc_dart.dart';
 
 void main() {
@@ -35,8 +37,10 @@ void main() {
 
   // Demonstrate causality
   print('Demonstrating causality:');
-  print('Peer 1 clock happened before Peer 2 clock: ${peer1Clock.happenedBefore(peer2Clock)}');
-  print('Peer 2 clock happened before Peer 1 clock: ${peer2Clock.happenedBefore(peer1Clock)}');
+  print('Peer 1 clock happened before Peer 2 clock: '
+      '${peer1Clock.happenedBefore(peer2Clock)}');
+  print('Peer 2 clock happened before Peer 1 clock: '
+      '${peer2Clock.happenedBefore(peer1Clock)}');
   print('Clocks are concurrent: ${peer1Clock.isConcurrentWith(peer2Clock)}\n');
 
   // Demonstrate serialization

@@ -1,11 +1,10 @@
 part of 'handler.dart';
 
 class _TextOperationFactory {
-
   _TextOperationFactory(this.handler);
-  final Handler handler;
+  final Handler<dynamic> handler;
 
-  Operation? fromPayload(dynamic payload) {
+  Operation? fromPayload(Map<String, dynamic> payload) {
     if (payload['id'] != handler.id) {
       return null;
     }
@@ -28,8 +27,16 @@ class _TextInsertOperation extends Operation {
     required super.type,
   });
 
+  factory _TextInsertOperation.fromPayload(Map<String, dynamic> payload) =>
+      _TextInsertOperation(
+        id: payload['id'] as String,
+        type: OperationType.fromPayload(payload['type'] as String),
+        index: payload['index'] as int,
+        text: payload['text'] as String,
+      );
+
   factory _TextInsertOperation.fromHandler(
-    Handler handler, {
+    Handler<dynamic> handler, {
     required int index,
     required String text,
   }) {
@@ -45,19 +52,12 @@ class _TextInsertOperation extends Operation {
   final String text;
 
   @override
-  dynamic toPayload() => {
+  Map<String, dynamic> toPayload() => {
         'type': type.toPayload(),
         'id': id,
         'index': index,
         'text': text,
       };
-
-  static _TextInsertOperation fromPayload(dynamic payload) => _TextInsertOperation(
-        id: payload['id'],
-        type: OperationType.fromPayload(payload['type']),
-        index: payload['index'],
-        text: payload['text'],
-      );
 }
 
 class _TextDeleteOperation extends Operation {
@@ -68,8 +68,16 @@ class _TextDeleteOperation extends Operation {
     required super.type,
   });
 
+  factory _TextDeleteOperation.fromPayload(Map<String, dynamic> payload) =>
+      _TextDeleteOperation(
+        id: payload['id'] as String,
+        type: OperationType.fromPayload(payload['type'] as String),
+        index: payload['index'] as int,
+        count: payload['count'] as int,
+      );
+
   factory _TextDeleteOperation.fromHandler(
-    Handler handler, {
+    Handler<dynamic> handler, {
     required int index,
     required int count,
   }) {
@@ -85,17 +93,10 @@ class _TextDeleteOperation extends Operation {
   final int count;
 
   @override
-  dynamic toPayload() => {
+  Map<String, dynamic> toPayload() => {
         'type': type.toPayload(),
         'id': id,
         'index': index,
         'count': count,
       };
-
-  static _TextDeleteOperation fromPayload(dynamic payload) => _TextDeleteOperation(
-        id: payload['id'],
-        type: OperationType.fromPayload(payload['type']),
-        index: payload['index'],
-        count: payload['count'],
-      );
 }

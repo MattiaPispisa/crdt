@@ -9,12 +9,12 @@ import 'package:hlc_dart/hlc_dart.dart';
 /// A Change represents a modification to the CRDT state.
 /// It includes an operation ID, dependencies, timestamp, author, and payload.
 class Change {
-
   /// Creates a new [Change] with the given properties
   ///
   /// [id] the operation id of the change
   /// [operation] the operation that is being applied
-  /// [deps] the dependencies of the change ([OperationId]s that this change depends on)
+  /// [deps] the dependencies of the change
+  /// ([OperationId]s that this change depends on)
   /// [hlc] the hybrid logical clock of the change
   /// [author] the author of the change
   factory Change({
@@ -32,6 +32,7 @@ class Change {
       payload: operation.toPayload(),
     );
   }
+
   /// Creates a new [Change] with the given properties
   const Change._({
     required this.id,
@@ -42,25 +43,27 @@ class Change {
   });
 
   /// Creates a Change from a JSON object
-  static Change fromJson(Map<String, dynamic> json) {
+  factory Change.fromJson(Map<String, dynamic> json) {
+    final hlc = json['hlc'] as Map<String, dynamic>;
     return Change._(
       id: OperationId.parse(json['id'] as String),
       deps: (json['deps'] as List)
           .map((d) => OperationId.parse(d as String))
           .toSet(),
       hlc: HybridLogicalClock(
-        l: json['hlc']['l'] as int,
-        c: json['hlc']['c'] as int,
+        l: hlc['l'] as int,
+        c: hlc['c'] as int,
       ),
       author: PeerId.parse(json['author'] as String),
-      payload: json['payload'],
+      payload: json['payload'] as Map<String, dynamic>,
     );
   }
 
   /// The unique identifier for this change
   final OperationId id;
 
-  /// The dependencies of this change ([OperationId]s that this change depends on)
+  /// The dependencies of this change
+  /// ([OperationId]s that this change depends on)
   final Set<OperationId> deps;
 
   /// The timestamp when this change was created
@@ -70,7 +73,7 @@ class Change {
   final PeerId author;
 
   /// The payload of this change (the actual data modification)
-  final dynamic payload;
+  final Map<String, dynamic> payload;
 
   /// Serializes this change to a JSON object
   Map<String, dynamic> toJson() {
@@ -90,7 +93,8 @@ class Change {
   @override
   String toString() {
     final depsStr = deps.map((d) => d.toString()).join(', ');
-    return 'Change(id: $id, deps: [$depsStr], hlc: $hlc, author: $author, payload: $payload)';
+    return 'Change(id: $id, deps: [$depsStr], '
+        'hlc: $hlc, author: $author, payload: $payload)';
   }
 
   /// Compares two Changes for equality

@@ -11,6 +11,7 @@ analyzer:
     record_literal_one_positional_no_trailing_comma: error
     collection_methods_unrelated_type: warning
     unrelated_type_equality_checks: warning
+    strict_raw_type: error
 
   exclude:
     - test/.test_coverage.dart
@@ -23,12 +24,10 @@ linter:
     - always_use_package_imports
     - annotate_overrides
     - avoid_bool_literals_in_conditional_expressions
-    - avoid_catches_without_on_clauses
     - avoid_catching_errors
     - avoid_double_and_int_checks
     - avoid_dynamic_calls
     - avoid_empty_else
-    - avoid_equals_and_hash_code_on_mutable_classes
     - avoid_escaping_inner_quotes
     - avoid_field_initializers_in_const_classes
     - avoid_final_parameters

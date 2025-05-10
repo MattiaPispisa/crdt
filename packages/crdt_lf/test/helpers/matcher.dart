@@ -4,4 +4,4 @@ import 'package:test/test.dart';
 const isString = TypeMatcher<String>();
 
 /// A matcher for an [Iterable]
-const isIterable = TypeMatcher<Iterable>();
+TypeMatcher<Iterable<T>> isIterable<T>() => TypeMatcher<Iterable<T>>();

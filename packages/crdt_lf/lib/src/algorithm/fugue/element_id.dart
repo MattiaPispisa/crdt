@@ -17,8 +17,8 @@ class FugueElementID with Comparable<FugueElementID> {
       return FugueElementID.nullID();
     }
     return FugueElementID(
-      PeerId.parse(json['replicaID']),
-      json['counter'],
+      PeerId.parse(json['replicaID'] as String),
+      json['counter'] as int?,
     );
   }
 

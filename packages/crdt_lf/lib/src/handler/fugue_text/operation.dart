@@ -6,10 +6,10 @@ class _FugueTextOperationFactory {
   _FugueTextOperationFactory(this.handler);
 
   /// The handler associated with this factory
-  final Handler handler;
+  final Handler<dynamic> handler;
 
   /// Creates an operation from a payload
-  Operation? fromPayload(dynamic payload) {
+  Operation? fromPayload(Map<String, dynamic> payload) {
     if (payload['id'] != handler.id) {
       return null;
     }
@@ -26,6 +26,7 @@ class _FugueTextOperationFactory {
 
 /// Insert operation for the Fugue algorithm
 class _FugueTextInsertOperation extends Operation {
+
   /// Constructor that initializes an insert operation
   _FugueTextInsertOperation({
     required this.newNodeID,
@@ -35,10 +36,26 @@ class _FugueTextInsertOperation extends Operation {
     required super.id,
     required super.type,
   });
+  /// Creates an insert operation from a payload
+  factory _FugueTextInsertOperation.fromPayload(Map<String, dynamic> payload) =>
+      _FugueTextInsertOperation(
+        id: payload['id'] as String,
+        type: OperationType.fromPayload(payload['type'] as String),
+        newNodeID: FugueElementID.fromJson(
+          payload['newNodeID'] as Map<String, dynamic>,
+        ),
+        text: payload['text'] as String,
+        leftOrigin: FugueElementID.fromJson(
+          payload['leftOrigin'] as Map<String, dynamic>,
+        ),
+        rightOrigin: FugueElementID.fromJson(
+          payload['rightOrigin'] as Map<String, dynamic>,
+        ),
+      );
 
   /// Factory to create an insert operation from a handler
   factory _FugueTextInsertOperation.fromHandler(
-    Handler handler, {
+    Handler<dynamic> handler, {
     required FugueElementID newNodeID,
     required String text,
     required FugueElementID leftOrigin,
@@ -67,7 +84,7 @@ class _FugueTextInsertOperation extends Operation {
   final FugueElementID rightOrigin;
 
   @override
-  dynamic toPayload() => {
+  Map<String, dynamic> toPayload() => {
         'type': type.toPayload(),
         'id': id,
         'newNodeID': newNodeID.toJson(),
@@ -75,17 +92,6 @@ class _FugueTextInsertOperation extends Operation {
         'leftOrigin': leftOrigin.toJson(),
         'rightOrigin': rightOrigin.toJson(),
       };
-
-  /// Creates an insert operation from a payload
-  static _FugueTextInsertOperation fromPayload(dynamic payload) =>
-      _FugueTextInsertOperation(
-        id: payload['id'],
-        type: OperationType.fromPayload(payload['type']),
-        newNodeID: FugueElementID.fromJson(payload['newNodeID']),
-        text: payload['text'],
-        leftOrigin: FugueElementID.fromJson(payload['leftOrigin']),
-        rightOrigin: FugueElementID.fromJson(payload['rightOrigin']),
-      );
 }
 
 /// Delete operation for the Fugue algorithm
@@ -97,9 +103,19 @@ class _FugueTextDeleteOperation extends Operation {
     required super.type,
   });
 
+  /// Creates a delete operation from a payload
+  factory _FugueTextDeleteOperation.fromPayload(Map<String, dynamic> payload) =>
+      _FugueTextDeleteOperation(
+        id: payload['id'] as String,
+        type: OperationType.fromPayload(payload['type'] as String),
+        nodeID: FugueElementID.fromJson(
+          payload['nodeID'] as Map<String, dynamic>,
+        ),
+      );
+
   /// Factory to create a delete operation from a handler
   factory _FugueTextDeleteOperation.fromHandler(
-    Handler handler, {
+    Handler<dynamic> handler, {
     required FugueElementID nodeID,
   }) {
     return _FugueTextDeleteOperation(
@@ -113,17 +129,9 @@ class _FugueTextDeleteOperation extends Operation {
   final FugueElementID nodeID;
 
   @override
-  dynamic toPayload() => {
+  Map<String, dynamic> toPayload() => {
         'type': type.toPayload(),
         'id': id,
         'nodeID': nodeID.toJson(),
       };
-
-  /// Creates a delete operation from a payload
-  static _FugueTextDeleteOperation fromPayload(dynamic payload) =>
-      _FugueTextDeleteOperation(
-        id: payload['id'],
-        type: OperationType.fromPayload(payload['type']),
-        nodeID: FugueElementID.fromJson(payload['nodeID']),
-      );
 }

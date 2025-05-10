@@ -1,15 +1,14 @@
+import 'package:crdt_lf/src/peer_id.dart';
+import 'package:hlc_dart/hlc_dart.dart';
 
 /// [OperationId] implementation for CRDT
 ///
 /// An [OperationId] uniquely identifies an operation in the CRDT system.
-/// It combines a [PeerId] and an [HybridLogicalClock] timestamp to create a globally unique identifier.
-
-import 'package:crdt_lf/src/peer_id.dart';
-import 'package:hlc_dart/hlc_dart.dart';
-
-/// A [OperationId] uniquely identifies an operation in the CRDT system.
+/// It combines a [PeerId] and an [HybridLogicalClock] timestamp
+///  to create a globally unique identifier.
 class OperationId with Comparable<OperationId> {
-  /// Creates a new [OperationId] with the given [PeerId] and [HybridLogicalClock] timestamp
+  /// Creates a new [OperationId] with the given [PeerId]
+  /// and [HybridLogicalClock] timestamp
   const OperationId(this.peerId, this.hlc);
 
   /// Parses an [OperationId] from a string representation
@@ -57,7 +56,8 @@ class OperationId with Comparable<OperationId> {
   /// Compares this [OperationId] with another [OperationId]
   ///
   /// Returns a negative number if this [OperationId] is less than the other,
-  /// zero if they are equal, and a positive number if this [OperationId] is greater.
+  /// zero if they are equal, and a positive number
+  /// if this [OperationId] is greater.
   ///
   /// The comparison is based on the [hlc] first, then the [peerId].
   @override
@@ -83,6 +83,8 @@ class OperationId with Comparable<OperationId> {
     return compareTo(other) > 0;
   }
 
+  /// Checks if this [OperationId] happened
+  /// after or equal to another [OperationId]
   bool happenedAfterOrEqual(OperationId other) {
     return compareTo(other) >= 0;
   }

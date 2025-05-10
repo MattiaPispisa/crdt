@@ -3,10 +3,9 @@ import 'package:test/test.dart';
 
 import '../helpers/handler.dart';
 
-
 void main() {
   group('OperationType', () {
-    late Handler handler;
+    late Handler<dynamic> handler;
     late CRDTDocument doc;
     late PeerId author;
 

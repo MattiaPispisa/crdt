@@ -3,7 +3,13 @@ import 'package:crdt_lf/src/algorithm/fugue/element_id.dart';
 import 'package:crdt_lf/src/algorithm/fugue/tree.dart' show FugueTree;
 
 /// Represents the side of a node in the [FugueTree] (left or right)
-enum FugueSide { left, right }
+enum FugueSide {
+  /// Left side
+  left,
+
+  /// Right side
+  right,
+}
 
 /// Represents a node in the [FugueTree]
 class FugueNode<T> {
@@ -18,9 +24,10 @@ class FugueNode<T> {
   /// Creates a node from a JSON object
   factory FugueNode.fromJson(Map<String, dynamic> json) {
     return FugueNode<T>(
-      id: FugueElementID.fromJson(json['id']),
-      value: json['value'],
-      parentID: FugueElementID.fromJson(json['parentID']),
+      id: FugueElementID.fromJson(json['id'] as Map<String, dynamic>),
+      value: json['value'] as T?,
+      parentID:
+          FugueElementID.fromJson(json['parentID'] as Map<String, dynamic>),
       side: json['side'] == 'left' ? FugueSide.left : FugueSide.right,
     );
   }
@@ -50,6 +57,7 @@ class FugueNode<T> {
 
   @override
   String toString() {
-    return 'FugueNode(id: $id, value: $value, parentID: $parentID, side: $side)';
+    return 'FugueNode(id: $id, value: $value,'
+        ' parentID: $parentID, side: $side)';
   }
 }

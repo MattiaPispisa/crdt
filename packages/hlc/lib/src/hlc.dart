@@ -3,7 +3,8 @@ import 'dart:math';
 /// Hybrid Logical Clock implementation based on the paper
 /// [Logical Physical Clocks and Consistent Snapshots in Globally Distributed Databases](https://cse.buffalo.edu/tech-reports/2014-04.pdf)
 ///
-/// [HybridLogicalClock] combines the benefits of logical clocks and physical clocks:
+/// [HybridLogicalClock] combines the benefits of
+/// logical clocks and physical clocks:
 /// - Captures causality like logical clocks (e hb f => l.e < l.f)
 /// - Maintains closeness to physical/NTP time (l.e is close to pt.e)
 /// - Compatible with 64-bit NTP timestamp format
@@ -54,17 +55,21 @@ class HybridLogicalClock with Comparable<HybridLogicalClock> {
 
   /// The logical/physical part of the timestamp
   int _l;
+
+  /// The logical/physical part of the timestamp
   int get l => _l;
 
   /// The counter part of the timestamp
   int _c;
+
+  /// The counter part of the timestamp
   int get c => _c;
 
   /// Handles a local event or send event
   ///
   /// Updates the [HybridLogicalClock] based on the current physical time
   ///
-  /// ```
+  /// ```dart
   /// l' := l
   /// l := max(l', pt)
   /// if (l = l') then c := c + 1
@@ -84,9 +89,10 @@ class HybridLogicalClock with Comparable<HybridLogicalClock> {
 
   /// Handles a receive event
   ///
-  /// Updates the [HybridLogicalClock] based on the received [HybridLogicalClock] and the current physical time
+  /// Updates the [HybridLogicalClock] based on
+  /// the received [HybridLogicalClock] and the current physical time
   ///
-  /// ```
+  /// ```dart
   /// l' := l
   /// l := max(l', l_m, pt)
   /// if (l = l' = l_m) then c := max(c, c_m) + 1
@@ -109,22 +115,27 @@ class HybridLogicalClock with Comparable<HybridLogicalClock> {
     }
   }
 
-  /// Checks if this [HybridLogicalClock] happened before another [HybridLogicalClock]
+  /// Checks if this [HybridLogicalClock] happened
+  /// before another [HybridLogicalClock]
   ///
-  /// Returns true if this [HybridLogicalClock] happened before the other [HybridLogicalClock]
+  /// Returns true if this [HybridLogicalClock] happened
+  /// before the other [HybridLogicalClock]
   /// (e hb f => l.e < l.f || (l.e = l.f && c.e < c.f))
   bool happenedBefore(HybridLogicalClock other) {
     return compareTo(other) < 0;
   }
 
-  /// Checks if this [HybridLogicalClock] happened after another [HybridLogicalClock]
+  /// Checks if this [HybridLogicalClock] happened
+  /// after another [HybridLogicalClock]
   ///
-  /// Returns true if this [HybridLogicalClock] happened after the other [HybridLogicalClock]
+  /// Returns true if this [HybridLogicalClock] happened
+  /// after the other [HybridLogicalClock]
   bool happenedAfter(HybridLogicalClock other) {
     return compareTo(other) > 0;
   }
 
-  /// Checks if this [HybridLogicalClock] is concurrent with another [HybridLogicalClock]
+  /// Checks if this [HybridLogicalClock] is concurrent
+  /// with another [HybridLogicalClock]
   ///
   /// Returns true if neither [HybridLogicalClock] happened before the other
   bool isConcurrentWith(HybridLogicalClock other) {
@@ -171,8 +182,9 @@ class HybridLogicalClock with Comparable<HybridLogicalClock> {
 
   /// Compares this [HybridLogicalClock] with another [HybridLogicalClock]
   ///
-  /// Returns a negative number if this [HybridLogicalClock] is less than the other,
-  /// zero if they are equal, and a positive number if this [HybridLogicalClock] is greater.
+  /// Returns a negative number if this [HybridLogicalClock]
+  /// is less than the other, zero if they are equal, and a positive number
+  /// if this [HybridLogicalClock] is greater.
   @override
   int compareTo(HybridLogicalClock other) {
     if (_l < other._l || (_l == other._l && _c < other._c)) {

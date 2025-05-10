@@ -5,9 +5,7 @@ void main() {
   group('CRDTFugueTextHandler', () {
     test('should insert text', () {
       final doc = CRDTDocument();
-      final handler = CRDTFugueTextHandler(doc, 'text1');
-
-      handler.insert(0, 'Hello');
+      final handler = CRDTFugueTextHandler(doc, 'text1')..insert(0, 'Hello');
       expect(handler.value, 'Hello');
       handler.insert(5, ' World');
       expect(handler.value, 'Hello World');
@@ -15,18 +13,15 @@ void main() {
 
     test('should handle empty text insertion', () {
       final doc = CRDTDocument();
-      final handler = CRDTFugueTextHandler(doc, 'text1');
-
-      handler.insert(0, '');
+      final handler = CRDTFugueTextHandler(doc, 'text1')..insert(0, '');
       expect(handler.value, '');
       expect(handler.length, 0);
     });
 
     test('should delete text', () {
       final doc = CRDTDocument();
-      final handler = CRDTFugueTextHandler(doc, 'text1');
-
-      handler.insert(0, 'Hello World');
+      final handler = CRDTFugueTextHandler(doc, 'text1')
+        ..insert(0, 'Hello World');
       expect(handler.value, 'Hello World');
 
       handler.delete(5, 6); // Delete " World"
@@ -35,18 +30,15 @@ void main() {
 
     test('should handle out of bounds deletion', () {
       final doc = CRDTDocument();
-      final handler = CRDTFugueTextHandler(doc, 'text1');
-
-      handler.insert(0, 'Hello');
-      handler.delete(10, 5); // Try to delete out of bounds
+      final handler = CRDTFugueTextHandler(doc, 'text1')
+        ..insert(0, 'Hello')
+        ..delete(10, 5); // Try to delete out of bounds
       expect(handler.value, 'Hello');
     });
 
     test('should handle value caching', () {
       final doc = CRDTDocument();
-      final handler = CRDTFugueTextHandler(doc, 'text1');
-
-      handler.insert(0, 'Hello');
+      final handler = CRDTFugueTextHandler(doc, 'text1')..insert(0, 'Hello');
       final value1 = handler.value;
       final value2 = handler.value;
       expect(identical(value1, value2), isTrue);
@@ -74,33 +66,31 @@ void main() {
 
     test('should maintain correct counter for element IDs', () {
       final doc = CRDTDocument();
-      final handler = CRDTFugueTextHandler(doc, 'text1');
-
-      // Insert multiple characters
-      handler.insert(0, 'Hello');
-      handler.insert(5, ' World');
-      handler.insert(11, '!');
+      CRDTFugueTextHandler(doc, 'text1')
+        // Insert multiple characters
+        ..insert(0, 'Hello')
+        ..insert(5, ' World')
+        ..insert(11, '!');
 
       // Each character should have a unique ID
       final changes = doc.exportChanges();
       final ids =
+          // ignore: avoid_dynamic_calls test
           changes.map((c) => c.payload['newNodeID']['counter']).toList();
       expect(ids, equals([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]));
     });
 
     test('toString returns correct string representation', () {
       final doc = CRDTDocument();
-      final handler = CRDTFugueTextHandler(doc, 'text1');
-
-      handler.insert(0, 'Hello World');
+      final handler = CRDTFugueTextHandler(doc, 'text1')
+        ..insert(0, 'Hello World');
       expect(handler.toString(), equals('CRDTFugueText(text1, "Hello World")'));
     });
 
     test('toString truncates long text', () {
       final doc = CRDTDocument();
-      final handler = CRDTFugueTextHandler(doc, 'text1');
-
-      handler.insert(0, 'This is a very long text that should be truncated');
+      final handler = CRDTFugueTextHandler(doc, 'text1')
+        ..insert(0, 'This is a very long text that should be truncated');
       expect(
         handler.toString(),
         equals('CRDTFugueText(text1, "This is a very long ...")'),
@@ -110,11 +100,13 @@ void main() {
     test('should handle concurrent insertions without interleaving', () {
       // Create two documents with their own handlers
       final doc1 = CRDTDocument(
-          peerId: PeerId.parse('45ee6b65-b393-40b7-9755-8b66dc7d0518'),);
+        peerId: PeerId.parse('45ee6b65-b393-40b7-9755-8b66dc7d0518'),
+      );
       final handler1 = CRDTFugueTextHandler(doc1, 'text1');
 
       final doc2 = CRDTDocument(
-          peerId: PeerId.parse('a90dfced-cbf0-4a49-9c64-f5b7b62fdc18'),);
+        peerId: PeerId.parse('a90dfced-cbf0-4a49-9c64-f5b7b62fdc18'),
+      );
       final handler2 = CRDTFugueTextHandler(doc2, 'text1');
 
       // Initial state
@@ -155,15 +147,18 @@ void main() {
     test('should handle complex concurrent edits without interleaving', () {
       // Create three documents with their own handlers
       final doc1 = CRDTDocument(
-          peerId: PeerId.parse('5cff68c5-0b34-4d9d-bd43-359db69f8fb6'),);
+        peerId: PeerId.parse('5cff68c5-0b34-4d9d-bd43-359db69f8fb6'),
+      );
       final handler1 = CRDTFugueTextHandler(doc1, 'text1');
 
       final doc2 = CRDTDocument(
-          peerId: PeerId.parse('41131068-f7f9-4938-b2f5-5f44320d8b3d'),);
+        peerId: PeerId.parse('41131068-f7f9-4938-b2f5-5f44320d8b3d'),
+      );
       final handler2 = CRDTFugueTextHandler(doc2, 'text1');
 
       final doc3 = CRDTDocument(
-          peerId: PeerId.parse('4f7db8d4-9306-49e1-a297-d0c14030a14a'),);
+        peerId: PeerId.parse('4f7db8d4-9306-49e1-a297-d0c14030a14a'),
+      );
       final handler3 = CRDTFugueTextHandler(doc3, 'text1');
 
       // Initial state

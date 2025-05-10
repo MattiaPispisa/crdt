@@ -2,7 +2,8 @@ import 'package:crdt_lf/crdt_lf.dart';
 
 /// DAG (Directed Acyclic Graph) implementation for CRDT
 ///
-/// The [DAG] tracks the causal relationships between operations in the CRDT system.
+/// The [DAG] tracks the causal relationships
+/// between operations in the CRDT system.
 /// It is used to determine which operations are causally ready to be applied.
 class DAG {
   /// Creates a new DAG with the given nodes and frontiers
@@ -60,7 +61,8 @@ class DAG {
     _versionVector.clear();
   }
 
-  /// Prunes the [DAG] history, keeping only nodes that happened after the given [version].
+  /// Prunes the [DAG] history, keeping only nodes that
+  /// happened after the given [version].
   ///
   /// Returns the number of nodes removed.
   int prune(VersionVector version) {

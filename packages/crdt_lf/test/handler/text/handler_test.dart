@@ -1,4 +1,5 @@
 import 'package:crdt_lf/crdt_lf.dart';
+import 'package:hlc_dart/hlc_dart.dart';
 import 'package:test/test.dart';
 
 import '../../helpers/matcher.dart';
@@ -27,45 +28,52 @@ void main() {
     });
 
     test('insert at end adds text at the end', () {
-      text.insert(0, 'Hello');
-      text.insert(5, ' World');
+      text
+        ..insert(0, 'Hello')
+        ..insert(5, ' World');
       expect(text.value, equals('Hello World'));
     });
 
     test('insert at middle adds text in the middle', () {
-      text.insert(0, 'Hello');
-      text.insert(5, ' World');
-      text.insert(6, 'Beautiful ');
+      text
+        ..insert(0, 'Hello')
+        ..insert(5, ' World')
+        ..insert(6, 'Beautiful ');
       expect(text.value, equals('Hello Beautiful World'));
     });
 
     test('insert at out of bounds index adds text at the end', () {
-      text.insert(0, 'Hello');
-      text.insert(10, ' World');
+      text
+        ..insert(0, 'Hello')
+        ..insert(10, ' World');
       expect(text.value, equals('Hello World'));
     });
 
     test('delete removes text at specified index', () {
-      text.insert(0, 'Hello World');
-      text.delete(5, 1);
+      text
+        ..insert(0, 'Hello World')
+        ..delete(5, 1);
       expect(text.value, equals('HelloWorld'));
     });
 
     test('delete multiple characters removes specified count', () {
-      text.insert(0, 'Hello World');
-      text.delete(5, 2);
+      text
+        ..insert(0, 'Hello World')
+        ..delete(5, 2);
       expect(text.value, equals('Helloorld'));
     });
 
     test('delete at end removes until the end', () {
-      text.insert(0, 'Hello World');
-      text.delete(5, 10);
+      text
+        ..insert(0, 'Hello World')
+        ..delete(5, 10);
       expect(text.value, equals('Hello'));
     });
 
     test('delete at out of bounds index does nothing', () {
-      text.insert(0, 'Hello World');
-      text.delete(20, 5);
+      text
+        ..insert(0, 'Hello World')
+        ..delete(20, 5);
       expect(text.value, equals('Hello World'));
     });
 
@@ -126,11 +134,12 @@ void main() {
     });
 
     test('multiple operations maintain correct order', () {
-      text.insert(0, 'Hello'); // Hello
-      text.insert(5, ' World'); // Hello World
-      text.delete(5, 1); // HelloWorld
-      text.insert(5, ' Beautiful '); // Hello Beautiful World
-      text.delete(0, 6); // Beautiful World
+      text
+        ..insert(0, 'Hello') // Hello
+        ..insert(5, ' World') // Hello World
+        ..delete(5, 1) // HelloWorld
+        ..insert(5, ' Beautiful ') // Hello Beautiful World
+        ..delete(0, 6); // Beautiful World
       expect(text.value, equals('Beautiful World'));
     });
 
@@ -158,17 +167,19 @@ void main() {
     });
 
     test('should be able to create snapshot', () {
-      text.insert(0, 'Hello');
-      text.insert(5, ' World');
-      text.delete(5, 1);
+      text
+        ..insert(0, 'Hello')
+        ..insert(5, ' World')
+        ..delete(5, 1);
 
       final snapshot = doc.takeSnapshot();
 
       expect(snapshot.id, isString);
       expect(
         snapshot.versionVector.entries,
-        isIterable.having(
-          (el) => el.map((e) => e.key),
+        isIterable<dynamic>().having(
+          (el) =>
+              el.map((e) => (e as MapEntry<PeerId, HybridLogicalClock>).key),
           'keys',
           equals([author]),
         ),
@@ -178,9 +189,10 @@ void main() {
     });
 
     test('should be able to continue from snapshot', () {
-      text.insert(0, 'Hello');
-      text.insert(5, ' World');
-      text.delete(5, 1);
+      text
+        ..insert(0, 'Hello')
+        ..insert(5, ' World')
+        ..delete(5, 1);
 
       doc.takeSnapshot();
 
@@ -284,7 +296,7 @@ void main() {
         // check convergence
         expect(text1.value.length, 3);
         expect(text1.value, equals(text3.value));
-        
+
         expect(text1.value, contains('A'));
         expect(text1.value, contains('B'));
         expect(text1.value, contains('C'));
