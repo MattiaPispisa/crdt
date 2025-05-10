@@ -1,5 +1,5 @@
-import 'package:test/test.dart';
 import 'package:crdt_lf/crdt_lf.dart';
+import 'package:test/test.dart';
 
 import '../../helpers/matcher.dart';
 
@@ -152,7 +152,7 @@ void main() {
       expect(text1.value, contains('Hello'));
       expect(text1.value, contains('World'));
       expect(
-        text1.value == "HelloWorld" || text1.value == "WorldHello",
+        text1.value == 'HelloWorld' || text1.value == 'WorldHello',
         isTrue,
       );
     });
@@ -214,7 +214,7 @@ void main() {
       expect(text1.value, contains('World'));
       expect(text2.value, contains('Hello'));
       expect(
-        text1.value == "HelloWorld" || text1.value == "WorldHello",
+        text1.value == 'HelloWorld' || text1.value == 'WorldHello',
         isTrue,
       );
     });
@@ -259,7 +259,7 @@ void main() {
         final doc2 = CRDTDocument(peerId: peerId2);
         final doc3 = CRDTDocument(peerId: peerId3);
 
-        final handlerId = 'complex-text';
+        const handlerId = 'complex-text';
         final text1 = CRDTTextHandler(doc1, handlerId);
         final text2 = CRDTTextHandler(doc2, handlerId);
         final text3 = CRDTTextHandler(doc3, handlerId);

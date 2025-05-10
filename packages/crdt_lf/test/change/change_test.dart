@@ -1,11 +1,11 @@
-import 'package:crdt_lf/src/document.dart';
-import 'package:test/test.dart';
 import 'package:crdt_lf/src/change/change.dart';
+import 'package:crdt_lf/src/document.dart';
+import 'package:crdt_lf/src/handler/handler.dart';
 import 'package:crdt_lf/src/operation/id.dart';
+import 'package:crdt_lf/src/operation/operation.dart';
 import 'package:crdt_lf/src/peer_id.dart';
 import 'package:hlc_dart/hlc_dart.dart';
-import 'package:crdt_lf/src/operation/operation.dart';
-import 'package:crdt_lf/src/handler/handler.dart';
+import 'package:test/test.dart';
 
 import '../helpers/handler.dart';
 
@@ -168,10 +168,10 @@ void main() {
 
     test('hashCode handles different dependencies correctly', () {
       final deps1 = {
-        OperationId.parse('3a5cd393-813c-46c8-97f3-9e99a6f2c8be@1.1')
+        OperationId.parse('3a5cd393-813c-46c8-97f3-9e99a6f2c8be@1.1'),
       };
       final deps2 = {
-        OperationId.parse('b7353649-1b52-43b0-9dbc-a843e3308cb0@1.3')
+        OperationId.parse('b7353649-1b52-43b0-9dbc-a843e3308cb0@1.3'),
       };
 
       final change1 = Change(

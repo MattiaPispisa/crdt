@@ -15,6 +15,14 @@ class FugueValueNode<T> {
     required this.value,
   });
 
+  /// Creates a node from a JSON object
+  factory FugueValueNode.fromJson(Map<String, dynamic> json) {
+    return FugueValueNode<T>(
+      id: FugueElementID.fromJson(json['id']),
+      value: json['value'],
+    );
+  }
+
   /// Unique ID of the node
   final FugueElementID id;
 
@@ -26,14 +34,6 @@ class FugueValueNode<T> {
         'id': id.toJson(),
         'value': value,
       };
-
-  /// Creates a node from a JSON object
-  factory FugueValueNode.fromJson(Map<String, dynamic> json) {
-    return FugueValueNode<T>(
-      id: FugueElementID.fromJson(json['id']),
-      value: json['value'],
-    );
-  }
 
   @override
   String toString() {

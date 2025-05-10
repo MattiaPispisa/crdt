@@ -10,14 +10,13 @@ final peerIdRegex = RegExp(
 /// A [PeerId] uniquely identifies a peer in the CRDT network.
 /// It is used to distinguish between different peers when merging changes.
 class PeerId with Comparable<PeerId> {
-  static final Random _random = Random.secure();
 
   /// Creates a new [PeerId] with the given identifier
   const PeerId._(this.id);
 
   /// Create an empty [PeerId]
   factory PeerId.empty() {
-    return PeerId._('');
+    return const PeerId._('');
   }
 
   /// Generates a random [PeerId]
@@ -29,7 +28,7 @@ class PeerId with Comparable<PeerId> {
     // Set variant to 1 (RFC 4122)
     bytes[8] = (bytes[8] & 0x3F) | 0x80;
 
-    final hex = bytes.map((b) => b.toRadixString(16).padLeft(2, '0')).join('');
+    final hex = bytes.map((b) => b.toRadixString(16).padLeft(2, '0')).join();
 
     return PeerId.parse('${hex.substring(0, 8)}-'
         '${hex.substring(8, 12)}-'
@@ -37,9 +36,6 @@ class PeerId with Comparable<PeerId> {
         '${hex.substring(16, 20)}-'
         '${hex.substring(20)}');
   }
-
-  /// The unique identifier string
-  final String id;
 
   /// Parses a [PeerId] from a string
   factory PeerId.parse(String value) {
@@ -50,6 +46,10 @@ class PeerId with Comparable<PeerId> {
 
     return PeerId._(value);
   }
+  static final Random _random = Random.secure();
+
+  /// The unique identifier string
+  final String id;
 
   /// Returns a string representation of this [PeerId]
   @override

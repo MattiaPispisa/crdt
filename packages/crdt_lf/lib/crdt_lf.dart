@@ -1,10 +1,10 @@
 export 'src/algorithm/fugue/element_id.dart';
-export 'src/algorithm/fugue/node_triple.dart';
 export 'src/algorithm/fugue/node.dart';
+export 'src/algorithm/fugue/node_triple.dart';
 export 'src/algorithm/fugue/tree.dart';
 export 'src/algorithm/fugue/value_node.dart';
-export 'src/change/change_store.dart';
 export 'src/change/change.dart';
+export 'src/change/change_store.dart';
 export 'src/dag/graph.dart';
 export 'src/dag/node.dart';
 export 'src/document.dart';

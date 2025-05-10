@@ -7,7 +7,7 @@ part 'operation.dart';
 /// It provides methods for inserting, deleting, and accessing text content.
 class CRDTFugueTextHandler extends Handler<List<FugueValueNode<String>>> {
   /// Constructor that initializes a new Fugue text handler
-  CRDTFugueTextHandler(CRDTDocument doc, this._id) : super(doc);
+  CRDTFugueTextHandler(super.doc, this._id);
 
   /// The ID of this handler in the document
   final String _id;
@@ -49,8 +49,8 @@ class CRDTFugueTextHandler extends Handler<List<FugueValueNode<String>>> {
     );
 
     // Insert remaining characters as right children of the previous character
-    FugueElementID previousID = firstNodeID;
-    for (int i = 1; i < text.length; i++) {
+    var previousID = firstNodeID;
+    for (var i = 1; i < text.length; i++) {
       final newNodeID = FugueElementID(doc.peerId, _counter++);
       doc.createChange(
         _FugueTextInsertOperation.fromHandler(
@@ -71,7 +71,7 @@ class CRDTFugueTextHandler extends Handler<List<FugueValueNode<String>>> {
   /// Deletes [count] characters starting from position [index]
   void delete(int index, int count) {
     // For each character to delete
-    for (int i = 0; i < count; i++) {
+    for (var i = 0; i < count; i++) {
       // Find the node at position index (which is now index + i since we've deleted i characters)
       final nodeID = _tree.findNodeAtPosition(index + i);
 
@@ -97,7 +97,7 @@ class CRDTFugueTextHandler extends Handler<List<FugueValueNode<String>>> {
     }
 
     if (cachedState != null) {
-      _cachedValue = cachedState!.map((node) => node.value).join('');
+      _cachedValue = cachedState!.map((node) => node.value).join();
       return _cachedValue!;
     }
 
@@ -106,7 +106,7 @@ class CRDTFugueTextHandler extends Handler<List<FugueValueNode<String>>> {
 
     // Store state in cache
     updateCachedState(state);
-    _cachedValue = state.map((node) => node.value).join('');
+    _cachedValue = state.map((node) => node.value).join();
 
     return _cachedValue!;
   }
@@ -180,6 +180,6 @@ class CRDTFugueTextHandler extends Handler<List<FugueValueNode<String>>> {
   /// Returns a text representation of this handler
   @override
   String toString() {
-    return 'CRDTFugueText($_id, "${value.length > 20 ? value.substring(0, 20) + "..." : value}")';
+    return 'CRDTFugueText($_id, "${value.length > 20 ? "${value.substring(0, 20)}..." : value}")';
   }
 }

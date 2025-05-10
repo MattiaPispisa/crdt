@@ -1,6 +1,6 @@
 import 'package:crdt_lf/crdt_lf.dart';
-import 'package:test/test.dart';
 import 'package:hlc_dart/hlc_dart.dart';
+import 'package:test/test.dart';
 
 void main() {
   group('DAG', () {
@@ -186,9 +186,8 @@ void main() {
       dag.addNode(id2, {id1});
 
       final expected =
-          'DAG(nodes: [\nDAGNode(id: $id1, parents: [], children: [$id2])\nDAGNode(id: $id2, parents: [$id1], children: [])\n], frontiers: ${
-        id2
-      })';
+          'DAG(nodes: [\nDAGNode(id: $id1, parents: [], children: [$id2])\nDAGNode(id: $id2, parents: [$id1], children: [])\n], frontiers: $id2
+      )';
       expect(dag.toString(), equals(expected));
     });
   });

@@ -1,4 +1,4 @@
-import '../handler/handler.dart';
+import 'package:crdt_lf/src/handler/handler.dart';
 
 /// Available operation on data for CRDT
 class OperationType {
@@ -61,6 +61,6 @@ class OperationType {
   int get hashCode => Object.hash(handler, type);
 
   String toPayload() {
-    return '${handler}:${type}';
+    return '$handler:$type';
   }
 }

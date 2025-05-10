@@ -110,11 +110,11 @@ void main() {
     test('should handle concurrent insertions without interleaving', () {
       // Create two documents with their own handlers
       final doc1 = CRDTDocument(
-          peerId: PeerId.parse('45ee6b65-b393-40b7-9755-8b66dc7d0518'));
+          peerId: PeerId.parse('45ee6b65-b393-40b7-9755-8b66dc7d0518'),);
       final handler1 = CRDTFugueTextHandler(doc1, 'text1');
 
       final doc2 = CRDTDocument(
-          peerId: PeerId.parse('a90dfced-cbf0-4a49-9c64-f5b7b62fdc18'));
+          peerId: PeerId.parse('a90dfced-cbf0-4a49-9c64-f5b7b62fdc18'),);
       final handler2 = CRDTFugueTextHandler(doc2, 'text1');
 
       // Initial state
@@ -155,15 +155,15 @@ void main() {
     test('should handle complex concurrent edits without interleaving', () {
       // Create three documents with their own handlers
       final doc1 = CRDTDocument(
-          peerId: PeerId.parse('5cff68c5-0b34-4d9d-bd43-359db69f8fb6'));
+          peerId: PeerId.parse('5cff68c5-0b34-4d9d-bd43-359db69f8fb6'),);
       final handler1 = CRDTFugueTextHandler(doc1, 'text1');
 
       final doc2 = CRDTDocument(
-          peerId: PeerId.parse('41131068-f7f9-4938-b2f5-5f44320d8b3d'));
+          peerId: PeerId.parse('41131068-f7f9-4938-b2f5-5f44320d8b3d'),);
       final handler2 = CRDTFugueTextHandler(doc2, 'text1');
 
       final doc3 = CRDTDocument(
-          peerId: PeerId.parse('4f7db8d4-9306-49e1-a297-d0c14030a14a'));
+          peerId: PeerId.parse('4f7db8d4-9306-49e1-a297-d0c14030a14a'),);
       final handler3 = CRDTFugueTextHandler(doc3, 'text1');
 
       // Initial state
@@ -225,7 +225,7 @@ void main() {
         final doc2 = CRDTDocument(peerId: peerId2);
         final doc3 = CRDTDocument(peerId: peerId3);
 
-        final handlerId = 'complex-text';
+        const handlerId = 'complex-text';
         final text1 = CRDTFugueTextHandler(doc1, handlerId);
         final text2 = CRDTFugueTextHandler(doc2, handlerId);
         final text3 = CRDTFugueTextHandler(doc3, handlerId);

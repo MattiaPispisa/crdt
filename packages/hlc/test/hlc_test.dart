@@ -1,5 +1,5 @@
-import 'package:test/test.dart';
 import 'package:hlc_dart/hlc_dart.dart';
+import 'package:test/test.dart';
 
 void main() {
   group('HybridLogicalClock', () {
@@ -18,9 +18,9 @@ void main() {
     });
 
     test('fromInt64 correctly parses 64-bit integer', () {
-      final l = 0x1234567890AB;
-      final c = 0xCDEF;
-      final value = (l << 16) | c;
+      const l = 0x1234567890AB;
+      const c = 0xCDEF;
+      const value = (l << 16) | c;
 
       final hlc = HybridLogicalClock.fromInt64(value);
       expect(hlc.l, equals(l));
@@ -192,8 +192,8 @@ void main() {
     });
 
     test('toInt64 correctly converts to 64-bit integer', () {
-      final l = 0x1234567890AB;
-      final c = 0xCDEF;
+      const l = 0x1234567890AB;
+      const c = 0xCDEF;
       final hlc = HybridLogicalClock(l: l, c: c);
 
       final value = hlc.toInt64();

@@ -26,20 +26,20 @@ void postChangedEvent(CRDTDocument document) {
     return;
   }
   _postEvent('document:changed', {
-    "id": trackedDocument.id,
+    'id': trackedDocument.id,
   });
 }
 
 /// a tracked document
 class TrackedDocument {
-  final CRDTDocument document;
-  final int id;
 
   /// create a new tracked document
   TrackedDocument(this.document) : id = _nextId++ {
     _byDocument[document] = this;
     all.add(this);
   }
+  final CRDTDocument document;
+  final int id;
 
   static int _nextId = 0;
 

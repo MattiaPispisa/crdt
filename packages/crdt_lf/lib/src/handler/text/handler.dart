@@ -1,5 +1,4 @@
 import 'package:crdt_lf/src/change/change.dart';
-import 'package:crdt_lf/src/document.dart';
 import 'package:crdt_lf/src/handler/handler.dart';
 import 'package:crdt_lf/src/operation/operation.dart';
 import 'package:crdt_lf/src/operation/type.dart';
@@ -12,7 +11,7 @@ part 'operation.dart';
 /// It provides methods for inserting, deleting, and accessing text content.
 class CRDTTextHandler extends Handler<String> {
   /// Creates a new CRDTText with the given document and ID
-  CRDTTextHandler(CRDTDocument doc, this._id) : super(doc);
+  CRDTTextHandler(super.doc, this._id);
 
   /// The ID of this text in the document
   final String _id;
@@ -121,6 +120,6 @@ class CRDTTextHandler extends Handler<String> {
   /// Returns a string representation of this text
   @override
   String toString() {
-    return 'CRDTText($_id, "${value.length > 20 ? value.substring(0, 20) + "..." : value}")';
+    return 'CRDTText($_id, "${value.length > 20 ? "${value.substring(0, 20)}..." : value}")';
   }
 }

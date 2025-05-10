@@ -1,12 +1,23 @@
 
-import '../operation/id.dart';
-import '../utils/set.dart';
+import 'package:crdt_lf/crdt_lf.dart' show DAG;
+
+import 'package:crdt_lf/src/dag/graph.dart' show DAG;
+
+import 'package:crdt_lf/src/operation/id.dart';
+import 'package:crdt_lf/src/utils/set.dart';
 
 /// Directed Acyclic Graph (DAG) Node implementation for CRDT
 ///
 /// A [DAGNode] represents a node in the [DAG] that tracks the causal relationships
 /// between operations.
 class DAGNode {
+
+  /// Creates a new [DAGNode] with the given [OperationId] and parents
+  DAGNode(
+    this.id, {
+    Set<OperationId>? parents,
+  })  : parents = parents != null ? Set.from(parents) : {},
+        children = {};
   /// The [OperationId] of this node
   final OperationId id;
 
@@ -15,13 +26,6 @@ class DAGNode {
 
   /// The [OperationId]s of the child nodes
   final Set<OperationId> children;
-
-  /// Creates a new [DAGNode] with the given [OperationId] and parents
-  DAGNode(
-    this.id, {
-    Set<OperationId>? parents,
-  })  : parents = parents != null ? Set.from(parents) : {},
-        children = {};
 
   /// Adds a parent to this node
   void addParent(OperationId parentId) {

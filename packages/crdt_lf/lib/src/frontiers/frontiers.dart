@@ -1,5 +1,9 @@
-import '../operation/id.dart';
-import '../utils/set.dart';
+import 'package:crdt_lf/crdt_lf.dart' show DAG;
+
+import 'package:crdt_lf/src/dag/graph.dart' show DAG;
+
+import 'package:crdt_lf/src/operation/id.dart';
+import 'package:crdt_lf/src/utils/set.dart';
 
 /// [Frontiers] implementation for CRDT
 ///
@@ -50,7 +54,7 @@ class Frontiers {
 
     // Filter out operations that are causally before other operations
     for (final op in allOps) {
-      bool isFrontier = allOps.every(op.happenedAfterOrEqual);
+      final isFrontier = allOps.every(op.happenedAfterOrEqual);
 
       if (isFrontier) {
         result.add(op);

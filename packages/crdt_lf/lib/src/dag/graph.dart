@@ -190,7 +190,7 @@ class DAG {
     // Find the lowest common ancestors
     final lca = <OperationId>{};
     for (final id in commonAncestors) {
-      bool isLowest = true;
+      var isLowest = true;
 
       for (final otherId in commonAncestors) {
         if (id != otherId && _isAncestor(id, otherId)) {

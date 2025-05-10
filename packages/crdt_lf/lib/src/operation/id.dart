@@ -4,8 +4,8 @@
 /// An [OperationId] uniquely identifies an operation in the CRDT system.
 /// It combines a [PeerId] and an [HybridLogicalClock] timestamp to create a globally unique identifier.
 
+import 'package:crdt_lf/src/peer_id.dart';
 import 'package:hlc_dart/hlc_dart.dart';
-import '../peer_id.dart';
 
 /// A [OperationId] uniquely identifies an operation in the CRDT system.
 class OperationId with Comparable<OperationId> {
@@ -39,7 +39,7 @@ class OperationId with Comparable<OperationId> {
   /// The format is "peerId@hlc" where [hlc] is in the format "l.c"
   /// ([HybridLogicalClock.toString])
   @override
-  String toString() => '${peerId.toString()}@${hlc.toString()}';
+  String toString() => '$peerId@$hlc';
 
   /// Compares two [OperationId]s for equality
   @override

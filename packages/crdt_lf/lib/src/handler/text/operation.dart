@@ -1,9 +1,9 @@
 part of 'handler.dart';
 
 class _TextOperationFactory {
-  final Handler handler;
 
   _TextOperationFactory(this.handler);
+  final Handler handler;
 
   Operation? fromPayload(dynamic payload) {
     if (payload['id'] != handler.id) {

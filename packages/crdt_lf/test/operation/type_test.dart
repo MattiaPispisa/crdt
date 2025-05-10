@@ -66,21 +66,21 @@ void main() {
     });
 
     test('fromPayload creates correct operation type', () {
-      final payload = 'TestHandler:insert';
+      const payload = 'TestHandler:insert';
       final operationType = OperationType.fromPayload(payload);
       expect(operationType.handler, equals('TestHandler'));
       expect(operationType.type, equals('insert'));
     });
 
     test('fromPayload creates correct operation type for delete', () {
-      final payload = 'TestHandler:delete';
+      const payload = 'TestHandler:delete';
       final operationType = OperationType.fromPayload(payload);
       expect(operationType.handler, equals('TestHandler'));
       expect(operationType.type, equals('delete'));
     });
 
     test('fromPayload with invalid format throws FormatException', () {
-      final payload = 'invalid-format';
+      const payload = 'invalid-format';
       expect(
         () => OperationType.fromPayload(payload),
         throwsA(isA<FormatException>()),
@@ -88,7 +88,7 @@ void main() {
     });
 
     test('fromPayload with missing handler throws FormatException', () {
-      final payload = ':insert';
+      const payload = ':insert';
       expect(
         () => OperationType.fromPayload(payload),
         throwsA(isA<FormatException>()),
@@ -96,7 +96,7 @@ void main() {
     });
 
     test('fromPayload with missing type throws FormatException', () {
-      final payload = 'TestHandler:';
+      const payload = 'TestHandler:';
       expect(
         () => OperationType.fromPayload(payload),
         throwsA(isA<FormatException>()),
@@ -104,7 +104,7 @@ void main() {
     });
 
     test('fromPayload with multiple colons throws FormatException', () {
-      final payload = 'TestHandler:insert:extra';
+      const payload = 'TestHandler:insert:extra';
       expect(
         () => OperationType.fromPayload(payload),
         throwsA(isA<FormatException>()),

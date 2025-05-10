@@ -1,23 +1,14 @@
+import 'package:crdt_lf/src/operation/id.dart';
 import 'package:crdt_lf/src/operation/operation.dart';
+import 'package:crdt_lf/src/peer_id.dart';
+import 'package:crdt_lf/src/utils/set.dart';
 import 'package:hlc_dart/hlc_dart.dart';
-
-import '../operation/id.dart';
-import '../peer_id.dart';
-import '../utils/set.dart';
 
 /// Change implementation for CRDT
 ///
 /// A Change represents a modification to the CRDT state.
 /// It includes an operation ID, dependencies, timestamp, author, and payload.
 class Change {
-  /// Creates a new [Change] with the given properties
-  const Change._({
-    required this.id,
-    required this.deps,
-    required this.hlc,
-    required this.author,
-    required this.payload,
-  });
 
   /// Creates a new [Change] with the given properties
   ///
@@ -41,6 +32,14 @@ class Change {
       payload: operation.toPayload(),
     );
   }
+  /// Creates a new [Change] with the given properties
+  const Change._({
+    required this.id,
+    required this.deps,
+    required this.hlc,
+    required this.author,
+    required this.payload,
+  });
 
   /// Creates a Change from a JSON object
   static Change fromJson(Map<String, dynamic> json) {

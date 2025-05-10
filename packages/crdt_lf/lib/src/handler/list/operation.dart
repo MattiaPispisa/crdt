@@ -1,9 +1,9 @@
 part of 'handler.dart';
 
 class _ListOperationFactory<T> {
-  final Handler handler;
 
   _ListOperationFactory(this.handler);
+  final Handler handler;
 
   Operation? fromPayload(dynamic payload) {
     if (payload['id'] != handler.id) {

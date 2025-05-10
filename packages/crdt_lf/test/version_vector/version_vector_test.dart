@@ -91,7 +91,7 @@ void main() {
       );
       expect(merged.entries.first.key, equals(author));
       expect(
-          merged.entries.first.value, equals(HybridLogicalClock(l: 1, c: 1)));
+          merged.entries.first.value, equals(HybridLogicalClock(l: 1, c: 1)),);
       expect(merged.entries.last.key, equals(author2));
       expect(merged.entries.last.value, equals(HybridLogicalClock(l: 1, c: 1)));
     });
@@ -120,7 +120,7 @@ void main() {
       );
       expect(merged.entries.first.key, equals(author));
       expect(
-          merged.entries.first.value, equals(HybridLogicalClock(l: 1, c: 2)));
+          merged.entries.first.value, equals(HybridLogicalClock(l: 1, c: 2)),);
       expect(merged.entries.last.key, equals(author3));
       expect(merged.entries.last.value, equals(HybridLogicalClock(l: 1, c: 7)));
     });
@@ -140,7 +140,7 @@ void main() {
       );
 
       expect(
-        () => versionVector.clear(),
+        versionVector.clear,
         throwsA(isA<UnsupportedError>()),
       );
     });
@@ -161,7 +161,7 @@ void main() {
       );
 
       expect(
-        () => mutableVersionVector.clear(),
+        mutableVersionVector.clear,
         returnsNormally,
       );
     });

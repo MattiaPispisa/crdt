@@ -8,7 +8,7 @@ class ChangeStore {
   const ChangeStore._(this._changes);
 
   /// Creates a new empty ChangeStore
-  factory ChangeStore.empty() => ChangeStore._(Map<OperationId, Change>());
+  factory ChangeStore.empty() => const ChangeStore._(<OperationId, Change>{});
 
   /// The changes stored in this [ChangeStore], indexed by their [OperationId]
   final Map<OperationId, Change> _changes;
@@ -69,7 +69,7 @@ class ChangeStore {
   ///
   /// Returns the number of [Change]s that were added.
   int importChanges(List<Change> changes) {
-    int added = 0;
+    var added = 0;
 
     for (final change in changes) {
       if (addChange(change)) {

@@ -16,12 +16,12 @@ void main() {
               'id': {'replicaID': '', 'counter': null},
               'value': null,
               'parentID': {'replicaID': '', 'counter': null},
-              'side': 'left'
+              'side': 'left',
             },
             'leftChildren': [],
-            'rightChildren': []
-          }
-        }
+            'rightChildren': [],
+          },
+        },
       };
 
       final tree = FugueTree.fromJson(json);

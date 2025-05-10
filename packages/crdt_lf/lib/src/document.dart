@@ -2,9 +2,8 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:crdt_lf/crdt_lf.dart';
+import 'package:crdt_lf/src/devtools/devtools.dart' as devtools;
 import 'package:hlc_dart/hlc_dart.dart';
-
-import 'devtools/devtools.dart' as devtools;
 
 /// CRDT Document implementation
 ///
@@ -34,7 +33,7 @@ class CRDTDocument {
   final PeerId _peerId;
 
   /// The hybrid logical clock for this document
-  HybridLogicalClock _clock;
+  final HybridLogicalClock _clock;
 
   /// Gets the peer ID of this document
   PeerId get peerId => _peerId;
@@ -147,7 +146,7 @@ class CRDTDocument {
     for (final provider in _handlers.values) {
       state[provider.id] = provider.getSnapshotState();
     }
-    var snapshot = Snapshot.create(
+    final snapshot = Snapshot.create(
       versionVector: getVersionVector(),
       data: state,
     );
@@ -230,7 +229,7 @@ class CRDTDocument {
     final sorted = _topologicalSort(_neverReceived(changes));
 
     // Apply changes
-    int applied = 0;
+    var applied = 0;
     for (final change in sorted) {
       try {
         if (applyChange(change)) {

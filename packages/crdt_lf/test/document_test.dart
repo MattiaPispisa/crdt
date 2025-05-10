@@ -1,6 +1,7 @@
-import 'package:test/test.dart';
 import 'package:crdt_lf/crdt_lf.dart';
 import 'package:hlc_dart/hlc_dart.dart';
+import 'package:test/test.dart';
+
 import 'helpers/handler.dart';
 
 void main() {
@@ -53,7 +54,7 @@ void main() {
     });
 
     test('createChange with physical time uses provided time', () {
-      final physicalTime = 1000;
+      const physicalTime = 1000;
       final change = doc.createChange(operation, physicalTime: physicalTime);
       expect(change.hlc.l, equals(physicalTime));
     });
@@ -216,7 +217,6 @@ void main() {
           (emittedChange) {
             expect(emittedChange.author, equals(author));
           },
-          count: 1,
         ),
       ); // Ensure the listener is called exactly once
 
@@ -321,7 +321,7 @@ void main() {
 
       doc.importSnapshot(
         Snapshot(
-          id: "id",
+          id: 'id',
           versionVector: VersionVector({
             author1: HybridLogicalClock(l: 1, c: 1),
           }),
@@ -330,7 +330,7 @@ void main() {
       );
 
       final snapshot = Snapshot(
-        id: "id2",
+        id: 'id2',
         versionVector: VersionVector({
           author2: HybridLogicalClock(l: 1, c: 2),
         }),
@@ -348,7 +348,7 @@ void main() {
       expect(
         doc.toString(),
         equals(
-            'CRDTDocument(peerId: $author, changes: 2, version: 1 frontiers)'),
+            'CRDTDocument(peerId: $author, changes: 2, version: 1 frontiers)',),
       );
     });
   });

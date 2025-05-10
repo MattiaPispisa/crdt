@@ -10,6 +10,21 @@ class FugueNodeTriple<T> {
     required this.rightChildren,
   });
 
+  /// Creates a triple from a JSON object
+  factory FugueNodeTriple.fromJson(
+    Map<String, dynamic> json,
+  ) {
+    return FugueNodeTriple<T>(
+      node: FugueNode<T>.fromJson(json['node']),
+      leftChildren: (json['leftChildren'] as List)
+          .map((j) => FugueElementID.fromJson(j))
+          .toList(),
+      rightChildren: (json['rightChildren'] as List)
+          .map((j) => FugueElementID.fromJson(j))
+          .toList(),
+    );
+  }
+
   /// The node itself
   final FugueNode<T> node;
 
@@ -25,19 +40,4 @@ class FugueNodeTriple<T> {
         'leftChildren': leftChildren.map((id) => id.toJson()).toList(),
         'rightChildren': rightChildren.map((id) => id.toJson()).toList(),
       };
-
-  /// Creates a triple from a JSON object
-  factory FugueNodeTriple.fromJson(
-    Map<String, dynamic> json,
-  ) {
-    return FugueNodeTriple<T>(
-      node: FugueNode<T>.fromJson(json['node']),
-      leftChildren: (json['leftChildren'] as List)
-          .map((j) => FugueElementID.fromJson(j))
-          .toList(),
-      rightChildren: (json['rightChildren'] as List)
-          .map((j) => FugueElementID.fromJson(j))
-          .toList(),
-    );
-  }
 }

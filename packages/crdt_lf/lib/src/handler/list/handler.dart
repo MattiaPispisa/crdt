@@ -1,5 +1,4 @@
 import 'package:crdt_lf/src/change/change.dart';
-import 'package:crdt_lf/src/document.dart';
 import 'package:crdt_lf/src/handler/handler.dart';
 import 'package:crdt_lf/src/operation/operation.dart';
 import 'package:crdt_lf/src/operation/type.dart';
@@ -11,7 +10,7 @@ part 'operation.dart';
 /// It provides methods for inserting, deleting, and accessing elements.
 class CRDTListHandler<T> extends Handler<List<T>> {
   /// Creates a new CRDTList with the given document and ID
-  CRDTListHandler(CRDTDocument doc, this._id) : super(doc);
+  CRDTListHandler(super.doc, this._id);
 
   /// The ID of this list in the document
   final String _id;
@@ -124,6 +123,6 @@ class CRDTListHandler<T> extends Handler<List<T>> {
   /// Returns a string representation of this list
   @override
   String toString() {
-    return 'CRDTList($_id, ${value.toString()})';
+    return 'CRDTList($_id, $value)';
   }
 }

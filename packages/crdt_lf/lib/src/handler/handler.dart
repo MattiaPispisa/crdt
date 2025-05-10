@@ -9,6 +9,7 @@ abstract class Handler<T> with SnapshotProvider {
   final CRDTDocument doc;
 
   /// The ID of the handler
+  @override
   String get id;
 
   /// The cached state of the handler

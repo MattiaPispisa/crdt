@@ -9,7 +9,7 @@ void main() {
 
     setUp(() {
       testId = FugueElementID(
-          PeerId.parse('01b23a30-2b3c-461a-871e-0d0b8a38e7a4'), 10);
+          PeerId.parse('01b23a30-2b3c-461a-871e-0d0b8a38e7a4'), 10,);
       testValue = 'Hello';
       node = FugueValueNode<String>(
         id: testId,
@@ -42,7 +42,7 @@ void main() {
     });
 
      test('should handle different value types in JSON', () {
-        final intValue = 123;
+        const intValue = 123;
         final intNode = FugueValueNode<int>(id: testId, value: intValue);
         final intJson = intNode.toJson();
         final deserializedIntNode = FugueValueNode<int>.fromJson(intJson);
@@ -50,7 +50,7 @@ void main() {
         expect(deserializedIntNode.id, equals(testId));
         expect(deserializedIntNode.value, equals(intValue));
 
-        final boolValue = true;
+        const boolValue = true;
         final boolNode = FugueValueNode<bool>(id: testId, value: boolValue);
         final boolJson = boolNode.toJson();
         final deserializedBoolNode = FugueValueNode<bool>.fromJson(boolJson);

@@ -97,7 +97,7 @@ void main() {
       final frontiers = Frontiers.from([op1, op2]);
       expect(
         frontiers.toString(),
-        equals('${op1.toString()}, ${op2.toString()}'),
+        equals('$op1, $op2'),
       );
     });
 

@@ -23,7 +23,7 @@ class FugueTree<T> {
         node: rootNode,
         leftChildren: [],
         rightChildren: [],
-      )
+      ),
     };
 
     return FugueTree._(
@@ -69,7 +69,7 @@ class FugueTree<T> {
       _rootID,
       (node) => FugueValueNode(
         id: node.id,
-        value: node.value!,
+        value: node.value as T,
       ),
     );
   }
@@ -82,7 +82,7 @@ class FugueTree<T> {
     FugueElementID nodeID,
     K Function(FugueNode<T> node) transform,
   ) {
-    List<K> result = [];
+    final result = <K>[];
 
     if (!_nodes.containsKey(nodeID)) {
       return result;
@@ -136,7 +136,7 @@ class FugueTree<T> {
     );
 
     // Insert remaining nodes as right children of the previous node
-    FugueElementID previousID = firstNodeID;
+    var previousID = firstNodeID;
     for (final value in nodes.skip(1)) {
       final newNodeID = value.id;
       insert(
@@ -311,7 +311,7 @@ class FugueTree<T> {
 
     // 2. Otherwise, climb up the tree until finding a node that is a left child
     // and return its right sibling
-    FugueElementID current = nodeID;
+    var current = nodeID;
     while (!current.isNull) {
       final currentNode = _nodes[current]!.node;
       if (currentNode.side == FugueSide.left) {
@@ -365,7 +365,7 @@ class FugueTree<T> {
     final rightChildren = nodeTriple.rightChildren;
 
     final indent = '  ' * depth;
-    buffer.writeln('$indent${node.toString()}');
+    buffer.writeln('$indent$node');
 
     buffer.writeln('$indent Left children:');
     for (final childID in leftChildren) {

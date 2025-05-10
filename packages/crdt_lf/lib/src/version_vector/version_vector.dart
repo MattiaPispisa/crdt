@@ -29,7 +29,7 @@ class VersionVector {
   /// Whether the version vector is empty.
   bool get isEmpty => _vector.isEmpty;
 
-  bool _immutable;
+  final bool _immutable;
 
   /// Updates the version vector with a new [clock] for the given [id].
   ///

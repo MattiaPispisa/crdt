@@ -11,15 +11,6 @@ class Snapshot {
     required Map<String, dynamic> data,
   }) : data = Map.unmodifiable(data);
 
-  /// A stable identifier derived from the version.
-  final String id;
-
-  /// The version vector of the snapshot.
-  final VersionVector versionVector;
-
-  /// The actual data representing the snapshot state.
-  final Map<String, dynamic> data;
-
   /// Creates a [Snapshot] from a [version].
   factory Snapshot.create({
     required VersionVector versionVector,
@@ -31,6 +22,15 @@ class Snapshot {
       data: data,
     );
   }
+
+  /// A stable identifier derived from the version.
+  final String id;
+
+  /// The version vector of the snapshot.
+  final VersionVector versionVector;
+
+  /// The actual data representing the snapshot state.
+  final Map<String, dynamic> data;
 
   /// Merges two [Snapshot]s.
   ///
@@ -76,8 +76,8 @@ class Snapshot {
       return sha256.convert(utf8.encode('')).toString();
     }
     // 1. Convert OperationIds to stable strings
-    final List<String> versionStrings = version.entries
-        .map((entry) => '${entry.key}:${entry.value.toString()}')
+    final versionStrings = version.entries
+        .map((entry) => '${entry.key}:${entry.value}')
         .toList()
       // 2. Sort the strings for stability
       ..sort();
