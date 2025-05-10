@@ -12,6 +12,7 @@ export 'src/frontiers/frontiers.dart';
 export 'src/handler/fugue_text/handler.dart';
 export 'src/handler/handler.dart';
 export 'src/handler/list/handler.dart';
+export 'src/handler/map/handler.dart';
 export 'src/handler/text/handler.dart';
 export 'src/operation/id.dart';
 export 'src/operation/operation.dart';
