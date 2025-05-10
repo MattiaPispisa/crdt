@@ -1,8 +1,12 @@
-## [Unreleased]
+## [0.6.0] - 2025-05-10
 
 **Breaking**
 
 - `Operation.toPayload` is now a `Map<String, dynamic>` instead of `dynamic` (every operation was already returning a `Map<String, dynamic>`)
+
+### Added
+
+- `CRDTMapHandler`: a new handler for maps
 
 ### Changed
 
