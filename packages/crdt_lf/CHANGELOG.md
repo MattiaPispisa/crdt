@@ -1,3 +1,9 @@
+## [Unreleased]
+
+### Changed
+
+- chore: apply linter rules
+- chore: more documentation on public api
 
 ## [0.5.1] - 2025-05-08
 
