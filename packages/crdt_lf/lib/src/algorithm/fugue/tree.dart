@@ -61,18 +61,12 @@ class FugueTree<T> {
 
   /// Returns all non-deleted values in the correct order
   List<T> values() {
-    return _traverse(_rootID, (node) => node.value!);
+    return _traverse(_rootID, (node) => node.value);
   }
 
   /// Returns all non-deleted nodes in the correct order
   List<FugueValueNode<T>> nodes() {
-    return _traverse(
-      _rootID,
-      (node) => FugueValueNode(
-        id: node.id,
-        value: node.value as T,
-      ),
-    );
+    return _traverse(_rootID, (node) => node);
   }
 
   /// Traverses the tree starting from the specified node
@@ -82,7 +76,7 @@ class FugueTree<T> {
   /// Collects the non-deleted values (different from `⊥`)
   List<K> _traverse<K>(
     FugueElementID nodeID,
-    K Function(FugueNode<T> node) transform,
+    K Function(FugueValueNode<T> node) transform,
   ) {
     final result = <K>[];
 
@@ -101,8 +95,16 @@ class FugueTree<T> {
     }
 
     // Visit the node itself if not deleted
-    if (node.value != null) {
-      result.add(transform(node));
+    final value = node.value;
+    if (value != null) {
+      result.add(
+        transform(
+          FugueValueNode(
+            id: node.id,
+            value: value,
+          ),
+        ),
+      );
     }
 
     // Recursively visit right children
