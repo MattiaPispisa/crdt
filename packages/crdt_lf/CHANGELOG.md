@@ -1,5 +1,9 @@
 ## [Unreleased]
 
+**Breaking**
+
+- `Operation.toPayload` is now a `Map<String, dynamic>` instead of `dynamic` (every operation was already returning a `Map<String, dynamic>`)
+
 ### Changed
 
 - chore: apply linter rules
