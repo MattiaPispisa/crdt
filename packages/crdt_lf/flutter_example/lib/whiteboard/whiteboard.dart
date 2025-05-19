@@ -76,7 +76,9 @@ class WhiteboardDocument extends StatelessWidget {
               child: Stack(
                 children: [
                   CustomPaint(
-                    painter: WhiteboardPainter(strokes: state.strokesWithFeedbacks),
+                    painter: WhiteboardPainter(
+                      strokes: state.strokesWithFeedbacks,
+                    ),
                     // Added child to CustomPaint for hit testing
                     child: Container(
                       decoration: BoxDecoration(
@@ -91,11 +93,7 @@ class WhiteboardDocument extends StatelessWidget {
                     Positioned(
                       left: pointer.offset.dx - 4, // hack to center the icon
                       top: pointer.offset.dy - 20, // hack to center the icon
-                      child: Icon(
-                        Icons.edit,
-                        color: pointer.color,
-                        size: 24.0,
-                      ),
+                      child: Icon(Icons.edit, color: pointer.color, size: 24.0),
                     ),
                 ],
               ),
