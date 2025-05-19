@@ -49,12 +49,10 @@ class WhiteboardDocumentState extends DocumentState {
     );
 
     _peerPointerFeedbackHandler.set(pointer.peerId.id, pointer);
-    notifyListeners();
   }
 
   void removePointerFeedback() {
     _peerPointerFeedbackHandler.set(peerId.id, null);
-    notifyListeners();
   }
 
   void createStrokeFeedback(
