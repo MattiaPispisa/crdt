@@ -1,6 +1,7 @@
 import 'package:crdt_lf/crdt_lf.dart';
 import 'package:crdt_lf_flutter_example/shared/document_state.dart';
 import 'package:crdt_lf_flutter_example/shared/network.dart';
+import 'package:crdt_lf_flutter_example/whiteboard/pointer_feedback.dart';
 import 'package:crdt_lf_flutter_example/whiteboard/stroke.dart';
 import 'package:flutter/material.dart';
 
@@ -9,6 +10,7 @@ class WhiteboardDocumentState extends DocumentState {
     CRDTDocument document,
     this._handler,
     this._peerFeedbackHandler,
+    this._peerPointerFeedbackHandler,
     Network network,
   ) : super(document, network);
 
@@ -22,16 +24,38 @@ class WhiteboardDocumentState extends DocumentState {
       document,
       'whiteboard_feedback',
     );
+    final peerPointerFeedbackHandler = CRDTMapHandler<PointerFeedback?>(
+      document,
+      'whiteboard_pointer_feedback',
+    );
     return WhiteboardDocumentState._(
       document,
       handler,
       peerFeedbackHandler,
+      peerPointerFeedbackHandler,
       network,
     );
   }
 
   final CRDTMapHandler<Stroke> _handler;
   final CRDTMapHandler<Stroke?> _peerFeedbackHandler;
+  final CRDTMapHandler<PointerFeedback?> _peerPointerFeedbackHandler;
+
+  void setPointerFeedback(Offset offset, {Color color = Colors.black}) {
+    final pointer = PointerFeedback(
+      offset: offset,
+      color: color,
+      peerId: peerId,
+    );
+
+    _peerPointerFeedbackHandler.set(pointer.peerId.id, pointer);
+    notifyListeners();
+  }
+
+  void removePointerFeedback() {
+    _peerPointerFeedbackHandler.set(peerId.id, null);
+    notifyListeners();
+  }
 
   void createStrokeFeedback(
     Offset offset, {
@@ -60,6 +84,15 @@ class WhiteboardDocumentState extends DocumentState {
     );
 
     _peerFeedbackHandler.set(peerId.id, updatedStrokeFeedback);
+
+    // Update also the pointer feedback
+    final pointerFeedback = _peerPointerFeedbackHandler.value[peerId.id];
+    if (pointerFeedback != null) {
+      _peerPointerFeedbackHandler.set(
+        peerId.id,
+        pointerFeedback.copyWith(offset: offset),
+      );
+    }
     notifyListeners();
   }
 
@@ -82,7 +115,12 @@ class WhiteboardDocumentState extends DocumentState {
 
   List<Stroke> get strokesWithFeedbacks => [
     ..._handler.value.values,
-    for (final strokeFeedback in _peerFeedbackHandler.value.values)
-      if (strokeFeedback != null) strokeFeedback,
+    ..._peerFeedbackHandler.value.values.whereType<Stroke>(),
   ];
+
+  List<PointerFeedback> get remotePointerFeedbacks =>
+      _peerPointerFeedbackHandler.value.values
+          .whereType<PointerFeedback>()
+          .where((feedback) => feedback.peerId != peerId)
+          .toList();
 }
