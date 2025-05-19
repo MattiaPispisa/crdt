@@ -16,16 +16,20 @@ class TodoList extends StatelessWidget {
   Widget build(BuildContext context) {
     return AppLayout(
       example: 'Todo List',
-      leftBody: ChangeNotifierProvider<DocumentState>(
+      leftBody: ChangeNotifierProvider<TodoDocumentState>(
         create:
-            (context) =>
-                DocumentState.create(author1, network: context.read<Network>()),
+            (context) => TodoDocumentState.create(
+              author1,
+              network: context.read<Network>(),
+            ),
         child: TodoDocument(author: author1),
       ),
-      rightBody: ChangeNotifierProvider<DocumentState>(
+      rightBody: ChangeNotifierProvider<TodoDocumentState>(
         create:
-            (context) =>
-                DocumentState.create(author2, network: context.read<Network>()),
+            (context) => TodoDocumentState.create(
+              author2,
+              network: context.read<Network>(),
+            ),
         child: TodoDocument(author: author2),
       ),
     );
@@ -44,7 +48,7 @@ class TodoDocument extends StatelessWidget {
       builder: (BuildContext dialogContext) {
         return AddItemDialog(
           onAdd: (text) {
-            context.read<DocumentState>().addTodo(text);
+            context.read<TodoDocumentState>().addTodo(text);
           },
         );
       },
@@ -54,7 +58,7 @@ class TodoDocument extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Consumer<DocumentState>(
+      body: Consumer<TodoDocumentState>(
         builder: (context, state, child) {
           if (state.todos.isEmpty) {
             return const Center(
@@ -83,7 +87,7 @@ class TodoDocument extends StatelessWidget {
         icon: const Icon(Icons.delete_outline),
         tooltip: 'Delete Todo',
         onPressed: () {
-          context.read<DocumentState>().removeTodo(index);
+          context.read<TodoDocumentState>().removeTodo(index);
         },
       ),
     );
