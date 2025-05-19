@@ -19,6 +19,9 @@ class Network extends ChangeNotifier {
   bool _isOnline = false;
   bool get isOnline => _isOnline;
 
+  Duration _networkDelay = Duration.zero;
+  Duration get networkDelay => _networkDelay;
+
   /// Sets the online status of the network.
   ///
   /// If transitioning to online, sends any queued offline changes.
@@ -48,14 +51,22 @@ class Network extends ChangeNotifier {
     }
   }
 
+  void setNetworkDelay(Duration delay) {
+    _networkDelay = delay;
+    notifyListeners();
+  }
+
   /// Sends a change into the network, attributed to the sender.
   ///
   /// If the network is online, the change is broadcast immediately.
   /// If offline, the change is queued and sent when the network comes back online.
   /// Listeners will receive this change unless their listener ID matches the senderId.
-  void sendChange(Change change) {
+  Future<void> sendChange(Change change) async {
     final changeTuple = (change.author, change);
     if (_isOnline) {
+      // Simulate network delay
+      if (_networkDelay > Duration.zero) await Future.delayed(_networkDelay);
+
       _changesController.add(changeTuple);
     } else {
       _offlineQueue.add(changeTuple);
