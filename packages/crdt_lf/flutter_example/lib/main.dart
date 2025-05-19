@@ -1,5 +1,6 @@
 import 'package:crdt_lf_flutter_example/shared/network.dart';
 import 'package:crdt_lf_flutter_example/todo_list/todo_list.dart';
+import 'package:crdt_lf_flutter_example/whiteboard/whiteboard.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -22,6 +23,7 @@ class MyApp extends StatelessWidget {
         routes: {
           '/': (context) => const Examples(),
           'todo-list': (context) => const TodoList(),
+          'whiteboard': (context) => const Whiteboard(),
         },
       ),
     );
@@ -45,7 +47,12 @@ class Examples extends StatelessWidget {
         leading: const SizedBox(),
         title: const Text('CRDT LF Examples'),
       ),
-      body: ListView(children: [_listTile(context, 'Todo List', 'todo-list')]),
+      body: ListView(
+        children: [
+          _listTile(context, 'Todo List', 'todo-list'),
+          _listTile(context, 'Whiteboard', 'whiteboard'),
+        ],
+      ),
     );
   }
 }

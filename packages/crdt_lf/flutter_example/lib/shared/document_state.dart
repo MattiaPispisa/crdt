@@ -13,6 +13,8 @@ abstract class DocumentState extends ChangeNotifier {
   final CRDTDocument _document;
   final Network _network;
 
+  PeerId get peerId => _document.peerId;
+
   StreamSubscription<Change>? _networkChanges;
   StreamSubscription<Change>? _localChanges;
 
