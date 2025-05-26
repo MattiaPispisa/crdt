@@ -13,12 +13,6 @@ abstract class CRDTSocketServer {
   /// Stop the server
   Future<void> stop();
 
-  /// Register a document
-  void registerDocument(String documentId, CRDTDocument document);
-
-  /// Unregister a document
-  void unregisterDocument(String documentId);
-
   /// Create a snapshot of a document
   Snapshot createSnapshot(String documentId);
 

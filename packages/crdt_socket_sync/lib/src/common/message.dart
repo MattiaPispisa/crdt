@@ -33,6 +33,63 @@ abstract class Message {
   /// Constructor
   const Message(this.type, this.documentId);
 
+  /// Create a change message
+  factory Message.change(String documentId, Change change) {
+    return ChangeMessage(
+      documentId: documentId,
+      change: change,
+    );
+  }
+
+  /// Create a snapshot message
+  factory Message.snapshot(String documentId, Snapshot snapshot) {
+    return SnapshotMessage(
+      documentId: documentId,
+      snapshot: snapshot,
+    );
+  }
+
+  /// Create a snapshot request message
+  factory Message.snapshotRequest(
+    String documentId,
+    Set<OperationId> version,
+  ) {
+    return SnapshotRequestMessage(
+      documentId: documentId,
+      version: version,
+    );
+  }
+
+  /// Create a ping message
+  factory Message.ping(String documentId, int timestamp) {
+    return PingMessage(
+      documentId: documentId,
+      timestamp: timestamp,
+    );
+  }
+
+  /// Create a pong message
+  factory Message.pong(
+    String documentId,
+    int originalTimestamp,
+    int responseTimestamp,
+  ) {
+    return PongMessage(
+      documentId: documentId,
+      originalTimestamp: originalTimestamp,
+      responseTimestamp: responseTimestamp,
+    );
+  }
+
+  /// Create an error message
+  factory Message.error(String documentId, String code, String message) {
+    return ErrorMessage(
+      documentId: documentId,
+      code: code,
+      message: message,
+    );
+  }
+
   /// The message type
   final MessageType type;
 
@@ -76,35 +133,34 @@ abstract class Message {
 class HandshakeRequestMessage extends Message {
   /// Constructor
   const HandshakeRequestMessage({
-    required this.peerId,
-    required this.versionVector,
+    required this.version,
     required String documentId,
+    required this.author,
   }) : super(MessageType.handshakeRequest, documentId);
 
   /// Create a handshake message from a JSON map
   factory HandshakeRequestMessage.fromJson(Map<String, dynamic> json) {
     return HandshakeRequestMessage(
-      peerId: PeerId.parse(json['peerId'] as String),
-      versionVector:
-          VersionVector.fromJson(json['versionVector'] as Map<String, dynamic>),
+      version: (json['version'] as List<String>).map(OperationId.parse).toSet(),
       documentId: json['documentId'] as String,
+      author: PeerId.parse(json['author'] as String),
     );
   }
 
-  /// The client peer ID
-  final PeerId peerId;
-
   // TODO(mattia): version vector or dag operationIds ?
   /// The client version vector
-  final VersionVector versionVector;
+  final Set<OperationId> version;
+
+  /// The author of the message
+  final PeerId author;
 
   @override
   Map<String, dynamic> toJson() {
     return {
       'type': type.index,
       'documentId': documentId,
-      'peerId': peerId.toString(),
-      'versionVector': versionVector.toJson(),
+      'author': author.toString(),
+      'version': version.map((e) => e.toString()).toList(),
     };
   }
 }
@@ -113,7 +169,6 @@ class HandshakeRequestMessage extends Message {
 class HandshakeResponseMessage extends Message {
   /// Constructor
   const HandshakeResponseMessage({
-    required this.needsFullUpdate,
     required String documentId,
     this.snapshot,
     this.changes,
@@ -122,7 +177,6 @@ class HandshakeResponseMessage extends Message {
   /// Create a handshake response message from a JSON map
   factory HandshakeResponseMessage.fromJson(Map<String, dynamic> json) {
     return HandshakeResponseMessage(
-      needsFullUpdate: json['needsFullUpdate'] as bool,
       documentId: json['documentId'] as String,
       snapshot: json['snapshot'] != null
           ? Snapshot.fromJson(json['snapshot'] as Map<String, dynamic>)
@@ -135,9 +189,6 @@ class HandshakeResponseMessage extends Message {
     );
   }
 
-  /// Indicates if a full update is needed
-  final bool needsFullUpdate;
-
   /// The snapshot, if present
   final Snapshot? snapshot;
 
@@ -149,7 +200,6 @@ class HandshakeResponseMessage extends Message {
     return {
       'type': type.index,
       'documentId': documentId,
-      'needsFullUpdate': needsFullUpdate,
       'snapshot': snapshot?.toJson(),
       'changes': changes?.map((c) => c.toJson()).toList(),
     };
@@ -218,34 +268,27 @@ class SnapshotMessage extends Message {
 class SnapshotRequestMessage extends Message {
   /// Constructor
   const SnapshotRequestMessage({
-    required this.peerId,
-    required this.versionVector,
+    required this.version,
     required String documentId,
   }) : super(MessageType.snapshotRequest, documentId);
 
   /// Create a snapshot request message from a JSON map
   factory SnapshotRequestMessage.fromJson(Map<String, dynamic> json) {
     return SnapshotRequestMessage(
-      peerId: PeerId.parse(json['peerId'] as String),
-      versionVector:
-          VersionVector.fromJson(json['versionVector'] as Map<String, dynamic>),
+      version: (json['version'] as List<String>).map(OperationId.parse).toSet(),
       documentId: json['documentId'] as String,
     );
   }
 
-  /// The client peer ID
-  final PeerId peerId;
-
-  /// The client version vector
-  final VersionVector versionVector;
+  /// The client version
+  final Set<OperationId> version;
 
   @override
   Map<String, dynamic> toJson() {
     return {
       'type': type.index,
       'documentId': documentId,
-      'peerId': peerId.toString(),
-      'versionVector': versionVector.toJson(),
+      'version': version.map((e) => e.toString()).toList(),
     };
   }
 }

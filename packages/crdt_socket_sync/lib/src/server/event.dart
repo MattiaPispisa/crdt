@@ -18,12 +18,6 @@ enum ServerEventType {
   /// A snapshot has been created
   snapshotCreated,
 
-  /// A new document has been registered
-  documentRegistered,
-
-  /// A document has been unregistered
-  documentUnregistered,
-
   /// An error has occurred
   error,
 }
