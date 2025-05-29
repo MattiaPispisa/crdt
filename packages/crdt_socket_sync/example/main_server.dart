@@ -3,11 +3,9 @@
 import 'dart:async';
 import 'dart:io';
 
-import 'package:crdt_socket_sync/src/server/in_memory_server_registry.dart'
-    as r;
 import 'package:crdt_socket_sync/src/web_socket_server.dart';
-
 import 'hot_reload_wathcer.dart';
+import 'server_registry.dart';
 
 late WebSocketServer server;
 
@@ -17,7 +15,7 @@ void main(List<String> args) async {
   server = WebSocketServer(
     host: 'localhost',
     port: 8080,
-    documentRegistry: r.InMemoryCRDTServerRegistry(),
+    documentRegistry: serverRegistry,
   );
 
   _setupSigintHandler();
@@ -42,15 +40,15 @@ Future<void> _watch() {
       '../crdt_lf/lib',
     ],
     debounceDelay: const Duration(milliseconds: 300),
-  )..onFileChanged = _restartServer;
+  )..onFileChanged = _stopServer;
   return watcher.startWatching();
 }
 
-Future<void> _restartServer() async {
+Future<void> _stopServer() async {
   print('🔄 Files changed, restarting server...');
   await server.stop();
   print('⏹️  Server stopped for hot reload');
-  return _startServer();
+  exit(0);
 }
 
 Future<void> _startServer() async {

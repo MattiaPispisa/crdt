@@ -80,12 +80,15 @@ class ClientSession {
     try {
       final message = _messageCodec.decode(data);
       _handleMessage(message);
-    } catch (e) {
+    } catch (e, stackTrace) {
       _sessionEventController.add(
         SessionEventGeneric(
           sessionId: id,
           type: SessionEventType.error,
           message: 'Failed to decode message: $e',
+          data: {
+            'stackTrace': stackTrace,
+          },
         ),
       );
     }

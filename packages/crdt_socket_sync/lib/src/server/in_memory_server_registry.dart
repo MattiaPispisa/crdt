@@ -7,13 +7,17 @@ import 'package:crdt_socket_sync/src/server/registry.dart';
 /// Documents are lost when the server restarts.
 class InMemoryCRDTServerRegistry implements CRDTServerRegistry {
   /// Creates a new [InMemoryCRDTServerRegistry]
-  InMemoryCRDTServerRegistry();
+  InMemoryCRDTServerRegistry({
+    Map<String, CRDTDocument>? documents,
+    Map<String, Snapshot>? snapshots,
+  })  : _documents = documents ?? <String, CRDTDocument>{},
+        _snapshots = snapshots ?? <String, Snapshot>{};
 
   /// Internal storage for documents
-  final Map<String, CRDTDocument> _documents = <String, CRDTDocument>{};
+  final Map<String, CRDTDocument> _documents;
 
   /// Internal storage for snapshots
-  final Map<String, Snapshot> _snapshots = <String, Snapshot>{};
+  final Map<String, Snapshot> _snapshots;
 
   @override
   void addDocument(String documentId, CRDTDocument document) {
@@ -55,14 +59,8 @@ class InMemoryCRDTServerRegistry implements CRDTServerRegistry {
   }
 
   @override
-  Snapshot getLatestSnapshot(String documentId) {
-    final snapshot = _snapshots[documentId];
-    if (snapshot == null) {
-      throw ArgumentError(
-        'No snapshot found for document with ID "$documentId"',
-      );
-    }
-    return snapshot;
+  Snapshot? getLatestSnapshot(String documentId) {
+    return _snapshots[documentId];
   }
 
   @override
@@ -84,7 +82,7 @@ class InMemoryCRDTServerRegistry implements CRDTServerRegistry {
   void clear() {
     _documents.clear();
     _snapshots.clear();
-  } 
+  }
 
   /// Get a copy of all documents (for debugging/testing purposes)
   Map<String, CRDTDocument> get documents => Map.unmodifiable(_documents);

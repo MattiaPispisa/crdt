@@ -6,6 +6,8 @@ import 'dart:io';
 import 'package:crdt_lf/crdt_lf.dart';
 import 'package:crdt_socket_sync/src/web_socket_client.dart';
 
+import 'server_registry.dart';
+
 void main(List<String> args) async {
   print('🚀 Starting CRDT WebSocket Client...');
 
@@ -13,9 +15,8 @@ void main(List<String> args) async {
   final author = PeerId.generate();
   print('🆔 Client Peer ID: $author');
 
-  // Create a local CRDT document
-  final document = CRDTDocument(peerId: author);
-  print('📄 Created local CRDT document');
+  // get a local CRDT document
+  final document = getServerRegistryDocument();
 
   // Create a WebSocket client
   final client = WebSocketClient(
@@ -53,7 +54,7 @@ void main(List<String> args) async {
 
   // Listen to incoming messages
   client.messages.listen((message) {
-    print('📨 Received message: ${message.type}');
+    print('📨 Received message: $message');
   });
 
   try {

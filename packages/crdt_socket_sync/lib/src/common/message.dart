@@ -146,7 +146,9 @@ class HandshakeRequestMessage extends Message {
   /// Create a handshake message from a JSON map
   factory HandshakeRequestMessage.fromJson(Map<String, dynamic> json) {
     return HandshakeRequestMessage(
-      version: (json['version'] as List<String>).map(OperationId.parse).toSet(),
+      version: (json['version'] as List<dynamic>)
+          .map((e) => OperationId.parse(e as String))
+          .toSet(),
       documentId: json['documentId'] as String,
       author: PeerId.parse(json['author'] as String),
     );
@@ -193,7 +195,7 @@ class HandshakeResponseMessage extends Message {
           ? Snapshot.fromJson(json['snapshot'] as Map<String, dynamic>)
           : null,
       changes: json['changes'] != null
-          ? (json['changes'] as List)
+          ? (json['changes'] as List<dynamic>)
               .map((c) => Change.fromJson(c as Map<String, dynamic>))
               .toList()
           : null,
@@ -301,7 +303,9 @@ class SnapshotRequestMessage extends Message {
   /// Create a snapshot request message from a JSON map
   factory SnapshotRequestMessage.fromJson(Map<String, dynamic> json) {
     return SnapshotRequestMessage(
-      version: (json['version'] as List<String>).map(OperationId.parse).toSet(),
+      version: (json['version'] as List<dynamic>)
+          .map((e) => OperationId.parse(e as String))
+          .toSet(), 
       documentId: json['documentId'] as String,
     );
   }
@@ -425,7 +429,7 @@ class ErrorMessage extends Message {
 
   @override
   Map<String, dynamic> toJson() {
-    return {
+    return {  
       'type': type.index,
       'documentId': documentId,
       'code': code,

@@ -24,7 +24,7 @@ abstract class CRDTServerRegistry {
   Snapshot createSnapshot(String documentId);
 
   /// Get the latest snapshot of a document
-  Snapshot getLatestSnapshot(String documentId);
+  Snapshot? getLatestSnapshot(String documentId);
 
   /// Apply a change to a document
   bool applyChange(String documentId, Change change);

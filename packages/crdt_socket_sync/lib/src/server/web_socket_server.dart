@@ -2,7 +2,6 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
-import 'package:crdt_lf/crdt_lf.dart';
 import 'package:crdt_socket_sync/src/common/common.dart';
 import 'package:crdt_socket_sync/src/server/client_session.dart';
 import 'package:crdt_socket_sync/src/server/client_session_event.dart';
@@ -10,6 +9,8 @@ import 'package:crdt_socket_sync/src/server/event.dart';
 import 'package:crdt_socket_sync/src/server/registry.dart';
 import 'package:crdt_socket_sync/src/server/server.dart';
 import 'package:web_socket_channel/status.dart';
+
+// TODO(mattia): wrap in try catch serverRegistry actions and dispatch to server error events
 
 /// WebSocket server implementation
 class WebSocketServer implements CRDTSocketServer {
