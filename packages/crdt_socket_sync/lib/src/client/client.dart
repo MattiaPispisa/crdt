@@ -10,10 +10,10 @@ abstract class CRDTSocketClient {
   /// The peer ID
   PeerId get author;
 
-  /// Stream of connection events
+  /// Stream of connection status changes between client and server
   Stream<ConnectionStatus> get connectionStatus;
 
-  /// Stream of incoming messages
+  /// Stream of incoming server messages
   Stream<Message> get messages;
 
   /// Connect the client to the server
@@ -22,10 +22,10 @@ abstract class CRDTSocketClient {
   /// Disconnect the client from the server
   Future<void> disconnect();
 
-  /// Send a message to the server
+  /// Send a [Message] to the server
   Future<void> sendMessage(Message message);
 
-  /// Send a change to the server
+  /// Send a [Change] to the server
   Future<void> sendChange(Change change);
 
   /// Request a snapshot from the server

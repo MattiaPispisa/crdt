@@ -47,7 +47,7 @@ class SyncManager {
   }
 
   /// Applies a list of changes
-  void applyChanges(List<Change> changes) {
+  void applyChanges(List<Change> changes) { 
     for (final change in changes) {
       applyChange(change);
     }

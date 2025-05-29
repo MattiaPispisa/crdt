@@ -10,7 +10,6 @@ import 'package:crdt_socket_sync/src/server/event.dart';
 import 'package:crdt_socket_sync/src/server/registry.dart';
 import 'package:crdt_socket_sync/src/server/server.dart';
 import 'package:web_socket_channel/status.dart';
-import 'package:web_socket_channel/web_socket_channel.dart';
 
 /// WebSocket server implementation
 class WebSocketServer implements CRDTSocketServer {
@@ -121,23 +120,6 @@ class WebSocketServer implements CRDTSocketServer {
         message: 'Server stopped',
       ),
     );
-  }
-
-  @override
-  Snapshot createSnapshot(String documentId) {
-    final snapshot = _serverRegistry.createSnapshot(documentId);
-
-    _serverEventController.add(
-      ServerEvent(
-        type: ServerEventType.snapshotCreated,
-        message: 'Snapshot created for document: $documentId',
-        data: {
-          'documentId': documentId,
-        },
-      ),
-    );
-
-    return snapshot;
   }
 
   @override

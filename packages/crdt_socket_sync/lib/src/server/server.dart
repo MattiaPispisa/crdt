@@ -1,4 +1,3 @@
-import 'package:crdt_lf/crdt_lf.dart';
 import 'package:crdt_socket_sync/src/common/common.dart';
 import 'package:crdt_socket_sync/src/server/event.dart';
 
@@ -13,9 +12,6 @@ abstract class CRDTSocketServer {
   /// Stop the server
   Future<void> stop();
 
-  /// Create a snapshot of a document
-  Snapshot createSnapshot(String documentId);
-
   /// Send a message to a specific client
   Future<void> sendMessageToClient(String clientId, Message message);
 
@@ -26,5 +22,5 @@ abstract class CRDTSocketServer {
   });
 
   /// Dispose the server
-  void dispose();
+  void dispose(); 
 }

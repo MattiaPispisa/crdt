@@ -15,9 +15,6 @@ enum ServerEventType {
   /// A client has disconnected
   clientDisconnected,
 
-  /// A snapshot has been created
-  snapshotCreated,
-
   /// An error has occurred
   error,
 }
@@ -39,4 +36,9 @@ class ServerEvent {
 
   /// Additional data associated with the event (optional)
   final Map<String, dynamic>? data;
+
+  @override
+  String toString() {
+    return 'ServerEvent(type: $type, message: $message, data: $data)';
+  } 
 }

@@ -127,6 +127,11 @@ abstract class Message {
         return ErrorMessage.fromJson(json);
     }
   }
+
+  @override
+  String toString() {
+    return 'Message(type: $type, documentId: $documentId)';
+  }
 }
 
 /// Handshake request message sent from client to server.
@@ -162,6 +167,12 @@ class HandshakeRequestMessage extends Message {
       'author': author.toString(),
       'version': version.map((e) => e.toString()).toList(),
     };
+  }
+
+  @override
+  String toString() {
+    return 'HandshakeRequestMessage(version: $version, '
+        'documentId: $documentId, author: $author)';
   }
 }
 
@@ -204,6 +215,11 @@ class HandshakeResponseMessage extends Message {
       'changes': changes?.map((c) => c.toJson()).toList(),
     };
   }
+
+  @override
+  String toString() {
+    return 'HandshakeResponseMessage(snapshot: $snapshot, changes: $changes)';
+  }
 }
 
 /// Message containing a CRDT change.
@@ -232,6 +248,11 @@ class ChangeMessage extends Message {
       'documentId': documentId,
       'change': change.toJson(),
     };
+  }
+
+  @override
+  String toString() {
+    return 'ChangeMessage(change: $change, documentId: $documentId)';
   }
 }
 
@@ -262,6 +283,11 @@ class SnapshotMessage extends Message {
       'snapshot': snapshot.toJson(),
     };
   }
+
+  @override
+  String toString() {
+    return 'SnapshotMessage(snapshot: $snapshot, documentId: $documentId)';
+  }
 }
 
 /// Snapshot request message sent from client to server.
@@ -291,6 +317,11 @@ class SnapshotRequestMessage extends Message {
       'version': version.map((e) => e.toString()).toList(),
     };
   }
+
+  @override
+  String toString() {
+    return 'SnapshotRequestMessage(version: $version, documentId: $documentId)';
+  }
 }
 
 /// Ping message to check the connection.
@@ -319,6 +350,11 @@ class PingMessage extends Message {
       'documentId': documentId,
       'timestamp': timestamp,
     };
+  }
+
+  @override
+  String toString() {
+    return 'PingMessage(timestamp: $timestamp, documentId: $documentId)';
   }
 }
 
@@ -355,6 +391,12 @@ class PongMessage extends Message {
       'responseTimestamp': responseTimestamp,
     };
   }
+
+  @override
+  String toString() {
+    return 'PongMessage(originalTimestamp: $originalTimestamp, '
+        'responseTimestamp: $responseTimestamp, documentId: $documentId)';
+  }
 }
 
 /// Error message.
@@ -389,5 +431,11 @@ class ErrorMessage extends Message {
       'code': code,
       'message': message,
     };
+  }
+
+  @override
+  String toString() {
+    return 'ErrorMessage(code: $code, '
+        'message: $message, documentId: $documentId)';
   }
 }
