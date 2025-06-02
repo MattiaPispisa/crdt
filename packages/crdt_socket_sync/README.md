@@ -23,7 +23,8 @@ Add this package to your `pubspec.yaml`:
 
 ```yaml
 dependencies:
-  crdt_socket_sync: ^0.1.0
+  crdt_socket_sync: 
+  crdt_lf:
 ```
 
 Then run:
