@@ -31,6 +31,8 @@ class ClientSession {
       onError: _handleConnectionError,
       onDone: _handleConnectionClosed,
     );
+
+    _startHeartbeatMonitoring();
   }
 
   /// Session ID
@@ -44,6 +46,15 @@ class ClientSession {
 
   /// Session event controller
   final StreamController<SessionEvent> _sessionEventController;
+
+  /// Timer for monitoring client heartbeat
+  Timer? _heartbeatTimer;
+
+  /// Last time we received any message from client
+  DateTime _lastClientActivity = DateTime.now();
+
+  /// Whether the session is closed
+  bool _isClosed = false;
 
   /// Session events stream
   Stream<SessionEvent> get events => _sessionEventController.stream;
@@ -59,6 +70,10 @@ class ClientSession {
 
   /// Send a message to the client
   Future<void> sendMessage(Message message) async {
+    if (_isClosed) {
+      throw StateError('Session is closed');
+    }
+
     try {
       final data = _messageCodec.encode(message);
       await _connection.send(data);
@@ -70,16 +85,24 @@ class ClientSession {
           message: 'Failed to send message: $e',
         ),
       );
+
+      // If we can't send, assume connection is dead
+      _closeSession(reason: 'Failed to send message: $e');
+      rethrow;
     }
   }
 
   /// Close the session
   Future<void> close() async {
+    _closeSession(reason: 'Session manually closed');
     await tryCatchIgnore(_connection.close);
   }
 
   /// Handle incoming data from the transport
   void _handleData(List<int> data) {
+    // Update last activity timestamp
+    _lastClientActivity = DateTime.now();
+
     try {
       final message = _messageCodec.decode(data);
       _handleMessage(message);
@@ -99,6 +122,10 @@ class ClientSession {
 
   /// Handle connection error
   void _handleConnectionError(dynamic error) {
+    if (_isClosed) {
+      return;
+    }
+
     _sessionEventController.add(
       SessionEventGeneric(
         sessionId: id,
@@ -106,17 +133,18 @@ class ClientSession {
         message: 'Connection error: $error',
       ),
     );
+
+    // Close the session on connection error
+    _closeSession(reason: 'Connection error: $error');
   }
 
   /// Handle connection closed
   void _handleConnectionClosed() {
-    _sessionEventController.add(
-      SessionEventGeneric(
-        sessionId: id,
-        type: SessionEventType.disconnected,
-        message: 'Client disconnected',
-      ),
-    );
+    if (_isClosed) {
+      return;
+    }
+
+    _closeSession(reason: 'Client disconnected');
   }
 
   /// Handle incoming message
@@ -134,9 +162,9 @@ class ClientSession {
       case MessageType.ping:
         return _handlePingMessage(message as PingMessage);
 
+      case MessageType.pong:
       case MessageType.handshakeResponse:
       case MessageType.error:
-      case MessageType.pong:
       case MessageType.snapshot:
         break;
     }
@@ -304,8 +332,80 @@ class ClientSession {
     return _subscribedDocuments.contains(documentId);
   }
 
+  /// Start heartbeat monitoring
+  ///
+  /// Controls that the client is still alive
+  /// by checking if the client has sent a message
+  /// in the last [Protocol.clientTimeout]
+  void _startHeartbeatMonitoring() {
+    _stopHeartbeatMonitoring();
+    _heartbeatTimer = Timer.periodic(
+      const Duration(seconds: 30),
+      (_) => _checkClientHeartbeat(),
+    );
+  }
+
+  /// Stop heartbeat monitoring
+  void _stopHeartbeatMonitoring() {
+    _heartbeatTimer?.cancel();
+    _heartbeatTimer = null;
+  }
+
+  /// Check if client is still alive based on last activity
+  void _checkClientHeartbeat() {
+    if (_isClosed) {
+      return;
+    }
+
+    final timeSinceLastActivity =
+        DateTime.now().difference(_lastClientActivity);
+
+    if (timeSinceLastActivity <= Protocol.clientTimeout) {
+      return;
+    }
+
+    _sessionEventController.add(
+      SessionEventGeneric(
+        sessionId: id,
+        type: SessionEventType.error,
+        message: 'Client timeout - no activity for'
+            ' ${timeSinceLastActivity.inSeconds}s',
+        data: {
+          'timeoutThreshold': Protocol.clientTimeout.inSeconds,
+          'lastActivity': _lastClientActivity.toIso8601String(),
+        },
+      ),
+    );
+
+    _closeSession(reason: 'Client timeout');
+  }
+
+  /// Close the session with reason
+  void _closeSession({required String reason}) {
+    if (_isClosed) {
+      return;
+    }
+
+    _isClosed = true;
+    _stopHeartbeatMonitoring();
+
+    _sessionEventController.add(
+      SessionEventGeneric(
+        sessionId: id,
+        type: SessionEventType.disconnected,
+        message: reason,
+        data: {
+          'lastActivity': _lastClientActivity.toIso8601String(),
+          'sessionDuration':
+              DateTime.now().difference(_lastClientActivity).inSeconds,
+        },
+      ),
+    );
+  }
+
   /// Dispose the session
   void dispose() {
+    _stopHeartbeatMonitoring();
     _sessionEventController.close();
   }
 }

@@ -12,6 +12,10 @@ class Protocol {
   /// Ping interval
   static const Duration pingInterval = Duration(milliseconds: 15000);
 
+  /// Client timeout (time after which a client is considered disconnected)
+  static final Duration clientTimeout =
+      Duration(seconds: pingInterval.inSeconds * 4);
+
   /// Maximum reconnect attempts
   static const int maxReconnectAttempts = 5;
 

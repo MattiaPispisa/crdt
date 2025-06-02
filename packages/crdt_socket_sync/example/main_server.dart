@@ -14,7 +14,7 @@ void main(List<String> args) async {
   server = WebSocketServer(
     host: 'localhost',
     port: 8080,
-    documentRegistry: serverRegistry,
+    serverRegistry: serverRegistry,
   );
 
   _setupSigintHandler();

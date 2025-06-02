@@ -18,11 +18,11 @@ class WebSocketServer implements CRDTSocketServer {
   WebSocketServer({
     required this.host,
     required this.port,
-    required CRDTServerRegistry documentRegistry,
+    required CRDTServerRegistry serverRegistry,
     Compressor? compressor,
   })  : _compressor = compressor ?? NoCompression.instance,
         _serverEventController = StreamController<ServerEvent>.broadcast(),
-        _serverRegistry = documentRegistry;
+        _serverRegistry = serverRegistry;
 
   /// The document registry
   final CRDTServerRegistry _serverRegistry;
@@ -200,7 +200,7 @@ class WebSocketServer implements CRDTSocketServer {
     _serverEventController.add(
       ServerEvent(
         type: ServerEventType.clientChangeApplied,
-        message: 'Client handshake completed: ${event.message}',
+        message: 'Client change applied: ${event.message}',
       ),
     );
     return broadcastMessage(
