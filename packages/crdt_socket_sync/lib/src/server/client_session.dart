@@ -149,24 +149,38 @@ class ClientSession {
 
   /// Handle incoming message
   Future<void> _handleMessage(Message message) async {
-    switch (message.type) {
-      case MessageType.handshakeRequest:
-        return _handleHandshakeRequest(message as HandshakeRequestMessage);
+    try {
+      switch (message.type) {
+        case MessageType.handshakeRequest:
+          return await _handleHandshakeRequest(
+            message as HandshakeRequestMessage,
+          );
 
-      case MessageType.change:
-        return _handleChangeMessage(message as ChangeMessage);
+        case MessageType.change:
+          return _handleChangeMessage(message as ChangeMessage);
 
-      case MessageType.snapshotRequest:
-        return _handleSnapshotRequest(message as SnapshotRequestMessage);
+        case MessageType.snapshotRequest:
+          return await _handleSnapshotRequest(
+            message as SnapshotRequestMessage,
+          );
 
-      case MessageType.ping:
-        return _handlePingMessage(message as PingMessage);
+        case MessageType.ping:
+          return await _handlePingMessage(message as PingMessage);
 
-      case MessageType.pong:
-      case MessageType.handshakeResponse:
-      case MessageType.error:
-      case MessageType.snapshot:
-        break;
+        case MessageType.pong:
+        case MessageType.handshakeResponse:
+        case MessageType.error:
+        case MessageType.snapshot:
+          break;
+      }
+    } catch (e) {
+      _sessionEventController.add(
+        SessionEventGeneric(
+          sessionId: id,
+          type: SessionEventType.error,
+          message: 'Failed to handle message: $e',
+        ),
+      );
     }
   }
 

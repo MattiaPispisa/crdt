@@ -10,8 +10,6 @@ import 'package:crdt_socket_sync/src/server/registry.dart';
 import 'package:crdt_socket_sync/src/server/server.dart';
 import 'package:web_socket_channel/status.dart';
 
-// TODO(mattia): wrap in try catch serverRegistry actions and dispatch to server error events
-
 /// WebSocket server implementation
 class WebSocketServer implements CRDTSocketServer {
   /// Constructor
@@ -318,7 +316,19 @@ class WebSocketServer implements CRDTSocketServer {
 
     // Free the document registry resources
     for (final documentId in _serverRegistry.documentIds) {
-      _serverRegistry.getDocument(documentId)?.dispose();
+      try {
+        _serverRegistry.getDocument(documentId)?.dispose();
+      } catch (e) {
+        _serverEventController.add(
+          ServerEvent(
+            type: ServerEventType.error,
+            message: 'Error disposing document: $e',
+            data: {
+              'documentId': documentId,
+            },
+          ),
+        );
+      }
     }
   }
 }
