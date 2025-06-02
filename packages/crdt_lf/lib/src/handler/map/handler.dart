@@ -92,7 +92,7 @@ class CRDTMapHandler<T> extends Handler<Map<String, T>> {
   Map<String, T> _initialState() {
     final snapshot = lastSnapshot();
     if (snapshot is Map<String, T>) {
-      return snapshot;
+      return Map.from(snapshot);
     }
     return <String, T>{};
   }

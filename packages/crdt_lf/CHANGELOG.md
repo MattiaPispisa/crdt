@@ -1,3 +1,9 @@
+## [0.6.1] - 2025-06-02
+
+### Fixed
+
+- Fix snapshot initialization for handlers that return a non primitive value
+
 ## [0.6.0] - 2025-05-10
 
 **Breaking**

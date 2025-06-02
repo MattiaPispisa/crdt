@@ -182,6 +182,33 @@ void main() {
       expect(finalState.contains('Dart'), isTrue);
     });
 
+    test('should handle concurrent insertions and deletions', () {
+      final doc1 = CRDTDocument(
+        peerId: PeerId.parse('45ee6b65-b393-40b7-9755-8b66dc7d0518'),
+      );
+      final handler1 = CRDTListHandler<String>(doc1, 'list1');
+
+      var counter = 0;
+
+      while (counter < 30) {
+        counter++;
+
+        final value = 'Item $counter';
+        handler1.insert(handler1.length, value);
+
+        if (counter % 5 == 0 && handler1.length > 3) {
+          handler1.delete(0, 1);
+        }
+
+        if (counter % 10 == 0) {
+          doc1.takeSnapshot();
+        }
+      }
+
+      final items = List.generate(24, (index) => 'Item ${index + 7}');
+      expect(handler1.value, items);
+    });
+
     test('toString returns correct string representation for empty list', () {
       final doc = CRDTDocument(
         peerId: PeerId.parse('37f1ec87-6ea5-430b-a627-a6b92b56a02d'),

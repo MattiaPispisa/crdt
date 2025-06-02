@@ -116,7 +116,7 @@ class CRDTListHandler<T> extends Handler<List<T>> {
   List<T> _initialState() {
     final snapshot = lastSnapshot();
     if (snapshot is List<T>) {
-      return snapshot;
+      return List.from(snapshot);
     }
 
     return [];

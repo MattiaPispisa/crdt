@@ -166,7 +166,7 @@ class CRDTFugueTextHandler extends Handler<List<FugueValueNode<String>>> {
   List<FugueValueNode<String>> _initialState() {
     final snapshot = lastSnapshot();
     if (snapshot is List<FugueValueNode<String>>) {
-      return snapshot;
+      return List.from(snapshot);
     }
 
     return [];
