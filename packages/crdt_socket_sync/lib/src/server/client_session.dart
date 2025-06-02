@@ -6,6 +6,9 @@ import 'package:crdt_socket_sync/src/server/client_session_event.dart';
 import 'package:crdt_socket_sync/src/server/registry.dart';
 
 /// Client session on server
+///
+/// - Handle incoming messages from [_connection]
+/// - Send messages using [_connection]
 class ClientSession {
   /// Constructor
   ClientSession({
@@ -187,10 +190,26 @@ class ClientSession {
     final documentId = message.documentId;
 
     if (!_serverRegistry.hasDocument(documentId)) {
+      _sessionEventController.add(
+        SessionEventGeneric(
+          sessionId: id,
+          type: SessionEventType.error,
+          message: 'Document not found: $documentId'
+              ', cannot apply change ${message.change.id}',
+        ),
+      );
       return;
     }
 
-    if (!_subscribedDocuments.contains(documentId)) {
+    if (!isSubscribedTo(documentId)) {
+      _sessionEventController.add(
+        SessionEventGeneric(
+          sessionId: id,
+          type: SessionEventType.error,
+          message: 'Client is not subscribed to document: $documentId'
+              ', cannot apply change ${message.change.id}',
+        ),
+      );
       return;
     }
 
@@ -199,7 +218,7 @@ class ClientSession {
 
       if (applied) {
         _sessionEventController.add(
-          SessionEventChangeReceived(
+          SessionEventChangeApplied(
             sessionId: id,
             message: 'Change received and applied for document $documentId',
             documentId: documentId,
@@ -212,7 +231,7 @@ class ClientSession {
         SessionEventGeneric(
           sessionId: id,
           type: SessionEventType.error,
-          message: 'Failed to apply change: $e',
+          message: 'Failed to apply change ${message.change.id}: $e',
         ),
       );
     }
@@ -224,6 +243,14 @@ class ClientSession {
 
     if (!_serverRegistry.hasDocument(documentId)) {
       // send error message if the document does not exist
+      _sessionEventController.add(
+        SessionEventGeneric(
+          sessionId: id,
+          type: SessionEventType.error,
+          message: 'Document not found: $documentId'
+              ', cannot send snapshot',
+        ),
+      );
       return sendMessage(
         Message.error(
           Protocol.errorDocumentNotFound,
@@ -233,7 +260,7 @@ class ClientSession {
       );
     }
 
-    if (!_subscribedDocuments.contains(documentId)) {
+    if (!isSubscribedTo(documentId)) {
       _subscribedDocuments.add(documentId);
     }
 
@@ -241,6 +268,18 @@ class ClientSession {
 
     final response = Message.snapshot(documentId, snapshot);
     await sendMessage(response);
+
+    _sessionEventController.add(
+      SessionEventGeneric(
+        sessionId: id,
+        type: SessionEventType.snapshotCreated,
+        message: 'Snapshot request completed for document $documentId',
+        data: {
+          'documentId': documentId,
+          'peerId': _clientAuthor.toString(),
+        },
+      ),
+    );
   }
 
   Future<void> _handlePingMessage(PingMessage message) async {
@@ -250,6 +289,14 @@ class ClientSession {
       DateTime.now().millisecondsSinceEpoch,
     );
     await sendMessage(pongMessage);
+
+    _sessionEventController.add(
+      SessionEventGeneric(
+        sessionId: id,
+        type: SessionEventType.pingReceived,
+        message: 'Ping received from client',
+      ),
+    );
   }
 
   /// Check if the client is subscribed to [documentId]

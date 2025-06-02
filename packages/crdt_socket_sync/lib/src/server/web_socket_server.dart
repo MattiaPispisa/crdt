@@ -194,9 +194,15 @@ class WebSocketServer implements CRDTSocketServer {
     );
   }
 
-  Future<void> _handleSessionEventChangeReceived(
-    SessionEventChangeReceived event,
+  Future<void> _handleSessionEventChangeApplied(
+    SessionEventChangeApplied event,
   ) {
+    _serverEventController.add(
+      ServerEvent(
+        type: ServerEventType.clientChangeApplied,
+        message: 'Client handshake completed: ${event.message}',
+      ),
+    );
     return broadcastMessage(
       Message.change(event.documentId, event.change),
       excludeClientIds: [event.sessionId],
@@ -213,7 +219,7 @@ class WebSocketServer implements CRDTSocketServer {
     );
   }
 
-  /// Handle a session event
+  /// Handle a [ClientSession] event.
   FutureOr<void> _handleSessionEvent(SessionEvent event) async {
     switch (event.type) {
       case SessionEventType.handshakeCompleted:
@@ -221,9 +227,9 @@ class WebSocketServer implements CRDTSocketServer {
           event as SessionEventGeneric,
         );
 
-      case SessionEventType.changeReceived:
-        return _handleSessionEventChangeReceived(
-          event as SessionEventChangeReceived,
+      case SessionEventType.changeApplied:
+        return _handleSessionEventChangeApplied(
+          event as SessionEventChangeApplied,
         );
 
       case SessionEventType.error:
@@ -231,27 +237,58 @@ class WebSocketServer implements CRDTSocketServer {
           event as SessionEventGeneric,
         );
 
+      case SessionEventType.snapshotCreated:
+        return _handleSessionEventSnapshotRequest(
+          event as SessionEventGeneric,
+        );
+
+      case SessionEventType.pingReceived:
+        return _handleSessionEventPingReceived(
+          event as SessionEventGeneric,
+        );
+
+      // already handled in _handleSessionClosed (stream onDone)
       case SessionEventType.disconnected:
         return;
     }
   }
 
+  void _handleSessionEventSnapshotRequest(SessionEventGeneric event) {
+    _serverEventController.add(
+      ServerEvent(
+        type: ServerEventType.clientSnapshotCreated,
+        message: 'Client snapshot request: ${event.message}',
+      ),
+    );
+  }
+
+  void _handleSessionEventPingReceived(SessionEventGeneric event) {
+    _serverEventController.add(
+      ServerEvent(
+        type: ServerEventType.clientPingRequest,
+        message: 'Client ping request: ${event.message}',
+      ),
+    );
+  }
+
   /// Handle session closed
   void _handleSessionClosed(String sessionId) {
     final session = _sessions.remove(sessionId);
-    if (session != null) {
-      session.dispose();
-
-      _serverEventController.add(
-        ServerEvent(
-          type: ServerEventType.clientDisconnected,
-          message: 'Client disconnected: $sessionId',
-          data: {
-            'clientId': sessionId,
-          },
-        ),
-      );
+    if (session == null) {
+      return;
     }
+
+    session.dispose();
+
+    _serverEventController.add(
+      ServerEvent(
+        type: ServerEventType.clientDisconnected,
+        message: 'Client disconnected: $sessionId',
+        data: {
+          'clientId': sessionId,
+        },
+      ),
+    );
   }
 
   /// Handle session error

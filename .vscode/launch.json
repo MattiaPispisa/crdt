@@ -18,6 +18,21 @@
       "type": "dart",
       "args": ["--dart-define=use_simulated_environment=true"]
     },
-    
+    {
+      "name": "crdt_socket_sync_example_server",
+      "cwd": "packages/crdt_socket_sync/example",
+      "request": "launch",
+      "type": "dart",
+      "program": "main_server.dart",
+      "args": []
+    },
+    {
+      "name": "crdt_socket_sync_example_client",
+      "cwd": "packages/crdt_socket_sync/example",
+      "request": "launch",
+      "type": "dart",
+      "program": "main_client.dart",
+      "args": []
+    }
   ]
 }

@@ -9,6 +9,7 @@ final serverRegistry = InMemoryCRDTServerRegistry(
   },
 );
 
+// simulate a client request to the server
 CRDTDocument getServerRegistryDocument() {
-  return serverRegistry.getDocument(_author.toString())!;
+  return CRDTDocument(peerId: _author);
 }

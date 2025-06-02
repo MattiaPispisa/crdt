@@ -119,7 +119,12 @@ class WebSocketClient implements CRDTSocketClient {
 
       _startPingTimer();
 
-      return await _performHandshake();
+      final connected = await _performHandshake();
+
+      if (!connected) {
+        _connectionStatusController.add(ConnectionStatus.error);
+      }
+      return connected;
     } catch (e) {
       _connectionStatusController.add(ConnectionStatus.error);
       return false;
@@ -272,6 +277,8 @@ class WebSocketClient implements CRDTSocketClient {
         () => false,
       );
 
+      // start a race with a timeout.
+      // _handshakeCompleter will complete in _handleMessage
       return await Future.any([_handshakeCompleter!.future, timeout]);
     } catch (e) {
       _handshakeCompleter?.complete(false);

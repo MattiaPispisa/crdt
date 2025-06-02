@@ -5,8 +5,14 @@ enum SessionEventType {
   /// Handshake completed
   handshakeCompleted,
 
-  /// Change received
-  changeReceived,
+  /// Snapshot created
+  snapshotCreated,
+
+  /// Change applied
+  changeApplied,
+
+  /// Ping received
+  pingReceived,
 
   /// Client disconnected
   disconnected,
@@ -35,14 +41,14 @@ abstract class SessionEvent {
 }
 
 /// Session event for a change received
-class SessionEventChangeReceived extends SessionEvent {
+class SessionEventChangeApplied extends SessionEvent {
   /// Constructor
-  const SessionEventChangeReceived({
+  const SessionEventChangeApplied({
     required super.sessionId,
     required super.message,
     required this.change,
     required this.documentId,
-  }) : super(type: SessionEventType.changeReceived);
+  }) : super(type: SessionEventType.changeApplied);
 
   /// The change that was received
   final Change change;

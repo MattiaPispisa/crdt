@@ -8,6 +8,8 @@ import 'package:crdt_socket_sync/src/web_socket_client.dart';
 
 import 'server_registry.dart';
 
+late WebSocketClient client;
+
 void main(List<String> args) async {
   print('🚀 Starting CRDT WebSocket Client...');
 
@@ -19,7 +21,7 @@ void main(List<String> args) async {
   final document = getServerRegistryDocument();
 
   // Create a WebSocket client
-  final client = WebSocketClient(
+  client = WebSocketClient(
     url: 'ws://localhost:8080',
     document: document,
     author: author,

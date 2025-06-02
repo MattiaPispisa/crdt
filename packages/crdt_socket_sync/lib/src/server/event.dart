@@ -6,11 +6,22 @@ enum ServerEventType {
   /// The server has been stopped
   stopped,
 
-  /// A client has connected
+  /// A client has connected.
   clientConnected,
 
-  /// A client has completed the handshake
+  /// A client has completed the handshake.
   clientHandshake,
+
+  /// A client has requested a snapshot.
+  /// The sever accepts the request and creates a snapshot.
+  clientSnapshotCreated,
+
+  /// A client has sent a change.
+  /// The server applies the change to the document.
+  clientChangeApplied,
+
+  /// A client has requested a ping
+  clientPingRequest,
 
   /// A client has disconnected
   clientDisconnected,
@@ -40,5 +51,5 @@ class ServerEvent {
   @override
   String toString() {
     return 'ServerEvent(type: $type, message: $message, data: $data)';
-  } 
+  }
 }

@@ -4,7 +4,6 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:crdt_socket_sync/src/web_socket_server.dart';
-import 'hot_reload_wathcer.dart';
 import 'server_registry.dart';
 
 late WebSocketServer server;
@@ -20,7 +19,6 @@ void main(List<String> args) async {
 
   _setupSigintHandler();
   await _startServer();
-  await _watch();
 }
 
 void _setupSigintHandler() {
@@ -30,25 +28,6 @@ void _setupSigintHandler() {
     print('✅ Server stopped.');
     exit(0);
   });
-}
-
-Future<void> _watch() {
-  final watcher = HotReloadWatcher(
-    watchPaths: [
-      'lib',
-      'example',
-      '../crdt_lf/lib',
-    ],
-    debounceDelay: const Duration(milliseconds: 300),
-  )..onFileChanged = _stopServer;
-  return watcher.startWatching();
-}
-
-Future<void> _stopServer() async {
-  print('🔄 Files changed, restarting server...');
-  await server.stop();
-  print('⏹️  Server stopped for hot reload');
-  exit(0);
 }
 
 Future<void> _startServer() async {
@@ -65,6 +44,8 @@ Future<void> _startServer() async {
       print('➡ Server event: $event');
     });
 
+    final completer = Completer<void>();
+    await completer.future;
     return;
   } catch (e) {
     print('❌ Failed to start server: $e');
