@@ -33,6 +33,13 @@
       "type": "dart",
       "program": "main_client.dart",
       "args": []
+    },
+    {
+      "name": "crdt_socket_sync_flutter_example",
+      "cwd": "packages/crdt_socket_sync/flutter_example",
+      "request": "launch",
+      "type": "dart",
+      "args": []
     }
   ]
 }

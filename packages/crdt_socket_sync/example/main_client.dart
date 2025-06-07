@@ -4,7 +4,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:crdt_lf/crdt_lf.dart';
-import 'package:crdt_socket_sync/src/web_socket_client.dart';
+import 'package:crdt_socket_sync/web_socket_client.dart';
 
 import 'server_registry.dart';
 

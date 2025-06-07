@@ -3,7 +3,7 @@
 import 'dart:async';
 import 'dart:io';
 
-import 'package:crdt_socket_sync/src/web_socket_server.dart';
+import 'package:crdt_socket_sync/web_socket_server.dart';
 import 'server_registry.dart';
 
 late WebSocketServer server;
