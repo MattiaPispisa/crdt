@@ -107,19 +107,19 @@ The package is organized into several modules for different use cases:
 #### For Client Applications
 ```dart
 // Basic client interfaces
-import 'package:crdt_socket_sync/src/client.dart';
+import 'package:crdt_socket_sync/client.dart';
 
 // WebSocket client implementation
-import 'package:crdt_socket_sync/src/web_socket_client.dart';
+import 'package:crdt_socket_sync/web_socket_client.dart';
 ```
 
 #### For Server Applications
 ```dart
 // Basic server interfaces
-import 'package:crdt_socket_sync/src/server.dart';
+import 'package:crdt_socket_sync/server.dart';
 
 // WebSocket server implementation
-import 'package:crdt_socket_sync/src/web_socket_server.dart';
+import 'package:crdt_socket_sync/web_socket_server.dart';
 ```
 ## Advanced Usage
 

@@ -3,7 +3,7 @@
 import 'dart:async';
 
 import 'package:crdt_lf/crdt_lf.dart';
-import 'package:crdt_socket_sync/src/client.dart';
+import 'package:crdt_socket_sync/client.dart';
 
 /// Mock implementation of CRDTSocketClient for testing
 class MockCRDTSocketClient implements CRDTSocketClient {
@@ -22,6 +22,8 @@ class MockCRDTSocketClient implements CRDTSocketClient {
 
   List<Message> get sentMessages => List.from(_sentMessages);
 
+  ConnectionStatus _connectionStatusValue = ConnectionStatus.disconnected;
+
   final StreamController<ConnectionStatus> _connectionStatusController =
       StreamController<ConnectionStatus>.broadcast();
   final StreamController<Message> _messagesController =
@@ -33,6 +35,9 @@ class MockCRDTSocketClient implements CRDTSocketClient {
   @override
   Stream<ConnectionStatus> get connectionStatus =>
       _connectionStatusController.stream;
+
+  @override
+  ConnectionStatus get connectionStatusValue => _connectionStatusValue;
 
   @override
   Stream<Message> get messages => _messagesController.stream;
@@ -97,4 +102,9 @@ class MockCRDTSocketClient implements CRDTSocketClient {
   }
 
   bool get isConnected => _isConnected;
+
+  void setConnectionStatus(ConnectionStatus status) {
+    _connectionStatusValue = status;
+    _connectionStatusController.add(_connectionStatusValue);
+  }
 }

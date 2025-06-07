@@ -18,7 +18,8 @@ class WebSocketClient implements CRDTSocketClient {
     Compressor? compressor,
   })  : _messageController = StreamController<Message>.broadcast(),
         _connectionStatusController =
-            StreamController<ConnectionStatus>.broadcast() {
+            StreamController<ConnectionStatus>.broadcast(),
+        _connectionStatusValue = ConnectionStatus.disconnected {
     _syncManager = SyncManager(document: document, client: this);
 
     _messageCodec = CompressedCodec<Message>(
@@ -57,6 +58,7 @@ class WebSocketClient implements CRDTSocketClient {
 
   /// Connection status controller
   final StreamController<ConnectionStatus> _connectionStatusController;
+  ConnectionStatus _connectionStatusValue;
 
   /// If client is connected
   bool _isConnected = false;
@@ -79,6 +81,9 @@ class WebSocketClient implements CRDTSocketClient {
   @override
   Stream<ConnectionStatus> get connectionStatus =>
       _connectionStatusController.stream;
+
+  @override
+  ConnectionStatus get connectionStatusValue => _connectionStatusValue;
 
   @override
   Stream<Message> get messages => _messageController.stream;
@@ -109,12 +114,12 @@ class WebSocketClient implements CRDTSocketClient {
 
       _isConnected = true;
       _reconnectAttempts = 0;
-      _connectionStatusController.add(ConnectionStatus.connected);
+      _updateConnectionStatus(ConnectionStatus.connected);
 
       _transport!.incoming.listen(
         _handleIncomingData,
         onError: _handleTransportError,
-        onDone: _handleTransportClosed,
+        onDone: disconnect,
       );
 
       _startPingTimer();
@@ -122,11 +127,11 @@ class WebSocketClient implements CRDTSocketClient {
       final connected = await _performHandshake();
 
       if (!connected) {
-        _connectionStatusController.add(ConnectionStatus.error);
+        _updateConnectionStatus(ConnectionStatus.error);
       }
       return connected;
     } catch (e) {
-      _connectionStatusController.add(ConnectionStatus.error);
+      _updateConnectionStatus(ConnectionStatus.error);
       return false;
     }
   }
@@ -141,7 +146,7 @@ class WebSocketClient implements CRDTSocketClient {
       _transport = null;
     }
 
-    _connectionStatusController.add(ConnectionStatus.disconnected);
+    _updateConnectionStatus(ConnectionStatus.disconnected);
   }
 
   @override
@@ -194,13 +199,7 @@ class WebSocketClient implements CRDTSocketClient {
   }
 
   void _handleTransportError(error) {
-    _connectionStatusController.add(ConnectionStatus.error);
-    _attemptReconnect();
-  }
-
-  void _handleTransportClosed() {
-    _isConnected = false;
-    _connectionStatusController.add(ConnectionStatus.disconnected);
+    _updateConnectionStatus(ConnectionStatus.error);
     _attemptReconnect();
   }
 
@@ -213,7 +212,7 @@ class WebSocketClient implements CRDTSocketClient {
     _isReconnecting = true;
     _reconnectAttempts++;
 
-    _connectionStatusController.add(ConnectionStatus.reconnecting);
+    _updateConnectionStatus(ConnectionStatus.reconnecting);
 
     await Future<void>.delayed(Protocol.reconnectInterval);
 
@@ -351,7 +350,7 @@ class WebSocketClient implements CRDTSocketClient {
   }
 
   void _handleErrorMessage(ErrorMessage message) {
-    _connectionStatusController.add(ConnectionStatus.error);
+    _updateConnectionStatus(ConnectionStatus.error);
 
     if (message.code == Protocol.errorHandshakeFailed &&
         _handshakeCompleter != null) {
@@ -360,9 +359,16 @@ class WebSocketClient implements CRDTSocketClient {
     }
   }
 
+  void _updateConnectionStatus(ConnectionStatus status) {
+    _connectionStatusValue = status;
+    if (_connectionStatusController.isClosed) {
+      return;
+    }
+    _connectionStatusController.add(status);
+  }
+
   @override
   void dispose() {
-    _stopPingTimer();
     disconnect();
     _messageController.close();
     _connectionStatusController.close();

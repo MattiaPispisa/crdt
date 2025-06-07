@@ -1,7 +1,7 @@
 import 'dart:async';
 
 import 'package:crdt_lf/crdt_lf.dart';
-import 'package:crdt_socket_sync/src/client.dart';
+import 'package:crdt_socket_sync/client.dart';
 import 'package:hlc_dart/hlc_dart.dart';
 import 'package:test/test.dart';
 

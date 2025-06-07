@@ -13,6 +13,9 @@ abstract class CRDTSocketClient {
   /// Stream of connection status changes between client and server
   Stream<ConnectionStatus> get connectionStatus;
 
+  /// The current connection status
+  ConnectionStatus get connectionStatusValue;
+
   /// Stream of incoming server messages
   Stream<Message> get messages;
 

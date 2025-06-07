@@ -71,7 +71,13 @@ class ClientSession {
   /// Send a message to the client
   Future<void> sendMessage(Message message) async {
     if (_isClosed) {
-      throw StateError('Session is closed');
+      return _sessionEventController.add(
+        SessionEventGeneric(
+          sessionId: id,
+          type: SessionEventType.error,
+          message: 'Session is closed',
+        ),
+      );
     }
 
     try {
@@ -395,7 +401,9 @@ class ClientSession {
   }
 
   /// Close the session with reason
-  void _closeSession({required String reason}) {
+  void _closeSession({
+    required String reason,
+  }) {
     if (_isClosed) {
       return;
     }
@@ -419,7 +427,7 @@ class ClientSession {
 
   /// Dispose the session
   void dispose() {
-    _stopHeartbeatMonitoring();
+    _closeSession(reason: 'Session disposed');
     _sessionEventController.close();
   }
 }

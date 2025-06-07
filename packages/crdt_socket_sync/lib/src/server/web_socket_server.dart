@@ -10,6 +10,9 @@ import 'package:crdt_socket_sync/src/server/registry.dart';
 import 'package:crdt_socket_sync/src/server/server.dart';
 import 'package:web_socket_channel/status.dart';
 
+// TODO(mattia): un sistema che capisce se tutte le sessioni sono allineate tra loro
+// ed effettua gli snapshot nei documenti per ridurre lo spazio
+
 /// WebSocket server implementation
 class WebSocketServer implements CRDTSocketServer {
   /// Constructor
@@ -245,9 +248,10 @@ class WebSocketServer implements CRDTSocketServer {
           event as SessionEventGeneric,
         );
 
-      // already handled in _handleSessionClosed (stream onDone)
       case SessionEventType.disconnected:
-        return;
+        return _handleSessionEventDisconnected(
+          event as SessionEventGeneric,
+        );
     }
   }
 
@@ -267,6 +271,21 @@ class WebSocketServer implements CRDTSocketServer {
         message: 'Client ping request: ${event.message}',
       ),
     );
+  }
+
+  void _handleSessionEventDisconnected(SessionEventGeneric event) {
+    _serverEventController.add(
+      ServerEvent(
+        type: ServerEventType.clientDisconnected,
+        message: 'Client disconnected: ${event.message}',
+      ),
+    );
+    final session = _sessions[event.sessionId];
+    if (session == null) {
+      return;
+    }
+    session.dispose();
+    _sessions.remove(event.sessionId);
   }
 
   /// Handle session closed
