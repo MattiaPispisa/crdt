@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_example/todo_list/_add_item.dart';
 import 'package:crdt_lf/crdt_lf.dart';
 import 'package:flutter_example/_user.dart';
+import 'package:flutter_example/todo_list/_users_connected.dart';
 import 'package:provider/provider.dart';
 
 import '_state.dart';
@@ -22,6 +23,8 @@ class TodoList extends StatelessWidget {
                 ..connect(),
       child: _TodoListContent(
         key: ValueKey('content_$documentId'),
+
+        userId: userId,
         documentId: documentId,
       ),
     );
@@ -29,8 +32,13 @@ class TodoList extends StatelessWidget {
 }
 
 class _TodoListContent extends StatelessWidget {
-  const _TodoListContent({super.key, required this.documentId});
+  const _TodoListContent({
+    super.key,
+    required this.documentId,
+    required this.userId,
+  });
 
+  final PeerId userId;
   final PeerId documentId;
 
   Future<void> _showAddTodoDialog(BuildContext context) async {
@@ -50,7 +58,12 @@ class _TodoListContent extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text("TODO LIST")),
+      appBar: AppBar(
+        title: const Text("TODO LIST"),
+        actions: [
+          UsersConnected(users: [userId]),
+        ],
+      ),
       body: Consumer<TodoListState>(
         builder: (context, state, child) {
           return Column(
