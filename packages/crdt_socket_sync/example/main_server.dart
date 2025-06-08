@@ -12,7 +12,7 @@ void main(List<String> args) async {
   print('🚀 Starting CRDT WebSocket Server...');
 
   server = WebSocketServer(
-    host: 'localhost',
+    host: InternetAddress.anyIPv4.host,
     port: 8080,
     serverRegistry: serverRegistry,
   );
@@ -32,17 +32,17 @@ void _setupSigintHandler() {
 
 Future<void> _startServer() async {
   try {
+    server.serverEvents.listen((event) {
+      print('➡ Server event: $event');
+    });
+
     await server.start();
     print('✅ CRDT WebSocket Server started successfully!');
-    print('📡 Listening on port ${server.port}');
+    print('📡 Listening on ${server.host}:${server.port}');
     print('💡 Press Ctrl+C to stop the server');
 
     // Keep the server running indefinitely
     print('🔄 Server is running... waiting for connections');
-
-    server.serverEvents.listen((event) {
-      print('➡ Server event: $event');
-    });
 
     final completer = Completer<void>();
     await completer.future;

@@ -48,6 +48,9 @@ void main(List<String> args) async {
       case ConnectionStatus.reconnecting:
         print('🟡 Reconnecting to server...');
         break;
+      case ConnectionStatus.connecting:
+        print('🟡 Connecting to server...');
+        break;
       case ConnectionStatus.error:
         print('❌ Connection error');
         break;
