@@ -73,7 +73,10 @@ void main() {
         author: PeerId.generate(),
       );
 
-      final message = Message.change(documentId, change);
+      final message = Message.change(
+        documentId: documentId,
+        change: change,
+      );
 
       expect(message, isA<ChangeMessage>());
       expect(message.type, MessageType.change);
@@ -90,7 +93,10 @@ void main() {
         data: {'key': 'value'},
       );
 
-      final message = Message.snapshot(documentId, snapshot);
+      final message = Message.snapshot(
+        documentId: documentId,
+        snapshot: snapshot,
+      );
 
       expect(message, isA<SnapshotMessage>());
       expect(message.type, MessageType.snapshot);
@@ -106,7 +112,10 @@ void main() {
         ),
       };
 
-      final message = Message.snapshotRequest(documentId, version);
+      final message = Message.snapshotRequest(
+        documentId: documentId,
+        version: version,
+      );
 
       expect(message, isA<SnapshotRequestMessage>());
       expect(message.type, MessageType.snapshotRequest);
@@ -117,7 +126,10 @@ void main() {
     test('Message.ping() should create PingMessage', () {
       const timestamp = 1234567890;
 
-      final message = Message.ping(documentId, timestamp);
+      final message = Message.ping(
+        documentId: documentId,
+        timestamp: timestamp,
+      );
 
       expect(message, isA<PingMessage>());
       expect(message.type, MessageType.ping);
@@ -130,9 +142,9 @@ void main() {
       const responseTimestamp = 1234567900;
 
       final message = Message.pong(
-        documentId,
-        originalTimestamp,
-        responseTimestamp,
+        documentId: documentId,
+        originalTimestamp: originalTimestamp,
+        responseTimestamp: responseTimestamp,
       );
 
       expect(message, isA<PongMessage>());
@@ -146,7 +158,11 @@ void main() {
       const code = 'TEST_ERROR';
       const errorMessage = 'Test error message';
 
-      final message = Message.error(documentId, code, errorMessage);
+      final message = Message.error(
+        documentId: documentId,
+        code: code,
+        message: errorMessage,
+      );
 
       expect(message, isA<ErrorMessage>());
       expect(message.type, MessageType.error);

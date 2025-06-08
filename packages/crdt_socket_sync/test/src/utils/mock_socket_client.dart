@@ -65,15 +65,18 @@ class MockCRDTSocketClient implements CRDTSocketClient {
 
   @override
   Future<void> sendChange(Change change) async {
-    final message = Message.change(document.peerId.toString(), change);
+    final message = Message.change(
+      documentId: document.peerId.toString(),
+      change: change,
+    );
     await sendMessage(message);
   }
 
   @override
   Future<void> requestSnapshot() async {
     final message = Message.snapshotRequest(
-      document.peerId.toString(),
-      document.version,
+      documentId: document.peerId.toString(),
+      version: document.version,
     );
     await sendMessage(message);
   }
@@ -107,4 +110,10 @@ class MockCRDTSocketClient implements CRDTSocketClient {
     _connectionStatusValue = status;
     _connectionStatusController.add(_connectionStatusValue);
   }
+  
+  @override
+  List<Change> get unSyncChanges => [];
+
+  @override
+  Stream<int> get unSyncChangesCount => Stream.value(0);
 }

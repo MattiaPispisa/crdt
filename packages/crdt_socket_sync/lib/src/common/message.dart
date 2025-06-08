@@ -34,7 +34,10 @@ abstract class Message {
   const Message(this.type, this.documentId);
 
   /// Create a change message
-  factory Message.change(String documentId, Change change) {
+  factory Message.change({
+    required String documentId,
+    required Change change,
+  }) {
     return ChangeMessage(
       documentId: documentId,
       change: change,
@@ -42,7 +45,10 @@ abstract class Message {
   }
 
   /// Create a snapshot message
-  factory Message.snapshot(String documentId, Snapshot snapshot) {
+  factory Message.snapshot({
+    required String documentId,
+    required Snapshot snapshot,
+  }) {
     return SnapshotMessage(
       documentId: documentId,
       snapshot: snapshot,
@@ -50,10 +56,10 @@ abstract class Message {
   }
 
   /// Create a snapshot request message
-  factory Message.snapshotRequest(
-    String documentId,
-    Set<OperationId> version,
-  ) {
+  factory Message.snapshotRequest({
+    required String documentId,
+    required Set<OperationId> version,
+  }) {
     return SnapshotRequestMessage(
       documentId: documentId,
       version: version,
@@ -61,7 +67,10 @@ abstract class Message {
   }
 
   /// Create a ping message
-  factory Message.ping(String documentId, int timestamp) {
+  factory Message.ping({
+    required String documentId,
+    required int timestamp,
+  }) {
     return PingMessage(
       documentId: documentId,
       timestamp: timestamp,
@@ -69,11 +78,11 @@ abstract class Message {
   }
 
   /// Create a pong message
-  factory Message.pong(
-    String documentId,
-    int originalTimestamp,
-    int responseTimestamp,
-  ) {
+  factory Message.pong({
+    required String documentId,
+    required int originalTimestamp,
+    required int responseTimestamp,
+  }) {
     return PongMessage(
       documentId: documentId,
       originalTimestamp: originalTimestamp,
@@ -82,7 +91,11 @@ abstract class Message {
   }
 
   /// Create an error message
-  factory Message.error(String documentId, String code, String message) {
+  factory Message.error({
+    required String documentId,
+    required String code,
+    required String message,
+  }) {
     return ErrorMessage(
       documentId: documentId,
       code: code,
@@ -154,7 +167,6 @@ class HandshakeRequestMessage extends Message {
     );
   }
 
-  // TODO(mattia): version vector or dag operationIds ?
   /// The client version vector
   final Set<OperationId> version;
 
@@ -305,7 +317,7 @@ class SnapshotRequestMessage extends Message {
     return SnapshotRequestMessage(
       version: (json['version'] as List<dynamic>)
           .map((e) => OperationId.parse(e as String))
-          .toSet(), 
+          .toSet(),
       documentId: json['documentId'] as String,
     );
   }
@@ -429,7 +441,7 @@ class ErrorMessage extends Message {
 
   @override
   Map<String, dynamic> toJson() {
-    return {  
+    return {
       'type': type.index,
       'documentId': documentId,
       'code': code,

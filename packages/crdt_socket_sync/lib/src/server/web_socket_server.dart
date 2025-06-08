@@ -205,7 +205,10 @@ class WebSocketServer implements CRDTSocketServer {
       ),
     );
     return broadcastMessage(
-      Message.change(event.documentId, event.change),
+      Message.change(
+        documentId: event.documentId,
+        change: event.change,
+      ),
       excludeClientIds: [event.sessionId],
     );
   }

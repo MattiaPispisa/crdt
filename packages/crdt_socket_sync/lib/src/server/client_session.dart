@@ -198,9 +198,9 @@ class ClientSession {
       // send error message if the document does not exist
       return sendMessage(
         Message.error(
-          Protocol.errorDocumentNotFound,
-          'Document not found: $documentId',
-          documentId,
+          documentId: documentId,
+          code: Protocol.errorDocumentNotFound,
+          message: 'Document not found: $documentId',
         ),
       );
     }
@@ -211,7 +211,14 @@ class ClientSession {
     final document = _serverRegistry.getDocument(documentId)!;
     final snapshot = _serverRegistry.getLatestSnapshot(documentId);
 
-    final changes = document.exportChanges(from: message.version);
+    late List<Change> changes;
+
+    try {
+      changes = document.exportChanges(from: message.version);
+    } catch (e) {
+      // goes here if the client is out of sync with the server
+      changes = document.exportChanges();
+    }
 
     final response = HandshakeResponseMessage(
       documentId: documentId,
@@ -273,6 +280,14 @@ class ClientSession {
             change: message.change,
           ),
         );
+      } else {
+        _sessionEventController.add(
+          SessionEventGeneric(
+            sessionId: id,
+            type: SessionEventType.error,
+            message: 'Failed to apply change ${message.change.id}',
+          ),
+        );
       }
     } catch (e) {
       _sessionEventController.add(
@@ -301,9 +316,9 @@ class ClientSession {
       );
       return sendMessage(
         Message.error(
-          Protocol.errorDocumentNotFound,
-          'Document not found: $documentId',
-          documentId,
+          documentId: documentId,
+          code: Protocol.errorDocumentNotFound,
+          message: 'Document not found: $documentId',
         ),
       );
     }
@@ -314,7 +329,10 @@ class ClientSession {
 
     final snapshot = _serverRegistry.createSnapshot(documentId);
 
-    final response = Message.snapshot(documentId, snapshot);
+    final response = Message.snapshot(
+      documentId: documentId,
+      snapshot: snapshot,
+    );
     await sendMessage(response);
 
     _sessionEventController.add(
@@ -332,9 +350,9 @@ class ClientSession {
 
   Future<void> _handlePingMessage(PingMessage message) async {
     final pongMessage = Message.pong(
-      message.documentId,
-      message.timestamp,
-      DateTime.now().millisecondsSinceEpoch,
+      documentId: message.documentId,
+      originalTimestamp: message.timestamp,
+      responseTimestamp: DateTime.now().millisecondsSinceEpoch,
     );
     await sendMessage(pongMessage);
 
