@@ -123,8 +123,9 @@ class _TodoListContent extends StatelessWidget {
       height: 30,
       color: switch (state.connectionStatusValue) {
         ConnectionStatus.connected => Colors.green,
-        ConnectionStatus.disconnected => Colors.red,
+        ConnectionStatus.disconnected => Colors.grey,
         ConnectionStatus.reconnecting => Colors.yellow,
+        ConnectionStatus.connecting => Colors.blue,
         ConnectionStatus.error => Colors.red,
       },
     );

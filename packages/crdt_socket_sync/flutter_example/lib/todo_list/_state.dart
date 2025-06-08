@@ -24,7 +24,7 @@ class TodoListState extends ChangeNotifier {
     final document = CRDTDocument(peerId: documentId);
     final handler = CRDTListHandler<String>(document, 'todo-list');
     final client = WebSocketClient(
-      url: 'ws://localhost:8080',
+      url: 'ws://192.168.1.37:8080',
       document: document,
       author: userId,
     );
