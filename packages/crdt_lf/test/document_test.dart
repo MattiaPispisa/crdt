@@ -354,5 +354,105 @@ void main() {
         ),
       );
     });
+
+    group('documents consistency', () {
+      late CRDTDocument serverDoc;
+      late CRDTDocument clientDoc;
+      late CRDTListHandler<String> serverHandler;
+      late CRDTListHandler<String> clientHandler;
+
+      setUp(() {
+        serverDoc = CRDTDocument();
+        clientDoc = CRDTDocument();
+        serverHandler = CRDTListHandler<String>(serverDoc, 'todo_list');
+        clientHandler = CRDTListHandler<String>(clientDoc, 'todo_list');
+      });
+
+      test('should be consistent', () {
+        clientHandler.insert(0, 'Hello');
+
+        serverDoc.importChanges(clientDoc.exportChanges());
+
+        expect(serverHandler.value, clientHandler.value);
+
+        clientHandler.insert(1, 'World');
+
+        // server is behind client, server doesn't have client version
+        expect(
+          () => serverDoc.exportChanges(from: clientDoc.version),
+          throwsA(isA<Error>()),
+        );
+
+        // client do nothing, client is ahead of server
+        clientDoc.importChanges(serverDoc.exportChanges());
+        expect(serverHandler.value, ['Hello']);
+        expect(clientHandler.value, ['Hello', 'World']);
+
+        // server import client changes, server is up to date
+        serverDoc.importChanges(clientDoc.exportChanges());
+        expect(serverHandler.value, ['Hello', 'World']);
+        expect(serverHandler.value, clientHandler.value);
+      });
+
+      test('should be consistent', () {
+        clientHandler.insert(0, 'Hello');
+        serverDoc.importChanges(clientDoc.exportChanges());
+
+        clientHandler.insert(1, 'World');
+        final serverSnapshot = serverDoc.takeSnapshot();
+
+        clientDoc.importChanges(serverDoc.exportChanges());
+        final snapshotImported = clientDoc.importSnapshot(serverSnapshot);
+
+        expect(snapshotImported, isFalse);
+        expect(serverHandler.value, ['Hello']);
+        expect(clientHandler.value, ['Hello', 'World']);
+        expect(clientDoc.exportChanges().length, 2);
+
+        clientDoc.mergeSnapshot(serverSnapshot);
+        expect(clientDoc.exportChanges().length, 1);
+
+        // server import client changes, server is up to date
+        final changesImportedCount =
+            serverDoc.importChanges(clientDoc.exportChanges());
+        expect(changesImportedCount, 1);
+
+        expect(serverHandler.value, ['Hello', 'World']);
+        expect(serverHandler.value, clientHandler.value);
+      });
+
+      test('should be consistent', () {
+        clientHandler.insert(0, 'Hello');
+        serverDoc.importChanges(clientDoc.exportChanges());
+
+        clientHandler.insert(1, 'World');
+        final serverSnapshot = serverDoc.takeSnapshot();
+
+        expect(
+          clientDoc.import(
+            snapshot: serverSnapshot,
+            changes: serverDoc.exportChanges(),
+          ),
+          equals(-1),
+        );
+
+        expect(
+          clientDoc.import(
+            snapshot: serverSnapshot,
+            changes: serverDoc.exportChanges(),
+            merge: true,
+          ),
+          equals(0),
+        );
+
+        expect(clientDoc.exportChanges().length, 1);
+        final changesImportedCount =
+            serverDoc.importChanges(clientDoc.exportChanges());
+        expect(changesImportedCount, 1);
+
+        expect(serverHandler.value, ['Hello', 'World']);
+        expect(serverHandler.value, clientHandler.value);
+      });
+    });
   });
 }

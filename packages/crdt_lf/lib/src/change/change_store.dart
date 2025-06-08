@@ -83,20 +83,43 @@ class ChangeStore {
   /// Removes [Change]s that are causally **older than**
   /// the provided [version] vector.
   ///
-  /// Returns the number of changes pruned.
+  /// If a [Change] has a dependency on a pruned [Change],
+  /// the dependency is removed to preserve integrity.
+  ///
+  /// Returns the number of [Change]s that were removed.
   int prune(VersionVector version) {
-    var removedCount = 0;
+    final removedIds = <OperationId>{};
 
-    final ids = _changes.keys.toList();
+    // 1. identify and remove old changes
+    var ids = _changes.keys.toList();
     for (final id in ids) {
       final clock = version[id.peerId];
       if (clock != null && id.hlc.compareTo(clock) <= 0) {
         _changes.remove(id);
-        removedCount++;
+        removedIds.add(id);
       }
     }
 
-    return removedCount;
+    if (removedIds.isEmpty) {
+      return 0;
+    }
+
+    // 2. clean up dependencies in remaining changes
+    ids = _changes.keys.toList();
+    for (final id in ids) {
+      // Remove dependencies to pruned changes
+      _changes.update(id, (change) {
+        return Change.fromPayload(
+          id: change.id,
+          payload: change.payload,
+          deps: Set.from(change.deps)..removeWhere(removedIds.contains),
+          hlc: change.hlc,
+          author: change.author,
+        );
+      });
+    }
+
+    return removedIds.length;
   }
 
   /// Clears all [Change]s from the store

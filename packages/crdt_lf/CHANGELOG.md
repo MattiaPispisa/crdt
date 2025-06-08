@@ -1,3 +1,12 @@
+## [0.7.0] - 2025-06-08
+
+### Added
+- `CRDTDocument.mergeSnapshot` to merge a snapshot with the current snapshot
+- `CRDTDocument.import` to import changes and snapshots with a single method and different strategies
+
+### Changed
+- On changes pruning, if a change has a dependency on a pruned change, the dependency is removed to preserve integrity
+
 ## [0.6.1] - 2025-06-02
 
 ### Fixed

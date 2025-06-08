@@ -24,7 +24,7 @@ class Change {
     required HybridLogicalClock hlc,
     required PeerId author,
   }) {
-    return Change._(
+    return Change.fromPayload(
       id: id,
       deps: deps,
       hlc: hlc,
@@ -34,7 +34,14 @@ class Change {
   }
 
   /// Creates a new [Change] with the given properties
-  const Change._({
+  ///
+  /// [id] the operation id of the change
+  /// [payload] the operation payload that is being applied
+  /// [deps] the dependencies of the change
+  /// ([OperationId]s that this change depends on)
+  /// [hlc] the hybrid logical clock of the change
+  /// [author] the author of the change
+  const Change.fromPayload({
     required this.id,
     required this.deps,
     required this.hlc,
@@ -45,7 +52,7 @@ class Change {
   /// Creates a Change from a JSON object
   factory Change.fromJson(Map<String, dynamic> json) {
     final hlc = json['hlc'] as Map<String, dynamic>;
-    return Change._(
+    return Change.fromPayload(
       id: OperationId.parse(json['id'] as String),
       deps: (json['deps'] as List)
           .map((d) => OperationId.parse(d as String))

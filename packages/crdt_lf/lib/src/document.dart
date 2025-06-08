@@ -175,14 +175,28 @@ class CRDTDocument {
 
       _lastSnapshot = snapshot;
 
-      for (final provider in _handlers.values) {
-        provider.invalidateCache();
-      }
+      _invalidateHandlers();
 
       return true;
     }
 
     return false;
+  }
+
+  /// Merges a [Snapshot] with the current snapshot
+  ///
+  /// This operation is always successful, even if the snapshot is older than
+  /// the current snapshot.
+  void mergeSnapshot(Snapshot snapshot) {
+    if (_lastSnapshot == null) {
+      _lastSnapshot = snapshot;
+    } else {
+      _lastSnapshot = _lastSnapshot!.merged(snapshot);
+    }
+
+    _prune(_lastSnapshot!.versionVector);
+
+    _invalidateHandlers();
   }
 
   /// Whether the given [snapshot] should be applied.
@@ -195,6 +209,54 @@ class CRDTDocument {
 
     return snapshot.versionVector
         .isStrictlyNewerOrEqualThan(getVersionVector());
+  }
+
+  /// Import [snapshot] and [changes].
+  /// [merge] is `false` by default.
+  ///
+  /// Returns the number of [Change]s that were applied.
+  ///
+  /// Return `-1` if the import failed.
+  ///
+  /// [snapshot] is always applied before [changes]
+  ///
+  /// If [merge] is `false`
+  /// [snapshot] is applied only if it is newer than document version
+  /// (snapshot is imported using [importSnapshot]),
+  /// also [changes] are ignored if [snapshot] is not imported.
+  ///
+  /// If [merge] is `true`, [snapshot] is merged with the current snapshot
+  /// (snapshot is imported using [mergeSnapshot])
+  /// and [changes] are applied to the merged snapshot.
+  ///
+  /// For more details:
+  /// - `merge`: `true` --> [mergeSnapshot] is called before [importChanges]
+  /// - `merge`: `false` --> [importSnapshot] is called before [importChanges]
+  int import({
+    Snapshot? snapshot,
+    List<Change>? changes,
+    bool merge = false,
+  }) {
+    if (snapshot == null && changes == null) {
+      return 0;
+    }
+
+    final changesToImport = changes ?? <Change>[];
+
+    if (snapshot == null) {
+      return importChanges(changesToImport);
+    }
+
+    if (merge) {
+      mergeSnapshot(snapshot);
+      return importChanges(changesToImport);
+    }
+
+    final imported = importSnapshot(snapshot);
+    if (!imported) {
+      return -1;
+    }
+    return importChanges(changesToImport);
   }
 
   /// Exports [Change]s from a specific version
@@ -321,6 +383,13 @@ class CRDTDocument {
     }
 
     return result;
+  }
+
+  /// Invalidates the cache of all handlers
+  void _invalidateHandlers() {
+    for (final handler in _handlers.values) {
+      handler.invalidateCache();
+    }
   }
 
   /// Returns a string representation of this document
