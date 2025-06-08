@@ -38,6 +38,7 @@ abstract class CRDTSocketClient {
   Future<void> sendChange(Change change);
 
   /// Request a snapshot from the server
+  // TODO(mattia): request server state like the handshake
   Future<void> requestSnapshot();
 
   /// Dispose the client

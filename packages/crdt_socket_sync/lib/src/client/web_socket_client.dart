@@ -90,6 +90,10 @@ class WebSocketClient implements CRDTSocketClient {
     return _handshakeCompleter!.future;
   }
 
+  /// Whether the client is handshaking
+  bool get _handshaking =>
+      _handshakeCompleter != null && !_handshakeCompleter!.isCompleted;
+
   /// Codec for messages
   late final MessageCodec<Message> _messageCodec;
 
@@ -128,6 +132,11 @@ class WebSocketClient implements CRDTSocketClient {
       return true;
     }
 
+    if (_handshaking) {
+      // already under connection
+      return _handshakeCompleter!.future;
+    }
+
     try {
       final connector = _WebSocketConnector(url);
 
@@ -145,13 +154,10 @@ class WebSocketClient implements CRDTSocketClient {
         onDone: disconnect,
       );
 
-      _startPingTimer();
-
       final connected = await _performHandshake();
       if (connected) {
+        _startPingTimer();
         _updateConnectionStatus(ConnectionStatus.connected);
-      } else {
-        _updateConnectionStatus(ConnectionStatus.error);
       }
 
       return connected;
@@ -206,7 +212,7 @@ class WebSocketClient implements CRDTSocketClient {
   @override
   Future<void> requestSnapshot() async {
     await tryCatchIgnore(() async {
-      final message = Message.snapshotRequest(
+      final message = Message.documentStatusRequest(
         documentId: _documentId,
         version: document.version,
       );
@@ -234,17 +240,19 @@ class WebSocketClient implements CRDTSocketClient {
     }
   }
 
+  /// set status with [ConnectionStatus.error]
+  /// and attempt to reconnect ([_attemptReconnect])
   void _handleTransportError(error) {
-    _updateConnectionStatus(ConnectionStatus.error);
+    if (!_connectionStatusValue.isReconnecting) {
+      _updateConnectionStatus(ConnectionStatus.error);
+    }
     _attemptReconnect();
   }
 
+  /// Attempt to reconnect calling with [Protocol.reconnectInterval] interval
+  /// the [connect] method
   Future<void> _attemptReconnect() async {
     if (_isReconnecting) {
-      return;
-    }
-
-    if (_connectionStatusValue.isConnected) {
       return;
     }
 
@@ -275,6 +283,7 @@ class WebSocketClient implements CRDTSocketClient {
     }
   }
 
+  /// Start the periodic ping [_sendPing] with [Protocol.pingInterval] interval
   void _startPingTimer() {
     _stopPingTimer();
     _pingTimer = Timer.periodic(
@@ -283,11 +292,13 @@ class WebSocketClient implements CRDTSocketClient {
     );
   }
 
+  /// Stop the periodic ping
   void _stopPingTimer() {
     _pingTimer?.cancel();
     _pingTimer = null;
   }
 
+  /// Send a ping message to the server
   Future<void> _sendPing() async {
     if (!_connectionStatusValue.isDisconnected) {
       await tryCatchIgnore(() async {
@@ -347,8 +358,8 @@ class WebSocketClient implements CRDTSocketClient {
         _handleChangeMessage(message as ChangeMessage);
         break;
 
-      case MessageType.snapshot:
-        _handleSnapshotMessage(message as SnapshotMessage);
+      case MessageType.documentStatus:
+        _handleDocumentStatusMessage(message as DocumentStatusMessage);
         break;
 
       case MessageType.ping:
@@ -361,12 +372,20 @@ class WebSocketClient implements CRDTSocketClient {
 
       case MessageType.pong:
       case MessageType.handshakeRequest:
-      case MessageType.snapshotRequest:
+      case MessageType.documentStatusRequest:
         break;
     }
   }
 
+  /// Handles the handshake response
+  ///
+  /// Merges the changes and snapshot into the document
+  /// and completes the handshake
   void _handleHandshakeResponse(HandshakeResponseMessage message) {
+    _syncManager.merge(
+      changes: message.changes,
+      snapshot: message.snapshot,
+    );
     _handshakeCompleter?.complete(true);
   }
 
@@ -374,8 +393,11 @@ class WebSocketClient implements CRDTSocketClient {
     _syncManager.applyChange(message.change);
   }
 
-  void _handleSnapshotMessage(SnapshotMessage message) {
-    _syncManager.applySnapshot(message.snapshot);
+  void _handleDocumentStatusMessage(DocumentStatusMessage message) {
+    _syncManager.merge(
+      changes: message.changes,
+      snapshot: message.snapshot,
+    );
   }
 
   Future<void> _handlePingMessage(PingMessage message) async {
@@ -397,6 +419,8 @@ class WebSocketClient implements CRDTSocketClient {
     }
   }
 
+  /// If [status] is different from [_connectionStatusValue]
+  /// then update the connection status and notify the listeners
   void _updateConnectionStatus(ConnectionStatus status) {
     if (status == _connectionStatusValue) {
       return;

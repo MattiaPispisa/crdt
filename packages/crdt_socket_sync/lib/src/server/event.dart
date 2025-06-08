@@ -14,7 +14,7 @@ enum ServerEventType {
 
   /// A client has requested a snapshot.
   /// The sever accepts the request and creates a snapshot.
-  clientSnapshotCreated,
+  clientDocumentStatusCreated,
 
   /// A client has sent a change.
   /// The server applies the change to the document.

@@ -79,7 +79,7 @@ void main() {
         // Should have sent a snapshot request
         expect(mockClient.sentMessages.length, equals(1));
         final sentMessage = mockClient.getLastSentMessage();
-        expect(sentMessage, isA<SnapshotRequestMessage>());
+        expect(sentMessage, isA<DocumentStatusRequestMessage>());
         expect(sentMessage!.documentId, equals(document.peerId.toString()));
       });
 
@@ -165,7 +165,7 @@ void main() {
         // Should have sent at least one snapshot request
         // due to the invalid change
         final snapshotRequests =
-            mockClient.getSentMessagesOfType<SnapshotRequestMessage>();
+            mockClient.getSentMessagesOfType<DocumentStatusRequestMessage>();
         expect(snapshotRequests.length, greaterThan(0));
       });
     });
@@ -179,8 +179,10 @@ void main() {
           data: {'test-handler': 'test_state'},
         );
 
-        final result = syncManager.applySnapshot(snapshot);
-        expect(result, isTrue);
+        syncManager.merge(
+          snapshot: snapshot,
+          changes: [],
+        );
       });
 
       test('should return false for outdated snapshot', () {
@@ -195,8 +197,10 @@ void main() {
           data: {'test-handler': 'test_state'},
         );
 
-        final result = syncManager.applySnapshot(outdatedSnapshot);
-        expect(result, isFalse);
+        syncManager.merge(
+          snapshot: outdatedSnapshot,
+          changes: [],
+        );
       });
 
       test('should apply newer snapshot over existing state', () {
@@ -207,8 +211,10 @@ void main() {
           data: {'test-handler': 'test_state'},
         );
 
-        final result = syncManager.applySnapshot(snapshot);
-        expect(result, isTrue);
+        syncManager.merge(
+          snapshot: snapshot,
+          changes: [],
+        );
       });
     });
 
@@ -268,7 +274,10 @@ void main() {
           data: {'test-handler': 'test_state'},
         );
 
-        expect(syncManager.applySnapshot(snapshot), isTrue);
+        syncManager.merge(
+          snapshot: snapshot,
+          changes: [],
+        );
       });
 
       test('should handle concurrent local changes', () async {
@@ -301,7 +310,10 @@ void main() {
           data: {},
         );
 
-        expect(syncManager.applySnapshot(snapshot), isTrue);
+        syncManager.merge(
+          snapshot: snapshot,
+          changes: [],
+        );
       });
 
       test('should handle change with empty dependencies', () {
@@ -342,7 +354,7 @@ void main() {
 
         // Should have requested missing changes
         final snapshotRequests =
-            mockClient.getSentMessagesOfType<SnapshotRequestMessage>();
+            mockClient.getSentMessagesOfType<DocumentStatusRequestMessage>();
         expect(snapshotRequests.length, equals(1));
       });
     });

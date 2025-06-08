@@ -48,6 +48,10 @@ class TodoListState extends ChangeNotifier {
       ..messages.listen((message) {
         notifyListeners();
       });
+
+    _client.messages.listen((message) {
+      print('message: $message');
+    });
   }
 
   ConnectionStatus get connectionStatusValue => _client.connectionStatusValue;

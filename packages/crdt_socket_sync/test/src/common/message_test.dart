@@ -39,8 +39,8 @@ void main() {
           MessageType.handshakeRequest,
           MessageType.handshakeResponse,
           MessageType.change,
-          MessageType.snapshot,
-          MessageType.snapshotRequest,
+          MessageType.documentStatus,
+          MessageType.documentStatusRequest,
           MessageType.ping,
           MessageType.pong,
           MessageType.error,
@@ -93,15 +93,16 @@ void main() {
         data: {'key': 'value'},
       );
 
-      final message = Message.snapshot(
+      final message = Message.documentStatus(
         documentId: documentId,
         snapshot: snapshot,
+        changes: [],
       );
 
-      expect(message, isA<SnapshotMessage>());
-      expect(message.type, MessageType.snapshot);
+      expect(message, isA<DocumentStatusMessage>());
+      expect(message.type, MessageType.documentStatus);
       expect(message.documentId, documentId);
-      expect((message as SnapshotMessage).snapshot, snapshot);
+      expect((message as DocumentStatusMessage).snapshot, snapshot);
     });
 
     test('Message.snapshotRequest() should create SnapshotRequestMessage', () {
@@ -112,15 +113,15 @@ void main() {
         ),
       };
 
-      final message = Message.snapshotRequest(
+      final message = Message.documentStatusRequest(
         documentId: documentId,
         version: version,
       );
 
-      expect(message, isA<SnapshotRequestMessage>());
-      expect(message.type, MessageType.snapshotRequest);
+      expect(message, isA<DocumentStatusRequestMessage>());
+      expect(message.type, MessageType.documentStatusRequest);
       expect(message.documentId, documentId);
-      expect((message as SnapshotRequestMessage).version, version);
+      expect((message as DocumentStatusRequestMessage).version, version);
     });
 
     test('Message.ping() should create PingMessage', () {
@@ -428,39 +429,39 @@ void main() {
     );
 
     test('should create with correct properties', () {
-      final message = SnapshotMessage(
+      final message = DocumentStatusMessage(
         documentId: documentId,
         snapshot: snapshot,
       );
 
-      expect(message.type, MessageType.snapshot);
+      expect(message.type, MessageType.documentStatus);
       expect(message.documentId, documentId);
       expect(message.snapshot, snapshot);
     });
 
     test('should serialize to JSON correctly', () {
-      final message = SnapshotMessage(
+      final message = DocumentStatusMessage(
         documentId: documentId,
         snapshot: snapshot,
       );
 
       final json = message.toJson();
 
-      expect(json['type'], MessageType.snapshot.index);
+      expect(json['type'], MessageType.documentStatus.index);
       expect(json['documentId'], documentId);
       expect(json['snapshot'], snapshot.toJson());
     });
 
     test('should deserialize from JSON correctly', () {
       final json = {
-        'type': MessageType.snapshot.index,
+        'type': MessageType.documentStatus.index,
         'documentId': documentId,
         'snapshot': snapshot.toJson(),
       };
 
-      final message = SnapshotMessage.fromJson(json);
+      final message = DocumentStatusMessage.fromJson(json);
 
-      expect(message.type, MessageType.snapshot);
+      expect(message.type, MessageType.documentStatus);
       expect(message.documentId, documentId);
       expect(message.snapshot, isNotNull);
     });
@@ -476,39 +477,39 @@ void main() {
     };
 
     test('should create with correct properties', () {
-      final message = SnapshotRequestMessage(
+      final message = DocumentStatusRequestMessage(
         documentId: documentId,
         version: version,
       );
 
-      expect(message.type, MessageType.snapshotRequest);
+      expect(message.type, MessageType.documentStatusRequest);
       expect(message.documentId, documentId);
       expect(message.version, version);
     });
 
     test('should serialize to JSON correctly', () {
-      final message = SnapshotRequestMessage(
+      final message = DocumentStatusRequestMessage(
         documentId: documentId,
         version: version,
       );
 
       final json = message.toJson();
 
-      expect(json['type'], MessageType.snapshotRequest.index);
+      expect(json['type'], MessageType.documentStatusRequest.index);
       expect(json['documentId'], documentId);
       expect(json['version'], version.map((e) => e.toString()).toList());
     });
 
     test('should deserialize from JSON correctly', () {
       final json = {
-        'type': MessageType.snapshotRequest.index,
+        'type': MessageType.documentStatusRequest.index,
         'documentId': documentId,
         'version': version.map((e) => e.toString()).toList(),
       };
 
-      final message = SnapshotRequestMessage.fromJson(json);
+      final message = DocumentStatusRequestMessage.fromJson(json);
 
-      expect(message.type, MessageType.snapshotRequest);
+      expect(message.type, MessageType.documentStatusRequest);
       expect(message.documentId, documentId);
       expect(message.version, version);
     });
@@ -767,28 +768,28 @@ void main() {
         data: {'key': 'value'},
       );
       final json = {
-        'type': MessageType.snapshot.index,
+        'type': MessageType.documentStatus.index,
         'documentId': 'test-doc',
         'snapshot': snapshot.toJson(),
       };
 
       final message = Message.fromJson(json);
 
-      expect(message, isA<SnapshotMessage>());
-      expect(message.type, MessageType.snapshot);
+      expect(message, isA<DocumentStatusMessage>());
+      expect(message.type, MessageType.documentStatus);
     });
 
     test('should deserialize SnapshotRequestMessage', () {
       final json = {
-        'type': MessageType.snapshotRequest.index,
+        'type': MessageType.documentStatusRequest.index,
         'documentId': 'test-doc',
         'version': <String>[],
       };
 
       final message = Message.fromJson(json);
 
-      expect(message, isA<SnapshotRequestMessage>());
-      expect(message.type, MessageType.snapshotRequest);
+      expect(message, isA<DocumentStatusRequestMessage>());
+      expect(message.type, MessageType.documentStatusRequest);
     });
 
     test('should deserialize PingMessage', () {

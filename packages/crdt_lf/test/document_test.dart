@@ -453,6 +453,36 @@ void main() {
         expect(serverHandler.value, ['Hello', 'World']);
         expect(serverHandler.value, clientHandler.value);
       });
+
+      test('should be consistent', () {
+        clientHandler.insert(0, 'Hello');
+        serverDoc.importChanges(clientDoc.exportChanges());
+
+        clientHandler.insert(1, 'World');
+        serverHandler.insert(1, 'All');
+
+        expect(
+          () => serverDoc.exportChanges(from: clientDoc.version),
+          throwsA(isA<Error>()),
+        );
+        expect(
+          () => clientDoc.exportChanges(from: serverDoc.version),
+          throwsA(isA<Error>()),
+        );
+
+        expect(
+          clientDoc.import(changes: serverDoc.exportChanges()),
+          equals(1),
+        );
+
+        expect(
+          serverDoc.import(changes: clientDoc.exportChanges()),
+          equals(1),
+        );
+
+        expect(serverHandler.value, ['Hello', 'World', 'All']);
+        expect(serverHandler.value, clientHandler.value);
+      });
     });
   });
 }

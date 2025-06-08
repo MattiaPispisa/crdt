@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_example/todo_list/_add_item.dart';
 import 'package:crdt_lf/crdt_lf.dart';
 import 'package:flutter_example/_user.dart';
+import 'package:flutter_example/todo_list/_connection_status.dart';
 import 'package:flutter_example/todo_list/_users_connected.dart';
 import 'package:provider/provider.dart';
 
@@ -69,7 +70,7 @@ class _TodoListContent extends StatelessWidget {
           return Column(
             children: [
               Expanded(child: _todos(context, state)),
-              _connectionStatus(context, state),
+              ConnectionStatusIndicator(state: state),
             ],
           );
         },
@@ -117,17 +118,4 @@ class _TodoListContent extends StatelessWidget {
     );
   }
 
-  Widget _connectionStatus(BuildContext context, TodoListState state) {
-    return Container(
-      width: double.infinity,
-      height: 30,
-      color: switch (state.connectionStatusValue) {
-        ConnectionStatus.connected => Colors.green,
-        ConnectionStatus.disconnected => Colors.grey,
-        ConnectionStatus.reconnecting => Colors.yellow,
-        ConnectionStatus.connecting => Colors.blue,
-        ConnectionStatus.error => Colors.red,
-      },
-    );
-  }
 }

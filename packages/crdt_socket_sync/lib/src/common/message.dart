@@ -13,10 +13,10 @@ enum MessageType {
   change,
 
   /// Message containing a full snapshot
-  snapshot,
+  documentStatus,
 
   /// Snapshot request message sent from client to server
-  snapshotRequest,
+  documentStatusRequest,
 
   /// Ping message to check the connection
   ping,
@@ -44,23 +44,25 @@ abstract class Message {
     );
   }
 
-  /// Create a snapshot message
-  factory Message.snapshot({
+  /// Create a document status message
+  factory Message.documentStatus({
     required String documentId,
-    required Snapshot snapshot,
+    required Snapshot? snapshot,
+    required List<Change>? changes,
   }) {
-    return SnapshotMessage(
+    return DocumentStatusMessage(
       documentId: documentId,
       snapshot: snapshot,
+      changes: changes,
     );
   }
 
-  /// Create a snapshot request message
-  factory Message.snapshotRequest({
+  /// Create a document status request message
+  factory Message.documentStatusRequest({
     required String documentId,
     required Set<OperationId> version,
   }) {
-    return SnapshotRequestMessage(
+    return DocumentStatusRequestMessage(
       documentId: documentId,
       version: version,
     );
@@ -128,10 +130,10 @@ abstract class Message {
         return HandshakeResponseMessage.fromJson(json);
       case MessageType.change:
         return ChangeMessage.fromJson(json);
-      case MessageType.snapshot:
-        return SnapshotMessage.fromJson(json);
-      case MessageType.snapshotRequest:
-        return SnapshotRequestMessage.fromJson(json);
+      case MessageType.documentStatus:
+        return DocumentStatusMessage.fromJson(json);
+      case MessageType.documentStatusRequest:
+        return DocumentStatusRequestMessage.fromJson(json);
       case MessageType.ping:
         return PingMessage.fromJson(json);
       case MessageType.pong:
@@ -271,30 +273,35 @@ class ChangeMessage extends Message {
 }
 
 /// Message containing a full snapshot.
-class SnapshotMessage extends Message {
+class DocumentStatusMessage extends Message {
   /// Constructor
-  const SnapshotMessage({
-    required this.snapshot,
+  const DocumentStatusMessage({
     required String documentId,
-  }) : super(MessageType.snapshot, documentId);
+    this.snapshot,
+    this.changes,
+  }) : super(MessageType.documentStatus, documentId);
 
   /// Create a snapshot message from a JSON map
-  factory SnapshotMessage.fromJson(Map<String, dynamic> json) {
-    return SnapshotMessage(
+  factory DocumentStatusMessage.fromJson(Map<String, dynamic> json) {
+    return DocumentStatusMessage(
       snapshot: Snapshot.fromJson(json['snapshot'] as Map<String, dynamic>),
       documentId: json['documentId'] as String,
     );
   }
 
   /// The CRDT snapshot
-  final Snapshot snapshot;
+  final Snapshot? snapshot;
+
+  /// The CRDT changes
+  final List<Change>? changes;
 
   @override
   Map<String, dynamic> toJson() {
     return {
       'type': type.index,
       'documentId': documentId,
-      'snapshot': snapshot.toJson(),
+      'snapshot': snapshot?.toJson(),
+      'changes': changes?.map((c) => c.toJson()).toList(),
     };
   }
 
@@ -305,16 +312,16 @@ class SnapshotMessage extends Message {
 }
 
 /// Snapshot request message sent from client to server.
-class SnapshotRequestMessage extends Message {
+class DocumentStatusRequestMessage extends Message {
   /// Constructor
-  const SnapshotRequestMessage({
+  const DocumentStatusRequestMessage({
     required this.version,
     required String documentId,
-  }) : super(MessageType.snapshotRequest, documentId);
+  }) : super(MessageType.documentStatusRequest, documentId);
 
   /// Create a snapshot request message from a JSON map
-  factory SnapshotRequestMessage.fromJson(Map<String, dynamic> json) {
-    return SnapshotRequestMessage(
+  factory DocumentStatusRequestMessage.fromJson(Map<String, dynamic> json) {
+    return DocumentStatusRequestMessage(
       version: (json['version'] as List<dynamic>)
           .map((e) => OperationId.parse(e as String))
           .toSet(),

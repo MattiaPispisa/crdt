@@ -165,9 +165,9 @@ class ClientSession {
         case MessageType.change:
           return _handleChangeMessage(message as ChangeMessage);
 
-        case MessageType.snapshotRequest:
-          return await _handleSnapshotRequest(
-            message as SnapshotRequestMessage,
+        case MessageType.documentStatusRequest:
+          return await _handleDocumentStatusRequest(
+            message as DocumentStatusRequestMessage,
           );
 
         case MessageType.ping:
@@ -176,7 +176,7 @@ class ClientSession {
         case MessageType.pong:
         case MessageType.handshakeResponse:
         case MessageType.error:
-        case MessageType.snapshot:
+        case MessageType.documentStatus:
           break;
       }
     } catch (e) {
@@ -301,7 +301,9 @@ class ClientSession {
   }
 
   /// Handle snapshot request
-  Future<void> _handleSnapshotRequest(SnapshotRequestMessage message) async {
+  Future<void> _handleDocumentStatusRequest(
+    DocumentStatusRequestMessage message,
+  ) async {
     final documentId = message.documentId;
 
     if (!_serverRegistry.hasDocument(documentId)) {
@@ -327,18 +329,20 @@ class ClientSession {
       _subscribedDocuments.add(documentId);
     }
 
-    final snapshot = _serverRegistry.createSnapshot(documentId);
+    final snapshot = _serverRegistry.getLatestSnapshot(documentId);
+    final changes = _serverRegistry.getDocument(documentId)!.exportChanges();
 
-    final response = Message.snapshot(
+    final response = Message.documentStatus(
       documentId: documentId,
       snapshot: snapshot,
+      changes: changes,
     );
     await sendMessage(response);
 
     _sessionEventController.add(
       SessionEventGeneric(
         sessionId: id,
-        type: SessionEventType.snapshotCreated,
+        type: SessionEventType.documentStatusCreated,
         message: 'Snapshot request completed for document $documentId',
         data: {
           'documentId': documentId,

@@ -5,8 +5,8 @@ enum SessionEventType {
   /// Handshake completed
   handshakeCompleted,
 
-  /// Snapshot created
-  snapshotCreated,
+  /// Document status created
+  documentStatusCreated,
 
   /// Change applied
   changeApplied,

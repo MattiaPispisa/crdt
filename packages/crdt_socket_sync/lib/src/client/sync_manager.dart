@@ -81,30 +81,16 @@ class SyncManager {
     }
   }
 
-  /// Imports or merges changes and snapshot
-  void importOrMerge({
+  /// [CRDTDocument.import] with `merge: true`
+  void merge({
     List<Change>? changes,
     Snapshot? snapshot,
   }) {
-    final applied = document.import(
+    document.import(
       changes: changes,
       snapshot: snapshot,
+      merge: true,
     );
-
-    if (applied == -1) {
-      document.import(
-        changes: changes,
-        snapshot: snapshot,
-        merge: true,
-      );
-    }
-
-    return;
-  }
-
-  /// Applies a snapshot received from the server
-  bool applySnapshot(Snapshot snapshot) {
-    return document.importSnapshot(snapshot);
   }
 
   /// Requests the missing changes from the server
@@ -112,7 +98,7 @@ class SyncManager {
     await tryCatchIgnore(() {
       // Request a snapshot from the server
       return client.sendMessage(
-        Message.snapshotRequest(
+        Message.documentStatusRequest(
           documentId: _documentId,
           version: document.version,
         ),

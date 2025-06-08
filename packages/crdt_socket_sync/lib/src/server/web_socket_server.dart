@@ -241,8 +241,8 @@ class WebSocketServer implements CRDTSocketServer {
           event as SessionEventGeneric,
         );
 
-      case SessionEventType.snapshotCreated:
-        return _handleSessionEventSnapshotRequest(
+      case SessionEventType.documentStatusCreated:
+        return _handleSessionEventDocumentStatusRequest(
           event as SessionEventGeneric,
         );
 
@@ -258,11 +258,11 @@ class WebSocketServer implements CRDTSocketServer {
     }
   }
 
-  void _handleSessionEventSnapshotRequest(SessionEventGeneric event) {
+  void _handleSessionEventDocumentStatusRequest(SessionEventGeneric event) {
     _serverEventController.add(
       ServerEvent(
-        type: ServerEventType.clientSnapshotCreated,
-        message: 'Client snapshot request: ${event.message}',
+        type: ServerEventType.clientDocumentStatusCreated,
+        message: 'Client document status request: ${event.message}',
       ),
     );
   }
