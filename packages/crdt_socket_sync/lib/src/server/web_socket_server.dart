@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
 import 'package:crdt_socket_sync/src/common/common.dart';
+import 'package:crdt_socket_sync/src/common/utils.dart';
 import 'package:crdt_socket_sync/src/server/client_session.dart';
 import 'package:crdt_socket_sync/src/server/client_session_event.dart';
 import 'package:crdt_socket_sync/src/server/event.dart';
@@ -11,31 +12,51 @@ import 'package:crdt_socket_sync/src/server/server.dart';
 import 'package:web_socket_channel/status.dart';
 
 // TODO(mattia): un sistema che capisce se tutte le sessioni sono allineate tra loro
-// ed effettua gli snapshot nei documenti per ridurre lo spazio
+// ed effettua gli snapshot nei documenti per ridurre lo spazio.
+// Magari in un plugin solo lato server?
 
 /// WebSocket server implementation
 class WebSocketServer implements CRDTSocketServer {
   /// Constructor
   WebSocketServer({
-    required this.host,
-    required this.port,
+    required Future<HttpServer> Function() serverFactory,
     required CRDTServerRegistry serverRegistry,
     Compressor? compressor,
-  })  : _compressor = compressor ?? NoCompression.instance,
+  })  : _serverFactory = serverFactory,
+        _serverTransformer = _DefaultWebSocketTransformerWrapper(),
+        _compressor = compressor ?? NoCompression.instance,
+        _serverEventController = StreamController<ServerEvent>.broadcast(),
+        _serverRegistry = serverRegistry;
+
+  /// Constructor for testing
+  WebSocketServer.test({
+    required Future<HttpServer> Function() serverFactory,
+    required CRDTServerRegistry serverRegistry,
+    Compressor? compressor,
+    WebSocketServerTransformer? serverTransformer,
+  })  : _serverFactory = serverFactory,
+        _serverTransformer =
+            serverTransformer ?? _DefaultWebSocketTransformerWrapper(),
+        _compressor = compressor ?? NoCompression.instance,
         _serverEventController = StreamController<ServerEvent>.broadcast(),
         _serverRegistry = serverRegistry;
 
   /// The document registry
   final CRDTServerRegistry _serverRegistry;
 
-  /// The server host
-  final String host;
+  /// The server transformer
+  final WebSocketServerTransformer _serverTransformer;
 
-  /// The server port
-  final int port;
+  final Future<HttpServer> Function() _serverFactory;
 
   /// The server
   HttpServer? _server;
+
+  /// The server host, if the server is not running, it will return `''`
+  String get host => _server?.address.host ?? '';
+
+  /// The server port, if the server is not running, it will return `0`
+  int get port => _server?.port ?? 0;
 
   /// Active client sessions
   final Map<String, ClientSession> _sessions = {};
@@ -67,7 +88,7 @@ class WebSocketServer implements CRDTSocketServer {
     }
 
     try {
-      _server = await HttpServer.bind(host, port);
+      _server = await _serverFactory();
 
       _serverEventController.add(
         ServerEvent(
@@ -79,8 +100,8 @@ class WebSocketServer implements CRDTSocketServer {
       _isRunning = true;
 
       _server!.listen((request) {
-        if (WebSocketTransformer.isUpgradeRequest(request)) {
-          WebSocketTransformer.upgrade(request).then(_handleWebSocket);
+        if (_serverTransformer.isUpgradeRequest(request)) {
+          _serverTransformer.upgrade(request).then(_handleWebSocket);
         } else {
           request.response.statusCode = HttpStatus.badRequest;
           request.response.close();
@@ -108,9 +129,11 @@ class WebSocketServer implements CRDTSocketServer {
     _isRunning = false;
 
     // close sessions
-    for (final session in _sessions.values) {
-      await session.close();
-    }
+    await Future.forEach(
+      _sessions.values,
+      (ClientSession session) => session.close,
+    );
+
     _sessions.clear();
 
     await _server?.close();
@@ -364,17 +387,19 @@ class _WebSocketConnection implements TransportConnection {
   final WebSocket _webSocket;
 
   @override
-  Stream<List<int>> get incoming => _webSocket.map(
-        (data) {
-          if (data is String) {
-            return utf8.encode(data);
-          } else if (data is List<int>) {
-            return data;
-          } else {
-            throw FormatException('Unexpected data type: ${data.runtimeType}');
-          }
-        },
-      );
+  Stream<List<int>> get incoming {
+    return _webSocket.map(
+      (data) {
+        if (data is String) {
+          return utf8.encode(data);
+        } else if (data is List<int>) {
+          return data;
+        } else {
+          throw FormatException('Unexpected data type: ${data.runtimeType}');
+        }
+      },
+    );
+  }
 
   @override
   Future<void> send(List<int> data) async {
@@ -388,4 +413,26 @@ class _WebSocketConnection implements TransportConnection {
 
   @override
   bool get isConnected => _webSocket.readyState == WebSocket.open;
+}
+
+/// WebSocket server transformer
+abstract class WebSocketServerTransformer {
+  /// Check if the request is an upgrade request
+  bool isUpgradeRequest(HttpRequest request);
+
+  /// Upgrade the request to a WebSocket connection
+  Future<WebSocket> upgrade(HttpRequest request);
+}
+
+class _DefaultWebSocketTransformerWrapper
+    implements WebSocketServerTransformer {
+  @override
+  bool isUpgradeRequest(HttpRequest request) {
+    return WebSocketTransformer.isUpgradeRequest(request);
+  }
+
+  @override
+  Future<WebSocket> upgrade(HttpRequest request) {
+    return WebSocketTransformer.upgrade(request);
+  }
 }

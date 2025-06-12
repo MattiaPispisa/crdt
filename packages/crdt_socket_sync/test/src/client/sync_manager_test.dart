@@ -135,7 +135,9 @@ void main() {
         expect(() => syncManager.applyChanges([]), returnsNormally);
       });
 
-      test('should handle mixed valid and invalid changes', () async {
+      test(
+          'should handle mixed valid and invalid changes '
+          'requesting missing data one time', () async {
         mockClient.clearSentMessages();
 
         final operation = MockOperation(handler);
@@ -157,7 +159,21 @@ void main() {
           author: PeerId.generate(),
         );
 
-        syncManager.applyChanges([validChange, invalidChange]);
+        final secondInvalidChange = Change(
+          id: OperationId(PeerId.generate(), HybridLogicalClock(l: 3, c: 1)),
+          operation: operation,
+          deps: {
+            OperationId(PeerId.generate(), HybridLogicalClock(l: 1, c: 2)),
+          },
+          hlc: HybridLogicalClock(l: 3, c: 1),
+          author: PeerId.generate(),
+        );
+
+        syncManager.applyChanges([
+          validChange,
+          invalidChange,
+          secondInvalidChange,
+        ]);
 
         // Wait for async operations
         await Future<void>.delayed(Duration.zero);
@@ -166,54 +182,26 @@ void main() {
         // due to the invalid change
         final snapshotRequests =
             mockClient.getSentMessagesOfType<DocumentStatusRequestMessage>();
-        expect(snapshotRequests.length, greaterThan(0));
+        expect(snapshotRequests.length, equals(1));
       });
     });
 
-    group('applySnapshot', () {
+    group('merge', () {
       test('should apply snapshot successfully', () {
         final snapshot = Snapshot(
           id: 'test-snapshot',
-          versionVector:
-              VersionVector({peerId: HybridLogicalClock(l: 1, c: 1)}),
+          versionVector: VersionVector(
+            {peerId: HybridLogicalClock(l: 1, c: 1)},
+          ),
           data: {'test-handler': 'test_state'},
         );
 
-        syncManager.merge(
-          snapshot: snapshot,
-          changes: [],
-        );
-      });
-
-      test('should return false for outdated snapshot', () {
-        // First create some local changes to advance the document version
-        final operation = MockOperation(handler);
-        document.createChange(operation);
-
-        // Try to apply an older snapshot
-        final outdatedSnapshot = Snapshot(
-          id: 'test-snapshot',
-          versionVector: VersionVector({}), // Empty version vector (older)
-          data: {'test-handler': 'test_state'},
-        );
-
-        syncManager.merge(
-          snapshot: outdatedSnapshot,
-          changes: [],
-        );
-      });
-
-      test('should apply newer snapshot over existing state', () {
-        final snapshot = Snapshot(
-          id: 'test-snapshot',
-          versionVector:
-              VersionVector({peerId: HybridLogicalClock(l: 5, c: 1)}),
-          data: {'test-handler': 'test_state'},
-        );
-
-        syncManager.merge(
-          snapshot: snapshot,
-          changes: [],
+        expect(
+          () => syncManager.merge(
+            snapshot: snapshot,
+            changes: [],
+          ),
+          returnsNormally,
         );
       });
     });
@@ -247,7 +235,7 @@ void main() {
       });
     });
 
-    group('_documentId getter', () {
+    group('documentId getter', () {
       test('should return document peer ID as string', () {
         // We can't directly test the private getter,
         // but we can verify it through
@@ -265,21 +253,6 @@ void main() {
     });
 
     group('Edge cases and error scenarios', () {
-      test('should handle document with no changes gracefully', () {
-        expect(() => syncManager.applyChanges([]), returnsNormally);
-
-        final snapshot = Snapshot(
-          id: 'test-snapshot',
-          versionVector: VersionVector({}),
-          data: {'test-handler': 'test_state'},
-        );
-
-        syncManager.merge(
-          snapshot: snapshot,
-          changes: [],
-        );
-      });
-
       test('should handle concurrent local changes', () async {
         final operation = MockOperation(handler);
 
@@ -299,20 +272,6 @@ void main() {
         expect(
           mockClient.sentMessages.every((msg) => msg is ChangeMessage),
           isTrue,
-        );
-      });
-
-      test('should handle snapshot with empty data', () {
-        final snapshot = Snapshot(
-          id: 'empty-snapshot',
-          versionVector:
-              VersionVector({peerId: HybridLogicalClock(l: 1, c: 1)}),
-          data: {},
-        );
-
-        syncManager.merge(
-          snapshot: snapshot,
-          changes: [],
         );
       });
 

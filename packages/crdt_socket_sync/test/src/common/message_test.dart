@@ -5,29 +5,8 @@ import 'package:crdt_socket_sync/src/common/message.dart';
 import 'package:hlc_dart/hlc_dart.dart';
 import 'package:test/test.dart';
 
-/// Helper handler for testing
-class _TestHandler extends Handler<dynamic> {
-  _TestHandler(super.doc);
-
-  @override
-  String get id => 'test-handler';
-
-  @override
-  String getSnapshotState() => '';
-}
-
-/// Helper to create a test operation
-class _TestOperation extends Operation {
-  _TestOperation(Handler<dynamic> handler)
-      : super(
-          id: handler.id,
-          type: OperationType.insert(handler),
-        );
-
-  @override
-  Map<String, dynamic> toPayload() =>
-      {'test': true, 'id': id, 'type': type.toPayload()};
-}
+import '../utils/mock_handler.dart';
+import '../utils/mock_operation.dart';
 
 void main() {
   group('MessageType', () {
@@ -52,13 +31,13 @@ void main() {
   group('Message factory methods', () {
     const documentId = 'test-doc-id';
     late CRDTDocument doc;
-    late _TestHandler handler;
-    late _TestOperation operation;
+    late MockHandler handler;
+    late MockOperation operation;
 
     setUp(() {
       doc = CRDTDocument();
-      handler = _TestHandler(doc);
-      operation = _TestOperation(handler);
+      handler = MockHandler(doc);
+      operation = MockOperation(handler);
     });
 
     test('Message.change() should create ChangeMessage', () {
@@ -245,15 +224,15 @@ void main() {
   group('HandshakeResponseMessage', () {
     const documentId = 'test-doc-id';
     late CRDTDocument doc;
-    late _TestHandler handler;
-    late _TestOperation operation;
+    late MockHandler handler;
+    late MockOperation operation;
     late Snapshot snapshot;
     late List<Change> changes;
 
     setUp(() {
       doc = CRDTDocument();
-      handler = _TestHandler(doc);
-      operation = _TestOperation(handler);
+      handler = MockHandler(doc);
+      operation = MockOperation(handler);
 
       snapshot = Snapshot(
         id: 'test-snapshot',
@@ -362,14 +341,14 @@ void main() {
   group('ChangeMessage', () {
     const documentId = 'test-doc-id';
     late CRDTDocument doc;
-    late _TestHandler handler;
-    late _TestOperation operation;
+    late MockHandler handler;
+    late MockOperation operation;
     late Change change;
 
     setUp(() {
       doc = CRDTDocument();
-      handler = _TestHandler(doc);
-      operation = _TestOperation(handler);
+      handler = MockHandler(doc);
+      operation = MockOperation(handler);
 
       change = Change(
         id: OperationId(PeerId.generate(), HybridLogicalClock(l: 1, c: 1)),
@@ -703,13 +682,13 @@ void main() {
 
   group('Message.fromJson()', () {
     late CRDTDocument doc;
-    late _TestHandler handler;
-    late _TestOperation operation;
+    late MockHandler handler;
+    late MockOperation operation;
 
     setUp(() {
       doc = CRDTDocument();
-      handler = _TestHandler(doc);
-      operation = _TestOperation(handler);
+      handler = MockHandler(doc);
+      operation = MockOperation(handler);
     });
 
     test('should deserialize HandshakeRequestMessage', () {
@@ -852,8 +831,8 @@ void main() {
 
     test('should handle complex message serialization', () {
       final doc = CRDTDocument();
-      final handler = _TestHandler(doc);
-      final operation = _TestOperation(handler);
+      final handler = MockHandler(doc);
+      final operation = MockOperation(handler);
 
       final change = Change(
         id: OperationId(PeerId.generate(), HybridLogicalClock(l: 1, c: 1)),

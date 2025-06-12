@@ -12,8 +12,7 @@ void main(List<String> args) async {
   print('🚀 Starting CRDT WebSocket Server...');
 
   server = WebSocketServer(
-    host: InternetAddress.anyIPv4.host,
-    port: 8080,
+    serverFactory: () => HttpServer.bind(InternetAddress.anyIPv4.host, 8080),
     serverRegistry: serverRegistry,
   );
 
