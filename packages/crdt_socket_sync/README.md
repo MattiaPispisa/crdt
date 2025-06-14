@@ -1,4 +1,26 @@
 # CRDT Socket Sync
+- [CRDT Socket Sync](#crdt-socket-sync)
+  - [Overview](#overview)
+  - [Features](#features)
+  - [Installation](#installation)
+  - [Quick Start](#quick-start)
+    - [Server Setup](#server-setup)
+    - [Client Setup](#client-setup)
+  - [Library Structure](#library-structure)
+    - [Import Options](#import-options)
+      - [For Client Applications](#for-client-applications)
+      - [For Server Applications](#for-server-applications)
+  - [Advanced Usage](#advanced-usage)
+    - [Custom Document Registry](#custom-document-registry)
+    - [Compression](#compression)
+    - [Event Monitoring](#event-monitoring)
+  - [Protocol Details](#protocol-details)
+  - [Error Handling](#error-handling)
+  - [Examples](#examples)
+  - [Packages](#packages)
+  - [Roadmap](#roadmap)
+  - [Contributing](#contributing)
+  - [Related Packages](#related-packages)
 
 A comprehensive Dart package for synchronizing Conflict-free Replicated Data Types (CRDTs) between multiple clients and a server.
 
@@ -236,10 +258,23 @@ client.connectionStatus.listen((status) {
 
 ## Examples
 
-Check the `example/` directory for complete working examples:
+This package provided some examples:
 
-- `main_server.dart`: Complete server implementation
-- `main_client.dart`: Interactive client demo
+In the [example/](https://github.com/MattiaPispisa/crdt/tree/main/packages/crdt_socket_sync/example) directory you can find a complete working example of the server and the client (dart).
+
+In the [flutter_example/](https://github.com/MattiaPispisa/crdt/tree/main/packages/crdt_socket_sync/flutter_example) directory you can find a complete working example of a flutter app that uses the server and the client.
+
+Try to run the [server example](https://github.com/MattiaPispisa/crdt/tree/main/packages/crdt_socket_sync/example/main.dart) and some [client applications](https://github.com/MattiaPispisa/crdt/tree/main/packages/crdt_socket_sync/flutter_example) (or the [dart client](https://github.com/MattiaPispisa/crdt/tree/main/packages/crdt_socket_sync/example/main_client.dart)).
+
+## Packages
+Other bricks of the crdt "system" are:
+
+- [crdt_lf](https://pub.dev/packages/crdt_lf)
+- [hlc_dart](https://pub.dev/packages/hlc_dart)
+
+## [Roadmap](https://github.com/users/MattiaPispisa/projects/1)
+A roadmap is available in the [project](https://github.com/users/MattiaPispisa/projects/1) page. The roadmap provides a high-level overview of the project's goals and the current status of the project.
+
 
 ## Contributing
 

@@ -10,6 +10,7 @@
     - [Basic Usage](#basic-usage)
     - [Dart Distributed Collaboration Example](#dart-distributed-collaboration-example)
     - [Flutter Distributed Collaboration Example](#flutter-distributed-collaboration-example)
+  - [Sync](#sync)
   - [Architecture](#architecture)
     - [CRDTDocument](#crdtdocument)
     - [Handlers](#handlers)
@@ -21,6 +22,7 @@
     - [Roadmap](#roadmap)
     - [Contributing](#contributing)
   - [Acknowledgments](#acknowledgments)
+  - [Packages](#packages)
 
 
 A Conflict-free Replicated Data Type (CRDT) implementation in Dart. 
@@ -31,9 +33,9 @@ This library provides solutions for:
 
 ## Features
 
-- **Hybrid Logical Clock**: Uses HLC for causal ordering of operations
-- **Automatic Conflict Resolution**: Automatically resolves conflicts in a CRDT
-- **Local Availability**: Operations are available locally as soon as they are applied
+- ⏱️ **Hybrid Logical Clock**: Uses HLC for causal ordering of operations
+- 🔄 **Automatic Conflict Resolution**: Automatically resolves conflicts in a CRDT
+- 📦 **Local Availability**: Operations are available locally as soon as they are applied
 
 ## Getting Started
 
@@ -74,9 +76,16 @@ void main() {
 ### [Dart Distributed Collaboration Example](https://github.com/MattiaPispisa/crdt/tree/main/packages/crdt_lf/example/main.dart)
 ### [Flutter Distributed Collaboration Example](https://github.com/MattiaPispisa/crdt/tree/main/packages/crdt_lf/flutter_example)
 
+## Sync 
+A sync library is available in the [crdt_socket_sync](https://github.com/MattiaPispisa/crdt/tree/main/packages/crdt_socket_sync) package. And it's used to synchronize the CRDT state between peers. More info in the [README](https://github.com/MattiaPispisa/crdt/tree/main/packages/crdt_socket_sync/README.md) of the sync package.
+
+A flutter example is available in the [flutter_example](https://github.com/MattiaPispisa/crdt/tree/main/packages/crdt_socket_sync/flutter_example) and provide a synced version of the  "Flutter Distributed Collaboration" Example. 
+
 ## Architecture
 
-The library is built around several key components:
+The library is built: 
+- above the [hlc_dart](https://pub.dev/packages/hlc_dart) package.
+- around several key components:
 
 ### CRDTDocument
 The main document class that manages the CRDT state and handles synchronization between peers.
@@ -105,6 +114,7 @@ A snapshot of the CRDT state, including the version vector and the data.
 This library is currently **in progress** and under active development. While all existing functionality is thoroughly tested, we are continuously working on improvements and new features.
 
 ### [Roadmap](https://github.com/users/MattiaPispisa/projects/1)
+A roadmap is available in the [project](https://github.com/users/MattiaPispisa/projects/1) page. The roadmap provides a high-level overview of the project's goals and the current status of the project.
 
 ### Contributing
 We welcome contributions! Whether you want to:
@@ -123,6 +133,13 @@ Feel free to:
 
 - [Fugue Algorithm](https://arxiv.org/abs/2005.05914)
 - [Hybrid Logical Clock](https://cse.buffalo.edu/tech-reports/2014-04.pdf)
+
+## Packages
+Other bricks of the crdt "system" are:
+
+- [hlc_dart](https://pub.dev/packages/hlc_dart)
+- [crdt_socket_sync](https://pub.dev/packages/crdt_socket_sync)
+
 
 [license_badge]: https://img.shields.io/badge/license-MIT-blue.svg
 [license_link]: https://opensource.org/licenses/MIT
