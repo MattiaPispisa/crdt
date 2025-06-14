@@ -1,4 +1,4 @@
-## [0.7.0] - 2025-06-08
+## [0.7.0] - 2025-06-14
 
 ### Added
 - `CRDTDocument.mergeSnapshot` to merge a snapshot with the current snapshot
