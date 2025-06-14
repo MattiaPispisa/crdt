@@ -23,4 +23,7 @@ abstract class ServerSyncPlugin implements SyncPlugin {
 
   /// Called when a session is closed.
   void onSessionClosed(ClientSession session);
+
+  /// Called when the plugin is disposed.
+  void dispose();
 }

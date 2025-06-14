@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
 import 'package:crdt_socket_sync/src/common/common.dart';
+import 'package:crdt_socket_sync/src/plugins/server.dart';
 import 'package:crdt_socket_sync/src/server/client_session.dart';
 import 'package:crdt_socket_sync/src/server/client_session_event.dart';
 import 'package:crdt_socket_sync/src/server/event.dart';
@@ -21,11 +22,13 @@ class WebSocketServer implements CRDTSocketServer {
     required Future<HttpServer> Function() serverFactory,
     required CRDTServerRegistry serverRegistry,
     Compressor? compressor,
+    List<ServerSyncPlugin>? plugins,
   })  : _serverFactory = serverFactory,
         _serverTransformer = _DefaultWebSocketTransformerWrapper(),
         _compressor = compressor ?? NoCompression.instance,
         _serverEventController = StreamController<ServerEvent>.broadcast(),
-        _serverRegistry = serverRegistry;
+        _serverRegistry = serverRegistry,
+        _plugins = plugins ?? [];
 
   /// Constructor for testing
   WebSocketServer.test({
@@ -33,12 +36,14 @@ class WebSocketServer implements CRDTSocketServer {
     required CRDTServerRegistry serverRegistry,
     Compressor? compressor,
     WebSocketServerTransformer? serverTransformer,
+    List<ServerSyncPlugin>? plugins,
   })  : _serverFactory = serverFactory,
         _serverTransformer =
             serverTransformer ?? _DefaultWebSocketTransformerWrapper(),
         _compressor = compressor ?? NoCompression.instance,
         _serverEventController = StreamController<ServerEvent>.broadcast(),
-        _serverRegistry = serverRegistry;
+        _serverRegistry = serverRegistry,
+        _plugins = plugins ?? [];
 
   /// The document registry
   final CRDTServerRegistry _serverRegistry;
@@ -72,6 +77,9 @@ class WebSocketServer implements CRDTSocketServer {
 
   /// Compressor to use
   final Compressor _compressor;
+
+  /// Plugins added to the server
+  final List<ServerSyncPlugin> _plugins;
 
   /// Start the server
   ///
@@ -186,6 +194,7 @@ class WebSocketServer implements CRDTSocketServer {
       connection: connection,
       serverRegistry: _serverRegistry,
       compressor: _compressor,
+      plugins: _plugins,
     );
 
     _sessions[sessionId] = session;
@@ -200,9 +209,15 @@ class WebSocketServer implements CRDTSocketServer {
       ),
     );
 
+    for (final plugin in _plugins) {
+      plugin.onNewSession(session);
+    }
+
     session.events.listen(
       _handleSessionEvent,
-      onDone: () => _handleSessionClosed(sessionId),
+      onDone: () {
+        _handleSessionClosed(sessionId);
+      },
       onError: (dynamic error) => _handleSessionError(sessionId, error),
     );
   }
@@ -309,7 +324,12 @@ class WebSocketServer implements CRDTSocketServer {
     if (session == null) {
       return;
     }
+
     session.dispose();
+
+    for (final plugin in _plugins) {
+      plugin.onSessionClosed(session);
+    }
     _sessions.remove(event.sessionId);
   }
 
@@ -321,6 +341,10 @@ class WebSocketServer implements CRDTSocketServer {
     }
 
     session.dispose();
+
+    for (final plugin in _plugins) {
+      plugin.onSessionClosed(session);
+    }
 
     _serverEventController.add(
       ServerEvent(
@@ -357,6 +381,10 @@ class WebSocketServer implements CRDTSocketServer {
   void dispose() {
     stop();
     _serverEventController.close();
+
+    for (final plugin in _plugins) {
+      plugin.dispose();
+    }
 
     // Free the document registry resources
     for (final documentId in _serverRegistry.documentIds) {
