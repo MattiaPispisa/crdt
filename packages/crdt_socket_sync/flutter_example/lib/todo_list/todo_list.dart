@@ -117,5 +117,4 @@ class _TodoListContent extends StatelessWidget {
       child: const Icon(Icons.add),
     );
   }
-
 }
