@@ -1,31 +1,42 @@
 import 'dart:convert';
 import 'package:crdt_lf/crdt_lf.dart';
 
+/// base message type class
+abstract class MessageTypeValue {
+  /// index
+  int get value;
+}
+
 /// Available message types
-enum MessageType {
+enum MessageType implements MessageTypeValue {
   /// Handshake request message sent from client to server
-  handshakeRequest,
+  handshakeRequest(0),
 
   /// Handshake response message sent from server to client
-  handshakeResponse,
+  handshakeResponse(1),
 
   /// Message containing a CRDT change
-  change,
+  change(2),
 
   /// Message containing a full snapshot
-  documentStatus,
+  documentStatus(3),
 
   /// Snapshot request message sent from client to server
-  documentStatusRequest,
+  documentStatusRequest(4),
 
   /// Ping message to check the connection
-  ping,
+  ping(5),
 
   /// Pong message
-  pong,
+  pong(6),
 
   /// Error message
-  error,
+  error(7);
+
+  const MessageType(this.value);
+
+  @override
+  final int value;
 }
 
 /// Base class for all messages exchanged between server and client.
@@ -106,7 +117,7 @@ abstract class Message {
   }
 
   /// The message type
-  final MessageType type;
+  final MessageTypeValue type;
 
   /// The document ID to which the message refers
   final String documentId;
@@ -120,10 +131,13 @@ abstract class Message {
   }
 
   /// Deserialize a message from a JSON string
-  static Message fromJson(Map<String, dynamic> json) {
-    final type = MessageType.values[json['type'] as int];
+  static Message? fromJson(Map<String, dynamic> json) {
+    final type = json['type'] as int;
+    if (type < 0 || type >= MessageType.values.length) {
+      return null;
+    }
 
-    switch (type) {
+    switch (MessageType.values[type]) {
       case MessageType.handshakeRequest:
         return HandshakeRequestMessage.fromJson(json);
       case MessageType.handshakeResponse:
@@ -178,7 +192,7 @@ class HandshakeRequestMessage extends Message {
   @override
   Map<String, dynamic> toJson() {
     return {
-      'type': type.index,
+      'type': type.value,
       'documentId': documentId,
       'author': author.toString(),
       'version': version.map((e) => e.toString()).toList(),
@@ -225,7 +239,7 @@ class HandshakeResponseMessage extends Message {
   @override
   Map<String, dynamic> toJson() {
     return {
-      'type': type.index,
+      'type': type.value,
       'documentId': documentId,
       'snapshot': snapshot?.toJson(),
       'changes': changes?.map((c) => c.toJson()).toList(),
@@ -260,7 +274,7 @@ class ChangeMessage extends Message {
   @override
   Map<String, dynamic> toJson() {
     return {
-      'type': type.index,
+      'type': type.value,
       'documentId': documentId,
       'change': change.toJson(),
     };
@@ -298,7 +312,7 @@ class DocumentStatusMessage extends Message {
   @override
   Map<String, dynamic> toJson() {
     return {
-      'type': type.index,
+      'type': type.value,
       'documentId': documentId,
       'snapshot': snapshot?.toJson(),
       'changes': changes?.map((c) => c.toJson()).toList(),
@@ -335,7 +349,7 @@ class DocumentStatusRequestMessage extends Message {
   @override
   Map<String, dynamic> toJson() {
     return {
-      'type': type.index,
+      'type': type.value,
       'documentId': documentId,
       'version': version.map((e) => e.toString()).toList(),
     };
@@ -369,7 +383,7 @@ class PingMessage extends Message {
   @override
   Map<String, dynamic> toJson() {
     return {
-      'type': type.index,
+      'type': type.value,
       'documentId': documentId,
       'timestamp': timestamp,
     };
@@ -408,7 +422,7 @@ class PongMessage extends Message {
   @override
   Map<String, dynamic> toJson() {
     return {
-      'type': type.index,
+      'type': type.value,
       'documentId': documentId,
       'originalTimestamp': originalTimestamp,
       'responseTimestamp': responseTimestamp,
@@ -449,7 +463,7 @@ class ErrorMessage extends Message {
   @override
   Map<String, dynamic> toJson() {
     return {
-      'type': type.index,
+      'type': type.value,
       'documentId': documentId,
       'code': code,
       'message': message,

@@ -41,13 +41,13 @@ class CompressedCodec<T> implements MessageCodec<T> {
   final Compressor _compressor;
 
   @override
-  List<int> encode(T message) {
+  List<int>? encode(T message) {
     final data = _codec.encode(message);
-    return _compressor.compress(data);
+    return data != null ? _compressor.compress(data) : null;
   }
 
   @override
-  T decode(List<int> data) {
+  T? decode(List<int> data) {
     final decompressed = _compressor.decompress(data);
     return _codec.decode(decompressed);
   }

@@ -186,6 +186,12 @@ class WebSocketClient implements CRDTSocketClient {
     }
 
     final data = _messageCodec.encode(message);
+
+    // TODO(mattia): add some event to the client to notify the user
+    // that the message is not supported by any plugin
+    if (data == null) {
+      return;
+    }
     try {
       await _transport!.send(data);
 
@@ -232,7 +238,11 @@ class WebSocketClient implements CRDTSocketClient {
 
         _buffer.clear();
 
-        _messageController.add(message);
+        // TODO(mattia): add some event to the client to notify the user
+        // that the message is not supported by any plugin
+        if (message != null) {
+          _messageController.add(message);
+        }
       } catch (e) {
         // not enough data for a message
         break;

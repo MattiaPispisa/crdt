@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:crdt_lf/crdt_lf.dart';
 import 'package:crdt_socket_sync/src/common/common.dart';
 import 'package:crdt_socket_sync/src/common/utils.dart';
+import 'package:crdt_socket_sync/src/plugins/server.dart';
 import 'package:crdt_socket_sync/src/server/client_session_event.dart';
 import 'package:crdt_socket_sync/src/server/registry.dart';
 
@@ -16,13 +17,18 @@ class ClientSession {
     required TransportConnection connection,
     required CRDTServerRegistry serverRegistry,
     Compressor? compressor,
+    List<ServerSyncPlugin> plugins = const [],
   })  : _connection = connection,
         _serverRegistry = serverRegistry,
+        _plugins = plugins,
         _sessionEventController = StreamController<SessionEvent>.broadcast(),
         _messageCodec = CompressedCodec<Message>(
-          JsonMessageCodec<Message>(
-            toJson: (message) => message.toJson(),
-            fromJson: Message.fromJson,
+          PluginAwareMessageCodec.fromPlugins(
+            plugins: plugins,
+            defaultCodec: JsonMessageCodec<Message>(
+              toJson: (message) => message.toJson(),
+              fromJson: Message.fromJson,
+            ),
           ),
           compressor: compressor ?? NoCompression.instance,
         ) {
@@ -33,6 +39,9 @@ class ClientSession {
     );
 
     _startHeartbeatMonitoring();
+    for (final plugin in _plugins) {
+      plugin.onNewSession(this);
+    }
   }
 
   /// Session ID
@@ -43,6 +52,9 @@ class ClientSession {
 
   /// The server registry
   final CRDTServerRegistry _serverRegistry;
+
+  /// The plugins to use for this session
+  final List<ServerSyncPlugin> _plugins;
 
   /// Session event controller
   final StreamController<SessionEvent> _sessionEventController;
@@ -82,6 +94,19 @@ class ClientSession {
 
     try {
       final data = _messageCodec.encode(message);
+
+      if (data == null) {
+        _sessionEventController.add(
+          SessionEventGeneric(
+            sessionId: id,
+            type: SessionEventType.error,
+            message: 'Failed to encode message: $message. '
+                'This message is not supported by any plugin.',
+          ),
+        );
+        return;
+      }
+
       await _connection.send(data);
     } catch (e) {
       _sessionEventController.add(
@@ -111,6 +136,17 @@ class ClientSession {
 
     try {
       final message = _messageCodec.decode(data);
+      if (message == null) {
+        _sessionEventController.add(
+          SessionEventGeneric(
+            sessionId: id,
+            type: SessionEventType.error,
+            message: 'Failed to decode message: $data. '
+                'This message is not supported by any plugin.',
+          ),
+        );
+        return;
+      }
       _handleMessage(message);
     } catch (e, stackTrace) {
       _sessionEventController.add(
@@ -155,6 +191,10 @@ class ClientSession {
 
   /// Handle incoming message
   Future<void> _handleMessage(Message message) async {
+    for (final plugin in _plugins) {
+      plugin.onMessage(this, message);
+    }
+
     try {
       switch (message.type) {
         case MessageType.handshakeRequest:
@@ -432,6 +472,10 @@ class ClientSession {
 
     _isClosed = true;
     _stopHeartbeatMonitoring();
+
+    for (final plugin in _plugins) {
+      plugin.onSessionClosed(this);
+    }
 
     _sessionEventController.add(
       SessionEventGeneric(

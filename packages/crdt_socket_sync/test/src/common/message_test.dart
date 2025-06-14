@@ -702,7 +702,7 @@ void main() {
       final message = Message.fromJson(json);
 
       expect(message, isA<HandshakeRequestMessage>());
-      expect(message.type, MessageType.handshakeRequest);
+      expect(message!.type, MessageType.handshakeRequest);
     });
 
     test('should deserialize HandshakeResponseMessage', () {
@@ -716,7 +716,7 @@ void main() {
       final message = Message.fromJson(json);
 
       expect(message, isA<HandshakeResponseMessage>());
-      expect(message.type, MessageType.handshakeResponse);
+      expect(message!.type, MessageType.handshakeResponse);
     });
 
     test('should deserialize ChangeMessage', () {
@@ -736,7 +736,7 @@ void main() {
       final message = Message.fromJson(json);
 
       expect(message, isA<ChangeMessage>());
-      expect(message.type, MessageType.change);
+      expect(message!.type, MessageType.change);
     });
 
     test('should deserialize SnapshotMessage', () {
@@ -755,7 +755,7 @@ void main() {
       final message = Message.fromJson(json);
 
       expect(message, isA<DocumentStatusMessage>());
-      expect(message.type, MessageType.documentStatus);
+      expect(message!.type, MessageType.documentStatus);
     });
 
     test('should deserialize SnapshotRequestMessage', () {
@@ -768,7 +768,7 @@ void main() {
       final message = Message.fromJson(json);
 
       expect(message, isA<DocumentStatusRequestMessage>());
-      expect(message.type, MessageType.documentStatusRequest);
+      expect(message!.type, MessageType.documentStatusRequest);
     });
 
     test('should deserialize PingMessage', () {
@@ -781,7 +781,7 @@ void main() {
       final message = Message.fromJson(json);
 
       expect(message, isA<PingMessage>());
-      expect(message.type, MessageType.ping);
+      expect(message!.type, MessageType.ping);
     });
 
     test('should deserialize PongMessage', () {
@@ -795,7 +795,7 @@ void main() {
       final message = Message.fromJson(json);
 
       expect(message, isA<PongMessage>());
-      expect(message.type, MessageType.pong);
+      expect(message!.type, MessageType.pong);
     });
 
     test('should deserialize ErrorMessage', () {
@@ -809,7 +809,7 @@ void main() {
       final message = Message.fromJson(json);
 
       expect(message, isA<ErrorMessage>());
-      expect(message.type, MessageType.error);
+      expect(message!.type, MessageType.error);
     });
   });
 
@@ -825,7 +825,7 @@ void main() {
       final restored = Message.fromJson(json);
 
       expect(restored, isA<PingMessage>());
-      expect(restored.documentId, original.documentId);
+      expect(restored!.documentId, original.documentId);
       expect((restored as PingMessage).timestamp, original.timestamp);
     });
 
@@ -851,7 +851,7 @@ void main() {
       final restored = Message.fromJson(json);
 
       expect(restored, isA<ChangeMessage>());
-      expect(restored.documentId, original.documentId);
+      expect(restored!.documentId, original.documentId);
       expect((restored as ChangeMessage).change.id, change.id);
     });
   });
