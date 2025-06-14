@@ -6,6 +6,7 @@
   - [Quick Start](#quick-start)
     - [Server Setup](#server-setup)
     - [Client Setup](#client-setup)
+  - [Examples](#examples)
   - [Library Structure](#library-structure)
     - [Import Options](#import-options)
       - [For Client Applications](#for-client-applications)
@@ -16,7 +17,6 @@
     - [Event Monitoring](#event-monitoring)
   - [Protocol Details](#protocol-details)
   - [Error Handling](#error-handling)
-  - [Examples](#examples)
   - [Packages](#packages)
   - [Roadmap](#roadmap)
   - [Contributing](#contributing)
@@ -119,6 +119,18 @@ void main() async {
   }
 }
 ```
+
+## Examples
+
+This package provided some examples:
+
+In the [example/](https://github.com/MattiaPispisa/crdt/tree/main/packages/crdt_socket_sync/example) directory you can find a complete working example of the server and the client (dart).
+
+In the [flutter_example/](https://github.com/MattiaPispisa/crdt/tree/main/packages/crdt_socket_sync/flutter_example) directory you can find a complete working example of a flutter app that uses the server and the client.
+
+Try to run the [server example](https://github.com/MattiaPispisa/crdt/tree/main/packages/crdt_socket_sync/example/main.dart) and some [client applications](https://github.com/MattiaPispisa/crdt/tree/main/packages/crdt_socket_sync/flutter_example) (or the [dart client](https://github.com/MattiaPispisa/crdt/tree/main/packages/crdt_socket_sync/example/main_client.dart)).
+
+![sync_server_multi_client](https://github.com/MattiaPispisa/crdt/tree/main/assets/demos/sync_server_multi_client.gif)
 
 ## Library Structure
 
@@ -256,15 +268,8 @@ client.connectionStatus.listen((status) {
 });
 ```
 
-## Examples
 
-This package provided some examples:
 
-In the [example/](https://github.com/MattiaPispisa/crdt/tree/main/packages/crdt_socket_sync/example) directory you can find a complete working example of the server and the client (dart).
-
-In the [flutter_example/](https://github.com/MattiaPispisa/crdt/tree/main/packages/crdt_socket_sync/flutter_example) directory you can find a complete working example of a flutter app that uses the server and the client.
-
-Try to run the [server example](https://github.com/MattiaPispisa/crdt/tree/main/packages/crdt_socket_sync/example/main.dart) and some [client applications](https://github.com/MattiaPispisa/crdt/tree/main/packages/crdt_socket_sync/flutter_example) (or the [dart client](https://github.com/MattiaPispisa/crdt/tree/main/packages/crdt_socket_sync/example/main_client.dart)).
 
 ## Packages
 Other bricks of the crdt "system" are:

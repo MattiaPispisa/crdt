@@ -81,6 +81,8 @@ A sync library is available in the [crdt_socket_sync](https://github.com/MattiaP
 
 A flutter example is available in the [flutter_example](https://github.com/MattiaPispisa/crdt/tree/main/packages/crdt_socket_sync/flutter_example) and provide a synced version of the  "Flutter Distributed Collaboration" Example. 
 
+![sync_server_multi_client](https://github.com/MattiaPispisa/crdt/tree/main/assets/demos/sync_server_multi_client.gif)
+
 ## Architecture
 
 The library is built: 
