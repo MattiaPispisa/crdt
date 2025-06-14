@@ -1,4 +1,3 @@
-import 'package:crdt_socket_sync/client.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_example/todo_list/_add_item.dart';
 import 'package:crdt_lf/crdt_lf.dart';

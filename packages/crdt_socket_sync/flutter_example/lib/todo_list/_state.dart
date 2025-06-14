@@ -1,3 +1,5 @@
+// ignore_for_file: avoid_print example app
+
 import 'dart:async';
 
 import 'package:crdt_lf/crdt_lf.dart';

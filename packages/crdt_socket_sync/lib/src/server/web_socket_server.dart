@@ -3,7 +3,6 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
 import 'package:crdt_socket_sync/src/common/common.dart';
-import 'package:crdt_socket_sync/src/common/utils.dart';
 import 'package:crdt_socket_sync/src/server/client_session.dart';
 import 'package:crdt_socket_sync/src/server/client_session_event.dart';
 import 'package:crdt_socket_sync/src/server/event.dart';
@@ -11,9 +10,9 @@ import 'package:crdt_socket_sync/src/server/registry.dart';
 import 'package:crdt_socket_sync/src/server/server.dart';
 import 'package:web_socket_channel/status.dart';
 
-// TODO(mattia): un sistema che capisce se tutte le sessioni sono allineate tra loro
-// ed effettua gli snapshot nei documenti per ridurre lo spazio.
-// Magari in un plugin solo lato server?
+// TODO(mattia): A system that is client session aware
+// and can perform snapshot when all clients are aligned.
+// Maybe in a plugin only for the server?
 
 /// WebSocket server implementation
 class WebSocketServer implements CRDTSocketServer {
