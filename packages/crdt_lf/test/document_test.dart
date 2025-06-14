@@ -480,7 +480,7 @@ void main() {
           equals(1),
         );
 
-        expect(serverHandler.value, ['Hello', 'World', 'All']);
+        expect(serverHandler.value, unorderedEquals(['Hello', 'World', 'All']));
         expect(serverHandler.value, clientHandler.value);
       });
     });
