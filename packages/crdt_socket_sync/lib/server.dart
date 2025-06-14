@@ -3,6 +3,8 @@ library crdt_socket_sync_server;
 
 export 'src/common/common.dart';
 
+export 'src/plugins/server.dart';
+
 export 'src/server/client_session.dart';
 export 'src/server/client_session_event.dart';
 export 'src/server/event.dart';

@@ -6,3 +6,5 @@ export 'src/client/status.dart';
 export 'src/client/sync_manager.dart';
 
 export 'src/common/common.dart';
+
+export 'src/plugins/client.dart';
