@@ -130,7 +130,7 @@ In the [flutter_example/](https://github.com/MattiaPispisa/crdt/tree/main/packag
 
 Try to run the [server example](https://github.com/MattiaPispisa/crdt/tree/main/packages/crdt_socket_sync/example/main.dart) and some [client applications](https://github.com/MattiaPispisa/crdt/tree/main/packages/crdt_socket_sync/flutter_example) (or the [dart client](https://github.com/MattiaPispisa/crdt/tree/main/packages/crdt_socket_sync/example/main_client.dart)).
 
-![sync_server_multi_client](https://github.com/MattiaPispisa/crdt/tree/main/assets/demos/sync_server_multi_client.gif)
+<img width="500" alt="sync_server_multi_client" src="https://raw.githubusercontent.com/MattiaPispisa/crdt/main/assets/demos/sync_server_multi_client.gif">
 
 ## Library Structure
 
