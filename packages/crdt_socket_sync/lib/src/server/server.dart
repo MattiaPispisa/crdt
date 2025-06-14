@@ -22,5 +22,5 @@ abstract class CRDTSocketServer {
   });
 
   /// Dispose the server
-  void dispose(); 
+  void dispose();
 }

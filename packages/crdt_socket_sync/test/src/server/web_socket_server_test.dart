@@ -54,7 +54,7 @@ void main() {
     late JsonMessageCodec<Message> codec;
 
     /// message sent controller used to observe every message
-    /// sent from the server to the client
+    /// sent from the server to the clients
     late StreamController<List<int>> messagesSent;
 
     setUp(() {
@@ -325,7 +325,7 @@ void main() {
       );
     });
 
-    Future<ServerSetup> setupServer({
+    Future<_ServerSetup> setupServer({
       void Function(Message)? onMessage,
       void Function(ServerEvent)? onEvent,
     }) async {
@@ -347,21 +347,26 @@ void main() {
 
       await server.start();
 
-      return ServerSetup(
+      return _ServerSetup(
         serverMessages: serverMessages,
         serverEvents: serverEvents,
       );
     }
 
+    /// Adds a client to the server
+    ///
+    /// This will send a handshake request to the server
+    /// and wait for the client to be added to the server
     Future<void> addClient({
       required String documentId,
+      required MockWebSocket Function() mockWebSocket,
       PeerId? clientId,
     }) async {
       final client = clientId ?? PeerId.generate();
 
       httpRequestController.add(MockHttpRequest());
       await Future<void>.delayed(Duration.zero);
-      mockWebSockets[0].controller.add(
+      mockWebSocket().controller.add(
             codec.encode(
               HandshakeRequestMessage(
                 author: client,
@@ -377,23 +382,46 @@ void main() {
       final client1 = PeerId.generate();
       final client2 = PeerId.generate();
 
-// server doc
+      // server doc
       final serverDoc = CRDTDocument(peerId: documentId);
       CRDTListHandler<String>(serverDoc, 'list');
       registry.addDocument(documentId.id, serverDoc);
 
-// client doc
+      // client doc
       final clientDoc = CRDTDocument(peerId: documentId);
       CRDTListHandler<String>(clientDoc, 'list').insert(0, 'Hello');
       final change = clientDoc.exportChanges().first;
 
-      final setup = await setupServer();
+      final completer = Completer<Message>();
 
-      await addClient(documentId: documentId.id, clientId: client1);
-      await addClient(documentId: documentId.id, clientId: client2);
+      final setup = await setupServer(
+        onMessage: (message) {
+          if (message.type == MessageType.change) {
+            completer.complete(message);
+          }
+        },
+      );
+
+      await addClient(
+        documentId: documentId.id,
+        clientId: client1,
+        mockWebSocket: () => mockWebSockets[0],
+      );
+      await addClient(
+        documentId: documentId.id,
+        clientId: client2,
+        mockWebSocket: () => mockWebSockets[1],
+      );
 
       await Future<void>.delayed(Duration.zero);
 
+      expect(setup.serverMessages.length, 2);
+      expect(setup.serverEvents.length, 5);
+
+      await Future<void>.delayed(Duration.zero);
+
+      // client 1 sends change to server
+      // server will broadcast the change to all clients (`client2`)
       mockWebSockets[0].controller.add(
             codec.encode(
               ChangeMessage(
@@ -403,22 +431,38 @@ void main() {
             ),
           );
 
-      await Future<void>.delayed(Duration.zero);
-      expect(setup.serverMessages.length, 2);
+      // wait for the change to be broadcasted to the other client
+      final message = await completer.future;
+
+      expect(setup.serverMessages.length, 3);
       expect(setup.serverEvents.length, 6);
+      // last event is the change applied event from the clientSession 1
       expect(setup.serverEvents[5].type, ServerEventType.clientChangeApplied);
 
-      // TODO: test broadcast to other clients
+      // check the broadcasted message
+      expect(message.type, setup.serverMessages[2].type);
+      expect(message.documentId, documentId.id);
+      expect(message, isA<ChangeMessage>());
+      expect((message as ChangeMessage).change.id, change.id);
     });
   });
 }
 
-class ServerSetup {
-  ServerSetup({
+/// Internal class used to setup the server
+///
+/// This is used to test the server and its behavior
+///
+/// It contains the messages sent from the server to the clients
+/// and the events emitted by the server
+class _ServerSetup {
+  _ServerSetup({
     required this.serverMessages,
     required this.serverEvents,
   });
 
+  /// Messages sent from the server to the clients
   final List<Message> serverMessages;
+
+  /// Events emitted by the server
   final List<ServerEvent> serverEvents;
 }

@@ -110,7 +110,7 @@ class MockCRDTSocketClient implements CRDTSocketClient {
     _connectionStatusValue = status;
     _connectionStatusController.add(_connectionStatusValue);
   }
-  
+
   @override
   List<Change> get unSyncChanges => [];
 
