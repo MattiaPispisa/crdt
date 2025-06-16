@@ -77,6 +77,9 @@ class ClientSession {
   /// The documents the client is subscribed to
   final Set<String> _subscribedDocuments = {};
 
+  /// The documents the client is subscribed to
+  List<String> get subscribedDocuments => _subscribedDocuments.toList();
+
   /// Message codec
   final MessageCodec<Message> _messageCodec;
 
@@ -247,6 +250,10 @@ class ClientSession {
 
     _clientAuthor = message.author;
     _subscribedDocuments.add(documentId);
+
+    for (final plugin in _plugins) {
+      plugin.onDocumentRegistered(this, documentId);
+    }
 
     final document = _serverRegistry.getDocument(documentId)!;
     final snapshot = _serverRegistry.getLatestSnapshot(documentId);

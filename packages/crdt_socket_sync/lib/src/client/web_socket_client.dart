@@ -5,6 +5,8 @@ import 'package:crdt_socket_sync/src/client/status.dart';
 import 'package:crdt_socket_sync/src/client/sync_manager.dart';
 import 'package:crdt_socket_sync/src/common/common.dart';
 import 'package:crdt_socket_sync/src/common/utils.dart';
+import 'package:crdt_socket_sync/src/plugins/client/client.dart';
+import 'package:crdt_socket_sync/src/plugins/common/common.dart';
 import 'package:web_socket_channel/status.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 
@@ -16,16 +18,20 @@ class WebSocketClient implements CRDTSocketClient {
     required this.document,
     required this.author,
     Compressor? compressor,
+    List<ClientSyncPlugin> plugins = const [],
   })  : _messageController = StreamController<Message>.broadcast(),
         _connectionStatusController =
             StreamController<ConnectionStatus>.broadcast(),
-        _connectionStatusValue = ConnectionStatus.disconnected {
+        _connectionStatusValue = ConnectionStatus.disconnected,
+        _plugins = plugins {
     _syncManager = SyncManager(document: document, client: this);
-
     _messageCodec = CompressedCodec<Message>(
-      JsonMessageCodec<Message>(
-        toJson: (message) => message.toJson(),
-        fromJson: Message.fromJson,
+      PluginAwareMessageCodec.fromPlugins(
+        plugins: plugins,
+        defaultCodec: JsonMessageCodec<Message>(
+          toJson: (message) => message.toJson(),
+          fromJson: Message.fromJson,
+        ),
       ),
       compressor: compressor ?? NoCompression.instance,
     );
@@ -71,6 +77,9 @@ class WebSocketClient implements CRDTSocketClient {
 
   /// Completer for handshake
   Completer<bool>? _handshakeCompleter;
+
+  /// Plugins
+  final List<ClientSyncPlugin> _plugins;
 
   /// Whether the handshake is resolved and completed
   ///
@@ -158,6 +167,9 @@ class WebSocketClient implements CRDTSocketClient {
       if (connected) {
         _startPingTimer();
         _updateConnectionStatus(ConnectionStatus.connected);
+        for (final plugin in _plugins) {
+          plugin.onConnected();
+        }
       }
 
       return connected;
@@ -177,6 +189,10 @@ class WebSocketClient implements CRDTSocketClient {
     }
 
     _updateConnectionStatus(ConnectionStatus.disconnected);
+
+    for (final plugin in _plugins) {
+      plugin.onDisconnected();
+    }
   }
 
   @override
@@ -357,6 +373,10 @@ class WebSocketClient implements CRDTSocketClient {
   Future<void> _handleMessage(Message message) async {
     if (message.documentId != _documentId) {
       return;
+    }
+
+    for (final plugin in _plugins) {
+      plugin.onMessage(message);
     }
 
     switch (message.type) {

@@ -16,6 +16,7 @@ class ClientAwareness {
       );
 
   /// client id
+  // TODO(mattia): peerId!
   final String clientId;
 
   /// client metadata
