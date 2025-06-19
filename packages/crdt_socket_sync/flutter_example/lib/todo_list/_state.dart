@@ -11,9 +11,11 @@ class TodoListState extends ChangeNotifier {
     required CRDTDocument document,
     required WebSocketClient client,
     required CRDTListHandler<String> handler,
+    required ClientAwarenessPlugin awareness,
   }) : _handler = handler,
        _client = client,
-       _document = document {
+       _document = document,
+       _awarenessPlugin = awareness {
     _connectionStatusSubscription = _client.connectionStatus.listen((status) {
       notifyListeners();
     });
@@ -25,15 +27,18 @@ class TodoListState extends ChangeNotifier {
   }) {
     final document = CRDTDocument(peerId: documentId);
     final handler = CRDTListHandler<String>(document, 'todo-list');
+    final awareness = ClientAwarenessPlugin();
     final client = WebSocketClient(
       url: 'ws://192.168.1.37:8080',
       document: document,
       author: userId,
+      plugins: [awareness],
     );
     return TodoListState._(
       document: document,
       client: client,
       handler: handler,
+      awareness: awareness,
     );
   }
 
@@ -41,6 +46,7 @@ class TodoListState extends ChangeNotifier {
   final CRDTDocument _document;
   final WebSocketClient _client;
   final CRDTListHandler<String> _handler;
+  final ClientAwarenessPlugin _awarenessPlugin;
 
   StreamSubscription<ConnectionStatus>? _connectionStatusSubscription;
 

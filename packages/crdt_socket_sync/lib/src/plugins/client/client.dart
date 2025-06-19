@@ -1,8 +1,9 @@
-import 'package:crdt_socket_sync/src/common/common.dart';
-import 'package:crdt_socket_sync/src/plugins/common/common.dart';
+import 'package:crdt_socket_sync/client.dart';
 
 /// Base class for all client plugins.
-abstract class ClientSyncPlugin implements SyncPlugin {
+abstract class ClientSyncPlugin
+    with SocketClientProvider
+    implements SyncPlugin {
   /// Called when a message is received from the server.
   ///
   /// The plugin can then react to the message, for example by sending a

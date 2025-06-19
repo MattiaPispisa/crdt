@@ -194,6 +194,10 @@ class ClientSession {
 
   /// Handle incoming message
   Future<void> _handleMessage(Message message) async {
+    if (_isClosed) {
+      return;
+    }
+
     for (final plugin in _plugins) {
       plugin.onMessage(this, message);
     }
@@ -271,6 +275,7 @@ class ClientSession {
       documentId: documentId,
       changes: changes,
       snapshot: snapshot,
+      sessionId: id,
     );
 
     await sendMessage(response);

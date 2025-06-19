@@ -5,25 +5,23 @@ import 'package:crdt_socket_sync/src/client/status.dart';
 import 'package:crdt_socket_sync/src/client/sync_manager.dart';
 import 'package:crdt_socket_sync/src/common/common.dart';
 import 'package:crdt_socket_sync/src/common/utils.dart';
-import 'package:crdt_socket_sync/src/plugins/client/client.dart';
 import 'package:crdt_socket_sync/src/plugins/common/common.dart';
 import 'package:web_socket_channel/status.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 
 /// [CRDTSocketClient] implementation using web socket
-class WebSocketClient implements CRDTSocketClient {
+class WebSocketClient extends CRDTSocketClient {
   /// Constructor
   WebSocketClient({
     required this.url,
     required this.document,
     required this.author,
     Compressor? compressor,
-    List<ClientSyncPlugin> plugins = const [],
+    super.plugins,
   })  : _messageController = StreamController<Message>.broadcast(),
         _connectionStatusController =
             StreamController<ConnectionStatus>.broadcast(),
-        _connectionStatusValue = ConnectionStatus.disconnected,
-        _plugins = plugins {
+        _connectionStatusValue = ConnectionStatus.disconnected {
     _syncManager = SyncManager(document: document, client: this);
     _messageCodec = CompressedCodec<Message>(
       PluginAwareMessageCodec.fromPlugins(
@@ -49,6 +47,12 @@ class WebSocketClient implements CRDTSocketClient {
 
   /// WebSocket server URL
   final String url;
+
+  /// Session ID
+  String? _sessionId;
+
+  @override
+  String? get sessionId => _sessionId;
 
   /// Sync manager
   late final SyncManager _syncManager;
@@ -77,9 +81,6 @@ class WebSocketClient implements CRDTSocketClient {
 
   /// Completer for handshake
   Completer<bool>? _handshakeCompleter;
-
-  /// Plugins
-  final List<ClientSyncPlugin> _plugins;
 
   /// Whether the handshake is resolved and completed
   ///
@@ -167,7 +168,7 @@ class WebSocketClient implements CRDTSocketClient {
       if (connected) {
         _startPingTimer();
         _updateConnectionStatus(ConnectionStatus.connected);
-        for (final plugin in _plugins) {
+        for (final plugin in plugins) {
           plugin.onConnected();
         }
       }
@@ -190,7 +191,7 @@ class WebSocketClient implements CRDTSocketClient {
 
     _updateConnectionStatus(ConnectionStatus.disconnected);
 
-    for (final plugin in _plugins) {
+    for (final plugin in plugins) {
       plugin.onDisconnected();
     }
   }
@@ -375,7 +376,7 @@ class WebSocketClient implements CRDTSocketClient {
       return;
     }
 
-    for (final plugin in _plugins) {
+    for (final plugin in plugins) {
       plugin.onMessage(message);
     }
 
@@ -412,6 +413,8 @@ class WebSocketClient implements CRDTSocketClient {
   /// Merges the changes and snapshot into the document
   /// and completes the handshake
   void _handleHandshakeResponse(HandshakeResponseMessage message) {
+    _sessionId = message.sessionId;
+
     _syncManager.merge(
       changes: message.changes,
       snapshot: message.snapshot,

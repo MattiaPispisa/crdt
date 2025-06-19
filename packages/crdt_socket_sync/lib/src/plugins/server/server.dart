@@ -1,12 +1,12 @@
-import 'package:crdt_socket_sync/src/common/common.dart';
-import 'package:crdt_socket_sync/src/plugins/common/common.dart';
-import 'package:crdt_socket_sync/src/server/client_session.dart';
+import 'package:crdt_socket_sync/server.dart';
 
 /// Base class for all server plugins.
 ///
 /// A plugin can be used to extend the server functionality.
 /// It can handle custom messages, and listen to events from the server.
-abstract class ServerSyncPlugin implements SyncPlugin {
+abstract class ServerSyncPlugin
+    with SocketServerProvider
+    implements SyncPlugin {
   /// Called when a new client session is created.
   void onNewSession(ClientSession session);
 
@@ -18,6 +18,8 @@ abstract class ServerSyncPlugin implements SyncPlugin {
   ///
   /// The plugin can then react to the message, for example by sending a
   /// response to the client.
+  ///
+  /// If the [session] terminates, this method will not be called again.
   void onMessage(ClientSession session, Message message);
 
   /// Called when [session] subscribes to a new document.
@@ -27,5 +29,7 @@ abstract class ServerSyncPlugin implements SyncPlugin {
   void onSessionClosed(ClientSession session);
 
   /// Called when the plugin is disposed.
+  ///
+  /// Usually [dispose] is called when the server is disposed.
   void dispose();
 }

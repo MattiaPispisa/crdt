@@ -3,6 +3,10 @@ import 'dart:async';
 import 'package:crdt_lf/crdt_lf.dart';
 import 'package:crdt_socket_sync/client.dart';
 
+// TODO(mattia): ChangeFailuresHandler can be removed in the future
+// with new methods on [CRDTDocument] that permits to save the last sent change.
+// This enables to export only changes during the offline period.
+
 /// Handles [Change]s that failed to be sent to the server
 class ChangeFailuresHandler {
   /// Constructor

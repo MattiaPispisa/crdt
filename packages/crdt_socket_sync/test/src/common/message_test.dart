@@ -264,6 +264,7 @@ void main() {
         documentId: documentId,
         snapshot: snapshot,
         changes: changes,
+        sessionId: 'test-session-id',
       );
 
       expect(message.type, MessageType.handshakeResponse);
@@ -276,6 +277,7 @@ void main() {
       final message = HandshakeResponseMessage(
         documentId: documentId,
         snapshot: snapshot,
+        sessionId: 'test-session-id',
       );
 
       expect(message.snapshot, snapshot);
@@ -286,10 +288,12 @@ void main() {
       final message = HandshakeResponseMessage(
         documentId: documentId,
         changes: changes,
+        sessionId: 'test-session-id',
       );
 
       expect(message.snapshot, isNull);
       expect(message.changes, changes);
+      expect(message.sessionId, 'test-session-id');
     });
 
     test('should serialize to JSON correctly', () {
@@ -297,6 +301,7 @@ void main() {
         documentId: documentId,
         snapshot: snapshot,
         changes: changes,
+        sessionId: 'test-session-id',
       );
 
       final json = message.toJson();
@@ -305,6 +310,7 @@ void main() {
       expect(json['documentId'], documentId);
       expect(json['snapshot'], snapshot.toJson());
       expect(json['changes'], changes.map((c) => c.toJson()).toList());
+      expect(json['sessionId'], 'test-session-id');
     });
 
     test('should deserialize from JSON correctly', () {

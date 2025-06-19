@@ -1,12 +1,18 @@
 import 'dart:async';
 import 'package:crdt_socket_sync/server.dart';
 
-class ServerAwarenessPlugin implements ServerSyncPlugin {
+/// Server awareness plugin.
+///
+/// This plugin is used to manage the awareness of the clients
+/// connected to the same document.
+class ServerAwarenessPlugin extends ServerSyncPlugin {
+  /// Constructor
+  ///
+  /// [codec] is the codec to use to encode and decode the messages.
+  /// default to [JsonMessageCodec]
   ServerAwarenessPlugin({
-    required CRDTSocketServer server,
     MessageCodec<Message>? codec,
   })  : _documentAwareness = {},
-        _server = server,
         messageCodec = codec ??
             JsonMessageCodec(
               toJson: (message) => message.toJson(),
@@ -19,7 +25,6 @@ class ServerAwarenessPlugin implements ServerSyncPlugin {
   String get name => 'awareness';
 
   final Map<String, DocumentAwareness> _documentAwareness;
-  final CRDTSocketServer _server;
   final StreamController<ServerAwarenessEvent> _awarenessController;
 
   @override
@@ -137,7 +142,7 @@ class ServerAwarenessPlugin implements ServerSyncPlugin {
       return;
     }
 
-    await _server.broadcastMessage(
+    await server.broadcastMessage(
       AwarenessStateMessage(
         awareness: awareness,
         documentId: documentId,
@@ -156,7 +161,7 @@ class ServerAwarenessPlugin implements ServerSyncPlugin {
       return;
     }
 
-    await _server.sendMessageToClient(
+    await server.sendMessageToClient(
       clientId,
       AwarenessStateMessage(
         awareness: awareness,
@@ -181,7 +186,7 @@ class ServerAwarenessPlugin implements ServerSyncPlugin {
       return;
     }
 
-    await _server.broadcastMessage(
+    await server.broadcastMessage(
       AwarenessUpdateMessage(
         documentId: documentId,
         state: client,

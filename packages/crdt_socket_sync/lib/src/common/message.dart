@@ -42,7 +42,10 @@ enum MessageType implements MessageTypeValue {
 /// Base class for all messages exchanged between server and client.
 abstract class Message {
   /// Constructor
-  const Message(this.type, this.documentId);
+  const Message(
+    this.type,
+    this.documentId,
+  );
 
   /// Create a change message
   factory Message.change({
@@ -211,6 +214,7 @@ class HandshakeResponseMessage extends Message {
   /// Constructor
   const HandshakeResponseMessage({
     required String documentId,
+    required this.sessionId,
     this.snapshot,
     this.changes,
   }) : super(MessageType.handshakeResponse, documentId);
@@ -227,6 +231,7 @@ class HandshakeResponseMessage extends Message {
               .map((c) => Change.fromJson(c as Map<String, dynamic>))
               .toList()
           : null,
+      sessionId: json['sessionId'] as String,
     );
   }
 
@@ -236,6 +241,9 @@ class HandshakeResponseMessage extends Message {
   /// The missing changes, if present
   final List<Change>? changes;
 
+  /// The session ID to which the message refers
+  final String sessionId;
+
   @override
   Map<String, dynamic> toJson() {
     return {
@@ -243,12 +251,14 @@ class HandshakeResponseMessage extends Message {
       'documentId': documentId,
       'snapshot': snapshot?.toJson(),
       'changes': changes?.map((c) => c.toJson()).toList(),
+      'sessionId': sessionId,
     };
   }
 
   @override
   String toString() {
-    return 'HandshakeResponseMessage(snapshot: $snapshot, changes: $changes)';
+    return 'HandshakeResponseMessage(snapshot: $snapshot, '
+        'changes: $changes, sessionId: $sessionId)';
   }
 }
 
