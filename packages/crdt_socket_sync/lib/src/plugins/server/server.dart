@@ -27,9 +27,4 @@ abstract class ServerSyncPlugin
 
   /// Called when a session is closed.
   void onSessionClosed(ClientSession session);
-
-  /// Called when the plugin is disposed.
-  ///
-  /// Usually [dispose] is called when the server is disposed.
-  void dispose();
 }

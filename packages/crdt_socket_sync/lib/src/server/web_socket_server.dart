@@ -162,8 +162,9 @@ class WebSocketServer extends CRDTSocketServer {
     List<String>? excludeClientIds,
   }) async {
     final documentId = message.documentId;
+    final sessions = List.of(_sessions.values);
 
-    for (final session in _sessions.values) {
+    for (final session in sessions) {
       final isExcluded = excludeClientIds?.contains(session.id) ?? false;
       final isSubscribed = session.isSubscribedTo(documentId);
 

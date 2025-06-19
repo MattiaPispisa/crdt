@@ -70,7 +70,9 @@ class ServerAwarenessPlugin extends ServerSyncPlugin {
       return;
     }
 
-    awareness.states[message.state.clientId] = message.state;
+    _documentAwareness[message.documentId] =
+        awareness.copyWithUpdatedClient(message.state);
+
     _broadcastAwarenessUpdate(
       message.documentId,
       message.state.clientId,
@@ -103,7 +105,9 @@ class ServerAwarenessPlugin extends ServerSyncPlugin {
     for (final documentId in _documentAwareness.keys) {
       final awareness = _documentAwareness[documentId]!;
       if (awareness.states.containsKey(session.id)) {
-        awareness.states.remove(session.id);
+        _documentAwareness[documentId] =
+            awareness.copyWithRemovedClient(session.id);
+
         _awarenessController.add(
           ServerAwarenessEvent(
             type: ServerAwarenessEventType.clientLeft,
@@ -197,7 +201,7 @@ class ServerAwarenessPlugin extends ServerSyncPlugin {
 
   @override
   void onDocumentRegistered(ClientSession session, String documentId) {
-    final awareness = _documentAwareness[documentId] ??
+    var awareness = _documentAwareness[documentId] ??
         DocumentAwareness(
           documentId: documentId,
           states: {},
@@ -207,7 +211,9 @@ class ServerAwarenessPlugin extends ServerSyncPlugin {
       metadata: {},
       lastUpdate: DateTime.now().millisecondsSinceEpoch,
     );
-    awareness.states[session.id] = client;
+
+    awareness = awareness.copyWithUpdatedClient(client);
+
     _documentAwareness[documentId] = awareness;
 
     // send to all clients except the one that joined

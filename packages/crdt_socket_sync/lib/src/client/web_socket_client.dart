@@ -469,6 +469,9 @@ class WebSocketClient extends CRDTSocketClient {
   @override
   void dispose() {
     disconnect();
+    for (final plugin in plugins) {
+      plugin.dispose();
+    }
     _messageController.close();
     _connectionStatusController.close();
     _syncManager.dispose();

@@ -91,6 +91,20 @@ class DocumentAwareness {
     );
   }
 
+  /// Creates a new DocumentAwareness with the updated client awareness.
+  DocumentAwareness copyWithUpdatedClient(ClientAwareness client) {
+    final newStates = Map<String, ClientAwareness>.from(states);
+    newStates[client.clientId] = client;
+    return copyWith(states: newStates);
+  }
+
+  /// Creates a new DocumentAwareness with the removed client awareness.
+  DocumentAwareness copyWithRemovedClient(String clientId) {
+    final newStates = Map<String, ClientAwareness>.from(states)
+      ..remove(clientId);
+    return copyWith(states: newStates);
+  }
+
   @override
   String toString() => 'DocumentAwareness(documentId: $documentId, '
       'states: $states)';

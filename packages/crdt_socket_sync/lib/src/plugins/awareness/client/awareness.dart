@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:crdt_socket_sync/client.dart';
 import 'package:crdt_socket_sync/src/plugins/client/client.dart';
 
@@ -19,14 +21,28 @@ class ClientAwarenessPlugin extends ClientSyncPlugin {
   })  : messageCodec = codec ??
             JsonMessageCodec<Message>(
               toJson: (message) => message.toJson(),
-              fromJson: Message.fromJson,
+              fromJson: AwarenessMessage.fromJson,
             ),
-        _initialMetadata = initialMetadata;
+        _initialMetadata = initialMetadata,
+        _awarenessController = StreamController<DocumentAwareness>.broadcast();
 
   @override
   String get name => 'awareness';
 
   DocumentAwareness? _awareness;
+
+  final StreamController<DocumentAwareness> _awarenessController;
+
+  /// Stream of awareness state changes
+  Stream<DocumentAwareness> get awarenessStream => _awarenessController.stream;
+
+  /// The awareness state of the client
+  DocumentAwareness get awareness =>
+      _awareness ??
+      DocumentAwareness(
+        documentId: client.document.peerId.toString(),
+        states: {},
+      );
 
   /// Initial metadata
   final Map<String, dynamic>? _initialMetadata;
@@ -62,7 +78,9 @@ class ClientAwarenessPlugin extends ClientSyncPlugin {
     if (localState != null &&
         remoteState != null &&
         localState.lastUpdate >= remoteState.lastUpdate) {
-      _awareness?.states[localState.clientId] = localState;
+      if (_awareness != null) {
+        _awareness = _awareness!.copyWithUpdatedClient(localState);
+      }
       return;
     }
   }
@@ -77,8 +95,9 @@ class ClientAwarenessPlugin extends ClientSyncPlugin {
         clientAwareness.lastUpdate >= message.state.lastUpdate) {
       return;
     }
-
-    _awareness?.states[message.state.clientId] = message.state;
+    if (_awareness != null) {
+      _awareness = _awareness!.copyWithUpdatedClient(message.state);
+    }
   }
 
   /// Update the local state of the awareness then send the update to the server
@@ -96,12 +115,19 @@ class ClientAwarenessPlugin extends ClientSyncPlugin {
       lastUpdate: DateTime.now().millisecondsSinceEpoch,
     );
 
-    _awareness?.states[sessionId] = state;
+    final documentId = client.document.peerId.toString();
+
+    _awareness = (_awareness ??
+            DocumentAwareness(
+              documentId: documentId,
+              states: {},
+            ))
+        .copyWithUpdatedClient(state);
 
     client.sendMessage(
       AwarenessUpdateMessage(
         state: state,
-        documentId: client.document.peerId.toString(),
+        documentId: documentId,
       ),
     );
   }
@@ -131,5 +157,10 @@ class ClientAwarenessPlugin extends ClientSyncPlugin {
   void onDisconnected() {
     // server is aware of client leaving so we don't need to do anything
     return;
+  }
+  
+  @override
+  void dispose() {
+    _awarenessController.close();
   }
 }

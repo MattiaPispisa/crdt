@@ -13,4 +13,9 @@ abstract class SyncPlugin {
   /// This is used to encode and decode messages for the plugin.
   /// The default implementation is [CompressedCodec] with [NoCompression].
   MessageCodec<Message> get messageCodec;
+
+  /// Called when the plugin is disposed.
+  ///
+  /// Usually [dispose] is called when the server is disposed.
+  void dispose();
 }

@@ -61,11 +61,20 @@ class _TodoListContent extends StatelessWidget {
       appBar: AppBar(
         title: const Text("TODO LIST"),
         actions: [
-          UsersConnected(users: [userId]),
+          Consumer<TodoListState>(
+            builder: (context, state, _) {
+              return UsersConnected(
+                users:
+                    state.awareness.states.values
+                        .map((e) => e.clientId)
+                        .toList(),
+              );
+            },
+          ),
         ],
       ),
       body: Consumer<TodoListState>(
-        builder: (context, state, child) {
+        builder: (context, state, _) {
           return Column(
             children: [
               Expanded(child: _todos(context, state)),
