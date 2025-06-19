@@ -2,16 +2,22 @@ import 'package:crdt_socket_sync/src/common/common.dart';
 import 'package:crdt_socket_sync/src/plugins/common/common.dart';
 
 /// A message codec that can be used to encode and decode messages
-/// for a list of plugins.
+/// for a list of [MessageCodec]s.
 ///
-/// The codec will try to decode the message with each plugin's codec
+/// The codec will try to decode the message with each [MessageCodec]
 /// until one of them succeeds.
-/// If no plugin can decode the message, the codec will return `null`.
+/// If no [MessageCodec] can decode the message, the codec will return `null`.
+///
+/// This codec is designed to support the plugin system.
+/// It is used to encode and decode messages with the default codec and the
+/// plugins' codecs.
 class PluginAwareMessageCodec implements MessageCodec<Message> {
   /// Constructor
   const PluginAwareMessageCodec(this._codecs);
 
-  /// Constructor from plugins
+  /// Constructor from a default codec and a list of plugins
+  ///
+  /// [defaultCodec] is the first codec used to encode and decode messages.
   PluginAwareMessageCodec.fromPlugins({
     required MessageCodec<Message> defaultCodec,
     required List<SyncPlugin> plugins,

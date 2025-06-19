@@ -48,6 +48,18 @@ class ClientAwareness {
   @override
   String toString() => 'AwarenessState(clientId: $clientId, '
       'metadata: $metadata, lastUpdate: $lastUpdate)';
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is ClientAwareness &&
+          runtimeType == other.runtimeType &&
+          clientId == other.clientId &&
+          metadata == other.metadata &&
+          lastUpdate == other.lastUpdate;
+
+  @override
+  int get hashCode => Object.hash(clientId, metadata, lastUpdate);
 }
 
 /// Document awareness state
@@ -108,4 +120,28 @@ class DocumentAwareness {
   @override
   String toString() => 'DocumentAwareness(documentId: $documentId, '
       'states: $states)';
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is DocumentAwareness &&
+          runtimeType == other.runtimeType &&
+          documentId == other.documentId &&
+          _mapEquals(states, other.states);
+
+  @override
+  int get hashCode => Object.hash(documentId, states);
+}
+
+bool _mapEquals(Map<String, dynamic> a, Map<String, dynamic> b) {
+  if (a.length != b.length) {
+    return false;
+  }
+  for (final entry in a.entries) {
+    if (b[entry.key] != entry.value) {
+      return false;
+    }
+  }
+
+  return true;
 }

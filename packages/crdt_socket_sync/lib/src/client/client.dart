@@ -76,5 +76,7 @@ mixin SocketClientProvider {
   /// The client instance.
   ///
   /// This is set by the client when the plugin is initialized.
+  ///
+  /// Do not use this property before the plugin is attached to the client.
   CRDTSocketClient get client => _client;
 }

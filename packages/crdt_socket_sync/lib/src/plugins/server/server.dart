@@ -25,6 +25,6 @@ abstract class ServerSyncPlugin
   /// Called when [session] subscribes to a new document.
   void onDocumentRegistered(ClientSession session, String documentId);
 
-  /// Called when a session is closed.
+  /// Called when [session] is closed.
   void onSessionClosed(ClientSession session);
 }

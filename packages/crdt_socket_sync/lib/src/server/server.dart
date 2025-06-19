@@ -42,12 +42,14 @@ abstract class CRDTSocketServer {
   void dispose();
 }
 
-/// A provider that can provide the server instance.
+/// A provider that provide the server instance.
 mixin SocketServerProvider {
   late final CRDTSocketServer _server;
 
   /// The server instance.
   ///
-  /// This is set by the server when the plugin is initialized.
+  /// This is set by the server when the plugin is attached to the server.
+  ///
+  /// Do not use this property before the plugin is attached to the server.
   CRDTSocketServer get server => _server;
 }

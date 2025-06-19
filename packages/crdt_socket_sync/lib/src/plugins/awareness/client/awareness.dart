@@ -80,6 +80,7 @@ class ClientAwarenessPlugin extends ClientSyncPlugin {
         localState.lastUpdate >= remoteState.lastUpdate) {
       if (_awareness != null) {
         _awareness = _awareness!.copyWithUpdatedClient(localState);
+        _awarenessController.add(_awareness!);
       }
       return;
     }
@@ -97,6 +98,7 @@ class ClientAwarenessPlugin extends ClientSyncPlugin {
     }
     if (_awareness != null) {
       _awareness = _awareness!.copyWithUpdatedClient(message.state);
+      _awarenessController.add(_awareness!);
     }
   }
 
@@ -123,6 +125,8 @@ class ClientAwarenessPlugin extends ClientSyncPlugin {
               states: {},
             ))
         .copyWithUpdatedClient(state);
+
+    _awarenessController.add(_awareness!);
 
     client.sendMessage(
       AwarenessUpdateMessage(
@@ -158,7 +162,7 @@ class ClientAwarenessPlugin extends ClientSyncPlugin {
     // server is aware of client leaving so we don't need to do anything
     return;
   }
-  
+
   @override
   void dispose() {
     _awarenessController.close();
