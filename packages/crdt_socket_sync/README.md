@@ -134,6 +134,8 @@ The package provides a plugin system that allows you to extend the functionality
 A plugin can be only on the client or only on the server or both.
 
 ```dart
+// it's important that `MyClientPlugin` extends `ClientSyncPlugin` (not implements).
+// `ClientSyncPlugin` makes some "magic" to make the plugin work.
 class MyClientPlugin extends ClientSyncPlugin {
   @override
   void onMessage(Message message) {
@@ -141,6 +143,8 @@ class MyClientPlugin extends ClientSyncPlugin {
   }
 }
 
+// it's important that `MyServerPlugin` extends `ServerSyncPlugin` (not implements).
+// `ServerSyncPlugin` makes some "magic" to make the plugin work.
 class MyServerPlugin extends ServerSyncPlugin {
   @override
   void onMessage(Message message) {
@@ -178,6 +182,8 @@ In the [example/](https://github.com/MattiaPispisa/crdt/tree/main/packages/crdt_
 In the [flutter_example/](https://github.com/MattiaPispisa/crdt/tree/main/packages/crdt_socket_sync/flutter_example) directory you can find a complete working example of a flutter app that uses the server and the client.
 
 Try to run the [server example](https://github.com/MattiaPispisa/crdt/tree/main/packages/crdt_socket_sync/example/main.dart) and some [client applications](https://github.com/MattiaPispisa/crdt/tree/main/packages/crdt_socket_sync/flutter_example) (or the [dart client](https://github.com/MattiaPispisa/crdt/tree/main/packages/crdt_socket_sync/example/main_client.dart)).
+The workspace contains a .vscode folder with the launch settings for the examples.
+
 
 The server example and the flutter example already use the awareness plugin.
 

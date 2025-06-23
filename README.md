@@ -28,6 +28,12 @@ A roadmap is available in the [project](https://github.com/users/MattiaPispisa/p
 This repository is a workspace that contains multiple packages.
 Consistency is granted by the [melos](https://pub.dev/packages/melos) tool.
 
+To setup the workspace, run:
+
+```bash
+melos bootstrap
+```
+
 A command is provided to publish all packages:
 
 ```bash

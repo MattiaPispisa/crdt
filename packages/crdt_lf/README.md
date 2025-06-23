@@ -77,7 +77,7 @@ void main() {
 ### [Flutter Distributed Collaboration Example](https://github.com/MattiaPispisa/crdt/tree/main/packages/crdt_lf/flutter_example)
 
 ## Sync 
-A sync library is available in the [crdt_socket_sync](https://github.com/MattiaPispisa/crdt/tree/main/packages/crdt_socket_sync) package. And it's used to synchronize the CRDT state between peers. More info in the [README](https://github.com/MattiaPispisa/crdt/tree/main/packages/crdt_socket_sync/README.md) of the sync package.
+A sync library is available in the [crdt_socket_sync](https://pub.dev/packages/crdt_socket_sync) package. And it's used to synchronize the CRDT state between peers. More info in the [README](https://github.com/MattiaPispisa/crdt/tree/main/packages/crdt_socket_sync/README.md) of the sync package.
 
 A flutter example is available in the [flutter_example](https://github.com/MattiaPispisa/crdt/tree/main/packages/crdt_socket_sync/flutter_example) and provide a synced version of the  "Flutter Distributed Collaboration" Example. 
 
@@ -100,6 +100,20 @@ Handlers are the core components of the library. They manage the state of a spec
 - `CRDTFugueTextHandler`: Handles text editing with the Fugue algorithm.
 - `CRDTListHandler`: Handles list editing.
 - `CRDTTextHandler`: Handles text editing.
+- `CRDTMapHandler`: Handles map editing.
+
+```dart
+final doc = CRDTDocument(
+  peerId: PeerId.parse('45ee6b65-b393-40b7-9755-8b66dc7d0518'),
+);
+final list = CRDTListHandler(doc, 'todo-list');
+list.insert(0, 'Buy apples');
+list.insert(1, 'Buy milk');
+list.delete(0);
+print(list.value); // Prints "[Buy milk]"
+```
+
+Every handler can be found in the [handlers](https://github.com/MattiaPispisa/crdt/tree/main/packages/crdt_lf/lib/src/handler) folder.
 
 ### DAG
 A Directed Acyclic Graph that maintains the causal ordering of operations.
@@ -117,7 +131,7 @@ A snapshot of the CRDT state, including the version vector and the data.
 
 This library is currently **in progress** and under active development. While all existing functionality is thoroughly tested, we are continuously working on improvements and new features.
 
-### [Roadmap](https://github.com/users/MattiaPispisa/projects/1)
+### Roadmap
 A roadmap is available in the [project](https://github.com/users/MattiaPispisa/projects/1) page. The roadmap provides a high-level overview of the project's goals and the current status of the project.
 
 ### Contributing
