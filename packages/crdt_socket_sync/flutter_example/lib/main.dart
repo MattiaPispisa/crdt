@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_example/_router.dart';
-import 'package:flutter_example/_user.dart';
+import 'package:flutter_example/user/_state.dart';
 
 void main() {
   runApp(const MyApp());
@@ -13,6 +13,7 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return UserProvider(
+      url: 'ws://192.168.1.37:8080',
       child: MaterialApp.router(
         debugShowCheckedModeBanner: false,
         title: 'Flutter Demo',

@@ -1,30 +1,30 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_example/todo_list/_add_item.dart';
 import 'package:crdt_lf/crdt_lf.dart';
-import 'package:flutter_example/_user.dart';
 import 'package:flutter_example/todo_list/_connection_status.dart';
 import 'package:flutter_example/todo_list/_users_connected.dart';
+import 'package:flutter_example/user/_state.dart';
 import 'package:provider/provider.dart';
 
 import '_state.dart';
 
-class TodoList extends StatelessWidget {
-  const TodoList({super.key, required this.documentId});
+class TodoListPage extends StatelessWidget {
+  const TodoListPage({super.key, required this.documentId});
 
   final PeerId documentId;
 
   @override
   Widget build(BuildContext context) {
-    final userId = context.user;
+    final user = context.user;
+
     return ChangeNotifierProvider<TodoListState>(
       create:
           (context) =>
-              TodoListState.create(documentId: documentId, userId: userId)
+              TodoListState.create(documentId: documentId, user: user)
                 ..connect(),
       child: _TodoListContent(
         key: ValueKey('content_$documentId'),
-
-        userId: userId,
+        userId: user.userId,
         documentId: documentId,
       ),
     );
@@ -65,9 +65,23 @@ class _TodoListContent extends StatelessWidget {
             builder: (context, state, _) {
               return UsersConnected(
                 users:
-                    state.awareness.states.values
-                        .map((e) => e.clientId)
-                        .toList(),
+                    state.awareness.states.values.fold<List<UserConnectedItem>>(
+                      [],
+                      (acc, e) {
+                        final username = e.metadata['username'] as String?;
+                        final surname = e.metadata['surname'] as String?;
+                        if (username == null || surname == null) {
+                          return acc;
+                        }
+                        return [
+                          ...acc,
+                          UserConnectedItem(
+                            username: username,
+                            surname: surname,
+                          ),
+                        ];
+                      },
+                    ).toList(),
               );
             },
           ),

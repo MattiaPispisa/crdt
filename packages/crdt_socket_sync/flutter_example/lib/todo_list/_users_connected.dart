@@ -1,9 +1,27 @@
 import 'package:flutter/material.dart';
 
+class UserConnectedItem {
+  const UserConnectedItem({required this.username, required this.surname});
+
+  final String username;
+  final String surname;
+
+  @override
+  bool operator ==(Object other) {
+    if (other is UserConnectedItem) {
+      return username == other.username && surname == other.surname;
+    }
+    return false;
+  }
+
+  @override
+  int get hashCode => username.hashCode ^ surname.hashCode;
+}
+
 class UsersConnected extends StatelessWidget {
   const UsersConnected({super.key, required this.users});
 
-  final List<String> users;
+  final List<UserConnectedItem> users;
 
   @override
   Widget build(BuildContext context) {
@@ -17,13 +35,13 @@ class UsersConnected extends StatelessWidget {
     );
   }
 
-  Widget _user(BuildContext context, String user) {
+  Widget _user(BuildContext context, UserConnectedItem user) {
     return Padding(
       padding: const EdgeInsets.all(4.0),
       child: CircleAvatar(
         backgroundColor: _getColorForUser(user),
         child: Text(
-          user.substring(0, 2).toUpperCase(),
+          '${user.username[0]}${user.surname[0]}'.toUpperCase(),
           style: const TextStyle(
             color: Colors.white,
             fontWeight: FontWeight.bold,
@@ -33,7 +51,7 @@ class UsersConnected extends StatelessWidget {
     );
   }
 
-  Color _getColorForUser(String user) {
+  Color _getColorForUser(UserConnectedItem user) {
     // List of vibrant colors
     final List<Color> vibrantColors = [
       Colors.red.shade600,

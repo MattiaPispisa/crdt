@@ -5,6 +5,7 @@ import 'dart:async';
 import 'package:crdt_lf/crdt_lf.dart';
 import 'package:crdt_socket_sync/web_socket_client.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_example/user/_state.dart';
 
 class TodoListState extends ChangeNotifier {
   TodoListState._({
@@ -27,15 +28,20 @@ class TodoListState extends ChangeNotifier {
 
   factory TodoListState.create({
     required PeerId documentId,
-    required PeerId userId,
+    required UserState user,
   }) {
     final document = CRDTDocument(peerId: documentId);
     final handler = CRDTListHandler<String>(document, 'todo-list');
-    final awareness = ClientAwarenessPlugin();
+    final awareness = ClientAwarenessPlugin(
+      initialMetadata: {
+        'username': user.username,
+        'surname': user.surname,
+      },
+    );
     final client = WebSocketClient(
-      url: 'ws://192.168.1.37:8080',
+      url: user.url,
       document: document,
-      author: userId,
+      author: user.userId,
       plugins: [awareness],
     );
     return TodoListState._(
@@ -62,7 +68,9 @@ class TodoListState extends ChangeNotifier {
       ..messages.listen((message) {
         notifyListeners();
       });
-
+    _client.connectionStatus.listen((status) {
+      notifyListeners();
+    });
     _client.messages.listen((message) {
       print('message: $message');
     });

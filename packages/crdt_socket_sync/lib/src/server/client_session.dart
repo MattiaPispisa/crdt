@@ -86,7 +86,7 @@ class ClientSession {
   /// Send a message to the client
   Future<void> sendMessage(Message message) async {
     if (_isClosed) {
-      return _sessionEventController.add(
+      return _addSessionEvent(
         SessionEventGeneric(
           sessionId: id,
           type: SessionEventType.error,
@@ -99,7 +99,7 @@ class ClientSession {
       final data = _messageCodec.encode(message);
 
       if (data == null) {
-        _sessionEventController.add(
+        _addSessionEvent(
           SessionEventGeneric(
             sessionId: id,
             type: SessionEventType.error,
@@ -112,7 +112,7 @@ class ClientSession {
 
       await _connection.send(data);
     } catch (e) {
-      _sessionEventController.add(
+      _addSessionEvent(
         SessionEventGeneric(
           sessionId: id,
           type: SessionEventType.error,
@@ -140,7 +140,7 @@ class ClientSession {
     try {
       final message = _messageCodec.decode(data);
       if (message == null) {
-        _sessionEventController.add(
+        _addSessionEvent(
           SessionEventGeneric(
             sessionId: id,
             type: SessionEventType.error,
@@ -152,7 +152,7 @@ class ClientSession {
       }
       _handleMessage(message);
     } catch (e, stackTrace) {
-      _sessionEventController.add(
+      _addSessionEvent(
         SessionEventGeneric(
           sessionId: id,
           type: SessionEventType.error,
@@ -171,7 +171,7 @@ class ClientSession {
       return;
     }
 
-    _sessionEventController.add(
+    _addSessionEvent(
       SessionEventGeneric(
         sessionId: id,
         type: SessionEventType.error,
@@ -227,7 +227,7 @@ class ClientSession {
           break;
       }
     } catch (e) {
-      _sessionEventController.add(
+      _addSessionEvent(
         SessionEventGeneric(
           sessionId: id,
           type: SessionEventType.error,
@@ -280,7 +280,7 @@ class ClientSession {
 
     await sendMessage(response);
 
-    _sessionEventController.add(
+    _addSessionEvent(
       SessionEventGeneric(
         sessionId: id,
         type: SessionEventType.handshakeCompleted,
@@ -297,7 +297,7 @@ class ClientSession {
     final documentId = message.documentId;
 
     if (!_serverRegistry.hasDocument(documentId)) {
-      _sessionEventController.add(
+      _addSessionEvent(
         SessionEventGeneric(
           sessionId: id,
           type: SessionEventType.error,
@@ -309,7 +309,7 @@ class ClientSession {
     }
 
     if (!isSubscribedTo(documentId)) {
-      _sessionEventController.add(
+      _addSessionEvent(
         SessionEventGeneric(
           sessionId: id,
           type: SessionEventType.error,
@@ -324,7 +324,7 @@ class ClientSession {
       final applied = _serverRegistry.applyChange(documentId, message.change);
 
       if (applied) {
-        _sessionEventController.add(
+        _addSessionEvent(
           SessionEventChangeApplied(
             sessionId: id,
             message: 'Change received and applied for document $documentId',
@@ -333,7 +333,7 @@ class ClientSession {
           ),
         );
       } else {
-        _sessionEventController.add(
+        _addSessionEvent(
           SessionEventGeneric(
             sessionId: id,
             type: SessionEventType.error,
@@ -342,7 +342,7 @@ class ClientSession {
         );
       }
     } catch (e) {
-      _sessionEventController.add(
+      _addSessionEvent(
         SessionEventGeneric(
           sessionId: id,
           type: SessionEventType.error,
@@ -360,7 +360,7 @@ class ClientSession {
 
     if (!_serverRegistry.hasDocument(documentId)) {
       // send error message if the document does not exist
-      _sessionEventController.add(
+      _addSessionEvent(
         SessionEventGeneric(
           sessionId: id,
           type: SessionEventType.error,
@@ -391,7 +391,7 @@ class ClientSession {
     );
     await sendMessage(response);
 
-    _sessionEventController.add(
+    _addSessionEvent(
       SessionEventGeneric(
         sessionId: id,
         type: SessionEventType.documentStatusCreated,
@@ -412,7 +412,7 @@ class ClientSession {
     );
     await sendMessage(pongMessage);
 
-    _sessionEventController.add(
+    _addSessionEvent(
       SessionEventGeneric(
         sessionId: id,
         type: SessionEventType.pingReceived,
@@ -458,7 +458,7 @@ class ClientSession {
       return;
     }
 
-    _sessionEventController.add(
+    _addSessionEvent(
       SessionEventGeneric(
         sessionId: id,
         type: SessionEventType.error,
@@ -489,7 +489,7 @@ class ClientSession {
       plugin.onSessionClosed(this);
     }
 
-    _sessionEventController.add(
+    _addSessionEvent(
       SessionEventGeneric(
         sessionId: id,
         type: SessionEventType.disconnected,
@@ -507,5 +507,12 @@ class ClientSession {
   void dispose() {
     _closeSession(reason: 'Session disposed');
     _sessionEventController.close();
+  }
+
+  void _addSessionEvent(SessionEvent event) {
+    if (_sessionEventController.isClosed) {
+      return;
+    }
+    _sessionEventController.add(event);
   }
 }

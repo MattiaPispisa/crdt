@@ -20,7 +20,8 @@ class WebSocketClient extends CRDTSocketClient {
     super.plugins,
   })  : _messageController = StreamController<Message>.broadcast(),
         _connectionStatusController =
-            StreamController<ConnectionStatus>.broadcast(),
+            StreamController<ConnectionStatus>.broadcast()
+              ..add(ConnectionStatus.disconnected),
         _connectionStatusValue = ConnectionStatus.disconnected {
     _syncManager = SyncManager(document: document, client: this);
     _messageCodec = CompressedCodec<Message>(
@@ -160,7 +161,9 @@ class WebSocketClient extends CRDTSocketClient {
 
       _transport!.incoming.listen(
         _handleIncomingData,
-        onError: _handleTransportError,
+        onError: (dynamic error, _) {
+          _handleTransportError(error);
+        },
         onDone: disconnect,
       );
 
@@ -196,8 +199,15 @@ class WebSocketClient extends CRDTSocketClient {
     }
   }
 
+  /// Send a message to the server
+  ///
+  /// If [attemptReconnect] is true, then the client will attempt to reconnect
+  /// on connection error
   @override
-  Future<void> sendMessage(Message message) async {
+  Future<void> sendMessage(
+    Message message, {
+    bool attemptReconnect = true,
+  }) async {
     if (_connectionStatusValue.isDisconnected || _transport == null) {
       throw StateError('Client not connected');
     }
@@ -216,7 +226,10 @@ class WebSocketClient extends CRDTSocketClient {
         _updateConnectionStatus(ConnectionStatus.connected);
       }
     } catch (e) {
-      _handleTransportError(e);
+      _handleTransportError(
+        e,
+        attemptReconnect: attemptReconnect,
+      );
       rethrow;
     }
   }
@@ -257,7 +270,7 @@ class WebSocketClient extends CRDTSocketClient {
 
         // TODO(mattia): add some event to the client to notify the user
         // that the message is not supported by any plugin
-        if (message != null) {
+        if (message != null && !_messageController.isClosed) {
           _messageController.add(message);
         }
       } catch (e) {
@@ -269,11 +282,18 @@ class WebSocketClient extends CRDTSocketClient {
 
   /// set status with [ConnectionStatus.error]
   /// and attempt to reconnect ([_attemptReconnect])
-  void _handleTransportError(error) {
+  void _handleTransportError(
+    dynamic error, {
+    bool attemptReconnect = true,
+  }) {
+    // on reconnecting if an error occurs do not update the status
+    // to error, because the reconnect will handle it.
     if (!_connectionStatusValue.isReconnecting) {
       _updateConnectionStatus(ConnectionStatus.error);
     }
-    _attemptReconnect();
+    if (attemptReconnect) {
+      _attemptReconnect();
+    }
   }
 
   /// Attempt to reconnect calling with [Protocol.reconnectInterval] interval
@@ -344,6 +364,8 @@ class WebSocketClient extends CRDTSocketClient {
   ///
   /// [Protocol.handshakeTimeout] is the maximum time to wait
   /// for the handshake response
+  ///
+  /// Handshake is not attempted to reconnect
   Future<bool> _performHandshake() async {
     _handshakeCompleter = Completer<bool>();
 
@@ -354,7 +376,12 @@ class WebSocketClient extends CRDTSocketClient {
     );
 
     try {
-      await sendMessage(handshakeRequest);
+      // do not attempt to reconnect on handshake error
+      // because the reconnect will handle it.
+      await sendMessage(
+        handshakeRequest,
+        attemptReconnect: false,
+      );
 
       final timeout = Future.delayed(
         Protocol.handshakeTimeout,
@@ -463,6 +490,7 @@ class WebSocketClient extends CRDTSocketClient {
     if (_connectionStatusController.isClosed) {
       return;
     }
+
     _connectionStatusController.add(status);
   }
 

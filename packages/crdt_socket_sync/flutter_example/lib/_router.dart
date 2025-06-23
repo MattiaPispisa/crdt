@@ -1,25 +1,27 @@
 import 'package:crdt_lf/crdt_lf.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_example/_view.dart';
+import 'package:flutter_example/user/user_page.dart';
 import 'package:go_router/go_router.dart';
 
 final router = GoRouter(
-  initialLocation: '/documents',
+  initialLocation: '/home',
   routes: [
     GoRoute(
-      path: '/documents',
-      builder: (context, state) => const DocumentsList(),
+      path: '/home',
+      builder: (context, state) => const DocumentsListPage(),
       routes: [
         GoRoute(
-          path: 'document/:id',
+          path: 'documents/:id',
           builder: (context, state) {
-            return TodoList(
+            return TodoListPage(
               documentId: PeerId.parse(
                 Uri.decodeComponent(state.pathParameters['id']!),
               ),
             );
           },
         ),
+        GoRoute(path: 'user', builder: (context, state) => const UserPage()),
       ],
     ),
   ],
@@ -27,10 +29,14 @@ final router = GoRouter(
 
 extension GoRouterHelper on BuildContext {
   void goToDocument(String id) {
-    go('/documents/document/${Uri.encodeComponent(id)}');
+    go('/home/documents/${Uri.encodeComponent(id)}');
   }
 
   void goToDocuments() {
-    go('/documents');
+    go('/home');
+  }
+
+  void goToUser() {
+    go('/home/user');
   }
 }

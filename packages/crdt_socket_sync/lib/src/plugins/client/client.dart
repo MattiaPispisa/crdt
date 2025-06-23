@@ -1,6 +1,11 @@
 import 'package:crdt_socket_sync/client.dart';
 
 /// Base class for all client plugins.
+///
+/// `extends` (not ~~implements~~) this class to make the plugin work.
+///
+/// Once the plugin is attached to the client the `CRDTSocketClient`
+/// will be available.
 abstract class ClientSyncPlugin
     with SocketClientProvider
     implements SyncPlugin {
