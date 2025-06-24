@@ -33,10 +33,7 @@ class TodoListState extends ChangeNotifier {
     final document = CRDTDocument(peerId: documentId);
     final handler = CRDTListHandler<String>(document, 'todo-list');
     final awareness = ClientAwarenessPlugin(
-      initialMetadata: {
-        'username': user.username,
-        'surname': user.surname,
-      },
+      initialMetadata: {'username': user.username, 'surname': user.surname},
     );
     final client = WebSocketClient(
       url: user.url,

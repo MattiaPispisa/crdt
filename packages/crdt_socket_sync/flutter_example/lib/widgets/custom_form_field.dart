@@ -24,11 +24,9 @@ class CustomFormField extends StatelessWidget {
         decoration: InputDecoration(
           icon: icon != null ? Icon(icon) : null,
           labelText: label,
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(8),
-          ),
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
         ),
       ),
     );
   }
-} 
+}

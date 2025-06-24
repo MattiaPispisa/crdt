@@ -6,7 +6,7 @@ import 'package:crdt_socket_sync/server.dart';
 ///
 /// Once the plugin is attached to the server the `CRDTSocketServer` will
 /// be available.
-/// 
+///
 /// A plugin can be used to extend the server functionality.
 /// It can handle custom messages, and listen to events from the server.
 abstract class ServerSyncPlugin
