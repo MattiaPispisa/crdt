@@ -167,11 +167,15 @@ final server = WebSocketServer(
 );
 ```
 
+A plugin can send new message types to clients and the server. To do so, it must extend the `Message` class and implement the `fromJson` method to decode the messages.
+
 #### Awareness Plugin
 
 The awareness plugin is a plugin that allows you to track the awareness of the clients.
 It is a plugin that is both on the client and the server.
 It is used to track the awareness of the clients and to send the awareness to the server and to the clients.
+
+The example provided uses the awareness plugin.
 
 ## Examples
 

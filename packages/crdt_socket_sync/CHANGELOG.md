@@ -1,5 +1,8 @@
 ## [0.2.0] - 2025-06-24
 
+**Breaking changes**
+- `encode` and `decode` methods of `MessageCodec` have nullable return type
+
 ### Added
 - Feature: add plugin system
 - Feature: add awareness plugin
