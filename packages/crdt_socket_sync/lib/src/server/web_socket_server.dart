@@ -400,6 +400,11 @@ class WebSocketServer extends CRDTSocketServer {
   }
 
   void _addServerEvent(ServerEvent event) {
+    assert(
+      !_serverEventController.isClosed,
+      '[WebSocketServer] Cannot add new server events'
+      ' after the server has been disposed',
+    );
     if (_serverEventController.isClosed) {
       return;
     }

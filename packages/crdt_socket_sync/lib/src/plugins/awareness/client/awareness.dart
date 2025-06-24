@@ -80,7 +80,7 @@ class ClientAwarenessPlugin extends ClientSyncPlugin {
         localState.lastUpdate >= remoteState.lastUpdate) {
       if (_awareness != null) {
         _awareness = _awareness!.copyWithUpdatedClient(localState);
-        _awarenessController.add(_awareness!);
+        _updateController(_awareness!);
       }
       return;
     }
@@ -98,7 +98,7 @@ class ClientAwarenessPlugin extends ClientSyncPlugin {
     }
     if (_awareness != null) {
       _awareness = _awareness!.copyWithUpdatedClient(message.state);
-      _awarenessController.add(_awareness!);
+      _updateController(_awareness!);
     }
   }
 
@@ -126,7 +126,7 @@ class ClientAwarenessPlugin extends ClientSyncPlugin {
             ))
         .copyWithUpdatedClient(state);
 
-    _awarenessController.add(_awareness!);
+    _updateController(_awareness!);
 
     client.sendMessage(
       AwarenessUpdateMessage(
@@ -166,5 +166,17 @@ class ClientAwarenessPlugin extends ClientSyncPlugin {
   @override
   void dispose() {
     _awarenessController.close();
+  }
+
+  void _updateController(DocumentAwareness awareness) {
+    assert(
+      !_awarenessController.isClosed,
+      '[ClientAwarenessPlugin] Cannot update the awareness state'
+      ' after the plugin has been disposed',
+    );
+    if (_awarenessController.isClosed) {
+      return;
+    }
+    _awarenessController.add(awareness);
   }
 }

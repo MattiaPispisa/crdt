@@ -78,7 +78,7 @@ class ServerAwarenessPlugin extends ServerSyncPlugin {
       message.state.clientId,
       excludeClientIds: [session.id],
     );
-    _awarenessController.add(
+    _updateController(
       ServerAwarenessEvent(
         type: ServerAwarenessEventType.clientUpdated,
         documentId: message.documentId,
@@ -108,7 +108,7 @@ class ServerAwarenessPlugin extends ServerSyncPlugin {
         _documentAwareness[documentId] =
             awareness.copyWithRemovedClient(session.id);
 
-        _awarenessController.add(
+        _updateController(
           ServerAwarenessEvent(
             type: ServerAwarenessEventType.clientLeft,
             documentId: documentId,
@@ -119,7 +119,7 @@ class ServerAwarenessPlugin extends ServerSyncPlugin {
           documentId,
         );
 
-        _awarenessController.add(
+        _updateController(
           ServerAwarenessEvent(
             type: ServerAwarenessEventType.clientLeft,
             documentId: documentId,
@@ -228,12 +228,24 @@ class ServerAwarenessPlugin extends ServerSyncPlugin {
       session.id,
     );
 
-    _awarenessController.add(
+    _updateController(
       ServerAwarenessEvent(
         type: ServerAwarenessEventType.clientJoined,
         documentId: documentId,
         clientId: session.id,
       ),
     );
+  }
+
+  void _updateController(ServerAwarenessEvent awareness) {
+    assert(
+      !_awarenessController.isClosed,
+      '[ServerAwarenessPlugin] Cannot add new awareness events'
+      ' after the plugin has been disposed',
+    );
+    if (_awarenessController.isClosed) {
+      return;
+    }
+    _awarenessController.add(awareness);
   }
 }

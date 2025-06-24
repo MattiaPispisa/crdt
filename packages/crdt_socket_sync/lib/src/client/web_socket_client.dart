@@ -214,11 +214,22 @@ class WebSocketClient extends CRDTSocketClient {
 
     final data = _messageCodec.encode(message);
 
-    // TODO(mattia): add some event to the client to notify the user
-    // that the message is not supported by any plugin
+    // ignore: prefer_asserts_with_message assert function
+    assert(() {
+      if (data == null) {
+        throw StateError(
+          '[WebSocketClient] cannot send a message that cannot be encoded.'
+          ' Have you added the plugin to the client?'
+          '\nMessage: $message',
+        );
+      }
+      return true;
+    }());
+
     if (data == null) {
       return;
     }
+
     try {
       await _transport!.send(data);
 
@@ -266,10 +277,26 @@ class WebSocketClient extends CRDTSocketClient {
       try {
         final message = _messageCodec.decode(_buffer);
 
+        // ignore: prefer_asserts_with_message assert function
+        assert(() {
+          if (message == null) {
+            throw StateError(
+              '[WebSocketClient] received a message that cannot be decoded.'
+              ' Have you added the plugin to the client?'
+              '\nBuffer: ${_buffer.join(', ')}',
+            );
+          }
+          if (_messageController.isClosed) {
+            throw StateError(
+              '[WebSocketClient] received a message after the client has been'
+              ' disposed',
+            );
+          }
+          return true;
+        }());
+
         _buffer.clear();
 
-        // TODO(mattia): add some event to the client to notify the user
-        // that the message is not supported by any plugin
         if (message != null && !_messageController.isClosed) {
           _messageController.add(message);
         }
@@ -482,6 +509,12 @@ class WebSocketClient extends CRDTSocketClient {
   /// If [status] is different from [_connectionStatusValue]
   /// then update the connection status and notify the listeners
   void _updateConnectionStatus(ConnectionStatus status) {
+    assert(
+      !_connectionStatusController.isClosed,
+      '[WebSocketClient] Cannot update the connection status'
+      ' after the client has been disposed',
+    );
+
     if (status == _connectionStatusValue) {
       return;
     }
