@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:crdt_socket_sync/client.dart';
+import 'package:crdt_socket_sync/src/plugins/awareness/client/throttle.dart';
 import 'package:crdt_socket_sync/src/plugins/client/client.dart';
 
 /// Client awareness plugin
@@ -15,16 +16,21 @@ class ClientAwarenessPlugin extends ClientSyncPlugin {
   ///
   /// [codec] is the codec to use to encode and decode the messages.
   /// default to [JsonMessageCodec]
+  ///
+  /// [throttleDuration] is the duration to wait before sending the awareness
+  /// update to the server. default to 50 milliseconds
   ClientAwarenessPlugin({
     MessageCodec<Message>? codec,
     Map<String, dynamic>? initialMetadata,
+    Duration throttleDuration = const Duration(milliseconds: 50),
   })  : messageCodec = codec ??
             JsonMessageCodec<Message>(
               toJson: (message) => message.toJson(),
               fromJson: AwarenessMessage.fromJson,
             ),
         _initialMetadata = initialMetadata,
-        _awarenessController = StreamController<DocumentAwareness>.broadcast();
+        _awarenessController = StreamController<DocumentAwareness>.broadcast(),
+        _throttler = Throttler(throttleDuration);
 
   @override
   String get name => 'awareness';
@@ -49,6 +55,8 @@ class ClientAwarenessPlugin extends ClientSyncPlugin {
 
   @override
   final MessageCodec<Message> messageCodec;
+
+  final Throttler _throttler;
 
   @override
   void onMessage(Message message) {
@@ -106,6 +114,16 @@ class ClientAwarenessPlugin extends ClientSyncPlugin {
   void updateLocalState(
     Map<String, dynamic> metadata,
   ) {
+    return _internalUpdateLocalState(
+      metadata,
+      throttle: true,
+    );
+  }
+
+  void _internalUpdateLocalState(
+    Map<String, dynamic> metadata, {
+    required bool throttle,
+  }) {
     final sessionId = client.sessionId;
     if (sessionId == null) {
       return;
@@ -128,12 +146,18 @@ class ClientAwarenessPlugin extends ClientSyncPlugin {
 
     _updateController(_awareness!);
 
-    client.sendMessage(
-      AwarenessUpdateMessage(
-        state: state,
-        documentId: documentId,
-      ),
-    );
+    void send() => client.sendMessage(
+          AwarenessUpdateMessage(
+            state: state,
+            documentId: documentId,
+          ),
+        );
+
+    if (throttle) {
+      _throttler(send);
+    } else {
+      send();
+    }
   }
 
   /// Request the state of the awareness from the server
@@ -153,7 +177,7 @@ class ClientAwarenessPlugin extends ClientSyncPlugin {
       return;
     }
 
-    updateLocalState(metadata);
+    _internalUpdateLocalState(metadata, throttle: false);
     return;
   }
 
@@ -165,6 +189,7 @@ class ClientAwarenessPlugin extends ClientSyncPlugin {
 
   @override
   void dispose() {
+    _throttler.dispose();
     _awarenessController.close();
   }
 
