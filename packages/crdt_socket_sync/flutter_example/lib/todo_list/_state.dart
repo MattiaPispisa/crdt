@@ -33,6 +33,7 @@ class TodoListState extends ChangeNotifier {
     final document = CRDTDocument(peerId: documentId);
     final handler = CRDTListHandler<String>(document, 'todo-list');
     final awareness = ClientAwarenessPlugin(
+      throttleDuration: const Duration(milliseconds: 100),
       initialMetadata: {'username': user.username, 'surname': user.surname},
     );
     final client = WebSocketClient(
@@ -83,6 +84,13 @@ class TodoListState extends ChangeNotifier {
   void removeTodo(int index) {
     _handler.delete(index, 1);
     notifyListeners();
+  }
+
+  void updateCursor(Offset position) {
+    _awareness.updateLocalState({
+      'positionX': position.dx,
+      'positionY': position.dy,
+    });
   }
 
   List<String> get todos => _handler.value;

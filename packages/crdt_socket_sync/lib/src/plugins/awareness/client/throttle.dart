@@ -12,9 +12,10 @@ class Throttler {
   /// throttle the [action]
   void call(void Function() action) {
     if (_timer?.isActive ?? false) {
-      _timer!.cancel();
+      return;
     }
-    _timer = Timer(duration, action);
+    _timer = Timer(duration, () {});
+    action();
   }
 
   /// dispose the Throttler

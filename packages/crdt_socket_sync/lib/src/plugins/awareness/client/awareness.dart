@@ -129,9 +129,13 @@ class ClientAwarenessPlugin extends ClientSyncPlugin {
       return;
     }
 
+    final currentMetadata = _awareness?.states[sessionId]?.metadata;
     final state = ClientAwareness(
       clientId: sessionId,
-      metadata: metadata,
+      metadata: {
+        ...currentMetadata ?? {},
+        ...metadata,
+      },
       lastUpdate: DateTime.now().millisecondsSinceEpoch,
     );
 
