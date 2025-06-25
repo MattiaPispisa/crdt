@@ -15,12 +15,13 @@ import 'package:web_socket_channel/status.dart';
 // Maybe in a plugin only for the server?
 
 /// WebSocket server implementation
-class WebSocketServer implements CRDTSocketServer {
+class WebSocketServer extends CRDTSocketServer {
   /// Constructor
   WebSocketServer({
     required Future<HttpServer> Function() serverFactory,
     required CRDTServerRegistry serverRegistry,
     Compressor? compressor,
+    super.plugins,
   })  : _serverFactory = serverFactory,
         _serverTransformer = _DefaultWebSocketTransformerWrapper(),
         _compressor = compressor ?? NoCompression.instance,
@@ -33,6 +34,7 @@ class WebSocketServer implements CRDTSocketServer {
     required CRDTServerRegistry serverRegistry,
     Compressor? compressor,
     WebSocketServerTransformer? serverTransformer,
+    super.plugins,
   })  : _serverFactory = serverFactory,
         _serverTransformer =
             serverTransformer ?? _DefaultWebSocketTransformerWrapper(),
@@ -89,7 +91,7 @@ class WebSocketServer implements CRDTSocketServer {
     try {
       _server = await _serverFactory();
 
-      _serverEventController.add(
+      _addServerEvent(
         ServerEvent(
           type: ServerEventType.started,
           message: 'Server started on $host:$port',
@@ -109,7 +111,7 @@ class WebSocketServer implements CRDTSocketServer {
 
       return true;
     } catch (e) {
-      _serverEventController.add(
+      _addServerEvent(
         ServerEvent(
           type: ServerEventType.error,
           message: 'Failed to start server: $e',
@@ -138,7 +140,7 @@ class WebSocketServer implements CRDTSocketServer {
     await _server?.close();
     _server = null;
 
-    _serverEventController.add(
+    _addServerEvent(
       const ServerEvent(
         type: ServerEventType.stopped,
         message: 'Server stopped',
@@ -160,8 +162,9 @@ class WebSocketServer implements CRDTSocketServer {
     List<String>? excludeClientIds,
   }) async {
     final documentId = message.documentId;
+    final sessions = List.of(_sessions.values);
 
-    for (final session in _sessions.values) {
+    for (final session in sessions) {
       final isExcluded = excludeClientIds?.contains(session.id) ?? false;
       final isSubscribed = session.isSubscribedTo(documentId);
 
@@ -186,11 +189,12 @@ class WebSocketServer implements CRDTSocketServer {
       connection: connection,
       serverRegistry: _serverRegistry,
       compressor: _compressor,
+      plugins: plugins,
     );
 
     _sessions[sessionId] = session;
 
-    _serverEventController.add(
+    _addServerEvent(
       ServerEvent(
         type: ServerEventType.clientConnected,
         message: 'Client connected: $sessionId',
@@ -200,15 +204,21 @@ class WebSocketServer implements CRDTSocketServer {
       ),
     );
 
+    for (final plugin in plugins) {
+      plugin.onNewSession(session);
+    }
+
     session.events.listen(
       _handleSessionEvent,
-      onDone: () => _handleSessionClosed(sessionId),
+      onDone: () {
+        _handleSessionClosed(sessionId);
+      },
       onError: (dynamic error) => _handleSessionError(sessionId, error),
     );
   }
 
   void _handleSessionEventHandshakeCompleted(SessionEventGeneric event) {
-    _serverEventController.add(
+    _addServerEvent(
       ServerEvent(
         type: ServerEventType.clientHandshake,
         message: 'Client handshake completed: ${event.message}',
@@ -220,7 +230,7 @@ class WebSocketServer implements CRDTSocketServer {
   Future<void> _handleSessionEventChangeApplied(
     SessionEventChangeApplied event,
   ) {
-    _serverEventController.add(
+    _addServerEvent(
       ServerEvent(
         type: ServerEventType.clientChangeApplied,
         message: 'Client change applied: ${event.message}',
@@ -236,7 +246,7 @@ class WebSocketServer implements CRDTSocketServer {
   }
 
   void _handleSessionEventError(SessionEventGeneric event) {
-    _serverEventController.add(
+    _addServerEvent(
       ServerEvent(
         type: ServerEventType.error,
         message: 'Session error: ${event.message}',
@@ -281,7 +291,7 @@ class WebSocketServer implements CRDTSocketServer {
   }
 
   void _handleSessionEventDocumentStatusRequest(SessionEventGeneric event) {
-    _serverEventController.add(
+    _addServerEvent(
       ServerEvent(
         type: ServerEventType.clientDocumentStatusCreated,
         message: 'Client document status request: ${event.message}',
@@ -290,7 +300,7 @@ class WebSocketServer implements CRDTSocketServer {
   }
 
   void _handleSessionEventPingReceived(SessionEventGeneric event) {
-    _serverEventController.add(
+    _addServerEvent(
       ServerEvent(
         type: ServerEventType.clientPingRequest,
         message: 'Client ping request: ${event.message}',
@@ -299,7 +309,7 @@ class WebSocketServer implements CRDTSocketServer {
   }
 
   void _handleSessionEventDisconnected(SessionEventGeneric event) {
-    _serverEventController.add(
+    _addServerEvent(
       ServerEvent(
         type: ServerEventType.clientDisconnected,
         message: 'Client disconnected: ${event.message}',
@@ -309,7 +319,12 @@ class WebSocketServer implements CRDTSocketServer {
     if (session == null) {
       return;
     }
+
     session.dispose();
+
+    for (final plugin in plugins) {
+      plugin.onSessionClosed(session);
+    }
     _sessions.remove(event.sessionId);
   }
 
@@ -322,7 +337,11 @@ class WebSocketServer implements CRDTSocketServer {
 
     session.dispose();
 
-    _serverEventController.add(
+    for (final plugin in plugins) {
+      plugin.onSessionClosed(session);
+    }
+
+    _addServerEvent(
       ServerEvent(
         type: ServerEventType.clientDisconnected,
         message: 'Client disconnected: $sessionId',
@@ -335,7 +354,7 @@ class WebSocketServer implements CRDTSocketServer {
 
   /// Handle session error
   void _handleSessionError(String sessionId, dynamic error) {
-    _serverEventController.add(
+    _addServerEvent(
       ServerEvent(
         type: ServerEventType.error,
         message: 'Session error: $error',
@@ -358,12 +377,16 @@ class WebSocketServer implements CRDTSocketServer {
     stop();
     _serverEventController.close();
 
+    for (final plugin in plugins) {
+      plugin.dispose();
+    }
+
     // Free the document registry resources
     for (final documentId in _serverRegistry.documentIds) {
       try {
         _serverRegistry.getDocument(documentId)?.dispose();
       } catch (e) {
-        _serverEventController.add(
+        _addServerEvent(
           ServerEvent(
             type: ServerEventType.error,
             message: 'Error disposing document: $e',
@@ -374,6 +397,18 @@ class WebSocketServer implements CRDTSocketServer {
         );
       }
     }
+  }
+
+  void _addServerEvent(ServerEvent event) {
+    assert(
+      !_serverEventController.isClosed,
+      '[WebSocketServer] Cannot add new server events'
+      ' after the server has been disposed',
+    );
+    if (_serverEventController.isClosed) {
+      return;
+    }
+    _serverEventController.add(event);
   }
 }
 

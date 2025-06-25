@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:crdt_lf/crdt_lf.dart';
 import 'package:crdt_socket_sync/src/common/common.dart';
 import 'package:crdt_socket_sync/src/common/utils.dart';
+import 'package:crdt_socket_sync/src/plugins/server.dart';
 import 'package:crdt_socket_sync/src/server/client_session_event.dart';
 import 'package:crdt_socket_sync/src/server/registry.dart';
 
@@ -16,13 +17,18 @@ class ClientSession {
     required TransportConnection connection,
     required CRDTServerRegistry serverRegistry,
     Compressor? compressor,
+    List<ServerSyncPlugin> plugins = const [],
   })  : _connection = connection,
         _serverRegistry = serverRegistry,
+        _plugins = plugins,
         _sessionEventController = StreamController<SessionEvent>.broadcast(),
         _messageCodec = CompressedCodec<Message>(
-          JsonMessageCodec<Message>(
-            toJson: (message) => message.toJson(),
-            fromJson: Message.fromJson,
+          PluginAwareMessageCodec.fromPlugins(
+            plugins: plugins,
+            defaultCodec: JsonMessageCodec<Message>(
+              toJson: (message) => message.toJson(),
+              fromJson: Message.fromJson,
+            ),
           ),
           compressor: compressor ?? NoCompression.instance,
         ) {
@@ -33,6 +39,9 @@ class ClientSession {
     );
 
     _startHeartbeatMonitoring();
+    for (final plugin in _plugins) {
+      plugin.onNewSession(this);
+    }
   }
 
   /// Session ID
@@ -43,6 +52,9 @@ class ClientSession {
 
   /// The server registry
   final CRDTServerRegistry _serverRegistry;
+
+  /// The plugins to use for this session
+  final List<ServerSyncPlugin> _plugins;
 
   /// Session event controller
   final StreamController<SessionEvent> _sessionEventController;
@@ -65,13 +77,16 @@ class ClientSession {
   /// The documents the client is subscribed to
   final Set<String> _subscribedDocuments = {};
 
+  /// The documents the client is subscribed to
+  List<String> get subscribedDocuments => _subscribedDocuments.toList();
+
   /// Message codec
   final MessageCodec<Message> _messageCodec;
 
   /// Send a message to the client
   Future<void> sendMessage(Message message) async {
     if (_isClosed) {
-      return _sessionEventController.add(
+      return _addSessionEvent(
         SessionEventGeneric(
           sessionId: id,
           type: SessionEventType.error,
@@ -82,9 +97,22 @@ class ClientSession {
 
     try {
       final data = _messageCodec.encode(message);
+
+      if (data == null) {
+        _addSessionEvent(
+          SessionEventGeneric(
+            sessionId: id,
+            type: SessionEventType.error,
+            message: 'Failed to encode message: $message. '
+                'This message is not supported by any plugin.',
+          ),
+        );
+        return;
+      }
+
       await _connection.send(data);
     } catch (e) {
-      _sessionEventController.add(
+      _addSessionEvent(
         SessionEventGeneric(
           sessionId: id,
           type: SessionEventType.error,
@@ -111,9 +139,20 @@ class ClientSession {
 
     try {
       final message = _messageCodec.decode(data);
+      if (message == null) {
+        _addSessionEvent(
+          SessionEventGeneric(
+            sessionId: id,
+            type: SessionEventType.error,
+            message: 'Failed to decode message: $data. '
+                'This message is not supported by any plugin.',
+          ),
+        );
+        return;
+      }
       _handleMessage(message);
     } catch (e, stackTrace) {
-      _sessionEventController.add(
+      _addSessionEvent(
         SessionEventGeneric(
           sessionId: id,
           type: SessionEventType.error,
@@ -132,7 +171,7 @@ class ClientSession {
       return;
     }
 
-    _sessionEventController.add(
+    _addSessionEvent(
       SessionEventGeneric(
         sessionId: id,
         type: SessionEventType.error,
@@ -155,6 +194,14 @@ class ClientSession {
 
   /// Handle incoming message
   Future<void> _handleMessage(Message message) async {
+    if (_isClosed) {
+      return;
+    }
+
+    for (final plugin in _plugins) {
+      plugin.onMessage(this, message);
+    }
+
     try {
       switch (message.type) {
         case MessageType.handshakeRequest:
@@ -180,7 +227,7 @@ class ClientSession {
           break;
       }
     } catch (e) {
-      _sessionEventController.add(
+      _addSessionEvent(
         SessionEventGeneric(
           sessionId: id,
           type: SessionEventType.error,
@@ -208,6 +255,10 @@ class ClientSession {
     _clientAuthor = message.author;
     _subscribedDocuments.add(documentId);
 
+    for (final plugin in _plugins) {
+      plugin.onDocumentRegistered(this, documentId);
+    }
+
     final document = _serverRegistry.getDocument(documentId)!;
     final snapshot = _serverRegistry.getLatestSnapshot(documentId);
 
@@ -224,11 +275,12 @@ class ClientSession {
       documentId: documentId,
       changes: changes,
       snapshot: snapshot,
+      sessionId: id,
     );
 
     await sendMessage(response);
 
-    _sessionEventController.add(
+    _addSessionEvent(
       SessionEventGeneric(
         sessionId: id,
         type: SessionEventType.handshakeCompleted,
@@ -245,7 +297,7 @@ class ClientSession {
     final documentId = message.documentId;
 
     if (!_serverRegistry.hasDocument(documentId)) {
-      _sessionEventController.add(
+      _addSessionEvent(
         SessionEventGeneric(
           sessionId: id,
           type: SessionEventType.error,
@@ -257,7 +309,7 @@ class ClientSession {
     }
 
     if (!isSubscribedTo(documentId)) {
-      _sessionEventController.add(
+      _addSessionEvent(
         SessionEventGeneric(
           sessionId: id,
           type: SessionEventType.error,
@@ -272,7 +324,7 @@ class ClientSession {
       final applied = _serverRegistry.applyChange(documentId, message.change);
 
       if (applied) {
-        _sessionEventController.add(
+        _addSessionEvent(
           SessionEventChangeApplied(
             sessionId: id,
             message: 'Change received and applied for document $documentId',
@@ -281,7 +333,7 @@ class ClientSession {
           ),
         );
       } else {
-        _sessionEventController.add(
+        _addSessionEvent(
           SessionEventGeneric(
             sessionId: id,
             type: SessionEventType.error,
@@ -290,7 +342,7 @@ class ClientSession {
         );
       }
     } catch (e) {
-      _sessionEventController.add(
+      _addSessionEvent(
         SessionEventGeneric(
           sessionId: id,
           type: SessionEventType.error,
@@ -308,7 +360,7 @@ class ClientSession {
 
     if (!_serverRegistry.hasDocument(documentId)) {
       // send error message if the document does not exist
-      _sessionEventController.add(
+      _addSessionEvent(
         SessionEventGeneric(
           sessionId: id,
           type: SessionEventType.error,
@@ -339,7 +391,7 @@ class ClientSession {
     );
     await sendMessage(response);
 
-    _sessionEventController.add(
+    _addSessionEvent(
       SessionEventGeneric(
         sessionId: id,
         type: SessionEventType.documentStatusCreated,
@@ -360,7 +412,7 @@ class ClientSession {
     );
     await sendMessage(pongMessage);
 
-    _sessionEventController.add(
+    _addSessionEvent(
       SessionEventGeneric(
         sessionId: id,
         type: SessionEventType.pingReceived,
@@ -406,7 +458,7 @@ class ClientSession {
       return;
     }
 
-    _sessionEventController.add(
+    _addSessionEvent(
       SessionEventGeneric(
         sessionId: id,
         type: SessionEventType.error,
@@ -433,7 +485,11 @@ class ClientSession {
     _isClosed = true;
     _stopHeartbeatMonitoring();
 
-    _sessionEventController.add(
+    for (final plugin in _plugins) {
+      plugin.onSessionClosed(this);
+    }
+
+    _addSessionEvent(
       SessionEventGeneric(
         sessionId: id,
         type: SessionEventType.disconnected,
@@ -451,5 +507,12 @@ class ClientSession {
   void dispose() {
     _closeSession(reason: 'Session disposed');
     _sessionEventController.close();
+  }
+
+  void _addSessionEvent(SessionEvent event) {
+    if (_sessionEventController.isClosed) {
+      return;
+    }
+    _sessionEventController.add(event);
   }
 }

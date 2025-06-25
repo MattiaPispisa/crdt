@@ -6,7 +6,7 @@ import 'package:crdt_lf/crdt_lf.dart';
 import 'package:crdt_socket_sync/client.dart';
 
 /// Mock implementation of CRDTSocketClient for testing
-class MockCRDTSocketClient implements CRDTSocketClient {
+class MockCRDTSocketClient extends CRDTSocketClient {
   MockCRDTSocketClient({
     required this.document,
     required this.author,
@@ -14,6 +14,9 @@ class MockCRDTSocketClient implements CRDTSocketClient {
 
   @override
   final CRDTDocument document;
+
+  @override
+  String? get sessionId => 'test-session-id';
 
   @override
   final PeerId author;

@@ -229,7 +229,7 @@ void main() {
               documentId: documentId,
               version: {},
             ),
-          ),
+          )!,
         );
 
         final message = await completer.future;
@@ -265,7 +265,7 @@ void main() {
 
       messagesSent.stream.listen((data) {
         final message = codec.decode(data);
-        serverMessages.add(message);
+        serverMessages.add(message!);
 
         if (serverMessages.length == 2) {
           completer.complete(true);
@@ -284,7 +284,7 @@ void main() {
                 documentId: documentId,
                 version: {},
               ),
-            ),
+            )!,
           );
 
       // Client 2
@@ -297,7 +297,7 @@ void main() {
                 documentId: documentId,
                 version: {},
               ),
-            ),
+            )!,
           );
 
       await completer.future;
@@ -334,7 +334,7 @@ void main() {
 
       messagesSent.stream.listen((data) {
         final message = codec.decode(data);
-        serverMessages.add(message);
+        serverMessages.add(message!);
         onMessage?.call(message);
       });
       server.serverEvents.listen((event) {
@@ -370,7 +370,7 @@ void main() {
                 documentId: documentId,
                 version: {},
               ),
-            ),
+            )!,
           );
     }
 
@@ -425,7 +425,7 @@ void main() {
                 change: change,
                 documentId: documentId.id,
               ),
-            ),
+            )!,
           );
 
       // wait for the change to be broadcasted to the other client

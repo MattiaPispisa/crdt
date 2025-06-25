@@ -1,30 +1,32 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_example/todo_list/_add_item.dart';
 import 'package:crdt_lf/crdt_lf.dart';
-import 'package:flutter_example/_user.dart';
+import 'package:flutter_example/todo_list/_animated_cursors.dart';
 import 'package:flutter_example/todo_list/_connection_status.dart';
 import 'package:flutter_example/todo_list/_users_connected.dart';
+import 'package:flutter_example/todo_list/_user_connected_item.dart';
+import 'package:flutter_example/user/_state.dart';
 import 'package:provider/provider.dart';
 
 import '_state.dart';
 
-class TodoList extends StatelessWidget {
-  const TodoList({super.key, required this.documentId});
+class TodoListPage extends StatelessWidget {
+  const TodoListPage({super.key, required this.documentId});
 
   final PeerId documentId;
 
   @override
   Widget build(BuildContext context) {
-    final userId = context.user;
+    final user = context.user;
+
     return ChangeNotifierProvider<TodoListState>(
       create:
           (context) =>
-              TodoListState.create(documentId: documentId, userId: userId)
+              TodoListState.create(documentId: documentId, user: user)
                 ..connect(),
       child: _TodoListContent(
         key: ValueKey('content_$documentId'),
-
-        userId: userId,
+        userId: user.userId,
         documentId: documentId,
       ),
     );
@@ -57,24 +59,41 @@ class _TodoListContent extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text("TODO LIST"),
-        actions: [
-          UsersConnected(users: [userId]),
-        ],
-      ),
-      body: Consumer<TodoListState>(
-        builder: (context, state, child) {
-          return Column(
+    return Consumer<TodoListState>(
+      builder: (context, state, _) {
+        final users =
+            UsersConnectedBuilder(
+              clients: state.awareness.states.values,
+              me: state.myAwareness,
+            ).build();
+
+        final cursors =
+            users.where((user) => !user.isMe && user.position != null).toList();
+
+        return MouseRegion(
+          onHover: (event) {
+            context.read<TodoListState>().updateCursor(event.position);
+          },
+          child: Stack(
             children: [
-              Expanded(child: _todos(context, state)),
-              ConnectionStatusIndicator(state: state),
+              Scaffold(
+                appBar: AppBar(
+                  title: const Text("TODO LIST"),
+                  actions: [AvatarUsersConnected(users: users)],
+                ),
+                body: Column(
+                  children: [
+                    Expanded(child: _todos(context, state)),
+                    ConnectionStatusIndicator(state: state),
+                  ],
+                ),
+                floatingActionButton: _fab(context),
+              ),
+              IgnorePointer(child: AnimatedCursors(users: cursors)),
             ],
-          );
-        },
-      ),
-      floatingActionButton: _fab(context),
+          ),
+        );
+      },
     );
   }
 

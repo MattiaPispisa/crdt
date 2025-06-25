@@ -5,27 +5,32 @@ import 'package:crdt_socket_sync/src/client/status.dart';
 import 'package:crdt_socket_sync/src/client/sync_manager.dart';
 import 'package:crdt_socket_sync/src/common/common.dart';
 import 'package:crdt_socket_sync/src/common/utils.dart';
+import 'package:crdt_socket_sync/src/plugins/common/common.dart';
 import 'package:web_socket_channel/status.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 
 /// [CRDTSocketClient] implementation using web socket
-class WebSocketClient implements CRDTSocketClient {
+class WebSocketClient extends CRDTSocketClient {
   /// Constructor
   WebSocketClient({
     required this.url,
     required this.document,
     required this.author,
     Compressor? compressor,
+    super.plugins,
   })  : _messageController = StreamController<Message>.broadcast(),
         _connectionStatusController =
-            StreamController<ConnectionStatus>.broadcast(),
+            StreamController<ConnectionStatus>.broadcast()
+              ..add(ConnectionStatus.disconnected),
         _connectionStatusValue = ConnectionStatus.disconnected {
     _syncManager = SyncManager(document: document, client: this);
-
     _messageCodec = CompressedCodec<Message>(
-      JsonMessageCodec<Message>(
-        toJson: (message) => message.toJson(),
-        fromJson: Message.fromJson,
+      PluginAwareMessageCodec.fromPlugins(
+        plugins: plugins,
+        defaultCodec: JsonMessageCodec<Message>(
+          toJson: (message) => message.toJson(),
+          fromJson: Message.fromJson,
+        ),
       ),
       compressor: compressor ?? NoCompression.instance,
     );
@@ -43,6 +48,12 @@ class WebSocketClient implements CRDTSocketClient {
 
   /// WebSocket server URL
   final String url;
+
+  /// Session ID
+  String? _sessionId;
+
+  @override
+  String? get sessionId => _sessionId;
 
   /// Sync manager
   late final SyncManager _syncManager;
@@ -150,7 +161,9 @@ class WebSocketClient implements CRDTSocketClient {
 
       _transport!.incoming.listen(
         _handleIncomingData,
-        onError: _handleTransportError,
+        onError: (dynamic error, _) {
+          _handleTransportError(error);
+        },
         onDone: disconnect,
       );
 
@@ -158,6 +171,9 @@ class WebSocketClient implements CRDTSocketClient {
       if (connected) {
         _startPingTimer();
         _updateConnectionStatus(ConnectionStatus.connected);
+        for (final plugin in plugins) {
+          plugin.onConnected();
+        }
       }
 
       return connected;
@@ -177,15 +193,43 @@ class WebSocketClient implements CRDTSocketClient {
     }
 
     _updateConnectionStatus(ConnectionStatus.disconnected);
+
+    for (final plugin in plugins) {
+      plugin.onDisconnected();
+    }
   }
 
+  /// Send a message to the server
+  ///
+  /// If [attemptReconnect] is true, then the client will attempt to reconnect
+  /// on connection error
   @override
-  Future<void> sendMessage(Message message) async {
+  Future<void> sendMessage(
+    Message message, {
+    bool attemptReconnect = true,
+  }) async {
     if (_connectionStatusValue.isDisconnected || _transport == null) {
       throw StateError('Client not connected');
     }
 
     final data = _messageCodec.encode(message);
+
+    // ignore: prefer_asserts_with_message assert function
+    assert(() {
+      if (data == null) {
+        throw StateError(
+          '[WebSocketClient] cannot send a message that cannot be encoded.'
+          ' Have you added the plugin to the client?'
+          '\nMessage: $message',
+        );
+      }
+      return true;
+    }());
+
+    if (data == null) {
+      return;
+    }
+
     try {
       await _transport!.send(data);
 
@@ -193,7 +237,10 @@ class WebSocketClient implements CRDTSocketClient {
         _updateConnectionStatus(ConnectionStatus.connected);
       }
     } catch (e) {
-      _handleTransportError(e);
+      _handleTransportError(
+        e,
+        attemptReconnect: attemptReconnect,
+      );
       rethrow;
     }
   }
@@ -230,9 +277,29 @@ class WebSocketClient implements CRDTSocketClient {
       try {
         final message = _messageCodec.decode(_buffer);
 
+        // ignore: prefer_asserts_with_message assert function
+        assert(() {
+          if (message == null) {
+            throw StateError(
+              '[WebSocketClient] received a message that cannot be decoded.'
+              ' Have you added the plugin to the client?'
+              '\nBuffer: ${_buffer.join(', ')}',
+            );
+          }
+          if (_messageController.isClosed) {
+            throw StateError(
+              '[WebSocketClient] received a message after the client has been'
+              ' disposed',
+            );
+          }
+          return true;
+        }());
+
         _buffer.clear();
 
-        _messageController.add(message);
+        if (message != null && !_messageController.isClosed) {
+          _messageController.add(message);
+        }
       } catch (e) {
         // not enough data for a message
         break;
@@ -242,11 +309,18 @@ class WebSocketClient implements CRDTSocketClient {
 
   /// set status with [ConnectionStatus.error]
   /// and attempt to reconnect ([_attemptReconnect])
-  void _handleTransportError(error) {
+  void _handleTransportError(
+    dynamic error, {
+    bool attemptReconnect = true,
+  }) {
+    // on reconnecting if an error occurs do not update the status
+    // to error, because the reconnect will handle it.
     if (!_connectionStatusValue.isReconnecting) {
       _updateConnectionStatus(ConnectionStatus.error);
     }
-    _attemptReconnect();
+    if (attemptReconnect) {
+      _attemptReconnect();
+    }
   }
 
   /// Attempt to reconnect calling with [Protocol.reconnectInterval] interval
@@ -317,6 +391,8 @@ class WebSocketClient implements CRDTSocketClient {
   ///
   /// [Protocol.handshakeTimeout] is the maximum time to wait
   /// for the handshake response
+  ///
+  /// Handshake is not attempted to reconnect
   Future<bool> _performHandshake() async {
     _handshakeCompleter = Completer<bool>();
 
@@ -327,7 +403,12 @@ class WebSocketClient implements CRDTSocketClient {
     );
 
     try {
-      await sendMessage(handshakeRequest);
+      // do not attempt to reconnect on handshake error
+      // because the reconnect will handle it.
+      await sendMessage(
+        handshakeRequest,
+        attemptReconnect: false,
+      );
 
       final timeout = Future.delayed(
         Protocol.handshakeTimeout,
@@ -347,6 +428,10 @@ class WebSocketClient implements CRDTSocketClient {
   Future<void> _handleMessage(Message message) async {
     if (message.documentId != _documentId) {
       return;
+    }
+
+    for (final plugin in plugins) {
+      plugin.onMessage(message);
     }
 
     switch (message.type) {
@@ -382,6 +467,8 @@ class WebSocketClient implements CRDTSocketClient {
   /// Merges the changes and snapshot into the document
   /// and completes the handshake
   void _handleHandshakeResponse(HandshakeResponseMessage message) {
+    _sessionId = message.sessionId;
+
     _syncManager.merge(
       changes: message.changes,
       snapshot: message.snapshot,
@@ -422,6 +509,12 @@ class WebSocketClient implements CRDTSocketClient {
   /// If [status] is different from [_connectionStatusValue]
   /// then update the connection status and notify the listeners
   void _updateConnectionStatus(ConnectionStatus status) {
+    assert(
+      !_connectionStatusController.isClosed,
+      '[WebSocketClient] Cannot update the connection status'
+      ' after the client has been disposed',
+    );
+
     if (status == _connectionStatusValue) {
       return;
     }
@@ -430,12 +523,16 @@ class WebSocketClient implements CRDTSocketClient {
     if (_connectionStatusController.isClosed) {
       return;
     }
+
     _connectionStatusController.add(status);
   }
 
   @override
   void dispose() {
     disconnect();
+    for (final plugin in plugins) {
+      plugin.dispose();
+    }
     _messageController.close();
     _connectionStatusController.close();
     _syncManager.dispose();

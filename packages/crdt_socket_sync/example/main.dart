@@ -14,6 +14,9 @@ void main(List<String> args) async {
   server = WebSocketServer(
     serverFactory: () => HttpServer.bind(InternetAddress.anyIPv4.host, 8080),
     serverRegistry: serverRegistry,
+    plugins: [
+      ServerAwarenessPlugin(),
+    ],
   );
 
   _setupSigintHandler();

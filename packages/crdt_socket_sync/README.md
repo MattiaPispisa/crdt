@@ -2,10 +2,13 @@
 - [CRDT Socket Sync](#crdt-socket-sync)
   - [Overview](#overview)
   - [Features](#features)
+    - [Built-in Plugins](#built-in-plugins)
   - [Installation](#installation)
   - [Quick Start](#quick-start)
     - [Server Setup](#server-setup)
     - [Client Setup](#client-setup)
+    - [Plugins](#plugins)
+      - [Awareness Plugin](#awareness-plugin)
   - [Examples](#examples)
   - [Library Structure](#library-structure)
     - [Import Options](#import-options)
@@ -38,6 +41,11 @@ CRDT Socket Sync provides a robust, real-time synchronization system that allows
 - 📡 **Automatic Reconnection**: Robust connection handling with automatic retry logic
 - 🎯 **Type Safety**: Full Dart type safety with generic document handlers
 - 📊 **Event Monitoring**: Comprehensive event streams for connection and synchronization monitoring
+- 🔌 **Plugins**: Extendable plugin system for custom functionality
+
+### Built-in Plugins
+
+- 📡 **Awareness Plugin**: Track the awareness of the clients.
 
 ## Installation
 
@@ -120,6 +128,57 @@ void main() async {
 }
 ```
 
+### Plugins
+
+The package provides a plugin system that allows you to extend the functionality of the client and the server.
+A plugin can be only on the client or only on the server or both.
+
+```dart
+// it's important that `MyClientPlugin` extends `ClientSyncPlugin` (not implements).
+// `ClientSyncPlugin` makes some "magic" to make the plugin work.
+class MyClientPlugin extends ClientSyncPlugin {
+  @override
+  void onMessage(Message message) {
+    print('message: $message');
+  }
+}
+
+// it's important that `MyServerPlugin` extends `ServerSyncPlugin` (not implements).
+// `ServerSyncPlugin` makes some "magic" to make the plugin work.
+class MyServerPlugin extends ServerSyncPlugin {
+  @override
+  void onMessage(Message message) {
+    print('message: $message');
+  }
+}
+
+final client = WebSocketClient(
+  url: 'ws://localhost:8080',
+  document: document,
+  author: document.peerId,
+  plugins: [MyClientPlugin()],
+);
+
+final server = WebSocketServer(
+  host: 'localhost',
+  port: 8080,
+  serverRegistry: registry,
+  plugins: [MyServerPlugin()],
+);
+```
+
+A plugin can send new message types to clients and the server. To do so, it must extend the `Message` class and implement the `fromJson` method to decode the messages.
+
+#### Awareness Plugin
+
+The awareness plugin is a plugin that allows you to track the awareness of the clients.
+It is a plugin that is both on the client and the server.
+It is used to track the awareness of the clients and to send the awareness to the server and to the clients.
+
+The example provided uses the awareness plugin to track the active users (name, surname, random color) and their relative position in the document.
+
+<img width="500" alt="awareness_plugin" src="https://raw.githubusercontent.com/MattiaPispisa/crdt/main/assets/demos/awareness_plugin.gif">
+
 ## Examples
 
 This package provided some examples:
@@ -129,6 +188,10 @@ In the [example/](https://github.com/MattiaPispisa/crdt/tree/main/packages/crdt_
 In the [flutter_example/](https://github.com/MattiaPispisa/crdt/tree/main/packages/crdt_socket_sync/flutter_example) directory you can find a complete working example of a flutter app that uses the server and the client.
 
 Try to run the [server example](https://github.com/MattiaPispisa/crdt/tree/main/packages/crdt_socket_sync/example/main.dart) and some [client applications](https://github.com/MattiaPispisa/crdt/tree/main/packages/crdt_socket_sync/flutter_example) (or the [dart client](https://github.com/MattiaPispisa/crdt/tree/main/packages/crdt_socket_sync/example/main_client.dart)).
+The workspace contains a .vscode folder with the launch settings for the examples.
+
+
+The server example and the flutter example already use the awareness plugin.
 
 <img width="500" alt="sync_server_multi_client" src="https://raw.githubusercontent.com/MattiaPispisa/crdt/main/assets/demos/sync_server_multi_client.gif">
 

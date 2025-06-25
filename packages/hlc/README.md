@@ -10,6 +10,7 @@
     - [Basic Usage](#basic-usage)
     - [Complete Example](#complete-example)
   - [Roadmap](#roadmap)
+  - [Packages](#packages)
 
 
 A hybrid logical clock implementation in Dart based on the paper
@@ -70,7 +71,14 @@ final deserialized = HybridLogicalClock.fromInt64(serialized);
 
 ### [Complete Example](https://github.com/MattiaPispisa/crdt/blob/main/packages/hlc/example/main.dart)
 
-## [Roadmap](https://github.com/users/MattiaPispisa/projects/1)
+## Roadmap
+A roadmap is available in the [project](https://github.com/users/MattiaPispisa/projects/1) page. The roadmap provides a high-level overview of the project's goals and the current status of the project.
+
+## Packages
+Other bricks of the crdt "system" are:
+
+- [crdt_lf](https://pub.dev/packages/crdt_lf)
+- [crdt_socket_sync](https://pub.dev/packages/crdt_socket_sync)
 
 
 [license_badge]: https://img.shields.io/badge/license-MIT-blue.svg

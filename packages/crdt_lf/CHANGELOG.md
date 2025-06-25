@@ -1,4 +1,10 @@
+## [0.7.1] - 2025-06-25
+
+### Changed
+- Update documentation
+
 ## [0.7.0+1] - 2025-06-14
+
 ### Fixed
 - Chore: update readme links
 
@@ -51,6 +57,7 @@
 - Fix Fugue tree insertion 
 
 ## [0.4.0] - 2025-04-29
+
 ### Changed
 - chore: move test utils under `helpers` folder
 
