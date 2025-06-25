@@ -102,22 +102,14 @@ class ServerAwarenessPlugin extends ServerSyncPlugin {
 
   @override
   void onSessionClosed(ClientSession session) {
-    for (final documentId in _documentAwareness.keys) {
+    final documentIds = _documentAwareness.keys.toList();
+    for (final documentId in documentIds) {
       final awareness = _documentAwareness[documentId]!;
       if (awareness.states.containsKey(session.id)) {
         _documentAwareness[documentId] =
             awareness.copyWithRemovedClient(session.id);
 
-        _updateController(
-          ServerAwarenessEvent(
-            type: ServerAwarenessEventType.clientLeft,
-            documentId: documentId,
-            clientId: session.id,
-          ),
-        );
-        _broadcastAwarenessState(
-          documentId,
-        );
+        _broadcastAwarenessState(documentId);
 
         _updateController(
           ServerAwarenessEvent(

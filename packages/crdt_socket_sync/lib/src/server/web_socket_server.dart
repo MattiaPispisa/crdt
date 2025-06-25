@@ -321,10 +321,6 @@ class WebSocketServer extends CRDTSocketServer {
     }
 
     session.dispose();
-
-    for (final plugin in plugins) {
-      plugin.onSessionClosed(session);
-    }
     _sessions.remove(event.sessionId);
   }
 
@@ -336,10 +332,6 @@ class WebSocketServer extends CRDTSocketServer {
     }
 
     session.dispose();
-
-    for (final plugin in plugins) {
-      plugin.onSessionClosed(session);
-    }
 
     _addServerEvent(
       ServerEvent(
