@@ -1,6 +1,5 @@
 import 'package:crdt_socket_sync/client.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_example/user/_state.dart';
 
 class UserConnectedItem {
   const UserConnectedItem._({
@@ -78,7 +77,6 @@ Color _getColorForUser(String username, String surname) {
 
 class UsersConnectedBuilder {
   const UsersConnectedBuilder({required this.clients, required this.me});
-
 
   final Iterable<ClientAwareness> clients;
   final ClientAwareness? me;

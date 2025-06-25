@@ -1,4 +1,4 @@
-## [0.7.1] - 2025-06-24
+## [0.7.1] - 2025-06-25
 
 ### Changed
 - Update documentation

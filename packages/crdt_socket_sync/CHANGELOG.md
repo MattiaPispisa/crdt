@@ -1,4 +1,4 @@
-## [0.2.0] - 2025-06-24
+## [0.2.0] - 2025-06-25
 
 **Breaking changes**
 - `encode` and `decode` methods of `MessageCodec` have nullable return type
