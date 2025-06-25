@@ -64,7 +64,7 @@ class _TodoListContent extends StatelessWidget {
         final users =
             UsersConnectedBuilder(
               clients: state.awareness.states.values,
-              me: context.user,
+              me: state.myAwareness,
             ).build();
 
         final cursors =
@@ -89,9 +89,7 @@ class _TodoListContent extends StatelessWidget {
                 ),
                 floatingActionButton: _fab(context),
               ),
-              IgnorePointer(
-                child: AnimatedCursors(users: cursors),
-              ),
+              IgnorePointer(child: AnimatedCursors(users: cursors)),
             ],
           ),
         );

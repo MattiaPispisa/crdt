@@ -37,6 +37,9 @@ class ClientAwarenessPlugin extends ClientSyncPlugin {
 
   DocumentAwareness? _awareness;
 
+  /// The awareness state of the client
+  ClientAwareness? get myState => _awareness?.states[client.sessionId];
+
   final StreamController<DocumentAwareness> _awarenessController;
 
   /// Stream of awareness state changes

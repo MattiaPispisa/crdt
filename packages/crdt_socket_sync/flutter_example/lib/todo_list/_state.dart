@@ -58,6 +58,8 @@ class TodoListState extends ChangeNotifier {
 
   DocumentAwareness get awareness => _awareness.awareness;
 
+  ClientAwareness? get myAwareness => _awareness.myState;
+
   StreamSubscription<ConnectionStatus>? _connectionStatusSubscription;
 
   void connect() {

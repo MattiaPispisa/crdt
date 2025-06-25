@@ -79,8 +79,9 @@ Color _getColorForUser(String username, String surname) {
 class UsersConnectedBuilder {
   const UsersConnectedBuilder({required this.clients, required this.me});
 
+
   final Iterable<ClientAwareness> clients;
-  final UserState me;
+  final ClientAwareness? me;
 
   List<UserConnectedItem> build() {
     final items = <UserConnectedItem>[];
@@ -92,7 +93,7 @@ class UsersConnectedBuilder {
         continue;
       }
 
-      final isMe = username == me.username && surname == me.surname;
+      final isMe = me == client;
 
       final xPosition = client.metadata['positionX'] as double?;
       final yPosition = client.metadata['positionY'] as double?;

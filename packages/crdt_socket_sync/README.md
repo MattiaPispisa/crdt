@@ -175,7 +175,9 @@ The awareness plugin is a plugin that allows you to track the awareness of the c
 It is a plugin that is both on the client and the server.
 It is used to track the awareness of the clients and to send the awareness to the server and to the clients.
 
-The example provided uses the awareness plugin.
+The example provided uses the awareness plugin to track the active users (name, surname, random color) and their relative position in the document.
+
+<img width="500" alt="awareness_plugin" src="https://raw.githubusercontent.com/MattiaPispisa/crdt/main/assets/demos/awareness_plugin.gif">
 
 ## Examples
 
