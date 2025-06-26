@@ -164,7 +164,6 @@ class WebSocketClient extends CRDTSocketClient {
         onError: (dynamic error, _) {
           _handleTransportError(error);
         },
-        onDone: disconnect,
       );
 
       final connected = await _performHandshake();
@@ -187,16 +186,18 @@ class WebSocketClient extends CRDTSocketClient {
   Future<void> disconnect() async {
     _stopPingTimer();
 
-    if (_transport != null) {
-      await _transport!.close();
-      _transport = null;
+    if (_transport == null) {
+      return;
     }
 
-    _updateConnectionStatus(ConnectionStatus.disconnected);
+    await _transport!.close();
+    _transport = null;
 
     for (final plugin in plugins) {
       plugin.onDisconnected();
     }
+
+    _updateConnectionStatus(ConnectionStatus.disconnected);
   }
 
   /// Send a message to the server
@@ -315,7 +316,7 @@ class WebSocketClient extends CRDTSocketClient {
   }) {
     // on reconnecting if an error occurs do not update the status
     // to error, because the reconnect will handle it.
-    if (!_connectionStatusValue.isReconnecting) {
+    if (!_isReconnecting) {
       _updateConnectionStatus(ConnectionStatus.error);
     }
     if (attemptReconnect) {
@@ -509,12 +510,6 @@ class WebSocketClient extends CRDTSocketClient {
   /// If [status] is different from [_connectionStatusValue]
   /// then update the connection status and notify the listeners
   void _updateConnectionStatus(ConnectionStatus status) {
-    assert(
-      !_connectionStatusController.isClosed,
-      '[WebSocketClient] Cannot update the connection status'
-      ' after the client has been disposed',
-    );
-
     if (status == _connectionStatusValue) {
       return;
     }
@@ -530,9 +525,11 @@ class WebSocketClient extends CRDTSocketClient {
   @override
   void dispose() {
     disconnect();
+
     for (final plugin in plugins) {
       plugin.dispose();
     }
+
     _messageController.close();
     _connectionStatusController.close();
     _syncManager.dispose();
