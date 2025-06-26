@@ -301,7 +301,7 @@ void main() {
         documentId: documentId,
         snapshot: snapshot,
         changes: changes,
-        sessionId: 'test-session-id',
+        sessionId: '5a2e1d55-74c7-453b-9256-1c5ffe3283b5',
       );
 
       final json = message.toJson();
@@ -310,7 +310,7 @@ void main() {
       expect(json['documentId'], documentId);
       expect(json['snapshot'], snapshot.toJson());
       expect(json['changes'], changes.map((c) => c.toJson()).toList());
-      expect(json['sessionId'], 'test-session-id');
+      expect(json['sessionId'], '5a2e1d55-74c7-453b-9256-1c5ffe3283b5');
     });
 
     test('should deserialize from JSON correctly', () {
@@ -319,6 +319,7 @@ void main() {
         'documentId': documentId,
         'snapshot': snapshot.toJson(),
         'changes': changes.map((c) => c.toJson()).toList(),
+        'sessionId': '5a2e1d55-74c7-453b-9256-1c5ffe3283b5',
       };
 
       final message = HandshakeResponseMessage.fromJson(json);
@@ -335,6 +336,7 @@ void main() {
         'documentId': documentId,
         'snapshot': null,
         'changes': null,
+        'sessionId': '5a2e1d55-74c7-453b-9256-1c5ffe3283b5',
       };
 
       final message = HandshakeResponseMessage.fromJson(json);
@@ -717,6 +719,7 @@ void main() {
         'documentId': 'test-doc',
         'snapshot': null,
         'changes': null,
+        'sessionId': '5a2e1d55-74c7-453b-9256-1c5ffe3283b5',
       };
 
       final message = Message.fromJson(json);
