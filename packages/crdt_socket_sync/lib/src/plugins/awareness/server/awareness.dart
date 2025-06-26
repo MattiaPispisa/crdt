@@ -50,30 +50,26 @@ class ServerAwarenessPlugin extends ServerSyncPlugin {
         );
         return;
 
+      // server should not receive awareness state messages
       case AwarenessMessageType.awarenessState:
         return;
     }
   }
 
   /// handle the awareness update message
-  void _handleAwarenessUpdate(
+  Future<void> _handleAwarenessUpdate(
     ClientSession session,
     AwarenessUpdateMessage message,
-  ) {
+  ) async {
     final awareness = _documentAwareness[message.documentId];
     if (awareness == null) {
-      return;
-    }
-
-    final oldState = awareness.states[message.state.clientId];
-    if (oldState != null && oldState.lastUpdate >= message.state.lastUpdate) {
       return;
     }
 
     _documentAwareness[message.documentId] =
         awareness.copyWithUpdatedClient(message.state);
 
-    _broadcastAwarenessUpdate(
+    await _broadcastAwarenessUpdate(
       message.documentId,
       message.state.clientId,
       excludeClientIds: [session.id],
@@ -201,7 +197,6 @@ class ServerAwarenessPlugin extends ServerSyncPlugin {
     final client = ClientAwareness(
       clientId: session.id,
       metadata: {},
-      lastUpdate: DateTime.now().millisecondsSinceEpoch,
     );
 
     awareness = awareness.copyWithUpdatedClient(client);

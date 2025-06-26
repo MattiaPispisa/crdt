@@ -4,7 +4,6 @@ class ClientAwareness {
   const ClientAwareness({
     required this.clientId,
     required this.metadata,
-    required this.lastUpdate,
   });
 
   /// from json
@@ -12,7 +11,6 @@ class ClientAwareness {
       ClientAwareness(
         clientId: json['clientId'] as String,
         metadata: json['metadata'] as Map<String, dynamic>,
-        lastUpdate: json['lastUpdate'] as int,
       );
 
   /// client id
@@ -22,32 +20,26 @@ class ClientAwareness {
   /// client metadata
   final Map<String, dynamic> metadata;
 
-  /// last update timestamp
-  final int lastUpdate;
-
   /// to json
   Map<String, dynamic> toJson() => {
         'clientId': clientId,
         'metadata': metadata,
-        'lastUpdate': lastUpdate,
       };
 
   /// copy with
   ClientAwareness copyWith({
     String? clientId,
     Map<String, dynamic>? metadata,
-    int? lastUpdate,
   }) {
     return ClientAwareness(
       clientId: clientId ?? this.clientId,
       metadata: metadata ?? Map<String, dynamic>.from(this.metadata),
-      lastUpdate: lastUpdate ?? this.lastUpdate,
     );
   }
 
   @override
   String toString() => 'AwarenessState(clientId: $clientId, '
-      'metadata: $metadata, lastUpdate: $lastUpdate)';
+      'metadata: $metadata)';
 
   @override
   bool operator ==(Object other) =>
@@ -55,11 +47,10 @@ class ClientAwareness {
       other is ClientAwareness &&
           runtimeType == other.runtimeType &&
           clientId == other.clientId &&
-          metadata == other.metadata &&
-          lastUpdate == other.lastUpdate;
+          metadata == other.metadata;
 
   @override
-  int get hashCode => Object.hash(clientId, metadata, lastUpdate);
+  int get hashCode => Object.hash(clientId, metadata);
 }
 
 /// Document awareness state

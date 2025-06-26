@@ -79,34 +79,17 @@ class ClientAwarenessPlugin extends ClientSyncPlugin {
     }
   }
 
+  /// Updates document awareness with the server state
+  ///
+  /// If local client awareness is more recent than the remote one,
+  /// then preserve the local state
   void _handleAwarenessState(AwarenessStateMessage message) {
-    final localState = _awareness?.states[client.sessionId];
-    final remoteState = message.awareness.states[client.sessionId];
-
     _awareness = message.awareness;
-
-    // verify if the local state is up to date
-    if (localState != null &&
-        remoteState != null &&
-        localState.lastUpdate >= remoteState.lastUpdate) {
-      if (_awareness != null) {
-        _awareness = _awareness!.copyWithUpdatedClient(localState);
-        _updateController(_awareness!);
-      }
-      return;
-    }
+    _updateController(_awareness!);
   }
 
+  /// Updates client awareness state received from the server
   void _handleAwarenessUpdate(AwarenessUpdateMessage message) {
-    final localStateId = client.sessionId;
-    final clientAwareness = _awareness?.states[message.state.clientId];
-
-    // verify if the local state is up to date
-    if (localStateId == message.state.clientId &&
-        clientAwareness != null &&
-        clientAwareness.lastUpdate >= message.state.lastUpdate) {
-      return;
-    }
     if (_awareness != null) {
       _awareness = _awareness!.copyWithUpdatedClient(message.state);
       _updateController(_awareness!);
@@ -133,13 +116,13 @@ class ClientAwarenessPlugin extends ClientSyncPlugin {
     }
 
     final currentMetadata = _awareness?.states[sessionId]?.metadata;
+
     final state = ClientAwareness(
       clientId: sessionId,
       metadata: {
         ...currentMetadata ?? {},
         ...metadata,
       },
-      lastUpdate: DateTime.now().millisecondsSinceEpoch,
     );
 
     final documentId = client.document.peerId.toString();
