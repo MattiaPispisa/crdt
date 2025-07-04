@@ -3,7 +3,7 @@ import 'package:test/test.dart';
 
 void main() {
   group('CRDTMapHandler', () {
-    test('should handle basic set and delete operations', () {
+    test('should handle basic operations', () {
       final doc = CRDTDocument(
         peerId: PeerId.parse('37f1ec87-6ea5-430b-a627-a6b92b56a02d'),
       );
@@ -26,6 +26,12 @@ void main() {
       handler.delete('d'); // Should not throw
       expect(handler.value, {'a': 'Hello', 'c': '!'});
       expect(handler.value.length, 2);
+
+      handler.update('a', 'Hello,');
+      expect(handler.value, {'a': 'Hello,', 'c': '!'});
+      expect(handler.value.length, 2);
+
+      handler.update('b', 'World');
     });
 
     test('should handle concurrent sets', () {

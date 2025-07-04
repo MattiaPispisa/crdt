@@ -13,6 +13,8 @@ class _ListOperationFactory<T> {
       return _ListInsertOperation.fromPayload<T>(payload);
     } else if (payload['type'] == OperationType.delete(handler).toPayload()) {
       return _ListDeleteOperation.fromPayload<T>(payload);
+    } else if (payload['type'] == OperationType.update(handler).toPayload()) {
+      return _ListUpdateOperation.fromPayload<T>(payload);
     }
 
     return null;
@@ -98,5 +100,46 @@ class _ListDeleteOperation<T> extends Operation {
         type: OperationType.fromPayload(payload['type'] as String),
         index: payload['index'] as int,
         count: payload['count'] as int,
+      );
+}
+
+class _ListUpdateOperation<T> extends Operation {
+  const _ListUpdateOperation({
+    required this.index,
+    required this.value,
+    required super.id,
+    required super.type,
+  });
+
+  factory _ListUpdateOperation.fromHandler(
+    Handler<dynamic> handler, {
+    required int index,
+    required T value,
+  }) {
+    return _ListUpdateOperation(
+      id: handler.id,
+      type: OperationType.update(handler),
+      index: index,
+      value: value,
+    );
+  }
+
+  final int index;
+  final T value;
+
+  @override
+  Map<String, dynamic> toPayload() => {
+        'type': type.toPayload(),
+        'id': id,
+        'index': index,
+        'value': value,
+      };
+
+  static _ListUpdateOperation<T> fromPayload<T>(Map<String, dynamic> payload) =>
+      _ListUpdateOperation<T>(
+        id: payload['id'] as String,
+        type: OperationType.fromPayload(payload['type'] as String),
+        index: payload['index'] as int,
+        value: payload['value'] as T,
       );
 }

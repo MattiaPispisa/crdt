@@ -90,6 +90,28 @@ class CRDTFugueTextHandler extends Handler<List<FugueValueNode<String>>> {
     _invalidateCache();
   }
 
+  /// Updates the text at position [index]
+  void update(int index, String text) {
+    if (text.isEmpty) return;
+
+    for (var i = 0; i < text.length; i++) {
+      final nodeID = _tree.findNodeAtPosition(index + i);
+      if (!nodeID.isNull) {
+        final newNodeID = FugueElementID(doc.peerId, _counter++);
+        doc.createChange(
+          _FugueTextUpdateOperation.fromHandler(
+            this,
+            nodeID: nodeID,
+            newNodeID: newNodeID,
+            text: text[i],
+          ),
+        );
+      }
+    }
+
+    _invalidateCache();
+  }
+
   /// Gets the current value of the text
   String get value {
     // Check if cache is still valid
@@ -155,6 +177,12 @@ class CRDTFugueTextHandler extends Handler<List<FugueValueNode<String>>> {
         );
       } else if (operation is _FugueTextDeleteOperation) {
         _tree.delete(operation.nodeID);
+      } else if (operation is _FugueTextUpdateOperation) {
+        _tree.update(
+          nodeID: operation.nodeID,
+          newID: operation.newNodeID,
+          newValue: operation.text,
+        );
       }
     }
 

@@ -40,6 +40,18 @@ class CRDTMapHandler<T> extends Handler<Map<String, T>> {
     invalidateCache();
   }
 
+  /// Updates a key-value pair in the map
+  void update(String key, T value) {
+    doc.createChange(
+      _MapUpdateOperation<T>.fromHandler(
+        this,
+        key: key,
+        value: value,
+      ),
+    );
+    invalidateCache();
+  }
+
   /// Gets the current state of the map
   Map<String, T> get value {
     // Check if the cached state is still valid
@@ -82,6 +94,8 @@ class CRDTMapHandler<T> extends Handler<Map<String, T>> {
         state[operation.key] = operation.value;
       } else if (operation is _MapDeleteOperation<T>) {
         state.remove(operation.key);
+      } else if (operation is _MapUpdateOperation<T>) {
+        state[operation.key] = operation.value;
       }
     }
 

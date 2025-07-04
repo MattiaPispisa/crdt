@@ -18,6 +18,8 @@ class _FugueTextOperationFactory {
       return _FugueTextInsertOperation.fromPayload(payload);
     } else if (payload['type'] == OperationType.delete(handler).toPayload()) {
       return _FugueTextDeleteOperation.fromPayload(payload);
+    } else if (payload['type'] == OperationType.update(handler).toPayload()) {
+      return _FugueTextUpdateOperation.fromPayload(payload);
     }
 
     return null;
@@ -133,5 +135,64 @@ class _FugueTextDeleteOperation extends Operation {
         'type': type.toPayload(),
         'id': id,
         'nodeID': nodeID.toJson(),
+      };
+}
+
+/// Update operation for the Fugue algorithm
+class _FugueTextUpdateOperation extends Operation {
+  /// Constructor that initializes an update operation
+  _FugueTextUpdateOperation({
+    required this.nodeID,
+    required this.newNodeID,
+    required this.text,
+    required super.id,
+    required super.type,
+  });
+
+  /// Creates an update operation from a payload
+  factory _FugueTextUpdateOperation.fromPayload(Map<String, dynamic> payload) =>
+      _FugueTextUpdateOperation(
+        id: payload['id'] as String,
+        type: OperationType.fromPayload(payload['type'] as String),
+        nodeID:
+            FugueElementID.fromJson(payload['nodeID'] as Map<String, dynamic>),
+        newNodeID: FugueElementID.fromJson(
+          payload['newNodeID'] as Map<String, dynamic>,
+        ),
+        text: payload['text'] as String,
+      );
+
+  /// Factory to create an update operation from a handler
+  factory _FugueTextUpdateOperation.fromHandler(
+    Handler<dynamic> handler, {
+    required FugueElementID nodeID,
+    required FugueElementID newNodeID,
+    required String text,
+  }) {
+    return _FugueTextUpdateOperation(
+      id: handler.id,
+      type: OperationType.update(handler),
+      nodeID: nodeID,
+      newNodeID: newNodeID,
+      text: text,
+    );
+  }
+
+  /// ID of the node to update
+  final FugueElementID nodeID;
+
+  /// ID of the new node
+  final FugueElementID newNodeID;
+
+  /// Text to update
+  final String text;
+
+  @override
+  Map<String, dynamic> toPayload() => {
+        'type': type.toPayload(),
+        'id': id,
+        'nodeID': nodeID.toJson(),
+        'newNodeID': newNodeID.toJson(),
+        'text': text,
       };
 }

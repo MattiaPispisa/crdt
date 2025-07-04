@@ -75,6 +75,20 @@ void main() {
         ..insert(0, 'Hello World')
         ..delete(20, 5);
       expect(text.value, equals('Hello World'));
+    }); 
+
+    test('update replaces text at specified index', () {
+      text
+        ..insert(0, 'Hello World')
+        ..update(5, 'Beautiful');
+      expect(text.value, equals('HelloBeauti'));
+    });
+
+    test('update replaces text at specified index with new text', () {
+      text
+        ..insert(0, 'Hello Beautiful')
+        ..update(6, 'World');
+      expect(text.value, equals('Hello Worldiful'));
     });
 
     test('length returns correct text length', () {

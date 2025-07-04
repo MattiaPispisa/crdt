@@ -216,6 +216,27 @@ class FugueTree<T> {
     }
   }
 
+  /// Updates a [FugueNode] by deleting the old value and inserting a new one.
+  void update({
+    required FugueElementID nodeID,
+    required FugueElementID newID,
+    required T newValue,
+  }) {
+    // Check if the node exists and is not already deleted
+    if (!_nodes.containsKey(nodeID) || _nodes[nodeID]!.node.isDeleted) {
+      return;
+    }
+
+    final index = nodes().indexWhere((node) => node.id == nodeID);
+    if (index == -1) return;
+
+    delete(nodeID);
+
+    iterableInsert(index, [
+      FugueValueNode(id: newID, value: newValue),
+    ]);
+  }
+
   /// Adds a node to the tree
   void _addNodeToTree(FugueNode<T> node) {
     final parentID = node.parentID;
