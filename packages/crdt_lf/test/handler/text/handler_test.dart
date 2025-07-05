@@ -321,6 +321,7 @@ void main() {
         text1.insert(text1.length, 'X');
         text2.delete(0, 1);
         text3.insert(0, 'Y');
+        text1.update(0, 'PK');
 
         // sync all changes
         var changes1 = doc1.exportChanges();

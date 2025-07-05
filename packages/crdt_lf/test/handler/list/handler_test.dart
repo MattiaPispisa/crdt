@@ -255,7 +255,8 @@ void main() {
       // Insert numbers
       handler1
         ..insert(0, 'Hello')
-        ..insert(1, 'World');
+        ..insert(1, 'World')
+        ..update(1, 'World All!');
       handler2.insert(0, 'Dart!');
 
       final changes1 = doc1.exportChanges();
@@ -271,7 +272,7 @@ void main() {
 
       expect(
         doc2.importChanges(changes1),
-        equals(2),
+        equals(3),
       );
 
       expect(
