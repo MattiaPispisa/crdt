@@ -95,7 +95,7 @@ class CRDTMapHandler<T> extends Handler<Map<String, T>> {
       } else if (operation is _MapDeleteOperation<T>) {
         state.remove(operation.key);
       } else if (operation is _MapUpdateOperation<T>) {
-        state[operation.key] = operation.value;
+        state.update(operation.key, (_) => operation.value);
       }
     }
 
