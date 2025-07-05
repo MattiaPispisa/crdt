@@ -1,7 +1,7 @@
 ## [Unreleased]
 
 ### Added
-- Update operation for every handler
+- Update operation for every handler [30](https://github.com/MattiaPispisa/crdt/issues/30)
 
 ## [0.7.1] - 2025-06-26
 
@@ -36,7 +36,7 @@
 
 ### Added
 
-- `CRDTMapHandler`: a new handler for maps
+- `CRDTMapHandler`: a new handler for maps [13](https://github.com/MattiaPispisa/crdt/issues/13)
 
 ### Changed
 
