@@ -1,3 +1,5 @@
+import 'dart:math';
+
 import 'package:crdt_lf/src/change/change.dart';
 import 'package:crdt_lf/src/handler/handler.dart';
 import 'package:crdt_lf/src/operation/operation.dart';
@@ -32,6 +34,18 @@ class CRDTTextHandler extends Handler<String> {
   void delete(int index, int count) {
     doc.createChange(
       _TextDeleteOperation.fromHandler(this, index: index, count: count),
+    );
+    invalidateCache();
+  }
+
+  /// Updates the text at the specified [index]
+  void update(int index, String text) {
+    doc.createChange(
+      _TextUpdateOperation.fromHandler(
+        this,
+        index: index,
+        text: text,
+      ),
     );
     invalidateCache();
   }
@@ -104,6 +118,28 @@ class CRDTTextHandler extends Handler<String> {
             ..clear()
             ..write(currentText.substring(0, index))
             ..write(currentText.substring(index + actualCount));
+        }
+      } else if (operation is _TextUpdateOperation) {
+        final index = operation.index;
+        final text = operation.text;
+
+        // Update the text at the specified index
+        final currentText = buffer.toString();
+
+        if (index < currentText.length) {
+          buffer
+            ..clear()
+            ..write(currentText.substring(0, index));
+
+          final remainingLength = currentText.length - index;
+          final truncatedText =
+              text.substring(0, min(text.length, remainingLength));
+
+          buffer.write(truncatedText);
+
+          if (remainingLength > text.length) {
+            buffer.write(currentText.substring(index + text.length));
+          }
         }
       }
     }

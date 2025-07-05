@@ -1,5 +1,10 @@
 import 'package:crdt_lf/src/handler/handler.dart';
 
+const _insert = 'insert';
+const _delete = 'delete';
+const _update = 'update';
+const _availableOperations = {_insert, _delete, _update};
+
 /// Available operation on data for CRDT
 class OperationType {
   const OperationType._({
@@ -11,7 +16,7 @@ class OperationType {
   factory OperationType.insert(Handler<dynamic> handler) {
     return OperationType._(
       handler: handler.runtimeType.toString(),
-      type: 'insert',
+      type: _insert,
     );
   }
 
@@ -19,7 +24,15 @@ class OperationType {
   factory OperationType.delete(Handler<dynamic> handler) {
     return OperationType._(
       handler: handler.runtimeType.toString(),
-      type: 'delete',
+      type: _delete,
+    );
+  }
+
+  /// Update operation
+  factory OperationType.update(Handler<dynamic> handler) {
+    return OperationType._(
+      handler: handler.runtimeType.toString(),
+      type: _update,
     );
   }
 
@@ -30,7 +43,7 @@ class OperationType {
     if (parts.length != 2 ||
         parts[0].isEmpty ||
         parts[1].isEmpty ||
-        (parts[1] != 'insert' && parts[1] != 'delete')) {
+        !_availableOperations.contains(parts[1])) {
       throw FormatException('Invalid payload: $payload');
     }
 

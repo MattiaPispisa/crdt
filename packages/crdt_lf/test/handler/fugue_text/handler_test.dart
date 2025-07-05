@@ -28,6 +28,29 @@ void main() {
       expect(handler.value, 'Hello');
     });
 
+    test(
+      'should update text',
+      () {
+        final doc = CRDTDocument();
+        final handler = CRDTFugueTextHandler(doc, 'text1')
+          ..insert(0, 'Hello World');
+        expect(handler.value, 'Hello World');
+
+        handler.update(5, 'Beautiful');
+        expect(handler.value, 'HelloBeauti');
+      },
+    );
+
+    test('should handle multiple operations', () {
+      final doc = CRDTDocument();
+      final handler = CRDTFugueTextHandler(doc, 'text1')
+        ..insert(0, 'Hello World')
+        ..delete(5, 6)
+        ..update(5, 'Dart!')
+        ..insert(8, 'and Flutter!');
+      expect(handler.value, 'Hello Worldand Flutter!');
+    });
+
     test('should handle out of bounds deletion', () {
       final doc = CRDTDocument();
       final handler = CRDTFugueTextHandler(doc, 'text1')

@@ -57,6 +57,31 @@ void main() {
       expect(tree.values(), equals(['test']));
     });
 
+    test(
+      'update ',
+      () {
+        final tree = FugueTree<dynamic>.empty();
+        final peerId = PeerId.parse('ee121333-c65b-4afc-b226-4ef116df3432');
+        final leftOrigin = FugueElementID.nullID();
+        final rightOrigin = FugueElementID(peerId, 0);
+
+        tree
+          ..insert(
+            newID: FugueElementID(peerId, 1),
+            value: 'test',
+            leftOrigin: leftOrigin,
+            rightOrigin: rightOrigin,
+          )
+          ..update(
+            newID: FugueElementID(peerId, 2),
+            newValue: 'Test!',
+            nodeID: FugueElementID(peerId, 1),
+          );
+
+        expect(tree.values(), equals(['Test!']));
+      },
+    );
+
     test('insert with leftOrigin creates right child', () {
       final tree = FugueTree<dynamic>.empty();
       final peerId = PeerId.parse('ee121333-c65b-4afc-b226-4ef116df3432');

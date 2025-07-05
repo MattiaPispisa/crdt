@@ -13,6 +13,8 @@ class _TextOperationFactory {
       return _TextInsertOperation.fromPayload(payload);
     } else if (payload['type'] == OperationType.delete(handler).toPayload()) {
       return _TextDeleteOperation.fromPayload(payload);
+    } else if (payload['type'] == OperationType.update(handler).toPayload()) {
+      return _TextUpdateOperation.fromPayload(payload);
     }
 
     return null;
@@ -98,5 +100,46 @@ class _TextDeleteOperation extends Operation {
         'id': id,
         'index': index,
         'count': count,
+      };
+}
+
+class _TextUpdateOperation extends Operation {
+  const _TextUpdateOperation({
+    required this.index,
+    required this.text,
+    required super.id,
+    required super.type,
+  });
+
+  factory _TextUpdateOperation.fromHandler(
+    Handler<dynamic> handler, {
+    required int index,
+    required String text,
+  }) {
+    return _TextUpdateOperation(
+      id: handler.id,
+      type: OperationType.update(handler),
+      index: index,
+      text: text,
+    );
+  }
+
+  factory _TextUpdateOperation.fromPayload(Map<String, dynamic> payload) =>
+      _TextUpdateOperation(
+        id: payload['id'] as String,
+        type: OperationType.fromPayload(payload['type'] as String),
+        index: payload['index'] as int,
+        text: payload['text'] as String,
+      );
+
+  final int index;
+  final String text;
+
+  @override
+  Map<String, dynamic> toPayload() => {
+        'type': type.toPayload(),
+        'id': id,
+        'index': index,
+        'text': text,
       };
 }

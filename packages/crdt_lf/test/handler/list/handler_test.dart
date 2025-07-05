@@ -3,7 +3,7 @@ import 'package:test/test.dart';
 
 void main() {
   group('CRDTListHandler', () {
-    test('should handle basic insert and delete operations', () {
+    test('should handle basic operations', () {
       final doc = CRDTDocument(
         peerId: PeerId.parse('37f1ec87-6ea5-430b-a627-a6b92b56a02d'),
       );
@@ -25,6 +25,18 @@ void main() {
       // Delete out of bounds
       handler.delete(2, 1); // Should not throw
       expect(handler.value, ['Hello', '!']);
+      expect(handler.length, 2);
+
+      handler.update(0, 'Hello,');
+      expect(handler.value, ['Hello,', '!']);
+      expect(handler.length, 2);
+
+      handler.update(1, 'World');
+      expect(handler.value, ['Hello,', 'World']);
+      expect(handler.length, 2);
+
+      handler.update(3, 'Dart');
+      expect(handler.value, ['Hello,', 'World']);
       expect(handler.length, 2);
     });
 
@@ -243,7 +255,8 @@ void main() {
       // Insert numbers
       handler1
         ..insert(0, 'Hello')
-        ..insert(1, 'World');
+        ..insert(1, 'World')
+        ..update(1, 'World All!');
       handler2.insert(0, 'Dart!');
 
       final changes1 = doc1.exportChanges();
@@ -259,7 +272,7 @@ void main() {
 
       expect(
         doc2.importChanges(changes1),
-        equals(2),
+        equals(3),
       );
 
       expect(

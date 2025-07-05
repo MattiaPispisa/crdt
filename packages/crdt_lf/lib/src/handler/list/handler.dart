@@ -43,6 +43,18 @@ class CRDTListHandler<T> extends Handler<List<T>> {
     invalidateCache();
   }
 
+  /// Updates the element at the specified index
+  void update(int index, T value) {
+    doc.createChange(
+      _ListUpdateOperation<T>.fromHandler(
+        this,
+        index: index,
+        value: value,
+      ),
+    );
+    invalidateCache();
+  }
+
   /// Gets the current state of the list
   List<T> get value {
     // Check if the cached state is still valid
@@ -105,6 +117,14 @@ class CRDTListHandler<T> extends Handler<List<T>> {
           final actualCount =
               index + count > state.length ? state.length - index : count;
           state.removeRange(index, index + actualCount);
+        }
+      } else if (operation is _ListUpdateOperation<T>) {
+        final index = operation.index;
+        final value = operation.value;
+
+        // Update the element at the specified index
+        if (index < state.length) {
+          state[index] = value;
         }
       }
     }
