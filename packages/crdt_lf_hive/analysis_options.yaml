@@ -1,0 +1,28 @@
+include: package:lints/recommended.yaml
+
+analyzer:
+  exclude:
+    - "build/**"
+    - "example/**"
+  
+linter:
+  rules:
+    # Enable additional rules
+    - prefer_single_quotes
+    - prefer_const_constructors
+    - prefer_const_declarations
+    - prefer_final_locals
+    - prefer_final_in_for_each
+    - prefer_final_fields
+    - sort_constructors_first
+    - sort_pub_dependencies
+    - unawaited_futures
+    - unnecessary_await_in_return
+    - unnecessary_parenthesis
+    - unnecessary_string_interpolations
+    - use_super_parameters
+    - require_trailing_commas
+    
+    # Disable some rules that might be too strict
+    - lines_longer_than_80_chars
+    - avoid_print 
