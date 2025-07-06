@@ -1,13 +1,15 @@
+import 'package:crdt_lf_hive/src/adapters/ids.dart';
 import 'package:hive/hive.dart';
 import 'package:hlc_dart/hlc_dart.dart';
 
 /// Hive adapter for [HybridLogicalClock] objects.
 ///
-/// This adapter handles serialization and deserialization of [HybridLogicalClock] objects
-/// for Hive storage.
+/// This adapter handles serialization
+/// and deserialization of [HybridLogicalClock] objects
+/// for [Hive] storage.
 class HybridLogicalClockAdapter extends TypeAdapter<HybridLogicalClock> {
   @override
-  final int typeId = 101;
+  final int typeId = kHybridLogicalClockAdapter;
 
   @override
   HybridLogicalClock read(BinaryReader reader) {
@@ -18,7 +20,8 @@ class HybridLogicalClockAdapter extends TypeAdapter<HybridLogicalClock> {
 
   @override
   void write(BinaryWriter writer, HybridLogicalClock obj) {
-    writer.writeInt(obj.l);
-    writer.writeInt(obj.c);
+    writer
+      ..writeInt(obj.l)
+      ..writeInt(obj.c);
   }
-} 
+}

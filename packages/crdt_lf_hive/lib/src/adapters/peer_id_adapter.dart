@@ -1,5 +1,6 @@
-import 'package:hive/hive.dart';
 import 'package:crdt_lf/crdt_lf.dart';
+import 'package:crdt_lf_hive/src/adapters/ids.dart';
+import 'package:hive/hive.dart';
 
 /// Hive adapter for [PeerId] objects.
 ///
@@ -7,7 +8,7 @@ import 'package:crdt_lf/crdt_lf.dart';
 /// for Hive storage.
 class PeerIdAdapter extends TypeAdapter<PeerId> {
   @override
-  final int typeId = 100;
+  final int typeId = kPeerIdAdapter;
 
   @override
   PeerId read(BinaryReader reader) {
@@ -19,4 +20,4 @@ class PeerIdAdapter extends TypeAdapter<PeerId> {
   void write(BinaryWriter writer, PeerId obj) {
     writer.writeString(obj.id);
   }
-} 
+}

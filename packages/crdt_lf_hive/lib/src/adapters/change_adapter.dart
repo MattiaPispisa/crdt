@@ -1,6 +1,7 @@
 import 'dart:convert';
-import 'package:hive/hive.dart';
 import 'package:crdt_lf/crdt_lf.dart';
+import 'package:crdt_lf_hive/src/adapters/ids.dart';
+import 'package:hive/hive.dart';
 import 'package:hlc_dart/hlc_dart.dart';
 
 /// Hive adapter for [Change] objects.
@@ -8,78 +9,81 @@ import 'package:hlc_dart/hlc_dart.dart';
 /// This adapter handles serialization and deserialization of [Change] objects
 /// for Hive storage.
 class ChangeAdapter extends TypeAdapter<Change> {
+  /// [useDataAdapter] is used to determine if the payload should be
+  /// serialized/deserialized using a custom initialized adapter or the
+  /// `json.encode`/`json.decode` method.
+  ChangeAdapter({bool useDataAdapter = false})
+      : _usePayloadAdapter = useDataAdapter;
+
+  final bool _usePayloadAdapter;
+
   @override
-  final int typeId = 104;
+  final int typeId = kChangeAdapter;
 
   @override
   Change read(BinaryReader reader) {
-    // Read id (OperationId)
-    final idPeerIdStr = reader.readString();
-    final idHlcL = reader.readInt();
-    final idHlcC = reader.readInt();
-    final id = OperationId(
-      PeerId.parse(idPeerIdStr),
-      HybridLogicalClock(l: idHlcL, c: idHlcC),
-    );
+    final id = reader.read() as OperationId;
+    final hlc = reader.read() as HybridLogicalClock;
+    final author = reader.read() as PeerId;
 
-    // Read deps (Set<OperationId>)
-    final depsLength = reader.readInt();
+    final depsCount = reader.readInt();
     final deps = <OperationId>{};
-    for (var i = 0; i < depsLength; i++) {
-      final depPeerIdStr = reader.readString();
-      final depHlcL = reader.readInt();
-      final depHlcC = reader.readInt();
-      deps.add(OperationId(
-        PeerId.parse(depPeerIdStr),
-        HybridLogicalClock(l: depHlcL, c: depHlcC),
-      ));
+    for (var i = 0; i < depsCount; i++) {
+      deps.add(reader.read() as OperationId);
     }
-
-    // Read hlc (HybridLogicalClock)
-    final hlcL = reader.readInt();
-    final hlcC = reader.readInt();
-    final hlc = HybridLogicalClock(l: hlcL, c: hlcC);
-
-    // Read author (PeerId)
-    final authorStr = reader.readString();
-    final author = PeerId.parse(authorStr);
-
-    // Read payload (Map<String, dynamic>)
-    final payloadJson = reader.readString();
-    final payload = Map<String, dynamic>.from(json.decode(payloadJson) as Map);
 
     return Change.fromPayload(
       id: id,
       deps: deps,
       hlc: hlc,
       author: author,
-      payload: payload,
+      payload: _readPayload(reader),
     );
+  }
+
+  Map<String, dynamic> _readPayload(BinaryReader reader) {
+    if (!_usePayloadAdapter) {
+      return json.decode(reader.readString()) as Map<String, dynamic>;
+    }
+
+    final payload = <String, dynamic>{};
+    final payloadCount = reader.readInt();
+    for (var i = 0; i < payloadCount; i++) {
+      final key = reader.readString();
+      final value = reader.read();
+      payload[key] = value;
+    }
+
+    return payload;
   }
 
   @override
   void write(BinaryWriter writer, Change obj) {
-    // Write id (OperationId)
-    writer.writeString(obj.id.peerId.id);
-    writer.writeInt(obj.id.hlc.l);
-    writer.writeInt(obj.id.hlc.c);
-
-    // Write deps (Set<OperationId>)
-    writer.writeInt(obj.deps.length);
+    writer
+      ..write(obj.id)
+      ..write(obj.hlc)
+      ..write(obj.author)
+      ..writeInt(obj.deps.length);
     for (final dep in obj.deps) {
-      writer.writeString(dep.peerId.id);
-      writer.writeInt(dep.hlc.l);
-      writer.writeInt(dep.hlc.c);
+      writer.write(dep);
     }
 
-    // Write hlc (HybridLogicalClock)
-    writer.writeInt(obj.hlc.l);
-    writer.writeInt(obj.hlc.c);
-
-    // Write author (PeerId)
-    writer.writeString(obj.author.id);
-
-    // Write payload (Map<String, dynamic>)
-    writer.writeString(json.encode(obj.payload));
+    _writePayload(writer, obj.payload);
   }
-} 
+
+  void _writePayload(
+    BinaryWriter writer,
+    Map<String, dynamic> payload,
+  ) {
+    if (!_usePayloadAdapter) {
+      return writer.writeString(json.encode(payload));
+    }
+
+    writer.writeInt(payload.length);
+    for (final entry in payload.entries) {
+      writer
+        ..writeString(entry.key)
+        ..write(entry.value);
+    }
+  }
+}

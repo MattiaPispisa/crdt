@@ -1,41 +1,32 @@
 import 'dart:convert';
-import 'package:hive/hive.dart';
 import 'package:crdt_lf/crdt_lf.dart';
-import 'package:hlc_dart/hlc_dart.dart';
+import 'package:crdt_lf_hive/src/adapters/ids.dart';
+import 'package:hive/hive.dart';
 
 /// Hive adapter for [Snapshot] objects.
 ///
 /// This adapter handles serialization and deserialization of [Snapshot] objects
 /// for Hive storage.
 class SnapshotAdapter extends TypeAdapter<Snapshot> {
+  /// [useDataAdapter] is used to determine if the data should be
+  /// serialized/deserialized using a custom initialized adapter or the
+  /// `json.encode`/`json.decode` method.
+  SnapshotAdapter({
+    bool useDataAdapter = false,
+  }) : _useDataAdapter = useDataAdapter;
+
+  final bool _useDataAdapter;
+
   @override
-  final int typeId = 105;
+  final int typeId = kSnapshotAdapter;
 
   @override
   Snapshot read(BinaryReader reader) {
-    // Read id (String)
     final id = reader.readString();
-
-    // Read versionVector (VersionVector)
-    final versionVectorLength = reader.readInt();
-    final vector = <PeerId, HybridLogicalClock>{};
-    
-    for (var i = 0; i < versionVectorLength; i++) {
-      final peerIdStr = reader.readString();
-      final hlcL = reader.readInt();
-      final hlcC = reader.readInt();
-      
-      final peerId = PeerId.parse(peerIdStr);
-      final hlc = HybridLogicalClock(l: hlcL, c: hlcC);
-      
-      vector[peerId] = hlc;
-    }
-    
-    final versionVector = VersionVector(vector);
+    final versionVector = reader.read() as VersionVector;
 
     // Read data (Map<String, dynamic>)
-    final dataJson = reader.readString();
-    final data = Map<String, dynamic>.from(json.decode(dataJson) as Map);
+    final data = _readData(reader);
 
     return Snapshot(
       id: id,
@@ -44,22 +35,49 @@ class SnapshotAdapter extends TypeAdapter<Snapshot> {
     );
   }
 
-  @override
-  void write(BinaryWriter writer, Snapshot obj) {
-    // Write id (String)
-    writer.writeString(obj.id);
-
-    // Write versionVector (VersionVector)
-    final entries = obj.versionVector.entries.toList();
-    writer.writeInt(entries.length);
-    
-    for (final entry in entries) {
-      writer.writeString(entry.key.id);
-      writer.writeInt(entry.value.l);
-      writer.writeInt(entry.value.c);
+  Map<String, dynamic> _readData(BinaryReader reader) {
+    if (!_useDataAdapter) {
+      return json.decode(reader.readString()) as Map<String, dynamic>;
     }
 
-    // Write data (Map<String, dynamic>)
-    writer.writeString(json.encode(obj.data));
+    final data = <String, dynamic>{};
+    final dataCount = reader.readInt();
+    for (var i = 0; i < dataCount; i++) {
+      final key = reader.readString();
+      final value = reader.read();
+      data[key] = value;
+    }
+
+    return data;
   }
-} 
+
+  @override
+  void write(BinaryWriter writer, Snapshot obj) {
+    writer.writeString(obj.id);
+
+    final entries = obj.versionVector.entries.toList();
+    writer.writeInt(entries.length);
+
+    for (final entry in entries) {
+      writer
+        ..writeString(entry.key.id)
+        ..writeInt(entry.value.l)
+        ..writeInt(entry.value.c);
+    }
+
+    _writeData(writer, obj.data);
+  }
+
+  void _writeData(BinaryWriter writer, Map<String, dynamic> data) {
+    if (!_useDataAdapter) {
+      return writer.writeString(json.encode(data));
+    }
+
+    writer.writeInt(data.length);
+    for (final entry in data.entries) {
+      writer
+        ..writeString(entry.key)
+        ..write(entry.value);
+    }
+  }
+}
