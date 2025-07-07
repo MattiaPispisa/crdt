@@ -73,10 +73,8 @@ class CRDTSnapshotStorage {
   ///
   /// Returns the number of snapshots that were actually deleted.
   Future<int> deleteSnapshots(List<String> ids) async {
-    final existingKeys = ids
-        .map(_getSnapshotKey)
-        .where(box.containsKey)
-        .toList();
+    final existingKeys =
+        ids.map(_getSnapshotKey).where(box.containsKey).toList();
     await box.deleteAll(existingKeys);
     return existingKeys.length;
   }

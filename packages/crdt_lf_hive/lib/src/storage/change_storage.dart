@@ -69,10 +69,8 @@ class CRDTChangeStorage {
   ///
   /// Returns the number of changes that were actually deleted.
   Future<int> deleteChanges(List<Change> changes) async {
-    final existingKeys = changes
-        .map(_getChangeKey)
-        .where(box.containsKey)
-        .toList();
+    final existingKeys =
+        changes.map(_getChangeKey).where(box.containsKey).toList();
     await box.deleteAll(existingKeys);
     return existingKeys.length;
   }

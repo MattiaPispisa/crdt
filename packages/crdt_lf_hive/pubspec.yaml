@@ -2,9 +2,9 @@ name: crdt_lf_hive
 description: Hive adapters for CRDT LF library objects, providing persistence for Change and Snapshot objects.
 homepage: https://mattiapispisa.github.io/
 repository: https://github.com/MattiaPispisa/crdt/tree/main/packages/crdt_lf_hive
-topics: [local-first, crdt, hive, persistence, dart]
+topics: [crdt, local-first, hive, persistence, dart]
 
-version: 1.0.0
+version: 0.1.0
 
 environment:
   sdk: ">=2.17.0 <4.0.0"
