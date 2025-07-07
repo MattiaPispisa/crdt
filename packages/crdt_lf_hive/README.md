@@ -1,5 +1,8 @@
 # CRDT LF Hive
 
+[![crdt_lf_hive_badge][crdt_lf_hive_badge]](https://pub.dev/packages/crdt_lf_hive)
+[![License: MIT][license_badge]][license_link]
+
 - [CRDT LF Hive](#crdt-lf-hive)
   - [Features](#features)
   - [Quick Start](#quick-start)
@@ -22,8 +25,6 @@
   - [Packages](#packages)
 
 
-[![crdt_lf_hive_badge][crdt_lf_hive_badge]](https://pub.dev/packages/crdt_lf_hive)
-[![License: MIT][license_badge]][license_link]
 
 A [Hive](https://pub.dev/packages/hive) storage implementation for [CRDT LF](https://pub.dev/packages/crdt_lf) objects, providing efficient persistence for Change and Snapshot objects with document-scoped organization.
 
