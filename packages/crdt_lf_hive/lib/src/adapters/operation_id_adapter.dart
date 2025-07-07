@@ -9,8 +9,15 @@ import 'package:hlc_dart/hlc_dart.dart';
 /// and deserialization of [OperationId] objects
 /// for Hive storage.
 class OperationIdAdapter extends TypeAdapter<OperationId> {
+  /// Creates a new [OperationIdAdapter] with optional [typeId].
+  OperationIdAdapter({
+    int? typeId,
+  }) : _typeId = typeId ?? kOperationIdAdapter;
+
+  final int _typeId;
+
   @override
-  final int typeId = kOperationIdAdapter;
+  int get typeId => _typeId;
 
   @override
   OperationId read(BinaryReader reader) {

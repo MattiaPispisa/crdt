@@ -8,8 +8,15 @@ import 'package:hlc_dart/hlc_dart.dart';
 /// and deserialization of [HybridLogicalClock] objects
 /// for [Hive] storage.
 class HybridLogicalClockAdapter extends TypeAdapter<HybridLogicalClock> {
+  /// Creates a new [HybridLogicalClockAdapter] with optional [typeId].
+  HybridLogicalClockAdapter({
+    int? typeId,
+  }) : _typeId = typeId ?? kHybridLogicalClockAdapter;
+
+  final int _typeId;
+
   @override
-  final int typeId = kHybridLogicalClockAdapter;
+  int get typeId => _typeId;
 
   @override
   HybridLogicalClock read(BinaryReader reader) {

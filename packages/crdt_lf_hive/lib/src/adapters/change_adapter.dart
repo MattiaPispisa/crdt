@@ -12,13 +12,17 @@ class ChangeAdapter extends TypeAdapter<Change> {
   /// [useDataAdapter] is used to determine if the payload should be
   /// serialized/deserialized using a custom initialized adapter or the
   /// `json.encode`/`json.decode` method.
-  ChangeAdapter({bool useDataAdapter = false})
-      : _usePayloadAdapter = useDataAdapter;
+  ChangeAdapter({
+    bool useDataAdapter = false,
+    int? typeId,
+  })  : _usePayloadAdapter = useDataAdapter,
+        _typeId = typeId ?? kChangeAdapter;
 
   final bool _usePayloadAdapter;
+  final int _typeId;
 
   @override
-  final int typeId = kChangeAdapter;
+  int get typeId => _typeId;
 
   @override
   Change read(BinaryReader reader) {

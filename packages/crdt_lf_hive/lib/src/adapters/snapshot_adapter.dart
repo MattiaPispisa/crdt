@@ -13,12 +13,15 @@ class SnapshotAdapter extends TypeAdapter<Snapshot> {
   /// `json.encode`/`json.decode` method.
   SnapshotAdapter({
     bool useDataAdapter = false,
-  }) : _useDataAdapter = useDataAdapter;
+    int? typeId,
+  })  : _useDataAdapter = useDataAdapter,
+        _typeId = typeId ?? kSnapshotAdapter;
 
   final bool _useDataAdapter;
+  final int _typeId;
 
   @override
-  final int typeId = kSnapshotAdapter;
+  int get typeId => _typeId;
 
   @override
   Snapshot read(BinaryReader reader) {

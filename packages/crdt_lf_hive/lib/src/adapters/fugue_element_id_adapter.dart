@@ -8,8 +8,15 @@ import 'package:hive/hive.dart';
 /// deserialization of [FugueElementID] objects
 /// for Hive storage.
 class FugueElementIDAdapter extends TypeAdapter<FugueElementID> {
+  /// Creates a new [FugueElementIDAdapter] with optional [typeId].
+  FugueElementIDAdapter({
+    int? typeId,
+  }) : _typeId = typeId ?? kFugueElementIDAdapter;
+
+  final int _typeId;
+
   @override
-  final int typeId = kFugueElementIDAdapter;
+  int get typeId => _typeId;
 
   @override
   FugueElementID read(BinaryReader reader) {

@@ -8,8 +8,15 @@ import 'package:hlc_dart/hlc_dart.dart';
 /// This adapter handles serialization and deserialization
 /// of [VersionVector] objects for Hive storage.
 class VersionVectorAdapter extends TypeAdapter<VersionVector> {
+  /// Creates a new [VersionVectorAdapter] with optional [typeId].
+  VersionVectorAdapter({
+    int? typeId,
+  }) : _typeId = typeId ?? kVersionVectorAdapter;
+
+  final int _typeId;
+
   @override
-  final int typeId = kVersionVectorAdapter;
+  int get typeId => _typeId;
 
   @override
   VersionVector read(BinaryReader reader) {

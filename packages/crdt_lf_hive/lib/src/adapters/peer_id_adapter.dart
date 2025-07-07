@@ -7,8 +7,15 @@ import 'package:hive/hive.dart';
 /// This adapter handles serialization and deserialization of [PeerId] objects
 /// for Hive storage.
 class PeerIdAdapter extends TypeAdapter<PeerId> {
+  /// Creates a new [PeerIdAdapter] with optional [typeId].
+  PeerIdAdapter({
+    int? typeId,
+  }) : _typeId = typeId ?? kPeerIdAdapter;
+
+  final int _typeId;
+
   @override
-  final int typeId = kPeerIdAdapter;
+  int get typeId => _typeId;
 
   @override
   PeerId read(BinaryReader reader) {

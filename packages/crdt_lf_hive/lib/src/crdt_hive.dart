@@ -46,17 +46,37 @@ class CRDTHive {
   /// - [Snapshot]
   ///
   /// [useDataAdapter] more details in [ChangeAdapter].
-  static void initialize({bool useDataAdapter = false}) {
+  ///
+  /// The typeId parameters allow customizing the Hive type IDs for each adapter
+  /// if needed to avoid conflicts with other adapters in your application.
+  /// Default typeIds are in range 100-107.
+  static void initialize({
+    bool useDataAdapter = false,
+    int? peerIdTypeId,
+    int? hybridLogicalClockTypeId,
+    int? operationIdTypeId,
+    int? versionVectorTypeId,
+    int? changeTypeId,
+    int? snapshotTypeId,
+    int? fugueElementIdTypeId,
+    int? fugueValueNodeTypeId,
+  }) {
     // Register all adapters
     Hive
-      ..registerAdapter(PeerIdAdapter())
-      ..registerAdapter(HybridLogicalClockAdapter())
-      ..registerAdapter(OperationIdAdapter())
-      ..registerAdapter(VersionVectorAdapter())
-      ..registerAdapter(ChangeAdapter(useDataAdapter: useDataAdapter))
-      ..registerAdapter(SnapshotAdapter(useDataAdapter: useDataAdapter))
-      ..registerAdapter(FugueElementIDAdapter())
-      ..registerAdapter(FugueValueNodeAdapter());
+      ..registerAdapter(PeerIdAdapter(typeId: peerIdTypeId))
+      ..registerAdapter(
+        HybridLogicalClockAdapter(typeId: hybridLogicalClockTypeId),
+      )
+      ..registerAdapter(OperationIdAdapter(typeId: operationIdTypeId))
+      ..registerAdapter(VersionVectorAdapter(typeId: versionVectorTypeId))
+      ..registerAdapter(
+        ChangeAdapter(useDataAdapter: useDataAdapter, typeId: changeTypeId),
+      )
+      ..registerAdapter(
+        SnapshotAdapter(useDataAdapter: useDataAdapter, typeId: snapshotTypeId),
+      )
+      ..registerAdapter(FugueElementIDAdapter(typeId: fugueElementIdTypeId))
+      ..registerAdapter(FugueValueNodeAdapter(typeId: fugueValueNodeTypeId));
   }
 
   /// Creates a [CRDTChangeStorage] for a specific document.

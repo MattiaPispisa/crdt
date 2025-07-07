@@ -8,8 +8,15 @@ import 'package:hive/hive.dart';
 /// deserialization of [FugueValueNode] objects
 /// for Hive storage.
 class FugueValueNodeAdapter extends TypeAdapter<FugueValueNode<dynamic>> {
+  /// Creates a new [FugueValueNodeAdapter] with optional [typeId].
+  FugueValueNodeAdapter({
+    int? typeId,
+  }) : _typeId = typeId ?? kFugueValueNodeAdapter;
+
+  final int _typeId;
+
   @override
-  final int typeId = kFugueValueNodeAdapter;
+  int get typeId => _typeId;
 
   @override
   FugueValueNode<dynamic> read(BinaryReader reader) {
