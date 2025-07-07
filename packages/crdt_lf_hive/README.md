@@ -1,233 +1,219 @@
 # CRDT LF Hive
 
-[![pub package](https://img.shields.io/pub/v/crdt_lf_hive.svg)](https://pub.dev/packages/crdt_lf_hive)
+[![crdt_lf_hive_badge][crdt_lf_hive_badge]](https://pub.dev/packages/crdt_lf_hive)
+[![License: MIT][license_badge]][license_link]
 
-Hive adapters for [CRDT LF](https://pub.dev/packages/crdt_lf) library objects, providing persistence for Change and Snapshot objects.
+A [Hive](https://pub.dev/packages/hive) storage implementation for [CRDT LF](https://pub.dev/packages/crdt_lf) objects, providing efficient persistence for Change and Snapshot objects with document-scoped organization.
 
 ## Features
 
-- **Complete CRDT Persistence**: Serialize and deserialize all CRDT objects:
-  - `Change` - Individual operations in the CRDT
-  - `Snapshot` - Point-in-time states of the CRDT
-  - `OperationId` - Unique identifiers for operations
-  - `PeerId` - Peer identifiers 
-  - `HybridLogicalClock` - Logical timestamps
-  - `VersionVector` - Vector clocks for causality tracking
-
-- **Storage Utilities**: High-level APIs for managing CRDT objects:
-  - `CRDTChangeStorage` - Store and query changes
-  - `CRDTSnapshotStorage` - Store and query snapshots
-  - Time-based queries, batch operations, and more
-
-- **Efficient Storage**: Optimized binary serialization via Hive adapters
-
-## Installation
-
-Add to your `pubspec.yaml`:
-
-```yaml
-dependencies:
-  crdt_lf_hive: ^1.0.0
-  hive: ^2.2.3
-```
+- **Complete Hive Adapters**: All necessary type adapters for CRDT objects (`Change`, `Snapshot`, `PeerId`, `OperationId`, `VersionVector`, etc.)
+- **Easy Initialization**: One-line setup with `CRDTHive.initialize()`
+- **Flexible Data Serialization**: Choose between JSON encoding or custom Hive adapters for generic data types
+- **Document-Scoped Storage**: Optional utilities that organize data by document ID for better isolation and performance
+- **Batch Operations**: Efficient bulk save/load operations for changes and snapshots
 
 ## Quick Start
 
-### 1. Initialize Hive
+### 1. Initialize Hive with CRDT Adapters
 
 ```dart
+import 'package:hive/hive.dart';
 import 'package:crdt_lf_hive/crdt_lf_hive.dart';
 
-// Initialize all CRDT adapters
-CRDTHive.initialize();
+void main() async {
+  // Initialize Hive
+  Hive.init('./my_app_data');
+  
+  // Register all CRDT adapters
+  CRDTHive.initialize();
+  
+  // Your app code here...
+}
 ```
 
-### 2. Open Storage Boxes
-
-```dart
-// Open dedicated boxes for different object types
-final changesBox = await CRDTHive.openChangesBox();
-final snapshotsBox = await CRDTHive.openSnapshotsBox();
-
-// Create storage utilities
-final changeStorage = CRDTChangeStorage(changesBox);
-final snapshotStorage = CRDTSnapshotStorage(snapshotsBox);
-```
-
-### 3. Store and Retrieve Objects
+### 2. Basic Usage with Manual Box Management
 
 ```dart
 import 'package:crdt_lf/crdt_lf.dart';
+import 'package:hive/hive.dart';
 
-// Create a change
-final peerId = PeerId.generate();
-final hlc = HybridLogicalClock.now();
-final operationId = OperationId(peerId, hlc);
+// Open boxes manually
+final changeBox = await Hive.openBox<Change>('changes');
+final snapshotBox = await Hive.openBox<Snapshot>('snapshots');
 
-final change = Change.fromPayload(
-  id: operationId,
-  deps: <OperationId>{},
-  hlc: hlc,
-  author: peerId,
-  payload: {
-    'type': 'text_insert',
-    'text': 'Hello CRDT!',
-    'position': 0,
-  },
-);
-
-// Store the change
-await changeStorage.saveChange(change);
-
-// Retrieve the change
-final retrievedChange = changeStorage.getChange(operationId);
-print(retrievedChange?.payload);
+// Store and retrieve changes
+final change = /* your change */;
+await changeBox.put(change.id.toString(), change);
+final retrievedChange = changeBox.get(change.id.toString());
 ```
 
-## API Reference
-
-### CRDTHive
-
-Main utility class for initialization and box management.
+### 3. Using Document-Scoped Storage (Recommended)
 
 ```dart
-// Initialize adapters (call once at app startup)
-CRDTHive.initialize();
+import 'package:crdt_lf/crdt_lf.dart';
+import 'package:crdt_lf_hive/crdt_lf_hive.dart';
 
-// Open boxes
-final changesBox = await CRDTHive.openChangesBox();
-final snapshotsBox = await CRDTHive.openSnapshotsBox();
+final documentId = 'my-document-id';
 
-// Cleanup
-await CRDTHive.closeAllBoxes();
-await CRDTHive.deleteBox('changes');
+// Open storage for a specific document
+final changeStorage = await CRDTHive.openChangeStorageForDocument(documentId);
+final snapshotStorage = await CRDTHive.openSnapshotStorageForDocument(documentId);
+
+// Or open both at once
+final documentStorage = await CRDTHive.openStorageForDocument(documentId);
 ```
+
+## Document-Scoped Storage
+
+The library provides optional storage utilities that organize data by document ID. Each document gets its own dedicated Hive boxes, improving isolation and performance.
 
 ### CRDTChangeStorage
 
-Storage utility for managing `Change` objects.
+Manages `Change` objects for a specific document:
 
 ```dart
-final storage = CRDTChangeStorage(changesBox);
+final changeStorage = await CRDTHive.openChangeStorageForDocument('doc-123');
 
-// Store operations
-await storage.saveChange(change);
-await storage.saveChanges([change1, change2, change3]);
+// Save individual changes
+await changeStorage.saveChange(change);
 
-// Retrieve operations
-final change = storage.getChange(operationId);
-final allChanges = storage.getAllChanges();
-final changesByAuthor = storage.getChangesByAuthor(peerId);
+// Batch save multiple changes
+await changeStorage.saveChanges([change1, change2, change3]);
 
-// Time-based queries
-final recentChanges = storage.getChangesInTimeRange(
-  from: startTime,
-  to: endTime,
-);
-final sortedChanges = storage.getChangesSortedByTime();
-final mostRecent = storage.getMostRecentChange();
+// Load all changes for the document
+final changes = changeStorage.getChanges();
 
-// Dependency queries
-final dependentChanges = storage.getChangesDependingOn(operationId);
+// Delete changes
+await changeStorage.deleteChange(change);
+await changeStorage.deleteChanges([change1, change2]);
 
-// Delete operations
-await storage.deleteChange(operationId);
-await storage.deleteChanges([id1, id2, id3]);
-await storage.clear();
-
-// Statistics
-print('Count: ${storage.count}');
-print('Empty: ${storage.isEmpty}');
+// Storage info
+print('Total changes: ${changeStorage.count}');
+print('Is empty: ${changeStorage.isEmpty}');
 ```
 
 ### CRDTSnapshotStorage
 
-Storage utility for managing `Snapshot` objects.
+Manages `Snapshot` objects for a specific document:
 
 ```dart
-final storage = CRDTSnapshotStorage(snapshotsBox);
+final snapshotStorage = await CRDTHive.openSnapshotStorageForDocument('doc-123');
 
-// Store operations
-await storage.saveSnapshot(snapshot);
-await storage.saveSnapshots([snapshot1, snapshot2]);
+// Save snapshots
+await snapshotStorage.saveSnapshot(snapshot);
+await snapshotStorage.saveSnapshots([snapshot1, snapshot2]);
 
-// Retrieve operations
-final snapshot = storage.getSnapshot(snapshotId);
-final allSnapshots = storage.getAllSnapshots();
-final snapshotsByPeer = storage.getSnapshotsByPeer(peerId);
+// Retrieve snapshots
+final snapshot = snapshotStorage.getSnapshot('snapshot-id');
+final allSnapshots = snapshotStorage.getSnapshots();
 
-// Version-based queries
-final newerSnapshots = storage.getSnapshotsNewerThan(versionVector);
-final bestSnapshot = storage.getBestSnapshotForVersion(targetVersion);
-
-// Time-based queries
-final mostRecent = storage.getMostRecentSnapshot();
-final sorted = storage.getSnapshotsSortedByTime();
-
-// Cleanup operations
-await storage.deleteSnapshot(snapshotId);
-await storage.deleteOldSnapshots(keepCount: 5);
-await storage.clear();
-```
-
-## Advanced Usage
-
-### Custom Box Names
-
-```dart
-// Use custom box names for different document types
-final todoChangesBox = await CRDTHive.openChangesBox(boxName: 'todo_changes');
-final todoSnapshotsBox = await CRDTHive.openSnapshotsBox(boxName: 'todo_snapshots');
-
-final todoChangeStorage = CRDTChangeStorage(todoChangesBox);
-final todoSnapshotStorage = CRDTSnapshotStorage(todoSnapshotsBox);
-```
-
-### Batch Operations
-
-```dart
-// Efficient batch storage
-final changes = [change1, change2, change3];
-await changeStorage.saveChanges(changes);
-
-// Batch deletion
-final operationIds = [id1, id2, id3];
-final deletedCount = await changeStorage.deleteChanges(operationIds);
-```
-
-### Snapshot Management
-
-```dart
-// Keep only the 10 most recent snapshots
-final deletedCount = await snapshotStorage.deleteOldSnapshots(keepCount: 10);
-
-// Find the best snapshot for a given version
-final bestSnapshot = snapshotStorage.getBestSnapshotForVersion(targetVersion);
-if (bestSnapshot != null) {
-  // Use this snapshot as a starting point
-  print('Best snapshot: ${bestSnapshot.id}');
+// Check existence
+if (snapshotStorage.containsSnapshot('snapshot-id')) {
+  // Snapshot exists
 }
 ```
 
-## Type ID Reference
+## Data Serialization Options
 
-The library uses the following Hive type IDs:
+The `useDataAdapter` parameter in `CRDTHive.initialize()` controls how generic data types in CRDT operations are serialized:
 
-| Type | ID |
-|------|-----|
-| PeerId | 100 |
-| HybridLogicalClock | 101 |
-| OperationId | 102 |
-| VersionVector | 103 |
-| Change | 104 |
-| Snapshot | 105 |
+### Default Mode (useDataAdapter: false)
 
-Make sure these IDs don't conflict with your existing Hive adapters.
+Generic data is serialized using JSON encoding:
 
-## Example
+```dart
+CRDTHive.initialize(); // useDataAdapter defaults to false
 
-See the complete example in [example.dart](lib/src/example.dart) for a full demonstration of the library's capabilities.
+// Data like List<String>, Map<String, dynamic> will be JSON-encoded
+final listHandler = CRDTListHandler<String>(document, 'items');
+listHandler.insert(0, 'Hello World'); // Stored as JSON
+```
 
-## License
+### Custom Adapter Mode (useDataAdapter: true)
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details. 
+Generic data uses custom Hive adapters for better performance and type safety:
+
+```dart
+class MyCustomDataAdapter extends TypeAdapter<MyCustomData> {
+  @override
+  final int typeId = 200;
+
+  @override
+  ListValue read(BinaryReader reader) {
+    // ...
+  }
+
+  @override
+  void write(BinaryWriter writer, ListValue obj) {
+    // ...
+  }
+}
+
+// Register your custom adapters first
+Hive.registerAdapter(MyCustomDataAdapter());
+
+// Then initialize with custom adapter support
+CRDTHive.initialize(useDataAdapter: true);
+
+// Now your custom types will use their adapters
+final listHandler = CRDTListHandler<MyCustomData>(document, 'items');
+listHandler.insert(0, MyCustomData(value: 'test')); // Uses MyCustomDataAdapter
+```
+
+## Complete Example
+
+A complete example with a custom data type and adapter is available [here](https://github.com/MattiaPispisa/crdt/blob/main/packages/crdt_lf_hive/example/main.dart).
+
+## Box Naming Convention
+
+When using document-scoped storage, boxes are named using the pattern:
+- Changes: `{boxName}_{documentId}` (default: `changes_{documentId}`)
+- Snapshots: `{boxName}_{documentId}` (default: `snapshots_{documentId}`)
+
+This ensures each document has isolated storage while allowing custom box name prefixes.
+
+## Storage Management
+
+### Cleanup Operations
+
+```dart
+// Close all CRDT-related boxes
+await CRDTHive.closeAllBoxes();
+
+// Delete all data for a specific document
+await CRDTHive.deleteDocumentData('doc-123');
+
+// Delete a specific box
+await CRDTHive.deleteBox('changes_doc-123');
+```
+
+### Box Customization
+
+```dart
+// Custom box names
+final changeStorage = await CRDTHive.openChangeStorageForDocument(
+  'doc-123',
+  boxName: 'my_custom_changes',
+);
+
+final documentStorage = await CRDTHive.openStorageForDocument(
+  'doc-123',
+  changesBoxName: 'custom_changes',
+  snapshotsBoxName: 'custom_snapshots',
+);
+```
+
+## Important Notes
+
+- **Document-scoped storage utilities are optional** - you can manage Hive boxes manually if preferred
+- **Custom box organization** - the provided utilities use a specific box-per-document pattern, but you can implement your own organization strategy
+- **Type ID conflicts** - ensure your custom adapters use unique type IDs
+
+## Roadmap
+A roadmap is available in the [project](https://github.com/users/MattiaPispisa/projects/1) page. The roadmap provides a high-level overview of the project's goals and the current status of the project.
+
+
+[crdt_lf_hive_badge]: https://img.shields.io/pub/v/crdt_lf_hive.svg
+[license_badge]: https://img.shields.io/badge/license-MIT-blue.svg
+[license_link]: https://opensource.org/licenses/MIT

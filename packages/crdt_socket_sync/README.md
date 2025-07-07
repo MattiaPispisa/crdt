@@ -1,4 +1,9 @@
 # CRDT Socket Sync
+
+[![crdt_socket_sync_badge][crdt_socket_sync_badge]](https://pub.dev/packages/crdt_socket_sync)
+[![License: MIT][license_badge]][license_link]
+
+
 - [CRDT Socket Sync](#crdt-socket-sync)
   - [Overview](#overview)
   - [Features](#features)
@@ -354,3 +359,7 @@ Contributions are welcome! Please read the contributing guidelines and submit pu
 - [web_socket_channel](https://pub.dev/packages/web_socket_channel): WebSocket communication layer
 - [hlc_dart](https://pub.dev/packages/hlc_dart)
 
+
+[crdt_socket_sync_badge]: https://img.shields.io/pub/v/crdt_socket_sync.svg
+[license_badge]: https://img.shields.io/badge/license-MIT-blue.svg
+[license_link]: https://opensource.org/licenses/MIT

@@ -1,7 +1,9 @@
 # CRDT LF
 
+[![crdt_lf_badge][crdt_lf_badge]](https://pub.dev/packages/crdt_lf)
 [![coverage][coverage_badge]][coverage_badge]
 [![License: MIT][license_badge]][license_link]
+
 
 - [CRDT LF](#crdt-lf)
   - [Features](#features)
@@ -162,3 +164,4 @@ Other bricks of the crdt "system" are:
 [license_badge]: https://img.shields.io/badge/license-MIT-blue.svg
 [license_link]: https://opensource.org/licenses/MIT
 [coverage_badge]: https://img.shields.io/badge/coverage-98%25-green
+[crdt_lf_badge]: https://img.shields.io/pub/v/crdt_lf.svg

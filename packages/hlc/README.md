@@ -1,5 +1,6 @@
 # Hybrid Logical Clock
 
+[![hlc_dart_badge][hlc_dart_badge]](https://pub.dev/packages/hlc_dart)
 [![coverage][coverage_badge]][coverage_badge]
 [![License: MIT][license_badge]][license_link]
 
@@ -84,3 +85,4 @@ Other bricks of the crdt "system" are:
 [license_badge]: https://img.shields.io/badge/license-MIT-blue.svg
 [license_link]: https://opensource.org/licenses/MIT
 [coverage_badge]: https://img.shields.io/badge/coverage-100%25-green
+[hlc_dart_badge]: https://img.shields.io/pub/v/hlc_dart.svg
