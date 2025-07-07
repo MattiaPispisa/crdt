@@ -1,5 +1,27 @@
 # CRDT LF Hive
 
+- [CRDT LF Hive](#crdt-lf-hive)
+  - [Features](#features)
+  - [Quick Start](#quick-start)
+    - [1. Initialize Hive with CRDT Adapters](#1-initialize-hive-with-crdt-adapters)
+    - [2. Basic Usage with Manual Box Management](#2-basic-usage-with-manual-box-management)
+    - [3. Using Document-Scoped Storage (Recommended)](#3-using-document-scoped-storage-recommended)
+  - [Document-Scoped Storage](#document-scoped-storage)
+    - [CRDTChangeStorage](#crdtchangestorage)
+    - [CRDTSnapshotStorage](#crdtsnapshotstorage)
+  - [Data Serialization Options](#data-serialization-options)
+    - [Default Mode (useDataAdapter: false)](#default-mode-usedataadapter-false)
+    - [Custom Adapter Mode (useDataAdapter: true)](#custom-adapter-mode-usedataadapter-true)
+  - [Complete Example](#complete-example)
+  - [Box Naming Convention](#box-naming-convention)
+  - [Storage Management](#storage-management)
+    - [Cleanup Operations](#cleanup-operations)
+    - [Box Customization](#box-customization)
+  - [Important Notes](#important-notes)
+  - [Roadmap](#roadmap)
+  - [Packages](#packages)
+
+
 [![crdt_lf_hive_badge][crdt_lf_hive_badge]](https://pub.dev/packages/crdt_lf_hive)
 [![License: MIT][license_badge]][license_link]
 
@@ -212,6 +234,13 @@ final documentStorage = await CRDTHive.openStorageForDocument(
 
 ## Roadmap
 A roadmap is available in the [project](https://github.com/users/MattiaPispisa/projects/1) page. The roadmap provides a high-level overview of the project's goals and the current status of the project.
+
+## Packages
+Other bricks of the crdt "system" are:
+
+- [crdt_lf](https://pub.dev/packages/crdt_lf)
+- [crdt_socket_sync](https://pub.dev/packages/crdt_socket_sync)
+- [hlc_dart](https://pub.dev/packages/hlc_dart)
 
 
 [crdt_lf_hive_badge]: https://img.shields.io/pub/v/crdt_lf_hive.svg
