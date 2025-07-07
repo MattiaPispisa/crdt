@@ -24,8 +24,6 @@ Future<void> main() async {
     ..localChanges.listen(changesToSave.add);
   final list = CRDTListHandler<ListValue>(document, 'list');
 
-  print('${document.exportChanges().length} changes imported');
-
   final length = list.value.length;
 
   for (var i = length; i < length + changesToInsert; i++) {

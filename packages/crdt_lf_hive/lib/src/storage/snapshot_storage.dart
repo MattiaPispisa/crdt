@@ -1,5 +1,5 @@
-import 'package:hive/hive.dart';
 import 'package:crdt_lf/crdt_lf.dart';
+import 'package:hive/hive.dart';
 
 /// Storage utility for managing [Snapshot] objects in [Hive].
 ///
@@ -53,7 +53,7 @@ class CRDTSnapshotStorage {
   /// Retrieves all [Snapshot] objects from the storage for this document.
   ///
   /// Returns a list of all stored snapshots for this document.
-  List<Snapshot> getAllSnapshots() {
+  List<Snapshot> getSnapshots() {
     return box.values.toList();
   }
 
@@ -74,8 +74,8 @@ class CRDTSnapshotStorage {
   /// Returns the number of snapshots that were actually deleted.
   Future<int> deleteSnapshots(List<String> ids) async {
     final existingKeys = ids
-        .map((id) => _getSnapshotKey(id))
-        .where((key) => box.containsKey(key))
+        .map(_getSnapshotKey)
+        .where(box.containsKey)
         .toList();
     await box.deleteAll(existingKeys);
     return existingKeys.length;

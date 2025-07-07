@@ -54,7 +54,9 @@ class CRDTHive {
       ..registerAdapter(OperationIdAdapter())
       ..registerAdapter(VersionVectorAdapter())
       ..registerAdapter(ChangeAdapter(useDataAdapter: useDataAdapter))
-      ..registerAdapter(SnapshotAdapter(useDataAdapter: useDataAdapter));
+      ..registerAdapter(SnapshotAdapter(useDataAdapter: useDataAdapter))
+      ..registerAdapter(FugueElementIDAdapter())
+      ..registerAdapter(FugueValueNodeAdapter());
   }
 
   /// Creates a [CRDTChangeStorage] for a specific document.

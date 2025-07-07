@@ -15,3 +15,9 @@ const kSnapshotAdapter = 105;
 
 /// version vector adapter id
 const kVersionVectorAdapter = 106;
+
+/// fugue value node adapter id
+const kFugueValueNodeAdapter = 107;
+
+/// fugue element id adapter id
+const kFugueElementIDAdapter = 108;

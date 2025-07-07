@@ -53,17 +53,9 @@ class SnapshotAdapter extends TypeAdapter<Snapshot> {
 
   @override
   void write(BinaryWriter writer, Snapshot obj) {
-    writer.writeString(obj.id);
-
-    final entries = obj.versionVector.entries.toList();
-    writer.writeInt(entries.length);
-
-    for (final entry in entries) {
-      writer
-        ..writeString(entry.key.id)
-        ..writeInt(entry.value.l)
-        ..writeInt(entry.value.c);
-    }
+    writer
+      ..writeString(obj.id)
+      ..write(obj.versionVector);
 
     _writeData(writer, obj.data);
   }
