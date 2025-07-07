@@ -130,7 +130,14 @@ void main() {
         expect(snapshotStorage.getSnapshots().length, equals(3));
 
         expect(snapshotStorage.containsSnapshot(snapshot1.id), isTrue);
+        expect(snapshotStorage.containsSnapshot(snapshot2.id), isTrue);
         expect(snapshotStorage.containsSnapshot(snapshot3.id), isTrue);
+
+        final snapshot1Data = snapshotStorage.getSnapshot(snapshot1.id);
+
+        expect(snapshot1Data, isNotNull);
+        expect(snapshot1Data!.data, isNotEmpty);
+        expect(snapshot1Data.versionVector.entries, isNotEmpty);
 
         final newDocument = CRDTDocument(peerId: PeerId.generate())
           ..importSnapshot(snapshot1);
@@ -156,7 +163,8 @@ void main() {
         // wait stream add and save changes
         await Future<void>.delayed(Duration.zero);
 
-        await changeStorage.saveChanges(changesToSave);
+        await changeStorage.saveChange(changesToSave.first);
+        await changeStorage.saveChange(changesToSave.last);
 
         expect(changeStorage.count, equals(2));
 
@@ -179,7 +187,8 @@ void main() {
 
         final snapshot2 = document.takeSnapshot();
 
-        await snapshotStorage.saveSnapshots([snapshot1, snapshot2]);
+        await snapshotStorage.saveSnapshot(snapshot1);
+        await snapshotStorage.saveSnapshot(snapshot2);
 
         expect(snapshotStorage.count, equals(2));
 

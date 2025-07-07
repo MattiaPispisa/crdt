@@ -33,8 +33,7 @@ class VersionVectorAdapter extends TypeAdapter<VersionVector> {
     for (final entry in entries) {
       writer
         ..write(entry.key)
-        ..write(entry.value)
-        ..write(entry.value.c);
+        ..write(entry.value);
     }
   }
 }

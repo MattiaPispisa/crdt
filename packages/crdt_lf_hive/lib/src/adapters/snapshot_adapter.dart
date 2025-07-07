@@ -25,7 +25,6 @@ class SnapshotAdapter extends TypeAdapter<Snapshot> {
     final id = reader.readString();
     final versionVector = reader.read() as VersionVector;
 
-    // Read data (Map<String, dynamic>)
     final data = _readData(reader);
 
     return Snapshot(
