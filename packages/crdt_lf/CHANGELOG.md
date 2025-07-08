@@ -1,7 +1,7 @@
-## [Unreleased]
+## [0.8.0] - 2025-07-08
 
 ### Added
-- Update operation for every handler [30](https://github.com/MattiaPispisa/crdt/issues/30)
+- Added `update` operation for every handler [30](https://github.com/MattiaPispisa/crdt/issues/30)
 
 ## [0.7.1] - 2025-06-26
 
