@@ -1,7 +1,9 @@
 # CRDT LF
 
+[![crdt_lf_badge][crdt_lf_badge]](https://pub.dev/packages/crdt_lf)
 [![coverage][coverage_badge]][coverage_badge]
 [![License: MIT][license_badge]][license_link]
+
 
 - [CRDT LF](#crdt-lf)
   - [Features](#features)
@@ -11,6 +13,7 @@
     - [Dart Distributed Collaboration Example](#dart-distributed-collaboration-example)
     - [Flutter Distributed Collaboration Example](#flutter-distributed-collaboration-example)
   - [Sync](#sync)
+  - [Persistence](#persistence)
   - [Architecture](#architecture)
     - [CRDTDocument](#crdtdocument)
     - [Handlers](#handlers)
@@ -84,6 +87,9 @@ A flutter example is available in the [flutter_example](https://github.com/Matti
 
 <img width="500" alt="sync_server_multi_client" src="https://raw.githubusercontent.com/MattiaPispisa/crdt/main/assets/demos/sync_server_multi_client.gif">
 
+## Persistence
+Persistence is not directly handled in this library but there are some out of the box solutions:
+- [crdt_lf_hive](https://pub.dev/packages/crdt_lf_hive): adapters and utils for persist data using [Hive](https://pub.dev/packages/hive).
 
 ## Architecture
 
@@ -157,8 +163,10 @@ Other bricks of the crdt "system" are:
 
 - [hlc_dart](https://pub.dev/packages/hlc_dart)
 - [crdt_socket_sync](https://pub.dev/packages/crdt_socket_sync)
+- [crdt_lf_hive](https://pub.dev/packages/crdt_lf_hive)
 
 
 [license_badge]: https://img.shields.io/badge/license-MIT-blue.svg
 [license_link]: https://opensource.org/licenses/MIT
-[coverage_badge]: https://img.shields.io/badge/coverage-98%25-green
+[coverage_badge]: https://img.shields.io/badge/coverage-97.9%25-green
+[crdt_lf_badge]: https://img.shields.io/pub/v/crdt_lf.svg
