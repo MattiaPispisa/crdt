@@ -75,7 +75,7 @@ void main() {
         ..insert(0, 'Hello World')
         ..delete(20, 5);
       expect(text.value, equals('Hello World'));
-    }); 
+    });
 
     test('update replaces text at specified index', () {
       text
