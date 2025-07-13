@@ -1,0 +1,21 @@
+name: crdt_lf_drift
+description: Drift database implementation for CRDT LF library objects, providing persistence for Change and Snapshot objects.
+homepage: https://mattiapispisa.github.io/
+repository: https://github.com/MattiaPispisa/crdt/tree/main/packages/crdt_lf_drift
+topics: [crdt, local-first, drift, database, persistence]
+
+version: 0.1.0
+
+environment:
+  sdk: ">=2.17.0 <4.0.0"
+
+dependencies:
+  crdt_lf: ^0.8.0
+  drift: ^2.20.0
+  hlc_dart: ^0.3.0
+  sqlite3_flutter_libs: ^0.5.0
+
+dev_dependencies:
+  drift_dev: ^2.20.0
+  build_runner: ^2.4.0
+  test: ^1.24.0 
