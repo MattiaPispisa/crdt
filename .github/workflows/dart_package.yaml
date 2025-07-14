@@ -7,10 +7,6 @@ on:
         required: true
         type: string
 
-    secrets:
-      CODECOV_TOKEN:
-        required: true
-
 jobs:
   build:
     uses: VeryGoodOpenSource/very_good_workflows/.github/workflows/dart_package.yml@v1
@@ -19,6 +15,7 @@ jobs:
       check_ignore: true
       report_on: "lib,test"
       no_example: true
+      min_coverage: 95
       working_directory: ${{ inputs.working_directory }}
 
   upload-coverage:

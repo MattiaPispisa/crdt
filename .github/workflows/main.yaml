@@ -11,5 +11,3 @@ jobs:
     uses: ./.github/workflows/dart_package.yaml
     with:
       working_directory: ./packages/crdt_lf
-    secrets:
-      CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
