@@ -63,5 +63,8 @@ jobs:
           files: ./coverage/lcov.info
           working-directory: ${{inputs.working_directory}}
           token: ${{ secrets.CODECOV_TOKEN }}
-          fail_ci_if_error: true
+          slug: ${{ github.repository }}
+          flags: ${{ inputs.working_directory }}
+          name: ${{ inputs.working_directory }}-coverage
           verbose: true
+          fail_ci_if_error: true
