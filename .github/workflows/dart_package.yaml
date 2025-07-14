@@ -10,6 +10,10 @@ on:
         required: false
         type: string
         default: "stable"
+      min_coverage:
+        required: false
+        type: number
+        default: 100
 
 jobs:
   build:
