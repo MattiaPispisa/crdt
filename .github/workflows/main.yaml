@@ -12,3 +12,5 @@ jobs:
     with:
       working_directory: ./packages/crdt_lf
       min_coverage: 95
+    secrets:
+      CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}

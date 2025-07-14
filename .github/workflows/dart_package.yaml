@@ -15,6 +15,10 @@ on:
         type: number
         default: 100
 
+    secrets:
+      CODECOV_TOKEN:
+        required: true
+
 jobs:
   build:
     defaults:
@@ -57,5 +61,5 @@ jobs:
         uses: codecov/codecov-action@v5
         with:
           directory: ${{inputs.working_directory}}/coverage
-          file: ${{inputs.working_directory}}/coverage/lcov.info
           token: ${{ secrets.CODECOV_TOKEN }}
+          fail_ci_if_error: true
