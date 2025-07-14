@@ -66,5 +66,5 @@ jobs:
           slug: ${{ github.repository }}
           flags: ${{ inputs.working_directory }}
           name: ${{ inputs.working_directory }}-coverage
-          verbose: true
+          verbose: false
           fail_ci_if_error: true
