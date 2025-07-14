@@ -1,16 +1,14 @@
 name: Monorepo CI
 
 on:
-  push:
-    branches:
-      - main
   pull_request:
+  push:
     branches:
       - main
 
 jobs:
   crdt_lf:
-    uses: ./.github/workflows/dart_package.yml
+    uses: .github/workflows/dart_package.yml
     with:
       working_directory: ./packages/crdt_lf
     secrets:
