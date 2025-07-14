@@ -1,0 +1,34 @@
+name: Dart Package CI + Coverage
+
+on:
+  workflow_call:
+    inputs:
+      working_directory:
+        required: true
+        type: string
+
+    secrets:
+      CODECOV_TOKEN:
+        required: true
+
+jobs:
+  build:
+    uses: VeryGoodOpenSource/very_good_workflows/.github/workflows/dart_package.yml@v1
+    with:
+      format_directories: "lib test"
+      check_ignore: true
+      report_on: "lib,test"
+      no_example: true
+      working_directory: ${{ inputs.working_directory }}
+
+  upload-coverage:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          directory: ${{ inputs.working_directory }}
+          token: ${{ secrets.CODECOV_TOKEN }}
