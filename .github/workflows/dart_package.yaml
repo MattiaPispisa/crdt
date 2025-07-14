@@ -60,6 +60,8 @@ jobs:
       - name: 📤 Upload coverage to Codecov
         uses: codecov/codecov-action@v5
         with:
-          directory: ${{inputs.working_directory}}/coverage
+          files: ./coverage/lcov.info
+          working-directory: ${{inputs.working_directory}}
           token: ${{ secrets.CODECOV_TOKEN }}
           fail_ci_if_error: true
+          verbose: true
