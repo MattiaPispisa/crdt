@@ -1,3 +1,8 @@
+## [Unreleased]
+
+### Changed
+- chore: setup .github/workflows and update coverage links [33](https://github.com/MattiaPispisa/crdt/issues/33)
+
 ## [0.3.1] - 2025-06-26
 
 ### Changed
