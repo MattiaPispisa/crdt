@@ -12,6 +12,7 @@ jobs:
     with:
       working_directory: ./packages/hlc
       min_coverage: 95
+      package_name: hlc_dart
     secrets:
       CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
 
@@ -20,5 +21,6 @@ jobs:
     with:
       working_directory: ./packages/crdt_lf
       min_coverage: 95
+      package_name: crdt_lf
     secrets:
       CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}

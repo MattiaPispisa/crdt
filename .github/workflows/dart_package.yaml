@@ -3,6 +3,9 @@ name: Dart Package CI
 on:
   workflow_call:
     inputs:
+      package_name:
+        required: true
+        type: string
       working_directory:
         required: true
         type: string
@@ -64,7 +67,7 @@ jobs:
           directory: ${{inputs.working_directory}}
           token: ${{ secrets.CODECOV_TOKEN }}
           slug: ${{ github.repository }}
-          flags: ${{ inputs.working_directory }}
-          name: ${{ inputs.working_directory }}-coverage
+          flags: ${{ inputs.package_name }}
+          name: ${{ inputs.package_name }}-coverage
           verbose: false
           fail_ci_if_error: true
