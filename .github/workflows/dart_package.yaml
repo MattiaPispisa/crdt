@@ -61,7 +61,7 @@ jobs:
         uses: codecov/codecov-action@v5
         with:
           files: ./coverage/lcov.info
-          working-directory: ${{inputs.working_directory}}
+          directory: ${{inputs.working_directory}}
           token: ${{ secrets.CODECOV_TOKEN }}
           slug: ${{ github.repository }}
           flags: ${{ inputs.working_directory }}
