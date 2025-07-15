@@ -1,0 +1,72 @@
+name: Dart Package CI
+
+on:
+  workflow_call:
+    inputs:
+      package_name:
+        required: true
+        type: string
+      working_directory:
+        required: true
+        type: string
+      dart_sdk:
+        required: false
+        type: string
+        default: "stable"
+      min_coverage:
+        required: false
+        type: number
+        default: 100
+
+    secrets:
+      CODECOV_TOKEN:
+        required: true
+
+jobs:
+  build:
+    defaults:
+      run:
+        working-directory: ${{inputs.working_directory}}
+
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 📚 Git Checkout
+        uses: actions/checkout@v4
+
+      - name: 🎯 Setup Dart
+        uses: dart-lang/setup-dart@v1
+        with:
+          sdk: ${{inputs.dart_sdk}}
+
+      - name: 📦 Install Dependencies
+        run: dart pub get --no-example
+
+      - name: ✨ Check Formatting
+        run: dart format --line-length 80 --set-exit-if-changed lib test
+
+      - name: 🕵️ Analyze
+        run: dart analyze --fatal-infos --fatal-warnings lib test
+
+      - name: 🧪 Run Tests
+        run: |
+          dart pub global activate coverage 1.2.0
+          dart test --coverage=coverage
+          dart pub global run coverage:format_coverage --lcov --in=coverage --out=coverage/lcov.info --packages=.dart_tool/package_config.json --report-on=lib
+
+      - name: 📊 Check Code Coverage
+        uses: VeryGoodOpenSource/very_good_coverage@v3
+        with:
+          path: ${{inputs.working_directory}}/coverage/lcov.info
+          min_coverage: ${{inputs.min_coverage}}
+
+      - name: 📤 Upload coverage to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          directory: ${{inputs.working_directory}}
+          token: ${{ secrets.CODECOV_TOKEN }}
+          slug: ${{ github.repository }}
+          flags: ${{ inputs.package_name }}
+          name: ${{ inputs.package_name }}-coverage
+          verbose: false
+          fail_ci_if_error: true

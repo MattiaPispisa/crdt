@@ -1,0 +1,26 @@
+name: Monorepo CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+jobs:
+  hlc:
+    uses: ./.github/workflows/dart_package.yaml
+    with:
+      working_directory: ./packages/hlc
+      min_coverage: 95
+      package_name: hlc_dart
+    secrets:
+      CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+
+  crdt_lf:
+    uses: ./.github/workflows/dart_package.yaml
+    with:
+      working_directory: ./packages/crdt_lf
+      min_coverage: 95
+      package_name: crdt_lf
+    secrets:
+      CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
