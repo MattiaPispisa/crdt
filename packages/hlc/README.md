@@ -1,7 +1,8 @@
 # Hybrid Logical Clock
 
 [![hlc_dart_badge][hlc_dart_badge]](https://pub.dev/packages/hlc_dart)
-[![coverage][coverage_badge]][coverage_badge]
+[![codecov][codecov_badge]][codecov_link]
+[![ci_badge][ci_badge]][ci_link]
 [![License: MIT][license_badge]][license_link]
 
 - [Hybrid Logical Clock](#hybrid-logical-clock)
@@ -82,7 +83,10 @@ Other bricks of the crdt "system" are:
 - [crdt_socket_sync](https://pub.dev/packages/crdt_socket_sync)
 
 
+[ci_badge]: https://img.shields.io/github/actions/workflow/status/MattiaPispisa/crdt/main.yaml
+[ci_link]: https://github.com/MattiaPispisa/crdt/actions/workflows/main.yaml
 [license_badge]: https://img.shields.io/badge/license-MIT-blue.svg
 [license_link]: https://opensource.org/licenses/MIT
-[coverage_badge]: https://img.shields.io/badge/coverage-100%25-green
 [hlc_dart_badge]: https://img.shields.io/pub/v/hlc_dart.svg
+[codecov_badge]: https://img.shields.io/codecov/c/github/MattiaPispisa/crdt/main?flag=hlc_dart&logo=codecov
+[codecov_link]: https://app.codecov.io/gh/MattiaPispisa/crdt/tree/main/packages/hlc

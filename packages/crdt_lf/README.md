@@ -1,9 +1,9 @@
 # CRDT LF
 
 [![crdt_lf_badge][crdt_lf_badge]](https://pub.dev/packages/crdt_lf)
-[![coverage][coverage_badge]][coverage_badge]
+[![codecov][codecov_badge]][codecov_link]
+[![ci_badge][ci_badge]][ci_link]
 [![License: MIT][license_badge]][license_link]
-
 
 - [CRDT LF](#crdt-lf)
   - [Features](#features)
@@ -168,5 +168,8 @@ Other bricks of the crdt "system" are:
 
 [license_badge]: https://img.shields.io/badge/license-MIT-blue.svg
 [license_link]: https://opensource.org/licenses/MIT
-[coverage_badge]: https://img.shields.io/badge/coverage-97.9%25-green
 [crdt_lf_badge]: https://img.shields.io/pub/v/crdt_lf.svg
+[codecov_badge]: https://img.shields.io/codecov/c/github/MattiaPispisa/crdt/main?flag=crdt_lf&logo=codecov
+[codecov_link]: https://app.codecov.io/gh/MattiaPispisa/crdt/tree/main/packages/crdt_lf
+[ci_badge]: https://img.shields.io/github/actions/workflow/status/MattiaPispisa/crdt/main.yaml
+[ci_link]: https://github.com/MattiaPispisa/crdt/actions/workflows/main.yaml
