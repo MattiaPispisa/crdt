@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:collection';
 import 'dart:convert';
 
 import 'package:crdt_lf/crdt_lf.dart';
@@ -339,39 +340,58 @@ class CRDTDocument {
   /// Returns a list of [Change]s sorted such that
   /// dependencies come before dependents.
   List<Change> _topologicalSort(List<Change> changes) {
+    if (changes.isEmpty) return [];
+
+    // Build a map for fast change lookup
+    final changeMap = <OperationId, Change>{};
+
     // Build a graph of dependencies
     final graph = <OperationId, Set<OperationId>>{};
     final inDegree = <OperationId, int>{};
 
+    // Initialize data structures
     for (final change in changes) {
+      changeMap[change.id] = change;
       graph[change.id] = {};
       inDegree[change.id] = 0;
     }
 
+    // Build dependency graph
     for (final change in changes) {
+      final changeId = change.id;
       for (final dep in change.deps) {
         // Only consider dependencies within the changes we're sorting
-        if (graph.containsKey(dep)) {
-          graph[dep]!.add(change.id);
-          inDegree[change.id] = (inDegree[change.id] ?? 0) + 1;
+        final dependentSet = graph[dep];
+        if (dependentSet != null) {
+          dependentSet.add(changeId);
+          inDegree[changeId] = inDegree[changeId]! + 1;
         }
       }
     }
 
     // Perform topological sort
-    final queue =
-        changes.where((c) => inDegree[c.id] == 0).map((c) => c.id).toList();
-    final result = <Change>[];
+    final queue = Queue<OperationId>();
 
+    // Find all nodes with no incoming edges
+    for (final entry in inDegree.entries) {
+      if (entry.value == 0) {
+        queue.add(entry.key);
+      }
+    }
+
+    final result = <Change>[];
     while (queue.isNotEmpty) {
-      final id = queue.removeAt(0);
-      // TODO(mattia): where is expensive
-      final change = changes.firstWhere((c) => c.id == id);
+      final id = queue.removeFirst();
+      final change = changeMap[id]!;
       result.add(change);
 
-      for (final dependent in graph[id]!) {
-        inDegree[dependent] = inDegree[dependent]! - 1;
-        if (inDegree[dependent] == 0) {
+      // Process all dependents
+      final dependents = graph[id]!;
+      for (final dependent in dependents) {
+        final newInDegree = inDegree[dependent]! - 1;
+        inDegree[dependent] = newInDegree;
+
+        if (newInDegree == 0) {
           queue.add(dependent);
         }
       }
