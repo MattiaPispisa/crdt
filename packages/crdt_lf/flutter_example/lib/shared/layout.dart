@@ -22,11 +22,21 @@ class AppLayout extends StatelessWidget {
     );
   }
 
-  Widget _switch() {
+  Widget _networkActions() {
     return Consumer<Network>(
       builder: (context, network, __) {
         return Row(
           children: [
+            Text('Network delay: ${network.networkDelay.inMilliseconds}ms'),
+            Slider(
+              value: network.networkDelay.inMilliseconds.toDouble(),
+              min: 0,
+              max: 2000,
+              divisions: 20,
+              onChanged: (value) {
+                network.setNetworkDelay(Duration(milliseconds: value.toInt()));
+              },
+            ),
             const Text('Sync: '),
             Switch(
               value: network.isOnline,
@@ -50,7 +60,7 @@ class AppLayout extends StatelessWidget {
       appBar: AppBar(
         leading: _leading(context),
         title: Text('CRDT LF: $example'),
-        actions: [_switch()],
+        actions: [_networkActions()],
       ),
       body: Row(
         children: [
