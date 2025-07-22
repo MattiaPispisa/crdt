@@ -1,7 +1,8 @@
 name: crdt_lf bug
 description: Create a new bug issue for crdt_lf
 title: "[crdt_lf] "
-labels: ["p:1", "pkg:crdt_lf","bug"]
+labels: ["p:1", "pkg:crdt_lf", "bug"]
+projects: ["1"]
 assignees:
   - MattiaPispisa
 
