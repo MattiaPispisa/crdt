@@ -1,10 +1,8 @@
 # CRDT
 
-<p align="center">
-  <a href="https://github.com/invertase/melos">
-    <img src="https://img.shields.io/badge/maintained%20with-melos-f700ff.svg?style=flat-square" alt="Maintained with Melos" />
-  </a>
-</p>
+![github_starts][github_starts]
+![melos_badge][melos_badge]
+![repo_size][repo_size]
 
 - [CRDT](#crdt)
   - [Packages](#packages)
@@ -20,6 +18,7 @@
 - [crdt_lf](./packages/crdt_lf/README.md)
 - [crdt_socket_sync](./packages/crdt_socket_sync/README.md)
 - [crdt_lf_devtools_extension](./packages/crdt_lf_devtools_extension/README.md)
+- [crdt_lf_hive](./packages/crdt_lf_hive/README.md)
 
 ## [Roadmap](https://github.com/users/MattiaPispisa/projects/1)
 A roadmap is available in the [project](https://github.com/users/MattiaPispisa/projects/1) page. The roadmap provides a high-level overview of the project's goals and the current status of the project.
@@ -63,3 +62,7 @@ workspace/
 
 ## Contributing
 We welcome contributions! Whether you want to:
+
+[repo_size]: https://img.shields.io/github/languages/code-size/MattiaPispisa/crdt
+[github_starts]: https://img.shields.io/github/stars/MattiaPispisa/crdt?style=flat&logo=github&color=red
+[melos_badge]: https://img.shields.io/badge/maintained%20with-melos-f700ff.svg?style=flat
