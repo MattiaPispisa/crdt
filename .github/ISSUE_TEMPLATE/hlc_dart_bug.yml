@@ -2,6 +2,7 @@ name: hlc_dart bug
 description: Create a new bug issue for hlc_dart
 title: "[hlc_dart] "
 labels: ["p:1", "pkg:hlc_dart","bug"]
+projects: ["MattiaPispisa/1"]
 assignees:
   - MattiaPispisa
 

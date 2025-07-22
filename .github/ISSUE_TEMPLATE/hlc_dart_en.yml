@@ -2,6 +2,7 @@ name: hlc_dart enhancement
 description: Create a new enhancement issue for hlc_dart
 title: "[hlc_dart] "
 labels: ["p:2", "pkg:hlc_dart","enhancement"]
+projects: ["MattiaPispisa/1"]
 assignees:
   - MattiaPispisa
 

@@ -2,6 +2,7 @@ name: plugin bug
 description: Create a new bug issue for a plugin
 title: "[plugin] "
 labels: ["p:1","bug"]
+projects: ["MattiaPispisa/1"]
 assignees:
   - MattiaPispisa
 

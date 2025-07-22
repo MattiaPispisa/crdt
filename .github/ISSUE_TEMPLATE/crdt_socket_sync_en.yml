@@ -2,6 +2,7 @@ name: crdt_socket_sync enhancement
 description: Create a new enhancement issue for crdt_socket_sync
 title: "[sync] "
 labels: ["p:2", "pkg:crdt_socket_sync","enhancement"]
+projects: ["MattiaPispisa/1"]
 assignees:
   - MattiaPispisa
 

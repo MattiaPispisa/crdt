@@ -2,6 +2,7 @@ name: plugin enhancement
 description: Create a new enhancement issue for a plugin
 title: "[plugin] "
 labels: ["p:2","enhancement"]
+projects: ["MattiaPispisa/1"]
 assignees:
   - MattiaPispisa
 

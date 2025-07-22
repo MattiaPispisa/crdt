@@ -2,6 +2,7 @@ name: workspace
 description: Create a new workspace issue
 title: "[workspace] "
 labels: ["p:3", "ws"]
+projects: ["MattiaPispisa/1"]
 assignees:
   - MattiaPispisa
 
@@ -11,6 +12,6 @@ body:
     attributes:
       label: Description
       description: A clear and concise description of what you want to do.
-      placeholder: Describe the workspace issue... Ex. Melos scripts can be enhanced with ..., .github can contains more templates, ...
+      placeholder: Describe the workspace issue... Ex. Melos scripts can be enhanced with ..., .github can contains more templates, there is no package for ...
     validations:
       required: true

@@ -2,6 +2,7 @@ name: crdt_socket_sync bug
 description: Create a new bug issue for crdt_socket_sync
 title: "[sync] "
 labels: ["p:1", "pkg:crdt_socket_sync","bug"]
+projects: ["MattiaPispisa/1"]
 assignees:
   - MattiaPispisa
 
