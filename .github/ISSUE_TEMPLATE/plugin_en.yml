@@ -1,0 +1,42 @@
+name: plugin enhancement
+description: Create a new enhancement issue for a plugin
+title: "[plugin] "
+labels: ["p:2","enhancement"]
+assignees:
+  - MattiaPispisa
+
+body:
+  - type: dropdown
+    id: plugin
+    attributes:
+      label: What plugin are you interested in?
+      multiple: true
+      options:
+        - hive
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: A clear and concise description of how you are limited by the current version of the system.
+      placeholder: Ex. I cannot do XXX ... because ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: Desired Solution
+      description: A clear and concise description of how a feature could be implemented to solve the problem.
+      placeholder: Describe your desired solution...
+    validations:
+      required: true
+
+  - type: textarea
+    id: additional
+    attributes:
+      label: More information
+      description: Any other information that might be useful.
+      placeholder: Additional context, screenshots, references, etc.

@@ -1,0 +1,16 @@
+name: workspace
+description: Create a new workspace issue
+title: "[workspace] "
+labels: ["p:3", "ws"]
+assignees:
+  - MattiaPispisa
+
+body:
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: A clear and concise description of what you want to do.
+      placeholder: Describe the workspace issue...
+    validations:
+      required: true
