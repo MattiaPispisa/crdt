@@ -11,6 +11,6 @@ body:
     attributes:
       label: Description
       description: A clear and concise description of what you want to do.
-      placeholder: Describe the workspace issue...
+      placeholder: Describe the workspace issue... Ex. Melos scripts can be enhanced with ..., .github can contains more templates, ...
     validations:
       required: true
