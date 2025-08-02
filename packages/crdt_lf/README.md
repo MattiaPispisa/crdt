@@ -155,7 +155,7 @@ Feel free to:
 
 ## Acknowledgments
 
-- [Fugue Algorithm](https://arxiv.org/abs/2005.05914)
+- [Fugue Algorithm](https://arxiv.org/abs/2305.00583)
 - [Hybrid Logical Clock](https://cse.buffalo.edu/tech-reports/2014-04.pdf)
 
 ## Packages
