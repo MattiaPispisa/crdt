@@ -17,6 +17,7 @@ class ClientSession {
     required TransportConnection connection,
     required CRDTServerRegistry serverRegistry,
     Compressor? compressor,
+    MessageCodec<Message>? messageCodec,
     List<ServerSyncPlugin> plugins = const [],
   })  : _connection = connection,
         _serverRegistry = serverRegistry,
@@ -25,10 +26,11 @@ class ClientSession {
         _messageCodec = CompressedCodec<Message>(
           PluginAwareMessageCodec.fromPlugins(
             plugins: plugins,
-            defaultCodec: JsonMessageCodec<Message>(
-              toJson: (message) => message.toJson(),
-              fromJson: Message.fromJson,
-            ),
+            defaultCodec: messageCodec ??
+                JsonMessageCodec<Message>(
+                  toJson: (message) => message.toJson(),
+                  fromJson: Message.fromJson,
+                ),
           ),
           compressor: compressor ?? NoCompression.instance,
         ) {

@@ -21,12 +21,14 @@ class WebSocketServer extends CRDTSocketServer {
     required Future<HttpServer> Function() serverFactory,
     required CRDTServerRegistry serverRegistry,
     Compressor? compressor,
+    MessageCodec<Message>? messageCodec,
     super.plugins,
   })  : _serverFactory = serverFactory,
         _serverTransformer = _DefaultWebSocketTransformerWrapper(),
         _compressor = compressor ?? NoCompression.instance,
         _serverEventController = StreamController<ServerEvent>.broadcast(),
-        _serverRegistry = serverRegistry;
+        _serverRegistry = serverRegistry,
+        _messageCodec = messageCodec;
 
   /// Constructor for testing
   WebSocketServer.test({
@@ -34,13 +36,15 @@ class WebSocketServer extends CRDTSocketServer {
     required CRDTServerRegistry serverRegistry,
     Compressor? compressor,
     WebSocketServerTransformer? serverTransformer,
+    MessageCodec<Message>? messageCodec,
     super.plugins,
   })  : _serverFactory = serverFactory,
         _serverTransformer =
             serverTransformer ?? _DefaultWebSocketTransformerWrapper(),
         _compressor = compressor ?? NoCompression.instance,
         _serverEventController = StreamController<ServerEvent>.broadcast(),
-        _serverRegistry = serverRegistry;
+        _serverRegistry = serverRegistry,
+        _messageCodec = messageCodec;
 
   /// The document registry
   final CRDTServerRegistry _serverRegistry;
@@ -74,6 +78,9 @@ class WebSocketServer extends CRDTSocketServer {
 
   /// Compressor to use
   final Compressor _compressor;
+
+  /// Message codec to use
+  final MessageCodec<Message>? _messageCodec;
 
   /// Start the server
   ///
@@ -190,6 +197,7 @@ class WebSocketServer extends CRDTSocketServer {
       serverRegistry: _serverRegistry,
       compressor: _compressor,
       plugins: plugins,
+      messageCodec: _messageCodec,
     );
 
     _sessions[sessionId] = session;

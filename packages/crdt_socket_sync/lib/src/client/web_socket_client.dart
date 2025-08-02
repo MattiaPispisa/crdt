@@ -17,6 +17,7 @@ class WebSocketClient extends CRDTSocketClient {
     required this.document,
     required this.author,
     Compressor? compressor,
+    MessageCodec<Message>? messageCodec,
     super.plugins,
   })  : _messageController = StreamController<Message>.broadcast(),
         _connectionStatusController =
@@ -27,10 +28,11 @@ class WebSocketClient extends CRDTSocketClient {
     _messageCodec = CompressedCodec<Message>(
       PluginAwareMessageCodec.fromPlugins(
         plugins: plugins,
-        defaultCodec: JsonMessageCodec<Message>(
-          toJson: (message) => message.toJson(),
-          fromJson: Message.fromJson,
-        ),
+        defaultCodec: messageCodec ??
+            JsonMessageCodec<Message>(
+              toJson: (message) => message.toJson(),
+              fromJson: Message.fromJson,
+            ),
       ),
       compressor: compressor ?? NoCompression.instance,
     );

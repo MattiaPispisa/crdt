@@ -1,3 +1,9 @@
+## [Unreleased]
+
+### Added
+- Feature: add `messageCodec` parameter to `WebSocketServer` and `WebSocketClient`
+- Feature: `JsonMessageCodec` now supports `toEncodable` and `reviver` parameters
+
 ## [0.2.0] - 2025-06-26
 
 **Breaking changes**
