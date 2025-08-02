@@ -212,7 +212,7 @@ class ClientSession {
           );
 
         case MessageType.change:
-          return _handleChangeMessage(message as ChangeMessage);
+          return await _handleChangeMessage(message as ChangeMessage);
 
         case MessageType.documentStatusRequest:
           return await _handleDocumentStatusRequest(
@@ -242,8 +242,9 @@ class ClientSession {
   /// Handle handshake
   Future<void> _handleHandshakeRequest(HandshakeRequestMessage message) async {
     final documentId = message.documentId;
+    final hasDocument = await _serverRegistry.hasDocument(documentId);
 
-    if (!_serverRegistry.hasDocument(documentId)) {
+    if (!hasDocument) {
       // send error message if the document does not exist
       return sendMessage(
         Message.error(
@@ -261,8 +262,8 @@ class ClientSession {
       plugin.onDocumentRegistered(this, documentId);
     }
 
-    final document = _serverRegistry.getDocument(documentId)!;
-    final snapshot = _serverRegistry.getLatestSnapshot(documentId);
+    final document = (await _serverRegistry.getDocument(documentId))!;
+    final snapshot = await _serverRegistry.getLatestSnapshot(documentId);
 
     late List<Change> changes;
 
@@ -295,10 +296,12 @@ class ClientSession {
     );
   }
 
-  void _handleChangeMessage(ChangeMessage message) {
+  Future<void> _handleChangeMessage(ChangeMessage message) async {
     final documentId = message.documentId;
 
-    if (!_serverRegistry.hasDocument(documentId)) {
+    final hasDocument = await _serverRegistry.hasDocument(documentId);
+
+    if (!hasDocument) {
       _addSessionEvent(
         SessionEventGeneric(
           sessionId: id,
@@ -323,7 +326,8 @@ class ClientSession {
     }
 
     try {
-      final applied = _serverRegistry.applyChange(documentId, message.change);
+      final applied =
+          await _serverRegistry.applyChange(documentId, message.change);
 
       if (applied) {
         _addSessionEvent(
@@ -359,8 +363,9 @@ class ClientSession {
     DocumentStatusRequestMessage message,
   ) async {
     final documentId = message.documentId;
+    final hasDocument = await _serverRegistry.hasDocument(documentId);
 
-    if (!_serverRegistry.hasDocument(documentId)) {
+    if (!hasDocument) {
       // send error message if the document does not exist
       _addSessionEvent(
         SessionEventGeneric(
@@ -383,8 +388,9 @@ class ClientSession {
       _subscribedDocuments.add(documentId);
     }
 
-    final snapshot = _serverRegistry.getLatestSnapshot(documentId);
-    final changes = _serverRegistry.getDocument(documentId)!.exportChanges();
+    final snapshot = await _serverRegistry.getLatestSnapshot(documentId);
+    final changes =
+        (await _serverRegistry.getDocument(documentId))!.exportChanges();
 
     final response = Message.documentStatus(
       documentId: documentId,

@@ -373,18 +373,23 @@ class WebSocketServer extends CRDTSocketServer {
   }
 
   @override
-  void dispose() {
-    stop();
-    _serverEventController.close();
+  Future<void> dispose() async {
+    await stop();
+    unawaited(_serverEventController.close());
 
     for (final plugin in plugins) {
       plugin.dispose();
     }
 
+    final documentIds = await _serverRegistry.documentIds;
+
     // Free the document registry resources
-    for (final documentId in _serverRegistry.documentIds) {
+    for (final documentId in documentIds) {
       try {
-        _serverRegistry.getDocument(documentId)?.dispose();
+        final document = await _serverRegistry.getDocument(documentId);
+        if (document != null) {
+          document.dispose();
+        }
       } catch (e) {
         _addServerEvent(
           ServerEvent(

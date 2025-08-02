@@ -1,5 +1,9 @@
 ## [Unreleased]
 
+**Breaking changes**
+- `CRDTServerRegistry.addDocument` now only takes a `documentId` parameter
+- `CRDTServerRegistry` methods now return a `Future`
+
 ### Added
 - Feature: add `messageCodec` parameter to `WebSocketServer` and `WebSocketClient`
 - Feature: `JsonMessageCodec` now supports `toEncodable` and `reviver` parameters
