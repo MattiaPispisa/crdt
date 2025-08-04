@@ -6,5 +6,13 @@
       "[$1](https://github.com/MattiaPispisa/crdt/issues/$1)"
     ],
     "description": "Insert Markdown link to GitHub issue"
+  },
+  "GitHub Compare Link": {
+    "prefix": "github_compare",
+    "scope": "markdown",
+    "body": [
+      "https://github.com/MattiaPispisa/crdt/compare/$1...$2"
+    ],
+    "description": "Insert Markdown link to GitHub compare"
   }
 }

@@ -1,9 +1,12 @@
 # CRDT LF
 
 [![crdt_lf_badge][crdt_lf_badge]](https://pub.dev/packages/crdt_lf)
+[![pub points][pub_points]][pub_link]
+[![pub likes][pub_likes]][pub_link]
 [![codecov][codecov_badge]][codecov_link]
 [![ci_badge][ci_badge]][ci_link]
 [![License: MIT][license_badge]][license_link]
+[![pub publisher][pub_publisher]][pub_publisher_link]
 
 - [CRDT LF](#crdt-lf)
   - [Features](#features)
@@ -17,6 +20,7 @@
   - [Architecture](#architecture)
     - [CRDTDocument](#crdtdocument)
     - [Handlers](#handlers)
+      - [Working with Complex Types](#working-with-complex-types)
     - [DAG](#dag)
     - [Change](#change)
     - [Frontiers](#frontiers)
@@ -121,6 +125,67 @@ print(list.value); // Prints "[Buy milk]"
 
 Every handler can be found in the [handlers](https://github.com/MattiaPispisa/crdt/tree/main/packages/crdt_lf/lib/src/handler) folder.
 
+#### Working with Complex Types
+
+When using `CRDTListHandler<T>` or `CRDTMapHandler<T>` with complex object types (e.g., your own custom classes) for `T`, it's crucial to understand how data is managed.
+
+The `value` of your complex object is directly embedded within the `Change`'s payload. This has two important implications:
+
+1.  **Serialization**: If you plan to persist these `Change`s (e.g., using `crdt_lf_hive`) or send them over a network, you **must** have a strategy to serialize and deserialize your custom objects. The raw object cannot be stored or transmitted as-is. A common approach is to convert your object to a `Map<String, dynamic>` (e.g., by implementing `toJson()` and a `fromJson()` factory).
+
+2.  **Immutability and Value Semantics**: When a `Change` is created, it captures the **state of the `value` at that specific moment**. If you later mutate the original object, the `Change` will still hold the old state. This can lead to unexpected behavior. It is highly recommended to treat your complex objects as **immutable**. When you need to modify an object, create a new instance with the updated values instead of mutating the existing one. This ensures that each `Change` is a predictable and self-contained snapshot of the operation.
+
+**Example with a custom class:**
+
+```dart
+class MyData {
+  final String name;
+  final int count;
+
+  MyData(this.name, this.count);
+
+  // You need a way to serialize
+  Map<String, dynamic> toJson() => {'name': name, 'count': count};
+
+  // And a way to deserialize
+  factory MyData.fromJson(Map<String, dynamic> json) {
+    return MyData(json['name'], json['count']);
+  }
+}
+
+// When using with a handler
+final list = CRDTListHandler<MyData>(doc, 'my-data-list');
+
+// GOOD: Create a new instance for the change
+final data = MyData('item1', 1);
+list.insert(0, data);
+
+// BAD: Mutating the object after insertion
+// This will NOT be reflected in the CRDT history
+// data.count = 2; // Avoid this
+
+// Instead, for updates, create a new instance
+final updatedData = MyData('item1', 2);
+list.update(0, updatedData);
+```
+
+**Alternative Approach: Store Raw Data**
+
+A more robust pattern is to always store raw, serializable data (like `Map<String, dynamic>`) inside the handler. This forces serialization at the system's boundary and avoids accidental mutation issues.
+
+```dart
+// 1. Declare the handler with a raw type
+final rawList = CRDTListHandler<Map<String, dynamic>>(doc, 'my-raw-list');
+
+// 2. Serialize before inserting/updating
+final data = MyData('item2', 1);
+rawList.insert(0, data.toJson()); 
+
+// 3. Deserialize when reading the value
+final myDataList = rawList.value.map((map) => MyData.fromJson(map)).toList();
+print(myDataList.first.name); // Prints "item2"
+```
+
 ### DAG
 A Directed Acyclic Graph that maintains the causal ordering of operations.
 
@@ -173,3 +238,8 @@ Other bricks of the crdt "system" are:
 [codecov_link]: https://app.codecov.io/gh/MattiaPispisa/crdt/tree/main/packages/crdt_lf
 [ci_badge]: https://img.shields.io/github/actions/workflow/status/MattiaPispisa/crdt/main.yaml
 [ci_link]: https://github.com/MattiaPispisa/crdt/actions/workflows/main.yaml
+[pub_points]: https://img.shields.io/pub/points/crdt_lf
+[pub_link]: https://pub.dev/packages/crdt_lf
+[pub_publisher]: https://img.shields.io/pub/publisher/crdt_lf
+[pub_publisher_link]: https://pub.dev/packages?q=publisher%3Amattiapispisa.it
+[pub_likes]: https://img.shields.io/pub/likes/crdt_lf

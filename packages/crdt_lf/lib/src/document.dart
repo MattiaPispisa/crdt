@@ -339,6 +339,15 @@ class CRDTDocument {
   /// Returns a list of [Change]s sorted such that
   /// dependencies come before dependents.
   List<Change> _topologicalSort(List<Change> changes) {
+    final result = <Change>[];
+
+    if (changes.isEmpty) {
+      return result;
+    }
+
+    // Create a map for O(1) lookup
+    final changeMap = <OperationId, Change>{};
+
     // Build a graph of dependencies
     final graph = <OperationId, Set<OperationId>>{};
     final inDegree = <OperationId, int>{};
@@ -346,6 +355,7 @@ class CRDTDocument {
     for (final change in changes) {
       graph[change.id] = {};
       inDegree[change.id] = 0;
+      changeMap[change.id] = change;
     }
 
     for (final change in changes) {
@@ -358,15 +368,13 @@ class CRDTDocument {
       }
     }
 
-    // Perform topological sort
+    // Perform topological sort (Kahn's algorithm)
     final queue =
         changes.where((c) => inDegree[c.id] == 0).map((c) => c.id).toList();
-    final result = <Change>[];
 
     while (queue.isNotEmpty) {
       final id = queue.removeAt(0);
-      // TODO(mattia): where is expensive
-      final change = changes.firstWhere((c) => c.id == id);
+      final change = changeMap[id]!;
       result.add(change);
 
       for (final dependent in graph[id]!) {

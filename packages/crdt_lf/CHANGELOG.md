@@ -1,7 +1,9 @@
-## [Unreleased]
+## [1.0.0] - Unreleased
 
 ### Changed
 - chore: setup .github/workflows and update coverage links [33](https://github.com/MattiaPispisa/crdt/issues/33)
+- chore: update readme with recommended approach for complex handler types
+- chore: update topological sort implementation [3](https://github.com/MattiaPispisa/crdt/issues/3)
 
 ### Fixed
 - Fix readme reference links
