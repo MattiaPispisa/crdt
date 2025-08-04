@@ -17,6 +17,7 @@
     - [Flutter Distributed Collaboration Example](#flutter-distributed-collaboration-example)
   - [Sync](#sync)
   - [Persistence](#persistence)
+  - [Benchmarks](#benchmarks)
   - [Architecture](#architecture)
     - [CRDTDocument](#crdtdocument)
     - [Handlers](#handlers)
@@ -94,6 +95,21 @@ A flutter example is available in the [flutter_example](https://github.com/Matti
 ## Persistence
 Persistence is not directly handled in this library but there are some out of the box solutions:
 - [crdt_lf_hive](https://pub.dev/packages/crdt_lf_hive): adapters and utils for persist data using [Hive](https://pub.dev/packages/hive).
+
+## Benchmarks
+
+This package includes a suite of benchmarks to ensure performance and stability. You can find the latest results [here](https://github.com/MattiaPispisa/crdt/tree/main/packages/crdt_lf/benchmark/results.md).
+
+To run the benchmarks yourself, execute the following script from the `packages/crdt_lf` directory:
+
+```sh
+./benchmark/run.sh
+```
+or run:
+
+```sh
+melos run benchmark
+```
 
 ## Architecture
 
