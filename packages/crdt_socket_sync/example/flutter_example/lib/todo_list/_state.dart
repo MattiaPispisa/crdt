@@ -11,7 +11,7 @@ class TodoListState extends ChangeNotifier {
   TodoListState._({
     required CRDTDocument document,
     required WebSocketClient client,
-    required CRDTListHandler<String> handler,
+    required CRDTListHandler<Map<String, dynamic>> handler,
     required ClientAwarenessPlugin awareness,
   }) : _handler = handler,
        _client = client,
@@ -31,7 +31,10 @@ class TodoListState extends ChangeNotifier {
     required UserState user,
   }) {
     final document = CRDTDocument(peerId: documentId);
-    final handler = CRDTListHandler<String>(document, 'todo-list');
+    final handler = CRDTListHandler<Map<String, dynamic>>(
+      document,
+      'todo-list',
+    );
     final awareness = ClientAwarenessPlugin(
       throttleDuration: const Duration(milliseconds: 100),
       initialMetadata: {'username': user.username, 'surname': user.surname},
@@ -53,7 +56,7 @@ class TodoListState extends ChangeNotifier {
   // ignore: unused_field
   final CRDTDocument _document;
   final WebSocketClient _client;
-  final CRDTListHandler<String> _handler;
+  final CRDTListHandler<Map<String, dynamic>> _handler;
   final ClientAwarenessPlugin _awareness;
 
   DocumentAwareness get awareness => _awareness.awareness;
@@ -79,7 +82,18 @@ class TodoListState extends ChangeNotifier {
   ConnectionStatus get connectionStatusValue => _client.connectionStatusValue;
 
   void addTodo(String todo) {
-    _handler.insert(_handler.length, todo);
+    _handler.insert(_handler.length, Todo(text: todo).toJson());
+    notifyListeners();
+  }
+
+  void toggleTodo(int index) {
+    final todo = _handler.value[index];
+    _handler.update(
+      index,
+      Todo.fromJson(
+        todo,
+      ).copyWith(isDone: !Todo.fromJson(todo).isDone).toJson(),
+    );
     notifyListeners();
   }
 
@@ -95,12 +109,29 @@ class TodoListState extends ChangeNotifier {
     });
   }
 
-  List<String> get todos => _handler.value;
+  List<Todo> get todos => _handler.value.map(Todo.fromJson).toList();
 
   @override
   void dispose() {
     _connectionStatusSubscription?.cancel();
     _client.dispose();
     super.dispose();
+  }
+}
+
+class Todo {
+  const Todo({required this.text, this.isDone = false});
+
+  final String text;
+  final bool isDone;
+
+  factory Todo.fromJson(Map<String, dynamic> json) {
+    return Todo(text: json['text'] as String, isDone: json['isDone'] as bool);
+  }
+
+  Map<String, dynamic> toJson() => {'text': text, 'isDone': isDone};
+
+  Todo copyWith({String? text, bool? isDone}) {
+    return Todo(text: text ?? this.text, isDone: isDone ?? this.isDone);
   }
 }

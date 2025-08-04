@@ -1,7 +1,9 @@
 {
-  "dart.flutterSdkPath": ".fvm/versions/3.29.1",
+  "dart.flutterSdkPath": ".fvm/versions/3.32.8",
   "cSpell.words": [
     "crdt",
-    "pubspec"
+    "Kleppmann",
+    "pubspec",
+    "Weidner"
   ]
 }

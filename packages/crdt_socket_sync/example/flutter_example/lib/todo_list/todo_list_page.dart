@@ -9,6 +9,7 @@ import 'package:flutter_example/user/_state.dart';
 import 'package:provider/provider.dart';
 
 import '_state.dart';
+import '_todo.dart';
 
 class TodoListPage extends StatelessWidget {
   const TodoListPage({super.key, required this.documentId});
@@ -107,23 +108,8 @@ class _TodoListContent extends StatelessWidget {
     return ListView.builder(
       itemCount: state.todos.length,
       itemBuilder: (context, index) {
-        final todoText = state.todos[index];
-
-        return _item(context, todoText, index);
+        return TodoItem(todo: state.todos[index], index: index);
       },
-    );
-  }
-
-  Widget _item(BuildContext context, String todo, int index) {
-    return ListTile(
-      title: Text(todo),
-      trailing: IconButton(
-        icon: const Icon(Icons.delete_outline),
-        tooltip: 'Delete Todo',
-        onPressed: () {
-          context.read<TodoListState>().removeTodo(index);
-        },
-      ),
     );
   }
 
