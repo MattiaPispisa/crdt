@@ -1,5 +1,7 @@
 import 'dart:math';
 
+import 'package:hlc_dart/src/exception.dart';
+
 /// Hybrid Logical Clock implementation based on the paper
 /// [Logical Physical Clocks and Consistent Snapshots in Globally Distributed Databases](https://cse.buffalo.edu/tech-reports/2014-04.pdf)
 ///
@@ -14,7 +16,9 @@ class HybridLogicalClock with Comparable<HybridLogicalClock> {
   HybridLogicalClock({
     required int l,
     required int c,
-  })  : _c = c,
+  })  : assert(l >= 0, 'l must be non-negative'),
+        assert(c >= 0, 'c must be non-negative'),
+        _c = c,
         _l = l;
 
   /// Creates a new [HybridLogicalClock] initialized to zero
@@ -28,6 +32,14 @@ class HybridLogicalClock with Comparable<HybridLogicalClock> {
     return HybridLogicalClock(
       l: DateTime.now().millisecondsSinceEpoch,
       c: 0,
+    );
+  }
+
+  /// Creates a new [HybridLogicalClock] from another [HybridLogicalClock]
+  factory HybridLogicalClock.fromHlc(HybridLogicalClock other) {
+    return HybridLogicalClock(
+      l: other.l,
+      c: other.c,
     );
   }
 
@@ -92,6 +104,14 @@ class HybridLogicalClock with Comparable<HybridLogicalClock> {
   /// Updates the [HybridLogicalClock] based on
   /// the received [HybridLogicalClock] and the current physical time
   ///
+  /// [maxDrift] is the maximum allowed drift between the received clock
+  /// and the current physical time.
+  ///
+  /// If the drift is greater than [maxDrift],
+  /// a [ClockDriftException] is thrown.
+  ///
+  /// If [maxDrift] is not provided, no check is performed.
+  ///
   /// ```dart
   /// l' := l
   /// l := max(l', l_m, pt)
@@ -100,7 +120,20 @@ class HybridLogicalClock with Comparable<HybridLogicalClock> {
   /// else if (l = l_m) then c := c_m + 1
   /// else c := 0
   /// ```
-  void receiveEvent(int physicalTime, HybridLogicalClock received) {
+  void receiveEvent(
+    int physicalTime,
+    HybridLogicalClock received, {
+    Duration? maxDrift,
+  }) {
+    if (maxDrift != null &&
+        (received.l - physicalTime) > maxDrift.inMilliseconds) {
+      throw ClockDriftException(
+        'Received clock is too far in the future. '
+        'Max drift is ${maxDrift.inMilliseconds}ms,'
+        ' but difference was ${received.l - physicalTime}ms.',
+      );
+    }
+
     final lOld = _l;
     _l = max(max(lOld, received._l), physicalTime);
 
@@ -115,6 +148,20 @@ class HybridLogicalClock with Comparable<HybridLogicalClock> {
     }
   }
 
+  /// Returns a new clock instance updated for a local event.
+  /// Does not modify the original clock.
+  ///
+  /// [localEvent] can be risk when used in different part of the system
+  /// because it mute the original clock.
+  ///
+  /// A more slow but safer approach is to use [nextTimestamp]
+  ///
+  /// Internally it uses [copy] to create a new instance and then
+  /// calls [localEvent] on the new instance.
+  HybridLogicalClock nextTimestamp(int physicalTime) {
+    return copy()..localEvent(physicalTime);
+  }
+
   /// Checks if this [HybridLogicalClock] happened
   /// before another [HybridLogicalClock]
   ///
@@ -123,6 +170,20 @@ class HybridLogicalClock with Comparable<HybridLogicalClock> {
   /// (e hb f => l.e < l.f || (l.e = l.f && c.e < c.f))
   bool happenedBefore(HybridLogicalClock other) {
     return compareTo(other) < 0;
+  }
+
+  /// Returns a new clock instance updated
+  /// after receiving an event from another node.
+  ///
+  /// [receiveEvent] can be risk when used in different part of the system
+  /// because it mute the original clock.
+  ///
+  /// A more slow but safer approach is to use [merge]
+  ///
+  /// Internally it uses [copy] to create a new instance and then
+  /// calls [receiveEvent] on the new instance.
+  HybridLogicalClock merge(int physicalTime, HybridLogicalClock received) {
+    return copy()..receiveEvent(physicalTime, received);
   }
 
   /// Checks if this [HybridLogicalClock] happened
@@ -153,6 +214,9 @@ class HybridLogicalClock with Comparable<HybridLogicalClock> {
     final maskedC = _c & 0xFFFF;
     return (maskedL << 16) | maskedC;
   }
+
+  /// Returns the logical/physical part of the timestamp as a [DateTime] object.
+  DateTime get asDateTime => DateTime.fromMillisecondsSinceEpoch(l);
 
   /// Returns a string representation of this [HybridLogicalClock]
   @override

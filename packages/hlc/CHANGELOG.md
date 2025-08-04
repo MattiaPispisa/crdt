@@ -1,7 +1,14 @@
-## [Unreleased]
+## [1.0.0]
+
+### Added
+
+- Can set a `maxDrift` for `receiveEvent` (added `ClockDriftException`)
+- `asDateTime` to get the logical/physical part of the timestamp as a `DateTime` object
+- `nextTimestamp` and `merge` to update the clock without mutating the original instance
 
 ### Changed
 - chore: setup .github/workflows and update coverage links [33](https://github.com/MattiaPispisa/crdt/issues/33)
+- Assert non-negative logical time and counter
 
 ## [0.3.1] - 2025-06-26
 

@@ -3,6 +3,20 @@ import 'package:test/test.dart';
 
 void main() {
   group('HybridLogicalClock', () {
+    test('throws AssertionError for negative logical time', () {
+      expect(
+        () => HybridLogicalClock(l: -1, c: 0),
+        throwsA(isA<AssertionError>()),
+      );
+    });
+
+    test('throws AssertionError for negative counter', () {
+      expect(
+        () => HybridLogicalClock(l: 0, c: -1),
+        throwsA(isA<AssertionError>()),
+      );
+    });
+
     test('initialize creates a zero HLC', () {
       final hlc = HybridLogicalClock.initialize();
       expect(hlc.l, equals(0));
@@ -15,6 +29,13 @@ void main() {
 
       expect(hlc.l, greaterThanOrEqualTo(now));
       expect(hlc.c, equals(0));
+    });
+
+    test('fromHlc creates a copy of the input HLC', () {
+      final hlc = HybridLogicalClock(l: 1000, c: 5);
+      final copy = HybridLogicalClock.fromHlc(hlc);
+      expect(copy.l, equals(hlc.l));
+      expect(copy.c, equals(hlc.c));
     });
 
     test('fromInt64 correctly parses 64-bit integer', () {
@@ -235,6 +256,113 @@ void main() {
         expect(hlc1 == hlc2, isTrue);
         expect(hlc1 == hlc3, isFalse);
       });
+    });
+
+    group('nextTimestamp', () {
+      test('creates a new instance', () {
+        final hlc = HybridLogicalClock(l: 1000, c: 5);
+        final next = hlc.nextTimestamp(500);
+        expect(identical(hlc, next), isFalse);
+      });
+
+      test('applies localEvent logic', () {
+        final hlc = HybridLogicalClock(l: 1000, c: 5);
+        final next = hlc.nextTimestamp(500);
+        expect(next.l, equals(1000));
+        expect(next.c, equals(6));
+      });
+
+      test('does not modify the original instance', () {
+        final hlc = HybridLogicalClock(l: 1000, c: 5)..nextTimestamp(500);
+        expect(hlc.l, equals(1000));
+        expect(hlc.c, equals(5));
+      });
+    });
+
+    group('merge', () {
+      test('creates a new instance', () {
+        final hlc1 = HybridLogicalClock(l: 1000, c: 5);
+        final hlc2 = HybridLogicalClock(l: 1000, c: 3);
+        final merged = hlc1.merge(500, hlc2);
+        expect(identical(hlc1, merged), isFalse);
+      });
+
+      test('applies receiveEvent logic', () {
+        final hlc1 = HybridLogicalClock(l: 1000, c: 5);
+        final hlc2 = HybridLogicalClock(l: 1000, c: 3);
+        final merged = hlc1.merge(500, hlc2);
+        expect(merged.l, equals(1000));
+        expect(merged.c, equals(6));
+      });
+
+      test('does not modify the original instance', () {
+        final hlc1 = HybridLogicalClock(l: 1000, c: 5);
+        final hlc2 = HybridLogicalClock(l: 1000, c: 3);
+        hlc1.merge(500, hlc2);
+        expect(hlc1.l, equals(1000));
+        expect(hlc1.c, equals(5));
+      });
+    });
+
+    group('receiveEvent with maxDrift', () {
+      test('throws ClockDriftException if drift is too high', () {
+        final hlc1 = HybridLogicalClock.now();
+        final hlc2 = HybridLogicalClock(
+          l: hlc1.l + 1000,
+          c: 0,
+        );
+        expect(
+          () => hlc1.receiveEvent(
+            hlc1.l,
+            hlc2,
+            maxDrift: const Duration(milliseconds: 500),
+          ),
+          throwsA(isA<ClockDriftException>()),
+        );
+      });
+
+      test('does not throw if drift is within limits', () {
+        final hlc1 = HybridLogicalClock.now();
+        final hlc2 = HybridLogicalClock(
+          l: hlc1.l + 100,
+          c: 0,
+        );
+        expect(
+          () => hlc1.receiveEvent(
+            hlc1.l,
+            hlc2,
+            maxDrift: const Duration(milliseconds: 500),
+          ),
+          returnsNormally,
+        );
+      });
+
+      test('exception contains correct message', () {
+        final hlc1 = HybridLogicalClock.now();
+        final hlc2 = HybridLogicalClock(l: hlc1.l + 1000, c: 0);
+        try {
+          hlc1.receiveEvent(
+            hlc1.l,
+            hlc2,
+            maxDrift: const Duration(milliseconds: 500),
+          );
+        } catch (e) {
+          expect(e, isA<ClockDriftException>());
+          expect(
+            e.toString(),
+            contains('Received clock is too far in the future'),
+          );
+        }
+      });
+    });
+
+    test('asDateTime returns correct DateTime object', () {
+      final now = DateTime.now();
+      final hlc = HybridLogicalClock(l: now.millisecondsSinceEpoch, c: 5);
+      expect(
+        hlc.asDateTime.millisecondsSinceEpoch,
+        equals(now.millisecondsSinceEpoch),
+      );
     });
   });
 }

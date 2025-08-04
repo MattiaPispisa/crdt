@@ -1,9 +1,12 @@
 # Hybrid Logical Clock
 
 [![hlc_dart_badge][hlc_dart_badge]](https://pub.dev/packages/hlc_dart)
+[![pub points][pub_points]][pub_link]
+[![pub likes][pub_likes]][pub_link]
 [![codecov][codecov_badge]][codecov_link]
 [![ci_badge][ci_badge]][ci_link]
 [![License: MIT][license_badge]][license_link]
+[![pub publisher][pub_publisher]][pub_publisher_link]
 
 - [Hybrid Logical Clock](#hybrid-logical-clock)
   - [Features](#features)
@@ -32,6 +35,8 @@ This library provides a Hybrid Logical Clock (HLC) implementation that combines 
 - Serialization to/from 64-bit integers
 - Thread-safe implementation
 - Zero dependencies
+- Drift detection
+- Mutable and immutable methods for every needed operation
 
 ## Getting Started
 
@@ -90,3 +95,8 @@ Other bricks of the crdt "system" are:
 [hlc_dart_badge]: https://img.shields.io/pub/v/hlc_dart.svg
 [codecov_badge]: https://img.shields.io/codecov/c/github/MattiaPispisa/crdt/main?flag=hlc_dart&logo=codecov
 [codecov_link]: https://app.codecov.io/gh/MattiaPispisa/crdt/tree/main/packages/hlc
+[pub_points]: https://img.shields.io/pub/points/hlc_dart
+[pub_link]: https://pub.dev/packages/hlc_dart
+[pub_publisher]: https://img.shields.io/pub/publisher/hlc_dart
+[pub_publisher_link]: https://pub.dev/packages?q=publisher%3Amattiapispisa.it
+[pub_likes]: https://img.shields.io/pub/likes/hlc_dart
