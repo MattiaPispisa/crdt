@@ -12,16 +12,17 @@ const _kDefaultPort = 8080;
 final _kDefaultHost = InternetAddress.anyIPv4.host;
 final _kDocumentPeerId = PeerId.parse('30669830-9256-4320-9ed5-f1860cd47d9f');
 
+late HiveServerRegistry _registry;
+late WebSocketServer _server;
+
 Future<void> run({
   int? port,
   String? host,
   List<ServerSyncPlugin>? plugins,
-  CRDTServerRegistry? serverRegistry,
   bool verbose = true,
 }) async {
-  final logger = EnLogger(defaultPrefixFormat: PrefixFormat.snakeSquare());
-  if (verbose) {
-    logger.addHandler(
+  final logger = EnLogger(defaultPrefixFormat: PrefixFormat.snakeSquare())
+    ..addHandler(
       PrinterHandler.custom(
         logCallback: (
           String message, {
@@ -37,68 +38,73 @@ Future<void> run({
         },
       ),
     );
-  }
 
   Hive.init(_kDefaultDbLocation);
 
-  final registry =
-      serverRegistry ??
-      await HiveServerRegistry.init(
-        logger: logger.getConfiguredInstance(prefix: 'HiveServerRegistry'),
-      );
-  await _setupDocument(registry);
+  _registry = await HiveServerRegistry.init(
+    logger: logger.getConfiguredInstance(prefix: 'HiveServerRegistry'),
+  );
 
-  final server = WebSocketServer(
+  await _setupDocument();
+
+  if (verbose) {
+    await _registry.showPersistence();
+  }
+
+  _server = WebSocketServer(
     serverFactory:
         () => HttpServer.bind(host ?? _kDefaultHost, port ?? _kDefaultPort),
-    serverRegistry: registry,
+    serverRegistry: _registry,
     plugins: plugins ?? [ServerAwarenessPlugin()],
   );
 
-  _setupSigintHandler(
-    server: server,
-    logger: logger.getConfiguredInstance(prefix: 'Bin'),
-  );
+  _setupSigintHandler(logger: logger.getConfiguredInstance(prefix: 'Bin'));
 
   await _startServer(
     logger: logger.getConfiguredInstance(prefix: 'WebSocketServer'),
-    server: server,
   );
 }
 
-Future<void> _setupDocument(CRDTServerRegistry registry) async {
+/// setup a document with id [_kDocumentPeerId] and register a handler for the todo list.
+///
+/// The same handler is used across all sync examples.
+Future<void> _setupDocument() async {
   final documentId = _kDocumentPeerId.toString();
-  if (await registry.hasDocument(documentId)) {
-    return;
+  final hasDocument = await _registry.hasDocument(documentId);
+
+  if (!hasDocument) {
+    await _registry.addDocument(documentId);
   }
 
-  await registry.addDocument(documentId);
+  final document = (await _registry.getDocument(documentId))!;
+  document.registerHandler(
+    CRDTListHandler<Map<String, dynamic>>(document, 'todo-list'),
+  );
 }
 
-void _setupSigintHandler({
-  required WebSocketServer server,
-  required EnLogger logger,
-}) {
+void _setupSigintHandler({required EnLogger logger}) {
   ProcessSignal.sigint.watch().listen((signal) async {
     logger.info('\n⏹️  Received SIGINT, shutting down gracefully...');
-    await server.stop();
+    await _server.stop();
+    await _registry.close();
     logger.info('✅ Server stopped.');
     exit(0);
   });
 }
 
-Future<void> _startServer({
-  required EnLogger logger,
-  required WebSocketServer server,
-}) async {
+Future<void> _startServer({required EnLogger logger}) async {
   try {
-    server.serverEvents.listen((event) {
+    _server.serverEvents.listen((event) {
+      if (event.type == ServerEventType.clientPingRequest) {
+        // ignore ping requests just to not spam the logs
+        return;
+      }
       logger.info('➡ Server event: $event');
     });
 
-    await server.start();
+    await _server.start();
     logger.info('✅ CRDT WebSocket Server started successfully!');
-    logger.info('📡 Listening on ${server.host}:${server.port}');
+    logger.info('📡 Listening on ${_server.host}:${_server.port}');
     logger.info('💡 Press Ctrl+C to stop the server');
 
     // Keep the server running indefinitely

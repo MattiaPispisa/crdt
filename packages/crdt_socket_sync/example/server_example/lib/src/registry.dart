@@ -7,7 +7,8 @@ import 'package:hive/hive.dart';
 import 'package:en_logger/en_logger.dart';
 
 const _kDocumentsBox = 'documents';
-const _kDefaultSnapshotInterval = Duration(minutes: 5);
+const _kDefaultSnapshotInterval = Duration(minutes: 2);
+const _kDefaultMinChangesForSnapshot = 10;
 
 /// A server-side CRDT document registry that uses Hive for persistence.
 ///
@@ -32,10 +33,16 @@ const _kDefaultSnapshotInterval = Duration(minutes: 5);
 class HiveServerRegistry extends CRDTServerRegistry {
   final Map<String, _CrdtDocumentRegistryItem> _documents;
   final Duration _snapshotInterval;
+  final int _minChangesForSnapshot;
   final EnLogger _logger;
   Timer? _snapshotTimer;
 
-  HiveServerRegistry._(this._documents, this._snapshotInterval, this._logger);
+  HiveServerRegistry._(
+    this._documents,
+    this._snapshotInterval,
+    this._minChangesForSnapshot,
+    this._logger,
+  );
 
   /// Initializes the registry by loading all document IDs from a dedicated Hive box.
   ///
@@ -45,6 +52,7 @@ class HiveServerRegistry extends CRDTServerRegistry {
   /// It also starts a periodic timer to create snapshots for loaded documents.
   static Future<HiveServerRegistry> init({
     Duration snapshotInterval = _kDefaultSnapshotInterval,
+    int minChangesForSnapshot = _kDefaultMinChangesForSnapshot,
     required EnLogger logger,
   }) async {
     logger.info('Initializing HiveServerRegistry...');
@@ -61,8 +69,12 @@ class HiveServerRegistry extends CRDTServerRegistry {
       );
     }
 
-    return HiveServerRegistry._(documents, snapshotInterval, logger)
-      .._startSnapshotTimer();
+    return HiveServerRegistry._(
+      documents,
+      snapshotInterval,
+      minChangesForSnapshot,
+      logger,
+    ).._startSnapshotTimer();
   }
 
   /// Starts the periodic timer for creating snapshots.
@@ -85,8 +97,17 @@ class HiveServerRegistry extends CRDTServerRegistry {
       final item = _documents[documentId];
       if (item != null && item.loaded) {
         try {
-          _logger.info('Creating snapshot for document $documentId...');
-          await createSnapshot(documentId);
+          final changesCount = item.storage!.changes.box.length;
+          if (changesCount > _minChangesForSnapshot) {
+            _logger.info(
+              'Creating snapshot for document $documentId ($changesCount changes)...',
+            );
+            await createSnapshot(documentId);
+          } else {
+            _logger.info(
+              'Skipping snapshot for $documentId: only $changesCount changes (threshold: $_minChangesForSnapshot)',
+            );
+          }
         } catch (e, st) {
           _logger.error(
             'Error creating snapshot for document $documentId.\n$e\n$st',
@@ -188,6 +209,11 @@ class HiveServerRegistry extends CRDTServerRegistry {
     await _loadDocument(documentId);
     final storage = await _getStorage(documentId);
     final snapshot = item.document.takeSnapshot();
+
+    _logger.info(
+      'Saving snapshot for document $documentId, data: ${snapshot.data}',
+    );
+
     await storage.snapshots.saveSnapshot(snapshot);
     await storage.changes.clear();
 
@@ -259,6 +285,29 @@ class HiveServerRegistry extends CRDTServerRegistry {
     }
     await Hive.box<String>(_kDocumentsBox).close();
     _logger.info('HiveServerRegistry closed.');
+  }
+
+  /// Shows the persistence state of the documents.
+  Future<void> showPersistence() async {
+    _logger.info('Showing persistence state...');
+    for (final documentId in _documents.keys.toList()) {
+      await _loadDocument(documentId);
+      final item = _documents[documentId]!;
+      final storage = item.storage!;
+
+      final changesCount = storage.changes.box.length;
+      final snapshots = storage.snapshots.getSnapshots();
+      final latestSnapshot = snapshots.lastOrNull;
+
+      _logger.info('Document: $documentId');
+      _logger.info('  Changes: $changesCount');
+      _logger.info('  Snapshots: ${snapshots.length}');
+      if (latestSnapshot != null) {
+        _logger.info('  Latest snapshot:');
+        _logger.info('    VV: ${latestSnapshot.versionVector}');
+        _logger.info('    Data: ${latestSnapshot.data}');
+      }
+    }
   }
 }
 
