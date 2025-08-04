@@ -4,14 +4,14 @@ import 'package:crdt_lf/crdt_lf.dart';
 import '../common/custom_emitter.dart';
 
 class SerializationBenchmark extends BenchmarkBase {
-  late final List<int> binaryChanges;
-  late final CRDTDocument doc;
-
   SerializationBenchmark()
       : super(
           'Binary encode/decode 1000 changes',
           emitter: const CustomEmitter(),
         );
+
+  late final List<int> binaryChanges;
+  late final CRDTDocument doc;
 
   @override
   void setup() {
@@ -25,8 +25,7 @@ class SerializationBenchmark extends BenchmarkBase {
 
   @override
   void run() {
-    final newDoc = CRDTDocument(peerId: PeerId.generate());
-    newDoc.binaryImportChanges(binaryChanges);
+    CRDTDocument(peerId: PeerId.generate()).binaryImportChanges(binaryChanges);
   }
 }
 

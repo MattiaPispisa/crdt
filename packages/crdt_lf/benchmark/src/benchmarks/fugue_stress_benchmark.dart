@@ -6,16 +6,17 @@ import 'package:crdt_lf/crdt_lf.dart';
 import '../common/custom_emitter.dart';
 
 class FugueStressBenchmark extends BenchmarkBase {
-  late final CRDTDocument doc;
-  late final CRDTFugueTextHandler text;
-  final random = Random();
-  final operations = <void Function()>[];
-
   FugueStressBenchmark()
       : super(
           'Fugue text editing stress test',
           emitter: const CustomEmitter(),
         );
+
+  late final CRDTDocument doc;
+  late final CRDTFugueTextHandler text;
+  final random = Random();
+  final operations = <void Function()>[];
+
 
   @override
   void setup() {
