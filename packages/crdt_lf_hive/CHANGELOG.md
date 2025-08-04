@@ -1,3 +1,12 @@
+## 0.2.0
+
+### Changed
+
+- chore: update `crdt_lf` dependency to `^1.0.0`
+- chore: update `hlc_dart` dependency to `^1.0.0`
+- chore: update readme
+
+
 ## 0.1.0
 
 ### Initial Release

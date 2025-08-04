@@ -11,7 +11,7 @@ environment:
 
 dependencies:
   crypto: ^3.0.0
-  hlc_dart: ^0.3.0
+  hlc_dart: ^1.0.0
 
 dev_dependencies:
   benchmark_harness: ^2.3.1

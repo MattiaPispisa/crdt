@@ -1,8 +1,10 @@
 # CRDT Socket Sync
 
-[![crdt_socket_sync_badge][crdt_socket_sync_badge]](https://pub.dev/packages/crdt_socket_sync)
+[![crdt_socket_sync_badge][crdt_socket_sync_badge]](https://pub.dev/packages/crdt_socket_sync) [![pub points][pub_points]][pub_link]
+[![pub likes][pub_likes]][pub_link]
+[![ci_badge][ci_badge]][ci_link]
 [![License: MIT][license_badge]][license_link]
-
+[![pub publisher][pub_publisher]][pub_publisher_link]
 
 - [CRDT Socket Sync](#crdt-socket-sync)
   - [Overview](#overview)
@@ -363,3 +365,12 @@ Contributions are welcome! Please read the contributing guidelines and submit pu
 [crdt_socket_sync_badge]: https://img.shields.io/pub/v/crdt_socket_sync.svg
 [license_badge]: https://img.shields.io/badge/license-MIT-blue.svg
 [license_link]: https://opensource.org/licenses/MIT
+[pub_link]: https://pub.dev/packages/crdt_socket_sync
+[pub_points]: https://img.shields.io/pub/points/crdt_socket_sync
+[pub_likes]: https://img.shields.io/pub/likes/crdt_socket_sync
+[codecov_badge]: https://codecov.io/gh/MattiaPispisa/crdt/branch/main/graph/badge.svg?token=00000000-0000-0000-0000-000000000000
+[codecov_link]: https://codecov.io/gh/MattiaPispisa/crdt
+[ci_badge]: https://img.shields.io/github/actions/workflow/status/MattiaPispisa/crdt/main.yaml
+[ci_link]: https://github.com/MattiaPispisa/crdt/actions/workflows/main.yaml
+[pub_publisher]: https://img.shields.io/pub/publisher/crdt_socket_sync
+[pub_publisher_link]: https://pub.dev/packages?q=publisher%3Amattiapispisa.it

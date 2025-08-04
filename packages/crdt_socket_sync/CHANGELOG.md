@@ -1,4 +1,4 @@
-## [Unreleased]
+## [0.3.0]
 
 **Breaking changes**
 - `CRDTServerRegistry.addDocument` now only takes a `documentId` parameter
