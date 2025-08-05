@@ -1,5 +1,14 @@
 ## [1.0.0] - Unreleased
 
+**Breaking changes**
+Create a set of exception classes to be used across the library. Replace `StateError` with `CrdtException` and its subclasses.
+
+- `applyChange`: throws `CausallyNotReadyException` instead of `StateError` when a change's dependencies are not met;
+- On import when a cycle is detected among changes throws `ChangesCycleException` instead of `StateError`;
+- On add node when a node already exists throws `DuplicateNodeException` instead of `StateError`;
+- On add node when a dependency is missing throws `MissingDependencyException` instead of `StateError`;
+- On Fugue tree insertion when a node already exists throws `DuplicateNodeException` instead of `Exception`.
+
 ### Changed
 - chore: setup .github/workflows and update coverage links [33](https://github.com/MattiaPispisa/crdt/issues/33)
 - chore: update readme with recommended approach for complex handler types

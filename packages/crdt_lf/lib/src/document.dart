@@ -115,7 +115,9 @@ class CRDTDocument {
 
     // Check if the change is causally ready
     if (!_dag.isReady(change.deps)) {
-      throw StateError('Change is not causally ready: ${change.id}');
+      throw CausallyNotReadyException(
+        'Change is not causally ready: ${change.id}',
+      );
     }
 
     // Add the change to the store
@@ -387,7 +389,7 @@ class CRDTDocument {
 
     // Check for cycles
     if (result.length != changes.length) {
-      throw StateError('Cycle detected in changes');
+      throw const ChangesCycleException('Cycle detected in changes');
     }
 
     return result;

@@ -243,7 +243,7 @@ class FugueTree<T> {
 
     if (_nodes.containsKey(node.id)) {
       if (_nodes[node.id]!.node.value != null) {
-        throw Exception('Node already exists: ${node.id}');
+        throw DuplicateNodeException('Node already exists: ${node.id}');
       }
     }
 

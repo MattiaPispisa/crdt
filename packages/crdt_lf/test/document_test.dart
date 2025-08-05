@@ -106,7 +106,7 @@ void main() {
 
       expect(
         () => doc.applyChange(change2),
-        throwsA(isA<StateError>()),
+        throwsA(isA<CausallyNotReadyException>()),
       );
     });
 
@@ -195,7 +195,7 @@ void main() {
 
       expect(
         () => doc.importChanges([change1, change2]),
-        throwsA(isA<StateError>()),
+        throwsA(isA<ChangesCycleException>()),
       );
     });
 

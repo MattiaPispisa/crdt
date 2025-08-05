@@ -55,7 +55,7 @@ void main() {
       dag.addNode(id1, {});
       expect(
         () => dag.addNode(id1, {}),
-        throwsA(isA<StateError>()),
+        throwsA(isA<DuplicateNodeException>()),
       );
     });
 
@@ -71,7 +71,7 @@ void main() {
     test('addNode throws when dependency does not exist', () {
       expect(
         () => dag.addNode(id1, {id2}),
-        throwsA(isA<StateError>()),
+        throwsA(isA<MissingDependencyException>()),
       );
     });
 
