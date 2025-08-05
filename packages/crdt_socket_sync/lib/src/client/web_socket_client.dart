@@ -260,7 +260,7 @@ class WebSocketClient extends CRDTSocketClient {
   }
 
   @override
-  Future<void> requestSnapshot() async {
+  Future<void> requestSync() async {
     await tryCatchIgnore(() async {
       final message = Message.documentStatusRequest(
         documentId: _documentId,
@@ -500,6 +500,11 @@ class WebSocketClient extends CRDTSocketClient {
   }
 
   void _handleErrorMessage(ErrorMessage message) {
+    if (message.code == Protocol.errorOutOfSync) {
+      requestSync();
+      return;
+    }
+
     _updateConnectionStatus(ConnectionStatus.error);
 
     if (message.code == Protocol.errorHandshakeFailed &&

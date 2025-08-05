@@ -347,6 +347,21 @@ class ClientSession {
           ),
         );
       }
+    } on CausallyNotReadyException {
+      await sendMessage(
+        Message.error(
+          documentId: documentId,
+          code: Protocol.errorOutOfSync,
+          message: 'Client is out of sync. Please re-sync.',
+        ),
+      );
+      _addSessionEvent(
+        SessionEventGeneric(
+          sessionId: id,
+          type: SessionEventType.clientOutOfSync,
+          message: 'Client is out of sync. Please re-sync.',
+        ),
+      );
     } catch (e) {
       _addSessionEvent(
         SessionEventGeneric(
@@ -389,8 +404,8 @@ class ClientSession {
     }
 
     final snapshot = await _serverRegistry.getLatestSnapshot(documentId);
-    final changes =
-        (await _serverRegistry.getDocument(documentId))!.exportChanges();
+    final changes = (await _serverRegistry.getDocument(documentId))!
+        .exportChanges(from: message.version);
 
     final response = Message.documentStatus(
       documentId: documentId,

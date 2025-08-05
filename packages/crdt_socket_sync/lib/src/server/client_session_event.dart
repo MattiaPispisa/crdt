@@ -17,6 +17,9 @@ enum SessionEventType {
   /// Client disconnected
   disconnected,
 
+  /// Client is out of sync
+  clientOutOfSync,
+
   /// Error occurred
   error,
 }

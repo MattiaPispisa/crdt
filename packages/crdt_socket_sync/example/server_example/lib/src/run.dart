@@ -99,6 +99,10 @@ Future<void> _startServer({required EnLogger logger}) async {
         // ignore ping requests just to not spam the logs
         return;
       }
+      if (event.type == ServerEventType.error) {
+        logger.error('❌ Server error: ${event.message}');
+        return;
+      }
       logger.info('➡ Server event: $event');
     });
 

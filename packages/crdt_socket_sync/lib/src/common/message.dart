@@ -21,7 +21,7 @@ enum MessageType implements MessageTypeValue {
   /// Message containing a full snapshot
   documentStatus(3),
 
-  /// Snapshot request message sent from client to server
+  /// Document status request message sent from client to server
   documentStatusRequest(4),
 
   /// Ping message to check the connection

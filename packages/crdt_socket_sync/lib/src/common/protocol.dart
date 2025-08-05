@@ -42,4 +42,7 @@ class Protocol {
 
   /// Error document not found
   static const String errorDocumentNotFound = 'DOCUMENT_NOT_FOUND';
+
+  /// Error client out of sync
+  static const String errorOutOfSync = 'OUT_OF_SYNC';
 }
