@@ -110,7 +110,6 @@ class CRDTDocument {
     final change = Change(
       id: id,
       deps: deps,
-      hlc: _clock.copy(),
       author: _peerId,
       operation: operation,
     );
@@ -147,11 +146,13 @@ class CRDTDocument {
     // Add the change to the DAG
     _dag.addNode(change.id, change.deps);
 
-    // Update the clock
-    _clock.receiveEvent(
-      DateTime.now().millisecondsSinceEpoch,
-      change.hlc,
-    );
+    // Update the clock only for remote changes
+    if (change.author != _peerId) {
+      _clock.receiveEvent(
+        DateTime.now().millisecondsSinceEpoch,
+        change.hlc,
+      );
+    }
 
     return true;
   }

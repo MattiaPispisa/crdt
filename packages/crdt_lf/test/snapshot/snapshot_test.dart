@@ -69,14 +69,12 @@ void main() {
             operation: operation,
             deps: {},
             author: author,
-            hlc: HybridLogicalClock(l: 1, c: 1),
           ),
           Change(
             id: OperationId(author, HybridLogicalClock(l: 1, c: 2)),
             operation: operation,
             deps: {},
             author: author,
-            hlc: HybridLogicalClock(l: 1, c: 2),
           ),
         ]);
 
@@ -146,14 +144,12 @@ void main() {
             operation: operation,
             deps: {},
             author: author,
-            hlc: HybridLogicalClock(l: 1, c: 1),
           ),
           Change(
             id: OperationId(author, HybridLogicalClock(l: 1, c: 2)),
             operation: operation,
             deps: {},
             author: author,
-            hlc: HybridLogicalClock(l: 1, c: 2),
           ),
         ]);
 
@@ -164,14 +160,12 @@ void main() {
             operation: operation,
             deps: {},
             author: author,
-            hlc: HybridLogicalClock(l: 1, c: 1),
           ),
           Change(
             id: OperationId(author, HybridLogicalClock(l: 1, c: 2)),
             operation: operation,
             deps: {},
             author: author,
-            hlc: HybridLogicalClock(l: 1, c: 2),
           ),
         ]);
 

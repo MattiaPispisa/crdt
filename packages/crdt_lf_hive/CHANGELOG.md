@@ -1,5 +1,8 @@
 ## 0.2.0
 
+**Breaking changes**
+Due to the `Change` breaking change in `crdt_lf` 1.0.0, the `Change` adapter has been updated.
+
 ### Changed
 
 - chore: update `crdt_lf` dependency to `^1.0.0`

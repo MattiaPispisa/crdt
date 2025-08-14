@@ -33,7 +33,6 @@ void main() {
         id: id1,
         operation: operation,
         deps: {},
-        hlc: hlc1,
         author: author,
       );
 
@@ -41,7 +40,6 @@ void main() {
         id: id2,
         operation: operation,
         deps: {id1},
-        hlc: hlc2,
         author: author,
       );
 
@@ -49,7 +47,6 @@ void main() {
         id: id3,
         operation: operation,
         deps: {id2},
-        hlc: hlc3,
         author: author,
       );
 

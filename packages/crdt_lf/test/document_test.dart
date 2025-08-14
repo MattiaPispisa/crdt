@@ -64,7 +64,6 @@ void main() {
         id: OperationId(author, HybridLogicalClock(l: 1, c: 1)),
         operation: operation,
         deps: {},
-        hlc: HybridLogicalClock(l: 1, c: 1),
         author: author,
       );
 
@@ -78,7 +77,6 @@ void main() {
         id: OperationId(author, HybridLogicalClock(l: 1, c: 1)),
         operation: operation,
         deps: {},
-        hlc: HybridLogicalClock(l: 1, c: 1),
         author: author,
       );
 
@@ -92,7 +90,6 @@ void main() {
         id: OperationId(author, HybridLogicalClock(l: 1, c: 1)),
         operation: operation,
         deps: {},
-        hlc: HybridLogicalClock(l: 1, c: 1),
         author: author,
       );
 
@@ -100,7 +97,6 @@ void main() {
         id: OperationId(author, HybridLogicalClock(l: 1, c: 2)),
         operation: operation,
         deps: {change1.id},
-        hlc: HybridLogicalClock(l: 1, c: 2),
         author: author,
       );
 
@@ -147,7 +143,6 @@ void main() {
         id: OperationId(author, HybridLogicalClock(l: 1, c: 1)),
         operation: operation,
         deps: {},
-        hlc: HybridLogicalClock(l: 1, c: 1),
         author: author,
       );
 
@@ -155,7 +150,6 @@ void main() {
         id: OperationId(author, HybridLogicalClock(l: 1, c: 2)),
         operation: operation,
         deps: {change1.id},
-        hlc: HybridLogicalClock(l: 1, c: 2),
         author: author,
       );
 
@@ -163,7 +157,6 @@ void main() {
         id: OperationId(author, HybridLogicalClock(l: 1, c: 3)),
         operation: operation,
         deps: {change2.id},
-        hlc: HybridLogicalClock(l: 1, c: 3),
         author: author,
       );
 
@@ -178,7 +171,6 @@ void main() {
         id: OperationId(author, HybridLogicalClock(l: 1, c: 1)),
         operation: operation,
         deps: {},
-        hlc: HybridLogicalClock(l: 1, c: 1),
         author: author,
       );
 
@@ -186,7 +178,6 @@ void main() {
         id: OperationId(author, HybridLogicalClock(l: 1, c: 2)),
         operation: operation,
         deps: {change1.id},
-        hlc: HybridLogicalClock(l: 1, c: 2),
         author: author,
       );
 
@@ -244,7 +235,6 @@ void main() {
         id: OperationId(author, HybridLogicalClock(l: 1, c: 1)),
         operation: operation,
         deps: {},
-        hlc: HybridLogicalClock(l: 1, c: 1),
         author: author,
       );
 
@@ -252,7 +242,6 @@ void main() {
         id: OperationId(author, HybridLogicalClock(l: 1, c: 3)),
         operation: operation,
         deps: {},
-        hlc: HybridLogicalClock(l: 1, c: 3),
         author: author,
       );
 
@@ -279,7 +268,6 @@ void main() {
         id: OperationId(author1, HybridLogicalClock(l: 1, c: 1)),
         operation: operation,
         deps: {},
-        hlc: HybridLogicalClock(l: 1, c: 1),
         author: author1,
       );
 
@@ -287,7 +275,6 @@ void main() {
         id: OperationId(author2, HybridLogicalClock(l: 1, c: 1)),
         operation: operation,
         deps: {},
-        hlc: HybridLogicalClock(l: 1, c: 2),
         author: author2,
       );
 
@@ -295,7 +282,6 @@ void main() {
         id: OperationId(author1, HybridLogicalClock(l: 1, c: 3)),
         operation: operation,
         deps: {},
-        hlc: HybridLogicalClock(l: 1, c: 3),
         author: author1,
       );
 

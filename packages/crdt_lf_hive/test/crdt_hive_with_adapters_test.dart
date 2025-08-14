@@ -2,31 +2,33 @@ import 'dart:io';
 import 'package:crdt_lf/crdt_lf.dart';
 import 'package:crdt_lf_hive/crdt_lf_hive.dart';
 import 'package:hive/hive.dart';
+import 'package:hlc_dart/hlc_dart.dart';
 import 'package:test/test.dart';
 
 void main() {
-  late String tempDir;
+  group('CRDTHive with data adapter', () {
+    late String tempDir;
 
-  setUpAll(() async {
-    // Initialize adapters only once for all tests
-    CRDTHive.initialize(useDataAdapter: true);
-    Hive
-      ..registerAdapter(ListValueAdapter())
-      ..registerAdapter(ObjectValueAdapter());
-  });
+    setUpAll(() async {
+      // Initialize adapters only once for all tests
 
-  setUp(() async {
-    final directory = await Directory.systemTemp.createTemp('crdt_hive_test');
-    tempDir = directory.path;
-    Hive.init(tempDir);
-  });
+      CRDTHive.initialize(useDataAdapter: true);
+      Hive
+        ..registerAdapter(ListValueAdapter())
+        ..registerAdapter(ObjectValueAdapter());
+    });
 
-  tearDown(() async {
-    await CRDTHive.closeAllBoxes();
-    await Hive.deleteFromDisk();
-  });
+    setUp(() async {
+      final directory = await Directory.systemTemp.createTemp('crdt_hive_test');
+      tempDir = directory.path;
+      Hive.init(tempDir);
+    });
 
-  group('CRDTHive Integration Tests', () {
+    tearDown(() async {
+      await CRDTHive.closeAllBoxes();
+      await Hive.deleteFromDisk();
+    });
+
     group('Single document', () {
       late List<Change> changesToSave;
 
@@ -56,6 +58,8 @@ void main() {
             await CRDTHive.openChangeStorageForDocument(documentId);
 
         expect(changeStorage.count, equals(0));
+        expect(changeStorage.isEmpty, isTrue);
+        expect(changeStorage.isNotEmpty, isFalse);
 
         // create some changes for different handlers
         list
@@ -64,7 +68,12 @@ void main() {
 
         map.set(
           'object',
-          const ObjectValue(height: 100, width: 100, offsetX: 0, offsetY: 0),
+          const ObjectValue(
+            height: 100,
+            width: 100,
+            offsetX: 0,
+            offsetY: 0,
+          ),
         );
 
         text.insert(0, 'Hello');
@@ -83,6 +92,8 @@ void main() {
         changeStorage = await CRDTHive.openChangeStorageForDocument(documentId);
 
         expect(changeStorage.count, greaterThan(0));
+        expect(changeStorage.isEmpty, isFalse);
+        expect(changeStorage.isNotEmpty, isTrue);
         expect(changeStorage.getChanges(), isNotEmpty);
 
         final newDocument = CRDTDocument(peerId: PeerId.generate())
@@ -100,6 +111,8 @@ void main() {
             await CRDTHive.openSnapshotStorageForDocument(documentId);
 
         expect(snapshotStorage.count, isZero);
+        expect(snapshotStorage.isEmpty, isTrue);
+        expect(snapshotStorage.isNotEmpty, isFalse);
 
         list
           ..insert(0, const ListValue(value: 'a'))
@@ -109,7 +122,12 @@ void main() {
 
         map.set(
           'object',
-          const ObjectValue(height: 100, width: 100, offsetX: 0, offsetY: 0),
+          const ObjectValue(
+            height: 100,
+            width: 100,
+            offsetX: 0,
+            offsetY: 0,
+          ),
         );
 
         final snapshot2 = document.takeSnapshot();
@@ -127,6 +145,8 @@ void main() {
             await CRDTHive.openSnapshotStorageForDocument(documentId);
 
         expect(snapshotStorage.count, equals(3));
+        expect(snapshotStorage.isEmpty, isFalse);
+        expect(snapshotStorage.isNotEmpty, isTrue);
         expect(snapshotStorage.getSnapshots().length, equals(3));
 
         expect(snapshotStorage.containsSnapshot(snapshot1.id), isTrue);
@@ -154,6 +174,8 @@ void main() {
             await CRDTHive.openChangeStorageForDocument(documentId);
 
         expect(changeStorage.count, equals(0));
+        expect(changeStorage.isEmpty, isTrue);
+        expect(changeStorage.isNotEmpty, isFalse);
 
         // create some changes for different handlers
         list
@@ -167,6 +189,8 @@ void main() {
         await changeStorage.saveChange(changesToSave.last);
 
         expect(changeStorage.count, equals(2));
+        expect(changeStorage.isEmpty, isFalse);
+        expect(changeStorage.isNotEmpty, isTrue);
 
         await changeStorage.deleteChange(changesToSave.first);
 
@@ -178,6 +202,8 @@ void main() {
             await CRDTHive.openSnapshotStorageForDocument(documentId);
 
         expect(snapshotStorage.count, equals(0));
+        expect(snapshotStorage.isEmpty, isTrue);
+        expect(snapshotStorage.isNotEmpty, isFalse);
 
         final snapshot1 = document.takeSnapshot();
 
@@ -191,6 +217,8 @@ void main() {
         await snapshotStorage.saveSnapshot(snapshot2);
 
         expect(snapshotStorage.count, equals(2));
+        expect(snapshotStorage.isEmpty, isFalse);
+        expect(snapshotStorage.isNotEmpty, isTrue);
 
         await snapshotStorage.deleteSnapshot(snapshot1.id);
 
@@ -272,6 +300,140 @@ void main() {
         expect(newList2.length, equals(2));
         expect(newList1[0].value, 'a');
       });
+    });
+
+    group('CRDTDocumentStorage', () {
+      test('CRDTDocumentStorage constructor holds storages', () async {
+        const documentId = 'doc-store-ctor';
+        final changeStorage =
+            await CRDTHive.openChangeStorageForDocument(documentId);
+        final snapshotStorage =
+            await CRDTHive.openSnapshotStorageForDocument(documentId);
+
+        final docStorage = CRDTDocumentStorage(
+          changes: changeStorage,
+          snapshots: snapshotStorage,
+        );
+
+        expect(docStorage.changes, isA<CRDTChangeStorage>());
+        expect(docStorage.snapshots, isA<CRDTSnapshotStorage>());
+      });
+
+      test('openStorageForDocument opens both storages', () async {
+        const documentId = 'doc-open-both';
+        final storage = await CRDTHive.openStorageForDocument(documentId);
+
+        expect(storage.changes, isA<CRDTChangeStorage>());
+        expect(storage.snapshots, isA<CRDTSnapshotStorage>());
+
+        // Write something and verify persistence across reopen
+        final id =
+            OperationId(PeerId.generate(), HybridLogicalClock(l: 1, c: 1));
+        final change = Change.fromPayload(
+          id: id,
+          deps: {},
+          author: id.peerId,
+          payload: {'x': 1},
+        );
+        await storage.changes.saveChange(change);
+
+        final snap = Snapshot(
+          id: 'snap-1',
+          versionVector: VersionVector({id.peerId: id.hlc}),
+          data: {'k': 'v'},
+        );
+        await storage.snapshots.saveSnapshot(snap);
+
+        await CRDTHive.closeAllBoxes();
+
+        final reopened = await CRDTHive.openStorageForDocument(documentId);
+        expect(reopened.changes.getChanges(), isNotEmpty);
+        expect(reopened.snapshots.getSnapshots(), isNotEmpty);
+      });
+
+      test('deleteBox removes arbitrary box from disk', () async {
+        const boxName = 'temp_box_for_delete';
+        final box = await Hive.openBox<String>(boxName);
+        await box.put('k', 'v');
+        await box.close();
+
+        await CRDTHive.deleteBox(boxName);
+
+        // Reopen: it should be a new empty box
+        final reopened = await Hive.openBox<String>(boxName);
+        expect(reopened.length, 0);
+        await reopened.close();
+      });
+
+      test('deleteDocumentData removes both changes_ and snapshots_ boxes',
+          () async {
+        const documentId = 'doc-del-data';
+        // Open and write into document-scoped boxes
+        final changes = await CRDTHive.openChangeStorageForDocument(documentId);
+        final snapshots =
+            await CRDTHive.openSnapshotStorageForDocument(documentId);
+
+        final id =
+            OperationId(PeerId.generate(), HybridLogicalClock(l: 5, c: 1));
+        final change = Change.fromPayload(
+          id: id,
+          deps: {},
+          author: id.peerId,
+          payload: {'p': true},
+        );
+        await changes.saveChange(change);
+        await snapshots.saveSnapshot(
+          Snapshot(
+            id: 's-del',
+            versionVector: VersionVector({id.peerId: id.hlc}),
+            data: {'d': 1},
+          ),
+        );
+
+        await CRDTHive.closeAllBoxes();
+
+        await CRDTHive.deleteDocumentData(documentId);
+
+        // Reopen storages for same document: they should be empty
+        final reopenedChanges =
+            await CRDTHive.openChangeStorageForDocument(documentId);
+        final reopenedSnapshots =
+            await CRDTHive.openSnapshotStorageForDocument(documentId);
+
+        expect(reopenedChanges.count, 0);
+        expect(reopenedSnapshots.count, 0);
+      });
+    });
+
+    test('SnapshotAdapter (data adapter mode): roundtrip complex data',
+        () async {
+      const documentId = 'doc-data-snap-roundtrip';
+      final storage = await CRDTHive.openSnapshotStorageForDocument(documentId);
+
+      final author = PeerId.generate();
+      final vv = VersionVector({author: HybridLogicalClock(l: 777, c: 3)});
+      final data = <String, dynamic>{
+        'title': 'with-adapter',
+        'meta': {
+          'tags': ['x', 'y'],
+          'flags': {'draft': true},
+        },
+        'count': 7,
+      };
+
+      final snapshot = Snapshot(id: 'snap-data', versionVector: vv, data: data);
+      await storage.saveSnapshot(snapshot);
+
+      await CRDTHive.closeAllBoxes();
+
+      final reopened =
+          await CRDTHive.openSnapshotStorageForDocument(documentId);
+      final loaded = reopened.getSnapshot('snap-data');
+
+      expect(loaded, isNotNull);
+      expect(loaded!.id, equals('snap-data'));
+      expect(loaded.versionVector.entries.length, equals(1));
+      expect(loaded.data, equals(data));
     });
   });
 }

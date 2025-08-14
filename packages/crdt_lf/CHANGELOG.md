@@ -9,6 +9,8 @@ Create a set of exception classes to be used across the library. Replace `StateE
 - On add node when a dependency is missing throws `MissingDependencyException` instead of `StateError`;
 - On Fugue tree insertion when a node already exists throws `DuplicateNodeException` instead of `Exception`.
 
+Removed redundant `hlc` from `Change`. `change.hlc` is also available as getter [37](https://github.com/MattiaPispisa/crdt/issues/37)
+
 ### Added
 - `documentId` to `CRDTDocument`, specified document identity to remove ambiguity between peer and document [38](https://github.com/MattiaPispisa/crdt/issues/38)
 
@@ -21,6 +23,7 @@ Create a set of exception classes to be used across the library. Replace `StateE
 ### Fixed
 - Fix `CRDTFugueTextHandler` to ensure state is synchronized before performing operations [39](https://github.com/MattiaPispisa/crdt/issues/39)
 - Fix readme reference links
+- Fix double hlc increment on `CRDTDocument.createChange`
 
 ## [0.8.0] - 2025-07-08
 

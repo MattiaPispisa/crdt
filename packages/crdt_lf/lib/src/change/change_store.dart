@@ -113,7 +113,6 @@ class ChangeStore {
           id: change.id,
           payload: change.payload,
           deps: Set.from(change.deps)..removeWhere(removedIds.contains),
-          hlc: change.hlc,
           author: change.author,
         );
       });
