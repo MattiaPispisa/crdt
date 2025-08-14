@@ -19,7 +19,8 @@ class ClientSession {
     Compressor? compressor,
     MessageCodec<Message>? messageCodec,
     List<ServerSyncPlugin> plugins = const [],
-  })  : _connection = connection,
+  })  : _isClosed = false,
+        _connection = connection,
         _serverRegistry = serverRegistry,
         _plugins = plugins,
         _sessionEventController = StreamController<SessionEvent>.broadcast(),
@@ -34,6 +35,7 @@ class ClientSession {
           ),
           compressor: compressor ?? NoCompression.instance,
         ) {
+    _updateClientActivity();
     _connection.incoming.listen(
       _handleData,
       onError: _handleConnectionError,
@@ -65,10 +67,10 @@ class ClientSession {
   Timer? _heartbeatTimer;
 
   /// Last time we received any message from client
-  DateTime _lastClientActivity = DateTime.now();
+  late DateTime _lastClientActivity;
 
   /// Whether the session is closed
-  bool _isClosed = false;
+  bool _isClosed;
 
   /// Session events stream
   Stream<SessionEvent> get events => _sessionEventController.stream;
@@ -136,8 +138,7 @@ class ClientSession {
 
   /// Handle incoming data from the transport
   void _handleData(List<int> data) {
-    // Update last activity timestamp
-    _lastClientActivity = DateTime.now();
+    _updateClientActivity();
 
     try {
       final message = _messageCodec.decode(data);
@@ -495,6 +496,11 @@ class ClientSession {
     );
 
     _closeSession(reason: 'Client timeout');
+  }
+
+  /// Update last activity timestamp
+  void _updateClientActivity() {
+    _lastClientActivity = DateTime.now();
   }
 
   /// Close the session with reason

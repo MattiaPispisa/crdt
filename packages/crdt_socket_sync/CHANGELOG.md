@@ -1,7 +1,7 @@
 ## [0.3.0]
 
 **Breaking changes**
-- `CRDTServerRegistry.addDocument` now only takes a `documentId` parameter
+- `CRDTServerRegistry.addDocument` takes a `documentId` and `author` parameter
 - `CRDTServerRegistry` methods now return a `Future`
 - rename client `requestSnapshot` to `requestSync`
 

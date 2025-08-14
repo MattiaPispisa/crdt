@@ -205,7 +205,7 @@ class WebSocketServer extends CRDTSocketServer {
     _addServerEvent(
       ServerEvent(
         type: ServerEventType.clientConnected,
-        message: 'Client connected: $sessionId',
+        message: 'Client connected with session id: $sessionId',
         data: {
           'clientId': sessionId,
         },
@@ -230,7 +230,8 @@ class WebSocketServer extends CRDTSocketServer {
     _addServerEvent(
       ServerEvent(
         type: ServerEventType.clientHandshake,
-        message: 'Client handshake completed: ${event.message}',
+        message:
+            'Session ${event.sessionId} handshake completed: ${event.message}',
         data: event.data,
       ),
     );
@@ -244,7 +245,7 @@ class WebSocketServer extends CRDTSocketServer {
     _addServerEvent(
       ServerEvent(
         type: ServerEventType.clientChangeApplied,
-        message: 'Client change applied: ${event.message}',
+        message: 'Session ${event.sessionId} change applied: ${event.message}',
       ),
     );
     return broadcastMessage(
@@ -261,7 +262,7 @@ class WebSocketServer extends CRDTSocketServer {
     _addServerEvent(
       ServerEvent(
         type: ServerEventType.error,
-        message: 'Session error: ${event.message}',
+        message: 'Session ${event.sessionId} error: ${event.message}',
         data: event.data,
       ),
     );
@@ -272,7 +273,7 @@ class WebSocketServer extends CRDTSocketServer {
     _addServerEvent(
       ServerEvent(
         type: ServerEventType.clientOutOfSync,
-        message: 'Client out of sync: ${event.message}',
+        message: 'Session ${event.sessionId} out of sync: ${event.message}',
       ),
     );
   }
@@ -322,7 +323,8 @@ class WebSocketServer extends CRDTSocketServer {
     _addServerEvent(
       ServerEvent(
         type: ServerEventType.clientDocumentStatusCreated,
-        message: 'Client document status request: ${event.message}',
+        message: 'Session ${event.sessionId} document'
+            ' status request: ${event.message}',
       ),
     );
   }
@@ -332,7 +334,7 @@ class WebSocketServer extends CRDTSocketServer {
     _addServerEvent(
       ServerEvent(
         type: ServerEventType.clientPingRequest,
-        message: 'Client ping request: ${event.message}',
+        message: 'Session ${event.sessionId} ping request: ${event.message}',
       ),
     );
   }
@@ -343,7 +345,7 @@ class WebSocketServer extends CRDTSocketServer {
     _addServerEvent(
       ServerEvent(
         type: ServerEventType.clientDisconnected,
-        message: 'Client disconnected: ${event.message}',
+        message: 'Session ${event.sessionId} disconnected: ${event.message}',
       ),
     );
     final session = _sessions[event.sessionId];
@@ -367,7 +369,7 @@ class WebSocketServer extends CRDTSocketServer {
     _addServerEvent(
       ServerEvent(
         type: ServerEventType.clientDisconnected,
-        message: 'Client disconnected: $sessionId',
+        message: 'Client disconnected with session id: $sessionId',
         data: {
           'clientId': sessionId,
         },
@@ -380,7 +382,7 @@ class WebSocketServer extends CRDTSocketServer {
     _addServerEvent(
       ServerEvent(
         type: ServerEventType.error,
-        message: 'Session error: $error',
+        message: 'Session $sessionId error: $error',
         data: {
           'clientId': sessionId,
         },

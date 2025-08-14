@@ -61,7 +61,7 @@ abstract class CRDTSocketClient {
   /// Send a [Change] to the server
   Future<void> sendChange(Change change);
 
-  /// Request a snapshot from the server
+  /// Request a sync message from the server
   Future<void> requestSync();
 
   /// Dispose the client

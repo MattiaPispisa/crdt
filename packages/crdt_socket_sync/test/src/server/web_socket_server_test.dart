@@ -244,7 +244,7 @@ void main() {
         final handshakeMessage = events.last;
         expect(
           handshakeMessage.message,
-          contains('Client handshake completed:'),
+          contains('handshake completed:'),
         );
       },
     );
