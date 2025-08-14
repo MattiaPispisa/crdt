@@ -42,7 +42,6 @@ class WebSocketClient extends CRDTSocketClient {
 
   @override
   final CRDTDocument document;
-  String get _documentId => document.peerId.toString();
 
   /// Author of the document
   @override
@@ -252,7 +251,7 @@ class WebSocketClient extends CRDTSocketClient {
   Future<void> sendChange(Change change) async {
     await tryCatchIgnore(() async {
       final message = Message.change(
-        documentId: _documentId,
+        documentId: document.documentId,
         change: change,
       );
       await sendMessage(message);
@@ -263,7 +262,7 @@ class WebSocketClient extends CRDTSocketClient {
   Future<void> requestSync() async {
     await tryCatchIgnore(() async {
       final message = Message.documentStatusRequest(
-        documentId: _documentId,
+        documentId: document.documentId,
         version: document.version,
       );
       await sendMessage(message);
@@ -380,7 +379,7 @@ class WebSocketClient extends CRDTSocketClient {
     if (!_connectionStatusValue.isDisconnected) {
       await tryCatchIgnore(() async {
         final pingMessage = Message.ping(
-          documentId: _documentId,
+          documentId: document.documentId,
           timestamp: DateTime.now().millisecondsSinceEpoch,
         );
         await sendMessage(pingMessage);
@@ -401,7 +400,7 @@ class WebSocketClient extends CRDTSocketClient {
 
     final handshakeRequest = HandshakeRequestMessage(
       version: document.version,
-      documentId: _documentId,
+      documentId: document.documentId,
       author: author,
     );
 
@@ -429,7 +428,7 @@ class WebSocketClient extends CRDTSocketClient {
 
   /// Handles incoming messages
   Future<void> _handleMessage(Message message) async {
-    if (message.documentId != _documentId) {
+    if (message.documentId != document.documentId) {
       return;
     }
 
@@ -492,7 +491,7 @@ class WebSocketClient extends CRDTSocketClient {
 
   Future<void> _handlePingMessage(PingMessage message) async {
     final pongMessage = PongMessage(
-      documentId: _documentId,
+      documentId: document.documentId,
       originalTimestamp: message.timestamp,
       responseTimestamp: DateTime.now().millisecondsSinceEpoch,
     );

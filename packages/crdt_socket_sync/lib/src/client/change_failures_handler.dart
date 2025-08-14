@@ -93,7 +93,7 @@ class ChangeFailuresHandler {
         final toSend = _unSyncChanges.first;
         await client.sendMessage(
           Message.change(
-            documentId: client.document.peerId.toString(),
+            documentId: client.document.documentId,
             change: toSend,
           ),
         );

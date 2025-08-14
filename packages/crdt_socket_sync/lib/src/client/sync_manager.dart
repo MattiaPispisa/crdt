@@ -24,9 +24,6 @@ class SyncManager {
   /// The local CRDT document
   final CRDTDocument document;
 
-  /// The document ID
-  String get _documentId => document.peerId.toString();
-
   /// The changes that have not been sent to the server
   List<Change> get unSyncChanges => _failuresHandler.unSyncChanges;
 
@@ -52,7 +49,7 @@ class SyncManager {
     try {
       await client.sendMessage(
         Message.change(
-          documentId: _documentId,
+          documentId: document.documentId,
           change: change,
         ),
       );
@@ -99,7 +96,7 @@ class SyncManager {
       // Request a snapshot from the server
       return client.sendMessage(
         Message.documentStatusRequest(
-          documentId: _documentId,
+          documentId: document.documentId,
           version: document.version,
         ),
       );
