@@ -19,6 +19,7 @@ Create a set of exception classes to be used across the library. Replace `StateE
 - chore: added benchmarks
 
 ### Fixed
+- Fix `CRDTFugueTextHandler` to ensure state is synchronized before performing operations [39](https://github.com/MattiaPispisa/crdt/issues/39)
 - Fix readme reference links
 
 ## [0.8.0] - 2025-07-08
