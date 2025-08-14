@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_example/_logger.dart';
 import 'package:flutter_example/todo_list/_add_item.dart';
 import 'package:crdt_lf/crdt_lf.dart';
 import 'package:flutter_example/todo_list/_animated_cursors.dart';
@@ -26,6 +27,7 @@ class TodoListPage extends StatelessWidget {
             documentId: documentId,
             author: user.userId,
             user: user,
+            logger: context.loggerInstance('TodoListState'),
           )..connect(),
       child: _TodoListContent(
         key: ValueKey('content_$documentId'),

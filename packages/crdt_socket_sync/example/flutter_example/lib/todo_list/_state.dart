@@ -4,6 +4,7 @@ import 'dart:async';
 
 import 'package:crdt_lf/crdt_lf.dart';
 import 'package:crdt_socket_sync/web_socket_client.dart';
+import 'package:en_logger/en_logger.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_example/user/_state.dart';
 
@@ -13,10 +14,12 @@ class TodoListState extends ChangeNotifier {
     required WebSocketClient client,
     required CRDTListHandler<Map<String, dynamic>> handler,
     required ClientAwarenessPlugin awareness,
+    required EnLogger logger,
   }) : _handler = handler,
        _client = client,
        _document = document,
-       _awareness = awareness {
+       _awareness = awareness,
+       _logger = logger {
     _connectionStatusSubscription = _client.connectionStatus.listen((status) {
       notifyListeners();
     });
@@ -30,6 +33,7 @@ class TodoListState extends ChangeNotifier {
     required String documentId,
     required PeerId author,
     required UserState user,
+    required EnLogger logger,
   }) {
     final document = CRDTDocument(documentId: documentId, peerId: author);
     final handler = CRDTListHandler<Map<String, dynamic>>(
@@ -46,11 +50,17 @@ class TodoListState extends ChangeNotifier {
       author: user.userId,
       plugins: [awareness],
     );
+    logger.info(
+      'setup client with author ${user.userId},'
+      ' document id ${document.documentId}'
+      ' for server ${user.url}',
+    );
     return TodoListState._(
       document: document,
       client: client,
       handler: handler,
       awareness: awareness,
+      logger: logger,
     );
   }
 
@@ -59,7 +69,7 @@ class TodoListState extends ChangeNotifier {
   final WebSocketClient _client;
   final CRDTListHandler<Map<String, dynamic>> _handler;
   final ClientAwarenessPlugin _awareness;
-
+  final EnLogger _logger;
   DocumentAwareness get awareness => _awareness.awareness;
 
   ClientAwareness? get myAwareness => _awareness.myState;
@@ -67,16 +77,16 @@ class TodoListState extends ChangeNotifier {
   StreamSubscription<ConnectionStatus>? _connectionStatusSubscription;
 
   void connect() {
+    _logger.info('connecting to server');
     _client
       ..connect()
       ..messages.listen((message) {
+        _logger.info('message: $message');
         notifyListeners();
       });
     _client.connectionStatus.listen((status) {
+      _logger.info('connection status: $status');
       notifyListeners();
-    });
-    _client.messages.listen((message) {
-      print('message: $message');
     });
   }
 
@@ -84,6 +94,7 @@ class TodoListState extends ChangeNotifier {
 
   void addTodo(String todo) {
     _handler.insert(_handler.length, Todo(text: todo).toJson());
+    _logger.info('adding todo: $todo');
     notifyListeners();
   }
 
@@ -95,11 +106,13 @@ class TodoListState extends ChangeNotifier {
         todo,
       ).copyWith(isDone: !Todo.fromJson(todo).isDone).toJson(),
     );
+    _logger.info('toggling todo: $todo');
     notifyListeners();
   }
 
   void removeTodo(int index) {
     _handler.delete(index, 1);
+    _logger.info('removing todo: $index');
     notifyListeners();
   }
 
@@ -116,6 +129,7 @@ class TodoListState extends ChangeNotifier {
   void dispose() {
     _connectionStatusSubscription?.cancel();
     _client.dispose();
+    _logger.info('disposing todo list state');
     super.dispose();
   }
 }
@@ -131,6 +145,11 @@ class Todo {
   }
 
   Map<String, dynamic> toJson() => {'text': text, 'isDone': isDone};
+
+  @override
+  String toString() {
+    return 'Todo(text: $text, isDone: $isDone)';
+  }
 
   Todo copyWith({String? text, bool? isDone}) {
     return Todo(text: text ?? this.text, isDone: isDone ?? this.isDone);
