@@ -1,4 +1,3 @@
-import 'package:crdt_lf/crdt_lf.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_example/_view.dart';
 import 'package:flutter_example/user/user_page.dart';
@@ -15,9 +14,7 @@ final router = GoRouter(
           path: 'documents/:id',
           builder: (context, state) {
             return TodoListPage(
-              documentId: PeerId.parse(
-                Uri.decodeComponent(state.pathParameters['id']!),
-              ),
+              documentId: Uri.decodeComponent(state.pathParameters['id']!),
             );
           },
         ),

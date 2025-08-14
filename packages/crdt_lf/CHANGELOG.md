@@ -7,7 +7,10 @@ Create a set of exception classes to be used across the library. Replace `StateE
 - On import when a cycle is detected among changes throws `ChangesCycleException` instead of `StateError`;
 - On add node when a node already exists throws `DuplicateNodeException` instead of `StateError`;
 - On add node when a dependency is missing throws `MissingDependencyException` instead of `StateError`;
-- On Fugue tree insertion when a node alreXWady exists throws `DuplicateNodeException` instead of `Exception`.
+- On Fugue tree insertion when a node already exists throws `DuplicateNodeException` instead of `Exception`.
+
+### Added
+- `documentId` to `CRDTDocument`, specified document identity to remove ambiguity between peer and document [38](https://github.com/MattiaPispisa/crdt/issues/38)
 
 ### Changed
 - chore: setup .github/workflows and update coverage links [33](https://github.com/MattiaPispisa/crdt/issues/33)

@@ -27,10 +27,11 @@ class TodoListState extends ChangeNotifier {
   }
 
   factory TodoListState.create({
-    required PeerId documentId,
+    required String documentId,
+    required PeerId author,
     required UserState user,
   }) {
-    final document = CRDTDocument(peerId: documentId);
+    final document = CRDTDocument(documentId: documentId, peerId: author);
     final handler = CRDTListHandler<Map<String, dynamic>>(
       document,
       'todo-list',

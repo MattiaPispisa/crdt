@@ -20,6 +20,7 @@
   - [Benchmarks](#benchmarks)
   - [Architecture](#architecture)
     - [CRDTDocument](#crdtdocument)
+      - [Identity](#identity)
     - [Handlers](#handlers)
       - [Working with Complex Types](#working-with-complex-types)
     - [DAG](#dag)
@@ -120,6 +121,12 @@ The library is built:
 ### CRDTDocument
 The main document class that manages the CRDT state and handles synchronization between peers.
 
+#### Identity
+- `documentId`: identifies the document/resource (used for routing, persistence, and ACLs). It does not participate in operation identifiers.
+- `peerId`: identifies the peer/author generating operations. It is embedded into `OperationId` together with the Hybrid Logical Clock.
+
+If not provided, both are generated: `peerId` and `documentId`.
+
 ### Handlers
 Handlers are the core components of the library. They manage the state of a specific type of data and provide operations to modify it.
 
@@ -130,6 +137,7 @@ Handlers are the core components of the library. They manage the state of a spec
 
 ```dart
 final doc = CRDTDocument(
+  documentId: 'todo-list-123',
   peerId: PeerId.parse('45ee6b65-b393-40b7-9755-8b66dc7d0518'),
 );
 final list = CRDTListHandler(doc, 'todo-list');

@@ -3,7 +3,10 @@ import 'package:crdt_lf/crdt_lf.dart';
 /// Class managing the CRDT document registry on the server.
 abstract class CRDTServerRegistry {
   /// Register a document
-  Future<void> addDocument(String documentId);
+  Future<void> addDocument(
+    String documentId, {
+    PeerId? author,
+  });
 
   /// Get a store for an existing document
   Future<CRDTDocument?> getDocument(String documentId);

@@ -20,8 +20,13 @@ class InMemoryCRDTServerRegistry implements CRDTServerRegistry {
   final Map<String, Snapshot> _snapshots;
 
   @override
-  Future<void> addDocument(String documentId) async {
-    _documents[documentId] = CRDTDocument(peerId: PeerId.parse(documentId));
+  Future<void> addDocument(
+    String documentId, {
+    PeerId? author,
+  }) async {
+    _documents[documentId] = CRDTDocument(
+      peerId: author ?? PeerId.generate(),
+    );
   }
 
   @override

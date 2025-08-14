@@ -10,13 +10,27 @@ import 'package:hlc_dart/hlc_dart.dart';
 /// A CRDTDocument is the main entry point for the CRDT system.
 /// It manages the DAG, ChangeStore, and provides methods for creating,
 /// applying, exporting, and importing changes.
+///
+/// Identity:
+/// - `documentId`: identifies the document/resource. It is useful for routing,
+///   persistence, and access control. It does not participate in operation
+///   identifiers.
+/// - `peerId`: identifies the peer/author generating operations. It is used in
+///   `OperationId` together with the Hybrid Logical Clock.
 class CRDTDocument {
-  /// Creates a new [CRDTDocument] with the given [peerId]
+  /// Creates a new [CRDTDocument] with the given identifiers.
+  ///
+  /// - [peerId]: the identifier of the local peer (author of operations).
+  ///   If not provided, a new one is generated.
+  /// - [documentId]: the identifier of the document. If not provided, a new
+  ///   random identifier is generated.
   CRDTDocument({
     PeerId? peerId,
+    String? documentId,
   })  : _dag = DAG.empty(),
         _changeStore = ChangeStore.empty(),
         _peerId = peerId ?? PeerId.generate(),
+        _documentId = documentId ?? PeerId.generate().toString(),
         _clock = HybridLogicalClock.initialize(),
         _localChangesController = StreamController<Change>.broadcast(),
         _handlers = {} {
@@ -32,11 +46,17 @@ class CRDTDocument {
   /// The ID of the peer that owns this document
   final PeerId _peerId;
 
+  /// The ID of the document/resource
+  final String _documentId;
+
   /// The hybrid logical clock for this document
   final HybridLogicalClock _clock;
 
   /// Gets the peer ID of this document
   PeerId get peerId => _peerId;
+
+  /// Gets the document ID of this document
+  String get documentId => _documentId;
 
   /// Gets the current timestamp of this document
   HybridLogicalClock get hlc => _clock.copy();

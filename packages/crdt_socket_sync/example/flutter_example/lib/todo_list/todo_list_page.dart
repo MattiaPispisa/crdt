@@ -12,9 +12,12 @@ import '_state.dart';
 import '_todo.dart';
 
 class TodoListPage extends StatelessWidget {
-  const TodoListPage({super.key, required this.documentId});
+  const TodoListPage({
+    super.key,
+    required this.documentId,
+  });
 
-  final PeerId documentId;
+  final String documentId;
 
   @override
   Widget build(BuildContext context) {
@@ -23,7 +26,11 @@ class TodoListPage extends StatelessWidget {
     return ChangeNotifierProvider<TodoListState>(
       create:
           (context) =>
-              TodoListState.create(documentId: documentId, user: user)
+              TodoListState.create(
+                documentId: documentId,
+                author: user.userId,
+                user: user,
+              )
                 ..connect(),
       child: _TodoListContent(
         key: ValueKey('content_$documentId'),
@@ -42,7 +49,7 @@ class _TodoListContent extends StatelessWidget {
   });
 
   final PeerId userId;
-  final PeerId documentId;
+  final String documentId;
 
   Future<void> _showAddTodoDialog(BuildContext context) async {
     return showDialog<void>(

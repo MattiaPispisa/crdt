@@ -10,7 +10,8 @@ import 'package:hive/hive.dart';
 const _kDefaultDbLocation = './example/db';
 const _kDefaultPort = 8080;
 final _kDefaultHost = InternetAddress.anyIPv4.host;
-final _kDocumentPeerId = PeerId.parse('30669830-9256-4320-9ed5-f1860cd47d9f');
+final _kDocumentId = '30669830-9256-4320-9ed5-f1860cd47d9f';
+final _kDocumentPeerId = PeerId.parse('97a6b8b3-fffc-4ebe-8dd4-f94e6a01c52f');
 
 late HiveServerRegistry _registry;
 late WebSocketServer _server;
@@ -65,18 +66,17 @@ Future<void> run({
   );
 }
 
-/// setup a document with id [_kDocumentPeerId] and register a handler for the todo list.
+/// setup a document with id [_kDocumentId] and register a handler for the todo list.
 ///
 /// The same handler is used across all sync examples.
 Future<void> _setupDocument() async {
-  final documentId = _kDocumentPeerId.toString();
-  final hasDocument = await _registry.hasDocument(documentId);
+  final hasDocument = await _registry.hasDocument(_kDocumentId);
 
   if (!hasDocument) {
-    await _registry.addDocument(documentId);
+    await _registry.addDocument(_kDocumentId);
   }
 
-  final document = (await _registry.getDocument(documentId))!;
+  final document = (await _registry.getDocument(_kDocumentId))!;
   document.registerHandler(
     CRDTListHandler<Map<String, dynamic>>(document, 'todo-list'),
   );

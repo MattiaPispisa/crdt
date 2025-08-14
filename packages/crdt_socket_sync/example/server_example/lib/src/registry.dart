@@ -157,7 +157,7 @@ class HiveServerRegistry extends CRDTServerRegistry {
   /// This creates an entry in the document list and prepares it for future use,
   /// but does not yet create any storage boxes.
   @override
-  Future<void> addDocument(String documentId) async {
+  Future<void> addDocument(String documentId, {PeerId? author}) async {
     if (_documents.containsKey(documentId)) {
       return;
     }
@@ -168,7 +168,10 @@ class HiveServerRegistry extends CRDTServerRegistry {
 
     _documents[documentId] = _CrdtDocumentRegistryItem.lazy(
       documentId: documentId,
-      document: CRDTDocument(peerId: PeerId.parse(documentId)),
+      document: CRDTDocument(
+        documentId: documentId,
+        peerId: author ?? PeerId.generate(),
+      ),
     );
   }
 
