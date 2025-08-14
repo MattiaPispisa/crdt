@@ -136,6 +136,21 @@ void main() {
       expect(snapshot.data, equals({'test': 'Hello World!'}));
     });
 
+    test('toString correctly', () {
+      final snapshot = Snapshot(
+        id: 'id',
+        versionVector: VersionVector({author: HybridLogicalClock(l: 1, c: 1)}),
+        data: {'test': 'Hello World!'},
+      );
+
+      expect(snapshot.toString(), contains('Snapshot(id: id'));
+      expect(
+        snapshot.toString(),
+        contains('versionVector: VersionVector(vector: '),
+      );
+      expect(snapshot.toString(), contains('data: {test: Hello World!}'));
+    });
+
     test('same version should produce same id', () {
       final doc = CRDTDocument(peerId: author)
         ..importChanges([

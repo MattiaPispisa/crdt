@@ -13,6 +13,7 @@ Removed redundant `hlc` from `Change`. `change.hlc` is also available as getter 
 
 ### Added
 - `documentId` to `CRDTDocument`, specified document identity to remove ambiguity between peer and document [38](https://github.com/MattiaPispisa/crdt/issues/38)
+- `toString` to `Snapshot` and `VersionVector`
 
 ### Changed
 - chore: setup .github/workflows and update coverage links [33](https://github.com/MattiaPispisa/crdt/issues/33)

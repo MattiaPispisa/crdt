@@ -68,6 +68,11 @@ class Snapshot {
         'versionVector': versionVector.toJson(),
       };
 
+  @override
+  String toString() {
+    return 'Snapshot(id: $id, versionVector: $versionVector, data: $data)';
+  }
+
   /// Generates a stable SHA-256 hash ID from the version set.
   static String _generateIdFromVersion(VersionVector version) {
     if (version.isEmpty) {

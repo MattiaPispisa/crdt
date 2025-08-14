@@ -178,4 +178,9 @@ class VersionVector {
 
   /// Returns an iterable of the entries in the version vector.
   Iterable<MapEntry<PeerId, HybridLogicalClock>> get entries => _vector.entries;
+
+  @override
+  String toString() {
+    return 'VersionVector(vector: $_vector)';
+  }
 }
