@@ -73,7 +73,7 @@ Future<void> _setupDocument() async {
   final hasDocument = await _registry.hasDocument(_kDocumentId);
 
   if (!hasDocument) {
-    await _registry.addDocument(_kDocumentId);
+    await _registry.addDocument(_kDocumentId, author: _kDocumentPeerId);
   }
 
   final document = (await _registry.getDocument(_kDocumentId))!;

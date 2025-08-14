@@ -225,6 +225,7 @@ class WebSocketServer extends CRDTSocketServer {
     );
   }
 
+  /// Add a server event for a handshake completed event
   void _handleSessionEventHandshakeCompleted(SessionEventGeneric event) {
     _addServerEvent(
       ServerEvent(
@@ -235,6 +236,8 @@ class WebSocketServer extends CRDTSocketServer {
     );
   }
 
+  /// 1. Add a server event for the change applied
+  /// 1. Broadcast the change to the other clients
   Future<void> _handleSessionEventChangeApplied(
     SessionEventChangeApplied event,
   ) {
@@ -253,12 +256,23 @@ class WebSocketServer extends CRDTSocketServer {
     );
   }
 
+  /// Add a server event for an error event
   void _handleSessionEventError(SessionEventGeneric event) {
     _addServerEvent(
       ServerEvent(
         type: ServerEventType.error,
         message: 'Session error: ${event.message}',
         data: event.data,
+      ),
+    );
+  }
+
+  /// Add a server event for a client out of sync event
+  void _handleSessionEventClientOutOfSync(SessionEventGeneric event) {
+    _addServerEvent(
+      ServerEvent(
+        type: ServerEventType.clientOutOfSync,
+        message: 'Client out of sync: ${event.message}',
       ),
     );
   }
@@ -295,9 +309,15 @@ class WebSocketServer extends CRDTSocketServer {
         return _handleSessionEventDisconnected(
           event as SessionEventGeneric,
         );
+
+      case SessionEventType.clientOutOfSync:
+        return _handleSessionEventClientOutOfSync(
+          event as SessionEventGeneric,
+        );
     }
   }
 
+  /// Add a server event for a document status request event
   void _handleSessionEventDocumentStatusRequest(SessionEventGeneric event) {
     _addServerEvent(
       ServerEvent(
@@ -307,6 +327,7 @@ class WebSocketServer extends CRDTSocketServer {
     );
   }
 
+  /// Add a server event for a ping received event
   void _handleSessionEventPingReceived(SessionEventGeneric event) {
     _addServerEvent(
       ServerEvent(
@@ -316,6 +337,8 @@ class WebSocketServer extends CRDTSocketServer {
     );
   }
 
+  /// 1. Add a server event for a client disconnected event
+  /// 1. Dispose the session
   void _handleSessionEventDisconnected(SessionEventGeneric event) {
     _addServerEvent(
       ServerEvent(

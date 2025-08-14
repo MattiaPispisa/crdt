@@ -12,10 +12,7 @@ import '_state.dart';
 import '_todo.dart';
 
 class TodoListPage extends StatelessWidget {
-  const TodoListPage({
-    super.key,
-    required this.documentId,
-  });
+  const TodoListPage({super.key, required this.documentId});
 
   final String documentId;
 
@@ -25,13 +22,11 @@ class TodoListPage extends StatelessWidget {
 
     return ChangeNotifierProvider<TodoListState>(
       create:
-          (context) =>
-              TodoListState.create(
-                documentId: documentId,
-                author: user.userId,
-                user: user,
-              )
-                ..connect(),
+          (context) => TodoListState.create(
+            documentId: documentId,
+            author: user.userId,
+            user: user,
+          )..connect(),
       child: _TodoListContent(
         key: ValueKey('content_$documentId'),
         userId: user.userId,

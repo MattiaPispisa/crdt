@@ -35,3 +35,10 @@ scripts:
     name: Devtools Build
     description: Build the devtools extension
     run: cd ./packages/crdt_lf_devtools_extension && dart run devtools_extensions build_and_copy --source=. --dest=../crdt_lf/extension/devtools && dart run devtools_extensions validate --package=../crdt_lf
+
+  fix_apply:
+    name: Fix Apply
+    description: Apply the fixes
+    run: dart fix --apply
+    exec:
+      concurrency: 1

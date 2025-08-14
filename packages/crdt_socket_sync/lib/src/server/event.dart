@@ -28,6 +28,9 @@ enum ServerEventType {
 
   /// An error has occurred
   error,
+
+  /// A client is out of sync
+  clientOutOfSync,
 }
 
 /// Class representing a server event

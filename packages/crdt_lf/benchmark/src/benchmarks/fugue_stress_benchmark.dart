@@ -17,7 +17,6 @@ class FugueStressBenchmark extends BenchmarkBase {
   final random = Random();
   final operations = <void Function()>[];
 
-
   @override
   void setup() {
     doc = CRDTDocument(peerId: PeerId.generate());
