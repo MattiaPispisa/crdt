@@ -70,6 +70,15 @@ class CRDTDocument {
   /// A stream that emits [Change]s created locally by this document.
   Stream<Change> get localChanges => _localChangesController.stream;
 
+  /// A stream controller that emits an event
+  /// every time the document state updates
+  /// (local or remote change applied, snapshot imported/merged).
+  final StreamController<void> _updatesController =
+      StreamController<void>.broadcast();
+
+  /// A stream that emits when the document state updates.
+  Stream<void> get updates => _updatesController.stream;
+
   /// The registered snapshot providers
   final Map<String, Handler<dynamic>> _handlers;
 
@@ -154,6 +163,8 @@ class CRDTDocument {
       );
     }
 
+    // Notify listeners about state update
+    _notifyUpdates();
     return true;
   }
 
@@ -199,7 +210,7 @@ class CRDTDocument {
       _lastSnapshot = snapshot;
 
       _invalidateHandlers();
-
+      _notifyUpdates();
       return true;
     }
 
@@ -218,8 +229,8 @@ class CRDTDocument {
     }
 
     _prune(_lastSnapshot!.versionVector);
-
     _invalidateHandlers();
+    _notifyUpdates();
   }
 
   /// Whether the given [snapshot] should be applied.
@@ -340,6 +351,14 @@ class CRDTDocument {
     _changeStore.prune(version);
   }
 
+  /// Notifies listeners about state update
+  void _notifyUpdates() {
+    if (_updatesController.isClosed) {
+      return;
+    }
+    _updatesController.add(null);
+  }
+
   /// Returns a list of [Change]s never received from this document:
   /// - the clock of the change is greater than the clock of the version vector
   /// - the change is not in the version vector
@@ -349,7 +368,7 @@ class CRDTDocument {
 
     for (final change in changes) {
       final clock = versionVector[change.id.peerId];
-      if (clock == null || change.id.hlc.compareTo(clock) > 0) {
+      if (clock == null || change.hlc.compareTo(clock) > 0) {
         newChanges.add(change);
       }
     }
@@ -433,6 +452,7 @@ class CRDTDocument {
   /// Disposes of the document
   void dispose() {
     _localChangesController.close();
+    _updatesController.close();
   }
 }
 

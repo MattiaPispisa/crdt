@@ -203,10 +203,22 @@ class HybridLogicalClock with Comparable<HybridLogicalClock> {
     return compareTo(other) == 0;
   }
 
-  /// Converts this [HybridLogicalClock] to a 64-bit integer
+  /// Converts this [HybridLogicalClock] to a 64-bit integer.
   ///
-  /// The high 48 bits represent the logical time (l)
-  /// The low 16 bits represent the counter (c)
+  /// Encoding layout:
+  /// - High 48 bits: logical/physical time `l` (milliseconds)
+  /// - Low 16 bits: counter `c`
+  ///
+  /// Remember that JSON numeric values are IEEE‑754 double precision on the web
+  ///   (JavaScript number). The maximum safe integer is 2^53−1
+  ///   (9,007,199,254,740,991).
+  ///
+  /// The packed 64‑bit value produced here commonly exceeds 2^53−1,
+  /// which means it will lose precision if serialized as a JSON number
+  /// and parsed in JavaScript.
+  ///
+  /// For network/JSON payloads, prefer [toString],
+  /// [HybridLogicalClock.parse] instead.
   int toInt64() {
     // Ensure l fits in 48 bits
     final maskedL = _l & 0xFFFFFFFFFFFF;

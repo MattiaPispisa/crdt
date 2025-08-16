@@ -21,7 +21,7 @@ class VersionVector {
         (json['vector'] as Map<String, dynamic>).map(
           (peerIdStr, hlcInt64) => MapEntry(
             PeerId.parse(peerIdStr),
-            HybridLogicalClock.fromInt64(hlcInt64 as int),
+            HybridLogicalClock.parse(hlcInt64 as String),
           ),
         ),
       );
@@ -164,7 +164,7 @@ class VersionVector {
   /// Converts the [VersionVector] to a JSON object
   Map<String, dynamic> toJson() => {
         'vector': _vector.map(
-          (peerId, hlc) => MapEntry(peerId.toString(), hlc.toInt64()),
+          (peerId, hlc) => MapEntry(peerId.toString(), hlc.toString()),
         ),
       };
 

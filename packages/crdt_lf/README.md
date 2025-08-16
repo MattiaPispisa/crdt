@@ -1,6 +1,6 @@
 # CRDT LF
 
-[![crdt_lf_badge][crdt_lf_badge]](https://pub.dev/packages/crdt_lf)
+[![crdt_lf_badge][crdt_lf_badge]][pub_link]
 [![pub points][pub_points]][pub_link]
 [![pub likes][pub_likes]][pub_link]
 [![codecov][codecov_badge]][codecov_link]

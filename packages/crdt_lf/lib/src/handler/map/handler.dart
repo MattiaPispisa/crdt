@@ -105,7 +105,8 @@ class CRDTMapHandler<T> extends Handler<Map<String, T>> {
   /// Gets the initial state of the map
   Map<String, T> _initialState() {
     final snapshot = lastSnapshot();
-    if (snapshot is Map<String, T>) {
+    if (snapshot is Map<String, dynamic> &&
+        snapshot.values.every((e) => e is T)) {
       return Map.from(snapshot);
     }
     return <String, T>{};

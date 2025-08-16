@@ -8,6 +8,7 @@
 
 ### Changed
 - chore: setup .github/workflows and update coverage links [33](https://github.com/MattiaPispisa/crdt/issues/33)
+- chore: improve documentation on `toInt64`
 - Assert non-negative logical time and counter
 
 ## [0.3.1] - 2025-06-26

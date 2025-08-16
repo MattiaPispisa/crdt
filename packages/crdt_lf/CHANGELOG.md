@@ -11,9 +11,12 @@ Create a set of exception classes to be used across the library. Replace `StateE
 
 Removed redundant `hlc` from `Change`. `change.hlc` is also available as getter [37](https://github.com/MattiaPispisa/crdt/issues/37)
 
+Hlc in version vector is now serialized as string instead of int64. This avoids precision loss when serialized as JSON for web interoperability.
+
 ### Added
 - `documentId` to `CRDTDocument`, specified document identity to remove ambiguity between peer and document [38](https://github.com/MattiaPispisa/crdt/issues/38)
 - `toString` to `Snapshot` and `VersionVector`
+- added a stream to `CRDTDocument` to be notified of every change (changes, snapshots, merges, ...)
 
 ### Changed
 - chore: setup .github/workflows and update coverage links [33](https://github.com/MattiaPispisa/crdt/issues/33)
@@ -25,6 +28,7 @@ Removed redundant `hlc` from `Change`. `change.hlc` is also available as getter 
 - Fix `CRDTFugueTextHandler` to ensure state is synchronized before performing operations [39](https://github.com/MattiaPispisa/crdt/issues/39)
 - Fix readme reference links
 - Fix double hlc increment on `CRDTDocument.createChange`
+- Fix snapshot initialization for handlers that return a non primitive value
 
 ## [0.8.0] - 2025-07-08
 
