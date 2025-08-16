@@ -261,11 +261,7 @@ class WebSocketClient extends CRDTSocketClient {
   @override
   Future<void> requestSync() async {
     await tryCatchIgnore(() async {
-      final message = Message.documentStatusRequest(
-        documentId: document.documentId,
-        version: document.version,
-      );
-      await sendMessage(message);
+      await _syncManager.requestDocumentStatus();
     });
   }
 

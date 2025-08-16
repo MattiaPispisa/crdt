@@ -5,6 +5,9 @@ import 'package:crdt_socket_sync/client.dart';
 import 'package:crdt_socket_sync/src/client/change_failures_handler.dart';
 import 'package:crdt_socket_sync/src/common/utils.dart';
 
+// TODO(mattia): when server goes offline a version must be saved and on
+// reconnecting every change from that version must be sent to the server.
+
 /// Manager for the CRDT client
 class SyncManager {
   /// Constructor
@@ -63,7 +66,7 @@ class SyncManager {
     try {
       document.applyChange(change);
     } catch (e) {
-      _requestMissingChanges();
+      requestDocumentStatus();
     }
   }
 
@@ -74,7 +77,7 @@ class SyncManager {
         document.applyChange(change);
       }
     } catch (e) {
-      _requestMissingChanges();
+      requestDocumentStatus();
     }
   }
 
@@ -88,10 +91,14 @@ class SyncManager {
       snapshot: snapshot,
       merge: true,
     );
+
+    // TODO(mattia): after merge client can have changes not available
+    // on the server this will cause a out_of_sync error
+    // we need to send the changes to the server that server don't have
   }
 
-  /// Requests the missing changes from the server
-  Future<void> _requestMissingChanges() async {
+  /// Requests the document status from the server
+  Future<void> requestDocumentStatus() async {
     await tryCatchIgnore(() {
       // Request a snapshot from the server
       return client.sendMessage(

@@ -74,7 +74,7 @@ abstract class Message {
   /// Create a document status request message
   factory Message.documentStatusRequest({
     required String documentId,
-    required Set<OperationId> version,
+    required Set<OperationId>? version,
   }) {
     return DocumentStatusRequestMessage(
       documentId: documentId,
@@ -339,29 +339,31 @@ class DocumentStatusMessage extends Message {
 class DocumentStatusRequestMessage extends Message {
   /// Constructor
   const DocumentStatusRequestMessage({
-    required this.version,
     required String documentId,
+    this.version,
   }) : super(MessageType.documentStatusRequest, documentId);
 
   /// Create a snapshot request message from a JSON map
   factory DocumentStatusRequestMessage.fromJson(Map<String, dynamic> json) {
     return DocumentStatusRequestMessage(
-      version: (json['version'] as List<dynamic>)
-          .map((e) => OperationId.parse(e as String))
-          .toSet(),
+      version: json['version'] != null
+          ? (json['version'] as List<dynamic>)
+              .map((e) => OperationId.parse(e as String))
+              .toSet()
+          : null,
       documentId: json['documentId'] as String,
     );
   }
 
   /// The client version
-  final Set<OperationId> version;
+  final Set<OperationId>? version;
 
   @override
   Map<String, dynamic> toJson() {
     return {
       'type': type.value,
       'documentId': documentId,
-      'version': version.map((e) => e.toString()).toList(),
+      'version': version?.map((e) => e.toString()).toList(),
     };
   }
 

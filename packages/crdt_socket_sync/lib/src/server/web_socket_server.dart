@@ -160,6 +160,15 @@ class WebSocketServer extends CRDTSocketServer {
     final session = _sessions[clientId];
     if (session != null) {
       await session.sendMessage(message);
+      _addServerEvent(
+        ServerEvent(
+          type: ServerEventType.messageSent,
+          message: 'Message sent to client $clientId',
+          data: {
+            'clientId': clientId,
+          },
+        ),
+      );
     }
   }
 
@@ -171,13 +180,29 @@ class WebSocketServer extends CRDTSocketServer {
     final documentId = message.documentId;
     final sessions = List.of(_sessions.values);
 
+    final sessionsReached = <String>[];
+
     for (final session in sessions) {
       final isExcluded = excludeClientIds?.contains(session.id) ?? false;
       final isSubscribed = session.isSubscribedTo(documentId);
 
       if (!isExcluded && isSubscribed) {
         await session.sendMessage(message);
+        sessionsReached.add(session.id);
       }
+    }
+
+    if (sessionsReached.isNotEmpty) {
+      _addServerEvent(
+        ServerEvent(
+          type: ServerEventType.messageBroadcasted,
+          message: 'Message broadcasted to ${sessionsReached.length} clients',
+          data: {
+            'documentId': documentId,
+            'sessionsReached': sessionsReached,
+          },
+        ),
+      );
     }
   }
 
