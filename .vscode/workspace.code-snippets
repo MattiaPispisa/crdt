@@ -1,0 +1,29 @@
+{
+  "README Badges Block": {
+    "scope": "markdown",
+    "prefix": "readme-badges",
+    "description": "Insert README badges and reference links for a package.",
+    "body": [
+      "[![package badge][package_badge]][pub_link]",
+      "[![pub points][pub_points_badge]][pub_link]",
+      "[![pub likes][pub_likes_badge]][pub_link]",
+      "[![codecov][codecov_badge]][codecov_link]",
+      "[![ci badge][ci_badge]][ci_link]",
+      "[![license][license_badge]][license_link]",
+      "[![pub publisher][pub_publisher_badge]][pub_publisher_link]",
+      "",
+      "[license_badge]: https://img.shields.io/badge/license-MIT-blue.svg",
+      "[license_link]: https://opensource.org/licenses/MIT",
+      "[package_badge]: https://img.shields.io/pub/v/${1:package}.svg",
+      "[codecov_badge]: https://img.shields.io/codecov/c/github/MattiaPispisa/crdt/main?flag=${1:package}&logo=codecov",
+      "[codecov_link]: https://app.codecov.io/gh/MattiaPispisa/crdt/tree/main/packages/${1:package}",
+      "[ci_badge]: https://img.shields.io/github/actions/workflow/status/MattiaPispisa/crdt/main.yaml",
+      "[ci_link]: https://github.com/MattiaPispisa/crdt/actions/workflows/main.yaml",
+      "[pub_points_badge]: https://img.shields.io/pub/points/${1:package}",
+      "[pub_link]: https://pub.dev/packages/${1:package}",
+      "[pub_publisher_badge]: https://img.shields.io/pub/publisher/${1:package}",
+      "[pub_publisher_link]: https://pub.dev/packages?q=publisher%3Amattiapispisa.it",
+      "[pub_likes_badge]: https://img.shields.io/pub/likes/${1:package}",
+    ]
+  }
+}
