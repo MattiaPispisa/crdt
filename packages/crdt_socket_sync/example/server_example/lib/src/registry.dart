@@ -7,8 +7,8 @@ import 'package:hive/hive.dart';
 import 'package:en_logger/en_logger.dart';
 
 const _kDocumentsBox = 'documents';
-const _kDefaultSnapshotInterval = Duration(minutes: 2);
-const _kDefaultMinChangesForSnapshot = 10;
+const _kDefaultSnapshotInterval = Duration(seconds: 30);
+const _kDefaultMinChangesForSnapshot = 2;
 
 /// A server-side CRDT document registry that uses Hive for persistence.
 ///
@@ -36,6 +36,7 @@ class HiveServerRegistry extends CRDTServerRegistry {
   final int _minChangesForSnapshot;
   final EnLogger _logger;
   Timer? _snapshotTimer;
+  late WebSocketServer _server;
 
   HiveServerRegistry._(
     this._documents,
@@ -77,6 +78,10 @@ class HiveServerRegistry extends CRDTServerRegistry {
     ).._startSnapshotTimer();
   }
 
+  void setServer(WebSocketServer server) {
+    _server = server;
+  }
+
   /// Starts the periodic timer for creating snapshots.
   void _startSnapshotTimer() {
     _logger.info(
@@ -102,7 +107,17 @@ class HiveServerRegistry extends CRDTServerRegistry {
             _logger.info(
               'Creating snapshot for document $documentId ($changesCount changes)...',
             );
-            await createSnapshot(documentId);
+            final snapshot = await createSnapshot(documentId);
+            final changes = item.document.exportChanges();
+            print('changes: $changes');
+            print('snapshot: $snapshot');
+            await _server.broadcastMessage(
+              Message.documentStatus(
+                documentId: documentId,
+                snapshot: snapshot,
+                changes: changes,
+              ),
+            );
           } else {
             _logger.info(
               'Skipping snapshot for $documentId: only $changesCount changes (threshold: $_minChangesForSnapshot)',
@@ -248,8 +263,7 @@ class HiveServerRegistry extends CRDTServerRegistry {
     final item = _documents[documentId];
     if (item == null) return null;
     final storage = await _getStorage(documentId);
-    final snapshots = storage.snapshots.getSnapshots();
-    return snapshots.isNotEmpty ? snapshots.last : null;
+    return storage.snapshots.getSnapshots().lastOrNull;
   }
 
   /// Checks if a document with the given ID exists in the registry.

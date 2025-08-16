@@ -58,6 +58,7 @@ Future<void> run({
     serverRegistry: _registry,
     plugins: plugins ?? [ServerAwarenessPlugin()],
   );
+  _registry.setServer(_server);
 
   _setupSigintHandler(logger: logger.getConfiguredInstance(prefix: 'Bin'));
 

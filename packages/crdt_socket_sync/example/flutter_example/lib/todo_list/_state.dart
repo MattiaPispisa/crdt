@@ -27,6 +27,12 @@ class TodoListState extends ChangeNotifier {
     _awareness.awarenessStream.listen((awareness) {
       notifyListeners();
     });
+
+    // React to any document update (remote changes, snapshot imports, merges)
+    _document.updates.listen((_) {
+      _logger.info('document updated');
+      notifyListeners();
+    });
   }
 
   factory TodoListState.create({
@@ -82,7 +88,6 @@ class TodoListState extends ChangeNotifier {
       ..connect()
       ..messages.listen((message) {
         _logger.info('message: $message');
-        notifyListeners();
       });
     _client.connectionStatus.listen((status) {
       _logger.info('connection status: $status');
