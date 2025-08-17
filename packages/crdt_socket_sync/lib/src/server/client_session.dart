@@ -213,7 +213,18 @@ class ClientSession {
           );
 
         case MessageType.change:
-          return await _handleChangeMessage(message as ChangeMessage);
+          final changeMessage = message as ChangeMessage;
+          return await _handleChangesMessage(
+            changes: [changeMessage.change],
+            documentId: changeMessage.documentId,
+          );
+
+        case MessageType.changes:
+          final changesMessage = message as ChangesMessage;
+          return await _handleChangesMessage(
+            changes: changesMessage.changes,
+            documentId: changesMessage.documentId,
+          );
 
         case MessageType.documentStatusRequest:
           return await _handleDocumentStatusRequest(
@@ -297,9 +308,10 @@ class ClientSession {
     );
   }
 
-  Future<void> _handleChangeMessage(ChangeMessage message) async {
-    final documentId = message.documentId;
-
+  Future<void> _handleChangesMessage({
+    required List<Change> changes,
+    required String documentId,
+  }) async {
     final hasDocument = await _serverRegistry.hasDocument(documentId);
 
     if (!hasDocument) {
@@ -308,7 +320,7 @@ class ClientSession {
           sessionId: id,
           type: SessionEventType.error,
           message: 'Document not found: $documentId'
-              ', cannot apply change ${message.change.id}',
+              ', cannot apply changes ${changes.map((c) => c.id).join(', ')}',
         ),
       );
       return;
@@ -320,57 +332,58 @@ class ClientSession {
           sessionId: id,
           type: SessionEventType.error,
           message: 'Client is not subscribed to document: $documentId'
-              ', cannot apply change ${message.change.id}',
+              ', cannot apply changes ${changes.map((c) => c.id).join(', ')}',
         ),
       );
       return;
     }
 
-    try {
-      final applied =
-          await _serverRegistry.applyChange(documentId, message.change);
+    for (final change in changes) {
+      try {
+        final applied = await _serverRegistry.applyChange(documentId, change);
 
-      if (applied) {
-        _addSessionEvent(
-          SessionEventChangeApplied(
-            sessionId: id,
-            message: 'Change received and applied for document $documentId',
+        if (applied) {
+          _addSessionEvent(
+            SessionEventChangeApplied(
+              sessionId: id,
+              message: 'Change received and applied for document $documentId',
+              documentId: documentId,
+              change: change,
+            ),
+          );
+        } else {
+          _addSessionEvent(
+            SessionEventGeneric(
+              sessionId: id,
+              type: SessionEventType.error,
+              message: 'Failed to apply change ${change.id}',
+            ),
+          );
+        }
+      } on CausallyNotReadyException {
+        await sendMessage(
+          Message.error(
             documentId: documentId,
-            change: message.change,
+            code: Protocol.errorOutOfSync,
+            message: 'Client is out of sync. Please re-sync.',
           ),
         );
-      } else {
+        _addSessionEvent(
+          SessionEventGeneric(
+            sessionId: id,
+            type: SessionEventType.clientOutOfSync,
+            message: 'Client is out of sync. Please re-sync.',
+          ),
+        );
+      } catch (e) {
         _addSessionEvent(
           SessionEventGeneric(
             sessionId: id,
             type: SessionEventType.error,
-            message: 'Failed to apply change ${message.change.id}',
+            message: 'Failed to apply change ${change.id}: $e',
           ),
         );
       }
-    } on CausallyNotReadyException {
-      await sendMessage(
-        Message.error(
-          documentId: documentId,
-          code: Protocol.errorOutOfSync,
-          message: 'Client is out of sync. Please re-sync.',
-        ),
-      );
-      _addSessionEvent(
-        SessionEventGeneric(
-          sessionId: id,
-          type: SessionEventType.clientOutOfSync,
-          message: 'Client is out of sync. Please re-sync.',
-        ),
-      );
-    } catch (e) {
-      _addSessionEvent(
-        SessionEventGeneric(
-          sessionId: id,
-          type: SessionEventType.error,
-          message: 'Failed to apply change ${message.change.id}: $e',
-        ),
-      );
     }
   }
 

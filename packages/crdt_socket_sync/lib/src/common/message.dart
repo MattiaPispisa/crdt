@@ -31,7 +31,10 @@ enum MessageType implements MessageTypeValue {
   pong(6),
 
   /// Error message
-  error(7);
+  error(7),
+
+  /// Message containing a set of changes
+  changes(8);
 
   const MessageType(this.value);
 
@@ -56,6 +59,14 @@ abstract class Message {
       documentId: documentId,
       change: change,
     );
+  }
+
+  /// Create a changes message
+  factory Message.changes({
+    required String documentId,
+    required List<Change> changes,
+  }) {
+    return ChangesMessage(documentId: documentId, changes: changes);
   }
 
   /// Create a document status message
@@ -147,6 +158,8 @@ abstract class Message {
         return HandshakeResponseMessage.fromJson(json);
       case MessageType.change:
         return ChangeMessage.fromJson(json);
+      case MessageType.changes:
+        return ChangesMessage.fromJson(json);
       case MessageType.documentStatus:
         return DocumentStatusMessage.fromJson(json);
       case MessageType.documentStatusRequest:
@@ -293,6 +306,42 @@ class ChangeMessage extends Message {
   @override
   String toString() {
     return 'ChangeMessage(change: $change, documentId: $documentId)';
+  }
+}
+
+/// Message containing a set of changes.
+class ChangesMessage extends Message {
+  /// Constructor
+  const ChangesMessage({
+    required this.changes,
+    required String documentId,
+  }) : super(MessageType.changes, documentId);
+
+  /// Create a changes message from a JSON map
+  factory ChangesMessage.fromJson(Map<String, dynamic> json) {
+    return ChangesMessage(
+      changes: (json['changes'] as List<dynamic>)
+          .map((c) => Change.fromJson(c as Map<String, dynamic>))
+          .toList(),
+      documentId: json['documentId'] as String,
+    );
+  }
+
+  /// The CRDT [Change]s
+  final List<Change> changes;
+
+  @override
+  Map<String, dynamic> toJson() {
+    return {
+      'type': type.value,
+      'documentId': documentId,
+      'changes': changes.map((c) => c.toJson()).toList(),
+    };
+  }
+
+  @override
+  String toString() {
+    return 'ChangesMessage(changes: $changes, documentId: $documentId)';
   }
 }
 

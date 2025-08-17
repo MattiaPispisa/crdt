@@ -200,6 +200,7 @@ class WebSocketServer extends CRDTSocketServer {
           data: {
             'documentId': documentId,
             'sessionsReached': sessionsReached,
+            'message': message.toJson(),
           },
         ),
       );

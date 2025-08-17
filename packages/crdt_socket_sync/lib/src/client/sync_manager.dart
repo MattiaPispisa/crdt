@@ -2,7 +2,6 @@ import 'dart:async';
 
 import 'package:crdt_lf/crdt_lf.dart';
 import 'package:crdt_socket_sync/client.dart';
-import 'package:crdt_socket_sync/src/client/change_failures_handler.dart';
 import 'package:crdt_socket_sync/src/common/utils.dart';
 
 // TODO(mattia): when server goes offline a version must be saved and on
@@ -14,11 +13,7 @@ class SyncManager {
   SyncManager({
     required this.document,
     required this.client,
-  }) : _failuresHandler = ChangeFailuresHandler(
-          // setup the retry interval as the reconnect interval
-          client: client,
-          retryInterval: Protocol.reconnectInterval,
-        ) {
+  }) {
     // Listen to the local changes and send them to the server
     _localChangesSubscription =
         document.localChanges.listen(_handleLocalChange);
@@ -27,38 +22,35 @@ class SyncManager {
   /// The local CRDT document
   final CRDTDocument document;
 
-  /// The changes that have not been sent to the server
-  List<Change> get unSyncChanges => _failuresHandler.unSyncChanges;
-
-  /// Stream of the number of unSyncChanges
-  Stream<int> get unSyncChangesCount => _failuresHandler.unSyncChangesCount;
-
   /// The socket client
   final CRDTSocketClient client;
-
-  final ChangeFailuresHandler _failuresHandler;
 
   /// Subscription to the local changes stream
   StreamSubscription<Change>? _localChangesSubscription;
 
   /// Handles a local change
   Future<void> _handleLocalChange(Change change) async {
-    if (unSyncChanges.isNotEmpty) {
-      _failuresHandler.add(change);
-      return;
-    }
-
     // Send the change to the server
-    try {
+    await tryCatchIgnore(() async {
       await client.sendMessage(
         Message.change(
           documentId: document.documentId,
           change: change,
         ),
       );
-    } catch (e) {
-      _failuresHandler.add(change);
-    }
+    });
+  }
+
+  /// Sends a list of changes to the server
+  Future<void> _sendChangesToServer(List<Change> changes) async {
+    await tryCatchIgnore(() async {
+      await client.sendMessage(
+        Message.changes(
+          documentId: document.documentId,
+          changes: changes,
+        ),
+      );
+    });
   }
 
   /// Applies a change
@@ -86,15 +78,38 @@ class SyncManager {
     List<Change>? changes,
     Snapshot? snapshot,
   }) {
+    final serverVV = _serverVersionVector(
+      base: snapshot?.versionVector.mutable(),
+      changes: changes,
+    );
+
     document.import(
       changes: changes,
       snapshot: snapshot,
       merge: true,
     );
 
-    // TODO(mattia): after merge client can have changes not available
-    // on the server this will cause a out_of_sync error
-    // we need to send the changes to the server that server don't have
+    _sendUnknownChangesToServer(serverVV);
+  }
+
+  /// Compute the server version from snapshot+changes
+  VersionVector _serverVersionVector({
+    VersionVector? base,
+    List<Change>? changes,
+  }) {
+    final versionVector = base ?? VersionVector({});
+
+    for (final c in changes ?? <Change>[]) {
+      versionVector.update(c.id.peerId, c.hlc);
+    }
+
+    return versionVector;
+  }
+
+ /// Send local changes that are newer than the server's vector
+  Future<void> _sendUnknownChangesToServer(VersionVector serverVV) async {
+    final toSend = document.exportChangesNewerThan(serverVV);
+    await _sendChangesToServer(toSend);
   }
 
   /// Requests the document status from the server
@@ -114,7 +129,5 @@ class SyncManager {
   void dispose() {
     _localChangesSubscription?.cancel();
     _localChangesSubscription = null;
-
-    _failuresHandler.dispose();
   }
 }

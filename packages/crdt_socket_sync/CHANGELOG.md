@@ -10,6 +10,7 @@
 - Feature: `JsonMessageCodec` now supports `toEncodable` and `reviver` parameters
 - Feature: added out of sync error handling
 - Feature: added `messageBroadcasted` and `messageSent` server events
+- Feature: added `ChangesMessage`
 
 ### Changes
 - Document status request can be sent without a version vector

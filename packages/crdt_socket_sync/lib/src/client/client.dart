@@ -43,12 +43,6 @@ abstract class CRDTSocketClient {
   /// Stream of incoming server messages
   Stream<Message> get messages;
 
-  /// The changes that have not been sent to the server
-  List<Change> get unSyncChanges;
-
-  /// Stream of the number of unSyncChanges
-  Stream<int> get unSyncChangesCount;
-
   /// Connect the client to the server
   Future<bool> connect();
 

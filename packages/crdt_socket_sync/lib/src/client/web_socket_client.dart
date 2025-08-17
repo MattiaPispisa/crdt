@@ -119,12 +119,6 @@ class WebSocketClient extends CRDTSocketClient {
   @override
   Stream<Message> get messages => _messageController.stream;
 
-  @override
-  List<Change> get unSyncChanges => _syncManager.unSyncChanges;
-
-  @override
-  Stream<int> get unSyncChangesCount => _syncManager.unSyncChangesCount;
-
   /// Connect to the server
   ///
   /// Returns true if the connection is successful, false otherwise
@@ -151,6 +145,10 @@ class WebSocketClient extends CRDTSocketClient {
 
     try {
       final connector = _WebSocketConnector(url);
+
+      await tryCatchIgnore(() async {
+        await _transport?.close();
+      });
 
       _transport = Transport.create(connector);
 
@@ -191,7 +189,9 @@ class WebSocketClient extends CRDTSocketClient {
       return;
     }
 
-    await _transport!.close();
+    await tryCatchIgnore(() async {
+      await _transport!.close();
+    });
     _transport = null;
 
     for (final plugin in plugins) {
@@ -311,6 +311,10 @@ class WebSocketClient extends CRDTSocketClient {
     dynamic error, {
     bool attemptReconnect = true,
   }) {
+    if (_handshaking || _handshakeCompleter != null) {
+      _resetHandshake();
+    }
+
     // on reconnecting if an error occurs do not update the status
     // to error, because the reconnect will handle it.
     if (!_isReconnecting) {
@@ -504,8 +508,7 @@ class WebSocketClient extends CRDTSocketClient {
 
     if (message.code == Protocol.errorHandshakeFailed &&
         _handshakeCompleter != null) {
-      _handshakeCompleter?.complete(false);
-      _handshakeCompleter = null;
+      _resetHandshake();
     }
   }
 
@@ -522,6 +525,14 @@ class WebSocketClient extends CRDTSocketClient {
     }
 
     _connectionStatusController.add(status);
+  }
+
+  /// Reset the handshake completer
+  void _resetHandshake() {
+    if (_handshakeCompleter?.isCompleted == false) {
+      _handshakeCompleter?.complete(false);
+    }
+    _handshakeCompleter = null;
   }
 
   @override
