@@ -173,11 +173,23 @@ class VersionVector {
 
   /// Returns an immutable copy of the version vector.
   VersionVector immutable() {
-    return VersionVector.immutable(_vector);
+    return VersionVector.immutable(_copy());
   }
 
-  /// Returns an iterable of the entries in the version vector.
-  Iterable<MapEntry<PeerId, HybridLogicalClock>> get entries => _vector.entries;
+  /// Returns a mutable copy of the version vector.
+  VersionVector mutable() {
+    return VersionVector(_copy());
+  }
+
+  /// Returns an iterable copy of the entries in the version vector.
+  Iterable<MapEntry<PeerId, HybridLogicalClock>> get entries => _copy().entries;
+
+  /// Returns a copy of the version vector.
+  Map<PeerId, HybridLogicalClock> _copy() {
+    return _vector.map(
+      (peerId, hlc) => MapEntry(peerId, hlc.copy()),
+    );
+  }
 
   @override
   String toString() {

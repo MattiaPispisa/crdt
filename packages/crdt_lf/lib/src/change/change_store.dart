@@ -65,6 +65,24 @@ class ChangeStore {
         .toList();
   }
 
+  /// Exports [Change]s that are newer than the provided [versionVector].
+  ///
+  /// A change is considered newer if its clock is strictly greater than the
+  /// clock in the provided version vector for the same peer, or if the peer is
+  /// not present in the provided vector.
+  List<Change> exportChangesNewerThan(VersionVector versionVector) {
+    final result = <Change>[];
+
+    for (final change in _changes.values) {
+      final hlc = versionVector[change.id.peerId];
+      if (hlc == null || change.hlc.compareTo(hlc) > 0) {
+        result.add(change);
+      }
+    }
+
+    return result;
+  }
+
   /// Imports [Change]s from another [ChangeStore]
   ///
   /// Returns the number of [Change]s that were added.

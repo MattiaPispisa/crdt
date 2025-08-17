@@ -17,6 +17,8 @@ Hlc in version vector is now serialized as string instead of int64. This avoids 
 - `documentId` to `CRDTDocument`, specified document identity to remove ambiguity between peer and document [38](https://github.com/MattiaPispisa/crdt/issues/38)
 - `toString` to `Snapshot` and `VersionVector`
 - added a stream to `CRDTDocument` to be notified of every change (changes, snapshots, merges, ...)
+- added `mutable` and method to `VersionVector` to create mutable copies
+- added a export changes method to `CRDTDocument` to export changes that are newer than a given version vector
 
 ### Changed
 - chore: setup .github/workflows and update coverage links [33](https://github.com/MattiaPispisa/crdt/issues/33)

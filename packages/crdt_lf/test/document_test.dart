@@ -138,6 +138,57 @@ void main() {
       expect(newDoc.version, equals(doc.version));
     });
 
+    test('exportChangesNewerThan returns only newer changes for same peer', () {
+      // create three changes
+      final change1 = doc.createChange(operation);
+      final change2 = doc.createChange(operation);
+
+      final version = VersionVector({author: change1.hlc});
+
+      final newer = doc.exportChangesNewerThan(version);
+
+      expect(newer.length, equals(1));
+      expect(newer, containsAll([change2]));
+    });
+
+    test('exportChangesNewerThan with multiple peers', () {
+      final authorA = PeerId.generate();
+      final authorB = PeerId.generate();
+
+      // Build manual changes from two peers and import them in current doc
+      final a1 = Change(
+        id: OperationId(authorA, HybridLogicalClock(l: 1, c: 1)),
+        operation: operation,
+        deps: {},
+        author: authorA,
+      );
+      final a2 = Change(
+        id: OperationId(authorA, HybridLogicalClock(l: 1, c: 2)),
+        operation: operation,
+        deps: {a1.id},
+        author: authorA,
+      );
+      final b1 = Change(
+        id: OperationId(authorB, HybridLogicalClock(l: 2, c: 1)),
+        operation: operation,
+        deps: {},
+        author: authorB,
+      );
+
+      // Import in causal order
+      expect(doc.importChanges([a1, a2, b1]), equals(3));
+
+      // Server knows up to a1 for authorA, and nothing for authorB
+      final version = VersionVector({authorA: a1.hlc});
+
+      final newer = doc.exportChangesNewerThan(version);
+
+      expect(newer, contains(a2));
+      expect(newer, contains(b1));
+      // Should not include a1
+      expect(newer.contains(a1), isFalse);
+    });
+
     test('importChanges applies changes in correct order', () {
       final change1 = Change(
         id: OperationId(author, HybridLogicalClock(l: 1, c: 1)),
@@ -228,6 +279,100 @@ void main() {
 
       // Wait for the stream to close
       await expectation;
+    });
+
+    group('updates stream', () {
+      test(
+          'emits when applyChange applies (>0),'
+          ' not when no-op (<=0)', () async {
+        final events = <void>[];
+        final sub = doc.updates.listen((_) => events.add(null));
+
+        // apply a new change -> should emit
+        final c1 = doc.createChange(operation);
+        await Future<void>.delayed(Duration.zero);
+        expect(events.length, 1);
+
+        // applying duplicate change -> no emit
+        final appliedAgain = doc.applyChange(c1);
+        expect(appliedAgain, isFalse);
+        await Future<void>.delayed(Duration.zero);
+        expect(events.length, 1);
+
+        await sub.cancel();
+      });
+
+      test(
+          'emits when importChanges applies (>0),'
+          ' not when applies 0', () async {
+        final events = <void>[];
+        final sub = doc.updates.listen((_) => events.add(null));
+
+        final other = CRDTDocument(peerId: PeerId.generate());
+        final otherHandler = TestHandler(other);
+        final otherOp = TestOperation.fromHandler(otherHandler);
+
+        // create and import 1 change -> should emit
+        final c = other.createChange(otherOp);
+        final applied = doc.importChanges([c]);
+        expect(applied, greaterThan(0));
+        await Future<void>.delayed(Duration.zero);
+        expect(events.length, 1);
+
+        // re-import same change -> 0 applied, no emit
+        final appliedAgain = doc.importChanges([c]);
+        expect(appliedAgain, equals(0));
+        await Future<void>.delayed(Duration.zero);
+        expect(events.length, 1);
+
+        await sub.cancel();
+      });
+
+      test('emits when importSnapshot succeeds, not when rejected', () async {
+        final events = <void>[];
+        final sub = doc.updates.listen((_) => events.add(null));
+
+        // Create a newer snapshot from another document
+        final other = CRDTDocument(peerId: PeerId.generate());
+        final otherHandler = TestHandler(other);
+        final otherOp = TestOperation.fromHandler(otherHandler);
+
+        final oldSnapshot = other.takeSnapshot();
+
+        other.createChange(otherOp); // make snapshot newer than empty doc
+        final snapNewer = other.takeSnapshot();
+
+        // import newer -> emit
+        final imported = doc.importSnapshot(snapNewer);
+        expect(imported, isTrue);
+        await Future<void>.delayed(Duration.zero);
+        expect(events.length, 1);
+
+        // try import older snapshot -> no emit
+        final importedOld = doc.importSnapshot(oldSnapshot);
+        expect(importedOld, isFalse);
+        await Future<void>.delayed(Duration.zero);
+        expect(events.length, 1);
+
+        await sub.cancel();
+      });
+
+      test('emits when mergeSnapshot is called', () async {
+        final events = <void>[];
+        final sub = doc.updates.listen((_) => events.add(null));
+
+        final other = CRDTDocument(peerId: PeerId.generate());
+        final otherHandler = TestHandler(other);
+        final otherOp = TestOperation.fromHandler(otherHandler);
+        other.createChange(otherOp);
+        final snap = other.takeSnapshot();
+
+        doc.mergeSnapshot(snap);
+        await Future<void>.delayed(Duration.zero);
+        expect(events.length, 1);
+
+        await sub.cancel();
+      });
     });
 
     test('import should not accept changes already in version vector', () {

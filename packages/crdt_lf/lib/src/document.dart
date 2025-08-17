@@ -301,6 +301,15 @@ class CRDTDocument {
     return _changeStore.exportChanges(from ?? {}, _dag);
   }
 
+  /// Exports [Change]s that are newer than the provided [versionVector].
+  ///
+  /// A change is considered newer if its clock is strictly greater than the
+  /// clock in the provided version vector for the same peer, or if the peer is
+  /// not present in the provided vector.
+  List<Change> exportChangesNewerThan(VersionVector versionVector) {
+    return _changeStore.exportChangesNewerThan(versionVector);
+  }
+
   /// Exports [Change]s as a binary format
   ///
   /// Returns a binary representation of the [Change]s

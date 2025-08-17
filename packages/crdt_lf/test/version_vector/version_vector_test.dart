@@ -147,6 +147,16 @@ void main() {
         versionVector.clear,
         throwsA(isA<UnsupportedError>()),
       );
+
+      final vvDeep = VersionVector.immutable({
+        author: HybridLogicalClock(l: 1, c: 1),
+      });
+
+      vvDeep.entries.first.value.localEvent(3);
+      expect(
+        vvDeep.entries.first.value,
+        equals(HybridLogicalClock(l: 1, c: 1)),
+      );
     });
 
     test('should be mutable', () {
@@ -166,6 +176,35 @@ void main() {
 
       expect(
         mutableVersionVector.clear,
+        returnsNormally,
+      );
+    });
+
+    test('mutable() should return a mutable copy', () {
+      final author = PeerId.generate();
+      final source = VersionVector.immutable({
+        author: HybridLogicalClock(l: 1, c: 1),
+      });
+
+      final mutableCopy = source.mutable();
+
+      expect(
+        () => mutableCopy.update(author, HybridLogicalClock(l: 2, c: 0)),
+        returnsNormally,
+      );
+
+      expect(
+        source[author],
+        equals(HybridLogicalClock(l: 1, c: 1)),
+      );
+
+      expect(
+        () => mutableCopy.remove([author]),
+        returnsNormally,
+      );
+
+      expect(
+        mutableCopy.clear,
         returnsNormally,
       );
     });
