@@ -24,7 +24,6 @@ void main() {
           MessageType.ping,
           MessageType.pong,
           MessageType.error,
-
         ]),
       );
     });
