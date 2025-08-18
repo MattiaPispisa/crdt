@@ -106,7 +106,7 @@ class SyncManager {
     return versionVector;
   }
 
- /// Send local changes that are newer than the server's vector
+  /// Send local changes that are newer than the server's vector
   Future<void> _sendUnknownChangesToServer(VersionVector serverVV) async {
     final toSend = document.exportChangesNewerThan(serverVV);
     if (toSend.isEmpty) {

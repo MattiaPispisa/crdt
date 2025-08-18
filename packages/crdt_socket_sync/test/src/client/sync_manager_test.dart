@@ -78,7 +78,7 @@ void main() {
         expect(mockClient.sentMessages.length, equals(1));
         final sentMessage = mockClient.getLastSentMessage();
         expect(sentMessage, isA<DocumentStatusRequestMessage>());
-        expect(sentMessage!.documentId, equals(document.peerId.toString()));
+        expect(sentMessage!.documentId, equals(document.documentId));
       });
 
       test('should handle error when requesting missing changes gracefully',
@@ -239,7 +239,7 @@ void main() {
         // Wait for the message to be sent
         Future<void>.delayed(Duration.zero).then((_) {
           final sentMessage = mockClient.getLastSentMessage();
-          expect(sentMessage!.documentId, equals(document.peerId.toString()));
+          expect(sentMessage!.documentId, equals(document.documentId));
         });
       });
     });

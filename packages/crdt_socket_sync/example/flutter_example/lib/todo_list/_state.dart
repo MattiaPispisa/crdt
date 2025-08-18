@@ -105,11 +105,10 @@ class TodoListState extends ChangeNotifier {
 
   void toggleTodo(int index) {
     final todo = _handler.value[index];
-    final newTodo = Todo.fromJson(todo).copyWith(isDone: !Todo.fromJson(todo).isDone);
-    _handler.update(
-      index,
-      newTodo.toJson(),
-    );
+    final newTodo = Todo.fromJson(
+      todo,
+    ).copyWith(isDone: !Todo.fromJson(todo).isDone);
+    _handler.update(index, newTodo.toJson());
     _logger.info('toggling todo: $newTodo');
     notifyListeners();
   }

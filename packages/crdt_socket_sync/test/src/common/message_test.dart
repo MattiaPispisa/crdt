@@ -11,18 +11,20 @@ import '../utils/mock_operation.dart';
 void main() {
   group('MessageType', () {
     test('should have all expected message types', () {
-      expect(MessageType.values, hasLength(8));
+      expect(MessageType.values, hasLength(9));
       expect(
         MessageType.values,
         containsAll([
           MessageType.handshakeRequest,
           MessageType.handshakeResponse,
           MessageType.change,
+          MessageType.changes,
           MessageType.documentStatus,
           MessageType.documentStatusRequest,
           MessageType.ping,
           MessageType.pong,
           MessageType.error,
+
         ]),
       );
     });
