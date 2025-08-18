@@ -19,15 +19,15 @@
       "args": ["--dart-define=use_simulated_environment=true"]
     },
     {
-      "name": "crdt_socket_sync_example_server",
+      "name": "in_memory_sync_server",
       "cwd": "packages/crdt_socket_sync/example",
       "request": "launch",
       "type": "dart",
-      "program": "main_server.dart",
+      "program": "main.dart",
       "args": []
     },
     {
-      "name": "crdt_socket_sync_example_client",
+      "name": "sync_terminal_client",
       "cwd": "packages/crdt_socket_sync/example",
       "request": "launch",
       "type": "dart",
@@ -35,8 +35,15 @@
       "args": []
     },
     {
-      "name": "crdt_socket_sync_flutter_example",
-      "cwd": "packages/crdt_socket_sync/flutter_example",
+      "name": "sync_flutter_example",
+      "cwd": "packages/crdt_socket_sync/example/flutter_example",
+      "request": "launch",
+      "type": "dart",
+      "args": []
+    },
+    {
+      "name": "complex_sync_server",
+      "cwd": "packages/crdt_socket_sync/example/server_example",
       "request": "launch",
       "type": "dart",
       "args": []

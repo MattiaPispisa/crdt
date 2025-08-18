@@ -1,0 +1,19 @@
+name: server_example
+description: A starting point for Dart libraries or applications.
+version: 1.0.0
+publish_to: none
+
+environment:
+  sdk: ^3.7.0
+
+# Add regular dependencies here.
+dependencies:
+  crdt_lf_hive: ">=0.1.0 <1.0.0"
+  crdt_socket_sync: ">=0.2.0 <1.0.0"
+  crdt_lf: ^1.0.0
+  hive: ^2.0.0
+  en_logger: ^1.2.0
+
+dev_dependencies:
+  lints: ^5.0.0
+  test: ^1.24.0

@@ -20,34 +20,43 @@ class InMemoryCRDTServerRegistry implements CRDTServerRegistry {
   final Map<String, Snapshot> _snapshots;
 
   @override
-  void addDocument(String documentId, CRDTDocument document) {
-    _documents[documentId] = document;
+  Future<void> addDocument(
+    String documentId, {
+    PeerId? author,
+  }) async {
+    _documents[documentId] = CRDTDocument(
+      peerId: author ?? PeerId.generate(),
+    );
   }
 
   @override
-  CRDTDocument? getDocument(String documentId) {
+  Future<CRDTDocument?> getDocument(String documentId) async {
     return _documents[documentId];
   }
 
   @override
-  bool hasDocument(String documentId) {
+  Future<bool> hasDocument(String documentId) async {
     return _documents.containsKey(documentId);
   }
 
   @override
-  void removeDocument(String documentId) {
+  Future<void> removeDocument(String documentId) async {
     _documents.remove(documentId);
     _snapshots.remove(documentId);
   }
 
   @override
-  Set<String> get documentIds => _documents.keys.toSet();
+  Future<Set<String>> get documentIds async {
+    return _documents.keys.toSet();
+  }
 
   @override
-  int get documentCount => _documents.length;
+  Future<int> get documentCount async {
+    return _documents.length;
+  }
 
   @override
-  Snapshot createSnapshot(String documentId) {
+  Future<Snapshot> createSnapshot(String documentId) async {
     final document = _documents[documentId];
     if (document == null) {
       throw ArgumentError('Document with ID "$documentId" not found');
@@ -59,12 +68,12 @@ class InMemoryCRDTServerRegistry implements CRDTServerRegistry {
   }
 
   @override
-  Snapshot? getLatestSnapshot(String documentId) {
+  Future<Snapshot?> getLatestSnapshot(String documentId) async {
     return _snapshots[documentId];
   }
 
   @override
-  bool applyChange(String documentId, Change change) {
+  Future<bool> applyChange(String documentId, Change change) async {
     final document = _documents[documentId];
     if (document == null) {
       throw ArgumentError('Document with ID "$documentId" not found');
@@ -79,7 +88,7 @@ class InMemoryCRDTServerRegistry implements CRDTServerRegistry {
   }
 
   /// Clear all documents and snapshots
-  void clear() {
+  Future<void> clear() async {
     _documents.clear();
     _snapshots.clear();
   }

@@ -109,7 +109,9 @@ class DAG {
   /// The node's parents must already exist in the [DAG].
   void addNode(OperationId id, Set<OperationId> deps) {
     if (_nodes.containsKey(id)) {
-      throw StateError('Node with ID $id already exists in the DAG');
+      throw DuplicateNodeException(
+        'Node with ID $id already exists in the DAG',
+      );
     }
 
     // Create the new node
@@ -120,7 +122,9 @@ class DAG {
     // Connect the node to its parents
     for (final depId in deps) {
       if (!_nodes.containsKey(depId)) {
-        throw StateError('Dependency $depId does not exist in the DAG');
+        throw MissingDependencyException(
+          'Dependency $depId does not exist in the DAG',
+        );
       }
 
       node.addParent(depId);

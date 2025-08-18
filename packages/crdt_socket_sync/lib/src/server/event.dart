@@ -28,6 +28,51 @@ enum ServerEventType {
 
   /// An error has occurred
   error,
+
+  /// A client is out of sync
+  clientOutOfSync,
+
+  /// A message has been broadcasted to clients
+  messageBroadcasted,
+
+  /// A message has been sent to a client
+  messageSent;
+
+  /// Whether the event is started
+  bool get isStarted => this == started;
+
+  /// Whether the event is stopped
+  bool get isStopped => this == stopped;
+
+  /// Whether the event is client connected
+  bool get isClientConnected => this == clientConnected;
+
+  /// Whether the event is client handshake
+  bool get isClientHandshake => this == clientHandshake;
+
+  /// Whether the event is client document status created
+  bool get isClientDocumentStatusCreated => this == clientDocumentStatusCreated;
+
+  /// Whether the event is client change applied
+  bool get isClientChangeApplied => this == clientChangeApplied;
+
+  /// Whether the event is client ping request
+  bool get isClientPingRequest => this == clientPingRequest;
+
+  /// Whether the event is client disconnected
+  bool get isClientDisconnected => this == clientDisconnected;
+
+  /// Whether the event is client out of sync
+  bool get isClientOutOfSync => this == clientOutOfSync;
+
+  /// Whether the event is a client event
+  bool get isError => this == error;
+
+  /// Whether the event is a broadcast event
+  bool get isMessageBroadcasted => this == messageBroadcasted;
+
+  /// Whether the event is a sent event
+  bool get isMessageSent => this == messageSent;
 }
 
 /// Class representing a server event

@@ -69,14 +69,12 @@ void main() {
             operation: operation,
             deps: {},
             author: author,
-            hlc: HybridLogicalClock(l: 1, c: 1),
           ),
           Change(
             id: OperationId(author, HybridLogicalClock(l: 1, c: 2)),
             operation: operation,
             deps: {},
             author: author,
-            hlc: HybridLogicalClock(l: 1, c: 2),
           ),
         ]);
 
@@ -111,7 +109,7 @@ void main() {
       expect(
         json['versionVector'],
         equals({
-          'vector': {author.toString(): 65537},
+          'vector': {author.toString(): '1.1'},
         }),
       );
       expect(json['data'], equals({'test': 'Hello World!'}));
@@ -138,6 +136,21 @@ void main() {
       expect(snapshot.data, equals({'test': 'Hello World!'}));
     });
 
+    test('toString correctly', () {
+      final snapshot = Snapshot(
+        id: 'id',
+        versionVector: VersionVector({author: HybridLogicalClock(l: 1, c: 1)}),
+        data: {'test': 'Hello World!'},
+      );
+
+      expect(snapshot.toString(), contains('Snapshot(id: id'));
+      expect(
+        snapshot.toString(),
+        contains('versionVector: VersionVector(vector: '),
+      );
+      expect(snapshot.toString(), contains('data: {test: Hello World!}'));
+    });
+
     test('same version should produce same id', () {
       final doc = CRDTDocument(peerId: author)
         ..importChanges([
@@ -146,14 +159,12 @@ void main() {
             operation: operation,
             deps: {},
             author: author,
-            hlc: HybridLogicalClock(l: 1, c: 1),
           ),
           Change(
             id: OperationId(author, HybridLogicalClock(l: 1, c: 2)),
             operation: operation,
             deps: {},
             author: author,
-            hlc: HybridLogicalClock(l: 1, c: 2),
           ),
         ]);
 
@@ -164,14 +175,12 @@ void main() {
             operation: operation,
             deps: {},
             author: author,
-            hlc: HybridLogicalClock(l: 1, c: 1),
           ),
           Change(
             id: OperationId(author, HybridLogicalClock(l: 1, c: 2)),
             operation: operation,
             deps: {},
             author: author,
-            hlc: HybridLogicalClock(l: 1, c: 2),
           ),
         ]);
 

@@ -49,7 +49,7 @@ class ClientAwarenessPlugin extends ClientSyncPlugin {
   DocumentAwareness get awareness =>
       _awareness ??
       DocumentAwareness(
-        documentId: client.document.peerId.toString(),
+        documentId: client.document.documentId,
         states: {},
       );
 
@@ -125,11 +125,9 @@ class ClientAwarenessPlugin extends ClientSyncPlugin {
       },
     );
 
-    final documentId = client.document.peerId.toString();
-
     _awareness = (_awareness ??
             DocumentAwareness(
-              documentId: documentId,
+              documentId: client.document.documentId,
               states: {},
             ))
         .copyWithUpdatedClient(state);
@@ -139,7 +137,7 @@ class ClientAwarenessPlugin extends ClientSyncPlugin {
     void send() => client.sendMessage(
           AwarenessUpdateMessage(
             state: state,
-            documentId: documentId,
+            documentId: client.document.documentId,
           ),
         );
 

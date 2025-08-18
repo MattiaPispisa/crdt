@@ -1,0 +1,10 @@
+# melos_managed_dependency_overrides: crdt_lf,crdt_lf_hive,crdt_socket_sync,hlc_dart
+dependency_overrides:
+  crdt_lf:
+    path: ../../../crdt_lf
+  crdt_lf_hive:
+    path: ../../../crdt_lf_hive
+  crdt_socket_sync:
+    path: ../..
+  hlc_dart:
+    path: ../../../hlc

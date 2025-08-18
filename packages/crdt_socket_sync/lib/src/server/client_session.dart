@@ -17,21 +17,25 @@ class ClientSession {
     required TransportConnection connection,
     required CRDTServerRegistry serverRegistry,
     Compressor? compressor,
+    MessageCodec<Message>? messageCodec,
     List<ServerSyncPlugin> plugins = const [],
-  })  : _connection = connection,
+  })  : _isClosed = false,
+        _connection = connection,
         _serverRegistry = serverRegistry,
         _plugins = plugins,
         _sessionEventController = StreamController<SessionEvent>.broadcast(),
         _messageCodec = CompressedCodec<Message>(
           PluginAwareMessageCodec.fromPlugins(
             plugins: plugins,
-            defaultCodec: JsonMessageCodec<Message>(
-              toJson: (message) => message.toJson(),
-              fromJson: Message.fromJson,
-            ),
+            defaultCodec: messageCodec ??
+                JsonMessageCodec<Message>(
+                  toJson: (message) => message.toJson(),
+                  fromJson: Message.fromJson,
+                ),
           ),
           compressor: compressor ?? NoCompression.instance,
         ) {
+    _updateClientActivity();
     _connection.incoming.listen(
       _handleData,
       onError: _handleConnectionError,
@@ -63,10 +67,10 @@ class ClientSession {
   Timer? _heartbeatTimer;
 
   /// Last time we received any message from client
-  DateTime _lastClientActivity = DateTime.now();
+  late DateTime _lastClientActivity;
 
   /// Whether the session is closed
-  bool _isClosed = false;
+  bool _isClosed;
 
   /// Session events stream
   Stream<SessionEvent> get events => _sessionEventController.stream;
@@ -134,8 +138,7 @@ class ClientSession {
 
   /// Handle incoming data from the transport
   void _handleData(List<int> data) {
-    // Update last activity timestamp
-    _lastClientActivity = DateTime.now();
+    _updateClientActivity();
 
     try {
       final message = _messageCodec.decode(data);
@@ -210,7 +213,18 @@ class ClientSession {
           );
 
         case MessageType.change:
-          return _handleChangeMessage(message as ChangeMessage);
+          final changeMessage = message as ChangeMessage;
+          return await _handleChangesMessage(
+            changes: [changeMessage.change],
+            documentId: changeMessage.documentId,
+          );
+
+        case MessageType.changes:
+          final changesMessage = message as ChangesMessage;
+          return await _handleChangesMessage(
+            changes: changesMessage.changes,
+            documentId: changesMessage.documentId,
+          );
 
         case MessageType.documentStatusRequest:
           return await _handleDocumentStatusRequest(
@@ -240,8 +254,9 @@ class ClientSession {
   /// Handle handshake
   Future<void> _handleHandshakeRequest(HandshakeRequestMessage message) async {
     final documentId = message.documentId;
+    final hasDocument = await _serverRegistry.hasDocument(documentId);
 
-    if (!_serverRegistry.hasDocument(documentId)) {
+    if (!hasDocument) {
       // send error message if the document does not exist
       return sendMessage(
         Message.error(
@@ -259,8 +274,8 @@ class ClientSession {
       plugin.onDocumentRegistered(this, documentId);
     }
 
-    final document = _serverRegistry.getDocument(documentId)!;
-    final snapshot = _serverRegistry.getLatestSnapshot(documentId);
+    final document = (await _serverRegistry.getDocument(documentId))!;
+    final snapshot = await _serverRegistry.getLatestSnapshot(documentId);
 
     late List<Change> changes;
 
@@ -293,16 +308,19 @@ class ClientSession {
     );
   }
 
-  void _handleChangeMessage(ChangeMessage message) {
-    final documentId = message.documentId;
+  Future<void> _handleChangesMessage({
+    required List<Change> changes,
+    required String documentId,
+  }) async {
+    final hasDocument = await _serverRegistry.hasDocument(documentId);
 
-    if (!_serverRegistry.hasDocument(documentId)) {
+    if (!hasDocument) {
       _addSessionEvent(
         SessionEventGeneric(
           sessionId: id,
           type: SessionEventType.error,
           message: 'Document not found: $documentId'
-              ', cannot apply change ${message.change.id}',
+              ', cannot apply changes ${changes.map((c) => c.id).join(', ')}',
         ),
       );
       return;
@@ -314,41 +332,58 @@ class ClientSession {
           sessionId: id,
           type: SessionEventType.error,
           message: 'Client is not subscribed to document: $documentId'
-              ', cannot apply change ${message.change.id}',
+              ', cannot apply changes ${changes.map((c) => c.id).join(', ')}',
         ),
       );
       return;
     }
 
-    try {
-      final applied = _serverRegistry.applyChange(documentId, message.change);
+    for (final change in changes) {
+      try {
+        final applied = await _serverRegistry.applyChange(documentId, change);
 
-      if (applied) {
-        _addSessionEvent(
-          SessionEventChangeApplied(
-            sessionId: id,
-            message: 'Change received and applied for document $documentId',
+        if (applied) {
+          _addSessionEvent(
+            SessionEventChangeApplied(
+              sessionId: id,
+              message: 'Change received and applied for document $documentId',
+              documentId: documentId,
+              change: change,
+            ),
+          );
+        } else {
+          _addSessionEvent(
+            SessionEventGeneric(
+              sessionId: id,
+              type: SessionEventType.error,
+              message: 'Failed to apply change ${change.id}',
+            ),
+          );
+        }
+      } on CausallyNotReadyException {
+        await sendMessage(
+          Message.error(
             documentId: documentId,
-            change: message.change,
+            code: Protocol.errorOutOfSync,
+            message: 'Client is out of sync. Please re-sync.',
           ),
         );
-      } else {
+        _addSessionEvent(
+          SessionEventGeneric(
+            sessionId: id,
+            type: SessionEventType.clientOutOfSync,
+            message: 'Client is out of sync. Please re-sync.',
+          ),
+        );
+      } catch (e) {
         _addSessionEvent(
           SessionEventGeneric(
             sessionId: id,
             type: SessionEventType.error,
-            message: 'Failed to apply change ${message.change.id}',
+            message: 'Failed to apply change ${change.id}: $e',
           ),
         );
       }
-    } catch (e) {
-      _addSessionEvent(
-        SessionEventGeneric(
-          sessionId: id,
-          type: SessionEventType.error,
-          message: 'Failed to apply change ${message.change.id}: $e',
-        ),
-      );
     }
   }
 
@@ -357,8 +392,9 @@ class ClientSession {
     DocumentStatusRequestMessage message,
   ) async {
     final documentId = message.documentId;
+    final hasDocument = await _serverRegistry.hasDocument(documentId);
 
-    if (!_serverRegistry.hasDocument(documentId)) {
+    if (!hasDocument) {
       // send error message if the document does not exist
       _addSessionEvent(
         SessionEventGeneric(
@@ -381,8 +417,9 @@ class ClientSession {
       _subscribedDocuments.add(documentId);
     }
 
-    final snapshot = _serverRegistry.getLatestSnapshot(documentId);
-    final changes = _serverRegistry.getDocument(documentId)!.exportChanges();
+    final snapshot = await _serverRegistry.getLatestSnapshot(documentId);
+    final changes = (await _serverRegistry.getDocument(documentId))!
+        .exportChanges(from: message.version);
 
     final response = Message.documentStatus(
       documentId: documentId,
@@ -472,6 +509,11 @@ class ClientSession {
     );
 
     _closeSession(reason: 'Client timeout');
+  }
+
+  /// Update last activity timestamp
+  void _updateClientActivity() {
+    _lastClientActivity = DateTime.now();
   }
 
   /// Close the session with reason

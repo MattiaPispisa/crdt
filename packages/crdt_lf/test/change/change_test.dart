@@ -33,7 +33,6 @@ void main() {
         id: id,
         operation: operation,
         deps: deps,
-        hlc: hlc,
         author: author,
       );
 
@@ -49,7 +48,6 @@ void main() {
         id: id,
         operation: operation,
         deps: deps,
-        hlc: hlc,
         author: author,
       );
 
@@ -64,7 +62,6 @@ void main() {
         id: id,
         operation: operation,
         deps: deps,
-        hlc: hlc,
         author: author,
       );
 
@@ -72,7 +69,6 @@ void main() {
         id: OperationId.parse('b7353649-1b52-43b0-9dbc-a843e3308cb0@1.3'),
         operation: operation,
         deps: deps,
-        hlc: hlc,
         author: author,
       );
 
@@ -84,7 +80,6 @@ void main() {
         id: OperationId.parse('2951e709-9576-4e1d-9ec8-52e557bfa8cd@1.1'),
         operation: operation,
         deps: deps,
-        hlc: HybridLogicalClock(l: 1, c: 1),
         author: author,
       );
 
@@ -92,7 +87,6 @@ void main() {
         id: OperationId.parse('112e1539-c71a-4217-9100-4554f79096e4@1.2'),
         operation: operation,
         deps: deps,
-        hlc: HybridLogicalClock(l: 2, c: 1),
         author: author,
       );
 
@@ -108,7 +102,6 @@ void main() {
         id: id,
         operation: operation,
         deps: deps,
-        hlc: hlc,
         author: author,
       );
 
@@ -129,7 +122,6 @@ void main() {
         id: id,
         operation: operation,
         deps: deps1,
-        hlc: hlc,
         author: author,
       );
 
@@ -137,7 +129,6 @@ void main() {
         id: id,
         operation: operation,
         deps: deps2,
-        hlc: hlc,
         author: author,
       );
 

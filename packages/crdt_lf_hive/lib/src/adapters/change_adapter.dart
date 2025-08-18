@@ -2,7 +2,6 @@ import 'dart:convert';
 import 'package:crdt_lf/crdt_lf.dart';
 import 'package:crdt_lf_hive/src/adapters/ids.dart';
 import 'package:hive/hive.dart';
-import 'package:hlc_dart/hlc_dart.dart';
 
 /// Hive adapter for [Change] objects.
 ///
@@ -27,7 +26,6 @@ class ChangeAdapter extends TypeAdapter<Change> {
   @override
   Change read(BinaryReader reader) {
     final id = reader.read() as OperationId;
-    final hlc = reader.read() as HybridLogicalClock;
     final author = reader.read() as PeerId;
 
     final depsCount = reader.readInt();
@@ -39,7 +37,6 @@ class ChangeAdapter extends TypeAdapter<Change> {
     return Change.fromPayload(
       id: id,
       deps: deps,
-      hlc: hlc,
       author: author,
       payload: _readPayload(reader),
     );
@@ -65,7 +62,6 @@ class ChangeAdapter extends TypeAdapter<Change> {
   void write(BinaryWriter writer, Change obj) {
     writer
       ..write(obj.id)
-      ..write(obj.hlc)
       ..write(obj.author)
       ..writeInt(obj.deps.length);
     for (final dep in obj.deps) {

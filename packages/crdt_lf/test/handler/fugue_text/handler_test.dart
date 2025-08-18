@@ -28,6 +28,14 @@ void main() {
       expect(handler.value, 'Hello');
     });
 
+    test('should delete text', () {
+      final doc = CRDTDocument();
+      final handler = CRDTFugueTextHandler(doc, 'text1')
+        ..insert(0, 'Hello')
+        ..delete(0, 2);
+      expect(handler.value, 'llo');
+    });
+
     test(
       'should update text',
       () {
@@ -46,9 +54,10 @@ void main() {
       final handler = CRDTFugueTextHandler(doc, 'text1')
         ..insert(0, 'Hello World')
         ..delete(5, 6)
-        ..update(5, 'Dart!')
-        ..insert(8, 'and Flutter!');
-      expect(handler.value, 'Hello Worldand Flutter!');
+        ..insert(5, ' Dart!')
+        ..update(6, 'World')
+        ..insert(11, ' and Flutter!');
+      expect(handler.value, 'Hello World and Flutter!');
     });
 
     test('should handle out of bounds deletion', () {

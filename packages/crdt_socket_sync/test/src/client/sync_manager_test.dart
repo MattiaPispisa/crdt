@@ -51,7 +51,6 @@ void main() {
           id: OperationId(PeerId.generate(), HybridLogicalClock(l: 1, c: 1)),
           operation: operation,
           deps: {},
-          hlc: HybridLogicalClock(l: 1, c: 1),
           author: PeerId.generate(),
         );
 
@@ -66,7 +65,6 @@ void main() {
           deps: {
             OperationId(PeerId.generate(), HybridLogicalClock(l: 1, c: 1)),
           },
-          hlc: HybridLogicalClock(l: 2, c: 1),
           author: PeerId.generate(),
         );
 
@@ -94,7 +92,6 @@ void main() {
           deps: {
             OperationId(PeerId.generate(), HybridLogicalClock(l: 1, c: 1)),
           },
-          hlc: HybridLogicalClock(l: 2, c: 1),
           author: PeerId.generate(),
         );
 
@@ -116,14 +113,12 @@ void main() {
             id: OperationId(PeerId.generate(), HybridLogicalClock(l: 1, c: 1)),
             operation: operation,
             deps: {},
-            hlc: HybridLogicalClock(l: 1, c: 1),
             author: PeerId.generate(),
           ),
           Change(
             id: OperationId(PeerId.generate(), HybridLogicalClock(l: 1, c: 2)),
             operation: operation,
             deps: {},
-            hlc: HybridLogicalClock(l: 1, c: 2),
             author: PeerId.generate(),
           ),
         ];
@@ -145,7 +140,6 @@ void main() {
           id: OperationId(PeerId.generate(), HybridLogicalClock(l: 1, c: 1)),
           operation: operation,
           deps: {},
-          hlc: HybridLogicalClock(l: 1, c: 1),
           author: PeerId.generate(),
         );
 
@@ -155,7 +149,6 @@ void main() {
           deps: {
             OperationId(PeerId.generate(), HybridLogicalClock(l: 1, c: 2)),
           },
-          hlc: HybridLogicalClock(l: 2, c: 1),
           author: PeerId.generate(),
         );
 
@@ -165,7 +158,6 @@ void main() {
           deps: {
             OperationId(PeerId.generate(), HybridLogicalClock(l: 1, c: 2)),
           },
-          hlc: HybridLogicalClock(l: 3, c: 1),
           author: PeerId.generate(),
         );
 
@@ -281,7 +273,6 @@ void main() {
           id: OperationId(PeerId.generate(), HybridLogicalClock(l: 1, c: 1)),
           operation: operation,
           deps: {},
-          hlc: HybridLogicalClock(l: 1, c: 1),
           author: PeerId.generate(),
         );
 
@@ -299,7 +290,6 @@ void main() {
           deps: {
             OperationId(PeerId.generate(), HybridLogicalClock(l: 1, c: 2)),
           },
-          hlc: HybridLogicalClock(l: 2, c: 1),
           author: PeerId.generate(),
         );
 

@@ -135,7 +135,7 @@ class CRDTListHandler<T> extends Handler<List<T>> {
   /// Gets the initial state of the list
   List<T> _initialState() {
     final snapshot = lastSnapshot();
-    if (snapshot is List<T>) {
+    if (snapshot is List<dynamic> && snapshot.every((e) => e is T)) {
       return List.from(snapshot);
     }
 

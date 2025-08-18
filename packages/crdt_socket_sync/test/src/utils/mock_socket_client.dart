@@ -76,9 +76,9 @@ class MockCRDTSocketClient extends CRDTSocketClient {
   }
 
   @override
-  Future<void> requestSnapshot() async {
+  Future<void> requestSync() async {
     final message = Message.documentStatusRequest(
-      documentId: document.peerId.toString(),
+      documentId: document.documentId,
       version: document.version,
     );
     await sendMessage(message);

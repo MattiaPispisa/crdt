@@ -21,12 +21,14 @@ class WebSocketServer extends CRDTSocketServer {
     required Future<HttpServer> Function() serverFactory,
     required CRDTServerRegistry serverRegistry,
     Compressor? compressor,
+    MessageCodec<Message>? messageCodec,
     super.plugins,
   })  : _serverFactory = serverFactory,
         _serverTransformer = _DefaultWebSocketTransformerWrapper(),
         _compressor = compressor ?? NoCompression.instance,
         _serverEventController = StreamController<ServerEvent>.broadcast(),
-        _serverRegistry = serverRegistry;
+        _serverRegistry = serverRegistry,
+        _messageCodec = messageCodec;
 
   /// Constructor for testing
   WebSocketServer.test({
@@ -34,13 +36,15 @@ class WebSocketServer extends CRDTSocketServer {
     required CRDTServerRegistry serverRegistry,
     Compressor? compressor,
     WebSocketServerTransformer? serverTransformer,
+    MessageCodec<Message>? messageCodec,
     super.plugins,
   })  : _serverFactory = serverFactory,
         _serverTransformer =
             serverTransformer ?? _DefaultWebSocketTransformerWrapper(),
         _compressor = compressor ?? NoCompression.instance,
         _serverEventController = StreamController<ServerEvent>.broadcast(),
-        _serverRegistry = serverRegistry;
+        _serverRegistry = serverRegistry,
+        _messageCodec = messageCodec;
 
   /// The document registry
   final CRDTServerRegistry _serverRegistry;
@@ -74,6 +78,9 @@ class WebSocketServer extends CRDTSocketServer {
 
   /// Compressor to use
   final Compressor _compressor;
+
+  /// Message codec to use
+  final MessageCodec<Message>? _messageCodec;
 
   /// Start the server
   ///
@@ -153,6 +160,15 @@ class WebSocketServer extends CRDTSocketServer {
     final session = _sessions[clientId];
     if (session != null) {
       await session.sendMessage(message);
+      _addServerEvent(
+        ServerEvent(
+          type: ServerEventType.messageSent,
+          message: 'Message sent to client $clientId',
+          data: {
+            'clientId': clientId,
+          },
+        ),
+      );
     }
   }
 
@@ -164,13 +180,30 @@ class WebSocketServer extends CRDTSocketServer {
     final documentId = message.documentId;
     final sessions = List.of(_sessions.values);
 
+    final sessionsReached = <String>[];
+
     for (final session in sessions) {
       final isExcluded = excludeClientIds?.contains(session.id) ?? false;
       final isSubscribed = session.isSubscribedTo(documentId);
 
       if (!isExcluded && isSubscribed) {
         await session.sendMessage(message);
+        sessionsReached.add(session.id);
       }
+    }
+
+    if (sessionsReached.isNotEmpty) {
+      _addServerEvent(
+        ServerEvent(
+          type: ServerEventType.messageBroadcasted,
+          message: 'Message broadcasted to ${sessionsReached.length} clients',
+          data: {
+            'documentId': documentId,
+            'sessionsReached': sessionsReached,
+            'message': message.toJson(),
+          },
+        ),
+      );
     }
   }
 
@@ -190,6 +223,7 @@ class WebSocketServer extends CRDTSocketServer {
       serverRegistry: _serverRegistry,
       compressor: _compressor,
       plugins: plugins,
+      messageCodec: _messageCodec,
     );
 
     _sessions[sessionId] = session;
@@ -197,7 +231,7 @@ class WebSocketServer extends CRDTSocketServer {
     _addServerEvent(
       ServerEvent(
         type: ServerEventType.clientConnected,
-        message: 'Client connected: $sessionId',
+        message: 'Client connected with session id: $sessionId',
         data: {
           'clientId': sessionId,
         },
@@ -217,23 +251,27 @@ class WebSocketServer extends CRDTSocketServer {
     );
   }
 
+  /// Add a server event for a handshake completed event
   void _handleSessionEventHandshakeCompleted(SessionEventGeneric event) {
     _addServerEvent(
       ServerEvent(
         type: ServerEventType.clientHandshake,
-        message: 'Client handshake completed: ${event.message}',
+        message:
+            'Session ${event.sessionId} handshake completed: ${event.message}',
         data: event.data,
       ),
     );
   }
 
+  /// 1. Add a server event for the change applied
+  /// 1. Broadcast the change to the other clients
   Future<void> _handleSessionEventChangeApplied(
     SessionEventChangeApplied event,
   ) {
     _addServerEvent(
       ServerEvent(
         type: ServerEventType.clientChangeApplied,
-        message: 'Client change applied: ${event.message}',
+        message: 'Session ${event.sessionId} change applied: ${event.message}',
       ),
     );
     return broadcastMessage(
@@ -245,12 +283,23 @@ class WebSocketServer extends CRDTSocketServer {
     );
   }
 
+  /// Add a server event for an error event
   void _handleSessionEventError(SessionEventGeneric event) {
     _addServerEvent(
       ServerEvent(
         type: ServerEventType.error,
-        message: 'Session error: ${event.message}',
+        message: 'Session ${event.sessionId} error: ${event.message}',
         data: event.data,
+      ),
+    );
+  }
+
+  /// Add a server event for a client out of sync event
+  void _handleSessionEventClientOutOfSync(SessionEventGeneric event) {
+    _addServerEvent(
+      ServerEvent(
+        type: ServerEventType.clientOutOfSync,
+        message: 'Session ${event.sessionId} out of sync: ${event.message}',
       ),
     );
   }
@@ -287,32 +336,42 @@ class WebSocketServer extends CRDTSocketServer {
         return _handleSessionEventDisconnected(
           event as SessionEventGeneric,
         );
+
+      case SessionEventType.clientOutOfSync:
+        return _handleSessionEventClientOutOfSync(
+          event as SessionEventGeneric,
+        );
     }
   }
 
+  /// Add a server event for a document status request event
   void _handleSessionEventDocumentStatusRequest(SessionEventGeneric event) {
     _addServerEvent(
       ServerEvent(
         type: ServerEventType.clientDocumentStatusCreated,
-        message: 'Client document status request: ${event.message}',
+        message: 'Session ${event.sessionId} document'
+            ' status request: ${event.message}',
       ),
     );
   }
 
+  /// Add a server event for a ping received event
   void _handleSessionEventPingReceived(SessionEventGeneric event) {
     _addServerEvent(
       ServerEvent(
         type: ServerEventType.clientPingRequest,
-        message: 'Client ping request: ${event.message}',
+        message: 'Session ${event.sessionId} ping request: ${event.message}',
       ),
     );
   }
 
+  /// 1. Add a server event for a client disconnected event
+  /// 1. Dispose the session
   void _handleSessionEventDisconnected(SessionEventGeneric event) {
     _addServerEvent(
       ServerEvent(
         type: ServerEventType.clientDisconnected,
-        message: 'Client disconnected: ${event.message}',
+        message: 'Session ${event.sessionId} disconnected: ${event.message}',
       ),
     );
     final session = _sessions[event.sessionId];
@@ -336,7 +395,7 @@ class WebSocketServer extends CRDTSocketServer {
     _addServerEvent(
       ServerEvent(
         type: ServerEventType.clientDisconnected,
-        message: 'Client disconnected: $sessionId',
+        message: 'Client disconnected with session id: $sessionId',
         data: {
           'clientId': sessionId,
         },
@@ -349,7 +408,7 @@ class WebSocketServer extends CRDTSocketServer {
     _addServerEvent(
       ServerEvent(
         type: ServerEventType.error,
-        message: 'Session error: $error',
+        message: 'Session $sessionId error: $error',
         data: {
           'clientId': sessionId,
         },
@@ -365,18 +424,23 @@ class WebSocketServer extends CRDTSocketServer {
   }
 
   @override
-  void dispose() {
-    stop();
-    _serverEventController.close();
+  Future<void> dispose() async {
+    await stop();
+    unawaited(_serverEventController.close());
 
     for (final plugin in plugins) {
       plugin.dispose();
     }
 
+    final documentIds = await _serverRegistry.documentIds;
+
     // Free the document registry resources
-    for (final documentId in _serverRegistry.documentIds) {
+    for (final documentId in documentIds) {
       try {
-        _serverRegistry.getDocument(documentId)?.dispose();
+        final document = await _serverRegistry.getDocument(documentId);
+        if (document != null) {
+          document.dispose();
+        }
       } catch (e) {
         _addServerEvent(
           ServerEvent(

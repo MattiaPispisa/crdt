@@ -10,9 +10,14 @@ sdkPath: .fvm/flutter_sdk
 command:
   publish:
     hooks:
-      pre: melos format && melos run analyze && melos run test && melos run devtools_build
+      pre: melos format && melos run analyze && melos run test && melos run devtools_build && melos run benchmark
 
 scripts:
+  benchmark:
+    name: Benchmark
+    description: Run the benchmarks
+    run: cd packages/crdt_lf && ./benchmark/run.sh
+
   test:
     name: Test
     description: Run the tests
@@ -30,3 +35,10 @@ scripts:
     name: Devtools Build
     description: Build the devtools extension
     run: cd ./packages/crdt_lf_devtools_extension && dart run devtools_extensions build_and_copy --source=. --dest=../crdt_lf/extension/devtools && dart run devtools_extensions validate --package=../crdt_lf
+
+  fix_apply:
+    name: Fix Apply
+    description: Apply the fixes
+    run: dart fix --apply
+    exec:
+      concurrency: 1

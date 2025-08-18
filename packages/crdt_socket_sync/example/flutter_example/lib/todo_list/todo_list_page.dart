@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_example/_logger.dart';
 import 'package:flutter_example/todo_list/_add_item.dart';
 import 'package:crdt_lf/crdt_lf.dart';
 import 'package:flutter_example/todo_list/_animated_cursors.dart';
@@ -9,11 +10,12 @@ import 'package:flutter_example/user/_state.dart';
 import 'package:provider/provider.dart';
 
 import '_state.dart';
+import '_todo.dart';
 
 class TodoListPage extends StatelessWidget {
   const TodoListPage({super.key, required this.documentId});
 
-  final PeerId documentId;
+  final String documentId;
 
   @override
   Widget build(BuildContext context) {
@@ -21,9 +23,12 @@ class TodoListPage extends StatelessWidget {
 
     return ChangeNotifierProvider<TodoListState>(
       create:
-          (context) =>
-              TodoListState.create(documentId: documentId, user: user)
-                ..connect(),
+          (context) => TodoListState.create(
+            documentId: documentId,
+            author: user.userId,
+            user: user,
+            logger: context.loggerInstance('TodoListState'),
+          )..connect(),
       child: _TodoListContent(
         key: ValueKey('content_$documentId'),
         userId: user.userId,
@@ -41,7 +46,7 @@ class _TodoListContent extends StatelessWidget {
   });
 
   final PeerId userId;
-  final PeerId documentId;
+  final String documentId;
 
   Future<void> _showAddTodoDialog(BuildContext context) async {
     return showDialog<void>(
@@ -107,23 +112,8 @@ class _TodoListContent extends StatelessWidget {
     return ListView.builder(
       itemCount: state.todos.length,
       itemBuilder: (context, index) {
-        final todoText = state.todos[index];
-
-        return _item(context, todoText, index);
+        return TodoItem(todo: state.todos[index], index: index);
       },
-    );
-  }
-
-  Widget _item(BuildContext context, String todo, int index) {
-    return ListTile(
-      title: Text(todo),
-      trailing: IconButton(
-        icon: const Icon(Icons.delete_outline),
-        tooltip: 'Delete Todo',
-        onPressed: () {
-          context.read<TodoListState>().removeTodo(index);
-        },
-      ),
     );
   }
 

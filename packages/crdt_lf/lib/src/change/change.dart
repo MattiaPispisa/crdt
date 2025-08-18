@@ -15,19 +15,16 @@ class Change {
   /// [operation] the operation that is being applied
   /// [deps] the dependencies of the change
   /// ([OperationId]s that this change depends on)
-  /// [hlc] the hybrid logical clock of the change
   /// [author] the author of the change
   factory Change({
     required OperationId id,
     required Operation operation,
     required Set<OperationId> deps,
-    required HybridLogicalClock hlc,
     required PeerId author,
   }) {
     return Change.fromPayload(
       id: id,
       deps: deps,
-      hlc: hlc,
       author: author,
       payload: operation.toPayload(),
     );
@@ -39,28 +36,21 @@ class Change {
   /// [payload] the operation payload that is being applied
   /// [deps] the dependencies of the change
   /// ([OperationId]s that this change depends on)
-  /// [hlc] the hybrid logical clock of the change
   /// [author] the author of the change
   const Change.fromPayload({
     required this.id,
     required this.deps,
-    required this.hlc,
     required this.author,
     required this.payload,
   });
 
   /// Creates a Change from a JSON object
   factory Change.fromJson(Map<String, dynamic> json) {
-    final hlc = json['hlc'] as Map<String, dynamic>;
     return Change.fromPayload(
       id: OperationId.parse(json['id'] as String),
       deps: (json['deps'] as List)
           .map((d) => OperationId.parse(d as String))
           .toSet(),
-      hlc: HybridLogicalClock(
-        l: hlc['l'] as int,
-        c: hlc['c'] as int,
-      ),
       author: PeerId.parse(json['author'] as String),
       payload: json['payload'] as Map<String, dynamic>,
     );
@@ -74,7 +64,7 @@ class Change {
   final Set<OperationId> deps;
 
   /// The timestamp when this change was created
-  final HybridLogicalClock hlc;
+  HybridLogicalClock get hlc => id.hlc;
 
   /// The peer that created this change
   final PeerId author;
@@ -87,10 +77,6 @@ class Change {
     return {
       'id': id.toString(),
       'deps': deps.map((d) => d.toString()).toList(),
-      'hlc': {
-        'l': hlc.l,
-        'c': hlc.c,
-      },
       'author': author.toString(),
       'payload': payload,
     };
@@ -123,7 +109,6 @@ class Change {
   int get hashCode => Object.hash(
         id,
         Object.hashAll(deps),
-        hlc,
         author,
         payload,
       );

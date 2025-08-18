@@ -1,9 +1,12 @@
 # CRDT LF
 
-[![crdt_lf_badge][crdt_lf_badge]](https://pub.dev/packages/crdt_lf)
+[![crdt_lf_badge][crdt_lf_badge]][pub_link]
+[![pub points][pub_points]][pub_link]
+[![pub likes][pub_likes]][pub_link]
 [![codecov][codecov_badge]][codecov_link]
 [![ci_badge][ci_badge]][ci_link]
 [![License: MIT][license_badge]][license_link]
+[![pub publisher][pub_publisher]][pub_publisher_link]
 
 - [CRDT LF](#crdt-lf)
   - [Features](#features)
@@ -14,9 +17,12 @@
     - [Flutter Distributed Collaboration Example](#flutter-distributed-collaboration-example)
   - [Sync](#sync)
   - [Persistence](#persistence)
+  - [Benchmarks](#benchmarks)
   - [Architecture](#architecture)
     - [CRDTDocument](#crdtdocument)
+      - [Identity](#identity)
     - [Handlers](#handlers)
+      - [Working with Complex Types](#working-with-complex-types)
     - [DAG](#dag)
     - [Change](#change)
     - [Frontiers](#frontiers)
@@ -91,6 +97,21 @@ A flutter example is available in the [flutter_example](https://github.com/Matti
 Persistence is not directly handled in this library but there are some out of the box solutions:
 - [crdt_lf_hive](https://pub.dev/packages/crdt_lf_hive): adapters and utils for persist data using [Hive](https://pub.dev/packages/hive).
 
+## Benchmarks
+
+This package includes a suite of benchmarks to ensure performance and stability. You can find the latest results [here](https://github.com/MattiaPispisa/crdt/tree/main/packages/crdt_lf/benchmark/results.md).
+
+To run the benchmarks yourself, execute the following script from the `packages/crdt_lf` directory:
+
+```sh
+./benchmark/run.sh
+```
+or run:
+
+```sh
+melos run benchmark
+```
+
 ## Architecture
 
 The library is built: 
@@ -99,6 +120,12 @@ The library is built:
 
 ### CRDTDocument
 The main document class that manages the CRDT state and handles synchronization between peers.
+
+#### Identity
+- `documentId`: identifies the document/resource (used for routing, persistence, and ACLs). It does not participate in operation identifiers.
+- `peerId`: identifies the peer/author generating operations. It is embedded into `OperationId` together with the Hybrid Logical Clock.
+
+If not provided, both are generated: `peerId` and `documentId`.
 
 ### Handlers
 Handlers are the core components of the library. They manage the state of a specific type of data and provide operations to modify it.
@@ -110,6 +137,7 @@ Handlers are the core components of the library. They manage the state of a spec
 
 ```dart
 final doc = CRDTDocument(
+  documentId: 'todo-list-123',
   peerId: PeerId.parse('45ee6b65-b393-40b7-9755-8b66dc7d0518'),
 );
 final list = CRDTListHandler(doc, 'todo-list');
@@ -120,6 +148,67 @@ print(list.value); // Prints "[Buy milk]"
 ```
 
 Every handler can be found in the [handlers](https://github.com/MattiaPispisa/crdt/tree/main/packages/crdt_lf/lib/src/handler) folder.
+
+#### Working with Complex Types
+
+When using `CRDTListHandler<T>` or `CRDTMapHandler<T>` with complex object types (e.g., your own custom classes) for `T`, it's crucial to understand how data is managed.
+
+The `value` of your complex object is directly embedded within the `Change`'s payload. This has two important implications:
+
+1.  **Serialization**: If you plan to persist these `Change`s (e.g., using `crdt_lf_hive`) or send them over a network, you **must** have a strategy to serialize and deserialize your custom objects. The raw object cannot be stored or transmitted as-is. A common approach is to convert your object to a `Map<String, dynamic>` (e.g., by implementing `toJson()` and a `fromJson()` factory).
+
+2.  **Immutability and Value Semantics**: When a `Change` is created, it captures the **state of the `value` at that specific moment**. If you later mutate the original object, the `Change` will still hold the old state. This can lead to unexpected behavior. It is highly recommended to treat your complex objects as **immutable**. When you need to modify an object, create a new instance with the updated values instead of mutating the existing one. This ensures that each `Change` is a predictable and self-contained snapshot of the operation.
+
+**Example with a custom class:**
+
+```dart
+class MyData {
+  final String name;
+  final int count;
+
+  MyData(this.name, this.count);
+
+  // You need a way to serialize
+  Map<String, dynamic> toJson() => {'name': name, 'count': count};
+
+  // And a way to deserialize
+  factory MyData.fromJson(Map<String, dynamic> json) {
+    return MyData(json['name'], json['count']);
+  }
+}
+
+// When using with a handler
+final list = CRDTListHandler<MyData>(doc, 'my-data-list');
+
+// GOOD: Create a new instance for the change
+final data = MyData('item1', 1);
+list.insert(0, data);
+
+// BAD: Mutating the object after insertion
+// This will NOT be reflected in the CRDT history
+// data.count = 2; // Avoid this
+
+// Instead, for updates, create a new instance
+final updatedData = MyData('item1', 2);
+list.update(0, updatedData);
+```
+
+**Alternative Approach: Store Raw Data**
+
+A more robust pattern is to always store raw, serializable data (like `Map<String, dynamic>`) inside the handler. This forces serialization at the system's boundary and avoids accidental mutation issues.
+
+```dart
+// 1. Declare the handler with a raw type
+final rawList = CRDTListHandler<Map<String, dynamic>>(doc, 'my-raw-list');
+
+// 2. Serialize before inserting/updating
+final data = MyData('item2', 1);
+rawList.insert(0, data.toJson()); 
+
+// 3. Deserialize when reading the value
+final myDataList = rawList.value.map((map) => MyData.fromJson(map)).toList();
+print(myDataList.first.name); // Prints "item2"
+```
 
 ### DAG
 A Directed Acyclic Graph that maintains the causal ordering of operations.
@@ -155,7 +244,7 @@ Feel free to:
 
 ## Acknowledgments
 
-- [Fugue Algorithm](https://arxiv.org/abs/2005.05914)
+- [Fugue Algorithm](https://arxiv.org/abs/2305.00583)
 - [Hybrid Logical Clock](https://cse.buffalo.edu/tech-reports/2014-04.pdf)
 
 ## Packages
@@ -173,3 +262,8 @@ Other bricks of the crdt "system" are:
 [codecov_link]: https://app.codecov.io/gh/MattiaPispisa/crdt/tree/main/packages/crdt_lf
 [ci_badge]: https://img.shields.io/github/actions/workflow/status/MattiaPispisa/crdt/main.yaml
 [ci_link]: https://github.com/MattiaPispisa/crdt/actions/workflows/main.yaml
+[pub_points]: https://img.shields.io/pub/points/crdt_lf
+[pub_link]: https://pub.dev/packages/crdt_lf
+[pub_publisher]: https://img.shields.io/pub/publisher/crdt_lf
+[pub_publisher_link]: https://pub.dev/packages?q=publisher%3Amattiapispisa.it
+[pub_likes]: https://img.shields.io/pub/likes/crdt_lf

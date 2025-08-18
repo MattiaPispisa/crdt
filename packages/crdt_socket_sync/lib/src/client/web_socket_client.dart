@@ -17,6 +17,7 @@ class WebSocketClient extends CRDTSocketClient {
     required this.document,
     required this.author,
     Compressor? compressor,
+    MessageCodec<Message>? messageCodec,
     super.plugins,
   })  : _messageController = StreamController<Message>.broadcast(),
         _connectionStatusController =
@@ -27,10 +28,11 @@ class WebSocketClient extends CRDTSocketClient {
     _messageCodec = CompressedCodec<Message>(
       PluginAwareMessageCodec.fromPlugins(
         plugins: plugins,
-        defaultCodec: JsonMessageCodec<Message>(
-          toJson: (message) => message.toJson(),
-          fromJson: Message.fromJson,
-        ),
+        defaultCodec: messageCodec ??
+            JsonMessageCodec<Message>(
+              toJson: (message) => message.toJson(),
+              fromJson: Message.fromJson,
+            ),
       ),
       compressor: compressor ?? NoCompression.instance,
     );
@@ -40,7 +42,6 @@ class WebSocketClient extends CRDTSocketClient {
 
   @override
   final CRDTDocument document;
-  String get _documentId => document.peerId.toString();
 
   /// Author of the document
   @override
@@ -118,12 +119,6 @@ class WebSocketClient extends CRDTSocketClient {
   @override
   Stream<Message> get messages => _messageController.stream;
 
-  @override
-  List<Change> get unSyncChanges => _syncManager.unSyncChanges;
-
-  @override
-  Stream<int> get unSyncChangesCount => _syncManager.unSyncChangesCount;
-
   /// Connect to the server
   ///
   /// Returns true if the connection is successful, false otherwise
@@ -150,6 +145,10 @@ class WebSocketClient extends CRDTSocketClient {
 
     try {
       final connector = _WebSocketConnector(url);
+
+      await tryCatchIgnore(() async {
+        await _transport?.close();
+      });
 
       _transport = Transport.create(connector);
 
@@ -190,7 +189,9 @@ class WebSocketClient extends CRDTSocketClient {
       return;
     }
 
-    await _transport!.close();
+    await tryCatchIgnore(() async {
+      await _transport!.close();
+    });
     _transport = null;
 
     for (final plugin in plugins) {
@@ -250,7 +251,7 @@ class WebSocketClient extends CRDTSocketClient {
   Future<void> sendChange(Change change) async {
     await tryCatchIgnore(() async {
       final message = Message.change(
-        documentId: _documentId,
+        documentId: document.documentId,
         change: change,
       );
       await sendMessage(message);
@@ -258,13 +259,9 @@ class WebSocketClient extends CRDTSocketClient {
   }
 
   @override
-  Future<void> requestSnapshot() async {
+  Future<void> requestSync() async {
     await tryCatchIgnore(() async {
-      final message = Message.documentStatusRequest(
-        documentId: _documentId,
-        version: document.version,
-      );
-      await sendMessage(message);
+      await _syncManager.requestDocumentStatus();
     });
   }
 
@@ -314,6 +311,10 @@ class WebSocketClient extends CRDTSocketClient {
     dynamic error, {
     bool attemptReconnect = true,
   }) {
+    if (_handshaking || _handshakeCompleter != null) {
+      _resetHandshake();
+    }
+
     // on reconnecting if an error occurs do not update the status
     // to error, because the reconnect will handle it.
     if (!_isReconnecting) {
@@ -378,7 +379,7 @@ class WebSocketClient extends CRDTSocketClient {
     if (!_connectionStatusValue.isDisconnected) {
       await tryCatchIgnore(() async {
         final pingMessage = Message.ping(
-          documentId: _documentId,
+          documentId: document.documentId,
           timestamp: DateTime.now().millisecondsSinceEpoch,
         );
         await sendMessage(pingMessage);
@@ -399,7 +400,7 @@ class WebSocketClient extends CRDTSocketClient {
 
     final handshakeRequest = HandshakeRequestMessage(
       version: document.version,
-      documentId: _documentId,
+      documentId: document.documentId,
       author: author,
     );
 
@@ -427,7 +428,7 @@ class WebSocketClient extends CRDTSocketClient {
 
   /// Handles incoming messages
   Future<void> _handleMessage(Message message) async {
-    if (message.documentId != _documentId) {
+    if (message.documentId != document.documentId) {
       return;
     }
 
@@ -490,7 +491,7 @@ class WebSocketClient extends CRDTSocketClient {
 
   Future<void> _handlePingMessage(PingMessage message) async {
     final pongMessage = PongMessage(
-      documentId: _documentId,
+      documentId: document.documentId,
       originalTimestamp: message.timestamp,
       responseTimestamp: DateTime.now().millisecondsSinceEpoch,
     );
@@ -498,12 +499,16 @@ class WebSocketClient extends CRDTSocketClient {
   }
 
   void _handleErrorMessage(ErrorMessage message) {
+    if (message.code == Protocol.errorOutOfSync) {
+      requestSync();
+      return;
+    }
+
     _updateConnectionStatus(ConnectionStatus.error);
 
     if (message.code == Protocol.errorHandshakeFailed &&
         _handshakeCompleter != null) {
-      _handshakeCompleter?.complete(false);
-      _handshakeCompleter = null;
+      _resetHandshake();
     }
   }
 
@@ -520,6 +525,14 @@ class WebSocketClient extends CRDTSocketClient {
     }
 
     _connectionStatusController.add(status);
+  }
+
+  /// Reset the handshake completer
+  void _resetHandshake() {
+    if (_handshakeCompleter?.isCompleted == false) {
+      _handshakeCompleter?.complete(false);
+    }
+    _handshakeCompleter = null;
   }
 
   @override

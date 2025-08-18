@@ -10,13 +10,27 @@ import 'package:hlc_dart/hlc_dart.dart';
 /// A CRDTDocument is the main entry point for the CRDT system.
 /// It manages the DAG, ChangeStore, and provides methods for creating,
 /// applying, exporting, and importing changes.
+///
+/// Identity:
+/// - `documentId`: identifies the document/resource. It is useful for routing,
+///   persistence, and access control. It does not participate in operation
+///   identifiers.
+/// - `peerId`: identifies the peer/author generating operations. It is used in
+///   `OperationId` together with the Hybrid Logical Clock.
 class CRDTDocument {
-  /// Creates a new [CRDTDocument] with the given [peerId]
+  /// Creates a new [CRDTDocument] with the given identifiers.
+  ///
+  /// - [peerId]: the identifier of the local peer (author of operations).
+  ///   If not provided, a new one is generated.
+  /// - [documentId]: the identifier of the document. If not provided, a new
+  ///   random identifier is generated.
   CRDTDocument({
     PeerId? peerId,
+    String? documentId,
   })  : _dag = DAG.empty(),
         _changeStore = ChangeStore.empty(),
         _peerId = peerId ?? PeerId.generate(),
+        _documentId = documentId ?? PeerId.generate().toString(),
         _clock = HybridLogicalClock.initialize(),
         _localChangesController = StreamController<Change>.broadcast(),
         _handlers = {} {
@@ -32,11 +46,17 @@ class CRDTDocument {
   /// The ID of the peer that owns this document
   final PeerId _peerId;
 
+  /// The ID of the document/resource
+  final String _documentId;
+
   /// The hybrid logical clock for this document
   final HybridLogicalClock _clock;
 
   /// Gets the peer ID of this document
   PeerId get peerId => _peerId;
+
+  /// Gets the document ID of this document
+  String get documentId => _documentId;
 
   /// Gets the current timestamp of this document
   HybridLogicalClock get hlc => _clock.copy();
@@ -49,6 +69,15 @@ class CRDTDocument {
 
   /// A stream that emits [Change]s created locally by this document.
   Stream<Change> get localChanges => _localChangesController.stream;
+
+  /// A stream controller that emits an event
+  /// every time the document state updates
+  /// (local or remote change applied, snapshot imported/merged).
+  final StreamController<void> _updatesController =
+      StreamController<void>.broadcast();
+
+  /// A stream that emits when the document state updates.
+  Stream<void> get updates => _updatesController.stream;
 
   /// The registered snapshot providers
   final Map<String, Handler<dynamic>> _handlers;
@@ -90,7 +119,6 @@ class CRDTDocument {
     final change = Change(
       id: id,
       deps: deps,
-      hlc: _clock.copy(),
       author: _peerId,
       operation: operation,
     );
@@ -115,7 +143,9 @@ class CRDTDocument {
 
     // Check if the change is causally ready
     if (!_dag.isReady(change.deps)) {
-      throw StateError('Change is not causally ready: ${change.id}');
+      throw CausallyNotReadyException(
+        'Change is not causally ready: ${change.id}',
+      );
     }
 
     // Add the change to the store
@@ -125,12 +155,16 @@ class CRDTDocument {
     // Add the change to the DAG
     _dag.addNode(change.id, change.deps);
 
-    // Update the clock
-    _clock.receiveEvent(
-      DateTime.now().millisecondsSinceEpoch,
-      change.hlc,
-    );
+    // Update the clock only for remote changes
+    if (change.author != _peerId) {
+      _clock.receiveEvent(
+        DateTime.now().millisecondsSinceEpoch,
+        change.hlc,
+      );
+    }
 
+    // Notify listeners about state update
+    _notifyUpdates();
     return true;
   }
 
@@ -176,7 +210,7 @@ class CRDTDocument {
       _lastSnapshot = snapshot;
 
       _invalidateHandlers();
-
+      _notifyUpdates();
       return true;
     }
 
@@ -195,8 +229,8 @@ class CRDTDocument {
     }
 
     _prune(_lastSnapshot!.versionVector);
-
     _invalidateHandlers();
+    _notifyUpdates();
   }
 
   /// Whether the given [snapshot] should be applied.
@@ -267,6 +301,15 @@ class CRDTDocument {
     return _changeStore.exportChanges(from ?? {}, _dag);
   }
 
+  /// Exports [Change]s that are newer than the provided [versionVector].
+  ///
+  /// A change is considered newer if its clock is strictly greater than the
+  /// clock in the provided version vector for the same peer, or if the peer is
+  /// not present in the provided vector.
+  List<Change> exportChangesNewerThan(VersionVector versionVector) {
+    return _changeStore.exportChangesNewerThan(versionVector);
+  }
+
   /// Exports [Change]s as a binary format
   ///
   /// Returns a binary representation of the [Change]s
@@ -317,6 +360,14 @@ class CRDTDocument {
     _changeStore.prune(version);
   }
 
+  /// Notifies listeners about state update
+  void _notifyUpdates() {
+    if (_updatesController.isClosed) {
+      return;
+    }
+    _updatesController.add(null);
+  }
+
   /// Returns a list of [Change]s never received from this document:
   /// - the clock of the change is greater than the clock of the version vector
   /// - the change is not in the version vector
@@ -326,7 +377,7 @@ class CRDTDocument {
 
     for (final change in changes) {
       final clock = versionVector[change.id.peerId];
-      if (clock == null || change.id.hlc.compareTo(clock) > 0) {
+      if (clock == null || change.hlc.compareTo(clock) > 0) {
         newChanges.add(change);
       }
     }
@@ -339,6 +390,15 @@ class CRDTDocument {
   /// Returns a list of [Change]s sorted such that
   /// dependencies come before dependents.
   List<Change> _topologicalSort(List<Change> changes) {
+    final result = <Change>[];
+
+    if (changes.isEmpty) {
+      return result;
+    }
+
+    // Create a map for O(1) lookup
+    final changeMap = <OperationId, Change>{};
+
     // Build a graph of dependencies
     final graph = <OperationId, Set<OperationId>>{};
     final inDegree = <OperationId, int>{};
@@ -346,6 +406,7 @@ class CRDTDocument {
     for (final change in changes) {
       graph[change.id] = {};
       inDegree[change.id] = 0;
+      changeMap[change.id] = change;
     }
 
     for (final change in changes) {
@@ -358,15 +419,13 @@ class CRDTDocument {
       }
     }
 
-    // Perform topological sort
+    // Perform topological sort (Kahn's algorithm)
     final queue =
         changes.where((c) => inDegree[c.id] == 0).map((c) => c.id).toList();
-    final result = <Change>[];
 
     while (queue.isNotEmpty) {
       final id = queue.removeAt(0);
-      // TODO(mattia): where is expensive
-      final change = changes.firstWhere((c) => c.id == id);
+      final change = changeMap[id]!;
       result.add(change);
 
       for (final dependent in graph[id]!) {
@@ -379,7 +438,7 @@ class CRDTDocument {
 
     // Check for cycles
     if (result.length != changes.length) {
-      throw StateError('Cycle detected in changes');
+      throw const ChangesCycleException('Cycle detected in changes');
     }
 
     return result;
@@ -402,6 +461,7 @@ class CRDTDocument {
   /// Disposes of the document
   void dispose() {
     _localChangesController.close();
+    _updatesController.close();
   }
 }
 

@@ -21,7 +21,7 @@ enum MessageType implements MessageTypeValue {
   /// Message containing a full snapshot
   documentStatus(3),
 
-  /// Snapshot request message sent from client to server
+  /// Document status request message sent from client to server
   documentStatusRequest(4),
 
   /// Ping message to check the connection
@@ -31,7 +31,10 @@ enum MessageType implements MessageTypeValue {
   pong(6),
 
   /// Error message
-  error(7);
+  error(7),
+
+  /// Message containing a set of changes
+  changes(8);
 
   const MessageType(this.value);
 
@@ -58,6 +61,14 @@ abstract class Message {
     );
   }
 
+  /// Create a changes message
+  factory Message.changes({
+    required String documentId,
+    required List<Change> changes,
+  }) {
+    return ChangesMessage(documentId: documentId, changes: changes);
+  }
+
   /// Create a document status message
   factory Message.documentStatus({
     required String documentId,
@@ -74,7 +85,7 @@ abstract class Message {
   /// Create a document status request message
   factory Message.documentStatusRequest({
     required String documentId,
-    required Set<OperationId> version,
+    required Set<OperationId>? version,
   }) {
     return DocumentStatusRequestMessage(
       documentId: documentId,
@@ -147,6 +158,8 @@ abstract class Message {
         return HandshakeResponseMessage.fromJson(json);
       case MessageType.change:
         return ChangeMessage.fromJson(json);
+      case MessageType.changes:
+        return ChangesMessage.fromJson(json);
       case MessageType.documentStatus:
         return DocumentStatusMessage.fromJson(json);
       case MessageType.documentStatusRequest:
@@ -296,6 +309,42 @@ class ChangeMessage extends Message {
   }
 }
 
+/// Message containing a set of changes.
+class ChangesMessage extends Message {
+  /// Constructor
+  const ChangesMessage({
+    required this.changes,
+    required String documentId,
+  }) : super(MessageType.changes, documentId);
+
+  /// Create a changes message from a JSON map
+  factory ChangesMessage.fromJson(Map<String, dynamic> json) {
+    return ChangesMessage(
+      changes: (json['changes'] as List<dynamic>)
+          .map((c) => Change.fromJson(c as Map<String, dynamic>))
+          .toList(),
+      documentId: json['documentId'] as String,
+    );
+  }
+
+  /// The CRDT [Change]s
+  final List<Change> changes;
+
+  @override
+  Map<String, dynamic> toJson() {
+    return {
+      'type': type.value,
+      'documentId': documentId,
+      'changes': changes.map((c) => c.toJson()).toList(),
+    };
+  }
+
+  @override
+  String toString() {
+    return 'ChangesMessage(changes: $changes, documentId: $documentId)';
+  }
+}
+
 /// Message containing a full snapshot.
 class DocumentStatusMessage extends Message {
   /// Constructor
@@ -339,29 +388,31 @@ class DocumentStatusMessage extends Message {
 class DocumentStatusRequestMessage extends Message {
   /// Constructor
   const DocumentStatusRequestMessage({
-    required this.version,
     required String documentId,
+    this.version,
   }) : super(MessageType.documentStatusRequest, documentId);
 
   /// Create a snapshot request message from a JSON map
   factory DocumentStatusRequestMessage.fromJson(Map<String, dynamic> json) {
     return DocumentStatusRequestMessage(
-      version: (json['version'] as List<dynamic>)
-          .map((e) => OperationId.parse(e as String))
-          .toSet(),
+      version: json['version'] != null
+          ? (json['version'] as List<dynamic>)
+              .map((e) => OperationId.parse(e as String))
+              .toSet()
+          : null,
       documentId: json['documentId'] as String,
     );
   }
 
   /// The client version
-  final Set<OperationId> version;
+  final Set<OperationId>? version;
 
   @override
   Map<String, dynamic> toJson() {
     return {
       'type': type.value,
       'documentId': documentId,
-      'version': version.map((e) => e.toString()).toList(),
+      'version': version?.map((e) => e.toString()).toList(),
     };
   }
 

@@ -39,7 +39,7 @@ abstract class CRDTSocketServer {
   });
 
   /// Dispose the server
-  void dispose();
+  Future<void> dispose();
 }
 
 /// A provider that provide the server instance.

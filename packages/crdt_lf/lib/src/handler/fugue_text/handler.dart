@@ -21,11 +21,22 @@ class CRDTFugueTextHandler extends Handler<List<FugueValueNode<String>>> {
   /// The cached value of the text
   String? _cachedValue;
 
+  /// Ensure local state is synchronized with the document version
+  void _ensureStateInSync() {
+    if (cachedState == null) {
+      final state = _computeState();
+      updateCachedState(state);
+      // Defer string building until actually needed via `value`
+      _cachedValue = null;
+    }
+  }
+
   @override
   String get id => _id;
 
   /// Inserts [text] at position [index]
   void insert(int index, String text) {
+    _ensureStateInSync();
     if (text.isEmpty) return;
 
     // Find the node at position index - 1 (or root node if index is 0)
@@ -70,6 +81,7 @@ class CRDTFugueTextHandler extends Handler<List<FugueValueNode<String>>> {
 
   /// Deletes [count] characters starting from position [index]
   void delete(int index, int count) {
+    _ensureStateInSync();
     // For each character to delete
     for (var i = 0; i < count; i++) {
       // Find the node at position index
@@ -92,6 +104,7 @@ class CRDTFugueTextHandler extends Handler<List<FugueValueNode<String>>> {
 
   /// Updates the text at position [index]
   void update(int index, String text) {
+    _ensureStateInSync();
     if (text.isEmpty) return;
 
     for (var i = 0; i < text.length; i++) {

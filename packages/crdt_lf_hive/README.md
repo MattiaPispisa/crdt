@@ -1,7 +1,11 @@
 # CRDT LF Hive
 
 [![crdt_lf_hive_badge][crdt_lf_hive_badge]](https://pub.dev/packages/crdt_lf_hive)
+[![pub points][pub_points]][pub_link]
+[![pub likes][pub_likes]][pub_link]
+[![ci_badge][ci_badge]][ci_link]
 [![License: MIT][license_badge]][license_link]
+[![pub publisher][pub_publisher]][pub_publisher_link]
 
 - [CRDT LF Hive](#crdt-lf-hive)
   - [Features](#features)
@@ -15,7 +19,9 @@
   - [Data Serialization Options](#data-serialization-options)
     - [Default Mode (useDataAdapter: false)](#default-mode-usedataadapter-false)
     - [Custom Adapter Mode (useDataAdapter: true)](#custom-adapter-mode-usedataadapter-true)
-  - [Complete Example](#complete-example)
+  - [Examples](#examples)
+    - [Storage example](#storage-example)
+    - [Server (+ storage) and clients](#server--storage-and-clients)
   - [Box Naming Convention](#box-naming-convention)
   - [Storage Management](#storage-management)
     - [Cleanup Operations](#cleanup-operations)
@@ -184,9 +190,17 @@ final listHandler = CRDTListHandler<MyCustomData>(document, 'items');
 listHandler.insert(0, MyCustomData(value: 'test')); // Uses MyCustomDataAdapter
 ```
 
-## Complete Example
+## Examples
+
+### Storage example
 
 A complete example with a custom data type and adapter is available [here](https://github.com/MattiaPispisa/crdt/blob/main/packages/crdt_lf_hive/example/main.dart).
+
+### Server (+ storage) and clients
+
+A complete example of a server with a persistent registry of documents and clients that can connect to the server and sync their data is available [here](https://github.com/MattiaPispisa/crdt/blob/main/packages/crdt_socket_sync/example/server_example/lib/main.dart).
+
+<img width="500" alt="sync_server_multi_client" src="https://raw.githubusercontent.com/MattiaPispisa/crdt/main/assets/demos/sync_server_multi_client.gif">
 
 ## Box Naming Convention
 
@@ -247,3 +261,10 @@ Other bricks of the crdt "system" are:
 [crdt_lf_hive_badge]: https://img.shields.io/pub/v/crdt_lf_hive.svg
 [license_badge]: https://img.shields.io/badge/license-MIT-blue.svg
 [license_link]: https://opensource.org/licenses/MIT
+[pub_link]: https://pub.dev/packages/crdt_lf_hive
+[pub_points]: https://img.shields.io/pub/points/crdt_lf_hive
+[pub_likes]: https://img.shields.io/pub/likes/crdt_lf_hive
+[ci_badge]: https://img.shields.io/github/actions/workflow/status/MattiaPispisa/crdt/main.yaml
+[ci_link]: https://github.com/MattiaPispisa/crdt/actions/workflows/main.yaml
+[pub_publisher]: https://img.shields.io/pub/publisher/crdt_lf_hive
+[pub_publisher_link]: https://pub.dev/packages?q=publisher%3Amattiapispisa.it

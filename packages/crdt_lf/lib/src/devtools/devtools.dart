@@ -4,12 +4,14 @@ import 'dart:developer' as developer;
 
 import 'package:crdt_lf/src/document.dart';
 
+const _packageName = 'crdt_lf';
+
 const _releaseMode = bool.fromEnvironment('dart.vm.product');
 
 const _enable = !_releaseMode;
 
 void _postEvent(String type, Map<Object?, Object?> data) {
-  developer.postEvent('crdt_lf:$type', data);
+  developer.postEvent('$_packageName:$type', data);
 }
 
 void _postCreatedEvent() {

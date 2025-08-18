@@ -21,7 +21,7 @@ class VersionVector {
         (json['vector'] as Map<String, dynamic>).map(
           (peerIdStr, hlcInt64) => MapEntry(
             PeerId.parse(peerIdStr),
-            HybridLogicalClock.fromInt64(hlcInt64 as int),
+            HybridLogicalClock.parse(hlcInt64 as String),
           ),
         ),
       );
@@ -164,7 +164,7 @@ class VersionVector {
   /// Converts the [VersionVector] to a JSON object
   Map<String, dynamic> toJson() => {
         'vector': _vector.map(
-          (peerId, hlc) => MapEntry(peerId.toString(), hlc.toInt64()),
+          (peerId, hlc) => MapEntry(peerId.toString(), hlc.toString()),
         ),
       };
 
@@ -173,9 +173,26 @@ class VersionVector {
 
   /// Returns an immutable copy of the version vector.
   VersionVector immutable() {
-    return VersionVector.immutable(_vector);
+    return VersionVector.immutable(_copy());
   }
 
-  /// Returns an iterable of the entries in the version vector.
-  Iterable<MapEntry<PeerId, HybridLogicalClock>> get entries => _vector.entries;
+  /// Returns a mutable copy of the version vector.
+  VersionVector mutable() {
+    return VersionVector(_copy());
+  }
+
+  /// Returns an iterable copy of the entries in the version vector.
+  Iterable<MapEntry<PeerId, HybridLogicalClock>> get entries => _copy().entries;
+
+  /// Returns a copy of the version vector.
+  Map<PeerId, HybridLogicalClock> _copy() {
+    return _vector.map(
+      (peerId, hlc) => MapEntry(peerId, hlc.copy()),
+    );
+  }
+
+  @override
+  String toString() {
+    return 'VersionVector(vector: $_vector)';
+  }
 }

@@ -8,6 +8,7 @@ export 'src/change/change_store.dart';
 export 'src/dag/graph.dart';
 export 'src/dag/node.dart';
 export 'src/document.dart';
+export 'src/exceptions/exceptions.dart';
 export 'src/frontiers/frontiers.dart';
 export 'src/handler/fugue_text/handler.dart';
 export 'src/handler/handler.dart';

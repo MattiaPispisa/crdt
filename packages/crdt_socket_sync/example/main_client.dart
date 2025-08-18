@@ -87,7 +87,8 @@ void main(List<String> args) async {
 /// Runs an interactive demo that creates CRDT operations periodically
 Future<void> _runInteractiveDemo(CRDTDocument document) async {
   // Register a simple list handler for demonstration
-  final listHandler = CRDTListHandler<String>(document, 'demo_list');
+  final listHandler =
+      CRDTListHandler<Map<String, dynamic>>(document, 'todo_list');
   document.registerHandler(listHandler);
 
   print('📝 Registered CRDT handlers: list');
@@ -99,7 +100,7 @@ Future<void> _runInteractiveDemo(CRDTDocument document) async {
     counter++;
 
     // Perform list operations
-    final value = 'Item $counter';
+    final value = Todo(text: 'Item $counter').toJson();
     listHandler.insert(listHandler.length, value);
 
     // Occasionally delete items to show both operations
@@ -120,4 +121,21 @@ Future<void> _runInteractiveDemo(CRDTDocument document) async {
   // Keep the client running indefinitely
   final completer = Completer<void>();
   return completer.future;
+}
+
+class Todo {
+  const Todo({required this.text, this.isDone = false});
+
+  factory Todo.fromJson(Map<String, dynamic> json) {
+    return Todo(text: json['text'] as String, isDone: json['isDone'] as bool);
+  }
+
+  final String text;
+  final bool isDone;
+
+  Map<String, dynamic> toJson() => {'text': text, 'isDone': isDone};
+
+  Todo copyWith({String? text, bool? isDone}) {
+    return Todo(text: text ?? this.text, isDone: isDone ?? this.isDone);
+  }
 }

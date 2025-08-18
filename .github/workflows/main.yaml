@@ -11,7 +11,7 @@ jobs:
     uses: ./.github/workflows/dart_package.yaml
     with:
       working_directory: ./packages/hlc
-      min_coverage: 95
+      min_coverage: 100
       package_name: hlc_dart
     secrets:
       CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
@@ -22,5 +22,14 @@ jobs:
       working_directory: ./packages/crdt_lf
       min_coverage: 95
       package_name: crdt_lf
+    secrets:
+      CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+
+  crdt_lf_hive:
+    uses: ./.github/workflows/dart_package.yaml
+    with:
+      working_directory: ./packages/crdt_lf_hive
+      min_coverage: 100
+      package_name: crdt_lf_hive
     secrets:
       CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}

@@ -43,12 +43,6 @@ abstract class CRDTSocketClient {
   /// Stream of incoming server messages
   Stream<Message> get messages;
 
-  /// The changes that have not been sent to the server
-  List<Change> get unSyncChanges;
-
-  /// Stream of the number of unSyncChanges
-  Stream<int> get unSyncChangesCount;
-
   /// Connect the client to the server
   Future<bool> connect();
 
@@ -61,9 +55,8 @@ abstract class CRDTSocketClient {
   /// Send a [Change] to the server
   Future<void> sendChange(Change change);
 
-  /// Request a snapshot from the server
-  // TODO(mattia): request server state like the handshake
-  Future<void> requestSnapshot();
+  /// Request a sync message from the server
+  Future<void> requestSync();
 
   /// Dispose the client
   void dispose();

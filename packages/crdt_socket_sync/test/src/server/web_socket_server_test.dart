@@ -209,7 +209,7 @@ void main() {
         stubHttpServer();
         stubWebSocket();
 
-        registry.addDocument(documentId, CRDTDocument());
+        await registry.addDocument(documentId);
 
         messagesSent.stream.listen((data) {
           final message = codec.decode(data);
@@ -244,7 +244,7 @@ void main() {
         final handshakeMessage = events.last;
         expect(
           handshakeMessage.message,
-          contains('Client handshake completed:'),
+          contains('handshake completed:'),
         );
       },
     );
@@ -261,7 +261,7 @@ void main() {
       stubHttpServer();
       stubWebSocket();
 
-      registry.addDocument(documentId, CRDTDocument());
+      await registry.addDocument(documentId);
 
       messagesSent.stream.listen((data) {
         final message = codec.decode(data);
@@ -382,7 +382,7 @@ void main() {
       // server doc
       final serverDoc = CRDTDocument(peerId: documentId);
       CRDTListHandler<String>(serverDoc, 'list');
-      registry.addDocument(documentId.id, serverDoc);
+      await registry.addDocument(documentId.id);
 
       // client doc
       final clientDoc = CRDTDocument(peerId: documentId);

@@ -143,7 +143,7 @@ void main() {
           leftOrigin: FugueElementID.nullID(),
           rightOrigin: FugueElementID.nullID(),
         ),
-        throwsException,
+        throwsA(isA<DuplicateNodeException>()),
       );
     });
 
