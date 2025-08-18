@@ -1,4 +1,4 @@
-## [1.0.0] - Unreleased
+## [1.0.0] - 2025-08-18
 
 **Breaking changes**
 Create a set of exception classes to be used across the library. Replace `StateError` with `CrdtException` and its subclasses.
