@@ -109,7 +109,7 @@ void main() {
       expect(
         json['versionVector'],
         equals({
-          'vector': {author.toString(): 65537},
+          'vector': {author.toString(): '1.1'},
         }),
       );
       expect(json['data'], equals({'test': 'Hello World!'}));
