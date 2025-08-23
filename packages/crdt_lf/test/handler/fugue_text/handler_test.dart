@@ -344,5 +344,53 @@ void main() {
         expect(text1.value.length, equals(4));
       },
     );
+
+    test(
+      'should handle late import that sorts between existing changes',
+      () {
+        // Setup two documents and sync initial state
+        final doc1 = CRDTDocument();
+        final doc2 = CRDTDocument();
+
+        const handlerId = 'mid-import-text';
+        final text1 = CRDTFugueTextHandler(doc1, handlerId);
+        final text2 = CRDTFugueTextHandler(doc2, handlerId);
+
+        // Initial content from doc1
+        text1.insert(0, 'AB');
+        expect(text1.value, 'AB');
+
+        // Sync doc1 -> doc2
+        expect(doc2.importChanges(doc1.exportChanges()), greaterThan(0));
+        expect(text2.value, 'AB');
+
+        // Doc1 appends 'CD' locally after the sync
+        text1.insert(2, 'CD'); // doc1: 'ABCD'
+        expect(text1.value, 'ABCD');
+
+        // Concurrently, doc2 inserts 'X' in the middle before receiving 'CD'
+        text2.insert(2, 'X'); // doc2: 'ABX'
+        expect(text2.value, 'ABX');
+
+        // Now exchange changes both ways
+        final ch1 = doc1.exportChanges();
+        final ch2 = doc2.exportChanges();
+
+        expect(doc1.importChanges(ch2), greaterThan(0));
+        expect(doc2.importChanges(ch1), greaterThan(0));
+
+        // Both documents should converge and not interleave 'X' with 'CD'
+        expect(text1.value, equals(text2.value));
+        final finalText = text1.value;
+
+        // Ensure both segments are present
+        expect(finalText.contains('X'), isTrue);
+        expect(finalText.contains('CD'), isTrue);
+
+        // Ensure segments are not interleaved (contiguous substrings)
+        expect(finalText.contains('CD'), isTrue);
+        expect(finalText.contains('X'), isTrue);
+      },
+    );
   });
 }

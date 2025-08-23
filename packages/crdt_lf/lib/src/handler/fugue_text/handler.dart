@@ -21,6 +21,7 @@ class CRDTFugueTextHandler extends Handler<List<FugueValueNode<String>>> {
   /// The cached value of the text
   String? _cachedValue;
 
+
   /// Ensure local state is synchronized with the document version
   void _ensureStateInSync() {
     if (cachedState == null) {
@@ -58,7 +59,13 @@ class CRDTFugueTextHandler extends Handler<List<FugueValueNode<String>>> {
         rightOrigin: rightOrigin,
       ),
     );
-
+    // Apply to cached tree immediately
+    _tree.insert(
+      newID: firstNodeID,
+      value: text[0],
+      leftOrigin: leftOrigin,
+      rightOrigin: rightOrigin,
+    );
     // Insert remaining characters as right children of the previous character
     var previousID = firstNodeID;
     for (var i = 1; i < text.length; i++) {
@@ -73,56 +80,82 @@ class CRDTFugueTextHandler extends Handler<List<FugueValueNode<String>>> {
           rightOrigin: rightOrigin,
         ),
       );
+      // Apply to cached tree immediately
+      _tree.insert(
+        newID: newNodeID,
+        value: text[i],
+        leftOrigin: previousID,
+        rightOrigin: rightOrigin,
+      );
       previousID = newNodeID;
     }
-
-    _invalidateCache();
+    // Refresh cached state and defer string recomputation
+    updateCachedState(_tree.nodes());
+    _cachedValue = null;
   }
 
   /// Deletes [count] characters starting from position [index]
   void delete(int index, int count) {
     _ensureStateInSync();
-    // For each character to delete
+    // Collect targets first to avoid index drift while deleting
+    final targets = <FugueElementID>[];
     for (var i = 0; i < count; i++) {
-      // Find the node at position index
-      // (which is now index + i since we've deleted i characters)
       final nodeID = _tree.findNodeAtPosition(index + i);
-
-      // If the node exists, create a delete operation
       if (!nodeID.isNull) {
-        doc.createChange(
-          _FugueTextDeleteOperation.fromHandler(
-            this,
-            nodeID: nodeID,
-          ),
-        );
+        targets.add(nodeID);
       }
     }
 
-    _invalidateCache();
+    for (final nodeID in targets) {
+      doc.createChange(
+        _FugueTextDeleteOperation.fromHandler(
+          this,
+          nodeID: nodeID,
+        ),
+      );
+      _tree.delete(nodeID);
+    }
+
+    // Refresh cached state and defer string recomputation
+    updateCachedState(_tree.nodes());
+    _cachedValue = null;
   }
 
   /// Updates the text at position [index]
   void update(int index, String text) {
     _ensureStateInSync();
     if (text.isEmpty) return;
-
+    // Collect targets first to avoid index drift while updating
+    final targets = <FugueElementID>[];
     for (var i = 0; i < text.length; i++) {
       final nodeID = _tree.findNodeAtPosition(index + i);
       if (!nodeID.isNull) {
-        final newNodeID = FugueElementID(doc.peerId, _counter++);
-        doc.createChange(
-          _FugueTextUpdateOperation.fromHandler(
-            this,
-            nodeID: nodeID,
-            newNodeID: newNodeID,
-            text: text[i],
-          ),
-        );
+        targets.add(nodeID);
       }
     }
 
-    _invalidateCache();
+    for (var i = 0; i < targets.length; i++) {
+      final nodeID = targets[i];
+      final newNodeID = FugueElementID(doc.peerId, _counter++);
+      final ch = text[i];
+      doc.createChange(
+        _FugueTextUpdateOperation.fromHandler(
+          this,
+          nodeID: nodeID,
+          newNodeID: newNodeID,
+          text: ch,
+        ),
+      );
+      _tree.update(
+        nodeID: nodeID,
+        newID: newNodeID,
+        newValue: ch,
+      );
+    }
+
+    // Refresh cached state and defer string recomputation
+    updateCachedState(_tree.nodes());
+    _cachedValue = null;
   }
 
   /// Gets the current value of the text
@@ -213,11 +246,7 @@ class CRDTFugueTextHandler extends Handler<List<FugueValueNode<String>>> {
     return [];
   }
 
-  /// Invalidates the cache
-  void _invalidateCache() {
-    invalidateCache();
-    _cachedValue = null;
-  }
+  // Cache is updated directly after local ops; no private invalidator needed
 
   /// Returns a text representation of this handler
   @override
