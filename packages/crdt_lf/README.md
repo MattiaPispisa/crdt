@@ -38,6 +38,8 @@ A Conflict-free Replicated Data Type (CRDT) implementation in Dart.
 This library provides solutions for:
 - Text Editing.
 - List Editing.
+- Map Editing.
+- Set Editing.
 - Text Editing with Fugue Algorithm ([The Art of the Fugue: Minimizing Interleaving in Collaborative Text Editing" di Matthew Weidner e Martin Kleppmann](https://arxiv.org/abs/2305.00583)).
 
 ## Features
@@ -45,6 +47,10 @@ This library provides solutions for:
 - ⏱️ **Hybrid Logical Clock**: Uses HLC for causal ordering of operations
 - 🔄 **Automatic Conflict Resolution**: Automatically resolves conflicts in a CRDT
 - 📦 **Local Availability**: Operations are available locally as soon as they are applied
+
+## Design
+
+// TODO(mattia): explain the design
 
 ## Getting Started
 
