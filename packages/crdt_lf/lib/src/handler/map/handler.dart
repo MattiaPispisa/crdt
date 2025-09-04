@@ -123,7 +123,9 @@ class CRDTMapHandler<T> extends Handler<Map<String, T>> {
     required String key,
     required T value,
   }) {
-    state.update(key, (_) => value);
+    if (state.containsKey(key)) {
+      state.update(key, (_) => value);
+    }
   }
 
   @override

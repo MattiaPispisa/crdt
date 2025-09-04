@@ -536,6 +536,9 @@ mixin CacheableStateProvider<T> on DocumentConsumer {
   /// The cached state of the handler
   T? _cachedState;
 
+  /// Whether to use incremental cache update
+  bool useIncrementalCacheUpdate = true;
+
   /// Updates the cached version with the current version of the document
   void _updateCachedVersion() {
     _cachedVersion = Set.from(_document.version);
@@ -551,6 +554,11 @@ mixin CacheableStateProvider<T> on DocumentConsumer {
     required Operation operation,
     required Change change,
   }) {
+    if (!useIncrementalCacheUpdate) {
+      invalidateCache();
+      return;
+    }
+
     final state = _cachedState;
     if (state == null) {
       return;
@@ -562,6 +570,7 @@ mixin CacheableStateProvider<T> on DocumentConsumer {
     );
 
     if (newState == null) {
+      invalidateCache();
       return;
     }
 
