@@ -616,4 +616,15 @@ void main() {
       });
     });
   });
+
+  group('handler caching', () {
+    // TODO(mattia): provide tests for handler caching
+    // 1. test that after an operation is applied, the cached state is updated
+    // 1. test that the cached state is not updated if the operation is not applied
+    // 1. test that disabling useIncrementalCacheUpdate works
+    // 1. test that start useIncrementalCacheUpdate then disaling useIncrementalCacheUpdate then re-enabling 
+    // no old cached state can work
+    // 1. test that setCachedState works
+    // 1. test when value recompute 
+  });
 }
