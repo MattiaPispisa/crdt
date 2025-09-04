@@ -5,6 +5,8 @@ import 'package:crdt_lf/crdt_lf.dart';
 
 import '../common/custom_emitter.dart';
 
+// TODO(mattia): fix this benchmark, add benchmarks for other handlers (create a configurable setup (list of operations to be executed in run with an initial optional snapshot) show time with cache enabled and disabled, decide when value is readed))
+
 /// Benchmark for CRDT text handler operations
 /// Tests insertion, update, and deletion operations on text content
 class TextHandlerOperationsBenchmark extends BenchmarkBase {
@@ -22,10 +24,10 @@ class TextHandlerOperationsBenchmark extends BenchmarkBase {
   void setup() {
     doc = CRDTDocument(peerId: PeerId.generate());
     textHandler = CRDTTextHandler(doc, 'text');
-    
+
     // Initialize with some base content
     textHandler.insert(0, 'Initial text content for testing operations. ');
-    
+
     // Generate a list of operations to perform
     operations = _generateOperations(1000);
   }
@@ -52,7 +54,7 @@ class TextHandlerOperationsBenchmark extends BenchmarkBase {
   List<_Operation> _generateOperations(int count) {
     final random = Random(42); // Fixed seed for reproducible results
     final operations = <_Operation>[];
-    
+
     // Sample texts for operations
     const sampleTexts = [
       'Hello ',
@@ -71,11 +73,12 @@ class TextHandlerOperationsBenchmark extends BenchmarkBase {
       'Generation ',
       'Algorithm ',
     ];
-    
+
     for (var i = 0; i < count; i++) {
-      final operationType = _OperationType.values[random.nextInt(_OperationType.values.length)];
+      final operationType =
+          _OperationType.values[random.nextInt(_OperationType.values.length)];
       final currentLength = textHandler.length;
-      
+
       switch (operationType) {
         case _OperationType.insert:
           final index = currentLength > 0 ? random.nextInt(currentLength) : 0;
@@ -86,7 +89,7 @@ class TextHandlerOperationsBenchmark extends BenchmarkBase {
             text: text,
           ));
           break;
-          
+
         case _OperationType.update:
           if (currentLength > 0) {
             final index = random.nextInt(currentLength);
@@ -105,11 +108,12 @@ class TextHandlerOperationsBenchmark extends BenchmarkBase {
             ));
           }
           break;
-          
+
         case _OperationType.delete:
           if (currentLength > 0) {
             final index = random.nextInt(currentLength);
-            final maxCount = min(5, currentLength - index); // Delete up to 5 characters
+            final maxCount =
+                min(5, currentLength - index); // Delete up to 5 characters
             final count = maxCount > 0 ? random.nextInt(maxCount) + 1 : 1;
             operations.add(_Operation(
               type: operationType,
@@ -127,7 +131,7 @@ class TextHandlerOperationsBenchmark extends BenchmarkBase {
           break;
       }
     }
-    
+
     return operations;
   }
 }
@@ -148,7 +152,7 @@ class TextHandlerStateComputationBenchmark extends BenchmarkBase {
   void setup() {
     doc = CRDTDocument(peerId: PeerId.generate());
     textHandler = CRDTTextHandler(doc, 'text');
-    
+
     // Create a document with many changes to test state computation
     final random = Random(42);
     const sampleTexts = [
@@ -158,19 +162,20 @@ class TextHandlerStateComputationBenchmark extends BenchmarkBase {
       'Duis aute irure dolor in reprehenderit in voluptate velit esse. ',
       'Excepteur sint occaecat cupidatat non proident, sunt in culpa. ',
     ];
-    
+
     // Perform 500 operations to create a complex state
     for (var i = 0; i < 500; i++) {
-      final operationType = _OperationType.values[random.nextInt(_OperationType.values.length)];
+      final operationType =
+          _OperationType.values[random.nextInt(_OperationType.values.length)];
       final currentLength = textHandler.length;
-      
+
       switch (operationType) {
         case _OperationType.insert:
           final index = currentLength > 0 ? random.nextInt(currentLength) : 0;
           final text = sampleTexts[random.nextInt(sampleTexts.length)];
           textHandler.insert(index, text);
           break;
-          
+
         case _OperationType.update:
           if (currentLength > 0) {
             final index = random.nextInt(currentLength);
@@ -178,7 +183,7 @@ class TextHandlerStateComputationBenchmark extends BenchmarkBase {
             textHandler.update(index, text);
           }
           break;
-          
+
         case _OperationType.delete:
           if (currentLength > 0) {
             final index = random.nextInt(currentLength);
@@ -214,7 +219,7 @@ class TextHandlerCachedStateBenchmark extends BenchmarkBase {
   void setup() {
     doc = CRDTDocument(peerId: PeerId.generate());
     textHandler = CRDTTextHandler(doc, 'text');
-    
+
     // Initialize with some content and warm up the cache
     textHandler.insert(0, 'Initial content for cached state testing. ');
     final _ = textHandler.value; // This will cache the state
@@ -256,14 +261,14 @@ void main() {
   // Run all text handler benchmarks
   // ignore: avoid_print
   print('Running CRDT Text Handler Benchmarks...\n');
-  
+
   TextHandlerOperationsBenchmark().report();
   // ignore: avoid_print
   print('');
-  
+
   TextHandlerStateComputationBenchmark().report();
   // ignore: avoid_print
   print('');
-  
+
   TextHandlerCachedStateBenchmark().report();
 }

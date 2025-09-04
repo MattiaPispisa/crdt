@@ -1,6 +1,8 @@
 import 'package:crdt_lf/crdt_lf.dart';
 part 'operation.dart';
 
+// TODO(mattia): fix and complete fugue text caching.
+
 /// ## CRDT Text with Fugue implementation
 ///
 /// ## Description

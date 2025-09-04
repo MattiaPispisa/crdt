@@ -5,6 +5,14 @@ import 'package:crdt_lf/crdt_lf.dart';
 import 'package:crdt_lf/src/devtools/devtools.dart' as devtools;
 import 'package:hlc_dart/hlc_dart.dart';
 
+// TODO(mattia): add transaction support.
+// Implicitly create a transaction context for each change.
+// Create a function to start an explicit transaction context.
+// notifiers are notified only when the transaction is committed.
+
+// TODO(mattia): after transaction support create compound operations.
+// A mechanism to group operations together and apply them atomically.
+
 /// CRDT Document implementation
 ///
 /// A CRDTDocument is the main entry point for the CRDT system.
