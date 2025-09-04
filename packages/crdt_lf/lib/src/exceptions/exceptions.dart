@@ -37,3 +37,9 @@ class MissingDependencyException extends CrdtException {
   /// Constructor
   const MissingDependencyException(super.message);
 }
+
+/// Thrown when attempting to register a handler that already exists.
+class HandlerAlreadyRegisteredException extends CrdtException {
+  /// Constructor
+  const HandlerAlreadyRegisteredException(super.message);
+}

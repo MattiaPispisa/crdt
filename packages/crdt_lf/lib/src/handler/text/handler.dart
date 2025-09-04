@@ -24,30 +24,32 @@ class CRDTTextHandler extends Handler<String> {
 
   /// Inserts [text] at the specified [index]
   void insert(int index, String text) {
-    doc.createChange(
-      _TextInsertOperation.fromHandler(this, index: index, text: text),
+    final operation = _TextInsertOperation.fromHandler(
+      this,
+      index: index,
+      text: text,
     );
-    invalidateCache();
+    doc.createChange(operation);
   }
 
   /// Deletes [count] characters starting at the specified [index]
   void delete(int index, int count) {
-    doc.createChange(
-      _TextDeleteOperation.fromHandler(this, index: index, count: count),
+    final operation = _TextDeleteOperation.fromHandler(
+      this,
+      index: index,
+      count: count,
     );
-    invalidateCache();
+    doc.createChange(operation);
   }
 
   /// Updates the text at the specified [index]
   void update(int index, String text) {
-    doc.createChange(
-      _TextUpdateOperation.fromHandler(
-        this,
-        index: index,
-        text: text,
-      ),
+    final operation = _TextUpdateOperation.fromHandler(
+      this,
+      index: index,
+      text: text,
     );
-    invalidateCache();
+    doc.createChange(operation);
   }
 
   /// Gets the current state of the text
@@ -88,62 +90,108 @@ class CRDTTextHandler extends Handler<String> {
 
       final operation = opFactory.fromPayload(payload);
 
-      if (operation is _TextInsertOperation) {
-        final index = operation.index;
-        final text = operation.text;
-
-        // Insert at the specified index,
-        // or at the end if the index is out of bounds
-        final currentText = buffer.toString();
-        if (index <= currentText.length) {
-          buffer
-            ..clear()
-            ..write(currentText.substring(0, index))
-            ..write(text)
-            ..write(currentText.substring(index));
-        } else {
-          buffer.write(text);
-        }
-      } else if (operation is _TextDeleteOperation) {
-        final index = operation.index;
-        final count = operation.count;
-
-        // Delete text if the index is valid
-        final currentText = buffer.toString();
-        if (index < currentText.length) {
-          final actualCount = index + count > currentText.length
-              ? currentText.length - index
-              : count;
-          buffer
-            ..clear()
-            ..write(currentText.substring(0, index))
-            ..write(currentText.substring(index + actualCount));
-        }
-      } else if (operation is _TextUpdateOperation) {
-        final index = operation.index;
-        final text = operation.text;
-
-        // Update the text at the specified index
-        final currentText = buffer.toString();
-
-        if (index < currentText.length) {
-          buffer
-            ..clear()
-            ..write(currentText.substring(0, index));
-
-          final remainingLength = currentText.length - index;
-          final truncatedText =
-              text.substring(0, min(text.length, remainingLength));
-
-          buffer.write(truncatedText);
-
-          if (remainingLength > text.length) {
-            buffer.write(currentText.substring(index + text.length));
-          }
-        }
+      if (operation != null) {
+        _applyOperationToBuffer(buffer, operation);
       }
     }
 
+    return buffer.toString();
+  }
+
+  /// Applies a single operation to a StringBuffer
+  void _applyOperationToBuffer(StringBuffer buffer, Operation operation) {
+    if (operation is _TextInsertOperation) {
+      return _bufferInsert(
+        buffer,
+        index: operation.index,
+        text: operation.text,
+      );
+    } else if (operation is _TextDeleteOperation) {
+      return _bufferDelete(
+        buffer,
+        index: operation.index,
+        count: operation.count,
+      );
+    } else if (operation is _TextUpdateOperation) {
+      return _bufferUpdate(
+        buffer,
+        index: operation.index,
+        text: operation.text,
+      );
+    }
+  }
+
+  void _bufferInsert(
+    StringBuffer buffer, {
+    required int index,
+    required String text,
+  }) {
+    // Insert at the specified index,
+    // or at the end if the index is out of bounds
+    final currentText = buffer.toString();
+    if (index <= currentText.length) {
+      buffer
+        ..clear()
+        ..write(currentText.substring(0, index))
+        ..write(text)
+        ..write(currentText.substring(index));
+      return;
+    }
+
+    buffer.write(text);
+    return;
+  }
+
+  void _bufferDelete(
+    StringBuffer buffer, {
+    required int index,
+    required int count,
+  }) {
+    // Delete text if the index is valid
+    final currentText = buffer.toString();
+    if (index < currentText.length) {
+      final actualCount = index + count > currentText.length
+          ? currentText.length - index
+          : count;
+      buffer
+        ..clear()
+        ..write(currentText.substring(0, index))
+        ..write(currentText.substring(index + actualCount));
+    }
+  }
+
+  void _bufferUpdate(
+    StringBuffer buffer, {
+    required int index,
+    required String text,
+  }) {
+    // Update the text at the specified index
+    final currentText = buffer.toString();
+
+    if (index < currentText.length) {
+      buffer
+        ..clear()
+        ..write(currentText.substring(0, index));
+
+      final remainingLength = currentText.length - index;
+      final truncatedText =
+          text.substring(0, min(text.length, remainingLength));
+
+      buffer.write(truncatedText);
+
+      if (remainingLength > text.length) {
+        buffer.write(currentText.substring(index + text.length));
+      }
+    }
+  }
+
+  @override
+  String incrementCachedState({
+    required Operation operation,
+    required String state,
+  }) {
+    final buffer = StringBuffer(state);
+    _applyOperationToBuffer(buffer, operation);
     return buffer.toString();
   }
 

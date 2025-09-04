@@ -91,6 +91,11 @@ class CRDTDocument {
 
   /// Register a [SnapshotProvider]
   void registerHandler(Handler<dynamic> handler) {
+    if (_handlers.containsKey(handler.id)) {
+      throw HandlerAlreadyRegisteredException(
+        'Handler with ID ${handler.id} already registered',
+      );
+    }
     _handlers[handler.id] = handler;
     handler._document = this;
   }
@@ -123,19 +128,43 @@ class CRDTDocument {
       operation: operation,
     );
 
-    final applied = applyChange(change);
+    final applied = _internalApplyChange(change, notify: false);
     if (applied) {
-      _localChangesController.add(change);
+      _onOperationApplied(operation, change);
     }
     return change;
   }
 
+  /// Called when an operation is applied to the document
+  ///
+  /// Iterate to each handler to find the one who crate
+  /// the change and request a "cache state increment".
+  void _onOperationApplied(
+    Operation operation,
+    Change change,
+  ) {
+    for (final handler in _handlers.values) {
+      if (handler.id != operation.id) {
+        handler._updateCachedVersion();
+      } else {
+        handler._internalIncrementCachedState(
+          operation: operation,
+          change: change,
+        );
+      }
+    }
+
+    _localChangesController.add(change);
+    _notifyUpdates();
+  }
+
   /// Applies a [Change] to this document
   ///
-  /// The [Change] must be causally ready (all its dependencies must exist
-  /// in the DAG).
-  /// Returns `true` if the [Change] was applied, `false` if it already existed.
-  bool applyChange(Change change) {
+  /// if [notify] is `true` call [_notifyUpdates] else nothing
+  bool _internalApplyChange(
+    Change change, {
+    required bool notify,
+  }) {
     // Check if the change already exists
     if (_changeStore.containsChange(change.id)) {
       return false;
@@ -163,9 +192,21 @@ class CRDTDocument {
       );
     }
 
-    // Notify listeners about state update
-    _notifyUpdates();
+    if (notify) {
+      // Notify listeners about state update
+      _notifyUpdates();
+    }
+
     return true;
+  }
+
+  /// Applies a [Change] to this document
+  ///
+  /// The [Change] must be causally ready (all its dependencies must exist
+  /// in the DAG).
+  /// Returns `true` if the [Change] was applied, `false` if it already existed.
+  bool applyChange(Change change) {
+    return _internalApplyChange(change, notify: true);
   }
 
   /// Takes a snapshot of the document, compacting its history.
@@ -344,12 +385,17 @@ class CRDTDocument {
     var applied = 0;
     for (final change in sorted) {
       try {
-        if (applyChange(change)) {
+        if (_internalApplyChange(change, notify: false)) {
           applied++;
         }
       } catch (e) {
         // Skip changes that can't be applied
       }
+    }
+
+    if (applied > 0) {
+      _invalidateHandlers();
+      _notifyUpdates();
     }
 
     return applied;
@@ -465,18 +511,104 @@ class CRDTDocument {
   }
 }
 
-/// A provider that can provide a snapshot of the state of a CRDT
-mixin SnapshotProvider {
-  /// The unique identifier for this provider
+/// A consumer that can consume a CRDTDocument
+mixin DocumentConsumer {
+  /// The document that `this` can consume
+  late final CRDTDocument _document;
+
+  /// The unique identifier for `this` consumer
+  String get id;
+}
+
+/// A provider that can provide a cacheable state of a [CRDTDocument]
+///
+/// [T] is the type of the cached state of the handler.
+/// The handler state can be whatever the handler needs it to be
+/// to perform better. There is no binding with the `handler.value`
+/// or `getSnapshotState`.
+mixin CacheableStateProvider<T> on DocumentConsumer {
+  @override
   String get id;
 
-  CRDTDocument? _document;
+  /// The version at witch the cached state is still valid
+  Set<OperationId>? _cachedVersion;
+
+  /// The cached state of the handler
+  T? _cachedState;
+
+  /// Updates the cached version with the current version of the document
+  void _updateCachedVersion() {
+    _cachedVersion = Set.from(_document.version);
+  }
+
+  /// Updates the cached state
+  void updateCachedState(T newState) {
+    _cachedState = newState;
+    _updateCachedVersion();
+  }
+
+  void _internalIncrementCachedState({
+    required Operation operation,
+    required Change change,
+  }) {
+    final state = _cachedState;
+    if (state == null) {
+      return;
+    }
+
+    final newState = incrementCachedState(
+      operation: operation,
+      state: state,
+    );
+
+    if (newState == null) {
+      return;
+    }
+
+    updateCachedState(newState);
+  }
+
+  /// When the document receives an operation and a change is applied
+  /// anyone using [CacheableStateProvider] is allowed to
+  /// increment the cached state.
+  ///
+  /// Use the [operation] to increment the current [state]
+  T? incrementCachedState({
+    required Operation operation,
+    required T state,
+  }) {
+    return null;
+  }
+
+  /// Invalidates the cached state
+  ///
+  /// [CRDTDocument] automatically invalidates
+  /// the cache when an external effect happens (import, export, etc.).
+  void invalidateCache() {
+    _cachedState = null;
+    _cachedVersion = null;
+  }
+
+  /// Returns the cached state
+  T? get cachedState {
+    if (_cachedState != null && setEquals(_cachedVersion, _document.version)) {
+      return _cachedState;
+    }
+
+    return null;
+  }
+}
+
+/// A provider that can provide a snapshot of the state of a [CRDTDocument]
+mixin SnapshotProvider on DocumentConsumer {
+  @override
+  String get id;
 
   /// Returns the current state of the provider
   dynamic getSnapshotState();
 
   /// Return the last snapshot of the document
   dynamic lastSnapshot() {
-    return _document?._lastSnapshot?.data[id];
+    return _document._lastSnapshot?.data[id];
   }
 }

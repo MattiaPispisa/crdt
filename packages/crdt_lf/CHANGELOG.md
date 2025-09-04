@@ -1,3 +1,15 @@
+## [Unreleased]
+
+### Added
+
+- Created a set of mixins to be used by handlers to optimize performance
+- Thrown `HandlerAlreadyRegisteredException` when a handler is registered twice
+
+### Changed
+
+- On `importChanges` listeners of `updates` are notified only one times at import end
+- `Handlers` now not invalidate cache when an operation is applied due to the new mixins system. This greatly improves the computation of the handler value as it is persisted much more often.
+
 ## [1.0.0] - 2025-08-18
 
 **Breaking changes**

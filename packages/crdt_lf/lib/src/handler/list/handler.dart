@@ -21,38 +21,32 @@ class CRDTListHandler<T> extends Handler<List<T>> {
 
   /// Inserts an element at the specified index
   void insert(int index, T value) {
-    doc.createChange(
-      _ListInsertOperation<T>.fromHandler(
-        this,
-        index: index,
-        value: value,
-      ),
+    final operation = _ListInsertOperation<T>.fromHandler(
+      this,
+      index: index,
+      value: value,
     );
-    invalidateCache();
+    doc.createChange(operation);
   }
 
   /// Deletes elements starting at the specified index
   void delete(int index, int count) {
-    doc.createChange(
-      _ListDeleteOperation<T>.fromHandler(
-        this,
-        index: index,
-        count: count,
-      ),
+    final operation = _ListDeleteOperation<T>.fromHandler(
+      this,
+      index: index,
+      count: count,
     );
-    invalidateCache();
+    doc.createChange(operation);
   }
 
   /// Updates the element at the specified index
   void update(int index, T value) {
-    doc.createChange(
-      _ListUpdateOperation<T>.fromHandler(
-        this,
-        index: index,
-        value: value,
-      ),
+    final operation = _ListUpdateOperation<T>.fromHandler(
+      this,
+      index: index,
+      value: value,
     );
-    invalidateCache();
+    doc.createChange(operation);
   }
 
   /// Gets the current state of the list
@@ -97,39 +91,83 @@ class CRDTListHandler<T> extends Handler<List<T>> {
 
       final operation = opFactory.fromPayload(payload);
 
-      if (operation is _ListInsertOperation<T>) {
-        final index = operation.index;
-        final value = operation.value;
-
-        // Insert at the specified index,
-        // or at the end if the index is out of bounds
-        if (index <= state.length) {
-          state.insert(index, value);
-        } else {
-          state.add(value);
-        }
-      } else if (operation is _ListDeleteOperation) {
-        final index = operation.index;
-        final count = operation.count;
-
-        // Delete elements if the index is valid
-        if (index < state.length) {
-          final actualCount =
-              index + count > state.length ? state.length - index : count;
-          state.removeRange(index, index + actualCount);
-        }
-      } else if (operation is _ListUpdateOperation<T>) {
-        final index = operation.index;
-        final value = operation.value;
-
-        // Update the element at the specified index
-        if (index < state.length) {
-          state[index] = value;
-        }
+      if (operation != null) {
+        _applyOperationToList(state, operation);
       }
     }
 
     return state;
+  }
+
+  /// Applies a single operation to a list
+  void _applyOperationToList(List<T> state, Operation operation) {
+    if (operation is _ListInsertOperation<T>) {
+      _listInsert(
+        state,
+        index: operation.index,
+        value: operation.value,
+      );
+    } else if (operation is _ListDeleteOperation) {
+      _listDelete(
+        state,
+        index: operation.index,
+        count: operation.count,
+      );
+    } else if (operation is _ListUpdateOperation<T>) {
+      _listUpdate(
+        state,
+        index: operation.index,
+        value: operation.value,
+      );
+    }
+  }
+
+  void _listInsert(
+    List<T> state, {
+    required int index,
+    required T value,
+  }) {
+    // Insert at the specified index,
+    // or at the end if the index is out of bounds
+    if (index <= state.length) {
+      state.insert(index, value);
+    } else {
+      state.add(value);
+    }
+  }
+
+  void _listDelete(
+    List<T> state, {
+    required int index,
+    required int count,
+  }) {
+    // Delete elements if the index is valid
+    if (index < state.length) {
+      final actualCount =
+          index + count > state.length ? state.length - index : count;
+      state.removeRange(index, index + actualCount);
+    }
+  }
+
+  void _listUpdate(
+    List<T> state, {
+    required int index,
+    required T value,
+  }) {
+    // Update the element at the specified index
+    if (index < state.length) {
+      state[index] = value;
+    }
+  }
+
+  @override
+  List<T> incrementCachedState({
+    required Operation operation,
+    required List<T> state,
+  }) {
+    final newState = List<T>.from(state);
+    _applyOperationToList(newState, operation);
+    return newState;
   }
 
   /// Gets the initial state of the list

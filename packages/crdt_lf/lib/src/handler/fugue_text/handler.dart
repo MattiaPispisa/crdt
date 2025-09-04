@@ -21,7 +21,6 @@ class CRDTFugueTextHandler extends Handler<List<FugueValueNode<String>>> {
   /// The cached value of the text
   String? _cachedValue;
 
-
   /// Ensure local state is synchronized with the document version
   void _ensureStateInSync() {
     if (cachedState == null) {
@@ -38,7 +37,9 @@ class CRDTFugueTextHandler extends Handler<List<FugueValueNode<String>>> {
   /// Inserts [text] at position [index]
   void insert(int index, String text) {
     _ensureStateInSync();
-    if (text.isEmpty) return;
+    if (text.isEmpty) {
+      return;
+    }
 
     // Find the node at position index - 1 (or root node if index is 0)
     final leftOrigin = index == 0
