@@ -10,6 +10,7 @@
 
 - [CRDT LF](#crdt-lf)
   - [Features](#features)
+  - [Design](#design)
   - [Getting Started](#getting-started)
   - [Usage](#usage)
     - [Basic Usage](#basic-usage)
@@ -48,9 +49,10 @@ This library provides solutions for:
 - 🔄 **Automatic Conflict Resolution**: Automatically resolves conflicts in a CRDT
 - 📦 **Local Availability**: Operations are available locally as soon as they are applied
 
-## Design
+## Design
 
-// TODO(mattia): explain the design
+The synchronization mechanism is operation-based (CmRDT). Each document manages synchronization by propagating **only the operations**. Locally, each handler (list, text, etc.) applies these operations to resolve its state. It's possible to create snapshots to establish an initial state on which operations are resolved. This is useful to prevent the memory requirements of the system from growing indefinitely. 
+Operation resolution is handled by each individual handler. This design allows each handler to implement its own operation resolution logic according to its specific requirements. The library includes simple implementations like `CRDTList`, where interleaving is managed solely through HLC timestamps, as well as more sophisticated systems like `OR-Sets` and `Fugue Text`. Each handler provides documentation that describes its approach to operation resolution.
 
 ## Getting Started
 
@@ -120,9 +122,7 @@ melos run benchmark
 
 ## Architecture
 
-The library is built: 
-- above the [hlc_dart](https://pub.dev/packages/hlc_dart) package.
-- around several key components:
+The library is built above the [hlc_dart](https://pub.dev/packages/hlc_dart) package and provide a solution to implement CRDT systems.
 
 ### CRDTDocument
 The main document class that manages the CRDT state and handles synchronization between peers.
@@ -252,6 +252,7 @@ Feel free to:
 
 - [Fugue Algorithm](https://arxiv.org/abs/2305.00583)
 - [Hybrid Logical Clock](https://cse.buffalo.edu/tech-reports/2014-04.pdf)
+- [A comprehensive study of Convergent and Commutative Replicated Data Types](https://inria.hal.science/inria-00555588/en/)
 
 ## Packages
 Other bricks of the crdt "system" are:
