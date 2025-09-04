@@ -7,11 +7,24 @@ import 'package:crdt_lf/src/operation/type.dart';
 
 part 'operation.dart';
 
-/// CRDT Text implementation
+/// # CRDT Text
 ///
+/// ## Description
 /// A CRDTText is a text data structure
 /// that uses CRDT for conflict-free collaboration.
 /// It provides methods for inserting, deleting, and accessing text content.
+///
+/// ## Algorithm
+/// Process operations in clock order. 
+/// Interleaving is handled just using the HLC.
+///
+/// ## Example
+/// ```dart
+/// final doc = CRDTDocument();
+/// final text = CRDTTextHandler(doc, 'text');
+/// text..insert(0, 'Hello')..insert(5, ' World!');
+/// print(text.value); // Prints "Hello World!"
+/// ```
 class CRDTTextHandler extends Handler<String> {
   /// Creates a new CRDTText with the given document and ID
   CRDTTextHandler(super.doc, this._id);

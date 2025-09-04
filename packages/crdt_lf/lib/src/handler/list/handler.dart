@@ -4,11 +4,24 @@ import 'package:crdt_lf/src/operation/operation.dart';
 import 'package:crdt_lf/src/operation/type.dart';
 part 'operation.dart';
 
-/// CRDT List implementation
+/// # CRDT List
 ///
+/// ## Description
 /// A CRDTList is a list data structure that uses CRDT
 /// for conflict-free collaboration.
 /// It provides methods for inserting, deleting, and accessing elements.
+///
+/// ## Algorithm
+/// Process operations in clock order.
+/// Interleaving is handled just using the HLC.
+///
+/// ## Example
+/// ```dart
+/// final doc = CRDTDocument();
+/// final list = CRDTListHandler<String>(doc, 'list');
+/// list..insert(0, 'Hello')..insert(1, 'World')..update(0, 'Hello,')
+/// print(list.value.join('')); // Prints "Hello, World"
+/// ```
 class CRDTListHandler<T> extends Handler<List<T>> {
   /// Creates a new CRDTList with the given document and ID
   CRDTListHandler(super.doc, this._id);

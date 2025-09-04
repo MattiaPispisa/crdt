@@ -2,11 +2,27 @@ import 'package:crdt_lf/crdt_lf.dart';
 
 part 'operation.dart';
 
-/// CRDT Map implementation
+/// # CRDT Map
 ///
+/// ## Description
 /// A CRDTMap is a map data structure that uses CRDT
 /// for conflict-free collaboration.
 /// It provides methods for setting, deleting, and accessing key-value pairs.
+/// 
+/// ## Algorithm
+/// Process operations in clock order.
+/// Interleaving is handled just using the HLC.
+/// 
+/// ## Example
+/// ```dart
+/// final doc = CRDTDocument();
+/// final map = CRDTMapHandler<String>(doc, 'map');
+/// map.set('key1', 'value1');
+/// map.set('key2', 'value2');
+/// map.delete('key1');
+/// map.update('key2', 'value2');
+/// print(map.value); // Prints {"key2": "value2"}
+/// ```
 class CRDTMapHandler<T> extends Handler<Map<String, T>> {
   /// Creates a new CRDTMap with the given document and ID
   CRDTMapHandler(super.doc, this._id);

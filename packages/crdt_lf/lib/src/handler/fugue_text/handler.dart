@@ -1,10 +1,25 @@
 import 'package:crdt_lf/crdt_lf.dart';
 part 'operation.dart';
 
-/// CRDT Text implementation with the Fugue algorithm
+/// ## CRDT Text with Fugue implementation
 ///
+/// ## Description
 /// A CRDTFugueText is a text data structure that uses the Fugue algorithm ([The Art of the Fugue: Minimizing Interleaving in Collaborative Text Editing](https://arxiv.org/abs/2305.00583)) to minimize interleaving.
 /// It provides methods for inserting, deleting, and accessing text content.
+///
+/// ## Algorithm
+/// It uses the Fugue algorithm to minimize interleaving.
+/// So even if two users edit the same portion of text the algorithm will
+/// minimize the possibility of characters from one user being interleaved
+/// with the characters from the other user.
+///
+/// ## Example
+/// ```dart
+/// final doc = CRDTDocument();
+/// final text = CRDTFugueTextHandler(doc, 'text');
+/// text..insert(0, 'Hello')..insert(5, ' World');
+/// print(text.value); // Prints ["Hello"]
+/// ```
 class CRDTFugueTextHandler extends Handler<List<FugueValueNode<String>>> {
   /// Constructor that initializes a new Fugue text handler
   CRDTFugueTextHandler(super.doc, this._id);

@@ -2,12 +2,29 @@ import 'package:crdt_lf/crdt_lf.dart';
 
 part 'operation.dart';
 
-/// Observed-Removed Set (OR-Set) handler
+/// # CRDT OR-Set
 ///
-/// Conflict resolution follows Observed-Removed semantics:
-/// - Each add produces a unique tag for the value.
-/// - Remove tombstones the set of observed tags for a value.
-/// - A value is present iff it has at least one tag not tomb-stoned.
+/// ## Description
+/// A CRDTORSet is a set data structure that uses
+/// the Observed-Removed Set (OR-Set) algorithm to resolve conflicts.
+///
+/// ## Algorithm
+/// Adding a value to the set produces a unique tag for the value. 
+/// Removing a value consists in tomb-stoning the tags for the value.
+/// A value is considered present iff it has at least one tag not tomb-stoned.
+/// 
+/// More detail about OR-Set can be found in [this paper](https://inria.hal.science/inria-00555588/en/)
+///
+/// ## Example
+/// ```dart
+/// final doc = CRDTDocument();
+/// final set = CRDTORSetHandler<String>(doc, 'set');
+/// set.add('value1');
+/// set.add('value2');
+/// set.add('value3');
+/// set.remove('value2');
+/// print(set.value); // Prints {'value1', 'value3'}
+/// ```
 class CRDTORSetHandler<T> extends Handler<ORSetState<T>> {
   /// Creates a new CRDT OR-SetHandler with the given document and ID
   CRDTORSetHandler(super.doc, this._id);
