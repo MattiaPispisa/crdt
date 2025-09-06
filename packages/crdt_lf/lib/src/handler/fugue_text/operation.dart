@@ -10,7 +10,7 @@ class _FugueTextOperationFactory {
 
   /// Creates an operation from a payload
   Operation? fromPayload(Map<String, dynamic> payload) {
-    if (payload['id'] != handler.id) {
+    if (Operation.handlerIdFrom(payload: payload) != handler.id) {
       return null;
     }
 
@@ -87,8 +87,7 @@ class _FugueTextInsertOperation extends Operation {
 
   @override
   Map<String, dynamic> toPayload() => {
-        'type': type.toPayload(),
-        'id': id,
+        ...super.toPayload(),
         'newNodeID': newNodeID.toJson(),
         'text': text,
         'leftOrigin': leftOrigin.toJson(),
@@ -132,8 +131,7 @@ class _FugueTextDeleteOperation extends Operation {
 
   @override
   Map<String, dynamic> toPayload() => {
-        'type': type.toPayload(),
-        'id': id,
+        ...super.toPayload(),
         'nodeID': nodeID.toJson(),
       };
 }
@@ -189,8 +187,7 @@ class _FugueTextUpdateOperation extends Operation {
 
   @override
   Map<String, dynamic> toPayload() => {
-        'type': type.toPayload(),
-        'id': id,
+        ...super.toPayload(),
         'nodeID': nodeID.toJson(),
         'newNodeID': newNodeID.toJson(),
         'text': text,

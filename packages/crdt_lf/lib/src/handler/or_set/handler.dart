@@ -9,10 +9,10 @@ part 'operation.dart';
 /// the Observed-Removed Set (OR-Set) algorithm to resolve conflicts.
 ///
 /// ## Algorithm
-/// Adding a value to the set produces a unique tag for the value. 
+/// Adding a value to the set produces a unique tag for the value.
 /// Removing a value consists in tomb-stoning the tags for the value.
 /// A value is considered present iff it has at least one tag not tomb-stoned.
-/// 
+///
 /// More detail about OR-Set can be found in [this paper](https://inria.hal.science/inria-00555588/en/)
 ///
 /// ## Example
@@ -55,7 +55,7 @@ class CRDTORSetHandler<T> extends Handler<ORSetState<T>> {
   /// Removes [value] from the set by tomb-stoning observed tags.
   void remove(T value) {
     final state = cachedState ?? _computeState();
-    final allTags = state.all[value] ?? <String>{};
+    final allTags = state._all[value] ?? <String>{};
 
     final operation = _ORSetRemoveOperation<T>.fromHandler(
       this,
@@ -68,12 +68,12 @@ class CRDTORSetHandler<T> extends Handler<ORSetState<T>> {
   /// Returns the current set value computed from changes and snapshot.
   Set<T> get value {
     if (cachedState != null) {
-      return cachedState!.state;
+      return cachedState!._state;
     }
 
     final tagState = _computeState();
     updateCachedState(tagState);
-    return tagState.state;
+    return tagState._state;
   }
 
   /// Returns whether the set contains [value].
@@ -87,7 +87,7 @@ class CRDTORSetHandler<T> extends Handler<ORSetState<T>> {
 
   /// Computes the tag state by replaying the history.
   ORSetState<T> _computeState() {
-    final state = ORSetState<T>(
+    final state = ORSetState<T>._(
       live: <T, Set<String>>{},
       all: <T, Set<String>>{},
       snapshotOnly: <T>{},
@@ -103,7 +103,7 @@ class CRDTORSetHandler<T> extends Handler<ORSetState<T>> {
     // otherwise.
     if (snap is Set<dynamic> && snap.every((e) => e is T)) {
       for (final v in snap.cast<T>()) {
-        state.snapshotOnly.add(v);
+        state._snapshotOnly.add(v);
       }
     }
 
@@ -146,14 +146,16 @@ class CRDTORSetHandler<T> extends Handler<ORSetState<T>> {
   }) {
     // Register tag as seen (all),
     // and as live if not tomb-stoned yet.
-    state.all.putIfAbsent(operation.value, () => <String>{}).add(operation.tag);
-    if (!state.tombstones.contains(operation.tag)) {
-      state.live
+    state._all
+        .putIfAbsent(operation.value, () => <String>{})
+        .add(operation.tag);
+    if (!state._tombstones.contains(operation.tag)) {
+      state._live
           .putIfAbsent(operation.value, () => <String>{})
           .add(operation.tag);
     }
     // A concrete add overrides snapshot-only presence for this value.
-    state.snapshotOnly.remove(operation.value);
+    state._snapshotOnly.remove(operation.value);
   }
 
   void _tagStateRemove({
@@ -164,17 +166,17 @@ class CRDTORSetHandler<T> extends Handler<ORSetState<T>> {
     // This is used to remove snapshot-only presence.
     if (operation.removeAll) {
       // Remove snapshot-only presence for this value
-      state.snapshotOnly.remove(operation.value);
+      state._snapshotOnly.remove(operation.value);
     }
 
     // Tombstone all provided tags for the value and drop them from live.
-    state.tombstones.addAll(operation.tags);
+    state._tombstones.addAll(operation.tags);
 
-    final setLive = state.live[operation.value];
+    final setLive = state._live[operation.value];
     if (setLive != null) {
       setLive.removeWhere(operation.tags.contains);
       if (setLive.isEmpty) {
-        state.live.remove(operation.value);
+        state._live.remove(operation.value);
       }
     }
   }
@@ -184,7 +186,7 @@ class CRDTORSetHandler<T> extends Handler<ORSetState<T>> {
     required Operation operation,
     required ORSetState<T> state,
   }) {
-    final newState = state.deepCopy();
+    final newState = state._deepCopy();
 
     // Apply the operation to the copied tag state
     _applyOperationToTagState(
@@ -195,39 +197,41 @@ class CRDTORSetHandler<T> extends Handler<ORSetState<T>> {
     return newState;
   }
 }
-
-/// - [live]: current non-tomb-stoned tags per value
-/// (value is present if non-empty)
-/// - [all]: all tags ever observed per value
-/// (useful for computing default removals)
-/// - [snapshotOnly]: values seeded from snapshot without any concrete add tags
-/// yet
-/// - [tombstones]: set of tomb-stoned tags observed
-/// so far while replaying history.
-/// - [state]: the current state of the OR-Set
+/// State of the [CRDTORSetHandler]
 class ORSetState<T> {
-  /// Creates a new ORSetState
-  ORSetState({
-    required this.live,
-    required this.all,
-    required this.snapshotOnly,
-    required this.tombstones,
-  });
+  /// - [_live]: current non-tomb-stoned tags per value
+  /// (value is present if non-empty)
+  /// - [_all]: all tags ever observed per value
+  /// (useful for computing default removals)
+  /// - [_snapshotOnly]: values seeded from snapshot 
+  /// without any concrete add tags yet
+  /// - [_tombstones]: set of tomb-stoned tags observed
+  /// so far while replaying history.
+  /// - [_state]: the current state of the OR-Set
+  ORSetState._({
+    required Map<T, Set<String>> live,
+    required Map<T, Set<String>> all,
+    required Set<T> snapshotOnly,
+    required Set<String> tombstones,
+  })  : _tombstones = tombstones,
+        _snapshotOnly = snapshotOnly,
+        _all = all,
+        _live = live;
 
   /// Creates a deep copy of the tag state
-  ORSetState<T> deepCopy() {
+  ORSetState<T> _deepCopy() {
     final live = <T, Set<String>>{
-      for (final entry in this.live.entries)
+      for (final entry in _live.entries)
         entry.key: Set<String>.from(entry.value),
     };
     final all = <T, Set<String>>{
-      for (final entry in this.all.entries)
+      for (final entry in _all.entries)
         entry.key: Set<String>.from(entry.value),
     };
-    final snapshotOnly = <T>{...this.snapshotOnly};
-    final tombstones = <String>{...this.tombstones};
+    final snapshotOnly = <T>{..._snapshotOnly};
+    final tombstones = <String>{..._tombstones};
 
-    return ORSetState<T>(
+    return ORSetState<T>._(
       live: live,
       all: all,
       snapshotOnly: snapshotOnly,
@@ -236,17 +240,17 @@ class ORSetState<T> {
   }
 
   /// The live tags per value
-  final Map<T, Set<String>> live;
+  final Map<T, Set<String>> _live;
 
   /// The all tags per value
-  final Map<T, Set<String>> all;
+  final Map<T, Set<String>> _all;
 
   /// The snapshot-only values
-  final Set<T> snapshotOnly;
+  final Set<T> _snapshotOnly;
 
   /// The tombstones
-  final Set<String> tombstones;
+  final Set<String> _tombstones;
 
   /// The state of the OR-Set
-  Set<T> get state => <T>{...live.keys, ...snapshotOnly};
+  Set<T> get _state => <T>{..._live.keys, ..._snapshotOnly};
 }

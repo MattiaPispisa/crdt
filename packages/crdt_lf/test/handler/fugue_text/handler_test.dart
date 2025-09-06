@@ -81,7 +81,7 @@ void main() {
       expect(identical(value1, value3), isFalse);
     });
 
-    test('should handle value cache invalidation on document change', () {
+    test('should handle value caching on independent handlers', () {
       final doc = CRDTDocument();
       final handler1 = CRDTFugueTextHandler(doc, 'text1');
       final handler2 = CRDTFugueTextHandler(doc, 'text2');
@@ -93,7 +93,7 @@ void main() {
       handler2.insert(0, 'World');
 
       final value2 = handler1.value;
-      expect(identical(value1, value2), isFalse);
+      expect(identical(value1, value2), isTrue);
     });
 
     test('should maintain correct counter for element IDs', () {

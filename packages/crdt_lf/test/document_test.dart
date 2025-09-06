@@ -615,16 +615,82 @@ void main() {
         expect(serverHandler.value, clientHandler.value);
       });
     });
-  });
 
-  group('handler caching', () {
-    // TODO(mattia): provide tests for handler caching
-    // 1. test that after an operation is applied, the cached state is updated
-    // 1. test that the cached state is not updated if the operation is not applied
-    // 1. test that disabling useIncrementalCacheUpdate works
-    // 1. test that start useIncrementalCacheUpdate then disaling useIncrementalCacheUpdate then re-enabling 
-    // no old cached state can work
-    // 1. test that setCachedState works
-    // 1. test when value recompute 
+    group('handlers', () {
+      test('should throw on double registration', () {
+        expect(
+          () {
+            return TestHandler(doc);
+          },
+          throwsA(isA<HandlerAlreadyRegisteredException>()),
+        );
+      });
+
+      test('should not increment cached without a cached state', () {
+        final handler = _FakeCRDTListHandler(doc, 'test-list');
+        expect(handler._incrementedCount, 0);
+        // cached state is never computed
+        handler.insert(0, 'Hello');
+        expect(handler._incrementedCount, 0);
+      });
+
+      test('should increment cached state on operation application', () {
+        final handler = _FakeCRDTListHandler(doc, 'test-list');
+        expect(handler._incrementedCount, 0);
+        // compute cached state
+        expect(handler.value, const <String>[]);
+        handler
+          ..insert(0, 'Hello')
+          ..insert(1, 'World');
+        expect(handler._incrementedCount, 2);
+      });
+
+      test(
+          'should not increment cached state'
+          ' if useIncrementalCacheUpdate is false', () {
+        final handler = _FakeCRDTListHandler(doc, 'test-list')
+          ..useIncrementalCacheUpdate = false;
+        expect(handler._incrementedCount, 0);
+        expect(handler.value, const <String>[]);
+        handler.insert(0, 'Hello');
+        expect(handler._incrementedCount, 0);
+      });
+
+      test('should ignore old cached state', () {
+        final handler = _FakeCRDTListHandler(doc, 'test-list')
+          ..useIncrementalCacheUpdate = true;
+        expect(handler._incrementedCount, 0);
+        expect(handler.value, const <String>[]);
+        handler.insert(0, 'Hello');
+        expect(handler._incrementedCount, 1);
+        handler
+          ..useIncrementalCacheUpdate = false
+          ..insert(1, 'World');
+        expect(handler._incrementedCount, 1);
+
+        // previous "insert" didn't increment cached state
+        // therefore, new "insert" should not increment cached state
+        handler
+          ..useIncrementalCacheUpdate = true
+          ..insert(2, 'Dart!');
+        expect(handler._incrementedCount, 1);
+        expect(handler.value, ['Hello', 'World', 'Dart!']);
+      });
+    });
   });
+}
+
+class _FakeCRDTListHandler extends CRDTListHandler<String> {
+  _FakeCRDTListHandler(super.doc, super.id);
+
+  var _incrementedCount = 0;
+
+  @override
+  List<String> incrementCachedState({
+    required Operation operation,
+    required List<String> state,
+  }) {
+    _incrementedCount++;
+    return super.incrementCachedState(operation: operation, state: state);
+  }
 }

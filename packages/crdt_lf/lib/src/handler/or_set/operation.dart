@@ -5,7 +5,7 @@ class _ORSetOperationFactory<T> {
   final Handler<dynamic> handler;
 
   Operation? fromPayload(Map<String, dynamic> payload) {
-    if (payload['id'] != handler.id) {
+    if (Operation.handlerIdFrom(payload: payload) != handler.id) {
       return null;
     }
 
@@ -57,8 +57,7 @@ class _ORSetAddOperation<T> extends Operation {
   @override
   Map<String, dynamic> toPayload() {
     return {
-      'type': type.toPayload(),
-      'id': id,
+      ...super.toPayload(),
       'value': value,
       'tag': tag,
     };
@@ -91,7 +90,7 @@ class _ORSetRemoveOperation<T> extends Operation {
   }
 
   factory _ORSetRemoveOperation.fromPayload(Map<String, dynamic> payload) {
-    final raw = (payload['tags'] as List<dynamic>? ?? const <dynamic>[]);
+    final raw = payload['tags'] as List<dynamic>? ?? const <dynamic>[];
     return _ORSetRemoveOperation<T>(
       id: payload['id'] as String,
       type: OperationType.fromPayload(payload['type'] as String),
@@ -108,8 +107,7 @@ class _ORSetRemoveOperation<T> extends Operation {
   @override
   Map<String, dynamic> toPayload() {
     return {
-      'type': type.toPayload(),
-      'id': id,
+      ...super.toPayload(),
       'value': value,
       'tags': tags.toList(),
       'removeAll': removeAll,

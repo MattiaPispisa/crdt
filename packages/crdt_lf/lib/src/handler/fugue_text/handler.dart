@@ -1,7 +1,6 @@
 import 'package:crdt_lf/crdt_lf.dart';
 part 'operation.dart';
 
-// TODO(mattia): fix and complete fugue text caching.
 
 /// ## CRDT Text with Fugue implementation
 ///
@@ -46,10 +45,10 @@ class CRDTFugueTextHandler extends Handler<FugueTextState> {
     // Find the node at position index - 1 (or root node if index is 0)
     final leftOrigin = index == 0
         ? FugueElementID.nullID()
-        : state.tree.findNodeAtPosition(index - 1);
+        : state._tree.findNodeAtPosition(index - 1);
 
     // Find the next node after leftOrigin
-    final rightOrigin = state.tree.findNextNode(leftOrigin);
+    final rightOrigin = state._tree.findNextNode(leftOrigin);
 
     // Insert first character
     final firstNodeID = FugueElementID(doc.peerId, _counter++);
@@ -87,7 +86,7 @@ class CRDTFugueTextHandler extends Handler<FugueTextState> {
     // Collect targets first to avoid index drift while deleting
     final targets = <FugueElementID>[];
     for (var i = 0; i < count; i++) {
-      final nodeID = state.tree.findNodeAtPosition(index + i);
+      final nodeID = state._tree.findNodeAtPosition(index + i);
       if (!nodeID.isNull) {
         targets.add(nodeID);
       }
@@ -114,7 +113,7 @@ class CRDTFugueTextHandler extends Handler<FugueTextState> {
     // Collect targets first to avoid index drift while updating
     final targets = <FugueElementID>[];
     for (var i = 0; i < text.length; i++) {
-      final nodeID = state.tree.findNodeAtPosition(index + i);
+      final nodeID = state._tree.findNodeAtPosition(index + i);
       if (!nodeID.isNull) {
         targets.add(nodeID);
       }
@@ -139,7 +138,7 @@ class CRDTFugueTextHandler extends Handler<FugueTextState> {
   String get value {
     // Check if cache is still valid
     if (cachedState != null) {
-      return cachedState!.value;
+      return cachedState!._value;
     }
 
     // Compute state from scratch
@@ -148,7 +147,7 @@ class CRDTFugueTextHandler extends Handler<FugueTextState> {
     // Store state in cache
     updateCachedState(state);
 
-    return state.value;
+    return state._value;
   }
 
   @override
@@ -156,14 +155,14 @@ class CRDTFugueTextHandler extends Handler<FugueTextState> {
     required Operation operation,
     required FugueTextState state,
   }) {
-    _applyTreeOperation(state.tree, operation);
+    _applyTreeOperation(state._tree, operation);
     return state..resolve();
   }
 
   @override
   List<FugueValueNode<String>> getSnapshotState() {
     if (cachedState != null) {
-      return cachedState!.nodes;
+      return cachedState!._nodes;
     }
 
     // Compute state from scratch
@@ -172,7 +171,7 @@ class CRDTFugueTextHandler extends Handler<FugueTextState> {
     // Store state in cache
     updateCachedState(state);
 
-    return state.nodes;
+    return state._nodes;
   }
 
   /// Gets the length of the text
@@ -183,7 +182,7 @@ class CRDTFugueTextHandler extends Handler<FugueTextState> {
     final state = FugueTextState.empty();
 
     // Insert initial state
-    state.tree.iterableInsert(0, _initialState());
+    state._tree.iterableInsert(0, _initialState());
 
     // Get all operations from the document
     final changes = doc.exportChanges().sorted();
@@ -195,7 +194,7 @@ class CRDTFugueTextHandler extends Handler<FugueTextState> {
       final operation = opFactory.fromPayload(change.payload);
 
       if (operation != null) {
-        _applyTreeOperation(state.tree, operation);
+        _applyTreeOperation(state._tree, operation);
       }
     }
 
@@ -243,21 +242,30 @@ class CRDTFugueTextHandler extends Handler<FugueTextState> {
   }
 }
 
+/// fugue text state
 class FugueTextState {
+  /// Constructor that initializes the state
   FugueTextState({
-    required this.tree,
-  });
+    required FugueTree<String> tree,
+  }) : _tree = tree;
 
+  /// Factory method that initializes an empty state
   factory FugueTextState.empty() {
     return FugueTextState(tree: FugueTree<String>.empty());
   }
 
-  final FugueTree<String> tree;
-  late List<FugueValueNode<String>> nodes;
-  late String value;
+  /// The tree of the state
+  final FugueTree<String> _tree;
 
+  /// The nodes of the state
+  late List<FugueValueNode<String>> _nodes;
+
+  /// The value of the state
+  late String _value;
+
+  /// Resolves [_nodes] and [_value] with the [_tree]
   void resolve() {
-    nodes = tree.nodes();
-    value = nodes.map((el) => el.value).join();
+    _nodes = _tree.nodes();
+    _value = _nodes.map((el) => el.value).join();
   }
 }
