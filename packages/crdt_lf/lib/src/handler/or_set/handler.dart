@@ -54,7 +54,7 @@ class CRDTORSetHandler<T> extends Handler<ORSetState<T>> {
 
   /// Removes [value] from the set by tomb-stoning observed tags.
   void remove(T value) {
-    final state = cachedState ?? _computeState();
+    final state = _cachedOrComputedState();
     final allTags = state._all[value] ?? <String>{};
 
     final operation = _ORSetRemoveOperation<T>.fromHandler(
@@ -67,13 +67,17 @@ class CRDTORSetHandler<T> extends Handler<ORSetState<T>> {
 
   /// Returns the current set value computed from changes and snapshot.
   Set<T> get value {
+    return _cachedOrComputedState()._state;
+  }
+
+  ORSetState<T> _cachedOrComputedState() {
     if (cachedState != null) {
-      return cachedState!._state;
+      return cachedState!;
     }
 
     final tagState = _computeState();
     updateCachedState(tagState);
-    return tagState._state;
+    return tagState;
   }
 
   /// Returns whether the set contains [value].
@@ -197,13 +201,14 @@ class CRDTORSetHandler<T> extends Handler<ORSetState<T>> {
     return newState;
   }
 }
+
 /// State of the [CRDTORSetHandler]
 class ORSetState<T> {
   /// - [_live]: current non-tomb-stoned tags per value
   /// (value is present if non-empty)
   /// - [_all]: all tags ever observed per value
   /// (useful for computing default removals)
-  /// - [_snapshotOnly]: values seeded from snapshot 
+  /// - [_snapshotOnly]: values seeded from snapshot
   /// without any concrete add tags yet
   /// - [_tombstones]: set of tomb-stoned tags observed
   /// so far while replaying history.

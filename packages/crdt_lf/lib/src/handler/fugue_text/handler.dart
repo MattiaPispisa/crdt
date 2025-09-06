@@ -1,7 +1,6 @@
 import 'package:crdt_lf/crdt_lf.dart';
 part 'operation.dart';
 
-
 /// ## CRDT Text with Fugue implementation
 ///
 /// ## Description
@@ -40,7 +39,7 @@ class CRDTFugueTextHandler extends Handler<FugueTextState> {
       return;
     }
 
-    final state = cachedState ?? _computeState();
+    final state = _cachedOrComputedState();
 
     // Find the node at position index - 1 (or root node if index is 0)
     final leftOrigin = index == 0
@@ -82,7 +81,7 @@ class CRDTFugueTextHandler extends Handler<FugueTextState> {
 
   /// Deletes [count] characters starting from position [index]
   void delete(int index, int count) {
-    final state = cachedState ?? _computeState();
+    final state = _cachedOrComputedState();
     // Collect targets first to avoid index drift while deleting
     final targets = <FugueElementID>[];
     for (var i = 0; i < count; i++) {
@@ -108,7 +107,7 @@ class CRDTFugueTextHandler extends Handler<FugueTextState> {
       return;
     }
 
-    final state = cachedState ?? _computeState();
+    final state = _cachedOrComputedState();
 
     // Collect targets first to avoid index drift while updating
     final targets = <FugueElementID>[];
@@ -136,18 +135,20 @@ class CRDTFugueTextHandler extends Handler<FugueTextState> {
 
   /// Gets the current value of the text
   String get value {
-    // Check if cache is still valid
+    return _cachedOrComputedState()._value;
+  }
+
+  /// If the cached state is still valid, returns it.
+  /// 
+  /// Otherwise, computes the state from scratch and updates the cache.
+  FugueTextState _cachedOrComputedState() {
     if (cachedState != null) {
-      return cachedState!._value;
+      return cachedState!;
     }
 
-    // Compute state from scratch
     final state = _computeState();
-
-    // Store state in cache
     updateCachedState(state);
-
-    return state._value;
+    return state;
   }
 
   @override
