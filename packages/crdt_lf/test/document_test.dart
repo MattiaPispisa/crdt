@@ -677,6 +677,61 @@ void main() {
         expect(handler.value, ['Hello', 'World', 'Dart!']);
       });
     });
+
+    group('transaction', () {
+      test('runInTransaction batches updates and notifies only once', () async {
+        final events = <void>[];
+        final sub = doc.updates.listen((_) => events.add(null));
+        final listHandler = CRDTListHandler<String>(doc, 'tx-list');
+
+        // Multiple operations within a transaction should emit a single update
+        doc.runInTransaction<void>(() {
+          listHandler
+            ..insert(0, 'a')
+            ..insert(1, 'b')
+            ..insert(2, 'c');
+        });
+
+        await Future<void>.delayed(Duration.zero);
+        expect(events.length, 1);
+
+        await sub.cancel();
+      });
+
+      test('runInTransaction batches import + handler ops and emits once',
+          () async {
+        final events = <void>[];
+        final sub = doc.updates.listen((_) => events.add(null));
+        final listHandler = CRDTListHandler<String>(doc, 'tx-list-2');
+
+        // Prepare another document with a change and a snapshot
+        final otherDocument = CRDTDocument(peerId: PeerId.generate());
+        final otherHandler = TestHandler(otherDocument);
+        final otherOp = TestOperation.fromHandler(otherHandler);
+        final otherSnap = otherDocument.takeSnapshot();
+        final otherChange = otherDocument.createChange(otherOp);
+        expect(otherChange, isNotNull);
+
+        // Batch import + a couple of local handler ops in a single transaction
+        doc.runInTransaction<void>(() {
+          final imported1 = doc.importSnapshot(otherSnap);
+          expect(imported1, isTrue);
+
+          final applied = doc.importChanges([otherChange]);
+          expect(applied, greaterThan(0));
+
+          listHandler
+            ..insert(0, 'hello')
+            ..insert(1, 'world');
+        });
+
+        await Future<void>.delayed(Duration.zero);
+        // Only one update despite multiple operations inside the transaction
+        expect(events.length, 1);
+
+        await sub.cancel();
+      });
+    });
   });
 }
 

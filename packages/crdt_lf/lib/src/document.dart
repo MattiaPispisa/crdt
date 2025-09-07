@@ -3,12 +3,8 @@ import 'dart:convert';
 
 import 'package:crdt_lf/crdt_lf.dart';
 import 'package:crdt_lf/src/devtools/devtools.dart' as devtools;
+import 'package:crdt_lf/src/transaction/transaction_manager.dart';
 import 'package:hlc_dart/hlc_dart.dart';
-
-// TODO(mattia): add transaction support.
-// Implicitly create a transaction context for each change.
-// Create a function to start an explicit transaction context.
-// notifiers are notified only when the transaction is committed.
 
 // TODO(mattia): after transaction support create compound operations.
 // A mechanism to group operations together and apply them atomically.
@@ -42,6 +38,10 @@ class CRDTDocument {
         _clock = HybridLogicalClock.initialize(),
         _localChangesController = StreamController<Change>.broadcast(),
         _handlers = {} {
+    _transactionManager = TransactionManager(
+      emitLocalChange: _transactionEmitLocalChange,
+      emitUpdate: _transactionEmitUpdate,
+    );
     devtools.handleCreated(this);
   }
 
@@ -93,9 +93,30 @@ class CRDTDocument {
   /// The last snapshot of this document
   Snapshot? _lastSnapshot;
 
+  /// Manages transactional batching of events
+  late final TransactionManager _transactionManager;
+
   /// Whether this document is empty.
   /// (no changes and no snapshot)
   bool get isEmpty => _changeStore.changeCount == 0 && _lastSnapshot == null;
+
+  /// Whether a transaction is currently active.
+  bool get isInTransaction => _transactionManager.isInTransaction;
+
+  void _transactionEmitLocalChange(Change change) {
+    if (_localChangesController.isClosed) {
+      return;
+    }
+
+    _localChangesController.add(change);
+  }
+
+  void _transactionEmitUpdate() {
+    if (_updatesController.isClosed) {
+      return;
+    }
+    _updatesController.add(null);
+  }
 
   /// Register a [SnapshotProvider]
   void registerHandler(Handler<dynamic> handler) {
@@ -123,24 +144,36 @@ class CRDTDocument {
     Operation operation, {
     int? physicalTime,
   }) {
-    final pt = physicalTime ?? DateTime.now().millisecondsSinceEpoch;
-    _clock.localEvent(pt);
+    final openedImplicitTransaction = !isInTransaction;
 
-    final id = OperationId(_peerId, _clock.copy());
-    final deps = _dag.frontiers;
+    try {
+      if (openedImplicitTransaction) {
+        _transactionManager.begin();
+      }
 
-    final change = Change(
-      id: id,
-      deps: deps,
-      author: _peerId,
-      operation: operation,
-    );
+      final pt = physicalTime ?? DateTime.now().millisecondsSinceEpoch;
+      _clock.localEvent(pt);
 
-    final applied = _internalApplyChange(change, notify: false);
-    if (applied) {
-      _onOperationApplied(operation, change);
+      final id = OperationId(_peerId, _clock.copy());
+      final deps = _dag.frontiers;
+
+      final change = Change(
+        id: id,
+        deps: deps,
+        author: _peerId,
+        operation: operation,
+      );
+
+      final applied = _internalApplyChange(change, notify: false);
+      if (applied) {
+        _onOperationApplied(operation, change);
+      }
+      return change;
+    } finally {
+      if (openedImplicitTransaction) {
+        _transactionManager.commit();
+      }
     }
-    return change;
   }
 
   /// Called when an operation is applied to the document
@@ -162,8 +195,9 @@ class CRDTDocument {
       }
     }
 
-    _localChangesController.add(change);
-    _notifyUpdates();
+    // Delegate local change emission and notifications 
+    // to the transaction manager
+    _transactionManager.handleLocalChange(change);
   }
 
   /// Applies a [Change] to this document
@@ -394,6 +428,7 @@ class CRDTDocument {
     for (final change in sorted) {
       try {
         if (_internalApplyChange(change, notify: false)) {
+          // TODO(mattia): set the handler affected by the change
           applied++;
         }
       } catch (e) {
@@ -402,6 +437,7 @@ class CRDTDocument {
     }
 
     if (applied > 0) {
+      // TODO(mattia): invalidate only handlers that are affected by the changes
       _invalidateHandlers();
       _notifyUpdates();
     }
@@ -419,7 +455,7 @@ class CRDTDocument {
     if (_updatesController.isClosed) {
       return;
     }
-    _updatesController.add(null);
+    _transactionManager.requestUpdate();
   }
 
   /// Returns a list of [Change]s never received from this document:
@@ -503,6 +539,14 @@ class CRDTDocument {
     for (final handler in _handlers.values) {
       handler.invalidateCache();
     }
+  }
+
+  /// Runs [action] within a transaction, committing at the end.
+  ///
+  /// Nested transactions are supported and will only flush once the outermost
+  /// transaction is committed.
+  T runInTransaction<T>(T Function() action) {
+    return _transactionManager.run<T>(action);
   }
 
   /// Returns a string representation of this document
