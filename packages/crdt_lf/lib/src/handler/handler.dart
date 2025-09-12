@@ -14,6 +14,18 @@ abstract class Handler<T>
   /// The document that owns this handler
   final CRDTDocument doc;
 
-  /// The handler can create 
+  /// During transaction consecutive operations can be compounded.
+  ///
+  /// By default, no compaction occurs and operations are returned as-is.
+  ///
+  /// Override this method to implement a compact algorithm.
+  ///
+  /// [accumulator] is the previous operation
+  /// [current] is the current operation
+  ///
+  /// If [current] can be compounded with [accumulator],
+  /// return the **new compounded** operation (union of the two).
+  /// 
+  /// Otherwise, return `null`.
   Operation? compound(Operation accumulator, Operation current) => null;
 }

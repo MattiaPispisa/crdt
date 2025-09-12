@@ -7,6 +7,8 @@ import 'package:crdt_lf/src/operation/type.dart';
 
 part 'operation.dart';
 
+// TODO(mattia): implement compound operation
+
 /// # CRDT Text
 ///
 /// ## Description
@@ -15,7 +17,7 @@ part 'operation.dart';
 /// It provides methods for inserting, deleting, and accessing text content.
 ///
 /// ## Algorithm
-/// Process operations in clock order. 
+/// Process operations in clock order.
 /// Interleaving is handled just using the HLC.
 ///
 /// ## Example
