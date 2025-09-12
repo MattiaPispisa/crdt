@@ -36,7 +36,7 @@ class CRDTORSetHandler<T> extends Handler<ORSetState<T>> {
 
   /// Obtains a unique tag for an operation
   String _tag() {
-    return '${doc.peerId}@${doc.hlc}';
+    return '${doc.peerId}@${doc.hlc}.${doc.peerId}';
   }
 
   /// Adds [value] to the set producing a unique tag, returned to the caller.
@@ -49,7 +49,7 @@ class CRDTORSetHandler<T> extends Handler<ORSetState<T>> {
       value: value,
       tag: _tag(),
     );
-    doc.createChange(operation);
+    doc.registerOperation(operation);
   }
 
   /// Removes [value] from the set by tomb-stoning observed tags.
@@ -62,7 +62,7 @@ class CRDTORSetHandler<T> extends Handler<ORSetState<T>> {
       value: value,
       tags: allTags,
     );
-    doc.createChange(operation);
+    doc.registerOperation(operation);
   }
 
   /// Returns the current set value computed from changes and snapshot.

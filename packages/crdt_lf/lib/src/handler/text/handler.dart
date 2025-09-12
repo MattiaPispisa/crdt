@@ -42,7 +42,7 @@ class CRDTTextHandler extends Handler<String> {
       index: index,
       text: text,
     );
-    doc.createChange(operation);
+    doc.registerOperation(operation);
   }
 
   /// Deletes [count] characters starting at the specified [index]
@@ -52,7 +52,7 @@ class CRDTTextHandler extends Handler<String> {
       index: index,
       count: count,
     );
-    doc.createChange(operation);
+    doc.registerOperation(operation);
   }
 
   /// Updates the text at the specified [index]
@@ -62,7 +62,7 @@ class CRDTTextHandler extends Handler<String> {
       index: index,
       text: text,
     );
-    doc.createChange(operation);
+    doc.registerOperation(operation);
   }
 
   /// Gets the current state of the text

@@ -9,26 +9,32 @@ import 'package:crdt_lf/crdt_lf.dart';
 class TransactionManager {
   /// Constructor
   TransactionManager({
-    required this.emitLocalChange,
-    required this.emitUpdate,
+    required this.flushWork,
   });
 
-  /// Callback used to emit a locally generated change when not in a transaction
-  /// or when flushing at commit time.
-  final void Function(Change change) emitLocalChange;
-
-  /// Callback used to notify listeners about document updates when not in a
-  /// transaction or when flushing at commit time.
-  final void Function() emitUpdate;
+  /// Callback used to flush the work done during the transaction:
+  ///
+  /// - `operations`: the operations applied during the transaction
+  /// - `changes`: the changes applied during the transaction
+  /// - `otherPendingUpdates`: whether there are other pending updates
+  final void Function(
+    List<Operation> operations,
+    List<Change> changes,
+    // ignore: avoid_positional_boolean_parameters the only boolean positional parameter
+    bool otherPendingUpdates,
+  ) flushWork;
 
   /// The depth of the transaction stack.
   int _depth = 0;
 
   /// The list of pending local changes.
-  final List<Change> _pendingLocalChanges = <Change>[];
+  final List<Operation> _pendingOperations = <Operation>[];
 
-  /// Whether there is a pending update.
-  bool _hasPendingUpdate = false;
+  /// The list of changes applied during the current transaction.
+  final List<Change> _pendingChanges = <Change>[];
+
+  /// Whether an update has been requested.
+  bool _hasRequestedUpdate = false;
 
   /// Whether a transaction is currently active.
   bool get isInTransaction => _depth > 0;
@@ -50,19 +56,7 @@ class TransactionManager {
       return;
     }
 
-    // Flush pending local changes
-    if (_pendingLocalChanges.isNotEmpty) {
-      for (final change in List<Change>.from(_pendingLocalChanges)) {
-        emitLocalChange(change);
-      }
-      _pendingLocalChanges.clear();
-    }
-
-    // Flush a single updates notification if any are pending
-    if (_hasPendingUpdate) {
-      _hasPendingUpdate = false;
-      emitUpdate();
-    }
+    _flushWork();
   }
 
   /// Runs [action] within a transaction, committing at the end.
@@ -75,27 +69,58 @@ class TransactionManager {
     }
   }
 
-  /// Handles a locally generated change: if a transaction is active, the
-  /// change is queued and an update is marked as pending; otherwise the change
-  /// and the update are emitted immediately.
-  void handleLocalChange(Change change) {
+  /// Handles a locally generated operation. i
+  /// 
+  /// If a transaction is active, the operation is queued
+  /// and an update is marked as pending; otherwise the operation
+  /// is emitted immediately.
+  void handleOperation(Operation operation) {
     if (isInTransaction) {
-      _pendingLocalChanges.add(change);
-      _hasPendingUpdate = true;
+      _pendingOperations.add(operation);
       return;
     }
 
-    emitLocalChange(change);
-    emitUpdate();
+    _pendingOperations.add(operation);
+    _flushWork();
   }
 
-  /// Requests an update notification. If a transaction is active, the update
+  /// Handles locally generated changes.
+  ///
+  /// If a transaction is active, the changes are queued
+  /// and an update is marked as pending; otherwise changes
+  /// are emitted immediately.
+  void handleAppliedChanges(List<Change> changes) {
+    if (isInTransaction) {
+      _pendingChanges.addAll(changes);
+      return;
+    }
+
+    _pendingChanges.addAll(changes);
+    _flushWork();
+  }
+
+  /// Requests an update notification.
+  ///
+  /// If a transaction is active, the update
   /// is marked as pending; otherwise it is emitted immediately.
   void requestUpdate() {
     if (isInTransaction) {
-      _hasPendingUpdate = true;
+      _hasRequestedUpdate = true;
       return;
     }
-    emitUpdate();
+
+    _hasRequestedUpdate = true;
+    _flushWork();
+  }
+
+  void _flushWork() {
+    flushWork(
+      List.of(_pendingOperations),
+      List.of(_pendingChanges),
+      _hasRequestedUpdate,
+    );
+    _pendingOperations.clear();
+    _pendingChanges.clear();
+    _hasRequestedUpdate = false;
   }
 }

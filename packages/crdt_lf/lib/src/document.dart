@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:crdt_lf/crdt_lf.dart';
+import 'package:crdt_lf/src/compound/compound.dart';
 import 'package:crdt_lf/src/devtools/devtools.dart' as devtools;
 import 'package:crdt_lf/src/transaction/transaction_manager.dart';
 import 'package:hlc_dart/hlc_dart.dart';
@@ -39,8 +40,7 @@ class CRDTDocument {
         _localChangesController = StreamController<Change>.broadcast(),
         _handlers = {} {
     _transactionManager = TransactionManager(
-      emitLocalChange: _transactionEmitLocalChange,
-      emitUpdate: _transactionEmitUpdate,
+      flushWork: _transactionFlushWork,
     );
     devtools.handleCreated(this);
   }
@@ -103,19 +103,74 @@ class CRDTDocument {
   /// Whether a transaction is currently active.
   bool get isInTransaction => _transactionManager.isInTransaction;
 
-  void _transactionEmitLocalChange(Change change) {
-    if (_localChangesController.isClosed) {
-      return;
+  /// Flushes the operations to the [Compound] and applies the changes.
+  ///
+  /// 1. Compacts the operations
+  /// 1. Operations are converted to [Change]s
+  /// 1. Subscribers are notified about changes
+  ///
+  /// **Only [_transactionManager] can call this method.**
+  void _transactionFlushWork(
+    List<Operation> operations,
+    List<Change> changes,
+    bool otherPendingUpdates,
+  ) {
+    final compacted = Compound(
+      operations: operations,
+      handlers: _handlers,
+    ).compact();
+
+    final handlersAffectedFromErrors = <String>{};
+    final appliedChanges = changes;
+
+    // if generated operations are applied correctly the handlers
+    // cached state can be preserved.
+    // Otherwise if there is at least one operation not applied correctly
+    // the handlers cached state is invalidated.
+    for (final operation in compacted) {
+      final change = _changeFromOp(operation);
+      final applied = _internalApplyChange(change);
+
+      if (applied) {
+        appliedChanges.add(change);
+        for (final handler in _handlers.values) {
+          if (!handlersAffectedFromErrors.contains(handler.id)) {
+            handler._updateCachedVersion();
+          }
+        }
+      } else {
+        _handlers[operation.id]?.invalidateCache();
+        handlersAffectedFromErrors.add(operation.id);
+      }
     }
 
-    _localChangesController.add(change);
+    if (!_localChangesController.isClosed) {
+      for (final change in appliedChanges.sorted()) {
+        _localChangesController.add(change);
+      }
+    }
+
+    if (appliedChanges.isNotEmpty || otherPendingUpdates) {
+      _updatesController.add(null);
+    }
   }
 
-  void _transactionEmitUpdate() {
-    if (_updatesController.isClosed) {
-      return;
+  /// [Change]s applied by external sources could not be incremental.
+  /// So the affected handlers are invalidated,
+  /// while others have their version updated.
+  ///
+  /// After the handlers are updated is emitted
+  /// an update request.
+  void _reactToAppliedExternalChange(Change change) {
+    for (final handler in _handlers.values) {
+      if (handler._isAffectedByChange(change)) {
+        handler.invalidateCache();
+      } else {
+        handler._updateCachedVersion();
+      }
     }
-    _updatesController.add(null);
+
+    _emitUpdate([change]);
   }
 
   /// Register a [SnapshotProvider]
@@ -137,13 +192,50 @@ class CRDTDocument {
     return _dag.versionVector;
   }
 
+  /// Creates a new [Change] from the given [operation]
+  Change _changeFromOp(
+    Operation operation, {
+    int? physicalTime,
+  }) {
+    final pt = physicalTime ?? DateTime.now().millisecondsSinceEpoch;
+    _clock.localEvent(pt);
+
+    final id = OperationId(_peerId, _clock.copy());
+    final deps = _dag.frontiers;
+
+    return Change(
+      id: id,
+      deps: deps,
+      author: _peerId,
+      operation: operation,
+    );
+  }
+
   /// Creates a new [Change] with the given [operation]
   ///
   /// The [Change] is automatically applied to this document.
+  ///
+  /// Subscribers are notified about the change only on transaction commit.
   Change createChange(
     Operation operation, {
     int? physicalTime,
   }) {
+    final change = _changeFromOp(operation, physicalTime: physicalTime);
+    final applied = _internalApplyChange(change);
+
+    if (applied) {
+      _reactToAppliedExternalChange(change);
+    }
+
+    return change;
+  }
+
+  /// Registers an [Operation] to this document.
+  ///
+  /// If there isn't a transaction an implicit transaction is opened
+  ///
+  /// Else the operation is added to the current transaction.
+  void registerOperation(Operation operation) {
     final openedImplicitTransaction = !isInTransaction;
 
     try {
@@ -151,24 +243,12 @@ class CRDTDocument {
         _transactionManager.begin();
       }
 
-      final pt = physicalTime ?? DateTime.now().millisecondsSinceEpoch;
-      _clock.localEvent(pt);
+      _transactionManager.handleOperation(operation);
 
-      final id = OperationId(_peerId, _clock.copy());
-      final deps = _dag.frontiers;
-
-      final change = Change(
-        id: id,
-        deps: deps,
-        author: _peerId,
-        operation: operation,
-      );
-
-      final applied = _internalApplyChange(change, notify: false);
-      if (applied) {
-        _onOperationApplied(operation, change);
+      final handler = _handlers[operation.id];
+      if (handler != null) {
+        handler._internalIncrementCachedState(operation: operation);
       }
-      return change;
     } finally {
       if (openedImplicitTransaction) {
         _transactionManager.commit();
@@ -176,37 +256,8 @@ class CRDTDocument {
     }
   }
 
-  /// Called when an operation is applied to the document
-  ///
-  /// Iterate to each handler to find the one who crate
-  /// the change and request a "cache state increment".
-  void _onOperationApplied(
-    Operation operation,
-    Change change,
-  ) {
-    for (final handler in _handlers.values) {
-      if (handler.id != operation.id) {
-        handler._updateCachedVersion();
-      } else {
-        handler._internalIncrementCachedState(
-          operation: operation,
-          change: change,
-        );
-      }
-    }
-
-    // Delegate local change emission and notifications 
-    // to the transaction manager
-    _transactionManager.handleLocalChange(change);
-  }
-
   /// Applies a [Change] to this document
-  ///
-  /// if [notify] is `true` call [_notifyUpdates] else nothing
-  bool _internalApplyChange(
-    Change change, {
-    required bool notify,
-  }) {
+  bool _internalApplyChange(Change change) {
     // Check if the change already exists
     if (_changeStore.containsChange(change.id)) {
       return false;
@@ -234,11 +285,6 @@ class CRDTDocument {
       );
     }
 
-    if (notify) {
-      // Notify listeners about state update
-      _notifyUpdates();
-    }
-
     return true;
   }
 
@@ -248,7 +294,11 @@ class CRDTDocument {
   /// in the DAG).
   /// Returns `true` if the [Change] was applied, `false` if it already existed.
   bool applyChange(Change change) {
-    return _internalApplyChange(change, notify: true);
+    final applied = _internalApplyChange(change);
+    if (applied) {
+      _reactToAppliedExternalChange(change);
+    }
+    return applied;
   }
 
   /// Takes a snapshot of the document, compacting its history.
@@ -293,7 +343,7 @@ class CRDTDocument {
       _lastSnapshot = snapshot;
 
       _invalidateHandlers();
-      _notifyUpdates();
+      _emitUpdate();
       return true;
     }
 
@@ -313,7 +363,7 @@ class CRDTDocument {
 
     _prune(_lastSnapshot!.versionVector);
     _invalidateHandlers();
-    _notifyUpdates();
+    _emitUpdate();
   }
 
   /// Whether the given [snapshot] should be applied.
@@ -427,7 +477,7 @@ class CRDTDocument {
     var applied = 0;
     for (final change in sorted) {
       try {
-        if (_internalApplyChange(change, notify: false)) {
+        if (_internalApplyChange(change)) {
           // TODO(mattia): set the handler affected by the change
           applied++;
         }
@@ -439,23 +489,33 @@ class CRDTDocument {
     if (applied > 0) {
       // TODO(mattia): invalidate only handlers that are affected by the changes
       _invalidateHandlers();
-      _notifyUpdates();
+      _emitUpdate();
     }
 
     return applied;
   }
 
+  /// Prunes the DAG and the change store up to the given version.
   void _prune(VersionVector version) {
     _dag.prune(version);
     _changeStore.prune(version);
   }
 
-  /// Notifies listeners about state update
-  void _notifyUpdates() {
-    if (_updatesController.isClosed) {
-      return;
+  /// Emits that the document state has made an update
+  /// to be notified by listeners.
+  ///
+  /// If a transaction is active, the update
+  /// is marked as pending; otherwise it is emitted immediately.
+  ///
+  /// Every [CRDTDocument] must call [_emitUpdate] when something happens,
+  /// the only way to **directly** notify listeners
+  /// is using the [_transactionManager] callbacks.
+  void _emitUpdate([List<Change>? changes]) {
+    if (changes != null) {
+      _transactionManager.handleAppliedChanges(changes);
+    } else {
+      _transactionManager.requestUpdate();
     }
-    _transactionManager.requestUpdate();
   }
 
   /// Returns a list of [Change]s never received from this document:
@@ -602,10 +662,7 @@ mixin CacheableStateProvider<T> on DocumentConsumer {
     _updateCachedVersion();
   }
 
-  void _internalIncrementCachedState({
-    required Operation operation,
-    required Change change,
-  }) {
+  void _internalIncrementCachedState({required Operation operation}) {
     if (!useIncrementalCacheUpdate) {
       invalidateCache();
       return;
@@ -671,5 +728,14 @@ mixin SnapshotProvider on DocumentConsumer {
   /// Return the last snapshot of the document
   dynamic lastSnapshot() {
     return _document._lastSnapshot?.data[id];
+  }
+}
+
+/// Helper extensions for [Handler]
+extension _HandlerHelper on Handler<dynamic> {
+  /// Whether the handler is affected by the given [change]
+  bool _isAffectedByChange(Change change) {
+    final id = Operation.handlerIdFrom(payload: change.payload);
+    return id == this.id;
   }
 }

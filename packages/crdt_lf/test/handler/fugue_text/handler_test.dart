@@ -108,7 +108,13 @@ void main() {
       final changes = doc.exportChanges();
       final ids =
           // ignore: avoid_dynamic_calls test
-          changes.map((c) => c.payload['newNodeID']['counter']).toList();
+          changes
+              .map(
+                (c) => (c.payload['items'] as List<dynamic>)
+                    .map((i) => i["id"]["counter"]),
+              )
+              .expand((x) => x)
+              .toList();
       expect(ids, equals([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]));
     });
 

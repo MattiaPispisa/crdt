@@ -39,7 +39,7 @@ class CRDTListHandler<T> extends Handler<List<T>> {
       index: index,
       value: value,
     );
-    doc.createChange(operation);
+    doc.registerOperation(operation);
   }
 
   /// Deletes elements starting at the specified index
@@ -49,7 +49,7 @@ class CRDTListHandler<T> extends Handler<List<T>> {
       index: index,
       count: count,
     );
-    doc.createChange(operation);
+    doc.registerOperation(operation);
   }
 
   /// Updates the element at the specified index
@@ -59,7 +59,7 @@ class CRDTListHandler<T> extends Handler<List<T>> {
       index: index,
       value: value,
     );
-    doc.createChange(operation);
+    doc.registerOperation(operation);
   }
 
   /// Gets the current state of the list

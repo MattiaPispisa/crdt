@@ -40,7 +40,7 @@ class CRDTMapHandler<T> extends Handler<Map<String, T>> {
       key: key,
       value: value,
     );
-    doc.createChange(operation);
+    doc.registerOperation(operation);
   }
 
   /// Deletes a key from the map
@@ -49,7 +49,7 @@ class CRDTMapHandler<T> extends Handler<Map<String, T>> {
       this,
       key: key,
     );
-    doc.createChange(operation);
+    doc.registerOperation(operation);
   }
 
   /// Updates a key-value pair in the map
@@ -59,7 +59,7 @@ class CRDTMapHandler<T> extends Handler<Map<String, T>> {
       key: key,
       value: value,
     );
-    doc.createChange(operation);
+    doc.registerOperation(operation);
   }
 
   /// Gets the current state of the map

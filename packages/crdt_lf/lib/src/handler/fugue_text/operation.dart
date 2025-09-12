@@ -26,72 +26,92 @@ class _FugueTextOperationFactory {
   }
 }
 
-/// Insert operation for the Fugue algorithm
+/// Batch insert operation for the Fugue algorithm
 class _FugueTextInsertOperation extends Operation {
-  /// Constructor that initializes an insert operation
+  /// Constructor that initializes a batch insert operation
   _FugueTextInsertOperation({
-    required this.newNodeID,
-    required this.text,
     required this.leftOrigin,
     required this.rightOrigin,
+    required this.items,
     required super.id,
     required super.type,
   });
 
-  /// Creates an insert operation from a payload
-  factory _FugueTextInsertOperation.fromPayload(Map<String, dynamic> payload) =>
-      _FugueTextInsertOperation(
-        id: payload['id'] as String,
-        type: OperationType.fromPayload(payload['type'] as String),
-        newNodeID: FugueElementID.fromJson(
-          payload['newNodeID'] as Map<String, dynamic>,
-        ),
-        text: payload['text'] as String,
-        leftOrigin: FugueElementID.fromJson(
-          payload['leftOrigin'] as Map<String, dynamic>,
-        ),
-        rightOrigin: FugueElementID.fromJson(
-          payload['rightOrigin'] as Map<String, dynamic>,
-        ),
-      );
+  /// Creates a batch insert operation from a payload
+  factory _FugueTextInsertOperation.fromPayload(
+    Map<String, dynamic> payload,
+  ) {
+    return _FugueTextInsertOperation(
+      id: payload['id'] as String,
+      type: OperationType.fromPayload(payload['type'] as String),
+      leftOrigin: FugueElementID.fromJson(
+        payload['leftOrigin'] as Map<String, dynamic>,
+      ),
+      rightOrigin: FugueElementID.fromJson(
+        payload['rightOrigin'] as Map<String, dynamic>,
+      ),
+      items: (payload['items'] as List)
+          .map(
+            (e) => _FugueInsertItem.fromJson(e as Map<String, dynamic>),
+          )
+          .toList(),
+    );
+  }
 
-  /// Factory to create an insert operation from a handler
+  /// Factory to create a batch insert operation from a handler
   factory _FugueTextInsertOperation.fromHandler(
     Handler<dynamic> handler, {
-    required FugueElementID newNodeID,
-    required String text,
     required FugueElementID leftOrigin,
     required FugueElementID rightOrigin,
+    required List<_FugueInsertItem> items,
   }) {
     return _FugueTextInsertOperation(
       id: handler.id,
       type: OperationType.insert(handler),
-      newNodeID: newNodeID,
-      text: text,
       leftOrigin: leftOrigin,
       rightOrigin: rightOrigin,
+      items: items,
     );
   }
 
-  /// ID of the new node
-  final FugueElementID newNodeID;
-
-  /// Text to insert
-  final String text;
-
-  /// ID of the left origin node
+  /// ID of the left origin node for the batch
   final FugueElementID leftOrigin;
 
-  /// ID of the right origin node
+  /// ID of the right origin node for the batch
   final FugueElementID rightOrigin;
+
+  /// Items to insert sequentially (first uses [leftOrigin], others chain)
+  final List<_FugueInsertItem> items;
 
   @override
   Map<String, dynamic> toPayload() => {
         ...super.toPayload(),
-        'newNodeID': newNodeID.toJson(),
-        'text': text,
         'leftOrigin': leftOrigin.toJson(),
         'rightOrigin': rightOrigin.toJson(),
+        'items': items.map((e) => e.toJson()).toList(),
+      };
+}
+
+/// A single item of a batch insert
+class _FugueInsertItem {
+  _FugueInsertItem({
+    required this.id,
+    required this.text,
+  });
+
+  factory _FugueInsertItem.fromJson(Map<String, dynamic> json) {
+    return _FugueInsertItem(
+      id: FugueElementID.fromJson(json['id'] as Map<String, dynamic>),
+      text: json['text'] as String,
+    );
+  }
+
+  final FugueElementID id;
+  final String text;
+
+  Map<String, dynamic> toJson() => {
+        'id': id.toJson(),
+        'text': text,
       };
 }
 

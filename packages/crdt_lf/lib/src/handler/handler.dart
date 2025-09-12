@@ -13,4 +13,7 @@ abstract class Handler<T>
 
   /// The document that owns this handler
   final CRDTDocument doc;
+
+  /// The handler can create 
+  Operation? compound(Operation accumulator, Operation current) => null;
 }

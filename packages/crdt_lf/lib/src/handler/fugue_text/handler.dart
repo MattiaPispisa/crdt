@@ -49,34 +49,27 @@ class CRDTFugueTextHandler extends Handler<FugueTextState> {
     // Find the next node after leftOrigin
     final rightOrigin = state._tree.findNextNode(leftOrigin);
 
-    // Insert first character
-    final firstNodeID = FugueElementID(doc.peerId, _counter++);
-    doc.createChange(
-      _FugueTextInsertOperation.fromHandler(
-        this,
-        newNodeID: firstNodeID,
-        text: text[0],
-        leftOrigin: leftOrigin,
-        rightOrigin: rightOrigin,
-      ),
-    );
-
-    // Insert remaining characters as right children of the previous character
-    var previousID = firstNodeID;
-    for (var i = 1; i < text.length; i++) {
+    // Generate IDs for each character preserving the previous behavior
+    final items = <_FugueInsertItem>[];
+    for (var i = 0; i < text.length; i++) {
       final newNodeID = FugueElementID(doc.peerId, _counter++);
-      doc.createChange(
-        _FugueTextInsertOperation.fromHandler(
-          this,
-          newNodeID: newNodeID,
+      items.add(
+        _FugueInsertItem(
+          id: newNodeID,
           text: text[i],
-          leftOrigin: previousID,
-          // Use the same rightOrigin for all characters in the chain
-          rightOrigin: rightOrigin,
         ),
       );
-      previousID = newNodeID;
     }
+
+    // Emit a single batch change containing the whole chain
+    doc.registerOperation(
+      _FugueTextInsertOperation.fromHandler(
+        this,
+        leftOrigin: leftOrigin,
+        rightOrigin: rightOrigin,
+        items: items,
+      ),
+    );
   }
 
   /// Deletes [count] characters starting from position [index]
@@ -92,7 +85,7 @@ class CRDTFugueTextHandler extends Handler<FugueTextState> {
     }
 
     for (final nodeID in targets) {
-      doc.createChange(
+      doc.registerOperation(
         _FugueTextDeleteOperation.fromHandler(
           this,
           nodeID: nodeID,
@@ -122,7 +115,7 @@ class CRDTFugueTextHandler extends Handler<FugueTextState> {
       final nodeID = targets[i];
       final newNodeID = FugueElementID(doc.peerId, _counter++);
       final ch = text[i];
-      doc.createChange(
+      doc.registerOperation(
         _FugueTextUpdateOperation.fromHandler(
           this,
           nodeID: nodeID,
@@ -139,7 +132,7 @@ class CRDTFugueTextHandler extends Handler<FugueTextState> {
   }
 
   /// If the cached state is still valid, returns it.
-  /// 
+  ///
   /// Otherwise, computes the state from scratch and updates the cache.
   FugueTextState _cachedOrComputedState() {
     if (cachedState != null) {
@@ -206,12 +199,28 @@ class CRDTFugueTextHandler extends Handler<FugueTextState> {
   /// Applies a single operation to a Fugue tree
   void _applyTreeOperation(FugueTree<String> tree, Operation operation) {
     if (operation is _FugueTextInsertOperation) {
+      if (operation.items.isEmpty) {
+        return;
+      }
+
+      // Insert first item with provided origins
       tree.insert(
-        newID: operation.newNodeID,
-        value: operation.text,
+        newID: operation.items.first.id,
+        value: operation.items.first.text,
         leftOrigin: operation.leftOrigin,
         rightOrigin: operation.rightOrigin,
       );
+      // Chain the rest to the previous inserted id, same rightOrigin
+      var previousID = operation.items.first.id;
+      for (final item in operation.items.skip(1)) {
+        tree.insert(
+          newID: item.id,
+          value: item.text,
+          leftOrigin: previousID,
+          rightOrigin: operation.rightOrigin,
+        );
+        previousID = item.id;
+      }
     } else if (operation is _FugueTextDeleteOperation) {
       tree.delete(operation.nodeID);
     } else if (operation is _FugueTextUpdateOperation) {

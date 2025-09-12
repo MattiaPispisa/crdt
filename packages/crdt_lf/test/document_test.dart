@@ -676,6 +676,10 @@ void main() {
         expect(handler._incrementedCount, 1);
         expect(handler.value, ['Hello', 'World', 'Dart!']);
       });
+
+      // TODO(mattia): complex cache scenario with errors during transaction. Cache state must be invalidated.
+
+      // TODO(mattia): complex cache scenario without errors but external changes. Cache state must be invalidated only for affected handlers.
     });
 
     group('transaction', () {
@@ -731,6 +735,52 @@ void main() {
 
         await sub.cancel();
       });
+
+      test(
+        'runInTransaction batches import + handler ops + local changes and emits once',
+        () async {
+          final events = <void>[];
+          final sub = doc.updates.listen((_) => events.add(null));
+          final listHandler = CRDTListHandler<String>(doc, 'tx-list');
+
+          // Prepare another document with a change and a snapshot
+          final otherDocument = CRDTDocument(peerId: PeerId.generate());
+          final otherHandler = TestHandler(otherDocument);
+          final otherOp = TestOperation.fromHandler(otherHandler);
+          final otherSnap = otherDocument.takeSnapshot();
+          final otherChange = otherDocument.createChange(otherOp);
+          expect(otherChange, isNotNull);
+
+          // Create a local handler for generating local changes
+          final localHandler = TestHandler(doc, id: 'other-local-handler');
+
+          // Batch import + handler ops + local changes in a single transaction
+          doc.runInTransaction<void>(() {
+            // Import snapshot and changes from other document
+            final imported1 = doc.importSnapshot(otherSnap);
+            expect(imported1, isTrue);
+
+            final applied = doc.importChanges([otherChange]);
+            expect(applied, greaterThan(0));
+
+            // Perform handler operations
+            listHandler
+              ..insert(0, 'hello')
+              ..insert(1, 'world');
+
+            // Create and apply local changes
+            final localOp = TestOperation.fromHandler(localHandler);
+            final localChange = doc.createChange(localOp);
+            expect(localChange, isNotNull);
+          });
+
+          await Future<void>.delayed(Duration.zero);
+          // Only one update despite multiple operations inside the transaction
+          expect(events.length, 1);
+
+          await sub.cancel();
+        },
+      );
     });
   });
 }
