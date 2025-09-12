@@ -5,6 +5,7 @@
 - Created a set of mixins to be used by handlers to optimize performance
 - Thrown `HandlerAlreadyRegisteredException` when a handler is registered twice
 - `TransactionManager` to manage transactional batching of notifications and local changes emission
+- `compound` "system" to compact consecutive operations during transaction
 - Added `CRDTORSetHandler` 
 
 ### Changed
