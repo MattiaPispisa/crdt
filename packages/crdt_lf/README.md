@@ -26,6 +26,7 @@
       - [Identity](#identity)
     - [Handlers](#handlers)
       - [Working with Complex Types](#working-with-complex-types)
+    - [Transaction](#transaction-1)
     - [DAG](#dag)
     - [Change](#change)
     - [Frontiers](#frontiers)
@@ -250,6 +251,36 @@ rawList.insert(0, data.toJson());
 final myDataList = rawList.value.map((map) => MyData.fromJson(map)).toList();
 print(myDataList.first.name); // Prints "item2"
 ```
+
+### Transaction
+
+To manage operations in a transaction, use the `runInTransaction` method of the document.
+
+```dart
+doc.runInTransaction(() {
+  listHandler.insert(0, 'item1');
+  listHandler.insert(1, 'item2');
+});
+// only here doc notifies subscribers about the transaction completion
+```
+
+Within a transaction can also be executed changes and imports. Those actions are applied immediately but notified only at the end of the transaction.
+
+```dart
+doc.runInTransaction(() {
+  listHandler.insert(0, 'item1');
+  listHandler.insert(1, 'item2');
+
+  // immediately applied
+  doc.createChange(listHandler.insert(0, 'item1'));
+
+  // immediately applied
+  doc.importSnapshot(otherDocument.takeSnapshot());
+});
+// Insertions are compacted, processed and applied to the document.
+// Doc notifies subscribers about the transaction completion
+```
+
 
 ### DAG
 A Directed Acyclic Graph that maintains the causal ordering of operations.
