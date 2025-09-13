@@ -186,7 +186,7 @@ class CRDTORSetHandler<T> extends Handler<ORSetState<T>> {
   }
 
   @override
-  ORSetState<T> incrementCachedState({
+  ORSetState<T>? incrementCachedState({
     required Operation operation,
     required ORSetState<T> state,
   }) {

@@ -1,5 +1,6 @@
 import 'package:crdt_lf/crdt_lf.dart';
 import 'package:hlc_dart/hlc_dart.dart';
+import 'package:mocktail/mocktail.dart';
 import 'package:test/test.dart';
 
 import 'helpers/handler.dart';
@@ -18,17 +19,26 @@ void main() {
       operation = TestOperation.fromHandler(handler);
     });
 
-    test('constructor creates document with generated peerId', () {
+    test('constructor creates document with generated peerId and id', () {
       final doc1 = CRDTDocument();
       final doc2 = CRDTDocument();
+
       expect(doc1.peerId, isNotNull);
       expect(doc2.peerId, isNotNull);
+
+      expect(doc1.documentId, isNotNull);
+      expect(doc2.documentId, isNotNull);
+
       expect(doc1.peerId, isNot(equals(doc2.peerId)));
+      expect(doc1.documentId, isNot(equals(doc2.documentId)));
     });
 
-    test('constructor creates document with provided peerId', () {
-      final doc = CRDTDocument(peerId: author);
+    test(
+        'constructor creates document with'
+        ' provided peerId and id', () {
+      final doc = CRDTDocument(peerId: author, documentId: 'docId');
       expect(doc.peerId, equals(author));
+      expect(doc.documentId, 'docId');
     });
 
     test('document should be empty', () {
@@ -656,6 +666,25 @@ void main() {
         expect(handler._incrementedCount, 0);
       });
 
+      test('should remove cache if incrementalCache return null', () {
+        final handler = _FakeCRDTListHandler(doc, 'test-list')
+          ..useIncrementalCacheUpdate = true
+          ..value;
+        expect(handler._incrementedCount, 0);
+        expect(handler.value, const <String>[]);
+
+        handler.insert(0, 'Hello');
+        expect(handler._incrementedCount, 1);
+
+        handler
+          ..notIncrementState = true
+          // this insert will not increment the cached state
+          ..insert(1, 'Dart')
+          // increment state not called
+          ..insert(2, 'Flutter');
+        expect(handler._incrementedCount, 2);
+      });
+
       test('should ignore old cached state', () {
         final handler = _FakeCRDTListHandler(doc, 'test-list')
           ..useIncrementalCacheUpdate = true;
@@ -834,7 +863,9 @@ void main() {
       });
 
       test(
-        'runInTransaction batches import + handler ops + local changes and emits once',
+        'runInTransaction batches import '
+        '+ handler ops '
+        '+ local changes and emits once',
         () async {
           final events = <void>[];
           final sub = doc.updates.listen((_) => events.add(null));
@@ -885,14 +916,23 @@ void main() {
 class _FakeCRDTListHandler extends CRDTListHandler<String> {
   _FakeCRDTListHandler(super.doc, super.id);
 
+  /// count of `incrementCachedState`
   var _incrementedCount = 0;
 
+  /// `incrementCachedState` will return null
+  bool notIncrementState = false;
+
   @override
-  List<String> incrementCachedState({
+  List<String>? incrementCachedState({
     required Operation operation,
     required List<String> state,
   }) {
     _incrementedCount++;
+
+    if (notIncrementState) {
+      return null;
+    }
+
     return super.incrementCachedState(operation: operation, state: state);
   }
 }

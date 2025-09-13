@@ -174,7 +174,7 @@ class CRDTListHandler<T> extends Handler<List<T>> {
   }
 
   @override
-  List<T> incrementCachedState({
+  List<T>? incrementCachedState({
     required Operation operation,
     required List<T> state,
   }) {

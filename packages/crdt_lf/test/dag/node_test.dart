@@ -139,6 +139,16 @@ void main() {
       expect(node.childCount, equals(0));
     });
 
+    test('should remove parents', () {
+      final node = DAGNode(id)
+        ..addParent(parentId1)
+        ..addParent(parentId2);
+
+      expect(node.parentCount, equals(2));
+      node.removeParents();
+      expect(node.parentCount, equals(0));
+    });
+
     test('equality works correctly', () {
       final node1 = DAGNode(id);
       final node2 = DAGNode(id);

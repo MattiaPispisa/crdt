@@ -201,7 +201,7 @@ class CRDTTextHandler extends Handler<String> {
   }
 
   @override
-  String incrementCachedState({
+  String? incrementCachedState({
     required Operation operation,
     required String state,
   }) {

@@ -145,7 +145,7 @@ class CRDTMapHandler<T> extends Handler<Map<String, T>> {
   }
 
   @override
-  Map<String, T> incrementCachedState({
+  Map<String, T>? incrementCachedState({
     required Operation operation,
     required Map<String, T> state,
   }) {

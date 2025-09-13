@@ -22,6 +22,8 @@ void main() {
       // Re-adding after remove should bring it back
       set.add('a');
       expect(set.value, contains('a'));
+      expect(set.contains('a'), isTrue);
+      expect(set.contains('c'), isFalse);
     });
 
     test('should handle concurrent adds', () {
