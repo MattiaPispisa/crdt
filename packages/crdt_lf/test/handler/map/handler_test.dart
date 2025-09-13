@@ -114,7 +114,7 @@ void main() {
       expect(handler1.value, {'b': 'World'});
     });
 
-    test('should handle concurrent set and delete', () {
+    test('should handle concurrent set, delete and update', () {
       final doc1 = CRDTDocument(
         peerId: PeerId.parse('45ee6b65-b393-40b7-9755-8b66dc7d0518'),
       );
@@ -125,19 +125,29 @@ void main() {
       );
       final handler2 = CRDTMapHandler<String>(doc2, 'map1');
 
-      // Initial state: key 'a' exists
-      handler1.set('a', 'Initial');
+      // Initial state: key 'a' and 'b' exists
+      handler1
+        ..set('a', 'Hello')
+        ..set('b', 'Dart');
       doc2.importChanges(doc1.exportChanges());
 
       // Concurrently: doc1 deletes 'a', doc2 sets 'a' to a new value
       handler1.delete('a');
-      handler2.set('a', 'Updated by Doc2');
+      handler2.set('a', 'Hi');
+
+      handler1
+        ..update('b', 'Dart & Flutter!')
+        ..update('c', 'World!');
 
       // Sync changes
       doc1.importChanges(doc2.exportChanges());
       doc2.importChanges(doc1.exportChanges());
 
       expect(handler1.value, handler2.value);
+      expect(handler1.value.keys, containsAll(['a', 'b']));
+      expect(handler1.value.keys, isNot(containsAll(['c'])));
+      expect(handler2.value['a'], 'Hi');
+      expect(handler1.value['b'], 'Dart & Flutter!');
     });
 
     test('should handle generic types for values', () {

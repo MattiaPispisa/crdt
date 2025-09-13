@@ -1,3 +1,25 @@
+## [Unreleased]
+
+**Breaking changes**
+- Changed `CRDTFugueTextHandler` operations payload
+
+### Added
+
+- Created a set of mixins to be used by handlers to optimize performance during operation insertions.
+- Thrown `HandlerAlreadyRegisteredException` when a handler is registered twice
+- Added `TransactionManager` to manage transactional batching of notifications and local changes emission [43](https://github.com/MattiaPispisa/crdt/issues/43)
+- Added `compound` "system" to compact consecutive operations during transaction [45](https://github.com/MattiaPispisa/crdt/issues/45)
+- Added `CRDTORSetHandler` [42](https://github.com/MattiaPispisa/crdt/issues/42)
+
+### Changed
+
+- On `importChanges` listeners of `updates` are notified only one times at import end
+- `Handlers` now not invalidate cache when an operation is applied due to the new mixins system. This greatly improves the computation of the handler value as it is persisted much more often.
+- chore: improved handlers benchmark system
+
+### Fixed
+- `CRDTMapHandler` updating an absent key is ignored
+
 ## [1.0.0] - 2025-08-18
 
 **Breaking changes**

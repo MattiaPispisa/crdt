@@ -4,7 +4,8 @@ import 'package:crdt_lf/crdt_lf.dart';
 ///
 /// A handler is a component that manages the state of a specific
 /// data structure in the CRDT system.
-abstract class Handler<T> with SnapshotProvider {
+abstract class Handler<T>
+    with DocumentConsumer, SnapshotProvider, CacheableStateProvider<T> {
   /// Creates a new handler for the given document
   Handler(this.doc) {
     doc.registerHandler(this);
@@ -13,34 +14,18 @@ abstract class Handler<T> with SnapshotProvider {
   /// The document that owns this handler
   final CRDTDocument doc;
 
-  /// The ID of the handler
-  @override
-  String get id;
-
-  /// The cached state of the handler
-  T? _cachedState;
-
-  /// The version at which the cached state was computed
-  Set<OperationId>? _cachedVersion;
-
-  /// Returns the cached state
-  T? get cachedState {
-    if (_cachedState != null && setEquals(_cachedVersion, doc.version)) {
-      return _cachedState;
-    }
-
-    return null;
-  }
-
-  /// Updates the cached state
-  void updateCachedState(T cachedState) {
-    _cachedState = cachedState;
-    _cachedVersion = Set.from(doc.version);
-  }
-
-  /// Invalidates the cached state
-  void invalidateCache() {
-    _cachedState = null;
-    _cachedVersion = null;
-  }
+  /// During transaction consecutive operations can be compounded.
+  ///
+  /// By default, no compaction occurs and operations are returned as-is.
+  ///
+  /// Override this method to implement a compact algorithm.
+  ///
+  /// [accumulator] is the previous operation
+  /// [current] is the current operation
+  ///
+  /// If [current] can be compounded with [accumulator],
+  /// return the **new compounded** operation (union of the two).
+  ///
+  /// Otherwise, return `null`.
+  Operation? compound(Operation accumulator, Operation current) => null;
 }

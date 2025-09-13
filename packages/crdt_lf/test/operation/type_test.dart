@@ -40,8 +40,8 @@ void main() {
     });
 
     test('same operation types with different handlers are not equal', () {
-      final handler1 = TestHandler(doc);
-      final handler2 = TestHandler(doc);
+      final handler1 = TestHandler(doc, id: 'test-handler-1');
+      final handler2 = TestHandler(doc, id: 'test-handler-2');
       final operationType1 = OperationType.insert(handler1);
       final operationType2 = OperationType.insert(handler2);
       expect(operationType1, equals(operationType2));
@@ -51,7 +51,7 @@ void main() {
       final operationType1 = OperationType.insert(handler);
       final operationType2 = OperationType.insert(handler);
       final operationType3 = OperationType.delete(handler);
-      final handler2 = TestHandler(doc);
+      final handler2 = TestHandler(doc, id: 'test-handler-2');
       final operationType4 = OperationType.insert(handler2);
 
       expect(operationType1.hashCode, equals(operationType2.hashCode));

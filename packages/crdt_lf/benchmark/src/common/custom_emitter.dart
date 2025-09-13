@@ -3,6 +3,7 @@ import 'package:benchmark_harness/benchmark_harness.dart';
 /// A custom benchmark emitter that prints the results in
 /// microseconds, milliseconds, and seconds.
 class CustomEmitter implements ScoreEmitter {
+  /// Creates a new custom emitter
   const CustomEmitter();
 
   @override

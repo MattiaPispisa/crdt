@@ -5,7 +5,7 @@ class _ListOperationFactory<T> {
   final Handler<dynamic> handler;
 
   Operation? fromPayload(Map<String, dynamic> payload) {
-    if (payload['id'] != handler.id) {
+    if (Operation.handlerIdFrom(payload: payload) != handler.id) {
       return null;
     }
 
@@ -47,8 +47,7 @@ class _ListInsertOperation<T> extends Operation {
 
   @override
   Map<String, dynamic> toPayload() => {
-        'type': type.toPayload(),
-        'id': id,
+        ...super.toPayload(),
         'index': index,
         'value': value,
       };
@@ -88,8 +87,7 @@ class _ListDeleteOperation<T> extends Operation {
 
   @override
   Map<String, dynamic> toPayload() => {
-        'type': type.toPayload(),
-        'id': id,
+        ...super.toPayload(),
         'index': index,
         'count': count,
       };
@@ -129,8 +127,7 @@ class _ListUpdateOperation<T> extends Operation {
 
   @override
   Map<String, dynamic> toPayload() => {
-        'type': type.toPayload(),
-        'id': id,
+        ...super.toPayload(),
         'index': index,
         'value': value,
       };

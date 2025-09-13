@@ -5,7 +5,7 @@ class _TextOperationFactory {
   final Handler<dynamic> handler;
 
   Operation? fromPayload(Map<String, dynamic> payload) {
-    if (payload['id'] != handler.id) {
+    if (Operation.handlerIdFrom(payload: payload) != handler.id) {
       return null;
     }
 
@@ -50,13 +50,15 @@ class _TextInsertOperation extends Operation {
     );
   }
 
+  /// The index of the first character to insert
   final int index;
+
+  /// The text to insert
   final String text;
 
   @override
   Map<String, dynamic> toPayload() => {
-        'type': type.toPayload(),
-        'id': id,
+        ...super.toPayload(),
         'index': index,
         'text': text,
       };
@@ -91,13 +93,15 @@ class _TextDeleteOperation extends Operation {
     );
   }
 
+  /// The index of the first character to delete
   final int index;
+
+  /// The number of characters to delete
   final int count;
 
   @override
   Map<String, dynamic> toPayload() => {
-        'type': type.toPayload(),
-        'id': id,
+        ...super.toPayload(),
         'index': index,
         'count': count,
       };
@@ -132,13 +136,15 @@ class _TextUpdateOperation extends Operation {
         text: payload['text'] as String,
       );
 
+  /// The index of the first character to update
   final int index;
+
+  /// The text to update
   final String text;
 
   @override
   Map<String, dynamic> toPayload() => {
-        'type': type.toPayload(),
-        'id': id,
+        ...super.toPayload(),
         'index': index,
         'text': text,
       };

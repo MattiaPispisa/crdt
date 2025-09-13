@@ -1,7 +1,8 @@
 {
-  "dart.flutterSdkPath": ".fvm/versions/3.32.8",
+  "dart.flutterSdkPath": ".fvm/versions/3.35.2",
   "cSpell.words": [
     "crdt",
+    "CRDTOR",
     "Kleppmann",
     "pubspec",
     "Weidner"

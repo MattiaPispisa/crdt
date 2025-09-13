@@ -82,6 +82,7 @@ class DAG {
 
     _removeNodes(toRemove);
 
+    // frontier is recreated
     _frontiers
       ..clear()
       ..merge(Frontiers.from(frontier));
@@ -89,6 +90,11 @@ class DAG {
     return toRemove.length;
   }
 
+  /// Removes the given nodes from the [DAG]
+  ///
+  /// In [DAGNode.parents] and [DAGNode.children]
+  /// are removed the references to the removed nodes,
+  /// then the nodes are removed from the [DAG].
   void _removeNodes(List<OperationId> operations) {
     for (final id in operations) {
       for (final parent in _nodes[id]!.parents) {

@@ -10,6 +10,9 @@
 
 - [CRDT LF](#crdt-lf)
   - [Features](#features)
+  - [Design](#design)
+    - [Operation based](#operation-based)
+    - [Transaction](#transaction)
   - [Getting Started](#getting-started)
   - [Usage](#usage)
     - [Basic Usage](#basic-usage)
@@ -22,7 +25,9 @@
     - [CRDTDocument](#crdtdocument)
       - [Identity](#identity)
     - [Handlers](#handlers)
+      - [Caching](#caching)
       - [Working with Complex Types](#working-with-complex-types)
+    - [Transaction](#transaction-1)
     - [DAG](#dag)
     - [Change](#change)
     - [Frontiers](#frontiers)
@@ -38,6 +43,8 @@ A Conflict-free Replicated Data Type (CRDT) implementation in Dart.
 This library provides solutions for:
 - Text Editing.
 - List Editing.
+- Map Editing.
+- Set Editing.
 - Text Editing with Fugue Algorithm ([The Art of the Fugue: Minimizing Interleaving in Collaborative Text Editing" di Matthew Weidner e Martin Kleppmann](https://arxiv.org/abs/2305.00583)).
 
 ## Features
@@ -45,6 +52,44 @@ This library provides solutions for:
 - ⏱️ **Hybrid Logical Clock**: Uses HLC for causal ordering of operations
 - 🔄 **Automatic Conflict Resolution**: Automatically resolves conflicts in a CRDT
 - 📦 **Local Availability**: Operations are available locally as soon as they are applied
+
+## Design
+
+### Operation based
+
+The synchronization mechanism is operation-based (CmRDT). Each document manages synchronization by propagating **only the operations**. Locally, each handler (list, text, etc.) applies these operations to resolve its state. It's possible to create snapshots to establish an initial state on which operations are resolved. This is useful to prevent the memory requirements of the system from growing indefinitely. 
+Operation resolution is handled by each individual handler. This design allows each handler to implement its own operation resolution logic according to its specific requirements. The library includes simple implementations like `CRDTList`, where interleaving is managed solely through HLC timestamps, as well as more sophisticated systems like `OR-Sets` and `Fugue Text`. Each handler provides documentation that describes its approach to operation resolution.
+
+### Transaction
+
+Each operation created by an handler is registered in the document. The document manages operations through a transaction system. A transaction is considered an atomic operation, and notifications to subscribers are sent only when the transaction is completed. If not explicitly declared, each operation is registered in an implicit transaction.
+
+An explicit transaction creates an environment where operations are grouped together and applied atomically. At the end of the transaction, contiguous operations can be compacted into fewer operations through compound algorithms to reduce the number of changes created.
+
+```mermaid
+graph TD
+    A[Operation Request] --> B{Transaction Active?}
+    
+    B -->|No| C[Start Implicit Transaction]
+    B -->|Yes| D[Queue Operation]
+    
+    C --> E[Queue Operation]
+    E --> F[Update Handler Cache]
+    F --> G[Commit Transaction]
+    
+    D --> F
+    
+    G --> H[Flush Transaction]
+    H --> I[Compact Operations]
+    
+    I --> N[Process Each Operation]
+    N --> O[Create Change]
+    O --> P[Apply to Document]    
+    P --> T[Notify Subscribers]
+    
+    T --> U[Transaction Complete]
+```
+
 
 ## Getting Started
 
@@ -114,9 +159,7 @@ melos run benchmark
 
 ## Architecture
 
-The library is built: 
-- above the [hlc_dart](https://pub.dev/packages/hlc_dart) package.
-- around several key components:
+The library is built above the [hlc_dart](https://pub.dev/packages/hlc_dart) package and provide a solution to implement CRDT systems.
 
 ### CRDTDocument
 The main document class that manages the CRDT state and handles synchronization between peers.
@@ -148,6 +191,9 @@ print(list.value); // Prints "[Buy milk]"
 ```
 
 Every handler can be found in the [handlers](https://github.com/MattiaPispisa/crdt/tree/main/packages/crdt_lf/lib/src/handler) folder.
+
+#### Caching
+Parlare del fatto che ad ogni operazione viene chiesto all'handler di incrementare il proprio stato. La gestione della cache è gestita dal documento e ad ogni handler viene chiesto solo di incrementare o impostare il prorio stato. Questo sarà fornito dal documento all'handler sulla base dello stato corrente del documento.
 
 #### Working with Complex Types
 
@@ -210,6 +256,36 @@ final myDataList = rawList.value.map((map) => MyData.fromJson(map)).toList();
 print(myDataList.first.name); // Prints "item2"
 ```
 
+### Transaction
+
+To manage operations in a transaction, use the `runInTransaction` method of the document.
+
+```dart
+doc.runInTransaction(() {
+  listHandler.insert(0, 'item1');
+  listHandler.insert(1, 'item2');
+});
+// only here doc notifies subscribers about the transaction completion
+```
+
+Within a transaction can also be executed changes and imports. Those actions are applied immediately but notified only at the end of the transaction.
+
+```dart
+doc.runInTransaction(() {
+  listHandler.insert(0, 'item1');
+  listHandler.insert(1, 'item2');
+
+  // immediately applied
+  doc.createChange(listHandler.insert(0, 'item1'));
+
+  // immediately applied
+  doc.importSnapshot(otherDocument.takeSnapshot());
+});
+// Insertions are compacted, processed and applied to the document.
+// Doc notifies subscribers about the transaction completion
+```
+
+
 ### DAG
 A Directed Acyclic Graph that maintains the causal ordering of operations.
 
@@ -246,6 +322,7 @@ Feel free to:
 
 - [Fugue Algorithm](https://arxiv.org/abs/2305.00583)
 - [Hybrid Logical Clock](https://cse.buffalo.edu/tech-reports/2014-04.pdf)
+- [A comprehensive study of Convergent and Commutative Replicated Data Types](https://inria.hal.science/inria-00555588/en/)
 
 ## Packages
 Other bricks of the crdt "system" are:

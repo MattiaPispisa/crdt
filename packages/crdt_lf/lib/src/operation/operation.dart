@@ -11,9 +11,21 @@ abstract class Operation {
   /// The type of the operation
   final OperationType type;
 
-  /// The ID of the operation
+  /// The ID of the handler that owns the operation
   final String id;
 
+  /// The [Operation.id] of the operation from a [payload]
+  static String handlerIdFrom({
+    required Map<String, dynamic> payload,
+  }) {
+    return payload['id'] as String;
+  }
+
   /// Converts the operation to a payload
-  Map<String, dynamic> toPayload();
+  Map<String, dynamic> toPayload() {
+    return {
+      'id': id,
+      'type': type.toPayload(),
+    };
+  }
 }

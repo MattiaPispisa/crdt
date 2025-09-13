@@ -3,10 +3,13 @@ import 'package:crdt_lf/crdt_lf.dart';
 /// A test handler for CRDT operations
 class TestHandler extends Handler<dynamic> {
   /// Create a new test handler
-  TestHandler(super.doc);
+  TestHandler(
+    super.doc, {
+    this.id = 'test-handler',
+  });
 
   @override
-  String get id => 'test-handler';
+  final String id;
 
   @override
   String getSnapshotState() {

@@ -7,11 +7,24 @@ import 'package:crdt_lf/src/operation/type.dart';
 
 part 'operation.dart';
 
-/// CRDT Text implementation
+/// # CRDT Text
 ///
+/// ## Description
 /// A CRDTText is a text data structure
 /// that uses CRDT for conflict-free collaboration.
 /// It provides methods for inserting, deleting, and accessing text content.
+///
+/// ## Algorithm
+/// Process operations in clock order.
+/// Interleaving is handled just using the HLC.
+///
+/// ## Example
+/// ```dart
+/// final doc = CRDTDocument();
+/// final text = CRDTTextHandler(doc, 'text');
+/// text..insert(0, 'Hello')..insert(5, ' World!');
+/// print(text.value); // Prints "Hello World!"
+/// ```
 class CRDTTextHandler extends Handler<String> {
   /// Creates a new CRDTText with the given document and ID
   CRDTTextHandler(super.doc, this._id);
@@ -24,30 +37,32 @@ class CRDTTextHandler extends Handler<String> {
 
   /// Inserts [text] at the specified [index]
   void insert(int index, String text) {
-    doc.createChange(
-      _TextInsertOperation.fromHandler(this, index: index, text: text),
+    final operation = _TextInsertOperation.fromHandler(
+      this,
+      index: index,
+      text: text,
     );
-    invalidateCache();
+    doc.registerOperation(operation);
   }
 
   /// Deletes [count] characters starting at the specified [index]
   void delete(int index, int count) {
-    doc.createChange(
-      _TextDeleteOperation.fromHandler(this, index: index, count: count),
+    final operation = _TextDeleteOperation.fromHandler(
+      this,
+      index: index,
+      count: count,
     );
-    invalidateCache();
+    doc.registerOperation(operation);
   }
 
   /// Updates the text at the specified [index]
   void update(int index, String text) {
-    doc.createChange(
-      _TextUpdateOperation.fromHandler(
-        this,
-        index: index,
-        text: text,
-      ),
+    final operation = _TextUpdateOperation.fromHandler(
+      this,
+      index: index,
+      text: text,
     );
-    invalidateCache();
+    doc.registerOperation(operation);
   }
 
   /// Gets the current state of the text
@@ -88,63 +103,166 @@ class CRDTTextHandler extends Handler<String> {
 
       final operation = opFactory.fromPayload(payload);
 
-      if (operation is _TextInsertOperation) {
-        final index = operation.index;
-        final text = operation.text;
-
-        // Insert at the specified index,
-        // or at the end if the index is out of bounds
-        final currentText = buffer.toString();
-        if (index <= currentText.length) {
-          buffer
-            ..clear()
-            ..write(currentText.substring(0, index))
-            ..write(text)
-            ..write(currentText.substring(index));
-        } else {
-          buffer.write(text);
-        }
-      } else if (operation is _TextDeleteOperation) {
-        final index = operation.index;
-        final count = operation.count;
-
-        // Delete text if the index is valid
-        final currentText = buffer.toString();
-        if (index < currentText.length) {
-          final actualCount = index + count > currentText.length
-              ? currentText.length - index
-              : count;
-          buffer
-            ..clear()
-            ..write(currentText.substring(0, index))
-            ..write(currentText.substring(index + actualCount));
-        }
-      } else if (operation is _TextUpdateOperation) {
-        final index = operation.index;
-        final text = operation.text;
-
-        // Update the text at the specified index
-        final currentText = buffer.toString();
-
-        if (index < currentText.length) {
-          buffer
-            ..clear()
-            ..write(currentText.substring(0, index));
-
-          final remainingLength = currentText.length - index;
-          final truncatedText =
-              text.substring(0, min(text.length, remainingLength));
-
-          buffer.write(truncatedText);
-
-          if (remainingLength > text.length) {
-            buffer.write(currentText.substring(index + text.length));
-          }
-        }
+      if (operation != null) {
+        _applyOperationToBuffer(buffer, operation);
       }
     }
 
     return buffer.toString();
+  }
+
+  /// Applies a single operation to a StringBuffer
+  void _applyOperationToBuffer(StringBuffer buffer, Operation operation) {
+    if (operation is _TextInsertOperation) {
+      return _bufferInsert(
+        buffer,
+        index: operation.index,
+        text: operation.text,
+      );
+    } else if (operation is _TextDeleteOperation) {
+      return _bufferDelete(
+        buffer,
+        index: operation.index,
+        count: operation.count,
+      );
+    } else if (operation is _TextUpdateOperation) {
+      return _bufferUpdate(
+        buffer,
+        index: operation.index,
+        text: operation.text,
+      );
+    }
+  }
+
+  void _bufferInsert(
+    StringBuffer buffer, {
+    required int index,
+    required String text,
+  }) {
+    // Insert at the specified index,
+    // or at the end if the index is out of bounds
+    final currentText = buffer.toString();
+    if (index <= currentText.length) {
+      buffer
+        ..clear()
+        ..write(currentText.substring(0, index))
+        ..write(text)
+        ..write(currentText.substring(index));
+      return;
+    }
+
+    buffer.write(text);
+    return;
+  }
+
+  void _bufferDelete(
+    StringBuffer buffer, {
+    required int index,
+    required int count,
+  }) {
+    // Delete text if the index is valid
+    final currentText = buffer.toString();
+    if (index < currentText.length) {
+      final actualCount = index + count > currentText.length
+          ? currentText.length - index
+          : count;
+      buffer
+        ..clear()
+        ..write(currentText.substring(0, index))
+        ..write(currentText.substring(index + actualCount));
+    }
+  }
+
+  void _bufferUpdate(
+    StringBuffer buffer, {
+    required int index,
+    required String text,
+  }) {
+    // Update the text at the specified index
+    final currentText = buffer.toString();
+
+    if (index < currentText.length) {
+      buffer
+        ..clear()
+        ..write(currentText.substring(0, index));
+
+      final remainingLength = currentText.length - index;
+      final truncatedText =
+          text.substring(0, min(text.length, remainingLength));
+
+      buffer.write(truncatedText);
+
+      if (remainingLength > text.length) {
+        buffer.write(currentText.substring(index + text.length));
+      }
+    }
+  }
+
+  @override
+  String? incrementCachedState({
+    required Operation operation,
+    required String state,
+  }) {
+    final buffer = StringBuffer(state);
+    _applyOperationToBuffer(buffer, operation);
+    return buffer.toString();
+  }
+
+  @override
+  Operation? compound(Operation accumulator, Operation current) {
+    if (accumulator is _TextInsertOperation &&
+        current is _TextInsertOperation &&
+        _isContiguousInsertion(accumulator, current)) {
+      final buffer = StringBuffer()
+        ..write(
+          accumulator.text.substring(0, current.index - accumulator.index),
+        )
+        ..write(current.text)
+        ..write(
+          accumulator.text.substring(current.index - accumulator.index),
+        );
+      return _TextInsertOperation.fromHandler(
+        this,
+        index: accumulator.index,
+        text: buffer.toString(),
+      );
+    }
+    if (accumulator is _TextInsertOperation &&
+        current is _TextDeleteOperation &&
+        _isDeletingPartialInsertion(accumulator, current)) {
+      final buffer = StringBuffer()
+        ..write(
+          accumulator.text.substring(0, current.index - accumulator.index),
+        )
+        ..write(
+          accumulator.text.substring(
+            current.index - accumulator.index + current.count,
+          ),
+        );
+      return _TextInsertOperation.fromHandler(
+        this,
+        index: accumulator.index,
+        text: buffer.toString(),
+      );
+    }
+
+    return null;
+  }
+
+  bool _isContiguousInsertion(
+    _TextInsertOperation accumulator,
+    _TextInsertOperation current,
+  ) {
+    return accumulator.index + accumulator.text.length >= current.index;
+  }
+
+  bool _isDeletingPartialInsertion(
+    _TextInsertOperation accumulator,
+    _TextDeleteOperation current,
+  ) {
+    return current.index >= accumulator.index &&
+        current.index + current.count <=
+            accumulator.index + accumulator.text.length;
   }
 
   /// Gets the initial state of the text

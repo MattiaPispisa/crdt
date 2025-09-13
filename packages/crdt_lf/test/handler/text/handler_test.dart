@@ -124,6 +124,33 @@ void main() {
       expect(value2, equals('Hello World'));
     });
 
+    test('should compound insert operations', () {
+      doc.runInTransaction(() {
+        text
+          ..insert(0, 'Hello')
+          ..insert(5, ' World');
+      });
+      expect(text.value, equals('Hello World'));
+    });
+
+    test('should compound insert operations with overlap', () {
+      doc.runInTransaction(() {
+        text
+          ..insert(0, 'Hello Flutter')
+          ..insert(5, ' World Dart');
+      });
+      expect(text.value, equals('Hello World Dart Flutter'));
+    });
+
+    test('should compound delete operations', () {
+      doc.runInTransaction(() {
+        text
+          ..insert(0, 'Hello Flutter')
+          ..delete(5, 8);
+      });
+      expect(text.value, equals('Hello'));
+    });
+
     test('value maintains cache across multiple reads', () {
       text.insert(0, 'Hello');
       final value1 = text.value;

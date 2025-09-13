@@ -1,156 +1,182 @@
 import 'package:crdt_lf/crdt_lf.dart';
 part 'operation.dart';
 
-/// CRDT Text implementation with the Fugue algorithm
+/// ## CRDT Text with Fugue implementation
 ///
+/// ## Description
 /// A CRDTFugueText is a text data structure that uses the Fugue algorithm ([The Art of the Fugue: Minimizing Interleaving in Collaborative Text Editing](https://arxiv.org/abs/2305.00583)) to minimize interleaving.
 /// It provides methods for inserting, deleting, and accessing text content.
-class CRDTFugueTextHandler extends Handler<List<FugueValueNode<String>>> {
+///
+/// ## Algorithm
+/// It uses the Fugue algorithm to minimize interleaving.
+/// So even if two users edit the same portion of text the algorithm will
+/// minimize the possibility of characters from one user being interleaved
+/// with the characters from the other user.
+///
+/// ## Example
+/// ```dart
+/// final doc = CRDTDocument();
+/// final text = CRDTFugueTextHandler(doc, 'text');
+/// text..insert(0, 'Hello')..insert(5, ' World');
+/// print(text.value); // Prints ["Hello"]
+/// ```
+class CRDTFugueTextHandler extends Handler<FugueTextState> {
   /// Constructor that initializes a new Fugue text handler
   CRDTFugueTextHandler(super.doc, this._id);
 
   /// The ID of this handler in the document
   final String _id;
 
-  /// The Fugue tree that represents the text
-  FugueTree<String> _tree = FugueTree<String>.empty();
-
   /// Counter to generate unique IDs for elements
   int _counter = 0;
-
-  /// The cached value of the text
-  String? _cachedValue;
-
-  /// Ensure local state is synchronized with the document version
-  void _ensureStateInSync() {
-    if (cachedState == null) {
-      final state = _computeState();
-      updateCachedState(state);
-      // Defer string building until actually needed via `value`
-      _cachedValue = null;
-    }
-  }
 
   @override
   String get id => _id;
 
   /// Inserts [text] at position [index]
   void insert(int index, String text) {
-    _ensureStateInSync();
-    if (text.isEmpty) return;
+    if (text.isEmpty) {
+      return;
+    }
+
+    final state = _cachedOrComputedState();
 
     // Find the node at position index - 1 (or root node if index is 0)
     final leftOrigin = index == 0
         ? FugueElementID.nullID()
-        : _tree.findNodeAtPosition(index - 1);
+        : state._tree.findNodeAtPosition(index - 1);
 
     // Find the next node after leftOrigin
-    final rightOrigin = _tree.findNextNode(leftOrigin);
+    final rightOrigin = state._tree.findNextNode(leftOrigin);
 
-    // Insert first character
-    final firstNodeID = FugueElementID(doc.peerId, _counter++);
-    doc.createChange(
-      _FugueTextInsertOperation.fromHandler(
-        this,
-        newNodeID: firstNodeID,
-        text: text[0],
-        leftOrigin: leftOrigin,
-        rightOrigin: rightOrigin,
-      ),
-    );
-
-    // Insert remaining characters as right children of the previous character
-    var previousID = firstNodeID;
-    for (var i = 1; i < text.length; i++) {
+    // Generate IDs for each character preserving the previous behavior
+    final items = <_FugueInsertItem>[];
+    for (var i = 0; i < text.length; i++) {
       final newNodeID = FugueElementID(doc.peerId, _counter++);
-      doc.createChange(
-        _FugueTextInsertOperation.fromHandler(
-          this,
-          newNodeID: newNodeID,
+      items.add(
+        _FugueInsertItem(
+          id: newNodeID,
           text: text[i],
-          leftOrigin: previousID,
-          // Use the same rightOrigin for all characters in the chain
-          rightOrigin: rightOrigin,
         ),
       );
-      previousID = newNodeID;
     }
 
-    _invalidateCache();
+    // Emit a single batch change containing the whole chain
+    doc.registerOperation(
+      _FugueTextInsertOperation.fromHandler(
+        this,
+        leftOrigin: leftOrigin,
+        rightOrigin: rightOrigin,
+        items: items,
+      ),
+    );
   }
 
   /// Deletes [count] characters starting from position [index]
   void delete(int index, int count) {
-    _ensureStateInSync();
-    // For each character to delete
+    final state = _cachedOrComputedState();
+    // Collect targets first to avoid index drift while deleting
+    final targets = <FugueElementID>[];
     for (var i = 0; i < count; i++) {
-      // Find the node at position index
-      // (which is now index + i since we've deleted i characters)
-      final nodeID = _tree.findNodeAtPosition(index + i);
-
-      // If the node exists, create a delete operation
+      final nodeID = state._tree.findNodeAtPosition(index + i);
       if (!nodeID.isNull) {
-        doc.createChange(
-          _FugueTextDeleteOperation.fromHandler(
-            this,
-            nodeID: nodeID,
-          ),
-        );
+        targets.add(nodeID);
       }
     }
 
-    _invalidateCache();
+    if (targets.isEmpty) {
+      return;
+    }
+
+    // Create items for batch delete
+    final items =
+        targets.map((nodeID) => _FugueDeleteItem(nodeID: nodeID)).toList();
+
+    // Emit a single batch delete change
+    doc.registerOperation(
+      _FugueTextDeleteOperation.fromHandler(
+        this,
+        items: items,
+      ),
+    );
   }
 
   /// Updates the text at position [index]
   void update(int index, String text) {
-    _ensureStateInSync();
-    if (text.isEmpty) return;
+    if (text.isEmpty) {
+      return;
+    }
 
+    final state = _cachedOrComputedState();
+
+    // Collect targets first to avoid index drift while updating
+    final targets = <FugueElementID>[];
     for (var i = 0; i < text.length; i++) {
-      final nodeID = _tree.findNodeAtPosition(index + i);
+      final nodeID = state._tree.findNodeAtPosition(index + i);
       if (!nodeID.isNull) {
-        final newNodeID = FugueElementID(doc.peerId, _counter++);
-        doc.createChange(
-          _FugueTextUpdateOperation.fromHandler(
-            this,
-            nodeID: nodeID,
-            newNodeID: newNodeID,
-            text: text[i],
-          ),
-        );
+        targets.add(nodeID);
       }
     }
 
-    _invalidateCache();
+    if (targets.isEmpty) {
+      return;
+    }
+
+    // Create items for batch update
+    final items = <_FugueUpdateItem>[];
+    for (var i = 0; i < targets.length; i++) {
+      final nodeID = targets[i];
+      final newNodeID = FugueElementID(doc.peerId, _counter++);
+      final ch = text[i];
+      items.add(
+        _FugueUpdateItem(
+          nodeID: nodeID,
+          newNodeID: newNodeID,
+          text: ch,
+        ),
+      );
+    }
+
+    // Emit a single batch update change
+    doc.registerOperation(
+      _FugueTextUpdateOperation.fromHandler(
+        this,
+        items: items,
+      ),
+    );
   }
 
   /// Gets the current value of the text
   String get value {
-    // Check if cache is still valid
-    if (cachedState != null && _cachedValue != null) {
-      return _cachedValue!;
-    }
+    return _cachedOrComputedState()._value;
+  }
 
+  /// If the cached state is still valid, returns it.
+  ///
+  /// Otherwise, computes the state from scratch and updates the cache.
+  FugueTextState _cachedOrComputedState() {
     if (cachedState != null) {
-      _cachedValue = cachedState!.map((node) => node.value).join();
-      return _cachedValue!;
+      return cachedState!;
     }
 
-    // Compute state from scratch
     final state = _computeState();
-
-    // Store state in cache
     updateCachedState(state);
-    _cachedValue = state.map((node) => node.value).join();
+    return state;
+  }
 
-    return _cachedValue!;
+  @override
+  FugueTextState? incrementCachedState({
+    required Operation operation,
+    required FugueTextState state,
+  }) {
+    _applyTreeOperation(state._tree, operation);
+    return state..resolve();
   }
 
   @override
   List<FugueValueNode<String>> getSnapshotState() {
     if (cachedState != null) {
-      return cachedState!;
+      return cachedState!._nodes;
     }
 
     // Compute state from scratch
@@ -159,18 +185,18 @@ class CRDTFugueTextHandler extends Handler<List<FugueValueNode<String>>> {
     // Store state in cache
     updateCachedState(state);
 
-    return state;
+    return state._nodes;
   }
 
   /// Gets the length of the text
   int get length => value.length;
 
   /// Computes the current state of the text from document operations
-  List<FugueValueNode<String>> _computeState() {
-    _tree = FugueTree.empty();
+  FugueTextState _computeState() {
+    final state = FugueTextState.empty();
 
     // Insert initial state
-    _tree.iterableInsert(0, _initialState());
+    state._tree.iterableInsert(0, _initialState());
 
     // Get all operations from the document
     final changes = doc.exportChanges().sorted();
@@ -181,26 +207,55 @@ class CRDTFugueTextHandler extends Handler<List<FugueValueNode<String>>> {
     for (final change in changes) {
       final operation = opFactory.fromPayload(change.payload);
 
-      if (operation is _FugueTextInsertOperation) {
-        _tree.insert(
-          newID: operation.newNodeID,
-          value: operation.text,
-          leftOrigin: operation.leftOrigin,
-          rightOrigin: operation.rightOrigin,
-        );
-      } else if (operation is _FugueTextDeleteOperation) {
-        _tree.delete(operation.nodeID);
-      } else if (operation is _FugueTextUpdateOperation) {
-        _tree.update(
-          nodeID: operation.nodeID,
-          newID: operation.newNodeID,
-          newValue: operation.text,
-        );
+      if (operation != null) {
+        _applyTreeOperation(state._tree, operation);
       }
     }
 
     // Return the resulting text
-    return _tree.nodes();
+    return state..resolve();
+  }
+
+  /// Applies a single operation to a Fugue tree
+  void _applyTreeOperation(FugueTree<String> tree, Operation operation) {
+    if (operation is _FugueTextInsertOperation) {
+      if (operation.items.isEmpty) {
+        return;
+      }
+
+      // Insert first item with provided origins
+      tree.insert(
+        newID: operation.items.first.id,
+        value: operation.items.first.text,
+        leftOrigin: operation.leftOrigin,
+        rightOrigin: operation.rightOrigin,
+      );
+      // Chain the rest to the previous inserted id, same rightOrigin
+      var previousID = operation.items.first.id;
+      for (final item in operation.items.skip(1)) {
+        tree.insert(
+          newID: item.id,
+          value: item.text,
+          leftOrigin: previousID,
+          rightOrigin: operation.rightOrigin,
+        );
+        previousID = item.id;
+      }
+    } else if (operation is _FugueTextDeleteOperation) {
+      // Apply batch delete - delete all items
+      for (final item in operation.items) {
+        tree.delete(item.nodeID);
+      }
+    } else if (operation is _FugueTextUpdateOperation) {
+      // Apply batch update - update all items
+      for (final item in operation.items) {
+        tree.update(
+          nodeID: item.nodeID,
+          newID: item.newNodeID,
+          newValue: item.text,
+        );
+      }
+    }
   }
 
   /// Gets the initial state of the text
@@ -213,16 +268,40 @@ class CRDTFugueTextHandler extends Handler<List<FugueValueNode<String>>> {
     return [];
   }
 
-  /// Invalidates the cache
-  void _invalidateCache() {
-    invalidateCache();
-    _cachedValue = null;
-  }
+  // Cache is updated directly after local ops; no private invalidator needed
 
   /// Returns a text representation of this handler
   @override
   String toString() {
     return 'CRDTFugueText($_id, '
         '"${value.length > 20 ? "${value.substring(0, 20)}..." : value}")';
+  }
+}
+
+/// fugue text state
+class FugueTextState {
+  /// Constructor that initializes the state
+  FugueTextState({
+    required FugueTree<String> tree,
+  }) : _tree = tree;
+
+  /// Factory method that initializes an empty state
+  factory FugueTextState.empty() {
+    return FugueTextState(tree: FugueTree<String>.empty());
+  }
+
+  /// The tree of the state
+  final FugueTree<String> _tree;
+
+  /// The nodes of the state
+  late List<FugueValueNode<String>> _nodes;
+
+  /// The value of the state
+  late String _value;
+
+  /// Resolves [_nodes] and [_value] with the [_tree]
+  void resolve() {
+    _nodes = _tree.nodes();
+    _value = _nodes.map((el) => el.value).join();
   }
 }

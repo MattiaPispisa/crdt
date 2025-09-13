@@ -18,17 +18,26 @@ void main() {
       operation = TestOperation.fromHandler(handler);
     });
 
-    test('constructor creates document with generated peerId', () {
+    test('constructor creates document with generated peerId and id', () {
       final doc1 = CRDTDocument();
       final doc2 = CRDTDocument();
+
       expect(doc1.peerId, isNotNull);
       expect(doc2.peerId, isNotNull);
+
+      expect(doc1.documentId, isNotNull);
+      expect(doc2.documentId, isNotNull);
+
       expect(doc1.peerId, isNot(equals(doc2.peerId)));
+      expect(doc1.documentId, isNot(equals(doc2.documentId)));
     });
 
-    test('constructor creates document with provided peerId', () {
-      final doc = CRDTDocument(peerId: author);
+    test(
+        'constructor creates document with'
+        ' provided peerId and id', () {
+      final doc = CRDTDocument(peerId: author, documentId: 'docId');
       expect(doc.peerId, equals(author));
+      expect(doc.documentId, 'docId');
     });
 
     test('document should be empty', () {
@@ -615,5 +624,339 @@ void main() {
         expect(serverHandler.value, clientHandler.value);
       });
     });
+
+    group('handlers', () {
+      test('should throw on double registration', () {
+        expect(
+          () {
+            return TestHandler(doc);
+          },
+          throwsA(isA<HandlerAlreadyRegisteredException>()),
+        );
+      });
+
+      test('should not increment cached without a cached state', () {
+        final handler = _FakeCRDTListHandler(doc, 'test-list');
+        expect(handler._incrementedCount, 0);
+        // cached state is never computed
+        handler.insert(0, 'Hello');
+        expect(handler._incrementedCount, 0);
+      });
+
+      test('should increment cached state on operation application', () {
+        final handler = _FakeCRDTListHandler(doc, 'test-list');
+        expect(handler._incrementedCount, 0);
+        // compute cached state
+        expect(handler.value, const <String>[]);
+        handler
+          ..insert(0, 'Hello')
+          ..insert(1, 'World');
+        expect(handler._incrementedCount, 2);
+      });
+
+      test(
+          'should not increment cached state'
+          ' if useIncrementalCacheUpdate is false', () {
+        final handler = _FakeCRDTListHandler(doc, 'test-list')
+          ..useIncrementalCacheUpdate = false;
+        expect(handler._incrementedCount, 0);
+        expect(handler.value, const <String>[]);
+        handler.insert(0, 'Hello');
+        expect(handler._incrementedCount, 0);
+      });
+
+      test('should remove cache if incrementalCache return null', () {
+        final handler = _FakeCRDTListHandler(doc, 'test-list')
+          ..useIncrementalCacheUpdate = true
+          ..value;
+        expect(handler._incrementedCount, 0);
+        expect(handler.value, const <String>[]);
+
+        handler.insert(0, 'Hello');
+        expect(handler._incrementedCount, 1);
+
+        handler
+          ..notIncrementState = true
+          // this insert will not increment the cached state
+          ..insert(1, 'Dart')
+          // increment state not called
+          ..insert(2, 'Flutter');
+        expect(handler._incrementedCount, 2);
+      });
+
+      test('should ignore old cached state', () {
+        final handler = _FakeCRDTListHandler(doc, 'test-list')
+          ..useIncrementalCacheUpdate = true;
+        expect(handler._incrementedCount, 0);
+        expect(handler.value, const <String>[]);
+        handler.insert(0, 'Hello');
+        expect(handler._incrementedCount, 1);
+        handler
+          ..useIncrementalCacheUpdate = false
+          ..insert(1, 'World');
+        expect(handler._incrementedCount, 1);
+
+        // previous "insert" didn't increment cached state
+        // therefore, new "insert" should not increment cached state
+        handler
+          ..useIncrementalCacheUpdate = true
+          ..insert(2, 'Dart!');
+        expect(handler._incrementedCount, 1);
+        expect(handler.value, ['Hello', 'World', 'Dart!']);
+      });
+
+      test(
+          'should related external handler changes '
+          'invalidate the handlers cache', () {
+        final handler1 = _FakeCRDTListHandler(doc, 'error-handler-1')
+          ..useIncrementalCacheUpdate = true
+          ..value;
+        final handler2 = _FakeCRDTListHandler(doc, 'error-handler-2')
+          ..useIncrementalCacheUpdate = true
+          ..value;
+
+        final otherDoc = CRDTDocument(peerId: PeerId.generate());
+        final otherHandler = _FakeCRDTListHandler(otherDoc, 'error-handler-1')
+          ..useIncrementalCacheUpdate = true
+          ..value;
+
+        // Initial state
+        expect(handler1._incrementedCount, 0);
+        expect(handler2._incrementedCount, 0);
+
+        // Perform operations that will succeed
+        handler1.insert(0, 'Hello'); // cache incremented
+        handler2.insert(0, 'World'); // cache incremented
+        otherHandler.insert(0, 'Other');
+        expect(handler1._incrementedCount, 1);
+        expect(handler2._incrementedCount, 1);
+
+        doc.runInTransaction<void>(() {
+          handler1.insert(1, 'Dart'); // cache incremented
+
+          // contains changes for handler1 so it's cache is invalidated
+          doc.importChanges(otherDoc.exportChanges());
+
+          handler2.insert(1, 'Flutter'); // cache incremented
+        });
+
+        handler1.insert(2, 'Test'); // cache not incremented
+        handler2.insert(2, 'Test2'); // cache incremented
+
+        // Cache should be invalidated, so incremental count should not increase
+        expect(handler1._incrementedCount, 2);
+        // value is computed from scratch
+        expect(
+          handler1.value,
+          containsAll(
+            ['Other', 'Dart', 'Test', 'Hello'],
+          ),
+        );
+        expect(handler2._incrementedCount, 3);
+      });
+
+      test(
+          'should external actions not applied to document '
+          'not affect the handlers cache', () {
+        final handler1 = _FakeCRDTListHandler(doc, 'external-handler-1')
+          ..useIncrementalCacheUpdate = true
+          ..value;
+        final handler2 = _FakeCRDTListHandler(doc, 'external-handler-2')
+          ..useIncrementalCacheUpdate = true
+          ..value;
+
+        // Initial state
+        expect(handler1._incrementedCount, 0);
+        expect(handler2._incrementedCount, 0);
+
+        // Perform initial operations
+        handler1.insert(0, 'Hello'); // cache incremented
+        handler2.insert(0, 'World');
+        expect(handler1._incrementedCount, 1);
+        expect(handler2._incrementedCount, 1);
+
+        // Import external changes in a transaction
+        expect(
+          () => doc.runInTransaction<void>(() {
+            // Perform local operations
+            handler1.insert(1, 'Dart'); // cache incremented
+            handler2.insert(1, 'Flutter');
+
+            final unexpectedDep = OperationId(
+              PeerId.generate(),
+              HybridLogicalClock(l: 9999999, c: 9999999),
+            );
+            doc.applyChange(
+              Change(
+                author: author,
+                id: OperationId(author, HybridLogicalClock(l: 1, c: 1)),
+                operation: TestOperation.fromHandler(handler1),
+                deps: {unexpectedDep},
+              ),
+            ); // throws an exception unrelated to handlers
+          }),
+          throwsA(isA<CrdtException>()),
+        );
+
+        handler1.insert(2, 'Test1'); // cache incremented
+        handler2.insert(2, 'Test2'); // cache incremented
+
+        expect(handler1._incrementedCount, 3);
+        expect(handler2._incrementedCount, 3);
+        expect(handler1.value, containsAll(['Hello', 'Dart', 'Test1']));
+      });
+    });
+
+    group('transaction', () {
+      test('runInTransaction batches updates and notifies only once', () async {
+        final events = <void>[];
+        final sub = doc.updates.listen((_) => events.add(null));
+        final listHandler = CRDTListHandler<String>(doc, 'tx-list');
+
+        // Multiple operations within a transaction should emit a single update
+        doc.runInTransaction<void>(() {
+          listHandler
+            ..insert(0, 'a')
+            ..insert(1, 'b')
+            ..insert(2, 'c');
+        });
+
+        await Future<void>.delayed(Duration.zero);
+        expect(events.length, 1);
+
+        await sub.cancel();
+      });
+
+      test('runInTransaction batches import + handler ops and emits once',
+          () async {
+        final events = <void>[];
+        final sub = doc.updates.listen((_) => events.add(null));
+        final listHandler = CRDTListHandler<String>(doc, 'tx-list-2');
+
+        // Prepare another document with a change and a snapshot
+        final otherDocument = CRDTDocument(peerId: PeerId.generate());
+        final otherHandler = TestHandler(otherDocument);
+        final otherOp = TestOperation.fromHandler(otherHandler);
+        final otherSnap = otherDocument.takeSnapshot();
+        final otherChange = otherDocument.createChange(otherOp);
+        expect(otherChange, isNotNull);
+
+        // Batch import + a couple of local handler ops in a single transaction
+        doc.runInTransaction<void>(() {
+          final imported1 = doc.importSnapshot(otherSnap);
+          expect(imported1, isTrue);
+
+          final applied = doc.importChanges([otherChange]);
+          expect(applied, greaterThan(0));
+
+          listHandler
+            ..insert(0, 'hello')
+            ..insert(1, 'world');
+        });
+
+        await Future<void>.delayed(Duration.zero);
+        // Only one update despite multiple operations inside the transaction
+        expect(events.length, 1);
+
+        await sub.cancel();
+      });
+
+      test(
+        'runInTransaction batches import '
+        '+ handler ops '
+        '+ local changes and emits once',
+        () async {
+          final events = <void>[];
+          final sub = doc.updates.listen((_) => events.add(null));
+          final listHandler = CRDTListHandler<String>(doc, 'tx-list');
+
+          // Prepare another document with a change and a snapshot
+          final otherDocument = CRDTDocument(peerId: PeerId.generate());
+          final otherHandler = TestHandler(otherDocument);
+          final otherOp = TestOperation.fromHandler(otherHandler);
+          final otherSnap = otherDocument.takeSnapshot();
+          final otherChange = otherDocument.createChange(otherOp);
+          expect(otherChange, isNotNull);
+
+          // Create a local handler for generating local changes
+          final localHandler = TestHandler(doc, id: 'other-local-handler');
+
+          // Batch import + handler ops + local changes in a single transaction
+          doc.runInTransaction<void>(() {
+            // Import snapshot and changes from other document
+            final imported1 = doc.importSnapshot(otherSnap);
+            expect(imported1, isTrue);
+
+            final applied = doc.importChanges([otherChange]);
+            expect(applied, greaterThan(0));
+
+            // Perform handler operations
+            listHandler
+              ..insert(0, 'hello')
+              ..insert(1, 'world');
+
+            // Create and apply local changes
+            final localOp = TestOperation.fromHandler(localHandler);
+            final localChange = doc.createChange(localOp);
+            expect(localChange, isNotNull);
+          });
+
+          await Future<void>.delayed(Duration.zero);
+          // Only one update despite multiple operations inside the transaction
+          expect(events.length, 1);
+
+          await sub.cancel();
+        },
+      );
+
+      test(
+          'should compound during transaction and emit compacted local changes',
+          () async {
+        final events = <void>[];
+        final localChanges = <Change>[];
+
+        doc.updates.listen((_) => events.add(null));
+        doc.localChanges.listen(localChanges.add);
+
+        final textHandler = CRDTTextHandler(doc, 'text');
+
+        doc.runInTransaction<void>(() {
+          textHandler
+            ..insert(0, 'Hello')
+            ..insert(5, ' World')
+            ..delete(6, 5)
+            ..insert(6, 'Dart!');
+        });
+
+        await Future<void>.delayed(Duration.zero);
+        expect(events.length, 1);
+        expect(localChanges.length, 1);
+        expect(textHandler.value, 'Hello Dart!');
+      });
+    });
   });
+}
+
+class _FakeCRDTListHandler extends CRDTListHandler<String> {
+  _FakeCRDTListHandler(super.doc, super.id);
+
+  /// count of `incrementCachedState`
+  var _incrementedCount = 0;
+
+  /// `incrementCachedState` will return null
+  bool notIncrementState = false;
+
+  @override
+  List<String>? incrementCachedState({
+    required Operation operation,
+    required List<String> state,
+  }) {
+    _incrementedCount++;
+
+    if (notIncrementState) {
+      return null;
+    }
+
+    return super.incrementCachedState(operation: operation, state: state);
+  }
 }

@@ -2,8 +2,13 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:crdt_lf/crdt_lf.dart';
+import 'package:crdt_lf/src/compound/compound.dart';
 import 'package:crdt_lf/src/devtools/devtools.dart' as devtools;
+import 'package:crdt_lf/src/transaction/transaction_manager.dart';
 import 'package:hlc_dart/hlc_dart.dart';
+
+// TODO(mattia): after transaction support create compound operations.
+// A mechanism to group operations together and apply them atomically.
 
 /// CRDT Document implementation
 ///
@@ -34,6 +39,9 @@ class CRDTDocument {
         _clock = HybridLogicalClock.initialize(),
         _localChangesController = StreamController<Change>.broadcast(),
         _handlers = {} {
+    _transactionManager = TransactionManager(
+      flushWork: _transactionFlushWork,
+    );
     devtools.handleCreated(this);
   }
 
@@ -85,12 +93,88 @@ class CRDTDocument {
   /// The last snapshot of this document
   Snapshot? _lastSnapshot;
 
+  /// Manages transactional batching of events
+  late final TransactionManager _transactionManager;
+
   /// Whether this document is empty.
   /// (no changes and no snapshot)
   bool get isEmpty => _changeStore.changeCount == 0 && _lastSnapshot == null;
 
+  /// Whether a transaction is currently active.
+  bool get isInTransaction => _transactionManager.isInTransaction;
+
+  /// Flushes the operations to the [Compound] and applies the changes.
+  ///
+  /// 1. Compacts the operations
+  /// 1. Operations are converted to [Change]s
+  /// 1. Subscribers are notified about changes
+  ///
+  /// **Only [_transactionManager] can call this method.**
+  void _transactionFlushWork(
+    List<Operation> operations,
+    List<Change> changes,
+    bool otherPendingUpdates,
+  ) {
+    final compacted = Compound(
+      operations: operations,
+      handlers: _handlers,
+    ).compact();
+
+    final handlersAffectedFromErrors = <String>{};
+    final appliedChanges = changes;
+
+    // if generated operations are applied correctly the handlers
+    // cached state can be preserved.
+    // Otherwise if there is at least one operation not applied correctly
+    // the handlers cached state is invalidated.
+    for (final operation in compacted) {
+      final change = _changeFromOp(operation);
+      final applied = _internalApplyChange(change);
+
+      if (applied) {
+        appliedChanges.add(change);
+        for (final handler in _handlers.values) {
+          if (!handlersAffectedFromErrors.contains(handler.id)) {
+            handler._updateCachedVersion();
+          }
+        }
+      } else {
+        _handlers[operation.id]?.invalidateCache();
+        handlersAffectedFromErrors.add(operation.id);
+      }
+    }
+
+    if (!_localChangesController.isClosed) {
+      for (final change in appliedChanges.sorted()) {
+        _localChangesController.add(change);
+      }
+    }
+
+    if (appliedChanges.isNotEmpty || otherPendingUpdates) {
+      _updatesController.add(null);
+    }
+  }
+
+  /// [Change]s applied by external sources could not be incremental.
+  /// So the affected handlers are invalidated,
+  /// while others have their version updated.
+  void _updateCacheWithAppliedExternalChange(Change change) {
+    for (final handler in _handlers.values) {
+      if (handler._isAffectedByChange(change)) {
+        handler.invalidateCache();
+      } else {
+        handler._updateCachedVersion();
+      }
+    }
+  }
+
   /// Register a [SnapshotProvider]
   void registerHandler(Handler<dynamic> handler) {
+    if (_handlers.containsKey(handler.id)) {
+      throw HandlerAlreadyRegisteredException(
+        'Handler with ID ${handler.id} already registered',
+      );
+    }
     _handlers[handler.id] = handler;
     handler._document = this;
   }
@@ -103,10 +187,8 @@ class CRDTDocument {
     return _dag.versionVector;
   }
 
-  /// Creates a new [Change] with the given [operation]
-  ///
-  /// The [Change] is automatically applied to this document.
-  Change createChange(
+  /// Creates a new [Change] from the given [operation]
+  Change _changeFromOp(
     Operation operation, {
     int? physicalTime,
   }) {
@@ -116,26 +198,62 @@ class CRDTDocument {
     final id = OperationId(_peerId, _clock.copy());
     final deps = _dag.frontiers;
 
-    final change = Change(
+    return Change(
       id: id,
       deps: deps,
       author: _peerId,
       operation: operation,
     );
+  }
 
-    final applied = applyChange(change);
+  /// Creates a new [Change] with the given [operation]
+  ///
+  /// The [Change] is automatically applied to this document.
+  ///
+  /// Subscribers are notified about the change only on transaction commit.
+  Change createChange(
+    Operation operation, {
+    int? physicalTime,
+  }) {
+    final change = _changeFromOp(operation, physicalTime: physicalTime);
+    final applied = _internalApplyChange(change);
+
     if (applied) {
-      _localChangesController.add(change);
+      _updateCacheWithAppliedExternalChange(change);
+      _emitUpdate([change]);
     }
+
     return change;
   }
 
-  /// Applies a [Change] to this document
+  /// Registers an [Operation] to this document.
   ///
-  /// The [Change] must be causally ready (all its dependencies must exist
-  /// in the DAG).
-  /// Returns `true` if the [Change] was applied, `false` if it already existed.
-  bool applyChange(Change change) {
+  /// If there isn't a transaction an implicit transaction is opened
+  ///
+  /// Else the operation is added to the current transaction.
+  void registerOperation(Operation operation) {
+    final openedImplicitTransaction = !isInTransaction;
+
+    try {
+      if (openedImplicitTransaction) {
+        _transactionManager.begin();
+      }
+
+      _transactionManager.handleOperation(operation);
+
+      final handler = _handlers[operation.id];
+      if (handler != null) {
+        handler._internalIncrementCachedState(operation: operation);
+      }
+    } finally {
+      if (openedImplicitTransaction) {
+        _transactionManager.commit();
+      }
+    }
+  }
+
+  /// Applies a [Change] to this document
+  bool _internalApplyChange(Change change) {
     // Check if the change already exists
     if (_changeStore.containsChange(change.id)) {
       return false;
@@ -163,9 +281,21 @@ class CRDTDocument {
       );
     }
 
-    // Notify listeners about state update
-    _notifyUpdates();
     return true;
+  }
+
+  /// Applies a [Change] to this document
+  ///
+  /// The [Change] must be causally ready (all its dependencies must exist
+  /// in the DAG).
+  /// Returns `true` if the [Change] was applied, `false` if it already existed.
+  bool applyChange(Change change) {
+    final applied = _internalApplyChange(change);
+    if (applied) {
+      _updateCacheWithAppliedExternalChange(change);
+      _emitUpdate([change]);
+    }
+    return applied;
   }
 
   /// Takes a snapshot of the document, compacting its history.
@@ -210,7 +340,7 @@ class CRDTDocument {
       _lastSnapshot = snapshot;
 
       _invalidateHandlers();
-      _notifyUpdates();
+      _emitUpdate();
       return true;
     }
 
@@ -230,7 +360,7 @@ class CRDTDocument {
 
     _prune(_lastSnapshot!.versionVector);
     _invalidateHandlers();
-    _notifyUpdates();
+    _emitUpdate();
   }
 
   /// Whether the given [snapshot] should be applied.
@@ -341,31 +471,46 @@ class CRDTDocument {
     final sorted = _topologicalSort(_neverReceived(changes));
 
     // Apply changes
-    var applied = 0;
+    final changedApplied = <Change>[];
     for (final change in sorted) {
       try {
-        if (applyChange(change)) {
-          applied++;
+        if (_internalApplyChange(change)) {
+          _updateCacheWithAppliedExternalChange(change);
+          changedApplied.add(change);
         }
       } catch (e) {
         // Skip changes that can't be applied
       }
     }
 
-    return applied;
+    if (changedApplied.isNotEmpty) {
+      _emitUpdate();
+    }
+
+    return changedApplied.length;
   }
 
+  /// Prunes the DAG and the change store up to the given version.
   void _prune(VersionVector version) {
     _dag.prune(version);
     _changeStore.prune(version);
   }
 
-  /// Notifies listeners about state update
-  void _notifyUpdates() {
-    if (_updatesController.isClosed) {
-      return;
+  /// Emits that the document state has made an update
+  /// to be notified by listeners.
+  ///
+  /// If a transaction is active, the update
+  /// is marked as pending; otherwise it is emitted immediately.
+  ///
+  /// Every [CRDTDocument] must call [_emitUpdate] when something happens,
+  /// the only way to **directly** notify listeners
+  /// is using the [_transactionManager] callbacks.
+  void _emitUpdate([List<Change>? changes]) {
+    if (changes != null) {
+      _transactionManager.handleAppliedChanges(changes);
+    } else {
+      _transactionManager.requestUpdate();
     }
-    _updatesController.add(null);
   }
 
   /// Returns a list of [Change]s never received from this document:
@@ -451,6 +596,14 @@ class CRDTDocument {
     }
   }
 
+  /// Runs [action] within a transaction, committing at the end.
+  ///
+  /// Nested transactions are supported and will only flush once the outermost
+  /// transaction is committed.
+  T runInTransaction<T>(T Function() action) {
+    return _transactionManager.run<T>(action);
+  }
+
   /// Returns a string representation of this document
   @override
   String toString() {
@@ -465,18 +618,119 @@ class CRDTDocument {
   }
 }
 
-/// A provider that can provide a snapshot of the state of a CRDT
-mixin SnapshotProvider {
-  /// The unique identifier for this provider
+/// A consumer that can consume a CRDTDocument
+mixin DocumentConsumer {
+  /// The document that `this` can consume
+  late final CRDTDocument _document;
+
+  /// The unique identifier for `this` consumer
+  String get id;
+}
+
+/// A provider that can provide a cacheable state of a [CRDTDocument]
+///
+/// [T] is the type of the cached state of the handler.
+/// The handler state can be whatever the handler needs it to be
+/// to perform better. There is no binding with the `handler.value`
+/// or `getSnapshotState`.
+mixin CacheableStateProvider<T> on DocumentConsumer {
+  @override
   String get id;
 
-  CRDTDocument? _document;
+  /// The version at witch the cached state is still valid
+  Set<OperationId>? _cachedVersion;
+
+  /// The cached state of the handler
+  T? _cachedState;
+
+  /// Whether to use incremental cache update
+  bool useIncrementalCacheUpdate = true;
+
+  /// Updates the cached version with the current version of the document
+  void _updateCachedVersion() {
+    _cachedVersion = Set.from(_document.version);
+  }
+
+  /// Updates the cached state
+  void updateCachedState(T newState) {
+    _cachedState = newState;
+    _updateCachedVersion();
+  }
+
+  void _internalIncrementCachedState({required Operation operation}) {
+    if (!useIncrementalCacheUpdate) {
+      invalidateCache();
+      return;
+    }
+
+    final state = _cachedState;
+    if (state == null) {
+      return;
+    }
+
+    final newState = incrementCachedState(
+      operation: operation,
+      state: state,
+    );
+
+    if (newState == null) {
+      invalidateCache();
+      return;
+    }
+
+    updateCachedState(newState);
+  }
+
+  /// When the document receives an operation and a change is applied
+  /// anyone using [CacheableStateProvider] is allowed to
+  /// increment the cached state.
+  ///
+  /// Use the [operation] to increment the current [state]
+  T? incrementCachedState({
+    required Operation operation,
+    required T state,
+  }) {
+    return null;
+  }
+
+  /// Invalidates the cached state
+  ///
+  /// [CRDTDocument] automatically invalidates
+  /// the cache when an external effect happens (import, export, etc.).
+  void invalidateCache() {
+    _cachedState = null;
+    _cachedVersion = null;
+  }
+
+  /// Returns the cached state
+  T? get cachedState {
+    if (_cachedState != null && setEquals(_cachedVersion, _document.version)) {
+      return _cachedState;
+    }
+
+    return null;
+  }
+}
+
+/// A provider that can provide a snapshot of the state of a [CRDTDocument]
+mixin SnapshotProvider on DocumentConsumer {
+  @override
+  String get id;
 
   /// Returns the current state of the provider
   dynamic getSnapshotState();
 
   /// Return the last snapshot of the document
   dynamic lastSnapshot() {
-    return _document?._lastSnapshot?.data[id];
+    return _document._lastSnapshot?.data[id];
+  }
+}
+
+/// Helper extensions for [Handler]
+extension _HandlerHelper on Handler<dynamic> {
+  /// Whether the handler is affected by the given [change]
+  bool _isAffectedByChange(Change change) {
+    final id = Operation.handlerIdFrom(payload: change.payload);
+    return id == this.id;
   }
 }
