@@ -9,12 +9,14 @@
 - Thrown `HandlerAlreadyRegisteredException` when a handler is registered twice
 - `TransactionManager` to manage transactional batching of notifications and local changes emission
 - `compound` "system" to compact consecutive operations during transaction
-- Added `CRDTORSetHandler` 
+- Added `CRDTORSetHandler` [42](https://github.com/MattiaPispisa/crdt/issues/42)
 
 ### Changed
 
 - On `importChanges` listeners of `updates` are notified only one times at import end
 - `Handlers` now not invalidate cache when an operation is applied due to the new mixins system. This greatly improves the computation of the handler value as it is persisted much more often.
+
+### Fixed
 - `CRDTMapHandler` updating an absent key is ignored
 
 ## [1.0.0] - 2025-08-18
