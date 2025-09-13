@@ -214,9 +214,13 @@ class CRDTTextHandler extends Handler<String> {
         current is _TextInsertOperation &&
         _isContiguousInsertion(accumulator, current)) {
       final buffer = StringBuffer()
-        ..write(accumulator.text.substring(0, current.index - accumulator.index))
+        ..write(
+          accumulator.text.substring(0, current.index - accumulator.index),
+        )
         ..write(current.text)
-        ..write(accumulator.text.substring(current.index - accumulator.index));
+        ..write(
+          accumulator.text.substring(current.index - accumulator.index),
+        );
       return _TextInsertOperation.fromHandler(
         this,
         index: accumulator.index,
@@ -227,16 +231,21 @@ class CRDTTextHandler extends Handler<String> {
         current is _TextDeleteOperation &&
         _isDeletingPartialInsertion(accumulator, current)) {
       final buffer = StringBuffer()
-        ..write(accumulator.text.substring(0, current.index - accumulator.index))
-        ..write(accumulator.text
-            .substring(current.index - accumulator.index + current.count));
+        ..write(
+          accumulator.text.substring(0, current.index - accumulator.index),
+        )
+        ..write(
+          accumulator.text.substring(
+            current.index - accumulator.index + current.count,
+          ),
+        );
       return _TextInsertOperation.fromHandler(
         this,
         index: accumulator.index,
         text: buffer.toString(),
       );
     }
-    
+
     return null;
   }
 

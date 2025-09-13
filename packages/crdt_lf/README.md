@@ -25,6 +25,7 @@
     - [CRDTDocument](#crdtdocument)
       - [Identity](#identity)
     - [Handlers](#handlers)
+      - [Caching](#caching)
       - [Working with Complex Types](#working-with-complex-types)
     - [Transaction](#transaction-1)
     - [DAG](#dag)
@@ -190,6 +191,9 @@ print(list.value); // Prints "[Buy milk]"
 ```
 
 Every handler can be found in the [handlers](https://github.com/MattiaPispisa/crdt/tree/main/packages/crdt_lf/lib/src/handler) folder.
+
+#### Caching
+Parlare del fatto che ad ogni operazione viene chiesto all'handler di incrementare il proprio stato. La gestione della cache è gestita dal documento e ad ogni handler viene chiesto solo di incrementare o impostare il prorio stato. Questo sarà fornito dal documento all'handler sulla base dello stato corrente del documento.
 
 #### Working with Complex Types
 
