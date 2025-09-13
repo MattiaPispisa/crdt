@@ -11,6 +11,8 @@
 - [CRDT LF](#crdt-lf)
   - [Features](#features)
   - [Design](#design)
+    - [Operation based](#operation-based)
+    - [Transaction](#transaction)
   - [Getting Started](#getting-started)
   - [Usage](#usage)
     - [Basic Usage](#basic-usage)
@@ -51,8 +53,41 @@ This library provides solutions for:
 
 ## Design
 
+### Operation based
+
 The synchronization mechanism is operation-based (CmRDT). Each document manages synchronization by propagating **only the operations**. Locally, each handler (list, text, etc.) applies these operations to resolve its state. It's possible to create snapshots to establish an initial state on which operations are resolved. This is useful to prevent the memory requirements of the system from growing indefinitely. 
 Operation resolution is handled by each individual handler. This design allows each handler to implement its own operation resolution logic according to its specific requirements. The library includes simple implementations like `CRDTList`, where interleaving is managed solely through HLC timestamps, as well as more sophisticated systems like `OR-Sets` and `Fugue Text`. Each handler provides documentation that describes its approach to operation resolution.
+
+### Transaction
+
+Each operation created by an handler is registered in the document. The document manages operations through a transaction system. A transaction is considered an atomic operation, and notifications to subscribers are sent only when the transaction is completed. If not explicitly declared, each operation is registered in an implicit transaction.
+
+An explicit transaction creates an environment where operations are grouped together and applied atomically. At the end of the transaction, contiguous operations can be compacted into fewer operations through compound algorithms to reduce the number of changes created.
+
+```mermaid
+graph TD
+    A[Operation Request] --> B{Transaction Active?}
+    
+    B -->|No| C[Start Implicit Transaction]
+    B -->|Yes| D[Queue Operation]
+    
+    C --> E[Queue Operation]
+    E --> F[Update Handler Cache]
+    F --> G[Commit Transaction]
+    
+    D --> F
+    
+    G --> H[Flush Transaction]
+    H --> I[Compact Operations]
+    
+    I --> N[Process Each Operation]
+    N --> O[Create Change]
+    O --> P[Apply to Document]    
+    P --> T[Notify Subscribers]
+    
+    T --> U[Transaction Complete]
+```
+
 
 ## Getting Started
 
