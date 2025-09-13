@@ -7,8 +7,6 @@ import 'package:crdt_lf/src/operation/type.dart';
 
 part 'operation.dart';
 
-// TODO(mattia): implement compound operation
-
 /// # CRDT Text
 ///
 /// ## Description
@@ -208,6 +206,24 @@ class CRDTTextHandler extends Handler<String> {
     final buffer = StringBuffer(state);
     _applyOperationToBuffer(buffer, operation);
     return buffer.toString();
+  }
+
+  @override
+  Operation? compound(Operation accumulator, Operation current) {
+    if (accumulator is _TextInsertOperation &&
+        current is _TextInsertOperation &&
+        accumulator.index + accumulator.text.length >= current.index) {
+      final finalText =
+          accumulator.text.substring(0, current.index - accumulator.index) +
+              current.text +
+              accumulator.text.substring(current.index - accumulator.index);
+      return _TextInsertOperation.fromHandler(
+        this,
+        index: accumulator.index,
+        text: finalText,
+      );
+    }
+    return null;
   }
 
   /// Gets the initial state of the text
