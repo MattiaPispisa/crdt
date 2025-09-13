@@ -50,7 +50,10 @@ class _TextInsertOperation extends Operation {
     );
   }
 
+  /// The index of the first character to insert
   final int index;
+
+  /// The text to insert
   final String text;
 
   @override
@@ -90,7 +93,10 @@ class _TextDeleteOperation extends Operation {
     );
   }
 
+  /// The index of the first character to delete
   final int index;
+
+  /// The number of characters to delete
   final int count;
 
   @override
@@ -130,7 +136,10 @@ class _TextUpdateOperation extends Operation {
         text: payload['text'] as String,
       );
 
+  /// The index of the first character to update
   final int index;
+
+  /// The text to update
   final String text;
 
   @override

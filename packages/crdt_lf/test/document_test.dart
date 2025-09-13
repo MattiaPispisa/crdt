@@ -909,6 +909,31 @@ void main() {
           await sub.cancel();
         },
       );
+
+      test(
+          'should compound during transaction and emit compacted local changes',
+          () async {
+        final events = <void>[];
+        final localChanges = <Change>[];
+
+        doc.updates.listen((_) => events.add(null));
+        doc.localChanges.listen(localChanges.add);
+
+        final textHandler = CRDTTextHandler(doc, 'text');
+
+        doc.runInTransaction<void>(() {
+          textHandler
+            ..insert(0, 'Hello')
+            ..insert(5, ' World')
+            ..delete(6, 5)
+            ..insert(6, 'Dart!');
+        });
+
+        await Future<void>.delayed(Duration.zero);
+        expect(events.length, 1);
+        expect(localChanges.length, 1);
+        expect(textHandler.value, 'Hello Dart!');
+      });
     });
   });
 }

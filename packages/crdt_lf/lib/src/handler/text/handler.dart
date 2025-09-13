@@ -212,18 +212,48 @@ class CRDTTextHandler extends Handler<String> {
   Operation? compound(Operation accumulator, Operation current) {
     if (accumulator is _TextInsertOperation &&
         current is _TextInsertOperation &&
-        accumulator.index + accumulator.text.length >= current.index) {
-      final finalText =
-          accumulator.text.substring(0, current.index - accumulator.index) +
-              current.text +
-              accumulator.text.substring(current.index - accumulator.index);
+        _isContiguousInsertion(accumulator, current)) {
+      final buffer = StringBuffer()
+        ..write(accumulator.text.substring(0, current.index - accumulator.index))
+        ..write(current.text)
+        ..write(accumulator.text.substring(current.index - accumulator.index));
       return _TextInsertOperation.fromHandler(
         this,
         index: accumulator.index,
-        text: finalText,
+        text: buffer.toString(),
       );
     }
+    if (accumulator is _TextInsertOperation &&
+        current is _TextDeleteOperation &&
+        _isDeletingPartialInsertion(accumulator, current)) {
+      final buffer = StringBuffer()
+        ..write(accumulator.text.substring(0, current.index - accumulator.index))
+        ..write(accumulator.text
+            .substring(current.index - accumulator.index + current.count));
+      return _TextInsertOperation.fromHandler(
+        this,
+        index: accumulator.index,
+        text: buffer.toString(),
+      );
+    }
+    
     return null;
+  }
+
+  bool _isContiguousInsertion(
+    _TextInsertOperation accumulator,
+    _TextInsertOperation current,
+  ) {
+    return accumulator.index + accumulator.text.length >= current.index;
+  }
+
+  bool _isDeletingPartialInsertion(
+    _TextInsertOperation accumulator,
+    _TextDeleteOperation current,
+  ) {
+    return current.index >= accumulator.index &&
+        current.index + current.count <=
+            accumulator.index + accumulator.text.length;
   }
 
   /// Gets the initial state of the text
