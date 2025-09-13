@@ -115,99 +115,136 @@ class _FugueInsertItem {
       };
 }
 
-/// Delete operation for the Fugue algorithm
+/// Batch delete operation for the Fugue algorithm
 class _FugueTextDeleteOperation extends Operation {
-  /// Constructor that initializes a delete operation
+  /// Constructor that initializes a batch delete operation
   _FugueTextDeleteOperation({
-    required this.nodeID,
+    required this.items,
     required super.id,
     required super.type,
   });
 
-  /// Creates a delete operation from a payload
-  factory _FugueTextDeleteOperation.fromPayload(Map<String, dynamic> payload) =>
-      _FugueTextDeleteOperation(
-        id: payload['id'] as String,
-        type: OperationType.fromPayload(payload['type'] as String),
-        nodeID: FugueElementID.fromJson(
-          payload['nodeID'] as Map<String, dynamic>,
-        ),
-      );
+  /// Creates a batch delete operation from a payload
+  factory _FugueTextDeleteOperation.fromPayload(Map<String, dynamic> payload) {
+    return _FugueTextDeleteOperation(
+      id: payload['id'] as String,
+      type: OperationType.fromPayload(payload['type'] as String),
+      items: (payload['items'] as List)
+          .map(
+            (e) => _FugueDeleteItem.fromJson(e as Map<String, dynamic>),
+          )
+          .toList(),
+    );
+  }
 
-  /// Factory to create a delete operation from a handler
+  /// Factory to create a batch delete operation from a handler
   factory _FugueTextDeleteOperation.fromHandler(
     Handler<dynamic> handler, {
-    required FugueElementID nodeID,
+    required List<_FugueDeleteItem> items,
   }) {
     return _FugueTextDeleteOperation(
       id: handler.id,
       type: OperationType.delete(handler),
-      nodeID: nodeID,
+      items: items,
     );
   }
 
-  /// ID of the node to delete
-  final FugueElementID nodeID;
+  /// Items to delete
+  final List<_FugueDeleteItem> items;
 
   @override
   Map<String, dynamic> toPayload() => {
         ...super.toPayload(),
+        'items': items.map((e) => e.toJson()).toList(),
+      };
+}
+
+/// A single item of a batch delete
+class _FugueDeleteItem {
+  _FugueDeleteItem({
+    required this.nodeID,
+  });
+
+  factory _FugueDeleteItem.fromJson(Map<String, dynamic> json) {
+    return _FugueDeleteItem(
+      nodeID: FugueElementID.fromJson(json['nodeID'] as Map<String, dynamic>),
+    );
+  }
+
+  final FugueElementID nodeID;
+
+  Map<String, dynamic> toJson() => {
         'nodeID': nodeID.toJson(),
       };
 }
 
-/// Update operation for the Fugue algorithm
+/// Batch update operation for the Fugue algorithm
 class _FugueTextUpdateOperation extends Operation {
-  /// Constructor that initializes an update operation
+  /// Constructor that initializes a batch update operation
   _FugueTextUpdateOperation({
-    required this.nodeID,
-    required this.newNodeID,
-    required this.text,
+    required this.items,
     required super.id,
     required super.type,
   });
 
-  /// Creates an update operation from a payload
-  factory _FugueTextUpdateOperation.fromPayload(Map<String, dynamic> payload) =>
-      _FugueTextUpdateOperation(
-        id: payload['id'] as String,
-        type: OperationType.fromPayload(payload['type'] as String),
-        nodeID:
-            FugueElementID.fromJson(payload['nodeID'] as Map<String, dynamic>),
-        newNodeID: FugueElementID.fromJson(
-          payload['newNodeID'] as Map<String, dynamic>,
-        ),
-        text: payload['text'] as String,
-      );
+  /// Creates a batch update operation from a payload
+  factory _FugueTextUpdateOperation.fromPayload(Map<String, dynamic> payload) {
+    return _FugueTextUpdateOperation(
+      id: payload['id'] as String,
+      type: OperationType.fromPayload(payload['type'] as String),
+      items: (payload['items'] as List)
+          .map(
+            (e) => _FugueUpdateItem.fromJson(e as Map<String, dynamic>),
+          )
+          .toList(),
+    );
+  }
 
-  /// Factory to create an update operation from a handler
+  /// Factory to create a batch update operation from a handler
   factory _FugueTextUpdateOperation.fromHandler(
     Handler<dynamic> handler, {
-    required FugueElementID nodeID,
-    required FugueElementID newNodeID,
-    required String text,
+    required List<_FugueUpdateItem> items,
   }) {
     return _FugueTextUpdateOperation(
       id: handler.id,
       type: OperationType.update(handler),
-      nodeID: nodeID,
-      newNodeID: newNodeID,
-      text: text,
+      items: items,
     );
   }
 
-  /// ID of the node to update
-  final FugueElementID nodeID;
-
-  /// ID of the new node
-  final FugueElementID newNodeID;
-
-  /// Text to update
-  final String text;
+  /// Items to update
+  final List<_FugueUpdateItem> items;
 
   @override
   Map<String, dynamic> toPayload() => {
         ...super.toPayload(),
+        'items': items.map((e) => e.toJson()).toList(),
+      };
+}
+
+/// A single item of a batch update
+class _FugueUpdateItem {
+  _FugueUpdateItem({
+    required this.nodeID,
+    required this.newNodeID,
+    required this.text,
+  });
+
+  factory _FugueUpdateItem.fromJson(Map<String, dynamic> json) {
+    return _FugueUpdateItem(
+      nodeID: FugueElementID.fromJson(json['nodeID'] as Map<String, dynamic>),
+      newNodeID: FugueElementID.fromJson(
+        json['newNodeID'] as Map<String, dynamic>,
+      ),
+      text: json['text'] as String,
+    );
+  }
+
+  final FugueElementID nodeID;
+  final FugueElementID newNodeID;
+  final String text;
+
+  Map<String, dynamic> toJson() => {
         'nodeID': nodeID.toJson(),
         'newNodeID': newNodeID.toJson(),
         'text': text,

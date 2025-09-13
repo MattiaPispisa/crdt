@@ -49,6 +49,18 @@ void main() {
       },
     );
 
+    test(
+      'should update text',
+      () {
+        final doc = CRDTDocument();
+        final handler = CRDTFugueTextHandler(doc, 'text1')
+          ..useIncrementalCacheUpdate = false
+          ..insert(0, 'Hello World')
+          ..update(5, 'Beautiful');
+        expect(handler.value, 'HelloBeauti');
+      },
+    );
+
     test('should handle multiple operations', () {
       final doc = CRDTDocument();
       final handler = CRDTFugueTextHandler(doc, 'text1')
@@ -110,8 +122,8 @@ void main() {
           // ignore: avoid_dynamic_calls test
           changes
               .map(
-                (c) => (c.payload['items'] as List<dynamic>)
-                    .map((i) => i["id"]["counter"]),
+                (c) => (c.payload['items'] as List<Map<String, dynamic>>)
+                    .map((i) => (i['id'] as Map<String, dynamic>)['counter']),
               )
               .expand((x) => x)
               .toList();

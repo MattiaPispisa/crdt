@@ -1,5 +1,8 @@
 ## [Unreleased]
 
+**Breaking changes**
+- Changed `CRDTFugueTextHandler` operations payload
+
 ### Added
 
 - Created a set of mixins to be used by handlers to optimize performance

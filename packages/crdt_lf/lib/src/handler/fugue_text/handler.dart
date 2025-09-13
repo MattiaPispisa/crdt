@@ -84,14 +84,22 @@ class CRDTFugueTextHandler extends Handler<FugueTextState> {
       }
     }
 
-    for (final nodeID in targets) {
-      doc.registerOperation(
-        _FugueTextDeleteOperation.fromHandler(
-          this,
-          nodeID: nodeID,
-        ),
-      );
+    if (targets.isEmpty) {
+      return;
     }
+
+    // Create items for batch delete
+    final items = targets
+        .map((nodeID) => _FugueDeleteItem(nodeID: nodeID))
+        .toList();
+
+    // Emit a single batch delete change
+    doc.registerOperation(
+      _FugueTextDeleteOperation.fromHandler(
+        this,
+        items: items,
+      ),
+    );
   }
 
   /// Updates the text at position [index]
@@ -111,19 +119,32 @@ class CRDTFugueTextHandler extends Handler<FugueTextState> {
       }
     }
 
+    if (targets.isEmpty) {
+      return;
+    }
+
+    // Create items for batch update
+    final items = <_FugueUpdateItem>[];
     for (var i = 0; i < targets.length; i++) {
       final nodeID = targets[i];
       final newNodeID = FugueElementID(doc.peerId, _counter++);
       final ch = text[i];
-      doc.registerOperation(
-        _FugueTextUpdateOperation.fromHandler(
-          this,
+      items.add(
+        _FugueUpdateItem(
           nodeID: nodeID,
           newNodeID: newNodeID,
           text: ch,
         ),
       );
     }
+
+    // Emit a single batch update change
+    doc.registerOperation(
+      _FugueTextUpdateOperation.fromHandler(
+        this,
+        items: items,
+      ),
+    );
   }
 
   /// Gets the current value of the text
@@ -222,13 +243,19 @@ class CRDTFugueTextHandler extends Handler<FugueTextState> {
         previousID = item.id;
       }
     } else if (operation is _FugueTextDeleteOperation) {
-      tree.delete(operation.nodeID);
+      // Apply batch delete - delete all items
+      for (final item in operation.items) {
+        tree.delete(item.nodeID);
+      }
     } else if (operation is _FugueTextUpdateOperation) {
-      tree.update(
-        nodeID: operation.nodeID,
-        newID: operation.newNodeID,
-        newValue: operation.text,
-      );
+      // Apply batch update - update all items
+      for (final item in operation.items) {
+        tree.update(
+          nodeID: item.nodeID,
+          newID: item.newNodeID,
+          newValue: item.text,
+        );
+      }
     }
   }
 
