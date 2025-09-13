@@ -8,11 +8,11 @@ part 'operation.dart';
 /// A CRDTMap is a map data structure that uses CRDT
 /// for conflict-free collaboration.
 /// It provides methods for setting, deleting, and accessing key-value pairs.
-/// 
+///
 /// ## Algorithm
 /// Process operations in clock order.
 /// Interleaving is handled just using the HLC.
-/// 
+///
 /// ## Example
 /// ```dart
 /// final doc = CRDTDocument();

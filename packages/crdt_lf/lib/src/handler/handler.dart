@@ -25,7 +25,7 @@ abstract class Handler<T>
   ///
   /// If [current] can be compounded with [accumulator],
   /// return the **new compounded** operation (union of the two).
-  /// 
+  ///
   /// Otherwise, return `null`.
   Operation? compound(Operation accumulator, Operation current) => null;
 }

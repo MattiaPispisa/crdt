@@ -89,9 +89,8 @@ class CRDTFugueTextHandler extends Handler<FugueTextState> {
     }
 
     // Create items for batch delete
-    final items = targets
-        .map((nodeID) => _FugueDeleteItem(nodeID: nodeID))
-        .toList();
+    final items =
+        targets.map((nodeID) => _FugueDeleteItem(nodeID: nodeID)).toList();
 
     // Emit a single batch delete change
     doc.registerOperation(
