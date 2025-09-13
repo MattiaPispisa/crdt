@@ -677,9 +677,106 @@ void main() {
         expect(handler.value, ['Hello', 'World', 'Dart!']);
       });
 
-      // TODO(mattia): complex cache scenario with errors during transaction. Cache state must be invalidated.
+      test(
+          'should related external handler changes '
+          'invalidate the handlers cache', () {
+        final handler1 = _FakeCRDTListHandler(doc, 'error-handler-1')
+          ..useIncrementalCacheUpdate = true
+          ..value;
+        final handler2 = _FakeCRDTListHandler(doc, 'error-handler-2')
+          ..useIncrementalCacheUpdate = true
+          ..value;
 
-      // TODO(mattia): complex cache scenario without errors but external changes. Cache state must be invalidated only for affected handlers.
+        final otherDoc = CRDTDocument(peerId: PeerId.generate());
+        final otherHandler = _FakeCRDTListHandler(otherDoc, 'error-handler-1')
+          ..useIncrementalCacheUpdate = true
+          ..value;
+
+        // Initial state
+        expect(handler1._incrementedCount, 0);
+        expect(handler2._incrementedCount, 0);
+
+        // Perform operations that will succeed
+        handler1.insert(0, 'Hello'); // cache incremented
+        handler2.insert(0, 'World'); // cache incremented
+        otherHandler.insert(0, 'Other');
+        expect(handler1._incrementedCount, 1);
+        expect(handler2._incrementedCount, 1);
+
+        doc.runInTransaction<void>(() {
+          handler1.insert(1, 'Dart'); // cache incremented
+
+          // contains changes for handler1 so it's cache is invalidated
+          doc.importChanges(otherDoc.exportChanges());
+
+          handler2.insert(1, 'Flutter'); // cache incremented
+        });
+
+        handler1.insert(2, 'Test'); // cache not incremented
+        handler2.insert(2, 'Test2'); // cache incremented
+
+        // Cache should be invalidated, so incremental count should not increase
+        expect(handler1._incrementedCount, 2);
+        // value is computed from scratch
+        expect(
+          handler1.value,
+          containsAll(
+            ['Other', 'Dart', 'Test', 'Hello'],
+          ),
+        );
+        expect(handler2._incrementedCount, 3);
+      });
+
+      test(
+          'should external actions not applied to document '
+          'not affect the handlers cache', () {
+        final handler1 = _FakeCRDTListHandler(doc, 'external-handler-1')
+          ..useIncrementalCacheUpdate = true
+          ..value;
+        final handler2 = _FakeCRDTListHandler(doc, 'external-handler-2')
+          ..useIncrementalCacheUpdate = true
+          ..value;
+
+        // Initial state
+        expect(handler1._incrementedCount, 0);
+        expect(handler2._incrementedCount, 0);
+
+        // Perform initial operations
+        handler1.insert(0, 'Hello'); // cache incremented
+        handler2.insert(0, 'World');
+        expect(handler1._incrementedCount, 1);
+        expect(handler2._incrementedCount, 1);
+
+        // Import external changes in a transaction
+        expect(
+          () => doc.runInTransaction<void>(() {
+            // Perform local operations
+            handler1.insert(1, 'Dart'); // cache incremented
+            handler2.insert(1, 'Flutter');
+
+            final unexpectedDep = OperationId(
+              PeerId.generate(),
+              HybridLogicalClock(l: 9999999, c: 9999999),
+            );
+            doc.applyChange(
+              Change(
+                author: author,
+                id: OperationId(author, HybridLogicalClock(l: 1, c: 1)),
+                operation: TestOperation.fromHandler(handler1),
+                deps: {unexpectedDep},
+              ),
+            ); // throws an exception unrelated to handlers
+          }),
+          throwsA(isA<CrdtException>()),
+        );
+
+        handler1.insert(2, 'Test1'); // cache incremented
+        handler2.insert(2, 'Test2'); // cache incremented
+
+        expect(handler1._incrementedCount, 3);
+        expect(handler2._incrementedCount, 3);
+        expect(handler1.value, containsAll(['Hello', 'Dart', 'Test1']));
+      });
     });
 
     group('transaction', () {

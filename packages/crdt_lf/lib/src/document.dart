@@ -158,10 +158,7 @@ class CRDTDocument {
   /// [Change]s applied by external sources could not be incremental.
   /// So the affected handlers are invalidated,
   /// while others have their version updated.
-  ///
-  /// After the handlers are updated is emitted
-  /// an update request.
-  void _reactToAppliedExternalChange(Change change) {
+  void _updateCacheWithAppliedExternalChange(Change change) {
     for (final handler in _handlers.values) {
       if (handler._isAffectedByChange(change)) {
         handler.invalidateCache();
@@ -169,8 +166,6 @@ class CRDTDocument {
         handler._updateCachedVersion();
       }
     }
-
-    _emitUpdate([change]);
   }
 
   /// Register a [SnapshotProvider]
@@ -224,7 +219,8 @@ class CRDTDocument {
     final applied = _internalApplyChange(change);
 
     if (applied) {
-      _reactToAppliedExternalChange(change);
+      _updateCacheWithAppliedExternalChange(change);
+      _emitUpdate([change]);
     }
 
     return change;
@@ -296,7 +292,8 @@ class CRDTDocument {
   bool applyChange(Change change) {
     final applied = _internalApplyChange(change);
     if (applied) {
-      _reactToAppliedExternalChange(change);
+      _updateCacheWithAppliedExternalChange(change);
+      _emitUpdate([change]);
     }
     return applied;
   }
@@ -474,25 +471,23 @@ class CRDTDocument {
     final sorted = _topologicalSort(_neverReceived(changes));
 
     // Apply changes
-    var applied = 0;
+    final changedApplied = <Change>[];
     for (final change in sorted) {
       try {
         if (_internalApplyChange(change)) {
-          // TODO(mattia): set the handler affected by the change
-          applied++;
+          _updateCacheWithAppliedExternalChange(change);
+          changedApplied.add(change);
         }
       } catch (e) {
         // Skip changes that can't be applied
       }
     }
 
-    if (applied > 0) {
-      // TODO(mattia): invalidate only handlers that are affected by the changes
-      _invalidateHandlers();
+    if (changedApplied.isNotEmpty) {
       _emitUpdate();
     }
 
-    return applied;
+    return changedApplied.length;
   }
 
   /// Prunes the DAG and the change store up to the given version.
