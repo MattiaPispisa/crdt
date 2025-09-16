@@ -1,3 +1,8 @@
+## [0.2.1] - 2025-09-16
+
+### Changed
+- chore: update `crdt_lf` dependency to support version `2.0.0`
+
 ## [0.2.0] - 2025-08-18
 
 **Breaking changes**
