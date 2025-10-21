@@ -146,6 +146,19 @@ class CRDTFugueTextHandler extends Handler<FugueTextState> {
     );
   }
 
+  void change(String newText) {
+    final state = _cachedOrComputedState();
+    final diff = myersDiff(state._value, newText);
+
+    for (final segment in diff) {
+      if (segment.op == DiffOp.insert) {
+        insert(segment.newStart, segment.text);
+      } else if (segment.op == DiffOp.remove) {
+        delete(segment.oldStart, segment.text.length);
+      }
+    }
+  }
+
   /// Gets the current value of the text
   String get value {
     return _cachedOrComputedState()._value;
