@@ -246,7 +246,14 @@ List<DiffSegment> _coalesce(
   var ax = 0;
   var by = 0;
 
-  void push(DiffOp op, String text, int oldStart, int oldEnd, int newStart, int newEnd) {
+  void push(
+    DiffOp op,
+    String text,
+    int oldStart,
+    int oldEnd,
+    int newStart,
+    int newEnd,
+  ) {
     if (text.isEmpty) {
       return;
     }
@@ -274,7 +281,7 @@ List<DiffSegment> _coalesce(
     );
   }
 
-  for (final _Edit e in edits) {
+  for (final e in edits) {
     final x = e.x;
     final y = e.y;
     if (ax < x && by < y) {

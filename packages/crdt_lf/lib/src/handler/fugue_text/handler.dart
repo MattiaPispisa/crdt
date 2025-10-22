@@ -146,15 +146,49 @@ class CRDTFugueTextHandler extends Handler<FugueTextState> {
     );
   }
 
+  /// Changes the entire text to [newText] using the
+  /// [Myers diff algorithm](http://www.xmailserver.org/diff2.pdf).
+  ///
+  /// This method computes the differences between the current text
+  /// and [newText] using the [Myers diff algorithm](http://www.xmailserver.org/diff2.pdf),
+  /// then converts these differences into a series of
+  /// atomic [insert] and [delete] operations.
+  ///
+  /// Since this method may generate multiple operations, 
+  /// it is recommended to use it within a [CRDTDocument.runInTransaction] 
+  /// for better performance and atomicity.
+  ///
+  /// ## Example
+  /// ```dart
+  /// final text = CRDTFugueTextHandler(doc, 'text');
+  /// text.insert(0, 'Hello World');
+  ///
+  /// // Using change within a transaction
+  /// doc.runInTransaction(() {
+  ///   text.change('Hello Brave New World');
+  /// });
+  /// // Internally generates: delete(' '), insert(' Brave New ')
+  /// ```
   void change(String newText) {
     final state = _cachedOrComputedState();
     final diff = myersDiff(state._value, newText);
 
-    for (final segment in diff) {
-      if (segment.op == DiffOp.insert) {
-        insert(segment.newStart, segment.text);
-      } else if (segment.op == DiffOp.remove) {
-        delete(segment.oldStart, segment.text.length);
+    // Apply operations in reverse order to avoid index shifting
+    for (var i = diff.length - 1; i >= 0; i--) {
+      final segment = diff[i];
+
+      switch (segment.op) {
+        case DiffOp.equal:
+          // Nothing to do, text is already correct
+          break;
+        case DiffOp.insert:
+          // Insert new text at oldStart position
+          insert(segment.oldStart, segment.text);
+          break;
+        case DiffOp.remove:
+          // Remove text from oldStart to oldEnd
+          delete(segment.oldStart, segment.text.length);
+          break;
       }
     }
   }
