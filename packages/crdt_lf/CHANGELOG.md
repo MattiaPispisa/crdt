@@ -1,3 +1,12 @@
+## [2.1.0]
+
+### Added
+- Added `change` operation to `CRDTFugueTextHandler` and `CRDTTextHandler` [12](https://github.com/MattiaPispisa/crdt/issues/12)
+
+### Changed
+
+- chore: improved Fugue text handler change implementation
+
 ## [2.0.0] - 2025-09-16
 
 **Breaking changes**

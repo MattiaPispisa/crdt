@@ -91,6 +91,46 @@ void main() {
       expect(text.value, equals('Hello Worldiful'));
     });
 
+    test('change replaces entire text using Myers diff', () {
+      text
+        ..insert(0, 'Hello World')
+        ..change('Hello Brave New World');
+      expect(text.value, equals('Hello Brave New World'));
+    });
+
+    test('change handles complex text transformations', () {
+      text
+        ..insert(0, 'The quick brown fox jumps over the lazy dog')
+        ..change('The quick red fox leaped over the lazy cat');
+      expect(text.value, equals('The quick red fox leaped over the lazy cat'));
+    });
+
+    test('change works with empty string to text', () {
+      text.change('Hello World');
+      expect(text.value, equals('Hello World'));
+    });
+
+    test('change works with text to empty string', () {
+      text
+        ..insert(0, 'Hello World')
+        ..change('');
+      expect(text.value, equals(''));
+    });
+
+    test('change within transaction generates operations efficiently', () {
+      text.insert(0, 'ABC');
+      final initialChanges = doc.exportChanges().length;
+
+      doc.runInTransaction(() {
+        text.change('AXBYCZ');
+      });
+
+      final newChanges = doc.exportChanges().length;
+      expect(text.value, equals('AXBYCZ'));
+      // Should have generated insert operations for X, Y, Z
+      expect(newChanges, greaterThan(initialChanges));
+    });
+
     test('length returns correct text length', () {
       text.insert(0, 'Hello World');
       expect(text.length, equals(11));

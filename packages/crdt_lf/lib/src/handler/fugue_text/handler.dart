@@ -173,21 +173,23 @@ class CRDTFugueTextHandler extends Handler<FugueTextState> {
     final state = _cachedOrComputedState();
     final diff = myersDiff(state._value, newText);
 
-    // Apply operations in reverse order to avoid index shifting
-    for (var i = diff.length - 1; i >= 0; i--) {
-      final segment = diff[i];
-
+    // Track offset as text length changes during operations
+    var offset = 0;
+    
+    for (final segment in diff) {
       switch (segment.op) {
         case DiffOp.equal:
           // Nothing to do, text is already correct
           break;
         case DiffOp.insert:
-          // Insert new text at oldStart position
-          insert(segment.oldStart, segment.text);
+          // Insert new text at adjusted position
+          insert(segment.oldStart + offset, segment.text);
+          offset += segment.text.length;
           break;
         case DiffOp.remove:
-          // Remove text from oldStart to oldEnd
-          delete(segment.oldStart, segment.text.length);
+          // Remove text at adjusted position
+          delete(segment.oldStart + offset, segment.text.length);
+          offset -= segment.text.length;
           break;
       }
     }

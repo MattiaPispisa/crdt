@@ -61,6 +61,135 @@ void main() {
       },
     );
 
+    test('should change text', () {
+      final doc = CRDTDocument();
+      final handler = CRDTFugueTextHandler(doc, 'text1')
+        ..insert(0, 'Hello World')
+        ..change('Hello Brave New World');
+      expect(handler.value, 'Hello Brave New World');
+    });
+
+    test('should change text with complex transformations', () {
+      final doc = CRDTDocument();
+      final handler = CRDTFugueTextHandler(doc, 'text1')
+        ..insert(0, 'The quick brown fox jumps over the lazy dog')
+        ..change('The quick red fox leaped over the lazy cat');
+      expect(handler.value, 'The quick red fox leaped over the lazy cat');
+    });
+
+    test('should change from empty to text', () {
+      final doc = CRDTDocument();
+      final handler = CRDTFugueTextHandler(doc, 'text1')..change('Hello World');
+      expect(handler.value, 'Hello World');
+    });
+
+    test('should change from text to empty', () {
+      final doc = CRDTDocument();
+      final handler = CRDTFugueTextHandler(doc, 'text1')
+        ..insert(0, 'Hello World')
+        ..change('');
+      expect(handler.value, '');
+    });
+
+    test('should change text within transaction', () {
+      final doc = CRDTDocument();
+      final handler = CRDTFugueTextHandler(doc, 'text1')..insert(0, 'ABC');
+
+      doc.runInTransaction(() {
+        handler.change('AXBYCZ');
+      });
+
+      expect(handler.value, 'AXBYCZ');
+    });
+
+    test('should change text with unicode and emoji', () {
+      final doc = CRDTDocument();
+      final handler = CRDTFugueTextHandler(doc, 'text1')
+        ..insert(0, 'Hello 😀 World')
+        ..change('Hello 🎉 Beautiful 🌍 World');
+      expect(handler.value, 'Hello 🎉 Beautiful 🌍 World');
+    });
+
+    test('should change multiline text', () {
+      final doc = CRDTDocument();
+      final handler = CRDTFugueTextHandler(doc, 'text1')
+        ..insert(0, 'Line 1\nLine 2\nLine 3')
+        ..change('Line 1\nModified Line 2\nLine 3\nLine 4');
+      expect(handler.value, 'Line 1\nModified Line 2\nLine 3\nLine 4');
+    });
+
+    test('should change text and sync correctly between peers', () {
+      final doc1 = CRDTDocument();
+      final doc2 = CRDTDocument();
+      final handler1 = CRDTFugueTextHandler(doc1, 'text1');
+      final handler2 = CRDTFugueTextHandler(doc2, 'text1');
+
+      // Initial state
+      handler1.insert(0, 'Hello');
+      doc2.importChanges(doc1.exportChanges());
+      expect(handler2.value, 'Hello');
+
+      // Use change on doc1
+      handler1.change('Hello World');
+      doc2.importChanges(doc1.exportChanges());
+
+      expect(handler1.value, 'Hello World');
+      expect(handler2.value, 'Hello World');
+    });
+
+    test('should handle concurrent changes from different peers', () {
+      final doc1 = CRDTDocument();
+      final doc2 = CRDTDocument();
+      final handler1 = CRDTFugueTextHandler(doc1, 'text1');
+      final handler2 = CRDTFugueTextHandler(doc2, 'text1');
+
+      // Initial state
+      handler1.insert(0, 'ABC');
+      doc2.importChanges(doc1.exportChanges());
+
+      // Concurrent changes
+      handler1.change('AXBC'); // doc1: A -> AX
+      handler2.change('AYBC'); // doc2: A -> AY
+
+      // Sync
+      doc2.importChanges(doc1.exportChanges());
+      doc1.importChanges(doc2.exportChanges());
+
+      // Both should converge
+      expect(handler1.value, handler2.value);
+      expect(handler1.value, contains('X'));
+      expect(handler1.value, contains('Y'));
+    });
+
+    test('should change preserves Fugue ordering', () {
+      final doc1 = CRDTDocument();
+      final doc2 = CRDTDocument();
+      final handler1 = CRDTFugueTextHandler(doc1, 'text1');
+      final handler2 = CRDTFugueTextHandler(doc2, 'text1');
+
+      // Initial: both have "Hello"
+      handler1.insert(0, 'Hello');
+      doc2.importChanges(doc1.exportChanges());
+
+      // Doc1 changes to "Hello World"
+      handler1.change('Hello World');
+
+      // Doc2 concurrently inserts "Beautiful " after "Hello"
+      handler2.insert(5, ' Beautiful');
+
+      // Sync
+      final changes1 = doc1.exportChanges();
+      final changes2 = doc2.exportChanges();
+      doc2.importChanges(changes1);
+      doc1.importChanges(changes2);
+
+      // Both should converge
+      expect(handler1.value, handler2.value);
+      // Should contain both modifications
+      expect(handler1.value, contains('Beautiful'));
+      expect(handler1.value, contains('World'));
+    });
+
     test('should handle multiple operations', () {
       final doc = CRDTDocument();
       final handler = CRDTFugueTextHandler(doc, 'text1')
@@ -360,6 +489,159 @@ void main() {
         expect(text1.value, equals(text2.value));
         expect(text2.value, equals(text3.value));
         expect(text1.value.length, equals(4));
+      },
+    );
+
+    test(
+      'complex scenario with 3 peers using concurrent change operations',
+      () {
+        // Setup
+        final peerId1 = PeerId.generate();
+        final peerId2 = PeerId.generate();
+        final peerId3 = PeerId.generate();
+
+        final doc1 = CRDTDocument(peerId: peerId1);
+        final doc2 = CRDTDocument(peerId: peerId2);
+        final doc3 = CRDTDocument(peerId: peerId3);
+
+        const handlerId = 'complex-change-text';
+        final text1 = CRDTFugueTextHandler(doc1, handlerId);
+        final text2 = CRDTFugueTextHandler(doc2, handlerId);
+        final text3 = CRDTFugueTextHandler(doc3, handlerId);
+
+        // === Phase 1: Initial state ===
+        // All peers start with the same base text
+        text1.insert(0, 'Hello World');
+
+        // Sync initial state to all peers
+        final initialChanges = doc1.exportChanges();
+        doc2.importChanges(initialChanges);
+        doc3.importChanges(initialChanges);
+
+        expect(text1.value, 'Hello World');
+        expect(text2.value, 'Hello World');
+        expect(text3.value, 'Hello World');
+
+        // === Phase 2: Concurrent changes using change() ===
+        // Each peer modifies the text differently using change()
+        text1.change('Hello Beautiful World'); // Adds "Beautiful"
+        text2.change('Hello Amazing World'); // Adds "Amazing"
+        text3.change('Hello World!'); // Adds "!"
+
+        // Before sync, each peer has different content
+        expect(text1.value, 'Hello Beautiful World');
+        expect(text2.value, 'Hello Amazing World');
+        expect(text3.value, 'Hello World!');
+
+        // === Phase 3: Partial sync (simulating network delays) ===
+        // Only doc1 and doc2 sync initially
+        var changes1 = doc1.exportChanges();
+        var changes2 = doc2.exportChanges();
+
+        doc1.importChanges(changes2);
+        doc2.importChanges(changes1);
+
+        // doc1 and doc2 should converge
+        expect(text1.value, equals(text2.value));
+        expect(text1.value, contains('Beautiful'));
+        expect(text1.value, contains('Amazing'));
+
+        // doc3 is still out of sync
+        expect(text3.value, isNot(equals(text1.value)));
+
+        // === Phase 4: Full sync including doc3 ===
+        var changes3 = doc3.exportChanges();
+        changes1 = doc1.exportChanges();
+
+        doc3.importChanges([...changes1, ...changes2]);
+        doc1.importChanges(changes3);
+        doc2.importChanges(changes3);
+
+        // All peers should converge
+        expect(text1.value, equals(text2.value));
+        expect(text2.value, equals(text3.value));
+        expect(text1.value, contains('Beautiful'));
+        expect(text1.value, contains('Amazing'));
+        expect(text1.value, contains('!'));
+
+        final convergedValue = text1.value;
+
+        // === Phase 5: More concurrent changes ===
+        // Use change() with more complex transformations
+        doc1.runInTransaction(() {
+          text1.change('$convergedValue Greetings');
+        });
+
+        doc2.runInTransaction(() {
+          text2.change('Wow! $convergedValue');
+        });
+
+        // doc3 makes a more dramatic change
+        text3.change('Completely New Text');
+
+        // === Phase 6: Sync all changes again ===
+        changes1 = doc1.exportChanges();
+        changes2 = doc2.exportChanges();
+        changes3 = doc3.exportChanges();
+
+        doc1.importChanges([...changes2, ...changes3]);
+        doc2.importChanges([...changes1, ...changes3]);
+        doc3.importChanges([...changes1, ...changes2]);
+
+        // All should converge again
+        expect(text1.value, equals(text2.value));
+        expect(text2.value, equals(text3.value));
+
+        // All modifications should be present
+        final finalValue = text1.value;
+        expect(finalValue, contains('Greetings'));
+        expect(finalValue, contains('Wow!'));
+        expect(finalValue, contains('Completely New Text'));
+
+        // === Phase 7: Snapshot and post-snapshot changes ===
+        final snapshot1 = doc1.takeSnapshot();
+
+        // Verify snapshot
+        expect(snapshot1.data[handlerId], isNotNull);
+        expect(doc2.shouldApplySnapshot(snapshot1), isTrue);
+        expect(doc3.shouldApplySnapshot(snapshot1), isTrue);
+
+        doc2.importSnapshot(snapshot1);
+        doc3.importSnapshot(snapshot1);
+
+        // All should still be in sync
+        expect(text1.value, equals(text2.value));
+        expect(text2.value, equals(text3.value));
+
+        // === Phase 8: Post-snapshot concurrent changes ===
+        final currentText = text1.value;
+
+        text1.change('$currentText [peer1]');
+        text2.change('$currentText [peer2]');
+        text3.change('$currentText [peer3]');
+
+        // Final sync
+        changes1 = doc1.exportChanges();
+        changes2 = doc2.exportChanges();
+        changes3 = doc3.exportChanges();
+
+        expect(changes1, isNotEmpty);
+        expect(changes2, isNotEmpty);
+        expect(changes3, isNotEmpty);
+
+        doc1.importChanges([...changes2, ...changes3]);
+        doc2.importChanges([...changes1, ...changes3]);
+        doc3.importChanges([...changes1, ...changes2]);
+
+        // Final convergence
+        expect(text1.value, equals(text2.value));
+        expect(text2.value, equals(text3.value));
+
+        // All peer markers should be present
+        final ultimateValue = text1.value;
+        expect(ultimateValue, contains('[peer1]'));
+        expect(ultimateValue, contains('[peer2]'));
+        expect(ultimateValue, contains('[peer3]'));
       },
     );
 
