@@ -2,6 +2,7 @@
 
 ### Added
 - Added `change` operation to `CRDTFugueTextHandler` and `CRDTTextHandler` [12](https://github.com/MattiaPispisa/crdt/issues/12)
+- Added `CRDTORMapHandler` [41](https://github.com/MattiaPispisa/crdt/issues/41)
 
 ### Changed
 
