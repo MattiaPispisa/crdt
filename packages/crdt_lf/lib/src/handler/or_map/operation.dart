@@ -34,7 +34,7 @@ class _ORMapPutOperation<K, V> extends Operation {
     Handler<dynamic> handler, {
     required K key,
     required V value,
-    required String tag,
+    required ORMapTag tag,
   }) {
     return _ORMapPutOperation<K, V>(
       id: handler.id,
@@ -51,13 +51,13 @@ class _ORMapPutOperation<K, V> extends Operation {
       type: OperationType.fromPayload(payload['type'] as String),
       key: payload['key'] as K,
       value: payload['value'] as V,
-      tag: payload['tag'] as String,
+      tag: ORMapTag.parse(payload['tag'] as String),
     );
   }
 
   final K key;
   final V value;
-  final String tag;
+  final ORMapTag tag;
 
   @override
   Map<String, dynamic> toPayload() {
@@ -65,7 +65,7 @@ class _ORMapPutOperation<K, V> extends Operation {
       ...super.toPayload(),
       'key': key,
       'value': value,
-      'tag': tag,
+      'tag': tag.toString(),
     };
   }
 }
@@ -84,7 +84,7 @@ class _ORMapRemoveOperation<K, V> extends Operation {
   factory _ORMapRemoveOperation.fromHandler(
     Handler<dynamic> handler, {
     required K key,
-    required Set<String> tags,
+    required Set<ORMapTag> tags,
   }) {
     return _ORMapRemoveOperation<K, V>(
       id: handler.id,
@@ -101,13 +101,13 @@ class _ORMapRemoveOperation<K, V> extends Operation {
       id: payload['id'] as String,
       type: OperationType.fromPayload(payload['type'] as String),
       key: payload['key'] as K,
-      tags: raw.map((e) => e as String).toSet(),
+      tags: raw.map((e) => ORMapTag.parse(e as String)).toSet(),
       removeAll: (payload['removeAll'] as bool?) ?? false,
     );
   }
 
   final K key;
-  final Set<String> tags;
+  final Set<ORMapTag> tags;
   final bool removeAll;
 
   @override
@@ -115,7 +115,7 @@ class _ORMapRemoveOperation<K, V> extends Operation {
     return {
       ...super.toPayload(),
       'key': key,
-      'tags': tags.toList(),
+      'tags': tags.map((t) => t.toString()).toList(),
       'removeAll': removeAll,
     };
   }

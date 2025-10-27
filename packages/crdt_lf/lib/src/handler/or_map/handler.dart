@@ -1,4 +1,5 @@
 import 'package:crdt_lf/crdt_lf.dart';
+import 'package:hlc_dart/hlc_dart.dart';
 
 part 'operation.dart';
 
@@ -36,8 +37,11 @@ class CRDTORMapHandler<K, V> extends Handler<ORMapState<K, V>> {
   String get id => _id;
 
   /// Obtains a unique tag for an operation
-  String _tag() {
-    return '${doc.peerId}@${doc.hlc}.${doc.peerId}';
+  ORMapTag _tag() {
+    return ORMapTag(
+      peerId: doc.peerId,
+      hlc: doc.hlc,
+    );
   }
 
   /// Puts [value] for [key] in the map, producing a unique tag.
@@ -107,10 +111,10 @@ class CRDTORMapHandler<K, V> extends Handler<ORMapState<K, V>> {
   /// Computes the tag state by replaying the history.
   ORMapState<K, V> _computeState() {
     final state = ORMapState<K, V>._(
-      live: <K, Map<V, Set<String>>>{},
-      all: <K, Map<V, Set<String>>>{},
+      live: <K, Set<ORMapEntry<V>>>{},
+      all: <K, Set<ORMapEntry<V>>>{},
       snapshotOnly: <K, V>{},
-      tombstones: <String>{},
+      tombstones: <ORMapTag>{},
     );
 
     final snap = lastSnapshot();
@@ -173,18 +177,14 @@ class CRDTORMapHandler<K, V> extends Handler<ORMapState<K, V>> {
     final value = operation.value;
     final tag = operation.tag;
 
-    // Register tag as seen (all) for this key-value pair
-    state._all
-        .putIfAbsent(key, () => <V, Set<String>>{})
-        .putIfAbsent(value, () => <String>{})
-        .add(tag);
+    final entry = ORMapEntry<V>(value: value, tag: tag);
+
+    // Register entry in all (seen)
+    state._all.putIfAbsent(key, () => <ORMapEntry<V>>{}).add(entry);
 
     // Add to live if not tomb-stoned yet
     if (!state._tombstones.contains(tag)) {
-      state._live
-          .putIfAbsent(key, () => <V, Set<String>>{})
-          .putIfAbsent(value, () => <String>{})
-          .add(tag);
+      state._live.putIfAbsent(key, () => <ORMapEntry<V>>{}).add(entry);
     }
 
     // A concrete put overrides snapshot-only presence for this key
@@ -205,15 +205,10 @@ class CRDTORMapHandler<K, V> extends Handler<ORMapState<K, V>> {
     // Tombstone all provided tags for the key
     state._tombstones.addAll(operation.tags);
 
-    // Remove tombstoned tags from live entries for this key
+    // Remove entries with tomb-stoned tags from live
     final liveForKey = state._live[key];
     if (liveForKey != null) {
-      for (final valueEntry in liveForKey.entries.toList()) {
-        valueEntry.value.removeWhere(operation.tags.contains);
-        if (valueEntry.value.isEmpty) {
-          liveForKey.remove(valueEntry.key);
-        }
-      }
+      liveForKey.removeWhere((entry) => operation.tags.contains(entry.tag));
       if (liveForKey.isEmpty) {
         state._live.remove(key);
       }
@@ -239,9 +234,9 @@ class CRDTORMapHandler<K, V> extends Handler<ORMapState<K, V>> {
 
 /// State of the [CRDTORMapHandler]
 class ORMapState<K, V> {
-  /// - [_live]: current non-tomb-stoned tags per key-value pair
-  /// (key is present if it has at least one live tag for some value)
-  /// - [_all]: all tags ever observed per key-value pair
+  /// - [_live]: current non-tomb-stoned entries (value, tag) per key
+  /// (key is present if it has at least one live entry)
+  /// - [_all]: all entries ever observed per key
   /// (useful for computing default removals)
   /// - [_snapshotOnly]: key-value pairs seeded from snapshot
   /// without any concrete put tags yet
@@ -249,10 +244,10 @@ class ORMapState<K, V> {
   /// so far while replaying history.
   /// - [_state]: the current state of the OR-Map
   ORMapState._({
-    required Map<K, Map<V, Set<String>>> live,
-    required Map<K, Map<V, Set<String>>> all,
+    required Map<K, Set<ORMapEntry<V>>> live,
+    required Map<K, Set<ORMapEntry<V>>> all,
     required Map<K, V> snapshotOnly,
-    required Set<String> tombstones,
+    required Set<ORMapTag> tombstones,
   })  : _tombstones = tombstones,
         _snapshotOnly = snapshotOnly,
         _all = all,
@@ -260,22 +255,16 @@ class ORMapState<K, V> {
 
   /// Creates a deep copy of the tag state
   ORMapState<K, V> _deepCopy() {
-    final live = <K, Map<V, Set<String>>>{
+    final live = <K, Set<ORMapEntry<V>>>{
       for (final entry in _live.entries)
-        entry.key: {
-          for (final valueEntry in entry.value.entries)
-            valueEntry.key: Set<String>.from(valueEntry.value),
-        },
+        entry.key: Set<ORMapEntry<V>>.from(entry.value),
     };
-    final all = <K, Map<V, Set<String>>>{
+    final all = <K, Set<ORMapEntry<V>>>{
       for (final entry in _all.entries)
-        entry.key: {
-          for (final valueEntry in entry.value.entries)
-            valueEntry.key: Set<String>.from(valueEntry.value),
-        },
+        entry.key: Set<ORMapEntry<V>>.from(entry.value),
     };
     final snapshotOnly = <K, V>{..._snapshotOnly};
-    final tombstones = <String>{..._tombstones};
+    final tombstones = <ORMapTag>{..._tombstones};
 
     return ORMapState<K, V>._(
       live: live,
@@ -285,62 +274,51 @@ class ORMapState<K, V> {
     );
   }
 
-  /// Returns all tags for a given key (across all values)
-  Set<String> _allTagsForKey(K key) {
-    final result = <String>{};
+  /// Returns all tags for a given key (across all entries)
+  Set<ORMapTag> _allTagsForKey(K key) {
     final allForKey = _all[key];
-    if (allForKey != null) {
-      for (final tags in allForKey.values) {
-        result.addAll(tags);
-      }
+    if (allForKey == null) {
+      return <ORMapTag>{};
     }
-    return result;
+    return allForKey.map((entry) => entry.tag).toSet();
   }
 
-  /// The live tags per key-value pair
-  final Map<K, Map<V, Set<String>>> _live;
+  /// The live entries per key
+  final Map<K, Set<ORMapEntry<V>>> _live;
 
-  /// All tags per key-value pair
-  final Map<K, Map<V, Set<String>>> _all;
+  /// All entries per key
+  final Map<K, Set<ORMapEntry<V>>> _all;
 
   /// Snapshot-only key-value pairs
   final Map<K, V> _snapshotOnly;
 
   /// The tombstones
-  final Set<String> _tombstones;
+  final Set<ORMapTag> _tombstones;
 
   /// The state of the OR-Map.
-  /// For each key with live tags, we pick the value with the
-  /// lexicographically highest tag (for deterministic conflict resolution).
+  /// For each key with live entries, we pick the entry with the
+  /// highest tag (by HLC, then PeerId) for deterministic conflict resolution.
   Map<K, V> get _state {
-    final result = <K, V>{};
-
-    // Add snapshot-only entries
-    result.addAll(_snapshotOnly);
+    final result = <K, V>{}
+      // Add snapshot-only entries
+      ..addAll(_snapshotOnly);
 
     // Override with live entries
     for (final keyEntry in _live.entries) {
       final key = keyEntry.key;
-      final valuesWithTags = keyEntry.value;
+      final entries = keyEntry.value;
 
-      // Find the value with the highest tag lexicographically
-      String? highestTag;
-      V? valueForHighestTag;
+      // Find the entry with the highest tag (by HLC, then PeerId)
+      ORMapEntry<V>? winningEntry;
 
-      for (final valueEntry in valuesWithTags.entries) {
-        final value = valueEntry.key;
-        final tags = valueEntry.value;
-
-        for (final tag in tags) {
-          if (highestTag == null || tag.compareTo(highestTag) > 0) {
-            highestTag = tag;
-            valueForHighestTag = value;
-          }
+      for (final entry in entries) {
+        if (winningEntry == null || entry.tag.compareTo(winningEntry.tag) > 0) {
+          winningEntry = entry;
         }
       }
 
-      if (valueForHighestTag != null) {
-        result[key] = valueForHighestTag;
+      if (winningEntry != null) {
+        result[key] = winningEntry.value;
       }
     }
 
@@ -348,3 +326,85 @@ class ORMapState<K, V> {
   }
 }
 
+/// Entry in the OR-Map representing a (value, tag) pair
+class ORMapEntry<V> {
+  /// Creates an OR-Map entry
+  const ORMapEntry({
+    required this.value,
+    required this.tag,
+  });
+
+  /// The value of this entry
+  final V value;
+
+  /// The unique tag for this entry
+  final ORMapTag tag;
+
+  @override
+  bool operator ==(Object other) {
+    if (identical(this, other)) {
+      return true;
+    }
+    return other is ORMapEntry<V> && other.value == value && other.tag == tag;
+  }
+
+  @override
+  int get hashCode => Object.hash(value, tag);
+
+  @override
+  String toString() => 'ORMapEntry(value: $value, tag: $tag)';
+}
+
+/// Tag for OR-Map entries, combining HLC and PeerId for proper ordering.
+/// Comparison is done first by HLC (causal order),
+/// then by PeerId (deterministic).
+class ORMapTag implements Comparable<ORMapTag> {
+  /// Creates an OR-Map tag
+  const ORMapTag({
+    required this.hlc,
+    required this.peerId,
+  });
+
+  /// Parses a tag from string format "peerId@hlc"
+  factory ORMapTag.parse(String tag) {
+    final parts = tag.split('@');
+    if (parts.length != 2) {
+      throw FormatException('Invalid tag format: $tag');
+    }
+    return ORMapTag(
+      peerId: PeerId.parse(parts[0]),
+      hlc: HybridLogicalClock.parse(parts[1]),
+    );
+  }
+
+  /// The HLC timestamp
+  final HybridLogicalClock hlc;
+
+  /// The peer ID
+  final PeerId peerId;
+
+  @override
+  int compareTo(ORMapTag other) {
+    // First compare by HLC (causal order)
+    final hlcComparison = hlc.compareTo(other.hlc);
+    if (hlcComparison != 0) {
+      return hlcComparison;
+    }
+    // If HLC is equal, compare by PeerId (deterministic)
+    return peerId.compareTo(other.peerId);
+  }
+
+  @override
+  bool operator ==(Object other) {
+    if (identical(this, other)) {
+      return true;
+    }
+    return other is ORMapTag && other.hlc == hlc && other.peerId == peerId;
+  }
+
+  @override
+  int get hashCode => Object.hash(hlc, peerId);
+
+  @override
+  String toString() => '$peerId@$hlc';
+}

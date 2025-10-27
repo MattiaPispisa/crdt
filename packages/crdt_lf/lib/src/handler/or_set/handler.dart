@@ -36,7 +36,7 @@ class CRDTORSetHandler<T> extends Handler<ORSetState<T>> {
 
   /// Obtains a unique tag for an operation
   String _tag() {
-    return '${doc.peerId}@${doc.hlc}.${doc.peerId}';
+    return '${doc.peerId}@${doc.hlc}';
   }
 
   /// Adds [value] to the set producing a unique tag, returned to the caller.
