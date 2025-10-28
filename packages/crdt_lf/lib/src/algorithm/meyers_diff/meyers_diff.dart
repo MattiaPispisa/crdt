@@ -322,6 +322,7 @@ List<DiffSegment> _coalesce(
     }
   }
 
+  // Handle any remaining characters after all edits.
   if (ax < a.length && by < b.length) {
     push(
       DiffOp.equal,

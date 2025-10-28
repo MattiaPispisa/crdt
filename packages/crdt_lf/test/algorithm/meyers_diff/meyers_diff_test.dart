@@ -4,6 +4,11 @@ import 'package:test/test.dart';
 void main() {
   group('myersDiff', () {
     group('segments result', () {
+      test('both strings empty', () {
+        final result = myersDiff('', '');
+        expect(result, isEmpty);
+      });
+
       test('identical strings', () {
         final result = myersDiff('hello', 'hello');
         expect(result.length, 1);
@@ -106,6 +111,207 @@ void main() {
             newEnd: 9,
           ),
         ]);
+      });
+
+      test('remove in middle', () {
+        // Test case: "abcXYZdef" → "abcdef" removes XYZ in the middle
+        final result = myersDiff('abcXYZdef', 'abcdef');
+        expect(result, const [
+          DiffSegment(
+            op: DiffOp.equal,
+            text: 'abc',
+            oldStart: 0,
+            oldEnd: 3,
+            newStart: 0,
+            newEnd: 3,
+          ),
+          DiffSegment(
+            op: DiffOp.remove,
+            text: 'XYZ',
+            oldStart: 3,
+            oldEnd: 6,
+            newStart: 3,
+            newEnd: 3,
+          ),
+          DiffSegment(
+            op: DiffOp.equal,
+            text: 'def',
+            oldStart: 6,
+            oldEnd: 9,
+            newStart: 3,
+            newEnd: 6,
+          ),
+        ]);
+      });
+
+      test('insert in middle', () {
+        // Test case: "abcdef" → "abcXYZdef" inserts XYZ in the middle
+        final result = myersDiff('abcdef', 'abcXYZdef');
+        expect(result, const [
+          DiffSegment(
+            op: DiffOp.equal,
+            text: 'abc',
+            oldStart: 0,
+            oldEnd: 3,
+            newStart: 0,
+            newEnd: 3,
+          ),
+          DiffSegment(
+            op: DiffOp.insert,
+            text: 'XYZ',
+            oldStart: 3,
+            oldEnd: 3,
+            newStart: 3,
+            newEnd: 6,
+          ),
+          DiffSegment(
+            op: DiffOp.equal,
+            text: 'def',
+            oldStart: 3,
+            oldEnd: 6,
+            newStart: 6,
+            newEnd: 9,
+          ),
+        ]);
+      });
+
+      test('multiple consecutive insertions', () {
+        const oldText = 'ac';
+        const newText = 'aXYbc';
+        final result = myersDiff(oldText, newText);
+
+        // Should have equal 'a', insert 'XY', insert/equal 'b', equal 'c'
+        // or could be coalesced differently depending on algorithm
+        expect(result.any((s) => s.op == DiffOp.insert), isTrue);
+        expect(result.any((s) => s.op == DiffOp.equal), isTrue);
+
+        // Verify reconstruction
+        final reconstructed = result
+            .where((s) => s.op == DiffOp.insert || s.op == DiffOp.equal)
+            .map((s) => s.text)
+            .join();
+        expect(reconstructed, newText);
+      });
+
+      test('multiple consecutive deletions', () {
+        const oldText = 'aXYZbc';
+        const newText = 'ac';
+        final result = myersDiff(oldText, newText);
+
+        // Should have equal 'a', remove 'XYZ', remove 'b', equal 'c'
+        // or could be coalesced differently
+        expect(result.any((s) => s.op == DiffOp.remove), isTrue);
+        expect(result.any((s) => s.op == DiffOp.equal), isTrue);
+
+        // Verify all removes
+        final allRemoved = result
+            .where((s) => s.op == DiffOp.remove)
+            .map((s) => s.text)
+            .join();
+        expect(allRemoved, contains('XYZ'));
+      });
+
+      test('single character substitution at start', () {
+        // This pattern can force edits early with equal chars remaining
+        const oldText = 'XABCD';
+        const newText = 'YABCD';
+        final result = myersDiff(oldText, newText);
+
+        expect(result.any((s) => s.op == DiffOp.remove), isTrue);
+        expect(result.any((s) => s.op == DiffOp.insert), isTrue);
+        expect(result.any((s) => s.op == DiffOp.equal), isTrue);
+
+        // Verify reconstruction
+        final reconstructed = result
+            .where((s) => s.op == DiffOp.insert || s.op == DiffOp.equal)
+            .map((s) => s.text)
+            .join();
+        expect(reconstructed, newText);
+      });
+
+      test('alternating pattern to exercise coalesce branches', () {
+        // Pattern: ABABABAB -> ACACAC (removes B's, keeps/changes A's)
+        const oldText = 'ABABABAB';
+        const newText = 'ACACAC';
+        final result = myersDiff(oldText, newText);
+
+        expect(result.isNotEmpty, isTrue);
+
+        // Verify reconstruction
+        final reconstructed = result
+            .where((s) => s.op == DiffOp.insert || s.op == DiffOp.equal)
+            .map((s) => s.text)
+            .join();
+        expect(reconstructed, newText);
+      });
+
+      test('complex pattern with multiple edits', () {
+        const oldText = 'aXbYcZd';
+        const newText = 'aPbQcRd';
+        final result = myersDiff(oldText, newText);
+
+        expect(result.isNotEmpty, isTrue);
+
+        // Verify reconstruction
+        final reconstructed = result
+            .where((s) => s.op == DiffOp.insert || s.op == DiffOp.equal)
+            .map((s) => s.text)
+            .join();
+        expect(reconstructed, newText);
+      });
+
+      test('pattern with only first char different', () {
+        const oldText = 'Xabc';
+        const newText = 'Yabc';
+        final result = myersDiff(oldText, newText);
+
+        expect(result.isNotEmpty, isTrue);
+
+        final reconstructed = result
+            .where((s) => s.op == DiffOp.insert || s.op == DiffOp.equal)
+            .map((s) => s.text)
+            .join();
+        expect(reconstructed, newText);
+      });
+
+      test('very short strings with single edit', () {
+        const oldText = 'ab';
+        const newText = 'xb';
+        final result = myersDiff(oldText, newText);
+
+        expect(result.isNotEmpty, isTrue);
+
+        final reconstructed = result
+            .where((s) => s.op == DiffOp.insert || s.op == DiffOp.equal)
+            .map((s) => s.text)
+            .join();
+        expect(reconstructed, newText);
+      });
+
+      test('single char strings', () {
+        // Edge case with minimal strings
+        const oldText = 'a';
+        const newText = 'b';
+        final result = myersDiff(oldText, newText);
+
+        expect(result.length, 2); // Remove 'a', insert 'b'
+        expect(result[0].op, DiffOp.remove);
+        expect(result[1].op, DiffOp.insert);
+      });
+
+      test('empty removal pattern', () {
+        // Test with strings where removal leaves empty
+        const oldText = 'XY';
+        const newText = 'Y';
+        final result = myersDiff(oldText, newText);
+
+        expect(result.isNotEmpty, isTrue);
+
+        final reconstructed = result
+            .where((s) => s.op == DiffOp.insert || s.op == DiffOp.equal)
+            .map((s) => s.text)
+            .join();
+        expect(reconstructed, newText);
       });
 
       test('large complex unicode and multi-line text', () {
@@ -355,6 +561,59 @@ void main() {
 
         _verifyContiguous(diffs, oldText.length, newText.length);
       });
+    });
+  });
+
+  group('DiffSegment', () {
+    test('equality and hashCode', () {
+      const seg1 = DiffSegment(
+        op: DiffOp.equal,
+        text: 'hello',
+        oldStart: 0,
+        oldEnd: 5,
+        newStart: 0,
+        newEnd: 5,
+      );
+      const seg2 = DiffSegment(
+        op: DiffOp.equal,
+        text: 'hello',
+        oldStart: 0,
+        oldEnd: 5,
+        newStart: 0,
+        newEnd: 5,
+      );
+      const seg3 = DiffSegment(
+        op: DiffOp.insert,
+        text: 'hello',
+        oldStart: 0,
+        oldEnd: 5,
+        newStart: 0,
+        newEnd: 5,
+      );
+
+      // Test equality
+      expect(seg1, equals(seg2));
+      expect(seg1, isNot(equals(seg3)));
+
+      // Test hashCode consistency
+      expect(seg1.hashCode, equals(seg2.hashCode));
+      // Different segments should (likely) have different hashCodes
+      expect(seg1.hashCode, isNot(equals(seg3.hashCode)));
+    });
+
+    test('toString format', () {
+      const seg = DiffSegment(
+        op: DiffOp.equal,
+        text: 'test',
+        oldStart: 0,
+        oldEnd: 4,
+        newStart: 0,
+        newEnd: 4,
+      );
+      final str = seg.toString();
+      expect(str, contains('DiffSegment'));
+      expect(str, contains('equal'));
+      expect(str, contains('test'));
     });
   });
 

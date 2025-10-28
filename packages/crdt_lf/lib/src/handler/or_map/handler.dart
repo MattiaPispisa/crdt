@@ -350,9 +350,6 @@ class ORMapEntry<V> {
 
   @override
   int get hashCode => Object.hash(value, tag);
-
-  @override
-  String toString() => 'ORMapEntry(value: $value, tag: $tag)';
 }
 
 /// Tag for OR-Map entries, combining HLC and PeerId for proper ordering.
