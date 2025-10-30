@@ -4,7 +4,7 @@ homepage: https://mattiapispisa.github.io/
 repository: https://github.com/MattiaPispisa/crdt/tree/main/packages/crdt_lf
 topics: [crdt, local-first, fugue, hlc]
 
-version: 2.0.0
+version: 2.1.0
 
 environment:
   sdk: ">=2.17.0 <4.0.0"
