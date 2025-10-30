@@ -85,8 +85,8 @@ class CRDTORSetHandler<T> extends Handler<ORSetState<T>> {
 
   /// Returns the current state for snapshotting
   @override
-  Set<T> getSnapshotState() {
-    return value;
+  List<T> getSnapshotState() {
+    return value.toList();
   }
 
   /// Computes the tag state by replaying the history.
@@ -105,7 +105,7 @@ class CRDTORSetHandler<T> extends Handler<ORSetState<T>> {
     // If a prior snapshot contained values for this handler,
     // we treat them as present without tags (snapshot-only) until changes say
     // otherwise.
-    if (snap is Set<dynamic> && snap.every((e) => e is T)) {
+    if (snap is List<dynamic> && snap.every((e) => e is T)) {
       for (final v in snap.cast<T>()) {
         state._snapshotOnly.add(v);
       }
