@@ -188,7 +188,8 @@ void main() {
           reason: 'Second list item should be "b"',
         );
 
-        // Verify CRDTMapHandler data with custom objects was correctly deserialized
+        // Verify CRDTMapHandler data with custom objects was correctly 
+        // deserialized
         final newMap = CRDTMapHandler<ObjectValue>(newDocument, 'map');
         expect(
           newMap.value,
@@ -725,7 +726,8 @@ void main() {
         expect(
           snapshotStorage.containsSnapshot(snapshot2.id),
           isTrue,
-          reason: 'Snapshot2 should still be in storage after snapshot1 deletion',
+          reason:
+              'Snapshot2 should still be in storage after snapshot1 deletion',
         );
         expect(
           snapshotStorage.getSnapshot(snapshot2.id),

@@ -120,4 +120,3 @@ class _ORMapRemoveOperation<K, V> extends Operation {
     };
   }
 }
-

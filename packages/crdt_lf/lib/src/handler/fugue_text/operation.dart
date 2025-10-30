@@ -52,7 +52,8 @@ class _FugueTextInsertOperation extends Operation {
       ),
       items: (payload['items'] as List)
           .map(
-            (e) => _FugueInsertItem.fromJson(Map<String, dynamic>.from(e as Map)),
+            (e) =>
+                _FugueInsertItem.fromJson(Map<String, dynamic>.from(e as Map)),
           )
           .toList(),
     );
@@ -133,7 +134,8 @@ class _FugueTextDeleteOperation extends Operation {
       type: OperationType.fromPayload(payload['type'] as String),
       items: (payload['items'] as List)
           .map(
-            (e) => _FugueDeleteItem.fromJson(Map<String, dynamic>.from(e as Map)),
+            (e) =>
+                _FugueDeleteItem.fromJson(Map<String, dynamic>.from(e as Map)),
           )
           .toList(),
     );
@@ -198,7 +200,8 @@ class _FugueTextUpdateOperation extends Operation {
       type: OperationType.fromPayload(payload['type'] as String),
       items: (payload['items'] as List)
           .map(
-            (e) => _FugueUpdateItem.fromJson(Map<String, dynamic>.from(e as Map)),
+            (e) =>
+                _FugueUpdateItem.fromJson(Map<String, dynamic>.from(e as Map)),
           )
           .toList(),
     );

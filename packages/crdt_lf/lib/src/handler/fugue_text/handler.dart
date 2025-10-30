@@ -154,8 +154,8 @@ class CRDTFugueTextHandler extends Handler<FugueTextState> {
   /// then converts these differences into a series of
   /// atomic [insert] and [delete] operations.
   ///
-  /// Since this method may generate multiple operations, 
-  /// it is recommended to use it within a [CRDTDocument.runInTransaction] 
+  /// Since this method may generate multiple operations,
+  /// it is recommended to use it within a [CRDTDocument.runInTransaction]
   /// for better performance and atomicity.
   ///
   /// ## Example
@@ -175,7 +175,7 @@ class CRDTFugueTextHandler extends Handler<FugueTextState> {
 
     // Track offset as text length changes during operations
     var offset = 0;
-    
+
     for (final segment in diff) {
       switch (segment.op) {
         case DiffOp.equal:

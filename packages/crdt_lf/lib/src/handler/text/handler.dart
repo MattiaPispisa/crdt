@@ -1,10 +1,6 @@
 import 'dart:math';
 
 import 'package:crdt_lf/crdt_lf.dart';
-import 'package:crdt_lf/src/change/change.dart';
-import 'package:crdt_lf/src/handler/handler.dart';
-import 'package:crdt_lf/src/operation/operation.dart';
-import 'package:crdt_lf/src/operation/type.dart';
 
 part 'operation.dart';
 

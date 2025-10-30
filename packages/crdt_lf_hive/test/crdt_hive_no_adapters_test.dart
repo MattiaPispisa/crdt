@@ -479,7 +479,8 @@ void main() {
         expect(newOrMap.value, {'k1': 1, 'k2': 2});
       });
 
-      test('should handle complex operations across multiple handlers', () async {
+      test('should handle complex operations across multiple handlers',
+          () async {
         var changeStorage =
             await CRDTHive.openChangeStorageForDocument(documentId);
 
