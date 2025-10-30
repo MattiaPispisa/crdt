@@ -8,6 +8,10 @@
 
 - chore: improved Fugue text handler change implementation
 
+### Fixed
+
+- Fixed deserialization of Map values in `CRDTFugueTextHandler` operations
+
 ## [2.0.0] - 2025-09-16
 
 **Breaking changes**
