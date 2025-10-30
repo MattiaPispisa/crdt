@@ -10,7 +10,7 @@ sdkPath: .fvm/flutter_sdk
 command:
   publish:
     hooks:
-      pre: melos format && melos run analyze && melos run test && melos run devtools_build 
+      pre: melos run format && melos run analyze && melos run test && melos run devtools_build 
       post: melos run benchmark
 
 scripts:
@@ -41,5 +41,12 @@ scripts:
     name: Fix Apply
     description: Apply the fixes
     run: dart fix --apply
+    exec:
+      concurrency: 1
+
+  format:
+    name: Format
+    description: Format the code
+    run: dart format --line-length 80 --set-exit-if-changed lib test
     exec:
       concurrency: 1

@@ -188,7 +188,7 @@ void main() {
           reason: 'Second list item should be "b"',
         );
 
-        // Verify CRDTMapHandler data with custom objects was correctly 
+        // Verify CRDTMapHandler data with custom objects was correctly
         // deserialized
         final newMap = CRDTMapHandler<ObjectValue>(newDocument, 'map');
         expect(

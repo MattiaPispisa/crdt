@@ -162,7 +162,7 @@ class FugueTree<T> {
   ///
   /// if [leftOrigin] exists and [rightOrigin] is a right child of [leftOrigin],
   /// the new node will be a left child of [rightOrigin]
-  /// otherwise if [leftOrigin] exists, the new node will be a right child 
+  /// otherwise if [leftOrigin] exists, the new node will be a right child
   /// of [leftOrigin]
   /// otherwise, the new node will be a left child of [rightOrigin]
   void insert({
