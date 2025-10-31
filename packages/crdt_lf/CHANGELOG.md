@@ -1,3 +1,17 @@
+## [2.1.0] - 2025-10-31
+
+### Added
+- Added `change` operation to `CRDTFugueTextHandler` and `CRDTTextHandler` [12](https://github.com/MattiaPispisa/crdt/issues/12)
+- Added `CRDTORMapHandler` [41](https://github.com/MattiaPispisa/crdt/issues/41)
+
+### Changed
+
+- chore: improved Fugue text handler change implementation
+
+### Fixed
+
+- Fixed deserialization of Map values in `CRDTFugueTextHandler` operations
+
 ## [2.0.0] - 2025-09-16
 
 **Breaking changes**

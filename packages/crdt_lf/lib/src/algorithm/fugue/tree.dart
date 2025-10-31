@@ -160,7 +160,10 @@ class FugueTree<T> {
   ///
   /// [rightOrigin] node after [leftOrigin] in traversal order
   ///
-  /// if [leftOrigin] exists, the new node will be a right child of leftOrigin
+  /// if [leftOrigin] exists and [rightOrigin] is a right child of [leftOrigin],
+  /// the new node will be a left child of [rightOrigin]
+  /// otherwise if [leftOrigin] exists, the new node will be a right child
+  /// of [leftOrigin]
   /// otherwise, the new node will be a left child of [rightOrigin]
   void insert({
     required FugueElementID newID,
@@ -171,7 +174,30 @@ class FugueTree<T> {
     // Determine if the new node should be a left or right child
     FugueNode<T> newNode;
 
-    if (!leftOrigin.isNull && _nodes.containsKey(leftOrigin)) {
+    if (!leftOrigin.isNull &&
+        _nodes.containsKey(leftOrigin) &&
+        !rightOrigin.isNull &&
+        _nodes.containsKey(rightOrigin)) {
+      // Check if rightOrigin is a right child of leftOrigin
+      final leftOriginTriple = _nodes[leftOrigin]!;
+      if (leftOriginTriple.rightChildren.contains(rightOrigin)) {
+        // Insert as left child of rightOrigin to maintain order
+        newNode = FugueNode<T>(
+          id: newID,
+          value: value,
+          parentID: rightOrigin,
+          side: FugueSide.left,
+        );
+      } else {
+        // Insert as right child of leftOrigin
+        newNode = FugueNode<T>(
+          id: newID,
+          value: value,
+          parentID: leftOrigin,
+          side: FugueSide.right,
+        );
+      }
+    } else if (!leftOrigin.isNull && _nodes.containsKey(leftOrigin)) {
       // The new node will be a right child of leftOrigin
       newNode = FugueNode<T>(
         id: newID,

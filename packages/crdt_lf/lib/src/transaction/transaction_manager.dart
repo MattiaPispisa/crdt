@@ -69,7 +69,7 @@ class TransactionManager {
     }
   }
 
-  /// Handles a locally generated operation. i
+  /// Handles a locally generated operation.
   ///
   /// If a transaction is active, the operation is queued
   /// and an update is marked as pending; otherwise the operation

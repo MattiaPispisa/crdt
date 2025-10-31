@@ -45,14 +45,15 @@ class _FugueTextInsertOperation extends Operation {
       id: payload['id'] as String,
       type: OperationType.fromPayload(payload['type'] as String),
       leftOrigin: FugueElementID.fromJson(
-        payload['leftOrigin'] as Map<String, dynamic>,
+        Map<String, dynamic>.from(payload['leftOrigin'] as Map),
       ),
       rightOrigin: FugueElementID.fromJson(
-        payload['rightOrigin'] as Map<String, dynamic>,
+        Map<String, dynamic>.from(payload['rightOrigin'] as Map),
       ),
       items: (payload['items'] as List)
           .map(
-            (e) => _FugueInsertItem.fromJson(e as Map<String, dynamic>),
+            (e) =>
+                _FugueInsertItem.fromJson(Map<String, dynamic>.from(e as Map)),
           )
           .toList(),
     );
@@ -101,7 +102,9 @@ class _FugueInsertItem {
 
   factory _FugueInsertItem.fromJson(Map<String, dynamic> json) {
     return _FugueInsertItem(
-      id: FugueElementID.fromJson(json['id'] as Map<String, dynamic>),
+      id: FugueElementID.fromJson(
+        Map<String, dynamic>.from(json['id'] as Map),
+      ),
       text: json['text'] as String,
     );
   }
@@ -131,7 +134,8 @@ class _FugueTextDeleteOperation extends Operation {
       type: OperationType.fromPayload(payload['type'] as String),
       items: (payload['items'] as List)
           .map(
-            (e) => _FugueDeleteItem.fromJson(e as Map<String, dynamic>),
+            (e) =>
+                _FugueDeleteItem.fromJson(Map<String, dynamic>.from(e as Map)),
           )
           .toList(),
     );
@@ -167,7 +171,9 @@ class _FugueDeleteItem {
 
   factory _FugueDeleteItem.fromJson(Map<String, dynamic> json) {
     return _FugueDeleteItem(
-      nodeID: FugueElementID.fromJson(json['nodeID'] as Map<String, dynamic>),
+      nodeID: FugueElementID.fromJson(
+        Map<String, dynamic>.from(json['nodeID'] as Map),
+      ),
     );
   }
 
@@ -194,7 +200,8 @@ class _FugueTextUpdateOperation extends Operation {
       type: OperationType.fromPayload(payload['type'] as String),
       items: (payload['items'] as List)
           .map(
-            (e) => _FugueUpdateItem.fromJson(e as Map<String, dynamic>),
+            (e) =>
+                _FugueUpdateItem.fromJson(Map<String, dynamic>.from(e as Map)),
           )
           .toList(),
     );
@@ -232,9 +239,11 @@ class _FugueUpdateItem {
 
   factory _FugueUpdateItem.fromJson(Map<String, dynamic> json) {
     return _FugueUpdateItem(
-      nodeID: FugueElementID.fromJson(json['nodeID'] as Map<String, dynamic>),
+      nodeID: FugueElementID.fromJson(
+        Map<String, dynamic>.from(json['nodeID'] as Map),
+      ),
       newNodeID: FugueElementID.fromJson(
-        json['newNodeID'] as Map<String, dynamic>,
+        Map<String, dynamic>.from(json['newNodeID'] as Map),
       ),
       text: json['text'] as String,
     );

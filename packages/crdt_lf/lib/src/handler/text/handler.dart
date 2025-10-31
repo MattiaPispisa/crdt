@@ -1,9 +1,6 @@
 import 'dart:math';
 
-import 'package:crdt_lf/src/change/change.dart';
-import 'package:crdt_lf/src/handler/handler.dart';
-import 'package:crdt_lf/src/operation/operation.dart';
-import 'package:crdt_lf/src/operation/type.dart';
+import 'package:crdt_lf/crdt_lf.dart';
 
 part 'operation.dart';
 
@@ -63,6 +60,54 @@ class CRDTTextHandler extends Handler<String> {
       text: text,
     );
     doc.registerOperation(operation);
+  }
+
+  /// Changes the entire text to [newText] using the
+  /// [Myers diff algorithm](http://www.xmailserver.org/diff2.pdf).
+  ///
+  /// This method computes the differences between the current text
+  /// and [newText] using the [Myers diff algorithm](http://www.xmailserver.org/diff2.pdf),
+  /// then converts these differences into a series of
+  /// atomic [insert] and [delete] operations.
+  ///
+  /// Since this method may generate multiple operations,
+  /// it is recommended to use it within a [CRDTDocument.runInTransaction]
+  /// for better performance and atomicity.
+  ///
+  /// ## Example
+  /// ```dart
+  /// final text = CRDTTextHandler(doc, 'text');
+  /// text.insert(0, 'Hello World');
+  ///
+  /// // Using change within a transaction
+  /// doc.runInTransaction(() {
+  ///   text.change('Hello Brave New World');
+  /// });
+  /// ```
+  void change(String newText) {
+    final currentText = value;
+    final diff = myersDiff(currentText, newText);
+
+    // Track offset as text length changes during operations
+    var offset = 0;
+
+    for (final segment in diff) {
+      switch (segment.op) {
+        case DiffOp.equal:
+          // Nothing to do, text is already correct
+          break;
+        case DiffOp.insert:
+          // Insert new text at adjusted position
+          insert(segment.oldStart + offset, segment.text);
+          offset += segment.text.length;
+          break;
+        case DiffOp.remove:
+          // Remove text at adjusted position
+          delete(segment.oldStart + offset, segment.text.length);
+          offset -= segment.text.length;
+          break;
+      }
+    }
   }
 
   /// Gets the current state of the text

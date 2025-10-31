@@ -25,7 +25,6 @@
     - [CRDTDocument](#crdtdocument)
       - [Identity](#identity)
     - [Handlers](#handlers)
-      - [Caching](#caching)
       - [Working with Complex Types](#working-with-complex-types)
     - [Transaction](#transaction-1)
     - [DAG](#dag)
@@ -45,7 +44,10 @@ This library provides solutions for:
 - List Editing.
 - Map Editing.
 - Set Editing.
-- Text Editing with Fugue Algorithm ([The Art of the Fugue: Minimizing Interleaving in Collaborative Text Editing" di Matthew Weidner e Martin Kleppmann](https://arxiv.org/abs/2305.00583)).
+
+Supporting: 
+- Fugue Algorithm for Text Editing to minimize interleaving.
+- Observed-Removed (OR) for conflict resolution.
 
 ## Features
 
@@ -177,6 +179,8 @@ Handlers are the core components of the library. They manage the state of a spec
 - `CRDTListHandler`: Handles list editing.
 - `CRDTTextHandler`: Handles text editing.
 - `CRDTMapHandler`: Handles map editing.
+- `CRDTORSetHandler`: Handles set editing with the Observed-Removed (OR) algorithm.
+- `CRDTORMapHandler`: Handles map editing with the Observed-Removed (OR) algorithm.
 
 ```dart
 final doc = CRDTDocument(
@@ -191,9 +195,6 @@ print(list.value); // Prints "[Buy milk]"
 ```
 
 Every handler can be found in the [handlers](https://github.com/MattiaPispisa/crdt/tree/main/packages/crdt_lf/lib/src/handler) folder.
-
-#### Caching
-Parlare del fatto che ad ogni operazione viene chiesto all'handler di incrementare il proprio stato. La gestione della cache è gestita dal documento e ad ogni handler viene chiesto solo di incrementare o impostare il prorio stato. Questo sarà fornito dal documento all'handler sulla base dello stato corrente del documento.
 
 #### Working with Complex Types
 
@@ -323,6 +324,7 @@ Feel free to:
 - [Fugue Algorithm](https://arxiv.org/abs/2305.00583)
 - [Hybrid Logical Clock](https://cse.buffalo.edu/tech-reports/2014-04.pdf)
 - [A comprehensive study of Convergent and Commutative Replicated Data Types](https://inria.hal.science/inria-00555588/en/)
+- [An O(ND) Difference Algorithm and its Variations (Myers diff algorithm)](http://www.xmailserver.org/diff2.pdf)
 
 ## Packages
 Other bricks of the crdt "system" are:
