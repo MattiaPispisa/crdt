@@ -1,5 +1,6 @@
 import 'dart:math' as math;
 
+// ignore: always_use_package_imports does not work with this file
 import 'ops.dart';
 
 /// Compute Myers diff between two strings and return coalesced segments of

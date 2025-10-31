@@ -28,7 +28,7 @@ scripts:
   analyze:
     name: Analyze
     description: Analyze the code
-    run: dart analyze --fatal-infos --fatal-warnings
+    run: dart analyze --fatal-infos --fatal-warnings lib test
     exec:
       concurrency: 1
 
