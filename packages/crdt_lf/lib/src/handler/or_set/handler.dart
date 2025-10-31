@@ -109,6 +109,10 @@ class CRDTORSetHandler<T> extends Handler<ORSetState<T>> {
       for (final v in snap.cast<T>()) {
         state._snapshotOnly.add(v);
       }
+    } else if (snap is Set<dynamic> && snap.every((e) => e is T)) {
+      for (final v in snap.cast<T>()) {
+        state._snapshotOnly.add(v);
+      }
     }
 
     final opFactory = _ORSetOperationFactory<T>(this);
