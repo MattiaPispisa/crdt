@@ -74,11 +74,13 @@ abstract class Message {
     required String documentId,
     required Snapshot? snapshot,
     required List<Change>? changes,
+    required VersionVector versionVector,
   }) {
     return DocumentStatusMessage(
       documentId: documentId,
       snapshot: snapshot,
       changes: changes,
+      versionVector: versionVector,
     );
   }
 
@@ -230,6 +232,7 @@ class HandshakeResponseMessage extends Message {
     required this.sessionId,
     this.snapshot,
     this.changes,
+    required this.versionVector,
   }) : super(MessageType.handshakeResponse, documentId);
 
   /// Create a handshake response message from a JSON map
@@ -245,6 +248,9 @@ class HandshakeResponseMessage extends Message {
               .toList()
           : null,
       sessionId: json['sessionId'] as String,
+      versionVector: VersionVector.fromJson(
+        json['versionVector'] as Map<String, dynamic>,
+      ),
     );
   }
 
@@ -257,6 +263,9 @@ class HandshakeResponseMessage extends Message {
   /// The session ID to which the message refers
   final String sessionId;
 
+  /// The server version vector after applying snapshot and changes
+  final VersionVector versionVector;
+
   @override
   Map<String, dynamic> toJson() {
     return {
@@ -265,13 +274,14 @@ class HandshakeResponseMessage extends Message {
       'snapshot': snapshot?.toJson(),
       'changes': changes?.map((c) => c.toJson()).toList(),
       'sessionId': sessionId,
+      'versionVector': versionVector.toJson(),
     };
   }
 
   @override
   String toString() {
     return 'HandshakeResponseMessage(snapshot: $snapshot, '
-        'changes: $changes, sessionId: $sessionId)';
+        'changes: $changes, sessionId: $sessionId, versionVector: $versionVector)';
   }
 }
 
@@ -352,13 +362,24 @@ class DocumentStatusMessage extends Message {
     required String documentId,
     this.snapshot,
     this.changes,
+    required this.versionVector,
   }) : super(MessageType.documentStatus, documentId);
 
   /// Create a snapshot message from a JSON map
   factory DocumentStatusMessage.fromJson(Map<String, dynamic> json) {
     return DocumentStatusMessage(
-      snapshot: Snapshot.fromJson(json['snapshot'] as Map<String, dynamic>),
+      snapshot: json['snapshot'] != null
+          ? Snapshot.fromJson(json['snapshot'] as Map<String, dynamic>)
+          : null,
       documentId: json['documentId'] as String,
+      changes: json['changes'] != null
+          ? (json['changes'] as List<dynamic>)
+              .map((c) => Change.fromJson(c as Map<String, dynamic>))
+              .toList()
+          : null,
+      versionVector: VersionVector.fromJson(
+        json['versionVector'] as Map<String, dynamic>,
+      ),
     );
   }
 
@@ -368,6 +389,9 @@ class DocumentStatusMessage extends Message {
   /// The CRDT changes
   final List<Change>? changes;
 
+  /// The server version vector after applying snapshot and changes
+  final VersionVector versionVector;
+
   @override
   Map<String, dynamic> toJson() {
     return {
@@ -375,12 +399,14 @@ class DocumentStatusMessage extends Message {
       'documentId': documentId,
       'snapshot': snapshot?.toJson(),
       'changes': changes?.map((c) => c.toJson()).toList(),
+      'versionVector': versionVector.toJson(),
     };
   }
 
   @override
   String toString() {
-    return 'SnapshotMessage(snapshot: $snapshot, documentId: $documentId)';
+    return 'DocumentStatusMessage(snapshot: $snapshot, '
+        'changes: $changes, documentId: $documentId, versionVector: $versionVector)';
   }
 }
 

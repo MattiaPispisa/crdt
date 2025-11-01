@@ -281,11 +281,15 @@ class ClientSession {
     late List<Change> changes;
     changes = document.exportChangesNewerThan(message.versionVector);
 
+    // Get the server's version vector representing the state after snapshot and changes
+    final serverVersionVector = document.getVersionVector();
+
     final response = HandshakeResponseMessage(
       documentId: documentId,
       changes: changes,
       snapshot: snapshot,
       sessionId: id,
+      versionVector: serverVersionVector,
     );
 
     await sendMessage(response);
@@ -415,18 +419,22 @@ class ClientSession {
     final snapshot = await _serverRegistry.getLatestSnapshot(documentId);
     
     // Use exportChangesNewerThan to get changes newer than client's version
+    final document = (await _serverRegistry.getDocument(documentId))!;
     late List<Change> changes;
     if (message.versionVector != null) {
-      changes = (await _serverRegistry.getDocument(documentId))!
-          .exportChangesNewerThan(message.versionVector!);
+      changes = document.exportChangesNewerThan(message.versionVector!);
     } else {
-      changes = (await _serverRegistry.getDocument(documentId))!.exportChanges();
+      changes = document.exportChanges();
     }
+
+    // Get the server's version vector representing the state after snapshot and changes
+    final serverVersionVector = document.getVersionVector();
 
     final response = Message.documentStatus(
       documentId: documentId,
       snapshot: snapshot,
       changes: changes,
+      versionVector: serverVersionVector,
     );
     await sendMessage(response);
 

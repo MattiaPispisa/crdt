@@ -474,6 +474,7 @@ class WebSocketClient extends CRDTSocketClient {
     _syncManager.merge(
       changes: message.changes,
       snapshot: message.snapshot,
+      serverVersionVector: message.versionVector,
     );
     _handshakeCompleter?.complete(true);
   }
@@ -486,6 +487,7 @@ class WebSocketClient extends CRDTSocketClient {
     _syncManager.merge(
       changes: message.changes,
       snapshot: message.snapshot,
+      serverVersionVector: message.versionVector,
     );
   }
 
