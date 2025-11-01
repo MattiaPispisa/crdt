@@ -114,6 +114,7 @@ class HiveServerRegistry extends CRDTServerRegistry {
                 documentId: documentId,
                 snapshot: snapshot,
                 changes: changes,
+                versionVector: item.document.getVersionVector(),
               ),
             );
           } else {

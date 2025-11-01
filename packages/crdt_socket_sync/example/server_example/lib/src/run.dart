@@ -22,6 +22,7 @@ Future<void> run({
   List<ServerSyncPlugin>? plugins,
   bool verbose = true,
 }) async {
+  // setup logger
   final logger = EnLogger(defaultPrefixFormat: PrefixFormat.snakeSquare())
     ..addHandler(
       PrinterHandler.custom(
@@ -40,8 +41,8 @@ Future<void> run({
       ),
     );
 
+  // db initialization
   Hive.init(_kDefaultDbLocation);
-
   _registry = await HiveServerRegistry.init(
     logger: logger.getConfiguredInstance(prefix: 'HiveServerRegistry'),
   );
@@ -78,9 +79,7 @@ Future<void> _setupDocument() async {
   }
 
   final document = (await _registry.getDocument(_kDocumentId))!;
-  document.registerHandler(
-    CRDTListHandler<Map<String, dynamic>>(document, 'todo-list'),
-  );
+  CRDTListHandler<Map<String, dynamic>>(document, 'todo-list');
 }
 
 void _setupSigintHandler({required EnLogger logger}) {
