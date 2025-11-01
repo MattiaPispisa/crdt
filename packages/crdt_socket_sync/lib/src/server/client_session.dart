@@ -277,14 +277,9 @@ class ClientSession {
     final document = (await _serverRegistry.getDocument(documentId))!;
     final snapshot = await _serverRegistry.getLatestSnapshot(documentId);
 
+    // Use exportChangesNewerThan to get changes newer than client's version
     late List<Change> changes;
-
-    try {
-      changes = document.exportChanges(from: message.version);
-    } catch (e) {
-      // goes here if the client is out of sync with the server
-      changes = document.exportChanges();
-    }
+    changes = document.exportChangesNewerThan(message.versionVector);
 
     final response = HandshakeResponseMessage(
       documentId: documentId,
@@ -418,8 +413,15 @@ class ClientSession {
     }
 
     final snapshot = await _serverRegistry.getLatestSnapshot(documentId);
-    final changes = (await _serverRegistry.getDocument(documentId))!
-        .exportChanges(from: message.version);
+    
+    // Use exportChangesNewerThan to get changes newer than client's version
+    late List<Change> changes;
+    if (message.versionVector != null) {
+      changes = (await _serverRegistry.getDocument(documentId))!
+          .exportChangesNewerThan(message.versionVector!);
+    } else {
+      changes = (await _serverRegistry.getDocument(documentId))!.exportChanges();
+    }
 
     final response = Message.documentStatus(
       documentId: documentId,

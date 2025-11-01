@@ -85,11 +85,11 @@ abstract class Message {
   /// Create a document status request message
   factory Message.documentStatusRequest({
     required String documentId,
-    required Set<OperationId>? version,
+    required VersionVector? versionVector,
   }) {
     return DocumentStatusRequestMessage(
       documentId: documentId,
-      version: version,
+      versionVector: versionVector,
     );
   }
 
@@ -183,7 +183,7 @@ abstract class Message {
 class HandshakeRequestMessage extends Message {
   /// Constructor
   const HandshakeRequestMessage({
-    required this.version,
+    required this.versionVector,
     required String documentId,
     required this.author,
   }) : super(MessageType.handshakeRequest, documentId);
@@ -191,16 +191,16 @@ class HandshakeRequestMessage extends Message {
   /// Create a handshake message from a JSON map
   factory HandshakeRequestMessage.fromJson(Map<String, dynamic> json) {
     return HandshakeRequestMessage(
-      version: (json['version'] as List<dynamic>)
-          .map((e) => OperationId.parse(e as String))
-          .toSet(),
+      versionVector: VersionVector.fromJson(
+        json['versionVector'] as Map<String, dynamic>,
+      ),
       documentId: json['documentId'] as String,
       author: PeerId.parse(json['author'] as String),
     );
   }
 
   /// The client version vector
-  final Set<OperationId> version;
+  final VersionVector versionVector;
 
   /// The author of the message
   final PeerId author;
@@ -211,13 +211,13 @@ class HandshakeRequestMessage extends Message {
       'type': type.value,
       'documentId': documentId,
       'author': author.toString(),
-      'version': version.map((e) => e.toString()).toList(),
+      'versionVector': versionVector.toJson(),
     };
   }
 
   @override
   String toString() {
-    return 'HandshakeRequestMessage(version: $version, '
+    return 'HandshakeRequestMessage(versionVector: $versionVector, '
         'documentId: $documentId, author: $author)';
   }
 }
@@ -389,36 +389,37 @@ class DocumentStatusRequestMessage extends Message {
   /// Constructor
   const DocumentStatusRequestMessage({
     required String documentId,
-    this.version,
+    this.versionVector,
   }) : super(MessageType.documentStatusRequest, documentId);
 
   /// Create a snapshot request message from a JSON map
   factory DocumentStatusRequestMessage.fromJson(Map<String, dynamic> json) {
     return DocumentStatusRequestMessage(
-      version: json['version'] != null
-          ? (json['version'] as List<dynamic>)
-              .map((e) => OperationId.parse(e as String))
-              .toSet()
+      versionVector: json['versionVector'] != null
+          ? VersionVector.fromJson(
+              json['versionVector'] as Map<String, dynamic>,
+            )
           : null,
       documentId: json['documentId'] as String,
     );
   }
 
-  /// The client version
-  final Set<OperationId>? version;
+  /// The client version vector
+  final VersionVector? versionVector;
 
   @override
   Map<String, dynamic> toJson() {
     return {
       'type': type.value,
       'documentId': documentId,
-      'version': version?.map((e) => e.toString()).toList(),
+      'versionVector': versionVector?.toJson(),
     };
   }
 
   @override
   String toString() {
-    return 'SnapshotRequestMessage(version: $version, documentId: $documentId)';
+    return 'DocumentStatusRequestMessage(versionVector: $versionVector, '
+        'documentId: $documentId)';
   }
 }
 

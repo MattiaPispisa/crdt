@@ -399,7 +399,7 @@ class WebSocketClient extends CRDTSocketClient {
     _handshakeCompleter = Completer<bool>();
 
     final handshakeRequest = HandshakeRequestMessage(
-      version: document.version,
+      versionVector: document.getVersionVector(),
       documentId: document.documentId,
       author: author,
     );

@@ -123,7 +123,7 @@ class SyncManager {
       return client.sendMessage(
         Message.documentStatusRequest(
           documentId: document.documentId,
-          version: document.version,
+          versionVector: document.getVersionVector(),
         ),
       );
     });

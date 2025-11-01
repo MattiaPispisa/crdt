@@ -227,7 +227,7 @@ void main() {
             HandshakeRequestMessage(
               author: client,
               documentId: documentId,
-              version: {},
+              versionVector: VersionVector({}),
             ),
           )!,
         );
@@ -282,7 +282,7 @@ void main() {
               HandshakeRequestMessage(
                 author: client1,
                 documentId: documentId,
-                version: {},
+                versionVector: VersionVector({}),
               ),
             )!,
           );
@@ -295,7 +295,7 @@ void main() {
               HandshakeRequestMessage(
                 author: client2,
                 documentId: documentId,
-                version: {},
+                versionVector: VersionVector({}),
               ),
             )!,
           );
@@ -368,7 +368,7 @@ void main() {
               HandshakeRequestMessage(
                 author: client,
                 documentId: documentId,
-                version: {},
+                versionVector: VersionVector({}),
               ),
             )!,
           );
