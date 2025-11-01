@@ -23,7 +23,39 @@ class WebSocketClient extends CRDTSocketClient {
         _connectionStatusController =
             StreamController<ConnectionStatus>.broadcast()
               ..add(ConnectionStatus.disconnected),
-        _connectionStatusValue = ConnectionStatus.disconnected {
+        _connectionStatusValue = ConnectionStatus.disconnected,
+        _transportConnectorFactory = (() => _WebSocketConnector(url)) {
+    _syncManager = SyncManager(document: document, client: this);
+    _messageCodec = CompressedCodec<Message>(
+      PluginAwareMessageCodec.fromPlugins(
+        plugins: plugins,
+        defaultCodec: messageCodec ??
+            JsonMessageCodec<Message>(
+              toJson: (message) => message.toJson(),
+              fromJson: Message.fromJson,
+            ),
+      ),
+      compressor: compressor ?? NoCompression.instance,
+    );
+
+    messages.listen(_handleMessage);
+  }
+
+  /// Constructor for testing
+  WebSocketClient.test({
+    required this.url,
+    required this.document,
+    required this.author,
+    required TransportConnector Function() transportConnectorFactory,
+    Compressor? compressor,
+    MessageCodec<Message>? messageCodec,
+    super.plugins,
+  })  : _messageController = StreamController<Message>.broadcast(),
+        _connectionStatusController =
+            StreamController<ConnectionStatus>.broadcast()
+              ..add(ConnectionStatus.disconnected),
+        _connectionStatusValue = ConnectionStatus.disconnected,
+        _transportConnectorFactory = transportConnectorFactory {
     _syncManager = SyncManager(document: document, client: this);
     _messageCodec = CompressedCodec<Message>(
       PluginAwareMessageCodec.fromPlugins(
@@ -71,6 +103,8 @@ class WebSocketClient extends CRDTSocketClient {
   /// Connection status controller
   final StreamController<ConnectionStatus> _connectionStatusController;
   ConnectionStatus _connectionStatusValue;
+
+  final TransportConnector Function() _transportConnectorFactory;
 
   /// Number of reconnect attempts
   int _reconnectAttempts = 0;
@@ -144,7 +178,7 @@ class WebSocketClient extends CRDTSocketClient {
     }
 
     try {
-      final connector = _WebSocketConnector(url);
+      final connector = _transportConnectorFactory();
 
       await tryCatchIgnore(() async {
         await _transport?.close();
