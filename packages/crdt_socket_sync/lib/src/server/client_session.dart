@@ -281,7 +281,8 @@ class ClientSession {
     late List<Change> changes;
     changes = document.exportChangesNewerThan(message.versionVector);
 
-    // Get the server's version vector representing the state after snapshot and changes
+    // Get the server's version vector representing the state 
+    // after snapshot and changes
     final serverVersionVector = document.getVersionVector();
 
     final response = HandshakeResponseMessage(

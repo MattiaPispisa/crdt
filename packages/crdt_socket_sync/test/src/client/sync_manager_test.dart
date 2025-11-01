@@ -260,7 +260,7 @@ void main() {
 
         // Should not send additional changes
         final changesMessages = mockClient.getSentMessagesOfType<ChangesMessage>();
-        expect(changesMessages, isEmpty);
+        expect(changesMessages, isEmpty); 
       });
 
       test('should handle changes from multiple peers correctly', () async {
@@ -552,6 +552,7 @@ void main() {
             mockClient.getSentMessagesOfType<DocumentStatusRequestMessage>();
         expect(snapshotRequests.length, equals(1));
       });
+
     });
   });
 }
