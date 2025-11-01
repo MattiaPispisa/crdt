@@ -19,7 +19,7 @@ class MockWebSocketTransformer extends Mock
     implements WebSocketServerTransformer {}
 
 class MockWebSocket extends Mock implements Stream<dynamic>, WebSocket {
-  MockWebSocket() : controller = StreamController<List<int>>();
+  MockWebSocket() : controller = StreamController<List<int>>.broadcast();
 
   final StreamController<List<int>> controller;
 
@@ -81,7 +81,11 @@ void stubWebSocket({
     when(() => mockWebSocket.add(any<List<int>>())).thenAnswer((invocation) {
       final data = invocation.positionalArguments[0] as List<int>;
       messagesSent.add(data);
+      // Server's _WebSocketConnection.send() calls _webSocket.add(), forward to controller
+      mockWebSocket.controller.add(data);
     });
+    
+    when(() => mockWebSocket.readyState).thenReturn(WebSocket.open);
 
     return mockWebSocket;
   });
@@ -121,6 +125,53 @@ class MockTransportConnector implements TransportConnector {
   @override
   Future<TransportConnection> connect() async {
     return MockTransportConnection(mockWebSocket: mockWebSocket);
+  }
+}
+
+/// TransportConnection implementation using StreamControllers for testing
+class StreamTransportConnection implements TransportConnection {
+  StreamTransportConnection({
+    required this.incomingController,
+    required this.outgoingController,
+  });
+
+  final StreamController<List<int>> incomingController;
+  final StreamController<List<int>> outgoingController;
+
+  @override
+  Stream<List<int>> get incoming => incomingController.stream;
+
+  @override
+  Future<void> send(List<int> data) async {
+    outgoingController.add(data);
+  }
+
+  @override
+  Future<void> close() async {
+    await incomingController.close();
+    await outgoingController.close();
+  }
+
+  @override
+  bool get isConnected => !incomingController.isClosed;
+}
+
+/// TransportConnector that returns a StreamTransportConnection
+class StreamTransportConnector implements TransportConnector {
+  StreamTransportConnector({
+    required this.incomingController,
+    required this.outgoingController,
+  });
+
+  final StreamController<List<int>> incomingController;
+  final StreamController<List<int>> outgoingController;
+
+  @override
+  Future<TransportConnection> connect() async {
+    return StreamTransportConnection(
+      incomingController: incomingController,
+      outgoingController: outgoingController,
+    );
   }
 }
 

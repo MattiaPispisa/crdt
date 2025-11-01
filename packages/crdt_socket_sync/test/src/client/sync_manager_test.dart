@@ -190,6 +190,7 @@ void main() {
 
         expect(
           () => syncManager.merge(
+            serverVersionVector: snapshot.versionVector,
             snapshot: snapshot,
             changes: [],
           ),
@@ -221,7 +222,7 @@ void main() {
           data: {'test-handler': 'test_state'},
         );
 
-        syncManager.merge(snapshot: snapshot, changes: []);
+        syncManager.merge(serverVersionVector: snapshot.versionVector, snapshot: snapshot, changes: []);
 
         // Wait for async operations
         await Future<void>.delayed(const Duration(milliseconds: 10));
@@ -253,7 +254,7 @@ void main() {
         // Add a newer change on the snapshot
         snapshot.versionVector.update(peerId, HybridLogicalClock(l: 10, c: 1));
 
-        syncManager.merge(snapshot: snapshot, changes: []);
+        syncManager.merge(serverVersionVector: snapshot.versionVector, snapshot: snapshot, changes: []);
 
         // Wait for async operations
         await Future<void>.delayed(const Duration(milliseconds: 10));
@@ -280,7 +281,11 @@ void main() {
           author: otherPeerId,
         );
 
-        syncManager.merge(changes: [serverChange], snapshot: null);
+        syncManager.merge(
+          serverVersionVector: VersionVector({otherPeerId: serverChange.hlc}),
+          changes: [serverChange],
+          snapshot: null,
+        );
 
         // Wait for async operations
         await Future<void>.delayed(const Duration(milliseconds: 10));
@@ -322,6 +327,7 @@ void main() {
         );
 
         syncManager.merge(
+          serverVersionVector: VersionVector({otherPeerId: serverChange.hlc}),
           snapshot: snapshot,
           changes: [serverChange],
         );
@@ -475,7 +481,11 @@ void main() {
           author: otherPeerId,
         );
 
-        syncManager.merge(changes: [serverChange], snapshot: null);
+        syncManager.merge(
+          serverVersionVector: VersionVector({otherPeerId: serverChange.hlc}),
+          changes: [serverChange],
+          snapshot: null,
+        );
 
         // Wait for async operations
         await Future<void>.delayed(const Duration(milliseconds: 10));
@@ -501,7 +511,11 @@ void main() {
 
         // Should not throw
         expect(
-          () => syncManager.merge(changes: null, snapshot: snapshot),
+          () => syncManager.merge(
+            serverVersionVector: snapshot.versionVector,
+            changes: null,
+            snapshot: snapshot,
+          ),
           returnsNormally,
         );
 

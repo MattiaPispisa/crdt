@@ -24,7 +24,7 @@ class WebSocketClient extends CRDTSocketClient {
             StreamController<ConnectionStatus>.broadcast()
               ..add(ConnectionStatus.disconnected),
         _connectionStatusValue = ConnectionStatus.disconnected,
-        _transportConnectorFactory = (() => _WebSocketConnector(url)) {
+        _transportFactory = (() => Transport.create(_WebSocketConnector(url))) {
     _syncManager = SyncManager(document: document, client: this);
     _messageCodec = CompressedCodec<Message>(
       PluginAwareMessageCodec.fromPlugins(
@@ -46,7 +46,7 @@ class WebSocketClient extends CRDTSocketClient {
     required this.url,
     required this.document,
     required this.author,
-    required TransportConnector Function() transportConnectorFactory,
+    required Transport Function() transportFactory,
     Compressor? compressor,
     MessageCodec<Message>? messageCodec,
     super.plugins,
@@ -55,7 +55,7 @@ class WebSocketClient extends CRDTSocketClient {
             StreamController<ConnectionStatus>.broadcast()
               ..add(ConnectionStatus.disconnected),
         _connectionStatusValue = ConnectionStatus.disconnected,
-        _transportConnectorFactory = transportConnectorFactory {
+        _transportFactory = transportFactory {
     _syncManager = SyncManager(document: document, client: this);
     _messageCodec = CompressedCodec<Message>(
       PluginAwareMessageCodec.fromPlugins(
@@ -104,7 +104,7 @@ class WebSocketClient extends CRDTSocketClient {
   final StreamController<ConnectionStatus> _connectionStatusController;
   ConnectionStatus _connectionStatusValue;
 
-  final TransportConnector Function() _transportConnectorFactory;
+  final Transport Function() _transportFactory;
 
   /// Number of reconnect attempts
   int _reconnectAttempts = 0;
@@ -178,13 +178,11 @@ class WebSocketClient extends CRDTSocketClient {
     }
 
     try {
-      final connector = _transportConnectorFactory();
-
       await tryCatchIgnore(() async {
         await _transport?.close();
       });
 
-      _transport = Transport.create(connector);
+      _transport = _transportFactory();
 
       _updateConnectionStatus(
         _connectionStatusValue.isDisconnected
