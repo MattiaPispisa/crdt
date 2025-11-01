@@ -707,7 +707,7 @@ void main() {
         'type': MessageType.handshakeRequest.index,
         'documentId': 'test-doc',
         'author': PeerId.generate().toString(),
-        'version': <String>[],
+        'versionVector': {'vector': <String,dynamic>{}},
       };
 
       final message = Message.fromJson(json);
