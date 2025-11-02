@@ -34,12 +34,13 @@ class MockWebSocket extends Mock implements Stream<dynamic>, WebSocket {
 void stubHttpServer({
   required MockHttpServer mockHttpServer,
   required StreamController<HttpRequest> httpRequestController,
+  int port = 8080,
 }) {
   registerFallbackValue(MockHttpRequest());
 
   // Mock the http server
   when(() => mockHttpServer.address).thenReturn(InternetAddress.loopbackIPv4);
-  when(() => mockHttpServer.port).thenReturn(8080);
+  when(() => mockHttpServer.port).thenReturn(port);
   when(
     () => mockHttpServer.listen(
       any(),
@@ -66,22 +67,23 @@ void stubHttpServer({
 ///
 /// When [mockWebSocketTransformer] is called to upgrade a request
 /// to a web socket, a new [MockWebSocket] is created
-/// and added to the [mockWebSockets] list.
+/// and added to both the [serverSockets] and [clientSockets] lists.
+/// This allows bidirectional communication through the same mock socket.
 ///
-/// The [messagesSent] controller is used to send messages from the server
-/// to the client.
-///
-/// The [mockWebSockets] list is used to store the mock web sockets.
+/// The [messagesSent] controller is used to send messages from both server
+/// and client for inspection.
 void stubWebSocket({
   required MockWebSocketTransformer mockWebSocketTransformer,
-  required List<MockWebSocket> mockWebSockets,
+  required List<MockWebSocket> serverSockets,
+  required List<MockWebSocket> clientSockets,
   required StreamController<List<int>> messagesSent,
 }) {
   // Mock the request upgrade to websocket
   when(() => mockWebSocketTransformer.isUpgradeRequest(any())).thenReturn(true);
   when(() => mockWebSocketTransformer.upgrade(any())).thenAnswer((_) async {
     final mockWebSocket = MockWebSocket();
-    mockWebSockets.add(mockWebSocket);
+    serverSockets.add(mockWebSocket);
+    clientSockets.add(mockWebSocket);
 
     // Mock web socket methods
     when(() => mockWebSocket.close(any(), any())).thenAnswer((_) async {});
@@ -100,40 +102,62 @@ void stubWebSocket({
   });
 }
 
-/// TransportConnector for testing
+/// [TransportConnector] for testing
 ///
 /// When [connect] is called, a new [TransportConnection] is created
-/// that uses the [mockWebSocket] to send and receive messages.
+/// that uses:
+/// - the [incoming] to send messages;
+/// - the [outgoing] to receive messages.
+///
+/// If [messagesSent] is provided,
+/// all sent messages will also be added to it.
 class MockTransportConnector implements TransportConnector {
-  MockTransportConnector(this.mockWebSocket);
+  MockTransportConnector({
+    required this.incoming,
+    required this.outgoing,
+    this.messagesSent,
+  });
 
-  final MockWebSocket mockWebSocket;
+  final MockWebSocket incoming;
+  final MockWebSocket outgoing;
+  final StreamController<List<int>>? messagesSent;
 
   @override
   Future<TransportConnection> connect() async {
-    return _MockTransportConnection(mockWebSocket: mockWebSocket);
+    return _MockTransportConnection(
+      incomingSocket: incoming,
+      outgoingSocket: outgoing,
+      messagesSent: messagesSent,
+    );
   }
 }
 
 /// TransportConnection implementation for testing using MockWebSocket
 class _MockTransportConnection implements TransportConnection {
   _MockTransportConnection({
-    required this.mockWebSocket,
+    required this.incomingSocket,
+    required this.outgoingSocket,
+    this.messagesSent,
   });
 
-  final MockWebSocket mockWebSocket;
+  final MockWebSocket incomingSocket;
+  final MockWebSocket outgoingSocket;
+  final StreamController<List<int>>? messagesSent;
 
   @override
-  Stream<List<int>> get incoming => mockWebSocket.controller.stream;
+  Stream<List<int>> get incoming => incomingSocket.controller.stream;
 
   @override
   Future<void> send(List<int> data) async {
-    mockWebSocket.controller.add(data);
+    // Forward to messagesSent for inspection
+    messagesSent?.add(data);
+    // Forward to controller for receiver to consume
+    outgoingSocket.controller.add(data);
   }
 
   @override
   Future<void> close() async {
-    await mockWebSocket.controller.close();
+    await outgoingSocket.controller.close();
   }
 
   @override

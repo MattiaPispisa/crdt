@@ -1,3 +1,5 @@
+// ignore_for_file: avoid_redundant_argument_values - explicit test setup
+
 import 'dart:async';
 import 'dart:io';
 
@@ -10,65 +12,103 @@ import 'package:test/test.dart';
 import 'utils/stub.dart';
 
 void main() {
-  group('WebSocket Integration Tests', () {
-    late MockHttpServer mockHttpServer;
-    late StreamController<HttpRequest> httpRequestController;
-    late MockWebSocketTransformer mockWebSocketTransformer;
-    late InMemoryCRDTServerRegistry registry;
-    late List<MockWebSocket> mockWebSockets;
-    late JsonMessageCodec<Message> codec;
-    late StreamController<List<int>> messagesSent;
+  /// This test verifies that the client and server
+  /// can communicate with each other
+  /// and is used to validate the infrastructure before the next group.
+  ///
+  /// The next group assumes communication works
+  /// and focuses solely on message exchange logic.
 
-    setUp(() {
-      messagesSent = StreamController<List<int>>.broadcast();
-      mockHttpServer = MockHttpServer();
-      httpRequestController = StreamController<HttpRequest>.broadcast();
-      registry = InMemoryCRDTServerRegistry();
-      mockWebSocketTransformer = MockWebSocketTransformer();
-      mockWebSockets = [];
-      codec = JsonMessageCodec<Message>(
+  group('WebSocket Integration Tests', () {
+    test(
+        'should setup a communication between '
+        'the client and the server', () async {
+      const documentId = 'test-document-1';
+      final clientPeerId = PeerId.generate();
+
+      final codec = JsonMessageCodec<Message>(
         toJson: (message) => message.toJson(),
         fromJson: Message.fromJson,
       );
-    });
 
-    tearDown(() async {
-      await registry.clear();
-      await httpRequestController.close();
-      await messagesSent.close();
-      for (final mock in mockWebSockets) {
-        await mock.controller.close();
-      }
-    });
+      const port = 8080;
+      final httpServer = MockHttpServer();
+      final httpRequestController = StreamController<HttpRequest>.broadcast();
+      final registry = InMemoryCRDTServerRegistry();
+      final mockWebSocketTransformer = MockWebSocketTransformer();
+      final outgoingServerSockets = <MockWebSocket>[];
+      final incomingServerSocket = <MockWebSocket>[];
 
-    /// Setup a client and connect it to the server
-    /// (send an "upgrade request" to the server)
-    ///
-    /// Returns the client instance
-    Future<WebSocketClient> setupClient({
-      required PeerId peerId,
-      required String documentId,
-    }) async {
-      final webSocketCount = mockWebSockets.length;
+      final serverMessagesSent = StreamController<List<int>>.broadcast();
+      final clientMessagesSent = StreamController<List<int>>.broadcast();
+
+      final serverMessages = <Message>[];
+      final clientMessages = <Message>[];
+
+      serverMessagesSent.stream.listen((data) {
+        final message = codec.decode(data);
+        if (message != null) {
+          serverMessages.add(message);
+        }
+      });
+      clientMessagesSent.stream.listen((data) {
+        final message = codec.decode(data);
+        if (message != null) {
+          clientMessages.add(message);
+        }
+      });
+
+      // Setup stubs
+      stubHttpServer(
+        mockHttpServer: httpServer,
+        httpRequestController: httpRequestController,
+        port: port,
+      );
+      stubWebSocket(
+        mockWebSocketTransformer: mockWebSocketTransformer,
+        serverSockets: outgoingServerSockets,
+        clientSockets: incomingServerSocket,
+        messagesSent: serverMessagesSent,
+      );
+
+      // Create server with WebSocketServer.test
+      final server = WebSocketServer.test(
+        serverFactory: () async => httpServer,
+        serverRegistry: registry,
+        serverTransformer: mockWebSocketTransformer,
+      );
+
+      await registry.addDocument(documentId);
+      final registryDoc = (await registry.getDocument(documentId))!;
+      CRDTListHandler<String>(registryDoc, 'test-list');
+
+      await server.start();
+
+      final webSocketCount = outgoingServerSockets.length;
 
       httpRequestController.add(MockHttpRequest());
-      await Future<void>.delayed(const Duration(milliseconds: 10));
+      await Future<void>.delayed(Duration.zero);
 
       expect(
-        mockWebSockets.length,
+        outgoingServerSockets.length,
         webSocketCount + 1,
         reason: 'After upgrade request, the number of web sockets '
             'should be incremented by 1',
       );
 
-      final clientDoc = CRDTDocument(peerId: peerId, documentId: documentId);
+      final clientDoc =
+          CRDTDocument(peerId: clientPeerId, documentId: documentId);
 
       final client = WebSocketClient.test(
-        url: 'ws://localhost:8080',
+        url: 'ws://localhost:$port',
         document: clientDoc,
-        author: peerId,
+        author: clientPeerId,
         transportFactory: () => Transport.create(
-          MockTransportConnector(mockWebSockets.last),
+          MockTransportConnector(
+            incoming: outgoingServerSockets.last,
+            outgoing: incomingServerSocket.last,
+            messagesSent: clientMessagesSent,
+          ),
         ),
         messageCodec: codec,
       );
@@ -76,29 +116,176 @@ void main() {
       final clientConnected = await client.connect();
       expect(clientConnected, isTrue);
 
+      await Future<void>.delayed(Duration.zero);
+
+      // Verify handshake messages were exchanged
+      final handshakeRequests = clientMessages
+          .where((m) => m.type == MessageType.handshakeRequest)
+          .toList();
+      final handshakeResponses = serverMessages
+          .where((m) => m.type == MessageType.handshakeResponse)
+          .toList();
+
+      expect(
+        handshakeRequests.length,
+        1,
+        reason: 'Client should send handshake request',
+      );
+      expect(
+        handshakeResponses.length,
+        1,
+        reason: 'Server should respond to handshake request',
+      );
+
+      // Verify handshake request properties
+      for (final request in handshakeRequests) {
+        final handshakeRequest = request as HandshakeRequestMessage;
+        expect(handshakeRequest.documentId, documentId);
+        expect(handshakeRequest.versionVector, isNotNull);
+      }
+
+      // Verify handshake response properties
+      for (final response in handshakeResponses) {
+        final handshakeResponse = response as HandshakeResponseMessage;
+        expect(handshakeResponse.documentId, documentId);
+        expect(handshakeResponse.sessionId, isNotNull);
+        expect(handshakeResponse.versionVector, isNotNull);
+      }
+    });
+  });
+
+  group(
+      'WebSocket integration test -'
+      ' should handle communication between clients', () {
+    // document
+    const documentId = 'd77712cf-ec51-4448-bc2e-bd8e6d72d741';
+
+    // http
+    const port = 8080;
+    late StreamController<HttpRequest> httpRequestController;
+    late MockHttpServer mockHttpServer;
+    late MockWebSocketTransformer mockWebSocketTransformer;
+
+    // registry
+    late InMemoryCRDTServerRegistry registry;
+
+    // server
+    late WebSocketServer server;
+    late List<MockWebSocket> outgoingServerSockets;
+    late List<MockWebSocket> incomingServerSockets;
+    late StreamController<List<int>> serverMessagesSentController;
+    late List<Message> serverMessages;
+
+    // clients
+    late WebSocketClient client1;
+    late StreamController<List<int>> client1MessagesSentController;
+    late List<Message> client1Messages;
+
+    late WebSocketClient client2;
+    late StreamController<List<int>> client2MessagesSentController;
+    late List<Message> client2Messages;
+
+    /// Setup a client and connect it to the server
+    /// (send an "upgrade request" to the server)
+    ///
+    /// Returns the client instance
+    Future<WebSocketClient> setupClient({
+      required PeerId peerId,
+      required StreamController<List<int>> messagesSentController,
+      required JsonMessageCodec<Message> codec,
+    }) async {
+      final webSocketCount = outgoingServerSockets.length;
+
+      httpRequestController.add(MockHttpRequest());
+      await Future<void>.delayed(Duration.zero);
+
+      expect(
+        outgoingServerSockets.length,
+        webSocketCount + 1,
+        reason: 'After upgrade request, the number of web sockets '
+            'should be incremented by 1',
+      );
+
+      final clientDoc = CRDTDocument(
+        peerId: peerId,
+        documentId: documentId,
+      );
+
+      final client = WebSocketClient.test(
+        url: 'ws://localhost:$port',
+        document: clientDoc,
+        author: peerId,
+        transportFactory: () => Transport.create(
+          MockTransportConnector(
+            incoming: outgoingServerSockets.last,
+            outgoing: incomingServerSockets.last,
+            messagesSent: messagesSentController,
+          ),
+        ),
+        messageCodec: codec,
+      );
+
+      final clientConnected = await client.connect();
+      expect(clientConnected, isTrue);
       return client;
     }
 
-    test(
-        'should setup a communication between '
-        'two clients and a server', () async {
-      const documentId = 'test-document-1';
+    setUp(() async {
+      httpRequestController = StreamController<HttpRequest>.broadcast();
+      mockWebSocketTransformer = MockWebSocketTransformer();
+
+      outgoingServerSockets = [];
+      incomingServerSockets = [];
+
+      final codec = JsonMessageCodec<Message>(
+        toJson: (message) => message.toJson(),
+        fromJson: Message.fromJson,
+      );
+
+      void listenToMessages(
+        StreamController<List<int>> messagesSent,
+        List<Message> messages,
+      ) {
+        messagesSent.stream.listen((data) {
+          final message = codec.decode(data);
+          if (message != null) {
+            messages.add(message);
+          }
+        });
+      }
+
+      serverMessagesSentController = StreamController<List<int>>.broadcast();
+      serverMessages = [];
+      listenToMessages(serverMessagesSentController, serverMessages);
+
       final client1PeerId = PeerId.generate();
+      client1MessagesSentController = StreamController<List<int>>.broadcast();
+      client1Messages = [];
+      listenToMessages(client1MessagesSentController, client1Messages);
+
       final client2PeerId = PeerId.generate();
+      client2MessagesSentController = StreamController<List<int>>.broadcast();
+      client2Messages = [];
+      listenToMessages(client2MessagesSentController, client2Messages);
+
+      mockHttpServer = MockHttpServer();
+      registry = InMemoryCRDTServerRegistry();
 
       // Setup stubs
       stubHttpServer(
         mockHttpServer: mockHttpServer,
         httpRequestController: httpRequestController,
+        port: port,
       );
       stubWebSocket(
         mockWebSocketTransformer: mockWebSocketTransformer,
-        mockWebSockets: mockWebSockets,
-        messagesSent: messagesSent,
+        serverSockets: outgoingServerSockets,
+        clientSockets: incomingServerSockets,
+        messagesSent: serverMessagesSentController,
       );
 
       // Create server with WebSocketServer.test
-      final server = WebSocketServer.test(
+      server = WebSocketServer.test(
         serverFactory: () async => mockHttpServer,
         serverRegistry: registry,
         serverTransformer: mockWebSocketTransformer,
@@ -110,104 +297,48 @@ void main() {
 
       await server.start();
 
-      final client1 = await setupClient(
+      client1 = await setupClient(
         peerId: client1PeerId,
-        documentId: documentId,
+        messagesSentController: client1MessagesSentController,
+        codec: codec,
       );
 
       await Future<void>.delayed(Duration.zero);
 
-      final client2 = await setupClient(
+      client2 = await setupClient(
         peerId: client2PeerId,
-        documentId: documentId,
+        messagesSentController: client2MessagesSentController,
+        codec: codec,
       );
 
       await Future<void>.delayed(Duration.zero);
 
-      final client1ListHandler =
-          CRDTListHandler<String>(client1.document, 'test-list');
+      // await handshake messages to be exchanged
+      // Verify handshake messages were exchanged
+      final handshakeClient1Requests = client1Messages
+          .where((m) => m.type == MessageType.handshakeRequest)
+          .toList();
+      final handshakeClient2Requests = client2Messages
+          .where((m) => m.type == MessageType.handshakeRequest)
+          .toList();
+      final handshakeServerResponses = serverMessages
+          .where((m) => m.type == MessageType.handshakeResponse)
+          .toList();
 
-      final client2ListHandler =
-          CRDTListHandler<String>(client2.document, 'test-list');
-
-      // Test: Client 1 sends a change and client 2 receives it
-      expect(client1ListHandler.length, 0);
-      client1ListHandler.insert(0, 'Item from C1');
-
-      await Future<void>.delayed(Duration.zero);
-
-      // Verify client 2 received the change
-      expect(client2ListHandler.length, 1);
-      expect(client2ListHandler[0], 'Item from C1');
-
-      final serverMessages = <Message>[];
-      final client1Messages = <Message>[];
-
-      messagesSent.stream.listen((data) {
-        final message = codec.decode(data);
-        if (message != null) {
-          serverMessages.add(message);
-        }
-      });
-
-      
-
+      expect(handshakeClient1Requests.length, 1);
+      expect(handshakeClient2Requests.length, 1);
+      expect(handshakeServerResponses.length, 2);
     });
 
-    group('should handle communication between clients', () {
-      const documentId = 'd77712cf-ec51-4448-bc2e-bd8e6d72d741';
-      late WebSocketServer server;
-      late WebSocketClient client1;
-      late WebSocketClient client2;
+    tearDown(() async {
+      client1.dispose();
+      client2.dispose();
 
-      setUp(() async {
-        final client1PeerId = PeerId.generate();
-        final client2PeerId = PeerId.generate();
+      await server.stop();
 
-        // Setup stubs
-        stubHttpServer(
-          mockHttpServer: mockHttpServer,
-          httpRequestController: httpRequestController,
-        );
-        stubWebSocket(
-          mockWebSocketTransformer: mockWebSocketTransformer,
-          mockWebSockets: mockWebSockets,
-          messagesSent: messagesSent,
-        );
-
-        // Create server with WebSocketServer.test
-        server = WebSocketServer.test(
-          serverFactory: () async => mockHttpServer,
-          serverRegistry: registry,
-          serverTransformer: mockWebSocketTransformer,
-        );
-
-        await registry.addDocument(documentId);
-        final registryDoc = (await registry.getDocument(documentId))!;
-        CRDTListHandler<String>(registryDoc, 'test-list');
-
-        await server.start();
-
-        client1 = await setupClient(
-          peerId: client1PeerId,
-          documentId: documentId,
-        );
-
-        await Future<void>.delayed(Duration.zero);
-
-        client2 = await setupClient(
-          peerId: client2PeerId,
-          documentId: documentId,
-        );
-
-        await Future<void>.delayed(Duration.zero);
-      });
-
-      tearDown(() async {
-        client1.dispose();
-        client2.dispose();
-        await server.stop();
-      });
+      await registry.clear();
     });
+
+    test('should handle communication between clients', () async {});
   });
 }

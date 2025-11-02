@@ -40,7 +40,7 @@ void main() {
       httpRequestController = StreamController<HttpRequest>.broadcast();
       registry = InMemoryCRDTServerRegistry();
       mockWebSocketTransformer = MockWebSocketTransformer();
-      mockWebSockets = [];
+      mockWebSockets = <MockWebSocket>[];
       codec = JsonMessageCodec<Message>(
         toJson: (message) => message.toJson(),
         fromJson: Message.fromJson,
@@ -57,7 +57,6 @@ void main() {
       registry.clear();
       httpRequestController.close();
     });
-
 
     test('should create a server', () {
       late WebSocketServer server;
@@ -102,7 +101,8 @@ void main() {
       );
       stubWebSocket(
         mockWebSocketTransformer: mockWebSocketTransformer,
-        mockWebSockets: mockWebSockets,
+        serverSockets: mockWebSockets,
+        clientSockets: <MockWebSocket>[],
         messagesSent: messagesSent,
       );
 
@@ -125,7 +125,8 @@ void main() {
       );
       stubWebSocket(
         mockWebSocketTransformer: mockWebSocketTransformer,
-        mockWebSockets: mockWebSockets,
+        serverSockets: mockWebSockets,
+        clientSockets: <MockWebSocket>[],
         messagesSent: messagesSent,
       );
 
@@ -159,7 +160,8 @@ void main() {
         );
         stubWebSocket(
           mockWebSocketTransformer: mockWebSocketTransformer,
-          mockWebSockets: mockWebSockets,
+          serverSockets: mockWebSockets,
+          clientSockets: <MockWebSocket>[],
           messagesSent: messagesSent,
         );
 
@@ -218,7 +220,8 @@ void main() {
       );
       stubWebSocket(
         mockWebSocketTransformer: mockWebSocketTransformer,
-        mockWebSockets: mockWebSockets,
+        serverSockets: mockWebSockets,
+        clientSockets: <MockWebSocket>[],
         messagesSent: messagesSent,
       );
 
@@ -293,7 +296,8 @@ void main() {
       );
       stubWebSocket(
         mockWebSocketTransformer: mockWebSocketTransformer,
-        mockWebSockets: mockWebSockets,
+        serverSockets: mockWebSockets,
+        clientSockets: <MockWebSocket>[],
         messagesSent: messagesSent,
       );
 
