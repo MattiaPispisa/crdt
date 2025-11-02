@@ -283,7 +283,7 @@ void main() {
       );
     });
 
-    Future<ServerSetup> setupServer({
+    Future<_ServerSetup> setupServer({
       void Function(Message)? onMessage,
       void Function(ServerEvent)? onEvent,
     }) async {
@@ -312,7 +312,7 @@ void main() {
 
       await server.start();
 
-      return ServerSetup(
+      return _ServerSetup(
         serverMessages: serverMessages,
         serverEvents: serverEvents,
       );
@@ -411,4 +411,21 @@ void main() {
       expect((message as ChangeMessage).change.id, change.id);
     });
   });
+}
+
+/// Internal class used to setup the server for testing
+///
+/// This contains the messages sent from the server to the clients
+/// and the events emitted by the server
+class _ServerSetup {
+  _ServerSetup({
+    required this.serverMessages,
+    required this.serverEvents,
+  });
+
+  /// Messages sent from the server to the clients
+  final List<Message> serverMessages;
+
+  /// Events emitted by the server
+  final List<ServerEvent> serverEvents;
 }

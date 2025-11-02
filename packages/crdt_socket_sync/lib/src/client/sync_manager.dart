@@ -82,7 +82,6 @@ class SyncManager {
     document.import(
       changes: changes,
       snapshot: snapshot,
-      merge: true,
     );
 
     _sendUnknownChangesToServerSync(

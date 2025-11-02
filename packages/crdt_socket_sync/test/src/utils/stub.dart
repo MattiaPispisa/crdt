@@ -89,7 +89,8 @@ void stubWebSocket({
     when(() => mockWebSocket.add(any<List<int>>())).thenAnswer((invocation) {
       final data = invocation.positionalArguments[0] as List<int>;
       messagesSent.add(data);
-      // Server's _WebSocketConnection.send() calls _webSocket.add(), forward to controller
+      // Server's _WebSocketConnection.send() calls _webSocket.add(),
+      // forward to controller
       mockWebSocket.controller.add(data);
     });
 
@@ -137,21 +138,4 @@ class _MockTransportConnection implements TransportConnection {
 
   @override
   bool get isConnected => true;
-}
-
-/// Internal class used to setup the server for testing
-///
-/// This contains the messages sent from the server to the clients
-/// and the events emitted by the server
-class ServerSetup {
-  ServerSetup({
-    required this.serverMessages,
-    required this.serverEvents,
-  });
-
-  /// Messages sent from the server to the clients
-  final List<Message> serverMessages;
-
-  /// Events emitted by the server
-  final List<ServerEvent> serverEvents;
 }
