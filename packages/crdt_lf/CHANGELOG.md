@@ -1,3 +1,8 @@
+## [2.2.0]
+
+### Changed
+- Can import snapshot even if there are newer changes in the document 
+
 ## [2.1.0] - 2025-10-31
 
 ### Added

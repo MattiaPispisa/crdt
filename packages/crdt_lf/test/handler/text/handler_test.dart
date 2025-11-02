@@ -323,7 +323,7 @@ void main() {
         text1.insert(0, 'Hello');
         text2.insert(0, 'World');
 
-        expect(doc1.shouldApplySnapshot(doc2.takeSnapshot()), isFalse);
+        expect(doc1.shouldApplySnapshot(doc2.takeSnapshot()), isTrue);
 
         final changes = doc1.exportChanges();
         final applied = doc2.importChanges(changes);

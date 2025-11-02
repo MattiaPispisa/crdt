@@ -187,7 +187,7 @@ void main() {
 
       // Import snapshot into doc1 should be applied only if newer
       final shouldApply = doc1.shouldApplySnapshot(snap);
-      expect(shouldApply, isFalse);
+      expect(shouldApply, isTrue);
 
       // Merge snapshot (always applies) and sync both ways
       doc1

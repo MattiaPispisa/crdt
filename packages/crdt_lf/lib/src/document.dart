@@ -180,6 +180,12 @@ class CRDTDocument {
   }
 
   /// It represents the **latest operation for each peer** of this document
+  ///
+  /// Example:
+  /// `{client1: HLC(3, 0), client2: HLC(2, 0),client3: HLC(1, 0)}`
+  ///
+  /// This means that the latest operation for client1 is HLC(3, 0)
+  /// (same reasoning for client2 and client3)
   VersionVector getVersionVector() {
     if (_lastSnapshot != null) {
       return _dag.versionVector.merged(_lastSnapshot!.versionVector);
@@ -329,9 +335,9 @@ class CRDTDocument {
 
   /// Import [Snapshot]
   ///
-  /// Returns true if the snapshot was applied.
+  /// Returns `true` if the snapshot was applied.
   ///
-  /// [snapshot] is applied only if it is newer than document version.
+  /// [snapshot] is applied only if it is newer than the document snapshot.
   /// Use [shouldApplySnapshot] to check if the snapshot should be applied.
   bool importSnapshot(Snapshot snapshot) {
     if (shouldApplySnapshot(snapshot)) {
@@ -366,13 +372,32 @@ class CRDTDocument {
   /// Whether the given [snapshot] should be applied.
   ///
   /// Returns `true` if the snapshot can be applied to the document.
+  ///
+  /// The snapshot is applied only if it is newer than the current one.
+  /// This is `true` when for every peer the snapshot version vector is
+  /// strictly newer than the document version vector.
+  ///
+  /// ### Example:
+  /// - S1: `{client1: HLC(5, 0), client2: HLC(8, 0),client3: HLC(2, 0)}`
+  /// - S2: `{client1: HLC(3, 0), client2: HLC(2, 0),client3: HLC(1, 0)}`
+  ///
+  /// `S1` can be applied to the document because for every peer
+  /// the snapshot version vector is strictly newer
+  /// than the document version vector.
+  ///
+  /// ### Example
+  /// - S1: `{client1: HLC(2, 0), client2: HLC(8, 0),client3: HLC(2, 0)}`
+  /// - S2: `{client1: HLC(3, 0), client2: HLC(2, 0),client3: HLC(1, 0)}`
+  ///
+  /// `S1` cannot be applied to the document because for client1
+  /// the snapshot version vector is not strictly newer
+  /// than the document version vector.
   bool shouldApplySnapshot(Snapshot snapshot) {
-    if (isEmpty) {
+    if (_lastSnapshot == null) {
       return true;
     }
-
     return snapshot.versionVector
-        .isStrictlyNewerOrEqualThan(getVersionVector());
+        .isStrictlyNewerOrEqualThan(_lastSnapshot!.versionVector);
   }
 
   /// Import [snapshot] and [changes].

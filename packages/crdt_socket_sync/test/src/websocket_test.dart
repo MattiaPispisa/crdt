@@ -81,6 +81,8 @@ void main() {
 
       await server.start();
 
+
+      // TODO: deve diventare una funzione per connecttere un client
       // Connect client 1 to server
       httpRequestController.add(MockHttpRequest());
       await Future<void>.delayed(const Duration(milliseconds: 10));

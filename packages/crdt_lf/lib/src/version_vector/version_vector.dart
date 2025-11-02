@@ -5,6 +5,12 @@ import 'package:hlc_dart/hlc_dart.dart';
 /// to their corresponding [HybridLogicalClock].
 ///
 /// It represents the **latest operation for each peer** in the document.
+///
+/// Example:
+/// `{client1: HLC(3, 0), client2: HLC(2, 0),client3: HLC(1, 0)}`
+///
+/// This means that the latest operation for client1 is HLC(3, 0) 
+/// (same reasoning for client2 and client3)
 class VersionVector {
   /// Creates a [VersionVector].
   VersionVector(Map<PeerId, HybridLogicalClock> vector)

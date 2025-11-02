@@ -90,20 +90,6 @@ class SyncManager {
     );
   }
 
-  /// Compute the server version from snapshot+changes
-  VersionVector _serverVersionVector({
-    VersionVector? base,
-    List<Change>? changes,
-  }) {
-    final versionVector = base ?? VersionVector({});
-
-    for (final c in changes ?? <Change>[]) {
-      versionVector.update(c.id.peerId, c.hlc);
-    }
-
-    return versionVector;
-  }
-
   /// Send a list of changes that were already exported (synchronous version)
   void _sendUnknownChangesToServerSync(List<Change> changes) {
     if (changes.isEmpty) {

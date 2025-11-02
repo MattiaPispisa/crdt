@@ -1,8 +1,6 @@
 import 'dart:async';
 import 'dart:io';
 
-import 'package:crdt_socket_sync/src/common/common.dart';
-import 'package:crdt_socket_sync/src/common/transporter.dart';
 import 'package:crdt_socket_sync/web_socket_server.dart';
 import 'package:mocktail/mocktail.dart';
 
@@ -30,6 +28,9 @@ class MockWebSocket extends Mock implements Stream<dynamic>, WebSocket {
 }
 
 /// Stub configuration for HTTP server in tests
+///
+/// When [mockHttpServer] is listened
+/// the [httpRequestController] is returned.
 void stubHttpServer({
   required MockHttpServer mockHttpServer,
   required StreamController<HttpRequest> httpRequestController,
@@ -37,8 +38,7 @@ void stubHttpServer({
   registerFallbackValue(MockHttpRequest());
 
   // Mock the http server
-  when(() => mockHttpServer.address)
-      .thenReturn(InternetAddress.loopbackIPv4);
+  when(() => mockHttpServer.address).thenReturn(InternetAddress.loopbackIPv4);
   when(() => mockHttpServer.port).thenReturn(8080);
   when(
     () => mockHttpServer.listen(
@@ -55,22 +55,30 @@ void stubHttpServer({
       onError: invocation.namedArguments[const Symbol('onError')] as Function?,
       cancelOnError:
           invocation.namedArguments[const Symbol('cancelOnError')] as bool?,
-      onDone: invocation.namedArguments[const Symbol('onDone')] as void
-          Function()?,
+      onDone:
+          invocation.namedArguments[const Symbol('onDone')] as void Function()?,
     );
   });
   when(() => mockHttpServer.close()).thenAnswer((_) async {});
 }
 
 /// Stub configuration for WebSocket upgrades in tests
+///
+/// When [mockWebSocketTransformer] is called to upgrade a request
+/// to a web socket, a new [MockWebSocket] is created
+/// and added to the [mockWebSockets] list.
+///
+/// The [messagesSent] controller is used to send messages from the server
+/// to the client.
+///
+/// The [mockWebSockets] list is used to store the mock web sockets.
 void stubWebSocket({
   required MockWebSocketTransformer mockWebSocketTransformer,
   required List<MockWebSocket> mockWebSockets,
   required StreamController<List<int>> messagesSent,
 }) {
   // Mock the request upgrade to websocket
-  when(() => mockWebSocketTransformer.isUpgradeRequest(any()))
-      .thenReturn(true);
+  when(() => mockWebSocketTransformer.isUpgradeRequest(any())).thenReturn(true);
   when(() => mockWebSocketTransformer.upgrade(any())).thenAnswer((_) async {
     final mockWebSocket = MockWebSocket();
     mockWebSockets.add(mockWebSocket);
@@ -84,16 +92,31 @@ void stubWebSocket({
       // Server's _WebSocketConnection.send() calls _webSocket.add(), forward to controller
       mockWebSocket.controller.add(data);
     });
-    
+
     when(() => mockWebSocket.readyState).thenReturn(WebSocket.open);
 
     return mockWebSocket;
   });
 }
 
+/// TransportConnector for testing
+///
+/// When [connect] is called, a new [TransportConnection] is created
+/// that uses the [mockWebSocket] to send and receive messages.
+class MockTransportConnector implements TransportConnector {
+  MockTransportConnector(this.mockWebSocket);
+
+  final MockWebSocket mockWebSocket;
+
+  @override
+  Future<TransportConnection> connect() async {
+    return _MockTransportConnection(mockWebSocket: mockWebSocket);
+  }
+}
+
 /// TransportConnection implementation for testing using MockWebSocket
-class MockTransportConnection implements TransportConnection {
-  MockTransportConnection({
+class _MockTransportConnection implements TransportConnection {
+  _MockTransportConnection({
     required this.mockWebSocket,
   });
 
@@ -116,65 +139,6 @@ class MockTransportConnection implements TransportConnection {
   bool get isConnected => true;
 }
 
-/// TransportConnector for testing that returns a MockTransportConnection
-class MockTransportConnector implements TransportConnector {
-  MockTransportConnector(this.mockWebSocket);
-
-  final MockWebSocket mockWebSocket;
-
-  @override
-  Future<TransportConnection> connect() async {
-    return MockTransportConnection(mockWebSocket: mockWebSocket);
-  }
-}
-
-/// TransportConnection implementation using StreamControllers for testing
-class StreamTransportConnection implements TransportConnection {
-  StreamTransportConnection({
-    required this.incomingController,
-    required this.outgoingController,
-  });
-
-  final StreamController<List<int>> incomingController;
-  final StreamController<List<int>> outgoingController;
-
-  @override
-  Stream<List<int>> get incoming => incomingController.stream;
-
-  @override
-  Future<void> send(List<int> data) async {
-    outgoingController.add(data);
-  }
-
-  @override
-  Future<void> close() async {
-    await incomingController.close();
-    await outgoingController.close();
-  }
-
-  @override
-  bool get isConnected => !incomingController.isClosed;
-}
-
-/// TransportConnector that returns a StreamTransportConnection
-class StreamTransportConnector implements TransportConnector {
-  StreamTransportConnector({
-    required this.incomingController,
-    required this.outgoingController,
-  });
-
-  final StreamController<List<int>> incomingController;
-  final StreamController<List<int>> outgoingController;
-
-  @override
-  Future<TransportConnection> connect() async {
-    return StreamTransportConnection(
-      incomingController: incomingController,
-      outgoingController: outgoingController,
-    );
-  }
-}
-
 /// Internal class used to setup the server for testing
 ///
 /// This contains the messages sent from the server to the clients
@@ -191,4 +155,3 @@ class ServerSetup {
   /// Events emitted by the server
   final List<ServerEvent> serverEvents;
 }
-
