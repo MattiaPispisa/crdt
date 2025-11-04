@@ -7,6 +7,7 @@ import 'package:crdt_lf/crdt_lf.dart';
 import 'package:crdt_socket_sync/src/server/in_memory_server_registry.dart';
 import 'package:crdt_socket_sync/web_socket_client.dart';
 import 'package:crdt_socket_sync/web_socket_server.dart';
+import 'package:mocktail/mocktail.dart';
 import 'package:test/test.dart';
 
 import 'utils/stub.dart';
@@ -110,7 +111,6 @@ void main() {
             incoming: outgoingServerSockets.last,
             outgoing: incomingServerSocket.last,
             messagesSent: clientMessagesSentController,
-            canSend: () => true,
           ),
         ),
         messageCodec: codec,
@@ -179,30 +179,28 @@ void main() {
     late List<MockWebSocket> incomingServerSockets;
     late StreamController<List<int>> serverMessagesSentController;
     late List<Message> serverMessagesSent;
-    late CRDTListHandler<Map<String, dynamic>> serverTodoList;
+    late CRDTListHandler<Map<String, dynamic>> serverTodoListHandler;
 
     // clients
     late WebSocketClient client1;
-    late _ClientCommunication client1Communication;
     late StreamController<List<int>> client1MessagesSentController;
     late List<Message> client1MessagesSent;
-    late CRDTListHandler<Map<String, dynamic>> client1TodoList;
+    late CRDTListHandler<Map<String, dynamic>> client1TodoListHandler;
 
     late WebSocketClient client2;
-    late _ClientCommunication client2Communication;
     late StreamController<List<int>> client2MessagesSentController;
     late List<Message> client2MessagesSent;
-    late CRDTListHandler<Map<String, dynamic>> client2TodoList;
+    late CRDTListHandler<Map<String, dynamic>> client2TodoListHandler;
 
     /// Setup a client and connect it to the server
     /// (send an "upgrade request" to the server)
     ///
     /// Returns the client instance
     Future<WebSocketClient> setupClient({
+      required int clientCount,
       required PeerId peerId,
       required StreamController<List<int>> messagesSentController,
       required JsonMessageCodec<Message> codec,
-      required _ClientCommunication clientCommunication,
     }) async {
       final webSocketCount = outgoingServerSockets.length;
 
@@ -227,10 +225,9 @@ void main() {
         author: peerId,
         transportFactory: () => Transport.create(
           MockTransportConnector(
-            incoming: outgoingServerSockets.last,
-            outgoing: incomingServerSockets.last,
+            incoming: outgoingServerSockets[clientCount - 1],
+            outgoing: incomingServerSockets[clientCount - 1],
             messagesSent: messagesSentController,
-            canSend: () => clientCommunication.canSend,
           ),
         ),
         messageCodec: codec,
@@ -274,13 +271,11 @@ void main() {
       listenToMessages(serverMessagesSentController, serverMessagesSent);
 
       final client1PeerId = PeerId.generate();
-      client1Communication = _ClientCommunication();
       client1MessagesSentController = StreamController<List<int>>.broadcast();
       client1MessagesSent = [];
       listenToMessages(client1MessagesSentController, client1MessagesSent);
 
       final client2PeerId = PeerId.generate();
-      client2Communication = _ClientCommunication();
       client2MessagesSentController = StreamController<List<int>>.broadcast();
       client2MessagesSent = [];
       listenToMessages(client2MessagesSentController, client2MessagesSent);
@@ -310,27 +305,27 @@ void main() {
 
       await registry.addDocument(documentId);
       final registryDoc = (await registry.getDocument(documentId))!;
-      serverTodoList = CRDTListHandler(registryDoc, todoList);
+      serverTodoListHandler = CRDTListHandler(registryDoc, todoList);
 
       await server.start();
 
       client1 = await setupClient(
+        clientCount: 1,
         peerId: client1PeerId,
         messagesSentController: client1MessagesSentController,
         codec: codec,
-        clientCommunication: client1Communication,
       );
-      client1TodoList = CRDTListHandler(client1.document, todoList);
+      client1TodoListHandler = CRDTListHandler(client1.document, todoList);
 
       await Future<void>.delayed(Duration.zero);
 
       client2 = await setupClient(
+        clientCount: 2,
         peerId: client2PeerId,
         messagesSentController: client2MessagesSentController,
         codec: codec,
-        clientCommunication: client2Communication,
       );
-      client2TodoList = CRDTListHandler(client2.document, todoList);
+      client2TodoListHandler = CRDTListHandler(client2.document, todoList);
 
       await Future<void>.delayed(Duration.zero);
 
@@ -361,7 +356,7 @@ void main() {
     });
 
     test('should handle communication between clients', () async {
-      client1TodoList.insert(0, const _Todo(text: 'Buy milk').toJson());
+      client1TodoListHandler.insert(0, const _Todo(text: 'Buy milk').toJson());
       await Future<void>.delayed(Duration.zero);
 
       final client1Changes = client1MessagesSent
@@ -389,28 +384,76 @@ void main() {
       );
 
       expect(
-        getTodoList(client1TodoList),
-        orderedEquals(getTodoList(client2TodoList)),
+        getTodoList(client1TodoListHandler),
+        orderedEquals(getTodoList(client2TodoListHandler)),
       );
     });
 
     test('should request a document status when sync problems occurs',
         () async {
-      client1Communication.canSend = false;
-      client1TodoList.insert(0, const _Todo(text: 'Buy milk').toJson());
+      outgoingServerSockets.first.controller.addError(Error());
+
+      client1TodoListHandler
+        ..insert(0, const _Todo(text: 'Buy milk').toJson())
+        ..insert(1, const _Todo(text: 'Buy apples').toJson());
+
+      var client1Changes = client1MessagesSent
+          .where((m) => m.type == MessageType.change)
+          .toList();
+      var serverChanges = serverMessagesSent
+          .where((m) => m.type == MessageType.change)
+          .toList();
+
+      expect(
+        client1Changes.length,
+        0,
+        reason: 'client1 should not send changes when sync problems occurs',
+      );
+      expect(serverChanges.length, 0);
+
+      await client1.connectionStatus
+          .firstWhere((status) => status == ConnectionStatus.reconnecting);
+
+      await Future<void>.delayed(Duration.zero);
+
+      await client1.connectionStatus
+          .firstWhere((status) => status == ConnectionStatus.connected);
 
       await Future<void>.delayed(Duration.zero);
 
       //no messages should be sent
-      final client1Changes = client1MessagesSent
+      client1Changes = client1MessagesSent
           .where((m) => m.type == MessageType.change)
           .toList();
-      expect(client1Changes.length, 0);
+      expect(
+        client1Changes.length,
+        2,
+      );
+      serverChanges = serverMessagesSent
+          .where((m) => m.type == MessageType.change)
+          .toList();
+      expect(
+        serverChanges.length,
+        2,
+      );
 
-      final serverChanges = serverMessagesSent
-          .where((m) => m.type == MessageType.change)
-          .toList();
-      expect(serverChanges.length, 0);
+      const syncedList = [
+        _Todo(text: 'Buy milk'),
+        _Todo(text: 'Buy apples'),
+      ];
+
+      expect(
+        getTodoList(client1TodoListHandler),
+        orderedEquals(syncedList),
+      );
+      expect(
+        getTodoList(serverTodoListHandler),
+        orderedEquals(syncedList),
+      );
+      expect(
+        getTodoList(client2TodoListHandler),
+        orderedEquals(syncedList),
+      );
     });
   });
 }
@@ -452,8 +495,4 @@ class _Todo {
 
   @override
   int get hashCode => Object.hashAll([text, isDone]);
-}
-
-class _ClientCommunication {
-  bool canSend = true;
 }

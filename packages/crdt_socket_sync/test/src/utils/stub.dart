@@ -88,6 +88,7 @@ void stubWebSocket({
   // Mock the request upgrade to websocket
   when(() => mockWebSocketTransformer.isUpgradeRequest(any())).thenReturn(true);
   when(() => mockWebSocketTransformer.upgrade(any())).thenAnswer((_) async {
+    print("UPGRADE");
     // Create two separate mock sockets for bidirectional communication
     final serverSocket = MockWebSocket();
     final clientSocket = MockWebSocket();
@@ -96,7 +97,8 @@ void stubWebSocket({
     clientSockets.add(clientSocket);
 
     // Mock server socket methods
-    when(() => serverSocket.close(any(), any())).thenAnswer((_) async {});
+    when(() => serverSocket.close(any(), any())).thenAnswer((_) async {
+    });
 
     when(() => serverSocket.add(any<List<int>>())).thenAnswer((invocation) {
       final data = invocation.positionalArguments[0] as List<int>;
@@ -127,14 +129,12 @@ class MockTransportConnector implements TransportConnector {
   MockTransportConnector({
     required this.incoming,
     required this.outgoing,
-    required this.canSend,
     this.messagesSent,
   });
 
   final MockWebSocket incoming;
   final MockWebSocket outgoing;
   final StreamController<List<int>>? messagesSent;
-  final bool Function() canSend;
 
   @override
   Future<TransportConnection> connect() async {
@@ -142,7 +142,6 @@ class MockTransportConnector implements TransportConnector {
       incomingSocket: incoming,
       outgoingSocket: outgoing,
       messagesSent: messagesSent,
-      canSend: canSend,
     );
   }
 }
@@ -152,23 +151,18 @@ class _MockTransportConnection implements TransportConnection {
   _MockTransportConnection({
     required this.incomingSocket,
     required this.outgoingSocket,
-    required this.canSend,
     this.messagesSent,
   });
 
   final MockWebSocket incomingSocket;
   final MockWebSocket outgoingSocket;
   final StreamController<List<int>>? messagesSent;
-  final bool Function() canSend;
 
   @override
   Stream<List<int>> get incoming => incomingSocket.controller.stream;
 
   @override
   Future<void> send(List<int> data) async {
-    if (!canSend()) {
-      throw StateError('Client cannot send messages');
-    }
     // Forward to messagesSent for inspection
     messagesSent?.add(data);
     // Forward to controller for receiver to consume
@@ -176,9 +170,7 @@ class _MockTransportConnection implements TransportConnection {
   }
 
   @override
-  Future<void> close() async {
-    await outgoingSocket.controller.close();
-  }
+  Future<void> close() async {}
 
   @override
   bool get isConnected => true;
