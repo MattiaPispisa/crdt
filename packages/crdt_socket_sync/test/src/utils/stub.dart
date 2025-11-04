@@ -17,13 +17,21 @@ class MockWebSocketTransformer extends Mock
     implements WebSocketServerTransformer {}
 
 class MockWebSocket extends Mock implements Stream<dynamic>, WebSocket {
-  MockWebSocket() : controller = StreamController<List<int>>.broadcast();
+  MockWebSocket()
+      : controller = StreamController<List<int>>.broadcast(),
+        incomingController = StreamController<List<int>>.broadcast();
 
+  /// Controller for outgoing messages (server writes here, client reads from here)
   final StreamController<List<int>> controller;
+
+  /// Controller for incoming messages (client writes here, server reads from here)
+  final StreamController<List<int>> incomingController;
 
   @override
   Stream<S> map<S>(S Function(dynamic event) convert) {
-    return controller.stream.map(convert);
+    // Server reads from incomingController, not from controller
+    // This prevents the server from reading its own messages
+    return incomingController.stream.map(convert);
   }
 }
 
@@ -65,13 +73,12 @@ void stubHttpServer({
 
 /// Stub configuration for WebSocket upgrades in tests
 ///
-/// When [mockWebSocketTransformer] is called to upgrade a request
-/// to a web socket, a new [MockWebSocket] is created
-/// and added to both the [serverSockets] and [clientSockets] lists.
-/// This allows bidirectional communication through the same mock socket.
+/// Creates two paired [MockWebSocket] instances:
+/// - serverSocket: used by the server (writes to client, reads from client)
+/// - clientSocket: used by the client (writes to server, reads from server)
 ///
-/// The [messagesSent] controller is used to send messages from both server
-/// and client for inspection.
+/// The [messagesSent] controller is used to capture all sent messages
+/// from both server and client for inspection.
 void stubWebSocket({
   required MockWebSocketTransformer mockWebSocketTransformer,
   required List<MockWebSocket> serverSockets,
@@ -81,24 +88,29 @@ void stubWebSocket({
   // Mock the request upgrade to websocket
   when(() => mockWebSocketTransformer.isUpgradeRequest(any())).thenReturn(true);
   when(() => mockWebSocketTransformer.upgrade(any())).thenAnswer((_) async {
-    final mockWebSocket = MockWebSocket();
-    serverSockets.add(mockWebSocket);
-    clientSockets.add(mockWebSocket);
+    // Create two separate mock sockets for bidirectional communication
+    final serverSocket = MockWebSocket();
+    final clientSocket = MockWebSocket();
 
-    // Mock web socket methods
-    when(() => mockWebSocket.close(any(), any())).thenAnswer((_) async {});
+    serverSockets.add(serverSocket);
+    clientSockets.add(clientSocket);
 
-    when(() => mockWebSocket.add(any<List<int>>())).thenAnswer((invocation) {
+    // Mock server socket methods
+    when(() => serverSocket.close(any(), any())).thenAnswer((_) async {});
+
+    when(() => serverSocket.add(any<List<int>>())).thenAnswer((invocation) {
       final data = invocation.positionalArguments[0] as List<int>;
       messagesSent.add(data);
-      // Server's _WebSocketConnection.send() calls _webSocket.add(),
-      // forward to controller
-      mockWebSocket.controller.add(data);
+      // Server writes to its own controller (client reads from this)
+      serverSocket.controller.add(data);
     });
 
-    when(() => mockWebSocket.readyState).thenReturn(WebSocket.open);
+    when(() => serverSocket.readyState).thenReturn(WebSocket.open);
 
-    return mockWebSocket;
+    // bind client write to server incoming controller
+    clientSocket.controller.stream.listen(serverSocket.incomingController.add);
+
+    return serverSocket;
   });
 }
 
@@ -106,21 +118,23 @@ void stubWebSocket({
 ///
 /// When [connect] is called, a new [TransportConnection] is created
 /// that uses:
-/// - the [incoming] to send messages;
-/// - the [outgoing] to receive messages.
+/// - the [incoming] socket to receive messages (read from its controller stream);
+/// - the [outgoing] socket to send messages (write to its controller).
 ///
 /// If [messagesSent] is provided,
-/// all sent messages will also be added to it.
+/// all sent messages will also be added to it for inspection.
 class MockTransportConnector implements TransportConnector {
   MockTransportConnector({
     required this.incoming,
     required this.outgoing,
+    required this.canSend,
     this.messagesSent,
   });
 
   final MockWebSocket incoming;
   final MockWebSocket outgoing;
   final StreamController<List<int>>? messagesSent;
+  final bool Function() canSend;
 
   @override
   Future<TransportConnection> connect() async {
@@ -128,6 +142,7 @@ class MockTransportConnector implements TransportConnector {
       incomingSocket: incoming,
       outgoingSocket: outgoing,
       messagesSent: messagesSent,
+      canSend: canSend,
     );
   }
 }
@@ -137,18 +152,23 @@ class _MockTransportConnection implements TransportConnection {
   _MockTransportConnection({
     required this.incomingSocket,
     required this.outgoingSocket,
+    required this.canSend,
     this.messagesSent,
   });
 
   final MockWebSocket incomingSocket;
   final MockWebSocket outgoingSocket;
   final StreamController<List<int>>? messagesSent;
+  final bool Function() canSend;
 
   @override
   Stream<List<int>> get incoming => incomingSocket.controller.stream;
 
   @override
   Future<void> send(List<int> data) async {
+    if (!canSend()) {
+      throw StateError('Client cannot send messages');
+    }
     // Forward to messagesSent for inspection
     messagesSent?.add(data);
     // Forward to controller for receiver to consume
