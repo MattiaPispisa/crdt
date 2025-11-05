@@ -7,7 +7,6 @@ import 'package:crdt_lf/crdt_lf.dart';
 import 'package:crdt_socket_sync/src/server/in_memory_server_registry.dart';
 import 'package:crdt_socket_sync/web_socket_client.dart';
 import 'package:crdt_socket_sync/web_socket_server.dart';
-import 'package:mocktail/mocktail.dart';
 import 'package:test/test.dart';
 
 import 'utils/stub.dart';
@@ -417,29 +416,26 @@ void main() {
       );
       expect(serverChanges.length, 0);
 
-      print('client1Changes: $client1MessagesSent');
-      print('serverChanges: $serverMessagesSent');
-
       await waitForClient1Status(ConnectionStatus.connected);
 
-      //no messages should be sent
+      // Wait for async message sending to complete
+      await Future<void>.delayed(Duration.zero);
+
+      // After reconnection, changes should be sent
       client1Changes = client1MessagesSent
-          .where((m) => m.type == MessageType.change)
+          .where((m) => m.type == MessageType.change || m.type == MessageType.changes)
           .toList();
       expect(
         client1Changes.length,
-        2,
+        1, // 1 ChangesMessage containing 2 changes
       );
       serverChanges = serverMessagesSent
-          .where((m) => m.type == MessageType.change)
+          .where((m) => m.type == MessageType.change || m.type == MessageType.changes)
           .toList();
       expect(
         serverChanges.length,
-        2,
+        2, // Server broadcasts 2 individual ChangeMessage
       );
-
-      print('client1Changes: $client1MessagesSent');
-      print('serverChanges: $serverMessagesSent');
 
       const syncedList = [
         _Todo(text: 'Buy milk'),
