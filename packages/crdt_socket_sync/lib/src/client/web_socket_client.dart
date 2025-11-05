@@ -246,6 +246,16 @@ class WebSocketClient extends CRDTSocketClient {
       throw StateError('Client not connected');
     }
 
+    // Only allow handshake and pong messages to be sent 
+    // before handshake is completed
+    final isHandshakeOrPong = message.type == MessageType.handshakeRequest ||
+        message.type == MessageType.pong;
+
+    if (!isHandshakeOrPong && !await _handshakeCompleted) {
+      // If handshake is not completed, wait or skip the message
+      throw StateError('Handshake not completed');
+    }
+
     final data = _messageCodec.encode(message);
 
     // ignore: prefer_asserts_with_message assert function
@@ -498,17 +508,19 @@ class WebSocketClient extends CRDTSocketClient {
 
   /// Handles the handshake response
   ///
-  /// Merges the changes and snapshot into the document
-  /// and completes the handshake
+  /// Completes the handshake and merges the changes 
+  /// and snapshot into the document
   void _handleHandshakeResponse(HandshakeResponseMessage message) {
     _sessionId = message.sessionId;
+
+    // Complete the handshake first so that merge can send messages
+    _handshakeCompleter?.complete(true);
 
     _syncManager.merge(
       changes: message.changes,
       snapshot: message.snapshot,
       serverVersionVector: message.versionVector,
     );
-    _handshakeCompleter?.complete(true);
   }
 
   void _handleChangeMessage(ChangeMessage message) {
