@@ -88,7 +88,6 @@ void stubWebSocket({
   // Mock the request upgrade to websocket
   when(() => mockWebSocketTransformer.isUpgradeRequest(any())).thenReturn(true);
   when(() => mockWebSocketTransformer.upgrade(any())).thenAnswer((_) async {
-    print("UPGRADE");
     // Create two separate mock sockets for bidirectional communication
     final serverSocket = MockWebSocket();
     final clientSocket = MockWebSocket();
@@ -97,12 +96,21 @@ void stubWebSocket({
     clientSockets.add(clientSocket);
 
     // Mock server socket methods
+    // In tests, we don't close the controllers to allow reconnection
+    // The controllers should remain open so they can be reused
     when(() => serverSocket.close(any(), any())).thenAnswer((_) async {
+      // Don't close the controllers - they are managed by the test
+      // and should remain open for reuse during reconnection
+    });
+    when(() => clientSocket.close(any(), any())).thenAnswer((_) async {
+      // Don't close the controllers - they are managed by the test
+      // and should remain open for reuse during reconnection
     });
 
     when(() => serverSocket.add(any<List<int>>())).thenAnswer((invocation) {
       final data = invocation.positionalArguments[0] as List<int>;
       messagesSent.add(data);
+
       // Server writes to its own controller (client reads from this)
       serverSocket.controller.add(data);
     });
@@ -110,7 +118,14 @@ void stubWebSocket({
     when(() => serverSocket.readyState).thenReturn(WebSocket.open);
 
     // bind client write to server incoming controller
-    clientSocket.controller.stream.listen(serverSocket.incomingController.add);
+    // Use a broadcast stream and handle errors gracefully
+    // so the listener doesn't get closed when errors occur
+    // This listener remains active even when errors occur,
+    // allowing the connection to be reused during reconnection
+    clientSocket.controller.stream.listen(
+      serverSocket.incomingController.add,
+      cancelOnError: false,
+    );
 
     return serverSocket;
   });
@@ -152,20 +167,23 @@ class _MockTransportConnection implements TransportConnection {
     required this.incomingSocket,
     required this.outgoingSocket,
     this.messagesSent,
-  });
+  }) {
+    // Create the stream once to avoid multiple subscriptions
+    _incomingStream = incomingSocket.controller.stream;
+  }
 
   final MockWebSocket incomingSocket;
   final MockWebSocket outgoingSocket;
   final StreamController<List<int>>? messagesSent;
+  late final Stream<List<int>> _incomingStream;
 
   @override
-  Stream<List<int>> get incoming => incomingSocket.controller.stream;
+  Stream<List<int>> get incoming => _incomingStream;
 
   @override
   Future<void> send(List<int> data) async {
     // Forward to messagesSent for inspection
     messagesSent?.add(data);
-    // Forward to controller for receiver to consume
     outgoingSocket.controller.add(data);
   }
 

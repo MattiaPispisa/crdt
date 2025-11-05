@@ -192,6 +192,10 @@ void main() {
     late List<Message> client2MessagesSent;
     late CRDTListHandler<Map<String, dynamic>> client2TodoListHandler;
 
+    Future<void> waitForClient1Status(ConnectionStatus status) {
+      return client1.connectionStatus.firstWhere((status) => status == status);
+    }
+
     /// Setup a client and connect it to the server
     /// (send an "upgrade request" to the server)
     ///
@@ -393,6 +397,8 @@ void main() {
         () async {
       outgoingServerSockets.first.controller.addError(Error());
 
+      await waitForClient1Status(ConnectionStatus.reconnecting);
+
       client1TodoListHandler
         ..insert(0, const _Todo(text: 'Buy milk').toJson())
         ..insert(1, const _Todo(text: 'Buy apples').toJson());
@@ -411,15 +417,10 @@ void main() {
       );
       expect(serverChanges.length, 0);
 
-      await client1.connectionStatus
-          .firstWhere((status) => status == ConnectionStatus.reconnecting);
+      print('client1Changes: $client1MessagesSent');
+      print('serverChanges: $serverMessagesSent');
 
-      await Future<void>.delayed(Duration.zero);
-
-      await client1.connectionStatus
-          .firstWhere((status) => status == ConnectionStatus.connected);
-
-      await Future<void>.delayed(Duration.zero);
+      await waitForClient1Status(ConnectionStatus.connected);
 
       //no messages should be sent
       client1Changes = client1MessagesSent
@@ -436,6 +437,9 @@ void main() {
         serverChanges.length,
         2,
       );
+
+      print('client1Changes: $client1MessagesSent');
+      print('serverChanges: $serverMessagesSent');
 
       const syncedList = [
         _Todo(text: 'Buy milk'),

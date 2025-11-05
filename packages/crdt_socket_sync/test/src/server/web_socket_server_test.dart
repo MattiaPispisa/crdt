@@ -178,7 +178,7 @@ void main() {
         final client = PeerId.generate();
         await Future<void>.delayed(Duration.zero);
 
-        mockWebSockets.first.controller.add(
+        mockWebSockets.first.incomingController.add(
           codec.encode(
             HandshakeRequestMessage(
               author: client,
@@ -241,7 +241,7 @@ void main() {
       // Client 1
       httpRequestController.add(MockHttpRequest());
       await Future<void>.delayed(Duration.zero);
-      mockWebSockets[0].controller.add(
+      mockWebSockets[0].incomingController.add(
             codec.encode(
               HandshakeRequestMessage(
                 author: client1,
@@ -254,7 +254,7 @@ void main() {
       // Client 2
       httpRequestController.add(MockHttpRequest());
       await Future<void>.delayed(Duration.zero);
-      mockWebSockets[1].controller.add(
+      mockWebSockets[1].incomingController.add(
             codec.encode(
               HandshakeRequestMessage(
                 author: client2,
@@ -335,7 +335,7 @@ void main() {
 
       httpRequestController.add(MockHttpRequest());
       await Future<void>.delayed(Duration.zero);
-      mockWebSocket().controller.add(
+      mockWebSocket().incomingController.add(
             codec.encode(
               HandshakeRequestMessage(
                 author: client,
@@ -391,7 +391,7 @@ void main() {
 
       // client 1 sends change to server
       // server will broadcast the change to all clients (`client2`)
-      mockWebSockets[0].controller.add(
+      mockWebSockets[0].incomingController.add(
             codec.encode(
               ChangeMessage(
                 change: change,
