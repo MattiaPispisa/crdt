@@ -51,6 +51,7 @@ class _TransportImpl implements Transport {
 
   final TransportConnector _connector;
   TransportConnection? _connection;
+  StreamSubscription<List<int>>? _incomingSubscription;
 
   final _incomingController = StreamController<List<int>>.broadcast();
 
@@ -68,6 +69,8 @@ class _TransportImpl implements Transport {
 
   @override
   Future<void> close() async {
+    await _incomingSubscription?.cancel();
+    _incomingSubscription = null;
     await _connection?.close();
     _connection = null;
     await _incomingController.close();
@@ -80,7 +83,7 @@ class _TransportImpl implements Transport {
     _connection = await _connector.connect();
 
     // Forward incoming messages to the controller
-    _connection!.incoming.listen(
+    _incomingSubscription = _connection!.incoming.listen(
       _incomingController.add,
       onError: _incomingController.addError,
       onDone: () {
