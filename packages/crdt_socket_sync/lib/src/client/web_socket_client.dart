@@ -169,12 +169,10 @@ class WebSocketClient extends CRDTSocketClient {
   @override
   Future<bool> connect() async {
     if (_connectionStatusValue.isConnected) {
-      print("_connectionStatusValue.isConnected");
       return true;
     }
 
     if (_handshaking) {
-      print("handhaking");
       // already under connection
       return _handshakeCompleter!.future;
     }
@@ -192,8 +190,6 @@ class WebSocketClient extends CRDTSocketClient {
             : ConnectionStatus.reconnecting,
       );
 
-      print("here ooo");
-
       _transport!.incoming.listen(
         _handleIncomingData,
         onError: (dynamic error, _) {
@@ -201,10 +197,7 @@ class WebSocketClient extends CRDTSocketClient {
         },
       );
 
-      print("perform handshake");
-
       final connected = await _performHandshake();
-      print("connected: $connected");
       if (connected) {
         _startPingTimer();
         _updateConnectionStatus(ConnectionStatus.connected);
@@ -360,7 +353,6 @@ class WebSocketClient extends CRDTSocketClient {
       _updateConnectionStatus(ConnectionStatus.error);
     }
     if (attemptReconnect) {
-      print("attempt reconnect");
       _attemptReconnect();
     }
   }
@@ -436,7 +428,6 @@ class WebSocketClient extends CRDTSocketClient {
   ///
   /// Handshake is not attempted to reconnect
   Future<bool> _performHandshake() async {
-    print("_performHandshake");
     _handshakeCompleter = Completer<bool>();
 
     final handshakeRequest = HandshakeRequestMessage(
@@ -517,7 +508,6 @@ class WebSocketClient extends CRDTSocketClient {
       snapshot: message.snapshot,
       serverVersionVector: message.versionVector,
     );
-    print("_handleHandshakeResponse");
     _handshakeCompleter?.complete(true);
   }
 
@@ -633,8 +623,7 @@ class _WebSocketConnection implements TransportConnection {
 
   @override
   Future<void> send(List<int> data) async {
-      _channel.sink.add(data);
-    
+    _channel.sink.add(data);
   }
 
   @override
