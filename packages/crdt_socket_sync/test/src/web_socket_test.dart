@@ -8,7 +8,6 @@ import 'package:crdt_socket_sync/src/server/in_memory_server_registry.dart';
 import 'package:crdt_socket_sync/web_socket_client.dart';
 import 'package:crdt_socket_sync/web_socket_server.dart';
 import 'package:test/test.dart';
-
 import 'utils/stub.dart';
 
 void main() {
@@ -20,6 +19,13 @@ void main() {
   /// and focuses solely on message exchange logic.
 
   group('WebSocket Integration Tests', () {
+    // TODO: server and client should close correct
+    // TODO: should sendMessageToClient make clients unsync
+    // TODO: after sendMessageToClient other actions re-align documents
+    // TODO: should attach plugins
+    // TODO: should dispose plugins correctly
+    // TODO: should have sessionId at init
+    // TODO: should have a sessionId value after socket instauration
     test(
         'should setup a communication between '
         'the client and the server', () async {
@@ -245,6 +251,40 @@ void main() {
       return listHandler.value.map(_Todo.fromJson).toList();
     }
 
+    /// expect equals:
+    /// - [client1TodoListHandler]
+    /// - [client2TodoListHandler]
+    /// - [serverTodoListHandler]
+    ///
+    /// if a list is provided it's also compered
+    void expectSameList({List<_Todo>? list}) {
+      expect(
+        getTodoList(client1TodoListHandler),
+        orderedEquals(getTodoList(client2TodoListHandler)),
+      );
+      expect(
+        getTodoList(client1TodoListHandler),
+        orderedEquals(getTodoList(serverTodoListHandler)),
+      );
+      if (list != null) {
+        expect(
+          getTodoList(client1TodoListHandler),
+          orderedEquals(list),
+        );
+      }
+    }
+
+    /// expect clients has same changes between each others
+    /// and the changes length is `count`
+    void expectSameChanges(int count) {
+      final client1Changes = client1.document.exportChanges();
+      expect(
+        client1Changes.map((c) => c.id),
+        orderedEquals(client2.document.exportChanges().map((c) => c.id)),
+      );
+      expect(client1Changes, hasLength(count));
+    }
+
     setUp(() async {
       httpRequestController = StreamController<HttpRequest>.broadcast();
       mockWebSocketTransformer = MockWebSocketTransformer();
@@ -386,18 +426,79 @@ void main() {
         reason: 'broadcasted change to client2',
       );
 
+      expectSameList();
+      expectSameChanges(1);
+    });
+
+    test('should be synced server and clients after a snapshot', () async {
+      client1TodoListHandler
+        ..insert(0, const _Todo(text: 'Buy milk').toJson())
+        ..insert(1, const _Todo(text: 'Buy apples').toJson());
+
+      await Future<void>.delayed(Duration.zero);
+
+      client2TodoListHandler
+        ..insert(2, const _Todo(text: 'Buy cheese').toJson())
+        ..insert(3, const _Todo(text: 'Buy bread').toJson());
+
+      await Future<void>.delayed(Duration.zero);
+
+      expectSameList();
+
+      final doc = (await registry.getDocument(documentId))!;
+      final snap = doc.takeSnapshot();
+      final changes = doc.exportChanges();
+
+      await server.broadcastMessage(
+        Message.documentStatus(
+          documentId: documentId,
+          snapshot: snap,
+          changes: changes,
+          versionVector: doc.getVersionVector(),
+        ),
+      );
+
+      await Future<void>.delayed(Duration.zero);
+
+      expectSameList();
+      expectSameChanges(0);
+    });
+
+    test('should handshake when sync problems occurs', () async {
+      outgoingServerSockets.first.controller.addError(Error());
+
+      await waitForClient1Status(ConnectionStatus.reconnecting);
+      await waitForClient1Status(ConnectionStatus.connected);
+
+      await Future<void>.delayed(Duration.zero);
+
+      // After reconnection, handshake should be sent
+      final client1Handshake = client1MessagesSent
+          .where((m) => m.type == MessageType.handshakeRequest)
+          .toList();
       expect(
-        getTodoList(client1TodoListHandler),
-        orderedEquals(getTodoList(client2TodoListHandler)),
+        client1Handshake.length,
+        2,
+        reason: 'a handshake request should be sent after sync problems',
+      );
+      final serverHandshake = serverMessagesSent
+          .where((m) => m.type == MessageType.handshakeResponse)
+          .toList();
+      expect(
+        serverHandshake.length,
+        3,
+        reason:
+            'one handshake per client and one after sync problems with client1',
       );
     });
 
-    test('should request a document status when sync problems occurs',
-        () async {
+    test('should send changes when sync problems occurs', () async {
+      // add error to client1 socket
       outgoingServerSockets.first.controller.addError(Error());
 
       await waitForClient1Status(ConnectionStatus.reconnecting);
 
+      // client1 makes changes during sync problems (none is sent to the server)
       client1TodoListHandler
         ..insert(0, const _Todo(text: 'Buy milk').toJson())
         ..insert(1, const _Todo(text: 'Buy apples').toJson());
@@ -410,50 +511,175 @@ void main() {
           .toList();
 
       expect(
-        client1Changes.length,
-        0,
+        client1MessagesSent,
+        orderedEquals([isA<HandshakeRequestMessage>()]),
         reason: 'client1 should not send changes when sync problems occurs',
       );
       expect(serverChanges.length, 0);
 
       await waitForClient1Status(ConnectionStatus.connected);
 
-      // Wait for async message sending to complete
+      // wait client 1 messages after reconnection
       await Future<void>.delayed(Duration.zero);
 
       // After reconnection, changes should be sent
       client1Changes = client1MessagesSent
-          .where((m) => m.type == MessageType.change || m.type == MessageType.changes)
+          .where((m) => m.type == MessageType.changes)
           .toList();
+
       expect(
         client1Changes.length,
-        1, // 1 ChangesMessage containing 2 changes
+        1,
+        reason: 'after sync problems the client send the changes'
+            ' not available on the server',
       );
       serverChanges = serverMessagesSent
-          .where((m) => m.type == MessageType.change || m.type == MessageType.changes)
+          .where((m) => m.type == MessageType.change)
           .toList();
-      expect(
-        serverChanges.length,
-        2, // Server broadcasts 2 individual ChangeMessage
-      );
+      expect(serverChanges.length, 2);
 
       const syncedList = [
         _Todo(text: 'Buy milk'),
         _Todo(text: 'Buy apples'),
       ];
 
-      expect(
-        getTodoList(client1TodoListHandler),
-        orderedEquals(syncedList),
+      expectSameList(
+        list: const [
+          _Todo(text: 'Buy milk'),
+          _Todo(text: 'Buy apples'),
+        ],
       );
+    });
+
+    test(
+        'should align clients - '
+        'client1 after sync problems should import client2 changes', () async {
+      // add error to client1 socket
+      outgoingServerSockets.first.controller.addError(Error());
+
+      await waitForClient1Status(ConnectionStatus.reconnecting);
+
+      client1TodoListHandler
+        ..insert(0, const _Todo(text: 'Buy milk').toJson())
+        ..insert(1, const _Todo(text: 'Buy apples').toJson());
+
+      await waitForClient1Status(ConnectionStatus.connected);
+
+      await Future<void>.delayed(Duration.zero);
+
+      expectSameList(
+        list: const [
+          _Todo(text: 'Buy milk'),
+          _Todo(text: 'Buy apples'),
+        ],
+      );
+    });
+
+    test(
+        'should align clients - '
+        'client1 after sync problems should import client2 changes '
+        'and send it unsent changes to the server', () async {
+      // add error to client1 socket
+      outgoingServerSockets.first.controller.addError(Error());
+
+      await waitForClient1Status(ConnectionStatus.reconnecting);
+
+      // client1 makes changes during sync problems (none is sent to the server)
+      client1TodoListHandler
+        ..insert(0, const _Todo(text: 'Buy milk').toJson())
+        ..insert(1, const _Todo(text: 'Buy apples').toJson());
+
+      // client2 make changes and sent them to the server
+      client2TodoListHandler
+        ..insert(0, const _Todo(text: 'Buy bread').toJson())
+        ..insert(1, const _Todo(text: 'Buy cheese').toJson());
+
+      await waitForClient1Status(ConnectionStatus.connected);
+
+      await Future<void>.delayed(Duration.zero);
+
+      expectSameList();
+    });
+
+    test(
+        'should align clients -'
+        ' client1 after sync occurs must align also with a server snapshot',
+        () async {
+      // add error to client1 socket
+      outgoingServerSockets.first.controller.addError(Error());
+
+      await waitForClient1Status(ConnectionStatus.reconnecting);
+
+      // client1 makes changes during sync problems (none is sent to the server)
+      client1TodoListHandler
+        ..insert(0, const _Todo(text: 'Buy milk').toJson())
+        ..insert(1, const _Todo(text: 'Buy apples').toJson());
+
+      // client2 make changes and sent them to the server
+      client2TodoListHandler
+        ..insert(0, const _Todo(text: 'Buy bread').toJson())
+        ..insert(1, const _Todo(text: 'Buy cheese').toJson());
+
+      await Future<void>.delayed(Duration.zero);
+
+      // ensure server has client2 changes
       expect(
         getTodoList(serverTodoListHandler),
-        orderedEquals(syncedList),
+        orderedEquals(const [
+          _Todo(text: 'Buy bread'),
+          _Todo(text: 'Buy cheese'),
+        ]),
       );
+
+      // create a server snapshot and broadcast it to clients
+      final document = (await registry.getDocument(documentId))!;
+      final snapshot = document.takeSnapshot();
+      final changes = document.exportChanges();
+      await server.broadcastMessage(
+        Message.documentStatus(
+          documentId: documentId,
+          versionVector: document.getVersionVector(),
+          changes: changes,
+          snapshot: snapshot,
+        ),
+      );
+
+      await Future<void>.delayed(Duration.zero);
+
+      // ensure status correctness
       expect(
-        getTodoList(client2TodoListHandler),
-        orderedEquals(syncedList),
+        serverMessagesSent,
+        contains(
+          isA<DocumentStatusMessage>()
+              .having((d) => d.changes?.length, 'length', 0)
+              .having(
+                (d) => d.snapshot,
+                'snapshot',
+                isA<Snapshot>(),
+              ),
+        ),
       );
+
+      // with snapshot client2 prune its changes
+      expect(
+        client2.document.exportChanges().length,
+        0,
+      );
+
+      await waitForClient1Status(ConnectionStatus.connected);
+
+      await Future<void>.delayed(Duration.zero);
+
+      expect(
+        getTodoList(client1TodoListHandler),
+        containsAll(const [
+          _Todo(text: 'Buy milk'),
+          _Todo(text: 'Buy apples'),
+          _Todo(text: 'Buy bread'),
+          _Todo(text: 'Buy cheese'),
+        ]),
+      );
+      expectSameList();
     });
   });
 }
