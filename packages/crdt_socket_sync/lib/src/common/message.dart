@@ -230,9 +230,9 @@ class HandshakeResponseMessage extends Message {
   const HandshakeResponseMessage({
     required String documentId,
     required this.sessionId,
+    required this.versionVector,
     this.snapshot,
     this.changes,
-    required this.versionVector,
   }) : super(MessageType.handshakeResponse, documentId);
 
   /// Create a handshake response message from a JSON map
@@ -360,9 +360,9 @@ class DocumentStatusMessage extends Message {
   /// Constructor
   const DocumentStatusMessage({
     required String documentId,
+    required this.versionVector,
     this.snapshot,
     this.changes,
-    required this.versionVector,
   }) : super(MessageType.documentStatus, documentId);
 
   /// Create a snapshot message from a JSON map

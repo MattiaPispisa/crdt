@@ -247,7 +247,7 @@ class WebSocketClient extends CRDTSocketClient {
       throw StateError('Client not connected');
     }
 
-    // Only allow handshake and pong messages to be sent 
+    // Only allow handshake and pong messages to be sent
     // before handshake is completed
     final isHandshakeOrPong = message.type == MessageType.handshakeRequest ||
         message.type == MessageType.pong;
@@ -509,7 +509,7 @@ class WebSocketClient extends CRDTSocketClient {
 
   /// Handles the handshake response
   ///
-  /// Completes the handshake and merges the changes 
+  /// Completes the handshake and merges the changes
   /// and snapshot into the document
   void _handleHandshakeResponse(HandshakeResponseMessage message) {
     _sessionId = message.sessionId;

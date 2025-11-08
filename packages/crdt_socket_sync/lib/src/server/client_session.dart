@@ -281,7 +281,7 @@ class ClientSession {
     late List<Change> changes;
     changes = document.exportChangesNewerThan(message.versionVector);
 
-    // Get the server's version vector representing the state 
+    // Get the server's version vector representing the state
     // after snapshot and changes
     final serverVersionVector = document.getVersionVector();
 
@@ -418,7 +418,7 @@ class ClientSession {
     }
 
     final snapshot = await _serverRegistry.getLatestSnapshot(documentId);
-    
+
     // Use exportChangesNewerThan to get changes newer than client's version
     final document = (await _serverRegistry.getDocument(documentId))!;
     late List<Change> changes;
