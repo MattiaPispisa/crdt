@@ -238,10 +238,6 @@ class WebSocketServer extends CRDTSocketServer {
       ),
     );
 
-    for (final plugin in plugins) {
-      plugin.onNewSession(session);
-    }
-
     session.events.listen(
       _handleSessionEvent,
       onDone: () {
