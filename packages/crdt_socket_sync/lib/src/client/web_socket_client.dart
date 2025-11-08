@@ -225,6 +225,7 @@ class WebSocketClient extends CRDTSocketClient {
       await _transport!.close();
     });
     _transport = null;
+    _sessionId = null;
 
     for (final plugin in plugins) {
       plugin.onDisconnected();
