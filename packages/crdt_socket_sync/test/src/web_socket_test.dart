@@ -19,8 +19,6 @@ void main() {
   /// The next group assumes communication works
   /// and focuses solely on message exchange logic.
   group('WebSocket Integration Tests', () {
-    // TODO: should have sessionId at init
-    // TODO: should have a sessionId value after socket instauration
     test(
         'should setup a communication between '
         'the client and the server', () async {
@@ -192,20 +190,23 @@ void main() {
     late StreamController<List<int>> serverMessagesSentController;
     late List<Message> serverMessagesSent;
     late CRDTListHandler<Map<String, dynamic>> serverTodoListHandler;
-    late _TestPluginServer serverPlugin;
+    late _TestPluginServer testPluginServer;
+    // late ServerAwarenessPlugin serverAwarenessPlugin;
 
     // clients
     late WebSocketClient client1;
     late StreamController<List<int>> client1MessagesSentController;
     late List<Message> client1MessagesSent;
     late CRDTListHandler<Map<String, dynamic>> client1TodoListHandler;
-    late _TestPluginClient client1Plugin;
+    late _TestPluginClient testPluginClient1;
+    // late ClientAwarenessPlugin awarenessPluginClient1;
 
     late WebSocketClient client2;
     late StreamController<List<int>> client2MessagesSentController;
     late List<Message> client2MessagesSent;
     late CRDTListHandler<Map<String, dynamic>> client2TodoListHandler;
-    late _TestPluginClient client2Plugin;
+    late _TestPluginClient testPluginClient2;
+    // late ClientAwarenessPlugin awarenessPluginClient2;
 
     Future<void> waitForClient1Status(ConnectionStatus status) {
       return client1.connectionStatus.firstWhere((status) => status == status);
@@ -352,12 +353,16 @@ void main() {
       );
 
       // Create server with WebSocketServer.test
-      serverPlugin = _TestPluginServer();
+      testPluginServer = _TestPluginServer();
+      // serverAwarenessPlugin = ServerAwarenessPlugin();
       server = WebSocketServer.test(
         serverFactory: () async => mockHttpServer,
         serverRegistry: registry,
         serverTransformer: mockWebSocketTransformer,
-        plugins: [serverPlugin],
+        plugins: [
+          testPluginServer,
+          // serverAwarenessPlugin,
+        ],
       );
 
       await registry.addDocument(documentId);
@@ -366,25 +371,33 @@ void main() {
 
       await server.start();
 
-      client1Plugin = _TestPluginClient();
+      testPluginClient1 = _TestPluginClient();
+      // awarenessPluginClient1 = ClientAwarenessPlugin();
       client1 = await setupClient(
         clientCount: 1,
         peerId: client1PeerId,
         messagesSentController: client1MessagesSentController,
         codec: codec,
-        clientPlugins: [client1Plugin],
+        clientPlugins: [
+          testPluginClient1,
+          // awarenessPluginClient1,
+        ],
       );
       client1TodoListHandler = CRDTListHandler(client1.document, todoList);
 
       await Future<void>.delayed(Duration.zero);
 
-      client2Plugin = _TestPluginClient();
+      testPluginClient2 = _TestPluginClient();
+      // awarenessPluginClient2 = ClientAwarenessPlugin();
       client2 = await setupClient(
         clientCount: 2,
         peerId: client2PeerId,
         messagesSentController: client2MessagesSentController,
         codec: codec,
-        clientPlugins: [client2Plugin],
+        clientPlugins: [
+          testPluginClient2,
+          // awarenessPluginClient2,
+        ],
       );
       client2TodoListHandler = CRDTListHandler(client2.document, todoList);
 
@@ -556,11 +569,6 @@ void main() {
           .toList();
       expect(serverChanges.length, 2);
 
-      const syncedList = [
-        _Todo(text: 'Buy milk'),
-        _Todo(text: 'Buy apples'),
-      ];
-
       expectSameList(
         list: const [
           _Todo(text: 'Buy milk'),
@@ -725,30 +733,30 @@ void main() {
 
     group('plugins', () {
       test('should setup plugins correctly', () {
-        expect(serverPlugin.sessionDocumentRegisteredCount, 2);
-        expect(serverPlugin.sessionNewSessionCount, 2);
+        expect(testPluginServer.sessionDocumentRegisteredCount, 2);
+        expect(testPluginServer.sessionNewSessionCount, 2);
 
-        expect(client1Plugin.connectedCount, 1);
-        expect(client2Plugin.connectedCount, 1);
+        expect(testPluginClient1.connectedCount, 1);
+        expect(testPluginClient2.connectedCount, 1);
 
-        expect(serverPlugin.sessionMessageCount, 0);
-        expect(client1Plugin.messageCount, 0);
-        expect(client2Plugin.messageCount, 0);
+        expect(testPluginServer.sessionMessageCount, 0);
+        expect(testPluginClient1.messageCount, 0);
+        expect(testPluginClient2.messageCount, 0);
       });
 
       test('should communicate with plugins', () async {
-        await serverPlugin.sendCount(documentId);
+        await testPluginServer.sendCount(documentId);
 
         await Future<void>.delayed(Duration.zero);
 
-        expect(client1Plugin.count, equals(1));
-        expect(client2Plugin.count, equals(1));
+        expect(testPluginClient1.count, equals(1));
+        expect(testPluginClient2.count, equals(1));
 
-        await client1Plugin.sendCount();
+        await testPluginClient1.sendCount();
 
         await Future<void>.delayed(Duration.zero);
 
-        expect(serverPlugin.count, equals(2));
+        expect(testPluginServer.count, equals(2));
       });
 
       test('should dispose plugins correctly', () async {
@@ -759,9 +767,9 @@ void main() {
 
         await server.dispose();
 
-        expect(serverPlugin.disposeCount, equals(1));
-        expect(client1Plugin.disposeCount, equals(1));
-        expect(client2Plugin.disposeCount, equals(1));
+        expect(testPluginServer.disposeCount, equals(1));
+        expect(testPluginClient1.disposeCount, equals(1));
+        expect(testPluginClient2.disposeCount, equals(1));
       });
     });
   });
@@ -867,10 +875,12 @@ class _TestPluginServer extends ServerSyncPlugin {
   }
 
   Future<void> sendCount(String documentId) async {
-    await server.broadcastMessage(_TestPluginMessage(
-      documentId,
-      count: count + 1,
-    ));
+    await server.broadcastMessage(
+      _TestPluginMessage(
+        documentId,
+        count: count + 1,
+      ),
+    );
   }
 
   @override

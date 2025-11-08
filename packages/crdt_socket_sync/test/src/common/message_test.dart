@@ -98,7 +98,8 @@ void main() {
       expect(message, isA<DocumentStatusRequestMessage>());
       expect(message.type, MessageType.documentStatusRequest);
       expect(message.documentId, documentId);
-      expect((message as DocumentStatusRequestMessage).versionVector, versionVector);
+      expect((message as DocumentStatusRequestMessage).versionVector,
+          versionVector);
     });
 
     test('Message.ping() should create PingMessage', () {
@@ -508,16 +509,15 @@ void main() {
     });
 
     test('should handle null versionVector', () {
-      final message = DocumentStatusRequestMessage(
+      const message = DocumentStatusRequestMessage(
         documentId: documentId,
-        versionVector: null,
       );
 
       expect(message.versionVector, isNull);
-      
+
       final json = message.toJson();
       expect(json['versionVector'], isNull);
-      
+
       final deserialized = DocumentStatusRequestMessage.fromJson(json);
       expect(deserialized.versionVector, isNull);
     });
@@ -725,7 +725,7 @@ void main() {
         'type': MessageType.handshakeRequest.index,
         'documentId': 'test-doc',
         'author': PeerId.generate().toString(),
-        'versionVector': {'vector': <String,dynamic>{}},
+        'versionVector': {'vector': <String, dynamic>{}},
       };
 
       final message = Message.fromJson(json);

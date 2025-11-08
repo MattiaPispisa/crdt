@@ -222,7 +222,10 @@ void main() {
           data: {'test-handler': 'test_state'},
         );
 
-        syncManager.merge(serverVersionVector: snapshot.versionVector, snapshot: snapshot, changes: []);
+        syncManager.merge(
+            serverVersionVector: snapshot.versionVector,
+            snapshot: snapshot,
+            changes: []);
 
         // Wait for async operations
         await Future<void>.delayed(const Duration(milliseconds: 10));
@@ -254,14 +257,18 @@ void main() {
         // Add a newer change on the snapshot
         snapshot.versionVector.update(peerId, HybridLogicalClock(l: 10, c: 1));
 
-        syncManager.merge(serverVersionVector: snapshot.versionVector, snapshot: snapshot, changes: []);
+        syncManager.merge(
+            serverVersionVector: snapshot.versionVector,
+            snapshot: snapshot,
+            changes: []);
 
         // Wait for async operations
         await Future<void>.delayed(const Duration(milliseconds: 10));
 
         // Should not send additional changes
-        final changesMessages = mockClient.getSentMessagesOfType<ChangesMessage>();
-        expect(changesMessages, isEmpty); 
+        final changesMessages =
+            mockClient.getSentMessagesOfType<ChangesMessage>();
+        expect(changesMessages, isEmpty);
       });
 
       test('should handle changes from multiple peers correctly', () async {
@@ -284,14 +291,14 @@ void main() {
         syncManager.merge(
           serverVersionVector: VersionVector({otherPeerId: serverChange.hlc}),
           changes: [serverChange],
-          snapshot: null,
         );
 
         // Wait for async operations
         await Future<void>.delayed(const Duration(milliseconds: 10));
 
         // Should have sent local changes as they're newer
-        final changeMessages = mockClient.getSentMessagesOfType<ChangeMessage>();
+        final changeMessages =
+            mockClient.getSentMessagesOfType<ChangeMessage>();
         final changesMessages =
             mockClient.getSentMessagesOfType<ChangesMessage>();
         expect(changeMessages.length + changesMessages.length, greaterThan(0));
@@ -360,7 +367,7 @@ void main() {
         expect(mockClient.sentMessages.length, equals(1));
         final message = mockClient.getLastSentMessage();
         expect(message, isA<DocumentStatusRequestMessage>());
-        final requestMessage = message as DocumentStatusRequestMessage;
+        final requestMessage = message! as DocumentStatusRequestMessage;
         expect(requestMessage.documentId, equals(document.documentId));
         expect(requestMessage.versionVector, isNotNull);
       });
@@ -381,8 +388,9 @@ void main() {
         await Future<void>.delayed(Duration.zero);
 
         final message = mockClient.getLastSentMessage();
-        final requestMessage = message as DocumentStatusRequestMessage;
-        expect(requestMessage.versionVector?.toJson(), equals(currentVV.toJson()));
+        final requestMessage = message! as DocumentStatusRequestMessage;
+        expect(
+            requestMessage.versionVector?.toJson(), equals(currentVV.toJson()));
       });
 
       test('should handle errors gracefully', () async {
@@ -484,14 +492,14 @@ void main() {
         syncManager.merge(
           serverVersionVector: VersionVector({otherPeerId: serverChange.hlc}),
           changes: [serverChange],
-          snapshot: null,
         );
 
         // Wait for async operations
         await Future<void>.delayed(const Duration(milliseconds: 10));
 
         // Should have sent local changes
-        final changeMessages = mockClient.getSentMessagesOfType<ChangeMessage>();
+        final changeMessages =
+            mockClient.getSentMessagesOfType<ChangeMessage>();
         final changesMessages =
             mockClient.getSentMessagesOfType<ChangesMessage>();
         expect(changeMessages.length + changesMessages.length, greaterThan(0));
@@ -513,7 +521,6 @@ void main() {
         expect(
           () => syncManager.merge(
             serverVersionVector: snapshot.versionVector,
-            changes: null,
             snapshot: snapshot,
           ),
           returnsNormally,
@@ -566,7 +573,6 @@ void main() {
             mockClient.getSentMessagesOfType<DocumentStatusRequestMessage>();
         expect(snapshotRequests.length, equals(1));
       });
-
     });
   });
 }
