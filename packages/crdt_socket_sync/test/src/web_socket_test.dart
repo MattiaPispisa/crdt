@@ -4,6 +4,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:crdt_lf/crdt_lf.dart';
+import 'package:crdt_socket_sync/src/plugins/client/client.dart';
 import 'package:crdt_socket_sync/src/server/in_memory_server_registry.dart';
 import 'package:crdt_socket_sync/web_socket_client.dart';
 import 'package:crdt_socket_sync/web_socket_server.dart';
@@ -17,13 +18,7 @@ void main() {
   ///
   /// The next group assumes communication works
   /// and focuses solely on message exchange logic.
-
   group('WebSocket Integration Tests', () {
-    // TODO: server and client should close correct
-    // TODO: should sendMessageToClient make clients unsync
-    // TODO: after sendMessageToClient other actions re-align documents
-    // TODO: should attach plugins
-    // TODO: should dispose plugins correctly
     // TODO: should have sessionId at init
     // TODO: should have a sessionId value after socket instauration
     test(
@@ -121,8 +116,11 @@ void main() {
         messageCodec: codec,
       );
 
+      expect(client.sessionId, isNull);
+
       final clientConnected = await client.connect();
       expect(clientConnected, isTrue);
+      expect(client.sessionId, isNotNull);
 
       await Future<void>.delayed(Duration.zero);
 
@@ -159,6 +157,15 @@ void main() {
         expect(handshakeResponse.sessionId, isNotNull);
         expect(handshakeResponse.versionVector, isNotNull);
       }
+
+      await expectLater(() async => client.disconnect(), returnsNormally);
+      expect(client.dispose, returnsNormally);
+      await expectLater(() async => server.dispose(), returnsNormally);
+
+      await Future<void>.delayed(Duration.zero);
+
+      expect(client.connectionStatusValue, ConnectionStatus.disconnected);
+      expect(client.sessionId, isNull);
     });
   });
 
@@ -185,17 +192,20 @@ void main() {
     late StreamController<List<int>> serverMessagesSentController;
     late List<Message> serverMessagesSent;
     late CRDTListHandler<Map<String, dynamic>> serverTodoListHandler;
+    late _TestPluginServer serverPlugin;
 
     // clients
     late WebSocketClient client1;
     late StreamController<List<int>> client1MessagesSentController;
     late List<Message> client1MessagesSent;
     late CRDTListHandler<Map<String, dynamic>> client1TodoListHandler;
+    late _TestPluginClient client1Plugin;
 
     late WebSocketClient client2;
     late StreamController<List<int>> client2MessagesSentController;
     late List<Message> client2MessagesSent;
     late CRDTListHandler<Map<String, dynamic>> client2TodoListHandler;
+    late _TestPluginClient client2Plugin;
 
     Future<void> waitForClient1Status(ConnectionStatus status) {
       return client1.connectionStatus.firstWhere((status) => status == status);
@@ -210,6 +220,7 @@ void main() {
       required PeerId peerId,
       required StreamController<List<int>> messagesSentController,
       required JsonMessageCodec<Message> codec,
+      required List<ClientSyncPlugin> clientPlugins,
     }) async {
       final webSocketCount = outgoingServerSockets.length;
 
@@ -232,6 +243,7 @@ void main() {
         url: 'ws://localhost:$port',
         document: clientDoc,
         author: peerId,
+        plugins: clientPlugins,
         transportFactory: () => Transport.create(
           MockTransportConnector(
             incoming: outgoingServerSockets[clientCount - 1],
@@ -340,10 +352,12 @@ void main() {
       );
 
       // Create server with WebSocketServer.test
+      serverPlugin = _TestPluginServer();
       server = WebSocketServer.test(
         serverFactory: () async => mockHttpServer,
         serverRegistry: registry,
         serverTransformer: mockWebSocketTransformer,
+        plugins: [serverPlugin],
       );
 
       await registry.addDocument(documentId);
@@ -352,21 +366,25 @@ void main() {
 
       await server.start();
 
+      client1Plugin = _TestPluginClient();
       client1 = await setupClient(
         clientCount: 1,
         peerId: client1PeerId,
         messagesSentController: client1MessagesSentController,
         codec: codec,
+        clientPlugins: [client1Plugin],
       );
       client1TodoListHandler = CRDTListHandler(client1.document, todoList);
 
       await Future<void>.delayed(Duration.zero);
 
+      client2Plugin = _TestPluginClient();
       client2 = await setupClient(
         clientCount: 2,
         peerId: client2PeerId,
         messagesSentController: client2MessagesSentController,
         codec: codec,
+        clientPlugins: [client2Plugin],
       );
       client2TodoListHandler = CRDTListHandler(client2.document, todoList);
 
@@ -681,7 +699,229 @@ void main() {
       );
       expectSameList();
     });
+
+    test('should send message to client', () async {
+      final clientId = client1.sessionId!;
+      final timestamp = DateTime(1997, 11, 12).millisecondsSinceEpoch;
+
+      final initialPongCount =
+          serverMessagesSent.where((m) => m.type == MessageType.pong).length;
+
+      await server.sendMessageToClient(
+        clientId,
+        Message.pong(
+          documentId: documentId,
+          originalTimestamp: timestamp,
+          responseTimestamp: timestamp,
+        ),
+      );
+
+      await Future<void>.delayed(Duration.zero);
+
+      final pongCount =
+          serverMessagesSent.where((m) => m.type == MessageType.pong).length;
+      expect(pongCount, initialPongCount + 1);
+    });
+
+    group('plugins', () {
+      test('should setup plugins correctly', () {
+        expect(serverPlugin.sessionDocumentRegisteredCount, 2);
+        expect(serverPlugin.sessionNewSessionCount, 2);
+
+        expect(client1Plugin.connectedCount, 1);
+        expect(client2Plugin.connectedCount, 1);
+
+        expect(serverPlugin.sessionMessageCount, 0);
+        expect(client1Plugin.messageCount, 0);
+        expect(client2Plugin.messageCount, 0);
+      });
+
+      test('should communicate with plugins', () async {
+        await serverPlugin.sendCount(documentId);
+
+        await Future<void>.delayed(Duration.zero);
+
+        expect(client1Plugin.count, equals(1));
+        expect(client2Plugin.count, equals(1));
+
+        await client1Plugin.sendCount();
+
+        await Future<void>.delayed(Duration.zero);
+
+        expect(serverPlugin.count, equals(2));
+      });
+
+      test('should dispose plugins correctly', () async {
+        await client1.disconnect();
+        await client2.disconnect();
+        client1.dispose();
+        client2.dispose();
+
+        await server.dispose();
+
+        expect(serverPlugin.disposeCount, equals(1));
+        expect(client1Plugin.disposeCount, equals(1));
+        expect(client2Plugin.disposeCount, equals(1));
+      });
+    });
   });
+}
+
+enum _TestPluginMessageType implements MessageTypeValue {
+  testPluginMessage(100);
+
+  const _TestPluginMessageType(this.value);
+
+  @override
+  final int value;
+}
+
+class _TestPluginClient extends ClientSyncPlugin {
+  _TestPluginClient()
+      : messageCodec = JsonMessageCodec<Message>(
+          toJson: (message) => message.toJson(),
+          fromJson: _TestPluginMessage.fromJson,
+        );
+
+  int disposeCount = 0;
+  int connectedCount = 0;
+  int disconnectedCount = 0;
+  int messageCount = 0;
+
+  int count = 0;
+
+  @override
+  void dispose() {
+    disposeCount++;
+    return;
+  }
+
+  Future<void> sendCount() async {
+    await client.sendMessage(
+      _TestPluginMessage(
+        client.document.documentId,
+        count: count + 1,
+      ),
+    );
+  }
+
+  @override
+  final MessageCodec<Message> messageCodec;
+
+  @override
+  String get name => 'test-plugin';
+
+  @override
+  void onConnected() {
+    connectedCount++;
+    return;
+  }
+
+  @override
+  void onDisconnected() {
+    disconnectedCount++;
+    return;
+  }
+
+  @override
+  void onMessage(Message message) {
+    if (message is _TestPluginMessage) {
+      messageCount++;
+      count = message.count;
+    }
+
+    return;
+  }
+}
+
+class _TestPluginServer extends ServerSyncPlugin {
+  _TestPluginServer()
+      : messageCodec = JsonMessageCodec<Message>(
+          toJson: (message) => message.toJson(),
+          fromJson: _TestPluginMessage.fromJson,
+        );
+
+  int sessionClosedCount = 0;
+  int sessionMessageCount = 0;
+  int sessionNewSessionCount = 0;
+  int sessionDocumentRegisteredCount = 0;
+  int disposeCount = 0;
+
+  int count = 0;
+
+  @override
+  void dispose() {
+    disposeCount++;
+    return;
+  }
+
+  @override
+  final MessageCodec<Message> messageCodec;
+
+  @override
+  String get name => 'test-plugin';
+
+  @override
+  void onDocumentRegistered(ClientSession session, String documentId) {
+    sessionDocumentRegisteredCount++;
+  }
+
+  Future<void> sendCount(String documentId) async {
+    await server.broadcastMessage(_TestPluginMessage(
+      documentId,
+      count: count + 1,
+    ));
+  }
+
+  @override
+  void onMessage(ClientSession session, Message message) {
+    if (message is _TestPluginMessage) {
+      sessionMessageCount++;
+      count = message.count;
+    }
+
+    return;
+  }
+
+  @override
+  void onNewSession(ClientSession session) {
+    sessionNewSessionCount++;
+    return;
+  }
+
+  @override
+  void onSessionClosed(ClientSession session) {
+    sessionClosedCount++;
+    return;
+  }
+}
+
+class _TestPluginMessage extends Message {
+  const _TestPluginMessage(
+    String documentId, {
+    required this.count,
+  }) : super(
+          _TestPluginMessageType.testPluginMessage,
+          documentId,
+        );
+
+  factory _TestPluginMessage.fromJson(Map<String, dynamic> json) {
+    return _TestPluginMessage(
+      json['documentId'] as String,
+      count: json['count'] as int,
+    );
+  }
+
+  final int count;
+
+  @override
+  Map<String, dynamic> toJson() {
+    return {
+      'type': type.value,
+      'documentId': documentId,
+      'count': count,
+    };
+  }
 }
 
 class _Todo {
