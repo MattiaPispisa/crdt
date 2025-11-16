@@ -1,3 +1,8 @@
+## [Unreleased]
+
+### Fixed 
+- Fixed sync problems on client disconnection
+
 ## [0.3.0]
 
 **Breaking changes**
