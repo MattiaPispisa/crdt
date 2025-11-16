@@ -1,3 +1,7 @@
+## [0.2.3]
+### Changed
+- chore: added code coverage references
+
 ## [0.2.2] - 2025-10-30
 
 ### Changed

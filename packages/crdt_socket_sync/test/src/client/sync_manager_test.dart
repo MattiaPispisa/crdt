@@ -204,8 +204,9 @@ void main() {
 
         // Create some local changes
         final operation = MockOperation(handler);
-        document.createChange(operation);
-        document.createChange(operation);
+        document
+          ..createChange(operation)
+          ..createChange(operation);
 
         // Wait for local changes to be processed
         await Future<void>.delayed(Duration.zero);
@@ -223,9 +224,10 @@ void main() {
         );
 
         syncManager.merge(
-            serverVersionVector: snapshot.versionVector,
-            snapshot: snapshot,
-            changes: []);
+          serverVersionVector: snapshot.versionVector,
+          snapshot: snapshot,
+          changes: [],
+        );
 
         // Wait for async operations
         await Future<void>.delayed(const Duration(milliseconds: 10));
@@ -258,9 +260,10 @@ void main() {
         snapshot.versionVector.update(peerId, HybridLogicalClock(l: 10, c: 1));
 
         syncManager.merge(
-            serverVersionVector: snapshot.versionVector,
-            snapshot: snapshot,
-            changes: []);
+          serverVersionVector: snapshot.versionVector,
+          snapshot: snapshot,
+          changes: [],
+        );
 
         // Wait for async operations
         await Future<void>.delayed(const Duration(milliseconds: 10));
@@ -311,8 +314,9 @@ void main() {
         final operation = MockOperation(handler);
 
         // Create some local changes
-        document.createChange(operation);
-        document.createChange(operation);
+        document
+          ..createChange(operation)
+          ..createChange(operation);
 
         // Wait for local changes
         await Future<void>.delayed(Duration.zero);
@@ -360,7 +364,7 @@ void main() {
       test('should send document status request', () async {
         mockClient.clearSentMessages();
 
-        syncManager.requestDocumentStatus();
+        await syncManager.requestDocumentStatus();
 
         await Future<void>.delayed(Duration.zero);
 
@@ -375,22 +379,25 @@ void main() {
       test('should send current version vector in request', () async {
         // Create local changes to update version
         final operation = MockOperation(handler);
-        document.createChange(operation);
-        document.createChange(operation);
+        document
+          ..createChange(operation)
+          ..createChange(operation);
 
         await Future<void>.delayed(Duration.zero);
 
         mockClient.clearSentMessages();
 
         final currentVV = document.getVersionVector();
-        syncManager.requestDocumentStatus();
+        await syncManager.requestDocumentStatus();
 
         await Future<void>.delayed(Duration.zero);
 
         final message = mockClient.getLastSentMessage();
         final requestMessage = message! as DocumentStatusRequestMessage;
         expect(
-            requestMessage.versionVector?.toJson(), equals(currentVV.toJson()));
+          requestMessage.versionVector?.toJson(),
+          equals(currentVV.toJson()),
+        );
       });
 
       test('should handle errors gracefully', () async {

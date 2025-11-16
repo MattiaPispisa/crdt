@@ -21,10 +21,12 @@ class MockWebSocket extends Mock implements Stream<dynamic>, WebSocket {
       : controller = StreamController<List<int>>.broadcast(),
         incomingController = StreamController<List<int>>.broadcast();
 
-  /// Controller for outgoing messages (server writes here, client reads from here)
+  /// Controller for outgoing messages
+  /// (server writes here, client reads from here)
   final StreamController<List<int>> controller;
 
-  /// Controller for incoming messages (client writes here, server reads from here)
+  /// Controller for incoming messages
+  /// (client writes here, server reads from here)
   final StreamController<List<int>> incomingController;
 
   @override
@@ -135,7 +137,10 @@ void stubWebSocket({
 ///
 /// When [connect] is called, a new [TransportConnection] is created
 /// that uses:
-/// - the [incoming] socket to receive messages (read from its controller stream);
+///
+/// - the [incoming] socket to receive messages
+/// (read from its controller stream);
+///
 /// - the [outgoing] socket to send messages (write to its controller).
 ///
 /// If [messagesSent] is provided,

@@ -98,8 +98,10 @@ void main() {
       expect(message, isA<DocumentStatusRequestMessage>());
       expect(message.type, MessageType.documentStatusRequest);
       expect(message.documentId, documentId);
-      expect((message as DocumentStatusRequestMessage).versionVector,
-          versionVector);
+      expect(
+        (message as DocumentStatusRequestMessage).versionVector,
+        versionVector,
+      );
     });
 
     test('Message.ping() should create PingMessage', () {

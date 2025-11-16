@@ -412,7 +412,7 @@ class CRDTDocument {
   /// If [merge] is `false`
   /// [snapshot] is applied only if it is newer than
   /// the current document snapshot (snapshot is imported using
-  /// [importSnapshot]), also [changes] are ignored 
+  /// [importSnapshot]), also [changes] are ignored
   /// if [snapshot] is not imported.
   ///
   /// If [merge] is `true`, [snapshot] is merged with the current snapshot

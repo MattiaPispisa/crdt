@@ -281,7 +281,8 @@ class HandshakeResponseMessage extends Message {
   @override
   String toString() {
     return 'HandshakeResponseMessage(snapshot: $snapshot, '
-        'changes: $changes, sessionId: $sessionId, versionVector: $versionVector)';
+        'changes: $changes, sessionId: $sessionId,'
+        ' versionVector: $versionVector)';
   }
 }
 
@@ -406,7 +407,8 @@ class DocumentStatusMessage extends Message {
   @override
   String toString() {
     return 'DocumentStatusMessage(snapshot: $snapshot, '
-        'changes: $changes, documentId: $documentId, versionVector: $versionVector)';
+        'changes: $changes, documentId: $documentId,'
+        ' versionVector: $versionVector)';
   }
 }
 

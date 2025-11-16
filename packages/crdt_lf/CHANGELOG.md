@@ -1,7 +1,11 @@
 ## [2.2.0]
 
 ### Changed
-- Can import snapshot even if there are newer changes in the document 
+- chore: improved documentation about version vector
+- Can import snapshot even if there are newer changes in the document
+
+### Fixed
+- chore: fixed references links
 
 ## [2.1.0] - 2025-10-31
 

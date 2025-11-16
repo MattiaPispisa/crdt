@@ -1,9 +1,4 @@
-## [Unreleased]
-
-### Fixed 
-- Fixed sync problems on client disconnection
-
-## [0.3.0]
+## [0.3.0] - 2025-11-16
 
 **Breaking changes**
 - `CRDTServerRegistry.addDocument` takes a `documentId` and `author` parameter
@@ -19,6 +14,11 @@
 
 ### Changes
 - Document status request can be sent without a version vector
+- chore: added code coverage references
+
+### Fixed 
+- Fixed sync problems during client disconnection
+- Fixed transporter subscription on connection error
 
 ## [0.2.0] - 2025-06-26
 

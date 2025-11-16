@@ -428,7 +428,8 @@ class ClientSession {
       changes = document.exportChanges();
     }
 
-    // Get the server's version vector representing the state after snapshot and changes
+    // Get the server's version vector representing
+    // the state after snapshot and changes
     final serverVersionVector = document.getVersionVector();
 
     final response = Message.documentStatus(
