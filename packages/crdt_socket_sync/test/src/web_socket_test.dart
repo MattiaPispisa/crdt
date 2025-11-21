@@ -196,6 +196,7 @@ void main() {
 
     // clients
     late WebSocketClient client1;
+    late void Function(int) updateClient1SocketIndex;
     late StreamController<List<int>> client1MessagesSentController;
     late List<Message> client1MessagesSent;
     late CRDTListHandler<Map<String, dynamic>> client1TodoListHandler;
@@ -209,15 +210,29 @@ void main() {
     late _TestPluginClient testPluginClient2;
     // late ClientAwarenessPlugin awarenessPluginClient2;
 
-    Future<void> waitForClient1Status(ConnectionStatus status) {
-      return client1.connectionStatus.firstWhere((status) => status == status);
+    Future<void> waitForClient1Status(ConnectionStatus expectedStatus) {
+      return client1.connectionStatus
+          .firstWhere((status) => status == expectedStatus);
+    }
+
+    /// Add a client connection to the server
+    /// (send an "upgrade request" to the server)
+    Future<void> addClientConnection() async {
+      httpRequestController.add(MockHttpRequest());
+      await Future<void>.delayed(Duration.zero);
+      return;
     }
 
     /// Setup a client and connect it to the server
     /// (send an "upgrade request" to the server)
     ///
-    /// Returns the client instance
-    Future<WebSocketClient> setupClient({
+    /// The client will have a dynamic transport factory that allows
+    /// reconnection with new sockets when [connect] is called again.
+    ///
+    /// Returns a [_ClientSetup] with:
+    /// - client: the WebSocketClient instance
+    /// - updateSocketIndex: a function to update which socket the client uses
+    Future<_ClientSetup> setupClient({
       required int clientCount,
       required PeerId peerId,
       required StreamController<List<int>> messagesSentController,
@@ -226,8 +241,7 @@ void main() {
     }) async {
       final webSocketCount = outgoingServerSockets.length;
 
-      httpRequestController.add(MockHttpRequest());
-      await Future<void>.delayed(Duration.zero);
+      await addClientConnection();
 
       expect(
         outgoingServerSockets.length,
@@ -241,24 +255,38 @@ void main() {
         documentId: documentId,
       );
 
+      // Track which socket index this client should use
+      // Initially it's the socket that was just created
+      var currentSocketIndex = clientCount - 1;
+
       final client = WebSocketClient.test(
         url: 'ws://localhost:$port',
         document: clientDoc,
         author: peerId,
         plugins: clientPlugins,
-        transportFactory: () => Transport.create(
-          MockTransportConnector(
-            incoming: outgoingServerSockets[clientCount - 1],
-            outgoing: incomingServerSockets[clientCount - 1],
-            messagesSent: messagesSentController,
-          ),
-        ),
+        transportFactory: () {
+          // Dynamic transport factory that allows reconnection:
+          // When connect() is called after a disconnection,
+          // this will use the current socket index which can be updated
+          return Transport.create(
+            MockTransportConnector(
+              incoming: outgoingServerSockets[currentSocketIndex],
+              outgoing: incomingServerSockets[currentSocketIndex],
+              messagesSent: messagesSentController,
+            ),
+          );
+        },
         messageCodec: codec,
       );
 
       final clientConnected = await client.connect();
       expect(clientConnected, isTrue);
-      return client;
+
+      // Return both the client and a function to update the socket index
+      return _ClientSetup(
+        client,
+        (int newIndex) => currentSocketIndex = newIndex,
+      );
     }
 
     List<_Todo> getTodoList(CRDTListHandler<Map<String, dynamic>> listHandler) {
@@ -275,15 +303,18 @@ void main() {
       expect(
         getTodoList(client1TodoListHandler),
         orderedEquals(getTodoList(client2TodoListHandler)),
+        reason: 'client1 and client2 should have the same list',
       );
       expect(
         getTodoList(client1TodoListHandler),
         orderedEquals(getTodoList(serverTodoListHandler)),
+        reason: 'client1 and server should have the same list',
       );
       if (list != null) {
         expect(
           getTodoList(client1TodoListHandler),
           orderedEquals(list),
+          reason: 'client1 should have the same list as the provided list',
         );
       }
     }
@@ -375,7 +406,7 @@ void main() {
 
         testPluginClient1 = _TestPluginClient();
         // awarenessPluginClient1 = ClientAwarenessPlugin();
-        client1 = await setupClient(
+        final client1Setup = await setupClient(
           clientCount: 1,
           peerId: client1PeerId,
           messagesSentController: client1MessagesSentController,
@@ -385,13 +416,15 @@ void main() {
             // awarenessPluginClient1,
           ],
         );
+        client1 = client1Setup.client;
+        updateClient1SocketIndex = client1Setup.updateSocketIndex;
         client1TodoListHandler = CRDTListHandler(client1.document, todoList);
 
         await Future<void>.delayed(Duration.zero);
 
         testPluginClient2 = _TestPluginClient();
         // awarenessPluginClient2 = ClientAwarenessPlugin();
-        client2 = await setupClient(
+        client2 = (await setupClient(
           clientCount: 2,
           peerId: client2PeerId,
           messagesSentController: client2MessagesSentController,
@@ -400,7 +433,8 @@ void main() {
             testPluginClient2,
             // awarenessPluginClient2,
           ],
-        );
+        ))
+            .client;
         client2TodoListHandler = CRDTListHandler(client2.document, todoList);
 
         await Future<void>.delayed(Duration.zero);
@@ -501,7 +535,7 @@ void main() {
       });
 
       test('should handshake when sync problems occurs', () async {
-        outgoingServerSockets.first.controller.addError(Error());
+        outgoingServerSockets.first.simulateError();
 
         await waitForClient1Status(ConnectionStatus.reconnecting);
         await waitForClient1Status(ConnectionStatus.connected);
@@ -530,7 +564,7 @@ void main() {
 
       test('should send changes when sync problems occurs', () async {
         // add error to client1 socket
-        outgoingServerSockets.first.controller.addError(Error());
+        outgoingServerSockets.first.simulateError();
 
         await waitForClient1Status(ConnectionStatus.reconnecting);
 
@@ -588,7 +622,7 @@ void main() {
           'client1 after sync problems should import client2 changes',
           () async {
         // add error to client1 socket
-        outgoingServerSockets.first.controller.addError(Error());
+        outgoingServerSockets.first.simulateError();
 
         await waitForClient1Status(ConnectionStatus.reconnecting);
 
@@ -613,7 +647,7 @@ void main() {
           'client1 after sync problems should import client2 changes '
           'and send it unsent changes to the server', () async {
         // add error to client1 socket
-        outgoingServerSockets.first.controller.addError(Error());
+        outgoingServerSockets.first.simulateError();
 
         await waitForClient1Status(ConnectionStatus.reconnecting);
 
@@ -640,7 +674,7 @@ void main() {
           ' client1 after sync occurs must align also with a server snapshot',
           () async {
         // add error to client1 socket
-        outgoingServerSockets.first.controller.addError(Error());
+        outgoingServerSockets.first.simulateError();
 
         await waitForClient1Status(ConnectionStatus.reconnecting);
 
@@ -700,6 +734,12 @@ void main() {
           client2.document.exportChanges().length,
           0,
         );
+        // client1 has sync problems,
+        // so it has its changes not available on the server
+        expect(
+          client1.document.exportChanges().length,
+          2,
+        );
 
         await waitForClient1Status(ConnectionStatus.connected);
 
@@ -714,6 +754,166 @@ void main() {
             _Todo(text: 'Buy cheese'),
           ]),
         );
+        expectSameList();
+
+        // client1 changes received from server after the snapshot
+        expect(client2.document.exportChanges().length, 2);
+        expect(client1.document.exportChanges().length, 2);
+      });
+
+      test('should handle explicit client disconnection', () async {
+        expect(client1.connectionStatusValue, ConnectionStatus.connected);
+        expect(client1.sessionId, isNotNull);
+
+        // Explicitly disconnect the client
+        unawaited(client1.disconnect());
+
+        await waitForClient1Status(ConnectionStatus.disconnected);
+
+        expect(client1.connectionStatusValue, ConnectionStatus.disconnected);
+        expect(client1.sessionId, isNull);
+      });
+
+      test(
+        'should handle simulated disconnection and reconnect with new session',
+        () async {
+          // Use client1 which already has dynamic transport factory
+          // Store initial session ID
+          final initialSessionId = client1.sessionId!;
+          expect(initialSessionId, isNotNull);
+          expect(client1.connectionStatusValue, ConnectionStatus.connected);
+
+          // Simulate a permanent client1 disconnection
+          outgoingServerSockets.first.simulateDisconnection();
+
+          // Wait for the client to detect disconnection and try to reconnect
+          await Future<void>.delayed(Duration.zero);
+
+          // Wait for error state after reconnection attempts fail
+          // This may take several seconds (5 attempts * 1 second interval)
+          await waitForClient1Status(ConnectionStatus.error);
+
+          expect(client1.connectionStatusValue, ConnectionStatus.error);
+
+          // Simulate a new HTTP upgrade request for reconnection
+          final socketCountBefore = outgoingServerSockets.length;
+          await addClientConnection();
+
+          // Verify that a new socket was created on the server
+          expect(
+            outgoingServerSockets.length,
+            socketCountBefore + 1,
+            reason: 'A new socket should be created for the reconnection',
+          );
+
+          // Update client1 to use the new socket
+          final newSocketIndex = outgoingServerSockets.length - 1;
+          updateClient1SocketIndex(newSocketIndex);
+
+          expect(
+            serverMessagesSent,
+            isNot(contains(isA<DocumentStatusMessage>())),
+          );
+
+          // Client1 reconnects - this will call transportFactory again
+          // which will now use the new socket
+          final reconnected = await client1.connect();
+          expect(reconnected, isTrue);
+
+          // Verify new session was created
+          expect(client1.connectionStatusValue, ConnectionStatus.connected);
+          expect(client1.sessionId, isNotNull);
+          expect(
+            client1.sessionId,
+            isNot(equals(initialSessionId)),
+            reason: 'A new sessionId should be assigned after reconnection',
+          );
+
+          await Future<void>.delayed(Duration.zero);
+          expect(
+            serverMessagesSent,
+            isNot(contains(isA<DocumentStatusMessage>())),
+            reason: 'No reason to request a document status after reconnection',
+          );
+        },
+      );
+
+      test('should client1 from error state to connected', () async {
+        outgoingServerSockets.first.simulateDisconnection();
+        await Future<void>.delayed(Duration.zero);
+        await waitForClient1Status(ConnectionStatus.error);
+        // now client1 should be in error
+
+        client2TodoListHandler
+          ..insert(
+            0,
+            const _Todo(text: 'Buy bread').toJson(),
+          )
+          ..insert(
+            1,
+            const _Todo(text: 'Buy milk').toJson(),
+          );
+
+        await Future<void>.delayed(Duration.zero);
+
+        final serverDoc = (await registry.getDocument(documentId))!;
+
+        // server is sync with client2, client1 is in error
+        expect(client1.document.exportChanges().length, 0);
+        expect(client2.document.exportChanges().length, 2);
+        expect(serverDoc.exportChanges().length, 2);
+
+        // client1 makes changes during sync problems
+        // (none is sent to the server)
+        client1TodoListHandler.insert(
+          0,
+          const _Todo(text: 'Buy cheese').toJson(),
+        );
+
+        await Future<void>.delayed(Duration.zero);
+
+        expect(client1.document.exportChanges().length, 1);
+        expect(client2.document.exportChanges().length, 2);
+        expect(serverDoc.exportChanges().length, 2);
+
+        // take a snapshot of the server and broadcast it to clients
+        final snap = serverDoc.takeSnapshot();
+        final changes = serverDoc.exportChanges();
+
+        await server.broadcastMessage(
+          Message.documentStatus(
+            documentId: documentId,
+            snapshot: snap,
+            changes: changes,
+            versionVector: serverDoc.getVersionVector(),
+          ),
+        );
+
+        await Future<void>.delayed(Duration.zero);
+
+        expect(client1.document.exportChanges().length, 1);
+        expect(client2.document.exportChanges().length, 0);
+        expect(serverDoc.exportChanges().length, 0);
+
+        // reconnect client1
+        await addClientConnection();
+        updateClient1SocketIndex(
+          outgoingServerSockets.length - 1,
+        ); // last socket
+        unawaited(client1.connect());
+        await waitForClient1Status(ConnectionStatus.connected);
+
+        // TODO(mattia): continuare da qui, individuato il problema di sync
+
+        await Future<void>.delayed(Duration(milliseconds: 1000));
+        print('serverMessagesSent:\n${serverMessagesSent.join('\n\n')}');
+        print('\n\nclient1MessagesSent:\n${client1MessagesSent.join('\n\n')}');
+        print('\n\nclient2MessagesSent:\n${client2MessagesSent.join('\n\n')}');
+
+        // now client1 should be sync with server and client2
+        expect(client1.document.exportChanges().length, 1);
+        expect(client2.document.exportChanges().length, 1);
+        expect(serverDoc.exportChanges().length, 1);
         expectSameList();
       });
 
@@ -861,7 +1061,7 @@ void main() {
         client1AwarenessPlugin = ClientAwarenessPlugin(
           throttleDuration: const Duration(milliseconds: 10),
         );
-        client1 = await setupClient(
+        client1 = (await setupClient(
           clientCount: 1,
           peerId: client1PeerId,
           messagesSentController: client1MessagesSentController,
@@ -869,7 +1069,8 @@ void main() {
           clientPlugins: [
             client1AwarenessPlugin,
           ],
-        );
+        ))
+            .client;
 
         client1TodoListHandler = CRDTListHandler(client1.document, todoList);
 
@@ -878,7 +1079,7 @@ void main() {
         client2AwarenessPlugin = ClientAwarenessPlugin(
           throttleDuration: const Duration(milliseconds: 10),
         );
-        client2 = await setupClient(
+        client2 = (await setupClient(
           clientCount: 2,
           peerId: client2PeerId,
           messagesSentController: client2MessagesSentController,
@@ -886,7 +1087,8 @@ void main() {
           clientPlugins: [
             client2AwarenessPlugin,
           ],
-        );
+        ))
+            .client;
         client2TodoListHandler = CRDTListHandler(client2.document, todoList);
 
         await Future<void>.delayed(Duration.zero);
@@ -1218,4 +1420,12 @@ class _Todo {
 
   @override
   int get hashCode => Object.hashAll([text, isDone]);
+}
+
+/// Helper class to hold a client and its socket index updater
+class _ClientSetup {
+  _ClientSetup(this.client, this.updateSocketIndex);
+
+  final WebSocketClient client;
+  final void Function(int) updateSocketIndex;
 }

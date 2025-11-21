@@ -19,7 +19,8 @@ class MockWebSocketTransformer extends Mock
 class MockWebSocket extends Mock implements Stream<dynamic>, WebSocket {
   MockWebSocket()
       : controller = StreamController<List<int>>.broadcast(),
-        incomingController = StreamController<List<int>>.broadcast();
+        incomingController = StreamController<List<int>>.broadcast(),
+        _isDisconnected = false;
 
   /// Controller for outgoing messages
   /// (server writes here, client reads from here)
@@ -29,11 +30,31 @@ class MockWebSocket extends Mock implements Stream<dynamic>, WebSocket {
   /// (client writes here, server reads from here)
   final StreamController<List<int>> incomingController;
 
+  /// Flag to track if this socket has been disconnected
+  bool _isDisconnected;
+
+  /// Check if this socket is disconnected
+  bool get isDisconnected => _isDisconnected;
+
   @override
   Stream<S> map<S>(S Function(dynamic event) convert) {
     // Server reads from incomingController, not from controller
     // This prevents the server from reading its own messages
     return incomingController.stream.map(convert);
+  }
+
+  /// Simulate a complete disconnection
+  void simulateDisconnection() {
+    simulateError();
+    _isDisconnected = true;
+  }
+
+  /// Simulate a connection error
+  void simulateError([Object? error]) {
+    final err = error ?? Error();
+    if (!controller.isClosed && !_isDisconnected) {
+      controller.addError(err);
+    }
   }
 }
 
@@ -114,7 +135,10 @@ void stubWebSocket({
       messagesSent.add(data);
 
       // Server writes to its own controller (client reads from this)
-      serverSocket.controller.add(data);
+      // Only add if not disconnected and controller is not closed
+      if (!serverSocket.isDisconnected) {
+        serverSocket.controller.add(data);
+      }
     });
 
     when(() => serverSocket.readyState).thenReturn(WebSocket.open);
@@ -158,6 +182,12 @@ class MockTransportConnector implements TransportConnector {
 
   @override
   Future<TransportConnection> connect() async {
+    // If the incoming socket is marked as disconnected,
+    // throw an error to prevent reconnection
+    if (incoming.isDisconnected) {
+      throw Exception('Socket is permanently disconnected');
+    }
+
     return _MockTransportConnection(
       incomingSocket: incoming,
       outgoingSocket: outgoing,
