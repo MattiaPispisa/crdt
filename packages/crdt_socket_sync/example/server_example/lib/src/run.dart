@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:crdt_lf/crdt_lf.dart';
@@ -65,6 +66,7 @@ Future<void> run({
 
   await _startServer(
     logger: logger.getConfiguredInstance(prefix: 'WebSocketServer'),
+    verbose: verbose,
   );
 }
 
@@ -92,17 +94,33 @@ void _setupSigintHandler({required EnLogger logger}) {
   });
 }
 
-Future<void> _startServer({required EnLogger logger}) async {
+Future<void> _startServer({
+  required EnLogger logger,
+  required bool verbose,
+}) async {
   try {
     _server.serverEvents.listen((event) {
-      if (event.type == ServerEventType.clientPingRequest) {
+      if (event.type == ServerEventType.clientPingRequest && !verbose) {
         // ignore ping requests just to not spam the logs
         return;
       }
+
+      final message = event.data?['message'] as Map<String, dynamic>?;
+      if (message != null) {
+        final awarenessMessage = AwarenessMessage.fromJson(message);
+        if (awarenessMessage != null) {
+          if (verbose) {
+            logger.info('➡ Awareness message: ${awarenessMessage.toJson()}');
+          }
+          return;
+        }
+      }
+
       if (event.type == ServerEventType.error) {
         logger.error('❌ Server error: ${event.message}');
         return;
       }
+
       logger.info('➡ Server event: $event');
     });
 

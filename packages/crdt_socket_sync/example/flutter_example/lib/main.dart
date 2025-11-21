@@ -9,7 +9,10 @@ const _kUrl = 'ws://0.0.0.0:8080';
 const _kTitle = 'Flutter Client Example';
 
 void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+
   final preferences = await SharedPreferences.getInstance();
+  
   runApp(MyApp(preferences: preferences));
 }
 
