@@ -265,8 +265,13 @@ class CRDTDocument {
       return false;
     }
 
-    // Check if the change is causally ready
-    if (!_dag.isReady(change.deps)) {
+    // Dependencies that were pruned from the DAG might still be present inside
+    // the last snapshot. Collect missing deps so we can verify whether they
+    // are implicitly satisfied by the snapshot metadata.
+    final missingDeps = _missingDependencies(change.deps);
+
+    if (missingDeps.isNotEmpty &&
+        !_dependenciesCoveredBySnapshot(missingDeps)) {
       throw CausallyNotReadyException(
         'Change is not causally ready: ${change.id}',
       );
@@ -277,7 +282,10 @@ class CRDTDocument {
     devtools.postChangedEvent(this);
 
     // Add the change to the DAG
-    _dag.addNode(change.id, change.deps);
+    // Only wire dependencies that still exist in the DAG. Dependencies already
+    // satisfied by a snapshot do not need graph edges.
+    final dagDependencies = change.deps.where(_dag.containsNode).toSet();
+    _dag.addNode(change.id, dagDependencies);
 
     // Update the clock only for remote changes
     if (change.author != _peerId) {
@@ -635,6 +643,46 @@ class CRDTDocument {
   String toString() {
     return 'CRDTDocument(peerId: $_peerId, changes: '
         '${_changeStore.changeCount}, version: ${version.length} frontiers)';
+  }
+
+  /// Returns the set of dependencies that are not currently present
+  /// in the DAG. These are the candidates that might be covered by
+  /// a snapshot.
+  Set<OperationId> _missingDependencies(Set<OperationId> deps) {
+    if (deps.isEmpty) {
+      return <OperationId>{};
+    }
+
+    final missing = <OperationId>{};
+    for (final dep in deps) {
+      if (!_dag.containsNode(dep)) {
+        missing.add(dep);
+      }
+    }
+    return missing;
+  }
+
+  /// Verifies that every dependency in [deps] is included
+  /// in the latest snapshot version vector.
+  ///
+  /// Returns `true` if the snapshot proves the missing deps were
+  /// compacted away, meaning the change is still causally ready.
+  bool _dependenciesCoveredBySnapshot(Set<OperationId> deps) {
+    if (deps.isEmpty) {
+      return true;
+    }
+    if (_lastSnapshot == null) {
+      return false;
+    }
+
+    final versionVector = _lastSnapshot!.versionVector;
+    for (final dep in deps) {
+      final snapshotClock = versionVector[dep.peerId];
+      if (snapshotClock == null || dep.hlc.compareTo(snapshotClock) > 0) {
+        return false;
+      }
+    }
+    return true;
   }
 
   /// Disposes of the document

@@ -515,8 +515,8 @@ void main() {
 
         expectSameList();
 
+        final snap = await registry.createSnapshot(documentId);
         final doc = (await registry.getDocument(documentId))!;
-        final snap = doc.takeSnapshot();
         final changes = doc.exportChanges();
 
         await server.broadcastMessage(
@@ -701,9 +701,10 @@ void main() {
         );
 
         // create a server snapshot and broadcast it to clients
+        final snapshot = await registry.createSnapshot(documentId);
         final document = (await registry.getDocument(documentId))!;
-        final snapshot = document.takeSnapshot();
         final changes = document.exportChanges();
+
         await server.broadcastMessage(
           Message.documentStatus(
             documentId: documentId,
@@ -856,7 +857,7 @@ void main() {
 
         await Future<void>.delayed(Duration.zero);
 
-        final serverDoc = (await registry.getDocument(documentId))!;
+        var serverDoc = (await registry.getDocument(documentId))!;
 
         // server is sync with client2, client1 is in error
         expect(client1.document.exportChanges().length, 0);
@@ -877,14 +878,14 @@ void main() {
         expect(serverDoc.exportChanges().length, 2);
 
         // take a snapshot of the server and broadcast it to clients
-        final snap = serverDoc.takeSnapshot();
-        final changes = serverDoc.exportChanges();
+        final snap = await registry.createSnapshot(documentId);
+        serverDoc = (await registry.getDocument(documentId))!;
 
         await server.broadcastMessage(
           Message.documentStatus(
             documentId: documentId,
             snapshot: snap,
-            changes: changes,
+            changes: serverDoc.exportChanges(),
             versionVector: serverDoc.getVersionVector(),
           ),
         );
@@ -903,12 +904,7 @@ void main() {
         unawaited(client1.connect());
         await waitForClient1Status(ConnectionStatus.connected);
 
-        // TODO(mattia): continuare da qui, individuato il problema di sync
-
-        await Future<void>.delayed(Duration(milliseconds: 1000));
-        print('serverMessagesSent:\n${serverMessagesSent.join('\n\n')}');
-        print('\n\nclient1MessagesSent:\n${client1MessagesSent.join('\n\n')}');
-        print('\n\nclient2MessagesSent:\n${client2MessagesSent.join('\n\n')}');
+        await Future<void>.delayed(Duration.zero);
 
         // now client1 should be sync with server and client2
         expect(client1.document.exportChanges().length, 1);

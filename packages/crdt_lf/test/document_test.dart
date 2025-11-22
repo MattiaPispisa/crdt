@@ -596,6 +596,36 @@ void main() {
       expect(handler2.value[2], equals('Dart'));
     });
 
+    test(
+        'should accept changes whose dependencies were pruned '
+        'by a snapshot', () {
+      final serverDoc = CRDTDocument();
+      final clientDoc = CRDTDocument();
+
+      final serverHandler = CRDTListHandler<String>(serverDoc, 'todos');
+      final clientHandler = CRDTListHandler<String>(clientDoc, 'todos')
+        ..insert(0, 'initial');
+      serverDoc
+        ..importChanges(clientDoc.exportChanges())
+        // Server compacts history, removing the dependency node
+        ..takeSnapshot();
+
+      // Client goes offline and generates a change referencing
+      // the pruned dependency.
+      clientHandler.insert(1, 'offline');
+
+      final pendingChanges =
+          clientDoc.exportChangesNewerThan(serverDoc.getVersionVector());
+      expect(pendingChanges, hasLength(1));
+
+      expect(
+        () => serverDoc.applyChange(pendingChanges.first),
+        returnsNormally,
+      );
+
+      expect(serverHandler.value, clientHandler.value);
+    });
+
     test('toString returns correct string representation', () {
       doc
         ..createChange(operation)

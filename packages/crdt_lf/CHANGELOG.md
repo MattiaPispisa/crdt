@@ -6,6 +6,7 @@
 
 ### Fixed
 - chore: fixed references links
+- Fix `CRDTDocument.applyChange` to correctly handle dependencies that were pruned from the DAG
 
 ## [2.1.0] - 2025-10-31
 
