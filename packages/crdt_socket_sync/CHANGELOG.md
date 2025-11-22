@@ -22,12 +22,12 @@
 ### Fixed 
 - Fixed sync problems during client disconnection
 - Fixed transporter subscription on connection error
+- Fixed double call on "onNewSession"
 
 ## [0.2.0](https://github.com/MattiaPispisa/crdt/tree/crdt_socket_sync-v0.2.0/packages/crdt_socket_sync)
 **Date:** 2025-06-26
 
 [compare to previous release](https://github.com/MattiaPispisa/crdt/compare/crdt_socket_sync-v0.1.0...crdt_socket_sync-v0.2.0)
-
 
 **Breaking changes**
 - `encode` and `decode` methods of `MessageCodec` have nullable return type
