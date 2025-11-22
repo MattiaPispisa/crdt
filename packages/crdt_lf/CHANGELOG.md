@@ -1,4 +1,5 @@
-## [2.2.0]
+## [2.2.0](https://github.com/MattiaPispisa/crdt/tree/crdt_lf-v2.2.0/packages/crdt_lf)
+[compare to previous release](https://github.com/MattiaPispisa/crdt/compare/crdt_lf-v2.1.0...crdt_lf-v2.2.0)
 
 ### Changed
 - chore: improved documentation about version vector
@@ -6,9 +7,12 @@
 
 ### Fixed
 - chore: fixed references links
-- Fix `CRDTDocument.applyChange` to correctly handle dependencies that were pruned from the DAG
+- Fix `CRDTDocument.applyChange` to correctly handle dependencies that were pruned from the DAG [50](https://github.com/MattiaPispisa/crdt/issues/50)
 
-## [2.1.0] - 2025-10-31
+## [2.1.0](https://github.com/MattiaPispisa/crdt/tree/crdt_lf-v2.1.0/packages/crdt_lf)
+**Date:** 2025-10-31
+
+[compare to previous release](https://github.com/MattiaPispisa/crdt/compare/crdt_lf-v2.0.0...crdt_lf-v2.1.0)
 
 ### Added
 - Added `change` operation to `CRDTFugueTextHandler` and `CRDTTextHandler` [12](https://github.com/MattiaPispisa/crdt/issues/12)
@@ -22,7 +26,10 @@
 
 - Fixed deserialization of Map values in `CRDTFugueTextHandler` operations
 
-## [2.0.0] - 2025-09-16
+## [2.0.0](https://github.com/MattiaPispisa/crdt/tree/crdt_lf-v2.0.0/packages/crdt_lf)
+**Date:** 2025-09-16
+
+[compare to previous release](https://github.com/MattiaPispisa/crdt/compare/crdt_lf-v1.0.0...crdt_lf-v2.0.0)
 
 **Breaking changes**
 - Changed `CRDTFugueTextHandler` operations payload
@@ -44,7 +51,10 @@
 ### Fixed
 - `CRDTMapHandler` updating an absent key is ignored
 
-## [1.0.0] - 2025-08-18
+## [1.0.0](https://github.com/MattiaPispisa/crdt/tree/crdt_lf-v1.0.0/packages/crdt_lf)
+**Date:** 2025-08-18
+
+[compare to previous release](https://github.com/MattiaPispisa/crdt/compare/crdt_lf-v0.8.0...crdt_lf-v1.0.0)
 
 **Breaking changes**
 Create a set of exception classes to be used across the library. Replace `StateError` with `CrdtException` and its subclasses.
@@ -78,22 +88,34 @@ Hlc in version vector is now serialized as string instead of int64. This avoids 
 - Fix double hlc increment on `CRDTDocument.createChange`
 - Fix snapshot initialization for handlers that return a non primitive value
 
-## [0.8.0] - 2025-07-08
+## [0.8.0](https://github.com/MattiaPispisa/crdt/tree/crdt_lf-v0.8.0/packages/crdt_lf)
+**Date:** 2025-07-08
+
+[compare to previous release](https://github.com/MattiaPispisa/crdt/compare/crdt_lf-v0.7.1...crdt_lf-v0.8.0)
 
 ### Added
 - Added `update` operation for every handler [30](https://github.com/MattiaPispisa/crdt/issues/30)
 
-## [0.7.1] - 2025-06-26
+## [0.7.1](https://github.com/MattiaPispisa/crdt/tree/crdt_lf-v0.7.1/packages/crdt_lf)
+**Date:** 2025-06-26
+
+[compare to previous release](https://github.com/MattiaPispisa/crdt/compare/crdt_lf-v0.7.0...crdt_lf-v0.7.1)
 
 ### Changed
 - Update documentation
 
-## [0.7.0+1] - 2025-06-14
+## [0.7.0+1](https://github.com/MattiaPispisa/crdt/tree/crdt_lf-v0.7.0+1/packages/crdt_lf)
+**Date:** 2025-06-14
+
+[compare to previous release](https://github.com/MattiaPispisa/crdt/compare/crdt_lf-v0.7.0...crdt_lf-v0.7.0+1)
 
 ### Fixed
 - Chore: update readme links
 
-## [0.7.0] - 2025-06-14
+## [0.7.0](https://github.com/MattiaPispisa/crdt/tree/crdt_lf-v0.7.0/packages/crdt_lf)
+**Date:** 2025-06-14
+
+[compare to previous release](https://github.com/MattiaPispisa/crdt/compare/crdt_lf-v0.6.1...crdt_lf-v0.7.0)
 
 ### Added
 - `CRDTDocument.mergeSnapshot` to merge a snapshot with the current snapshot
@@ -102,13 +124,19 @@ Hlc in version vector is now serialized as string instead of int64. This avoids 
 ### Changed
 - On changes pruning, if a change has a dependency on a pruned change, the dependency is removed to preserve integrity
 
-## [0.6.1] - 2025-06-02
+## [0.6.1](https://github.com/MattiaPispisa/crdt/tree/crdt_lf-v0.6.1/packages/crdt_lf)
+**Date:** 2025-06-02
+
+[compare to previous release](https://github.com/MattiaPispisa/crdt/compare/crdt_lf-v0.6.0...crdt_lf-v0.6.1)
 
 ### Fixed
 
 - Fix snapshot initialization for handlers that return a non primitive value
 
-## [0.6.0] - 2025-05-10
+## [0.6.0](https://github.com/MattiaPispisa/crdt/tree/crdt_lf-v0.6.0/packages/crdt_lf)
+**Date:** 2025-05-10
+
+[compare to previous release](https://github.com/MattiaPispisa/crdt/compare/crdt_lf-v0.5.1...crdt_lf-v0.6.0)
 
 **Breaking**
 
@@ -123,12 +151,18 @@ Hlc in version vector is now serialized as string instead of int64. This avoids 
 - chore: apply linter rules
 - chore: more documentation on public api
 
-## [0.5.1] - 2025-05-08
+## [0.5.1](https://github.com/MattiaPispisa/crdt/tree/crdt_lf-v0.5.1/packages/crdt_lf)
+**Date:** 2025-05-08
+
+[compare to previous release](https://github.com/MattiaPispisa/crdt/compare/crdt_lf-v0.5.0...crdt_lf-v0.5.1)
 
 ### Fixed
 - Fix folder name clash with gitignore rules 
 
-## [0.5.0] - 2025-05-07
+## [0.5.0](https://github.com/MattiaPispisa/crdt/tree/crdt_lf-v0.5.0/packages/crdt_lf)
+**Date:** 2025-05-07
+
+[compare to previous release](https://github.com/MattiaPispisa/crdt/compare/crdt_lf-v0.4.0...crdt_lf-v0.5.0)
 
 **Breaking**
 - rename `document.import` in `document.binaryImportChanges`
@@ -141,12 +175,18 @@ Hlc in version vector is now serialized as string instead of int64. This avoids 
 ### Fixed
 - Fix Fugue tree insertion 
 
-## [0.4.0] - 2025-04-29
+## [0.4.0](https://github.com/MattiaPispisa/crdt/tree/crdt_lf-v0.4.0/packages/crdt_lf)
+**Date:** 2025-04-29
+
+[compare to previous release](https://github.com/MattiaPispisa/crdt/compare/crdt_lf-v0.3.0...crdt_lf-v0.4.0)
 
 ### Changed
 - chore: move test utils under `helpers` folder
 
-## [0.3.0] - 2025-04-21
+## [0.3.0](https://github.com/MattiaPispisa/crdt/tree/crdt_lf-v0.3.0/packages/crdt_lf)
+**Date:** 2025-04-21
+
+[compare to previous release](https://github.com/MattiaPispisa/crdt/compare/crdt_lf-v0.2.0...crdt_lf-v0.3.0)
 
 ### Added
 - `CRDTDocument` expose `localChanges` stream to listen to local changes [18](https://github.com/MattiaPispisa/crdt/issues/18)
@@ -154,7 +194,10 @@ Hlc in version vector is now serialized as string instead of int64. This avoids 
 contains a routing with a basic example for each use case (currently only todo list)[16](https://github.com/MattiaPispisa/crdt/issues/16)
 - Split Fugue algorithm from text handler [4](https://github.com/MattiaPispisa/crdt/issues/4)
 
-## [0.2.0] - 2025-04-09
+## [0.2.0](https://github.com/MattiaPispisa/crdt/tree/crdt_lf-v0.2.0/packages/crdt_lf)
+**Date:** 2025-04-09
+
+[compare to previous release](https://github.com/MattiaPispisa/crdt/compare/crdt_lf-v0.1.0...crdt_lf-v0.2.0)
 
 ### Added
 - Tests [6](https://github.com/MattiaPispisa/crdt/issues/6)
@@ -162,9 +205,10 @@ contains a routing with a basic example for each use case (currently only todo l
 ### Fixed
 - Fix cached value in handlers
 
-## [0.1.0] - 2025-04-01
+## [0.1.0](https://github.com/MattiaPispisa/crdt/tree/crdt_lf-v0.1.0/packages/crdt_lf)
+**Date:** 2025-04-01
 
-Initial release
+**Initial release**
 
 ### Added
 - CRDTDocument with ChangeStore and Frontiers

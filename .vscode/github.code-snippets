@@ -14,5 +14,17 @@
       "https://github.com/MattiaPispisa/crdt/compare/$1...$2"
     ],
     "description": "Insert Markdown link to GitHub compare"
+  },
+  "GitHub CRDT_LF Release Link": {
+    "prefix": "github_crdt_lf_release",
+    "scope": "markdown",
+    "body": [
+      "## [$1](https://github.com/MattiaPispisa/crdt/tree/crdt_lf-v$1/packages/crdt_lf)",
+      "",
+      "**Date:** $3",
+      "",
+      "[compare to previous release](https://github.com/MattiaPispisa/crdt/compare/crdt_lf-v$2...crdt_lf-v$1)"
+    ],
+    "description": "Insert Markdown link to GitHub CRDT_LF release"
   }
 }
