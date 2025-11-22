@@ -252,6 +252,7 @@ final documentStorage = await CRDTHive.openStorageForDocument(
 A roadmap is available in the [project](https://github.com/users/MattiaPispisa/projects/1) page. The roadmap provides a high-level overview of the project's goals and the current status of the project.
 
 ## Packages
+
 Other bricks of the crdt "system" are:
 
 - [crdt_lf](https://pub.dev/packages/crdt_lf)

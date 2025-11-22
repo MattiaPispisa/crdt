@@ -31,7 +31,7 @@
   - [Packages](#packages)
   - [Roadmap](#roadmap)
   - [Contributing](#contributing)
-  - [Related Packages](#related-packages)
+  - [Packages](#packages-1)
 
 A comprehensive Dart package for synchronizing Conflict-free Replicated Data Types (CRDTs) between multiple clients and a server.
 
@@ -356,11 +356,13 @@ A roadmap is available in the [project](https://github.com/users/MattiaPispisa/p
 
 Contributions are welcome! Please read the contributing guidelines and submit pull requests to the main repository.
 
-## Related Packages
+## Packages
 
-- [crdt_lf](https://pub.dev/packages/crdt_lf): The underlying CRDT implementation
-- [web_socket_channel](https://pub.dev/packages/web_socket_channel): WebSocket communication layer
+Other bricks of the crdt "system" are:
+
+- [crdt_lf](https://pub.dev/packages/crdt_lf)
 - [hlc_dart](https://pub.dev/packages/hlc_dart)
+- [crdt_lf_hive](https://pub.dev/packages/crdt_lf_hive)
 
 
 [crdt_socket_sync_badge]: https://img.shields.io/pub/v/crdt_socket_sync.svg

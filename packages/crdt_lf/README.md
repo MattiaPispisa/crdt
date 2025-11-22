@@ -327,10 +327,11 @@ Feel free to:
 - [An O(ND) Difference Algorithm and its Variations (Myers diff algorithm)](https://link.springer.com/article/10.1007/BF01840446)
 
 ## Packages
+
 Other bricks of the crdt "system" are:
 
-- [hlc_dart](https://pub.dev/packages/hlc_dart)
 - [crdt_socket_sync](https://pub.dev/packages/crdt_socket_sync)
+- [hlc_dart](https://pub.dev/packages/hlc_dart)
 - [crdt_lf_hive](https://pub.dev/packages/crdt_lf_hive)
 
 
