@@ -3,6 +3,7 @@
 [![crdt_lf_hive_badge][crdt_lf_hive_badge]](https://pub.dev/packages/crdt_lf_hive)
 [![pub points][pub_points]][pub_link]
 [![pub likes][pub_likes]][pub_link]
+[![codecov][codecov_badge]][codecov_link]
 [![ci_badge][ci_badge]][ci_link]
 [![License: MIT][license_badge]][license_link]
 [![pub publisher][pub_publisher]][pub_publisher_link]
@@ -251,6 +252,7 @@ final documentStorage = await CRDTHive.openStorageForDocument(
 A roadmap is available in the [project](https://github.com/users/MattiaPispisa/projects/1) page. The roadmap provides a high-level overview of the project's goals and the current status of the project.
 
 ## Packages
+
 Other bricks of the crdt "system" are:
 
 - [crdt_lf](https://pub.dev/packages/crdt_lf)
@@ -261,6 +263,8 @@ Other bricks of the crdt "system" are:
 [crdt_lf_hive_badge]: https://img.shields.io/pub/v/crdt_lf_hive.svg
 [license_badge]: https://img.shields.io/badge/license-MIT-blue.svg
 [license_link]: https://opensource.org/licenses/MIT
+[codecov_badge]: https://img.shields.io/codecov/c/github/MattiaPispisa/crdt/main?flag=crdt_lf_hive&logo=codecov
+[codecov_link]: https://app.codecov.io/gh/MattiaPispisa/crdt/tree/main/packages/crdt_lf_hive
 [pub_link]: https://pub.dev/packages/crdt_lf_hive
 [pub_points]: https://img.shields.io/pub/points/crdt_lf_hive
 [pub_likes]: https://img.shields.io/pub/likes/crdt_lf_hive

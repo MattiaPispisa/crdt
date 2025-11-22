@@ -23,7 +23,39 @@ class WebSocketClient extends CRDTSocketClient {
         _connectionStatusController =
             StreamController<ConnectionStatus>.broadcast()
               ..add(ConnectionStatus.disconnected),
-        _connectionStatusValue = ConnectionStatus.disconnected {
+        _connectionStatusValue = ConnectionStatus.disconnected,
+        _transportFactory = (() => Transport.create(_WebSocketConnector(url))) {
+    _syncManager = SyncManager(document: document, client: this);
+    _messageCodec = CompressedCodec<Message>(
+      PluginAwareMessageCodec.fromPlugins(
+        plugins: plugins,
+        defaultCodec: messageCodec ??
+            JsonMessageCodec<Message>(
+              toJson: (message) => message.toJson(),
+              fromJson: Message.fromJson,
+            ),
+      ),
+      compressor: compressor ?? NoCompression.instance,
+    );
+
+    messages.listen(_handleMessage);
+  }
+
+  /// Constructor for testing
+  WebSocketClient.test({
+    required this.url,
+    required this.document,
+    required this.author,
+    required Transport Function() transportFactory,
+    Compressor? compressor,
+    MessageCodec<Message>? messageCodec,
+    super.plugins,
+  })  : _messageController = StreamController<Message>.broadcast(),
+        _connectionStatusController =
+            StreamController<ConnectionStatus>.broadcast()
+              ..add(ConnectionStatus.disconnected),
+        _connectionStatusValue = ConnectionStatus.disconnected,
+        _transportFactory = transportFactory {
     _syncManager = SyncManager(document: document, client: this);
     _messageCodec = CompressedCodec<Message>(
       PluginAwareMessageCodec.fromPlugins(
@@ -71,6 +103,8 @@ class WebSocketClient extends CRDTSocketClient {
   /// Connection status controller
   final StreamController<ConnectionStatus> _connectionStatusController;
   ConnectionStatus _connectionStatusValue;
+
+  final Transport Function() _transportFactory;
 
   /// Number of reconnect attempts
   int _reconnectAttempts = 0;
@@ -144,13 +178,11 @@ class WebSocketClient extends CRDTSocketClient {
     }
 
     try {
-      final connector = _WebSocketConnector(url);
-
       await tryCatchIgnore(() async {
         await _transport?.close();
       });
 
-      _transport = Transport.create(connector);
+      _transport = _transportFactory();
 
       _updateConnectionStatus(
         _connectionStatusValue.isDisconnected
@@ -193,6 +225,7 @@ class WebSocketClient extends CRDTSocketClient {
       await _transport!.close();
     });
     _transport = null;
+    _sessionId = null;
 
     for (final plugin in plugins) {
       plugin.onDisconnected();
@@ -212,6 +245,16 @@ class WebSocketClient extends CRDTSocketClient {
   }) async {
     if (_connectionStatusValue.isDisconnected || _transport == null) {
       throw StateError('Client not connected');
+    }
+
+    // Only allow handshake and pong messages to be sent
+    // before handshake is completed
+    final isHandshakeOrPong = message.type == MessageType.handshakeRequest ||
+        message.type == MessageType.pong;
+
+    if (!isHandshakeOrPong && !await _handshakeCompleted) {
+      // If handshake is not completed, wait or skip the message
+      throw StateError('Handshake not completed');
     }
 
     final data = _messageCodec.encode(message);
@@ -399,7 +442,7 @@ class WebSocketClient extends CRDTSocketClient {
     _handshakeCompleter = Completer<bool>();
 
     final handshakeRequest = HandshakeRequestMessage(
-      version: document.version,
+      versionVector: document.getVersionVector(),
       documentId: document.documentId,
       author: author,
     );
@@ -466,16 +509,19 @@ class WebSocketClient extends CRDTSocketClient {
 
   /// Handles the handshake response
   ///
-  /// Merges the changes and snapshot into the document
-  /// and completes the handshake
+  /// Completes the handshake and merges the changes
+  /// and snapshot into the document
   void _handleHandshakeResponse(HandshakeResponseMessage message) {
     _sessionId = message.sessionId;
+
+    // Complete the handshake first so that merge can send messages
+    _handshakeCompleter?.complete(true);
 
     _syncManager.merge(
       changes: message.changes,
       snapshot: message.snapshot,
+      serverVersionVector: message.versionVector,
     );
-    _handshakeCompleter?.complete(true);
   }
 
   void _handleChangeMessage(ChangeMessage message) {
@@ -486,6 +532,7 @@ class WebSocketClient extends CRDTSocketClient {
     _syncManager.merge(
       changes: message.changes,
       snapshot: message.snapshot,
+      serverVersionVector: message.versionVector,
     );
   }
 

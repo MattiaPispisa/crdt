@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:crdt_lf/crdt_lf.dart';
@@ -22,6 +23,7 @@ Future<void> run({
   List<ServerSyncPlugin>? plugins,
   bool verbose = true,
 }) async {
+  // setup logger
   final logger = EnLogger(defaultPrefixFormat: PrefixFormat.snakeSquare())
     ..addHandler(
       PrinterHandler.custom(
@@ -40,8 +42,8 @@ Future<void> run({
       ),
     );
 
+  // db initialization
   Hive.init(_kDefaultDbLocation);
-
   _registry = await HiveServerRegistry.init(
     logger: logger.getConfiguredInstance(prefix: 'HiveServerRegistry'),
   );
@@ -64,6 +66,7 @@ Future<void> run({
 
   await _startServer(
     logger: logger.getConfiguredInstance(prefix: 'WebSocketServer'),
+    verbose: verbose,
   );
 }
 
@@ -78,9 +81,7 @@ Future<void> _setupDocument() async {
   }
 
   final document = (await _registry.getDocument(_kDocumentId))!;
-  document.registerHandler(
-    CRDTListHandler<Map<String, dynamic>>(document, 'todo-list'),
-  );
+  CRDTListHandler<Map<String, dynamic>>(document, 'todo-list');
 }
 
 void _setupSigintHandler({required EnLogger logger}) {
@@ -93,17 +94,33 @@ void _setupSigintHandler({required EnLogger logger}) {
   });
 }
 
-Future<void> _startServer({required EnLogger logger}) async {
+Future<void> _startServer({
+  required EnLogger logger,
+  required bool verbose,
+}) async {
   try {
     _server.serverEvents.listen((event) {
-      if (event.type == ServerEventType.clientPingRequest) {
+      if (event.type == ServerEventType.clientPingRequest && !verbose) {
         // ignore ping requests just to not spam the logs
         return;
       }
+
+      final message = event.data?['message'] as Map<String, dynamic>?;
+      if (message != null) {
+        final awarenessMessage = AwarenessMessage.fromJson(message);
+        if (awarenessMessage != null) {
+          if (verbose) {
+            logger.info('➡ Awareness message: ${awarenessMessage.toJson()}');
+          }
+          return;
+        }
+      }
+
       if (event.type == ServerEventType.error) {
         logger.error('❌ Server error: ${event.message}');
         return;
       }
+
       logger.info('➡ Server event: $event');
     });
 

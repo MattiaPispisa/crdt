@@ -33,3 +33,11 @@ jobs:
       package_name: crdt_lf_hive
     secrets:
       CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+  crdt_socket_sync:
+    uses: ./.github/workflows/dart_package.yaml
+    with:
+      working_directory: ./packages/crdt_socket_sync
+      min_coverage: 70
+      package_name: crdt_socket_sync
+    secrets:
+      CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}

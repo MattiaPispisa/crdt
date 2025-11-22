@@ -147,7 +147,7 @@ class CRDTFugueTextHandler extends Handler<FugueTextState> {
   }
 
   /// Changes the entire text to [newText] using the
-  /// [Myers diff algorithm](http://www.xmailserver.org/diff2.pdf).
+  /// [Myers diff algorithm](https://link.springer.com/article/10.1007/BF01840446).
   ///
   /// This method computes the differences between the current text
   /// and [newText] using the [Myers diff algorithm](http://www.xmailserver.org/diff2.pdf),

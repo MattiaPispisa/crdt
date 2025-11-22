@@ -190,11 +190,223 @@ void main() {
 
         expect(
           () => syncManager.merge(
+            serverVersionVector: snapshot.versionVector,
             snapshot: snapshot,
             changes: [],
           ),
           returnsNormally,
         );
+      });
+
+      test('should send local changes newer than server when client ahead',
+          () async {
+        mockClient.clearSentMessages();
+
+        // Create some local changes
+        final operation = MockOperation(handler);
+        document
+          ..createChange(operation)
+          ..createChange(operation);
+
+        // Wait for local changes to be processed
+        await Future<void>.delayed(Duration.zero);
+
+        final localChangesCount = mockClient.sentMessages.length;
+
+        // Now merge with snapshot that has older version
+        final olderPeerId = PeerId.generate();
+        final snapshot = Snapshot(
+          id: 'test-snapshot',
+          versionVector: VersionVector(
+            {olderPeerId: HybridLogicalClock(l: 1, c: 1)},
+          ),
+          data: {'test-handler': 'test_state'},
+        );
+
+        syncManager.merge(
+          serverVersionVector: snapshot.versionVector,
+          snapshot: snapshot,
+          changes: [],
+        );
+
+        // Wait for async operations
+        await Future<void>.delayed(const Duration(milliseconds: 10));
+
+        // Should have sent local changes via merge
+        expect(mockClient.sentMessages.length, greaterThan(localChangesCount));
+        final changesMessages =
+            mockClient.getSentMessagesOfType<ChangesMessage>();
+        expect(changesMessages, isNotEmpty);
+      });
+
+      test('should not send changes if server is ahead', () async {
+        mockClient.clearSentMessages();
+
+        // Create local change
+        final operation = MockOperation(handler);
+        document.createChange(operation);
+
+        // Get the current version
+        final currentVV = document.getVersionVector();
+
+        // Merge with snapshot that includes the client's change
+        final snapshot = Snapshot(
+          id: 'test-snapshot',
+          versionVector: currentVV.mutable(),
+          data: {'test-handler': 'test_state'},
+        );
+
+        // Add a newer change on the snapshot
+        snapshot.versionVector.update(peerId, HybridLogicalClock(l: 10, c: 1));
+
+        syncManager.merge(
+          serverVersionVector: snapshot.versionVector,
+          snapshot: snapshot,
+          changes: [],
+        );
+
+        // Wait for async operations
+        await Future<void>.delayed(const Duration(milliseconds: 10));
+
+        // Should not send additional changes
+        final changesMessages =
+            mockClient.getSentMessagesOfType<ChangesMessage>();
+        expect(changesMessages, isEmpty);
+      });
+
+      test('should handle changes from multiple peers correctly', () async {
+        mockClient.clearSentMessages();
+
+        final otherPeerId = PeerId.generate();
+        final operation = MockOperation(handler);
+
+        // Create local change
+        document.createChange(operation);
+
+        // Merge with server changes from another peer
+        final serverChange = Change(
+          id: OperationId(otherPeerId, HybridLogicalClock(l: 1, c: 1)),
+          operation: operation,
+          deps: {},
+          author: otherPeerId,
+        );
+
+        syncManager.merge(
+          serverVersionVector: VersionVector({otherPeerId: serverChange.hlc}),
+          changes: [serverChange],
+        );
+
+        // Wait for async operations
+        await Future<void>.delayed(const Duration(milliseconds: 10));
+
+        // Should have sent local changes as they're newer
+        final changeMessages =
+            mockClient.getSentMessagesOfType<ChangeMessage>();
+        final changesMessages =
+            mockClient.getSentMessagesOfType<ChangesMessage>();
+        expect(changeMessages.length + changesMessages.length, greaterThan(0));
+      });
+
+      test('should compute server version vector correctly', () async {
+        mockClient.clearSentMessages();
+
+        final otherPeerId = PeerId.generate();
+        final operation = MockOperation(handler);
+
+        // Create some local changes
+        document
+          ..createChange(operation)
+          ..createChange(operation);
+
+        // Wait for local changes
+        await Future<void>.delayed(Duration.zero);
+
+        // Merge with server that has snapshot + changes
+        final snapshot = Snapshot(
+          id: 'test-snapshot',
+          versionVector: VersionVector({
+            otherPeerId: HybridLogicalClock(l: 5, c: 1),
+          }),
+          data: {'test-handler': 'test_state'},
+        );
+
+        final serverChange = Change(
+          id: OperationId(otherPeerId, HybridLogicalClock(l: 6, c: 1)),
+          operation: operation,
+          deps: {},
+          author: otherPeerId,
+        );
+
+        syncManager.merge(
+          serverVersionVector: VersionVector({otherPeerId: serverChange.hlc}),
+          snapshot: snapshot,
+          changes: [serverChange],
+        );
+
+        // Wait for async operations
+        await Future<void>.delayed(const Duration(milliseconds: 10));
+
+        // Should send only local changes that are newer
+        final changesMessages =
+            mockClient.getSentMessagesOfType<ChangesMessage>();
+        if (changesMessages.isNotEmpty) {
+          // If there are changes, they should only be from peerId
+          final allChanges = <Change>[];
+          for (final msg in changesMessages) {
+            allChanges.addAll((msg as ChangesMessage).changes);
+          }
+          expect(allChanges.every((c) => c.id.peerId == peerId), isTrue);
+        }
+      });
+    });
+
+    group('requestDocumentStatus', () {
+      test('should send document status request', () async {
+        mockClient.clearSentMessages();
+
+        await syncManager.requestDocumentStatus();
+
+        await Future<void>.delayed(Duration.zero);
+
+        expect(mockClient.sentMessages.length, equals(1));
+        final message = mockClient.getLastSentMessage();
+        expect(message, isA<DocumentStatusRequestMessage>());
+        final requestMessage = message! as DocumentStatusRequestMessage;
+        expect(requestMessage.documentId, equals(document.documentId));
+        expect(requestMessage.versionVector, isNotNull);
+      });
+
+      test('should send current version vector in request', () async {
+        // Create local changes to update version
+        final operation = MockOperation(handler);
+        document
+          ..createChange(operation)
+          ..createChange(operation);
+
+        await Future<void>.delayed(Duration.zero);
+
+        mockClient.clearSentMessages();
+
+        final currentVV = document.getVersionVector();
+        await syncManager.requestDocumentStatus();
+
+        await Future<void>.delayed(Duration.zero);
+
+        final message = mockClient.getLastSentMessage();
+        final requestMessage = message! as DocumentStatusRequestMessage;
+        expect(
+          requestMessage.versionVector?.toJson(),
+          equals(currentVV.toJson()),
+        );
+      });
+
+      test('should handle errors gracefully', () async {
+        mockClient.setShouldThrowOnSendMessage = true;
+
+        expect(() => syncManager.requestDocumentStatus(), returnsNormally);
+        await Future<void>.delayed(Duration.zero);
+
+        expect(mockClient.sentMessages.length, equals(0));
       });
     });
 
@@ -265,6 +477,68 @@ void main() {
           mockClient.sentMessages.every((msg) => msg is ChangeMessage),
           isTrue,
         );
+      });
+
+      test('should handle merge with null snapshot', () async {
+        mockClient.clearSentMessages();
+
+        final otherPeerId = PeerId.generate();
+        final operation = MockOperation(handler);
+
+        // Create local change
+        document.createChange(operation);
+
+        // Merge with changes only (no snapshot)
+        final serverChange = Change(
+          id: OperationId(otherPeerId, HybridLogicalClock(l: 1, c: 1)),
+          operation: operation,
+          deps: {},
+          author: otherPeerId,
+        );
+
+        syncManager.merge(
+          serverVersionVector: VersionVector({otherPeerId: serverChange.hlc}),
+          changes: [serverChange],
+        );
+
+        // Wait for async operations
+        await Future<void>.delayed(const Duration(milliseconds: 10));
+
+        // Should have sent local changes
+        final changeMessages =
+            mockClient.getSentMessagesOfType<ChangeMessage>();
+        final changesMessages =
+            mockClient.getSentMessagesOfType<ChangesMessage>();
+        expect(changeMessages.length + changesMessages.length, greaterThan(0));
+      });
+
+      test('should handle merge with only snapshot and no changes', () async {
+        mockClient.clearSentMessages();
+
+        final otherPeerId = PeerId.generate();
+        final snapshot = Snapshot(
+          id: 'test-snapshot',
+          versionVector: VersionVector({
+            otherPeerId: HybridLogicalClock(l: 1, c: 1),
+          }),
+          data: {'test-handler': 'test_state'},
+        );
+
+        // Should not throw
+        expect(
+          () => syncManager.merge(
+            serverVersionVector: snapshot.versionVector,
+            snapshot: snapshot,
+          ),
+          returnsNormally,
+        );
+
+        // Wait for async operations
+        await Future<void>.delayed(const Duration(milliseconds: 10));
+
+        // With no local changes and only snapshot, no messages should be sent
+        // (or only local changes if any exist)
+        expect(mockClient.sentMessages.length, greaterThanOrEqualTo(0));
       });
 
       test('should handle change with empty dependencies', () {

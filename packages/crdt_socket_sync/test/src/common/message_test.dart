@@ -76,6 +76,7 @@ void main() {
         documentId: documentId,
         snapshot: snapshot,
         changes: [],
+        versionVector: snapshot.versionVector,
       );
 
       expect(message, isA<DocumentStatusMessage>());
@@ -85,22 +86,22 @@ void main() {
     });
 
     test('Message.snapshotRequest() should create SnapshotRequestMessage', () {
-      final version = {
-        OperationId(
-          PeerId.generate(),
-          HybridLogicalClock(l: 1, c: 1),
-        ),
-      };
+      final versionVector = VersionVector({
+        PeerId.generate(): HybridLogicalClock(l: 1, c: 1),
+      });
 
       final message = Message.documentStatusRequest(
         documentId: documentId,
-        version: version,
+        versionVector: versionVector,
       );
 
       expect(message, isA<DocumentStatusRequestMessage>());
       expect(message.type, MessageType.documentStatusRequest);
       expect(message.documentId, documentId);
-      expect((message as DocumentStatusRequestMessage).version, version);
+      expect(
+        (message as DocumentStatusRequestMessage).versionVector,
+        versionVector,
+      );
     });
 
     test('Message.ping() should create PingMessage', () {
@@ -155,31 +156,28 @@ void main() {
   group('HandshakeRequestMessage', () {
     const documentId = 'test-doc-id';
     final author = PeerId.generate();
-    final version = {
-      OperationId(
-        PeerId.generate(),
-        HybridLogicalClock(l: 1, c: 1),
-      ),
-    };
+    final versionVector = VersionVector({
+      PeerId.generate(): HybridLogicalClock(l: 1, c: 1),
+    });
 
     test('should create with correct properties', () {
       final message = HandshakeRequestMessage(
         documentId: documentId,
         author: author,
-        version: version,
+        versionVector: versionVector,
       );
 
       expect(message.type, MessageType.handshakeRequest);
       expect(message.documentId, documentId);
       expect(message.author, author);
-      expect(message.version, version);
+      expect(message.versionVector, versionVector);
     });
 
     test('should serialize to JSON correctly', () {
       final message = HandshakeRequestMessage(
         documentId: documentId,
         author: author,
-        version: version,
+        versionVector: versionVector,
       );
 
       final json = message.toJson();
@@ -187,7 +185,7 @@ void main() {
       expect(json['type'], MessageType.handshakeRequest.index);
       expect(json['documentId'], documentId);
       expect(json['author'], author.toString());
-      expect(json['version'], version.map((e) => e.toString()).toList());
+      expect(json['versionVector'], versionVector.toJson());
     });
 
     test('should deserialize from JSON correctly', () {
@@ -195,7 +193,7 @@ void main() {
         'type': MessageType.handshakeRequest.index,
         'documentId': documentId,
         'author': author.toString(),
-        'version': version.map((e) => e.toString()).toList(),
+        'versionVector': versionVector.toJson(),
       };
 
       final message = HandshakeRequestMessage.fromJson(json);
@@ -203,14 +201,14 @@ void main() {
       expect(message.type, MessageType.handshakeRequest);
       expect(message.documentId, documentId);
       expect(message.author, author);
-      expect(message.version, version);
+      expect(message.versionVector.toJson(), versionVector.toJson());
     });
 
     test('should have correct toString representation', () {
       final message = HandshakeRequestMessage(
         documentId: documentId,
         author: author,
-        version: version,
+        versionVector: versionVector,
       );
 
       final string = message.toString();
@@ -263,6 +261,7 @@ void main() {
         snapshot: snapshot,
         changes: changes,
         sessionId: 'test-session-id',
+        versionVector: snapshot.versionVector,
       );
 
       expect(message.type, MessageType.handshakeResponse);
@@ -276,6 +275,7 @@ void main() {
         documentId: documentId,
         snapshot: snapshot,
         sessionId: 'test-session-id',
+        versionVector: snapshot.versionVector,
       );
 
       expect(message.snapshot, snapshot);
@@ -283,10 +283,16 @@ void main() {
     });
 
     test('should create with only changes', () {
+      final versionVector = VersionVector({});
+      for (final change in changes) {
+        versionVector.update(change.id.peerId, change.hlc);
+      }
+
       final message = HandshakeResponseMessage(
         documentId: documentId,
         changes: changes,
         sessionId: 'test-session-id',
+        versionVector: versionVector,
       );
 
       expect(message.snapshot, isNull);
@@ -300,6 +306,7 @@ void main() {
         snapshot: snapshot,
         changes: changes,
         sessionId: '5a2e1d55-74c7-453b-9256-1c5ffe3283b5',
+        versionVector: snapshot.versionVector,
       );
 
       final json = message.toJson();
@@ -309,6 +316,7 @@ void main() {
       expect(json['snapshot'], snapshot.toJson());
       expect(json['changes'], changes.map((c) => c.toJson()).toList());
       expect(json['sessionId'], '5a2e1d55-74c7-453b-9256-1c5ffe3283b5');
+      expect(json['versionVector'], snapshot.versionVector.toJson());
     });
 
     test('should deserialize from JSON correctly', () {
@@ -318,6 +326,7 @@ void main() {
         'snapshot': snapshot.toJson(),
         'changes': changes.map((c) => c.toJson()).toList(),
         'sessionId': '5a2e1d55-74c7-453b-9256-1c5ffe3283b5',
+        'versionVector': snapshot.versionVector.toJson(),
       };
 
       final message = HandshakeResponseMessage.fromJson(json);
@@ -329,12 +338,14 @@ void main() {
     });
 
     test('should handle null snapshot and changes in JSON', () {
+      final emptyVV = VersionVector({});
       final json = {
         'type': MessageType.handshakeResponse.index,
         'documentId': documentId,
         'snapshot': null,
         'changes': null,
         'sessionId': '5a2e1d55-74c7-453b-9256-1c5ffe3283b5',
+        'versionVector': emptyVV.toJson(),
       };
 
       final message = HandshakeResponseMessage.fromJson(json);
@@ -416,6 +427,7 @@ void main() {
       final message = DocumentStatusMessage(
         documentId: documentId,
         snapshot: snapshot,
+        versionVector: snapshot.versionVector,
       );
 
       expect(message.type, MessageType.documentStatus);
@@ -427,6 +439,7 @@ void main() {
       final message = DocumentStatusMessage(
         documentId: documentId,
         snapshot: snapshot,
+        versionVector: snapshot.versionVector,
       );
 
       final json = message.toJson();
@@ -434,6 +447,7 @@ void main() {
       expect(json['type'], MessageType.documentStatus.index);
       expect(json['documentId'], documentId);
       expect(json['snapshot'], snapshot.toJson());
+      expect(json['versionVector'], snapshot.versionVector.toJson());
     });
 
     test('should deserialize from JSON correctly', () {
@@ -441,6 +455,7 @@ void main() {
         'type': MessageType.documentStatus.index,
         'documentId': documentId,
         'snapshot': snapshot.toJson(),
+        'versionVector': snapshot.versionVector.toJson(),
       };
 
       final message = DocumentStatusMessage.fromJson(json);
@@ -453,49 +468,60 @@ void main() {
 
   group('SnapshotRequestMessage', () {
     const documentId = 'test-doc-id';
-    final version = {
-      OperationId(
-        PeerId.generate(),
-        HybridLogicalClock(l: 1, c: 1),
-      ),
-    };
+    final versionVector = VersionVector({
+      PeerId.generate(): HybridLogicalClock(l: 1, c: 1),
+    });
 
     test('should create with correct properties', () {
       final message = DocumentStatusRequestMessage(
         documentId: documentId,
-        version: version,
+        versionVector: versionVector,
       );
 
       expect(message.type, MessageType.documentStatusRequest);
       expect(message.documentId, documentId);
-      expect(message.version, version);
+      expect(message.versionVector, versionVector);
     });
 
     test('should serialize to JSON correctly', () {
       final message = DocumentStatusRequestMessage(
         documentId: documentId,
-        version: version,
+        versionVector: versionVector,
       );
 
       final json = message.toJson();
 
       expect(json['type'], MessageType.documentStatusRequest.index);
       expect(json['documentId'], documentId);
-      expect(json['version'], version.map((e) => e.toString()).toList());
+      expect(json['versionVector'], versionVector.toJson());
     });
 
     test('should deserialize from JSON correctly', () {
       final json = {
         'type': MessageType.documentStatusRequest.index,
         'documentId': documentId,
-        'version': version.map((e) => e.toString()).toList(),
+        'versionVector': versionVector.toJson(),
       };
 
       final message = DocumentStatusRequestMessage.fromJson(json);
 
       expect(message.type, MessageType.documentStatusRequest);
       expect(message.documentId, documentId);
-      expect(message.version, version);
+      expect(message.versionVector?.toJson(), versionVector.toJson());
+    });
+
+    test('should handle null versionVector', () {
+      const message = DocumentStatusRequestMessage(
+        documentId: documentId,
+      );
+
+      expect(message.versionVector, isNull);
+
+      final json = message.toJson();
+      expect(json['versionVector'], isNull);
+
+      final deserialized = DocumentStatusRequestMessage.fromJson(json);
+      expect(deserialized.versionVector, isNull);
     });
   });
 
@@ -701,7 +727,7 @@ void main() {
         'type': MessageType.handshakeRequest.index,
         'documentId': 'test-doc',
         'author': PeerId.generate().toString(),
-        'version': <String>[],
+        'versionVector': {'vector': <String, dynamic>{}},
       };
 
       final message = Message.fromJson(json);
@@ -711,12 +737,14 @@ void main() {
     });
 
     test('should deserialize HandshakeResponseMessage', () {
+      final emptyVV = VersionVector({});
       final json = {
         'type': MessageType.handshakeResponse.index,
         'documentId': 'test-doc',
         'snapshot': null,
         'changes': null,
         'sessionId': '5a2e1d55-74c7-453b-9256-1c5ffe3283b5',
+        'versionVector': emptyVV.toJson(),
       };
 
       final message = Message.fromJson(json);
@@ -755,6 +783,7 @@ void main() {
         'type': MessageType.documentStatus.index,
         'documentId': 'test-doc',
         'snapshot': snapshot.toJson(),
+        'versionVector': snapshot.versionVector.toJson(),
       };
 
       final message = Message.fromJson(json);

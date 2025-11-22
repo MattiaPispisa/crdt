@@ -210,7 +210,7 @@ void main() {
 
       expect(
         doc1.shouldApplySnapshot(doc2.takeSnapshot()),
-        isFalse,
+        isTrue,
       );
       expect(
         doc2.shouldApplySnapshot(doc1.takeSnapshot()),

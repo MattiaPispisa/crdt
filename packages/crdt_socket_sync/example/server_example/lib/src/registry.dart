@@ -7,8 +7,8 @@ import 'package:hive/hive.dart';
 import 'package:en_logger/en_logger.dart';
 
 const _kDocumentsBox = 'documents';
-const _kDefaultSnapshotInterval = Duration(seconds: 30);
-const _kDefaultMinChangesForSnapshot = 2;
+const _kDefaultSnapshotInterval = Duration(seconds: 30000000);
+const _kDefaultMinChangesForSnapshot = 2000;
 
 /// A server-side CRDT document registry that uses Hive for persistence.
 ///
@@ -114,6 +114,7 @@ class HiveServerRegistry extends CRDTServerRegistry {
                 documentId: documentId,
                 snapshot: snapshot,
                 changes: changes,
+                versionVector: item.document.getVersionVector(),
               ),
             );
           } else {
@@ -231,7 +232,10 @@ class HiveServerRegistry extends CRDTServerRegistry {
     );
 
     await storage.snapshots.saveSnapshot(snapshot);
-    await storage.changes.clear();
+
+    await storage.changes.clear().then((_) {
+      return storage.changes.saveChanges(item.document.exportChanges());
+    });
 
     return snapshot;
   }

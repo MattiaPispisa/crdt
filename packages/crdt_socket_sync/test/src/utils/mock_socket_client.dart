@@ -79,7 +79,7 @@ class MockCRDTSocketClient extends CRDTSocketClient {
   Future<void> requestSync() async {
     final message = Message.documentStatusRequest(
       documentId: document.documentId,
-      version: document.version,
+      versionVector: document.getVersionVector(),
     );
     await sendMessage(message);
   }

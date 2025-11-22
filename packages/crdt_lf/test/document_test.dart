@@ -482,6 +482,150 @@ void main() {
       expect(doc.shouldApplySnapshot(snapshot), isFalse);
     });
 
+    test('should not accept snapshot not newer then current', () {
+      final author1 = PeerId.generate();
+      final author2 = PeerId.generate();
+
+      final doc1 = CRDTDocument(peerId: author1);
+      final handler1 = CRDTListHandler<String>(doc1, 'list');
+
+      final doc2 = CRDTDocument(peerId: author2);
+
+      handler1
+        ..insert(0, 'Hello')
+        ..insert(1, 'World');
+
+      final snapshot1 = doc1.takeSnapshot();
+
+      handler1
+        ..insert(2, ' "Dart')
+        ..insert(3, 'Flutter');
+
+      final snapshot2 = doc1.takeSnapshot();
+
+      final imported2 = doc2.importSnapshot(snapshot2);
+      expect(imported2, isTrue);
+
+      final imported1 = doc2.importSnapshot(snapshot1);
+      expect(imported1, isFalse);
+      expect(doc1.importSnapshot(snapshot1), isFalse);
+    });
+
+    test('should prune changes when merge snapshot is called', () {
+      final author1 = PeerId.generate();
+      final author2 = PeerId.generate();
+
+      final doc1 = CRDTDocument(peerId: author1);
+      final handler1 = CRDTListHandler<String>(doc1, 'list');
+
+      final doc2 = CRDTDocument(peerId: author2);
+      final handler2 = CRDTListHandler<String>(doc2, 'list');
+
+      handler1
+        ..insert(0, 'Hello')
+        ..insert(1, 'World');
+
+      doc2.importChanges(doc1.exportChanges());
+
+      expect(handler2.value[0], equals('Hello'));
+      expect(handler2.value[1], equals('World'));
+
+      final snapshot = doc2.takeSnapshot();
+      handler1
+        ..insert(2, 'Dart')
+        ..update(0, 'Hello, ');
+
+      // should prune changes respect to the snapshot version vector
+      // so the change "Hello" and "World" are pruned
+      doc1.mergeSnapshot(snapshot);
+
+      // result must be consistent also with the prune
+      expect(handler1.value[0], equals('Hello, '));
+      expect(handler1.value[1], equals('World'));
+      expect(handler1.value[2], equals('Dart'));
+
+      expect(doc1.exportChanges().length, equals(2));
+
+      doc2.importChanges(doc1.exportChanges());
+
+      expect(handler2.value[0], equals('Hello, '));
+      expect(handler2.value[1], equals('World'));
+      expect(handler2.value[2], equals('Dart'));
+    });
+
+    test('should prune changes when import snapshot is called', () {
+      final author1 = PeerId.generate();
+      final author2 = PeerId.generate();
+
+      final doc1 = CRDTDocument(peerId: author1);
+      final handler1 = CRDTListHandler<String>(doc1, 'list');
+
+      final doc2 = CRDTDocument(peerId: author2);
+      final handler2 = CRDTListHandler<String>(doc2, 'list');
+
+      handler1
+        ..insert(0, 'Hello')
+        ..insert(1, 'World');
+
+      doc2.importChanges(doc1.exportChanges());
+
+      expect(handler2.value[0], equals('Hello'));
+      expect(handler2.value[1], equals('World'));
+
+      final snapshot = doc2.takeSnapshot();
+      handler1
+        ..insert(2, 'Dart')
+        ..update(0, 'Hello, ');
+
+      // should prune changes respect to the snapshot version vector
+      // so the change "Hello" and "World" are pruned
+      final imported = doc1.importSnapshot(snapshot);
+      expect(imported, isTrue);
+
+      // result must be consistent also with the prune
+      expect(handler1.value[0], equals('Hello, '));
+      expect(handler1.value[1], equals('World'));
+      expect(handler1.value[2], equals('Dart'));
+
+      expect(doc1.exportChanges().length, equals(2));
+
+      doc2.importChanges(doc1.exportChanges());
+
+      expect(handler2.value[0], equals('Hello, '));
+      expect(handler2.value[1], equals('World'));
+      expect(handler2.value[2], equals('Dart'));
+    });
+
+    test(
+        'should accept changes whose dependencies were pruned '
+        'by a snapshot', () {
+      final serverDoc = CRDTDocument();
+      final clientDoc = CRDTDocument();
+
+      final serverHandler = CRDTListHandler<String>(serverDoc, 'todos');
+      final clientHandler = CRDTListHandler<String>(clientDoc, 'todos')
+        ..insert(0, 'initial');
+      serverDoc
+        ..importChanges(clientDoc.exportChanges())
+        // Server compacts history, removing the dependency node
+        ..takeSnapshot();
+
+      // Client goes offline and generates a change referencing
+      // the pruned dependency.
+      clientHandler.insert(1, 'offline');
+
+      final pendingChanges =
+          clientDoc.exportChangesNewerThan(serverDoc.getVersionVector());
+      expect(pendingChanges, hasLength(1));
+
+      expect(
+        () => serverDoc.applyChange(pendingChanges.first),
+        returnsNormally,
+      );
+
+      expect(serverHandler.value, clientHandler.value);
+    });
+
     test('toString returns correct string representation', () {
       doc
         ..createChange(operation)
@@ -544,10 +688,10 @@ void main() {
         clientDoc.importChanges(serverDoc.exportChanges());
         final snapshotImported = clientDoc.importSnapshot(serverSnapshot);
 
-        expect(snapshotImported, isFalse);
+        expect(snapshotImported, isTrue);
         expect(serverHandler.value, ['Hello']);
         expect(clientHandler.value, ['Hello', 'World']);
-        expect(clientDoc.exportChanges().length, 2);
+        expect(clientDoc.exportChanges().length, 1);
 
         clientDoc.mergeSnapshot(serverSnapshot);
         expect(clientDoc.exportChanges().length, 1);
@@ -573,7 +717,7 @@ void main() {
             snapshot: serverSnapshot,
             changes: serverDoc.exportChanges(),
           ),
-          equals(-1),
+          equals(0),
         );
 
         expect(

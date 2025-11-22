@@ -7,27 +7,7 @@ import 'package:crdt_socket_sync/web_socket_server.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:test/test.dart';
 
-class MockHttpServer extends Mock implements HttpServer {}
-
-class MockHttpRequest extends Mock implements HttpRequest {}
-
-class MockHttpResponse extends Mock implements HttpResponse {}
-
-class MockHttpHeaders extends Mock implements HttpHeaders {}
-
-class MockWebSocketTransformer extends Mock
-    implements WebSocketServerTransformer {}
-
-class MockWebSocket extends Mock implements Stream<dynamic>, WebSocket {
-  MockWebSocket() : controller = StreamController<List<int>>();
-
-  final StreamController<List<int>> controller;
-
-  @override
-  Stream<S> map<S>(S Function(dynamic event) convert) {
-    return controller.stream.map(convert);
-  }
-}
+import '../utils/stub.dart';
 
 void main() {
   group('WebSocketServer', () {
@@ -60,7 +40,7 @@ void main() {
       httpRequestController = StreamController<HttpRequest>.broadcast();
       registry = InMemoryCRDTServerRegistry();
       mockWebSocketTransformer = MockWebSocketTransformer();
-      mockWebSockets = [];
+      mockWebSockets = <MockWebSocket>[];
       codec = JsonMessageCodec<Message>(
         toJson: (message) => message.toJson(),
         fromJson: Message.fromJson,
@@ -77,57 +57,6 @@ void main() {
       registry.clear();
       httpRequestController.close();
     });
-
-    void stubHttpServer() {
-      registerFallbackValue(MockHttpRequest());
-
-      // Mock the http server
-      when(() => mockHttpServer.address)
-          .thenReturn(InternetAddress.loopbackIPv4);
-      when(() => mockHttpServer.port).thenReturn(8080);
-      when(
-        () => mockHttpServer.listen(
-          any(),
-          onError: any(named: 'onError'),
-          cancelOnError: any(named: 'cancelOnError'),
-          onDone: any(named: 'onDone'),
-        ),
-      ).thenAnswer((invocation) {
-        final onData =
-            invocation.positionalArguments[0] as void Function(HttpRequest);
-        return httpRequestController.stream.listen(
-          onData,
-          onError:
-              invocation.namedArguments[const Symbol('onError')] as Function?,
-          cancelOnError:
-              invocation.namedArguments[const Symbol('cancelOnError')] as bool?,
-          onDone: invocation.namedArguments[const Symbol('onDone')] as void
-              Function()?,
-        );
-      });
-      when(() => mockHttpServer.close()).thenAnswer((_) async {});
-    }
-
-    void stubWebSocket() {
-      // Mock the request upgrade to websocket
-      when(() => mockWebSocketTransformer.isUpgradeRequest(any()))
-          .thenReturn(true);
-      when(() => mockWebSocketTransformer.upgrade(any())).thenAnswer((_) async {
-        final mockWebSocket = MockWebSocket();
-        mockWebSockets.add(mockWebSocket);
-
-        // Mock web socket methods
-        when(() => mockWebSocket.close(any(), any())).thenAnswer((_) async {});
-
-        when(() => mockWebSocket.add(any<List<int>>()))
-            .thenAnswer((invocation) {
-          final data = invocation.positionalArguments[0] as List<int>;
-          messagesSent.add(data);
-        });
-
-        return mockWebSocket;
-      });
-    }
 
     test('should create a server', () {
       late WebSocketServer server;
@@ -147,7 +76,10 @@ void main() {
     });
 
     test('should start the server', () async {
-      stubHttpServer();
+      stubHttpServer(
+        mockHttpServer: mockHttpServer,
+        httpRequestController: httpRequestController,
+      );
 
       final started = await server.start();
       expect(started, isTrue);
@@ -163,8 +95,16 @@ void main() {
     });
 
     test('should upgrade request to websocket', () async {
-      stubHttpServer();
-      stubWebSocket();
+      stubHttpServer(
+        mockHttpServer: mockHttpServer,
+        httpRequestController: httpRequestController,
+      );
+      stubWebSocket(
+        mockWebSocketTransformer: mockWebSocketTransformer,
+        serverSockets: mockWebSockets,
+        clientSockets: <MockWebSocket>[],
+        messagesSent: messagesSent,
+      );
 
       final started = await server.start();
       expect(started, isTrue);
@@ -179,8 +119,16 @@ void main() {
     test('should create a session', () async {
       final completer = Completer<ServerEvent>();
 
-      stubHttpServer();
-      stubWebSocket();
+      stubHttpServer(
+        mockHttpServer: mockHttpServer,
+        httpRequestController: httpRequestController,
+      );
+      stubWebSocket(
+        mockWebSocketTransformer: mockWebSocketTransformer,
+        serverSockets: mockWebSockets,
+        clientSockets: <MockWebSocket>[],
+        messagesSent: messagesSent,
+      );
 
       server.serverEvents.listen((data) {
         if (data.type == ServerEventType.clientConnected) {
@@ -206,8 +154,16 @@ void main() {
 
         final events = <ServerEvent>[];
 
-        stubHttpServer();
-        stubWebSocket();
+        stubHttpServer(
+          mockHttpServer: mockHttpServer,
+          httpRequestController: httpRequestController,
+        );
+        stubWebSocket(
+          mockWebSocketTransformer: mockWebSocketTransformer,
+          serverSockets: mockWebSockets,
+          clientSockets: <MockWebSocket>[],
+          messagesSent: messagesSent,
+        );
 
         await registry.addDocument(documentId);
 
@@ -222,12 +178,12 @@ void main() {
         final client = PeerId.generate();
         await Future<void>.delayed(Duration.zero);
 
-        mockWebSockets.first.controller.add(
+        mockWebSockets.first.incomingController.add(
           codec.encode(
             HandshakeRequestMessage(
               author: client,
               documentId: documentId,
-              version: {},
+              versionVector: VersionVector({}),
             ),
           )!,
         );
@@ -258,8 +214,16 @@ void main() {
       final serverMessages = <Message>[];
       final serverEvents = <ServerEvent>[];
 
-      stubHttpServer();
-      stubWebSocket();
+      stubHttpServer(
+        mockHttpServer: mockHttpServer,
+        httpRequestController: httpRequestController,
+      );
+      stubWebSocket(
+        mockWebSocketTransformer: mockWebSocketTransformer,
+        serverSockets: mockWebSockets,
+        clientSockets: <MockWebSocket>[],
+        messagesSent: messagesSent,
+      );
 
       await registry.addDocument(documentId);
 
@@ -277,12 +241,12 @@ void main() {
       // Client 1
       httpRequestController.add(MockHttpRequest());
       await Future<void>.delayed(Duration.zero);
-      mockWebSockets[0].controller.add(
+      mockWebSockets[0].incomingController.add(
             codec.encode(
               HandshakeRequestMessage(
                 author: client1,
                 documentId: documentId,
-                version: {},
+                versionVector: VersionVector({}),
               ),
             )!,
           );
@@ -290,12 +254,12 @@ void main() {
       // Client 2
       httpRequestController.add(MockHttpRequest());
       await Future<void>.delayed(Duration.zero);
-      mockWebSockets[1].controller.add(
+      mockWebSockets[1].incomingController.add(
             codec.encode(
               HandshakeRequestMessage(
                 author: client2,
                 documentId: documentId,
-                version: {},
+                versionVector: VersionVector({}),
               ),
             )!,
           );
@@ -326,8 +290,16 @@ void main() {
       void Function(Message)? onMessage,
       void Function(ServerEvent)? onEvent,
     }) async {
-      stubHttpServer();
-      stubWebSocket();
+      stubHttpServer(
+        mockHttpServer: mockHttpServer,
+        httpRequestController: httpRequestController,
+      );
+      stubWebSocket(
+        mockWebSocketTransformer: mockWebSocketTransformer,
+        serverSockets: mockWebSockets,
+        clientSockets: <MockWebSocket>[],
+        messagesSent: messagesSent,
+      );
 
       final serverMessages = <Message>[];
       final serverEvents = <ServerEvent>[];
@@ -363,12 +335,12 @@ void main() {
 
       httpRequestController.add(MockHttpRequest());
       await Future<void>.delayed(Duration.zero);
-      mockWebSocket().controller.add(
+      mockWebSocket().incomingController.add(
             codec.encode(
               HandshakeRequestMessage(
                 author: client,
                 documentId: documentId,
-                version: {},
+                versionVector: VersionVector({}),
               ),
             )!,
           );
@@ -419,7 +391,7 @@ void main() {
 
       // client 1 sends change to server
       // server will broadcast the change to all clients (`client2`)
-      mockWebSockets[0].controller.add(
+      mockWebSockets[0].incomingController.add(
             codec.encode(
               ChangeMessage(
                 change: change,
@@ -445,11 +417,9 @@ void main() {
   });
 }
 
-/// Internal class used to setup the server
+/// Internal class used to setup the server for testing
 ///
-/// This is used to test the server and its behavior
-///
-/// It contains the messages sent from the server to the clients
+/// This contains the messages sent from the server to the clients
 /// and the events emitted by the server
 class _ServerSetup {
   _ServerSetup({

@@ -263,8 +263,10 @@ void main() {
 
       expect(
         doc1.shouldApplySnapshot(doc2.takeSnapshot()),
-        isFalse,
+        isTrue,
       );
+
+      // doc1 snapshot is older
       expect(
         doc2.shouldApplySnapshot(doc1.takeSnapshot()),
         isFalse,
@@ -276,9 +278,7 @@ void main() {
       );
 
       expect(
-        doc1.shouldApplySnapshot(
-          doc2.takeSnapshot(),
-        ),
+        doc1.shouldApplySnapshot(doc2.takeSnapshot()),
         isTrue,
       );
       expect(

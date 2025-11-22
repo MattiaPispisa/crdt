@@ -18,10 +18,17 @@ class PluginAwareMessageCodec implements MessageCodec<Message> {
   /// Constructor from a default codec and a list of plugins
   ///
   /// [defaultCodec] is the first codec used to encode and decode messages.
-  PluginAwareMessageCodec.fromPlugins({
+  factory PluginAwareMessageCodec.fromPlugins({
     required MessageCodec<Message> defaultCodec,
     required List<SyncPlugin> plugins,
-  }) : _codecs = [defaultCodec, ...plugins.map((e) => e.messageCodec)];
+  }) {
+    return PluginAwareMessageCodec(
+      [
+        defaultCodec,
+        ...plugins.map((e) => e.messageCodec),
+      ],
+    );
+  }
 
   /// The list of codecs
   final List<MessageCodec<Message>> _codecs;

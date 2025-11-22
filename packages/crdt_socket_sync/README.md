@@ -2,6 +2,7 @@
 
 [![crdt_socket_sync_badge][crdt_socket_sync_badge]](https://pub.dev/packages/crdt_socket_sync) [![pub points][pub_points]][pub_link]
 [![pub likes][pub_likes]][pub_link]
+[![codecov][codecov_badge]][codecov_link]
 [![ci_badge][ci_badge]][ci_link]
 [![License: MIT][license_badge]][license_link]
 [![pub publisher][pub_publisher]][pub_publisher_link]
@@ -30,7 +31,7 @@
   - [Packages](#packages)
   - [Roadmap](#roadmap)
   - [Contributing](#contributing)
-  - [Related Packages](#related-packages)
+  - [Packages](#packages-1)
 
 A comprehensive Dart package for synchronizing Conflict-free Replicated Data Types (CRDTs) between multiple clients and a server.
 
@@ -355,15 +356,19 @@ A roadmap is available in the [project](https://github.com/users/MattiaPispisa/p
 
 Contributions are welcome! Please read the contributing guidelines and submit pull requests to the main repository.
 
-## Related Packages
+## Packages
 
-- [crdt_lf](https://pub.dev/packages/crdt_lf): The underlying CRDT implementation
-- [web_socket_channel](https://pub.dev/packages/web_socket_channel): WebSocket communication layer
+Other bricks of the crdt "system" are:
+
+- [crdt_lf](https://pub.dev/packages/crdt_lf)
 - [hlc_dart](https://pub.dev/packages/hlc_dart)
+- [crdt_lf_hive](https://pub.dev/packages/crdt_lf_hive)
 
 
 [crdt_socket_sync_badge]: https://img.shields.io/pub/v/crdt_socket_sync.svg
 [license_badge]: https://img.shields.io/badge/license-MIT-blue.svg
+[codecov_badge]: https://img.shields.io/codecov/c/github/MattiaPispisa/crdt/main?flag=crdt_socket_sync&logo=codecov
+[codecov_link]: https://app.codecov.io/gh/MattiaPispisa/crdt/tree/main/packages/crdt_socket_sync
 [license_link]: https://opensource.org/licenses/MIT
 [pub_link]: https://pub.dev/packages/crdt_socket_sync
 [pub_points]: https://img.shields.io/pub/points/crdt_socket_sync

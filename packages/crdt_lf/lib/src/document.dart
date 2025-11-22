@@ -180,6 +180,12 @@ class CRDTDocument {
   }
 
   /// It represents the **latest operation for each peer** of this document
+  ///
+  /// Example:
+  /// `{client1: HLC(3, 0), client2: HLC(2, 0),client3: HLC(1, 0)}`
+  ///
+  /// This means that the latest operation for client1 is HLC(3, 0)
+  /// (same reasoning for client2 and client3)
   VersionVector getVersionVector() {
     if (_lastSnapshot != null) {
       return _dag.versionVector.merged(_lastSnapshot!.versionVector);
@@ -259,8 +265,13 @@ class CRDTDocument {
       return false;
     }
 
-    // Check if the change is causally ready
-    if (!_dag.isReady(change.deps)) {
+    // Dependencies that were pruned from the DAG might still be present inside
+    // the last snapshot. Collect missing deps so we can verify whether they
+    // are implicitly satisfied by the snapshot metadata.
+    final missingDeps = _missingDependencies(change.deps);
+
+    if (missingDeps.isNotEmpty &&
+        !_dependenciesCoveredBySnapshot(missingDeps)) {
       throw CausallyNotReadyException(
         'Change is not causally ready: ${change.id}',
       );
@@ -271,7 +282,10 @@ class CRDTDocument {
     devtools.postChangedEvent(this);
 
     // Add the change to the DAG
-    _dag.addNode(change.id, change.deps);
+    // Only wire dependencies that still exist in the DAG. Dependencies already
+    // satisfied by a snapshot do not need graph edges.
+    final dagDependencies = change.deps.where(_dag.containsNode).toSet();
+    _dag.addNode(change.id, dagDependencies);
 
     // Update the clock only for remote changes
     if (change.author != _peerId) {
@@ -329,9 +343,9 @@ class CRDTDocument {
 
   /// Import [Snapshot]
   ///
-  /// Returns true if the snapshot was applied.
+  /// Returns `true` if the snapshot was applied.
   ///
-  /// [snapshot] is applied only if it is newer than document version.
+  /// [snapshot] is applied only if it is newer than the document snapshot.
   /// Use [shouldApplySnapshot] to check if the snapshot should be applied.
   bool importSnapshot(Snapshot snapshot) {
     if (shouldApplySnapshot(snapshot)) {
@@ -366,13 +380,32 @@ class CRDTDocument {
   /// Whether the given [snapshot] should be applied.
   ///
   /// Returns `true` if the snapshot can be applied to the document.
+  ///
+  /// The snapshot is applied only if it is newer than the current one.
+  /// This is `true` when for every peer the snapshot version vector is
+  /// strictly newer than the document version vector.
+  ///
+  /// ### Example:
+  /// - S1: `{client1: HLC(5, 0), client2: HLC(8, 0),client3: HLC(2, 0)}`
+  /// - S2: `{client1: HLC(3, 0), client2: HLC(2, 0),client3: HLC(1, 0)}`
+  ///
+  /// `S1` can be applied to the document because for every peer
+  /// the snapshot version vector is strictly newer
+  /// than the document version vector.
+  ///
+  /// ### Example
+  /// - S1: `{client1: HLC(2, 0), client2: HLC(8, 0),client3: HLC(2, 0)}`
+  /// - S2: `{client1: HLC(3, 0), client2: HLC(2, 0),client3: HLC(1, 0)}`
+  ///
+  /// `S1` cannot be applied to the document because for client1
+  /// the snapshot version vector is not strictly newer
+  /// than the document version vector.
   bool shouldApplySnapshot(Snapshot snapshot) {
-    if (isEmpty) {
+    if (_lastSnapshot == null) {
       return true;
     }
-
     return snapshot.versionVector
-        .isStrictlyNewerOrEqualThan(getVersionVector());
+        .isStrictlyNewerOrEqualThan(_lastSnapshot!.versionVector);
   }
 
   /// Import [snapshot] and [changes].
@@ -385,9 +418,10 @@ class CRDTDocument {
   /// [snapshot] is always applied before [changes]
   ///
   /// If [merge] is `false`
-  /// [snapshot] is applied only if it is newer than document version
-  /// (snapshot is imported using [importSnapshot]),
-  /// also [changes] are ignored if [snapshot] is not imported.
+  /// [snapshot] is applied only if it is newer than
+  /// the current document snapshot (snapshot is imported using
+  /// [importSnapshot]), also [changes] are ignored
+  /// if [snapshot] is not imported.
   ///
   /// If [merge] is `true`, [snapshot] is merged with the current snapshot
   /// (snapshot is imported using [mergeSnapshot])
@@ -609,6 +643,46 @@ class CRDTDocument {
   String toString() {
     return 'CRDTDocument(peerId: $_peerId, changes: '
         '${_changeStore.changeCount}, version: ${version.length} frontiers)';
+  }
+
+  /// Returns the set of dependencies that are not currently present
+  /// in the DAG. These are the candidates that might be covered by
+  /// a snapshot.
+  Set<OperationId> _missingDependencies(Set<OperationId> deps) {
+    if (deps.isEmpty) {
+      return <OperationId>{};
+    }
+
+    final missing = <OperationId>{};
+    for (final dep in deps) {
+      if (!_dag.containsNode(dep)) {
+        missing.add(dep);
+      }
+    }
+    return missing;
+  }
+
+  /// Verifies that every dependency in [deps] is included
+  /// in the latest snapshot version vector.
+  ///
+  /// Returns `true` if the snapshot proves the missing deps were
+  /// compacted away, meaning the change is still causally ready.
+  bool _dependenciesCoveredBySnapshot(Set<OperationId> deps) {
+    if (deps.isEmpty) {
+      return true;
+    }
+    if (_lastSnapshot == null) {
+      return false;
+    }
+
+    final versionVector = _lastSnapshot!.versionVector;
+    for (final dep in deps) {
+      final snapshotClock = versionVector[dep.peerId];
+      if (snapshotClock == null || dep.hlc.compareTo(snapshotClock) > 0) {
+        return false;
+      }
+    }
+    return true;
   }
 
   /// Disposes of the document

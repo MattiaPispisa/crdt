@@ -75,45 +75,28 @@ class SyncManager {
 
   /// [CRDTDocument.import] with `merge: true`
   void merge({
+    required VersionVector serverVersionVector,
     List<Change>? changes,
     Snapshot? snapshot,
   }) {
-    final serverVV = _serverVersionVector(
-      base: snapshot?.versionVector.mutable(),
-      changes: changes,
-    );
-
     document.import(
       changes: changes,
       snapshot: snapshot,
-      merge: true,
     );
 
-    _sendUnknownChangesToServer(serverVV);
+    _sendUnknownChangesToServerSync(
+      document.exportChangesNewerThan(serverVersionVector),
+    );
   }
 
-  /// Compute the server version from snapshot+changes
-  VersionVector _serverVersionVector({
-    VersionVector? base,
-    List<Change>? changes,
-  }) {
-    final versionVector = base ?? VersionVector({});
-
-    for (final c in changes ?? <Change>[]) {
-      versionVector.update(c.id.peerId, c.hlc);
-    }
-
-    return versionVector;
-  }
-
-  /// Send local changes that are newer than the server's vector
-  Future<void> _sendUnknownChangesToServer(VersionVector serverVV) async {
-    final toSend = document.exportChangesNewerThan(serverVV);
-    if (toSend.isEmpty) {
+  /// Send a list of changes that were already exported (synchronous version)
+  void _sendUnknownChangesToServerSync(List<Change> changes) {
+    if (changes.isEmpty) {
       return;
     }
 
-    await _sendChangesToServer(toSend);
+    // Use unawaited because we can't await in merge (it's not async)
+    unawaited(_sendChangesToServer(changes));
   }
 
   /// Requests the document status from the server
@@ -123,7 +106,7 @@ class SyncManager {
       return client.sendMessage(
         Message.documentStatusRequest(
           documentId: document.documentId,
-          version: document.version,
+          versionVector: document.getVersionVector(),
         ),
       );
     });
