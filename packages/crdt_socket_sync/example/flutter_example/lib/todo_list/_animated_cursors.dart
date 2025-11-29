@@ -76,7 +76,7 @@ class _AnimatedCursorsState extends State<AnimatedCursors>
   @override
   Widget build(BuildContext context) {
     final screenSize = MediaQuery.sizeOf(context);
-    
+
     return AnimatedBuilder(
       animation: Listenable.merge(_controllers.values.toList()),
       builder: (context, child) {
@@ -90,12 +90,13 @@ class _AnimatedCursorsState extends State<AnimatedCursors>
                   tween == null ||
                   user.position == null) {
                 // Convert relative position to absolute
-                final absolutePosition = user.position != null
-                    ? Offset(
-                        user.position!.dx * screenSize.width,
-                        user.position!.dy * screenSize.height,
-                      )
-                    : null;
+                final absolutePosition =
+                    user.position != null
+                        ? Offset(
+                          user.position!.dx * screenSize.width,
+                          user.position!.dy * screenSize.height,
+                        )
+                        : null;
                 return UserConnectedItem(
                   username: user.username,
                   surname: user.surname,
@@ -153,10 +154,10 @@ class CursorPainter extends CustomPainter {
           Paint()
             ..color = user.color
             ..style = PaintingStyle.fill;
-      
+
       // Increase cursor size when hovering
       final cursorRadius = user.isHovering ? 8.0 : 5.0;
-      
+
       canvas.drawCircle(user.position ?? Offset.zero, cursorRadius, paint);
     }
   }
