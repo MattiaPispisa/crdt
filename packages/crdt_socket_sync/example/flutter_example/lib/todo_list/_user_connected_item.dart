@@ -8,6 +8,7 @@ class UserConnectedItem {
     required this.color,
     required this.position,
     required this.isMe,
+    required this.isHovering,
   });
 
   factory UserConnectedItem({
@@ -15,6 +16,7 @@ class UserConnectedItem {
     required String surname,
     required Offset? position,
     required bool isMe,
+    bool isHovering = false,
   }) {
     return UserConnectedItem._(
       username: username,
@@ -22,6 +24,7 @@ class UserConnectedItem {
       color: _getColorForUser(username, surname),
       position: position,
       isMe: isMe,
+      isHovering: isHovering,
     );
   }
 
@@ -30,6 +33,7 @@ class UserConnectedItem {
   final Color color;
   final Offset? position;
   final bool isMe;
+  final bool isHovering;
 
   @override
   bool operator ==(Object other) {
@@ -95,6 +99,7 @@ class UsersConnectedBuilder {
 
       final xPosition = client.metadata['positionX'] as double?;
       final yPosition = client.metadata['positionY'] as double?;
+      final isHovering = client.metadata['isHovering'] as bool? ?? false;
 
       Offset? position;
       if (xPosition != null && yPosition != null) {
@@ -107,6 +112,7 @@ class UsersConnectedBuilder {
           surname: surname,
           position: position,
           isMe: isMe,
+          isHovering: isHovering,
         ),
       );
     }

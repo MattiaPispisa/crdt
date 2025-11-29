@@ -50,6 +50,7 @@ class _AnimatedCursorsState extends State<AnimatedCursors>
       if (newUser.position == null) continue;
 
       final oldUser = oldMap[id];
+      // Use relative positions for animation
       final from = _tweens[id]?.end ?? oldUser?.position ?? newUser.position!;
       final to = newUser.position!;
 
@@ -74,6 +75,8 @@ class _AnimatedCursorsState extends State<AnimatedCursors>
 
   @override
   Widget build(BuildContext context) {
+    final screenSize = MediaQuery.sizeOf(context);
+    
     return AnimatedBuilder(
       animation: Listenable.merge(_controllers.values.toList()),
       builder: (context, child) {
@@ -86,18 +89,38 @@ class _AnimatedCursorsState extends State<AnimatedCursors>
               if (controller == null ||
                   tween == null ||
                   user.position == null) {
-                return user;
+                // Convert relative position to absolute
+                final absolutePosition = user.position != null
+                    ? Offset(
+                        user.position!.dx * screenSize.width,
+                        user.position!.dy * screenSize.height,
+                      )
+                    : null;
+                return UserConnectedItem(
+                  username: user.username,
+                  surname: user.surname,
+                  position: absolutePosition,
+                  isMe: user.isMe,
+                  isHovering: user.isHovering,
+                );
               }
 
               final animation = tween.animate(
                 CurvedAnimation(parent: controller, curve: Curves.easeInOut),
               );
 
+              // Convert relative position to absolute
+              final absolutePosition = Offset(
+                animation.value.dx * screenSize.width,
+                animation.value.dy * screenSize.height,
+              );
+
               return UserConnectedItem(
                 username: user.username,
                 surname: user.surname,
-                position: animation.value,
+                position: absolutePosition,
                 isMe: user.isMe,
+                isHovering: user.isHovering,
               );
             }).toList();
 
@@ -130,7 +153,11 @@ class CursorPainter extends CustomPainter {
           Paint()
             ..color = user.color
             ..style = PaintingStyle.fill;
-      canvas.drawCircle(user.position ?? Offset.zero, 5.0, paint);
+      
+      // Increase cursor size when hovering
+      final cursorRadius = user.isHovering ? 8.0 : 5.0;
+      
+      canvas.drawCircle(user.position ?? Offset.zero, cursorRadius, paint);
     }
   }
 

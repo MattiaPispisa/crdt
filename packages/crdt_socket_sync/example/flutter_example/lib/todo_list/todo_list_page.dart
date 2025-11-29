@@ -75,9 +75,17 @@ class _TodoListContent extends StatelessWidget {
         final cursors =
             users.where((user) => !user.isMe && user.position != null).toList();
 
+        final screenSize = MediaQuery.sizeOf(context);
+
         return MouseRegion(
           onHover: (event) {
-            context.read<TodoListState>().updateCursor(event.position);
+            final relativePosition = Offset(
+              event.position.dx / screenSize.width,
+              event.position.dy / screenSize.height,
+            );
+            context.read<TodoListState>().updateCursor(
+              relativePosition: relativePosition,
+            );
           },
           child: Stack(
             children: [
@@ -112,7 +120,13 @@ class _TodoListContent extends StatelessWidget {
     return ListView.builder(
       itemCount: state.todos.length,
       itemBuilder: (context, index) {
-        return TodoItem(todo: state.todos[index], index: index);
+        return TodoItem(
+          todo: state.todos[index],
+          index: index,
+          onHover: (isHovering) {
+            context.read<TodoListState>().setHover(isHovering);
+          },
+        );
       },
     );
   }

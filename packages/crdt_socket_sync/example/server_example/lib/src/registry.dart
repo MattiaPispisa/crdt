@@ -7,8 +7,8 @@ import 'package:hive/hive.dart';
 import 'package:en_logger/en_logger.dart';
 
 const _kDocumentsBox = 'documents';
-const _kDefaultSnapshotInterval = Duration(seconds: 30000000);
-const _kDefaultMinChangesForSnapshot = 2000;
+const _kDefaultSnapshotInterval = Duration(minutes: 30);
+const _kDefaultMinChangesForSnapshot = 20;
 
 /// A server-side CRDT document registry that uses Hive for persistence.
 ///

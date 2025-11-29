@@ -119,11 +119,30 @@ class TodoListState extends ChangeNotifier {
     notifyListeners();
   }
 
-  void updateCursor(Offset position) {
+  void _updateAwareness({bool? isHovering, Offset? relativePosition}) {
+    final nextIsHovering =
+        isHovering ?? myAwareness?.metadata['isHovering'] as bool? ?? false;
+    final nextRelativePositionX =
+        relativePosition?.dx ??
+        myAwareness?.metadata['positionX'] as double? ??
+        0.0;
+    final nextRelativePositionY =
+        relativePosition?.dy ??
+        myAwareness?.metadata['positionY'] as double? ??
+        0.0;
     _awareness.updateLocalState({
-      'positionX': position.dx,
-      'positionY': position.dy,
+      'positionX': nextRelativePositionX,
+      'positionY': nextRelativePositionY,
+      'isHovering': nextIsHovering,
     });
+  }
+
+  void updateCursor({required Offset relativePosition}) {
+    _updateAwareness(relativePosition: relativePosition);
+  }
+
+  void setHover(bool isHovering) {
+    _updateAwareness(isHovering: isHovering);
   }
 
   List<Todo> get todos => _handler.value.map(Todo.fromJson).toList();
