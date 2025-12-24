@@ -29,14 +29,19 @@ class CRDTDocument {
   ///   If not provided, a new one is generated.
   /// - [documentId]: the identifier of the document. If not provided, a new
   ///   random identifier is generated.
+  /// - [initialClock]: the initial hybrid logical clock for this document.
+  ///   If not provided, defaults to [HybridLogicalClock.initialize] (clock
+  ///   starting at zero). Use [HybridLogicalClock.now] to start from the
+  ///   current physical time.
   CRDTDocument({
     PeerId? peerId,
     String? documentId,
+    HybridLogicalClock? initialClock,
   })  : _dag = DAG.empty(),
         _changeStore = ChangeStore.empty(),
         _peerId = peerId ?? PeerId.generate(),
         _documentId = documentId ?? PeerId.generate().toString(),
-        _clock = HybridLogicalClock.initialize(),
+        _clock = initialClock ?? HybridLogicalClock.initialize(),
         _localChangesController = StreamController<Change>.broadcast(),
         _handlers = {} {
     _transactionManager = TransactionManager(

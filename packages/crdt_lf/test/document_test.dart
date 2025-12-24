@@ -34,10 +34,15 @@ void main() {
 
     test(
         'constructor creates document with'
-        ' provided peerId and id', () {
-      final doc = CRDTDocument(peerId: author, documentId: 'docId');
+        ' provided peerId, id and initial clock', () {
+      final doc = CRDTDocument(
+        peerId: author,
+        documentId: 'docId',
+        initialClock: HybridLogicalClock(l: 1, c: 3),
+      );
       expect(doc.peerId, equals(author));
       expect(doc.documentId, 'docId');
+      expect(doc.hlc, equals(HybridLogicalClock(l: 1, c: 3)));
     });
 
     test('document should be empty', () {
