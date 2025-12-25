@@ -38,6 +38,7 @@ class CRDTORMapHandler<K, V> extends Handler<ORMapState<K, V>> {
 
   /// Obtains a unique tag for an operation
   ORMapTag _tag() {
+    doc.prepareMutation();
     return ORMapTag(
       peerId: doc.peerId,
       hlc: doc.hlc,

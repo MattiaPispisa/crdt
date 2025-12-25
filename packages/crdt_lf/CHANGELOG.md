@@ -1,3 +1,17 @@
+## [2.3.0](https://github.com/MattiaPispisa/crdt/tree/crdt_lf-v2.3.0/packages/crdt_lf)
+**Date:** 2025-12-24
+
+[compare to previous release](https://github.com/MattiaPispisa/crdt/compare/crdt_lf-v2.2.0...crdt_lf-v2.3.0)
+
+### Added
+
+- Added `initialClock` to `CRDTDocument` constructor
+- Added `prepareMutation` to `CRDTDocument` to prepare the system to perform a mutation
+
+### Fixed
+
+- `CRDTORMapHandler` and `CRDTORSetHandler` now refresh clock ("prepareMutation") before creating a tag [52](https://github.com/MattiaPispisa/crdt/issues/52) (thx to @gborges9)
+
 ## [2.2.0](https://github.com/MattiaPispisa/crdt/tree/crdt_lf-v2.2.0/packages/crdt_lf)
 **Date:** 2025-11-22
 
@@ -72,7 +86,7 @@ Removed redundant `hlc` from `Change`. `change.hlc` is also available as getter 
 Hlc in version vector is now serialized as string instead of int64. This avoids precision loss when serialized as JSON for web interoperability.
 
 ### Added
-- `documentId` to `CRDTDocument`, specified document identity to remove ambiguity between peer and document [38](https://github.com/MattiaPispisa/crdt/issues/38)
+- `documentId` to `CRDTDocument`, specified document identity to remove ambiguity between peer and document [38](https://github.com/MattiaPispisa/crdt/issues/38) (thx to @Jei-sKappa)
 - `toString` to `Snapshot` and `VersionVector`
 - added a stream to `CRDTDocument` to be notified of every change (changes, snapshots, merges, ...)
 - added `mutable` and method to `VersionVector` to create mutable copies

@@ -74,6 +74,26 @@ class CRDTDocument {
   /// Gets the current timestamp of this document
   HybridLogicalClock get hlc => _clock.copy();
 
+  /// Updates the document's clock to the current physical time.
+  void _tickClock({int? physicalTime}) {
+    final pt = physicalTime ?? DateTime.now().millisecondsSinceEpoch;
+    _clock.localEvent(pt);
+  }
+
+  /// Prepares the system to perform a mutation.
+  ///
+  /// What this currently does:
+  /// - updates the document's clock
+  ///
+  /// Call this only when you intend to execute a causal operation,
+  /// not just to update the clock for timekeeping.
+  ///
+  /// Examples of causal operations:
+  /// - creating a tag that references a [HybridLogicalClock]
+  void prepareMutation() {
+    _tickClock();
+  }
+
   /// Gets the current version of this document (the frontiers of the DAG)
   Set<OperationId> get version => _dag.frontiers;
 
@@ -203,8 +223,7 @@ class CRDTDocument {
     Operation operation, {
     int? physicalTime,
   }) {
-    final pt = physicalTime ?? DateTime.now().millisecondsSinceEpoch;
-    _clock.localEvent(pt);
+    _tickClock(physicalTime: physicalTime);
 
     final id = OperationId(_peerId, _clock.copy());
     final deps = _dag.frontiers;
