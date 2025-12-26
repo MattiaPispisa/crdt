@@ -34,8 +34,11 @@ class CRDTORSetHandler<T> extends Handler<ORSetState<T>> {
   @override
   String get id => _id;
 
+  // TODO(m.pispisa): create a reusable class for a tag related
+  // to peerId and hlc. Can be shared with the ORMapHandler.
   /// Obtains a unique tag for an operation
   String _tag() {
+    doc.prepareMutation();
     return '${doc.peerId}@${doc.hlc}';
   }
 

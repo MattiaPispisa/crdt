@@ -38,6 +38,17 @@ void main() {
       expect(map['x'], 3);
     });
 
+    test('should refresh clock before creating a tag', () {
+      final doc = CRDTDocument();
+      final hlc1 = doc.hlc;
+      CRDTORMapHandler<String, int>(doc, 'map1').put('x', 1);
+      final change = doc.exportChanges().first.toJson();
+      final payload = change['payload'] as Map<String, dynamic>;
+      final tag = ORMapTag.parse(payload['tag'] as String);
+      expect(tag.hlc, isNot(hlc1));
+      expect(hlc1, isNot(doc.hlc));
+    });
+
     test('should handle concurrent puts on different keys', () {
       final doc1 = CRDTDocument(
         peerId: PeerId.parse('45ee6b65-b393-40b7-9755-8b66dc7d0518'),
