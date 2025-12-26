@@ -34,6 +34,7 @@ void main() {
       final payload = change['payload'] as Map<String, dynamic>;
       final tag = ORMapTag.parse(payload['tag'] as String);
       expect(tag.hlc, isNot(hlc1));
+      expect(hlc1, isNot(doc.hlc));
     });
 
     test('should handle concurrent adds', () {
