@@ -43,3 +43,9 @@ class HandlerAlreadyRegisteredException extends CrdtException {
   /// Constructor
   const HandlerAlreadyRegisteredException(super.message);
 }
+
+class ReadOnlyDocumentException extends CrdtException {
+  ReadOnlyDocumentException(String methodInvoked)
+      : super('Impossible to execute $methodInvoked. '
+            'The document is in time travel mode (Read-Only).');
+}

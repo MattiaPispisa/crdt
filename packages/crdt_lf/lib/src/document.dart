@@ -7,6 +7,36 @@ import 'package:crdt_lf/src/devtools/devtools.dart' as devtools;
 import 'package:crdt_lf/src/transaction/transaction_manager.dart';
 import 'package:hlc_dart/hlc_dart.dart';
 
+abstract class BaseCRDTDocument {
+  /// Gets the current timestamp of this document
+  HybridLogicalClock get hlc;
+
+  /// Gets the peer ID of this document
+  PeerId get peerId;
+
+  /// Gets the document ID of this document
+  String get documentId;
+
+  /// Gets the current version of this document (the frontiers of the DAG)
+  Set<OperationId> get version;
+
+  /// Registers an [Operation] to this document.
+  ///
+  /// If there isn't a transaction an implicit transaction is opened
+  ///
+  /// Else the operation is added to the current transaction.
+  void registerOperation(Operation operation);
+
+  /// Exports [Change]s from a specific version
+  ///
+  /// Returns a list of [Change]s that are not ancestors of the given version.
+  /// If version is empty, returns all [Change]s.
+  List<Change> exportChanges({Set<OperationId>? from});
+
+  /// The last snapshot of this document
+  Snapshot? _lastSnapshot;
+}
+
 // TODO(mattia): after transaction support create compound operations.
 // A mechanism to group operations together and apply them atomically.
 
@@ -22,7 +52,7 @@ import 'package:hlc_dart/hlc_dart.dart';
 ///   identifiers.
 /// - `peerId`: identifies the peer/author generating operations. It is used in
 ///   `OperationId` together with the Hybrid Logical Clock.
-class CRDTDocument {
+class CRDTDocument extends BaseCRDTDocument {
   /// Creates a new [CRDTDocument] with the given identifiers.
   ///
   /// - [peerId]: the identifier of the local peer (author of operations).
@@ -65,13 +95,13 @@ class CRDTDocument {
   /// The hybrid logical clock for this document
   final HybridLogicalClock _clock;
 
-  /// Gets the peer ID of this document
+  @override
   PeerId get peerId => _peerId;
 
-  /// Gets the document ID of this document
+  @override
   String get documentId => _documentId;
 
-  /// Gets the current timestamp of this document
+  @override
   HybridLogicalClock get hlc => _clock.copy();
 
   /// Updates the document's clock to the current physical time.
@@ -94,7 +124,7 @@ class CRDTDocument {
     _tickClock();
   }
 
-  /// Gets the current version of this document (the frontiers of the DAG)
+  @override
   Set<OperationId> get version => _dag.frontiers;
 
   /// A stream controller for locally generated changes.
@@ -256,11 +286,7 @@ class CRDTDocument {
     return change;
   }
 
-  /// Registers an [Operation] to this document.
-  ///
-  /// If there isn't a transaction an implicit transaction is opened
-  ///
-  /// Else the operation is added to the current transaction.
+  @override
   void registerOperation(Operation operation) {
     final openedImplicitTransaction = !isInTransaction;
 
@@ -485,6 +511,7 @@ class CRDTDocument {
   ///
   /// Returns a list of [Change]s that are not ancestors of the given version.
   /// If version is empty, returns all [Change]s.
+  @override
   List<Change> exportChanges({Set<OperationId>? from}) {
     return _changeStore.exportChanges(from ?? {}, _dag);
   }
@@ -547,6 +574,8 @@ class CRDTDocument {
 
     return changedApplied.length;
   }
+
+  HistorySession timeTravel();
 
   /// Prunes the DAG and the change store up to the given version.
   void _prune(VersionVector version) {
@@ -716,16 +745,74 @@ class CRDTDocument {
   }
 }
 
+class _CRDTStaticProxyDocument extends BaseCRDTDocument {
+  _CRDTStaticProxyDocument({
+    required String documentId,
+    required HybridLogicalClock hlc,
+    required PeerId peerId,
+    required List<Change> frozenChanges,
+  })  : _documentId = documentId,
+        _hlc = hlc,
+        _peerId = peerId,
+        _frozenChanges = frozenChanges;
+
+  final String _documentId;
+
+  final HybridLogicalClock _hlc;
+
+  final PeerId _peerId;
+
+  final List<Change> _frozenChanges;
+
+  @override
+  String get documentId => _documentId;
+
+  @override
+  HybridLogicalClock get hlc => _hlc;
+
+  @override
+  PeerId get peerId => _peerId;
+
+  @override
+  void registerOperation(Operation operation) {
+    throw ReadOnlyDocumentException('registerOperation');
+  }
+
+  @override
+  Set<OperationId> get version {
+    throw UnimplementedError();
+  }
+
+  @override
+  List<Change> exportChanges({Set<OperationId>? from}) {
+    // TODO: implement exportChanges
+    throw UnimplementedError();
+  }
+}
+
+class HistorySession {
+  final int _cursor;
+
+  bool get canNext;
+  bool get canPrevious;
+
+  H getHandler<H extends Handler>(H Function(BaseCrdtDocument) factory);
+
+  void next();
+  void previous();
+  void jump(int cursor);
+}
+
 /// A consumer that can consume a CRDTDocument
 mixin DocumentConsumer {
   /// The document that `this` can consume
-  late final CRDTDocument _document;
+  late final BaseCRDTDocument _document;
 
   /// The unique identifier for `this` consumer
   String get id;
 }
 
-/// A provider that can provide a cacheable state of a [CRDTDocument]
+/// A provider that can provide a cacheable state of a [BaseCRDTDocument]
 ///
 /// [T] is the type of the cached state of the handler.
 /// The handler state can be whatever the handler needs it to be
