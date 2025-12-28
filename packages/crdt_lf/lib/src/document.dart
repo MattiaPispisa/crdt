@@ -831,8 +831,6 @@ class _CRDTStaticProxyDocument extends BaseCRDTDocument {
   }
 }
 
-// TODO(mattia): add an example for HistorySession
-
 /// {@template history_session}
 /// An interactive controller for navigating the history of a [CRDTDocument].
 ///
@@ -840,7 +838,27 @@ class _CRDTStaticProxyDocument extends BaseCRDTDocument {
 /// as the moment of instantiation. It allows "Time tavel" functionality by
 /// moving a temporal cursor back and forth through the [Change]s.
 ///
-/// Example of
+/// ```dart
+/// final document = CRDTDocument();
+/// final listHandler = CRDTListHandler<String>(document, 'list');
+/// listHandler
+///   ..insert(0, 'Hello')
+///   ..insert(1, 'World')
+///   ..insert(2, 'Dart');
+///
+/// final historySession = document.toTimeTravel();
+/// final viewListHandler = historySession.getHandler(
+///   (doc) => CRDTListHandler<String>(doc, 'list'),
+/// );
+///
+/// print(viewListHandler.value); // ['Hello', 'World', 'Dart']
+///
+/// historySession.previous();
+/// print(viewListHandler.value); // ['Hello', 'World']
+///
+/// historySession.next();
+/// print(viewListHandler.value); // ['Hello', 'World', 'Dart']
+/// ```
 /// {@endtemplate}
 class HistorySession {
   HistorySession._({
