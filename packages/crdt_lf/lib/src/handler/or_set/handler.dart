@@ -37,9 +37,12 @@ class CRDTORSetHandler<T> extends Handler<ORSetState<T>> {
   // TODO(mattia): create a reusable class for a tag related
   // to peerId and hlc. Can be shared with the ORMapHandler.
   /// Obtains a unique tag for an operation
-  String _tag() {
+  ORHandlerTag _tag() {
     doc.prepareMutation();
-    return '${doc.peerId}@${doc.hlc}';
+    return ORHandlerTag(
+      peerId: doc.peerId,
+      hlc: doc.hlc,
+    );
   }
 
   /// Adds [value] to the set producing a unique tag, returned to the caller.
@@ -58,7 +61,7 @@ class CRDTORSetHandler<T> extends Handler<ORSetState<T>> {
   /// Removes [value] from the set by tomb-stoning observed tags.
   void remove(T value) {
     final state = _cachedOrComputedState();
-    final allTags = state._all[value] ?? <String>{};
+    final allTags = state._all[value] ?? <ORHandlerTag>{};
 
     final operation = _ORSetRemoveOperation<T>.fromHandler(
       this,
@@ -95,10 +98,10 @@ class CRDTORSetHandler<T> extends Handler<ORSetState<T>> {
   /// Computes the tag state by replaying the history.
   ORSetState<T> _computeState() {
     final state = ORSetState<T>._(
-      live: <T, Set<String>>{},
-      all: <T, Set<String>>{},
+      live: <T, Set<ORHandlerTag>>{},
+      all: <T, Set<ORHandlerTag>>{},
       snapshotOnly: <T>{},
-      tombstones: <String>{},
+      tombstones: <ORHandlerTag>{},
     );
 
     final snap = lastSnapshot();
@@ -158,11 +161,11 @@ class CRDTORSetHandler<T> extends Handler<ORSetState<T>> {
     // Register tag as seen (all),
     // and as live if not tomb-stoned yet.
     state._all
-        .putIfAbsent(operation.value, () => <String>{})
+        .putIfAbsent(operation.value, () => <ORHandlerTag>{})
         .add(operation.tag);
     if (!state._tombstones.contains(operation.tag)) {
       state._live
-          .putIfAbsent(operation.value, () => <String>{})
+          .putIfAbsent(operation.value, () => <ORHandlerTag>{})
           .add(operation.tag);
     }
     // A concrete add overrides snapshot-only presence for this value.
@@ -221,10 +224,10 @@ class ORSetState<T> {
   /// so far while replaying history.
   /// - [_state]: the current state of the OR-Set
   ORSetState._({
-    required Map<T, Set<String>> live,
-    required Map<T, Set<String>> all,
+    required Map<T, Set<ORHandlerTag>> live,
+    required Map<T, Set<ORHandlerTag>> all,
     required Set<T> snapshotOnly,
-    required Set<String> tombstones,
+    required Set<ORHandlerTag> tombstones,
   })  : _tombstones = tombstones,
         _snapshotOnly = snapshotOnly,
         _all = all,
@@ -232,16 +235,16 @@ class ORSetState<T> {
 
   /// Creates a deep copy of the tag state
   ORSetState<T> _deepCopy() {
-    final live = <T, Set<String>>{
+    final live = <T, Set<ORHandlerTag>>{
       for (final entry in _live.entries)
-        entry.key: Set<String>.from(entry.value),
+        entry.key: Set<ORHandlerTag>.from(entry.value),
     };
-    final all = <T, Set<String>>{
+    final all = <T, Set<ORHandlerTag>>{
       for (final entry in _all.entries)
-        entry.key: Set<String>.from(entry.value),
+        entry.key: Set<ORHandlerTag>.from(entry.value),
     };
     final snapshotOnly = <T>{..._snapshotOnly};
-    final tombstones = <String>{..._tombstones};
+    final tombstones = <ORHandlerTag>{..._tombstones};
 
     return ORSetState<T>._(
       live: live,
@@ -252,16 +255,16 @@ class ORSetState<T> {
   }
 
   /// The live tags per value
-  final Map<T, Set<String>> _live;
+  final Map<T, Set<ORHandlerTag>> _live;
 
   /// The all tags per value
-  final Map<T, Set<String>> _all;
+  final Map<T, Set<ORHandlerTag>> _all;
 
   /// The snapshot-only values
   final Set<T> _snapshotOnly;
 
   /// The tombstones
-  final Set<String> _tombstones;
+  final Set<ORHandlerTag> _tombstones;
 
   /// The state of the OR-Set
   Set<T> get _state => <T>{..._live.keys, ..._snapshotOnly};
