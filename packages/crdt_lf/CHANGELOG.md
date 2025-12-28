@@ -1,3 +1,12 @@
+## [Unreleased]
+
+### Added
+
+- Added `HistorySession` to `CRDTDocument` to navigate the history of the document. It allows "Time travel" functionality by moving a temporal cursor back and forth through the changes. Can be called using `document.toTimeTravel()` [55](https://github.com/MattiaPispisa/crdt/issues/55)
+
+### Changed
+- CRDTDocument now extends `BaseCRDTDocument` instead of implementing it directly. `Handler`s now use `BaseCRDTDocument` instead of `CRDTDocument`.
+
 ## [2.3.0](https://github.com/MattiaPispisa/crdt/tree/crdt_lf-v2.3.0/packages/crdt_lf)
 **Date:** 2025-12-24
 
