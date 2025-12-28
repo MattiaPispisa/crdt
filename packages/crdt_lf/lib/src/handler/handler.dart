@@ -12,7 +12,7 @@ abstract class Handler<T>
   }
 
   /// The document that owns this handler
-  final CRDTDocument doc;
+  final BaseCRDTDocument doc;
 
   /// During transaction consecutive operations can be compounded.
   ///

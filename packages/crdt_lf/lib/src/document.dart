@@ -37,6 +37,9 @@ abstract class BaseCRDTDocument {
   /// If version is empty, returns all [Change]s.
   List<Change> exportChanges({Set<OperationId>? from});
 
+  /// Prepares the system to perform a mutation.
+  void prepareMutation();
+
   /// The last snapshot of this document
   Snapshot? get _lastSnapshot;
 
@@ -144,6 +147,7 @@ class CRDTDocument extends BaseCRDTDocument {
   ///
   /// Examples of causal operations:
   /// - creating a tag that references a [HybridLogicalClock]
+  @override
   void prepareMutation() {
     _tickClock();
   }
@@ -809,7 +813,15 @@ class _CRDTStaticProxyDocument extends BaseCRDTDocument {
   }
 
   @override
+  void prepareMutation() {
+    throw ReadOnlyDocumentException('prepareMutation');
+  }
+
+  @override
   Set<OperationId> get version {
+    if (_visibleCount == 0) {
+      return {};
+    }
     return _historyVersions[_visibleCount - 1];
   }
 
@@ -909,8 +921,7 @@ class HistorySession {
   H getHandler<H extends Handler<T>, T>(
     H Function(BaseCRDTDocument document) factory,
   ) {
-    final handler = factory(_document);
-    return handler;
+    return factory(_document);
   }
 
   /// Advances the cursor by one step.
