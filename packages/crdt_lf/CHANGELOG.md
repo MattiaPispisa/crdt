@@ -7,6 +7,7 @@
 ### Changed
 - CRDTDocument now extends `BaseCRDTDocument` instead of implementing it directly. `Handler`s now use `BaseCRDTDocument` instead of `CRDTDocument`.
 - Improved `CRDTDocument` disposal management. After disposal, all operations on the document will throw `DocumentDisposedException` [57](https://github.com/MattiaPispisa/crdt/issues/57)
+- Reuse tag creation logic in `CRDTORMapHandler` and `CRDTORSetHandler` to avoid code duplication [54](https://github.com/MattiaPispisa/crdt/issues/54)
 - chore: improved documentation
 
 ## [2.3.0](https://github.com/MattiaPispisa/crdt/tree/crdt_lf-v2.3.0/packages/crdt_lf)
