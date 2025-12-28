@@ -7,6 +7,57 @@ import 'package:crdt_lf/src/devtools/devtools.dart' as devtools;
 import 'package:crdt_lf/src/transaction/transaction_manager.dart';
 import 'package:hlc_dart/hlc_dart.dart';
 
+/// Defines the foundational contract for a CRDT document.
+///
+/// This abstract class serves as the common interfaces between
+/// the live [CRDTDocument] and the static read-only document.
+abstract class BaseCRDTDocument {
+  /// Gets the current timestamp of this document
+  HybridLogicalClock get hlc;
+
+  /// Gets the peer ID of this document
+  PeerId get peerId;
+
+  /// Gets the document ID of this document
+  String get documentId;
+
+  /// Gets the current version of this document (the frontiers of the DAG)
+  Set<OperationId> get version;
+
+  /// Registers an [Operation] to this document.
+  ///
+  /// If there isn't a transaction an implicit transaction is opened
+  ///
+  /// Else the operation is added to the current transaction.
+  void registerOperation(Operation operation);
+
+  /// Exports [Change]s from a specific version
+  ///
+  /// Returns a list of [Change]s that are not ancestors of the given version.
+  /// If version is empty, returns all [Change]s.
+  List<Change> exportChanges({Set<OperationId>? from});
+
+  /// Prepares the system to perform a mutation.
+  void prepareMutation();
+
+  /// The last snapshot of this document
+  Snapshot? get _lastSnapshot;
+
+  /// The registered snapshot providers
+  Map<String, Handler<dynamic>> get _handlers;
+
+  /// Register a [SnapshotProvider]
+  void registerHandler(Handler<dynamic> handler) {
+    if (_handlers.containsKey(handler.id)) {
+      throw HandlerAlreadyRegisteredException(
+        'Handler with ID ${handler.id} already registered',
+      );
+    }
+    _handlers[handler.id] = handler;
+    handler._document = this;
+  }
+}
+
 // TODO(mattia): after transaction support create compound operations.
 // A mechanism to group operations together and apply them atomically.
 
@@ -22,7 +73,7 @@ import 'package:hlc_dart/hlc_dart.dart';
 ///   identifiers.
 /// - `peerId`: identifies the peer/author generating operations. It is used in
 ///   `OperationId` together with the Hybrid Logical Clock.
-class CRDTDocument {
+class CRDTDocument extends BaseCRDTDocument {
   /// Creates a new [CRDTDocument] with the given identifiers.
   ///
   /// - [peerId]: the identifier of the local peer (author of operations).
@@ -65,14 +116,20 @@ class CRDTDocument {
   /// The hybrid logical clock for this document
   final HybridLogicalClock _clock;
 
-  /// Gets the peer ID of this document
+  @override
   PeerId get peerId => _peerId;
 
-  /// Gets the document ID of this document
+  @override
   String get documentId => _documentId;
 
-  /// Gets the current timestamp of this document
+  @override
   HybridLogicalClock get hlc => _clock.copy();
+
+  @override
+  Snapshot? _lastSnapshot;
+
+  @override
+  final Map<String, Handler<dynamic>> _handlers;
 
   /// Updates the document's clock to the current physical time.
   void _tickClock({int? physicalTime}) {
@@ -90,11 +147,12 @@ class CRDTDocument {
   ///
   /// Examples of causal operations:
   /// - creating a tag that references a [HybridLogicalClock]
+  @override
   void prepareMutation() {
     _tickClock();
   }
 
-  /// Gets the current version of this document (the frontiers of the DAG)
+  @override
   Set<OperationId> get version => _dag.frontiers;
 
   /// A stream controller for locally generated changes.
@@ -111,12 +169,6 @@ class CRDTDocument {
 
   /// A stream that emits when the document state updates.
   Stream<void> get updates => _updatesController.stream;
-
-  /// The registered snapshot providers
-  final Map<String, Handler<dynamic>> _handlers;
-
-  /// The last snapshot of this document
-  Snapshot? _lastSnapshot;
 
   /// Manages transactional batching of events
   late final TransactionManager _transactionManager;
@@ -193,17 +245,6 @@ class CRDTDocument {
     }
   }
 
-  /// Register a [SnapshotProvider]
-  void registerHandler(Handler<dynamic> handler) {
-    if (_handlers.containsKey(handler.id)) {
-      throw HandlerAlreadyRegisteredException(
-        'Handler with ID ${handler.id} already registered',
-      );
-    }
-    _handlers[handler.id] = handler;
-    handler._document = this;
-  }
-
   /// It represents the **latest operation for each peer** of this document
   ///
   /// Example:
@@ -256,11 +297,7 @@ class CRDTDocument {
     return change;
   }
 
-  /// Registers an [Operation] to this document.
-  ///
-  /// If there isn't a transaction an implicit transaction is opened
-  ///
-  /// Else the operation is added to the current transaction.
+  @override
   void registerOperation(Operation operation) {
     final openedImplicitTransaction = !isInTransaction;
 
@@ -485,6 +522,7 @@ class CRDTDocument {
   ///
   /// Returns a list of [Change]s that are not ancestors of the given version.
   /// If version is empty, returns all [Change]s.
+  @override
   List<Change> exportChanges({Set<OperationId>? from}) {
     return _changeStore.exportChanges(from ?? {}, _dag);
   }
@@ -546,6 +584,13 @@ class CRDTDocument {
     }
 
     return changedApplied.length;
+  }
+
+  /// Create a history session from the current state.
+  ///
+  /// {@macro history_session}
+  HistorySession toTimeTravel() {
+    return HistorySession._fromLiveDocument(this);
   }
 
   /// Prunes the DAG and the change store up to the given version.
@@ -716,16 +761,230 @@ class CRDTDocument {
   }
 }
 
+class _CRDTStaticProxyDocument extends BaseCRDTDocument {
+  _CRDTStaticProxyDocument({
+    required String documentId,
+    required HybridLogicalClock hlc,
+    required PeerId peerId,
+    required List<Change> frozenChanges,
+    required List<Set<OperationId>> historyVersions,
+    required int visibleCount,
+    required Snapshot? lastSnapshot,
+    required Map<String, Handler<dynamic>> handlers,
+  })  : _documentId = documentId,
+        _hlc = hlc,
+        _peerId = peerId,
+        _frozenChanges = frozenChanges,
+        _historyVersions = historyVersions,
+        _visibleCount = visibleCount,
+        _lastSnapshot = lastSnapshot,
+        _handlers = handlers;
+
+  final String _documentId;
+
+  final HybridLogicalClock _hlc;
+
+  final PeerId _peerId;
+
+  final List<Change> _frozenChanges;
+
+  final List<Set<OperationId>> _historyVersions;
+
+  int _visibleCount;
+
+  @override
+  String get documentId => _documentId;
+
+  @override
+  HybridLogicalClock get hlc => _hlc;
+
+  @override
+  PeerId get peerId => _peerId;
+
+  @override
+  final Snapshot? _lastSnapshot;
+
+  @override
+  final Map<String, Handler<dynamic>> _handlers;
+
+  @override
+  void registerOperation(Operation operation) {
+    throw ReadOnlyDocumentException('registerOperation');
+  }
+
+  @override
+  void prepareMutation() {
+    throw ReadOnlyDocumentException('prepareMutation');
+  }
+
+  @override
+  Set<OperationId> get version {
+    if (_visibleCount == 0) {
+      return {};
+    }
+    return _historyVersions[_visibleCount - 1];
+  }
+
+  @override
+  List<Change> exportChanges({Set<OperationId>? from}) {
+    return _frozenChanges.sublist(0, _visibleCount);
+  }
+}
+
+/// {@template history_session}
+/// An interactive controller for navigating the history of a [CRDTDocument].
+///
+/// A [HistorySession] creates a frozen, immutable view of a [CRDTDocument]
+/// as the moment of instantiation. It allows "Time tavel" functionality by
+/// moving a temporal cursor back and forth through the [Change]s.
+///
+/// ```dart
+/// final document = CRDTDocument();
+/// final listHandler = CRDTListHandler<String>(document, 'list');
+/// listHandler
+///   ..insert(0, 'Hello')
+///   ..insert(1, 'World')
+///   ..insert(2, 'Dart');
+///
+/// final historySession = document.toTimeTravel();
+/// final viewListHandler = historySession.getHandler(
+///   (doc) => CRDTListHandler<String>(doc, 'list'),
+/// );
+///
+/// print(viewListHandler.value); // ['Hello', 'World', 'Dart']
+///
+/// historySession.previous();
+/// print(viewListHandler.value); // ['Hello', 'World']
+///
+/// historySession.next();
+/// print(viewListHandler.value); // ['Hello', 'World', 'Dart']
+/// ```
+/// {@endtemplate}
+class HistorySession {
+  HistorySession._({
+    required int cursor,
+    required _CRDTStaticProxyDocument document,
+    required this.length,
+  })  : _document = document,
+        _cursor = cursor,
+        _cursorController = StreamController<int>.broadcast();
+
+  factory HistorySession._fromLiveDocument(
+    BaseCRDTDocument document,
+  ) {
+    final changes = document.exportChanges().sorted();
+
+    final historyVersions = <Set<OperationId>>[];
+    final tempFrontiers = Frontiers();
+
+    for (final change in changes) {
+      tempFrontiers.update(
+        newOperationId: change.id,
+        oldDependencies: change.deps,
+      );
+
+      historyVersions.add(tempFrontiers.get());
+    }
+
+    final cursor = changes.length;
+
+    return HistorySession._(
+      cursor: cursor,
+      length: cursor,
+      document: _CRDTStaticProxyDocument(
+        documentId: document.documentId,
+        hlc: document.hlc,
+        peerId: document.peerId,
+        frozenChanges: changes,
+        historyVersions: historyVersions,
+        visibleCount: cursor,
+        lastSnapshot: document._lastSnapshot,
+        handlers: {},
+      ),
+    );
+  }
+
+  final _CRDTStaticProxyDocument _document;
+  int _cursor;
+  final StreamController<int> _cursorController;
+
+  /// The total number of changes available in this history session.
+  final int length;
+
+  /// The stream of cursor position updates.
+  ///
+  /// Emits the new cursor index whenever
+  /// [next], [previous], or [jump] is called.
+  Stream<int> get cursorStream => _cursorController.stream;
+
+  /// The current position of the temporal cursor.
+  ///
+  /// Represents the number of changes currently applied to the view.
+  /// - 0: Initial state (snapshot only).
+  /// - [length]: The full state at the time the session was created.
+  int get cursor => _cursor;
+
+  /// Whether the cursor can move forward (Redo).
+  bool get canNext => _cursor < length;
+
+  /// Whether the cursor can move backward (Undo).
+  bool get canPrevious => _cursor > 0;
+
+  /// Factory method to instantiate a CRDT Handler linked
+  /// to this history session.
+  ///
+  /// [Handler]s bound to the history session can only view their states,
+  /// on write operations (example [BaseCRDTDocument.registerOperation]) a
+  /// [ReadOnlyDocumentException] is thrown
+  H getHandler<H extends Handler<T>, T>(
+    H Function(BaseCRDTDocument document) factory,
+  ) {
+    return factory(_document);
+  }
+
+  /// Advances the cursor by one step.
+  ///
+  /// Does nothing if [canNext] is false.
+  void next() => jump(_cursor + 1);
+
+  /// Moves the cursor back by one step.
+  ///
+  /// Does nothing if [canPrevious] if false.
+  void previous() => jump(_cursor - 1);
+
+  /// Jumps immediately to a specific point in history.
+  ///
+  /// [cursor] must be between 0 and [length] (inclusive).
+  /// Does nothing if cursor remains the same.
+  void jump(int cursor) {
+    if (cursor < 0 || cursor > length) {
+      return;
+    }
+    if (cursor == _cursor) {
+      return;
+    }
+
+    _cursor = cursor;
+    _document._visibleCount = _cursor;
+    _cursorController.add(_cursor);
+  }
+
+  /// Releases resources used by this session.
+  void dispose() {
+    _cursorController.close();
+  }
+}
+
 /// A consumer that can consume a CRDTDocument
 mixin DocumentConsumer {
   /// The document that `this` can consume
-  late final CRDTDocument _document;
+  late final BaseCRDTDocument _document;
 
   /// The unique identifier for `this` consumer
   String get id;
 }
 
-/// A provider that can provide a cacheable state of a [CRDTDocument]
+/// A provider that can provide a cacheable state of a [BaseCRDTDocument]
 ///
 /// [T] is the type of the cached state of the handler.
 /// The handler state can be whatever the handler needs it to be
