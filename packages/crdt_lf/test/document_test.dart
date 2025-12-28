@@ -1084,6 +1084,30 @@ void main() {
       });
     });
   });
+
+  group('history session', () {
+    // TODO(mattia): should create a history session
+    // with cursor at the end of the document
+
+    // TODO(mattia): should not change when the document is modified
+    //(import changes, import snapshot, registered operation, pruned)
+
+    // TODO(mattia): should be able to jump to a specific cursor position
+    // TODO(mattia): should be able to move forward and backward
+    // TODO(mattia): should notify when the cursor changes
+    // TODO(mattia): should not change the cursor when out of bounds
+    // TODO(mattia): should canNext and canPrevious be true when the cursor is
+    // at the end and start of the document respectively
+    // TODO(mattia): should next and previous be no-op
+    // when canNext and canPrevious are false respectively
+
+    // TODO(mattia): should register handler in the history session
+    // TODO(mattia): should throw when registered handler
+    // try to register operation
+    // TODO(mattia): should correctly view the handler state on cursor change
+
+    // TODO(mattia): should dispose the history session
+  });
 }
 
 class _FakeCRDTListHandler extends CRDTListHandler<String> {
