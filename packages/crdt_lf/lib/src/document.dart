@@ -81,9 +81,6 @@ abstract class BaseCRDTDocument {
   }
 }
 
-// TODO(mattia): after transaction support create compound operations.
-// A mechanism to group operations together and apply them atomically.
-
 /// CRDT Document implementation
 ///
 /// A CRDTDocument is the main entry point for the CRDT system.
@@ -96,6 +93,52 @@ abstract class BaseCRDTDocument {
 ///   identifiers.
 /// - `peerId`: identifies the peer/author generating operations. It is used in
 ///   `OperationId` together with the Hybrid Logical Clock.
+///
+/// ## Example
+/// ```dart
+/// // setup
+/// final document = CRDTDocument(
+///   initialClock: HybridLogicalClock.now(),
+///   peerId: PeerId.parse('a90dfced-cbf0-4a49-9c64-f5b7b62fdc18'),
+/// );
+///
+/// // insert
+/// final list = CRDTListHandler<String>(document, 'list')
+///   ..insert(0, 'Hello')
+///   ..insert(1, 'World')
+///   ..insert(2, 'Dart');
+///
+/// print(list.value); // Prints ["Hello", "World", "Dart"]
+///
+/// final document2 = CRDTDocument(
+///   initialClock: HybridLogicalClock.now(),
+///   peerId: PeerId.parse('6551847f-415f-4811-ba33-c0344b6afb73'),
+/// );
+///
+/// final list2 = CRDTListHandler<String>(document2, 'list2');
+///
+/// // sync
+/// final changes1 = document.exportChanges();
+/// document2.importChanges(changes1);
+///
+/// print(list2.value); // Prints ["Hello", "World", "Dart"]
+///
+/// // history session
+/// final viewListHandler = document.toTimeTravel().getHandler((doc)
+///   => CRDTListHandler<String>(doc, 'list'),
+/// );
+/// print(viewListHandler.value); // Prints ["Hello", "World", "Dart"]
+/// historySession.previous();
+/// print(viewListHandler.value); // Prints ["Hello", "World"]
+///
+/// // transaction
+/// document.runInTransaction(() {
+///   list
+///    ..insert(3, 'Flutter')
+///    ..insert(4, '!');
+/// });
+/// print(list.value); // Prints ["Hello", "World", "Dart", "Flutter", "!"]
+/// ```
 class CRDTDocument extends BaseCRDTDocument {
   /// Creates a new [CRDTDocument] with the given identifiers.
   ///
