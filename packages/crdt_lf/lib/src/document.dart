@@ -7,6 +7,10 @@ import 'package:crdt_lf/src/devtools/devtools.dart' as devtools;
 import 'package:crdt_lf/src/transaction/transaction_manager.dart';
 import 'package:hlc_dart/hlc_dart.dart';
 
+/// Defines the foundational contract for a CRDT document.
+///
+/// This abstract class serves as the common interfaces between
+/// the live [CRDTDocument] and the static read-only document.
 abstract class BaseCRDTDocument {
   /// Gets the current timestamp of this document
   HybridLogicalClock get hlc;
@@ -578,7 +582,10 @@ class CRDTDocument extends BaseCRDTDocument {
     return changedApplied.length;
   }
 
-  HistorySession timeTravel() {
+  /// Create a history session from the current state.
+  ///
+  /// {@macro history_session}
+  HistorySession toTimeTravel() {
     return HistorySession._fromLiveDocument(this);
   }
 
@@ -812,6 +819,17 @@ class _CRDTStaticProxyDocument extends BaseCRDTDocument {
   }
 }
 
+// TODO(mattia): add an example for HistorySession
+
+/// {@template history_session}
+/// An interactive controller for navigating the history of a [CRDTDocument].
+///
+/// A [HistorySession] creates a frozen, immutable view of a [CRDTDocument]
+/// as the moment of instantiation. It allows "Time tavel" functionality by
+/// moving a temporal cursor back and forth through the [Change]s.
+///
+/// Example of
+/// {@endtemplate}
 class HistorySession {
   HistorySession._({
     required int cursor,
@@ -824,7 +842,7 @@ class HistorySession {
   factory HistorySession._fromLiveDocument(
     BaseCRDTDocument document,
   ) {
-    final changes = document.exportChanges();
+    final changes = document.exportChanges().sorted();
 
     final historyVersions = <Set<OperationId>>[];
     final tempFrontiers = Frontiers();
@@ -838,11 +856,11 @@ class HistorySession {
       historyVersions.add(tempFrontiers.get());
     }
 
-    final cursor = changes.length - 1;
+    final cursor = changes.length;
 
     return HistorySession._(
       cursor: cursor,
-      length: changes.length,
+      length: cursor,
       document: _CRDTStaticProxyDocument(
         documentId: document.documentId,
         hlc: document.hlc,
@@ -859,13 +877,35 @@ class HistorySession {
   final _CRDTStaticProxyDocument _document;
   int _cursor;
   final StreamController<int> _cursorController;
+
+  /// The total number of changes available in this history session.
   final int length;
 
+  /// The stream of cursor position updates.
+  ///
+  /// Emits the new cursor index whenever
+  /// [next], [previous], or [jump] is called.
   Stream<int> get cursorStream => _cursorController.stream;
+
+  /// The current position of the temporal cursor.
+  ///
+  /// Represents the number of changes currently applied to the view.
+  /// - 0: Initial state (snapshot only).
+  /// - [length]: The full state at the time the session was created.
   int get cursor => _cursor;
-  bool get canNext => _cursor < length - 1;
+
+  /// Whether the cursor can move forward (Redo).
+  bool get canNext => _cursor < length;
+
+  /// Whether the cursor can move backward (Undo).
   bool get canPrevious => _cursor > 0;
 
+  /// Factory method to instantiate a CRDT Handler linked
+  /// to this history session.
+  ///
+  /// [Handler]s bound to the history session can only view their states,
+  /// on write operations (example [BaseCRDTDocument.registerOperation]) a
+  /// [ReadOnlyDocumentException] is thrown
   H getHandler<H extends Handler<T>, T>(
     H Function(BaseCRDTDocument document) factory,
   ) {
@@ -873,12 +913,22 @@ class HistorySession {
     return handler;
   }
 
+  /// Advances the cursor by one step.
+  ///
+  /// Does nothing if [canNext] is false.
   void next() => jump(_cursor + 1);
 
+  /// Moves the cursor back by one step.
+  ///
+  /// Does nothing if [canPrevious] if false.
   void previous() => jump(_cursor - 1);
 
+  /// Jumps immediately to a specific point in history.
+  ///
+  /// [cursor] must be between 0 and [length] (inclusive).
+  /// Does nothing if cursor remains the same.
   void jump(int cursor) {
-    if (cursor < 0 || cursor >= length) {
+    if (cursor < 0 || cursor > length) {
       return;
     }
     if (cursor == _cursor) {
@@ -890,6 +940,7 @@ class HistorySession {
     _cursorController.add(_cursor);
   }
 
+  /// Releases resources used by this session.
   void dispose() {
     _cursorController.close();
   }
