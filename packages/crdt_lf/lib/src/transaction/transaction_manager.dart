@@ -6,6 +6,19 @@ import 'package:crdt_lf/crdt_lf.dart';
 ///
 /// While a transaction is active, emissions are deferred and flushed
 /// upon commit of the outermost transaction.
+///
+/// ```dart
+/// final manager = TransactionManager(
+///   flushWork: _transactionFlushWork,
+/// );
+///
+/// manager.run(() {
+///   listHandler
+///     ..insert(0, 'Hello')
+///     ..insert(1, 'World')
+/// });
+///
+/// ```
 class TransactionManager {
   /// Constructor
   TransactionManager({

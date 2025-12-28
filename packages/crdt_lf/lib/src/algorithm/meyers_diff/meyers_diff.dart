@@ -5,6 +5,11 @@ import 'ops.dart';
 
 /// Compute Myers diff between two strings and return coalesced segments of
 /// Equal, Insert, and Remove operations.
+///
+/// ```dart
+/// print(myersDiff('Hello', 'Hello')); // Prints 1 diff segment with op equal
+/// print(myersDiff('Hello', 'Hello World')); // Prints 2 diff segments with op equal and insert
+/// ```
 List<DiffSegment> myersDiff(String oldText, String newText) {
   if (oldText == newText) {
     if (oldText.isEmpty) {
