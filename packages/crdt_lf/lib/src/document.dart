@@ -12,6 +12,11 @@ import 'package:hlc_dart/hlc_dart.dart';
 /// This abstract class serves as the common interfaces between
 /// the live [CRDTDocument] and the static read-only document.
 abstract class BaseCRDTDocument {
+  bool _isDisposed = false;
+
+  /// Whether the document is disposed
+  bool get isDisposed => _isDisposed;
+
   /// Gets the current timestamp of this document
   HybridLogicalClock get hlc;
 
@@ -48,6 +53,8 @@ abstract class BaseCRDTDocument {
 
   /// Register a [SnapshotProvider]
   void registerHandler(Handler<dynamic> handler) {
+    _ensureNotDisposed('registerHandler');
+
     if (_handlers.containsKey(handler.id)) {
       throw HandlerAlreadyRegisteredException(
         'Handler with ID ${handler.id} already registered',
@@ -55,6 +62,22 @@ abstract class BaseCRDTDocument {
     }
     _handlers[handler.id] = handler;
     handler._document = this;
+  }
+
+  void _ensureNotDisposed(String methodInvoke) {
+    if (_isDisposed) {
+      throw DocumentDisposedException(methodInvoke);
+    }
+  }
+
+  /// Disposes of the document
+  void dispose() {
+    if (_isDisposed) {
+      return;
+    }
+
+    _isDisposed = true;
+    _handlers.clear();
   }
 }
 
@@ -94,6 +117,7 @@ class CRDTDocument extends BaseCRDTDocument {
         _documentId = documentId ?? PeerId.generate().toString(),
         _clock = initialClock ?? HybridLogicalClock.initialize(),
         _localChangesController = StreamController<Change>.broadcast(),
+        _updatesController = StreamController<void>.broadcast(),
         _handlers = {} {
     _transactionManager = TransactionManager(
       flushWork: _transactionFlushWork,
@@ -149,6 +173,7 @@ class CRDTDocument extends BaseCRDTDocument {
   /// - creating a tag that references a [HybridLogicalClock]
   @override
   void prepareMutation() {
+    _ensureNotDisposed('prepareMutation');
     _tickClock();
   }
 
@@ -164,8 +189,7 @@ class CRDTDocument extends BaseCRDTDocument {
   /// A stream controller that emits an event
   /// every time the document state updates
   /// (local or remote change applied, snapshot imported/merged).
-  final StreamController<void> _updatesController =
-      StreamController<void>.broadcast();
+  final StreamController<void> _updatesController;
 
   /// A stream that emits when the document state updates.
   Stream<void> get updates => _updatesController.stream;
@@ -286,6 +310,8 @@ class CRDTDocument extends BaseCRDTDocument {
     Operation operation, {
     int? physicalTime,
   }) {
+    _ensureNotDisposed('createChange');
+
     final change = _changeFromOp(operation, physicalTime: physicalTime);
     final applied = _internalApplyChange(change);
 
@@ -299,6 +325,8 @@ class CRDTDocument extends BaseCRDTDocument {
 
   @override
   void registerOperation(Operation operation) {
+    _ensureNotDisposed('registerOperation');
+
     final openedImplicitTransaction = !isInTransaction;
 
     try {
@@ -365,6 +393,8 @@ class CRDTDocument extends BaseCRDTDocument {
   /// in the DAG).
   /// Returns `true` if the [Change] was applied, `false` if it already existed.
   bool applyChange(Change change) {
+    _ensureNotDisposed('applyChange');
+
     final applied = _internalApplyChange(change);
     if (applied) {
       _updateCacheWithAppliedExternalChange(change);
@@ -387,6 +417,8 @@ class CRDTDocument extends BaseCRDTDocument {
   /// Returns a [Snapshot] representing the document's
   /// state at the current version.
   Snapshot takeSnapshot() {
+    _ensureNotDisposed('takeSnapshot');
+
     final state = <String, dynamic>{};
     for (final provider in _handlers.values) {
       state[provider.id] = provider.getSnapshotState();
@@ -409,6 +441,8 @@ class CRDTDocument extends BaseCRDTDocument {
   /// [snapshot] is applied only if it is newer than the document snapshot.
   /// Use [shouldApplySnapshot] to check if the snapshot should be applied.
   bool importSnapshot(Snapshot snapshot) {
+    _ensureNotDisposed('importSnapshot');
+
     if (shouldApplySnapshot(snapshot)) {
       _prune(snapshot.versionVector);
 
@@ -427,6 +461,8 @@ class CRDTDocument extends BaseCRDTDocument {
   /// This operation is always successful, even if the snapshot is older than
   /// the current snapshot.
   void mergeSnapshot(Snapshot snapshot) {
+    _ensureNotDisposed('mergeSnapshot');
+
     if (_lastSnapshot == null) {
       _lastSnapshot = snapshot;
     } else {
@@ -496,6 +532,8 @@ class CRDTDocument extends BaseCRDTDocument {
     List<Change>? changes,
     bool merge = false,
   }) {
+    _ensureNotDisposed('import');
+
     if (snapshot == null && changes == null) {
       return 0;
     }
@@ -550,6 +588,8 @@ class CRDTDocument extends BaseCRDTDocument {
   ///
   /// Returns the number of [Change]s that were applied.
   int binaryImportChanges(List<int> data) {
+    _ensureNotDisposed('binaryImportChanges');
+
     final jsonStr = utf8.decode(data);
     final jsonList = jsonDecode(jsonStr) as List;
     final changes = jsonList
@@ -563,6 +603,8 @@ class CRDTDocument extends BaseCRDTDocument {
   ///
   /// Returns the number of [Change]s that were applied.
   int importChanges(List<Change> changes) {
+    _ensureNotDisposed('importChanges');
+
     // Sort changes topologically
     final sorted = _topologicalSort(_neverReceived(changes));
 
@@ -704,6 +746,8 @@ class CRDTDocument extends BaseCRDTDocument {
   /// Nested transactions are supported and will only flush once the outermost
   /// transaction is committed.
   T runInTransaction<T>(T Function() action) {
+    _ensureNotDisposed('runInTransaction');
+
     return _transactionManager.run<T>(action);
   }
 
@@ -755,9 +799,15 @@ class CRDTDocument extends BaseCRDTDocument {
   }
 
   /// Disposes of the document
+  @override
   void dispose() {
+    if (_isDisposed) {
+      return;
+    }
+
     _localChangesController.close();
     _updatesController.close();
+    super.dispose();
   }
 }
 
@@ -809,12 +859,12 @@ class _CRDTStaticProxyDocument extends BaseCRDTDocument {
 
   @override
   void registerOperation(Operation operation) {
-    throw ReadOnlyDocumentException('registerOperation');
+    throw const ReadOnlyDocumentException('registerOperation');
   }
 
   @override
   void prepareMutation() {
-    throw ReadOnlyDocumentException('prepareMutation');
+    throw const ReadOnlyDocumentException('prepareMutation');
   }
 
   @override
@@ -972,6 +1022,7 @@ class HistorySession {
   /// Releases resources used by this session.
   void dispose() {
     _cursorController.close();
+    _document.dispose();
   }
 }
 

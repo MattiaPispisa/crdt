@@ -47,7 +47,15 @@ class HandlerAlreadyRegisteredException extends CrdtException {
 /// Thrown when attempting to execute a method on a read-only document.
 class ReadOnlyDocumentException extends CrdtException {
   /// Constructor
-  ReadOnlyDocumentException(String methodInvoked)
+  const ReadOnlyDocumentException(String methodInvoked)
       : super('Impossible to execute $methodInvoked. '
             'The document is in time travel mode (Read-Only).');
+}
+
+/// Thrown when attempting to execute a method on a disposed document.
+class DocumentDisposedException extends CrdtException {
+  /// Constructor
+  const DocumentDisposedException(String methodInvoked)
+      : super('Cannot execute $methodInvoked.'
+            ' The document has been disposed.');
 }
