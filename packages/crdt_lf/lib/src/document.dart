@@ -34,7 +34,21 @@ abstract class BaseCRDTDocument {
   List<Change> exportChanges({Set<OperationId>? from});
 
   /// The last snapshot of this document
-  Snapshot? _lastSnapshot;
+  Snapshot? get _lastSnapshot;
+
+  /// The registered snapshot providers
+  Map<String, Handler<dynamic>> get _handlers;
+
+  /// Register a [SnapshotProvider]
+  void registerHandler(Handler<dynamic> handler) {
+    if (_handlers.containsKey(handler.id)) {
+      throw HandlerAlreadyRegisteredException(
+        'Handler with ID ${handler.id} already registered',
+      );
+    }
+    _handlers[handler.id] = handler;
+    handler._document = this;
+  }
 }
 
 // TODO(mattia): after transaction support create compound operations.
@@ -104,6 +118,12 @@ class CRDTDocument extends BaseCRDTDocument {
   @override
   HybridLogicalClock get hlc => _clock.copy();
 
+  @override
+  Snapshot? _lastSnapshot;
+
+  @override
+  final Map<String, Handler<dynamic>> _handlers;
+
   /// Updates the document's clock to the current physical time.
   void _tickClock({int? physicalTime}) {
     final pt = physicalTime ?? DateTime.now().millisecondsSinceEpoch;
@@ -141,12 +161,6 @@ class CRDTDocument extends BaseCRDTDocument {
 
   /// A stream that emits when the document state updates.
   Stream<void> get updates => _updatesController.stream;
-
-  /// The registered snapshot providers
-  final Map<String, Handler<dynamic>> _handlers;
-
-  /// The last snapshot of this document
-  Snapshot? _lastSnapshot;
 
   /// Manages transactional batching of events
   late final TransactionManager _transactionManager;
@@ -221,17 +235,6 @@ class CRDTDocument extends BaseCRDTDocument {
         handler._updateCachedVersion();
       }
     }
-  }
-
-  /// Register a [SnapshotProvider]
-  void registerHandler(Handler<dynamic> handler) {
-    if (_handlers.containsKey(handler.id)) {
-      throw HandlerAlreadyRegisteredException(
-        'Handler with ID ${handler.id} already registered',
-      );
-    }
-    _handlers[handler.id] = handler;
-    handler._document = this;
   }
 
   /// It represents the **latest operation for each peer** of this document
@@ -575,7 +578,9 @@ class CRDTDocument extends BaseCRDTDocument {
     return changedApplied.length;
   }
 
-  HistorySession timeTravel();
+  HistorySession timeTravel() {
+    return HistorySession._fromLiveDocument(this);
+  }
 
   /// Prunes the DAG and the change store up to the given version.
   void _prune(VersionVector version) {
@@ -751,10 +756,18 @@ class _CRDTStaticProxyDocument extends BaseCRDTDocument {
     required HybridLogicalClock hlc,
     required PeerId peerId,
     required List<Change> frozenChanges,
+    required List<Set<OperationId>> historyVersions,
+    required int visibleCount,
+    required Snapshot? lastSnapshot,
+    required Map<String, Handler<dynamic>> handlers,
   })  : _documentId = documentId,
         _hlc = hlc,
         _peerId = peerId,
-        _frozenChanges = frozenChanges;
+        _frozenChanges = frozenChanges,
+        _historyVersions = historyVersions,
+        _visibleCount = visibleCount,
+        _lastSnapshot = lastSnapshot,
+        _handlers = handlers;
 
   final String _documentId;
 
@@ -763,6 +776,10 @@ class _CRDTStaticProxyDocument extends BaseCRDTDocument {
   final PeerId _peerId;
 
   final List<Change> _frozenChanges;
+
+  final List<Set<OperationId>> _historyVersions;
+
+  int _visibleCount;
 
   @override
   String get documentId => _documentId;
@@ -774,33 +791,108 @@ class _CRDTStaticProxyDocument extends BaseCRDTDocument {
   PeerId get peerId => _peerId;
 
   @override
+  final Snapshot? _lastSnapshot;
+
+  @override
+  final Map<String, Handler<dynamic>> _handlers;
+
+  @override
   void registerOperation(Operation operation) {
     throw ReadOnlyDocumentException('registerOperation');
   }
 
   @override
   Set<OperationId> get version {
-    throw UnimplementedError();
+    return _historyVersions[_visibleCount - 1];
   }
 
   @override
   List<Change> exportChanges({Set<OperationId>? from}) {
-    // TODO: implement exportChanges
-    throw UnimplementedError();
+    return _frozenChanges.sublist(0, _visibleCount);
   }
 }
 
 class HistorySession {
-  final int _cursor;
+  HistorySession._({
+    required int cursor,
+    required _CRDTStaticProxyDocument document,
+    required this.length,
+  })  : _document = document,
+        _cursor = cursor,
+        _cursorController = StreamController<int>.broadcast();
 
-  bool get canNext;
-  bool get canPrevious;
+  factory HistorySession._fromLiveDocument(
+    BaseCRDTDocument document,
+  ) {
+    final changes = document.exportChanges();
 
-  H getHandler<H extends Handler>(H Function(BaseCrdtDocument) factory);
+    final historyVersions = <Set<OperationId>>[];
+    final tempFrontiers = Frontiers();
 
-  void next();
-  void previous();
-  void jump(int cursor);
+    for (final change in changes) {
+      tempFrontiers.update(
+        newOperationId: change.id,
+        oldDependencies: change.deps,
+      );
+
+      historyVersions.add(tempFrontiers.get());
+    }
+
+    final cursor = changes.length - 1;
+
+    return HistorySession._(
+      cursor: cursor,
+      length: changes.length,
+      document: _CRDTStaticProxyDocument(
+        documentId: document.documentId,
+        hlc: document.hlc,
+        peerId: document.peerId,
+        frozenChanges: changes,
+        historyVersions: historyVersions,
+        visibleCount: cursor,
+        lastSnapshot: document._lastSnapshot,
+        handlers: {},
+      ),
+    );
+  }
+
+  final _CRDTStaticProxyDocument _document;
+  int _cursor;
+  final StreamController<int> _cursorController;
+  final int length;
+
+  Stream<int> get cursorStream => _cursorController.stream;
+  int get cursor => _cursor;
+  bool get canNext => _cursor < length - 1;
+  bool get canPrevious => _cursor > 0;
+
+  H getHandler<H extends Handler<T>, T>(
+    H Function(BaseCRDTDocument document) factory,
+  ) {
+    final handler = factory(_document);
+    return handler;
+  }
+
+  void next() => jump(_cursor + 1);
+
+  void previous() => jump(_cursor - 1);
+
+  void jump(int cursor) {
+    if (cursor < 0 || cursor >= length) {
+      return;
+    }
+    if (cursor == _cursor) {
+      return;
+    }
+
+    _cursor = cursor;
+    _document._visibleCount = _cursor;
+    _cursorController.add(_cursor);
+  }
+
+  void dispose() {
+    _cursorController.close();
+  }
 }
 
 /// A consumer that can consume a CRDTDocument
