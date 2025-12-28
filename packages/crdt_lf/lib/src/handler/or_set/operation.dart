@@ -32,7 +32,7 @@ class _ORSetAddOperation<T> extends Operation {
   factory _ORSetAddOperation.fromHandler(
     Handler<dynamic> handler, {
     required T value,
-    required String tag,
+    required ORHandlerTag tag,
   }) {
     return _ORSetAddOperation<T>(
       id: handler.id,
@@ -47,19 +47,19 @@ class _ORSetAddOperation<T> extends Operation {
       id: payload['id'] as String,
       type: OperationType.fromPayload(payload['type'] as String),
       value: payload['value'] as T,
-      tag: payload['tag'] as String,
+      tag: ORHandlerTag.parse(payload['tag'] as String),
     );
   }
 
   final T value;
-  final String tag;
+  final ORHandlerTag tag;
 
   @override
   Map<String, dynamic> toPayload() {
     return {
       ...super.toPayload(),
       'value': value,
-      'tag': tag,
+      'tag': tag.toString(),
     };
   }
 }
@@ -78,13 +78,13 @@ class _ORSetRemoveOperation<T> extends Operation {
   factory _ORSetRemoveOperation.fromHandler(
     Handler<dynamic> handler, {
     required T value,
-    required Set<String> tags,
+    required Set<ORHandlerTag> tags,
   }) {
     return _ORSetRemoveOperation<T>(
       id: handler.id,
       type: OperationType.delete(handler),
       value: value,
-      tags: Set.from(tags),
+      tags: Set<ORHandlerTag>.from(tags),
       removeAll: tags.isEmpty,
     );
   }
@@ -95,13 +95,13 @@ class _ORSetRemoveOperation<T> extends Operation {
       id: payload['id'] as String,
       type: OperationType.fromPayload(payload['type'] as String),
       value: payload['value'] as T,
-      tags: raw.map((e) => e as String).toSet(),
+      tags: raw.map((e) => ORHandlerTag.parse(e as String)).toSet(),
       removeAll: (payload['removeAll'] as bool?) ?? false,
     );
   }
 
   final T value;
-  final Set<String> tags;
+  final Set<ORHandlerTag> tags;
   final bool removeAll;
 
   @override
@@ -109,7 +109,7 @@ class _ORSetRemoveOperation<T> extends Operation {
     return {
       ...super.toPayload(),
       'value': value,
-      'tags': tags.toList(),
+      'tags': tags.map((t) => t.toString()).toList(),
       'removeAll': removeAll,
     };
   }

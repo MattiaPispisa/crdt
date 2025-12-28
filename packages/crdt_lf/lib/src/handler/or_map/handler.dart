@@ -1,5 +1,4 @@
 import 'package:crdt_lf/crdt_lf.dart';
-import 'package:hlc_dart/hlc_dart.dart';
 
 part 'operation.dart';
 
@@ -37,9 +36,9 @@ class CRDTORMapHandler<K, V> extends Handler<ORMapState<K, V>> {
   String get id => _id;
 
   /// Obtains a unique tag for an operation
-  ORMapTag _tag() {
+  ORHandlerTag _tag() {
     doc.prepareMutation();
-    return ORMapTag(
+    return ORHandlerTag(
       peerId: doc.peerId,
       hlc: doc.hlc,
     );
@@ -115,7 +114,7 @@ class CRDTORMapHandler<K, V> extends Handler<ORMapState<K, V>> {
       live: <K, Set<ORMapEntry<V>>>{},
       all: <K, Set<ORMapEntry<V>>>{},
       snapshotOnly: <K, V>{},
-      tombstones: <ORMapTag>{},
+      tombstones: <ORHandlerTag>{},
     );
 
     final snap = lastSnapshot();
@@ -248,7 +247,7 @@ class ORMapState<K, V> {
     required Map<K, Set<ORMapEntry<V>>> live,
     required Map<K, Set<ORMapEntry<V>>> all,
     required Map<K, V> snapshotOnly,
-    required Set<ORMapTag> tombstones,
+    required Set<ORHandlerTag> tombstones,
   })  : _tombstones = tombstones,
         _snapshotOnly = snapshotOnly,
         _all = all,
@@ -265,7 +264,7 @@ class ORMapState<K, V> {
         entry.key: Set<ORMapEntry<V>>.from(entry.value),
     };
     final snapshotOnly = <K, V>{..._snapshotOnly};
-    final tombstones = <ORMapTag>{..._tombstones};
+    final tombstones = <ORHandlerTag>{..._tombstones};
 
     return ORMapState<K, V>._(
       live: live,
@@ -276,10 +275,10 @@ class ORMapState<K, V> {
   }
 
   /// Returns all tags for a given key (across all entries)
-  Set<ORMapTag> _allTagsForKey(K key) {
+  Set<ORHandlerTag> _allTagsForKey(K key) {
     final allForKey = _all[key];
     if (allForKey == null) {
-      return <ORMapTag>{};
+      return <ORHandlerTag>{};
     }
     return allForKey.map((entry) => entry.tag).toSet();
   }
@@ -294,7 +293,7 @@ class ORMapState<K, V> {
   final Map<K, V> _snapshotOnly;
 
   /// The tombstones
-  final Set<ORMapTag> _tombstones;
+  final Set<ORHandlerTag> _tombstones;
 
   /// The state of the OR-Map.
   /// For each key with live entries, we pick the entry with the
@@ -339,7 +338,7 @@ class ORMapEntry<V> {
   final V value;
 
   /// The unique tag for this entry
-  final ORMapTag tag;
+  final ORHandlerTag tag;
 
   @override
   bool operator ==(Object other) {
@@ -351,58 +350,4 @@ class ORMapEntry<V> {
 
   @override
   int get hashCode => Object.hash(value, tag);
-}
-
-/// Tag for OR-Map entries, combining HLC and PeerId for proper ordering.
-/// Comparison is done first by HLC (causal order),
-/// then by PeerId (deterministic).
-class ORMapTag implements Comparable<ORMapTag> {
-  /// Creates an OR-Map tag
-  const ORMapTag({
-    required this.hlc,
-    required this.peerId,
-  });
-
-  /// Parses a tag from string format "peerId@hlc"
-  factory ORMapTag.parse(String tag) {
-    final parts = tag.split('@');
-    if (parts.length != 2) {
-      throw FormatException('Invalid tag format: $tag');
-    }
-    return ORMapTag(
-      peerId: PeerId.parse(parts[0]),
-      hlc: HybridLogicalClock.parse(parts[1]),
-    );
-  }
-
-  /// The HLC timestamp
-  final HybridLogicalClock hlc;
-
-  /// The peer ID
-  final PeerId peerId;
-
-  @override
-  int compareTo(ORMapTag other) {
-    // First compare by HLC (causal order)
-    final hlcComparison = hlc.compareTo(other.hlc);
-    if (hlcComparison != 0) {
-      return hlcComparison;
-    }
-    // If HLC is equal, compare by PeerId (deterministic)
-    return peerId.compareTo(other.peerId);
-  }
-
-  @override
-  bool operator ==(Object other) {
-    if (identical(this, other)) {
-      return true;
-    }
-    return other is ORMapTag && other.hlc == hlc && other.peerId == peerId;
-  }
-
-  @override
-  int get hashCode => Object.hash(hlc, peerId);
-
-  @override
-  String toString() => '$peerId@$hlc';
 }

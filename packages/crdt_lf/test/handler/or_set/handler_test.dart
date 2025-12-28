@@ -32,7 +32,7 @@ void main() {
       CRDTORSetHandler<String>(doc, 'set1').add('x');
       final change = doc.exportChanges().first.toJson();
       final payload = change['payload'] as Map<String, dynamic>;
-      final tag = ORMapTag.parse(payload['tag'] as String);
+      final tag = ORHandlerTag.parse(payload['tag'] as String);
       expect(tag.hlc, isNot(hlc1));
       expect(hlc1, isNot(doc.hlc));
     });
