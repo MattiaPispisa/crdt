@@ -1083,6 +1083,97 @@ void main() {
         expect(textHandler.value, 'Hello Dart!');
       });
     });
+
+    group('dispose', () {
+      test('should set isDisposed', () {
+        expect(doc.isDisposed, isFalse);
+        doc.dispose();
+        expect(doc.isDisposed, isTrue);
+      });
+      test('dispose should be idempotent', () {
+        expect(() => doc.dispose(), returnsNormally);
+        expect(
+          () => doc.dispose(),
+          returnsNormally,
+          reason: 'should be idempotent, second call should do nothing',
+        );
+      });
+
+      test('"write" operations should throw when the document is disposed', () {
+        final doc2 = CRDTDocument();
+        CRDTListHandler<String>(doc2, 'list')
+          ..insert(0, 'Hello')
+          ..insert(1, 'World');
+        final doc2Changes = doc2.exportChanges();
+        final doc2BinaryChanges = doc2.binaryExportChanges();
+        final doc2Snap = doc2.takeSnapshot();
+
+        final list = CRDTListHandler<String>(doc, 'list');
+        doc.dispose();
+
+        expect(
+          () => list.insert(0, 'Hello'),
+          throwsA(isA<DocumentDisposedException>()),
+        );
+        expect(
+          () => doc.binaryImportChanges(doc2BinaryChanges),
+          throwsA(isA<DocumentDisposedException>()),
+        );
+        expect(
+          () => doc.import(changes: doc2Changes, snapshot: doc2Snap),
+          throwsA(isA<DocumentDisposedException>()),
+        );
+        expect(
+          () => doc.importChanges(doc2Changes),
+          throwsA(isA<DocumentDisposedException>()),
+        );
+        expect(
+          () => doc.mergeSnapshot(doc2Snap),
+          throwsA(isA<DocumentDisposedException>()),
+        );
+        expect(
+          () => doc.importSnapshot(doc2Snap),
+          throwsA(isA<DocumentDisposedException>()),
+        );
+        expect(
+          () => doc.createChange(operation),
+          throwsA(isA<DocumentDisposedException>()),
+        );
+        expect(
+          () => doc.takeSnapshot(),
+          throwsA(isA<DocumentDisposedException>()),
+        );
+        expect(
+          () => doc.applyChange(
+            Change(
+              author: author,
+              id: OperationId(author, HybridLogicalClock(l: 1, c: 1)),
+              operation: TestOperation.fromHandler(list),
+              deps: {},
+            ),
+          ),
+          throwsA(isA<DocumentDisposedException>()),
+        );
+        expect(
+          () => doc.runInTransaction<void>(() {
+            list.insert(0, 'Hello');
+          }),
+          throwsA(isA<DocumentDisposedException>()),
+        );
+        expect(
+          () => CRDTListHandler<String>(doc, 'second-list'),
+          throwsA(isA<DocumentDisposedException>()),
+        );
+        expect(
+          () => doc.prepareMutation(),
+          throwsA(isA<DocumentDisposedException>()),
+        );
+        expect(
+          () => doc.registerOperation(operation),
+          throwsA(isA<DocumentDisposedException>()),
+        );
+      });
+    });
   });
 
   group('history session', () {
