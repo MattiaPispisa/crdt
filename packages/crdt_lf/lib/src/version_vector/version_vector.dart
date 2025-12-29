@@ -32,6 +32,34 @@ class VersionVector {
         ),
       );
 
+  static VersionVector intersection(Iterable<VersionVector> vectors) {
+    if (vectors.isEmpty) {
+      return VersionVector({});
+    }
+
+    final commonMap = Map<PeerId, HybridLogicalClock>.of(vectors.first._vector);
+
+    for (final vv in vectors.skip(1)) {
+      if (commonMap.isEmpty) {
+        break;
+      }
+
+      final currentKeys = commonMap.keys;
+      for (final key in currentKeys) {
+        final otherVal = vv[key];
+
+        if (otherVal == null) {
+          commonMap.remove(key);
+        } else {
+          final currentVal = commonMap[key]!;
+          commonMap[key] = currentVal <= otherVal ? currentVal : otherVal;
+        }
+      }
+    }
+
+    return VersionVector(commonMap);
+  }
+
   final Map<PeerId, HybridLogicalClock> _vector;
 
   /// Whether the version vector is empty.
