@@ -1,4 +1,7 @@
-## [Unreleased]
+## [2.4.0](https://github.com/MattiaPispisa/crdt/tree/crdt_lf-v2.4.0/packages/crdt_lf)
+**Date:** 2025-12-29
+
+[compare to previous release](https://github.com/MattiaPispisa/crdt/compare/crdt_lf-v2.3.0...crdt_lf-v2.4.0)
 
 ### Added
 
