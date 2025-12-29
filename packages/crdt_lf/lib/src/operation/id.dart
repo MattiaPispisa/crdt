@@ -9,20 +9,20 @@ import 'package:hlc_dart/hlc_dart.dart';
 class OperationId with Comparable<OperationId> {
   /// Creates a new [OperationId] with the given [PeerId]
   /// and [HybridLogicalClock] timestamp
-  const OperationId(this.peerId, this.hlc);
+  OperationId(this.peerId, this.hlc);
 
   /// Parses an [OperationId] from a string representation
   ///
   /// The format is "peerId@hlc" where [hlc] is in the format "l.c"
   /// ([HybridLogicalClock.toString])
   factory OperationId.parse(String value) {
-    final parts = value.split('@');
-    if (parts.length != 2) {
+    final index = value.indexOf('@');
+    if (index == -1) {
       throw FormatException('Invalid OpId format: $value');
     }
 
-    final peerId = PeerId.parse(parts[0]);
-    final timestamp = HybridLogicalClock.parse(parts[1]);
+    final peerId = PeerId.parse(value.substring(0, index));
+    final timestamp = HybridLogicalClock.parse(value.substring(index + 1));
 
     return OperationId(peerId, timestamp);
   }
@@ -49,9 +49,11 @@ class OperationId with Comparable<OperationId> {
     return other is OperationId && other.peerId == peerId && other.hlc == hlc;
   }
 
+  late final int _hashCode = Object.hash(peerId, hlc);
+
   /// Returns a hash code for this [OperationId]
   @override
-  int get hashCode => Object.hash(peerId, hlc);
+  int get hashCode => _hashCode;
 
   /// Compares this [OperationId] with another [OperationId]
   ///

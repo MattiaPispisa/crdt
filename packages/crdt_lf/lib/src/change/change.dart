@@ -34,7 +34,7 @@ class Change {
   /// [deps] the dependencies of the change
   /// ([OperationId]s that this change depends on)
   /// [author] the author of the change
-  const Change.fromPayload({
+  Change.fromPayload({
     required this.id,
     required this.deps,
     required this.author,
@@ -101,14 +101,16 @@ class Change {
         other.payload == payload;
   }
 
+  late final int _hashCode = Object.hash(
+    id,
+    Object.hashAll(deps),
+    author,
+    payload,
+  );
+
   /// Returns a hash code for this Change
   @override
-  int get hashCode => Object.hash(
-        id,
-        Object.hashAll(deps),
-        author,
-        payload,
-      );
+  int get hashCode => _hashCode;
 }
 
 /// Utilities on [List] of [Change]s

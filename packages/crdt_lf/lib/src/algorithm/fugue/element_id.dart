@@ -3,12 +3,15 @@ import 'package:crdt_lf/src/peer_id.dart';
 /// Represents the ID of an element in the Fugue algorithm
 class FugueElementID with Comparable<FugueElementID> {
   /// Constructor that initializes the element ID
-  const FugueElementID(this.replicaID, this.counter);
+  FugueElementID(this.replicaID, this.counter);
 
   /// Constructor to create a null ID (used for the root)
-  FugueElementID.nullID()
-      : replicaID = PeerId.empty(),
-        counter = null;
+  factory FugueElementID.nullID() {
+    return FugueElementID(
+      PeerId.empty(),
+      null,
+    );
+  }
 
   /// Creates an ID from a JSON object
   factory FugueElementID.fromJson(Map<String, dynamic> json) {
@@ -27,14 +30,14 @@ class FugueElementID with Comparable<FugueElementID> {
       return FugueElementID.nullID();
     }
 
-    final parts = value.split(':');
-    if (parts.length != 2) {
+    final index = value.indexOf(':');
+    if (index == -1) {
       throw FormatException('Invalid FugueElementID format: $value');
     }
 
     return FugueElementID(
-      PeerId.parse(parts[0]),
-      int.parse(parts[1]),
+      PeerId.parse(value.substring(0, index)),
+      int.parse(value.substring(index + 1)),
     );
   }
 
@@ -43,6 +46,8 @@ class FugueElementID with Comparable<FugueElementID> {
 
   /// Local counter of the replica at the time of element creation
   final int? counter;
+
+  late final int _hashCode = Object.hash(replicaID, counter);
 
   /// Checks if this is a null ID
   bool get isNull => counter == null;
@@ -87,7 +92,7 @@ class FugueElementID with Comparable<FugueElementID> {
   }
 
   @override
-  int get hashCode => Object.hash(replicaID, counter);
+  int get hashCode => _hashCode;
 
   @override
   String toString() {

@@ -8,20 +8,21 @@ import 'package:hlc_dart/hlc_dart.dart';
 /// then by [PeerId] (deterministic).
 class ORHandlerTag implements Comparable<ORHandlerTag> {
   /// Creates an OR-based handler tag
-  const ORHandlerTag({
+  ORHandlerTag({
     required this.hlc,
     required this.peerId,
   });
 
   /// Parses a tag from string format "peerId@hlc"
   factory ORHandlerTag.parse(String tag) {
-    final parts = tag.split('@');
-    if (parts.length != 2) {
+    final index = tag.indexOf('@');
+    if (index == -1) {
       throw FormatException('Invalid ORHandlerTag format: $tag');
     }
+
     return ORHandlerTag(
-      peerId: PeerId.parse(parts[0]),
-      hlc: HybridLogicalClock.parse(parts[1]),
+      peerId: PeerId.parse(tag.substring(0, index)),
+      hlc: HybridLogicalClock.parse(tag.substring(index + 1)),
     );
   }
 
@@ -30,6 +31,8 @@ class ORHandlerTag implements Comparable<ORHandlerTag> {
 
   /// The peer ID
   final PeerId peerId;
+
+  late final int _hashCode = Object.hash(hlc, peerId);
 
   @override
   int compareTo(ORHandlerTag other) {
@@ -51,7 +54,7 @@ class ORHandlerTag implements Comparable<ORHandlerTag> {
   }
 
   @override
-  int get hashCode => Object.hash(hlc, peerId);
+  int get hashCode => _hashCode;
 
   @override
   String toString() => '$peerId@$hlc';
