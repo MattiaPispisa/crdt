@@ -1,3 +1,8 @@
+## [Unreleased]
+
+### Changed
+- chore: improved documentation adding design diagrams
+
 ## [0.3.0](https://github.com/MattiaPispisa/crdt/tree/crdt_socket_sync-v0.3.0/packages/crdt_socket_sync)
 **Date:** 
 

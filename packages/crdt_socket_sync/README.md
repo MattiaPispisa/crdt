@@ -17,6 +17,10 @@
     - [Client Setup](#client-setup)
     - [Plugins](#plugins)
       - [Awareness Plugin](#awareness-plugin)
+  - [Design](#design)
+    - [Connection \& Handshake Phase](#connection--handshake-phase)
+    - [Real-time Updates](#real-time-updates)
+    - [Herror handling](#herror-handling)
   - [Examples](#examples)
   - [Library Structure](#library-structure)
     - [Import Options](#import-options)
@@ -186,6 +190,101 @@ It is used to track the awareness of the clients and to send the awareness to th
 The example provided uses the awareness plugin to track the active users (name, surname, random color) and their relative position in the document.
 
 <img width="500" alt="awareness_plugin" src="https://raw.githubusercontent.com/MattiaPispisa/crdt/main/assets/demos/awareness_plugin.gif">
+
+## Design
+
+### Connection & Handshake Phase
+```mermaid
+sequenceDiagram
+    autonumber
+    participant C as Client
+    participant S as Server
+
+    %% Socket Upgrade
+    Note over C,S: 1. Connection Setup
+    C->>S: HTTP GET /sync (Connection: Upgrade)
+    S-->>C: HTTP 101 Switching Protocols
+    Note right of S: WebSocket Open
+
+    %% Handshake
+    Note over C,S: 2. Handshake & Synchronization
+    C->>S: Handshake MSG<br/>(Author, Document info)
+    
+    activate S
+    Note right of S: Validates Doc & Version.<br/>Must reply within TIMEOUT.
+    S-->>C: Handshake RESPONSE<br/>(Document data)
+    deactivate S
+
+    %% Import & Push back
+    C->>C: Import Data
+    
+    alt Client Version > Server Version
+        Note right of C: Client is ahead (local data<br/>missing on Server)
+        C->>S: Push missing data
+        S->>S: Apply data
+    end
+
+    Note over C,S: Connection Established
+```
+
+The diagram was created using [Mermaid](https://mermaid.js.org/). 
+GitHub natively supports this tool, but if you are unable to view them, 
+you can use the [official vscode extension](https://open-vsx.org/extension/MermaidChart/vscode-mermaid-chart) or the, [Mermaid Live Editor](https://mermaid.live/).
+
+### Real-time Updates
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant CA as Client A
+    participant S as Server
+    participant CB as Client B (n)
+
+    Note over CA, CB: Standard Operation Cycle
+    
+    CA->>CA: Execute local operation
+    CA->>S: Send change
+    
+    activate S
+    S->>S: Apply change
+    
+    par Broadcast to others
+        S->>CB: Broadcast change
+        %% You can add more clients here conceptually
+    end
+    deactivate S
+    
+    CB->>CB: Apply change
+```
+
+The diagram was created using [Mermaid](https://mermaid.js.org/). 
+GitHub natively supports this tool, but if you are unable to view them, 
+you can use the [official vscode extension](https://open-vsx.org/extension/MermaidChart/vscode-mermaid-chart) or the, [Mermaid Live Editor](https://mermaid.live/).
+
+### Herror handling
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant C as Client
+    participant S as Server
+
+    Note over C, S: Sync Issue Detected
+    
+    C->>S: Request Document Info 
+    
+    activate S
+    Note right of S: Retrieval logic similar to Handshake
+    S-->>C: Document Data Response
+    deactivate S
+    
+    C->>C: Reconcile Document
+    Note right of C: Client is back in sync
+```
+
+The diagram was created using [Mermaid](https://mermaid.js.org/). 
+GitHub natively supports this tool, but if you are unable to view them, 
+you can use the [official vscode extension](https://open-vsx.org/extension/MermaidChart/vscode-mermaid-chart) or the, [Mermaid Live Editor](https://mermaid.live/).
 
 ## Examples
 

@@ -91,10 +91,10 @@ graph TD
     
     T --> U[Transaction Complete]
 ```
-The diagram was created using [Mermaid](https://mermaid.js.org/).
-If you are unable to view it, GitHub Web natively supports the tool,
-there is an [official extension](https://open-vsx.org/extension/MermaidChart/vscode-mermaid-chart) available on VS Code 
-otherwise use [Mermaid Live Editor](https://mermaid.live/).
+
+The diagram was created using [Mermaid](https://mermaid.js.org/). 
+GitHub natively supports this tool, but if you are unable to view them, 
+you can use the [official vscode extension](https://open-vsx.org/extension/MermaidChart/vscode-mermaid-chart) or the, [Mermaid Live Editor](https://mermaid.live/).
 
 ## Getting Started
 
