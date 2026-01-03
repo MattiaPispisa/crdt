@@ -106,6 +106,7 @@ abstract class BaseCRDTDocument {
 /// - `peerId`: identifies the peer/author generating operations. It is used in
 ///   `OperationId` together with the Hybrid Logical Clock.
 ///
+/// {@template document_example}
 /// ## Example
 /// ```dart
 /// // setup
@@ -151,6 +152,7 @@ abstract class BaseCRDTDocument {
 /// });
 /// print(list.value); // Prints ["Hello", "World", "Dart", "Flutter", "!"]
 /// ```
+/// {@endtemplate}
 class CRDTDocument extends BaseCRDTDocument {
   /// Creates a new [CRDTDocument] with the given identifiers.
   ///
@@ -162,6 +164,8 @@ class CRDTDocument extends BaseCRDTDocument {
   ///   If not provided, defaults to [HybridLogicalClock.initialize] (clock
   ///   starting at zero). Use [HybridLogicalClock.now] to start from the
   ///   current physical time.
+  /// 
+  /// {@macro document_example}
   CRDTDocument({
     PeerId? peerId,
     String? documentId,
@@ -480,7 +484,8 @@ class CRDTDocument extends BaseCRDTDocument {
   /// ### Garbage Collection & History Pruning Strategy
   ///
   /// In a distributed CRDT system, managing the log of operations ([Change]s)
-  /// involves a trade-off between **Memory Usage** and **Synchronization Capability**.
+  /// involves a trade-off between **Memory Usage** and
+  /// **Synchronization Capability**.
   ///
   /// #### 1. Aggressive Pruning (Local Optimization)
   /// Removing history immediately after a snapshot minimizes storage/RAM usage.
@@ -494,14 +499,15 @@ class CRDTDocument extends BaseCRDTDocument {
   /// To ensure seamless synchronization while managing memory, follow the
   /// **Stability Frontier** pattern:
   ///
-  /// * **Keep History:** Take snapshots for fast loading but keep the underlying
-  ///   changes (`pruneHistory: false`).
+  /// * **Keep History:** Take snapshots for fast loading but keep
+  /// the underlying changes (`pruneHistory: false`).
   /// * **Calculate Stability:** Determine the "minimum common version" known by
   ///   all active peers (using [VersionVector.intersection]).
   /// * **Prune Safely:** Only delete changes that are **both** included in a
   ///   snapshot **and** older than the stability frontier.
   ///
-  /// This ensures that you only delete history that no other peer will ever need.
+  /// This ensures that you only delete history that no other peer
+  /// will ever need.
   /// {@endtemplate}
   Snapshot takeSnapshot({
     bool pruneHistory = true,
@@ -525,10 +531,12 @@ class CRDTDocument extends BaseCRDTDocument {
     return snapshot;
   }
 
-  // TODO(mattia): implement garbage collection
-  // - prune dag and change store up to the given version vector
-  // - doc: for a safety version vector use the [VersionVector.intersection]
-  void garbageCollect(VersionVector versionVector) {}
+  /// Prunes the DAG and the change store up to the given version vector.
+  ///
+  /// {@macro pruning_strategy}
+  void garbageCollect(VersionVector versionVector) {
+    _prune(versionVector);
+  }
 
   /// Import [Snapshot]
   ///
@@ -641,7 +649,7 @@ class CRDTDocument extends BaseCRDTDocument {
   /// For more details:
   /// - `merge`: `true` --> [mergeSnapshot] is called before [importChanges]
   /// - `merge`: `false` --> [importSnapshot] is called before [importChanges]
-  /// 
+  ///
   /// Use [pruneHistory] to prune the history and reduce memory usage.
   ///
   /// {@macro pruning_strategy}
