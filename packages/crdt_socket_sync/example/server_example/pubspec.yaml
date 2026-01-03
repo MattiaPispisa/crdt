@@ -13,6 +13,7 @@ dependencies:
   crdt_lf: ^1.0.0
   hive: ^2.0.0
   en_logger: ^1.2.0
+  hlc_dart: ^1.0.0
 
 dev_dependencies:
   lints: ^5.0.0

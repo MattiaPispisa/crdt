@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:hlc_dart/hlc_dart.dart';
 import 'package:crdt_lf/crdt_lf.dart';
 import 'package:crdt_socket_sync/web_socket_server.dart';
 import 'package:crdt_lf_hive/crdt_lf_hive.dart';
@@ -185,6 +186,7 @@ class HiveServerRegistry extends CRDTServerRegistry {
       document: CRDTDocument(
         documentId: documentId,
         peerId: author ?? PeerId.generate(),
+        initialClock: HybridLogicalClock.now(),
       ),
     );
   }
