@@ -26,6 +26,10 @@ class CRDTListHandler<T> extends Handler<List<T>> {
   /// Creates a new CRDTList with the given document and ID
   CRDTListHandler(super.doc, this._id);
 
+  @override
+  late final OperationFactory operationFactory =
+      _ListOperationFactory<T>(this).fromPayload;
+
   /// The ID of this list in the document
   final String _id;
 
@@ -93,20 +97,8 @@ class CRDTListHandler<T> extends Handler<List<T>> {
   List<T> _computeState() {
     final state = _initialState();
 
-    // Get all changes from the document
-    final changes = doc.exportChanges().sorted();
-
-    // Apply changes in order
-    final opFactory = _ListOperationFactory<T>(this);
-
-    for (final change in changes) {
-      final payload = change.payload;
-
-      final operation = opFactory.fromPayload(payload);
-
-      if (operation != null) {
-        _applyOperationToList(state, operation);
-      }
+    for (final operation in operations()) {
+      _applyOperationToList(state, operation);
     }
 
     return state;

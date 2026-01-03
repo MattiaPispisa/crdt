@@ -1,5 +1,10 @@
 import 'package:crdt_lf/crdt_lf.dart';
 
+/// A factory function that creates an operation from a payload
+typedef OperationFactory = Operation? Function(
+  Map<String, dynamic> payload,
+);
+
 /// Abstract class for CRDT handlers
 ///
 /// A handler is a component that manages the state of a specific
@@ -13,6 +18,9 @@ abstract class Handler<T>
 
   /// The document that owns this handler
   final BaseCRDTDocument doc;
+
+  /// The factory function that creates an operation from a payload
+  OperationFactory get operationFactory;
 
   /// During transaction consecutive operations can be compounded.
   ///
@@ -28,4 +36,25 @@ abstract class Handler<T>
   ///
   /// Otherwise, return `null`.
   Operation? compound(Operation accumulator, Operation current) => null;
+
+  /// Returns the operations required by this consumer to compute its state.
+  ///
+  /// The operations are returned in the order they were applied.
+  List<Operation> operations() {
+    final changes = doc
+        .exportChanges(
+          fromVersionVector: snapshotVersionVector(),
+        )
+        .sorted(inplace: true);
+
+    final operations = <Operation>[];
+    for (final change in changes) {
+      final operation = operationFactory(change.payload);
+      if (operation != null) {
+        operations.add(operation);
+      }
+    }
+
+    return operations;
+  }
 }

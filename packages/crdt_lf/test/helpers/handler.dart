@@ -15,6 +15,10 @@ class TestHandler extends Handler<dynamic> {
   String getSnapshotState() {
     return '';
   }
+
+  @override
+  OperationFactory get operationFactory =>
+      (payload) => TestOperation.fromHandler(this);
 }
 
 /// A test operation for CRDT operations

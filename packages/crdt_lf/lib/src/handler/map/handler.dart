@@ -31,6 +31,10 @@ class CRDTMapHandler<T> extends Handler<Map<String, T>> {
   final String _id;
 
   @override
+  late final OperationFactory operationFactory =
+      _MapOperationFactory<T>(this).fromPayload;
+
+  @override
   String get id => _id;
 
   /// Sets a key-value pair in the map
@@ -91,18 +95,8 @@ class CRDTMapHandler<T> extends Handler<Map<String, T>> {
     final state = _initialState();
 
     // Get all changes from the document
-    final changes = doc.exportChanges().sorted();
-
-    // Apply changes in order
-    final opFactory = _MapOperationFactory<T>(this);
-
-    for (final change in changes) {
-      final payload = change.payload;
-      final operation = opFactory.fromPayload(payload);
-
-      if (operation != null) {
-        _applyOperationToMap(state, operation);
-      }
+    for (final operation in operations()) {
+      _applyOperationToMap(state, operation);
     }
 
     return state;

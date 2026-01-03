@@ -21,6 +21,7 @@ class VersionVector {
   VersionVector.immutable(Map<PeerId, HybridLogicalClock> vector)
       : _vector = Map.unmodifiable(vector),
         _immutable = true;
+        
 
   /// Converts a JSON object to a [VersionVector]
   factory VersionVector.fromJson(Map<String, dynamic> json) => VersionVector(
@@ -32,7 +33,29 @@ class VersionVector {
         ),
       );
 
-  static VersionVector intersection(Iterable<VersionVector> vectors) {
+  /// Returns the intersection of the given [VersionVector]s.
+  ///
+  /// The intersection is the version vector that contains the minimum
+  /// clock for each peer.
+  ///
+  ///
+  /// ```dart
+  /// final vv1 = VersionVector({
+  ///   client1: HLC(2, 0),
+  ///   client2: HLC(1, 0),
+  /// });
+  /// final vv2 = VersionVector({
+  ///   client1: HLC(3, 0),
+  ///   client2: HLC(2, 0),
+  ///   client3: HLC(2, 0),
+  /// });
+  /// final intersection = VersionVector.intersection([vv1, vv2]);
+  /// print(intersection); // VersionVector({
+  ///   client1: HLC(2, 0),
+  ///   client2: HLC(1, 0),
+  /// });
+  /// ```
+  factory VersionVector.intersection(Iterable<VersionVector> vectors) {
     if (vectors.isEmpty) {
       return VersionVector({});
     }
@@ -129,21 +152,21 @@ class VersionVector {
   ///
   /// Find the most recent clock for each peer and compare them.
   bool isNewerThan(VersionVector other) {
-    final mostRecent = _mostRecent();
-    final otherMostRecent = other._mostRecent();
+    final recent = mostRecent();
+    final otherMostRecent = other.mostRecent();
 
-    if (mostRecent == null && otherMostRecent == null) {
+    if (recent == null && otherMostRecent == null) {
       return false;
     }
 
-    if (mostRecent != null && otherMostRecent == null) {
+    if (recent != null && otherMostRecent == null) {
       return true;
     }
-    if (mostRecent == null && otherMostRecent != null) {
+    if (recent == null && otherMostRecent != null) {
       return false;
     }
 
-    return mostRecent!.compareTo(otherMostRecent!) > 0;
+    return recent!.compareTo(otherMostRecent!) > 0;
   }
 
   /// Whether this version vector is strictly newer than the other.
@@ -185,14 +208,27 @@ class VersionVector {
   /// Returns the most recent clock for this version vector.
   ///
   /// Returns null if the version vector is empty.
-  HybridLogicalClock? _mostRecent() {
-    HybridLogicalClock? mostRecent;
+  HybridLogicalClock? mostRecent() {
+    HybridLogicalClock? result;
     for (final entry in _vector.entries) {
-      if (mostRecent == null || entry.value.compareTo(mostRecent) > 0) {
-        mostRecent = entry.value;
+      if (result == null || entry.value.compareTo(result) > 0) {
+        result = entry.value;
       }
     }
-    return mostRecent;
+    return result;
+  }
+
+  /// Returns the most oldest clock for this version vector.
+  ///
+  /// Returns null if the version vector is empty.
+  HybridLogicalClock? mostOldest() {
+    HybridLogicalClock? result;
+    for (final entry in _vector.entries) {
+      if (result == null || entry.value.compareTo(result) < 0) {
+        result = entry.value;
+      }
+    }
+    return result;
   }
 
   /// Converts the [VersionVector] to a JSON object

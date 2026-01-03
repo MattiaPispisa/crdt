@@ -48,7 +48,10 @@ class ChangeStore {
   ///
   /// Returns a list of [Change]s that are not ancestors of the given [version].
   /// If [version] is empty, returns all [Change]s.
-  List<Change> exportChanges(Set<OperationId> version, DAG dag) {
+  List<Change> exportChanges(
+    Set<OperationId> version,
+    DAG dag,
+  ) {
     if (version.isEmpty) {
       return getAllChanges();
     }
@@ -65,22 +68,9 @@ class ChangeStore {
         .toList();
   }
 
-  /// Exports [Change]s that are newer than the provided [versionVector].
-  ///
-  /// A change is considered newer if its clock is strictly greater than the
-  /// clock in the provided version vector for the same peer, or if the peer is
-  /// not present in the provided vector.
+  /// {@macro change_iterable_newer_than}
   List<Change> exportChangesNewerThan(VersionVector versionVector) {
-    final result = <Change>[];
-
-    for (final change in _changes.values) {
-      final hlc = versionVector[change.id.peerId];
-      if (hlc == null || change.hlc.compareTo(hlc) > 0) {
-        result.add(change);
-      }
-    }
-
-    return result;
+    return _changes.values.newerThan(versionVector).toList();
   }
 
   /// Imports [Change]s from another [ChangeStore]
