@@ -341,6 +341,42 @@ void main() {
     );
 
     test(
+      'operations from different peers merge correctly using snapshots,'
+      ' preserving history',
+      () {
+        final doc1 = CRDTDocument();
+        final doc2 = CRDTDocument();
+        final doc3 = CRDTDocument();
+        final text1 = CRDTTextHandler(doc1, 'test-text');
+        final text2 = CRDTTextHandler(doc2, 'test-text');
+        final text3 = CRDTTextHandler(doc3, 'test-text');
+
+        text1.insert(0, 'Hello');
+        text2.insert(0, 'World');
+
+        final changes = doc1.exportChanges();
+        doc2.importChanges(changes);
+        doc3.importChanges(changes);
+
+        // doc2 preserves history and doc1
+        // aggressively prunes history until snapshot
+        doc1.import(
+          snapshot: doc2.takeSnapshot(pruneHistory: false),
+          changes: changes,
+        );
+        doc3.import(
+          snapshot: doc2.takeSnapshot(pruneHistory: false),
+          changes: changes,
+          pruneHistory: false,
+        );
+
+        expect(text1.value, equals(text2.value));
+        expect(text1.value, equals(text3.value));
+        expect(text2.value, equals(text3.value));
+      },
+    );
+
+    test(
       'complex scenario with 3 peers, changes, and snapshots',
       () {
         // setup

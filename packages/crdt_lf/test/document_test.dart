@@ -389,6 +389,85 @@ void main() {
       });
     });
 
+    group('snapshot', () {
+      test('safe pruning, should conserve changes', () {
+        CRDTListHandler<String>(doc, 'list')
+          ..insert(0, 'Hello')
+          ..insert(1, 'World');
+
+        expect(doc.exportChanges(), hasLength(2));
+        doc.takeSnapshot(pruneHistory: false);
+        final changes = doc.exportChanges();
+        expect(changes, hasLength(2));
+      });
+
+      test('safe pruning, should garbage collect correctly', () {
+        CRDTListHandler<String>(doc, 'list')
+          ..insert(0, 'Hello')
+          ..insert(1, 'World');
+        doc.takeSnapshot(pruneHistory: false);
+
+        expect(doc.exportChanges(), hasLength(2));
+
+        doc.garbageCollect(doc.getVersionVector());
+        expect(doc.exportChanges(), hasLength(0));
+      });
+
+      test('safe pruning, should preserve history because no snapshot is taken',
+          () {
+        CRDTListHandler<String>(doc, 'list')
+          ..insert(0, 'Hello')
+          ..insert(1, 'World');
+
+        expect(doc.exportChanges(), hasLength(2));
+        doc.garbageCollect(doc.getVersionVector());
+        expect(doc.exportChanges(), hasLength(2));
+      });
+
+      test('safe pruning, should import correctly', () {
+        CRDTListHandler<String>(doc, 'list')
+          ..insert(0, 'Hello')
+          ..insert(1, 'World');
+
+        expect(doc.exportChanges(), hasLength(2));
+        final snapshot = doc.takeSnapshot(pruneHistory: false);
+        final changes = doc.exportChanges();
+        expect(changes, hasLength(2));
+
+        final doc2 = CRDTDocument();
+        final listDoc2 = CRDTListHandler<String>(doc2, 'list');
+
+        final doc3 = CRDTDocument();
+        final listDoc3 = CRDTListHandler<String>(doc3, 'list');
+
+        final imported2 = doc2.import(
+          changes: changes,
+          pruneHistory: false,
+        );
+        final imported3 = doc3.import(
+          snapshot: snapshot,
+          changes: changes,
+        );
+
+        expect(
+          imported2,
+          equals(2),
+          reason: 'doc2 does not import snapshot but '
+              'changes contains the entire history',
+        );
+        expect(
+          imported3,
+          equals(0),
+          reason: 'doc3 imports snapshot and '
+              'all changes remaining consistent',
+        );
+        expect(doc2.exportChanges(), hasLength(2));
+        expect(doc3.exportChanges(), hasLength(0));
+        expect(listDoc2.value, ['Hello', 'World']);
+        expect(listDoc3.value, ['Hello', 'World']);
+      });
+    });
+
     test('import should not accept changes already in version vector', () {
       final change1 = Change(
         id: OperationId(author, HybridLogicalClock(l: 1, c: 1)),
