@@ -5,6 +5,7 @@
 - Added `fromVersionVector` to `CRDTDocument.exportChanges` to export changes that are newer than a given version vector.
 
 ### Changed
+- Implemented hashCode memoization for `PeerId`, `FugueElementId`, `Change`, `ORHandlerTag`, `ORMapEntry`, `OperationId`, `OperationType`. Constructors are no longer const, resulting in faster equality checks and reduced CPU usage during heavy parsing or collection lookups.
 - chore: improved example. Can now time travel and garbage collect the document history.
 
 ## [2.4.0](https://github.com/MattiaPispisa/crdt/tree/crdt_lf-v2.4.0/packages/crdt_lf)

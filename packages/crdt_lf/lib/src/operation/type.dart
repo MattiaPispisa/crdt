@@ -7,7 +7,7 @@ const _availableOperations = {_insert, _delete, _update};
 
 /// Available operation on data for CRDT
 class OperationType {
-  const OperationType._({
+  OperationType._({
     required this.handler,
     required this.type,
   });
@@ -38,18 +38,24 @@ class OperationType {
 
   /// Factory to create an operation type from a payload
   factory OperationType.fromPayload(String payload) {
-    final parts = payload.split(':');
+    final index = payload.indexOf(':');
 
-    if (parts.length != 2 ||
-        parts[0].isEmpty ||
-        parts[1].isEmpty ||
-        !_availableOperations.contains(parts[1])) {
+    if (index == -1) {
+      throw FormatException('Invalid payload: $payload');
+    }
+
+    final handler = payload.substring(0, index);
+    final type = payload.substring(index + 1);
+
+    if (handler.isEmpty ||
+        type.isEmpty ||
+        !_availableOperations.contains(type)) {
       throw FormatException('Invalid payload: $payload');
     }
 
     return OperationType._(
-      handler: parts[0],
-      type: parts[1],
+      handler: handler,
+      type: type,
     );
   }
 
@@ -70,9 +76,11 @@ class OperationType {
         other.type == type;
   }
 
+  late final int _hashCode = Object.hash(handler, type);
+
   /// Returns a hash code for this [OperationType]
   @override
-  int get hashCode => Object.hash(handler, type);
+  int get hashCode => _hashCode;
 
   /// Returns a payload for this [OperationType]
   String toPayload() {

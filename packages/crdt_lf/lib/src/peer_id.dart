@@ -12,11 +12,11 @@ final peerIdRegex = RegExp(
 /// It is used to distinguish between different peers when merging changes.
 class PeerId with Comparable<PeerId> {
   /// Creates a new [PeerId] with the given identifier
-  const PeerId._(this.id);
+  PeerId._(this.id);
 
   /// Create an empty [PeerId]
   factory PeerId.empty() {
-    return const PeerId._('');
+    return PeerId._('');
   }
 
   /// Generates a random [PeerId]
@@ -51,6 +51,8 @@ class PeerId with Comparable<PeerId> {
   /// The unique identifier string
   final String id;
 
+  late final int _hashCode = id.hashCode;
+
   /// Returns a string representation of this [PeerId]
   @override
   String toString() => id;
@@ -66,7 +68,7 @@ class PeerId with Comparable<PeerId> {
 
   /// Returns a hash code for this [PeerId]
   @override
-  int get hashCode => id.hashCode;
+  int get hashCode => _hashCode;
 
   /// Compares this [PeerId] with another [PeerId]
   ///

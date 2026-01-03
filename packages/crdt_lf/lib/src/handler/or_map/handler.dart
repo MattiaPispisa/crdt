@@ -327,7 +327,7 @@ class ORMapState<K, V> {
 /// Entry in the OR-Map representing a (value, tag) pair
 class ORMapEntry<V> {
   /// Creates an OR-Map entry
-  const ORMapEntry({
+  ORMapEntry({
     required this.value,
     required this.tag,
   });
@@ -346,6 +346,8 @@ class ORMapEntry<V> {
     return other is ORMapEntry<V> && other.value == value && other.tag == tag;
   }
 
+  late final int _hashCode = Object.hash(value, tag);
+
   @override
-  int get hashCode => Object.hash(value, tag);
+  int get hashCode => _hashCode;
 }
