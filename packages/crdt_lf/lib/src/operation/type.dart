@@ -39,11 +39,15 @@ class OperationType {
   /// Factory to create an operation type from a payload
   factory OperationType.fromPayload(String payload) {
     final index = payload.indexOf(':');
+
+    if (index == -1) {
+      throw FormatException('Invalid payload: $payload');
+    }
+
     final handler = payload.substring(0, index);
     final type = payload.substring(index + 1);
 
-    if (index == -1 ||
-        handler.isEmpty ||
+    if (handler.isEmpty ||
         type.isEmpty ||
         !_availableOperations.contains(type)) {
       throw FormatException('Invalid payload: $payload');
