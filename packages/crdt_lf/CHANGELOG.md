@@ -1,4 +1,7 @@
-## [Unreleased]
+## [2.5.0](https://github.com/MattiaPispisa/crdt/tree/crdt_lf-v2.5.0/packages/crdt_lf)
+**Date:** 2026-01-03
+
+[compare to previous release](https://github.com/MattiaPispisa/crdt/compare/crdt_lf-v2.4.0...crdt_lf-v2.5.0)
 
 ### Added
 - Added `garbageCollect` to `CRDTDocument` to prune the document history. It prunes the document history up to the given version vector. `VersionVector.intersection` can be used to compute the minimum common version vector that contains the minimum clock for each peer. [61](https://github.com/MattiaPispisa/crdt/issues/61)
