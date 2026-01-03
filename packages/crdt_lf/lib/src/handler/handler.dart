@@ -37,9 +37,9 @@ abstract class Handler<T>
   /// Otherwise, return `null`.
   Operation? compound(Operation accumulator, Operation current) => null;
 
-  /// Returns the operations required by this consumer to compute its state.
+  /// Returns the [Operation]s required by this consumer to compute its state.
   ///
-  /// The operations are returned in the order they were applied.
+  /// The [Operation]s are returned in the order they were applied.
   List<Operation> operations() {
     final changes = doc
         .exportChanges(
