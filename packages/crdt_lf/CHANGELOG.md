@@ -1,9 +1,11 @@
 ## [Unreleased]
 
 ### Added
-- Added `garbageCollect` to `CRDTDocument` to prune the document history. [61](https://github.com/MattiaPispisa/crdt/issues/61)
-- Added `intersection` to `VersionVector` to compute the intersection of some version vectors. It returns the version vector that contains the minimum clock for each peer.
+- Added `garbageCollect` to `CRDTDocument` to prune the document history. It prunes the document history up to the given version vector. `VersionVector.intersection` can be used to compute the minimum common version vector that contains the minimum clock for each peer. [61](https://github.com/MattiaPispisa/crdt/issues/61)
 - Added `fromVersionVector` to `CRDTDocument.exportChanges` to export changes that are newer than a given version vector.
+
+### Changed
+- chore: improved example. Can now time travel and garbage collect the document history.
 
 ## [2.4.0](https://github.com/MattiaPispisa/crdt/tree/crdt_lf-v2.4.0/packages/crdt_lf)
 **Date:** 2025-12-29
