@@ -72,6 +72,7 @@ void main() {
       ..insert(3, 'Flutter')
       ..insert(4, '!');
   });
+  // insertions are committed at the end
   print(list1.value); // Prints ["Hello", "World", "Dart", "Flutter", "!"]
 
   // snapshot
