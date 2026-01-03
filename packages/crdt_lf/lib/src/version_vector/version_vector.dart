@@ -67,8 +67,7 @@ class VersionVector {
         break;
       }
 
-      final currentKeys = commonMap.keys;
-      for (final key in currentKeys) {
+      for (final key in commonMap.keys.toList()) {
         final otherVal = vv[key];
 
         if (otherVal == null) {
