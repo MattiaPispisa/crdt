@@ -1,8 +1,4 @@
 import 'package:crdt_lf/crdt_lf.dart';
-import 'package:crdt_lf/src/operation/id.dart';
-import 'package:crdt_lf/src/operation/operation.dart';
-import 'package:crdt_lf/src/peer_id.dart';
-import 'package:crdt_lf/src/utils/set.dart';
 import 'package:hlc_dart/hlc_dart.dart';
 
 /// Change implementation for CRDT

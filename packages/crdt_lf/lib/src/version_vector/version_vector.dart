@@ -21,7 +21,6 @@ class VersionVector {
   VersionVector.immutable(Map<PeerId, HybridLogicalClock> vector)
       : _vector = Map.unmodifiable(vector),
         _immutable = true;
-        
 
   /// Converts a JSON object to a [VersionVector]
   factory VersionVector.fromJson(Map<String, dynamic> json) => VersionVector(

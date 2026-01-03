@@ -583,9 +583,9 @@ class CRDTDocument extends BaseCRDTDocument {
   }
 
   /// Prunes the DAG and the change store.
-  /// [protectUntil] represents the stability frontier (minimum common version) 
+  /// [protectUntil] represents the stability frontier (minimum common version)
   /// until which the history is protected from garbage collection.
-  /// 
+  ///
   /// **The history is always protected until the last snapshot.**
   ///
   /// {@macro pruning_strategy}
