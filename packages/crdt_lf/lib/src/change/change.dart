@@ -1,7 +1,4 @@
-import 'package:crdt_lf/src/operation/id.dart';
-import 'package:crdt_lf/src/operation/operation.dart';
-import 'package:crdt_lf/src/peer_id.dart';
-import 'package:crdt_lf/src/utils/set.dart';
+import 'package:crdt_lf/crdt_lf.dart';
 import 'package:hlc_dart/hlc_dart.dart';
 
 /// Change implementation for CRDT
@@ -116,15 +113,46 @@ class Change {
 
 /// Utilities on [List] of [Change]s
 extension ChangeList on List<Change> {
-  /// Sort changes first by hlc then for author
-  List<Change> sorted() {
-    return List.from(this)
-      ..sort((a, b) {
-        final hlcCompare = a.hlc.compareTo(b.hlc);
-        if (hlcCompare != 0) {
-          return hlcCompare;
-        }
-        return a.author.compareTo(b.author);
-      });
+  /// Sort changes first by hlc then for author.
+  ///
+  /// If [inplace] is `true`, the list is sorted in place.
+  /// Otherwise, a new list is returned.
+  List<Change> sorted({
+    bool inplace = false,
+  }) {
+    if (inplace) {
+      sort(_hlcCompare);
+      return this;
+    }
+
+    return List.from(this)..sort(_hlcCompare);
+  }
+
+  int _hlcCompare(Change a, Change b) {
+    final hlcCompare = a.hlc.compareTo(b.hlc);
+    if (hlcCompare != 0) {
+      return hlcCompare;
+    }
+    return a.author.compareTo(b.author);
+  }
+}
+
+/// Utilities on [Iterable] of [Change]s
+extension ChangeIterable on Iterable<Change> {
+  /// {@template change_iterable_newer_than}
+  /// Returns the changes that are newer than the given [versionVector].
+  ///
+  /// A change is considered newer if its clock is strictly greater than the
+  /// clock in the provided version vector for the same peer, or if the peer is
+  /// not present in the provided vector.
+  /// {@endtemplate}
+  Iterable<Change> newerThan(VersionVector versionVector) {
+    return where((change) {
+      final hlc = versionVector[change.id.peerId];
+      if (hlc == null) {
+        return true;
+      }
+      return change.hlc.compareTo(hlc) > 0;
+    });
   }
 }

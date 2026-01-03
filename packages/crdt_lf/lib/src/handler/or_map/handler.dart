@@ -35,6 +35,10 @@ class CRDTORMapHandler<K, V> extends Handler<ORMapState<K, V>> {
   @override
   String get id => _id;
 
+  @override
+  late final OperationFactory operationFactory =
+      _ORMapOperationFactory<K, V>(this).fromPayload;
+
   /// Obtains a unique tag for an operation
   ORHandlerTag _tag() {
     doc.prepareMutation();
@@ -118,7 +122,6 @@ class CRDTORMapHandler<K, V> extends Handler<ORMapState<K, V>> {
     );
 
     final snap = lastSnapshot();
-    final changes = doc.exportChanges().sorted();
 
     // Seed from snapshot:
     // If a prior snapshot contained key-value pairs for this handler,
@@ -136,16 +139,11 @@ class CRDTORMapHandler<K, V> extends Handler<ORMapState<K, V>> {
       }
     }
 
-    final opFactory = _ORMapOperationFactory<K, V>(this);
-
-    for (final change in changes) {
-      final op = opFactory.fromPayload(change.payload);
-      if (op != null) {
-        _applyOperationToTagState(
-          state: state,
-          operation: op,
-        );
-      }
+    for (final operation in operations()) {
+      _applyOperationToTagState(
+        state: state,
+        operation: operation,
+      );
     }
 
     return state;

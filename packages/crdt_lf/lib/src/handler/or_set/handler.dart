@@ -34,6 +34,10 @@ class CRDTORSetHandler<T> extends Handler<ORSetState<T>> {
   @override
   String get id => _id;
 
+  @override
+  late final OperationFactory operationFactory =
+      _ORSetOperationFactory<T>(this).fromPayload;
+
   // TODO(mattia): create a reusable class for a tag related
   // to peerId and hlc. Can be shared with the ORMapHandler.
   /// Obtains a unique tag for an operation
@@ -105,7 +109,6 @@ class CRDTORSetHandler<T> extends Handler<ORSetState<T>> {
     );
 
     final snap = lastSnapshot();
-    final changes = doc.exportChanges().sorted();
 
     // Seed from snapshot:
     // If a prior snapshot contained values for this handler,
@@ -121,16 +124,11 @@ class CRDTORSetHandler<T> extends Handler<ORSetState<T>> {
       }
     }
 
-    final opFactory = _ORSetOperationFactory<T>(this);
-
-    for (final change in changes) {
-      final op = opFactory.fromPayload(change.payload);
-      if (op != null) {
-        _applyOperationToTagState(
-          state: state,
-          operation: op,
-        );
-      }
+    for (final operation in operations()) {
+      _applyOperationToTagState(
+        state: state,
+        operation: operation,
+      );
     }
 
     return state;

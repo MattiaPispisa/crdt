@@ -32,6 +32,10 @@ class CRDTTextHandler extends Handler<String> {
   @override
   String get id => _id;
 
+  @override
+  late final OperationFactory operationFactory =
+      _TextOperationFactory(this).fromPayload;
+
   /// Inserts [text] at the specified [index]
   void insert(int index, String text) {
     final operation = _TextInsertOperation.fromHandler(
@@ -138,19 +142,9 @@ class CRDTTextHandler extends Handler<String> {
   String _computeState() {
     final buffer = StringBuffer(_initialState());
 
-    // Get all changes from the document
-    final changes = doc.exportChanges().sorted();
-
     // Apply changes in order
-    final opFactory = _TextOperationFactory(this);
-    for (final change in changes) {
-      final payload = change.payload;
-
-      final operation = opFactory.fromPayload(payload);
-
-      if (operation != null) {
-        _applyOperationToBuffer(buffer, operation);
-      }
+    for (final operation in operations()) {
+      _applyOperationToBuffer(buffer, operation);
     }
 
     return buffer.toString();

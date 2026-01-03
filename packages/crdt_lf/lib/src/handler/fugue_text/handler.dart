@@ -33,6 +33,10 @@ class CRDTFugueTextHandler extends Handler<FugueTextState> {
   @override
   String get id => _id;
 
+  @override
+  late final OperationFactory operationFactory =
+      _FugueTextOperationFactory(this).fromPayload;
+
   /// Inserts [text] at position [index]
   void insert(int index, String text) {
     if (text.isEmpty) {
@@ -248,17 +252,8 @@ class CRDTFugueTextHandler extends Handler<FugueTextState> {
     state._tree.iterableInsert(0, _initialState());
 
     // Get all operations from the document
-    final changes = doc.exportChanges().sorted();
-
-    // Apply operations in order
-    final opFactory = _FugueTextOperationFactory(this);
-
-    for (final change in changes) {
-      final operation = opFactory.fromPayload(change.payload);
-
-      if (operation != null) {
-        _applyTreeOperation(state._tree, operation);
-      }
+    for (final operation in operations()) {
+      _applyTreeOperation(state._tree, operation);
     }
 
     // Return the resulting text

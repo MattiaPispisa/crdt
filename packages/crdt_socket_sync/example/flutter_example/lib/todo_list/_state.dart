@@ -2,6 +2,7 @@
 
 import 'dart:async';
 
+import 'package:hlc_dart/hlc_dart.dart';
 import 'package:crdt_lf/crdt_lf.dart';
 import 'package:crdt_socket_sync/web_socket_client.dart';
 import 'package:en_logger/en_logger.dart';
@@ -41,7 +42,11 @@ class TodoListState extends ChangeNotifier {
     required UserState user,
     required EnLogger logger,
   }) {
-    final document = CRDTDocument(documentId: documentId, peerId: author);
+    final document = CRDTDocument(
+      documentId: documentId,
+      peerId: author,
+      initialClock: HybridLogicalClock.now(),
+    );
     final handler = CRDTListHandler<Map<String, dynamic>>(
       document,
       'todo-list',

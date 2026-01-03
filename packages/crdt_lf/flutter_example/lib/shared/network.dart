@@ -3,6 +3,7 @@ import 'dart:collection'; // Import for Queue
 
 import 'package:crdt_lf/crdt_lf.dart';
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
 /// Represents a simple broadcast network simulation with offline queuing.
 ///
@@ -90,5 +91,17 @@ class Network extends ChangeNotifier {
   void dispose() {
     _changesController.close();
     super.dispose();
+  }
+}
+
+class NetworkProvider extends StatelessWidget {
+  /// Provide to children a [Network] instance.
+  const NetworkProvider({super.key, required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return ChangeNotifierProvider(create: (context) => Network(), child: child);
   }
 }

@@ -36,11 +36,21 @@ abstract class BaseCRDTDocument {
   /// Else the operation is added to the current transaction.
   void registerOperation(Operation operation);
 
-  /// Exports [Change]s from a specific version
+  /// Exports [Change]s from a specific version.
   ///
-  /// Returns a list of [Change]s that are not ancestors of the given version.
-  /// If version is empty, returns all [Change]s.
-  List<Change> exportChanges({Set<OperationId>? from});
+  /// If [fromVersionVector] is provided, it is used to filter the changes.
+  /// Only changes that are newer than the given
+  /// [fromVersionVector] are returned.
+  ///
+  /// If [from] is provided, it is used to filter the changes.
+  /// Only changes that are not ancestors of the given [from] are returned.
+  ///
+  /// If neither [fromVersionVector] nor [from] are provided,
+  /// all changes are returned.
+  List<Change> exportChanges({
+    Set<OperationId>? from,
+    VersionVector? fromVersionVector,
+  });
 
   /// Prepares the system to perform a mutation.
   void prepareMutation();
@@ -64,6 +74,8 @@ abstract class BaseCRDTDocument {
     handler._document = this;
   }
 
+  /// If [_isDisposed] is `true`, throws [DocumentDisposedException]
+  /// with the given [methodInvoke].
   void _ensureNotDisposed(String methodInvoke) {
     if (_isDisposed) {
       throw DocumentDisposedException(methodInvoke);
@@ -94,51 +106,104 @@ abstract class BaseCRDTDocument {
 /// - `peerId`: identifies the peer/author generating operations. It is used in
 ///   `OperationId` together with the Hybrid Logical Clock.
 ///
+/// {@template document_example}
 /// ## Example
 /// ```dart
-/// // setup
-/// final document = CRDTDocument(
-///   initialClock: HybridLogicalClock.now(),
-///   peerId: PeerId.parse('a90dfced-cbf0-4a49-9c64-f5b7b62fdc18'),
-/// );
+/// // Create two documents (simulating different peers)
+///  final doc1 = CRDTDocument(
+///    peerId: PeerId.parse('45ee6b65-b393-40b7-9755-8b66dc7d0518'),
+///  );
+///  final doc2 = CRDTDocument(
+///    peerId: PeerId.parse('a90dfced-cbf0-4a49-9c64-f5b7b62fdc18'),
+///  );
 ///
-/// // insert
-/// final list = CRDTListHandler<String>(document, 'list')
-///   ..insert(0, 'Hello')
-///   ..insert(1, 'World')
-///   ..insert(2, 'Dart');
+///  // Create text handlers
+///  final fugueTextDoc1 = CRDTFugueTextHandler(doc1, 'text');
+///  final fugueTextDoc2 = CRDTFugueTextHandler(doc2, 'text');
 ///
-/// print(list.value); // Prints ["Hello", "World", "Dart"]
+///  // Initial state
+///  fugueTextDoc1.insert(0, 'Hello');
 ///
-/// final document2 = CRDTDocument(
-///   initialClock: HybridLogicalClock.now(),
-///   peerId: PeerId.parse('6551847f-415f-4811-ba33-c0344b6afb73'),
-/// );
+///  // Sync doc1 to doc2
+///  var changesDoc1 = doc1.exportChanges();
+///  doc2.importChanges(changesDoc1);
 ///
-/// final list2 = CRDTListHandler<String>(document2, 'list2');
+///  // Concurrent edits
+///  fugueTextDoc1.insert(5, ' World'); // doc1: "Hello World"
+///  fugueTextDoc2.insert(5, ' Dart'); // doc2: "Hello Dart"
 ///
-/// // sync
-/// final changes1 = document.exportChanges();
-/// document2.importChanges(changes1);
+///  // Sync both ways
+///  final changes1After = doc1.exportChanges();
+///  final changes2After = doc2.exportChanges();
 ///
-/// print(list2.value); // Prints ["Hello", "World", "Dart"]
+///  doc2.importChanges(changes1After);
+///  doc1.importChanges(changes2After);
 ///
-/// // history session
-/// final viewListHandler = document.toTimeTravel().getHandler((doc)
-///   => CRDTListHandler<String>(doc, 'list'),
-/// );
-/// print(viewListHandler.value); // Prints ["Hello", "World", "Dart"]
-/// historySession.previous();
-/// print(viewListHandler.value); // Prints ["Hello", "World"]
+///  // Both documents will have the same final state
+///  print(fugueTextDoc1.value); // Prints "Hello World Dart" or "Hello Dart World"
+///  print(fugueTextDoc2.value); // Prints the same as text1
 ///
-/// // transaction
-/// document.runInTransaction(() {
-///   list
-///    ..insert(3, 'Flutter')
-///    ..insert(4, '!');
-/// });
-/// print(list.value); // Prints ["Hello", "World", "Dart", "Flutter", "!"]
+///  // Create list handler
+///  final list1 = CRDTListHandler(doc1, 'list');
+///  final list2 = CRDTListHandler(doc2, 'list');
+///
+///  list1
+///    ..insert(0, 'Hello')
+///    ..insert(1, 'World')
+///    ..insert(2, 'Dart');
+///
+///  print(list1.value); // Prints ["Hello", "World", "Dart"]
+///
+///  // sync doc1 to doc2
+///  changesDoc1 = doc1.exportChanges();
+///  doc2.importChanges(changesDoc1);
+///
+///  print(list2.value); // Prints ["Hello", "World", "Dart"]
+///
+///  // history session
+///  final historySession = doc1.toTimeTravel();
+///  final viewListHandler =
+///      historySession.getHandler(
+///    (doc) => CRDTListHandler(doc, 'list'),
+///  );
+///  print(viewListHandler.value); // Prints ["Hello", "World", "Dart"]
+///
+///  historySession.previous();
+///  print(viewListHandler.value); // Prints ["Hello", "World"]
+///
+///  // transaction
+///  doc1.runInTransaction(() {
+///    list1
+///      ..insert(3, 'Flutter')
+///      ..insert(4, '!');
+///  });
+///  // insertions are committed at the end
+///  print(list1.value); // Prints ["Hello", "World", "Dart", "Flutter", "!"]
+///
+///  // snapshot
+///  // save pruning
+///  var snapshotDoc1 = doc1.takeSnapshot(pruneHistory: false);
+///  changesDoc1 = doc1.exportChanges();
+///  doc2.import(
+///    snapshot: snapshotDoc1,
+///    changes: changesDoc1,
+///    pruneHistory: false,
+///  );
+///
+///  // changes are read starting from the snapshot then changed are applied
+///  print(list2.value); // Prints ["Hello", "World", "Dart", "Flutter", "!"]
+///  // changes are not pruned
+///  print(doc1.exportChanges().length); // Prints 8
+///
+///  // aggressive pruning
+///  snapshotDoc1 = doc1.takeSnapshot(
+///    pruneHistory: true,
+///  );
+///  // changes are pruned
+///  doc1.garbageCollect(doc1.getVersionVector());
+///  print(doc1.exportChanges().length); // Prints 0
 /// ```
+/// {@endtemplate}
 class CRDTDocument extends BaseCRDTDocument {
   /// Creates a new [CRDTDocument] with the given identifiers.
   ///
@@ -150,6 +215,8 @@ class CRDTDocument extends BaseCRDTDocument {
   ///   If not provided, defaults to [HybridLogicalClock.initialize] (clock
   ///   starting at zero). Use [HybridLogicalClock.now] to start from the
   ///   current physical time.
+  ///
+  /// {@macro document_example}
   CRDTDocument({
     PeerId? peerId,
     String? documentId,
@@ -391,6 +458,9 @@ class CRDTDocument extends BaseCRDTDocument {
   }
 
   /// Applies a [Change] to this document
+  ///
+  /// Throws [CausallyNotReadyException] if the change is not causally ready
+  /// (some of its dependencies are not present in the DAG).
   bool _internalApplyChange(Change change) {
     // Check if the change already exists
     if (_changeStore.containsChange(change.id)) {
@@ -446,20 +516,53 @@ class CRDTDocument extends BaseCRDTDocument {
     return applied;
   }
 
-  /// Takes a snapshot of the document, compacting its history.
+  /// Takes a snapshot of the document.
   ///
   /// This operation captures the current state of the document,
   /// represented by its version (frontiers).
+  ///
+  /// Returns a [Snapshot] representing the document's
+  /// state at the current version.
+  ///
+  /// ### Pruning history
+  /// If [pruneHistory] is `true` (default),
   /// [Change]s that are causally included in this version are removed from the
   /// internal [ChangeStore],
   /// effectively pruning the history up to the snapshot point.
   /// The internal [DAG] is also updated.
-  /// Use [Snapshot]s to reduce memory usage and
-  /// improve performance for long-lived documents.
   ///
-  /// Returns a [Snapshot] representing the document's
-  /// state at the current version.
-  Snapshot takeSnapshot() {
+  /// {@template pruning_strategy}
+  /// ### Garbage Collection & History Pruning Strategy
+  ///
+  /// In a distributed CRDT system, managing the log of operations ([Change]s)
+  /// involves a trade-off between **Memory Usage** and
+  /// **Synchronization Capability**.
+  ///
+  /// #### 1. Aggressive Pruning (Local Optimization)
+  /// Removing history immediately after a snapshot minimizes storage/RAM usage.
+  ///
+  /// > **Warning:** This breaks **Delta Synchronization** for lagging peers.
+  /// > If a peer requests changes that have been pruned locally, you cannot
+  /// > send the missing operations. The peer will be forced to perform a
+  /// > costly **Full State Transfer** (downloading the entire snapshot).
+  ///
+  /// #### 2. Safe Distributed Pruning (Recommended)
+  /// To ensure seamless synchronization while managing memory, follow the
+  /// **Stability Frontier** pattern:
+  ///
+  /// * **Keep History:** Take snapshots for fast loading but keep
+  /// the underlying changes (`pruneHistory: false`).
+  /// * **Calculate Stability:** Determine the "minimum common version" known by
+  ///   all active peers (using [VersionVector.intersection]).
+  /// * **Prune Safely:** Only delete changes that are **both** included in a
+  ///   snapshot **and** older than the stability frontier.
+  ///
+  /// This ensures that you only delete history that no other peer
+  /// will ever need.
+  /// {@endtemplate}
+  Snapshot takeSnapshot({
+    bool pruneHistory = true,
+  }) {
     _ensureNotDisposed('takeSnapshot');
 
     final state = <String, dynamic>{};
@@ -471,10 +574,32 @@ class CRDTDocument extends BaseCRDTDocument {
       data: state,
     );
 
-    _prune(snapshot.versionVector);
+    if (pruneHistory) {
+      _prune(snapshot.versionVector);
+    }
 
     _lastSnapshot = snapshot;
     return snapshot;
+  }
+
+  /// Prunes the DAG and the change store.
+  /// [protectUntil] represents the stability frontier (minimum common version)
+  /// until which the history is protected from garbage collection.
+  ///
+  /// **The history is always protected until the last snapshot.**
+  ///
+  /// {@macro pruning_strategy}
+  void garbageCollect(VersionVector protectUntil) {
+    final effectiveVV = VersionVector.intersection(
+      [
+        protectUntil,
+        _lastSnapshot?.versionVector ?? VersionVector({}),
+      ],
+    );
+    if (effectiveVV.isEmpty) {
+      return;
+    }
+    _prune(effectiveVV);
   }
 
   /// Import [Snapshot]
@@ -483,11 +608,20 @@ class CRDTDocument extends BaseCRDTDocument {
   ///
   /// [snapshot] is applied only if it is newer than the document snapshot.
   /// Use [shouldApplySnapshot] to check if the snapshot should be applied.
-  bool importSnapshot(Snapshot snapshot) {
+  ///
+  /// Use [pruneHistory] to prune the history and reduce memory usage.
+  ///
+  /// {@macro pruning_strategy}
+  bool importSnapshot(
+    Snapshot snapshot, {
+    bool pruneHistory = true,
+  }) {
     _ensureNotDisposed('importSnapshot');
 
     if (shouldApplySnapshot(snapshot)) {
-      _prune(snapshot.versionVector);
+      if (pruneHistory) {
+        _prune(snapshot.versionVector);
+      }
 
       _lastSnapshot = snapshot;
 
@@ -503,7 +637,14 @@ class CRDTDocument extends BaseCRDTDocument {
   ///
   /// This operation is always successful, even if the snapshot is older than
   /// the current snapshot.
-  void mergeSnapshot(Snapshot snapshot) {
+  ///
+  /// Use [pruneHistory] to prune the history and reduce memory usage.
+  ///
+  /// {@macro pruning_strategy}
+  void mergeSnapshot(
+    Snapshot snapshot, {
+    bool pruneHistory = true,
+  }) {
     _ensureNotDisposed('mergeSnapshot');
 
     if (_lastSnapshot == null) {
@@ -512,7 +653,9 @@ class CRDTDocument extends BaseCRDTDocument {
       _lastSnapshot = _lastSnapshot!.merged(snapshot);
     }
 
-    _prune(_lastSnapshot!.versionVector);
+    if (pruneHistory) {
+      _prune(_lastSnapshot!.versionVector);
+    }
     _invalidateHandlers();
     _emitUpdate();
   }
@@ -570,10 +713,15 @@ class CRDTDocument extends BaseCRDTDocument {
   /// For more details:
   /// - `merge`: `true` --> [mergeSnapshot] is called before [importChanges]
   /// - `merge`: `false` --> [importSnapshot] is called before [importChanges]
+  ///
+  /// Use [pruneHistory] to prune the history and reduce memory usage.
+  ///
+  /// {@macro pruning_strategy}
   int import({
     Snapshot? snapshot,
     List<Change>? changes,
     bool merge = false,
+    bool pruneHistory = true,
   }) {
     _ensureNotDisposed('import');
 
@@ -588,24 +736,29 @@ class CRDTDocument extends BaseCRDTDocument {
     }
 
     if (merge) {
-      mergeSnapshot(snapshot);
+      mergeSnapshot(snapshot, pruneHistory: pruneHistory);
       return importChanges(changesToImport);
     }
 
-    final imported = importSnapshot(snapshot);
+    final imported = importSnapshot(snapshot, pruneHistory: pruneHistory);
     if (!imported) {
       return -1;
     }
     return importChanges(changesToImport);
   }
 
-  /// Exports [Change]s from a specific version
-  ///
-  /// Returns a list of [Change]s that are not ancestors of the given version.
-  /// If version is empty, returns all [Change]s.
   @override
-  List<Change> exportChanges({Set<OperationId>? from}) {
-    return _changeStore.exportChanges(from ?? {}, _dag);
+  List<Change> exportChanges({
+    Set<OperationId>? from,
+    VersionVector? fromVersionVector,
+  }) {
+    if (from == null && fromVersionVector == null) {
+      return _changeStore.getAllChanges();
+    }
+    if (fromVersionVector != null) {
+      return _changeStore.exportChangesNewerThan(fromVersionVector);
+    }
+    return _changeStore.exportChanges(from ?? const {}, _dag);
   }
 
   /// Exports [Change]s that are newer than the provided [versionVector].
@@ -919,8 +1072,17 @@ class _CRDTStaticProxyDocument extends BaseCRDTDocument {
   }
 
   @override
-  List<Change> exportChanges({Set<OperationId>? from}) {
-    return _frozenChanges.sublist(0, _visibleCount);
+  List<Change> exportChanges({
+    Set<OperationId>? from,
+    VersionVector? fromVersionVector,
+  }) {
+    var changes = _frozenChanges.sublist(0, _visibleCount);
+
+    if (fromVersionVector != null && _lastSnapshot != null) {
+      changes = changes.newerThan(_lastSnapshot!.versionVector).toList();
+    }
+
+    return changes;
   }
 }
 
@@ -1168,12 +1330,17 @@ mixin SnapshotProvider on DocumentConsumer {
   @override
   String get id;
 
-  /// Returns the current state of the provider
+  /// Returns the current state of the consumer
   dynamic getSnapshotState();
 
-  /// Return the last snapshot of the document
+  /// Return the last snapshot of the document for this consumer.
   dynamic lastSnapshot() {
     return _document._lastSnapshot?.data[id];
+  }
+
+  /// Returns the version vector of the last snapshot for this consumer.
+  VersionVector? snapshotVersionVector() {
+    return _document._lastSnapshot?.versionVector;
   }
 }
 
