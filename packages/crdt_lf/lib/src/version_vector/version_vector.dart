@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:crdt_lf/crdt_lf.dart';
 import 'package:hlc_dart/hlc_dart.dart';
 
@@ -31,6 +33,36 @@ class VersionVector {
           ),
         ),
       );
+
+  /// Decodes a [VersionVector] from bytes produced by [toBytes].
+  ///
+  /// Layout:
+  /// - `count: uvarint`
+  /// - repeated `count` times:
+  ///   - `peerId: 16 bytes`
+  ///   - `hlc: 8 bytes`
+  factory VersionVector.fromBytes(Uint8List bytes) {
+    var offset = 0;
+    final countRec = UVarint.read(bytes, offset: offset);
+    offset = countRec.nextOffset;
+
+    final vector = <PeerId, HybridLogicalClock>{};
+    for (var i = 0; i < countRec.value; i += 1) {
+      if (offset + 24 > bytes.length) {
+        throw const FormatException('Truncated VersionVector entry');
+      }
+      final peerId = PeerId.fromUint8List(bytes, offset: offset);
+      final hlc = HybridLogicalClock.fromUint8List(bytes, offset: offset + 16);
+      vector[peerId] = hlc;
+      offset += 24;
+    }
+
+    if (offset != bytes.length) {
+      throw const FormatException('Trailing bytes after VersionVector');
+    }
+
+    return VersionVector(vector);
+  }
 
   /// Returns the intersection of the given [VersionVector]s.
   ///
@@ -235,6 +267,20 @@ class VersionVector {
           (peerId, hlc) => MapEntry(peerId.toString(), hlc.toString()),
         ),
       };
+
+  /// Encodes this version vector to a compact binary representation.
+  ///
+  /// See [VersionVector.fromBytes] for the layout.
+  Uint8List toBytes() {
+    final out = BytesBuilder(copy: false);
+    UVarint.write(_vector.length, out);
+    for (final entry in _vector.entries) {
+      out
+        ..add(entry.key.toUint8List())
+        ..add(entry.value.toUint8List());
+    }
+    return out.toBytes();
+  }
 
   /// Returns the clock for the given [peerId].
   HybridLogicalClock? operator [](PeerId peerId) => _vector[peerId];

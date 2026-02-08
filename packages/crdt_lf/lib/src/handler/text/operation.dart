@@ -4,17 +4,23 @@ class _TextOperationFactory {
   _TextOperationFactory(this.handler);
   final Handler<dynamic> handler;
 
-  Operation? fromPayload(Map<String, dynamic> payload) {
-    if (Operation.handlerIdFrom(payload: payload) != handler.id) {
+  Operation? fromBytes(Uint8List operationBytes) {
+    final env = OperationEnvelopeCodec.decode(operationBytes);
+    if (env.handlerId != handler.id) {
       return null;
     }
 
-    if (payload['type'] == OperationType.insert(handler).toPayload()) {
-      return _TextInsertOperation.fromPayload(payload);
-    } else if (payload['type'] == OperationType.delete(handler).toPayload()) {
-      return _TextDeleteOperation.fromPayload(payload);
-    } else if (payload['type'] == OperationType.update(handler).toPayload()) {
-      return _TextUpdateOperation.fromPayload(payload);
+    if (env.handlerType != handler.runtimeType.toString()) {
+      return null;
+    }
+
+    final body = Uint8List.sublistView(operationBytes, env.bodyOffset);
+    if (env.kind == OperationType.kindInsert) {
+      return _TextInsertOperation.fromBodyBytes(handler, body);
+    } else if (env.kind == OperationType.kindDelete) {
+      return _TextDeleteOperation.fromBodyBytes(handler, body);
+    } else if (env.kind == OperationType.kindUpdate) {
+      return _TextUpdateOperation.fromBodyBytes(handler, body);
     }
 
     return null;
@@ -29,13 +35,32 @@ class _TextInsertOperation extends Operation {
     required super.type,
   });
 
-  factory _TextInsertOperation.fromPayload(Map<String, dynamic> payload) =>
-      _TextInsertOperation(
-        id: payload['id'] as String,
-        type: OperationType.fromPayload(payload['type'] as String),
-        index: payload['index'] as int,
-        text: payload['text'] as String,
-      );
+  factory _TextInsertOperation.fromBodyBytes(
+    Handler<dynamic> handler,
+    Uint8List body,
+  ) {
+    var offset = 0;
+    final indexRec = UVarint.read(body, offset: offset);
+    final index = indexRec.value;
+    offset = indexRec.nextOffset;
+
+    final lenRec = UVarint.read(body, offset: offset);
+    final len = lenRec.value;
+    offset = lenRec.nextOffset;
+
+    final end = offset + len;
+    if (end > body.length) {
+      throw const FormatException('Truncated text insert');
+    }
+
+    final text = utf8.decode(Uint8List.sublistView(body, offset, end));
+
+    return _TextInsertOperation.fromHandler(
+      handler,
+      index: index,
+      text: text,
+    );
+  }
 
   factory _TextInsertOperation.fromHandler(
     Handler<dynamic> handler, {
@@ -57,6 +82,16 @@ class _TextInsertOperation extends Operation {
   final String text;
 
   @override
+  Uint8List toBodyBytes() {
+    final out = BytesBuilder(copy: false);
+    UVarint.write(index, out);
+    final textBytes = utf8.encode(text);
+    UVarint.write(textBytes.length, out);
+    out.add(textBytes);
+    return out.toBytes();
+  }
+
+  @override
   Map<String, dynamic> toPayload() => {
         ...super.toPayload(),
         'index': index,
@@ -72,13 +107,23 @@ class _TextDeleteOperation extends Operation {
     required super.type,
   });
 
-  factory _TextDeleteOperation.fromPayload(Map<String, dynamic> payload) =>
-      _TextDeleteOperation(
-        id: payload['id'] as String,
-        type: OperationType.fromPayload(payload['type'] as String),
-        index: payload['index'] as int,
-        count: payload['count'] as int,
-      );
+  factory _TextDeleteOperation.fromBodyBytes(
+    Handler<dynamic> handler,
+    Uint8List body,
+  ) {
+    var offset = 0;
+    final indexRec = UVarint.read(body, offset: offset);
+    final index = indexRec.value;
+    offset = indexRec.nextOffset;
+    final countRec = UVarint.read(body, offset: offset);
+    final count = countRec.value;
+
+    return _TextDeleteOperation.fromHandler(
+      handler,
+      index: index,
+      count: count,
+    );
+  }
 
   factory _TextDeleteOperation.fromHandler(
     Handler<dynamic> handler, {
@@ -98,6 +143,14 @@ class _TextDeleteOperation extends Operation {
 
   /// The number of characters to delete
   final int count;
+
+  @override
+  Uint8List toBodyBytes() {
+    final out = BytesBuilder(copy: false);
+    UVarint.write(index, out);
+    UVarint.write(count, out);
+    return out.toBytes();
+  }
 
   @override
   Map<String, dynamic> toPayload() => {
@@ -128,19 +181,48 @@ class _TextUpdateOperation extends Operation {
     );
   }
 
-  factory _TextUpdateOperation.fromPayload(Map<String, dynamic> payload) =>
-      _TextUpdateOperation(
-        id: payload['id'] as String,
-        type: OperationType.fromPayload(payload['type'] as String),
-        index: payload['index'] as int,
-        text: payload['text'] as String,
-      );
+  factory _TextUpdateOperation.fromBodyBytes(
+    Handler<dynamic> handler,
+    Uint8List body,
+  ) {
+    var offset = 0;
+    final indexRec = UVarint.read(body, offset: offset);
+    final index = indexRec.value;
+    offset = indexRec.nextOffset;
+
+    final lenRec = UVarint.read(body, offset: offset);
+    final len = lenRec.value;
+    offset = lenRec.nextOffset;
+
+    final end = offset + len;
+    if (end > body.length) {
+      throw const FormatException('Truncated text update');
+    }
+
+    final text = utf8.decode(Uint8List.sublistView(body, offset, end));
+
+    return _TextUpdateOperation.fromHandler(
+      handler,
+      index: index,
+      text: text,
+    );
+  }
 
   /// The index of the first character to update
   final int index;
 
   /// The text to update
   final String text;
+
+  @override
+  Uint8List toBodyBytes() {
+    final out = BytesBuilder(copy: false);
+    UVarint.write(index, out);
+    final textBytes = utf8.encode(text);
+    UVarint.write(textBytes.length, out);
+    out.add(textBytes);
+    return out.toBytes();
+  }
 
   @override
   Map<String, dynamic> toPayload() => {

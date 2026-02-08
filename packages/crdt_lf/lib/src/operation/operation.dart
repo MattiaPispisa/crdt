@@ -1,4 +1,6 @@
-import 'package:crdt_lf/src/operation/type.dart';
+import 'dart:typed_data';
+
+import 'package:crdt_lf/crdt_lf.dart';
 
 /// Abstract class for operations
 abstract class Operation {
@@ -14,12 +16,21 @@ abstract class Operation {
   /// The ID of the handler that owns the operation
   final String id;
 
-  /// The [Operation.id] of the operation from a [payload]
-  static String handlerIdFrom({
-    required Map<String, dynamic> payload,
-  }) {
-    return payload['id'] as String;
+  /// Encodes the operation as bytes.
+  ///
+  /// This is the representation used inside [Change] to optimize memory usage.
+  Uint8List toBytes() {
+    final body = toBodyBytes();
+    return OperationEnvelopeCodec.encode(
+      handlerType: type.handler,
+      handlerId: id,
+      kind: type.kind,
+      body: body,
+    );
   }
+
+  /// Encodes the operation body bytes (without the envelope).
+  Uint8List toBodyBytes();
 
   /// Converts the operation to a payload
   Map<String, dynamic> toPayload() {

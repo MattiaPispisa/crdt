@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:crdt_lf/src/peer_id.dart';
 import 'package:hlc_dart/hlc_dart.dart';
 
@@ -10,6 +12,26 @@ class OperationId with Comparable<OperationId> {
   /// Creates a new [OperationId] with the given [PeerId]
   /// and [HybridLogicalClock] timestamp
   OperationId(this.peerId, this.hlc);
+
+  /// Decodes an [OperationId] from a 24-byte buffer.
+  ///
+  /// Layout:
+  /// - Bytes 0-15: [PeerId] (UUID v4)
+  /// - Bytes 16-23: [HybridLogicalClock] (8 bytes, big endian)
+  ///
+  /// Throws a [RangeError] if the buffer is too short.
+  factory OperationId.fromUint8List(
+    Uint8List bytes, {
+    int offset = 0,
+  }) {
+    if (offset < 0 || offset + byteLength > bytes.length) {
+      throw RangeError.range(offset, 0, bytes.length - byteLength, 'offset');
+    }
+
+    final peerId = PeerId.fromUint8List(bytes, offset: offset);
+    final hlc = HybridLogicalClock.fromUint8List(bytes, offset: offset + 16);
+    return OperationId(peerId, hlc);
+  }
 
   /// Parses an [OperationId] from a string representation
   ///
@@ -27,6 +49,9 @@ class OperationId with Comparable<OperationId> {
     return OperationId(peerId, timestamp);
   }
 
+  /// Byte length of the binary encoding (16 peerId + 8 hlc).
+  static const int byteLength = 24;
+
   /// The peer that created this operation
   final PeerId peerId;
 
@@ -39,6 +64,14 @@ class OperationId with Comparable<OperationId> {
   /// ([HybridLogicalClock.toString])
   @override
   String toString() => '$peerId@$hlc';
+
+  /// Encodes this [OperationId] into a new 24-byte buffer.
+  Uint8List toUint8List() {
+    final out = Uint8List(byteLength)
+      ..setRange(0, 16, peerId.toUint8List())
+      ..setRange(16, byteLength, hlc.toUint8List());
+    return out;
+  }
 
   /// Compares two [OperationId]s for equality
   @override

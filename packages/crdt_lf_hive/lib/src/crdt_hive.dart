@@ -45,11 +45,15 @@ class CRDTHive {
   /// - [Change]
   /// - [Snapshot]
   ///
-  /// [useDataAdapter] more details in [ChangeAdapter].
+  /// [useDataAdapter] controls how [Snapshot.data] is serialized:
+  /// `true` uses registered Hive type adapters per nested value;
+  /// `false` falls back to `json.encode`/`json.decode`.
+  /// Operation payloads inside [Change] are always stored as their compact
+  /// binary representation via [Change.toBytes], regardless of this flag.
   ///
   /// The typeId parameters allow customizing the Hive type IDs for each adapter
   /// if needed to avoid conflicts with other adapters in your application.
-  /// Default typeIds are in range 100-107.
+  /// Default typeIds are in range 100-108.
   static void initialize({
     bool useDataAdapter = false,
     int? peerIdTypeId,
@@ -69,9 +73,7 @@ class CRDTHive {
       )
       ..registerAdapter(OperationIdAdapter(typeId: operationIdTypeId))
       ..registerAdapter(VersionVectorAdapter(typeId: versionVectorTypeId))
-      ..registerAdapter(
-        ChangeAdapter(useDataAdapter: useDataAdapter, typeId: changeTypeId),
-      )
+      ..registerAdapter(ChangeAdapter(typeId: changeTypeId))
       ..registerAdapter(
         SnapshotAdapter(useDataAdapter: useDataAdapter, typeId: snapshotTypeId),
       )

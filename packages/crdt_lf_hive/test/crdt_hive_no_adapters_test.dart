@@ -1,4 +1,7 @@
+import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
+
 import 'package:crdt_lf/crdt_lf.dart';
 import 'package:crdt_lf_hive/crdt_lf_hive.dart';
 import 'package:hive/hive.dart';
@@ -26,88 +29,38 @@ void main() {
       await Hive.deleteFromDisk();
     });
 
-    test('ChangeAdapter JSON mode: roundtrip complex payload', () async {
-      // Test JSON serialization with complex nested payloads
+    test('ChangeAdapter: roundtrips binary payload bytes', () async {
       const documentId = 'doc-json-1';
       final storage = await CRDTHive.openChangeStorageForDocument(documentId);
 
-      // Create an operation ID with specific clock values
       final id = OperationId(
         PeerId.generate(),
         HybridLogicalClock(l: 123, c: 4),
       );
 
-      // Create a complex payload with nested structures
-      final payload = <String, dynamic>{
-        'k1': 'v1',
-        'nested': {'a': 1, 'b': true},
-        'list': [1, 2, 3],
-      };
+      // Arbitrary opaque payload — Hive must preserve it byte-for-byte.
+      final payloadBytes = Uint8List.fromList([1, 2, 3, 4, 5, 250, 251]);
 
-      // Create a change with the complex payload
-      final change = Change.fromPayload(
+      final change = Change.fromPayloadBytes(
         id: id,
         deps: {},
         author: id.peerId,
-        payload: payload,
+        payloadBytes: payloadBytes,
       );
 
-      // Save the change using JSON serialization
       await storage.saveChange(change);
 
-      // Close and reopen storage to test persistence
       await CRDTHive.closeAllBoxes();
       final reopened = await CRDTHive.openChangeStorageForDocument(documentId);
 
-      // Retrieve all changes from storage
       final changes = reopened.getChanges();
 
-      // Verify the change was saved and loaded correctly
-      expect(
-        changes.length,
-        equals(1),
-        reason: 'Should have exactly one change after reopening',
-      );
-      expect(
-        changes.first.payload,
-        equals(payload),
-        reason: 'Payload should be deserialized identically via JSON',
-      );
-      expect(
-        changes.first.payload['k1'],
-        equals('v1'),
-        reason: 'Top-level string values should be preserved',
-      );
-      expect(
-        changes.first.payload['nested'],
-        equals({'a': 1, 'b': true}),
-        reason: 'Nested maps should be preserved',
-      );
-      expect(
-        changes.first.payload['list'],
-        equals([1, 2, 3]),
-        reason: 'Lists should be preserved',
-      );
-      expect(
-        reopened.isEmpty,
-        isFalse,
-        reason: 'Storage should not be empty after loading',
-      );
-      expect(
-        reopened.isNotEmpty,
-        isTrue,
-        reason: 'isNotEmpty should return true',
-      );
-      expect(
-        changes.first.id,
-        equals(id),
-        reason: 'Change ID should be preserved',
-      );
-      expect(
-        changes.first.author,
-        equals(id.peerId),
-        reason: 'Author should be preserved',
-      );
+      expect(changes.length, equals(1));
+      expect(changes.first.payloadBytes(), equals(payloadBytes));
+      expect(reopened.isEmpty, isFalse);
+      expect(reopened.isNotEmpty, isTrue);
+      expect(changes.first.id, equals(id));
+      expect(changes.first.author, equals(id.peerId));
     });
 
     test('CRDTChangeStorage deleteChanges and clear', () async {
@@ -119,11 +72,11 @@ void main() {
           PeerId.generate(),
           HybridLogicalClock(l: l, c: c),
         );
-        return Change.fromPayload(
+        return Change.fromPayloadBytes(
           id: id,
           deps: {},
           author: id.peerId,
-          payload: {'value': '$l.$c'},
+          payloadBytes: Uint8List.fromList(utf8.encode('$l.$c')),
         );
       }
 

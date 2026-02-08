@@ -245,17 +245,30 @@ void main() {
         ..insert(5, ' World')
         ..insert(11, '!');
 
-      // Each character should have a unique ID
+      // Each character should have a unique ID (decode body from bytes).
+      // Insert operation body layout:
+      //   leftOrigin (FugueElementID) | rightOrigin (FugueElementID) |
+      //   itemsCount (varint) | [item.id (FugueElementID), textLen, text]*
       final changes = doc.exportChanges();
-      final ids =
-          // ignore: avoid_dynamic_calls test
-          changes
-              .map(
-                (c) => (c.payload['items'] as List<Map<String, dynamic>>)
-                    .map((i) => (i['id'] as Map<String, dynamic>)['counter']),
-              )
-              .expand((x) => x)
-              .toList();
+      final ids = <int>[];
+      for (final c in changes) {
+        final env = OperationEnvelopeCodec.decode(c.payloadBytes());
+        final body = c.payloadBytes().sublist(env.bodyOffset);
+        var offset = 0;
+        final leftRec = FugueElementID.readFromBytes(body, offset: offset);
+        offset = leftRec.nextOffset;
+        final rightRec = FugueElementID.readFromBytes(body, offset: offset);
+        offset = rightRec.nextOffset;
+        final countRec = UVarint.read(body, offset: offset);
+        offset = countRec.nextOffset;
+        for (var i = 0; i < countRec.value; i += 1) {
+          final idRec = FugueElementID.readFromBytes(body, offset: offset);
+          offset = idRec.nextOffset;
+          ids.add(idRec.value.counter!);
+          final textLenRec = UVarint.read(body, offset: offset);
+          offset = textLenRec.nextOffset + textLenRec.value;
+        }
+      }
       expect(ids, equals([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]));
     });
 
@@ -642,6 +655,27 @@ void main() {
         expect(ultimateValue, contains('[peer1]'));
         expect(ultimateValue, contains('[peer2]'));
         expect(ultimateValue, contains('[peer3]'));
+      },
+    );
+
+    test(
+      'insert/delete/update operations round-trip through binary payload',
+      () {
+        final doc = CRDTDocument(peerId: PeerId.generate());
+        final handler = CRDTFugueTextHandler(doc, 'text-bin')
+          ..insert(0, 'Hello')
+          ..delete(1, 1)
+          ..update(0, 'X');
+
+        final doc2 = CRDTDocument(peerId: PeerId.generate());
+        final handler2 = CRDTFugueTextHandler(doc2, 'text-bin');
+        doc2.binaryImportChanges(doc.binaryExportChanges());
+        expect(handler2.value, equals(handler.value));
+
+        // Each operation must successfully decode from its payload bytes
+        // (otherwise `operations()` would have thrown).
+        final changeCount = doc.exportChanges().length;
+        expect(changeCount, greaterThanOrEqualTo(3));
       },
     );
 

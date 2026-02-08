@@ -1,4 +1,5 @@
 import 'dart:math';
+import 'dart:typed_data';
 
 /// A regular expression for validating [PeerId]s
 final peerIdRegex = RegExp(
@@ -46,6 +47,35 @@ class PeerId with Comparable<PeerId> {
 
     return PeerId._(value);
   }
+
+  /// Decodes a [PeerId] from a 16-byte buffer.
+  ///
+  /// Throws a [RangeError] if the buffer is too short.
+  factory PeerId.fromUint8List(
+    Uint8List bytes, {
+    int offset = 0,
+  }) {
+    if (offset < 0 || offset + 16 > bytes.length) {
+      throw RangeError.range(offset, 0, bytes.length - 16, 'offset');
+    }
+
+    final hex = StringBuffer();
+    for (var i = 0; i < 16; i += 1) {
+      final v = bytes[offset + i];
+      hex
+        ..write(_hexChar(v >> 4))
+        ..write(_hexChar(v & 0x0F));
+    }
+
+    final s = hex.toString();
+    final uuid = '${s.substring(0, 8)}-'
+        '${s.substring(8, 12)}-'
+        '${s.substring(12, 16)}-'
+        '${s.substring(16, 20)}-'
+        '${s.substring(20, 32)}';
+
+    return PeerId.parse(uuid);
+  }
   static final Random _random = Random.secure();
 
   /// The unique identifier string
@@ -56,6 +86,56 @@ class PeerId with Comparable<PeerId> {
   /// Returns a string representation of this [PeerId]
   @override
   String toString() => id;
+
+  /// Encodes this [PeerId] into a new 16-byte buffer.
+  Uint8List toUint8List() {
+    final out = Uint8List(16);
+
+    var outIndex = 0;
+    var i = 0;
+    while (i < id.length) {
+      final ch = id.codeUnitAt(i);
+      if (ch == 0x2D) {
+        i += 1;
+        continue;
+      }
+
+      if (i + 1 >= id.length) {
+        throw FormatException('Invalid PeerId: $id');
+      }
+
+      final hi = _hexValue(id.codeUnitAt(i));
+      final lo = _hexValue(id.codeUnitAt(i + 1));
+      out[outIndex] = (hi << 4) | lo;
+
+      outIndex += 1;
+      i += 2;
+    }
+
+    if (outIndex != 16) {
+      throw FormatException('Invalid PeerId: $id');
+    }
+
+    return out;
+  }
+
+  static int _hexValue(int codeUnit) {
+    if (codeUnit >= 0x30 && codeUnit <= 0x39) {
+      return codeUnit - 0x30;
+    }
+    if (codeUnit >= 0x61 && codeUnit <= 0x66) {
+      return codeUnit - 0x61 + 10;
+    }
+    if (codeUnit >= 0x41 && codeUnit <= 0x46) {
+      return codeUnit - 0x41 + 10;
+    }
+    throw const FormatException('Invalid hex digit');
+  }
+
+  static String _hexChar(int value) {
+    const digits = '0123456789abcdef';
+    return digits[value & 0x0F];
+  }
 
   /// Compares two [PeerId]s for equality
   @override

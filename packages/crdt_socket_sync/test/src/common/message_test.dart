@@ -8,6 +8,10 @@ import 'package:test/test.dart';
 import '../utils/mock_handler.dart';
 import '../utils/mock_operation.dart';
 
+String _encCh(Change c) => base64Encode(c.toBytes());
+String _encVV(VersionVector vv) => base64Encode(vv.toBytes());
+String _encSnap(Snapshot s) => base64Encode(s.toBytes());
+
 void main() {
   group('MessageType', () {
     test('should have all expected message types', () {
@@ -42,14 +46,15 @@ void main() {
     });
 
     test('Message.change() should create ChangeMessage', () {
+      final peer = PeerId.generate();
       final change = Change(
         id: OperationId(
-          PeerId.generate(),
+          peer,
           HybridLogicalClock(l: 1, c: 1),
         ),
         operation: operation,
         deps: {},
-        author: PeerId.generate(),
+        author: peer,
       );
 
       final message = Message.change(
@@ -185,7 +190,7 @@ void main() {
       expect(json['type'], MessageType.handshakeRequest.index);
       expect(json['documentId'], documentId);
       expect(json['author'], author.toString());
-      expect(json['versionVector'], versionVector.toJson());
+      expect(json['versionVector'], _encVV(versionVector));
     });
 
     test('should deserialize from JSON correctly', () {
@@ -193,7 +198,7 @@ void main() {
         'type': MessageType.handshakeRequest.index,
         'documentId': documentId,
         'author': author.toString(),
-        'versionVector': versionVector.toJson(),
+        'versionVector': _encVV(versionVector),
       };
 
       final message = HandshakeRequestMessage.fromJson(json);
@@ -239,18 +244,20 @@ void main() {
         data: {'key': 'value'},
       );
 
+      final peer1 = PeerId.generate();
+      final peer2 = PeerId.generate();
       changes = [
         Change(
-          id: OperationId(PeerId.generate(), HybridLogicalClock(l: 1, c: 1)),
+          id: OperationId(peer1, HybridLogicalClock(l: 1, c: 1)),
           operation: operation,
           deps: {},
-          author: PeerId.generate(),
+          author: peer1,
         ),
         Change(
-          id: OperationId(PeerId.generate(), HybridLogicalClock(l: 1, c: 2)),
+          id: OperationId(peer2, HybridLogicalClock(l: 1, c: 2)),
           operation: operation,
           deps: {},
-          author: PeerId.generate(),
+          author: peer2,
         ),
       ];
     });
@@ -313,20 +320,20 @@ void main() {
 
       expect(json['type'], MessageType.handshakeResponse.index);
       expect(json['documentId'], documentId);
-      expect(json['snapshot'], snapshot.toJson());
-      expect(json['changes'], changes.map((c) => c.toJson()).toList());
+      expect(json['snapshot'], _encSnap(snapshot));
+      expect(json['changes'], changes.map(_encCh).toList());
       expect(json['sessionId'], '5a2e1d55-74c7-453b-9256-1c5ffe3283b5');
-      expect(json['versionVector'], snapshot.versionVector.toJson());
+      expect(json['versionVector'], _encVV(snapshot.versionVector));
     });
 
     test('should deserialize from JSON correctly', () {
       final json = {
         'type': MessageType.handshakeResponse.index,
         'documentId': documentId,
-        'snapshot': snapshot.toJson(),
-        'changes': changes.map((c) => c.toJson()).toList(),
+        'snapshot': _encSnap(snapshot),
+        'changes': changes.map(_encCh).toList(),
         'sessionId': '5a2e1d55-74c7-453b-9256-1c5ffe3283b5',
-        'versionVector': snapshot.versionVector.toJson(),
+        'versionVector': _encVV(snapshot.versionVector),
       };
 
       final message = HandshakeResponseMessage.fromJson(json);
@@ -345,7 +352,7 @@ void main() {
         'snapshot': null,
         'changes': null,
         'sessionId': '5a2e1d55-74c7-453b-9256-1c5ffe3283b5',
-        'versionVector': emptyVV.toJson(),
+        'versionVector': _encVV(emptyVV),
       };
 
       final message = HandshakeResponseMessage.fromJson(json);
@@ -367,11 +374,12 @@ void main() {
       handler = MockHandler(doc);
       operation = MockOperation(handler);
 
+      final peer = PeerId.generate();
       change = Change(
-        id: OperationId(PeerId.generate(), HybridLogicalClock(l: 1, c: 1)),
+        id: OperationId(peer, HybridLogicalClock(l: 1, c: 1)),
         operation: operation,
         deps: {},
-        author: PeerId.generate(),
+        author: peer,
       );
     });
 
@@ -396,14 +404,14 @@ void main() {
 
       expect(json['type'], MessageType.change.index);
       expect(json['documentId'], documentId);
-      expect(json['change'], change.toJson());
+      expect(json['change'], _encCh(change));
     });
 
     test('should deserialize from JSON correctly', () {
       final json = {
         'type': MessageType.change.index,
         'documentId': documentId,
-        'change': change.toJson(),
+        'change': _encCh(change),
       };
 
       final message = ChangeMessage.fromJson(json);
@@ -446,16 +454,16 @@ void main() {
 
       expect(json['type'], MessageType.documentStatus.index);
       expect(json['documentId'], documentId);
-      expect(json['snapshot'], snapshot.toJson());
-      expect(json['versionVector'], snapshot.versionVector.toJson());
+      expect(json['snapshot'], _encSnap(snapshot));
+      expect(json['versionVector'], _encVV(snapshot.versionVector));
     });
 
     test('should deserialize from JSON correctly', () {
       final json = {
         'type': MessageType.documentStatus.index,
         'documentId': documentId,
-        'snapshot': snapshot.toJson(),
-        'versionVector': snapshot.versionVector.toJson(),
+        'snapshot': _encSnap(snapshot),
+        'versionVector': _encVV(snapshot.versionVector),
       };
 
       final message = DocumentStatusMessage.fromJson(json);
@@ -493,14 +501,14 @@ void main() {
 
       expect(json['type'], MessageType.documentStatusRequest.index);
       expect(json['documentId'], documentId);
-      expect(json['versionVector'], versionVector.toJson());
+      expect(json['versionVector'], _encVV(versionVector));
     });
 
     test('should deserialize from JSON correctly', () {
       final json = {
         'type': MessageType.documentStatusRequest.index,
         'documentId': documentId,
-        'versionVector': versionVector.toJson(),
+        'versionVector': _encVV(versionVector),
       };
 
       final message = DocumentStatusRequestMessage.fromJson(json);
@@ -727,7 +735,7 @@ void main() {
         'type': MessageType.handshakeRequest.index,
         'documentId': 'test-doc',
         'author': PeerId.generate().toString(),
-        'versionVector': {'vector': <String, dynamic>{}},
+        'versionVector': _encVV(VersionVector({})),
       };
 
       final message = Message.fromJson(json);
@@ -744,7 +752,7 @@ void main() {
         'snapshot': null,
         'changes': null,
         'sessionId': '5a2e1d55-74c7-453b-9256-1c5ffe3283b5',
-        'versionVector': emptyVV.toJson(),
+        'versionVector': _encVV(emptyVV),
       };
 
       final message = Message.fromJson(json);
@@ -754,16 +762,17 @@ void main() {
     });
 
     test('should deserialize ChangeMessage', () {
+      final peer = PeerId.generate();
       final change = Change(
-        id: OperationId(PeerId.generate(), HybridLogicalClock(l: 1, c: 1)),
+        id: OperationId(peer, HybridLogicalClock(l: 1, c: 1)),
         operation: operation,
         deps: {},
-        author: PeerId.generate(),
+        author: peer,
       );
       final json = {
         'type': MessageType.change.index,
         'documentId': 'test-doc',
-        'change': change.toJson(),
+        'change': _encCh(change),
       };
 
       final message = Message.fromJson(json);
@@ -782,8 +791,8 @@ void main() {
       final json = {
         'type': MessageType.documentStatus.index,
         'documentId': 'test-doc',
-        'snapshot': snapshot.toJson(),
-        'versionVector': snapshot.versionVector.toJson(),
+        'snapshot': _encSnap(snapshot),
+        'versionVector': _encVV(snapshot.versionVector),
       };
 
       final message = Message.fromJson(json);
@@ -868,11 +877,12 @@ void main() {
       final handler = MockHandler(doc);
       final operation = MockOperation(handler);
 
+      final peer = PeerId.generate();
       final change = Change(
-        id: OperationId(PeerId.generate(), HybridLogicalClock(l: 1, c: 1)),
+        id: OperationId(peer, HybridLogicalClock(l: 1, c: 1)),
         operation: operation,
         deps: {},
-        author: PeerId.generate(),
+        author: peer,
       );
       final original = ChangeMessage(
         documentId: 'complex-doc-id',

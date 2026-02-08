@@ -1,4 +1,8 @@
+import 'dart:typed_data';
+
 import 'package:crdt_lf/crdt_lf.dart';
+import 'package:crdt_lf/src/binary/varint.dart';
+import 'package:hlc_dart/hlc_dart.dart';
 
 part 'operation.dart';
 
@@ -28,16 +32,24 @@ part 'operation.dart';
 /// ```
 class CRDTORMapHandler<K, V> extends Handler<ORMapState<K, V>> {
   /// Creates a new CRDT OR-MapHandler with the given document and ID
-  CRDTORMapHandler(super.doc, this._id);
+  CRDTORMapHandler(
+    super.doc,
+    this._id, {
+    ValueCodec<K>? keyCodec,
+    ValueCodec<V>? valueCodec,
+  })  : _keyCodec = keyCodec ?? JsonValueCodec<K>(),
+        _valueCodec = valueCodec ?? JsonValueCodec<V>();
 
   final String _id;
+  final ValueCodec<K> _keyCodec;
+  final ValueCodec<V> _valueCodec;
 
   @override
   String get id => _id;
 
   @override
   late final OperationFactory operationFactory =
-      _ORMapOperationFactory<K, V>(this).fromPayload;
+      _ORMapOperationFactory<K, V>(this).fromBytes;
 
   /// Obtains a unique tag for an operation
   ORHandlerTag _tag() {

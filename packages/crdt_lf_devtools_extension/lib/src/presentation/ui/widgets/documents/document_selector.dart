@@ -22,15 +22,14 @@ class DocumentSelector extends StatelessWidget {
           onChanged: (index) {
             _onChanged(context, index);
           },
-          items:
-              documents
-                  .map(
-                    (e) => DropdownMenuItem<int>(
-                      value: e.id,
-                      child: Text(e.id.toString()),
-                    ),
-                  )
-                  .toList(),
+          items: documents
+              .map(
+                (e) => DropdownMenuItem<int>(
+                  value: e.id,
+                  child: Text(e.displayLabel),
+                ),
+              )
+              .toList(),
         );
       },
     );

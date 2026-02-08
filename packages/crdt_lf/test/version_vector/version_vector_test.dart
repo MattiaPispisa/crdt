@@ -270,5 +270,27 @@ void main() {
       final mostOldest = versionVector.mostOldest();
       expect(mostOldest, equals(HybridLogicalClock(l: 1, c: 1)));
     });
+
+    test('toBytes/fromBytes round-trip with multiple entries', () {
+      final p1 = PeerId.generate();
+      final p2 = PeerId.generate();
+      final p3 = PeerId.generate();
+      final vv = VersionVector({
+        p1: HybridLogicalClock(l: 1, c: 0),
+        p2: HybridLogicalClock(l: 42, c: 7),
+        p3: HybridLogicalClock(l: 1000, c: 999),
+      });
+
+      final decoded = VersionVector.fromBytes(vv.toBytes());
+      expect(decoded[p1], equals(vv[p1]));
+      expect(decoded[p2], equals(vv[p2]));
+      expect(decoded[p3], equals(vv[p3]));
+    });
+
+    test('toBytes/fromBytes round-trip with an empty vector', () {
+      final vv = VersionVector({});
+      final decoded = VersionVector.fromBytes(vv.toBytes());
+      expect(decoded.isEmpty, isTrue);
+    });
   });
 }

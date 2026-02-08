@@ -25,10 +25,10 @@ class Frontiers {
     return Set.from(_frontiers);
   }
 
-  /// Updates the [Frontiers] with a new [OperationId]
+  /// Updates the [Frontiers] with a new operation id.
   ///
-  /// The [OperationId]'s dependencies are removed from the [Frontiers],
-  /// and the [OperationId] itself is added to the [Frontiers].
+  /// The dependencies are removed from the [Frontiers],
+  /// and the new operation is added to the [Frontiers].
   void update({
     required OperationId newOperationId,
     required Set<OperationId> oldDependencies,

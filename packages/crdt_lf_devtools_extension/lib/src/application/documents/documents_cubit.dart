@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:bloc/bloc.dart';
 import 'package:crdt_lf_devtools_extension/src/application/devtools/eval.dart';
@@ -10,15 +11,15 @@ import 'package:vm_service/vm_service.dart';
 part 'documents_state.dart';
 
 class DocumentsCubitArgs {
-  final VmService service;
+  const DocumentsCubitArgs({required this.service});
 
-  DocumentsCubitArgs({required this.service});
+  final VmService service;
 }
 
-/// Cubit for loading the documents from the VM service
+/// Cubit loading the list of CRDT documents tracked by the target app.
 ///
-/// This cubit listens for document created events and loads the documents from the
-/// VM service.
+/// Refreshes whenever a new document is registered on the target side
+/// (event `crdt_lf:documents:created`) or when [load] is invoked manually.
 class DocumentsCubit extends Cubit<DocumentsState> {
   DocumentsCubit(this.args) : super(DocumentsState.initial()) {
     load();
@@ -37,65 +38,37 @@ class DocumentsCubit extends Cubit<DocumentsState> {
     });
   }
 
-  void load() async {
+  Future<void> load() async {
     if (state.loading) {
       return;
     }
 
-    try {
-      emit(
-        DocumentsState(
-          loading: true,
-          documents: state.documents,
-          error: null,
-          selectedDocument: state.selectedDocument,
-        ),
-      );
+    emit(state.copyWith(loading: true, error: null));
 
+    try {
       _alive?.dispose();
       _alive = Disposable();
 
       final eval = CrdtLfEvalExtension.setup(args.service);
+      final json = await eval.evalDocumentsJson(_alive);
+      final list = (jsonDecode(json) as List<dynamic>)
+          .map((e) => TrackedDocument.fromJson(e as Map<String, dynamic>))
+          .toList();
 
-      final result = await eval.evalDocuments(_alive);
-
-      final trackedDocuments = await Future.wait(
-        result.elements!.cast<InstanceRef>().map((element) async {
-          final trackedDocumentInstance = await eval.safeGetInstance(
-            element,
-            _alive,
-          );
-          final idField = trackedDocumentInstance.fields!.firstWhere(
-            (f) => f.name == 'id',
-          );
-          final documentField = trackedDocumentInstance.fields!.firstWhere(
-            (f) => f.name == 'document',
-          );
-
-          final responses = await Future.wait([
-            eval.safeGetInstance(idField.value, _alive),
-            eval.safeGetInstance(documentField.value, _alive),
-          ]);
-
-          return TrackedDocument(
-            id: int.parse(responses[0].valueAsString!),
-            document: responses[1],
-          );
-        }),
-      );
-
-      var selectedDocument = state.selectedDocument;
-
-      if (state.selectedDocument != null &&
-          !_exists(trackedDocuments, selectedDocument!.id)) {
-        selectedDocument = null;
+      // Preserve selection across reloads when possible.
+      TrackedDocument? selected = state.selectedDocument;
+      if (selected != null) {
+        selected = list.cast<TrackedDocument?>().firstWhere(
+              (d) => d?.id == selected!.id,
+              orElse: () => null,
+            );
       }
 
       emit(
         DocumentsState(
           loading: false,
-          documents: trackedDocuments,
-          selectedDocument: selectedDocument,
+          documents: list,
+          selectedDocument: selected,
           error: null,
         ),
       );
@@ -103,36 +76,35 @@ class DocumentsCubit extends Cubit<DocumentsState> {
       emit(
         DocumentsState(
           loading: false,
+          documents: state.documents,
+          selectedDocument: state.selectedDocument,
           error: e.toString(),
-          documents: null,
-          selectedDocument: null,
         ),
       );
     }
-  }
-
-  bool _exists(List<TrackedDocument>? documents, int documentId) {
-    return documents?.any((d) => d.id == documentId) ?? false;
   }
 
   void select(int? id) {
     if (id == null) {
-      return emit(
+      emit(
         DocumentsState(
-          selectedDocument: null,
           documents: state.documents,
+          selectedDocument: null,
           loading: state.loading,
           error: state.error,
         ),
       );
+      return;
     }
 
-    if (_exists(state.documents, id)) {
-      emit(
-        state.copyWith(
-          selectedDocument: state.documents?.firstWhere((d) => d.id == id),
-        ),
-      );
+    final docs = state.documents;
+    if (docs == null) return;
+    final match = docs.cast<TrackedDocument?>().firstWhere(
+          (d) => d?.id == id,
+          orElse: () => null,
+        );
+    if (match != null) {
+      emit(state.copyWith(selectedDocument: match));
     }
   }
 

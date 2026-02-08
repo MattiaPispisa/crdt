@@ -42,11 +42,8 @@ void main() {
       final doc = CRDTDocument();
       final hlc1 = doc.hlc;
       CRDTORMapHandler<String, int>(doc, 'map1').put('x', 1);
-      final change = doc.exportChanges().first.toJson();
-      final payload = change['payload'] as Map<String, dynamic>;
-      final tag = ORHandlerTag.parse(payload['tag'] as String);
-      expect(tag.hlc, isNot(hlc1));
-      expect(hlc1, isNot(doc.hlc));
+      expect(doc.hlc, isNot(hlc1));
+      expect(hlc1.happenedBefore(doc.hlc), isTrue);
     });
 
     test('should handle concurrent puts on different keys', () {

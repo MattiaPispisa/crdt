@@ -1,3 +1,6 @@
+import 'dart:convert';
+import 'dart:typed_data';
+
 import 'package:crdt_lf/crdt_lf.dart';
 part 'operation.dart';
 
@@ -35,7 +38,7 @@ class CRDTFugueTextHandler extends Handler<FugueTextState> {
 
   @override
   late final OperationFactory operationFactory =
-      _FugueTextOperationFactory(this).fromPayload;
+      _FugueTextOperationFactory(this).fromBytes;
 
   /// Inserts [text] at position [index]
   void insert(int index, String text) {

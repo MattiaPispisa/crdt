@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:crdt_lf/crdt_lf.dart';
 
 /// A test handler for CRDT operations
@@ -18,7 +20,13 @@ class TestHandler extends Handler<dynamic> {
 
   @override
   OperationFactory get operationFactory =>
-      (payload) => TestOperation.fromHandler(this);
+      (operationBytes) {
+        final env = OperationEnvelopeCodec.decode(operationBytes);
+        if (env.handlerId != id) {
+          return null;
+        }
+        return TestOperation.fromHandler(this);
+      };
 }
 
 /// A test operation for CRDT operations
@@ -37,7 +45,8 @@ class TestOperation extends Operation {
     );
   }
 
-  /// Return the payload of the operation
   @override
-  Map<String, dynamic> toPayload() => {'id': id};
+  Uint8List toBodyBytes() {
+    return Uint8List(0);
+  }
 }

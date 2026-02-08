@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:benchmark_harness/benchmark_harness.dart';
 import 'package:crdt_lf/crdt_lf.dart';
 
@@ -10,7 +12,7 @@ class SerializationBenchmark extends BenchmarkBase {
           emitter: const CustomEmitter(),
         );
 
-  late final List<int> binaryChanges;
+  late final Uint8List binaryChanges;
   late final CRDTDocument doc;
 
   @override

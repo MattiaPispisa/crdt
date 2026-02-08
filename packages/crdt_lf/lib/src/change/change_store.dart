@@ -8,21 +8,31 @@ class ChangeStore {
   ChangeStore._(this._changes);
 
   /// Creates a new empty ChangeStore
-  factory ChangeStore.empty() => ChangeStore._(<OperationId, Change>{});
+  factory ChangeStore.empty() => ChangeStore._(<OpIdKey, Change>{});
 
-  /// The changes stored in this [ChangeStore], indexed by their [OperationId]
-  final Map<OperationId, Change> _changes;
+  /// The changes stored in this [ChangeStore], indexed by their packed id.
+  final Map<OpIdKey, Change> _changes;
 
   /// Gets the number of changes in the store
   int get changeCount => _changes.length;
 
   /// Checks if the store contains a change with the given [id]
   bool containsChange(OperationId id) {
-    return _changes.containsKey(id);
+    return containsChangeKey(_keyFromOperationId(id));
   }
 
   /// Gets a change by its [id]
   Change? getChange(OperationId id) {
+    return getChangeByKey(_keyFromOperationId(id));
+  }
+
+  /// Checks if the store contains a change with the given packed [id].
+  bool containsChangeKey(OpIdKey id) {
+    return _changes.containsKey(id);
+  }
+
+  /// Gets a change by its packed [id].
+  Change? getChangeByKey(OpIdKey id) {
     return _changes[id];
   }
 
@@ -31,11 +41,12 @@ class ChangeStore {
   /// If a change with the same [Change.id] already exists, it is not replaced.
   /// Returns `true` if the [change] was added, `false` if it already existed.
   bool addChange(Change change) {
-    if (_changes.containsKey(change.id)) {
+    final key = change.key;
+    if (_changes.containsKey(key)) {
       return false;
     }
 
-    _changes[change.id] = change;
+    _changes[key] = change;
     return true;
   }
 
@@ -57,14 +68,16 @@ class ChangeStore {
     }
 
     // Get all ancestors of the version
-    final ancestors = <OperationId>{};
+    final ancestors = <OpIdKey>{};
     for (final id in version) {
-      ancestors.addAll(dag.getAncestors(id));
+      for (final anc in dag.getAncestors(id)) {
+        ancestors.add(_keyFromOperationId(anc));
+      }
     }
 
     // Return all changes that are not ancestors of the version
     return _changes.values
-        .where((change) => !ancestors.contains(change.id))
+        .where((change) => !ancestors.contains(change.key))
         .toList();
   }
 
@@ -96,13 +109,13 @@ class ChangeStore {
   ///
   /// Returns the number of [Change]s that were removed.
   int prune(VersionVector version) {
-    final removedIds = <OperationId>{};
+    final removedIds = <OpIdKey>{};
 
     // 1. identify and remove old changes
     var ids = _changes.keys.toList();
     for (final id in ids) {
-      final clock = version[id.peerId];
-      if (clock != null && id.hlc.compareTo(clock) <= 0) {
+      final clock = version[id.peerId()];
+      if (clock != null && id.hlc().compareTo(clock) <= 0) {
         _changes.remove(id);
         removedIds.add(id);
       }
@@ -117,16 +130,27 @@ class ChangeStore {
     for (final id in ids) {
       // Remove dependencies to pruned changes
       _changes.update(id, (change) {
-        return Change.fromPayload(
+        final deps = <OperationId>{};
+        for (final depKey in change.depsKeys()) {
+          if (!removedIds.contains(depKey)) {
+            deps.add(depKey.toOperationId());
+          }
+        }
+
+        return Change.fromPayloadBytes(
           id: change.id,
-          payload: change.payload,
-          deps: Set.from(change.deps)..removeWhere(removedIds.contains),
+          payloadBytes: change.payloadBytes(),
+          deps: deps,
           author: change.author,
         );
       });
     }
 
     return removedIds.length;
+  }
+
+  static OpIdKey _keyFromOperationId(OperationId id) {
+    return OpIdKey.copy(id.toUint8List());
   }
 
   /// Clears all [Change]s from the store

@@ -1,7 +1,10 @@
 import 'dart:async';
-import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:crdt_lf/crdt_lf.dart';
+import 'package:crdt_lf/src/binary/change_codec.dart';
+import 'package:crdt_lf/src/operation/id.dart';
+import 'package:crdt_lf/src/binary/varint.dart';
 import 'package:crdt_lf/src/compound/compound.dart';
 import 'package:crdt_lf/src/devtools/devtools.dart' as devtools;
 import 'package:crdt_lf/src/transaction/transaction_manager.dart';
@@ -288,7 +291,15 @@ class CRDTDocument extends BaseCRDTDocument {
   }
 
   @override
-  Set<OperationId> get version => _dag.frontiers;
+  Set<OperationId> get version {
+    return _dag.frontiers;
+  }
+
+  /// All handlers currently registered on this document, keyed by their id.
+  ///
+  /// Intended for read-only introspection (devtools, debugging). Do not mutate.
+  Map<String, Handler<dynamic>> get registeredHandlers =>
+      Map.unmodifiable(_handlers);
 
   /// A stream controller for locally generated changes.
   final StreamController<Change> _localChangesController;
@@ -463,7 +474,7 @@ class CRDTDocument extends BaseCRDTDocument {
   /// (some of its dependencies are not present in the DAG).
   bool _internalApplyChange(Change change) {
     // Check if the change already exists
-    if (_changeStore.containsChange(change.id)) {
+    if (_changeStore.containsChangeKey(change.key)) {
       return false;
     }
 
@@ -770,27 +781,64 @@ class CRDTDocument extends BaseCRDTDocument {
     return _changeStore.exportChangesNewerThan(versionVector);
   }
 
-  /// Exports [Change]s as a binary format
+  /// Exports [Change]s as a compact binary format.
   ///
-  /// Returns a binary representation of the [Change]s
-  /// that can be imported by another document.
-  List<int> binaryExportChanges({Set<OperationId>? from}) {
+  /// This is a versioned, length-prefixed format designed for efficient
+  /// synchronization and reduced memory overhead.
+  Uint8List binaryExportChanges({Set<OperationId>? from}) {
     final changes = exportChanges(from: from);
-    final jsonChanges = changes.map((c) => c.toJson()).toList();
-    return utf8.encode(jsonEncode(jsonChanges));
+    final blobs = <Uint8List>[];
+
+    for (final change in changes) {
+      final out = BytesBuilder(copy: false);
+      UVarint.write(change.depsCount, out);
+      out.add(change.bytes);
+      blobs.add(out.toBytes());
+    }
+
+    return ChangeCodec.encodeBlobs(blobs);
   }
 
-  /// Imports [Change]s from a binary format
+  /// Imports [Change]s from the compact binary format.
   ///
   /// Returns the number of [Change]s that were applied.
-  int binaryImportChanges(List<int> data) {
+  int binaryImportChanges(Uint8List data) {
     _ensureNotDisposed('binaryImportChanges');
 
-    final jsonStr = utf8.decode(data);
-    final jsonList = jsonDecode(jsonStr) as List;
-    final changes = jsonList
-        .map((j) => Change.fromJson(j as Map<String, dynamic>))
-        .toList();
+    final blobs = ChangeCodec.decodeBlobs(data);
+    final changes = <Change>[];
+
+    for (final blob in blobs) {
+      final depsCountRec = UVarint.read(blob, offset: 0);
+      final depsCount = depsCountRec.value;
+      final bytes = Uint8List.sublistView(blob, depsCountRec.nextOffset);
+
+      if (bytes.length < OperationId.byteLength) {
+        throw const FormatException('Truncated change bytes');
+      }
+
+      final id = OperationId.fromUint8List(bytes, offset: 0);
+      final deps = <OperationId>{};
+
+      var cursor = OperationId.byteLength;
+      for (var i = 0; i < depsCount; i += 1) {
+        if (cursor + OperationId.byteLength > bytes.length) {
+          throw const FormatException('Truncated change dependencies');
+        }
+        deps.add(OperationId.fromUint8List(bytes, offset: cursor));
+        cursor += OperationId.byteLength;
+      }
+
+      final payloadBytes = Uint8List.sublistView(bytes, cursor);
+      changes.add(
+        Change.fromPayloadBytes(
+          id: id,
+          deps: deps,
+          author: id.peerId,
+          payloadBytes: payloadBytes,
+        ),
+      );
+    }
 
     return importChanges(changes);
   }
@@ -862,7 +910,7 @@ class CRDTDocument extends BaseCRDTDocument {
     final newChanges = <Change>[];
 
     for (final change in changes) {
-      final clock = versionVector[change.id.peerId];
+      final clock = versionVector[change.author];
       if (clock == null || change.hlc.compareTo(clock) > 0) {
         newChanges.add(change);
       }
@@ -1348,7 +1396,7 @@ mixin SnapshotProvider on DocumentConsumer {
 extension _HandlerHelper on Handler<dynamic> {
   /// Whether the handler is affected by the given [change]
   bool _isAffectedByChange(Change change) {
-    final id = Operation.handlerIdFrom(payload: change.payload);
-    return id == this.id;
+    final env = OperationEnvelopeCodec.decode(change.payloadBytes());
+    return env.handlerId == id;
   }
 }

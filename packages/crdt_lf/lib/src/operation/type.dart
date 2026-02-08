@@ -5,12 +5,51 @@ const _delete = 'delete';
 const _update = 'update';
 const _availableOperations = {_insert, _delete, _update};
 
-/// Available operation on data for CRDT
+/// Available operation on data for CRDT.
+///
+/// Also holds the binary kind constants used in the operation envelope (u8).
 class OperationType {
   OperationType._({
     required this.handler,
     required this.type,
   });
+
+  /// Binary kind value for insert (u8 in the operation envelope).
+  static const int kindInsert = 0;
+
+  /// Binary kind value for delete (u8 in the operation envelope).
+  static const int kindDelete = 1;
+
+  /// Binary kind value for update (u8 in the operation envelope).
+  static const int kindUpdate = 2;
+
+  /// Binary kind value for this operation type (0=insert, 1=delete, 2=update).
+  int get kind {
+    if (type == _insert) {
+      return kindInsert;
+    }
+    if (type == _delete) {
+      return kindDelete;
+    }
+    if (type == _update) {
+      return kindUpdate;
+    }
+    throw FormatException('Unknown operation type: $type');
+  }
+
+  /// Returns the type name string for a binary [kind] value.
+  static String typeNameFromKind(int kind) {
+    if (kind == kindInsert) {
+      return _insert;
+    }
+    if (kind == kindDelete) {
+      return _delete;
+    }
+    if (kind == kindUpdate) {
+      return _update;
+    }
+    throw FormatException('Unknown operation kind: $kind');
+  }
 
   /// Insert operation
   factory OperationType.insert(Handler<dynamic> handler) {

@@ -53,7 +53,7 @@ void main() {
     test('createChange creates and applies a new change', () {
       final change = doc.createChange(operation);
       expect(change.author, equals(author));
-      expect(change.payload, equals(operation.toPayload()));
+      expect(change.payloadBytes(), equals(operation.toBytes()));
       expect(doc.version, equals({change.id}));
     });
 
@@ -232,22 +232,22 @@ void main() {
     });
 
     test('importChanges handles cycles gracefully', () {
+      final id1 = OperationId(author, HybridLogicalClock(l: 1, c: 1));
+      final id2 = OperationId(author, HybridLogicalClock(l: 1, c: 2));
+
       final change1 = Change(
-        id: OperationId(author, HybridLogicalClock(l: 1, c: 1)),
+        id: id1,
         operation: operation,
-        deps: {},
+        deps: {id2},
         author: author,
       );
 
       final change2 = Change(
-        id: OperationId(author, HybridLogicalClock(l: 1, c: 2)),
+        id: id2,
         operation: operation,
-        deps: {change1.id},
+        deps: {id1},
         author: author,
       );
-
-      // Create a cycle
-      change1.deps.add(change2.id);
 
       expect(
         () => doc.importChanges([change1, change2]),

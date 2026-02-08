@@ -47,11 +47,12 @@ void main() {
     group('applyChange', () {
       test('should apply change to document successfully', () {
         final operation = MockOperation(handler);
+        final peer = PeerId.generate();
         final change = Change(
-          id: OperationId(PeerId.generate(), HybridLogicalClock(l: 1, c: 1)),
+          id: OperationId(peer, HybridLogicalClock(l: 1, c: 1)),
           operation: operation,
           deps: {},
-          author: PeerId.generate(),
+          author: peer,
         );
 
         expect(() => syncManager.applyChange(change), returnsNormally);
@@ -59,13 +60,14 @@ void main() {
 
       test('should request missing changes when apply fails', () async {
         final operation = MockOperation(handler);
+        final peer = PeerId.generate();
         final nonReadyChange = Change(
-          id: OperationId(PeerId.generate(), HybridLogicalClock(l: 2, c: 1)),
+          id: OperationId(peer, HybridLogicalClock(l: 2, c: 1)),
           operation: operation,
           deps: {
             OperationId(PeerId.generate(), HybridLogicalClock(l: 1, c: 1)),
           },
-          author: PeerId.generate(),
+          author: peer,
         );
 
         // This should trigger the error handling path
@@ -86,13 +88,14 @@ void main() {
         mockClient.setShouldThrowOnSendMessage = true;
 
         final operation = MockOperation(handler);
+        final peer = PeerId.generate();
         final nonReadyChange = Change(
-          id: OperationId(PeerId.generate(), HybridLogicalClock(l: 2, c: 1)),
+          id: OperationId(peer, HybridLogicalClock(l: 2, c: 1)),
           operation: operation,
           deps: {
             OperationId(PeerId.generate(), HybridLogicalClock(l: 1, c: 1)),
           },
-          author: PeerId.generate(),
+          author: peer,
         );
 
         // This should not throw even when the client throws
@@ -108,18 +111,20 @@ void main() {
     group('applyChanges', () {
       test('should apply multiple changes successfully', () {
         final operation = MockOperation(handler);
+        final peer1 = PeerId.generate();
+        final peer2 = PeerId.generate();
         final changes = [
           Change(
-            id: OperationId(PeerId.generate(), HybridLogicalClock(l: 1, c: 1)),
+            id: OperationId(peer1, HybridLogicalClock(l: 1, c: 1)),
             operation: operation,
             deps: {},
-            author: PeerId.generate(),
+            author: peer1,
           ),
           Change(
-            id: OperationId(PeerId.generate(), HybridLogicalClock(l: 1, c: 2)),
+            id: OperationId(peer2, HybridLogicalClock(l: 1, c: 2)),
             operation: operation,
             deps: {},
-            author: PeerId.generate(),
+            author: peer2,
           ),
         ];
 
@@ -136,29 +141,32 @@ void main() {
         mockClient.clearSentMessages();
 
         final operation = MockOperation(handler);
+        final peerA = PeerId.generate();
+        final peerB = PeerId.generate();
+        final peerC = PeerId.generate();
         final validChange = Change(
-          id: OperationId(PeerId.generate(), HybridLogicalClock(l: 1, c: 1)),
+          id: OperationId(peerA, HybridLogicalClock(l: 1, c: 1)),
           operation: operation,
           deps: {},
-          author: PeerId.generate(),
+          author: peerA,
         );
 
         final invalidChange = Change(
-          id: OperationId(PeerId.generate(), HybridLogicalClock(l: 2, c: 1)),
+          id: OperationId(peerB, HybridLogicalClock(l: 2, c: 1)),
           operation: operation,
           deps: {
             OperationId(PeerId.generate(), HybridLogicalClock(l: 1, c: 2)),
           },
-          author: PeerId.generate(),
+          author: peerB,
         );
 
         final secondInvalidChange = Change(
-          id: OperationId(PeerId.generate(), HybridLogicalClock(l: 3, c: 1)),
+          id: OperationId(peerC, HybridLogicalClock(l: 3, c: 1)),
           operation: operation,
           deps: {
             OperationId(PeerId.generate(), HybridLogicalClock(l: 1, c: 2)),
           },
-          author: PeerId.generate(),
+          author: peerC,
         );
 
         syncManager.applyChanges([
@@ -543,11 +551,12 @@ void main() {
 
       test('should handle change with empty dependencies', () {
         final operation = MockOperation(handler);
+        final peer = PeerId.generate();
         final change = Change(
-          id: OperationId(PeerId.generate(), HybridLogicalClock(l: 1, c: 1)),
+          id: OperationId(peer, HybridLogicalClock(l: 1, c: 1)),
           operation: operation,
           deps: {},
-          author: PeerId.generate(),
+          author: peer,
         );
 
         expect(() => syncManager.applyChange(change), returnsNormally);
@@ -558,13 +567,14 @@ void main() {
 
         // Try to apply an invalid change
         final operation = MockOperation(handler);
+        final peer = PeerId.generate();
         final invalidChange = Change(
-          id: OperationId(PeerId.generate(), HybridLogicalClock(l: 2, c: 1)),
+          id: OperationId(peer, HybridLogicalClock(l: 2, c: 1)),
           operation: operation,
           deps: {
             OperationId(PeerId.generate(), HybridLogicalClock(l: 1, c: 2)),
           },
-          author: PeerId.generate(),
+          author: peer,
         );
 
         syncManager.applyChange(invalidChange);

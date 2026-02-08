@@ -1,3 +1,13 @@
+## [1.1.0](https://github.com/MattiaPispisa/crdt/tree/hlc_dart-v1.1.0/packages/hlc)
+**Date:** 
+
+[compare to previous release](https://github.com/MattiaPispisa/crdt/compare/hlc_dart-v1.0.0...hlc_dart-v1.1.0)
+
+
+### Added
+
+- Added encoder/decoder for 8-byte buffer for desktop and web interoperability
+
 ## [1.0.0](https://github.com/MattiaPispisa/crdt/tree/hlc_dart-v1.0.0/packages/hlc)
 **Date:** 2025-08-18
 

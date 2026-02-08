@@ -1,4 +1,8 @@
+import 'dart:typed_data';
+
 import 'package:crdt_lf/crdt_lf.dart';
+import 'package:crdt_lf/src/binary/varint.dart';
+import 'package:hlc_dart/hlc_dart.dart';
 
 part 'operation.dart';
 
@@ -27,16 +31,21 @@ part 'operation.dart';
 /// ```
 class CRDTORSetHandler<T> extends Handler<ORSetState<T>> {
   /// Creates a new CRDT OR-SetHandler with the given document and ID
-  CRDTORSetHandler(super.doc, this._id);
+  CRDTORSetHandler(
+    super.doc,
+    this._id, {
+    ValueCodec<T>? valueCodec,
+  }) : _valueCodec = valueCodec ?? JsonValueCodec<T>();
 
   final String _id;
+  final ValueCodec<T> _valueCodec;
 
   @override
   String get id => _id;
 
   @override
   late final OperationFactory operationFactory =
-      _ORSetOperationFactory<T>(this).fromPayload;
+      _ORSetOperationFactory<T>(this).fromBytes;
 
   // TODO(mattia): create a reusable class for a tag related
   // to peerId and hlc. Can be shared with the ORMapHandler.

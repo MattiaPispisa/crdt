@@ -27,11 +27,8 @@ class CrdtLfExtensionBody extends StatelessWidget {
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
         useMaterial3: true,
       ),
-      home: Bootstrap(
-        child: Scaffold(
-          appBar: AppBar(title: const Text('CRDT LF Document Visualizer')),
-          body: const DocumentChangesWidget(),
-        ),
+      home: const Bootstrap(
+        child: Scaffold(body: DocumentChangesWidget()),
       ),
     );
   }

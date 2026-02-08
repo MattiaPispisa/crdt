@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:crdt_lf/crdt_lf.dart';
 import 'package:crdt_lf/src/transaction/transaction_manager.dart';
 import 'package:hlc_dart/hlc_dart.dart';
@@ -58,11 +60,12 @@ void main() {
       manager.requestUpdate();
 
       final dummyOperation = TestOperation('dummy');
+      final peerId = PeerId.generate();
       final dummyChange = Change(
-        id: OperationId(PeerId.generate(), HybridLogicalClock(l: 1, c: 1)),
+        id: OperationId(peerId, HybridLogicalClock(l: 1, c: 1)),
         operation: dummyOperation,
         deps: {},
-        author: PeerId.generate(),
+        author: peerId,
       );
 
       manager
@@ -100,11 +103,12 @@ void main() {
 
     test('handleChanges outside transaction emits immediately', () {
       var updateCount = 0;
+      final peerId = PeerId.generate();
       final change = Change(
-        id: OperationId(PeerId.generate(), HybridLogicalClock(l: 1, c: 1)),
+        id: OperationId(peerId, HybridLogicalClock(l: 1, c: 1)),
         operation: TestOperation('dummy'),
         deps: {},
-        author: PeerId.generate(),
+        author: peerId,
       );
       TransactionManager(
         flushWork: (_, __, ___) => updateCount++,
@@ -130,4 +134,9 @@ class TestOperation extends Operation {
           type: OperationType.fromPayload('Test:update'),
           id: handlerId,
         );
+
+  @override
+  Uint8List toBodyBytes() {
+    return Uint8List(0);
+  }
 }

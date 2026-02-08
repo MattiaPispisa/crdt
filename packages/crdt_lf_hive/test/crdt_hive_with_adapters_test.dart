@@ -1,4 +1,7 @@
+import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
+
 import 'package:crdt_lf/crdt_lf.dart';
 import 'package:crdt_lf_hive/crdt_lf_hive.dart';
 import 'package:hive/hive.dart';
@@ -49,8 +52,16 @@ void main() {
         document = CRDTDocument(peerId: PeerId.parse(documentId))
           ..localChanges.listen(changesToSave.add);
 
-        list = CRDTListHandler<ListValue>(document, 'list');
-        map = CRDTMapHandler<ObjectValue>(document, 'map');
+        list = CRDTListHandler<ListValue>(
+          document,
+          'list',
+          valueCodec: const ListValueCodec(),
+        );
+        map = CRDTMapHandler<ObjectValue>(
+          document,
+          'map',
+          valueCodec: const ObjectValueCodec(),
+        );
         text = CRDTTextHandler(document, 'text');
         fugueText = CRDTFugueTextHandler(document, 'fugueText');
         orSet = CRDTORSetHandler(document, 'orSet');
@@ -171,7 +182,11 @@ void main() {
           ..importChanges(changeStorage.getChanges());
 
         // Verify CRDTListHandler data was correctly deserialized
-        final newList = CRDTListHandler<ListValue>(newDocument, 'list');
+        final newList = CRDTListHandler<ListValue>(
+          newDocument,
+          'list',
+          valueCodec: const ListValueCodec(),
+        );
         expect(
           newList.length,
           equals(2),
@@ -190,7 +205,11 @@ void main() {
 
         // Verify CRDTMapHandler data with custom objects was correctly
         // deserialized
-        final newMap = CRDTMapHandler<ObjectValue>(newDocument, 'map');
+        final newMap = CRDTMapHandler<ObjectValue>(
+          newDocument,
+          'map',
+          valueCodec: const ObjectValueCodec(),
+        );
         expect(
           newMap.value,
           {
@@ -443,7 +462,11 @@ void main() {
           ..importSnapshot(snapshot3);
 
         // Verify list data from snapshot
-        final newList = CRDTListHandler<ListValue>(newDocument, 'list');
+        final newList = CRDTListHandler<ListValue>(
+          newDocument,
+          'list',
+          valueCodec: const ListValueCodec(),
+        );
         expect(
           newList.length,
           equals(2),
@@ -461,7 +484,11 @@ void main() {
         );
 
         // Verify map data with custom objects from snapshot
-        final newMap = CRDTMapHandler<ObjectValue>(newDocument, 'map');
+        final newMap = CRDTMapHandler<ObjectValue>(
+          newDocument,
+          'map',
+          valueCodec: const ObjectValueCodec(),
+        );
         expect(
           newMap.value,
           {
@@ -766,8 +793,16 @@ void main() {
           peerId: PeerId.parse('32f8d819-8b64-4cf2-a239-e2e6414b19ef'),
         )..localChanges.listen(changesToSaveDocument2.add);
 
-        list1 = CRDTListHandler<ListValue>(document1, 'list');
-        list2 = CRDTListHandler<ListValue>(document2, 'list');
+        list1 = CRDTListHandler<ListValue>(
+          document1,
+          'list',
+          valueCodec: const ListValueCodec(),
+        );
+        list2 = CRDTListHandler<ListValue>(
+          document2,
+          'list',
+          valueCodec: const ListValueCodec(),
+        );
       });
 
       test('should handle multiple documents independently', () async {
@@ -809,8 +844,16 @@ void main() {
         final newDocument2 = CRDTDocument(peerId: PeerId.generate())
           ..importChanges(changeStorage2.getChanges());
 
-        final newList1 = CRDTListHandler<ListValue>(newDocument1, 'list');
-        final newList2 = CRDTListHandler<ListValue>(newDocument2, 'list');
+        final newList1 = CRDTListHandler<ListValue>(
+          newDocument1,
+          'list',
+          valueCodec: const ListValueCodec(),
+        );
+        final newList2 = CRDTListHandler<ListValue>(
+          newDocument2,
+          'list',
+          valueCodec: const ListValueCodec(),
+        );
 
         expect(newList1.length, equals(2));
         expect(newList2.length, equals(2));
@@ -845,11 +888,11 @@ void main() {
         // Write something and verify persistence across reopen
         final id =
             OperationId(PeerId.generate(), HybridLogicalClock(l: 1, c: 1));
-        final change = Change.fromPayload(
+        final change = Change.fromPayloadBytes(
           id: id,
           deps: {},
           author: id.peerId,
-          payload: {'x': 1},
+          payloadBytes: Uint8List.fromList(const [1, 2, 3]),
         );
         await storage.changes.saveChange(change);
 
@@ -891,11 +934,11 @@ void main() {
 
         final id =
             OperationId(PeerId.generate(), HybridLogicalClock(l: 5, c: 1));
-        final change = Change.fromPayload(
+        final change = Change.fromPayloadBytes(
           id: id,
           deps: {},
           author: id.peerId,
-          payload: {'p': true},
+          payloadBytes: Uint8List.fromList(const [9, 8, 7]),
         );
         await changes.saveChange(change);
         await snapshots.saveSnapshot(
@@ -995,6 +1038,42 @@ class ObjectValue {
 
   @override
   String toString() => 'MapValue(height: $height, width: $width)';
+}
+
+class ListValueCodec implements ValueCodec<ListValue> {
+  const ListValueCodec();
+
+  @override
+  Uint8List encode(ListValue value) =>
+      Uint8List.fromList(utf8.encode(value.value));
+
+  @override
+  ListValue decode(Uint8List bytes) => ListValue(value: utf8.decode(bytes));
+}
+
+class ObjectValueCodec implements ValueCodec<ObjectValue> {
+  const ObjectValueCodec();
+
+  @override
+  Uint8List encode(ObjectValue value) {
+    final out = ByteData(32)
+      ..setFloat64(0, value.height)
+      ..setFloat64(8, value.width)
+      ..setFloat64(16, value.offsetX)
+      ..setFloat64(24, value.offsetY);
+    return out.buffer.asUint8List();
+  }
+
+  @override
+  ObjectValue decode(Uint8List bytes) {
+    final view = ByteData.sublistView(bytes);
+    return ObjectValue(
+      height: view.getFloat64(0),
+      width: view.getFloat64(8),
+      offsetX: view.getFloat64(16),
+      offsetY: view.getFloat64(24),
+    );
+  }
 }
 
 class ListValueAdapter extends TypeAdapter<ListValue> {

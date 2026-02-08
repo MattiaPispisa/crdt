@@ -22,7 +22,7 @@ scripts:
   test:
     name: Test
     description: Run the tests
-    run: dart test
+    run: dart test && dart test -p chrome
     exec:
       concurrency: 1
   analyze:

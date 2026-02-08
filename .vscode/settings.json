@@ -1,12 +1,16 @@
 {
-  "dart.flutterSdkPath": ".fvm/versions/3.35.2",
+  "dart.flutterSdkPath": ".fvm/versions/stable",
   "cSpell.words": [
     "crdt",
+    "CRDTLF",
     "CRDTOR",
     "endtemplate",
     "inplace",
     "Kleppmann",
     "pubspec",
+    "uvarint",
+    "Varint",
+    "varints",
     "Weidner"
   ]
 }
