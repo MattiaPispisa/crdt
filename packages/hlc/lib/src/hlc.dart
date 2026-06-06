@@ -269,8 +269,12 @@ class HybridLogicalClock with Comparable<HybridLogicalClock> {
   Uint8List toUint8List() {
     final bytes = Uint8List(8);
 
-    final lHigh = (_l / 4294967296).floor();
-    final lLow = _l % 4294967296;
+    // Integer division avoids float conversion on native Dart.
+    // Using ~/ and % instead of (/ n).floor() keeps the result identical
+    // on both VM and Web (dart2js integers are 53-bit, so ~/ 2^32 is safe
+    // for any realistic timestamp value).
+    final lHigh = _l ~/ 0x100000000;
+    final lLow = _l % 0x100000000;
 
     bytes[0] = (lHigh >> 8) & 0xFF;
     bytes[1] = lHigh & 0xFF;

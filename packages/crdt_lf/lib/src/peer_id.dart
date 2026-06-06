@@ -59,22 +59,28 @@ class PeerId with Comparable<PeerId> {
       throw RangeError.range(offset, 0, bytes.length - 16, 'offset');
     }
 
-    final hex = StringBuffer();
+    // Build the UUID string directly into a fixed-length char code array,
+    // avoiding StringBuffer + multiple substring() calls.
+    // Layout: "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" (36 chars)
+    final codes = Uint16List(36)
+      ..[8] = 0x2D // '-'
+      ..[13] = 0x2D
+      ..[18] = 0x2D
+      ..[23] = 0x2D;
+
+    // Fill hex nibbles, skipping the four dash positions.
+    const hexDigits = '0123456789abcdef';
+    var out = 0;
     for (var i = 0; i < 16; i += 1) {
+      if (out == 8 || out == 13 || out == 18 || out == 23) out++;
       final v = bytes[offset + i];
-      hex
-        ..write(_hexChar(v >> 4))
-        ..write(_hexChar(v & 0x0F));
+      codes[out++] = hexDigits.codeUnitAt(v >> 4);
+      if (out == 8 || out == 13 || out == 18 || out == 23) out++;
+      codes[out++] = hexDigits.codeUnitAt(v & 0x0F);
     }
 
-    final s = hex.toString();
-    final uuid = '${s.substring(0, 8)}-'
-        '${s.substring(8, 12)}-'
-        '${s.substring(12, 16)}-'
-        '${s.substring(16, 20)}-'
-        '${s.substring(20, 32)}';
-
-    return PeerId.parse(uuid);
+    // Bytes produced by toUint8List() are already a valid UUID v4 — skip regex.
+    return PeerId._(String.fromCharCodes(codes));
   }
   static final Random _random = Random.secure();
 
@@ -130,11 +136,6 @@ class PeerId with Comparable<PeerId> {
       return codeUnit - 0x41 + 10;
     }
     throw const FormatException('Invalid hex digit');
-  }
-
-  static String _hexChar(int value) {
-    const digits = '0123456789abcdef';
-    return digits[value & 0x0F];
   }
 
   /// Compares two [PeerId]s for equality
