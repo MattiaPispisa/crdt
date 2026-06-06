@@ -489,13 +489,11 @@ class CRDTDocument extends BaseCRDTDocument {
     final dagDependencies = change.deps.where(_dag.containsNode).toSet();
     _dag.addNode(change.id, dagDependencies);
 
-    // Update the clock only for remote changes
-    if (change.author != _peerId) {
-      _clock.receiveEvent(
-        DateTime.now().millisecondsSinceEpoch,
-        change.hlc,
-      );
-    }
+    // Always advance the clock past the applied change.
+    _clock.receiveEvent(
+      DateTime.now().millisecondsSinceEpoch,
+      change.hlc,
+    );
 
     return true;
   }
