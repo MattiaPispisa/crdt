@@ -1,6 +1,25 @@
-## [Unreleased]
+## [0.4.0](https://github.com/MattiaPispisa/crdt/tree/crdt_socket_sync-v0.4.0/packages/crdt_socket_sync)
+**Date:** 2026-06-06
+
+[compare to previous release](https://github.com/MattiaPispisa/crdt/compare/crdt_socket_sync-v0.3.0...crdt_socket_sync-v0.4.0)
+
+**Breaking changes**
+
+Wire protocol changed: `Change`, `Snapshot`, and `VersionVector` payloads are now transmitted as base64-encoded binary strings instead of JSON objects. Servers and clients running different versions are not compatible.
+
+Affected message fields:
+- `HandshakeRequestMessage.versionVector` — was `Map<String, dynamic>`, now a base64 string.
+- `HandshakeResponseMessage.versionVector`, `.snapshot`, `.changes[*]` — same change.
+- `ChangeMessage.change` — was `Map<String, dynamic>`, now a base64 string.
+- `ChangesMessage.changes[*]` — was `List<Map>`, now `List<String>` (base64).
+- `DocumentStatusMessage.versionVector`, `.snapshot`, `.changes[*]` — same change.
+- `DocumentStatusRequestMessage.versionVector` — same change.
+
+Updated `crdt_lf` dependency to `^3.0.0`.
 
 ### Changed
+
+- All binary payloads in messages now use the compact binary format from `crdt_lf` 3.0.0 (`Change.toBytes`, `VersionVector.toBytes`, `Snapshot.toBytes`), reducing message size and eliminating JSON parsing overhead on the hot path.
 - chore: improved documentation adding design diagrams
 - chore: update tests
 

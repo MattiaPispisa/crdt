@@ -1,3 +1,18 @@
+## [1.0.0](https://github.com/MattiaPispisa/crdt/tree/crdt_lf_hive-v1.0.0/packages/crdt_lf_hive)
+**Date:** 2026-06-06
+
+[compare to previous release](https://github.com/MattiaPispisa/crdt/compare/crdt_lf_hive-v0.2.3...crdt_lf_hive-v1.0.0)
+
+**Breaking changes**
+
+- `ChangeAdapter` no longer accepts the `useDataAdapter` parameter, which is removed. The adapter now always serializes `Change` objects via `Change.toBytes()` / `Change.fromBytes()`.
+- **Storage format changed**: existing Hive boxes written with `0.x` adapters are not readable by this version. A one-time migration (read with old adapter, write with new) is required before upgrading.
+- Updated `crdt_lf` dependency to `^3.0.0`.
+
+### Changed
+
+- `ChangeAdapter` rewritten to use the compact binary format introduced by `crdt_lf` 3.0.0. Stores a raw byte list per change instead of JSON-encoded fields, reducing storage size and eliminating runtime JSON parsing.
+
 ## [0.2.3](https://github.com/MattiaPispisa/crdt/tree/crdt_lf_hive-v0.2.3/packages/crdt_lf_hive)
 **Date:** 2025-11-22
 
