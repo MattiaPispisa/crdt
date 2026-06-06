@@ -2,7 +2,7 @@ import 'package:hlc_dart/hlc_dart.dart';
 import 'package:test/test.dart';
 
 void main() {
-  bool isWeb = identical(0, 0.0);
+  const isWeb = identical(0, 0.0);
   group('HybridLogicalClock', () {
     test('throws AssertionError for negative logical time', () {
       expect(
