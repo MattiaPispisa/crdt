@@ -55,12 +55,6 @@ class _ORMapPutOperation<K, V> extends Operation {
     );
   }
 
-  final K key;
-  final V value;
-  final ORHandlerTag tag;
-  final ValueCodec<K> keyCodec;
-  final ValueCodec<V> valueCodec;
-
   factory _ORMapPutOperation.fromBodyBytes(
     CRDTORMapHandler<K, V> handler,
     Uint8List body,
@@ -107,6 +101,12 @@ class _ORMapPutOperation<K, V> extends Operation {
     );
   }
 
+  final K key;
+  final V value;
+  final ORHandlerTag tag;
+  final ValueCodec<K> keyCodec;
+  final ValueCodec<V> valueCodec;
+
   @override
   Uint8List toBodyBytes() {
     final out = BytesBuilder(copy: false);
@@ -117,10 +117,10 @@ class _ORMapPutOperation<K, V> extends Operation {
 
     final valueBytes = valueCodec.encode(value);
     UVarint.write(valueBytes.length, out);
-    out.add(valueBytes);
-
-    out.add(tag.peerId.toUint8List());
-    out.add(tag.hlc.toUint8List());
+    out
+      ..add(valueBytes)
+      ..add(tag.peerId.toUint8List())
+      ..add(tag.hlc.toUint8List());
 
     return out.toBytes();
   }
@@ -162,11 +162,6 @@ class _ORMapRemoveOperation<K, V> extends Operation {
       keyCodec: handler._keyCodec,
     );
   }
-
-  final K key;
-  final Set<ORHandlerTag> tags;
-  final bool removeAll;
-  final ValueCodec<K> keyCodec;
 
   factory _ORMapRemoveOperation.fromBodyBytes(
     CRDTORMapHandler<K, V> handler,
@@ -213,6 +208,11 @@ class _ORMapRemoveOperation<K, V> extends Operation {
       keyCodec: handler._keyCodec,
     );
   }
+
+  final K key;
+  final Set<ORHandlerTag> tags;
+  final bool removeAll;
+  final ValueCodec<K> keyCodec;
 
   @override
   Uint8List toBodyBytes() {

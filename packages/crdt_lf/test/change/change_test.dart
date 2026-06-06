@@ -63,7 +63,10 @@ void main() {
       expect(roundTripped.id, equals(change.id));
       expect(roundTripped.deps, equals(change.deps));
       expect(roundTripped.author, equals(change.author));
-      expect(roundTripped.payloadBytes().length, equals(change.payloadBytes().length));
+      expect(
+        roundTripped.payloadBytes().length,
+        equals(change.payloadBytes().length),
+      );
     });
 
     test('compares different changes correctly', () {
@@ -74,8 +77,7 @@ void main() {
         author: author,
       );
 
-      final id2 =
-          OperationId.parse('b7353649-1b52-43b0-9dbc-a843e3308cb0@1.3');
+      final id2 = OperationId.parse('b7353649-1b52-43b0-9dbc-a843e3308cb0@1.3');
       final change2 = Change(
         id: id2,
         operation: operation,

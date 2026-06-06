@@ -50,10 +50,6 @@ class _ListInsertOperation<T> extends Operation {
     );
   }
 
-  final int index;
-  final T value;
-  final ValueCodec<T> valueCodec;
-
   factory _ListInsertOperation.fromBodyBytes(
     CRDTListHandler<T> handler,
     Uint8List body,
@@ -81,6 +77,10 @@ class _ListInsertOperation<T> extends Operation {
       valueCodec: handler._valueCodec,
     );
   }
+
+  final int index;
+  final T value;
+  final ValueCodec<T> valueCodec;
 
   @override
   Map<String, dynamic> toPayload() => {
@@ -121,9 +121,6 @@ class _ListDeleteOperation<T> extends Operation {
     );
   }
 
-  final int index;
-  final int count;
-
   factory _ListDeleteOperation.fromBodyBytes(
     CRDTListHandler<T> handler,
     Uint8List body,
@@ -141,6 +138,9 @@ class _ListDeleteOperation<T> extends Operation {
       count: count,
     );
   }
+
+  final int index;
+  final int count;
 
   @override
   Map<String, dynamic> toPayload() => {
@@ -181,10 +181,6 @@ class _ListUpdateOperation<T> extends Operation {
     );
   }
 
-  final int index;
-  final T value;
-  final ValueCodec<T> valueCodec;
-
   factory _ListUpdateOperation.fromBodyBytes(
     CRDTListHandler<T> handler,
     Uint8List body,
@@ -212,6 +208,10 @@ class _ListUpdateOperation<T> extends Operation {
       valueCodec: handler._valueCodec,
     );
   }
+
+  final int index;
+  final T value;
+  final ValueCodec<T> valueCodec;
 
   @override
   Map<String, dynamic> toPayload() => {

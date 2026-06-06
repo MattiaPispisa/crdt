@@ -1,7 +1,6 @@
 import 'dart:typed_data';
 
 import 'package:crdt_lf/crdt_lf.dart';
-import 'package:crdt_lf/src/binary/varint.dart';
 import 'package:hlc_dart/hlc_dart.dart';
 
 part 'operation.dart';

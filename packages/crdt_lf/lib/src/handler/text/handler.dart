@@ -3,7 +3,6 @@ import 'dart:math';
 import 'dart:typed_data';
 
 import 'package:crdt_lf/crdt_lf.dart';
-import 'package:crdt_lf/src/binary/varint.dart';
 
 part 'operation.dart';
 
@@ -36,7 +35,8 @@ class CRDTTextHandler extends Handler<String> {
   String get id => _id;
 
   @override
-  late final OperationFactory operationFactory = _TextOperationFactory(this).fromBytes;
+  late final OperationFactory operationFactory =
+      _TextOperationFactory(this).fromBytes;
 
   /// Inserts [text] at the specified [index]
   void insert(int index, String text) {

@@ -91,9 +91,10 @@ class _ORSetAddOperation<T> extends Operation {
     final out = BytesBuilder(copy: false);
     final valueBytes = valueCodec.encode(value);
     UVarint.write(valueBytes.length, out);
-    out.add(valueBytes);
-    out.add(tag.peerId.toUint8List());
-    out.add(tag.hlc.toUint8List());
+    out
+      ..add(valueBytes)
+      ..add(tag.peerId.toUint8List())
+      ..add(tag.hlc.toUint8List());
     return out.toBytes();
   }
 
@@ -118,27 +119,6 @@ class _ORSetRemoveOperation<T> extends Operation {
     required super.id,
     required super.type,
   });
-
-  factory _ORSetRemoveOperation.fromHandler(
-    CRDTORSetHandler<T> handler, {
-    required T value,
-    required Set<ORHandlerTag> tags,
-  }) {
-    return _ORSetRemoveOperation<T>(
-      id: handler.id,
-      type: OperationType.delete(handler),
-      value: value,
-      tags: Set<ORHandlerTag>.from(tags),
-      removeAll: tags.isEmpty,
-      valueCodec: handler._valueCodec,
-    );
-  }
-
-  final T value;
-  final Set<ORHandlerTag> tags;
-  final bool removeAll;
-  final ValueCodec<T> valueCodec;
-
   factory _ORSetRemoveOperation.fromBodyBytes(
     CRDTORSetHandler<T> handler,
     Uint8List body,
@@ -184,6 +164,26 @@ class _ORSetRemoveOperation<T> extends Operation {
       valueCodec: handler._valueCodec,
     );
   }
+
+  factory _ORSetRemoveOperation.fromHandler(
+    CRDTORSetHandler<T> handler, {
+    required T value,
+    required Set<ORHandlerTag> tags,
+  }) {
+    return _ORSetRemoveOperation<T>(
+      id: handler.id,
+      type: OperationType.delete(handler),
+      value: value,
+      tags: Set<ORHandlerTag>.from(tags),
+      removeAll: tags.isEmpty,
+      valueCodec: handler._valueCodec,
+    );
+  }
+
+  final T value;
+  final Set<ORHandlerTag> tags;
+  final bool removeAll;
+  final ValueCodec<T> valueCodec;
 
   @override
   Uint8List toBodyBytes() {

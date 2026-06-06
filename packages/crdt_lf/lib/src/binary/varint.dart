@@ -15,9 +15,26 @@ class UVarintResult {
 
 /// Unsigned Varint encoding utilities.
 ///
-/// This codec implements base-128 varints (LEB128-style)
-/// for non-negative integers.
-/// It is optimized for compact representation of small numbers.
+/// This codec implements base-128 varints (LEB128-style) for non-negative
+/// integers. It is optimized for compact representation of small numbers,
+/// which is the common case for lengths and counters in binary formats.
+///
+/// Instead of always using 4 or 8 bytes per integer, varints use only as many
+/// bytes as needed:
+///
+/// | Value range  | Fixed u32 | Varint |
+/// |--------------|-----------|--------|
+/// | 0 – 127      | 4 bytes   | 1 byte |
+/// | 128 – 16 383 | 4 bytes   | 2 bytes|
+/// | 16 384 – 2 M | 4 bytes   | 3 bytes|
+///
+/// Each byte uses 7 bits for data and 1 bit (the most-significant bit) as a
+/// continuation flag: `1` means more bytes follow, `0` means this is the last
+/// byte.
+///
+/// Used throughout the binary format to encode lengths and counters
+/// (e.g. number of deps in a change, number of entries in a version vector,
+/// text length in an element ID).
 class UVarint {
   UVarint._();
 

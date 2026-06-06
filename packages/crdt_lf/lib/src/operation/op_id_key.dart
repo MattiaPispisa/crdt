@@ -4,8 +4,6 @@ import 'package:crdt_lf/src/operation/id.dart';
 import 'package:crdt_lf/src/peer_id.dart';
 import 'package:hlc_dart/hlc_dart.dart';
 
-// TODO(mattia): non web friendly
-
 /// Packed key representation for an [OperationId].
 ///
 /// This avoids allocating `PeerId`/`HybridLogicalClock`/`OperationId` objects

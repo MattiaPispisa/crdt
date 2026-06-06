@@ -5,12 +5,11 @@ void main() {
   group('Operation bytes', () {
     test('CRDTTextHandler operation bytes roundtrip', () {
       final doc = CRDTDocument(peerId: PeerId.generate());
-      final text = CRDTTextHandler(doc, 'text');
-
-      text.insert(0, 'Hello');
-      text.insert(5, ' World');
-      text.delete(5, 1);
-      text.update(0, 'h');
+      final text = CRDTTextHandler(doc, 'text')
+        ..insert(0, 'Hello')
+        ..insert(5, ' World')
+        ..delete(5, 1)
+        ..update(0, 'h');
 
       final changes = doc.exportChanges().sorted();
 
@@ -26,4 +25,3 @@ void main() {
     });
   });
 }
-
