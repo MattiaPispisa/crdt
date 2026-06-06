@@ -465,6 +465,12 @@ void main() {
         expect(doc3.exportChanges(), hasLength(0));
         expect(listDoc2.value, ['Hello', 'World']);
         expect(listDoc3.value, ['Hello', 'World']);
+
+        // import with snapshot only (no changes argument)
+        final doc5 = CRDTDocument();
+        CRDTListHandler<String>(doc5, 'list');
+        expect(doc5.import(snapshot: snapshot), equals(0));
+        expect(doc5.exportChanges(), isEmpty);
       });
     });
 
@@ -593,6 +599,12 @@ void main() {
       final imported1 = doc2.importSnapshot(snapshot1);
       expect(imported1, isFalse);
       expect(doc1.importSnapshot(snapshot1), isFalse);
+
+      // import() with an older snapshot should return -1
+      final doc3 = CRDTDocument(peerId: author2);
+      CRDTListHandler<String>(doc3, 'list');
+      doc3.importSnapshot(snapshot2);
+      expect(doc3.import(snapshot: snapshot1), equals(-1));
     });
 
     test('should prune changes when merge snapshot is called', () {
@@ -855,12 +867,22 @@ void main() {
 
     group('handlers', () {
       test('should throw on double registration', () {
+        expect(doc.registeredHandlers, contains('test-handler'));
         expect(
           () {
             return TestHandler(doc);
           },
           throwsA(isA<HandlerAlreadyRegisteredException>()),
         );
+      });
+
+      test('default incrementCachedState invalidates cache', () {
+        final freshDoc = CRDTDocument();
+        final freshHandler = TestHandler(freshDoc);
+        freshHandler.updateCachedState('primed');
+        expect(freshHandler.cachedState, isNotNull);
+        freshDoc.registerOperation(TestOperation.fromHandler(freshHandler));
+        expect(freshHandler.cachedState, isNull);
       });
 
       test('should not increment cached without a cached state', () {

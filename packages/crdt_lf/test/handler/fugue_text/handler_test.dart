@@ -745,6 +745,25 @@ void main() {
       );
 
       test(
+        'scans update-op newNodeIDs during lazy counter init',
+        () {
+          final peerId = PeerId.generate();
+          final doc1 = CRDTDocument(peerId: peerId);
+          final h1 = CRDTFugueTextHandler(doc1, 'text');
+          h1.insert(0, 'Hello'); // counters 0-4
+          h1.update(0, 'X'); // newNodeID counter 5 for peerId
+          final exported = doc1.binaryExportChanges();
+
+          final doc2 = CRDTDocument(peerId: peerId);
+          final h2 = CRDTFugueTextHandler(doc2, 'text');
+          doc2.binaryImportChanges(exported);
+          expect(h2.value, h1.value);
+          expect(() => h2.insert(h2.length, '!'), returnsNormally);
+          expect(h2.value, endsWith('!'));
+        },
+      );
+
+      test(
         'counter continues correctly after re-init (no duplicate IDs)',
         () {
           final peerId = PeerId.generate();
@@ -771,6 +790,27 @@ void main() {
         },
       );
     });
+
+    test(
+      'takeSnapshot computes state from scratch when handler cache is null',
+      () {
+        final doc1 = CRDTDocument();
+        final h1 = CRDTFugueTextHandler(doc1, 'text');
+        h1.insert(0, 'Hi');
+
+        final doc2 = CRDTDocument();
+        final h2 = CRDTFugueTextHandler(doc2, 'text');
+        h2.insert(0, 'start'); // populates h2's cache
+
+        // Importing an external change for the same handler invalidates h2's cache
+        doc2.importChanges(doc1.exportChanges());
+
+        // h2's cache is null; takeSnapshot must recompute it from scratch
+        final snap = doc2.takeSnapshot();
+        expect(snap.data['text'], isNotNull);
+        expect(h2.value, contains('Hi'));
+      },
+    );
 
     test(
       'should handle late import that sorts between existing changes',
