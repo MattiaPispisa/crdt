@@ -6,7 +6,8 @@ import 'package:hlc_dart/hlc_dart.dart';
 
 import '../common/custom_emitter.dart';
 
-/// Benchmarks OpIdKey.view() creation — zero-copy key wrapping an existing buffer.
+/// Benchmarks OpIdKey.view() creation
+/// — zero-copy key wrapping an existing buffer.
 class OpIdKeyViewBenchmark extends BenchmarkBase {
   OpIdKeyViewBenchmark()
       : super('OpIdKey view x100k', emitter: const CustomEmitter());
@@ -18,8 +19,8 @@ class OpIdKeyViewBenchmark extends BenchmarkBase {
     final peer = PeerId.generate();
     buffers = List.generate(
       100000,
-      (i) => OperationId(peer, HybridLogicalClock(l: i + 1, c: 0))
-          .toUint8List(),
+      (i) =>
+          OperationId(peer, HybridLogicalClock(l: i + 1, c: 0)).toUint8List(),
     );
   }
 
@@ -31,7 +32,8 @@ class OpIdKeyViewBenchmark extends BenchmarkBase {
   }
 }
 
-/// Benchmarks OpIdKey.hashCode — FNV-1a over 24 bytes (cached after first call).
+/// Benchmarks OpIdKey.hashCode
+/// — FNV-1a over 24 bytes (cached after first call).
 class OpIdKeyHashBenchmark extends BenchmarkBase {
   OpIdKeyHashBenchmark()
       : super('OpIdKey hashCode x100k (cold)', emitter: const CustomEmitter());
@@ -57,7 +59,8 @@ class OpIdKeyHashBenchmark extends BenchmarkBase {
   }
 }
 
-/// Benchmarks Map<OpIdKey, int> lookup — representative of ChangeStore access.
+/// Benchmarks Map\<OpIdKey, int> lookup
+/// — representative of ChangeStore access.
 class OpIdKeyMapLookupBenchmark extends BenchmarkBase {
   OpIdKeyMapLookupBenchmark()
       : super('OpIdKey map lookup x10k', emitter: const CustomEmitter());
@@ -87,7 +90,8 @@ class OpIdKeyMapLookupBenchmark extends BenchmarkBase {
   }
 }
 
-/// Benchmarks Map<OperationId, int> lookup — for comparison with OpIdKey.
+/// Benchmarks Map\<OperationId, int> lookup
+/// — for comparison with OpIdKey.
 class OperationIdMapLookupBenchmark extends BenchmarkBase {
   OperationIdMapLookupBenchmark()
       : super('OperationId map lookup x10k', emitter: const CustomEmitter());

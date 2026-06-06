@@ -23,8 +23,7 @@ class DAGAddNodeChainBenchmark extends BenchmarkBase {
 
   @override
   void run() {
-    final dag = DAG.empty();
-    dag.addNode(ids[0], {});
+    final dag = DAG.empty()..addNode(ids[0], {});
     for (var i = 1; i < ids.length; i++) {
       dag.addNode(ids[i], {ids[i - 1]});
     }

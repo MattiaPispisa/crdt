@@ -19,7 +19,10 @@ VersionVector _makeVersionVector(int peerCount) {
 /// Each call allocates a Uint8List and serialises all entries.
 class VersionVectorToBytesBenchmark extends BenchmarkBase {
   VersionVectorToBytesBenchmark()
-      : super('VersionVector toBytes 10 peers x1000', emitter: const CustomEmitter());
+      : super(
+          'VersionVector toBytes 10 peers x1000',
+          emitter: const CustomEmitter(),
+        );
 
   late final VersionVector vv;
 
@@ -39,7 +42,10 @@ class VersionVectorToBytesBenchmark extends BenchmarkBase {
 /// Benchmarks VersionVector.fromBytes() on a 10-entry vector.
 class VersionVectorFromBytesBenchmark extends BenchmarkBase {
   VersionVectorFromBytesBenchmark()
-      : super('VersionVector fromBytes 10 peers x1000', emitter: const CustomEmitter());
+      : super(
+          'VersionVector fromBytes 10 peers x1000',
+          emitter: const CustomEmitter(),
+        );
 
   late final Uint8List bytes;
 

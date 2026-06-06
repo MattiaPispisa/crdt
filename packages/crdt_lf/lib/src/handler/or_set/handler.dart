@@ -46,8 +46,6 @@ class CRDTORSetHandler<T> extends Handler<ORSetState<T>> {
   late final OperationFactory operationFactory =
       _ORSetOperationFactory<T>(this).fromBytes;
 
-  // TODO(mattia): create a reusable class for a tag related
-  // to peerId and hlc. Can be shared with the ORMapHandler.
   /// Obtains a unique tag for an operation
   ORHandlerTag _tag() {
     doc.prepareMutation();
