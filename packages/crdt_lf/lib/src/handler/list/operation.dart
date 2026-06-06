@@ -43,7 +43,7 @@ class _ListInsertOperation<T> extends Operation {
   }) {
     return _ListInsertOperation(
       id: handler.id,
-      type: OperationType.insert(handler),
+      type: handler.insertType,
       index: index,
       value: value,
       valueCodec: handler._valueCodec,
@@ -71,7 +71,7 @@ class _ListInsertOperation<T> extends Operation {
 
     return _ListInsertOperation<T>(
       id: handler.id,
-      type: OperationType.insert(handler),
+      type: handler.insertType,
       index: index,
       value: value,
       valueCodec: handler._valueCodec,
@@ -115,7 +115,7 @@ class _ListDeleteOperation<T> extends Operation {
   }) {
     return _ListDeleteOperation(
       id: handler.id,
-      type: OperationType.delete(handler),
+      type: handler.deleteType,
       index: index,
       count: count,
     );
@@ -174,7 +174,7 @@ class _ListUpdateOperation<T> extends Operation {
   }) {
     return _ListUpdateOperation(
       id: handler.id,
-      type: OperationType.update(handler),
+      type: handler.updateType,
       index: index,
       value: value,
       valueCodec: handler._valueCodec,
@@ -202,7 +202,7 @@ class _ListUpdateOperation<T> extends Operation {
 
     return _ListUpdateOperation<T>(
       id: handler.id,
-      type: OperationType.update(handler),
+      type: handler.updateType,
       index: index,
       value: value,
       valueCodec: handler._valueCodec,

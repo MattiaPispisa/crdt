@@ -24,6 +24,12 @@ abstract class Handler<T>
   /// The factory function that creates an operation from a payload
   OperationFactory get operationFactory;
 
+  // Cached OperationType instances — these are per-handler-type-and-id, so
+  // they never change after the handler is created.
+  late final OperationType insertType = OperationType.insert(this);
+  late final OperationType deleteType = OperationType.delete(this);
+  late final OperationType updateType = OperationType.update(this);
+
   /// During transaction consecutive operations can be compounded.
   ///
   /// By default, no compaction occurs and operations are returned as-is.

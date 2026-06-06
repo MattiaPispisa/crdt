@@ -69,7 +69,7 @@ class _TextInsertOperation extends Operation {
   }) {
     return _TextInsertOperation(
       id: handler.id,
-      type: OperationType.insert(handler),
+      type: handler.insertType,
       index: index,
       text: text,
     );
@@ -132,7 +132,7 @@ class _TextDeleteOperation extends Operation {
   }) {
     return _TextDeleteOperation(
       id: handler.id,
-      type: OperationType.delete(handler),
+      type: handler.deleteType,
       index: index,
       count: count,
     );
@@ -175,7 +175,7 @@ class _TextUpdateOperation extends Operation {
   }) {
     return _TextUpdateOperation(
       id: handler.id,
-      type: OperationType.update(handler),
+      type: handler.updateType,
       index: index,
       text: text,
     );

@@ -43,7 +43,7 @@ class _ORSetAddOperation<T> extends Operation {
   }) {
     return _ORSetAddOperation<T>(
       id: handler.id,
-      type: OperationType.insert(handler),
+      type: handler.insertType,
       value: value,
       tag: tag,
       valueCodec: handler._valueCodec,
@@ -75,7 +75,7 @@ class _ORSetAddOperation<T> extends Operation {
 
     return _ORSetAddOperation<T>(
       id: handler.id,
-      type: OperationType.insert(handler),
+      type: handler.insertType,
       value: value,
       tag: tag,
       valueCodec: handler._valueCodec,
@@ -157,7 +157,7 @@ class _ORSetRemoveOperation<T> extends Operation {
 
     return _ORSetRemoveOperation<T>(
       id: handler.id,
-      type: OperationType.delete(handler),
+      type: handler.deleteType,
       value: value,
       tags: tags,
       removeAll: removeAll,
@@ -172,7 +172,7 @@ class _ORSetRemoveOperation<T> extends Operation {
   }) {
     return _ORSetRemoveOperation<T>(
       id: handler.id,
-      type: OperationType.delete(handler),
+      type: handler.deleteType,
       value: value,
       tags: Set<ORHandlerTag>.from(tags),
       removeAll: tags.isEmpty,

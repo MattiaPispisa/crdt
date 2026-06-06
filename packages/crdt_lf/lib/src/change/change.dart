@@ -177,38 +177,36 @@ class Change {
   /// The change bytes (payload and ids).
   final Uint8List bytes;
 
-  /// The unique identifier for this change (decoded).
-  OperationId get id {
-    return OperationId.fromUint8List(
-      bytes,
-    );
-  }
+  // Decoded fields are cached lazily to avoid re-parsing on every access.
+  late final OperationId _id = OperationId.fromUint8List(bytes);
+  late final PeerId _author = PeerId.fromUint8List(bytes);
+  late final HybridLogicalClock _hlc =
+      HybridLogicalClock.fromUint8List(bytes, offset: 16);
+  late final Set<OperationId> _deps = _parseDeps();
+  late final OpIdKey _key = OpIdKey.view(bytes);
 
-  /// Packed key view for this change id.
-  OpIdKey get key {
-    return OpIdKey.view(
-      bytes,
-    );
-  }
-
-  /// The peer that created this change
-  PeerId get author => PeerId.fromUint8List(
-        bytes,
-      );
-
-  /// The dependencies of this change (decoded).
-  Set<OperationId> get deps {
+  Set<OperationId> _parseDeps() {
     final count = meta[_metaDepsCount];
     final result = <OperationId>{};
-
     var cursor = OperationId.byteLength;
     for (var i = 0; i < count; i += 1) {
       result.add(OperationId.fromUint8List(bytes, offset: cursor));
       cursor += OperationId.byteLength;
     }
-
     return result;
   }
+
+  /// The unique identifier for this change (decoded).
+  OperationId get id => _id;
+
+  /// Packed key view for this change id.
+  OpIdKey get key => _key;
+
+  /// The peer that created this change.
+  PeerId get author => _author;
+
+  /// The dependencies of this change (decoded).
+  Set<OperationId> get deps => _deps;
 
   /// The number of dependencies stored in this change.
   int get depsCount => meta[_metaDepsCount];
@@ -223,11 +221,8 @@ class Change {
     }
   }
 
-  /// The timestamp when this change was created
-  HybridLogicalClock get hlc => HybridLogicalClock.fromUint8List(
-        bytes,
-        offset: 16,
-      );
+  /// The timestamp when this change was created.
+  HybridLogicalClock get hlc => _hlc;
 
   /// Encodes this change into a self-describing byte buffer.
   ///
@@ -291,9 +286,9 @@ class Change {
     return true;
   }
 
-  /// Returns a hash code for this Change
-  @override
-  int get hashCode {
+  late final int _hashCode = _computeHashCode();
+
+  int _computeHashCode() {
     var hash = 0x811C9DC5;
     for (var i = 0; i < meta.length; i += 1) {
       hash ^= meta[i];
@@ -305,6 +300,10 @@ class Change {
     }
     return hash;
   }
+
+  /// Returns a hash code for this Change.
+  @override
+  int get hashCode => _hashCode;
 }
 
 /// Utilities on [List] of [Change]s

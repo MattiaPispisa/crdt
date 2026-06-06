@@ -53,7 +53,7 @@ class _FugueTextInsertOperation extends Operation {
   }) {
     return _FugueTextInsertOperation(
       id: handler.id,
-      type: OperationType.insert(handler),
+      type: handler.insertType,
       leftOrigin: leftOrigin,
       rightOrigin: rightOrigin,
       items: items,
@@ -104,7 +104,7 @@ class _FugueTextInsertOperation extends Operation {
 
     return _FugueTextInsertOperation(
       id: handler.id,
-      type: OperationType.insert(handler),
+      type: handler.insertType,
       leftOrigin: leftRec.value,
       rightOrigin: rightRec.value,
       items: items,
@@ -163,7 +163,7 @@ class _FugueTextDeleteOperation extends Operation {
   }) {
     return _FugueTextDeleteOperation(
       id: handler.id,
-      type: OperationType.delete(handler),
+      type: handler.deleteType,
       items: items,
     );
   }
@@ -192,7 +192,7 @@ class _FugueTextDeleteOperation extends Operation {
 
     return _FugueTextDeleteOperation(
       id: handler.id,
-      type: OperationType.delete(handler),
+      type: handler.deleteType,
       items: items,
     );
   }
@@ -236,7 +236,7 @@ class _FugueTextUpdateOperation extends Operation {
   }) {
     return _FugueTextUpdateOperation(
       id: handler.id,
-      type: OperationType.update(handler),
+      type: handler.updateType,
       items: items,
     );
   }
@@ -287,7 +287,7 @@ class _FugueTextUpdateOperation extends Operation {
 
     return _FugueTextUpdateOperation(
       id: handler.id,
-      type: OperationType.update(handler),
+      type: handler.updateType,
       items: items,
     );
   }

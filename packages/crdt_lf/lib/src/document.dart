@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:crdt_lf/crdt_lf.dart';
@@ -1391,9 +1392,40 @@ mixin SnapshotProvider on DocumentConsumer {
 
 /// Helper extensions for [Handler]
 extension _HandlerHelper on Handler<dynamic> {
-  /// Whether the handler is affected by the given [change]
+  // Expando acts as a per-instance cache (weak-ref keyed map).
+  // Extensions cannot declare instance fields, but an Expando on a static
+  // variable gives the same semantics with no memory-leak risk.
+  static final Expando<Uint8List> _prefixCache = Expando();
+
+  /// Binary prefix for this handler's operations:
+  /// [varint(typeLen)][type UTF-8][varint(idLen)][id UTF-8].
+  ///
+  /// Computed once and cached. Compared byte-by-byte against a change payload
+  /// in [_isAffectedByChange] to avoid UTF-8 decode + String allocation on
+  /// every change application.
+  Uint8List get _envelopePrefix {
+    return _prefixCache[this] ??= _buildPrefix();
+  }
+
+  Uint8List _buildPrefix() {
+    final out = BytesBuilder(copy: false);
+    final typeBytes = utf8.encode(runtimeType.toString());
+    UVarint.write(typeBytes.length, out);
+    out.add(typeBytes);
+    final idBytes = utf8.encode(id);
+    UVarint.write(idBytes.length, out);
+    out.add(idBytes);
+    return out.toBytes();
+  }
+
   bool _isAffectedByChange(Change change) {
-    final env = OperationEnvelopeCodec.decode(change.payloadBytes());
-    return env.handlerId == id;
+    final payload = change.payloadBytes();
+    final prefix = _envelopePrefix;
+    // +1 for the kind byte that follows the prefix.
+    if (payload.length < prefix.length + 1) return false;
+    for (var i = 0; i < prefix.length; i++) {
+      if (payload[i] != prefix[i]) return false;
+    }
+    return true;
   }
 }

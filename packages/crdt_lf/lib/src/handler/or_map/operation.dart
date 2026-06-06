@@ -46,7 +46,7 @@ class _ORMapPutOperation<K, V> extends Operation {
   }) {
     return _ORMapPutOperation<K, V>(
       id: handler.id,
-      type: OperationType.insert(handler),
+      type: handler.insertType,
       key: key,
       value: value,
       tag: tag,
@@ -92,7 +92,7 @@ class _ORMapPutOperation<K, V> extends Operation {
 
     return _ORMapPutOperation<K, V>(
       id: handler.id,
-      type: OperationType.insert(handler),
+      type: handler.insertType,
       key: key,
       value: value,
       tag: tag,
@@ -155,7 +155,7 @@ class _ORMapRemoveOperation<K, V> extends Operation {
   }) {
     return _ORMapRemoveOperation<K, V>(
       id: handler.id,
-      type: OperationType.delete(handler),
+      type: handler.deleteType,
       key: key,
       tags: Set.from(tags),
       removeAll: tags.isEmpty,
@@ -201,7 +201,7 @@ class _ORMapRemoveOperation<K, V> extends Operation {
 
     return _ORMapRemoveOperation<K, V>(
       id: handler.id,
-      type: OperationType.delete(handler),
+      type: handler.deleteType,
       key: key,
       tags: tags,
       removeAll: removeAll,

@@ -43,7 +43,7 @@ class _MapInsertOperation<T> extends Operation {
   }) {
     return _MapInsertOperation<T>(
       id: handler.id,
-      type: OperationType.insert(handler),
+      type: handler.insertType,
       key: key,
       value: value,
       valueCodec: handler._valueCodec,
@@ -77,7 +77,7 @@ class _MapInsertOperation<T> extends Operation {
 
     return _MapInsertOperation<T>(
       id: handler.id,
-      type: OperationType.insert(handler),
+      type: handler.insertType,
       key: key,
       value: value,
       valueCodec: handler._valueCodec,
@@ -123,7 +123,7 @@ class _MapDeleteOperation<T> extends Operation {
   }) {
     return _MapDeleteOperation<T>(
       id: handler.id,
-      type: OperationType.delete(handler),
+      type: handler.deleteType,
       key: key,
     );
   }
@@ -178,7 +178,7 @@ class _MapUpdateOperation<T> extends Operation {
   }) {
     return _MapUpdateOperation(
       id: handler.id,
-      type: OperationType.update(handler),
+      type: handler.updateType,
       key: key,
       value: value,
       valueCodec: handler._valueCodec,
@@ -212,7 +212,7 @@ class _MapUpdateOperation<T> extends Operation {
 
     return _MapUpdateOperation<T>(
       id: handler.id,
-      type: OperationType.update(handler),
+      type: handler.updateType,
       key: key,
       value: value,
       valueCodec: handler._valueCodec,
