@@ -679,6 +679,99 @@ void main() {
       },
     );
 
+    group('counter re-initialisation after import', () {
+      test(
+        'does not throw after binaryImportChanges with same peerId',
+        () {
+          final peerId = PeerId.generate();
+
+          final doc1 = CRDTDocument(peerId: peerId);
+          final handler1 = CRDTFugueTextHandler(doc1, 'text');
+          handler1.insert(0, 'Hello');
+          expect(handler1.value, 'Hello');
+          final exported = doc1.binaryExportChanges();
+
+          // Simulate restart: new document with the same peer ID imports the
+          // previous state.  Before the fix this threw
+          // CrdtException('Node already exists') on the first insert.
+          final doc2 = CRDTDocument(peerId: peerId);
+          final handler2 = CRDTFugueTextHandler(doc2, 'text');
+          doc2.binaryImportChanges(exported);
+
+          expect(handler2.value, 'Hello');
+          expect(() => handler2.insert(5, ' World'), returnsNormally);
+          expect(handler2.value, 'Hello World');
+        },
+      );
+
+      test(
+        'does not throw after importChanges with same peerId',
+        () {
+          final peerId = PeerId.generate();
+
+          final doc1 = CRDTDocument(peerId: peerId);
+          final handler1 = CRDTFugueTextHandler(doc1, 'text');
+          handler1.insert(0, 'CRDT');
+          final exported = doc1.exportChanges();
+
+          final doc2 = CRDTDocument(peerId: peerId);
+          final handler2 = CRDTFugueTextHandler(doc2, 'text');
+          doc2.importChanges(exported);
+
+          expect(handler2.value, 'CRDT');
+          expect(() => handler2.insert(4, '!'), returnsNormally);
+          expect(handler2.value, 'CRDT!');
+        },
+      );
+
+      test(
+        'does not throw after importSnapshot with same peerId',
+        () {
+          final peerId = PeerId.generate();
+
+          final doc1 = CRDTDocument(peerId: peerId);
+          final handler1 = CRDTFugueTextHandler(doc1, 'text');
+          handler1.insert(0, 'Snapshot');
+          final snap = doc1.takeSnapshot();
+
+          final doc2 = CRDTDocument(peerId: peerId);
+          final handler2 = CRDTFugueTextHandler(doc2, 'text');
+          doc2.importSnapshot(snap);
+
+          expect(handler2.value, 'Snapshot');
+          expect(() => handler2.insert(8, '!'), returnsNormally);
+          expect(handler2.value, 'Snapshot!');
+        },
+      );
+
+      test(
+        'counter continues correctly after re-init (no duplicate IDs)',
+        () {
+          final peerId = PeerId.generate();
+
+          // doc1 creates "Hi" (counters 0, 1 for peerId)
+          final doc1 = CRDTDocument(peerId: peerId);
+          final handler1 = CRDTFugueTextHandler(doc1, 'text');
+          handler1.insert(0, 'Hi');
+          final exported = doc1.binaryExportChanges();
+
+          // doc2 (same peerId) imports the state then edits further
+          final doc2 = CRDTDocument(peerId: peerId);
+          final handler2 = CRDTFugueTextHandler(doc2, 'text');
+          doc2.binaryImportChanges(exported);
+
+          handler2.insert(2, '!'); // counter must be >= 2
+          handler2.insert(0, 'Say: ');
+
+          // Verify state is consistent and no collision occurred
+          expect(handler2.value, 'Say: Hi!');
+
+          // Also verify update() triggers no collision
+          expect(() => handler2.update(0, 'X'), returnsNormally);
+        },
+      );
+    });
+
     test(
       'should handle late import that sorts between existing changes',
       () {
