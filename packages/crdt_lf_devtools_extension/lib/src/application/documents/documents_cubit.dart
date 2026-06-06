@@ -59,17 +59,18 @@ class DocumentsCubit extends Cubit<DocumentsState> {
 
       final eval = CrdtLfEvalExtension.setup(args.service);
       final json = await eval.evalDocumentsJson(_alive);
-      final list = (jsonDecode(json) as List<dynamic>)
-          .map((e) => TrackedDocument.fromJson(e as Map<String, dynamic>))
-          .toList();
+      final list =
+          (jsonDecode(json) as List<dynamic>)
+              .map((e) => TrackedDocument.fromJson(e as Map<String, dynamic>))
+              .toList();
 
       // Preserve selection across reloads when possible.
       TrackedDocument? selected = state.selectedDocument;
       if (selected != null) {
         selected = list.cast<TrackedDocument?>().firstWhere(
-              (d) => d?.id == selected!.id,
-              orElse: () => null,
-            );
+          (d) => d?.id == selected!.id,
+          orElse: () => null,
+        );
       }
 
       emit(
@@ -108,9 +109,9 @@ class DocumentsCubit extends Cubit<DocumentsState> {
     final docs = state.documents;
     if (docs == null) return;
     final match = docs.cast<TrackedDocument?>().firstWhere(
-          (d) => d?.id == id,
-          orElse: () => null,
-        );
+      (d) => d?.id == id,
+      orElse: () => null,
+    );
     if (match != null) {
       emit(state.copyWith(selectedDocument: match));
     }

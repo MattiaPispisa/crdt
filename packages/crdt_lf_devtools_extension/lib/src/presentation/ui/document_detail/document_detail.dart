@@ -65,8 +65,11 @@ class _DocumentMetadataCard extends StatelessWidget {
               style: Theme.of(context).textTheme.titleLarge,
             ),
             const SizedBox(height: 8),
-            _KeyValue(label: 'documentId', value: document.documentId,
-                style: mono),
+            _KeyValue(
+              label: 'documentId',
+              value: document.documentId,
+              style: mono,
+            ),
             _KeyValue(label: 'peerId', value: document.peerId, style: mono),
             _KeyValue(
               label: 'changes',
@@ -78,9 +81,10 @@ class _DocumentMetadataCard extends StatelessWidget {
             ),
             _KeyValue(
               label: 'version',
-              value: document.version.isEmpty
-                  ? '<empty>'
-                  : document.version.join('\n'),
+              value:
+                  document.version.isEmpty
+                      ? '<empty>'
+                      : document.version.join('\n'),
               style: mono,
             ),
           ],
@@ -137,10 +141,7 @@ class _KeyValue extends StatelessWidget {
         children: [
           SizedBox(
             width: 110,
-            child: Text(
-              label,
-              style: Theme.of(context).textTheme.labelMedium,
-            ),
+            child: Text(label, style: Theme.of(context).textTheme.labelMedium),
           ),
           Expanded(child: SelectableText(value, style: style)),
         ],

@@ -40,9 +40,6 @@ class CrdtLfChangeCard extends StatelessWidget {
       ),
     );
 
-    return Opacity(
-      opacity: highlighted ? 1 : 0.35,
-      child: Card(child: body),
-    );
+    return Opacity(opacity: highlighted ? 1 : 0.35, child: Card(child: body));
   }
 }

@@ -57,21 +57,15 @@ class DocumentChangesCubit extends Cubit<DocumentChangesState> {
       _alive = devtools.Disposable();
 
       final eval = CrdtLfEvalExtension.setup(args.service);
-      final json = await eval.evalDocumentChangesJson(
-        args.document.id,
-        _alive,
-      );
+      final json = await eval.evalDocumentChangesJson(args.document.id, _alive);
 
-      final descriptors = (jsonDecode(json) as List<dynamic>)
-          .map((e) => ChangeDescriptor.fromJson(e as Map<String, dynamic>))
-          .toList();
+      final descriptors =
+          (jsonDecode(json) as List<dynamic>)
+              .map((e) => ChangeDescriptor.fromJson(e as Map<String, dynamic>))
+              .toList();
 
       emit(
-        DocumentChangesState(
-          changes: descriptors,
-          error: null,
-          loading: false,
-        ),
+        DocumentChangesState(changes: descriptors, error: null, loading: false),
       );
     } catch (e) {
       emit(state.copyWith(error: e.toString(), loading: false));

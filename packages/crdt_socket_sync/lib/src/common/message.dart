@@ -5,8 +5,7 @@ import 'package:crdt_lf/crdt_lf.dart';
 String _encodeChange(Change change) => base64Encode(change.toBytes());
 
 /// Decodes a base64-encoded [Change].
-Change _decodeChange(String value) =>
-    Change.fromBytes(base64Decode(value));
+Change _decodeChange(String value) => Change.fromBytes(base64Decode(value));
 
 /// Base64-encodes the binary representation of [vector].
 String _encodeVersionVector(VersionVector vector) =>
@@ -17,8 +16,7 @@ VersionVector _decodeVersionVector(String value) =>
     VersionVector.fromBytes(base64Decode(value));
 
 /// Base64-encodes the binary representation of [snapshot].
-String _encodeSnapshot(Snapshot snapshot) =>
-    base64Encode(snapshot.toBytes());
+String _encodeSnapshot(Snapshot snapshot) => base64Encode(snapshot.toBytes());
 
 /// Decodes a base64-encoded [Snapshot].
 Snapshot _decodeSnapshot(String value) =>

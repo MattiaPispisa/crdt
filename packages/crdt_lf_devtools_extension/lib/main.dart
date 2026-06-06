@@ -27,9 +27,7 @@ class CrdtLfExtensionBody extends StatelessWidget {
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
         useMaterial3: true,
       ),
-      home: const Bootstrap(
-        child: Scaffold(body: DocumentChangesWidget()),
-      ),
+      home: const Bootstrap(child: Scaffold(body: DocumentChangesWidget())),
     );
   }
 }

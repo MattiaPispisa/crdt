@@ -9,10 +9,10 @@ class HandlerSummary extends Equatable {
   });
 
   factory HandlerSummary.fromJson(Map<String, dynamic> json) => HandlerSummary(
-        id: json['id'] as String,
-        type: json['type'] as String,
-        value: json['value'] as String,
-      );
+    id: json['id'] as String,
+    type: json['type'] as String,
+    value: json['value'] as String,
+  );
 
   /// Handler instance id (the same one passed to its constructor).
   final String id;
@@ -36,11 +36,11 @@ class DocumentDetailState extends Equatable {
   });
 
   factory DocumentDetailState.initial() => const DocumentDetailState(
-        loading: false,
-        error: null,
-        document: null,
-        handlers: null,
-      );
+    loading: false,
+    error: null,
+    document: null,
+    handlers: null,
+  );
 
   final bool loading;
   final String? error;

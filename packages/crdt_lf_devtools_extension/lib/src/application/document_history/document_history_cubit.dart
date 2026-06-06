@@ -57,10 +57,7 @@ class DocumentHistoryCubit extends Cubit<DocumentHistoryState> {
       _alive = devtools.Disposable();
 
       final eval = CrdtLfEvalExtension.setup(args.service);
-      final json = await eval.evalDocumentHistoryJson(
-        args.document.id,
-        _alive,
-      );
+      final json = await eval.evalDocumentHistoryJson(args.document.id, _alive);
       final map = jsonDecode(json) as Map<String, dynamic>;
 
       if (map.containsKey('error')) {
@@ -68,13 +65,16 @@ class DocumentHistoryCubit extends Cubit<DocumentHistoryState> {
       }
 
       final length = map['length'] as int;
-      final changes = (map['changes'] as List<dynamic>)
-          .map((e) => ChangeDescriptor.fromJson(e as Map<String, dynamic>))
-          .toList();
+      final changes =
+          (map['changes'] as List<dynamic>)
+              .map((e) => ChangeDescriptor.fromJson(e as Map<String, dynamic>))
+              .toList();
 
       // Keep the previous cursor when possible; otherwise show full state.
       final cursor =
-          state.cursor != null && state.cursor! <= length ? state.cursor! : length;
+          state.cursor != null && state.cursor! <= length
+              ? state.cursor!
+              : length;
 
       emit(
         DocumentHistoryState(

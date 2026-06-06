@@ -42,8 +42,8 @@ class HLCFromBytesBenchmark extends BenchmarkBase {
   void setup() {
     bytesList = List.generate(
       100000,
-      (i) => HybridLogicalClock(l: 1700000000000 + i, c: i % 65536)
-          .toUint8List(),
+      (i) =>
+          HybridLogicalClock(l: 1700000000000 + i, c: i % 65536).toUint8List(),
     );
   }
 

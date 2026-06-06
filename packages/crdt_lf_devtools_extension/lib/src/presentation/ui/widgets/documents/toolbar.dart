@@ -10,11 +10,7 @@ class DocumentsToolbar extends StatelessWidget {
     return const Padding(
       padding: EdgeInsets.all(16.0),
       child: Row(
-        children: [
-          Text('Document:'),
-          SizedBox(width: 12),
-          DocumentSelector(),
-        ],
+        children: [Text('Document:'), SizedBox(width: 12), DocumentSelector()],
       ),
     );
   }

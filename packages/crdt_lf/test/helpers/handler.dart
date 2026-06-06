@@ -19,8 +19,7 @@ class TestHandler extends Handler<dynamic> {
   }
 
   @override
-  OperationFactory get operationFactory =>
-      (operationBytes) {
+  OperationFactory get operationFactory => (operationBytes) {
         final env = OperationEnvelopeCodec.decode(operationBytes);
         if (env.handlerId != id) {
           return null;

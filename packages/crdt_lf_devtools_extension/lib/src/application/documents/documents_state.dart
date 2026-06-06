@@ -49,13 +49,13 @@ class TrackedDocument extends Equatable {
 
   @override
   List<Object?> get props => [
-        id,
-        documentId,
-        peerId,
-        changesCount,
-        handlersCount,
-        version,
-      ];
+    id,
+    documentId,
+    peerId,
+    changesCount,
+    handlersCount,
+    version,
+  ];
 }
 
 class DocumentsState extends Equatable {

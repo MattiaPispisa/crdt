@@ -62,9 +62,10 @@ class DocumentDetailCubit extends Cubit<DocumentDetailState> {
         throw StateError(map['error'] as String);
       }
 
-      final handlers = (map['handlers'] as List<dynamic>)
-          .map((h) => HandlerSummary.fromJson(h as Map<String, dynamic>))
-          .toList();
+      final handlers =
+          (map['handlers'] as List<dynamic>)
+              .map((h) => HandlerSummary.fromJson(h as Map<String, dynamic>))
+              .toList();
 
       emit(
         DocumentDetailState(

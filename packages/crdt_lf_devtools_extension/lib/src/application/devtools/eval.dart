@@ -50,26 +50,17 @@ extension CrdtLfEvalExtension on EvalOnDartLibrary {
 
   /// JSON object describing a single document: metadata + handlers list.
   Future<String> evalDocumentJson(int trackedId, Disposable? isAlive) {
-    return evalJsonString(
-      'describeDocumentJson($trackedId)',
-      isAlive: isAlive,
-    );
+    return evalJsonString('describeDocumentJson($trackedId)', isAlive: isAlive);
   }
 
   /// JSON array describing every change of a document
   /// (id, hlc, deps, payloadSize, bytes).
   Future<String> evalDocumentChangesJson(int trackedId, Disposable? isAlive) {
-    return evalJsonString(
-      'describeChangesJson($trackedId)',
-      isAlive: isAlive,
-    );
+    return evalJsonString('describeChangesJson($trackedId)', isAlive: isAlive);
   }
 
   /// JSON object describing the document timeline (length + ordered changes).
   Future<String> evalDocumentHistoryJson(int trackedId, Disposable? isAlive) {
-    return evalJsonString(
-      'describeHistoryJson($trackedId)',
-      isAlive: isAlive,
-    );
+    return evalJsonString('describeHistoryJson($trackedId)', isAlive: isAlive);
   }
 }

@@ -26,12 +26,13 @@ class DocumentChangesWidget extends StatelessWidget {
           children: [
             const DocumentsToolbar(),
             Expanded(
-              child: selectedDocument != null
-                  ? _SelectedDocumentTabs(
-                      key: ValueKey(selectedDocument.id),
-                      document: selectedDocument,
-                    )
-                  : const _NoSelection(),
+              child:
+                  selectedDocument != null
+                      ? _SelectedDocumentTabs(
+                        key: ValueKey(selectedDocument.id),
+                        document: selectedDocument,
+                      )
+                      : const _NoSelection(),
             ),
           ],
         );
@@ -81,12 +82,13 @@ class _ChangesTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return BlocProvider(
-      create: (_) => DocumentChangesCubit(
-        DocumentChangesCubitArgs(
-          service: context.vmService,
-          document: document,
-        ),
-      ),
+      create:
+          (_) => DocumentChangesCubit(
+            DocumentChangesCubitArgs(
+              service: context.vmService,
+              document: document,
+            ),
+          ),
       child: BlocBuilder<DocumentChangesCubit, DocumentChangesState>(
         builder: (context, state) {
           return AppDataBuilder<List<ChangeDescriptor>>(
@@ -99,8 +101,9 @@ class _ChangesTab extends StatelessWidget {
               }
               return ListView.builder(
                 itemCount: changes.length,
-                itemBuilder: (context, index) =>
-                    CrdtLfChangeCard(change: changes[index]),
+                itemBuilder:
+                    (context, index) =>
+                        CrdtLfChangeCard(change: changes[index]),
               );
             },
           );
@@ -118,12 +121,13 @@ class _StateTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return BlocProvider(
-      create: (_) => DocumentDetailCubit(
-        DocumentDetailCubitArgs(
-          service: context.vmService,
-          document: document,
-        ),
-      ),
+      create:
+          (_) => DocumentDetailCubit(
+            DocumentDetailCubitArgs(
+              service: context.vmService,
+              document: document,
+            ),
+          ),
       child: const DocumentDetailView(),
     );
   }
@@ -137,12 +141,13 @@ class _HistoryTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return BlocProvider(
-      create: (_) => DocumentHistoryCubit(
-        DocumentHistoryCubitArgs(
-          service: context.vmService,
-          document: document,
-        ),
-      ),
+      create:
+          (_) => DocumentHistoryCubit(
+            DocumentHistoryCubitArgs(
+              service: context.vmService,
+              document: document,
+            ),
+          ),
       child: const DocumentHistoryView(),
     );
   }

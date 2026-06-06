@@ -878,8 +878,7 @@ void main() {
 
       test('default incrementCachedState invalidates cache', () {
         final freshDoc = CRDTDocument();
-        final freshHandler = TestHandler(freshDoc);
-        freshHandler.updateCachedState('primed');
+        final freshHandler = TestHandler(freshDoc)..updateCachedState('primed');
         expect(freshHandler.cachedState, isNotNull);
         freshDoc.registerOperation(TestOperation.fromHandler(freshHandler));
         expect(freshHandler.cachedState, isNull);

@@ -686,8 +686,8 @@ void main() {
           final peerId = PeerId.generate();
 
           final doc1 = CRDTDocument(peerId: peerId);
-          final handler1 = CRDTFugueTextHandler(doc1, 'text');
-          handler1.insert(0, 'Hello');
+          final handler1 = CRDTFugueTextHandler(doc1, 'text')
+            ..insert(0, 'Hello');
           expect(handler1.value, 'Hello');
           final exported = doc1.binaryExportChanges();
 
@@ -710,8 +710,7 @@ void main() {
           final peerId = PeerId.generate();
 
           final doc1 = CRDTDocument(peerId: peerId);
-          final handler1 = CRDTFugueTextHandler(doc1, 'text');
-          handler1.insert(0, 'CRDT');
+          CRDTFugueTextHandler(doc1, 'text').insert(0, 'CRDT');
           final exported = doc1.exportChanges();
 
           final doc2 = CRDTDocument(peerId: peerId);
@@ -730,8 +729,7 @@ void main() {
           final peerId = PeerId.generate();
 
           final doc1 = CRDTDocument(peerId: peerId);
-          final handler1 = CRDTFugueTextHandler(doc1, 'text');
-          handler1.insert(0, 'Snapshot');
+          CRDTFugueTextHandler(doc1, 'text').insert(0, 'Snapshot');
           final snap = doc1.takeSnapshot();
 
           final doc2 = CRDTDocument(peerId: peerId);
@@ -749,9 +747,9 @@ void main() {
         () {
           final peerId = PeerId.generate();
           final doc1 = CRDTDocument(peerId: peerId);
-          final h1 = CRDTFugueTextHandler(doc1, 'text');
-          h1.insert(0, 'Hello'); // counters 0-4
-          h1.update(0, 'X'); // newNodeID counter 5 for peerId
+          final h1 = CRDTFugueTextHandler(doc1, 'text')
+            ..insert(0, 'Hello') // counters 0-4
+            ..update(0, 'X'); // newNodeID counter 5 for peerId
           final exported = doc1.binaryExportChanges();
 
           final doc2 = CRDTDocument(peerId: peerId);
@@ -770,8 +768,7 @@ void main() {
 
           // doc1 creates "Hi" (counters 0, 1 for peerId)
           final doc1 = CRDTDocument(peerId: peerId);
-          final handler1 = CRDTFugueTextHandler(doc1, 'text');
-          handler1.insert(0, 'Hi');
+          CRDTFugueTextHandler(doc1, 'text').insert(0, 'Hi');
           final exported = doc1.binaryExportChanges();
 
           // doc2 (same peerId) imports the state then edits further
@@ -779,8 +776,9 @@ void main() {
           final handler2 = CRDTFugueTextHandler(doc2, 'text');
           doc2.binaryImportChanges(exported);
 
-          handler2.insert(2, '!'); // counter must be >= 2
-          handler2.insert(0, 'Say: ');
+          handler2
+            ..insert(2, '!') // counter must be >= 2
+            ..insert(0, 'Say: ');
 
           // Verify state is consistent and no collision occurred
           expect(handler2.value, 'Say: Hi!');
@@ -795,14 +793,14 @@ void main() {
       'takeSnapshot computes state from scratch when handler cache is null',
       () {
         final doc1 = CRDTDocument();
-        final h1 = CRDTFugueTextHandler(doc1, 'text');
-        h1.insert(0, 'Hi');
+        CRDTFugueTextHandler(doc1, 'text').insert(0, 'Hi');
 
         final doc2 = CRDTDocument();
-        final h2 = CRDTFugueTextHandler(doc2, 'text');
-        h2.insert(0, 'start'); // populates h2's cache
+        final h2 = CRDTFugueTextHandler(doc2, 'text')
+          ..insert(0, 'start'); // populates h2's cache
 
-        // Importing an external change for the same handler invalidates h2's cache
+        // Importing an external change for the same
+        // handler invalidates h2's cache
         doc2.importChanges(doc1.exportChanges());
 
         // h2's cache is null; takeSnapshot must recompute it from scratch

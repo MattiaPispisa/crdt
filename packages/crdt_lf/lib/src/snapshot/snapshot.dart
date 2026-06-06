@@ -133,8 +133,7 @@ class Snapshot {
     UVarint.write(vvBytes.length, out);
     out.add(vvBytes);
 
-    final dataBytes =
-        const JsonValueCodec<Map<String, dynamic>>().encode(data);
+    final dataBytes = const JsonValueCodec<Map<String, dynamic>>().encode(data);
     UVarint.write(dataBytes.length, out);
     out.add(dataBytes);
 

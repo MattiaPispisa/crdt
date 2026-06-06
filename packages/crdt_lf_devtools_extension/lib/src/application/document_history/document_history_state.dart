@@ -10,12 +10,12 @@ class DocumentHistoryState extends Equatable {
   });
 
   factory DocumentHistoryState.initial() => const DocumentHistoryState(
-        loading: false,
-        error: null,
-        length: null,
-        changes: null,
-        cursor: null,
-      );
+    loading: false,
+    error: null,
+    length: null,
+    changes: null,
+    cursor: null,
+  );
 
   final bool loading;
   final String? error;

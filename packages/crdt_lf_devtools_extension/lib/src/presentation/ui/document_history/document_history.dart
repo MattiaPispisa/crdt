@@ -25,15 +25,17 @@ class DocumentHistoryView extends StatelessWidget {
                 _CursorControls(cursor: cursor, length: length),
                 const Divider(height: 1),
                 Expanded(
-                  child: changes.isEmpty
-                      ? const Center(child: Text('No changes yet'))
-                      : ListView.builder(
-                          itemCount: changes.length,
-                          itemBuilder: (context, index) => CrdtLfChangeCard(
-                            change: changes[index],
-                            highlighted: index < cursor,
+                  child:
+                      changes.isEmpty
+                          ? const Center(child: Text('No changes yet'))
+                          : ListView.builder(
+                            itemCount: changes.length,
+                            itemBuilder:
+                                (context, index) => CrdtLfChangeCard(
+                                  change: changes[index],
+                                  highlighted: index < cursor,
+                                ),
                           ),
-                        ),
                 ),
               ],
             );
