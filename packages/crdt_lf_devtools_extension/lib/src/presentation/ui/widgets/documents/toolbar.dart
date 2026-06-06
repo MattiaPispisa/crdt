@@ -1,10 +1,7 @@
 import 'package:crdt_lf_devtools_extension/src/presentation/ui/widgets/documents/document_selector.dart';
-import 'package:crdt_lf_devtools_extension/src/presentation/ui/widgets/documents/reload.dart';
 import 'package:flutter/material.dart';
 
-/// Toolbar for the documents
-///
-/// This toolbar contains a document selector and a reload button.
+/// Toolbar showing the document selector.
 class DocumentsToolbar extends StatelessWidget {
   const DocumentsToolbar({super.key});
 
@@ -17,8 +14,6 @@ class DocumentsToolbar extends StatelessWidget {
           Text('Document:'),
           SizedBox(width: 12),
           DocumentSelector(),
-          SizedBox(width: 24),
-          DocumentsReloadButton(),
         ],
       ),
     );

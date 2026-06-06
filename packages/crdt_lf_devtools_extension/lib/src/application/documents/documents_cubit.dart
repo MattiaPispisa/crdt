@@ -34,6 +34,14 @@ class DocumentsCubit extends Cubit<DocumentsState> {
     _eventStreamSubscription = args.service.onExtensionEvent.listen((event) {
       if (event.isDocumentCreatedEvent) {
         load();
+      } else if (event.isDocumentChangedEvent) {
+        // If the event references a document not yet in our list, the
+        // `crdt_lf:documents:created` event was missed (e.g. the extension
+        // connected after the document was created). Reload to pick it up.
+        final docs = state.documents;
+        if (docs != null && !docs.any((d) => d.id == event.documentId)) {
+          load();
+        }
       }
     });
   }

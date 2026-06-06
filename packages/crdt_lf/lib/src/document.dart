@@ -2,9 +2,6 @@ import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:crdt_lf/crdt_lf.dart';
-import 'package:crdt_lf/src/binary/change_codec.dart';
-import 'package:crdt_lf/src/operation/id.dart';
-import 'package:crdt_lf/src/binary/varint.dart';
 import 'package:crdt_lf/src/compound/compound.dart';
 import 'package:crdt_lf/src/devtools/devtools.dart' as devtools;
 import 'package:crdt_lf/src/transaction/transaction_manager.dart';
@@ -817,7 +814,7 @@ class CRDTDocument extends BaseCRDTDocument {
         throw const FormatException('Truncated change bytes');
       }
 
-      final id = OperationId.fromUint8List(bytes, offset: 0);
+      final id = OperationId.fromUint8List(bytes);
       final deps = <OperationId>{};
 
       var cursor = OperationId.byteLength;
