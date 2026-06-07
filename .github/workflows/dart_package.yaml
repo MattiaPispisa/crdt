@@ -61,7 +61,7 @@ jobs:
           min_coverage: ${{inputs.min_coverage}}
 
       - name: 📤 Upload coverage to Codecov
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@v7
         with:
           directory: ${{inputs.working_directory}}
           token: ${{ secrets.CODECOV_TOKEN }}
