@@ -16,11 +16,13 @@ The internal data model has migrated from JSON to a compact binary encoding. Cha
 
 ### Added
 
+- `Change.toBytes()` and `Change.fromBytes(Uint8List)` — binary serialization for a single change, replacing the removed `toJson`/`fromJson`.
+- `VersionVector.toBytes()` and `VersionVector.fromBytes(Uint8List)` — compact binary encoding for version vectors.
+- `Snapshot.toBytes()` and `Snapshot.fromBytes(Uint8List)` — binary serialization for snapshots.
 - `CRDTDocument.registeredHandlers` — read-only map of handlers currently registered on the document, intended for introspection and tooling.
 
 ### Changed
 
-- All handler operations (`text`, `list`, `map`, `or_set`, `or_map`, `fugue_text`) now use compact binary body encoding instead of JSON for `toBodyBytes` / `fromBodyBytes`. This reduces serialization overhead significantly.
 - `ChangeStore` now indexes changes by `OpIdKey` instead of `OperationId`, eliminating redundant object allocation on lookup.
 - Several hot-path performance improvements: `HybridLogicalClock.toUint8List` now uses integer arithmetic instead of floating-point, `PeerId.fromUint8List` avoids regex validation and intermediate string allocation, `DAG.getAncestors` was converted from O(n²) BFS to O(n) DFS, and frequently-used `OperationType` instances are now cached lazily on each handler.
 
