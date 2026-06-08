@@ -30,6 +30,9 @@ part 'operation.dart';
 /// ```
 class CRDTORSetHandler<T> extends Handler<ORSetState<T>> {
   /// Creates a new CRDT OR-SetHandler with the given document and ID
+  /// 
+  /// [valueCodec] is an optional codec for encoding/decoding [T] values to bytes.
+  /// Default is [JsonValueCodec].
   CRDTORSetHandler(
     super.doc,
     this._id, {

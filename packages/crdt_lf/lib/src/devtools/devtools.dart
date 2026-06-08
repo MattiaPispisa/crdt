@@ -79,10 +79,6 @@ void handleCreated(CRDTDocument document) {
   }
 }
 
-// ---------------------------------------------------------------------------
-// JSON descriptors invoked via VM service `eval` from the devtools extension.
-// ---------------------------------------------------------------------------
-
 /// JSON list of tracked documents with lightweight metadata.
 ///
 /// Shape (per element):

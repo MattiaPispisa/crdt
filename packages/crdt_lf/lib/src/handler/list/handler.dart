@@ -23,6 +23,9 @@ part 'operation.dart';
 /// ```
 class CRDTListHandler<T> extends Handler<List<T>> {
   /// Creates a new CRDTList with the given document and ID
+  ///
+  /// [valueCodec] is an optional codec for encoding/decoding [T] values to bytes.
+  /// Default is [JsonValueCodec].
   CRDTListHandler(
     super.doc,
     this._id, {

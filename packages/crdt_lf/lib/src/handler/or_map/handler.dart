@@ -31,6 +31,9 @@ part 'operation.dart';
 /// ```
 class CRDTORMapHandler<K, V> extends Handler<ORMapState<K, V>> {
   /// Creates a new CRDT OR-MapHandler with the given document and ID
+  ///
+  /// [keyCodec] and [valueCodec] are optional codecs for encoding/decoding keys and values to bytes.
+  /// Default is [JsonValueCodec].
   CRDTORMapHandler(
     super.doc,
     this._id, {

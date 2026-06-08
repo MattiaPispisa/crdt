@@ -28,6 +28,9 @@ part 'operation.dart';
 /// ```
 class CRDTMapHandler<T> extends Handler<Map<String, T>> {
   /// Creates a new CRDTMap with the given document and ID
+  ///
+  /// [valueCodec] is an optional codec for encoding/decoding [T] values to bytes.
+  /// Default is [JsonValueCodec].
   CRDTMapHandler(
     super.doc,
     this._id, {
