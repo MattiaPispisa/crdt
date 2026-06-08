@@ -5,36 +5,28 @@
 
 **Breaking changes**
 
+The internal data model has migrated from JSON to a compact binary encoding. Changes, operations, peer IDs, and clock values are now stored and transmitted as raw bytes. Views over the binary data are created lazily on demand rather than eagerly decoded into Dart objects. This results in measurably better throughput and reduced memory fragmentation. [64](https://github.com/MattiaPispisa/crdt/issues/64)
+
 - `Change.fromJson` and `Change.toJson` removed. Use `Change.fromBytes(Uint8List)` and `Change.toBytes()` instead.
 - `Change.fromPayload({..., payload: Map<String, dynamic>})` renamed to `Change.fromPayloadBytes({..., payloadBytes: Uint8List})`. The payload is now an opaque binary blob.
 - `Change.payload` (`Map<String, dynamic>`) removed. Use `Change.payloadBytes()` returning `Uint8List`.
 - `CRDTDocument.binaryExportChanges` return type changed from `List<int>` to `Uint8List`.
 - `CRDTDocument.binaryImportChanges` parameter type changed from `List<int>` to `Uint8List`.
 - `Operation.handlerIdFrom(payload: Map)` removed. Operation identity is now derived from the binary envelope via `OperationEnvelopeCodec`.
-- `Operation.toBodyBytes()` is now abstract. Custom `Operation` subclasses must implement it. The previous JSON-based body encoding (`toPayload()` override) is no longer used for serialization; `toPayload()` is kept only as a debug helper.
-- `ValueCodec` and `JsonValueCodec` moved from `lib/src/operation/value_codec.dart` to `lib/src/handler/value_codec.dart`. The public export path via `package:crdt_lf/crdt_lf.dart` is unchanged.
 
 ### Added
 
-- Binary encoding infrastructure in `lib/src/binary/`:
-  - `UVarint` — unsigned LEB128 varint encoder/decoder.
-  - `ChangeCodec` — versioned multi-change framing (magic bytes + length-prefixed blobs).
-  - `OperationEnvelopeCodec` — operation envelope encoding (handler type + id + kind + body).
-- `Change.toBytes()` / `Change.fromBytes(Uint8List)` — compact self-describing per-change binary format (schema version + deps + id + payload).
-- `VersionVector.toBytes()` / `VersionVector.fromBytes(Uint8List)` — binary format for version vectors. `toJson`/`fromJson` are preserved.
-- `Snapshot.toBytes()` / `Snapshot.fromBytes(Uint8List)` — binary format for snapshots. `toJson`/`fromJson` are preserved.
-- `PeerId.toUint8List()` / `PeerId.fromUint8List(Uint8List, {int offset})` — 16-byte binary encoding for peer IDs.
-- `OperationId.toUint8List()` / `OperationId.fromUint8List(Uint8List, {int offset})` / `OperationId.byteLength` — 24-byte binary encoding for operation IDs.
-- `OpIdKey` — zero-copy packed 24-byte key for `OperationId`, used as `Map` key in `ChangeStore` to avoid allocating intermediate objects.
-- `FugueElementID.toBytes()` / `FugueElementID.fromBytes(Uint8List)` / `FugueElementID.readFromBytes(Uint8List, {int offset})` — compact binary encoding for Fugue element IDs.
 - `CRDTDocument.registeredHandlers` — read-only map of handlers currently registered on the document, intended for introspection and tooling.
-- `Operation.toBytes()` — encodes the full operation (envelope + body) as bytes.
-- `Operation.fromBytes(Uint8List)` — decodes an operation from its binary representation.
 
 ### Changed
 
 - All handler operations (`text`, `list`, `map`, `or_set`, `or_map`, `fugue_text`) now use compact binary body encoding instead of JSON for `toBodyBytes` / `fromBodyBytes`. This reduces serialization overhead significantly.
 - `ChangeStore` now indexes changes by `OpIdKey` instead of `OperationId`, eliminating redundant object allocation on lookup.
+- Several hot-path performance improvements: `HybridLogicalClock.toUint8List` now uses integer arithmetic instead of floating-point, `PeerId.fromUint8List` avoids regex validation and intermediate string allocation, `DAG.getAncestors` was converted from O(n²) BFS to O(n) DFS, and frequently-used `OperationType` instances are now cached lazily on each handler.
+
+### Fixed
+
+- Fixed `CRDTFugueTextHandler` throwing `CrdtException: Node already exists` after restoring document state via `binaryImportChanges`, `importChanges`, or `importSnapshot`. [65](https://github.com/MattiaPispisa/crdt/issues/65) (thx to @coltrane)
 
 ## [2.5.0](https://github.com/MattiaPispisa/crdt/tree/crdt_lf-v2.5.0/packages/crdt_lf)
 **Date:** 2026-01-03
