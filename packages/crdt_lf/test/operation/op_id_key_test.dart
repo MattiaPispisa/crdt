@@ -179,9 +179,6 @@ void main() {
 
       test('identical short-circuits', () {
         final a = OpIdKey.copy(bytesA);
-        // Intentionally comparing the same instance to itself
-        // to exercise the identical(...) fast path of operator ==.
-        // ignore: unrelated_type_equality_checks
         expect(a == a, isTrue);
       });
 
