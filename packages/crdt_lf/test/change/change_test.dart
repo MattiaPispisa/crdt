@@ -176,6 +176,40 @@ void main() {
       );
     });
 
+    test('fromPayloadBytes rejects mismatched author', () {
+      final otherAuthor = PeerId.generate();
+      expect(
+        () => Change.fromPayloadBytes(
+          id: id,
+          deps: deps,
+          author: otherAuthor,
+          payloadBytes: operation.toBytes(),
+        ),
+        throwsA(isA<ArgumentError>()),
+      );
+    });
+
+    test('fromBytes rejects empty buffer', () {
+      expect(
+        () => Change.fromBytes(Uint8List(0)),
+        throwsA(isA<FormatException>()),
+      );
+    });
+
+    test('fromBytes rejects buffer with trailing bytes', () {
+      final change = Change(
+        id: id,
+        operation: operation,
+        deps: deps,
+        author: author,
+      );
+      final corrupted = Uint8List.fromList([...change.toBytes(), 0xFF]);
+      expect(
+        () => Change.fromBytes(corrupted),
+        throwsA(isA<FormatException>()),
+      );
+    });
+
     test('hashCode handles different dependencies correctly', () {
       final deps1 = {
         OperationId.parse('3a5cd393-813c-46c8-97f3-9e99a6f2c8be@1.1'),

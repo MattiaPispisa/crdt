@@ -144,6 +144,31 @@ void main() {
       expect(decoded, equals(id));
     });
 
+    test('readFromBytes throws FormatException on invalid flag byte', () {
+      // Flag must be 0 (null) or 1 (real id). Any other value is invalid.
+      final invalid = Uint8List.fromList([2]);
+      expect(
+        () => FugueElementID.readFromBytes(invalid),
+        throwsA(isA<FormatException>()),
+      );
+    });
+
+    test('readFromBytes throws on empty buffer at offset', () {
+      expect(
+        () => FugueElementID.readFromBytes(Uint8List(0)),
+        throwsA(isA<FormatException>()),
+      );
+    });
+
+    test('readFromBytes throws on truncated replicaID', () {
+      // flag=1 then only a partial replicaID
+      final truncated = Uint8List.fromList([1, 0, 0, 0]);
+      expect(
+        () => FugueElementID.readFromBytes(truncated),
+        throwsA(isA<FormatException>()),
+      );
+    });
+
     test('readFromBytes returns the next offset for chained reads', () {
       final peerId = PeerId.parse('2ff4de6c-5add-42b6-b5f5-e6b7404cbf68');
       final id1 = FugueElementID(peerId, 7);

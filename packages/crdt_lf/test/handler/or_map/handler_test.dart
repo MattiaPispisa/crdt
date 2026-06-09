@@ -306,4 +306,36 @@ void main() {
       expect(map.value, isEmpty);
     });
   });
+
+  group('ORMapEntry', () {
+    test('equality and hashCode reflect value+tag', () {
+      final tagA = ORHandlerTag.parse(
+        '37f1ec87-6ea5-430b-a627-a6b92b56a02d@1.0',
+      );
+      final tagB = ORHandlerTag.parse(
+        '37f1ec87-6ea5-430b-a627-a6b92b56a02d@2.0',
+      );
+      final entry1 = ORMapEntry<int>(value: 1, tag: tagA);
+      final entry2 = ORMapEntry<int>(value: 1, tag: tagA);
+      final entryDifferentValue = ORMapEntry<int>(value: 2, tag: tagA);
+      final entryDifferentTag = ORMapEntry<int>(value: 1, tag: tagB);
+
+      expect(entry1, equals(entry2));
+      expect(entry1.hashCode, equals(entry2.hashCode));
+      expect(entry1, isNot(equals(entryDifferentValue)));
+      expect(entry1, isNot(equals(entryDifferentTag)));
+    });
+
+    test('identity short-circuit and non-ORMapEntry inequality', () {
+      final tag = ORHandlerTag.parse(
+        '37f1ec87-6ea5-430b-a627-a6b92b56a02d@1.0',
+      );
+      final entry = ORMapEntry<String>(value: 'x', tag: tag);
+      // Compares same instance: triggers identical short-circuit.
+      expect(entry == entry, isTrue);
+      // Compares to unrelated type.
+      // ignore: unrelated_type_equality_checks
+      expect(entry == 'x', isFalse);
+    });
+  });
 }

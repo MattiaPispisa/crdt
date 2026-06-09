@@ -1,4 +1,5 @@
 import 'package:crdt_lf/crdt_lf.dart';
+import 'package:hlc_dart/hlc_dart.dart';
 import 'package:test/test.dart';
 
 void main() {
@@ -105,6 +106,26 @@ void main() {
       // At least one tag for 'k' remains (from s2), so 'k' is present
       expect(s1.value, equals(s2.value));
       expect(s1.value.contains('k'), isTrue);
+    });
+
+    test('mergeSnapshot with Set-valued data seeds the OR-Set', () {
+      // OR-Set normally stores snapshot data as a List. To exercise the
+      // Set<dynamic> branch in _computeState we construct a Snapshot whose
+      // data[handlerId] is a Set<String>.
+      final doc = CRDTDocument(
+        peerId: PeerId.parse('45ee6b65-b393-40b7-9755-8b66dc7d0518'),
+      );
+      final s = CRDTORSetHandler<String>(doc, 'set1');
+
+      final snap = Snapshot.create(
+        versionVector: VersionVector({
+          doc.peerId: HybridLogicalClock(l: 1, c: 1),
+        }),
+        data: {'set1': <String>{'a', 'b'}},
+      );
+
+      doc.mergeSnapshot(snap, pruneHistory: false);
+      expect(s.value, equals({'a', 'b'}));
     });
 
     test('snapshot import/merge with OR-Set', () {

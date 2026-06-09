@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:hlc_dart/hlc_dart.dart';
 import 'package:test/test.dart';
 
@@ -57,6 +59,13 @@ void main() {
 
       expect(hlc2.l, equals(hlc.l));
       expect(hlc2.c, equals(hlc.c));
+    });
+
+    test('fromUint8List throws RangeError for invalid buffer', () {
+      expect(
+        () => HybridLogicalClock.fromUint8List(Uint8List(7)),
+        throwsA(isA<RangeError>()),
+      );
     });
 
     group('parse', () {

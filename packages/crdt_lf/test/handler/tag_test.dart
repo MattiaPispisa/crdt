@@ -43,6 +43,13 @@ void main() {
       );
     });
 
+    test('should throw FormatException when @ is missing', () {
+      expect(
+        () => ORHandlerTag.parse('no-at-sign-here'),
+        throwsA(isA<FormatException>()),
+      );
+    });
+
     test('should compare correctly', () {
       final tag1 = ORHandlerTag(
         hlc: HybridLogicalClock(l: 12, c: 0),
