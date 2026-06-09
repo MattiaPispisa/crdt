@@ -29,7 +29,7 @@ void main() {
       await Hive.deleteFromDisk();
     });
 
-    test('ChangeAdapter: roundtrips binary payload bytes', () async {
+    test('ChangeAdapter: round-trips binary payload bytes', () async {
       const documentId = 'doc-json-1';
       final storage = await CRDTHive.openChangeStorageForDocument(documentId);
 

@@ -9,7 +9,6 @@ export 'src/adapters/change_adapter.dart';
 export 'src/adapters/fugue_element_id_adapter.dart';
 export 'src/adapters/fugue_node_value_adapter.dart';
 export 'src/adapters/hybrid_logical_clock_adapter.dart';
-export 'src/adapters/operation_id_adapter.dart';
 export 'src/adapters/peer_id_adapter.dart';
 export 'src/adapters/snapshot_adapter.dart';
 export 'src/adapters/version_vector_adapter.dart';

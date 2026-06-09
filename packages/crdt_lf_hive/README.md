@@ -37,7 +37,7 @@ A [Hive](https://pub.dev/packages/hive) storage implementation for [CRDT LF](htt
 
 ## Features
 
-- **Complete Hive Adapters**: All necessary type adapters for CRDT objects (`Change`, `Snapshot`, `PeerId`, `OperationId`, `VersionVector`, etc.)
+- **Complete Hive Adapters**: All necessary type adapters for CRDT objects (`Change`, `Snapshot`, `PeerId`, `VersionVector`, etc.)
 - **Easy Initialization**: One-line setup with `CRDTHive.initialize()`
 - **Flexible Data Serialization**: Choose between JSON encoding or custom Hive adapters for generic data types
 - **Document-Scoped Storage**: Optional utilities that organize data by document ID for better isolation and performance

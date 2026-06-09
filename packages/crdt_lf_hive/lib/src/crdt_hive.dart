@@ -40,7 +40,6 @@ class CRDTHive {
   /// It registers all the necessary type adapters for:
   /// - [PeerId]
   /// - [HybridLogicalClock]
-  /// - [OperationId]
   /// - [VersionVector]
   /// - [Change]
   /// - [Snapshot]
@@ -58,7 +57,6 @@ class CRDTHive {
     bool useDataAdapter = false,
     int? peerIdTypeId,
     int? hybridLogicalClockTypeId,
-    int? operationIdTypeId,
     int? versionVectorTypeId,
     int? changeTypeId,
     int? snapshotTypeId,
@@ -71,7 +69,6 @@ class CRDTHive {
       ..registerAdapter(
         HybridLogicalClockAdapter(typeId: hybridLogicalClockTypeId),
       )
-      ..registerAdapter(OperationIdAdapter(typeId: operationIdTypeId))
       ..registerAdapter(VersionVectorAdapter(typeId: versionVectorTypeId))
       ..registerAdapter(ChangeAdapter(typeId: changeTypeId))
       ..registerAdapter(

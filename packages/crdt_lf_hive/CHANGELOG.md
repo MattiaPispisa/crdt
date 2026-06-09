@@ -7,11 +7,16 @@
 
 - `ChangeAdapter` no longer accepts the `useDataAdapter` parameter, which is removed. The adapter now always serializes `Change` objects via `Change.toBytes()` / `Change.fromBytes()`.
 - **Storage format changed**: existing Hive boxes written with `0.x` adapters are not readable by this version. A one-time migration (read with old adapter, write with new) is required before upgrading.
+- `OperationIdAdapter` and the `kOperationIdAdapter` constant have been removed. The new `ChangeAdapter` serializes `Change` as a single binary blob via `Change.toBytes()`, so no nested `OperationId` adapter is involved in the serialization path. `CRDTHive.initialize` no longer accepts the `operationIdTypeId` parameter; type id `102` is now unused.
 - Updated `crdt_lf` dependency to `^3.0.0`.
 
 ### Changed
 
 - `ChangeAdapter` rewritten to use the compact binary format introduced by `crdt_lf` 3.0.0. Stores a raw byte list per change instead of JSON-encoded fields, reducing storage size and eliminating runtime JSON parsing.
+
+### Removed
+
+- `OperationIdAdapter` and `kOperationIdAdapter` (no longer needed by the new `ChangeAdapter` pipeline).
 
 ## [0.2.3](https://github.com/MattiaPispisa/crdt/tree/crdt_lf_hive-v0.2.3/packages/crdt_lf_hive)
 **Date:** 2025-11-22
