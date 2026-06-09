@@ -118,10 +118,8 @@ void main() {
       test('falls back to PeerId bytes when HLC is equal', () {
         final hlc = HybridLogicalClock(l: 5, c: 3);
         // Pick two peer ids whose first differing byte we can predict.
-        final lowPeer =
-            PeerId.parse('00000000-0000-4000-8000-000000000001');
-        final highPeer =
-            PeerId.parse('ffffffff-ffff-4fff-bfff-ffffffffffff');
+        final lowPeer = PeerId.parse('00000000-0000-4000-8000-000000000001');
+        final highPeer = PeerId.parse('ffffffff-ffff-4fff-bfff-ffffffffffff');
         final low = OpIdKey.copy(OperationId(lowPeer, hlc).toUint8List());
         final high = OpIdKey.copy(OperationId(highPeer, hlc).toUint8List());
         expect(low.compareTo(high), lessThan(0));

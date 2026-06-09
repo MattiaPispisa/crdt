@@ -210,6 +210,64 @@ void main() {
       );
     });
 
+    test('fromBytes rejects buffer truncated before the id', () {
+      // version byte + depsCount varint (0) and nothing else: no room for id.
+      final truncated = Uint8List.fromList(<int>[Change.schemaVersion, 0x00]);
+      expect(
+        () => Change.fromBytes(truncated),
+        throwsA(isA<FormatException>()),
+      );
+    });
+
+    test('fromBytes rejects buffer truncated in the middle of deps', () {
+      // version + depsCount=1 varint + full id + only 10 bytes of the dep.
+      final builder = BytesBuilder(copy: false)
+        ..addByte(Change.schemaVersion)
+        ..addByte(0x01)
+        ..add(Uint8List(OperationId.byteLength))
+        ..add(Uint8List(OperationId.byteLength - 14));
+      expect(
+        () => Change.fromBytes(builder.toBytes()),
+        throwsA(isA<FormatException>()),
+      );
+    });
+
+    test('fromBytes rejects buffer truncated in the payload', () {
+      // version + depsCount=0 + id + payloadLen=10 + only 5 payload bytes.
+      final builder = BytesBuilder(copy: false)
+        ..addByte(Change.schemaVersion)
+        ..addByte(0x00)
+        ..add(Uint8List(OperationId.byteLength))
+        ..addByte(0x0A)
+        ..add(Uint8List(5));
+      expect(
+        () => Change.fromBytes(builder.toBytes()),
+        throwsA(isA<FormatException>()),
+      );
+    });
+
+    test('fromBytes round-trips bytes without re-encoding ids', () {
+      // Sanity check: ensure the refactored fromBytes produces a Change
+      // equal to one built via the public factory for a non-trivial payload.
+      final change = Change(
+        id: id,
+        operation: operation,
+        deps: {
+          OperationId.parse('3a5cd393-813c-46c8-97f3-9e99a6f2c8be@1.1'),
+          OperationId.parse('b7353649-1b52-43b0-9dbc-a843e3308cb0@1.3'),
+        },
+        author: author,
+      );
+      final decoded = Change.fromBytes(change.toBytes());
+      expect(decoded, equals(change));
+      // Lazy decoders should also yield the original values.
+      expect(decoded.id, equals(change.id));
+      expect(decoded.author, equals(change.author));
+      expect(decoded.hlc, equals(change.hlc));
+      expect(decoded.deps, equals(change.deps));
+      expect(decoded.payloadBytes(), equals(change.payloadBytes()));
+    });
+
     test('hashCode handles different dependencies correctly', () {
       final deps1 = {
         OperationId.parse('3a5cd393-813c-46c8-97f3-9e99a6f2c8be@1.1'),
