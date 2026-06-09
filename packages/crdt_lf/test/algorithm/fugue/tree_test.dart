@@ -177,7 +177,8 @@ void main() {
       expect(tree.values(), isEmpty);
     });
 
-    test('insert with unknown leftOrigin and null rightOrigin '
+    test(
+        'insert with unknown leftOrigin and null rightOrigin '
         'falls back to root left side', () {
       final tree = FugueTree<dynamic>.empty();
       final peerId = PeerId.parse('4e91a152-582f-4f46-8944-c2c2e8b217ff');

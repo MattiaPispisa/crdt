@@ -121,7 +121,9 @@ void main() {
         versionVector: VersionVector({
           doc.peerId: HybridLogicalClock(l: 1, c: 1),
         }),
-        data: {'set1': <String>{'a', 'b'}},
+        data: {
+          'set1': <String>{'a', 'b'},
+        },
       );
 
       doc.mergeSnapshot(snap, pruneHistory: false);

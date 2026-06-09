@@ -78,10 +78,8 @@ class OperationType {
     if (type == _delete) {
       return kindDelete;
     }
-    if (type == _update) {
-      return kindUpdate;
-    }
-    throw FormatException('Unknown operation type: $type');
+    assert(type == _update, 'unknown operation type: $type');
+    return kindUpdate;
   }
 
   /// Returns the type name string for a binary [kind] value.

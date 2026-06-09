@@ -35,8 +35,6 @@ class OperationEnvelope {
 /// - kind: u8
 /// - body: bytes
 class OperationEnvelopeCodec {
-  OperationEnvelopeCodec._();
-
   /// Encodes an [OperationEnvelope] into a byte array.
   static Uint8List encode({
     required String handlerType,

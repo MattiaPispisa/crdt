@@ -36,8 +36,6 @@ class UVarintResult {
 /// (e.g. number of deps in a change, number of entries in a version vector,
 /// text length in an element ID).
 class UVarint {
-  UVarint._();
-
   /// Encodes [value] as an unsigned varint and appends it to [out].
   ///
   /// Throws an [ArgumentError] if [value] is negative.

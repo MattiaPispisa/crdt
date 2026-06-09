@@ -14,8 +14,6 @@ import 'package:crdt_lf/src/binary/varint.dart';
 ///   - length: varint
 ///   - payload: `length` bytes
 class ChangeCodec {
-  ChangeCodec._();
-
   /// The version of the change codec.
   static const int version = 1;
 
