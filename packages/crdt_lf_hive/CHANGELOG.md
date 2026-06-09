@@ -1,7 +1,7 @@
-## [1.0.0](https://github.com/MattiaPispisa/crdt/tree/crdt_lf_hive-v1.0.0/packages/crdt_lf_hive)
+## [0.3.0](https://github.com/MattiaPispisa/crdt/tree/crdt_lf_hive-v0.3.0/packages/crdt_lf_hive)
 **Date:** 2026-06-06
 
-[compare to previous release](https://github.com/MattiaPispisa/crdt/compare/crdt_lf_hive-v0.2.3...crdt_lf_hive-v1.0.0)
+[compare to previous release](https://github.com/MattiaPispisa/crdt/compare/crdt_lf_hive-v0.2.3...crdt_lf_hive-v0.3.0)
 
 **Breaking changes**
 
