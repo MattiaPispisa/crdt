@@ -17,8 +17,7 @@ void main() {
     });
 
     setUp(() async {
-      final directory =
-          await Directory.systemTemp.createTemp('crdt_hive_test');
+      final directory = await Directory.systemTemp.createTemp('crdt_hive_test');
       tempDir = directory.path;
       Hive.init(tempDir);
     });
@@ -168,8 +167,7 @@ void main() {
     group('Storage delete/contains single-item operations', () {
       test('CRDTChangeStorage.deleteChange returns true then false', () async {
         const documentId = 'doc-delete-change';
-        final storage =
-            await CRDTHive.openChangeStorageForDocument(documentId);
+        final storage = await CRDTHive.openChangeStorageForDocument(documentId);
 
         final id =
             OperationId(PeerId.generate(), HybridLogicalClock(l: 1, c: 1));
@@ -270,8 +268,7 @@ void main() {
         await changeStorage.saveChanges(document.exportChanges());
         await CRDTHive.closeAllBoxes();
 
-        changeStorage =
-            await CRDTHive.openChangeStorageForDocument(documentId);
+        changeStorage = await CRDTHive.openChangeStorageForDocument(documentId);
 
         final newDocument = CRDTDocument(peerId: PeerId.generate())
           ..importChanges(changeStorage.getChanges());
