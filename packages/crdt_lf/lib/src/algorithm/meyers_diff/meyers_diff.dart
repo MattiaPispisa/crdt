@@ -121,7 +121,7 @@ List<DiffSegment> myersDiff(String oldText, String newText) {
     );
   }
 
-  return _mergeAdjacent(segments);
+  return segments;
 }
 
 int _commonPrefix(String a, String b) {
@@ -328,60 +328,12 @@ List<DiffSegment> _coalesce(
     }
   }
 
-  // Handle any remaining characters after all edits.
-  if (ax < a.length && by < b.length) {
-    push(
-      DiffOp.equal,
-      String.fromCharCodes(a.getRange(ax, a.length)),
-      oldOffset + ax,
-      oldOffset + a.length,
-      newOffset + by,
-      newOffset + b.length,
-    );
-  } else if (ax < a.length) {
-    push(
-      DiffOp.remove,
-      String.fromCharCodes(a.getRange(ax, a.length)),
-      oldOffset + ax,
-      oldOffset + a.length,
-      newOffset + by,
-      newOffset + by,
-    );
-  } else if (by < b.length) {
-    push(
-      DiffOp.insert,
-      String.fromCharCodes(b.getRange(by, b.length)),
-      oldOffset + ax,
-      oldOffset + ax,
-      newOffset + by,
-      newOffset + b.length,
-    );
-  }
-  return out;
-}
-
-List<DiffSegment> _mergeAdjacent(List<DiffSegment> segments) {
-  if (segments.isEmpty) {
-    return segments;
-  }
-  final out = <DiffSegment>[];
-  var current = segments.first;
-  for (var i = 1; i < segments.length; i++) {
-    final next = segments[i];
-    if (current.op == next.op) {
-      current = DiffSegment(
-        op: current.op,
-        text: current.text + next.text,
-        oldStart: current.oldStart,
-        oldEnd: next.oldEnd,
-        newStart: current.newStart,
-        newEnd: next.newEnd,
-      );
-    } else {
-      out.add(current);
-      current = next;
-    }
-  }
-  out.add(current);
+  // Invariant: after `_commonPrefix`/`_commonSuffix` trim the inner SES
+  // always reaches the end of both sequences, so there are no residual
+  // characters left to emit.
+  assert(
+    ax == a.length && by == b.length,
+    'SES did not cover the entire inputs',
+  );
   return out;
 }

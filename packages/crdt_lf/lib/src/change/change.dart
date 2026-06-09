@@ -25,30 +25,24 @@ class Change {
   Change._({
     required this.meta,
     required this.bytes,
-  }) {
-    if (meta.length != 4) {
-      throw ArgumentError.value(meta.length, 'meta.length', 'Must be 4');
-    }
-    if (meta[_metaSchema] != schemaVersion) {
-      throw ArgumentError.value(
-        meta[_metaSchema],
-        'meta.schema',
-        'Unsupported schema version',
-      );
-    }
-    if (meta[_metaDepsCount] < 0) {
-      throw ArgumentError.value(meta[_metaDepsCount], 'depsCount');
-    }
-    if (meta[_metaPayloadOffset] < 0) {
-      throw ArgumentError.value(meta[_metaPayloadOffset], 'payloadOffset');
-    }
-    if (meta[_metaPayloadLength] < 0) {
-      throw ArgumentError.value(meta[_metaPayloadLength], 'payloadLength');
-    }
-    if (meta[_metaPayloadOffset] + meta[_metaPayloadLength] != bytes.length) {
-      throw ArgumentError('Invalid payload bounds');
-    }
-  }
+  })  : assert(meta.length == 4, 'meta must have 4 entries'),
+        assert(
+          meta[_metaSchema] == schemaVersion,
+          'unsupported meta schema version',
+        ),
+        assert(meta[_metaDepsCount] >= 0, 'depsCount must be non-negative'),
+        assert(
+          meta[_metaPayloadOffset] >= 0,
+          'payloadOffset must be non-negative',
+        ),
+        assert(
+          meta[_metaPayloadLength] >= 0,
+          'payloadLength must be non-negative',
+        ),
+        assert(
+          meta[_metaPayloadOffset] + meta[_metaPayloadLength] == bytes.length,
+          'payload bounds must match bytes length',
+        );
 
   /// Decodes a [Change] from a self-describing byte buffer produced by
   /// [toBytes].
@@ -68,47 +62,45 @@ class Change {
     if (version != schemaVersion) {
       throw FormatException('Unsupported Change schema version: $version');
     }
-    var offset = 1;
 
-    final depsCountRec = UVarint.read(data, offset: offset);
+    final depsCountRec = UVarint.read(data, offset: 1);
     final depsCount = depsCountRec.value;
-    offset = depsCountRec.nextOffset;
+    final idDepsStart = depsCountRec.nextOffset;
 
-    if (offset + OperationId.byteLength > data.length) {
+    // id + deps occupy (1 + depsCount) * 24 contiguous bytes — the same
+    // layout used by the internal [bytes] field, so we can slice without
+    // round-tripping through OperationId objects.
+    if (idDepsStart + OperationId.byteLength > data.length) {
       throw const FormatException('Truncated Change id');
     }
-    final id = OperationId.fromUint8List(data, offset: offset);
-    offset += OperationId.byteLength;
-
-    final deps = <OperationId>{};
-    for (var i = 0; i < depsCount; i += 1) {
-      if (offset + OperationId.byteLength > data.length) {
-        throw const FormatException('Truncated Change deps');
-      }
-      deps.add(OperationId.fromUint8List(data, offset: offset));
-      offset += OperationId.byteLength;
+    final idDepsLen = (1 + depsCount) * OperationId.byteLength;
+    final idDepsEnd = idDepsStart + idDepsLen;
+    if (idDepsEnd > data.length) {
+      throw const FormatException('Truncated Change deps');
     }
 
-    final payloadLenRec = UVarint.read(data, offset: offset);
+    final payloadLenRec = UVarint.read(data, offset: idDepsEnd);
     final payloadLen = payloadLenRec.value;
-    offset = payloadLenRec.nextOffset;
-
-    final payloadEnd = offset + payloadLen;
+    final payloadStart = payloadLenRec.nextOffset;
+    final payloadEnd = payloadStart + payloadLen;
     if (payloadEnd > data.length) {
       throw const FormatException('Truncated Change payload');
     }
-    final payload = Uint8List.sublistView(data, offset, payloadEnd);
-
     if (payloadEnd != data.length) {
       throw const FormatException('Trailing bytes after Change');
     }
 
-    return Change.fromPayloadBytes(
-      id: id,
-      deps: deps,
-      author: id.peerId,
-      payloadBytes: payload,
-    );
+    final bytes = Uint8List(idDepsLen + payloadLen)
+      ..setRange(0, idDepsLen, data, idDepsStart)
+      ..setRange(idDepsLen, idDepsLen + payloadLen, data, payloadStart);
+
+    final meta = Int32List(4);
+    meta[_metaSchema] = schemaVersion;
+    meta[_metaDepsCount] = depsCount;
+    meta[_metaPayloadOffset] = idDepsLen;
+    meta[_metaPayloadLength] = payloadLen;
+
+    return Change._(meta: meta, bytes: bytes);
   }
 
   /// Creates a new [Change] with the given properties.

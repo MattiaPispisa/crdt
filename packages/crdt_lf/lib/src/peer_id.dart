@@ -106,9 +106,9 @@ class PeerId with Comparable<PeerId> {
         continue;
       }
 
-      if (i + 1 >= id.length) {
-        throw FormatException('Invalid PeerId: $id');
-      }
+      // Invariant: validated UUID-v4 format guarantees pairs of hex digits
+      // between dashes, so we always have a second nibble to read.
+      assert(i + 1 < id.length, 'Invalid PeerId: $id');
 
       final hi = _hexValue(id.codeUnitAt(i));
       final lo = _hexValue(id.codeUnitAt(i + 1));
