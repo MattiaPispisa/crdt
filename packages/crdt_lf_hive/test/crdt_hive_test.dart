@@ -9,17 +9,16 @@ import 'package:hlc_dart/hlc_dart.dart';
 import 'package:test/test.dart';
 
 void main() {
-  group('CRDTHive without data adapter', () {
+  group('CRDTHive', () {
     late String tempDir;
 
     setUpAll(() async {
-      // Initialize adapters with JSON mode for payload/data
       CRDTHive.initialize();
     });
 
     setUp(() async {
       final directory =
-          await Directory.systemTemp.createTemp('crdt_hive_json_adapter_test');
+          await Directory.systemTemp.createTemp('crdt_hive_test');
       tempDir = directory.path;
       Hive.init(tempDir);
     });
@@ -164,6 +163,317 @@ void main() {
       expect(loaded!.id, equals('snap-json'));
       expect(loaded.versionVector.entries.length, equals(1));
       expect(loaded.data, equals(data));
+    });
+
+    group('Storage delete/contains single-item operations', () {
+      test('CRDTChangeStorage.deleteChange returns true then false', () async {
+        const documentId = 'doc-delete-change';
+        final storage =
+            await CRDTHive.openChangeStorageForDocument(documentId);
+
+        final id =
+            OperationId(PeerId.generate(), HybridLogicalClock(l: 1, c: 1));
+        final change = Change.fromPayloadBytes(
+          id: id,
+          deps: {},
+          author: id.peerId,
+          payloadBytes: Uint8List.fromList(const [1, 2, 3]),
+        );
+
+        await storage.saveChange(change);
+        expect(storage.count, equals(1));
+
+        // First delete: present → true.
+        expect(await storage.deleteChange(change), isTrue);
+        expect(storage.count, isZero);
+
+        // Second delete: absent → false (covers the `else` branch).
+        expect(await storage.deleteChange(change), isFalse);
+      });
+
+      test('CRDTSnapshotStorage.deleteSnapshot returns true then false',
+          () async {
+        const documentId = 'doc-delete-snapshot';
+        final storage =
+            await CRDTHive.openSnapshotStorageForDocument(documentId);
+
+        final author = PeerId.generate();
+        final snapshot = Snapshot(
+          id: 'snap-1',
+          versionVector: VersionVector(
+            {author: HybridLogicalClock(l: 1, c: 1)},
+          ),
+          data: {'k': 'v'},
+        );
+
+        await storage.saveSnapshot(snapshot);
+        expect(storage.count, equals(1));
+
+        expect(await storage.deleteSnapshot('snap-1'), isTrue);
+        expect(storage.count, isZero);
+
+        expect(await storage.deleteSnapshot('snap-1'), isFalse);
+      });
+
+      test('CRDTSnapshotStorage.containsSnapshot reflects presence', () async {
+        const documentId = 'doc-contains-snapshot';
+        final storage =
+            await CRDTHive.openSnapshotStorageForDocument(documentId);
+
+        expect(storage.containsSnapshot('absent'), isFalse);
+
+        final author = PeerId.generate();
+        await storage.saveSnapshot(
+          Snapshot(
+            id: 'present',
+            versionVector:
+                VersionVector({author: HybridLogicalClock(l: 1, c: 1)}),
+            data: {'k': 'v'},
+          ),
+        );
+        expect(storage.containsSnapshot('present'), isTrue);
+      });
+    });
+
+    group('Complex value types', () {
+      test(
+          'CRDTListHandler<ObjectValue> with binary codec round-trips '
+          'changes through Hive', () async {
+        const documentId = 'doc-complex-value';
+        var changeStorage =
+            await CRDTHive.openChangeStorageForDocument(documentId);
+
+        final document = CRDTDocument(peerId: PeerId.generate());
+        final list = CRDTListHandler<ObjectValue>(
+          document,
+          'shapes',
+          valueCodec: const ObjectValueCodec(),
+        );
+
+        const v1 = ObjectValue(
+          height: 10,
+          width: 20,
+          offsetX: 1.5,
+          offsetY: 2.5,
+        );
+        const v2 = ObjectValue(
+          height: 30,
+          width: 40,
+          offsetX: 3.5,
+          offsetY: 4.5,
+        );
+
+        list
+          ..insert(0, v1)
+          ..insert(1, v2);
+
+        await changeStorage.saveChanges(document.exportChanges());
+        await CRDTHive.closeAllBoxes();
+
+        changeStorage =
+            await CRDTHive.openChangeStorageForDocument(documentId);
+
+        final newDocument = CRDTDocument(peerId: PeerId.generate())
+          ..importChanges(changeStorage.getChanges());
+        final newList = CRDTListHandler<ObjectValue>(
+          newDocument,
+          'shapes',
+          valueCodec: const ObjectValueCodec(),
+        );
+
+        expect(newList.value, equals([v1, v2]));
+      });
+
+      test(
+          'Snapshot.data with nested JSON-serializable map '
+          'round-trips through Hive', () async {
+        const documentId = 'doc-complex-snapshot';
+        final storage =
+            await CRDTHive.openSnapshotStorageForDocument(documentId);
+
+        // ObjectValue serialized as JSON-friendly Map (the new contract for
+        // Snapshot.data): keys/values must survive json.encode/json.decode.
+        final author = PeerId.generate();
+        final shapesAsMaps = [
+          {'height': 10, 'width': 20, 'offsetX': 1.5, 'offsetY': 2.5},
+          {'height': 30, 'width': 40, 'offsetX': 3.5, 'offsetY': 4.5},
+        ];
+
+        final snapshot = Snapshot(
+          id: 'snap-shapes',
+          versionVector: VersionVector(
+            {author: HybridLogicalClock(l: 9, c: 1)},
+          ),
+          data: {'shapes': shapesAsMaps},
+        );
+
+        await storage.saveSnapshot(snapshot);
+        await CRDTHive.closeAllBoxes();
+
+        final reopened =
+            await CRDTHive.openSnapshotStorageForDocument(documentId);
+        final loaded = reopened.getSnapshot('snap-shapes');
+        expect(loaded, isNotNull);
+        expect(loaded!.data['shapes'], equals(shapesAsMaps));
+      });
+    });
+
+    group('Multiple documents', () {
+      test('should handle multiple documents independently', () async {
+        final document1 = CRDTDocument(
+          peerId: PeerId.parse('5fe9139e-6c1d-4a6b-a767-4071b1e379dd'),
+        );
+        final document2 = CRDTDocument(
+          peerId: PeerId.parse('32f8d819-8b64-4cf2-a239-e2e6414b19ef'),
+        );
+        final changes1 = <Change>[];
+        final changes2 = <Change>[];
+        document1.localChanges.listen(changes1.add);
+        document2.localChanges.listen(changes2.add);
+
+        CRDTListHandler<String>(document1, 'list')
+          ..insert(0, 'a')
+          ..insert(1, 'b');
+        CRDTListHandler<String>(document2, 'list')
+          ..insert(0, 'c')
+          ..insert(1, 'd');
+
+        await Future<void>.delayed(Duration.zero);
+
+        var storage1 = await CRDTHive.openChangeStorageForDocument(
+          document1.peerId.toString(),
+        );
+        var storage2 = await CRDTHive.openChangeStorageForDocument(
+          document2.peerId.toString(),
+        );
+        await storage1.saveChanges(changes1);
+        await storage2.saveChanges(changes2);
+
+        expect(storage1.count, equals(2));
+        expect(storage2.count, equals(2));
+
+        await CRDTHive.closeAllBoxes();
+
+        storage1 = await CRDTHive.openChangeStorageForDocument(
+          document1.peerId.toString(),
+        );
+        storage2 = await CRDTHive.openChangeStorageForDocument(
+          document2.peerId.toString(),
+        );
+
+        final reopened1 = CRDTDocument(peerId: PeerId.generate())
+          ..importChanges(storage1.getChanges());
+        final reopened2 = CRDTDocument(peerId: PeerId.generate())
+          ..importChanges(storage2.getChanges());
+
+        expect(
+          CRDTListHandler<String>(reopened1, 'list').value,
+          equals(['a', 'b']),
+        );
+        expect(
+          CRDTListHandler<String>(reopened2, 'list').value,
+          equals(['c', 'd']),
+        );
+      });
+    });
+
+    group('CRDTDocumentStorage', () {
+      test('constructor holds both storages', () async {
+        const documentId = 'doc-store-ctor';
+        final changeStorage =
+            await CRDTHive.openChangeStorageForDocument(documentId);
+        final snapshotStorage =
+            await CRDTHive.openSnapshotStorageForDocument(documentId);
+
+        final docStorage = CRDTDocumentStorage(
+          changes: changeStorage,
+          snapshots: snapshotStorage,
+        );
+
+        expect(docStorage.changes, isA<CRDTChangeStorage>());
+        expect(docStorage.snapshots, isA<CRDTSnapshotStorage>());
+      });
+
+      test('openStorageForDocument opens both storages and persists', () async {
+        const documentId = 'doc-open-both';
+        final storage = await CRDTHive.openStorageForDocument(documentId);
+
+        expect(storage.changes, isA<CRDTChangeStorage>());
+        expect(storage.snapshots, isA<CRDTSnapshotStorage>());
+
+        final id =
+            OperationId(PeerId.generate(), HybridLogicalClock(l: 1, c: 1));
+        final change = Change.fromPayloadBytes(
+          id: id,
+          deps: {},
+          author: id.peerId,
+          payloadBytes: Uint8List.fromList(const [1, 2, 3]),
+        );
+        await storage.changes.saveChange(change);
+
+        final snap = Snapshot(
+          id: 'snap-1',
+          versionVector: VersionVector({id.peerId: id.hlc}),
+          data: {'k': 'v'},
+        );
+        await storage.snapshots.saveSnapshot(snap);
+
+        await CRDTHive.closeAllBoxes();
+
+        final reopened = await CRDTHive.openStorageForDocument(documentId);
+        expect(reopened.changes.getChanges(), isNotEmpty);
+        expect(reopened.snapshots.getSnapshots(), isNotEmpty);
+      });
+
+      test('deleteBox removes an arbitrary box from disk', () async {
+        const boxName = 'temp_box_for_delete';
+        final box = await Hive.openBox<String>(boxName);
+        await box.put('k', 'v');
+        await box.close();
+
+        await CRDTHive.deleteBox(boxName);
+
+        final reopened = await Hive.openBox<String>(boxName);
+        expect(reopened.length, 0);
+        await reopened.close();
+      });
+
+      test('deleteDocumentData removes both changes_ and snapshots_ boxes',
+          () async {
+        const documentId = 'doc-del-data';
+        final changes = await CRDTHive.openChangeStorageForDocument(documentId);
+        final snapshots =
+            await CRDTHive.openSnapshotStorageForDocument(documentId);
+
+        final id =
+            OperationId(PeerId.generate(), HybridLogicalClock(l: 5, c: 1));
+        await changes.saveChange(
+          Change.fromPayloadBytes(
+            id: id,
+            deps: {},
+            author: id.peerId,
+            payloadBytes: Uint8List.fromList(const [9, 8, 7]),
+          ),
+        );
+        await snapshots.saveSnapshot(
+          Snapshot(
+            id: 's-del',
+            versionVector: VersionVector({id.peerId: id.hlc}),
+            data: {'d': 1},
+          ),
+        );
+
+        await CRDTHive.closeAllBoxes();
+        await CRDTHive.deleteDocumentData(documentId);
+
+        final reopenedChanges =
+            await CRDTHive.openChangeStorageForDocument(documentId);
+        final reopenedSnapshots =
+            await CRDTHive.openSnapshotStorageForDocument(documentId);
+
+        expect(reopenedChanges.count, 0);
+        expect(reopenedSnapshots.count, 0);
+      });
     });
 
     group('All handlers with JSON mode', () {
@@ -500,4 +810,58 @@ void main() {
       });
     });
   });
+}
+
+class ObjectValue {
+  const ObjectValue({
+    required this.height,
+    required this.width,
+    required this.offsetX,
+    required this.offsetY,
+  });
+
+  final double height;
+  final double width;
+  final double offsetX;
+  final double offsetY;
+
+  @override
+  bool operator ==(Object other) {
+    if (identical(this, other)) {
+      return true;
+    }
+    return other is ObjectValue &&
+        other.height == height &&
+        other.width == width &&
+        other.offsetX == offsetX &&
+        other.offsetY == offsetY;
+  }
+
+  @override
+  int get hashCode => Object.hash(height, width, offsetX, offsetY);
+}
+
+class ObjectValueCodec implements ValueCodec<ObjectValue> {
+  const ObjectValueCodec();
+
+  @override
+  Uint8List encode(ObjectValue value) {
+    final out = ByteData(32)
+      ..setFloat64(0, value.height)
+      ..setFloat64(8, value.width)
+      ..setFloat64(16, value.offsetX)
+      ..setFloat64(24, value.offsetY);
+    return out.buffer.asUint8List();
+  }
+
+  @override
+  ObjectValue decode(Uint8List bytes) {
+    final view = ByteData.sublistView(bytes);
+    return ObjectValue(
+      height: view.getFloat64(0),
+      width: view.getFloat64(8),
+      offsetX: view.getFloat64(16),
+      offsetY: view.getFloat64(24),
+    );
+  }
 }

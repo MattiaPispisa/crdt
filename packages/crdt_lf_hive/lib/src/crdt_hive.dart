@@ -1,7 +1,6 @@
 import 'package:crdt_lf/crdt_lf.dart';
 import 'package:crdt_lf_hive/crdt_lf_hive.dart';
 import 'package:hive/hive.dart';
-import 'package:hlc_dart/hlc_dart.dart';
 
 /// Container class for both change and snapshot storage for a document.
 class CRDTDocumentStorage {
@@ -37,45 +36,23 @@ class CRDTHive {
   /// Initializes Hive with all CRDT adapters.
   ///
   /// This method must be called before using any CRDT objects with Hive.
-  /// It registers all the necessary type adapters for:
-  /// - [PeerId]
-  /// - [HybridLogicalClock]
-  /// - [VersionVector]
-  /// - [Change]
-  /// - [Snapshot]
+  /// It registers the type adapters for:
+  /// - [Change] — serialized via [Change.toBytes]
+  /// - [Snapshot] — serialized via [Snapshot.toBytes]
   ///
-  /// [useDataAdapter] controls how [Snapshot.data] is serialized:
-  /// `true` uses registered Hive type adapters per nested value;
-  /// `false` falls back to `json.encode`/`json.decode`.
-  /// Operation payloads inside [Change] are always stored as their compact
-  /// binary representation via [Change.toBytes], regardless of this flag.
+  /// Both [Change] and [Snapshot] are persisted as compact binary blobs using
+  /// the self-describing format provided by `crdt_lf`. No recursive Hive
+  /// adapters are involved.
   ///
   /// The typeId parameters allow customizing the Hive type IDs for each adapter
   /// if needed to avoid conflicts with other adapters in your application.
-  /// Default typeIds are in range 100-108.
   static void initialize({
-    bool useDataAdapter = false,
-    int? peerIdTypeId,
-    int? hybridLogicalClockTypeId,
-    int? versionVectorTypeId,
     int? changeTypeId,
     int? snapshotTypeId,
-    int? fugueElementIdTypeId,
-    int? fugueValueNodeTypeId,
   }) {
-    // Register all adapters
     Hive
-      ..registerAdapter(PeerIdAdapter(typeId: peerIdTypeId))
-      ..registerAdapter(
-        HybridLogicalClockAdapter(typeId: hybridLogicalClockTypeId),
-      )
-      ..registerAdapter(VersionVectorAdapter(typeId: versionVectorTypeId))
       ..registerAdapter(ChangeAdapter(typeId: changeTypeId))
-      ..registerAdapter(
-        SnapshotAdapter(useDataAdapter: useDataAdapter, typeId: snapshotTypeId),
-      )
-      ..registerAdapter(FugueElementIDAdapter(typeId: fugueElementIdTypeId))
-      ..registerAdapter(FugueValueNodeAdapter(typeId: fugueValueNodeTypeId));
+      ..registerAdapter(SnapshotAdapter(typeId: snapshotTypeId));
   }
 
   /// Creates a [CRDTChangeStorage] for a specific document.

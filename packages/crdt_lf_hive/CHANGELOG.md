@@ -6,17 +6,27 @@
 **Breaking changes**
 
 - `ChangeAdapter` no longer accepts the `useDataAdapter` parameter, which is removed. The adapter now always serializes `Change` objects via `Change.toBytes()` / `Change.fromBytes()`.
+- `SnapshotAdapter` is now a thin wrapper around `Snapshot.toBytes()` / `Snapshot.fromBytes()`. The `useDataAdapter` constructor parameter has been removed: `Snapshot.data` is always serialized via `JsonValueCodec` (its values must be JSON-serializable).
 - **Storage format changed**: existing Hive boxes written with `0.x` adapters are not readable by this version. A one-time migration (read with old adapter, write with new) is required before upgrading.
-- `OperationIdAdapter` and the `kOperationIdAdapter` constant have been removed. The new `ChangeAdapter` serializes `Change` as a single binary blob via `Change.toBytes()`, so no nested `OperationId` adapter is involved in the serialization path. `CRDTHive.initialize` no longer accepts the `operationIdTypeId` parameter; type id `102` is now unused.
+- Removed adapters that are no longer part of the persistence pipeline (changes and snapshots are stored as opaque binary blobs):
+  - `PeerIdAdapter` / `kPeerIdAdapter`
+  - `HybridLogicalClockAdapter` / `kHybridLogicalClockAdapter`
+  - `OperationIdAdapter` / `kOperationIdAdapter`
+  - `VersionVectorAdapter` / `kVersionVectorAdapter`
+  - `FugueElementIDAdapter` / `kFugueElementIDAdapter`
+  - `FugueValueNodeAdapter` / `kFugueValueNodeAdapter`
+- `CRDTHive.initialize` signature reduced to `({int? changeTypeId, int? snapshotTypeId})`. The `useDataAdapter`, `peerIdTypeId`, `hybridLogicalClockTypeId`, `operationIdTypeId`, `versionVectorTypeId`, `fugueElementIdTypeId`, `fugueValueNodeTypeId` parameters have been removed.
 - Updated `crdt_lf` dependency to `^3.0.0`.
 
 ### Changed
 
 - `ChangeAdapter` rewritten to use the compact binary format introduced by `crdt_lf` 3.0.0. Stores a raw byte list per change instead of JSON-encoded fields, reducing storage size and eliminating runtime JSON parsing.
+- `SnapshotAdapter` rewritten as a single-byte-list wrapper around `Snapshot.toBytes()` / `Snapshot.fromBytes()`. No more recursive `BinaryWriter`/`BinaryReader` calls into nested types.
 
 ### Removed
 
-- `OperationIdAdapter` and `kOperationIdAdapter` (no longer needed by the new `ChangeAdapter` pipeline).
+- `OperationIdAdapter`, `PeerIdAdapter`, `HybridLogicalClockAdapter`, `VersionVectorAdapter`, `FugueElementIDAdapter`, `FugueValueNodeAdapter` and their `k*Adapter` type-id constants. With `Change` and `Snapshot` serialized as binary blobs, no nested Hive adapters are involved in the pipeline.
+- `useDataAdapter` flag from `SnapshotAdapter` and `CRDTHive.initialize`. Use `Snapshot.data` with JSON-serializable values instead.
 
 ## [0.2.3](https://github.com/MattiaPispisa/crdt/tree/crdt_lf_hive-v0.2.3/packages/crdt_lf_hive)
 **Date:** 2025-11-22

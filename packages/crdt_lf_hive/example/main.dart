@@ -10,8 +10,7 @@ Future<void> main() async {
   final documentId = PeerId.parse('784ff372-6f0a-4fe9-8e63-19b72fd18c23');
 
   Hive.init(dbLocation);
-  CRDTHive.initialize(useDataAdapter: true);
-  Hive.registerAdapter(ListAdapter());
+  CRDTHive.initialize();
 
   final changeStorage = await CRDTHive.openChangeStorageForDocument(
     documentId.toString(),
@@ -22,15 +21,12 @@ Future<void> main() async {
   final document = CRDTDocument(peerId: documentId)
     ..importChanges(changeStorage.getChanges())
     ..localChanges.listen(changesToSave.add);
-  final list = CRDTListHandler<ListValue>(document, 'list');
+  final list = CRDTListHandler<String>(document, 'list');
 
   final length = list.value.length;
 
   for (var i = length; i < length + changesToInsert; i++) {
-    list.insert(
-      i,
-      ListValue(value: 'Item $i', isDone: false),
-    );
+    list.insert(i, 'Item $i');
   }
 
   print('${document.exportChanges().length} changes ');
@@ -47,37 +43,4 @@ Future<void> main() async {
   await CRDTHive.closeAllBoxes();
 
   print('boxes closed');
-}
-
-class ListValue {
-  const ListValue({
-    required this.value,
-    required this.isDone,
-  });
-
-  final String value;
-  final bool isDone;
-
-  @override
-  String toString() => 'ListValue(value: $value, isDone: $isDone)';
-}
-
-class ListAdapter extends TypeAdapter<ListValue> {
-  @override
-  final int typeId = 200;
-
-  @override
-  ListValue read(BinaryReader reader) {
-    return ListValue(
-      value: reader.readString(),
-      isDone: reader.readBool(),
-    );
-  }
-
-  @override
-  void write(BinaryWriter writer, ListValue obj) {
-    writer
-      ..writeString(obj.value)
-      ..writeBool(obj.isDone);
-  }
 }
