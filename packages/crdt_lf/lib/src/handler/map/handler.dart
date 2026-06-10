@@ -1,3 +1,6 @@
+import 'dart:convert';
+import 'dart:typed_data';
+
 import 'package:crdt_lf/crdt_lf.dart';
 
 part 'operation.dart';
@@ -25,14 +28,23 @@ part 'operation.dart';
 /// ```
 class CRDTMapHandler<T> extends Handler<Map<String, T>> {
   /// Creates a new CRDTMap with the given document and ID
-  CRDTMapHandler(super.doc, this._id);
+  ///
+  /// [valueCodec] is an optional codec for encoding/decoding [T] values to bytes.
+  /// Default is [JsonValueCodec].
+  CRDTMapHandler(
+    super.doc,
+    this._id, {
+    ValueCodec<T>? valueCodec,
+  }) : _valueCodec = valueCodec ?? JsonValueCodec<T>();
 
   /// The ID of this map in the document
   final String _id;
 
+  final ValueCodec<T> _valueCodec;
+
   @override
   late final OperationFactory operationFactory =
-      _MapOperationFactory<T>(this).fromPayload;
+      _MapOperationFactory<T>(this).fromBytes;
 
   @override
   String get id => _id;

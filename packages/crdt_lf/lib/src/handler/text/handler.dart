@@ -1,4 +1,6 @@
+import 'dart:convert';
 import 'dart:math';
+import 'dart:typed_data';
 
 import 'package:crdt_lf/crdt_lf.dart';
 
@@ -34,7 +36,7 @@ class CRDTTextHandler extends Handler<String> {
 
   @override
   late final OperationFactory operationFactory =
-      _TextOperationFactory(this).fromPayload;
+      _TextOperationFactory(this).fromBytes;
 
   /// Inserts [text] at the specified [index]
   void insert(int index, String text) {

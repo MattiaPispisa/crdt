@@ -1,6 +1,27 @@
 import 'dart:convert';
 import 'package:crdt_lf/crdt_lf.dart';
 
+/// Base64-encodes the binary representation of [change].
+String _encodeChange(Change change) => base64Encode(change.toBytes());
+
+/// Decodes a base64-encoded [Change].
+Change _decodeChange(String value) => Change.fromBytes(base64Decode(value));
+
+/// Base64-encodes the binary representation of [vector].
+String _encodeVersionVector(VersionVector vector) =>
+    base64Encode(vector.toBytes());
+
+/// Decodes a base64-encoded [VersionVector].
+VersionVector _decodeVersionVector(String value) =>
+    VersionVector.fromBytes(base64Decode(value));
+
+/// Base64-encodes the binary representation of [snapshot].
+String _encodeSnapshot(Snapshot snapshot) => base64Encode(snapshot.toBytes());
+
+/// Decodes a base64-encoded [Snapshot].
+Snapshot _decodeSnapshot(String value) =>
+    Snapshot.fromBytes(base64Decode(value));
+
 /// base message type class
 abstract class MessageTypeValue {
   /// index
@@ -193,9 +214,7 @@ class HandshakeRequestMessage extends Message {
   /// Create a handshake message from a JSON map
   factory HandshakeRequestMessage.fromJson(Map<String, dynamic> json) {
     return HandshakeRequestMessage(
-      versionVector: VersionVector.fromJson(
-        json['versionVector'] as Map<String, dynamic>,
-      ),
+      versionVector: _decodeVersionVector(json['versionVector'] as String),
       documentId: json['documentId'] as String,
       author: PeerId.parse(json['author'] as String),
     );
@@ -213,7 +232,7 @@ class HandshakeRequestMessage extends Message {
       'type': type.value,
       'documentId': documentId,
       'author': author.toString(),
-      'versionVector': versionVector.toJson(),
+      'versionVector': _encodeVersionVector(versionVector),
     };
   }
 
@@ -240,17 +259,15 @@ class HandshakeResponseMessage extends Message {
     return HandshakeResponseMessage(
       documentId: json['documentId'] as String,
       snapshot: json['snapshot'] != null
-          ? Snapshot.fromJson(json['snapshot'] as Map<String, dynamic>)
+          ? _decodeSnapshot(json['snapshot'] as String)
           : null,
       changes: json['changes'] != null
           ? (json['changes'] as List<dynamic>)
-              .map((c) => Change.fromJson(c as Map<String, dynamic>))
+              .map((c) => _decodeChange(c as String))
               .toList()
           : null,
       sessionId: json['sessionId'] as String,
-      versionVector: VersionVector.fromJson(
-        json['versionVector'] as Map<String, dynamic>,
-      ),
+      versionVector: _decodeVersionVector(json['versionVector'] as String),
     );
   }
 
@@ -271,10 +288,10 @@ class HandshakeResponseMessage extends Message {
     return {
       'type': type.value,
       'documentId': documentId,
-      'snapshot': snapshot?.toJson(),
-      'changes': changes?.map((c) => c.toJson()).toList(),
+      'snapshot': snapshot != null ? _encodeSnapshot(snapshot!) : null,
+      'changes': changes?.map(_encodeChange).toList(),
       'sessionId': sessionId,
-      'versionVector': versionVector.toJson(),
+      'versionVector': _encodeVersionVector(versionVector),
     };
   }
 
@@ -297,7 +314,7 @@ class ChangeMessage extends Message {
   /// Create a change message from a JSON map
   factory ChangeMessage.fromJson(Map<String, dynamic> json) {
     return ChangeMessage(
-      change: Change.fromJson(json['change'] as Map<String, dynamic>),
+      change: _decodeChange(json['change'] as String),
       documentId: json['documentId'] as String,
     );
   }
@@ -310,7 +327,7 @@ class ChangeMessage extends Message {
     return {
       'type': type.value,
       'documentId': documentId,
-      'change': change.toJson(),
+      'change': _encodeChange(change),
     };
   }
 
@@ -332,7 +349,7 @@ class ChangesMessage extends Message {
   factory ChangesMessage.fromJson(Map<String, dynamic> json) {
     return ChangesMessage(
       changes: (json['changes'] as List<dynamic>)
-          .map((c) => Change.fromJson(c as Map<String, dynamic>))
+          .map((c) => _decodeChange(c as String))
           .toList(),
       documentId: json['documentId'] as String,
     );
@@ -346,7 +363,7 @@ class ChangesMessage extends Message {
     return {
       'type': type.value,
       'documentId': documentId,
-      'changes': changes.map((c) => c.toJson()).toList(),
+      'changes': changes.map(_encodeChange).toList(),
     };
   }
 
@@ -370,17 +387,15 @@ class DocumentStatusMessage extends Message {
   factory DocumentStatusMessage.fromJson(Map<String, dynamic> json) {
     return DocumentStatusMessage(
       snapshot: json['snapshot'] != null
-          ? Snapshot.fromJson(json['snapshot'] as Map<String, dynamic>)
+          ? _decodeSnapshot(json['snapshot'] as String)
           : null,
       documentId: json['documentId'] as String,
       changes: json['changes'] != null
           ? (json['changes'] as List<dynamic>)
-              .map((c) => Change.fromJson(c as Map<String, dynamic>))
+              .map((c) => _decodeChange(c as String))
               .toList()
           : null,
-      versionVector: VersionVector.fromJson(
-        json['versionVector'] as Map<String, dynamic>,
-      ),
+      versionVector: _decodeVersionVector(json['versionVector'] as String),
     );
   }
 
@@ -398,9 +413,9 @@ class DocumentStatusMessage extends Message {
     return {
       'type': type.value,
       'documentId': documentId,
-      'snapshot': snapshot?.toJson(),
-      'changes': changes?.map((c) => c.toJson()).toList(),
-      'versionVector': versionVector.toJson(),
+      'snapshot': snapshot != null ? _encodeSnapshot(snapshot!) : null,
+      'changes': changes?.map(_encodeChange).toList(),
+      'versionVector': _encodeVersionVector(versionVector),
     };
   }
 
@@ -424,9 +439,7 @@ class DocumentStatusRequestMessage extends Message {
   factory DocumentStatusRequestMessage.fromJson(Map<String, dynamic> json) {
     return DocumentStatusRequestMessage(
       versionVector: json['versionVector'] != null
-          ? VersionVector.fromJson(
-              json['versionVector'] as Map<String, dynamic>,
-            )
+          ? _decodeVersionVector(json['versionVector'] as String)
           : null,
       documentId: json['documentId'] as String,
     );
@@ -440,7 +453,8 @@ class DocumentStatusRequestMessage extends Message {
     return {
       'type': type.value,
       'documentId': documentId,
-      'versionVector': versionVector?.toJson(),
+      'versionVector':
+          versionVector != null ? _encodeVersionVector(versionVector!) : null,
     };
   }
 

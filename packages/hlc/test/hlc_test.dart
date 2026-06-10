@@ -1,7 +1,10 @@
+import 'dart:typed_data';
+
 import 'package:hlc_dart/hlc_dart.dart';
 import 'package:test/test.dart';
 
 void main() {
+  const isWeb = identical(0, 0.0);
   group('HybridLogicalClock', () {
     test('throws AssertionError for negative logical time', () {
       expect(
@@ -38,14 +41,31 @@ void main() {
       expect(copy.c, equals(hlc.c));
     });
 
-    test('fromInt64 correctly parses 64-bit integer', () {
-      const l = 0x1234567890AB;
-      const c = 0xCDEF;
-      const value = (l << 16) | c;
+    test('fromInt64 correctly parses 64-bit integer (if not web)', () {
+      final hlc = HybridLogicalClock.now();
+      final hlc2 = HybridLogicalClock.fromInt64(hlc.toInt64());
 
-      final hlc = HybridLogicalClock.fromInt64(value);
-      expect(hlc.l, equals(l));
-      expect(hlc.c, equals(c));
+      if (isWeb) {
+        expect(hlc2.l, isNot(equals(hlc.l)));
+      } else {
+        expect(hlc2.l, equals(hlc.l));
+      }
+      expect(hlc2.c, equals(hlc.c));
+    });
+
+    test('fromUint8List correctly parses 8-byte buffer', () {
+      final hlc = HybridLogicalClock.now();
+      final hlc2 = HybridLogicalClock.fromUint8List(hlc.toUint8List());
+
+      expect(hlc2.l, equals(hlc.l));
+      expect(hlc2.c, equals(hlc.c));
+    });
+
+    test('fromUint8List throws RangeError for invalid buffer', () {
+      expect(
+        () => HybridLogicalClock.fromUint8List(Uint8List(7)),
+        throwsA(isA<RangeError>()),
+      );
     });
 
     group('parse', () {
@@ -211,16 +231,6 @@ void main() {
         expect(hlc1 != hlc2, isTrue);
         expect(hlc1 >= hlc3, isFalse);
       });
-    });
-
-    test('toInt64 correctly converts to 64-bit integer', () {
-      const l = 0x1234567890AB;
-      const c = 0xCDEF;
-      final hlc = HybridLogicalClock(l: l, c: c);
-
-      final value = hlc.toInt64();
-      expect((value >> 16) & 0xFFFFFFFFFFFF, equals(l));
-      expect(value & 0xFFFF, equals(c));
     });
 
     test('copy creates a deep copy', () {

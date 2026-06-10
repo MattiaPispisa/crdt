@@ -177,6 +177,70 @@ void main() {
       expect(tree.values(), isEmpty);
     });
 
+    test(
+        'insert with unknown leftOrigin and null rightOrigin '
+        'falls back to root left side', () {
+      final tree = FugueTree<dynamic>.empty();
+      final peerId = PeerId.parse('4e91a152-582f-4f46-8944-c2c2e8b217ff');
+      // leftOrigin is a node id that has never been inserted, and
+      // rightOrigin is null. This should still produce a usable node.
+      final unknownLeft = FugueElementID(peerId, 42);
+
+      tree.insert(
+        newID: FugueElementID(peerId, 1),
+        value: 'fallback',
+        leftOrigin: unknownLeft,
+        rightOrigin: FugueElementID.nullID(),
+      );
+
+      expect(tree.values(), equals(['fallback']));
+    });
+
+    test('findNextNode returns null when nodeID is not in tree', () {
+      final tree = FugueTree<dynamic>.empty();
+      final peerId = PeerId.parse('4e91a152-582f-4f46-8944-c2c2e8b217ff');
+      // Use an ID that has not been inserted.
+      final unknown = FugueElementID(peerId, 999);
+      final result = tree.findNextNode(unknown);
+      expect(result.isNull, isTrue);
+    });
+
+    test('toString renders a tree with left and right children', () {
+      final tree = FugueTree<dynamic>.empty();
+      final peerId = PeerId.parse('4e91a152-582f-4f46-8944-c2c2e8b217ff');
+      final root = FugueElementID(peerId, 1);
+      // root node as a right child of the implicit tree root
+      tree
+        ..insert(
+          newID: root,
+          value: 'root',
+          leftOrigin: FugueElementID.nullID(),
+          rightOrigin: FugueElementID.nullID(),
+        )
+        // adds a right child of root
+        ..insert(
+          newID: FugueElementID(peerId, 2),
+          value: 'right',
+          leftOrigin: root,
+          rightOrigin: FugueElementID.nullID(),
+        )
+        // adds a left child of root by setting rightOrigin=root
+        ..insert(
+          newID: FugueElementID(peerId, 3),
+          value: 'left',
+          leftOrigin: FugueElementID.nullID(),
+          rightOrigin: root,
+        );
+
+      final str = tree.toString();
+      expect(str, contains('Tree:'));
+      expect(str, contains('Left children:'));
+      expect(str, contains('Right children:'));
+      // both children should appear in the rendering
+      expect(str, contains('left'));
+      expect(str, contains('right'));
+    });
+
     test('values returns all non-deleted values in order', () {
       final tree = FugueTree<dynamic>.empty();
       final peerId = PeerId.parse('4e91a152-582f-4f46-8944-c2c2e8b217ff');

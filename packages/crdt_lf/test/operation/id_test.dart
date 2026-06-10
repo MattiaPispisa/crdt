@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:crdt_lf/crdt_lf.dart';
 import 'package:hlc_dart/hlc_dart.dart';
 import 'package:test/test.dart';
@@ -116,6 +118,33 @@ void main() {
       expect(operationId2.happenedAfter(operationId1), isTrue);
       expect(operationId1.happenedAfter(operationId2), isFalse);
       expect(operationId1.happenedAfter(operationId3), isFalse);
+    });
+
+    test('fromUint8List throws RangeError on negative offset', () {
+      expect(
+        () => OperationId.fromUint8List(
+          Uint8List(OperationId.byteLength),
+          offset: -1,
+        ),
+        throwsA(isA<RangeError>()),
+      );
+    });
+
+    test('fromUint8List throws RangeError when buffer is too short', () {
+      expect(
+        () => OperationId.fromUint8List(Uint8List(8)),
+        throwsA(isA<RangeError>()),
+      );
+    });
+
+    test('fromUint8List throws RangeError when offset overflows', () {
+      expect(
+        () => OperationId.fromUint8List(
+          Uint8List(OperationId.byteLength),
+          offset: 1,
+        ),
+        throwsA(isA<RangeError>()),
+      );
     });
 
     test('happenedAfterOrEqual works correctly', () {

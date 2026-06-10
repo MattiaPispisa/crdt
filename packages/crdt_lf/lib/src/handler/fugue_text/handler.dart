@@ -1,3 +1,6 @@
+import 'dart:convert';
+import 'dart:typed_data';
+
 import 'package:crdt_lf/crdt_lf.dart';
 part 'operation.dart';
 
@@ -27,15 +30,17 @@ class CRDTFugueTextHandler extends Handler<FugueTextState> {
   /// The ID of this handler in the document
   final String _id;
 
-  /// Counter to generate unique IDs for elements
-  int _counter = 0;
+  /// Counter to generate unique IDs for elements.
+  ///
+  /// Lazily computed on first.
+  int? _counter;
 
   @override
   String get id => _id;
 
   @override
   late final OperationFactory operationFactory =
-      _FugueTextOperationFactory(this).fromPayload;
+      _FugueTextOperationFactory(this).fromBytes;
 
   /// Inserts [text] at position [index]
   void insert(int index, String text) {
@@ -56,7 +61,7 @@ class CRDTFugueTextHandler extends Handler<FugueTextState> {
     // Generate IDs for each character preserving the previous behavior
     final items = <_FugueInsertItem>[];
     for (var i = 0; i < text.length; i++) {
-      final newNodeID = FugueElementID(doc.peerId, _counter++);
+      final newNodeID = FugueElementID(doc.peerId, _nextCounter());
       items.add(
         _FugueInsertItem(
           id: newNodeID,
@@ -74,6 +79,45 @@ class CRDTFugueTextHandler extends Handler<FugueTextState> {
         items: items,
       ),
     );
+  }
+
+  /// Returns the next unique counter for this peer
+  /// Initializing lazily on first call by scanning
+  /// all existing operations and snapshot nodes.
+  int _nextCounter() {
+    if (_counter == null) {
+      var max = -1;
+      for (final node in _initialState()) {
+        final id = node.id;
+        if (!id.isNull && id.replicaID == doc.peerId) {
+          final c = id.counter!;
+          if (c > max) max = c;
+        }
+      }
+      for (final op in operations()) {
+        if (op is _FugueTextInsertOperation) {
+          for (final item in op.items) {
+            final id = item.id;
+            if (!id.isNull && id.replicaID == doc.peerId) {
+              final c = id.counter!;
+              if (c > max) max = c;
+            }
+          }
+        } else if (op is _FugueTextUpdateOperation) {
+          for (final item in op.items) {
+            final id = item.newNodeID;
+            if (!id.isNull && id.replicaID == doc.peerId) {
+              final c = id.counter!;
+              if (c > max) max = c;
+            }
+          }
+        }
+      }
+      _counter = max + 1;
+    }
+    final result = _counter!;
+    _counter = result + 1;
+    return result;
   }
 
   /// Deletes [count] characters starting from position [index]
@@ -130,7 +174,7 @@ class CRDTFugueTextHandler extends Handler<FugueTextState> {
     final items = <_FugueUpdateItem>[];
     for (var i = 0; i < targets.length; i++) {
       final nodeID = targets[i];
-      final newNodeID = FugueElementID(doc.peerId, _counter++);
+      final newNodeID = FugueElementID(doc.peerId, _nextCounter());
       final ch = text[i];
       items.add(
         _FugueUpdateItem(

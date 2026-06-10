@@ -161,19 +161,19 @@ class DAG {
     }
 
     final ancestors = <OperationId>{};
-    final queue = <OperationId>[id];
+    // DFS stack
+    final stack = <OperationId>[id];
 
-    while (queue.isNotEmpty) {
-      final nodeId = queue.removeAt(0);
-      if (ancestors.contains(nodeId)) {
+    while (stack.isNotEmpty) {
+      final nodeId = stack.removeLast();
+      if (!ancestors.add(nodeId)) {
         continue;
       }
 
-      ancestors.add(nodeId);
-
-      final node = _nodes[nodeId]!;
-      for (final parentId in node.parents) {
-        queue.add(parentId);
+      for (final parentId in _nodes[nodeId]!.parents) {
+        if (!ancestors.contains(parentId)) {
+          stack.add(parentId);
+        }
       }
     }
 

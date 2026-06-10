@@ -2,19 +2,25 @@ part of 'handler.dart';
 
 class _MapOperationFactory<T> {
   _MapOperationFactory(this.handler);
-  final Handler<dynamic> handler;
+  final CRDTMapHandler<T> handler;
 
-  Operation? fromPayload(Map<String, dynamic> payload) {
-    if (Operation.handlerIdFrom(payload: payload) != handler.id) {
+  Operation? fromBytes(Uint8List operationBytes) {
+    final env = OperationEnvelopeCodec.decode(operationBytes);
+    if (env.handlerId != handler.id) {
       return null;
     }
 
-    if (payload['type'] == OperationType.insert(handler).toPayload()) {
-      return _MapInsertOperation<T>.fromPayload(payload);
-    } else if (payload['type'] == OperationType.delete(handler).toPayload()) {
-      return _MapDeleteOperation<T>.fromPayload(payload);
-    } else if (payload['type'] == OperationType.update(handler).toPayload()) {
-      return _MapUpdateOperation<T>.fromPayload(payload);
+    if (env.handlerType != handler.runtimeType.toString()) {
+      return null;
+    }
+
+    final body = Uint8List.sublistView(operationBytes, env.bodyOffset);
+    if (env.kind == OperationType.kindInsert) {
+      return _MapInsertOperation<T>.fromBodyBytes(handler, body);
+    } else if (env.kind == OperationType.kindDelete) {
+      return _MapDeleteOperation<T>.fromBodyBytes(handler, body);
+    } else if (env.kind == OperationType.kindUpdate) {
+      return _MapUpdateOperation<T>.fromBodyBytes(handler, body);
     }
 
     return null;
@@ -25,35 +31,76 @@ class _MapInsertOperation<T> extends Operation {
   const _MapInsertOperation({
     required this.key,
     required this.value,
+    required this.valueCodec,
     required super.id,
     required super.type,
   });
 
-  factory _MapInsertOperation.fromPayload(
-    Map<String, dynamic> payload,
-  ) =>
-      _MapInsertOperation<T>(
-        id: payload['id'] as String,
-        type: OperationType.fromPayload(payload['type'] as String),
-        key: payload['key'] as String,
-        value: payload['value'] as T,
-      );
-
   factory _MapInsertOperation.fromHandler(
-    Handler<dynamic> handler, {
+    CRDTMapHandler<T> handler, {
     required String key,
     required T value,
   }) {
     return _MapInsertOperation<T>(
       id: handler.id,
-      type: OperationType.insert(handler),
+      type: handler.insertType,
       key: key,
       value: value,
+      valueCodec: handler._valueCodec,
+    );
+  }
+
+  factory _MapInsertOperation.fromBodyBytes(
+    CRDTMapHandler<T> handler,
+    Uint8List body,
+  ) {
+    var offset = 0;
+    final keyLenRec = UVarint.read(body, offset: offset);
+    final keyLen = keyLenRec.value;
+    offset = keyLenRec.nextOffset;
+    final keyEnd = offset + keyLen;
+    if (keyEnd > body.length) {
+      throw const FormatException('Truncated map insert key');
+    }
+    final key = utf8.decode(Uint8List.sublistView(body, offset, keyEnd));
+    offset = keyEnd;
+
+    final valLenRec = UVarint.read(body, offset: offset);
+    final valLen = valLenRec.value;
+    offset = valLenRec.nextOffset;
+    final valEnd = offset + valLen;
+    if (valEnd > body.length) {
+      throw const FormatException('Truncated map insert value');
+    }
+    final valueBytes = Uint8List.sublistView(body, offset, valEnd);
+    final value = handler._valueCodec.decode(valueBytes);
+
+    return _MapInsertOperation<T>(
+      id: handler.id,
+      type: handler.insertType,
+      key: key,
+      value: value,
+      valueCodec: handler._valueCodec,
     );
   }
 
   final String key;
   final T value;
+  final ValueCodec<T> valueCodec;
+
+  @override
+  Uint8List toBodyBytes() {
+    final out = BytesBuilder(copy: false);
+    final keyBytes = utf8.encode(key);
+    UVarint.write(keyBytes.length, out);
+    out.add(keyBytes);
+
+    final valBytes = valueCodec.encode(value);
+    UVarint.write(valBytes.length, out);
+    out.add(valBytes);
+
+    return out.toBytes();
+  }
 
   @override
   Map<String, dynamic> toPayload() => {
@@ -70,27 +117,43 @@ class _MapDeleteOperation<T> extends Operation {
     required super.type,
   });
 
-  factory _MapDeleteOperation.fromPayload(
-    Map<String, dynamic> payload,
-  ) =>
-      _MapDeleteOperation<T>(
-        id: payload['id'] as String,
-        type: OperationType.fromPayload(payload['type'] as String),
-        key: payload['key'] as String,
-      );
-
   factory _MapDeleteOperation.fromHandler(
-    Handler<dynamic> handler, {
+    CRDTMapHandler<T> handler, {
     required String key,
   }) {
     return _MapDeleteOperation<T>(
       id: handler.id,
-      type: OperationType.delete(handler),
+      type: handler.deleteType,
       key: key,
     );
   }
 
+  factory _MapDeleteOperation.fromBodyBytes(
+    CRDTMapHandler<T> handler,
+    Uint8List body,
+  ) {
+    var offset = 0;
+    final keyLenRec = UVarint.read(body, offset: offset);
+    final keyLen = keyLenRec.value;
+    offset = keyLenRec.nextOffset;
+    final keyEnd = offset + keyLen;
+    if (keyEnd > body.length) {
+      throw const FormatException('Truncated map delete key');
+    }
+    final key = utf8.decode(Uint8List.sublistView(body, offset, keyEnd));
+    return _MapDeleteOperation<T>.fromHandler(handler, key: key);
+  }
+
   final String key;
+
+  @override
+  Uint8List toBodyBytes() {
+    final out = BytesBuilder(copy: false);
+    final keyBytes = utf8.encode(key);
+    UVarint.write(keyBytes.length, out);
+    out.add(keyBytes);
+    return out.toBytes();
+  }
 
   @override
   Map<String, dynamic> toPayload() => {
@@ -103,33 +166,76 @@ class _MapUpdateOperation<T> extends Operation {
   const _MapUpdateOperation({
     required this.key,
     required this.value,
+    required this.valueCodec,
     required super.id,
     required super.type,
   });
 
   factory _MapUpdateOperation.fromHandler(
-    Handler<dynamic> handler, {
+    CRDTMapHandler<T> handler, {
     required String key,
     required T value,
   }) {
     return _MapUpdateOperation(
       id: handler.id,
-      type: OperationType.update(handler),
+      type: handler.updateType,
       key: key,
       value: value,
+      valueCodec: handler._valueCodec,
     );
   }
 
-  factory _MapUpdateOperation.fromPayload(Map<String, dynamic> payload) =>
-      _MapUpdateOperation<T>(
-        id: payload['id'] as String,
-        type: OperationType.fromPayload(payload['type'] as String),
-        key: payload['key'] as String,
-        value: payload['value'] as T,
-      );
+  factory _MapUpdateOperation.fromBodyBytes(
+    CRDTMapHandler<T> handler,
+    Uint8List body,
+  ) {
+    var offset = 0;
+    final keyLenRec = UVarint.read(body, offset: offset);
+    final keyLen = keyLenRec.value;
+    offset = keyLenRec.nextOffset;
+    final keyEnd = offset + keyLen;
+    if (keyEnd > body.length) {
+      throw const FormatException('Truncated map update key');
+    }
+    final key = utf8.decode(Uint8List.sublistView(body, offset, keyEnd));
+    offset = keyEnd;
+
+    final valLenRec = UVarint.read(body, offset: offset);
+    final valLen = valLenRec.value;
+    offset = valLenRec.nextOffset;
+    final valEnd = offset + valLen;
+    if (valEnd > body.length) {
+      throw const FormatException('Truncated map update value');
+    }
+    final valueBytes = Uint8List.sublistView(body, offset, valEnd);
+    final value = handler._valueCodec.decode(valueBytes);
+
+    return _MapUpdateOperation<T>(
+      id: handler.id,
+      type: handler.updateType,
+      key: key,
+      value: value,
+      valueCodec: handler._valueCodec,
+    );
+  }
 
   final String key;
   final T value;
+  final ValueCodec<T> valueCodec;
+
+  @override
+  Uint8List toBodyBytes() {
+    final out = BytesBuilder(copy: false);
+    final keyBytes = utf8.encode(key);
+    UVarint.write(keyBytes.length, out);
+    out.add(keyBytes);
+
+    final valBytes = valueCodec.encode(value);
+    UVarint.write(valBytes.length, out);
+    out.add(valBytes);
+
+    return out.toBytes();
+  }
 
   @override
   Map<String, dynamic> toPayload() => {

@@ -1,4 +1,5 @@
 import 'dart:math';
+import 'dart:typed_data';
 
 /// A regular expression for validating [PeerId]s
 final peerIdRegex = RegExp(
@@ -46,6 +47,41 @@ class PeerId with Comparable<PeerId> {
 
     return PeerId._(value);
   }
+
+  /// Decodes a [PeerId] from a 16-byte buffer.
+  ///
+  /// Throws a [RangeError] if the buffer is too short.
+  factory PeerId.fromUint8List(
+    Uint8List bytes, {
+    int offset = 0,
+  }) {
+    if (offset < 0 || offset + 16 > bytes.length) {
+      throw RangeError.range(offset, 0, bytes.length - 16, 'offset');
+    }
+
+    // Build the UUID string directly into a fixed-length char code array,
+    // avoiding StringBuffer + multiple substring() calls.
+    // Layout: "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" (36 chars)
+    final codes = Uint16List(36)
+      ..[8] = 0x2D // '-'
+      ..[13] = 0x2D
+      ..[18] = 0x2D
+      ..[23] = 0x2D;
+
+    // Fill hex nibbles, skipping the four dash positions.
+    const hexDigits = '0123456789abcdef';
+    var out = 0;
+    for (var i = 0; i < 16; i += 1) {
+      if (out == 8 || out == 13 || out == 18 || out == 23) out++;
+      final v = bytes[offset + i];
+      codes[out++] = hexDigits.codeUnitAt(v >> 4);
+      if (out == 8 || out == 13 || out == 18 || out == 23) out++;
+      codes[out++] = hexDigits.codeUnitAt(v & 0x0F);
+    }
+
+    // Bytes produced by toUint8List() are already a valid UUID v4 — skip regex.
+    return PeerId._(String.fromCharCodes(codes));
+  }
   static final Random _random = Random.secure();
 
   /// The unique identifier string
@@ -56,6 +92,51 @@ class PeerId with Comparable<PeerId> {
   /// Returns a string representation of this [PeerId]
   @override
   String toString() => id;
+
+  /// Encodes this [PeerId] into a new 16-byte buffer.
+  Uint8List toUint8List() {
+    final out = Uint8List(16);
+
+    var outIndex = 0;
+    var i = 0;
+    while (i < id.length) {
+      final ch = id.codeUnitAt(i);
+      if (ch == 0x2D) {
+        i += 1;
+        continue;
+      }
+
+      // Invariant: validated UUID-v4 format guarantees pairs of hex digits
+      // between dashes, so we always have a second nibble to read.
+      assert(i + 1 < id.length, 'Invalid PeerId: $id');
+
+      final hi = _hexValue(id.codeUnitAt(i));
+      final lo = _hexValue(id.codeUnitAt(i + 1));
+      out[outIndex] = (hi << 4) | lo;
+
+      outIndex += 1;
+      i += 2;
+    }
+
+    if (outIndex != 16) {
+      throw FormatException('Invalid PeerId: $id');
+    }
+
+    return out;
+  }
+
+  static int _hexValue(int codeUnit) {
+    if (codeUnit >= 0x30 && codeUnit <= 0x39) {
+      return codeUnit - 0x30;
+    }
+    if (codeUnit >= 0x61 && codeUnit <= 0x66) {
+      return codeUnit - 0x61 + 10;
+    }
+    if (codeUnit >= 0x41 && codeUnit <= 0x46) {
+      return codeUnit - 0x41 + 10;
+    }
+    throw const FormatException('Invalid hex digit');
+  }
 
   /// Compares two [PeerId]s for equality
   @override

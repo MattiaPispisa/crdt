@@ -245,17 +245,30 @@ void main() {
         ..insert(5, ' World')
         ..insert(11, '!');
 
-      // Each character should have a unique ID
+      // Each character should have a unique ID (decode body from bytes).
+      // Insert operation body layout:
+      //   leftOrigin (FugueElementID) | rightOrigin (FugueElementID) |
+      //   itemsCount (varint) | [item.id (FugueElementID), textLen, text]*
       final changes = doc.exportChanges();
-      final ids =
-          // ignore: avoid_dynamic_calls test
-          changes
-              .map(
-                (c) => (c.payload['items'] as List<Map<String, dynamic>>)
-                    .map((i) => (i['id'] as Map<String, dynamic>)['counter']),
-              )
-              .expand((x) => x)
-              .toList();
+      final ids = <int>[];
+      for (final c in changes) {
+        final env = OperationEnvelopeCodec.decode(c.payloadBytes());
+        final body = c.payloadBytes().sublist(env.bodyOffset);
+        var offset = 0;
+        final leftRec = FugueElementID.readFromBytes(body, offset: offset);
+        offset = leftRec.nextOffset;
+        final rightRec = FugueElementID.readFromBytes(body, offset: offset);
+        offset = rightRec.nextOffset;
+        final countRec = UVarint.read(body, offset: offset);
+        offset = countRec.nextOffset;
+        for (var i = 0; i < countRec.value; i += 1) {
+          final idRec = FugueElementID.readFromBytes(body, offset: offset);
+          offset = idRec.nextOffset;
+          ids.add(idRec.value.counter!);
+          final textLenRec = UVarint.read(body, offset: offset);
+          offset = textLenRec.nextOffset + textLenRec.value;
+        }
+      }
       expect(ids, equals([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]));
     });
 
@@ -642,6 +655,158 @@ void main() {
         expect(ultimateValue, contains('[peer1]'));
         expect(ultimateValue, contains('[peer2]'));
         expect(ultimateValue, contains('[peer3]'));
+      },
+    );
+
+    test(
+      'insert/delete/update operations round-trip through binary payload',
+      () {
+        final doc = CRDTDocument(peerId: PeerId.generate());
+        final handler = CRDTFugueTextHandler(doc, 'text-bin')
+          ..insert(0, 'Hello')
+          ..delete(1, 1)
+          ..update(0, 'X');
+
+        final doc2 = CRDTDocument(peerId: PeerId.generate());
+        final handler2 = CRDTFugueTextHandler(doc2, 'text-bin');
+        doc2.binaryImportChanges(doc.binaryExportChanges());
+        expect(handler2.value, equals(handler.value));
+
+        // Each operation must successfully decode from its payload bytes
+        // (otherwise `operations()` would have thrown).
+        final changeCount = doc.exportChanges().length;
+        expect(changeCount, greaterThanOrEqualTo(3));
+      },
+    );
+
+    group('counter re-initialisation after import', () {
+      test(
+        'does not throw after binaryImportChanges with same peerId',
+        () {
+          final peerId = PeerId.generate();
+
+          final doc1 = CRDTDocument(peerId: peerId);
+          final handler1 = CRDTFugueTextHandler(doc1, 'text')
+            ..insert(0, 'Hello');
+          expect(handler1.value, 'Hello');
+          final exported = doc1.binaryExportChanges();
+
+          // Simulate restart: new document with the same peer ID imports the
+          // previous state.  Before the fix this threw
+          // CrdtException('Node already exists') on the first insert.
+          final doc2 = CRDTDocument(peerId: peerId);
+          final handler2 = CRDTFugueTextHandler(doc2, 'text');
+          doc2.binaryImportChanges(exported);
+
+          expect(handler2.value, 'Hello');
+          expect(() => handler2.insert(5, ' World'), returnsNormally);
+          expect(handler2.value, 'Hello World');
+        },
+      );
+
+      test(
+        'does not throw after importChanges with same peerId',
+        () {
+          final peerId = PeerId.generate();
+
+          final doc1 = CRDTDocument(peerId: peerId);
+          CRDTFugueTextHandler(doc1, 'text').insert(0, 'CRDT');
+          final exported = doc1.exportChanges();
+
+          final doc2 = CRDTDocument(peerId: peerId);
+          final handler2 = CRDTFugueTextHandler(doc2, 'text');
+          doc2.importChanges(exported);
+
+          expect(handler2.value, 'CRDT');
+          expect(() => handler2.insert(4, '!'), returnsNormally);
+          expect(handler2.value, 'CRDT!');
+        },
+      );
+
+      test(
+        'does not throw after importSnapshot with same peerId',
+        () {
+          final peerId = PeerId.generate();
+
+          final doc1 = CRDTDocument(peerId: peerId);
+          CRDTFugueTextHandler(doc1, 'text').insert(0, 'Snapshot');
+          final snap = doc1.takeSnapshot();
+
+          final doc2 = CRDTDocument(peerId: peerId);
+          final handler2 = CRDTFugueTextHandler(doc2, 'text');
+          doc2.importSnapshot(snap);
+
+          expect(handler2.value, 'Snapshot');
+          expect(() => handler2.insert(8, '!'), returnsNormally);
+          expect(handler2.value, 'Snapshot!');
+        },
+      );
+
+      test(
+        'scans update-op newNodeIDs during lazy counter init',
+        () {
+          final peerId = PeerId.generate();
+          final doc1 = CRDTDocument(peerId: peerId);
+          final h1 = CRDTFugueTextHandler(doc1, 'text')
+            ..insert(0, 'Hello') // counters 0-4
+            ..update(0, 'X'); // newNodeID counter 5 for peerId
+          final exported = doc1.binaryExportChanges();
+
+          final doc2 = CRDTDocument(peerId: peerId);
+          final h2 = CRDTFugueTextHandler(doc2, 'text');
+          doc2.binaryImportChanges(exported);
+          expect(h2.value, h1.value);
+          expect(() => h2.insert(h2.length, '!'), returnsNormally);
+          expect(h2.value, endsWith('!'));
+        },
+      );
+
+      test(
+        'counter continues correctly after re-init (no duplicate IDs)',
+        () {
+          final peerId = PeerId.generate();
+
+          // doc1 creates "Hi" (counters 0, 1 for peerId)
+          final doc1 = CRDTDocument(peerId: peerId);
+          CRDTFugueTextHandler(doc1, 'text').insert(0, 'Hi');
+          final exported = doc1.binaryExportChanges();
+
+          // doc2 (same peerId) imports the state then edits further
+          final doc2 = CRDTDocument(peerId: peerId);
+          final handler2 = CRDTFugueTextHandler(doc2, 'text');
+          doc2.binaryImportChanges(exported);
+
+          handler2
+            ..insert(2, '!') // counter must be >= 2
+            ..insert(0, 'Say: ');
+
+          // Verify state is consistent and no collision occurred
+          expect(handler2.value, 'Say: Hi!');
+
+          // Also verify update() triggers no collision
+          expect(() => handler2.update(0, 'X'), returnsNormally);
+        },
+      );
+    });
+
+    test(
+      'takeSnapshot computes state from scratch when handler cache is null',
+      () {
+        final doc1 = CRDTDocument();
+        CRDTFugueTextHandler(doc1, 'text').insert(0, 'Hi');
+
+        final doc2 = CRDTDocument();
+        final h2 = CRDTFugueTextHandler(doc2, 'text')
+          ..insert(0, 'start'); // populates h2's cache
+
+        // Importing an external change for the same
+        // handler invalidates h2's cache
+        doc2.importChanges(doc1.exportChanges());
+
+        // h2's cache is null; takeSnapshot must recompute it from scratch
+        final snap = doc2.takeSnapshot();
+        expect(snap.data['text'], isNotNull);
+        expect(h2.value, contains('Hi'));
       },
     );
 

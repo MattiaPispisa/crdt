@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:crdt_lf/crdt_lf.dart';
 import 'package:crdt_lf/src/compound/compound.dart';
@@ -288,7 +289,15 @@ class CRDTDocument extends BaseCRDTDocument {
   }
 
   @override
-  Set<OperationId> get version => _dag.frontiers;
+  Set<OperationId> get version {
+    return _dag.frontiers;
+  }
+
+  /// All handlers currently registered on this document, keyed by their id.
+  ///
+  /// Intended for read-only introspection (devtools, debugging). Do not mutate.
+  Map<String, Handler<dynamic>> get registeredHandlers =>
+      Map.unmodifiable(_handlers);
 
   /// A stream controller for locally generated changes.
   final StreamController<Change> _localChangesController;
@@ -463,7 +472,7 @@ class CRDTDocument extends BaseCRDTDocument {
   /// (some of its dependencies are not present in the DAG).
   bool _internalApplyChange(Change change) {
     // Check if the change already exists
-    if (_changeStore.containsChange(change.id)) {
+    if (_changeStore.containsChangeKey(change.key)) {
       return false;
     }
 
@@ -489,13 +498,11 @@ class CRDTDocument extends BaseCRDTDocument {
     final dagDependencies = change.deps.where(_dag.containsNode).toSet();
     _dag.addNode(change.id, dagDependencies);
 
-    // Update the clock only for remote changes
-    if (change.author != _peerId) {
-      _clock.receiveEvent(
-        DateTime.now().millisecondsSinceEpoch,
-        change.hlc,
-      );
-    }
+    // Always advance the clock past the applied change.
+    _clock.receiveEvent(
+      DateTime.now().millisecondsSinceEpoch,
+      change.hlc,
+    );
 
     return true;
   }
@@ -770,27 +777,64 @@ class CRDTDocument extends BaseCRDTDocument {
     return _changeStore.exportChangesNewerThan(versionVector);
   }
 
-  /// Exports [Change]s as a binary format
+  /// Exports [Change]s as a compact binary format.
   ///
-  /// Returns a binary representation of the [Change]s
-  /// that can be imported by another document.
-  List<int> binaryExportChanges({Set<OperationId>? from}) {
+  /// This is a versioned, length-prefixed format designed for efficient
+  /// synchronization and reduced memory overhead.
+  Uint8List binaryExportChanges({Set<OperationId>? from}) {
     final changes = exportChanges(from: from);
-    final jsonChanges = changes.map((c) => c.toJson()).toList();
-    return utf8.encode(jsonEncode(jsonChanges));
+    final blobs = <Uint8List>[];
+
+    for (final change in changes) {
+      final out = BytesBuilder(copy: false);
+      UVarint.write(change.depsCount, out);
+      out.add(change.bytes);
+      blobs.add(out.toBytes());
+    }
+
+    return ChangeCodec.encodeBlobs(blobs);
   }
 
-  /// Imports [Change]s from a binary format
+  /// Imports [Change]s from the compact binary format.
   ///
   /// Returns the number of [Change]s that were applied.
-  int binaryImportChanges(List<int> data) {
+  int binaryImportChanges(Uint8List data) {
     _ensureNotDisposed('binaryImportChanges');
 
-    final jsonStr = utf8.decode(data);
-    final jsonList = jsonDecode(jsonStr) as List;
-    final changes = jsonList
-        .map((j) => Change.fromJson(j as Map<String, dynamic>))
-        .toList();
+    final blobs = ChangeCodec.decodeBlobs(data);
+    final changes = <Change>[];
+
+    for (final blob in blobs) {
+      final depsCountRec = UVarint.read(blob, offset: 0);
+      final depsCount = depsCountRec.value;
+      final bytes = Uint8List.sublistView(blob, depsCountRec.nextOffset);
+
+      if (bytes.length < OperationId.byteLength) {
+        throw const FormatException('Truncated change bytes');
+      }
+
+      final id = OperationId.fromUint8List(bytes);
+      final deps = <OperationId>{};
+
+      var cursor = OperationId.byteLength;
+      for (var i = 0; i < depsCount; i += 1) {
+        if (cursor + OperationId.byteLength > bytes.length) {
+          throw const FormatException('Truncated change dependencies');
+        }
+        deps.add(OperationId.fromUint8List(bytes, offset: cursor));
+        cursor += OperationId.byteLength;
+      }
+
+      final payloadBytes = Uint8List.sublistView(bytes, cursor);
+      changes.add(
+        Change.fromPayloadBytes(
+          id: id,
+          deps: deps,
+          author: id.peerId,
+          payloadBytes: payloadBytes,
+        ),
+      );
+    }
 
     return importChanges(changes);
   }
@@ -862,7 +906,7 @@ class CRDTDocument extends BaseCRDTDocument {
     final newChanges = <Change>[];
 
     for (final change in changes) {
-      final clock = versionVector[change.id.peerId];
+      final clock = versionVector[change.author];
       if (clock == null || change.hlc.compareTo(clock) > 0) {
         newChanges.add(change);
       }
@@ -1346,9 +1390,40 @@ mixin SnapshotProvider on DocumentConsumer {
 
 /// Helper extensions for [Handler]
 extension _HandlerHelper on Handler<dynamic> {
-  /// Whether the handler is affected by the given [change]
+  // Expando acts as a per-instance cache (weak-ref keyed map).
+  // Extensions cannot declare instance fields, but an Expando on a static
+  // variable gives the same semantics with no memory-leak risk.
+  static final Expando<Uint8List> _prefixCache = Expando();
+
+  /// Binary prefix for this handler's operations:
+  /// [varint(typeLen)][type UTF-8][varint(idLen)][id UTF-8].
+  ///
+  /// Computed once and cached. Compared byte-by-byte against a change payload
+  /// in [_isAffectedByChange] to avoid UTF-8 decode + String allocation on
+  /// every change application.
+  Uint8List get _envelopePrefix {
+    return _prefixCache[this] ??= _buildPrefix();
+  }
+
+  Uint8List _buildPrefix() {
+    final out = BytesBuilder(copy: false);
+    final typeBytes = utf8.encode(runtimeType.toString());
+    UVarint.write(typeBytes.length, out);
+    out.add(typeBytes);
+    final idBytes = utf8.encode(id);
+    UVarint.write(idBytes.length, out);
+    out.add(idBytes);
+    return out.toBytes();
+  }
+
   bool _isAffectedByChange(Change change) {
-    final id = Operation.handlerIdFrom(payload: change.payload);
-    return id == this.id;
+    final payload = change.payloadBytes();
+    final prefix = _envelopePrefix;
+    // +1 for the kind byte that follows the prefix.
+    if (payload.length < prefix.length + 1) return false;
+    for (var i = 0; i < prefix.length; i++) {
+      if (payload[i] != prefix[i]) return false;
+    }
+    return true;
   }
 }

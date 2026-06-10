@@ -17,9 +17,7 @@
   - [Document-Scoped Storage](#document-scoped-storage)
     - [CRDTChangeStorage](#crdtchangestorage)
     - [CRDTSnapshotStorage](#crdtsnapshotstorage)
-  - [Data Serialization Options](#data-serialization-options)
-    - [Default Mode (useDataAdapter: false)](#default-mode-usedataadapter-false)
-    - [Custom Adapter Mode (useDataAdapter: true)](#custom-adapter-mode-usedataadapter-true)
+  - [Snapshot Data Serialization](#snapshot-data-serialization)
   - [Examples](#examples)
     - [Storage example](#storage-example)
     - [Server (+ storage) and clients](#server--storage-and-clients)
@@ -37,9 +35,8 @@ A [Hive](https://pub.dev/packages/hive) storage implementation for [CRDT LF](htt
 
 ## Features
 
-- **Complete Hive Adapters**: All necessary type adapters for CRDT objects (`Change`, `Snapshot`, `PeerId`, `OperationId`, `VersionVector`, etc.)
+- **Compact Binary Adapters**: A single `TypeAdapter` for `Change` and one for `Snapshot`, each storing the object as the self-describing binary blob produced by `crdt_lf`'s native `toBytes()` / `fromBytes()` methods
 - **Easy Initialization**: One-line setup with `CRDTHive.initialize()`
-- **Flexible Data Serialization**: Choose between JSON encoding or custom Hive adapters for generic data types
 - **Document-Scoped Storage**: Optional utilities that organize data by document ID for better isolation and performance
 - **Batch Operations**: Efficient bulk save/load operations for changes and snapshots
 
@@ -144,52 +141,19 @@ if (snapshotStorage.containsSnapshot('snapshot-id')) {
 }
 ```
 
-## Data Serialization Options
+## Snapshot Data Serialization
 
-The `useDataAdapter` parameter in `CRDTHive.initialize()` controls how generic data types in CRDT operations are serialized:
+`Snapshot` is persisted via `Snapshot.toBytes()` (the same self-describing binary
+format used everywhere else in `crdt_lf`). Internally, the `data` map is encoded
+with `JsonValueCodec`, so any value stored in `Snapshot.data` must be
+JSON-serializable (primitives, `List`, `Map<String, dynamic>`, or a custom type
+that exposes `toJson`).
 
-### Default Mode (useDataAdapter: false)
-
-Generic data is serialized using JSON encoding:
-
-```dart
-CRDTHive.initialize(); // useDataAdapter defaults to false
-
-// Data like List<String>, Map<String, dynamic> will be JSON-encoded
-final listHandler = CRDTListHandler<String>(document, 'items');
-listHandler.insert(0, 'Hello World'); // Stored as JSON
-```
-
-### Custom Adapter Mode (useDataAdapter: true)
-
-Generic data uses custom Hive adapters for better performance and type safety:
-
-```dart
-class MyCustomDataAdapter extends TypeAdapter<MyCustomData> {
-  @override
-  final int typeId = 200;
-
-  @override
-  ListValue read(BinaryReader reader) {
-    // ...
-  }
-
-  @override
-  void write(BinaryWriter writer, ListValue obj) {
-    // ...
-  }
-}
-
-// Register your custom adapters first
-Hive.registerAdapter(MyCustomDataAdapter());
-
-// Then initialize with custom adapter support
-CRDTHive.initialize(useDataAdapter: true);
-
-// Now your custom types will use their adapters
-final listHandler = CRDTListHandler<MyCustomData>(document, 'items');
-listHandler.insert(0, MyCustomData(value: 'test')); // Uses MyCustomDataAdapter
-```
+Custom value types used inside CRDT handlers (e.g. `CRDTListHandler<MyValue>`)
+are not affected: their per-operation payload is serialized by the
+`ValueCodec<T>` you pass to the handler, and ends up inside `Change` bytes, not
+in `Snapshot.data`. Only the projected state captured in a snapshot needs to be
+JSON-serializable.
 
 ## Examples
 

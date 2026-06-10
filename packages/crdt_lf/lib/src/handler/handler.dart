@@ -1,8 +1,10 @@
+import 'dart:typed_data';
+
 import 'package:crdt_lf/crdt_lf.dart';
 
-/// A factory function that creates an operation from a payload
+/// A factory function that creates an operation from bytes.
 typedef OperationFactory = Operation? Function(
-  Map<String, dynamic> payload,
+  Uint8List operationBytes,
 );
 
 /// Abstract class for CRDT handlers
@@ -21,6 +23,15 @@ abstract class Handler<T>
 
   /// The factory function that creates an operation from a payload
   OperationFactory get operationFactory;
+
+  /// Cached insert type instances for this handler, used in operations.
+  late final OperationType insertType = OperationType.insert(this);
+
+  /// Cached delete type instances for this handler, used in operations.
+  late final OperationType deleteType = OperationType.delete(this);
+
+  /// Cached update type instances for this handler, used in operations.
+  late final OperationType updateType = OperationType.update(this);
 
   /// During transaction consecutive operations can be compounded.
   ///
@@ -49,7 +60,7 @@ abstract class Handler<T>
 
     final operations = <Operation>[];
     for (final change in changes) {
-      final operation = operationFactory(change.payload);
+      final operation = operationFactory(change.payloadBytes());
       if (operation != null) {
         operations.add(operation);
       }

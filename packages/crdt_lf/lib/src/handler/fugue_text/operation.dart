@@ -8,18 +8,25 @@ class _FugueTextOperationFactory {
   /// The handler associated with this factory
   final Handler<dynamic> handler;
 
-  /// Creates an operation from a payload
-  Operation? fromPayload(Map<String, dynamic> payload) {
-    if (Operation.handlerIdFrom(payload: payload) != handler.id) {
+  /// Creates an operation from bytes.
+  Operation? fromBytes(Uint8List operationBytes) {
+    final env = OperationEnvelopeCodec.decode(operationBytes);
+    if (env.handlerId != handler.id) {
       return null;
     }
 
-    if (payload['type'] == OperationType.insert(handler).toPayload()) {
-      return _FugueTextInsertOperation.fromPayload(payload);
-    } else if (payload['type'] == OperationType.delete(handler).toPayload()) {
-      return _FugueTextDeleteOperation.fromPayload(payload);
-    } else if (payload['type'] == OperationType.update(handler).toPayload()) {
-      return _FugueTextUpdateOperation.fromPayload(payload);
+    if (env.handlerType != handler.runtimeType.toString()) {
+      return null;
+    }
+
+    final body = Uint8List.sublistView(operationBytes, env.bodyOffset);
+
+    if (env.kind == OperationType.kindInsert) {
+      return _FugueTextInsertOperation.fromBodyBytes(handler, body);
+    } else if (env.kind == OperationType.kindDelete) {
+      return _FugueTextDeleteOperation.fromBodyBytes(handler, body);
+    } else if (env.kind == OperationType.kindUpdate) {
+      return _FugueTextUpdateOperation.fromBodyBytes(handler, body);
     }
 
     return null;
@@ -37,28 +44,6 @@ class _FugueTextInsertOperation extends Operation {
     required super.type,
   });
 
-  /// Creates a batch insert operation from a payload
-  factory _FugueTextInsertOperation.fromPayload(
-    Map<String, dynamic> payload,
-  ) {
-    return _FugueTextInsertOperation(
-      id: payload['id'] as String,
-      type: OperationType.fromPayload(payload['type'] as String),
-      leftOrigin: FugueElementID.fromJson(
-        Map<String, dynamic>.from(payload['leftOrigin'] as Map),
-      ),
-      rightOrigin: FugueElementID.fromJson(
-        Map<String, dynamic>.from(payload['rightOrigin'] as Map),
-      ),
-      items: (payload['items'] as List)
-          .map(
-            (e) =>
-                _FugueInsertItem.fromJson(Map<String, dynamic>.from(e as Map)),
-          )
-          .toList(),
-    );
-  }
-
   /// Factory to create a batch insert operation from a handler
   factory _FugueTextInsertOperation.fromHandler(
     Handler<dynamic> handler, {
@@ -68,9 +53,60 @@ class _FugueTextInsertOperation extends Operation {
   }) {
     return _FugueTextInsertOperation(
       id: handler.id,
-      type: OperationType.insert(handler),
+      type: handler.insertType,
       leftOrigin: leftOrigin,
       rightOrigin: rightOrigin,
+      items: items,
+    );
+  }
+
+  /// Decodes an insert operation body.
+  ///
+  /// Layout:
+  /// - leftOrigin: [FugueElementID] bytes
+  /// - rightOrigin: [FugueElementID] bytes
+  /// - itemsCount: uvarint
+  /// - repeated `itemsCount` times:
+  ///   - id: [FugueElementID] bytes
+  ///   - textLen: uvarint
+  ///   - text: utf8 bytes
+  factory _FugueTextInsertOperation.fromBodyBytes(
+    Handler<dynamic> handler,
+    Uint8List body,
+  ) {
+    var offset = 0;
+
+    final leftRec = FugueElementID.readFromBytes(body, offset: offset);
+    offset = leftRec.nextOffset;
+
+    final rightRec = FugueElementID.readFromBytes(body, offset: offset);
+    offset = rightRec.nextOffset;
+
+    final countRec = UVarint.read(body, offset: offset);
+    offset = countRec.nextOffset;
+
+    final items = <_FugueInsertItem>[];
+    for (var i = 0; i < countRec.value; i += 1) {
+      final idRec = FugueElementID.readFromBytes(body, offset: offset);
+      offset = idRec.nextOffset;
+
+      final textLenRec = UVarint.read(body, offset: offset);
+      offset = textLenRec.nextOffset;
+      final textEnd = offset + textLenRec.value;
+      if (textEnd > body.length) {
+        throw const FormatException('Truncated Fugue insert text');
+      }
+      final text = utf8.decode(Uint8List.sublistView(body, offset, textEnd));
+      offset = textEnd;
+
+      items.add(_FugueInsertItem(id: idRec.value, text: text));
+    }
+
+    return _FugueTextInsertOperation(
+      id: handler.id,
+      type: handler.insertType,
+      leftOrigin: leftRec.value,
+      rightOrigin: rightRec.value,
       items: items,
     );
   }
@@ -85,12 +121,19 @@ class _FugueTextInsertOperation extends Operation {
   final List<_FugueInsertItem> items;
 
   @override
-  Map<String, dynamic> toPayload() => {
-        ...super.toPayload(),
-        'leftOrigin': leftOrigin.toJson(),
-        'rightOrigin': rightOrigin.toJson(),
-        'items': items.map((e) => e.toJson()).toList(),
-      };
+  Uint8List toBodyBytes() {
+    final out = BytesBuilder(copy: false)
+      ..add(leftOrigin.toBytes())
+      ..add(rightOrigin.toBytes());
+    UVarint.write(items.length, out);
+    for (final item in items) {
+      out.add(item.id.toBytes());
+      final textBytes = utf8.encode(item.text);
+      UVarint.write(textBytes.length, out);
+      out.add(textBytes);
+    }
+    return out.toBytes();
+  }
 }
 
 /// A single item of a batch insert
@@ -100,22 +143,8 @@ class _FugueInsertItem {
     required this.text,
   });
 
-  factory _FugueInsertItem.fromJson(Map<String, dynamic> json) {
-    return _FugueInsertItem(
-      id: FugueElementID.fromJson(
-        Map<String, dynamic>.from(json['id'] as Map),
-      ),
-      text: json['text'] as String,
-    );
-  }
-
   final FugueElementID id;
   final String text;
-
-  Map<String, dynamic> toJson() => {
-        'id': id.toJson(),
-        'text': text,
-      };
 }
 
 /// Batch delete operation for the Fugue algorithm
@@ -127,20 +156,6 @@ class _FugueTextDeleteOperation extends Operation {
     required super.type,
   });
 
-  /// Creates a batch delete operation from a payload
-  factory _FugueTextDeleteOperation.fromPayload(Map<String, dynamic> payload) {
-    return _FugueTextDeleteOperation(
-      id: payload['id'] as String,
-      type: OperationType.fromPayload(payload['type'] as String),
-      items: (payload['items'] as List)
-          .map(
-            (e) =>
-                _FugueDeleteItem.fromJson(Map<String, dynamic>.from(e as Map)),
-          )
-          .toList(),
-    );
-  }
-
   /// Factory to create a batch delete operation from a handler
   factory _FugueTextDeleteOperation.fromHandler(
     Handler<dynamic> handler, {
@@ -148,7 +163,36 @@ class _FugueTextDeleteOperation extends Operation {
   }) {
     return _FugueTextDeleteOperation(
       id: handler.id,
-      type: OperationType.delete(handler),
+      type: handler.deleteType,
+      items: items,
+    );
+  }
+
+  /// Decodes a delete operation body.
+  ///
+  /// Layout:
+  /// - itemsCount: uvarint
+  /// - repeated `itemsCount` times:
+  ///   - nodeID: [FugueElementID] bytes
+  factory _FugueTextDeleteOperation.fromBodyBytes(
+    Handler<dynamic> handler,
+    Uint8List body,
+  ) {
+    var offset = 0;
+
+    final countRec = UVarint.read(body, offset: offset);
+    offset = countRec.nextOffset;
+
+    final items = <_FugueDeleteItem>[];
+    for (var i = 0; i < countRec.value; i += 1) {
+      final idRec = FugueElementID.readFromBytes(body, offset: offset);
+      offset = idRec.nextOffset;
+      items.add(_FugueDeleteItem(nodeID: idRec.value));
+    }
+
+    return _FugueTextDeleteOperation(
+      id: handler.id,
+      type: handler.deleteType,
       items: items,
     );
   }
@@ -157,10 +201,14 @@ class _FugueTextDeleteOperation extends Operation {
   final List<_FugueDeleteItem> items;
 
   @override
-  Map<String, dynamic> toPayload() => {
-        ...super.toPayload(),
-        'items': items.map((e) => e.toJson()).toList(),
-      };
+  Uint8List toBodyBytes() {
+    final out = BytesBuilder(copy: false);
+    UVarint.write(items.length, out);
+    for (final item in items) {
+      out.add(item.nodeID.toBytes());
+    }
+    return out.toBytes();
+  }
 }
 
 /// A single item of a batch delete
@@ -169,19 +217,7 @@ class _FugueDeleteItem {
     required this.nodeID,
   });
 
-  factory _FugueDeleteItem.fromJson(Map<String, dynamic> json) {
-    return _FugueDeleteItem(
-      nodeID: FugueElementID.fromJson(
-        Map<String, dynamic>.from(json['nodeID'] as Map),
-      ),
-    );
-  }
-
   final FugueElementID nodeID;
-
-  Map<String, dynamic> toJson() => {
-        'nodeID': nodeID.toJson(),
-      };
 }
 
 /// Batch update operation for the Fugue algorithm
@@ -193,20 +229,6 @@ class _FugueTextUpdateOperation extends Operation {
     required super.type,
   });
 
-  /// Creates a batch update operation from a payload
-  factory _FugueTextUpdateOperation.fromPayload(Map<String, dynamic> payload) {
-    return _FugueTextUpdateOperation(
-      id: payload['id'] as String,
-      type: OperationType.fromPayload(payload['type'] as String),
-      items: (payload['items'] as List)
-          .map(
-            (e) =>
-                _FugueUpdateItem.fromJson(Map<String, dynamic>.from(e as Map)),
-          )
-          .toList(),
-    );
-  }
-
   /// Factory to create a batch update operation from a handler
   factory _FugueTextUpdateOperation.fromHandler(
     Handler<dynamic> handler, {
@@ -214,7 +236,58 @@ class _FugueTextUpdateOperation extends Operation {
   }) {
     return _FugueTextUpdateOperation(
       id: handler.id,
-      type: OperationType.update(handler),
+      type: handler.updateType,
+      items: items,
+    );
+  }
+
+  /// Decodes an update operation body.
+  ///
+  /// Layout:
+  /// - itemsCount: uvarint
+  /// - repeated `itemsCount` times:
+  ///   - nodeID: [FugueElementID] bytes
+  ///   - newNodeID: [FugueElementID] bytes
+  ///   - textLen: uvarint
+  ///   - text: utf8 bytes
+  factory _FugueTextUpdateOperation.fromBodyBytes(
+    Handler<dynamic> handler,
+    Uint8List body,
+  ) {
+    var offset = 0;
+
+    final countRec = UVarint.read(body, offset: offset);
+    offset = countRec.nextOffset;
+
+    final items = <_FugueUpdateItem>[];
+    for (var i = 0; i < countRec.value; i += 1) {
+      final idRec = FugueElementID.readFromBytes(body, offset: offset);
+      offset = idRec.nextOffset;
+
+      final newIdRec = FugueElementID.readFromBytes(body, offset: offset);
+      offset = newIdRec.nextOffset;
+
+      final textLenRec = UVarint.read(body, offset: offset);
+      offset = textLenRec.nextOffset;
+      final textEnd = offset + textLenRec.value;
+      if (textEnd > body.length) {
+        throw const FormatException('Truncated Fugue update text');
+      }
+      final text = utf8.decode(Uint8List.sublistView(body, offset, textEnd));
+      offset = textEnd;
+
+      items.add(
+        _FugueUpdateItem(
+          nodeID: idRec.value,
+          newNodeID: newIdRec.value,
+          text: text,
+        ),
+      );
+    }
+
+    return _FugueTextUpdateOperation(
+      id: handler.id,
+      type: handler.updateType,
       items: items,
     );
   }
@@ -223,10 +296,19 @@ class _FugueTextUpdateOperation extends Operation {
   final List<_FugueUpdateItem> items;
 
   @override
-  Map<String, dynamic> toPayload() => {
-        ...super.toPayload(),
-        'items': items.map((e) => e.toJson()).toList(),
-      };
+  Uint8List toBodyBytes() {
+    final out = BytesBuilder(copy: false);
+    UVarint.write(items.length, out);
+    for (final item in items) {
+      out
+        ..add(item.nodeID.toBytes())
+        ..add(item.newNodeID.toBytes());
+      final textBytes = utf8.encode(item.text);
+      UVarint.write(textBytes.length, out);
+      out.add(textBytes);
+    }
+    return out.toBytes();
+  }
 }
 
 /// A single item of a batch update
@@ -237,25 +319,7 @@ class _FugueUpdateItem {
     required this.text,
   });
 
-  factory _FugueUpdateItem.fromJson(Map<String, dynamic> json) {
-    return _FugueUpdateItem(
-      nodeID: FugueElementID.fromJson(
-        Map<String, dynamic>.from(json['nodeID'] as Map),
-      ),
-      newNodeID: FugueElementID.fromJson(
-        Map<String, dynamic>.from(json['newNodeID'] as Map),
-      ),
-      text: json['text'] as String,
-    );
-  }
-
   final FugueElementID nodeID;
   final FugueElementID newNodeID;
   final String text;
-
-  Map<String, dynamic> toJson() => {
-        'nodeID': nodeID.toJson(),
-        'newNodeID': newNodeID.toJson(),
-        'text': text,
-      };
 }

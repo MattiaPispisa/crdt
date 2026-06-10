@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:crdt_lf/crdt_lf.dart';
 import 'package:test/test.dart';
 
@@ -120,6 +122,70 @@ void main() {
       expect(id1 == id3, isFalse);
       expect(id1.hashCode, equals(id2.hashCode));
       expect(id1.hashCode, isNot(equals(id3.hashCode)));
+    });
+
+    test('toBytes/fromBytes round-trips a valid id', () {
+      final peerId = PeerId.parse('2ff4de6c-5add-42b6-b5f5-e6b7404cbf68');
+      final id = FugueElementID(peerId, 42);
+      final bytes = id.toBytes();
+      final decoded = FugueElementID.fromBytes(bytes);
+      expect(decoded, equals(id));
+      expect(decoded.counter, equals(42));
+      expect(decoded.replicaID, equals(peerId));
+    });
+
+    test('toBytes/fromBytes round-trips a null id', () {
+      final id = FugueElementID.nullID();
+      final bytes = id.toBytes();
+      expect(bytes.length, equals(1));
+      expect(bytes[0], equals(0));
+      final decoded = FugueElementID.fromBytes(bytes);
+      expect(decoded.isNull, isTrue);
+      expect(decoded, equals(id));
+    });
+
+    test('readFromBytes throws FormatException on invalid flag byte', () {
+      // Flag must be 0 (null) or 1 (real id). Any other value is invalid.
+      final invalid = Uint8List.fromList([2]);
+      expect(
+        () => FugueElementID.readFromBytes(invalid),
+        throwsA(isA<FormatException>()),
+      );
+    });
+
+    test('readFromBytes throws on empty buffer at offset', () {
+      expect(
+        () => FugueElementID.readFromBytes(Uint8List(0)),
+        throwsA(isA<FormatException>()),
+      );
+    });
+
+    test('readFromBytes throws on truncated replicaID', () {
+      // flag=1 then only a partial replicaID
+      final truncated = Uint8List.fromList([1, 0, 0, 0]);
+      expect(
+        () => FugueElementID.readFromBytes(truncated),
+        throwsA(isA<FormatException>()),
+      );
+    });
+
+    test('readFromBytes returns the next offset for chained reads', () {
+      final peerId = PeerId.parse('2ff4de6c-5add-42b6-b5f5-e6b7404cbf68');
+      final id1 = FugueElementID(peerId, 7);
+      final id2 = FugueElementID.nullID();
+      final buffer = [...id1.toBytes(), ...id2.toBytes()];
+
+      final first = FugueElementID.readFromBytes(
+        Uint8List.fromList(buffer),
+      );
+      expect(first.value, equals(id1));
+
+      final second = FugueElementID.readFromBytes(
+        Uint8List.fromList(buffer),
+        offset: first.nextOffset,
+      );
+      expect(second.value, equals(id2));
+      expect(second.nextOffset, equals(buffer.length));
     });
   });
 }

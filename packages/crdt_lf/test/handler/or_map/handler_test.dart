@@ -42,11 +42,8 @@ void main() {
       final doc = CRDTDocument();
       final hlc1 = doc.hlc;
       CRDTORMapHandler<String, int>(doc, 'map1').put('x', 1);
-      final change = doc.exportChanges().first.toJson();
-      final payload = change['payload'] as Map<String, dynamic>;
-      final tag = ORHandlerTag.parse(payload['tag'] as String);
-      expect(tag.hlc, isNot(hlc1));
-      expect(hlc1, isNot(doc.hlc));
+      expect(doc.hlc, isNot(hlc1));
+      expect(hlc1.happenedBefore(doc.hlc), isTrue);
     });
 
     test('should handle concurrent puts on different keys', () {
@@ -307,6 +304,38 @@ void main() {
       // Remove on empty map should be safe
       map.remove('nonexistent');
       expect(map.value, isEmpty);
+    });
+  });
+
+  group('ORMapEntry', () {
+    test('equality and hashCode reflect value+tag', () {
+      final tagA = ORHandlerTag.parse(
+        '37f1ec87-6ea5-430b-a627-a6b92b56a02d@1.0',
+      );
+      final tagB = ORHandlerTag.parse(
+        '37f1ec87-6ea5-430b-a627-a6b92b56a02d@2.0',
+      );
+      final entry1 = ORMapEntry<int>(value: 1, tag: tagA);
+      final entry2 = ORMapEntry<int>(value: 1, tag: tagA);
+      final entryDifferentValue = ORMapEntry<int>(value: 2, tag: tagA);
+      final entryDifferentTag = ORMapEntry<int>(value: 1, tag: tagB);
+
+      expect(entry1, equals(entry2));
+      expect(entry1.hashCode, equals(entry2.hashCode));
+      expect(entry1, isNot(equals(entryDifferentValue)));
+      expect(entry1, isNot(equals(entryDifferentTag)));
+    });
+
+    test('identity short-circuit and non-ORMapEntry inequality', () {
+      final tag = ORHandlerTag.parse(
+        '37f1ec87-6ea5-430b-a627-a6b92b56a02d@1.0',
+      );
+      final entry = ORMapEntry<String>(value: 'x', tag: tag);
+      // Compares same instance: triggers identical short-circuit.
+      expect(entry == entry, isTrue);
+      // Compares to unrelated type.
+      // ignore: unrelated_type_equality_checks
+      expect(entry == 'x', isFalse);
     });
   });
 }

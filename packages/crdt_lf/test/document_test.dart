@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:crdt_lf/crdt_lf.dart';
 import 'package:hlc_dart/hlc_dart.dart';
 import 'package:test/test.dart';
@@ -53,7 +55,7 @@ void main() {
     test('createChange creates and applies a new change', () {
       final change = doc.createChange(operation);
       expect(change.author, equals(author));
-      expect(change.payload, equals(operation.toPayload()));
+      expect(change.payloadBytes(), equals(operation.toBytes()));
       expect(doc.version, equals({change.id}));
     });
 
@@ -139,19 +141,6 @@ void main() {
       expect(changes, containsAll([change2, change3]));
     });
 
-    test('export and import work correctly', () {
-      doc
-        ..createChange(operation)
-        ..createChange(operation);
-
-      final data = doc.binaryExportChanges();
-      final newDoc = CRDTDocument();
-      final imported = newDoc.binaryImportChanges(data);
-
-      expect(imported, equals(2));
-      expect(newDoc.version, equals(doc.version));
-    });
-
     test('exportChangesNewerThan returns only newer changes for same peer', () {
       // create three changes
       final change1 = doc.createChange(operation);
@@ -232,22 +221,22 @@ void main() {
     });
 
     test('importChanges handles cycles gracefully', () {
+      final id1 = OperationId(author, HybridLogicalClock(l: 1, c: 1));
+      final id2 = OperationId(author, HybridLogicalClock(l: 1, c: 2));
+
       final change1 = Change(
-        id: OperationId(author, HybridLogicalClock(l: 1, c: 1)),
+        id: id1,
         operation: operation,
-        deps: {},
+        deps: {id2},
         author: author,
       );
 
       final change2 = Change(
-        id: OperationId(author, HybridLogicalClock(l: 1, c: 2)),
+        id: id2,
         operation: operation,
-        deps: {change1.id},
+        deps: {id1},
         author: author,
       );
-
-      // Create a cycle
-      change1.deps.add(change2.id);
 
       expect(
         () => doc.importChanges([change1, change2]),
@@ -465,6 +454,12 @@ void main() {
         expect(doc3.exportChanges(), hasLength(0));
         expect(listDoc2.value, ['Hello', 'World']);
         expect(listDoc3.value, ['Hello', 'World']);
+
+        // import with snapshot only (no changes argument)
+        final doc5 = CRDTDocument();
+        CRDTListHandler<String>(doc5, 'list');
+        expect(doc5.import(snapshot: snapshot), equals(0));
+        expect(doc5.exportChanges(), isEmpty);
       });
     });
 
@@ -593,6 +588,12 @@ void main() {
       final imported1 = doc2.importSnapshot(snapshot1);
       expect(imported1, isFalse);
       expect(doc1.importSnapshot(snapshot1), isFalse);
+
+      // import() with an older snapshot should return -1
+      final doc3 = CRDTDocument(peerId: author2);
+      CRDTListHandler<String>(doc3, 'list');
+      doc3.importSnapshot(snapshot2);
+      expect(doc3.import(snapshot: snapshot1), equals(-1));
     });
 
     test('should prune changes when merge snapshot is called', () {
@@ -721,6 +722,102 @@ void main() {
           'CRDTDocument(peerId: $author, changes: 2, version: 1 frontiers)',
         ),
       );
+    });
+
+    group('binary round-trips', () {
+      test('export and import work correctly', () {
+        doc
+          ..createChange(operation)
+          ..createChange(operation);
+
+        final data = doc.binaryExportChanges();
+        final newDoc = CRDTDocument();
+        final imported = newDoc.binaryImportChanges(data);
+
+        expect(imported, equals(2));
+        expect(newDoc.version, equals(doc.version));
+      });
+
+      test('export/import v2 syncs text changes', () {
+        final doc1 = CRDTDocument(peerId: PeerId.generate());
+        final doc2 = CRDTDocument(peerId: PeerId.generate());
+
+        final t1 = CRDTTextHandler(doc1, 'text');
+        final t2 = CRDTTextHandler(doc2, 'text');
+
+        t1
+          ..insert(0, 'Hello')
+          ..insert(5, ' World');
+
+        final bytes = doc1.binaryExportChanges();
+        final applied = doc2.binaryImportChanges(Uint8List.fromList(bytes));
+        expect(applied, greaterThan(0));
+
+        expect(t2.value, equals(t1.value));
+      });
+
+      test('export/import v2 syncs multiple handler types together', () {
+        final doc1 = CRDTDocument(peerId: PeerId.generate());
+        final doc2 = CRDTDocument(peerId: PeerId.generate());
+
+        final text1 = CRDTTextHandler(doc1, 'text');
+        final fugue1 = CRDTFugueTextHandler(doc1, 'fugue');
+        final list1 = CRDTListHandler<String>(doc1, 'list');
+        final map1 = CRDTORMapHandler<String, int>(doc1, 'or_map');
+
+        final text2 = CRDTTextHandler(doc2, 'text');
+        final fugue2 = CRDTFugueTextHandler(doc2, 'fugue');
+        final list2 = CRDTListHandler<String>(doc2, 'list');
+        final map2 = CRDTORMapHandler<String, int>(doc2, 'or_map');
+
+        text1.insert(0, 'plain');
+        fugue1
+          ..insert(0, 'fugue')
+          ..delete(1, 2)
+          ..insert(0, 'Z');
+        list1
+          ..insert(0, 'a')
+          ..insert(1, 'b');
+        map1
+          ..put('count', 1)
+          ..put('total', 99);
+
+        final bytes = doc1.binaryExportChanges();
+        doc2.binaryImportChanges(Uint8List.fromList(bytes));
+
+        expect(text2.value, equals(text1.value));
+        expect(fugue2.value, equals(fugue1.value));
+        expect(list2.value, equals(list1.value));
+        expect(map2.value, equals(map1.value));
+      });
+
+      test('binaryImportChanges rejects unsupported framing version', () {
+        final doc1 = CRDTDocument(peerId: PeerId.generate());
+        final t1 = CRDTTextHandler(doc1, 'text')..insert(0, 'hello');
+
+        final exported = Uint8List.fromList(doc1.binaryExportChanges());
+        // Layout: "CRDTLF"(6 bytes) + version(u8) + ...
+        // Corrupt the version byte to an unsupported value.
+        exported[6] = 99;
+
+        final doc2 = CRDTDocument(peerId: PeerId.generate());
+        CRDTTextHandler(doc2, 'text');
+        expect(
+          () => doc2.binaryImportChanges(exported),
+          throwsA(isA<FormatException>()),
+        );
+        // The original handler is untouched.
+        expect(t1.value, equals('hello'));
+      });
+
+      test('binaryImportChanges rejects empty/short buffer', () {
+        final doc = CRDTDocument(peerId: PeerId.generate());
+        CRDTTextHandler(doc, 'text');
+        expect(
+          () => doc.binaryImportChanges(Uint8List(0)),
+          throwsA(isA<FormatException>()),
+        );
+      });
     });
 
     group('documents consistency', () {
@@ -855,12 +952,21 @@ void main() {
 
     group('handlers', () {
       test('should throw on double registration', () {
+        expect(doc.registeredHandlers, contains('test-handler'));
         expect(
           () {
             return TestHandler(doc);
           },
           throwsA(isA<HandlerAlreadyRegisteredException>()),
         );
+      });
+
+      test('default incrementCachedState invalidates cache', () {
+        final freshDoc = CRDTDocument();
+        final freshHandler = TestHandler(freshDoc)..updateCachedState('primed');
+        expect(freshHandler.cachedState, isNotNull);
+        freshDoc.registerOperation(TestOperation.fromHandler(freshHandler));
+        expect(freshHandler.cachedState, isNull);
       });
 
       test('should not increment cached without a cached state', () {

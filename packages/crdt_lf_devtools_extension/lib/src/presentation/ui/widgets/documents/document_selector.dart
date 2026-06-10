@@ -27,7 +27,7 @@ class DocumentSelector extends StatelessWidget {
                   .map(
                     (e) => DropdownMenuItem<int>(
                       value: e.id,
-                      child: Text(e.id.toString()),
+                      child: Text(e.displayLabel),
                     ),
                   )
                   .toList(),

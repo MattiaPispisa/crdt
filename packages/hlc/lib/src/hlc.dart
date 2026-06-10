@@ -1,4 +1,5 @@
 import 'dart:math';
+import 'dart:typed_data';
 
 import 'package:hlc_dart/src/exception.dart';
 
@@ -50,6 +51,34 @@ class HybridLogicalClock with Comparable<HybridLogicalClock> {
   factory HybridLogicalClock.fromInt64(int value) {
     final l = (value >> 16) & 0xFFFFFFFFFFFF;
     final c = value & 0xFFFF;
+    return HybridLogicalClock(l: l, c: c);
+  }
+
+  /// Decodes a [HybridLogicalClock] from a byte buffer (Big Endian).
+  ///
+  /// [bytes] The buffer containing the encoded HLC.
+  /// [offset] The index in the buffer where the HLC data starts (default: 0).
+  ///
+  /// Throws a [RangeError] if the buffer is too short.
+  factory HybridLogicalClock.fromUint8List(
+    Uint8List bytes, {
+    int offset = 0,
+  }) {
+    if (offset < 0 || offset + 8 > bytes.length) {
+      throw RangeError.range(offset, 0, bytes.length - 8, 'offset');
+    }
+
+    final lHigh = (bytes[offset + 0] * 256) + bytes[offset + 1];
+
+    final lLow = (bytes[offset + 2] * 16777216) +
+        (bytes[offset + 3] * 65536) +
+        (bytes[offset + 4] * 256) +
+        bytes[offset + 5];
+
+    final l = (lHigh * 4294967296) + lLow;
+
+    final c = (bytes[offset + 6] * 256) + bytes[offset + 7];
+
     return HybridLogicalClock(l: l, c: c);
   }
 
@@ -225,6 +254,39 @@ class HybridLogicalClock with Comparable<HybridLogicalClock> {
     // Ensure c fits in 16 bits
     final maskedC = _c & 0xFFFF;
     return (maskedL << 16) | maskedC;
+  }
+
+  /// Encodes this [HybridLogicalClock] into a new 8-byte buffer (Big Endian).
+  ///
+  /// Respect to [toInt64], this method is safe to use in JavaScript
+  /// (Web) because it reconstructs the 48-bit logical time
+  /// and 16-bit counter separately,
+  /// avoiding the 53-bit safe integer limit of JavaScript Numbers.
+  ///
+  /// Layout:
+  /// - Bytes 0-5: Logical time (l) - 48 bits
+  /// - Bytes 6-7: Counter (c) - 16 bits
+  Uint8List toUint8List() {
+    final bytes = Uint8List(8);
+
+    // Integer division avoids float conversion on native Dart.
+    // Using ~/ and % instead of (/ n).floor() keeps the result identical
+    // on both VM and Web (dart2js integers are 53-bit, so ~/ 2^32 is safe
+    // for any realistic timestamp value).
+    final lHigh = _l ~/ 0x100000000;
+    final lLow = _l % 0x100000000;
+
+    bytes[0] = (lHigh >> 8) & 0xFF;
+    bytes[1] = lHigh & 0xFF;
+
+    bytes[2] = (lLow >> 24) & 0xFF;
+    bytes[3] = (lLow >> 16) & 0xFF;
+    bytes[4] = (lLow >> 8) & 0xFF;
+    bytes[5] = lLow & 0xFF;
+
+    bytes[6] = (_c >> 8) & 0xFF;
+    bytes[7] = _c & 0xFF;
+    return bytes;
   }
 
   /// Returns the logical/physical part of the timestamp as a [DateTime] object.

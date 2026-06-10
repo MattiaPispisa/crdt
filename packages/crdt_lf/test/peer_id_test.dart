@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:crdt_lf/crdt_lf.dart';
 import 'package:test/test.dart';
 
@@ -70,6 +72,44 @@ void main() {
 
       expect(peerId1.hashCode, equals(peerId2.hashCode));
       expect(peerId1.hashCode, isNot(equals(peerId3.hashCode)));
+    });
+
+    test('parse accepts uppercase hex characters', () {
+      // Forces the uppercase branch of _hexValue when toUint8List is called.
+      const upperId = 'ABCDEF12-3456-4789-ABCD-EF1234567890';
+      final peerId = PeerId.parse(upperId);
+      final bytes = peerId.toUint8List();
+      expect(bytes, hasLength(16));
+      // Decoding back yields a lowercased form (canonical hex).
+      expect(PeerId.fromUint8List(bytes).id, equals(upperId.toLowerCase()));
+    });
+
+    test('fromUint8List throws RangeError on negative offset', () {
+      expect(
+        () => PeerId.fromUint8List(Uint8List(16), offset: -1),
+        throwsA(isA<RangeError>()),
+      );
+    });
+
+    test('fromUint8List throws RangeError when buffer is too short', () {
+      expect(
+        () => PeerId.fromUint8List(Uint8List(8)),
+        throwsA(isA<RangeError>()),
+      );
+    });
+
+    test('fromUint8List throws RangeError when offset goes past end', () {
+      expect(
+        () => PeerId.fromUint8List(Uint8List(16), offset: 1),
+        throwsA(isA<RangeError>()),
+      );
+    });
+
+    test('empty().toUint8List throws FormatException', () {
+      expect(
+        () => PeerId.empty().toUint8List(),
+        throwsA(isA<FormatException>()),
+      );
     });
 
     test('compareTo works correctly', () {

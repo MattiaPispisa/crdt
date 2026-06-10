@@ -320,5 +320,31 @@ void main() {
       expect(entry1.value, equals(HybridLogicalClock(l: 1, c: 1)));
       expect(entry2.value, equals(HybridLogicalClock(l: 2, c: 1)));
     });
+
+    test('toBytes/fromBytes round-trips id, versionVector and data', () {
+      final p = PeerId.generate();
+      final snapshot = Snapshot(
+        id: 'snap-id',
+        versionVector: VersionVector({p: HybridLogicalClock(l: 5, c: 1)}),
+        data: {'a': 1, 'b': 'hello', 'c': true},
+      );
+
+      final decoded = Snapshot.fromBytes(snapshot.toBytes());
+      expect(decoded.id, equals(snapshot.id));
+      expect(decoded.versionVector[p], equals(snapshot.versionVector[p]));
+      expect(decoded.data, equals(snapshot.data));
+    });
+
+    test('toBytes/fromBytes round-trips an empty snapshot', () {
+      final snapshot = Snapshot(
+        id: 'empty',
+        versionVector: VersionVector({}),
+        data: const <String, dynamic>{},
+      );
+      final decoded = Snapshot.fromBytes(snapshot.toBytes());
+      expect(decoded.id, equals(snapshot.id));
+      expect(decoded.versionVector.isEmpty, isTrue);
+      expect(decoded.data, isEmpty);
+    });
   });
 }

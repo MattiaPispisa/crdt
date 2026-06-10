@@ -304,9 +304,9 @@ class FugueTree<T> {
     required int targetPos,
     required _CurrentPosition currentPos,
   }) {
-    if (!_nodes.containsKey(nodeID)) {
-      return FugueElementID.nullID();
-    }
+    // Invariant: only called with [_rootID] (always present) or with
+    // children IDs taken from the tree, so [nodeID] always exists.
+    assert(_nodes.containsKey(nodeID), 'nodeID must be in the tree');
 
     final nodeTriple = _nodes[nodeID]!;
     final node = nodeTriple.node;

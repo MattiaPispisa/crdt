@@ -188,6 +188,28 @@ void main() {
       expect(dag.containsNode(id2), isFalse);
     });
 
+    test('prune removes a child while keeping the parent', () {
+      // Build a small DAG where a child belongs to a different peer than its
+      // parent, so we can prune the child without pruning the parent.
+      final peerA = PeerId.parse('11111111-1111-4111-8111-111111111111');
+      final peerB = PeerId.parse('22222222-2222-4222-8222-222222222222');
+
+      final parent = OperationId(peerA, HybridLogicalClock(l: 1, c: 1));
+      final child = OperationId(peerB, HybridLogicalClock(l: 1, c: 2));
+
+      dag
+        ..addNode(parent, {})
+        ..addNode(child, {parent})
+        // Prune only peerB up to child.hlc -> removes the child.
+        // peerA is not included, so the parent is kept.
+        ..prune(VersionVector({peerB: child.hlc}));
+
+      expect(dag.containsNode(parent), isTrue);
+      expect(dag.containsNode(child), isFalse);
+      // The parent should no longer reference the removed child.
+      expect(dag.getNode(parent)!.hasChild(child), isFalse);
+    });
+
     test('toString returns correct string representation', () {
       dag
         ..addNode(id1, {})

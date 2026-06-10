@@ -314,6 +314,37 @@ void main() {
         expect(reconstructed, newText);
       });
 
+      test('mixed inserts and deletes within aligned prefix/suffix', () {
+        // Common prefix 'p' and suffix 'q' are pre-trimmed by the algorithm.
+        // The inner diff is computed for 'aXb' -> 'aYb', exercising the
+        // path where the SES has equal sections between edits.
+        const oldText = 'paXbq';
+        const newText = 'paYbq';
+        final diffs = myersDiff(oldText, newText);
+        expect(diffs.any((s) => s.op == DiffOp.equal), isTrue);
+        expect(diffs.any((s) => s.op == DiffOp.insert), isTrue);
+        expect(diffs.any((s) => s.op == DiffOp.remove), isTrue);
+        _verifyContiguous(diffs, oldText.length, newText.length);
+      });
+
+      test('insertion in middle with surrounding equals', () {
+        // 'abXYZcd' -> 'abXMYZcd' inserts M between equal regions.
+        const oldText = 'abXYZcd';
+        const newText = 'abXMYZcd';
+        final diffs = myersDiff(oldText, newText);
+        expect(diffs.any((s) => s.op == DiffOp.insert), isTrue);
+        _verifyContiguous(diffs, oldText.length, newText.length);
+      });
+
+      test('deletion in middle with surrounding equals', () {
+        // 'abXMYZcd' -> 'abXYZcd' removes M between equal regions.
+        const oldText = 'abXMYZcd';
+        const newText = 'abXYZcd';
+        final diffs = myersDiff(oldText, newText);
+        expect(diffs.any((s) => s.op == DiffOp.remove), isTrue);
+        _verifyContiguous(diffs, oldText.length, newText.length);
+      });
+
       test('large complex unicode and multi-line text', () {
         const oldText = 'Line1: Hello world!\n'
             'Line2: The quick brown fox jumps over the lazy dog.\n'

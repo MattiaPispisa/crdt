@@ -1,6 +1,6 @@
-import 'package:crdt_lf/src/handler/handler.dart';
-import 'package:crdt_lf/src/operation/operation.dart';
-import 'package:crdt_lf/src/operation/type.dart';
+import 'dart:typed_data';
+import 'package:crdt_lf/crdt_lf.dart';
+
 part 'operation.dart';
 
 /// # CRDT List
@@ -23,14 +23,23 @@ part 'operation.dart';
 /// ```
 class CRDTListHandler<T> extends Handler<List<T>> {
   /// Creates a new CRDTList with the given document and ID
-  CRDTListHandler(super.doc, this._id);
+  ///
+  /// [valueCodec] is an optional codec for encoding/decoding [T] values to bytes.
+  /// Default is [JsonValueCodec].
+  CRDTListHandler(
+    super.doc,
+    this._id, {
+    ValueCodec<T>? valueCodec,
+  }) : _valueCodec = valueCodec ?? JsonValueCodec<T>();
 
   @override
   late final OperationFactory operationFactory =
-      _ListOperationFactory<T>(this).fromPayload;
+      _ListOperationFactory<T>(this).fromBytes;
 
   /// The ID of this list in the document
   final String _id;
+
+  final ValueCodec<T> _valueCodec;
 
   @override
   String get id => _id;

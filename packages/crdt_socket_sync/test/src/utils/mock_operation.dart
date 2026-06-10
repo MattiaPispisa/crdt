@@ -1,3 +1,4 @@
+import 'dart:typed_data';
 import 'package:crdt_lf/crdt_lf.dart';
 
 /// Test operation for testing purposes
@@ -14,4 +15,9 @@ class MockOperation extends Operation {
         'id': id,
         'test': true,
       };
+
+  @override
+  Uint8List toBodyBytes() {
+    return Uint8List(0);
+  }
 }

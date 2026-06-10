@@ -109,5 +109,42 @@ void main() {
         throwsA(isA<FormatException>()),
       );
     });
+
+    test('kind returns expected u8 for insert/delete/update', () {
+      expect(
+        OperationType.insert(handler).kind,
+        equals(OperationType.kindInsert),
+      );
+      expect(
+        OperationType.delete(handler).kind,
+        equals(OperationType.kindDelete),
+      );
+      expect(
+        OperationType.update(handler).kind,
+        equals(OperationType.kindUpdate),
+      );
+    });
+
+    test('typeNameFromKind returns expected name for valid kinds', () {
+      expect(
+        OperationType.typeNameFromKind(OperationType.kindInsert),
+        equals('insert'),
+      );
+      expect(
+        OperationType.typeNameFromKind(OperationType.kindDelete),
+        equals('delete'),
+      );
+      expect(
+        OperationType.typeNameFromKind(OperationType.kindUpdate),
+        equals('update'),
+      );
+    });
+
+    test('typeNameFromKind throws FormatException on unknown kind', () {
+      expect(
+        () => OperationType.typeNameFromKind(99),
+        throwsA(isA<FormatException>()),
+      );
+    });
   });
 }
