@@ -32,7 +32,8 @@ This library provides a Hybrid Logical Clock (HLC) implementation that combines 
 - Local event handling
 - Message exchange between peers
 - Causality detection
-- Serialization to/from 64-bit integers
+- Serialization to/from 64-bit integers (`toInt64` / `fromInt64`)
+- Compact 8-byte big-endian binary representation (`toUint8List` / `fromUint8List`) — usable as a building block inside larger binary frames (e.g. `OperationId` in `crdt_lf`)
 - Thread-safe implementation
 - Zero dependencies
 - Drift detection
@@ -71,9 +72,14 @@ print(clock.isConcurrentWith(receivedClock));
 print(clock >= receivedClock);
 print(clock < receivedClock);
 
-// Serialize/deserialize
+// Serialize/deserialize as a 64-bit integer
 final serialized = clock.toInt64();
 final deserialized = HybridLogicalClock.fromInt64(serialized);
+
+// Or as a compact 8-byte big-endian buffer (useful when embedding an HLC
+// inside a larger binary frame).
+final bytes = clock.toUint8List();
+final fromBytes = HybridLogicalClock.fromUint8List(bytes);
 ```
 
 ### [Complete Example](https://github.com/MattiaPispisa/crdt/blob/main/packages/hlc/example/main.dart)

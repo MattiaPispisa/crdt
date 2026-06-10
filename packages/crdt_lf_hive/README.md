@@ -143,17 +143,17 @@ if (snapshotStorage.containsSnapshot('snapshot-id')) {
 
 ## Snapshot Data Serialization
 
-`Snapshot` is persisted via `Snapshot.toBytes()` (the same self-describing binary
-format used everywhere else in `crdt_lf`). Internally, the `data` map is encoded
-with `JsonValueCodec`, so any value stored in `Snapshot.data` must be
-JSON-serializable (primitives, `List`, `Map<String, dynamic>`, or a custom type
-that exposes `toJson`).
+`Snapshot` is persisted via `Snapshot.toBytes()` (the same self-describing
+binary format used everywhere else in `crdt_lf`). Each entry of `Snapshot.data`
+is a `Uint8List` produced by the corresponding handler's `getSnapshotState()`;
+`Snapshot` itself only frames each blob with a length prefix.
 
 Custom value types used inside CRDT handlers (e.g. `CRDTListHandler<MyValue>`)
-are not affected: their per-operation payload is serialized by the
-`ValueCodec<T>` you pass to the handler, and ends up inside `Change` bytes, not
-in `Snapshot.data`. Only the projected state captured in a snapshot needs to be
-JSON-serializable.
+work out of the box: the per-operation payload is serialized by the
+`ValueCodec<T>` you pass to the handler — and the same codec is reused by the
+handler to encode each item into its snapshot state. The whole pipeline is
+binary end-to-end, with JSON only appearing as the default `ValueCodec<T>`
+when the user does not provide a custom one.
 
 ## Examples
 

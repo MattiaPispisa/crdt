@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:crdt_lf/crdt_lf.dart';
 import 'package:crdt_socket_sync/src/common/message.dart';
@@ -74,7 +75,7 @@ void main() {
         versionVector: VersionVector(
           {PeerId.generate(): HybridLogicalClock(l: 1, c: 1)},
         ),
-        data: {'key': 'value'},
+        data: {'key': Uint8List.fromList([1, 2, 3])},
       );
 
       final message = Message.documentStatus(
@@ -241,7 +242,7 @@ void main() {
         id: 'test-snapshot',
         versionVector:
             VersionVector({PeerId.generate(): HybridLogicalClock(l: 1, c: 1)}),
-        data: {'key': 'value'},
+        data: {'key': Uint8List.fromList([1, 2, 3])},
       );
 
       final peer1 = PeerId.generate();
@@ -428,7 +429,7 @@ void main() {
       id: 'test-snapshot',
       versionVector:
           VersionVector({PeerId.generate(): HybridLogicalClock(l: 1, c: 1)}),
-      data: {'key': 'value'},
+      data: {'key': Uint8List.fromList([1, 2, 3])},
     );
 
     test('should create with correct properties', () {
@@ -786,7 +787,7 @@ void main() {
         id: 'test-snapshot',
         versionVector:
             VersionVector({PeerId.generate(): HybridLogicalClock(l: 1, c: 1)}),
-        data: {'key': 'value'},
+        data: {'key': Uint8List.fromList([1, 2, 3])},
       );
       final json = {
         'type': MessageType.documentStatus.index,

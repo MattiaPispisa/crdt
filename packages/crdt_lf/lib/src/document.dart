@@ -572,7 +572,7 @@ class CRDTDocument extends BaseCRDTDocument {
   }) {
     _ensureNotDisposed('takeSnapshot');
 
-    final state = <String, dynamic>{};
+    final state = <String, Uint8List>{};
     for (final provider in _handlers.values) {
       state[provider.id] = provider.getSnapshotState();
     }
@@ -1370,15 +1370,23 @@ mixin CacheableStateProvider<T> on DocumentConsumer {
 }
 
 /// A provider that can provide a snapshot of the state of a [CRDTDocument]
+///
+/// Snapshot state is now a binary blob owned by the consumer. The framework
+/// only frames each blob with a length prefix inside [Snapshot]; the encoding
+/// and decoding of the blob's contents is entirely up to the consumer.
 mixin SnapshotProvider on DocumentConsumer {
   @override
   String get id;
 
-  /// Returns the current state of the consumer
-  dynamic getSnapshotState();
+  /// Encodes the consumer's current state to a binary blob.
+  ///
+  /// The blob is opaque to `crdt_lf` itself and will be returned verbatim
+  /// by [lastSnapshot] when the consumer needs to reconstruct its state.
+  Uint8List getSnapshotState();
 
-  /// Return the last snapshot of the document for this consumer.
-  dynamic lastSnapshot() {
+  /// Returns the last snapshot bytes for this consumer (the value previously
+  /// produced by [getSnapshotState]) or `null` if no snapshot is available.
+  Uint8List? lastSnapshot() {
     return _document._lastSnapshot?.data[id];
   }
 

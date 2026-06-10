@@ -14,8 +14,8 @@ class TestHandler extends Handler<dynamic> {
   final String id;
 
   @override
-  String getSnapshotState() {
-    return '';
+  Uint8List getSnapshotState() {
+    return Uint8List(0);
   }
 
   @override
