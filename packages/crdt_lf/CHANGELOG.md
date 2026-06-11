@@ -1,3 +1,32 @@
+## [3.1.0](https://github.com/MattiaPispisa/crdt/tree/crdt_lf-v3.1.0/packages/crdt_lf)
+**Date:** 2026-06-11
+
+[compare to previous release](https://github.com/MattiaPispisa/crdt/compare/crdt_lf-v3.0.0...crdt_lf-v3.1.0)
+
+Performance-focused release: handler caches are now updated in place instead of being deep-copied on every operation, and several core algorithms were rewritten to remove quadratic behavior.
+
+### Added
+
+- `DAG.getAncestorsOfAll(Iterable<OperationId>)` — single traversal with a shared visited set over multiple sources; `exportChanges(from:)` now uses it instead of one walk per frontier head.
+- `Frontiers.reset(Iterable<OperationId>)` — replaces the frontier content directly.
+
+### Changed
+
+- **Performance**: `CRDTORSetHandler`, `CRDTORMapHandler`, `CRDTListHandler` and `CRDTMapHandler` no longer deep-copy their cached state on every operation; the cache is mutated in place (the OR-Set handler benchmark drops from ~180ms to ~27ms for 1000 operations on a fresh document).
+- **Performance**: `CRDTFugueTextHandler` resolves its nodes and text lazily on read instead of re-traversing the whole tree after every operation.
+- **Performance**: `CRDTTextHandler` replays history on a mutable list of code units and applies incremental updates with a single string concatenation instead of multiple `StringBuffer` round-trips.
+- **Performance**: `ChangeStore.exportChangesNewerThan` answers from a lazily-built per-peer index sorted by clock (binary search) instead of scanning every stored change — this is the sync-server hot path (~500x faster on a 50k-change store).
+- **Performance**: `ChangeStore.prune` only rebuilds the changes whose dependencies were actually pruned, preserving object identity for untouched changes.
+- **Performance**: `CRDTDocument` topological sort uses a `ListQueue` (`removeFirst`) instead of `List.removeAt(0)`, removing quadratic behavior on large imports.
+- **Performance**: `DAG.getLCA` filters the lowest common ancestors through the children sets instead of re-running full ancestor walks.
+- `CRDTListHandler.value` and `CRDTMapHandler.value` now consistently return the handler's internal collection on both the cached and the recomputed path (previously the recomputed path returned a copy). Treat the returned collection as read-only.
+- `CacheableStateProvider.cachedState` may now be mutated in place between reads (live view rather than per-operation snapshot).
+
+### Fixed
+
+- `Frontiers.merge` compared operations with a total-order HLC comparison instead of causal dominance, so concurrent heads of different peers collapsed to the single operation with the highest clock after every `DAG.prune` (i.e. after every pruning snapshot or garbage collection). Frontiers now keep one head per peer (operations of the same peer are totally ordered; operations of different peers are concurrent), and `DAG.prune`/`DAG.merge` recompute the frontier from the structure of the graph. The document `version` no longer under-reports after a snapshot with concurrent peers.
+- `DAG` constructor mis-used `Map.fromIterable` when building the version vector from a non-empty node map, throwing a runtime type error. The vector is now built explicitly taking the maximum clock per peer.
+
 ## [3.0.0](https://github.com/MattiaPispisa/crdt/tree/crdt_lf-v3.0.0/packages/crdt_lf)
 **Date:** 2026-06-11
 
