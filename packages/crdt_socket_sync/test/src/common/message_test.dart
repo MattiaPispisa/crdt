@@ -76,7 +76,7 @@ void main() {
           {PeerId.generate(): HybridLogicalClock(l: 1, c: 1)},
         ),
         data: {
-          'key': Uint8List.fromList([1, 2, 3])
+          'key': Uint8List.fromList([1, 2, 3]),
         },
       );
 
@@ -245,7 +245,7 @@ void main() {
         versionVector:
             VersionVector({PeerId.generate(): HybridLogicalClock(l: 1, c: 1)}),
         data: {
-          'key': Uint8List.fromList([1, 2, 3])
+          'key': Uint8List.fromList([1, 2, 3]),
         },
       );
 
@@ -434,7 +434,7 @@ void main() {
       versionVector:
           VersionVector({PeerId.generate(): HybridLogicalClock(l: 1, c: 1)}),
       data: {
-        'key': Uint8List.fromList([1, 2, 3])
+        'key': Uint8List.fromList([1, 2, 3]),
       },
     );
 
@@ -794,7 +794,7 @@ void main() {
         versionVector:
             VersionVector({PeerId.generate(): HybridLogicalClock(l: 1, c: 1)}),
         data: {
-          'key': Uint8List.fromList([1, 2, 3])
+          'key': Uint8List.fromList([1, 2, 3]),
         },
       );
       final json = {
