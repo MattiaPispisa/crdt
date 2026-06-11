@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:crdt_lf/crdt_lf.dart';
 import 'package:hlc_dart/hlc_dart.dart';
 import 'package:test/test.dart';
@@ -266,7 +268,10 @@ void main() {
         ),
       );
       expect(snapshot.data, isMap);
-      expect(snapshot.data[handlerId], equals('HelloWorld'));
+      expect(
+        utf8.decode(snapshot.data[handlerId]!),
+        equals('HelloWorld'),
+      );
     });
 
     test('should be able to continue from snapshot', () {
@@ -445,7 +450,10 @@ void main() {
 
         // Verify snapshot data (simple check)
         expect(snapshot1.data[handlerId], isNotNull);
-        expect(snapshot1.data[handlerId], equals(convergedValue));
+        expect(
+          utf8.decode(snapshot1.data[handlerId]!),
+          equals(convergedValue),
+        );
 
         // Check if snapshots should be applied
         expect(doc2.shouldApplySnapshot(snapshot1), isTrue);

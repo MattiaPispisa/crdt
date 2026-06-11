@@ -91,8 +91,16 @@ class CRDTListHandler<T> extends Handler<List<T>> {
   }
 
   @override
-  List<T> getSnapshotState() {
-    return value;
+  Uint8List getSnapshotState() {
+    final out = BytesBuilder(copy: false);
+    final items = value;
+    UVarint.write(items.length, out);
+    for (final item in items) {
+      final bytes = _valueCodec.encode(item);
+      UVarint.write(bytes.length, out);
+      out.add(bytes);
+    }
+    return out.toBytes();
   }
 
   /// Gets the length of the list
@@ -186,11 +194,24 @@ class CRDTListHandler<T> extends Handler<List<T>> {
   /// Gets the initial state of the list
   List<T> _initialState() {
     final snapshot = lastSnapshot();
-    if (snapshot is List<dynamic> && snapshot.every((e) => e is T)) {
-      return List.from(snapshot);
+    if (snapshot == null) {
+      return [];
     }
 
-    return [];
+    var offset = 0;
+    final countRec = UVarint.read(snapshot, offset: offset);
+    offset = countRec.nextOffset;
+    final items = <T>[];
+    for (var i = 0; i < countRec.value; i += 1) {
+      final lenRec = UVarint.read(snapshot, offset: offset);
+      offset = lenRec.nextOffset;
+      final end = offset + lenRec.value;
+      items.add(
+        _valueCodec.decode(Uint8List.sublistView(snapshot, offset, end)),
+      );
+      offset = end;
+    }
+    return items;
   }
 
   /// Returns a string representation of this list

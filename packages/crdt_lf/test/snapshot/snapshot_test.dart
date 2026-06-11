@@ -1,9 +1,14 @@
+import 'dart:convert';
+import 'dart:typed_data';
+
 import 'package:crdt_lf/crdt_lf.dart';
 import 'package:hlc_dart/hlc_dart.dart';
 import 'package:test/test.dart';
 
 import '../helpers/handler.dart';
 import '../helpers/matcher.dart';
+
+Uint8List _b(String s) => Uint8List.fromList(utf8.encode(s));
 
 void main() {
   group('Snapshot', () {
@@ -32,31 +37,28 @@ void main() {
       final snapshot = Snapshot(
         id: 'id',
         versionVector: VersionVector({author: HybridLogicalClock(l: 1, c: 1)}),
-        data: {'test': 'Hello World!'},
+        data: {'test': _b('Hello World!')},
       );
 
       expect(snapshot.id, equals('id'));
-      expect(
-        snapshot.versionVector.entries.length,
-        equals(1),
-      );
+      expect(snapshot.versionVector.entries.length, equals(1));
       expect(snapshot.versionVector.entries.first.key, equals(author));
       expect(
         snapshot.versionVector.entries.first.value,
         equals(HybridLogicalClock(l: 1, c: 1)),
       );
-      expect(snapshot.data, equals({'test': 'Hello World!'}));
+      expect(snapshot.data, equals({'test': _b('Hello World!')}));
     });
 
     test('should be immutable', () {
       final snapshot = Snapshot(
         id: 'id',
         versionVector: VersionVector({author: HybridLogicalClock(l: 1, c: 1)}),
-        data: {'test': 'Hello World!'},
+        data: {'test': _b('Hello World!')},
       );
 
       expect(
-        () => snapshot.data['test'] = 'Hello World!',
+        () => snapshot.data['test'] = _b('Hello World!'),
         throwsA(isA<UnsupportedError>()),
       );
     });
@@ -80,67 +82,24 @@ void main() {
 
       final snapshot = Snapshot.create(
         versionVector: doc.getVersionVector(),
-        data: {'test': 'Hello World!'},
+        data: {'test': _b('Hello World!')},
       );
 
       expect(snapshot.id, isString);
-      expect(
-        snapshot.versionVector.entries.length,
-        equals(1),
-      );
+      expect(snapshot.versionVector.entries.length, equals(1));
       expect(snapshot.versionVector.entries.first.key, equals(author));
       expect(
         snapshot.versionVector.entries.first.value,
         equals(HybridLogicalClock(l: 1, c: 2)),
       );
-      expect(snapshot.data, equals({'test': 'Hello World!'}));
+      expect(snapshot.data, equals({'test': _b('Hello World!')}));
     });
 
-    test('should toJson correctly', () {
+    test('toString contains id, versionVector and entry count', () {
       final snapshot = Snapshot(
         id: 'id',
         versionVector: VersionVector({author: HybridLogicalClock(l: 1, c: 1)}),
-        data: {'test': 'Hello World!'},
-      );
-
-      final json = snapshot.toJson();
-      expect(json, isMap);
-      expect(json['id'], equals('id'));
-      expect(
-        json['versionVector'],
-        equals({
-          'vector': {author.toString(): '1.1'},
-        }),
-      );
-      expect(json['data'], equals({'test': 'Hello World!'}));
-    });
-
-    test('should fromJson correctly', () {
-      final json = Snapshot(
-        id: 'id',
-        versionVector: VersionVector({author: HybridLogicalClock(l: 1, c: 1)}),
-        data: {'test': 'Hello World!'},
-      ).toJson();
-
-      final snapshot = Snapshot.fromJson(json);
-      expect(snapshot.id, equals('id'));
-      expect(
-        snapshot.versionVector.entries.length,
-        equals(1),
-      );
-      expect(snapshot.versionVector.entries.first.key, equals(author));
-      expect(
-        snapshot.versionVector.entries.first.value,
-        equals(HybridLogicalClock(l: 1, c: 1)),
-      );
-      expect(snapshot.data, equals({'test': 'Hello World!'}));
-    });
-
-    test('toString correctly', () {
-      final snapshot = Snapshot(
-        id: 'id',
-        versionVector: VersionVector({author: HybridLogicalClock(l: 1, c: 1)}),
-        data: {'test': 'Hello World!'},
+        data: {'test': _b('Hello World!')},
       );
 
       expect(snapshot.toString(), contains('Snapshot(id: id'));
@@ -148,7 +107,7 @@ void main() {
         snapshot.toString(),
         contains('versionVector: VersionVector(vector: '),
       );
-      expect(snapshot.toString(), contains('data: {test: Hello World!}'));
+      expect(snapshot.toString(), contains('data: 1 entries'));
     });
 
     test('same version should produce same id', () {
@@ -205,8 +164,8 @@ void main() {
         id: 'id1',
         versionVector: VersionVector({author1: HybridLogicalClock(l: 1, c: 1)}),
         data: {
-          'todo-list': ['apple', 'banana'],
-          'test': 'Hello',
+          'todo-list': _b('apple,banana'),
+          'test': _b('Hello'),
         },
       );
 
@@ -217,21 +176,18 @@ void main() {
           author2: HybridLogicalClock(l: 1, c: 2),
         }),
         data: {
-          'test': 'Hello World!',
-          'document': 'Thesis: CRDTs are cool',
+          'test': _b('Hello World!'),
+          'document': _b('Thesis: CRDTs are cool'),
         },
       );
 
       final merged = snapshot.merged(newerSnapshot);
 
-      expect(merged.data, containsPair('test', 'Hello World!'));
-      expect(merged.data, containsPair('todo-list', ['apple', 'banana']));
-      expect(merged.data, containsPair('document', 'Thesis: CRDTs are cool'));
+      expect(merged.data['test'], equals(_b('Hello World!')));
+      expect(merged.data['todo-list'], equals(_b('apple,banana')));
+      expect(merged.data['document'], equals(_b('Thesis: CRDTs are cool')));
 
-      expect(
-        merged.versionVector.entries.length,
-        equals(2),
-      );
+      expect(merged.versionVector.entries.length, equals(2));
       expect(merged.versionVector.entries.first.key, equals(author1));
       expect(
         merged.versionVector.entries.first.value,
@@ -251,18 +207,18 @@ void main() {
       final snapshot = Snapshot(
         id: 'id1',
         versionVector: VersionVector({author1: HybridLogicalClock(l: 1, c: 1)}),
-        data: {'test': 'Hello'},
+        data: {'test': _b('Hello')},
       );
 
       final newerSnapshot = Snapshot(
         id: 'id2',
         versionVector: VersionVector({author2: HybridLogicalClock(l: 1, c: 2)}),
-        data: {'test': 'Hello World!'},
+        data: {'test': _b('Hello World!')},
       );
 
       final merged = snapshot.merged(newerSnapshot);
 
-      expect(merged.data, containsPair('test', 'Hello'));
+      expect(merged.data['test'], equals(_b('Hello')));
     });
 
     test(
@@ -275,8 +231,8 @@ void main() {
         id: 'base_id',
         versionVector: VersionVector({author1: HybridLogicalClock(l: 1, c: 1)}),
         data: {
-          'common_key': 'value from base',
-          'base_only_key': 'base only',
+          'common_key': _b('value from base'),
+          'base_only_key': _b('base only'),
         },
       );
 
@@ -287,27 +243,20 @@ void main() {
           author2: HybridLogicalClock(l: 2, c: 1),
         }),
         data: {
-          'common_key': 'value from other', // This should overwrite base
-          'other_only_key': 'other only',
+          'common_key': _b('value from other'),
+          'other_only_key': _b('other only'),
         },
       );
 
-      // Merge other into base
       final merged = snapshotBase.merged(snapshotOther);
 
-      // Verify data merge preference
-      expect(merged.data, containsPair('common_key', 'value from other'));
-      expect(merged.data, containsPair('base_only_key', 'base only'));
-      expect(merged.data, containsPair('other_only_key', 'other only'));
+      expect(merged.data['common_key'], equals(_b('value from other')));
+      expect(merged.data['base_only_key'], equals(_b('base only')));
+      expect(merged.data['other_only_key'], equals(_b('other only')));
       expect(merged.data.length, 3);
 
-      // Verify version vector merge (should contain both authors)
-      expect(
-        merged.versionVector.entries.length, // Check number of entries
-        equals(2),
-      );
+      expect(merged.versionVector.entries.length, equals(2));
 
-      // Find entries by key
       final entry1 = merged.versionVector.entries.firstWhere(
         (entry) => entry.key == author1,
         orElse: () => throw StateError('Author1 not found in merged VV'),
@@ -326,20 +275,27 @@ void main() {
       final snapshot = Snapshot(
         id: 'snap-id',
         versionVector: VersionVector({p: HybridLogicalClock(l: 5, c: 1)}),
-        data: {'a': 1, 'b': 'hello', 'c': true},
+        data: {
+          'a': _b('one'),
+          'b': _b('hello'),
+          'c': Uint8List.fromList([1, 2]),
+        },
       );
 
       final decoded = Snapshot.fromBytes(snapshot.toBytes());
       expect(decoded.id, equals(snapshot.id));
       expect(decoded.versionVector[p], equals(snapshot.versionVector[p]));
-      expect(decoded.data, equals(snapshot.data));
+      expect(decoded.data.keys.toSet(), equals(snapshot.data.keys.toSet()));
+      for (final key in snapshot.data.keys) {
+        expect(decoded.data[key], equals(snapshot.data[key]));
+      }
     });
 
     test('toBytes/fromBytes round-trips an empty snapshot', () {
       final snapshot = Snapshot(
         id: 'empty',
         versionVector: VersionVector({}),
-        data: const <String, dynamic>{},
+        data: const <String, Uint8List>{},
       );
       final decoded = Snapshot.fromBytes(snapshot.toBytes());
       expect(decoded.id, equals(snapshot.id));

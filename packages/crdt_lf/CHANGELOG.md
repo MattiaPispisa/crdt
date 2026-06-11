@@ -1,5 +1,5 @@
 ## [3.0.0](https://github.com/MattiaPispisa/crdt/tree/crdt_lf-v3.0.0/packages/crdt_lf)
-**Date:** 2026-06-06
+**Date:** 2026-06-11
 
 [compare to previous release](https://github.com/MattiaPispisa/crdt/compare/crdt_lf-v2.5.0...crdt_lf-v3.0.0)
 
@@ -13,6 +13,11 @@ The internal data model has migrated from JSON to a compact binary encoding. Cha
 - `CRDTDocument.binaryExportChanges` return type changed from `List<int>` to `Uint8List`.
 - `CRDTDocument.binaryImportChanges` parameter type changed from `List<int>` to `Uint8List`.
 - `Operation.handlerIdFrom(payload: Map)` removed. Operation identity is now derived from the binary envelope via `OperationEnvelopeCodec`.
+- `Snapshot.data` type changed from `Map<String, dynamic>` to `Map<String, Uint8List>`. Each entry is the opaque binary blob produced by the corresponding handler's `getSnapshotState()` and is owned by that handler.
+- `Snapshot.toJson` / `Snapshot.fromJson` removed. Use `Snapshot.toBytes()` / `Snapshot.fromBytes(Uint8List)` instead.
+- `SnapshotProvider.getSnapshotState()` return type changed from `dynamic` to `Uint8List`. Each handler is now responsible for encoding its own state to bytes (typically by reusing its `ValueCodec<T>`) and for decoding it back from `lastSnapshot()`.
+- `SnapshotProvider.lastSnapshot()` return type changed from `dynamic` to `Uint8List?`.
+- `VersionVector.toJson` / `VersionVector.fromJson` removed. Use `VersionVector.toBytes()` / `VersionVector.fromBytes(Uint8List)` instead.
 
 ### Added
 

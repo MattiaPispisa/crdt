@@ -5,22 +5,17 @@ import 'package:crdt_lf/crdt_lf.dart';
 import 'package:crypto/crypto.dart';
 
 /// Represents a snapshot of a CRDTDocument's state at a specific version.
+///
+/// Each entry in [data] is the opaque binary representation of one consumer's
+/// (handler's) projected state. The handler is responsible for encoding and
+/// decoding its own state — `crdt_lf` only treats each entry as a `Uint8List`.
 class Snapshot {
-  /// Creates a [Snapshot]
+  /// Creates a [Snapshot].
   Snapshot({
     required this.id,
     required this.versionVector,
-    required Map<String, dynamic> data,
+    required Map<String, Uint8List> data,
   }) : data = Map.unmodifiable(data);
-
-  /// Converts a JSON object to a [Snapshot]
-  factory Snapshot.fromJson(Map<String, dynamic> json) => Snapshot(
-        id: json['id'] as String,
-        data: Map<String, dynamic>.from(json['data'] as Map),
-        versionVector: VersionVector.fromJson(
-          json['versionVector'] as Map<String, dynamic>,
-        ),
-      );
 
   /// Decodes a [Snapshot] from a binary buffer produced by [toBytes].
   ///
@@ -29,8 +24,12 @@ class Snapshot {
   /// - `id: utf8 bytes`
   /// - `vectorLen: uvarint`
   /// - `vector: VersionVector bytes`
-  /// - `dataLen: uvarint`
-  /// - `data: JsonValueCodec bytes`
+  /// - `entryCount: uvarint`
+  /// - repeated `entryCount` times:
+  ///   - `keyLen: uvarint`
+  ///   - `key: utf8 bytes`
+  ///   - `valueLen: uvarint`
+  ///   - `value: bytes` (opaque, owned by the consumer that produced it)
   factory Snapshot.fromBytes(Uint8List bytes) {
     var offset = 0;
 
@@ -54,15 +53,30 @@ class Snapshot {
     );
     offset = vvEnd;
 
-    final dataLenRec = UVarint.read(bytes, offset: offset);
-    offset = dataLenRec.nextOffset;
-    final dataEnd = offset + dataLenRec.value;
-    if (dataEnd > bytes.length) {
-      throw const FormatException('Truncated Snapshot data');
+    final countRec = UVarint.read(bytes, offset: offset);
+    offset = countRec.nextOffset;
+    final data = <String, Uint8List>{};
+    for (var i = 0; i < countRec.value; i += 1) {
+      final keyLenRec = UVarint.read(bytes, offset: offset);
+      offset = keyLenRec.nextOffset;
+      final keyEnd = offset + keyLenRec.value;
+      if (keyEnd > bytes.length) {
+        throw const FormatException('Truncated Snapshot data key');
+      }
+      final key = utf8.decode(Uint8List.sublistView(bytes, offset, keyEnd));
+      offset = keyEnd;
+
+      final valueLenRec = UVarint.read(bytes, offset: offset);
+      offset = valueLenRec.nextOffset;
+      final valueEnd = offset + valueLenRec.value;
+      if (valueEnd > bytes.length) {
+        throw const FormatException('Truncated Snapshot data value');
+      }
+      data[key] = Uint8List.fromList(
+        Uint8List.sublistView(bytes, offset, valueEnd),
+      );
+      offset = valueEnd;
     }
-    final data = const JsonValueCodec<Map<String, dynamic>>().decode(
-      Uint8List.sublistView(bytes, offset, dataEnd),
-    );
 
     return Snapshot(
       id: id,
@@ -74,7 +88,7 @@ class Snapshot {
   /// Creates a [Snapshot] from a [versionVector].
   factory Snapshot.create({
     required VersionVector versionVector,
-    required Map<String, dynamic> data,
+    required Map<String, Uint8List> data,
   }) {
     return Snapshot(
       id: _generateIdFromVersion(versionVector),
@@ -89,8 +103,11 @@ class Snapshot {
   /// The version vector of the snapshot.
   final VersionVector versionVector;
 
-  /// The actual data representing the snapshot state.
-  final Map<String, dynamic> data;
+  /// The actual data representing the snapshot state, keyed by handler id.
+  ///
+  /// Each value is the opaque binary blob the corresponding handler produced
+  /// via its `getSnapshotState()`.
+  final Map<String, Uint8List> data;
 
   /// Merges two [Snapshot]s.
   ///
@@ -112,13 +129,6 @@ class Snapshot {
     );
   }
 
-  /// Converts the [Snapshot] to a JSON object
-  Map<String, dynamic> toJson() => {
-        'id': id,
-        'data': data,
-        'versionVector': versionVector.toJson(),
-      };
-
   /// Encodes this snapshot to a compact binary representation.
   ///
   /// See [Snapshot.fromBytes] for the layout.
@@ -133,39 +143,39 @@ class Snapshot {
     UVarint.write(vvBytes.length, out);
     out.add(vvBytes);
 
-    final dataBytes = const JsonValueCodec<Map<String, dynamic>>().encode(data);
-    UVarint.write(dataBytes.length, out);
-    out.add(dataBytes);
+    UVarint.write(data.length, out);
+    for (final entry in data.entries) {
+      final keyBytes = utf8.encode(entry.key);
+      UVarint.write(keyBytes.length, out);
+      out.add(keyBytes);
+
+      UVarint.write(entry.value.length, out);
+      out.add(entry.value);
+    }
 
     return out.toBytes();
   }
 
   @override
   String toString() {
-    return 'Snapshot(id: $id, versionVector: $versionVector, data: $data)';
+    return 'Snapshot(id: $id, versionVector: $versionVector, '
+        'data: ${data.length} entries)';
   }
 
   /// Generates a stable SHA-256 hash ID from the version set.
   static String _generateIdFromVersion(VersionVector version) {
     if (version.isEmpty) {
-      // Define a specific ID for the empty version state
-      // Hashing an empty string or using a constant are options.
       return sha256.convert(utf8.encode('')).toString();
     }
-    // 1. Convert OperationIds to stable strings
-    final versionStrings =
-        version.entries.map((entry) => '${entry.key}:${entry.value}').toList()
-          // 2. Sort the strings for stability
-          ..sort();
+    final versionStrings = version.entries
+        .map((entry) => '${entry.key}:${entry.value}')
+        .toList()
+      ..sort();
 
-    // 3. Concatenate into a single string
     final concatenatedString = versionStrings.join();
-
-    // 4. Hash the concatenated string using SHA-256
     final bytes = utf8.encode(concatenatedString);
     final digest = sha256.convert(bytes);
 
-    // Return the hexadecimal representation of the hash
     return digest.toString();
   }
 }

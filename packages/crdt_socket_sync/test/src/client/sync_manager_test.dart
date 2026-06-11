@@ -1,4 +1,6 @@
 import 'dart:async';
+import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:crdt_lf/crdt_lf.dart';
 import 'package:crdt_socket_sync/client.dart';
@@ -193,7 +195,7 @@ void main() {
           versionVector: VersionVector(
             {peerId: HybridLogicalClock(l: 1, c: 1)},
           ),
-          data: {'test-handler': 'test_state'},
+          data: {'test-handler': Uint8List.fromList(utf8.encode('test_state'))},
         );
 
         expect(
@@ -228,7 +230,7 @@ void main() {
           versionVector: VersionVector(
             {olderPeerId: HybridLogicalClock(l: 1, c: 1)},
           ),
-          data: {'test-handler': 'test_state'},
+          data: {'test-handler': Uint8List.fromList(utf8.encode('test_state'))},
         );
 
         syncManager.merge(
@@ -261,7 +263,7 @@ void main() {
         final snapshot = Snapshot(
           id: 'test-snapshot',
           versionVector: currentVV.mutable(),
-          data: {'test-handler': 'test_state'},
+          data: {'test-handler': Uint8List.fromList(utf8.encode('test_state'))},
         );
 
         // Add a newer change on the snapshot
@@ -335,7 +337,7 @@ void main() {
           versionVector: VersionVector({
             otherPeerId: HybridLogicalClock(l: 5, c: 1),
           }),
-          data: {'test-handler': 'test_state'},
+          data: {'test-handler': Uint8List.fromList(utf8.encode('test_state'))},
         );
 
         final serverChange = Change(
@@ -403,8 +405,8 @@ void main() {
         final message = mockClient.getLastSentMessage();
         final requestMessage = message! as DocumentStatusRequestMessage;
         expect(
-          requestMessage.versionVector?.toJson(),
-          equals(currentVV.toJson()),
+          requestMessage.versionVector?.toBytes(),
+          equals(currentVV.toBytes()),
         );
       });
 
@@ -529,7 +531,7 @@ void main() {
           versionVector: VersionVector({
             otherPeerId: HybridLogicalClock(l: 1, c: 1),
           }),
-          data: {'test-handler': 'test_state'},
+          data: {'test-handler': Uint8List.fromList(utf8.encode('test_state'))},
         );
 
         // Should not throw

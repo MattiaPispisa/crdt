@@ -31,6 +31,7 @@
     - [Change](#change)
     - [Frontiers](#frontiers)
     - [Snapshot](#snapshot)
+    - [Binary representation](#binary-representation)
   - [Project Status](#project-status)
     - [Roadmap](#roadmap)
     - [Contributing](#contributing)
@@ -205,58 +206,73 @@ When using `CRDTListHandler<T>` or `CRDTMapHandler<T>` with complex object types
 
 The `value` of your complex object is directly embedded within the `Change`'s payload. This has two important implications:
 
-1.  **Serialization**: If you plan to persist these `Change`s (e.g., using `crdt_lf_hive`) or send them over a network, you **must** have a strategy to serialize and deserialize your custom objects. The raw object cannot be stored or transmitted as-is. A common approach is to convert your object to a `Map<String, dynamic>` (e.g., by implementing `toJson()` and a `fromJson()` factory).
+1.  **Serialization**: If you plan to persist these `Change`s (e.g., using `crdt_lf_hive`) or send them over a network, you **must** provide a strategy to serialize your custom type to bytes and back. This is done by passing a `ValueCodec<T>` to the handler — its `encode(T) → Uint8List` is stored directly inside the operation payload, and `decode(Uint8List) → T` is used on the receiver. A `ValueCodec` can wrap any binary format (raw fixed-width fields, protobuf, json bytes, etc.).
 
 2.  **Immutability and Value Semantics**: When a `Change` is created, it captures the **state of the `value` at that specific moment**. If you later mutate the original object, the `Change` will still hold the old state. This can lead to unexpected behavior. It is highly recommended to treat your complex objects as **immutable**. When you need to modify an object, create a new instance with the updated values instead of mutating the existing one. This ensures that each `Change` is a predictable and self-contained snapshot of the operation.
 
-**Example with a custom class:**
+**Example with a custom class and a binary `ValueCodec<T>`:**
 
 ```dart
 class MyData {
+  const MyData(this.name, this.count);
   final String name;
   final int count;
+}
 
-  MyData(this.name, this.count);
+class MyDataCodec implements ValueCodec<MyData> {
+  const MyDataCodec();
 
-  // You need a way to serialize
-  Map<String, dynamic> toJson() => {'name': name, 'count': count};
+  @override
+  Uint8List encode(MyData value) {
+    final nameBytes = utf8.encode(value.name);
+    final out = BytesBuilder(copy: false)
+      ..add(Uint8List(4)..buffer.asByteData().setInt32(0, value.count))
+      ..add(nameBytes);
+    return out.toBytes();
+  }
 
-  // And a way to deserialize
-  factory MyData.fromJson(Map<String, dynamic> json) {
-    return MyData(json['name'], json['count']);
+  @override
+  MyData decode(Uint8List bytes) {
+    final count = ByteData.sublistView(bytes, 0, 4).getInt32(0);
+    final name = utf8.decode(bytes.sublist(4));
+    return MyData(name, count);
   }
 }
 
-// When using with a handler
-final list = CRDTListHandler<MyData>(doc, 'my-data-list');
+// Wire the codec into the handler
+final list = CRDTListHandler<MyData>(
+  doc,
+  'my-data-list',
+  valueCodec: const MyDataCodec(),
+);
 
-// GOOD: Create a new instance for the change
-final data = MyData('item1', 1);
-list.insert(0, data);
+// GOOD: create a new instance for the change
+list.insert(0, const MyData('item1', 1));
 
-// BAD: Mutating the object after insertion
-// This will NOT be reflected in the CRDT history
-// data.count = 2; // Avoid this
+// BAD: mutating the object after insertion
+// This will NOT be reflected in the CRDT history.
 
-// Instead, for updates, create a new instance
-final updatedData = MyData('item1', 2);
-list.update(0, updatedData);
+// For updates, create a new instance
+list.update(0, const MyData('item1', 2));
 ```
 
-**Alternative Approach: Store Raw Data**
+If you don't pass a `valueCodec`, the handler falls back to `JsonValueCodec<T>`, which simply wraps `json.encode`/`json.decode` — convenient for types that already implement `toJson()`/`fromJson()`.
 
-A more robust pattern is to always store raw, serializable data (like `Map<String, dynamic>`) inside the handler. This forces serialization at the system's boundary and avoids accidental mutation issues.
+**About snapshot data.** When you call `document.takeSnapshot()`, each handler projects its current state into `Snapshot.data` as a `Uint8List` produced by the handler's own `getSnapshotState()`. Built-in handlers reuse the same `ValueCodec<T>` you pass at construction time to encode each item, so a `CRDTListHandler<MyData>` with a `MyDataCodec` snapshots its state with that same codec. `Snapshot` itself only frames each per-handler blob with a length prefix.
+
+**Alternative approach: store raw data inside the handler.**
+
+If you don't need a custom binary layout and you're fine with JSON, you can rely on the default `JsonValueCodec<T>` by declaring the handler with a JSON-friendly type (e.g. `Map<String, dynamic>`). The same `JsonValueCodec` is reused both for operation payloads and for snapshot entries.
 
 ```dart
 // 1. Declare the handler with a raw type
 final rawList = CRDTListHandler<Map<String, dynamic>>(doc, 'my-raw-list');
 
 // 2. Serialize before inserting/updating
-final data = MyData('item2', 1);
-rawList.insert(0, data.toJson()); 
+rawList.insert(0, const MyData('item2', 1).toJson());
 
 // 3. Deserialize when reading the value
-final myDataList = rawList.value.map((map) => MyData.fromJson(map)).toList();
+final myDataList = rawList.value.map(MyData.fromJson).toList();
 print(myDataList.first.name); // Prints "item2"
 ```
 
@@ -301,6 +317,30 @@ A structure that manages the frontiers (latest operations) of the CRDT.
 
 ### Snapshot
 A snapshot of the CRDT state, including the version vector and the data.
+
+### Binary representation
+
+Every core CRDT type exposes a compact, self-describing binary representation.
+This is the canonical wire format used by `crdt_lf_hive` for persistence and by
+`crdt_socket_sync` for transport — but it is also a public API you can use
+directly to build your own storage or sync layer.
+
+| Type | Methods | Size |
+|---|---|---|
+| `PeerId` | `toUint8List()` / `fromUint8List()` | 16 B |
+| `HybridLogicalClock` | `toUint8List()` / `fromUint8List()` | 8 B |
+| `OperationId` | `toUint8List()` / `fromUint8List()` | 24 B (peer + hlc) |
+| `FugueElementID` | `toBytes()` / `fromBytes()` (also `readFromBytes` for chained reads) | variable |
+| `VersionVector` | `toBytes()` / `fromBytes()` | variable |
+| `Change` | `toBytes()` / `fromBytes()` | variable, schema-versioned |
+| `Snapshot` | `toBytes()` / `fromBytes()` | variable; `data` is a `Map<String, Uint8List>` framed with a length prefix per entry |
+
+Operation payloads inside a `Change` are produced by the handler's
+`ValueCodec<T>`. Each entry of `Snapshot.data` is produced by the handler's
+`getSnapshotState()` — built-in handlers reuse the same `ValueCodec<T>` to
+encode their items, so the whole pipeline (operation payload → `Change` →
+`Snapshot`) is fully binary end-to-end. JSON only appears as the *default*
+`ValueCodec<T>` when the user does not provide a custom one.
 
 ## Project Status
 

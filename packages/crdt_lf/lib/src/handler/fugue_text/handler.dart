@@ -271,18 +271,58 @@ class CRDTFugueTextHandler extends Handler<FugueTextState> {
   }
 
   @override
-  List<FugueValueNode<String>> getSnapshotState() {
+  Uint8List getSnapshotState() {
+    final List<FugueValueNode<String>> nodes;
     if (cachedState != null) {
-      return cachedState!._nodes;
+      nodes = cachedState!._nodes;
+    } else {
+      final state = _computeState();
+      updateCachedState(state);
+      nodes = state._nodes;
     }
+    return _encodeSnapshotNodes(nodes);
+  }
 
-    // Compute state from scratch
-    final state = _computeState();
+  static Uint8List _encodeSnapshotNodes(List<FugueValueNode<String>> nodes) {
+    final out = BytesBuilder(copy: false);
+    UVarint.write(nodes.length, out);
+    for (final node in nodes) {
+      final idBytes = node.id.toBytes();
+      UVarint.write(idBytes.length, out);
+      out.add(idBytes);
 
-    // Store state in cache
-    updateCachedState(state);
+      final valueBytes = utf8.encode(node.value);
+      UVarint.write(valueBytes.length, out);
+      out.add(valueBytes);
+    }
+    return out.toBytes();
+  }
 
-    return state._nodes;
+  static List<FugueValueNode<String>> _decodeSnapshotNodes(Uint8List bytes) {
+    var offset = 0;
+    final countRec = UVarint.read(bytes, offset: offset);
+    offset = countRec.nextOffset;
+    final nodes = <FugueValueNode<String>>[];
+    for (var i = 0; i < countRec.value; i += 1) {
+      final idLenRec = UVarint.read(bytes, offset: offset);
+      offset = idLenRec.nextOffset;
+      final idEnd = offset + idLenRec.value;
+      final id = FugueElementID.fromBytes(
+        Uint8List.sublistView(bytes, offset, idEnd),
+      );
+      offset = idEnd;
+
+      final valLenRec = UVarint.read(bytes, offset: offset);
+      offset = valLenRec.nextOffset;
+      final valEnd = offset + valLenRec.value;
+      final value = utf8.decode(
+        Uint8List.sublistView(bytes, offset, valEnd),
+      );
+      offset = valEnd;
+
+      nodes.add(FugueValueNode<String>(id: id, value: value));
+    }
+    return nodes;
   }
 
   /// Gets the length of the text
@@ -349,11 +389,10 @@ class CRDTFugueTextHandler extends Handler<FugueTextState> {
   /// Gets the initial state of the text
   List<FugueValueNode<String>> _initialState() {
     final snapshot = lastSnapshot();
-    if (snapshot is List<FugueValueNode<String>>) {
-      return List.from(snapshot);
+    if (snapshot == null) {
+      return [];
     }
-
-    return [];
+    return _decodeSnapshotNodes(snapshot);
   }
 
   // Cache is updated directly after local ops; no private invalidator needed

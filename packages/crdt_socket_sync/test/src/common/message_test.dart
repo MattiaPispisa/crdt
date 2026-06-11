@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:crdt_lf/crdt_lf.dart';
 import 'package:crdt_socket_sync/src/common/message.dart';
@@ -74,7 +75,9 @@ void main() {
         versionVector: VersionVector(
           {PeerId.generate(): HybridLogicalClock(l: 1, c: 1)},
         ),
-        data: {'key': 'value'},
+        data: {
+          'key': Uint8List.fromList([1, 2, 3]),
+        },
       );
 
       final message = Message.documentStatus(
@@ -206,7 +209,7 @@ void main() {
       expect(message.type, MessageType.handshakeRequest);
       expect(message.documentId, documentId);
       expect(message.author, author);
-      expect(message.versionVector.toJson(), versionVector.toJson());
+      expect(message.versionVector.toBytes(), versionVector.toBytes());
     });
 
     test('should have correct toString representation', () {
@@ -241,7 +244,9 @@ void main() {
         id: 'test-snapshot',
         versionVector:
             VersionVector({PeerId.generate(): HybridLogicalClock(l: 1, c: 1)}),
-        data: {'key': 'value'},
+        data: {
+          'key': Uint8List.fromList([1, 2, 3]),
+        },
       );
 
       final peer1 = PeerId.generate();
@@ -428,7 +433,9 @@ void main() {
       id: 'test-snapshot',
       versionVector:
           VersionVector({PeerId.generate(): HybridLogicalClock(l: 1, c: 1)}),
-      data: {'key': 'value'},
+      data: {
+        'key': Uint8List.fromList([1, 2, 3]),
+      },
     );
 
     test('should create with correct properties', () {
@@ -515,7 +522,7 @@ void main() {
 
       expect(message.type, MessageType.documentStatusRequest);
       expect(message.documentId, documentId);
-      expect(message.versionVector?.toJson(), versionVector.toJson());
+      expect(message.versionVector?.toBytes(), versionVector.toBytes());
     });
 
     test('should handle null versionVector', () {
@@ -786,7 +793,9 @@ void main() {
         id: 'test-snapshot',
         versionVector:
             VersionVector({PeerId.generate(): HybridLogicalClock(l: 1, c: 1)}),
-        data: {'key': 'value'},
+        data: {
+          'key': Uint8List.fromList([1, 2, 3]),
+        },
       );
       final json = {
         'type': MessageType.documentStatus.index,

@@ -102,10 +102,18 @@ class CRDTORSetHandler<T> extends Handler<ORSetState<T>> {
   /// Returns whether the set contains [value].
   bool contains(T element) => value.contains(element);
 
-  /// Returns the current state for snapshotting
+  /// Returns the current state for snapshotting as a binary blob.
   @override
-  List<T> getSnapshotState() {
-    return value.toList();
+  Uint8List getSnapshotState() {
+    final out = BytesBuilder(copy: false);
+    final items = value;
+    UVarint.write(items.length, out);
+    for (final item in items) {
+      final bytes = _valueCodec.encode(item);
+      UVarint.write(bytes.length, out);
+      out.add(bytes);
+    }
+    return out.toBytes();
   }
 
   /// Computes the tag state by replaying the history.
@@ -122,14 +130,20 @@ class CRDTORSetHandler<T> extends Handler<ORSetState<T>> {
     // Seed from snapshot:
     // If a prior snapshot contained values for this handler,
     // we treat them as present without tags (snapshot-only) until changes say
-    // otherwise.
-    if (snap is List<dynamic> && snap.every((e) => e is T)) {
-      for (final v in snap.cast<T>()) {
-        state._snapshotOnly.add(v);
-      }
-    } else if (snap is Set<dynamic> && snap.every((e) => e is T)) {
-      for (final v in snap.cast<T>()) {
-        state._snapshotOnly.add(v);
+    // otherwise. The snapshot is a length-prefixed sequence of items encoded
+    // via [_valueCodec].
+    if (snap != null) {
+      var offset = 0;
+      final countRec = UVarint.read(snap, offset: offset);
+      offset = countRec.nextOffset;
+      for (var i = 0; i < countRec.value; i += 1) {
+        final lenRec = UVarint.read(snap, offset: offset);
+        offset = lenRec.nextOffset;
+        final end = offset + lenRec.value;
+        state._snapshotOnly.add(
+          _valueCodec.decode(Uint8List.sublistView(snap, offset, end)),
+        );
+        offset = end;
       }
     }
 

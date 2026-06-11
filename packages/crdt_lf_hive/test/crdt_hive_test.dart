@@ -98,11 +98,11 @@ void main() {
       expect(storage.isNotEmpty, isFalse);
     });
 
-    test('SnapshotAdapter JSON mode and CRDTSnapshotStorage ops', () async {
-      const documentId = 'doc-json-3';
+    test('SnapshotAdapter and CRDTSnapshotStorage ops', () async {
+      const documentId = 'doc-snap-3';
       final storage = await CRDTHive.openSnapshotStorageForDocument(documentId);
 
-      Snapshot makeSnapshot(int l, int c, Map<String, dynamic> data) {
+      Snapshot makeSnapshot(int l, int c, Map<String, Uint8List> data) {
         return Snapshot(
           id: 's_${l}_$c',
           versionVector: VersionVector(
@@ -112,10 +112,14 @@ void main() {
         );
       }
 
-      final s1 = makeSnapshot(1, 1, {'a': 1});
-      final s2 = makeSnapshot(1, 2, {'b': true});
+      final s1 = makeSnapshot(1, 1, {
+        'a': Uint8List.fromList([1]),
+      });
+      final s2 = makeSnapshot(1, 2, {
+        'b': Uint8List.fromList([0]),
+      });
       final s3 = makeSnapshot(2, 1, {
-        'list': [1, 2],
+        'list': Uint8List.fromList([1, 2]),
       });
 
       await storage.saveSnapshots([s1, s2, s3]);
@@ -134,34 +138,34 @@ void main() {
       expect(storage.isNotEmpty, isFalse);
     });
 
-    test('SnapshotAdapter JSON mode: roundtrip complex data', () async {
-      const documentId = 'doc-json-snap-roundtrip';
+    test('SnapshotAdapter: roundtrip opaque binary blobs', () async {
+      const documentId = 'doc-snap-roundtrip';
       final storage = await CRDTHive.openSnapshotStorageForDocument(documentId);
 
       final author = PeerId.generate();
       final vv = VersionVector({author: HybridLogicalClock(l: 999, c: 2)});
-      final data = <String, dynamic>{
-        'title': 'doc',
-        'meta': {
-          'tags': ['a', 'b'],
-          'flags': {'public': true, 'archived': false},
-        },
-        'count': 42,
+      final data = <String, Uint8List>{
+        'title': Uint8List.fromList(utf8.encode('doc')),
+        'count': Uint8List.fromList([42, 0, 0, 0]),
+        'blob': Uint8List.fromList(List<int>.generate(32, (i) => i)),
       };
 
-      final snapshot = Snapshot(id: 'snap-json', versionVector: vv, data: data);
+      final snapshot = Snapshot(id: 'snap', versionVector: vv, data: data);
       await storage.saveSnapshot(snapshot);
 
       await CRDTHive.closeAllBoxes();
 
       final reopened =
           await CRDTHive.openSnapshotStorageForDocument(documentId);
-      final loaded = reopened.getSnapshot('snap-json');
+      final loaded = reopened.getSnapshot('snap');
 
       expect(loaded, isNotNull);
-      expect(loaded!.id, equals('snap-json'));
+      expect(loaded!.id, equals('snap'));
       expect(loaded.versionVector.entries.length, equals(1));
-      expect(loaded.data, equals(data));
+      expect(loaded.data.keys.toSet(), equals(data.keys.toSet()));
+      for (final key in data.keys) {
+        expect(loaded.data[key], equals(data[key]));
+      }
     });
 
     group('Storage delete/contains single-item operations', () {
@@ -201,7 +205,9 @@ void main() {
           versionVector: VersionVector(
             {author: HybridLogicalClock(l: 1, c: 1)},
           ),
-          data: {'k': 'v'},
+          data: {
+            'k': Uint8List.fromList([1]),
+          },
         );
 
         await storage.saveSnapshot(snapshot);
@@ -226,7 +232,9 @@ void main() {
             id: 'present',
             versionVector:
                 VersionVector({author: HybridLogicalClock(l: 1, c: 1)}),
-            data: {'k': 'v'},
+            data: {
+              'k': Uint8List.fromList([1]),
+            },
           ),
         );
         expect(storage.containsSnapshot('present'), isTrue);
@@ -282,36 +290,54 @@ void main() {
       });
 
       test(
-          'Snapshot.data with nested JSON-serializable map '
-          'round-trips through Hive', () async {
+          'CRDTListHandler<ObjectValue> snapshot round-trips through Hive '
+          'using the handler-owned binary state', () async {
         const documentId = 'doc-complex-snapshot';
         final storage =
             await CRDTHive.openSnapshotStorageForDocument(documentId);
 
-        // ObjectValue serialized as JSON-friendly Map (the new contract for
-        // Snapshot.data): keys/values must survive json.encode/json.decode.
-        final author = PeerId.generate();
-        final shapesAsMaps = [
-          {'height': 10, 'width': 20, 'offsetX': 1.5, 'offsetY': 2.5},
-          {'height': 30, 'width': 40, 'offsetX': 3.5, 'offsetY': 4.5},
-        ];
-
-        final snapshot = Snapshot(
-          id: 'snap-shapes',
-          versionVector: VersionVector(
-            {author: HybridLogicalClock(l: 9, c: 1)},
-          ),
-          data: {'shapes': shapesAsMaps},
+        final document = CRDTDocument(peerId: PeerId.generate());
+        final list = CRDTListHandler<ObjectValue>(
+          document,
+          'shapes',
+          valueCodec: const ObjectValueCodec(),
         );
 
+        const v1 = ObjectValue(
+          height: 10,
+          width: 20,
+          offsetX: 1.5,
+          offsetY: 2.5,
+        );
+        const v2 = ObjectValue(
+          height: 30,
+          width: 40,
+          offsetX: 3.5,
+          offsetY: 4.5,
+        );
+        list
+          ..insert(0, v1)
+          ..insert(1, v2);
+
+        final snapshot = document.takeSnapshot(pruneHistory: false);
         await storage.saveSnapshot(snapshot);
         await CRDTHive.closeAllBoxes();
 
         final reopened =
             await CRDTHive.openSnapshotStorageForDocument(documentId);
-        final loaded = reopened.getSnapshot('snap-shapes');
+        final loaded = reopened.getSnapshot(snapshot.id);
         expect(loaded, isNotNull);
-        expect(loaded!.data['shapes'], equals(shapesAsMaps));
+
+        // Restore the snapshot into a fresh document and rebuild the
+        // handler — it should expose the original typed values.
+        final restoredDoc = CRDTDocument(peerId: PeerId.generate())
+          ..mergeSnapshot(loaded!, pruneHistory: false);
+        final restoredList = CRDTListHandler<ObjectValue>(
+          restoredDoc,
+          'shapes',
+          valueCodec: const ObjectValueCodec(),
+        );
+        expect(restoredList.value, equals([v1, v2]));
       });
     });
 
@@ -411,7 +437,9 @@ void main() {
         final snap = Snapshot(
           id: 'snap-1',
           versionVector: VersionVector({id.peerId: id.hlc}),
-          data: {'k': 'v'},
+          data: {
+            'k': Uint8List.fromList([1]),
+          },
         );
         await storage.snapshots.saveSnapshot(snap);
 
@@ -456,7 +484,9 @@ void main() {
           Snapshot(
             id: 's-del',
             versionVector: VersionVector({id.peerId: id.hlc}),
-            data: {'d': 1},
+            data: {
+              'd': Uint8List.fromList([1]),
+            },
           ),
         );
 

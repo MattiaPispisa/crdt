@@ -133,8 +133,8 @@ class CRDTTextHandler extends Handler<String> {
   }
 
   @override
-  String getSnapshotState() {
-    return value;
+  Uint8List getSnapshotState() {
+    return Uint8List.fromList(utf8.encode(value));
   }
 
   /// Gets the length of the text
@@ -309,11 +309,10 @@ class CRDTTextHandler extends Handler<String> {
   /// Gets the initial state of the text
   String _initialState() {
     final snapshot = lastSnapshot();
-    if (snapshot is String) {
-      return snapshot;
+    if (snapshot == null) {
+      return '';
     }
-
-    return '';
+    return utf8.decode(snapshot);
   }
 
   /// Returns a string representation of this text

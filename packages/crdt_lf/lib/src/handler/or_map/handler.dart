@@ -120,10 +120,22 @@ class CRDTORMapHandler<K, V> extends Handler<ORMapState<K, V>> {
   /// Returns the current entries in the map.
   Iterable<MapEntry<K, V>> get entries => value.entries;
 
-  /// Returns the current state for snapshotting
+  /// Returns the current state for snapshotting as a binary blob.
   @override
-  Map<K, V> getSnapshotState() {
-    return value;
+  Uint8List getSnapshotState() {
+    final out = BytesBuilder(copy: false);
+    final entries = value;
+    UVarint.write(entries.length, out);
+    for (final entry in entries.entries) {
+      final keyBytes = _keyCodec.encode(entry.key);
+      UVarint.write(keyBytes.length, out);
+      out.add(keyBytes);
+
+      final valueBytes = _valueCodec.encode(entry.value);
+      UVarint.write(valueBytes.length, out);
+      out.add(valueBytes);
+    }
+    return out.toBytes();
   }
 
   /// Computes the tag state by replaying the history.
@@ -140,16 +152,28 @@ class CRDTORMapHandler<K, V> extends Handler<ORMapState<K, V>> {
     // Seed from snapshot:
     // If a prior snapshot contained key-value pairs for this handler,
     // we treat them as present without tags (snapshot-only) until changes
-    // say otherwise.
-    if (snap is Map<dynamic, dynamic>) {
-      try {
-        for (final entry in snap.entries) {
-          if (entry.key is K && entry.value is V) {
-            state._snapshotOnly[entry.key as K] = entry.value as V;
-          }
-        }
-      } catch (_) {
-        // Ignore malformed snapshot
+    // say otherwise. The snapshot is a length-prefixed sequence of
+    // (key, value) pairs encoded via [_keyCodec] and [_valueCodec].
+    if (snap != null) {
+      var offset = 0;
+      final countRec = UVarint.read(snap, offset: offset);
+      offset = countRec.nextOffset;
+      for (var i = 0; i < countRec.value; i += 1) {
+        final keyLenRec = UVarint.read(snap, offset: offset);
+        offset = keyLenRec.nextOffset;
+        final keyEnd = offset + keyLenRec.value;
+        final key = _keyCodec.decode(
+          Uint8List.sublistView(snap, offset, keyEnd),
+        );
+        offset = keyEnd;
+
+        final valLenRec = UVarint.read(snap, offset: offset);
+        offset = valLenRec.nextOffset;
+        final valEnd = offset + valLenRec.value;
+        state._snapshotOnly[key] = _valueCodec.decode(
+          Uint8List.sublistView(snap, offset, valEnd),
+        );
+        offset = valEnd;
       }
     }
 

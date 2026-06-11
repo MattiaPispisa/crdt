@@ -95,8 +95,20 @@ class CRDTMapHandler<T> extends Handler<Map<String, T>> {
   }
 
   @override
-  Map<String, T> getSnapshotState() {
-    return value;
+  Uint8List getSnapshotState() {
+    final out = BytesBuilder(copy: false);
+    final entries = value;
+    UVarint.write(entries.length, out);
+    for (final entry in entries.entries) {
+      final keyBytes = utf8.encode(entry.key);
+      UVarint.write(keyBytes.length, out);
+      out.add(keyBytes);
+
+      final valueBytes = _valueCodec.encode(entry.value);
+      UVarint.write(valueBytes.length, out);
+      out.add(valueBytes);
+    }
+    return out.toBytes();
   }
 
   /// Gets the value associated with the given key
@@ -163,11 +175,30 @@ class CRDTMapHandler<T> extends Handler<Map<String, T>> {
   /// Gets the initial state of the map
   Map<String, T> _initialState() {
     final snapshot = lastSnapshot();
-    if (snapshot is Map<String, dynamic> &&
-        snapshot.values.every((e) => e is T)) {
-      return Map.from(snapshot);
+    if (snapshot == null) {
+      return <String, T>{};
     }
-    return <String, T>{};
+
+    var offset = 0;
+    final countRec = UVarint.read(snapshot, offset: offset);
+    offset = countRec.nextOffset;
+    final state = <String, T>{};
+    for (var i = 0; i < countRec.value; i += 1) {
+      final keyLenRec = UVarint.read(snapshot, offset: offset);
+      offset = keyLenRec.nextOffset;
+      final keyEnd = offset + keyLenRec.value;
+      final key = utf8.decode(Uint8List.sublistView(snapshot, offset, keyEnd));
+      offset = keyEnd;
+
+      final valLenRec = UVarint.read(snapshot, offset: offset);
+      offset = valLenRec.nextOffset;
+      final valEnd = offset + valLenRec.value;
+      state[key] = _valueCodec.decode(
+        Uint8List.sublistView(snapshot, offset, valEnd),
+      );
+      offset = valEnd;
+    }
+    return state;
   }
 
   /// Returns a string representation of this map

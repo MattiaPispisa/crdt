@@ -415,6 +415,26 @@ The synchronization protocol includes:
 - **Ping/Pong**: Connection health monitoring
 - **Error Handling**: Graceful error recovery and reporting
 
+### Wire format
+
+Messages are exchanged as JSON envelopes (typed by `MessageType`) where the
+heavy CRDT payloads are carried as **base64-encoded binary blobs** produced by
+`crdt_lf`'s native binary methods:
+
+| Field | Encoding |
+|---|---|
+| `Change` | `base64(change.toBytes())` |
+| `Snapshot` | `base64(snapshot.toBytes())` |
+| `VersionVector` | `base64(versionVector.toBytes())` |
+
+On the receiver side, the corresponding `fromBytes` factories rebuild the
+objects. Operation payloads inside a `Change` are already compact binary blobs
+produced by the handler's `ValueCodec<T>`, so the wire payload is independent
+from the in-memory representation of your custom value types.
+
+Requires `crdt_lf` `^3.0.0`, which provides the schema-versioned `Change` /
+`Snapshot` binary format.
+
 ## Error Handling
 
 The library provides robust error handling with automatic recovery:
