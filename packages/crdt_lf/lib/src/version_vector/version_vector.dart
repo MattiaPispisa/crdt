@@ -24,16 +24,6 @@ class VersionVector {
       : _vector = Map.unmodifiable(vector),
         _immutable = true;
 
-  /// Converts a JSON object to a [VersionVector]
-  factory VersionVector.fromJson(Map<String, dynamic> json) => VersionVector(
-        (json['vector'] as Map<String, dynamic>).map(
-          (peerIdStr, hlcInt64) => MapEntry(
-            PeerId.parse(peerIdStr),
-            HybridLogicalClock.parse(hlcInt64 as String),
-          ),
-        ),
-      );
-
   /// Decodes a [VersionVector] from bytes produced by [toBytes].
   ///
   /// Layout:
@@ -260,13 +250,6 @@ class VersionVector {
     }
     return result;
   }
-
-  /// Converts the [VersionVector] to a JSON object
-  Map<String, dynamic> toJson() => {
-        'vector': _vector.map(
-          (peerId, hlc) => MapEntry(peerId.toString(), hlc.toString()),
-        ),
-      };
 
   /// Encodes this version vector to a compact binary representation.
   ///

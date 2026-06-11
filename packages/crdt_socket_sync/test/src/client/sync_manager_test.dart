@@ -405,8 +405,8 @@ void main() {
         final message = mockClient.getLastSentMessage();
         final requestMessage = message! as DocumentStatusRequestMessage;
         expect(
-          requestMessage.versionVector?.toJson(),
-          equals(currentVV.toJson()),
+          requestMessage.versionVector?.toBytes(),
+          equals(currentVV.toBytes()),
         );
       });
 

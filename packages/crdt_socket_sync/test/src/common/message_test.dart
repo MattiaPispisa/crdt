@@ -207,7 +207,7 @@ void main() {
       expect(message.type, MessageType.handshakeRequest);
       expect(message.documentId, documentId);
       expect(message.author, author);
-      expect(message.versionVector.toJson(), versionVector.toJson());
+      expect(message.versionVector.toBytes(), versionVector.toBytes());
     });
 
     test('should have correct toString representation', () {
@@ -516,7 +516,7 @@ void main() {
 
       expect(message.type, MessageType.documentStatusRequest);
       expect(message.documentId, documentId);
-      expect(message.versionVector?.toJson(), versionVector.toJson());
+      expect(message.versionVector?.toBytes(), versionVector.toBytes());
     });
 
     test('should handle null versionVector', () {

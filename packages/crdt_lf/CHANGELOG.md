@@ -17,6 +17,7 @@ The internal data model has migrated from JSON to a compact binary encoding. Cha
 - `Snapshot.toJson` / `Snapshot.fromJson` removed. Use `Snapshot.toBytes()` / `Snapshot.fromBytes(Uint8List)` instead.
 - `SnapshotProvider.getSnapshotState()` return type changed from `dynamic` to `Uint8List`. Each handler is now responsible for encoding its own state to bytes (typically by reusing its `ValueCodec<T>`) and for decoding it back from `lastSnapshot()`.
 - `SnapshotProvider.lastSnapshot()` return type changed from `dynamic` to `Uint8List?`.
+- `VersionVector.toJson` / `VersionVector.fromJson` removed. Use `VersionVector.toBytes()` / `VersionVector.fromBytes(Uint8List)` instead.
 
 ### Added
 
