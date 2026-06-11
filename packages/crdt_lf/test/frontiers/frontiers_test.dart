@@ -92,6 +92,36 @@ void main() {
       expect(frontiers2.get(), equals({op1}));
     });
 
+    test('merge keeps concurrent heads of different peers', () {
+      final otherPeerId = PeerId.parse('b903417d-b8a6-4aeb-a847-8b3f9ec665ff');
+      final otherOp = OperationId(otherPeerId, HybridLogicalClock(l: 1, c: 1));
+
+      final frontiers1 = Frontiers.from([op2]);
+      final frontiers2 = Frontiers.from([otherOp]);
+
+      frontiers1.merge(frontiers2);
+      // Operations of different peers are concurrent: both must survive,
+      // even if one has a greater HLC.
+      expect(frontiers1.get(), equals({op2, otherOp}));
+    });
+
+    test('merge keeps only the latest operation per peer', () {
+      final otherPeerId = PeerId.parse('b903417d-b8a6-4aeb-a847-8b3f9ec665ff');
+      final otherOp1 = OperationId(otherPeerId, HybridLogicalClock(l: 1, c: 1));
+      final otherOp2 = OperationId(otherPeerId, HybridLogicalClock(l: 1, c: 5));
+
+      final frontiers1 = Frontiers.from([op1, otherOp2]);
+      final frontiers2 = Frontiers.from([op3, otherOp1]);
+
+      frontiers1.merge(frontiers2);
+      expect(frontiers1.get(), equals({op3, otherOp2}));
+    });
+
+    test('reset replaces the frontiers', () {
+      final frontiers = Frontiers.from([op1, op2])..reset([op3]);
+      expect(frontiers.get(), equals({op3}));
+    });
+
     test('toString returns correct string representation', () {
       final frontiers = Frontiers.from([op1, op2]);
       expect(

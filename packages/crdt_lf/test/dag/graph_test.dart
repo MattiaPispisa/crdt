@@ -210,6 +210,45 @@ void main() {
       expect(dag.getNode(parent)!.hasChild(child), isFalse);
     });
 
+    test('prune keeps concurrent heads of different peers', () {
+      final peerB = PeerId.generate();
+      final peerC = PeerId.generate();
+
+      final root = OperationId(author, HybridLogicalClock(l: 1, c: 1));
+      final headA = OperationId(author, HybridLogicalClock(l: 1, c: 2));
+      final headB = OperationId(peerB, HybridLogicalClock(l: 1, c: 3));
+      final headC = OperationId(peerC, HybridLogicalClock(l: 1, c: 4));
+
+      dag
+        ..addNode(root, {})
+        ..addNode(headA, {root})
+        ..addNode(headB, {root})
+        ..addNode(headC, {root})
+        ..prune(VersionVector({author: root.hlc}));
+
+      // All concurrent heads must survive the prune, even if their
+      // HLCs are totally ordered.
+      expect(dag.frontiers, equals({headA, headB, headC}));
+    });
+
+    test('getAncestorsOfAll traverses from multiple sources', () {
+      dag
+        ..addNode(id1, {})
+        ..addNode(id2, {id1})
+        ..addNode(id3, {id1})
+        ..addNode(id4, {id2});
+
+      expect(
+        dag.getAncestorsOfAll([id3, id4]),
+        equals({id1, id2, id3, id4}),
+      );
+      final missing = OperationId(author, HybridLogicalClock(l: 9, c: 9));
+      expect(
+        () => dag.getAncestorsOfAll([missing]),
+        throwsArgumentError,
+      );
+    });
+
     test('toString returns correct string representation', () {
       dag
         ..addNode(id1, {})
