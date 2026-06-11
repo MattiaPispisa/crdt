@@ -167,9 +167,10 @@ class Snapshot {
     if (version.isEmpty) {
       return sha256.convert(utf8.encode('')).toString();
     }
-    final versionStrings =
-        version.entries.map((entry) => '${entry.key}:${entry.value}').toList()
-          ..sort();
+    final versionStrings = version.entries
+        .map((entry) => '${entry.key}:${entry.value}')
+        .toList()
+      ..sort();
 
     final concatenatedString = versionStrings.join();
     final bytes = utf8.encode(concatenatedString);

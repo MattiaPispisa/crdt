@@ -112,8 +112,12 @@ void main() {
         );
       }
 
-      final s1 = makeSnapshot(1, 1, {'a': Uint8List.fromList([1])});
-      final s2 = makeSnapshot(1, 2, {'b': Uint8List.fromList([0])});
+      final s1 = makeSnapshot(1, 1, {
+        'a': Uint8List.fromList([1])
+      });
+      final s2 = makeSnapshot(1, 2, {
+        'b': Uint8List.fromList([0])
+      });
       final s3 = makeSnapshot(2, 1, {
         'list': Uint8List.fromList([1, 2]),
       });
@@ -201,7 +205,9 @@ void main() {
           versionVector: VersionVector(
             {author: HybridLogicalClock(l: 1, c: 1)},
           ),
-          data: {'k': Uint8List.fromList([1])},
+          data: {
+            'k': Uint8List.fromList([1])
+          },
         );
 
         await storage.saveSnapshot(snapshot);
@@ -226,7 +232,9 @@ void main() {
             id: 'present',
             versionVector:
                 VersionVector({author: HybridLogicalClock(l: 1, c: 1)}),
-            data: {'k': Uint8List.fromList([1])},
+            data: {
+              'k': Uint8List.fromList([1])
+            },
           ),
         );
         expect(storage.containsSnapshot('present'), isTrue);
@@ -429,7 +437,9 @@ void main() {
         final snap = Snapshot(
           id: 'snap-1',
           versionVector: VersionVector({id.peerId: id.hlc}),
-          data: {'k': Uint8List.fromList([1])},
+          data: {
+            'k': Uint8List.fromList([1])
+          },
         );
         await storage.snapshots.saveSnapshot(snap);
 
@@ -474,7 +484,9 @@ void main() {
           Snapshot(
             id: 's-del',
             versionVector: VersionVector({id.peerId: id.hlc}),
-            data: {'d': Uint8List.fromList([1])},
+            data: {
+              'd': Uint8List.fromList([1])
+            },
           ),
         );
 
