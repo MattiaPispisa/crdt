@@ -266,8 +266,15 @@ class CRDTFugueTextHandler extends Handler<FugueTextState> {
     required Operation operation,
     required FugueTextState state,
   }) {
-    _applyTreeOperation(state._tree, operation);
-    return state..resolve();
+    // The tree is mutated in place; nodes and value are resolved
+    // lazily on the next read instead of after every operation.
+    try {
+      _applyTreeOperation(state._tree, operation);
+      return state.._markDirty();
+    } catch (_) {
+      // The tree may be half-mutated: invalidate the cache.
+      return null;
+    }
   }
 
   @override
@@ -340,8 +347,8 @@ class CRDTFugueTextHandler extends Handler<FugueTextState> {
       _applyTreeOperation(state._tree, operation);
     }
 
-    // Return the resulting text
-    return state..resolve();
+    // Nodes and value are resolved lazily on the first read
+    return state;
   }
 
   /// Applies a single operation to a Fugue tree
@@ -420,15 +427,30 @@ class FugueTextState {
   /// The tree of the state
   final FugueTree<String> _tree;
 
-  /// The nodes of the state
-  late List<FugueValueNode<String>> _nodes;
+  /// The resolved nodes, or `null` when the tree changed since
+  /// the last resolution
+  List<FugueValueNode<String>>? _cachedNodes;
 
-  /// The value of the state
-  late String _value;
+  /// The resolved value, or `null` when the tree changed since
+  /// the last resolution
+  String? _cachedValue;
+
+  /// The nodes of the state, resolved lazily from the tree
+  List<FugueValueNode<String>> get _nodes => _cachedNodes ??= _tree.nodes();
+
+  /// The value of the state, resolved lazily from [_nodes]
+  String get _value => _cachedValue ??= _nodes.map((el) => el.value).join();
+
+  /// Discards the resolved nodes and value after a tree mutation;
+  /// they are resolved again lazily on the next read
+  void _markDirty() {
+    _cachedNodes = null;
+    _cachedValue = null;
+  }
 
   /// Resolves [_nodes] and [_value] with the [_tree]
   void resolve() {
-    _nodes = _tree.nodes();
-    _value = _nodes.map((el) => el.value).join();
+    _cachedNodes = _tree.nodes();
+    _cachedValue = _cachedNodes!.map((el) => el.value).join();
   }
 }

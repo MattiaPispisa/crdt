@@ -75,6 +75,9 @@ class CRDTListHandler<T> extends Handler<List<T>> {
   }
 
   /// Gets the current state of the list
+  ///
+  /// The returned list is the handler's internal state:
+  /// treat it as read-only.
   List<T> get value {
     // Check if the cached state is still valid
     if (cachedState != null) {
@@ -87,7 +90,7 @@ class CRDTListHandler<T> extends Handler<List<T>> {
     // Cache the state
     updateCachedState(state);
 
-    return List.from(state);
+    return state;
   }
 
   @override
@@ -186,9 +189,15 @@ class CRDTListHandler<T> extends Handler<List<T>> {
     required Operation operation,
     required List<T> state,
   }) {
-    final newState = List<T>.from(state);
-    _applyOperationToList(newState, operation);
-    return newState;
+    // Mutate the cached state in place instead of copying it on
+    // every operation.
+    try {
+      _applyOperationToList(state, operation);
+      return state;
+    } catch (_) {
+      // The state may be half-mutated: invalidate the cache.
+      return null;
+    }
   }
 
   /// Gets the initial state of the list

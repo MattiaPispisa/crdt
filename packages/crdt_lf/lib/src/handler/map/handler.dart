@@ -79,6 +79,9 @@ class CRDTMapHandler<T> extends Handler<Map<String, T>> {
   }
 
   /// Gets the current state of the map
+  ///
+  /// The returned map is the handler's internal state:
+  /// treat it as read-only.
   Map<String, T> get value {
     // Check if the cached state is still valid
     if (cachedState != null) {
@@ -91,7 +94,7 @@ class CRDTMapHandler<T> extends Handler<Map<String, T>> {
     // Cache the state
     updateCachedState(state);
 
-    return Map.from(state);
+    return state;
   }
 
   @override
@@ -167,9 +170,15 @@ class CRDTMapHandler<T> extends Handler<Map<String, T>> {
     required Operation operation,
     required Map<String, T> state,
   }) {
-    final newState = Map<String, T>.from(state);
-    _applyOperationToMap(newState, operation);
-    return newState;
+    // Mutate the cached state in place instead of copying it on
+    // every operation.
+    try {
+      _applyOperationToMap(state, operation);
+      return state;
+    } catch (_) {
+      // The state may be half-mutated: invalidate the cache.
+      return null;
+    }
   }
 
   /// Gets the initial state of the map
