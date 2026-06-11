@@ -18,12 +18,11 @@ class ORSetHandlerBenchmark
   }
 
   @override
-  List<VoidCallback> generateOperations(
-    CRDTORSetHandler<String> handler,
+  List<HandlerOperation<CRDTORSetHandler<String>>> generateOperations(
     int count,
   ) {
     final random = Random(42); // Fixed seed for reproducible results
-    final operations = <VoidCallback>[];
+    final operations = <HandlerOperation<CRDTORSetHandler<String>>>[];
     final existingValues = <String>[];
 
     for (var i = 0; i < count; i++) {
@@ -31,12 +30,12 @@ class ORSetHandlerBenchmark
         // Add operation with a new unique value
         final value = 'value_$i';
         existingValues.add(value);
-        operations.add(() => handler.add(value));
+        operations.add((handler) => handler.add(value));
       } else {
         // Remove operation with an existing value
         final valueIndex = random.nextInt(existingValues.length);
         final value = existingValues.removeAt(valueIndex);
-        operations.add(() => handler.remove(value));
+        operations.add((handler) => handler.remove(value));
       }
     }
     return operations;

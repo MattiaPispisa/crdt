@@ -3,8 +3,6 @@ import 'dart:math';
 import 'package:crdt_lf/crdt_lf.dart';
 import '../common/handler_benchmark.dart';
 
-typedef VoidCallback = void Function();
-
 /// [BaseHandlerOperationsBenchmark] for [CRDTTextHandler]
 class TextHandlerOperationsBenchmark
     extends BaseHandlerOperationsBenchmark<CRDTTextHandler> {
@@ -21,14 +19,14 @@ class TextHandlerOperationsBenchmark
     return handler.value;
   }
 
-  /// Generates a list of random operations for benchmarking
+  /// Generates a list of random operations for benchmarking.
+  ///
+  /// The text length is simulated while generating so that indexes are
+  /// always valid for the state produced by the previous operations.
   @override
-  List<VoidCallback> generateOperations(
-    CRDTTextHandler textHandler,
-    int count,
-  ) {
+  List<HandlerOperation<CRDTTextHandler>> generateOperations(int count) {
     final random = Random(42); // Fixed seed for reproducible results
-    final operations = <VoidCallback>[];
+    final operations = <HandlerOperation<CRDTTextHandler>>[];
 
     // Sample texts for operations
     const sampleTexts = [
@@ -50,51 +48,36 @@ class TextHandlerOperationsBenchmark
     ];
 
     final operationTypes = ['insert', 'update', 'delete'];
+    var currentLength = 0;
 
     for (var i = 0; i < count; i++) {
-      final operationType =
-          operationTypes[random.nextInt(operationTypes.length)];
-      final currentLength = textHandler.length;
+      var operationType = operationTypes[random.nextInt(operationTypes.length)];
+      if (currentLength == 0) {
+        // If no content, insert instead
+        operationType = 'insert';
+      }
 
       switch (operationType) {
         case 'insert':
           final index = currentLength > 0 ? random.nextInt(currentLength) : 0;
           final text = sampleTexts[random.nextInt(sampleTexts.length)];
-          operations.add(() => textHandler.insert(index, text));
+          operations.add((handler) => handler.insert(index, text));
+          currentLength += text.length;
           break;
 
         case 'update':
-          if (currentLength > 0) {
-            final index = random.nextInt(currentLength);
-            final text = sampleTexts[random.nextInt(sampleTexts.length)];
-            operations.add(() => textHandler.update(index, text));
-          } else {
-            // If no content, insert instead
-            operations.add(
-              () => textHandler.insert(
-                0,
-                sampleTexts[random.nextInt(sampleTexts.length)],
-              ),
-            );
-          }
+          final index = random.nextInt(currentLength);
+          final text = sampleTexts[random.nextInt(sampleTexts.length)];
+          operations.add((handler) => handler.update(index, text));
           break;
 
         case 'delete':
-          if (currentLength > 0) {
-            final index = random.nextInt(currentLength);
-            final maxCount =
-                min(5, currentLength - index); // Delete up to 5 characters
-            final count = maxCount > 0 ? random.nextInt(maxCount) + 1 : 1;
-            operations.add(() => textHandler.delete(index, count));
-          } else {
-            // If no content, insert instead
-            operations.add(
-              () => textHandler.insert(
-                0,
-                sampleTexts[random.nextInt(sampleTexts.length)],
-              ),
-            );
-          }
+          final index = random.nextInt(currentLength);
+          final maxCount =
+              min(5, currentLength - index); // Delete up to 5 characters
+          final count = maxCount > 0 ? random.nextInt(maxCount) + 1 : 1;
+          operations.add((handler) => handler.delete(index, count));
+          currentLength -= count;
           break;
       }
     }
