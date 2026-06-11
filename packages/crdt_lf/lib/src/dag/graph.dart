@@ -1,4 +1,5 @@
 import 'package:crdt_lf/crdt_lf.dart';
+import 'package:hlc_dart/hlc_dart.dart';
 
 /// DAG (Directed Acyclic Graph) implementation for CRDT
 ///
@@ -12,11 +13,7 @@ class DAG {
     required Frontiers frontiers,
   })  : _nodes = nodes,
         _frontiers = frontiers,
-        _versionVector = VersionVector(
-          Map.fromIterable(
-            nodes.entries.map((e) => MapEntry(e.key.peerId, e.key.hlc)),
-          ),
-        );
+        _versionVector = VersionVector(_versionVectorFromNodes(nodes));
 
   /// Creates a new empty DAG
   factory DAG.empty() {
@@ -24,6 +21,19 @@ class DAG {
       nodes: {},
       frontiers: Frontiers(),
     );
+  }
+
+  static Map<PeerId, HybridLogicalClock> _versionVectorFromNodes(
+    Map<OperationId, DAGNode> nodes,
+  ) {
+    final vector = <PeerId, HybridLogicalClock>{};
+    for (final id in nodes.keys) {
+      final current = vector[id.peerId];
+      if (current == null || id.hlc.compareTo(current) > 0) {
+        vector[id.peerId] = id.hlc;
+      }
+    }
+    return vector;
   }
 
   /// The nodes in the [DAG], indexed by their [OperationId]
@@ -82,12 +92,26 @@ class DAG {
 
     _removeNodes(toRemove);
 
-    // frontier is recreated
-    _frontiers
-      ..clear()
-      ..merge(Frontiers.from(frontier));
+    // The surviving nodes without children are the new frontier:
+    // a causally-closed [version] cannot remove a child of a survivor.
+    _resetFrontiersToHeads(frontier);
 
     return toRemove.length;
+  }
+
+  /// Resets the frontiers to the latest head per peer among [heads].
+  ///
+  /// Heads of different peers are concurrent and all kept; heads of the
+  /// same peer are totally ordered, so only the latest one is kept.
+  void _resetFrontiersToHeads(Iterable<OperationId> heads) {
+    final latestByPeer = <PeerId, OperationId>{};
+    for (final id in heads) {
+      final latest = latestByPeer[id.peerId];
+      if (latest == null || id.hlc.compareTo(latest.hlc) > 0) {
+        latestByPeer[id.peerId] = id;
+      }
+    }
+    _frontiers.reset(latestByPeer.values);
   }
 
   /// Removes the given nodes from the [DAG]
@@ -156,13 +180,25 @@ class DAG {
   /// Returns a set of all operation IDs that are ancestors of the given node,
   /// including the node itself.
   Set<OperationId> getAncestors(OperationId id) {
-    if (!_nodes.containsKey(id)) {
-      throw ArgumentError('Node with ID $id does not exist in the DAG');
-    }
+    return getAncestorsOfAll([id]);
+  }
 
+  /// Gets all ancestors of a set of nodes
+  ///
+  /// Returns a set of all operation IDs that are ancestors of any of the
+  /// given nodes, including the nodes themselves. A single traversal with a
+  /// shared visited set covers all the sources.
+  Set<OperationId> getAncestorsOfAll(Iterable<OperationId> ids) {
     final ancestors = <OperationId>{};
     // DFS stack
-    final stack = <OperationId>[id];
+    final stack = <OperationId>[];
+
+    for (final id in ids) {
+      if (!_nodes.containsKey(id)) {
+        throw ArgumentError('Node with ID $id does not exist in the DAG');
+      }
+      stack.add(id);
+    }
 
     while (stack.isNotEmpty) {
       final nodeId = stack.removeLast();
@@ -190,8 +226,8 @@ class DAG {
     }
 
     // Get all ancestors of each set
-    final ancestorsA = a.expand(getAncestors).toSet();
-    final ancestorsB = b.expand(getAncestors).toSet();
+    final ancestorsA = getAncestorsOfAll(a);
+    final ancestorsB = getAncestorsOfAll(b);
 
     // Find common ancestors
     final commonAncestors = ancestorsA.intersection(ancestorsB);
@@ -199,17 +235,13 @@ class DAG {
       return {};
     }
 
-    // Find the lowest common ancestors
+    // Find the lowest common ancestors.
+    // The set of common ancestors is closed under "parent of", so an id is
+    // lowest iff none of its children is itself a common ancestor.
     final lca = <OperationId>{};
     for (final id in commonAncestors) {
-      var isLowest = true;
-
-      for (final otherId in commonAncestors) {
-        if (id != otherId && _isAncestor(id, otherId)) {
-          isLowest = false;
-          break;
-        }
-      }
+      final children = _nodes[id]!.children;
+      final isLowest = !children.any(commonAncestors.contains);
 
       if (isLowest) {
         lca.add(id);
@@ -217,16 +249,6 @@ class DAG {
     }
 
     return lca;
-  }
-
-  /// Checks if one node is an ancestor of another
-  bool _isAncestor(OperationId ancestorId, OperationId descendantId) {
-    if (ancestorId == descendantId) {
-      return false;
-    }
-
-    final ancestors = getAncestors(descendantId);
-    return ancestors.contains(ancestorId);
   }
 
   /// Merges another DAG into this one
@@ -254,8 +276,12 @@ class DAG {
       }
     }
 
-    // Merge the frontiers
-    _frontiers.merge(other._frontiers);
+    // Recompute the frontiers from the merged graph: the nodes without
+    // children are the operations not causally dominated through the graph.
+    _resetFrontiersToHeads([
+      for (final entry in _nodes.entries)
+        if (entry.value.childCount == 0) entry.key,
+    ]);
   }
 
   /// Returns a string representation of the DAG

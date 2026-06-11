@@ -13,6 +13,13 @@ class ChangeStore {
   /// The changes stored in this [ChangeStore], indexed by their packed id.
   final Map<OpIdKey, Change> _changes;
 
+  /// Per-peer changes sorted by clock, used to answer
+  /// [exportChangesNewerThan] with a binary search instead of a full scan.
+  ///
+  /// Built lazily on first use, maintained by [addChange] and invalidated
+  /// by [prune] and [clear]. `_changes` remains the source of truth.
+  Map<PeerId, List<Change>>? _changesByPeer;
+
   /// Gets the number of changes in the store
   int get changeCount => _changes.length;
 
@@ -47,7 +54,52 @@ class ChangeStore {
     }
 
     _changes[key] = change;
+    _indexChange(change);
     return true;
+  }
+
+  /// Keeps the per-peer index in sync with [addChange], when built.
+  void _indexChange(Change change) {
+    final index = _changesByPeer;
+    if (index == null) {
+      return;
+    }
+
+    final list = index.putIfAbsent(change.id.peerId, () => <Change>[]);
+    if (list.isEmpty || list.last.hlc.compareTo(change.hlc) <= 0) {
+      list.add(change);
+      return;
+    }
+
+    // Out-of-order arrival: insert keeping the list sorted by clock
+    var low = 0;
+    var high = list.length;
+    while (low < high) {
+      final mid = (low + high) >> 1;
+      if (list[mid].hlc.compareTo(change.hlc) <= 0) {
+        low = mid + 1;
+      } else {
+        high = mid;
+      }
+    }
+    list.insert(low, change);
+  }
+
+  /// Returns the per-peer index, building it from [_changes] if needed.
+  Map<PeerId, List<Change>> _peerIndex() {
+    final existing = _changesByPeer;
+    if (existing != null) {
+      return existing;
+    }
+
+    final index = <PeerId, List<Change>>{};
+    for (final change in _changes.values) {
+      index.putIfAbsent(change.id.peerId, () => <Change>[]).add(change);
+    }
+    for (final list in index.values) {
+      list.sort((a, b) => a.hlc.compareTo(b.hlc));
+    }
+    return _changesByPeer = index;
   }
 
   /// Gets all [Change]s in the store
@@ -67,23 +119,44 @@ class ChangeStore {
       return getAllChanges();
     }
 
-    // Get all ancestors of the version
-    final ancestors = <OpIdKey>{};
-    for (final id in version) {
-      for (final anc in dag.getAncestors(id)) {
-        ancestors.add(_keyFromOperationId(anc));
-      }
-    }
+    // Get all ancestors of the version in a single traversal
+    final ancestors = dag.getAncestorsOfAll(version);
 
     // Return all changes that are not ancestors of the version
     return _changes.values
-        .where((change) => !ancestors.contains(change.key))
+        .where((change) => !ancestors.contains(change.id))
         .toList();
   }
 
   /// {@macro change_iterable_newer_than}
   List<Change> exportChangesNewerThan(VersionVector versionVector) {
-    return _changes.values.newerThan(versionVector).toList();
+    final result = <Change>[];
+
+    for (final entry in _peerIndex().entries) {
+      final list = entry.value;
+      final clock = versionVector[entry.key];
+      if (clock == null) {
+        result.addAll(list);
+        continue;
+      }
+
+      // Binary search for the first change with a strictly greater clock
+      var low = 0;
+      var high = list.length;
+      while (low < high) {
+        final mid = (low + high) >> 1;
+        if (list[mid].hlc.compareTo(clock) > 0) {
+          high = mid;
+        } else {
+          low = mid + 1;
+        }
+      }
+      for (var i = low; i < list.length; i++) {
+        result.add(list[i]);
+      }
+    }
+
+    return result;
   }
 
   /// Imports [Change]s from another [ChangeStore]
@@ -112,7 +185,7 @@ class ChangeStore {
     final removedIds = <OpIdKey>{};
 
     // 1. identify and remove old changes
-    var ids = _changes.keys.toList();
+    final ids = _changes.keys.toList();
     for (final id in ids) {
       final clock = version[id.peerId()];
       if (clock != null && id.hlc().compareTo(clock) <= 0) {
@@ -125,26 +198,39 @@ class ChangeStore {
       return 0;
     }
 
-    // 2. clean up dependencies in remaining changes
-    ids = _changes.keys.toList();
-    for (final id in ids) {
-      // Remove dependencies to pruned changes
-      _changes.update(id, (change) {
-        final deps = <OperationId>{};
-        for (final depKey in change.depsKeys()) {
-          if (!removedIds.contains(depKey)) {
-            deps.add(depKey.toOperationId());
-          }
-        }
+    _changesByPeer = null;
 
-        return Change.fromPayloadBytes(
-          id: change.id,
-          payloadBytes: change.payloadBytes(),
-          deps: deps,
-          author: change.author,
-        );
-      });
+    // 2. clean up dependencies in remaining changes.
+    // Only changes that actually depend on a pruned change are rebuilt.
+    final updates = <OpIdKey, Change>{};
+    for (final entry in _changes.entries) {
+      final change = entry.value;
+      var hasPrunedDep = false;
+      for (final depKey in change.depsKeys()) {
+        if (removedIds.contains(depKey)) {
+          hasPrunedDep = true;
+          break;
+        }
+      }
+      if (!hasPrunedDep) {
+        continue;
+      }
+
+      final deps = <OperationId>{};
+      for (final depKey in change.depsKeys()) {
+        if (!removedIds.contains(depKey)) {
+          deps.add(depKey.toOperationId());
+        }
+      }
+
+      updates[entry.key] = Change.fromPayloadBytes(
+        id: change.id,
+        payloadBytes: change.payloadBytes(),
+        deps: deps,
+        author: change.author,
+      );
     }
+    _changes.addAll(updates);
 
     return removedIds.length;
   }
@@ -156,6 +242,7 @@ class ChangeStore {
   /// Clears all [Change]s from the store
   void clear() {
     _changes.clear();
+    _changesByPeer = null;
   }
 
   /// Returns a string representation of the [ChangeStore]
