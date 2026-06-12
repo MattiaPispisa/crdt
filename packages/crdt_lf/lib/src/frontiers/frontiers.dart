@@ -57,7 +57,7 @@ class Frontiers {
 
     for (final op in _frontiers.followedBy(other._frontiers)) {
       final latest = latestByPeer[op.peerId];
-      if (latest == null || op.hlc.compareTo(latest.hlc) > 0) {
+      if (latest == null || op.hlc > latest.hlc) {
         latestByPeer[op.peerId] = op;
       }
     }

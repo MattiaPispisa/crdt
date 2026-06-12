@@ -29,7 +29,7 @@ class DAG {
     final vector = <PeerId, HybridLogicalClock>{};
     for (final id in nodes.keys) {
       final current = vector[id.peerId];
-      if (current == null || id.hlc.compareTo(current) > 0) {
+      if (current == null || id.hlc > current) {
         vector[id.peerId] = id.hlc;
       }
     }
@@ -81,7 +81,7 @@ class DAG {
 
     for (final entry in _nodes.entries) {
       final clock = version[entry.key.peerId];
-      if (clock != null && entry.key.hlc.compareTo(clock) <= 0) {
+      if (clock != null && entry.key.hlc <= clock) {
         toRemove.add(entry.key);
       } else {
         if (entry.value.childCount == 0) {
@@ -107,7 +107,7 @@ class DAG {
     final latestByPeer = <PeerId, OperationId>{};
     for (final id in heads) {
       final latest = latestByPeer[id.peerId];
-      if (latest == null || id.hlc.compareTo(latest.hlc) > 0) {
+      if (latest == null || id.hlc > latest.hlc) {
         latestByPeer[id.peerId] = id;
       }
     }
