@@ -1,4 +1,5 @@
 import 'package:crdt_lf/crdt_lf.dart';
+import 'package:hlc_dart/hlc_dart.dart';
 
 /// ChangeStore implementation for CRDT
 ///
@@ -13,12 +14,9 @@ class ChangeStore {
   /// The changes stored in this [ChangeStore], indexed by their packed id.
   final Map<OpIdKey, Change> _changes;
 
-  /// Per-peer changes sorted by clock, used to answer
-  /// [exportChangesNewerThan] with a binary search instead of a full scan.
-  ///
-  /// Built lazily on first use, maintained by [addChange] and invalidated
-  /// by [prune] and [clear]. `_changes` remains the source of truth.
-  Map<PeerId, List<Change>>? _changesByPeer;
+  /// Secondary index used to answer [exportChangesNewerThan];
+  /// `_changes` remains the source of truth.
+  final _PeerClockIndex _peerClockIndex = _PeerClockIndex();
 
   /// Gets the number of changes in the store
   int get changeCount => _changes.length;
@@ -54,52 +52,8 @@ class ChangeStore {
     }
 
     _changes[key] = change;
-    _indexChange(change);
+    _peerClockIndex.add(change);
     return true;
-  }
-
-  /// Keeps the per-peer index in sync with [addChange], when built.
-  void _indexChange(Change change) {
-    final index = _changesByPeer;
-    if (index == null) {
-      return;
-    }
-
-    final list = index.putIfAbsent(change.id.peerId, () => <Change>[]);
-    if (list.isEmpty || list.last.hlc.compareTo(change.hlc) <= 0) {
-      list.add(change);
-      return;
-    }
-
-    // Out-of-order arrival: insert keeping the list sorted by clock
-    var low = 0;
-    var high = list.length;
-    while (low < high) {
-      final mid = (low + high) >> 1;
-      if (list[mid].hlc.compareTo(change.hlc) <= 0) {
-        low = mid + 1;
-      } else {
-        high = mid;
-      }
-    }
-    list.insert(low, change);
-  }
-
-  /// Returns the per-peer index, building it from [_changes] if needed.
-  Map<PeerId, List<Change>> _peerIndex() {
-    final existing = _changesByPeer;
-    if (existing != null) {
-      return existing;
-    }
-
-    final index = <PeerId, List<Change>>{};
-    for (final change in _changes.values) {
-      index.putIfAbsent(change.id.peerId, () => <Change>[]).add(change);
-    }
-    for (final list in index.values) {
-      list.sort((a, b) => a.hlc.compareTo(b.hlc));
-    }
-    return _changesByPeer = index;
   }
 
   /// Gets all [Change]s in the store
@@ -130,33 +84,7 @@ class ChangeStore {
 
   /// {@macro change_iterable_newer_than}
   List<Change> exportChangesNewerThan(VersionVector versionVector) {
-    final result = <Change>[];
-
-    for (final entry in _peerIndex().entries) {
-      final list = entry.value;
-      final clock = versionVector[entry.key];
-      if (clock == null) {
-        result.addAll(list);
-        continue;
-      }
-
-      // Binary search for the first change with a strictly greater clock
-      var low = 0;
-      var high = list.length;
-      while (low < high) {
-        final mid = (low + high) >> 1;
-        if (list[mid].hlc.compareTo(clock) > 0) {
-          high = mid;
-        } else {
-          low = mid + 1;
-        }
-      }
-      for (var i = low; i < list.length; i++) {
-        result.add(list[i]);
-      }
-    }
-
-    return result;
+    return _peerClockIndex.changesNewerThan(versionVector, _changes.values);
   }
 
   /// Imports [Change]s from another [ChangeStore]
@@ -188,7 +116,7 @@ class ChangeStore {
     final ids = _changes.keys.toList();
     for (final id in ids) {
       final clock = version[id.peerId()];
-      if (clock != null && id.hlc().compareTo(clock) <= 0) {
+      if (clock != null && id.hlc() <= clock) {
         _changes.remove(id);
         removedIds.add(id);
       }
@@ -198,7 +126,7 @@ class ChangeStore {
       return 0;
     }
 
-    _changesByPeer = null;
+    _peerClockIndex.invalidate();
 
     // 2. clean up dependencies in remaining changes.
     // Only changes that actually depend on a pruned change are rebuilt.
@@ -242,12 +170,101 @@ class ChangeStore {
   /// Clears all [Change]s from the store
   void clear() {
     _changes.clear();
-    _changesByPeer = null;
+    _peerClockIndex.invalidate();
   }
 
   /// Returns a string representation of the [ChangeStore]
   @override
   String toString() {
     return 'ChangeStore(changes: ${_changes.length})';
+  }
+}
+
+/// Secondary index of [Change]s grouped by peer and sorted by clock.
+///
+/// Answers [ChangeStore.exportChangesNewerThan] with a binary search per
+/// peer instead of a full scan of the store.
+///
+/// The index is built lazily from the source of truth (the store's primary
+/// map) on the first query, kept in sync by [add] on every insertion and
+/// dropped by [invalidate] when changes are removed or rewritten.
+class _PeerClockIndex {
+  Map<PeerId, List<Change>>? _byPeer;
+
+  /// Keeps the index in sync with an insertion, when built.
+  void add(Change change) {
+    final index = _byPeer;
+    if (index == null) {
+      return;
+    }
+
+    final list = index.putIfAbsent(change.id.peerId, () => <Change>[]);
+    if (list.isEmpty || list.last.hlc <= change.hlc) {
+      list.add(change);
+      return;
+    }
+
+    // Out-of-order arrival: insert keeping the list sorted by clock
+    list.insert(_firstNewerThan(list, change.hlc), change);
+  }
+
+  /// Drops the index; it is rebuilt lazily on the next query.
+  void invalidate() {
+    _byPeer = null;
+  }
+
+  /// {@macro change_iterable_newer_than}
+  ///
+  /// [source] is the store's current set of changes, used to (re)build the
+  /// index when it is not available.
+  List<Change> changesNewerThan(
+    VersionVector versionVector,
+    Iterable<Change> source,
+  ) {
+    final index = _byPeer ??= _build(source);
+    final result = <Change>[];
+
+    for (final entry in index.entries) {
+      final list = entry.value;
+      final clock = versionVector[entry.key];
+      if (clock == null) {
+        result.addAll(list);
+        continue;
+      }
+
+      for (var i = _firstNewerThan(list, clock); i < list.length; i++) {
+        result.add(list[i]);
+      }
+    }
+
+    return result;
+  }
+
+  static Map<PeerId, List<Change>> _build(Iterable<Change> source) {
+    final index = <PeerId, List<Change>>{};
+    for (final change in source) {
+      index.putIfAbsent(change.id.peerId, () => <Change>[]).add(change);
+    }
+    for (final list in index.values) {
+      list.sort((a, b) => a.hlc.compareTo(b.hlc));
+    }
+    return index;
+  }
+
+  /// Returns the index of the first change in the sorted [list] with a
+  /// clock strictly greater than [clock], or `list.length` if none.
+  static int _firstNewerThan(List<Change> list, HybridLogicalClock clock) {
+    // binary search (lower bound)
+    var low = 0;
+    var high = list.length;
+    while (low < high) {
+      final mid = (low + high) >> 1;
+      if (list[mid].hlc > clock) {
+        high = mid;
+      } else {
+        low = mid + 1;
+      }
+    }
+    return low;
   }
 }
