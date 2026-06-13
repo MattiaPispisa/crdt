@@ -1,7 +1,7 @@
 import 'dart:typed_data';
 
 import 'package:crdt_lf/crdt_lf.dart';
-import 'package:crdt_lf/src/handler/fugue/fugue_handler.dart';
+import 'package:crdt_lf/src/handler/fugue/fugue_sequence_handler.dart';
 
 part 'operation.dart';
 
@@ -31,7 +31,7 @@ part 'operation.dart';
 /// print(list.value); // Prints ['Hello', 'World']
 /// ```
 class CRDTFugueListHandler<T>
-    extends FugueHandler<T, List<T>, FugueListState<T>> {
+    extends FugueSequenceHandler<T, List<T>, FugueListState<T>> {
   /// Creates a new CRDTFugueList with the given document and ID
   ///
   /// [valueCodec] is an optional codec for encoding/decoding [T] values to

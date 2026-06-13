@@ -1,8 +1,9 @@
 import 'dart:typed_data';
 
 import 'package:crdt_lf/crdt_lf.dart';
+import 'package:crdt_lf/src/handler/fugue/fugue_cache.dart';
 
-/// Lazily-resolved state shared by Fugue-based handlers.
+/// Lazily-resolved state shared by Fugue-based ordered-sequence handlers.
 ///
 /// Wraps a [FugueTree] (the source of truth) and memoizes the two derived
 /// projections — the ordered [FugueValueNode]s and the public value — so
@@ -35,39 +36,40 @@ class FugueState<T, V> {
   }
 }
 
-/// Shared base for handlers backed by a Fugue tree.
+/// Base for Fugue-backed handlers whose state is an **ordered sequence** of
+/// `T` values: a single [FugueTree] plus a pure projection to the public
+/// value `V`. `CRDTFugueTextHandler` and `CRDTFugueListHandler` extend it.
 ///
-/// It owns everything the text and list variants have in common:
-/// - the per-peer element-id counter ([nextCounter]),
-/// - the cache lifecycle (lazy resolution and in-place incremental tree
-///   mutation),
-/// - history replay and snapshot framing,
-/// - the [delete] operation and the tree-navigation helpers used to build
-///   inserts and updates.
+/// It owns everything those variants have in common on top of [FugueCache]:
+/// history replay, snapshot framing, the [delete] operation and the
+/// tree-navigation helpers used to build inserts and updates. The counter and
+/// the cache lifecycle come from [FugueCache].
 ///
 /// Subclasses provide the element type `T`, the public value type `V` and the
 /// concrete state type `S`, plus the extension points that depend on the
 /// concrete operation encoding (see the methods grouped under
 /// "Extension points").
 ///
+/// ## When NOT to use this
+/// This base assumes the visible order equals the live-node traversal order of
+/// the tree (so `findNodeAtPosition` maps a visible index to a node). A handler
+/// whose visible order is decoupled from the tree — e.g. a movable list, where
+/// an element's position is the result of its latest move — must not extend it;
+/// it should mix in [FugueCache] directly and own its own navigation.
+///
 /// ## Note on `T`
 /// The Fugue tree uses a `null` value to mark a deleted element, so `T` must
 /// be non-nullable: a stored `null` would be indistinguishable from a
 /// deletion.
-abstract class FugueHandler<T, V, S extends FugueState<T, V>>
-    extends Handler<S> {
-  /// Creates a Fugue handler bound to [doc] with the given handler [id].
-  FugueHandler(super.doc, String id) : _id = id;
+abstract class FugueSequenceHandler<T, V, S extends FugueState<T, V>>
+    extends Handler<S> with FugueCache<S> {
+  /// Creates a Fugue sequence handler bound to [doc] with the given [id].
+  FugueSequenceHandler(super.doc, String id) : _id = id;
 
   final String _id;
 
-  /// Per-peer element-id counter, lazily seeded on first use.
-  int? _counter;
-
   @override
   String get id => _id;
-
-  // --- Extension points implemented by subclasses ---
 
   /// Creates an empty state (an empty tree with this handler's projection).
   S createEmptyState();
@@ -76,7 +78,7 @@ abstract class FugueHandler<T, V, S extends FugueState<T, V>>
   void applyToTree(FugueTree<T> tree, Operation operation);
 
   /// The element ids produced by this peer in [operation] — insert ids and
-  /// update new-node ids — used to seed [nextCounter].
+  /// update new-node ids — used to seed the counter.
   ///
   /// Returns nothing for operations that do not create nodes (e.g. delete).
   Iterable<FugueElementID> producedElementIds(Operation operation);
@@ -90,14 +92,44 @@ abstract class FugueHandler<T, V, S extends FugueState<T, V>>
   /// Decodes a single element value from the snapshot blob.
   T decodeValue(Uint8List bytes);
 
-  // --- Shared public API ---
+  @override
+  Iterable<FugueElementID> knownElementIds() sync* {
+    for (final node in _initialState()) {
+      yield node.id;
+    }
+    for (final op in operations()) {
+      yield* producedElementIds(op);
+    }
+  }
+
+  @override
+  S computeState() {
+    final state = createEmptyState();
+
+    // Seed from the snapshot, then replay the history.
+    state._tree.iterableInsert(0, _initialState());
+    for (final operation in operations()) {
+      applyToTree(state._tree, operation);
+    }
+
+    // The projections are resolved lazily on the first read.
+    return state;
+  }
+
+  @override
+  void applyOperation(S state, Operation operation) {
+    // The tree is mutated in place; the projections are resolved lazily on
+    // the next read instead of after every operation.
+    applyToTree(state._tree, operation);
+    state._markDirty();
+  }
 
   /// The current value, computed from changes and snapshot.
-  V get value => _cachedOrComputedState()._value;
+  V get value => cachedOrComputedState()._value;
 
   /// Deletes [count] elements starting at [index].
   void delete(int index, int count) {
-    final state = _cachedOrComputedState();
+    final state = cachedOrComputedState();
 
     // Collect targets first to avoid index drift while deleting.
     final targets = <FugueElementID>[];
@@ -115,101 +147,28 @@ abstract class FugueHandler<T, V, S extends FugueState<T, V>>
     doc.registerOperation(buildDeleteOperation(targets));
   }
 
-  // --- Helpers for subclass insert/update ---
-
   /// The left origin for an insertion at [index]: the root id for index `0`,
   /// otherwise the node currently at `index - 1`.
   FugueElementID originBefore(int index) {
     if (index == 0) {
       return FugueElementID.nullID();
     }
-    return _cachedOrComputedState()._tree.findNodeAtPosition(index - 1);
+    return cachedOrComputedState()._tree.findNodeAtPosition(index - 1);
   }
 
   /// The node that follows [id] in traversal order.
   FugueElementID nodeAfter(FugueElementID id) {
-    return _cachedOrComputedState()._tree.findNextNode(id);
+    return cachedOrComputedState()._tree.findNextNode(id);
   }
 
   /// The node currently at [index], or a null id if out of range.
   FugueElementID nodeAt(int index) {
-    return _cachedOrComputedState()._tree.findNodeAtPosition(index);
+    return cachedOrComputedState()._tree.findNodeAtPosition(index);
   }
-
-  /// Returns the next unique element counter for this peer.
-  ///
-  /// Seeded lazily on first use by scanning the snapshot nodes and every
-  /// operation for the highest counter produced by this peer.
-  int nextCounter() {
-    if (_counter == null) {
-      var max = -1;
-      void consider(FugueElementID id) {
-        if (!id.isNull && id.replicaID == doc.peerId) {
-          final c = id.counter!;
-          if (c > max) max = c;
-        }
-      }
-
-      for (final node in _initialState()) {
-        consider(node.id);
-      }
-      for (final op in operations()) {
-        producedElementIds(op).forEach(consider);
-      }
-      _counter = max + 1;
-    }
-    final result = _counter!;
-    _counter = result + 1;
-    return result;
-  }
-
-  // --- Cache lifecycle ---
-
-  S _cachedOrComputedState() {
-    final cached = cachedState;
-    if (cached != null) {
-      return cached;
-    }
-
-    final state = _computeState();
-    updateCachedState(state);
-    return state;
-  }
-
-  @override
-  S? incrementCachedState({
-    required Operation operation,
-    required S state,
-  }) {
-    // The tree is mutated in place; the projections are resolved lazily on
-    // the next read instead of after every operation.
-    try {
-      applyToTree(state._tree, operation);
-      return state.._markDirty();
-    } catch (_) {
-      // The tree may be half-mutated: invalidate the cache.
-      return null;
-    }
-  }
-
-  S _computeState() {
-    final state = createEmptyState();
-
-    // Seed from the snapshot, then replay the history.
-    state._tree.iterableInsert(0, _initialState());
-    for (final operation in operations()) {
-      applyToTree(state._tree, operation);
-    }
-
-    // The projections are resolved lazily on the first read.
-    return state;
-  }
-
-  // --- Snapshot framing ---
 
   @override
   Uint8List getSnapshotState() {
-    final nodes = _cachedOrComputedState()._nodes;
+    final nodes = cachedOrComputedState()._nodes;
 
     final out = BytesBuilder(copy: false);
     UVarint.write(nodes.length, out);

@@ -2,7 +2,7 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:crdt_lf/crdt_lf.dart';
-import 'package:crdt_lf/src/handler/fugue/fugue_handler.dart';
+import 'package:crdt_lf/src/handler/fugue/fugue_sequence_handler.dart';
 
 part 'operation.dart';
 
@@ -26,7 +26,7 @@ part 'operation.dart';
 /// print(text.value); // Prints ["Hello"]
 /// ```
 class CRDTFugueTextHandler
-    extends FugueHandler<String, String, FugueTextState> {
+    extends FugueSequenceHandler<String, String, FugueTextState> {
   /// Constructor that initializes a new Fugue text handler
   CRDTFugueTextHandler(super.doc, super.id);
 

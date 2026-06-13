@@ -7,7 +7,7 @@
 ### Added
 
 - `CRDTFugueListHandler<T>` — a list handler that uses the Fugue algorithm to minimize interleaving of concurrent edits. Like `CRDTListHandler<T>` it is generic over `T` with an optional `ValueCodec<T>`. [72](https://github.com/MattiaPispisa/crdt/issues/72)
-- Added `FugueHandler<T, V, S>` and `FugueState<T, V>` to share fugue behaviors to every "Fugue"-Handlers.
+- Added shared (library-internal) Fugue infrastructure: the `FugueCache` mixin (per-peer element-id counter + cache lifecycle, reusable by any Fugue-backed handler) and `FugueSequenceHandler<T, V, S>` / `FugueState<T, V>` (the ordered-sequence base behind `CRDTFugueTextHandler` and `CRDTFugueListHandler`).
 
 ## [3.1.0](https://github.com/MattiaPispisa/crdt/tree/crdt_lf-v3.1.0/packages/crdt_lf)
 **Date:** 2026-06-13
