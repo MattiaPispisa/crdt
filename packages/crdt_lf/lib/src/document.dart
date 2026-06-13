@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:collection';
 import 'dart:convert';
 import 'dart:typed_data';
 
@@ -950,11 +951,12 @@ class CRDTDocument extends BaseCRDTDocument {
     }
 
     // Perform topological sort (Kahn's algorithm)
-    final queue =
-        changes.where((c) => inDegree[c.id] == 0).map((c) => c.id).toList();
+    final queue = ListQueue<OperationId>.of(
+      changes.where((c) => inDegree[c.id] == 0).map((c) => c.id),
+    );
 
     while (queue.isNotEmpty) {
-      final id = queue.removeAt(0);
+      final id = queue.removeFirst();
       final change = changeMap[id]!;
       result.add(change);
 

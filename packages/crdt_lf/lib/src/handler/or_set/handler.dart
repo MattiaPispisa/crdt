@@ -209,7 +209,9 @@ class CRDTORSetHandler<T> extends Handler<ORSetState<T>> {
 
     final setLive = state._live[operation.value];
     if (setLive != null) {
-      setLive.removeWhere(operation.tags.contains);
+      for (final tag in operation.tags) {
+        setLive.remove(tag);
+      }
       if (setLive.isEmpty) {
         state._live.remove(operation.value);
       }
@@ -221,15 +223,18 @@ class CRDTORSetHandler<T> extends Handler<ORSetState<T>> {
     required Operation operation,
     required ORSetState<T> state,
   }) {
-    final newState = state._deepCopy();
-
-    // Apply the operation to the copied tag state
-    _applyOperationToTagState(
-      state: newState,
-      operation: operation,
-    );
-
-    return newState;
+    // The cached state is never exposed by this handler, so it can be
+    // mutated in place instead of deep-copied on every operation.
+    try {
+      _applyOperationToTagState(
+        state: state,
+        operation: operation,
+      );
+      return state;
+    } catch (_) {
+      // The state may be half-mutated: invalidate the cache.
+      return null;
+    }
   }
 }
 
@@ -253,27 +258,6 @@ class ORSetState<T> {
         _snapshotOnly = snapshotOnly,
         _all = all,
         _live = live;
-
-  /// Creates a deep copy of the tag state
-  ORSetState<T> _deepCopy() {
-    final live = <T, Set<ORHandlerTag>>{
-      for (final entry in _live.entries)
-        entry.key: Set<ORHandlerTag>.from(entry.value),
-    };
-    final all = <T, Set<ORHandlerTag>>{
-      for (final entry in _all.entries)
-        entry.key: Set<ORHandlerTag>.from(entry.value),
-    };
-    final snapshotOnly = <T>{..._snapshotOnly};
-    final tombstones = <ORHandlerTag>{..._tombstones};
-
-    return ORSetState<T>._(
-      live: live,
-      all: all,
-      snapshotOnly: snapshotOnly,
-      tombstones: tombstones,
-    );
-  }
 
   /// The live tags per value
   final Map<T, Set<ORHandlerTag>> _live;

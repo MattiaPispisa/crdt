@@ -3,6 +3,7 @@ import 'package:crdt_lf/crdt_lf.dart' show DAG;
 import 'package:crdt_lf/src/dag/graph.dart' show DAG;
 
 import 'package:crdt_lf/src/operation/id.dart';
+import 'package:crdt_lf/src/peer_id.dart';
 import 'package:crdt_lf/src/utils/set.dart';
 
 /// [Frontiers] implementation for CRDT
@@ -44,27 +45,33 @@ class Frontiers {
 
   /// Merges another [Frontiers] into this one
   ///
-  /// The result is a new [Frontiers] that contains only the [OperationId]s
-  /// that are not causally before
-  /// any other [OperationId] in either [Frontiers].
+  /// The result contains only the [OperationId]s that are not causally
+  /// before any other [OperationId] in either [Frontiers].
+  ///
+  /// Without access to a [DAG], causal dominance can only be established
+  /// between operations of the same peer (whose operations are totally
+  /// ordered): for each peer only the latest operation is kept, while
+  /// operations of different peers are considered concurrent and all kept.
   void merge(Frontiers other) {
-    final result = <OperationId>{};
+    final latestByPeer = <PeerId, OperationId>{};
 
-    // Add all operations from both frontiers
-    final allOps = {..._frontiers, ...other._frontiers};
-
-    // Filter out operations that are causally before other operations
-    for (final op in allOps) {
-      final isFrontier = allOps.every(op.happenedAfterOrEqual);
-
-      if (isFrontier) {
-        result.add(op);
+    for (final op in _frontiers.followedBy(other._frontiers)) {
+      final latest = latestByPeer[op.peerId];
+      if (latest == null || op.hlc > latest.hlc) {
+        latestByPeer[op.peerId] = op;
       }
     }
 
     _frontiers
       ..clear()
-      ..addAll(result);
+      ..addAll(latestByPeer.values);
+  }
+
+  /// Replaces the [Frontiers] with the given operation ids
+  void reset(Iterable<OperationId> frontiers) {
+    _frontiers
+      ..clear()
+      ..addAll(frontiers);
   }
 
   /// Clears the [Frontiers]

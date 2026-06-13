@@ -1,4 +1,5 @@
 import 'package:crdt_lf/crdt_lf.dart';
+import 'package:hlc_dart/hlc_dart.dart';
 
 /// ChangeStore implementation for CRDT
 ///
@@ -12,6 +13,10 @@ class ChangeStore {
 
   /// The changes stored in this [ChangeStore], indexed by their packed id.
   final Map<OpIdKey, Change> _changes;
+
+  /// Secondary index used to answer [exportChangesNewerThan];
+  /// `_changes` remains the source of truth.
+  final _PeerClockIndex _peerClockIndex = _PeerClockIndex();
 
   /// Gets the number of changes in the store
   int get changeCount => _changes.length;
@@ -47,6 +52,7 @@ class ChangeStore {
     }
 
     _changes[key] = change;
+    _peerClockIndex.add(change);
     return true;
   }
 
@@ -67,23 +73,18 @@ class ChangeStore {
       return getAllChanges();
     }
 
-    // Get all ancestors of the version
-    final ancestors = <OpIdKey>{};
-    for (final id in version) {
-      for (final anc in dag.getAncestors(id)) {
-        ancestors.add(_keyFromOperationId(anc));
-      }
-    }
+    // Get all ancestors of the version in a single traversal
+    final ancestors = dag.getAncestorsOfAll(version);
 
     // Return all changes that are not ancestors of the version
     return _changes.values
-        .where((change) => !ancestors.contains(change.key))
+        .where((change) => !ancestors.contains(change.id))
         .toList();
   }
 
   /// {@macro change_iterable_newer_than}
   List<Change> exportChangesNewerThan(VersionVector versionVector) {
-    return _changes.values.newerThan(versionVector).toList();
+    return _peerClockIndex.changesNewerThan(versionVector, _changes.values);
   }
 
   /// Imports [Change]s from another [ChangeStore]
@@ -112,10 +113,10 @@ class ChangeStore {
     final removedIds = <OpIdKey>{};
 
     // 1. identify and remove old changes
-    var ids = _changes.keys.toList();
+    final ids = _changes.keys.toList();
     for (final id in ids) {
       final clock = version[id.peerId()];
-      if (clock != null && id.hlc().compareTo(clock) <= 0) {
+      if (clock != null && id.hlc() <= clock) {
         _changes.remove(id);
         removedIds.add(id);
       }
@@ -125,26 +126,39 @@ class ChangeStore {
       return 0;
     }
 
-    // 2. clean up dependencies in remaining changes
-    ids = _changes.keys.toList();
-    for (final id in ids) {
-      // Remove dependencies to pruned changes
-      _changes.update(id, (change) {
-        final deps = <OperationId>{};
-        for (final depKey in change.depsKeys()) {
-          if (!removedIds.contains(depKey)) {
-            deps.add(depKey.toOperationId());
-          }
-        }
+    _peerClockIndex.invalidate();
 
-        return Change.fromPayloadBytes(
-          id: change.id,
-          payloadBytes: change.payloadBytes(),
-          deps: deps,
-          author: change.author,
-        );
-      });
+    // 2. clean up dependencies in remaining changes.
+    // Only changes that actually depend on a pruned change are rebuilt.
+    final updates = <OpIdKey, Change>{};
+    for (final entry in _changes.entries) {
+      final change = entry.value;
+      var hasPrunedDep = false;
+      for (final depKey in change.depsKeys()) {
+        if (removedIds.contains(depKey)) {
+          hasPrunedDep = true;
+          break;
+        }
+      }
+      if (!hasPrunedDep) {
+        continue;
+      }
+
+      final deps = <OperationId>{};
+      for (final depKey in change.depsKeys()) {
+        if (!removedIds.contains(depKey)) {
+          deps.add(depKey.toOperationId());
+        }
+      }
+
+      updates[entry.key] = Change.fromPayloadBytes(
+        id: change.id,
+        payloadBytes: change.payloadBytes(),
+        deps: deps,
+        author: change.author,
+      );
     }
+    _changes.addAll(updates);
 
     return removedIds.length;
   }
@@ -156,11 +170,101 @@ class ChangeStore {
   /// Clears all [Change]s from the store
   void clear() {
     _changes.clear();
+    _peerClockIndex.invalidate();
   }
 
   /// Returns a string representation of the [ChangeStore]
   @override
   String toString() {
     return 'ChangeStore(changes: ${_changes.length})';
+  }
+}
+
+/// Secondary index of [Change]s grouped by peer and sorted by clock.
+///
+/// Answers [ChangeStore.exportChangesNewerThan] with a binary search per
+/// peer instead of a full scan of the store.
+///
+/// The index is built lazily from the source of truth (the store's primary
+/// map) on the first query, kept in sync by [add] on every insertion and
+/// dropped by [invalidate] when changes are removed or rewritten.
+class _PeerClockIndex {
+  Map<PeerId, List<Change>>? _byPeer;
+
+  /// Keeps the index in sync with an insertion, when built.
+  void add(Change change) {
+    final index = _byPeer;
+    if (index == null) {
+      return;
+    }
+
+    final list = index.putIfAbsent(change.id.peerId, () => <Change>[]);
+    if (list.isEmpty || list.last.hlc <= change.hlc) {
+      list.add(change);
+      return;
+    }
+
+    // Out-of-order arrival: insert keeping the list sorted by clock
+    list.insert(_firstNewerThan(list, change.hlc), change);
+  }
+
+  /// Drops the index; it is rebuilt lazily on the next query.
+  void invalidate() {
+    _byPeer = null;
+  }
+
+  /// {@macro change_iterable_newer_than}
+  ///
+  /// [source] is the store's current set of changes, used to (re)build the
+  /// index when it is not available.
+  List<Change> changesNewerThan(
+    VersionVector versionVector,
+    Iterable<Change> source,
+  ) {
+    final index = _byPeer ??= _build(source);
+    final result = <Change>[];
+
+    for (final entry in index.entries) {
+      final list = entry.value;
+      final clock = versionVector[entry.key];
+      if (clock == null) {
+        result.addAll(list);
+        continue;
+      }
+
+      for (var i = _firstNewerThan(list, clock); i < list.length; i++) {
+        result.add(list[i]);
+      }
+    }
+
+    return result;
+  }
+
+  static Map<PeerId, List<Change>> _build(Iterable<Change> source) {
+    final index = <PeerId, List<Change>>{};
+    for (final change in source) {
+      index.putIfAbsent(change.id.peerId, () => <Change>[]).add(change);
+    }
+    for (final list in index.values) {
+      list.sort((a, b) => a.hlc.compareTo(b.hlc));
+    }
+    return index;
+  }
+
+  /// Returns the index of the first change in the sorted [list] with a
+  /// clock strictly greater than [clock], or `list.length` if none.
+  static int _firstNewerThan(List<Change> list, HybridLogicalClock clock) {
+    // binary search (lower bound)
+    var low = 0;
+    var high = list.length;
+    while (low < high) {
+      final mid = (low + high) >> 1;
+      if (list[mid].hlc > clock) {
+        high = mid;
+      } else {
+        low = mid + 1;
+      }
+    }
+    return low;
   }
 }

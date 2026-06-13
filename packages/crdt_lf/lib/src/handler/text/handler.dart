@@ -142,100 +142,79 @@ class CRDTTextHandler extends Handler<String> {
 
   /// Computes the current state of the text from the document's changes
   String _computeState() {
-    final buffer = StringBuffer(_initialState());
+    // Replay on a mutable list of code units: each operation costs a
+    // single splice instead of rebuilding the whole string.
+    final units = _initialState().codeUnits.toList();
 
     // Apply changes in order
     for (final operation in operations()) {
-      _applyOperationToBuffer(buffer, operation);
+      _applyOperationToUnits(units, operation);
     }
 
-    return buffer.toString();
+    return String.fromCharCodes(units);
   }
 
-  /// Applies a single operation to a StringBuffer
-  void _applyOperationToBuffer(StringBuffer buffer, Operation operation) {
+  /// Applies a single operation to a mutable list of code units
+  void _applyOperationToUnits(List<int> units, Operation operation) {
     if (operation is _TextInsertOperation) {
-      return _bufferInsert(
-        buffer,
+      return _unitsInsert(
+        units,
         index: operation.index,
         text: operation.text,
       );
     } else if (operation is _TextDeleteOperation) {
-      return _bufferDelete(
-        buffer,
+      return _unitsDelete(
+        units,
         index: operation.index,
         count: operation.count,
       );
     } else if (operation is _TextUpdateOperation) {
-      return _bufferUpdate(
-        buffer,
+      return _unitsUpdate(
+        units,
         index: operation.index,
         text: operation.text,
       );
     }
   }
 
-  void _bufferInsert(
-    StringBuffer buffer, {
+  void _unitsInsert(
+    List<int> units, {
     required int index,
     required String text,
   }) {
     // Insert at the specified index,
     // or at the end if the index is out of bounds
-    final currentText = buffer.toString();
-    if (index <= currentText.length) {
-      buffer
-        ..clear()
-        ..write(currentText.substring(0, index))
-        ..write(text)
-        ..write(currentText.substring(index));
-      return;
+    if (index <= units.length) {
+      units.insertAll(index, text.codeUnits);
+    } else {
+      units.addAll(text.codeUnits);
     }
-
-    buffer.write(text);
-    return;
   }
 
-  void _bufferDelete(
-    StringBuffer buffer, {
+  void _unitsDelete(
+    List<int> units, {
     required int index,
     required int count,
   }) {
     // Delete text if the index is valid
-    final currentText = buffer.toString();
-    if (index < currentText.length) {
-      final actualCount = index + count > currentText.length
-          ? currentText.length - index
-          : count;
-      buffer
-        ..clear()
-        ..write(currentText.substring(0, index))
-        ..write(currentText.substring(index + actualCount));
+    if (index < units.length) {
+      final actualCount =
+          index + count > units.length ? units.length - index : count;
+      units.removeRange(index, index + actualCount);
     }
   }
 
-  void _bufferUpdate(
-    StringBuffer buffer, {
+  void _unitsUpdate(
+    List<int> units, {
     required int index,
     required String text,
   }) {
-    // Update the text at the specified index
-    final currentText = buffer.toString();
-
-    if (index < currentText.length) {
-      buffer
-        ..clear()
-        ..write(currentText.substring(0, index));
-
-      final remainingLength = currentText.length - index;
-      final truncatedText =
-          text.substring(0, min(text.length, remainingLength));
-
-      buffer.write(truncatedText);
-
-      if (remainingLength > text.length) {
-        buffer.write(currentText.substring(index + text.length));
-      }
+    // Update the text at the specified index,
+    // truncating the replacement to the remaining length
+    if (index < units.length) {
+      final remainingLength = units.length - index;
+      final replacedCount = min(text.length, remainingLength);
+      units.setRange(index, index + replacedCount, text.codeUnits);
     }
   }
 
@@ -244,9 +223,34 @@ class CRDTTextHandler extends Handler<String> {
     required Operation operation,
     required String state,
   }) {
-    final buffer = StringBuffer(state);
-    _applyOperationToBuffer(buffer, operation);
-    return buffer.toString();
+    // A single concatenation instead of a StringBuffer round-trip.
+    if (operation is _TextInsertOperation) {
+      final index = operation.index;
+      if (index <= state.length) {
+        return state.substring(0, index) +
+            operation.text +
+            state.substring(index);
+      }
+      return state + operation.text;
+    } else if (operation is _TextDeleteOperation) {
+      final index = operation.index;
+      if (index >= state.length) {
+        return state;
+      }
+      final end = min(index + operation.count, state.length);
+      return state.substring(0, index) + state.substring(end);
+    } else if (operation is _TextUpdateOperation) {
+      final index = operation.index;
+      if (index >= state.length) {
+        return state;
+      }
+      final text = operation.text;
+      final replacedCount = min(text.length, state.length - index);
+      return state.substring(0, index) +
+          text.substring(0, replacedCount) +
+          state.substring(index + replacedCount);
+    }
+    return state;
   }
 
   @override

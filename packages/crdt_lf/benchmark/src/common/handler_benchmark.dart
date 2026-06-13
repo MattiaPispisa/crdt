@@ -5,11 +5,16 @@ import 'custom_emitter.dart';
 
 const _kOperationsCount = 1000;
 
-typedef VoidCallback = void Function();
+/// An operation to apply to a handler during a benchmark run.
+typedef HandlerOperation<T> = void Function(T handler);
 
 /// Benchmark for handler
-/// Performs operations and get the value of the handler
-/// after all operations are performed
+/// Performs operations on a fresh document and gets the value of the
+/// handler after all operations are performed.
+///
+/// A fresh document is created on every [run] so that state does not
+/// accumulate across benchmark iterations and the reported time measures
+/// a reproducible amount of work.
 abstract class BaseHandlerOperationsBenchmark<T extends Handler<dynamic>>
     extends BenchmarkBase {
   /// Creates a new base handler operations benchmark
@@ -32,20 +37,16 @@ abstract class BaseHandlerOperationsBenchmark<T extends Handler<dynamic>>
           emitter: const CustomEmitter(),
         );
 
-  late final CRDTDocument _document;
   final T Function(CRDTDocument document) _handlerFactory;
-  late final List<VoidCallback> _operations;
-  late final T _handler;
+  late final List<HandlerOperation<T>> _operations;
 
   final bool _useIncrementalCacheUpdate;
   final int _operationsCount;
 
   @override
   void setup() {
-    _document = CRDTDocument(peerId: PeerId.generate());
-    _handler = _handlerFactory(_document);
     // Generate a list of operations to perform
-    _operations = generateOperations(_handler, _operationsCount);
+    _operations = generateOperations(_operationsCount);
   }
 
   /// Gets the value of the handler
@@ -53,18 +54,21 @@ abstract class BaseHandlerOperationsBenchmark<T extends Handler<dynamic>>
 
   @override
   void run() {
+    final document = CRDTDocument(peerId: PeerId.generate());
+    final handler = _handlerFactory(document)
+      ..useIncrementalCacheUpdate = _useIncrementalCacheUpdate;
+
     if (_useIncrementalCacheUpdate) {
-      _handler.useIncrementalCacheUpdate = true;
-      getHandlerValue(_handler);
-    } else {
-      _handler.useIncrementalCacheUpdate = false;
+      // Warm the cache so operations update it incrementally
+      getHandlerValue(handler);
     }
+
     for (final operation in _operations) {
-      operation();
+      operation(handler);
     }
-    getHandlerValue(_handler);
+    getHandlerValue(handler);
   }
 
   /// Generates a list of operations for benchmarking
-  List<VoidCallback> generateOperations(T handler, int count);
+  List<HandlerOperation<T>> generateOperations(int count);
 }

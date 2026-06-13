@@ -152,6 +152,57 @@ void main() {
       expect(store.containsChange(change1.id), isFalse);
     });
 
+    test('prune keeps untouched changes by identity', () {
+      store
+        ..addChange(change1)
+        ..addChange(change2)
+        ..addChange(change3)
+        ..prune(VersionVector({author: change1.hlc}));
+
+      expect(
+        store.getChange(change2.id)!.deps,
+        isEmpty,
+        reason: 'change2 depended on the pruned change1'
+            ' and must be rebuilt without the dependency',
+      );
+      expect(identical(store.getChange(change3.id), change3), isTrue);
+      expect(
+        store.getChange(change3.id)!.deps,
+        equals({change2.id}),
+        reason: 'change3 only depends on the surviving change2'
+            ' and must not be rebuilt',
+      );
+    });
+
+    test('exportChangesNewerThan filters by version vector', () {
+      store
+        ..addChange(change1)
+        ..addChange(change2)
+        ..addChange(change3);
+
+      final newer = store.exportChangesNewerThan(
+        VersionVector({author: change1.hlc}),
+      );
+      expect(newer.toSet(), equals({change2, change3}));
+
+      final all = store.exportChangesNewerThan(VersionVector({}));
+      expect(all.toSet(), equals({change1, change2, change3}));
+
+      // Adding a change after the index is built must keep it consistent
+      final hlc4 = HybridLogicalClock(l: 1, c: 4);
+      final change4 = Change(
+        id: OperationId(author, hlc4),
+        operation: operation,
+        deps: {change3.id},
+        author: author,
+      );
+      store.addChange(change4);
+      final newest = store.exportChangesNewerThan(
+        VersionVector({author: change3.hlc}),
+      );
+      expect(newest, equals([change4]));
+    });
+
     test('toString returns correct string representation', () {
       store
         ..addChange(change1)

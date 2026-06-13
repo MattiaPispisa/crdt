@@ -256,15 +256,18 @@ class CRDTORMapHandler<K, V> extends Handler<ORMapState<K, V>> {
     required Operation operation,
     required ORMapState<K, V> state,
   }) {
-    final newState = state._deepCopy();
-
-    // Apply the operation to the copied tag state
-    _applyOperationToTagState(
-      state: newState,
-      operation: operation,
-    );
-
-    return newState;
+    // The cached state is never exposed by this handler, so it can be
+    // mutated in place instead of deep-copied on every operation.
+    try {
+      _applyOperationToTagState(
+        state: state,
+        operation: operation,
+      );
+      return state;
+    } catch (_) {
+      // The state may be half-mutated: invalidate the cache.
+      return null;
+    }
   }
 }
 
@@ -288,27 +291,6 @@ class ORMapState<K, V> {
         _snapshotOnly = snapshotOnly,
         _all = all,
         _live = live;
-
-  /// Creates a deep copy of the tag state
-  ORMapState<K, V> _deepCopy() {
-    final live = <K, Set<ORMapEntry<V>>>{
-      for (final entry in _live.entries)
-        entry.key: Set<ORMapEntry<V>>.from(entry.value),
-    };
-    final all = <K, Set<ORMapEntry<V>>>{
-      for (final entry in _all.entries)
-        entry.key: Set<ORMapEntry<V>>.from(entry.value),
-    };
-    final snapshotOnly = <K, V>{..._snapshotOnly};
-    final tombstones = <ORHandlerTag>{..._tombstones};
-
-    return ORMapState<K, V>._(
-      live: live,
-      all: all,
-      snapshotOnly: snapshotOnly,
-      tombstones: tombstones,
-    );
-  }
 
   /// Returns all tags for a given key (across all entries)
   Set<ORHandlerTag> _allTagsForKey(K key) {

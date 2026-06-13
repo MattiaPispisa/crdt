@@ -279,7 +279,11 @@ class VersionVector {
   }
 
   /// Returns an iterable copy of the entries in the version vector.
-  Iterable<MapEntry<PeerId, HybridLogicalClock>> get entries => _copy().entries;
+  ///
+  /// The entries are copied lazily while iterating, without building an
+  /// intermediate map.
+  Iterable<MapEntry<PeerId, HybridLogicalClock>> get entries =>
+      _vector.entries.map((e) => MapEntry(e.key, e.value.copy()));
 
   /// Returns a copy of the version vector.
   Map<PeerId, HybridLogicalClock> _copy() {
