@@ -186,6 +186,36 @@ void main() {
       expect(text2.value, incremental);
     });
 
+    test('CRDTFugueListHandler', () {
+      final doc = CRDTDocument(peerId: PeerId.generate());
+      final list = CRDTFugueListHandler<String>(doc, 'fugue_list')
+        ..useIncrementalCacheUpdate = true;
+      final random = Random(42);
+
+      expect(list.value, isEmpty);
+
+      for (var i = 0; i < 100; i++) {
+        final len = list.value.length;
+        final choice = random.nextInt(3);
+        if (choice == 0 || len == 0) {
+          list.insert(random.nextInt(len + 1), 'item$i');
+        } else if (choice == 1) {
+          list.delete(random.nextInt(len), random.nextInt(3) + 1);
+        } else {
+          list.update(random.nextInt(len), 'updated$i');
+        }
+      }
+
+      final incremental = List<String>.from(list.value);
+      list.invalidateCache();
+      expect(list.value, incremental);
+
+      final doc2 = CRDTDocument(peerId: PeerId.generate());
+      final list2 = CRDTFugueListHandler<String>(doc2, 'fugue_list');
+      doc2.importChanges(doc.exportChanges());
+      expect(list2.value, incremental);
+    });
+
     test('snapshot state matches after incremental updates', () {
       final doc = CRDTDocument(peerId: PeerId.generate());
       final set = CRDTORSetHandler<String>(doc, 'set')

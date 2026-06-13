@@ -2,6 +2,8 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:crdt_lf/crdt_lf.dart';
+import 'package:crdt_lf/src/handler/fugue/fugue_handler.dart';
+
 part 'operation.dart';
 
 /// ## CRDT Text with Fugue implementation
@@ -23,20 +25,10 @@ part 'operation.dart';
 /// text..insert(0, 'Hello')..insert(5, ' World');
 /// print(text.value); // Prints ["Hello"]
 /// ```
-class CRDTFugueTextHandler extends Handler<FugueTextState> {
+class CRDTFugueTextHandler
+    extends FugueHandler<String, String, FugueTextState> {
   /// Constructor that initializes a new Fugue text handler
-  CRDTFugueTextHandler(super.doc, this._id);
-
-  /// The ID of this handler in the document
-  final String _id;
-
-  /// Counter to generate unique IDs for elements.
-  ///
-  /// Lazily computed on first.
-  int? _counter;
-
-  @override
-  String get id => _id;
+  CRDTFugueTextHandler(super.doc, super.id);
 
   @override
   late final OperationFactory operationFactory =
@@ -48,23 +40,15 @@ class CRDTFugueTextHandler extends Handler<FugueTextState> {
       return;
     }
 
-    final state = _cachedOrComputedState();
+    final leftOrigin = originBefore(index);
+    final rightOrigin = nodeAfter(leftOrigin);
 
-    // Find the node at position index - 1 (or root node if index is 0)
-    final leftOrigin = index == 0
-        ? FugueElementID.nullID()
-        : state._tree.findNodeAtPosition(index - 1);
-
-    // Find the next node after leftOrigin
-    final rightOrigin = state._tree.findNextNode(leftOrigin);
-
-    // Generate IDs for each character preserving the previous behavior
+    // Generate one node per character
     final items = <_FugueInsertItem>[];
     for (var i = 0; i < text.length; i++) {
-      final newNodeID = FugueElementID(doc.peerId, _nextCounter());
       items.add(
         _FugueInsertItem(
-          id: newNodeID,
+          id: FugueElementID(doc.peerId, nextCounter()),
           text: text[i],
         ),
       );
@@ -81,86 +65,16 @@ class CRDTFugueTextHandler extends Handler<FugueTextState> {
     );
   }
 
-  /// Returns the next unique counter for this peer
-  /// Initializing lazily on first call by scanning
-  /// all existing operations and snapshot nodes.
-  int _nextCounter() {
-    if (_counter == null) {
-      var max = -1;
-      for (final node in _initialState()) {
-        final id = node.id;
-        if (!id.isNull && id.replicaID == doc.peerId) {
-          final c = id.counter!;
-          if (c > max) max = c;
-        }
-      }
-      for (final op in operations()) {
-        if (op is _FugueTextInsertOperation) {
-          for (final item in op.items) {
-            final id = item.id;
-            if (!id.isNull && id.replicaID == doc.peerId) {
-              final c = id.counter!;
-              if (c > max) max = c;
-            }
-          }
-        } else if (op is _FugueTextUpdateOperation) {
-          for (final item in op.items) {
-            final id = item.newNodeID;
-            if (!id.isNull && id.replicaID == doc.peerId) {
-              final c = id.counter!;
-              if (c > max) max = c;
-            }
-          }
-        }
-      }
-      _counter = max + 1;
-    }
-    final result = _counter!;
-    _counter = result + 1;
-    return result;
-  }
-
-  /// Deletes [count] characters starting from position [index]
-  void delete(int index, int count) {
-    final state = _cachedOrComputedState();
-    // Collect targets first to avoid index drift while deleting
-    final targets = <FugueElementID>[];
-    for (var i = 0; i < count; i++) {
-      final nodeID = state._tree.findNodeAtPosition(index + i);
-      if (!nodeID.isNull) {
-        targets.add(nodeID);
-      }
-    }
-
-    if (targets.isEmpty) {
-      return;
-    }
-
-    // Create items for batch delete
-    final items =
-        targets.map((nodeID) => _FugueDeleteItem(nodeID: nodeID)).toList();
-
-    // Emit a single batch delete change
-    doc.registerOperation(
-      _FugueTextDeleteOperation.fromHandler(
-        this,
-        items: items,
-      ),
-    );
-  }
-
   /// Updates the text at position [index]
   void update(int index, String text) {
     if (text.isEmpty) {
       return;
     }
 
-    final state = _cachedOrComputedState();
-
     // Collect targets first to avoid index drift while updating
     final targets = <FugueElementID>[];
     for (var i = 0; i < text.length; i++) {
-      final nodeID = state._tree.findNodeAtPosition(index + i);
+      final nodeID = nodeAt(index + i);
       if (!nodeID.isNull) {
         targets.add(nodeID);
       }
@@ -170,27 +84,19 @@ class CRDTFugueTextHandler extends Handler<FugueTextState> {
       return;
     }
 
-    // Create items for batch update
     final items = <_FugueUpdateItem>[];
     for (var i = 0; i < targets.length; i++) {
-      final nodeID = targets[i];
-      final newNodeID = FugueElementID(doc.peerId, _nextCounter());
-      final ch = text[i];
       items.add(
         _FugueUpdateItem(
-          nodeID: nodeID,
-          newNodeID: newNodeID,
-          text: ch,
+          nodeID: targets[i],
+          newNodeID: FugueElementID(doc.peerId, nextCounter()),
+          text: text[i],
         ),
       );
     }
 
-    // Emit a single batch update change
     doc.registerOperation(
-      _FugueTextUpdateOperation.fromHandler(
-        this,
-        items: items,
-      ),
+      _FugueTextUpdateOperation.fromHandler(this, items: items),
     );
   }
 
@@ -218,8 +124,7 @@ class CRDTFugueTextHandler extends Handler<FugueTextState> {
   /// // Internally generates: delete(' '), insert(' Brave New ')
   /// ```
   void change(String newText) {
-    final state = _cachedOrComputedState();
-    final diff = myersDiff(state._value, newText);
+    final diff = myersDiff(value, newText);
 
     // Track offset as text length changes during operations
     var offset = 0;
@@ -243,116 +148,14 @@ class CRDTFugueTextHandler extends Handler<FugueTextState> {
     }
   }
 
-  /// Gets the current value of the text
-  String get value {
-    return _cachedOrComputedState()._value;
-  }
-
-  /// If the cached state is still valid, returns it.
-  ///
-  /// Otherwise, computes the state from scratch and updates the cache.
-  FugueTextState _cachedOrComputedState() {
-    if (cachedState != null) {
-      return cachedState!;
-    }
-
-    final state = _computeState();
-    updateCachedState(state);
-    return state;
-  }
-
-  @override
-  FugueTextState? incrementCachedState({
-    required Operation operation,
-    required FugueTextState state,
-  }) {
-    // The tree is mutated in place; nodes and value are resolved
-    // lazily on the next read instead of after every operation.
-    try {
-      _applyTreeOperation(state._tree, operation);
-      return state.._markDirty();
-    } catch (_) {
-      // The tree may be half-mutated: invalidate the cache.
-      return null;
-    }
-  }
-
-  @override
-  Uint8List getSnapshotState() {
-    final List<FugueValueNode<String>> nodes;
-    if (cachedState != null) {
-      nodes = cachedState!._nodes;
-    } else {
-      final state = _computeState();
-      updateCachedState(state);
-      nodes = state._nodes;
-    }
-    return _encodeSnapshotNodes(nodes);
-  }
-
-  static Uint8List _encodeSnapshotNodes(List<FugueValueNode<String>> nodes) {
-    final out = BytesBuilder(copy: false);
-    UVarint.write(nodes.length, out);
-    for (final node in nodes) {
-      final idBytes = node.id.toBytes();
-      UVarint.write(idBytes.length, out);
-      out.add(idBytes);
-
-      final valueBytes = utf8.encode(node.value);
-      UVarint.write(valueBytes.length, out);
-      out.add(valueBytes);
-    }
-    return out.toBytes();
-  }
-
-  static List<FugueValueNode<String>> _decodeSnapshotNodes(Uint8List bytes) {
-    var offset = 0;
-    final countRec = UVarint.read(bytes, offset: offset);
-    offset = countRec.nextOffset;
-    final nodes = <FugueValueNode<String>>[];
-    for (var i = 0; i < countRec.value; i += 1) {
-      final idLenRec = UVarint.read(bytes, offset: offset);
-      offset = idLenRec.nextOffset;
-      final idEnd = offset + idLenRec.value;
-      final id = FugueElementID.fromBytes(
-        Uint8List.sublistView(bytes, offset, idEnd),
-      );
-      offset = idEnd;
-
-      final valLenRec = UVarint.read(bytes, offset: offset);
-      offset = valLenRec.nextOffset;
-      final valEnd = offset + valLenRec.value;
-      final value = utf8.decode(
-        Uint8List.sublistView(bytes, offset, valEnd),
-      );
-      offset = valEnd;
-
-      nodes.add(FugueValueNode<String>(id: id, value: value));
-    }
-    return nodes;
-  }
-
   /// Gets the length of the text
   int get length => value.length;
 
-  /// Computes the current state of the text from document operations
-  FugueTextState _computeState() {
-    final state = FugueTextState.empty();
+  @override
+  FugueTextState createEmptyState() => FugueTextState.empty();
 
-    // Insert initial state
-    state._tree.iterableInsert(0, _initialState());
-
-    // Get all operations from the document
-    for (final operation in operations()) {
-      _applyTreeOperation(state._tree, operation);
-    }
-
-    // Nodes and value are resolved lazily on the first read
-    return state;
-  }
-
-  /// Applies a single operation to a Fugue tree
-  void _applyTreeOperation(FugueTree<String> tree, Operation operation) {
+  @override
+  void applyToTree(FugueTree<String> tree, Operation operation) {
     if (operation is _FugueTextInsertOperation) {
       if (operation.items.isEmpty) {
         return;
@@ -377,12 +180,10 @@ class CRDTFugueTextHandler extends Handler<FugueTextState> {
         previousID = item.id;
       }
     } else if (operation is _FugueTextDeleteOperation) {
-      // Apply batch delete - delete all items
       for (final item in operation.items) {
         tree.delete(item.nodeID);
       }
     } else if (operation is _FugueTextUpdateOperation) {
-      // Apply batch update - update all items
       for (final item in operation.items) {
         tree.update(
           nodeID: item.nodeID,
@@ -393,58 +194,55 @@ class CRDTFugueTextHandler extends Handler<FugueTextState> {
     }
   }
 
-  /// Gets the initial state of the text
-  List<FugueValueNode<String>> _initialState() {
-    final snapshot = lastSnapshot();
-    if (snapshot == null) {
-      return [];
+  @override
+  Iterable<FugueElementID> producedElementIds(Operation operation) sync* {
+    if (operation is _FugueTextInsertOperation) {
+      for (final item in operation.items) {
+        yield item.id;
+      }
+    } else if (operation is _FugueTextUpdateOperation) {
+      for (final item in operation.items) {
+        yield item.newNodeID;
+      }
     }
-    return _decodeSnapshotNodes(snapshot);
   }
 
-  // Cache is updated directly after local ops; no private invalidator needed
+  @override
+  Operation buildDeleteOperation(List<FugueElementID> nodeIDs) {
+    return _FugueTextDeleteOperation.fromHandler(
+      this,
+      items: nodeIDs.map((id) => _FugueDeleteItem(nodeID: id)).toList(),
+    );
+  }
+
+  @override
+  Uint8List encodeValue(String value) {
+    return Uint8List.fromList(utf8.encode(value));
+  }
+
+  @override
+  String decodeValue(Uint8List bytes) {
+    return utf8.decode(bytes);
+  }
 
   /// Returns a text representation of this handler
   @override
   String toString() {
-    return 'CRDTFugueText($_id, '
+    return 'CRDTFugueText($id, '
         '"${value.length > 20 ? "${value.substring(0, 20)}..." : value}")';
   }
 }
 
-/// fugue text state
-class FugueTextState {
-  /// Constructor that initializes the state
-  FugueTextState({
-    required FugueTree<String> tree,
-  }) : _tree = tree;
+/// State of the [CRDTFugueTextHandler]: the text is the concatenation of all
+/// live node values.
+class FugueTextState extends FugueState<String, String> {
+  /// Creates a text state over [tree].
+  FugueTextState(FugueTree<String> tree) : super(tree, _join);
 
-  /// Factory method that initializes an empty state
+  /// Creates an empty text state.
   factory FugueTextState.empty() {
-    return FugueTextState(tree: FugueTree<String>.empty());
+    return FugueTextState(FugueTree<String>.empty());
   }
 
-  /// The tree of the state
-  final FugueTree<String> _tree;
-
-  /// The resolved nodes, or `null` when the tree changed since
-  /// the last resolution
-  List<FugueValueNode<String>>? _cachedNodes;
-
-  /// The resolved value, or `null` when the tree changed since
-  /// the last resolution
-  String? _cachedValue;
-
-  /// The nodes of the state, resolved lazily from the tree
-  List<FugueValueNode<String>> get _nodes => _cachedNodes ??= _tree.nodes();
-
-  /// The value of the state, resolved lazily from [_nodes]
-  String get _value => _cachedValue ??= _nodes.map((el) => el.value).join();
-
-  /// Discards the resolved nodes and value after a tree mutation;
-  /// they are resolved again lazily on the next read
-  void _markDirty() {
-    _cachedNodes = null;
-    _cachedValue = null;
-  }
+  static String _join(FugueTree<String> tree) => tree.values().join();
 }
