@@ -447,10 +447,4 @@ class FugueTextState {
     _cachedNodes = null;
     _cachedValue = null;
   }
-
-  /// Resolves [_nodes] and [_value] with the [_tree]
-  void resolve() {
-    _cachedNodes = _tree.nodes();
-    _cachedValue = _cachedNodes!.map((el) => el.value).join();
-  }
 }

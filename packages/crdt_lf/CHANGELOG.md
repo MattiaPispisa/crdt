@@ -1,9 +1,9 @@
 ## [3.1.0](https://github.com/MattiaPispisa/crdt/tree/crdt_lf-v3.1.0/packages/crdt_lf)
-**Date:** 2026-06-11
+**Date:** 2026-06-13
 
 [compare to previous release](https://github.com/MattiaPispisa/crdt/compare/crdt_lf-v3.0.0...crdt_lf-v3.1.0)
 
-Performance-focused release: handler caches are now updated in place instead of being deep-copied on every operation, and several core algorithms were rewritten to remove quadratic behavior.
+Performance-focused release: handler caches are now updated in place instead of being deep-copied on every operation, and several core algorithms were rewritten to remove quadratic behavior. [70](https://github.com/MattiaPispisa/crdt/issues/70)
 
 ### Added
 

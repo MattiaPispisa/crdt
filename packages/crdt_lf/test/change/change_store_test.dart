@@ -159,12 +159,19 @@ void main() {
         ..addChange(change3)
         ..prune(VersionVector({author: change1.hlc}));
 
-      // change2 depended on the pruned change1 and must be rebuilt
-      // without the dependency; change3 only depends on the surviving
-      // change2 and must not be rebuilt.
-      expect(store.getChange(change2.id)!.deps, isEmpty);
+      expect(
+        store.getChange(change2.id)!.deps,
+        isEmpty,
+        reason: 'change2 depended on the pruned change1'
+            ' and must be rebuilt without the dependency',
+      );
       expect(identical(store.getChange(change3.id), change3), isTrue);
-      expect(store.getChange(change3.id)!.deps, equals({change2.id}));
+      expect(
+        store.getChange(change3.id)!.deps,
+        equals({change2.id}),
+        reason: 'change3 only depends on the surviving change2'
+            ' and must not be rebuilt',
+      );
     });
 
     test('exportChangesNewerThan filters by version vector', () {

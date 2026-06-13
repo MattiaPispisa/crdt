@@ -102,7 +102,13 @@ void main() {
       frontiers1.merge(frontiers2);
       // Operations of different peers are concurrent: both must survive,
       // even if one has a greater HLC.
-      expect(frontiers1.get(), equals({op2, otherOp}));
+      expect(
+        frontiers1.get(),
+        equals({op2, otherOp}),
+        reason:
+            'Operations of different peers are concurrent: both must survive,'
+            ' even if one has a greater HLC.',
+      );
     });
 
     test('merge keeps only the latest operation per peer', () {

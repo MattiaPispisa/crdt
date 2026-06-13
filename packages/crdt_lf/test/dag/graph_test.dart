@@ -226,9 +226,12 @@ void main() {
         ..addNode(headC, {root})
         ..prune(VersionVector({author: root.hlc}));
 
-      // All concurrent heads must survive the prune, even if their
-      // HLCs are totally ordered.
-      expect(dag.frontiers, equals({headA, headB, headC}));
+      expect(
+        dag.frontiers,
+        equals({headA, headB, headC}),
+        reason: 'All concurrent heads must survive the prune,'
+            ' even if their HLCs are totally ordered.',
+      );
     });
 
     test('getAncestorsOfAll traverses from multiple sources', () {
