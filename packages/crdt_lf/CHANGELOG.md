@@ -7,7 +7,7 @@
 ### Added
 
 - `CRDTFugueListHandler<T>` — a list handler that uses the Fugue algorithm to minimize interleaving of concurrent edits. Like `CRDTListHandler<T>` it is generic over `T` with an optional `ValueCodec<T>`. [72](https://github.com/MattiaPispisa/crdt/issues/72)
-- Added shared (library-internal) Fugue infrastructure: the `FugueCache` mixin (per-peer element-id counter + cache lifecycle, reusable by any Fugue-backed handler) and `FugueSequenceHandler<T, V, S>` / `FugueState<T, V>` (the ordered-sequence base behind `CRDTFugueTextHandler` and `CRDTFugueListHandler`).
+- Added `CRDTFugueMovableListHandler<T>`, a list CRDT that combines Fugue's interleaving-minimizing insertion with an explicit `move(from, to)` operation that preserves the moved element's identity across concurrent reorderings (implements the algorithm from Kleppmann, *Moving Elements in List CRDTs*, PaPoC 2020). [26](https://github.com/MattiaPispisa/crdt/issues/26)
 
 ## [3.1.0](https://github.com/MattiaPispisa/crdt/tree/crdt_lf-v3.1.0/packages/crdt_lf)
 **Date:** 2026-06-13
@@ -17,7 +17,6 @@
 Performance-focused release: handler caches are now updated in place instead of being deep-copied on every operation, and several core algorithms were rewritten to remove quadratic behavior. [70](https://github.com/MattiaPispisa/crdt/issues/70)
 
 ### Added
-
 - `DAG.getAncestorsOfAll(Iterable<OperationId>)` — single traversal with a shared visited set over multiple sources; `exportChanges(from:)` now uses it instead of one walk per frontier head.
 - `Frontiers.reset(Iterable<OperationId>)` — replaces the frontier content directly.
 
