@@ -33,6 +33,9 @@ abstract class Handler<T>
   /// Cached update type instances for this handler, used in operations.
   late final OperationType updateType = OperationType.update(this);
 
+  /// Cached move type instances for this handler, used in operations.
+  late final OperationType moveType = OperationType.move(this);
+
   /// During transaction consecutive operations can be compounded.
   ///
   /// By default, no compaction occurs and operations are returned as-is.

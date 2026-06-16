@@ -3,7 +3,8 @@ import 'package:crdt_lf/src/handler/handler.dart';
 const _insert = 'insert';
 const _delete = 'delete';
 const _update = 'update';
-const _availableOperations = {_insert, _delete, _update};
+const _move = 'move';
+const _availableOperations = {_insert, _delete, _update, _move};
 
 /// Available operation on data for CRDT.
 ///
@@ -35,6 +36,15 @@ class OperationType {
     return OperationType._(
       handler: handler.runtimeType.toString(),
       type: _update,
+    );
+  }
+
+  /// Move operation — used by handlers that support reordering elements
+  /// without changing their identity (e.g. `CRDTFugueMovableListHandler`).
+  factory OperationType.move(Handler<dynamic> handler) {
+    return OperationType._(
+      handler: handler.runtimeType.toString(),
+      type: _move,
     );
   }
 
@@ -70,7 +80,11 @@ class OperationType {
   /// Binary kind value for update (u8 in the operation envelope).
   static const int kindUpdate = 2;
 
-  /// Binary kind value for this operation type (0=insert, 1=delete, 2=update).
+  /// Binary kind value for move (u8 in the operation envelope).
+  static const int kindMove = 3;
+
+  /// Binary kind value for this operation type
+  /// (0=insert, 1=delete, 2=update, 3=move).
   int get kind {
     if (type == _insert) {
       return kindInsert;
@@ -78,8 +92,11 @@ class OperationType {
     if (type == _delete) {
       return kindDelete;
     }
-    assert(type == _update, 'unknown operation type: $type');
-    return kindUpdate;
+    if (type == _update) {
+      return kindUpdate;
+    }
+    assert(type == _move, 'unknown operation type: $type');
+    return kindMove;
   }
 
   /// Returns the type name string for a binary [kind] value.
@@ -92,6 +109,9 @@ class OperationType {
     }
     if (kind == kindUpdate) {
       return _update;
+    }
+    if (kind == kindMove) {
+      return _move;
     }
     throw FormatException('Unknown operation kind: $kind');
   }
