@@ -161,6 +161,8 @@ class CRDTFugueTextHandler
         return;
       }
 
+      // TODO(MattiaPispisa): can be used tree.iterableInsert ?
+
       // Insert first item with provided origins
       tree.insert(
         newID: operation.items.first.id,

@@ -240,6 +240,75 @@ void main() {
       expect(b.value.contains('D'), isTrue);
     });
 
+    test('insertAll inserts a contiguous run with Fugue non-interleaving', () {
+      // Two peers both run an `insertAll` at the same anchor; each peer's
+      // batch must stay contiguous in the merged result.
+      final docA = CRDTDocument(
+        peerId: PeerId.parse('00000000-0000-4000-8000-000000000001'),
+      );
+      final docB = CRDTDocument(
+        peerId: PeerId.parse('ffffffff-ffff-4fff-bfff-ffffffffffff'),
+      );
+      final a = CRDTFugueMovableListHandler<String>(docA, 'l')
+        ..insertAll(0, ['A1', 'A2', 'A3']);
+      final b = CRDTFugueMovableListHandler<String>(docB, 'l')
+        ..insertAll(0, ['B1', 'B2', 'B3']);
+
+      docA.importChanges(docB.exportChanges());
+      docB.importChanges(docA.exportChanges());
+
+      expect(a.value, equals(b.value));
+      final merged = a.value;
+      // Each batch run must remain consecutive.
+      final aStart = merged.indexOf('A1');
+      final bStart = merged.indexOf('B1');
+      expect(merged.sublist(aStart, aStart + 3), equals(['A1', 'A2', 'A3']));
+      expect(merged.sublist(bStart, bStart + 3), equals(['B1', 'B2', 'B3']));
+      // …and the whole batch travels in a single change.
+      expect(docA.exportChanges().length, equals(2));
+    });
+
+    test('insertAll with empty iterable is a no-op', () {
+      final doc = CRDTDocument(peerId: PeerId.generate());
+      final list = CRDTFugueMovableListHandler<String>(doc, 'l')
+        ..insertAll(0, const <String>[]);
+      expect(list.value, isEmpty);
+      expect(doc.exportChanges(), isEmpty);
+    });
+
+    test('delete(index, count) removes a contiguous range in one op', () {
+      final doc = CRDTDocument(peerId: PeerId.generate());
+      final list = CRDTFugueMovableListHandler<String>(doc, 'l')
+        ..insertAll(0, ['a', 'b', 'c', 'd', 'e']);
+      final beforeChangesCount = doc.exportChanges().length;
+
+      list.delete(1, 3); // remove b, c, d
+      expect(list.value, equals(['a', 'e']));
+
+      // The whole range removal must produce exactly one change.
+      expect(doc.exportChanges().length, equals(beforeChangesCount + 1));
+    });
+
+    test('delete(index, count) clamps to the end of the visible list', () {
+      final doc = CRDTDocument(peerId: PeerId.generate());
+      final list = CRDTFugueMovableListHandler<String>(doc, 'l')
+        ..insertAll(0, ['a', 'b', 'c'])
+        ..delete(1, 99);
+      expect(list.value, equals(['a']));
+    });
+
+    test('delete with non-positive count is a no-op', () {
+      final doc = CRDTDocument(peerId: PeerId.generate());
+      final list = CRDTFugueMovableListHandler<String>(doc, 'l')
+        ..insertAll(0, ['a', 'b']);
+      final before = doc.exportChanges().length;
+      list
+        ..delete(0, 0)
+        ..delete(0, -1);
+      expect(list.value, equals(['a', 'b']));
+      expect(doc.exportChanges().length, equals(before));
+    });
+
     test('operation bytes round-trip via operationFactory', () {
       final doc = CRDTDocument(peerId: PeerId.generate());
       final list = CRDTFugueMovableListHandler<String>(doc, 'l')

@@ -1286,6 +1286,8 @@ mixin DocumentConsumer {
   String get id;
 }
 
+// TODO(MattiaPispisa): more doc in CacheableStateProvider
+
 /// A provider that can provide a cacheable state of a [BaseCRDTDocument]
 ///
 /// [T] is the type of the cached state of the handler.

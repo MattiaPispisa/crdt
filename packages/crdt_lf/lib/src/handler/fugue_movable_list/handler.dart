@@ -6,121 +6,14 @@ import 'package:hlc_dart/hlc_dart.dart';
 
 part 'operation.dart';
 
-/// Per-identity state in a [CRDTFugueMovableListHandler].
-class _MovableElement<T> {
-  _MovableElement({
-    required this.value,
-    required this.valueHlc,
-    required this.position,
-    required this.positionHlc,
-    required this.deleted,
-  });
-
-  /// The value currently associated with this identity, picked by LWW on
-  /// concurrent `update` operations.
-  T value;
-
-  /// The clock attached to the [value] (last write wins).
-  HybridLogicalClock valueHlc;
-
-  /// The position currently associated with this identity, picked by LWW on
-  /// concurrent `move`/`insert` operations.
-  FugueElementID position;
-
-  /// The clock attached to the [position] (last write wins).
-  HybridLogicalClock positionHlc;
-
-  /// Whether this identity has been deleted.
-  bool deleted;
-}
-
-/// State of a [CRDTFugueMovableListHandler].
-///
-/// Holds two pieces:
-/// - a [FugueTree] of `FugueElementID` slots: each tree node represents a
-///   position in the document, and the node's value is the **identity** that
-///   "lives at" that position. The tree provides the interleaving-aware total
-///   order from the Fugue algorithm.
-/// - a `Map<identityID, MovableElement>` keyed by stable element identity,
-///   carrying the LWW value and LWW current position of each element.
-///
-/// The visible list is the result of walking the tree in traversal order and
-/// keeping only the slots whose identity still points back to them (i.e. the
-/// LWW-winning position of the identity) and whose identity has not been
-/// deleted.
-class FugueMovableListState<T> {
-  FugueMovableListState._({
-    required FugueTree<FugueElementID> tree,
-    required Map<FugueElementID, _MovableElement<T>> elements,
-  })  : _tree = tree,
-        _elements = elements;
-
-  /// Creates an empty state.
-  factory FugueMovableListState.empty() {
-    return FugueMovableListState<T>._(
-      tree: FugueTree<FugueElementID>.empty(),
-      elements: <FugueElementID, _MovableElement<T>>{},
-    );
-  }
-
-  final FugueTree<FugueElementID> _tree;
-  final Map<FugueElementID, _MovableElement<T>> _elements;
-
-  List<T>? _cachedValues;
-  List<FugueElementID>? _cachedVisiblePositions;
-
-  void _markDirty() {
-    _cachedValues = null;
-    _cachedVisiblePositions = null;
-  }
-
-  void _resolveVisible() {
-    if (_cachedValues != null && _cachedVisiblePositions != null) {
-      return;
-    }
-    final values = <T>[];
-    final positions = <FugueElementID>[];
-    for (final node in _tree.nodes()) {
-      final identity = node.value;
-      final element = _elements[identity];
-      if (element == null || element.deleted) {
-        continue;
-      }
-      if (element.position != node.id) {
-        // This slot is orphaned (the identity has since moved elsewhere).
-        continue;
-      }
-      values.add(element.value);
-      positions.add(node.id);
-    }
-    _cachedValues = values;
-    _cachedVisiblePositions = positions;
-  }
-
-  /// Returns the public list value.
-  List<T> get value {
-    _resolveVisible();
-    return _cachedValues!;
-  }
-
-  /// Returns the visible positions in traversal order.
-  List<FugueElementID> get visiblePositions {
-    _resolveVisible();
-    return _cachedVisiblePositions!;
-  }
-}
-
-/// # CRDT Movable List with Fugue interleaving
+/// # CRDT List with Fugue implementation and movable elements
 ///
 /// A list CRDT that supports `insert`, `delete`, `update` **and** an explicit
 /// `move` operation that preserves the identity of the moved element across
-/// concurrent reorderings (see Kleppmann, *Moving Elements in List CRDTs*,
-/// PaPoC 2020).
+/// concurrent reorderings (see Kleppmann, [Moving Elements in List CRDTs](https://martin.kleppmann.com/2020/04/27/papoc-list-move.html)).
 ///
 /// Conflict resolution combines:
-/// - the **Fugue algorithm** for the placement of newly-created positions
-///   (minimizes interleaving when two peers insert concurrently in the same
-///   region), and
+/// - the Fugue algorithm ([The Art of the Fugue: Minimizing Interleaving in Collaborative Text Editing](https://arxiv.org/abs/2305.00583)) to minimize interleaving;
 /// - a **last-writer-wins register** (keyed on the change HLC) for the
 ///   "current position" of each element. Concurrent moves of the same element
 ///   converge to a single winning destination instead of duplicating the
@@ -128,14 +21,11 @@ class FugueMovableListState<T> {
 ///
 /// ## Identities and positions
 /// Every element has a stable [FugueElementID] **identity** assigned at
-/// `insert` time. Subsequent `move`/`update`/`delete` operations reference
+/// `insert` time (never change). Subsequent `move`/`update`/`delete` operations reference
 /// that identity. Each successful `move` allocates a fresh position id that is
 /// inserted into the underlying [FugueTree] via the standard Fugue insertion
 /// rules; older positions are not removed from the tree but become "orphaned"
 /// (their slot is filtered out because the identity now points elsewhere).
-///
-/// ## Note on `T`
-/// `T` must be non-nullable (the same restriction as `CRDTFugueListHandler`).
 ///
 /// ## Example
 /// ```dart
@@ -170,8 +60,6 @@ class CRDTFugueMovableListHandler<T> extends Handler<FugueMovableListState<T>>
   late final OperationFactory operationFactory =
       _FugueMovableListOperationFactory<T>(this).fromBytes;
 
-  // --- Public API ---------------------------------------------------------
-
   /// Returns the current list value.
   List<T> get value => cachedOrComputedState().value;
 
@@ -183,26 +71,42 @@ class CRDTFugueMovableListHandler<T> extends Handler<FugueMovableListState<T>>
 
   /// Inserts [value] at the visible position [index].
   void insert(int index, T value) {
+    insertAll(index, [value]);
+  }
+
+  /// Inserts all [values] starting at the visible position [index].
+  ///
+  /// The inserted run is kept contiguous: a concurrent edit at the same
+  /// position never interleaves with these elements (the Fugue property).
+  void insertAll(int index, Iterable<T> values) {
     final state = cachedOrComputedState();
     final visible = state.visiblePositions;
 
     final leftOrigin =
         index <= 0 ? FugueElementID.nullID() : visible[index - 1];
-    final rightOrigin = index >= visible.length
-        ? FugueElementID.nullID()
-        : visible[index];
+    final rightOrigin =
+        index >= visible.length ? FugueElementID.nullID() : visible[index];
 
-    final identityID = FugueElementID(doc.peerId, nextCounter());
-    final positionID = FugueElementID(doc.peerId, nextCounter());
+    final items = <_MovableListInsertItem<T>>[];
+    for (final value in values) {
+      items.add(
+        _MovableListInsertItem<T>(
+          identityID: FugueElementID(doc.peerId, nextCounter()),
+          positionID: FugueElementID(doc.peerId, nextCounter()),
+          value: value,
+        ),
+      );
+    }
+    if (items.isEmpty) {
+      return;
+    }
 
     doc.registerOperation(
       _MovableListInsertOperation<T>.fromHandler(
         this,
-        identityID: identityID,
-        positionID: positionID,
         leftOrigin: leftOrigin,
         rightOrigin: rightOrigin,
-        value: value,
+        items: items,
       ),
     );
   }
@@ -212,6 +116,8 @@ class CRDTFugueMovableListHandler<T> extends Handler<FugueMovableListState<T>>
   ///
   /// Indexes are interpreted in the **visible** list (no-op slots are skipped).
   /// Negative `from`, `from` out of range or `from == to` is a no-op.
+  ///
+  /// Range move is not supported, is an open problem [paper §4: open problem]((https://martin.kleppmann.com/2020/04/27/papoc-list-move.html))
   void move(int from, int to) {
     if (from == to) {
       return;
@@ -224,9 +130,10 @@ class CRDTFugueMovableListHandler<T> extends Handler<FugueMovableListState<T>>
 
     // Lift the moving slot out and compute origins on the resulting list.
     final movingPosition = visible[from];
-    final identityID = state._tree.nodes().firstWhere(
-          (n) => n.id == movingPosition,
-        ).value;
+    final identityID = _identityForPosition(state, movingPosition);
+    if (identityID == null) {
+      return;
+    }
 
     final filtered = [...visible]..removeAt(from);
     final clampedTo = to.clamp(0, filtered.length);
@@ -252,45 +159,79 @@ class CRDTFugueMovableListHandler<T> extends Handler<FugueMovableListState<T>>
 
   /// Updates the value of the element currently at visible position [index].
   void update(int index, T value) {
-    final state = cachedOrComputedState();
-    final visible = state.visiblePositions;
-    if (index < 0 || index >= visible.length) {
+    final identity = _identityAtVisibleIndex(index);
+    if (identity == null) {
       return;
     }
-    final identityID = state._tree.nodes().firstWhere(
-          (n) => n.id == visible[index],
-        ).value;
 
     doc.registerOperation(
       _MovableListUpdateOperation<T>.fromHandler(
         this,
-        identityID: identityID,
-        value: value,
         hlc: doc.hlc,
+        items: [_MovableListUpdateItem<T>(identityID: identity, value: value)],
       ),
     );
   }
 
-  /// Deletes the element currently at visible position [index].
-  void delete(int index) {
+  /// Deletes [count] elements starting at visible position [index].
+  void delete(int index, [int count = 1]) {
+    if (count <= 0) {
+      return;
+    }
     final state = cachedOrComputedState();
     final visible = state.visiblePositions;
     if (index < 0 || index >= visible.length) {
       return;
     }
-    final identityID = state._tree.nodes().firstWhere(
-          (n) => n.id == visible[index],
-        ).value;
+
+    // Collect identities first, so we delete by identity (stable) instead of
+    // by visible index (which would drift as items go away).
+    final actualCount =
+        index + count > visible.length ? visible.length - index : count;
+    final items = <_MovableListDeleteItem>[];
+    for (var i = 0; i < actualCount; i += 1) {
+      final identity = _identityForPosition(state, visible[index + i]);
+      if (identity != null) {
+        items.add(_MovableListDeleteItem(identityID: identity));
+      }
+    }
+    if (items.isEmpty) {
+      return;
+    }
 
     doc.registerOperation(
       _MovableListDeleteOperation<T>.fromHandler(
         this,
-        identityID: identityID,
+        items: items,
       ),
     );
   }
 
-  // --- FugueCache hooks ---------------------------------------------------
+  // --- Internal helpers ---------------------------------------------------
+
+  /// Returns the identity living at the visible [index], or `null` if the
+  /// index is out of range.
+  FugueElementID? _identityAtVisibleIndex(int index) {
+    final state = cachedOrComputedState();
+    final visible = state.visiblePositions;
+    if (index < 0 || index >= visible.length) {
+      return null;
+    }
+    return _identityForPosition(state, visible[index]);
+  }
+
+  /// Resolves the identity currently bound to [positionID] in [state].
+  FugueElementID? _identityForPosition(
+    FugueMovableListState<T> state,
+    FugueElementID positionID,
+  ) {
+    for (final node in state._tree.nodes()) {
+      if (node.id == positionID) {
+        return node.value;
+      }
+    }
+    return null;
+  }
 
   @override
   Iterable<FugueElementID> knownElementIds() sync* {
@@ -303,8 +244,10 @@ class CRDTFugueMovableListHandler<T> extends Handler<FugueMovableListState<T>>
     }
     for (final op in operations()) {
       if (op is _MovableListInsertOperation<T>) {
-        yield op.identityID;
-        yield op.positionID;
+        for (final item in op.items) {
+          yield item.identityID;
+          yield item.positionID;
+        }
       } else if (op is _MovableListMoveOperation<T>) {
         yield op.newPositionID;
       }
@@ -348,25 +291,36 @@ class CRDTFugueMovableListHandler<T> extends Handler<FugueMovableListState<T>>
     Operation operation,
   ) {
     if (operation is _MovableListInsertOperation<T>) {
-      state._tree.insert(
-        newID: operation.positionID,
-        value: operation.identityID,
-        leftOrigin: operation.leftOrigin,
-        rightOrigin: operation.rightOrigin,
-      );
-      // First-write-wins on the (peer, counter) identity space: an existing
-      // identity is left untouched if a duplicate insert arrives (which is
-      // possible only via malformed input — counters are unique per peer).
-      state._elements.putIfAbsent(
-        operation.identityID,
-        () => _MovableElement<T>(
-          value: operation.value,
-          valueHlc: HybridLogicalClock(l: 0, c: 0),
-          position: operation.positionID,
-          positionHlc: HybridLogicalClock(l: 0, c: 0),
-          deleted: false,
-        ),
-      );
+      if (operation.items.isEmpty) {
+        return;
+      }
+
+      // TODO(MattiaPispisa): can be used tree.iterableInsert ?
+
+      // First item uses the operation's leftOrigin/rightOrigin; subsequent
+      // items chain to the previously inserted position so the inserted run
+      // stays contiguous (Fugue's non-interleaving property).
+      var leftOrigin = operation.leftOrigin;
+      for (final item in operation.items) {
+        state._tree.insert(
+          newID: item.positionID,
+          value: item.identityID,
+          leftOrigin: leftOrigin,
+          rightOrigin: operation.rightOrigin,
+        );
+        // First-write-wins on the (peer, counter) identity space.
+        state._elements.putIfAbsent(
+          item.identityID,
+          () => _MovableElement<T>(
+            value: item.value,
+            valueHlc: HybridLogicalClock.initialize(),
+            position: item.positionID,
+            positionHlc: HybridLogicalClock.initialize(),
+            deleted: false,
+          ),
+        );
+        leftOrigin = item.positionID;
+      }
     } else if (operation is _MovableListMoveOperation<T>) {
       state._tree.insert(
         newID: operation.newPositionID,
@@ -383,24 +337,27 @@ class CRDTFugueMovableListHandler<T> extends Handler<FugueMovableListState<T>>
         }
       }
     } else if (operation is _MovableListUpdateOperation<T>) {
-      final element = state._elements[operation.identityID];
-      if (element != null) {
-        if (operation.hlc.happenedAfter(element.valueHlc)) {
-          element
-            ..value = operation.value
-            ..valueHlc = operation.hlc;
+      for (final item in operation.items) {
+        final element = state._elements[item.identityID];
+        if (element != null) {
+          // last written wins
+          if (operation.hlc.happenedAfter(element.valueHlc)) {
+            element
+              ..value = item.value
+              ..valueHlc = operation.hlc;
+          }
         }
       }
     } else if (operation is _MovableListDeleteOperation<T>) {
-      final element = state._elements[operation.identityID];
-      if (element != null) {
-        element.deleted = true;
+      for (final item in operation.items) {
+        final element = state._elements[item.identityID];
+        if (element != null) {
+          element.deleted = true;
+        }
       }
     }
     state._markDirty();
   }
-
-  // --- Snapshot encoding --------------------------------------------------
 
   /// Snapshot layout:
   /// - elementsCount: uvarint
@@ -425,9 +382,7 @@ class CRDTFugueMovableListHandler<T> extends Handler<FugueMovableListState<T>>
     final out = BytesBuilder(copy: false);
     UVarint.write(visible.length, out);
     for (final positionID in visible) {
-      final identityID = state._tree.nodes().firstWhere(
-            (n) => n.id == positionID,
-          ).value;
+      final identityID = _identityForPosition(state, positionID)!;
       final element = state._elements[identityID]!;
 
       out
@@ -518,4 +473,115 @@ class CRDTFugueMovableListHandler<T> extends Handler<FugueMovableListState<T>>
   String toString() {
     return 'CRDTFugueMovableList($id, $value)';
   }
+}
+
+/// State of a [CRDTFugueMovableListHandler].
+///
+/// Holds two pieces:
+/// - a [FugueTree] of `FugueElementID` slots: each tree node represents a
+///   position in the document, and the node's value is the **identity** that
+///   "lives at" that position. The tree provides the interleaving-aware total
+///   order from the Fugue algorithm.
+/// - a `Map<identityID, MovableElement>` keyed by stable element identity,
+///   carrying the LWW value and LWW current position of each element.
+///
+/// The visible list is the result of walking the tree in traversal order and
+/// keeping only the slots whose identity still points back to them (i.e. the
+/// LWW-winning position of the identity) and whose identity has not been
+/// deleted.
+class FugueMovableListState<T> {
+  FugueMovableListState._({
+    required FugueTree<FugueElementID> tree,
+    required Map<FugueElementID, _MovableElement<T>> elements,
+  })  : _tree = tree,
+        _elements = elements;
+
+  /// Creates an empty state.
+  factory FugueMovableListState.empty() {
+    return FugueMovableListState<T>._(
+      tree: FugueTree<FugueElementID>.empty(),
+      elements: <FugueElementID, _MovableElement<T>>{},
+    );
+  }
+
+  final FugueTree<FugueElementID> _tree;
+  final Map<FugueElementID, _MovableElement<T>> _elements;
+
+  /// rebuilt (lazy) after every applyOperation
+  List<T>? _cachedValues;
+
+  /// rebuilt (lazy) after every applyOperation
+  List<FugueElementID>? _cachedVisiblePositions;
+
+  void _markDirty() {
+    _cachedValues = null;
+    _cachedVisiblePositions = null;
+  }
+
+  void _resolveVisible() {
+    if (_cachedValues != null && _cachedVisiblePositions != null) {
+      return;
+    }
+
+    final values = <T>[];
+    final positions = <FugueElementID>[];
+    for (final node in _tree.nodes()) {
+      final identity = node.value;
+      final element = _elements[identity];
+
+      if (element == null || element.deleted) {
+        continue;
+      }
+
+      if (element.position != node.id) {
+        // This slot is orphaned (the identity has since moved elsewhere).
+        // There is another node in the tree with the new position
+        continue;
+      }
+      values.add(element.value);
+      positions.add(node.id);
+    }
+    _cachedValues = values;
+    _cachedVisiblePositions = positions;
+  }
+
+  /// Returns the public list value.
+  List<T> get value {
+    _resolveVisible();
+    return _cachedValues!;
+  }
+
+  /// Returns the visible positions in traversal order.
+  List<FugueElementID> get visiblePositions {
+    _resolveVisible();
+    return _cachedVisiblePositions!;
+  }
+}
+
+/// Per-identity state in a [CRDTFugueMovableListHandler].
+class _MovableElement<T> {
+  _MovableElement({
+    required this.value,
+    required this.valueHlc,
+    required this.position,
+    required this.positionHlc,
+    required this.deleted,
+  });
+
+  /// The value currently associated with this identity, picked by LWW on
+  /// concurrent `update` operations.
+  T value;
+
+  /// The clock attached to the [value] (last write wins).
+  HybridLogicalClock valueHlc;
+
+  /// The position currently associated with this identity, picked by LWW on
+  /// concurrent `move`/`insert` operations.
+  FugueElementID position;
+
+  /// The clock attached to the [position] (last write wins).
+  HybridLogicalClock positionHlc;
+
+  /// Whether this identity has been deleted.
+  bool deleted;
 }

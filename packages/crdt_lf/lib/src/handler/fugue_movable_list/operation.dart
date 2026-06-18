@@ -31,22 +31,24 @@ class _FugueMovableListOperationFactory<T> {
   }
 }
 
-/// Inserts a new element with a fresh identity at a Fugue position.
+/// Batch insert: introduces a contiguous run of new identities anchored at
+/// the same Fugue origin pair, chaining additional items to the previously
+/// inserted one (Fugue's non-interleaving property).
 ///
 /// Layout (body):
-/// - identityID: [FugueElementID]
-/// - positionID: [FugueElementID]
 /// - leftOrigin: [FugueElementID]
 /// - rightOrigin: [FugueElementID]
-/// - valueLen: uvarint
-/// - value: [ValueCodec] bytes
+/// - itemsCount: uvarint
+/// - repeated `itemsCount` times:
+///   - identityID: [FugueElementID]
+///   - positionID: [FugueElementID]
+///   - valueLen: uvarint
+///   - value: [ValueCodec] bytes
 class _MovableListInsertOperation<T> extends Operation {
   _MovableListInsertOperation({
-    required this.identityID,
-    required this.positionID,
     required this.leftOrigin,
     required this.rightOrigin,
-    required this.value,
+    required this.items,
     required this.valueCodec,
     required super.id,
     required super.type,
@@ -54,20 +56,16 @@ class _MovableListInsertOperation<T> extends Operation {
 
   factory _MovableListInsertOperation.fromHandler(
     CRDTFugueMovableListHandler<T> handler, {
-    required FugueElementID identityID,
-    required FugueElementID positionID,
     required FugueElementID leftOrigin,
     required FugueElementID rightOrigin,
-    required T value,
+    required List<_MovableListInsertItem<T>> items,
   }) {
     return _MovableListInsertOperation<T>(
       id: handler.id,
       type: handler.insertType,
-      identityID: identityID,
-      positionID: positionID,
       leftOrigin: leftOrigin,
       rightOrigin: rightOrigin,
-      value: value,
+      items: items,
       valueCodec: handler._valueCodec,
     );
   }
@@ -78,66 +76,95 @@ class _MovableListInsertOperation<T> extends Operation {
   ) {
     var offset = 0;
 
-    final identityRec = FugueElementID.readFromBytes(body, offset: offset);
-    offset = identityRec.nextOffset;
-
-    final positionRec = FugueElementID.readFromBytes(body, offset: offset);
-    offset = positionRec.nextOffset;
-
     final leftRec = FugueElementID.readFromBytes(body, offset: offset);
     offset = leftRec.nextOffset;
 
     final rightRec = FugueElementID.readFromBytes(body, offset: offset);
     offset = rightRec.nextOffset;
 
-    final valLenRec = UVarint.read(body, offset: offset);
-    offset = valLenRec.nextOffset;
-    final valEnd = offset + valLenRec.value;
-    if (valEnd > body.length) {
-      throw const FormatException(
-        'Truncated movable list insert value',
+    final countRec = UVarint.read(body, offset: offset);
+    offset = countRec.nextOffset;
+
+    final items = <_MovableListInsertItem<T>>[];
+    for (var i = 0; i < countRec.value; i += 1) {
+      final identityRec = FugueElementID.readFromBytes(body, offset: offset);
+      offset = identityRec.nextOffset;
+
+      final positionRec = FugueElementID.readFromBytes(body, offset: offset);
+      offset = positionRec.nextOffset;
+
+      final valLenRec = UVarint.read(body, offset: offset);
+      offset = valLenRec.nextOffset;
+      final valEnd = offset + valLenRec.value;
+      if (valEnd > body.length) {
+        throw const FormatException(
+          'Truncated movable list insert value',
+        );
+      }
+      final value = handler._valueCodec.decode(
+        Uint8List.sublistView(body, offset, valEnd),
+      );
+      offset = valEnd;
+
+      items.add(
+        _MovableListInsertItem<T>(
+          identityID: identityRec.value,
+          positionID: positionRec.value,
+          value: value,
+        ),
       );
     }
-    final value = handler._valueCodec.decode(
-      Uint8List.sublistView(body, offset, valEnd),
-    );
 
     return _MovableListInsertOperation<T>(
       id: handler.id,
       type: handler.insertType,
-      identityID: identityRec.value,
-      positionID: positionRec.value,
       leftOrigin: leftRec.value,
       rightOrigin: rightRec.value,
-      value: value,
+      items: items,
       valueCodec: handler._valueCodec,
     );
   }
 
-  final FugueElementID identityID;
-  final FugueElementID positionID;
+  /// Origin used by the first item (subsequent items chain to the previous
+  /// item's `positionID`, sharing the same [rightOrigin]).
   final FugueElementID leftOrigin;
   final FugueElementID rightOrigin;
-  final T value;
+  final List<_MovableListInsertItem<T>> items;
   final ValueCodec<T> valueCodec;
 
   @override
   Uint8List toBodyBytes() {
     final out = BytesBuilder(copy: false)
-      ..add(identityID.toBytes())
-      ..add(positionID.toBytes())
       ..add(leftOrigin.toBytes())
       ..add(rightOrigin.toBytes());
-    final valBytes = valueCodec.encode(value);
-    UVarint.write(valBytes.length, out);
-    out.add(valBytes);
+    UVarint.write(items.length, out);
+    for (final item in items) {
+      out
+        ..add(item.identityID.toBytes())
+        ..add(item.positionID.toBytes());
+      final valBytes = valueCodec.encode(item.value);
+      UVarint.write(valBytes.length, out);
+      out.add(valBytes);
+    }
     return out.toBytes();
   }
 }
 
-/// Moves an existing identity to a fresh Fugue position.
-///
-/// The receiver applies an LWW on the identity's `position` field using [hlc].
+/// A single item in a batch insert.
+class _MovableListInsertItem<T> {
+  _MovableListInsertItem({
+    required this.identityID,
+    required this.positionID,
+    required this.value,
+  });
+
+  final FugueElementID identityID;
+  final FugueElementID positionID;
+  final T value;
+}
+
+/// Single-element move. Range moves are intentionally not supported — they
+/// are an open problem (see Kleppmann, PaPoC 2020, §4).
 ///
 /// Layout (body):
 /// - identityID: [FugueElementID]
@@ -226,18 +253,21 @@ class _MovableListMoveOperation<T> extends Operation {
   }
 }
 
-/// Updates the value of an existing identity.
+/// Batch update: every item shares the same LWW [hlc] so the whole batch is
+/// applied or rejected atomically against each identity's current value
+/// clock.
 ///
 /// Layout (body):
-/// - identityID: [FugueElementID]
 /// - hlc: 8 bytes ([HybridLogicalClock])
-/// - valueLen: uvarint
-/// - value: [ValueCodec] bytes
+/// - itemsCount: uvarint
+/// - repeated `itemsCount` times:
+///   - identityID: [FugueElementID]
+///   - valueLen: uvarint
+///   - value: [ValueCodec] bytes
 class _MovableListUpdateOperation<T> extends Operation {
   _MovableListUpdateOperation({
-    required this.identityID,
-    required this.value,
     required this.hlc,
+    required this.items,
     required this.valueCodec,
     required super.id,
     required super.type,
@@ -245,16 +275,14 @@ class _MovableListUpdateOperation<T> extends Operation {
 
   factory _MovableListUpdateOperation.fromHandler(
     CRDTFugueMovableListHandler<T> handler, {
-    required FugueElementID identityID,
-    required T value,
     required HybridLogicalClock hlc,
+    required List<_MovableListUpdateItem<T>> items,
   }) {
     return _MovableListUpdateOperation<T>(
       id: handler.id,
       type: handler.updateType,
-      identityID: identityID,
-      value: value,
       hlc: hlc,
+      items: items,
       valueCodec: handler._valueCodec,
     );
   }
@@ -264,73 +292,100 @@ class _MovableListUpdateOperation<T> extends Operation {
     Uint8List body,
   ) {
     var offset = 0;
-    final identityRec = FugueElementID.readFromBytes(body, offset: offset);
-    offset = identityRec.nextOffset;
-
     if (offset + 8 > body.length) {
       throw const FormatException('Truncated movable list update HLC');
     }
     final hlc = HybridLogicalClock.fromUint8List(body, offset: offset);
     offset += 8;
 
-    final valLenRec = UVarint.read(body, offset: offset);
-    offset = valLenRec.nextOffset;
-    final valEnd = offset + valLenRec.value;
-    if (valEnd > body.length) {
-      throw const FormatException(
-        'Truncated movable list update value',
+    final countRec = UVarint.read(body, offset: offset);
+    offset = countRec.nextOffset;
+
+    final items = <_MovableListUpdateItem<T>>[];
+    for (var i = 0; i < countRec.value; i += 1) {
+      final identityRec = FugueElementID.readFromBytes(body, offset: offset);
+      offset = identityRec.nextOffset;
+
+      final valLenRec = UVarint.read(body, offset: offset);
+      offset = valLenRec.nextOffset;
+      final valEnd = offset + valLenRec.value;
+      if (valEnd > body.length) {
+        throw const FormatException(
+          'Truncated movable list update value',
+        );
+      }
+      final value = handler._valueCodec.decode(
+        Uint8List.sublistView(body, offset, valEnd),
+      );
+      offset = valEnd;
+
+      items.add(
+        _MovableListUpdateItem<T>(
+          identityID: identityRec.value,
+          value: value,
+        ),
       );
     }
-    final value = handler._valueCodec.decode(
-      Uint8List.sublistView(body, offset, valEnd),
-    );
 
     return _MovableListUpdateOperation<T>(
       id: handler.id,
       type: handler.updateType,
-      identityID: identityRec.value,
-      value: value,
       hlc: hlc,
+      items: items,
       valueCodec: handler._valueCodec,
     );
   }
 
-  final FugueElementID identityID;
-  final T value;
   final HybridLogicalClock hlc;
+  final List<_MovableListUpdateItem<T>> items;
   final ValueCodec<T> valueCodec;
 
   @override
   Uint8List toBodyBytes() {
-    final out = BytesBuilder(copy: false)
-      ..add(identityID.toBytes())
-      ..add(hlc.toUint8List());
-    final valBytes = valueCodec.encode(value);
-    UVarint.write(valBytes.length, out);
-    out.add(valBytes);
+    final out = BytesBuilder(copy: false)..add(hlc.toUint8List());
+    UVarint.write(items.length, out);
+    for (final item in items) {
+      out.add(item.identityID.toBytes());
+      final valBytes = valueCodec.encode(item.value);
+      UVarint.write(valBytes.length, out);
+      out.add(valBytes);
+    }
     return out.toBytes();
   }
 }
 
-/// Marks an identity as deleted.
+/// A single item in a batch update.
+class _MovableListUpdateItem<T> {
+  _MovableListUpdateItem({
+    required this.identityID,
+    required this.value,
+  });
+
+  final FugueElementID identityID;
+  final T value;
+}
+
+/// Batch delete.
 ///
 /// Layout (body):
-/// - identityID: [FugueElementID]
+/// - itemsCount: uvarint
+/// - repeated `itemsCount` times:
+///   - identityID: [FugueElementID]
 class _MovableListDeleteOperation<T> extends Operation {
   _MovableListDeleteOperation({
-    required this.identityID,
+    required this.items,
     required super.id,
     required super.type,
   });
 
   factory _MovableListDeleteOperation.fromHandler(
     CRDTFugueMovableListHandler<T> handler, {
-    required FugueElementID identityID,
+    required List<_MovableListDeleteItem> items,
   }) {
     return _MovableListDeleteOperation<T>(
       id: handler.id,
       type: handler.deleteType,
-      identityID: identityID,
+      items: items,
     );
   }
 
@@ -338,16 +393,40 @@ class _MovableListDeleteOperation<T> extends Operation {
     CRDTFugueMovableListHandler<T> handler,
     Uint8List body,
   ) {
-    final identityRec = FugueElementID.readFromBytes(body);
+    var offset = 0;
+    final countRec = UVarint.read(body, offset: offset);
+    offset = countRec.nextOffset;
+
+    final items = <_MovableListDeleteItem>[];
+    for (var i = 0; i < countRec.value; i += 1) {
+      final identityRec = FugueElementID.readFromBytes(body, offset: offset);
+      offset = identityRec.nextOffset;
+      items.add(_MovableListDeleteItem(identityID: identityRec.value));
+    }
+
     return _MovableListDeleteOperation<T>(
       id: handler.id,
       type: handler.deleteType,
-      identityID: identityRec.value,
+      items: items,
     );
   }
 
-  final FugueElementID identityID;
+  final List<_MovableListDeleteItem> items;
 
   @override
-  Uint8List toBodyBytes() => identityID.toBytes();
+  Uint8List toBodyBytes() {
+    final out = BytesBuilder(copy: false);
+    UVarint.write(items.length, out);
+    for (final item in items) {
+      out.add(item.identityID.toBytes());
+    }
+    return out.toBytes();
+  }
+}
+
+/// A single item in a batch delete.
+class _MovableListDeleteItem {
+  _MovableListDeleteItem({required this.identityID});
+
+  final FugueElementID identityID;
 }

@@ -291,6 +291,7 @@ class FugueTree<T> {
 
   /// Finds the node at the specified position in the tree
   FugueElementID findNodeAtPosition(int position) {
+    // TODO(MattiaPispisa): heavy operation [71](https://github.com/MattiaPispisa/crdt/issues/71)
     return _findNodeAtPositionRecursive(
       nodeID: _rootID,
       targetPos: position,

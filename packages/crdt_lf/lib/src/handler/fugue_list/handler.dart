@@ -49,6 +49,8 @@ class CRDTFugueListHandler<T>
       _FugueListOperationFactory<T>(this).fromBytes;
 
   /// Inserts [value] at position [index]
+  /// 
+  /// {@macro naive_move}
   void insert(int index, T value) {
     insertAll(index, [value]);
   }
@@ -57,6 +59,8 @@ class CRDTFugueListHandler<T>
   ///
   /// The inserted run is kept contiguous: a concurrent edit at the same
   /// position never interleaves with these elements (the Fugue property).
+  /// 
+  /// {@macro naive_move}
   void insertAll(int index, Iterable<T> values) {
     final leftOrigin = originBefore(index);
     final rightOrigin = nodeAfter(leftOrigin);
