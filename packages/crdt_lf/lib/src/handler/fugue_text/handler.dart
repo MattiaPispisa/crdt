@@ -157,30 +157,13 @@ class CRDTFugueTextHandler
   @override
   void applyToTree(FugueTree<String> tree, Operation operation) {
     if (operation is _FugueTextInsertOperation) {
-      if (operation.items.isEmpty) {
-        return;
-      }
-
-      // TODO(MattiaPispisa): can be used tree.iterableInsert ?
-
-      // Insert first item with provided origins
-      tree.insert(
-        newID: operation.items.first.id,
-        value: operation.items.first.text,
+      tree.iterableInsertChain(
         leftOrigin: operation.leftOrigin,
         rightOrigin: operation.rightOrigin,
+        nodes: operation.items.map(
+          (item) => FugueValueNode<String>(id: item.id, value: item.text),
+        ),
       );
-      // Chain the rest to the previous inserted id, same rightOrigin
-      var previousID = operation.items.first.id;
-      for (final item in operation.items.skip(1)) {
-        tree.insert(
-          newID: item.id,
-          value: item.text,
-          leftOrigin: previousID,
-          rightOrigin: operation.rightOrigin,
-        );
-        previousID = item.id;
-      }
     } else if (operation is _FugueTextDeleteOperation) {
       for (final item in operation.items) {
         tree.delete(item.nodeID);

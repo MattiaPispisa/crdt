@@ -291,24 +291,20 @@ class CRDTFugueMovableListHandler<T> extends Handler<FugueMovableListState<T>>
     Operation operation,
   ) {
     if (operation is _MovableListInsertOperation<T>) {
-      if (operation.items.isEmpty) {
-        return;
-      }
-
-      // TODO(MattiaPispisa): can be used tree.iterableInsert ?
-
-      // First item uses the operation's leftOrigin/rightOrigin; subsequent
-      // items chain to the previously inserted position so the inserted run
-      // stays contiguous (Fugue's non-interleaving property).
-      var leftOrigin = operation.leftOrigin;
+      // Slots into the Fugue tree (handled by the tree's chained insert);
+      // identities into the elements map (first-write-wins on (peer, counter),
+      // since counters are unique per peer).
+      state._tree.iterableInsertChain(
+        leftOrigin: operation.leftOrigin,
+        rightOrigin: operation.rightOrigin,
+        nodes: operation.items.map(
+          (item) => FugueValueNode<FugueElementID>(
+            id: item.positionID,
+            value: item.identityID,
+          ),
+        ),
+      );
       for (final item in operation.items) {
-        state._tree.insert(
-          newID: item.positionID,
-          value: item.identityID,
-          leftOrigin: leftOrigin,
-          rightOrigin: operation.rightOrigin,
-        );
-        // First-write-wins on the (peer, counter) identity space.
         state._elements.putIfAbsent(
           item.identityID,
           () => _MovableElement<T>(
@@ -319,7 +315,6 @@ class CRDTFugueMovableListHandler<T> extends Handler<FugueMovableListState<T>>
             deleted: false,
           ),
         );
-        leftOrigin = item.positionID;
       }
     } else if (operation is _MovableListMoveOperation<T>) {
       state._tree.insert(

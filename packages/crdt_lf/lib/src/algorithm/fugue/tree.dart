@@ -1,6 +1,9 @@
 import 'package:crdt_lf/crdt_lf.dart';
 
 /// Implementation of the Fugue tree for collaborative text editing
+/// 
+/// ([The Art of the Fugue: Minimizing Interleaving in Collaborative Text
+/// Editing](https://arxiv.org/abs/2305.00583))
 class FugueTree<T> {
   FugueTree._({
     required Map<FugueElementID, FugueNodeTriple<T>> nodes,
@@ -115,7 +118,10 @@ class FugueTree<T> {
     return result;
   }
 
-  /// Inserts a list of nodes into the tree at the specified index
+  /// Inserts a list of nodes into the tree at the specified index.
+  ///
+  /// Convenience for the local-edit path: derives `leftOrigin`/`rightOrigin`
+  /// from [index] and delegates to [iterableInsertChain].
   void iterableInsert(
     int index,
     Iterable<FugueValueNode<T>> nodes,
@@ -124,33 +130,43 @@ class FugueTree<T> {
       return;
     }
 
-    // Find the node at position index - 1 (or root node if index is 0)
     final leftOrigin =
         index == 0 ? FugueElementID.nullID() : findNodeAtPosition(index - 1);
-
-    // Find the next node after leftOrigin
     final rightOrigin = findNextNode(leftOrigin);
 
-    // Insert first node
-    final firstNodeID = nodes.first.id;
-    insert(
-      newID: firstNodeID,
-      value: nodes.first.value,
+    iterableInsertChain(
       leftOrigin: leftOrigin,
       rightOrigin: rightOrigin,
+      nodes: nodes,
     );
+  }
 
-    // Insert remaining nodes as right children of the previous node
-    var previousID = firstNodeID;
-    for (final value in nodes.skip(1)) {
-      final newNodeID = value.id;
+  /// Inserts a chain of nodes between [leftOrigin] and [rightOrigin].
+  ///
+  /// The first node is inserted with the given origins; each subsequent node
+  /// is chained as a right child of the previously-inserted one, with the
+  /// same [rightOrigin]. This is the "non-interleaving" Fugue insertion used
+  /// when applying a batch insert received from a peer: the origins come
+  /// from the operation itself, not from a local index, so this is the
+  /// method that handler `applyOperation` paths should call.
+  void iterableInsertChain({
+    required FugueElementID leftOrigin,
+    required FugueElementID rightOrigin,
+    required Iterable<FugueValueNode<T>> nodes,
+  }) {
+    if (nodes.isEmpty) {
+      return;
+    }
+
+    var previousID = leftOrigin;
+    for (final node in nodes) {
       insert(
-        newID: newNodeID,
-        value: value.value,
+        newID: node.id,
+        value: node.value,
         leftOrigin: previousID,
         rightOrigin: rightOrigin,
       );
-      previousID = newNodeID;
+      previousID = node.id;
     }
   }
 

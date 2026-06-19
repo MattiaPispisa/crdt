@@ -124,28 +124,13 @@ class CRDTFugueListHandler<T>
   @override
   void applyToTree(FugueTree<T> tree, Operation operation) {
     if (operation is _FugueListInsertOperation<T>) {
-      if (operation.items.isEmpty) {
-        return;
-      }
-
-      // Insert first item with provided origins
-      tree.insert(
-        newID: operation.items.first.id,
-        value: operation.items.first.value,
+      tree.iterableInsertChain(
         leftOrigin: operation.leftOrigin,
         rightOrigin: operation.rightOrigin,
+        nodes: operation.items.map(
+          (item) => FugueValueNode<T>(id: item.id, value: item.value),
+        ),
       );
-      // Chain the rest to the previous inserted id, same rightOrigin
-      var previousID = operation.items.first.id;
-      for (final item in operation.items.skip(1)) {
-        tree.insert(
-          newID: item.id,
-          value: item.value,
-          leftOrigin: previousID,
-          rightOrigin: operation.rightOrigin,
-        );
-        previousID = item.id;
-      }
     } else if (operation is _FugueListDeleteOperation<T>) {
       for (final item in operation.items) {
         tree.delete(item.nodeID);

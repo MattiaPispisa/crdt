@@ -1286,38 +1286,58 @@ mixin DocumentConsumer {
   String get id;
 }
 
-// TODO(MattiaPispisa): more doc in CacheableStateProvider
-
-/// A provider that can provide a cacheable state of a [BaseCRDTDocument]
+/// Per-consumer state cache that avoids recomputing the consumer's state
+/// from the full history on every read.
 ///
-/// [T] is the type of the cached state of the handler.
-/// The handler state can be whatever the handler needs it to be
-/// to perform better. There is no binding with the `handler.value`
-/// or `getSnapshotState`.
+/// Two update paths:
+/// - **incremental**: when a single [Operation] is applied, the cache is
+///   patched via [incrementCachedState]. Hosts that can cheaply apply an
+///   operation to their state override it; returning `null` means "can't
+///   (or won't) update incrementally" and falls back to invalidation.
+/// - **full recompute**: [cachedState] returns `null` whenever the cached
+///   version no longer matches the document's current version (e.g. after
+///   import, snapshot merge or prune). The host recomputes the state from
+///   scratch and pushes it back via [updateCachedState].
+///
+/// [T] is the host's own internal representation. It has no required
+/// relationship with `handler.value` or [SnapshotProvider.getSnapshotState]
+/// — pick whatever shape makes recomputation cheap.
+/// 
+/// Set [useIncrementalCacheUpdate] to false to ignore [incrementCachedState]
 mixin CacheableStateProvider<T> on DocumentConsumer {
   @override
   String get id;
 
-  /// The version at witch the cached state is still valid
+  /// Document version the cached state is pinned to (`null` when no
+  /// state is cached). The cache is valid only while this set equals
+  /// `_document.version`.
   Set<OperationId>? _cachedVersion;
 
-  /// The cached state of the handler
+  /// The most recently cached state, or `null` if no state is cached.
   T? _cachedState;
 
-  /// Whether to use incremental cache update
+  /// If `false`, every applied operation invalidates the cache instead of
+  /// invoking [incrementCachedState]. Hosts that have no cheap incremental
+  /// path may set this to `false` to skip the hook entirely; the default
+  /// `true` lets each operation try the incremental path first.
   bool useIncrementalCacheUpdate = true;
 
-  /// Updates the cached version with the current version of the document
+  /// Pins the cached version to the document's current version.
   void _updateCachedVersion() {
     _cachedVersion = Set.from(_document.version);
   }
 
-  /// Updates the cached state
+  /// Replaces the cached state with [newState] and pins it to the current
+  /// document version. Call this after a full recompute.
   void updateCachedState(T newState) {
     _cachedState = newState;
     _updateCachedVersion();
   }
 
+  /// Framework hook: tries to advance the cache by a single [operation],
+  /// honoring [useIncrementalCacheUpdate]. Falls back to [invalidateCache]
+  /// when the host opts out, has no cached state, or cannot apply the
+  /// operation incrementally.
   void _internalIncrementCachedState({required Operation operation}) {
     if (!useIncrementalCacheUpdate) {
       invalidateCache();
@@ -1342,11 +1362,12 @@ mixin CacheableStateProvider<T> on DocumentConsumer {
     updateCachedState(newState);
   }
 
-  /// When the document receives an operation and a change is applied
-  /// anyone using [CacheableStateProvider] is allowed to
-  /// increment the cached state.
+  /// Applies [operation] to [state] and returns the resulting state, or
+  /// `null` to opt out of incremental updates (the cache will be
+  /// invalidated and recomputed on the next read).
   ///
-  /// Use the [operation] to increment the current [state]
+  /// May mutate [state] in place and return it. The default implementation
+  /// returns `null`, i.e. no incremental path.
   T? incrementCachedState({
     required Operation operation,
     required T state,
@@ -1354,16 +1375,16 @@ mixin CacheableStateProvider<T> on DocumentConsumer {
     return null;
   }
 
-  /// Invalidates the cached state
-  ///
-  /// [CRDTDocument] automatically invalidates
-  /// the cache when an external effect happens (import, export, etc.).
+  /// Drops the cached state. The framework calls this automatically when
+  /// the consumer's state is no longer guaranteed to match the document
+  /// (e.g. external changes imported, snapshot merged, history pruned).
   void invalidateCache() {
     _cachedState = null;
     _cachedVersion = null;
   }
 
-  /// Returns the cached state
+  /// The cached state if it still matches the document's current version,
+  /// otherwise `null` (forcing the host to recompute).
   T? get cachedState {
     if (_cachedState != null && setEquals(_cachedVersion, _document.version)) {
       return _cachedState;
