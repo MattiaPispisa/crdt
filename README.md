@@ -4,6 +4,8 @@
 ![melos_badge][melos_badge]
 ![repo_size][repo_size]
 
+<img width="220" alt="UI Showcase" src="https://raw.githubusercontent.com/MattiaPispisa/crdt/main/assets/images/logo.png" />
+
 - [CRDT](#crdt)
   - [Packages](#packages)
   - [Roadmap](#roadmap)
