@@ -26,6 +26,7 @@
       - [Identity](#identity)
     - [Handlers](#handlers)
       - [Working with Complex Types](#working-with-complex-types)
+      - [Nested Structures (Containers and References)](#nested-structures-containers-and-references)
     - [Transaction](#transaction-1)
     - [DAG](#dag)
     - [Change](#change)
@@ -45,10 +46,13 @@ This library provides solutions for:
 - List Editing.
 - Map Editing.
 - Set Editing.
+- Nested (recursive) data structures.
 
 Supporting: 
 - Fugue Algorithm for Text Editing to minimize interleaving.
 - Observed-Removed (OR) for conflict resolution.
+- Movable lists that preserve element identity across concurrent reorderings.
+- Nested CRDTs via a flat storage of references (model documents, canvases, trees…).
 
 ## Features
 
@@ -179,12 +183,20 @@ If not provided, both are generated: `peerId` and `documentId`.
 ### Handlers
 Handlers are the core components of the library. They manage the state of a specific type of data and provide operations to modify it.
 
-- `CRDTFugueTextHandler`: Handles text editing with the Fugue algorithm.
-- `CRDTListHandler`: Handles list editing.
-- `CRDTTextHandler`: Handles text editing.
-- `CRDTMapHandler`: Handles map editing.
+- `CRDTTextHandler`: Handles text editing (concurrent edits ordered by HLC).
+- `CRDTFugueTextHandler`: Handles text editing with the Fugue algorithm (minimizes interleaving of concurrent edits).
+- `CRDTListHandler`: Handles list editing (concurrent edits ordered by HLC).
+- `CRDTFugueListHandler`: Handles ordered list editing with the Fugue algorithm (minimizes interleaving of concurrent edits in the same region).
+- `CRDTFugueMovableListHandler`: Handles ordered list editing with an explicit `move` operation that preserves element identity across concurrent reorderings (no duplicates).
+- `CRDTMapHandler`: Handles map editing (last-writer-wins by HLC).
 - `CRDTORSetHandler`: Handles set editing with the Observed-Removed (OR) algorithm.
 - `CRDTORMapHandler`: Handles map editing with the Observed-Removed (OR) algorithm.
+
+Container handlers, used to model nested structures (see [Nested Structures](#nested-structures-containers-and-references)):
+
+- `CRDTMapRefHandler`: a map whose values are references to other handlers.
+- `CRDTListRefHandler`: an ordered (Fugue) list of references to other handlers.
+- `CRDTMovableListRefHandler`: a movable ordered list of references to other handlers.
 
 ```dart
 final doc = CRDTDocument(
@@ -275,6 +287,94 @@ rawList.insert(0, const MyData('item2', 1).toJson());
 final myDataList = rawList.value.map(MyData.fromJson).toList();
 print(myDataList.first.name); // Prints "item2"
 ```
+
+#### Nested Structures (Containers and References)
+
+The handlers above store **raw values**, which keeps the data *flat*. To model
+real-world, deeply nested documents (e.g. a document → chapters → paragraphs →
+collaborative text and sortable lists, or a canvas → slides → elements →
+coordinates), the library uses a **"flat storage & references"** approach,
+similar to Yjs/Loro: the `CRDTDocument` is a flat registry of *all* handlers,
+and parents point to children by **reference**.
+
+**Container handlers** store `HandlerRef`s (a child handler's `id` + `type`)
+instead of raw data:
+
+- `CRDTMapRefHandler` — keyed references (`setRef(key, handler)` / `getRef(key)`).
+- `CRDTListRefHandler` — ordered references using Fugue (`insertRef(index, handler)` / `getRefAt(index)`).
+- `CRDTMovableListRefHandler` — movable ordered references (adds `move(from, to)`), ideal for reordering with stable identity (slides, z-index, sortable lists…).
+
+Each container exposes both views:
+
+- the inherited `value` getter returns the **raw references** (`Map<String, HandlerRef>` / `List<HandlerRef>`);
+- the `resolved` getter returns the **fully resolved subtree** as plain Dart values, resolving every reference recursively (with cycle protection).
+
+Children are resolved **lazily** through the document registry, so the state is
+computed only when read.
+
+```dart
+final doc = CRDTDocument()..registerDefaultFactories();
+
+// Root container.
+final root = CRDTMapRefHandler(doc, 'root');
+
+// A nested, sortable list of chapters.
+final chapters = CRDTListRefHandler(doc, doc.newHandlerId());
+root.setRef('chapters', chapters);
+
+// A chapter holding collaborative text.
+final chapter = CRDTMapRefHandler(doc, doc.newHandlerId());
+final title = CRDTFugueTextHandler(doc, doc.newHandlerId())..insert(0, 'Intro');
+chapter.setRef('title', title);
+chapters.insertRef(0, chapter);
+
+// Read the whole tree resolved to plain Dart values.
+print(root.resolved); // {chapters: [{title: Intro}]}
+```
+
+Every node is a standard CRDT, so concurrent edits at **any depth** merge
+conflict-free (e.g. one peer adds a chapter while another types into an
+existing paragraph).
+
+**Reconstructing the tree on a remote peer.** A peer that only received the
+`Change`s does not know the structure in advance. The document keeps a registry
+of **factories** keyed by handler `type` so it can rebuild the correct handler
+from the `type` carried in each operation payload:
+
+- `doc.registerFactory(type, (doc, id) => Handler)` registers a factory; `doc.registerDefaultFactories()` registers the built-in containers plus the non-generic leaf handlers (`CRDTTextHandler`, `CRDTFugueTextHandler`).
+- `doc.newHandlerId()` generates a globally-unique id for a dynamically-created child (carried inside the reference, so peers reuse the same id).
+- `doc.resolveHandler(ref)` returns the registered handler or instantiates it via its factory.
+
+When factories are registered, **importing changes auto-instantiates** the
+referenced handlers, so the tree is ready right after `importChanges` — no extra
+step:
+
+```dart
+// Peer B registers the same factories, then imports.
+final docB = CRDTDocument()..registerDefaultFactories();
+docB.importChanges(docA.exportChanges());
+
+final rootB = docB.registeredHandlers['root']! as CRDTMapRefHandler;
+print(rootB.resolved); // same tree as docA
+
+// doc.roots() returns the entry points (containers not referenced by another).
+```
+
+For state coming from a **pruned snapshot** (where the changes have been removed
+and only the snapshot `{id: type}` manifest remains), call `doc.reconstruct()`
+to rebuild every reachable handler from the manifest and the references.
+
+> Note on generics: a factory is keyed by `runtimeType.toString()`, which
+> includes generic arguments. `registerDefaultFactories()` therefore registers
+> only the non-generic leaf handlers; generic leaves (e.g.
+> `CRDTMapHandler<num>`) must be registered explicitly with their concrete type
+> string. Auto-registration is **opt-in**: with no factory registered the
+> classic flat usage is unchanged (handlers are created explicitly with a known
+> id on each peer).
+
+A complete, interactive example is available in the Flutter example app under
+the **Document** entry (sortable chapters → paragraphs → collaborative text and
+sortable item lists).
 
 ### Transaction
 

@@ -72,5 +72,39 @@ void main() {
       final textB = CRDTFugueTextHandler(docB, 'text');
       expect(textB.value, 'hello');
     });
+
+    test('importing changes auto-registers handlers (no reconstruct call)', () {
+      final docA = CRDTDocument()..registerDefaultFactories();
+      final rootA = buildTree(docA);
+
+      // No reconstruct(): handlers must be instantiated during import because
+      // factories are registered.
+      final docB = CRDTDocument()
+        ..registerDefaultFactories()
+        ..importChanges(docA.exportChanges());
+
+      expect(
+        docB.registeredHandlers.keys,
+        containsAll(<String>['root', 'title', 'chapters', 'intro']),
+      );
+      expect(docB.roots().map((h) => h.id), ['root']);
+
+      final rootB = docB.registeredHandlers['root']! as CRDTMapRefHandler;
+      expect(rootB.resolved, rootA.resolved);
+    });
+
+    test('without factories, import does not auto-register (legacy)', () {
+      final docA = CRDTDocument();
+      final text = CRDTFugueTextHandler(docA, 'text')..insert(0, 'hi');
+
+      final docB = CRDTDocument()..importChanges(docA.exportChanges());
+
+      // No factory registered: the registry stays empty, classic behavior.
+      expect(docB.registeredHandlers, isEmpty);
+
+      // Reading still works by creating the handler with the matching id.
+      final textB = CRDTFugueTextHandler(docB, 'text');
+      expect(textB.value, text.value);
+    });
   });
 }

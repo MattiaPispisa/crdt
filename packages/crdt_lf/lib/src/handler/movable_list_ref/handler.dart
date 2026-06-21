@@ -26,14 +26,14 @@ class CRDTMovableListRefHandler extends CRDTFugueMovableListHandler<HandlerRef>
 
   /// Inserts a reference to [handler] at position [index].
   ///
-  /// [handler] must already be registered on the same document.
+  /// {@macro handlers_in_ref}
   void insertRef(int index, Handler<dynamic> handler) {
     insert(index, HandlerRef.of(handler));
   }
 
-  /// Returns the handler referenced at [index], resolving (and lazily
-  /// instantiating) it through the document, or `null` if out of range or
-  /// unresolvable.
+  /// Returns the handler referenced at [index], or `null` if out of range.
+  ///
+  /// {@macro ref_get_resolution}
   Handler<dynamic>? getRefAt(int index) {
     final refs = value;
     if (index < 0 || index >= refs.length) {
@@ -61,7 +61,9 @@ class CRDTMovableListRefHandler extends CRDTFugueMovableListHandler<HandlerRef>
     return out;
   }
 
-  /// The fully resolved subtree rooted at this list.
+  /// The fully resolved subtree rooted at this list, as a `List<Object?>`.
+  ///
+  /// {@macro ref_resolved}
   List<Object?> get resolved {
     final result = toNested(<String>{});
     return result is List<Object?> ? result : const [];

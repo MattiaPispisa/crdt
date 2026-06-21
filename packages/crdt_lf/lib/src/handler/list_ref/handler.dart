@@ -28,14 +28,24 @@ class CRDTListRefHandler extends CRDTFugueListHandler<HandlerRef>
 
   /// Inserts a reference to [handler] at position [index].
   ///
-  /// [handler] must already be registered on the same document.
+  /// {@template handlers_in_ref}
+  /// Only a reference (`id` + type) to [handler] is stored, not the handler
+  /// itself, so [handler] must live on the **same** document. A [Handler]
+  /// auto-registers on its document when constructed, so just create it with
+  /// the same `doc` (e.g. `CRDTFugueTextHandler(doc, doc.newHandlerId())`); a
+  /// handler from another document would neither resolve nor sync.
+  /// {@endtemplate}
   void insertRef(int index, Handler<dynamic> handler) {
     insert(index, HandlerRef.of(handler));
   }
 
-  /// Returns the handler referenced at [index], resolving (and lazily
-  /// instantiating) it through the document, or `null` if out of range or
-  /// unresolvable.
+  /// Returns the handler referenced at [index], or `null` if out of range.
+  ///
+  /// {@template ref_get_resolution}
+  /// The handler is resolved — and lazily instantiated if needed — through the
+  /// document registry; it is `null` when the reference's type has no
+  /// registered factory.
+  /// {@endtemplate}
   Handler<dynamic>? getRefAt(int index) {
     final refs = value;
     if (index < 0 || index >= refs.length) {
@@ -63,7 +73,13 @@ class CRDTListRefHandler extends CRDTFugueListHandler<HandlerRef>
     return out;
   }
 
-  /// The fully resolved subtree rooted at this list.
+  /// The fully resolved subtree rooted at this list, as a `List<Object?>`.
+  ///
+  /// {@template ref_resolved}
+  /// Each reference is replaced by the resolved value of the child handler,
+  /// recursively; a leaf handler resolves to its `value`. A reference that
+  /// closes a cycle resolves to `null`.
+  /// {@endtemplate}
   List<Object?> get resolved {
     final result = toNested(<String>{});
     return result is List<Object?> ? result : const [];

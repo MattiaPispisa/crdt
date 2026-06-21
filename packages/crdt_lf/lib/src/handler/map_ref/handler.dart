@@ -27,14 +27,14 @@ class CRDTMapRefHandler extends CRDTMapHandler<HandlerRef>
 
   /// Associates [key] with a reference to [handler].
   ///
-  /// [handler] must already be registered on the same document (handlers
-  /// self-register in their constructor).
+  /// {@macro handlers_in_ref}
   void setRef(String key, Handler<dynamic> handler) {
     set(key, HandlerRef.of(handler));
   }
 
-  /// Returns the handler referenced by [key], resolving (and lazily
-  /// instantiating) it through the document, or `null` if absent/unresolvable.
+  /// Returns the handler referenced by [key], or `null` if [key] is absent.
+  ///
+  /// {@macro ref_get_resolution}
   Handler<dynamic>? getRef(String key) {
     final ref = value[key];
     return ref == null ? null : doc.resolveHandler(ref);
@@ -59,7 +59,9 @@ class CRDTMapRefHandler extends CRDTMapHandler<HandlerRef>
     return out;
   }
 
-  /// The fully resolved subtree rooted at this map.
+  /// The fully resolved subtree, as a `Map<String, Object?>`.
+  ///
+  /// {@macro ref_resolved}
   Map<String, Object?> get resolved {
     final result = toNested(<String>{});
     return result is Map<String, Object?> ? result : const {};

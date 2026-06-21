@@ -77,6 +77,17 @@ abstract class BaseCRDTDocument {
   }
 
   /// Factories used to lazily reconstruct handlers from their type string.
+  ///
+  /// A factory is never inserted directly: when it is called, the handler it
+  /// builds self-registers into [_handlers] through this chain:
+  ///
+  /// ```md
+  /// factory(this, id)
+  /// → new CRDTMapRefHandler(doc, id)
+  ///   → super Handler(doc)
+  ///     → doc.registerHandler(this)
+  ///       → _handlers[id] = this
+  /// ```
   final Map<String, HandlerFactory> _factories = {};
 
   /// Registers a [HandlerFactory] for handlers whose `runtimeType.toString()`
@@ -152,9 +163,16 @@ abstract class BaseCRDTDocument {
         .toList();
   }
 
-  /// Instantiates every handler reachable from the currently-registered
-  /// container handlers, following their references to a fixed point.
+  /// Instantiates every handler reachable from the currently registered
+  /// container handlers by following their references to a fixed point.
+  ///
+  /// Handlers inside refs are created lazily.
+  /// This means that functions using [_handlers] cannot find the lazy ones
+  /// that have not yet been instantiated
+  /// (e.g., handlers left unexplored during a snapshot will not be saved).
+  /// This method ensures that every reachable handler is instantiated.
   void _materializeReachable() {
+    // Performs a Breadth-First Search (BFS) starting from the known handlers.
     final queue = Queue<Handler<dynamic>>.of(_handlers.values);
     final seen = <String>{};
     while (queue.isNotEmpty) {
@@ -500,6 +518,33 @@ class CRDTDocument extends BaseCRDTDocument {
     }
   }
 
+  /// Auto-registers the handler targeted by [change] when it is not yet
+  /// registered and a [HandlerFactory] is available for its type.
+  ///
+  /// This keeps the handler registry in sync with imported data: a peer that
+  /// registered the relevant factories (see [registerFactory] /
+  /// `registerDefaultFactories`) sees nested handlers appear as their changes
+  /// arrive, without having to call [reconstruct].
+  ///
+  /// It is a no-op when no factory is registered (the classic flat usage), so
+  /// existing documents are completely unaffected. Children reached only
+  /// through a parent reference after history pruning are not covered here
+  /// (they have no change to import) — use [reconstruct] for that case.
+  void _ensureHandlerForChange(Change change) {
+    if (_factories.isEmpty) {
+      return;
+    }
+    try {
+      final envelope = OperationEnvelopeCodec.decode(change.payloadBytes());
+      if (_handlers.containsKey(envelope.handlerId)) {
+        return;
+      }
+      _factories[envelope.handlerType]?.call(this, envelope.handlerId);
+    } catch (_) {
+      // Ignore changes whose envelope cannot be decoded.
+    }
+  }
+
   /// It represents the **latest operation for each peer** of this document
   ///
   /// Example:
@@ -629,6 +674,7 @@ class CRDTDocument extends BaseCRDTDocument {
 
     final applied = _internalApplyChange(change);
     if (applied) {
+      _ensureHandlerForChange(change);
       _updateCacheWithAppliedExternalChange(change);
       _emitUpdate([change]);
     }
@@ -982,6 +1028,7 @@ class CRDTDocument extends BaseCRDTDocument {
     for (final change in sorted) {
       try {
         if (_internalApplyChange(change)) {
+          _ensureHandlerForChange(change);
           _updateCacheWithAppliedExternalChange(change);
           changedApplied.add(change);
         }
