@@ -45,6 +45,20 @@ class CRDTListHandler<T> extends Handler<List<T>> {
   String get id => _id;
 
   /// Inserts an element at the specified index
+  ///
+  /// {@template naive_move}
+  /// Do not [delete] + [insert] to move an element
+  /// instead use [CRDTFugueMovableListHandler].
+  ///
+  /// A naive move (delete + insert) can cause a duplicated element.
+  ///
+  /// ```md
+  /// Initial state: [milk, plants, joe]
+  /// Peer A:  move(joe → top) ⇒ [joe, milk, plants]
+  /// Peer B:  move(joe → top) ⇒ [joe, milk, plants]
+  /// Sync:  [joe, joe, milk, plants]   ← duplicated
+  /// ```
+  /// {@endtemplate}
   void insert(int index, T value) {
     final operation = _ListInsertOperation<T>.fromHandler(
       this,
@@ -55,6 +69,8 @@ class CRDTListHandler<T> extends Handler<List<T>> {
   }
 
   /// Deletes elements starting at the specified index
+  ///
+  /// {@macro naive_move}
   void delete(int index, int count) {
     final operation = _ListDeleteOperation<T>.fromHandler(
       this,

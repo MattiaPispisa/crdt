@@ -1,16 +1,59 @@
 import 'package:flutter/material.dart';
 
-import '../routing.dart';
+import 'sortable_todo_list/sortable_todo_list.dart';
+import 'todo_list/todo_list.dart';
 
+/// Describes a single example: how it is named, what it demonstrates, the
+/// route it lives at and how to build it.
+class Example {
+  /// Creates an example descriptor.
+  const Example({
+    required this.name,
+    required this.description,
+    required this.path,
+    required this.builder,
+  });
+
+  /// Display name.
+  final String name;
+
+  /// One-line description of what the example demonstrates.
+  final String description;
+
+  /// Route path (used by the router and for navigation).
+  final String path;
+
+  /// Builds the example widget.
+  final WidgetBuilder builder;
+}
+
+/// The single source of truth for the example list: both this page and the
+/// router are derived from it.
+final kExamples = <Example>[
+  Example(
+    name: 'Todo List',
+    description:
+        'A collaborative todo list backed by CRDTListHandler. '
+        'Concurrent edits merge conflict-free; includes time travel and '
+        'garbage collection.',
+    path: '/todo-list',
+    builder: (_) => const TodoList(),
+  ),
+  Example(
+    name: 'Sortable Todo List',
+    description:
+        'A reorderable todo list backed by '
+        'CRDTFugueMovableListHandler. Drag to reorder; concurrent moves of the '
+        'same item converge without duplicating it.',
+    path: '/sortable-todo-list',
+    builder: (_) => const SortableTodoList(),
+  ),
+];
+
+/// Home page listing the available examples.
 class Examples extends StatelessWidget {
+  /// Creates the examples landing page.
   const Examples({super.key});
-
-  Widget _listTile(BuildContext context, RouteData route) {
-    return ListTile(
-      title: Text(route.name),
-      onTap: () => Navigator.of(context).pushNamed(route.path),
-    );
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -19,10 +62,21 @@ class Examples extends StatelessWidget {
         leading: const SizedBox(),
         title: const Text('CRDT LF Examples'),
       ),
-      body: ListView.builder(
-        itemCount: kExampleRoutes.length,
-        itemBuilder:
-            (context, index) => _listTile(context, kExampleRoutes[index]),
+      body: ListView.separated(
+        padding: const EdgeInsets.all(8),
+        itemCount: kExamples.length,
+        separatorBuilder: (_, __) => const SizedBox(height: 8),
+        itemBuilder: (context, index) {
+          final example = kExamples[index];
+          return Card(
+            child: ListTile(
+              title: Text(example.name),
+              subtitle: Text(example.description),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () => Navigator.of(context).pushNamed(example.path),
+            ),
+          );
+        },
       ),
     );
   }

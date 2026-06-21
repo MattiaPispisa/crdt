@@ -14,6 +14,7 @@ export 'src/document.dart';
 export 'src/exceptions/exceptions.dart';
 export 'src/frontiers/frontiers.dart';
 export 'src/handler/fugue_list/handler.dart';
+export 'src/handler/fugue_movable_list/handler.dart';
 export 'src/handler/fugue_text/handler.dart';
 export 'src/handler/handler.dart';
 export 'src/handler/list/handler.dart';
