@@ -46,6 +46,10 @@ void main() {
       });
     });
 
+    test('toString includes the handler id', () {
+      expect(root.toString(), contains('CRDTMapRefHandler'));
+    });
+
     test('two peers converge on a nested structure', () {
       final docA = CRDTDocument()..registerDefaultFactories();
       final titleA = CRDTFugueTextHandler(docA, 'title')..insert(0, 'Hello');

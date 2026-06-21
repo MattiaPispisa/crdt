@@ -26,6 +26,14 @@ void main() {
       expect(list.resolved, ['A', 'B']);
     });
 
+    test('a self-reference cycle resolves to null and toString works', () {
+      list.insertRef(0, list);
+      expect(list.resolved, [
+        [null],
+      ]);
+      expect(list.toString(), contains('CRDTListRefHandler'));
+    });
+
     test('concurrent insertions in the same region converge', () {
       final docA = CRDTDocument()..registerDefaultFactories();
       final listA = CRDTListRefHandler(docA, 'list');

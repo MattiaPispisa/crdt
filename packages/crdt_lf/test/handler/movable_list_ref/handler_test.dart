@@ -25,6 +25,14 @@ void main() {
       expect(slides.resolved, ['c', 'a', 'b']);
     });
 
+    test('a self-reference cycle resolves to null and toString works', () {
+      slides.insertRef(0, slides);
+      expect(slides.resolved, [
+        [null],
+      ]);
+      expect(slides.toString(), contains('CRDTMovableListRefHandler'));
+    });
+
     test('concurrent move and child edit converge without duplicates', () {
       final docA = CRDTDocument()..registerDefaultFactories();
       final slidesA = CRDTMovableListRefHandler(docA, 'slides');
