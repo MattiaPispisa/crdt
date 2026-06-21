@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'document/document_example.dart';
 import 'sortable_todo_list/sortable_todo_list.dart';
 import 'todo_list/todo_list.dart';
 
@@ -47,6 +48,16 @@ final kExamples = <Example>[
         'same item converge without duplicating it.',
     path: '/sortable-todo-list',
     builder: (_) => const SortableTodoList(),
+  ),
+  Example(
+    name: 'Document',
+    description:
+        'A nested document built on the reference handlers '
+        '(CRDTMapRefHandler / CRDTMovableListRefHandler): sortable chapters, '
+        'each with sortable paragraphs holding collaborative text and a '
+        'sortable list of items. Nested CRDTs that merge conflict-free.',
+    path: '/document',
+    builder: (_) => const DocumentExample(),
   ),
 ];
 
