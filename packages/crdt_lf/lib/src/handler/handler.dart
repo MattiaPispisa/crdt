@@ -56,7 +56,8 @@ abstract class Handler<T>
   /// The [Operation]s are returned in the order they were applied.
   List<Operation> operations() {
     final changes = doc
-        .exportChanges(
+        .changesForHandler(
+          id,
           fromVersionVector: snapshotVersionVector(),
         )
         .sorted(inplace: true);

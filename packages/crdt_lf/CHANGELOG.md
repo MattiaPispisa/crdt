@@ -9,6 +9,12 @@
 - `CRDTFugueListHandler<T>` — a list handler that uses the Fugue algorithm to minimize interleaving of concurrent edits. Like `CRDTListHandler<T>` it is generic over `T` with an optional `ValueCodec<T>`. [72](https://github.com/MattiaPispisa/crdt/issues/72)
 - Added `CRDTFugueMovableListHandler<T>`, a list CRDT that combines Fugue's interleaving-minimizing insertion with an explicit `move(from, to)` operation that preserves the moved element's identity across concurrent reorderings (implements the algorithm from Kleppmann, *Moving Elements in List CRDTs*, PaPoC 2020). [26](https://github.com/MattiaPispisa/crdt/issues/26)
 - It is possible to recursively nest “handlers,” which allow for real-world modeling. The following handlers have been added: `CRDTListRefHandler`, `CRDTMapRefHandler`, and `CRDTMovableListRefHandler`, which, instead of handling values, allow for the nesting of additional handlers. [74](https://github.com/MattiaPispisa/crdt/issues/74)
+- `ChangeStore.changesForHandler` / `CRDTDocument.changesForHandler` — return the changes produced by a single handler, backed by a lazily-built per-handler index.
+
+### Changed
+
+- **Performance**: requesting the operations of a handler now scales linearly with that handler's own operations instead of with the whole oplog. `Handler.operations()` reads from the new per-handler index in `ChangeStore` rather than scanning every change, so resolving a handler's state — and therefore reading a nested tree of handlers — no longer degrades quadratically as the number of handlers grows (resolving an 800-node nested document drops from ~1.3s to ~32ms).
+- **Performance**: `CRDTDocument.importChanges` updates the handler caches once per batch instead of once per applied change, removing the O(handlers × changes) cost on large imports (importing and resolving an 800-node nested document drops from ~2.0s to ~120ms).
 
 ## [3.1.0](https://github.com/MattiaPispisa/crdt/tree/crdt_lf-v3.1.0/packages/crdt_lf)
 **Date:** 2026-06-13
