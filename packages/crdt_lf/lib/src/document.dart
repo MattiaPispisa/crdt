@@ -1302,7 +1302,7 @@ mixin DocumentConsumer {
 /// [T] is the host's own internal representation. It has no required
 /// relationship with `handler.value` or [SnapshotProvider.getSnapshotState]
 /// — pick whatever shape makes recomputation cheap.
-/// 
+///
 /// Set [useIncrementalCacheUpdate] to false to ignore [incrementCachedState]
 mixin CacheableStateProvider<T> on DocumentConsumer {
   @override

@@ -23,10 +23,11 @@ class SortableTodoList extends StatelessWidget {
   Widget _pane(PeerId author) {
     return ChangeNotifierProvider<SortableDocumentState>(
       key: ValueKey(author),
-      create: (context) => SortableDocumentState(
-        author: author,
-        network: context.read<Network>(),
-      ),
+      create:
+          (context) => SortableDocumentState(
+            author: author,
+            network: context.read<Network>(),
+          ),
       child: const _SortablePane(),
     );
   }
@@ -78,12 +79,13 @@ class _SortableListView extends StatelessWidget {
     if (state.isTimeTraveling) {
       return ListView.builder(
         itemCount: todos.length,
-        itemBuilder: (context, index) => SortableTodoItem(
-          key: ValueKey('history-$index'),
-          todo: todos[index],
-          index: index,
-          interactive: false,
-        ),
+        itemBuilder:
+            (context, index) => SortableTodoItem(
+              key: ValueKey('history-$index'),
+              todo: todos[index],
+              index: index,
+              interactive: false,
+            ),
       );
     }
 
@@ -101,12 +103,13 @@ class _SortableListView extends StatelessWidget {
         }
         state.reorder(oldIndex, newIndex);
       },
-      itemBuilder: (context, index) => SortableTodoItem(
-        key: ValueKey(index),
-        todo: todos[index],
-        index: index,
-        interactive: true,
-      ),
+      itemBuilder:
+          (context, index) => SortableTodoItem(
+            key: ValueKey(index),
+            todo: todos[index],
+            index: index,
+            interactive: true,
+          ),
     );
   }
 }

@@ -19,11 +19,12 @@ abstract class ExampleDocument<H extends Handler<dynamic>>
     extends ChangeNotifier {
   /// Creates the controller for [author], wired to [network].
   ExampleDocument({required PeerId author, required Network network})
-      : document = CRDTDocument(peerId: author),
-        _network = network {
+    : document = CRDTDocument(peerId: author),
+      _network = network {
     liveHandler = createHandler(document);
-    _networkChanges =
-        _network.stream(document.peerId).listen(_applyNetworkChange);
+    _networkChanges = _network
+        .stream(document.peerId)
+        .listen(_applyNetworkChange);
     _localChanges = document.localChanges.listen(_network.sendChange);
     _docChanges = document.updates.listen((_) => notifyListeners());
   }

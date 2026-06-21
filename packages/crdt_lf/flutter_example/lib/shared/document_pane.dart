@@ -80,14 +80,15 @@ class DocumentPane extends StatelessWidget {
           _bottomActions(),
         ],
       ),
-      floatingActionButton: state.isTimeTraveling
-          ? null
-          : FloatingActionButton(
-              heroTag: state.author.toString(),
-              onPressed: () => _showAddDialog(context),
-              tooltip: 'Add',
-              child: const Icon(Icons.add),
-            ),
+      floatingActionButton:
+          state.isTimeTraveling
+              ? null
+              : FloatingActionButton(
+                heroTag: state.author.toString(),
+                onPressed: () => _showAddDialog(context),
+                tooltip: 'Add',
+                child: const Icon(Icons.add),
+              ),
     );
   }
 }

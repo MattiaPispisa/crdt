@@ -19,8 +19,9 @@ class TodoList extends StatelessWidget {
   Widget _pane(PeerId author) {
     return ChangeNotifierProvider<DocumentState>(
       key: ValueKey(author),
-      create: (context) =>
-          DocumentState(author: author, network: context.read<Network>()),
+      create:
+          (context) =>
+              DocumentState(author: author, network: context.read<Network>()),
       child: const _TodoPane(),
     );
   }

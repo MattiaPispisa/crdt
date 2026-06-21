@@ -28,9 +28,10 @@ class SortableTodoItem extends StatelessWidget {
     return ListTile(
       leading: Checkbox(
         value: todo.isDone,
-        onChanged: interactive
-            ? (_) => context.read<SortableDocumentState>().toggleTodo(index)
-            : null,
+        onChanged:
+            interactive
+                ? (_) => context.read<SortableDocumentState>().toggleTodo(index)
+                : null,
       ),
       title: Text(
         todo.text,
@@ -44,9 +45,11 @@ class SortableTodoItem extends StatelessWidget {
           IconButton(
             icon: const Icon(Icons.delete_outline),
             tooltip: 'Delete Todo',
-            onPressed: interactive
-                ? () => context.read<SortableDocumentState>().removeTodo(index)
-                : null,
+            onPressed:
+                interactive
+                    ? () =>
+                        context.read<SortableDocumentState>().removeTodo(index)
+                    : null,
           ),
           if (interactive)
             ReorderableDragStartListener(

@@ -12,11 +12,14 @@ class DocumentInfo extends StatelessWidget {
   final ExampleDocument state;
 
   String _info() {
-    final result = StringBuffer('Document Info\n'.toUpperCase())
-      ..writeln('Peer ID: ${state.author}')
-      ..writeln('Changes Count: ${state.changesCount}');
+    final result =
+        StringBuffer('Document Info\n'.toUpperCase())
+          ..writeln('Peer ID: ${state.author}')
+          ..writeln('Changes Count: ${state.changesCount}');
     if (state.isTimeTraveling) {
-      result.writeln('Time Traveling: Yes, cursor: ${state.historySession?.cursor}');
+      result.writeln(
+        'Time Traveling: Yes, cursor: ${state.historySession?.cursor}',
+      );
     } else {
       result.writeln('Time Traveling: No');
     }
@@ -45,9 +48,10 @@ class ToHistoryViewButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final canTimeTravel = state.canTimeTravel();
     return IconButton(
-      tooltip: canTimeTravel
-          ? 'Time travel to the document history'
-          : 'No changes to time travel to',
+      tooltip:
+          canTimeTravel
+              ? 'Time travel to the document history'
+              : 'No changes to time travel to',
       icon: const Icon(Icons.history),
       onPressed: canTimeTravel ? state.timeTravel : null,
     );
@@ -85,7 +89,8 @@ class GarbageCollectionButton extends StatelessWidget {
     return IconButton(
       onPressed: state.garbageCollection,
       icon: const Icon(Icons.delete, color: Colors.red),
-      tooltip: 'Garbage Collection, take a snapshot and garbage collect the '
+      tooltip:
+          'Garbage Collection, take a snapshot and garbage collect the '
           'history until the snapshot version vector',
     );
   }

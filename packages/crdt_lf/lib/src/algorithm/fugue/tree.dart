@@ -1,7 +1,7 @@
 import 'package:crdt_lf/crdt_lf.dart';
 
 /// Implementation of the Fugue tree for collaborative text editing
-/// 
+///
 /// ([The Art of the Fugue: Minimizing Interleaving in Collaborative Text
 /// Editing](https://arxiv.org/abs/2305.00583))
 class FugueTree<T> {

@@ -10,7 +10,8 @@ const _kTodoListDocumentId = 'todo-list';
 ///
 /// Backed by a [CRDTListHandler]: concurrent edits merge conflict-free, but
 /// there is no move operation (use the sortable example for that).
-class DocumentState extends ExampleDocument<CRDTListHandler<EncodedTodoListType>> {
+class DocumentState
+    extends ExampleDocument<CRDTListHandler<EncodedTodoListType>> {
   /// Creates a todo document for [author] wired to [network].
   DocumentState({required super.author, required super.network});
 

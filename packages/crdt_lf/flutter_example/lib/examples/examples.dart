@@ -32,7 +32,8 @@ class Example {
 final kExamples = <Example>[
   Example(
     name: 'Todo List',
-    description: 'A collaborative todo list backed by CRDTListHandler. '
+    description:
+        'A collaborative todo list backed by CRDTListHandler. '
         'Concurrent edits merge conflict-free; includes time travel and '
         'garbage collection.',
     path: '/todo-list',
@@ -40,7 +41,8 @@ final kExamples = <Example>[
   ),
   Example(
     name: 'Sortable Todo List',
-    description: 'A reorderable todo list backed by '
+    description:
+        'A reorderable todo list backed by '
         'CRDTFugueMovableListHandler. Drag to reorder; concurrent moves of the '
         'same item converge without duplicating it.',
     path: '/sortable-todo-list',
