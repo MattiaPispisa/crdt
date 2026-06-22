@@ -54,8 +54,9 @@ final kExamples = <Example>[
     description:
         'A nested document built on the reference handlers '
         '(CRDTMapRefHandler / CRDTMovableListRefHandler): sortable chapters, '
-        'each with sortable paragraphs holding collaborative text and a '
-        'sortable list of items. Nested CRDTs that merge conflict-free.',
+        'each with sortable paragraphs holding collaborative text and an '
+        'extensible, sortable list of blocks — text and todo lists '
+        '(text + done). Nested CRDTs that merge conflict-free.',
     path: '/document',
     builder: (_) => const DocumentExample(),
   ),

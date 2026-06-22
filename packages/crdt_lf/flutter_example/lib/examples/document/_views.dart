@@ -1,23 +1,10 @@
 import 'package:crdt_lf/crdt_lf.dart';
-import 'package:crdt_lf_flutter_example/shared/add_item_dialog.dart';
 import 'package:crdt_lf_flutter_example/shared/crdt_text_field.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '_blocks.dart';
 import '_state.dart';
-
-Future<void> _promptText(
-  BuildContext context, {
-  required String title,
-  required String hint,
-  required void Function(String text) onAdd,
-}) {
-  return showDialog<void>(
-    context: context,
-    barrierDismissible: true,
-    builder: (_) => AddItemDialog(title: title, hint: hint, onAdd: onAdd),
-  );
-}
 
 /// Up / down reorder buttons plus a delete button, shared by every level.
 class ReorderControls extends StatelessWidget {
@@ -163,7 +150,7 @@ class ChapterCard extends StatelessWidget {
                   icon: const Icon(Icons.add),
                   label: const Text('Add paragraph'),
                   onPressed:
-                      () => _promptText(
+                      () => promptText(
                         context,
                         title: 'Add paragraph',
                         hint: 'Paragraph text',
@@ -179,7 +166,8 @@ class ChapterCard extends StatelessWidget {
   }
 }
 
-/// A single paragraph: editable text and a sortable list of items.
+/// A single paragraph: editable text and an extensible, sortable list of
+/// blocks (text / todo list).
 class ParagraphCard extends StatelessWidget {
   /// Creates a paragraph card.
   const ParagraphCard({
@@ -211,8 +199,8 @@ class ParagraphCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final state = context.read<DocumentState>();
     final text = state.paragraphText(paragraph);
-    final items = state.itemsOf(paragraph);
-    final itemsList = state.liveItemsOf(paragraph);
+    final blocks = state.blocksOf(paragraph);
+    final blocksList = state.liveBlocksOf(paragraph);
 
     return Container(
       margin: const EdgeInsets.only(left: 8, top: 4, bottom: 4),
@@ -256,140 +244,125 @@ class ParagraphCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 4),
-          _ItemsList(
-            items: items,
-            itemsList: itemsList,
-            interactive: interactive,
-          ),
-          if (interactive && itemsList != null)
+          for (var i = 0; i < blocks.length; i++)
+            BlockCard(
+              key: ValueKey('block-${blocks[i].id}'),
+              block: blocks[i],
+              parentList: blocksList,
+              index: i,
+              count: blocks.length,
+              interactive: interactive,
+            ),
+          if (interactive && blocksList != null)
             Align(
               alignment: Alignment.centerLeft,
               child: TextButton.icon(
                 icon: const Icon(Icons.add),
-                label: const Text('Add item'),
-                onPressed:
-                    () => _promptText(
-                      context,
-                      title: 'Add item',
-                      hint: 'Item text',
-                      onAdd: (text) => state.addItem(itemsList, text),
-                    ),
+                label: const Text('Add block'),
+                onPressed: () => _showAddBlockMenu(context, state, blocksList),
               ),
             ),
         ],
       ),
     );
   }
-}
 
-class _ItemsList extends StatelessWidget {
-  const _ItemsList({
-    required this.items,
-    required this.itemsList,
-    required this.interactive,
-  });
-
-  final List<CRDTFugueTextHandler> items;
-  final CRDTMovableListRefHandler? itemsList;
-  final bool interactive;
-
-  @override
-  Widget build(BuildContext context) {
-    final state = context.read<DocumentState>();
-
-    if (items.isEmpty) {
-      return const Padding(
-        padding: EdgeInsets.symmetric(vertical: 4, horizontal: 8),
-        child: Text('No items', style: TextStyle(color: Colors.grey)),
-      );
-    }
-
-    // While time traveling (or with no live list) the list is read-only.
-    if (!interactive || itemsList == null) {
-      return Column(
-        children: [
-          for (var i = 0; i < items.length; i++)
-            _ItemRow(
-              key: ValueKey('item-ro-${items[i].id}'),
-              item: items[i],
-              index: i,
-              itemsList: itemsList,
-              interactive: false,
+  void _showAddBlockMenu(
+    BuildContext context,
+    DocumentState state,
+    CRDTMovableListRefHandler blocks,
+  ) {
+    showModalBottomSheet<void>(
+      context: context,
+      builder:
+          (sheetContext) => SafeArea(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const ListTile(title: Text('Add block')),
+                for (final spec in state.blockSpecs)
+                  ListTile(
+                    leading: Icon(spec.icon),
+                    title: Text(spec.label),
+                    onTap: () {
+                      Navigator.of(sheetContext).pop();
+                      state.addBlock(blocks, spec);
+                    },
+                  ),
+              ],
             ),
-        ],
-      );
-    }
-
-    return ReorderableListView.builder(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      buildDefaultDragHandles: false,
-      itemCount: items.length,
-      onReorder: (oldIndex, newIndex) {
-        if (newIndex > oldIndex) {
-          newIndex -= 1;
-        }
-        state.reorderItems(itemsList!, oldIndex, newIndex);
-      },
-      itemBuilder:
-          (context, i) => _ItemRow(
-            key: ValueKey('item-${items[i].id}'),
-            item: items[i],
-            index: i,
-            itemsList: itemsList,
-            interactive: true,
           ),
     );
   }
 }
 
-class _ItemRow extends StatelessWidget {
-  const _ItemRow({
+/// A single block inside a paragraph: a header (kind icon + label +
+/// reorder/delete) and the block body rendered by its [BlockSpec].
+class BlockCard extends StatelessWidget {
+  /// Creates a block card.
+  const BlockCard({
     super.key,
-    required this.item,
+    required this.block,
+    required this.parentList,
     required this.index,
-    required this.itemsList,
+    required this.count,
     required this.interactive,
   });
 
-  final CRDTFugueTextHandler item;
+  /// The block container handler.
+  final CRDTMapRefHandler block;
+
+  /// The parent blocks list handler (live), or `null` while time traveling.
+  final CRDTMovableListRefHandler? parentList;
+
+  /// The block index among its siblings.
   final int index;
-  final CRDTMovableListRefHandler? itemsList;
+
+  /// The number of blocks.
+  final int count;
+
+  /// Whether the block can be edited.
   final bool interactive;
 
   @override
   Widget build(BuildContext context) {
     final state = context.read<DocumentState>();
+    final kind = state.blockKind(block);
+    final spec = kind == null ? null : blockSpecByKind[kind];
+
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 2),
-      child: Row(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Icon(Icons.circle, size: 6),
-          const SizedBox(width: 8),
-          Expanded(
-            child: CrdtTextField(
-              key: ValueKey('item-field-${item.id}'),
-              value: item.value,
-              enabled: interactive,
-              hintText: 'Item',
-              onChanged: (value) => state.editText(item, value),
-            ),
-          ),
-          if (interactive && itemsList != null) ...[
-            IconButton(
-              icon: const Icon(Icons.delete_outline),
-              tooltip: 'Delete item',
-              visualDensity: VisualDensity.compact,
-              onPressed: () => state.removeItem(itemsList!, index),
-            ),
-            ReorderableDragStartListener(
-              index: index,
-              child: const Padding(
-                padding: EdgeInsets.symmetric(horizontal: 4),
-                child: Icon(Icons.drag_handle),
+          Row(
+            children: [
+              Icon(spec?.icon ?? Icons.help_outline, size: 16),
+              const SizedBox(width: 6),
+              Text(
+                spec?.label ?? kind ?? 'Unknown',
+                style: Theme.of(context).textTheme.labelMedium,
               ),
+              const Spacer(),
+              ReorderControls(
+                interactive: interactive && parentList != null,
+                canMoveUp: index > 0,
+                canMoveDown: index < count - 1,
+                onMoveUp:
+                    () => state.reorderBlocks(parentList!, index, index - 1),
+                onMoveDown:
+                    () => state.reorderBlocks(parentList!, index, index + 1),
+                onDelete: () => state.removeBlock(parentList!, index),
+              ),
+            ],
+          ),
+          if (spec != null)
+            spec.buildBody(context, state, block, interactive)
+          else
+            const Text(
+              'Unsupported block',
+              style: TextStyle(color: Colors.grey),
             ),
-          ],
         ],
       ),
     );

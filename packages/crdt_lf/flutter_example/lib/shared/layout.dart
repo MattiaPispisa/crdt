@@ -1,6 +1,5 @@
-import 'package:crdt_lf_flutter_example/shared/network.dart';
+import 'package:crdt_lf_flutter_example/shared/network_settings.dart';
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
 
 class AppLayout extends StatelessWidget {
   const AppLayout({
@@ -22,24 +21,6 @@ class AppLayout extends StatelessWidget {
     );
   }
 
-  Widget _switch() {
-    return Consumer<Network>(
-      builder: (context, network, __) {
-        return Row(
-          children: [
-            const Text('Sync: '),
-            Switch(
-              value: network.isOnline,
-              onChanged: (value) => network.toggleOnlineStatus(),
-            ),
-            Text('Offline events: ${network.offlineEvents}'),
-            const SizedBox(width: 8),
-          ],
-        );
-      },
-    );
-  }
-
   Widget _padded(Widget child) {
     return Padding(padding: const EdgeInsets.all(8), child: child);
   }
@@ -50,7 +31,7 @@ class AppLayout extends StatelessWidget {
       appBar: AppBar(
         leading: _leading(context),
         title: Text('CRDT LF: $example'),
-        actions: [_switch()],
+        actions: const [NetworkSettings(), SizedBox(width: 8)],
       ),
       body: Row(
         children: [

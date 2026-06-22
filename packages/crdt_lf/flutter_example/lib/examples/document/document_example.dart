@@ -12,12 +12,13 @@ final _author1 = PeerId.parse('5b3b2c1a-0001-4000-8000-000000000011');
 final _author2 = PeerId.parse('5b3b2c1a-0001-4000-8000-000000000012');
 
 /// A nested collaborative document: sortable chapters, each with sortable
-/// paragraphs, each holding collaborative text and a sortable list of items.
+/// paragraphs, each holding collaborative text and an extensible, sortable
+/// list of blocks (collaborative text and todo lists).
 ///
-/// Demonstrates nested CRDTs ("flat storage & references"): every node is a
-/// container/leaf handler linked by reference, the tree is reconstructed on a
-/// remote peer from the received changes, and concurrent edits at any depth
-/// merge conflict-free.
+/// Demonstrates nested CRDTs ("flat storage & references") plus an extensible,
+/// factory-style block model: every node is a container/leaf handler linked by
+/// reference, the tree is reconstructed on a remote peer from the received
+/// changes, and concurrent edits at any depth merge conflict-free.
 class DocumentExample extends StatelessWidget {
   /// Creates the document example.
   const DocumentExample({super.key});

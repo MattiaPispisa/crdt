@@ -5,8 +5,13 @@ import 'package:flutter/material.dart';
 /// The parent passes the current [value] (read from a `CRDTFugueTextHandler`)
 /// and an [onChanged] callback (which typically calls `handler.change(...)`).
 ///
-/// Remote edits are adopted only while the field is **not** focused, so the
-/// caret does not jump under the user while they are typing locally.
+/// The controller is always kept in sync with [value] — including while the
+/// field is focused. This is required for correctness: `onChanged` reports the
+/// full new text and the parent turns it into a `change(...)` (a diff against
+/// the handler's current value). If the controller lagged behind a concurrent
+/// remote edit, that diff would compute against a stale base and silently undo
+/// the remote edit. The caret offset is preserved on a best-effort basis (it
+/// may shift when a remote edit lands before it).
 class CrdtTextField extends StatefulWidget {
   /// Creates a collaborative text field.
   const CrdtTextField({
@@ -55,9 +60,21 @@ class _CrdtTextFieldState extends State<CrdtTextField> {
   @override
   void didUpdateWidget(CrdtTextField oldWidget) {
     super.didUpdateWidget(oldWidget);
-    // Adopt external (remote) edits only when the user is not typing here.
-    if (!_focusNode.hasFocus && widget.value != _controller.text) {
-      _controller.text = widget.value;
+    // Always adopt the merged value so the next local edit is diffed against
+    // the up-to-date text (otherwise a `change(...)` would fight concurrent
+    // remote edits). After a local keystroke `value == _controller.text`, so
+    // this is a no-op and the caret does not move; it only runs for genuine
+    // remote updates, where the caret is kept best-effort.
+    if (widget.value != _controller.text) {
+      final offset = _controller.selection.baseOffset;
+      final caret =
+          offset < 0
+              ? widget.value.length
+              : offset.clamp(0, widget.value.length);
+      _controller.value = TextEditingValue(
+        text: widget.value,
+        selection: TextSelection.collapsed(offset: caret),
+      );
     }
   }
 
