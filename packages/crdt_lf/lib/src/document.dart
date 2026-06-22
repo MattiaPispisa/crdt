@@ -58,27 +58,10 @@ abstract class BaseCRDTDocument {
   ///
   /// If [fromVersionVector] is provided, only changes strictly newer than it
   /// (per author) are returned.
-  ///
-  /// The default implementation scans [exportChanges]; [CRDTDocument] overrides
-  /// it with an indexed lookup so the cost is proportional to the handler's own
-  /// changes rather than the whole oplog.
   List<Change> changesForHandler(
     String handlerId, {
     VersionVector? fromVersionVector,
-  }) {
-    final result = <Change>[];
-    for (final change in exportChanges(fromVersionVector: fromVersionVector)) {
-      try {
-        final env = OperationEnvelopeCodec.decode(change.payloadBytes());
-        if (env.handlerId == handlerId) {
-          result.add(change);
-        }
-      } catch (_) {
-        // Ignore changes whose envelope cannot be decoded.
-      }
-    }
-    return result;
-  }
+  });
 
   /// Prepares the system to perform a mutation.
   void prepareMutation();
@@ -1377,6 +1360,25 @@ class _CRDTStaticProxyDocument extends BaseCRDTDocument {
     }
 
     return changes;
+  }
+
+  @override
+  List<Change> changesForHandler(
+    String handlerId, {
+    VersionVector? fromVersionVector,
+  }) {
+    final result = <Change>[];
+    for (final change in exportChanges(fromVersionVector: fromVersionVector)) {
+      try {
+        final env = OperationEnvelopeCodec.decode(change.payloadBytes());
+        if (env.handlerId == handlerId) {
+          result.add(change);
+        }
+      } catch (_) {
+        // Ignore changes whose envelope cannot be decoded.
+      }
+    }
+    return result;
   }
 }
 
