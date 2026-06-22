@@ -21,6 +21,22 @@ void main() {
       expect(root.resolved, {'title': 'Hello'});
     });
 
+    test('getRefAs returns the typed handler or null on mismatch', () {
+      final title = CRDTFugueTextHandler(doc, doc.newHandlerId());
+      root.setRef('title', title);
+
+      expect(root.getRefAs<CRDTFugueTextHandler>('title'), same(title));
+      expect(root.getRefAs<CRDTMapRefHandler>('title'), isNull);
+      expect(root.getRefAs<CRDTFugueTextHandler>('missing'), isNull);
+    });
+
+    test('getRefAs asserts when given the Handler catch-all type', () {
+      expect(
+        () => root.getRefAs<Handler<dynamic>>('title'),
+        throwsA(isA<AssertionError>()),
+      );
+    });
+
     test('resolves a deeply nested tree', () {
       final chapter = CRDTMapRefHandler(doc, doc.newHandlerId());
       final body = CRDTFugueTextHandler(doc, doc.newHandlerId());

@@ -40,6 +40,13 @@ class CRDTMapRefHandler extends CRDTMapHandler<HandlerRef>
     return ref == null ? null : doc.resolveHandler(ref);
   }
 
+  /// Like [getRef] but returns the handler only when it is a [T], otherwise
+  /// `null` — removing the need for an `as` cast at the call site.
+  ///
+  /// {@macro handler_ref_typed}
+  T? getRefAs<T extends Handler<dynamic>>(String key) =>
+      typedRef<T>(getRef(key));
+
   @override
   Iterable<HandlerRef> childRefs() => value.values;
 

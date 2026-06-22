@@ -54,6 +54,13 @@ class CRDTListRefHandler extends CRDTFugueListHandler<HandlerRef>
     return doc.resolveHandler(refs[index]);
   }
 
+  /// Like [getRefAt] but returns the handler only when it is a [T], otherwise
+  /// `null` — removing the need for an `as` cast at the call site.
+  ///
+  /// {@macro handler_ref_typed}
+  T? getRefAtAs<T extends Handler<dynamic>>(int index) =>
+      typedRef<T>(getRefAt(index));
+
   @override
   Iterable<HandlerRef> childRefs() => value;
 

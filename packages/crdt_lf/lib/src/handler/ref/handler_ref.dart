@@ -119,6 +119,22 @@ extension RegisterDefaultFactories on BaseCRDTDocument {
   }
 }
 
+/// Casts an already-resolved [reference] to the handler type [T], returning
+/// `null` when it is `null` or not a [T].
+///
+/// {@template handler_ref_typed}
+/// [T] must be a concrete handler type.
+/// An assertion ensures that `T` cannot be dynamic.
+/// {@endtemplate}
+T? typedRef<T extends Handler<dynamic>>(Handler<dynamic>? reference) {
+  assert(
+    T != Handler<dynamic>,
+    'typedRef<T> requires a concrete handler type for T; '
+    'use getRef/getRefAt when any handler is acceptable.',
+  );
+  return reference is T ? reference : null;
+}
+
 /// Resolves [handler] to a plain value: recurses through [ContainerHandler]s
 /// and reads `value` from the built-in leaf handlers (text, list, map, ...).
 ///

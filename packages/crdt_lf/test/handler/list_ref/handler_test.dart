@@ -26,6 +26,15 @@ void main() {
       expect(list.resolved, ['A', 'B']);
     });
 
+    test('getRefAtAs returns the typed handler or null on mismatch', () {
+      final a = CRDTFugueTextHandler(doc, doc.newHandlerId());
+      list.insertRef(0, a);
+
+      expect(list.getRefAtAs<CRDTFugueTextHandler>(0), same(a));
+      expect(list.getRefAtAs<CRDTMapRefHandler>(0), isNull);
+      expect(list.getRefAtAs<CRDTFugueTextHandler>(5), isNull);
+    });
+
     test('a self-reference cycle resolves to null and toString works', () {
       list.insertRef(0, list);
       expect(list.resolved, [

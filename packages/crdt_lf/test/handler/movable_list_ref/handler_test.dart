@@ -25,6 +25,15 @@ void main() {
       expect(slides.resolved, ['c', 'a', 'b']);
     });
 
+    test('getRefAtAs returns the typed handler or null on mismatch', () {
+      final a = CRDTFugueTextHandler(doc, doc.newHandlerId());
+      slides.insertRef(0, a);
+
+      expect(slides.getRefAtAs<CRDTFugueTextHandler>(0), same(a));
+      expect(slides.getRefAtAs<CRDTMapRefHandler>(0), isNull);
+      expect(slides.getRefAtAs<CRDTFugueTextHandler>(5), isNull);
+    });
+
     test('a self-reference cycle resolves to null and toString works', () {
       slides.insertRef(0, slides);
       expect(slides.resolved, [
