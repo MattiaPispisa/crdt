@@ -1721,7 +1721,7 @@ extension _HandlerHelper on Handler<dynamic> {
 /// Reserved [Snapshot] data key holding the `{handlerId: handlerType}` manifest
 /// used to reconstruct nested handlers after history pruning. The leading
 /// control character keeps it from colliding with any real handler id.
-const String _handlerManifestKey = ' crdt_lf/handler-manifest';
+const String _handlerManifestKey = 'crdt_lf/handler-manifest';
 
 /// Encodes a `{id: type}` manifest as `[uvarint count]` followed, per entry, by
 /// `[uvarint idLen][utf8 id][uvarint typeLen][utf8 type]`.
