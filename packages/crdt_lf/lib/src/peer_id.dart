@@ -1,5 +1,6 @@
-import 'dart:math';
 import 'dart:typed_data';
+
+import 'package:crdt_lf/src/utils/uuid.dart';
 
 /// A regular expression for validating [PeerId]s
 final peerIdRegex = RegExp(
@@ -21,22 +22,7 @@ class PeerId with Comparable<PeerId> {
   }
 
   /// Generates a random [PeerId]
-  factory PeerId.generate() {
-    final bytes = List<int>.generate(16, (_) => _random.nextInt(256));
-
-    // Set version to 4 (random)
-    bytes[6] = (bytes[6] & 0x0F) | 0x40;
-    // Set variant to 1 (RFC 4122)
-    bytes[8] = (bytes[8] & 0x3F) | 0x80;
-
-    final hex = bytes.map((b) => b.toRadixString(16).padLeft(2, '0')).join();
-
-    return PeerId.parse('${hex.substring(0, 8)}-'
-        '${hex.substring(8, 12)}-'
-        '${hex.substring(12, 16)}-'
-        '${hex.substring(16, 20)}-'
-        '${hex.substring(20)}');
-  }
+  factory PeerId.generate() => PeerId.parse(generateUuid());
 
   /// Parses a [PeerId] from a string
   factory PeerId.parse(String value) {
@@ -82,7 +68,6 @@ class PeerId with Comparable<PeerId> {
     // Bytes produced by toUint8List() are already a valid UUID v4 — skip regex.
     return PeerId._(String.fromCharCodes(codes));
   }
-  static final Random _random = Random.secure();
 
   /// The unique identifier string
   final String id;
