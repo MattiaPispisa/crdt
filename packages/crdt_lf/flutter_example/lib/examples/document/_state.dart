@@ -46,21 +46,19 @@ class DocumentState extends ExampleDocument<CRDTMovableListRefHandler> {
   static const _kBlocksKey = 'blocks';
   static const _kDoneKey = 'done';
 
-  /// Key of the boolean register entry inside a todo's `done` handler.
-  static const _kDoneValueKey = 'value';
-
   @override
   CRDTMovableListRefHandler createHandler(BaseCRDTDocument doc) {
     // Register the factories so children received from a remote peer (or a
     // time-travel session) can be reconstructed by type.
     doc.registerDefaultFactories();
-    // The todo `done` flag is a nested CRDTMapHandler<bool>, which is not part
-    // of the default (non-generic) set, so register it explicitly. The factory
-    // is keyed by the handler's runtime type string; that is stable for this
-    // example app (a minified build would need a non-generic wrapper instead).
+    // The todo `done` flag is a nested CRDTRegisterHandler<bool> (a LWW
+    // register), which is generic and therefore not part of the default
+    // (non-generic) set, so register it explicitly. The factory is keyed by the
+    // handler's runtime type string; that is stable for this example app (a
+    // minified build would need a non-generic wrapper instead).
     doc.registerFactory(
-      'CRDTMapHandler<bool>',
-      (d, id) => CRDTMapHandler<bool>(d, id),
+      'CRDTRegisterHandler<bool>',
+      CRDTRegisterHandler<bool>.new,
     );
     return CRDTMovableListRefHandler(doc, _kDocumentId);
   }
@@ -115,8 +113,8 @@ class DocumentState extends ExampleDocument<CRDTMovableListRefHandler> {
 
   /// Whether a todo [item] is marked done.
   bool todoDone(CRDTMapRefHandler item) {
-    final done = item.getRefAs<CRDTMapHandler<bool>>(_kDoneKey);
-    return done?[_kDoneValueKey] ?? false;
+    final done = item.getRefAs<CRDTRegisterHandler<bool>>(_kDoneKey);
+    return done?.value ?? false;
   }
 
   List<CRDTMapRefHandler> _resolveMapList(CRDTMovableListRefHandler list) {
@@ -193,11 +191,11 @@ class DocumentState extends ExampleDocument<CRDTMovableListRefHandler> {
 
   /// Toggles the done flag of a todo [item].
   void toggleTodo(CRDTMapRefHandler item) {
-    final done = item.getRefAs<CRDTMapHandler<bool>>(_kDoneKey);
+    final done = item.getRefAs<CRDTRegisterHandler<bool>>(_kDoneKey);
     if (done == null) {
       return;
     }
-    done.set(_kDoneValueKey, !(done[_kDoneValueKey] ?? false));
+    done.set(!(done.value ?? false));
   }
 
   /// Replaces the text of a todo [item].
@@ -245,9 +243,9 @@ class DocumentState extends ExampleDocument<CRDTMovableListRefHandler> {
     return handler;
   }
 
-  CRDTMapHandler<bool> _newDone({required bool value}) {
-    final handler = CRDTMapHandler<bool>(document, _newId());
-    handler.set(_kDoneValueKey, value);
+  CRDTRegisterHandler<bool> _newDone({required bool value}) {
+    final handler = CRDTRegisterHandler<bool>(document, _newId());
+    handler.set(value);
     return handler;
   }
 }

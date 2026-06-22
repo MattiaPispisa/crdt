@@ -146,6 +146,9 @@ Object? nestedValueOf(Handler<dynamic> handler, Set<String> visiting) {
   if (handler is ContainerHandler) {
     return (handler as ContainerHandler).toNested(visiting);
   }
+  if (handler is CRDTRegisterHandler<dynamic>) {
+    return handler.value;
+  }
   if (handler is CRDTTextHandler) {
     return handler.value;
   }

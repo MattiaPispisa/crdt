@@ -195,6 +195,7 @@ Handlers are the core components of the library. They manage the state of a spec
 - `CRDTFugueListHandler`: Handles ordered list editing with the Fugue algorithm (minimizes interleaving of concurrent edits in the same region).
 - `CRDTFugueMovableListHandler`: Handles ordered list editing with an explicit `move` operation that preserves element identity across concurrent reorderings (no duplicates).
 - `CRDTMapHandler`: Handles map editing (last-writer-wins by HLC).
+- `CRDTRegisterHandler`: Holds a single value with last-writer-wins (the scalar counterpart of the collections — a flag, a number, a non-collaborative string).
 - `CRDTORSetHandler`: Handles set editing with the Observed-Removed (OR) algorithm.
 - `CRDTORMapHandler`: Handles map editing with the Observed-Removed (OR) algorithm.
 
@@ -452,14 +453,15 @@ final todos = CRDTMovableListRefHandler(doc, 'todos');
 
 final item = CRDTMapRefHandler(doc, doc.newHandlerId())
   ..setRef('text', CRDTFugueTextHandler(doc, doc.newHandlerId()))
-  ..setRef('done', CRDTMapHandler<bool>(doc, doc.newHandlerId()));
+  ..setRef('done', CRDTRegisterHandler<bool>(doc, doc.newHandlerId()));
 todos.insertRef(0, item);
 ```
 
 - Conflict resolution reaches **each field**: one peer editing `text` while
   another toggles `done` on the same item → **both survive**.
 - `text` is itself collaborative (character-level merge); `done` is a tiny
-  last-writer-wins register (`CRDTMapHandler<bool>`).
+  last-writer-wins scalar (`CRDTRegisterHandler<bool>`) — the right primitive
+  for a single value, instead of abusing a one-key map.
 - A **movable** list keeps each item's identity across concurrent reorders (no
   duplicates). Costs more handlers and setup.
 
@@ -485,6 +487,9 @@ todos.insertRef(0, item);
 - **List — `CRDTListHandler` vs `CRDTFugueListHandler` vs
   `CRDTFugueMovableListHandler`**: HLC-ordered (cheapest) → interleaving-aware →
   interleaving-aware **plus** identity-preserving `move`.
+- **Scalar — `CRDTRegisterHandler<T>`**: a single last-writer-wins value (flag,
+  number, non-collaborative string). Use it for a scalar field of a nested node
+  instead of a one-key map.
 - **Map / Set — `CRDTMapHandler` (last-writer-wins per key) vs `CRDTORMapHandler`
   / `CRDTORSetHandler`** (observed-removed, add-wins semantics for
   concurrent add/remove).

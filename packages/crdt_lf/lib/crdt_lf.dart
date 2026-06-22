@@ -25,6 +25,7 @@ export 'src/handler/movable_list_ref/handler.dart';
 export 'src/handler/or_map/handler.dart';
 export 'src/handler/or_set/handler.dart';
 export 'src/handler/ref/handler_ref.dart';
+export 'src/handler/register/handler.dart';
 export 'src/handler/tag.dart';
 export 'src/handler/text/handler.dart';
 export 'src/handler/value_codec.dart';
