@@ -27,6 +27,7 @@
     - [Handlers](#handlers)
       - [Working with Complex Types](#working-with-complex-types)
       - [Nested Structures (Containers and References)](#nested-structures-containers-and-references)
+      - [Choosing How to Model Your Data](#choosing-how-to-model-your-data)
     - [Transaction](#transaction-1)
     - [DAG](#dag)
     - [Change](#change)
@@ -53,6 +54,11 @@ Supporting:
 - Observed-Removed (OR) for conflict resolution.
 - Movable lists that preserve element identity across concurrent reorderings.
 - Nested CRDTs via a flat storage of references (model documents, canvases, trees…).
+
+> Beyond each handler's API documentation, see
+> [Choosing How to Model Your Data](#choosing-how-to-model-your-data) for
+> guidance on **which handlers to pick and how to combine them** to model your
+> own document.
 
 ## Features
 
@@ -332,6 +338,33 @@ chapters.insertRef(0, chapter);
 print(root.resolved); // {chapters: [{title: Intro}]}
 ```
 
+The lifecycle of a nested handler — create and attach it, then visualize the
+tree — looks like this:
+
+```mermaid
+graph TD
+    A[Create Child Handler] --> B[Register Handler in Document]
+    B --> C[Attach to Parent as Reference]
+    C --> D[Reference Recorded as a Change]
+
+    D -->|When Read| E[Resolve Tree]
+    E --> F{For Each Reference}
+
+    F -->|Cycle Detected| G[Resolve to Null]
+    F -->|Otherwise| H[Resolve Referenced Handler]
+
+    H --> I{Container or Leaf?}
+    I -->|Container| E
+    I -->|Leaf| J[Read Handler Value]
+
+    G --> K[Build Resolved Tree]
+    J --> K
+```
+
+> On a remote peer the same resolution step recreates children through the
+> registered factories; once they are registered, `importChanges`
+> auto-instantiates them (see below).
+
 Every node is a standard CRDT, so concurrent edits at **any depth** merge
 conflict-free (e.g. one peer adds a chapter while another types into an
 existing paragraph).
@@ -375,6 +408,89 @@ to rebuild every reachable handler from the manifest and the references.
 A complete, interactive example is available in the Flutter example app under
 the **Document** entry (sortable chapters → paragraphs → collaborative text and
 sortable item lists).
+
+#### Choosing How to Model Your Data
+
+There is rarely a single "right" model — it depends on **how far down you want
+conflicts to be resolved**. The trade-off is always the same:
+
+- **Coarser (flat values)** → fewer handlers, less memory/overhead, simpler
+  code, but concurrent edits are resolved at a coarser unit (often
+  last-writer-wins over the whole value).
+- **Finer (nested handlers)** → concurrent edits merge per field / per
+  character, but you pay with more handlers (memory, snapshot size, resolution
+  cost) and more setup.
+
+**Rule of thumb:** push granularity *down* only where concurrency actually
+happens. Model a node as a nested container when peers can edit *different parts
+of it at the same time* and you want both edits to survive; model it as a flat
+value when it is atomic or last-writer-wins is acceptable.
+
+##### Worked example: a TODO list
+
+Each todo has a `text` and a `done` flag. Two reasonable models:
+
+**A — Flat list of values**
+
+```dart
+// TodoItem is a plain value: {text, done}, encoded via a ValueCodec/JSON.
+final todos = CRDTFugueListHandler<Map<String, dynamic>>(doc, 'todos');
+todos.insert(0, {'text': 'Buy milk', 'done': false});
+todos.update(0, {'text': 'Buy milk', 'done': true});
+```
+
+- The **list** merges conflict-free (ordering, concurrent inserts).
+- Each **item is atomic**: editing it is replacing the whole value, so two peers
+  changing `text` and `done` of the *same* item concurrently → one `update`
+  wins, the other is lost (last-writer-wins on the item).
+- Simple, compact, fast. Good when items are small and rarely co-edited.
+
+**B — List of references to per-item sub-documents**
+
+```dart
+final todos = CRDTMovableListRefHandler(doc, 'todos');
+
+final item = CRDTMapRefHandler(doc, doc.newHandlerId())
+  ..setRef('text', CRDTFugueTextHandler(doc, doc.newHandlerId()))
+  ..setRef('done', CRDTMapHandler<bool>(doc, doc.newHandlerId()));
+todos.insertRef(0, item);
+```
+
+- Conflict resolution reaches **each field**: one peer editing `text` while
+  another toggles `done` on the same item → **both survive**.
+- `text` is itself collaborative (character-level merge); `done` is a tiny
+  last-writer-wins register (`CRDTMapHandler<bool>`).
+- A **movable** list keeps each item's identity across concurrent reorders (no
+  duplicates). Costs more handlers and setup.
+
+##### A quick decision guide
+
+| Question | Lean towards |
+|---|---|
+| Peers edit *different fields of the same item* concurrently? | Nested (per-field) — model B |
+| Peers co-edit the *same text* in real time? | A text handler as a child (model B) |
+| Item is atomic / co-editing is rare? | Flat value + LWW — model A |
+| Need drag-to-reorder without duplicating on concurrent moves? | `CRDTMovableListRefHandler` / `CRDTFugueMovableListHandler` |
+| Order matters and peers insert at the same spot? | A Fugue list (less interleaving) |
+
+##### Picking a leaf handler
+
+- **Text — `CRDTTextHandler` vs `CRDTFugueTextHandler`**: both are
+  character-level collaborative text. `CRDTText` orders concurrent edits by HLC
+  (simpler, cheaper, but concurrent insertions at the same position may
+  interleave). `CRDTFugueText` minimizes interleaving (concurrent runs stay
+  contiguous, more intuitive merges) at a higher cost. Use Fugue for real
+  collaborative prose; `CRDTText` for short or rarely-co-edited strings — or a
+  plain `String` value when it is never co-edited.
+- **List — `CRDTListHandler` vs `CRDTFugueListHandler` vs
+  `CRDTFugueMovableListHandler`**: HLC-ordered (cheapest) → interleaving-aware →
+  interleaving-aware **plus** identity-preserving `move`.
+- **Map / Set — `CRDTMapHandler` (last-writer-wins per key) vs `CRDTORMapHandler`
+  / `CRDTORSetHandler`** (observed-removed, add-wins semantics for
+  concurrent add/remove).
+- **Containers — `CRDTMapRefHandler` / `CRDTListRefHandler` /
+  `CRDTMovableListRefHandler`**: use these when the values are themselves
+  sub-documents (model B) rather than raw data.
 
 ### Transaction
 
