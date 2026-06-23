@@ -1,4 +1,5 @@
 import 'package:crdt_lf/crdt_lf.dart';
+import 'package:crdt_lf/src/algorithm/sqrt_decomposition/sqrt_decomposition.dart';
 
 /// Implementation of the Fugue tree for collaborative text editing
 ///
@@ -53,7 +54,7 @@ class FugueTree<T> {
     return FugueTree._(
       nodes: nodes,
       rootID: FugueElementID.nullID(),
-    );
+    ).._rebuildIndex();
   }
 
   /// The nodes in the tree, indexed by ID
@@ -61,6 +62,15 @@ class FugueTree<T> {
 
   /// Root node ID
   final FugueElementID _rootID;
+
+  /// Positional index over the in-order sequence of all structural nodes
+  /// (live nodes and tombstones), answering position↔id queries in `O(√n)`
+  /// instead of an `O(n)` traversal.
+  ///
+  /// Derived accelerator kept in sync by [_addNodeToTree] and [delete]; never
+  /// serialized, rebuilt from the tree on deserialization via [_rebuildIndex].
+  final SqrtDecomposition<FugueElementID> _index =
+      SqrtDecomposition<FugueElementID>();
 
   /// Returns all non-deleted values in the correct order
   List<T> values() {
@@ -255,6 +265,7 @@ class FugueTree<T> {
   void delete(FugueElementID nodeID) {
     if (_nodes.containsKey(nodeID)) {
       _nodes[nodeID]!.node.value = null;
+      _index.setLive(nodeID, live: false);
     }
   }
 
@@ -269,7 +280,7 @@ class FugueTree<T> {
       return;
     }
 
-    final index = nodes().indexWhere((node) => node.id == nodeID);
+    final index = _index.liveRankOf(nodeID);
     if (index == -1) return;
 
     delete(nodeID);
@@ -303,66 +314,110 @@ class FugueTree<T> {
     } else {
       _nodes[parentID]!.rightChildren.add(node.id);
     }
+
+    _indexInsert(node);
   }
 
-  /// Finds the node at the specified position in the tree
+  /// Keeps [_index] in sync after [node] has been linked into the tree.
+  void _indexInsert(FugueNode<T> node) {
+    final isLive = node.value != null;
+
+    // Re-linking a previously-seen id (e.g. a resurrected tombstone): keep its
+    // position, just refresh liveness.
+    if (_index.contains(node.id)) {
+      _index.setLive(node.id, live: isLive);
+      return;
+    }
+
+    final predecessor = _indexPredecessorFor(node);
+    if (predecessor == null) {
+      _index.insertAtFront(node.id, live: isLive);
+    } else {
+      _index.insertAfter(predecessor, node.id, live: isLive);
+    }
+  }
+
+  /// The in-order predecessor of [node] (just appended as the last child on its
+  /// side), or `null` when [node] sorts at the very front of the sequence.
+  FugueElementID? _indexPredecessorFor(FugueNode<T> node) {
+    final parentID = node.parentID;
+    final parentTriple = _nodes[parentID]!;
+    final siblings = node.side == FugueSide.left
+        ? parentTriple.leftChildren
+        : parentTriple.rightChildren;
+
+    // A previous sibling exists: predecessor is the in-order-last node of its
+    // subtree.
+    if (siblings.length >= 2) {
+      return _inOrderLastOfSubtree(siblings[siblings.length - 2]);
+    }
+
+    // [node] is the first child on its side.
+    if (node.side == FugueSide.right) {
+      if (parentID == _rootID) {
+        // The root emits no value, so the predecessor is the in-order-last node
+        // of the root's left subtree, or the front if there is none.
+        final left = parentTriple.leftChildren;
+        return left.isEmpty ? null : _inOrderLastOfSubtree(left.last);
+      }
+      // A node immediately precedes its first right child in traversal order.
+      return parentID;
+    }
+
+    // First left child: it sorts immediately before its parent.
+    if (parentID == _rootID) {
+      return null;
+    }
+    return _index.predecessorOf(parentID);
+  }
+
+  /// The last node visited by an in-order traversal of [id]'s subtree, i.e.
+  /// following the right-children spine to its deepest end.
+  FugueElementID _inOrderLastOfSubtree(FugueElementID id) {
+    var current = id;
+    while (_nodes[current]!.rightChildren.isNotEmpty) {
+      current = _nodes[current]!.rightChildren.last;
+    }
+    return current;
+  }
+
+  /// Rebuilds [_index] from the tree in `O(n)`, used after deserialization.
+  void _rebuildIndex() {
+    final ids = <FugueElementID>[];
+    final live = <bool>[];
+    _collectStructuralInOrder(_rootID, ids, live);
+    _index.bulkBuild(ids, live);
+  }
+
+  /// In-order traversal collecting **all** structural nodes except the root
+  /// (tombstones included), as parallel id/liveness lists for [_index].
+  void _collectStructuralInOrder(
+    FugueElementID nodeID,
+    List<FugueElementID> ids,
+    List<bool> live,
+  ) {
+    final triple = _nodes[nodeID];
+    if (triple == null) {
+      return;
+    }
+    for (final childID in triple.leftChildren) {
+      _collectStructuralInOrder(childID, ids, live);
+    }
+    if (nodeID != _rootID) {
+      ids.add(nodeID);
+      live.add(triple.node.value != null);
+    }
+    for (final childID in triple.rightChildren) {
+      _collectStructuralInOrder(childID, ids, live);
+    }
+  }
+
+  /// Finds the node at the specified [position], or a null id if [position] is
+  /// negative or past the last live node.
+  ///
+  /// Backed by [_index]: `O(√n)` instead of a full in-order traversal.
   FugueElementID findNodeAtPosition(int position) {
-    // TODO(MattiaPispisa): heavy operation [71](https://github.com/MattiaPispisa/crdt/issues/71)
-    return _findNodeAtPositionRecursive(
-      nodeID: _rootID,
-      targetPos: position,
-      currentPos: _CurrentPosition(-1),
-    );
-  }
-
-  /// Recursive helper to find the node at the specified position
-  FugueElementID _findNodeAtPositionRecursive({
-    required FugueElementID nodeID,
-    required int targetPos,
-    required _CurrentPosition currentPos,
-  }) {
-    // Invariant: only called with [_rootID] (always present) or with
-    // children IDs taken from the tree, so [nodeID] always exists.
-    assert(_nodes.containsKey(nodeID), 'nodeID must be in the tree');
-
-    final nodeTriple = _nodes[nodeID]!;
-    final node = nodeTriple.node;
-    final leftChildren = nodeTriple.leftChildren;
-    final rightChildren = nodeTriple.rightChildren;
-
-    // Check left children
-    for (final childID in leftChildren) {
-      final result = _findNodeAtPositionRecursive(
-        nodeID: childID,
-        targetPos: targetPos,
-        currentPos: currentPos,
-      );
-      if (!result.isNull) {
-        return result;
-      }
-    }
-
-    // Check the node itself
-    if (node.value != null) {
-      currentPos.increment();
-      if (currentPos.value == targetPos) {
-        return nodeID;
-      }
-    }
-
-    // Check right children
-    for (final childID in rightChildren) {
-      final result = _findNodeAtPositionRecursive(
-        nodeID: childID,
-        targetPos: targetPos,
-        currentPos: currentPos,
-      );
-      if (!result.isNull) {
-        return result;
-      }
-    }
-
-    return FugueElementID.nullID();
+    return _index.liveAt(position) ?? FugueElementID.nullID();
   }
 
   /// Finds the next node after [nodeID] in the traversal
@@ -376,6 +431,13 @@ class FugueTree<T> {
     // 1. If it has right children, the next is the first right child
     if (nodeTriple.rightChildren.isNotEmpty) {
       return nodeTriple.rightChildren.first;
+    }
+
+    // Fast path: the in-order-last structural node has no successor. The climb
+    // below would reach this same conclusion in `O(depth)`; the index answers
+    // it in `O(√n)`, which keeps appending at the end (typing) sublinear.
+    if (_index.last() == nodeID) {
+      return FugueElementID.nullID();
     }
 
     // 2. Otherwise, climb up the tree until finding a node that is a left child
@@ -444,15 +506,5 @@ class FugueTree<T> {
     for (final childID in rightChildren) {
       _buildTreeString(childID, depth + 1, buffer);
     }
-  }
-}
-
-class _CurrentPosition {
-  _CurrentPosition(this.value);
-
-  int value;
-
-  void increment() {
-    value++;
   }
 }
