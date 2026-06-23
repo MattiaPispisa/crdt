@@ -26,6 +26,8 @@
       - [Identity](#identity)
     - [Handlers](#handlers)
       - [Working with Complex Types](#working-with-complex-types)
+      - [Nested Structures (Containers and References)](#nested-structures-containers-and-references)
+      - [Choosing How to Model Your Data](#choosing-how-to-model-your-data)
     - [Transaction](#transaction-1)
     - [DAG](#dag)
     - [Change](#change)
@@ -45,10 +47,18 @@ This library provides solutions for:
 - List Editing.
 - Map Editing.
 - Set Editing.
+- Nested (recursive) data structures.
 
 Supporting: 
 - Fugue Algorithm for Text Editing to minimize interleaving.
 - Observed-Removed (OR) for conflict resolution.
+- Movable lists that preserve element identity across concurrent reorderings.
+- Nested CRDTs via a flat storage of references (model documents, canvases, trees…).
+
+> Beyond each handler's API documentation, see
+> [Choosing How to Model Your Data](#choosing-how-to-model-your-data) for
+> guidance on **which handlers to pick and how to combine them** to model your
+> own document.
 
 ## Features
 
@@ -179,12 +189,21 @@ If not provided, both are generated: `peerId` and `documentId`.
 ### Handlers
 Handlers are the core components of the library. They manage the state of a specific type of data and provide operations to modify it.
 
-- `CRDTFugueTextHandler`: Handles text editing with the Fugue algorithm.
-- `CRDTListHandler`: Handles list editing.
-- `CRDTTextHandler`: Handles text editing.
-- `CRDTMapHandler`: Handles map editing.
+- `CRDTTextHandler`: Handles text editing (concurrent edits ordered by HLC).
+- `CRDTFugueTextHandler`: Handles text editing with the Fugue algorithm (minimizes interleaving of concurrent edits).
+- `CRDTListHandler`: Handles list editing (concurrent edits ordered by HLC).
+- `CRDTFugueListHandler`: Handles ordered list editing with the Fugue algorithm (minimizes interleaving of concurrent edits in the same region).
+- `CRDTFugueMovableListHandler`: Handles ordered list editing with an explicit `move` operation that preserves element identity across concurrent reorderings (no duplicates).
+- `CRDTMapHandler`: Handles map editing (last-writer-wins by HLC).
+- `CRDTRegisterHandler`: Holds a single value with last-writer-wins (the scalar counterpart of the collections — a flag, a number, a non-collaborative string).
 - `CRDTORSetHandler`: Handles set editing with the Observed-Removed (OR) algorithm.
 - `CRDTORMapHandler`: Handles map editing with the Observed-Removed (OR) algorithm.
+
+Container handlers, used to model nested structures (see [Nested Structures](#nested-structures-containers-and-references)):
+
+- `CRDTMapRefHandler`: a map whose values are references to other handlers.
+- `CRDTListRefHandler`: an ordered (Fugue) list of references to other handlers.
+- `CRDTMovableListRefHandler`: a movable ordered list of references to other handlers.
 
 ```dart
 final doc = CRDTDocument(
@@ -275,6 +294,208 @@ rawList.insert(0, const MyData('item2', 1).toJson());
 final myDataList = rawList.value.map(MyData.fromJson).toList();
 print(myDataList.first.name); // Prints "item2"
 ```
+
+#### Nested Structures (Containers and References)
+
+The handlers above store **raw values**, which keeps the data *flat*. To model
+real-world, deeply nested documents (e.g. a document → chapters → paragraphs →
+collaborative text and sortable lists, or a canvas → slides → elements →
+coordinates), the library uses a **"flat storage & references"** approach,
+similar to Yjs/Loro: the `CRDTDocument` is a flat registry of *all* handlers,
+and parents point to children by **reference**.
+
+**Container handlers** store `HandlerRef`s (a child handler's `id` + `type`)
+instead of raw data:
+
+- `CRDTMapRefHandler` — keyed references (`setRef(key, handler)` / `getRef(key)`).
+- `CRDTListRefHandler` — ordered references using Fugue (`insertRef(index, handler)` / `getRefAt(index)`).
+- `CRDTMovableListRefHandler` — movable ordered references (adds `move(from, to)`), ideal for reordering with stable identity (slides, z-index, sortable lists…).
+
+Each container exposes both views:
+
+- the inherited `value` getter returns the **raw references** (`Map<String, HandlerRef>` / `List<HandlerRef>`);
+- the `resolved` getter returns the **fully resolved subtree** as plain Dart values, resolving every reference recursively (with cycle protection).
+
+Children are resolved **lazily** through the document registry, so the state is
+computed only when read.
+
+```dart
+final doc = CRDTDocument()..registerDefaultFactories();
+
+// Root container.
+final root = CRDTMapRefHandler(doc, 'root');
+
+// A nested, sortable list of chapters.
+final chapters = CRDTListRefHandler(doc, doc.newHandlerId());
+root.setRef('chapters', chapters);
+
+// A chapter holding collaborative text.
+final chapter = CRDTMapRefHandler(doc, doc.newHandlerId());
+final title = CRDTFugueTextHandler(doc, doc.newHandlerId())..insert(0, 'Intro');
+chapter.setRef('title', title);
+chapters.insertRef(0, chapter);
+
+// Read the whole tree resolved to plain Dart values.
+print(root.resolved); // {chapters: [{title: Intro}]}
+```
+
+The lifecycle of a nested handler — create and attach it, then visualize the
+tree — looks like this:
+
+```mermaid
+graph TD
+    A[Create Child Handler] --> B[Register Handler in Document]
+    B --> C[Attach to Parent as Reference]
+    C --> D[Reference Recorded as a Change]
+
+    D -->|When Read| E[Resolve Tree]
+    E --> F{For Each Reference}
+
+    F -->|Cycle Detected| G[Resolve to Null]
+    F -->|Otherwise| H[Resolve Referenced Handler]
+
+    H --> I{Container or Leaf?}
+    I -->|Container| E
+    I -->|Leaf| J[Read Handler Value]
+
+    G --> K[Build Resolved Tree]
+    J --> K
+```
+
+> On a remote peer the same resolution step recreates children through the
+> registered factories; once they are registered, `importChanges`
+> auto-instantiates them (see below).
+
+Every node is a standard CRDT, so concurrent edits at **any depth** merge
+conflict-free (e.g. one peer adds a chapter while another types into an
+existing paragraph).
+
+**Reconstructing the tree on a remote peer.** A peer that only received the
+`Change`s does not know the structure in advance. The document keeps a registry
+of **factories** keyed by handler `type` so it can rebuild the correct handler
+from the `type` carried in each operation payload:
+
+- `doc.registerFactory(type, (doc, id) => Handler)` registers a factory; `doc.registerDefaultFactories()` registers the built-in containers plus the non-generic leaf handlers (`CRDTTextHandler`, `CRDTFugueTextHandler`).
+- `doc.newHandlerId()` generates a globally-unique id for a dynamically-created child (carried inside the reference, so peers reuse the same id).
+- `doc.resolveHandler(ref)` returns the registered handler or instantiates it via its factory.
+
+When factories are registered, **importing changes auto-instantiates** the
+referenced handlers, so the tree is ready right after `importChanges` — no extra
+step:
+
+```dart
+// Peer B registers the same factories, then imports.
+final docB = CRDTDocument()..registerDefaultFactories();
+docB.importChanges(docA.exportChanges());
+
+final rootB = docB.registeredHandlers['root']! as CRDTMapRefHandler;
+print(rootB.resolved); // same tree as docA
+
+// doc.roots() returns the entry points (containers not referenced by another).
+```
+
+For state coming from a **pruned snapshot** (where the changes have been removed
+and only the snapshot `{id: type}` manifest remains), call `doc.reconstruct()`
+to rebuild every reachable handler from the manifest and the references.
+
+> Note on generics: a factory is keyed by `runtimeType.toString()`, which
+> includes generic arguments. `registerDefaultFactories()` therefore registers
+> only the non-generic leaf handlers; generic leaves (e.g.
+> `CRDTMapHandler<num>`) must be registered explicitly with their concrete type
+> string. Auto-registration is **opt-in**: with no factory registered the
+> classic flat usage is unchanged (handlers are created explicitly with a known
+> id on each peer).
+
+A complete, interactive example is available in the Flutter example app under
+the **Document** entry (sortable chapters → paragraphs → collaborative text and
+sortable item lists).
+
+#### Choosing How to Model Your Data
+
+There is rarely a single "right" model — it depends on **how far down you want
+conflicts to be resolved**. The trade-off is always the same:
+
+- **Coarser (flat values)** → fewer handlers, less memory/overhead, simpler
+  code, but concurrent edits are resolved at a coarser unit (often
+  last-writer-wins over the whole value).
+- **Finer (nested handlers)** → concurrent edits merge per field / per
+  character, but you pay with more handlers (memory, snapshot size, resolution
+  cost) and more setup.
+
+**Rule of thumb:** push granularity *down* only where concurrency actually
+happens. Model a node as a nested container when peers can edit *different parts
+of it at the same time* and you want both edits to survive; model it as a flat
+value when it is atomic or last-writer-wins is acceptable.
+
+##### Worked example: a TODO list
+
+Each todo has a `text` and a `done` flag. Two reasonable models:
+
+**A — Flat list of values**
+
+```dart
+// TodoItem is a plain value: {text, done}, encoded via a ValueCodec/JSON.
+final todos = CRDTFugueListHandler<Map<String, dynamic>>(doc, 'todos');
+todos.insert(0, {'text': 'Buy milk', 'done': false});
+todos.update(0, {'text': 'Buy milk', 'done': true});
+```
+
+- The **list** merges conflict-free (ordering, concurrent inserts).
+- Each **item is atomic**: editing it is replacing the whole value, so two peers
+  changing `text` and `done` of the *same* item concurrently → one `update`
+  wins, the other is lost (last-writer-wins on the item).
+- Simple, compact, fast. Good when items are small and rarely co-edited.
+
+**B — List of references to per-item sub-documents**
+
+```dart
+final todos = CRDTMovableListRefHandler(doc, 'todos');
+
+final item = CRDTMapRefHandler(doc, doc.newHandlerId())
+  ..setRef('text', CRDTFugueTextHandler(doc, doc.newHandlerId()))
+  ..setRef('done', CRDTRegisterHandler<bool>(doc, doc.newHandlerId()));
+todos.insertRef(0, item);
+```
+
+- Conflict resolution reaches **each field**: one peer editing `text` while
+  another toggles `done` on the same item → **both survive**.
+- `text` is itself collaborative (character-level merge); `done` is a tiny
+  last-writer-wins scalar (`CRDTRegisterHandler<bool>`) — the right primitive
+  for a single value, instead of abusing a one-key map.
+- A **movable** list keeps each item's identity across concurrent reorders (no
+  duplicates). Costs more handlers and setup.
+
+##### A quick decision guide
+
+| Question | Lean towards |
+|---|---|
+| Peers edit *different fields of the same item* concurrently? | Nested (per-field) — model B |
+| Peers co-edit the *same text* in real time? | A text handler as a child (model B) |
+| Item is atomic / co-editing is rare? | Flat value + LWW — model A |
+| Need drag-to-reorder without duplicating on concurrent moves? | `CRDTMovableListRefHandler` / `CRDTFugueMovableListHandler` |
+| Order matters and peers insert at the same spot? | A Fugue list (less interleaving) |
+
+##### Picking a leaf handler
+
+- **Text — `CRDTTextHandler` vs `CRDTFugueTextHandler`**: both are
+  character-level collaborative text. `CRDTText` orders concurrent edits by HLC
+  (simpler, cheaper, but concurrent insertions at the same position may
+  interleave). `CRDTFugueText` minimizes interleaving (concurrent runs stay
+  contiguous, more intuitive merges) at a higher cost. Use Fugue for real
+  collaborative prose; `CRDTText` for short or rarely-co-edited strings — or a
+  plain `String` value when it is never co-edited.
+- **List — `CRDTListHandler` vs `CRDTFugueListHandler` vs
+  `CRDTFugueMovableListHandler`**: HLC-ordered (cheapest) → interleaving-aware →
+  interleaving-aware **plus** identity-preserving `move`.
+- **Scalar — `CRDTRegisterHandler<T>`**: a single last-writer-wins value (flag,
+  number, non-collaborative string). Use it for a scalar field of a nested node
+  instead of a one-key map.
+- **Map / Set — `CRDTMapHandler` (last-writer-wins per key) vs `CRDTORMapHandler`
+  / `CRDTORSetHandler`** (observed-removed, add-wins semantics for
+  concurrent add/remove).
+- **Containers — `CRDTMapRefHandler` / `CRDTListRefHandler` /
+  `CRDTMovableListRefHandler`**: use these when the values are themselves
+  sub-documents (model B) rather than raw data.
 
 ### Transaction
 

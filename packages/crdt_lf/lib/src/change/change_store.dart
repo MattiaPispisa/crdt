@@ -18,6 +18,10 @@ class ChangeStore {
   /// `_changes` remains the source of truth.
   final _PeerClockIndex _peerClockIndex = _PeerClockIndex();
 
+  /// Secondary index used to answer [changesForHandler];
+  /// `_changes` remains the source of truth.
+  final _HandlerIndex _handlerIndex = _HandlerIndex();
+
   /// Gets the number of changes in the store
   int get changeCount => _changes.length;
 
@@ -53,6 +57,7 @@ class ChangeStore {
 
     _changes[key] = change;
     _peerClockIndex.add(change);
+    _handlerIndex.add(change);
     return true;
   }
 
@@ -85,6 +90,23 @@ class ChangeStore {
   /// {@macro change_iterable_newer_than}
   List<Change> exportChangesNewerThan(VersionVector versionVector) {
     return _peerClockIndex.changesNewerThan(versionVector, _changes.values);
+  }
+
+  /// Returns the [Change]s produced by the handler with the given [handlerId].
+  ///
+  /// If [fromVersionVector] is provided, only changes strictly newer than it
+  /// (per author) are returned. Backed by a secondary index, so the cost is
+  /// proportional to the handler's own changes instead of a full scan of the
+  /// store.
+  List<Change> changesForHandler(
+    String handlerId, {
+    VersionVector? fromVersionVector,
+  }) {
+    return _handlerIndex.changesForHandler(
+      handlerId,
+      fromVersionVector,
+      _changes.values,
+    );
   }
 
   /// Imports [Change]s from another [ChangeStore]
@@ -127,6 +149,7 @@ class ChangeStore {
     }
 
     _peerClockIndex.invalidate();
+    _handlerIndex.invalidate();
 
     // 2. clean up dependencies in remaining changes.
     // Only changes that actually depend on a pruned change are rebuilt.
@@ -171,6 +194,7 @@ class ChangeStore {
   void clear() {
     _changes.clear();
     _peerClockIndex.invalidate();
+    _handlerIndex.invalidate();
   }
 
   /// Returns a string representation of the [ChangeStore]
@@ -266,5 +290,69 @@ class _PeerClockIndex {
       }
     }
     return low;
+  }
+}
+
+/// Secondary index of [Change]s grouped by the id of the handler that produced
+/// them (read from the operation envelope).
+///
+/// Answers [ChangeStore.changesForHandler] in time proportional to the
+/// handler's own changes instead of a full scan of the store — the hot path
+/// when many handlers (e.g. nested containers and leaves) replay their state.
+///
+/// Built lazily from the source of truth on the first query, kept in sync by
+/// [add] on every insertion and dropped by [invalidate] when changes are
+/// removed or rewritten.
+class _HandlerIndex {
+  Map<String, List<Change>>? _byHandler;
+
+  /// Keeps the index in sync with an insertion, when built.
+  void add(Change change) {
+    final index = _byHandler;
+    if (index == null) {
+      return;
+    }
+    index.putIfAbsent(_handlerIdOf(change), () => <Change>[]).add(change);
+  }
+
+  /// Drops the index; it is rebuilt lazily on the next query.
+  void invalidate() {
+    _byHandler = null;
+  }
+
+  /// Returns the changes for [handlerId], optionally filtered to those newer
+  /// than [versionVector] (per author).
+  ///
+  /// [source] is the store's current set of changes, used to (re)build the
+  /// index when it is not available.
+  List<Change> changesForHandler(
+    String handlerId,
+    VersionVector? versionVector,
+    Iterable<Change> source,
+  ) {
+    final index = _byHandler ??= _build(source);
+    final list = index[handlerId];
+    if (list == null) {
+      return <Change>[];
+    }
+    if (versionVector == null) {
+      return list.toList();
+    }
+    return list.where((change) {
+      final clock = versionVector[change.author];
+      return clock == null || change.hlc.happenedAfter(clock);
+    }).toList();
+  }
+
+  static Map<String, List<Change>> _build(Iterable<Change> source) {
+    final index = <String, List<Change>>{};
+    for (final change in source) {
+      index.putIfAbsent(_handlerIdOf(change), () => <Change>[]).add(change);
+    }
+    return index;
+  }
+
+  static String _handlerIdOf(Change change) {
+    return OperationEnvelopeCodec.decode(change.payloadBytes()).handlerId;
   }
 }
