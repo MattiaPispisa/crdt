@@ -67,6 +67,16 @@ workspace/
 
 ## Contributing
 We welcome contributions! Whether you want to:
+- Fix bugs
+- Add new features
+- Improve documentation
+- Optimize performance
+- Or something else
+
+Feel free to:
+1. Check out our [GitHub repository](https://github.com/MattiaPispisa/crdt)
+2. Look at the [open issues](https://github.com/MattiaPispisa/crdt/issues)
+3. Submit a Pull Request
 
 [repo_size]: https://img.shields.io/github/languages/code-size/MattiaPispisa/crdt
 [github_starts]: https://img.shields.io/github/stars/MattiaPispisa/crdt?style=flat&logo=github&color=red
