@@ -146,13 +146,18 @@ void main() {
 ### [Dart Distributed Collaboration Example](https://github.com/MattiaPispisa/crdt/tree/main/packages/crdt_lf/example/main.dart)
 ### [Flutter Distributed Collaboration Example](https://github.com/MattiaPispisa/crdt/tree/main/packages/crdt_lf/flutter_example)
 
+<div align="center">
+  <img width="500" alt="sync_server_multi_client" src="https://raw.githubusercontent.com/MattiaPispisa/crdt/main/assets/demos/flutter_document_example.gif">
+</div>
+
 ## Sync 
 A sync library is available in the [crdt_socket_sync](https://pub.dev/packages/crdt_socket_sync) package. And it's used to synchronize the CRDT state between peers. More info in the [README](https://github.com/MattiaPispisa/crdt/tree/main/packages/crdt_socket_sync/README.md) of the sync package.
 
 A flutter example is available in the [flutter_example](https://github.com/MattiaPispisa/crdt/tree/main/packages/crdt_socket_sync/flutter_example) and provide a synced version of the  "Flutter Distributed Collaboration" Example. 
 
-
+<div align="center">
 <img width="500" alt="sync_server_multi_client" src="https://raw.githubusercontent.com/MattiaPispisa/crdt/main/assets/demos/sync_server_multi_client.gif">
+</div>
 
 ## Persistence
 Persistence is not directly handled in this library but there are some out of the box solutions:
@@ -467,13 +472,13 @@ todos.insertRef(0, item);
 
 ##### A quick decision guide
 
-| Question | Lean towards |
-|---|---|
-| Peers edit *different fields of the same item* concurrently? | Nested (per-field) — model B |
-| Peers co-edit the *same text* in real time? | A text handler as a child (model B) |
-| Item is atomic / co-editing is rare? | Flat value + LWW — model A |
+| Question                                                      | Lean towards                                                |
+|---------------------------------------------------------------|-------------------------------------------------------------|
+| Peers edit *different fields of the same item* concurrently?  | Nested (per-field) — model B                                |
+| Peers co-edit the *same text* in real time?                   | A text handler as a child (model B)                         |
+| Item is atomic / co-editing is rare?                          | Flat value + LWW — model A                                  |
 | Need drag-to-reorder without duplicating on concurrent moves? | `CRDTMovableListRefHandler` / `CRDTFugueMovableListHandler` |
-| Order matters and peers insert at the same spot? | A Fugue list (less interleaving) |
+| Order matters and peers insert at the same spot?              | A Fugue list (less interleaving)                            |
 
 ##### Picking a leaf handler
 
@@ -546,15 +551,15 @@ This is the canonical wire format used by `crdt_lf_hive` for persistence and by
 `crdt_socket_sync` for transport — but it is also a public API you can use
 directly to build your own storage or sync layer.
 
-| Type | Methods | Size |
-|---|---|---|
-| `PeerId` | `toUint8List()` / `fromUint8List()` | 16 B |
-| `HybridLogicalClock` | `toUint8List()` / `fromUint8List()` | 8 B |
-| `OperationId` | `toUint8List()` / `fromUint8List()` | 24 B (peer + hlc) |
-| `FugueElementID` | `toBytes()` / `fromBytes()` (also `readFromBytes` for chained reads) | variable |
-| `VersionVector` | `toBytes()` / `fromBytes()` | variable |
-| `Change` | `toBytes()` / `fromBytes()` | variable, schema-versioned |
-| `Snapshot` | `toBytes()` / `fromBytes()` | variable; `data` is a `Map<String, Uint8List>` framed with a length prefix per entry |
+| Type                 | Methods                                                              | Size                                                                                 |
+|----------------------|----------------------------------------------------------------------|--------------------------------------------------------------------------------------|
+| `PeerId`             | `toUint8List()` / `fromUint8List()`                                  | 16 B                                                                                 |
+| `HybridLogicalClock` | `toUint8List()` / `fromUint8List()`                                  | 8 B                                                                                  |
+| `OperationId`        | `toUint8List()` / `fromUint8List()`                                  | 24 B (peer + hlc)                                                                    |
+| `FugueElementID`     | `toBytes()` / `fromBytes()` (also `readFromBytes` for chained reads) | variable                                                                             |
+| `VersionVector`      | `toBytes()` / `fromBytes()`                                          | variable                                                                             |
+| `Change`             | `toBytes()` / `fromBytes()`                                          | variable, schema-versioned                                                           |
+| `Snapshot`           | `toBytes()` / `fromBytes()`                                          | variable; `data` is a `Map<String, Uint8List>` framed with a length prefix per entry |
 
 Operation payloads inside a `Change` are produced by the handler's
 `ValueCodec<T>`. Each entry of `Snapshot.data` is produced by the handler's
