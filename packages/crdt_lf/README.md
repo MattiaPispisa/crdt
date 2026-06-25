@@ -590,7 +590,7 @@ Feel free to:
 - [A comprehensive study of Convergent and Commutative Replicated Data Types](https://inria.hal.science/inria-00555588/en/)
 - [An O(ND) Difference Algorithm and its Variations (Myers diff algorithm)](https://link.springer.com/article/10.1007/BF01840446)
 - [Moving Elements in List CRDTs](https://martin.kleppmann.com/2020/04/27/papoc-list-move.html)
-
+- [Sqrt Decomposition Data Structure](https://cp-algorithms.com/data_structures/sqrt_decomposition.html)
 ## Packages
 
 Other bricks of the crdt "system" are:

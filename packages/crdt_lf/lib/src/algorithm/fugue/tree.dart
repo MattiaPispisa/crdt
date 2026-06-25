@@ -281,7 +281,9 @@ class FugueTree<T> {
     }
 
     final index = _index.liveRankOf(nodeID);
-    if (index == -1) return;
+    if (index == -1) {
+      return;
+    }
 
     delete(nodeID);
 

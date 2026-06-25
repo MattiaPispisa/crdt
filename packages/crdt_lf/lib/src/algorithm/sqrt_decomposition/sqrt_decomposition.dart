@@ -1,4 +1,4 @@
-import 'dart:math';
+import 'dart:math' as math;
 
 /// A single bucket of the [SqrtDecomposition].
 ///
@@ -41,7 +41,7 @@ class SqrtDecomposition<T> {
   /// Target block size, ≈ √N. Monotonically non-decreasing because [_total]
   /// only grows (elements are never removed).
   int get _target {
-    final t = sqrt(_total).ceil();
+    final t = math.sqrt(_total).ceil();
     return t < 1 ? 1 : t;
   }
 
@@ -197,7 +197,7 @@ class SqrtDecomposition<T> {
     if (keys.isEmpty) {
       return;
     }
-    final target = sqrt(keys.length).ceil().clamp(1, keys.length);
+    final target = math.sqrt(keys.length).ceil().clamp(1, keys.length);
     for (var start = 0; start < keys.length; start += target) {
       final end = (start + target < keys.length) ? start + target : keys.length;
       final block = _Block<T>();
