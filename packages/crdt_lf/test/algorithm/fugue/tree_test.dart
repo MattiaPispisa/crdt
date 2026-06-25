@@ -1,3 +1,5 @@
+import 'dart:math';
+
 import 'package:crdt_lf/crdt_lf.dart';
 import 'package:test/test.dart';
 
@@ -271,6 +273,126 @@ void main() {
       // Delete middle value
       tree.delete(FugueElementID(peerId, 2));
       expect(tree.values(), equals(['a', 'c']));
+    });
+
+    test('findNodeAtPosition matches the live traversal order', () {
+      final tree = FugueTree<dynamic>.empty();
+      final peerId = PeerId.parse('4e91a152-582f-4f46-8944-c2c2e8b217ff');
+
+      var left = FugueElementID.nullID();
+      for (var i = 1; i <= 5; i++) {
+        final id = FugueElementID(peerId, i);
+        tree.insert(
+          newID: id,
+          value: 'v$i',
+          leftOrigin: left,
+          rightOrigin: FugueElementID.nullID(),
+        );
+        left = id;
+      }
+
+      final nodes = tree.nodes();
+      for (var i = 0; i < nodes.length; i++) {
+        expect(tree.findNodeAtPosition(i), nodes[i].id);
+      }
+      expect(tree.findNodeAtPosition(-1).isNull, isTrue);
+      expect(tree.findNodeAtPosition(nodes.length).isNull, isTrue);
+
+      // Delete a middle node: positions shift down, no stale entry remains.
+      tree.delete(FugueElementID(peerId, 3));
+      final after = tree.nodes();
+      for (var i = 0; i < after.length; i++) {
+        expect(tree.findNodeAtPosition(i), after[i].id);
+      }
+    });
+
+    test('findNextNode: last node has no successor (fast path)', () {
+      final tree = FugueTree<dynamic>.empty();
+      final peerId = PeerId.parse('4e91a152-582f-4f46-8944-c2c2e8b217ff');
+
+      final ids = [for (var i = 1; i <= 5; i++) FugueElementID(peerId, i)];
+      var left = FugueElementID.nullID();
+      for (final id in ids) {
+        tree.insert(
+          newID: id,
+          value: '$id',
+          leftOrigin: left,
+          rightOrigin: FugueElementID.nullID(),
+        );
+        left = id;
+      }
+
+      // The in-order-last node has no successor.
+      expect(tree.findNextNode(ids.last).isNull, isTrue);
+      // A middle node still resolves to its right child (unchanged behavior).
+      expect(tree.findNextNode(ids[2]), ids[3]);
+    });
+
+    test(
+        'randomized differential: index agrees with the traversal oracle '
+        'through inserts, deletes, updates and a json round-trip', () {
+      final rng = Random(424242);
+      final peerId = PeerId.parse('4e91a152-582f-4f46-8944-c2c2e8b217ff');
+      final tree = FugueTree<String>.empty();
+      final created = <FugueElementID>[]; // every id ever inserted
+      var counter = 0;
+
+      FugueElementID nextId() => FugueElementID(peerId, counter++);
+
+      void checkAgainstOracle(FugueTree<String> t, int step) {
+        final oracle = t.nodes();
+        for (var i = 0; i < oracle.length; i++) {
+          expect(
+            t.findNodeAtPosition(i),
+            oracle[i].id,
+            reason: 'position $i at step $step',
+          );
+        }
+        expect(t.findNodeAtPosition(-1).isNull, isTrue);
+        expect(t.findNodeAtPosition(oracle.length).isNull, isTrue);
+      }
+
+      for (var step = 0; step < 1500; step++) {
+        final live = tree.nodes();
+        final op = rng.nextInt(10);
+
+        if (live.isEmpty || op < 6) {
+          // Structural insert with random origins (covers right/left children,
+          // sibling chains and root fallbacks).
+          final id = nextId();
+          final leftOrigin = created.isEmpty || rng.nextBool()
+              ? FugueElementID.nullID()
+              : created[rng.nextInt(created.length)];
+          final rightOrigin = created.isNotEmpty && rng.nextInt(3) == 0
+              ? created[rng.nextInt(created.length)]
+              : FugueElementID.nullID();
+          tree.insert(
+            newID: id,
+            value: 'v$counter',
+            leftOrigin: leftOrigin,
+            rightOrigin: rightOrigin,
+          );
+          created.add(id);
+        } else if (op < 8) {
+          tree.delete(live[rng.nextInt(live.length)].id);
+        } else {
+          final id = nextId();
+          tree.update(
+            nodeID: live[rng.nextInt(live.length)].id,
+            newID: id,
+            newValue: 'u$counter',
+          );
+          created.add(id);
+        }
+
+        checkAgainstOracle(tree, step);
+      }
+
+      // A json round-trip rebuilds the index and reproduces the same sequence.
+      final restored = FugueTree<String>.fromJson(tree.toJson());
+      final oracle = tree.nodes().map((n) => n.id).toList();
+      expect(restored.nodes().map((n) => n.id).toList(), oracle);
+      checkAgainstOracle(restored, -1);
     });
   });
 }

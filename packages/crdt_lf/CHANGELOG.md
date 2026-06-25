@@ -13,6 +13,7 @@
 
 ### Changed
 
+- **Performance**: `FugueTree` now answers position↔node queries through a square-root-decomposition positional index (`sqrt_decomposition`) instead of a full in-order traversal, so locating, inserting, deleting and updating a node by position costs O(√n) instead of O(n) (Performing 1,000 operations in the `FugueListHandler` reduces the execution time from  ~121ms to ~34ms). [71](https://github.com/MattiaPispisa/crdt/issues/71)
 - **Performance**: requesting the operations of a handler now scales linearly with that handler's own operations instead of with the whole oplog. `Handler.operations()` reads from the new per-handler index in `ChangeStore` rather than scanning every change, so resolving a handler's state — and therefore reading a nested tree of handlers — no longer degrades quadratically as the number of handlers grows (resolving an 800-node nested document drops from ~1.3s to ~32ms).
 - **Performance**: `CRDTDocument.importChanges` updates the handler caches once per batch instead of once per applied change, removing the O(handlers × changes) cost on large imports (importing and resolving an 800-node nested document drops from ~2.0s to ~120ms).
 - chore: improved documentation highlighting how data can be modelled. The differences between the handlers and the available options are emphasized through concrete examples.
