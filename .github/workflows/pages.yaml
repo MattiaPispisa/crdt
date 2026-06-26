@@ -1,11 +1,7 @@
 name: Deploy CRDT Docs & Example to GitHub Pages
 
 on:
-  # Run on push to main...
-  push:
-    branches:
-      - main
-  # ...and allow manual runs from the Actions tab.
+  # Manual-only: trigger from the Actions tab ("Run workflow").
   workflow_dispatch:
 
 permissions:
