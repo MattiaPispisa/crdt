@@ -15,8 +15,12 @@ type CardItem = {
 
 const cards: CardItem[] = [
   {
-    title: "Examples", // TODO: fill in
-    url: "", // TODO: fill in
+    title: "Examples",
+    description: "Try the interactive Flutter demo built from crdt_lf.",
+    // The Flutter web app is built separately and served at <baseUrl>/example/.
+    // `pathname://` makes Docusaurus treat it as a plain server path (skips SPA
+    // routing and the broken-link checker) while still prepending the baseUrl.
+    url: "pathname:///example/",
   },
 ];
 
