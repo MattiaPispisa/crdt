@@ -1,3 +1,4 @@
+import 'package:crdt_lf_flutter_example/shared/app_bar_links.dart';
 import 'package:flutter/material.dart';
 
 import 'document/document_example.dart';
@@ -73,6 +74,7 @@ class Examples extends StatelessWidget {
       appBar: AppBar(
         leading: const SizedBox(),
         title: const Text('CRDT LF Examples'),
+        actions: const [AppBarLinks(), SizedBox(width: 8)],
       ),
       body: ListView.separated(
         padding: const EdgeInsets.all(8),

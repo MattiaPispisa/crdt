@@ -1,3 +1,4 @@
+import 'package:crdt_lf_flutter_example/shared/app_bar_links.dart';
 import 'package:crdt_lf_flutter_example/shared/network_settings.dart';
 import 'package:flutter/material.dart';
 
@@ -31,7 +32,11 @@ class AppLayout extends StatelessWidget {
       appBar: AppBar(
         leading: _leading(context),
         title: Text('CRDT LF: $example'),
-        actions: const [NetworkSettings(), SizedBox(width: 8)],
+        actions: const [
+          NetworkSettings(),
+          AppBarLinks(),
+          SizedBox(width: 8),
+        ],
       ),
       body: Row(
         children: [
