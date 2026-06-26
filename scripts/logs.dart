@@ -7,9 +7,6 @@ final logger = l.EnLogger(
   ],
 );
 
-/// Per-severity ANSI colors, reusing en_logger's default color mapping
-/// (error → red, warning → yellow, notice → blue, informational → green,
-/// debug → cyan).
 final _colors = l.DevLogColorConfiguration();
 
 /// ANSI reset sequence.
