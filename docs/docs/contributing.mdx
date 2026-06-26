@@ -1,0 +1,59 @@
+---
+sidebar_position: 99
+title: Contributing
+---
+
+# Contributing
+
+We welcome contributions! Whether you want to:
+
+- Fix bugs
+- Add new features
+- Improve documentation
+- Optimize performance
+- Or something else
+
+Feel free to:
+
+1. Check out our [GitHub repository](https://github.com/MattiaPispisa/crdt)
+2. Look at the [open issues](https://github.com/MattiaPispisa/crdt/issues)
+3. Submit a Pull Request
+
+## Workspace structure
+
+This repository is a workspace that contains multiple packages.
+Consistency is granted by the [melos](https://pub.dev/packages/melos) tool.
+
+To setup the workspace, run:
+
+```bash
+melos bootstrap
+```
+
+A command is provided to publish all packages:
+
+```bash
+melos publish --no-dry-run --git-tag-version
+```
+
+This ensures that every package is formatted, analyzed, tested and built.
+
+### Organization
+
+The repository structure is organized as follows:
+
+```
+workspace/
+├── melos.yaml # melos configuration file
+├── packages/ # contains every package of the workspace
+│   ├── crdt_lf/
+│   │   ├── lib/
+│   │   ├── example/
+│   │   └── flutter_example/
+│   └── .../
+│       ├── lib/
+│       ├── example/
+│       └── flutter_example/
+└── assets/ # contains the assets used in the documentation
+    └── .../
+```

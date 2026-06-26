@@ -6,8 +6,8 @@ import type * as Preset from '@docusaurus/preset-classic';
 
 const config: Config = {
   title: 'CRDT',
-  tagline: 'Conflict-free Replicated Data Type are cool',
-  favicon: 'img/favicon.ico',
+  tagline: 'Conflict-free Replicated Data Type',
+  favicon: undefined,
 
   // Future flags, see https://docusaurus.io/docs/api/docusaurus-config#future
   future: {
@@ -52,29 +52,27 @@ const config: Config = {
   ],
 
   themeConfig: {
-    // Replace with your project's social card
-    image: 'img/docusaurus-social-card.jpg',
+    // Social card (og:image). Lives in static/images, copied in by docs_bs.
+    image: 'images/logo.png',
     colorMode: {
       respectPrefersColorScheme: true,
     },
     navbar: {
       title: 'CRDT in Dart',
-      logo: {
-        alt: 'My Site Logo',
-        src: 'img/logo.svg',
-      },
       items: [
         {
-          sidebarId: "exampleSidebar",
           label: "Example",
           position: "left",
-          to: "/example"
+          // The Flutter web app is built separately and served as a static
+          // folder at <baseUrl>/example/. `pathname://` tells Docusaurus to
+          // treat it as a plain server path (skips SPA routing and the
+          // broken-link checker) while still prepending the baseUrl.
+          href: "pathname:///example/",
         },
         {
-          type: 'docSidebar',
-          sidebarId: 'tutorialSidebar',
+          to: '/docs/contributing',
           position: 'left',
-          label: 'Tutorial',
+          label: 'Contributing',
         },
         {
           href: 'https://github.com/MattiaPispisa/crdt',
@@ -90,8 +88,8 @@ const config: Config = {
           title: 'Docs',
           items: [
             {
-              label: 'Tutorial',
-              to: '/docs/intro',
+              label: 'Contributing',
+              to: '/docs/contributing',
             },
           ],
         },
@@ -118,7 +116,7 @@ const config: Config = {
           ],
         },
       ],
-      copyright: `Copyright © ${new Date().getFullYear()} My Project, Inc. Built with Docusaurus.`,
+      copyright: `Copyright © ${new Date().getFullYear()} CRDT_LF, Inc.`,
     },
     prism: {
       theme: prismThemes.github,
