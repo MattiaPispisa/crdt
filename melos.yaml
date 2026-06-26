@@ -10,10 +10,18 @@ sdkPath: .fvm/flutter_sdk
 command:
   publish:
     hooks:
-      pre: melos run format && melos run analyze && melos run test && melos run devtools_build 
+      pre: melos run format && melos run analyze && melos run test && melos run devtools_build
       post: melos run benchmark
 
 scripts:
+  docs_bs:
+    name: "Docs bootstrap"
+    description: "Documentation bootstrap"
+    run: dart run scripts/docs_bs.dart
+  docs_build:
+    name: "Docs build"
+    description: "Build the documentation site"
+    run: dart run scripts/docs_build.dart
   benchmark:
     name: Benchmark
     description: Run the benchmarks

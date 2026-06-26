@@ -1,0 +1,95 @@
+name: Deploy CRDT Docs & Example to GitHub Pages
+
+on:
+  # Run on push to main...
+  push:
+    branches:
+      - main
+  # ...and allow manual runs from the Actions tab.
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Allow only one concurrent deployment, skipping runs queued between the run
+# in-progress and latest queued. Do not cancel in-progress runs as we want to
+# let production deployments finish.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 📚 Checkout
+        uses: actions/checkout@v4
+
+      # --- Toolchain ---
+      - name: 🐦 Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+
+      # melos.yaml pins `sdkPath: .fvm/flutter_sdk` for local FVM use, which
+      # does not exist on CI. Point melos at the runner's Flutter SDK instead.
+      - name: 🧭 Resolve Flutter SDK path for melos
+        run: echo "MELOS_SDK_PATH=$(dirname "$(dirname "$(which flutter)")")" >> "$GITHUB_ENV"
+
+      - name: ⚙️ Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: docs/package-lock.json
+
+      # --- Workspace bootstrap (Dart/Flutter deps for every package) ---
+      # The root pubspec pins melos as a dev_dependency, so `dart run melos`
+      # uses that exact version instead of a globally activated one.
+      - name: 📦 Bootstrap workspace
+        run: |
+          dart pub get
+          dart run melos bootstrap
+
+      # --- Build the Flutter web example ---
+      # base-href must match where the app is served: <baseUrl>/example/.
+      - name: 🛠️ Build Flutter web example
+        working-directory: packages/crdt_lf/flutter_example
+        run: flutter build web --release --base-href "/crdt/example/"
+
+      # --- Build the Docusaurus docs ---
+      # docs_bs copies the shared assets into docs/static and installs node
+      # deps. --ci uses `npm ci` for a clean, lockfile-based install.
+      - name: 🧰 Bootstrap docs
+        run: dart run scripts/docs_bs.dart --ci
+
+      - name: 📖 Build docs
+        run: dart run melos run docs_build
+
+      # --- Assemble the static site ---
+      - name: 🧩 Assemble site
+        run: |
+          mkdir -p _site
+          # Docusaurus output at the site root.
+          cp -R docs/build/. _site/
+          # Flutter example under /example.
+          mkdir -p _site/example
+          cp -R packages/crdt_lf/flutter_example/build/web/. _site/example/
+
+      - name: ⬆️ Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: 🚀 Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
