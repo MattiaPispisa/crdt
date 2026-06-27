@@ -4,15 +4,35 @@ import type * as Preset from '@docusaurus/preset-classic';
 
 // This runs in Node.js - Don't use client-side code here (browser APIs, JSX...)
 
+// Single source of truth for the Flutter web examples link. The app is built
+// separately and served as a static folder at <baseUrl>/examples/.
+// `pathname://` tells Docusaurus to treat it as a plain server path (skips SPA
+// routing and the broken-link checker) while still prepending the baseUrl.
+// Exposed via `customFields` so pages can read it with useDocusaurusContext.
+const examplesUrl = 'pathname:///examples/';
+const projectUrl = 'https://github.com/users/MattiaPispisa/projects/1';
+
 const config: Config = {
   title: 'CRDT',
-  tagline: 'Conflict-free Replicated Data Type',
+  tagline: 'Conflict-free Replicated Data Type in Dart 🎯',
   favicon: undefined,
+
+  customFields: { examplesUrl, projectUrl },
 
   // Future flags, see https://docusaurus.io/docs/api/docusaurus-config#future
   future: {
     v4: true, // Improve compatibility with the upcoming Docusaurus v4
   },
+
+  // `detect` keeps `.md` files (the copied package READMEs) on CommonMark so
+  // their raw HTML (e.g. `<div>`, `<img>`) renders as on GitHub, while `.mdx`
+  // stays MDX. `mermaid: true` enables ```mermaid code fences.
+  markdown: {
+    format: 'detect',
+    mermaid: true,
+  },
+
+  themes: ['@docusaurus/theme-mermaid'],
 
   // Set the production url of your site here
   url: 'https://MattiaPispisa.github.io',
@@ -61,18 +81,24 @@ const config: Config = {
       title: 'CRDT in Dart',
       items: [
         {
-          label: "Example",
+          label: "Examples",
           position: "left",
-          // The Flutter web app is built separately and served as a static
-          // folder at <baseUrl>/example/. `pathname://` tells Docusaurus to
-          // treat it as a plain server path (skips SPA routing and the
-          // broken-link checker) while still prepending the baseUrl.
-          href: "pathname:///example/",
+          href: examplesUrl,
+        },
+        {
+          to: '/docs/packages',
+          position: 'left',
+          label: 'Packages',
         },
         {
           to: '/docs/contributing',
           position: 'left',
           label: 'Contributing',
+        },
+        {
+          to: '/docs/references',
+          position: 'left',
+          label: 'References',
         },
         {
           href: 'https://github.com/MattiaPispisa/crdt',
@@ -90,6 +116,10 @@ const config: Config = {
             {
               label: 'Contributing',
               to: '/docs/contributing',
+            },
+            {
+              label: 'References',
+              to: '/docs/references',
             },
           ],
         },

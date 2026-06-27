@@ -3,6 +3,12 @@ import 'package:test/test.dart';
 
 void main() {
   group('CRDTFugueTextHandler', () {
+    test('exposes a stable handlerType (minification-safe factory key)', () {
+      final handler = CRDTFugueTextHandler(CRDTDocument(), 'text1');
+      expect(handler.handlerType, 'CRDTFugueTextHandler');
+      expect(HandlerRef.of(handler).type, 'CRDTFugueTextHandler');
+    });
+
     test('should insert text', () {
       final doc = CRDTDocument();
       final handler = CRDTFugueTextHandler(doc, 'text1')..insert(0, 'Hello');

@@ -20,6 +20,21 @@ void main(List<String> args) async {
     );
     badExit();
   }
+
+  logger.info('Copy package READMEs');
+  try {
+    copyPackageReadmes(
+      to: docsDir(subParts: ['docs', 'packages']),
+      logger: logger,
+    );
+  } catch (error) {
+    logger.error(
+      'Unable to copy package READMEs',
+      error: error,
+    );
+    badExit();
+  }
+
   logger.info('Install Docs');
 
   try {

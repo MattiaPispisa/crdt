@@ -1,0 +1,9 @@
+{
+  "label": "Packages",
+  "position": 1,
+  "link": {
+    "type": "generated-index",
+    "slug": "/packages",
+    "description": "The packages that make up the CRDT workspace. Each page is the package's README."
+  }
+}

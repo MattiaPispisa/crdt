@@ -3,6 +3,22 @@ import 'package:test/test.dart';
 
 void main() {
   group('CRDTORMapHandler', () {
+    test('handlerType: generic default, and a stable constructor override', () {
+      final doc = CRDTDocument();
+      // Default tag is runtimeType-based and includes both generic arguments.
+      expect(
+        CRDTORMapHandler<String, String>(doc, 'm').handlerType,
+        'CRDTORMapHandler<String, String>',
+      );
+      final tagged = CRDTORMapHandler<String, String>(
+        doc,
+        'm2',
+        handlerType: 'ormap/str',
+      );
+      expect(tagged.handlerType, 'ormap/str');
+      expect(HandlerRef.of(tagged).type, 'ormap/str');
+    });
+
     test('should handle basic put/remove', () {
       final doc = CRDTDocument(
         peerId: PeerId.parse('37f1ec87-6ea5-430b-a627-a6b92b56a02d'),

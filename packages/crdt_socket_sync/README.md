@@ -7,6 +7,8 @@
 [![License: MIT][license_badge]][license_link]
 [![pub publisher][pub_publisher]][pub_publisher_link]
 
+[![docs_badge]][docs_link]
+
 - [CRDT Socket Sync](#crdt-socket-sync)
   - [Overview](#overview)
   - [Features](#features)
@@ -498,3 +500,5 @@ Other bricks of the crdt "system" are:
 [ci_link]: https://github.com/MattiaPispisa/crdt/actions/workflows/main.yaml
 [pub_publisher]: https://img.shields.io/pub/publisher/crdt_socket_sync
 [pub_publisher_link]: https://pub.dev/packages?q=publisher%3Amattiapispisa.it
+[docs_badge]: https://img.shields.io/badge/docs-mattiapispisa.it-blue?style=for-the-badge&logo=read-the-docs
+[docs_link]: https://mattiapispisa.it/crdt/
