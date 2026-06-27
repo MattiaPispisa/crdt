@@ -26,7 +26,7 @@ class CRDTMovableListRefHandler extends CRDTFugueMovableListHandler<HandlerRef>
 
   /// Stable type tag (minification-safe). See [Handler.handlerType].
   @override
-  String get handlerType => 'CRDTMovableListRefHandler';
+  String get handlerType => kMovableListRefHandlerType;
 
   /// Inserts a reference to [handler] at position [index].
   ///

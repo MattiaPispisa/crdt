@@ -28,7 +28,7 @@ class CRDTListRefHandler extends CRDTFugueListHandler<HandlerRef>
 
   /// Stable type tag (minification-safe). See [Handler.handlerType].
   @override
-  String get handlerType => 'CRDTListRefHandler';
+  String get handlerType => kListRefHandlerType;
 
   /// Inserts a reference to [handler] at position [index].
   ///

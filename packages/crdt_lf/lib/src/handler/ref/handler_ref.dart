@@ -110,14 +110,11 @@ abstract class ContainerHandler {
 extension RegisterDefaultFactories on BaseCRDTDocument {
   /// Registers the built-in container and non-generic leaf factories.
   void registerDefaultFactories() {
-    registerFactory('CRDTMapRefHandler', CRDTMapRefHandler.new);
-    registerFactory('CRDTListRefHandler', CRDTListRefHandler.new);
-    registerFactory(
-      'CRDTMovableListRefHandler',
-      CRDTMovableListRefHandler.new,
-    );
-    registerFactory('CRDTTextHandler', CRDTTextHandler.new);
-    registerFactory('CRDTFugueTextHandler', CRDTFugueTextHandler.new);
+    registerFactory(kMapRefHandlerType, CRDTMapRefHandler.new);
+    registerFactory(kListRefHandlerType, CRDTListRefHandler.new);
+    registerFactory(kMovableListRefHandlerType, CRDTMovableListRefHandler.new);
+    registerFactory(kTextHandlerType, CRDTTextHandler.new);
+    registerFactory(kFugueTextHandlerType, CRDTFugueTextHandler.new);
   }
 }
 

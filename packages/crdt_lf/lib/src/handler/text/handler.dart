@@ -36,7 +36,7 @@ class CRDTTextHandler extends Handler<String> {
 
   /// Stable type tag (minification-safe). See [Handler.handlerType].
   @override
-  String get handlerType => 'CRDTTextHandler';
+  String get handlerType => kTextHandlerType;
 
   @override
   late final OperationFactory operationFactory =

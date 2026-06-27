@@ -32,7 +32,7 @@ class CRDTFugueTextHandler
 
   /// Stable type tag (minification-safe). See [Handler.handlerType].
   @override
-  String get handlerType => 'CRDTFugueTextHandler';
+  String get handlerType => kFugueTextHandlerType;
 
   @override
   late final OperationFactory operationFactory =

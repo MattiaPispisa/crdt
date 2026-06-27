@@ -27,7 +27,7 @@ class CRDTMapRefHandler extends CRDTMapHandler<HandlerRef>
 
   /// Stable type tag (minification-safe). See [Handler.handlerType].
   @override
-  String get handlerType => 'CRDTMapRefHandler';
+  String get handlerType => kMapRefHandlerType;
 
   /// Associates [key] with a reference to [handler].
   ///
