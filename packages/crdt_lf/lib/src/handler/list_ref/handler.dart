@@ -1,4 +1,5 @@
 import 'package:crdt_lf/crdt_lf.dart';
+import 'package:crdt_lf/src/handler/handler_type.dart';
 
 /// # CRDT ordered list of references
 ///
@@ -25,6 +26,10 @@ class CRDTListRefHandler extends CRDTFugueListHandler<HandlerRef>
   /// Creates an ordered list-of-references handler bound to [doc] with [id].
   CRDTListRefHandler(super.doc, super.id)
       : super(valueCodec: const HandlerRefCodec());
+
+  /// Stable type tag (minification-safe). See [Handler.handlerType].
+  @override
+  String get handlerType => kListRefHandlerType;
 
   /// Inserts a reference to [handler] at position [index].
   ///

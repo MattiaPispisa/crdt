@@ -46,6 +46,12 @@ class DocumentState extends ExampleDocument<CRDTMovableListRefHandler> {
   static const _kBlocksKey = 'blocks';
   static const _kDoneKey = 'done';
 
+  // Stable type tag for the todo `done` register. Used both as the factory key
+  // and as the handler's `handlerType`, so the two match even in a minified
+  // (Flutter web `--release`) build where `runtimeType.toString()` would be an
+  // opaque `"minified:..."` token. See [Handler.handlerType].
+  static const _kDoneType = 'CRDTRegisterHandler<bool>';
+
   @override
   CRDTMovableListRefHandler createHandler(BaseCRDTDocument doc) {
     // Register the factories so children received from a remote peer (or a
@@ -53,12 +59,11 @@ class DocumentState extends ExampleDocument<CRDTMovableListRefHandler> {
     doc.registerDefaultFactories();
     // The todo `done` flag is a nested CRDTRegisterHandler<bool> (a LWW
     // register), which is generic and therefore not part of the default
-    // (non-generic) set, so register it explicitly. The factory is keyed by the
-    // handler's runtime type string; that is stable for this example app (a
-    // minified build would need a non-generic wrapper instead).
+    // (non-generic) set, so register it explicitly — with the same stable tag
+    // the handler is created with below.
     doc.registerFactory(
-      'CRDTRegisterHandler<bool>',
-      CRDTRegisterHandler<bool>.new,
+      _kDoneType,
+      (d, id) => CRDTRegisterHandler<bool>(d, id, handlerType: _kDoneType),
     );
     return CRDTMovableListRefHandler(doc, _kDocumentId);
   }
@@ -244,7 +249,11 @@ class DocumentState extends ExampleDocument<CRDTMovableListRefHandler> {
   }
 
   CRDTRegisterHandler<bool> _newDone({required bool value}) {
-    final handler = CRDTRegisterHandler<bool>(document, _newId());
+    final handler = CRDTRegisterHandler<bool>(
+      document,
+      _newId(),
+      handlerType: _kDoneType,
+    );
     handler.set(value);
     return handler;
   }

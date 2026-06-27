@@ -110,7 +110,7 @@ String describeDocumentJson(int trackedId) {
       .map(
         (entry) => {
           'id': entry.key,
-          'type': entry.value.runtimeType.toString(),
+          'type': entry.value.handlerType,
           'value': entry.value.toString(),
         },
       )

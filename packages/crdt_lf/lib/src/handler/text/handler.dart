@@ -3,6 +3,7 @@ import 'dart:math';
 import 'dart:typed_data';
 
 import 'package:crdt_lf/crdt_lf.dart';
+import 'package:crdt_lf/src/handler/handler_type.dart';
 
 part 'operation.dart';
 
@@ -33,6 +34,10 @@ class CRDTTextHandler extends Handler<String> {
 
   @override
   String get id => _id;
+
+  /// Stable type tag (minification-safe). See [Handler.handlerType].
+  @override
+  String get handlerType => kTextHandlerType;
 
   @override
   late final OperationFactory operationFactory =

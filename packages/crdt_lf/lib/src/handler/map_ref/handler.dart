@@ -1,4 +1,5 @@
 import 'package:crdt_lf/crdt_lf.dart';
+import 'package:crdt_lf/src/handler/handler_type.dart';
 
 /// # CRDT Map of references
 ///
@@ -24,6 +25,10 @@ class CRDTMapRefHandler extends CRDTMapHandler<HandlerRef>
   /// Creates a map-of-references handler bound to [doc] with the given [id].
   CRDTMapRefHandler(super.doc, super.id)
       : super(valueCodec: const HandlerRefCodec());
+
+  /// Stable type tag (minification-safe). See [Handler.handlerType].
+  @override
+  String get handlerType => kMapRefHandlerType;
 
   /// Associates [key] with a reference to [handler].
   ///

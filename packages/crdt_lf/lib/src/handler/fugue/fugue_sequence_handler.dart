@@ -64,7 +64,7 @@ class FugueState<T, V> {
 abstract class FugueSequenceHandler<T, V, S extends FugueState<T, V>>
     extends Handler<S> with FugueCache<S> {
   /// Creates a Fugue sequence handler bound to [doc] with the given [id].
-  FugueSequenceHandler(super.doc, String id) : _id = id;
+  FugueSequenceHandler(super.doc, String id, {super.handlerType}) : _id = id;
 
   final String _id;
 

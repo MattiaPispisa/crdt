@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:crdt_lf/crdt_lf.dart';
+import 'package:crdt_lf/src/handler/handler_type.dart';
 
 /// A factory that instantiates a [Handler] of a specific runtime type for a
 /// given [BaseCRDTDocument] and handler id.
@@ -20,7 +21,7 @@ typedef HandlerFactory = Handler<dynamic> Function(
 /// raw data, keeping the document storage **flat**: every handler lives in the
 /// document registry keyed by its [id], and a parent points to a child by id.
 ///
-/// The [type] is the child handler's `runtimeType.toString()`, which is the key
+/// The [type] is the child handler's [Handler.handlerType], which is the key
 /// used to look up a [HandlerFactory] when reconstructing the tree on a remote
 /// peer.
 class HandlerRef {
@@ -29,12 +30,14 @@ class HandlerRef {
 
   /// Builds a reference pointing at [handler].
   factory HandlerRef.of(Handler<dynamic> handler) =>
-      HandlerRef(handler.id, handler.runtimeType.toString());
+      HandlerRef(handler.id, handler.handlerType);
 
   /// The referenced handler's unique id.
   final String id;
 
-  /// The referenced handler's runtime type (factory key).
+  /// The referenced handler's type tag (factory key).
+  ///
+  /// See [Handler.handlerType].
   final String type;
 
   @override
@@ -108,14 +111,11 @@ abstract class ContainerHandler {
 extension RegisterDefaultFactories on BaseCRDTDocument {
   /// Registers the built-in container and non-generic leaf factories.
   void registerDefaultFactories() {
-    registerFactory('CRDTMapRefHandler', CRDTMapRefHandler.new);
-    registerFactory('CRDTListRefHandler', CRDTListRefHandler.new);
-    registerFactory(
-      'CRDTMovableListRefHandler',
-      CRDTMovableListRefHandler.new,
-    );
-    registerFactory('CRDTTextHandler', CRDTTextHandler.new);
-    registerFactory('CRDTFugueTextHandler', CRDTFugueTextHandler.new);
+    registerFactory(kMapRefHandlerType, CRDTMapRefHandler.new);
+    registerFactory(kListRefHandlerType, CRDTListRefHandler.new);
+    registerFactory(kMovableListRefHandlerType, CRDTMovableListRefHandler.new);
+    registerFactory(kTextHandlerType, CRDTTextHandler.new);
+    registerFactory(kFugueTextHandlerType, CRDTFugueTextHandler.new);
   }
 }
 

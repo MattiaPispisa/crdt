@@ -32,6 +32,7 @@ class CRDTRegisterHandler<T> extends Handler<T> {
     super.doc,
     this._id, {
     ValueCodec<T>? valueCodec,
+    super.handlerType,
   }) : _valueCodec = valueCodec ?? JsonValueCodec<T>();
 
   final String _id;

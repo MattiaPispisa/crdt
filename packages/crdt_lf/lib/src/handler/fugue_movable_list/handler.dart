@@ -47,6 +47,7 @@ class CRDTFugueMovableListHandler<T> extends Handler<FugueMovableListState<T>>
     super.doc,
     String id, {
     ValueCodec<T>? valueCodec,
+    super.handlerType,
   })  : _id = id,
         _valueCodec = valueCodec ?? JsonValueCodec<T>();
 

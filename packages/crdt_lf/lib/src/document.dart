@@ -100,7 +100,7 @@ abstract class BaseCRDTDocument {
   /// ```
   final Map<String, HandlerFactory> _factories = {};
 
-  /// Registers a [HandlerFactory] for handlers whose `runtimeType.toString()`
+  /// Registers a [HandlerFactory] for handlers whose [Handler.handlerType]
   /// equals [type]. Registering the same [type] twice overwrites the factory.
   void registerFactory(String type, HandlerFactory factory) {
     _factories[type] = factory;
@@ -792,7 +792,7 @@ class CRDTDocument extends BaseCRDTDocument {
     if (hasContainers) {
       state[_handlerManifestKey] = _encodeHandlerManifest({
         for (final provider in _handlers.values)
-          provider.id: provider.runtimeType.toString(),
+          provider.id: provider.handlerType,
       });
     }
     final snapshot = Snapshot.create(
@@ -1697,7 +1697,7 @@ extension _HandlerHelper on Handler<dynamic> {
 
   Uint8List _buildPrefix() {
     final out = BytesBuilder(copy: false);
-    final typeBytes = utf8.encode(runtimeType.toString());
+    final typeBytes = utf8.encode(handlerType);
     UVarint.write(typeBytes.length, out);
     out.add(typeBytes);
     final idBytes = utf8.encode(id);

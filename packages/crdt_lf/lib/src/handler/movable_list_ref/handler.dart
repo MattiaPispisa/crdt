@@ -1,4 +1,5 @@
 import 'package:crdt_lf/crdt_lf.dart';
+import 'package:crdt_lf/src/handler/handler_type.dart';
 
 /// # CRDT movable ordered list of references
 ///
@@ -23,6 +24,10 @@ class CRDTMovableListRefHandler extends CRDTFugueMovableListHandler<HandlerRef>
   /// Creates a movable list-of-references handler bound to [doc] with [id].
   CRDTMovableListRefHandler(super.doc, super.id)
       : super(valueCodec: const HandlerRefCodec());
+
+  /// Stable type tag (minification-safe). See [Handler.handlerType].
+  @override
+  String get handlerType => kMovableListRefHandlerType;
 
   /// Inserts a reference to [handler] at position [index].
   ///

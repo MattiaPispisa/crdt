@@ -3,6 +3,7 @@ import 'dart:typed_data';
 
 import 'package:crdt_lf/crdt_lf.dart';
 import 'package:crdt_lf/src/handler/fugue/fugue_sequence_handler.dart';
+import 'package:crdt_lf/src/handler/handler_type.dart';
 
 part 'operation.dart';
 
@@ -29,6 +30,10 @@ class CRDTFugueTextHandler
     extends FugueSequenceHandler<String, String, FugueTextState> {
   /// Constructor that initializes a new Fugue text handler
   CRDTFugueTextHandler(super.doc, super.id);
+
+  /// Stable type tag (minification-safe). See [Handler.handlerType].
+  @override
+  String get handlerType => kFugueTextHandlerType;
 
   @override
   late final OperationFactory operationFactory =

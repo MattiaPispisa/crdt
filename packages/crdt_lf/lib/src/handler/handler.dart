@@ -13,16 +13,37 @@ typedef OperationFactory = Operation? Function(
 /// data structure in the CRDT system.
 abstract class Handler<T>
     with DocumentConsumer, SnapshotProvider, CacheableStateProvider<T> {
-  /// Creates a new handler for the given document
-  Handler(this.doc) {
+  /// Creates a new handler for the given document.
+  ///
+  /// [handlerType] optionally overrides the type tag
+  /// (see [Handler.handlerType]);
+  /// pass a stable constant for generic handlers
+  /// that must work in a minified build.
+  Handler(this.doc, {String? handlerType}) : _handlerType = handlerType {
     doc.registerHandler(this);
   }
 
   /// The document that owns this handler
   final BaseCRDTDocument doc;
 
+  final String? _handlerType;
+
   /// The factory function that creates an operation from a payload
   OperationFactory get operationFactory;
+
+  /// Stable identifier of this handler's **type**.
+  ///
+  /// Used as the type tag in operation envelopes, in the snapshot handler
+  /// manifest and in [HandlerRef]s, and as the key under which a
+  /// [HandlerFactory] is registered (see [BaseCRDTDocument.registerFactory]).
+  /// The same value is produced on every peer so changes route to the matching
+  /// handler and nested handlers can be reconstructed remotely.
+  ///
+  /// Defaults to `runtimeType.toString()`, which is convenient but **not
+  /// stable under dart2js minification**. Custom handlers
+  /// that must work in a minified build (or persist/sync across builds) should
+  /// override it with their own constant, or pass one to the constructor.
+  String get handlerType => _handlerType ?? runtimeType.toString();
 
   /// Cached insert type instances for this handler, used in operations.
   late final OperationType insertType = OperationType.insert(this);
