@@ -24,11 +24,7 @@ class Panel {
 /// ([_MobAppLayout]). Construct it through the [AppLayout] factory, which picks
 /// the right one for the available width.
 abstract class AppLayout extends StatelessWidget {
-  const AppLayout._({
-    super.key,
-    required this.example,
-    required this.panels,
-  });
+  const AppLayout._({super.key, required this.example, required this.panels});
 
   /// Builds the layout that fits the current screen width: panels side by side
   /// on wide screens, swipeable tabs on phones/tablets.
@@ -138,10 +134,8 @@ class _ResponsiveBodyState extends State<_ResponsiveBody> {
 
 /// Wide layout: the panels side by side, separated by dividers.
 class _DesktopAppLayout extends AppLayout {
-  const _DesktopAppLayout({
-    required super.example,
-    required super.panels,
-  }) : super._();
+  const _DesktopAppLayout({required super.example, required super.panels})
+    : super._();
 
   @override
   Widget build(BuildContext context) {
@@ -188,10 +182,8 @@ class _KeepAliveState extends State<_KeepAlive>
 
 /// Narrow layout (phone/tablet): the panels as swipeable tabs.
 class _MobAppLayout extends AppLayout {
-  const _MobAppLayout({
-    required super.example,
-    required super.panels,
-  }) : super._();
+  const _MobAppLayout({required super.example, required super.panels})
+    : super._();
 
   @override
   Widget build(BuildContext context) {
@@ -201,9 +193,7 @@ class _MobAppLayout extends AppLayout {
         appBar: buildAppBar(
           context,
           bottom: TabBar(
-            tabs: [
-              for (final panel in panels) Tab(text: panel.label),
-            ],
+            tabs: [for (final panel in panels) Tab(text: panel.label)],
           ),
         ),
         body: TabBarView(

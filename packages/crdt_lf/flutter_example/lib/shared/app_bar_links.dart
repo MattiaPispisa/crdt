@@ -10,9 +10,7 @@ class AppBarLinks extends StatelessWidget {
   static final Uri _docsUrl = Uri.parse(
     'https://mattiapispisa.github.io/crdt/',
   );
-  static final Uri _pubDevUrl = Uri.parse(
-    'https://pub.dev/packages/crdt_lf',
-  );
+  static final Uri _pubDevUrl = Uri.parse('https://pub.dev/packages/crdt_lf');
 
   Future<void> _open(Uri url) {
     return launchUrl(url, mode: LaunchMode.platformDefault);
