@@ -18,7 +18,7 @@ class OperationType {
   /// Insert operation
   factory OperationType.insert(Handler<dynamic> handler) {
     return OperationType._(
-      handler: handler.runtimeType.toString(),
+      handler: handler.handlerType,
       type: _insert,
     );
   }
@@ -26,7 +26,7 @@ class OperationType {
   /// Delete operation
   factory OperationType.delete(Handler<dynamic> handler) {
     return OperationType._(
-      handler: handler.runtimeType.toString(),
+      handler: handler.handlerType,
       type: _delete,
     );
   }
@@ -34,7 +34,7 @@ class OperationType {
   /// Update operation
   factory OperationType.update(Handler<dynamic> handler) {
     return OperationType._(
-      handler: handler.runtimeType.toString(),
+      handler: handler.handlerType,
       type: _update,
     );
   }
@@ -43,7 +43,7 @@ class OperationType {
   /// without changing their identity (e.g. `CRDTFugueMovableListHandler`).
   factory OperationType.move(Handler<dynamic> handler) {
     return OperationType._(
-      handler: handler.runtimeType.toString(),
+      handler: handler.handlerType,
       type: _move,
     );
   }

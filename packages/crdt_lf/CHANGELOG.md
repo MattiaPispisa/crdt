@@ -1,3 +1,13 @@
+## [3.2.1](https://github.com/MattiaPispisa/crdt/tree/crdt_lf-v3.2.1/packages/crdt_lf)
+
+**Date:** 2026-06-26
+
+[compare to previous release](https://github.com/MattiaPispisa/crdt/compare/crdt_lf-v3.2.0...crdt_lf-v3.2.1)
+
+### Fixed
+
+- Nested handlers failed to reconstruct (and therefore to sync) in dart2js-minified builds (e.g. Flutter web `--release`), because handler type identity relied on `runtimeType.toString()` (an opaque `"minified:..."` token there). Introduced the stable `Handler.handlerType` tag used for routing, snapshot manifest, `HandlerRef`s and factory keys — defaults to `runtimeType.toString()` (non-breaking), overridden with a constant by built-in handlers, with an optional `handlerType` constructor argument for generic handlers.
+
 ## [3.2.0](https://github.com/MattiaPispisa/crdt/tree/crdt_lf-v3.2.0/packages/crdt_lf)
 
 **Date:** 2026-06-25

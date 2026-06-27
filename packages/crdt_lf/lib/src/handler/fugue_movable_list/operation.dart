@@ -12,7 +12,7 @@ class _FugueMovableListOperationFactory<T> {
     if (env.handlerId != handler.id) {
       return null;
     }
-    if (env.handlerType != handler.runtimeType.toString()) {
+    if (env.handlerType != handler.handlerType) {
       return null;
     }
 

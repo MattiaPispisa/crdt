@@ -15,7 +15,7 @@ class _FugueListOperationFactory<T> {
       return null;
     }
 
-    if (env.handlerType != handler.runtimeType.toString()) {
+    if (env.handlerType != handler.handlerType) {
       return null;
     }
 
