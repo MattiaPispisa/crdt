@@ -49,11 +49,11 @@ jobs:
           dart pub get
           dart run melos bootstrap
 
-      # --- Build the Flutter web example ---
-      # base-href must match where the app is served: <baseUrl>/example/.
-      - name: 🛠️ Build Flutter web example
+      # --- Build the Flutter web examples ---
+      # base-href must match where the app is served: <baseUrl>/examples/.
+      - name: 🛠️ Build Flutter web examples
         working-directory: packages/crdt_lf/flutter_example
-        run: flutter build web --release --base-href "/crdt/example/"
+        run: flutter build web --release --base-href "/crdt/examples/"
 
       # --- Build the Docusaurus docs ---
       # docs_bs copies the shared assets into docs/static and installs node
@@ -70,9 +70,9 @@ jobs:
           mkdir -p _site
           # Docusaurus output at the site root.
           cp -R docs/build/. _site/
-          # Flutter example under /example.
-          mkdir -p _site/example
-          cp -R packages/crdt_lf/flutter_example/build/web/. _site/example/
+          # Flutter example under /examples.
+          mkdir -p _site/examples
+          cp -R packages/crdt_lf/flutter_example/build/web/. _site/examples/
 
       - name: ⬆️ Upload Pages artifact
         uses: actions/upload-pages-artifact@v3

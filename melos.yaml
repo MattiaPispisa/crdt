@@ -8,6 +8,9 @@ repository: https://github.com/MattiaPispisa/crdt
 sdkPath: .fvm/flutter_sdk
 
 command:
+  bootstrap:
+    hooks:
+      post: dart run scripts/flutter_example_bs.dart
   publish:
     hooks:
       pre: melos run format && melos run analyze && melos run test && melos run devtools_build

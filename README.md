@@ -3,7 +3,6 @@
 ![github_starts][github_starts]
 ![melos_badge][melos_badge]
 ![repo_size][repo_size]
-
 <div align="center">
   <img width="300" alt="logo" src="https://raw.githubusercontent.com/MattiaPispisa/crdt/refs/heads/main/assets/images/logo.png" />
 </div>
@@ -16,6 +15,8 @@
     - [Organization](#organization)
   - [Contributing](#contributing)
 
+
+[![docs_badge]][docs_link]
 
 ## Packages
 
@@ -78,6 +79,8 @@ Feel free to:
 2. Look at the [open issues](https://github.com/MattiaPispisa/crdt/issues)
 3. Submit a Pull Request
 
+[docs_badge]: https://img.shields.io/badge/docs-mattiapispisa.it-blue?style=for-the-badge&logo=read-the-docs
+[docs_link]: https://mattiapispisa.it/crdt/
 [repo_size]: https://img.shields.io/github/languages/code-size/MattiaPispisa/crdt
 [github_starts]: https://img.shields.io/github/stars/MattiaPispisa/crdt?style=flat&logo=github&color=red
 [melos_badge]: https://img.shields.io/badge/maintained%20with-melos-f700ff.svg?style=flat
