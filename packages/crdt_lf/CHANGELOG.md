@@ -1,6 +1,6 @@
 ## [3.2.1](https://github.com/MattiaPispisa/crdt/tree/crdt_lf-v3.2.1/packages/crdt_lf)
 
-**Date:** 2026-06-26
+**Date:** 2026-06-27
 
 [compare to previous release](https://github.com/MattiaPispisa/crdt/compare/crdt_lf-v3.2.0...crdt_lf-v3.2.1)
 
