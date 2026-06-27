@@ -81,12 +81,56 @@ class _ResponsiveAppLayout extends AppLayout {
 
   @override
   Widget build(BuildContext context) {
+    return _ResponsiveBody(example: example, panels: panels);
+  }
+}
+
+/// Hosts the responsive switch and keeps each pane's element alive across it.
+///
+/// Crossing [AppLayout.splitBreakpoint] swaps the side-by-side ([_DesktopAppLayout],
+/// a [Row]) and tabbed ([_MobAppLayout], a [TabBarView]) subtrees. Without a
+/// stable identity, Flutter would discard and rebuild every pane — destroying
+/// any state the panes own (e.g. a per-peer `ChangeNotifierProvider`). Wrapping
+/// each [Panel.child] in a [KeyedSubtree] with a [GlobalKey] held in this state
+/// makes Flutter reparent the existing element instead of recreating it.
+class _ResponsiveBody extends StatefulWidget {
+  const _ResponsiveBody({required this.example, required this.panels});
+
+  final String example;
+  final List<Panel> panels;
+
+  @override
+  State<_ResponsiveBody> createState() => _ResponsiveBodyState();
+}
+
+class _ResponsiveBodyState extends State<_ResponsiveBody> {
+  final _paneKeys = <GlobalKey>[];
+
+  /// The panels with each child wrapped in a [KeyedSubtree] keyed by a stable
+  /// [GlobalKey], so panes survive the layout switch.
+  List<Panel> get _keyedPanels {
+    final panels = widget.panels;
+    while (_paneKeys.length < panels.length) {
+      _paneKeys.add(GlobalKey());
+    }
+    return [
+      for (var i = 0; i < panels.length; i++)
+        Panel(
+          label: panels[i].label,
+          child: KeyedSubtree(key: _paneKeys[i], child: panels[i].child),
+        ),
+    ];
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final panels = _keyedPanels;
     return LayoutBuilder(
       builder: (context, constraints) {
         if (constraints.maxWidth >= AppLayout.splitBreakpoint) {
-          return _DesktopAppLayout(example: example, panels: panels);
+          return _DesktopAppLayout(example: widget.example, panels: panels);
         }
-        return _MobAppLayout(example: example, panels: panels);
+        return _MobAppLayout(example: widget.example, panels: panels);
       },
     );
   }
@@ -115,6 +159,33 @@ class _DesktopAppLayout extends AppLayout {
   }
 }
 
+/// Keeps [child] alive when it scrolls out of a lazy viewport.
+///
+/// A [TabBarView] disposes the page that leaves the viewport, which would
+/// destroy any state the page owns (e.g. a per-peer `ChangeNotifierProvider`).
+/// Wrapping each tab page in this widget marks it to be retained, so switching
+/// tabs preserves the pane's state instead of rebuilding it from scratch.
+class _KeepAlive extends StatefulWidget {
+  const _KeepAlive({required this.child});
+
+  final Widget child;
+
+  @override
+  State<_KeepAlive> createState() => _KeepAliveState();
+}
+
+class _KeepAliveState extends State<_KeepAlive>
+    with AutomaticKeepAliveClientMixin {
+  @override
+  bool get wantKeepAlive => true;
+
+  @override
+  Widget build(BuildContext context) {
+    super.build(context);
+    return widget.child;
+  }
+}
+
 /// Narrow layout (phone/tablet): the panels as swipeable tabs.
 class _MobAppLayout extends AppLayout {
   const _MobAppLayout({
@@ -137,7 +208,7 @@ class _MobAppLayout extends AppLayout {
         ),
         body: TabBarView(
           children: [
-            for (final panel in panels) padded(panel.child),
+            for (final panel in panels) _KeepAlive(child: padded(panel.child)),
           ],
         ),
       ),
