@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:crdt_lf/crdt_lf.dart';
+import 'package:crdt_lf/src/handler/handler_type.dart';
 
 /// A factory that instantiates a [Handler] of a specific runtime type for a
 /// given [BaseCRDTDocument] and handler id.

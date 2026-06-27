@@ -1,4 +1,5 @@
 import 'package:crdt_lf/crdt_lf.dart';
+import 'package:crdt_lf/src/handler/handler_type.dart';
 
 /// # CRDT Map of references
 ///
