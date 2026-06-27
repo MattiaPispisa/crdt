@@ -76,21 +76,34 @@ class Examples extends StatelessWidget {
         title: const Text('CRDT LF Examples'),
         actions: const [AppBarLinks(), SizedBox(width: 8)],
       ),
-      body: ListView.separated(
-        padding: const EdgeInsets.all(8),
-        itemCount: kExamples.length,
-        separatorBuilder: (_, __) => const SizedBox(height: 8),
-        itemBuilder: (context, index) {
-          final example = kExamples[index];
-          return Card(
-            child: ListTile(
-              title: Text(example.name),
-              subtitle: Text(example.description),
-              trailing: const Icon(Icons.chevron_right),
-              onTap: () => Navigator.of(context).pushNamed(example.path),
+      body: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 24),
+            child: Image.asset('assets/images/logo.png', height: 120),
+          ),
+          Expanded(
+            // Match the ListTile's ink/focus shape to the Card's rounded
+            // corners so the focus/hover highlight stays inside the card
+            // (without clipping the Card itself).
+            child: ListView.separated(
+              padding: const EdgeInsets.all(8),
+              itemCount: kExamples.length,
+              separatorBuilder: (_, __) => const SizedBox(height: 8),
+              itemBuilder: (context, index) {
+                final example = kExamples[index];
+                return Card(
+                  child: ListTile(
+                    title: Text(example.name),
+                    subtitle: Text(example.description),
+                    trailing: const Icon(Icons.chevron_right),
+                    onTap: () => Navigator.of(context).pushNamed(example.path),
+                  ),
+                );
+              },
             ),
-          );
-        },
+          ),
+        ],
       ),
     );
   }

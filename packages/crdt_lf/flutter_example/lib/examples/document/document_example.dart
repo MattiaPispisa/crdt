@@ -37,8 +37,10 @@ class DocumentExample extends StatelessWidget {
   Widget build(BuildContext context) {
     return AppLayout(
       example: 'Document',
-      leftBody: _pane(_author1),
-      rightBody: _pane(_author2),
+      panels: [
+        Panel(label: 'Peer 1', child: _pane(_author1)),
+        Panel(label: 'Peer 2', child: _pane(_author2)),
+      ],
     );
   }
 }
