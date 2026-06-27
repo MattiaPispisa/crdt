@@ -11,6 +11,11 @@ void main() {
       list = CRDTListRefHandler(doc, 'list');
     });
 
+    test('exposes a stable handlerType (minification-safe factory key)', () {
+      expect(list.handlerType, 'CRDTListRefHandler');
+      expect(HandlerRef.of(list).type, 'CRDTListRefHandler');
+    });
+
     test('insertRef/getRefAt store and resolve children in order', () {
       final a = CRDTFugueTextHandler(doc, doc.newHandlerId());
       final b = CRDTFugueTextHandler(doc, doc.newHandlerId());

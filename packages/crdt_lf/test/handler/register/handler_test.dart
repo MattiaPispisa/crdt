@@ -30,6 +30,20 @@ void main() {
       expect(register.toString(), contains('CRDTRegisterHandler'));
     });
 
+    test('handlerType defaults to runtimeType, or a constructor override', () {
+      // Default (minification-fragile) tag.
+      expect(register.handlerType, 'CRDTRegisterHandler<bool>');
+      // A generic handler can be given a stable tag so it keeps working as a
+      // nested ref in a dart2js-minified build; the tag flows into HandlerRef.
+      final tagged = CRDTRegisterHandler<bool>(
+        doc,
+        'flag2',
+        handlerType: 'register/bool',
+      );
+      expect(tagged.handlerType, 'register/bool');
+      expect(HandlerRef.of(tagged).type, 'register/bool');
+    });
+
     test('concurrent sets converge (last-writer-wins by HLC)', () {
       final docA = CRDTDocument(
         peerId: PeerId.parse('45ee6b65-b393-40b7-9755-8b66dc7d0518'),

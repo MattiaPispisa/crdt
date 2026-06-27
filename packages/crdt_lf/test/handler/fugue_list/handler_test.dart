@@ -3,6 +3,22 @@ import 'package:test/test.dart';
 
 void main() {
   group('CRDTFugueListHandler', () {
+    test('handlerType: generic default, and a stable constructor override', () {
+      final doc = CRDTDocument();
+      expect(
+        CRDTFugueListHandler<String>(doc, 'l').handlerType,
+        'CRDTFugueListHandler<String>',
+      );
+      // Forwarded through FugueSequenceHandler to the base Handler.
+      final tagged = CRDTFugueListHandler<String>(
+        doc,
+        'l2',
+        handlerType: 'fuguelist/str',
+      );
+      expect(tagged.handlerType, 'fuguelist/str');
+      expect(HandlerRef.of(tagged).type, 'fuguelist/str');
+    });
+
     test('should handle basic operations', () {
       final doc = CRDTDocument(
         peerId: PeerId.parse('37f1ec87-6ea5-430b-a627-a6b92b56a02d'),

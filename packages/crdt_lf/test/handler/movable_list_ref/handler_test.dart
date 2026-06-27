@@ -15,6 +15,11 @@ void main() {
       return CRDTFugueTextHandler(doc, doc.newHandlerId())..insert(0, text);
     }
 
+    test('exposes a stable handlerType (minification-safe factory key)', () {
+      expect(slides.handlerType, 'CRDTMovableListRefHandler');
+      expect(HandlerRef.of(slides).type, 'CRDTMovableListRefHandler');
+    });
+
     test('insertRef then move reorders children preserving identity', () {
       slides
         ..insertRef(0, labeled('a'))

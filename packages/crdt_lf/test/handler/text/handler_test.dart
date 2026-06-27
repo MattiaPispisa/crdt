@@ -24,6 +24,11 @@ void main() {
       expect(text.id, equals('test-text'));
     });
 
+    test('exposes a stable handlerType (minification-safe factory key)', () {
+      expect(text.handlerType, 'CRDTTextHandler');
+      expect(HandlerRef.of(text).type, 'CRDTTextHandler');
+    });
+
     test('insert adds text at specified index', () {
       text.insert(0, 'Hello');
       expect(text.value, equals('Hello'));

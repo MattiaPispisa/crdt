@@ -106,5 +106,57 @@ void main() {
       final textB = CRDTFugueTextHandler(docB, 'text');
       expect(textB.value, text.value);
     });
+
+    test('a generic ref with a custom handlerType reconstructs remotely', () {
+      // Mirrors how the example tags its CRDTRegisterHandler<bool> so the
+      // nested ref keeps working in a minified build. The factory key and the
+      // handler's handlerType are the same custom tag.
+      const tag = 'register/bool';
+      CRDTRegisterHandler<bool> newFlag(BaseCRDTDocument d, String id) =>
+          CRDTRegisterHandler<bool>(d, id, handlerType: tag);
+
+      final docA = CRDTDocument()
+        ..registerDefaultFactories()
+        ..registerFactory(tag, newFlag);
+      final flagA = newFlag(docA, 'flag')..set(true);
+      CRDTMapRefHandler(docA, 'root').setRef('done', flagA);
+
+      final docB = CRDTDocument()
+        ..registerDefaultFactories()
+        ..registerFactory(tag, newFlag)
+        ..importChanges(docA.exportChanges())
+        ..reconstruct();
+
+      final rootB = docB.registeredHandlers['root']! as CRDTMapRefHandler;
+      final flagB = rootB.getRefAs<CRDTRegisterHandler<bool>>('done');
+      expect(flagB, isNotNull);
+      expect(flagB!.value, isTrue);
+      expect(flagB.handlerType, tag);
+    });
+
+    test('routing follows handlerType, not the runtime class', () {
+      // The handler is created with tag-A, but the remote peer only knows a
+      // factory registered under tag-B, so the ref must not resolve. This
+      // proves handlerType (not the runtime class) drives factory lookup.
+      final docA = CRDTDocument()..registerDefaultFactories();
+      final flagA = CRDTRegisterHandler<bool>(
+        docA,
+        'flag',
+        handlerType: 'tag-A',
+      )..set(true);
+      CRDTMapRefHandler(docA, 'root').setRef('done', flagA);
+
+      final docB = CRDTDocument()
+        ..registerDefaultFactories()
+        ..registerFactory(
+          'tag-B',
+          (d, id) => CRDTRegisterHandler<bool>(d, id, handlerType: 'tag-B'),
+        )
+        ..importChanges(docA.exportChanges())
+        ..reconstruct();
+
+      final rootB = docB.registeredHandlers['root']! as CRDTMapRefHandler;
+      expect(rootB.getRef('done'), isNull);
+    });
   });
 }

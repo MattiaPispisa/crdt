@@ -11,6 +11,13 @@ void main() {
       root = CRDTMapRefHandler(doc, 'root');
     });
 
+    test('exposes a stable handlerType (minification-safe factory key)', () {
+      // Pinned to the literal on purpose: a change to the tag must fail here,
+      // since it is a wire/identity value shared across peers and builds.
+      expect(root.handlerType, 'CRDTMapRefHandler');
+      expect(HandlerRef.of(root).type, 'CRDTMapRefHandler');
+    });
+
     test('setRef/getRef store and resolve a child handler', () {
       final title = CRDTFugueTextHandler(doc, doc.newHandlerId());
       root.setRef('title', title);
