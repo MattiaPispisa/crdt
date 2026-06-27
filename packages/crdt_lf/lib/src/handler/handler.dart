@@ -15,8 +15,10 @@ abstract class Handler<T>
     with DocumentConsumer, SnapshotProvider, CacheableStateProvider<T> {
   /// Creates a new handler for the given document.
   ///
-  /// [handlerType] optionally overrides the type tag (see [handlerType]); pass
-  /// a stable constant for generic handlers that must work in a minified build.
+  /// [handlerType] optionally overrides the type tag
+  /// (see [Handler.handlerType]);
+  /// pass a stable constant for generic handlers
+  /// that must work in a minified build.
   Handler(this.doc, {String? handlerType}) : _handlerType = handlerType {
     doc.registerHandler(this);
   }
