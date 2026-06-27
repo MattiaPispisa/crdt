@@ -39,6 +39,7 @@ class CRDTORMapHandler<K, V> extends Handler<ORMapState<K, V>> {
     this._id, {
     ValueCodec<K>? keyCodec,
     ValueCodec<V>? valueCodec,
+    super.handlerType,
   })  : _keyCodec = keyCodec ?? JsonValueCodec<K>(),
         _valueCodec = valueCodec ?? JsonValueCodec<V>();
 

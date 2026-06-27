@@ -30,6 +30,7 @@ class CRDTListHandler<T> extends Handler<List<T>> {
     super.doc,
     this._id, {
     ValueCodec<T>? valueCodec,
+    super.handlerType,
   }) : _valueCodec = valueCodec ?? JsonValueCodec<T>();
 
   @override

@@ -40,6 +40,7 @@ class CRDTFugueListHandler<T>
     super.doc,
     super.id, {
     ValueCodec<T>? valueCodec,
+    super.handlerType,
   }) : _valueCodec = valueCodec ?? JsonValueCodec<T>();
 
   final ValueCodec<T> _valueCodec;

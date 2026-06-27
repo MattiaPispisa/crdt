@@ -37,6 +37,7 @@ class CRDTORSetHandler<T> extends Handler<ORSetState<T>> {
     super.doc,
     this._id, {
     ValueCodec<T>? valueCodec,
+    super.handlerType,
   }) : _valueCodec = valueCodec ?? JsonValueCodec<T>();
 
   final String _id;
