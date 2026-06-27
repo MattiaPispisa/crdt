@@ -30,6 +30,10 @@ class CRDTFugueTextHandler
   /// Constructor that initializes a new Fugue text handler
   CRDTFugueTextHandler(super.doc, super.id);
 
+  /// Stable type tag (minification-safe). See [Handler.handlerType].
+  @override
+  String get handlerType => 'CRDTFugueTextHandler';
+
   @override
   late final OperationFactory operationFactory =
       _FugueTextOperationFactory(this).fromBytes;

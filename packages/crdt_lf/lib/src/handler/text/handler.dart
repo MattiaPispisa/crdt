@@ -34,6 +34,10 @@ class CRDTTextHandler extends Handler<String> {
   @override
   String get id => _id;
 
+  /// Stable type tag (minification-safe). See [Handler.handlerType].
+  @override
+  String get handlerType => 'CRDTTextHandler';
+
   @override
   late final OperationFactory operationFactory =
       _TextOperationFactory(this).fromBytes;

@@ -25,6 +25,10 @@ class CRDTMapRefHandler extends CRDTMapHandler<HandlerRef>
   CRDTMapRefHandler(super.doc, super.id)
       : super(valueCodec: const HandlerRefCodec());
 
+  /// Stable type tag (minification-safe). See [Handler.handlerType].
+  @override
+  String get handlerType => 'CRDTMapRefHandler';
+
   /// Associates [key] with a reference to [handler].
   ///
   /// {@macro handlers_in_ref}

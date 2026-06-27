@@ -24,6 +24,10 @@ class CRDTMovableListRefHandler extends CRDTFugueMovableListHandler<HandlerRef>
   CRDTMovableListRefHandler(super.doc, super.id)
       : super(valueCodec: const HandlerRefCodec());
 
+  /// Stable type tag (minification-safe). See [Handler.handlerType].
+  @override
+  String get handlerType => 'CRDTMovableListRefHandler';
+
   /// Inserts a reference to [handler] at position [index].
   ///
   /// {@macro handlers_in_ref}

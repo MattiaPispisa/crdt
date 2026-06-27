@@ -26,6 +26,10 @@ class CRDTListRefHandler extends CRDTFugueListHandler<HandlerRef>
   CRDTListRefHandler(super.doc, super.id)
       : super(valueCodec: const HandlerRefCodec());
 
+  /// Stable type tag (minification-safe). See [Handler.handlerType].
+  @override
+  String get handlerType => 'CRDTListRefHandler';
+
   /// Inserts a reference to [handler] at position [index].
   ///
   /// {@template handlers_in_ref}
