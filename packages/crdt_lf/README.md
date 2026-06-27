@@ -8,6 +8,8 @@
 [![License: MIT][license_badge]][license_link]
 [![pub publisher][pub_publisher]][pub_publisher_link]
 
+[![docs_badge]][docs_link]
+
 - [CRDT LF](#crdt-lf)
   - [Features](#features)
   - [Design](#design)
@@ -145,6 +147,14 @@ void main() {
 
 ### [Dart Distributed Collaboration Example](https://github.com/MattiaPispisa/crdt/tree/main/packages/crdt_lf/example/main.dart)
 ### [Flutter Distributed Collaboration Example](https://github.com/MattiaPispisa/crdt/tree/main/packages/crdt_lf/flutter_example)
+
+> 🚀 **Try the examples live in your browser — no install needed.**
+
+<div align="center">
+
+[![Open the live demo](https://img.shields.io/badge/▶%20Open%20live%20demo-mattiapispisa.it%2Fcrdt%2Fexamples-2ea44f?style=for-the-badge&logo=flutter&logoColor=white)](https://mattiapispisa.it/crdt/examples/)
+
+</div>
 
 <div align="center">
   <img width="500" alt="flutter_document_example" src="https://raw.githubusercontent.com/MattiaPispisa/crdt/main/assets/demos/flutter_document_example.gif">
@@ -617,3 +627,5 @@ Other bricks of the crdt "system" are:
 [pub_publisher]: https://img.shields.io/pub/publisher/crdt_lf
 [pub_publisher_link]: https://pub.dev/packages?q=publisher%3Amattiapispisa.it
 [pub_likes]: https://img.shields.io/pub/likes/crdt_lf
+[docs_badge]: https://img.shields.io/badge/docs-mattiapispisa.it-blue?style=for-the-badge&logo=read-the-docs
+[docs_link]: https://mattiapispisa.it/crdt/

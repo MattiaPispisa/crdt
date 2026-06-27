@@ -1,0 +1,18 @@
+{
+  "title": {
+    "message": "CRDT in Dart",
+    "description": "The title in the navbar"
+  },
+  "item.label.Examples": {
+    "message": "Examples",
+    "description": "Navbar item with label Examples"
+  },
+  "item.label.Contributing": {
+    "message": "Contributing",
+    "description": "Navbar item with label Contributing"
+  },
+  "item.label.GitHub": {
+    "message": "GitHub",
+    "description": "Navbar item with label GitHub"
+  }
+}

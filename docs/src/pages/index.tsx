@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import clsx from "clsx";
 import Link from "@docusaurus/Link";
+import { translate } from "@docusaurus/Translate";
 import useDocusaurusContext from "@docusaurus/useDocusaurusContext";
 import Layout from "@theme/Layout";
 import Heading from "@theme/Heading";
@@ -13,18 +14,39 @@ type CardItem = {
   url: string;
 };
 
-const cards: CardItem[] = [
-  {
-    title: "Examples",
-    description: "Try the interactive Flutter demo built from crdt_lf.",
-    // The Flutter web app is built separately and served at <baseUrl>/example/.
-    // `pathname://` makes Docusaurus treat it as a plain server path (skips SPA
-    // routing and the broken-link checker) while still prepending the baseUrl.
-    url: "pathname:///example/",
-  },
-];
-
 function Cards() {
+  const { siteConfig } = useDocusaurusContext();
+  const examplesUrl = siteConfig.customFields?.examplesUrl as string;
+
+  const cards: CardItem[] = [
+    {
+      title: translate({
+        id: "homepage.cards.examples.title",
+        message: "Examples",
+        description: "Title of the Examples card on the homepage",
+      }),
+      description: translate({
+        id: "homepage.cards.examples.description",
+        message: "Try the interactive Flutter demo built from crdt_lf.",
+        description: "Description of the Examples card on the homepage",
+      }),
+      url: examplesUrl,
+    },
+    {
+      title: translate({
+        id: "homepage.cards.packages.title",
+        message: "Packages",
+        description: "Title of the Packages card on the homepage",
+      }),
+      description: translate({
+        id: "homepage.cards.packages.description",
+        message: "Read the documentation for each package in the workspace.",
+        description: "Description of the Packages card on the homepage",
+      }),
+      url: "/docs/packages",
+    },
+  ];
+
   return (
     <section className={styles.cards}>
       {cards.map((card) => (
@@ -32,7 +54,9 @@ function Cards() {
           <Heading as="h3" className={styles.cardTitle}>
             {card.title}
           </Heading>
-          {card.description && <p className={styles.cardDescription}>{card.description}</p>}
+          {card.description && (
+            <p className={styles.cardDescription}>{card.description}</p>
+          )}
         </Link>
       ))}
     </section>
@@ -62,7 +86,15 @@ export default function Home(): ReactNode {
     <Layout title={`Hello from ${siteConfig.title}`}>
       <HomepageHeader />
       <main className={styles.main}>
-        <img src={logoUrl} className={styles.logo} role="img" alt={siteConfig.title} />
+        <img
+          src={logoUrl}
+          className={styles.logo}
+          role="img"
+          alt={siteConfig.title}
+        />
+        <Link href={siteConfig.customFields!.projectUrl as string}>
+          Currently working on ...
+        </Link>
         <Cards />
       </main>
     </Layout>
