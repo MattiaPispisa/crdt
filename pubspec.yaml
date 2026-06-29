@@ -5,5 +5,5 @@ environment:
 
 dev_dependencies:
   en_logger: ^2.0.0
-  melos: ^6.3.2
+  melos: ^8.0.0
   path: ^1.9.0
