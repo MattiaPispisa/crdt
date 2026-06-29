@@ -79,7 +79,7 @@ Feel free to:
 2. Look at the [open issues](https://github.com/MattiaPispisa/crdt/issues)
 3. Submit a Pull Request
 
-[docs_badge]: https://img.shields.io/badge/docs-mattiapispisa.it-blue?style=for-the-badge&logo=read-the-docs
+[docs_badge]: https://img.shields.io/badge/docs-crdt-blue?style=for-the-badge&logo=read-the-docs
 [docs_link]: https://mattiapispisa.it/crdt/
 [repo_size]: https://img.shields.io/github/languages/code-size/MattiaPispisa/crdt
 [github_starts]: https://img.shields.io/github/stars/MattiaPispisa/crdt?style=flat&logo=github&color=red

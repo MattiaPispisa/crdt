@@ -110,5 +110,5 @@ Other bricks of the crdt "system" are:
 [pub_publisher]: https://img.shields.io/pub/publisher/hlc_dart
 [pub_publisher_link]: https://pub.dev/packages?q=publisher%3Amattiapispisa.it
 [pub_likes]: https://img.shields.io/pub/likes/hlc_dart
-[docs_badge]: https://img.shields.io/badge/docs-mattiapispisa.it-blue?style=for-the-badge&logo=read-the-docs
+[docs_badge]: https://img.shields.io/badge/docs-crdt-blue?style=for-the-badge&logo=read-the-docs
 [docs_link]: https://mattiapispisa.it/crdt/
