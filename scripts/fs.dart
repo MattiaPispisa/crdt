@@ -20,6 +20,18 @@ io.Directory flutterExampleDir({List<String> subParts = const []}) {
   ].toDir();
 }
 
+io.File crdtLfExamplePubspecLock() {
+  return io.File(
+    path.joinAll(
+      [crdtLfDir().path, 'flutter_example', 'pubspec.lock'],
+    ),
+  );
+}
+
+io.Directory crdtLfDir() {
+  return packagesDir(subParts: ['crdt_lf']);
+}
+
 io.Directory packagesDir({List<String> subParts = const []}) {
   return [io.Directory.current.path, 'packages', ...subParts].toDir();
 }

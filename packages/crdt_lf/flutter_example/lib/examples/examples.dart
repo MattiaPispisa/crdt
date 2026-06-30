@@ -1,3 +1,4 @@
+import 'package:crdt_lf_flutter_example/generated.dart';
 import 'package:crdt_lf_flutter_example/shared/app_bar_links.dart';
 import 'package:flutter/material.dart';
 
@@ -78,33 +79,61 @@ class Examples extends StatelessWidget {
       ),
       body: Column(
         children: [
+          Padding(padding: const EdgeInsets.only(top: 24), child: _Logo()),
           Padding(
-            padding: const EdgeInsets.symmetric(vertical: 24),
-            child: Image.asset('assets/images/logo.png', height: 120),
+            padding: const EdgeInsets.only(top: 8, bottom: 24),
+            child: _Version(),
           ),
-          Expanded(
-            // Match the ListTile's ink/focus shape to the Card's rounded
-            // corners so the focus/hover highlight stays inside the card
-            // (without clipping the Card itself).
-            child: ListView.separated(
-              padding: const EdgeInsets.all(8),
-              itemCount: kExamples.length,
-              separatorBuilder: (_, __) => const SizedBox(height: 8),
-              itemBuilder: (context, index) {
-                final example = kExamples[index];
-                return Card(
-                  child: ListTile(
-                    title: Text(example.name),
-                    subtitle: Text(example.description),
-                    trailing: const Icon(Icons.chevron_right),
-                    onTap: () => Navigator.of(context).pushNamed(example.path),
-                  ),
-                );
-              },
-            ),
-          ),
+          Expanded(child: _List()),
         ],
       ),
+    );
+  }
+}
+
+class _Logo extends StatelessWidget {
+  const _Logo({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Image.asset('assets/images/logo.png', height: 120);
+  }
+}
+
+class _Version extends StatelessWidget {
+  const _Version({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      'crdt_lf v$libraryVersion',
+      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+        color: Theme.of(context).colorScheme.outline,
+      ),
+    );
+  }
+}
+
+class _List extends StatelessWidget {
+  const _List({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView.separated(
+      padding: const EdgeInsets.all(8),
+      itemCount: kExamples.length,
+      separatorBuilder: (_, __) => const SizedBox(height: 8),
+      itemBuilder: (context, index) {
+        final example = kExamples[index];
+        return Card(
+          child: ListTile(
+            title: Text(example.name),
+            subtitle: Text(example.description),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => Navigator.of(context).pushNamed(example.path),
+          ),
+        );
+      },
     );
   }
 }
