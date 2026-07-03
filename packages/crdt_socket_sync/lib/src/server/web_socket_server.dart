@@ -2,17 +2,15 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
+import 'package:crdt_lf/crdt_lf.dart';
 import 'package:crdt_socket_sync/src/common/common.dart';
+import 'package:crdt_socket_sync/src/common/utils.dart';
 import 'package:crdt_socket_sync/src/server/client_session.dart';
 import 'package:crdt_socket_sync/src/server/client_session_event.dart';
 import 'package:crdt_socket_sync/src/server/event.dart';
 import 'package:crdt_socket_sync/src/server/registry.dart';
 import 'package:crdt_socket_sync/src/server/server.dart';
 import 'package:web_socket_channel/status.dart';
-
-// TODO(mattia): A system that is client session aware
-// and can perform snapshot when all clients are aligned.
-// Maybe in a plugin only for the server?
 
 /// WebSocket server implementation
 class WebSocketServer extends CRDTSocketServer {
@@ -22,13 +20,15 @@ class WebSocketServer extends CRDTSocketServer {
     required CRDTServerRegistry serverRegistry,
     Compressor? compressor,
     MessageCodec<Message>? messageCodec,
+    int? maxBufferSize,
     super.plugins,
   })  : _serverFactory = serverFactory,
         _serverTransformer = _DefaultWebSocketTransformerWrapper(),
         _compressor = compressor ?? NoCompression.instance,
         _serverEventController = StreamController<ServerEvent>.broadcast(),
         _serverRegistry = serverRegistry,
-        _messageCodec = messageCodec;
+        _messageCodec = messageCodec,
+        _maxBufferSize = maxBufferSize;
 
   /// Constructor for testing
   WebSocketServer.test({
@@ -37,6 +37,7 @@ class WebSocketServer extends CRDTSocketServer {
     Compressor? compressor,
     WebSocketServerTransformer? serverTransformer,
     MessageCodec<Message>? messageCodec,
+    int? maxBufferSize,
     super.plugins,
   })  : _serverFactory = serverFactory,
         _serverTransformer =
@@ -44,7 +45,8 @@ class WebSocketServer extends CRDTSocketServer {
         _compressor = compressor ?? NoCompression.instance,
         _serverEventController = StreamController<ServerEvent>.broadcast(),
         _serverRegistry = serverRegistry,
-        _messageCodec = messageCodec;
+        _messageCodec = messageCodec,
+        _maxBufferSize = maxBufferSize;
 
   /// The document registry
   final CRDTServerRegistry _serverRegistry;
@@ -81,6 +83,9 @@ class WebSocketServer extends CRDTSocketServer {
 
   /// Message codec to use
   final MessageCodec<Message>? _messageCodec;
+
+  /// Maximum outbound buffer size per client session (bytes).
+  final int? _maxBufferSize;
 
   /// Start the server
   ///
@@ -136,10 +141,12 @@ class WebSocketServer extends CRDTSocketServer {
 
     _isRunning = false;
 
-    // close sessions
+    // Gracefully close every session. Guard each close so one failing
+    // session does not prevent the others (and the server socket) from
+    // being torn down.
     await Future.forEach(
-      _sessions.values,
-      (ClientSession session) => session.close,
+      List.of(_sessions.values),
+      (ClientSession session) => tryCatchIgnore(session.close),
     );
 
     _sessions.clear();
@@ -186,9 +193,27 @@ class WebSocketServer extends CRDTSocketServer {
       final isExcluded = excludeClientIds?.contains(session.id) ?? false;
       final isSubscribed = session.isSubscribedTo(documentId);
 
-      if (!isExcluded && isSubscribed) {
+      if (isExcluded || !isSubscribed) {
+        continue;
+      }
+
+      try {
         await session.sendMessage(message);
         sessionsReached.add(session.id);
+      } catch (e) {
+        // A failing client must not prevent the broadcast from reaching the
+        // remaining healthy clients. `sendMessage` already closed the failing
+        // session; just record the error and continue.
+        _addServerEvent(
+          ServerEvent(
+            type: ServerEventType.error,
+            message: 'Failed to broadcast to session ${session.id}: $e',
+            data: {
+              'clientId': session.id,
+              'documentId': documentId,
+            },
+          ),
+        );
       }
     }
 
@@ -224,6 +249,7 @@ class WebSocketServer extends CRDTSocketServer {
       compressor: _compressor,
       plugins: plugins,
       messageCodec: _messageCodec,
+      maxBufferSize: _maxBufferSize,
     );
 
     _sessions[sessionId] = session;
@@ -248,13 +274,99 @@ class WebSocketServer extends CRDTSocketServer {
   }
 
   /// Add a server event for a handshake completed event
-  void _handleSessionEventHandshakeCompleted(SessionEventGeneric event) {
+  Future<void> _handleSessionEventHandshakeCompleted(
+    SessionEventGeneric event,
+  ) async {
     _addServerEvent(
       ServerEvent(
         type: ServerEventType.clientHandshake,
         message:
             'Session ${event.sessionId} handshake completed: ${event.message}',
         data: event.data,
+      ),
+    );
+    await _maybeTakeAlignedSnapshotForSession(event.sessionId);
+  }
+
+  /// Run the snapshot coordinator for every document [sessionId] is subscribed
+  /// to.
+  Future<void> _maybeTakeAlignedSnapshotForSession(String sessionId) async {
+    final session = _sessions[sessionId];
+    if (session == null) {
+      return;
+    }
+    for (final documentId in session.subscribedDocuments) {
+      await _maybeTakeAlignedSnapshot(documentId);
+    }
+  }
+
+  /// Take a snapshot (and prune the confirmed history) when every client
+  /// subscribed to [documentId] has confirmed at least the server's current
+  /// state.
+  ///
+  /// Alignment is derived from the version vectors clients report on their
+  /// pings (and at handshake). The stability frontier is the intersection
+  /// (per-peer minimum) of those vectors. Snapshotting only when the frontier
+  /// covers the server's current version guarantees pruning never drops
+  /// history a client has not yet confirmed — a lagging client still re-syncs
+  /// from the stored snapshot on its next handshake.
+  Future<void> _maybeTakeAlignedSnapshot(String documentId) async {
+    if (!_isRunning) {
+      return;
+    }
+
+    final subscribed = _sessions.values
+        .where((session) => session.isSubscribedTo(documentId))
+        .toList();
+    if (subscribed.isEmpty) {
+      return;
+    }
+
+    final versionVectors = <VersionVector>[];
+    for (final session in subscribed) {
+      final versionVector = session.lastKnownVersionVector;
+      if (versionVector == null) {
+        // A subscribed client has not reported its state yet: we cannot know
+        // how far it has advanced, so pruning would be unsafe.
+        return;
+      }
+      versionVectors.add(versionVector);
+    }
+
+    final frontier = VersionVector.intersection(versionVectors);
+
+    final document = await _serverRegistry.getDocument(documentId);
+    if (document == null) {
+      return;
+    }
+
+    final serverVersion = document.getVersionVector();
+    if (serverVersion.isEmpty) {
+      return;
+    }
+
+    // Every client has confirmed at least the server's current state.
+    if (!frontier.isStrictlyNewerOrEqualThan(serverVersion)) {
+      return;
+    }
+
+    // Avoid redundant work: skip if a snapshot already covers this state.
+    final existing = await _serverRegistry.getLatestSnapshot(documentId);
+    if (existing != null &&
+        !serverVersion.isStrictlyNewerThan(existing.versionVector)) {
+      return;
+    }
+
+    await _serverRegistry.createSnapshot(documentId);
+
+    _addServerEvent(
+      ServerEvent(
+        type: ServerEventType.snapshotCreated,
+        message: 'All clients aligned on document $documentId: '
+            'snapshot taken and confirmed history pruned',
+        data: {
+          'documentId': documentId,
+        },
       ),
     );
   }
@@ -352,13 +464,18 @@ class WebSocketServer extends CRDTSocketServer {
   }
 
   /// Add a server event for a ping received event
-  void _handleSessionEventPingReceived(SessionEventGeneric event) {
+  Future<void> _handleSessionEventPingReceived(
+    SessionEventGeneric event,
+  ) async {
     _addServerEvent(
       ServerEvent(
         type: ServerEventType.clientPingRequest,
         message: 'Session ${event.sessionId} ping request: ${event.message}',
       ),
     );
+    // Clients piggy-back their version vector on pings; a ping may complete a
+    // fleet-wide alignment and let the server snapshot + prune.
+    await _maybeTakeAlignedSnapshotForSession(event.sessionId);
   }
 
   /// 1. Add a server event for a client disconnected event
@@ -474,17 +591,7 @@ class _WebSocketConnection implements TransportConnection {
 
   @override
   Stream<List<int>> get incoming {
-    return _webSocket.map(
-      (data) {
-        if (data is String) {
-          return utf8.encode(data);
-        } else if (data is List<int>) {
-          return data;
-        } else {
-          throw FormatException('Unexpected data type: ${data.runtimeType}');
-        }
-      },
-    );
+    return _webSocket.map(frameToBytes);
   }
 
   @override
