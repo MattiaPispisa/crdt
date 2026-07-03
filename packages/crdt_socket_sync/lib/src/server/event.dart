@@ -36,7 +36,11 @@ enum ServerEventType {
   messageBroadcasted,
 
   /// A message has been sent to a client
-  messageSent;
+  messageSent,
+
+  /// The server took a snapshot because all clients reached a common frontier
+  /// and pruned the confirmed history.
+  snapshotCreated;
 
   /// Whether the event is started
   bool get isStarted => this == started;
@@ -73,6 +77,9 @@ enum ServerEventType {
 
   /// Whether the event is a sent event
   bool get isMessageSent => this == messageSent;
+
+  /// Whether the event is a snapshot created event
+  bool get isSnapshotCreated => this == snapshotCreated;
 }
 
 /// Class representing a server event
