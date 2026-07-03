@@ -53,6 +53,9 @@ CRDT Socket Sync provides a robust, real-time synchronization system that allows
 - 📦 **Compression**: Optional data compression for efficient network usage
 - 🔌 **Modular Architecture**: Separate client and server components with clean abstractions
 - 📡 **Automatic Reconnection**: Robust connection handling with automatic retry logic
+- 💓 **Liveness Detection**: Ping/pong tracking detects half-open connections and reconnects
+- 🚰 **Backpressure**: Bounded per-connection send queue drops peers that cannot keep up (they re-sync on reconnect)
+- 🗜️ **History Pruning**: Server takes a snapshot and prunes confirmed history once every client aligns on a common frontier
 - 🎯 **Type Safety**: Full Dart type safety with generic document handlers
 - 📊 **Event Monitoring**: Comprehensive event streams for connection and synchronization monitoring
 - 🔌 **Plugins**: Extendable plugin system for custom functionality
