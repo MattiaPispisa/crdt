@@ -118,6 +118,11 @@ void main() {
       expect(ServerEventType.clientChangeApplied.isError, isFalse);
       expect(ServerEventType.clientChangeApplied.isMessageBroadcasted, isFalse);
       expect(ServerEventType.clientChangeApplied.isMessageSent, isFalse);
+
+      expect(ServerEventType.snapshotCreated.isSnapshotCreated, isTrue);
+      expect(ServerEventType.snapshotCreated.isStarted, isFalse);
+      expect(ServerEventType.snapshotCreated.isMessageSent, isFalse);
+      expect(ServerEventType.clientChangeApplied.isSnapshotCreated, isFalse);
     });
 
     test('should constructor work correctly', () {

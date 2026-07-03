@@ -75,6 +75,25 @@ void main() {
       expect(server.serverEvents.isBroadcast, isTrue);
     });
 
+    test('should return false and emit an error when start fails', () async {
+      final failingServer = WebSocketServer.test(
+        serverFactory: () async => throw Exception('cannot bind'),
+        serverRegistry: registry,
+        serverTransformer: mockWebSocketTransformer,
+      );
+      final events = <ServerEvent>[];
+      failingServer.serverEvents.listen(events.add);
+
+      final started = await failingServer.start();
+
+      expect(started, isFalse);
+      await Future<void>.delayed(Duration.zero);
+      expect(
+        events.where((e) => e.type == ServerEventType.error),
+        isNotEmpty,
+      );
+    });
+
     test('should start the server', () async {
       stubHttpServer(
         mockHttpServer: mockHttpServer,
@@ -404,9 +423,15 @@ void main() {
       final message = await completer.future;
 
       expect(setup.serverMessages.length, 3);
-      expect(setup.serverEvents.length, 6);
-      // last event is the change applied event from the clientSession 1
-      expect(setup.serverEvents[5].type, ServerEventType.clientChangeApplied);
+      // The change from client1 is applied on the server, which then broadcasts
+      // it. (The exact event ordering relative to the completer is not pinned:
+      // outbound sends are serialized through a queue, so the broadcast event
+      // may settle before or after this point.)
+      expect(
+        setup.serverEvents
+            .where((e) => e.type == ServerEventType.clientChangeApplied),
+        hasLength(1),
+      );
 
       // check the broadcasted message
       expect(message.type, setup.serverMessages[2].type);
@@ -414,6 +439,227 @@ void main() {
       expect(message, isA<ChangeMessage>());
       expect((message as ChangeMessage).change.id, change.id);
     });
+
+    test(
+      'should tell the client it is out of sync on a causally-not-ready change',
+      () async {
+        final documentId = PeerId.generate().id;
+        await registry.addDocument(documentId);
+
+        // Build two causally dependent changes; only the second is sent to the
+        // server, whose document has neither — so it is not causally ready.
+        final authorDoc = CRDTDocument(peerId: PeerId.generate());
+        CRDTListHandler<String>(authorDoc, 'list')
+          ..insert(0, 'a')
+          ..insert(1, 'b');
+        final orphanChange = authorDoc.exportChanges()[1];
+
+        final setup = await setupServer();
+        await addClient(
+          documentId: documentId,
+          mockWebSocket: () => mockWebSockets[0],
+        );
+        await Future<void>.delayed(Duration.zero);
+
+        mockWebSockets[0].incomingController.add(
+              codec.encode(
+                ChangeMessage(
+                  change: orphanChange,
+                  documentId: documentId,
+                ),
+              )!,
+            );
+        await Future<void>.delayed(Duration.zero);
+
+        // Regression: the registry used to swallow CausallyNotReadyException
+        // and return false, so the server never emitted OUT_OF_SYNC and the
+        // client never re-synced.
+        final outOfSyncErrors = setup.serverMessages
+            .whereType<ErrorMessage>()
+            .where((m) => m.code == Protocol.errorOutOfSync)
+            .toList();
+        expect(outOfSyncErrors, hasLength(1));
+
+        expect(
+          setup.serverEvents
+              .where((e) => e.type == ServerEventType.clientOutOfSync),
+          hasLength(1),
+        );
+      },
+    );
+
+    /// Applies a single change to the registry document so the server has a
+    /// non-empty state, and returns the resulting server version vector.
+    Future<VersionVector> seedServerChange(String documentId) async {
+      final authorDoc = CRDTDocument(peerId: PeerId.generate());
+      CRDTListHandler<String>(authorDoc, 'list').insert(0, 'a');
+      final change = authorDoc.exportChanges().first;
+      await registry.applyChange(documentId, change);
+      return (await registry.getDocument(documentId))!.getVersionVector();
+    }
+
+    test(
+      'should snapshot and prune once every client confirms the state',
+      () async {
+        final documentId = PeerId.generate().id;
+        await registry.addDocument(documentId);
+        final serverVV = await seedServerChange(documentId);
+
+        final setup = await setupServer();
+        await addClient(
+          documentId: documentId,
+          mockWebSocket: () => mockWebSockets[0],
+        );
+        await addClient(
+          documentId: documentId,
+          mockWebSocket: () => mockWebSockets[1],
+        );
+        await Future<void>.delayed(Duration.zero);
+
+        // Clients reported an empty version vector at handshake -> not aligned.
+        expect(await registry.getLatestSnapshot(documentId), isNull);
+
+        // Both clients now report the server's version vector via ping.
+        for (final index in [0, 1]) {
+          mockWebSockets[index].incomingController.add(
+                codec.encode(
+                  PingMessage(
+                    documentId: documentId,
+                    timestamp: 0,
+                    versionVector: serverVV,
+                  ),
+                )!,
+              );
+          await Future<void>.delayed(Duration.zero);
+        }
+
+        expect(await registry.getLatestSnapshot(documentId), isA<Snapshot>());
+        expect(
+          setup.serverEvents
+              .where((e) => e.type == ServerEventType.snapshotCreated),
+          hasLength(1),
+        );
+      },
+    );
+
+    test('should not snapshot while a client is behind', () async {
+      final documentId = PeerId.generate().id;
+      await registry.addDocument(documentId);
+      final serverVV = await seedServerChange(documentId);
+
+      final setup = await setupServer();
+      await addClient(
+        documentId: documentId,
+        mockWebSocket: () => mockWebSockets[0],
+      );
+      await addClient(
+        documentId: documentId,
+        mockWebSocket: () => mockWebSockets[1],
+      );
+      await Future<void>.delayed(Duration.zero);
+
+      // Only the first client is aligned; the second stays behind (empty).
+      mockWebSockets[0].incomingController.add(
+            codec.encode(
+              PingMessage(
+                documentId: documentId,
+                timestamp: 0,
+                versionVector: serverVV,
+              ),
+            )!,
+          );
+      mockWebSockets[1].incomingController.add(
+            codec.encode(
+              PingMessage(
+                documentId: documentId,
+                timestamp: 0,
+                versionVector: VersionVector({}),
+              ),
+            )!,
+          );
+      await Future<void>.delayed(Duration.zero);
+
+      expect(await registry.getLatestSnapshot(documentId), isNull);
+      expect(
+        setup.serverEvents
+            .where((e) => e.type == ServerEventType.snapshotCreated),
+        isEmpty,
+      );
+    });
+
+    test('should close every client session on stop', () async {
+      final documentId = PeerId.generate().id;
+      await registry.addDocument(documentId);
+      await setupServer();
+
+      await addClient(
+        documentId: documentId,
+        mockWebSocket: () => mockWebSockets[0],
+      );
+      await addClient(
+        documentId: documentId,
+        mockWebSocket: () => mockWebSockets[1],
+      );
+      await Future<void>.delayed(Duration.zero);
+
+      expect(mockWebSockets, hasLength(2));
+
+      await server.stop();
+
+      // Regression: `stop()` used to pass the `session.close` tear-off without
+      // calling it, so the underlying sockets were never closed.
+      verify(() => mockWebSockets[0].close(any(), any())).called(1);
+      verify(() => mockWebSockets[1].close(any(), any())).called(1);
+    });
+
+    test(
+      'should broadcast to healthy clients even when one client send fails',
+      () async {
+        final documentId = PeerId.generate().id;
+        await registry.addDocument(documentId);
+
+        // Build a change to broadcast.
+        final clientDoc = CRDTDocument(peerId: PeerId.generate());
+        CRDTListHandler<String>(clientDoc, 'list').insert(0, 'Hi');
+        final change = clientDoc.exportChanges().first;
+
+        final setup = await setupServer();
+
+        await addClient(
+          documentId: documentId,
+          mockWebSocket: () => mockWebSockets[0],
+        );
+        await addClient(
+          documentId: documentId,
+          mockWebSocket: () => mockWebSockets[1],
+        );
+        await addClient(
+          documentId: documentId,
+          mockWebSocket: () => mockWebSockets[2],
+        );
+        await Future<void>.delayed(Duration.zero);
+
+        // Make the first session's socket fail on every send.
+        when(() => mockWebSockets[0].add(any<List<int>>()))
+            .thenThrow(Exception('dead socket'));
+
+        // Regression: a failing first client used to abort the whole
+        // broadcast, so the healthy clients never received the message.
+        await expectLater(
+          server.broadcastMessage(
+            Message.change(documentId: documentId, change: change),
+          ),
+          completes,
+        );
+        await Future<void>.delayed(Duration.zero);
+
+        final changeMessages = setup.serverMessages
+            .where((m) => m.type == MessageType.change)
+            .toList();
+        // The two healthy clients each received the broadcast.
+        expect(changeMessages, hasLength(2));
+      },
+    );
   });
 }
 

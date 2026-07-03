@@ -594,6 +594,38 @@ void main() {
       expect(string, contains(timestamp.toString()));
       expect(string, contains(documentId));
     });
+
+    test('should omit versionVector when not provided', () {
+      const message = PingMessage(
+        documentId: documentId,
+        timestamp: timestamp,
+      );
+
+      expect(message.versionVector, isNull);
+      expect(message.toJson().containsKey('versionVector'), isFalse);
+    });
+
+    test('should round-trip the reported versionVector', () {
+      final doc = CRDTDocument(peerId: PeerId.generate());
+      CRDTListHandler<String>(doc, 'list').insert(0, 'a');
+      final versionVector = doc.getVersionVector();
+
+      final message = PingMessage(
+        documentId: documentId,
+        timestamp: timestamp,
+        versionVector: versionVector,
+      );
+
+      final json = message.toJson();
+      expect(json['versionVector'], isNotNull);
+
+      final restored = PingMessage.fromJson(json);
+      expect(restored.versionVector, isNotNull);
+      expect(
+        restored.versionVector!.toBytes(),
+        equals(versionVector.toBytes()),
+      );
+    });
   });
 
   group('PongMessage', () {

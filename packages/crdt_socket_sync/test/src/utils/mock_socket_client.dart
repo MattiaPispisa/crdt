@@ -10,6 +10,7 @@ class MockCRDTSocketClient extends CRDTSocketClient {
   MockCRDTSocketClient({
     required this.document,
     required this.author,
+    super.plugins,
   });
 
   @override
