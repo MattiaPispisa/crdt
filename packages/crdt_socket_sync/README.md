@@ -293,14 +293,13 @@ you can use the [official vscode extension](https://open-vsx.org/extension/Merma
 
 ## Examples
 
-This package provided some examples:
+This package provides two examples:
 
-In the [example/](https://github.com/MattiaPispisa/crdt/tree/main/packages/crdt_socket_sync/example) directory you can find a complete working example of the server and the client (dart).
+- [example/](https://github.com/MattiaPispisa/crdt/tree/main/packages/crdt_socket_sync/example) — a persistent (Hive-backed) WebSocket **server**.
+- [client_example/](https://github.com/MattiaPispisa/crdt/tree/main/packages/crdt_socket_sync/client_example) — the **Flutter client** counterpart, which connects to the server and shows the same examples as `crdt_lf`, live over the real backend.
 
-In the [flutter_example/](https://github.com/MattiaPispisa/crdt/tree/main/packages/crdt_socket_sync/flutter_example) directory you can find a complete working example of a flutter app that uses the server and the client.
-
-Try to run the [server example](https://github.com/MattiaPispisa/crdt/tree/main/packages/crdt_socket_sync/example/main.dart) and some [client applications](https://github.com/MattiaPispisa/crdt/tree/main/packages/crdt_socket_sync/flutter_example) (or the [dart client](https://github.com/MattiaPispisa/crdt/tree/main/packages/crdt_socket_sync/example/main_client.dart)).
-The workspace contains a .vscode folder with the launch settings for the examples.
+Run the [server](https://github.com/MattiaPispisa/crdt/tree/main/packages/crdt_socket_sync/example/lib/main.dart) and one or more clients (open several windows to collaborate).
+The workspace contains a `.vscode` folder with launch settings — use the `sync-examples: demo (server + 2 clients)` compound to start everything at once.
 
 
 The server example and the flutter example already use the awareness plugin.

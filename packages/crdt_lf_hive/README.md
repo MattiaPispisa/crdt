@@ -165,7 +165,7 @@ A complete example with a custom data type and adapter is available [here](https
 
 ### Server (+ storage) and clients
 
-A complete example of a server with a persistent registry of documents and clients that can connect to the server and sync their data is available [here](https://github.com/MattiaPispisa/crdt/blob/main/packages/crdt_socket_sync/example/server_example/lib/main.dart).
+A complete example of a server with a persistent registry of documents and clients that can connect to the server and sync their data is available [here](https://github.com/MattiaPispisa/crdt/blob/main/packages/crdt_socket_sync/example/lib/main.dart).
 
 <img width="500" alt="sync_server_multi_client" src="https://raw.githubusercontent.com/MattiaPispisa/crdt/main/assets/demos/sync_server_multi_client.gif">
 

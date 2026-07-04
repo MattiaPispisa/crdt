@@ -18,7 +18,7 @@ class YamlReader {
   }
 
   String version(String package) {
-    return ((_map?['packages'] as yaml.YamlMap)[package]
+    return ((_getMap()['packages'] as yaml.YamlMap)[package]
         as yaml.YamlMap)['version'] as String;
   }
 }

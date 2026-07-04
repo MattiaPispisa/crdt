@@ -19,34 +19,55 @@
       "args": ["--dart-define=use_simulated_environment=true"]
     },
     {
-      "name": "in_memory_sync_server",
+      "name": "crdt_socket_sync: server (example)",
       "cwd": "packages/crdt_socket_sync/example",
       "request": "launch",
       "type": "dart",
-      "program": "main.dart",
       "args": []
     },
     {
-      "name": "sync_terminal_client",
-      "cwd": "packages/crdt_socket_sync/example",
-      "request": "launch",
-      "type": "dart",
-      "program": "main_client.dart",
-      "args": []
-    },
-    {
-      "name": "sync_flutter_example",
-      "cwd": "packages/crdt_socket_sync/example/flutter_example",
+      "name": "crdt_socket_sync: client (client_example)",
+      "cwd": "packages/crdt_socket_sync/client_example",
       "request": "launch",
       "type": "dart",
       "args": []
     },
+    // --- sync-examples demo (persistent server + N clients) ---
     {
-      "name": "complex_sync_server",
-      "cwd": "packages/crdt_socket_sync/example/server_example",
+      "name": "sync-examples: client 1",
+      "cwd": "packages/crdt_socket_sync/client_example",
       "request": "launch",
       "type": "dart",
-      "args": []
+      "args": [
+        "-d",
+        "chrome",
+        "--web-port",
+        "5001",
+        "--dart-define=SERVER_URL=ws://localhost:8080"
+      ]
+    },
+    {
+      "name": "sync-examples: client 2",
+      "cwd": "packages/crdt_socket_sync/client_example",
+      "request": "launch",
+      "type": "dart",
+      "args": [
+        "-d",
+        "chrome",
+        "--web-port",
+        "5002",
+        "--dart-define=SERVER_URL=ws://localhost:8080"
+      ]
+    }
+  ],
+  "compounds": [
+    {
+      "name": "sync-examples: demo (server + 2 clients)",
+      "configurations": [
+        "crdt_socket_sync: server (example)",
+        "sync-examples: client 1",
+        "sync-examples: client 2"
+      ]
     }
   ]
 }
