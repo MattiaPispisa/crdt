@@ -1,3 +1,6 @@
+@TestOn('vm')
+library web_socket_server_test;
+
 import 'dart:async';
 import 'dart:io';
 

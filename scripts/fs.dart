@@ -10,26 +10,33 @@ io.Directory docsDir({List<String> subParts = const []}) {
   return [io.Directory.current.path, 'docs', ...subParts].toDir();
 }
 
-io.Directory flutterExampleDir({List<String> subParts = const []}) {
-  return [
-    io.Directory.current.path,
-    'packages',
-    'crdt_lf',
-    'flutter_example',
-    ...subParts,
-  ].toDir();
+io.Directory crdtLfFlutterExampleDir({List<String> subParts = const []}) {
+  return crdtLfDir(subParts: ['flutter_example', ...subParts]);
+}
+
+io.Directory clientExampleDir({List<String> subParts = const []}) {
+  return crdtLfSocketSyncDir(subParts: ['client_example', ...subParts]);
 }
 
 io.File crdtLfExamplePubspecLock() {
-  return io.File(
-    path.joinAll(
-      [crdtLfDir().path, 'flutter_example', 'pubspec.lock'],
-    ),
-  );
+  return pubspecLockOf(crdtLfFlutterExampleDir());
 }
 
-io.Directory crdtLfDir() {
-  return packagesDir(subParts: ['crdt_lf']);
+io.File clientExamplePubspecLock() {
+  return pubspecLockOf(clientExampleDir());
+}
+
+/// The `pubspec.lock` file inside [dir].
+io.File pubspecLockOf(io.Directory dir) {
+  return io.File(path.join(dir.path, 'pubspec.lock'));
+}
+
+io.Directory crdtLfDir({List<String> subParts = const []}) {
+  return packagesDir(subParts: ['crdt_lf', ...subParts]);
+}
+
+io.Directory crdtLfSocketSyncDir({List<String> subParts = const []}) {
+  return packagesDir(subParts: ['crdt_socket_sync', ...subParts]);
 }
 
 io.Directory packagesDir({List<String> subParts = const []}) {

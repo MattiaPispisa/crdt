@@ -13,7 +13,7 @@ command:
       post: dart run scripts/flutter_example_bs.dart
   publish:
     hooks:
-      pre: melos run format && melos run analyze && melos run test && melos run devtools_build
+      pre: melos run format && melos run analyze && melos run test && melos run test_chrome && melos run devtools_build
       post: melos run benchmark
 
 scripts:
@@ -36,6 +36,16 @@ scripts:
     run: dart test
     exec:
       concurrency: 1
+
+  test_chrome:
+    name: Test (Chrome)
+    description: Run the tests on Chrome (web)
+    run: dart test -p chrome
+    exec:
+      concurrency: 1
+    packageFilters:
+      flutter: false
+      dirExists: test
   analyze:
     name: Analyze
     description: Analyze the code

@@ -1,4 +1,6 @@
 // ignore_for_file: avoid_redundant_argument_values - explicit test setup
+@TestOn('vm')
+library web_socket_test;
 
 import 'dart:async';
 import 'dart:io';

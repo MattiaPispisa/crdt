@@ -1,20 +1,32 @@
 import 'package:flutter/material.dart';
 import 'package:shared_examples_infrastructure/examples/example.dart';
 
+/// A package name + version pair shown under the logo on the examples home.
+class PackageVersion {
+  /// Creates a package version entry.
+  const PackageVersion({required this.name, required this.version});
+
+  /// Package name, e.g. `crdt_lf`.
+  final String name;
+
+  /// Package version, e.g. `3.2.1`.
+  final String version;
+}
+
 /// Home page listing the available [examples].
 ///
-/// Branding is injected so each app can supply its own [logo], [title] and
-/// [versionLabel]; [actions] are the app-bar trailing widgets. Tapping an item
-/// navigates to `example.path` via the [Navigator] (route table derived from
-/// the same [examples] list).
+/// Branding is injected so each app can supply its own [logo], [title] and the
+/// list of [versions] of the packages it uses; [actions] are the app-bar
+/// trailing widgets. Tapping an item navigates to `example.path` via the
+/// [Navigator] (route table derived from the same [examples] list).
 class ExamplesHome extends StatelessWidget {
   /// Creates the examples landing page.
   const ExamplesHome({
     super.key,
     required this.title,
     required this.logo,
-    required this.versionLabel,
     required this.examples,
+    this.versions = const [],
     this.actions = const [],
   });
 
@@ -24,11 +36,11 @@ class ExamplesHome extends StatelessWidget {
   /// Brand logo shown at the top.
   final Widget logo;
 
-  /// Version label shown under the logo (e.g. `'crdt_lf v3.2.1'`).
-  final String versionLabel;
-
   /// The examples to list.
   final List<Example> examples;
+
+  /// Versions of the packages used, shown under the logo.
+  final List<PackageVersion> versions;
 
   /// App-bar trailing actions.
   final List<Widget> actions;
@@ -46,12 +58,7 @@ class ExamplesHome extends StatelessWidget {
           Padding(padding: const EdgeInsets.only(top: 24), child: logo),
           Padding(
             padding: const EdgeInsets.only(top: 8, bottom: 24),
-            child: Text(
-              versionLabel,
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: Theme.of(context).colorScheme.outline,
-              ),
-            ),
+            child: _Versions(versions: versions),
           ),
           Expanded(
             child: ListView.separated(
@@ -73,6 +80,32 @@ class ExamplesHome extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// Renders the package versions as a centered, wrapping row of `name vX.Y.Z`.
+class _Versions extends StatelessWidget {
+  const _Versions({required this.versions});
+
+  final List<PackageVersion> versions;
+
+  @override
+  Widget build(BuildContext context) {
+    if (versions.isEmpty) {
+      return const SizedBox.shrink();
+    }
+    final style = Theme.of(context).textTheme.bodySmall?.copyWith(
+      color: Theme.of(context).colorScheme.outline,
+    );
+    return Wrap(
+      alignment: WrapAlignment.center,
+      spacing: 12,
+      runSpacing: 4,
+      children: [
+        for (final package in versions)
+          Text('${package.name} v${package.version}', style: style),
+      ],
     );
   }
 }
