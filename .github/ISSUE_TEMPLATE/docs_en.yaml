@@ -1,0 +1,46 @@
+name: docs enhancement
+description: Report documentation that is missing or unclear
+title: "[docs] "
+labels: ["p:2", "docs","enhancement"]
+projects: ["MattiaPispisa/1"]
+assignees:
+  - MattiaPispisa
+
+body:
+  - type: textarea
+    id: description
+    attributes:
+      label: What is missing or unclear?
+      description: A clear description of documentation that is absent, incomplete, or hard to understand.
+      placeholder: |
+        Ex. There is no documentation on how to ...
+        Ex. The section about ... doesn't explain ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: location
+    attributes:
+      label: Where did you look / where should it live?
+      description: Where you expected to find it (page, section, API) so we know where to add or clarify it.
+      placeholder: |
+        - Looked in: ...
+        - Should be documented under: ...
+    validations:
+      required: false
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What should be added or clarified?
+      description: A clear description of the content that would make the docs complete/clear.
+      placeholder: Explain what should be documented (an example, a diagram, a step-by-step guide, ...).
+    validations:
+      required: true
+
+  - type: textarea
+    id: additional
+    attributes:
+      label: More information
+      description: Any other information that might be useful.
+      placeholder: Additional context, screenshots, references, etc.

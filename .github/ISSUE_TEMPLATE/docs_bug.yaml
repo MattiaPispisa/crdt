@@ -1,0 +1,54 @@
+name: docs bug
+description: Report documentation that is incorrect, misleading or outdated
+title: "[docs] "
+labels: ["p:1", "docs", "bug"]
+projects: ["MattiaPispisa/1"]
+assignees:
+  - MattiaPispisa
+
+body:
+  - type: textarea
+    id: description
+    attributes:
+      label: What is documented incorrectly?
+      description: A clear description of the documentation that is wrong, misleading or outdated.
+      placeholder: The docs state that ... but this is not correct because ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: location
+    attributes:
+      label: Where is it?
+      description: Point to the exact place — page title, URL, section, or code sample.
+      placeholder: |
+        - Page/URL: ...
+        - Section: ...
+        - Code sample / API: ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: incorrect
+    attributes:
+      label: What the docs currently say
+      description: Quote or paraphrase the incorrect content.
+      placeholder: Copy the misleading sentence, snippet or diagram here...
+    validations:
+      required: true
+
+  - type: textarea
+    id: correct
+    attributes:
+      label: What is correct
+      description: What the documentation should say instead.
+      placeholder: The correct behavior/usage is ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: additional
+    attributes:
+      label: More information
+      description: Any other information that might be useful, also screenshots.
+      placeholder: Additional context, screenshots, links, etc.
