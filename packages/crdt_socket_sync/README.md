@@ -425,10 +425,10 @@ Messages are exchanged as JSON envelopes (typed by `MessageType`) where the
 heavy CRDT payloads are carried as **base64-encoded binary blobs** produced by
 `crdt_lf`'s native binary methods:
 
-| Field | Encoding |
-|---|---|
-| `Change` | `base64(change.toBytes())` |
-| `Snapshot` | `base64(snapshot.toBytes())` |
+| Field           | Encoding                          |
+|-----------------|-----------------------------------|
+| `Change`        | `base64(change.toBytes())`        |
+| `Snapshot`      | `base64(snapshot.toBytes())`      |
 | `VersionVector` | `base64(versionVector.toBytes())` |
 
 On the receiver side, the corresponding `fromBytes` factories rebuild the
@@ -461,15 +461,6 @@ client.connectionStatus.listen((status) {
   }
 });
 ```
-
-
-
-
-## Packages
-Other bricks of the crdt "system" are:
-
-- [crdt_lf](https://pub.dev/packages/crdt_lf)
-- [hlc_dart](https://pub.dev/packages/hlc_dart)
 
 ## [Roadmap](https://github.com/users/MattiaPispisa/projects/1)
 A roadmap is available in the [project](https://github.com/users/MattiaPispisa/projects/1) page. The roadmap provides a high-level overview of the project's goals and the current status of the project.
