@@ -3,6 +3,10 @@
 
 [compare to previous release](https://github.com/MattiaPispisa/crdt/compare/crdt_socket_sync-v0.4.0...crdt_socket_sync-v0.5.0)
 
+This release is a general pass to improve the sync process and clean up the
+code following the improvements introduced in `crdt_lf` v3.0.0
+(see [#87](https://github.com/MattiaPispisa/crdt/issues/87)).
+
 ### Added
 
 - Client-side dead-connection detection: the client tracks pong replies and, if
