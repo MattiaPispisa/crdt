@@ -169,6 +169,30 @@ abstract class Message {
     return jsonEncode(toJson());
   }
 
+  /// Safely reads the raw `type` code of an encoded message [data] frame,
+  /// without throwing.
+  ///
+  /// [data] is expected to be the (uncompressed) UTF-8 JSON payload produced
+  /// by the message codec. Returns `null` when the frame is not valid JSON or
+  /// carries no integer `type`.
+  ///
+  /// Unlike [fromJson], the code does not need to match a known [MessageType],
+  /// so plugin message codes (e.g. `100+`) are reported too. This makes it
+  /// useful to diagnose a frame that cannot be decoded because its plugin has
+  /// not been registered on this side of the connection.
+  static int? getTypeOrNull(List<int> data) {
+    try {
+      final json = jsonDecode(utf8.decode(data));
+      if (json is Map<String, dynamic>) {
+        final type = json['type'];
+        return type is int ? type : null;
+      }
+    } catch (_) {
+      // Not decodable (malformed or compressed): no type to report.
+    }
+    return null;
+  }
+
   /// Deserialize a message from a JSON string
   static Message? fromJson(Map<String, dynamic> json) {
     final type = json['type'] as int;

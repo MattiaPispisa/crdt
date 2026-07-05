@@ -366,8 +366,11 @@ class WebSocketClient extends CRDTSocketClient {
     // ignore: prefer_asserts_with_message assert function
     assert(() {
       if (message == null) {
+        final type = Message.getTypeOrNull(data);
         throw StateError(
-          '[WebSocketClient] received a message that cannot be decoded.'
+          '[WebSocketClient] received a message'
+          '${type != null ? ' of type $type' : ''}'
+          ' that cannot be decoded.'
           ' Have you added the plugin to the client?'
           '\nFrame: ${data.join(', ')}',
         );

@@ -951,4 +951,38 @@ void main() {
       expect(message.toString(), contains('PingMessage'));
     });
   });
+
+  group('Message.getTypeOrNull()', () {
+    test('should read the type code of a serialized core message', () {
+      const message = PingMessage(documentId: 'test-doc', timestamp: 1);
+      final data = utf8.encode(message.serialize());
+
+      expect(Message.getTypeOrNull(data), MessageType.ping.value);
+    });
+
+    test('should read plugin type codes that fromJson cannot decode', () {
+      // A plugin message (e.g. awareness uses codes 100+): unknown to the core
+      // decoder, but its type code is still reported for diagnostics.
+      final data = utf8.encode(jsonEncode({'type': 100, 'documentId': 'd'}));
+
+      expect(Message.fromJson({'type': 100, 'documentId': 'd'}), isNull);
+      expect(Message.getTypeOrNull(data), 100);
+    });
+
+    test('should return null for a malformed (non-JSON) frame', () {
+      expect(Message.getTypeOrNull(utf8.encode('not json')), isNull);
+      expect(Message.getTypeOrNull(const [0xff, 0xfe]), isNull);
+    });
+
+    test('should return null when type is missing or not an int', () {
+      expect(
+        Message.getTypeOrNull(utf8.encode(jsonEncode({'documentId': 'd'}))),
+        isNull,
+      );
+      expect(
+        Message.getTypeOrNull(utf8.encode(jsonEncode({'type': 'ping'}))),
+        isNull,
+      );
+    });
+  });
 }
