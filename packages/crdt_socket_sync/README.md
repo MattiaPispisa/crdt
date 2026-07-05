@@ -298,9 +298,7 @@ This package provides two examples:
 - [example/](https://github.com/MattiaPispisa/crdt/tree/main/packages/crdt_socket_sync/example) — a persistent (Hive-backed) WebSocket **server**.
 - [client_example/](https://github.com/MattiaPispisa/crdt/tree/main/packages/crdt_socket_sync/client_example) — the **Flutter client** counterpart, which connects to the server and shows the same examples as `crdt_lf`, live over the real backend.
 
-Run the [server](https://github.com/MattiaPispisa/crdt/tree/main/packages/crdt_socket_sync/example/lib/main.dart) and one or more clients (open several windows to collaborate).
-The workspace contains a `.vscode` folder with launch settings — use the `sync-examples: demo (server + 2 clients)` compound to start everything at once.
-
+Run the [server](https://github.com/MattiaPispisa/crdt/tree/main/packages/crdt_socket_sync/example/lib/main.dart) and a client. The workspace contains a `.vscode` folder with launch settings to run both server and client.
 
 The server example and the flutter example already use the awareness plugin.
 
