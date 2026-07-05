@@ -13,7 +13,7 @@ import 'package:crdt_socket_sync/src/common/utils.dart';
 /// {@endtemplate}
 class SyncManager {
   /// {@macro sync_manager}
-  /// 
+  ///
   /// Constructor
   SyncManager({
     required this.document,
