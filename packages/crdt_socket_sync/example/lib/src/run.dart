@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:crdt_lf/crdt_lf.dart';
 import 'package:crdt_socket_sync/web_socket_server.dart';
 import 'package:en_logger/en_logger.dart';
+import 'package:crdt_socket_sync_example/src/example_ids.dart';
 import 'package:crdt_socket_sync_example/src/registry.dart';
 import 'package:hive/hive.dart';
 
@@ -12,16 +13,6 @@ const _kDefaultPort = 8080;
 final _kDefaultHost = InternetAddress.anyIPv4.host;
 final _kDocumentId = '30669830-9256-4320-9ed5-f1860cd47d9f';
 final _kDocumentPeerId = PeerId.parse('97a6b8b3-fffc-4ebe-8dd4-f94e6a01c52f');
-
-// Sync-example document + handler ids used by the Flutter example clients.
-// Keep in sync with shared_examples_infrastructure/lib/examples/ids.dart
-const _kTodoDocId = 'a1b2c3d4-0001-4000-8000-000000000001';
-const _kSortableDocId = 'a1b2c3d4-0001-4000-8000-000000000002';
-const _kDocumentDocId = 'a1b2c3d4-0001-4000-8000-000000000003';
-const _kTodoHandlerId = 'todo-list';
-const _kSortableHandlerId = 'sortable-todo-list';
-const _kDocumentHandlerId = 'document';
-const _kDoneType = 'CRDTRegisterHandler<bool>';
 
 late HiveServerRegistry _registry;
 late WebSocketServer _server;
@@ -91,7 +82,7 @@ Future<void> _setupDocument() async {
   }
 
   final document = (await _registry.getDocument(_kDocumentId))!;
-  CRDTListHandler<Map<String, dynamic>>(document, 'todo-list');
+  CRDTListHandler<Map<String, dynamic>>(document, ExampleHandlerIds.todoList);
 }
 
 /// Registers the three sync-example documents (todo / sortable / document),
@@ -108,22 +99,22 @@ Future<void> _setupExampleDocuments() async {
   }
 
   CRDTListHandler<Map<String, dynamic>>(
-    await ensure(_kTodoDocId),
-    _kTodoHandlerId,
+    await ensure(ExampleDocumentIds.todoList),
+    ExampleHandlerIds.todoList,
   );
   CRDTFugueMovableListHandler<Map<String, dynamic>>(
-    await ensure(_kSortableDocId),
-    _kSortableHandlerId,
+    await ensure(ExampleDocumentIds.sortableTodoList),
+    ExampleHandlerIds.sortableTodoList,
   );
-  final document = await ensure(_kDocumentDocId);
+  final document = await ensure(ExampleDocumentIds.document);
   document
     ..registerDefaultFactories()
     ..registerFactory(
-      _kDoneType,
+      kDoneHandlerType,
       (BaseCRDTDocument d, String id) =>
-          CRDTRegisterHandler<bool>(d, id, handlerType: _kDoneType),
+          CRDTRegisterHandler<bool>(d, id, handlerType: kDoneHandlerType),
     );
-  CRDTMovableListRefHandler(document, _kDocumentHandlerId);
+  CRDTMovableListRefHandler(document, ExampleHandlerIds.document);
 }
 
 void _setupSigintHandler({required EnLogger logger}) {
