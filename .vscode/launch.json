@@ -26,15 +26,17 @@
       "args": []
     },
     {
-      "name": "crdt_socket_sync: client (client_example)",
+      "name": "crdt_socket_sync: client (choose device)",
       "cwd": "packages/crdt_socket_sync/client_example",
       "request": "launch",
       "type": "dart",
       "args": []
     },
-    // --- sync-examples demo (persistent server + N clients) ---
+    // --- sync-examples demo: persistent server + 2 Chrome clients on fixed
+    // ports (so multiple browser windows can collaborate). For any other
+    // device use "crdt_socket_sync: client (choose device)".
     {
-      "name": "sync-examples: client 1",
+      "name": "sync-examples: client 1 (Chrome :5001)",
       "cwd": "packages/crdt_socket_sync/client_example",
       "request": "launch",
       "type": "dart",
@@ -47,7 +49,7 @@
       ]
     },
     {
-      "name": "sync-examples: client 2",
+      "name": "sync-examples: client 2 (Chrome :5002)",
       "cwd": "packages/crdt_socket_sync/client_example",
       "request": "launch",
       "type": "dart",
@@ -65,8 +67,8 @@
       "name": "sync-examples: demo (server + 2 clients)",
       "configurations": [
         "crdt_socket_sync: server (example)",
-        "sync-examples: client 1",
-        "sync-examples: client 2"
+        "sync-examples: client 1 (Chrome :5001)",
+        "sync-examples: client 2 (Chrome :5002)"
       ]
     }
   ]
