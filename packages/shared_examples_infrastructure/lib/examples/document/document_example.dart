@@ -14,11 +14,13 @@ import '_views.dart';
 Widget documentExample({
   required SessionsFactory sessionsFactory,
   AppBarActionsBuilder? appBarActionsBuilder,
+  PaneWrapper? paneWrapper,
 }) {
   return ExampleScaffold<DocumentExampleState>(
     title: 'Document',
     sessionsFactory: sessionsFactory,
     appBarActionsBuilder: appBarActionsBuilder,
+    paneWrapper: paneWrapper,
     stateBuilder: DocumentExampleState.new,
     paneBuilder:
         (context, state) => DocumentPane(

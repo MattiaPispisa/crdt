@@ -17,6 +17,10 @@ typedef SessionsFactory = List<ExampleSyncSession> Function();
 typedef AppBarActionsBuilder =
     List<Widget> Function(List<ExampleSyncSession> sessions);
 
+/// Wraps a pane's content, given its [session], so an app can overlay
+/// session-specific chrome on every example (e.g. live awareness cursors).
+typedef PaneWrapper = Widget Function(ExampleSyncSession session, Widget child);
+
 /// Shared screen scaffold for an example.
 ///
 /// Owns the session lifecycle (creates them on mount, disposes on unmount),
@@ -34,6 +38,7 @@ class ExampleScaffold<S extends ExampleDocument> extends StatefulWidget {
     required this.stateBuilder,
     required this.paneBuilder,
     this.appBarActionsBuilder,
+    this.paneWrapper,
   });
 
   /// App-bar title.
@@ -50,6 +55,9 @@ class ExampleScaffold<S extends ExampleDocument> extends StatefulWidget {
 
   /// Optional builder for the app-bar trailing actions.
   final AppBarActionsBuilder? appBarActionsBuilder;
+
+  /// Optional wrapper applied to each pane's content (with its session).
+  final PaneWrapper? paneWrapper;
 
   @override
   State<ExampleScaffold<S>> createState() => _ExampleScaffoldState<S>();
@@ -80,17 +88,18 @@ class _ExampleScaffoldState<S extends ExampleDocument>
       actions: widget.appBarActionsBuilder?.call(_sessions) ?? const [],
       panels: [
         for (final session in _sessions)
-          Panel(
-            label: session.label,
-            child: ChangeNotifierProvider<S>(
-              create: (_) => widget.stateBuilder(session.document),
-              child: Consumer<S>(
-                builder:
-                    (context, state, _) => widget.paneBuilder(context, state),
-              ),
-            ),
-          ),
+          Panel(label: session.label, child: _pane(session)),
       ],
     );
+  }
+
+  Widget _pane(ExampleSyncSession session) {
+    final content = ChangeNotifierProvider<S>(
+      create: (_) => widget.stateBuilder(session.document),
+      child: Consumer<S>(
+        builder: (context, state, _) => widget.paneBuilder(context, state),
+      ),
+    );
+    return widget.paneWrapper?.call(session, content) ?? content;
   }
 }

@@ -13,11 +13,13 @@ import '_todo_item.dart';
 Widget todoListExample({
   required SessionsFactory sessionsFactory,
   AppBarActionsBuilder? appBarActionsBuilder,
+  PaneWrapper? paneWrapper,
 }) {
   return ExampleScaffold<TodoDocumentState>(
     title: 'Todo List',
     sessionsFactory: sessionsFactory,
     appBarActionsBuilder: appBarActionsBuilder,
+    paneWrapper: paneWrapper,
     stateBuilder: TodoDocumentState.new,
     paneBuilder:
         (context, state) => DocumentPane(

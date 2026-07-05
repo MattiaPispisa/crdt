@@ -13,11 +13,13 @@ import '_state.dart';
 Widget sortableTodoListExample({
   required SessionsFactory sessionsFactory,
   AppBarActionsBuilder? appBarActionsBuilder,
+  PaneWrapper? paneWrapper,
 }) {
   return ExampleScaffold<SortableDocumentState>(
     title: 'Sortable Todo List',
     sessionsFactory: sessionsFactory,
     appBarActionsBuilder: appBarActionsBuilder,
+    paneWrapper: paneWrapper,
     stateBuilder: SortableDocumentState.new,
     paneBuilder:
         (context, state) => DocumentPane(
