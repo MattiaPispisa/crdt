@@ -50,12 +50,18 @@ class ConnectionIndicator extends StatelessWidget {
       builder: (context, snapshot) {
         final status = snapshot.data ?? ConnectionStatus.disconnected;
         final visual = _visual(status);
-        return Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 8),
-          child: Tooltip(
-            message: visual.label,
-            child: Icon(visual.icon, color: visual.color),
-          ),
+
+        // Once the automatic reconnects are exhausted (error) or the client is
+        // disconnected, offer a manual retry: tapping re-runs connect().
+        final canRetry =
+            status == ConnectionStatus.disconnected ||
+            status == ConnectionStatus.error;
+
+        return IconButton(
+          icon: Icon(visual.icon, color: visual.color),
+          tooltip:
+              canRetry ? '${visual.label} — tap to reconnect' : visual.label,
+          onPressed: canRetry ? () => client.connect() : null,
         );
       },
     );

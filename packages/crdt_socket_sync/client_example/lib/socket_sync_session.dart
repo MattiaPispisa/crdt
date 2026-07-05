@@ -30,13 +30,17 @@ class SocketSyncSession implements ExampleSyncSession {
          peerId: author,
          initialClock: HybridLogicalClock.now(),
        ) {
+    awareness = ClientAwarenessPlugin(
+      initialMetadata: metadata,
+      throttleDuration: const Duration(milliseconds: 100),
+    );
     client = WebSocketClient(
       url: url,
       document: document,
       author: author,
       // The demo servers run the awareness plugin, so the client must too —
       // otherwise it can't decode the awareness messages the server sends.
-      plugins: [ClientAwarenessPlugin(initialMetadata: metadata)],
+      plugins: [awareness],
     );
     unawaited(client.connect());
   }
@@ -49,6 +53,9 @@ class SocketSyncSession implements ExampleSyncSession {
 
   /// The underlying client (exposed for the connection-status indicator).
   late final WebSocketClient client;
+
+  /// The awareness (presence/cursors) plugin for this session.
+  late final ClientAwarenessPlugin awareness;
 
   @override
   void dispose() {

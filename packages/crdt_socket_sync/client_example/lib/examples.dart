@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:crdt_socket_sync_client_example/awareness_cursors.dart';
 import 'package:crdt_socket_sync_client_example/connection_indicator.dart';
 import 'package:crdt_socket_sync_client_example/socket_sync_session.dart';
 import 'package:crdt_socket_sync_client_example/user/_state.dart';
@@ -13,6 +14,7 @@ typedef _ExampleScreen =
     Widget Function({
       required SessionsFactory sessionsFactory,
       AppBarActionsBuilder? appBarActionsBuilder,
+      PaneWrapper? paneWrapper,
     });
 
 /// Wraps a shared example [screen] with a single real socket session pointed at
@@ -33,6 +35,7 @@ WidgetBuilder _socket(_ExampleScreen screen, String documentId) {
           ],
       appBarActionsBuilder:
           (sessions) => [
+            const SettingsButton(),
             ConnectionIndicator(
               client: (sessions.first as SocketSyncSession).client,
             ),
@@ -42,6 +45,11 @@ WidgetBuilder _socket(_ExampleScreen screen, String documentId) {
               pubTooltip: 'crdt_socket_sync on pub.dev',
             ),
           ],
+      paneWrapper:
+          (session, child) => AwarenessCursors(
+            session: session as SocketSyncSession,
+            child: child,
+          ),
     );
   };
 }
@@ -82,8 +90,25 @@ final kExamples = <Example>[
   ),
 ];
 
+/// App-bar button that returns to the connect/settings screen (the first
+/// route), so a wrong server URL can be corrected.
+class SettingsButton extends StatelessWidget {
+  /// Creates the settings button.
+  const SettingsButton({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return IconButton(
+      icon: const Icon(Icons.settings),
+      tooltip: 'Change server',
+      onPressed: () => Navigator.of(context).popUntil((route) => route.isFirst),
+    );
+  }
+}
+
 /// App bar actions for the home page.
 const List<Widget> homeActions = [
+  SettingsButton(),
   AppBarLinks(
     docsUrl: _docsUrl,
     pubDevUrl: _pubDevUrl,
