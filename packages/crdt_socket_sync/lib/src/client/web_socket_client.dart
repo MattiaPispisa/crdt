@@ -355,6 +355,13 @@ class WebSocketClient extends CRDTSocketClient {
   /// message this client does not understand) is dropped — it must never
   /// poison the decoding of subsequent frames.
   void _handleIncomingData(List<int> data) {
+    // The client may be disposed (or reconnecting) while a frame is still in
+    // flight from the transport. Dropping it is expected teardown behavior,
+    // not an error, so bail out before decoding or asserting.
+    if (_messageController.isClosed) {
+      return;
+    }
+
     Message? message;
     try {
       message = _messageCodec.decode(data);
@@ -375,16 +382,10 @@ class WebSocketClient extends CRDTSocketClient {
           '\nFrame: ${data.join(', ')}',
         );
       }
-      if (_messageController.isClosed) {
-        throw StateError(
-          '[WebSocketClient] received a message after the client has been'
-          ' disposed',
-        );
-      }
       return true;
     }());
 
-    if (message != null && !_messageController.isClosed) {
+    if (message != null) {
       _messageController.add(message);
     }
   }
