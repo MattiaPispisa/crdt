@@ -53,6 +53,9 @@ CRDT Socket Sync provides a robust, real-time synchronization system that allows
 - 📦 **Compression**: Optional data compression for efficient network usage
 - 🔌 **Modular Architecture**: Separate client and server components with clean abstractions
 - 📡 **Automatic Reconnection**: Robust connection handling with automatic retry logic
+- 💓 **Liveness Detection**: Ping/pong tracking detects half-open connections and reconnects
+- 🚰 **Backpressure**: Bounded per-connection send queue drops peers that cannot keep up (they re-sync on reconnect)
+- 🗜️ **History Pruning**: Server takes a snapshot and prunes confirmed history once every client aligns on a common frontier
 - 🎯 **Type Safety**: Full Dart type safety with generic document handlers
 - 📊 **Event Monitoring**: Comprehensive event streams for connection and synchronization monitoring
 - 🔌 **Plugins**: Extendable plugin system for custom functionality
@@ -189,9 +192,7 @@ The awareness plugin is a plugin that allows you to track the awareness of the c
 It is a plugin that is both on the client and the server.
 It is used to track the awareness of the clients and to send the awareness to the server and to the clients.
 
-The example provided uses the awareness plugin to track the active users (name, surname, random color) and their relative position in the document.
-
-<img width="500" alt="awareness_plugin" src="https://raw.githubusercontent.com/MattiaPispisa/crdt/main/assets/demos/awareness_plugin.gif">
+The [example](#examples) provided uses the awareness plugin to track the active users (name, surname, random color) and their relative position in the document.
 
 ## Design
 
@@ -290,15 +291,12 @@ you can use the [official vscode extension](https://open-vsx.org/extension/Merma
 
 ## Examples
 
-This package provided some examples:
+This package provides two examples:
 
-In the [example/](https://github.com/MattiaPispisa/crdt/tree/main/packages/crdt_socket_sync/example) directory you can find a complete working example of the server and the client (dart).
+- [example/](https://github.com/MattiaPispisa/crdt/tree/main/packages/crdt_socket_sync/example) — a persistent (Hive-backed) WebSocket **server**.
+- [client_example/](https://github.com/MattiaPispisa/crdt/tree/main/packages/crdt_socket_sync/client_example) — the **Flutter client** counterpart, which connects to the server and shows the same examples as `crdt_lf`, live over the real backend.
 
-In the [flutter_example/](https://github.com/MattiaPispisa/crdt/tree/main/packages/crdt_socket_sync/flutter_example) directory you can find a complete working example of a flutter app that uses the server and the client.
-
-Try to run the [server example](https://github.com/MattiaPispisa/crdt/tree/main/packages/crdt_socket_sync/example/main.dart) and some [client applications](https://github.com/MattiaPispisa/crdt/tree/main/packages/crdt_socket_sync/flutter_example) (or the [dart client](https://github.com/MattiaPispisa/crdt/tree/main/packages/crdt_socket_sync/example/main_client.dart)).
-The workspace contains a .vscode folder with the launch settings for the examples.
-
+Run the [server](https://github.com/MattiaPispisa/crdt/tree/main/packages/crdt_socket_sync/example/lib/main.dart) and a client. The workspace contains a `.vscode` folder with launch settings to run both server and client.
 
 The server example and the flutter example already use the awareness plugin.
 
@@ -423,10 +421,10 @@ Messages are exchanged as JSON envelopes (typed by `MessageType`) where the
 heavy CRDT payloads are carried as **base64-encoded binary blobs** produced by
 `crdt_lf`'s native binary methods:
 
-| Field | Encoding |
-|---|---|
-| `Change` | `base64(change.toBytes())` |
-| `Snapshot` | `base64(snapshot.toBytes())` |
+| Field           | Encoding                          |
+|-----------------|-----------------------------------|
+| `Change`        | `base64(change.toBytes())`        |
+| `Snapshot`      | `base64(snapshot.toBytes())`      |
 | `VersionVector` | `base64(versionVector.toBytes())` |
 
 On the receiver side, the corresponding `fromBytes` factories rebuild the
@@ -459,15 +457,6 @@ client.connectionStatus.listen((status) {
   }
 });
 ```
-
-
-
-
-## Packages
-Other bricks of the crdt "system" are:
-
-- [crdt_lf](https://pub.dev/packages/crdt_lf)
-- [hlc_dart](https://pub.dev/packages/hlc_dart)
 
 ## [Roadmap](https://github.com/users/MattiaPispisa/projects/1)
 A roadmap is available in the [project](https://github.com/users/MattiaPispisa/projects/1) page. The roadmap provides a high-level overview of the project's goals and the current status of the project.

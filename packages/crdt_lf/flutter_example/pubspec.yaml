@@ -16,6 +16,8 @@ dependencies:
   crdt_lf:
     path: ../
   provider: ^6.1.4
+  shared_examples_infrastructure:
+    path: ../../shared_examples_infrastructure
   url_launcher: ^6.3.0
 
 dev_dependencies:

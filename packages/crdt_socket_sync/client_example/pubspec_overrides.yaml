@@ -1,0 +1,10 @@
+# melos_managed_dependency_overrides: crdt_lf,crdt_socket_sync,hlc_dart,shared_examples_infrastructure
+dependency_overrides:
+  crdt_lf:
+    path: ../../crdt_lf
+  crdt_socket_sync:
+    path: ..
+  hlc_dart:
+    path: ../../hlc
+  shared_examples_infrastructure:
+    path: ../../shared_examples_infrastructure

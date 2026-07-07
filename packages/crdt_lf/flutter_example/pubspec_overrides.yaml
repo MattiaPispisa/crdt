@@ -1,6 +1,8 @@
-# melos_managed_dependency_overrides: crdt_lf,hlc_dart
+# melos_managed_dependency_overrides: crdt_lf,hlc_dart,shared_examples_infrastructure
 dependency_overrides:
   crdt_lf:
     path: ..
   hlc_dart:
     path: ../../hlc
+  shared_examples_infrastructure:
+    path: ../../shared_examples_infrastructure

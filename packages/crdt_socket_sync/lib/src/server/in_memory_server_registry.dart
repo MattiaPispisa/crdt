@@ -81,8 +81,12 @@ class InMemoryCRDTServerRegistry implements CRDTServerRegistry {
 
     try {
       return document.applyChange(change);
+    } on CausallyNotReadyException {
+      // The change depends on operations we don't have. Let this propagate so
+      // the server can tell the client it is out of sync and needs to re-sync.
+      rethrow;
     } catch (e) {
-      // Change could not be applied (e.g., not causally ready)
+      // Any other failure: the change could not be applied.
       return false;
     }
   }

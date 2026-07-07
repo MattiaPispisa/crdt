@@ -1,24 +1,24 @@
 import 'dart:io';
 
-import 'package:path/path.dart';
-
 import 'fs.dart';
 import 'logs.dart';
 import 'process.dart';
 import 'yaml.dart';
 
-/// Copies the shared workspace assets into the Flutter example so it can
-/// reference them as bundled assets (see its `pubspec.yaml`).
+/// Bootstraps the Flutter example apps: copies the shared workspace assets
+/// into the crdt_lf example and generates the `generated.dart` version files
+/// the examples display.
 ///
 /// Run as the `melos bootstrap` post hook, mirroring what `docs_bs` does for
 /// the documentation site.
 void main() {
+  // crdt_lf flutter_example bundles the shared workspace assets (logo, ...).
   logger
-    ..info('Bootstrapping flutter_example...')
-    ..info('Copy assets');
+    ..info('Bootstrapping examples...')
+    ..info('Copy assets into crdt_lf/flutter_example');
   try {
     assetsDir().copySync(
-      to: flutterExampleDir(subParts: ['assets']),
+      to: crdtLfFlutterExampleDir(subParts: ['assets']),
       logger: logger,
     );
   } catch (error) {
@@ -29,34 +29,58 @@ void main() {
     badExit();
   }
 
-  logger.info('generating flutter example code...');
+  logger.info('Generating example version files...');
   try {
-    _generateFlutterExampleCode();
+    // crdt_lf example shows the crdt_lf version.
+    _generateVersions(
+      pubspecLock: crdtLfExamplePubspecLock(),
+      output: File(
+        crdtLfFlutterExampleDir(subParts: ['lib', 'generated.dart']).path,
+      ),
+      packages: const {'crdt_lf'},
+    );
+    // crdt_socket_sync client_example shows both the socket and crdt_lf
+    // versions.
+    _generateVersions(
+      pubspecLock: clientExamplePubspecLock(),
+      output: File(
+        clientExampleDir(subParts: ['lib', 'generated.dart']).path,
+      ),
+      packages: const {'crdt_socket_sync', 'crdt_lf'},
+    );
   } catch (error) {
     logger.error(
-      'Unable to detect dependencies',
+      'Unable to generate version files',
       error: error,
     );
     badExit();
   }
 
-  logger.info('flutter_example ready ✅');
+  logger.info('examples ready ✅');
 }
 
-void _generateFlutterExampleCode() {
-  final reader = YamlReader(crdtLfExamplePubspecLock())..initSync();
-  final version = reader.version('crdt_lf');
+/// Writes a `generated.dart` at [output] exposing each package version as a
+/// top-level `<package>_version` string, read from [pubspecLock].
+///
+/// [packages] is the set of package names to emit
+/// (e.g. `{'crdt_socket_sync', 'crdt_lf'}`).
+void _generateVersions({
+  required File pubspecLock,
+  required File output,
+  required Set<String> packages,
+}) {
+  final reader = YamlReader(pubspecLock)..initSync();
 
-  final generatedFile = File(
-    joinAll(
-      [crdtLfDir().path, 'flutter_example', 'lib', 'generated.dart'],
-    ),
-  );
-
-  final generatedCode = StringBuffer()
+  final code = StringBuffer()
     ..writeln('// GENERATED CODE - DO NOT MODIFY BY HAND')
-    ..writeln()
-    ..writeln("String libraryVersion = '$version';");
+    ..writeln(
+      '// ignore_for_file: constant_identifier_names, '
+      'non_constant_identifier_names',
+    )
+    ..writeln();
+  for (final package in packages) {
+    code.writeln("String ${package}_version = '${reader.version(package)}';");
+  }
 
-  generatedFile.writeAsStringSync(generatedCode.toString());
+  output.writeAsStringSync(code.toString());
 }

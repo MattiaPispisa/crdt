@@ -18,6 +18,7 @@ class ClientSession {
     required CRDTServerRegistry serverRegistry,
     Compressor? compressor,
     MessageCodec<Message>? messageCodec,
+    int? maxBufferSize,
     List<ServerSyncPlugin> plugins = const [],
   })  : _isClosed = false,
         _connection = connection,
@@ -35,6 +36,10 @@ class ClientSession {
           ),
           compressor: compressor ?? NoCompression.instance,
         ) {
+    _outboundQueue = OutboundQueue(
+      onSend: _connection.send,
+      maxBufferSize: maxBufferSize ?? Protocol.maxBufferSize,
+    );
     _updateClientActivity();
     _connection.incoming.listen(
       _handleData,
@@ -84,8 +89,21 @@ class ClientSession {
   /// The documents the client is subscribed to
   List<String> get subscribedDocuments => _subscribedDocuments.toList();
 
+  /// The client's most recently reported version vector.
+  ///
+  /// Seeded from the handshake and refreshed from every ping that carries one.
+  /// The server uses it to know how far this client has advanced so it can
+  /// take a snapshot once every client has confirmed the current state.
+  VersionVector? _lastKnownVersionVector;
+
+  /// The client's most recently reported version vector, if any.
+  VersionVector? get lastKnownVersionVector => _lastKnownVersionVector;
+
   /// Message codec
   final MessageCodec<Message> _messageCodec;
+
+  /// Bounded, serialized outbound send queue.
+  late final OutboundQueue _outboundQueue;
 
   /// Send a message to the client
   Future<void> sendMessage(Message message) async {
@@ -114,7 +132,7 @@ class ClientSession {
         return;
       }
 
-      await _connection.send(data);
+      await _outboundQueue.add(data);
     } catch (e) {
       _addSessionEvent(
         SessionEventGeneric(
@@ -268,6 +286,7 @@ class ClientSession {
     }
 
     _clientAuthor = message.author;
+    _lastKnownVersionVector = message.versionVector;
     _subscribedDocuments.add(documentId);
 
     for (final plugin in _plugins) {
@@ -454,6 +473,10 @@ class ClientSession {
   }
 
   Future<void> _handlePingMessage(PingMessage message) async {
+    if (message.versionVector != null) {
+      _lastKnownVersionVector = message.versionVector;
+    }
+
     final pongMessage = Message.pong(
       documentId: message.documentId,
       originalTimestamp: message.timestamp,
@@ -538,6 +561,7 @@ class ClientSession {
 
     _isClosed = true;
     _stopHeartbeatMonitoring();
+    _outboundQueue.close();
 
     for (final plugin in _plugins) {
       plugin.onSessionClosed(this);

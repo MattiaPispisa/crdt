@@ -79,12 +79,23 @@ class ClientAwarenessPlugin extends ClientSyncPlugin {
     }
   }
 
-  /// Updates document awareness with the server state
+  /// Updates document awareness with the authoritative server state.
   ///
-  /// If local client awareness is more recent than the remote one,
-  /// then preserve the local state
+  /// The server state is authoritative for every remote client, but the local
+  /// client is the source of truth for its own presence. A full state message
+  /// can predate a just-applied local update, so the local client's own entry
+  /// is overlaid on top of the server state to avoid clobbering it.
   void _handleAwarenessState(AwarenessStateMessage message) {
-    _awareness = message.awareness;
+    final sessionId = client.sessionId;
+    final localOwnState =
+        sessionId != null ? _awareness?.states[sessionId] : null;
+
+    var next = message.awareness;
+    if (localOwnState != null) {
+      next = next.copyWithUpdatedClient(localOwnState);
+    }
+
+    _awareness = next;
     _updateController(_awareness!);
   }
 

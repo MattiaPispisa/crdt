@@ -120,10 +120,12 @@ abstract class Message {
   factory Message.ping({
     required String documentId,
     required int timestamp,
+    VersionVector? versionVector,
   }) {
     return PingMessage(
       documentId: documentId,
       timestamp: timestamp,
+      versionVector: versionVector,
     );
   }
 
@@ -165,6 +167,25 @@ abstract class Message {
   /// Serialize the message to a JSON string
   String serialize() {
     return jsonEncode(toJson());
+  }
+
+  /// Safely reads the raw `type` code of an encoded message [data] frame,
+  /// without throwing.
+  ///
+  /// [data] is expected to be the (uncompressed) UTF-8 JSON payload produced
+  /// by the message codec. Returns `null` when the frame is not valid JSON or
+  /// carries no integer `type`.
+  static int? getTypeOrNull(List<int> data) {
+    try {
+      final json = jsonDecode(utf8.decode(data));
+      if (json is Map<String, dynamic>) {
+        final type = json['type'];
+        return type is int ? type : null;
+      }
+    } catch (_) {
+      // Not decodable (malformed or compressed): no type to report.
+    }
+    return null;
   }
 
   /// Deserialize a message from a JSON string
@@ -471,6 +492,7 @@ class PingMessage extends Message {
   const PingMessage({
     required this.timestamp,
     required String documentId,
+    this.versionVector,
   }) : super(MessageType.ping, documentId);
 
   /// Create a ping message from a JSON map
@@ -478,11 +500,21 @@ class PingMessage extends Message {
     return PingMessage(
       timestamp: json['timestamp'] as int,
       documentId: json['documentId'] as String,
+      versionVector: json['versionVector'] != null
+          ? _decodeVersionVector(json['versionVector'] as String)
+          : null,
     );
   }
 
   /// Timestamp of the ping
   final int timestamp;
+
+  /// The sender's current version vector, if reported.
+  ///
+  /// Clients piggy-back their version vector on pings so the server can learn
+  /// how far each client has advanced and take a snapshot (and prune history)
+  /// once every connected client has confirmed a common frontier.
+  final VersionVector? versionVector;
 
   @override
   Map<String, dynamic> toJson() {
@@ -490,12 +522,15 @@ class PingMessage extends Message {
       'type': type.value,
       'documentId': documentId,
       'timestamp': timestamp,
+      if (versionVector != null)
+        'versionVector': _encodeVersionVector(versionVector!),
     };
   }
 
   @override
   String toString() {
-    return 'PingMessage(timestamp: $timestamp, documentId: $documentId)';
+    return 'PingMessage(timestamp: $timestamp, documentId: $documentId, '
+        'versionVector: $versionVector)';
   }
 }
 

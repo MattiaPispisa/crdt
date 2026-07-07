@@ -199,7 +199,7 @@ void main() {
         );
 
         expect(
-          () => syncManager.merge(
+          () => syncManager.import(
             serverVersionVector: snapshot.versionVector,
             snapshot: snapshot,
             changes: [],
@@ -233,7 +233,7 @@ void main() {
           data: {'test-handler': Uint8List.fromList(utf8.encode('test_state'))},
         );
 
-        syncManager.merge(
+        syncManager.import(
           serverVersionVector: snapshot.versionVector,
           snapshot: snapshot,
           changes: [],
@@ -269,7 +269,7 @@ void main() {
         // Add a newer change on the snapshot
         snapshot.versionVector.update(peerId, HybridLogicalClock(l: 10, c: 1));
 
-        syncManager.merge(
+        syncManager.import(
           serverVersionVector: snapshot.versionVector,
           snapshot: snapshot,
           changes: [],
@@ -301,7 +301,7 @@ void main() {
           author: otherPeerId,
         );
 
-        syncManager.merge(
+        syncManager.import(
           serverVersionVector: VersionVector({otherPeerId: serverChange.hlc}),
           changes: [serverChange],
         );
@@ -347,7 +347,7 @@ void main() {
           author: otherPeerId,
         );
 
-        syncManager.merge(
+        syncManager.import(
           serverVersionVector: VersionVector({otherPeerId: serverChange.hlc}),
           snapshot: snapshot,
           changes: [serverChange],
@@ -506,7 +506,7 @@ void main() {
           author: otherPeerId,
         );
 
-        syncManager.merge(
+        syncManager.import(
           serverVersionVector: VersionVector({otherPeerId: serverChange.hlc}),
           changes: [serverChange],
         );
@@ -536,7 +536,7 @@ void main() {
 
         // Should not throw
         expect(
-          () => syncManager.merge(
+          () => syncManager.import(
             serverVersionVector: snapshot.versionVector,
             snapshot: snapshot,
           ),

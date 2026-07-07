@@ -18,12 +18,18 @@ class WebSocketClient extends CRDTSocketClient {
     required this.author,
     Compressor? compressor,
     MessageCodec<Message>? messageCodec,
+    Duration? pingInterval,
+    Duration? pingTimeout,
+    int? maxBufferSize,
     super.plugins,
   })  : _messageController = StreamController<Message>.broadcast(),
         _connectionStatusController =
             StreamController<ConnectionStatus>.broadcast()
               ..add(ConnectionStatus.disconnected),
         _connectionStatusValue = ConnectionStatus.disconnected,
+        _pingInterval = pingInterval ?? Protocol.pingInterval,
+        _pingTimeout = pingTimeout ?? Protocol.pingTimeout,
+        _maxBufferSize = maxBufferSize ?? Protocol.maxBufferSize,
         _transportFactory = (() => Transport.create(_WebSocketConnector(url))) {
     _syncManager = SyncManager(document: document, client: this);
     _messageCodec = CompressedCodec<Message>(
@@ -49,12 +55,18 @@ class WebSocketClient extends CRDTSocketClient {
     required Transport Function() transportFactory,
     Compressor? compressor,
     MessageCodec<Message>? messageCodec,
+    Duration? pingInterval,
+    Duration? pingTimeout,
+    int? maxBufferSize,
     super.plugins,
   })  : _messageController = StreamController<Message>.broadcast(),
         _connectionStatusController =
             StreamController<ConnectionStatus>.broadcast()
               ..add(ConnectionStatus.disconnected),
         _connectionStatusValue = ConnectionStatus.disconnected,
+        _pingInterval = pingInterval ?? Protocol.pingInterval,
+        _pingTimeout = pingTimeout ?? Protocol.pingTimeout,
+        _maxBufferSize = maxBufferSize ?? Protocol.maxBufferSize,
         _transportFactory = transportFactory {
     _syncManager = SyncManager(document: document, client: this);
     _messageCodec = CompressedCodec<Message>(
@@ -94,9 +106,6 @@ class WebSocketClient extends CRDTSocketClient {
   /// Transport for communication
   Transport? _transport;
 
-  /// Buffer for incoming data
-  final List<int> _buffer = [];
-
   /// Incoming (transporter) messages controller
   final StreamController<Message> _messageController;
 
@@ -114,6 +123,27 @@ class WebSocketClient extends CRDTSocketClient {
 
   /// Timer for periodic ping
   Timer? _pingTimer;
+
+  /// Interval between outgoing pings
+  final Duration _pingInterval;
+
+  /// Maximum time to wait for a pong before considering the connection dead
+  final Duration _pingTimeout;
+
+  /// Maximum outbound buffer size (bytes) before the connection is torn down
+  final int _maxBufferSize;
+
+  /// Bounded, serialized outbound send queue for the current connection.
+  ///
+  /// Recreated on each [connect] (the transport is recreated too) and cleared
+  /// on [disconnect].
+  OutboundQueue? _outboundQueue;
+
+  /// Timestamp of the last pong received from the server.
+  ///
+  /// Reset on connect and cleared on disconnect. Used to detect a half-open
+  /// connection (one where sends still appear to succeed but the peer is gone).
+  DateTime? _lastPongAt;
 
   /// Completer for handshake
   Completer<bool>? _handshakeCompleter;
@@ -183,6 +213,10 @@ class WebSocketClient extends CRDTSocketClient {
       });
 
       _transport = _transportFactory();
+      _outboundQueue = OutboundQueue(
+        onSend: (data) => _transport!.send(data),
+        maxBufferSize: _maxBufferSize,
+      );
 
       _updateConnectionStatus(
         _connectionStatusValue.isDisconnected
@@ -199,6 +233,8 @@ class WebSocketClient extends CRDTSocketClient {
 
       final connected = await _performHandshake();
       if (connected) {
+        // Seed liveness so a fresh connection is not immediately judged dead.
+        _lastPongAt = DateTime.now();
         _startPingTimer();
         _updateConnectionStatus(ConnectionStatus.connected);
         for (final plugin in plugins) {
@@ -226,6 +262,9 @@ class WebSocketClient extends CRDTSocketClient {
     });
     _transport = null;
     _sessionId = null;
+    _lastPongAt = null;
+    _outboundQueue?.close();
+    _outboundQueue = null;
 
     for (final plugin in plugins) {
       plugin.onDisconnected();
@@ -276,7 +315,7 @@ class WebSocketClient extends CRDTSocketClient {
     }
 
     try {
-      await _transport!.send(data);
+      await (_outboundQueue?.add(data) ?? _transport!.send(data));
 
       if (await _handshakeCompleted) {
         _updateConnectionStatus(ConnectionStatus.connected);
@@ -308,43 +347,46 @@ class WebSocketClient extends CRDTSocketClient {
     });
   }
 
+  /// Handle a single incoming transport frame.
+  ///
+  /// The WebSocket transport preserves message boundaries: each frame is
+  /// exactly one encoded [Message]. We therefore decode each frame
+  /// independently. A frame that cannot be decoded (malformed, or a plugin
+  /// message this client does not understand) is dropped — it must never
+  /// poison the decoding of subsequent frames.
   void _handleIncomingData(List<int> data) {
-    _buffer.addAll(data);
-    _processBuffer();
-  }
+    // The client may be disposed (or reconnecting) while a frame is still in
+    // flight from the transport. Dropping it is expected teardown behavior,
+    // not an error, so bail out before decoding or asserting.
+    if (_messageController.isClosed) {
+      return;
+    }
 
-  void _processBuffer() {
-    while (_buffer.isNotEmpty) {
-      try {
-        final message = _messageCodec.decode(_buffer);
+    Message? message;
+    try {
+      message = _messageCodec.decode(data);
+    } catch (_) {
+      // Undecodable frame: drop it and keep processing later frames.
+      return;
+    }
 
-        // ignore: prefer_asserts_with_message assert function
-        assert(() {
-          if (message == null) {
-            throw StateError(
-              '[WebSocketClient] received a message that cannot be decoded.'
-              ' Have you added the plugin to the client?'
-              '\nBuffer: ${_buffer.join(', ')}',
-            );
-          }
-          if (_messageController.isClosed) {
-            throw StateError(
-              '[WebSocketClient] received a message after the client has been'
-              ' disposed',
-            );
-          }
-          return true;
-        }());
-
-        _buffer.clear();
-
-        if (message != null && !_messageController.isClosed) {
-          _messageController.add(message);
-        }
-      } catch (e) {
-        // not enough data for a message
-        break;
+    // ignore: prefer_asserts_with_message assert function
+    assert(() {
+      if (message == null) {
+        final type = Message.getTypeOrNull(data);
+        throw StateError(
+          '[WebSocketClient] received a message'
+          '${type != null ? ' of type $type' : ''}'
+          ' that cannot be decoded.'
+          ' Have you added the plugin to the client?'
+          '\nFrame: ${data.join(', ')}',
+        );
       }
+      return true;
+    }());
+
+    if (message != null) {
+      _messageController.add(message);
     }
   }
 
@@ -402,32 +444,56 @@ class WebSocketClient extends CRDTSocketClient {
     }
   }
 
-  /// Start the periodic ping [_sendPing] with [Protocol.pingInterval] interval
+  /// Start the periodic ping [_sendPing] with [_pingInterval] interval
   void _startPingTimer() {
     _stopPingTimer();
     _pingTimer = Timer.periodic(
-      Protocol.pingInterval,
+      _pingInterval,
       (_) => _sendPing(),
     );
   }
 
-  /// Stop the periodic ping
+  /// Stop the periodic ping.
+  ///
+  /// Note: this only cancels the timer. The liveness timestamp
+  /// ([_lastPongAt]) is owned by [connect]/[disconnect] so that restarting the
+  /// timer does not wipe a freshly seeded value.
   void _stopPingTimer() {
     _pingTimer?.cancel();
     _pingTimer = null;
   }
 
-  /// Send a ping message to the server
+  /// Send a ping message to the server.
+  ///
+  /// Before sending, detect a dead (half-open) connection: if no pong has been
+  /// received within [_pingTimeout], the peer is gone even though sends may
+  /// still appear to succeed. Route this through [_handleTransportError] so the
+  /// existing reconnect machinery (status transitions, [Protocol
+  /// .maxReconnectAttempts]) is reused.
   Future<void> _sendPing() async {
-    if (!_connectionStatusValue.isDisconnected) {
-      await tryCatchIgnore(() async {
-        final pingMessage = Message.ping(
-          documentId: document.documentId,
-          timestamp: DateTime.now().millisecondsSinceEpoch,
-        );
-        await sendMessage(pingMessage);
-      });
+    if (_connectionStatusValue.isDisconnected) {
+      return;
     }
+
+    final lastPongAt = _lastPongAt;
+    if (lastPongAt != null &&
+        DateTime.now().difference(lastPongAt) > _pingTimeout) {
+      _handleTransportError(
+        TimeoutException('No pong received within $_pingTimeout'),
+      );
+      return;
+    }
+
+    await tryCatchIgnore(() async {
+      final pingMessage = Message.ping(
+        documentId: document.documentId,
+        timestamp: DateTime.now().millisecondsSinceEpoch,
+        // Report our version vector so the server can coordinate snapshots
+        // once every client has confirmed a common frontier.
+        versionVector: document.getVersionVector(),
+      );
+      await sendMessage(pingMessage);
+    });
   }
 
   /// Performs the handshake with the server
@@ -501,10 +567,18 @@ class WebSocketClient extends CRDTSocketClient {
         break;
 
       case MessageType.pong:
+        _handlePongMessage(message as PongMessage);
+        break;
+
       case MessageType.handshakeRequest:
       case MessageType.documentStatusRequest:
         break;
     }
+  }
+
+  /// Records that the server is alive.
+  void _handlePongMessage(PongMessage message) {
+    _lastPongAt = DateTime.now();
   }
 
   /// Handles the handshake response
@@ -517,7 +591,7 @@ class WebSocketClient extends CRDTSocketClient {
     // Complete the handshake first so that merge can send messages
     _handshakeCompleter?.complete(true);
 
-    _syncManager.merge(
+    _syncManager.import(
       changes: message.changes,
       snapshot: message.snapshot,
       serverVersionVector: message.versionVector,
@@ -529,7 +603,7 @@ class WebSocketClient extends CRDTSocketClient {
   }
 
   void _handleDocumentStatusMessage(DocumentStatusMessage message) {
-    _syncManager.merge(
+    _syncManager.import(
       changes: message.changes,
       snapshot: message.snapshot,
       serverVersionVector: message.versionVector,
@@ -623,15 +697,7 @@ class _WebSocketConnection implements TransportConnection {
 
   @override
   Stream<List<int>> get incoming {
-    return _channel.stream.map((data) {
-      if (data is String) {
-        return List<int>.from(data.codeUnits);
-      } else if (data is List<int>) {
-        return data;
-      }
-
-      throw FormatException('Unexpected data type: ${data.runtimeType}');
-    });
+    return _channel.stream.map(frameToBytes);
   }
 
   @override

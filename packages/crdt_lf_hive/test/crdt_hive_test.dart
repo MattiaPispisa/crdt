@@ -1,5 +1,4 @@
 import 'dart:convert';
-import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:crdt_lf/crdt_lf.dart';
@@ -7,6 +6,8 @@ import 'package:crdt_lf_hive/crdt_lf_hive.dart';
 import 'package:hive/hive.dart';
 import 'package:hlc_dart/hlc_dart.dart';
 import 'package:test/test.dart';
+
+import 'helpers/hive_test_path.dart';
 
 void main() {
   group('CRDTHive', () {
@@ -17,8 +18,7 @@ void main() {
     });
 
     setUp(() async {
-      final directory = await Directory.systemTemp.createTemp('crdt_hive_test');
-      tempDir = directory.path;
+      tempDir = await hiveTestPath();
       Hive.init(tempDir);
     });
 
@@ -515,9 +515,15 @@ void main() {
       late CRDTORSetHandler<String> orSet;
       late CRDTORMapHandler<String, int> orMap;
 
+      // Unique document id per test: these tests reuse the same document id,
+      // which collides on the web where Hive boxes live in a per-origin
+      // IndexedDB (the `Hive.init` path is ignored) rather than an isolated
+      // temp directory as on the VM.
+      var testIndex = 0;
+
       setUp(() {
         changesToSave = [];
-        documentId = 'doc-all-handlers';
+        documentId = 'doc-all-handlers-${testIndex++}';
         document = CRDTDocument(peerId: PeerId.generate())
           ..localChanges.listen(changesToSave.add);
 

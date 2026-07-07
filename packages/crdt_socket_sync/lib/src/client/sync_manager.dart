@@ -4,11 +4,16 @@ import 'package:crdt_lf/crdt_lf.dart';
 import 'package:crdt_socket_sync/client.dart';
 import 'package:crdt_socket_sync/src/common/utils.dart';
 
-// TODO(mattia): when server goes offline a version must be saved and on
-// reconnecting every change from that version must be sent to the server.
-
+/// {@template sync_manager}
 /// Manager for the CRDT client
+///
+/// it's responsible for:
+/// - implementing the requested changes to the [document]
+/// - submitting the changes to the [document]
+/// {@endtemplate}
 class SyncManager {
+  /// {@macro sync_manager}
+  ///
   /// Constructor
   SyncManager({
     required this.document,
@@ -73,8 +78,10 @@ class SyncManager {
     }
   }
 
-  /// [CRDTDocument.import] with `merge: true`
-  void merge({
+  /// [CRDTDocument.import] with:
+  /// - `merge: false`
+  /// - `pruneHistory: true`
+  void import({
     required VersionVector serverVersionVector,
     List<Change>? changes,
     Snapshot? snapshot,

@@ -1,3 +1,48 @@
+## [0.5.0](https://github.com/MattiaPispisa/crdt/tree/crdt_socket_sync-v0.5.0/packages/crdt_socket_sync)
+**Date:** 2026-07-03
+
+[compare to previous release](https://github.com/MattiaPispisa/crdt/compare/crdt_socket_sync-v0.4.0...crdt_socket_sync-v0.5.0)
+
+This release is a general pass to improve the sync process and clean up the
+code following the improvements introduced in `crdt_lf` v3.0.0
+(see [#87](https://github.com/MattiaPispisa/crdt/issues/87)).
+
+### Added
+
+- Client-side dead-connection detection: the client tracks pong replies and, if
+  no pong arrives within `Protocol.pingTimeout`, treats the connection as dead
+  and reconnects. Ping/pong durations are injectable via the `WebSocketClient`
+  constructors.
+- Backpressure: outbound sends are serialized through a bounded per-connection
+  queue. A peer that exceeds `Protocol.maxBufferSize` of un-flushed data is
+  disconnected (and re-syncs on reconnect) instead of growing memory without
+  bound. The bound is injectable on both `WebSocketClient` and `WebSocketServer`.
+- Server auto-snapshot: clients report their version vector on pings, and the
+  server takes a snapshot and prunes confirmed history once every connected
+  client has confirmed a common frontier (`ServerEventType.snapshotCreated`).
+- `PingMessage` gained an optional `versionVector` field. This is
+  backward-compatible on the wire (older peers ignore the extra field).
+
+### Fixed
+
+- `WebSocketServer.stop()` now actually closes every client session (previously a
+  method tear-off meant sessions were never gracefully closed).
+- A broadcast no longer aborts when a single client's send fails: the failing
+  client is dropped and the message still reaches every other subscribed client.
+- Incoming client frames are decoded per-frame instead of through a shared
+  buffer, so a single malformed/undecodable frame can no longer poison the
+  decoding of every subsequent message.
+- Text frames are decoded with UTF-8 on both client and server (previously the
+  client used `codeUnits`, corrupting multi-byte payloads).
+- `InMemoryCRDTServerRegistry`: The server's out-of-sync recovery path is no longer dead code:
+  `InMemoryCRDTServerRegistry.applyChange` now propagates
+  `CausallyNotReadyException` so the server tells the client to re-sync instead
+  of silently dropping the change.
+- The awareness client no longer clobbers its own just-updated presence when a
+  full state message arrives from the server.
+- The awareness throttler now fires the trailing action in a burst (the last
+  cursor position is no longer dropped).
+
 ## [0.4.0](https://github.com/MattiaPispisa/crdt/tree/crdt_socket_sync-v0.4.0/packages/crdt_socket_sync)
 **Date:** 2026-06-11
 

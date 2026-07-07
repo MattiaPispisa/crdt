@@ -1,3 +1,6 @@
+@TestOn('vm')
+library server_event_test;
+
 import 'package:crdt_socket_sync/web_socket_server.dart';
 import 'package:test/test.dart';
 
@@ -118,6 +121,11 @@ void main() {
       expect(ServerEventType.clientChangeApplied.isError, isFalse);
       expect(ServerEventType.clientChangeApplied.isMessageBroadcasted, isFalse);
       expect(ServerEventType.clientChangeApplied.isMessageSent, isFalse);
+
+      expect(ServerEventType.snapshotCreated.isSnapshotCreated, isTrue);
+      expect(ServerEventType.snapshotCreated.isStarted, isFalse);
+      expect(ServerEventType.snapshotCreated.isMessageSent, isFalse);
+      expect(ServerEventType.clientChangeApplied.isSnapshotCreated, isFalse);
     });
 
     test('should constructor work correctly', () {

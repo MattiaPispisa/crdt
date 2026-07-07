@@ -1,0 +1,27 @@
+name: shared_examples_infrastructure
+description: >-
+  Private, unpublished package holding the shared UI and example logic reused by
+  packages Flutter example apps.
+publish_to: "none"
+
+version: 1.0.0
+
+environment:
+  sdk: ^3.7.0
+
+dependencies:
+  crdt_lf:
+    path: ../crdt_lf
+  flutter:
+    sdk: flutter
+  provider: ^6.1.4
+  url_launcher: ^6.3.0
+
+dev_dependencies:
+  flutter_lints: ^5.0.0
+  flutter_test:
+    sdk: flutter
+  test: 
+
+flutter:
+  uses-material-design: true

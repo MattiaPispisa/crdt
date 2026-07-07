@@ -1,4 +1,6 @@
 // ignore_for_file: avoid_redundant_argument_values - explicit test setup
+@TestOn('vm')
+library web_socket_test;
 
 import 'dart:async';
 import 'dart:io';
@@ -499,6 +501,31 @@ void main() {
         expectSameList();
         expectSameChanges(1);
       });
+
+      test(
+        'should keep processing frames after an undecodable one '
+        '(no buffer poisoning)',
+        () async {
+          // Feed client1 a malformed frame that cannot be decoded.
+          // Regression: the client used to buffer this frame forever, so every
+          // subsequent (valid) frame failed to decode.
+          outgoingServerSockets.first.controller.add([0xff, 0xfe, 0x00, 0x01]);
+          await Future<void>.delayed(Duration.zero);
+
+          expect(client1.connectionStatusValue, ConnectionStatus.connected);
+
+          // A valid change from client2 is broadcast to client1 through the
+          // same channel that just carried the malformed frame.
+          client2TodoListHandler.insert(
+            0,
+            const _Todo(text: 'Buy milk').toJson(),
+          );
+          await Future<void>.delayed(Duration.zero);
+
+          // client1 still received and applied the valid change.
+          expectSameList(list: const [_Todo(text: 'Buy milk')]);
+        },
+      );
 
       test('should be synced server and clients after a snapshot', () async {
         client1TodoListHandler
