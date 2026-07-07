@@ -81,7 +81,7 @@ class SyncManager {
   /// [CRDTDocument.import] with:
   /// - `merge: false`
   /// - `pruneHistory: true`
-  void merge({
+  void import({
     required VersionVector serverVersionVector,
     List<Change>? changes,
     Snapshot? snapshot,

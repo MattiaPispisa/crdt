@@ -591,7 +591,7 @@ class WebSocketClient extends CRDTSocketClient {
     // Complete the handshake first so that merge can send messages
     _handshakeCompleter?.complete(true);
 
-    _syncManager.merge(
+    _syncManager.import(
       changes: message.changes,
       snapshot: message.snapshot,
       serverVersionVector: message.versionVector,
@@ -603,7 +603,7 @@ class WebSocketClient extends CRDTSocketClient {
   }
 
   void _handleDocumentStatusMessage(DocumentStatusMessage message) {
-    _syncManager.merge(
+    _syncManager.import(
       changes: message.changes,
       snapshot: message.snapshot,
       serverVersionVector: message.versionVector,
