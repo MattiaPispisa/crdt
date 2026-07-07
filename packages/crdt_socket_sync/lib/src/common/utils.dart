@@ -14,8 +14,7 @@ Future<void> tryCatchIgnore(FutureOr<void> Function() fn) async {
 ///
 /// A frame is either a `String` (text frame) or a `List<int>` (binary frame).
 /// Text frames are decoded with [utf8] to stay symmetric with how both the
-/// client and the server encode outgoing text (`utf8.encode`). Using
-/// `String.codeUnits` here would corrupt any multi-byte/non-ASCII payload.
+/// client and the server encode outgoing text (`utf8.encode`).
 List<int> frameToBytes(Object? data) {
   if (data is String) {
     return utf8.encode(data);

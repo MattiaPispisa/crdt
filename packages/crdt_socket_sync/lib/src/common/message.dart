@@ -175,11 +175,6 @@ abstract class Message {
   /// [data] is expected to be the (uncompressed) UTF-8 JSON payload produced
   /// by the message codec. Returns `null` when the frame is not valid JSON or
   /// carries no integer `type`.
-  ///
-  /// Unlike [fromJson], the code does not need to match a known [MessageType],
-  /// so plugin message codes (e.g. `100+`) are reported too. This makes it
-  /// useful to diagnose a frame that cannot be decoded because its plugin has
-  /// not been registered on this side of the connection.
   static int? getTypeOrNull(List<int> data) {
     try {
       final json = jsonDecode(utf8.decode(data));
