@@ -2,6 +2,7 @@ import 'dart:typed_data';
 
 import 'package:crdt_lf/crdt_lf.dart';
 import 'package:crdt_lf_sqlite/src/schema.dart';
+import 'package:crdt_lf_sqlite/src/transaction.dart';
 import 'package:sqlite3/sqlite3.dart' as sq;
 
 /// Storage utility for managing [Change] objects in a SQLite [sq.Database].
@@ -41,8 +42,9 @@ class CRDTSqliteChangeStorage {
 
   /// Saves multiple [Change] objects to the storage.
   ///
-  /// This method is more efficient than calling [saveChange] multiple times
-  /// as it reuses a single prepared statement.
+  /// More efficient and atomic compared to calling [saveChange] multiple
+  /// times: all inserts run in a single transaction using one prepared
+  /// statement. Either all changes are saved or, on error, none are.
   void saveChanges(List<Change> changes) {
     if (changes.isEmpty) {
       return;
@@ -52,9 +54,11 @@ class CRDTSqliteChangeStorage {
       '(document_id, change_id, bytes) VALUES (?, ?, ?)',
     );
     try {
-      for (final change in changes) {
-        statement.execute([documentId, _changeKey(change), change.toBytes()]);
-      }
+      runInTransaction(database, () {
+        for (final change in changes) {
+          statement.execute([documentId, _changeKey(change), change.toBytes()]);
+        }
+      });
     } finally {
       statement.close();
     }
@@ -88,6 +92,7 @@ class CRDTSqliteChangeStorage {
 
   /// Deletes multiple [Change] objects.
   ///
+  /// All deletions run in a single transaction (all-or-nothing).
   /// Returns the number of changes that were actually deleted.
   int deleteChanges(List<Change> changes) {
     if (changes.isEmpty) {
@@ -98,13 +103,15 @@ class CRDTSqliteChangeStorage {
       'DELETE FROM $changesTable WHERE document_id = ? AND change_id = ?',
     );
     try {
-      for (final change in changes) {
-        final key = _changeKey(change);
-        if (_contains(key)) {
-          statement.execute([documentId, key]);
-          deleted += 1;
+      runInTransaction(database, () {
+        for (final change in changes) {
+          final key = _changeKey(change);
+          if (_contains(key)) {
+            statement.execute([documentId, key]);
+            deleted += 1;
+          }
         }
-      }
+      });
     } finally {
       statement.close();
     }

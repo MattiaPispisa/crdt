@@ -7,6 +7,7 @@ import 'dart:typed_data';
 
 import 'package:crdt_lf/crdt_lf.dart';
 import 'package:crdt_lf_sqlite/crdt_lf_sqlite.dart';
+import 'package:crdt_lf_sqlite/src/transaction.dart';
 import 'package:hlc_dart/hlc_dart.dart';
 import 'package:test/test.dart';
 
@@ -111,6 +112,22 @@ void main() {
       expect(changeStorage.deleteChange(change), isTrue);
       expect(changeStorage.count, isZero);
       expect(changeStorage.deleteChange(change), isFalse);
+    });
+
+    test('runInTransaction rolls back partial work on error', () {
+      final changeStorage = storage.changeStorageForDocument('doc-rollback');
+
+      expect(
+        () => runInTransaction(storage.database, () {
+          // This insert happens inside the open transaction...
+          changeStorage.saveChange(makeChange(1, 1));
+          // ...but the failure must roll it back.
+          throw StateError('boom');
+        }),
+        throwsA(isA<StateError>()),
+      );
+
+      expect(changeStorage.count, isZero, reason: 'partial work rolled back');
     });
 
     test('snapshot ops: save/delete/clear and empty-list branches', () {

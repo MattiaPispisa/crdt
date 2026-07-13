@@ -2,6 +2,7 @@ import 'dart:typed_data';
 
 import 'package:crdt_lf/crdt_lf.dart';
 import 'package:crdt_lf_sqlite/src/schema.dart';
+import 'package:crdt_lf_sqlite/src/transaction.dart';
 import 'package:sqlite3/sqlite3.dart' as sq;
 
 /// Storage utility for managing [Snapshot] objects in a SQLite [sq-Database].
@@ -38,8 +39,9 @@ class CRDTSqliteSnapshotStorage {
 
   /// Saves multiple [Snapshot] objects to the storage.
   ///
-  /// This method is more efficient than calling [saveSnapshot] multiple times
-  /// as it reuses a single prepared statement.
+  /// More efficient and atomic compared to calling [saveSnapshot] multiple
+  /// times: all inserts run in a single transaction using one prepared
+  /// statement. Either all snapshots are saved or, on error, none are.
   void saveSnapshots(List<Snapshot> snapshots) {
     if (snapshots.isEmpty) {
       return;
@@ -49,9 +51,11 @@ class CRDTSqliteSnapshotStorage {
       '(document_id, snapshot_id, bytes) VALUES (?, ?, ?)',
     );
     try {
-      for (final snapshot in snapshots) {
-        statement.execute([documentId, snapshot.id, snapshot.toBytes()]);
-      }
+      runInTransaction(database, () {
+        for (final snapshot in snapshots) {
+          statement.execute([documentId, snapshot.id, snapshot.toBytes()]);
+        }
+      });
     } finally {
       statement.close();
     }
@@ -99,6 +103,7 @@ class CRDTSqliteSnapshotStorage {
 
   /// Deletes multiple [Snapshot] objects by their ids.
   ///
+  /// All deletions run in a single transaction (all-or-nothing).
   /// Returns the number of snapshots that were actually deleted.
   int deleteSnapshots(List<String> ids) {
     if (ids.isEmpty) {
@@ -109,12 +114,14 @@ class CRDTSqliteSnapshotStorage {
       'DELETE FROM $snapshotsTable WHERE document_id = ? AND snapshot_id = ?',
     );
     try {
-      for (final id in ids) {
-        if (containsSnapshot(id)) {
-          statement.execute([documentId, id]);
-          deleted += 1;
+      runInTransaction(database, () {
+        for (final id in ids) {
+          if (containsSnapshot(id)) {
+            statement.execute([documentId, id]);
+            deleted += 1;
+          }
         }
-      }
+      });
     } finally {
       statement.close();
     }
