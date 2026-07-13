@@ -33,6 +33,25 @@ jobs:
       package_name: crdt_lf_hive
     secrets:
       CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+  crdt_lf_sqlite:
+    uses: ./.github/workflows/dart_package.yaml
+    with:
+      working_directory: ./packages/crdt_lf_sqlite
+      min_coverage: 90
+      package_name: crdt_lf_sqlite
+      install_sqlite: true
+    secrets:
+      CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+  crdt_lf_drift:
+    uses: ./.github/workflows/dart_package.yaml
+    with:
+      working_directory: ./packages/crdt_lf_drift
+      min_coverage: 90
+      package_name: crdt_lf_drift
+      install_sqlite: true
+      coverage_exclude: "**/*.g.dart"
+    secrets:
+      CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
   crdt_socket_sync:
     uses: ./.github/workflows/dart_package.yaml
     with:
