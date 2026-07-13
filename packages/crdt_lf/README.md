@@ -606,6 +606,7 @@ Feel free to:
 - [An O(ND) Difference Algorithm and its Variations (Myers diff algorithm)](https://link.springer.com/article/10.1007/BF01840446)
 - [Moving Elements in List CRDTs](https://martin.kleppmann.com/2020/04/27/papoc-list-move.html)
 - [Sqrt Decomposition Data Structure](https://cp-algorithms.com/data_structures/sqrt_decomposition.html)
+
 ## Packages
 
 Other bricks of the crdt "system" are:
@@ -613,6 +614,8 @@ Other bricks of the crdt "system" are:
 - [crdt_socket_sync](https://pub.dev/packages/crdt_socket_sync)
 - [hlc_dart](https://pub.dev/packages/hlc_dart)
 - [crdt_lf_hive](https://pub.dev/packages/crdt_lf_hive)
+- [crdt_lf_drift](https://pub.dev/packages/crdt_lf_drift)
+- [crdt_lf_sqlite](https://pub.dev/packages/crdt_lf_sqlite)
 
 
 [license_badge]: https://img.shields.io/badge/license-MIT-blue.svg

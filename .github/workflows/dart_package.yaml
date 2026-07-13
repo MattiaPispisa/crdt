@@ -17,6 +17,14 @@ on:
         required: false
         type: number
         default: 100
+      coverage_exclude:
+        required: false
+        type: string
+        default: ""
+      install_sqlite:
+        required: false
+        type: boolean
+        default: false
 
     secrets:
       CODECOV_TOKEN:
@@ -38,6 +46,10 @@ jobs:
         uses: dart-lang/setup-dart@v1
         with:
           sdk: ${{inputs.dart_sdk}}
+
+      - name: 🗃️ Install SQLite
+        if: ${{ inputs.install_sqlite }}
+        run: sudo apt-get update && sudo apt-get install -y libsqlite3-dev
 
       - name: 📦 Install Dependencies
         run: dart pub get --no-example
@@ -62,6 +74,7 @@ jobs:
         with:
           path: ${{inputs.working_directory}}/coverage/lcov.info
           min_coverage: ${{inputs.min_coverage}}
+          exclude: ${{inputs.coverage_exclude}}
 
       - name: 📤 Upload coverage to Codecov
         if: ${{ github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository }}

@@ -25,6 +25,8 @@
 - [crdt_socket_sync](./packages/crdt_socket_sync/README.md)
 - [crdt_lf_devtools_extension](./packages/crdt_lf_devtools_extension/README.md)
 - [crdt_lf_hive](./packages/crdt_lf_hive/README.md)
+- [crdt_lf_sqlite](./packages/crdt_lf_sqlite/README.md)
+- [crdt_lf_drift](./packages/crdt_lf_drift/README.md)
 
 ## [Roadmap](https://github.com/users/MattiaPispisa/projects/1)
 A roadmap is available in the [project](https://github.com/users/MattiaPispisa/projects/1) page. The roadmap provides a high-level overview of the project's goals and the current status of the project.
