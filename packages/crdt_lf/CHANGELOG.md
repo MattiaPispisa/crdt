@@ -1,3 +1,17 @@
+## [3.3.0](https://github.com/MattiaPispisa/crdt/tree/crdt_lf-v3.3.0/packages/crdt_lf)
+
+**Date:** 2026-07-14
+
+[compare to previous release](https://github.com/MattiaPispisa/crdt/compare/crdt_lf-v3.2.1...crdt_lf-v3.3.0)
+
+### Added
+
+- Extended the `compound` compaction system for more handlers. 
+    - `CRDTTextHandler` and `CRDTListHandler` collapse adjacent deletions (forward "Delete" and backward "Backspace" runs); 
+    - `CRDTListHandler` collapses consecutive updates at the same index; 
+    - `CRDTMapHandler` and `CRDTRegisterHandler` collapses consecutive writes to the same key (`set`/`update`/`delete`) into a single equivalent operation; 
+    - `CRDTRegisterHandler` collapses consecutive sets into the last write. 
+
 ## [3.2.1](https://github.com/MattiaPispisa/crdt/tree/crdt_lf-v3.2.1/packages/crdt_lf)
 
 **Date:** 2026-06-27

@@ -46,6 +46,9 @@ class CRDTRegisterHandler<T> extends Handler<T> {
       _RegisterOperationFactory<T>(this).fromBytes;
 
   /// Sets the register to [value] (last-writer-wins by HLC).
+  ///
+  /// Consecutive writes performed inside a [CRDTDocument.runInTransaction] are
+  /// compacted into a single set of the last value.
   void set(T value) {
     doc.registerOperation(
       _RegisterSetOperation<T>.fromHandler(this, value: value),
@@ -76,6 +79,17 @@ class CRDTRegisterHandler<T> extends Handler<T> {
       }
     }
     return current;
+  }
+
+  @override
+  Operation? compound(Operation accumulator, Operation current) {
+    // Consecutive writes collapse to the last one (last-writer-wins), which is
+    // exactly what a single set of the latest value replays to.
+    if (accumulator is _RegisterSetOperation<T> &&
+        current is _RegisterSetOperation<T>) {
+      return current;
+    }
+    return null;
   }
 
   @override

@@ -295,6 +295,27 @@ class CRDTTextHandler extends Handler<String> {
         text: buffer.toString(),
       );
     }
+    if (accumulator is _TextDeleteOperation &&
+        current is _TextDeleteOperation) {
+      // Forward delete (repeated "Delete" key): both deletions share the
+      // same anchor index, so the second removes what shifted into place.
+      if (current.index == accumulator.index) {
+        return _TextDeleteOperation.fromHandler(
+          this,
+          index: accumulator.index,
+          count: accumulator.count + current.count,
+        );
+      }
+      // Backward delete (repeated "Backspace"): the current deletion ends
+      // exactly where the accumulated one began.
+      if (current.index + current.count == accumulator.index) {
+        return _TextDeleteOperation.fromHandler(
+          this,
+          index: current.index,
+          count: accumulator.count + current.count,
+        );
+      }
+    }
 
     return null;
   }

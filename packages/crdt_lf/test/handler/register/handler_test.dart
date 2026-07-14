@@ -106,5 +106,30 @@ void main() {
       expect(operations, hasLength(1));
       expect(operations.single.toPayload()['value'], isTrue);
     });
+
+    test('compounds consecutive sets into a single change', () {
+      doc.runInTransaction(() {
+        register
+          ..set(true)
+          ..set(false)
+          ..set(true);
+      });
+      expect(register.value, isTrue);
+      expect(doc.exportChanges().length, 1);
+    });
+
+    test('compacted sets replay identically on a remote peer', () {
+      final doc2 = CRDTDocument(peerId: PeerId.generate());
+      final register2 = CRDTRegisterHandler<bool>(doc2, 'flag');
+
+      doc.runInTransaction(() {
+        register
+          ..set(true)
+          ..set(false);
+      });
+
+      doc2.importChanges(doc.exportChanges());
+      expect(register2.value, register.value);
+    });
   });
 }

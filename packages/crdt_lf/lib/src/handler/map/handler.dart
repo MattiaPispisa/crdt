@@ -51,6 +51,10 @@ class CRDTMapHandler<T> extends Handler<Map<String, T>> {
   String get id => _id;
 
   /// Sets a key-value pair in the map
+  ///
+  /// Consecutive writes to the **same key** (`set`/`update`/`delete`) performed
+  /// inside a [CRDTDocument.runInTransaction] are compacted into a single
+  /// operation reflecting the net effect.
   void set(String key, T value) {
     final operation = _MapInsertOperation<T>.fromHandler(
       this,
@@ -164,6 +168,71 @@ class CRDTMapHandler<T> extends Handler<Map<String, T>> {
     if (state.containsKey(key)) {
       state.update(key, (_) => value);
     }
+  }
+
+  @override
+  Operation? compound(Operation accumulator, Operation current) {
+    final accKey = _keyOf(accumulator);
+    final curKey = _keyOf(current);
+    // Only writes to the same key can be collapsed.
+    if (accKey == null || curKey == null || accKey != curKey) {
+      return null;
+    }
+
+    // The current op deletes the key: whatever came before, the key ends up
+    // absent, so a single delete is equivalent.
+    if (current is _MapDeleteOperation<T>) {
+      return _MapDeleteOperation<T>.fromHandler(this, key: accKey);
+    }
+
+    // The current op is a `set` (insert): it unconditionally establishes the
+    // value regardless of what came before.
+    if (current is _MapInsertOperation<T>) {
+      return _MapInsertOperation<T>.fromHandler(
+        this,
+        key: accKey,
+        value: current.value,
+      );
+    }
+
+    // The current op is an `update`.
+    final currentValue = (current as _MapUpdateOperation<T>).value;
+    // set + update: the set forces the key to exist, so the update always
+    // applies → equivalent to a single `set` with the updated value.
+    if (accumulator is _MapInsertOperation<T>) {
+      return _MapInsertOperation<T>.fromHandler(
+        this,
+        key: accKey,
+        value: currentValue,
+      );
+    }
+    // delete + update: the delete removes the key, so the update is a no-op →
+    // equivalent to a single delete.
+    if (accumulator is _MapDeleteOperation<T>) {
+      return _MapDeleteOperation<T>.fromHandler(this, key: accKey);
+    }
+    // update + update: the last write wins, but only if the key already exists
+    // → keep it an `update`.
+    return _MapUpdateOperation<T>.fromHandler(
+      this,
+      key: accKey,
+      value: currentValue,
+    );
+  }
+
+  /// Returns the key targeted by [operation] if it is one of this handler's
+  /// operations, or `null` otherwise.
+  String? _keyOf(Operation operation) {
+    if (operation is _MapInsertOperation<T>) {
+      return operation.key;
+    }
+    if (operation is _MapUpdateOperation<T>) {
+      return operation.key;
+    }
+    if (operation is _MapDeleteOperation<T>) {
+      return operation.key;
+    }
+    return null;
   }
 
   @override

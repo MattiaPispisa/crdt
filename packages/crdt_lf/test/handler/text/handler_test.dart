@@ -198,6 +198,52 @@ void main() {
       expect(text.value, equals('Hello'));
     });
 
+    test('should compound consecutive forward deletes (Delete key)', () {
+      text.insert(0, 'Hello World');
+      final before = doc.exportChanges().length;
+
+      doc.runInTransaction(() {
+        text
+          ..delete(5, 1)
+          ..delete(5, 5);
+      });
+
+      expect(text.value, equals('Hello'));
+      // The two deletes collapse into a single change.
+      expect(doc.exportChanges().length, before + 1);
+    });
+
+    test('should compound consecutive backward deletes (Backspace)', () {
+      text.insert(0, 'Hello World');
+      final before = doc.exportChanges().length;
+
+      doc.runInTransaction(() {
+        // Backspace at the end, repeatedly.
+        text
+          ..delete(10, 1)
+          ..delete(9, 1)
+          ..delete(8, 1);
+      });
+
+      expect(text.value, equals('Hello Wo'));
+      expect(doc.exportChanges().length, before + 1);
+    });
+
+    test('compacted deletes replay identically on a remote peer', () {
+      final doc2 = CRDTDocument(peerId: PeerId.generate());
+      final text2 = CRDTTextHandler(doc2, handlerId);
+
+      text.insert(0, 'Hello World');
+      doc.runInTransaction(() {
+        text
+          ..delete(5, 1)
+          ..delete(5, 5);
+      });
+
+      doc2.importChanges(doc.exportChanges());
+      expect(text2.value, equals(text.value));
+    });
+
     test('value maintains cache across multiple reads', () {
       text.insert(0, 'Hello');
       final value1 = text.value;

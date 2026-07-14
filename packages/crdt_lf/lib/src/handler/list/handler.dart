@@ -72,6 +72,9 @@ class CRDTListHandler<T> extends Handler<List<T>> {
   /// Deletes elements starting at the specified index
   ///
   /// {@macro naive_move}
+  ///
+  /// Consecutive deletions over adjacent ranges performed inside a
+  /// [CRDTDocument.runInTransaction] are compacted into a single delete.
   void delete(int index, int count) {
     final operation = _ListDeleteOperation<T>.fromHandler(
       this,
@@ -82,6 +85,10 @@ class CRDTListHandler<T> extends Handler<List<T>> {
   }
 
   /// Updates the element at the specified index
+  ///
+  /// Consecutive updates at the same index performed inside a
+  /// [CRDTDocument.runInTransaction] are compacted into a single update
+  /// (last write wins).
   void update(int index, T value) {
     final operation = _ListUpdateOperation<T>.fromHandler(
       this,
@@ -199,6 +206,43 @@ class CRDTListHandler<T> extends Handler<List<T>> {
     if (index < state.length) {
       state[index] = value;
     }
+  }
+
+  @override
+  Operation? compound(Operation accumulator, Operation current) {
+    // Two consecutive deletions over adjacent ranges collapse into one.
+    if (accumulator is _ListDeleteOperation<T> &&
+        current is _ListDeleteOperation<T>) {
+      // Forward delete: both deletions share the same anchor index.
+      if (current.index == accumulator.index) {
+        return _ListDeleteOperation<T>.fromHandler(
+          this,
+          index: accumulator.index,
+          count: accumulator.count + current.count,
+        );
+      }
+      // Backward delete: the current deletion ends where the accumulated
+      // one began.
+      if (current.index + current.count == accumulator.index) {
+        return _ListDeleteOperation<T>.fromHandler(
+          this,
+          index: current.index,
+          count: accumulator.count + current.count,
+        );
+      }
+    }
+    // Two consecutive updates at the same index: the last write wins.
+    if (accumulator is _ListUpdateOperation<T> &&
+        current is _ListUpdateOperation<T> &&
+        current.index == accumulator.index) {
+      return _ListUpdateOperation<T>.fromHandler(
+        this,
+        index: accumulator.index,
+        value: current.value,
+      );
+    }
+
+    return null;
   }
 
   @override
