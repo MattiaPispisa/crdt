@@ -291,5 +291,112 @@ void main() {
 
       expect(handler2.value, handler1.value);
     });
+
+    group('compound', () {
+      test('should compound consecutive forward deletes', () {
+        final doc = CRDTDocument(
+          peerId: PeerId.parse('37f1ec87-6ea5-430b-a627-a6b92b56a02d'),
+        );
+        final handler = CRDTListHandler<String>(doc, 'list1')
+          ..insert(0, 'a')
+          ..insert(1, 'b')
+          ..insert(2, 'c')
+          ..insert(3, 'd');
+        final before = doc.exportChanges().length;
+
+        doc.runInTransaction(() {
+          handler
+            ..delete(1, 1)
+            ..delete(1, 1);
+        });
+
+        expect(handler.value, ['a', 'd']);
+        expect(doc.exportChanges().length, before + 1);
+      });
+
+      test('should compound consecutive backward deletes', () {
+        final doc = CRDTDocument(
+          peerId: PeerId.parse('37f1ec87-6ea5-430b-a627-a6b92b56a02d'),
+        );
+        final handler = CRDTListHandler<String>(doc, 'list1')
+          ..insert(0, 'a')
+          ..insert(1, 'b')
+          ..insert(2, 'c')
+          ..insert(3, 'd');
+        final before = doc.exportChanges().length;
+
+        doc.runInTransaction(() {
+          handler
+            ..delete(3, 1)
+            ..delete(2, 1);
+        });
+
+        expect(handler.value, ['a', 'b']);
+        expect(doc.exportChanges().length, before + 1);
+      });
+
+      test('should compound consecutive updates at the same index', () {
+        final doc = CRDTDocument(
+          peerId: PeerId.parse('37f1ec87-6ea5-430b-a627-a6b92b56a02d'),
+        );
+        final handler = CRDTListHandler<String>(doc, 'list1')
+          ..insert(0, 'a')
+          ..insert(1, 'b');
+        final before = doc.exportChanges().length;
+
+        doc.runInTransaction(() {
+          handler
+            ..update(1, 'x')
+            ..update(1, 'y')
+            ..update(1, 'z');
+        });
+
+        expect(handler.value, ['a', 'z']);
+        expect(doc.exportChanges().length, before + 1);
+      });
+
+      test('should not compound updates at different indexes', () {
+        final doc = CRDTDocument(
+          peerId: PeerId.parse('37f1ec87-6ea5-430b-a627-a6b92b56a02d'),
+        );
+        final handler = CRDTListHandler<String>(doc, 'list1')
+          ..insert(0, 'a')
+          ..insert(1, 'b');
+        final before = doc.exportChanges().length;
+
+        doc.runInTransaction(() {
+          handler
+            ..update(0, 'x')
+            ..update(1, 'y');
+        });
+
+        expect(handler.value, ['x', 'y']);
+        expect(doc.exportChanges().length, before + 2);
+      });
+
+      test('compacted operations replay identically on a remote peer', () {
+        final doc1 = CRDTDocument(
+          peerId: PeerId.parse('45ee6b65-b393-40b7-9755-8b66dc7d0518'),
+        );
+        final handler1 = CRDTListHandler<String>(doc1, 'list1')
+          ..insert(0, 'a')
+          ..insert(1, 'b')
+          ..insert(2, 'c');
+
+        final doc2 = CRDTDocument(
+          peerId: PeerId.parse('a90dfced-cbf0-4a49-9c64-f5b7b62fdc18'),
+        );
+        final handler2 = CRDTListHandler<String>(doc2, 'list1');
+
+        doc1.runInTransaction(() {
+          handler1
+            ..delete(1, 1)
+            ..update(1, 'C');
+        });
+
+        doc2.importChanges(doc1.exportChanges());
+        expect(handler2.value, handler1.value);
+      });
+    });
   });
 }

@@ -1220,6 +1220,10 @@ class CRDTDocument extends BaseCRDTDocument {
   ///
   /// Nested transactions are supported and will only flush once the outermost
   /// transaction is committed.
+  ///
+  /// At the end of the transaction, contiguous operations can be compacted
+  /// into fewer operations through compound algorithms ([Handler.compound]) 
+  /// to reduce the number of changes created.
   T runInTransaction<T>(T Function() action) {
     _ensureNotDisposed('runInTransaction');
 
