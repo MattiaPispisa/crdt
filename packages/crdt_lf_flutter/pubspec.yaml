@@ -1,0 +1,24 @@
+name: crdt_lf_flutter
+description: Flutter reactivity for crdt_lf — rebuild widgets when CRDT state changes, with selectors, a provider and a collaborative text field. Wraps provider, like flutter_bloc.
+homepage: https://mattiapispisa.github.io/
+repository: https://github.com/MattiaPispisa/crdt/tree/main/packages/crdt_lf_flutter
+topics: [crdt, local-first, flutter, reactive]
+
+version: 0.1.0
+
+environment:
+  sdk: ">=3.0.0 <4.0.0"
+
+dependencies:
+  crdt_lf: ^3.4.0
+  flutter:
+    sdk: flutter
+  provider: ^6.0.0
+
+dev_dependencies:
+  flutter_lints: ^6.0.0
+  flutter_test:
+    sdk: flutter
+
+flutter:
+  uses-material-design: true

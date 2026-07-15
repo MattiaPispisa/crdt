@@ -1,0 +1,75 @@
+name: Flutter Package CI
+
+on:
+  workflow_call:
+    inputs:
+      package_name:
+        required: true
+        type: string
+      working_directory:
+        required: true
+        type: string
+      flutter_channel:
+        required: false
+        type: string
+        default: "stable"
+      min_coverage:
+        required: false
+        type: number
+        default: 100
+      coverage_exclude:
+        required: false
+        type: string
+        default: ""
+
+    secrets:
+      CODECOV_TOKEN:
+        required: true
+
+jobs:
+  build:
+    defaults:
+      run:
+        working-directory: ${{inputs.working_directory}}
+
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 📚 Git Checkout
+        uses: actions/checkout@v7
+
+      - name: 🐦 Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: ${{inputs.flutter_channel}}
+
+      - name: 📦 Install Dependencies
+        run: flutter pub get
+
+      - name: ✨ Check Formatting
+        run: dart format --line-length 80 --set-exit-if-changed lib test
+
+      - name: 🕵️ Analyze
+        run: flutter analyze lib test
+
+      - name: 🧪 Run Tests
+        run: flutter test --coverage
+
+      - name: 📊 Check Code Coverage
+        uses: VeryGoodOpenSource/very_good_coverage@v3
+        with:
+          path: ${{inputs.working_directory}}/coverage/lcov.info
+          min_coverage: ${{inputs.min_coverage}}
+          exclude: ${{inputs.coverage_exclude}}
+
+      - name: 📤 Upload coverage to Codecov
+        if: ${{ github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository }}
+        uses: codecov/codecov-action@v7
+        with:
+          directory: ${{inputs.working_directory}}
+          token: ${{ secrets.CODECOV_TOKEN }}
+          slug: ${{ github.repository }}
+          flags: ${{ inputs.package_name }}
+          name: ${{ inputs.package_name }}-coverage
+          verbose: false
+          fail_ci_if_error: true

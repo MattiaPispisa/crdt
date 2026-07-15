@@ -1,0 +1,8 @@
+# melos_managed_dependency_overrides: crdt_lf,crdt_lf_flutter,hlc_dart
+dependency_overrides:
+  crdt_lf:
+    path: ../../crdt_lf
+  crdt_lf_flutter:
+    path: ..
+  hlc_dart:
+    path: ../../hlc
