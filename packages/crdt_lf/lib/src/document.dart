@@ -64,6 +64,24 @@ abstract class BaseCRDTDocument {
     VersionVector? fromVersionVector,
   });
 
+  /// Returns the number of [Change]s produced by the handler with the given
+  /// [handlerId].
+  int changeCountForHandler(String handlerId);
+
+  /// A monotonically increasing revision for the handler with the given
+  /// [handlerId].
+  ///
+  /// It increases (at least once per [CRDTDocument.updates] event) every time
+  /// the observable state of the handler **may have changed**:
+  /// changes targeting it are applied (local or imported), 
+  /// or a snapshot carrying its state is imported/merged. 
+  /// 
+  /// **It never decreases** — in particular, history pruning
+  /// does not affect it — so two equal readings guarantee the handler state
+  /// did not change in between. **This is the signal reactive bindings should
+  /// watch.**
+  int revisionForHandler(String handlerId);
+
   /// Prepares the system to perform a mutation.
   void prepareMutation();
 
@@ -299,6 +317,9 @@ class CRDTDocument extends BaseCRDTDocument {
   /// The hybrid logical clock for this document
   final HybridLogicalClock _clock;
 
+  /// Per-handler monotonic revisions. See [revisionForHandler].
+  final Map<String, int> _handlerRevisions = {};
+
   @override
   PeerId get peerId => _peerId;
 
@@ -492,6 +513,10 @@ class CRDTDocument extends BaseCRDTDocument {
       final change = _changeFromOp(operation);
       final applied = _internalApplyChange(change);
 
+      // [operation.id] is the handler id: the revision bump costs a map
+      // update, no envelope decode (see [_refreshHandlerCaches]).
+      _handlerRevisions.update(operation.id, (r) => r + 1, ifAbsent: () => 1);
+
       if (applied) {
         appliedChanges.add(change);
         for (final handler in _handlers.values) {
@@ -548,13 +573,15 @@ class CRDTDocument extends BaseCRDTDocument {
   }
 
   /// Refreshes every registered handler's cache after external change(s): a
-  /// handler for which [isAffected] is `true` is invalidated, the others have
-  /// their cached version advanced to the document's new version.
+  /// handler for which [isAffected] is `true` is invalidated (and its
+  /// [revisionForHandler] bumped), the others have their cached version
+  /// advanced to the document's new version.
   void _refreshHandlerCaches(
     bool Function(Handler<dynamic> handler) isAffected,
   ) {
     for (final handler in _handlers.values) {
       if (isAffected(handler)) {
+        _handlerRevisions.update(handler.id, (r) => r + 1, ifAbsent: () => 1);
         handler.invalidateCache();
       } else {
         handler._updateCachedVersion();
@@ -850,6 +877,7 @@ class CRDTDocument extends BaseCRDTDocument {
       }
 
       _lastSnapshot = snapshot;
+      _bumpRevisionsForSnapshot(snapshot);
 
       _invalidateHandlers();
       _emitUpdate();
@@ -878,6 +906,7 @@ class CRDTDocument extends BaseCRDTDocument {
     } else {
       _lastSnapshot = _lastSnapshot!.merged(snapshot);
     }
+    _bumpRevisionsForSnapshot(snapshot);
 
     if (pruneHistory) {
       _prune(_lastSnapshot!.versionVector);
@@ -996,6 +1025,24 @@ class CRDTDocument extends BaseCRDTDocument {
       handlerId,
       fromVersionVector: fromVersionVector,
     );
+  }
+
+  @override
+  int changeCountForHandler(String handlerId) {
+    return _changeStore.changeCountForHandler(handlerId);
+  }
+
+  @override
+  int revisionForHandler(String handlerId) => _handlerRevisions[handlerId] ?? 0;
+
+  /// Bumps the revision of every handler whose state is carried by [snapshot].
+  void _bumpRevisionsForSnapshot(Snapshot snapshot) {
+    for (final handlerId in snapshot.data.keys) {
+      if (handlerId == _handlerManifestKey) {
+        continue;
+      }
+      _handlerRevisions.update(handlerId, (r) => r + 1, ifAbsent: () => 1);
+    }
   }
 
   /// Exports [Change]s that are newer than the provided [versionVector].
@@ -1386,6 +1433,16 @@ class _CRDTStaticProxyDocument extends BaseCRDTDocument {
     }
     return result;
   }
+
+  @override
+  int changeCountForHandler(String handlerId) {
+    return changesForHandler(handlerId).length;
+  }
+
+  // The frozen view never imports snapshots, so the visible change count
+  // (which follows the time-travel cursor) is a complete revision signal.
+  @override
+  int revisionForHandler(String handlerId) => changeCountForHandler(handlerId);
 }
 
 /// {@template history_session}

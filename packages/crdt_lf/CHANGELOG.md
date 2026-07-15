@@ -1,3 +1,14 @@
+## [3.4.0](https://github.com/MattiaPispisa/crdt/tree/crdt_lf-v3.4.0/packages/crdt_lf)
+
+**Date:** 2026-07-15
+
+[compare to previous release](https://github.com/MattiaPispisa/crdt/compare/crdt_lf-v3.3.0...crdt_lf-v3.4.0)
+
+### Added
+
+- `CRDTDocument.changeCountForHandler(handlerId)` — the number of changes produced by a handler, answered in O(1) from the existing per-handler index without allocating a list. A store metric (useful for sync/persistence/debugging); note it can decrease when history is pruned.
+- `CRDTDocument.revisionForHandler(handlerId)` — a per-handler monotonic revision that grows every time the handler's observable state may have changed: a change targeting it is applied (local or imported), or a snapshot carrying its state is imported/merged. It never decreases (history pruning does not affect it), so equal readings guarantee the state did not change in between — the single signal reactive bindings should watch.
+
 ## [3.3.0](https://github.com/MattiaPispisa/crdt/tree/crdt_lf-v3.3.0/packages/crdt_lf)
 
 **Date:** 2026-07-14

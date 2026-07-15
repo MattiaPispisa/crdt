@@ -211,5 +211,36 @@ void main() {
 
       expect(store.toString(), equals('ChangeStore(changes: 3)'));
     });
+
+    group('changeCountForHandler', () {
+      test('counts a handler changes and stays in sync with additions', () {
+        expect(store.changeCountForHandler(handler.id), equals(0));
+
+        store
+          ..addChange(change1)
+          ..addChange(change2);
+        expect(store.changeCountForHandler(handler.id), equals(2));
+
+        // Kept in sync after the index has been built.
+        store.addChange(change3);
+        expect(store.changeCountForHandler(handler.id), equals(3));
+      });
+
+      test('returns 0 for an unknown handler', () {
+        store.addChange(change1);
+        expect(store.changeCountForHandler('missing'), equals(0));
+      });
+
+      test('drops after pruning', () {
+        store
+          ..addChange(change1)
+          ..addChange(change2)
+          ..addChange(change3);
+        expect(store.changeCountForHandler(handler.id), equals(3));
+
+        store.prune(VersionVector({author: change2.hlc}));
+        expect(store.changeCountForHandler(handler.id), equals(1));
+      });
+    });
   });
 }
