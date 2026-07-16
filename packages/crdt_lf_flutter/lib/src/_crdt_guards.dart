@@ -1,20 +1,6 @@
 import 'package:crdt_lf/crdt_lf.dart';
 import 'package:flutter/foundation.dart';
 
-/// Throws a [FlutterError] when the value type parameter [R] was left unset
-/// (i.e. resolved to `dynamic`).
-///
-/// Reactive selectors are useless without a concrete result type, so this turns
-/// a silent `dynamic` into an explicit, early failure.
-void assertGenericIsSet<R>(String widget) {
-  if (R == dynamic) {
-    throw FlutterError(
-      '$widget was used without a value type parameter.\n'
-      'Specify the selected type, e.g. $widget<int>(...).',
-    );
-  }
-}
-
 /// Throws a [FlutterError] when the handler type parameter [H] was left unset
 /// (i.e. resolved to the base `Handler`).
 void assertHandlerGenericIsSet<H extends Handler<dynamic>>(String widget) {
