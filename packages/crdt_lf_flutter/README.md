@@ -4,10 +4,9 @@ Flutter reactivity for [`crdt_lf`](https://pub.dev/packages/crdt_lf): rebuild yo
 widgets when CRDT state changes — at the **document** level or scoped to a single
 **handler**, with selectors and a collaborative text field.
 
-Built on top of [`provider`](https://pub.dev/packages/provider), the same way
-[`flutter_bloc`](https://pub.dev/packages/flutter_bloc) is — so you also get
+Built on top of [`provider`](https://pub.dev/packages/provider) — so you also get
 `context.read` / `context.watch` / `context.select` for a `CRDTDocument` for free
-(`provider` is re-exported).
+(`provider` is re-exported minimally).
 
 - [CRDT LF Flutter](#crdt-lf-flutter)
   - [Features](#features)
@@ -30,31 +29,19 @@ Built on top of [`provider`](https://pub.dev/packages/provider), the same way
 - **`CrdtHandlerBuilder<H>`** / **`CrdtHandlerSelector<H, R>`** — rebuild only when
   a **specific handler** changes (optionally including nested handlers).
 - **`CrdtHandlerListener<H>`** — side-effect callback on a handler change.
-- **`CrdtTextFieldBuilder`** — a `TextEditingController` kept in sync with a
-  collaborative text value.
+- **`CrdtTextFieldBuilder`** — a `TextEditingController` bound to a text
+  handler, the way collaborative editor bindings work.
+- **`CrdtRemoteCursorsOverlay`** — paints collaborators' carets/selections
+  over the text field, anchored by stable positions.
 - Context helpers: `context.crdtDocument`, `context.watchCrdtDocument()`,
   `context.selectCrdtDocument(...)`, `context.crdtHandler<H>(id)`.
-
-## How it works
-
-`crdt_lf` exposes a `CRDTDocument.updates` broadcast stream that fires on any
-local edit, applied remote change or snapshot import. `CrdtProvider` exposes the
-document through `provider` and bridges `updates` (via `startListening`), so
-provider dependents (`context.watch` / `context.select`, and the widgets above)
-rebuild automatically.
-
-Handler-scoped widgets rebuild only when a per-handler signal changes: the O(1)
-`CRDTDocument.revisionForHandler(id)`, a monotonic revision that grows on every
-applied change targeting the handler (local or imported) and on snapshot
-imports carrying its state. With `nested: true` the revisions of the handler
-and its descendants (`ContainerHandler.childRefs`) are summed.
 
 ## Getting Started
 
 ```yaml
 dependencies:
-  crdt_lf_flutter: ^0.1.0
-  crdt_lf: ^3.4.0
+  crdt_lf_flutter: 
+  crdt_lf: 
 ```
 
 ## Usage
@@ -133,18 +120,70 @@ context.crdtHandler<CRDTListHandler<String>>('todos').insert(0, 'new');
 
 ### Collaborative text
 
+`CrdtTextFieldBuilder` binds a `TextEditingController` to the text handler
+(`CRDTTextHandler` or `CRDTFugueTextHandler`) registered under `id`, the way
+collaborative editor bindings do:
+
+- **local edits** are pushed into the handler immediately as the precise delta
+  of each editing gesture (prefix/suffix trimming, one transaction per
+  gesture — no full-text diff, no debounce);
+- **IME composition** (CJK input, autocorrect) is respected: nothing is
+  committed while a composing region is active;
+- **remote changes** are adopted into the controller in place, with the caret
+  and selection kept anchored: with a `CRDTFugueTextHandler` through **stable
+  positions** (`stablePositionAt` — anchors tied to element identity, exact
+  even for multi-region remote changes), otherwise mapped through the remote
+  delta;
+- the subtree **never rebuilds** — `builder` runs once and the controller is
+  updated directly.
+
 ```dart
-CrdtHandlerSelector<CRDTFugueTextHandler, String>(
+CrdtTextFieldBuilder(
   id: 'note',
-  selector: (context, handler) => handler.value,
-  builder: (context, text) => CrdtTextFieldBuilder(
-    value: text,
-    builder: (context, controller) => TextField(
-      controller: controller,
-      onChanged: (next) => doc.runInTransaction(
-        () => context.crdtHandler<CRDTFugueTextHandler>('note').change(next),
-      ),
-    ),
+  builder: (context, controller) => TextField(controller: controller),
+);
+```
+
+The delta primitives are exported too (`TextDelta`, `computeTextDelta`,
+`mapOffsetThroughDelta`) if you need to build a custom binding.
+
+#### Remote cursors
+
+Publish the local selection with `onSelectionAnchorsChanged` (the anchors are
+serializable — send them over your presence channel, e.g. the awareness
+plugin of `crdt_socket_sync`) and draw collaborators with
+`CrdtRemoteCursorsOverlay`:
+
+```dart
+CrdtTextFieldBuilder(
+  id: 'note',
+  onSelectionAnchorsChanged: (base, extent) => publishPresence(base, extent),
+  builder: (context, controller) => CrdtRemoteCursorsOverlay(
+    id: 'note',
+    cursors: remoteCursors, // List<CrdtRemoteCursor> from presence
+    child: TextField(controller: controller),
   ),
 );
 ```
+
+The overlay re-resolves each anchor on every document update
+(`indexOfStablePosition`, O(√n)) and asks the field's own `RenderEditable`
+for pixel rects — wrapping, scrolling and text direction come from the real
+text layout. Cursors whose anchor is not known yet (change not received) are
+hidden until it arrives. Name tags are never clipped by the field; use
+`labelPlacement` (`auto` — flip below the caret when the top edge would cut
+the tag — or forced `above`/`below`) to control where they sit.
+
+## (deep dive) How it works
+
+`crdt_lf` exposes a `CRDTDocument.updates` broadcast stream that fires on any
+local edit, applied remote change or snapshot import. `CrdtProvider` exposes the
+document through `provider` and bridges `updates` so
+provider dependents (`context.watch` / `context.select`, and the widgets above)
+rebuild automatically.
+
+Handler-scoped widgets rebuild only when a per-handler signal changes: the O(1)
+`CRDTDocument.revisionForHandler(id)`, a monotonic revision that grows on every
+applied change targeting the handler (local or imported) and on snapshot
+imports carrying its state. With `nested: true` the revisions of the handler
+and its descendants (`ContainerHandler.childRefs`) are summed.
