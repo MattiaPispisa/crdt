@@ -11,3 +11,5 @@ export 'src/crdt_handler.dart';
 export 'src/crdt_helper.dart';
 export 'src/crdt_provider.dart';
 export 'src/crdt_text_field.dart';
+export 'src/remote_cursors.dart';
+export 'src/text_delta.dart';

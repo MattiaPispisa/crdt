@@ -56,6 +56,10 @@ int _signatureOf(
       return;
     }
     if (handler is ContainerHandler) {
+      // FIXME(m.pispisa):se io cancello elementi allora non li visito e la signature non cambia. 
+      // 1 el -> revision 1, cancello 1 el --> revision sopra 2, figlio -->non cè
+      // è bug crdt_lf ? 
+      // serve in revisionForHandler la proprietà nested ? --> O(1) + coerenza
       for (final ref in (handler as ContainerHandler).childRefs()) {
         visit(ref.id);
       }
@@ -73,7 +77,7 @@ int _signatureOf(
 /// Unlike [CrdtBuilder], **unrelated handlers' changes do not rebuild this
 /// widget**. It hands you the concrete typed [H] so you can read its `value`
 /// (the base `Handler` exposes none).
-/// 
+///
 ///  **The right tool to render a whole handler
 /// value — including list/map handlers whose value is mutated in place, where a
 /// value `Selector` would not detect the change.**

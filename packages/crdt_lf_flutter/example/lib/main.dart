@@ -1,3 +1,5 @@
+import 'dart:math';
+
 import 'package:crdt_lf/crdt_lf.dart';
 import 'package:crdt_lf_flutter/crdt_lf_flutter.dart';
 import 'package:flutter/material.dart';
@@ -340,7 +342,7 @@ class _SettingsCard extends StatelessWidget {
             );
             if (nickname != null) {
               context.crdtDocument.runInTransaction(
-                () => nickname.change('user-${nickname.value.length + 1}'),
+                () => nickname.change('user-${Random().nextInt(20)}'),
               );
             }
           },
@@ -369,22 +371,25 @@ class _SettingsCard extends StatelessWidget {
           selector:
               (context, handler) =>
                   handler.value.keys.any((k) => k != _nicknameKey),
-          builder:
-              (context, hasExtra) => FilledButton.tonalIcon(
-                onPressed:
-                    !hasExtra
-                        ? null
-                        : () {
-                          final settings = _settings(context);
-                          final extra =
-                              settings.value.keys
-                                  .where((k) => k != _nicknameKey)
-                                  .toList();
-                          if (extra.isNotEmpty) settings.delete(extra.last);
-                        },
-                icon: const Icon(Icons.remove),
-                label: const Text('Remove key'),
-              ),
+          builder: (context, hasExtra) {
+            return FilledButton.tonalIcon(
+              onPressed:
+                  !hasExtra
+                      ? null
+                      : () {
+                        final settings = _settings(context);
+                        final extra =
+                            settings.value.keys
+                                .where((k) => k != _nicknameKey)
+                                .toList();
+                        if (extra.isNotEmpty) {
+                          settings.delete(extra.last);
+                        }
+                      },
+              icon: const Icon(Icons.remove),
+              label: const Text('Remove key'),
+            );
+          },
         ),
       ],
       child: Column(
@@ -392,27 +397,29 @@ class _SettingsCard extends StatelessWidget {
         children: [
           CrdtHandlerBuilder<CRDTMapRefHandler>(
             id: _settingsId,
-            builder:
-                (context, handler) => _RebuildBadge(
-                  label: 'settings-flat',
-                  child: Text(
-                    'nested: false → ${handler.value.length} keys',
-                    style: _valueStyle(context),
-                  ),
+            builder: (context, handler) {
+              return _RebuildBadge(
+                label: 'settings-flat',
+                child: Text(
+                  'nested: false → ${handler.value.length} keys',
+                  style: _valueStyle(context),
                 ),
+              );
+            },
           ),
           const SizedBox(height: 8),
           CrdtHandlerBuilder<CRDTMapRefHandler>(
             id: _settingsId,
             nested: true,
-            builder:
-                (context, handler) => _RebuildBadge(
-                  label: 'settings-nested',
-                  child: Text(
-                    'nested: true → ${handler.resolved}',
-                    style: _valueStyle(context),
-                  ),
+            builder: (context, handler) {
+              return _RebuildBadge(
+                label: 'settings-nested',
+                child: Text(
+                  'nested: true → ${handler.resolved}',
+                  style: _valueStyle(context),
                 ),
+              );
+            },
           ),
         ],
       ),
@@ -492,27 +499,29 @@ class _NoteCardState extends State<_NoteCard> {
       ],
       child: CrdtTextFieldBuilder(
         id: _noteId,
-        builder:
-            (context, controller) => _RebuildBadge(
-              label: 'note-text',
-              child: ValueListenableBuilder<List<CrdtRemoteCursor>>(
-                valueListenable: _cursors,
-                builder:
-                    (context, cursors, child) => CrdtRemoteCursorsOverlay(
-                      id: _noteId,
-                      cursors: cursors,
-                      child: child!,
-                    ),
-                child: TextField(
-                  key: const Key('note-field'),
-                  controller: controller,
-                  decoration: const InputDecoration(
-                    border: OutlineInputBorder(),
-                    isDense: true,
-                  ),
+        builder: (context, controller) {
+          return _RebuildBadge(
+            label: 'note-text',
+            child: ValueListenableBuilder<List<CrdtRemoteCursor>>(
+              valueListenable: _cursors,
+              builder: (context, cursors, child) {
+                return CrdtRemoteCursorsOverlay(
+                  id: _noteId,
+                  cursors: cursors,
+                  child: child!,
+                );
+              },
+              child: TextField(
+                key: const Key('note-field'),
+                controller: controller,
+                decoration: const InputDecoration(
+                  border: OutlineInputBorder(),
+                  isDense: true,
                 ),
               ),
             ),
+          );
+        },
       ),
     );
   }
@@ -592,19 +601,20 @@ class _RebuildBadgeState extends State<_RebuildBadge> {
       key: ValueKey<int>(_count),
       tween: Tween<double>(begin: 1, end: 0),
       duration: const Duration(milliseconds: 600),
-      builder:
-          (context, t, child) => Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-            decoration: BoxDecoration(
-              color: Color.lerp(
-                scheme.surfaceContainerHighest,
-                scheme.primary,
-                t,
-              ),
-              borderRadius: BorderRadius.circular(12),
+      builder: (context, t, child) {
+        return Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+          decoration: BoxDecoration(
+            color: Color.lerp(
+              scheme.surfaceContainerHighest,
+              scheme.primary,
+              t,
             ),
-            child: child,
+            borderRadius: BorderRadius.circular(12),
           ),
+          child: child,
+        );
+      },
       child: Text(
         '⟳ ${widget.label} ×$_count',
         key: Key('rebuilds-${widget.label}'),
@@ -622,6 +632,7 @@ class _RebuildBadgeState extends State<_RebuildBadge> {
         children: [chip, const SizedBox(width: 8), widget.child],
       );
     }
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       mainAxisSize: MainAxisSize.min,

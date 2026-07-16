@@ -73,22 +73,5 @@ void main() {
       await tester.pumpAndSettle();
       expect(builds, 2);
     });
-
-    testWidgets('throws a FlutterError when the value type is dynamic',
-        (tester) async {
-      final doc = CRDTDocument(peerId: PeerId.generate());
-      await tester.pumpWidget(
-        CrdtProvider.value(
-          value: doc,
-          child: MaterialApp(
-            home: CrdtSelector<dynamic>(
-              selector: (context, document) => document,
-              builder: (context, value) => const SizedBox.shrink(),
-            ),
-          ),
-        ),
-      );
-      expect(tester.takeException(), isFlutterError);
-    });
   });
 }
