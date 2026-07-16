@@ -105,7 +105,7 @@ class _Legend extends StatelessWidget {
           'is the point of CrdtSelector / CrdtHandlerBuilder. The Listener '
           'card fires side effects without rebuilding, and the Note card '
           'binds a TextField to a text handler — including changes imported '
-          'from a remote peer.',
+          'from a remote peer and a collaborator cursor drawn over the field.',
         ),
       ),
     );
@@ -328,7 +328,9 @@ class _SettingsCard extends StatelessWidget {
       title: 'Settings (ref handler) — nested: false vs true',
       description:
           'Edit nickname changes a CHILD handler: only nested:true '
-          'rebuilds. Add/remove key changes the container itself: both rebuild.',
+          'rebuilds. Add/remove key changes the container itself: both '
+          'rebuild. Only keys added with "Add key" are removable (nickname '
+          'stays): "Remove key" disables itself when none is left.',
       actions: [
         FilledButton.tonalIcon(
           onPressed: () {
@@ -359,15 +361,30 @@ class _SettingsCard extends StatelessWidget {
           icon: const Icon(Icons.add),
           label: const Text('Add key'),
         ),
-        FilledButton.tonalIcon(
-          onPressed: () {
-            final settings = _settings(context);
-            final extra =
-                settings.value.keys.where((k) => k != _nicknameKey).toList();
-            if (extra.isNotEmpty) settings.delete(extra.last);
-          },
-          icon: const Icon(Icons.remove),
-          label: const Text('Remove key'),
+        // Only the keys added with "Add key" are removable (nickname is the
+        // nested demo): the button disables itself — reactively — when none
+        // is left, instead of silently doing nothing.
+        CrdtHandlerSelector<CRDTMapRefHandler, bool>(
+          id: _settingsId,
+          selector:
+              (context, handler) =>
+                  handler.value.keys.any((k) => k != _nicknameKey),
+          builder:
+              (context, hasExtra) => FilledButton.tonalIcon(
+                onPressed:
+                    !hasExtra
+                        ? null
+                        : () {
+                          final settings = _settings(context);
+                          final extra =
+                              settings.value.keys
+                                  .where((k) => k != _nicknameKey)
+                                  .toList();
+                          if (extra.isNotEmpty) settings.delete(extra.last);
+                        },
+                icon: const Icon(Icons.remove),
+                label: const Text('Remove key'),
+              ),
         ),
       ],
       child: Column(
@@ -405,18 +422,56 @@ class _SettingsCard extends StatelessWidget {
 
 /// A `CRDTFugueTextHandler` bound to a TextField through [CrdtTextFieldBuilder]
 /// (local keystrokes diff into the handler, remote values are adopted with the
-/// caret preserved), plus a naive remote peer simulated on demand.
-class _NoteCard extends StatelessWidget {
+/// caret preserved), plus a naive remote peer simulated on demand and a fake
+/// collaborator cursor drawn by [CrdtRemoteCursorsOverlay].
+class _NoteCard extends StatefulWidget {
   const _NoteCard();
+
+  @override
+  State<_NoteCard> createState() => _NoteCardState();
+}
+
+class _NoteCardState extends State<_NoteCard> {
+  /// The fake collaborator's cursors. In a real app they come from a presence
+  /// channel (e.g. crdt_socket_sync's awareness plugin); a ValueNotifier so
+  /// updating them rebuilds only the overlay, not the CrdtTextFieldBuilder.
+  final _cursors = ValueNotifier<List<CrdtRemoteCursor>>(const []);
+
+  @override
+  void dispose() {
+    _cursors.dispose();
+    super.dispose();
+  }
+
+  void _toggleCursor() {
+    if (_cursors.value.isNotEmpty) {
+      _cursors.value = const [];
+      return;
+    }
+    final note = context.crdtHandler<CRDTFugueTextHandler>(_noteId);
+    // A stable anchor mid-text: watch it follow the text when "Remote edit"
+    // prepends content or when you type before it.
+    _cursors.value = [
+      CrdtRemoteCursor(
+        id: 'bob',
+        label: 'Bob',
+        color: Colors.pink,
+        base: note.stablePositionAt(note.length ~/ 2),
+      ),
+    ];
+  }
 
   @override
   Widget build(BuildContext context) {
     return _DemoCard(
-      title: 'Note — CrdtTextFieldBuilder + remote import',
+      title: 'Note — CrdtTextFieldBuilder + remote cursors',
       description:
-          'A TextField bound to a text handler: typing diffs into the '
-          'handler, "Remote edit" imports a change from a throwaway peer and '
-          'the field adopts it (caret preserved).',
+          'A TextField bound to a text handler: typing pushes each edit '
+          'into the handler, "Remote edit" imports a change from a throwaway '
+          'peer and the controller adopts it in place (caret preserved) — '
+          'the badge never bumps because the subtree never rebuilds. '
+          '"Toggle cursor" anchors a fake collaborator cursor that follows '
+          'the text across edits.',
       actions: [
         FilledButton.tonalIcon(
           onPressed: () {
@@ -429,32 +484,33 @@ class _NoteCard extends StatelessWidget {
           icon: const Icon(Icons.cloud_download),
           label: const Text('Remote edit'),
         ),
+        FilledButton.tonalIcon(
+          onPressed: _toggleCursor,
+          icon: const Icon(Icons.person_pin),
+          label: const Text('Toggle cursor'),
+        ),
       ],
-      child: CrdtHandlerSelector<CRDTFugueTextHandler, String>(
+      child: CrdtTextFieldBuilder(
         id: _noteId,
-        selector: (context, handler) => handler.value,
         builder:
-            (context, value) => _RebuildBadge(
+            (context, controller) => _RebuildBadge(
               label: 'note-text',
-              child: CrdtTextFieldBuilder(
-                value: value,
+              child: ValueListenableBuilder<List<CrdtRemoteCursor>>(
+                valueListenable: _cursors,
                 builder:
-                    (context, controller) => TextField(
-                      key: const Key('note-field'),
-                      controller: controller,
-                      decoration: const InputDecoration(
-                        border: OutlineInputBorder(),
-                        isDense: true,
-                      ),
-                      onChanged: (text) {
-                        final note = context.crdtHandler<CRDTFugueTextHandler>(
-                          _noteId,
-                        );
-                        context.crdtDocument.runInTransaction(
-                          () => note.change(text),
-                        );
-                      },
+                    (context, cursors, child) => CrdtRemoteCursorsOverlay(
+                      id: _noteId,
+                      cursors: cursors,
+                      child: child!,
                     ),
+                child: TextField(
+                  key: const Key('note-field'),
+                  controller: controller,
+                  decoration: const InputDecoration(
+                    border: OutlineInputBorder(),
+                    isDense: true,
+                  ),
+                ),
               ),
             ),
       ),
