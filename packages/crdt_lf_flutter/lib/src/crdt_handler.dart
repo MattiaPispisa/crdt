@@ -31,10 +31,14 @@ typedef CrdtHandlerListenerCallback<H extends Handler<dynamic>> = void Function(
 /// A per-handler "did it change" signature that consume the handler's
 /// [CRDTDocument.revisionForHandler].
 ///
-/// When [nested], the revisions of the
-/// handler and every descendant reachable through
-/// [ContainerHandler.childRefs] are summed, so a nested change is detected
-/// too.
+/// When [nested], the ids **and** revisions of the handler and every
+/// descendant reachable through [ContainerHandler.childRefs] are folded
+/// into one hash. A plain sum of revisions would miss removals: deleting a
+/// child bumps the parent's revision but drops the child's from the sum,
+/// and the two can cancel out (parent 1 + child 1 == parent 2 + no child).
+/// Hashing the visited (id, revision) sequence changes on any content bump
+/// or structural change — and since revisions are monotonic, a past
+/// signature never recurs.
 int _signatureOf(
   CRDTDocument document,
   String id, {
@@ -44,22 +48,20 @@ int _signatureOf(
     return document.revisionForHandler(id);
   }
 
-  var total = 0;
+  final components = <Object>[];
   final visiting = <String>{};
   void visit(String handlerId) {
     if (!visiting.add(handlerId)) {
       return;
     }
-    total += document.revisionForHandler(handlerId);
+    components
+      ..add(handlerId)
+      ..add(document.revisionForHandler(handlerId));
     final handler = document.registeredHandlers[handlerId];
     if (handler == null) {
       return;
     }
     if (handler is ContainerHandler) {
-      // FIXME(m.pispisa):se io cancello elementi allora non li visito e la signature non cambia. 
-      // 1 el -> revision 1, cancello 1 el --> revision sopra 2, figlio -->non cè
-      // è bug crdt_lf ? 
-      // serve in revisionForHandler la proprietà nested ? --> O(1) + coerenza
       for (final ref in (handler as ContainerHandler).childRefs()) {
         visit(ref.id);
       }
@@ -67,7 +69,7 @@ int _signatureOf(
   }
 
   visit(id);
-  return total;
+  return Object.hashAll(components);
 }
 
 /// Rebuilds [builder] with the handler registered under [id], **only when that

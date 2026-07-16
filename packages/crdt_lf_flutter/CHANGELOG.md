@@ -22,8 +22,11 @@
     (BlocListener analogue).
   - `CrdtTextFieldBuilder` — binds a `TextEditingController` to the text
     handler registered under `id`.
-  - `CrdtRemoteCursorsOverlay` + `CrdtRemoteCursor` — paints collaborators'
+  - `CrdtTextCursorsOverlay` + `CrdtTextCursor` — paints collaborators'
     carets, selection highlights and name tags over the text field.
+  - `CrdtAwarenessCursorsOverlay` + `CrdtAwarenessCursor` — overlays
+    collaborators' mouse-style presence cursors (pointer arrow + name
+    bubble) on any pane, and reports the local pointer for publishing.
   - Context helpers: `context.crdtDocument`, `context.watchCrdtDocument()`,
     `context.selectCrdtDocument(...)`, and `context.crdtHandler<H>(id)` for
     imperative access.

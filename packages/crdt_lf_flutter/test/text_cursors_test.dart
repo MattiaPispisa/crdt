@@ -5,21 +5,21 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  group('CrdtRemoteCursorsOverlay', () {
+  group('CrdtTextCursorsOverlay', () {
     late CRDTDocument doc;
 
     setUp(() {
       doc = CRDTDocument(peerId: PeerId.generate());
     });
 
-    Widget host(List<CrdtRemoteCursor> cursors) {
+    Widget host(List<CrdtTextCursor> cursors) {
       return CrdtProvider.value(
         value: doc,
         child: MaterialApp(
           home: Scaffold(
             body: CrdtTextFieldBuilder(
               id: 'note',
-              builder: (context, controller) => CrdtRemoteCursorsOverlay(
+              builder: (context, controller) => CrdtTextCursorsOverlay(
                 id: 'note',
                 cursors: cursors,
                 child: TextField(controller: controller),
@@ -35,7 +35,7 @@ void main() {
     Finder overlayPaint() => find.byWidgetPredicate(
           (widget) =>
               widget is CustomPaint &&
-              widget.painter.runtimeType.toString() == '_RemoteCursorsPainter',
+              widget.painter.runtimeType.toString() == '_TextCursorsPainter',
         );
 
     /// The caret rect the overlay is expected to draw for [offset], computed
@@ -44,7 +44,7 @@ void main() {
       final editable =
           tester.allRenderObjects.whereType<RenderEditable>().first;
       final overlayBox = tester.renderObject(
-        find.byType(CrdtRemoteCursorsOverlay),
+        find.byType(CrdtTextCursorsOverlay),
       );
       final caret = MatrixUtils.transformRect(
         editable.getTransformTo(overlayBox),
@@ -58,7 +58,7 @@ void main() {
         'across a remote edit', (tester) async {
       final note = CRDTFugueTextHandler(doc, 'note')..insert(0, 'hello world');
       const color = Color(0xFFAA0000);
-      final cursor = CrdtRemoteCursor(
+      final cursor = CrdtTextCursor(
         id: 'peer-b',
         color: color,
         base: note.stablePositionAt(5), // after "hello"
@@ -89,7 +89,7 @@ void main() {
     testWidgets('paints a selection highlight and a label tag', (tester) async {
       final note = CRDTFugueTextHandler(doc, 'note')..insert(0, 'hello world');
       const color = Color(0xFF00AA00);
-      final cursor = CrdtRemoteCursor(
+      final cursor = CrdtTextCursor(
         id: 'peer-b',
         color: color,
         label: 'Bob',
@@ -109,7 +109,7 @@ void main() {
 
     testWidgets('hides a cursor whose anchor is not known yet', (tester) async {
       CRDTFugueTextHandler(doc, 'note').insert(0, 'hello');
-      final cursor = CrdtRemoteCursor(
+      final cursor = CrdtTextCursor(
         id: 'peer-b',
         color: const Color(0xFF0000AA),
         // An element from a change this document has not received.
@@ -128,53 +128,53 @@ void main() {
     });
   });
 
-  group('resolveCursorLabelRect', () {
+  group('resolveTextCursorLabelRect', () {
     const labelSize = Size(38, 14);
     const bounds = Size(300, 40);
 
     test('auto: above the caret, flipped below when it would be cut', () {
       // Plenty of room above.
-      final tall = resolveCursorLabelRect(
+      final tall = resolveTextCursorLabelRect(
         labelSize: labelSize,
         caret: const Rect.fromLTWH(100, 30, 2, 24),
         bounds: const Size(300, 200),
-        placement: CrdtCursorLabelPlacement.auto,
+        placement: CrdtTextCursorLabelPlacement.auto,
       );
       expect(tall.top, 30 - 14 - 4);
 
       // First line of a dense field: no room above → below the caret.
-      final dense = resolveCursorLabelRect(
+      final dense = resolveTextCursorLabelRect(
         labelSize: labelSize,
         caret: const Rect.fromLTWH(100, 8, 2, 24),
         bounds: bounds,
-        placement: CrdtCursorLabelPlacement.auto,
+        placement: CrdtTextCursorLabelPlacement.auto,
       );
       expect(dense.top, 8 + 24 + 4);
     });
 
     test('forced placements are honored even outside the field', () {
-      final above = resolveCursorLabelRect(
+      final above = resolveTextCursorLabelRect(
         labelSize: labelSize,
         caret: const Rect.fromLTWH(100, 8, 2, 24),
         bounds: bounds,
-        placement: CrdtCursorLabelPlacement.above,
+        placement: CrdtTextCursorLabelPlacement.above,
       );
       expect(above.top, lessThan(0)); // escapes the field, never cut
-      final below = resolveCursorLabelRect(
+      final below = resolveTextCursorLabelRect(
         labelSize: labelSize,
         caret: const Rect.fromLTWH(100, 8, 2, 24),
         bounds: bounds,
-        placement: CrdtCursorLabelPlacement.below,
+        placement: CrdtTextCursorLabelPlacement.below,
       );
       expect(below.top, 8 + 24 + 4);
     });
 
     test('clamps horizontally into the field', () {
-      final nearEdge = resolveCursorLabelRect(
+      final nearEdge = resolveTextCursorLabelRect(
         labelSize: labelSize,
         caret: const Rect.fromLTWH(290, 8, 2, 24),
         bounds: bounds,
-        placement: CrdtCursorLabelPlacement.auto,
+        placement: CrdtTextCursorLabelPlacement.auto,
       );
       expect(nearEdge.left, 300 - 38);
       expect(nearEdge.right, 300);
@@ -214,6 +214,55 @@ void main() {
       final (base, extent) = published.last;
       expect(base, note.stablePositionAt(3));
       expect(extent, note.stablePositionAt(3));
+    });
+
+    testWidgets('withdraws the anchors when the field loses focus',
+        (tester) async {
+      final doc = CRDTDocument(peerId: PeerId.generate());
+      CRDTFugueTextHandler(doc, 'a').insert(0, 'first');
+      CRDTFugueTextHandler(doc, 'b').insert(0, 'second');
+      final publishedA = <(FugueElementID?, FugueElementID?)>[];
+      final publishedB = <(FugueElementID?, FugueElementID?)>[];
+
+      await tester.pumpWidget(
+        CrdtProvider.value(
+          value: doc,
+          child: MaterialApp(
+            home: Scaffold(
+              body: Column(
+                children: [
+                  CrdtTextFieldBuilder(
+                    id: 'a',
+                    onSelectionAnchorsChanged: (base, extent) =>
+                        publishedA.add((base, extent)),
+                    builder: (context, controller) =>
+                        TextField(key: const Key('a'), controller: controller),
+                  ),
+                  CrdtTextFieldBuilder(
+                    id: 'b',
+                    onSelectionAnchorsChanged: (base, extent) =>
+                        publishedB.add((base, extent)),
+                    builder: (context, controller) =>
+                        TextField(key: const Key('b'), controller: controller),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+
+      await tester.tap(find.byKey(const Key('a')));
+      await tester.pump();
+      expect(publishedA.last.$1, isNotNull);
+
+      // Moving focus to the other field: Flutter keeps field a's selection
+      // in its controller, but its published cursor must be withdrawn — a
+      // user has one text cursor.
+      await tester.tap(find.byKey(const Key('b')));
+      await tester.pump();
+      expect(publishedA.last, (null, null));
+      expect(publishedB.last.$1, isNotNull);
     });
   });
 }

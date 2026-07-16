@@ -430,7 +430,7 @@ class _SettingsCard extends StatelessWidget {
 /// A `CRDTFugueTextHandler` bound to a TextField through [CrdtTextFieldBuilder]
 /// (local keystrokes diff into the handler, remote values are adopted with the
 /// caret preserved), plus a naive remote peer simulated on demand and a fake
-/// collaborator cursor drawn by [CrdtRemoteCursorsOverlay].
+/// collaborator cursor drawn by [CrdtTextCursorsOverlay].
 class _NoteCard extends StatefulWidget {
   const _NoteCard();
 
@@ -442,7 +442,7 @@ class _NoteCardState extends State<_NoteCard> {
   /// The fake collaborator's cursors. In a real app they come from a presence
   /// channel (e.g. crdt_socket_sync's awareness plugin); a ValueNotifier so
   /// updating them rebuilds only the overlay, not the CrdtTextFieldBuilder.
-  final _cursors = ValueNotifier<List<CrdtRemoteCursor>>(const []);
+  final _cursors = ValueNotifier<List<CrdtTextCursor>>(const []);
 
   @override
   void dispose() {
@@ -459,7 +459,7 @@ class _NoteCardState extends State<_NoteCard> {
     // A stable anchor mid-text: watch it follow the text when "Remote edit"
     // prepends content or when you type before it.
     _cursors.value = [
-      CrdtRemoteCursor(
+      CrdtTextCursor(
         id: 'bob',
         label: 'Bob',
         color: Colors.pink,
@@ -502,10 +502,10 @@ class _NoteCardState extends State<_NoteCard> {
         builder: (context, controller) {
           return _RebuildBadge(
             label: 'note-text',
-            child: ValueListenableBuilder<List<CrdtRemoteCursor>>(
+            child: ValueListenableBuilder<List<CrdtTextCursor>>(
               valueListenable: _cursors,
               builder: (context, cursors, child) {
-                return CrdtRemoteCursorsOverlay(
+                return CrdtTextCursorsOverlay(
                   id: _noteId,
                   cursors: cursors,
                   child: child!,

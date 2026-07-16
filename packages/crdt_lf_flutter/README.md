@@ -18,6 +18,7 @@ Built on top of [`provider`](https://pub.dev/packages/provider) — so you also 
     - [Handler-scoped rebuilds](#handler-scoped-rebuilds)
     - [Imperative access](#imperative-access)
     - [Collaborative text](#collaborative-text)
+    - [Presence cursors](#presence-cursors)
 
 ## Features
 
@@ -31,8 +32,10 @@ Built on top of [`provider`](https://pub.dev/packages/provider) — so you also 
 - **`CrdtHandlerListener<H>`** — side-effect callback on a handler change.
 - **`CrdtTextFieldBuilder`** — a `TextEditingController` bound to a text
   handler, the way collaborative editor bindings work.
-- **`CrdtRemoteCursorsOverlay`** — paints collaborators' carets/selections
+- **`CrdtTextCursorsOverlay`** — paints collaborators' carets/selections
   over the text field, anchored by stable positions.
+- **`CrdtAwarenessCursorsOverlay`** — overlays collaborators' mouse-style
+  presence cursors (pointer arrow + name bubble) on any pane.
 - Context helpers: `context.crdtDocument`, `context.watchCrdtDocument()`,
   `context.selectCrdtDocument(...)`, `context.crdtHandler<H>(id)`.
 
@@ -147,20 +150,20 @@ CrdtTextFieldBuilder(
 The delta primitives are exported too (`TextDelta`, `computeTextDelta`,
 `mapOffsetThroughDelta`) if you need to build a custom binding.
 
-#### Remote cursors
+#### Remote text cursors
 
 Publish the local selection with `onSelectionAnchorsChanged` (the anchors are
 serializable — send them over your presence channel, e.g. the awareness
 plugin of `crdt_socket_sync`) and draw collaborators with
-`CrdtRemoteCursorsOverlay`:
+`CrdtTextCursorsOverlay`:
 
 ```dart
 CrdtTextFieldBuilder(
   id: 'note',
   onSelectionAnchorsChanged: (base, extent) => publishPresence(base, extent),
-  builder: (context, controller) => CrdtRemoteCursorsOverlay(
+  builder: (context, controller) => CrdtTextCursorsOverlay(
     id: 'note',
-    cursors: remoteCursors, // List<CrdtRemoteCursor> from presence
+    cursors: remoteTextCursors, // List<CrdtTextCursor> from presence
     child: TextField(controller: controller),
   ),
 );
@@ -174,6 +177,23 @@ hidden until it arrives. Name tags are never clipped by the field; use
 `labelPlacement` (`auto` — flip below the caret when the top edge would cut
 the tag — or forced `above`/`below`) to control where they sit.
 
+### Presence cursors
+
+`CrdtAwarenessCursorsOverlay` draws collaborators' **mouse pointers** (arrow
+plus name bubble) over any pane — the presence complement of the in-field
+text cursors above. It is transport-agnostic: you map your presence channel
+to `CrdtAwarenessCursor`s (positions normalized into `[0, 1]`, so cursors
+map across window sizes) and publish what `onLocalPointer` reports:
+
+```dart
+CrdtAwarenessCursorsOverlay(
+  cursors: remotePointers, // List<CrdtAwarenessCursor> from presence
+  onLocalPointer: (position, {required hovering}) =>
+      publishPresence(position, hovering),
+  child: pane,
+);
+```
+
 ## (deep dive) How it works
 
 `crdt_lf` exposes a `CRDTDocument.updates` broadcast stream that fires on any
@@ -185,5 +205,6 @@ rebuild automatically.
 Handler-scoped widgets rebuild only when a per-handler signal changes: the O(1)
 `CRDTDocument.revisionForHandler(id)`, a monotonic revision that grows on every
 applied change targeting the handler (local or imported) and on snapshot
-imports carrying its state. With `nested: true` the revisions of the handler
-and its descendants (`ContainerHandler.childRefs`) are summed.
+imports carrying its state. With `nested: true` the ids and revisions of the
+handler and its descendants (`ContainerHandler.childRefs`) are folded into one
+hash, so structural changes (a child added or removed) are detected too.

@@ -7,9 +7,9 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/widgets.dart';
 
-/// {@template crdt_remote_cursor}
-/// A collaborator's cursor to draw over a text field: identity, paint style
-/// and the stable anchors of their selection.
+/// {@template crdt_text_cursor}
+/// A collaborator's text cursor to draw over a text field: identity, paint
+/// style and the stable anchors of their selection.
 ///
 /// The anchors come from `CRDTFugueTextHandler.stablePositionAt` on the
 /// collaborator's side (see `CrdtTextFieldBuilder.onSelectionAnchorsChanged`)
@@ -17,12 +17,12 @@ import 'package:flutter/widgets.dart';
 /// be part of the document history.
 /// {@endtemplate}
 @immutable
-class CrdtRemoteCursor {
-  /// {@macro crdt_remote_cursor}
+class CrdtTextCursor {
+  /// {@macro crdt_text_cursor}
   ///
-  /// Creates a remote cursor. [extent] defaults to [base] (a collapsed
+  /// Creates a text cursor. [extent] defaults to [base] (a collapsed
   /// caret).
-  const CrdtRemoteCursor({
+  const CrdtTextCursor({
     required this.id,
     required this.color,
     required this.base,
@@ -47,7 +47,7 @@ class CrdtRemoteCursor {
 
   @override
   bool operator ==(Object other) =>
-      other is CrdtRemoteCursor &&
+      other is CrdtTextCursor &&
       other.id == id &&
       other.color == color &&
       other.label == label &&
@@ -58,9 +58,9 @@ class CrdtRemoteCursor {
   int get hashCode => Object.hash(id, color, label, base, extent);
 }
 
-/// Where [CrdtRemoteCursorsOverlay] draws a cursor's name tag, relative to
+/// Where [CrdtTextCursorsOverlay] draws a cursor's name tag, relative to
 /// the caret.
-enum CrdtCursorLabelPlacement {
+enum CrdtTextCursorLabelPlacement {
   /// Above the caret; flips below it when the tag would escape the field's
   /// top edge. The default.
   auto,
@@ -76,14 +76,14 @@ enum CrdtCursorLabelPlacement {
 /// a field of [bounds], following [placement].
 ///
 /// Clamped horizontally into [bounds]; with
-/// [CrdtCursorLabelPlacement.auto] it sits above the caret and flips below
-/// it when the top edge would be crossed.
+/// [CrdtTextCursorLabelPlacement.auto] it sits above the caret and flips
+/// below it when the top edge would be crossed.
 @visibleForTesting
-Rect resolveCursorLabelRect({
+Rect resolveTextCursorLabelRect({
   required Size labelSize,
   required Rect caret,
   required Size bounds,
-  required CrdtCursorLabelPlacement placement,
+  required CrdtTextCursorLabelPlacement placement,
 }) {
   const gap = 4.0;
   final left = math
@@ -92,18 +92,18 @@ Rect resolveCursorLabelRect({
   final above = caret.top - labelSize.height - gap;
   final below = caret.bottom + gap;
   final top = switch (placement) {
-    CrdtCursorLabelPlacement.above => above,
-    CrdtCursorLabelPlacement.below => below,
-    CrdtCursorLabelPlacement.auto => above >= 0 ? above : below,
+    CrdtTextCursorLabelPlacement.above => above,
+    CrdtTextCursorLabelPlacement.below => below,
+    CrdtTextCursorLabelPlacement.auto => above >= 0 ? above : below,
   };
   return Rect.fromLTWH(left, top, labelSize.width, labelSize.height);
 }
 
-/// {@template crdt_remote_cursors_overlay}
+/// {@template crdt_text_cursors_overlay}
 /// Paints the carets and selections of remote collaborators over [child]
 /// (the subtree containing the `TextField` bound to the same handler [id]).
 ///
-/// Each [CrdtRemoteCursor] is anchored by stable positions
+/// Each [CrdtTextCursor] is anchored by stable positions
 /// (`stablePositionAt`), so an anchor received once stays correct forever.
 ///
 /// Like `CrdtTextFieldBuilder`, it never rebuilds its subtree: document
@@ -116,7 +116,7 @@ Rect resolveCursorLabelRect({
 /// ```dart
 /// CrdtTextFieldBuilder(
 ///   id: 'note',
-///   builder: (context, controller) => CrdtRemoteCursorsOverlay(
+///   builder: (context, controller) => CrdtTextCursorsOverlay(
 ///     id: 'note',
 ///     cursors: cursors, // from your presence channel
 ///     child: TextField(controller: controller),
@@ -124,15 +124,15 @@ Rect resolveCursorLabelRect({
 /// ),
 /// ```
 /// {@endtemplate}
-class CrdtRemoteCursorsOverlay extends StatefulWidget {
-  /// {@macro crdt_remote_cursors_overlay}
+class CrdtTextCursorsOverlay extends StatefulWidget {
+  /// {@macro crdt_text_cursors_overlay}
   ///
-  /// Create a CrdtRemoteCursorsOverlay.
-  const CrdtRemoteCursorsOverlay({
+  /// Create a CrdtTextCursorsOverlay.
+  const CrdtTextCursorsOverlay({
     required this.id,
     required this.cursors,
     required this.child,
-    this.labelPlacement = CrdtCursorLabelPlacement.auto,
+    this.labelPlacement = CrdtTextCursorLabelPlacement.auto,
     super.key,
   });
 
@@ -140,23 +140,22 @@ class CrdtRemoteCursorsOverlay extends StatefulWidget {
   /// **must be a [CRDTFugueTextHandler]**
   final String id;
 
-  /// The remote cursors to draw.
-  final List<CrdtRemoteCursor> cursors;
+  /// The text cursors to draw.
+  final List<CrdtTextCursor> cursors;
 
   /// Where the name tags sit relative to the caret; see
-  /// [CrdtCursorLabelPlacement]. Defaults to
-  /// [CrdtCursorLabelPlacement.auto].
-  final CrdtCursorLabelPlacement labelPlacement;
+  /// [CrdtTextCursorLabelPlacement]. Defaults to
+  /// [CrdtTextCursorLabelPlacement.auto].
+  final CrdtTextCursorLabelPlacement labelPlacement;
 
   /// The subtree containing the text field to draw over.
   final Widget child;
 
   @override
-  State<CrdtRemoteCursorsOverlay> createState() =>
-      _CrdtRemoteCursorsOverlayState();
+  State<CrdtTextCursorsOverlay> createState() => _CrdtTextCursorsOverlayState();
 }
 
-class _CrdtRemoteCursorsOverlayState extends State<CrdtRemoteCursorsOverlay> {
+class _CrdtTextCursorsOverlayState extends State<CrdtTextCursorsOverlay> {
   CRDTDocument? _document;
   StreamSubscription<void>? _subscription;
   int _lastRevision = 0;
@@ -183,7 +182,7 @@ class _CrdtRemoteCursorsOverlayState extends State<CrdtRemoteCursorsOverlay> {
           widget.child,
           Positioned.fill(
             child: IgnorePointer(
-              child: CustomPaint(painter: _RemoteCursorsPainter(this)),
+              child: CustomPaint(painter: _TextCursorsPainter(this)),
             ),
           ),
         ],
@@ -192,7 +191,7 @@ class _CrdtRemoteCursorsOverlayState extends State<CrdtRemoteCursorsOverlay> {
   }
 
   @override
-  void didUpdateWidget(CrdtRemoteCursorsOverlay oldWidget) {
+  void didUpdateWidget(CrdtTextCursorsOverlay oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (!listEquals(oldWidget.cursors, widget.cursors) ||
         oldWidget.labelPlacement != widget.labelPlacement) {
@@ -229,14 +228,14 @@ class _CrdtRemoteCursorsOverlayState extends State<CrdtRemoteCursorsOverlay> {
       return handler;
     }
     throw FlutterError(
-      'CrdtRemoteCursorsOverlay expected a CRDTFugueTextHandler registered '
+      'CrdtTextCursorsOverlay expected a CRDTFugueTextHandler registered '
       'under id "${widget.id}" (stable cursor anchors need Fugue element '
       'identity), but found ${handler ?? 'none'}.',
     );
   }
 
   /// The [RenderEditable] of the text field inside
-  /// [CrdtRemoteCursorsOverlay.child].
+  /// [CrdtTextCursorsOverlay.child].
   RenderEditable? _findEditable() {
     if (_editable != null && _editable!.attached) {
       return _editable;
@@ -263,12 +262,17 @@ class _RepaintNotifier extends ChangeNotifier {
   void bump() => notifyListeners();
 }
 
-class _RemoteCursorsPainter extends CustomPainter {
-  _RemoteCursorsPainter(this._state) : super(repaint: _state._repaint);
+class _TextCursorsPainter extends CustomPainter {
+  _TextCursorsPainter(this._state) : super(repaint: _state._repaint);
 
-  final _CrdtRemoteCursorsOverlayState _state;
+  final _CrdtTextCursorsOverlayState _state;
 
   static const _caretWidth = 2.0;
+
+  /// Name-tag pill geometry, matching the mouse-style presence cursors.
+  static const _labelHeight = 18.0;
+  static const _labelMaxWidth = 140.0;
+  static const _labelPadding = 8.0;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -283,7 +287,7 @@ class _RemoteCursorsPainter extends CustomPainter {
     final handler = _state._handler();
     final transform = editable.getTransformTo(overlayBox);
     final bounds = Offset.zero & size;
-    final labels = <(CrdtRemoteCursor, Rect)>[];
+    final labels = <(CrdtTextCursor, Rect)>[];
 
     // Carets and selections follow the field's inner scroll: keep them
     // clipped to the overlay. Labels are painted after, without clipping.
@@ -337,35 +341,47 @@ class _RemoteCursorsPainter extends CustomPainter {
     }
   }
 
-  /// A small name tag next to the caret, never clipped by the field: placed
-  /// per [CrdtRemoteCursorsOverlay.labelPlacement] and clamped horizontally.
+  /// A pill-shaped name tag next to the caret (the same look as the
+  /// mouse-style presence cursor bubbles), never clipped by the field:
+  /// placed per [CrdtTextCursorsOverlay.labelPlacement] and clamped
+  /// horizontally. Long names are truncated with an ellipsis at
+  /// [_labelMaxWidth].
   void _paintLabel(
     Canvas canvas,
-    CrdtRemoteCursor cursor,
+    CrdtTextCursor cursor,
     Rect caret,
     Size size,
   ) {
     final text = TextPainter(
       text: TextSpan(
         text: cursor.label,
-        style: const TextStyle(color: Color(0xFFFFFFFF), fontSize: 10),
+        style: const TextStyle(
+          color: Color(0xFFFFFFFF),
+          fontSize: 11,
+          fontWeight: FontWeight.w600,
+        ),
       ),
+      maxLines: 1,
+      ellipsis: '…',
       textDirection: TextDirection.ltr,
-    )..layout();
-    final tag = resolveCursorLabelRect(
-      labelSize: Size(text.width + 8, text.height + 4),
+    )..layout(maxWidth: _labelMaxWidth - _labelPadding * 2);
+    final tag = resolveTextCursorLabelRect(
+      labelSize: Size(text.width + _labelPadding * 2, _labelHeight),
       caret: caret,
       bounds: size,
       placement: _state.widget.labelPlacement,
     );
     canvas.drawRRect(
-      RRect.fromRectAndRadius(tag, const Radius.circular(3)),
+      RRect.fromRectAndRadius(tag, const Radius.circular(_labelHeight / 2)),
       Paint()..color = cursor.color,
     );
-    text.paint(canvas, tag.topLeft + const Offset(4, 2));
+    text.paint(
+      canvas,
+      tag.topLeft + Offset(_labelPadding, (_labelHeight - text.height) / 2),
+    );
   }
 
   @override
-  bool shouldRepaint(_RemoteCursorsPainter oldDelegate) =>
+  bool shouldRepaint(_TextCursorsPainter oldDelegate) =>
       oldDelegate._state != _state;
 }

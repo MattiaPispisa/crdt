@@ -60,11 +60,17 @@ class CrdtTextFieldBuilder extends StatefulWidget {
   /// ([CRDTFugueTextHandler.stablePositionAt] of the selection base and
   /// extent) — ready to be published as ephemeral presence (e.g. the
   /// awareness plugin of `crdt_socket_sync`), so that other peers can draw
-  /// this user's cursor with `CrdtRemoteCursorsOverlay`.
+  /// this user's cursor with `CrdtTextCursorsOverlay`.
   ///
-  /// `null` anchors mean "no anchored selection right now": the field has no
-  /// valid selection, an IME composition is pending, or the handler is not
-  /// Fugue-based (only Fugue handlers carry element identity).
+  /// Anchors are only reported **while the field has focus** — a user has
+  /// one text cursor, where they are typing. When focus leaves the field
+  /// (Flutter keeps the controller's selection on blur) the callback fires
+  /// once with `null`s so the published cursor is withdrawn.
+  ///
+  /// `null` anchors mean "no anchored selection right now": the field is
+  /// not focused, has no valid selection, an IME composition is pending, or
+  /// the handler is not Fugue-based (only Fugue handlers carry element
+  /// identity).
   final void Function(FugueElementID? base, FugueElementID? extent)?
       onSelectionAnchorsChanged;
 
@@ -91,13 +97,29 @@ class _CrdtTextFieldBuilderState extends State<CrdtTextFieldBuilder> {
   FugueElementID? _selectionBaseAnchor;
   FugueElementID? _selectionExtentAnchor;
 
+  /// Whether the field inside [CrdtTextFieldBuilder.builder] has focus.
+  /// Anchors keep being captured regardless (they anchor [_adopt] too), but
+  /// they are only *published* while focused: an unfocused field retains
+  /// its selection, which is not the collaborator's cursor.
+  bool _hasFocus = false;
+
+  /// What was last handed to [CrdtTextFieldBuilder.onSelectionAnchorsChanged].
+  FugueElementID? _publishedBase;
+  FugueElementID? _publishedExtent;
+
   @override
   Widget build(BuildContext context) {
     final document = context.crdtDocument;
     if (!identical(document, _document)) {
       _attach(document);
     }
-    return widget.builder(context, _controller!);
+    return Focus(
+      canRequestFocus: false,
+      skipTraversal: true,
+      includeSemantics: false,
+      onFocusChange: _onFocusChange,
+      child: widget.builder(context, _controller!),
+    );
   }
 
   @override
@@ -196,6 +218,25 @@ class _CrdtTextFieldBuilderState extends State<CrdtTextFieldBuilder> {
     }
     _selectionBaseAnchor = base;
     _selectionExtentAnchor = extent;
+    _publishAnchors();
+  }
+
+  void _onFocusChange(bool hasFocus) {
+    if (_hasFocus == hasFocus) {
+      return;
+    }
+    _hasFocus = hasFocus;
+    _publishAnchors();
+  }
+
+  void _publishAnchors() {
+    final base = _hasFocus ? _selectionBaseAnchor : null;
+    final extent = _hasFocus ? _selectionExtentAnchor : null;
+    if (base == _publishedBase && extent == _publishedExtent) {
+      return;
+    }
+    _publishedBase = base;
+    _publishedExtent = extent;
     widget.onSelectionAnchorsChanged?.call(base, extent);
   }
 
@@ -286,7 +327,9 @@ class _CrdtTextFieldBuilderState extends State<CrdtTextFieldBuilder> {
     final delta = computeTextDelta(old.text, merged)!;
     int map(int offset, FugueElementID? anchor) {
       if (offset < 0) {
-        return merged.length;
+        // No selection (field never touched): keep it that way — turning it
+        // into a caret would publish a phantom cursor on adopt.
+        return offset;
       }
       if (anchor != null && handler is CRDTFugueTextHandler) {
         final resolved = handler.indexOfStablePosition(anchor);

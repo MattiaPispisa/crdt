@@ -59,12 +59,12 @@ class CrdtBuilder extends StatelessWidget {
 /// [CRDTDocument]: derive a small, comparable slice of state (a scalar or
 /// immutable value) and skip rebuilds when it is unchanged.
 ///
-/// Remember that the `compar` operator is for ==, 
-/// and **some handlers, for efficiency, mutate objects**, 
-/// so they may change while remaining the same by reference. 
-/// **It's always better to derive a value** (e.g. `handler.value.length`) 
+/// Remember that the `compar` operator is for ==,
+/// and **some handlers, for efficiency, mutate objects**,
+/// so they may change while remaining the same by reference.
+/// **It's always better to derive a value** (e.g. `handler.value.length`)
 /// rather than use the raw collection.
-/// 
+///
 /// For whole-collection rebuilds use [CrdtBuilder].
 ///
 /// ## Example

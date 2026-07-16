@@ -176,6 +176,14 @@ void main() {
       // nested: true rebuilds; the flat one does not (root itself unchanged).
       expect(nestedBuilds, 2);
       expect(flatBuilds, 1);
+
+      // Removing the child bumps root (revision 1 → 2) while dropping the
+      // child's revision (1) from the visit: a plain revision sum would
+      // stay at 2 and miss this rebuild.
+      root.delete('child');
+      await tester.pumpAndSettle();
+      expect(nestedBuilds, 3);
+      expect(flatBuilds, 2);
     });
   });
 
