@@ -1,5 +1,6 @@
 import 'package:crdt_lf/crdt_lf.dart';
-import 'package:crdt_lf_flutter/src/crdt_guards.dart';
+import 'package:crdt_lf_flutter/src/_crdt_guards.dart';
+import 'package:crdt_lf_flutter/src/crdt_builder.dart';
 import 'package:crdt_lf_flutter/src/crdt_helper.dart';
 import 'package:flutter/widgets.dart';
 
@@ -27,13 +28,13 @@ typedef CrdtHandlerListenerCallback<H extends Handler<dynamic>> = void Function(
   H handler,
 );
 
-/// A per-handler "did it change" signature: the handler's
-/// [CRDTDocument.revisionForHandler], a monotonic revision that grows on every
-/// applied change targeting it (local + imported) and on snapshot
-/// imports/merges carrying its state. When [nested], the revisions of the
+/// A per-handler "did it change" signature that consume the handler's
+/// [CRDTDocument.revisionForHandler].
+///
+/// When [nested], the revisions of the
 /// handler and every descendant reachable through
 /// [ContainerHandler.childRefs] are summed, so a nested change is detected
-/// too (a sum of monotonic counters is monotonic).
+/// too.
 int _signatureOf(
   CRDTDocument document,
   String id, {
@@ -69,11 +70,13 @@ int _signatureOf(
 /// handler changes** — a change applied to it (local or remote), a snapshot
 /// import, or (when [nested]) a change to a descendant handler.
 ///
-/// Unlike `CrdtBuilder`, unrelated handlers' changes do not rebuild this
-/// widget. It hands you the concrete typed [H] so you can read its `value`
-/// (the base `Handler` exposes none). The right tool to render a whole handler
+/// Unlike [CrdtBuilder], **unrelated handlers' changes do not rebuild this
+/// widget**. It hands you the concrete typed [H] so you can read its `value`
+/// (the base `Handler` exposes none).
+/// 
+///  **The right tool to render a whole handler
 /// value — including list/map handlers whose value is mutated in place, where a
-/// value `Selector` would not detect the change.
+/// value `Selector` would not detect the change.**
 ///
 /// ## Example
 /// ```dart
@@ -103,7 +106,6 @@ class CrdtHandlerBuilder<H extends Handler<dynamic>> extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     assertHandlerGenericIsSet<H>('CrdtHandlerBuilder');
-    // Rebuild trigger: only when this handler's signature changes.
     context.selectCrdtDocument((doc) => _signatureOf(doc, id, nested: nested));
     return builder(context, context.crdtHandler<H>(id));
   }
@@ -114,7 +116,7 @@ class CrdtHandlerBuilder<H extends Handler<dynamic>> extends StatelessWidget {
 ///
 /// The selector re-runs on every document update and the result is
 /// deduplicated, so this naturally scopes rebuilds to the selected slice
-/// regardless of which handler changed. Select a scalar or immutable value
+/// regardless of which handler changed. **Select a scalar or immutable value**
 /// (e.g. `handler.value.length`), not an in-place-mutated collection.
 ///
 /// ## Example
@@ -147,7 +149,6 @@ class CrdtHandlerSelector<H extends Handler<dynamic>, R>
   @override
   Widget build(BuildContext context) {
     assertHandlerGenericIsSet<H>('CrdtHandlerSelector');
-    assertGenericIsSet<R>('CrdtHandlerSelector');
     final value = context.selectCrdtDocument(
       (document) => selector(context, resolveCrdtHandler<H>(document, id)),
     );
@@ -159,8 +160,8 @@ class CrdtHandlerSelector<H extends Handler<dynamic>, R>
 /// registered under [id] changes — a change applied to it, a snapshot import,
 /// or (when [nested]) a descendant change.
 ///
-/// The BlocListener analogue: use it for navigation, snackbars, etc. It renders
-/// [child] unchanged.
+/// Use it for navigation, snackbar, etc.
+/// **It renders [child] unchanged.**
 class CrdtHandlerListener<H extends Handler<dynamic>> extends StatefulWidget {
   /// Creates a listener that fires [listener] on each handler change.
   const CrdtHandlerListener({
