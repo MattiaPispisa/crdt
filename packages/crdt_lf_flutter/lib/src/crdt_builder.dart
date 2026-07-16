@@ -1,5 +1,5 @@
 import 'package:crdt_lf/crdt_lf.dart';
-import 'package:crdt_lf_flutter/src/crdt_guards.dart';
+import 'package:crdt_lf_flutter/src/crdt_handler.dart';
 import 'package:crdt_lf_flutter/src/crdt_helper.dart';
 import 'package:flutter/widgets.dart';
 import 'package:provider/provider.dart';
@@ -30,8 +30,8 @@ typedef CrdtSelectorWidgetBuilder<R> = Widget Function(
 /// change (through the `updates` bridge installed by `CrdtProvider`). Read any
 /// handler's `value` inside [builder]; the cache-backed getters make it cheap.
 ///
-/// For rebuilds scoped to a single handler use `CrdtHandlerBuilder`; for a
-/// derived slice use [CrdtSelector].
+/// - For rebuilds scoped to a **single handler** use [CrdtHandlerBuilder];
+/// for a derived slice use [CrdtSelector].
 ///
 /// ## Example
 /// ```dart
@@ -59,10 +59,13 @@ class CrdtBuilder extends StatelessWidget {
 /// [CRDTDocument]: derive a small, comparable slice of state (a scalar or
 /// immutable value) and skip rebuilds when it is unchanged.
 ///
-/// Because the list/map handlers mutate their cached collection in place, select
-/// a derived value (e.g. `handler.value.length`) rather than the raw collection
-/// — otherwise the selected value keeps a stable identity and the change is not
-/// detected. For whole-collection rebuilds use [CrdtBuilder].
+/// Remember that the `compar` operator is for ==, 
+/// and **some handlers, for efficiency, mutate objects**, 
+/// so they may change while remaining the same by reference. 
+/// **It's always better to derive a value** (e.g. `handler.value.length`) 
+/// rather than use the raw collection.
+/// 
+/// For whole-collection rebuilds use [CrdtBuilder].
 ///
 /// ## Example
 /// ```dart
@@ -87,7 +90,6 @@ class CrdtSelector<R> extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    assertGenericIsSet<R>('CrdtSelector');
     final value = context.select<CRDTDocument, R>(
       (document) => selector(context, document),
     );
