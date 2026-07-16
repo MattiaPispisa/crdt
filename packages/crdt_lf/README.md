@@ -498,7 +498,10 @@ todos.insertRef(0, item);
   interleave). `CRDTFugueText` minimizes interleaving (concurrent runs stay
   contiguous, more intuitive merges) at a higher cost. Use Fugue for real
   collaborative prose; `CRDTText` for short or rarely-co-edited strings — or a
-  plain `String` value when it is never co-edited.
+  plain `String` value when it is never co-edited. Fugue sequence handlers
+  also expose **stable positions** (`stablePositionAt` /
+  `indexOfStablePosition`): serializable caret/cursor anchors tied to element
+  identity that survive concurrent edits useful for carets and remote cursors.
 - **List — `CRDTListHandler` vs `CRDTFugueListHandler` vs
   `CRDTFugueMovableListHandler`**: HLC-ordered (cheapest) → interleaving-aware →
   interleaving-aware **plus** identity-preserving `move`.

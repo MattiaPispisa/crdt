@@ -422,6 +422,24 @@ class FugueTree<T> {
     return _index.liveAt(position) ?? FugueElementID.nullID();
   }
 
+  /// The live index of a caret anchored immediately **after** [nodeID]: the
+  /// number of live nodes up to and including it — or strictly before it, if
+  /// [nodeID] is a tombstone (the caret stays where the element used to be).
+  ///
+  /// Returns `null` for an id unknown to this tree. Backed by [_index]:
+  /// `O(√n)`.
+  int? liveIndexAfter(FugueElementID nodeID) {
+    final triple = _nodes[nodeID];
+    if (triple == null) {
+      return null;
+    }
+    final rank = _index.liveRankOf(nodeID);
+    if (rank == -1) {
+      return null;
+    }
+    return triple.node.isDeleted ? rank : rank + 1;
+  }
+
   /// Finds the next node after [nodeID] in the traversal
   FugueElementID findNextNode(FugueElementID nodeID) {
     if (!_nodes.containsKey(nodeID)) {

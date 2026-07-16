@@ -1152,8 +1152,8 @@ void main() {
           final afterLocal = a.revisionForHandler('x');
           expect(afterLocal, greaterThan(0));
 
-          // A remote peer edits the same handler id; importing its changes bumps
-          // the revision too.
+          // A remote peer edits the same handler id; importing its changes
+          // bumps the revision too.
           final b = CRDTDocument(peerId: PeerId.generate());
           CRDTListHandler<String>(b, 'x').insert(0, 'c');
           a.importChanges(b.exportChanges());
@@ -1194,7 +1194,7 @@ void main() {
             expect(listA.value, ['a']);
             // ...the change count is unchanged (nothing was added)...
             expect(a.changeCountForHandler('x'), 0);
-            // ...but the revision grew, so a reactive binding detects the update.
+            // ...but the revision grew: a reactive binding sees the update.
             expect(a.revisionForHandler('x'), greaterThan(0));
           },
         );
