@@ -1,4 +1,7 @@
+import 'package:crdt_lf/crdt_lf.dart';
+import 'package:crdt_lf_flutter/crdt_lf_flutter.dart' show CrdtHandlerBuilder;
 import 'package:flutter/material.dart';
+import 'package:shared_examples_infrastructure/examples/ids.dart';
 import 'package:shared_examples_infrastructure/shared/document_pane.dart';
 import 'package:shared_examples_infrastructure/shared/example_scaffold.dart';
 
@@ -39,25 +42,36 @@ class _ChapterList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final chapters = state.chapters;
-    if (chapters.isEmpty) {
-      return const Center(
-        child: Text('No chapters yet. Add one using the button below!'),
-      );
-    }
+    // Rebuild when the chapters root — or any nested handler of the tree
+    // (titles, paragraphs, blocks, todos) — changes; reads still go through
+    // `state` so the time-travel view stays correct. Note that the text
+    // fields themselves never rebuild: `CrdtTextField` binds its controller
+    // directly (see `CrdtTextFieldBuilder`).
+    return CrdtHandlerBuilder<CRDTMovableListRefHandler>(
+      id: ExampleHandlerIds.document,
+      nested: true,
+      builder: (context, _) {
+        final chapters = state.chapters;
+        if (chapters.isEmpty) {
+          return const Center(
+            child: Text('No chapters yet. Add one using the button below!'),
+          );
+        }
 
-    final interactive = !state.isTimeTraveling;
-    return ListView.builder(
-      padding: const EdgeInsets.symmetric(horizontal: 8),
-      itemCount: chapters.length,
-      itemBuilder:
-          (context, index) => ChapterCard(
-            key: ValueKey('c-${chapters[index].id}'),
-            chapter: chapters[index],
-            index: index,
-            count: chapters.length,
-            interactive: interactive,
-          ),
+        final interactive = !state.isTimeTraveling;
+        return ListView.builder(
+          padding: const EdgeInsets.symmetric(horizontal: 8),
+          itemCount: chapters.length,
+          itemBuilder:
+              (context, index) => ChapterCard(
+                key: ValueKey('c-${chapters[index].id}'),
+                chapter: chapters[index],
+                index: index,
+                count: chapters.length,
+                interactive: interactive,
+              ),
+        );
+      },
     );
   }
 }

@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:crdt_lf/crdt_lf.dart';
 import 'package:flutter/foundation.dart';
 
@@ -8,8 +6,11 @@ import 'package:flutter/foundation.dart';
 /// It is bound to an **already-synced** [CRDTDocument] (whatever transport
 /// produced it — a simulated in-memory network or a real socket client) and
 /// provides the behaviors common to all examples: time travel, garbage
-/// collection and the document info getters. It rebuilds on [CRDTDocument
-/// .updates].
+/// collection and the document info getters.
+///
+/// It only notifies for its **own** state (time travel, GC): document
+/// reactivity belongs to the `crdt_lf_flutter` widgets (`CrdtBuilder`,
+/// `CrdtHandlerBuilder`, …) rooted in the `CrdtProvider` of each pane.
 ///
 /// The transport wiring and the document lifecycle live in the injected
 /// sync session; this controller therefore **does not own and never disposes**
@@ -24,7 +25,6 @@ abstract class ExampleDocument<H extends Handler<dynamic>>
   /// Creates the controller for an already-synced [document].
   ExampleDocument(this.document) {
     liveHandler = createHandler(document);
-    _docChanges = document.updates.listen((_) => notifyListeners());
   }
 
   /// The live CRDT document. Owned by the transport session, not by this
@@ -36,8 +36,6 @@ abstract class ExampleDocument<H extends Handler<dynamic>>
 
   /// The active time-travel session and its handler, if any.
   (HistorySession, H)? _history;
-
-  StreamSubscription<void>? _docChanges;
 
   /// Creates the handler bound to [doc].
   ///
@@ -96,7 +94,6 @@ abstract class ExampleDocument<H extends Handler<dynamic>>
 
   @override
   void dispose() {
-    _docChanges?.cancel();
     _history?.$1.dispose();
     // NOTE: `document` is owned by the sync session, not disposed here.
     super.dispose();

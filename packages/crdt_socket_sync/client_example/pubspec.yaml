@@ -16,6 +16,7 @@ dependencies:
 
   hlc_dart: ^1.0.0
   crdt_lf: ^1.0.0
+  crdt_lf_flutter: ^0.1.0
   crdt_socket_sync: ">=0.2.0 <1.0.0"
   provider: ^6.1.4
   en_logger: ^1.2.0

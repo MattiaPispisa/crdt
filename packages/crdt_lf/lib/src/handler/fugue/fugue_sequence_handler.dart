@@ -166,6 +166,38 @@ abstract class FugueSequenceHandler<T, V, S extends FugueState<T, V>>
     return cachedOrComputedState()._tree.findNodeAtPosition(index);
   }
 
+  /// A stable anchor for a caret/cursor sitting at [index]: the id of the
+  /// element currently at `index - 1` (a null id for the sequence start).
+  ///
+  /// Resolve it back to a current index with [indexOfStablePosition];
+  ///
+  /// An [index] past the end anchors to the last element. `O(√n)`.
+  FugueElementID stablePositionAt(int index) {
+    if (index <= 0) {
+      return FugueElementID.nullID();
+    }
+    final state = cachedOrComputedState();
+    final liveCount = state._nodes.length;
+    if (liveCount == 0) {
+      return FugueElementID.nullID();
+    }
+    final anchor = index < liveCount ? index - 1 : liveCount - 1;
+    return state._tree.findNodeAtPosition(anchor);
+  }
+
+  /// The current index of a caret anchored at [position] (obtained from
+  /// [stablePositionAt], possibly on another peer): the position right after
+  /// the anchored element, wherever it sits now.
+  ///
+  /// If the element has been deleted the caret resolves to where the element
+  /// used to be. Returns `null` for an element unknown to this document
+  int? indexOfStablePosition(FugueElementID position) {
+    if (position.isNull) {
+      return 0;
+    }
+    return cachedOrComputedState()._tree.liveIndexAfter(position);
+  }
+
   @override
   Uint8List getSnapshotState() {
     final nodes = cachedOrComputedState()._nodes;

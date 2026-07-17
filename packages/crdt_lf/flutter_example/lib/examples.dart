@@ -1,6 +1,7 @@
 import 'package:crdt_lf/crdt_lf.dart';
 import 'package:crdt_lf_flutter_example/shared/network.dart';
 import 'package:crdt_lf_flutter_example/shared/network_settings.dart';
+import 'package:crdt_lf_flutter_example/shared/text_presence_hub.dart';
 import 'package:crdt_lf_flutter_example/simulated_sync_session.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -47,19 +48,24 @@ WidgetBuilder _simulated(_ExampleScreen screen, List<PeerId> authors) {
   return (context) {
     final network = context.read<Network>();
     return screen(
-      sessionsFactory:
-          () => [
+      sessionsFactory: () {
+        // In-memory presence bus between the two peers: type in one pane
+        // and see the labelled text cursor in the other (the socket example
+        // does the same over the awareness plugin).
+        final presence = TextPresenceHub();
+        return [
+          for (final (index, author) in authors.indexed)
             SimulatedSyncSession(
-              author: authors[0],
+              author: author,
               network: network,
-              label: 'Peer 1',
+              label: 'Peer ${index + 1}',
+              textPresence: presence.register(
+                peerId: author.toString(),
+                label: 'Peer ${index + 1}',
+              ),
             ),
-            SimulatedSyncSession(
-              author: authors[1],
-              network: network,
-              label: 'Peer 2',
-            ),
-          ],
+        ];
+      },
       appBarActionsBuilder: _appBarActions,
     );
   };
@@ -69,13 +75,15 @@ WidgetBuilder _simulated(_ExampleScreen screen, List<PeerId> authors) {
 /// router are derived from it.
 final kExamples = <Example>[
   Example(
-    name: 'Todo List',
+    name: 'Document',
     description:
-        'A collaborative todo list backed by CRDTListHandler. '
-        'Concurrent edits merge conflict-free; includes time travel and '
-        'garbage collection.',
-    path: '/todo-list',
-    builder: _simulated(todoListExample, _todoAuthors),
+        'A nested document built on the reference handlers '
+        '(CRDTMapRefHandler / CRDTMovableListRefHandler): sortable chapters, '
+        'each with sortable paragraphs holding collaborative text and an '
+        'extensible, sortable list of blocks — text and todo lists '
+        '(text + done). Nested CRDTs that merge conflict-free.',
+    path: '/document',
+    builder: _simulated(documentExample, _documentAuthors),
   ),
   Example(
     name: 'Sortable Todo List',
@@ -87,15 +95,13 @@ final kExamples = <Example>[
     builder: _simulated(sortableTodoListExample, _sortableAuthors),
   ),
   Example(
-    name: 'Document',
+    name: 'Todo List',
     description:
-        'A nested document built on the reference handlers '
-        '(CRDTMapRefHandler / CRDTMovableListRefHandler): sortable chapters, '
-        'each with sortable paragraphs holding collaborative text and an '
-        'extensible, sortable list of blocks — text and todo lists '
-        '(text + done). Nested CRDTs that merge conflict-free.',
-    path: '/document',
-    builder: _simulated(documentExample, _documentAuthors),
+        'A collaborative todo list backed by CRDTListHandler. '
+        'Concurrent edits merge conflict-free; includes time travel and '
+        'garbage collection.',
+    path: '/todo-list',
+    builder: _simulated(todoListExample, _todoAuthors),
   ),
 ];
 

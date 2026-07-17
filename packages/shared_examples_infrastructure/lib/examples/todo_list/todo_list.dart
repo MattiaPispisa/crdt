@@ -1,4 +1,7 @@
+import 'package:crdt_lf/crdt_lf.dart';
+import 'package:crdt_lf_flutter/crdt_lf_flutter.dart' show CrdtHandlerBuilder;
 import 'package:flutter/material.dart';
+import 'package:shared_examples_infrastructure/examples/ids.dart';
 import 'package:shared_examples_infrastructure/shared/document_pane.dart';
 import 'package:shared_examples_infrastructure/shared/example_scaffold.dart';
 
@@ -37,19 +40,26 @@ class _TodoListView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final todos = state.todos;
-    if (todos.isEmpty) {
-      return const Center(
-        child: Text('No todos yet. Add one using the button below!'),
-      );
-    }
-    return ListView.builder(
-      itemCount: todos.length,
-      itemBuilder: (context, index) {
-        return TodoItem(
-          todo: todos[index],
-          index: index,
-          interactive: !state.isTimeTraveling,
+    // Rebuild only when the todo-list handler changes (local or remote);
+    // reads still go through `state` so the time-travel view stays correct.
+    return CrdtHandlerBuilder<CRDTListHandler<EncodedTodoListType>>(
+      id: ExampleHandlerIds.todoList,
+      builder: (context, _) {
+        final todos = state.todos;
+        if (todos.isEmpty) {
+          return const Center(
+            child: Text('No todos yet. Add one using the button below!'),
+          );
+        }
+        return ListView.builder(
+          itemCount: todos.length,
+          itemBuilder: (context, index) {
+            return TodoItem(
+              todo: todos[index],
+              index: index,
+              interactive: !state.isTimeTraveling,
+            );
+          },
         );
       },
     );

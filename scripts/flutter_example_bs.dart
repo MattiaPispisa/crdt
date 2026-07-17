@@ -37,7 +37,7 @@ void main() {
       output: File(
         crdtLfFlutterExampleDir(subParts: ['lib', 'generated.dart']).path,
       ),
-      packages: const {'crdt_lf'},
+      packages: const {'crdt_lf', 'crdt_lf_flutter'},
     );
     // crdt_socket_sync client_example shows both the socket and crdt_lf
     // versions.
@@ -46,7 +46,7 @@ void main() {
       output: File(
         clientExampleDir(subParts: ['lib', 'generated.dart']).path,
       ),
-      packages: const {'crdt_socket_sync', 'crdt_lf'},
+      packages: const {'crdt_socket_sync', 'crdt_lf', 'crdt_lf_flutter'},
     );
   } catch (error) {
     logger.error(

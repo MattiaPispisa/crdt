@@ -169,9 +169,16 @@ A flutter example is available in the [flutter_example](https://github.com/Matti
 <img width="500" alt="sync_server_multi_client" src="https://raw.githubusercontent.com/MattiaPispisa/crdt/main/assets/demos/sync_server_multi_client.gif">
 </div>
 
+## Flutter
+A companion library, [crdt_lf_flutter](https://pub.dev/packages/crdt_lf_flutter),containing widgets that make it easier to use `crdt_lf` within Flutter systems. 
+
+It provides Flutter reactivity for `crdt_lf`: widgets rebuild when the CRDT state changes, with selectors, a provider and a collaborative text field. More info in the [README](https://github.com/MattiaPispisa/crdt/tree/main/packages/crdt_lf_flutter/README.md) of the Flutter package.
+
 ## Persistence
 Persistence is not directly handled in this library but there are some out of the box solutions:
 - [crdt_lf_hive](https://pub.dev/packages/crdt_lf_hive): adapters and utils for persist data using [Hive](https://pub.dev/packages/hive).
+- [crdt_lf_drift](https://pub.dev/packages/crdt_lf_drift): adapters and utils for persist data using [Drift](https://pub.dev/packages/drift).
+- [crdt_lf_sqlite](https://pub.dev/packages/crdt_lf_sqlite): adapters and utils for persist data using [sqlite3](https://pub.dev/packages/sqlite3).
 
 ## Benchmarks
 
@@ -498,7 +505,10 @@ todos.insertRef(0, item);
   interleave). `CRDTFugueText` minimizes interleaving (concurrent runs stay
   contiguous, more intuitive merges) at a higher cost. Use Fugue for real
   collaborative prose; `CRDTText` for short or rarely-co-edited strings — or a
-  plain `String` value when it is never co-edited.
+  plain `String` value when it is never co-edited. Fugue sequence handlers
+  also expose **stable positions** (`stablePositionAt` /
+  `indexOfStablePosition`): serializable caret/cursor anchors tied to element
+  identity that survive concurrent edits useful for carets and remote cursors.
 - **List — `CRDTListHandler` vs `CRDTFugueListHandler` vs
   `CRDTFugueMovableListHandler`**: HLC-ordered (cheapest) → interleaving-aware →
   interleaving-aware **plus** identity-preserving `move`.

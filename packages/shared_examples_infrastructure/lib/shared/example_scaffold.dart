@@ -1,4 +1,5 @@
 import 'package:crdt_lf/crdt_lf.dart';
+import 'package:crdt_lf_flutter/crdt_lf_flutter.dart' show CrdtProvider;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_examples_infrastructure/shared/example_document.dart';
@@ -67,14 +68,27 @@ class _ExampleScaffoldState<S extends ExampleDocument>
     extends State<ExampleScaffold<S>> {
   late final List<ExampleSyncSession> _sessions;
 
+  /// The per-session controllers, owned here (not inside the pane subtree) so
+  /// they survive the responsive desktop/mobile layout swap. If they were
+  /// created by an in-pane `ChangeNotifierProvider(create:)`, crossing the
+  /// breakpoint would unmount the pane and dispose the controller mid-frame,
+  /// leaving `Consumer<S>` reading a disposed (null) provider.
+  late final List<S> _states;
+
   @override
   void initState() {
     super.initState();
     _sessions = widget.sessionsFactory();
+    _states = [
+      for (final session in _sessions) widget.stateBuilder(session.document),
+    ];
   }
 
   @override
   void dispose() {
+    for (final state in _states) {
+      state.dispose();
+    }
     for (final session in _sessions) {
       session.dispose();
     }
@@ -87,17 +101,33 @@ class _ExampleScaffoldState<S extends ExampleDocument>
       title: widget.title,
       actions: widget.appBarActionsBuilder?.call(_sessions) ?? const [],
       panels: [
-        for (final session in _sessions)
-          Panel(label: session.label, child: _pane(session)),
+        for (var i = 0; i < _sessions.length; i++)
+          Panel(
+            label: _sessions[i].label,
+            child: _pane(_sessions[i], _states[i]),
+          ),
       ],
     );
   }
 
-  Widget _pane(ExampleSyncSession session) {
-    final content = ChangeNotifierProvider<S>(
-      create: (_) => widget.stateBuilder(session.document),
-      child: Consumer<S>(
-        builder: (context, state, _) => widget.paneBuilder(context, state),
+  Widget _pane(ExampleSyncSession session, S state) {
+    // Document reactivity comes from the crdt_lf_flutter widgets rooted in
+    // CrdtProvider; the ChangeNotifier controller only signals its own state
+    // (time travel, GC). The session is exposed (nullable) so the shared
+    // fields can reach the optional text-cursor presence channel.
+    //
+    // The controller is provided by value (owned by this State), so rebuilding
+    // this subtree across the layout swap never disposes it.
+    final content = CrdtProvider.value(
+      value: session.document,
+      child: Provider<ExampleSyncSession?>.value(
+        value: session,
+        child: ChangeNotifierProvider<S>.value(
+          value: state,
+          child: Consumer<S>(
+            builder: (context, state, _) => widget.paneBuilder(context, state),
+          ),
+        ),
       ),
     );
     return widget.paneWrapper?.call(session, content) ?? content;

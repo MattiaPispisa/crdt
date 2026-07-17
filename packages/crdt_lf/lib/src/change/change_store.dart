@@ -109,6 +109,15 @@ class ChangeStore {
     );
   }
 
+  /// Returns the number of [Change]s produced by the handler with the given
+  /// [handlerId].
+  ///
+  /// Backed by the same secondary index as [changesForHandler] but O(1) and
+  /// without allocating a list — suited to being polled.
+  int changeCountForHandler(String handlerId) {
+    return _handlerIndex.countForHandler(handlerId, _changes.values);
+  }
+
   /// Imports [Change]s from another [ChangeStore]
   ///
   /// Returns the number of [Change]s that were added.
@@ -342,6 +351,16 @@ class _HandlerIndex {
       final clock = versionVector[change.author];
       return clock == null || change.hlc.happenedAfter(clock);
     }).toList();
+  }
+
+  /// Returns the number of changes for [handlerId] in O(1) (once the index is
+  /// built), without allocating a list.
+  ///
+  /// [source] is the store's current set of changes, used to (re)build the
+  /// index when it is not available.
+  int countForHandler(String handlerId, Iterable<Change> source) {
+    final index = _byHandler ??= _build(source);
+    return index[handlerId]?.length ?? 0;
   }
 
   static Map<String, List<Change>> _build(Iterable<Change> source) {

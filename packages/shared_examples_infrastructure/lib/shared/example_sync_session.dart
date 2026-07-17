@@ -1,4 +1,5 @@
 import 'package:crdt_lf/crdt_lf.dart';
+import 'package:shared_examples_infrastructure/shared/text_cursor_presence.dart';
 
 /// A transport-agnostic handle to one synced [CRDTDocument] shown in a pane.
 ///
@@ -19,6 +20,10 @@ abstract class ExampleSyncSession {
 
   /// The pane label (tab title in the narrow layout), e.g. `'Peer 1'`.
   String get label;
+
+  /// The presence channel for in-field text cursors, or `null` when the
+  /// transport has none (fields then simply skip cursor publishing/drawing).
+  TextCursorPresence? get textPresence => null;
 
   /// Tears down the transport and the document.
   void dispose();

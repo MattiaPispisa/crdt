@@ -113,14 +113,9 @@ class ChapterCard extends StatelessWidget {
                 Expanded(
                   child: CrdtTextField(
                     key: ValueKey('title-${chapter.id}'),
-                    value: title?.value ?? '',
-                    enabled: interactive && title != null,
+                    handler: title,
+                    enabled: interactive,
                     hintText: 'Chapter title',
-                    onChanged: (text) {
-                      if (title != null) {
-                        state.editText(title, text);
-                      }
-                    },
                   ),
                 ),
                 ReorderControls(
@@ -218,15 +213,10 @@ class ParagraphCard extends StatelessWidget {
               Expanded(
                 child: CrdtTextField(
                   key: ValueKey('text-${paragraph.id}'),
-                  value: text?.value ?? '',
-                  enabled: interactive && text != null,
+                  handler: text,
+                  enabled: interactive,
                   hintText: 'Paragraph text',
                   maxLines: null,
-                  onChanged: (value) {
-                    if (text != null) {
-                      state.editText(text, value);
-                    }
-                  },
                 ),
               ),
               ReorderControls(

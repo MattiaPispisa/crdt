@@ -9,7 +9,13 @@ final kRoutes = <String, WidgetBuilder>{
       (context) => ExamplesHome(
         title: 'CRDT LF Examples',
         logo: Image.asset('assets/images/logo.png', height: 120),
-        versions: [PackageVersion(name: 'crdt_lf', version: crdt_lf_version)],
+        versions: [
+          PackageVersion(name: 'crdt_lf', version: crdt_lf_version),
+          PackageVersion(
+            name: 'crdt_lf_flutter',
+            version: crdt_lf_flutter_version,
+          ),
+        ],
         examples: kExamples,
         actions: homeActions,
       ),

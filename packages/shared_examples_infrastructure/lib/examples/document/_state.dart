@@ -202,11 +202,6 @@ class DocumentExampleState extends ExampleDocument<CRDTMovableListRefHandler> {
     done.set(!(done.value ?? false));
   }
 
-  /// Replaces the text of a todo [item].
-  void editTodoText(CRDTMapRefHandler item, String value) {
-    item.getRefAs<CRDTFugueTextHandler>(_kTextKey)?.change(value);
-  }
-
   /// Moves a todo inside [todoList] from [from] to [to].
   void reorderTodos(CRDTMovableListRefHandler todoList, int from, int to) =>
       todoList.move(from, to);
@@ -214,9 +209,6 @@ class DocumentExampleState extends ExampleDocument<CRDTMovableListRefHandler> {
   /// Removes the todo at [index] from [todoList].
   void removeTodo(CRDTMovableListRefHandler todoList, int index) =>
       todoList.delete(index);
-
-  /// Replaces the whole content of [text] with [value] (collaborative edit).
-  void editText(CRDTFugueTextHandler text, String value) => text.change(value);
 
   // --- Live accessors for mutation (resolve handlers on the live document) ---
 
