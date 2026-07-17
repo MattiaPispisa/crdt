@@ -73,9 +73,9 @@ abstract class BaseCRDTDocument {
   ///
   /// It increases (at least once per [CRDTDocument.updates] event) every time
   /// the observable state of the handler **may have changed**:
-  /// changes targeting it are applied (local or imported), 
-  /// or a snapshot carrying its state is imported/merged. 
-  /// 
+  /// changes targeting it are applied (local or imported),
+  /// or a snapshot carrying its state is imported/merged.
+  ///
   /// **It never decreases** — in particular, history pruning
   /// does not affect it — so two equal readings guarantee the handler state
   /// did not change in between. **This is the signal reactive bindings should
