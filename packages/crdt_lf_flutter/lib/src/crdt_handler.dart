@@ -33,12 +33,7 @@ typedef CrdtHandlerListenerCallback<H extends Handler<dynamic>> = void Function(
 ///
 /// When [nested], the ids **and** revisions of the handler and every
 /// descendant reachable through [ContainerHandler.childRefs] are folded
-/// into one hash. A plain sum of revisions would miss removals: deleting a
-/// child bumps the parent's revision but drops the child's from the sum,
-/// and the two can cancel out (parent 1 + child 1 == parent 2 + no child).
-/// Hashing the visited (id, revision) sequence changes on any content bump
-/// or structural change — and since revisions are monotonic, a past
-/// signature never recurs.
+/// into one hash.
 int _signatureOf(
   CRDTDocument document,
   String id, {

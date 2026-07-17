@@ -59,13 +59,13 @@ WidgetBuilder _socket(_ExampleScreen screen, String documentId) {
 /// real socket session on its own document id.
 final kExamples = <Example>[
   Example(
-    name: 'Todo List',
+    name: 'Document',
     description:
-        'A collaborative todo list backed by CRDTListHandler, synced '
-        'live over a real WebSocket server. Open this page in another window '
-        'to collaborate.',
-    path: '/todo-list',
-    builder: _socket(todoListExample, ExampleDocumentIds.todoList),
+        'A nested document built on the reference handlers, synced '
+        'over the real backend: sortable chapters and paragraphs holding '
+        'collaborative text and an extensible list of blocks.',
+    path: '/document',
+    builder: _socket(documentExample, ExampleDocumentIds.document),
   ),
   Example(
     name: 'Sortable Todo List',
@@ -80,13 +80,13 @@ final kExamples = <Example>[
     ),
   ),
   Example(
-    name: 'Document',
+    name: 'Todo List',
     description:
-        'A nested document built on the reference handlers, synced '
-        'over the real backend: sortable chapters and paragraphs holding '
-        'collaborative text and an extensible list of blocks.',
-    path: '/document',
-    builder: _socket(documentExample, ExampleDocumentIds.document),
+        'A collaborative todo list backed by CRDTListHandler, synced '
+        'live over a real WebSocket server. Open this page in another window '
+        'to collaborate.',
+    path: '/todo-list',
+    builder: _socket(todoListExample, ExampleDocumentIds.todoList),
   ),
 ];
 

@@ -18,6 +18,10 @@ final kRoutes = <String, WidgetBuilder>{
             version: crdt_socket_sync_version,
           ),
           PackageVersion(name: 'crdt_lf', version: crdt_lf_version),
+          PackageVersion(
+            name: 'crdt_lf_flutter',
+            version: crdt_lf_flutter_version,
+          ),
         ],
         examples: kExamples,
         actions: homeActions,

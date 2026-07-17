@@ -75,13 +75,15 @@ WidgetBuilder _simulated(_ExampleScreen screen, List<PeerId> authors) {
 /// router are derived from it.
 final kExamples = <Example>[
   Example(
-    name: 'Todo List',
+    name: 'Document',
     description:
-        'A collaborative todo list backed by CRDTListHandler. '
-        'Concurrent edits merge conflict-free; includes time travel and '
-        'garbage collection.',
-    path: '/todo-list',
-    builder: _simulated(todoListExample, _todoAuthors),
+        'A nested document built on the reference handlers '
+        '(CRDTMapRefHandler / CRDTMovableListRefHandler): sortable chapters, '
+        'each with sortable paragraphs holding collaborative text and an '
+        'extensible, sortable list of blocks — text and todo lists '
+        '(text + done). Nested CRDTs that merge conflict-free.',
+    path: '/document',
+    builder: _simulated(documentExample, _documentAuthors),
   ),
   Example(
     name: 'Sortable Todo List',
@@ -93,15 +95,13 @@ final kExamples = <Example>[
     builder: _simulated(sortableTodoListExample, _sortableAuthors),
   ),
   Example(
-    name: 'Document',
+    name: 'Todo List',
     description:
-        'A nested document built on the reference handlers '
-        '(CRDTMapRefHandler / CRDTMovableListRefHandler): sortable chapters, '
-        'each with sortable paragraphs holding collaborative text and an '
-        'extensible, sortable list of blocks — text and todo lists '
-        '(text + done). Nested CRDTs that merge conflict-free.',
-    path: '/document',
-    builder: _simulated(documentExample, _documentAuthors),
+        'A collaborative todo list backed by CRDTListHandler. '
+        'Concurrent edits merge conflict-free; includes time travel and '
+        'garbage collection.',
+    path: '/todo-list',
+    builder: _simulated(todoListExample, _todoAuthors),
   ),
 ];
 
