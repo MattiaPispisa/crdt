@@ -23,6 +23,7 @@
 - [hlc](./packages/hlc/README.md)
 - [crdt_lf](./packages/crdt_lf/README.md)
 - [crdt_socket_sync](./packages/crdt_socket_sync/README.md)
+- [crdt_lf_flutter](./packages/crdt_lf_flutter/README.md)
 - [crdt_lf_devtools_extension](./packages/crdt_lf_devtools_extension/README.md)
 - [crdt_lf_hive](./packages/crdt_lf_hive/README.md)
 - [crdt_lf_sqlite](./packages/crdt_lf_sqlite/README.md)

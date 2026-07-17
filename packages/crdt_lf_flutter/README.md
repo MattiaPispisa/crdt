@@ -1,5 +1,13 @@
 # CRDT LF Flutter
 
+[![package badge][package_badge]][pub_link]
+[![pub points][pub_points_badge]][pub_link]
+[![pub likes][pub_likes_badge]][pub_link]
+[![codecov][codecov_badge]][codecov_link]
+[![ci badge][ci_badge]][ci_link]
+[![license][license_badge]][license_link]
+[![pub publisher][pub_publisher_badge]][pub_publisher_link]
+
 Flutter reactivity for [`crdt_lf`](https://pub.dev/packages/crdt_lf): rebuild your
 widgets when CRDT state changes — at the **document** level or scoped to a single
 **handler**, with selectors and a collaborative text field.
@@ -19,6 +27,7 @@ Built on top of [`provider`](https://pub.dev/packages/provider) — so you also 
     - [Imperative access](#imperative-access)
     - [Collaborative text](#collaborative-text)
     - [Presence cursors](#presence-cursors)
+  - [Packages](#packages)
 
 ## Features
 
@@ -202,3 +211,28 @@ applied change targeting the handler (local or imported) and on snapshot
 imports carrying its state. With `nested: true` the ids and revisions of the
 handler and its descendants (`ContainerHandler.childRefs`) are folded into one
 hash, so structural changes (a child added or removed) are detected too.
+
+## Packages
+
+Other bricks of the crdt "system" are:
+
+- [crdt_lf](https://pub.dev/packages/crdt_lf)
+- [crdt_socket_sync](https://pub.dev/packages/crdt_socket_sync)
+- [hlc_dart](https://pub.dev/packages/hlc_dart)
+- [crdt_lf_hive](https://pub.dev/packages/crdt_lf_hive)
+- [crdt_lf_drift](https://pub.dev/packages/crdt_lf_drift)
+- [crdt_lf_sqlite](https://pub.dev/packages/crdt_lf_sqlite)
+
+
+[license_badge]: https://img.shields.io/badge/license-MIT-blue.svg
+[license_link]: https://opensource.org/licenses/MIT
+[package_badge]: https://img.shields.io/pub/v/crdt_lf_flutter.svg
+[codecov_badge]: https://img.shields.io/codecov/c/github/MattiaPispisa/crdt/main?flag=crdt_lf_flutter&logo=codecov
+[codecov_link]: https://app.codecov.io/gh/MattiaPispisa/crdt/tree/main/packages/crdt_lf_flutter
+[ci_badge]: https://img.shields.io/github/actions/workflow/status/MattiaPispisa/crdt/main.yaml
+[ci_link]: https://github.com/MattiaPispisa/crdt/actions/workflows/main.yaml
+[pub_points_badge]: https://img.shields.io/pub/points/crdt_lf_flutter
+[pub_link]: https://pub.dev/packages/crdt_lf_flutter
+[pub_publisher_badge]: https://img.shields.io/pub/publisher/crdt_lf_flutter
+[pub_publisher_link]: https://pub.dev/packages?q=publisher%3Amattiapispisa.it
+[pub_likes_badge]: https://img.shields.io/pub/likes/crdt_lf_flutter

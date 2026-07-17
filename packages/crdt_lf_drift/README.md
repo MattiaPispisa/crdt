@@ -156,6 +156,7 @@ Other bricks of the crdt "system" are:
 
 - [crdt_lf](https://pub.dev/packages/crdt_lf)
 - [crdt_socket_sync](https://pub.dev/packages/crdt_socket_sync)
+- [crdt_lf_flutter](https://pub.dev/packages/crdt_lf_flutter)
 - [hlc_dart](https://pub.dev/packages/hlc_dart)
 - [crdt_lf_hive](https://pub.dev/packages/crdt_lf_hive)
 - [crdt_lf_sqlite](https://pub.dev/packages/crdt_lf_sqlite)
