@@ -1,6 +1,8 @@
 import 'package:crdt_lf/crdt_lf.dart';
+import 'package:crdt_lf_flutter/crdt_lf_flutter.dart' show CrdtProvider;
 import 'package:shared_examples_infrastructure/shared/add_item_dialog.dart';
 import 'package:shared_examples_infrastructure/shared/crdt_text_field.dart';
+import 'package:shared_examples_infrastructure/shared/example_sync_session.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -135,6 +137,11 @@ class _TodoBlockBody extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final state = context.read<DocumentExampleState>();
+    // Captured here (where the pane's providers are in scope) so each row can
+    // re-expose them: ReorderableListView lifts the dragged row into the app
+    // overlay, which is rooted above these providers.
+    final document = CrdtProvider.of(context);
+    final session = context.read<ExampleSyncSession?>();
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -171,12 +178,17 @@ class _TodoBlockBody extends StatelessWidget {
               state.reorderTodos(list!, oldIndex, newIndex);
             },
             itemBuilder:
-                (context, i) => _TodoRow(
+                (context, i) => _ReorderItemScope(
                   key: ValueKey('todo-${todos[i].id}'),
-                  item: todos[i],
-                  index: i,
-                  list: list,
-                  interactive: true,
+                  document: document,
+                  session: session,
+                  state: state,
+                  child: _TodoRow(
+                    item: todos[i],
+                    index: i,
+                    list: list,
+                    interactive: true,
+                  ),
                 ),
           ),
         if (interactive && list != null)
@@ -195,6 +207,43 @@ class _TodoBlockBody extends StatelessWidget {
             ),
           ),
       ],
+    );
+  }
+}
+
+/// Re-exposes the pane's providers to a reorderable item's subtree.
+///
+/// While dragging, [ReorderableListView] re-hosts the item widget in the app
+/// [Overlay], which sits above the pane's `CrdtProvider` / session / controller
+/// providers. Without re-providing them here the dragged row's
+/// [CrdtTextField] would throw `ProviderNotFoundException` for
+/// `Provider<CRDTDocument>`. Because these providers live inside the item's own
+/// subtree, they travel with it into the overlay.
+class _ReorderItemScope extends StatelessWidget {
+  const _ReorderItemScope({
+    super.key,
+    required this.document,
+    required this.session,
+    required this.state,
+    required this.child,
+  });
+
+  final CRDTDocument document;
+  final ExampleSyncSession? session;
+  final DocumentExampleState state;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return CrdtProvider.value(
+      value: document,
+      child: Provider<ExampleSyncSession?>.value(
+        value: session,
+        child: ChangeNotifierProvider<DocumentExampleState>.value(
+          value: state,
+          child: child,
+        ),
+      ),
     );
   }
 }
