@@ -1,4 +1,5 @@
 import 'package:crdt_lf/crdt_lf.dart';
+import 'package:crdt_lf_flutter/crdt_lf_flutter.dart' show CrdtProvider;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_examples_infrastructure/shared/example_document.dart';
@@ -94,10 +95,20 @@ class _ExampleScaffoldState<S extends ExampleDocument>
   }
 
   Widget _pane(ExampleSyncSession session) {
-    final content = ChangeNotifierProvider<S>(
-      create: (_) => widget.stateBuilder(session.document),
-      child: Consumer<S>(
-        builder: (context, state, _) => widget.paneBuilder(context, state),
+    // Document reactivity comes from the crdt_lf_flutter widgets rooted in
+    // CrdtProvider; the ChangeNotifier controller only signals its own state
+    // (time travel, GC). The session is exposed (nullable) so the shared
+    // fields can reach the optional text-cursor presence channel.
+    final content = CrdtProvider.value(
+      value: session.document,
+      child: Provider<ExampleSyncSession?>.value(
+        value: session,
+        child: ChangeNotifierProvider<S>(
+          create: (_) => widget.stateBuilder(session.document),
+          child: Consumer<S>(
+            builder: (context, state, _) => widget.paneBuilder(context, state),
+          ),
+        ),
       ),
     );
     return widget.paneWrapper?.call(session, content) ?? content;

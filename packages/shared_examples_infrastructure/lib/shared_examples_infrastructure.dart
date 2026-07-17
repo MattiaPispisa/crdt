@@ -5,6 +5,8 @@ library;
 // Sync seam + base controller.
 export 'shared/example_document.dart';
 export 'shared/example_sync_session.dart';
+export 'shared/peer_colors.dart';
+export 'shared/text_cursor_presence.dart';
 
 // Shared UI.
 export 'shared/add_item_dialog.dart';

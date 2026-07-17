@@ -15,6 +15,8 @@ dependencies:
   
   crdt_lf:
     path: ../
+  crdt_lf_flutter:
+    path: ../../crdt_lf_flutter
   provider: ^6.1.4
   shared_examples_infrastructure:
     path: ../../shared_examples_infrastructure

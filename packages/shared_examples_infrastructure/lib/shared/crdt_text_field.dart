@@ -1,34 +1,36 @@
+import 'package:crdt_lf/crdt_lf.dart';
+import 'package:crdt_lf_flutter/crdt_lf_flutter.dart';
 import 'package:flutter/material.dart';
+import 'package:shared_examples_infrastructure/shared/example_sync_session.dart';
+import 'package:shared_examples_infrastructure/shared/text_cursor_presence.dart';
 
-/// An inline text field bound to a collaborative text value.
+/// An inline collaborative text field bound to a [CRDTFugueTextHandler].
 ///
-/// The parent passes the current [value] (read from a `CRDTFugueTextHandler`)
-/// and an [onChanged] callback (which typically calls `handler.change(...)`).
+/// The live field wraps [CrdtTextFieldBuilder]: local edits are pushed as
+/// precise per-gesture deltas (no full-text diff), IME composition is
+/// respected and the caret stays anchored across remote edits through stable
+/// positions. If the pane's session exposes a [TextCursorPresence], the
+/// local selection is published on it and the remote collaborators' cursors
+/// are drawn over the field with [CrdtTextCursorsOverlay].
 ///
-/// The controller is always kept in sync with [value] — including while the
-/// field is focused. This is required for correctness: `onChanged` reports the
-/// full new text and the parent turns it into a `change(...)` (a diff against
-/// the handler's current value). If the controller lagged behind a concurrent
-/// remote edit, that diff would compute against a stale base and silently undo
-/// the remote edit. The caret offset is preserved on a best-effort basis (it
-/// may shift when a remote edit lands before it).
-class CrdtTextField extends StatefulWidget {
-  /// Creates a collaborative text field.
+/// While time traveling ([enabled] is false, [handler] is the time-travel
+/// view handler) — or while [handler] is not created yet — the field is a
+/// read-only view of the handler value (the pane rebuilds it as the history
+/// cursor moves).
+class CrdtTextField extends StatelessWidget {
+  /// Creates a collaborative text field over [handler].
   const CrdtTextField({
     super.key,
-    required this.value,
-    required this.onChanged,
+    required this.handler,
     this.enabled = true,
     this.hintText,
     this.style,
     this.maxLines = 1,
   });
 
-  /// The current text value (source of truth lives in the CRDT handler).
-  final String value;
-
-  /// Called on every local edit with the full updated text.
-  final ValueChanged<String> onChanged;
+  /// The text handler backing the field: the live handler, or the
+  /// time-travel view handler (same id) while time traveling.
+  final CRDTFugueTextHandler? handler;
 
   /// Whether the field can be edited (false while time traveling).
   final bool enabled;
@@ -42,46 +44,89 @@ class CrdtTextField extends StatefulWidget {
   /// Maximum number of lines (null for unbounded).
   final int? maxLines;
 
+  InputDecoration get _decoration => InputDecoration(
+    hintText: hintText,
+    isDense: true,
+    border: const OutlineInputBorder(),
+  );
+
   @override
-  State<CrdtTextField> createState() => _CrdtTextFieldState();
+  Widget build(BuildContext context) {
+    final handler = this.handler;
+    if (handler == null || !enabled) {
+      return _StaticTextField(
+        value: handler?.value ?? '',
+        decoration: _decoration,
+        style: style,
+        maxLines: maxLines,
+      );
+    }
+
+    final presence = context.read<ExampleSyncSession?>()?.textPresence;
+    return CrdtTextFieldBuilder(
+      id: handler.id,
+      onSelectionAnchorsChanged:
+          presence == null
+              ? null
+              : (base, extent) => presence.publish(handler.id, base, extent),
+      builder: (context, controller) {
+        final field = TextField(
+          controller: controller,
+          maxLines: maxLines,
+          style: style,
+          decoration: _decoration,
+        );
+        if (presence == null) {
+          return field;
+        }
+        return ValueListenableBuilder<List<CrdtTextCursor>>(
+          valueListenable: presence.cursorsOf(handler.id),
+          builder:
+              (context, cursors, child) => CrdtTextCursorsOverlay(
+                id: handler.id,
+                cursors: cursors,
+                child: child!,
+              ),
+          child: field,
+        );
+      },
+    );
+  }
 }
 
-class _CrdtTextFieldState extends State<CrdtTextField> {
-  late final TextEditingController _controller;
-  late final FocusNode _focusNode;
+/// A disabled [TextField] kept in sync with an externally-changing [value]
+/// (the time-travel view as the history cursor moves).
+class _StaticTextField extends StatefulWidget {
+  const _StaticTextField({
+    required this.value,
+    required this.decoration,
+    required this.style,
+    required this.maxLines,
+  });
+
+  final String value;
+  final InputDecoration decoration;
+  final TextStyle? style;
+  final int? maxLines;
 
   @override
-  void initState() {
-    super.initState();
-    _controller = TextEditingController(text: widget.value);
-    _focusNode = FocusNode();
-  }
+  State<_StaticTextField> createState() => _StaticTextFieldState();
+}
+
+class _StaticTextFieldState extends State<_StaticTextField> {
+  late final _controller = TextEditingController(text: widget.value);
 
   @override
-  void didUpdateWidget(CrdtTextField oldWidget) {
+  void didUpdateWidget(_StaticTextField oldWidget) {
     super.didUpdateWidget(oldWidget);
-    // Always adopt the merged value so the next local edit is diffed against
-    // the up-to-date text (otherwise a `change(...)` would fight concurrent
-    // remote edits). After a local keystroke `value == _controller.text`, so
-    // this is a no-op and the caret does not move; it only runs for genuine
-    // remote updates, where the caret is kept best-effort.
     if (widget.value != _controller.text) {
-      final offset = _controller.selection.baseOffset;
-      final caret =
-          offset < 0
-              ? widget.value.length
-              : offset.clamp(0, widget.value.length);
-      _controller.value = TextEditingValue(
-        text: widget.value,
-        selection: TextSelection.collapsed(offset: caret),
-      );
+      _controller.text = widget.value;
     }
   }
 
   @override
   void dispose() {
     _controller.dispose();
-    _focusNode.dispose();
     super.dispose();
   }
 
@@ -89,16 +134,10 @@ class _CrdtTextFieldState extends State<CrdtTextField> {
   Widget build(BuildContext context) {
     return TextField(
       controller: _controller,
-      focusNode: _focusNode,
-      enabled: widget.enabled,
+      enabled: false,
       maxLines: widget.maxLines,
       style: widget.style,
-      decoration: InputDecoration(
-        hintText: widget.hintText,
-        isDense: true,
-        border: const OutlineInputBorder(),
-      ),
-      onChanged: widget.onChanged,
+      decoration: widget.decoration,
     );
   }
 }

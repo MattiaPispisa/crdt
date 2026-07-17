@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:crdt_lf/crdt_lf.dart';
 import 'package:crdt_socket_sync/web_socket_client.dart';
+import 'package:crdt_socket_sync_client_example/awareness_text_presence.dart';
 import 'package:hlc_dart/hlc_dart.dart';
 import 'package:shared_examples_infrastructure/shared_examples_infrastructure.dart';
 
@@ -42,6 +43,11 @@ class SocketSyncSession implements ExampleSyncSession {
       // otherwise it can't decode the awareness messages the server sends.
       plugins: [awareness],
     );
+    textPresence = AwarenessTextCursorPresence(
+      awareness: awareness,
+      // Assigned by the server on connect: read it lazily.
+      localSessionId: () => client.sessionId,
+    );
     unawaited(client.connect());
   }
 
@@ -57,8 +63,14 @@ class SocketSyncSession implements ExampleSyncSession {
   /// The awareness (presence/cursors) plugin for this session.
   late final ClientAwarenessPlugin awareness;
 
+  /// In-field text cursors over the awareness plugin (see
+  /// [AwarenessTextCursorPresence]).
+  @override
+  late final AwarenessTextCursorPresence textPresence;
+
   @override
   void dispose() {
+    textPresence.dispose();
     client.dispose();
     document.dispose();
   }

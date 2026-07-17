@@ -12,10 +12,14 @@ import 'package:shared_examples_infrastructure/shared_examples_infrastructure.da
 /// causally ready.
 class SimulatedSyncSession implements ExampleSyncSession {
   /// Creates a simulated session for [author] on [network].
+  ///
+  /// [textPresence] is the peer's view on the screen's in-memory presence
+  /// hub, or `null` for no in-field text cursors.
   SimulatedSyncSession({
     required PeerId author,
     required Network network,
     required this.label,
+    this.textPresence,
   }) : document = CRDTDocument(peerId: author),
        _network = network {
     _remote = _network.stream(document.peerId).listen((change) {
@@ -29,6 +33,9 @@ class SimulatedSyncSession implements ExampleSyncSession {
 
   @override
   final String label;
+
+  @override
+  final TextCursorPresence? textPresence;
 
   final Network _network;
   late final StreamSubscription<Change> _remote;

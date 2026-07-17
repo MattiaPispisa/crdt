@@ -1,4 +1,7 @@
+import 'package:crdt_lf/crdt_lf.dart';
+import 'package:crdt_lf_flutter/crdt_lf_flutter.dart' show CrdtHandlerBuilder;
 import 'package:flutter/material.dart';
+import 'package:shared_examples_infrastructure/examples/ids.dart';
 import 'package:shared_examples_infrastructure/shared/document_pane.dart';
 import 'package:shared_examples_infrastructure/shared/example_scaffold.dart';
 
@@ -37,6 +40,15 @@ class _SortableListView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Rebuild only when the sortable-list handler changes (local or remote);
+    // reads still go through `state` so the time-travel view stays correct.
+    return CrdtHandlerBuilder<CRDTFugueMovableListHandler<EncodedTodoListType>>(
+      id: ExampleHandlerIds.sortableTodoList,
+      builder: (context, _) => _buildList(context),
+    );
+  }
+
+  Widget _buildList(BuildContext context) {
     final todos = state.todos;
     if (todos.isEmpty) {
       return const Center(

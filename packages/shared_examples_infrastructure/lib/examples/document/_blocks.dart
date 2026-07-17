@@ -81,15 +81,10 @@ class TextBlockSpec extends BlockSpec {
     final text = state.blockContent(block) as CRDTFugueTextHandler?;
     return CrdtTextField(
       key: ValueKey('text-${block.id}'),
-      value: text?.value ?? '',
-      enabled: interactive && text != null,
+      handler: text,
+      enabled: interactive,
       hintText: 'Write something…',
       maxLines: null,
-      onChanged: (value) {
-        if (text != null) {
-          state.editText(text, value);
-        }
-      },
     );
   }
 }
@@ -235,8 +230,8 @@ class _TodoRow extends StatelessWidget {
           Expanded(
             child: CrdtTextField(
               key: ValueKey('todo-field-${item.id}'),
-              value: text?.value ?? '',
-              enabled: interactive && text != null,
+              handler: text,
+              enabled: interactive,
               hintText: 'Todo',
               style:
                   done
@@ -245,11 +240,6 @@ class _TodoRow extends StatelessWidget {
                         color: Colors.grey,
                       )
                       : null,
-              onChanged: (value) {
-                if (text != null) {
-                  state.editTodoText(item, value);
-                }
-              },
             ),
           ),
           if (interactive && list != null) ...[

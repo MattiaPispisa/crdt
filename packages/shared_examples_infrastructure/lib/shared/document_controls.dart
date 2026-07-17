@@ -1,4 +1,5 @@
 import 'package:crdt_lf/crdt_lf.dart';
+import 'package:crdt_lf_flutter/crdt_lf_flutter.dart' show CrdtBuilder;
 import 'package:shared_examples_infrastructure/shared/example_document.dart';
 import 'package:flutter/material.dart';
 
@@ -28,9 +29,13 @@ class DocumentInfo extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(left: 24.0, bottom: 24.0),
-      child: Tooltip(message: _info(), child: const Icon(Icons.info)),
+    // The info reads the document (changes count): rebuild on any update.
+    return CrdtBuilder(
+      builder:
+          (context, document) => Padding(
+            padding: const EdgeInsets.only(left: 24.0, bottom: 24.0),
+            child: Tooltip(message: _info(), child: const Icon(Icons.info)),
+          ),
     );
   }
 }
@@ -46,14 +51,19 @@ class ToHistoryViewButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final canTimeTravel = state.canTimeTravel();
-    return IconButton(
-      tooltip:
-          canTimeTravel
-              ? 'Time travel to the document history'
-              : 'No changes to time travel to',
-      icon: const Icon(Icons.history),
-      onPressed: canTimeTravel ? state.timeTravel : null,
+    // Enablement depends on the document history: rebuild on any update.
+    return CrdtBuilder(
+      builder: (context, document) {
+        final canTimeTravel = state.canTimeTravel();
+        return IconButton(
+          tooltip:
+              canTimeTravel
+                  ? 'Time travel to the document history'
+                  : 'No changes to time travel to',
+          icon: const Icon(Icons.history),
+          onPressed: canTimeTravel ? state.timeTravel : null,
+        );
+      },
     );
   }
 }
