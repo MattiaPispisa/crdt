@@ -109,6 +109,11 @@ Rect resolveTextCursorLabelRect({
 /// Like `CrdtTextFieldBuilder`, it never rebuilds its subtree: document
 /// updates and scrolls only schedule a repaint of the painter.
 ///
+/// Cursors are painted into the app [Overlay] (via [OverlayPortal]), so
+/// sibling widgets painted after the field — a following container's
+/// border, the next card — can never cover a caret or its name tag.
+/// Requires an [Overlay] ancestor (`MaterialApp`/[WidgetsApp] provide one).
+///
 /// Requires a `CRDTFugueTextHandler` under [id]: only Fugue handlers carry
 /// the element identity that anchors are made of.
 ///
@@ -161,9 +166,23 @@ class _CrdtTextCursorsOverlayState extends State<CrdtTextCursorsOverlay> {
   int _lastRevision = 0;
   final _repaint = _RepaintNotifier();
 
+  /// Anchors the [OverlayPortal] paint surface to this widget's origin, so
+  /// the painter keeps working in field-local coordinates while living in
+  /// the app [Overlay] (above everything a sibling could paint).
+  final _link = LayerLink();
+  final _portal = OverlayPortalController();
+
   /// Cached [RenderEditable] found under this widget; re-resolved when the
   /// child subtree changes.
   RenderEditable? _editable;
+
+  @override
+  void initState() {
+    super.initState();
+    // Safe while detached: the controller records the pending z-order and
+    // the portal shows on attach.
+    _portal.show();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -177,15 +196,19 @@ class _CrdtTextCursorsOverlayState extends State<CrdtTextCursorsOverlay> {
         _repaint.bump();
         return false;
       },
-      child: Stack(
-        children: [
-          widget.child,
-          Positioned.fill(
-            child: IgnorePointer(
+      child: CompositedTransformTarget(
+        link: _link,
+        child: OverlayPortal(
+          controller: _portal,
+          overlayChildBuilder: (context) => IgnorePointer(
+            child: CompositedTransformFollower(
+              link: _link,
+              showWhenUnlinked: false,
               child: CustomPaint(painter: _TextCursorsPainter(this)),
             ),
           ),
-        ],
+          child: widget.child,
+        ),
       ),
     );
   }
@@ -280,13 +303,17 @@ class _TextCursorsPainter extends CustomPainter {
     if (editable == null || !editable.attached) {
       return;
     }
+    // The paint surface lives in the app Overlay, anchored to the widget's
+    // origin: coordinates and bounds come from the widget's own render box,
+    // not from [size].
     final overlayBox = _state.context.findRenderObject();
-    if (overlayBox == null) {
+    if (overlayBox is! RenderBox || !overlayBox.hasSize) {
       return;
     }
+    final fieldSize = overlayBox.size;
     final handler = _state._handler();
     final transform = editable.getTransformTo(overlayBox);
-    final bounds = Offset.zero & size;
+    final bounds = Offset.zero & fieldSize;
     final labels = <(CrdtTextCursor, Rect)>[];
 
     // Carets and selections follow the field's inner scroll: keep them
@@ -337,7 +364,7 @@ class _TextCursorsPainter extends CustomPainter {
 
     canvas.restore();
     for (final (cursor, caret) in labels) {
-      _paintLabel(canvas, cursor, caret, size);
+      _paintLabel(canvas, cursor, caret, fieldSize);
     }
   }
 

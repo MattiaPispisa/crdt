@@ -79,6 +79,17 @@ abstract class AppLayout extends StatelessWidget {
 }
 
 /// Picks [_DesktopAppLayout] or [_MobAppLayout] based on the available width.
+///
+/// Crossing [AppLayout.splitBreakpoint] swaps the side-by-side
+/// ([_DesktopAppLayout], a [Row]) and tabbed ([_MobAppLayout], a [TabBarView])
+/// subtrees, which unmounts and rebuilds every pane. That is safe because the
+/// per-peer controller state lives *above* this switch (owned by the example
+/// scaffold and provided by value), so a rebuilt pane simply re-reads it. We
+/// deliberately do **not** try to reparent the live pane elements across the
+/// swap (e.g. with a [GlobalKey]): moving a live element between a lazy
+/// [TabBarView] and a [Row] during the layout phase leaves dangling render
+/// objects and disposed providers ("unmounted" assertions / null provider
+/// reads).
 class _ResponsiveAppLayout extends AppLayout {
   const _ResponsiveAppLayout({
     super.key,
@@ -89,69 +100,16 @@ class _ResponsiveAppLayout extends AppLayout {
 
   @override
   Widget build(BuildContext context) {
-    return _ResponsiveBody(title: title, panels: panels, actions: actions);
-  }
-}
-
-/// Hosts the responsive switch and keeps each pane's element alive across it.
-///
-/// Crossing [AppLayout.splitBreakpoint] swaps the side-by-side ([_DesktopAppLayout],
-/// a [Row]) and tabbed ([_MobAppLayout], a [TabBarView]) subtrees. Without a
-/// stable identity, Flutter would discard and rebuild every pane — destroying
-/// any state the panes own (e.g. a per-peer `ChangeNotifierProvider`). Wrapping
-/// each [Panel.child] in a [KeyedSubtree] with a [GlobalKey] held in this state
-/// makes Flutter reparent the existing element instead of recreating it.
-class _ResponsiveBody extends StatefulWidget {
-  const _ResponsiveBody({
-    required this.title,
-    required this.panels,
-    required this.actions,
-  });
-
-  final String title;
-  final List<Panel> panels;
-  final List<Widget> actions;
-
-  @override
-  State<_ResponsiveBody> createState() => _ResponsiveBodyState();
-}
-
-class _ResponsiveBodyState extends State<_ResponsiveBody> {
-  final _paneKeys = <GlobalKey>[];
-
-  /// The panels with each child wrapped in a [KeyedSubtree] keyed by a stable
-  /// [GlobalKey], so panes survive the layout switch.
-  List<Panel> get _keyedPanels {
-    final panels = widget.panels;
-    while (_paneKeys.length < panels.length) {
-      _paneKeys.add(GlobalKey());
-    }
-    return [
-      for (var i = 0; i < panels.length; i++)
-        Panel(
-          label: panels[i].label,
-          child: KeyedSubtree(key: _paneKeys[i], child: panels[i].child),
-        ),
-    ];
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final panels = _keyedPanels;
     return LayoutBuilder(
       builder: (context, constraints) {
         if (constraints.maxWidth >= AppLayout.splitBreakpoint) {
           return _DesktopAppLayout(
-            title: widget.title,
+            title: title,
             panels: panels,
-            actions: widget.actions,
+            actions: actions,
           );
         }
-        return _MobAppLayout(
-          title: widget.title,
-          panels: panels,
-          actions: widget.actions,
-        );
+        return _MobAppLayout(title: title, panels: panels, actions: actions);
       },
     );
   }

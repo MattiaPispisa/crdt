@@ -105,6 +105,14 @@ void main() {
           ..rect(rect: expectedCaret(tester, 5), color: color) // caret
           ..rrect(color: color), // label tag
       );
+
+      // The paint surface lives in the app Overlay, not under the field:
+      // widgets painted after the field (a sibling border, the next card)
+      // can never cover a caret or its tag.
+      expect(
+        find.ancestor(of: overlayPaint(), matching: find.byType(Overlay)),
+        findsOneWidget,
+      );
     });
 
     testWidgets('hides a cursor whose anchor is not known yet', (tester) async {

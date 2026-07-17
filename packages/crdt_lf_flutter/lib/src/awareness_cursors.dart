@@ -1,7 +1,5 @@
-import 'dart:math' as math;
-
 import 'package:crdt_lf_flutter/src/text_cursors.dart';
-import 'package:flutter/material.dart';
+import 'package:flutter/widgets.dart';
 
 /// {@template crdt_awareness_cursor}
 /// A collaborator's pointer (a mouse-style presence cursor) to draw over a
@@ -159,8 +157,14 @@ const double _kMaxBubbleWidth = 140;
 const double _kBubbleHeight = 18;
 const double _kBubblePadding = 8;
 
-/// A pointer arrow plus a name bubble bounded to [_kMaxBubbleWidth]; long
-/// names are truncated with an ellipsis.
+/// Pointer arrow geometry: the Figma-style kite fits this square, tip at
+/// its top-left. The name bubble hangs at the pointer's bottom-right with
+/// a small gap, so arrow and bubble read as two elements, not one blob.
+const double _kPointerSize = 18;
+const Offset _kBubbleOffset = Offset(12, 3);
+
+/// A Figma-style pointer arrow plus a name bubble bounded to
+/// [_kMaxBubbleWidth]; long names are truncated with an ellipsis.
 class _CursorMarker extends StatelessWidget {
   const _CursorMarker({required this.cursor});
 
@@ -172,40 +176,79 @@ class _CursorMarker extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Cursor tip (points up-left, so its top-left ~ the actual
-        // position). Grows smoothly while the collaborator is hovering.
+        // Pointer tip at the widget's top-left ~ the actual position.
+        // Grows smoothly while the collaborator is hovering.
         AnimatedScale(
           scale: cursor.hovering ? 1.25 : 1,
           duration: const Duration(milliseconds: 120),
           alignment: Alignment.topLeft,
-          child: Transform.rotate(
-            angle: -math.pi / 4,
-            child: Icon(Icons.navigation, size: 16, color: cursor.color),
+          child: CustomPaint(
+            size: const Size(_kPointerSize, _kPointerSize),
+            painter: _PointerPainter(color: cursor.color),
           ),
         ),
         // Name bubble: fixed height, capped width, long names truncated.
         if (cursor.label != null)
-          Container(
-            height: _kBubbleHeight,
-            constraints: const BoxConstraints(maxWidth: _kMaxBubbleWidth),
-            padding: const EdgeInsets.symmetric(horizontal: _kBubblePadding),
-            decoration: BoxDecoration(
-              color: cursor.color,
-              borderRadius: BorderRadius.circular(_kBubbleHeight / 2),
+          Padding(
+            padding: EdgeInsets.only(
+              left: _kBubbleOffset.dx,
+              top: _kBubbleOffset.dy,
             ),
-            alignment: Alignment.centerLeft,
-            child: Text(
-              cursor.label!,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                color: Color(0xFFFFFFFF),
-                fontSize: 11,
-                fontWeight: FontWeight.w600,
+            child: Container(
+              height: _kBubbleHeight,
+              constraints: const BoxConstraints(maxWidth: _kMaxBubbleWidth),
+              padding: const EdgeInsets.symmetric(horizontal: _kBubblePadding),
+              decoration: BoxDecoration(
+                color: cursor.color,
+                borderRadius: BorderRadius.circular(_kBubbleHeight / 2),
+              ),
+              alignment: Alignment.centerLeft,
+              child: Text(
+                cursor.label!,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: Color(0xFFFFFFFF),
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
             ),
           ),
       ],
     );
   }
+}
+
+/// A kite-shaped arrow with its tip at the
+/// top-left corner, filled with the peer color, outlined in white (so it
+/// stays visible on any background) over a soft shadow.
+class _PointerPainter extends CustomPainter {
+  const _PointerPainter({required this.color});
+
+  final Color color;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final path = Path()
+      ..moveTo(1, 1)
+      ..lineTo(size.width - 2, size.height * 0.38)
+      ..lineTo(size.width * 0.53, size.height * 0.53)
+      ..lineTo(size.width * 0.38, size.height - 2)
+      ..close();
+    canvas
+      ..drawShadow(path, const Color(0x66000000), 2, true)
+      ..drawPath(path, Paint()..color = color)
+      ..drawPath(
+        path,
+        Paint()
+          ..color = const Color(0xFFFFFFFF)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 1.5
+          ..strokeJoin = StrokeJoin.round,
+      );
+  }
+
+  @override
+  bool shouldRepaint(_PointerPainter oldDelegate) => oldDelegate.color != color;
 }

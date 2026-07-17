@@ -155,7 +155,9 @@ The delta primitives are exported too (`TextDelta`, `computeTextDelta`,
 Publish the local selection with `onSelectionAnchorsChanged` (the anchors are
 serializable — send them over your presence channel, e.g. the awareness
 plugin of `crdt_socket_sync`) and draw collaborators with
-`CrdtTextCursorsOverlay`:
+`CrdtTextCursorsOverlay`. Anchors are reported only while the field has
+focus — on blur the callback fires once with `null`s, so with several bound
+fields a peer shows at most one cursor, where they are typing:
 
 ```dart
 CrdtTextFieldBuilder(
@@ -168,14 +170,6 @@ CrdtTextFieldBuilder(
   ),
 );
 ```
-
-The overlay re-resolves each anchor on every document update
-(`indexOfStablePosition`, O(√n)) and asks the field's own `RenderEditable`
-for pixel rects — wrapping, scrolling and text direction come from the real
-text layout. Cursors whose anchor is not known yet (change not received) are
-hidden until it arrives. Name tags are never clipped by the field; use
-`labelPlacement` (`auto` — flip below the caret when the top edge would cut
-the tag — or forced `above`/`below`) to control where they sit.
 
 ### Presence cursors
 
