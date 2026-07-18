@@ -7,7 +7,54 @@ on:
       - main
 
 jobs:
+
+  changes:
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: read
+    outputs:
+      global: ${{ steps.filter.outputs.global }}
+      hlc: ${{ steps.filter.outputs.hlc }}
+      crdt_lf: ${{ steps.filter.outputs.crdt_lf }}
+      crdt_lf_hive: ${{ steps.filter.outputs.crdt_lf_hive }}
+      crdt_lf_sqlite: ${{ steps.filter.outputs.crdt_lf_sqlite }}
+      crdt_lf_drift: ${{ steps.filter.outputs.crdt_lf_drift }}
+      crdt_socket_sync: ${{ steps.filter.outputs.crdt_socket_sync }}
+      crdt_lf_flutter: ${{ steps.filter.outputs.crdt_lf_flutter }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            global:
+              - '.github/workflows/**'
+              - 'analysis_options.yaml'
+              - 'pubspec.yaml'
+              - 'pubspec.lock'
+              - 'melos.yaml'
+              - 'scripts/**'
+              - 'packages/shared_examples_infrastructure/**'
+            hlc:
+              - 'packages/hlc/**'
+            crdt_lf:
+              - 'packages/crdt_lf/**'
+            crdt_lf_hive:
+              - 'packages/crdt_lf_hive/**'
+            crdt_lf_sqlite:
+              - 'packages/crdt_lf_sqlite/**'
+            crdt_lf_drift:
+              - 'packages/crdt_lf_drift/**'
+            crdt_socket_sync:
+              - 'packages/crdt_socket_sync/**'
+            crdt_lf_flutter:
+              - 'packages/crdt_lf_flutter/**'
+
   hlc:
+    needs: changes
+    if: >-
+      ${{ needs.changes.outputs.global == 'true'
+       || needs.changes.outputs.hlc == 'true' }}
     uses: ./.github/workflows/dart_package.yaml
     with:
       working_directory: ./packages/hlc
@@ -17,6 +64,11 @@ jobs:
       CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
 
   crdt_lf:
+    needs: changes
+    if: >-
+      ${{ needs.changes.outputs.global == 'true'
+       || needs.changes.outputs.hlc == 'true'
+       || needs.changes.outputs.crdt_lf == 'true' }}
     uses: ./.github/workflows/dart_package.yaml
     with:
       working_directory: ./packages/crdt_lf
@@ -26,6 +78,12 @@ jobs:
       CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
 
   crdt_lf_hive:
+    needs: changes
+    if: >-
+      ${{ needs.changes.outputs.global == 'true'
+       || needs.changes.outputs.hlc == 'true'
+       || needs.changes.outputs.crdt_lf == 'true'
+       || needs.changes.outputs.crdt_lf_hive == 'true' }}
     uses: ./.github/workflows/dart_package.yaml
     with:
       working_directory: ./packages/crdt_lf_hive
@@ -35,6 +93,12 @@ jobs:
       CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
 
   crdt_lf_sqlite:
+    needs: changes
+    if: >-
+      ${{ needs.changes.outputs.global == 'true'
+       || needs.changes.outputs.hlc == 'true'
+       || needs.changes.outputs.crdt_lf == 'true'
+       || needs.changes.outputs.crdt_lf_sqlite == 'true' }}
     uses: ./.github/workflows/dart_package.yaml
     with:
       working_directory: ./packages/crdt_lf_sqlite
@@ -45,6 +109,12 @@ jobs:
       CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
 
   crdt_lf_drift:
+    needs: changes
+    if: >-
+      ${{ needs.changes.outputs.global == 'true'
+       || needs.changes.outputs.hlc == 'true'
+       || needs.changes.outputs.crdt_lf == 'true'
+       || needs.changes.outputs.crdt_lf_drift == 'true' }}
     uses: ./.github/workflows/dart_package.yaml
     with:
       working_directory: ./packages/crdt_lf_drift
@@ -56,6 +126,12 @@ jobs:
       CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
 
   crdt_socket_sync:
+    needs: changes
+    if: >-
+      ${{ needs.changes.outputs.global == 'true'
+       || needs.changes.outputs.hlc == 'true'
+       || needs.changes.outputs.crdt_lf == 'true'
+       || needs.changes.outputs.crdt_socket_sync == 'true' }}
     uses: ./.github/workflows/dart_package.yaml
     with:
       working_directory: ./packages/crdt_socket_sync
@@ -65,6 +141,12 @@ jobs:
       CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
 
   crdt_lf_flutter:
+    needs: changes
+    if: >-
+      ${{ needs.changes.outputs.global == 'true'
+       || needs.changes.outputs.hlc == 'true'
+       || needs.changes.outputs.crdt_lf == 'true'
+       || needs.changes.outputs.crdt_lf_flutter == 'true' }}
     uses: ./.github/workflows/flutter_package.yaml
     with:
       working_directory: ./packages/crdt_lf_flutter
@@ -72,3 +154,27 @@ jobs:
       package_name: crdt_lf_flutter
     secrets:
       CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+
+  ci-success:
+    name: CI Success
+    runs-on: ubuntu-latest
+    if: ${{ always() }}
+    needs:
+      - changes
+      - hlc
+      - crdt_lf
+      - crdt_lf_hive
+      - crdt_lf_sqlite
+      - crdt_lf_drift
+      - crdt_socket_sync
+      - crdt_lf_flutter
+    steps:
+      - name: Verify no job failed
+        run: |
+          for r in ${{ join(needs.*.result, ' ') }}; do
+            if [ "$r" = "failure" ] || [ "$r" = "cancelled" ]; then
+              echo "A required job did not succeed: $r"
+              exit 1
+            fi
+          done
+          echo "All impacted jobs passed (skipped are OK)."
