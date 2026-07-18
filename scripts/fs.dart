@@ -10,6 +10,16 @@ io.Directory docsDir({List<String> subParts = const []}) {
   return [io.Directory.current.path, 'docs', ...subParts].toDir();
 }
 
+io.Directory greyhoundMarkdownDir({List<String> subParts = const []}) {
+  return [
+    io.Directory.current.path,
+    'apps',
+    'greyhound_markdown',
+    'client',
+    ...subParts,
+  ].toDir();
+}
+
 io.Directory crdtLfFlutterExampleDir({List<String> subParts = const []}) {
   return crdtLfDir(subParts: ['flutter_example', ...subParts]);
 }
@@ -41,6 +51,10 @@ io.Directory crdtLfSocketSyncDir({List<String> subParts = const []}) {
 
 io.Directory packagesDir({List<String> subParts = const []}) {
   return [io.Directory.current.path, 'packages', ...subParts].toDir();
+}
+
+io.Directory appsDir({List<String> subParts = const []}) {
+  return [io.Directory.current.path, 'apps', ...subParts].toDir();
 }
 
 /// Copies each `packages/<name>/README.md` into [to] as `<name>.md`.

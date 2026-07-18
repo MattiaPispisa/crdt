@@ -15,10 +15,14 @@ void main() {
   // crdt_lf flutter_example bundles the shared workspace assets (logo, ...).
   logger
     ..info('Bootstrapping examples...')
-    ..info('Copy assets into crdt_lf/flutter_example');
+    ..info('Copy assets');
   try {
     assetsDir().copySync(
       to: crdtLfFlutterExampleDir(subParts: ['assets']),
+      logger: logger,
+    );
+    assetsDir().copySync(
+      to: greyhoundMarkdownDir(subParts: ['assets']),
       logger: logger,
     );
   } catch (error) {

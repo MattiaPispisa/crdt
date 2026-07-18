@@ -1,5 +1,7 @@
 # Greyhound Markdown
 
+![Greyhound Markdown logo](https://raw.githubusercontent.com/MattiaPispisa/crdt/main/assets/images/greyhound_markdown_logo.png)
+
 Real-time collaborative markdown editor built on
 [`crdt_lf`](../../packages/crdt_lf) and
 [`crdt_lf_flutter`](../../packages/crdt_lf_flutter).

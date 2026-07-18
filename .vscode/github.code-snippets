@@ -28,9 +28,13 @@
     "description": "Insert Markdown link to GitHub CRDT_LF release"
   },
   "Packages references": {
-    "prefix": "packages_references",
+    "prefix": "app_packages_references",
     "scope": "markdown",
     "body": [
+      "## Apps",
+      "",
+      "- [greyhound_markdown](https://github.com/MattiaPispisa/crdt/tree/main/apps/greyhound_markdown) — Real-time collaborative markdown editor built on crdt_lf",
+      "",
       "## Packages",
       "",
       "Other bricks of the crdt \"system\" are:",

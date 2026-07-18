@@ -25,6 +25,10 @@ scripts:
     name: "Docs build"
     description: "Build the documentation site"
     run: dart run scripts/docs_build.dart
+  update_references:
+    name: "Update references"
+    description: "Propagate package/app references into READMEs and cut a documentation release"
+    run: dart run scripts/update_references.dart
   benchmark:
     name: Benchmark
     description: Run the benchmarks

@@ -18,6 +18,10 @@
 
 [![docs_badge]][docs_link]
 
+## Apps
+
+- [greyhound_markdown](./apps/greyhound_markdown/README.md)
+
 ## Packages
 
 - [hlc](./packages/hlc/README.md)
