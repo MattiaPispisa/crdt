@@ -5,6 +5,13 @@
   "version": "0.2.0",
   "configurations": [
     {
+      "name": "🐕 🐦 greyhound_markdown",
+      "cwd": "apps/greyhound_markdown/client",
+      "request": "launch",
+      "type": "dart",
+      "args": ["--dart-define=GREYHOUND_WS="]
+    },
+    {
       "name": "[crdt_lf] flutter_example",
       "cwd": "packages/crdt_lf/flutter_example",
       "request": "launch",
