@@ -78,8 +78,14 @@ void main() {
   group('WebSocketClient ping/pong liveness', () {
     const documentId = 'doc';
     // Short, injected durations keep the test fast and deterministic.
-    const pingInterval = Duration(milliseconds: 30);
-    const pingTimeout = Duration(milliseconds: 80);
+    //
+    // pingTimeout is deliberately wide relative to pingInterval: the liveness
+    // check trips only when the gap between two processed pongs exceeds it.
+    // Under dart2js in a headless browser the event loop is coarse and bursty,
+    // so a tight timeout produced intermittent false reconnects. The margin
+    // keeps the healthy test robust while staying fast.
+    const pingInterval = Duration(milliseconds: 50);
+    const pingTimeout = Duration(milliseconds: 500);
 
     WebSocketClient buildClient({required bool respondToPings}) {
       final doc = CRDTDocument(
@@ -109,8 +115,9 @@ void main() {
       final connected = await client.connect();
       expect(connected, isTrue);
 
-      // Well beyond pingTimeout: several ping/pong round-trips happen.
-      await Future<void>.delayed(pingTimeout * 4);
+      // Beyond pingTimeout: several ping/pong round-trips happen, so staying
+      // connected proves fresh pongs sustain it (not just the seeded stamp).
+      await Future<void>.delayed(pingTimeout * 2);
 
       expect(client.connectionStatusValue, ConnectionStatus.connected);
       expect(
@@ -150,9 +157,9 @@ void main() {
       final statuses = <ConnectionStatus>[];
       final sub = client.connectionStatus.listen(statuses.add);
 
-      // Past several ping windows: a cancelled timer must not fire liveness
-      // checks or flip the client into reconnecting.
-      await Future<void>.delayed(pingTimeout * 3);
+      // Past a full ping-timeout window: a cancelled timer must not fire
+      // liveness checks or flip the client into reconnecting.
+      await Future<void>.delayed(pingTimeout);
 
       expect(client.connectionStatusValue, ConnectionStatus.disconnected);
       expect(statuses, isNot(contains(ConnectionStatus.reconnecting)));

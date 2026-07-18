@@ -69,89 +69,101 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       bottomNavigationBar: const AppFooter(),
-      body: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 420),
-          child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Image.asset(
-                  'assets/images/greyhound_markdown_logo.png',
-                  height: _logoWidth,
-                ),
-                const SizedBox(height: 16),
-                Text(
-                  'Greyhound Markdown',
-                  style: Theme.of(context).textTheme.headlineMedium,
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 32),
-                TextField(
-                  controller: _nameController,
-                  decoration: const InputDecoration(
-                    labelText: 'Your name',
-                    border: OutlineInputBorder(),
+      // Scroll on short viewports (mobile landscape / small phones) so the
+      // content is never clipped; still vertically centered when there is
+      // room (minHeight = viewport keeps the Center meaningful).
+      body: SafeArea(
+        child: LayoutBuilder(
+          builder: (context, constraints) => SingleChildScrollView(
+            child: ConstrainedBox(
+              constraints: BoxConstraints(minHeight: constraints.maxHeight),
+              child: Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 420),
+                  child: Padding(
+                    padding: const EdgeInsets.all(24),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Image.asset(
+                          'assets/images/greyhound_markdown_logo.png',
+                          height: _logoWidth,
+                        ),
+                        const SizedBox(height: 16),
+                        Text(
+                          'Greyhound Markdown',
+                          style: Theme.of(context).textTheme.headlineMedium,
+                          textAlign: TextAlign.center,
+                        ),
+                        const SizedBox(height: 32),
+                        TextField(
+                          controller: _nameController,
+                          decoration: const InputDecoration(
+                            labelText: 'Your name',
+                            border: OutlineInputBorder(),
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        Wrap(
+                          spacing: 8,
+                          alignment: WrapAlignment.center,
+                          children: [
+                            for (final color in _palette)
+                              GestureDetector(
+                                onTap: () => setState(() => _color = color),
+                                child: CircleAvatar(
+                                  radius: 14,
+                                  backgroundColor: color,
+                                  child: _color == color
+                                      ? const Icon(
+                                          Icons.check,
+                                          size: 16,
+                                          color: Colors.white,
+                                        )
+                                      : null,
+                                ),
+                              ),
+                          ],
+                        ),
+                        const SizedBox(height: 32),
+                        FilledButton.icon(
+                          onPressed: () => _openRoom(_randomRoomId()),
+                          icon: const Icon(Icons.add),
+                          label: const Text('Create a new room'),
+                        ),
+                        const SizedBox(height: 24),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: TextField(
+                                controller: _roomController,
+                                decoration: const InputDecoration(
+                                  labelText: 'Room id',
+                                  border: OutlineInputBorder(),
+                                ),
+                                onSubmitted: (value) {
+                                  if (value.trim().isNotEmpty) {
+                                    _openRoom(value.trim());
+                                  }
+                                },
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            OutlinedButton(
+                              onPressed: () {
+                                final id = _roomController.text.trim();
+                                if (id.isNotEmpty) _openRoom(id);
+                              },
+                              child: const Text('Join'),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
                   ),
                 ),
-                const SizedBox(height: 16),
-                Wrap(
-                  spacing: 8,
-                  alignment: WrapAlignment.center,
-                  children: [
-                    for (final color in _palette)
-                      GestureDetector(
-                        onTap: () => setState(() => _color = color),
-                        child: CircleAvatar(
-                          radius: 14,
-                          backgroundColor: color,
-                          child: _color == color
-                              ? const Icon(
-                                  Icons.check,
-                                  size: 16,
-                                  color: Colors.white,
-                                )
-                              : null,
-                        ),
-                      ),
-                  ],
-                ),
-                const SizedBox(height: 32),
-                FilledButton.icon(
-                  onPressed: () => _openRoom(_randomRoomId()),
-                  icon: const Icon(Icons.add),
-                  label: const Text('Create a new room'),
-                ),
-                const SizedBox(height: 24),
-                Row(
-                  children: [
-                    Expanded(
-                      child: TextField(
-                        controller: _roomController,
-                        decoration: const InputDecoration(
-                          labelText: 'Room id',
-                          border: OutlineInputBorder(),
-                        ),
-                        onSubmitted: (value) {
-                          if (value.trim().isNotEmpty) {
-                            _openRoom(value.trim());
-                          }
-                        },
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    OutlinedButton(
-                      onPressed: () {
-                        final id = _roomController.text.trim();
-                        if (id.isNotEmpty) _openRoom(id);
-                      },
-                      child: const Text('Join'),
-                    ),
-                  ],
-                ),
-              ],
+              ),
             ),
           ),
         ),
