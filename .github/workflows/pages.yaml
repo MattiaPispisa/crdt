@@ -3,14 +3,6 @@ name: Deploy CRDT Docs & Example to GitHub Pages
 on:
   # Manual-only: trigger from the Actions tab ("Run workflow").
   workflow_dispatch:
-    inputs:
-      greyhound_server_ws_url:
-        description: >-
-          WebSocket URL of the Greyhound Markdown signaling server
-          (wss://...). Leave empty to build with the localhost default.
-        required: false
-        type: string
-        default: ""
 
 permissions:
   contents: read
@@ -25,15 +17,7 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  # Builds the Greyhound Markdown client (apps/greyhound_markdown) and
-  # shares it as an artifact; assembled into the site by the build job.
-  greyhound:
-    uses: ./.github/workflows/greyhound_markdown.yaml
-    with:
-      server_ws_url: ${{ inputs.greyhound_server_ws_url }}
-
   build:
-    needs: greyhound
     runs-on: ubuntu-latest
     steps:
       - name: 📚 Checkout
@@ -71,6 +55,14 @@ jobs:
         working-directory: packages/crdt_lf/flutter_example
         run: flutter build web --release --base-href "/crdt/examples/"
 
+      # --- Build the Greyhound Markdown web client ---
+      - name: 🛠️ Build Greyhound Markdown web client
+        working-directory: apps/greyhound_markdown/client
+        run: |
+          flutter build web --release \
+            --base-href "/crdt/greyhound_markdown/" \
+            --dart-define=GREYHOUND_WS=wss://greyhound-markdown-server.mattia-pispisa.workers.dev
+
       # --- Build the Docusaurus docs ---
       # docs_bs copies the shared assets into docs/static and installs node
       # deps. --ci uses `npm ci` for a clean, lockfile-based install.
@@ -83,12 +75,6 @@ jobs:
       # --- Assemble the static site ---
       # A Pages deployment replaces the entire site, so every deploy must
       # include all of its parts: docs, examples and the Greyhound app.
-      - name: ⬇️ Download Greyhound Markdown client
-        uses: actions/download-artifact@v4
-        with:
-          name: greyhound-markdown-client
-          path: _greyhound
-
       - name: 🧩 Assemble site
         run: |
           mkdir -p _site
@@ -99,7 +85,7 @@ jobs:
           cp -R packages/crdt_lf/flutter_example/build/web/. _site/examples/
           # Greyhound Markdown client under /greyhound_markdown.
           mkdir -p _site/greyhound_markdown
-          cp -R _greyhound/. _site/greyhound_markdown/
+          cp -R apps/greyhound_markdown/client/build/web/. _site/greyhound_markdown/
 
       - name: ⬆️ Upload Pages artifact
         uses: actions/upload-pages-artifact@v5
