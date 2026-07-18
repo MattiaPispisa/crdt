@@ -1,0 +1,7 @@
+dependency_overrides:
+  crdt_lf:
+    path: ../../../packages/crdt_lf
+  crdt_lf_flutter:
+    path: ../../../packages/crdt_lf_flutter
+  hlc_dart:
+    path: ../../../packages/hlc
