@@ -62,18 +62,33 @@ class SyncClient {
       _pending.add(change.toBytes());
       _flush();
     });
-    final uri = Uri.parse('$serverUrl/room/$roomId?client=${document.peerId}');
     try {
-      _channel = _connectChannel(uri);
+      _channel = _connectChannel(_roomUri());
     } on Exception {
       _scheduleReconnect();
       return;
     }
+    // Connection failures already surface through the stream's
+    // onError/onDone; observe `ready` only to avoid unhandled async errors.
+    unawaited(_channel!.ready.catchError((Object _) {}));
     _socketSub = _channel!.stream.listen(
       _onFrame,
       onDone: _onSocketClosed,
       onError: (Object _) => _onSocketClosed(),
       cancelOnError: true,
+    );
+  }
+
+  /// Builds the room URI, tolerating an `http(s)://` server URL (as printed
+  /// by `wrangler deploy`): browsers only accept `ws:`/`wss:` schemes.
+  Uri _roomUri() {
+    final uri = Uri.parse('$serverUrl/room/$roomId?client=${document.peerId}');
+    return uri.replace(
+      scheme: switch (uri.scheme) {
+        'https' => 'wss',
+        'http' => 'ws',
+        _ => uri.scheme,
+      },
     );
   }
 

@@ -34,6 +34,9 @@ class _FakeChannel implements WebSocketChannel {
   void receive(ProtocolMessage message) => controller.add(message.encode());
 
   @override
+  Future<void> get ready => Future.value();
+
+  @override
   Stream<dynamic> get stream => controller.stream;
 
   @override
@@ -174,6 +177,27 @@ void main() {
     final restoredText = CRDTFugueTextHandler(restored, kHandlerId);
     restored.import(snapshot: Snapshot.fromBytes(upload.snapshot));
     expect(restoredText.value, 'content to snapshot');
+  });
+
+  test('http(s) server URLs are normalized to ws(s)', () {
+    Uri? captured;
+    final doc2 = CRDTDocument();
+    final aw = AwarenessService(name: 'x', color: const Color(0xFF000000));
+    SyncClient(
+        roomId: 'r',
+        document: doc2,
+        awareness: aw,
+        serverUrl: 'https://example.workers.dev',
+        channelFactory: (uri) {
+          captured = uri;
+          return _FakeChannel();
+        },
+      )
+      ..connect()
+      ..dispose();
+    aw.dispose();
+    expect(captured?.scheme, 'wss');
+    expect(captured?.host, 'example.workers.dev');
   });
 
   test('awareness updates and peer_left maintain the peers map', () async {
