@@ -1,3 +1,9 @@
+## [0.3.0+1](https://github.com/MattiaPispisa/crdt/tree/crdt_lf_hive-v0.3.0+1/packages/crdt_lf_hive)
+
+**Date:** 2026-07-18
+
+Documentation release: refreshes the CHANGELOG and docs published on pub.dev. No functional changes since `0.3.0`.
+
 ## [0.3.0](https://github.com/MattiaPispisa/crdt/tree/crdt_lf_hive-v0.3.0/packages/crdt_lf_hive)
 **Date:** 2026-06-11
 

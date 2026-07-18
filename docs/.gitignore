@@ -22,4 +22,4 @@ yarn-error.log*
 /static
 
 # Package READMEs copied into the Packages section by docs_bs
-/docs/packages/*.md
+/docs/documentation/packages/*.md

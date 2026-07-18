@@ -1,3 +1,25 @@
+## [0.2.0](https://github.com/MattiaPispisa/crdt/tree/crdt_lf_flutter-v0.2.0/packages/crdt_lf_flutter)
+
+**Date:** 2026-07-18
+
+[compare to previous release](https://github.com/MattiaPispisa/crdt/compare/crdt_lf_flutter-v0.1.0...crdt_lf_flutter-v0.2.0)
+
+### Added
+
+- Split the presence overlay into three composable, all-exported pieces for
+  maximum flexibility:
+  - `CrdtAwarenessCursorsBuilder` — the transport/layout half of the overlay
+    (positioning + local-pointer handling) with a per-cursor `builder`, so you
+    can draw a completely custom marker (an avatar, a badge, …) per cursor.
+  - `CrdtAwarenessCursorMarker` — the standalone default marker (pointer arrow
+    + name bubble) for a single cursor, positioning-agnostic.
+  - `CrdtAwarenessCursorsOverlay` — the ready-made combination of the two.
+- `CrdtAwarenessCursorStyle` to style a marker: a plain
+  `color` for the common case, or a full style (color + label text style +
+  marker sizes) when you need more. Set it per cursor via
+  `CrdtAwarenessCursor.style` or for the whole overlay via
+  `CrdtAwarenessCursorsOverlay.style` (each peer keeps its own identity color).
+
 ## [0.1.0](https://github.com/MattiaPispisa/crdt/tree/crdt_lf_flutter-v0.1.0/packages/crdt_lf_flutter)
 
 **Date:** 2026-07-17

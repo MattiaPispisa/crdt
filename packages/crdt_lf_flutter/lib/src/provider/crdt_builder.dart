@@ -1,6 +1,6 @@
 import 'package:crdt_lf/crdt_lf.dart';
-import 'package:crdt_lf_flutter/src/crdt_handler.dart';
-import 'package:crdt_lf_flutter/src/crdt_helper.dart';
+import 'package:crdt_lf_flutter/src/provider/crdt_handler.dart';
+import 'package:crdt_lf_flutter/src/provider/crdt_helper.dart';
 import 'package:flutter/widgets.dart';
 import 'package:provider/provider.dart';
 

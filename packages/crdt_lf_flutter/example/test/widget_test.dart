@@ -39,6 +39,7 @@ void main() {
       'settings-flat',
       'settings-nested',
       'note-text',
+      'presence',
     ];
     Map<String, int> snapshot() => {
       for (final l in labels) l: rebuilds(tester, l),
@@ -141,6 +142,27 @@ void main() {
     await tapButton(tester, 'Toggle cursor');
     expect(rebuilds(tester, 'note-text'), before['note-text']);
     expect(tester.takeException(), isNull);
+
+    // 9. Presence overlay: a fake peer 'Bob' whose pointer is driven by a
+    //    stream + timer. Starting it moves the cursor across the pane WITHOUT
+    //    rebuilding the card subtree — the presence badge (outside the
+    //    StreamBuilder) stays put while the overlay updates.
+    before = snapshot();
+    final startPresence = find.widgetWithText(FilledButton, 'Start presence');
+    await tester.ensureVisible(startPresence);
+    await tester.tap(startPresence);
+    await tester.pump(); // apply setState (badge +1), start the timer
+    expect(rebuilds(tester, 'presence'), before['presence']! + 1);
+    await tester.pump(const Duration(milliseconds: 120)); // first tick
+    expect(find.text('Bob'), findsOneWidget);
+    final movedBadge = rebuilds(tester, 'presence');
+    await tester.pump(const Duration(milliseconds: 120)); // cursor glides
+    expect(rebuilds(tester, 'presence'), movedBadge); // no rebuild on move
+    expect(tester.takeException(), isNull);
+    // Stop the timer so the test can settle and end cleanly.
+    await tester.tap(find.widgetWithText(FilledButton, 'Stop presence'));
+    await tester.pump();
+    expect(find.text('Bob'), findsNothing);
 
     // Flush the SnackBar auto-dismiss timer so the test ends cleanly.
     await tester.pump(const Duration(seconds: 5));

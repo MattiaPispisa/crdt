@@ -24,7 +24,7 @@ void main(List<String> args) async {
   logger.info('Copy package READMEs');
   try {
     copyPackageReadmes(
-      to: docsDir(subParts: ['docs', 'packages']),
+      to: docsDir(subParts: ['docs', 'documentation', 'packages']),
       logger: logger,
     );
   } catch (error) {
