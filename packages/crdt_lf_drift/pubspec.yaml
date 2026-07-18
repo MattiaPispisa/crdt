@@ -4,7 +4,7 @@ homepage: https://mattiapispisa.github.io/
 repository: https://github.com/MattiaPispisa/crdt/tree/main/packages/crdt_lf_drift
 topics: [crdt, local-first, drift, persistence, dart]
 
-version: 0.1.0
+version: 0.1.0+1
 
 environment:
   sdk: ">=3.0.0 <4.0.0"

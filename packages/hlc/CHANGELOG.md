@@ -1,3 +1,9 @@
+## [1.1.0+1](https://github.com/MattiaPispisa/crdt/tree/hlc_dart-v1.1.0+1/packages/hlc)
+
+**Date:** 2026-07-18
+
+Documentation release: refreshes the CHANGELOG and docs published on pub.dev. No functional changes since `1.1.0`.
+
 ## [1.1.0](https://github.com/MattiaPispisa/crdt/tree/hlc_dart-v1.1.0/packages/hlc)
 **Date:** 2026-06-11
 

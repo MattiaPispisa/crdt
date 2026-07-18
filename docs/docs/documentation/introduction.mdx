@@ -1,0 +1,47 @@
+---
+sidebar_position: 1
+slug: /documentation
+title: Introduction
+description: What this workspace is, and where to start if CRDTs are new to you.
+---
+
+# Introduction
+
+This site documents **CRDT in Dart** — a workspace of small, composable
+packages for building local-first, collaborative apps on top of
+**Conflict-free Replicated Data Types**:
+
+- **`crdt_lf`** — the core CRDT library (documents, handlers, changes,
+  snapshots).
+- **`crdt_lf_flutter`** — Flutter reactivity bindings.
+- **`crdt_socket_sync`** — client/server synchronization over sockets, with a
+  presence/awareness plugin.
+- **`crdt_lf_sqlite` / `crdt_lf_drift` / `crdt_lf_hive`** — persistence
+  adapters.
+- **`hlc_dart`** — hybrid logical clock.
+
+Each package's page under [Packages](/docs/packages) is its README — the
+authoritative, always-up-to-date reference.
+
+## New to CRDTs?
+
+If you're not yet comfortable with what CRDTs are and why they matter, start
+here: I wrote a post that introduces the topic from the ground up — the
+problem they solve, the intuition behind them, and how the pieces fit
+together.
+
+
+📝 **[CRDTs explained — an introduction](https://dev.to/mattia/crdts-how-to-build-conflict-free-collaborative-apps-and-why-i-decided-to-implement-them-in-dart-7)**
+_(dev.to)_
+
+Read it first if the concept is new to you; the package docs below assume the
+basics.
+
+
+Once the idea clicks, head to the [Packages](/docs/packages) section to pick
+the bricks you need.
+
+## Want to learn more?
+
+The [References](/docs/references) section contains a continuously updated list of scientific texts and academic papers that go into greater detail on the topic.
+But don't worry—you don't need to be familiar with them to use this system, though you do need to be to build it! That's why the fundamentals on which the entire system is based are referenced. 

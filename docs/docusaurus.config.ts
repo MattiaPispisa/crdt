@@ -86,9 +86,9 @@ const config: Config = {
           href: examplesUrl,
         },
         {
-          to: '/docs/packages',
+          to: '/docs/documentation',
           position: 'left',
-          label: 'Packages',
+          label: 'Documentation',
         },
         {
           to: '/docs/contributing',

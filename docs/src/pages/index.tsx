@@ -34,16 +34,17 @@ function Cards() {
     },
     {
       title: translate({
-        id: "homepage.cards.packages.title",
-        message: "Packages",
-        description: "Title of the Packages card on the homepage",
+        id: "homepage.cards.documentation.title",
+        message: "Documentation",
+        description: "Title of the Documentation card on the homepage",
       }),
       description: translate({
-        id: "homepage.cards.packages.description",
-        message: "Read the documentation for each package in the workspace.",
-        description: "Description of the Packages card on the homepage",
+        id: "homepage.cards.documentation.description",
+        message:
+          "Start here — an intro to CRDTs and the docs for every package.",
+        description: "Description of the Documentation card on the homepage",
       }),
-      url: "/docs/packages",
+      url: "/docs/documentation",
     },
   ];
 
