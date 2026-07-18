@@ -32,9 +32,10 @@ jobs:
         with:
           channel: stable
 
-      # The app lives outside the melos workspace: its pubspec_overrides.yaml
-      # points at the sibling packages, so a plain build resolves everything
-      # without bootstrapping. base-href must match where the app is served:
+      # The app declares hosted versions of the crdt packages; the committed
+      # melos-managed pubspec_overrides.yaml points them at the sibling
+      # packages, so a plain build resolves everything without bootstrapping.
+      # base-href must match where the app is served:
       # <baseUrl>/greyhound_markdown/.
       - name: 🛠️ Build web client
         working-directory: apps/greyhound_markdown/client

@@ -7,10 +7,8 @@ environment:
   sdk: ^3.11.5
 
 dependencies:
-  crdt_lf:
-    path: ../../../packages/crdt_lf
-  crdt_lf_flutter:
-    path: ../../../packages/crdt_lf_flutter
+  crdt_lf: ^3.4.0
+  crdt_lf_flutter: ^0.2.0
   flutter:
     sdk: flutter
   flutter_markdown_plus: ^1.0.3
