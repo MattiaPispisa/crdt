@@ -1,0 +1,28 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "greyhound-markdown-server",
+  "main": "src/index.ts",
+  "compatibility_date": "2025-07-01",
+  "vars": {
+    // Browser origins allowed to open rooms (comma-separated).
+    // localhost/127.0.0.1 are always allowed for development, and requests
+    // without an Origin header (non-browser clients) are not blocked: the
+    // check only defends against cross-site browser abuse, which is the
+    // only case where Origin is trustworthy.
+    "ALLOWED_ORIGINS": "https://mattiapispisa.it"
+  },
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "ROOM",
+        "class_name": "RoomDO"
+      }
+    ]
+  },
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": ["RoomDO"]
+    }
+  ]
+}

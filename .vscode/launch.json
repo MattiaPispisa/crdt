@@ -5,6 +5,22 @@
   "version": "0.2.0",
   "configurations": [
     {
+      "name": "🐕 🐦 greyhound_markdown",
+      "cwd": "apps/greyhound_markdown/client",
+      "request": "launch",
+      "type": "dart",
+      "args": [
+        "--dart-define=GREYHOUND_WS=wss://greyhound-markdown-server.mattia-pispisa.workers.dev"
+      ]
+    },
+    {
+      "name": "🐕 🐦 greyhound_markdown (local server)",
+      "cwd": "apps/greyhound_markdown/client",
+      "request": "launch",
+      "type": "dart",
+      "args": []
+    },
+    {
       "name": "[crdt_lf] flutter_example",
       "cwd": "packages/crdt_lf/flutter_example",
       "request": "launch",
