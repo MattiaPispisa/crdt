@@ -1,4 +1,17 @@
 # Codecov configuration
 # https://docs.codecov.com/docs/codecov-yaml
+coverage:
+  status:
+    # Non-blocking: the authoritative gate is `very_good_coverage`
+    # (min_coverage) inside the reusable package workflows. 
+    
+    # Codecov still posts the comparison, but its checks never fail the PR.
+    project:
+      default:
+        informational: true
+    patch:
+      default:
+        informational: true
+
 ignore:
   - "**/*.g.dart"
