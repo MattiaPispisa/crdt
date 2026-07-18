@@ -1,8 +1,8 @@
 import 'dart:async';
 
 import 'package:crdt_lf/crdt_lf.dart';
-import 'package:crdt_lf_flutter/src/crdt_helper.dart';
-import 'package:crdt_lf_flutter/src/text_delta.dart';
+import 'package:crdt_lf_flutter/src/effects/text_delta.dart';
+import 'package:crdt_lf_flutter/src/provider/crdt_helper.dart';
 import 'package:flutter/widgets.dart';
 
 /// {@template crdt_text_field_builder}

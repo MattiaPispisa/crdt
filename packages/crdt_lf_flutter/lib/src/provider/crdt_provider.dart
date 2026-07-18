@@ -1,5 +1,5 @@
 import 'package:crdt_lf/crdt_lf.dart';
-import 'package:crdt_lf_flutter/crdt_lf_flutter.dart';
+import 'package:crdt_lf_flutter/src/provider/crdt_builder.dart';
 import 'package:flutter/widgets.dart';
 import 'package:provider/provider.dart';
 

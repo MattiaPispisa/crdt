@@ -18,6 +18,7 @@ Built on top of [`provider`](https://pub.dev/packages/provider) — so you also 
 
 - [CRDT LF Flutter](#crdt-lf-flutter)
   - [Features](#features)
+  - [Example](#example)
   - [How it works](#how-it-works)
   - [Getting Started](#getting-started)
   - [Usage](#usage)
@@ -44,9 +45,24 @@ Built on top of [`provider`](https://pub.dev/packages/provider) — so you also 
 - **`CrdtTextCursorsOverlay`** — paints collaborators' carets/selections
   over the text field, anchored by stable positions.
 - **`CrdtAwarenessCursorsOverlay`** — overlays collaborators' mouse-style
-  presence cursors (pointer arrow + name bubble) on any pane.
+  presence cursors (pointer arrow + name bubble) on any pane. Split into a
+  `CrdtAwarenessCursorsBuilder` (positioning + local-pointer handling, you
+  build each marker) and a standalone `CrdtAwarenessCursorMarker` widget,
+  styled through `CrdtAwarenessCursorStyle`.
 - Context helpers: `context.crdtDocument`, `context.watchCrdtDocument()`,
   `context.selectCrdtDocument(...)`, `context.crdtHandler<H>(id)`.
+
+## Example
+
+The [`example/`](https://github.com/MattiaPispisa/crdt/tree/main/packages/crdt_lf_flutter/example)
+app demos **every widget in this package on a single screen** — each card wires
+a different handler, and a live `⟳ rebuilt ×N` badge shows exactly which regions
+re-render as you edit, so you can *see* the reactive scoping (and the
+zero-rebuild bindings) at work.
+
+<div align="center">
+  <img width="500" alt="crdt_lf_flutter_example" src="https://raw.githubusercontent.com/MattiaPispisa/crdt/main/assets/demos/crdt_lf_flutter_example.gif">
+</div>
 
 ## Getting Started
 
@@ -193,6 +209,37 @@ CrdtAwarenessCursorsOverlay(
   cursors: remotePointers, // List<CrdtAwarenessCursor> from presence
   onLocalPointer: (position, {required hovering}) =>
       publishPresence(position, hovering),
+  child: pane,
+);
+```
+
+The overlay is composed of three pieces, all exported so you can use exactly
+the layer you need:
+
+- **`CrdtAwarenessCursorsBuilder`** — the transport/layout half: it positions
+  each pointer over the pane and reports the local pointer, but delegates each
+  cursor's look to a `builder` callback. Use it to draw a completely custom
+  marker (an avatar, a badge, …) per cursor.
+- **`CrdtAwarenessCursorMarker`** — the standalone default marker (arrow +
+  name bubble) for one cursor, positioning-agnostic.
+- **`CrdtAwarenessCursorsOverlay`** — the ready-made combination of
+  the two above.
+
+The marker is styled `Container`-style: pass a plain **`color`** for the
+common case, or a full **`CrdtAwarenessCursorStyle`** (the "decoration") — its
+`color` plus the label text style and marker sizes — when you need more
+(passing both is an error). Pass a `style` to `CrdtAwarenessCursorsOverlay` to
+restyle every cursor at once, or set `CrdtAwarenessCursor.style` for a single
+peer; in the overlay the peer's own `color` always wins over the style's, so
+peers keep their identity color:
+
+```dart
+CrdtAwarenessCursorsOverlay(
+  cursors: remotePointers,
+  style: const CrdtAwarenessCursorStyle(
+    pointerSize: 22,
+    labelStyle: TextStyle(fontSize: 12, color: Colors.white),
+  ),
   child: pane,
 );
 ```

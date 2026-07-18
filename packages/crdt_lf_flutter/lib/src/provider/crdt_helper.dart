@@ -1,5 +1,6 @@
 import 'package:crdt_lf/crdt_lf.dart';
 import 'package:crdt_lf_flutter/crdt_lf_flutter.dart';
+import 'package:crdt_lf_flutter/src/provider/crdt_provider.dart';
 import 'package:flutter/widgets.dart';
 
 /// Convenience access to the ambient [CRDTDocument].

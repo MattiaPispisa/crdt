@@ -53,4 +53,83 @@ void main() {
       expect(reported.last.$2, isFalse);
     });
   });
+
+  group('CrdtAwarenessCursorsBuilder', () {
+    testWidgets('positions each cursor and delegates its look to builder',
+        (tester) async {
+      const cursors = [
+        CrdtAwarenessCursor(
+          id: 'a',
+          color: Color(0xFF00FF00),
+          position: Offset(0.25, 0.75),
+        ),
+        CrdtAwarenessCursor(
+          id: 'b',
+          color: Color(0xFF0000FF),
+          position: Offset(0.5, 0.5),
+        ),
+      ];
+      final seen = <Object>[];
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: CrdtAwarenessCursorsBuilder(
+            cursors: cursors,
+            builder: (context, cursor) {
+              seen.add(cursor.id);
+              return SizedBox(key: ValueKey('marker-${cursor.id}'));
+            },
+            child: const ColoredBox(color: Color(0xFFFFFFFF)),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // The builder ran once per cursor.
+      expect(seen, ['a', 'b']);
+      final size = tester.getSize(find.byType(CrdtAwarenessCursorsBuilder));
+      final a = tester.widget<AnimatedPositioned>(
+        find.ancestor(
+          of: find.byKey(const ValueKey('marker-a')),
+          matching: find.byType(AnimatedPositioned),
+        ),
+      );
+      expect(a.left, size.width * 0.25);
+      expect(a.top, size.height * 0.75);
+    });
+  });
+
+  group('CrdtAwarenessCursorMarker', () {
+    testWidgets('styles the name bubble text through CrdtAwarenessCursorStyle',
+        (tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: CrdtAwarenessCursorMarker(
+            label: 'Bob',
+            style: const CrdtAwarenessCursorStyle(
+              color: Color(0xFFAA0000),
+              labelStyle: TextStyle(color: Color(0xFF112233), fontSize: 20),
+            ),
+          ),
+        ),
+      );
+
+      final text = tester.widget<Text>(find.text('Bob'));
+      // labelStyle is merged over the default (white/11/w600): overrides win,
+      // the unspecified weight is inherited.
+      expect(text.style!.color, const Color(0xFF112233));
+      expect(text.style!.fontSize, 20);
+      expect(text.style!.fontWeight, FontWeight.w600);
+    });
+
+    test('rejects providing both color and style', () {
+      expect(
+        () => CrdtAwarenessCursorMarker(
+          color: const Color(0xFFAA0000),
+          style: const CrdtAwarenessCursorStyle(),
+        ),
+        throwsAssertionError,
+      );
+    });
+  });
 }

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math';
 
 import 'package:crdt_lf/crdt_lf.dart';
@@ -84,6 +85,7 @@ class HomePage extends StatelessWidget {
             _TodosCard(),
             _SettingsCard(),
             _NoteCard(),
+            _PresenceCard(),
           ],
         ),
       ),
@@ -522,6 +524,126 @@ class _NoteCardState extends State<_NoteCard> {
             ),
           );
         },
+      ),
+    );
+  }
+}
+
+/// Demonstrates the mouse-style presence cursors: a fake second user ("Bob")
+/// whose pointer is driven by a `Timer.periodic` pushing normalized positions
+/// through a `Stream`. A `StreamBuilder` hydrates the
+/// [CrdtAwarenessCursorsOverlay] from it, so the pointer glides across the pane
+/// while the card subtree never rebuilds — the `presence` badge (outside the
+/// StreamBuilder) stays put.
+///
+/// In a real app the positions come from a presence channel (e.g.
+/// crdt_socket_sync's awareness plugin) instead of a local timer.
+class _PresenceCard extends StatefulWidget {
+  const _PresenceCard();
+
+  @override
+  State<_PresenceCard> createState() => _PresenceCardState();
+}
+
+class _PresenceCardState extends State<_PresenceCard> {
+  final _positions = StreamController<Offset>.broadcast();
+  Timer? _timer;
+  double _phase = 0;
+  bool _running = false;
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    _positions.close();
+    super.dispose();
+  }
+
+  void _toggle() {
+    setState(() {
+      if (_running) {
+        _timer?.cancel();
+        _timer = null;
+        _running = false;
+        return;
+      }
+      _running = true;
+      // A Lissajous glide across the pane so the movement is obviously live.
+      _timer = Timer.periodic(const Duration(milliseconds: 100), (_) {
+        _phase += 0.25;
+        _positions.add(
+          Offset(0.5 + 0.4 * sin(_phase), 0.5 + 0.35 * sin(_phase * 1.7)),
+        );
+      });
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return _DemoCard(
+      title: 'Presence — CrdtAwarenessCursorsOverlay (stream + timer)',
+      description:
+          'A fake collaborator "Bob" whose pointer is fed by a Timer through '
+          'a Stream. "Start/Stop presence" toggles it; while it glides, the '
+          'overlay updates but the card subtree never rebuilds (the badge is '
+          'outside the StreamBuilder). The marker is CrdtAwarenessCursorMarker '
+          'restyled through CrdtAwarenessCursorStyle.',
+      actions: [
+        FilledButton.tonalIcon(
+          onPressed: _toggle,
+          icon: Icon(_running ? Icons.stop : Icons.play_arrow),
+          label: Text(_running ? 'Stop presence' : 'Start presence'),
+        ),
+      ],
+      child: _RebuildBadge(
+        label: 'presence',
+        child: SizedBox(
+          height: 160,
+          child: StreamBuilder<Offset>(
+            stream: _positions.stream,
+            builder: (context, snapshot) {
+              final position = snapshot.data;
+              return CrdtAwarenessCursorsOverlay(
+                // A per-cursor bigger, bold name bubble to show the style API.
+                style: const CrdtAwarenessCursorStyle(
+                  pointerSize: 22,
+                  bubbleHeight: 20,
+                  labelStyle: TextStyle(fontSize: 12),
+                ),
+                cursors: [
+                  if (_running && position != null)
+                    CrdtAwarenessCursor(
+                      id: 'bob',
+                      label: 'Bob',
+                      color: Colors.pink,
+                      position: position,
+                      hovering: true,
+                    ),
+                ],
+                child: const _PresencePane(),
+              );
+            },
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// The static backdrop the presence cursor glides over. `const`, so it is
+/// built once and never rebuilds as the cursor moves.
+class _PresencePane extends StatelessWidget {
+  const _PresencePane();
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        border: Border.all(color: const Color(0x22000000)),
+        borderRadius: BorderRadius.circular(8),
+        color: const Color(0x11000000),
+      ),
+      child: const Center(
+        child: Text('shared canvas — remote pointers appear here'),
       ),
     );
   }
