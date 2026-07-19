@@ -174,6 +174,23 @@ A companion library, [crdt_lf_flutter](https://pub.dev/packages/crdt_lf_flutter)
 
 It provides Flutter reactivity for `crdt_lf`: widgets rebuild when the CRDT state changes, with selectors, a provider and a collaborative text field. More info in the [README](https://github.com/MattiaPispisa/crdt/tree/main/packages/crdt_lf_flutter/README.md) of the Flutter package.
 
+## Greyhound Markdown
+
+A real-time collaborative markdown editor built with `crdt_lf`. Open it on
+separate devices, join the same room and edit together — no install needed.
+
+<div align="center">
+
+[![Open the live demo](https://img.shields.io/badge/▶%20Open%20live%20demo-mattiapispisa.it%2Fcrdt%2Fgreyhound_markdown-2ea44f?style=for-the-badge&logo=flutter&logoColor=white)](https://mattiapispisa.it/crdt/greyhound_markdown/)
+
+</div>
+
+<div align="center">
+  <img width="360" alt="Greyhound Markdown home screen" src="https://raw.githubusercontent.com/MattiaPispisa/crdt/main/assets/images/greyhound_home_screen.png">
+</div>
+
+Source: [apps/greyhound_markdown](https://github.com/MattiaPispisa/crdt/tree/main/apps/greyhound_markdown).
+
 ## Persistence
 Persistence is not directly handled in this library but there are some out of the box solutions:
 - [crdt_lf_hive](https://pub.dev/packages/crdt_lf_hive): adapters and utils for persist data using [Hive](https://pub.dev/packages/hive).

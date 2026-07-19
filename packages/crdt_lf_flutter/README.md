@@ -64,6 +64,24 @@ zero-rebuild bindings) at work.
   <img width="500" alt="crdt_lf_flutter_example" src="https://raw.githubusercontent.com/MattiaPispisa/crdt/main/assets/demos/crdt_lf_flutter_example.gif">
 </div>
 
+## Greyhound Markdown
+
+A real-time collaborative markdown editor built with `crdt_lf` and
+`crdt_lf_flutter`. Open it on separate devices, join the same room and edit
+together — no install needed.
+
+<div align="center">
+
+[![Open the live demo](https://img.shields.io/badge/▶%20Open%20live%20demo-mattiapispisa.it%2Fcrdt%2Fgreyhound_markdown-2ea44f?style=for-the-badge&logo=flutter&logoColor=white)](https://mattiapispisa.it/crdt/greyhound_markdown/)
+
+</div>
+
+<div align="center">
+  <img width="360" alt="Greyhound Markdown home screen" src="https://raw.githubusercontent.com/MattiaPispisa/crdt/main/assets/images/greyhound_home_screen.png">
+</div>
+
+Source: [apps/greyhound_markdown](https://github.com/MattiaPispisa/crdt/tree/main/apps/greyhound_markdown).
+
 ## Getting Started
 
 ```yaml
