@@ -89,6 +89,10 @@ final fromBytes = HybridLogicalClock.fromUint8List(bytes);
 ## Roadmap
 A roadmap is available in the [project](https://github.com/users/MattiaPispisa/projects/1) page. The roadmap provides a high-level overview of the project's goals and the current status of the project.
 
+## Apps
+
+- [greyhound_markdown](https://github.com/MattiaPispisa/crdt/tree/main/apps/greyhound_markdown) — Real-time collaborative markdown editor built on crdt_lf
+
 ## Packages
 
 Other bricks of the crdt "system" are:

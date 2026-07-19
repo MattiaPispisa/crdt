@@ -277,6 +277,10 @@ imports carrying its state. With `nested: true` the ids and revisions of the
 handler and its descendants (`ContainerHandler.childRefs`) are folded into one
 hash, so structural changes (a child added or removed) are detected too.
 
+## Apps
+
+- [greyhound_markdown](https://github.com/MattiaPispisa/crdt/tree/main/apps/greyhound_markdown) — Real-time collaborative markdown editor built on crdt_lf
+
 ## Packages
 
 Other bricks of the crdt "system" are:
@@ -287,7 +291,6 @@ Other bricks of the crdt "system" are:
 - [crdt_lf_hive](https://pub.dev/packages/crdt_lf_hive)
 - [crdt_lf_drift](https://pub.dev/packages/crdt_lf_drift)
 - [crdt_lf_sqlite](https://pub.dev/packages/crdt_lf_sqlite)
-
 
 [license_badge]: https://img.shields.io/badge/license-MIT-blue.svg
 [license_link]: https://opensource.org/licenses/MIT

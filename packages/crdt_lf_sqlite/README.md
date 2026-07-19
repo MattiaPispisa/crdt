@@ -163,6 +163,10 @@ storage.close();
 ## Roadmap
 A roadmap is available in the [project](https://github.com/users/MattiaPispisa/projects/1) page. The roadmap provides a high-level overview of the project's goals and the current status of the project.
 
+## Apps
+
+- [greyhound_markdown](https://github.com/MattiaPispisa/crdt/tree/main/apps/greyhound_markdown) — Real-time collaborative markdown editor built on crdt_lf
+
 ## Packages
 
 Other bricks of the crdt "system" are:
@@ -173,7 +177,6 @@ Other bricks of the crdt "system" are:
 - [hlc_dart](https://pub.dev/packages/hlc_dart)
 - [crdt_lf_hive](https://pub.dev/packages/crdt_lf_hive)
 - [crdt_lf_drift](https://pub.dev/packages/crdt_lf_drift)
-
 
 [crdt_lf_sqlite_badge]: https://img.shields.io/pub/v/crdt_lf_sqlite.svg
 [license_badge]: https://img.shields.io/badge/license-MIT-blue.svg

@@ -64,3 +64,15 @@ fvm flutter test --dart-define=E2E=true test/e2e_test.dart  # needs wrangler dev
 
 The e2e test drives two real `SyncClient`s through the local server and
 checks convergence, awareness propagation and late-joiner catch-up.
+
+## Packages
+
+Other bricks of the crdt "system" are:
+
+- [crdt_lf](https://pub.dev/packages/crdt_lf)
+- [crdt_socket_sync](https://pub.dev/packages/crdt_socket_sync)
+- [crdt_lf_flutter](https://pub.dev/packages/crdt_lf_flutter)
+- [hlc_dart](https://pub.dev/packages/hlc_dart)
+- [crdt_lf_hive](https://pub.dev/packages/crdt_lf_hive)
+- [crdt_lf_drift](https://pub.dev/packages/crdt_lf_drift)
+- [crdt_lf_sqlite](https://pub.dev/packages/crdt_lf_sqlite)
