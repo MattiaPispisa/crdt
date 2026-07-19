@@ -17,20 +17,24 @@ type CardItem = {
 function Cards() {
   const { siteConfig } = useDocusaurusContext();
   const examplesUrl = siteConfig.customFields?.examplesUrl as string;
+  const greyhoundUrl = siteConfig.customFields?.greyhoundUrl as string;
 
   const cards: CardItem[] = [
     {
       title: translate({
-        id: "homepage.cards.examples.title",
-        message: "Examples",
-        description: "Title of the Examples card on the homepage",
+        id: "homepage.cards.greyhound.title",
+        message: "Greyhound Markdown",
+        description: "Title of the Greyhound Markdown card on the homepage",
       }),
       description: translate({
-        id: "homepage.cards.examples.description",
-        message: "Try the interactive Flutter demo built from crdt_lf.",
-        description: "Description of the Examples card on the homepage",
+        id: "homepage.cards.greyhound.description",
+        message:
+          "A real-time collaborative markdown editor. Open it on separate " +
+          "devices, join the same room and edit together.",
+        description:
+          "Description of the Greyhound Markdown card on the homepage",
       }),
-      url: examplesUrl,
+      url: greyhoundUrl,
     },
     {
       title: translate({
@@ -45,6 +49,19 @@ function Cards() {
         description: "Description of the Documentation card on the homepage",
       }),
       url: "/docs/documentation",
+    },
+    {
+      title: translate({
+        id: "homepage.cards.examples.title",
+        message: "Examples",
+        description: "Title of the Examples card on the homepage",
+      }),
+      description: translate({
+        id: "homepage.cards.examples.description",
+        message: "Try the interactive Flutter demo built from crdt_lf.",
+        description: "Description of the Examples card on the homepage",
+      }),
+      url: examplesUrl,
     },
   ];
 

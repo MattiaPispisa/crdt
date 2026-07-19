@@ -466,6 +466,10 @@ A roadmap is available in the [project](https://github.com/users/MattiaPispisa/p
 
 Contributions are welcome! Please read the contributing guidelines and submit pull requests to the main repository.
 
+## Apps
+
+- [greyhound_markdown](https://github.com/MattiaPispisa/crdt/tree/main/apps/greyhound_markdown) — Real-time collaborative markdown editor built on crdt_lf
+
 ## Packages
 
 Other bricks of the crdt "system" are:
@@ -474,7 +478,8 @@ Other bricks of the crdt "system" are:
 - [crdt_lf_flutter](https://pub.dev/packages/crdt_lf_flutter)
 - [hlc_dart](https://pub.dev/packages/hlc_dart)
 - [crdt_lf_hive](https://pub.dev/packages/crdt_lf_hive)
-
+- [crdt_lf_drift](https://pub.dev/packages/crdt_lf_drift)
+- [crdt_lf_sqlite](https://pub.dev/packages/crdt_lf_sqlite)
 
 [crdt_socket_sync_badge]: https://img.shields.io/pub/v/crdt_socket_sync.svg
 [license_badge]: https://img.shields.io/badge/license-MIT-blue.svg

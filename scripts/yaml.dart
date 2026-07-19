@@ -21,4 +21,11 @@ class YamlReader {
     return ((_getMap()['packages'] as yaml.YamlMap)[package]
         as yaml.YamlMap)['version'] as String;
   }
+
+  /// Reads a top-level string [key] (e.g. `name` or `version` of a package
+  /// `pubspec.yaml`).
+  String string(String key) => _getMap()[key] as String;
+
+  /// Reads a top-level string [key], or `null` when the key is absent.
+  String? stringOrNull(String key) => _getMap()[key] as String?;
 }

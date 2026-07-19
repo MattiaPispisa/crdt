@@ -13,5 +13,28 @@ coverage:
       default:
         informational: true
 
+flags:
+  hlc_dart:
+    paths: [packages/hlc]
+    carryforward: true
+  crdt_lf:
+    paths: [packages/crdt_lf]
+    carryforward: true
+  crdt_socket_sync:
+    paths: [packages/crdt_socket_sync]
+    carryforward: true
+  crdt_lf_flutter:
+    paths: [packages/crdt_lf_flutter]
+    carryforward: true
+  crdt_lf_hive:
+    paths: [packages/crdt_lf_hive]
+    carryforward: true
+  crdt_lf_drift:
+    paths: [packages/crdt_lf_drift]
+    carryforward: true
+  crdt_lf_sqlite:
+    paths: [packages/crdt_lf_sqlite]
+    carryforward: true
+
 ignore:
   - "**/*.g.dart"

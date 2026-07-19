@@ -20,7 +20,7 @@
 
 ## Apps
 
-- [greyhound_markdown](./apps/greyhound_markdown/README.md)
+- [greyhound_markdown](https://mattiapispisa.it/crdt/greyhound_markdown/) — real-time collaborative markdown editor built on `crdt_lf` ([source](./apps/greyhound_markdown/README.md))
 
 ## Packages
 

@@ -6,6 +6,7 @@ import 'package:pub_semver/pub_semver.dart';
 import 'fs.dart';
 import 'logs.dart';
 import 'process.dart';
+import 'yaml.dart';
 
 /// Propagates the cross-package "references" block (Apps + Packages lists)
 /// into every published package README and the greyhound app README, then
@@ -91,15 +92,13 @@ const _packagePubNames = <String>[
 /// Maps every package's pub.dev name to its directory under `packages/`.
 Map<String, String> _pubNameToDir() {
   final map = <String, String>{};
-  final nameRe = RegExp(r'^name:\s*(.+)$', multiLine: true);
 
   for (final dir in packagesDir().listSync().whereType<io.Directory>()) {
     final pubspec = io.File(path.join(dir.path, 'pubspec.yaml'));
     if (!pubspec.existsSync()) {
       continue;
     }
-    final name =
-        nameRe.firstMatch(pubspec.readAsStringSync())?.group(1)?.trim();
+    final name = YamlReader(pubspec).stringOrNull('name');
     if (name != null) {
       map[name] = path.basename(dir.path);
     }
@@ -196,19 +195,20 @@ void _cutDocumentationRelease({
   required io.File pubspec,
   required io.File changelog,
 }) {
-  final content = pubspec.readAsStringSync();
-  final versionRe = RegExp(r'^version:\s*(.+)$', multiLine: true);
-  final match = versionRe.firstMatch(content);
-  if (match == null) {
+  final rawVersion = YamlReader(pubspec).stringOrNull('version');
+  if (rawVersion == null) {
     logger.error('No version in ${_relative(pubspec)}');
     badExit();
   }
 
-  final current = Version.parse(match.group(1)!.trim());
+  final current = Version.parse(rawVersion);
   final next = _bumpBuild(current);
 
   pubspec.writeAsStringSync(
-    content.replaceRange(match.start, match.end, 'version: $next'),
+    pubspec.readAsStringSync().replaceFirst(
+          'version: $current',
+          'version: $next',
+        ),
   );
 
   final stanza = '## [$next](https://github.com/MattiaPispisa/crdt/tree/'

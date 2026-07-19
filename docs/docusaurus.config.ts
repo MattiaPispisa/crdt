@@ -11,13 +11,17 @@ import type * as Preset from '@docusaurus/preset-classic';
 // Exposed via `customFields` so pages can read it with useDocusaurusContext.
 const examplesUrl = 'pathname:///examples/';
 const projectUrl = 'https://github.com/users/MattiaPispisa/projects/1';
+// Greyhound Markdown: a standalone real-time collaborative editor app built on
+// crdt_lf / crdt_lf_flutter, hosted separately (absolute external URL, so it is
+// a plain `href` and is skipped by the broken-link checker).
+const greyhoundUrl = 'https://mattiapispisa.it/crdt/greyhound_markdown/';
 
 const config: Config = {
   title: 'CRDT',
   tagline: 'Conflict-free Replicated Data Type in Dart 🎯',
   favicon: undefined,
 
-  customFields: { examplesUrl, projectUrl },
+  customFields: { examplesUrl, projectUrl, greyhoundUrl },
 
   // Future flags, see https://docusaurus.io/docs/api/docusaurus-config#future
   future: {
@@ -81,14 +85,19 @@ const config: Config = {
       title: 'CRDT in Dart',
       items: [
         {
-          label: "Examples",
+          label: "Greyhound Markdown",
           position: "left",
-          href: examplesUrl,
+          href: greyhoundUrl,
         },
         {
           to: '/docs/documentation',
           position: 'left',
           label: 'Documentation',
+        },
+        {
+          label: "Examples",
+          position: "left",
+          href: examplesUrl,
         },
         {
           to: '/docs/contributing',
