@@ -1,6 +1,14 @@
 # Greyhound Markdown
 
-![Greyhound Markdown logo](https://raw.githubusercontent.com/MattiaPispisa/crdt/main/assets/images/greyhound_markdown_logo.png)
+<div align="center">
+  <img height="250" alt="Greyhound Markdown logo" src="https://raw.githubusercontent.com/MattiaPispisa/crdt/main/assets/images/greyhound_markdown_logo.png">
+</div>
+
+<div align="center">
+
+[![Open the live demo](https://img.shields.io/badge/▶%20Open%20live%20demo-mattiapispisa.it%2Fcrdt%2Fgreyhound_markdown-2ea44f?style=for-the-badge&logo=flutter&logoColor=white)](https://mattiapispisa.it/crdt/greyhound_markdown/)
+
+</div>
 
 Real-time collaborative markdown editor built on
 [`crdt_lf`](../../packages/crdt_lf) and
