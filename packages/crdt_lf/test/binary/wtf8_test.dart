@@ -27,9 +27,22 @@ void main() {
     });
 
     test('round-trips well-formed strings losslessly', () {
-      for (final s in ['', 'a', '😀', 'a😀b', '日本😀語']) {
+      // Covers every decode branch: 1-byte (ASCII), 2-byte (accents),
+      // 3-byte (CJK) and 4-byte (emoji).
+      for (final s in ['', 'a', 'à', 'café résumé', '日本😀語', 'a😀b']) {
         expect(Wtf8.decode(Wtf8.encode(s)), equals(s));
       }
+    });
+
+    test('encodes a lone high surrogate followed by a BMP char', () {
+      // The high surrogate is not completed by a low surrogate, so it is kept
+      // as a lone 3-byte sequence and the next char is encoded on its own.
+      final s = '${String.fromCharCode(0xD83D)}x';
+      expect(
+        Wtf8.encode(s),
+        equals(Uint8List.fromList([0xED, 0xA0, 0xBD, 0x78])),
+      );
+      expect(Wtf8.decode(Wtf8.encode(s)).codeUnits, equals([0xD83D, 0x78]));
     });
 
     test('round-trips a lone high surrogate losslessly', () {
@@ -63,10 +76,16 @@ void main() {
     });
 
     test('throws on a truncated multi-byte sequence', () {
-      expect(
-        () => Wtf8.decode(Uint8List.fromList([0xF0, 0x9F])),
-        throwsFormatException,
-      );
+      for (final truncated in <List<int>>[
+        [0xC3], // 2-byte lead, missing continuation
+        [0xE6, 0x97], // 3-byte lead, missing one continuation
+        [0xF0, 0x9F], // 4-byte lead, missing continuations
+      ]) {
+        expect(
+          () => Wtf8.decode(Uint8List.fromList(truncated)),
+          throwsFormatException,
+        );
+      }
     });
   });
 }
