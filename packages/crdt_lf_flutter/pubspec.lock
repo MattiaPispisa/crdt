@@ -47,7 +47,7 @@ packages:
       path: "../crdt_lf"
       relative: true
     source: path
-    version: "3.4.0+2"
+    version: "3.4.1"
   crypto:
     dependency: transitive
     description:

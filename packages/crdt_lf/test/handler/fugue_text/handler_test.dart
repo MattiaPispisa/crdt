@@ -863,88 +863,132 @@ void main() {
         expect(finalText.contains('X'), isTrue);
       },
     );
-  });
 
-  group('stablePositionAt / indexOfStablePosition', () {
-    late CRDTDocument doc;
-    late CRDTFugueTextHandler text;
+    group('stablePositionAt / indexOfStablePosition', () {
+      late CRDTDocument doc;
+      late CRDTFugueTextHandler text;
 
-    setUp(() {
-      doc = CRDTDocument(peerId: PeerId.generate());
-      text = CRDTFugueTextHandler(doc, 'text');
+      setUp(() {
+        doc = CRDTDocument(peerId: PeerId.generate());
+        text = CRDTFugueTextHandler(doc, 'text');
+      });
+
+      /// A peer that shares [doc]'s history, so merges are deterministic.
+      CRDTDocument remotePeer() {
+        final remote = CRDTDocument(peerId: PeerId.generate());
+        CRDTFugueTextHandler(remote, 'text');
+        remote.importChanges(doc.exportChanges());
+        return remote;
+      }
+
+      test('the sequence start is a null id and resolves to 0', () {
+        text.insert(0, 'hello');
+        expect(text.stablePositionAt(0).isNull, isTrue);
+        expect(text.indexOfStablePosition(FugueElementID.nullID()), 0);
+        // Empty sequence: any index anchors to the start.
+        final empty = CRDTFugueTextHandler(doc, 'empty');
+        expect(empty.stablePositionAt(3).isNull, isTrue);
+      });
+
+      test('an anchor keeps its place across remote edits before it', () {
+        text.insert(0, 'hello world');
+        final caret = text.stablePositionAt(5); // after "hello"
+
+        final remote = remotePeer();
+        (remote.registeredHandlers['text']! as CRDTFugueTextHandler)
+          ..insert(0, 'XXX ')
+          ..insert(15, '!!!');
+        doc.importChanges(remote.exportChanges());
+
+        expect(text.value, 'XXX hello world!!!');
+        expect(text.indexOfStablePosition(caret), 9);
+      });
+
+      test('edits after the anchor do not move it', () {
+        text.insert(0, 'hello world');
+        final caret = text.stablePositionAt(5);
+        text
+          ..insert(11, '!!!')
+          ..delete(6, 5); // "world"
+        expect(text.indexOfStablePosition(caret), 5);
+      });
+
+      test('a deleted anchor resolves to where the element used to be', () {
+        text.insert(0, 'hello');
+        final caret = text.stablePositionAt(5); // after the final "o"
+        text.delete(2, 3); // "llo" — the anchored element is a tombstone now
+        expect(text.value, 'he');
+        expect(text.indexOfStablePosition(caret), 2);
+      });
+
+      test('an index past the end anchors to the last element', () {
+        text.insert(0, 'hi');
+        expect(text.stablePositionAt(100), text.stablePositionAt(2));
+        expect(text.indexOfStablePosition(text.stablePositionAt(100)), 2);
+      });
+
+      test('an unknown element resolves to null (caller falls back)', () {
+        text.insert(0, 'hello');
+        final foreign = FugueElementID(PeerId.generate(), 42);
+        expect(text.indexOfStablePosition(foreign), isNull);
+      });
+
+      test('anchors are serializable and resolvable on another peer', () {
+        text.insert(0, 'hello world');
+        final wire = text.stablePositionAt(5).toBytes();
+
+        final remote = remotePeer();
+        final remoteText = remote.registeredHandlers['text']!
+            as CRDTFugueTextHandler
+          ..insert(0, 'XXX ');
+
+        final caret = FugueElementID.fromBytes(wire);
+        expect(remoteText.indexOfStablePosition(caret), 9);
+      });
     });
 
-    /// A peer that shares [doc]'s history, so merges are deterministic.
-    CRDTDocument remotePeer() {
-      final remote = CRDTDocument(peerId: PeerId.generate());
-      CRDTFugueTextHandler(remote, 'text');
-      remote.importChanges(doc.exportChanges());
-      return remote;
-    }
+    group('non-BMP round-trip', () {
+      test('emoji survives export/import to a second replica', () {
+        final doc1 = CRDTDocument();
+        CRDTFugueTextHandler(doc1, 'text').insert(0, 'a😀b🎉c');
 
-    test('the sequence start is a null id and resolves to 0', () {
-      text.insert(0, 'hello');
-      expect(text.stablePositionAt(0).isNull, isTrue);
-      expect(text.indexOfStablePosition(FugueElementID.nullID()), 0);
-      // Empty sequence: any index anchors to the start.
-      final empty = CRDTFugueTextHandler(doc, 'empty');
-      expect(empty.stablePositionAt(3).isNull, isTrue);
-    });
+        final doc2 = CRDTDocument(documentId: doc1.documentId);
+        final text2 = CRDTFugueTextHandler(doc2, 'text');
+        doc2.importChanges(doc1.exportChanges());
 
-    test('an anchor keeps its place across remote edits before it', () {
-      text.insert(0, 'hello world');
-      final caret = text.stablePositionAt(5); // after "hello"
+        expect(text2.value, equals('a😀b🎉c'));
+        expect(text2.value.codeUnits, equals('a😀b🎉c'.codeUnits));
+      });
 
-      final remote = remotePeer();
-      (remote.registeredHandlers['text']! as CRDTFugueTextHandler)
-        ..insert(0, 'XXX ')
-        ..insert(15, '!!!');
-      doc.importChanges(remote.exportChanges());
+      test('emoji update survives export/import to a second replica', () {
+        final doc1 = CRDTDocument();
+        final text1 = CRDTFugueTextHandler(doc1, 'text')..insert(0, '😀');
+        final doc2 = CRDTDocument(documentId: doc1.documentId);
+        final text2 = CRDTFugueTextHandler(doc2, 'text');
+        doc2.importChanges(doc1.exportChanges());
 
-      expect(text.value, 'XXX hello world!!!');
-      expect(text.indexOfStablePosition(caret), 9);
-    });
+        text1.update(0, '😃');
+        doc2.importChanges(doc1.exportChanges());
 
-    test('edits after the anchor do not move it', () {
-      text.insert(0, 'hello world');
-      final caret = text.stablePositionAt(5);
-      text
-        ..insert(11, '!!!')
-        ..delete(6, 5); // "world"
-      expect(text.indexOfStablePosition(caret), 5);
-    });
+        expect(text1.value, equals('😃'));
+        expect(text2.value, equals('😃'));
+      });
 
-    test('a deleted anchor resolves to where the element used to be', () {
-      text.insert(0, 'hello');
-      final caret = text.stablePositionAt(5); // after the final "o"
-      text.delete(2, 3); // "llo" — the anchored element is a tombstone now
-      expect(text.value, 'he');
-      expect(text.indexOfStablePosition(caret), 2);
-    });
+      test('emoji survives a snapshot round-trip (bytes -> reload)', () {
+        final doc = CRDTDocument();
+        CRDTFugueTextHandler(doc, 'text').insert(0, '😀 x 𐐷');
 
-    test('an index past the end anchors to the last element', () {
-      text.insert(0, 'hi');
-      expect(text.stablePositionAt(100), text.stablePositionAt(2));
-      expect(text.indexOfStablePosition(text.stablePositionAt(100)), 2);
-    });
+        final snapBytes = doc.takeSnapshot(pruneHistory: false).toBytes();
 
-    test('an unknown element resolves to null (caller falls back)', () {
-      text.insert(0, 'hello');
-      final foreign = FugueElementID(PeerId.generate(), 42);
-      expect(text.indexOfStablePosition(foreign), isNull);
-    });
+        final reloaded = CRDTDocument(
+          peerId: doc.peerId,
+          documentId: doc.documentId,
+        );
+        final reloadedText = CRDTFugueTextHandler(reloaded, 'text');
+        reloaded.import(snapshot: Snapshot.fromBytes(snapBytes));
 
-    test('anchors are serializable and resolvable on another peer', () {
-      text.insert(0, 'hello world');
-      final wire = text.stablePositionAt(5).toBytes();
-
-      final remote = remotePeer();
-      final remoteText = remote.registeredHandlers['text']!
-          as CRDTFugueTextHandler
-        ..insert(0, 'XXX ');
-
-      final caret = FugueElementID.fromBytes(wire);
-      expect(remoteText.indexOfStablePosition(caret), 9);
+        expect(reloadedText.value, equals('😀 x 𐐷'));
+      });
     });
   });
 }
