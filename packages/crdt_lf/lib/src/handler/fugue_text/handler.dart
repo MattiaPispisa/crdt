@@ -1,4 +1,3 @@
-import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:crdt_lf/crdt_lf.dart';
@@ -207,12 +206,12 @@ class CRDTFugueTextHandler
 
   @override
   Uint8List encodeValue(String value) {
-    return Uint8List.fromList(utf8.encode(value));
+    return Wtf8.encode(value);
   }
 
   @override
   String decodeValue(Uint8List bytes) {
-    return utf8.decode(bytes);
+    return Wtf8.decode(bytes);
   }
 
   /// Returns a text representation of this handler

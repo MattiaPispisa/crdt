@@ -69,7 +69,7 @@ class _FugueTextInsertOperation extends Operation {
   /// - repeated `itemsCount` times:
   ///   - id: [FugueElementID] bytes
   ///   - textLen: uvarint
-  ///   - text: utf8 bytes
+  ///   - text: wtf8 bytes
   factory _FugueTextInsertOperation.fromBodyBytes(
     Handler<dynamic> handler,
     Uint8List body,
@@ -96,7 +96,7 @@ class _FugueTextInsertOperation extends Operation {
       if (textEnd > body.length) {
         throw const FormatException('Truncated Fugue insert text');
       }
-      final text = utf8.decode(Uint8List.sublistView(body, offset, textEnd));
+      final text = Wtf8.decode(Uint8List.sublistView(body, offset, textEnd));
       offset = textEnd;
 
       items.add(_FugueInsertItem(id: idRec.value, text: text));
@@ -128,7 +128,7 @@ class _FugueTextInsertOperation extends Operation {
     UVarint.write(items.length, out);
     for (final item in items) {
       out.add(item.id.toBytes());
-      final textBytes = utf8.encode(item.text);
+      final textBytes = Wtf8.encode(item.text);
       UVarint.write(textBytes.length, out);
       out.add(textBytes);
     }
@@ -249,7 +249,7 @@ class _FugueTextUpdateOperation extends Operation {
   ///   - nodeID: [FugueElementID] bytes
   ///   - newNodeID: [FugueElementID] bytes
   ///   - textLen: uvarint
-  ///   - text: utf8 bytes
+  ///   - text: wtf8 bytes
   factory _FugueTextUpdateOperation.fromBodyBytes(
     Handler<dynamic> handler,
     Uint8List body,
@@ -273,7 +273,7 @@ class _FugueTextUpdateOperation extends Operation {
       if (textEnd > body.length) {
         throw const FormatException('Truncated Fugue update text');
       }
-      final text = utf8.decode(Uint8List.sublistView(body, offset, textEnd));
+      final text = Wtf8.decode(Uint8List.sublistView(body, offset, textEnd));
       offset = textEnd;
 
       items.add(
@@ -303,7 +303,7 @@ class _FugueTextUpdateOperation extends Operation {
       out
         ..add(item.nodeID.toBytes())
         ..add(item.newNodeID.toBytes());
-      final textBytes = utf8.encode(item.text);
+      final textBytes = Wtf8.encode(item.text);
       UVarint.write(textBytes.length, out);
       out.add(textBytes);
     }

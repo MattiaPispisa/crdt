@@ -53,7 +53,7 @@ class _TextInsertOperation extends Operation {
       throw const FormatException('Truncated text insert');
     }
 
-    final text = utf8.decode(Uint8List.sublistView(body, offset, end));
+    final text = Wtf8.decode(Uint8List.sublistView(body, offset, end));
 
     return _TextInsertOperation.fromHandler(
       handler,
@@ -85,7 +85,7 @@ class _TextInsertOperation extends Operation {
   Uint8List toBodyBytes() {
     final out = BytesBuilder(copy: false);
     UVarint.write(index, out);
-    final textBytes = utf8.encode(text);
+    final textBytes = Wtf8.encode(text);
     UVarint.write(textBytes.length, out);
     out.add(textBytes);
     return out.toBytes();
@@ -199,7 +199,7 @@ class _TextUpdateOperation extends Operation {
       throw const FormatException('Truncated text update');
     }
 
-    final text = utf8.decode(Uint8List.sublistView(body, offset, end));
+    final text = Wtf8.decode(Uint8List.sublistView(body, offset, end));
 
     return _TextUpdateOperation.fromHandler(
       handler,
@@ -218,7 +218,7 @@ class _TextUpdateOperation extends Operation {
   Uint8List toBodyBytes() {
     final out = BytesBuilder(copy: false);
     UVarint.write(index, out);
-    final textBytes = utf8.encode(text);
+    final textBytes = Wtf8.encode(text);
     UVarint.write(textBytes.length, out);
     out.add(textBytes);
     return out.toBytes();

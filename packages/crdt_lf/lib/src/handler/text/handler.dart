@@ -1,4 +1,3 @@
-import 'dart:convert';
 import 'dart:math';
 import 'dart:typed_data';
 
@@ -139,7 +138,7 @@ class CRDTTextHandler extends Handler<String> {
 
   @override
   Uint8List getSnapshotState() {
-    return Uint8List.fromList(utf8.encode(value));
+    return Wtf8.encode(value);
   }
 
   /// Gets the length of the text
@@ -342,7 +341,7 @@ class CRDTTextHandler extends Handler<String> {
     if (snapshot == null) {
       return '';
     }
-    return utf8.decode(snapshot);
+    return Wtf8.decode(snapshot);
   }
 
   /// Returns a string representation of this text
