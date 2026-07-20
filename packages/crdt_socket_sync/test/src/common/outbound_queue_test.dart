@@ -1,6 +1,6 @@
 import 'dart:async';
 
-import 'package:crdt_socket_sync/src/common/outbound_queue.dart';
+import 'package:crdt_socket_sync/src/common/common/outbound_queue.dart';
 import 'package:test/test.dart';
 
 void main() {

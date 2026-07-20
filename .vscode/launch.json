@@ -14,6 +14,15 @@
       ]
     },
     {
+      "name": "🐕 🐦 greyhound_markdown [DEV]",
+      "cwd": "apps/greyhound_markdown/client",
+      "request": "launch",
+      "type": "dart",
+      "args": [
+        "--dart-define=GREYHOUND_WS=ws://localhost:8787"
+      ]
+    },
+    {
       "name": "[crdt_lf] flutter_example",
       "cwd": "packages/crdt_lf/flutter_example",
       "request": "launch",

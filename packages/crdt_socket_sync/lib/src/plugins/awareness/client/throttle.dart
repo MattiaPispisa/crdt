@@ -1,13 +1,15 @@
 import 'dart:async';
 
+/// {@template throttler}
 /// Throttler
 ///
 /// Leading + trailing edge: the first call in a window fires immediately;
 /// further calls within the window are coalesced and the latest one fires when
 /// the window elapses. This guarantees the final action in a burst (e.g. the
 /// last cursor position) is not dropped.
+/// {@endtemplate}
 class Throttler {
-  /// Constructor
+  /// {@macro throttler}
   Throttler(this.duration);
 
   /// throttle duration

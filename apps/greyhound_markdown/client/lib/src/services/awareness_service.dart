@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:ui';
 
 import 'package:crdt_lf/crdt_lf.dart';
+import 'package:crdt_socket_sync/web_socket_relay_client.dart';
 import 'package:flutter/foundation.dart';
 
 import 'package:greyhound_markdown_client/src/config.dart';
@@ -48,80 +49,64 @@ class PeerState {
   };
 }
 
-/// Ephemeral presence: keeps the map of remote peers and publishes the local
-/// state (name, color, text cursor) through [outbound], throttled so caret
-/// movement doesn't flood the socket.
+/// Ephemeral presence, adapting the package's [ClientAwarenessPlugin] to the
+/// UI: exposes remote peers as a [ValueNotifier] of [PeerState]s and
+/// publishes the local state (name, color, text cursor) as plugin metadata.
+///
+/// Attach [plugin] to the room's `WebSocketRelayClient`; the client owns the
+/// plugin lifecycle (it disposes it).
 class AwarenessService {
   AwarenessService({
     required this.name,
     required this.color,
-    this.throttle = const Duration(milliseconds: 75),
-  });
+    Duration throttle = const Duration(milliseconds: 75),
+  }) : plugin = ClientAwarenessPlugin(
+         throttleDuration: throttle,
+         initialMetadata: PeerState(name: name, color: color).toJson(),
+       ) {
+    _subscription = plugin.awarenessStream.listen(_onAwareness);
+  }
 
   final String name;
   final Color color;
-  final Duration throttle;
 
-  /// Hooked by the sync client to send the local state over the wire.
-  void Function(Map<String, dynamic> state)? outbound;
+  /// The underlying awareness plugin, to be passed to the sync client.
+  final ClientAwarenessPlugin plugin;
 
-  /// Remote peers keyed by clientId (the peerId used on the socket URL).
+  /// Remote peers keyed by session id (self excluded).
   final ValueNotifier<Map<String, PeerState>> peers = ValueNotifier(const {});
 
-  FugueElementID? _base;
-  FugueElementID? _extent;
-  Timer? _throttleTimer;
-  bool _dirty = false;
+  StreamSubscription<DocumentAwareness>? _subscription;
 
-  Map<String, dynamic> get localState => PeerState(
-    name: name,
-    color: color,
-    base: _base,
-    extent: _extent,
-  ).toJson();
-
-  /// Updates the local text cursor; `null` anchors withdraw it (blur).
-  /// Trailing-edge throttled.
-  void setLocalCursor(FugueElementID? base, FugueElementID? extent) {
-    _base = base;
-    _extent = extent;
-    if (_throttleTimer?.isActive ?? false) {
-      _dirty = true;
-      return;
-    }
-    _publish();
-    _throttleTimer = Timer(throttle, () {
-      if (_dirty) {
-        _dirty = false;
-        _publish();
-      }
-    });
-  }
-
-  /// Sends the current local state immediately (connect/reconnect).
-  void republish() => _publish();
-
-  void _publish() => outbound?.call(localState);
-
-  /// Replaces the peer map with the states received in a `welcome`.
-  void seedPeers(Map<String, Map<String, dynamic>> states) {
+  void _onAwareness(DocumentAwareness awareness) {
+    final sessionId = plugin.client.sessionId;
     peers.value = {
-      for (final entry in states.entries)
-        entry.key: PeerState.fromJson(entry.value),
+      for (final entry in awareness.states.entries)
+        // Skip self and peers that have not published a state yet
+        // (a fresh joiner has empty metadata until its first update).
+        if (entry.key != sessionId && entry.value.metadata.isNotEmpty)
+          entry.key: PeerState.fromJson(entry.value.metadata),
     };
   }
 
-  void updatePeer(String clientId, Map<String, dynamic> state) {
-    peers.value = {...peers.value, clientId: PeerState.fromJson(state)};
-  }
-
-  void removePeer(String clientId) {
-    final next = {...peers.value}..remove(clientId);
-    peers.value = next;
+  /// Updates the local text cursor; `null` anchors withdraw it (blur).
+  /// Throttled by the plugin.
+  void setLocalCursor(FugueElementID? base, FugueElementID? extent) {
+    // The plugin merges metadata, so name/color (from initialMetadata) are
+    // preserved and `cursor: null` withdraws the cursor.
+    plugin.updateLocalState({
+      'cursor': base == null
+          ? null
+          : {
+              'base': base.toJson(),
+              if (extent != null) 'extent': extent.toJson(),
+            },
+    });
   }
 
   void dispose() {
-    _throttleTimer?.cancel();
+    _subscription?.cancel();
+    _subscription = null;
     peers.dispose();
   }
 }

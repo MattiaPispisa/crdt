@@ -69,7 +69,7 @@ class MockCRDTSocketClient extends CRDTSocketClient {
 
   @override
   Future<void> sendChange(Change change) async {
-    final message = Message.change(
+    final message = SyncMessage.change(
       documentId: document.peerId.toString(),
       change: change,
     );
@@ -78,7 +78,7 @@ class MockCRDTSocketClient extends CRDTSocketClient {
 
   @override
   Future<void> requestSync() async {
-    final message = Message.documentStatusRequest(
+    final message = SyncMessage.documentStatusRequest(
       documentId: document.documentId,
       versionVector: document.getVersionVector(),
     );

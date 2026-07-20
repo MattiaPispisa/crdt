@@ -1,7 +1,7 @@
 import 'dart:convert';
 
-import 'package:crdt_socket_sync/src/common/codec.dart';
-import 'package:crdt_socket_sync/src/common/compressor.dart';
+import 'package:crdt_socket_sync/src/common/common/codec.dart';
+import 'package:crdt_socket_sync/src/common/common/compressor.dart';
 import 'package:test/test.dart';
 
 /// Simple value type for exercising the generic codecs.

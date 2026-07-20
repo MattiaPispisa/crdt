@@ -11,14 +11,19 @@
 </div>
 
 Real-time collaborative markdown editor built on
-[`crdt_lf`](../../packages/crdt_lf) and
-[`crdt_lf_flutter`](../../packages/crdt_lf_flutter).
+[`crdt_lf`](../../packages/crdt_lf),
+[`crdt_lf_flutter`](../../packages/crdt_lf_flutter) and the **relay mode** of
+[`crdt_socket_sync`](../../packages/crdt_socket_sync).
 
-- `client/` — Flutter web app (editor + live preview, shared cursors).
-- `server/` — Cloudflare Worker + Durable Object acting as a dumb relay:
+- `client/` — Flutter web app (editor + live preview, shared cursors). It
+  uses the package's `WebSocketRelayClient` and `ClientAwarenessPlugin`
+  directly; the room id is the CRDT `documentId`.
+- `server/` — Cloudflare Worker + Durable Object acting as a relay server:
   it rebroadcasts opaque CRDT blobs to the other clients of a room and
   persists them (change log + compacted snapshots) in Durable Object
-  storage. All CRDT merge happens client-side.
+  storage. All CRDT merge happens client-side. It is a **TypeScript
+  reference implementation of the `crdt_socket_sync` relay protocol** — the
+  same contract `WebSocketRelayServer` implements in Dart.
 
 ## Architecture
 
@@ -28,15 +33,17 @@ Client A ──ws──┐
 Client B ──ws──┘                            DO storage: change log + snapshot)
 ```
 
-Wire protocol: JSON text frames, CRDT binary blobs as base64. Message types:
-`welcome`, `push`/`ack`, `change`, `snapshot` (log compaction), `awareness`
-(ephemeral presence), `peer_left`. The Dart side lives in
-`client/lib/src/model/protocol.dart`, the TypeScript side in
-`server/src/protocol.ts` — keep them in sync.
+Wire protocol: the `crdt_socket_sync` relay protocol (JSON envelopes typed by
+integer codes, CRDT binary blobs as base64). The server (`server/src/`)
+speaks hello/welcome, push/ack, changes, snapshotUpload/compaction, ping/pong
+and awareness (100–102) — see
+[Implementing a relay server](../../packages/crdt_socket_sync/README.md#implementing-a-relay-server)
+for the message contract to keep in sync. The client has no hand-rolled
+protocol: it drives `WebSocketRelayClient` from the package.
 
-`crdt_socket_sync` is intentionally **not** used: its client requires a
-CRDT-aware server (handshake with server-computed deltas), which a dumb
-relay cannot provide.
+This app demonstrates that the relay server contract is host-agnostic: a
+Cloudflare Worker serves the same package client that a Dart
+`WebSocketRelayServer` would.
 
 ## Run it
 
@@ -70,8 +77,8 @@ fvm flutter test                                        # unit tests
 fvm flutter test --dart-define=E2E=true test/e2e_test.dart  # needs wrangler dev
 ```
 
-The e2e test drives two real `SyncClient`s through the local server and
-checks convergence, awareness propagation and late-joiner catch-up.
+The e2e test drives two real `WebSocketRelayClient`s through the local worker
+and checks convergence, awareness propagation and late-joiner catch-up.
 
 ## Packages
 

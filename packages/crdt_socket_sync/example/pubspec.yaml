@@ -10,6 +10,7 @@ environment:
 
 # Add regular dependencies here.
 dependencies:
+  archive: ^3.6.0
   crdt_lf_hive: ">=0.1.0 <1.0.0"
   crdt_socket_sync: ">=0.2.0 <1.0.0"
   crdt_lf: ^1.0.0

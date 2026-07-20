@@ -26,6 +26,7 @@ class SocketSyncSession implements ExampleSyncSession {
     required PeerId author,
     required this.label,
     Map<String, dynamic>? metadata,
+    Compressor? compressor,
   }) : document = CRDTDocument(
          documentId: documentId,
          peerId: author,
@@ -42,6 +43,9 @@ class SocketSyncSession implements ExampleSyncSession {
       // The demo servers run the awareness plugin, so the client must too —
       // otherwise it can't decode the awareness messages the server sends.
       plugins: [awareness],
+      // Must match the server's compressor (symmetric). Defaults to
+      // NoCompression when null. See examples.dart (USE_COMPRESSION).
+      compressor: compressor,
     );
     textPresence = AwarenessTextCursorPresence(
       awareness: awareness,

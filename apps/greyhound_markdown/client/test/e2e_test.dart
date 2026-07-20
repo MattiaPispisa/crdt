@@ -1,18 +1,18 @@
 @TestOn('vm')
 library;
 
-// End-to-end test against a real server. Requires `npx wrangler dev` running
-// in ../server; run explicitly with:
+// End-to-end test against a real relay server. Requires `npx wrangler dev`
+// running in ../server; run explicitly with:
 //   flutter test --dart-define=E2E=true test/e2e_test.dart
 import 'dart:math';
 import 'dart:ui';
 
 import 'package:crdt_lf/crdt_lf.dart';
+import 'package:crdt_socket_sync/web_socket_relay_client.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:greyhound_markdown_client/src/config.dart';
 import 'package:greyhound_markdown_client/src/services/awareness_service.dart';
-import 'package:greyhound_markdown_client/src/services/sync_client.dart';
 
 const _e2e = bool.fromEnvironment('E2E');
 
@@ -29,18 +29,23 @@ Future<void> _eventually(bool Function() condition, {String? reason}) async {
 ({
   CRDTDocument doc,
   CRDTFugueTextHandler text,
-  SyncClient sync,
+  WebSocketRelayClient sync,
   AwarenessService awareness,
 })
 _makeClient(String roomId, String name) {
-  final doc = CRDTDocument();
+  // The document id IS the relay room key.
+  final doc = CRDTDocument(documentId: roomId);
   final text = CRDTFugueTextHandler(doc, kHandlerId);
   final awareness = AwarenessService(
     name: name,
     color: const Color(0xFF3949AB),
   );
-  final sync = SyncClient(roomId: roomId, document: doc, awareness: awareness)
-    ..connect();
+  final sync = WebSocketRelayClient(
+    url: roomUrl(kServerUrl, roomId),
+    document: doc,
+    author: doc.peerId,
+    plugins: [awareness.plugin],
+  )..connect();
   return (doc: doc, text: text, sync: sync, awareness: awareness);
 }
 
@@ -61,8 +66,8 @@ void main() {
 
       await _eventually(
         () =>
-            a.sync.status.value == SyncStatus.connected &&
-            b.sync.status.value == SyncStatus.connected,
+            a.sync.connectionStatusValue == ConnectionStatus.connected &&
+            b.sync.connectionStatusValue == ConnectionStatus.connected,
         reason: 'both clients connected',
       );
 

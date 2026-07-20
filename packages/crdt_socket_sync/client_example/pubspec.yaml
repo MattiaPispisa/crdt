@@ -13,6 +13,7 @@ dependencies:
 
   cupertino_icons: ^1.0.8
   shared_preferences: ^2.5.3
+  archive: ^3.6.0
 
   hlc_dart: ^1.0.0
   crdt_lf: ^1.0.0

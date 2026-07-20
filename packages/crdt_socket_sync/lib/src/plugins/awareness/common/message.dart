@@ -1,4 +1,4 @@
-import 'package:crdt_socket_sync/src/common/common.dart';
+import 'package:crdt_socket_sync/src/common/common/common.dart';
 import 'package:crdt_socket_sync/src/plugins/server.dart';
 
 /// Awareness message types
