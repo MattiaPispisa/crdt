@@ -7,7 +7,7 @@ environment:
   sdk: ^3.11.5
 
 dependencies:
-  crdt_lf: ^3.4.0
+  crdt_lf: ^3.4.1
   crdt_lf_flutter: ^0.2.0
   flutter:
     sdk: flutter
