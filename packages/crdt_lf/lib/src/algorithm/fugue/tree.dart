@@ -389,6 +389,10 @@ class FugueTree<T> {
 
   /// In-order traversal collecting **all** structural nodes except the root
   /// (tombstones included), as parallel id/liveness lists for [_index].
+  ///
+  /// Iterative for the same reason as [_traverse]: a deep tree (a long run of
+  /// consecutive inserts) would overflow the call stack, here while rebuilding
+  /// the index after deserializing a large document.
   void _collectStructuralInOrder(
     FugueElementID nodeID,
     List<FugueElementID> ids,
