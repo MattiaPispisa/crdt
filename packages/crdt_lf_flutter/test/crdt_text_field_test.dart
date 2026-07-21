@@ -170,6 +170,40 @@ void main() {
       expect(controller.text, note.value);
     });
 
+    testWidgets(
+        'records a mid-caret edit next to an identical character on the '
+        'caret side (does not slide past it)', (tester) async {
+      // Regression: typing on the empty line between the fences of
+      // "```dart\n```" used to attach the characters after the closing
+      // newline, because the delta slid across the identical '\n'.
+      final note = CRDTFugueTextHandler(doc, 'note')..insert(0, '```dart\n```');
+      await tester.pumpWidget(host());
+      final controller =
+          tester.widget<TextField>(find.byType(TextField)).controller!;
+
+      // Drive the controller as a real keystroke does (TextField writes the
+      // new value + collapsed caret to its controller, firing the binding).
+      void keystroke(int at, String ch) {
+        controller.value = TextEditingValue(
+          text: controller.text.replaceRange(at, at, ch),
+          selection: TextSelection.collapsed(offset: at + ch.length),
+        );
+      }
+
+      // Caret at the end of line 1 (before the existing '\n'), press Enter.
+      keystroke(7, '\n');
+      await tester.pump();
+
+      // Type on the now-empty middle line.
+      for (final ch in 'hi'.split('')) {
+        keystroke(controller.selection.baseOffset, ch);
+        await tester.pump();
+      }
+
+      expect(controller.text, '```dart\nhi\n```');
+      expect(note.value, '```dart\nhi\n```');
+    });
+
     testWidgets('throws a FlutterError for a non-text handler', (tester) async {
       CRDTListHandler<String>(doc, 'note');
       await tester.pumpWidget(host());

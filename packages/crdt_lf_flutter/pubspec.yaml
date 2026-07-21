@@ -4,13 +4,13 @@ homepage: https://mattiapispisa.github.io/
 repository: https://github.com/MattiaPispisa/crdt/tree/main/packages/crdt_lf_flutter
 topics: [crdt, local-first, flutter, reactive]
 
-version: 0.2.0+1
+version: 0.2.1
 
 environment:
   sdk: ">=3.0.0 <4.0.0"
 
 dependencies:
-  crdt_lf: ^3.4.0
+  crdt_lf: ^3.4.2
   flutter:
     sdk: flutter
   provider: ^6.0.0

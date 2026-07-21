@@ -990,5 +990,33 @@ void main() {
         expect(reloadedText.value, equals('😀 x 𐐷'));
       });
     });
+
+    test(
+        'a deep tree (many large inserts, e.g. repeated paste) does not '
+        'overflow the stack on read or on reload', () {
+      // Regression: the Fugue tree in-order traversal used to be recursive, so
+      // a long run of consecutive inserts degenerated it into a deep chain and
+      // reading `value` (or rebuilding the index on reload) overflowed the
+      // call stack — crashing a Flutter web app after enough pasting.
+      final doc = CRDTDocument();
+      final text = CRDTFugueTextHandler(doc, 'text');
+      const block = 'the quick brown fox jumps over the lazy dog\n\n';
+      var length = 0;
+      for (var i = 0; i < 600; i++) {
+        text.insert(length, block);
+        length += block.length;
+      }
+
+      // Reading the whole value (in-order traversal) must not overflow.
+      expect(text.value.length, 600 * block.length);
+
+      // Reloading from a snapshot rebuilds the positional index with the same
+      // in-order traversal — must not overflow either.
+      final snapshot = doc.takeSnapshot();
+      final restored = CRDTDocument();
+      final restoredText = CRDTFugueTextHandler(restored, 'text');
+      restored.importSnapshot(snapshot);
+      expect(restoredText.value, equals(text.value));
+    });
   });
 }

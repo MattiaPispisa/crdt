@@ -1,3 +1,16 @@
+## [3.4.2](https://github.com/MattiaPispisa/crdt/tree/crdt_lf-v3.4.2/packages/crdt_lf)
+
+**Date:** 2026-07-21
+
+[compare to previous release](https://github.com/MattiaPispisa/crdt/compare/crdt_lf-v3.4.1...crdt_lf-v3.4.2)
+
+### Fixed
+
+- **Fugue text handler only:** reading a large document no longer risks a stack
+  overflow. The Fugue tree's in-order traversal was recursive, so a long run of
+  consecutive inserts (e.g. repeated pasting) grew a deep chain that overflowed
+  the call stack — sooner on Flutter web. It is now iterative.
+
 ## [3.4.1](https://github.com/MattiaPispisa/crdt/tree/crdt_lf-v3.4.1/packages/crdt_lf)
 
 **Date:** 2026-07-20

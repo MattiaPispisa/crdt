@@ -261,7 +261,12 @@ class _CrdtTextFieldBuilderState extends State<CrdtTextFieldBuilder> {
     final handlerText = _handlerText();
     final target = _controller!.text;
 
-    final delta = computeTextDelta(_lastCommittedText, target);
+    // The post-edit caret disambiguates edits inside a run of identical
+    // characters (e.g. a newline typed right before another newline), so the
+    // gesture is recorded where the user actually is, not slid past it.
+    final selection = _controller!.selection;
+    final caret = selection.isCollapsed ? selection.baseOffset : null;
+    final delta = computeTextDelta(_lastCommittedText, target, caret: caret);
     if (delta == null) {
       _lastCommittedText = target;
       return;
