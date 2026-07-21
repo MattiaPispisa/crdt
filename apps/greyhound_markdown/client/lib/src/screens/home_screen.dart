@@ -2,6 +2,7 @@ import 'dart:math';
 
 import 'package:flutter/material.dart';
 
+import 'package:greyhound_markdown_client/src/config.dart';
 import 'package:greyhound_markdown_client/src/widgets/app_footer.dart';
 
 const _logoWidth = 300.0;
@@ -59,7 +60,7 @@ class _HomeScreenState extends State<HomeScreen> {
     Navigator.of(context).pushNamed(
       '/room/$roomId',
       arguments: HomeScreenArguments(
-        name: name.isEmpty ? 'anonymous' : name,
+        name: name.isEmpty ? kDefaultUserName : name,
         color: _color,
       ),
     );
@@ -86,13 +87,10 @@ class _HomeScreenState extends State<HomeScreen> {
                       mainAxisSize: MainAxisSize.min,
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        Image.asset(
-                          'assets/images/greyhound_markdown_logo.png',
-                          height: _logoWidth,
-                        ),
+                        Image.asset(kLogoAsset, height: _logoWidth),
                         const SizedBox(height: 16),
                         Text(
-                          'Greyhound Markdown',
+                          kAppName,
                           style: Theme.of(context).textTheme.headlineMedium,
                           textAlign: TextAlign.center,
                         ),

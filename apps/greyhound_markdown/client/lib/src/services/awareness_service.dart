@@ -4,6 +4,8 @@ import 'dart:ui';
 import 'package:crdt_lf/crdt_lf.dart';
 import 'package:flutter/foundation.dart';
 
+import 'package:greyhound_markdown_client/src/config.dart';
+
 /// Presence state of a remote peer: identity plus an optional text cursor
 /// anchored to stable fugue positions.
 @immutable
@@ -18,7 +20,7 @@ class PeerState {
   factory PeerState.fromJson(Map<String, dynamic> json) {
     final cursor = json['cursor'] as Map<String, dynamic>?;
     return PeerState(
-      name: json['name'] as String? ?? 'anonymous',
+      name: json['name'] as String? ?? kDefaultUserName,
       color: Color(json['color'] as int? ?? 0xFF888888),
       base: cursor == null
           ? null

@@ -1,12 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
-const _repoUrl = 'https://github.com/MattiaPispisa/crdt';
-const _appSourceUrl =
-    'https://github.com/MattiaPispisa/crdt/tree/main/apps/greyhound_markdown';
-const _docsUrl = 'https://mattiapispisa.it/crdt/';
+import 'package:greyhound_markdown_client/src/config.dart';
 
-/// Credits and project links.
+/// Credits and project links, plus an entry point to the about/settings page.
 class AppFooter extends StatelessWidget {
   const AppFooter({super.key});
 
@@ -23,17 +20,24 @@ class AppFooter extends StatelessWidget {
         crossAxisAlignment: WrapCrossAlignment.center,
         spacing: 8,
         children: [
-          Text(
-            'Powered by crdt_lf · created by Mattia Pispisa',
-            style: theme.textTheme.bodySmall,
+          Text(kCreditLine, style: theme.textTheme.bodySmall),
+          for (final link in kProjectLinks)
+            _FooterLink(label: link.label, url: link.url, style: linkStyle),
+          InkWell(
+            onTap: () => Navigator.of(context).pushNamed(kSettingsRoute),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  Icons.info_outline,
+                  size: 14,
+                  color: theme.colorScheme.primary,
+                ),
+                const SizedBox(width: 4),
+                Text('About', style: linkStyle),
+              ],
+            ),
           ),
-          _FooterLink(label: 'GitHub', url: _repoUrl, style: linkStyle),
-          _FooterLink(
-            label: 'App source',
-            url: _appSourceUrl,
-            style: linkStyle,
-          ),
-          _FooterLink(label: 'crdt_lf docs', url: _docsUrl, style: linkStyle),
         ],
       ),
     );
