@@ -86,13 +86,6 @@ class FugueTree<T> {
   ///
   /// Visits the left children, then the node itself, then the right children,
   /// collecting the non-deleted values (different from `⊥`).
-  ///
-  /// Iterative (explicit stack) on purpose: a run of consecutive inserts —
-  /// e.g. pasting a large block — degenerates the tree into a long chain, and
-  /// a recursive walk would overflow the call stack (crashing the whole app,
-  /// sooner on the web where the stack is smaller). Each stack entry is
-  /// `(id, emitSelf)`: `emitSelf == false` expands the node (pushing its
-  /// children and its own emit marker), `emitSelf == true` appends its value.
   List<K> _traverse<K>(
     FugueElementID nodeID,
     K Function(FugueValueNode<T> node) transform,
@@ -396,10 +389,6 @@ class FugueTree<T> {
 
   /// In-order traversal collecting **all** structural nodes except the root
   /// (tombstones included), as parallel id/liveness lists for [_index].
-  ///
-  /// Iterative for the same reason as [_traverse]: a deep tree (a long run of
-  /// consecutive inserts) would overflow the call stack, here while rebuilding
-  /// the index after deserializing a large document.
   void _collectStructuralInOrder(
     FugueElementID nodeID,
     List<FugueElementID> ids,
@@ -547,8 +536,7 @@ class FugueTree<T> {
   }
 }
 
-/// One frame of the explicit-stack in-order traversals in [FugueTree]
-/// ([FugueTree._traverse], [FugueTree._collectStructuralInOrder]).
+/// One frame of the explicit-stack in-order traversals in [FugueTree].
 ///
 /// `emitSelf == false` expands the node (pushing its children and its own
 /// emit frame); `emitSelf == true` visits the node itself.
