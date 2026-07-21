@@ -1,3 +1,10 @@
+## Unreleased
+
+### Fixed
+
+- `CrdtTextFieldBuilder`: an edit made next to an identical character no longer slides to the wrong side of
+  that character. The text delta is now anchored to the post-edit caret.
+
 ## [0.2.0+1](https://github.com/MattiaPispisa/crdt/tree/crdt_lf_flutter-v0.2.0+1/packages/crdt_lf_flutter)
 
 **Date:** 2026-07-19

@@ -46,6 +46,39 @@ void main() {
       expect(delta.inserted, 'a');
     });
 
+    test('anchors an ambiguous insertion to the caret', () {
+      // Enter pressed *before* an existing '\n' (as between the two lines of
+      // a code fence). Without the caret, greedy prefix trimming slides the
+      // insertion past the caret to index 8, attaching the newline to the
+      // wrong side; with the caret (offset 8, after the inserted '\n') the
+      // edit is recorded where the user actually is.
+      const before = '```dart\n```';
+      const after = '```dart\n\n```';
+      expect(
+        computeTextDelta(before, after),
+        const TextDelta(index: 8, deleted: 0, inserted: '\n'),
+      );
+      expect(
+        computeTextDelta(before, after, caret: 8),
+        const TextDelta(index: 7, deleted: 0, inserted: '\n'),
+      );
+    });
+
+    test('anchors an ambiguous deletion to the caret', () {
+      // Backspace removing the *first* of two 'a's: caret ends at 1.
+      expect(
+        computeTextDelta('baab', 'bab', caret: 1),
+        const TextDelta(index: 1, deleted: 1, inserted: ''),
+      );
+    });
+
+    test('a caret leaves an unambiguous edit unchanged', () {
+      expect(
+        computeTextDelta('hello world', 'hello brave world', caret: 12),
+        const TextDelta(index: 6, deleted: 0, inserted: 'brave '),
+      );
+    });
+
     test('never splits a surrogate pair between kept and replaced regions', () {
       // The two emoji share the high surrogate: a naive trim would keep it
       // and replace only the low surrogate, producing lone-surrogate ops.
