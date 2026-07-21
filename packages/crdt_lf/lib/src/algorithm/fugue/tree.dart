@@ -82,47 +82,50 @@ class FugueTree<T> {
     return _traverse(_rootID, (node) => node);
   }
 
-  /// Traverses the tree starting from the specified node
+  /// Traverses the tree starting from the specified node.
   ///
-  /// Visits recursively the left children,
-  /// then the node itself, then the right children
-  /// Collects the non-deleted values (different from `⊥`)
+  /// Visits the left children, then the node itself, then the right children,
+  /// collecting the non-deleted values (different from `⊥`).
+  ///
+  /// Iterative (explicit stack) on purpose: a run of consecutive inserts —
+  /// e.g. pasting a large block — degenerates the tree into a long chain, and
+  /// a recursive walk would overflow the call stack (crashing the whole app,
+  /// sooner on the web where the stack is smaller). Each stack entry is
+  /// `(id, emitSelf)`: `emitSelf == false` expands the node (pushing its
+  /// children and its own emit marker), `emitSelf == true` appends its value.
   List<K> _traverse<K>(
     FugueElementID nodeID,
     K Function(FugueValueNode<T> node) transform,
   ) {
     final result = <K>[];
+    final stack = <_TraversalStep>[_TraversalStep(nodeID, emitSelf: false)];
 
-    if (!_nodes.containsKey(nodeID)) {
-      return result;
-    }
+    while (stack.isNotEmpty) {
+      final step = stack.removeLast();
+      final nodeTriple = _nodes[step.id];
+      if (nodeTriple == null) {
+        continue;
+      }
+      final node = nodeTriple.node;
 
-    final nodeTriple = _nodes[nodeID]!;
-    final node = nodeTriple.node;
-    final leftChildren = nodeTriple.leftChildren;
-    final rightChildren = nodeTriple.rightChildren;
+      if (step.emitSelf) {
+        // Visit the node itself if not deleted.
+        final value = node.value;
+        if (value != null) {
+          result.add(transform(FugueValueNode(id: node.id, value: value)));
+        }
+        continue;
+      }
 
-    // Recursively visit left children
-    for (final childID in leftChildren) {
-      result.addAll(_traverse<K>(childID, transform));
-    }
-
-    // Visit the node itself if not deleted
-    final value = node.value;
-    if (value != null) {
-      result.add(
-        transform(
-          FugueValueNode(
-            id: node.id,
-            value: value,
-          ),
-        ),
-      );
-    }
-
-    // Recursively visit right children
-    for (final childID in rightChildren) {
-      result.addAll(_traverse<K>(childID, transform));
+      // Push in reverse so the pop order is: left children, self, then right
+      // children (each child list kept in its own order).
+      for (final childID in nodeTriple.rightChildren.reversed) {
+        stack.add(_TraversalStep(childID, emitSelf: false));
+      }
+      stack.add(_TraversalStep(step.id, emitSelf: true));
+      for (final childID in nodeTriple.leftChildren.reversed) {
+        stack.add(_TraversalStep(childID, emitSelf: false));
+      }
     }
 
     return result;
@@ -393,24 +396,39 @@ class FugueTree<T> {
 
   /// In-order traversal collecting **all** structural nodes except the root
   /// (tombstones included), as parallel id/liveness lists for [_index].
+  ///
+  /// Iterative for the same reason as [_traverse]: a deep tree (a long run of
+  /// consecutive inserts) would overflow the call stack, here while rebuilding
+  /// the index after deserializing a large document.
   void _collectStructuralInOrder(
     FugueElementID nodeID,
     List<FugueElementID> ids,
     List<bool> live,
   ) {
-    final triple = _nodes[nodeID];
-    if (triple == null) {
-      return;
-    }
-    for (final childID in triple.leftChildren) {
-      _collectStructuralInOrder(childID, ids, live);
-    }
-    if (nodeID != _rootID) {
-      ids.add(nodeID);
-      live.add(triple.node.value != null);
-    }
-    for (final childID in triple.rightChildren) {
-      _collectStructuralInOrder(childID, ids, live);
+    final stack = <_TraversalStep>[_TraversalStep(nodeID, emitSelf: false)];
+
+    while (stack.isNotEmpty) {
+      final step = stack.removeLast();
+      final triple = _nodes[step.id];
+      if (triple == null) {
+        continue;
+      }
+
+      if (step.emitSelf) {
+        if (step.id != _rootID) {
+          ids.add(step.id);
+          live.add(triple.node.value != null);
+        }
+        continue;
+      }
+
+      for (final childID in triple.rightChildren.reversed) {
+        stack.add(_TraversalStep(childID, emitSelf: false));
+      }
+      stack.add(_TraversalStep(step.id, emitSelf: true));
+      for (final childID in triple.leftChildren.reversed) {
+        stack.add(_TraversalStep(childID, emitSelf: false));
+      }
     }
   }
 
@@ -527,4 +545,16 @@ class FugueTree<T> {
       _buildTreeString(childID, depth + 1, buffer);
     }
   }
+}
+
+/// One frame of the explicit-stack in-order traversals in [FugueTree]
+/// ([FugueTree._traverse], [FugueTree._collectStructuralInOrder]).
+///
+/// `emitSelf == false` expands the node (pushing its children and its own
+/// emit frame); `emitSelf == true` visits the node itself.
+class _TraversalStep {
+  _TraversalStep(this.id, {required this.emitSelf});
+
+  final FugueElementID id;
+  final bool emitSelf;
 }

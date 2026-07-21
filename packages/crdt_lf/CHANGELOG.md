@@ -2,13 +2,10 @@
 
 ### Fixed
 
-- Reading a large document no longer risks a stack overflow. The Fugue tree's
-  in-order traversal (behind `value`/`nodes`, and the index rebuild on
-  deserialization) was recursive, so a long run of consecutive inserts — e.g.
-  pasting a big block repeatedly — degenerated the tree into a deep chain and
-  overflowed the call stack, crashing the app (sooner on Flutter web, where the
-  stack is smaller). The traversal is now iterative (explicit stack), with no
-  depth limit and the same ordering.
+- **Fugue text handler only:** reading a large document no longer risks a stack
+  overflow. The Fugue tree's in-order traversal was recursive, so a long run of
+  consecutive inserts (e.g. repeated pasting) grew a deep chain that overflowed
+  the call stack — sooner on Flutter web. It is now iterative.
 
 ## [3.4.1](https://github.com/MattiaPispisa/crdt/tree/crdt_lf-v3.4.1/packages/crdt_lf)
 
