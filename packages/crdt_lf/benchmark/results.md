@@ -1,39 +1,39 @@
-Apply 1000 changes(RunTime): 9357.245421245421 us | 9.3572 ms | 0.009357 s
-Change toBytes x1000(RunTime): 596.7115 us | 0.5967 ms | 0.000597 s
-Change fromBytes x1000(RunTime): 188.18607295120796 us | 0.1882 ms | 0.000188 s
-Change roundtrip x1000(RunTime): 787.5115 us | 0.7875 ms | 0.000788 s
-DAG addNode chain of 1000(RunTime): 1845.7076461769116 us | 1.8457 ms | 0.001846 s
-DAG getAncestors chain of 200(RunTime): 77.49597203222375 us | 0.0775 ms | 0.000077 s
-CRDTFugueListHandler do 1000 operations and get value (incremental cache update: true)(RunTime): 33087.77272727273 us | 33.0878 ms | 0.033088 s
-HLC toUint8List x100k(RunTime): 254.5053431183211 us | 0.2545 ms | 0.000255 s
-HLC fromUint8List x100k(RunTime): 5088.829213483146 us | 5.0888 ms | 0.005089 s
-HLC compareTo x100k(RunTime): 540.6219977553311 us | 0.5406 ms | 0.000541 s
-CRDTListHandler do 1000 operations and get value (incremental cache update: true)(RunTime): 26524.467532467534 us | 26.5245 ms | 0.026524 s
-CRDTMapHandler do 1000 operations and get value (incremental cache update: true)(RunTime): 26959.76388888889 us | 26.9598 ms | 0.026960 s
-Resolve nested tree with 50 leaves (cold caches)(RunTime): 2179.023 us | 2.1790 ms | 0.002179 s
-Resolve nested tree with 200 leaves (cold caches)(RunTime): 9121.627802690584 us | 9.1216 ms | 0.009122 s
-Resolve nested tree with 800 leaves (cold caches)(RunTime): 41436.42857142857 us | 41.4364 ms | 0.041436 s
-Import + resolve nested tree with 50 leaves (fresh peer)(RunTime): 5493.966292134832 us | 5.4940 ms | 0.005494 s
-Import + resolve nested tree with 200 leaves (fresh peer)(RunTime): 23805.537735849055 us | 23.8055 ms | 0.023806 s
-Import + resolve nested tree with 800 leaves (fresh peer)(RunTime): 117710.45833333333 us | 117.7105 ms | 0.117710 s
-OpIdKey view x100k(RunTime): 4795.384269662922 us | 4.7954 ms | 0.004795 s
-OpIdKey hashCode x100k (cold)(RunTime): 20079.85436893204 us | 20.0799 ms | 0.020080 s
-OpIdKey map lookup x10k(RunTime): 562.68875 us | 0.5627 ms | 0.000563 s
-OperationId map lookup x10k(RunTime): 596.2135 us | 0.5962 ms | 0.000596 s
-CRDTORSetHandler do 1000 operations and get value (incremental cache update: true)(RunTime): 30097.582089552237 us | 30.0976 ms | 0.030098 s
-PeerId generate x100(RunTime): 1620.2548725637182 us | 1.6203 ms | 0.001620 s
-PeerId toUint8List x1000(RunTime): 319.25248 us | 0.3193 ms | 0.000319 s
-PeerId fromUint8List x1000(RunTime): 579.20525 us | 0.5792 ms | 0.000579 s
-Import 1000 chained changes(RunTime): 9607.924302788844 us | 9.6079 ms | 0.009608 s
-Import 10000 chained changes(RunTime): 136858.86956521738 us | 136.8589 ms | 0.136859 s
-exportChangesNewerThan on 50000 changes / 10 peers (99% caught-up)(RunTime): 15.387245563772181 us | 0.0154 ms | 0.000015 s
-takeSnapshot(pruneHistory) with 10000 changes(RunTime): 248432.6 us | 248.4326 ms | 0.248433 s
-takeSnapshot(pruneHistory) with 100 concurrent heads(RunTime): 37435.018867924526 us | 37.4350 ms | 0.037435 s
-Binary encode/decode 1000 changes(RunTime): 24388.727272727272 us | 24.3887 ms | 0.024389 s
-Take snapshot with 1000 changes(RunTime): 1302.9785 us | 1.3030 ms | 0.001303 s
-CRDTTextHandler do 1000 operations and get value (incremental cache update: true)(RunTime): 27922.466666666667 us | 27.9225 ms | 0.027922 s
-CRDTTextHandler do 1000 operations and get value (incremental cache update: false)(RunTime): 29587.464285714286 us | 29.5875 ms | 0.029587 s
-Import 1000 concurrent changes(RunTime): 9554.956 us | 9.5550 ms | 0.009555 s
-VersionVector toBytes 10 peers x1000(RunTime): 4361.954 us | 4.3620 ms | 0.004362 s
-VersionVector fromBytes 10 peers x1000(RunTime): 14413.391608391608 us | 14.4134 ms | 0.014413 s
-VersionVector intersection 10 peers x1000(RunTime): 1874.2946026986506 us | 1.8743 ms | 0.001874 s
+Apply 1000 changes(RunTime): 9309.1327014218 us | 9.3091 ms | 0.009309 s
+Change toBytes x1000(RunTime): 592.65125 us | 0.5927 ms | 0.000593 s
+Change fromBytes x1000(RunTime): 190.08460445286593 us | 0.1901 ms | 0.000190 s
+Change roundtrip x1000(RunTime): 795.23725 us | 0.7952 ms | 0.000795 s
+DAG addNode chain of 1000(RunTime): 1842.856071964018 us | 1.8429 ms | 0.001843 s
+DAG getAncestors chain of 200(RunTime): 74.87966274910578 us | 0.0749 ms | 0.000075 s
+CRDTFugueListHandler do 1000 operations and get value (incremental cache update: true)(RunTime): 33023.269841269845 us | 33.0233 ms | 0.033023 s
+HLC toUint8List x100k(RunTime): 251.1408253968254 us | 0.2511 ms | 0.000251 s
+HLC fromUint8List x100k(RunTime): 5139.675 us | 5.1397 ms | 0.005140 s
+HLC compareTo x100k(RunTime): 451.21677852348995 us | 0.4512 ms | 0.000451 s
+CRDTListHandler do 1000 operations and get value (incremental cache update: true)(RunTime): 25733.03947368421 us | 25.7330 ms | 0.025733 s
+CRDTMapHandler do 1000 operations and get value (incremental cache update: true)(RunTime): 25483.25316455696 us | 25.4833 ms | 0.025483 s
+Resolve nested tree with 50 leaves (cold caches)(RunTime): 2026.866 us | 2.0269 ms | 0.002027 s
+Resolve nested tree with 200 leaves (cold caches)(RunTime): 8812.139830508475 us | 8.8121 ms | 0.008812 s
+Resolve nested tree with 800 leaves (cold caches)(RunTime): 39442.78846153846 us | 39.4428 ms | 0.039443 s
+Import + resolve nested tree with 50 leaves (fresh peer)(RunTime): 5408.733133433283 us | 5.4087 ms | 0.005409 s
+Import + resolve nested tree with 200 leaves (fresh peer)(RunTime): 23870.284090909092 us | 23.8703 ms | 0.023870 s
+Import + resolve nested tree with 800 leaves (fresh peer)(RunTime): 146568.60869565216 us | 146.5686 ms | 0.146569 s
+OpIdKey view x100k(RunTime): 4776.875 us | 4.7769 ms | 0.004777 s
+OpIdKey hashCode x100k (cold)(RunTime): 20051.300970873788 us | 20.0513 ms | 0.020051 s
+OpIdKey map lookup x10k(RunTime): 540.90725 us | 0.5409 ms | 0.000541 s
+OperationId map lookup x10k(RunTime): 362.4340853013747 us | 0.3624 ms | 0.000362 s
+CRDTORSetHandler do 1000 operations and get value (incremental cache update: true)(RunTime): 29043.093333333334 us | 29.0431 ms | 0.029043 s
+PeerId generate x100(RunTime): 1765.8335832083958 us | 1.7658 ms | 0.001766 s
+PeerId toUint8List x1000(RunTime): 327.6279740447008 us | 0.3276 ms | 0.000328 s
+PeerId fromUint8List x1000(RunTime): 586.0915 us | 0.5861 ms | 0.000586 s
+Import 1000 chained changes(RunTime): 9819.322097378277 us | 9.8193 ms | 0.009819 s
+Import 10000 chained changes(RunTime): 115369.6875 us | 115.3697 ms | 0.115370 s
+exportChangesNewerThan on 50000 changes / 10 peers (99% caught-up)(RunTime): 29.821819623631317 us | 0.0298 ms | 0.000030 s
+takeSnapshot(pruneHistory) with 10000 changes(RunTime): 244280.75 us | 244.2808 ms | 0.244281 s
+takeSnapshot(pruneHistory) with 100 concurrent heads(RunTime): 38395.57692307692 us | 38.3956 ms | 0.038396 s
+Binary encode/decode 1000 changes(RunTime): 23728.354166666668 us | 23.7284 ms | 0.023728 s
+Take snapshot with 1000 changes(RunTime): 1289.0925 us | 1.2891 ms | 0.001289 s
+CRDTTextHandler do 1000 operations and get value (incremental cache update: true)(RunTime): 28339.060606060608 us | 28.3391 ms | 0.028339 s
+CRDTTextHandler do 1000 operations and get value (incremental cache update: false)(RunTime): 27635.247191011236 us | 27.6352 ms | 0.027635 s
+Import 1000 concurrent changes(RunTime): 9505.51282051282 us | 9.5055 ms | 0.009506 s
+VersionVector toBytes 10 peers x1000(RunTime): 4478.268 us | 4.4783 ms | 0.004478 s
+VersionVector fromBytes 10 peers x1000(RunTime): 14681.753623188406 us | 14.6818 ms | 0.014682 s
+VersionVector intersection 10 peers x1000(RunTime): 1858.8665667166417 us | 1.8589 ms | 0.001859 s
