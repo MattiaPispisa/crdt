@@ -540,5 +540,37 @@ void main() {
         expect(text2.value, equals(text3.value));
       },
     );
+
+    group('non-BMP round-trip', () {
+      test('change() splitting a surrogate pair survives a round-trip', () {
+        // change()'s Myers diff works per code unit: turning '😀' into '😃'
+        // deletes/inserts a single (lone) low surrogate. That lone-surrogate
+        // insert is what a plain utf8 encoder would corrupt to U+FFFD.
+        final doc1 = CRDTDocument();
+        final text1 = CRDTTextHandler(doc1, 'text')..insert(0, 'a😀b');
+
+        final doc2 = CRDTDocument(documentId: doc1.documentId);
+        final text2 = CRDTTextHandler(doc2, 'text');
+        doc2.importChanges(doc1.exportChanges());
+
+        text1.change('a😃b');
+        doc2.importChanges(doc1.exportChanges());
+
+        expect(text1.value, equals('a😃b'));
+        expect(text2.value, equals('a😃b'));
+        expect(text2.value.codeUnits, equals('a😃b'.codeUnits));
+      });
+
+      test('emoji insert survives export/import to a second replica', () {
+        final doc1 = CRDTDocument();
+        CRDTTextHandler(doc1, 'text').insert(0, 'hi 😀🎉');
+
+        final doc2 = CRDTDocument(documentId: doc1.documentId);
+        final text2 = CRDTTextHandler(doc2, 'text');
+        doc2.importChanges(doc1.exportChanges());
+
+        expect(text2.value, equals('hi 😀🎉'));
+      });
+    });
   });
 }

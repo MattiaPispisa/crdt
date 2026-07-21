@@ -1,3 +1,13 @@
+## [3.4.1](https://github.com/MattiaPispisa/crdt/tree/crdt_lf-v3.4.1/packages/crdt_lf)
+
+**Date:** 2026-07-20
+
+[compare to previous release](https://github.com/MattiaPispisa/crdt/compare/crdt_lf-v3.4.0+2...crdt_lf-v3.4.1)
+
+### Fixed
+
+- Non-BMP characters (emoji, mathematical alphanumerics, …) no longer corrupt to U+FFFD (`�`): the text handlers split text per UTF-16 code unit, so a surrogate pair's halves were `utf8.encode`d separately and each lone surrogate became the replacement character (surfacing only on export/import or a snapshot reload). Text values are now serialized with a WTF-8 codec that round-trips the full Unicode range losslessly (the change is **backward compatible**: WTF-8 is byte-identical to UTF-8 for all well-formed text). [103](https://github.com/MattiaPispisa/crdt/issues/103) (thx to @pedersen)
+
 ## [3.4.0+2](https://github.com/MattiaPispisa/crdt/tree/crdt_lf-v3.4.0+2/packages/crdt_lf)
 
 **Date:** 2026-07-19
