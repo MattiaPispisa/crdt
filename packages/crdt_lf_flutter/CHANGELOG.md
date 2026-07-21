@@ -1,4 +1,8 @@
-## Unreleased
+## [0.2.1](https://github.com/MattiaPispisa/crdt/tree/crdt_lf_flutter-v0.2.1/packages/crdt_lf_flutter)
+
+**Date:** 2026-07-21
+
+[compare to previous release](https://github.com/MattiaPispisa/crdt/compare/crdt_lf_flutter-v0.2.0+1...crdt_lf_flutter-v0.2.1)
 
 ### Fixed
 
