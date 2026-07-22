@@ -1,0 +1,8 @@
+# Local development override: build the app against the in-repo
+# crdt_lf_flutter (and crdt_lf) so unreleased fixes are picked up before they
+# are published. Remove this file to build against the pub.dev versions.
+#dependency_overrides:
+#  crdt_lf:
+#    path: ../../../packages/crdt_lf
+#  crdt_lf_flutter:
+#    path: ../../../packages/crdt_lf_flutter

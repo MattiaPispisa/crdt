@@ -43,7 +43,7 @@ class _EditorScreenState extends State<EditorScreen> {
     _document = CRDTDocument();
     CRDTFugueTextHandler(_document, kHandlerId);
     _awareness = AwarenessService(
-      name: profile?.name ?? 'anonymous',
+      name: profile?.name ?? kDefaultUserName,
       color: profile?.color ?? Colors.blueGrey,
     );
     _sync = SyncClient(
