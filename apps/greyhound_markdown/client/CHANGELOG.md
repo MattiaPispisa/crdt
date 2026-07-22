@@ -9,6 +9,7 @@
 - Keyboard shortcuts for the markdown editor.
 - Placeholder text in the editor.
 - Settings, including a licenses page.
+- Syntax highlighting
 
 ## 0.1.0
 
