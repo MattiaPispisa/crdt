@@ -33,6 +33,7 @@
     - [Join \& Welcome](#join--welcome)
     - [Push, Ack \& Rebroadcast](#push-ack--rebroadcast)
     - [Log Compaction](#log-compaction)
+    - [Client seq window](#client-seq-window)
     - [Relay Plugins \& Awareness](#relay-plugins--awareness)
     - [Implementing a relay server](#implementing-a-relay-server)
     - [Relay Imports](#relay-imports)
@@ -489,15 +490,18 @@ entries; late joiners then bootstrap from snapshot plus residual log.
 ```mermaid
 sequenceDiagram
     autonumber
-    participant C as Relay Client
+    participant CA as Relay Client A
+    participant CB as Relay Client B
     participant R as Relay Server
     participant S as RelayStore
 
-    R-->>C: Ack (compact: true)
-    C->>C: takeSnapshot(pruneHistory: false)
-    Note right of C: The upload never covers sequences<br/>the client has not imported yet
-    C->>R: SnapshotUpload (blob, upToSeq)
+    R-->>CA: Ack (compact: true)
+    Note over CA,CB: only the asked client compacts.<br/>Everyone else keeps pushing and receiving as usual
+    CA->>CA: takeSnapshot(pruneHistory: false)
+    Note right of CA: the upload never covers sequences<br/>the client has not imported yet
+    CA->>R: SnapshotUpload (blob, upToSeq)
     R->>S: save snapshot, delete log ≤ upToSeq
+    Note over R,S: normal flow resumes unchanged.<br/>If the log is still long, the next push is asked again
 ```
 
 > 📖 Diagrams render best in the [live documentation](https://mattiapispisa.it/crdt/docs/documentation/packages/crdt_socket_sync).
@@ -505,6 +509,44 @@ sequenceDiagram
 The client caps `upToSeq` at the highest **contiguous** sequence it has
 imported, so a snapshot can never silently drop a concurrent change that the
 relay logged but this client has not received yet.
+
+### Client seq window
+
+The relay stamps every change blob with a monotonic **seq**. Each client keeps a
+window over the room log: `maxContiguous` — the highest seq `S` such that it has
+imported *every* entry in `[1, S]` — plus any **detached ranges** above it, the
+holes left when concurrent clients' rebroadcasts arrive out of order. Three
+inbound frames feed the window — a **welcome** (the whole prefix), an **ack** of
+your own push, and rebroadcast **changes** — and whenever a hole fills, the
+contiguous frontier advances.
+
+`maxContiguous` is the only thing that bounds a snapshot upload: a compaction
+request is capped at it, so the client can never claim to cover a seq it has not
+imported (which would let the relay delete a change no snapshot holds). The seq
+window is pure relay bookkeeping — it does **not** decide what the document
+shows; that is the CRDT's own causal job (`importChanges` applies the
+causally-ready subset and skips the rest).
+
+```mermaid
+graph TD
+    W[Welcome: whole prefix up to seq] --> UP1[Update seq window]
+    A[Ack: your pushed range] --> UP1
+    CH[Changes: rebroadcast range] --> UP1
+
+    UP1 --> M{Does it fill the gap<br/>above maxContiguous?}
+    M -->|yes| ADV[Advance maxContiguous<br/>over the merged range]
+    M -->|no| HOLD[Keep as a detached range<br/>above maxContiguous]
+
+    ADV --> C{Compaction requested?}
+    HOLD --> C
+    C -->|no| DONE[Done]
+    C -->|yes| CAP[Cap upToSeq at maxContiguous]
+    CAP --> G{upToSeq greater than 0?}
+    G -->|no| DONE
+    G -->|yes| UPL[Upload snapshot up to upToSeq]
+```
+
+> 📖 Diagrams render best in the [live documentation](https://mattiapispisa.it/crdt/docs/documentation/packages/crdt_socket_sync).
 
 ### Relay Plugins & Awareness
 
