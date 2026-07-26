@@ -1,6 +1,6 @@
 ## [3.4.2+1](https://github.com/MattiaPispisa/crdt/tree/crdt_lf-v3.4.2+1/packages/crdt_lf)
 
-**Date:** 2026-07-19
+**Date:** 2026-07-26
 
 Documentation release: refreshes the CHANGELOG and docs published on pub.dev. No functional changes since `3.4.2`.
 
