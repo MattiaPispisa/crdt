@@ -35,7 +35,7 @@ Session events:
   CRDT-agnostic backend (no `crdt_lf` on the server, easy to port to other
   runtimes, including serverless). Adds the `relay_client`,
   `web_socket_relay_client`, `relay_server` and `web_socket_relay_server`
-  libraries; see the README for the full picture.
+  libraries; see the README for the full picture. [100](https://github.com/MattiaPispisa/crdt/issues/100)
 
 ### Fixed
 
