@@ -105,9 +105,7 @@ graph TD
     T --> U[Transaction Complete]
 ```
 
-The diagram was created using [Mermaid](https://mermaid.js.org/). 
-GitHub natively supports this tool, but if you are unable to view them, 
-you can use the [official vscode extension](https://open-vsx.org/extension/MermaidChart/vscode-mermaid-chart) or the, [Mermaid Live Editor](https://mermaid.live/).
+> 📖 Diagrams render best in the [live documentation](https://mattiapispisa.it/crdt/docs/documentation/packages/crdt_lf).
 
 ## Getting Started
 
@@ -400,6 +398,8 @@ graph TD
     G --> K[Build Resolved Tree]
     J --> K
 ```
+
+> 📖 Diagrams render best in the [live documentation](https://mattiapispisa.it/crdt/docs/documentation/packages/crdt_lf).
 
 > On a remote peer the same resolution step recreates children through the
 > registered factories; once they are registered, `importChanges`

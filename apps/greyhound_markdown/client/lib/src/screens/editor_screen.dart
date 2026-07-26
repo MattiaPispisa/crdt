@@ -1,12 +1,14 @@
+import 'dart:async';
+
 import 'package:crdt_lf/crdt_lf.dart';
 import 'package:crdt_lf_flutter/crdt_lf_flutter.dart';
+import 'package:crdt_socket_sync/web_socket_relay_client.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import 'package:greyhound_markdown_client/src/config.dart';
 import 'package:greyhound_markdown_client/src/screens/home_screen.dart';
 import 'package:greyhound_markdown_client/src/services/awareness_service.dart';
-import 'package:greyhound_markdown_client/src/services/sync_client.dart';
 import 'package:greyhound_markdown_client/src/widgets/app_footer.dart';
 import 'package:greyhound_markdown_client/src/widgets/editor_pane.dart';
 import 'package:greyhound_markdown_client/src/widgets/preview_pane.dart';
@@ -29,7 +31,9 @@ enum _ViewMode { edit, split, view }
 class _EditorScreenState extends State<EditorScreen> {
   late final CRDTDocument _document;
   late final AwarenessService _awareness;
-  late final SyncClient _sync;
+  late final WebSocketRelayClient _sync;
+  late final ValueNotifier<ConnectionStatus> _status;
+  StreamSubscription<ConnectionStatus>? _statusSubscription;
   bool _initialized = false;
   _ViewMode _mode = _ViewMode.split;
 
@@ -40,23 +44,33 @@ class _EditorScreenState extends State<EditorScreen> {
     _initialized = true;
     final profile =
         ModalRoute.of(context)?.settings.arguments as HomeScreenArguments?;
-    _document = CRDTDocument();
+    // The document id IS the relay room key: every client of the room must
+    // use the same one.
+    _document = CRDTDocument(documentId: widget.roomId);
     CRDTFugueTextHandler(_document, kHandlerId);
     _awareness = AwarenessService(
       name: profile?.name ?? kDefaultUserName,
       color: profile?.color ?? Colors.blueGrey,
     );
-    _sync = SyncClient(
-      roomId: widget.roomId,
+    _sync = WebSocketRelayClient(
+      url: roomUrl(kServerUrl, widget.roomId),
       document: _document,
-      awareness: _awareness,
+      author: _document.peerId,
+      plugins: [_awareness.plugin],
     )..connect();
+    _status = ValueNotifier(_sync.connectionStatusValue);
+    _statusSubscription = _sync.connectionStatus.listen(
+      (status) => _status.value = status,
+    );
   }
 
   @override
   void dispose() {
+    _statusSubscription?.cancel();
+    // Disposes the awareness plugin too.
     _sync.dispose();
     _awareness.dispose();
+    _status.dispose();
     _document.dispose();
     super.dispose();
   }
@@ -143,7 +157,7 @@ class _EditorScreenState extends State<EditorScreen> {
         bottomNavigationBar: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            StatusBar(status: _sync.status, peers: _awareness.peers),
+            StatusBar(status: _status, peers: _awareness.peers),
             const AppFooter(),
           ],
         ),

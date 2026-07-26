@@ -2,14 +2,15 @@ import 'dart:async';
 
 import 'package:crdt_socket_sync/client.dart';
 import 'package:crdt_socket_sync/src/plugins/awareness/client/throttle.dart';
-import 'package:crdt_socket_sync/src/plugins/client/client.dart';
 
+/// {@template client_awareness_plugin}
 /// Client awareness plugin
 ///
 /// This plugin is used to manage the awareness of the clients
 /// connected to the same document
+/// {@endtemplate}
 class ClientAwarenessPlugin extends ClientSyncPlugin {
-  /// Constructor
+  /// {@macro client_awareness_plugin}
   ///
   /// [initialMetadata] is the initial metadata of the client
   /// sent to the server [onConnected]

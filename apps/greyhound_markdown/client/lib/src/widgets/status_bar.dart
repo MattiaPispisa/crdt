@@ -1,14 +1,14 @@
+import 'package:crdt_socket_sync/web_socket_relay_client.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import 'package:greyhound_markdown_client/src/services/awareness_service.dart';
-import 'package:greyhound_markdown_client/src/services/sync_client.dart';
 
 /// Connection indicator plus one chip per connected peer.
 class StatusBar extends StatelessWidget {
   const StatusBar({required this.status, required this.peers, super.key});
 
-  final ValueListenable<SyncStatus> status;
+  final ValueListenable<ConnectionStatus> status;
   final ValueListenable<Map<String, PeerState>> peers;
 
   @override
@@ -19,7 +19,7 @@ class StatusBar extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
         child: Row(
           children: [
-            ValueListenableBuilder<SyncStatus>(
+            ValueListenableBuilder<ConnectionStatus>(
               valueListenable: status,
               builder: (context, value, _) => Row(
                 mainAxisSize: MainAxisSize.min,
@@ -28,18 +28,20 @@ class StatusBar extends StatelessWidget {
                     Icons.circle,
                     size: 10,
                     color: switch (value) {
-                      SyncStatus.connected => Colors.green,
-                      SyncStatus.connecting ||
-                      SyncStatus.reconnecting => Colors.orange,
-                      SyncStatus.disconnected => Colors.red,
+                      ConnectionStatus.connected => Colors.green,
+                      ConnectionStatus.connecting ||
+                      ConnectionStatus.reconnecting => Colors.orange,
+                      ConnectionStatus.disconnected ||
+                      ConnectionStatus.error => Colors.red,
                     },
                   ),
                   const SizedBox(width: 6),
                   Text(switch (value) {
-                    SyncStatus.connected => 'Connected',
-                    SyncStatus.connecting => 'Connecting…',
-                    SyncStatus.reconnecting => 'Reconnecting…',
-                    SyncStatus.disconnected => 'Disconnected',
+                    ConnectionStatus.connected => 'Connected',
+                    ConnectionStatus.connecting => 'Connecting…',
+                    ConnectionStatus.reconnecting => 'Reconnecting…',
+                    ConnectionStatus.disconnected => 'Disconnected',
+                    ConnectionStatus.error => 'Connection error',
                   }),
                 ],
               ),

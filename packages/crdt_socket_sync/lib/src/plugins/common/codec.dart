@@ -1,6 +1,7 @@
-import 'package:crdt_socket_sync/src/common/common.dart';
+import 'package:crdt_socket_sync/src/common/common/common.dart';
 import 'package:crdt_socket_sync/src/plugins/common/common.dart';
 
+/// {@template plugin_aware_message_codec}
 /// A message codec that can be used to encode and decode messages
 /// for a list of [MessageCodec]s.
 ///
@@ -11,10 +12,15 @@ import 'package:crdt_socket_sync/src/plugins/common/common.dart';
 /// This codec is designed to support the plugin system.
 /// It is used to encode and decode messages with the default codec and the
 /// plugins' codecs.
+/// {@endtemplate}
 class PluginAwareMessageCodec implements MessageCodec<Message> {
+  /// {@macro plugin_aware_message_codec}
+  ///
   /// Constructor
   const PluginAwareMessageCodec(this._codecs);
 
+  /// {@macro plugin_aware_message_codec}
+  ///
   /// Constructor from a default codec and a list of plugins
   ///
   /// [defaultCodec] is the first codec used to encode and decode messages.

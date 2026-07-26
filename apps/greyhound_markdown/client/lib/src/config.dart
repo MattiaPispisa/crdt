@@ -99,6 +99,7 @@ const String kAppSourceUrl =
 const String kDocsUrl = 'https://mattiapispisa.it/crdt/';
 
 /// WebSocket endpoint of the signaling server.
+/// WebSocket endpoint of the relay server.
 ///
 /// Override at build time with
 /// `--dart-define=GREYHOUND_WS=wss://your-worker.example.com`.
@@ -106,3 +107,19 @@ const String kServerUrl = String.fromEnvironment(
   'GREYHOUND_WS',
   defaultValue: 'ws://localhost:8787',
 );
+
+/// The WebSocket URL of a room on the relay server.
+///
+/// Appends the `/room/<id>` path and normalizes http(s) schemes to ws(s).
+String roomUrl(String serverUrl, String roomId) {
+  final uri = Uri.parse('$serverUrl/room/$roomId');
+  return uri
+      .replace(
+        scheme: switch (uri.scheme) {
+          'https' => 'wss',
+          'http' => 'ws',
+          _ => uri.scheme,
+        },
+      )
+      .toString();
+}

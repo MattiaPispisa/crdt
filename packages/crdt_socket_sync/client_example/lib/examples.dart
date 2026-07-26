@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:crdt_socket_sync_client_example/awareness_cursors.dart';
 import 'package:crdt_socket_sync_client_example/connection_indicator.dart';
+import 'package:crdt_socket_sync_client_example/gzip_compression.dart';
 import 'package:crdt_socket_sync_client_example/socket_sync_session.dart';
 import 'package:crdt_socket_sync_client_example/user/_state.dart';
 import 'package:provider/provider.dart';
@@ -8,6 +9,13 @@ import 'package:shared_examples_infrastructure/shared_examples_infrastructure.da
 
 const _docsUrl = 'https://mattiapispisa.github.io/crdt/';
 const _pubDevUrl = 'https://pub.dev/packages/crdt_socket_sync';
+
+/// Enable gzip compression at build time with
+/// `--dart-define=USE_COMPRESSION=true`. The target server must run the
+/// matching compressor (e.g. the `example` server started with `--compress`),
+/// because compression is symmetric. Defaults to no compression so the demo
+/// keeps working against relay/servers that don't compress.
+const _useCompression = bool.fromEnvironment('USE_COMPRESSION');
 
 /// Signature of the shared example screen builders.
 typedef _ExampleScreen =
@@ -31,6 +39,7 @@ WidgetBuilder _socket(_ExampleScreen screen, String documentId) {
               author: user.userId,
               label: 'This device',
               metadata: {'name': user.username},
+              compressor: _useCompression ? const GzipCompression() : null,
             ),
           ],
       appBarActionsBuilder:

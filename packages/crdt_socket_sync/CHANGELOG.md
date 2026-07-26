@@ -1,3 +1,48 @@
+## [0.6.0](https://github.com/MattiaPispisa/crdt/tree/crdt_socket_sync-v0.6.0/packages/crdt_socket_sync)
+
+**Date:** 2026-07-26
+
+[compare to previous release](https://github.com/MattiaPispisa/crdt/compare/crdt_socket_sync-v0.5.0+2...crdt_socket_sync-v0.6.0)
+
+**Breaking changes (Dart names only — not the protocol)**
+
+The CRDT-aware sync frames and session-event values now live under `Sync*`
+types. These are pure **source-level renames**: update the identifiers, **the
+on-the-wire messages stay byte-identical** (a `0.5.x` and a `0.6.0` peer still talk to
+each other).
+
+Messages:
+
+- ~~`Message.change`~~ → **`SyncMessage.change`**
+- ~~`Message.changes`~~ → **`SyncMessage.changes`**
+- ~~`Message.documentStatus`~~ → **`SyncMessage.documentStatus`**
+- ~~`Message.documentStatusRequest`~~ → **`SyncMessage.documentStatusRequest`**
+- `Message.fromJson` now decodes only the shared frames (ping/pong/error); in a
+  custom codec chain it: `SyncMessage.fromJson(json) ?? Message.fromJson(json)`.
+
+Session events:
+
+- ~~`SessionEventType.handshakeCompleted`~~ → **`SyncSessionEventType.handshakeCompleted`**
+- ~~`SessionEventType.documentStatusCreated`~~ → **`SyncSessionEventType.documentStatusCreated`**
+- ~~`SessionEventType.changeApplied`~~ → **`SyncSessionEventType.changeApplied`**
+- ~~`SessionEventType.clientOutOfSync`~~ → **`SyncSessionEventType.clientOutOfSync`**
+
+### Added
+
+- **Relay mode** — a second sync model where the server stays *dumb*: it only
+  stores change blobs opaquely and rebroadcasts them per room, never parsing
+  CRDT data, so all merging happens on the clients. This enables a
+  CRDT-agnostic backend (no `crdt_lf` on the server, easy to port to other
+  runtimes, including serverless). Adds the `relay_client`,
+  `web_socket_relay_client`, `relay_server` and `web_socket_relay_server`
+  libraries; see the README for the full picture. [100](https://github.com/MattiaPispisa/crdt/issues/100)
+
+### Fixed
+
+- The client libraries now actually export `ClientSyncPlugin` and
+  `SocketClientProvider` (the plugin barrel previously self-exported, forcing
+  `src/` imports for custom client plugins).
+
 ## [0.5.0+2](https://github.com/MattiaPispisa/crdt/tree/crdt_socket_sync-v0.5.0+2/packages/crdt_socket_sync)
 
 **Date:** 2026-07-19

@@ -1,6 +1,6 @@
 import 'dart:convert';
 
-import 'package:crdt_socket_sync/src/common/utils.dart';
+import 'package:crdt_socket_sync/src/common/common/utils.dart';
 import 'package:test/test.dart';
 
 void main() {

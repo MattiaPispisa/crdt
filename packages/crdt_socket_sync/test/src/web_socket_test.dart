@@ -6,8 +6,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:crdt_lf/crdt_lf.dart';
-import 'package:crdt_socket_sync/src/plugins/client/client.dart';
-import 'package:crdt_socket_sync/src/server/in_memory_server_registry.dart';
+import 'package:crdt_socket_sync/src/server_client/server/in_memory_server_registry.dart';
 import 'package:crdt_socket_sync/web_socket_client.dart';
 import 'package:crdt_socket_sync/web_socket_server.dart';
 import 'package:test/test.dart';
@@ -30,7 +29,8 @@ void main() {
 
       final codec = JsonMessageCodec<Message>(
         toJson: (message) => message.toJson(),
-        fromJson: Message.fromJson,
+        fromJson: (json) =>
+            SyncMessage.fromJson(json) ?? Message.fromJson(json),
       );
 
       const port = 8080;
@@ -342,7 +342,8 @@ void main() {
 
         final codec = JsonMessageCodec<Message>(
           toJson: (message) => message.toJson(),
-          fromJson: Message.fromJson,
+          fromJson: (json) =>
+              SyncMessage.fromJson(json) ?? Message.fromJson(json),
         );
 
         void listenToMessages(
@@ -547,7 +548,7 @@ void main() {
         final changes = doc.exportChanges();
 
         await server.broadcastMessage(
-          Message.documentStatus(
+          SyncMessage.documentStatus(
             documentId: documentId,
             snapshot: snap,
             changes: changes,
@@ -733,7 +734,7 @@ void main() {
         final changes = document.exportChanges();
 
         await server.broadcastMessage(
-          Message.documentStatus(
+          SyncMessage.documentStatus(
             documentId: documentId,
             versionVector: document.getVersionVector(),
             changes: changes,
@@ -909,7 +910,7 @@ void main() {
         serverDoc = (await registry.getDocument(documentId))!;
 
         await server.broadcastMessage(
-          Message.documentStatus(
+          SyncMessage.documentStatus(
             documentId: documentId,
             snapshot: snap,
             changes: serverDoc.exportChanges(),
@@ -1020,7 +1021,8 @@ void main() {
 
         final codec = JsonMessageCodec<Message>(
           toJson: (message) => message.toJson(),
-          fromJson: Message.fromJson,
+          fromJson: (json) =>
+              SyncMessage.fromJson(json) ?? Message.fromJson(json),
         );
 
         void listenToMessages(

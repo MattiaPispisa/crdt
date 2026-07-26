@@ -21,6 +21,7 @@ Future<void> run({
   int? port,
   String? host,
   List<ServerSyncPlugin>? plugins,
+  Compressor? compressor,
   bool verbose = true,
 }) async {
   // setup logger
@@ -60,6 +61,10 @@ Future<void> run({
         () => HttpServer.bind(host ?? _kDefaultHost, port ?? _kDefaultPort),
     serverRegistry: _registry,
     plugins: plugins ?? [ServerAwarenessPlugin()],
+    // Optional gzip compression (see GzipCompression). When enabled here, every
+    // connecting client must inject the same compressor — compression is
+    // symmetric. Defaults to NoCompression when null.
+    compressor: compressor,
   );
   _registry.setServer(_server);
 

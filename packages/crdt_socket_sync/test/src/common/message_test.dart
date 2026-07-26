@@ -1,17 +1,8 @@
 import 'dart:convert';
-import 'dart:typed_data';
 
 import 'package:crdt_lf/crdt_lf.dart';
-import 'package:crdt_socket_sync/src/common/message.dart';
-import 'package:hlc_dart/hlc_dart.dart';
+import 'package:crdt_socket_sync/src/common/common/message.dart';
 import 'package:test/test.dart';
-
-import '../utils/mock_handler.dart';
-import '../utils/mock_operation.dart';
-
-String _encCh(Change c) => base64Encode(c.toBytes());
-String _encVV(VersionVector vv) => base64Encode(vv.toBytes());
-String _encSnap(Snapshot s) => base64Encode(s.toBytes());
 
 void main() {
   group('MessageType', () {
@@ -34,83 +25,8 @@ void main() {
     });
   });
 
-  group('Message factory methods', () {
+  group('Message factory methods (shared)', () {
     const documentId = 'test-doc-id';
-    late CRDTDocument doc;
-    late MockHandler handler;
-    late MockOperation operation;
-
-    setUp(() {
-      doc = CRDTDocument();
-      handler = MockHandler(doc);
-      operation = MockOperation(handler);
-    });
-
-    test('Message.change() should create ChangeMessage', () {
-      final peer = PeerId.generate();
-      final change = Change(
-        id: OperationId(
-          peer,
-          HybridLogicalClock(l: 1, c: 1),
-        ),
-        operation: operation,
-        deps: {},
-        author: peer,
-      );
-
-      final message = Message.change(
-        documentId: documentId,
-        change: change,
-      );
-
-      expect(message, isA<ChangeMessage>());
-      expect(message.type, MessageType.change);
-      expect(message.documentId, documentId);
-      expect((message as ChangeMessage).change, change);
-    });
-
-    test('Message.snapshot() should create SnapshotMessage', () {
-      final snapshot = Snapshot(
-        id: 'test-snapshot',
-        versionVector: VersionVector(
-          {PeerId.generate(): HybridLogicalClock(l: 1, c: 1)},
-        ),
-        data: {
-          'key': Uint8List.fromList([1, 2, 3]),
-        },
-      );
-
-      final message = Message.documentStatus(
-        documentId: documentId,
-        snapshot: snapshot,
-        changes: [],
-        versionVector: snapshot.versionVector,
-      );
-
-      expect(message, isA<DocumentStatusMessage>());
-      expect(message.type, MessageType.documentStatus);
-      expect(message.documentId, documentId);
-      expect((message as DocumentStatusMessage).snapshot, snapshot);
-    });
-
-    test('Message.snapshotRequest() should create SnapshotRequestMessage', () {
-      final versionVector = VersionVector({
-        PeerId.generate(): HybridLogicalClock(l: 1, c: 1),
-      });
-
-      final message = Message.documentStatusRequest(
-        documentId: documentId,
-        versionVector: versionVector,
-      );
-
-      expect(message, isA<DocumentStatusRequestMessage>());
-      expect(message.type, MessageType.documentStatusRequest);
-      expect(message.documentId, documentId);
-      expect(
-        (message as DocumentStatusRequestMessage).versionVector,
-        versionVector,
-      );
-    });
 
     test('Message.ping() should create PingMessage', () {
       const timestamp = 1234567890;
@@ -161,385 +77,6 @@ void main() {
     });
   });
 
-  group('HandshakeRequestMessage', () {
-    const documentId = 'test-doc-id';
-    final author = PeerId.generate();
-    final versionVector = VersionVector({
-      PeerId.generate(): HybridLogicalClock(l: 1, c: 1),
-    });
-
-    test('should create with correct properties', () {
-      final message = HandshakeRequestMessage(
-        documentId: documentId,
-        author: author,
-        versionVector: versionVector,
-      );
-
-      expect(message.type, MessageType.handshakeRequest);
-      expect(message.documentId, documentId);
-      expect(message.author, author);
-      expect(message.versionVector, versionVector);
-    });
-
-    test('should serialize to JSON correctly', () {
-      final message = HandshakeRequestMessage(
-        documentId: documentId,
-        author: author,
-        versionVector: versionVector,
-      );
-
-      final json = message.toJson();
-
-      expect(json['type'], MessageType.handshakeRequest.index);
-      expect(json['documentId'], documentId);
-      expect(json['author'], author.toString());
-      expect(json['versionVector'], _encVV(versionVector));
-    });
-
-    test('should deserialize from JSON correctly', () {
-      final json = {
-        'type': MessageType.handshakeRequest.index,
-        'documentId': documentId,
-        'author': author.toString(),
-        'versionVector': _encVV(versionVector),
-      };
-
-      final message = HandshakeRequestMessage.fromJson(json);
-
-      expect(message.type, MessageType.handshakeRequest);
-      expect(message.documentId, documentId);
-      expect(message.author, author);
-      expect(message.versionVector.toBytes(), versionVector.toBytes());
-    });
-
-    test('should have correct toString representation', () {
-      final message = HandshakeRequestMessage(
-        documentId: documentId,
-        author: author,
-        versionVector: versionVector,
-      );
-
-      final string = message.toString();
-
-      expect(string, contains('HandshakeRequestMessage'));
-      expect(string, contains(documentId));
-      expect(string, contains(author.toString()));
-    });
-  });
-
-  group('HandshakeResponseMessage', () {
-    const documentId = 'test-doc-id';
-    late CRDTDocument doc;
-    late MockHandler handler;
-    late MockOperation operation;
-    late Snapshot snapshot;
-    late List<Change> changes;
-
-    setUp(() {
-      doc = CRDTDocument();
-      handler = MockHandler(doc);
-      operation = MockOperation(handler);
-
-      snapshot = Snapshot(
-        id: 'test-snapshot',
-        versionVector:
-            VersionVector({PeerId.generate(): HybridLogicalClock(l: 1, c: 1)}),
-        data: {
-          'key': Uint8List.fromList([1, 2, 3]),
-        },
-      );
-
-      final peer1 = PeerId.generate();
-      final peer2 = PeerId.generate();
-      changes = [
-        Change(
-          id: OperationId(peer1, HybridLogicalClock(l: 1, c: 1)),
-          operation: operation,
-          deps: {},
-          author: peer1,
-        ),
-        Change(
-          id: OperationId(peer2, HybridLogicalClock(l: 1, c: 2)),
-          operation: operation,
-          deps: {},
-          author: peer2,
-        ),
-      ];
-    });
-
-    test('should create with snapshot and changes', () {
-      final message = HandshakeResponseMessage(
-        documentId: documentId,
-        snapshot: snapshot,
-        changes: changes,
-        sessionId: 'test-session-id',
-        versionVector: snapshot.versionVector,
-      );
-
-      expect(message.type, MessageType.handshakeResponse);
-      expect(message.documentId, documentId);
-      expect(message.snapshot, snapshot);
-      expect(message.changes, changes);
-    });
-
-    test('should create with only snapshot', () {
-      final message = HandshakeResponseMessage(
-        documentId: documentId,
-        snapshot: snapshot,
-        sessionId: 'test-session-id',
-        versionVector: snapshot.versionVector,
-      );
-
-      expect(message.snapshot, snapshot);
-      expect(message.changes, isNull);
-    });
-
-    test('should create with only changes', () {
-      final versionVector = VersionVector({});
-      for (final change in changes) {
-        versionVector.update(change.id.peerId, change.hlc);
-      }
-
-      final message = HandshakeResponseMessage(
-        documentId: documentId,
-        changes: changes,
-        sessionId: 'test-session-id',
-        versionVector: versionVector,
-      );
-
-      expect(message.snapshot, isNull);
-      expect(message.changes, changes);
-      expect(message.sessionId, 'test-session-id');
-    });
-
-    test('should serialize to JSON correctly', () {
-      final message = HandshakeResponseMessage(
-        documentId: documentId,
-        snapshot: snapshot,
-        changes: changes,
-        sessionId: '5a2e1d55-74c7-453b-9256-1c5ffe3283b5',
-        versionVector: snapshot.versionVector,
-      );
-
-      final json = message.toJson();
-
-      expect(json['type'], MessageType.handshakeResponse.index);
-      expect(json['documentId'], documentId);
-      expect(json['snapshot'], _encSnap(snapshot));
-      expect(json['changes'], changes.map(_encCh).toList());
-      expect(json['sessionId'], '5a2e1d55-74c7-453b-9256-1c5ffe3283b5');
-      expect(json['versionVector'], _encVV(snapshot.versionVector));
-    });
-
-    test('should deserialize from JSON correctly', () {
-      final json = {
-        'type': MessageType.handshakeResponse.index,
-        'documentId': documentId,
-        'snapshot': _encSnap(snapshot),
-        'changes': changes.map(_encCh).toList(),
-        'sessionId': '5a2e1d55-74c7-453b-9256-1c5ffe3283b5',
-        'versionVector': _encVV(snapshot.versionVector),
-      };
-
-      final message = HandshakeResponseMessage.fromJson(json);
-
-      expect(message.type, MessageType.handshakeResponse);
-      expect(message.documentId, documentId);
-      expect(message.snapshot, isNotNull);
-      expect(message.changes, hasLength(changes.length));
-    });
-
-    test('should handle null snapshot and changes in JSON', () {
-      final emptyVV = VersionVector({});
-      final json = {
-        'type': MessageType.handshakeResponse.index,
-        'documentId': documentId,
-        'snapshot': null,
-        'changes': null,
-        'sessionId': '5a2e1d55-74c7-453b-9256-1c5ffe3283b5',
-        'versionVector': _encVV(emptyVV),
-      };
-
-      final message = HandshakeResponseMessage.fromJson(json);
-
-      expect(message.snapshot, isNull);
-      expect(message.changes, isNull);
-    });
-  });
-
-  group('ChangeMessage', () {
-    const documentId = 'test-doc-id';
-    late CRDTDocument doc;
-    late MockHandler handler;
-    late MockOperation operation;
-    late Change change;
-
-    setUp(() {
-      doc = CRDTDocument();
-      handler = MockHandler(doc);
-      operation = MockOperation(handler);
-
-      final peer = PeerId.generate();
-      change = Change(
-        id: OperationId(peer, HybridLogicalClock(l: 1, c: 1)),
-        operation: operation,
-        deps: {},
-        author: peer,
-      );
-    });
-
-    test('should create with correct properties', () {
-      final message = ChangeMessage(
-        documentId: documentId,
-        change: change,
-      );
-
-      expect(message.type, MessageType.change);
-      expect(message.documentId, documentId);
-      expect(message.change, change);
-    });
-
-    test('should serialize to JSON correctly', () {
-      final message = ChangeMessage(
-        documentId: documentId,
-        change: change,
-      );
-
-      final json = message.toJson();
-
-      expect(json['type'], MessageType.change.index);
-      expect(json['documentId'], documentId);
-      expect(json['change'], _encCh(change));
-    });
-
-    test('should deserialize from JSON correctly', () {
-      final json = {
-        'type': MessageType.change.index,
-        'documentId': documentId,
-        'change': _encCh(change),
-      };
-
-      final message = ChangeMessage.fromJson(json);
-
-      expect(message.type, MessageType.change);
-      expect(message.documentId, documentId);
-      expect(message.change.id, change.id);
-    });
-  });
-
-  group('SnapshotMessage', () {
-    const documentId = 'test-doc-id';
-    final snapshot = Snapshot(
-      id: 'test-snapshot',
-      versionVector:
-          VersionVector({PeerId.generate(): HybridLogicalClock(l: 1, c: 1)}),
-      data: {
-        'key': Uint8List.fromList([1, 2, 3]),
-      },
-    );
-
-    test('should create with correct properties', () {
-      final message = DocumentStatusMessage(
-        documentId: documentId,
-        snapshot: snapshot,
-        versionVector: snapshot.versionVector,
-      );
-
-      expect(message.type, MessageType.documentStatus);
-      expect(message.documentId, documentId);
-      expect(message.snapshot, snapshot);
-    });
-
-    test('should serialize to JSON correctly', () {
-      final message = DocumentStatusMessage(
-        documentId: documentId,
-        snapshot: snapshot,
-        versionVector: snapshot.versionVector,
-      );
-
-      final json = message.toJson();
-
-      expect(json['type'], MessageType.documentStatus.index);
-      expect(json['documentId'], documentId);
-      expect(json['snapshot'], _encSnap(snapshot));
-      expect(json['versionVector'], _encVV(snapshot.versionVector));
-    });
-
-    test('should deserialize from JSON correctly', () {
-      final json = {
-        'type': MessageType.documentStatus.index,
-        'documentId': documentId,
-        'snapshot': _encSnap(snapshot),
-        'versionVector': _encVV(snapshot.versionVector),
-      };
-
-      final message = DocumentStatusMessage.fromJson(json);
-
-      expect(message.type, MessageType.documentStatus);
-      expect(message.documentId, documentId);
-      expect(message.snapshot, isNotNull);
-    });
-  });
-
-  group('SnapshotRequestMessage', () {
-    const documentId = 'test-doc-id';
-    final versionVector = VersionVector({
-      PeerId.generate(): HybridLogicalClock(l: 1, c: 1),
-    });
-
-    test('should create with correct properties', () {
-      final message = DocumentStatusRequestMessage(
-        documentId: documentId,
-        versionVector: versionVector,
-      );
-
-      expect(message.type, MessageType.documentStatusRequest);
-      expect(message.documentId, documentId);
-      expect(message.versionVector, versionVector);
-    });
-
-    test('should serialize to JSON correctly', () {
-      final message = DocumentStatusRequestMessage(
-        documentId: documentId,
-        versionVector: versionVector,
-      );
-
-      final json = message.toJson();
-
-      expect(json['type'], MessageType.documentStatusRequest.index);
-      expect(json['documentId'], documentId);
-      expect(json['versionVector'], _encVV(versionVector));
-    });
-
-    test('should deserialize from JSON correctly', () {
-      final json = {
-        'type': MessageType.documentStatusRequest.index,
-        'documentId': documentId,
-        'versionVector': _encVV(versionVector),
-      };
-
-      final message = DocumentStatusRequestMessage.fromJson(json);
-
-      expect(message.type, MessageType.documentStatusRequest);
-      expect(message.documentId, documentId);
-      expect(message.versionVector?.toBytes(), versionVector.toBytes());
-    });
-
-    test('should handle null versionVector', () {
-      const message = DocumentStatusRequestMessage(
-        documentId: documentId,
-      );
-
-      expect(message.versionVector, isNull);
-
-      final json = message.toJson();
-      expect(json['versionVector'], isNull);
-
-      final deserialized = DocumentStatusRequestMessage.fromJson(json);
-      expect(deserialized.versionVector, isNull);
-    });
-  });
-
   group('PingMessage', () {
     const documentId = 'test-doc-id';
     const timestamp = 1234567890;
@@ -563,14 +100,14 @@ void main() {
 
       final json = message.toJson();
 
-      expect(json['type'], MessageType.ping.index);
+      expect(json['type'], MessageType.ping.value);
       expect(json['documentId'], documentId);
       expect(json['timestamp'], timestamp);
     });
 
     test('should deserialize from JSON correctly', () {
       final json = {
-        'type': MessageType.ping.index,
+        'type': MessageType.ping.value,
         'documentId': documentId,
         'timestamp': timestamp,
       };
@@ -655,7 +192,7 @@ void main() {
 
       final json = message.toJson();
 
-      expect(json['type'], MessageType.pong.index);
+      expect(json['type'], MessageType.pong.value);
       expect(json['documentId'], documentId);
       expect(json['originalTimestamp'], originalTimestamp);
       expect(json['responseTimestamp'], responseTimestamp);
@@ -663,7 +200,7 @@ void main() {
 
     test('should deserialize from JSON correctly', () {
       final json = {
-        'type': MessageType.pong.index,
+        'type': MessageType.pong.value,
         'documentId': documentId,
         'originalTimestamp': originalTimestamp,
         'responseTimestamp': responseTimestamp,
@@ -720,7 +257,7 @@ void main() {
 
       final json = message.toJson();
 
-      expect(json['type'], MessageType.error.index);
+      expect(json['type'], MessageType.error.value);
       expect(json['documentId'], documentId);
       expect(json['code'], code);
       expect(json['message'], errorMessage);
@@ -728,7 +265,7 @@ void main() {
 
     test('should deserialize from JSON correctly', () {
       final json = {
-        'type': MessageType.error.index,
+        'type': MessageType.error.value,
         'documentId': documentId,
         'code': code,
         'message': errorMessage,
@@ -759,105 +296,9 @@ void main() {
   });
 
   group('Message.fromJson()', () {
-    late CRDTDocument doc;
-    late MockHandler handler;
-    late MockOperation operation;
-
-    setUp(() {
-      doc = CRDTDocument();
-      handler = MockHandler(doc);
-      operation = MockOperation(handler);
-    });
-
-    test('should deserialize HandshakeRequestMessage', () {
-      final json = {
-        'type': MessageType.handshakeRequest.index,
-        'documentId': 'test-doc',
-        'author': PeerId.generate().toString(),
-        'versionVector': _encVV(VersionVector({})),
-      };
-
-      final message = Message.fromJson(json);
-
-      expect(message, isA<HandshakeRequestMessage>());
-      expect(message!.type, MessageType.handshakeRequest);
-    });
-
-    test('should deserialize HandshakeResponseMessage', () {
-      final emptyVV = VersionVector({});
-      final json = {
-        'type': MessageType.handshakeResponse.index,
-        'documentId': 'test-doc',
-        'snapshot': null,
-        'changes': null,
-        'sessionId': '5a2e1d55-74c7-453b-9256-1c5ffe3283b5',
-        'versionVector': _encVV(emptyVV),
-      };
-
-      final message = Message.fromJson(json);
-
-      expect(message, isA<HandshakeResponseMessage>());
-      expect(message!.type, MessageType.handshakeResponse);
-    });
-
-    test('should deserialize ChangeMessage', () {
-      final peer = PeerId.generate();
-      final change = Change(
-        id: OperationId(peer, HybridLogicalClock(l: 1, c: 1)),
-        operation: operation,
-        deps: {},
-        author: peer,
-      );
-      final json = {
-        'type': MessageType.change.index,
-        'documentId': 'test-doc',
-        'change': _encCh(change),
-      };
-
-      final message = Message.fromJson(json);
-
-      expect(message, isA<ChangeMessage>());
-      expect(message!.type, MessageType.change);
-    });
-
-    test('should deserialize SnapshotMessage', () {
-      final snapshot = Snapshot(
-        id: 'test-snapshot',
-        versionVector:
-            VersionVector({PeerId.generate(): HybridLogicalClock(l: 1, c: 1)}),
-        data: {
-          'key': Uint8List.fromList([1, 2, 3]),
-        },
-      );
-      final json = {
-        'type': MessageType.documentStatus.index,
-        'documentId': 'test-doc',
-        'snapshot': _encSnap(snapshot),
-        'versionVector': _encVV(snapshot.versionVector),
-      };
-
-      final message = Message.fromJson(json);
-
-      expect(message, isA<DocumentStatusMessage>());
-      expect(message!.type, MessageType.documentStatus);
-    });
-
-    test('should deserialize SnapshotRequestMessage', () {
-      final json = {
-        'type': MessageType.documentStatusRequest.index,
-        'documentId': 'test-doc',
-        'version': <String>[],
-      };
-
-      final message = Message.fromJson(json);
-
-      expect(message, isA<DocumentStatusRequestMessage>());
-      expect(message!.type, MessageType.documentStatusRequest);
-    });
-
     test('should deserialize PingMessage', () {
       final json = {
-        'type': MessageType.ping.index,
+        'type': MessageType.ping.value,
         'documentId': 'test-doc',
         'timestamp': 1234567890,
       };
@@ -870,7 +311,7 @@ void main() {
 
     test('should deserialize PongMessage', () {
       final json = {
-        'type': MessageType.pong.index,
+        'type': MessageType.pong.value,
         'documentId': 'test-doc',
         'originalTimestamp': 1234567890,
         'responseTimestamp': 1234567900,
@@ -884,7 +325,7 @@ void main() {
 
     test('should deserialize ErrorMessage', () {
       final json = {
-        'type': MessageType.error.index,
+        'type': MessageType.error.value,
         'documentId': 'test-doc',
         'code': 'TEST_ERROR',
         'message': 'Test error',
@@ -894,6 +335,29 @@ void main() {
 
       expect(message, isA<ErrorMessage>());
       expect(message!.type, MessageType.error);
+    });
+
+    test('should return null for server-client (sync) type codes', () {
+      // Sync-protocol frames are decoded by SyncMessage.fromJson, not here;
+      // Message.fromJson stays chainable by returning null for them.
+      for (final type in [
+        MessageType.handshakeRequest.value,
+        MessageType.handshakeResponse.value,
+        MessageType.change.value,
+        MessageType.changes.value,
+        MessageType.documentStatus.value,
+        MessageType.documentStatusRequest.value,
+      ]) {
+        expect(
+          Message.fromJson({'type': type, 'documentId': 'd'}),
+          isNull,
+          reason: 'type $type must not be decoded by Message.fromJson',
+        );
+      }
+    });
+
+    test('should return null for plugin type codes', () {
+      expect(Message.fromJson({'type': 100, 'documentId': 'd'}), isNull);
     });
   });
 
@@ -911,32 +375,6 @@ void main() {
       expect(restored, isA<PingMessage>());
       expect(restored!.documentId, original.documentId);
       expect((restored as PingMessage).timestamp, original.timestamp);
-    });
-
-    test('should handle complex message serialization', () {
-      final doc = CRDTDocument();
-      final handler = MockHandler(doc);
-      final operation = MockOperation(handler);
-
-      final peer = PeerId.generate();
-      final change = Change(
-        id: OperationId(peer, HybridLogicalClock(l: 1, c: 1)),
-        operation: operation,
-        deps: {},
-        author: peer,
-      );
-      final original = ChangeMessage(
-        documentId: 'complex-doc-id',
-        change: change,
-      );
-
-      final jsonString = original.serialize();
-      final json = jsonDecode(jsonString) as Map<String, dynamic>;
-      final restored = Message.fromJson(json);
-
-      expect(restored, isA<ChangeMessage>());
-      expect(restored!.documentId, original.documentId);
-      expect((restored as ChangeMessage).change.id, change.id);
     });
   });
 

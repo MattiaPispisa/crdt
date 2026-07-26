@@ -111,7 +111,7 @@ class HiveServerRegistry extends CRDTServerRegistry {
             final snapshot = await createSnapshot(documentId);
             final changes = item.document.exportChanges();
             await _server.broadcastMessage(
-              Message.documentStatus(
+              SyncMessage.documentStatus(
                 documentId: documentId,
                 snapshot: snapshot,
                 changes: changes,

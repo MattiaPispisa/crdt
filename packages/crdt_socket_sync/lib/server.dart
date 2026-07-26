@@ -1,12 +1,12 @@
 /// Server library for CRDT Socket Sync
 library crdt_socket_sync_server;
 
-export 'src/common/common.dart';
-
+export 'src/common/common/common.dart';
+export 'src/common/server/client_session.dart';
+export 'src/common/server/client_session_event.dart';
+export 'src/common/server/event.dart';
+export 'src/common/server/server.dart';
 export 'src/plugins/server.dart';
-
-export 'src/server/client_session.dart';
-export 'src/server/client_session_event.dart';
-export 'src/server/event.dart';
-export 'src/server/registry.dart';
-export 'src/server/server.dart';
+export 'src/server_client/common/common.dart';
+export 'src/server_client/server/document_client_session.dart';
+export 'src/server_client/server/registry.dart';

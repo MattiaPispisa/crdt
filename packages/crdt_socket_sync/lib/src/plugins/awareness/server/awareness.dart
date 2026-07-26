@@ -1,12 +1,14 @@
 import 'dart:async';
 import 'package:crdt_socket_sync/server.dart';
 
+/// {@template server_awareness_plugin}
 /// Server awareness plugin.
 ///
 /// This plugin is used to manage the awareness of the clients
 /// connected to the same document.
+/// {@endtemplate}
 class ServerAwarenessPlugin extends ServerSyncPlugin {
-  /// Constructor
+  /// {@macro server_awareness_plugin}
   ///
   /// [codec] is the codec to use to encode and decode the messages.
   /// default to [JsonMessageCodec]
