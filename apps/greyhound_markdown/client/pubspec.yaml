@@ -9,8 +9,8 @@ environment:
 dependencies:
   crdt_lf: ^3.4.2
   crdt_lf_flutter: ^0.2.1
-  crdt_socket_sync:
-    path: ../../../packages/crdt_socket_sync
+  crdt_socket_sync: ^0.6.0
+  
   flutter:
     sdk: flutter
   flutter_highlight: ^0.7.0
