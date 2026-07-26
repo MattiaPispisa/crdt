@@ -1,3 +1,11 @@
+## 0.3.0
+
+**Date:** 2026-07-26
+
+### Changed
+
+- Sync now runs on the `crdt_socket_sync` relay
+
 ## 0.2.0
 
 **Date:** 2026-07-21
