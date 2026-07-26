@@ -373,11 +373,11 @@ class WebSocketRelayClient extends RelaySocketClient {
 
     // ignore: prefer_asserts_with_message assert function
     assert(() {
-      // TODO(m.pispisa): decifriamo il type se possibile
       if (data == null) {
         throw StateError(
-          '[WebSocketRelayClient] cannot send a message that cannot be'
-          ' encoded. Have you added the plugin to the client?'
+          '[WebSocketRelayClient] cannot send a message of type'
+          ' ${message.type} that cannot be encoded.'
+          ' Have you added the plugin to the client?'
           '\nMessage: $message',
         );
       }

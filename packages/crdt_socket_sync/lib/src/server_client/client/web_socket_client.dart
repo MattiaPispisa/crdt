@@ -287,7 +287,8 @@ class WebSocketClient extends CRDTSocketClient {
     assert(() {
       if (data == null) {
         throw StateError(
-          '[WebSocketClient] cannot send a message that cannot be encoded.'
+          '[WebSocketClient] cannot send a message of type ${message.type}'
+          ' that cannot be encoded.'
           ' Have you added the plugin to the client?'
           '\nMessage: $message',
         );
