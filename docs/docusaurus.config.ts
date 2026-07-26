@@ -38,6 +38,11 @@ const config: Config = {
 
   themes: ['@docusaurus/theme-mermaid'],
 
+  plugins: [
+    // offline, client-side search
+    'docusaurus-plugin-pagefind',
+  ],
+
   // Set the production url of your site here
   url: 'https://MattiaPispisa.github.io',
   // Set the /<baseUrl>/ pathname under which your site is served
@@ -160,6 +165,7 @@ const config: Config = {
     prism: {
       theme: prismThemes.github,
       darkTheme: prismThemes.dracula,
+      additionalLanguages: ['dart'],
     },
   } satisfies Preset.ThemeConfig,
 };
