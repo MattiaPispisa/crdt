@@ -760,7 +760,7 @@ flutter run --dart-define=USE_COMPRESSION=true
 ```
 
 [archive]: https://pub.dev/packages/archive
-[gzip-example]: example/lib/src/gzip_compression.dart
+[gzip-example]: https://github.com/MattiaPispisa/crdt/blob/main/packages/crdt_socket_sync/example/lib/src/gzip_compression.dart
 
 ### Connection status & error handling
 
