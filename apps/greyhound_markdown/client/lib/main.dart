@@ -3,6 +3,7 @@ import 'package:highlight/highlight.dart' show highlight;
 import 'package:highlight/languages/all.dart' show allLanguages;
 
 import 'package:greyhound_markdown_client/src/config.dart';
+import 'package:greyhound_markdown_client/src/screens/changelog_screen.dart';
 import 'package:greyhound_markdown_client/src/screens/editor_screen.dart';
 import 'package:greyhound_markdown_client/src/screens/home_screen.dart';
 import 'package:greyhound_markdown_client/src/screens/settings_screen.dart';
@@ -36,6 +37,12 @@ class GreyhoundApp extends StatelessWidget {
           return MaterialPageRoute(
             settings: settings,
             builder: (_) => const SettingsScreen(),
+          );
+        }
+        if (uri.path == kChangelogRoute) {
+          return MaterialPageRoute(
+            settings: settings,
+            builder: (_) => const ChangelogScreen(),
           );
         }
         return MaterialPageRoute(

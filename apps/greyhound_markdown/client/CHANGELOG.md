@@ -1,3 +1,11 @@
+## 0.4.0
+
+**Date:** 2026-07-26
+
+### Added
+
+- View the app changelog from the About page.
+
 ## 0.3.0
 
 **Date:** 2026-07-26

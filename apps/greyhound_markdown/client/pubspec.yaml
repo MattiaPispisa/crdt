@@ -1,7 +1,7 @@
 name: greyhound_markdown_client
 description: "Real-time collaborative markdown editor built on crdt_lf."
 publish_to: 'none'
-version: 0.3.0
+version: 0.4.0
 
 environment:
   sdk: ^3.11.5
@@ -30,3 +30,4 @@ flutter:
   uses-material-design: true
   assets:
     - assets/images/greyhound_markdown_logo.png
+    - CHANGELOG.md

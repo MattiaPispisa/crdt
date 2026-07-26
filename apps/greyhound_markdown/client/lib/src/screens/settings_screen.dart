@@ -61,6 +61,15 @@ class SettingsScreen extends StatelessWidget {
             const SizedBox(height: 24),
             Center(
               child: OutlinedButton.icon(
+                icon: const Icon(Icons.history),
+                label: const Text('View changelog'),
+                onPressed: () =>
+                    Navigator.of(context).pushNamed(kChangelogRoute),
+              ),
+            ),
+            const SizedBox(height: 12),
+            Center(
+              child: OutlinedButton.icon(
                 icon: const Icon(Icons.description_outlined),
                 label: const Text('View licenses'),
                 onPressed: () => _showLicenses(context),
