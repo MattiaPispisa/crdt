@@ -12,7 +12,13 @@ void main() {
       doc = CRDTDocument(peerId: PeerId.generate());
     });
 
-    Widget host(List<CrdtTextCursor> cursors) {
+    /// The overlay under test. Caret motion is off by default, so the
+    /// assertions below read the resolved position, not an animation frame.
+    Widget host(
+      List<CrdtTextCursor> cursors, {
+      Duration motionDuration = Duration.zero,
+      int? maxLines = 1,
+    }) {
       return CrdtProvider.value(
         value: doc,
         child: MaterialApp(
@@ -22,7 +28,8 @@ void main() {
               builder: (context, controller) => CrdtTextCursorsOverlay(
                 id: 'note',
                 cursors: cursors,
-                child: TextField(controller: controller),
+                motionDuration: motionDuration,
+                child: TextField(controller: controller, maxLines: maxLines),
               ),
             ),
           ),
@@ -112,6 +119,76 @@ void main() {
       expect(
         find.ancestor(of: overlayPaint(), matching: find.byType(Overlay)),
         findsOneWidget,
+      );
+    });
+
+    testWidgets('glides to the position an edit moved the caret to',
+        (tester) async {
+      final note = CRDTFugueTextHandler(doc, 'note')..insert(0, 'hello world');
+      const color = Color(0xFFAA0000);
+      final cursor = CrdtTextCursor(
+        id: 'peer-b',
+        color: color,
+        base: note.stablePositionAt(5),
+      );
+      await tester.pumpWidget(
+        host([cursor], motionDuration: const Duration(milliseconds: 120)),
+      );
+      final from = expectedCaret(tester, 5);
+
+      final remote = CRDTDocument(peerId: PeerId.generate());
+      CRDTFugueTextHandler(remote, 'note');
+      remote.importChanges(doc.exportChanges());
+      (remote.registeredHandlers['note']! as CRDTFugueTextHandler)
+          .insert(0, 'XXX ');
+      doc.importChanges(remote.exportChanges());
+
+      // The text is already updated, the caret has not left yet.
+      await tester.pump();
+      final to = expectedCaret(tester, 9);
+      expect(overlayPaint(), paints..rect(rect: from, color: color));
+
+      // Mid-flight: somewhere between the two, never at either end.
+      await tester.pump(const Duration(milliseconds: 16));
+      await tester.pump(const Duration(milliseconds: 16));
+      expect(
+        overlayPaint(),
+        paints
+          ..something((method, arguments) {
+            if (method != #drawRect) {
+              return false;
+            }
+            final rect = arguments.first as Rect;
+            return rect.left > from.left && rect.left < to.left;
+          }),
+      );
+
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(overlayPaint(), paints..rect(rect: to, color: color));
+    });
+
+    testWidgets('snaps a caret that jumps far away', (tester) async {
+      final note = CRDTFugueTextHandler(doc, 'note')
+        ..insert(0, 'one\ntwo\nthree\nfour\nfive');
+      const color = Color(0xFF0000AA);
+      const motion = Duration(milliseconds: 120);
+      CrdtTextCursor cursorAt(int index) => CrdtTextCursor(
+            id: 'peer-b',
+            color: color,
+            base: note.stablePositionAt(index),
+          );
+      await tester.pumpWidget(
+        host([cursorAt(1)], motionDuration: motion, maxLines: null),
+      );
+
+      // Four lines down is a jump, not a move: no sweep across the field.
+      await tester.pumpWidget(
+        host([cursorAt(22)], motionDuration: motion, maxLines: null),
+      );
+      await tester.pump();
+      expect(
+        overlayPaint(),
+        paints..rect(rect: expectedCaret(tester, 22), color: color),
       );
     });
 

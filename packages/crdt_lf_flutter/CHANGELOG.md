@@ -4,6 +4,10 @@
 
 [compare to previous release](https://github.com/MattiaPispisa/crdt/compare/crdt_lf_flutter-v0.2.1...crdt_lf_flutter-v0.3.0)
 
+### Added
+
+- `CrdtTextCursorsOverlay` carets now moves to their new position instead of jumping there. Tune it with `motionDuration` (120ms by default, `Duration.zero` restores the instant painting). [102](https://github.com/MattiaPispisa/crdt/issues/102)
+
 ### Changed
 
 - Requires `crdt_lf` 4.0.0, where text is indexed by code point rather than by code unit. [106](https://github.com/MattiaPispisa/crdt/issues/106)
