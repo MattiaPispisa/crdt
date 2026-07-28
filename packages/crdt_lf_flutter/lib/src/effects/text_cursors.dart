@@ -5,6 +5,7 @@ import 'package:crdt_lf/crdt_lf.dart';
 import 'package:crdt_lf_flutter/src/provider/crdt_helper.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/rendering.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:flutter/widgets.dart';
 
 /// {@template crdt_text_cursor}
@@ -109,6 +110,10 @@ Rect resolveTextCursorLabelRect({
 /// Like `CrdtTextFieldBuilder`, it never rebuilds its subtree: document
 /// updates and scrolls only schedule a repaint of the painter.
 ///
+/// A caret glides to its new position over [motionDuration] instead of
+/// jumping there, so a collaborator typing over the network reads as one
+/// continuous movement.
+///
 /// Cursors are painted into the app [Overlay] (via [OverlayPortal]), so
 /// sibling widgets painted after the field — a following container's
 /// border, the next card — can never cover a caret or its name tag.
@@ -138,6 +143,7 @@ class CrdtTextCursorsOverlay extends StatefulWidget {
     required this.cursors,
     required this.child,
     this.labelPlacement = CrdtTextCursorLabelPlacement.auto,
+    this.motionDuration = const Duration(milliseconds: 120),
     super.key,
   });
 
@@ -153,6 +159,16 @@ class CrdtTextCursorsOverlay extends StatefulWidget {
   /// [CrdtTextCursorLabelPlacement.auto].
   final CrdtTextCursorLabelPlacement labelPlacement;
 
+  /// How long a caret (and its name tag) takes to glide to a new position.
+  ///
+  /// Movement is smoothed in the text's own coordinates.
+  ///
+  /// A caret that jumps far away
+  /// snaps rather than move across the field.
+  ///
+  /// Defaults to 120ms; [Duration.zero] paints every move instantly.
+  final Duration motionDuration;
+
   /// The subtree containing the text field to draw over.
   final Widget child;
 
@@ -160,11 +176,18 @@ class CrdtTextCursorsOverlay extends StatefulWidget {
   State<CrdtTextCursorsOverlay> createState() => _CrdtTextCursorsOverlayState();
 }
 
-class _CrdtTextCursorsOverlayState extends State<CrdtTextCursorsOverlay> {
+class _CrdtTextCursorsOverlayState extends State<CrdtTextCursorsOverlay>
+    with SingleTickerProviderStateMixin {
   CRDTDocument? _document;
   StreamSubscription<void>? _subscription;
   int _lastRevision = 0;
   final _repaint = _RepaintNotifier();
+
+  /// The gliding carets, keyed by [CrdtTextCursor.id].
+  /// One [Ticker] drives them all.
+  final _motions = <Object, _CaretMotion>{};
+  late final Ticker _ticker;
+  Duration _lastTick = Duration.zero;
 
   /// Anchors the [OverlayPortal] paint surface to this widget's origin, so
   /// the painter keeps working in field-local coordinates while living in
@@ -179,6 +202,7 @@ class _CrdtTextCursorsOverlayState extends State<CrdtTextCursorsOverlay> {
   @override
   void initState() {
     super.initState();
+    _ticker = createTicker(_onTick);
     // Safe while detached: the controller records the pending z-order and
     // the portal shows on attach.
     _portal.show();
@@ -217,7 +241,8 @@ class _CrdtTextCursorsOverlayState extends State<CrdtTextCursorsOverlay> {
   void didUpdateWidget(CrdtTextCursorsOverlay oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (!listEquals(oldWidget.cursors, widget.cursors) ||
-        oldWidget.labelPlacement != widget.labelPlacement) {
+        oldWidget.labelPlacement != widget.labelPlacement ||
+        oldWidget.motionDuration != widget.motionDuration) {
       _repaint.bump();
     }
   }
@@ -225,8 +250,50 @@ class _CrdtTextCursorsOverlayState extends State<CrdtTextCursorsOverlay> {
   @override
   void dispose() {
     _subscription?.cancel();
+    _ticker.dispose();
     _repaint.dispose();
     super.dispose();
+  }
+
+  /// Starts the glide clock if a caret is on its way somewhere.
+  ///
+  /// Called from the painter, which runs inside a frame, so the callback
+  /// fires at the end of that same frame.
+  void _ensureTicking() {
+    if (_ticker.isActive) {
+      return;
+    }
+    SchedulerBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || _ticker.isActive || _settled) {
+        return;
+      }
+      _lastTick = Duration.zero;
+      _ticker.start();
+    });
+  }
+
+  bool get _settled => _motions.values.every((motion) => motion.settled);
+
+  /// Moves every caret a slice of the way to its target and repaints.
+  ///
+  /// The step is an exponential settle (~98% of the distance covered in
+  /// [CrdtTextCursorsOverlay.motionDuration]): frame-rate independent, and
+  /// stable when the target moves mid-glide. A long gap between ticks — a
+  /// muted [Ticker] on an off-screen field — resolves to a snap.
+  void _onTick(Duration elapsed) {
+    final dt =
+        (elapsed - _lastTick).inMicroseconds / Duration.microsecondsPerSecond;
+    _lastTick = elapsed;
+    final tau = widget.motionDuration.inMicroseconds /
+        (4 * Duration.microsecondsPerSecond);
+    final t = tau <= 0 ? 1.0 : 1 - math.exp(-dt / tau);
+    for (final motion in _motions.values) {
+      motion.advance(t);
+    }
+    if (_settled) {
+      _ticker.stop();
+    }
+    _repaint.bump();
   }
 
   void _attach(CRDTDocument document) {
@@ -285,6 +352,57 @@ class _RepaintNotifier extends ChangeNotifier {
   void bump() => notifyListeners();
 }
 
+/// A caret on its way from where it is painted ([shown]) to where the
+/// anchor now resolves ([target]), both in the text's own (unscrolled)
+/// coordinates.
+class _CaretMotion {
+  _CaretMotion(Rect at)
+      : shown = at,
+        target = at;
+
+  /// The rect currently painted.
+  Rect shown;
+
+  /// The rect [shown] is heading to.
+  Rect target;
+
+  /// Whether a caret vertically [rect] away is a jump rather than a move:
+  /// a collaborator clicking elsewhere or pasting a block must not sweep
+  /// across the field.
+  static bool isJump(Rect from, Rect rect) =>
+      (rect.center.dy - from.center.dy).abs() > 2 * rect.height;
+
+  bool get settled => shown == target;
+
+  /// Sends this caret to [rect], gliding unless the move is a [isJump].
+  ///
+  /// Returns whether a glide is now in flight.
+  bool retarget(Rect rect, {required bool animate}) {
+    target = rect;
+    if (!animate || isJump(shown, rect)) {
+      shown = rect;
+    }
+    return !settled;
+  }
+
+  /// Covers a fraction [t] of the remaining distance, snapping when the
+  /// leftover is under half a pixel (an invisible difference that would
+  /// otherwise keep the clock running forever).
+  void advance(double t) {
+    if (settled) {
+      return;
+    }
+    final next = Rect.lerp(shown, target, t)!;
+    const epsilon = 0.5;
+    shown = (next.left - target.left).abs() < epsilon &&
+            (next.top - target.top).abs() < epsilon &&
+            (next.right - target.right).abs() < epsilon &&
+            (next.bottom - target.bottom).abs() < epsilon
+        ? target
+        : next;
+  }
+}
+
 class _TextCursorsPainter extends CustomPainter {
   _TextCursorsPainter(this._state) : super(repaint: _state._repaint);
 
@@ -315,6 +433,9 @@ class _TextCursorsPainter extends CustomPainter {
     final transform = editable.getTransformTo(overlayBox);
     final bounds = Offset.zero & fieldSize;
     final labels = <(CrdtTextCursor, Rect)>[];
+    final motions = _state._motions;
+    final drawn = <Object>{};
+    var gliding = false;
 
     // Carets and selections follow the field's inner scroll: keep them
     // clipped to the overlay. Labels are painted after, without clipping.
@@ -346,9 +467,28 @@ class _TextCursorsPainter extends CustomPainter {
         }
       }
 
+      // The glide happens in the text's own coordinates and the scroll
+      // lives in [transform]: a scrolling field carries its carets along
+      // instantly, only movement through the text is smoothed.
+      final resolved = editable.getLocalRectForCaret(
+        TextPosition(offset: extent),
+      );
+      drawn.add(cursor.id);
+      final motion = motions[cursor.id];
+      if (motion == null) {
+        // First sight (or a cursor back from an unknown anchor): appear
+        // where it belongs instead of flying in from a stale position.
+        motions[cursor.id] = _CaretMotion(resolved);
+      } else if (motion.target != resolved) {
+        gliding |= motion.retarget(
+          resolved,
+          animate: _state.widget.motionDuration > Duration.zero,
+        );
+      }
+
       final caret = MatrixUtils.transformRect(
         transform,
-        editable.getLocalRectForCaret(TextPosition(offset: extent)),
+        motions[cursor.id]!.shown,
       );
       canvas.drawRect(
         Rect.fromLTWH(caret.left, caret.top, _caretWidth, caret.height),
@@ -365,6 +505,13 @@ class _TextCursorsPainter extends CustomPainter {
     canvas.restore();
     for (final (cursor, caret) in labels) {
       _paintLabel(canvas, cursor, caret, fieldSize);
+    }
+
+    // A cursor that went away (removed, or its anchor unknown again) forgets
+    // where it was, so it reappears in place rather than gliding from there.
+    motions.removeWhere((id, _) => !drawn.contains(id));
+    if (gliding) {
+      _state._ensureTicking();
     }
   }
 
