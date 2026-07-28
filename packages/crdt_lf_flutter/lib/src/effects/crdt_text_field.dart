@@ -165,22 +165,33 @@ class _CrdtTextFieldBuilderState extends State<CrdtTextFieldBuilder> {
     return (handler as CRDTFugueTextHandler).value;
   }
 
-  void _applyDelta(TextDelta delta) {
+  /// Pushes [delta] into the handler. Its offsets are code-unit offsets into
+  /// [against], the handler's text as the delta was computed against it.
+  void _applyDelta(TextDelta delta, String against) {
     final handler = _handler();
+
+    // [TextDelta] is expressed in code units, the handlers in runes. The
+    // delta's boundaries are snapped to code-point boundaries by
+    // [computeTextDelta], so both ends convert exactly.
+    final index = RuneOffsets.runeIndex(against, delta.index);
+    final deleted = delta.deleted == 0
+        ? 0
+        : RuneOffsets.runeIndex(against, delta.index + delta.deleted) - index;
+
     void run() {
       if (handler is CRDTTextHandler) {
-        if (delta.deleted > 0) {
-          handler.delete(delta.index, delta.deleted);
+        if (deleted > 0) {
+          handler.delete(index, deleted);
         }
         if (delta.inserted.isNotEmpty) {
-          handler.insert(delta.index, delta.inserted);
+          handler.insert(index, delta.inserted);
         }
       } else if (handler is CRDTFugueTextHandler) {
-        if (delta.deleted > 0) {
-          handler.delete(delta.index, delta.deleted);
+        if (deleted > 0) {
+          handler.delete(index, deleted);
         }
         if (delta.inserted.isNotEmpty) {
-          handler.insert(delta.index, delta.inserted);
+          handler.insert(index, delta.inserted);
         }
       }
     }
@@ -198,13 +209,19 @@ class _CrdtTextFieldBuilderState extends State<CrdtTextFieldBuilder> {
       return;
     }
     final selection = _controller!.selection;
+    // Selection offsets are code-unit offsets; the handler anchors by rune.
+    final text = _controller!.text;
     _setSelectionAnchors(
       selection.baseOffset < 0
           ? null
-          : handler.stablePositionAt(selection.baseOffset),
+          : handler.stablePositionAt(
+              RuneOffsets.runeIndex(text, selection.baseOffset),
+            ),
       selection.extentOffset < 0
           ? null
-          : handler.stablePositionAt(selection.extentOffset),
+          : handler.stablePositionAt(
+              RuneOffsets.runeIndex(text, selection.extentOffset),
+            ),
     );
   }
 
@@ -288,7 +305,7 @@ class _CrdtTextFieldBuilderState extends State<CrdtTextFieldBuilder> {
       );
     }
 
-    _applyDelta(pushed);
+    _applyDelta(pushed, handlerText);
     _lastCommittedText = _handlerText();
     _lastRevision = _document!.revisionForHandler(widget.id);
 
@@ -339,7 +356,8 @@ class _CrdtTextFieldBuilderState extends State<CrdtTextFieldBuilder> {
       if (anchor != null && handler is CRDTFugueTextHandler) {
         final resolved = handler.indexOfStablePosition(anchor);
         if (resolved != null) {
-          return resolved.clamp(0, merged.length);
+          // A rune index: back to a code-unit offset for the selection.
+          return RuneOffsets.utf16Offset(merged, resolved);
         }
       }
       return mapOffsetThroughDelta(offset, delta).clamp(0, merged.length);

@@ -322,15 +322,22 @@ class _TextCursorsPainter extends CustomPainter {
       ..save()
       ..clipRect(bounds);
 
+    // Handler indices count runes; `RenderEditable` indexes code units.
+    final text = handler.value;
+
     for (final cursor in _state.widget.cursors) {
-      final base = handler.indexOfStablePosition(cursor.base);
-      final extent = cursor.extent == cursor.base
-          ? base
+      final baseIndex = handler.indexOfStablePosition(cursor.base);
+      final extentIndex = cursor.extent == cursor.base
+          ? baseIndex
           : handler.indexOfStablePosition(cursor.extent);
-      if (extent == null) {
+      if (extentIndex == null) {
         // The anchored element is not known yet: hide until it arrives.
         continue;
       }
+
+      final extent = RuneOffsets.utf16Offset(text, extentIndex);
+      final base =
+          baseIndex == null ? null : RuneOffsets.utf16Offset(text, baseIndex);
 
       if (base != null && base != extent) {
         final highlight = Paint()..color = cursor.color.withValues(alpha: .3);
