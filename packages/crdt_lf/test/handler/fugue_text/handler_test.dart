@@ -960,6 +960,53 @@ void main() {
         expect(text2.value.codeUnits, equals('a😀b🎉c'.codeUnits));
       });
 
+      test('an emoji is one indivisible element', () {
+        final doc = CRDTDocument();
+        final text = CRDTFugueTextHandler(doc, 'text')..insert(0, 'a😀b');
+
+        // Three elements, even though the string is four code units long.
+        expect(text.length, equals(3));
+        expect(text.value.length, equals(4));
+
+        // Deleting the single position the emoji occupies removes all of it.
+        text.delete(1, 1);
+        expect(text.value, equals('ab'));
+      });
+
+      test('a legacy per-code-unit document still reads back correctly', () {
+        // Before code-point granularity every UTF-16 code unit was its own
+        // element, so an emoji arrived as two lone-surrogate elements. Such a
+        // tree keeps projecting the right text; the emoji simply still
+        // occupies two positions until it is retyped.
+        final doc = CRDTDocument();
+        final text = CRDTFugueTextHandler(doc, 'text')
+          ..insert(0, 'a')
+          ..insert(1, String.fromCharCode(0xD83D))
+          ..insert(2, String.fromCharCode(0xDE00))
+          ..insert(3, 'b');
+
+        expect(text.value, equals('a😀b'));
+
+        // `length` tracks the index space, not the rune count of the value,
+        // so appending at `length` still appends.
+        expect(text.length, equals(4));
+        text.insert(text.length, '!');
+        expect(text.value, equals('a😀b!'));
+      });
+
+      test('stable positions round-trip across a non-BMP character', () {
+        final doc = CRDTDocument();
+        final text = CRDTFugueTextHandler(doc, 'text')..insert(0, 'a😀b');
+
+        for (var i = 0; i <= text.length; i++) {
+          expect(
+            text.indexOfStablePosition(text.stablePositionAt(i)),
+            equals(i),
+            reason: 'anchor at rune index $i',
+          );
+        }
+      });
+
       test('emoji update survives export/import to a second replica', () {
         final doc1 = CRDTDocument();
         final text1 = CRDTFugueTextHandler(doc1, 'text')..insert(0, '😀');

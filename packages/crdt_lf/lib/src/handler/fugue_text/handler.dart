@@ -18,6 +18,10 @@ part 'operation.dart';
 /// minimize the possibility of characters from one user being interleaved
 /// with the characters from the other user.
 ///
+/// ## Index space
+/// One element is one **rune** (Unicode code point).
+/// Use [RuneOffsets] to work with code unit.
+///
 /// ## Example
 /// ```dart
 /// final doc = CRDTDocument();
@@ -38,7 +42,7 @@ class CRDTFugueTextHandler
   late final OperationFactory operationFactory =
       _FugueTextOperationFactory(this).fromBytes;
 
-  /// Inserts [text] at position [index]
+  /// Inserts [text] at position [index], **in runes**
   void insert(int index, String text) {
     if (text.isEmpty) {
       return;
@@ -47,13 +51,13 @@ class CRDTFugueTextHandler
     final leftOrigin = originBefore(index);
     final rightOrigin = nodeAfter(leftOrigin);
 
-    // Generate one node per character
+    // Generate one node per rune
     final items = <_FugueInsertItem>[];
-    for (var i = 0; i < text.length; i++) {
+    for (final rune in text.runes) {
       items.add(
         _FugueInsertItem(
           id: FugueElementID(doc.peerId, nextCounter()),
-          text: text[i],
+          text: String.fromCharCode(rune),
         ),
       );
     }
@@ -69,34 +73,31 @@ class CRDTFugueTextHandler
     );
   }
 
-  /// Updates the text at position [index]
+  /// Updates the text at position [index], **in runes**
   void update(int index, String text) {
     if (text.isEmpty) {
       return;
     }
 
-    // Collect targets first to avoid index drift while updating
-    final targets = <FugueElementID>[];
-    for (var i = 0; i < text.length; i++) {
-      final nodeID = nodeAt(index + i);
-      if (!nodeID.isNull) {
-        targets.add(nodeID);
-      }
-    }
-
-    if (targets.isEmpty) {
-      return;
-    }
-
+    final runes = text.runes.toList();
     final items = <_FugueUpdateItem>[];
-    for (var i = 0; i < targets.length; i++) {
+    for (var i = 0; i < runes.length; i++) {
+      final nodeID = nodeAt(index + i);
+      if (nodeID.isNull) {
+        // Past the end of the text: there is nothing left to replace.
+        break;
+      }
       items.add(
         _FugueUpdateItem(
-          nodeID: targets[i],
+          nodeID: nodeID,
           newNodeID: FugueElementID(doc.peerId, nextCounter()),
-          text: text[i],
+          text: String.fromCharCode(runes[i]),
         ),
       );
+    }
+
+    if (items.isEmpty) {
+      return;
     }
 
     doc.registerOperation(
@@ -141,19 +142,20 @@ class CRDTFugueTextHandler
         case DiffOp.insert:
           // Insert new text at adjusted position
           insert(segment.oldStart + offset, segment.text);
-          offset += segment.text.length;
+          offset += segment.newEnd - segment.newStart;
           break;
         case DiffOp.remove:
           // Remove text at adjusted position
-          delete(segment.oldStart + offset, segment.text.length);
-          offset -= segment.text.length;
+          final count = segment.oldEnd - segment.oldStart;
+          delete(segment.oldStart + offset, count);
+          offset -= count;
           break;
       }
     }
   }
 
-  /// Gets the length of the text
-  int get length => value.length;
+  /// Gets the length of the text, **in runes**
+  int get length => elementCount;
 
   @override
   FugueTextState createEmptyState() => FugueTextState.empty();
@@ -217,8 +219,10 @@ class CRDTFugueTextHandler
   /// Returns a text representation of this handler
   @override
   String toString() {
-    return 'CRDTFugueText($id, '
-        '"${value.length > 20 ? "${value.substring(0, 20)}..." : value}")';
+    final text = value;
+    final cut = RuneOffsets.utf16Offset(text, 20);
+    final truncated = cut < text.length ? '${text.substring(0, cut)}...' : text;
+    return 'CRDTFugueText($id, "$truncated")';
   }
 }
 

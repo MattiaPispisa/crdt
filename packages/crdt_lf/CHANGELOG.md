@@ -1,3 +1,13 @@
+## [4.0.0](https://github.com/MattiaPispisa/crdt/tree/crdt_lf-v4.0.0/packages/crdt_lf)
+
+**Date:** 2026-07-28
+
+[compare to previous release](https://github.com/MattiaPispisa/crdt/compare/crdt_lf-v3.4.2+1...crdt_lf-v4.0.0)
+
+### Changed
+
+- `CRDTFugueTextHandler`, `CRDTTextHandler` is now indexed by runes (code point) instead of UTF-16 code unit. [106](https://github.com/MattiaPispisa/crdt/issues/106)
+
 ## [3.4.2+1](https://github.com/MattiaPispisa/crdt/tree/crdt_lf-v3.4.2+1/packages/crdt_lf)
 
 **Date:** 2026-07-26

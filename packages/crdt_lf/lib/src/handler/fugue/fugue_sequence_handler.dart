@@ -127,6 +127,9 @@ abstract class FugueSequenceHandler<T, V, S extends FugueState<T, V>>
   /// The current value, computed from changes and snapshot.
   V get value => cachedOrComputedState()._value;
 
+  /// The number of live elements
+  int get elementCount => cachedOrComputedState()._nodes.length;
+
   /// Deletes [count] elements starting at [index].
   void delete(int index, int count) {
     final state = cachedOrComputedState();

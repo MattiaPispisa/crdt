@@ -542,10 +542,7 @@ void main() {
     );
 
     group('non-BMP round-trip', () {
-      test('change() splitting a surrogate pair survives a round-trip', () {
-        // change()'s Myers diff works per code unit: turning '😀' into '😃'
-        // deletes/inserts a single (lone) low surrogate. That lone-surrogate
-        // insert is what a plain utf8 encoder would corrupt to U+FFFD.
+      test('change() replaces a whole emoji, not a surrogate half', () {
         final doc1 = CRDTDocument();
         final text1 = CRDTTextHandler(doc1, 'text')..insert(0, 'a😀b');
 
@@ -559,6 +556,19 @@ void main() {
         expect(text1.value, equals('a😃b'));
         expect(text2.value, equals('a😃b'));
         expect(text2.value.codeUnits, equals('a😃b'.codeUnits));
+      });
+
+      test('an emoji is one indivisible position', () {
+        final doc = CRDTDocument();
+        final text = CRDTTextHandler(doc, 'text')..insert(0, 'a😀b');
+
+        // Three runes, even though the string is four code units long.
+        expect(text.length, equals(3));
+        expect(text.value.length, equals(4));
+
+        // Deleting the single position the emoji occupies removes all of it.
+        text.delete(1, 1);
+        expect(text.value, equals('ab'));
       });
 
       test('emoji insert survives export/import to a second replica', () {
