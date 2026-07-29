@@ -19,7 +19,6 @@ class RuneOffsets {
   /// Out-of-range indices clamp to the ends of [text].
   ///
   /// ```dart
-  /// // 'a😀b' is 4 code units but 3 runes: the emoji spans offsets 1-2.
   /// print(RuneOffsets.utf16Offset('a😀b', 1)); // Prints 1 (the emoji)
   /// print(RuneOffsets.utf16Offset('a😀b', 2)); // Prints 3 (the 'b')
   /// print(RuneOffsets.utf16Offset('a😀b', 9)); // Prints 4 (clamped)

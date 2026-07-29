@@ -445,11 +445,9 @@ to rebuild every reachable handler from the manifest and the references.
 > classic flat usage is unchanged (handlers are created explicitly with a known
 > id on each peer).
 
-Two complete, interactive examples are available in the Flutter example app:
+A complete, interactive example is available in the Flutter example app under
 the **Document** entry (sortable chapters → paragraphs → collaborative text and
-sortable item lists) and the **Canvas** entry — a Figma-like page whose z-order
-is a `CRDTMovableListRefHandler` of shapes, each a nested node holding its name,
-kind, geometry and style.
+sortable item lists).
 
 #### Choosing How to Model Your Data
 

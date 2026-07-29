@@ -4,9 +4,14 @@
 
 [compare to previous release](https://github.com/MattiaPispisa/crdt/compare/crdt_lf-v3.4.2+1...crdt_lf-v4.0.0)
 
-### Changed
+**Breaking changes**
 
-- `CRDTFugueTextHandler`, `CRDTTextHandler` is now indexed by runes (code point) instead of UTF-16 code unit. [106](https://github.com/MattiaPispisa/crdt/issues/106)
+`CRDTFugueTextHandler`, `CRDTTextHandler` are now indexed by runes (code points) instead of UTF-16 code units [106](https://github.com/MattiaPispisa/crdt/issues/106).
+ 
+Everything remains compatible with v3 as long as text stays inside the BMP.
+Only documents that already contain non-BMP characters (emoji, …) are affected:
+  - `CRDTFugueTextHandler`: a previously written non-BMP character can still be half-deleted, until it is typed again.
+  - `CRDTTextHandler`: a history holding an index that falls after a non-BMP character replays to different text. Documents in that state have to be re-created. 
 
 ## [3.4.2+1](https://github.com/MattiaPispisa/crdt/tree/crdt_lf-v3.4.2+1/packages/crdt_lf)
 
