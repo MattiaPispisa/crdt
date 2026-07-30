@@ -4,10 +4,12 @@ import 'package:flutter/material.dart';
 import 'package:greyhound_markdown_client/src/config.dart';
 import 'package:greyhound_markdown_client/src/services/awareness_service.dart';
 import 'package:greyhound_markdown_client/src/widgets/editor_toolbar.dart';
+import 'package:greyhound_markdown_client/src/widgets/markdown_shortcuts.dart';
 
 /// The collaborative markdown source editor: a formatting toolbar above a
 /// [TextField] bound to the fugue text handler, with remote carets painted on
-/// top.
+/// top. The toolbar actions that declare a key chord are also reachable from
+/// the keyboard while focus is inside the pane.
 ///
 /// The cursors listenable sits inside [CrdtTextFieldBuilder.builder] so that
 /// presence repaints never rebuild the text field itself.
@@ -46,53 +48,63 @@ class _EditorPaneState extends State<EditorPane> {
     return CrdtTextFieldBuilder(
       id: kHandlerId,
       onSelectionAnchorsChanged: widget.awareness.setLocalCursor,
-      builder: (context, controller) => Column(
-        children: [
-          EditorToolbar(controller: controller, focusNode: _focusNode),
-          const Divider(height: 1),
-          Expanded(
-            child: Stack(
-              children: [
-                Positioned.fill(
-                  child: ValueListenableBuilder<Map<String, PeerState>>(
-                    valueListenable: widget.awareness.peers,
-                    builder: (context, peers, child) => CrdtTextCursorsOverlay(
-                      id: kHandlerId,
-                      cursors: _toCursors(peers),
-                      child: child!,
-                    ),
-                    child: TextField(
-                      controller: controller,
-                      focusNode: _focusNode,
-                      maxLines: null,
-                      expands: true,
-                      textAlignVertical: TextAlignVertical.top,
-                      style: const TextStyle(
-                        fontFamily: kMonospaceFontFamily,
-                        fontSize: 14,
-                      ),
-                      decoration: const InputDecoration(
-                        border: InputBorder.none,
-                        contentPadding: EdgeInsets.all(16),
+      builder: (context, controller) => CallbackShortcuts(
+        // Sits below the app-wide DefaultTextEditingShortcuts and above the
+        // field, so the chords win over the browser and over text editing
+        // defaults while focus is anywhere in the pane.
+        bindings: markdownShortcutBindings(
+          controller,
+          Theme.of(context).platform,
+        ),
+        child: Column(
+          children: [
+            EditorToolbar(controller: controller, focusNode: _focusNode),
+            const Divider(height: 1),
+            Expanded(
+              child: Stack(
+                children: [
+                  Positioned.fill(
+                    child: ValueListenableBuilder<Map<String, PeerState>>(
+                      valueListenable: widget.awareness.peers,
+                      builder: (context, peers, child) =>
+                          CrdtTextCursorsOverlay(
+                            id: kHandlerId,
+                            cursors: _toCursors(peers),
+                            child: child!,
+                          ),
+                      child: TextField(
+                        controller: controller,
+                        focusNode: _focusNode,
+                        maxLines: null,
+                        expands: true,
+                        textAlignVertical: TextAlignVertical.top,
+                        style: const TextStyle(
+                          fontFamily: kMonospaceFontFamily,
+                          fontSize: 14,
+                        ),
+                        decoration: const InputDecoration(
+                          border: InputBorder.none,
+                          contentPadding: EdgeInsets.all(16),
+                        ),
                       ),
                     ),
                   ),
-                ),
-                // The welcome document as a scrollable placeholder — a plain
-                // hint would overflow the pane (hints don't scroll). Shown only
-                // while the document is empty; a tap focuses the editor.
-                Positioned.fill(
-                  child: ValueListenableBuilder<TextEditingValue>(
-                    valueListenable: controller,
-                    builder: (context, value, _) => value.text.isEmpty
-                        ? _EditorPlaceholder(focusNode: _focusNode)
-                        : const SizedBox.shrink(),
+                  // The welcome document as a scrollable placeholder — a plain
+                  // hint would overflow the pane (hints don't scroll). Shown
+                  // only while the document is empty; a tap focuses the editor.
+                  Positioned.fill(
+                    child: ValueListenableBuilder<TextEditingValue>(
+                      valueListenable: controller,
+                      builder: (context, value, _) => value.text.isEmpty
+                          ? _EditorPlaceholder(focusNode: _focusNode)
+                          : const SizedBox.shrink(),
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

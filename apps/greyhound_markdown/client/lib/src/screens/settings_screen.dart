@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import 'package:greyhound_markdown_client/src/application/application.dart';
 import 'package:greyhound_markdown_client/src/config.dart';
+import 'package:greyhound_markdown_client/src/widgets/credit_line.dart';
 
 /// Formats a bundle version as `v<version>` plus the build number when the
 /// platform provides one (empty on web / when no `+build` is set).
@@ -11,9 +14,9 @@ String formatVersion(PackageInfo info) {
   return build.isEmpty ? 'v${info.version}' : 'v${info.version} ($build)';
 }
 
-/// About / settings page: the expanded version of the footer credits, the app
-/// version (resolved cross-platform from the bundle) and access to the
-/// open-source licenses.
+/// Settings page: the app's preferences, plus the expanded version of the
+/// footer credits, the app version (resolved cross-platform from the bundle)
+/// and access to the open-source licenses.
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key});
 
@@ -21,7 +24,7 @@ class SettingsScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return Scaffold(
-      appBar: AppBar(title: const Text('About')),
+      appBar: AppBar(title: const Text('Settings')),
       body: SafeArea(
         child: ListView(
           padding: const EdgeInsets.all(24),
@@ -44,14 +47,14 @@ class SettingsScreen extends StatelessWidget {
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 32),
+            Text('Appearance', style: theme.textTheme.titleSmall),
+            const SizedBox(height: 12),
+            const _ThemeModeSelector(),
+            const SizedBox(height: 32),
             Text('Links', style: theme.textTheme.titleSmall),
             for (final link in kProjectLinks) _LinkTile(link: link),
             const Divider(height: 40),
-            Text(
-              kCreditLine,
-              style: theme.textTheme.bodySmall,
-              textAlign: TextAlign.center,
-            ),
+            const CreditLine(alignment: WrapAlignment.center),
             const SizedBox(height: 4),
             Text(
               kAppLegalese,
@@ -92,6 +95,44 @@ class SettingsScreen extends StatelessWidget {
       applicationIcon: Padding(
         padding: const EdgeInsets.all(8),
         child: Image.asset(kLogoAsset, height: 64),
+      ),
+    );
+  }
+}
+
+/// Light / dark / follow the system, persisted with the rest of the user's
+/// preferences.
+///
+/// A [SegmentedButton], like the view switcher in the editor, so the app keeps
+/// one idiom for exclusive choices.
+class _ThemeModeSelector extends StatelessWidget {
+  const _ThemeModeSelector();
+
+  @override
+  Widget build(BuildContext context) {
+    return BlocBuilder<UserSettingsCubit, UserSettingsState>(
+      builder: (context, settings) => SegmentedButton<ThemeMode>(
+        segments: const [
+          ButtonSegment(
+            value: ThemeMode.light,
+            icon: Icon(Icons.light_mode),
+            label: Text('Light'),
+          ),
+          ButtonSegment(
+            value: ThemeMode.dark,
+            icon: Icon(Icons.dark_mode),
+            label: Text('Dark'),
+          ),
+          ButtonSegment(
+            value: ThemeMode.system,
+            icon: Icon(Icons.brightness_auto),
+            label: Text('System'),
+          ),
+        ],
+        selected: {settings.themeMode},
+        showSelectedIcon: false,
+        onSelectionChanged: (selection) =>
+            context.read<UserSettingsCubit>().setThemeMode(selection.single),
       ),
     );
   }

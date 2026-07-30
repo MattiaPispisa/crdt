@@ -18,21 +18,106 @@
 
   <meta charset="UTF-8">
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
-  <meta name="description" content="A new Flutter project.">
+  <meta name="description" content="Real-time collaborative markdown editor built on crdt_lf.">
 
   <!-- iOS meta tags & icons -->
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black">
-  <meta name="apple-mobile-web-app-title" content="greyhound_markdown_client">
-  <link rel="apple-touch-icon" href="icons/Icon-192.png">
+  <meta name="apple-mobile-web-app-title" content="Greyhound Markdown">
+  <!-- The maskable variant: iOS paints a transparent touch icon on black. -->
+  <link rel="apple-touch-icon" href="icons/Icon-maskable-192.png">
 
   <!-- Favicon -->
   <link rel="icon" type="image/png" href="favicon.png"/>
 
-  <title>greyhound_markdown_client</title>
+  <title>Greyhound Markdown</title>
   <link rel="manifest" href="manifest.json">
+
+  <!--
+    Loading indicator, shown until the Flutter engine paints its first frame.
+    Fetching the engine takes a few seconds on a cold cache, and without this
+    the page stays blank white for the whole wait.
+
+    The colours are those of ColorScheme.fromSeed(seedColor: Colors.teal), the
+    app's own theme, so the app fades in over an identical background.
+  -->
+  <style>
+    #loading {
+      position: fixed;
+      inset: 0;
+      z-index: 9999;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 20px;
+      /* colorScheme.surface */
+      background: #F4FBF8;
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      transition: opacity 250ms ease;
+    }
+
+    #loading.loaded {
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    #loading img {
+      width: 96px;
+      height: 96px;
+    }
+
+    #loading p {
+      margin: 0;
+      font-size: 16px;
+      letter-spacing: 0.3px;
+      /* colorScheme.onSurfaceVariant */
+      color: #3F4947;
+    }
+
+    #loading .spinner {
+      width: 28px;
+      height: 28px;
+      /* colorScheme.primary */
+      border: 3px solid rgba(0, 106, 96, 0.2);
+      border-top-color: #006A60;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      #loading .spinner { animation: none; }
+    }
+
+    /*
+      The dark half of the same seeded scheme. Follows the OS preference, not
+      the theme the user picked in the app: that one lives in the app's own
+      storage, which is not readable before the engine boots.
+    */
+    @media (prefers-color-scheme: dark) {
+      /* colorScheme.surface */
+      #loading { background: #0E1513; }
+      /* colorScheme.onSurfaceVariant */
+      #loading p { color: #BEC9C6; }
+      /* colorScheme.primary */
+      #loading .spinner {
+        border-color: rgba(130, 213, 200, 0.2);
+        border-top-color: #82D5C8;
+      }
+    }
+  </style>
 </head>
 <body>
+  <div id="loading">
+    <img src="icons/Icon-192.png" alt="">
+    <p>Greyhound Markdown</p>
+    <div class="spinner"></div>
+  </div>
+
   <!--
     You can customize the "flutter_bootstrap.js" script.
     This is useful to provide a custom configuration to the Flutter loader
@@ -42,5 +127,21 @@
     * https://docs.flutter.dev/platform-integration/web/initialization
   -->
   <script src="flutter_bootstrap.js" async></script>
+
+  <script>
+    // The engine fires "flutter-first-frame" once the app has actually
+    // painted, which covers the download, the renderer fetch and main().
+    window.addEventListener('flutter-first-frame', function () {
+      var loading = document.getElementById('loading');
+      if (!loading) return;
+      loading.classList.add('loaded');
+      loading.addEventListener('transitionend', function () {
+        loading.remove();
+      });
+      // Removed either way: a faded overlay left in the DOM would keep
+      // covering the app if the transition never runs.
+      setTimeout(function () { loading.remove(); }, 1000);
+    });
+  </script>
 </body>
 </html>

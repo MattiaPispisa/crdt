@@ -29,6 +29,7 @@ class EditorToolbar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final platform = Theme.of(context).platform;
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
       child: Row(
@@ -36,7 +37,7 @@ class EditorToolbar extends StatelessWidget {
           for (final shortcut in kMarkdownShortcuts)
             IconButton(
               icon: Icon(shortcut.icon),
-              tooltip: shortcut.tooltip,
+              tooltip: shortcut.tooltipFor(platform),
               iconSize: 20,
               onPressed: () => _apply(shortcut),
             ),

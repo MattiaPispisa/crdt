@@ -3,6 +3,7 @@ import 'dart:io';
 import 'fs.dart';
 import 'logs.dart';
 import 'process.dart';
+import 'web_icons.dart';
 import 'yaml.dart';
 
 /// Bootstraps the Flutter example apps: copies the shared workspace assets
@@ -28,6 +29,27 @@ void main() {
   } catch (error) {
     logger.error(
       'Unable to copy assets',
+      error: error,
+    );
+    badExit();
+  }
+
+  // The web build serves its icons from `web/`, outside the Flutter asset
+  // bundle, so they are rendered from the shared logo instead of copied.
+  logger.info('Generating greyhound_markdown web icons...');
+  try {
+    generateWebIcons(
+      source: greyhoundLogo(),
+      webDir: greyhoundMarkdownDir(subParts: ['web']),
+      // The plate under the maskable icons — the only ones that cannot be
+      // transparent. ColorScheme.fromSeed(seedColor: Colors.teal).surface, so
+      // the launcher shows the app's own light surface.
+      background: 0xF4FBF8,
+      logger: logger,
+    );
+  } catch (error) {
+    logger.error(
+      'Unable to generate web icons',
       error: error,
     );
     badExit();

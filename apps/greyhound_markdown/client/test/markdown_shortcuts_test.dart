@@ -1,3 +1,4 @@
+import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:greyhound_markdown_client/src/widgets/markdown_shortcuts.dart';
@@ -8,9 +9,9 @@ MarkdownShortcut byTooltip(String tooltip) =>
 TextEditingValue empty() => TextEditingValue.empty;
 
 TextEditingValue withCaret(String text, int offset) => TextEditingValue(
-      text: text,
-      selection: TextSelection.collapsed(offset: offset),
-    );
+  text: text,
+  selection: TextSelection.collapsed(offset: offset),
+);
 
 void main() {
   group('line-prefix shortcuts', () {
@@ -77,6 +78,37 @@ void main() {
       );
       expect(result.text, '[site]()');
       expect(result.selection.baseOffset, 7); // inside ()
+    });
+  });
+
+  group('key bindings', () {
+    test('the tooltip carries the chord in the platform notation', () {
+      expect(byTooltip('Bold').tooltipFor(TargetPlatform.macOS), 'Bold (⌘B)');
+      expect(
+        byTooltip('Bold').tooltipFor(TargetPlatform.windows),
+        'Bold (Ctrl+B)',
+      );
+    });
+
+    test('an unbound action keeps its plain tooltip', () {
+      expect(
+        byTooltip('Heading 1').tooltipFor(TargetPlatform.macOS),
+        'Heading 1',
+      );
+      expect(byTooltip('Heading 1').binding, isNull);
+    });
+
+    test('the modifier is Meta on Apple platforms and Control elsewhere', () {
+      final binding = byTooltip('Link').binding!;
+      final apple = binding.activator(TargetPlatform.macOS) as SingleActivator;
+      expect(apple.meta, isTrue);
+      expect(apple.control, isFalse);
+      expect(apple.trigger, LogicalKeyboardKey.keyK);
+
+      final other =
+          binding.activator(TargetPlatform.windows) as SingleActivator;
+      expect(other.control, isTrue);
+      expect(other.meta, isFalse);
     });
   });
 }

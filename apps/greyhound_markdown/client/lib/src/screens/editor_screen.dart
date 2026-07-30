@@ -6,8 +6,8 @@ import 'package:crdt_socket_sync/web_socket_relay_client.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import 'package:greyhound_markdown_client/src/application/application.dart';
 import 'package:greyhound_markdown_client/src/config.dart';
-import 'package:greyhound_markdown_client/src/screens/home_screen.dart';
 import 'package:greyhound_markdown_client/src/services/awareness_service.dart';
 import 'package:greyhound_markdown_client/src/widgets/app_footer.dart';
 import 'package:greyhound_markdown_client/src/widgets/editor_pane.dart';
@@ -42,15 +42,16 @@ class _EditorScreenState extends State<EditorScreen> {
     super.didChangeDependencies();
     if (_initialized) return;
     _initialized = true;
-    final profile =
-        ModalRoute.of(context)?.settings.arguments as HomeScreenArguments?;
+    // Straight from the stored preferences rather than from route arguments,
+    // so a shared `/room/<id>` link opened cold still joins as the user.
+    final profile = context.read<UserSettingsCubit>().state;
     // The document id IS the relay room key: every client of the room must
     // use the same one.
     _document = CRDTDocument(documentId: widget.roomId);
     CRDTFugueTextHandler(_document, kHandlerId);
     _awareness = AwarenessService(
-      name: profile?.name ?? kDefaultUserName,
-      color: profile?.color ?? Colors.blueGrey,
+      name: profile.displayName,
+      color: profile.color,
     );
     _sync = WebSocketRelayClient(
       url: roomUrl(kServerUrl, widget.roomId),

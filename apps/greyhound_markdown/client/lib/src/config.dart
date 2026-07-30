@@ -1,3 +1,5 @@
+import 'dart:ui' show Color;
+
 /// The single fugue text handler shared by every client of a room.
 /// Must be identical across peers for the Fugue merge to converge.
 const String kHandlerId = 'content';
@@ -62,6 +64,20 @@ const String kMonospaceFontFamily = 'monospace';
 /// Fallback display name for a peer that did not pick one.
 const String kDefaultUserName = 'anonymous';
 
+/// The colors a peer can pick as its identity — used for the avatar dot on the
+/// home screen and for the remote cursors in the editor. Kept saturated and
+/// far apart so two peers are told apart at a glance.
+const List<Color> kAvatarPalette = [
+  Color(0xFFE53935),
+  Color(0xFF8E24AA),
+  Color(0xFF3949AB),
+  Color(0xFF039BE5),
+  Color(0xFF00897B),
+  Color(0xFF7CB342),
+  Color(0xFFFB8C00),
+  Color(0xFF6D4C41),
+];
+
 /// Named route of the about/settings page.
 const String kSettingsRoute = '/settings';
 
@@ -75,6 +91,9 @@ const String kChangelogAsset = 'CHANGELOG.md';
 /// in exactly one place.
 const String kAuthor = 'Mattia Pispisa';
 
+/// The author's personal site, linked from the credit line.
+const String kAuthorUrl = 'https://mattiapispisa.it';
+
 /// Display name of the application (title bars, about/licenses pages).
 const String kAppName = 'Greyhound Markdown';
 
@@ -82,8 +101,9 @@ const String kAppName = 'Greyhound Markdown';
 const String kAppTagline =
     'A real-time collaborative markdown editor built on crdt_lf.';
 
-/// Footer/about credit line.
-const String kCreditLine = 'Powered by crdt_lf · created by $kAuthor';
+/// Footer/about credit line, up to the author's name — [kAuthor] follows it as
+/// a link to [kAuthorUrl], so the line is a widget rather than a single string.
+const String kCreditPrefix = 'Powered by crdt_lf · created by ';
 
 /// Legal line shown on the about/settings and licenses pages.
 const String kAppLegalese = '© $kAuthor';

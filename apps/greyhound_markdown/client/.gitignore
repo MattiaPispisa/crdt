@@ -45,3 +45,6 @@ app.*.map.json
 /android/app/release
 
 /assets
+# Generated from the shared logo by scripts/flutter_example_bs.dart.
+/web/favicon.png
+/web/icons/

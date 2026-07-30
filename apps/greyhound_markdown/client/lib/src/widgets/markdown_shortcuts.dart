@@ -1,4 +1,39 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+
+/// A key binding whose primary modifier follows the platform: ⌘ on Apple
+/// platforms, Ctrl everywhere else.
+class MarkdownShortcutBinding {
+  /// Binds [trigger], optionally with Shift, to the platform modifier.
+  const MarkdownShortcutBinding(this.trigger, {this.shift = false});
+
+  /// The key pressed alongside the modifiers.
+  final LogicalKeyboardKey trigger;
+
+  /// Whether Shift is part of the chord.
+  final bool shift;
+
+  static bool _isApple(TargetPlatform platform) =>
+      platform == TargetPlatform.macOS || platform == TargetPlatform.iOS;
+
+  /// The activator to register for [platform].
+  ShortcutActivator activator(TargetPlatform platform) => SingleActivator(
+    trigger,
+    control: !_isApple(platform),
+    meta: _isApple(platform),
+    shift: shift,
+  );
+
+  /// The chord as the user reads it: `⇧⌘K` on Apple platforms, `Ctrl+Shift+K`
+  /// elsewhere.
+  String label(TargetPlatform platform) {
+    final key = trigger.keyLabel;
+    if (_isApple(platform)) {
+      return '${shift ? '⇧' : ''}⌘$key';
+    }
+    return 'Ctrl+${shift ? 'Shift+' : ''}$key';
+  }
+}
 
 /// A single markdown formatting action the toolbar can apply.
 ///
@@ -9,7 +44,11 @@ import 'package:flutter/material.dart';
 /// then turns into the corresponding document edit.
 abstract class MarkdownShortcut {
   /// Const base constructor.
-  const MarkdownShortcut({required this.icon, required this.tooltip});
+  const MarkdownShortcut({
+    required this.icon,
+    required this.tooltip,
+    this.binding,
+  });
 
   /// The button glyph.
   final IconData icon;
@@ -17,9 +56,35 @@ abstract class MarkdownShortcut {
   /// The button tooltip / semantics label.
   final String tooltip;
 
+  /// The keyboard chord that also triggers this action, if it has one.
+  final MarkdownShortcutBinding? binding;
+
   /// Returns the new editing value (text + caret/selection) after applying
   /// this shortcut to [value].
   TextEditingValue apply(TextEditingValue value);
+
+  /// [tooltip] with the key chord appended when [binding] is set.
+  String tooltipFor(TargetPlatform platform) {
+    final binding = this.binding;
+    if (binding == null) {
+      return tooltip;
+    }
+    return '$tooltip (${binding.label(platform)})';
+  }
+}
+
+/// The bindings of every shortcut that declares one, each applying itself to
+/// [controller]. Ready to hand to a [CallbackShortcuts].
+Map<ShortcutActivator, VoidCallback> markdownShortcutBindings(
+  TextEditingController controller,
+  TargetPlatform platform,
+) {
+  return {
+    for (final shortcut in kMarkdownShortcuts)
+      if (shortcut.binding != null)
+        shortcut.binding!.activator(platform): () =>
+            controller.value = shortcut.apply(controller.value),
+  };
 }
 
 /// The ordered set of shortcuts rendered by the editor toolbar.
@@ -27,11 +92,13 @@ const List<MarkdownShortcut> kMarkdownShortcuts = [
   _WrapShortcut(
     icon: Icons.format_bold,
     tooltip: 'Bold',
+    binding: MarkdownShortcutBinding(LogicalKeyboardKey.keyB),
     marker: '**',
   ),
   _WrapShortcut(
     icon: Icons.format_italic,
     tooltip: 'Italic',
+    binding: MarkdownShortcutBinding(LogicalKeyboardKey.keyI),
     marker: '*',
   ),
   _WrapShortcut(
@@ -42,13 +109,10 @@ const List<MarkdownShortcut> kMarkdownShortcuts = [
   _WrapShortcut(
     icon: Icons.code,
     tooltip: 'Inline code',
+    binding: MarkdownShortcutBinding(LogicalKeyboardKey.keyE),
     marker: '`',
   ),
-  _LinePrefixShortcut(
-    icon: Icons.title,
-    tooltip: 'Heading 1',
-    prefix: '# ',
-  ),
+  _LinePrefixShortcut(icon: Icons.title, tooltip: 'Heading 1', prefix: '# '),
   _LinePrefixShortcut(
     icon: Icons.text_fields,
     tooltip: 'Heading 2',
@@ -59,11 +123,7 @@ const List<MarkdownShortcut> kMarkdownShortcuts = [
     tooltip: 'Heading 3',
     prefix: '### ',
   ),
-  _LinePrefixShortcut(
-    icon: Icons.format_quote,
-    tooltip: 'Quote',
-    prefix: '> ',
-  ),
+  _LinePrefixShortcut(icon: Icons.format_quote, tooltip: 'Quote', prefix: '> '),
   _LinePrefixShortcut(
     icon: Icons.format_list_bulleted,
     tooltip: 'Bullet list',
@@ -72,13 +132,10 @@ const List<MarkdownShortcut> kMarkdownShortcuts = [
   _LinkLikeShortcut(
     icon: Icons.link,
     tooltip: 'Link',
+    binding: MarkdownShortcutBinding(LogicalKeyboardKey.keyK),
     open: '[',
   ),
-  _LinkLikeShortcut(
-    icon: Icons.image,
-    tooltip: 'Image',
-    open: '![',
-  ),
+  _LinkLikeShortcut(icon: Icons.image, tooltip: 'Image', open: '!['),
 ];
 
 /// The caret as an offset, defaulting to end-of-text when the field has never
@@ -98,6 +155,7 @@ class _WrapShortcut extends MarkdownShortcut {
     required super.icon,
     required super.tooltip,
     required this.marker,
+    super.binding,
   });
 
   final String marker;
@@ -108,7 +166,11 @@ class _WrapShortcut extends MarkdownShortcut {
     final text = value.text;
     final selected = selection.textInside(text);
     final replacement = '$marker$selected$marker';
-    final newText = text.replaceRange(selection.start, selection.end, replacement);
+    final newText = text.replaceRange(
+      selection.start,
+      selection.end,
+      replacement,
+    );
     // With a selection, keep it wrapped; without one, sit between the markers.
     final int base;
     final int extent;
@@ -164,6 +226,7 @@ class _LinkLikeShortcut extends MarkdownShortcut {
     required super.icon,
     required super.tooltip,
     required this.open,
+    super.binding,
   });
 
   /// The leading token: `'['` for a link, `'!['` for an image.
@@ -176,7 +239,11 @@ class _LinkLikeShortcut extends MarkdownShortcut {
     final label = selection.textInside(text);
     const close = ']()';
     final replacement = '$open$label$close';
-    final newText = text.replaceRange(selection.start, selection.end, replacement);
+    final newText = text.replaceRange(
+      selection.start,
+      selection.end,
+      replacement,
+    );
     // Caret between the parentheses: one char before the closing ')'.
     final caret = selection.start + replacement.length - 1;
     return TextEditingValue(
