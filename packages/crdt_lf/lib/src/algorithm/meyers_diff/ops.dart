@@ -11,6 +11,8 @@ enum DiffOp {
 }
 
 /// A single diff segment with an operation and the associated text.
+///
+/// All four offsets count **runes**.
 class DiffSegment {
   /// Creates a new diff segment with the given operation and text.
   const DiffSegment({

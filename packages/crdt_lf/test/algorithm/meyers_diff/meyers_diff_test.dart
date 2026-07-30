@@ -324,7 +324,7 @@ void main() {
         expect(diffs.any((s) => s.op == DiffOp.equal), isTrue);
         expect(diffs.any((s) => s.op == DiffOp.insert), isTrue);
         expect(diffs.any((s) => s.op == DiffOp.remove), isTrue);
-        _verifyContiguous(diffs, oldText.length, newText.length);
+        _verifyContiguous(diffs, oldText, newText);
       });
 
       test('insertion in middle with surrounding equals', () {
@@ -333,7 +333,7 @@ void main() {
         const newText = 'abXMYZcd';
         final diffs = myersDiff(oldText, newText);
         expect(diffs.any((s) => s.op == DiffOp.insert), isTrue);
-        _verifyContiguous(diffs, oldText.length, newText.length);
+        _verifyContiguous(diffs, oldText, newText);
       });
 
       test('deletion in middle with surrounding equals', () {
@@ -342,7 +342,7 @@ void main() {
         const newText = 'abXYZcd';
         final diffs = myersDiff(oldText, newText);
         expect(diffs.any((s) => s.op == DiffOp.remove), isTrue);
-        _verifyContiguous(diffs, oldText.length, newText.length);
+        _verifyContiguous(diffs, oldText, newText);
       });
 
       test('large complex unicode and multi-line text', () {
@@ -396,13 +396,13 @@ void main() {
 
           if (seg.op == DiffOp.equal) {
             expect(seg.oldEnd - seg.oldStart, seg.newEnd - seg.newStart);
-            expect(seg.text.length, seg.oldEnd - seg.oldStart);
+            expect(RuneOffsets.length(seg.text), seg.oldEnd - seg.oldStart);
           } else if (seg.op == DiffOp.insert) {
             expect(seg.oldEnd, seg.oldStart);
-            expect(seg.text.length, seg.newEnd - seg.newStart);
+            expect(RuneOffsets.length(seg.text), seg.newEnd - seg.newStart);
           } else if (seg.op == DiffOp.remove) {
             expect(seg.newEnd, seg.newStart);
-            expect(seg.text.length, seg.oldEnd - seg.oldStart);
+            expect(RuneOffsets.length(seg.text), seg.oldEnd - seg.oldStart);
           }
         }
       });
@@ -552,7 +552,7 @@ void main() {
 
         final diffs = myersDiff(oldText, newText);
 
-        _verifyContiguous(diffs, oldText.length, newText.length);
+        _verifyContiguous(diffs, oldText, newText);
       });
 
       test('segments are contiguous with only removes', () {
@@ -561,7 +561,7 @@ void main() {
 
         final diffs = myersDiff(oldText, newText);
 
-        _verifyContiguous(diffs, oldText.length, newText.length);
+        _verifyContiguous(diffs, oldText, newText);
       });
 
       test('segments are contiguous with empty strings', () {
@@ -569,10 +569,10 @@ void main() {
         const newText = 'Hello';
 
         final diffs1 = myersDiff(oldText, newText);
-        _verifyContiguous(diffs1, oldText.length, newText.length);
+        _verifyContiguous(diffs1, oldText, newText);
 
         final diffs2 = myersDiff(newText, oldText);
-        _verifyContiguous(diffs2, newText.length, oldText.length);
+        _verifyContiguous(diffs2, newText, oldText);
       });
 
       test('segments are contiguous with complex multiline text', () {
@@ -581,7 +581,7 @@ void main() {
 
         final diffs = myersDiff(oldText, newText);
 
-        _verifyContiguous(diffs, oldText.length, newText.length);
+        _verifyContiguous(diffs, oldText, newText);
       });
 
       test('segments are contiguous with unicode', () {
@@ -590,7 +590,7 @@ void main() {
 
         final diffs = myersDiff(oldText, newText);
 
-        _verifyContiguous(diffs, oldText.length, newText.length);
+        _verifyContiguous(diffs, oldText, newText);
       });
     });
   });
@@ -685,7 +685,14 @@ void main() {
 }
 
 /// Verify that segments are contiguous with no gaps or overlaps.
-void _verifyContiguous(List<DiffSegment> diffs, int oldLength, int newLength) {
+void _verifyContiguous(
+  List<DiffSegment> diffs,
+  String oldText,
+  String newText,
+) {
+  final oldLength = RuneOffsets.length(oldText);
+  final newLength = RuneOffsets.length(newText);
+
   if (diffs.isEmpty) {
     expect(oldLength, 0);
     expect(newLength, 0);
@@ -730,12 +737,16 @@ void _verifyContiguous(List<DiffSegment> diffs, int oldLength, int newLength) {
 
 /// Apply diff operations to oldText to reconstruct newText.
 /// Start with oldText and apply insert/remove operations in reverse order.
+///
+/// Segment offsets are rune offsets, so they are converted before being used
+/// with [String.substring], which indexes by code unit.
 String _applyDiff(String oldText, List<DiffSegment> diffs) {
   var result = oldText;
 
   // Process segments in reverse order to avoid index shifting
   for (var i = diffs.length - 1; i >= 0; i--) {
     final seg = diffs[i];
+    final start = RuneOffsets.utf16Offset(result, seg.oldStart);
 
     switch (seg.op) {
       case DiffOp.equal:
@@ -743,14 +754,13 @@ String _applyDiff(String oldText, List<DiffSegment> diffs) {
         break;
       case DiffOp.insert:
         // Insert new text at oldStart position
-        result = result.substring(0, seg.oldStart) +
-            seg.text +
-            result.substring(seg.oldStart);
+        result =
+            result.substring(0, start) + seg.text + result.substring(start);
         break;
       case DiffOp.remove:
         // Remove text from oldStart to oldEnd
-        result =
-            result.substring(0, seg.oldStart) + result.substring(seg.oldEnd);
+        final end = RuneOffsets.utf16Offset(result, seg.oldEnd);
+        result = result.substring(0, start) + result.substring(end);
         break;
     }
   }
