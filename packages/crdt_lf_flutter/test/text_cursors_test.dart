@@ -148,8 +148,8 @@ void main() {
       final to = expectedCaret(tester, 9);
       expect(overlayPaint(), paints..rect(rect: from, color: color));
 
-      // Mid-flight: somewhere between the two, never at either end.
-      await tester.pump(const Duration(milliseconds: 16));
+      // Mid-flight after a single frame — the glide clock starts within the
+      // frame that moved the caret, so no frame is spent standing still.
       await tester.pump(const Duration(milliseconds: 16));
       expect(
         overlayPaint(),
@@ -189,6 +189,64 @@ void main() {
       expect(
         overlayPaint(),
         paints..rect(rect: expectedCaret(tester, 22), color: color),
+      );
+    });
+
+    testWidgets('snaps a caret that jumps across the line', (tester) async {
+      final note = CRDTFugueTextHandler(doc, 'note')..insert(0, 'word ' * 30);
+      const color = Color(0xFF00AAAA);
+      const motion = Duration(milliseconds: 120);
+      CrdtTextCursor cursorAt(int index) => CrdtTextCursor(
+            id: 'peer-b',
+            color: color,
+            base: note.stablePositionAt(index),
+          );
+      await tester.pumpWidget(host([cursorAt(1)], motionDuration: motion));
+
+      // Most of the field away on the same line: a collaborator clicking
+      // elsewhere, the only kind of jump a single-line field has.
+      await tester.pumpWidget(host([cursorAt(60)], motionDuration: motion));
+      await tester.pump();
+      expect(
+        overlayPaint(),
+        paints..rect(rect: expectedCaret(tester, 60), color: color),
+      );
+    });
+
+    testWidgets('carries a caret along instantly when the field scrolls',
+        (tester) async {
+      final note = CRDTFugueTextHandler(doc, 'note')..insert(0, 'A' * 200);
+      const color = Color(0xFFAA00AA);
+      final cursor = CrdtTextCursor(
+        id: 'peer-b',
+        color: color,
+        base: note.stablePositionAt(5),
+      );
+      await tester.pumpWidget(
+        host([cursor], motionDuration: const Duration(milliseconds: 120)),
+      );
+
+      // The field scrolls under the text (the local caret running past the
+      // right edge): the anchor did not move through the text, so the caret
+      // belongs at its new place at once instead of gliding there.
+      final field = tester.state<ScrollableState>(find.byType(Scrollable));
+      field.position.jumpTo(60);
+      await tester.pump();
+
+      final want = expectedCaret(tester, 5);
+      expect(
+        overlayPaint(),
+        paints
+          ..something((method, arguments) {
+            if (method != #drawRect) {
+              return false;
+            }
+            // Taking the scroll out of the rect and putting it back costs a
+            // float ulp, hence the tolerance instead of an exact match.
+            final rect = arguments.first as Rect;
+            return (rect.left - want.left).abs() < 0.01 &&
+                (rect.top - want.top).abs() < 0.01;
+          }),
       );
     });
 
