@@ -35,6 +35,20 @@ void main(List<String> args) async {
     badExit();
   }
 
+  logger.info('Copy contributing guide');
+  try {
+    copyContributing(
+      to: docsDir(subParts: ['docs']),
+      logger: logger,
+    );
+  } catch (error) {
+    logger.error(
+      'Unable to copy the contributing guide',
+      error: error,
+    );
+    badExit();
+  }
+
   logger.info('Install Docs');
 
   try {

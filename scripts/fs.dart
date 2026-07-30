@@ -83,6 +83,48 @@ void copyPackageReadmes({
   }
 }
 
+/// Copies the root `CONTRIBUTING.md` into [to] as `contributing.md`.
+///
+/// The guide is written for GitHub, so the copy is adapted to Docusaurus:
+/// the front matter is prepended, the inline table of contents is dropped
+/// (the site renders its own) and the repository-relative links are made
+/// absolute.
+void copyContributing({
+  required io.Directory to,
+  EnLogger? logger,
+}) {
+  if (!to.existsSync()) {
+    to.createSync(recursive: true);
+  }
+
+  final source = io.File(
+    path.join(io.Directory.current.path, 'CONTRIBUTING.md'),
+  );
+
+  const frontMatter = '---\n'
+      'sidebar_position: 99\n'
+      'title: Contributing\n'
+      '---\n'
+      '\n';
+
+  final content = _absoluteRepositoryLinks(
+    _parseReadme(source.readAsStringSync()),
+  );
+  io.File(path.join(to.path, 'contributing.md'))
+      .writeAsStringSync('$frontMatter$content');
+  logger?.info('Copied CONTRIBUTING.md');
+}
+
+/// Rewrites the repository-relative links (`./README.md`, `./melos.yaml`, ...)
+/// as absolute GitHub URLs, so they still resolve outside the repository.
+///
+/// Handles both the inline (`](./file)`) and the reference (`]: ./file`) link
+/// syntax.
+String _absoluteRepositoryLinks(String content) {
+  const blob = 'https://github.com/MattiaPispisa/crdt/blob/main/';
+  return content.replaceAll('](./', ']($blob').replaceAll(']: ./', ']: $blob');
+}
+
 /// Prepares a README for Docusaurus.
 ///
 /// Removes the leading auto-generated table of contents — the first contiguous

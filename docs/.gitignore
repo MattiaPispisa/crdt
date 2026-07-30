@@ -23,3 +23,5 @@ yarn-error.log*
 
 # Package READMEs copied into the Packages section by docs_bs
 /docs/documentation/packages/*.md
+# Root CONTRIBUTING.md copied by docs_bs
+/docs/contributing.md
