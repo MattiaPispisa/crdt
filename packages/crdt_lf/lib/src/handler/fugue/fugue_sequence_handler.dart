@@ -1,6 +1,7 @@
 import 'dart:typed_data';
 
 import 'package:crdt_lf/crdt_lf.dart';
+import 'package:crdt_lf/src/handler/fugue/element_id_floor.dart';
 import 'package:crdt_lf/src/handler/fugue/fugue_cache.dart';
 
 /// Lazily-resolved state shared by Fugue-based ordered-sequence handlers.
@@ -213,11 +214,15 @@ abstract class FugueSequenceHandler<T, V, S extends FugueState<T, V>>
       UVarint.write(valueBytes.length, out);
       out.add(valueBytes);
     }
+    ElementIdFloor.write(elementIdFloorForSnapshot(), out);
     return out.toBytes();
   }
 
   /// Decodes the snapshot nodes for this handler, or an empty list if there
   /// is no snapshot.
+  ///
+  /// Also seeds the element id floor from the snapshot trailer, so counters
+  /// spent on elements that were deleted and pruned are never reissued.
   List<FugueValueNode<T>> _initialState() {
     final snapshot = lastSnapshot();
     if (snapshot == null) {
@@ -247,6 +252,7 @@ abstract class FugueSequenceHandler<T, V, S extends FugueState<T, V>>
 
       nodes.add(FugueValueNode<T>(id: id, value: value));
     }
+    seedElementIdFloor(ElementIdFloor.read(snapshot, offset: offset));
     return nodes;
   }
 }

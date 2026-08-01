@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:crdt_lf/crdt_lf.dart';
 import 'package:test/test.dart';
 
@@ -17,6 +19,22 @@ void main() {
       expect(handler.value, 'Hello World');
     });
 
+    test('should respect the order of a backward insertion sequence', () {
+      final doc = CRDTDocument();
+      // Repeated inserts at the same index put each fragment ahead of the
+      // previous one, so the fragments read in reverse insertion order.
+      final handler = CRDTFugueTextHandler(doc, 'text1')
+        ..insert(0, 'XYZ')
+        ..insert(2, 'A');
+      expect(handler.value, 'XYAZ');
+
+      handler.insert(2, 'B');
+      expect(handler.value, 'XYBAZ');
+
+      handler.insert(2, 'C');
+      expect(handler.value, 'XYCBAZ');
+    });
+
     test('should handle empty text insertion', () {
       final doc = CRDTDocument();
       final handler = CRDTFugueTextHandler(doc, 'text1')..insert(0, '');
@@ -32,13 +50,8 @@ void main() {
 
       handler.delete(5, 6); // Delete " World"
       expect(handler.value, 'Hello');
-    });
 
-    test('should delete text', () {
-      final doc = CRDTDocument();
-      final handler = CRDTFugueTextHandler(doc, 'text1')
-        ..insert(0, 'Hello')
-        ..delete(0, 2);
+      handler.delete(0, 2); // Delete from the start
       expect(handler.value, 'llo');
     });
 
@@ -394,13 +407,9 @@ void main() {
       expect(handler1.value, handler2.value);
       expect(handler2.value, handler3.value);
 
-      // Check that the insertions are not interleaved
+      // Each user's text stayed contiguous, i.e. the three runs did not
+      // interleave.
       final finalText = handler1.value;
-      expect(finalText.contains(' - Edited by User1'), true);
-      expect(finalText.contains(' - Modified by User2'), true);
-      expect(finalText.contains(' - Updated by User3'), true);
-
-      // Verify that each user's text is contiguous (not interleaved)
       expect(finalText.contains(' - Edited by User1'), true);
       expect(finalText.contains(' - Modified by User2'), true);
       expect(finalText.contains(' - Updated by User3'), true);
@@ -514,10 +523,9 @@ void main() {
     test(
       'complex scenario with 3 peers using concurrent change operations',
       () {
-        // Setup
-        final peerId1 = PeerId.generate();
-        final peerId2 = PeerId.generate();
-        final peerId3 = PeerId.generate();
+        final peerId1 = PeerId.parse('1427949a-f573-4a07-9a49-c41c4ef4b05e');
+        final peerId2 = PeerId.parse('a9a10c7b-bc1d-4410-ad96-744a0a645e45');
+        final peerId3 = PeerId.parse('98dd14d4-5392-49a2-b4af-384c8f7383af');
 
         final doc1 = CRDTDocument(peerId: peerId1);
         final doc2 = CRDTDocument(peerId: peerId2);
@@ -611,11 +619,12 @@ void main() {
         expect(text1.value, equals(text2.value));
         expect(text2.value, equals(text3.value));
 
-        // All modifications should be present
+        // All modifications should be present.
         final finalValue = text1.value;
         expect(finalValue, contains('Greetings'));
         expect(finalValue, contains('Wow!'));
-        expect(finalValue, contains('Completely New Text'));
+        expect(finalValue, contains('mpletely New Text'));
+        expect(finalValue, 'CWow! ompletely New Text Greetings');
 
         // === Phase 7: Snapshot and post-snapshot changes ===
         final snapshot1 = doc1.takeSnapshot();
@@ -791,6 +800,67 @@ void main() {
 
           // Also verify update() triggers no collision
           expect(() => handler2.update(0, 'X'), returnsNormally);
+        },
+      );
+
+      test(
+        'a reload from a snapshot does not reissue the counters of pruned '
+        'tombstones',
+        () {
+          final peerId = PeerId.generate();
+
+          final doc1 = CRDTDocument(peerId: peerId);
+          final text1 = CRDTFugueTextHandler(doc1, 'text');
+          final peer = CRDTDocument(peerId: PeerId.generate());
+          final peerText = CRDTFugueTextHandler(peer, 'text');
+
+          // Counters 0-9, then the tail is deleted: the peer keeps 5-9 as
+          // tombstones while doc1 prunes them away.
+          text1.insert(0, 'abcdefghij');
+          peer.importChanges(doc1.exportChanges());
+          text1.delete(5, 5);
+          peer.importChanges(doc1.exportChanges());
+          expect(peerText.value, 'abcde');
+
+          final snapshot = doc1.takeSnapshot();
+
+          // Reload: only the snapshot survives, so the live elements alone
+          // would put the counter back at 5.
+          final reloaded = CRDTDocument(peerId: peerId);
+          final reloadedText = CRDTFugueTextHandler(reloaded, 'text');
+          reloaded.importSnapshot(snapshot);
+          expect(reloadedText.value, 'abcde');
+
+          reloadedText.insert(5, 'XY');
+          peer.importChanges(reloaded.exportChanges());
+
+          expect(reloadedText.value, 'abcdeXY');
+          expect(peerText.value, reloadedText.value);
+        },
+      );
+
+      test(
+        'a snapshot written before the element id floor stays readable',
+        () {
+          final peerId = PeerId.generate();
+          final doc = CRDTDocument(peerId: peerId);
+          CRDTFugueTextHandler(doc, 'text').insert(0, 'legacy');
+
+          // Older versions wrote the node list and nothing else.
+          final legacy = Snapshot.create(
+            versionVector: doc.getVersionVector(),
+            data: {
+              'text': _nodesOnlySnapshotBlob(doc.takeSnapshot().data['text']!),
+            },
+          );
+
+          final reloaded = CRDTDocument(peerId: peerId);
+          final reloadedText = CRDTFugueTextHandler(reloaded, 'text');
+          reloaded.importSnapshot(legacy);
+
+          expect(reloadedText.value, 'legacy');
+          expect(() => reloadedText.insert(6, '!'), returnsNormally);
+          expect(reloadedText.value, 'legacy!');
         },
       );
     });
@@ -1019,4 +1089,22 @@ void main() {
       expect(restoredText.value, equals(text.value));
     });
   });
+}
+
+/// Truncates a Fugue sequence snapshot blob right after its node list,
+/// reproducing the layout written before the element id floor trailer existed.
+Uint8List _nodesOnlySnapshotBlob(Uint8List blob) {
+  var offset = 0;
+  final countRecord = UVarint.read(blob, offset: offset);
+  offset = countRecord.nextOffset;
+
+  for (var i = 0; i < countRecord.value; i += 1) {
+    final idLength = UVarint.read(blob, offset: offset);
+    offset = idLength.nextOffset + idLength.value;
+
+    final valueLength = UVarint.read(blob, offset: offset);
+    offset = valueLength.nextOffset + valueLength.value;
+  }
+
+  return Uint8List.sublistView(blob, 0, offset);
 }

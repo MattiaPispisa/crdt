@@ -379,6 +379,45 @@ void main() {
     });
 
     group('snapshot', () {
+      test('importing a snapshot advances the clock past its version vector',
+          () {
+        final peerId = PeerId.generate();
+        // A clock ahead of the wall clock: the physical time cannot mask a
+        // logical clock that restarts.
+        final source = CRDTDocument(
+          peerId: peerId,
+          initialClock: HybridLogicalClock(
+            l: DateTime.now().millisecondsSinceEpoch + 60000,
+            c: 0,
+          ),
+        );
+        CRDTListHandler<String>(source, 'list')
+          ..insert(0, 'a')
+          ..insert(1, 'b')
+          ..insert(2, 'c');
+        final snapshot = source.takeSnapshot();
+
+        // A document rebuilt from the snapshot alone has no changes to
+        // advance its clock, so it would otherwise restart from zero and
+        // reissue operation ids its peers already hold.
+        final reloaded = CRDTDocument(peerId: peerId);
+        final reloadedList = CRDTListHandler<String>(reloaded, 'list');
+        reloaded.importSnapshot(snapshot);
+        expect(reloadedList.value, equals(['a', 'b', 'c']));
+
+        reloadedList.insert(3, 'd');
+        final change = reloaded.exportChanges().single;
+        expect(change.hlc > source.getVersionVector()[peerId]!, isTrue);
+
+        // A peer that holds the original history accepts the new change.
+        final peer = CRDTDocument(peerId: PeerId.generate());
+        final peerList = CRDTListHandler<String>(peer, 'list');
+        peer
+          ..mergeSnapshot(snapshot, pruneHistory: false)
+          ..importChanges([change]);
+        expect(peerList.value, equals(['a', 'b', 'c', 'd']));
+      });
+
       test('safe pruning, should conserve changes', () {
         CRDTListHandler<String>(doc, 'list')
           ..insert(0, 'Hello')

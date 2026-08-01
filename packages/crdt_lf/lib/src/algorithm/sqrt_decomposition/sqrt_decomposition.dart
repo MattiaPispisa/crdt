@@ -9,6 +9,24 @@ class _Block<T> {
   final List<T> keys = [];
   final List<bool> live = [];
   int liveCount = 0;
+
+  /// The offset of [key] inside [keys].
+  ///
+  /// Sequences are usually built by appending, and neighbour queries usually
+  /// land on an edge, so the two ends are checked before the linear scan.
+  int offsetOf(T key) {
+    final last = keys.length - 1;
+    if (last < 0) {
+      return -1;
+    }
+    if (identical(keys[last], key) || keys[last] == key) {
+      return last;
+    }
+    if (identical(keys[0], key) || keys[0] == key) {
+      return 0;
+    }
+    return keys.indexOf(key);
+  }
 }
 
 /// Order-statistics positional index backed by **square-root decomposition**.
@@ -60,7 +78,7 @@ class SqrtDecomposition<T> {
     if (block == null) {
       return;
     }
-    final offset = block.keys.indexOf(predecessor);
+    final offset = block.offsetOf(predecessor);
     block.keys.insert(offset + 1, key);
     block.live.insert(offset + 1, live);
     if (live) {
@@ -100,7 +118,7 @@ class SqrtDecomposition<T> {
     if (block == null) {
       return;
     }
-    final offset = block.keys.indexOf(key);
+    final offset = block.offsetOf(key);
     if (block.live[offset] == live) {
       return;
     }
@@ -146,7 +164,7 @@ class SqrtDecomposition<T> {
       }
       rank += candidate.liveCount;
     }
-    final offset = block.keys.indexOf(key);
+    final offset = block.offsetOf(key);
     for (var i = 0; i < offset; i++) {
       if (block.live[i]) {
         rank++;
@@ -162,7 +180,7 @@ class SqrtDecomposition<T> {
     if (block == null) {
       return null;
     }
-    final offset = block.keys.indexOf(key);
+    final offset = block.offsetOf(key);
     if (offset > 0) {
       return block.keys[offset - 1];
     }
@@ -177,6 +195,58 @@ class SqrtDecomposition<T> {
       return null;
     }
     return previous.keys.last;
+  }
+
+  /// Returns the element immediately after [key], or `null` if [key] is last
+  /// (or absent).
+  T? successorOf(T key) {
+    final block = _blockOf[key];
+    if (block == null) {
+      return null;
+    }
+    final offset = block.offsetOf(key);
+    if (offset < block.keys.length - 1) {
+      return block.keys[offset + 1];
+    }
+    var seen = false;
+    for (final candidate in _blocks) {
+      if (seen && candidate.keys.isNotEmpty) {
+        return candidate.keys.first;
+      }
+      if (identical(candidate, block)) {
+        seen = true;
+      }
+    }
+    return null;
+  }
+
+  /// Calls [action] on every **live** key, in sequence order.
+  ///
+  /// Blocks with no live element are skipped whole, so a sequence that is
+  /// mostly tombstones costs far less than one pass per element.
+  void forEachLive(void Function(T key) action) {
+    for (final block in _blocks) {
+      if (block.liveCount == 0) {
+        continue;
+      }
+      final keys = block.keys;
+      final live = block.live;
+      for (var i = 0; i < keys.length; i++) {
+        if (live[i]) {
+          action(keys[i]);
+        }
+      }
+    }
+  }
+
+  /// Returns the first element in the sequence, or `null` if empty.
+  T? first() {
+    for (final block in _blocks) {
+      if (block.keys.isNotEmpty) {
+        return block.keys.first;
+      }
+    }
+    return null;
   }
 
   /// Returns the last element in the sequence, or `null` if empty.

@@ -240,6 +240,42 @@ void main() {
       expect(b.value.contains('D'), isTrue);
     });
 
+    test(
+      'a reload from a snapshot does not reissue the counters of pruned '
+      'identities',
+      () {
+        final peerId = PeerId.parse('45ee6b65-b393-40b7-9755-8b66dc7d0518');
+        final docA = CRDTDocument(peerId: peerId);
+        final a = CRDTFugueMovableListHandler<String>(docA, 'l');
+
+        final docB = CRDTDocument(
+          peerId: PeerId.parse('a90dfced-cbf0-4a49-9c64-f5b7b62fdc18'),
+        );
+        final b = CRDTFugueMovableListHandler<String>(docB, 'l');
+
+        a.insertAll(0, ['a', 'b', 'c', 'd']);
+        docB.importChanges(docA.exportChanges());
+        a.delete(2, 2);
+        docB.importChanges(docA.exportChanges());
+        expect(b.value, equals(['a', 'b']));
+
+        final snapshot = docA.takeSnapshot();
+
+        // Reload: the snapshot only carries the live identities, so without
+        // the element id floor the counters of 'c' and 'd' come back.
+        final reloaded = CRDTDocument(peerId: peerId);
+        final reloadedList = CRDTFugueMovableListHandler<String>(reloaded, 'l');
+        reloaded.importSnapshot(snapshot);
+        expect(reloadedList.value, equals(['a', 'b']));
+
+        reloadedList.insertAll(2, ['x', 'y']);
+        docB.importChanges(reloaded.exportChanges());
+
+        expect(reloadedList.value, equals(['a', 'b', 'x', 'y']));
+        expect(b.value, equals(reloadedList.value));
+      },
+    );
+
     test('insertAll inserts a contiguous run with Fugue non-interleaving', () {
       // Two peers both run an `insertAll` at the same anchor; each peer's
       // batch must stay contiguous in the merged result.

@@ -64,6 +64,16 @@ class _Model<T> {
     return keys[at - 1];
   }
 
+  T? successorOf(T key) {
+    final at = keys.indexOf(key);
+    if (at == -1 || at == keys.length - 1) {
+      return null;
+    }
+    return keys[at + 1];
+  }
+
+  T? first() => keys.isEmpty ? null : keys.first;
+
   T? last() => keys.isEmpty ? null : keys.last;
 
   int get liveTotal => live.where((l) => l).length;
@@ -76,8 +86,10 @@ void main() {
       expect(index.length, 0);
       expect(index.liveAt(0), isNull);
       expect(index.liveAt(-1), isNull);
+      expect(index.first(), isNull);
       expect(index.last(), isNull);
       expect(index.predecessorOf(1), isNull);
+      expect(index.successorOf(1), isNull);
       expect(index.liveRankOf(1), -1);
       expect(index.contains(1), isFalse);
     });
@@ -107,6 +119,10 @@ void main() {
         [for (var i = 0; i < index.length; i++) index.liveAt(i)],
         [1, 5, 2, 3],
       );
+      expect(index.first(), 1);
+      expect(index.successorOf(1), 5);
+      expect(index.successorOf(5), 2);
+      expect(index.successorOf(3), isNull);
       expect(index.predecessorOf(5), 1);
       expect(index.predecessorOf(2), 5);
       expect(index.predecessorOf(1), isNull);
@@ -177,6 +193,41 @@ void main() {
       expect(index.predecessorOf(1234), 1233);
     });
 
+    test('append-only and prepend-only sequences agree with the model', () {
+      // The two shapes the block-edge fast paths in `offsetOf` target: the
+      // predecessor is always the last key of its block when appending, and
+      // always the first when prepending.
+      for (final appendOnly in [true, false]) {
+        final index = SqrtDecomposition<int>();
+        final model = _Model<int>();
+
+        for (var key = 0; key < 900; key++) {
+          final live = key.isEven;
+          if (appendOnly) {
+            if (key == 0) {
+              index.insertAtFront(key, live: live);
+              model.insertAtFront(key, isLive: live);
+            } else {
+              index.insertAfter(key - 1, key, live: live);
+              model.insertAfter(key - 1, key, isLive: live);
+            }
+          } else {
+            index.insertAtFront(key, live: live);
+            model.insertAtFront(key, isLive: live);
+          }
+        }
+
+        for (var position = 0; position < model.liveTotal; position++) {
+          expect(index.liveAt(position), model.liveAt(position));
+        }
+        for (final key in model.keys) {
+          expect(index.liveRankOf(key), model.liveRankOf(key));
+          expect(index.predecessorOf(key), model.predecessorOf(key));
+          expect(index.successorOf(key), model.successorOf(key));
+        }
+      }
+    });
+
     test('randomized differential test against a reference model', () {
       final rng = Random(20240607);
       final index = SqrtDecomposition<int>();
@@ -210,6 +261,7 @@ void main() {
         // Spot-check invariants every few steps (and always near the end).
         if (step % 7 == 0 || step > 3950) {
           expect(index.length, model.keys.length);
+          expect(index.first(), model.first());
           expect(index.last(), model.last());
           final liveTotal = model.liveTotal;
           expect(index.liveAt(liveTotal), isNull);
@@ -231,6 +283,11 @@ void main() {
               index.predecessorOf(key),
               model.predecessorOf(key),
               reason: 'predecessorOf($key) mismatch at step $step',
+            );
+            expect(
+              index.successorOf(key),
+              model.successorOf(key),
+              reason: 'successorOf($key) mismatch at step $step',
             );
           }
         }
