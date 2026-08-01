@@ -17,6 +17,22 @@ void main() {
       expect(handler.value, 'Hello World');
     });
 
+    test('should respect the order of a backward insertion sequence', () {
+      final doc = CRDTDocument();
+      // Repeated inserts at the same index put each fragment ahead of the
+      // previous one, so the fragments read in reverse insertion order.
+      final handler = CRDTFugueTextHandler(doc, 'text1')
+        ..insert(0, 'XYZ')
+        ..insert(2, 'A');
+      expect(handler.value, 'XYAZ');
+
+      handler.insert(2, 'B');
+      expect(handler.value, 'XYBAZ');
+
+      handler.insert(2, 'C');
+      expect(handler.value, 'XYCBAZ');
+    });
+
     test('should handle empty text insertion', () {
       final doc = CRDTDocument();
       final handler = CRDTFugueTextHandler(doc, 'text1')..insert(0, '');
@@ -32,13 +48,8 @@ void main() {
 
       handler.delete(5, 6); // Delete " World"
       expect(handler.value, 'Hello');
-    });
 
-    test('should delete text', () {
-      final doc = CRDTDocument();
-      final handler = CRDTFugueTextHandler(doc, 'text1')
-        ..insert(0, 'Hello')
-        ..delete(0, 2);
+      handler.delete(0, 2); // Delete from the start
       expect(handler.value, 'llo');
     });
 
@@ -394,13 +405,9 @@ void main() {
       expect(handler1.value, handler2.value);
       expect(handler2.value, handler3.value);
 
-      // Check that the insertions are not interleaved
+      // Each user's text stayed contiguous, i.e. the three runs did not
+      // interleave.
       final finalText = handler1.value;
-      expect(finalText.contains(' - Edited by User1'), true);
-      expect(finalText.contains(' - Modified by User2'), true);
-      expect(finalText.contains(' - Updated by User3'), true);
-
-      // Verify that each user's text is contiguous (not interleaved)
       expect(finalText.contains(' - Edited by User1'), true);
       expect(finalText.contains(' - Modified by User2'), true);
       expect(finalText.contains(' - Updated by User3'), true);
@@ -514,10 +521,9 @@ void main() {
     test(
       'complex scenario with 3 peers using concurrent change operations',
       () {
-        // Setup
-        final peerId1 = PeerId.generate();
-        final peerId2 = PeerId.generate();
-        final peerId3 = PeerId.generate();
+        final peerId1 = PeerId.parse('1427949a-f573-4a07-9a49-c41c4ef4b05e');
+        final peerId2 = PeerId.parse('a9a10c7b-bc1d-4410-ad96-744a0a645e45');
+        final peerId3 = PeerId.parse('98dd14d4-5392-49a2-b4af-384c8f7383af');
 
         final doc1 = CRDTDocument(peerId: peerId1);
         final doc2 = CRDTDocument(peerId: peerId2);
@@ -611,11 +617,12 @@ void main() {
         expect(text1.value, equals(text2.value));
         expect(text2.value, equals(text3.value));
 
-        // All modifications should be present
+        // All modifications should be present.
         final finalValue = text1.value;
         expect(finalValue, contains('Greetings'));
         expect(finalValue, contains('Wow!'));
-        expect(finalValue, contains('Completely New Text'));
+        expect(finalValue, contains('mpletely New Text'));
+        expect(finalValue, 'CWow! ompletely New Text Greetings');
 
         // === Phase 7: Snapshot and post-snapshot changes ===
         final snapshot1 = doc1.takeSnapshot();

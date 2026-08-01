@@ -64,6 +64,16 @@ class _Model<T> {
     return keys[at - 1];
   }
 
+  T? successorOf(T key) {
+    final at = keys.indexOf(key);
+    if (at == -1 || at == keys.length - 1) {
+      return null;
+    }
+    return keys[at + 1];
+  }
+
+  T? first() => keys.isEmpty ? null : keys.first;
+
   T? last() => keys.isEmpty ? null : keys.last;
 
   int get liveTotal => live.where((l) => l).length;
@@ -76,8 +86,10 @@ void main() {
       expect(index.length, 0);
       expect(index.liveAt(0), isNull);
       expect(index.liveAt(-1), isNull);
+      expect(index.first(), isNull);
       expect(index.last(), isNull);
       expect(index.predecessorOf(1), isNull);
+      expect(index.successorOf(1), isNull);
       expect(index.liveRankOf(1), -1);
       expect(index.contains(1), isFalse);
     });
@@ -107,6 +119,10 @@ void main() {
         [for (var i = 0; i < index.length; i++) index.liveAt(i)],
         [1, 5, 2, 3],
       );
+      expect(index.first(), 1);
+      expect(index.successorOf(1), 5);
+      expect(index.successorOf(5), 2);
+      expect(index.successorOf(3), isNull);
       expect(index.predecessorOf(5), 1);
       expect(index.predecessorOf(2), 5);
       expect(index.predecessorOf(1), isNull);
@@ -210,6 +226,7 @@ void main() {
         // Spot-check invariants every few steps (and always near the end).
         if (step % 7 == 0 || step > 3950) {
           expect(index.length, model.keys.length);
+          expect(index.first(), model.first());
           expect(index.last(), model.last());
           final liveTotal = model.liveTotal;
           expect(index.liveAt(liveTotal), isNull);
@@ -231,6 +248,11 @@ void main() {
               index.predecessorOf(key),
               model.predecessorOf(key),
               reason: 'predecessorOf($key) mismatch at step $step',
+            );
+            expect(
+              index.successorOf(key),
+              model.successorOf(key),
+              reason: 'successorOf($key) mismatch at step $step',
             );
           }
         }

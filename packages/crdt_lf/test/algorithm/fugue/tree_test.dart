@@ -43,10 +43,11 @@ void main() {
       expect(str, contains('Tree:'));
     });
 
-    test('insert with rightOrigin creates right child', () {
+    test('insert with no usable origin attaches under the root', () {
       final tree = FugueTree<dynamic>.empty();
       final peerId = PeerId.parse('ee121333-c65b-4afc-b226-4ef116df3432');
       final leftOrigin = FugueElementID.nullID();
+      // Never inserted, so neither origin can be resolved.
       final rightOrigin = FugueElementID(peerId, 0);
 
       tree.insert(
@@ -58,31 +59,6 @@ void main() {
 
       expect(tree.values(), equals(['test']));
     });
-
-    test(
-      'update ',
-      () {
-        final tree = FugueTree<dynamic>.empty();
-        final peerId = PeerId.parse('ee121333-c65b-4afc-b226-4ef116df3432');
-        final leftOrigin = FugueElementID.nullID();
-        final rightOrigin = FugueElementID(peerId, 0);
-
-        tree
-          ..insert(
-            newID: FugueElementID(peerId, 1),
-            value: 'test',
-            leftOrigin: leftOrigin,
-            rightOrigin: rightOrigin,
-          )
-          ..update(
-            newID: FugueElementID(peerId, 2),
-            newValue: 'Test!',
-            nodeID: FugueElementID(peerId, 1),
-          );
-
-        expect(tree.values(), equals(['Test!']));
-      },
-    );
 
     test('insert with leftOrigin creates right child', () {
       final tree = FugueTree<dynamic>.empty();
@@ -107,21 +83,6 @@ void main() {
         );
 
       expect(tree.values(), equals(['first', 'second']));
-    });
-
-    test('should be attached under root', () {
-      final tree = FugueTree<dynamic>.empty();
-      final peerId = PeerId.parse('4e91a152-582f-4f46-8944-c2c2e8b217ff');
-
-      expect(
-        () => tree.insert(
-          newID: FugueElementID(peerId, 1),
-          value: 'test',
-          leftOrigin: FugueElementID.nullID(), // Invalid parent
-          rightOrigin: FugueElementID.nullID(),
-        ),
-        returnsNormally,
-      );
     });
 
     test('insert throws on duplicate node', () {
@@ -155,7 +116,7 @@ void main() {
       expect(result.isNull, isTrue);
     });
 
-    test('findNextNode returns null for last node', () {
+    test('findNextNode returns null for the root of an empty tree', () {
       final tree = FugueTree<dynamic>.empty();
       final result = tree.findNextNode(FugueElementID.nullID());
       expect(result.isNull, isTrue);
@@ -275,57 +236,223 @@ void main() {
       expect(tree.values(), equals(['a', 'c']));
     });
 
-    test('findNodeAtPosition matches the live traversal order', () {
-      final tree = FugueTree<dynamic>.empty();
+    test('findNextNode returns the in-order successor', () {
+      final tree = FugueTree<String>.empty();
       final peerId = PeerId.parse('4e91a152-582f-4f46-8944-c2c2e8b217ff');
+      final nullID = FugueElementID.nullID();
 
-      var left = FugueElementID.nullID();
-      for (var i = 1; i <= 5; i++) {
-        final id = FugueElementID(peerId, i);
-        tree.insert(
-          newID: id,
-          value: 'v$i',
-          leftOrigin: left,
-          rightOrigin: FugueElementID.nullID(),
+      // A right-children chain X → Y → Z ...
+      final x = FugueElementID(peerId, 1);
+      final y = FugueElementID(peerId, 2);
+      final z = FugueElementID(peerId, 3);
+      tree
+        ..insert(newID: x, value: 'X', leftOrigin: nullID, rightOrigin: nullID)
+        ..insert(newID: y, value: 'Y', leftOrigin: x, rightOrigin: nullID)
+        ..insert(newID: z, value: 'Z', leftOrigin: y, rightOrigin: nullID);
+
+      // ... with two left children hanging under Z.
+      final a = FugueElementID(peerId, 4);
+      final b = FugueElementID(peerId, 5);
+      tree
+        ..insert(newID: a, value: 'A', leftOrigin: y, rightOrigin: z)
+        ..insert(newID: b, value: 'B', leftOrigin: y, rightOrigin: z);
+
+      expect(tree.values(), equals(['X', 'Y', 'A', 'B', 'Z']));
+
+      // The successor of a node with right children opens that subtree by its
+      // left spine, not by the right child itself.
+      expect(tree.findNextNode(y), a);
+      // A sibling on the same side comes next ...
+      expect(tree.findNextNode(a), b);
+      // ... and the last left child is followed by its own parent.
+      expect(tree.findNextNode(b), z);
+      expect(tree.findNextNode(x), y);
+      expect(tree.findNextNode(z).isNull, isTrue);
+    });
+
+    test('insert attaches to rightOrigin when it descends from leftOrigin', () {
+      final tree = FugueTree<String>.empty();
+      final peerId = PeerId.parse('4e91a152-582f-4f46-8944-c2c2e8b217ff');
+      final nullID = FugueElementID.nullID();
+
+      final x = FugueElementID(peerId, 1);
+      final y = FugueElementID(peerId, 2);
+      final z = FugueElementID(peerId, 3);
+      final a = FugueElementID(peerId, 4);
+      tree
+        ..insert(newID: x, value: 'X', leftOrigin: nullID, rightOrigin: nullID)
+        ..insert(newID: y, value: 'Y', leftOrigin: x, rightOrigin: nullID)
+        ..insert(newID: z, value: 'Z', leftOrigin: y, rightOrigin: nullID)
+        ..insert(newID: a, value: 'A', leftOrigin: y, rightOrigin: z)
+        // A is a left child of Z, so it is a grandchild of Y rather than one
+        // of its children: the placement rule still has to see the descendance.
+        ..insert(
+          newID: FugueElementID(peerId, 5),
+          value: 'B',
+          leftOrigin: y,
+          rightOrigin: a,
         );
-        left = id;
+
+      expect(tree.values(), equals(['X', 'Y', 'B', 'A', 'Z']));
+    });
+
+    test('update puts the replacement in the slot of the target', () {
+      final tree = FugueTree<String>.empty();
+      final peerId = PeerId.parse('4e91a152-582f-4f46-8944-c2c2e8b217ff');
+      final nullID = FugueElementID.nullID();
+
+      final a = FugueElementID(peerId, 1);
+      final b = FugueElementID(peerId, 2);
+      final c = FugueElementID(peerId, 3);
+      tree
+        ..insert(newID: a, value: 'A', leftOrigin: nullID, rightOrigin: nullID)
+        ..insert(newID: b, value: 'B', leftOrigin: a, rightOrigin: nullID)
+        ..insert(newID: c, value: 'C', leftOrigin: b, rightOrigin: nullID)
+        ..update(
+          nodeID: b,
+          newID: FugueElementID(peerId, 4),
+          newValue: 'B2',
+        );
+
+      expect(tree.values(), equals(['A', 'B2', 'C']));
+
+      // A second update of the same — by now deleted — target still
+      // materializes its replacement, next to the first one in id order.
+      tree.update(
+        nodeID: b,
+        newID: FugueElementID(peerId, 5),
+        newValue: 'B3',
+      );
+
+      expect(tree.values(), equals(['A', 'B2', 'B3', 'C']));
+    });
+
+    test('the sequence does not depend on the order operations are applied in',
+        () {
+      final base = PeerId.parse('4e91a152-582f-4f46-8944-c2c2e8b217ff');
+      final p1 = PeerId.parse('ee121333-c65b-4afc-b226-4ef116df3432');
+      final p2 = PeerId.parse('7c9e2b1a-3f4d-4a8b-9c0e-1d2f3a4b5c6d');
+      final nullID = FugueElementID.nullID();
+
+      final a = FugueElementID(base, 1);
+      final b = FugueElementID(base, 2);
+      final c = FugueElementID(base, 3);
+
+      // Four groups of operations, all generated against the same base state
+      // (so they are mutually concurrent) and therefore applicable in any
+      // order. Within a group the order is causal and preserved.
+      final groups = <void Function(FugueTree<String>)>[
+        (tree) => tree.iterableInsertChain(
+              leftOrigin: a,
+              rightOrigin: b,
+              nodes: [
+                FugueValueNode(id: FugueElementID(p1, 1), value: 'x1'),
+                FugueValueNode(id: FugueElementID(p1, 2), value: 'x2'),
+              ],
+            ),
+        (tree) => tree.iterableInsertChain(
+              leftOrigin: a,
+              rightOrigin: b,
+              nodes: [
+                FugueValueNode(id: FugueElementID(p2, 1), value: 'y1'),
+                FugueValueNode(id: FugueElementID(p2, 2), value: 'y2'),
+              ],
+            ),
+        (tree) => tree.insert(
+              newID: FugueElementID(p2, 3),
+              value: 'z',
+              leftOrigin: b,
+              rightOrigin: c,
+            ),
+        (tree) => tree.update(
+              nodeID: b,
+              newID: FugueElementID(p1, 3),
+              newValue: 'B2',
+            ),
+      ];
+
+      List<String> applyInOrder(List<int> order) {
+        final tree = FugueTree<String>.empty()
+          ..insert(
+            newID: a,
+            value: 'A',
+            leftOrigin: nullID,
+            rightOrigin: nullID,
+          )
+          ..insert(newID: b, value: 'B', leftOrigin: a, rightOrigin: nullID)
+          ..insert(newID: c, value: 'C', leftOrigin: b, rightOrigin: nullID);
+        for (final index in order) {
+          groups[index](tree);
+        }
+        return tree.values();
       }
 
-      final nodes = tree.nodes();
-      for (var i = 0; i < nodes.length; i++) {
-        expect(tree.findNodeAtPosition(i), nodes[i].id);
+      final permutations = <List<int>>[];
+      void permute(List<int> chosen, List<int> remaining) {
+        if (remaining.isEmpty) {
+          permutations.add(chosen);
+          return;
+        }
+        for (var i = 0; i < remaining.length; i++) {
+          permute(
+            [...chosen, remaining[i]],
+            [...remaining]..removeAt(i),
+          );
+        }
       }
-      expect(tree.findNodeAtPosition(-1).isNull, isTrue);
-      expect(tree.findNodeAtPosition(nodes.length).isNull, isTrue);
 
-      // Delete a middle node: positions shift down, no stale entry remains.
-      tree.delete(FugueElementID(peerId, 3));
-      final after = tree.nodes();
-      for (var i = 0; i < after.length; i++) {
-        expect(tree.findNodeAtPosition(i), after[i].id);
+      permute([], [0, 1, 2, 3]);
+      expect(permutations, hasLength(24));
+
+      final expected = applyInOrder(permutations.first);
+      for (final order in permutations.skip(1)) {
+        expect(applyInOrder(order), equals(expected), reason: 'order $order');
       }
     });
 
-    test('findNextNode: last node has no successor (fast path)', () {
-      final tree = FugueTree<dynamic>.empty();
+    test('a chained batch insert matches element-by-element inserts', () {
       final peerId = PeerId.parse('4e91a152-582f-4f46-8944-c2c2e8b217ff');
+      final nullID = FugueElementID.nullID();
+      final p = FugueElementID(peerId, 5);
+      final q = FugueElementID(peerId, 6);
 
-      final ids = [for (var i = 1; i <= 5; i++) FugueElementID(peerId, i)];
-      var left = FugueElementID.nullID();
-      for (final id in ids) {
-        tree.insert(
-          newID: id,
-          value: '$id',
-          leftOrigin: left,
-          rightOrigin: FugueElementID.nullID(),
-        );
-        left = id;
+      // X Y A Z, where A is a left child of Z: inserting at index 2 lands on
+      // the branch where the new node hangs off rightOrigin.
+      FugueTree<String> base() {
+        final x = FugueElementID(peerId, 1);
+        final y = FugueElementID(peerId, 2);
+        final z = FugueElementID(peerId, 3);
+        return FugueTree<String>.empty()
+          ..insert(
+            newID: x,
+            value: 'X',
+            leftOrigin: nullID,
+            rightOrigin: nullID,
+          )
+          ..insert(newID: y, value: 'Y', leftOrigin: x, rightOrigin: nullID)
+          ..insert(newID: z, value: 'Z', leftOrigin: y, rightOrigin: nullID)
+          ..insert(
+            newID: FugueElementID(peerId, 4),
+            value: 'A',
+            leftOrigin: y,
+            rightOrigin: z,
+          );
       }
 
-      // The in-order-last node has no successor.
-      expect(tree.findNextNode(ids.last).isNull, isTrue);
-      // A middle node still resolves to its right child (unchanged behavior).
-      expect(tree.findNextNode(ids[2]), ids[3]);
+      final batched = base()
+        ..iterableInsert(2, [
+          FugueValueNode(id: p, value: 'p'),
+          FugueValueNode(id: q, value: 'q'),
+        ]);
+      final oneByOne = base()
+        ..iterableInsert(2, [FugueValueNode(id: p, value: 'p')])
+        ..iterableInsert(3, [FugueValueNode(id: q, value: 'q')]);
+
+      expect(batched.values(), equals(['X', 'Y', 'p', 'q', 'A', 'Z']));
+      expect(
+        batched.nodes().map((node) => node.id).toList(),
+        equals(oneByOne.nodes().map((node) => node.id).toList()),
+      );
     });
 
     test(
@@ -350,6 +477,40 @@ void main() {
         }
         expect(t.findNodeAtPosition(-1).isNull, isTrue);
         expect(t.findNodeAtPosition(oracle.length).isNull, isTrue);
+      }
+
+      // `findNextNode` reads the successor out of the index, and it must also
+      // walk tombstones, which the live oracle above cannot see. This rebuilds
+      // the structural sequence from the serialized tree instead.
+      void checkSuccessorsAgainstOracle(FugueTree<String> t, int step) {
+        final nodesJson = t.toJson()['nodes']! as Map<String, dynamic>;
+        final sequence = <String>[];
+        void visit(String id) {
+          final triple = nodesJson[id]! as Map<String, dynamic>;
+          for (final child in triple['leftChildren']! as List<dynamic>) {
+            visit(
+              FugueElementID.fromJson(child as Map<String, dynamic>).toString(),
+            );
+          }
+          if (id != 'null') {
+            sequence.add(id);
+          }
+          for (final child in triple['rightChildren']! as List<dynamic>) {
+            visit(
+              FugueElementID.fromJson(child as Map<String, dynamic>).toString(),
+            );
+          }
+        }
+
+        visit('null');
+
+        for (var i = 0; i < sequence.length; i++) {
+          expect(
+            t.findNextNode(FugueElementID.parse(sequence[i])).toString(),
+            i + 1 < sequence.length ? sequence[i + 1] : 'null',
+            reason: 'successor of ${sequence[i]} at step $step',
+          );
+        }
       }
 
       for (var step = 0; step < 1500; step++) {
@@ -386,7 +547,12 @@ void main() {
         }
 
         checkAgainstOracle(tree, step);
+        // Quadratic in the tree size, so sampled rather than run every step.
+        if (step % 100 == 0) {
+          checkSuccessorsAgainstOracle(tree, step);
+        }
       }
+      checkSuccessorsAgainstOracle(tree, 1500);
 
       // A json round-trip rebuilds the index and reproduces the same sequence.
       final restored = FugueTree<String>.fromJson(tree.toJson());

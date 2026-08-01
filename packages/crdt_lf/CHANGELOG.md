@@ -1,3 +1,15 @@
+## [4.0.0](https://github.com/MattiaPispisa/crdt/tree/crdt_lf-v4.0.0/packages/crdt_lf)
+
+**Date:** 2026-08-01
+
+[compare to previous release](https://github.com/MattiaPispisa/crdt/compare/crdt_lf-v3.4.2+1...crdt_lf-v4.0.0)
+
+
+### Fixed
+
+- Repeated insertions at the same index no longer come out in the wrong order. [117](https://github.com/MattiaPispisa/crdt/issues/117) (thx to @coltrane)
+- `update` now anchors the replacement to the element it replaces rather than to its position in the visible text, so an update whose target was concurrently deleted is no longer dropped. [113](https://github.com/MattiaPispisa/crdt/issues/113) (thx to @pedersen)
+
 ## [3.4.2+1](https://github.com/MattiaPispisa/crdt/tree/crdt_lf-v3.4.2+1/packages/crdt_lf)
 
 **Date:** 2026-07-26

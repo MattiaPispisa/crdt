@@ -64,11 +64,10 @@ class FugueTree<T> {
   final FugueElementID _rootID;
 
   /// Positional index over the in-order sequence of all structural nodes
-  /// (live nodes and tombstones), answering position↔id queries in `O(√n)`
-  /// instead of an `O(n)` traversal.
+  /// Answers position↔id and successor queries in `O(√n)`.
   ///
-  /// Derived accelerator kept in sync by [_addNodeToTree] and [delete]; never
-  /// serialized, rebuilt from the tree on deserialization via [_rebuildIndex].
+  /// - Never serialized;
+  /// - Rebuilt on deserialization via [_rebuildIndex].
   final SqrtDecomposition<FugueElementID> _index =
       SqrtDecomposition<FugueElementID>();
 
@@ -151,10 +150,11 @@ class FugueTree<T> {
   ///
   /// The first node is inserted with the given origins; each subsequent node
   /// is chained as a right child of the previously-inserted one, with the
-  /// same [rightOrigin]. This is the "non-interleaving" Fugue insertion used
-  /// when applying a batch insert received from a peer: the origins come
-  /// from the operation itself, not from a local index, so this is the
-  /// method that handler `applyOperation` paths should call.
+  /// same [rightOrigin].
+  ///
+  /// The result is the same as inserting the nodes one by one at consecutive
+  /// indexes, and the chain stays contiguous under concurrent insertions at
+  /// the same position.
   void iterableInsertChain({
     required FugueElementID leftOrigin,
     required FugueElementID rightOrigin,
@@ -182,11 +182,10 @@ class FugueTree<T> {
   ///
   /// [rightOrigin] node after [leftOrigin] in traversal order
   ///
-  /// if [leftOrigin] exists and [rightOrigin] is a right child of [leftOrigin],
-  /// the new node will be a left child of [rightOrigin]
-  /// otherwise if [leftOrigin] exists, the new node will be a right child
-  /// of [leftOrigin]
-  /// otherwise, the new node will be a left child of [rightOrigin]
+  /// If [leftOrigin] is an ancestor of [rightOrigin] the new node becomes a
+  /// left child of [rightOrigin]; otherwise it becomes a right child of
+  /// [leftOrigin]. When [leftOrigin] is unknown the node becomes a left child
+  /// of [rightOrigin], and when neither origin is known it hangs off the root.
   void insert({
     required FugueElementID newID,
     required T value,
@@ -200,9 +199,7 @@ class FugueTree<T> {
         _nodes.containsKey(leftOrigin) &&
         !rightOrigin.isNull &&
         _nodes.containsKey(rightOrigin)) {
-      // Check if rightOrigin is a right child of leftOrigin
-      final leftOriginTriple = _nodes[leftOrigin]!;
-      if (leftOriginTriple.rightChildren.contains(rightOrigin)) {
+      if (_isAncestorOf(leftOrigin, rightOrigin)) {
         // Insert as left child of rightOrigin to maintain order
         newNode = FugueNode<T>(
           id: newID,
@@ -257,6 +254,40 @@ class FugueTree<T> {
     _addNodeToTree(newNode);
   }
 
+  /// Whether [descendant] sits in the subtree rooted at [ancestor].
+  ///
+  /// Both ids must be present in the tree.
+  bool _isAncestorOf(FugueElementID ancestor, FugueElementID descendant) {
+    // without right children nothing can be a right descendant.
+    if (_nodes[ancestor]!.rightChildren.isEmpty) {
+      return false;
+    }
+
+    // a direct child.
+    if (_nodes[descendant]!.node.parentID == ancestor) {
+      return true;
+    }
+
+    // `O(√n)`: with right children the in-order successor is the leftmost node
+    // of the first right subtree, hence a descendant.
+    if (_index.successorOf(ancestor) == descendant) {
+      return true;
+    }
+
+    var current = descendant;
+    while (current != _rootID) {
+      final parentID = _nodes[current]?.node.parentID;
+      if (parentID == null) {
+        return false;
+      }
+      if (parentID == ancestor) {
+        return true;
+      }
+      current = parentID;
+    }
+    return false;
+  }
+
   /// Deletes a node from the tree (marks it as deleted, `⊥`)
   void delete(FugueElementID nodeID) {
     if (_nodes.containsKey(nodeID)) {
@@ -265,27 +296,32 @@ class FugueTree<T> {
     }
   }
 
-  /// Updates a [FugueNode] by deleting the old value and inserting a new one.
+  /// Updates a [FugueNode]: tombstones [nodeID] and puts [newID], carrying
+  /// [newValue], in the slot [nodeID] occupied.
+  ///
+  /// Does nothing when [nodeID] is unknown to this tree.
   void update({
     required FugueElementID nodeID,
     required FugueElementID newID,
     required T newValue,
   }) {
-    // Check if the node exists and is not already deleted
-    if (!_nodes.containsKey(nodeID) || _nodes[nodeID]!.node.isDeleted) {
+    final triple = _nodes[nodeID];
+    if (triple == null) {
       return;
     }
 
-    final index = _index.liveRankOf(nodeID);
-    if (index == -1) {
-      return;
+    if (!triple.node.isDeleted) {
+      delete(nodeID);
     }
 
-    delete(nodeID);
-
-    iterableInsert(index, [
-      FugueValueNode(id: newID, value: newValue),
-    ]);
+    _addNodeToTree(
+      FugueNode<T>(
+        id: newID,
+        value: newValue,
+        parentID: nodeID,
+        side: FugueSide.left,
+      ),
+    );
   }
 
   /// Adds a node to the tree
@@ -306,18 +342,34 @@ class FugueTree<T> {
     );
     _nodes[node.id] = nodeTriple;
 
-    // Update the parent's children list
-    if (node.side == FugueSide.left) {
-      _nodes[parentID]!.leftChildren.add(node.id);
-    } else {
-      _nodes[parentID]!.rightChildren.add(node.id);
-    }
+    // Same-side siblings are kept sorted by id.
+    final siblings = node.side == FugueSide.left
+        ? _nodes[parentID]!.leftChildren
+        : _nodes[parentID]!.rightChildren;
+    final position = _siblingInsertionPoint(siblings, node.id);
+    siblings.insert(position, node.id);
 
-    _indexInsert(node);
+    _indexInsert(node, position);
   }
 
-  /// Keeps [_index] in sync after [node] has been linked into the tree.
-  void _indexInsert(FugueNode<T> node) {
+  /// The index at which [id] belongs in the id-sorted [siblings] list.
+  int _siblingInsertionPoint(List<FugueElementID> siblings, FugueElementID id) {
+    var low = 0;
+    var high = siblings.length;
+    while (low < high) {
+      final middle = (low + high) >> 1;
+      if (siblings[middle].compareTo(id) < 0) {
+        low = middle + 1;
+      } else {
+        high = middle;
+      }
+    }
+    return low;
+  }
+
+  /// Keeps [_index] in sync after [node] has been linked into the tree as the
+  /// child at [position] on its side.
+  void _indexInsert(FugueNode<T> node, int position) {
     final isLive = node.value != null;
 
     // Re-linking a previously-seen id (e.g. a resurrected tombstone): keep its
@@ -327,7 +379,7 @@ class FugueTree<T> {
       return;
     }
 
-    final predecessor = _indexPredecessorFor(node);
+    final predecessor = _indexPredecessorFor(node, position);
     if (predecessor == null) {
       _index.insertAtFront(node.id, live: isLive);
     } else {
@@ -335,9 +387,9 @@ class FugueTree<T> {
     }
   }
 
-  /// The in-order predecessor of [node] (just appended as the last child on its
-  /// side), or `null` when [node] sorts at the very front of the sequence.
-  FugueElementID? _indexPredecessorFor(FugueNode<T> node) {
+  /// The in-order predecessor of [node], linked as the child at [position] on
+  /// its side, or `null` when [node] sorts at the very front of the sequence.
+  FugueElementID? _indexPredecessorFor(FugueNode<T> node, int position) {
     final parentID = node.parentID;
     final parentTriple = _nodes[parentID]!;
     final siblings = node.side == FugueSide.left
@@ -346,8 +398,8 @@ class FugueTree<T> {
 
     // A previous sibling exists: predecessor is the in-order-last node of its
     // subtree.
-    if (siblings.length >= 2) {
-      return _inOrderLastOfSubtree(siblings[siblings.length - 2]);
+    if (position > 0) {
+      return _inOrderLastOfSubtree(siblings[position - 1]);
     }
 
     // [node] is the first child on its side.
@@ -375,6 +427,16 @@ class FugueTree<T> {
     var current = id;
     while (_nodes[current]!.rightChildren.isNotEmpty) {
       current = _nodes[current]!.rightChildren.last;
+    }
+    return current;
+  }
+
+  /// The first node visited by an in-order traversal of [id]'s subtree, i.e.
+  /// following the left-children spine to its deepest end.
+  FugueElementID _inOrderFirstOfSubtree(FugueElementID id) {
+    var current = id;
+    while (_nodes[current]!.leftChildren.isNotEmpty) {
+      current = _nodes[current]!.leftChildren.first;
     }
     return current;
   }
@@ -447,49 +509,38 @@ class FugueTree<T> {
     return triple.node.isDeleted ? rank : rank + 1;
   }
 
-  /// Finds the next node after [nodeID] in the traversal
+  /// Finds the next node after [nodeID] in the traversal, tombstones included,
+  /// or a null id when [nodeID] is the last node of the sequence.
   FugueElementID findNextNode(FugueElementID nodeID) {
     if (!_nodes.containsKey(nodeID)) {
       return FugueElementID.nullID();
     }
 
-    final nodeTriple = _nodes[nodeID]!;
-
-    // 1. If it has right children, the next is the first right child
-    if (nodeTriple.rightChildren.isNotEmpty) {
-      return nodeTriple.rightChildren.first;
+    // The root is the only structural node kept out of [_index].
+    if (nodeID == _rootID) {
+      final rightChildren = _nodes[_rootID]!.rightChildren;
+      if (rightChildren.isEmpty) {
+        return FugueElementID.nullID();
+      }
+      return _nodes[_rootID]!.leftChildren.isEmpty
+          ? _index.first() ?? FugueElementID.nullID()
+          : _inOrderFirstOfSubtree(rightChildren.first);
     }
 
-    // Fast path: the in-order-last structural node has no successor. The climb
-    // below would reach this same conclusion in `O(depth)`; the index answers
-    // it in `O(√n)`, which keeps appending at the end (typing) sublinear.
+    // guard for appending at the end, the sequential-typing path.
     if (_index.last() == nodeID) {
       return FugueElementID.nullID();
     }
 
-    // 2. Otherwise, climb up the tree until finding a node that is a left child
-    // and return its right sibling
-    var current = nodeID;
-    while (!current.isNull) {
-      final currentNode = _nodes[current]!.node;
-      if (currentNode.side == FugueSide.left) {
-        // Find the right sibling
-        final parent = currentNode.parentID;
-        if (!_nodes.containsKey(parent)) {
-          break;
-        }
-
-        final parentTriple = _nodes[parent]!;
-        final rightSiblings = parentTriple.rightChildren;
-        if (rightSiblings.isNotEmpty) {
-          return rightSiblings.first;
-        }
-      }
-      current = currentNode.parentID;
+    // guard for editing inside a document: a right child with no left
+    // children of its own opens its subtree, so it is the successor.
+    final rightChildren = _nodes[nodeID]!.rightChildren;
+    if (rightChildren.isNotEmpty &&
+        _nodes[rightChildren.first]!.leftChildren.isEmpty) {
+      return rightChildren.first;
     }
 
-    // 3. If no right sibling is found, return null
-    return FugueElementID.nullID();
+    return _index.successorOf(nodeID) ?? FugueElementID.nullID();
   }
 
   /// Serializes the tree to JSON format

@@ -179,6 +179,39 @@ class SqrtDecomposition<T> {
     return previous.keys.last;
   }
 
+  /// Returns the element immediately after [key], or `null` if [key] is last
+  /// (or absent).
+  T? successorOf(T key) {
+    final block = _blockOf[key];
+    if (block == null) {
+      return null;
+    }
+    final offset = block.keys.indexOf(key);
+    if (offset < block.keys.length - 1) {
+      return block.keys[offset + 1];
+    }
+    var seen = false;
+    for (final candidate in _blocks) {
+      if (seen && candidate.keys.isNotEmpty) {
+        return candidate.keys.first;
+      }
+      if (identical(candidate, block)) {
+        seen = true;
+      }
+    }
+    return null;
+  }
+
+  /// Returns the first element in the sequence, or `null` if empty.
+  T? first() {
+    for (final block in _blocks) {
+      if (block.keys.isNotEmpty) {
+        return block.keys.first;
+      }
+    }
+    return null;
+  }
+
   /// Returns the last element in the sequence, or `null` if empty.
   T? last() {
     if (_blocks.isEmpty) {
