@@ -1,3 +1,11 @@
+## 0.6.0
+
+**Date:** 2026-078-02
+
+### Changed
+
+- Update `crdt_lf` to `3.4.3` 
+
 ## 0.5.0
 
 **Date:** 2026-07-30
@@ -11,6 +19,9 @@
   code and link.
 - Splash screen during app bootstrap.
 - The credit line links to the author's site.
+
+### Changed
+
 - Update `crdt_lf_flutter` to `0.3.0` 
 
 ## 0.4.0
