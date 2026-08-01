@@ -72,54 +72,29 @@ class FugueTree<T> {
       SqrtDecomposition<FugueElementID>();
 
   /// Returns all non-deleted values in the correct order
+  ///
+  /// Read out of [_index], which already holds the in-order sequence: no tree
+  /// walk, and stretches of tombstones are skipped a whole block at a time.
   List<T> values() {
-    return _traverse(_rootID, (node) => node.value);
+    final result = <T>[];
+    _index.forEachLive((id) {
+      final value = _nodes[id]!.node.value;
+      if (value != null) {
+        result.add(value);
+      }
+    });
+    return result;
   }
 
   /// Returns all non-deleted nodes in the correct order
   List<FugueValueNode<T>> nodes() {
-    return _traverse(_rootID, (node) => node);
-  }
-
-  /// Traverses the tree starting from the specified node.
-  ///
-  /// Visits the left children, then the node itself, then the right children,
-  /// collecting the non-deleted values (different from `⊥`).
-  List<K> _traverse<K>(
-    FugueElementID nodeID,
-    K Function(FugueValueNode<T> node) transform,
-  ) {
-    final result = <K>[];
-    final stack = <_TraversalStep>[_TraversalStep(nodeID, emitSelf: false)];
-
-    while (stack.isNotEmpty) {
-      final step = stack.removeLast();
-      final nodeTriple = _nodes[step.id];
-      if (nodeTriple == null) {
-        continue;
+    final result = <FugueValueNode<T>>[];
+    _index.forEachLive((id) {
+      final value = _nodes[id]!.node.value;
+      if (value != null) {
+        result.add(FugueValueNode<T>(id: id, value: value));
       }
-      final node = nodeTriple.node;
-
-      if (step.emitSelf) {
-        // Visit the node itself if not deleted.
-        final value = node.value;
-        if (value != null) {
-          result.add(transform(FugueValueNode(id: node.id, value: value)));
-        }
-        continue;
-      }
-
-      // Push in reverse so the pop order is: left children, self, then right
-      // children (each child list kept in its own order).
-      for (final childID in nodeTriple.rightChildren.reversed) {
-        stack.add(_TraversalStep(childID, emitSelf: false));
-      }
-      stack.add(_TraversalStep(step.id, emitSelf: true));
-      for (final childID in nodeTriple.leftChildren.reversed) {
-        stack.add(_TraversalStep(childID, emitSelf: false));
-      }
-    }
-
+    });
     return result;
   }
 
@@ -328,10 +303,10 @@ class FugueTree<T> {
   void _addNodeToTree(FugueNode<T> node) {
     final parentID = node.parentID;
 
+    // Element ids are unique by construction, so an id already in the tree
+    // means the history is broken.
     if (_nodes.containsKey(node.id)) {
-      if (_nodes[node.id]!.node.value != null) {
-        throw DuplicateNodeException('Node already exists: ${node.id}');
-      }
+      throw DuplicateNodeException('Node already exists: ${node.id}');
     }
 
     // Create a new triple for the node
@@ -371,14 +346,6 @@ class FugueTree<T> {
   /// child at [position] on its side.
   void _indexInsert(FugueNode<T> node, int position) {
     final isLive = node.value != null;
-
-    // Re-linking a previously-seen id (e.g. a resurrected tombstone): keep its
-    // position, just refresh liveness.
-    if (_index.contains(node.id)) {
-      _index.setLive(node.id, live: isLive);
-      return;
-    }
-
     final predecessor = _indexPredecessorFor(node, position);
     if (predecessor == null) {
       _index.insertAtFront(node.id, live: isLive);
@@ -414,11 +381,18 @@ class FugueTree<T> {
       return parentID;
     }
 
-    // First left child: it sorts immediately before its parent.
-    if (parentID == _rootID) {
+    // [node] now opens its parent's region: it sorts before every left sibling
+    // already there, and before the parent itself when there are none. Taking
+    // the predecessor of the parent would be wrong as soon as the parent has
+    // other left children, because those come between the two.
+    final regionStart = siblings.length > 1
+        ? _inOrderFirstOfSubtree(siblings[1])
+        : parentID;
+    if (regionStart == _rootID) {
+      // The root emits no value and nothing precedes its left subtree.
       return null;
     }
-    return _index.predecessorOf(parentID);
+    return _index.predecessorOf(regionStart);
   }
 
   /// The last node visited by an in-order traversal of [id]'s subtree, i.e.
@@ -511,20 +485,18 @@ class FugueTree<T> {
 
   /// Finds the next node after [nodeID] in the traversal, tombstones included,
   /// or a null id when [nodeID] is the last node of the sequence.
+  ///
+  /// A null [nodeID] means "before everything", so it resolves to the first
+  /// node of the sequence. Callers use it to anchor an insertion at index `0`.
   FugueElementID findNextNode(FugueElementID nodeID) {
     if (!_nodes.containsKey(nodeID)) {
       return FugueElementID.nullID();
     }
 
-    // The root is the only structural node kept out of [_index].
+    // The root sits before every other node and is the only structural node
+    // kept out of [_index], so its successor is the head of the sequence.
     if (nodeID == _rootID) {
-      final rightChildren = _nodes[_rootID]!.rightChildren;
-      if (rightChildren.isEmpty) {
-        return FugueElementID.nullID();
-      }
-      return _nodes[_rootID]!.leftChildren.isEmpty
-          ? _index.first() ?? FugueElementID.nullID()
-          : _inOrderFirstOfSubtree(rightChildren.first);
+      return _index.first() ?? FugueElementID.nullID();
     }
 
     // guard for appending at the end, the sequential-typing path.

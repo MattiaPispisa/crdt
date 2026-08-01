@@ -1,4 +1,5 @@
 import 'package:crdt_lf/crdt_lf.dart';
+import 'package:crdt_lf/src/handler/fugue/element_id_floor.dart';
 
 /// Reusable plumbing shared by every Fugue-backed handler, independent of how
 /// the handler lays out its state or navigates positions.
@@ -20,6 +21,10 @@ import 'package:crdt_lf/crdt_lf.dart';
 mixin FugueCache<S> on Handler<S> {
   int? _counter;
 
+  /// The highest element counter each peer is known to have used, seeded from
+  /// the snapshot. See [ElementIdFloor].
+  final Map<PeerId, int> _elementIdFloor = <PeerId, int>{};
+
   // --- Hooks implemented by the host ---
 
   /// All element ids already known to this handler, from its snapshot and its
@@ -38,20 +43,53 @@ mixin FugueCache<S> on Handler<S> {
 
   /// Returns the next unique element counter for this peer.
   ///
-  /// Seeded lazily on first use from [knownElementIds].
+  /// Seeded lazily on first use from [knownElementIds] and from the floor the
+  /// snapshot carries, so a counter is never handed out twice.
   int nextCounter() {
-    if (_counter == null) {
-      var max = -1;
-      for (final id in knownElementIds()) {
-        if (!id.isNull && id.replicaID == doc.peerId) {
-          final c = id.counter!;
-          if (c > max) max = c;
-        }
-      }
-      _counter = max + 1;
-    }
+    _counter ??= (_maxCountersByPeer()[doc.peerId] ?? -1) + 1;
     final result = _counter!;
     _counter = result + 1;
+    return result;
+  }
+
+  /// Records that every peer in [floor] has already used counters up to the
+  /// given value, and lifts an already-seeded counter above its own entry.
+  ///
+  /// Called by the snapshot decoders.
+  void seedElementIdFloor(Map<PeerId, int> floor) {
+    ElementIdFloor.mergeInto(_elementIdFloor, floor);
+
+    final own = _elementIdFloor[doc.peerId];
+    final counter = _counter;
+    if (own != null && counter != null && counter <= own) {
+      _counter = own + 1;
+    }
+  }
+
+  /// The floor to store in the next snapshot: the counters this handler knows
+  /// about, plus the ones inherited from the snapshot it was seeded with.
+  ///
+  /// The inherited part is what keeps the counters of pruned tombstones alive
+  /// across successive snapshots.
+  Map<PeerId, int> elementIdFloorForSnapshot() => _maxCountersByPeer();
+
+  /// The highest counter per peer over [knownElementIds] merged with
+  /// [_elementIdFloor].
+  Map<PeerId, int> _maxCountersByPeer() {
+    final result = <PeerId, int>{};
+    // Walking the ids first matters: decoding the snapshot is what seeds
+    // [_elementIdFloor], and it happens inside [knownElementIds].
+    for (final id in knownElementIds()) {
+      if (id.isNull) {
+        continue;
+      }
+      final counter = id.counter!;
+      final current = result[id.replicaID];
+      if (current == null || counter > current) {
+        result[id.replicaID] = counter;
+      }
+    }
+    ElementIdFloor.mergeInto(result, _elementIdFloor);
     return result;
   }
 

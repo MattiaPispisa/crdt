@@ -877,6 +877,7 @@ class CRDTDocument extends BaseCRDTDocument {
       }
 
       _lastSnapshot = snapshot;
+      _advanceClockPast(snapshot.versionVector);
       _bumpRevisionsForSnapshot(snapshot);
 
       _invalidateHandlers();
@@ -906,6 +907,7 @@ class CRDTDocument extends BaseCRDTDocument {
     } else {
       _lastSnapshot = _lastSnapshot!.merged(snapshot);
     }
+    _advanceClockPast(snapshot.versionVector);
     _bumpRevisionsForSnapshot(snapshot);
 
     if (pruneHistory) {
@@ -913,6 +915,14 @@ class CRDTDocument extends BaseCRDTDocument {
     }
     _invalidateHandlers();
     _emitUpdate();
+  }
+
+  /// Advances the clock past every entry of [versionVector].
+  void _advanceClockPast(VersionVector versionVector) {
+    final physicalTime = DateTime.now().millisecondsSinceEpoch;
+    for (final entry in versionVector.entries) {
+      _clock.receiveEvent(physicalTime, entry.value);
+    }
   }
 
   /// Whether the given [snapshot] should be applied.

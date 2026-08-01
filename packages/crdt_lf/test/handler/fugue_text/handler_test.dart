@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:crdt_lf/crdt_lf.dart';
 import 'package:test/test.dart';
 
@@ -800,6 +802,67 @@ void main() {
           expect(() => handler2.update(0, 'X'), returnsNormally);
         },
       );
+
+      test(
+        'a reload from a snapshot does not reissue the counters of pruned '
+        'tombstones',
+        () {
+          final peerId = PeerId.generate();
+
+          final doc1 = CRDTDocument(peerId: peerId);
+          final text1 = CRDTFugueTextHandler(doc1, 'text');
+          final peer = CRDTDocument(peerId: PeerId.generate());
+          final peerText = CRDTFugueTextHandler(peer, 'text');
+
+          // Counters 0-9, then the tail is deleted: the peer keeps 5-9 as
+          // tombstones while doc1 prunes them away.
+          text1.insert(0, 'abcdefghij');
+          peer.importChanges(doc1.exportChanges());
+          text1.delete(5, 5);
+          peer.importChanges(doc1.exportChanges());
+          expect(peerText.value, 'abcde');
+
+          final snapshot = doc1.takeSnapshot();
+
+          // Reload: only the snapshot survives, so the live elements alone
+          // would put the counter back at 5.
+          final reloaded = CRDTDocument(peerId: peerId);
+          final reloadedText = CRDTFugueTextHandler(reloaded, 'text');
+          reloaded.importSnapshot(snapshot);
+          expect(reloadedText.value, 'abcde');
+
+          reloadedText.insert(5, 'XY');
+          peer.importChanges(reloaded.exportChanges());
+
+          expect(reloadedText.value, 'abcdeXY');
+          expect(peerText.value, reloadedText.value);
+        },
+      );
+
+      test(
+        'a snapshot written before the element id floor stays readable',
+        () {
+          final peerId = PeerId.generate();
+          final doc = CRDTDocument(peerId: peerId);
+          CRDTFugueTextHandler(doc, 'text').insert(0, 'legacy');
+
+          // Older versions wrote the node list and nothing else.
+          final legacy = Snapshot.create(
+            versionVector: doc.getVersionVector(),
+            data: {
+              'text': _nodesOnlySnapshotBlob(doc.takeSnapshot().data['text']!),
+            },
+          );
+
+          final reloaded = CRDTDocument(peerId: peerId);
+          final reloadedText = CRDTFugueTextHandler(reloaded, 'text');
+          reloaded.importSnapshot(legacy);
+
+          expect(reloadedText.value, 'legacy');
+          expect(() => reloadedText.insert(6, '!'), returnsNormally);
+          expect(reloadedText.value, 'legacy!');
+        },
+      );
     });
 
     test(
@@ -1026,4 +1089,22 @@ void main() {
       expect(restoredText.value, equals(text.value));
     });
   });
+}
+
+/// Truncates a Fugue sequence snapshot blob right after its node list,
+/// reproducing the layout written before the element id floor trailer existed.
+Uint8List _nodesOnlySnapshotBlob(Uint8List blob) {
+  var offset = 0;
+  final countRecord = UVarint.read(blob, offset: offset);
+  offset = countRecord.nextOffset;
+
+  for (var i = 0; i < countRecord.value; i += 1) {
+    final idLength = UVarint.read(blob, offset: offset);
+    offset = idLength.nextOffset + idLength.value;
+
+    final valueLength = UVarint.read(blob, offset: offset);
+    offset = valueLength.nextOffset + valueLength.value;
+  }
+
+  return Uint8List.sublistView(blob, 0, offset);
 }

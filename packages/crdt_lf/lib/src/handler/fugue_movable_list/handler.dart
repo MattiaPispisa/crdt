@@ -1,6 +1,7 @@
 import 'dart:typed_data';
 
 import 'package:crdt_lf/crdt_lf.dart';
+import 'package:crdt_lf/src/handler/fugue/element_id_floor.dart';
 import 'package:crdt_lf/src/handler/fugue/fugue_cache.dart';
 import 'package:hlc_dart/hlc_dart.dart';
 
@@ -392,11 +393,16 @@ class CRDTFugueMovableListHandler<T> extends Handler<FugueMovableListState<T>>
       UVarint.write(valBytes.length, out);
       out.add(valBytes);
     }
+    ElementIdFloor.write(elementIdFloorForSnapshot(), out);
     return out.toBytes();
   }
 
   /// Decodes the snapshot and returns the seeded element map, preserving
   /// the original traversal order so [computeState] can rebuild the tree.
+  ///
+  /// Also seeds the element id floor from the snapshot trailer, so counters
+  /// spent on identities and positions that were deleted and pruned are never
+  /// reissued.
   Map<FugueElementID, _MovableElement<T>> _seedFromSnapshot() {
     final snapshot = lastSnapshot();
     if (snapshot == null) {
@@ -462,6 +468,7 @@ class CRDTFugueMovableListHandler<T> extends Handler<FugueMovableListState<T>>
         deleted: deleted,
       );
     }
+    seedElementIdFloor(ElementIdFloor.read(snapshot, offset: offset));
     return result;
   }
 

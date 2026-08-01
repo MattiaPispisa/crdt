@@ -193,6 +193,41 @@ void main() {
       expect(index.predecessorOf(1234), 1233);
     });
 
+    test('append-only and prepend-only sequences agree with the model', () {
+      // The two shapes the block-edge fast paths in `offsetOf` target: the
+      // predecessor is always the last key of its block when appending, and
+      // always the first when prepending.
+      for (final appendOnly in [true, false]) {
+        final index = SqrtDecomposition<int>();
+        final model = _Model<int>();
+
+        for (var key = 0; key < 900; key++) {
+          final live = key.isEven;
+          if (appendOnly) {
+            if (key == 0) {
+              index.insertAtFront(key, live: live);
+              model.insertAtFront(key, isLive: live);
+            } else {
+              index.insertAfter(key - 1, key, live: live);
+              model.insertAfter(key - 1, key, isLive: live);
+            }
+          } else {
+            index.insertAtFront(key, live: live);
+            model.insertAtFront(key, isLive: live);
+          }
+        }
+
+        for (var position = 0; position < model.liveTotal; position++) {
+          expect(index.liveAt(position), model.liveAt(position));
+        }
+        for (final key in model.keys) {
+          expect(index.liveRankOf(key), model.liveRankOf(key));
+          expect(index.predecessorOf(key), model.predecessorOf(key));
+          expect(index.successorOf(key), model.successorOf(key));
+        }
+      }
+    });
+
     test('randomized differential test against a reference model', () {
       final rng = Random(20240607);
       final index = SqrtDecomposition<int>();

@@ -110,6 +110,38 @@ void main() {
       );
     });
 
+    test('insert throws on a tombstoned duplicate, leaving the tree intact',
+        () {
+      final tree = FugueTree<String>.empty();
+      final peerId = PeerId.parse('4e91a152-582f-4f46-8944-c2c2e8b217ff');
+      final nullID = FugueElementID.nullID();
+
+      // A → B with X sitting between them, so A carries a subtree.
+      final a = FugueElementID(peerId, 1);
+      final b = FugueElementID(peerId, 2);
+      final x = FugueElementID(peerId, 3);
+      tree
+        ..insert(newID: a, value: 'A', leftOrigin: nullID, rightOrigin: nullID)
+        ..insert(newID: b, value: 'B', leftOrigin: a, rightOrigin: nullID)
+        ..insert(newID: x, value: 'X', leftOrigin: a, rightOrigin: b)
+        ..delete(a);
+
+      expect(tree.values(), equals(['X', 'B']));
+
+      // Re-linking the tombstone would drop A's subtree and list A twice
+      // among the root's children.
+      expect(
+        () => tree.insert(
+          newID: a,
+          value: 'A',
+          leftOrigin: nullID,
+          rightOrigin: b,
+        ),
+        throwsA(isA<DuplicateNodeException>()),
+      );
+      expect(tree.values(), equals(['X', 'B']));
+    });
+
     test('findNodeAtPosition returns null for invalid position', () {
       final tree = FugueTree<dynamic>.empty();
       final result = tree.findNodeAtPosition(10);
@@ -268,6 +300,82 @@ void main() {
       expect(tree.findNextNode(b), z);
       expect(tree.findNextNode(x), y);
       expect(tree.findNextNode(z).isNull, isTrue);
+    });
+
+    test('positions follow the visible order after a concurrent same-anchor '
+        'insert', () {
+      final base = PeerId.parse('4e91a152-582f-4f46-8944-c2c2e8b217ff');
+      // p2 sorts before p1, so the second batch lands ahead of the first.
+      final p1 = PeerId.parse('ee121333-c65b-4afc-b226-4ef116df3432');
+      final p2 = PeerId.parse('7c9e2b1a-3f4d-4a8b-9c0e-1d2f3a4b5c6d');
+      final nullID = FugueElementID.nullID();
+
+      final a = FugueElementID(base, 1);
+      final b = FugueElementID(base, 2);
+      final tree = FugueTree<String>.empty()
+        ..insert(newID: a, value: 'A', leftOrigin: nullID, rightOrigin: nullID)
+        ..insert(newID: b, value: 'B', leftOrigin: a, rightOrigin: nullID)
+        ..iterableInsertChain(
+          leftOrigin: a,
+          rightOrigin: b,
+          nodes: [
+            FugueValueNode(id: FugueElementID(p1, 1), value: 'x1'),
+            FugueValueNode(id: FugueElementID(p1, 2), value: 'x2'),
+          ],
+        )
+        ..iterableInsertChain(
+          leftOrigin: a,
+          rightOrigin: b,
+          nodes: [
+            FugueValueNode(id: FugueElementID(p2, 1), value: 'y1'),
+            FugueValueNode(id: FugueElementID(p2, 2), value: 'y2'),
+          ],
+        );
+
+      expect(tree.values(), equals(['A', 'y1', 'y2', 'x1', 'x2', 'B']));
+
+      // The second batch opens the region of `b`, so every position after it
+      // has to shift: reading positions must not still report the old layout.
+      final nodes = tree.nodes();
+      for (var i = 0; i < nodes.length; i++) {
+        expect(tree.findNodeAtPosition(i), nodes[i].id, reason: 'position $i');
+      }
+    });
+
+    test('the head of the sequence can sit in the left subtree of the root',
+        () {
+      final tree = FugueTree<String>.empty();
+      final peerId = PeerId.parse('4e91a152-582f-4f46-8944-c2c2e8b217ff');
+      final nullID = FugueElementID.nullID();
+
+      final b = FugueElementID(peerId, 1);
+      tree.insert(
+        newID: b,
+        value: 'B',
+        leftOrigin: nullID,
+        rightOrigin: nullID,
+      );
+
+      // An insert whose leftOrigin is unknown to this tree — the shape a
+      // pruned origin produces — hangs off the left of the root.
+      final l = FugueElementID(peerId, 2);
+      tree.insert(
+        newID: l,
+        value: 'L',
+        leftOrigin: FugueElementID(peerId, 99),
+        rightOrigin: nullID,
+      );
+
+      expect(tree.values(), equals(['L', 'B']));
+      // The root sits before everything, so its successor is the head of the
+      // sequence and not the head of its right subtree.
+      expect(tree.findNextNode(nullID), l);
+
+      // An insert at index 0 therefore lands in front of L.
+      tree.iterableInsert(0, [
+        FugueValueNode(id: FugueElementID(peerId, 3), value: 'Z'),
+      ]);
+      expect(tree.values(), equals(['Z', 'L', 'B']));
     });
 
     test('insert attaches to rightOrigin when it descends from leftOrigin', () {
@@ -466,23 +574,11 @@ void main() {
 
       FugueElementID nextId() => FugueElementID(peerId, counter++);
 
-      void checkAgainstOracle(FugueTree<String> t, int step) {
-        final oracle = t.nodes();
-        for (var i = 0; i < oracle.length; i++) {
-          expect(
-            t.findNodeAtPosition(i),
-            oracle[i].id,
-            reason: 'position $i at step $step',
-          );
-        }
-        expect(t.findNodeAtPosition(-1).isNull, isTrue);
-        expect(t.findNodeAtPosition(oracle.length).isNull, isTrue);
-      }
-
-      // `findNextNode` reads the successor out of the index, and it must also
-      // walk tombstones, which the live oracle above cannot see. This rebuilds
-      // the structural sequence from the serialized tree instead.
-      void checkSuccessorsAgainstOracle(FugueTree<String> t, int step) {
+      // Everything the tree exposes about order — `values`, `nodes`,
+      // `findNodeAtPosition`, `findNextNode` — is now served by the positional
+      // index, so the oracle has to come from somewhere else: an in-order walk
+      // of the serialized tree, which is the structure the index mirrors.
+      List<String> structuralSequence(FugueTree<String> t) {
         final nodesJson = t.toJson()['nodes']! as Map<String, dynamic>;
         final sequence = <String>[];
         void visit(String id) {
@@ -503,7 +599,40 @@ void main() {
         }
 
         visit('null');
+        return sequence;
+      }
 
+      void checkAgainstOracle(FugueTree<String> t, int step) {
+        final nodesJson = t.toJson()['nodes']! as Map<String, dynamic>;
+        final live = <String>[];
+        for (final id in structuralSequence(t)) {
+          final triple = nodesJson[id]! as Map<String, dynamic>;
+          final node = triple['node']! as Map<String, dynamic>;
+          if (node['value'] != null) {
+            live.add(id);
+          }
+        }
+
+        expect(
+          t.nodes().map((n) => n.id.toString()).toList(),
+          equals(live),
+          reason: 'live sequence at step $step',
+        );
+        for (var i = 0; i < live.length; i++) {
+          expect(
+            t.findNodeAtPosition(i).toString(),
+            live[i],
+            reason: 'position $i at step $step',
+          );
+        }
+        expect(t.findNodeAtPosition(-1).isNull, isTrue);
+        expect(t.findNodeAtPosition(live.length).isNull, isTrue);
+      }
+
+      // `findNextNode` must also walk tombstones, which the live oracle above
+      // cannot see, so it is checked against the full structural sequence.
+      void checkSuccessorsAgainstOracle(FugueTree<String> t, int step) {
+        final sequence = structuralSequence(t);
         for (var i = 0; i < sequence.length; i++) {
           expect(
             t.findNextNode(FugueElementID.parse(sequence[i])).toString(),

@@ -4,11 +4,19 @@
 
 [compare to previous release](https://github.com/MattiaPispisa/crdt/compare/crdt_lf-v3.4.2+1...crdt_lf-v3.4.3)
 
-
 ### Fixed
 
 - Repeated insertions at the same index no longer come out in the wrong order. [117](https://github.com/MattiaPispisa/crdt/issues/117) (thx to @coltrane)
 - `update` now anchors the replacement to the element it replaces rather than to its position in the visible text, so an update whose target was concurrently deleted is no longer dropped. [113](https://github.com/MattiaPispisa/crdt/issues/113) (thx to @pedersen)
+- A document rebuilt from a snapshot alone no longer reissues element ids it has already used.
+- Importing a snapshot now advances the document clock past the snapshot's version vector, as applying a change already did.
+- Inserting at index `0` now lands first even when the head of the sequence sits in the left subtree of the tree root, the shape a pruned origin produces.
+- Reinserting an element id that the tree already holds now always throws `DuplicateNodeException`.
+
+### Performance
+
+- Improved Fugue sequence walks efficiency: `values()` and `nodes()` are served straight from the positional index.
+- Appending to a Fugue sequence is faster: the positional index now recognises that a sequential insertion lands at the edge of a block instead of searching the block for it.
 
 ## [3.4.2+1](https://github.com/MattiaPispisa/crdt/tree/crdt_lf-v3.4.2+1/packages/crdt_lf)
 
