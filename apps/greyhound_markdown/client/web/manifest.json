@@ -1,11 +1,11 @@
 {
-    "name": "greyhound_markdown_client",
-    "short_name": "greyhound_markdown_client",
+    "name": "Greyhound Markdown",
+    "short_name": "Greyhound",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#0175C2",
-    "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "background_color": "#F4FBF8",
+    "theme_color": "#006A60",
+    "description": "Real-time collaborative markdown editor built on crdt_lf.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

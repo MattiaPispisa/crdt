@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 import 'package:greyhound_markdown_client/src/config.dart';
+import 'package:greyhound_markdown_client/src/widgets/credit_line.dart';
+import 'package:greyhound_markdown_client/src/widgets/footer_link.dart';
 
-/// Credits and project links, plus an entry point to the about/settings page.
+/// Credits and project links, plus an entry point to the settings page.
 class AppFooter extends StatelessWidget {
   const AppFooter({super.key});
 
@@ -20,46 +21,26 @@ class AppFooter extends StatelessWidget {
         crossAxisAlignment: WrapCrossAlignment.center,
         spacing: 8,
         children: [
-          Text(kCreditLine, style: theme.textTheme.bodySmall),
+          const CreditLine(),
           for (final link in kProjectLinks)
-            _FooterLink(label: link.label, url: link.url, style: linkStyle),
+            FooterLink(label: link.label, url: link.url, style: linkStyle),
           InkWell(
             onTap: () => Navigator.of(context).pushNamed(kSettingsRoute),
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
                 Icon(
-                  Icons.info_outline,
+                  Icons.settings_outlined,
                   size: 14,
                   color: theme.colorScheme.primary,
                 ),
                 const SizedBox(width: 4),
-                Text('About', style: linkStyle),
+                Text('Settings', style: linkStyle),
               ],
             ),
           ),
         ],
       ),
-    );
-  }
-}
-
-class _FooterLink extends StatelessWidget {
-  const _FooterLink({
-    required this.label,
-    required this.url,
-    required this.style,
-  });
-
-  final String label;
-  final String url;
-  final TextStyle? style;
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      onTap: () => launchUrl(Uri.parse(url)),
-      child: Text(label, style: style),
     );
   }
 }

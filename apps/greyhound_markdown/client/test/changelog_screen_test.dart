@@ -4,10 +4,10 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:greyhound_markdown_client/src/screens/changelog_screen.dart';
 
 void main() {
-  testWidgets('renders the bundled changelog asset as markdown', (tester) async {
-    await tester.pumpWidget(
-      const MaterialApp(home: ChangelogScreen()),
-    );
+  testWidgets('renders the bundled changelog asset as markdown', (
+    tester,
+  ) async {
+    await tester.pumpWidget(const MaterialApp(home: ChangelogScreen()));
     // First frame: FutureBuilder is still loading the asset.
     expect(find.byType(CircularProgressIndicator), findsOneWidget);
 
@@ -15,7 +15,9 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byType(Markdown), findsOneWidget);
-    // A heading from CHANGELOG.md proves the asset loaded and parsed.
-    expect(find.textContaining('Initial release'), findsOneWidget);
+    // The bundled asset is what got rendered — asserted on the data rather
+    // than on painted text, which only covers the top of a long changelog.
+    final markdown = tester.widget<Markdown>(find.byType(Markdown));
+    expect(markdown.data, contains('Initial release'));
   });
 }

@@ -20,6 +20,16 @@ io.Directory greyhoundMarkdownDir({List<String> subParts = const []}) {
   ].toDir();
 }
 
+/// The shared Greyhound Markdown artwork, source of the app's web icons.
+io.File greyhoundLogo() {
+  return io.File(
+    path.join(
+      assetsDir(subParts: ['images']).path,
+      'greyhound_markdown_logo.png',
+    ),
+  );
+}
+
 io.Directory crdtLfFlutterExampleDir({List<String> subParts = const []}) {
   return crdtLfDir(subParts: ['flutter_example', ...subParts]);
 }

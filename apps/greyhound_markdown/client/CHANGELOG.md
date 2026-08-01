@@ -1,3 +1,18 @@
+## 0.5.0
+
+**Date:** 2026-07-30
+
+### Added
+
+- Appearance (light/dark/system)
+- User settings are preserved (username, color, appearance)
+- Improved Home accessibility
+- Keyboard shortcut for the most used formatting actions — bold, italic, inline
+  code and link.
+- Splash screen during app bootstrap.
+- The credit line links to the author's site.
+- Update `crdt_lf_flutter` to `0.3.0` 
+
 ## 0.4.0
 
 **Date:** 2026-07-26
