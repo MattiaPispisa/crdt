@@ -385,9 +385,8 @@ class FugueTree<T> {
     // already there, and before the parent itself when there are none. Taking
     // the predecessor of the parent would be wrong as soon as the parent has
     // other left children, because those come between the two.
-    final regionStart = siblings.length > 1
-        ? _inOrderFirstOfSubtree(siblings[1])
-        : parentID;
+    final regionStart =
+        siblings.length > 1 ? _inOrderFirstOfSubtree(siblings[1]) : parentID;
     if (regionStart == _rootID) {
       // The root emits no value and nothing precedes its left subtree.
       return null;

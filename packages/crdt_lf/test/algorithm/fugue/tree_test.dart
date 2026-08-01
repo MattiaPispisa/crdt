@@ -302,7 +302,8 @@ void main() {
       expect(tree.findNextNode(z).isNull, isTrue);
     });
 
-    test('positions follow the visible order after a concurrent same-anchor '
+    test(
+        'positions follow the visible order after a concurrent same-anchor '
         'insert', () {
       final base = PeerId.parse('4e91a152-582f-4f46-8944-c2c2e8b217ff');
       // p2 sorts before p1, so the second batch lands ahead of the first.
