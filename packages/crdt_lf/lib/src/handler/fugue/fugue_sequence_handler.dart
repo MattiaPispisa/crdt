@@ -118,6 +118,9 @@ abstract class FugueSequenceHandler<T, V, S extends FugueState<T, V>>
   }
 
   @override
+  bool get stateIsOrderIndependent => true;
+
+  @override
   void applyOperation(S state, Operation operation) {
     // The tree is mutated in place; the projections are resolved lazily on
     // the next read instead of after every operation.

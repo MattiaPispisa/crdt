@@ -220,6 +220,9 @@ class CRDTORSetHandler<T> extends Handler<ORSetState<T>> {
   }
 
   @override
+  bool get stateIsOrderIndependent => true;
+
+  @override
   ORSetState<T>? incrementCachedState({
     required Operation operation,
     required ORSetState<T> state,

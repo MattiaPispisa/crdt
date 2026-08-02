@@ -253,6 +253,9 @@ class CRDTORMapHandler<K, V> extends Handler<ORMapState<K, V>> {
   }
 
   @override
+  bool get stateIsOrderIndependent => true;
+
+  @override
   ORMapState<K, V>? incrementCachedState({
     required Operation operation,
     required ORMapState<K, V> state,
