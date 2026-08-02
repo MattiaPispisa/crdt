@@ -233,4 +233,321 @@ void main() {
       expect(set.getSnapshotState(), incrementalSnapshot);
     });
   });
+
+  group('remote incremental cache oracle', () {
+    test('CRDTTextHandler', () {
+      _remoteOracle<CRDTTextHandler>(
+        create: (doc) => CRDTTextHandler(doc, 'text'),
+        mutate: (text, random, i) {
+          final len = text.length;
+          final choice = random.nextInt(3);
+          if (choice == 0 || len == 0) {
+            text.insert(random.nextInt(len + 1), 'ins$i ');
+          } else if (choice == 1) {
+            text.delete(random.nextInt(len), random.nextInt(3) + 1);
+          } else {
+            text.update(random.nextInt(len), 'u$i');
+          }
+        },
+        read: (text) => text.value,
+      );
+    });
+
+    test('CRDTListHandler', () {
+      _remoteOracle<CRDTListHandler<String>>(
+        create: (doc) => CRDTListHandler<String>(doc, 'list'),
+        mutate: (list, random, i) {
+          final len = list.length;
+          final choice = random.nextInt(3);
+          if (choice == 0 || len == 0) {
+            list.insert(random.nextInt(len + 1), 'item$i');
+          } else if (choice == 1) {
+            list.delete(random.nextInt(len), random.nextInt(3) + 1);
+          } else {
+            list.update(random.nextInt(len), 'updated$i');
+          }
+        },
+        read: (list) => List<String>.from(list.value),
+      );
+    });
+
+    test('CRDTMapHandler', () {
+      _remoteOracle<CRDTMapHandler<int>>(
+        create: (doc) => CRDTMapHandler<int>(doc, 'map'),
+        mutate: (map, random, i) {
+          final key = 'key${random.nextInt(20)}';
+          final choice = random.nextInt(3);
+          if (choice == 0) {
+            map.set(key, i);
+          } else if (choice == 1) {
+            map.delete(key);
+          } else {
+            map.update(key, i * 10);
+          }
+        },
+        read: (map) => Map<String, int>.from(map.value),
+      );
+    });
+
+    test('CRDTRegisterHandler', () {
+      _remoteOracle<CRDTRegisterHandler<int>>(
+        create: (doc) => CRDTRegisterHandler<int>(doc, 'register'),
+        mutate: (register, random, i) => register.set(i),
+        read: (register) => register.value,
+      );
+    });
+
+    test('CRDTORSetHandler', () {
+      _remoteOracle<CRDTORSetHandler<String>>(
+        create: (doc) => CRDTORSetHandler<String>(doc, 'set'),
+        mutate: (set, random, i) {
+          final current = set.value.toList();
+          if (current.isEmpty || random.nextBool()) {
+            set.add('value_$i');
+          } else {
+            set.remove(current[random.nextInt(current.length)]);
+          }
+        },
+        read: (set) => Set<String>.from(set.value),
+      );
+    });
+
+    test('CRDTORMapHandler', () {
+      _remoteOracle<CRDTORMapHandler<String, int>>(
+        create: (doc) => CRDTORMapHandler<String, int>(doc, 'or_map'),
+        mutate: (map, random, i) {
+          final key = 'key${random.nextInt(20)}';
+          if (random.nextInt(3) < 2) {
+            map.put(key, i);
+          } else {
+            map.remove(key);
+          }
+        },
+        read: (map) => Map<String, int>.from(map.value),
+      );
+    });
+
+    test('CRDTFugueTextHandler', () {
+      _remoteOracle<CRDTFugueTextHandler>(
+        create: (doc) => CRDTFugueTextHandler(doc, 'fugue'),
+        mutate: (text, random, i) {
+          final len = text.length;
+          final choice = random.nextInt(3);
+          if (choice == 0 || len == 0) {
+            text.insert(random.nextInt(len + 1), 'ins$i ');
+          } else if (choice == 1) {
+            text.delete(random.nextInt(len), random.nextInt(3) + 1);
+          } else {
+            text.update(random.nextInt(len), 'u$i');
+          }
+        },
+        read: (text) => text.value,
+      );
+    });
+
+    test('CRDTFugueMovableListHandler', () {
+      _remoteOracle<CRDTFugueMovableListHandler<String>>(
+        create: (doc) =>
+            CRDTFugueMovableListHandler<String>(doc, 'movable_list'),
+        mutate: (list, random, i) {
+          final len = list.length;
+          final choice = random.nextInt(4);
+          if (choice == 0 || len == 0) {
+            list.insert(random.nextInt(len + 1), 'item$i');
+          } else if (choice == 1) {
+            list.move(random.nextInt(len), random.nextInt(len));
+          } else if (choice == 2) {
+            list.update(random.nextInt(len), 'updated$i');
+          } else {
+            list.delete(random.nextInt(len));
+          }
+        },
+        read: (list) => List<String>.from(list.value),
+      );
+    });
+
+    test('CRDTFugueListHandler fed one change at a time by applyChange', () {
+      final source = CRDTDocument(peerId: PeerId.generate());
+      final sourceList = CRDTFugueListHandler<String>(source, 'fugue_list');
+
+      final queued = CRDTDocument(peerId: PeerId.generate());
+      final queuedList = CRDTFugueListHandler<String>(queued, 'fugue_list');
+      expect(queuedList.value, isEmpty);
+
+      final random = Random(11);
+      for (var i = 0; i < 100; i++) {
+        final len = sourceList.length;
+        final choice = random.nextInt(3);
+        if (choice == 0 || len == 0) {
+          sourceList.insert(random.nextInt(len + 1), 'item$i');
+        } else if (choice == 1) {
+          sourceList.delete(random.nextInt(len), random.nextInt(3) + 1);
+        } else {
+          sourceList.update(random.nextInt(len), 'updated$i');
+        }
+
+        // The single-change path, the one that never decodes the envelope.
+        final pending = source
+            .exportChanges(fromVersionVector: queued.getVersionVector())
+            .sorted();
+        for (final change in pending) {
+          queued.applyChange(change);
+        }
+      }
+
+      final incremental = List<String>.from(queuedList.value);
+      expect(incremental, sourceList.value);
+
+      queuedList.invalidateCache();
+      expect(queuedList.value, incremental);
+    });
+
+    // Convergence itself is covered by the handler tests. What is new here is
+    // that each peer keeps editing locally while remote changes are queued, so
+    // a local operation has to land on an already drained state.
+    test('local edits meet queued remote changes', () {
+      _concurrentOracle<CRDTFugueTextHandler>(
+        create: (doc) => CRDTFugueTextHandler(doc, 'fugue'),
+        mutate: (text, random, round) {
+          final len = text.length;
+          if (len == 0 || random.nextBool()) {
+            text.insert(random.nextInt(len + 1), 'r$round');
+          } else {
+            text.delete(random.nextInt(len), random.nextInt(2) + 1);
+          }
+        },
+        read: (text) => text.value,
+      );
+    });
+
+    test('CRDTORSetHandler under concurrent editing', () {
+      _concurrentOracle<CRDTORSetHandler<String>>(
+        create: (doc) => CRDTORSetHandler<String>(doc, 'set'),
+        mutate: (set, random, round) {
+          final current = set.value.toList();
+          if (current.isEmpty || random.nextBool()) {
+            set.add('value_${random.nextInt(20)}');
+          } else {
+            set.remove(current[random.nextInt(current.length)]);
+          }
+        },
+        read: (set) => Set<String>.from(set.value),
+      );
+    });
+
+    test('CRDTORMapHandler under concurrent editing', () {
+      _concurrentOracle<CRDTORMapHandler<String, int>>(
+        create: (doc) => CRDTORMapHandler<String, int>(doc, 'or_map'),
+        mutate: (map, random, round) {
+          final key = 'key${random.nextInt(10)}';
+          if (random.nextInt(3) < 2) {
+            map.put(key, round);
+          } else {
+            map.remove(key);
+          }
+        },
+        read: (map) => Map<String, int>.from(map.value),
+      );
+    });
+  });
+}
+
+/// Drives a source handler through random operations and feeds its changes to
+/// two peers: one that advances its cached state as the changes arrive, one
+/// forced to replay the whole history on every read. They must never disagree.
+///
+/// [read] must return a value that is safe to compare later, so callers copy
+/// mutable states.
+void _remoteOracle<H extends Handler<dynamic>>({
+  required H Function(CRDTDocument doc) create,
+  required void Function(H handler, Random random, int round) mutate,
+  required Object? Function(H handler) read,
+  int rounds = 100,
+  int seed = 7,
+}) {
+  final source = CRDTDocument(peerId: PeerId.generate());
+  final sourceHandler = create(source);
+
+  final queued = CRDTDocument(peerId: PeerId.generate());
+  final queuedHandler = create(queued);
+  final recomputed = CRDTDocument(peerId: PeerId.generate());
+  final recomputedHandler = create(recomputed)
+    ..useIncrementalCacheUpdate = false;
+
+  // Warm the caches: a handler with nothing cached has nothing to advance.
+  read(queuedHandler);
+  read(recomputedHandler);
+
+  final random = Random(seed);
+  for (var round = 0; round < rounds; round++) {
+    mutate(sourceHandler, random, round);
+
+    queued.importChanges(
+      source.exportChanges(fromVersionVector: queued.getVersionVector()),
+    );
+    recomputed.importChanges(
+      source.exportChanges(fromVersionVector: recomputed.getVersionVector()),
+    );
+
+    // Read only now and then, so the queue also gets to hold several changes
+    // at once.
+    if (round % 5 == 4) {
+      expect(read(queuedHandler), read(recomputedHandler));
+    }
+  }
+
+  final incremental = read(queuedHandler);
+  expect(incremental, read(sourceHandler));
+  expect(read(recomputedHandler), incremental);
+
+  // The state built by folding must equal the state built by replaying.
+  queuedHandler.invalidateCache();
+  expect(read(queuedHandler), incremental);
+}
+
+/// Drives two peers that edit at the same time and exchange changes both ways.
+///
+/// Each side receives changes that sort before what it already folded in, so
+/// only a handler that opts into commutativity keeps its cache here. The two
+/// peers must converge, and the folded state must equal the replayed one.
+void _concurrentOracle<H extends Handler<dynamic>>({
+  required H Function(CRDTDocument doc) create,
+  required void Function(H handler, Random random, int round) mutate,
+  required Object? Function(H handler) read,
+  int rounds = 40,
+  int seed = 23,
+}) {
+  final a = CRDTDocument(peerId: PeerId.generate());
+  final aHandler = create(a);
+  final b = CRDTDocument(peerId: PeerId.generate());
+  final bHandler = create(b);
+
+  // Warm the caches: a handler with nothing cached has nothing to advance.
+  read(aHandler);
+  read(bHandler);
+
+  final random = Random(seed);
+  for (var round = 0; round < rounds; round++) {
+    mutate(aHandler, random, round);
+    mutate(bHandler, random, round);
+
+    a.importChanges(b.exportChanges(fromVersionVector: a.getVersionVector()));
+    b.importChanges(a.exportChanges(fromVersionVector: b.getVersionVector()));
+
+    // Check before reading: a read rebuilds the cache and would hide an
+    // import that dropped it.
+    expect(aHandler.cachedState, isNotNull, reason: 'round $round');
+    expect(bHandler.cachedState, isNotNull, reason: 'round $round');
+
+    read(aHandler);
+    read(bHandler);
+  }
+
+  final value = read(aHandler);
+  expect(read(bHandler), value);
+
+  aHandler.invalidateCache();
+  bHandler.invalidateCache();
+  expect(read(aHandler), value);
+  expect(read(bHandler), value);
 }

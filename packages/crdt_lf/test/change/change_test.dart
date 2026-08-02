@@ -1,8 +1,7 @@
 import 'dart:typed_data';
 
 import 'package:crdt_lf/src/change/change.dart';
-import 'package:crdt_lf/src/document.dart';
-import 'package:crdt_lf/src/handler/handler.dart';
+import 'package:crdt_lf/src/document/document.dart';
 import 'package:crdt_lf/src/operation/id.dart';
 import 'package:crdt_lf/src/operation/operation.dart';
 import 'package:crdt_lf/src/peer_id.dart';
