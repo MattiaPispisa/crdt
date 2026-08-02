@@ -1,5 +1,15 @@
 import 'dart:ui' show Color;
 
+import 'package:markdown/markdown.dart' as md;
+
+/// The markdown dialect of the app: GitHub flavored, so tables, fenced code
+/// and strikethrough all work.
+///
+/// It is the set `flutter_markdown_plus` falls back to in the preview. The
+/// exporters parse with the same one, so an exported file says what the
+/// preview showed.
+final md.ExtensionSet kMarkdownExtensionSet = md.ExtensionSet.gitHubFlavored;
+
 /// The single fugue text handler shared by every client of a room.
 /// Must be identical across peers for the Fugue merge to converge.
 const String kHandlerId = 'content';

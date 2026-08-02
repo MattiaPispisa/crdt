@@ -51,6 +51,9 @@ class SettingsScreen extends StatelessWidget {
             const SizedBox(height: 12),
             const _ThemeModeSelector(),
             const SizedBox(height: 32),
+            Text('Editor', style: theme.textTheme.titleSmall),
+            const _EditorOptions(),
+            const SizedBox(height: 32),
             Text('Links', style: theme.textTheme.titleSmall),
             for (final link in kProjectLinks) _LinkTile(link: link),
             const Divider(height: 40),
@@ -133,6 +136,43 @@ class _ThemeModeSelector extends StatelessWidget {
         showSelectedIcon: false,
         onSelectionChanged: (selection) =>
             context.read<UserSettingsCubit>().setThemeMode(selection.single),
+      ),
+    );
+  }
+}
+
+/// How the source editor looks: line-number gutter and word wrap.
+///
+/// Both are local view preferences — they never touch the shared document, so
+/// two peers of the same room can read it differently.
+class _EditorOptions extends StatelessWidget {
+  const _EditorOptions();
+
+  @override
+  Widget build(BuildContext context) {
+    return BlocBuilder<UserSettingsCubit, UserSettingsState>(
+      builder: (context, settings) => Column(
+        children: [
+          SwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            title: const Text('Line numbers'),
+            subtitle: const Text('Show a numbered gutter next to the source'),
+            value: settings.showLineNumbers,
+            onChanged: (value) => context
+                .read<UserSettingsCubit>()
+                .setShowLineNumbers(value: value),
+          ),
+          SwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            title: const Text('Word wrap'),
+            subtitle: const Text(
+              'Wrap long lines instead of scrolling sideways',
+            ),
+            value: settings.wordWrap,
+            onChanged: (value) =>
+                context.read<UserSettingsCubit>().setWordWrap(value: value),
+          ),
+        ],
       ),
     );
   }
