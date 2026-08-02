@@ -68,7 +68,7 @@ Future<_Fonts> _loadFonts() async {
     return _fonts!;
   }
   Future<pw.Font> load(String name) async =>
-      pw.Font.ttf(await rootBundle.load('assets/fonts/$name.ttf'));
+      pw.Font.ttf(await rootBundle.load('fonts/$name.ttf'));
   return _fonts = _Fonts(
     regular: await load('Roboto-Regular'),
     bold: await load('Roboto-Bold'),

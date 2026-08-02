@@ -43,7 +43,7 @@ flutter:
     # Embedded in exported PDFs. Loaded on demand by the exporter, so they
     # never weigh on the initial web payload. The built-in PDF fonts only
     # cover WinAnsi and would drop accented characters.
-    - assets/fonts/Roboto-Regular.ttf
-    - assets/fonts/Roboto-Bold.ttf
-    - assets/fonts/Roboto-Italic.ttf
-    - assets/fonts/Roboto-BoldItalic.ttf
+    - fonts/Roboto-Regular.ttf
+    - fonts/Roboto-Bold.ttf
+    - fonts/Roboto-Italic.ttf
+    - fonts/Roboto-BoldItalic.ttf
