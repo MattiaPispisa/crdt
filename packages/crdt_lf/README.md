@@ -15,6 +15,7 @@
   - [Design](#design)
     - [Operation based](#operation-based)
     - [Transaction](#transaction)
+    - [State cache](#state-cache)
   - [Getting Started](#getting-started)
   - [Usage](#usage)
     - [Basic Usage](#basic-usage)
@@ -106,6 +107,65 @@ graph TD
 ```
 
 > 📖 Diagrams render best in the [live documentation](https://mattiapispisa.it/crdt/docs/documentation/packages/crdt_lf).
+
+### State cache
+
+A handler answers a read from a cached state. Without that cache every read
+would replay the whole history of the handler, so the cost of an edit would grow
+with the age of the document. An edit therefore tries to **advance** the cached
+state instead of dropping it.
+
+A local edit always can: the operation is folded in the moment it is registered.
+A remote change is harder, because it arrives in the order the network delivers
+it, while a replay walks the history sorted by `(HLC, author)`. It can still be
+folded in when one of two things is true:
+
+- the handler's state is the **same whatever the order** causally ready
+  operations are applied in — it declares this with `stateIsOrderIndependent`.
+  The Fugue sequence handlers (they address elements by id) and the OR handlers
+  (they pick winners by tag) do;
+- or the change is the **newest one so far**, so folding it on top is the same
+  as replaying with it at the end. This holds for every handler, and covers the
+  common case of one peer writing at a time.
+
+Otherwise the cached state is dropped and the next read replays the history.
+That is always correct — it is the slow path, never a wrong one.
+
+```mermaid
+graph TD
+    A[Insert] --> B{Local or Remote?}
+
+    B -->|Local| C[Fold Operation into Cached State]
+    C --> D[Value Ready]
+    C -->|Cannot Apply| I[Drop Cached State]
+
+    B -->|Remote| E{Handler Affected?}
+    E -->|No| D
+    E -->|Yes| F{State Order-Independent?}
+
+    F -->|Yes| G[Queue Change]
+    F -->|No| H{Newest Change So Far?}
+    H -->|Yes| G
+    H -->|No| I
+
+    G -->|On Read| J[Fold Queued Changes]
+    I -->|On Read| K[Replay History]
+
+    J --> D
+    K --> D
+```
+
+> 📖 Diagrams render best in the [live documentation](https://mattiapispisa.it/crdt/docs/documentation/packages/crdt_lf).
+
+Queued changes are folded in on the next read, not on arrival: applying them
+right away would mean decoding every incoming operation, which the apply path
+avoids on purpose. A read never sees a stale value — reading is what drains the
+queue.
+
+Set `useIncrementalCacheUpdate = false` on a handler to turn every incremental
+path off and always replay. A custom handler that resolves conflicts by replay
+order must leave `stateIsOrderIndependent` at its default `false`, otherwise two
+peers that receive the same changes in a different order diverge.
 
 ## Getting Started
 
