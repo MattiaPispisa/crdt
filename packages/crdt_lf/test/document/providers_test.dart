@@ -322,6 +322,183 @@ void main() {
 
       expect(otherText.value, 'hello world');
     });
+
+    test('a change the handler cannot decode is dropped by both paths', () {
+      // What a peer sees when a newer build sends an operation it does not
+      // know how to read.
+      final other = CRDTDocument(peerId: PeerId.generate());
+      final otherText = _UndecodableFugueText(other, 'fugue');
+      // Warm the cache: a handler with nothing cached has nothing to advance.
+      expect(otherText.value, '');
+
+      other.importChanges(source.exportChanges());
+
+      expect(otherText.cachedState, isNull, reason: 'the queue gave up');
+      // The recompute reads the change through the same factory, so it skips
+      // it too: folding and replaying still agree.
+      expect(otherText.value, '');
+    });
+
+    test('a snapshot folds a queued change before storing it', () {
+      sourceText.insert(5, ' world');
+      // Nothing reads the handler, so the change is still waiting in the queue
+      // when the snapshot asks for its state.
+      target.importChanges(
+        source.exportChanges(fromVersionVector: target.getVersionVector()),
+      );
+      final snapshot = target.takeSnapshot();
+
+      final restored = CRDTDocument(peerId: PeerId.generate());
+      final restoredText = CRDTFugueTextHandler(restored, 'fugue');
+      restored.importSnapshot(snapshot);
+
+      expect(restoredText.value, 'hello world');
+      expect(targetText.value, 'hello world');
+    });
+
+    test('a snapshot that covers a queued change replaces it', () {
+      sourceText.insert(5, '!');
+      target
+        ..importChanges(
+          source.exportChanges(fromVersionVector: target.getVersionVector()),
+        )
+        // The snapshot already contains what waits in the queue.
+        ..importSnapshot(source.takeSnapshot(pruneHistory: false));
+
+      expect(targetText.cachedState, isNull);
+      expect(targetText.value, 'hello!');
+    });
+
+    test('the queue takes exactly _maxPendingRemoteChanges changes', () {
+      // The bound lives in the library; 256 is the value it is set to.
+      for (var i = 0; i < 256; i += 1) {
+        sourceText.insert(sourceText.length, 'x');
+        for (final change in source
+            .exportChanges(fromVersionVector: target.getVersionVector())
+            .sorted()) {
+          target.applyChange(change);
+        }
+      }
+
+      expect(targetText.cachedState, isNotNull);
+      expect(targetText.value, sourceText.value);
+
+      for (var i = 0; i < 257; i += 1) {
+        sourceText.insert(sourceText.length, 'y');
+        for (final change in source
+            .exportChanges(fromVersionVector: target.getVersionVector())
+            .sorted()) {
+          target.applyChange(change);
+        }
+      }
+
+      expect(targetText.cachedState, isNull);
+      expect(targetText.value, sourceText.value);
+    });
+
+    test('turning the incremental path off drops a pending queue', () {
+      final other = CRDTDocument(peerId: PeerId.generate());
+      final otherList = _CountingListHandler(other, 'list')..insert(0, 'a');
+      final receiver = CRDTDocument(peerId: PeerId.generate());
+      final receiverList = _CountingListHandler(receiver, 'list');
+      receiver.importChanges(other.exportChanges());
+      expect(receiverList.value, ['a']);
+      expect(receiverList.increments, 0);
+
+      otherList.insert(1, 'b');
+      receiver.importChanges(
+        other.exportChanges(fromVersionVector: receiver.getVersionVector()),
+      );
+
+      // The change is already queued. Reading it now must replay the history
+      // instead of folding, because folding is what the flag turns off.
+      receiverList.useIncrementalCacheUpdate = false;
+      expect(receiverList.value, ['a', 'b']);
+      expect(receiverList.increments, 0);
+    });
+  });
+
+  group('the replay boundary', () {
+    test('a change from the past is folded onto a pruned history', () {
+      final ahead = CRDTDocument(peerId: PeerId.generate());
+      final aheadText = CRDTTextHandler(ahead, 'text')..insert(0, 'aaa');
+      expect(aheadText.value, 'aaa');
+
+      final behind = CRDTDocument(peerId: PeerId.generate());
+      CRDTTextHandler(behind, 'text').insert(0, 'bbb');
+
+      // A twin seeded with the same snapshot, but never folding anything.
+      final twin = CRDTDocument(peerId: PeerId.generate());
+      final twinText = CRDTTextHandler(twin, 'text')
+        ..useIncrementalCacheUpdate = false;
+      twin.importSnapshot(ahead.takeSnapshot(pruneHistory: false));
+      expect(twinText.value, 'aaa');
+
+      // After the prune the history is empty, so a recompute replays nothing
+      // and the boundary becomes "no change at all".
+      ahead.takeSnapshot();
+      expect(aheadText.value, 'aaa');
+
+      ahead.importChanges(behind.exportChanges());
+      twin.importChanges(behind.exportChanges());
+
+      // The change is older than what the snapshot holds, yet the snapshot is
+      // all the history left: folding it is what replaying it would do too.
+      expect(aheadText.cachedState, isNotNull);
+      final folded = aheadText.value;
+      aheadText.invalidateCache();
+      expect(aheadText.value, folded);
+      expect(twinText.value, folded);
+    });
+
+    test('a change imported mid transaction drops a replay-order cache', () {
+      final other = CRDTDocument(peerId: PeerId.generate());
+      CRDTTextHandler(other, 'text').insert(0, 'X');
+
+      final doc = CRDTDocument(peerId: PeerId.generate());
+      final text = CRDTTextHandler(doc, 'text');
+      expect(text.value, '');
+
+      doc.runInTransaction(() {
+        // Folded into the state, but the change that carries it — and its
+        // clock — only exists on commit, so the boundary says nothing.
+        text.insert(0, 'local');
+        doc.importChanges(other.exportChanges());
+      });
+
+      expect(text.cachedState, isNull);
+      final folded = text.value;
+      text.invalidateCache();
+      expect(text.value, folded);
+    });
+
+    test('a change imported mid transaction keeps a commutative cache', () {
+      final other = CRDTDocument(peerId: PeerId.generate());
+      final otherText = CRDTFugueTextHandler(other, 'fugue')..insert(0, 'X');
+
+      final doc = CRDTDocument(peerId: PeerId.generate());
+      final text = CRDTFugueTextHandler(doc, 'fugue');
+      expect(text.value, '');
+
+      doc.runInTransaction(() {
+        text.insert(0, 'local');
+        doc.importChanges(other.exportChanges());
+      });
+
+      expect(text.cachedState, isNotNull);
+      final folded = text.value;
+      text.invalidateCache();
+      expect(text.value, folded);
+
+      // The boundary is usable again once the transaction has committed.
+      otherText.insert(1, 'Y');
+      doc.importChanges(
+        other.exportChanges(fromVersionVector: doc.getVersionVector()),
+      );
+      final next = text.value;
+      text.invalidateCache();
+      expect(text.value, next);
+    });
   });
 }
 
@@ -340,6 +517,30 @@ class _UnappliableFugueText extends CRDTFugueTextHandler {
     required FugueTextState state,
   }) =>
       null;
+}
+
+/// A Fugue text handler that reads no operation at all.
+class _UndecodableFugueText extends CRDTFugueTextHandler {
+  _UndecodableFugueText(super.doc, super.id);
+
+  @override
+  OperationFactory get operationFactory => (_) => null;
+}
+
+/// Counts how many times the cached state is advanced by one operation.
+class _CountingListHandler extends CRDTListHandler<String> {
+  _CountingListHandler(super.doc, super.id);
+
+  int increments = 0;
+
+  @override
+  List<String>? incrementCachedState({
+    required Operation operation,
+    required List<String> state,
+  }) {
+    increments += 1;
+    return super.incrementCachedState(operation: operation, state: state);
+  }
 }
 
 class _FakeCRDTListHandler extends CRDTListHandler<String> {

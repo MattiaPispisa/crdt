@@ -10,14 +10,14 @@
   as long as that change is newer than everything folded in so far. A change that
   arrives from the past still forces a recompute.
   Measured on one remote change followed by a read: `CRDTTextHandler` on 30 000
-  characters 406 µs → 12 µs, `CRDTMapHandler` on 5 000 keys 2.96 ms → 5 µs,
-  Fugue text on 30 000 characters 19.2 ms → 0.7 ms. [121](https://github.com/MattiaPispisa/crdt/issues/121)
+  characters 417 µs → 13 µs, `CRDTMapHandler` on 5 000 keys 3.04 ms → 5 µs,
+  Fugue text on 30 000 characters 19.6 ms → 0.69 ms. [121](https://github.com/MattiaPispisa/crdt/issues/121)
 - Handlers whose state does not depend on the order changes arrive in keep their
   cached state **even when the change comes from the past**, which is what
   concurrent editing produces. This covers `CRDTFugueTextHandler`,
   `CRDTFugueListHandler`, `CRDTListRefHandler`, `CRDTORSetHandler` and
   `CRDTORMapHandler`. Measured on one such change followed by a read: OR-set on
-  5 000 values 1.83 ms → 96 µs, OR-map on 5 000 keys 1.19 ms → 0.25 ms. [121](https://github.com/MattiaPispisa/crdt/issues/121)
+  5 000 values 4.33 ms → 114 µs, OR-map on 5 000 keys 5.87 ms → 0.25 ms. [121](https://github.com/MattiaPispisa/crdt/issues/121)
 
 ### Added
 

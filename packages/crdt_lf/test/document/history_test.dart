@@ -251,6 +251,37 @@ void main() {
       );
     });
 
+    test('should count changes and revisions at the cursor', () {
+      listHandler
+        ..insert(0, 'Hello')
+        ..insert(1, 'World')
+        ..insert(2, 'Dart');
+      CRDTListHandler<String>(document, 'other').insert(0, 'Elsewhere');
+
+      final historySession = document.toTimeTravel();
+      final viewDocument = historySession
+          .getHandler<CRDTListHandler<String>, List<String>>(
+            (doc) => CRDTListHandler<String>(doc, 'list'),
+          )
+          .doc;
+
+      expect(viewDocument.changeCountForHandler('list'), 3);
+      expect(viewDocument.changeCountForHandler('other'), 1);
+      // The frozen view has no snapshot to import, so the visible change count
+      // is the whole revision signal — and it follows the cursor both ways.
+      expect(viewDocument.revisionForHandler('list'), 3);
+
+      historySession
+        ..previous()
+        ..previous();
+      expect(viewDocument.changeCountForHandler('list'), 2);
+      expect(viewDocument.changeCountForHandler('other'), 0);
+      expect(viewDocument.revisionForHandler('list'), 2);
+
+      historySession.next();
+      expect(viewDocument.revisionForHandler('list'), 3);
+    });
+
     test('should dispose the history session', () {
       listHandler
         ..insert(0, 'Hello')
