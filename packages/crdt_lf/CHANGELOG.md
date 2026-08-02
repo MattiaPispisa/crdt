@@ -1,3 +1,33 @@
+## [3.5.0](https://github.com/MattiaPispisa/crdt/tree/crdt_lf-v3.5.0/packages/crdt_lf)
+
+**Date:** 2026-08-02
+
+[compare to previous release](https://github.com/MattiaPispisa/crdt/compare/crdt_lf-v3.4.3...crdt_lf-v3.5.0)
+
+### Performance
+
+- **Every handler** now folds a remote change into the state it already holds,
+  as long as that change is newer than everything folded in so far. A change that
+  arrives from the past still forces a recompute.
+  Measured on one remote change followed by a read: `CRDTTextHandler` on 30 000
+  characters 406 µs → 12 µs, `CRDTMapHandler` on 5 000 keys 2.96 ms → 5 µs,
+  Fugue text on 30 000 characters 19.2 ms → 0.7 ms. [121](https://github.com/MattiaPispisa/crdt/issues/121)
+- Handlers whose state does not depend on the order changes arrive in keep their
+  cached state **even when the change comes from the past**, which is what
+  concurrent editing produces. This covers `CRDTFugueTextHandler`,
+  `CRDTFugueListHandler`, `CRDTListRefHandler`, `CRDTORSetHandler` and
+  `CRDTORMapHandler`. Measured on one such change followed by a read: OR-set on
+  5 000 values 1.83 ms → 96 µs, OR-map on 5 000 keys 1.19 ms → 0.25 ms. [121](https://github.com/MattiaPispisa/crdt/issues/121)
+
+### Added
+
+- `compareChangeOrder`, the `(hlc, author)` order changes are replayed in.
+
+### Changed
+
+- Reorganized the document and handler files so that the members only the
+  framework calls no longer show up on a handler you hold..
+
 ## [3.4.3](https://github.com/MattiaPispisa/crdt/tree/crdt_lf-v3.4.3/packages/crdt_lf)
 
 **Date:** 2026-08-01
