@@ -1,4 +1,4 @@
-import 'package:crdt_lf/src/handler/handler.dart';
+import 'package:crdt_lf/src/document/document.dart';
 
 const _insert = 'insert';
 const _delete = 'delete';

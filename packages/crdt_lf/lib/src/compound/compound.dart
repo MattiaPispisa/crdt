@@ -1,4 +1,4 @@
-import 'package:crdt_lf/src/handler/handler.dart';
+import 'package:crdt_lf/src/document/document.dart';
 import 'package:crdt_lf/src/operation/operation.dart';
 
 /// Compound takes a list of [Operation] and compact them.
