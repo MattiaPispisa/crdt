@@ -1089,8 +1089,7 @@ void main() {
       expect(restoredText.value, equals(text.value));
     });
 
-    test('a snapshot taken right after an import includes the new changes',
-        () {
+    test('a snapshot taken right after an import includes the new changes', () {
       final source = CRDTDocument();
       final sourceText = CRDTFugueTextHandler(source, 'text')
         ..insert(0, 'hello');
