@@ -2,7 +2,7 @@ import 'package:crdt_socket_sync/web_socket_relay_client.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
-import 'package:greyhound_markdown_client/src/services/awareness_service.dart';
+import 'package:greyhound_markdown_client/src/services/awareness/awareness_service.dart';
 
 /// Connection indicator plus one chip per connected peer.
 class StatusBar extends StatelessWidget {

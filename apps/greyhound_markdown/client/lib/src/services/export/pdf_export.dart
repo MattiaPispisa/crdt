@@ -78,9 +78,6 @@ Future<_Fonts> _loadFonts() async {
   );
 }
 
-/// Forgets the cached fonts. Only tests need this.
-void debugResetPdfFonts() => _fonts = null;
-
 /// The markdown tags that open a block of their own. Anything else found
 /// between blocks is inline content and gets wrapped in a paragraph.
 const Set<String> _kBlockTags = {

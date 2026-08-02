@@ -24,4 +24,29 @@ void main() {
 
     expect(cubit.state.themeMode, ThemeMode.dark);
   });
+
+  testWidgets('SettingsScreen stores the editor options', (tester) async {
+    final cubit = UserSettingsCubit(storage: MemoryStorage());
+    await tester.pumpWidget(
+      BlocProvider.value(
+        value: cubit,
+        child: const MaterialApp(home: SettingsScreen()),
+      ),
+    );
+
+    expect(cubit.state.showLineNumbers, isFalse);
+    expect(cubit.state.wordWrap, isTrue);
+
+    // Both switches sit below the fold of the test surface.
+    await tester.ensureVisible(find.text('Line numbers'));
+    await tester.tap(find.text('Line numbers'));
+    await tester.pumpAndSettle();
+
+    await tester.ensureVisible(find.text('Word wrap'));
+    await tester.tap(find.text('Word wrap'));
+    await tester.pumpAndSettle();
+
+    expect(cubit.state.showLineNumbers, isTrue);
+    expect(cubit.state.wordWrap, isFalse);
+  });
 }

@@ -12,7 +12,7 @@ import 'package:crdt_socket_sync/web_socket_relay_client.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:greyhound_markdown_client/src/config.dart';
-import 'package:greyhound_markdown_client/src/services/awareness_service.dart';
+import 'package:greyhound_markdown_client/src/services/awareness/awareness_service.dart';
 
 const _e2e = bool.fromEnvironment('E2E');
 

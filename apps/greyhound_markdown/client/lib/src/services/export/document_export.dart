@@ -3,7 +3,7 @@ import 'dart:typed_data';
 
 import 'package:greyhound_markdown_client/src/services/export/html_export.dart';
 import 'package:greyhound_markdown_client/src/services/export/pdf_export.dart';
-import 'package:greyhound_markdown_client/src/services/file_saver.dart';
+import 'package:greyhound_markdown_client/src/services/file_saver/file_saver.dart';
 
 /// A file type the document can be exported as.
 enum ExportFormat {
@@ -31,7 +31,7 @@ enum ExportFormat {
 /// Exports the room's markdown as a file the user can keep.
 ///
 /// The rendering of each format lives in its own file under `export/`; this
-/// class only picks one, names the file and hands the bytes to a [FileSaver].
+/// class only picks one and hands the bytes to a [FileSaver].
 class DocumentExporter {
   /// Creates an exporter.
   ///
@@ -42,31 +42,35 @@ class DocumentExporter {
 
   final FileSaver _saver;
 
-  /// Renders [markdown] as [format] and saves it.
+  /// Renders [markdown] as [format] and saves it under [fileName] (without
+  /// the extension, which [format] adds).
   ///
-  /// The file is named after the document's first heading, or after
-  /// [fallbackName] when it has none.
-  Future<void> export({
+  /// Returns `false` when the user closed the save dialog without choosing a
+  /// destination.
+  Future<bool> export({
     required String markdown,
     required ExportFormat format,
-    required String fallbackName,
+    required String fileName,
   }) async {
-    final title = documentTitle(markdown) ?? fallbackName;
     final bytes = switch (format) {
       ExportFormat.markdown => utf8.encode(markdown),
       ExportFormat.html => utf8.encode(
-        markdownToHtmlDocument(markdown, title: title),
+        markdownToHtmlDocument(markdown, title: fileName),
       ),
-      ExportFormat.pdf => await markdownToPdfBytes(markdown, title: title),
+      ExportFormat.pdf => await markdownToPdfBytes(markdown, title: fileName),
     };
-    await _saver.save(
-      fileName: '${fileNameOf(title, fallback: fallbackName)}.'
-          '${format.extension}',
+    return _saver.save(
+      fileName: '$fileName.${format.extension}',
       bytes: Uint8List.fromList(bytes),
       mimeType: format.mimeType,
     );
   }
 }
+
+/// The file name to offer for [markdown]: its first heading slugified, or
+/// [fallback] when it opens with something else.
+String suggestedFileName(String markdown, {required String fallback}) =>
+    fileNameOf(documentTitle(markdown) ?? fallback, fallback: fallback);
 
 /// The document's title: the text of its first ATX heading, or `null` when it
 /// opens with something else.

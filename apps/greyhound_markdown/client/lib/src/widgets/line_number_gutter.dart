@@ -1,25 +1,33 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 
-/// The horizontal breathing room around the numbers.
-const double _kGutterPadding = 8;
+/// The horizontal breathing room around the numbers. Kept tight: the field
+/// next to the gutter already has padding of its own.
+const double _kGutterPadding = 4;
 
 /// The smallest number of digits the gutter reserves, so a short document does
 /// not sit in a sliver of a column.
 const int _kMinDigits = 2;
 
+/// The widest the gutter grows. Past it the numbers are scaled down to fit
+/// rather than taking more room from the text.
+const int _kMaxDigits = 4;
+
 /// The width a gutter needs for a document of [lineCount] lines drawn in
 /// [style].
 ///
 /// Grows with the digit count instead of with the text, so the editor next to
-/// it only shifts when the document crosses 100, 1000, … lines.
+/// it only shifts when the document crosses 100, 1000, … lines — and stops
+/// growing at [_kMaxDigits].
 double lineNumberGutterWidth(int lineCount, TextStyle style) {
-  final digits = '$lineCount'.length.clamp(_kMinDigits, 12);
+  final digits = '$lineCount'.length.clamp(_kMinDigits, _kMaxDigits);
   final painter = TextPainter(
     text: TextSpan(text: '0' * digits, style: style),
     textDirection: TextDirection.ltr,
   )..layout();
-  return painter.width + _kGutterPadding * 2;
+  final width = painter.width + _kGutterPadding * 2;
+  painter.dispose();
+  return width;
 }
 
 /// The offset in [text] where each line starts, the first one included.
@@ -33,6 +41,66 @@ List<int> lineStartOffsets(String text) {
     }
   }
   return starts;
+}
+
+/// The style to draw the line numbers of [editable] in, keeping the color of
+/// [fallback].
+///
+/// It is the field's **own** text style, not the one the app passed to the
+/// field: `TextField` merges that into the theme's `bodyLarge`, which carries
+/// `height: 1.5`. A number laid out without it gets a box a third shorter than
+/// the line, and ends up drawn above the text it numbers.
+TextStyle gutterNumberStyle(RenderEditable editable, TextStyle fallback) {
+  final style = editable.text?.style;
+  return style == null ? fallback : style.copyWith(color: fallback.color);
+}
+
+/// A line number and the y it is painted at, in the gutter's coordinates.
+typedef GutterLine = ({int number, double top});
+
+/// The line numbers visible in a gutter [height] tall next to [editable].
+///
+/// Each number sits at the caret top of its line's first character, so a
+/// logical line that wraps over several visual rows still gets exactly one
+/// number, next to its first row. The field's vertical scroll and its content
+/// padding are already inside [toGutter] — nothing is measured twice here.
+///
+/// Only the visible lines come back. A line's top grows with its offset, so
+/// the first visible one is a binary search away: a document of ten thousand
+/// lines costs about fourteen probes, not ten thousand.
+List<GutterLine> resolveGutterLines({
+  required RenderEditable editable,
+  required Matrix4 toGutter,
+  required double height,
+}) {
+  final starts = lineStartOffsets(editable.plainText);
+  final lineHeight = editable.preferredLineHeight;
+
+  double topOf(int line) => MatrixUtils.transformRect(
+    toGutter,
+    editable.getLocalRectForCaret(TextPosition(offset: starts[line])),
+  ).top;
+
+  var low = 0;
+  var high = starts.length - 1;
+  while (low < high) {
+    final middle = (low + high) ~/ 2;
+    if (topOf(middle) + lineHeight < 0) {
+      low = middle + 1;
+    } else {
+      high = middle;
+    }
+  }
+
+  final lines = <GutterLine>[];
+  for (var line = low; line < starts.length; line++) {
+    final top = topOf(line);
+    if (top > height) {
+      break;
+    }
+    lines.add((number: line + 1, top: top));
+  }
+  return lines;
 }
 
 /// The numbered column drawn next to the editor.
@@ -81,17 +149,56 @@ class _LineNumberGutterState extends State<LineNumberGutter> {
   /// Cached [RenderEditable] of the field; re-resolved once it detaches.
   RenderEditable? _editable;
 
+  /// One laid-out [TextPainter] per number. A scrolling document keeps asking
+  /// for the same few dozen numbers frame after frame.
+  final _numbers = <int, TextPainter>{};
+
+  /// The style the numbers were last laid out with.
+  TextStyle? _numberStyle;
+
   @override
   void dispose() {
+    _clearNumbers();
     _repaint.dispose();
     super.dispose();
+  }
+
+  void _clearNumbers() {
+    for (final painter in _numbers.values) {
+      painter.dispose();
+    }
+    _numbers.clear();
+  }
+
+  /// A number laid out with [style].
+  ///
+  /// [style] is the field's own text style, not this widget's: the theme adds
+  /// a line height to it (`bodyLarge` carries `height: 1.5`), and a number
+  /// laid out without it gets a shorter box, so it would sit above the line it
+  /// numbers.
+  TextPainter _numberPainter(int number, TextStyle style) {
+    if (_numberStyle != style) {
+      _numberStyle = style;
+      _clearNumbers();
+    }
+    return _numbers.putIfAbsent(
+      number,
+      () => TextPainter(
+        text: TextSpan(text: '$number', style: style),
+        textDirection: TextDirection.ltr,
+      )..layout(),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     return SizedBox(
       width: widget.width,
-      child: CustomPaint(painter: _GutterPainter(this)),
+      // Decoration only. A CustomPaint absorbs hits by default, which would
+      // eat a drag that started on the gutter.
+      child: IgnorePointer(
+        child: CustomPaint(painter: _GutterPainter(this)),
+      ),
     );
   }
 
@@ -153,40 +260,39 @@ class _GutterPainter extends CustomPainter {
       return;
     }
 
-    final transform = editable.getTransformTo(gutter);
-    final starts = lineStartOffsets(_state.widget.controller.text);
+    final lines = resolveGutterLines(
+      editable: editable,
+      toGutter: editable.getTransformTo(gutter),
+      height: size.height,
+    );
 
-    double topOf(int line) => MatrixUtils.transformRect(
-      transform,
-      editable.getLocalRectForCaret(TextPosition(offset: starts[line])),
-    ).top;
-
-    // First line whose bottom is still below the top edge.
-    var low = 0;
-    var high = starts.length - 1;
-    while (low < high) {
-      final middle = (low + high) ~/ 2;
-      if (topOf(middle) < -_state.widget.style.fontSize! * 2) {
-        low = middle + 1;
-      } else {
-        high = middle;
+    final style = gutterNumberStyle(editable, _state.widget.style);
+    final available = size.width - _kGutterPadding * 2;
+    canvas
+      ..save()
+      ..clipRect(Offset.zero & size);
+    for (final line in lines) {
+      final painter = _state._numberPainter(line.number, style);
+      // Past the gutter's widest digit count a number is shrunk to fit
+      // instead of spilling over the text.
+      final scale = painter.width > available
+          ? available / painter.width
+          : 1.0;
+      if (scale == 1) {
+        painter.paint(
+          canvas,
+          Offset(size.width - _kGutterPadding - painter.width, line.top),
+        );
+        continue;
       }
+      canvas
+        ..save()
+        ..translate(_kGutterPadding, line.top)
+        ..scale(scale);
+      painter.paint(canvas, Offset.zero);
+      canvas.restore();
     }
-
-    for (var line = low; line < starts.length; line++) {
-      final top = topOf(line);
-      if (top > size.height) {
-        break;
-      }
-      final painter = TextPainter(
-        text: TextSpan(text: '${line + 1}', style: _state.widget.style),
-        textDirection: TextDirection.ltr,
-      )..layout();
-      painter.paint(
-        canvas,
-        Offset(size.width - _kGutterPadding - painter.width, top),
-      );
-    }
+    canvas.restore();
   }
 
   @override

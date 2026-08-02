@@ -3,7 +3,7 @@ import 'dart:typed_data';
 
 import 'package:path_provider/path_provider.dart';
 
-import 'package:greyhound_markdown_client/src/services/file_saver.dart';
+import 'package:greyhound_markdown_client/src/services/file_saver/file_saver.dart';
 
 /// Writes a file next to the user's other documents.
 ///
@@ -16,7 +16,7 @@ class PlatformFileSaver extends FileSaver {
   const PlatformFileSaver();
 
   @override
-  Future<void> save({
+  Future<bool> save({
     required String fileName,
     required Uint8List bytes,
     required String mimeType,
@@ -26,5 +26,6 @@ class PlatformFileSaver extends FileSaver {
         await getApplicationDocumentsDirectory();
     await File('${directory.path}${Platform.pathSeparator}$fileName')
         .writeAsBytes(bytes);
+    return true;
   }
 }
