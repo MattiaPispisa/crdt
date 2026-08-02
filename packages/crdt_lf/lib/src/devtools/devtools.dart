@@ -2,7 +2,7 @@ import 'dart:convert';
 import 'dart:developer' as developer;
 
 import 'package:crdt_lf/src/change/change.dart';
-import 'package:crdt_lf/src/document.dart';
+import 'package:crdt_lf/src/document/document.dart';
 
 const _packageName = 'crdt_lf';
 

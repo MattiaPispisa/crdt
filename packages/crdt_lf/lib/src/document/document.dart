@@ -10,6 +10,16 @@ import 'package:crdt_lf/src/transaction/transaction_manager.dart';
 import 'package:crdt_lf/src/utils/uuid.dart';
 import 'package:hlc_dart/hlc_dart.dart';
 
+// [Handler] shares this library so the hooks the framework calls on it can stay
+// private. See the "Extension points" section of its documentation for the
+// members a custom handler is meant to override.
+part '../handler/handler.dart';
+
+// The mixins a consumer of the document is built from, and the read-only
+// document a [HistorySession] walks through.
+part 'providers.dart';
+part 'history.dart';
+
 /// Defines the foundational contract for a CRDT document.
 ///
 /// This abstract class serves as the common interfaces between
@@ -519,6 +529,9 @@ class CRDTDocument extends BaseCRDTDocument {
 
       if (applied) {
         appliedChanges.add(change);
+        // The operation was folded into the cache when it was registered; this
+        // is where it finally gets its place in the replay order.
+        _handlers[operation.id]?._noteReplayBoundary(change);
         for (final handler in _handlers.values) {
           if (!handlersAffectedFromErrors.contains(handler.id)) {
             handler._updateCachedVersion();
@@ -541,50 +554,83 @@ class CRDTDocument extends BaseCRDTDocument {
     }
   }
 
-  /// [Change]s applied by external sources could not be incremental.
-  /// So the affected handlers are invalidated,
-  /// while others have their version updated.
-  void _updateCacheWithAppliedExternalChange(Change change) {
-    _refreshHandlerCaches((handler) => handler._isAffectedByChange(change));
+  /// Advances the handler caches after [change] was applied to the document.
+  ///
+  /// Called on every path that hands the document a change **no handler has
+  /// folded into its cache yet**: [createChange], [applyChange] and the import
+  /// path. [registerOperation] is not one of them — it folds the operation as
+  /// it registers it, long before the change exists, so its commit only has to
+  /// report the replay boundary (see [_transactionFlushWork]).
+  ///
+  /// Such a change can sort before what a handler already holds, so an affected
+  /// handler either queues it (see
+  /// [CacheableStateProvider._queueRemoteChanges]) or drops its cache; the
+  /// others have their version updated.
+  void _foldOrDropCachesForChange(Change change) {
+    // One list for the whole pass: [_queueRemoteChanges] copies out of it, so
+    // every affected handler can share it.
+    final pending = <Change>[change];
+    _refreshHandlerCaches(
+      (handler) => handler._isAffectedByChange(change) ? pending : null,
+    );
   }
 
-  /// Batch version of [_updateCacheWithAppliedExternalChange] for a set of
-  /// applied [changes].
+  /// Batch version of [_foldOrDropCachesForChange] for a set of applied
+  /// [changes].
   ///
-  /// Collects the ids of the handlers touched by the batch once (O(changes)),
-  /// then refreshes the caches in a single pass (O(handlers)) — a handler is
-  /// invalidated if any applied change targets it. This avoids the
+  /// Groups the batch by handler id once (O(changes)), then refreshes the
+  /// caches in a single pass (O(handlers)). This avoids the
   /// O(handlers × changes) cost of invoking the per-change variant in a loop.
-  void _updateCacheWithAppliedExternalChanges(List<Change> changes) {
+  void _foldOrDropCachesForChanges(List<Change> changes) {
     if (_handlers.isEmpty) {
       return;
     }
-    final affected = <String>{};
+    final affected = <String, List<Change>>{};
     for (final change in changes) {
       try {
-        affected.add(
-          OperationEnvelopeCodec.decode(change.payloadBytes()).handlerId,
-        );
+        final handlerId =
+            OperationEnvelopeCodec.decode(change.payloadBytes()).handlerId;
+        final pending = affected[handlerId];
+        if (pending == null) {
+          affected[handlerId] = <Change>[change];
+        } else if (pending.isNotEmpty) {
+          pending.add(change);
+          if (pending.length >
+              CacheableStateProvider._maxPendingRemoteChanges) {
+            // Too many to queue: mark the handler for invalidation and stop
+            // holding on to its changes.
+            affected[handlerId] = const <Change>[];
+          }
+        }
       } catch (_) {
         // Ignore changes whose envelope cannot be decoded.
       }
     }
-    _refreshHandlerCaches((handler) => affected.contains(handler.id));
+    _refreshHandlerCaches((handler) => affected[handler.id]);
   }
 
-  /// Refreshes every registered handler's cache after external change(s): a
-  /// handler for which [isAffected] is `true` is invalidated (and its
-  /// [revisionForHandler] bumped), the others have their cached version
-  /// advanced to the document's new version.
+  /// Refreshes every registered handler's cache after external change(s).
+  ///
+  /// [changesFor] answers, per handler:
+  /// - `null` — untouched: its cached version is advanced to the document's
+  ///   new version;
+  /// - a non-empty list — the changes that target it: [revisionForHandler] is
+  ///   bumped and the changes are queued, falling back to invalidation when
+  ///   the handler cannot take them;
+  /// - an empty list — touched, but to be invalidated outright.
   void _refreshHandlerCaches(
-    bool Function(Handler<dynamic> handler) isAffected,
+    List<Change>? Function(Handler<dynamic> handler) changesFor,
   ) {
     for (final handler in _handlers.values) {
-      if (isAffected(handler)) {
-        _handlerRevisions.update(handler.id, (r) => r + 1, ifAbsent: () => 1);
-        handler.invalidateCache();
-      } else {
+      final pending = changesFor(handler);
+      if (pending == null) {
         handler._updateCachedVersion();
+        continue;
+      }
+
+      _handlerRevisions.update(handler.id, (r) => r + 1, ifAbsent: () => 1);
+      if (!handler._queueRemoteChanges(pending)) {
+        handler.invalidateCache();
       }
     }
   }
@@ -663,7 +709,7 @@ class CRDTDocument extends BaseCRDTDocument {
     final applied = _internalApplyChange(change);
 
     if (applied) {
-      _updateCacheWithAppliedExternalChange(change);
+      _foldOrDropCachesForChange(change);
       _emitUpdate([change]);
     }
 
@@ -746,7 +792,7 @@ class CRDTDocument extends BaseCRDTDocument {
     final applied = _internalApplyChange(change);
     if (applied) {
       _ensureHandlerForChange(change);
-      _updateCacheWithAppliedExternalChange(change);
+      _foldOrDropCachesForChange(change);
       _emitUpdate([change]);
     }
     return applied;
@@ -1152,7 +1198,7 @@ class CRDTDocument extends BaseCRDTDocument {
     // change: a per-change pass would be O(handlers × changes), quadratic when
     // many handlers are present (e.g. a large nested tree).
     if (changedApplied.isNotEmpty) {
-      _updateCacheWithAppliedExternalChanges(changedApplied);
+      _foldOrDropCachesForChanges(changedApplied);
       _emitUpdate();
     }
 
@@ -1344,448 +1390,6 @@ class CRDTDocument extends BaseCRDTDocument {
     _localChangesController.close();
     _updatesController.close();
     super.dispose();
-  }
-}
-
-class _CRDTStaticProxyDocument extends BaseCRDTDocument {
-  _CRDTStaticProxyDocument({
-    required String documentId,
-    required HybridLogicalClock hlc,
-    required PeerId peerId,
-    required List<Change> frozenChanges,
-    required List<Set<OperationId>> historyVersions,
-    required int visibleCount,
-    required Snapshot? lastSnapshot,
-    required Map<String, Handler<dynamic>> handlers,
-  })  : _documentId = documentId,
-        _hlc = hlc,
-        _peerId = peerId,
-        _frozenChanges = frozenChanges,
-        _historyVersions = historyVersions,
-        _visibleCount = visibleCount,
-        _lastSnapshot = lastSnapshot,
-        _handlers = handlers;
-
-  final String _documentId;
-
-  final HybridLogicalClock _hlc;
-
-  final PeerId _peerId;
-
-  final List<Change> _frozenChanges;
-
-  final List<Set<OperationId>> _historyVersions;
-
-  int _visibleCount;
-
-  @override
-  String get documentId => _documentId;
-
-  @override
-  HybridLogicalClock get hlc => _hlc;
-
-  @override
-  PeerId get peerId => _peerId;
-
-  @override
-  final Snapshot? _lastSnapshot;
-
-  @override
-  final Map<String, Handler<dynamic>> _handlers;
-
-  @override
-  void registerOperation(Operation operation) {
-    throw const ReadOnlyDocumentException('registerOperation');
-  }
-
-  @override
-  void prepareMutation() {
-    throw const ReadOnlyDocumentException('prepareMutation');
-  }
-
-  @override
-  Set<OperationId> get version {
-    if (_visibleCount == 0) {
-      return {};
-    }
-    return _historyVersions[_visibleCount - 1];
-  }
-
-  @override
-  List<Change> exportChanges({
-    Set<OperationId>? from,
-    VersionVector? fromVersionVector,
-  }) {
-    var changes = _frozenChanges.sublist(0, _visibleCount);
-
-    if (fromVersionVector != null && _lastSnapshot != null) {
-      changes = changes.newerThan(_lastSnapshot!.versionVector).toList();
-    }
-
-    return changes;
-  }
-
-  @override
-  List<Change> changesForHandler(
-    String handlerId, {
-    VersionVector? fromVersionVector,
-  }) {
-    final result = <Change>[];
-    for (final change in exportChanges(fromVersionVector: fromVersionVector)) {
-      try {
-        final env = OperationEnvelopeCodec.decode(change.payloadBytes());
-        if (env.handlerId == handlerId) {
-          result.add(change);
-        }
-      } catch (_) {
-        // Ignore changes whose envelope cannot be decoded.
-      }
-    }
-    return result;
-  }
-
-  @override
-  int changeCountForHandler(String handlerId) {
-    return changesForHandler(handlerId).length;
-  }
-
-  // The frozen view never imports snapshots, so the visible change count
-  // (which follows the time-travel cursor) is a complete revision signal.
-  @override
-  int revisionForHandler(String handlerId) => changeCountForHandler(handlerId);
-}
-
-/// {@template history_session}
-/// An interactive controller for navigating the history of a [CRDTDocument].
-///
-/// A [HistorySession] creates a frozen, immutable view of a [CRDTDocument]
-/// as the moment of instantiation. It allows "Time tavel" functionality by
-/// moving a temporal cursor back and forth through the [Change]s.
-///
-/// ```dart
-/// final document = CRDTDocument();
-/// final listHandler = CRDTListHandler<String>(document, 'list');
-/// listHandler
-///   ..insert(0, 'Hello')
-///   ..insert(1, 'World')
-///   ..insert(2, 'Dart');
-///
-/// final historySession = document.toTimeTravel();
-/// final viewListHandler = historySession.getHandler(
-///   (doc) => CRDTListHandler<String>(doc, 'list'),
-/// );
-///
-/// print(viewListHandler.value); // ['Hello', 'World', 'Dart']
-///
-/// historySession.previous();
-/// print(viewListHandler.value); // ['Hello', 'World']
-///
-/// historySession.next();
-/// print(viewListHandler.value); // ['Hello', 'World', 'Dart']
-/// ```
-/// {@endtemplate}
-class HistorySession {
-  HistorySession._({
-    required int cursor,
-    required _CRDTStaticProxyDocument document,
-    required this.length,
-  })  : _document = document,
-        _cursor = cursor,
-        _cursorController = StreamController<int>.broadcast();
-
-  factory HistorySession._fromLiveDocument(
-    BaseCRDTDocument document,
-  ) {
-    final changes = document.exportChanges().sorted();
-
-    final historyVersions = <Set<OperationId>>[];
-    final tempFrontiers = Frontiers();
-
-    for (final change in changes) {
-      tempFrontiers.update(
-        newOperationId: change.id,
-        oldDependencies: change.deps,
-      );
-
-      historyVersions.add(tempFrontiers.get());
-    }
-
-    final cursor = changes.length;
-
-    final proxy = _CRDTStaticProxyDocument(
-      documentId: document.documentId,
-      hlc: document.hlc,
-      peerId: document.peerId,
-      frozenChanges: changes,
-      historyVersions: historyVersions,
-      visibleCount: cursor,
-      lastSnapshot: document._lastSnapshot,
-      handlers: {},
-    );
-    // Carry over the factories so nested handlers resolved through the
-    // read-only session can be reconstructed against the historical changes.
-    proxy._factories.addAll(document._factories);
-
-    return HistorySession._(
-      cursor: cursor,
-      length: cursor,
-      document: proxy,
-    );
-  }
-
-  final _CRDTStaticProxyDocument _document;
-  int _cursor;
-  final StreamController<int> _cursorController;
-
-  /// The total number of changes available in this history session.
-  final int length;
-
-  /// The stream of cursor position updates.
-  ///
-  /// Emits the new cursor index whenever
-  /// [next], [previous], or [jump] is called.
-  Stream<int> get cursorStream => _cursorController.stream;
-
-  /// The current position of the temporal cursor.
-  ///
-  /// Represents the number of changes currently applied to the view.
-  /// - 0: Initial state (snapshot only).
-  /// - [length]: The full state at the time the session was created.
-  int get cursor => _cursor;
-
-  /// Whether the cursor can move forward (Redo).
-  bool get canNext => _cursor < length;
-
-  /// Whether the cursor can move backward (Undo).
-  bool get canPrevious => _cursor > 0;
-
-  /// Factory method to instantiate a CRDT Handler linked
-  /// to this history session.
-  ///
-  /// [Handler]s bound to the history session can only view their states,
-  /// on write operations (example [BaseCRDTDocument.registerOperation]) a
-  /// [ReadOnlyDocumentException] is thrown
-  H getHandler<H extends Handler<T>, T>(
-    H Function(BaseCRDTDocument document) factory,
-  ) {
-    return factory(_document);
-  }
-
-  /// Advances the cursor by one step.
-  ///
-  /// Does nothing if [canNext] is false.
-  void next() => jump(_cursor + 1);
-
-  /// Moves the cursor back by one step.
-  ///
-  /// Does nothing if [canPrevious] if false.
-  void previous() => jump(_cursor - 1);
-
-  /// Jumps immediately to a specific point in history.
-  ///
-  /// [cursor] must be between 0 and [length] (inclusive).
-  /// Does nothing if cursor remains the same.
-  void jump(int cursor) {
-    if (cursor < 0 || cursor > length) {
-      return;
-    }
-    if (cursor == _cursor) {
-      return;
-    }
-
-    _cursor = cursor;
-    _document._visibleCount = _cursor;
-    _cursorController.add(_cursor);
-  }
-
-  /// Releases resources used by this session.
-  void dispose() {
-    _cursorController.close();
-    _document.dispose();
-  }
-}
-
-/// A consumer that can consume a CRDTDocument
-mixin DocumentConsumer {
-  /// The document that `this` can consume
-  late final BaseCRDTDocument _document;
-
-  /// The unique identifier for `this` consumer
-  String get id;
-}
-
-/// Per-consumer state cache that avoids recomputing the consumer's state
-/// from the full history on every read.
-///
-/// Two update paths:
-/// - **incremental**: when a single [Operation] is applied, the cache is
-///   patched via [incrementCachedState]. Hosts that can cheaply apply an
-///   operation to their state override it; returning `null` means "can't
-///   (or won't) update incrementally" and falls back to invalidation.
-/// - **full recompute**: [cachedState] returns `null` whenever the cached
-///   version no longer matches the document's current version (e.g. after
-///   import, snapshot merge or prune). The host recomputes the state from
-///   scratch and pushes it back via [updateCachedState].
-///
-/// [T] is the host's own internal representation. It has no required
-/// relationship with `handler.value` or [SnapshotProvider.getSnapshotState]
-/// — pick whatever shape makes recomputation cheap.
-///
-/// Set [useIncrementalCacheUpdate] to false to ignore [incrementCachedState]
-mixin CacheableStateProvider<T> on DocumentConsumer {
-  @override
-  String get id;
-
-  /// Document version the cached state is pinned to (`null` when no
-  /// state is cached). The cache is valid only while this set equals
-  /// `_document.version`.
-  Set<OperationId>? _cachedVersion;
-
-  /// The most recently cached state, or `null` if no state is cached.
-  T? _cachedState;
-
-  /// If `false`, every applied operation invalidates the cache instead of
-  /// invoking [incrementCachedState]. Hosts that have no cheap incremental
-  /// path may set this to `false` to skip the hook entirely; the default
-  /// `true` lets each operation try the incremental path first.
-  bool useIncrementalCacheUpdate = true;
-
-  /// Pins the cached version to the document's current version.
-  void _updateCachedVersion() {
-    _cachedVersion = Set.from(_document.version);
-  }
-
-  /// Replaces the cached state with [newState] and pins it to the current
-  /// document version. Call this after a full recompute.
-  void updateCachedState(T newState) {
-    _cachedState = newState;
-    _updateCachedVersion();
-  }
-
-  /// Framework hook: tries to advance the cache by a single [operation],
-  /// honoring [useIncrementalCacheUpdate]. Falls back to [invalidateCache]
-  /// when the host opts out, has no cached state, or cannot apply the
-  /// operation incrementally.
-  void _internalIncrementCachedState({required Operation operation}) {
-    if (!useIncrementalCacheUpdate) {
-      invalidateCache();
-      return;
-    }
-
-    final state = _cachedState;
-    if (state == null) {
-      return;
-    }
-
-    final newState = incrementCachedState(
-      operation: operation,
-      state: state,
-    );
-
-    if (newState == null) {
-      invalidateCache();
-      return;
-    }
-
-    updateCachedState(newState);
-  }
-
-  /// Applies [operation] to [state] and returns the resulting state, or
-  /// `null` to opt out of incremental updates (the cache will be
-  /// invalidated and recomputed on the next read).
-  ///
-  /// May mutate [state] in place and return it. The default implementation
-  /// returns `null`, i.e. no incremental path.
-  T? incrementCachedState({
-    required Operation operation,
-    required T state,
-  }) {
-    return null;
-  }
-
-  /// Drops the cached state. The framework calls this automatically when
-  /// the consumer's state is no longer guaranteed to match the document
-  /// (e.g. external changes imported, snapshot merged, history pruned).
-  void invalidateCache() {
-    _cachedState = null;
-    _cachedVersion = null;
-  }
-
-  /// The cached state if it still matches the document's current version,
-  /// otherwise `null` (forcing the host to recompute).
-  T? get cachedState {
-    if (_cachedState != null && setEquals(_cachedVersion, _document.version)) {
-      return _cachedState;
-    }
-
-    return null;
-  }
-}
-
-/// A provider that can provide a snapshot of the state of a [CRDTDocument]
-///
-/// Snapshot state is now a binary blob owned by the consumer. The framework
-/// only frames each blob with a length prefix inside [Snapshot]; the encoding
-/// and decoding of the blob's contents is entirely up to the consumer.
-mixin SnapshotProvider on DocumentConsumer {
-  @override
-  String get id;
-
-  /// Encodes the consumer's current state to a binary blob.
-  ///
-  /// The blob is opaque to `crdt_lf` itself and will be returned verbatim
-  /// by [lastSnapshot] when the consumer needs to reconstruct its state.
-  Uint8List getSnapshotState();
-
-  /// Returns the last snapshot bytes for this consumer (the value previously
-  /// produced by [getSnapshotState]) or `null` if no snapshot is available.
-  Uint8List? lastSnapshot() {
-    return _document._lastSnapshot?.data[id];
-  }
-
-  /// Returns the version vector of the last snapshot for this consumer.
-  VersionVector? snapshotVersionVector() {
-    return _document._lastSnapshot?.versionVector;
-  }
-}
-
-/// Helper extensions for [Handler]
-extension _HandlerHelper on Handler<dynamic> {
-  // Expando acts as a per-instance cache (weak-ref keyed map).
-  // Extensions cannot declare instance fields, but an Expando on a static
-  // variable gives the same semantics with no memory-leak risk.
-  static final Expando<Uint8List> _prefixCache = Expando();
-
-  /// Binary prefix for this handler's operations:
-  /// [varint(typeLen)][type UTF-8][varint(idLen)][id UTF-8].
-  ///
-  /// Computed once and cached. Compared byte-by-byte against a change payload
-  /// in [_isAffectedByChange] to avoid UTF-8 decode + String allocation on
-  /// every change application.
-  Uint8List get _envelopePrefix {
-    return _prefixCache[this] ??= _buildPrefix();
-  }
-
-  Uint8List _buildPrefix() {
-    final out = BytesBuilder(copy: false);
-    final typeBytes = utf8.encode(handlerType);
-    UVarint.write(typeBytes.length, out);
-    out.add(typeBytes);
-    final idBytes = utf8.encode(id);
-    UVarint.write(idBytes.length, out);
-    out.add(idBytes);
-    return out.toBytes();
-  }
-
-  bool _isAffectedByChange(Change change) {
-    final payload = change.payloadBytes();
-    final prefix = _envelopePrefix;
-    // +1 for the kind byte that follows the prefix.
-    if (payload.length < prefix.length + 1) return false;
-    for (var i = 0; i < prefix.length; i++) {
-      if (payload[i] != prefix[i]) return false;
-    }
-    return true;
   }
 }
 

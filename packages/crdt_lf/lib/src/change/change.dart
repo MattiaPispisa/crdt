@@ -298,6 +298,19 @@ class Change {
   int get hashCode => _hashCode;
 }
 
+/// Orders two [Change]s first by hlc, then by author.
+///
+/// This is **the replay order**: the order [ChangeList.sorted] puts changes in
+/// before a consumer folds them into its state. Two changes never compare equal
+/// — the same author cannot issue the same clock twice.
+int compareChangeOrder(Change a, Change b) {
+  final hlcCompare = a.hlc.compareTo(b.hlc);
+  if (hlcCompare != 0) {
+    return hlcCompare;
+  }
+  return a.author.compareTo(b.author);
+}
+
 /// Utilities on [List] of [Change]s
 extension ChangeList on List<Change> {
   /// Sort changes first by hlc then for author.
@@ -308,19 +321,11 @@ extension ChangeList on List<Change> {
     bool inplace = false,
   }) {
     if (inplace) {
-      sort(_hlcCompare);
+      sort(compareChangeOrder);
       return this;
     }
 
-    return List.from(this)..sort(_hlcCompare);
-  }
-
-  int _hlcCompare(Change a, Change b) {
-    final hlcCompare = a.hlc.compareTo(b.hlc);
-    if (hlcCompare != 0) {
-      return hlcCompare;
-    }
-    return a.author.compareTo(b.author);
+    return List.from(this)..sort(compareChangeOrder);
   }
 }
 

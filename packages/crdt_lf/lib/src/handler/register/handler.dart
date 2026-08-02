@@ -97,8 +97,8 @@ class CRDTRegisterHandler<T> extends Handler<T> {
     required Operation operation,
     required T state,
   }) {
-    // Only local writes reach the incremental path, and a local write is the
-    // latest in clock order, so it wins.
+    // Only an operation that is the latest in clock order reaches this: a
+    // local write, or a remote change newer than everything folded in so far.
     if (operation is _RegisterSetOperation<T>) {
       return operation.value;
     }

@@ -1,6 +1,4 @@
-import 'dart:typed_data';
-
-import 'package:crdt_lf/crdt_lf.dart';
+part of '../document/document.dart';
 
 /// A factory function that creates an operation from bytes.
 typedef OperationFactory = Operation? Function(
@@ -11,6 +9,31 @@ typedef OperationFactory = Operation? Function(
 ///
 /// A handler is a component that manages the state of a specific
 /// data structure in the CRDT system.
+///
+/// ## Extension points
+///
+/// Most of the members below this class are for **writing** a handler, not for
+/// using one. Using a handler means calling the API of the concrete class
+/// (`value`, `insert`, `set`, …); nothing here has to be called by hand.
+///
+/// A custom handler overrides:
+///
+/// - [id] and [operationFactory] — required: how the handler is addressed and
+///   how its operations are decoded.
+/// - [getSnapshotState] — required: the state as bytes, seeded back through
+///   [lastSnapshot].
+/// - [handlerType] — for a handler that must survive dart2js minification.
+/// - [incrementCachedState] — to advance the cached state by one operation
+///   instead of replaying the history.
+/// - [stateIsOrderIndependent] — only when the state is the same
+///   whatever the order causally ready operations arrive in.
+/// - [compound] — to collapse consecutive operations inside a transaction.
+///
+/// And it reads its state through [cachedState] / [updateCachedState],
+/// replaying [operations] when there is nothing cached.
+///
+/// The hooks the framework calls on a handler are private to this library, so
+/// they never show up on a handler you hold.
 abstract class Handler<T>
     with DocumentConsumer, SnapshotProvider, CacheableStateProvider<T> {
   /// Creates a new handler for the given document.
@@ -72,6 +95,10 @@ abstract class Handler<T>
   /// Otherwise, return `null`.
   Operation? compound(Operation accumulator, Operation current) => null;
 
+  @override
+  Operation? _operationFromChange(Change change) =>
+      operationFactory(change.payloadBytes());
+
   /// Returns the [Operation]s required by this consumer to compute its state.
   ///
   /// The [Operation]s are returned in the order they were applied.
@@ -79,9 +106,13 @@ abstract class Handler<T>
     final changes = doc
         .changesForHandler(
           id,
-          fromVersionVector: snapshotVersionVector(),
+          fromVersionVector: _snapshotVersionVector(),
         )
         .sorted(inplace: true);
+
+    // The list is sorted, so its last entry is the newest change the caller is
+    // about to fold in. See [CacheableStateProvider._noteReplayBoundary].
+    _noteReplayBoundary(changes.isEmpty ? null : changes.last);
 
     final operations = <Operation>[];
     for (final change in changes) {

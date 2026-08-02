@@ -1088,6 +1088,28 @@ void main() {
       restored.importSnapshot(snapshot);
       expect(restoredText.value, equals(text.value));
     });
+
+    test('a snapshot taken right after an import includes the new changes', () {
+      final source = CRDTDocument();
+      final sourceText = CRDTFugueTextHandler(source, 'text')
+        ..insert(0, 'hello');
+
+      final target = CRDTDocument();
+      final targetText = CRDTFugueTextHandler(target, 'text');
+      target.importChanges(source.exportChanges());
+      // Warm the cache, then import more without reading the value.
+      expect(targetText.value, 'hello');
+
+      sourceText.insert(5, ' world');
+      target.importChanges(
+        source.exportChanges(fromVersionVector: target.getVersionVector()),
+      );
+
+      final restored = CRDTDocument();
+      final restoredText = CRDTFugueTextHandler(restored, 'text');
+      restored.importSnapshot(target.takeSnapshot());
+      expect(restoredText.value, 'hello world');
+    });
   });
 }
 
