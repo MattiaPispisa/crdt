@@ -8,7 +8,7 @@ import 'package:crdt_lf/crdt_lf.dart';
 import 'package:crdt_socket_sync/relay_client.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:greyhound_markdown_client/src/services/awareness_service.dart';
+import 'package:greyhound_markdown_client/src/services/awareness/awareness_service.dart';
 
 /// Minimal in-memory [RelaySocketClient] to drive the awareness plugin
 /// without a real transport. Extends the abstract class so the plugin

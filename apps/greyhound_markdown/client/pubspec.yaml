@@ -1,13 +1,13 @@
 name: greyhound_markdown_client
 description: "Real-time collaborative markdown editor built on crdt_lf."
 publish_to: 'none'
-version: 0.6.0
+version: 0.7.0
 
 environment:
   sdk: ^3.11.5
 
 dependencies:
-  crdt_lf: ^3.4.3
+  crdt_lf: ^3.5.0
   crdt_lf_flutter: ^0.3.0
   crdt_socket_sync: ^0.6.0
   
@@ -19,7 +19,9 @@ dependencies:
   markdown: ^7.3.1
   package_info_plus: ^8.0.0
   path_provider: ^2.1.5
+  pdf: ^3.11.0
   url_launcher: ^6.3.0
+  web: ^1.1.0
   web_socket_channel: ^3.0.0
 
   # state management
@@ -38,3 +40,10 @@ flutter:
   assets:
     - assets/images/greyhound_markdown_logo.png
     - CHANGELOG.md
+    # Embedded in exported PDFs. Loaded on demand by the exporter, so they
+    # never weigh on the initial web payload. The built-in PDF fonts only
+    # cover WinAnsi and would drop accented characters.
+    - assets/fonts/Roboto-Regular.ttf
+    - assets/fonts/Roboto-Bold.ttf
+    - assets/fonts/Roboto-Italic.ttf
+    - assets/fonts/Roboto-BoldItalic.ttf

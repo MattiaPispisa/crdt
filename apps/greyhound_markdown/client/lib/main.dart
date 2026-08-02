@@ -61,6 +61,7 @@ class GreyhoundApp extends StatelessWidget {
           title: kAppName,
           theme: greyhoundTheme(Brightness.light),
           darkTheme: greyhoundTheme(Brightness.dark),
+          debugShowCheckedModeBanner: false,
           themeMode: themeMode,
           onGenerateRoute: (settings) {
             final uri = Uri.parse(settings.name ?? '/');

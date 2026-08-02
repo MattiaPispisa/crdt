@@ -1,6 +1,22 @@
+## 0.7.0
+
+**Date:** 2026-08-02
+
+### Added
+
+- Export the document as Markdown, HTML or PDF, from the room toolbar. The
+  PDF embeds its fonts, so accented text survives; images come out as their
+  alt text and emoji are not drawn.
+- **Line numbers** — a numbered gutter beside the source.
+- **Word wrap** — turn it off and long lines run as far as they need to, with the editor scrolling sideways and following the caret.
+
+### Changed
+
+- Update `crdt_lf` to `3.5.0` 
+
 ## 0.6.0
 
-**Date:** 2026-078-02
+**Date:** 2026-08-02
 
 ### Changed
 

@@ -8,9 +8,10 @@ import 'package:flutter/services.dart';
 
 import 'package:greyhound_markdown_client/src/application/application.dart';
 import 'package:greyhound_markdown_client/src/config.dart';
-import 'package:greyhound_markdown_client/src/services/awareness_service.dart';
+import 'package:greyhound_markdown_client/src/services/awareness/awareness_service.dart';
 import 'package:greyhound_markdown_client/src/widgets/app_footer.dart';
 import 'package:greyhound_markdown_client/src/widgets/editor_pane.dart';
+import 'package:greyhound_markdown_client/src/widgets/export_menu.dart';
 import 'package:greyhound_markdown_client/src/widgets/preview_pane.dart';
 import 'package:greyhound_markdown_client/src/widgets/status_bar.dart';
 
@@ -94,6 +95,7 @@ class _EditorScreenState extends State<EditorScreen> {
                 ).showSnackBar(const SnackBar(content: Text('Room id copied')));
               },
             ),
+            ExportMenu(fallbackName: 'greyhound-${widget.roomId}'),
           ],
           bottom: PreferredSize(
             preferredSize: const Size.fromHeight(52),

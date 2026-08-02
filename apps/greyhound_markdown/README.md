@@ -17,7 +17,9 @@ Real-time collaborative markdown editor built on
 
 - `client/` — Flutter web app (editor + live preview, shared cursors). It
   uses the package's `WebSocketRelayClient` and `ClientAwarenessPlugin`
-  directly; the room id is the CRDT `documentId`.
+  directly; the room id is the CRDT `documentId`. The room toolbar exports
+  the document as `.md`, `.html` or `.pdf`; Settings holds the local editor
+  options (line numbers, word wrap).
 - `server/` — Cloudflare Worker + Durable Object acting as a relay server:
   it rebroadcasts opaque CRDT blobs to the other clients of a room and
   persists them (change log + compacted snapshots) in Durable Object

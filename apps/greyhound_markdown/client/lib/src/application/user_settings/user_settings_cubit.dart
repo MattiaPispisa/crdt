@@ -39,6 +39,14 @@ class UserSettingsCubit extends HydratedCubit<UserSettingsState> {
   /// Sets whether the app follows the system theme or is forced light/dark.
   void setThemeMode(ThemeMode mode) => emit(state.copyWith(themeMode: mode));
 
+  /// Sets whether the editor draws a line-number gutter.
+  void setShowLineNumbers({required bool value}) =>
+      emit(state.copyWith(showLineNumbers: value));
+
+  /// Sets whether long editor lines wrap at the pane edge.
+  void setWordWrap({required bool value}) =>
+      emit(state.copyWith(wordWrap: value));
+
   @override
   UserSettingsState fromJson(Map<String, dynamic> json) {
     final fallback = UserSettingsState.initial();
@@ -48,6 +56,12 @@ class UserSettingsCubit extends HydratedCubit<UserSettingsState> {
           ? Color(json['color'] as int)
           : fallback.color,
       themeMode: _themeModeFrom(json['themeMode']) ?? fallback.themeMode,
+      showLineNumbers: json['showLineNumbers'] is bool
+          ? json['showLineNumbers'] as bool
+          : fallback.showLineNumbers,
+      wordWrap: json['wordWrap'] is bool
+          ? json['wordWrap'] as bool
+          : fallback.wordWrap,
     );
   }
 
@@ -56,6 +70,8 @@ class UserSettingsCubit extends HydratedCubit<UserSettingsState> {
     'name': state.name,
     'color': state.color.toARGB32(),
     'themeMode': state.themeMode.name,
+    'showLineNumbers': state.showLineNumbers,
+    'wordWrap': state.wordWrap,
   };
 }
 
