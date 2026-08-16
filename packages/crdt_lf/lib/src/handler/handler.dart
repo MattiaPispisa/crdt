@@ -41,6 +41,16 @@ typedef OperationFactory = Operation? Function(
 /// And it reads its state through [cachedState] / [updateCachedState],
 /// replaying [operations] when there is nothing cached.
 ///
+/// The four conventional operation kinds are ready to use as [insertType],
+/// [deleteType], [updateType] and [moveType]. A handler that needs a fifth
+/// semantics declares its own with [OperationType.custom] instead of reusing
+/// one of those names:
+///
+/// ```dart
+/// late final OperationType incrementType =
+///     OperationType.custom(this, kind: 4, name: 'increment');
+/// ```
+///
 /// The hooks the framework calls on a handler are private to this library, so
 /// they never show up on a handler you hold.
 abstract class Handler<T>

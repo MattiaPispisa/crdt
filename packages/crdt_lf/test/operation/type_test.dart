@@ -64,53 +64,7 @@ void main() {
       expect(operationType.toPayload(), equals('TestHandler:insert'));
     });
 
-    test('fromPayload creates correct operation type', () {
-      const payload = 'TestHandler:insert';
-      final operationType = OperationType.fromPayload(payload);
-      expect(operationType.handler, equals('TestHandler'));
-      expect(operationType.type, equals('insert'));
-    });
-
-    test('fromPayload creates correct operation type for delete', () {
-      const payload = 'TestHandler:delete';
-      final operationType = OperationType.fromPayload(payload);
-      expect(operationType.handler, equals('TestHandler'));
-      expect(operationType.type, equals('delete'));
-    });
-
-    test('fromPayload with invalid format throws FormatException', () {
-      const payload = 'invalid-format';
-      expect(
-        () => OperationType.fromPayload(payload),
-        throwsA(isA<FormatException>()),
-      );
-    });
-
-    test('fromPayload with missing handler throws FormatException', () {
-      const payload = ':insert';
-      expect(
-        () => OperationType.fromPayload(payload),
-        throwsA(isA<FormatException>()),
-      );
-    });
-
-    test('fromPayload with missing type throws FormatException', () {
-      const payload = 'TestHandler:';
-      expect(
-        () => OperationType.fromPayload(payload),
-        throwsA(isA<FormatException>()),
-      );
-    });
-
-    test('fromPayload with multiple colons throws FormatException', () {
-      const payload = 'TestHandler:insert:extra';
-      expect(
-        () => OperationType.fromPayload(payload),
-        throwsA(isA<FormatException>()),
-      );
-    });
-
-    test('kind returns expected u8 for insert/delete/update', () {
+    test('the four conventional factories carry their kind', () {
       expect(
         OperationType.insert(handler).kind,
         equals(OperationType.kindInsert),
@@ -123,28 +77,99 @@ void main() {
         OperationType.update(handler).kind,
         equals(OperationType.kindUpdate),
       );
-    });
-
-    test('typeNameFromKind returns expected name for valid kinds', () {
       expect(
-        OperationType.typeNameFromKind(OperationType.kindInsert),
-        equals('insert'),
-      );
-      expect(
-        OperationType.typeNameFromKind(OperationType.kindDelete),
-        equals('delete'),
-      );
-      expect(
-        OperationType.typeNameFromKind(OperationType.kindUpdate),
-        equals('update'),
+        OperationType.move(handler).kind,
+        equals(OperationType.kindMove),
       );
     });
 
-    test('typeNameFromKind throws FormatException on unknown kind', () {
-      expect(
-        () => OperationType.typeNameFromKind(99),
-        throwsA(isA<FormatException>()),
-      );
+    group('custom', () {
+      test('declares a kind and a name of its own', () {
+        final increment = OperationType.custom(
+          handler,
+          kind: 7,
+          name: 'increment',
+        );
+
+        expect(increment.kind, equals(7));
+        expect(increment.type, equals('increment'));
+        expect(increment.handler, equals('TestHandler'));
+        expect(increment.toPayload(), equals('TestHandler:increment'));
+      });
+
+      test('two kinds with the same name are not equal', () {
+        final a = OperationType.custom(handler, kind: 4, name: 'tick');
+        final b = OperationType.custom(handler, kind: 5, name: 'tick');
+
+        expect(a, isNot(equals(b)));
+        expect(a.hashCode, isNot(equals(b.hashCode)));
+      });
+
+      test('may reuse a conventional kind under another name', () {
+        final aliased = OperationType.custom(
+          handler,
+          kind: OperationType.kindInsert,
+          name: 'append',
+        );
+
+        expect(aliased.kind, equals(OperationType.kindInsert));
+        expect(aliased, isNot(equals(OperationType.insert(handler))));
+      });
+
+      test('rejects a kind that would collide with the stamp flag', () {
+        expect(
+          () => OperationType.custom(handler, kind: 128, name: 'nope'),
+          throwsA(isA<ArgumentError>()),
+        );
+        expect(
+          () => OperationType.custom(handler, kind: 255, name: 'nope'),
+          throwsA(isA<ArgumentError>()),
+        );
+      });
+
+      test('rejects a negative kind', () {
+        expect(
+          () => OperationType.custom(handler, kind: -1, name: 'nope'),
+          throwsA(isA<ArgumentError>()),
+        );
+      });
+
+      test('accepts the boundary value', () {
+        expect(
+          OperationType.custom(
+            handler,
+            kind: OperationType.maxKind,
+            name: 'edge',
+          ).kind,
+          equals(127),
+        );
+      });
+    });
+
+    group('wellKnownName', () {
+      test('names the four conventional kinds', () {
+        expect(
+          OperationType.wellKnownName(OperationType.kindInsert),
+          equals('insert'),
+        );
+        expect(
+          OperationType.wellKnownName(OperationType.kindDelete),
+          equals('delete'),
+        );
+        expect(
+          OperationType.wellKnownName(OperationType.kindUpdate),
+          equals('update'),
+        );
+        expect(
+          OperationType.wellKnownName(OperationType.kindMove),
+          equals('move'),
+        );
+      });
+
+      test('returns null past them, because the meaning is handler-scoped', () {
+        expect(OperationType.wellKnownName(4), isNull);
+        expect(OperationType.wellKnownName(99), isNull);
+      });
     });
   });
 }
