@@ -215,14 +215,17 @@ class CRDTFugueTextHandler
     );
   }
 
+  /// Writes the run as plain WTF-8, one sequence per element and nothing
+  /// else: an element is one rune, and a rune is one WTF-8 sequence, so the
+  /// blob is self-delimiting and ASCII text costs one byte per character.
   @override
-  Uint8List encodeValue(String value) {
-    return Wtf8.encode(value);
+  Uint8List encodeRun(List<String> values) {
+    return Wtf8.encodeAll(values);
   }
 
   @override
-  String decodeValue(Uint8List bytes) {
-    return Wtf8.decode(bytes);
+  List<String> decodeRun(Uint8List blob, int length) {
+    return Wtf8.decodeCodePoints(blob);
   }
 
   /// Returns a text representation of this handler

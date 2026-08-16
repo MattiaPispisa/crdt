@@ -909,31 +909,6 @@ void main() {
           expect(peerText.value, reloadedText.value);
         },
       );
-
-      test(
-        'a snapshot written before the element id floor stays readable',
-        () {
-          final peerId = PeerId.generate();
-          final doc = CRDTDocument(peerId: peerId);
-          CRDTFugueTextHandler(doc, 'text').insert(0, 'legacy');
-
-          // Older versions wrote the node list and nothing else.
-          final legacy = Snapshot.create(
-            versionVector: doc.getVersionVector(),
-            data: {
-              'text': _nodesOnlySnapshotBlob(doc.takeSnapshot().data['text']!),
-            },
-          );
-
-          final reloaded = CRDTDocument(peerId: peerId);
-          final reloadedText = CRDTFugueTextHandler(reloaded, 'text');
-          reloaded.importSnapshot(legacy);
-
-          expect(reloadedText.value, 'legacy');
-          expect(() => reloadedText.insert(6, '!'), returnsNormally);
-          expect(reloadedText.value, 'legacy!');
-        },
-      );
     });
 
     test(
@@ -1177,6 +1152,37 @@ void main() {
 
         expect(reloadedText.value, equals('😀 x 𐐷'));
       });
+
+      // Two lone surrogates side by side are two elements that read as one
+      // emoji. The snapshot run holds them with no framing of its own, so
+      // only the WTF-8 sequence boundaries keep them apart.
+      test('two adjacent lone surrogates stay two elements over a snapshot',
+          () {
+        final high = String.fromCharCode(0xD83D);
+        final low = String.fromCharCode(0xDE00);
+
+        final doc = CRDTDocument();
+        final text = CRDTFugueTextHandler(doc, 'text')
+          ..insert(0, high)
+          ..insert(1, low);
+        expect(text.length, equals(2));
+
+        final snapBytes = doc.takeSnapshot(pruneHistory: false).toBytes();
+
+        final reloaded = CRDTDocument(
+          peerId: doc.peerId,
+          documentId: doc.documentId,
+        );
+        final reloadedText = CRDTFugueTextHandler(reloaded, 'text');
+        reloaded.import(snapshot: Snapshot.fromBytes(snapBytes));
+
+        expect(reloadedText.length, equals(2));
+        expect(reloadedText.value.codeUnits, equals([0xD83D, 0xDE00]));
+        // Deleting the first half leaves the second, which a fused element
+        // could not do.
+        reloadedText.delete(0, 1);
+        expect(reloadedText.value.codeUnits, equals([0xDE00]));
+      });
     });
 
     test(
@@ -1358,22 +1364,4 @@ void main() {
       });
     });
   });
-}
-
-/// Truncates a Fugue sequence snapshot blob right after its node list,
-/// reproducing the layout written before the element id floor trailer existed.
-Uint8List _nodesOnlySnapshotBlob(Uint8List blob) {
-  var offset = 0;
-  final countRecord = UVarint.read(blob, offset: offset);
-  offset = countRecord.nextOffset;
-
-  for (var i = 0; i < countRecord.value; i += 1) {
-    final idLength = UVarint.read(blob, offset: offset);
-    offset = idLength.nextOffset + idLength.value;
-
-    final valueLength = UVarint.read(blob, offset: offset);
-    offset = valueLength.nextOffset + valueLength.value;
-  }
-
-  return Uint8List.sublistView(blob, 0, offset);
 }

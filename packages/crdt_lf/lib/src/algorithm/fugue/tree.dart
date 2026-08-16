@@ -112,13 +112,70 @@ class FugueTree<T> {
   /// Returns all non-deleted nodes in the correct order
   List<FugueValueNode<T>> nodes() {
     final result = <FugueValueNode<T>>[];
+    forEachLiveNode((id, value) {
+      result.add(FugueValueNode<T>(id: id, value: value));
+    });
+    return result;
+  }
+
+  /// Calls [action] on every non-deleted node, in sequence order.
+  ///
+  /// The streaming form of [nodes]: a caller that only reads each node once
+  /// pays nothing for the list.
+  void forEachLiveNode(void Function(FugueElementID id, T value) action) {
     _index.forEachLive((id) {
       final value = _nodes[id]!.node.value;
       if (value != null) {
-        result.add(FugueValueNode<T>(id: id, value: value));
+        action(id, value);
       }
     });
-    return result;
+  }
+
+  /// The last-writer-wins stamps of the nodes an [update] overwrote.
+  ///
+  /// Bounded by the live nodes, because [delete] evicts. A snapshot has to
+  /// carry them: without them a restored document accepts an update it had
+  /// already rejected, and quietly loses the value that had won.
+  Map<FugueElementID, OperationStamp> get stamps =>
+      Map<FugueElementID, OperationStamp>.unmodifiable(_stamps);
+
+  /// Seeds an empty tree with [nodes], in sequence order, plus their [stamps].
+  ///
+  /// Node for node this is what `iterableInsert(0, nodes)` builds — a right
+  /// spine hanging off the root — but it links the nodes directly and builds
+  /// the positional index with a single [SqrtDecomposition.bulkBuild]. That
+  /// turns the seed from n insertions of `O(√n)` into `O(n)`, which is the
+  /// whole cost of opening a document from a snapshot.
+  void bulkSeed(
+    List<FugueValueNode<T>> nodes,
+    Map<FugueElementID, OperationStamp> stamps,
+  ) {
+    assert(_nodes.length == 1, 'bulkSeed expects an empty tree');
+    if (nodes.isEmpty) {
+      return;
+    }
+
+    var parentID = _rootID;
+    for (final node in nodes) {
+      _nodes[node.id] = FugueNodeTriple<T>(
+        node: FugueNode<T>(
+          id: node.id,
+          value: node.value,
+          parentID: parentID,
+          side: FugueSide.right,
+        ),
+        leftChildren: [],
+        rightChildren: [],
+      );
+      _nodes[parentID]!.rightChildren.add(node.id);
+      parentID = node.id;
+    }
+
+    _index.bulkBuild(
+      nodes.map((node) => node.id).toList(),
+      List<bool>.filled(nodes.length, true),
+    );
+    _stamps.addAll(stamps);
   }
 
   /// Inserts a list of nodes into the tree at the specified index.

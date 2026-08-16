@@ -1,0 +1,200 @@
+import 'dart:typed_data';
+
+import 'package:crdt_lf/crdt_lf.dart';
+import 'package:crdt_lf/src/algorithm/fugue/tree.dart';
+import 'package:crdt_lf/src/handler/fugue/fugue_snapshot.dart';
+import 'package:hlc_dart/hlc_dart.dart';
+import 'package:test/test.dart';
+
+/// One ASCII byte per value, so the framing is what the assertions see.
+Uint8List _encodeRun(List<String> values) =>
+    Uint8List.fromList(values.join().codeUnits);
+
+List<String> _decodeRun(Uint8List blob, int length) =>
+    String.fromCharCodes(blob).split('');
+
+OperationStamp _stamp(PeerId peer, int l) =>
+    OperationStamp(hlc: HybridLogicalClock(l: l, c: 0), peerId: peer);
+
+/// Appends [values] to [tree], each one after the last.
+void _append(FugueTree<String> tree, PeerId peer, int from, String values) {
+  var counter = from;
+  for (final value in values.split('')) {
+    tree.insert(
+      newID: FugueElementID(peer, counter),
+      value: value,
+      leftOrigin: counter == from
+          ? tree.nodes().isEmpty
+              ? FugueElementID.nullID()
+              : tree.nodes().last.id
+          : FugueElementID(peer, counter - 1),
+      rightOrigin: FugueElementID.nullID(),
+    );
+    counter += 1;
+  }
+}
+
+void main() {
+  final peerA = PeerId.parse('00000000-0000-4000-8000-00000000000a');
+  final peerB = PeerId.parse('00000000-0000-4000-8000-00000000000b');
+
+  Uint8List write(FugueTree<String> tree, Map<PeerId, int> floor) =>
+      FugueSnapshot.write<String>(
+        tree: tree,
+        floor: floor,
+        encodeRun: _encodeRun,
+      );
+
+  FugueSnapshotData<String> read(Uint8List bytes) =>
+      FugueSnapshot.read<String>(bytes, decodeRun: _decodeRun);
+
+  group('FugueSnapshot', () {
+    test('round-trips nodes, stamps and floor through a restored tree', () {
+      final tree = FugueTree<String>.empty();
+      _append(tree, peerA, 0, 'abc');
+      _append(tree, peerB, 0, 'de');
+      _append(tree, peerA, 3, 'f');
+      tree
+        ..delete(FugueElementID(peerA, 1))
+        ..update(
+          nodeID: FugueElementID(peerB, 1),
+          value: 'E',
+          stamp: _stamp(peerB, 7),
+        );
+
+      final floor = {peerA: 3, peerB: 1};
+      final data = read(write(tree, floor));
+
+      final restored = FugueTree<String>.empty()
+        ..bulkSeed(data.nodes, data.stamps);
+
+      expect(restored.values(), equals(tree.values()));
+      expect(
+        restored.nodes().map((n) => n.id).toList(),
+        equals(tree.nodes().map((n) => n.id).toList()),
+      );
+      for (var i = 0; i < tree.nodes().length; i++) {
+        expect(restored.findNodeAtPosition(i), equals(tree.nodes()[i].id));
+      }
+      expect(restored.stamps, equals(tree.stamps));
+      expect(data.floor, equals(floor));
+    });
+
+    // Without the stamps a snapshot would let an update this document had
+    // already rejected win on reload: a lost update nobody sees.
+    test('a restored tree still refuses an update older than the one it kept',
+        () {
+      final tree = FugueTree<String>.empty();
+      _append(tree, peerA, 0, 'ab');
+      tree.update(
+        nodeID: FugueElementID(peerA, 0),
+        value: 'A',
+        stamp: _stamp(peerA, 20),
+      );
+
+      final data = read(write(tree, {peerA: 1}));
+      final restored = FugueTree<String>.empty()
+        ..bulkSeed(data.nodes, data.stamps);
+
+      expect(
+        restored.update(
+          nodeID: FugueElementID(peerA, 0),
+          value: 'stale',
+          stamp: _stamp(peerA, 10),
+        ),
+        isFalse,
+      );
+      expect(restored.values(), equals(['A', 'b']));
+    });
+
+    // The point of the run framing: one peer typing into a document spends a
+    // handful of bytes on ids instead of one id per element.
+    test('a single peer writing in order collapses into one run', () {
+      final tree = FugueTree<String>.empty();
+      _append(tree, peerA, 0, 'a' * 500);
+
+      final bytes = write(tree, {peerA: 499});
+      final runCount = UVarint.read(bytes, offset: 1).value;
+
+      expect(runCount, equals(1));
+      expect(read(bytes).nodes, hasLength(500));
+      // 500 values, one id, one floor entry: nowhere near an id per element.
+      expect(bytes.length, lessThan(600));
+    });
+
+    test('a gap in the counters opens a new run', () {
+      final tree = FugueTree<String>.empty();
+      _append(tree, peerA, 0, 'abc');
+      // Deleting the middle leaves counters 0 and 2 next to each other.
+      tree.delete(FugueElementID(peerA, 1));
+
+      final bytes = write(tree, {peerA: 2});
+      expect(UVarint.read(bytes, offset: 1).value, equals(2));
+      expect(
+        read(bytes).nodes.map((n) => n.value).toList(),
+        equals(['a', 'c']),
+      );
+    });
+
+    test('an empty tree round-trips', () {
+      final data = read(write(FugueTree<String>.empty(), {}));
+      expect(data.nodes, isEmpty);
+      expect(data.stamps, isEmpty);
+      expect(data.floor, isEmpty);
+    });
+
+    group('refuses', () {
+      late Uint8List valid;
+
+      setUp(() {
+        final tree = FugueTree<String>.empty();
+        _append(tree, peerA, 0, 'abc');
+        valid = write(tree, {peerA: 2});
+      });
+
+      test('an empty buffer', () {
+        expect(() => read(Uint8List(0)), throwsFormatException);
+      });
+
+      test('a version this build does not write', () {
+        for (final version in [0, 2, 255]) {
+          final other = Uint8List.fromList(valid)..[0] = version;
+          expect(
+            () => read(other),
+            throwsA(
+              isA<FormatException>().having(
+                (e) => e.message,
+                'message',
+                contains('Unsupported Fugue snapshot version: $version'),
+              ),
+            ),
+          );
+        }
+      });
+
+      test('a buffer that stops before the floor', () {
+        expect(
+          () => read(Uint8List.sublistView(valid, 0, valid.length - 1)),
+          throwsFormatException,
+        );
+      });
+
+      test('a run whose blob holds fewer values than it declares', () {
+        // The run of three declares three, the decoder finds two.
+        expect(
+          () => FugueSnapshot.read<String>(
+            valid,
+            decodeRun: (blob, length) => _decodeRun(blob, length)..removeLast(),
+          ),
+          throwsA(
+            isA<FormatException>().having(
+              (e) => e.message,
+              'message',
+              contains('declares 3 elements but decodes to 2'),
+            ),
+          ),
+        );
+      });
+    });
+  });
+}

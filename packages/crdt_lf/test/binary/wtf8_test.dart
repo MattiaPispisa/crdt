@@ -87,5 +87,43 @@ void main() {
         );
       }
     });
+
+    group('encodeAll / decodeCodePoints', () {
+      test('round-trips one value per code point', () {
+        final values = ['a', 'é', '日', '😀', '\n'];
+        expect(
+          Wtf8.decodeCodePoints(Wtf8.encodeAll(values)),
+          equals(values),
+        );
+      });
+
+      // This is the pair the Fugue snapshot run framing rests on. Going
+      // through the whole string on either side would fuse the two halves
+      // into one emoji, turning two elements into one.
+      test('keeps two adjacent lone surrogates apart', () {
+        final high = String.fromCharCode(0xD83D);
+        final low = String.fromCharCode(0xDE00);
+
+        final bytes = Wtf8.encodeAll([high, low]);
+        expect(bytes, hasLength(6)); // two 3-byte sequences, not one 4-byte
+        expect(Wtf8.decodeCodePoints(bytes), equals([high, low]));
+
+        // What the naive route would have produced instead.
+        expect(Wtf8.encode(high + low), hasLength(4));
+        expect(Wtf8.decodeCodePoints(Wtf8.encode(high + low)), equals(['😀']));
+      });
+
+      test('an empty run round-trips to nothing', () {
+        expect(Wtf8.encodeAll(const []), isEmpty);
+        expect(Wtf8.decodeCodePoints(Uint8List(0)), isEmpty);
+      });
+
+      test('throws on a sequence cut short by the end of the buffer', () {
+        expect(
+          () => Wtf8.decodeCodePoints(Uint8List.fromList([0x61, 0xF0, 0x9F])),
+          throwsFormatException,
+        );
+      });
+    });
   });
 }

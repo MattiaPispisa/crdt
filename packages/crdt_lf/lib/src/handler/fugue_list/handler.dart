@@ -167,11 +167,35 @@ class CRDTFugueListHandler<T>
     );
   }
 
+  /// Prefixes every value with its length: a [ValueCodec] is free to produce
+  /// anything, so nothing else tells one value from the next inside a run.
   @override
-  Uint8List encodeValue(T value) => _valueCodec.encode(value);
+  Uint8List encodeRun(List<T> values) {
+    final out = BytesBuilder(copy: false);
+    for (final value in values) {
+      final bytes = _valueCodec.encode(value);
+      UVarint.write(bytes.length, out);
+      out.add(bytes);
+    }
+    return out.toBytes();
+  }
 
   @override
-  T decodeValue(Uint8List bytes) => _valueCodec.decode(bytes);
+  List<T> decodeRun(Uint8List blob, int length) {
+    final values = <T>[];
+    var offset = 0;
+    for (var i = 0; i < length; i += 1) {
+      final lenRec = UVarint.read(blob, offset: offset);
+      offset = lenRec.nextOffset;
+      final end = offset + lenRec.value;
+      if (end > blob.length) {
+        throw const FormatException('Truncated Fugue list snapshot value');
+      }
+      values.add(_valueCodec.decode(Uint8List.sublistView(blob, offset, end)));
+      offset = end;
+    }
+    return values;
+  }
 
   /// Returns a string representation of this handler
   @override

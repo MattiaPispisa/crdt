@@ -9,6 +9,8 @@ const _kElements = 10000;
 ///
 /// With [tombstones] on, every other element is deleted, so the live ids stop
 /// being consecutive — the case the snapshot run framing cannot compress.
+/// The state is read before returning, so the caller times the snapshot and
+/// not the history replay behind it.
 CRDTDocument _document({required bool tombstones}) {
   final doc = CRDTDocument(peerId: PeerId.generate());
   final text = CRDTFugueTextHandler(doc, 'text');
@@ -22,6 +24,7 @@ CRDTDocument _document({required bool tombstones}) {
       }
     });
   }
+  text.value;
   return doc;
 }
 
