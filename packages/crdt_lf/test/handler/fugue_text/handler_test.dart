@@ -1,5 +1,9 @@
 import 'dart:typed_data';
 
+// Only the barrel, on purpose: the Fugue tree and its nodes are not exported,
+// but everything this file exercises has to stay reachable by a user. In
+// particular `FugueElementID`, which 'anchors are serializable and resolvable
+// on another peer' round-trips through bytes. Do not add an `src/` import here.
 import 'package:crdt_lf/crdt_lf.dart';
 import 'package:hlc_dart/hlc_dart.dart';
 import 'package:test/test.dart';

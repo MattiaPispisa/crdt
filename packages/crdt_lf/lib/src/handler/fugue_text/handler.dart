@@ -1,6 +1,8 @@
 import 'dart:typed_data';
 
 import 'package:crdt_lf/crdt_lf.dart';
+import 'package:crdt_lf/src/algorithm/fugue/tree.dart';
+import 'package:crdt_lf/src/algorithm/fugue/value_node.dart';
 import 'package:crdt_lf/src/handler/fugue/fugue_sequence_handler.dart';
 import 'package:crdt_lf/src/handler/handler_type.dart';
 
@@ -229,12 +231,13 @@ class CRDTFugueTextHandler
 /// State of the [CRDTFugueTextHandler]: the text is the concatenation of all
 /// live node values.
 class FugueTextState extends FugueState<String, String> {
-  /// Creates a text state over [tree].
-  FugueTextState(FugueTree<String> tree) : super(tree, _join);
+  // Private: the tree it wraps is implementation detail, so naming it in a
+  // public signature would leak it back out.
+  FugueTextState._(FugueTree<String> tree) : super(tree, _join);
 
   /// Creates an empty text state.
   factory FugueTextState.empty() {
-    return FugueTextState(FugueTree<String>.empty());
+    return FugueTextState._(FugueTree<String>.empty());
   }
 
   static String _join(FugueTree<String> tree) => tree.values().join();

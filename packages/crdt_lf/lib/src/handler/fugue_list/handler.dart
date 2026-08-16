@@ -1,6 +1,8 @@
 import 'dart:typed_data';
 
 import 'package:crdt_lf/crdt_lf.dart';
+import 'package:crdt_lf/src/algorithm/fugue/tree.dart';
+import 'package:crdt_lf/src/algorithm/fugue/value_node.dart';
 import 'package:crdt_lf/src/handler/fugue/fugue_sequence_handler.dart';
 
 part 'operation.dart';
@@ -183,12 +185,13 @@ class CRDTFugueListHandler<T>
 
 /// State of the [CRDTFugueListHandler]: the list of all live node values.
 class FugueListState<T> extends FugueState<T, List<T>> {
-  /// Creates a list state over [tree].
-  FugueListState(FugueTree<T> tree) : super(tree, _collect);
+  // Private: the tree it wraps is implementation detail, so naming it in a
+  // public signature would leak it back out.
+  FugueListState._(FugueTree<T> tree) : super(tree, _collect);
 
   /// Creates an empty list state.
   factory FugueListState.empty() {
-    return FugueListState(FugueTree<T>.empty());
+    return FugueListState._(FugueTree<T>.empty());
   }
 
   static List<T> _collect<T>(FugueTree<T> tree) => tree.values();

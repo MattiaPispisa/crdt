@@ -2,6 +2,8 @@ import 'dart:math';
 
 import 'package:benchmark_harness/benchmark_harness.dart';
 import 'package:crdt_lf/crdt_lf.dart';
+import 'package:crdt_lf/src/algorithm/fugue/tree.dart';
+import 'package:crdt_lf/src/algorithm/fugue/value_node.dart';
 
 import '../common/custom_emitter.dart';
 

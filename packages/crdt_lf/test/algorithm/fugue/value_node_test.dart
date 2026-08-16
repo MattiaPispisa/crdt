@@ -1,4 +1,5 @@
 import 'package:crdt_lf/crdt_lf.dart';
+import 'package:crdt_lf/src/algorithm/fugue/value_node.dart';
 import 'package:test/test.dart';
 
 void main() {

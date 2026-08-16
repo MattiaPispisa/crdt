@@ -1,4 +1,3 @@
-import 'package:crdt_lf/crdt_lf.dart' show FugueTree;
 import 'package:crdt_lf/src/algorithm/fugue/element_id.dart';
 import 'package:crdt_lf/src/algorithm/fugue/tree.dart' show FugueTree;
 
