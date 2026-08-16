@@ -254,6 +254,7 @@ class CRDTORMapHandler<K, V> extends Handler<ORMapState<K, V>> {
   ORMapState<K, V>? incrementCachedState({
     required Operation operation,
     required ORMapState<K, V> state,
+    DeltaSink<Object?>? sink,
   }) {
     // The cached state is never exposed by this handler, so it can be
     // mutated in place instead of deep-copied on every operation.

@@ -232,6 +232,7 @@ class CRDTTextHandler extends Handler<String> {
   String? incrementCachedState({
     required Operation operation,
     required String state,
+    DeltaSink<Object?>? sink,
   }) {
     if (operation is _TextInsertOperation) {
       final at = RuneOffsets.utf16Offset(state, operation.index);

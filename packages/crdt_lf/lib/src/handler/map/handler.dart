@@ -239,6 +239,7 @@ class CRDTMapHandler<T> extends Handler<Map<String, T>> {
   Map<String, T>? incrementCachedState({
     required Operation operation,
     required Map<String, T> state,
+    DeltaSink<Object?>? sink,
   }) {
     // Mutate the cached state in place instead of copying it on
     // every operation.

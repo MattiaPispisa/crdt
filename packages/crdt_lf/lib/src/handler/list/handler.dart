@@ -249,6 +249,7 @@ class CRDTListHandler<T> extends Handler<List<T>> {
   List<T>? incrementCachedState({
     required Operation operation,
     required List<T> state,
+    DeltaSink<Object?>? sink,
   }) {
     // Mutate the cached state in place instead of copying it on
     // every operation.

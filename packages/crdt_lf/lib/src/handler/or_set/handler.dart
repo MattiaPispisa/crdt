@@ -221,6 +221,7 @@ class CRDTORSetHandler<T> extends Handler<ORSetState<T>> {
   ORSetState<T>? incrementCachedState({
     required Operation operation,
     required ORSetState<T> state,
+    DeltaSink<Object?>? sink,
   }) {
     // The cached state is never exposed by this handler, so it can be
     // mutated in place instead of deep-copied on every operation.

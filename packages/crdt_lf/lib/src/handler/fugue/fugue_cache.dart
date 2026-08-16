@@ -112,6 +112,7 @@ mixin FugueCache<S> on Handler<S> {
   S? incrementCachedState({
     required Operation operation,
     required S state,
+    DeltaSink<Object?>? sink,
   }) {
     // The state is mutated in place; on failure the (possibly half-mutated)
     // cache is invalidated by returning null.

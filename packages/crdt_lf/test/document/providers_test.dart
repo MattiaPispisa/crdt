@@ -547,6 +547,7 @@ class _UnappliableFugueText extends CRDTFugueTextHandler {
   FugueTextState? incrementCachedState({
     required Operation operation,
     required FugueTextState state,
+    DeltaSink<Object?>? sink,
   }) =>
       null;
 }
@@ -573,6 +574,7 @@ class _CountingListHandler extends CRDTListHandler<String> {
   List<String>? incrementCachedState({
     required Operation operation,
     required List<String> state,
+    DeltaSink<Object?>? sink,
   }) {
     increments += 1;
     return super.incrementCachedState(operation: operation, state: state);
@@ -592,6 +594,7 @@ class _FakeCRDTListHandler extends CRDTListHandler<String> {
   List<String>? incrementCachedState({
     required Operation operation,
     required List<String> state,
+    DeltaSink<Object?>? sink,
   }) {
     _incrementedCount++;
 

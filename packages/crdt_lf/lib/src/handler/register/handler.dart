@@ -96,6 +96,7 @@ class CRDTRegisterHandler<T> extends Handler<T> {
   T? incrementCachedState({
     required Operation operation,
     required T state,
+    DeltaSink<Object?>? sink,
   }) {
     // Only an operation that is the latest in clock order reaches this: a
     // local write, or a remote change newer than everything folded in so far.

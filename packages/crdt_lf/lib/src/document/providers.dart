@@ -185,7 +185,7 @@ mixin CacheableStateProvider<T> on DocumentConsumer {
   /// read recomputes from the history — the same failure policy
   /// [_internalIncrementCachedState] uses. A decode that *throws* drops the
   /// cache too, then rethrows: see the comment on the loop.
-  void _drainPendingRemoteChanges() {
+  void _drainPendingRemoteChanges({DeltaSink<Object?>? sink}) {
     final pending = _pendingRemoteChanges;
     if (pending == null) {
       return;
@@ -215,7 +215,11 @@ mixin CacheableStateProvider<T> on DocumentConsumer {
           invalidateCache();
           return;
         }
-        final next = incrementCachedState(operation: operation, state: state);
+        final next = incrementCachedState(
+          operation: operation,
+          state: state,
+          sink: sink,
+        );
         if (next == null) {
           invalidateCache();
           return;
@@ -248,7 +252,10 @@ mixin CacheableStateProvider<T> on DocumentConsumer {
   /// honoring [useIncrementalCacheUpdate]. Falls back to [invalidateCache]
   /// when the host opts out, has no cached state, or cannot apply the
   /// operation incrementally.
-  void _internalIncrementCachedState({required Operation operation}) {
+  void _internalIncrementCachedState({
+    required Operation operation,
+    DeltaSink<Object?>? sink,
+  }) {
     if (!useIncrementalCacheUpdate) {
       invalidateCache();
       return;
@@ -256,7 +263,7 @@ mixin CacheableStateProvider<T> on DocumentConsumer {
 
     // A local operation must never land on a state that still has remote
     // changes waiting, so flush them first.
-    _drainPendingRemoteChanges();
+    _drainPendingRemoteChanges(sink: sink);
 
     final state = _cachedState;
     if (state == null) {
@@ -266,6 +273,7 @@ mixin CacheableStateProvider<T> on DocumentConsumer {
     final newState = incrementCachedState(
       operation: operation,
       state: state,
+      sink: sink,
     );
 
     if (newState == null) {
@@ -287,9 +295,13 @@ mixin CacheableStateProvider<T> on DocumentConsumer {
   ///
   /// May mutate [state] in place and return it. The default implementation
   /// returns `null`, i.e. no incremental path.
+  ///
+  /// [sink] is always `null` today; see [DeltaSink] for why the parameter is
+  /// here at all. An override declares it and ignores it.
   T? incrementCachedState({
     required Operation operation,
     required T state,
+    DeltaSink<Object?>? sink,
   }) {
     return null;
   }
@@ -386,4 +398,19 @@ extension _HandlerHelper on Handler<dynamic> {
     }
     return true;
   }
+}
+
+/// Collects the positional effects of applying operations.
+///
+/// Nothing produces a sink yet: the parameter on
+/// [CacheableStateProvider.incrementCachedState] exists so that an
+/// observation API can be added without changing that signature. In Dart an
+/// override has to declare the optional parameters of the method it
+/// overrides, so introducing it later would break every custom handler.
+///
+/// It is `null` everywhere nobody is listening, which costs the apply path
+/// one null check.
+abstract class DeltaSink<D> {
+  /// Records one delta.
+  void add(D delta);
 }

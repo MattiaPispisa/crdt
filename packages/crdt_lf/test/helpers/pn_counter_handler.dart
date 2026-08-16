@@ -97,6 +97,7 @@ class PNCounterHandler extends Handler<int> {
   int? incrementCachedState({
     required Operation operation,
     required int state,
+    DeltaSink<Object?>? sink,
   }) {
     if (operation is PNCounterIncrementOperation) {
       return state + operation.delta;
