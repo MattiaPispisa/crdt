@@ -9,18 +9,7 @@ class _FugueTextOperationFactory {
   final Handler<dynamic> handler;
 
   /// Creates an operation from bytes.
-  Operation? fromBytes(Uint8List operationBytes) {
-    final env = OperationEnvelopeCodec.decode(operationBytes);
-    if (env.handlerId != handler.id) {
-      return null;
-    }
-
-    if (env.handlerType != handler.handlerType) {
-      return null;
-    }
-
-    final body = Uint8List.sublistView(operationBytes, env.bodyOffset);
-
+  Operation fromBytes(OperationEnvelope env, Uint8List body) {
     if (env.kind == OperationType.kindInsert) {
       return _FugueTextInsertOperation.fromBodyBytes(handler, body);
     } else if (env.kind == OperationType.kindDelete) {

@@ -1162,20 +1162,23 @@ void main() {
       restored.importSnapshot(target.takeSnapshot());
       expect(restoredText.value, 'hello world');
     });
-    // These three cover the whole contract of OperationFactory. It is the same
-    // code in all nine handlers, so it is asserted once, here.
+    // The factory is the same code in all nine handlers, so its contract is
+    // asserted once, here. Addressing is no longer part of it: the framework
+    // checks the envelope belongs to this handler before calling the factory.
     group('operation decoding', () {
       test('raises on a kind this build cannot decode', () {
         final handler = CRDTFugueTextHandler(CRDTDocument(), 'text1');
-        final payload = OperationEnvelopeCodec.encode(
-          handlerType: handler.handlerType,
-          handlerId: handler.id,
-          kind: 99,
-          body: Uint8List(0),
+        final envelope = OperationEnvelopeCodec.decode(
+          OperationEnvelopeCodec.encode(
+            handlerType: handler.handlerType,
+            handlerId: handler.id,
+            kind: 99,
+            body: Uint8List(0),
+          ),
         );
 
         expect(
-          () => handler.operationFactory(payload),
+          () => handler.operationFactory(envelope, Uint8List(0)),
           throwsA(
             isA<UnknownOperationKindException>()
                 .having((e) => e.kind, 'kind', 99)
@@ -1189,28 +1192,29 @@ void main() {
         );
       });
 
-      test('answers null for a change addressed to another handler id', () {
-        final handler = CRDTFugueTextHandler(CRDTDocument(), 'text1');
-        final payload = OperationEnvelopeCodec.encode(
-          handlerType: handler.handlerType,
-          handlerId: 'text2',
-          kind: 99,
-          body: Uint8List(0),
+      test('another handler type is declined before the kind is read', () {
+        // Order matters here: an unknown kind under a foreign type tag is
+        // somebody else's business. Checking the kind first would turn every
+        // handler that shares an id into a reader of everyone else's changes.
+        final doc = CRDTDocument();
+        final handler = CRDTFugueTextHandler(doc, 'text1')..insert(0, 'Hello');
+
+        final author = PeerId.generate();
+        doc.applyChange(
+          Change.fromPayloadBytes(
+            id: OperationId(author, HybridLogicalClock(l: 100, c: 1)),
+            deps: {},
+            author: author,
+            payloadBytes: OperationEnvelopeCodec.encode(
+              handlerType: 'CRDTFugueListHandler<String>',
+              handlerId: handler.id,
+              kind: 99,
+              body: Uint8List(0),
+            ),
+          ),
         );
 
-        expect(handler.operationFactory(payload), isNull);
-      });
-
-      test('answers null for the same id under another handler type', () {
-        final handler = CRDTFugueTextHandler(CRDTDocument(), 'text1');
-        final payload = OperationEnvelopeCodec.encode(
-          handlerType: 'CRDTFugueListHandler<String>',
-          handlerId: handler.id,
-          kind: 99,
-          body: Uint8List(0),
-        );
-
-        expect(handler.operationFactory(payload), isNull);
+        expect(handler.value, 'Hello');
       });
 
       test('an undecodable change makes the handler raise on every read', () {

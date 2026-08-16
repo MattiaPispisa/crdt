@@ -26,18 +26,17 @@ void main() {
       expect(envelope.kind, equals(PNCounterHandler.incrementKind));
       expect(envelope.kind, greaterThan(OperationType.kindMove));
 
-      final operation = counter.operationFactory(change.payloadBytes());
+      final operation = counter.operations().single;
       expect(operation, isA<PNCounterIncrementOperation>());
-      expect((operation! as PNCounterIncrementOperation).delta, equals(300));
+      expect((operation as PNCounterIncrementOperation).delta, equals(300));
     });
 
     test('round-trips a negative delta', () {
       final doc = CRDTDocument(peerId: PeerId.generate());
       final counter = PNCounterHandler(doc, 'counter')..decrement(1000);
 
-      final change = doc.exportChanges().single;
-      final operation = counter.operationFactory(change.payloadBytes())!
-          as PNCounterIncrementOperation;
+      final operation =
+          counter.operations().single as PNCounterIncrementOperation;
 
       expect(operation.delta, equals(-1000));
     });
@@ -95,15 +94,19 @@ void main() {
       expect(marker.value, equals(3));
     });
 
-    test("a change for the other handler is not this handler's to decode", () {
-      final doc = CRDTDocument(peerId: PeerId.generate());
-      final counter = PNCounterHandler(doc, 'counter');
-      final marker = _MarkerHandler(doc, 'marker')..set(42);
+    test('declines a change that shares its id but not its handler type', () {
+      final markerDoc = CRDTDocument(peerId: PeerId.generate());
+      _MarkerHandler(markerDoc, 'shared').set(42);
 
-      final change = doc.exportChanges().single;
-      // Same kind byte, different handler type: not mine, and not an error.
-      expect(counter.operationFactory(change.payloadBytes()), isNull);
-      expect(marker.operationFactory(change.payloadBytes()), isNotNull);
+      // Same handler id, so the change is routed here, and the same kind
+      // byte, so only the handler type tells the two apart. Being declined is
+      // the right answer; reading it would be the wrong one.
+      final counterDoc = CRDTDocument(peerId: PeerId.generate());
+      final counter = PNCounterHandler(counterDoc, 'shared');
+      counterDoc.importChanges(markerDoc.exportChanges());
+
+      expect(counter.operations(), isEmpty);
+      expect(counter.value, equals(0));
     });
   });
 }
@@ -129,13 +132,7 @@ class _MarkerHandler extends Handler<int> {
   @override
   late final OperationFactory operationFactory = _fromBytes;
 
-  Operation? _fromBytes(Uint8List operationBytes) {
-    final env = OperationEnvelopeCodec.decode(operationBytes);
-    if (env.handlerId != id || env.handlerType != handlerType) {
-      return null;
-    }
-
-    final body = Uint8List.sublistView(operationBytes, env.bodyOffset);
+  Operation _fromBytes(OperationEnvelope env, Uint8List body) {
     if (env.kind == setKind) {
       return _MarkerSetOperation(
         id: id,
@@ -176,7 +173,7 @@ class _MarkerHandler extends Handler<int> {
 }
 
 class _MarkerSetOperation extends Operation {
-  const _MarkerSetOperation({
+  _MarkerSetOperation({
     required super.id,
     required super.type,
     required this.value,

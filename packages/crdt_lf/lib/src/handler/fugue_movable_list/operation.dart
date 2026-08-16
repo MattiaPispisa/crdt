@@ -7,17 +7,7 @@ class _FugueMovableListOperationFactory<T> {
   final CRDTFugueMovableListHandler<T> handler;
 
   /// Decodes an operation from its binary envelope.
-  Operation? fromBytes(Uint8List operationBytes) {
-    final env = OperationEnvelopeCodec.decode(operationBytes);
-    if (env.handlerId != handler.id) {
-      return null;
-    }
-    if (env.handlerType != handler.handlerType) {
-      return null;
-    }
-
-    final body = Uint8List.sublistView(operationBytes, env.bodyOffset);
-
+  Operation fromBytes(OperationEnvelope env, Uint8List body) {
     if (env.kind == OperationType.kindInsert) {
       return _MovableListInsertOperation<T>.fromBodyBytes(handler, body);
     } else if (env.kind == OperationType.kindMove) {

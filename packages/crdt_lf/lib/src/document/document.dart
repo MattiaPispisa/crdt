@@ -720,6 +720,18 @@ class CRDTDocument extends BaseCRDTDocument {
   void registerOperation(Operation operation) {
     _ensureNotDisposed('registerOperation');
 
+    final handler = _handlers[operation.id];
+    if (handler != null && handler.operationsAreStamped) {
+      // The tick [prepareMutation] performs, for the same reason: a stamp has
+      // to be strictly newer than everything this peer has already written, or
+      // a second write in the same millisecond would not beat the first.
+      //
+      // Minting here, before the operation is handed to anyone, is what lets
+      // the fold below read the stamp and the change built at commit carry it.
+      _tickClock();
+      operation.stamp = OperationStamp(hlc: _clock.copy(), peerId: _peerId);
+    }
+
     final openedImplicitTransaction = !isInTransaction;
 
     try {
@@ -729,7 +741,6 @@ class CRDTDocument extends BaseCRDTDocument {
 
       _transactionManager.handleOperation(operation);
 
-      final handler = _handlers[operation.id];
       if (handler != null) {
         handler._internalIncrementCachedState(operation: operation);
       }

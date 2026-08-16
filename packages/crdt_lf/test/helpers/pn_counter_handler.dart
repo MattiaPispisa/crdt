@@ -47,13 +47,7 @@ class PNCounterHandler extends Handler<int> {
   @override
   late final OperationFactory operationFactory = _fromBytes;
 
-  Operation? _fromBytes(Uint8List operationBytes) {
-    final env = OperationEnvelopeCodec.decode(operationBytes);
-    if (env.handlerId != id || env.handlerType != handlerType) {
-      return null;
-    }
-
-    final body = Uint8List.sublistView(operationBytes, env.bodyOffset);
+  Operation _fromBytes(OperationEnvelope env, Uint8List body) {
     if (env.kind == incrementKind) {
       return PNCounterIncrementOperation.fromBodyBytes(this, body);
     }
@@ -135,7 +129,7 @@ class PNCounterHandler extends Handler<int> {
 /// uvarint.
 class PNCounterIncrementOperation extends Operation {
   /// Creates an increment of [delta] for the handler addressed by [id].
-  const PNCounterIncrementOperation({
+  PNCounterIncrementOperation({
     required super.id,
     required super.type,
     required this.delta,

@@ -5,7 +5,7 @@ import 'package:crdt_lf/crdt_lf.dart';
 /// Abstract class for operations
 abstract class Operation {
   /// Constructor that initializes an operation
-  const Operation({
+  Operation({
     required this.type,
     required this.id,
   });
@@ -16,6 +16,14 @@ abstract class Operation {
   /// The ID of the handler that owns the operation
   final String id;
 
+  /// The last-writer-wins stamp of this operation; `null` when the handler
+  /// that owns it does not ask to be stamped.
+  ///
+  /// Set by the document, in `registerOperation` for a local operation and
+  /// from the envelope for one that arrived from another peer. A handler
+  /// reads it, it never writes it.
+  OperationStamp? stamp;
+
   /// Encodes the operation as bytes.
   ///
   /// This is the representation used inside [Change] to optimize memory usage.
@@ -25,6 +33,7 @@ abstract class Operation {
       handlerType: type.handler,
       handlerId: id,
       kind: type.kind,
+      stamp: stamp,
       body: body,
     );
   }
@@ -37,6 +46,7 @@ abstract class Operation {
     return {
       'id': id,
       'type': type.toPayload(),
+      if (stamp != null) 'stamp': stamp.toString(),
     };
   }
 }

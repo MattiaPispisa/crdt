@@ -4,17 +4,7 @@ class _ORMapOperationFactory<K, V> {
   _ORMapOperationFactory(this.handler);
   final CRDTORMapHandler<K, V> handler;
 
-  Operation? fromBytes(Uint8List operationBytes) {
-    final env = OperationEnvelopeCodec.decode(operationBytes);
-    if (env.handlerId != handler.id) {
-      return null;
-    }
-
-    if (env.handlerType != handler.handlerType) {
-      return null;
-    }
-
-    final body = Uint8List.sublistView(operationBytes, env.bodyOffset);
+  Operation fromBytes(OperationEnvelope env, Uint8List body) {
     if (env.kind == OperationType.kindInsert) {
       return _ORMapPutOperation<K, V>.fromBodyBytes(handler, body);
     } else if (env.kind == OperationType.kindDelete) {
@@ -32,7 +22,7 @@ class _ORMapOperationFactory<K, V> {
 /// Put operation for OR-Map
 /// It adds a new unique tag for the provided key-value pair.
 class _ORMapPutOperation<K, V> extends Operation {
-  const _ORMapPutOperation({
+  _ORMapPutOperation({
     required this.key,
     required this.value,
     required this.tag,
@@ -143,7 +133,7 @@ class _ORMapPutOperation<K, V> extends Operation {
 /// Remove operation for OR-Map
 /// It tombstones the provided tags that were observed for a key.
 class _ORMapRemoveOperation<K, V> extends Operation {
-  const _ORMapRemoveOperation({
+  _ORMapRemoveOperation({
     required this.key,
     required this.tags,
     required this.removeAll,

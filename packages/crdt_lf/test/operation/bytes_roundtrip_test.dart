@@ -1,8 +1,47 @@
 import 'package:crdt_lf/crdt_lf.dart';
 import 'package:test/test.dart';
 
+/// `[varint 15]'CRDTTextHandler'[varint 4]'text'` — the envelope prefix, the
+/// part the zero-decode routing compares byte for byte.
+const _textPrefix = <int>[
+  15, 67, 82, 68, 84, 84, 101, 120, 116, 72, 97, 110, 100, 108, 101, 114, //
+  4, 116, 101, 120, 116,
+];
+
 void main() {
   group('Operation bytes', () {
+    // Pinned on purpose, and captured from the encoder before it knew about
+    // stamps. A handler that does not ask to be stamped has to keep writing
+    // exactly these bytes: the stamp flag is bit 7 of the kind byte, so a
+    // build that sets it by mistake would be read wrong by every other peer,
+    // with no error anywhere. Delete this test and that breakage goes quiet.
+    test('an unstamped operation keeps the envelope it had before stamps', () {
+      final doc = CRDTDocument(
+        peerId: PeerId.parse('45ee6b65-b393-40b7-9755-8b66dc7d0518'),
+      );
+      CRDTTextHandler(doc, 'text')
+        ..insert(0, 'Hello')
+        ..delete(1, 2)
+        ..update(0, 'h');
+
+      final payloads = doc
+          .exportChanges()
+          .sorted()
+          .map((change) => change.payloadBytes().toList())
+          .toList();
+
+      expect(payloads, hasLength(3));
+      // kind 0, index 0, length 5, 'Hello'
+      expect(
+        payloads[0],
+        equals([..._textPrefix, 0, 0, 5, 72, 101, 108, 108, 111]),
+      );
+      // kind 1, index 1, count 2
+      expect(payloads[1], equals([..._textPrefix, 1, 1, 2]));
+      // kind 2, index 0, length 1, 'h'
+      expect(payloads[2], equals([..._textPrefix, 2, 0, 1, 104]));
+    });
+
     test('CRDTTextHandler operation bytes roundtrip', () {
       final doc = CRDTDocument(peerId: PeerId.generate());
       final text = CRDTTextHandler(doc, 'text')
@@ -11,14 +50,11 @@ void main() {
         ..delete(5, 1)
         ..update(0, 'h');
 
-      final changes = doc.exportChanges().sorted();
+      final operations = text.operations();
+      expect(operations, isNotEmpty);
 
-      // Decode operations from bytes and ensure payload is well-formed.
-      for (final change in changes) {
-        final op = text.operationFactory(change.payloadBytes());
-        expect(op, isNotNull);
-
-        final payload = op!.toPayload();
+      for (final operation in operations) {
+        final payload = operation.toPayload();
         expect(payload['id'], equals('text'));
         expect(payload['type'], isA<String>());
       }
@@ -32,13 +68,11 @@ void main() {
         ..update(0, 'A')
         ..delete(1, 1);
 
-      final changes = doc.exportChanges().sorted();
-      expect(changes, isNotEmpty);
+      final operations = list.operations();
+      expect(operations, isNotEmpty);
 
-      for (final change in changes) {
-        final op = list.operationFactory(change.payloadBytes());
-        expect(op, isNotNull);
-        final payload = op!.toPayload();
+      for (final operation in operations) {
+        final payload = operation.toPayload();
         expect(payload['id'], equals('list'));
         expect(payload['type'], isA<String>());
         expect(payload.containsKey('index'), isTrue);
@@ -53,13 +87,11 @@ void main() {
         ..update('k1', 'V1')
         ..delete('k2');
 
-      final changes = doc.exportChanges().sorted();
-      expect(changes, isNotEmpty);
+      final operations = map.operations();
+      expect(operations, isNotEmpty);
 
-      for (final change in changes) {
-        final op = map.operationFactory(change.payloadBytes());
-        expect(op, isNotNull);
-        final payload = op!.toPayload();
+      for (final operation in operations) {
+        final payload = operation.toPayload();
         expect(payload['id'], equals('map'));
         expect(payload['type'], isA<String>());
         expect(payload.containsKey('key'), isTrue);
@@ -73,13 +105,11 @@ void main() {
         ..add('y')
         ..remove('x');
 
-      final changes = doc.exportChanges().sorted();
-      expect(changes, isNotEmpty);
+      final operations = set.operations();
+      expect(operations, isNotEmpty);
 
-      for (final change in changes) {
-        final op = set.operationFactory(change.payloadBytes());
-        expect(op, isNotNull);
-        final payload = op!.toPayload();
+      for (final operation in operations) {
+        final payload = operation.toPayload();
         expect(payload['id'], equals('oset'));
         expect(payload['type'], isA<String>());
         expect(payload.containsKey('value'), isTrue);
@@ -93,13 +123,11 @@ void main() {
         ..put('k2', 2)
         ..remove('k1');
 
-      final changes = doc.exportChanges().sorted();
-      expect(changes, isNotEmpty);
+      final operations = orMap.operations();
+      expect(operations, isNotEmpty);
 
-      for (final change in changes) {
-        final op = orMap.operationFactory(change.payloadBytes());
-        expect(op, isNotNull);
-        final payload = op!.toPayload();
+      for (final operation in operations) {
+        final payload = operation.toPayload();
         expect(payload['id'], equals('omap'));
         expect(payload['type'], isA<String>());
         expect(payload.containsKey('key'), isTrue);

@@ -4,17 +4,7 @@ class _ListOperationFactory<T> {
   _ListOperationFactory(this.handler);
   final CRDTListHandler<T> handler;
 
-  Operation? fromBytes(Uint8List operationBytes) {
-    final env = OperationEnvelopeCodec.decode(operationBytes);
-    if (env.handlerId != handler.id) {
-      return null;
-    }
-
-    if (env.handlerType != handler.handlerType) {
-      return null;
-    }
-
-    final body = Uint8List.sublistView(operationBytes, env.bodyOffset);
+  Operation fromBytes(OperationEnvelope env, Uint8List body) {
     if (env.kind == OperationType.kindInsert) {
       return _ListInsertOperation<T>.fromBodyBytes(handler, body);
     } else if (env.kind == OperationType.kindDelete) {
@@ -32,7 +22,7 @@ class _ListOperationFactory<T> {
 }
 
 class _ListInsertOperation<T> extends Operation {
-  const _ListInsertOperation({
+  _ListInsertOperation({
     required this.index,
     required this.value,
     required this.valueCodec,
@@ -105,7 +95,7 @@ class _ListInsertOperation<T> extends Operation {
 }
 
 class _ListDeleteOperation<T> extends Operation {
-  const _ListDeleteOperation({
+  _ListDeleteOperation({
     required this.index,
     required this.count,
     required super.id,
@@ -163,7 +153,7 @@ class _ListDeleteOperation<T> extends Operation {
 }
 
 class _ListUpdateOperation<T> extends Operation {
-  const _ListUpdateOperation({
+  _ListUpdateOperation({
     required this.index,
     required this.value,
     required this.valueCodec,

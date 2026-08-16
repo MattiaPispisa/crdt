@@ -4,17 +4,7 @@ class _ORSetOperationFactory<T> {
   _ORSetOperationFactory(this.handler);
   final CRDTORSetHandler<T> handler;
 
-  Operation? fromBytes(Uint8List operationBytes) {
-    final env = OperationEnvelopeCodec.decode(operationBytes);
-    if (env.handlerId != handler.id) {
-      return null;
-    }
-
-    if (env.handlerType != handler.handlerType) {
-      return null;
-    }
-
-    final body = Uint8List.sublistView(operationBytes, env.bodyOffset);
+  Operation fromBytes(OperationEnvelope env, Uint8List body) {
     if (env.kind == OperationType.kindInsert) {
       return _ORSetAddOperation<T>.fromBodyBytes(handler, body);
     } else if (env.kind == OperationType.kindDelete) {
@@ -32,7 +22,7 @@ class _ORSetOperationFactory<T> {
 /// Add operation for OR-Set
 /// It adds a new unique tag for the provided value.
 class _ORSetAddOperation<T> extends Operation {
-  const _ORSetAddOperation({
+  _ORSetAddOperation({
     required this.value,
     required this.tag,
     required this.valueCodec,
@@ -115,7 +105,7 @@ class _ORSetAddOperation<T> extends Operation {
 /// Remove operation for OR-Set
 /// It tombstones the provided tags that were observed for a value.
 class _ORSetRemoveOperation<T> extends Operation {
-  const _ORSetRemoveOperation({
+  _ORSetRemoveOperation({
     required this.value,
     required this.tags,
     required this.removeAll,

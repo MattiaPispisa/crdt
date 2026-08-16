@@ -325,19 +325,19 @@ void main() {
       expect(otherText.value, 'hello world');
     });
 
-    test('a change the handler cannot decode is dropped by both paths', () {
-      // What a peer sees when a newer build sends an operation it does not
-      // know how to read.
+    test('a change for another handler type is skipped by both paths', () {
+      // The batch import groups changes by handler id alone, so a change can
+      // reach a handler that is not the one that wrote it.
       final other = CRDTDocument(peerId: PeerId.generate());
-      final otherText = _UndecodableFugueText(other, 'fugue');
+      final otherText = _ForeignTypeFugueText(other, 'fugue');
       // Warm the cache: a handler with nothing cached has nothing to advance.
       expect(otherText.value, '');
 
       other.importChanges(source.exportChanges());
 
       expect(otherText.cachedState, isNull, reason: 'the queue gave up');
-      // The recompute reads the change through the same factory, so it skips
-      // it too: folding and replaying still agree.
+      // The recompute reads the change through the same path, so it skips it
+      // too: folding and replaying still agree.
       expect(otherText.value, '');
     });
 
@@ -551,12 +551,16 @@ class _UnappliableFugueText extends CRDTFugueTextHandler {
       null;
 }
 
-/// A Fugue text handler that reads no operation at all.
-class _UndecodableFugueText extends CRDTFugueTextHandler {
-  _UndecodableFugueText(super.doc, super.id);
+/// A Fugue text handler under a type tag of its own.
+///
+/// A change written by the ordinary handler carries the same id, so the batch
+/// import routes it here, and a different type tag, so this handler declines
+/// it.
+class _ForeignTypeFugueText extends CRDTFugueTextHandler {
+  _ForeignTypeFugueText(super.doc, super.id);
 
   @override
-  OperationFactory get operationFactory => (_) => null;
+  String get handlerType => 'SomeOtherFugueText';
 }
 
 /// Counts how many times the cached state is advanced by one operation.

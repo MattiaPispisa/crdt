@@ -19,19 +19,14 @@ class TestHandler extends Handler<dynamic> {
   }
 
   @override
-  OperationFactory get operationFactory => (operationBytes) {
-        final env = OperationEnvelopeCodec.decode(operationBytes);
-        if (env.handlerId != id) {
-          return null;
-        }
-        return TestOperation.fromHandler(this);
-      };
+  OperationFactory get operationFactory =>
+      (env, body) => TestOperation.fromHandler(this);
 }
 
 /// A test operation for CRDT operations
 class TestOperation extends Operation {
   /// Create a new test operation
-  const TestOperation({
+  TestOperation({
     required super.id,
     required super.type,
   });

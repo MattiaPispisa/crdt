@@ -4,17 +4,7 @@ class _TextOperationFactory {
   _TextOperationFactory(this.handler);
   final Handler<dynamic> handler;
 
-  Operation? fromBytes(Uint8List operationBytes) {
-    final env = OperationEnvelopeCodec.decode(operationBytes);
-    if (env.handlerId != handler.id) {
-      return null;
-    }
-
-    if (env.handlerType != handler.handlerType) {
-      return null;
-    }
-
-    final body = Uint8List.sublistView(operationBytes, env.bodyOffset);
+  Operation fromBytes(OperationEnvelope env, Uint8List body) {
     if (env.kind == OperationType.kindInsert) {
       return _TextInsertOperation.fromBodyBytes(handler, body);
     } else if (env.kind == OperationType.kindDelete) {
@@ -32,7 +22,7 @@ class _TextOperationFactory {
 }
 
 class _TextInsertOperation extends Operation {
-  const _TextInsertOperation({
+  _TextInsertOperation({
     required this.index,
     required this.text,
     required super.id,
@@ -104,7 +94,7 @@ class _TextInsertOperation extends Operation {
 }
 
 class _TextDeleteOperation extends Operation {
-  const _TextDeleteOperation({
+  _TextDeleteOperation({
     required this.index,
     required this.count,
     required super.id,
@@ -165,7 +155,7 @@ class _TextDeleteOperation extends Operation {
 }
 
 class _TextUpdateOperation extends Operation {
-  const _TextUpdateOperation({
+  _TextUpdateOperation({
     required this.index,
     required this.text,
     required super.id,

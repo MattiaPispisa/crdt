@@ -354,12 +354,10 @@ void main() {
         ..update(0, 'A')
         ..delete(1);
 
-      final changes = doc.exportChanges().sorted();
-      expect(changes, isNotEmpty);
-      for (final change in changes) {
-        final op = list.operationFactory(change.payloadBytes());
-        expect(op, isNotNull);
-        expect(op!.id, equals('l'));
+      final operations = list.operations();
+      expect(operations, isNotEmpty);
+      for (final operation in operations) {
+        expect(operation.id, equals('l'));
       }
     });
   });

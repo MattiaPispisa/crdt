@@ -1,17 +1,19 @@
 part of '../document/document.dart';
 
-/// A factory function that creates an operation from bytes.
+/// A factory function that builds an operation from an already-decoded
+/// [envelope] and its [body].
 ///
-/// Returns `null` when the envelope belongs to another handler — a different
-/// instance id or a different type tag. That is a normal answer, and the
-/// caller skips the change.
-///
-/// Throws [UnknownOperationKindException] when the envelope *is* addressed to
-/// this handler but carries a kind this build cannot decode. That change comes
-/// from a newer peer, and skipping it would leave two peers with different
+/// The framework has checked that the envelope addresses this handler, so a
+/// factory only has to dispatch on [OperationEnvelope.kind]. It always returns
+/// an operation: there is no kind it may quietly decline, because a change it
+/// cannot read is one that would otherwise leave two peers with different
 /// states and the same version vector.
-typedef OperationFactory = Operation? Function(
-  Uint8List operationBytes,
+///
+/// Throws [UnknownOperationKindException] on a kind this build cannot decode.
+/// That change comes from a newer peer.
+typedef OperationFactory = Operation Function(
+  OperationEnvelope envelope,
+  Uint8List body,
 );
 
 /// Abstract class for CRDT handlers
@@ -70,10 +72,23 @@ abstract class Handler<T>
 
   final String? _handlerType;
 
-  /// The factory function that creates an operation from a payload.
+  /// The factory function that creates an operation from a decoded envelope.
   ///
-  /// See [OperationFactory] for what `null` means and when the decode throws.
+  /// See [OperationFactory] for the contract.
   OperationFactory get operationFactory;
+
+  /// Whether the document must stamp this handler's operations with an
+  /// [OperationStamp].
+  ///
+  /// Turn it on for a handler that resolves concurrent writes by
+  /// last-writer-wins: the stamp is what lets it do so without depending on
+  /// the order operations arrive in, which is the precondition for
+  /// [stateIsOrderIndependent].
+  ///
+  /// A stamped handler reads the stamp from [Operation.stamp], which is set
+  /// before the operation reaches [incrementCachedState] and before the
+  /// change that carries it is built.
+  bool get operationsAreStamped => false;
 
   /// Stable identifier of this handler's **type**.
   ///
@@ -116,9 +131,32 @@ abstract class Handler<T>
   /// Otherwise, return `null`.
   Operation? compound(Operation accumulator, Operation current) => null;
 
+  /// Decodes the operation [change] carries, or `null` when the change is
+  /// addressed to another handler.
+  ///
+  /// The single place the envelope is decoded: it checks the address, hands
+  /// the factory a body it does not have to slice again, and attaches the
+  /// stamp the envelope carried.
   @override
-  Operation? _operationFromChange(Change change) =>
-      operationFactory(change.payloadBytes());
+  Operation? _operationFromChange(Change change) {
+    final bytes = change.payloadBytes();
+    final envelope = OperationEnvelopeCodec.decode(bytes);
+
+    if (envelope.handlerId != id || envelope.handlerType != handlerType) {
+      return null;
+    }
+
+    if (operationsAreStamped && envelope.stamp == null) {
+      throw FormatException(
+        'Operation for handler $handlerType/$id carries no stamp, but the '
+        'handler resolves conflicts with one. The change was written by a '
+        'peer that does not stamp this handler.',
+      );
+    }
+
+    final body = Uint8List.sublistView(bytes, envelope.bodyOffset);
+    return operationFactory(envelope, body)..stamp = envelope.stamp;
+  }
 
   /// Returns the [Operation]s required by this consumer to compute its state.
   ///
@@ -137,7 +175,7 @@ abstract class Handler<T>
 
     final operations = <Operation>[];
     for (final change in changes) {
-      final operation = operationFactory(change.payloadBytes());
+      final operation = _operationFromChange(change);
       if (operation != null) {
         operations.add(operation);
       }
