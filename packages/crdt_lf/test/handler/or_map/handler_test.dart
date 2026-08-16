@@ -55,12 +55,20 @@ void main() {
       expect(map['x'], 3);
     });
 
-    test('should refresh clock before creating a tag', () {
+    test('each put is stamped strictly after the one before it', () {
       final doc = CRDTDocument();
       final hlc1 = doc.hlc;
-      CRDTORMapHandler<String, int>(doc, 'map1').put('x', 1);
-      expect(doc.hlc, isNot(hlc1));
+      final map = CRDTORMapHandler<String, int>(doc, 'map1')
+        ..put('x', 1)
+        ..put('x', 2);
       expect(hlc1.happenedBefore(doc.hlc), isTrue);
+
+      // The document ticks its clock before minting each stamp. Without that
+      // tick two puts in the same millisecond would share a tag, and the
+      // second could not win against the first.
+      final stamps = map.operations().map((operation) => operation.stamp!);
+      expect(stamps, hasLength(2));
+      expect(stamps.first.compareTo(stamps.last), lessThan(0));
     });
 
     test('should handle concurrent puts on different keys', () {
