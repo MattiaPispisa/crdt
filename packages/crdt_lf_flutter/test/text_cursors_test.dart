@@ -93,8 +93,7 @@ void main() {
       );
     });
 
-    testWidgets(
-        'draws a caret at the UTF-16 offset of an anchor past an emoji',
+    testWidgets('draws a caret at the UTF-16 offset of an anchor past an emoji',
         (tester) async {
       // Rune index 3 lands after "😀 he" — UTF-16 offset 4, one past the
       // rune index, because the emoji is a surrogate pair.
