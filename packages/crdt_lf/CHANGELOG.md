@@ -6,12 +6,51 @@
 
 **Breaking changes**
 
+**A v3 document does not open in v4.** Not from its history, not from a snapshot, not from the bytes an
+Hive/SQLite/Drift adapter saved. `Change` and `Snapshot` now refuse anything written by v3 instead of
+reading it as if nothing had happened. That refusal is the point: several things below change what the
+same bytes *mean*, so a v3 and a v4 peer would otherwise agree on their version vectors while holding
+different content, with no error anywhere to show for it. Peers have to move together.
+
 `CRDTFugueTextHandler`, `CRDTTextHandler` are now indexed by runes (code points) instead of UTF-16 code units [106](https://github.com/MattiaPispisa/crdt/issues/106).
- 
-Everything remains compatible with v3 as long as text stays inside the BMP.
-Only documents that already contain non-BMP characters (emoji, …) are affected:
+Documents that already contain non-BMP characters (emoji, …) are affected the most:
   - `CRDTFugueTextHandler`: a previously written non-BMP character can still be half-deleted, until it is typed again.
-  - `CRDTTextHandler`: a history holding an index that falls after a non-BMP character replays to different text. Documents in that state have to be re-created. 
+  - `CRDTTextHandler`: a history holding an index that falls after a non-BMP character replays to different text. Documents in that state have to be re-created.
+
+An operation kind is now something a handler declares, not a name picked from a closed list of four.
+`OperationType.custom(handler, kind: …, name: …)` takes any value from `4` to `127`; the kind is scoped
+to the handler type, so two handlers may use the same byte for two unrelated meanings. Bit 7 of the kind
+byte is reserved, which is where the ceiling of 127 comes from. `OperationType.typeNameFromKind` is
+replaced by `OperationType.wellKnownName`, which answers `null` past the four conventional kinds rather
+than throwing — past those four a name cannot be recovered from a kind alone.
+`OperationType.fromPayload` is gone: the payload string is a debug format and never carried a kind.
+
+`ORHandlerTag` is replaced by `OperationStamp`, the one `(hlc, peerId)` pair every last-writer-wins
+handler now resolves conflicts with. The document mints it when an operation is registered and the
+envelope carries it, so a handler no longer writes its own tie-break. Same 24 bytes as before.
+
+`OperationFactory` receives the decoded envelope and the operation body instead of raw bytes, and
+returns a non-nullable `Operation`. The framework checks that the envelope belongs to the handler
+before calling it, so a custom handler only dispatches on the kind and raises
+`UnknownOperationKindException` on one it does not know. `Operation` loses its `const` constructor.
+
+`incrementCachedState` takes an optional `DeltaSink<Object?>? sink`. It is always `null`; a custom
+handler declares it and ignores it.
+
+Wire and storage details, for anyone reading bytes directly:
+  - An operation envelope may carry a stamp after the kind byte, flagged by bit 7 of that byte. An
+    operation from a handler that is not stamped keeps exactly the bytes it had.
+  - `CRDTORSetHandler` and `CRDTORMapHandler`: the tag leaves the body of `add`/`put`. Their snapshots
+    never held tags and do not change.
+  - `CRDTFugueMovableListHandler`: the HLC leaves the bodies of `move` and `update`, and its snapshot
+    blob grows — its two last-writer-wins clocks go from 8 to 24 bytes each.
+
+**Fixed**
+
+- `CRDTFugueMovableListHandler`: two concurrent `move` or `update` operations that carry the same clock
+  no longer leave two peers with different results. It compared bare clocks with `happenedAfter`, which
+  is false in both directions on a tie, so the value already in place stayed — and which one that was
+  depended on the order the changes arrived in. The peer now settles it.
 
 ## [3.5.0](https://github.com/MattiaPispisa/crdt/tree/crdt_lf-v3.5.0/packages/crdt_lf)
 
