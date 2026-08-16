@@ -593,10 +593,24 @@ class _TextCursorsPainter extends CustomPainter {
       ..save()
       ..clipRect(bounds);
 
-    for (final resolved in _state._resolved) {
-      final cursor = resolved.cursor;
+    // Handler indices count runes; `RenderEditable` indexes code units.
+    final text = handler.value;
 
-      if (resolved.selection.isNotEmpty) {
+    for (final cursor in _state.widget.cursors) {
+      final baseIndex = handler.indexOfStablePosition(cursor.base);
+      final extentIndex = cursor.extent == cursor.base
+          ? baseIndex
+          : handler.indexOfStablePosition(cursor.extent);
+      if (extentIndex == null) {
+        // The anchored element is not known yet: hide until it arrives.
+        continue;
+      }
+
+      final extent = RuneOffsets.utf16Offset(text, extentIndex);
+      final base =
+          baseIndex == null ? null : RuneOffsets.utf16Offset(text, baseIndex);
+
+      if (base != null && base != extent) {
         final highlight = Paint()..color = cursor.color.withValues(alpha: .3);
         for (final box in resolved.selection) {
           canvas.drawRect(

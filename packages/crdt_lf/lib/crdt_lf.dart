@@ -34,5 +34,6 @@ export 'src/operation/operation.dart';
 export 'src/operation/type.dart';
 export 'src/peer_id.dart';
 export 'src/snapshot/snapshot.dart';
+export 'src/utils/rune_offsets.dart';
 export 'src/utils/set.dart';
 export 'src/version_vector/version_vector.dart';

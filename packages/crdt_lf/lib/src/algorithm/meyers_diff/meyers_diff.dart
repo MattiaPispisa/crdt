@@ -1,10 +1,15 @@
 import 'dart:math' as math;
 
+import 'package:crdt_lf/src/utils/rune_offsets.dart';
+
 // ignore: always_use_package_imports does not work with this file
 import 'ops.dart';
 
 /// Compute Myers diff between two strings and return coalesced segments of
 /// Equal, Insert, and Remove operations.
+///
+/// The diff runs over **runes** (Unicode code points).
+/// All segment offsets are rune offsets.
 ///
 /// ```dart
 /// print(myersDiff('Hello', 'Hello')); // Prints 1 diff segment with op equal
@@ -15,14 +20,15 @@ List<DiffSegment> myersDiff(String oldText, String newText) {
     if (oldText.isEmpty) {
       return <DiffSegment>[];
     } else {
+      final length = RuneOffsets.length(oldText);
       return <DiffSegment>[
         DiffSegment(
           op: DiffOp.equal,
           text: oldText,
           oldStart: 0,
-          oldEnd: oldText.length,
+          oldEnd: length,
           newStart: 0,
-          newEnd: newText.length,
+          newEnd: length,
         ),
       ];
     }
@@ -35,7 +41,7 @@ List<DiffSegment> myersDiff(String oldText, String newText) {
         oldStart: 0,
         oldEnd: 0,
         newStart: 0,
-        newEnd: newText.length,
+        newEnd: RuneOffsets.length(newText),
       ),
     ];
   }
@@ -45,18 +51,21 @@ List<DiffSegment> myersDiff(String oldText, String newText) {
         op: DiffOp.remove,
         text: oldText,
         oldStart: 0,
-        oldEnd: oldText.length,
+        oldEnd: RuneOffsets.length(oldText),
         newStart: 0,
         newEnd: 0,
       ),
     ];
   }
 
+  final a = oldText.runes.toList();
+  final b = newText.runes.toList();
+
   // Trim common prefix and suffix to reduce the problem size.
-  final prefixLen = _commonPrefix(oldText, newText);
+  final prefixLen = _commonPrefix(a, b);
   final suffixLen = _commonSuffix(
-    oldText,
-    newText,
+    a,
+    b,
     prefixLen,
   );
 
@@ -65,7 +74,7 @@ List<DiffSegment> myersDiff(String oldText, String newText) {
     segments.add(
       DiffSegment(
         op: DiffOp.equal,
-        text: oldText.substring(0, prefixLen),
+        text: String.fromCharCodes(a.getRange(0, prefixLen)),
         oldStart: 0,
         oldEnd: prefixLen,
         newStart: 0,
@@ -74,49 +83,47 @@ List<DiffSegment> myersDiff(String oldText, String newText) {
     );
   }
 
-  final aMid = oldText.substring(prefixLen, oldText.length - suffixLen);
-  final bMid = newText.substring(prefixLen, newText.length - suffixLen);
+  final aMid = a.sublist(prefixLen, a.length - suffixLen);
+  final bMid = b.sublist(prefixLen, b.length - suffixLen);
 
   if (aMid.isEmpty && bMid.isNotEmpty) {
     segments.add(
       DiffSegment(
         op: DiffOp.insert,
-        text: bMid,
+        text: String.fromCharCodes(bMid),
         oldStart: prefixLen,
         oldEnd: prefixLen,
         newStart: prefixLen,
-        newEnd: newText.length - suffixLen,
+        newEnd: b.length - suffixLen,
       ),
     );
   } else if (bMid.isEmpty && aMid.isNotEmpty) {
     segments.add(
       DiffSegment(
         op: DiffOp.remove,
-        text: aMid,
+        text: String.fromCharCodes(aMid),
         oldStart: prefixLen,
-        oldEnd: oldText.length - suffixLen,
+        oldEnd: a.length - suffixLen,
         newStart: prefixLen,
         newEnd: prefixLen,
       ),
     );
   } else if (aMid.isNotEmpty || bMid.isNotEmpty) {
-    final a = aMid.codeUnits;
-    final b = bMid.codeUnits;
-    final edits = _shortestEditScript(a, b);
-    segments.addAll(_coalesce(a, b, edits, prefixLen, prefixLen));
+    final edits = _shortestEditScript(aMid, bMid);
+    segments.addAll(_coalesce(aMid, bMid, edits, prefixLen, prefixLen));
   }
 
   if (suffixLen > 0) {
-    final oldSuffixStart = oldText.length - suffixLen;
-    final newSuffixStart = newText.length - suffixLen;
+    final oldSuffixStart = a.length - suffixLen;
+    final newSuffixStart = b.length - suffixLen;
     segments.add(
       DiffSegment(
         op: DiffOp.equal,
-        text: oldText.substring(oldSuffixStart),
+        text: String.fromCharCodes(a.getRange(oldSuffixStart, a.length)),
         oldStart: oldSuffixStart,
-        oldEnd: oldText.length,
+        oldEnd: a.length,
         newStart: newSuffixStart,
-        newEnd: newText.length,
+        newEnd: b.length,
       ),
     );
   }
@@ -124,27 +131,21 @@ List<DiffSegment> myersDiff(String oldText, String newText) {
   return segments;
 }
 
-int _commonPrefix(String a, String b) {
+int _commonPrefix(List<int> a, List<int> b) {
   final n = math.min(a.length, b.length);
   var i = 0;
-  while (i < n) {
-    if (a.codeUnitAt(i) != b.codeUnitAt(i)) {
-      break;
-    }
+  while (i < n && a[i] == b[i]) {
     i++;
   }
   return i;
 }
 
-int _commonSuffix(String a, String b, int skipPrefix) {
+int _commonSuffix(List<int> a, List<int> b, int skipPrefix) {
   final aLen = math.max(0, a.length - skipPrefix);
   final bLen = math.max(0, b.length - skipPrefix);
 
   var i = 0;
-  while (i < aLen && i < bLen) {
-    if (a.codeUnitAt(a.length - 1 - i) != b.codeUnitAt(b.length - 1 - i)) {
-      break;
-    }
+  while (i < aLen && i < bLen && a[a.length - 1 - i] == b[b.length - 1 - i]) {
     i++;
   }
   return i;
@@ -165,7 +166,7 @@ class _Edit {
   final int y;
 }
 
-/// Myers shortest edit script for two sequences of code units.
+/// Myers shortest edit script for two sequences of runes.
 List<_Edit> _shortestEditScript(List<int> a, List<int> b) {
   final n = a.length;
   final m = b.length;

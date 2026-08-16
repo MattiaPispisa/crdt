@@ -204,6 +204,54 @@ void main() {
       expect(note.value, '```dart\nhi\n```');
     });
 
+    testWidgets(
+        'backspacing an emoji removes it whole (code-unit field offsets '
+        'against rune handler indices)', (tester) async {
+      final note = CRDTFugueTextHandler(doc, 'note');
+      await tester.pumpWidget(host());
+      final controller =
+          tester.widget<TextField>(find.byType(TextField)).controller!;
+
+      await tester.enterText(find.byType(TextField), 'a😀b');
+      expect(note.value, 'a😀b');
+      // One rune per element: the emoji is a single handler position even
+      // though the field counts it as two code units.
+      expect(note.length, 3);
+      expect(controller.text.length, 4);
+
+      // Backspace with the caret right after the emoji. Flutter deletes the
+      // whole cluster, so the field hands us a two-code-unit deletion.
+      controller.value = const TextEditingValue(
+        text: 'ab',
+        selection: TextSelection.collapsed(offset: 1),
+      );
+      await tester.pump();
+
+      expect(note.value, 'ab');
+      expect(controller.text, 'ab');
+    });
+
+    testWidgets('anchors the caret correctly past an emoji', (tester) async {
+      CRDTFugueTextHandler(doc, 'note').insert(0, 'a😀b');
+      await tester.pumpWidget(host());
+      final controller =
+          tester.widget<TextField>(find.byType(TextField)).controller!
+            // Caret at code-unit offset 3 — after the emoji, i.e. rune 2.
+            ..selection = const TextSelection.collapsed(offset: 3);
+      await tester.pump();
+
+      // A remote insertion before the caret must shift it by the inserted
+      // code units, not by the inserted runes.
+      final remote = remotePeer();
+      (remote.registeredHandlers['note']! as CRDTFugueTextHandler)
+          .insert(0, '🎉');
+      doc.importChanges(remote.exportChanges());
+      await tester.pump();
+
+      expect(controller.text, '🎉a😀b');
+      expect(controller.selection.baseOffset, 5);
+    });
+
     testWidgets('throws a FlutterError for a non-text handler', (tester) async {
       CRDTListHandler<String>(doc, 'note');
       await tester.pumpWidget(host());

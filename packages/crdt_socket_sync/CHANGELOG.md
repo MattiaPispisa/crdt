@@ -1,3 +1,9 @@
+## [0.6.1](https://github.com/MattiaPispisa/crdt/tree/crdt_socket_sync-v0.6.1/packages/crdt_socket_sync)
+
+**Date:** 2026-07-28
+
+Widens the `crdt_lf` constraint to `>=3.0.0 <5.0.0`. No functional changes, and no migration of existing databases.
+
 ## [0.6.0](https://github.com/MattiaPispisa/crdt/tree/crdt_socket_sync-v0.6.0/packages/crdt_socket_sync)
 
 **Date:** 2026-07-26

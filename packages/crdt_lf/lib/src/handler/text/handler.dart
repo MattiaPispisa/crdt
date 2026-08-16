@@ -13,6 +13,10 @@ part 'operation.dart';
 /// that uses CRDT for conflict-free collaboration.
 /// It provides methods for inserting, deleting, and accessing text content.
 ///
+/// ## Index space
+/// Every index and count is measured in **runes** (Unicode code points).
+/// Use [RuneOffsets] to work with code unit.
+///
 /// ## Algorithm
 /// Process operations in clock order.
 /// Interleaving is handled just using the HLC.
@@ -42,7 +46,7 @@ class CRDTTextHandler extends Handler<String> {
   late final OperationFactory operationFactory =
       _TextOperationFactory(this).fromBytes;
 
-  /// Inserts [text] at the specified [index]
+  /// Inserts [text] at the specified [index], counted **in runes**
   void insert(int index, String text) {
     final operation = _TextInsertOperation.fromHandler(
       this,
@@ -52,7 +56,7 @@ class CRDTTextHandler extends Handler<String> {
     doc.registerOperation(operation);
   }
 
-  /// Deletes [count] characters starting at the specified [index]
+  /// Deletes [count] runes starting at the specified [index]
   void delete(int index, int count) {
     final operation = _TextDeleteOperation.fromHandler(
       this,
@@ -62,7 +66,7 @@ class CRDTTextHandler extends Handler<String> {
     doc.registerOperation(operation);
   }
 
-  /// Updates the text at the specified [index]
+  /// Updates the text at the specified [index], counted **in runes**
   void update(int index, String text) {
     final operation = _TextUpdateOperation.fromHandler(
       this,
@@ -109,12 +113,13 @@ class CRDTTextHandler extends Handler<String> {
         case DiffOp.insert:
           // Insert new text at adjusted position
           insert(segment.oldStart + offset, segment.text);
-          offset += segment.text.length;
+          offset += segment.newEnd - segment.newStart;
           break;
         case DiffOp.remove:
           // Remove text at adjusted position
-          delete(segment.oldStart + offset, segment.text.length);
-          offset -= segment.text.length;
+          final count = segment.oldEnd - segment.oldStart;
+          delete(segment.oldStart + offset, count);
+          offset -= count;
           break;
       }
     }
@@ -141,14 +146,14 @@ class CRDTTextHandler extends Handler<String> {
     return Wtf8.encode(value);
   }
 
-  /// Gets the length of the text
-  int get length => value.length;
+  /// Gets the length of the text, **in runes**
+  int get length => RuneOffsets.length(value);
 
   /// Computes the current state of the text from the document's changes
   String _computeState() {
-    // Replay on a mutable list of code units: each operation costs a
+    // Replay on a mutable list of runes: each operation costs a
     // single splice instead of rebuilding the whole string.
-    final units = _initialState().codeUnits.toList();
+    final units = _initialState().runes.toList();
 
     // Apply changes in order
     for (final operation in operations()) {
@@ -158,7 +163,7 @@ class CRDTTextHandler extends Handler<String> {
     return String.fromCharCodes(units);
   }
 
-  /// Applies a single operation to a mutable list of code units
+  /// Applies a single operation to a mutable list of runes
   void _applyOperationToUnits(List<int> units, Operation operation) {
     if (operation is _TextInsertOperation) {
       return _unitsInsert(
@@ -189,9 +194,9 @@ class CRDTTextHandler extends Handler<String> {
     // Insert at the specified index,
     // or at the end if the index is out of bounds
     if (index <= units.length) {
-      units.insertAll(index, text.codeUnits);
+      units.insertAll(index, text.runes);
     } else {
-      units.addAll(text.codeUnits);
+      units.addAll(text.runes);
     }
   }
 
@@ -217,8 +222,9 @@ class CRDTTextHandler extends Handler<String> {
     // truncating the replacement to the remaining length
     if (index < units.length) {
       final remainingLength = units.length - index;
-      final replacedCount = min(text.length, remainingLength);
-      units.setRange(index, index + replacedCount, text.codeUnits);
+      final runes = text.runes.toList();
+      final replacedCount = min(runes.length, remainingLength);
+      units.setRange(index, index + replacedCount, runes);
     }
   }
 
@@ -227,32 +233,34 @@ class CRDTTextHandler extends Handler<String> {
     required Operation operation,
     required String state,
   }) {
-    // A single concatenation instead of a StringBuffer round-trip.
     if (operation is _TextInsertOperation) {
-      final index = operation.index;
-      if (index <= state.length) {
-        return state.substring(0, index) +
-            operation.text +
-            state.substring(index);
-      }
-      return state + operation.text;
+      final at = RuneOffsets.utf16Offset(state, operation.index);
+      return state.substring(0, at) + operation.text + state.substring(at);
     } else if (operation is _TextDeleteOperation) {
-      final index = operation.index;
-      if (index >= state.length) {
+      final start = RuneOffsets.utf16Offset(state, operation.index);
+      if (start >= state.length) {
         return state;
       }
-      final end = min(index + operation.count, state.length);
-      return state.substring(0, index) + state.substring(end);
+      final end = RuneOffsets.utf16Offset(
+        state,
+        operation.index + operation.count,
+      );
+      return state.substring(0, start) + state.substring(end);
     } else if (operation is _TextUpdateOperation) {
-      final index = operation.index;
-      if (index >= state.length) {
+      final start = RuneOffsets.utf16Offset(state, operation.index);
+      if (start >= state.length) {
         return state;
       }
       final text = operation.text;
-      final replacedCount = min(text.length, state.length - index);
-      return state.substring(0, index) +
-          text.substring(0, replacedCount) +
-          state.substring(index + replacedCount);
+      // The replacement is truncated to whatever fits after the index.
+      final end = RuneOffsets.utf16Offset(
+        state,
+        operation.index + RuneOffsets.length(text),
+      );
+      final replacedCount = RuneOffsets.runeIndex(state, end) - operation.index;
+      return state.substring(0, start) +
+          text.substring(0, RuneOffsets.utf16Offset(text, replacedCount)) +
+          state.substring(end);
     }
     return state;
   }
@@ -262,14 +270,14 @@ class CRDTTextHandler extends Handler<String> {
     if (accumulator is _TextInsertOperation &&
         current is _TextInsertOperation &&
         _isContiguousInsertion(accumulator, current)) {
+      final split = RuneOffsets.utf16Offset(
+        accumulator.text,
+        current.index - accumulator.index,
+      );
       final buffer = StringBuffer()
-        ..write(
-          accumulator.text.substring(0, current.index - accumulator.index),
-        )
+        ..write(accumulator.text.substring(0, split))
         ..write(current.text)
-        ..write(
-          accumulator.text.substring(current.index - accumulator.index),
-        );
+        ..write(accumulator.text.substring(split));
       return _TextInsertOperation.fromHandler(
         this,
         index: accumulator.index,
@@ -279,13 +287,20 @@ class CRDTTextHandler extends Handler<String> {
     if (accumulator is _TextInsertOperation &&
         current is _TextDeleteOperation &&
         _isDeletingPartialInsertion(accumulator, current)) {
+      final removedStart = current.index - accumulator.index;
       final buffer = StringBuffer()
         ..write(
-          accumulator.text.substring(0, current.index - accumulator.index),
+          accumulator.text.substring(
+            0,
+            RuneOffsets.utf16Offset(accumulator.text, removedStart),
+          ),
         )
         ..write(
           accumulator.text.substring(
-            current.index - accumulator.index + current.count,
+            RuneOffsets.utf16Offset(
+              accumulator.text,
+              removedStart + current.count,
+            ),
           ),
         );
       return _TextInsertOperation.fromHandler(
@@ -323,7 +338,8 @@ class CRDTTextHandler extends Handler<String> {
     _TextInsertOperation accumulator,
     _TextInsertOperation current,
   ) {
-    return accumulator.index + accumulator.text.length >= current.index;
+    return accumulator.index + RuneOffsets.length(accumulator.text) >=
+        current.index;
   }
 
   bool _isDeletingPartialInsertion(
@@ -332,7 +348,7 @@ class CRDTTextHandler extends Handler<String> {
   ) {
     return current.index >= accumulator.index &&
         current.index + current.count <=
-            accumulator.index + accumulator.text.length;
+            accumulator.index + RuneOffsets.length(accumulator.text);
   }
 
   /// Gets the initial state of the text
@@ -347,8 +363,9 @@ class CRDTTextHandler extends Handler<String> {
   /// Returns a string representation of this text
   @override
   String toString() {
+    final cut = RuneOffsets.utf16Offset(value, 20);
     final truncated =
-        value.length > 20 ? '${value.substring(0, 20)}...' : value;
+        cut < value.length ? '${value.substring(0, cut)}...' : value;
     return 'CRDTText($_id, "$truncated")';
   }
 }
