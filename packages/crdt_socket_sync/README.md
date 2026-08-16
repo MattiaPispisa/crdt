@@ -835,15 +835,7 @@ Cloudflare Worker relay server), see the [greyhound_markdown](#apps) app.
 
 ## Apps
 
-- [greyhound_markdown](https://github.com/MattiaPispisa/crdt/tree/main/apps/greyhound_markdown) — Real-time collaborative markdown editor built on crdt_lf, using [relay mode](#relay-mode) (relay client from this library; Cloudflare Worker server).
-
-## [Roadmap](https://github.com/users/MattiaPispisa/projects/1)
-A roadmap is available in the [project](https://github.com/users/MattiaPispisa/projects/1) page. The roadmap provides a high-level overview of the project's goals and the current status of the project.
-
-
-## Contributing
-
-Contributions are welcome! Please read the contributing guidelines and submit pull requests to the main repository.
+- [greyhound_markdown](https://github.com/MattiaPispisa/crdt/tree/main/apps/greyhound_markdown) — Real-time collaborative markdown editor built on crdt_lf
 
 ## Packages
 

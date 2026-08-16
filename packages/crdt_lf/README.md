@@ -173,7 +173,7 @@ Add this to your package's `pubspec.yaml` file:
 
 ```yaml
 dependencies:
-  crdt_lf: ^1.0.0
+  crdt_lf: ^4.0.0
 ```
 
 ## Usage

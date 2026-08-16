@@ -4,13 +4,13 @@ homepage: https://mattiapispisa.github.io/
 repository: https://github.com/MattiaPispisa/crdt/tree/main/packages/crdt_lf_sqlite
 topics: [crdt, local-first, sqlite, persistence, dart]
 
-version: 0.1.1
+version: 0.2.0+1
 
 environment:
   sdk: ">=3.0.0 <4.0.0"
 
 dependencies:
-  crdt_lf: ">=3.0.0 <5.0.0"
+  crdt_lf: ^4.0.0
   hlc_dart: ^1.0.0
   sqlite3: ^3.0.0
 

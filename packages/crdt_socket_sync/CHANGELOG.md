@@ -1,3 +1,9 @@
+## [0.7.0+1](https://github.com/MattiaPispisa/crdt/tree/crdt_socket_sync-v0.7.0+1/packages/crdt_socket_sync)
+
+**Date:** 2026-08-16
+
+Documentation release: refreshes the CHANGELOG and docs published on pub.dev. No functional changes since `0.7.0`.
+
 ## [0.6.1](https://github.com/MattiaPispisa/crdt/tree/crdt_socket_sync-v0.6.1/packages/crdt_socket_sync)
 
 **Date:** 2026-07-28
