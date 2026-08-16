@@ -85,6 +85,94 @@ void main() {
       },
     );
 
+    group('update overwrites the element in place', () {
+      /// A second document sharing [doc]'s history, so merges are
+      /// deterministic.
+      CRDTDocument peerOf(CRDTDocument doc) {
+        final remote = CRDTDocument(peerId: PeerId.generate());
+        CRDTFugueTextHandler(remote, 'text');
+        remote.importChanges(doc.exportChanges());
+        return remote;
+      }
+
+      CRDTFugueTextHandler textOf(CRDTDocument doc) =>
+          doc.registeredHandlers['text']! as CRDTFugueTextHandler;
+
+      // Two updates used to make two elements out of one. Now the losing
+      // value is simply dropped, and both peers drop the same one.
+      test('two peers updating the same element converge on one value', () {
+        final a = CRDTDocument(peerId: PeerId.generate());
+        final textA = CRDTFugueTextHandler(a, 'text')..insert(0, 'abc');
+        final b = peerOf(a);
+        final textB = textOf(b);
+
+        textA.update(1, 'X');
+        textB.update(1, 'Y');
+
+        a.importChanges(b.exportChanges());
+        b.importChanges(a.exportChanges());
+
+        expect(textA.value, equals(textB.value));
+        expect(textA.value, anyOf('aXc', 'aYc'));
+        expect(textA.length, equals(3));
+      });
+
+      test('an update loses against a concurrent delete, in both orders', () {
+        for (final deleteArrivesFirst in [true, false]) {
+          final a = CRDTDocument(peerId: PeerId.generate());
+          final textA = CRDTFugueTextHandler(a, 'text')..insert(0, 'abc');
+          final b = peerOf(a);
+          final textB = textOf(b);
+
+          textA.update(1, 'X');
+          textB.delete(1, 1);
+
+          if (deleteArrivesFirst) {
+            a.importChanges(b.exportChanges());
+            b.importChanges(a.exportChanges());
+          } else {
+            b.importChanges(a.exportChanges());
+            a.importChanges(b.exportChanges());
+          }
+
+          expect(textA.value, equals(textB.value));
+          expect(textA.value, equals('ac'));
+        }
+      });
+
+      // The reason to pick this handler over `CRDTTextHandler` is that an
+      // anchor keeps resolving. An update used to tombstone the anchored
+      // element, which broke exactly that.
+      test('an anchor survives a remote update of the anchored element', () {
+        final doc = CRDTDocument(peerId: PeerId.generate());
+        final text = CRDTFugueTextHandler(doc, 'text')..insert(0, 'hello');
+        final caret = text.stablePositionAt(3); // after the second "l"
+
+        final remote = peerOf(doc);
+        textOf(remote).update(2, 'L');
+        doc.importChanges(remote.exportChanges());
+
+        expect(text.value, equals('heLlo'));
+        expect(text.indexOfStablePosition(caret), equals(3));
+      });
+
+      // An update creates no node, so it must not spend a counter either.
+      test('an update spends no element counter', () {
+        final doc = CRDTDocument(peerId: PeerId.generate());
+        final text = CRDTFugueTextHandler(doc, 'text')..insert(0, 'abc');
+        expect(text.nodeAt(2).counter, equals(2));
+
+        text
+          ..update(0, 'A')
+          ..update(1, 'B')
+          ..update(2, 'C')
+          ..insert(3, 'd');
+
+        expect(text.value, equals('ABCd'));
+        expect(text.nodeAt(3).counter, equals(3));
+      });
+    });
+
     test('should change text', () {
       final doc = CRDTDocument();
       final handler = CRDTFugueTextHandler(doc, 'text1')
@@ -763,25 +851,6 @@ void main() {
       );
 
       test(
-        'scans update-op newNodeIDs during lazy counter init',
-        () {
-          final peerId = PeerId.generate();
-          final doc1 = CRDTDocument(peerId: peerId);
-          final h1 = CRDTFugueTextHandler(doc1, 'text')
-            ..insert(0, 'Hello') // counters 0-4
-            ..update(0, 'X'); // newNodeID counter 5 for peerId
-          final exported = doc1.binaryExportChanges();
-
-          final doc2 = CRDTDocument(peerId: peerId);
-          final h2 = CRDTFugueTextHandler(doc2, 'text');
-          doc2.binaryImportChanges(exported);
-          expect(h2.value, h1.value);
-          expect(() => h2.insert(h2.length, '!'), returnsNormally);
-          expect(h2.value, endsWith('!'));
-        },
-      );
-
-      test(
         'counter continues correctly after re-init (no duplicate IDs)',
         () {
           final peerId = PeerId.generate();
@@ -802,9 +871,6 @@ void main() {
 
           // Verify state is consistent and no collision occurred
           expect(handler2.value, 'Say: Hi!');
-
-          // Also verify update() triggers no collision
-          expect(() => handler2.update(0, 'X'), returnsNormally);
         },
       );
 
@@ -1231,6 +1297,13 @@ void main() {
               handlerType: handler.handlerType,
               handlerId: handler.id,
               kind: 99,
+              // Stamped, so the kind is what the read trips over: the handler
+              // is stamped and an envelope without one fails earlier, on a
+              // different guard.
+              stamp: OperationStamp(
+                hlc: HybridLogicalClock(l: 100, c: 1),
+                peerId: author,
+              ),
               body: Uint8List(0),
             ),
           ),

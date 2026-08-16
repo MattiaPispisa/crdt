@@ -75,7 +75,19 @@ class CRDTFugueTextHandler
     );
   }
 
-  /// Updates the text at position [index], **in runes**
+  /// Overwrites the elements starting at [index] with [text], keeping the
+  /// identity of each one.
+  ///
+  /// Two peers updating the same element converge on one of the two values
+  /// instead of keeping both, anchors taken with [stablePositionAt] keep
+  /// resolving, and nothing is added to the tree. An update loses against a
+  /// concurrent deletion of the same element, and stops at the end of the
+  /// text instead of inserting.
+  ///
+  /// [index] and the length of [text] are counted in **runes**, like every
+  /// other positional API of this handler.
+  ///
+  /// `O(√n)` per element.
   void update(int index, String text) {
     if (text.isEmpty) {
       return;
@@ -86,13 +98,12 @@ class CRDTFugueTextHandler
     for (var i = 0; i < runes.length; i++) {
       final nodeID = nodeAt(index + i);
       if (nodeID.isNull) {
-        // Past the end of the text: there is nothing left to replace.
+        // Past the end of the text: there is nothing left to overwrite.
         break;
       }
       items.add(
         _FugueUpdateItem(
           nodeID: nodeID,
-          newNodeID: FugueElementID(doc.peerId, nextCounter()),
           text: String.fromCharCode(runes[i]),
         ),
       );
@@ -180,8 +191,8 @@ class CRDTFugueTextHandler
       for (final item in operation.items) {
         tree.update(
           nodeID: item.nodeID,
-          newID: item.newNodeID,
-          newValue: item.text,
+          value: item.text,
+          stamp: operation.stamp!,
         );
       }
     }
@@ -192,10 +203,6 @@ class CRDTFugueTextHandler
     if (operation is _FugueTextInsertOperation) {
       for (final item in operation.items) {
         yield item.id;
-      }
-    } else if (operation is _FugueTextUpdateOperation) {
-      for (final item in operation.items) {
-        yield item.newNodeID;
       }
     }
   }

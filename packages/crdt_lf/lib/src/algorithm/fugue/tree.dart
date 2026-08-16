@@ -54,10 +54,20 @@ class FugueTree<T> {
       nodes[id] = triple;
     }
 
-    return FugueTree._(
+    final tree = FugueTree<T>._(
       nodes: nodes,
       rootID: FugueElementID.nullID(),
     ).._rebuildIndex();
+
+    final stampsJson = json['stamps'] as Map<String, dynamic>?;
+    if (stampsJson != null) {
+      for (final entry in stampsJson.entries) {
+        tree._stamps[FugueElementID.parse(entry.key)] =
+            OperationStamp.parse(entry.value as String);
+      }
+    }
+
+    return tree;
   }
 
   /// The nodes in the tree, indexed by ID
@@ -65,6 +75,16 @@ class FugueTree<T> {
 
   /// Root node ID
   final FugueElementID _rootID;
+
+  /// The last-writer-wins stamp of the nodes whose value has been overwritten
+  /// in place by [update].
+  ///
+  /// A node still carrying the value it was inserted with has no entry, and
+  /// loses against any update. Only overwritten nodes are stored: the map
+  /// stays empty for the insert/delete-only workloads, which is the case that
+  /// matters — on text there is one node per element, and a stamp on every
+  /// node would cost 24 bytes each.
+  final Map<FugueElementID, OperationStamp> _stamps = {};
 
   /// Positional index over the in-order sequence of all structural nodes
   /// Answers position↔id and successor queries in `O(√n)`.
@@ -270,36 +290,48 @@ class FugueTree<T> {
   void delete(FugueElementID nodeID) {
     if (_nodes.containsKey(nodeID)) {
       _nodes[nodeID]!.node.value = null;
+      // A tombstone refuses every update, so the stamp can never be needed
+      // again: dropping it keeps [_stamps] bounded by the live nodes.
+      _stamps.remove(nodeID);
       _index.setLive(nodeID, live: false);
     }
   }
 
-  /// Updates a [FugueNode]: tombstones [nodeID] and puts [newID], carrying
-  /// [newValue], in the slot [nodeID] occupied.
+  /// Overwrites the value of [nodeID] in place, keeping its identity, its
+  /// position and its liveness.
   ///
-  /// Does nothing when [nodeID] is unknown to this tree.
-  void update({
+  /// Last-writer-wins on [stamp]: [OperationStamp] orders by clock first and
+  /// by peer second, and the peer is what settles two updates carrying an
+  /// identical clock — a case the clock alone cannot order, and where letting
+  /// the arrival order decide would leave two peers with different values.
+  /// Re-applying the same update is therefore a no-op.
+  ///
+  /// Refuses unknown and tombstoned nodes. A deletion is monotone, so an
+  /// update that loses the race against one — or that arrives after the
+  /// tombstone has been dropped by a snapshot — must not bring the element
+  /// back.
+  ///
+  /// Returns whether [value] won. The positional index is deliberately left
+  /// untouched: neither liveness nor traversal order changes, so it stays
+  /// valid and the call is `O(1)`.
+  bool update({
     required FugueElementID nodeID,
-    required FugueElementID newID,
-    required T newValue,
+    required T value,
+    required OperationStamp stamp,
   }) {
     final triple = _nodes[nodeID];
-    if (triple == null) {
-      return;
+    if (triple == null || triple.node.isDeleted) {
+      return false;
     }
 
-    if (!triple.node.isDeleted) {
-      delete(nodeID);
+    final current = _stamps[nodeID];
+    if (current != null && stamp.compareTo(current) <= 0) {
+      return false;
     }
 
-    _addNodeToTree(
-      FugueNode<T>(
-        id: newID,
-        value: newValue,
-        parentID: nodeID,
-        side: FugueSide.left,
-      ),
-    );
+    triple.node.value = value;
+    _stamps[nodeID] = stamp;
+    return true;
   }
 
   /// Adds a node to the tree
@@ -518,14 +550,24 @@ class FugueTree<T> {
   }
 
   /// Serializes the tree to JSON format
+  ///
+  /// Carries the [update] stamps next to the nodes. They are part of the
+  /// state — without them a restored tree would accept an update it had
+  /// already rejected — so a round-trip that dropped them would be a trap.
   Map<String, dynamic> toJson() {
     final nodesJson = <String, dynamic>{};
     for (final entry in _nodes.entries) {
       nodesJson[entry.key.toString()] = entry.value.toJson();
     }
 
+    final stampsJson = <String, dynamic>{};
+    for (final entry in _stamps.entries) {
+      stampsJson[entry.key.toString()] = entry.value.toString();
+    }
+
     return {
       'nodes': nodesJson,
+      'stamps': stampsJson,
     };
   }
 

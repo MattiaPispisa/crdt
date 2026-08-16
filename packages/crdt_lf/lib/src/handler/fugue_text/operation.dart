@@ -240,9 +240,11 @@ class _FugueTextUpdateOperation extends Operation {
   /// - itemsCount: uvarint
   /// - repeated `itemsCount` times:
   ///   - nodeID: [FugueElementID] bytes
-  ///   - newNodeID: [FugueElementID] bytes
   ///   - textLen: uvarint
   ///   - text: wtf8 bytes
+  ///
+  /// The writer and the clock that settle two concurrent updates travel in
+  /// the envelope, as [Operation.stamp], not here.
   factory _FugueTextUpdateOperation.fromBodyBytes(
     Handler<dynamic> handler,
     Uint8List body,
@@ -257,9 +259,6 @@ class _FugueTextUpdateOperation extends Operation {
       final idRec = FugueElementID.readFromBytes(body, offset: offset);
       offset = idRec.nextOffset;
 
-      final newIdRec = FugueElementID.readFromBytes(body, offset: offset);
-      offset = newIdRec.nextOffset;
-
       final textLenRec = UVarint.read(body, offset: offset);
       offset = textLenRec.nextOffset;
       final textEnd = offset + textLenRec.value;
@@ -269,13 +268,7 @@ class _FugueTextUpdateOperation extends Operation {
       final text = Wtf8.decode(Uint8List.sublistView(body, offset, textEnd));
       offset = textEnd;
 
-      items.add(
-        _FugueUpdateItem(
-          nodeID: idRec.value,
-          newNodeID: newIdRec.value,
-          text: text,
-        ),
-      );
+      items.add(_FugueUpdateItem(nodeID: idRec.value, text: text));
     }
 
     return _FugueTextUpdateOperation(
@@ -293,9 +286,7 @@ class _FugueTextUpdateOperation extends Operation {
     final out = BytesBuilder(copy: false);
     UVarint.write(items.length, out);
     for (final item in items) {
-      out
-        ..add(item.nodeID.toBytes())
-        ..add(item.newNodeID.toBytes());
+      out.add(item.nodeID.toBytes());
       final textBytes = Wtf8.encode(item.text);
       UVarint.write(textBytes.length, out);
       out.add(textBytes);
@@ -308,11 +299,9 @@ class _FugueTextUpdateOperation extends Operation {
 class _FugueUpdateItem {
   _FugueUpdateItem({
     required this.nodeID,
-    required this.newNodeID,
     required this.text,
   });
 
   final FugueElementID nodeID;
-  final FugueElementID newNodeID;
   final String text;
 }

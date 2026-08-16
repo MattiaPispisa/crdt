@@ -74,16 +74,27 @@ abstract class FugueSequenceHandler<T, V, S extends FugueState<T, V>>
   @override
   String get id => _id;
 
+  /// Every operation carries an [OperationStamp], because `update` overwrites
+  /// an element in place and needs one to pick a winner.
+  ///
+  /// The switch is per handler, not per kind, so `insert` and `delete` carry
+  /// a stamp they never read. The alternative — a per-kind switch — buys 24
+  /// bytes a keystroke at the price of a second, kind-dependent rule in the
+  /// one place that decides whether a change is readable at all.
+  @override
+  bool get operationsAreStamped => true;
+
   /// Creates an empty state (an empty tree with this handler's projection).
   S createEmptyState();
 
   /// Applies a single decoded [operation] to [tree].
   void applyToTree(FugueTree<T> tree, Operation operation);
 
-  /// The element ids produced by this peer in [operation] — insert ids and
-  /// update new-node ids — used to seed the counter.
+  /// The element ids this peer created in [operation], used to seed the
+  /// counter.
   ///
-  /// Returns nothing for operations that do not create nodes (e.g. delete).
+  /// Returns nothing for operations that create no node: `delete` and
+  /// `update`, which addresses an element that already exists.
   Iterable<FugueElementID> producedElementIds(Operation operation);
 
   /// Builds the delete operation for the given [nodeIDs].

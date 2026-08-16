@@ -250,9 +250,11 @@ class _FugueListUpdateOperation<T> extends Operation {
   /// - itemsCount: uvarint
   /// - repeated `itemsCount` times:
   ///   - nodeID: [FugueElementID] bytes
-  ///   - newNodeID: [FugueElementID] bytes
   ///   - valueLen: uvarint
   ///   - value: [ValueCodec] bytes
+  ///
+  /// The writer and the clock that settle two concurrent updates travel in
+  /// the envelope, as [Operation.stamp], not here.
   factory _FugueListUpdateOperation.fromBodyBytes(
     CRDTFugueListHandler<T> handler,
     Uint8List body,
@@ -267,9 +269,6 @@ class _FugueListUpdateOperation<T> extends Operation {
       final idRec = FugueElementID.readFromBytes(body, offset: offset);
       offset = idRec.nextOffset;
 
-      final newIdRec = FugueElementID.readFromBytes(body, offset: offset);
-      offset = newIdRec.nextOffset;
-
       final valLenRec = UVarint.read(body, offset: offset);
       offset = valLenRec.nextOffset;
       final valEnd = offset + valLenRec.value;
@@ -281,13 +280,7 @@ class _FugueListUpdateOperation<T> extends Operation {
       );
       offset = valEnd;
 
-      items.add(
-        _FugueListUpdateItem<T>(
-          nodeID: idRec.value,
-          newNodeID: newIdRec.value,
-          value: value,
-        ),
-      );
+      items.add(_FugueListUpdateItem<T>(nodeID: idRec.value, value: value));
     }
 
     return _FugueListUpdateOperation<T>(
@@ -309,9 +302,7 @@ class _FugueListUpdateOperation<T> extends Operation {
     final out = BytesBuilder(copy: false);
     UVarint.write(items.length, out);
     for (final item in items) {
-      out
-        ..add(item.nodeID.toBytes())
-        ..add(item.newNodeID.toBytes());
+      out.add(item.nodeID.toBytes());
       final valBytes = valueCodec.encode(item.value);
       UVarint.write(valBytes.length, out);
       out.add(valBytes);
@@ -324,11 +315,9 @@ class _FugueListUpdateOperation<T> extends Operation {
 class _FugueListUpdateItem<T> {
   _FugueListUpdateItem({
     required this.nodeID,
-    required this.newNodeID,
     required this.value,
   });
 
   final FugueElementID nodeID;
-  final FugueElementID newNodeID;
   final T value;
 }

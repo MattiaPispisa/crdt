@@ -92,25 +92,26 @@ class CRDTFugueListHandler<T>
     );
   }
 
-  /// Updates the element at position [index] with [value]
+  /// Overwrites the element at position [index] with [value], keeping the
+  /// identity of that element.
+  ///
+  /// Two peers updating the same element converge on one of the two values
+  /// instead of keeping both, anchors taken with [stablePositionAt] keep
+  /// resolving, and nothing is added to the tree. An update loses against a
+  /// concurrent deletion of the same element, and does nothing when [index]
+  /// is out of range.
+  ///
+  /// `O(√n)`.
   void update(int index, T value) {
     final nodeID = nodeAt(index);
     if (nodeID.isNull) {
       return;
     }
 
-    final newNodeID = FugueElementID(doc.peerId, nextCounter());
-
     doc.registerOperation(
       _FugueListUpdateOperation<T>.fromHandler(
         this,
-        items: [
-          _FugueListUpdateItem<T>(
-            nodeID: nodeID,
-            newNodeID: newNodeID,
-            value: value,
-          ),
-        ],
+        items: [_FugueListUpdateItem<T>(nodeID: nodeID, value: value)],
       ),
     );
   }
@@ -142,8 +143,8 @@ class CRDTFugueListHandler<T>
       for (final item in operation.items) {
         tree.update(
           nodeID: item.nodeID,
-          newID: item.newNodeID,
-          newValue: item.value,
+          value: item.value,
+          stamp: operation.stamp!,
         );
       }
     }
@@ -154,10 +155,6 @@ class CRDTFugueListHandler<T>
     if (operation is _FugueListInsertOperation<T>) {
       for (final item in operation.items) {
         yield item.id;
-      }
-    } else if (operation is _FugueListUpdateOperation<T>) {
-      for (final item in operation.items) {
-        yield item.newNodeID;
       }
     }
   }

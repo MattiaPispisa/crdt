@@ -3,7 +3,12 @@ import 'dart:math';
 import 'package:crdt_lf/crdt_lf.dart';
 import 'package:crdt_lf/src/algorithm/fugue/tree.dart';
 import 'package:crdt_lf/src/algorithm/fugue/value_node.dart';
+import 'package:hlc_dart/hlc_dart.dart';
 import 'package:test/test.dart';
+
+/// A stamp written by [peer] at logical time [l].
+OperationStamp _stamp(PeerId peer, int l) =>
+    OperationStamp(hlc: HybridLogicalClock(l: l, c: 0), peerId: peer);
 
 void main() {
   group('FugueTree', () {
@@ -407,35 +412,157 @@ void main() {
       expect(tree.values(), equals(['X', 'Y', 'B', 'A', 'Z']));
     });
 
-    test('update puts the replacement in the slot of the target', () {
-      final tree = FugueTree<String>.empty();
+    group('update', () {
       final peerId = PeerId.parse('4e91a152-582f-4f46-8944-c2c2e8b217ff');
+      // Pinned in ascending order: the peer settles two updates that share a
+      // clock, so the winner has to be known in advance.
+      final lowPeer = PeerId.parse('00000000-0000-4000-8000-00000000000a');
+      final highPeer = PeerId.parse('00000000-0000-4000-8000-00000000000b');
       final nullID = FugueElementID.nullID();
 
       final a = FugueElementID(peerId, 1);
       final b = FugueElementID(peerId, 2);
       final c = FugueElementID(peerId, 3);
-      tree
-        ..insert(newID: a, value: 'A', leftOrigin: nullID, rightOrigin: nullID)
-        ..insert(newID: b, value: 'B', leftOrigin: a, rightOrigin: nullID)
-        ..insert(newID: c, value: 'C', leftOrigin: b, rightOrigin: nullID)
-        ..update(
-          nodeID: b,
-          newID: FugueElementID(peerId, 4),
-          newValue: 'B2',
+
+      FugueTree<String> abc() {
+        return FugueTree<String>.empty()
+          ..insert(
+            newID: a,
+            value: 'A',
+            leftOrigin: nullID,
+            rightOrigin: nullID,
+          )
+          ..insert(newID: b, value: 'B', leftOrigin: a, rightOrigin: nullID)
+          ..insert(newID: c, value: 'C', leftOrigin: b, rightOrigin: nullID);
+      }
+
+      test('overwrites in place, keeping identity and position', () {
+        final tree = abc();
+
+        expect(
+          tree.update(nodeID: b, value: 'B2', stamp: _stamp(peerId, 10)),
+          isTrue,
         );
 
-      expect(tree.values(), equals(['A', 'B2', 'C']));
+        expect(tree.values(), equals(['A', 'B2', 'C']));
+        expect(tree.nodes().map((n) => n.id).toList(), equals([a, b, c]));
+      });
 
-      // A second update of the same — by now deleted — target still
-      // materializes its replacement, next to the first one in id order.
-      tree.update(
-        nodeID: b,
-        newID: FugueElementID(peerId, 5),
-        newValue: 'B3',
-      );
+      test('the higher stamp wins, whatever order the two arrive in', () {
+        final early = _stamp(peerId, 10);
+        final late = _stamp(peerId, 20);
 
-      expect(tree.values(), equals(['A', 'B2', 'B3', 'C']));
+        final forward = abc()
+          ..update(nodeID: b, value: 'early', stamp: early)
+          ..update(nodeID: b, value: 'late', stamp: late);
+        final backward = abc()
+          ..update(nodeID: b, value: 'late', stamp: late)
+          ..update(nodeID: b, value: 'early', stamp: early);
+
+        expect(forward.values(), equals(backward.values()));
+        expect(forward.values(), equals(['A', 'late', 'C']));
+      });
+
+      test('the peer settles two updates that share a clock', () {
+        final low = _stamp(lowPeer, 10);
+        final high = _stamp(highPeer, 10);
+        expect(low.hlc.compareTo(high.hlc), equals(0));
+
+        final forward = abc()
+          ..update(nodeID: b, value: 'from low', stamp: low)
+          ..update(nodeID: b, value: 'from high', stamp: high);
+        final backward = abc()
+          ..update(nodeID: b, value: 'from high', stamp: high)
+          ..update(nodeID: b, value: 'from low', stamp: low);
+
+        expect(forward.values(), equals(backward.values()));
+        expect(forward.values(), equals(['A', 'from high', 'C']));
+      });
+
+      test('re-applying the same update changes nothing', () {
+        final tree = abc();
+        final stamp = _stamp(peerId, 10);
+
+        expect(tree.update(nodeID: b, value: 'B2', stamp: stamp), isTrue);
+        expect(tree.update(nodeID: b, value: 'B2', stamp: stamp), isFalse);
+        expect(tree.values(), equals(['A', 'B2', 'C']));
+      });
+
+      test('an unknown node is refused and leaves the tree alone', () {
+        final tree = abc();
+        final stranger = FugueElementID(peerId, 99);
+
+        expect(
+          tree.update(nodeID: stranger, value: 'X', stamp: _stamp(peerId, 10)),
+          isFalse,
+        );
+        expect(tree.values(), equals(['A', 'B', 'C']));
+        expect(tree.findNextNode(a), equals(b));
+      });
+
+      // A deletion is monotone: whichever way the two are ordered, the element
+      // stays gone.
+      test('a tombstone is never brought back, in either order', () {
+        final deleteFirst = abc()..delete(b);
+        expect(
+          deleteFirst.update(nodeID: b, value: 'B2', stamp: _stamp(peerId, 10)),
+          isFalse,
+        );
+
+        final updateFirst = abc()
+          ..update(nodeID: b, value: 'B2', stamp: _stamp(peerId, 10))
+          ..delete(b);
+
+        expect(deleteFirst.values(), equals(updateFirst.values()));
+        expect(deleteFirst.values(), equals(['A', 'C']));
+      });
+
+      // The stamp goes away with the value it guarded, so it cannot pin memory
+      // for a node that can never accept a write again.
+      test('deleting evicts the stamp without letting a later update in', () {
+        final tree = abc()
+          ..update(nodeID: b, value: 'B2', stamp: _stamp(peerId, 10))
+          ..delete(b);
+
+        expect(
+          tree.update(nodeID: b, value: 'B3', stamp: _stamp(peerId, 30)),
+          isFalse,
+        );
+        expect(tree.values(), equals(['A', 'C']));
+      });
+
+      // Nothing about liveness or traversal order changes, so the positional
+      // index must not even notice.
+      test('leaves every positional query untouched', () {
+        final tree = abc();
+        final ids = [a, b, c];
+
+        List<Object?> queries() => [
+              for (var i = 0; i < 3; i++) tree.findNodeAtPosition(i),
+              for (final id in ids) tree.findNextNode(id),
+              for (final id in ids) tree.liveIndexAfter(id),
+            ];
+
+        final before = queries();
+        tree.update(nodeID: b, value: 'B2', stamp: _stamp(peerId, 10));
+
+        expect(queries(), equals(before));
+      });
+
+      test('a json round-trip keeps the stamps, so a stale update still loses',
+          () {
+        final tree = abc()
+          ..update(nodeID: b, value: 'B2', stamp: _stamp(peerId, 20));
+
+        final restored = FugueTree<String>.fromJson(tree.toJson());
+        expect(restored.values(), equals(['A', 'B2', 'C']));
+
+        expect(
+          restored.update(nodeID: b, value: 'stale', stamp: _stamp(peerId, 10)),
+          isFalse,
+        );
+        expect(restored.values(), equals(['A', 'B2', 'C']));
+      });
     });
 
     test('the sequence does not depend on the order operations are applied in',
@@ -477,8 +604,8 @@ void main() {
             ),
         (tree) => tree.update(
               nodeID: b,
-              newID: FugueElementID(p1, 3),
-              newValue: 'B2',
+              value: 'B2',
+              stamp: _stamp(p1, 10),
             ),
       ];
 
@@ -669,13 +796,13 @@ void main() {
         } else if (op < 8) {
           tree.delete(live[rng.nextInt(live.length)].id);
         } else {
-          final id = nextId();
+          // A strictly growing clock, so every update wins and the value the
+          // oracle sees is the one just written.
           tree.update(
             nodeID: live[rng.nextInt(live.length)].id,
-            newID: id,
-            newValue: 'u$counter',
+            value: 'u$step',
+            stamp: _stamp(peerId, step + 1),
           );
-          created.add(id);
         }
 
         checkAgainstOracle(tree, step);
