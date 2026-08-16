@@ -8,6 +8,12 @@
 
 - Requires `crdt_lf` 4.0.0, where text is indexed by code point rather than by code unit. [106](https://github.com/MattiaPispisa/crdt/issues/106)
 
+### Fixed
+
+- `CrdtTextCursorsOverlay`: a remote cursor anchored past an emoji (or any
+  non-BMP character) now paints at the right position instead of drifting by
+  one code unit per preceding astral character. [106](https://github.com/MattiaPispisa/crdt/issues/106)
+
 ## [0.3.0](https://github.com/MattiaPispisa/crdt/tree/crdt_lf_flutter-v0.3.0/packages/crdt_lf_flutter)
 
 **Date:** 2026-08-01

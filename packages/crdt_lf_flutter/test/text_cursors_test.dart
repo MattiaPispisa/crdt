@@ -93,6 +93,26 @@ void main() {
       );
     });
 
+    testWidgets(
+        'draws a caret at the UTF-16 offset of an anchor past an emoji',
+        (tester) async {
+      // Rune index 3 lands after "😀 he" — UTF-16 offset 4, one past the
+      // rune index, because the emoji is a surrogate pair.
+      final note = CRDTFugueTextHandler(doc, 'note')..insert(0, '😀 hello');
+      const color = Color(0xFFAA0000);
+      final cursor = CrdtTextCursor(
+        id: 'peer-b',
+        color: color,
+        base: note.stablePositionAt(3),
+      );
+      await tester.pumpWidget(host([cursor]));
+
+      expect(
+        overlayPaint(),
+        paints..rect(rect: expectedCaret(tester, 4), color: color),
+      );
+    });
+
     testWidgets('paints a selection highlight and a label tag', (tester) async {
       final note = CRDTFugueTextHandler(doc, 'note')..insert(0, 'hello world');
       const color = Color(0xFF00AA00);
