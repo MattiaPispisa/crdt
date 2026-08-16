@@ -16,10 +16,11 @@ part 'operation.dart';
 ///
 /// Conflict resolution combines:
 /// - the Fugue algorithm ([The Art of the Fugue: Minimizing Interleaving in Collaborative Text Editing](https://arxiv.org/abs/2305.00583)) to minimize interleaving;
-/// - a **last-writer-wins register** (keyed on the change HLC) for the
-///   "current position" of each element. Concurrent moves of the same element
-///   converge to a single winning destination instead of duplicating the
-///   element.
+/// - a **last-writer-wins register** on [OperationStamp] for the value and
+///   for the "current position" of each element. Concurrent moves of the same
+///   element converge to a single winning destination instead of duplicating
+///   the element, and so do concurrent updates of its value. It is the same
+///   rule the two other Fugue handlers apply to `update`.
 ///
 /// ## Identities and positions
 /// Every element has a stable [FugueElementID] **identity** assigned at
@@ -177,7 +178,17 @@ class CRDTFugueMovableListHandler<T> extends Handler<FugueMovableListState<T>>
     );
   }
 
-  /// Updates the value of the element currently at visible position [index].
+  /// Overwrites the value of the element at visible position [index], keeping
+  /// the identity of that element.
+  ///
+  /// Two peers updating the same element converge on one of the two values
+  /// instead of keeping both, and the element keeps its place in the list. An
+  /// update loses against a concurrent deletion of the same element, and does
+  /// nothing when [index] is out of range.
+  ///
+  /// The rule is [OperationStamp]: clock first, peer second. It is the same
+  /// one `CRDTFugueTextHandler.update` and `CRDTFugueListHandler.update`
+  /// follow — the three handlers no longer have two models between them.
   void update(int index, T value) {
     final identity = _identityAtVisibleIndex(index);
     if (identity == null) {

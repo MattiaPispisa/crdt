@@ -101,6 +101,10 @@ class CRDTFugueListHandler<T>
   /// concurrent deletion of the same element, and does nothing when [index]
   /// is out of range.
   ///
+  /// The rule is [OperationStamp]: clock first, peer second. It is the same
+  /// one `CRDTFugueTextHandler.update` and
+  /// `CRDTFugueMovableListHandler.update` follow.
+  ///
   /// `O(√n)`.
   void update(int index, T value) {
     final nodeID = nodeAt(index);

@@ -80,29 +80,77 @@ void main() {
       expect(setB.value, equals(setA.value));
     });
 
-    // Before the stamp, the movable list compared bare clocks with
-    // `happenedAfter`, which is false in both directions on a tie: nobody won,
-    // the value already in place stayed, and which one that was depended on
-    // the order the changes arrived in. Two peers, two results.
-    test('a movable list update converges instead of going by arrival', () {
-      final a = _doc(_peerA);
-      final b = _doc(_peerB);
-      final listA = CRDTFugueMovableListHandler<String>(a, 'l')..insert(0, 'x');
-      final listB = CRDTFugueMovableListHandler<String>(b, 'l');
-      b.importChanges(a.exportChanges());
-      expect(listB.value, equals(['x']));
+    // One scenario, three handlers: the same tie has to pick the same peer on
+    // all of them. Before 4.0.0 there were three answers to that one question.
+    // The two sequence handlers kept both values. The movable list compared
+    // bare clocks with `happenedAfter`, which is false in both directions on a
+    // tie: nobody won, the value already in place stayed, and which one that
+    // was depended on the order the changes arrived in.
+    group('update on the three Fugue handlers', () {
+      /// Puts one element on two peers, then has both update it in the same
+      /// tick, and asserts they read back the same thing afterwards.
+      ///
+      /// [seed] writes the element, [update] overwrites it with the given
+      /// text, [read] returns the value to compare. [winner] is what the peer
+      /// that wins the tie wrote — peer B, which sorts higher.
+      void expectSameWinner<H extends Handler<dynamic>>({
+        required H Function(CRDTDocument doc) create,
+        required void Function(H handler) seed,
+        required void Function(H handler, String value) update,
+        required Object? Function(H handler) read,
+        required Object? winner,
+      }) {
+        final a = _doc(_peerA);
+        final b = _doc(_peerB);
+        final handlerA = create(a);
+        final handlerB = create(b);
 
-      _levelClocks(a, b);
-      listA.update(0, 'from A');
-      listB.update(0, 'from B');
+        seed(handlerA);
+        b.importChanges(a.exportChanges());
 
-      _expectTie(listA.operations().last, listB.operations().last);
+        _levelClocks(a, b);
+        update(handlerA, 'from A');
+        update(handlerB, 'from B');
+        _expectTie(handlerA.operations().last, handlerB.operations().last);
 
-      a.importChanges(b.exportChanges());
-      b.importChanges(a.exportChanges());
+        a.importChanges(b.exportChanges());
+        b.importChanges(a.exportChanges());
 
-      expect(listA.value, equals(listB.value));
-      expect(listA.value, equals(['from B']));
+        expect(read(handlerA), equals(read(handlerB)));
+        expect(read(handlerA), equals(winner));
+      }
+
+      test('fugue text', () {
+        expectSameWinner<CRDTFugueTextHandler>(
+          create: (doc) => CRDTFugueTextHandler(doc, 'h'),
+          seed: (handler) => handler.insert(0, 'x'),
+          // One element, so one rune: the last letter of "from A" / "from B".
+          update: (handler, value) =>
+              handler.update(0, value[value.length - 1]),
+          read: (handler) => handler.value,
+          winner: 'B',
+        );
+      });
+
+      test('fugue list', () {
+        expectSameWinner<CRDTFugueListHandler<String>>(
+          create: (doc) => CRDTFugueListHandler<String>(doc, 'h'),
+          seed: (handler) => handler.insert(0, 'x'),
+          update: (handler, value) => handler.update(0, value),
+          read: (handler) => handler.value,
+          winner: ['from B'],
+        );
+      });
+
+      test('fugue movable list', () {
+        expectSameWinner<CRDTFugueMovableListHandler<String>>(
+          create: (doc) => CRDTFugueMovableListHandler<String>(doc, 'h'),
+          seed: (handler) => handler.insert(0, 'x'),
+          update: (handler, value) => handler.update(0, value),
+          read: (handler) => handler.value,
+          winner: ['from B'],
+        );
+      });
     });
 
     test('a movable list move converges instead of going by arrival', () {
