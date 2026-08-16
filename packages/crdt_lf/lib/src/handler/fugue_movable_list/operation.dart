@@ -27,7 +27,12 @@ class _FugueMovableListOperationFactory<T> {
     } else if (env.kind == OperationType.kindDelete) {
       return _MovableListDeleteOperation<T>.fromBodyBytes(handler, body);
     }
-    return null;
+
+    throw UnknownOperationKindException(
+      handlerType: env.handlerType,
+      handlerId: env.handlerId,
+      kind: env.kind,
+    );
   }
 }
 

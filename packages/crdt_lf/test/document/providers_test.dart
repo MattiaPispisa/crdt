@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:crdt_lf/crdt_lf.dart';
 import 'package:hlc_dart/hlc_dart.dart';
 import 'package:test/test.dart';
@@ -415,6 +417,36 @@ void main() {
       receiverList.useIncrementalCacheUpdate = false;
       expect(receiverList.value, ['a', 'b']);
       expect(receiverList.increments, 0);
+    });
+
+    // The drain empties the queue and the version is already pinned past those
+    // changes, so a throw halfway through used to leave the old state in place:
+    // one loud read, then quiet wrong answers for ever. Both reads must fail.
+    test('a change the queue cannot decode keeps failing, not just once', () {
+      final author = PeerId.generate();
+      target.applyChange(
+        Change.fromPayloadBytes(
+          id: OperationId(author, HybridLogicalClock(l: 100, c: 1)),
+          deps: {},
+          author: author,
+          payloadBytes: OperationEnvelopeCodec.encode(
+            handlerType: targetText.handlerType,
+            handlerId: targetText.id,
+            kind: 99,
+            body: Uint8List(0),
+          ),
+        ),
+      );
+
+      expect(
+        () => targetText.value,
+        throwsA(isA<UnknownOperationKindException>()),
+      );
+      expect(targetText.cachedState, isNull);
+      expect(
+        () => targetText.value,
+        throwsA(isA<UnknownOperationKindException>()),
+      );
     });
   });
 

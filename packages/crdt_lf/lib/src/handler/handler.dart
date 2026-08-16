@@ -1,6 +1,15 @@
 part of '../document/document.dart';
 
 /// A factory function that creates an operation from bytes.
+///
+/// Returns `null` when the envelope belongs to another handler — a different
+/// instance id or a different type tag. That is a normal answer, and the
+/// caller skips the change.
+///
+/// Throws [UnknownOperationKindException] when the envelope *is* addressed to
+/// this handler but carries a kind this build cannot decode. That change comes
+/// from a newer peer, and skipping it would leave two peers with different
+/// states and the same version vector.
 typedef OperationFactory = Operation? Function(
   Uint8List operationBytes,
 );
@@ -51,7 +60,9 @@ abstract class Handler<T>
 
   final String? _handlerType;
 
-  /// The factory function that creates an operation from a payload
+  /// The factory function that creates an operation from a payload.
+  ///
+  /// See [OperationFactory] for what `null` means and when the decode throws.
   OperationFactory get operationFactory;
 
   /// Stable identifier of this handler's **type**.

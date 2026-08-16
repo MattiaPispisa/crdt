@@ -21,7 +21,11 @@ class _ORSetOperationFactory<T> {
       return _ORSetRemoveOperation<T>.fromBodyBytes(handler, body);
     }
 
-    return null;
+    throw UnknownOperationKindException(
+      handlerType: env.handlerType,
+      handlerId: env.handlerId,
+      kind: env.kind,
+    );
   }
 }
 

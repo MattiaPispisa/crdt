@@ -38,6 +38,35 @@ class MissingDependencyException extends CrdtException {
   const MissingDependencyException(super.message);
 }
 
+/// Thrown when a change addressed to this handler carries an operation kind
+/// this build cannot decode.
+///
+/// It means the change was written by a newer peer. Dropping it silently would
+/// let two peers hold different states while agreeing on the same version
+/// vector, so it is raised instead. Catch it to tell the user that this peer
+/// needs an upgrade.
+///
+/// A change meant for another handler is not this: that one is still answered
+/// with `null` and skipped.
+class UnknownOperationKindException extends CrdtException {
+  /// Constructor
+  const UnknownOperationKindException({
+    required this.handlerType,
+    required this.handlerId,
+    required this.kind,
+  }) : super('Handler $handlerType($handlerId) cannot decode operation '
+            'kind $kind. The change comes from a newer peer.');
+
+  /// The handler type tag carried by the envelope.
+  final String handlerType;
+
+  /// The handler instance id carried by the envelope.
+  final String handlerId;
+
+  /// The kind byte this build does not know how to decode.
+  final int kind;
+}
+
 /// Thrown when attempting to register a handler that already exists.
 class HandlerAlreadyRegisteredException extends CrdtException {
   /// Constructor

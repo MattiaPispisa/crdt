@@ -1,5 +1,8 @@
+import 'dart:typed_data';
+
 import 'package:crdt_lf/crdt_lf.dart';
 import 'package:crdt_socket_sync/src/server_client/server/in_memory_server_registry.dart';
+import 'package:hlc_dart/hlc_dart.dart';
 import 'package:test/test.dart';
 
 void main() {
@@ -93,6 +96,40 @@ void main() {
         await expectLater(
           () => registry.applyChange('doc', orphan),
           throwsA(isA<CausallyNotReadyException>()),
+        );
+      },
+    );
+
+    test(
+      'a change carrying an unknown operation kind is not an out-of-sync one',
+      () async {
+        await registry.addDocument('doc');
+        final document = (await registry.getDocument('doc'))!;
+        final text = CRDTFugueTextHandler(document, 'text');
+
+        final author = PeerId.generate();
+        final change = Change.fromPayloadBytes(
+          id: OperationId(author, HybridLogicalClock(l: 100, c: 1)),
+          deps: {},
+          author: author,
+          payloadBytes: OperationEnvelopeCodec.encode(
+            handlerType: text.handlerType,
+            handlerId: text.id,
+            kind: 99,
+            body: Uint8List(0),
+          ),
+        );
+
+        // Applying is zero-decode, so the change lands. What matters is that it
+        // is not reported as a causality gap: the server answers that with a
+        // resync, and resyncing cannot teach an old peer a newer operation.
+        expect(await registry.applyChange('doc', change), isTrue);
+
+        // The disagreement shows up on the read instead, where the client can
+        // turn it into "this peer needs an upgrade".
+        expect(
+          () => text.value,
+          throwsA(isA<UnknownOperationKindException>()),
         );
       },
     );

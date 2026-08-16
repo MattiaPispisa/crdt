@@ -23,7 +23,11 @@ class _TextOperationFactory {
       return _TextUpdateOperation.fromBodyBytes(handler, body);
     }
 
-    return null;
+    throw UnknownOperationKindException(
+      handlerType: env.handlerType,
+      handlerId: env.handlerId,
+      kind: env.kind,
+    );
   }
 }
 

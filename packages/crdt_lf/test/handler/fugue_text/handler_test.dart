@@ -1,6 +1,7 @@
 import 'dart:typed_data';
 
 import 'package:crdt_lf/crdt_lf.dart';
+import 'package:hlc_dart/hlc_dart.dart';
 import 'package:test/test.dart';
 
 void main() {
@@ -1156,6 +1157,89 @@ void main() {
       final restoredText = CRDTFugueTextHandler(restored, 'text');
       restored.importSnapshot(target.takeSnapshot());
       expect(restoredText.value, 'hello world');
+    });
+    // These three cover the whole contract of OperationFactory. It is the same
+    // code in all nine handlers, so it is asserted once, here.
+    group('operation decoding', () {
+      test('raises on a kind this build cannot decode', () {
+        final handler = CRDTFugueTextHandler(CRDTDocument(), 'text1');
+        final payload = OperationEnvelopeCodec.encode(
+          handlerType: handler.handlerType,
+          handlerId: handler.id,
+          kind: 99,
+          body: Uint8List(0),
+        );
+
+        expect(
+          () => handler.operationFactory(payload),
+          throwsA(
+            isA<UnknownOperationKindException>()
+                .having((e) => e.kind, 'kind', 99)
+                .having((e) => e.handlerId, 'handlerId', 'text1')
+                .having(
+                  (e) => e.handlerType,
+                  'handlerType',
+                  'CRDTFugueTextHandler',
+                ),
+          ),
+        );
+      });
+
+      test('answers null for a change addressed to another handler id', () {
+        final handler = CRDTFugueTextHandler(CRDTDocument(), 'text1');
+        final payload = OperationEnvelopeCodec.encode(
+          handlerType: handler.handlerType,
+          handlerId: 'text2',
+          kind: 99,
+          body: Uint8List(0),
+        );
+
+        expect(handler.operationFactory(payload), isNull);
+      });
+
+      test('answers null for the same id under another handler type', () {
+        final handler = CRDTFugueTextHandler(CRDTDocument(), 'text1');
+        final payload = OperationEnvelopeCodec.encode(
+          handlerType: 'CRDTFugueListHandler<String>',
+          handlerId: handler.id,
+          kind: 99,
+          body: Uint8List(0),
+        );
+
+        expect(handler.operationFactory(payload), isNull);
+      });
+
+      test('an undecodable change makes the handler raise on every read', () {
+        final doc = CRDTDocument();
+        final handler = CRDTFugueTextHandler(doc, 'text1')..insert(0, 'Hello');
+
+        final author = PeerId.generate();
+        doc.applyChange(
+          Change.fromPayloadBytes(
+            id: OperationId(author, HybridLogicalClock(l: 100, c: 1)),
+            deps: {},
+            author: author,
+            payloadBytes: OperationEnvelopeCodec.encode(
+              handlerType: handler.handlerType,
+              handlerId: handler.id,
+              kind: 99,
+              body: Uint8List(0),
+            ),
+          ),
+        );
+
+        // Applying is zero-decode, so nothing failed above. The disagreement
+        // surfaces on the read — and it has to keep surfacing: answering with
+        // the pre-change text would be the silent divergence this guards.
+        expect(
+          () => handler.value,
+          throwsA(isA<UnknownOperationKindException>()),
+        );
+        expect(
+          () => handler.value,
+          throwsA(isA<UnknownOperationKindException>()),
+        );
+      });
     });
   });
 }

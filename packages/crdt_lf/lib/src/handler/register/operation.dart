@@ -18,7 +18,12 @@ class _RegisterOperationFactory<T> {
     if (env.kind == OperationType.kindInsert) {
       return _RegisterSetOperation<T>.fromBodyBytes(handler, body);
     }
-    return null;
+
+    throw UnknownOperationKindException(
+      handlerType: env.handlerType,
+      handlerId: env.handlerId,
+      kind: env.kind,
+    );
   }
 }
 

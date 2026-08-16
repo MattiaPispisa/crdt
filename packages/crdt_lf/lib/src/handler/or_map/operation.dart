@@ -21,7 +21,11 @@ class _ORMapOperationFactory<K, V> {
       return _ORMapRemoveOperation<K, V>.fromBodyBytes(handler, body);
     }
 
-    return null;
+    throw UnknownOperationKindException(
+      handlerType: env.handlerType,
+      handlerId: env.handlerId,
+      kind: env.kind,
+    );
   }
 }
 

@@ -23,7 +23,11 @@ class _MapOperationFactory<T> {
       return _MapUpdateOperation<T>.fromBodyBytes(handler, body);
     }
 
-    return null;
+    throw UnknownOperationKindException(
+      handlerType: env.handlerType,
+      handlerId: env.handlerId,
+      kind: env.kind,
+    );
   }
 }
 

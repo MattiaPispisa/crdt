@@ -183,7 +183,8 @@ mixin CacheableStateProvider<T> on DocumentConsumer {
   ///
   /// Anything that cannot be decoded or applied drops the cache, so the next
   /// read recomputes from the history — the same failure policy
-  /// [_internalIncrementCachedState] uses.
+  /// [_internalIncrementCachedState] uses. A decode that *throws* drops the
+  /// cache too, then rethrows: see the comment on the loop.
   void _drainPendingRemoteChanges() {
     final pending = _pendingRemoteChanges;
     if (pending == null) {
@@ -202,18 +203,28 @@ mixin CacheableStateProvider<T> on DocumentConsumer {
     }
     var state = _cachedState as T;
 
-    for (final change in pending) {
-      final operation = _operationFromChange(change);
-      if (operation == null) {
-        invalidateCache();
-        return;
+    // The queue was emptied above and [_queueRemoteChanges] already pinned the
+    // version past these changes. Letting a throw escape with the old state
+    // still in place would make the next read answer from a cache that silently
+    // lags the document. Drop it first, so that read replays the history and
+    // fails the same way instead.
+    try {
+      for (final change in pending) {
+        final operation = _operationFromChange(change);
+        if (operation == null) {
+          invalidateCache();
+          return;
+        }
+        final next = incrementCachedState(operation: operation, state: state);
+        if (next == null) {
+          invalidateCache();
+          return;
+        }
+        state = next;
       }
-      final next = incrementCachedState(operation: operation, state: state);
-      if (next == null) {
-        invalidateCache();
-        return;
-      }
-      state = next;
+    } catch (_) {
+      invalidateCache();
+      rethrow;
     }
 
     // The pinned version already covers these changes (see

@@ -29,7 +29,11 @@ class _FugueTextOperationFactory {
       return _FugueTextUpdateOperation.fromBodyBytes(handler, body);
     }
 
-    return null;
+    throw UnknownOperationKindException(
+      handlerType: env.handlerType,
+      handlerId: env.handlerId,
+      kind: env.kind,
+    );
   }
 }
 
