@@ -16,10 +16,14 @@ void main() {
     group('ordering', () {
       test('the clock decides when the clocks differ', () {
         // The higher clock wins even though its peer sorts lower.
-        expect(_stamp(_peerA, 2, 0).compareTo(_stamp(_peerB, 1, 0)),
-            greaterThan(0));
-        expect(_stamp(_peerA, 1, 1).compareTo(_stamp(_peerA, 1, 0)),
-            greaterThan(0));
+        expect(
+          _stamp(_peerA, 2, 0).compareTo(_stamp(_peerB, 1, 0)),
+          greaterThan(0),
+        );
+        expect(
+          _stamp(_peerA, 1, 1).compareTo(_stamp(_peerA, 1, 0)),
+          greaterThan(0),
+        );
       });
 
       test('the peer settles two stamps that share a clock', () {

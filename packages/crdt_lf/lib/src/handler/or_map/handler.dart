@@ -1,7 +1,6 @@
 import 'dart:typed_data';
 
 import 'package:crdt_lf/crdt_lf.dart';
-import 'package:hlc_dart/hlc_dart.dart';
 
 part 'operation.dart';
 
@@ -54,26 +53,20 @@ class CRDTORMapHandler<K, V> extends Handler<ORMapState<K, V>> {
   late final OperationFactory operationFactory =
       _ORMapOperationFactory<K, V>(this).fromBytes;
 
-  /// Obtains a unique tag for an operation
-  ORHandlerTag _tag() {
-    doc.prepareMutation();
-    return ORHandlerTag(
-      peerId: doc.peerId,
-      hlc: doc.hlc,
-    );
-  }
+  @override
+  bool get operationsAreStamped => true;
 
-  /// Puts [value] for [key] in the map, producing a unique tag.
+  /// Puts [value] for [key] in the map, under a tag of its own.
   ///
-  /// If the key already exists, this creates a new tag for the new value,
-  /// effectively updating the key's value. The tag is pseudo-causal,
-  /// derived from the current document clock and peer id.
+  /// Writing a key that already exists adds a new tag rather than replacing
+  /// the old one, which is how the key reads back as updated. The tag is the
+  /// [OperationStamp] the document mints for the operation, so two peers
+  /// writing the same key concurrently converge on the higher stamp.
   void put(K key, V value) {
     final operation = _ORMapPutOperation<K, V>.fromHandler(
       this,
       key: key,
       value: value,
-      tag: _tag(),
     );
     doc.registerOperation(operation);
   }
@@ -145,7 +138,7 @@ class CRDTORMapHandler<K, V> extends Handler<ORMapState<K, V>> {
       live: <K, Set<ORMapEntry<V>>>{},
       all: <K, Set<ORMapEntry<V>>>{},
       snapshotOnly: <K, V>{},
-      tombstones: <ORHandlerTag>{},
+      tombstones: <OperationStamp>{},
     );
 
     final snap = lastSnapshot();
@@ -212,7 +205,9 @@ class CRDTORMapHandler<K, V> extends Handler<ORMapState<K, V>> {
   }) {
     final key = operation.key;
     final value = operation.value;
-    final tag = operation.tag;
+    // The stamp is there for every put: the handler is stamped, so the
+    // document mints one locally and the decode refuses a change without one.
+    final tag = operation.stamp!;
 
     final entry = ORMapEntry<V>(value: value, tag: tag);
 
@@ -290,17 +285,17 @@ class ORMapState<K, V> {
     required Map<K, Set<ORMapEntry<V>>> live,
     required Map<K, Set<ORMapEntry<V>>> all,
     required Map<K, V> snapshotOnly,
-    required Set<ORHandlerTag> tombstones,
+    required Set<OperationStamp> tombstones,
   })  : _tombstones = tombstones,
         _snapshotOnly = snapshotOnly,
         _all = all,
         _live = live;
 
   /// Returns all tags for a given key (across all entries)
-  Set<ORHandlerTag> _allTagsForKey(K key) {
+  Set<OperationStamp> _allTagsForKey(K key) {
     final allForKey = _all[key];
     if (allForKey == null) {
-      return <ORHandlerTag>{};
+      return <OperationStamp>{};
     }
     return allForKey.map((entry) => entry.tag).toSet();
   }
@@ -315,7 +310,7 @@ class ORMapState<K, V> {
   final Map<K, V> _snapshotOnly;
 
   /// The tombstones
-  final Set<ORHandlerTag> _tombstones;
+  final Set<OperationStamp> _tombstones;
 
   /// The state of the OR-Map.
   /// For each key with live entries, we pick the entry with the
@@ -360,7 +355,7 @@ class ORMapEntry<V> {
   final V value;
 
   /// The unique tag for this entry
-  final ORHandlerTag tag;
+  final OperationStamp tag;
 
   @override
   bool operator ==(Object other) {

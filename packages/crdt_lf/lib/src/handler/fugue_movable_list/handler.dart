@@ -5,7 +5,6 @@ import 'package:crdt_lf/src/algorithm/fugue/tree.dart';
 import 'package:crdt_lf/src/algorithm/fugue/value_node.dart';
 import 'package:crdt_lf/src/handler/fugue/element_id_floor.dart';
 import 'package:crdt_lf/src/handler/fugue/fugue_cache.dart';
-import 'package:hlc_dart/hlc_dart.dart';
 
 part 'operation.dart';
 
@@ -63,6 +62,9 @@ class CRDTFugueMovableListHandler<T> extends Handler<FugueMovableListState<T>>
   @override
   late final OperationFactory operationFactory =
       _FugueMovableListOperationFactory<T>(this).fromBytes;
+
+  @override
+  bool get operationsAreStamped => true;
 
   /// Returns the current list value.
   List<T> get value => cachedOrComputedState().value;
@@ -156,7 +158,6 @@ class CRDTFugueMovableListHandler<T> extends Handler<FugueMovableListState<T>>
         newPositionID: newPositionID,
         leftOrigin: leftOrigin,
         rightOrigin: rightOrigin,
-        hlc: doc.hlc,
       ),
     );
   }
@@ -171,7 +172,6 @@ class CRDTFugueMovableListHandler<T> extends Handler<FugueMovableListState<T>>
     doc.registerOperation(
       _MovableListUpdateOperation<T>.fromHandler(
         this,
-        hlc: doc.hlc,
         items: [_MovableListUpdateItem<T>(identityID: identity, value: value)],
       ),
     );
@@ -313,9 +313,13 @@ class CRDTFugueMovableListHandler<T> extends Handler<FugueMovableListState<T>>
           item.identityID,
           () => _MovableElement<T>(
             value: item.value,
-            valueHlc: HybridLogicalClock.initialize(),
+            // The insert's own stamp, not a zero clock: any later move or
+            // update has to have observed this insert, so it always carries a
+            // greater stamp. Seeding with a real one keeps the peer in the
+            // record, which is what settles a tie.
+            valueStamp: operation.stamp!,
             position: item.positionID,
-            positionHlc: HybridLogicalClock.initialize(),
+            positionStamp: operation.stamp!,
             deleted: false,
           ),
         );
@@ -329,21 +333,24 @@ class CRDTFugueMovableListHandler<T> extends Handler<FugueMovableListState<T>>
       );
       final element = state._elements[operation.identityID];
       if (element != null) {
-        if (operation.hlc.happenedAfter(element.positionHlc)) {
+        // `compareTo`, not `happenedAfter`: two moves sharing a clock are
+        // ordered by peer instead of leaving both sides refusing to move,
+        // which used to make the winner depend on the arrival order.
+        if (operation.stamp!.compareTo(element.positionStamp) > 0) {
           element
             ..position = operation.newPositionID
-            ..positionHlc = operation.hlc;
+            ..positionStamp = operation.stamp!;
         }
       }
     } else if (operation is _MovableListUpdateOperation<T>) {
       for (final item in operation.items) {
         final element = state._elements[item.identityID];
         if (element != null) {
-          // last written wins
-          if (operation.hlc.happenedAfter(element.valueHlc)) {
+          // Last writer wins, with the peer settling an identical clock.
+          if (operation.stamp!.compareTo(element.valueStamp) > 0) {
             element
               ..value = item.value
-              ..valueHlc = operation.hlc;
+              ..valueStamp = operation.stamp!;
           }
         }
       }
@@ -363,8 +370,8 @@ class CRDTFugueMovableListHandler<T> extends Handler<FugueMovableListState<T>>
   /// - repeated `elementsCount` times:
   ///   - identityID: [FugueElementID] bytes
   ///   - position: [FugueElementID] bytes
-  ///   - positionHlc: 8 bytes
-  ///   - valueHlc: 8 bytes
+  ///   - positionStamp: [OperationStamp.byteLength] bytes
+  ///   - valueStamp: [OperationStamp.byteLength] bytes
   ///   - deleted: u8 (0/1)
   ///   - valueLen: uvarint
   ///   - value: [ValueCodec] bytes
@@ -387,8 +394,8 @@ class CRDTFugueMovableListHandler<T> extends Handler<FugueMovableListState<T>>
       out
         ..add(identityID.toBytes())
         ..add(element.position.toBytes())
-        ..add(element.positionHlc.toUint8List())
-        ..add(element.valueHlc.toUint8List())
+        ..add(element.positionStamp.toUint8List())
+        ..add(element.valueStamp.toUint8List())
         ..addByte(element.deleted ? 1 : 0);
 
       final valBytes = _valueCodec.encode(element.value);
@@ -429,17 +436,17 @@ class CRDTFugueMovableListHandler<T> extends Handler<FugueMovableListState<T>>
       );
       offset = positionRec.nextOffset;
 
-      final positionHlc = HybridLogicalClock.fromUint8List(
+      final positionStamp = OperationStamp.fromUint8List(
         snapshot,
         offset: offset,
       );
-      offset += 8;
+      offset += OperationStamp.byteLength;
 
-      final valueHlc = HybridLogicalClock.fromUint8List(
+      final valueStamp = OperationStamp.fromUint8List(
         snapshot,
         offset: offset,
       );
-      offset += 8;
+      offset += OperationStamp.byteLength;
 
       if (offset >= snapshot.length) {
         throw const FormatException(
@@ -464,9 +471,9 @@ class CRDTFugueMovableListHandler<T> extends Handler<FugueMovableListState<T>>
 
       result[identityRec.value] = _MovableElement<T>(
         value: value,
-        valueHlc: valueHlc,
+        valueStamp: valueStamp,
         position: positionRec.value,
-        positionHlc: positionHlc,
+        positionStamp: positionStamp,
         deleted: deleted,
       );
     }
@@ -567,9 +574,9 @@ class FugueMovableListState<T> {
 class _MovableElement<T> {
   _MovableElement({
     required this.value,
-    required this.valueHlc,
+    required this.valueStamp,
     required this.position,
-    required this.positionHlc,
+    required this.positionStamp,
     required this.deleted,
   });
 
@@ -577,15 +584,18 @@ class _MovableElement<T> {
   /// concurrent `update` operations.
   T value;
 
-  /// The clock attached to the [value] (last write wins).
-  HybridLogicalClock valueHlc;
+  /// The stamp of the write that put [value] here.
+  ///
+  /// A stamp rather than a clock: two peers can write in the same tick, and
+  /// the peer is what settles which of the two wins on both of them.
+  OperationStamp valueStamp;
 
   /// The position currently associated with this identity, picked by LWW on
   /// concurrent `move`/`insert` operations.
   FugueElementID position;
 
-  /// The clock attached to the [position] (last write wins).
-  HybridLogicalClock positionHlc;
+  /// The stamp of the write that put this identity at [position].
+  OperationStamp positionStamp;
 
   /// Whether this identity has been deleted.
   bool deleted;

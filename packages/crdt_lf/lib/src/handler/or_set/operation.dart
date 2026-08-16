@@ -20,11 +20,12 @@ class _ORSetOperationFactory<T> {
 }
 
 /// Add operation for OR-Set
-/// It adds a new unique tag for the provided value.
+///
+/// The tag it adds for the value is the operation's own [Operation.stamp],
+/// carried by the envelope, so the body holds nothing but the value.
 class _ORSetAddOperation<T> extends Operation {
   _ORSetAddOperation({
     required this.value,
-    required this.tag,
     required this.valueCodec,
     required super.id,
     required super.type,
@@ -33,13 +34,11 @@ class _ORSetAddOperation<T> extends Operation {
   factory _ORSetAddOperation.fromHandler(
     CRDTORSetHandler<T> handler, {
     required T value,
-    required ORHandlerTag tag,
   }) {
     return _ORSetAddOperation<T>(
       id: handler.id,
       type: handler.insertType,
       value: value,
-      tag: tag,
       valueCodec: handler._valueCodec,
     );
   }
@@ -48,36 +47,26 @@ class _ORSetAddOperation<T> extends Operation {
     CRDTORSetHandler<T> handler,
     Uint8List body,
   ) {
-    var offset = 0;
-    final valueLenRec = UVarint.read(body, offset: offset);
-    final valueLen = valueLenRec.value;
-    offset = valueLenRec.nextOffset;
-    final valueEnd = offset + valueLen;
+    final valueLenRec = UVarint.read(body, offset: 0);
+    final valueEnd = valueLenRec.nextOffset + valueLenRec.value;
     if (valueEnd > body.length) {
       throw const FormatException('Truncated OR-Set add value');
     }
-    final valueBytes = Uint8List.sublistView(body, offset, valueEnd);
-    final value = handler._valueCodec.decode(valueBytes);
-    offset = valueEnd;
-
-    if (offset + 24 > body.length) {
-      throw const FormatException('Truncated OR-Set add tag');
-    }
-    final peerId = PeerId.fromUint8List(body, offset: offset);
-    final hlc = HybridLogicalClock.fromUint8List(body, offset: offset + 16);
-    final tag = ORHandlerTag(peerId: peerId, hlc: hlc);
+    final valueBytes = Uint8List.sublistView(
+      body,
+      valueLenRec.nextOffset,
+      valueEnd,
+    );
 
     return _ORSetAddOperation<T>(
       id: handler.id,
       type: handler.insertType,
-      value: value,
-      tag: tag,
+      value: handler._valueCodec.decode(valueBytes),
       valueCodec: handler._valueCodec,
     );
   }
 
   final T value;
-  final ORHandlerTag tag;
   final ValueCodec<T> valueCodec;
 
   @override
@@ -85,10 +74,7 @@ class _ORSetAddOperation<T> extends Operation {
     final out = BytesBuilder(copy: false);
     final valueBytes = valueCodec.encode(value);
     UVarint.write(valueBytes.length, out);
-    out
-      ..add(valueBytes)
-      ..add(tag.peerId.toUint8List())
-      ..add(tag.hlc.toUint8List());
+    out.add(valueBytes);
     return out.toBytes();
   }
 
@@ -97,7 +83,6 @@ class _ORSetAddOperation<T> extends Operation {
     return {
       ...super.toPayload(),
       'value': value,
-      'tag': tag.toString(),
     };
   }
 }
@@ -133,15 +118,10 @@ class _ORSetRemoveOperation<T> extends Operation {
     final count = countRec.value;
     offset = countRec.nextOffset;
 
-    final tags = <ORHandlerTag>{};
+    final tags = <OperationStamp>{};
     for (var i = 0; i < count; i += 1) {
-      if (offset + 24 > body.length) {
-        throw const FormatException('Truncated OR-Set remove tags');
-      }
-      final peerId = PeerId.fromUint8List(body, offset: offset);
-      final hlc = HybridLogicalClock.fromUint8List(body, offset: offset + 16);
-      tags.add(ORHandlerTag(peerId: peerId, hlc: hlc));
-      offset += 24;
+      tags.add(OperationStamp.fromUint8List(body, offset: offset));
+      offset += OperationStamp.byteLength;
     }
 
     if (offset >= body.length) {
@@ -162,20 +142,20 @@ class _ORSetRemoveOperation<T> extends Operation {
   factory _ORSetRemoveOperation.fromHandler(
     CRDTORSetHandler<T> handler, {
     required T value,
-    required Set<ORHandlerTag> tags,
+    required Set<OperationStamp> tags,
   }) {
     return _ORSetRemoveOperation<T>(
       id: handler.id,
       type: handler.deleteType,
       value: value,
-      tags: Set<ORHandlerTag>.from(tags),
+      tags: Set<OperationStamp>.from(tags),
       removeAll: tags.isEmpty,
       valueCodec: handler._valueCodec,
     );
   }
 
   final T value;
-  final Set<ORHandlerTag> tags;
+  final Set<OperationStamp> tags;
   final bool removeAll;
   final ValueCodec<T> valueCodec;
 
@@ -189,9 +169,7 @@ class _ORSetRemoveOperation<T> extends Operation {
 
     UVarint.write(tags.length, out);
     for (final t in tags) {
-      out
-        ..add(t.peerId.toUint8List())
-        ..add(t.hlc.toUint8List());
+      out.add(t.toUint8List());
     }
 
     out.addByte(removeAll ? 1 : 0);

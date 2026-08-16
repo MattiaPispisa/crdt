@@ -20,12 +20,13 @@ class _ORMapOperationFactory<K, V> {
 }
 
 /// Put operation for OR-Map
-/// It adds a new unique tag for the provided key-value pair.
+///
+/// The tag it adds for the pair is the operation's own [Operation.stamp],
+/// carried by the envelope, so the body holds nothing but key and value.
 class _ORMapPutOperation<K, V> extends Operation {
   _ORMapPutOperation({
     required this.key,
     required this.value,
-    required this.tag,
     required this.keyCodec,
     required this.valueCodec,
     required super.id,
@@ -36,14 +37,12 @@ class _ORMapPutOperation<K, V> extends Operation {
     CRDTORMapHandler<K, V> handler, {
     required K key,
     required V value,
-    required ORHandlerTag tag,
   }) {
     return _ORMapPutOperation<K, V>(
       id: handler.id,
       type: handler.insertType,
       key: key,
       value: value,
-      tag: tag,
       keyCodec: handler._keyCodec,
       valueCodec: handler._valueCodec,
     );
@@ -75,21 +74,12 @@ class _ORMapPutOperation<K, V> extends Operation {
     }
     final valueBytes = Uint8List.sublistView(body, offset, valEnd);
     final value = handler._valueCodec.decode(valueBytes);
-    offset = valEnd;
-
-    if (offset + 24 > body.length) {
-      throw const FormatException('Truncated OR-Map put tag');
-    }
-    final peerId = PeerId.fromUint8List(body, offset: offset);
-    final hlc = HybridLogicalClock.fromUint8List(body, offset: offset + 16);
-    final tag = ORHandlerTag(peerId: peerId, hlc: hlc);
 
     return _ORMapPutOperation<K, V>(
       id: handler.id,
       type: handler.insertType,
       key: key,
       value: value,
-      tag: tag,
       keyCodec: handler._keyCodec,
       valueCodec: handler._valueCodec,
     );
@@ -97,7 +87,6 @@ class _ORMapPutOperation<K, V> extends Operation {
 
   final K key;
   final V value;
-  final ORHandlerTag tag;
   final ValueCodec<K> keyCodec;
   final ValueCodec<V> valueCodec;
 
@@ -111,10 +100,7 @@ class _ORMapPutOperation<K, V> extends Operation {
 
     final valueBytes = valueCodec.encode(value);
     UVarint.write(valueBytes.length, out);
-    out
-      ..add(valueBytes)
-      ..add(tag.peerId.toUint8List())
-      ..add(tag.hlc.toUint8List());
+    out.add(valueBytes);
 
     return out.toBytes();
   }
@@ -125,7 +111,6 @@ class _ORMapPutOperation<K, V> extends Operation {
       ...super.toPayload(),
       'key': key,
       'value': value,
-      'tag': tag.toString(),
     };
   }
 }
@@ -145,7 +130,7 @@ class _ORMapRemoveOperation<K, V> extends Operation {
   factory _ORMapRemoveOperation.fromHandler(
     CRDTORMapHandler<K, V> handler, {
     required K key,
-    required Set<ORHandlerTag> tags,
+    required Set<OperationStamp> tags,
   }) {
     return _ORMapRemoveOperation<K, V>(
       id: handler.id,
@@ -177,15 +162,10 @@ class _ORMapRemoveOperation<K, V> extends Operation {
     final count = countRec.value;
     offset = countRec.nextOffset;
 
-    final tags = <ORHandlerTag>{};
+    final tags = <OperationStamp>{};
     for (var i = 0; i < count; i += 1) {
-      if (offset + 24 > body.length) {
-        throw const FormatException('Truncated OR-Map remove tags');
-      }
-      final peerId = PeerId.fromUint8List(body, offset: offset);
-      final hlc = HybridLogicalClock.fromUint8List(body, offset: offset + 16);
-      tags.add(ORHandlerTag(peerId: peerId, hlc: hlc));
-      offset += 24;
+      tags.add(OperationStamp.fromUint8List(body, offset: offset));
+      offset += OperationStamp.byteLength;
     }
 
     if (offset >= body.length) {
@@ -204,7 +184,7 @@ class _ORMapRemoveOperation<K, V> extends Operation {
   }
 
   final K key;
-  final Set<ORHandlerTag> tags;
+  final Set<OperationStamp> tags;
   final bool removeAll;
   final ValueCodec<K> keyCodec;
 
@@ -218,9 +198,7 @@ class _ORMapRemoveOperation<K, V> extends Operation {
 
     UVarint.write(tags.length, out);
     for (final t in tags) {
-      out
-        ..add(t.peerId.toUint8List())
-        ..add(t.hlc.toUint8List());
+      out.add(t.toUint8List());
     }
 
     out.addByte(removeAll ? 1 : 0);

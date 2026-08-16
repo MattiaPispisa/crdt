@@ -1,4 +1,5 @@
 import 'package:crdt_lf/crdt_lf.dart';
+import 'package:hlc_dart/hlc_dart.dart';
 import 'package:test/test.dart';
 
 void main() {
@@ -325,11 +326,14 @@ void main() {
 
   group('ORMapEntry', () {
     test('equality and hashCode reflect value+tag', () {
-      final tagA = ORHandlerTag.parse(
-        '37f1ec87-6ea5-430b-a627-a6b92b56a02d@1.0',
+      final peer = PeerId.parse('37f1ec87-6ea5-430b-a627-a6b92b56a02d');
+      final tagA = OperationStamp(
+        peerId: peer,
+        hlc: HybridLogicalClock(l: 1, c: 0),
       );
-      final tagB = ORHandlerTag.parse(
-        '37f1ec87-6ea5-430b-a627-a6b92b56a02d@2.0',
+      final tagB = OperationStamp(
+        peerId: peer,
+        hlc: HybridLogicalClock(l: 2, c: 0),
       );
       final entry1 = ORMapEntry<int>(value: 1, tag: tagA);
       final entry2 = ORMapEntry<int>(value: 1, tag: tagA);
@@ -343,8 +347,9 @@ void main() {
     });
 
     test('identity short-circuit and non-ORMapEntry inequality', () {
-      final tag = ORHandlerTag.parse(
-        '37f1ec87-6ea5-430b-a627-a6b92b56a02d@1.0',
+      final tag = OperationStamp(
+        peerId: PeerId.parse('37f1ec87-6ea5-430b-a627-a6b92b56a02d'),
+        hlc: HybridLogicalClock(l: 1, c: 0),
       );
       final entry = ORMapEntry<String>(value: 'x', tag: tag);
       // Compares same instance: triggers identical short-circuit.
