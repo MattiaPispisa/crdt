@@ -3,6 +3,8 @@ import 'dart:math';
 import 'package:crdt_lf/crdt_lf.dart';
 import 'package:test/test.dart';
 
+import '../helpers/pn_counter_handler.dart';
+
 /// Oracle tests: the incrementally-updated cached state must be identical
 /// to the state recomputed from scratch (cache invalidated) and to the
 /// state computed by a fresh document importing the same changes.
@@ -297,6 +299,16 @@ void main() {
       );
     });
 
+    test('PNCounterHandler', () {
+      _remoteOracle<PNCounterHandler>(
+        create: (doc) => PNCounterHandler(doc, 'counter'),
+        mutate: (counter, random, i) => counter.increment(
+          random.nextInt(21) - 10,
+        ),
+        read: (counter) => counter.value,
+      );
+    });
+
     test('CRDTORSetHandler', () {
       _remoteOracle<CRDTORSetHandler<String>>(
         create: (doc) => CRDTORSetHandler<String>(doc, 'set'),
@@ -447,6 +459,16 @@ void main() {
           }
         },
         read: (map) => Map<String, int>.from(map.value),
+      );
+    });
+
+    test('PNCounterHandler under concurrent editing', () {
+      _concurrentOracle<PNCounterHandler>(
+        create: (doc) => PNCounterHandler(doc, 'counter'),
+        mutate: (counter, random, round) => counter.increment(
+          random.nextInt(21) - 10,
+        ),
+        read: (counter) => counter.value,
       );
     });
   });
