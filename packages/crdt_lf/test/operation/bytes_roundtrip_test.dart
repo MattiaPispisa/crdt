@@ -42,6 +42,46 @@ void main() {
       expect(payloads[2], equals([..._textPrefix, 2, 0, 1, 104]));
     });
 
+    // Which kinds carry a stamp is a local declaration, and getting it wrong
+    // is not an error anywhere: the writer simply spends 24 bytes it does not
+    // need, or drops the tie-break of a kind that does. Pin the ones in
+    // `lib/`, one document per handler that stamps anything.
+    test('only the kinds that resolve a conflict carry a stamp', () {
+      final doc = CRDTDocument(peerId: PeerId.generate());
+      CRDTFugueTextHandler(doc, 'fugue-text')
+        ..insert(0, 'ab')
+        ..update(0, 'A')
+        ..delete(1, 1);
+      CRDTORSetHandler<String>(doc, 'oset')
+        ..add('x')
+        ..remove('x');
+      CRDTFugueMovableListHandler<String>(doc, 'movable')
+        ..insert(0, 'a')
+        ..insert(1, 'b')
+        ..move(1, 0)
+        ..update(0, 'B')
+        ..delete(0);
+
+      final stampedByKind = <String, bool>{};
+      for (final change in doc.exportChanges().sorted()) {
+        final envelope = OperationEnvelopeCodec.decode(change.payloadBytes());
+        stampedByKind['${envelope.handlerId}/${envelope.kind}'] =
+            envelope.stamp != null;
+      }
+
+      expect(stampedByKind, {
+        'fugue-text/${OperationType.kindInsert}': false,
+        'fugue-text/${OperationType.kindUpdate}': true,
+        'fugue-text/${OperationType.kindDelete}': false,
+        'oset/${OperationType.kindInsert}': true,
+        'oset/${OperationType.kindDelete}': false,
+        'movable/${OperationType.kindInsert}': true,
+        'movable/${OperationType.kindMove}': true,
+        'movable/${OperationType.kindUpdate}': true,
+        'movable/${OperationType.kindDelete}': false,
+      });
+    });
+
     test('CRDTTextHandler operation bytes roundtrip', () {
       final doc = CRDTDocument(peerId: PeerId.generate());
       final text = CRDTTextHandler(doc, 'text')

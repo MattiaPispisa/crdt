@@ -1,4 +1,6 @@
 import 'package:crdt_lf/src/document/document.dart';
+import 'package:crdt_lf/src/operation/operation.dart';
+import 'package:crdt_lf/src/operation/stamp.dart';
 
 const _insert = 'insert';
 const _delete = 'delete';
@@ -11,47 +13,67 @@ const _move = 'move';
 /// the handler type it belongs to. The kind alone never identifies an
 /// operation: the envelope carries the handler type before it, so two handlers
 /// may use the same byte for two unrelated semantics.
+///
+/// It also says whether operations of this kind carry an [OperationStamp]
+/// (see [stamped]).
 class OperationType {
   OperationType._({
     required this.handler,
     required this.type,
     required this.kind,
+    required this.stamped,
   });
 
   /// Insert operation
-  factory OperationType.insert(Handler<dynamic> handler) {
+  factory OperationType.insert(
+    Handler<dynamic> handler, {
+    bool stamped = false,
+  }) {
     return OperationType._(
       handler: handler.handlerType,
       type: _insert,
       kind: kindInsert,
+      stamped: stamped,
     );
   }
 
   /// Delete operation
-  factory OperationType.delete(Handler<dynamic> handler) {
+  factory OperationType.delete(
+    Handler<dynamic> handler, {
+    bool stamped = false,
+  }) {
     return OperationType._(
       handler: handler.handlerType,
       type: _delete,
       kind: kindDelete,
+      stamped: stamped,
     );
   }
 
   /// Update operation
-  factory OperationType.update(Handler<dynamic> handler) {
+  factory OperationType.update(
+    Handler<dynamic> handler, {
+    bool stamped = false,
+  }) {
     return OperationType._(
       handler: handler.handlerType,
       type: _update,
       kind: kindUpdate,
+      stamped: stamped,
     );
   }
 
   /// Move operation — used by handlers that support reordering elements
   /// without changing their identity (e.g. `CRDTFugueMovableListHandler`).
-  factory OperationType.move(Handler<dynamic> handler) {
+  factory OperationType.move(
+    Handler<dynamic> handler, {
+    bool stamped = false,
+  }) {
     return OperationType._(
       handler: handler.handlerType,
       type: _move,
       kind: kindMove,
+      stamped: stamped,
     );
   }
 
@@ -67,12 +89,16 @@ class OperationType {
   /// [name] labels the kind in [toPayload] and in debug output. It carries no
   /// meaning on the wire — only [kind] is written there.
   ///
+  /// Turn on [stamped] for a kind that resolves conflicts by
+  /// last-writer-wins.
+  ///
   /// The upper half of the byte is not available: bit 7 is reserved by the
   /// envelope, which uses it to signal that a stamp follows the kind.
   factory OperationType.custom(
     Handler<dynamic> handler, {
     required int kind,
     required String name,
+    bool stamped = false,
   }) {
     if (kind < 0 || kind > maxKind) {
       throw ArgumentError.value(
@@ -87,6 +113,7 @@ class OperationType {
       handler: handler.handlerType,
       type: name,
       kind: kind,
+      stamped: stamped,
     );
   }
 
@@ -140,6 +167,25 @@ class OperationType {
   /// Binary kind value written in the operation envelope (u8).
   final int kind;
 
+  /// Whether the document stamps operations of this kind with an
+  /// [OperationStamp], and the envelope carries it.
+  ///
+  /// Turn it on for a kind that resolves concurrent writes by
+  /// last-writer-wins: the stamp is what lets it pick the same winner on
+  /// every peer instead of depending on the order operations arrive in, which
+  /// is the precondition for `stateIsOrderIndependent`. The handler reads it
+  /// from [Operation.stamp], which is set before the operation reaches
+  /// `incrementCachedState` and before the change that carries it is built.
+  ///
+  /// A stamp costs [OperationStamp.byteLength] bytes on the wire, so it sits
+  /// on the kind rather than on the handler: a text `insert` has no conflict
+  /// to resolve and pays nothing, while `update` on the same handler does.
+  ///
+  /// It is a local declaration, not part of the wire format — two builds that
+  /// disagree about it are caught by the envelope, which flags the stamp with
+  /// bit 7 of the kind byte.
+  final bool stamped;
+
   /// Compares two [OperationType]s for equality
   @override
   bool operator ==(Object other) {
@@ -149,10 +195,11 @@ class OperationType {
     return other is OperationType &&
         other.handler == handler &&
         other.type == type &&
-        other.kind == kind;
+        other.kind == kind &&
+        other.stamped == stamped;
   }
 
-  late final int _hashCode = Object.hash(handler, type, kind);
+  late final int _hashCode = Object.hash(handler, type, kind, stamped);
 
   /// Returns a hash code for this [OperationType]
   @override

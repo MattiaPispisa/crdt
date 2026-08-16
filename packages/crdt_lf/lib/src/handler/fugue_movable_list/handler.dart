@@ -63,8 +63,23 @@ class CRDTFugueMovableListHandler<T> extends Handler<FugueMovableListState<T>>
   late final OperationFactory operationFactory =
       _FugueMovableListOperationFactory<T>(this).fromBytes;
 
+  /// `insert` seeds the two last-writer-wins clocks of an element, and
+  /// `move` and `update` race against them, so all three carry a stamp.
+  /// `delete` does not: it wins over everything.
   @override
-  bool get operationsAreStamped => true;
+  late final OperationType insertType = OperationType.insert(
+    this,
+    stamped: true,
+  );
+
+  @override
+  late final OperationType moveType = OperationType.move(this, stamped: true);
+
+  @override
+  late final OperationType updateType = OperationType.update(
+    this,
+    stamped: true,
+  );
 
   /// Returns the current list value.
   List<T> get value => cachedOrComputedState().value;

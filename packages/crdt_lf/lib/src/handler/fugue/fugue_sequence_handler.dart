@@ -74,15 +74,14 @@ abstract class FugueSequenceHandler<T, V, S extends FugueState<T, V>>
   @override
   String get id => _id;
 
-  /// Every operation carries an [OperationStamp], because `update` overwrites
-  /// an element in place and needs one to pick a winner.
-  ///
-  /// The switch is per handler, not per kind, so `insert` and `delete` carry
-  /// a stamp they never read. The alternative — a per-kind switch — buys 24
-  /// bytes a keystroke at the price of a second, kind-dependent rule in the
-  /// one place that decides whether a change is readable at all.
+  /// `update` overwrites an element in place, so it needs a stamp to pick a
+  /// winner. `insert` and `delete` do not: element ids are unique, and a
+  /// deletion beats everything.
   @override
-  bool get operationsAreStamped => true;
+  late final OperationType updateType = OperationType.update(
+    this,
+    stamped: true,
+  );
 
   /// Creates an empty state (an empty tree with this handler's projection).
   S createEmptyState();

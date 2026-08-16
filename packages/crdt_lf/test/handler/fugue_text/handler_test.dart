@@ -1258,6 +1258,48 @@ void main() {
         );
       });
 
+      // `update` is stamped and `insert` is not, so a peer that got that
+      // wrong would leave the two sides picking different winners with no
+      // error anywhere. The read has to refuse instead.
+      test('a stamped kind that arrives without a stamp raises', () {
+        final doc = CRDTDocument();
+        final handler = CRDTFugueTextHandler(doc, 'text1')..insert(0, 'ab');
+
+        // The body of a one-item update: nodeID, then the new value.
+        final body = BytesBuilder(copy: false);
+        UVarint.write(1, body);
+        body.add(handler.nodeAt(0).toBytes());
+        final value = Wtf8.encode('X');
+        UVarint.write(value.length, body);
+        body.add(value);
+
+        final author = PeerId.generate();
+        doc.applyChange(
+          Change.fromPayloadBytes(
+            id: OperationId(author, HybridLogicalClock(l: 100, c: 1)),
+            deps: doc.version,
+            author: author,
+            payloadBytes: OperationEnvelopeCodec.encode(
+              handlerType: handler.handlerType,
+              handlerId: handler.id,
+              kind: OperationType.kindUpdate,
+              body: body.toBytes(),
+            ),
+          ),
+        );
+
+        expect(
+          () => handler.value,
+          throwsA(
+            isA<FormatException>().having(
+              (e) => e.message,
+              'message',
+              contains('carries no stamp'),
+            ),
+          ),
+        );
+      });
+
       test('another handler type is declined before the kind is read', () {
         // Order matters here: an unknown kind under a foreign type tag is
         // somebody else's business. Checking the kind first would turn every
@@ -1297,13 +1339,6 @@ void main() {
               handlerType: handler.handlerType,
               handlerId: handler.id,
               kind: 99,
-              // Stamped, so the kind is what the read trips over: the handler
-              // is stamped and an envelope without one fails earlier, on a
-              // different guard.
-              stamp: OperationStamp(
-                hlc: HybridLogicalClock(l: 100, c: 1),
-                peerId: author,
-              ),
               body: Uint8List(0),
             ),
           ),

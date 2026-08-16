@@ -721,7 +721,7 @@ class CRDTDocument extends BaseCRDTDocument {
     _ensureNotDisposed('registerOperation');
 
     final handler = _handlers[operation.id];
-    if (handler != null && handler.operationsAreStamped) {
+    if (operation.type.stamped) {
       // The tick [prepareMutation] performs, for the same reason: a stamp has
       // to be strictly newer than everything this peer has already written, or
       // a second write in the same millisecond would not beat the first.

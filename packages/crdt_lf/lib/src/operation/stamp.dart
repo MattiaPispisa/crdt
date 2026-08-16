@@ -11,10 +11,11 @@ import 'package:hlc_dart/hlc_dart.dart';
 /// and where letting the arrival order decide would leave two peers holding
 /// different values for the same data.
 ///
-/// A handler asks for one by turning on `operationsAreStamped`; it then reads
-/// it from `Operation.stamp`. The document mints it, so every
-/// last-writer-wins handler resolves conflicts by the same rule instead of
-/// writing its own.
+/// An operation kind asks for one by turning on `OperationType.stamped`; the
+/// handler then reads it from `Operation.stamp`. The document mints it, so
+/// every last-writer-wins handler resolves conflicts by the same rule instead
+/// of writing its own. A kind that has no conflict to resolve declares
+/// nothing and pays no bytes.
 class OperationStamp implements Comparable<OperationStamp> {
   /// Creates a stamp for [hlc] written by [peerId].
   OperationStamp({

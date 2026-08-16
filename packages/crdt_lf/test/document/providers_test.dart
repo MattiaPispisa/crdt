@@ -433,13 +433,6 @@ void main() {
             handlerType: targetText.handlerType,
             handlerId: targetText.id,
             kind: 99,
-            // Stamped, so the kind is what the drain trips over: the handler
-            // is stamped and an envelope without one fails earlier, on a
-            // different guard.
-            stamp: OperationStamp(
-              hlc: HybridLogicalClock(l: 100, c: 1),
-              peerId: author,
-            ),
             body: Uint8List(0),
           ),
         ),

@@ -123,9 +123,6 @@ class _StampedRegister extends Handler<int> {
   String get id => _id;
 
   @override
-  bool get operationsAreStamped => true;
-
-  @override
   late final OperationFactory operationFactory = _fromBytes;
 
   Operation _fromBytes(OperationEnvelope env, Uint8List body) => _StampedWrite(
@@ -138,6 +135,7 @@ class _StampedRegister extends Handler<int> {
     this,
     kind: 4,
     name: 'write',
+    stamped: true,
   );
 
   _StampedWrite write(int value) =>

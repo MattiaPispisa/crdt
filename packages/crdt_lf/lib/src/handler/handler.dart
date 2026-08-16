@@ -77,19 +77,6 @@ abstract class Handler<T>
   /// See [OperationFactory] for the contract.
   OperationFactory get operationFactory;
 
-  /// Whether the document must stamp this handler's operations with an
-  /// [OperationStamp].
-  ///
-  /// Turn it on for a handler that resolves concurrent writes by
-  /// last-writer-wins: the stamp is what lets it do so without depending on
-  /// the order operations arrive in, which is the precondition for
-  /// [stateIsOrderIndependent].
-  ///
-  /// A stamped handler reads the stamp from [Operation.stamp], which is set
-  /// before the operation reaches [incrementCachedState] and before the
-  /// change that carries it is built.
-  bool get operationsAreStamped => false;
-
   /// Stable identifier of this handler's **type**.
   ///
   /// Used as the type tag in operation envelopes, in the snapshot handler
@@ -104,17 +91,38 @@ abstract class Handler<T>
   /// override it with their own constant, or pass one to the constructor.
   String get handlerType => _handlerType ?? runtimeType.toString();
 
-  /// Cached insert type instances for this handler, used in operations.
-  late final OperationType insertType = OperationType.insert(this);
+  /// Cached insert type instance for this handler, used in operations.
+  ///
+  /// Override it to declare the kind stamped, when concurrent inserts have to
+  /// be resolved by last-writer-wins:
+  ///
+  /// ```dart
+  /// @override
+  /// late final OperationType insertType =
+  ///     OperationType.insert(this, stamped: true);
+  /// ```
+  OperationType get insertType => _insertType ??= OperationType.insert(this);
+  OperationType? _insertType;
 
-  /// Cached delete type instances for this handler, used in operations.
-  late final OperationType deleteType = OperationType.delete(this);
+  /// Cached delete type instance for this handler, used in operations.
+  ///
+  /// {@template stamped_kind_override}
+  /// Override it to declare the kind stamped. See [OperationType.stamped].
+  /// {@endtemplate}
+  OperationType get deleteType => _deleteType ??= OperationType.delete(this);
+  OperationType? _deleteType;
 
-  /// Cached update type instances for this handler, used in operations.
-  late final OperationType updateType = OperationType.update(this);
+  /// Cached update type instance for this handler, used in operations.
+  ///
+  /// {@macro stamped_kind_override}
+  OperationType get updateType => _updateType ??= OperationType.update(this);
+  OperationType? _updateType;
 
-  /// Cached move type instances for this handler, used in operations.
-  late final OperationType moveType = OperationType.move(this);
+  /// Cached move type instance for this handler, used in operations.
+  ///
+  /// {@macro stamped_kind_override}
+  OperationType get moveType => _moveType ??= OperationType.move(this);
+  OperationType? _moveType;
 
   /// During transaction consecutive operations can be compounded.
   ///
@@ -146,16 +154,18 @@ abstract class Handler<T>
       return null;
     }
 
-    if (operationsAreStamped && envelope.stamp == null) {
+    final body = Uint8List.sublistView(bytes, envelope.bodyOffset);
+    final operation = operationFactory(envelope, body);
+
+    if (operation.type.stamped && envelope.stamp == null) {
       throw FormatException(
-        'Operation for handler $handlerType/$id carries no stamp, but the '
-        'handler resolves conflicts with one. The change was written by a '
-        'peer that does not stamp this handler.',
+        'Operation ${operation.type.toPayload()} carries no stamp, but this '
+        'kind resolves conflicts with one. The change was written by a peer '
+        'that does not stamp it.',
       );
     }
 
-    final body = Uint8List.sublistView(bytes, envelope.bodyOffset);
-    return operationFactory(envelope, body)..stamp = envelope.stamp;
+    return operation..stamp = envelope.stamp;
   }
 
   /// Returns the [Operation]s required by this consumer to compute its state.

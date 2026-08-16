@@ -116,12 +116,6 @@ void main() {
             handlerType: text.handlerType,
             handlerId: text.id,
             kind: 99,
-            // Stamped, so the kind is what the read trips over: the handler
-            // is stamped and an envelope without one fails on another guard.
-            stamp: OperationStamp(
-              hlc: HybridLogicalClock(l: 100, c: 1),
-              peerId: author,
-            ),
             body: Uint8List(0),
           ),
         );
