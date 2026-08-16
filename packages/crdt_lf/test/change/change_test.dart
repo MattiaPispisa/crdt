@@ -175,6 +175,34 @@ void main() {
       );
     });
 
+    // Do not delete this test as "a case that cannot happen". It is the guard
+    // that keeps a 3.x change from being read by a 4.0 build. The bytes of the
+    // two versions are shaped the same; only the meaning of the integers
+    // inside changed (runes instead of UTF-16 code units). Without the version
+    // byte the decode succeeds and the two peers hold different text while
+    // agreeing on the version vector.
+    test('fromBytes rejects a change written by crdt_lf 3.x', () {
+      final change = Change(
+        id: id,
+        operation: operation,
+        deps: deps,
+        author: author,
+      );
+      // Same buffer a 3.x peer would send: identical layout, schema byte 2.
+      final legacy = Uint8List.fromList(change.toBytes())..[0] = 2;
+
+      expect(
+        () => Change.fromBytes(legacy),
+        throwsA(
+          isA<FormatException>().having(
+            (e) => e.message,
+            'message',
+            allOf(contains('2'), contains('3')),
+          ),
+        ),
+      );
+    });
+
     test('fromPayloadBytes rejects mismatched author', () {
       final otherAuthor = PeerId.generate();
       expect(
