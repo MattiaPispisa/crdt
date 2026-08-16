@@ -116,8 +116,8 @@ class CRDTFugueListHandler<T>
     );
   }
 
-  /// Gets the length of the list
-  int get length => value.length;
+  /// Gets the length of the list, in `O(1)`.
+  int get length => elementCount;
 
   /// Gets the element at the specified index
   T operator [](int index) => value[index];

@@ -118,6 +118,9 @@ class FugueTree<T> {
     return result;
   }
 
+  /// The number of non-deleted nodes, in `O(1)`.
+  int get liveLength => _index.liveLength;
+
   /// Calls [action] on every non-deleted node, in sequence order.
   ///
   /// The streaming form of [nodes]: a caller that only reads each node once

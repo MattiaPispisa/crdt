@@ -2,15 +2,13 @@ import 'dart:typed_data';
 
 import 'package:crdt_lf/crdt_lf.dart';
 import 'package:crdt_lf/src/algorithm/fugue/tree.dart';
-import 'package:crdt_lf/src/algorithm/fugue/value_node.dart';
 import 'package:crdt_lf/src/handler/fugue/fugue_cache.dart';
 import 'package:crdt_lf/src/handler/fugue/fugue_snapshot.dart';
 
 /// Lazily-resolved state shared by Fugue-based ordered-sequence handlers.
 ///
-/// Wraps a [FugueTree] (the source of truth) and memoizes the two derived
-/// projections — the ordered [FugueValueNode]s and the public value — so
-/// that a batch of mutations resolves them at most once, on the next read.
+/// Wraps a [FugueTree] (the source of truth) and memoizes the public value,
+/// so that a batch of mutations resolves it at most once, on the next read.
 ///
 /// `T` is the element type stored in the tree, `V` is the public value type
 /// (`String` for text, `List<T>` for a list). The projection from the tree to
@@ -22,19 +20,14 @@ class FugueState<T, V> {
   final FugueTree<T> _tree;
   final V Function(FugueTree<T> tree) _project;
 
-  List<FugueValueNode<T>>? _cachedNodes;
   V? _cachedValue;
-
-  /// The ordered value nodes, resolved lazily from the tree.
-  List<FugueValueNode<T>> get _nodes => _cachedNodes ??= _tree.nodes();
 
   /// The public value, resolved lazily from the tree.
   V get _value => _cachedValue ??= _project(_tree);
 
-  /// Discards the resolved projections after a tree mutation; they are
-  /// resolved again lazily on the next read.
+  /// Discards the resolved value after a tree mutation; it is resolved again
+  /// lazily on the next read.
   void _markDirty() {
-    _cachedNodes = null;
     _cachedValue = null;
   }
 }
@@ -149,8 +142,8 @@ abstract class FugueSequenceHandler<T, V, S extends FugueState<T, V>>
   /// The current value, computed from changes and snapshot.
   V get value => cachedOrComputedState()._value;
 
-  /// The number of live elements
-  int get elementCount => cachedOrComputedState()._nodes.length;
+  /// The number of live elements, in `O(1)`.
+  int get elementCount => cachedOrComputedState()._tree.liveLength;
 
   /// Deletes [count] elements starting at [index].
   void delete(int index, int count) {
@@ -202,7 +195,7 @@ abstract class FugueSequenceHandler<T, V, S extends FugueState<T, V>>
       return FugueElementID.nullID();
     }
     final state = cachedOrComputedState();
-    final liveCount = state._nodes.length;
+    final liveCount = state._tree.liveLength;
     if (liveCount == 0) {
       return FugueElementID.nullID();
     }

@@ -748,6 +748,11 @@ void main() {
           equals(live),
           reason: 'live sequence at step $step',
         );
+        expect(
+          t.liveLength,
+          live.length,
+          reason: 'liveLength at step $step',
+        );
         for (var i = 0; i < live.length; i++) {
           expect(
             t.findNodeAtPosition(i).toString(),

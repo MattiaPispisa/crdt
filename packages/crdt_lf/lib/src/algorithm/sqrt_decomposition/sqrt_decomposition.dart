@@ -55,6 +55,7 @@ class SqrtDecomposition<T> {
   final List<_Block<T>> _blocks = [];
   final Map<T, _Block<T>> _blockOf = {};
   int _total = 0;
+  int _live = 0;
 
   /// Target block size, ≈ √N. Monotonically non-decreasing because [_total]
   /// only grows (elements are never removed).
@@ -65,6 +66,13 @@ class SqrtDecomposition<T> {
 
   /// The number of elements (live and deleted) in the index.
   int get length => _total;
+
+  /// The number of **live** elements, in `O(1)`.
+  ///
+  /// The blocks each cache their own `liveCount`; this is the running sum, so
+  /// a caller does not have to walk them — or, worse, materialize the live
+  /// sequence — just to know how long it is.
+  int get liveLength => _live;
 
   /// Whether [key] is already present.
   bool contains(T key) => _blockOf.containsKey(key);
@@ -83,6 +91,7 @@ class SqrtDecomposition<T> {
     block.live.insert(offset + 1, live);
     if (live) {
       block.liveCount++;
+      _live++;
     }
     _blockOf[key] = block;
     _total++;
@@ -99,6 +108,9 @@ class SqrtDecomposition<T> {
       _blocks.add(block);
       _blockOf[key] = block;
       _total++;
+      if (live) {
+        _live++;
+      }
       return;
     }
     final block = _blocks.first;
@@ -106,6 +118,7 @@ class SqrtDecomposition<T> {
     block.live.insert(0, live);
     if (live) {
       block.liveCount++;
+      _live++;
     }
     _blockOf[key] = block;
     _total++;
@@ -124,6 +137,7 @@ class SqrtDecomposition<T> {
     }
     block.live[offset] = live;
     block.liveCount += live ? 1 : -1;
+    _live += live ? 1 : -1;
   }
 
   /// Returns the [position]-th **live** key, or `null` if [position] is
@@ -276,6 +290,7 @@ class SqrtDecomposition<T> {
         block.live.add(live[i]);
         if (live[i]) {
           block.liveCount++;
+          _live++;
         }
         _blockOf[keys[i]] = block;
       }
@@ -288,6 +303,7 @@ class SqrtDecomposition<T> {
     _blocks.clear();
     _blockOf.clear();
     _total = 0;
+    _live = 0;
   }
 
   /// Splits [block] in half when it grows past `2 * target`, keeping block

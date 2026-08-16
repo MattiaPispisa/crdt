@@ -250,5 +250,11 @@ class FugueTextState extends FugueState<String, String> {
     return FugueTextState._(FugueTree<String>.empty());
   }
 
-  static String _join(FugueTree<String> tree) => tree.values().join();
+  /// Streams into a buffer instead of `tree.values().join()`, which builds a
+  /// list of N one-rune strings before concatenating them.
+  static String _join(FugueTree<String> tree) {
+    final buffer = StringBuffer();
+    tree.forEachLiveNode((id, value) => buffer.write(value));
+    return buffer.toString();
+  }
 }
