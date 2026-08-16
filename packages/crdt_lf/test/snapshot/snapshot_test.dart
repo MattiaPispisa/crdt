@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:crdt_lf/crdt_lf.dart';
+import 'package:crypto/crypto.dart';
 import 'package:hlc_dart/hlc_dart.dart';
 import 'package:test/test.dart';
 
@@ -301,6 +302,47 @@ void main() {
       expect(decoded.id, equals(snapshot.id));
       expect(decoded.versionVector.isEmpty, isTrue);
       expect(decoded.data, isEmpty);
+    });
+
+    // Do not delete this test as "a case that cannot happen". It is the guard
+    // that keeps a 3.x snapshot from being read by a 4.0 build. A 3.x buffer
+    // had no version byte and started straight at the id length, so it used to
+    // decode without complaint and hand back state built on the old element
+    // unit (UTF-16 code units instead of runes).
+    //
+    // A real snapshot always comes from Snapshot.create, whose id is a 64-char
+    // sha256 hex string: its first byte is 0x40, never a valid schema version.
+    test('fromBytes rejects a snapshot written by crdt_lf 3.x', () {
+      final id = sha256.convert(utf8.encode('legacy')).toString();
+      final idBytes = utf8.encode(id);
+      final vvBytes = VersionVector({}).toBytes();
+
+      // The 3.x layout, byte for byte: idLen, id, vvLen, vv, entryCount.
+      final legacy = BytesBuilder(copy: false);
+      UVarint.write(idBytes.length, legacy);
+      legacy.add(idBytes);
+      UVarint.write(vvBytes.length, legacy);
+      legacy
+        ..add(vvBytes)
+        ..addByte(0x00);
+
+      expect(
+        () => Snapshot.fromBytes(legacy.toBytes()),
+        throwsA(
+          isA<FormatException>().having(
+            (e) => e.message,
+            'message',
+            allOf(contains('64'), contains('1')),
+          ),
+        ),
+      );
+    });
+
+    test('fromBytes rejects an empty buffer', () {
+      expect(
+        () => Snapshot.fromBytes(Uint8List(0)),
+        throwsA(isA<FormatException>()),
+      );
     });
   });
 }

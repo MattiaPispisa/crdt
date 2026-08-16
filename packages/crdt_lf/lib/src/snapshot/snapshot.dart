@@ -20,6 +20,7 @@ class Snapshot {
   /// Decodes a [Snapshot] from a binary buffer produced by [toBytes].
   ///
   /// Layout:
+  /// - `schemaVersion: u8`
   /// - `idLen: uvarint`
   /// - `id: utf8 bytes`
   /// - `vectorLen: uvarint`
@@ -30,8 +31,23 @@ class Snapshot {
   ///   - `key: utf8 bytes`
   ///   - `valueLen: uvarint`
   ///   - `value: bytes` (opaque, owned by the consumer that produced it)
+  ///
+  /// [schemaVersion] covers the wrapper only — the id, the version vector and
+  /// the framing of the entries. Each entry value carries its own version,
+  /// written and read by the handler that owns it. Two levels, on purpose: a
+  /// handler can change its blob without touching this one.
   factory Snapshot.fromBytes(Uint8List bytes) {
-    var offset = 0;
+    if (bytes.isEmpty) {
+      throw const FormatException('Truncated Snapshot');
+    }
+    final version = bytes[0];
+    if (version != schemaVersion) {
+      throw FormatException(
+        'Unsupported Snapshot schema version: $version '
+        '(this build reads $schemaVersion)',
+      );
+    }
+    var offset = 1;
 
     final idLenRec = UVarint.read(bytes, offset: offset);
     offset = idLenRec.nextOffset;
@@ -97,6 +113,14 @@ class Snapshot {
     );
   }
 
+  /// Schema version for the current binary layout.
+  ///
+  /// Added in `crdt_lf` 4.0.0. A 3.x snapshot has no version byte at all, so
+  /// it used to decode without complaint and hand back state built on the old
+  /// element unit. It now fails to decode, which is the point: reading it
+  /// wrong is worse than not reading it.
+  static const int schemaVersion = 1;
+
   /// A stable identifier derived from the version.
   final String id;
 
@@ -133,7 +157,7 @@ class Snapshot {
   ///
   /// See [Snapshot.fromBytes] for the layout.
   Uint8List toBytes() {
-    final out = BytesBuilder(copy: false);
+    final out = BytesBuilder(copy: false)..addByte(schemaVersion);
 
     final idBytes = utf8.encode(id);
     UVarint.write(idBytes.length, out);
