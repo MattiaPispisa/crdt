@@ -55,6 +55,9 @@ doc.runInTransaction(() {
 });
 ```
 
+No consumer needed the old semantics as a single operation during this
+release, so `replace` does not come back as a kind of its own.
+
 `OperationFactory` receives the decoded envelope and the operation body instead of raw bytes, and
 returns a non-nullable `Operation`. The framework checks that the envelope belongs to the handler
 before calling it, so a custom handler only dispatches on the kind and raises
@@ -86,7 +89,9 @@ Wire and storage details, for anyone reading bytes directly:
 - A snapshot of 10 000 runes written by a single peer goes from 219 893 to 10 044 bytes, and taking it
   from 4.50 ms to 1.05 ms, because its ids collapse into one run. Reloading from it goes from 6.68 ms
   to 4.20 ms. A document where every other element is deleted has no runs to find: same size, and
-  2.55 ms → 3.11 ms to write. [`benchmark/results.md`]
+  2.55 ms → 3.11 ms to write. The same shape holds an order of magnitude up: 100 000 runes from one
+  peer is 100 047 bytes, not roughly ten times 10 044 — the per-run overhead does not scale with element
+  count. [`benchmark/results.md`]
 - `CRDTFugueTextHandler.length` and `CRDTFugueListHandler.length` are O(1). One keystroke followed by
   reading `length` on 30 000 runes goes from 846 µs to 27 µs: the handler no longer builds a list of
   every live element to count it. [`benchmark/results.md`]

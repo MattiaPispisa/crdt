@@ -4,6 +4,16 @@
 
 Documentation release: refreshes the CHANGELOG and docs published on pub.dev. No functional changes since `0.7.0`.
 
+## [0.7.0](https://github.com/MattiaPispisa/crdt/tree/crdt_socket_sync-v0.7.0/packages/crdt_socket_sync)
+
+**Date:** 2026-08-16
+
+Requires `crdt_lf: ^4.0.0` instead of `>=3.0.0 <5.0.0`. Raising this constraint is necessary but not
+sufficient by itself: the relay is CRDT-agnostic and forwards opaque blobs between clients regardless of
+version, so it does nothing on its own to stop a 3.x and a 4.0 client from talking past each other while
+agreeing on a version vector. What actually stops that is `crdt_lf`'s own protocol guard — `Change` and
+`Snapshot` refusing to decode a schema version they do not recognize, landed in `crdt_lf` 4.0.0.
+
 ## [0.6.1](https://github.com/MattiaPispisa/crdt/tree/crdt_socket_sync-v0.6.1/packages/crdt_socket_sync)
 
 **Date:** 2026-07-28

@@ -4,11 +4,11 @@
 
 Documentation release: refreshes the CHANGELOG and docs published on pub.dev. No functional changes since `0.4.0`.
 
-## [0.4.0]
+## [0.4.0](https://github.com/MattiaPispisa/crdt/tree/crdt_lf_flutter-v0.4.0/packages/crdt_lf_flutter)
 
-**Date:** 2026-07-28
+**Date:** 2026-08-16
 
-[compare to previous release](https://github.com/MattiaPispisa/crdt/compare/crdt_lf_flutter-v0.2.1...crdt_lf_flutter-v0.3.0)
+[compare to previous release](https://github.com/MattiaPispisa/crdt/compare/crdt_lf_flutter-v0.3.0...crdt_lf_flutter-v0.4.0)
 
 ### Changed
 
