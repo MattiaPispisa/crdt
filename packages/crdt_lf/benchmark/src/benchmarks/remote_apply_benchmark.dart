@@ -166,8 +166,7 @@ class TextRemoteBenchmark extends RemoteChangeBenchmark<CRDTTextHandler> {
 /// order rule is the only thing that makes the incremental path correct.
 class MapRemoteBenchmark extends RemoteChangeBenchmark<CRDTMapHandler<int>> {
   /// Creates the benchmark for a map of [size] keys.
-  MapRemoteBenchmark(this.size)
-      : super('Map remote set + read on $size keys');
+  MapRemoteBenchmark(this.size) : super('Map remote set + read on $size keys');
 
   /// The number of keys the map holds.
   final int size;
