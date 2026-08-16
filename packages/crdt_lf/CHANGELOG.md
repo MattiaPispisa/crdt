@@ -29,6 +29,26 @@ than throwing — past those four a name cannot be recovered from a kind alone.
 handler now resolves conflicts with. The document mints it when an operation is registered and the
 envelope carries it, so a handler no longer writes its own tie-break. Same 24 bytes as before.
 
+An operation kind says whether it is stamped: `OperationType.update(this, stamped: true)`, and the same
+argument on `insert`, `delete`, `move` and `custom`. It is the kind and not the handler, because a text
+`insert` has no conflict to resolve — element ids are unique — and would otherwise pay 24 bytes on every
+keystroke for a tie-break it never reads. Reading a change whose kind wants a stamp and does not have one
+now raises. The four cached `OperationType`s on `Handler` became getters so a handler can override them.
+
+`update` on `CRDTFugueTextHandler` and `CRDTFugueListHandler` **keeps the identity of the element**.
+It used to tombstone it and hang a new one in its slot, which meant two concurrent updates produced two
+elements, an update on a deleted element brought it back, and an anchor taken with `stablePositionAt`
+stopped resolving — the very thing those handlers exist for. Now the value is overwritten in place and
+concurrent writers converge on one of the two by `OperationStamp`; an update loses against a concurrent
+deletion. `CRDTFugueMovableListHandler` already worked this way, so the three now share one rule.
+For the old delete-and-insert behaviour, ask for it:
+
+```dart
+doc.runInTransaction(() {
+  text..delete(index, count)..insert(index, replacement);
+});
+```
+
 `OperationFactory` receives the decoded envelope and the operation body instead of raw bytes, and
 returns a non-nullable `Operation`. The framework checks that the envelope belongs to the handler
 before calling it, so a custom handler only dispatches on the kind and raises
@@ -39,11 +59,31 @@ handler declares it and ignores it.
 
 Wire and storage details, for anyone reading bytes directly:
   - An operation envelope may carry a stamp after the kind byte, flagged by bit 7 of that byte. An
-    operation from a handler that is not stamped keeps exactly the bytes it had.
+    operation of a kind that is not stamped keeps exactly the bytes it had. The stamped kinds are
+    `update` on the two Fugue sequence handlers, `add`/`put` on the OR handlers, and
+    `insert`/`move`/`update` on the movable list.
   - `CRDTORSetHandler` and `CRDTORMapHandler`: the tag leaves the body of `add`/`put`. Their snapshots
     never held tags and do not change.
   - `CRDTFugueMovableListHandler`: the HLC leaves the bodies of `move` and `update`, and its snapshot
     blob grows — its two last-writer-wins clocks go from 8 to 24 bytes each.
+  - The `update` body of the two Fugue sequence handlers loses its `newNodeID`: no node is created any
+    more, so an update no longer spends an element counter either. A document that has seen many updates
+    reports a lower element id floor than v3 did, which is the correct one.
+  - The snapshot blob of the two Fugue sequence handlers is new: a version byte, the live elements
+    grouped in **runs** of consecutive ids from one peer, the `update` stamps, then the element id floor.
+    The stamps have to be in there — without them a reload accepts an update it had already rejected and
+    silently loses the value that had won. `ElementIdFloor.read` no longer tolerates a buffer that ends
+    before the table.
+
+**Performance**
+
+- A snapshot of 10 000 runes written by a single peer goes from 219 893 to 10 044 bytes, and taking it
+  from 4.50 ms to 1.05 ms, because its ids collapse into one run. Reloading from it goes from 6.68 ms
+  to 4.20 ms. A document where every other element is deleted has no runs to find: same size, and
+  2.55 ms → 3.11 ms to write. [`benchmark/results.md`]
+- `CRDTFugueTextHandler.length` and `CRDTFugueListHandler.length` are O(1). One keystroke followed by
+  reading `length` on 30 000 runes goes from 846 µs to 27 µs: the handler no longer builds a list of
+  every live element to count it. [`benchmark/results.md`]
 
 **Fixed**
 

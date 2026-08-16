@@ -586,6 +586,9 @@ todos.insertRef(0, item);
   also expose **stable positions** (`stablePositionAt` /
   `indexOfStablePosition`): serializable caret/cursor anchors tied to element
   identity that survive concurrent edits useful for carets and remote cursors.
+  On all three Fugue handlers `update` overwrites an element **in place**, so
+  an anchor keeps resolving across it, and two peers updating the same element
+  converge on one of the two values instead of keeping both.
 - **List — `CRDTListHandler` vs `CRDTFugueListHandler` vs
   `CRDTFugueMovableListHandler`**: HLC-ordered (cheapest) → interleaving-aware →
   interleaving-aware **plus** identity-preserving `move`.
