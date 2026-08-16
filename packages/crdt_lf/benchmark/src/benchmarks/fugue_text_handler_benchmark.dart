@@ -51,7 +51,37 @@ class FugueTextKeystrokeValueBenchmark extends _KeystrokeBenchmark {
   void read(CRDTFugueTextHandler text) => text.value;
 }
 
+/// The isolated cost of an `update`, in place of the insert+read the
+/// keystroke benchmarks above measure.
+///
+/// `update` resolves the target through the positional index the same way
+/// `insert`/`delete` do, so this is what tells the two apart from a single
+/// combined number.
+class FugueTextUpdateBenchmark extends BenchmarkBase {
+  FugueTextUpdateBenchmark()
+      : super(
+          'Fugue text update on $_kChars chars',
+          emitter: const CustomEmitter(),
+        );
+
+  late CRDTFugueTextHandler _text;
+
+  @override
+  void setup() {
+    final doc = CRDTDocument(peerId: PeerId.generate());
+    _text = CRDTFugueTextHandler(doc, 'text');
+    doc.runInTransaction(() => _text.insert(0, 'a' * _kChars));
+    _text.value;
+  }
+
+  @override
+  void run() {
+    _text.update(_kChars ~/ 2, 'x');
+  }
+}
+
 void main() {
   FugueTextKeystrokeLengthBenchmark().report();
   FugueTextKeystrokeValueBenchmark().report();
+  FugueTextUpdateBenchmark().report();
 }
