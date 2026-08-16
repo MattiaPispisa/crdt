@@ -19,7 +19,7 @@ Built on top of [`provider`](https://pub.dev/packages/provider) — so you also 
 - [CRDT LF Flutter](#crdt-lf-flutter)
   - [Features](#features)
   - [Example](#example)
-  - [How it works](#how-it-works)
+  - [Greyhound Markdown](#greyhound-markdown)
   - [Getting Started](#getting-started)
   - [Usage](#usage)
     - [Provide a document](#provide-a-document)
@@ -27,7 +27,11 @@ Built on top of [`provider`](https://pub.dev/packages/provider) — so you also 
     - [Handler-scoped rebuilds](#handler-scoped-rebuilds)
     - [Imperative access](#imperative-access)
     - [Collaborative text](#collaborative-text)
+      - [Remote text cursors](#remote-text-cursors)
+      - [Rune ↔ UTF-16 offsets](#rune--utf-16-offsets)
     - [Presence cursors](#presence-cursors)
+  - [(deep dive) How it works](#deep-dive-how-it-works)
+  - [Apps](#apps)
   - [Packages](#packages)
 
 ## Features
@@ -213,6 +217,30 @@ CrdtTextFieldBuilder(
   ),
 );
 ```
+
+#### Rune ↔ UTF-16 offsets
+
+`crdt_lf`'s handler API is rune-indexed everywhere (see [Text handlers
+index by rune](https://github.com/MattiaPispisa/crdt/tree/main/packages/crdt_lf/README.md#text-handlers-index-by-rune)
+in the `crdt_lf` README). Flutter's `RenderEditable`, `TextSelection` and
+`TextPosition` are not — they count UTF-16 code units.
+`CrdtTextFieldBuilder` and `CrdtTextCursorsOverlay` already do this
+conversion for you; you only need it yourself when building a custom text
+binding.
+
+The single conversion point is `RuneOffsets`, defined in `crdt_lf` itself
+and reused here as-is — deliberately not reimplemented or wrapped in this
+package:
+
+```dart
+RuneOffsets.utf16Offset('a😀b', 1); // 1 — start of the emoji
+RuneOffsets.utf16Offset('a😀b', 2); // 3 — start of 'b'
+RuneOffsets.runeIndex('a😀b', 3);   // 2 — the rune that starts at code unit 3
+```
+
+`utf16Offset` converts a handler rune index into a UTF-16 offset for
+`TextSelection`/`TextPosition`; `runeIndex` converts the other way. Both
+clamp out-of-range input to the ends of the string instead of throwing.
 
 ### Presence cursors
 

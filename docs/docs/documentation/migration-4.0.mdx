@@ -1,0 +1,58 @@
+---
+sidebar_position: 4
+title: Migrating to 4.0
+description: What breaks moving from crdt_lf 3.x to 4.0, and the renamed or removed symbols to update.
+---
+
+# Migrating from 3.x to 4.0
+
+## Your documents do not open
+
+`Change` and `Snapshot` now refuse anything written by a 3.x peer — not
+from history, not from a snapshot, not from the bytes a Hive/SQLite/Drift
+adapter saved. That refusal is the point: 4.0 changes what several of these
+bytes *mean*, not just their layout. Reading them under the old assumptions
+would silently give two peers different content while their version vectors
+still agreed.
+
+**There is no migration script.** Recreate the document instead — export
+its current text/lists/maps by hand (a snapshot already does the
+equivalent: read a document's state under 3.x, then rebuild an empty 4.0
+document from that state). The history is not migratable anyway: element
+ids change granularity with the switch to
+[rune indexing](/docs/documentation/packages/crdt_lf#text-handlers-index-by-rune),
+so a rebuilt document starts from one insert per handler, the same shape a
+snapshot produces.
+
+If you ship `crdt_lf` inside an app with real user data (this workspace's
+own [Greyhound Markdown](/docs/documentation/packages/crdt_lf#greyhound-markdown)
+included), plan for your users to lose in-progress documents on upgrade, or
+hold the upgrade until they've exported what they need.
+
+## Renamed or removed symbols
+
+| 3.x | 4.0 | Note |
+|---|---|---|
+| `ORHandlerTag` | `OperationStamp` | Minted by the document in `registerOperation`, carried in the envelope — a handler no longer writes its own tie-break. |
+| `OperationType.typeNameFromKind` | `OperationType.wellKnownName` | Returns `null` past the four conventional kinds instead of throwing — a kind's meaning depends on the handler type in front of it. |
+| `OperationType.fromPayload` | removed | The payload string is a debug format; it never carried a kind, and this had no callers. |
+| `OperationFactory` | now `Operation Function(OperationEnvelope envelope, Uint8List body)` | Was raw bytes; also returns a non-nullable `Operation`, and raises `UnknownOperationKindException` instead of returning `null`. |
+| `FugueTree`, `FugueNode`, `FugueNodeTriple`, `FugueValueNode` | no longer exported | Implementation detail of the two Fugue sequence handlers. `FugueElementID` — what a stable position is made of — is still public. |
+| `update` on `CRDTFugueTextHandler` / `CRDTFugueListHandler` (delete + insert) | `update` keeps the element's identity | For the old behavior, ask for it explicitly: `doc.runInTransaction(() { text..delete(index, count)..insert(index, replacement); });` |
+| `incrementCachedState({required operation, required state})` | adds an optional `DeltaSink<Object?>? sink` | Always `null` today; a custom handler overriding this method has to declare the parameter, even unused. |
+| Text handler positions in UTF-16 code units | positions in **runes** (Unicode code points) | Affects `insert`, `delete`, `update`, `length`, `stablePositionAt`, `indexOfStablePosition`, and `myersDiff`'s offsets. See [Text handlers index by rune](/docs/documentation/packages/crdt_lf#text-handlers-index-by-rune). |
+
+The full breaking-change writeup, with the reasoning behind each one, is in
+[`crdt_lf`'s CHANGELOG](https://github.com/MattiaPispisa/crdt/blob/main/packages/crdt_lf/CHANGELOG.md).
+
+## Everything that depends on `crdt_lf` needs the same bump
+
+Raising your own `crdt_lf` constraint to `^4.0.0` is necessary but not
+sufficient by itself if you sync over `crdt_socket_sync`: its relay is
+CRDT-agnostic and forwards opaque blobs between clients regardless of
+version, so it does nothing on its own to stop a 3.x and a 4.0 client from
+talking past each other. What actually stops that is `crdt_lf`'s own
+protocol guard described above — every dependent package
+(`crdt_lf_flutter`, `crdt_socket_sync`, `crdt_lf_hive`, `crdt_lf_sqlite`,
+`crdt_lf_drift`) has to move to a version that requires `crdt_lf: ^4.0.0`
+too, or the guard never gets exercised on a client still resolving 3.x.

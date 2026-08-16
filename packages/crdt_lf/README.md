@@ -12,22 +12,25 @@
 
 - [CRDT LF](#crdt-lf)
   - [Features](#features)
-  - [Design](#design)
-    - [Operation based](#operation-based)
-    - [Transaction](#transaction)
-    - [State cache](#state-cache)
+  - [Greyhound Markdown](#greyhound-markdown)
   - [Getting Started](#getting-started)
   - [Usage](#usage)
     - [Basic Usage](#basic-usage)
     - [Dart Distributed Collaboration Example](#dart-distributed-collaboration-example)
     - [Flutter Distributed Collaboration Example](#flutter-distributed-collaboration-example)
   - [Sync](#sync)
+  - [Flutter](#flutter)
   - [Persistence](#persistence)
   - [Benchmarks](#benchmarks)
+  - [Design](#design)
+    - [Operation based](#operation-based)
+    - [Transaction](#transaction)
+    - [State cache](#state-cache)
   - [Architecture](#architecture)
     - [CRDTDocument](#crdtdocument)
       - [Identity](#identity)
     - [Handlers](#handlers)
+      - [Text handlers index by rune](#text-handlers-index-by-rune)
       - [Working with Complex Types](#working-with-complex-types)
       - [Nested Structures (Containers and References)](#nested-structures-containers-and-references)
       - [Choosing How to Model Your Data](#choosing-how-to-model-your-data)
@@ -41,6 +44,7 @@
     - [Roadmap](#roadmap)
     - [Contributing](#contributing)
   - [Acknowledgments](#acknowledgments)
+  - [Apps](#apps)
   - [Packages](#packages)
 
 
@@ -68,6 +72,113 @@ Supporting:
 - ⏱️ **Hybrid Logical Clock**: Uses HLC for causal ordering of operations
 - 🔄 **Automatic Conflict Resolution**: Automatically resolves conflicts in a CRDT
 - 📦 **Local Availability**: Operations are available locally as soon as they are applied
+
+## Greyhound Markdown
+
+A real-time collaborative markdown editor built with `crdt_lf`. Open it on
+separate devices, join the same room and edit together — no install needed.
+
+<div align="center">
+
+[![Open the live demo](https://img.shields.io/badge/▶%20Open%20live%20demo-mattiapispisa.it%2Fcrdt%2Fgreyhound_markdown-2ea44f?style=for-the-badge&logo=flutter&logoColor=white)](https://mattiapispisa.it/crdt/greyhound_markdown/)
+
+</div>
+
+<div align="center">
+  <img width="360" alt="Greyhound Markdown home screen" src="https://raw.githubusercontent.com/MattiaPispisa/crdt/main/assets/images/greyhound_home_screen.png">
+</div>
+
+Source: [apps/greyhound_markdown](https://github.com/MattiaPispisa/crdt/tree/main/apps/greyhound_markdown).
+
+## Getting Started
+
+Upgrading from a 3.x document? A `crdt_lf` 4.0 peer refuses to read v3
+bytes — see the [migration guide](https://mattiapispisa.it/crdt/docs/documentation/migration-4.0)
+before you deploy. Short version: recreate your documents.
+
+Add this to your package's `pubspec.yaml` file:
+
+```yaml
+dependencies:
+  crdt_lf: ^4.0.0
+```
+
+## Usage
+
+### Basic Usage
+
+```dart
+import 'package:crdt_lf/crdt_lf.dart';
+
+void main() {
+  // Create a new document
+  final doc = CRDTDocument(
+    peerId: PeerId.parse('45ee6b65-b393-40b7-9755-8b66dc7d0518'),
+  );
+
+  // Create a text handler
+  final text = CRDTFugueTextHandler(doc, 'text1');
+
+  // Insert text
+  text.insert(0, 'Hello');
+
+  // Delete text
+  text.delete(0, 2); // Deletes "He"
+
+  // Get current value
+  print(text.value); // Prints "llo"
+}
+```
+
+### [Dart Distributed Collaboration Example](https://github.com/MattiaPispisa/crdt/tree/main/packages/crdt_lf/example/main.dart)
+### [Flutter Distributed Collaboration Example](https://github.com/MattiaPispisa/crdt/tree/main/packages/crdt_lf/flutter_example)
+
+> 🚀 **Try the examples live in your browser — no install needed.**
+
+<div align="center">
+
+[![Open the live demo](https://img.shields.io/badge/▶%20Open%20live%20demo-mattiapispisa.it%2Fcrdt%2Fexamples-2ea44f?style=for-the-badge&logo=flutter&logoColor=white)](https://mattiapispisa.it/crdt/examples/)
+
+</div>
+
+<div align="center">
+  <img width="500" alt="flutter_document_example" src="https://raw.githubusercontent.com/MattiaPispisa/crdt/main/assets/demos/flutter_document_example.gif">
+</div>
+
+## Sync 
+A sync library is available in the [crdt_socket_sync](https://pub.dev/packages/crdt_socket_sync) package. And it's used to synchronize the CRDT state between peers. More info in the [README](https://github.com/MattiaPispisa/crdt/tree/main/packages/crdt_socket_sync/README.md) of the sync package.
+
+A flutter example is available in the [flutter_example](https://github.com/MattiaPispisa/crdt/tree/main/packages/crdt_socket_sync/flutter_example) and provide a synced version of the  "Flutter Distributed Collaboration" Example. 
+
+<div align="center">
+<img width="500" alt="sync_server_multi_client" src="https://raw.githubusercontent.com/MattiaPispisa/crdt/main/assets/demos/sync_server_multi_client.gif">
+</div>
+
+## Flutter
+A companion library, [crdt_lf_flutter](https://pub.dev/packages/crdt_lf_flutter),containing widgets that make it easier to use `crdt_lf` within Flutter systems. 
+
+It provides Flutter reactivity for `crdt_lf`: widgets rebuild when the CRDT state changes, with selectors, a provider and a collaborative text field. More info in the [README](https://github.com/MattiaPispisa/crdt/tree/main/packages/crdt_lf_flutter/README.md) of the Flutter package.
+
+## Persistence
+Persistence is not directly handled in this library but there are some out of the box solutions:
+- [crdt_lf_hive](https://pub.dev/packages/crdt_lf_hive): adapters and utils for persist data using [Hive](https://pub.dev/packages/hive).
+- [crdt_lf_drift](https://pub.dev/packages/crdt_lf_drift): adapters and utils for persist data using [Drift](https://pub.dev/packages/drift).
+- [crdt_lf_sqlite](https://pub.dev/packages/crdt_lf_sqlite): adapters and utils for persist data using [sqlite3](https://pub.dev/packages/sqlite3).
+
+## Benchmarks
+
+This package includes a suite of benchmarks to ensure performance and stability. You can find the latest results [here](https://github.com/MattiaPispisa/crdt/tree/main/packages/crdt_lf/benchmark/results.md).
+
+To run the benchmarks yourself, execute the following script from the `packages/crdt_lf` directory:
+
+```sh
+./benchmark/run.sh
+```
+or run:
+
+```sh
+melos run benchmark
+```
 
 ## Design
 
@@ -167,109 +278,6 @@ path off and always replay. A custom handler that resolves conflicts by replay
 order must leave `stateIsOrderIndependent` at its default `false`, otherwise two
 peers that receive the same changes in a different order diverge.
 
-## Getting Started
-
-Add this to your package's `pubspec.yaml` file:
-
-```yaml
-dependencies:
-  crdt_lf: ^4.0.0
-```
-
-## Usage
-
-### Basic Usage
-
-```dart
-import 'package:crdt_lf/crdt_lf.dart';
-
-void main() {
-  // Create a new document
-  final doc = CRDTDocument(
-    peerId: PeerId.parse('45ee6b65-b393-40b7-9755-8b66dc7d0518'),
-  );
-
-  // Create a text handler
-  final text = CRDTFugueTextHandler(doc, 'text1');
-
-  // Insert text
-  text.insert(0, 'Hello');
-
-  // Delete text
-  text.delete(0, 2); // Deletes "He"
-
-  // Get current value
-  print(text.value); // Prints "llo"
-}
-```
-
-### [Dart Distributed Collaboration Example](https://github.com/MattiaPispisa/crdt/tree/main/packages/crdt_lf/example/main.dart)
-### [Flutter Distributed Collaboration Example](https://github.com/MattiaPispisa/crdt/tree/main/packages/crdt_lf/flutter_example)
-
-> 🚀 **Try the examples live in your browser — no install needed.**
-
-<div align="center">
-
-[![Open the live demo](https://img.shields.io/badge/▶%20Open%20live%20demo-mattiapispisa.it%2Fcrdt%2Fexamples-2ea44f?style=for-the-badge&logo=flutter&logoColor=white)](https://mattiapispisa.it/crdt/examples/)
-
-</div>
-
-<div align="center">
-  <img width="500" alt="flutter_document_example" src="https://raw.githubusercontent.com/MattiaPispisa/crdt/main/assets/demos/flutter_document_example.gif">
-</div>
-
-## Sync 
-A sync library is available in the [crdt_socket_sync](https://pub.dev/packages/crdt_socket_sync) package. And it's used to synchronize the CRDT state between peers. More info in the [README](https://github.com/MattiaPispisa/crdt/tree/main/packages/crdt_socket_sync/README.md) of the sync package.
-
-A flutter example is available in the [flutter_example](https://github.com/MattiaPispisa/crdt/tree/main/packages/crdt_socket_sync/flutter_example) and provide a synced version of the  "Flutter Distributed Collaboration" Example. 
-
-<div align="center">
-<img width="500" alt="sync_server_multi_client" src="https://raw.githubusercontent.com/MattiaPispisa/crdt/main/assets/demos/sync_server_multi_client.gif">
-</div>
-
-## Flutter
-A companion library, [crdt_lf_flutter](https://pub.dev/packages/crdt_lf_flutter),containing widgets that make it easier to use `crdt_lf` within Flutter systems. 
-
-It provides Flutter reactivity for `crdt_lf`: widgets rebuild when the CRDT state changes, with selectors, a provider and a collaborative text field. More info in the [README](https://github.com/MattiaPispisa/crdt/tree/main/packages/crdt_lf_flutter/README.md) of the Flutter package.
-
-## Greyhound Markdown
-
-A real-time collaborative markdown editor built with `crdt_lf`. Open it on
-separate devices, join the same room and edit together — no install needed.
-
-<div align="center">
-
-[![Open the live demo](https://img.shields.io/badge/▶%20Open%20live%20demo-mattiapispisa.it%2Fcrdt%2Fgreyhound_markdown-2ea44f?style=for-the-badge&logo=flutter&logoColor=white)](https://mattiapispisa.it/crdt/greyhound_markdown/)
-
-</div>
-
-<div align="center">
-  <img width="360" alt="Greyhound Markdown home screen" src="https://raw.githubusercontent.com/MattiaPispisa/crdt/main/assets/images/greyhound_home_screen.png">
-</div>
-
-Source: [apps/greyhound_markdown](https://github.com/MattiaPispisa/crdt/tree/main/apps/greyhound_markdown).
-
-## Persistence
-Persistence is not directly handled in this library but there are some out of the box solutions:
-- [crdt_lf_hive](https://pub.dev/packages/crdt_lf_hive): adapters and utils for persist data using [Hive](https://pub.dev/packages/hive).
-- [crdt_lf_drift](https://pub.dev/packages/crdt_lf_drift): adapters and utils for persist data using [Drift](https://pub.dev/packages/drift).
-- [crdt_lf_sqlite](https://pub.dev/packages/crdt_lf_sqlite): adapters and utils for persist data using [sqlite3](https://pub.dev/packages/sqlite3).
-
-## Benchmarks
-
-This package includes a suite of benchmarks to ensure performance and stability. You can find the latest results [here](https://github.com/MattiaPispisa/crdt/tree/main/packages/crdt_lf/benchmark/results.md).
-
-To run the benchmarks yourself, execute the following script from the `packages/crdt_lf` directory:
-
-```sh
-./benchmark/run.sh
-```
-or run:
-
-```sh
-melos run benchmark
-```
-
 ## Architecture
 
 The library is built above the [hlc_dart](https://pub.dev/packages/hlc_dart) package and provide a solution to implement CRDT systems.
@@ -314,7 +322,31 @@ list.delete(0);
 print(list.value); // Prints "[Buy milk]"
 ```
 
-Every handler can be found in the [handlers](https://github.com/MattiaPispisa/crdt/tree/main/packages/crdt_lf/lib/src/handler) folder.
+Every handler can be found in the [handlers](https://github.com/MattiaPispisa/crdt/tree/main/packages/crdt_lf/lib/src/handler) folder. Want to add your own, with a
+kind the four conventional ones don't cover? See [Custom handlers](https://mattiapispisa.it/crdt/docs/documentation/custom-handlers).
+
+#### Text handlers index by rune
+
+`CRDTTextHandler` and `CRDTFugueTextHandler` count positions in **runes**
+(Unicode code points), not UTF-16 code units. `insert`, `delete`, `update`,
+`length`, and the Fugue handler's `stablePositionAt`/`indexOfStablePosition`
+all agree on this: one element is one rune.
+
+A rune, not a grapheme cluster, because a cluster's boundary is not stable —
+it depends on the Unicode version *and* on the characters next to it (a
+zero-width-joiner sequence changes shape when a peer inserts something
+beside it). A CRDT element's identity cannot depend on its neighbours, or it
+stops converging. A code point does not have that problem.
+
+The consequence is worth stating plainly rather than hiding it: a family
+emoji like `👨‍👩‍👧` is five code points (`U+1F468`, `U+200D`, `U+1F469`,
+`U+200D`, `U+1F467`), so it is five separate elements. A concurrent edit
+next to it can split it — the same limit Yjs, Automerge and Loro share.
+
+Building a text field on top of this in Flutter? `RenderEditable` counts
+UTF-16 code units, not runes — see [`RuneOffsets` in the crdt_lf_flutter
+docs](https://github.com/MattiaPispisa/crdt/tree/main/packages/crdt_lf_flutter/README.md)
+for the conversion.
 
 #### Working with Complex Types
 
@@ -567,7 +599,7 @@ todos.insertRef(0, item);
 ##### A quick decision guide
 
 | Question                                                      | Lean towards                                                |
-|---------------------------------------------------------------|-------------------------------------------------------------|
+|-----------------------------------------------------------------|-------------------------------------------------------------|
 | Peers edit *different fields of the same item* concurrently?  | Nested (per-field) — model B                                |
 | Peers co-edit the *same text* in real time?                   | A text handler as a child (model B)                         |
 | Item is atomic / co-editing is rare?                          | Flat value + LWW — model A                                  |
@@ -652,7 +684,7 @@ This is the canonical wire format used by `crdt_lf_hive` for persistence and by
 directly to build your own storage or sync layer.
 
 | Type                 | Methods                                                              | Size                                                                                 |
-|----------------------|----------------------------------------------------------------------|--------------------------------------------------------------------------------------|
+|----------------------|------------------------------------------------------------------------|----------------------------------------------------------------------------------------|
 | `PeerId`             | `toUint8List()` / `fromUint8List()`                                  | 16 B                                                                                 |
 | `HybridLogicalClock` | `toUint8List()` / `fromUint8List()`                                  | 8 B                                                                                  |
 | `OperationId`        | `toUint8List()` / `fromUint8List()`                                  | 24 B (peer + hlc)                                                                    |
@@ -667,6 +699,17 @@ Operation payloads inside a `Change` are produced by the handler's
 encode their items, so the whole pipeline (operation payload → `Change` →
 `Snapshot`) is fully binary end-to-end. JSON only appears as the *default*
 `ValueCodec<T>` when the user does not provide a custom one.
+
+**Two levels of versioning.** `Snapshot.schemaVersion` (currently `1`, added
+in `crdt_lf` 4.0.0) covers only the wrapper: the document id, the version
+vector, and the framing of the per-handler entries. Each handler's
+`getSnapshotState()` blob can carry its own version, independent of the
+wrapper — a handler can change its own layout without touching this one. The
+two Fugue sequence handlers (`CRDTFugueTextHandler`, `CRDTFugueListHandler`)
+do this today: their blob starts with its own `version: u8` byte and groups
+live elements into **runs** of consecutive ids from the same peer, instead of
+one entry per element. Not every built-in handler versions its blob yet — it
+is a capability the format supports, not something every handler has to use.
 
 ## Project Status
 
