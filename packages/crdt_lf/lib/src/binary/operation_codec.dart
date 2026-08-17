@@ -44,14 +44,6 @@ class OperationEnvelope {
 /// - stamp: [OperationStamp.byteLength] bytes, only when bit 7 is set
 /// - body: bytes
 ///
-/// The stamp sits here rather than in the body for three reasons. It is a
-/// fact about the framework, not about what the handler means, so it belongs
-/// to the part of the format the framework owns. It is written the same way
-/// for every handler, so a tool can read it without knowing which handler
-/// produced the operation. And it reaches the handler attached to the
-/// operation, which keeps `applyOperation` free of the change that carried
-/// it.
-///
 /// Bit 7 of the kind byte is what caps a kind at [OperationType.maxKind].
 class OperationEnvelopeCodec {
   static const int _stampFlag = 0x80;

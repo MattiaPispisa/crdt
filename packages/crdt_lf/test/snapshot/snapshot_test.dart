@@ -304,15 +304,7 @@ void main() {
       expect(decoded.data, isEmpty);
     });
 
-    // Do not delete this test as "a case that cannot happen". It is the guard
-    // that keeps a 3.x snapshot from being read by a 4.0 build. A 3.x buffer
-    // had no version byte and started straight at the id length, so it used to
-    // decode without complaint and hand back state built on the old element
-    // unit (UTF-16 code units instead of runes).
-    //
-    // A real snapshot always comes from Snapshot.create, whose id is a 64-char
-    // sha256 hex string: its first byte is 0x40, never a valid schema version.
-    test('fromBytes rejects a snapshot written by crdt_lf 3.x', () {
+    test('fromBytes rejects a snapshot written by an old version', () {
       final id = sha256.convert(utf8.encode('legacy')).toString();
       final idBytes = utf8.encode(id);
       final vvBytes = VersionVector({}).toBytes();

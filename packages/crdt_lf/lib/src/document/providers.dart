@@ -184,7 +184,7 @@ mixin CacheableStateProvider<T> on DocumentConsumer {
   /// Anything that cannot be decoded or applied drops the cache, so the next
   /// read recomputes from the history — the same failure policy
   /// [_internalIncrementCachedState] uses. A decode that *throws* drops the
-  /// cache too, then rethrows: see the comment on the loop.
+  /// cache too, then rethrows.
   void _drainPendingRemoteChanges({DeltaSink<Object?>? sink}) {
     final pending = _pendingRemoteChanges;
     if (pending == null) {

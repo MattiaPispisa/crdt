@@ -114,11 +114,6 @@ class Snapshot {
   }
 
   /// Schema version for the current binary layout.
-  ///
-  /// Added in `crdt_lf` 4.0.0. A 3.x snapshot has no version byte at all, so
-  /// it used to decode without complaint and hand back state built on the old
-  /// element unit. It now fails to decode, which is the point: reading it
-  /// wrong is worse than not reading it.
   static const int schemaVersion = 1;
 
   /// A stable identifier derived from the version.

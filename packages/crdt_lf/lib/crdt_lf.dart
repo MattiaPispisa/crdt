@@ -1,7 +1,3 @@
-// The Fugue tree and its nodes are implementation detail: `FugueTree`,
-// `FugueNode`, `FugueNodeTriple` and `FugueValueNode` are deliberately not
-// exported. `FugueElementID` is, because it is the type of a stable position:
-// it is serialized, and it travels between peers on the presence channel.
 export 'src/algorithm/fugue/element_id.dart';
 export 'src/algorithm/meyers_diff/meyers_diff.dart';
 export 'src/algorithm/meyers_diff/ops.dart';

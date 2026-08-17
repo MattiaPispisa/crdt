@@ -5,9 +5,7 @@ part of '../document/document.dart';
 ///
 /// The framework has checked that the envelope addresses this handler, so a
 /// factory only has to dispatch on [OperationEnvelope.kind]. It always returns
-/// an operation: there is no kind it may quietly decline, because a change it
-/// cannot read is one that would otherwise leave two peers with different
-/// states and the same version vector.
+/// an operation: there is no kind it may quietly decline.
 ///
 /// Throws [UnknownOperationKindException] on a kind this build cannot decode.
 /// That change comes from a newer peer.

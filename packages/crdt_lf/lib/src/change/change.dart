@@ -158,12 +158,6 @@ class Change {
   }
 
   /// Schema version for the current binary layout.
-  ///
-  /// Bumped to 3 in `crdt_lf` 4.0.0. The bytes of a 3.x change are still
-  /// readable, but the integers inside them mean something else: positional
-  /// operations count in runes now, not in UTF-16 code units. Two peers would
-  /// agree on the version vector and hold different text, with no error
-  /// anywhere. Refusing the decode is what makes that disagreement loud.
   static const int schemaVersion = 3;
 
   /// Metadata layout (indices in [meta]).
