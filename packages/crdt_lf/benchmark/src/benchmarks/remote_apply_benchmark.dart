@@ -267,6 +267,45 @@ class OrMapRemoteBenchmark
   }
 }
 
+/// The movable list: since 4.0.0 its two last-writer-wins clocks are
+/// [OperationStamp]s compared with `compareTo`, so its state commutes and a
+/// change from the past keeps the cache. Before that the comparison was
+/// `happenedAfter`, and the handler had to replay.
+class MovableListRemoteBenchmark
+    extends RemoteChangeBenchmark<CRDTFugueMovableListHandler<int>> {
+  /// Creates the benchmark for a list of [size] elements.
+  MovableListRemoteBenchmark(this.size)
+      : super('Movable list remote move from the past + read on $size items');
+
+  /// The number of elements the list holds.
+  final int size;
+
+  @override
+  bool get remoteChangeIsFromThePast => true;
+
+  @override
+  CRDTFugueMovableListHandler<int> createHandler(CRDTDocument doc) =>
+      CRDTFugueMovableListHandler<int>(doc, 'movable');
+
+  @override
+  void seed(CRDTFugueMovableListHandler<int> handler) {
+    handler.insertAll(0, List<int>.generate(size, (index) => index));
+  }
+
+  /// A move rather than an insert: it is the operation whose winner the stamp
+  /// decides, and the one that used to force a replay.
+  @override
+  void edit(CRDTFugueMovableListHandler<int> handler, int round) =>
+      handler.move(round % handler.length, 0);
+
+  @override
+  void read(CRDTFugueMovableListHandler<int> handler) {
+    if (handler.value.isEmpty) {
+      throw StateError('empty value');
+    }
+  }
+}
+
 void main() {
   for (final size in [2000, 10000, 30000]) {
     FugueTextRemoteBenchmark(size).report();
@@ -282,5 +321,8 @@ void main() {
   }
   for (final size in [1000, 5000]) {
     OrMapRemoteBenchmark(size).report();
+  }
+  for (final size in [1000, 5000]) {
+    MovableListRemoteBenchmark(size).report();
   }
 }

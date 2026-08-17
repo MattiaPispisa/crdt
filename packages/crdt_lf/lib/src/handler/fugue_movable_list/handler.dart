@@ -82,6 +82,18 @@ class CRDTFugueMovableListHandler<T> extends Handler<FugueMovableListState<T>>
     stamped: true,
   );
 
+  /// Every mutation commutes, so a change that arrives from the past is folded
+  /// into the cached state instead of forcing a replay.
+  ///
+  /// `insert` seeds an element's two clocks and never overwrites them, `move`
+  /// and `update` keep the greater [OperationStamp], and `delete` is monotone.
+  /// The tree the positions live in sorts siblings by element id, so it is a
+  /// function of the operation set alone. Until 4.0.0 this was not true: the
+  /// two clocks were compared with `happenedAfter`, which is false in both
+  /// directions on a tie, so the winner was whoever arrived first.
+  @override
+  bool get stateIsOrderIndependent => true;
+
   /// Returns the current list value.
   List<T> get value => cachedOrComputedState().value;
 
