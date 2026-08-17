@@ -16,13 +16,35 @@ abstract class Operation {
   /// The ID of the handler that owns the operation
   final String id;
 
-  /// The last-writer-wins stamp of this operation; `null` when the handler
-  /// that owns it does not ask to be stamped.
+  OperationStamp? _stamp;
+
+  /// The stamp of this operation; `null` when its kind is not stamped
+  /// (see [OperationType.stamped]).
   ///
   /// Set by the document, in `registerOperation` for a local operation and
   /// from the envelope for one that arrived from another peer. A handler
   /// reads it, it never writes it.
-  OperationStamp? stamp;
+  OperationStamp? get stamp => _stamp;
+
+  /// Assigns the stamp, once.
+  ///
+  /// A second write throws. The stamp is what a last-writer-wins handler
+  /// stores **inside its state**, so an operation whose stamp changed after
+  /// one peer folded it leaves the two peers holding different values, with
+  /// nothing to show for it. There is no case where the same operation is
+  /// legitimately stamped twice: a local one is minted in `registerOperation`,
+  /// a remote one is read off the envelope, and a compound is a fresh
+  /// operation.
+  set stamp(OperationStamp? value) {
+    if (_stamp != null) {
+      throw StateError(
+        'The stamp of ${type.toPayload()} is already set. It is minted once, '
+        'by the document, and it ends up inside handler state: rewriting it '
+        'leaves two peers holding different values.',
+      );
+    }
+    _stamp = value;
+  }
 
   /// Encodes the operation as bytes.
   ///
