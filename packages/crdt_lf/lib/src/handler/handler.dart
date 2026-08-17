@@ -143,6 +143,12 @@ abstract class Handler<T>
   /// The single place the envelope is decoded: it checks the address, hands
   /// the factory a body it does not have to slice again, and attaches the
   /// stamp the envelope carried.
+  ///
+  /// Both halves of a disagreement about [OperationType.stamped] are refused
+  /// here. The flag is a local declaration, so two builds can disagree about
+  /// the same kind; either way the peers would resolve a conflict by two
+  /// different rules and end up holding different values, with nothing to show
+  /// for it.
   @override
   Operation? _operationFromChange(Change change) {
     final bytes = change.payloadBytes();
@@ -160,6 +166,15 @@ abstract class Handler<T>
         'Operation ${operation.type.toPayload()} carries no stamp, but this '
         'kind resolves conflicts with one. The change was written by a peer '
         'that does not stamp it.',
+      );
+    }
+
+    if (!operation.type.stamped && envelope.stamp != null) {
+      throw FormatException(
+        'Operation ${operation.type.toPayload()} carries a stamp, but this '
+        'build does not stamp that kind. The change was written by a peer '
+        'that resolves it by last-writer-wins, and this one would ignore the '
+        'stamp.',
       );
     }
 

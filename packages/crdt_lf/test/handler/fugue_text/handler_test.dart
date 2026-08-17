@@ -1327,6 +1327,55 @@ void main() {
         );
       });
 
+      // The other half of the same disagreement: a peer that stamps `insert`
+      // sends one, this build does not read it, and the two would resolve
+      // concurrent inserts by different rules. Silent, so the read refuses.
+      test('an unstamped kind that arrives with a stamp raises', () {
+        final doc = CRDTDocument();
+        final handler = CRDTFugueTextHandler(doc, 'text1')..insert(0, 'ab');
+
+        // The body of a one-item insert: the two origins it hangs off, then
+        // the item id and its value.
+        final body = BytesBuilder(copy: false)
+          ..add(handler.nodeAt(0).toBytes())
+          ..add(FugueElementID.nullID().toBytes());
+        UVarint.write(1, body);
+        body.add(FugueElementID(PeerId.generate(), 900).toBytes());
+        final value = Wtf8.encode('X');
+        UVarint.write(value.length, body);
+        body.add(value);
+
+        final author = PeerId.generate();
+        doc.applyChange(
+          Change.fromPayloadBytes(
+            id: OperationId(author, HybridLogicalClock(l: 100, c: 1)),
+            deps: doc.version,
+            author: author,
+            payloadBytes: OperationEnvelopeCodec.encode(
+              handlerType: handler.handlerType,
+              handlerId: handler.id,
+              kind: OperationType.kindInsert,
+              stamp: OperationStamp(
+                hlc: HybridLogicalClock(l: 100, c: 1),
+                peerId: author,
+              ),
+              body: body.toBytes(),
+            ),
+          ),
+        );
+
+        expect(
+          () => handler.value,
+          throwsA(
+            isA<FormatException>().having(
+              (e) => e.message,
+              'message',
+              contains('carries a stamp'),
+            ),
+          ),
+        );
+      });
+
       test('another handler type is declined before the kind is read', () {
         // Order matters here: an unknown kind under a foreign type tag is
         // somebody else's business. Checking the kind first would turn every

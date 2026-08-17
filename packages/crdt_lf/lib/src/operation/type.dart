@@ -167,23 +167,37 @@ class OperationType {
   /// Binary kind value written in the operation envelope (u8).
   final int kind;
 
-  /// Whether the document stamps operations of this kind with an
+  /// Whether the document marks operations of this kind with an
   /// [OperationStamp], and the envelope carries it.
   ///
-  /// Turn it on for a kind that resolves concurrent writes by
-  /// last-writer-wins: the stamp is what lets it pick the same winner on
-  /// every peer instead of depending on the order operations arrive in, which
-  /// is the precondition for `stateIsOrderIndependent`. The handler reads it
-  /// from [Operation.stamp], which is set before the operation reaches
-  /// `incrementCachedState` and before the change that carries it is built.
+  /// A stamp is a unique, totally ordered mark: unique because the document
+  /// ticks its clock before minting one, ordered because [OperationStamp]
+  /// compares by clock first and by peer second. Handlers use it for two
+  /// things:
+  ///
+  /// - **A last-writer-wins tie-break.** `update` on the Fugue sequence
+  ///   handlers and `insert`/`move`/`update` on the movable list keep the
+  ///   greater stamp, so every peer picks the same winner instead of the one
+  ///   that happened to arrive last. That is the precondition for
+  ///   `stateIsOrderIndependent`.
+  /// - **An identity tag.** `add` on `CRDTORSetHandler` and `put` on
+  ///   `CRDTORMapHandler` only need the mark to be distinct: it is the tag a
+  ///   later `remove` tombstones. `CRDTORSetHandler` never compares two of
+  ///   them.
+  ///
+  /// The handler reads it from [Operation.stamp], which is set before the
+  /// operation reaches `incrementCachedState` and before the change that
+  /// carries it is built.
   ///
   /// A stamp costs [OperationStamp.byteLength] bytes on the wire, so it sits
-  /// on the kind rather than on the handler: a text `insert` has no conflict
-  /// to resolve and pays nothing, while `update` on the same handler does.
+  /// on the kind rather than on the handler: a text `insert` needs neither a
+  /// tie-break nor a tag and pays nothing, while `update` on the same handler
+  /// does.
   ///
-  /// It is a local declaration, not part of the wire format — two builds that
-  /// disagree about it are caught by the envelope, which flags the stamp with
-  /// bit 7 of the kind byte.
+  /// It is a local declaration, not part of the wire format. Two builds that
+  /// disagree about it are refused on decode, in both directions: the envelope
+  /// flags the stamp with bit 7 of the kind byte, so a missing one and an
+  /// unexpected one are equally visible.
   final bool stamped;
 
   /// Compares two [OperationType]s for equality
