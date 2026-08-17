@@ -60,12 +60,33 @@ factory OperationType.custom(
   stamp follows.
 - `name` labels the kind in `toPayload` and debug output. It carries no
   meaning on the wire — only `kind` is written there.
-- `stamped: true` turns on last-writer-wins conflict resolution for that
-  kind, via an `OperationStamp` (`hlc` + `peerId`) the document mints and
-  the envelope carries. `OperationType.wellKnownName(kind)` returns the
+- `stamped: true` asks the document for an `OperationStamp` (`hlc` +
+  `peerId`), minted when the operation is registered and carried by the
+  envelope. `OperationType.wellKnownName(kind)` returns the
   name of a conventional kind, or `null` past those four — a kind's meaning
   depends on the handler type in front of it, so a total `kind -> name`
   function isn't expressible for custom kinds.
+
+### When to turn `stamped` on
+
+A stamp is a unique, totally ordered mark. It costs 24 bytes on the wire per
+operation of that kind, so turn it on only when the handler reads it. The
+built-in handlers use it for two different things:
+
+| Use | Who | What the handler does |
+|---|---|---|
+| Last-writer-wins tie-break | `update` on the Fugue sequence handlers, `insert`/`move`/`update` on the movable list | keeps the **greater** stamp, so every peer picks the same winner instead of whichever change arrived last |
+| Identity tag | `add` on `CRDTORSetHandler`, `put` on `CRDTORMapHandler` | stores the stamp as the tag a later `remove` tombstones; `CRDTORSetHandler` never compares two of them |
+
+A kind with no conflict to resolve and nothing to tag declares nothing and
+pays nothing — a text `insert` is one, because element ids are already unique.
+
+`stamped` is a **local declaration**, not part of the wire format: the
+envelope only flags whether a stamp is present, in bit 7 of the kind byte. Two
+builds that disagree about it are refused on decode, in both directions — a
+stamped kind arriving without a stamp, and an unstamped kind arriving with
+one, both raise a `FormatException` on read. Changing the flag on a kind you
+already shipped is therefore a breaking change.
 
 A change carrying a kind this build doesn't recognize for that handler type
 throws `UnknownOperationKindException` instead of being silently dropped —
