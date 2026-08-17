@@ -6,7 +6,7 @@ Documentation release: refreshes the CHANGELOG and docs published on pub.dev. No
 
 ## [4.0.0](https://github.com/MattiaPispisa/crdt/tree/crdt_lf-v4.0.0/packages/crdt_lf)
 
-**Date:** 2026-07-28
+**Date:** 2026-08-16
 
 [compare to previous release](https://github.com/MattiaPispisa/crdt/compare/crdt_lf-v3.4.2+1...crdt_lf-v4.0.0)
 
@@ -66,6 +66,19 @@ before calling it, so a custom handler only dispatches on the kind and raises
 `incrementCachedState` takes an optional `DeltaSink<Object?>? sink`. It is always `null`; a custom
 handler declares it and ignores it.
 
+`Operation.stamp` is written once. It used to be a public mutable field, so anything holding an
+operation — `handler.operations()` hands them out — could rewrite the tie-break. A last-writer-wins
+handler stores the stamp *inside its state*, so an operation restamped after one peer folded it
+leaves the two peers with different values and nothing to show for it. A second write now throws a
+`StateError`; there is no legitimate one, because a local operation is stamped in `registerOperation`,
+a remote one from the envelope, and a compound is a fresh operation.
+
+Reading a change also refuses the opposite disagreement: an operation whose kind this build declares
+**unstamped**, arriving **with** a stamp, now raises. `stamped` is a local declaration, so two builds
+can disagree about the same kind while the change schema version stays `3`; without this the receiver
+would attach a stamp no code path reads and resolve the conflict by a different rule. Flipping
+`stamped` on a kind you already shipped is a breaking change.
+
 Wire and storage details, for anyone reading bytes directly:
   - An operation envelope may carry a stamp after the kind byte, flagged by bit 7 of that byte. An
     operation of a kind that is not stamped keeps exactly the bytes it had. The stamped kinds are
@@ -93,8 +106,16 @@ Wire and storage details, for anyone reading bytes directly:
   peer is 100 047 bytes, not roughly ten times 10 044 — the per-run overhead does not scale with element
   count. [`benchmark/results.md`]
 - `CRDTFugueTextHandler.length` and `CRDTFugueListHandler.length` are O(1). One keystroke followed by
-  reading `length` on 30 000 runes goes from 846 µs to 27 µs: the handler no longer builds a list of
-  every live element to count it. [`benchmark/results.md`]
+  reading `length` on 30 000 runes goes from 590 µs to 3.1 µs: the handler no longer builds a list of
+  every live element to count it, and no longer builds the whole string just to ask how long it is.
+  [`benchmark/results.md`]
+- `CRDTFugueMovableListHandler` keeps its cached state when a change arrives **from the past**, which is
+  what concurrent editing produces. Its state commutes now that both its last-writer-wins clocks are
+  `OperationStamp`s compared by `compareTo`. Measured on one remote move followed by a read: 1 000 items
+  919 µs → 44 µs, 5 000 items 2.52 ms → 164 µs. [`benchmark/results.md`]
+- The movable list is the one blob that got **bigger**: 92.2 bytes per element at 10 000, against roughly
+  60 in 3.x, because its two clocks went from 8 to 24 bytes each. There is no run framing to win any of
+  it back — its entries are keyed by identity, one per element. [`benchmark/results.md`]
 
 **Fixed**
 
@@ -102,6 +123,10 @@ Wire and storage details, for anyone reading bytes directly:
   no longer leave two peers with different results. It compared bare clocks with `happenedAfter`, which
   is false in both directions on a tie, so the value already in place stayed — and which one that was
   depended on the order the changes arrived in. The peer now settles it.
+- Reading the whole text after a keystroke on 30 000 runes is back to 625 µs from 710 µs. Building the
+  string had been rewritten to stream into a `StringBuffer`, which looks cheaper than collecting a list
+  and joining it and measures 13% slower — `join` adds up the lengths in one pass and fills a single
+  allocation, while a buffer grows as it writes.
 
 ## [3.5.0](https://github.com/MattiaPispisa/crdt/tree/crdt_lf-v3.5.0/packages/crdt_lf)
 
