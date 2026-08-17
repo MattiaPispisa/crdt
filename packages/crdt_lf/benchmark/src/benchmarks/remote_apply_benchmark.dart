@@ -12,7 +12,8 @@ import '../common/custom_emitter.dart';
 abstract class RemoteChangeBenchmark<H extends Handler<dynamic>>
     extends BenchmarkBase {
   /// Creates the benchmark reported under `name`.
-  RemoteChangeBenchmark(super.name) : super(emitter: const CustomEmitter());
+  RemoteChangeBenchmark(super.name)
+      : super(emitter: const CustomEmitter(runsPerMeasure: 1));
 
   static const _warmupCycles = 20;
   static const _measuredCycles = 200;
