@@ -86,12 +86,6 @@ class CRDTFugueTextHandler
   ///
   /// [index] and the length of [text] are counted in **runes**, like every
   /// other positional API of this handler.
-  ///
-  /// The rule is [OperationStamp]: clock first, peer second. It is the same
-  /// one `CRDTFugueListHandler.update` and
-  /// `CRDTFugueMovableListHandler.update` follow.
-  ///
-  /// `O(√n)` per element.
   void update(int index, String text) {
     if (text.isEmpty) {
       return;

@@ -136,9 +136,7 @@ class FugueTree<T> {
 
   /// The last-writer-wins stamps of the nodes an [update] overwrote.
   ///
-  /// Bounded by the live nodes, because [delete] evicts. A snapshot has to
-  /// carry them: without them a restored document accepts an update it had
-  /// already rejected, and quietly loses the value that had won.
+  /// Bounded by the live nodes (because [delete] evicts).
   Map<FugueElementID, OperationStamp> get stamps =>
       Map<FugueElementID, OperationStamp>.unmodifiable(_stamps);
 

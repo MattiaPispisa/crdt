@@ -44,9 +44,6 @@ class OperationStamp implements Comparable<OperationStamp> {
 
   /// Reads back a stamp written by [toString].
   ///
-  /// The text form is for debug payloads and for the JSON the Fugue tree
-  /// writes; the wire form is [toUint8List].
-  ///
   /// Throws a [FormatException] on anything [toString] would not have
   /// produced.
   factory OperationStamp.parse(String value) {
