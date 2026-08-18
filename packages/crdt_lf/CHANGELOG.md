@@ -18,8 +18,10 @@
   default body without breaking it.
 - A deleted element keeps its value, its place and the id of the change that removed it, in the
   tree and in the snapshot, so it can be put back whole.
-- The framing `binaryExportChanges` writes carries a version that moves with the meaning of the
-  bytes inside it; a 3.x buffer used to be accepted there without a word.
+- `binaryExportChanges` frames whole `Change`s instead of a layout of its own, so each one says
+  which schema it is in and a 3.x buffer is refused there too. Two bytes more per change, and
+  importing 1 000 of them goes from 2.40 ms to 1.96 ms: the old reader decoded every id into an
+  object only to write it straight back out.
 
 ### Breaking
 

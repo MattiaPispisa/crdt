@@ -1151,17 +1151,9 @@ class CRDTDocument extends BaseCRDTDocument {
   /// This is a versioned, length-prefixed format designed for efficient
   /// synchronization and reduced memory overhead.
   Uint8List binaryExportChanges({Set<OperationId>? from}) {
-    final changes = exportChanges(from: from);
-    final blobs = <Uint8List>[];
-
-    for (final change in changes) {
-      final out = BytesBuilder(copy: false);
-      UVarint.write(change.depsCount, out);
-      out.add(change.bytes);
-      blobs.add(out.toBytes());
-    }
-
-    return ChangeCodec.encodeBlobs(blobs);
+    return ChangeCodec.encodeBlobs([
+      for (final change in exportChanges(from: from)) change.toBytes(),
+    ]);
   }
 
   /// Imports [Change]s from the compact binary format.
@@ -1170,42 +1162,9 @@ class CRDTDocument extends BaseCRDTDocument {
   int binaryImportChanges(Uint8List data) {
     _ensureNotDisposed('binaryImportChanges');
 
-    final blobs = ChangeCodec.decodeBlobs(data);
-    final changes = <Change>[];
-
-    for (final blob in blobs) {
-      final depsCountRec = UVarint.read(blob, offset: 0);
-      final depsCount = depsCountRec.value;
-      final bytes = Uint8List.sublistView(blob, depsCountRec.nextOffset);
-
-      if (bytes.length < OperationId.byteLength) {
-        throw const FormatException('Truncated change bytes');
-      }
-
-      final id = OperationId.fromUint8List(bytes);
-      final deps = <OperationId>{};
-
-      var cursor = OperationId.byteLength;
-      for (var i = 0; i < depsCount; i += 1) {
-        if (cursor + OperationId.byteLength > bytes.length) {
-          throw const FormatException('Truncated change dependencies');
-        }
-        deps.add(OperationId.fromUint8List(bytes, offset: cursor));
-        cursor += OperationId.byteLength;
-      }
-
-      final payloadBytes = Uint8List.sublistView(bytes, cursor);
-      changes.add(
-        Change.fromPayloadBytes(
-          id: id,
-          deps: deps,
-          author: id.peerId,
-          payloadBytes: payloadBytes,
-        ),
-      );
-    }
-
-    return importChanges(changes);
+    return importChanges([
+      for (final blob in ChangeCodec.decodeBlobs(data)) Change.fromBytes(blob),
+    ]);
   }
 
   /// Imports [Change]s from another document

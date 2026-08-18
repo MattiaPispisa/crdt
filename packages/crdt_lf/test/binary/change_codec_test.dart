@@ -25,9 +25,8 @@ void main() {
       expect(decoded[2], equals([9]));
     });
 
-    // The framed blobs carry no `Change.schemaVersion`, so this byte is the
-    // only thing that tells a 3.x buffer apart from a 4.x one. Both layouts
-    // decode without error and mean different things.
+    // 3.x framed a change without the byte `Change.toBytes` leads with, so a
+    // v1 blob and a v2 blob are different things under the same magic.
     test('refuses the framing version 3.x wrote', () {
       final framed = _framedWithVersion(1, [
         Uint8List.fromList([1, 2, 3]),
