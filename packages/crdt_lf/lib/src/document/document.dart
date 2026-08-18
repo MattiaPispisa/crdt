@@ -6,6 +6,7 @@ import 'dart:typed_data';
 import 'package:crdt_lf/crdt_lf.dart';
 import 'package:crdt_lf/src/compound/compound.dart';
 import 'package:crdt_lf/src/devtools/devtools.dart' as devtools;
+import 'package:crdt_lf/src/snapshot/blob_version.dart';
 import 'package:crdt_lf/src/transaction/transaction_manager.dart';
 import 'package:crdt_lf/src/utils/uuid.dart';
 import 'package:hlc_dart/hlc_dart.dart';
@@ -1433,10 +1434,13 @@ class CRDTDocument extends BaseCRDTDocument {
 /// control character keeps it from colliding with any real handler id.
 const String _handlerManifestKey = 'crdt_lf/handler-manifest';
 
-/// Encodes a `{id: type}` manifest as `[uvarint count]` followed, per entry, by
-/// `[uvarint idLen][utf8 id][uvarint typeLen][utf8 type]`.
+/// The version of the manifest blob this build writes and reads.
+const int _handlerManifestVersion = 1;
+
+/// Encodes a `{id: type}` manifest as `[u8 version][uvarint count]` followed,
+/// per entry, by `[uvarint idLen][utf8 id][uvarint typeLen][utf8 type]`.
 Uint8List _encodeHandlerManifest(Map<String, String> manifest) {
-  final out = BytesBuilder(copy: false);
+  final out = BytesBuilder(copy: false)..addByte(_handlerManifestVersion);
   UVarint.write(manifest.length, out);
   for (final entry in manifest.entries) {
     final idBytes = utf8.encode(entry.key);
@@ -1453,7 +1457,11 @@ Uint8List _encodeHandlerManifest(Map<String, String> manifest) {
 /// Decodes a manifest produced by [_encodeHandlerManifest].
 Map<String, String> _decodeHandlerManifest(Uint8List bytes) {
   final manifest = <String, String>{};
-  var offset = 0;
+  var offset = SnapshotBlob.read(
+    bytes,
+    version: _handlerManifestVersion,
+    name: 'handler manifest',
+  );
   final countRec = UVarint.read(bytes, offset: offset);
   offset = countRec.nextOffset;
   for (var i = 0; i < countRec.value; i += 1) {

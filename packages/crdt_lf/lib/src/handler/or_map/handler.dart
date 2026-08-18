@@ -1,6 +1,7 @@
 import 'dart:typed_data';
 
 import 'package:crdt_lf/crdt_lf.dart';
+import 'package:crdt_lf/src/snapshot/blob_version.dart';
 
 part 'operation.dart';
 
@@ -118,10 +119,18 @@ class CRDTORMapHandler<K, V> extends Handler<ORMapState<K, V>> {
   /// Returns the current entries in the map.
   Iterable<MapEntry<K, V>> get entries => value.entries;
 
+  /// The version of the snapshot blob this build writes and reads.
+  ///
+  /// Layout: `version: u8`, `count: uvarint`, then per entry
+  /// `keyLen: uvarint`, `key: bytes`, `valueLen: uvarint`, `value: bytes`.
+  /// The tags stay out: a snapshot holds the projected map, and the entries
+  /// come back tagless.
+  static const int _snapshotVersion = 1;
+
   /// Returns the current state for snapshotting as a binary blob.
   @override
   Uint8List getSnapshotState() {
-    final out = BytesBuilder(copy: false);
+    final out = BytesBuilder(copy: false)..addByte(_snapshotVersion);
     final entries = value;
     UVarint.write(entries.length, out);
     for (final entry in entries.entries) {
@@ -153,7 +162,11 @@ class CRDTORMapHandler<K, V> extends Handler<ORMapState<K, V>> {
     // say otherwise. The snapshot is a length-prefixed sequence of
     // (key, value) pairs encoded via [_keyCodec] and [_valueCodec].
     if (snap != null) {
-      var offset = 0;
+      var offset = SnapshotBlob.read(
+        snap,
+        version: _snapshotVersion,
+        name: 'OR-map',
+      );
       final countRec = UVarint.read(snap, offset: offset);
       offset = countRec.nextOffset;
       for (var i = 0; i < countRec.value; i += 1) {

@@ -1,6 +1,7 @@
 import 'dart:typed_data';
 
 import 'package:crdt_lf/crdt_lf.dart';
+import 'package:crdt_lf/src/snapshot/blob_version.dart';
 
 part 'operation.dart';
 
@@ -100,10 +101,17 @@ class CRDTORSetHandler<T> extends Handler<ORSetState<T>> {
   /// Returns whether the set contains [value].
   bool contains(T element) => value.contains(element);
 
+  /// The version of the snapshot blob this build writes and reads.
+  ///
+  /// Layout: `version: u8`, `count: uvarint`, then per item
+  /// `itemLen: uvarint`, `item: bytes`. The tags stay out: a snapshot holds
+  /// the projected set, and the elements come back tagless.
+  static const int _snapshotVersion = 1;
+
   /// Returns the current state for snapshotting as a binary blob.
   @override
   Uint8List getSnapshotState() {
-    final out = BytesBuilder(copy: false);
+    final out = BytesBuilder(copy: false)..addByte(_snapshotVersion);
     final items = value;
     UVarint.write(items.length, out);
     for (final item in items) {
@@ -131,7 +139,11 @@ class CRDTORSetHandler<T> extends Handler<ORSetState<T>> {
     // otherwise. The snapshot is a length-prefixed sequence of items encoded
     // via [_valueCodec].
     if (snap != null) {
-      var offset = 0;
+      var offset = SnapshotBlob.read(
+        snap,
+        version: _snapshotVersion,
+        name: 'OR-set',
+      );
       final countRec = UVarint.read(snap, offset: offset);
       offset = countRec.nextOffset;
       for (var i = 0; i < countRec.value; i += 1) {

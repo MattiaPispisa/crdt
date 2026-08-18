@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:crdt_lf/crdt_lf.dart';
 import 'package:hlc_dart/hlc_dart.dart';
@@ -319,8 +320,12 @@ void main() {
         ),
       );
       expect(snapshot.data, isMap);
+      final blob = snapshot.data[handlerId]!;
+      // The blob leads with its own version, under the one the wrapper
+      // carries, and the text follows it.
+      expect(blob[0], equals(1));
       expect(
-        utf8.decode(snapshot.data[handlerId]!),
+        utf8.decode(Uint8List.sublistView(blob, 1)),
         equals('HelloWorld'),
       );
     });
@@ -502,7 +507,7 @@ void main() {
         // Verify snapshot data (simple check)
         expect(snapshot1.data[handlerId], isNotNull);
         expect(
-          utf8.decode(snapshot1.data[handlerId]!),
+          utf8.decode(Uint8List.sublistView(snapshot1.data[handlerId]!, 1)),
           equals(convergedValue),
         );
 

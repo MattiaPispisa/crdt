@@ -3,6 +3,7 @@ import 'dart:typed_data';
 
 import 'package:crdt_lf/crdt_lf.dart';
 import 'package:crdt_lf/src/handler/handler_type.dart';
+import 'package:crdt_lf/src/snapshot/blob_version.dart';
 
 part 'operation.dart';
 
@@ -141,9 +142,17 @@ class CRDTTextHandler extends Handler<String> {
     return state;
   }
 
+  /// The version of the snapshot blob this build writes and reads.
+  ///
+  /// Layout: `version: u8` then the whole text as WTF-8.
+  static const int _snapshotVersion = 1;
+
   @override
   Uint8List getSnapshotState() {
-    return Wtf8.encode(value);
+    final out = BytesBuilder(copy: false)
+      ..addByte(_snapshotVersion)
+      ..add(Wtf8.encode(value));
+    return out.toBytes();
   }
 
   /// Gets the length of the text, **in runes**
@@ -358,7 +367,12 @@ class CRDTTextHandler extends Handler<String> {
     if (snapshot == null) {
       return '';
     }
-    return Wtf8.decode(snapshot);
+    final offset = SnapshotBlob.read(
+      snapshot,
+      version: _snapshotVersion,
+      name: 'text',
+    );
+    return Wtf8.decode(Uint8List.sublistView(snapshot, offset));
   }
 
   /// Returns a string representation of this text

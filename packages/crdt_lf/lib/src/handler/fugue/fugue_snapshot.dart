@@ -4,6 +4,7 @@ import 'package:crdt_lf/crdt_lf.dart';
 import 'package:crdt_lf/src/algorithm/fugue/tree.dart';
 import 'package:crdt_lf/src/algorithm/fugue/value_node.dart';
 import 'package:crdt_lf/src/handler/fugue/element_id_floor.dart';
+import 'package:crdt_lf/src/snapshot/blob_version.dart';
 
 /// Everything a Fugue snapshot blob holds, once decoded.
 class FugueSnapshotData<T> {
@@ -121,16 +122,7 @@ class FugueSnapshot {
     Uint8List bytes, {
     required List<T> Function(Uint8List blob, int length) decodeRun,
   }) {
-    if (bytes.isEmpty) {
-      throw const FormatException('Truncated Fugue snapshot');
-    }
-    if (bytes[0] != version) {
-      throw FormatException(
-        'Unsupported Fugue snapshot version: ${bytes[0]} '
-        '(this build reads $version)',
-      );
-    }
-    var offset = 1;
+    var offset = SnapshotBlob.read(bytes, version: version, name: 'Fugue');
 
     final runCountRec = UVarint.read(bytes, offset: offset);
     offset = runCountRec.nextOffset;

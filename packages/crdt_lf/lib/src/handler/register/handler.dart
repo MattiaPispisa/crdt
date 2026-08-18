@@ -1,6 +1,7 @@
 import 'dart:typed_data';
 
 import 'package:crdt_lf/crdt_lf.dart';
+import 'package:crdt_lf/src/snapshot/blob_version.dart';
 
 part 'operation.dart';
 
@@ -106,9 +107,15 @@ class CRDTRegisterHandler<T> extends Handler<T> {
     return state;
   }
 
+  /// The version of the snapshot blob this build writes and reads.
+  ///
+  /// Layout: `version: u8`, `present: u8`, then, when present,
+  /// `valueLen: uvarint`, `value: bytes`.
+  static const int _snapshotVersion = 1;
+
   @override
   Uint8List getSnapshotState() {
-    final out = BytesBuilder(copy: false);
+    final out = BytesBuilder(copy: false)..addByte(_snapshotVersion);
     final current = value;
     if (current == null) {
       out.addByte(0); // unset
@@ -123,10 +130,21 @@ class CRDTRegisterHandler<T> extends Handler<T> {
 
   T? _initialValue() {
     final snapshot = lastSnapshot();
-    if (snapshot == null || snapshot.isEmpty || snapshot[0] == 0) {
+    if (snapshot == null) {
       return null;
     }
-    final lenRec = UVarint.read(snapshot, offset: 1);
+    final offset = SnapshotBlob.read(
+      snapshot,
+      version: _snapshotVersion,
+      name: 'register',
+    );
+    if (offset >= snapshot.length) {
+      throw const FormatException('Truncated register snapshot');
+    }
+    if (snapshot[offset] == 0) {
+      return null;
+    }
+    final lenRec = UVarint.read(snapshot, offset: offset + 1);
     final end = lenRec.nextOffset + lenRec.value;
     if (end > snapshot.length) {
       throw const FormatException('Truncated register snapshot value');

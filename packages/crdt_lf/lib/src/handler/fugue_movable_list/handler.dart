@@ -5,6 +5,7 @@ import 'package:crdt_lf/src/algorithm/fugue/tree.dart';
 import 'package:crdt_lf/src/algorithm/fugue/value_node.dart';
 import 'package:crdt_lf/src/handler/fugue/element_id_floor.dart';
 import 'package:crdt_lf/src/handler/fugue/fugue_cache.dart';
+import 'package:crdt_lf/src/snapshot/blob_version.dart';
 
 part 'operation.dart';
 
@@ -398,16 +399,23 @@ class CRDTFugueMovableListHandler<T> extends Handler<FugueMovableListState<T>>
     state._markDirty();
   }
 
+  /// The version of the snapshot blob this build writes and reads.
+  static const int _snapshotVersion = 1;
+
   /// Snapshot layout:
+  /// - version: u8
   /// - elementsCount: uvarint
   /// - repeated `elementsCount` times:
   ///   - identityID: [FugueElementID] bytes
   ///   - position: [FugueElementID] bytes
   ///   - positionStamp: [OperationId.byteLength] bytes
   ///   - valueStamp: [OperationId.byteLength] bytes
-  ///   - deleted: u8 (0/1)
   ///   - valueLen: uvarint
   ///   - value: [ValueCodec] bytes
+  /// - floor: [ElementIdFloor]
+  ///
+  /// Only the visible elements go out, so a restored element is never deleted
+  /// and the flag that used to say so carried no information.
   ///
   /// The Fugue tree is not encoded directly: it is rebuilt at restore time by
   /// inserting the snapshot identities at their winning positions in
@@ -418,7 +426,7 @@ class CRDTFugueMovableListHandler<T> extends Handler<FugueMovableListState<T>>
     final state = cachedOrComputedState();
     final visible = state.visiblePositions;
 
-    final out = BytesBuilder(copy: false);
+    final out = BytesBuilder(copy: false)..addByte(_snapshotVersion);
     UVarint.write(visible.length, out);
     for (final positionID in visible) {
       final identityID = _identityForPosition(state, positionID)!;
@@ -428,8 +436,7 @@ class CRDTFugueMovableListHandler<T> extends Handler<FugueMovableListState<T>>
         ..add(identityID.toBytes())
         ..add(element.position.toBytes())
         ..add(element.positionStamp.toUint8List())
-        ..add(element.valueStamp.toUint8List())
-        ..addByte(element.deleted ? 1 : 0);
+        ..add(element.valueStamp.toUint8List());
 
       final valBytes = _valueCodec.encode(element.value);
       UVarint.write(valBytes.length, out);
@@ -451,7 +458,11 @@ class CRDTFugueMovableListHandler<T> extends Handler<FugueMovableListState<T>>
       return <FugueElementID, _MovableElement<T>>{};
     }
 
-    var offset = 0;
+    var offset = SnapshotBlob.read(
+      snapshot,
+      version: _snapshotVersion,
+      name: 'movable list',
+    );
     final countRec = UVarint.read(snapshot, offset: offset);
     offset = countRec.nextOffset;
 
@@ -481,14 +492,6 @@ class CRDTFugueMovableListHandler<T> extends Handler<FugueMovableListState<T>>
       );
       offset += OperationId.byteLength;
 
-      if (offset >= snapshot.length) {
-        throw const FormatException(
-          'Truncated movable list snapshot deleted flag',
-        );
-      }
-      final deleted = snapshot[offset] != 0;
-      offset += 1;
-
       final valLenRec = UVarint.read(snapshot, offset: offset);
       offset = valLenRec.nextOffset;
       final valEnd = offset + valLenRec.value;
@@ -507,7 +510,8 @@ class CRDTFugueMovableListHandler<T> extends Handler<FugueMovableListState<T>>
         valueStamp: valueStamp,
         position: positionRec.value,
         positionStamp: positionStamp,
-        deleted: deleted,
+        // A snapshot holds the visible elements only.
+        deleted: false,
       );
     }
     seedElementIdFloor(ElementIdFloor.read(snapshot, offset: offset));
