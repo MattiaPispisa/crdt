@@ -110,7 +110,7 @@ void _reportSize({required int elements, required bool tombstones}) {
 /// bigger.
 ///
 /// Its two last-writer-wins clocks went from a bare 8-byte HLC to a 24-byte
-/// [OperationStamp] each, so every element pays 32 bytes more than it did in
+/// [OperationId] each, so every element pays 32 bytes more than it did in
 /// 3.x. Unlike the Fugue sequence blob there is no run framing to win any of
 /// it back: the entries are keyed by identity, one per element.
 void _reportMovableListSize(int elements) {

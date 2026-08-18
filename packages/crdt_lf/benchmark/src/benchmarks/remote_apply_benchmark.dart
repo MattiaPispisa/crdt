@@ -269,7 +269,7 @@ class OrMapRemoteBenchmark
 }
 
 /// The movable list: since 4.0.0 its two last-writer-wins clocks are
-/// [OperationStamp]s compared with `compareTo`, so its state commutes and a
+/// [OperationId]s compared with `compareTo`, so its state commutes and a
 /// change from the past keeps the cache. Before that the comparison was
 /// `happenedAfter`, and the handler had to replay.
 class MovableListRemoteBenchmark
