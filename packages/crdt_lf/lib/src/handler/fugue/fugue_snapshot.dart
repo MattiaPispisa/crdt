@@ -23,13 +23,14 @@ class FugueSnapshotData<T> {
   /// The last-writer-wins stamps of the elements an update overwrote.
   final Map<FugueElementID, OperationId> stamps;
 
-  /// Which of [nodes] are still in the sequence, one flag per node in the
-  /// same order. Parallel rather than a set of ids because the seed walks the
-  /// two together, and a hash lookup per element is what it is trying to
-  /// avoid.
+  /// Which of [nodes] are still in the sequence: one flag per node, in the
+  /// same order, so the two are read together.
   final List<bool> live;
 
-  /// The stamps of the commands that took elements out of the sequence.
+  /// The greatest stamp among the commands that deleted each element.
+  ///
+  /// Empty in a blob this build wrote: see `FugueSnapshot.write`. An element
+  /// with no entry loses to any stamp.
   final Map<FugueElementID, OperationId> livenessStamps;
 
   /// The highest counter each peer is known to have spent.
@@ -62,10 +63,10 @@ class FugueSnapshotData<T> {
 /// bytes instead of one id per element. The writer finds the runs in one
 /// linear pass.
 ///
-/// Tombstones are in the runs too, with the value they were deleted holding,
-/// so an element that leaves the sequence keeps its identity, its place and
-/// its content. It also keeps the runs around it whole: a deletion in the
-/// middle of a run used to split it in two.
+/// Tombstones sit in the runs too, holding the value they were deleted with.
+/// An element that leaves the sequence keeps its identity, its place and its
+/// content. It also keeps the run whole: a deletion in the middle of one
+/// costs a bit of the bitmap rather than a second id.
 ///
 /// The values of a run go out as one blob, framed by the handler that owns
 /// them. See `FugueSequenceHandler.encodeRun`.
@@ -76,10 +77,14 @@ class FugueSnapshot {
   /// its own.
   static const int version = 1;
 
-  /// Encodes the live part of [tree] plus [floor].
+  /// Encodes the whole sequence of [tree], tombstones included, plus [floor].
   ///
   /// [encodeRun] turns the values of one run into a blob; it is the inverse
   /// of the `decodeRun` passed to [read].
+  ///
+  /// [FugueSnapshotData.livenessStamps] comes back empty from anything this
+  /// writes. Nothing reads a liveness stamp, and an entry costs more than the
+  /// element it belongs to.
   static Uint8List write<T>({
     required FugueTree<T> tree,
     required Map<PeerId, int> floor,

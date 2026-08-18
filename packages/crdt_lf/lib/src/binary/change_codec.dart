@@ -14,10 +14,9 @@ import 'package:crdt_lf/src/binary/varint.dart';
 ///   - length: varint
 ///   - payload: `length` bytes
 ///
-/// [version] covers this framing and nothing else. A blob says which layout
-/// it is in on its own, because it is what `Change.toBytes` produces, so a
-/// change to the change layout moves `Change.schemaVersion` and leaves this
-/// alone.
+/// A blob is what `Change.toBytes` produces, so it carries a version of its
+/// own. [version] covers this framing and nothing else: a change to the
+/// change layout moves `Change.schemaVersion` and leaves this one alone.
 class ChangeCodec {
   /// The version this build writes and is the only one it reads.
   static const int version = 2;

@@ -415,8 +415,7 @@ base class CRDTFugueMovableListHandler<T>
   ///   - value: [ValueCodec] bytes
   /// - floor: [ElementIdFloor]
   ///
-  /// Only the visible elements go out, so a restored element is never deleted
-  /// and the flag that used to say so carried no information.
+  /// Only the visible elements go out, so every element comes back live.
   ///
   /// The Fugue tree is not encoded directly: it is rebuilt at restore time by
   /// inserting the snapshot identities at their winning positions in

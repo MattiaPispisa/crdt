@@ -94,18 +94,18 @@ class FugueTree<T> {
   /// stays empty on an insert/delete-only workload.
   final Map<FugueElementID, OperationId> _stamps = {};
 
-  /// The stamp of the last command that decided whether a node is part of the
+  /// The greatest stamp among the commands that took a node out of the
   /// sequence.
   ///
-  /// Written by [delete], and read by nothing yet. It is what a command that
-  /// brings an element back has to win against, and it has to be stamped
-  /// rather than settled by arrival order: the Fugue handlers fold a change
-  /// into the state they already hold, in the order changes turn up, while
-  /// replay orders them by `(clock, peer)`. Two peers would otherwise reach
-  /// different answers from the same set of operations.
+  /// Written by [delete] and read by nothing: a deletion wins over everything
+  /// today, so there is no race to settle. It is kept because it can only be
+  /// known while the deletion happens.
   ///
-  /// A node with no entry lost its liveness to nothing in particular, so
-  /// anything beats it.
+  /// A stamp rather than arrival order, because arrival order is not the same
+  /// on two peers. The Fugue handlers fold a change as it turns up, while a
+  /// replay sorts by `(clock, peer)`.
+  ///
+  /// A node with no entry loses to any stamp.
   final Map<FugueElementID, OperationId> _liveness = {};
 
   /// Positional index over the in-order sequence of all structural nodes
@@ -159,9 +159,9 @@ class FugueTree<T> {
   /// Calls [action] on every node of the sequence, tombstones included, in
   /// sequence order. The root is not one of them.
   ///
-  /// A tombstone still carries its value, so this is what a snapshot writes
-  /// to keep the deleted elements whole instead of leaving a gap in the
-  /// counters behind them.
+  /// `deleted` tells the two apart; the value comes through either way. Use
+  /// [forEachLiveNode] to skip the tombstones, which is cheaper: it skips a
+  /// whole block of them at a time.
   void forEachNode(
     void Function(FugueElementID id, T value, {required bool deleted}) action,
   ) {
@@ -175,14 +175,16 @@ class FugueTree<T> {
 
   /// The last-writer-wins stamps of the nodes an [update] overwrote.
   ///
-  /// A tombstone keeps its own: the value it holds is still the value it
-  /// would come back with.
+  /// A tombstone keeps its entry, because it keeps its value.
   Map<FugueElementID, OperationId> get stamps =>
       Map<FugueElementID, OperationId>.unmodifiable(_stamps);
 
-  /// The stamps of the commands that took nodes out of the sequence.
+  /// The greatest stamp among the commands that deleted each node.
   ///
-  /// See [_liveness].
+  /// Empty until something is deleted, and one entry per tombstone after
+  /// that. Nothing in the tree compares these today: a deletion wins over
+  /// everything, so they are recorded rather than read. A node with no entry
+  /// loses to any stamp.
   Map<FugueElementID, OperationId> get livenessStamps =>
       Map<FugueElementID, OperationId>.unmodifiable(_liveness);
 
@@ -401,14 +403,14 @@ class FugueTree<T> {
 
   /// Takes [nodeID] out of the sequence, keeping the node.
   ///
-  /// The tombstone holds on to the value, to the position it had among its
-  /// siblings and to the stamp of the update that last wrote it, so the
-  /// element is still there in everything but its liveness.
+  /// The tombstone keeps its value, its place among its siblings, and the
+  /// stamp of the update that last wrote it. Only its liveness goes.
   ///
-  /// [stamp] is the mark of the command, kept as the greater of the two when
-  /// a node is deleted twice. Nothing reads it yet; it is what a command
-  /// bringing the element back would have to beat, and it has to be recorded
-  /// as the deletion happens, because that is the only moment it is known.
+  /// [stamp] marks the command. Deleting a node twice keeps the greater of
+  /// the two, so the call is idempotent and order-independent. See
+  /// [livenessStamps] for what reads it.
+  ///
+  /// Does nothing for an id this tree does not hold.
   void delete(FugueElementID nodeID, {required OperationId stamp}) {
     final triple = _nodes[nodeID];
     if (triple == null) {
@@ -681,10 +683,10 @@ class FugueTree<T> {
 
   /// Serializes the tree to JSON format
   ///
-  /// Carries both sets of stamps next to the nodes. They are part of the
-  /// state: a tree restored without the [update] ones accepts an update it
-  /// had already rejected, and one restored without the [delete] ones lets a
-  /// later command take back a liveness it had already lost.
+  /// Carries both sets of stamps next to the nodes, because both are state.
+  /// A tree restored without the [update] ones accepts an update it had
+  /// already rejected. One restored without the [delete] ones has forgotten
+  /// what settled each node's liveness.
   Map<String, dynamic> toJson() {
     final nodesJson = <String, dynamic>{};
     for (final entry in _nodes.entries) {

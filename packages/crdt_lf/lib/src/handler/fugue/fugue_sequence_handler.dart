@@ -54,9 +54,9 @@ class FugueState<T, V> {
 /// it should mix in [FugueCache] directly and own its own navigation.
 ///
 /// ## Note on `T`
-/// `T` must be non-nullable: the Fugue tree keeps `null` for the root, the one
-/// node that stands for no element at all, and a stored `null` would be
-/// indistinguishable from it.
+/// `T` must be non-nullable. The Fugue tree keeps `null` for the root, the
+/// one node that stands for no element, and a stored `null` would look the
+/// same.
 abstract base class FugueSequenceHandler<T, V, S extends FugueState<T, V>>
     extends Handler<S> with FugueCache<S> {
   /// Creates a Fugue sequence handler bound to [doc] with the given [id].

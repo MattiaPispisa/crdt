@@ -36,11 +36,10 @@ class FugueNode<T> {
   /// Unique ID of the node
   final FugueElementID id;
 
-  /// Value of the node.
+  /// Value of the node; `null` only on the root, which stands for no element.
   ///
-  /// A deleted node keeps the value it held, so the element can be brought
-  /// back with the identity and the position it already has. Only the root,
-  /// which stands for no element at all, has none.
+  /// A tombstone keeps the value it held. Reading it means checking [deleted]
+  /// first: a value here does not say the node is part of the sequence.
   T? value;
 
   /// ID of the parent node
@@ -51,9 +50,8 @@ class FugueNode<T> {
 
   /// Whether this node is a tombstone.
   ///
-  /// Deletion is what this says, not the absence of a value: the two used to
-  /// be the same thing, and telling them apart is what lets a tombstone hold
-  /// on to what it held.
+  /// This is the only thing that says so. [value] survives a deletion, and a
+  /// node out of the sequence still has one.
   bool deleted;
 
   /// Checks if the node has been deleted

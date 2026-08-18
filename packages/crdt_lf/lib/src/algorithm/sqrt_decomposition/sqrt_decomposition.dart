@@ -254,8 +254,9 @@ class SqrtDecomposition<T> {
 
   /// Calls [action] on every key, live or not, in sequence order.
   ///
-  /// The index holds the whole sequence — keys are never removed, only marked
-  /// — so this walks it without touching the structure it was built from.
+  /// The index holds the whole sequence: keys are only ever marked, never
+  /// removed. Use [forEachLive] when the dead ones do not matter — it skips
+  /// them a block at a time, which this cannot.
   void forEach(void Function(T key, {required bool live}) action) {
     for (final block in _blocks) {
       final keys = block.keys;
