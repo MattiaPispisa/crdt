@@ -29,11 +29,9 @@ class ElementIdFloor {
 
   /// Decodes the table stored in [bytes] starting at [offset].
   ///
-  /// Throws a [FormatException] when the table is missing or cut short. It
-  /// used to answer an empty map at the end of the buffer, for snapshots
-  /// written before the table existed; v4 refuses those anyway, and a
-  /// tolerant read is what turns a format mistake into two peers spending the
-  /// same counter twice.
+  /// Throws a [FormatException] when the table is missing or cut short. The
+  /// read is strict on purpose: a table read as empty lets two peers spend the
+  /// same element counter twice.
   static Map<PeerId, int> read(Uint8List bytes, {int offset = 0}) {
     if (offset >= bytes.length) {
       throw const FormatException('Missing element id floor');

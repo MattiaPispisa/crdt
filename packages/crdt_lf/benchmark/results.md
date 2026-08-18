@@ -1,80 +1,69 @@
-Apply 1000 changes(RunTime): 980.4183266932271 us | 0.9804 ms | 0.000980 s
-Change toBytes x1000(RunTime): 60.1345 us | 0.0601 ms | 0.000060 s
-Change fromBytes x1000(RunTime): 19.007267358796078 us | 0.0190 ms | 0.000019 s
-Change roundtrip x1000(RunTime): 79.17775 us | 0.0792 ms | 0.000079 s
-Change size, fugue text update(Size): 96 bytes total | 45 bytes payload | stamped: true
-Change size, or-set add(Size): 59 bytes total | 32 bytes payload | stamped: true
-Change size, or-map put(Size): 66 bytes total | 39 bytes payload | stamped: true
-Change size, movable list move(Size): 145 bytes total | 94 bytes payload | stamped: true
-DAG addNode chain of 1000(RunTime): 186.5575712143928 us | 0.1866 ms | 0.000187 s
-DAG getAncestors chain of 200(RunTime): 7.445084708389989 us | 0.0074 ms | 0.000007 s
-CRDTFugueListHandler do 1000 operations and get value (incremental cache update: true)(RunTime): 3026.2084507042255 us | 3.0262 ms | 0.003026 s
-Fugue text snapshot of 10000 elements (tombstones: false)(Size): 10044 bytes handler blob | 10144 bytes total
-Fugue text takeSnapshot of 10000 elements (tombstones: false)(RunTime): 1090.7492146596858 us | 1.0907 ms | 0.001091 s
-Fugue text restore of 10000 elements from snapshot (tombstones: false)(RunTime): 4244.208196721312 us | 4.2442 ms | 0.004244 s
-Fugue text snapshot of 10000 elements (tombstones: true)(Size): 109959 bytes handler blob | 110060 bytes total
-Fugue text takeSnapshot of 10000 elements (tombstones: true)(RunTime): 3218.28961038961 us | 3.2183 ms | 0.003218 s
-Fugue text restore of 10000 elements from snapshot (tombstones: true)(RunTime): 3758.6013333333335 us | 3.7586 ms | 0.003759 s
-Fugue text snapshot of 100000 elements (tombstones: false)(Size): 100047 bytes handler blob | 100148 bytes total
-Fugue text takeSnapshot of 100000 elements (tombstones: false)(RunTime): 35758.98888888889 us | 35.7590 ms | 0.035759 s
-Fugue text restore of 100000 elements from snapshot (tombstones: false)(RunTime): 98413.55 us | 98.4136 ms | 0.098414 s
-Fugue text snapshot of 100000 elements (tombstones: true)(Size): 1141769 bytes handler blob | 1141870 bytes total
-Fugue text takeSnapshot of 100000 elements (tombstones: true)(RunTime): 61101.13333333334 us | 61.1011 ms | 0.061101 s
-Fugue text restore of 100000 elements from snapshot (tombstones: true)(RunTime): 51434.08 us | 51.4341 ms | 0.051434 s
-Movable list snapshot of 10000 elements(Size): 922400 bytes handler blob | 922504 bytes total | 92.2 bytes per element
-Fugue text keystroke + length on 30000 chars(RunTime): 3.07 us | 0.0031 ms | 0.000003 s
-Fugue text keystroke + value on 30000 chars(RunTime): 620.57 us | 0.6206 ms | 0.000621 s
-Fugue text update on 30000 chars(RunTime): 2.135 us | 0.0021 ms | 0.000002 s
-FugueTree append 50000 elements(RunTime): 30132.585714285717 us | 30.1326 ms | 0.030133 s
-FugueTree prepend 50000 elements(RunTime): 74244.26666666666 us | 74.2443 ms | 0.074244 s
-FugueTree random insert 50000 elements(RunTime): 77109.56666666667 us | 77.1096 ms | 0.077110 s
-FugueTree values() over 50000 live elements(RunTime): 847.8936440677966 us | 0.8479 ms | 0.000848 s
-FugueTree values() over 50000 elements, 90% tombstones(RunTime): 132.39884999999998 us | 0.1324 ms | 0.000132 s
-Fugue text retained RSS for 10000 elements(Size): 9912320 bytes (before: 209911808, after: 219824128)
-Fugue text retained RSS for 100000 elements(Size): 91914240 bytes (before: 219824128, after: 311738368)
-HLC toUint8List x100k(RunTime): 24.919121976193523 us | 0.0249 ms | 0.000025 s
-HLC fromUint8List x100k(RunTime): 508.47025 us | 0.5085 ms | 0.000508 s
-HLC compareTo x100k(RunTime): 45.65748314606741 us | 0.0457 ms | 0.000046 s
-CRDTListHandler do 1000 operations and get value (incremental cache update: true)(RunTime): 2614.2052631578945 us | 2.6142 ms | 0.002614 s
-CRDTMapHandler do 1000 operations and get value (incremental cache update: true)(RunTime): 2637.7417721518987 us | 2.6377 ms | 0.002638 s
-Resolve nested tree with 50 leaves (cold caches)(RunTime): 193.4337331334333 us | 0.1934 ms | 0.000193 s
-Resolve nested tree with 200 leaves (cold caches)(RunTime): 829.4936 us | 0.8295 ms | 0.000829 s
-Resolve nested tree with 800 leaves (cold caches)(RunTime): 3482.693220338983 us | 3.4827 ms | 0.003483 s
-Import + resolve nested tree with 50 leaves (fresh peer)(RunTime): 530.1458426966292 us | 0.5301 ms | 0.000530 s
-Import + resolve nested tree with 200 leaves (fresh peer)(RunTime): 2114.186440677966 us | 2.1142 ms | 0.002114 s
-Import + resolve nested tree with 800 leaves (fresh peer)(RunTime): 11309.685185185186 us | 11.3097 ms | 0.011310 s
-OpIdKey view x100k(RunTime): 475.7092134831461 us | 0.4757 ms | 0.000476 s
-OpIdKey hashCode x100k (cold)(RunTime): 1986.574 us | 1.9866 ms | 0.001987 s
-OpIdKey map lookup x10k(RunTime): 53.787 us | 0.0538 ms | 0.000054 s
-OperationId map lookup x10k(RunTime): 35.8806237677003 us | 0.0359 ms | 0.000036 s
-CRDTORSetHandler do 1000 operations and get value (incremental cache update: true)(RunTime): 2898.301408450704 us | 2.8983 ms | 0.002898 s
-PeerId generate x100(RunTime): 163.11836581709144 us | 0.1631 ms | 0.000163 s
-PeerId toUint8List x1000(RunTime): 31.8708253968254 us | 0.0319 ms | 0.000032 s
-PeerId fromUint8List x1000(RunTime): 58.064675 us | 0.0581 ms | 0.000058 s
-Fugue text remote keystroke + read on 2000 chars(RunTime): 57.315 us | 0.0573 ms | 0.000057 s
-Fugue text remote keystroke + read on 10000 chars(RunTime): 171.84 us | 0.1718 ms | 0.000172 s
-Fugue text remote keystroke + read on 30000 chars(RunTime): 670.355 us | 0.6704 ms | 0.000670 s
-Text remote keystroke + read on 2000 chars(RunTime): 9.37 us | 0.0094 ms | 0.000009 s
-Text remote keystroke + read on 10000 chars(RunTime): 12.795 us | 0.0128 ms | 0.000013 s
-Text remote keystroke + read on 30000 chars(RunTime): 21.005 us | 0.0210 ms | 0.000021 s
-Map remote set + read on 1000 keys(RunTime): 8.72 us | 0.0087 ms | 0.000009 s
-Map remote set + read on 5000 keys(RunTime): 12.79 us | 0.0128 ms | 0.000013 s
-OR-set remote add from the past + read on 1000 values(RunTime): 33.17 us | 0.0332 ms | 0.000033 s
-OR-set remote add from the past + read on 5000 values(RunTime): 100.105 us | 0.1001 ms | 0.000100 s
-OR-map remote put from the past + read on 1000 keys(RunTime): 84.39 us | 0.0844 ms | 0.000084 s
-OR-map remote put from the past + read on 5000 keys(RunTime): 255.885 us | 0.2559 ms | 0.000256 s
-Movable list remote move from the past + read on 1000 items(RunTime): 41.955 us | 0.0420 ms | 0.000042 s
-Movable list remote move from the past + read on 5000 items(RunTime): 155.13 us | 0.1551 ms | 0.000155 s
-Import 1000 chained changes(RunTime): 961.3263999999999 us | 0.9613 ms | 0.000961 s
-Import 10000 chained changes(RunTime): 11334.985714285714 us | 11.3350 ms | 0.011335 s
-exportChangesNewerThan on 50000 changes / 10 peers (99% caught-up)(RunTime): 2.8017737322626775 us | 0.0028 ms | 0.000003 s
-takeSnapshot(pruneHistory) with 10000 changes(RunTime): 24500.02 us | 24.5000 ms | 0.024500 s
-takeSnapshot(pruneHistory) with 100 concurrent heads(RunTime): 3928.9461538461537 us | 3.9289 ms | 0.003929 s
-Binary encode/decode 1000 changes(RunTime): 2469.1149532710283 us | 2.4691 ms | 0.002469 s
-Take snapshot with 1000 changes(RunTime): 131.63065 us | 0.1316 ms | 0.000132 s
-CRDTTextHandler do 1000 operations and get value (incremental cache update: true)(RunTime): 3033.666153846154 us | 3.0337 ms | 0.003034 s
-CRDTTextHandler do 1000 operations and get value (incremental cache update: false)(RunTime): 2850.801219512195 us | 2.8508 ms | 0.002851 s
-Import 1000 concurrent changes(RunTime): 1007.2533333333333 us | 1.0073 ms | 0.001007 s
-VersionVector toBytes 10 peers x1000(RunTime): 449.3344 us | 0.4493 ms | 0.000449 s
-VersionVector fromBytes 10 peers x1000(RunTime): 1428.860839160839 us | 1.4289 ms | 0.001429 s
-VersionVector intersection 10 peers x1000(RunTime): 184.09677661169414 us | 0.1841 ms | 0.000184 s
+Apply 1000 changes(RunTime): 963.4398268398269 us | 0.9634 ms | 0.000963 s
+Change toBytes x1000(RunTime): 59.292425 us | 0.0593 ms | 0.000059 s
+Change fromBytes x1000(RunTime): 19.13356951359632 us | 0.0191 ms | 0.000019 s
+Change roundtrip x1000(RunTime): 80.58795 us | 0.0806 ms | 0.000081 s
+DAG addNode chain of 1000(RunTime): 183.89220389805098 us | 0.1839 ms | 0.000184 s
+DAG getAncestors chain of 200(RunTime): 7.4101746337131855 us | 0.0074 ms | 0.000007 s
+CRDTFugueListHandler do 1000 operations and get value (incremental cache update: true)(RunTime): 3082.3784615384616 us | 3.0824 ms | 0.003082 s
+Fugue text takeSnapshot of 10000 elements (tombstones: false)(RunTime): 1082.9649214659687 us | 1.0830 ms | 0.001083 s
+Fugue text restore of 10000 elements from snapshot (tombstones: false)(RunTime): 4322.567105263158 us | 4.3226 ms | 0.004323 s
+Fugue text takeSnapshot of 10000 elements (tombstones: true)(RunTime): 3292.867123287671 us | 3.2929 ms | 0.003293 s
+Fugue text restore of 10000 elements from snapshot (tombstones: true)(RunTime): 3487.8014492753623 us | 3.4878 ms | 0.003488 s
+Fugue text takeSnapshot of 100000 elements (tombstones: false)(RunTime): 32406.93333333333 us | 32.4069 ms | 0.032407 s
+Fugue text restore of 100000 elements from snapshot (tombstones: false)(RunTime): 95007.85 us | 95.0079 ms | 0.095008 s
+Fugue text takeSnapshot of 100000 elements (tombstones: true)(RunTime): 68677.38 us | 68.6774 ms | 0.068677 s
+Fugue text restore of 100000 elements from snapshot (tombstones: true)(RunTime): 61432.54285714285 us | 61.4325 ms | 0.061433 s
+Fugue text keystroke + length on 30000 chars(RunTime): 2.995 us | 0.0030 ms | 0.000003 s
+Fugue text keystroke + value on 30000 chars(RunTime): 619.33 us | 0.6193 ms | 0.000619 s
+Fugue text update on 30000 chars(RunTime): 2.18 us | 0.0022 ms | 0.000002 s
+FugueTree append 50000 elements(RunTime): 29905.371428571427 us | 29.9054 ms | 0.029905 s
+FugueTree prepend 50000 elements(RunTime): 74679.63333333333 us | 74.6796 ms | 0.074680 s
+FugueTree random insert 50000 elements(RunTime): 76518.33333333334 us | 76.5183 ms | 0.076518 s
+FugueTree values() over 50000 live elements(RunTime): 857.8597457627118 us | 0.8579 ms | 0.000858 s
+FugueTree values() over 50000 elements, 90% tombstones(RunTime): 139.22895 us | 0.1392 ms | 0.000139 s
+HLC toUint8List x100k(RunTime): 25.21238573451783 us | 0.0252 ms | 0.000025 s
+HLC fromUint8List x100k(RunTime): 507.14425 us | 0.5071 ms | 0.000507 s
+HLC compareTo x100k(RunTime): 45.27376536312849 us | 0.0453 ms | 0.000045 s
+CRDTListHandler do 1000 operations and get value (incremental cache update: true)(RunTime): 2596.73625 us | 2.5967 ms | 0.002597 s
+CRDTMapHandler do 1000 operations and get value (incremental cache update: true)(RunTime): 2612.9924050632912 us | 2.6130 ms | 0.002613 s
+Resolve nested tree with 50 leaves (cold caches)(RunTime): 195.09287856071964 us | 0.1951 ms | 0.000195 s
+Resolve nested tree with 200 leaves (cold caches)(RunTime): 839.7036 us | 0.8397 ms | 0.000840 s
+Resolve nested tree with 800 leaves (cold caches)(RunTime): 3578.8649122807014 us | 3.5789 ms | 0.003579 s
+Import + resolve nested tree with 50 leaves (fresh peer)(RunTime): 550.8196 us | 0.5508 ms | 0.000551 s
+Import + resolve nested tree with 200 leaves (fresh peer)(RunTime): 2234.9415254237288 us | 2.2349 ms | 0.002235 s
+Import + resolve nested tree with 800 leaves (fresh peer)(RunTime): 10872.18275862069 us | 10.8722 ms | 0.010872 s
+OpIdKey view x100k(RunTime): 482.26606741573033 us | 0.4823 ms | 0.000482 s
+OpIdKey hashCode x100k (cold)(RunTime): 1981.3485436893202 us | 1.9813 ms | 0.001981 s
+OpIdKey map lookup x10k(RunTime): 54.164175 us | 0.0542 ms | 0.000054 s
+OperationId map lookup x10k(RunTime): 35.94580530973452 us | 0.0359 ms | 0.000036 s
+CRDTORSetHandler do 1000 operations and get value (incremental cache update: true)(RunTime): 2912.9211267605633 us | 2.9129 ms | 0.002913 s
+PeerId generate x100(RunTime): 164.4147676161919 us | 0.1644 ms | 0.000164 s
+PeerId toUint8List x1000(RunTime): 31.98432216905901 us | 0.0320 ms | 0.000032 s
+PeerId fromUint8List x1000(RunTime): 58.760149999999996 us | 0.0588 ms | 0.000059 s
+Fugue text remote keystroke + read on 2000 chars(RunTime): 61.165 us | 0.0612 ms | 0.000061 s
+Fugue text remote keystroke + read on 10000 chars(RunTime): 184.435 us | 0.1844 ms | 0.000184 s
+Fugue text remote keystroke + read on 30000 chars(RunTime): 670.925 us | 0.6709 ms | 0.000671 s
+Text remote keystroke + read on 2000 chars(RunTime): 12.315 us | 0.0123 ms | 0.000012 s
+Text remote keystroke + read on 10000 chars(RunTime): 13.47 us | 0.0135 ms | 0.000013 s
+Text remote keystroke + read on 30000 chars(RunTime): 21.31 us | 0.0213 ms | 0.000021 s
+Map remote set + read on 1000 keys(RunTime): 9.35 us | 0.0093 ms | 0.000009 s
+Map remote set + read on 5000 keys(RunTime): 5.035 us | 0.0050 ms | 0.000005 s
+OR-set remote add from the past + read on 1000 values(RunTime): 33.285 us | 0.0333 ms | 0.000033 s
+OR-set remote add from the past + read on 5000 values(RunTime): 105.945 us | 0.1059 ms | 0.000106 s
+OR-map remote put from the past + read on 1000 keys(RunTime): 77.385 us | 0.0774 ms | 0.000077 s
+OR-map remote put from the past + read on 5000 keys(RunTime): 253.18 us | 0.2532 ms | 0.000253 s
+Movable list remote move from the past + read on 1000 items(RunTime): 43.595 us | 0.0436 ms | 0.000044 s
+Movable list remote move from the past + read on 5000 items(RunTime): 168.96 us | 0.1690 ms | 0.000169 s
+Import 1000 chained changes(RunTime): 974.9931034482759 us | 0.9750 ms | 0.000975 s
+Import 10000 chained changes(RunTime): 11605.418181818182 us | 11.6054 ms | 0.011605 s
+exportChangesNewerThan on 50000 changes / 10 peers (99% caught-up)(RunTime): 1.594856 us | 0.0016 ms | 0.000002 s
+takeSnapshot(pruneHistory) with 10000 changes(RunTime): 24763.22 us | 24.7632 ms | 0.024763 s
+takeSnapshot(pruneHistory) with 100 concurrent heads(RunTime): 3884.656 us | 3.8847 ms | 0.003885 s
+Binary encode/decode 1000 changes(RunTime): 2444.967088607595 us | 2.4450 ms | 0.002445 s
+Take snapshot with 1000 changes(RunTime): 130.8464 us | 0.1308 ms | 0.000131 s
+CRDTTextHandler do 1000 operations and get value (incremental cache update: true)(RunTime): 3108.8118644067795 us | 3.1088 ms | 0.003109 s
+CRDTTextHandler do 1000 operations and get value (incremental cache update: false)(RunTime): 2780.9365853658537 us | 2.7809 ms | 0.002781 s
+Import 1000 concurrent changes(RunTime): 980.4638743455498 us | 0.9805 ms | 0.000980 s
+VersionVector toBytes 10 peers x1000(RunTime): 426.54179999999997 us | 0.4265 ms | 0.000427 s
+VersionVector fromBytes 10 peers x1000(RunTime): 1497.295652173913 us | 1.4973 ms | 0.001497 s
+VersionVector intersection 10 peers x1000(RunTime): 183.70209895052474 us | 0.1837 ms | 0.000184 s

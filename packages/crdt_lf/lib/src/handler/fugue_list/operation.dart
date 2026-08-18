@@ -253,8 +253,8 @@ class _FugueListUpdateOperation<T> extends Operation {
   ///   - valueLen: uvarint
   ///   - value: [ValueCodec] bytes
   ///
-  /// The writer and the clock that settle two concurrent updates travel in
-  /// the envelope, as [Operation.stamp], not here.
+  /// The mark that settles two concurrent updates is not in the body; it is
+  /// the operation's [Operation.stamp].
   factory _FugueListUpdateOperation.fromBodyBytes(
     CRDTFugueListHandler<T> handler,
     Uint8List body,

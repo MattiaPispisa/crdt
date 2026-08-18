@@ -49,9 +49,7 @@ class CRDTORSetHandler<T> extends Handler<ORSetState<T>> {
   late final OperationFactory operationFactory =
       _ORSetOperationFactory<T>(this).fromBytes;
 
-  /// `add` mints its tag from the stamp. `remove` does not need one: the tags
-  /// it takes away are the ones it read from the state, and they travel in
-  /// its body.
+  /// The stamp of an `add` is the tag it stores for the added value.
   @override
   late final OperationType insertType = OperationType.insert(
     this,

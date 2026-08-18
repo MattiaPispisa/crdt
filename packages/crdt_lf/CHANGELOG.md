@@ -1,149 +1,30 @@
-## [4.0.0+1](https://github.com/MattiaPispisa/crdt/tree/crdt_lf-v4.0.0+1/packages/crdt_lf)
-
-**Date:** 2026-08-16
-
-Documentation release: refreshes the CHANGELOG and docs published on pub.dev. No functional changes since `4.0.0`.
-
 ## [4.0.0](https://github.com/MattiaPispisa/crdt/tree/crdt_lf-v4.0.0/packages/crdt_lf)
 
-**Date:** 2026-08-16
+**Date:** 2026-08-18
 
-[compare to previous release](https://github.com/MattiaPispisa/crdt/compare/crdt_lf-v3.4.2+1...crdt_lf-v4.0.0)
+[compare to previous release](https://github.com/MattiaPispisa/crdt/compare/crdt_lf-v3.5.0...crdt_lf-v4.0.0)
 
-**Breaking changes**
+### Changed
 
-**A v3 document does not open in v4.** Not from its history, not from a snapshot, not from the bytes an
-Hive/SQLite/Drift adapter saved. `Change` and `Snapshot` now refuse anything written by v3 instead of
-reading it as if nothing had happened. That refusal is the point: several things below change what the
-same bytes *mean*, so a v3 and a v4 peer would otherwise agree on their version vectors while holding
-different content, with no error anywhere to show for it. Peers have to move together.
+- Text handlers index by runes (code points), not UTF-16 code units. [106](https://github.com/MattiaPispisa/crdt/issues/106)
+- New operation layer: a handler declares its own operation kinds, and every last-writer-wins handler
+  settles ties with the id of the change carrying the operation. [129](https://github.com/MattiaPispisa/crdt/issues/129)
+- `update` on `CRDTFugueTextHandler` and `CRDTFugueListHandler` keeps the identity of the element
+  instead of replacing it. [127](https://github.com/MattiaPispisa/crdt/issues/127)
+- `Snapshot` carries a schema version. [130](https://github.com/MattiaPispisa/crdt/issues/130)
+- `incrementCachedState` takes an optional `DeltaSink`. [132](https://github.com/MattiaPispisa/crdt/issues/132)
 
-`CRDTFugueTextHandler`, `CRDTTextHandler` are now indexed by runes (code points) instead of UTF-16 code units [106](https://github.com/MattiaPispisa/crdt/issues/106).
-Documents that already contain non-BMP characters (emoji, …) are affected the most:
-  - `CRDTFugueTextHandler`: a previously written non-BMP character can still be half-deleted, until it is typed again.
-  - `CRDTTextHandler`: a history holding an index that falls after a non-BMP character replays to different text. Documents in that state have to be re-created.
+### Breaking
 
-An operation kind is now something a handler declares, not a name picked from a closed list of four.
-`OperationType.custom(handler, kind: …, name: …)` takes any value from `4` to `127`; the kind is scoped
-to the handler type, so two handlers may use the same byte for two unrelated meanings. Bit 7 of the kind
-byte is reserved, which is where the ceiling of 127 comes from. `OperationType.typeNameFromKind` is
-replaced by `OperationType.wellKnownName`, which answers `null` past the four conventional kinds rather
-than throwing — past those four a name cannot be recovered from a kind alone.
-`OperationType.fromPayload` is gone: the payload string is a debug format and never carried a kind.
+A v3 document does not open in v4 — not from its history, not from a snapshot, not from the bytes an
+adapter saved — so peers have to move together and existing documents have to be recreated; the
+[README](https://github.com/MattiaPispisa/crdt/tree/main/packages/crdt_lf#migrating-from-3x-to-40) lists the
+renamed and removed symbols.
 
-`ORHandlerTag` is gone, and so is the separate stamp that briefly replaced it. Every last-writer-wins
-handler now resolves conflicts with the `OperationId` of the change carrying the operation — not a copy
-of it, the same value. `Change.author` has always had to equal `id.peerId`, and `OperationId.compareTo`
-has always been `(hlc, peerId)`, the same relation `compareChangeOrder` replays by. So the tie-break was
-already on the wire, and a stamp of its own was a duplicate. It **costs nothing now**: a stamped
-operation is 24 bytes smaller.
+### Performance
 
-An operation kind says whether it reads a stamp: `OperationType.update(this, stamped: true)`, and the
-same argument on `insert`, `delete`, `move` and `custom`. Bit 7 of the kind byte carries that
-declaration and nothing else. Reading a change whose kind disagrees with the declaration raises, in
-both directions — the flag is local, so two builds can differ about it while the schema version stays
-the same, and either way they would resolve the same conflict by two different rules. **Flipping
-`stamped` on a kind you have already shipped is a breaking change.** The four cached `OperationType`s
-on `Handler` became getters so a handler can override them.
-
-Every operation is given an id when it is registered, and the change built for it carries that id
-rather than a fresh one. Two consequences:
-
-  - **A stamped kind is never compounded.** A compound is one change and has one id, but the writer
-    folded each constituent under its own; on a compound touching several targets the two disagree, and
-    nothing shows it until a later concurrent write lands between the two ids and wins on one peer while
-    losing on the other. `Compound` leaves stamped operations alone and asserts in debug so a handler
-    author hears why their `compound` is not called.
-  - **`createChange` refuses an operation that already belongs to a change.** One operation, one change.
-    Reusing the instance used to work because the id came from the clock at commit; it would now rebuild
-    the change it already produced.
-
-`update` on `CRDTFugueTextHandler` and `CRDTFugueListHandler` **keeps the identity of the element**.
-It used to tombstone it and hang a new one in its slot, which meant two concurrent updates produced two
-elements, an update on a deleted element brought it back, and an anchor taken with `stablePositionAt`
-stopped resolving — the very thing those handlers exist for. Now the value is overwritten in place and
-concurrent writers converge on one of the two by `OperationId`; an update loses against a concurrent
-deletion. `CRDTFugueMovableListHandler` already worked this way, so the three now share one rule.
-For the old delete-and-insert behaviour, ask for it:
-
-```dart
-doc.runInTransaction(() {
-  text..delete(index, count)..insert(index, replacement);
-});
-```
-
-No consumer needed the old semantics as a single operation during this
-release, so `replace` does not come back as a kind of its own.
-
-`OperationFactory` receives the decoded envelope and the operation body instead of raw bytes, and
-returns a non-nullable `Operation`. The framework checks that the envelope belongs to the handler
-before calling it, so a custom handler only dispatches on the kind and raises
-`UnknownOperationKindException` on one it does not know. `Operation` loses its `const` constructor.
-
-`incrementCachedState` takes an optional `DeltaSink<Object?>? sink`. It is always `null`; a custom
-handler declares it and ignores it.
-
-`Operation.stamp` is written once. It used to be a public mutable field, so anything holding an
-operation — `handler.operations()` hands them out — could rewrite the tie-break. A last-writer-wins
-handler stores it *inside its state*, so an operation restamped after one peer folded it leaves the two
-peers with different values and nothing to show for it. A second write now throws a `StateError`; there
-is no legitimate one, because a local operation is stamped in `registerOperation`, a remote one is read
-off the change that carried it, and a compound is a fresh operation.
-
-Wire and storage details, for anyone reading bytes directly:
-  - Nothing sits between the kind byte and the body. Bit 7 of that byte declares the kind stamped and
-    costs no bytes of its own, so an unstamped operation keeps exactly the bytes it had and a stamped
-    one is 24 bytes lighter than in v3. The stamped kinds are `update` on the two Fugue sequence
-    handlers, `add`/`put` on the OR handlers, and `insert`/`move`/`update` on the movable list.
-  - `CRDTORSetHandler` and `CRDTORMapHandler`: the tag leaves the body of `add`/`put` and is read back
-    off the change id. Their snapshots never held tags and do not change; a `remove` still carries the
-    tags it observed, one `OperationId` each.
-  - `CRDTFugueMovableListHandler`: the HLC leaves the bodies of `move` and `update`, and its snapshot
-    blob grows — its two last-writer-wins clocks go from 8 to 24 bytes each.
-  - The `update` body of the two Fugue sequence handlers loses its `newNodeID`: no node is created any
-    more, so an update no longer spends an element counter either. A document that has seen many updates
-    reports a lower element id floor than v3 did, which is the correct one.
-  - The snapshot blob of the two Fugue sequence handlers is new: a version byte, the live elements
-    grouped in **runs** of consecutive ids from one peer, the `update` stamps, then the element id floor.
-    The stamps have to be in there — without them a reload accepts an update it had already rejected and
-    silently loses the value that had won. `ElementIdFloor.read` no longer tolerates a buffer that ends
-    before the table.
-
-**Performance**
-
-- An operation of a stamped kind is **24 bytes smaller**, because its tie-break is now the id of the
-  change carrying it instead of a copy of that id. Per encoded change: a Fugue text `update` 120 → 96
-  bytes, an OR-set `add` 83 → 59, an OR-map `put` 90 → 66, a movable list `move` 169 → 145 — between
-  14% and 29% of the change, depending on how big the rest of it is. Snapshots are unchanged: the
-  stamps stored inside a state are still one id each. [`benchmark/results.md`]
-- A snapshot of 10 000 runes written by a single peer goes from 219 893 to 10 044 bytes, and taking it
-  from 4.50 ms to 1.05 ms, because its ids collapse into one run. Reloading from it goes from 6.68 ms
-  to 4.20 ms. A document where every other element is deleted has no runs to find: same size, and
-  2.55 ms → 3.11 ms to write. The same shape holds an order of magnitude up: 100 000 runes from one
-  peer is 100 047 bytes, not roughly ten times 10 044 — the per-run overhead does not scale with element
-  count. [`benchmark/results.md`]
-- `CRDTFugueTextHandler.length` and `CRDTFugueListHandler.length` are O(1). One keystroke followed by
-  reading `length` on 30 000 runes goes from 590 µs to 3.1 µs: the handler no longer builds a list of
-  every live element to count it, and no longer builds the whole string just to ask how long it is.
-  [`benchmark/results.md`]
-- `CRDTFugueMovableListHandler` keeps its cached state when a change arrives **from the past**, which is
-  what concurrent editing produces. Its state commutes now that both its last-writer-wins clocks are
-  `OperationId`s compared by `compareTo`. Measured on one remote move followed by a read: 1 000 items
-  919 µs → 44 µs, 5 000 items 2.52 ms → 164 µs. [`benchmark/results.md`]
-- The movable list is the one blob that got **bigger**: 92.2 bytes per element at 10 000, against roughly
-  60 in 3.x, because its two clocks went from 8 to 24 bytes each. There is no run framing to win any of
-  it back — its entries are keyed by identity, one per element. [`benchmark/results.md`]
-
-**Fixed**
-
-- `CRDTFugueMovableListHandler`: two concurrent `move` or `update` operations that carry the same clock
-  no longer leave two peers with different results. It compared bare clocks with `happenedAfter`, which
-  is false in both directions on a tie, so the value already in place stayed — and which one that was
-  depended on the order the changes arrived in. The peer now settles it.
-- Reading the whole text after a keystroke on 30 000 runes is back to 625 µs from 710 µs. Building the
-  string had been rewritten to stream into a `StringBuffer`, which looks cheaper than collecting a list
-  and joining it and measures 13% slower — `join` adds up the lengths in one pass and fills a single
-  allocation, while a buffer grows as it writes.
+A Fugue text snapshot of 10 000 runes from one peer is ~20x
+smaller and ~4x faster to take, and `length` on the two Fugue sequence handlers is now O(1).
 
 ## [3.5.0](https://github.com/MattiaPispisa/crdt/tree/crdt_lf-v3.5.0/packages/crdt_lf)
 

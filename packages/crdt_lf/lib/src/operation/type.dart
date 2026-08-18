@@ -138,10 +138,9 @@ class OperationType {
   /// The conventional name of [kind] for the four values every handler uses
   /// the same way, or `null` beyond them.
   ///
-  /// Only for tooling that labels an operation without knowing which handler
-  /// produced it. A total `kind -> name` function is not expressible: past
-  /// those four, the meaning of a kind depends on the handler type that
-  /// precedes it in the envelope.
+  /// Returns `null` past those four: the meaning of a higher kind depends on
+  /// the handler type that precedes it in the envelope, so a total
+  /// `kind -> name` function is not expressible.
   static String? wellKnownName(int kind) {
     if (kind == kindInsert) {
       return _insert;
@@ -167,37 +166,21 @@ class OperationType {
   /// Binary kind value written in the operation envelope (u8).
   final int kind;
 
-  /// Whether the document marks operations of this kind with an
-  /// [OperationId], and the envelope carries it.
+  /// Whether an operation of this kind is marked with an [OperationId].
   ///
   /// A stamp is a unique, totally ordered mark: unique because the document
-  /// ticks its clock before minting one, ordered because [OperationId]
-  /// compares by clock first and by peer second. Handlers use it for two
-  /// things:
+  /// mints one id per operation, ordered because [OperationId] compares by
+  /// clock first and by peer second. A handler reads it from
+  /// [Operation.stamp], which is set before the operation reaches
+  /// `incrementCachedState`.
   ///
-  /// - **A last-writer-wins tie-break.** `update` on the Fugue sequence
-  ///   handlers and `insert`/`move`/`update` on the movable list keep the
-  ///   greater stamp, so every peer picks the same winner instead of the one
-  ///   that happened to arrive last. That is the precondition for
-  ///   `stateIsOrderIndependent`.
-  /// - **An identity tag.** `add` on `CRDTORSetHandler` and `put` on
-  ///   `CRDTORMapHandler` only need the mark to be distinct: it is the tag a
-  ///   later `remove` tombstones. `CRDTORSetHandler` never compares two of
-  ///   them.
+  /// The stamp is the id of the change that carries the operation, so it
+  /// costs no bytes of its own: bit 7 of the kind byte carries the
+  /// declaration, and nothing follows it.
   ///
-  /// The handler reads it from [Operation.stamp], which is set before the
-  /// operation reaches `incrementCachedState` and before the change that
-  /// carries it is built.
-  ///
-  /// A stamp costs [OperationId.byteLength] bytes on the wire, so it sits
-  /// on the kind rather than on the handler: a text `insert` needs neither a
-  /// tie-break nor a tag and pays nothing, while `update` on the same handler
-  /// does.
-  ///
-  /// It is a local declaration, not part of the wire format. Two builds that
-  /// disagree about it are refused on decode, in both directions: the envelope
-  /// flags the stamp with bit 7 of the kind byte, so a missing one and an
-  /// unexpected one are equally visible.
+  /// The declaration is local, not part of the wire format. Two builds that
+  /// disagree about a kind are refused on decode, in both directions: a
+  /// missing stamp and an unexpected one are equally visible.
   final bool stamped;
 
   /// Compares two [OperationType]s for equality

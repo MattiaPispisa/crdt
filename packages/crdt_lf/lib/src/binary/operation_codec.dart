@@ -29,9 +29,8 @@ class OperationEnvelope {
   /// (see [OperationType.stamped]).
   ///
   /// The stamp itself is not here — it is the id of the change carrying the
-  /// operation. This is the writer's **declaration**, and the only thing that
-  /// catches two builds disagreeing about a kind: without it the reader would
-  /// quietly resolve conflicts by a different rule.
+  /// operation. This is the writer's declaration, and it is what a reader
+  /// compares against its own to catch a disagreement about the kind.
   final bool stamped;
 
   /// Offset in the buffer where the body starts.
@@ -49,8 +48,8 @@ class OperationEnvelope {
 /// - body: bytes
 ///
 /// Bit 7 of the kind byte is what caps a kind at [OperationType.maxKind]. It
-/// costs no bytes of its own: a stamped operation is marked, not carried,
-/// because the mark it needs is the id of the change it travels in.
+/// costs no bytes of its own: a stamped operation is marked here, and the
+/// mark itself is the id of the change it travels in.
 class OperationEnvelopeCodec {
   static const int _stampedFlag = 0x80;
 

@@ -53,9 +53,7 @@ class CRDTORMapHandler<K, V> extends Handler<ORMapState<K, V>> {
   late final OperationFactory operationFactory =
       _ORMapOperationFactory<K, V>(this).fromBytes;
 
-  /// `put` mints its tag from the stamp. `remove` does not need one: the tags
-  /// it takes away are the ones it read from the state, and they travel in
-  /// its body.
+  /// The stamp of a `put` is the tag it stores for the written value.
   @override
   late final OperationType insertType = OperationType.insert(
     this,

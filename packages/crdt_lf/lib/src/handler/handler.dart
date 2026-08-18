@@ -3,12 +3,11 @@ part of '../document/document.dart';
 /// A factory function that builds an operation from an already-decoded
 /// [envelope] and its [body].
 ///
-/// The framework has checked that the envelope addresses this handler, so a
-/// factory only has to dispatch on [OperationEnvelope.kind]. It always returns
-/// an operation: there is no kind it may quietly decline.
+/// The [envelope] is already known to address this handler, so a factory only
+/// has to dispatch on [OperationEnvelope.kind]. It always returns an
+/// operation: there is no kind it may quietly decline.
 ///
 /// Throws [UnknownOperationKindException] on a kind this build cannot decode.
-/// That change comes from a newer peer.
 typedef OperationFactory = Operation Function(
   OperationEnvelope envelope,
   Uint8List body,
@@ -144,16 +143,12 @@ abstract class Handler<T>
   /// the factory a body it does not have to slice again, and gives the
   /// operation the id of the change that carried it.
   ///
-  /// That id **is** the stamp. It costs no bytes of its own, and it is the
-  /// same value the writing peer folded into its own state, because the
-  /// document mints it in `registerOperation` and the change is built with it
-  /// rather than with a fresh one.
+  /// That id **is** the stamp, so it is the same value the writing peer
+  /// folded into its own state.
   ///
-  /// Both halves of a disagreement about [OperationType.stamped] are refused
-  /// here. The flag is a local declaration — only the writer's bit travels —
-  /// so two builds can disagree about the same kind; either way the peers
-  /// would resolve a conflict by two different rules and end up holding
-  /// different values, with nothing to show for it.
+  /// Throws a [FormatException] when the change disagrees with this build
+  /// about [OperationType.stamped], in either direction: a kind this build
+  /// stamps arriving undeclared, and one it does not stamp arriving declared.
   @override
   Operation? _operationFromChange(Change change) {
     final bytes = change.payloadBytes();

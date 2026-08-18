@@ -70,8 +70,7 @@ class SqrtDecomposition<T> {
   /// The number of **live** elements, in `O(1)`.
   ///
   /// The blocks each cache their own `liveCount`; this is the running sum, so
-  /// a caller does not have to walk them — or, worse, materialize the live
-  /// sequence — just to know how long it is.
+  /// the answer costs no walk over the blocks or over the sequence.
   int get liveLength => _live;
 
   /// Whether [key] is already present.

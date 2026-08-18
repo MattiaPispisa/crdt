@@ -19,8 +19,7 @@ part 'operation.dart';
 /// - a **last-writer-wins register** on [OperationId] for the value and
 ///   for the "current position" of each element. Concurrent moves of the same
 ///   element converge to a single winning destination instead of duplicating
-///   the element, and so do concurrent updates of its value. It is the same
-///   rule the two other Fugue handlers apply to `update`.
+///   the element, and so do concurrent updates of its value.
 ///
 /// ## Identities and positions
 /// Every element has a stable [FugueElementID] **identity** assigned at
@@ -88,9 +87,7 @@ class CRDTFugueMovableListHandler<T> extends Handler<FugueMovableListState<T>>
   /// `insert` seeds an element's two clocks and never overwrites them, `move`
   /// and `update` keep the greater [OperationId], and `delete` is monotone.
   /// The tree the positions live in sorts siblings by element id, so it is a
-  /// function of the operation set alone. Until 4.0.0 this was not true: the
-  /// two clocks were compared with `happenedAfter`, which is false in both
-  /// directions on a tie, so the winner was whoever arrived first.
+  /// function of the operation set alone.
   @override
   bool get stateIsOrderIndependent => true;
 
@@ -198,9 +195,7 @@ class CRDTFugueMovableListHandler<T> extends Handler<FugueMovableListState<T>>
   /// update loses against a concurrent deletion of the same element, and does
   /// nothing when [index] is out of range.
   ///
-  /// The rule is [OperationId]: clock first, peer second. It is the same
-  /// one `CRDTFugueTextHandler.update` and `CRDTFugueListHandler.update`
-  /// follow — the three handlers no longer have two models between them.
+  /// The winner is the greater [OperationId]: clock first, peer second.
   void update(int index, T value) {
     final identity = _identityAtVisibleIndex(index);
     if (identity == null) {

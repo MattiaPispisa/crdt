@@ -353,14 +353,9 @@ class CRDTDocument extends BaseCRDTDocument {
 
   /// Moves the document's clock forward, as registering an operation would.
   ///
-  /// Nothing in the library calls it any more: an operation gets its id — and
-  /// with it the tick — in [registerOperation]. It is left public because it
-  /// is the only way to move two documents' clocks level, which is what a test
-  /// needs to make two peers write in the same tick on purpose and exercise
-  /// the tie-break.
-  ///
-  /// Call it only when you mean to spend a clock value. It is not a way to
-  /// keep time.
+  /// Spends a clock value without producing an operation. Use it to bring two
+  /// documents' clocks level, so they write in the same tick on purpose. It is
+  /// not a way to keep time.
   @override
   void prepareMutation() {
     _ensureNotDisposed('prepareMutation');
@@ -679,10 +674,8 @@ class CRDTDocument extends BaseCRDTDocument {
   /// Creates a new [Change] carrying [operation].
   ///
   /// The change takes the id [registerOperation] already minted for the
-  /// operation. It is not a copy of it — the change id **is** the mark a
-  /// last-writer-wins handler folded into its state, and the two have to be
-  /// the same value or a peer reading the change back would resolve conflicts
-  /// against a different one.
+  /// operation, rather than a fresh one: that id **is** the mark a
+  /// last-writer-wins handler folded into its state.
   ///
   /// An operation that never went through [registerOperation] has no id yet,
   /// which is the [createChange] case: it gets one here.
@@ -712,10 +705,9 @@ class CRDTDocument extends BaseCRDTDocument {
   /// Subscribers are notified about the change only on transaction commit.
   ///
   /// [operation] must be fresh: one operation belongs to one change, because
-  /// the change takes the operation's id for its own. Passing one that has
-  /// already been through here or through [registerOperation] throws — reusing
-  /// the instance would otherwise rebuild the change it already produced, and
-  /// the document would drop it as a duplicate without a word.
+  /// the change takes the operation's id for its own. Throws a [StateError]
+  /// on one that has already been through here or through
+  /// [registerOperation].
   Change createChange(
     Operation operation, {
     int? physicalTime,

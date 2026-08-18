@@ -1,18 +1,9 @@
-## [0.4.0+1](https://github.com/MattiaPispisa/crdt/tree/crdt_lf_hive-v0.4.0+1/packages/crdt_lf_hive)
-
-**Date:** 2026-08-16
-
-Documentation release: refreshes the CHANGELOG and docs published on pub.dev. No functional changes since `0.4.0`.
-
 ## [0.4.0](https://github.com/MattiaPispisa/crdt/tree/crdt_lf_hive-v0.4.0/packages/crdt_lf_hive)
 
 **Date:** 2026-08-16
 
-Requires `crdt_lf: ^4.0.0` instead of `>=3.0.0 <5.0.0`. Raising this constraint is necessary but not
-sufficient by itself: this adapter stores whatever bytes `Change`/`Snapshot` hand it, opaquely — it has no
-way to tell a 3.x buffer from a 4.0 one. What actually stops a 3.x buffer from being read back on a 4.0
-peer is `crdt_lf`'s own protocol guard: `Change.fromBytes`/`Snapshot.fromBytes` refuse a schema version
-they do not recognize, landed in `crdt_lf` 4.0.0.
+Requires `crdt_lf: ^4.0.0` instead of `>=3.0.0 <5.0.0`. The adapter stores opaque bytes and cannot tell
+a 3.x buffer from a 4.0 one; the guard that refuses one is `crdt_lf`'s own schema version check.
 
 ## [0.3.1](https://github.com/MattiaPispisa/crdt/tree/crdt_lf_hive-v0.3.1/packages/crdt_lf_hive)
 

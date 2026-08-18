@@ -37,10 +37,8 @@ class OperationId with Comparable<OperationId> {
   ///
   /// Same bytes as [OperationId.fromUint8List], different failure: this one
   /// throws a [FormatException] on a buffer that stops inside the record,
-  /// because it reads ids sitting inside a payload — a snapshot blob, an
-  /// operation body — where a short buffer means the input is corrupt rather
-  /// than the caller passing a bad offset. The cursor advances by
-  /// [byteLength], which is fixed.
+  /// treating a short buffer as corrupt input rather than a bad offset. The
+  /// cursor advances by [byteLength], which is fixed.
   factory OperationId.readFromBytes(
     Uint8List bytes, {
     int offset = 0,

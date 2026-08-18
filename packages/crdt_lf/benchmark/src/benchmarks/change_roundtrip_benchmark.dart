@@ -87,57 +87,8 @@ class ChangeRoundtripBenchmark extends BenchmarkBase {
   }
 }
 
-/// Prints the size of one encoded change per stamped operation kind.
-///
-/// These are the kinds that resolve a conflict, so they are the ones that
-/// used to carry a 24-byte stamp in their envelope on top of the id the change
-/// already held. A size is not a run time, so it goes out on its own line
-/// rather than through the benchmark emitter.
-void _reportChangeSizes() {
-  final samples = <String, Change Function()>{
-    'fugue text update': () {
-      final doc = CRDTDocument(peerId: PeerId.generate());
-      final text = CRDTFugueTextHandler(doc, 't')..insert(0, 'ab');
-      final before = doc.exportChanges().length;
-      text.update(0, 'A');
-      return doc.exportChanges().sorted()[before];
-    },
-    'or-set add': () {
-      final doc = CRDTDocument(peerId: PeerId.generate());
-      CRDTORSetHandler<String>(doc, 's').add('x');
-      return doc.exportChanges().single;
-    },
-    'or-map put': () {
-      final doc = CRDTDocument(peerId: PeerId.generate());
-      CRDTORMapHandler<String, int>(doc, 'm').put('k', 1);
-      return doc.exportChanges().single;
-    },
-    'movable list move': () {
-      final doc = CRDTDocument(peerId: PeerId.generate());
-      final list = CRDTFugueMovableListHandler<String>(doc, 'l')
-        ..insertAll(0, ['a', 'b']);
-      final before = doc.exportChanges().length;
-      list.move(1, 0);
-      return doc.exportChanges().sorted()[before];
-    },
-  };
-
-  for (final entry in samples.entries) {
-    final change = entry.value();
-    final envelope = OperationEnvelopeCodec.decode(change.payloadBytes());
-    // ignore: avoid_print benchmark results
-    print(
-      'Change size, ${entry.key}(Size): '
-      '${change.toBytes().length} bytes total '
-      '| ${change.payloadBytes().length} bytes payload '
-      '| stamped: ${envelope.stamped}',
-    );
-  }
-}
-
 void main() {
   ChangeToBytesBenchmark().report();
   ChangeFromBytesBenchmark().report();
   ChangeRoundtripBenchmark().report();
-  _reportChangeSizes();
 }

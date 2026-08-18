@@ -243,8 +243,8 @@ class _FugueTextUpdateOperation extends Operation {
   ///   - textLen: uvarint
   ///   - text: wtf8 bytes
   ///
-  /// The writer and the clock that settle two concurrent updates travel in
-  /// the envelope, as [Operation.stamp], not here.
+  /// The mark that settles two concurrent updates is not in the body; it is
+  /// the operation's [Operation.stamp].
   factory _FugueTextUpdateOperation.fromBodyBytes(
     Handler<dynamic> handler,
     Uint8List body,

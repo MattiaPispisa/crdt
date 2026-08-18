@@ -34,8 +34,7 @@ class Snapshot {
   ///
   /// [schemaVersion] covers the wrapper only — the id, the version vector and
   /// the framing of the entries. Each entry value carries its own version,
-  /// written and read by the handler that owns it. Two levels, on purpose: a
-  /// handler can change its blob without touching this one.
+  /// written and read by the handler that owns it.
   factory Snapshot.fromBytes(Uint8List bytes) {
     if (bytes.isEmpty) {
       throw const FormatException('Truncated Snapshot');

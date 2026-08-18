@@ -296,8 +296,8 @@ mixin CacheableStateProvider<T> on DocumentConsumer {
   /// May mutate [state] in place and return it. The default implementation
   /// returns `null`, i.e. no incremental path.
   ///
-  /// [sink] is always `null` today; see [DeltaSink] for why the parameter is
-  /// here at all. An override declares it and ignores it.
+  /// [sink] collects the positional effects of [operation]; `null` when
+  /// nobody is listening, which is every call the library makes today.
   T? incrementCachedState({
     required Operation operation,
     required T state,
@@ -400,16 +400,12 @@ extension _HandlerHelper on Handler<dynamic> {
   }
 }
 
-/// Collects the positional effects of applying operations.
+/// Collects the positional effects of applying operations, one delta of type
+/// [D] at a time.
 ///
-/// Nothing produces a sink yet: the parameter on
-/// [CacheableStateProvider.incrementCachedState] exists so that an
-/// observation API can be added without changing that signature. In Dart an
-/// override has to declare the optional parameters of the method it
-/// overrides, so introducing it later would break every custom handler.
-///
-/// It is `null` everywhere nobody is listening, which costs the apply path
-/// one null check.
+/// Passed to [CacheableStateProvider.incrementCachedState]. The library
+/// produces no sink of its own, so that parameter is `null` on every call it
+/// makes.
 abstract class DeltaSink<D> {
   /// Records one delta.
   void add(D delta);

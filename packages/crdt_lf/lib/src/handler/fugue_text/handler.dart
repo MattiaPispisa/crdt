@@ -248,14 +248,9 @@ class FugueTextState extends FugueState<String, String> {
     return FugueTextState._(FugueTree<String>.empty());
   }
 
-  /// Collects into a list and joins it, rather than streaming into a
-  /// `StringBuffer`.
-  ///
-  /// The buffer looks like the cheaper of the two — it skips a list of N
-  /// one-rune strings — and measures 13% slower on 30 000 runes (710 µs
-  /// against 621 µs for one keystroke followed by a read). `join` walks the
-  /// list once to add up the lengths, allocates the result in one go and fills
-  /// it; a buffer grows as it writes. The list is short-lived garbage either
-  /// way.
+  // Collects into a list and joins it. A `StringBuffer` skips the list of N
+  // one-rune strings and still measures slower: `join` walks the list once to
+  // add up the lengths and fills a single allocation, while a buffer grows as
+  // it writes.
   static String _join(FugueTree<String> tree) => tree.values().join();
 }

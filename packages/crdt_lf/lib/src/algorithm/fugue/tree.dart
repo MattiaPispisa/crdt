@@ -80,10 +80,8 @@ class FugueTree<T> {
   /// in place by [update].
   ///
   /// A node still carrying the value it was inserted with has no entry, and
-  /// loses against any update. Only overwritten nodes are stored: the map
-  /// stays empty for the insert/delete-only workloads, which is the case that
-  /// matters — on text there is one node per element, and a stamp on every
-  /// node would cost 24 bytes each.
+  /// loses against any update. Only overwritten nodes are stored, so the map
+  /// stays empty on an insert/delete-only workload.
   final Map<FugueElementID, OperationId> _stamps = {};
 
   /// Positional index over the in-order sequence of all structural nodes
@@ -145,8 +143,7 @@ class FugueTree<T> {
   /// Node for node this is what `iterableInsert(0, nodes)` builds — a right
   /// spine hanging off the root — but it links the nodes directly and builds
   /// the positional index with a single [SqrtDecomposition.bulkBuild]. That
-  /// turns the seed from n insertions of `O(√n)` into `O(n)`, which is the
-  /// whole cost of opening a document from a snapshot.
+  /// turns the seed from n insertions of `O(√n)` into `O(n)`.
   void bulkSeed(
     List<FugueValueNode<T>> nodes,
     Map<FugueElementID, OperationId> stamps,
@@ -610,8 +607,8 @@ class FugueTree<T> {
   /// Serializes the tree to JSON format
   ///
   /// Carries the [update] stamps next to the nodes. They are part of the
-  /// state — without them a restored tree would accept an update it had
-  /// already rejected — so a round-trip that dropped them would be a trap.
+  /// state: a tree restored without them accepts an update it had already
+  /// rejected.
   Map<String, dynamic> toJson() {
     final nodesJson = <String, dynamic>{};
     for (final entry in _nodes.entries) {

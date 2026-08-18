@@ -44,17 +44,15 @@ class FugueSnapshotData<T> {
 /// written by the same peer with consecutive counters. A single peer typing
 /// into a document produces one run for the whole text, so the ids cost a
 /// handful of bytes instead of one id per element. The writer finds the runs
-/// in one linear pass; when the tree starts storing runs of its own they are
-/// written out as they already are.
+/// in one linear pass.
 ///
-/// The values of a run go out as one blob because the handler knows how to
-/// frame them: text concatenates WTF-8 and pays nothing per element, a list
-/// prefixes each value with its length. See `FugueSequenceHandler.encodeRun`.
+/// The values of a run go out as one blob, framed by the handler that owns
+/// them. See `FugueSequenceHandler.encodeRun`.
 class FugueSnapshot {
   /// The version this build writes and is the only one it reads.
   ///
-  /// The `Snapshot` wrapper has a version of its own; this one covers the
-  /// blob, so the handler can change its layout without touching the wrapper.
+  /// It covers this blob only. The `Snapshot` wrapper carries a version of
+  /// its own.
   static const int version = 1;
 
   /// Encodes the live part of [tree] plus [floor].

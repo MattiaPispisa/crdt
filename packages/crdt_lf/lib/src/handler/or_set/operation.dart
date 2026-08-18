@@ -21,8 +21,8 @@ class _ORSetOperationFactory<T> {
 
 /// Add operation for OR-Set
 ///
-/// The tag it adds for the value is the operation's own [Operation.stamp],
-/// carried by the envelope, so the body holds nothing but the value.
+/// The tag it adds for the value is the operation's [Operation.stamp], so the
+/// body holds nothing but the value.
 class _ORSetAddOperation<T> extends Operation {
   _ORSetAddOperation({
     required this.value,

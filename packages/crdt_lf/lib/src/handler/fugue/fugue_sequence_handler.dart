@@ -94,9 +94,8 @@ abstract class FugueSequenceHandler<T, V, S extends FugueState<T, V>>
 
   /// Encodes the [values] of one snapshot run into a single blob.
   ///
-  /// A run is a stretch of consecutive elements (see [FugueSnapshot]), so the
-  /// framing is the handler's to choose: text concatenates WTF-8 and spends
-  /// nothing per element, a list has to prefix each value with its length.
+  /// The blob carries no count of its own, so an implementation picks any
+  /// framing [decodeRun] can undo given the number of values.
   Uint8List encodeRun(List<T> values);
 
   /// Decodes a run blob holding exactly [length] values, the inverse of

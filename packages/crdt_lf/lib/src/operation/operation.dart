@@ -22,23 +22,19 @@ abstract class Operation {
   /// last-writer-wins handler orders it by; `null` before the document has
   /// minted one.
   ///
-  /// Set by the document: in `registerOperation` for a local operation, from
-  /// the change it arrived in for a remote one. A handler reads it, it never
-  /// writes it. Whether a handler reads it at all is [OperationType.stamped].
+  /// Set by the document. A handler reads it, it never writes it. Whether a
+  /// handler reads it at all is [OperationType.stamped].
   ///
-  /// It costs nothing on the wire. The change already carries its id, so a
+  /// It costs nothing on the wire: the change already carries its id, so a
   /// stamped kind spends one bit in the envelope to declare itself and no
   /// bytes to carry the value.
   OperationId? get stamp => _stamp;
 
   /// Assigns the id, once.
   ///
-  /// A second write throws. The id is what a last-writer-wins handler stores
-  /// **inside its state**, so an operation whose id changed after one peer
-  /// folded it leaves the two peers holding different values, with nothing to
-  /// show for it. There is no case where the same operation is legitimately
-  /// stamped twice: a local one is minted in `registerOperation`, a remote one
-  /// is read off its change, and a compound is a fresh operation.
+  /// Throws a [StateError] on a second write. A last-writer-wins handler
+  /// stores this value **inside its state**, so an operation restamped after
+  /// one peer folded it leaves the two peers holding different values.
   set stamp(OperationId? value) {
     if (_stamp != null) {
       throw StateError(

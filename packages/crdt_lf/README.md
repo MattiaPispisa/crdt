@@ -30,6 +30,8 @@
     - [CRDTDocument](#crdtdocument)
       - [Identity](#identity)
     - [Handlers](#handlers)
+      - [Custom handlers](#custom-handlers)
+        - [When to turn `stamped` on](#when-to-turn-stamped-on)
       - [Text handlers index by rune](#text-handlers-index-by-rune)
       - [Working with Complex Types](#working-with-complex-types)
       - [Nested Structures (Containers and References)](#nested-structures-containers-and-references)
@@ -46,6 +48,8 @@
   - [Acknowledgments](#acknowledgments)
   - [Apps](#apps)
   - [Packages](#packages)
+  - [Migrations](#migrations)
+    - [Migrating from 3.x to 4.0](#migrating-from-3x-to-40)
 
 
 A Conflict-free Replicated Data Type (CRDT) implementation in Dart. 
@@ -91,10 +95,6 @@ separate devices, join the same room and edit together — no install needed.
 Source: [apps/greyhound_markdown](https://github.com/MattiaPispisa/crdt/tree/main/apps/greyhound_markdown).
 
 ## Getting Started
-
-Upgrading from a 3.x document? A `crdt_lf` 4.0 peer refuses to read v3
-bytes — see the [migration guide](https://mattiapispisa.it/crdt/docs/documentation/migration-4.0)
-before you deploy. Short version: recreate your documents.
 
 Add this to your package's `pubspec.yaml` file:
 
@@ -323,7 +323,92 @@ print(list.value); // Prints "[Buy milk]"
 ```
 
 Every handler can be found in the [handlers](https://github.com/MattiaPispisa/crdt/tree/main/packages/crdt_lf/lib/src/handler) folder. Want to add your own, with a
-kind the four conventional ones don't cover? See [Custom handlers](https://mattiapispisa.it/crdt/docs/documentation/custom-handlers).
+kind the four conventional ones don't cover? See [Custom handlers](#custom-handlers).
+
+#### Custom handlers
+
+`Handler<T>` is an abstract class, and a handler you write yourself plugs into
+the same document, transaction system and sync path as the built-in ones. It
+overrides:
+
+- `id` and `operationFactory` — required: how the handler is addressed, and
+  how its operations are decoded.
+- `getSnapshotState` — required: the state as bytes, seeded back through
+  `lastSnapshot`.
+- `handlerType` — for a handler that must survive dart2js minification.
+- `incrementCachedState` — to advance the cached state by one operation
+  instead of replaying the whole history on every read.
+- `stateIsOrderIndependent` — only when the state is the same whatever order
+  causally ready operations arrive in.
+- `compound` — to collapse consecutive operations inside a transaction into
+  fewer changes.
+
+The four conventional kinds (`insert`, `delete`, `update`, `move`) are ready
+to use as `insertType`, `deleteType`, `updateType` and `moveType`. A handler
+that needs a fifth semantics declares its own:
+
+```dart
+factory OperationType.custom(
+  Handler<dynamic> handler, {
+  required int kind,
+  required String name,
+  bool stamped = false,
+})
+```
+
+- `kind` is scoped to the **handler type**, not global — two unrelated
+  handlers can both use kind `4` for two unrelated meanings, because the
+  envelope always says which handler type it addresses first. Values `0`-`3`
+  are the conventional kinds; `4` up to `OperationType.maxKind` (`127`) are
+  free. The ceiling is `127` because bit 7 of the kind byte is reserved.
+- `name` labels the kind in `toPayload` and debug output. Only `kind` is
+  written on the wire.
+
+##### When to turn `stamped` on
+
+A stamp is a unique, totally ordered mark: the `OperationId` of the change the
+operation travels in. It costs **no bytes** — the change already carries that
+id — so the question is not what it costs but what it constrains. The built-in
+handlers use it for two different things:
+
+| Use | Who | What the handler does |
+|---|---|---|
+| Last-writer-wins tie-break | `update` on the Fugue sequence handlers, `insert`/`move`/`update` on the movable list | keeps the **greater** stamp, so every peer picks the same winner instead of whichever change arrived last |
+| Identity tag | `add` on `CRDTORSetHandler`, `put` on `CRDTORMapHandler` | stores the stamp as the tag a later `remove` tombstones; `CRDTORSetHandler` never compares two of them |
+
+A kind with no conflict to resolve and nothing to tag declares nothing — a
+text `insert` is one, because element ids are already unique.
+
+**A stamped kind cannot be compounded.** `Compound` never folds operations of
+a stamped kind, and asserts in debug if your `compound` returns one for them.
+A compound is a single change and carries a single id, but your handler folded
+each constituent under its own; on a compound touching more than one target
+the two disagree, and nothing shows it until a later concurrent write lands
+between the two ids and wins on one peer while losing on the other. So it is
+one or the other: a kind that reads a stamp, or a kind that folds.
+
+`stamped` is a **local declaration**, not part of the wire format: bit 7 of
+the kind byte carries the writer's declaration, and nothing else. Two builds
+that disagree about it are refused on decode, in both directions. Changing the
+flag on a kind you already shipped is therefore a breaking change.
+
+A change carrying a kind this build does not recognize for that handler type
+throws `UnknownOperationKindException` instead of being dropped in silence —
+which is why a factory never returns `null`.
+
+A full worked example, a PN-counter with its own `increment` kind, lives in
+[`test/helpers/pn_counter_handler.dart`](https://github.com/MattiaPispisa/crdt/tree/main/packages/crdt_lf/test/helpers/pn_counter_handler.dart).
+It is test-only; publishing a real PN-counter is tracked by
+[issue #126](https://github.com/MattiaPispisa/crdt/issues/126). Using one
+looks like any built-in handler:
+
+```dart
+final doc = CRDTDocument(peerId: PeerId.generate());
+final votes = PNCounterHandler(doc, 'votes')
+  ..increment(3)
+  ..decrement();
+print(votes.value); // 2
+```
 
 #### Text handlers index by rune
 
@@ -754,6 +839,46 @@ Other bricks of the crdt "system" are:
 - [crdt_lf_hive](https://pub.dev/packages/crdt_lf_hive)
 - [crdt_lf_drift](https://pub.dev/packages/crdt_lf_drift)
 - [crdt_lf_sqlite](https://pub.dev/packages/crdt_lf_sqlite)
+
+## Migrations
+
+### Migrating from 3.x to 4.0
+
+A 4.0 peer refuses to read v3 bytes — not from a document's history, not from
+a snapshot, not from the bytes a Hive/SQLite/Drift adapter saved. 4.0 changes
+what several of those bytes *mean*, so reading them under the old assumptions
+would leave two peers with different content while their version vectors still
+agreed.
+
+**Most of the table below is harmless if you never persisted a document and
+never wrote a custom handler.** With no stored bytes there is nothing a 4.0
+peer can refuse to open, and the operation-layer rows (`ORHandlerTag`,
+`OperationFactory`, `OperationType`, `incrementCachedState`) only reach code
+that implements `Handler` itself. Peers still have to upgrade together: a 3.x
+and a 4.0 client talking live break the same way.
+
+The one row that reaches ordinary code either way is rune indexing. It changes
+nothing while the text stays inside the BMP — for ASCII and most Latin text a
+rune and a UTF-16 code unit are the same thing. It bites when the text holds
+emoji or other non-BMP characters, or when you hand a handler an offset taken
+from a Flutter `TextField`, which counts code units.
+
+Every package that depends on `crdt_lf` has to move to a version that requires
+`crdt_lf: ^4.0.0` as well, or a client still resolving 3.x never reaches the
+guard.
+
+Renamed or removed symbols:
+
+| 3.x | 4.0 | Note |
+|---|---|---|
+| `ORHandlerTag` | `OperationId` | The tie-break is the id of the change carrying the operation. A handler no longer writes its own, and it costs no bytes. |
+| `OperationType.typeNameFromKind` | `OperationType.wellKnownName` | Returns `null` past the four conventional kinds instead of throwing. |
+| `OperationType.fromPayload` | removed | The payload string is a debug format and never carried a kind. |
+| `OperationFactory` | `Operation Function(OperationEnvelope envelope, Uint8List body)` | Was raw bytes. It also returns a non-nullable `Operation`, and raises `UnknownOperationKindException` instead of returning `null`. |
+| `FugueTree`, `FugueNode`, `FugueNodeTriple`, `FugueValueNode` | no longer exported | Implementation detail of the two Fugue sequence handlers. `FugueElementID` is still public. |
+| `update` on `CRDTFugueTextHandler` / `CRDTFugueListHandler` (delete + insert) | `update` keeps the element's identity | For the old behavior, ask for it: `doc.runInTransaction(() { text..delete(index, count)..insert(index, replacement); });` |
+| `incrementCachedState({required operation, required state})` | adds an optional `DeltaSink<Object?>? sink` | Always `null` today; an override has to declare the parameter, even unused. |
+| Text handler positions in UTF-16 code units | positions in **runes** | Affects `insert`, `delete`, `update`, `length`, `stablePositionAt`, `indexOfStablePosition` and `myersDiff`. See [Text handlers index by rune](#text-handlers-index-by-rune). |
 
 [license_badge]: https://img.shields.io/badge/license-MIT-blue.svg
 [license_link]: https://opensource.org/licenses/MIT

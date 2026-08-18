@@ -21,8 +21,8 @@ class _ORMapOperationFactory<K, V> {
 
 /// Put operation for OR-Map
 ///
-/// The tag it adds for the pair is the operation's own [Operation.stamp],
-/// carried by the envelope, so the body holds nothing but key and value.
+/// The tag it adds for the pair is the operation's [Operation.stamp], so the
+/// body holds nothing but key and value.
 class _ORMapPutOperation<K, V> extends Operation {
   _ORMapPutOperation({
     required this.key,

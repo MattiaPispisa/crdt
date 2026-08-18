@@ -167,8 +167,8 @@ class _MovableListInsertItem<T> {
 /// - leftOrigin: [FugueElementID]
 /// - rightOrigin: [FugueElementID]
 ///
-/// The clock this move is resolved against is the operation's own
-/// [Operation.stamp], carried by the envelope.
+/// The mark this move is resolved against is the operation's
+/// [Operation.stamp], not part of the body.
 class _MovableListMoveOperation<T> extends Operation {
   _MovableListMoveOperation({
     required this.identityID,

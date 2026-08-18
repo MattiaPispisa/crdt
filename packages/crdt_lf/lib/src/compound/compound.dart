@@ -24,17 +24,11 @@ class Compound {
   ///
   /// ## A stamped kind is never folded
   ///
-  /// A compound is one change, so it has one id. A handler that reads
-  /// [Operation.stamp] has already folded each constituent into its state
-  /// under **its own** id, and a peer receiving the compound would fold it
-  /// once under this one. On a compound touching a single target the two agree;
-  /// on one touching several they do not, and the disagreement is invisible
-  /// until a later concurrent write lands between the two ids and wins on one
-  /// peer while losing on the other.
-  ///
-  /// Nothing expresses "N marks in one change", so the combination is refused
-  /// rather than approximated. In debug the [assert] tells a handler author
-  /// why their `compound` is not being called.
+  /// Operations of a kind that reads [Operation.stamp] are left alone, and a
+  /// `compound` that folds one anyway fails an assertion in debug. A compound
+  /// is one change and carries one id, so folding several stamped operations
+  /// would replace their marks with a single one, and the peers that already
+  /// folded them separately would keep resolving conflicts by the old marks.
   List<Operation> compact() {
     if (_operations.isEmpty) {
       return [];
