@@ -56,37 +56,51 @@ factory OperationType.custom(
   `0`-`3` are the four conventional kinds and are best left alone so tooling
   can label them without knowing the handler; `4` up to `OperationType.maxKind`
   (`127`) are free. The ceiling is `127`, not `255`, because bit 7 of the
-  kind byte is reserved by the envelope, which uses it to signal that a
-  stamp follows.
+  kind byte is reserved by the envelope, which uses it to declare the kind
+  stamped.
 - `name` labels the kind in `toPayload` and debug output. It carries no
   meaning on the wire — only `kind` is written there.
-- `stamped: true` asks the document for an `OperationStamp` (`hlc` +
-  `peerId`), minted when the operation is registered and carried by the
-  envelope. `OperationType.wellKnownName(kind)` returns the
+- `stamped: true` says the handler reads `Operation.stamp`, which is the
+  `OperationId` of the change carrying the operation.
+  `OperationType.wellKnownName(kind)` returns the
   name of a conventional kind, or `null` past those four — a kind's meaning
   depends on the handler type in front of it, so a total `kind -> name`
   function isn't expressible for custom kinds.
 
 ### When to turn `stamped` on
 
-A stamp is a unique, totally ordered mark. It costs 24 bytes on the wire per
-operation of that kind, so turn it on only when the handler reads it. The
-built-in handlers use it for two different things:
+A stamp is a unique, totally ordered mark: the `OperationId` of the change the
+operation travels in. It costs **no bytes** — the change already carries its
+id — so the question is not what it costs but what it constrains. The built-in
+handlers use it for two different things:
 
 | Use | Who | What the handler does |
 |---|---|---|
 | Last-writer-wins tie-break | `update` on the Fugue sequence handlers, `insert`/`move`/`update` on the movable list | keeps the **greater** stamp, so every peer picks the same winner instead of whichever change arrived last |
 | Identity tag | `add` on `CRDTORSetHandler`, `put` on `CRDTORMapHandler` | stores the stamp as the tag a later `remove` tombstones; `CRDTORSetHandler` never compares two of them |
 
-A kind with no conflict to resolve and nothing to tag declares nothing and
-pays nothing — a text `insert` is one, because element ids are already unique.
+A kind with no conflict to resolve and nothing to tag declares nothing — a text
+`insert` is one, because element ids are already unique.
 
-`stamped` is a **local declaration**, not part of the wire format: the
-envelope only flags whether a stamp is present, in bit 7 of the kind byte. Two
-builds that disagree about it are refused on decode, in both directions — a
-stamped kind arriving without a stamp, and an unstamped kind arriving with
-one, both raise a `FormatException` on read. Changing the flag on a kind you
-already shipped is therefore a breaking change.
+:::warning A stamped kind cannot be compounded
+
+`Compound` never folds operations of a stamped kind, and asserts in debug if
+your `compound` returns one for them. A compound is a single change and has a
+single id, but your handler folded each constituent under its own; on a
+compound touching more than one target the two disagree, and nothing shows it
+until a later concurrent write lands between the two ids and wins on one peer
+while losing on the other.
+
+So it is one or the other: a kind that reads a stamp, or a kind that folds.
+
+:::
+
+`stamped` is a **local declaration**, not part of the wire format: bit 7 of the
+kind byte carries the writer's declaration, and nothing else. Two builds that
+disagree about it are refused on decode, in both directions — a kind this build
+stamps arriving undeclared, and one it does not stamp arriving declared, both
+raise a `FormatException` on read. Changing the flag on a kind you already
+shipped is therefore a breaking change.
 
 A change carrying a kind this build doesn't recognize for that handler type
 throws `UnknownOperationKindException` instead of being silently dropped —

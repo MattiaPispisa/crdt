@@ -31,21 +31,38 @@ replaced by `OperationType.wellKnownName`, which answers `null` past the four co
 than throwing — past those four a name cannot be recovered from a kind alone.
 `OperationType.fromPayload` is gone: the payload string is a debug format and never carried a kind.
 
-`ORHandlerTag` is replaced by `OperationStamp`, the one `(hlc, peerId)` pair every last-writer-wins
-handler now resolves conflicts with. The document mints it when an operation is registered and the
-envelope carries it, so a handler no longer writes its own tie-break. Same 24 bytes as before.
+`ORHandlerTag` is gone, and so is the separate stamp that briefly replaced it. Every last-writer-wins
+handler now resolves conflicts with the `OperationId` of the change carrying the operation — not a copy
+of it, the same value. `Change.author` has always had to equal `id.peerId`, and `OperationId.compareTo`
+has always been `(hlc, peerId)`, the same relation `compareChangeOrder` replays by. So the tie-break was
+already on the wire, and a stamp of its own was a duplicate. It **costs nothing now**: a stamped
+operation is 24 bytes smaller.
 
-An operation kind says whether it is stamped: `OperationType.update(this, stamped: true)`, and the same
-argument on `insert`, `delete`, `move` and `custom`. It is the kind and not the handler, because a text
-`insert` has no conflict to resolve — element ids are unique — and would otherwise pay 24 bytes on every
-keystroke for a tie-break it never reads. Reading a change whose kind wants a stamp and does not have one
-now raises. The four cached `OperationType`s on `Handler` became getters so a handler can override them.
+An operation kind says whether it reads a stamp: `OperationType.update(this, stamped: true)`, and the
+same argument on `insert`, `delete`, `move` and `custom`. Bit 7 of the kind byte carries that
+declaration and nothing else. Reading a change whose kind disagrees with the declaration raises, in
+both directions — the flag is local, so two builds can differ about it while the schema version stays
+the same, and either way they would resolve the same conflict by two different rules. **Flipping
+`stamped` on a kind you have already shipped is a breaking change.** The four cached `OperationType`s
+on `Handler` became getters so a handler can override them.
+
+Every operation is given an id when it is registered, and the change built for it carries that id
+rather than a fresh one. Two consequences:
+
+  - **A stamped kind is never compounded.** A compound is one change and has one id, but the writer
+    folded each constituent under its own; on a compound touching several targets the two disagree, and
+    nothing shows it until a later concurrent write lands between the two ids and wins on one peer while
+    losing on the other. `Compound` leaves stamped operations alone and asserts in debug so a handler
+    author hears why their `compound` is not called.
+  - **`createChange` refuses an operation that already belongs to a change.** One operation, one change.
+    Reusing the instance used to work because the id came from the clock at commit; it would now rebuild
+    the change it already produced.
 
 `update` on `CRDTFugueTextHandler` and `CRDTFugueListHandler` **keeps the identity of the element**.
 It used to tombstone it and hang a new one in its slot, which meant two concurrent updates produced two
 elements, an update on a deleted element brought it back, and an anchor taken with `stablePositionAt`
 stopped resolving — the very thing those handlers exist for. Now the value is overwritten in place and
-concurrent writers converge on one of the two by `OperationStamp`; an update loses against a concurrent
+concurrent writers converge on one of the two by `OperationId`; an update loses against a concurrent
 deletion. `CRDTFugueMovableListHandler` already worked this way, so the three now share one rule.
 For the old delete-and-insert behaviour, ask for it:
 
@@ -68,24 +85,19 @@ handler declares it and ignores it.
 
 `Operation.stamp` is written once. It used to be a public mutable field, so anything holding an
 operation — `handler.operations()` hands them out — could rewrite the tie-break. A last-writer-wins
-handler stores the stamp *inside its state*, so an operation restamped after one peer folded it
-leaves the two peers with different values and nothing to show for it. A second write now throws a
-`StateError`; there is no legitimate one, because a local operation is stamped in `registerOperation`,
-a remote one from the envelope, and a compound is a fresh operation.
-
-Reading a change also refuses the opposite disagreement: an operation whose kind this build declares
-**unstamped**, arriving **with** a stamp, now raises. `stamped` is a local declaration, so two builds
-can disagree about the same kind while the change schema version stays `3`; without this the receiver
-would attach a stamp no code path reads and resolve the conflict by a different rule. Flipping
-`stamped` on a kind you already shipped is a breaking change.
+handler stores it *inside its state*, so an operation restamped after one peer folded it leaves the two
+peers with different values and nothing to show for it. A second write now throws a `StateError`; there
+is no legitimate one, because a local operation is stamped in `registerOperation`, a remote one is read
+off the change that carried it, and a compound is a fresh operation.
 
 Wire and storage details, for anyone reading bytes directly:
-  - An operation envelope may carry a stamp after the kind byte, flagged by bit 7 of that byte. An
-    operation of a kind that is not stamped keeps exactly the bytes it had. The stamped kinds are
-    `update` on the two Fugue sequence handlers, `add`/`put` on the OR handlers, and
-    `insert`/`move`/`update` on the movable list.
-  - `CRDTORSetHandler` and `CRDTORMapHandler`: the tag leaves the body of `add`/`put`. Their snapshots
-    never held tags and do not change.
+  - Nothing sits between the kind byte and the body. Bit 7 of that byte declares the kind stamped and
+    costs no bytes of its own, so an unstamped operation keeps exactly the bytes it had and a stamped
+    one is 24 bytes lighter than in v3. The stamped kinds are `update` on the two Fugue sequence
+    handlers, `add`/`put` on the OR handlers, and `insert`/`move`/`update` on the movable list.
+  - `CRDTORSetHandler` and `CRDTORMapHandler`: the tag leaves the body of `add`/`put` and is read back
+    off the change id. Their snapshots never held tags and do not change; a `remove` still carries the
+    tags it observed, one `OperationId` each.
   - `CRDTFugueMovableListHandler`: the HLC leaves the bodies of `move` and `update`, and its snapshot
     blob grows — its two last-writer-wins clocks go from 8 to 24 bytes each.
   - The `update` body of the two Fugue sequence handlers loses its `newNodeID`: no node is created any
@@ -99,6 +111,11 @@ Wire and storage details, for anyone reading bytes directly:
 
 **Performance**
 
+- An operation of a stamped kind is **24 bytes smaller**, because its tie-break is now the id of the
+  change carrying it instead of a copy of that id. Per encoded change: a Fugue text `update` 120 → 96
+  bytes, an OR-set `add` 83 → 59, an OR-map `put` 90 → 66, a movable list `move` 169 → 145 — between
+  14% and 29% of the change, depending on how big the rest of it is. Snapshots are unchanged: the
+  stamps stored inside a state are still one id each. [`benchmark/results.md`]
 - A snapshot of 10 000 runes written by a single peer goes from 219 893 to 10 044 bytes, and taking it
   from 4.50 ms to 1.05 ms, because its ids collapse into one run. Reloading from it goes from 6.68 ms
   to 4.20 ms. A document where every other element is deleted has no runs to find: same size, and
@@ -111,7 +128,7 @@ Wire and storage details, for anyone reading bytes directly:
   [`benchmark/results.md`]
 - `CRDTFugueMovableListHandler` keeps its cached state when a change arrives **from the past**, which is
   what concurrent editing produces. Its state commutes now that both its last-writer-wins clocks are
-  `OperationStamp`s compared by `compareTo`. Measured on one remote move followed by a read: 1 000 items
+  `OperationId`s compared by `compareTo`. Measured on one remote move followed by a read: 1 000 items
   919 µs → 44 µs, 5 000 items 2.52 ms → 164 µs. [`benchmark/results.md`]
 - The movable list is the one blob that got **bigger**: 92.2 bytes per element at 10 000, against roughly
   60 in 3.x, because its two clocks went from 8 to 24 bytes each. There is no run framing to win any of

@@ -33,7 +33,7 @@ hold the upgrade until they've exported what they need.
 
 | 3.x | 4.0 | Note |
 |---|---|---|
-| `ORHandlerTag` | `OperationStamp` | Minted by the document in `registerOperation`, carried in the envelope — a handler no longer writes its own tie-break. |
+| `ORHandlerTag` | `OperationId` | The tie-break is the id of the change carrying the operation, minted by the document in `registerOperation`. A handler no longer writes its own, and it costs no bytes: the change already carried that id. |
 | `OperationType.typeNameFromKind` | `OperationType.wellKnownName` | Returns `null` past the four conventional kinds instead of throwing — a kind's meaning depends on the handler type in front of it. |
 | `OperationType.fromPayload` | removed | The payload string is a debug format; it never carried a kind, and this had no callers. |
 | `OperationFactory` | now `Operation Function(OperationEnvelope envelope, Uint8List body)` | Was raw bytes; also returns a non-nullable `Operation`, and raises `UnknownOperationKindException` instead of returning `null`. |
