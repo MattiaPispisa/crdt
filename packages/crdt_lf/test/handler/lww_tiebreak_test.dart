@@ -9,7 +9,11 @@ const _peerB = '00000000-0000-4000-8000-00000000000b';
 
 /// Far past any wall clock this test will ever see, and still inside the 48
 /// bits the encoded clock gives `l` — past that it silently wraps on the wire.
-const _farFuture = 1 << 45;
+///
+/// Written out rather than as `1 << 45`: a shift is 32 bits under dart2js, so
+/// on `-p chrome` that expression is 8192, the clock starts in the past, and
+/// the two documents stop sharing a tick — which is the whole set-up here.
+const _farFuture = 35184372088832;
 
 /// A document whose clock only ever moves in its logical part.
 ///
