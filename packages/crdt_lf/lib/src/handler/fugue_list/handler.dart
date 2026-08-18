@@ -135,7 +135,7 @@ base class CRDTFugueListHandler<T>
       );
     } else if (operation is _FugueListDeleteOperation<T>) {
       for (final item in operation.items) {
-        tree.delete(item.nodeID);
+        tree.delete(item.nodeID, stamp: operation.stamp!);
       }
     } else if (operation is _FugueListUpdateOperation<T>) {
       for (final item in operation.items) {

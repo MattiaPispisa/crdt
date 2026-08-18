@@ -39,8 +39,11 @@ void main() {
 
       expect(node.isDeleted, false);
 
-      node.value = null;
+      // The value is what the element comes back with, so deletion says so
+      // on its own instead of throwing the value away.
+      node.deleted = true;
       expect(node.isDeleted, true);
+      expect(node.value, equals('a'));
     });
 
     test('should serialize to JSON correctly', () {
@@ -130,8 +133,8 @@ void main() {
         side: FugueSide.right,
       );
 
-      final expected = 'FugueNode(id: $id, value: a, parentID: $parentId,'
-          ' side: ${FugueSide.right})';
+      final expected = 'FugueNode(id: $id, value: a, deleted: false,'
+          ' parentID: $parentId, side: ${FugueSide.right})';
       expect(node.toString(), equals(expected));
     });
 
@@ -148,8 +151,8 @@ void main() {
         side: FugueSide.right,
       );
 
-      final expected = 'FugueNode(id: $id, value: null, parentID: $parentId,'
-          ' side: ${FugueSide.right})';
+      final expected = 'FugueNode(id: $id, value: null, deleted: false,'
+          ' parentID: $parentId, side: ${FugueSide.right})';
       expect(node.toString(), equals(expected));
     });
   });

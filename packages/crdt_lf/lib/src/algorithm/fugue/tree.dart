@@ -24,6 +24,8 @@ class FugueTree<T> {
       value: null,
       parentID: FugueElementID.nullID(),
       side: FugueSide.left,
+      // The root stands for no element, so it is never part of the sequence.
+      deleted: true,
     );
     final nodes = {
       rootID: FugueNodeTriple<T>(
@@ -67,6 +69,14 @@ class FugueTree<T> {
       }
     }
 
+    final livenessJson = json['liveness'] as Map<String, dynamic>?;
+    if (livenessJson != null) {
+      for (final entry in livenessJson.entries) {
+        tree._liveness[FugueElementID.parse(entry.key)] =
+            OperationId.parse(entry.value as String);
+      }
+    }
+
     return tree;
   }
 
@@ -83,6 +93,20 @@ class FugueTree<T> {
   /// loses against any update. Only overwritten nodes are stored, so the map
   /// stays empty on an insert/delete-only workload.
   final Map<FugueElementID, OperationId> _stamps = {};
+
+  /// The stamp of the last command that decided whether a node is part of the
+  /// sequence.
+  ///
+  /// Written by [delete], and read by nothing yet. It is what a command that
+  /// brings an element back has to win against, and it has to be stamped
+  /// rather than settled by arrival order: the Fugue handlers fold a change
+  /// into the state they already hold, in the order changes turn up, while
+  /// replay orders them by `(clock, peer)`. Two peers would otherwise reach
+  /// different answers from the same set of operations.
+  ///
+  /// A node with no entry lost its liveness to nothing in particular, so
+  /// anything beats it.
+  final Map<FugueElementID, OperationId> _liveness = {};
 
   /// Positional index over the in-order sequence of all structural nodes
   /// Answers position↔id and successor queries in `O(√n)`.
@@ -132,13 +156,39 @@ class FugueTree<T> {
     });
   }
 
+  /// Calls [action] on every node of the sequence, tombstones included, in
+  /// sequence order. The root is not one of them.
+  ///
+  /// A tombstone still carries its value, so this is what a snapshot writes
+  /// to keep the deleted elements whole instead of leaving a gap in the
+  /// counters behind them.
+  void forEachNode(
+    void Function(FugueElementID id, T value, {required bool deleted}) action,
+  ) {
+    _index.forEach((id, {required live}) {
+      final value = _nodes[id]!.node.value;
+      if (value != null) {
+        action(id, value, deleted: !live);
+      }
+    });
+  }
+
   /// The last-writer-wins stamps of the nodes an [update] overwrote.
   ///
-  /// Bounded by the live nodes (because [delete] evicts).
+  /// A tombstone keeps its own: the value it holds is still the value it
+  /// would come back with.
   Map<FugueElementID, OperationId> get stamps =>
       Map<FugueElementID, OperationId>.unmodifiable(_stamps);
 
-  /// Seeds an empty tree with [nodes], in sequence order, plus their [stamps].
+  /// The stamps of the commands that took nodes out of the sequence.
+  ///
+  /// See [_liveness].
+  Map<FugueElementID, OperationId> get livenessStamps =>
+      Map<FugueElementID, OperationId>.unmodifiable(_liveness);
+
+  /// Seeds an empty tree with [nodes], in sequence order, plus their [stamps]
+  /// and [livenessStamps]. [live] says which of them are still in the
+  /// sequence, one flag per node; all of them when it is left out.
   ///
   /// Node for node this is what `iterableInsert(0, nodes)` builds — a right
   /// spine hanging off the root — but it links the nodes directly and builds
@@ -146,34 +196,42 @@ class FugueTree<T> {
   /// turns the seed from n insertions of `O(√n)` into `O(n)`.
   void bulkSeed(
     List<FugueValueNode<T>> nodes,
-    Map<FugueElementID, OperationId> stamps,
-  ) {
+    Map<FugueElementID, OperationId> stamps, {
+    Map<FugueElementID, OperationId> livenessStamps = const {},
+    List<bool>? live,
+  }) {
     assert(_nodes.length == 1, 'bulkSeed expects an empty tree');
+    assert(
+      live == null || live.length == nodes.length,
+      'bulkSeed expects one liveness flag per node',
+    );
     if (nodes.isEmpty) {
       return;
     }
 
     var parentID = _rootID;
-    for (final node in nodes) {
+    final ids = <FugueElementID>[];
+    for (var i = 0; i < nodes.length; i += 1) {
+      final node = nodes[i];
       _nodes[node.id] = FugueNodeTriple<T>(
         node: FugueNode<T>(
           id: node.id,
           value: node.value,
           parentID: parentID,
           side: FugueSide.right,
+          deleted: live != null && !live[i],
         ),
         leftChildren: [],
         rightChildren: [],
       );
       _nodes[parentID]!.rightChildren.add(node.id);
       parentID = node.id;
+      ids.add(node.id);
     }
 
-    _index.bulkBuild(
-      nodes.map((node) => node.id).toList(),
-      List<bool>.filled(nodes.length, true),
-    );
+    _index.bulkBuild(ids, live ?? List<bool>.filled(nodes.length, true));
     _stamps.addAll(stamps);
+    _liveness.addAll(livenessStamps);
   }
 
   /// Inserts a list of nodes into the tree at the specified index.
@@ -341,15 +399,32 @@ class FugueTree<T> {
     return false;
   }
 
-  /// Deletes a node from the tree (marks it as deleted, `⊥`)
-  void delete(FugueElementID nodeID) {
-    if (_nodes.containsKey(nodeID)) {
-      _nodes[nodeID]!.node.value = null;
-      // A tombstone refuses every update, so the stamp can never be needed
-      // again: dropping it keeps [_stamps] bounded by the live nodes.
-      _stamps.remove(nodeID);
-      _index.setLive(nodeID, live: false);
+  /// Takes [nodeID] out of the sequence, keeping the node.
+  ///
+  /// The tombstone holds on to the value, to the position it had among its
+  /// siblings and to the stamp of the update that last wrote it, so the
+  /// element is still there in everything but its liveness.
+  ///
+  /// [stamp] is the mark of the command, kept as the greater of the two when
+  /// a node is deleted twice. Nothing reads it yet; it is what a command
+  /// bringing the element back would have to beat, and it has to be recorded
+  /// as the deletion happens, because that is the only moment it is known.
+  void delete(FugueElementID nodeID, {required OperationId stamp}) {
+    final triple = _nodes[nodeID];
+    if (triple == null) {
+      return;
     }
+
+    final current = _liveness[nodeID];
+    if (current == null || stamp.compareTo(current) > 0) {
+      _liveness[nodeID] = stamp;
+    }
+
+    if (triple.node.deleted) {
+      return;
+    }
+    triple.node.deleted = true;
+    _index.setLive(nodeID, live: false);
   }
 
   /// Overwrites the value of [nodeID] in place, keeping its identity, its
@@ -435,7 +510,7 @@ class FugueTree<T> {
   /// Keeps [_index] in sync after [node] has been linked into the tree as the
   /// child at [position] on its side.
   void _indexInsert(FugueNode<T> node, int position) {
-    final isLive = node.value != null;
+    final isLive = !node.deleted;
     final predecessor = _indexPredecessorFor(node, position);
     if (predecessor == null) {
       _index.insertAtFront(node.id, live: isLive);
@@ -531,7 +606,7 @@ class FugueTree<T> {
       if (step.emitSelf) {
         if (step.id != _rootID) {
           ids.add(step.id);
-          live.add(triple.node.value != null);
+          live.add(!triple.node.deleted);
         }
         continue;
       }
@@ -606,9 +681,10 @@ class FugueTree<T> {
 
   /// Serializes the tree to JSON format
   ///
-  /// Carries the [update] stamps next to the nodes. They are part of the
-  /// state: a tree restored without them accepts an update it had already
-  /// rejected.
+  /// Carries both sets of stamps next to the nodes. They are part of the
+  /// state: a tree restored without the [update] ones accepts an update it
+  /// had already rejected, and one restored without the [delete] ones lets a
+  /// later command take back a liveness it had already lost.
   Map<String, dynamic> toJson() {
     final nodesJson = <String, dynamic>{};
     for (final entry in _nodes.entries) {
@@ -620,9 +696,15 @@ class FugueTree<T> {
       stampsJson[entry.key.toString()] = entry.value.toString();
     }
 
+    final livenessJson = <String, dynamic>{};
+    for (final entry in _liveness.entries) {
+      livenessJson[entry.key.toString()] = entry.value.toString();
+    }
+
     return {
       'nodes': nodesJson,
       'stamps': stampsJson,
+      'liveness': livenessJson,
     };
   }
 

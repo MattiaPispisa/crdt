@@ -55,7 +55,7 @@ void main() {
       _append(tree, peerB, 0, 'de');
       _append(tree, peerA, 3, 'f');
       tree
-        ..delete(FugueElementID(peerA, 1))
+        ..delete(FugueElementID(peerA, 1), stamp: _stamp(peerA, 1))
         ..update(
           nodeID: FugueElementID(peerB, 1),
           value: 'E',
@@ -66,7 +66,12 @@ void main() {
       final data = read(write(tree, floor));
 
       final restored = FugueTree<String>.empty()
-        ..bulkSeed(data.nodes, data.stamps);
+        ..bulkSeed(
+          data.nodes,
+          data.stamps,
+          livenessStamps: data.livenessStamps,
+          live: data.live,
+        );
 
       expect(restored.values(), equals(tree.values()));
       expect(
@@ -118,21 +123,92 @@ void main() {
 
       expect(runCount, equals(1));
       expect(read(bytes).nodes, hasLength(500));
-      // 500 values, one id, one floor entry: nowhere near an id per element.
-      expect(bytes.length, lessThan(600));
+      // 500 values, one id, one liveness bitmap, one floor entry: nowhere
+      // near an id per element.
+      expect(bytes.length, lessThan(700));
     });
 
     test('a gap in the counters opens a new run', () {
       final tree = FugueTree<String>.empty();
-      _append(tree, peerA, 0, 'abc');
-      // Deleting the middle leaves counters 0 and 2 next to each other.
-      tree.delete(FugueElementID(peerA, 1));
+      _append(tree, peerA, 0, 'ab');
+      _append(tree, peerA, 5, 'c');
 
-      final bytes = write(tree, {peerA: 2});
+      final bytes = write(tree, {peerA: 5});
       expect(UVarint.read(bytes, offset: 1).value, equals(2));
       expect(
         read(bytes).nodes.map((n) => n.value).toList(),
-        equals(['a', 'c']),
+        equals(['a', 'b', 'c']),
+      );
+    });
+
+    // A deletion used to cut the run in two and drop the element. Keeping the
+    // tombstone inside the run is what lets the element come back whole, and
+    // it costs one bit instead of a second id.
+    test('a deletion in the middle of a run keeps the run whole', () {
+      final tree = FugueTree<String>.empty();
+      _append(tree, peerA, 0, 'abc');
+      tree.delete(FugueElementID(peerA, 1), stamp: _stamp(peerA, 9));
+
+      final bytes = write(tree, {peerA: 2});
+      expect(UVarint.read(bytes, offset: 1).value, equals(1));
+
+      final data = read(bytes);
+      expect(data.nodes.map((n) => n.value).toList(), equals(['a', 'b', 'c']));
+      expect(data.live, equals([true, false, true]));
+      // The table is in the format, and empty: see the note on the writer.
+      expect(data.livenessStamps, isEmpty);
+
+      final restored = FugueTree<String>.empty()
+        ..bulkSeed(
+          data.nodes,
+          data.stamps,
+          livenessStamps: data.livenessStamps,
+          live: data.live,
+        );
+      expect(restored.values(), equals(['a', 'c']));
+    });
+
+    // The writer leaves the liveness table empty, so nothing else exercises
+    // the reader for it. It is in the format for the build that will fill it,
+    // and a path no test walks is a path that rots.
+    test('the reader takes a liveness table the writer does not yet write', () {
+      final out = BytesBuilder(copy: false)..addByte(FugueSnapshot.version);
+      UVarint.write(1, out); // one run
+      out
+        ..add(FugueElementID(peerA, 0).toBytes())
+        ..addByte(2) // length, as a uvarint
+        ..addByte(0x01); // liveness bits: element 0 live, element 1 gone
+      final blob = _encodeRun(['a', 'b']);
+      UVarint.write(blob.length, out);
+      out.add(blob);
+
+      UVarint.write(0, out); // no update stamps
+      UVarint.write(1, out); // one liveness stamp
+      out
+        ..add(FugueElementID(peerA, 1).toBytes())
+        ..add(_stamp(peerA, 9).toUint8List());
+      UVarint.write(0, out); // empty floor
+
+      final data = read(out.toBytes());
+
+      expect(data.nodes.map((n) => n.value).toList(), equals(['a', 'b']));
+      expect(data.live, equals([true, false]));
+      expect(
+        data.livenessStamps,
+        equals({FugueElementID(peerA, 1): _stamp(peerA, 9)}),
+      );
+
+      final restored = FugueTree<String>.empty()
+        ..bulkSeed(
+          data.nodes,
+          data.stamps,
+          livenessStamps: data.livenessStamps,
+          live: data.live,
+        );
+      expect(restored.values(), equals(['a']));
+      expect(
+        restored.livenessStamps,
+        equals({FugueElementID(peerA, 1): _stamp(peerA, 9)}),
       );
     });
 
@@ -140,6 +216,8 @@ void main() {
       final data = read(write(FugueTree<String>.empty(), {}));
       expect(data.nodes, isEmpty);
       expect(data.stamps, isEmpty);
+      expect(data.live, isEmpty);
+      expect(data.livenessStamps, isEmpty);
       expect(data.floor, isEmpty);
     });
 

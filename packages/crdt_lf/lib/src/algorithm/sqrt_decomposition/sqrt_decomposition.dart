@@ -252,6 +252,20 @@ class SqrtDecomposition<T> {
     }
   }
 
+  /// Calls [action] on every key, live or not, in sequence order.
+  ///
+  /// The index holds the whole sequence — keys are never removed, only marked
+  /// — so this walks it without touching the structure it was built from.
+  void forEach(void Function(T key, {required bool live}) action) {
+    for (final block in _blocks) {
+      final keys = block.keys;
+      final live = block.live;
+      for (var i = 0; i < keys.length; i++) {
+        action(keys[i], live: live[i]);
+      }
+    }
+  }
+
   /// Returns the first element in the sequence, or `null` if empty.
   T? first() {
     for (final block in _blocks) {

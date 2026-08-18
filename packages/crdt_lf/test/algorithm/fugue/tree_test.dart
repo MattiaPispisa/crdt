@@ -131,7 +131,7 @@ void main() {
         ..insert(newID: a, value: 'A', leftOrigin: nullID, rightOrigin: nullID)
         ..insert(newID: b, value: 'B', leftOrigin: a, rightOrigin: nullID)
         ..insert(newID: x, value: 'X', leftOrigin: a, rightOrigin: b)
-        ..delete(a);
+        ..delete(a, stamp: _stamp(peerId, 1));
 
       expect(tree.values(), equals(['X', 'B']));
 
@@ -175,7 +175,7 @@ void main() {
 
       expect(tree.values(), equals(['test']));
 
-      tree.delete(nodeId);
+      tree.delete(nodeId, stamp: _stamp(peerId, 1));
       expect(tree.values(), isEmpty);
     });
 
@@ -271,7 +271,7 @@ void main() {
       expect(tree.values(), equals(['a', 'b', 'c']));
 
       // Delete middle value
-      tree.delete(FugueElementID(peerId, 2));
+      tree.delete(FugueElementID(peerId, 2), stamp: _stamp(peerId, 1));
       expect(tree.values(), equals(['a', 'c']));
     });
 
@@ -503,7 +503,7 @@ void main() {
       // A deletion is monotone: whichever way the two are ordered, the element
       // stays gone.
       test('a tombstone is never brought back, in either order', () {
-        final deleteFirst = abc()..delete(b);
+        final deleteFirst = abc()..delete(b, stamp: _stamp(peerId, 1));
         expect(
           deleteFirst.update(nodeID: b, value: 'B2', stamp: _stamp(peerId, 10)),
           isFalse,
@@ -511,24 +511,69 @@ void main() {
 
         final updateFirst = abc()
           ..update(nodeID: b, value: 'B2', stamp: _stamp(peerId, 10))
-          ..delete(b);
+          ..delete(b, stamp: _stamp(peerId, 1));
 
         expect(deleteFirst.values(), equals(updateFirst.values()));
         expect(deleteFirst.values(), equals(['A', 'C']));
       });
 
-      // The stamp goes away with the value it guarded, so it cannot pin memory
-      // for a node that can never accept a write again.
-      test('deleting evicts the stamp without letting a later update in', () {
+      // The tombstone holds on to everything the element had, so it can be
+      // put back the way it was — and it still refuses a later update, which
+      // now rests on the flag rather than on the value being gone.
+      test(
+          'deleting keeps the value and the stamp, and still refuses an update',
+          () {
         final tree = abc()
           ..update(nodeID: b, value: 'B2', stamp: _stamp(peerId, 10))
-          ..delete(b);
+          ..delete(b, stamp: _stamp(peerId, 1));
 
         expect(
           tree.update(nodeID: b, value: 'B3', stamp: _stamp(peerId, 30)),
           isFalse,
         );
         expect(tree.values(), equals(['A', 'C']));
+        expect(tree.stamps[b], equals(_stamp(peerId, 10)));
+        expect(tree.livenessStamps[b], equals(_stamp(peerId, 1)));
+      });
+
+      // Nothing reads the liveness stamp yet, but it has to be the same on
+      // every peer the day something does. Arrival order is not: the Fugue
+      // handlers fold changes as they turn up, and replay orders them by
+      // clock and peer.
+      test('two deletes of the same node keep the greater stamp, either way',
+          () {
+        final low = _stamp(peerId, 5);
+        final high = _stamp(peerId, 9);
+
+        final lowFirst = abc()
+          ..delete(b, stamp: low)
+          ..delete(b, stamp: high);
+        final highFirst = abc()
+          ..delete(b, stamp: high)
+          ..delete(b, stamp: low);
+
+        expect(lowFirst.livenessStamps[b], equals(high));
+        expect(highFirst.livenessStamps[b], equals(high));
+        expect(lowFirst.values(), equals(highFirst.values()));
+      });
+
+      // Two peers can mint the same clock, and then the peer is all that is
+      // left to settle it.
+      test('the peer settles two deletes carrying the same clock', () {
+        final lowPeer = PeerId.parse('00000000-0000-4000-8000-00000000000a');
+        final highPeer = PeerId.parse('00000000-0000-4000-8000-00000000000b');
+        final fromLow = _stamp(lowPeer, 5);
+        final fromHigh = _stamp(highPeer, 5);
+
+        final lowFirst = abc()
+          ..delete(b, stamp: fromLow)
+          ..delete(b, stamp: fromHigh);
+        final highFirst = abc()
+          ..delete(b, stamp: fromHigh)
+          ..delete(b, stamp: fromLow);
+
+        expect(lowFirst.livenessStamps[b], equals(fromHigh));
+        expect(highFirst.livenessStamps[b], equals(fromHigh));
       });
 
       // Nothing about liveness or traversal order changes, so the positional
@@ -738,7 +783,8 @@ void main() {
         for (final id in structuralSequence(t)) {
           final triple = nodesJson[id]! as Map<String, dynamic>;
           final node = triple['node']! as Map<String, dynamic>;
-          if (node['value'] != null) {
+          // A tombstone keeps its value, so the flag is what says it is gone.
+          if (node['deleted'] != true) {
             live.add(id);
           }
         }
@@ -799,7 +845,10 @@ void main() {
           );
           created.add(id);
         } else if (op < 8) {
-          tree.delete(live[rng.nextInt(live.length)].id);
+          tree.delete(
+            live[rng.nextInt(live.length)].id,
+            stamp: _stamp(peerId, step),
+          );
         } else {
           // A strictly growing clock, so every update wins and the value the
           // oracle sees is the one just written.

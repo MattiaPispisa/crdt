@@ -54,9 +54,9 @@ class FugueState<T, V> {
 /// it should mix in [FugueCache] directly and own its own navigation.
 ///
 /// ## Note on `T`
-/// The Fugue tree uses a `null` value to mark a deleted element, so `T` must
-/// be non-nullable: a stored `null` would be indistinguishable from a
-/// deletion.
+/// `T` must be non-nullable: the Fugue tree keeps `null` for the root, the one
+/// node that stands for no element at all, and a stored `null` would be
+/// indistinguishable from it.
 abstract base class FugueSequenceHandler<T, V, S extends FugueState<T, V>>
     extends Handler<S> with FugueCache<S> {
   /// Creates a Fugue sequence handler bound to [doc] with the given [id].
@@ -118,7 +118,12 @@ abstract base class FugueSequenceHandler<T, V, S extends FugueState<T, V>>
 
     // Seed from the snapshot, then replay the history.
     final seed = _initialState();
-    state._tree.bulkSeed(seed.nodes, seed.stamps);
+    state._tree.bulkSeed(
+      seed.nodes,
+      seed.stamps,
+      livenessStamps: seed.livenessStamps,
+      live: seed.live,
+    );
     for (final operation in operations()) {
       applyToTree(state._tree, operation);
     }
@@ -235,6 +240,8 @@ abstract base class FugueSequenceHandler<T, V, S extends FugueState<T, V>>
       return FugueSnapshotData<T>(
         nodes: const [],
         stamps: const {},
+        live: const [],
+        livenessStamps: const {},
         floor: const {},
       );
     }
