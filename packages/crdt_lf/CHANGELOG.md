@@ -11,20 +11,30 @@
   settles ties with the id of the change carrying the operation. [129](https://github.com/MattiaPispisa/crdt/issues/129)
 - `update` on `CRDTFugueTextHandler` and `CRDTFugueListHandler` keeps the identity of the element
   instead of replacing it. [127](https://github.com/MattiaPispisa/crdt/issues/127)
-- `Snapshot` carries a schema version. [130](https://github.com/MattiaPispisa/crdt/issues/130)
+- `Snapshot` carries a schema version, and so does every per-handler blob inside it. [130](https://github.com/MattiaPispisa/crdt/issues/130)
 - `incrementCachedState` takes an optional `DeltaSink`. [132](https://github.com/MattiaPispisa/crdt/issues/132)
+- `Handler` is a `base` class: extend it, do not implement it. A handler you write declares
+  `base`, `final` or `sealed` in turn, which is what lets a later release add a hook with a
+  default body without breaking it.
+- A deleted element keeps its value, its place and the id of the change that removed it, in the
+  tree and in the snapshot, so it can be put back whole.
+- The framing `binaryExportChanges` writes carries a version that moves with the meaning of the
+  bytes inside it; a 3.x buffer used to be accepted there without a word.
 
 ### Breaking
 
 A v3 document does not open in v4 — not from its history, not from a snapshot, not from the bytes an
 adapter saved — so peers have to move together and existing documents have to be recreated; the
 [README](https://github.com/MattiaPispisa/crdt/tree/main/packages/crdt_lf#migrating-from-3x-to-40) lists the
-renamed and removed symbols.
+renamed and removed symbols. The Dart floor moves to `>=3.0.0`.
 
 ### Performance
 
 A Fugue text snapshot of 10 000 runes from one peer is ~20x
 smaller and ~4x faster to take, and `length` on the two Fugue sequence handlers is now O(1).
+On the same 10 000 runes with half the elements deleted, keeping the tombstones inside the runs
+takes `takeSnapshot` from 3.14 ms to 1.27 ms and the blob from 5.0 KB to 11.3 KB; restoring that
+document costs 5.27 ms instead of 3.74 ms: twice the nodes to seed.
 
 ## [3.5.0](https://github.com/MattiaPispisa/crdt/tree/crdt_lf-v3.5.0/packages/crdt_lf)
 

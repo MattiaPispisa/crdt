@@ -4,7 +4,7 @@
 
 Requires `crdt_lf: ^4.0.0` instead of `>=3.0.0 <5.0.0`. The relay is CRDT-agnostic and forwards opaque
 blobs whatever their version; the guard that stops a 3.x and a 4.0 client from talking past each other
-is `crdt_lf`'s own schema version check.
+is `crdt_lf`'s own schema version check. The Dart floor moves to `>=3.0.0`, which `crdt_lf` now needs.
 
 ## [0.6.1](https://github.com/MattiaPispisa/crdt/tree/crdt_socket_sync-v0.6.1/packages/crdt_socket_sync)
 

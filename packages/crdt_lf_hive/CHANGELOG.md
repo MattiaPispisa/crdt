@@ -4,6 +4,7 @@
 
 Requires `crdt_lf: ^4.0.0` instead of `>=3.0.0 <5.0.0`. The adapter stores opaque bytes and cannot tell
 a 3.x buffer from a 4.0 one; the guard that refuses one is `crdt_lf`'s own schema version check.
+The Dart floor moves to `>=3.0.0`, which `crdt_lf` now needs.
 
 ## [0.3.1](https://github.com/MattiaPispisa/crdt/tree/crdt_lf_hive-v0.3.1/packages/crdt_lf_hive)
 

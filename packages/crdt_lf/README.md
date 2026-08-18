@@ -328,8 +328,20 @@ kind the four conventional ones don't cover? See [Custom handlers](#custom-handl
 #### Custom handlers
 
 `Handler<T>` is an abstract class, and a handler you write yourself plugs into
-the same document, transaction system and sync path as the built-in ones. It
-overrides:
+the same document, transaction system and sync path as the built-in ones.
+
+It is a **`base` class**, so you extend it and cannot implement it, and your
+own handler says `base`, `final` or `sealed` in turn:
+
+```dart
+final class PNCounterHandler extends Handler<int> { … }
+```
+
+That is what lets a later release add a hook with a default body — an
+`invert` for undo, a `watch` for deltas — without breaking the handlers
+already out there.
+
+A handler overrides:
 
 - `id` and `operationFactory` — required: how the handler is addressed, and
   how its operations are decoded.
@@ -367,9 +379,11 @@ factory OperationType.custom(
 ##### When to turn `stamped` on
 
 A stamp is a unique, totally ordered mark: the `OperationId` of the change the
-operation travels in. It costs **no bytes** — the change already carries that
-id — so the question is not what it costs but what it constrains. The built-in
-handlers use it for two different things:
+operation travels in. **Every** operation carries one, declared or not: the
+document mints it when the operation is registered, and a remote one reads it
+off the change. So the flag is not about reaching the stamp — it is about
+saying that this kind's conflict resolution reads it, which is something two
+peers have to agree on. The built-in handlers use it for two different things:
 
 | Use | Who | What the handler does |
 |---|---|---|
@@ -377,7 +391,10 @@ handlers use it for two different things:
 | Identity tag | `add` on `CRDTORSetHandler`, `put` on `CRDTORMapHandler` | stores the stamp as the tag a later `remove` tombstones; `CRDTORSetHandler` never compares two of them |
 
 A kind with no conflict to resolve and nothing to tag declares nothing — a
-text `insert` is one, because element ids are already unique.
+text `insert` is one, because element ids are already unique. A `delete` is
+another: it beats everything, so there is no rule for a peer to disagree
+with. It still reads its own stamp and records it on the tombstone, against
+the day something tries to take an element back.
 
 **A stamped kind cannot be compounded.** `Compound` never folds operations of
 a stamped kind, and asserts in debug if your `compound` returns one for them.
@@ -787,14 +804,19 @@ encode their items, so the whole pipeline (operation payload → `Change` →
 
 **Two levels of versioning.** `Snapshot.schemaVersion` (currently `1`, added
 in `crdt_lf` 4.0.0) covers only the wrapper: the document id, the version
-vector, and the framing of the per-handler entries. Each handler's
-`getSnapshotState()` blob can carry its own version, independent of the
-wrapper — a handler can change its own layout without touching this one. The
-two Fugue sequence handlers (`CRDTFugueTextHandler`, `CRDTFugueListHandler`)
-do this today: their blob starts with its own `version: u8` byte and groups
-live elements into **runs** of consecutive ids from the same peer, instead of
-one entry per element. Not every built-in handler versions its blob yet — it
-is a capability the format supports, not something every handler has to use.
+vector, and the framing of the per-handler entries. Inside an entry, the
+layout belongs to the handler that wrote it, and so does its version: **every
+built-in blob starts with a `version: u8` byte of its own**, so a handler can
+change its layout without moving a byte any other handler reads. The reader
+is strict — a version it does not write is refused whole rather than parsed
+as far as it happens to work. Write one in your own handler too; there is
+nothing to gain from a blob that cannot say what it is.
+
+The two Fugue sequence handlers (`CRDTFugueTextHandler`,
+`CRDTFugueListHandler`) show what the room is for: their blob groups elements
+into **runs** of consecutive ids from the same peer instead of one entry per
+element, and carries the deleted elements inside those runs, marked by a bit,
+so a deletion keeps its identity and its place instead of leaving a gap.
 
 ## Project Status
 
@@ -878,6 +900,8 @@ Renamed or removed symbols:
 | `FugueTree`, `FugueNode`, `FugueNodeTriple`, `FugueValueNode` | no longer exported | Implementation detail of the two Fugue sequence handlers. `FugueElementID` is still public. |
 | `update` on `CRDTFugueTextHandler` / `CRDTFugueListHandler` (delete + insert) | `update` keeps the element's identity | For the old behavior, ask for it: `doc.runInTransaction(() { text..delete(index, count)..insert(index, replacement); });` |
 | `incrementCachedState({required operation, required state})` | adds an optional `DeltaSink<Object?>? sink` | Always `null` today; an override has to declare the parameter, even unused. |
+| `class MyHandler extends Handler<T>` | `base`/`final`/`sealed class MyHandler extends Handler<T>` | `Handler` is a `base` class now. Extending it is unchanged; implementing it is no longer allowed. See [Custom handlers](#custom-handlers). |
+| Dart `>=2.17.0` | Dart `>=3.0.0` | Class modifiers need it. `crdt_socket_sync` and `crdt_lf_hive` move with it. |
 | Text handler positions in UTF-16 code units | positions in **runes** | Affects `insert`, `delete`, `update`, `length`, `stablePositionAt`, `indexOfStablePosition` and `myersDiff`. See [Text handlers index by rune](#text-handlers-index-by-rune). |
 
 [license_badge]: https://img.shields.io/badge/license-MIT-blue.svg
