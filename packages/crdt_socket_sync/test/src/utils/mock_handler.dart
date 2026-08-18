@@ -6,7 +6,7 @@ import 'package:crdt_lf/crdt_lf.dart';
 import 'mock_operation.dart';
 
 /// Test handler for testing purposes
-class MockHandler extends Handler<String> {
+final class MockHandler extends Handler<String> {
   MockHandler(super.doc);
 
   @override

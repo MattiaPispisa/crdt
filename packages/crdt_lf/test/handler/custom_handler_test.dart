@@ -113,7 +113,7 @@ void main() {
 
 /// Holds the last value it was set to, under the same kind byte the
 /// PN-counter uses for an increment.
-class _MarkerHandler extends Handler<int> {
+final class _MarkerHandler extends Handler<int> {
   _MarkerHandler(super.doc, this._id);
 
   static const int setKind = 4;

@@ -16,7 +16,7 @@ class FugueElementIDReadResult {
 }
 
 /// Represents the ID of an element in the Fugue algorithm
-class FugueElementID with Comparable<FugueElementID> {
+class FugueElementID implements Comparable<FugueElementID> {
   /// Constructor that initializes the element ID
   FugueElementID(this.replicaID, this.counter);
 

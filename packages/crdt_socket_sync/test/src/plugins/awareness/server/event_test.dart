@@ -155,13 +155,10 @@ void main() {
       switch (type) {
         case ServerAwarenessEventType.clientJoined:
           result = 'joined';
-          break;
         case ServerAwarenessEventType.clientUpdated:
           result = 'updated';
-          break;
         case ServerAwarenessEventType.clientLeft:
           result = 'left';
-          break;
       }
 
       expect(result, 'joined');

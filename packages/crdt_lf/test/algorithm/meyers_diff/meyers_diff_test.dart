@@ -756,12 +756,10 @@ String _applyDiff(String oldText, List<DiffSegment> diffs) {
         // Insert new text at oldStart position
         result =
             result.substring(0, start) + seg.text + result.substring(start);
-        break;
       case DiffOp.remove:
         // Remove text from oldStart to oldEnd
         final end = RuneOffsets.utf16Offset(result, seg.oldEnd);
         result = result.substring(0, start) + result.substring(end);
-        break;
     }
   }
 

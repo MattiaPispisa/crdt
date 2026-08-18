@@ -63,13 +63,11 @@ class TextHandlerOperationsBenchmark
           final text = sampleTexts[random.nextInt(sampleTexts.length)];
           operations.add((handler) => handler.insert(index, text));
           currentLength += text.length;
-          break;
 
         case 'update':
           final index = random.nextInt(currentLength);
           final text = sampleTexts[random.nextInt(sampleTexts.length)];
           operations.add((handler) => handler.update(index, text));
-          break;
 
         case 'delete':
           final index = random.nextInt(currentLength);
@@ -78,7 +76,6 @@ class TextHandlerOperationsBenchmark
           final count = maxCount > 0 ? random.nextInt(maxCount) + 1 : 1;
           operations.add((handler) => handler.delete(index, count));
           currentLength -= count;
-          break;
       }
     }
 

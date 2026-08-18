@@ -25,7 +25,7 @@ part 'operation.dart';
 /// done.set(true);
 /// print(done.value); // true
 /// ```
-class CRDTRegisterHandler<T> extends Handler<T> {
+base class CRDTRegisterHandler<T> extends Handler<T> {
   /// Creates a new register with the given document and ID.
   ///
   /// [valueCodec] encodes/decodes `T` to bytes; default is [JsonValueCodec].

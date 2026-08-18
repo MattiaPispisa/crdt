@@ -3,7 +3,7 @@
 /// A relay server rebroadcasts opaque CRDT change blobs to the other clients
 /// of a room and persists them in a `RelayStore`, without ever interpreting
 /// CRDT data: merging is entirely a client concern.
-library crdt_socket_sync_relay_server;
+library;
 
 export 'src/common/common/common.dart';
 export 'src/common/server/client_session.dart';

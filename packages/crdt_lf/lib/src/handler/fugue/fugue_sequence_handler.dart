@@ -57,7 +57,7 @@ class FugueState<T, V> {
 /// The Fugue tree uses a `null` value to mark a deleted element, so `T` must
 /// be non-nullable: a stored `null` would be indistinguishable from a
 /// deletion.
-abstract class FugueSequenceHandler<T, V, S extends FugueState<T, V>>
+abstract base class FugueSequenceHandler<T, V, S extends FugueState<T, V>>
     extends Handler<S> with FugueCache<S> {
   /// Creates a Fugue sequence handler bound to [doc] with the given [id].
   FugueSequenceHandler(super.doc, String id, {super.handlerType}) : _id = id;

@@ -1,5 +1,5 @@
 /// WebSocket relay server library for CRDT Socket Sync.
-library crdt_web_socket_sync_relay_server;
+library;
 
 export 'relay_server.dart';
 export 'src/common/server/web_socket/transformer.dart';

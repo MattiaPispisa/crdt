@@ -98,7 +98,7 @@ Operation _write(CRDTRegisterHandler<int> handler, int value) {
 
 /// A stamped handler that does **not** compound, which is the only shape a
 /// stamped handler is allowed to have.
-class _StampedRegister extends Handler<int> {
+base class _StampedRegister extends Handler<int> {
   _StampedRegister(super.doc, this._id);
 
   final String _id;
@@ -142,7 +142,7 @@ class _StampedRegister extends Handler<int> {
 }
 
 /// A handler written the way `Compound` refuses: stamped **and** folding.
-class _CompoundingStampedRegister extends _StampedRegister {
+final class _CompoundingStampedRegister extends _StampedRegister {
   _CompoundingStampedRegister(super.doc, super.id);
 
   @override

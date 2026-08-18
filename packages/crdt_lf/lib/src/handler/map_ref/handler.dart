@@ -20,7 +20,7 @@ import 'package:crdt_lf/src/handler/handler_type.dart';
 /// title.insert(0, 'Hello');
 /// print(root.resolved); // {title: 'Hello'}
 /// ```
-class CRDTMapRefHandler extends CRDTMapHandler<HandlerRef>
+base class CRDTMapRefHandler extends CRDTMapHandler<HandlerRef>
     implements ContainerHandler {
   /// Creates a map-of-references handler bound to [doc] with the given [id].
   CRDTMapRefHandler(super.doc, super.id)

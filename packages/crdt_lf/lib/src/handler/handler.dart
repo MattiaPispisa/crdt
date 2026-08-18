@@ -52,7 +52,7 @@ typedef OperationFactory = Operation Function(
 ///
 /// The hooks the framework calls on a handler are private to this library, so
 /// they never show up on a handler you hold.
-abstract class Handler<T>
+abstract base class Handler<T>
     with DocumentConsumer, SnapshotProvider, CacheableStateProvider<T> {
   /// Creates a new handler for the given document.
   ///

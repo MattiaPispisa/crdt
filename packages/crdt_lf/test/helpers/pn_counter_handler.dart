@@ -24,7 +24,7 @@ import 'package:crdt_lf/crdt_lf.dart';
 ///   ..decrement();
 /// print(votes.value); // 2
 /// ```
-class PNCounterHandler extends Handler<int> {
+final class PNCounterHandler extends Handler<int> {
   /// Creates a counter addressed by [id] in [doc].
   PNCounterHandler(super.doc, this._id, {super.handlerType});
 

@@ -27,7 +27,7 @@ part 'operation.dart';
 /// map.update('key2', 'value2');
 /// print(map.value); // Prints {"key2": "value2"}
 /// ```
-class CRDTMapHandler<T> extends Handler<Map<String, T>> {
+base class CRDTMapHandler<T> extends Handler<Map<String, T>> {
   /// Creates a new CRDTMap with the given document and ID
   ///
   /// [valueCodec] is an optional codec for encoding/decoding [T] values to bytes.

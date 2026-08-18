@@ -40,7 +40,8 @@ part 'operation.dart';
 ///   ..move(2, 0);
 /// print(list.value); // ['phone joe', 'buy milk', 'water plants']
 /// ```
-class CRDTFugueMovableListHandler<T> extends Handler<FugueMovableListState<T>>
+base class CRDTFugueMovableListHandler<T>
+    extends Handler<FugueMovableListState<T>>
     with FugueCache<FugueMovableListState<T>> {
   /// Creates a movable list handler bound to [doc] with the given [id].
   ///

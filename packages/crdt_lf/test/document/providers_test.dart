@@ -540,7 +540,7 @@ void main() {
 /// Draining the queue gives up the same way whether the change cannot be
 /// decoded or the operation cannot be applied: it drops the cache and lets the
 /// next read replay the history.
-class _UnappliableFugueText extends CRDTFugueTextHandler {
+final class _UnappliableFugueText extends CRDTFugueTextHandler {
   _UnappliableFugueText(super.doc, super.id);
 
   @override
@@ -557,7 +557,7 @@ class _UnappliableFugueText extends CRDTFugueTextHandler {
 /// A change written by the ordinary handler carries the same id, so the batch
 /// import routes it here, and a different type tag, so this handler declines
 /// it.
-class _ForeignTypeFugueText extends CRDTFugueTextHandler {
+final class _ForeignTypeFugueText extends CRDTFugueTextHandler {
   _ForeignTypeFugueText(super.doc, super.id);
 
   @override
@@ -565,7 +565,7 @@ class _ForeignTypeFugueText extends CRDTFugueTextHandler {
 }
 
 /// Counts how many times the cached state is advanced by one operation.
-class _CountingListHandler extends CRDTListHandler<String> {
+final class _CountingListHandler extends CRDTListHandler<String> {
   _CountingListHandler(super.doc, super.id);
 
   int increments = 0;
@@ -581,7 +581,7 @@ class _CountingListHandler extends CRDTListHandler<String> {
   }
 }
 
-class _FakeCRDTListHandler extends CRDTListHandler<String> {
+final class _FakeCRDTListHandler extends CRDTListHandler<String> {
   _FakeCRDTListHandler(super.doc, super.id);
 
   /// count of `incrementCachedState`

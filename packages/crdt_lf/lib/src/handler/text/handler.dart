@@ -29,7 +29,7 @@ part 'operation.dart';
 /// text..insert(0, 'Hello')..insert(5, ' World!');
 /// print(text.value); // Prints "Hello World!"
 /// ```
-class CRDTTextHandler extends Handler<String> {
+base class CRDTTextHandler extends Handler<String> {
   /// Creates a new CRDTText with the given document and ID
   CRDTTextHandler(super.doc, this._id);
 
@@ -115,13 +115,11 @@ class CRDTTextHandler extends Handler<String> {
           // Insert new text at adjusted position
           insert(segment.oldStart + offset, segment.text);
           offset += segment.newEnd - segment.newStart;
-          break;
         case DiffOp.remove:
           // Remove text at adjusted position
           final count = segment.oldEnd - segment.oldStart;
           delete(segment.oldStart + offset, count);
           offset -= count;
-          break;
       }
     }
   }

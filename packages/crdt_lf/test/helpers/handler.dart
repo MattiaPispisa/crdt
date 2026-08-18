@@ -3,7 +3,7 @@ import 'dart:typed_data';
 import 'package:crdt_lf/crdt_lf.dart';
 
 /// A test handler for CRDT operations
-class TestHandler extends Handler<dynamic> {
+final class TestHandler extends Handler<dynamic> {
   /// Create a new test handler
   TestHandler(
     super.doc, {

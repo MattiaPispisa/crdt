@@ -518,27 +518,21 @@ class WebSocketClient extends CRDTSocketClient {
     switch (message.type) {
       case MessageType.handshakeResponse:
         _handleHandshakeResponse(message as HandshakeResponseMessage);
-        break;
 
       case MessageType.change:
         _handleChangeMessage(message as ChangeMessage);
-        break;
 
       case MessageType.documentStatus:
         _handleDocumentStatusMessage(message as DocumentStatusMessage);
-        break;
 
       case MessageType.ping:
         await _handlePingMessage(message as PingMessage);
-        break;
 
       case MessageType.error:
         _handleErrorMessage(message as ErrorMessage);
-        break;
 
       case MessageType.pong:
         _handlePongMessage(message as PongMessage);
-        break;
 
       case MessageType.handshakeRequest:
       case MessageType.documentStatusRequest:

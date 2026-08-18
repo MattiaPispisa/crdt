@@ -29,7 +29,7 @@ part 'operation.dart';
 /// map.remove('b');
 /// print(map.value); // Prints {'a': 10}
 /// ```
-class CRDTORMapHandler<K, V> extends Handler<ORMapState<K, V>> {
+base class CRDTORMapHandler<K, V> extends Handler<ORMapState<K, V>> {
   /// Creates a new CRDT OR-MapHandler with the given document and ID
   ///
   /// [keyCodec] and [valueCodec] are optional codecs for encoding/decoding keys and values to bytes.

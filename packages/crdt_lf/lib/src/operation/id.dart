@@ -8,7 +8,7 @@ import 'package:hlc_dart/hlc_dart.dart';
 /// An [OperationId] uniquely identifies an operation in the CRDT system.
 /// It combines a [PeerId] and an [HybridLogicalClock] timestamp
 ///  to create a globally unique identifier.
-class OperationId with Comparable<OperationId> {
+class OperationId implements Comparable<OperationId> {
   /// Creates a new [OperationId] with the given [PeerId]
   /// and [HybridLogicalClock] timestamp
   OperationId(this.peerId, this.hlc);

@@ -18,7 +18,7 @@ import 'package:crdt_lf/src/handler/fugue/element_id_floor.dart';
 /// handler whose visible order is decoupled from the tree (e.g. a movable
 /// list) reuse the counter and the cache without inheriting the ordered
 /// sequence semantics of `FugueSequenceHandler`.
-mixin FugueCache<S> on Handler<S> {
+base mixin FugueCache<S> on Handler<S> {
   int? _counter;
 
   /// The highest element counter each peer is known to have used, seeded from

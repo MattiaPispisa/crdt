@@ -28,7 +28,7 @@ part 'operation.dart';
 /// set.remove('value2');
 /// print(set.value); // Prints {'value1', 'value3'}
 /// ```
-class CRDTORSetHandler<T> extends Handler<ORSetState<T>> {
+base class CRDTORSetHandler<T> extends Handler<ORSetState<T>> {
   /// Creates a new CRDT OR-SetHandler with the given document and ID
   ///
   /// [valueCodec] is an optional codec for encoding/decoding [T] values to bytes.

@@ -21,7 +21,7 @@ import 'package:crdt_lf/src/handler/handler_type.dart';
 /// intro.insert(0, 'Once upon a time');
 /// print(chapters.resolved); // ['Once upon a time']
 /// ```
-class CRDTListRefHandler extends CRDTFugueListHandler<HandlerRef>
+base class CRDTListRefHandler extends CRDTFugueListHandler<HandlerRef>
     implements ContainerHandler {
   /// Creates an ordered list-of-references handler bound to [doc] with [id].
   CRDTListRefHandler(super.doc, super.id)

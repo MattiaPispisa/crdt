@@ -31,7 +31,7 @@ part 'operation.dart';
 /// text..insert(0, 'Hello')..insert(5, ' World');
 /// print(text.value); // Prints ["Hello"]
 /// ```
-class CRDTFugueTextHandler
+base class CRDTFugueTextHandler
     extends FugueSequenceHandler<String, String, FugueTextState> {
   /// Constructor that initializes a new Fugue text handler
   CRDTFugueTextHandler(super.doc, super.id);
@@ -154,13 +154,11 @@ class CRDTFugueTextHandler
           // Insert new text at adjusted position
           insert(segment.oldStart + offset, segment.text);
           offset += segment.newEnd - segment.newStart;
-          break;
         case DiffOp.remove:
           // Remove text at adjusted position
           final count = segment.oldEnd - segment.oldStart;
           delete(segment.oldStart + offset, count);
           offset -= count;
-          break;
       }
     }
   }

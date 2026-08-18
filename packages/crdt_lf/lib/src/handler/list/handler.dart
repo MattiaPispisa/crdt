@@ -22,7 +22,7 @@ part 'operation.dart';
 /// list..insert(0, 'Hello')..insert(1, 'World')..update(0, 'Hello,')
 /// print(list.value.join('')); // Prints "Hello, World"
 /// ```
-class CRDTListHandler<T> extends Handler<List<T>> {
+base class CRDTListHandler<T> extends Handler<List<T>> {
   /// Creates a new CRDTList with the given document and ID
   ///
   /// [valueCodec] is an optional codec for encoding/decoding [T] values to bytes.

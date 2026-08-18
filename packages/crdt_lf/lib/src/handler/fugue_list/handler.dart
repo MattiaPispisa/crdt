@@ -32,7 +32,7 @@ part 'operation.dart';
 /// list..insert(0, 'Hello')..insert(1, 'World');
 /// print(list.value); // Prints ['Hello', 'World']
 /// ```
-class CRDTFugueListHandler<T>
+base class CRDTFugueListHandler<T>
     extends FugueSequenceHandler<T, List<T>, FugueListState<T>> {
   /// Creates a new CRDTFugueList with the given document and ID
   ///

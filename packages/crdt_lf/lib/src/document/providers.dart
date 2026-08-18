@@ -1,7 +1,7 @@
 part of 'document.dart';
 
 /// A consumer that can consume a CRDTDocument
-mixin DocumentConsumer {
+base mixin DocumentConsumer {
   /// The document that `this` can consume
   late final BaseCRDTDocument _document;
 
@@ -31,7 +31,7 @@ mixin DocumentConsumer {
 /// — pick whatever shape makes recomputation cheap.
 ///
 /// Set [useIncrementalCacheUpdate] to false to ignore [incrementCachedState]
-mixin CacheableStateProvider<T> on DocumentConsumer {
+base mixin CacheableStateProvider<T> on DocumentConsumer {
   @override
   String get id;
 
@@ -338,7 +338,7 @@ mixin CacheableStateProvider<T> on DocumentConsumer {
 /// Snapshot state is now a binary blob owned by the consumer. The framework
 /// only frames each blob with a length prefix inside [Snapshot]; the encoding
 /// and decoding of the blob's contents is entirely up to the consumer.
-mixin SnapshotProvider on DocumentConsumer {
+base mixin SnapshotProvider on DocumentConsumer {
   @override
   String get id;
 
