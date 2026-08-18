@@ -1,6 +1,6 @@
 import 'package:crdt_lf/src/document/document.dart';
+import 'package:crdt_lf/src/operation/id.dart';
 import 'package:crdt_lf/src/operation/operation.dart';
-import 'package:crdt_lf/src/operation/stamp.dart';
 
 /// Compound takes a list of [Operation] and compact them.
 class Compound {
@@ -64,7 +64,7 @@ class Compound {
   ///
   /// A handler that does not ask to be stamped folds into an unstamped
   /// operation, exactly as it did before stamps existed.
-  static OperationStamp? _greaterStamp(OperationStamp? a, OperationStamp? b) {
+  static OperationId? _greaterStamp(OperationId? a, OperationId? b) {
     if (a == null) {
       return b;
     }

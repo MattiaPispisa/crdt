@@ -33,6 +33,24 @@ class OperationId with Comparable<OperationId> {
     return OperationId(peerId, hlc);
   }
 
+  /// Reads an [OperationId] embedded in a larger buffer at [offset].
+  ///
+  /// Same bytes as [OperationId.fromUint8List], different failure: this one
+  /// throws a [FormatException] on a buffer that stops inside the record,
+  /// because it reads ids sitting inside a payload — a snapshot blob, an
+  /// operation body — where a short buffer means the input is corrupt rather
+  /// than the caller passing a bad offset. The cursor advances by
+  /// [byteLength], which is fixed.
+  factory OperationId.readFromBytes(
+    Uint8List bytes, {
+    int offset = 0,
+  }) {
+    if (offset < 0 || offset + byteLength > bytes.length) {
+      throw const FormatException('Truncated OperationId');
+    }
+    return OperationId.fromUint8List(bytes, offset: offset);
+  }
+
   /// Parses an [OperationId] from a string representation
   ///
   /// The format is "peerId@hlc" where [hlc] is in the format "l.c"

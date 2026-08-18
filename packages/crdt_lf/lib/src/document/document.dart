@@ -729,7 +729,7 @@ class CRDTDocument extends BaseCRDTDocument {
       // Minting here, before the operation is handed to anyone, is what lets
       // the fold below read the stamp and the change built at commit carry it.
       _tickClock();
-      operation.stamp = OperationStamp(hlc: _clock.copy(), peerId: _peerId);
+      operation.stamp = OperationId(_peerId, _clock.copy());
     }
 
     final openedImplicitTransaction = !isInTransaction;

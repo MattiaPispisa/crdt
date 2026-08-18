@@ -13,8 +13,8 @@ Uint8List _encodeRun(List<String> values) =>
 List<String> _decodeRun(Uint8List blob, int length) =>
     String.fromCharCodes(blob).split('');
 
-OperationStamp _stamp(PeerId peer, int l) =>
-    OperationStamp(hlc: HybridLogicalClock(l: l, c: 0), peerId: peer);
+OperationId _stamp(PeerId peer, int l) =>
+    OperationId(peer, HybridLogicalClock(l: l, c: 0));
 
 /// Appends [values] to [tree], each one after the last.
 void _append(FugueTree<String> tree, PeerId peer, int from, String values) {

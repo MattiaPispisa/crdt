@@ -26,7 +26,6 @@ export 'src/handler/value_codec.dart';
 export 'src/operation/id.dart';
 export 'src/operation/op_id_key.dart';
 export 'src/operation/operation.dart';
-export 'src/operation/stamp.dart';
 export 'src/operation/type.dart';
 export 'src/peer_id.dart';
 export 'src/snapshot/snapshot.dart';

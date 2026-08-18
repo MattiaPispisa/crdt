@@ -14,10 +14,8 @@ void main() {
       counter = PNCounterHandler(doc, 'counter');
     });
 
-    OperationStamp stamp(int clock) => OperationStamp(
-          hlc: HybridLogicalClock(l: clock, c: 0),
-          peerId: doc.peerId,
-        );
+    OperationId stamp(int clock) =>
+        OperationId(doc.peerId, HybridLogicalClock(l: clock, c: 0));
 
     group('stamp', () {
       test('starts unset and takes the first value written', () {

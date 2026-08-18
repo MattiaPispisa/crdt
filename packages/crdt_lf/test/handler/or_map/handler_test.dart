@@ -335,13 +335,13 @@ void main() {
   group('ORMapEntry', () {
     test('equality and hashCode reflect value+tag', () {
       final peer = PeerId.parse('37f1ec87-6ea5-430b-a627-a6b92b56a02d');
-      final tagA = OperationStamp(
-        peerId: peer,
-        hlc: HybridLogicalClock(l: 1, c: 0),
+      final tagA = OperationId(
+        peer,
+        HybridLogicalClock(l: 1, c: 0),
       );
-      final tagB = OperationStamp(
-        peerId: peer,
-        hlc: HybridLogicalClock(l: 2, c: 0),
+      final tagB = OperationId(
+        peer,
+        HybridLogicalClock(l: 2, c: 0),
       );
       final entry1 = ORMapEntry<int>(value: 1, tag: tagA);
       final entry2 = ORMapEntry<int>(value: 1, tag: tagA);
@@ -355,9 +355,9 @@ void main() {
     });
 
     test('identity short-circuit and non-ORMapEntry inequality', () {
-      final tag = OperationStamp(
-        peerId: PeerId.parse('37f1ec87-6ea5-430b-a627-a6b92b56a02d'),
-        hlc: HybridLogicalClock(l: 1, c: 0),
+      final tag = OperationId(
+        PeerId.parse('37f1ec87-6ea5-430b-a627-a6b92b56a02d'),
+        HybridLogicalClock(l: 1, c: 0),
       );
       final entry = ORMapEntry<String>(value: 'x', tag: tag);
       // Compares same instance: triggers identical short-circuit.

@@ -27,7 +27,7 @@ class OperationEnvelope {
 
   /// The stamp the writer minted for this operation; `null` when the handler
   /// does not ask to be stamped.
-  final OperationStamp? stamp;
+  final OperationId? stamp;
 
   /// Offset in the buffer where the body starts.
   final int bodyOffset;
@@ -41,7 +41,7 @@ class OperationEnvelope {
 /// - handlerIdLen: uvarint
 /// - handlerId: utf8
 /// - kind: u8, where bit 7 signals that a stamp follows
-/// - stamp: [OperationStamp.byteLength] bytes, only when bit 7 is set
+/// - stamp: [OperationId.byteLength] bytes, only when bit 7 is set
 /// - body: bytes
 ///
 /// Bit 7 of the kind byte is what caps a kind at [OperationType.maxKind].
@@ -61,7 +61,7 @@ class OperationEnvelopeCodec {
     required String handlerId,
     required int kind,
     required Uint8List body,
-    OperationStamp? stamp,
+    OperationId? stamp,
   }) {
     if (kind < 0 || kind > OperationType.maxKind) {
       throw ArgumentError.value(
@@ -130,10 +130,10 @@ class OperationEnvelopeCodec {
     final rawKind = bytes[offset];
     offset += 1;
 
-    OperationStamp? stamp;
+    OperationId? stamp;
     if (rawKind & _stampFlag != 0) {
-      stamp = OperationStamp.fromUint8List(bytes, offset: offset);
-      offset += OperationStamp.byteLength;
+      stamp = OperationId.readFromBytes(bytes, offset: offset);
+      offset += OperationId.byteLength;
     }
 
     return OperationEnvelope(

@@ -7,8 +7,7 @@ import 'package:test/test.dart';
 
 final _peer = PeerId.parse('45ee6b65-b393-40b7-9755-8b66dc7d0518');
 
-OperationStamp _stamp(int c) =>
-    OperationStamp(hlc: HybridLogicalClock(l: 1, c: c), peerId: _peer);
+OperationId _stamp(int c) => OperationId(_peer, HybridLogicalClock(l: 1, c: c));
 
 void main() {
   group('Compound', () {

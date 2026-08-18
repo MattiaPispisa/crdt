@@ -63,7 +63,7 @@ class FugueTree<T> {
     if (stampsJson != null) {
       for (final entry in stampsJson.entries) {
         tree._stamps[FugueElementID.parse(entry.key)] =
-            OperationStamp.parse(entry.value as String);
+            OperationId.parse(entry.value as String);
       }
     }
 
@@ -84,7 +84,7 @@ class FugueTree<T> {
   /// stays empty for the insert/delete-only workloads, which is the case that
   /// matters — on text there is one node per element, and a stamp on every
   /// node would cost 24 bytes each.
-  final Map<FugueElementID, OperationStamp> _stamps = {};
+  final Map<FugueElementID, OperationId> _stamps = {};
 
   /// Positional index over the in-order sequence of all structural nodes
   /// Answers position↔id and successor queries in `O(√n)`.
@@ -137,8 +137,8 @@ class FugueTree<T> {
   /// The last-writer-wins stamps of the nodes an [update] overwrote.
   ///
   /// Bounded by the live nodes (because [delete] evicts).
-  Map<FugueElementID, OperationStamp> get stamps =>
-      Map<FugueElementID, OperationStamp>.unmodifiable(_stamps);
+  Map<FugueElementID, OperationId> get stamps =>
+      Map<FugueElementID, OperationId>.unmodifiable(_stamps);
 
   /// Seeds an empty tree with [nodes], in sequence order, plus their [stamps].
   ///
@@ -149,7 +149,7 @@ class FugueTree<T> {
   /// whole cost of opening a document from a snapshot.
   void bulkSeed(
     List<FugueValueNode<T>> nodes,
-    Map<FugueElementID, OperationStamp> stamps,
+    Map<FugueElementID, OperationId> stamps,
   ) {
     assert(_nodes.length == 1, 'bulkSeed expects an empty tree');
     if (nodes.isEmpty) {
@@ -358,7 +358,7 @@ class FugueTree<T> {
   /// Overwrites the value of [nodeID] in place, keeping its identity, its
   /// position and its liveness.
   ///
-  /// Last-writer-wins on [stamp]: [OperationStamp] orders by clock first and
+  /// Last-writer-wins on [stamp]: [OperationId] orders by clock first and
   /// by peer second, and the peer is what settles two updates carrying an
   /// identical clock — a case the clock alone cannot order, and where letting
   /// the arrival order decide would leave two peers with different values.
@@ -375,7 +375,7 @@ class FugueTree<T> {
   bool update({
     required FugueElementID nodeID,
     required T value,
-    required OperationStamp stamp,
+    required OperationId stamp,
   }) {
     final triple = _nodes[nodeID];
     if (triple == null || triple.node.isDeleted) {

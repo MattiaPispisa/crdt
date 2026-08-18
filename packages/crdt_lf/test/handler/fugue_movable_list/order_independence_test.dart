@@ -61,7 +61,7 @@ void main() {
   // cached state instead of replaying the history. That is sound only if the
   // state is the same whatever order causally ready changes arrive in.
   //
-  // Every mutation is max-wins on `OperationStamp`: `insert` seeds the two
+  // Every mutation is max-wins on `OperationId`: `insert` seeds the two
   // clocks and never overwrites them, `move` and `update` keep the greater
   // stamp, `delete` is monotone. The tree the positions live in sorts siblings
   // by element id, so it is a function of the operation set alone. These tests

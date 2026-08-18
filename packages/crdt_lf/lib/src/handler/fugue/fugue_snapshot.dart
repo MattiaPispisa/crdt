@@ -18,7 +18,7 @@ class FugueSnapshotData<T> {
   final List<FugueValueNode<T>> nodes;
 
   /// The last-writer-wins stamps of the elements an update overwrote.
-  final Map<FugueElementID, OperationStamp> stamps;
+  final Map<FugueElementID, OperationId> stamps;
 
   /// The highest counter each peer is known to have spent.
   final Map<PeerId, int> floor;
@@ -37,7 +37,7 @@ class FugueSnapshotData<T> {
 /// - `stampCount: uvarint`
 /// - repeated `stampCount` times:
 ///   - `nodeID:` [FugueElementID] bytes
-///   - `stamp:` [OperationStamp.byteLength] bytes
+///   - `stamp:` [OperationId.byteLength] bytes
 /// - `floor:` [ElementIdFloor]
 ///
 /// A **run** is a stretch of live elements, adjacent in sequence order,
@@ -178,12 +178,12 @@ class FugueSnapshot {
     final stampCountRec = UVarint.read(bytes, offset: offset);
     offset = stampCountRec.nextOffset;
 
-    final stamps = <FugueElementID, OperationStamp>{};
+    final stamps = <FugueElementID, OperationId>{};
     for (var i = 0; i < stampCountRec.value; i += 1) {
       final idRec = FugueElementID.readFromBytes(bytes, offset: offset);
       offset = idRec.nextOffset;
-      stamps[idRec.value] = OperationStamp.fromUint8List(bytes, offset: offset);
-      offset += OperationStamp.byteLength;
+      stamps[idRec.value] = OperationId.readFromBytes(bytes, offset: offset);
+      offset += OperationId.byteLength;
     }
 
     return FugueSnapshotData<T>(

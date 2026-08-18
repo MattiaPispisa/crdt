@@ -1,6 +1,6 @@
 import 'package:crdt_lf/src/document/document.dart';
+import 'package:crdt_lf/src/operation/id.dart';
 import 'package:crdt_lf/src/operation/operation.dart';
-import 'package:crdt_lf/src/operation/stamp.dart';
 
 const _insert = 'insert';
 const _delete = 'delete';
@@ -14,7 +14,7 @@ const _move = 'move';
 /// operation: the envelope carries the handler type before it, so two handlers
 /// may use the same byte for two unrelated semantics.
 ///
-/// It also says whether operations of this kind carry an [OperationStamp]
+/// It also says whether operations of this kind carry an [OperationId]
 /// (see [stamped]).
 class OperationType {
   OperationType._({
@@ -168,10 +168,10 @@ class OperationType {
   final int kind;
 
   /// Whether the document marks operations of this kind with an
-  /// [OperationStamp], and the envelope carries it.
+  /// [OperationId], and the envelope carries it.
   ///
   /// A stamp is a unique, totally ordered mark: unique because the document
-  /// ticks its clock before minting one, ordered because [OperationStamp]
+  /// ticks its clock before minting one, ordered because [OperationId]
   /// compares by clock first and by peer second. Handlers use it for two
   /// things:
   ///
@@ -189,7 +189,7 @@ class OperationType {
   /// operation reaches `incrementCachedState` and before the change that
   /// carries it is built.
   ///
-  /// A stamp costs [OperationStamp.byteLength] bytes on the wire, so it sits
+  /// A stamp costs [OperationId.byteLength] bytes on the wire, so it sits
   /// on the kind rather than on the handler: a text `insert` needs neither a
   /// tie-break nor a tag and pays nothing, while `update` on the same handler
   /// does.

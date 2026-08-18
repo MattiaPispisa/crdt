@@ -7,8 +7,8 @@ import 'package:hlc_dart/hlc_dart.dart';
 import 'package:test/test.dart';
 
 /// A stamp written by [peer] at logical time [l].
-OperationStamp _stamp(PeerId peer, int l) =>
-    OperationStamp(hlc: HybridLogicalClock(l: l, c: 0), peerId: peer);
+OperationId _stamp(PeerId peer, int l) =>
+    OperationId(peer, HybridLogicalClock(l: l, c: 0));
 
 void main() {
   group('FugueTree', () {

@@ -118,10 +118,10 @@ class _ORSetRemoveOperation<T> extends Operation {
     final count = countRec.value;
     offset = countRec.nextOffset;
 
-    final tags = <OperationStamp>{};
+    final tags = <OperationId>{};
     for (var i = 0; i < count; i += 1) {
-      tags.add(OperationStamp.fromUint8List(body, offset: offset));
-      offset += OperationStamp.byteLength;
+      tags.add(OperationId.readFromBytes(body, offset: offset));
+      offset += OperationId.byteLength;
     }
 
     if (offset >= body.length) {
@@ -142,20 +142,20 @@ class _ORSetRemoveOperation<T> extends Operation {
   factory _ORSetRemoveOperation.fromHandler(
     CRDTORSetHandler<T> handler, {
     required T value,
-    required Set<OperationStamp> tags,
+    required Set<OperationId> tags,
   }) {
     return _ORSetRemoveOperation<T>(
       id: handler.id,
       type: handler.deleteType,
       value: value,
-      tags: Set<OperationStamp>.from(tags),
+      tags: Set<OperationId>.from(tags),
       removeAll: tags.isEmpty,
       valueCodec: handler._valueCodec,
     );
   }
 
   final T value;
-  final Set<OperationStamp> tags;
+  final Set<OperationId> tags;
   final bool removeAll;
   final ValueCodec<T> valueCodec;
 

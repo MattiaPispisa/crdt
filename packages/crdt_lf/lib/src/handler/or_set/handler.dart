@@ -60,7 +60,7 @@ class CRDTORSetHandler<T> extends Handler<ORSetState<T>> {
 
   /// Adds [value] to the set under a tag of its own.
   ///
-  /// The tag is the [OperationStamp] the document mints for the operation, so
+  /// The tag is the [OperationId] the document mints for the operation, so
   /// two peers adding the same value concurrently produce two tags and the
   /// value survives either removal.
   void add(T value) {
@@ -74,7 +74,7 @@ class CRDTORSetHandler<T> extends Handler<ORSetState<T>> {
   /// Removes [value] from the set by tomb-stoning observed tags.
   void remove(T value) {
     final state = _cachedOrComputedState();
-    final allTags = state._all[value] ?? <OperationStamp>{};
+    final allTags = state._all[value] ?? <OperationId>{};
 
     final operation = _ORSetRemoveOperation<T>.fromHandler(
       this,
@@ -119,10 +119,10 @@ class CRDTORSetHandler<T> extends Handler<ORSetState<T>> {
   /// Computes the tag state by replaying the history.
   ORSetState<T> _computeState() {
     final state = ORSetState<T>._(
-      live: <T, Set<OperationStamp>>{},
-      all: <T, Set<OperationStamp>>{},
+      live: <T, Set<OperationId>>{},
+      all: <T, Set<OperationId>>{},
       snapshotOnly: <T>{},
-      tombstones: <OperationStamp>{},
+      tombstones: <OperationId>{},
     );
 
     final snap = lastSnapshot();
@@ -185,10 +185,10 @@ class CRDTORSetHandler<T> extends Handler<ORSetState<T>> {
     // The stamp is there for every add: the handler is stamped, so the
     // document mints one locally and the decode refuses a change without one.
     final tag = operation.stamp!;
-    state._all.putIfAbsent(operation.value, () => <OperationStamp>{}).add(tag);
+    state._all.putIfAbsent(operation.value, () => <OperationId>{}).add(tag);
     if (!state._tombstones.contains(tag)) {
       state._live
-          .putIfAbsent(operation.value, () => <OperationStamp>{})
+          .putIfAbsent(operation.value, () => <OperationId>{})
           .add(tag);
     }
     // A concrete add overrides snapshot-only presence for this value.
@@ -256,26 +256,26 @@ class ORSetState<T> {
   /// so far while replaying history.
   /// - [_state]: the current state of the OR-Set
   ORSetState._({
-    required Map<T, Set<OperationStamp>> live,
-    required Map<T, Set<OperationStamp>> all,
+    required Map<T, Set<OperationId>> live,
+    required Map<T, Set<OperationId>> all,
     required Set<T> snapshotOnly,
-    required Set<OperationStamp> tombstones,
+    required Set<OperationId> tombstones,
   })  : _tombstones = tombstones,
         _snapshotOnly = snapshotOnly,
         _all = all,
         _live = live;
 
   /// The live tags per value
-  final Map<T, Set<OperationStamp>> _live;
+  final Map<T, Set<OperationId>> _live;
 
   /// The all tags per value
-  final Map<T, Set<OperationStamp>> _all;
+  final Map<T, Set<OperationId>> _all;
 
   /// The snapshot-only values
   final Set<T> _snapshotOnly;
 
   /// The tombstones
-  final Set<OperationStamp> _tombstones;
+  final Set<OperationId> _tombstones;
 
   /// The state of the OR-Set
   Set<T> get _state => <T>{..._live.keys, ..._snapshotOnly};

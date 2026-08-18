@@ -1355,10 +1355,7 @@ void main() {
               handlerType: handler.handlerType,
               handlerId: handler.id,
               kind: OperationType.kindInsert,
-              stamp: OperationStamp(
-                hlc: HybridLogicalClock(l: 100, c: 1),
-                peerId: author,
-              ),
+              stamp: OperationId(author, HybridLogicalClock(l: 100, c: 1)),
               body: body.toBytes(),
             ),
           ),

@@ -16,7 +16,7 @@ part 'operation.dart';
 ///
 /// Conflict resolution combines:
 /// - the Fugue algorithm ([The Art of the Fugue: Minimizing Interleaving in Collaborative Text Editing](https://arxiv.org/abs/2305.00583)) to minimize interleaving;
-/// - a **last-writer-wins register** on [OperationStamp] for the value and
+/// - a **last-writer-wins register** on [OperationId] for the value and
 ///   for the "current position" of each element. Concurrent moves of the same
 ///   element converge to a single winning destination instead of duplicating
 ///   the element, and so do concurrent updates of its value. It is the same
@@ -86,7 +86,7 @@ class CRDTFugueMovableListHandler<T> extends Handler<FugueMovableListState<T>>
   /// into the cached state instead of forcing a replay.
   ///
   /// `insert` seeds an element's two clocks and never overwrites them, `move`
-  /// and `update` keep the greater [OperationStamp], and `delete` is monotone.
+  /// and `update` keep the greater [OperationId], and `delete` is monotone.
   /// The tree the positions live in sorts siblings by element id, so it is a
   /// function of the operation set alone. Until 4.0.0 this was not true: the
   /// two clocks were compared with `happenedAfter`, which is false in both
@@ -198,7 +198,7 @@ class CRDTFugueMovableListHandler<T> extends Handler<FugueMovableListState<T>>
   /// update loses against a concurrent deletion of the same element, and does
   /// nothing when [index] is out of range.
   ///
-  /// The rule is [OperationStamp]: clock first, peer second. It is the same
+  /// The rule is [OperationId]: clock first, peer second. It is the same
   /// one `CRDTFugueTextHandler.update` and `CRDTFugueListHandler.update`
   /// follow — the three handlers no longer have two models between them.
   void update(int index, T value) {
@@ -408,8 +408,8 @@ class CRDTFugueMovableListHandler<T> extends Handler<FugueMovableListState<T>>
   /// - repeated `elementsCount` times:
   ///   - identityID: [FugueElementID] bytes
   ///   - position: [FugueElementID] bytes
-  ///   - positionStamp: [OperationStamp.byteLength] bytes
-  ///   - valueStamp: [OperationStamp.byteLength] bytes
+  ///   - positionStamp: [OperationId.byteLength] bytes
+  ///   - valueStamp: [OperationId.byteLength] bytes
   ///   - deleted: u8 (0/1)
   ///   - valueLen: uvarint
   ///   - value: [ValueCodec] bytes
@@ -474,17 +474,17 @@ class CRDTFugueMovableListHandler<T> extends Handler<FugueMovableListState<T>>
       );
       offset = positionRec.nextOffset;
 
-      final positionStamp = OperationStamp.fromUint8List(
+      final positionStamp = OperationId.readFromBytes(
         snapshot,
         offset: offset,
       );
-      offset += OperationStamp.byteLength;
+      offset += OperationId.byteLength;
 
-      final valueStamp = OperationStamp.fromUint8List(
+      final valueStamp = OperationId.readFromBytes(
         snapshot,
         offset: offset,
       );
-      offset += OperationStamp.byteLength;
+      offset += OperationId.byteLength;
 
       if (offset >= snapshot.length) {
         throw const FormatException(
@@ -626,14 +626,14 @@ class _MovableElement<T> {
   ///
   /// A stamp rather than a clock: two peers can write in the same tick, and
   /// the peer is what settles which of the two wins on both of them.
-  OperationStamp valueStamp;
+  OperationId valueStamp;
 
   /// The position currently associated with this identity, picked by LWW on
   /// concurrent `move`/`insert` operations.
   FugueElementID position;
 
   /// The stamp of the write that put this identity at [position].
-  OperationStamp positionStamp;
+  OperationId positionStamp;
 
   /// Whether this identity has been deleted.
   bool deleted;

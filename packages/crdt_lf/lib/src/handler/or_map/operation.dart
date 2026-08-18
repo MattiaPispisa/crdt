@@ -130,7 +130,7 @@ class _ORMapRemoveOperation<K, V> extends Operation {
   factory _ORMapRemoveOperation.fromHandler(
     CRDTORMapHandler<K, V> handler, {
     required K key,
-    required Set<OperationStamp> tags,
+    required Set<OperationId> tags,
   }) {
     return _ORMapRemoveOperation<K, V>(
       id: handler.id,
@@ -162,10 +162,10 @@ class _ORMapRemoveOperation<K, V> extends Operation {
     final count = countRec.value;
     offset = countRec.nextOffset;
 
-    final tags = <OperationStamp>{};
+    final tags = <OperationId>{};
     for (var i = 0; i < count; i += 1) {
-      tags.add(OperationStamp.fromUint8List(body, offset: offset));
-      offset += OperationStamp.byteLength;
+      tags.add(OperationId.readFromBytes(body, offset: offset));
+      offset += OperationId.byteLength;
     }
 
     if (offset >= body.length) {
@@ -184,7 +184,7 @@ class _ORMapRemoveOperation<K, V> extends Operation {
   }
 
   final K key;
-  final Set<OperationStamp> tags;
+  final Set<OperationId> tags;
   final bool removeAll;
   final ValueCodec<K> keyCodec;
 

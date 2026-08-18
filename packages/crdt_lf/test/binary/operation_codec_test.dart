@@ -8,7 +8,7 @@ final _peer = PeerId.parse('45ee6b65-b393-40b7-9755-8b66dc7d0518');
 
 Uint8List _encode({
   int kind = 0,
-  OperationStamp? stamp,
+  OperationId? stamp,
   List<int> body = const [1, 2, 3],
 }) {
   return OperationEnvelopeCodec.encode(
@@ -32,10 +32,7 @@ void main() {
     });
 
     test('round-trips an envelope with a stamp', () {
-      final stamp = OperationStamp(
-        hlc: HybridLogicalClock(l: 987654321, c: 12),
-        peerId: _peer,
-      );
+      final stamp = OperationId(_peer, HybridLogicalClock(l: 987654321, c: 12));
 
       final envelope = OperationEnvelopeCodec.decode(
         _encode(kind: 3, stamp: stamp),
@@ -46,16 +43,13 @@ void main() {
     });
 
     test('the stamp costs exactly its own bytes, and one flag bit', () {
-      final stamp = OperationStamp(
-        hlc: HybridLogicalClock(l: 1, c: 0),
-        peerId: _peer,
-      );
+      final stamp = OperationId(_peer, HybridLogicalClock(l: 1, c: 0));
       final plain = _encode(kind: 5);
       final stamped = _encode(kind: 5, stamp: stamp);
 
       expect(
         stamped.length - plain.length,
-        equals(OperationStamp.byteLength),
+        equals(OperationId.byteLength),
       );
 
       // The kind byte is the last one before where the stamp starts.
@@ -65,10 +59,7 @@ void main() {
     });
 
     test('the body stays where the offset says, stamp or not', () {
-      final stamp = OperationStamp(
-        hlc: HybridLogicalClock(l: 7, c: 7),
-        peerId: _peer,
-      );
+      final stamp = OperationId(_peer, HybridLogicalClock(l: 7, c: 7));
 
       for (final bytes in [_encode(), _encode(stamp: stamp)]) {
         final envelope = OperationEnvelopeCodec.decode(bytes);
@@ -80,10 +71,7 @@ void main() {
     });
 
     test('raises on a buffer that flags a stamp and stops short of it', () {
-      final stamp = OperationStamp(
-        hlc: HybridLogicalClock(l: 1, c: 0),
-        peerId: _peer,
-      );
+      final stamp = OperationId(_peer, HybridLogicalClock(l: 1, c: 0));
       final full = _encode(stamp: stamp, body: const []);
       final truncated = Uint8List.sublistView(full, 0, full.length - 1);
 

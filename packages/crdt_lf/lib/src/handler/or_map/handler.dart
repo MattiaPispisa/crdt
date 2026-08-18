@@ -66,7 +66,7 @@ class CRDTORMapHandler<K, V> extends Handler<ORMapState<K, V>> {
   ///
   /// Writing a key that already exists adds a new tag rather than replacing
   /// the old one, which is how the key reads back as updated. The tag is the
-  /// [OperationStamp] the document mints for the operation, so two peers
+  /// [OperationId] the document mints for the operation, so two peers
   /// writing the same key concurrently converge on the higher stamp.
   void put(K key, V value) {
     final operation = _ORMapPutOperation<K, V>.fromHandler(
@@ -144,7 +144,7 @@ class CRDTORMapHandler<K, V> extends Handler<ORMapState<K, V>> {
       live: <K, Set<ORMapEntry<V>>>{},
       all: <K, Set<ORMapEntry<V>>>{},
       snapshotOnly: <K, V>{},
-      tombstones: <OperationStamp>{},
+      tombstones: <OperationId>{},
     );
 
     final snap = lastSnapshot();
@@ -292,17 +292,17 @@ class ORMapState<K, V> {
     required Map<K, Set<ORMapEntry<V>>> live,
     required Map<K, Set<ORMapEntry<V>>> all,
     required Map<K, V> snapshotOnly,
-    required Set<OperationStamp> tombstones,
+    required Set<OperationId> tombstones,
   })  : _tombstones = tombstones,
         _snapshotOnly = snapshotOnly,
         _all = all,
         _live = live;
 
   /// Returns all tags for a given key (across all entries)
-  Set<OperationStamp> _allTagsForKey(K key) {
+  Set<OperationId> _allTagsForKey(K key) {
     final allForKey = _all[key];
     if (allForKey == null) {
-      return <OperationStamp>{};
+      return <OperationId>{};
     }
     return allForKey.map((entry) => entry.tag).toSet();
   }
@@ -317,7 +317,7 @@ class ORMapState<K, V> {
   final Map<K, V> _snapshotOnly;
 
   /// The tombstones
-  final Set<OperationStamp> _tombstones;
+  final Set<OperationId> _tombstones;
 
   /// The state of the OR-Map.
   /// For each key with live entries, we pick the entry with the
@@ -362,7 +362,7 @@ class ORMapEntry<V> {
   final V value;
 
   /// The unique tag for this entry
-  final OperationStamp tag;
+  final OperationId tag;
 
   @override
   bool operator ==(Object other) {

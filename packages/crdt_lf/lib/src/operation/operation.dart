@@ -16,7 +16,7 @@ abstract class Operation {
   /// The ID of the handler that owns the operation
   final String id;
 
-  OperationStamp? _stamp;
+  OperationId? _stamp;
 
   /// The stamp of this operation; `null` when its kind is not stamped
   /// (see [OperationType.stamped]).
@@ -24,7 +24,7 @@ abstract class Operation {
   /// Set by the document, in `registerOperation` for a local operation and
   /// from the envelope for one that arrived from another peer. A handler
   /// reads it, it never writes it.
-  OperationStamp? get stamp => _stamp;
+  OperationId? get stamp => _stamp;
 
   /// Assigns the stamp, once.
   ///
@@ -35,7 +35,7 @@ abstract class Operation {
   /// legitimately stamped twice: a local one is minted in `registerOperation`,
   /// a remote one is read off the envelope, and a compound is a fresh
   /// operation.
-  set stamp(OperationStamp? value) {
+  set stamp(OperationId? value) {
     if (_stamp != null) {
       throw StateError(
         'The stamp of ${type.toPayload()} is already set. It is minted once, '
