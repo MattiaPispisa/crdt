@@ -20,6 +20,12 @@ void main() {
       operation = TestOperation.fromHandler(handler);
     });
 
+    /// A fresh operation for every change.
+    ///
+    /// One operation belongs to one change — the change takes its id — so a
+    /// test that wants two changes has to build two operations.
+    Operation newOperation() => TestOperation.fromHandler(handler);
+
     test('constructor creates document with generated peerId and id', () {
       final doc1 = CRDTDocument();
       final doc2 = CRDTDocument();
@@ -60,9 +66,9 @@ void main() {
     });
 
     test('clock increment on createChange', () {
-      doc.createChange(operation);
+      doc.createChange(newOperation());
       final clock1 = doc.hlc;
-      doc.createChange(operation);
+      doc.createChange(newOperation());
       final clock2 = doc.hlc;
 
       expect(clock1, isNot(equals(clock2)));
@@ -123,8 +129,8 @@ void main() {
     });
 
     test('exportChanges returns all changes when no version specified', () {
-      final change1 = doc.createChange(operation);
-      final change2 = doc.createChange(operation);
+      final change1 = doc.createChange(newOperation());
+      final change2 = doc.createChange(newOperation());
 
       final changes = doc.exportChanges();
       expect(changes.length, equals(2));
@@ -132,9 +138,9 @@ void main() {
     });
 
     test('exportChanges returns changes after specified version', () {
-      final change1 = doc.createChange(operation);
-      final change2 = doc.createChange(operation);
-      final change3 = doc.createChange(operation);
+      final change1 = doc.createChange(newOperation());
+      final change2 = doc.createChange(newOperation());
+      final change3 = doc.createChange(newOperation());
 
       final changes = doc.exportChanges(from: {change1.id});
       expect(changes.length, equals(2));
@@ -143,8 +149,8 @@ void main() {
 
     test('exportChangesNewerThan returns only newer changes for same peer', () {
       // create three changes
-      final change1 = doc.createChange(operation);
-      final change2 = doc.createChange(operation);
+      final change1 = doc.createChange(newOperation());
+      final change2 = doc.createChange(newOperation());
 
       final version = VersionVector({author: change1.hlc});
 
@@ -252,7 +258,7 @@ void main() {
       );
 
       // Create a change
-      doc.createChange(operation);
+      doc.createChange(newOperation());
 
       // Wait for the stream to emit
       await expectation;
@@ -267,7 +273,7 @@ void main() {
       ); // Ensure the listener is called exactly once
 
       // Create another change to trigger the listener above
-      doc.createChange(operation);
+      doc.createChange(newOperation());
     });
 
     test('localChanges stream is closed on dispose', () async {
@@ -752,8 +758,8 @@ void main() {
 
     test('toString returns correct string representation', () {
       doc
-        ..createChange(operation)
-        ..createChange(operation);
+        ..createChange(newOperation())
+        ..createChange(newOperation());
 
       expect(
         doc.toString(),
@@ -766,8 +772,8 @@ void main() {
     group('binary round-trips', () {
       test('export and import work correctly', () {
         doc
-          ..createChange(operation)
-          ..createChange(operation);
+          ..createChange(newOperation())
+          ..createChange(newOperation());
 
         final data = doc.binaryExportChanges();
         final newDoc = CRDTDocument();

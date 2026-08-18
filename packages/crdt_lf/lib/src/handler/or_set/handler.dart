@@ -187,9 +187,7 @@ class CRDTORSetHandler<T> extends Handler<ORSetState<T>> {
     final tag = operation.stamp!;
     state._all.putIfAbsent(operation.value, () => <OperationId>{}).add(tag);
     if (!state._tombstones.contains(tag)) {
-      state._live
-          .putIfAbsent(operation.value, () => <OperationId>{})
-          .add(tag);
+      state._live.putIfAbsent(operation.value, () => <OperationId>{}).add(tag);
     }
     // A concrete add overrides snapshot-only presence for this value.
     state._snapshotOnly.remove(operation.value);

@@ -351,16 +351,16 @@ class CRDTDocument extends BaseCRDTDocument {
     _clock.localEvent(pt);
   }
 
-  /// Prepares the system to perform a mutation.
+  /// Moves the document's clock forward, as registering an operation would.
   ///
-  /// What this currently does:
-  /// - updates the document's clock
+  /// Nothing in the library calls it any more: an operation gets its id — and
+  /// with it the tick — in [registerOperation]. It is left public because it
+  /// is the only way to move two documents' clocks level, which is what a test
+  /// needs to make two peers write in the same tick on purpose and exercise
+  /// the tie-break.
   ///
-  /// Call this only when you intend to execute a causal operation,
-  /// not just to update the clock for timekeeping.
-  ///
-  /// Examples of causal operations:
-  /// - creating a tag that references a [HybridLogicalClock]
+  /// Call it only when you mean to spend a clock value. It is not a way to
+  /// keep time.
   @override
   void prepareMutation() {
     _ensureNotDisposed('prepareMutation');
@@ -676,20 +676,31 @@ class CRDTDocument extends BaseCRDTDocument {
     return _dag.versionVector;
   }
 
-  /// Creates a new [Change] from the given [operation]
+  /// Creates a new [Change] carrying [operation].
+  ///
+  /// The change takes the id [registerOperation] already minted for the
+  /// operation. It is not a copy of it — the change id **is** the mark a
+  /// last-writer-wins handler folded into its state, and the two have to be
+  /// the same value or a peer reading the change back would resolve conflicts
+  /// against a different one.
+  ///
+  /// An operation that never went through [registerOperation] has no id yet,
+  /// which is the [createChange] case: it gets one here.
   Change _changeFromOp(
     Operation operation, {
     int? physicalTime,
   }) {
-    _tickClock(physicalTime: physicalTime);
-
-    final id = OperationId(_peerId, _clock.copy());
-    final deps = _dag.frontiers;
+    var id = operation.stamp;
+    if (id == null) {
+      _tickClock(physicalTime: physicalTime);
+      id = OperationId(_peerId, _clock.copy());
+      operation.stamp = id;
+    }
 
     return Change(
       id: id,
-      deps: deps,
-      author: _peerId,
+      deps: _dag.frontiers,
+      author: id.peerId,
       operation: operation,
     );
   }
@@ -699,11 +710,24 @@ class CRDTDocument extends BaseCRDTDocument {
   /// The [Change] is automatically applied to this document.
   ///
   /// Subscribers are notified about the change only on transaction commit.
+  ///
+  /// [operation] must be fresh: one operation belongs to one change, because
+  /// the change takes the operation's id for its own. Passing one that has
+  /// already been through here or through [registerOperation] throws — reusing
+  /// the instance would otherwise rebuild the change it already produced, and
+  /// the document would drop it as a duplicate without a word.
   Change createChange(
     Operation operation, {
     int? physicalTime,
   }) {
     _ensureNotDisposed('createChange');
+
+    if (operation.stamp != null) {
+      throw StateError(
+        'Operation ${operation.type.toPayload()} already belongs to a change '
+        '(${operation.stamp}). Build a new operation for a new change.',
+      );
+    }
 
     final change = _changeFromOp(operation, physicalTime: physicalTime);
     final applied = _internalApplyChange(change);
@@ -721,16 +745,24 @@ class CRDTDocument extends BaseCRDTDocument {
     _ensureNotDisposed('registerOperation');
 
     final handler = _handlers[operation.id];
-    if (operation.type.stamped) {
-      // The tick [prepareMutation] performs, for the same reason: a stamp has
-      // to be strictly newer than everything this peer has already written, or
-      // a second write in the same millisecond would not beat the first.
-      //
-      // Minting here, before the operation is handed to anyone, is what lets
-      // the fold below read the stamp and the change built at commit carry it.
-      _tickClock();
-      operation.stamp = OperationId(_peerId, _clock.copy());
-    }
+
+    // The only place an operation id is minted. The change built at commit
+    // carries this one rather than a fresh one, for two reasons that pull the
+    // same way:
+    //
+    // - the fold below happens **now**, and a stamped handler stores this id
+    //   inside its state; a change carrying a different one would make a peer
+    //   reading it back resolve conflicts against a value nobody folded;
+    // - minting only for stamped kinds would break the replay order. An
+    //   unstamped operation registered before a stamped one would take its id
+    //   at commit, after the stamped one had already taken an earlier one, so
+    //   a change would sort ahead of the change it depends on.
+    //
+    // The tick is what [prepareMutation] does and for the same reason: an id
+    // has to be strictly newer than everything this peer has written, or a
+    // second write in the same millisecond would not beat the first.
+    _tickClock();
+    operation.stamp = OperationId(_peerId, _clock.copy());
 
     final openedImplicitTransaction = !isInTransaction;
 

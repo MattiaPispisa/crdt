@@ -1,5 +1,4 @@
 import 'package:crdt_lf/src/document/document.dart';
-import 'package:crdt_lf/src/operation/id.dart';
 import 'package:crdt_lf/src/operation/operation.dart';
 
 /// Compound takes a list of [Operation] and compact them.
@@ -16,16 +15,26 @@ class Compound {
 
   /// Compact the operations
   ///
-  /// An operation built by folding two others carries the **greater** of their
-  /// stamps. The peer that produced them has already folded each one into its
-  /// own state with its own stamp; a peer that receives the compound folds it
-  /// once, with this one. Since stamps end up **inside** the state, any rule
-  /// other than the greater would leave the two peers holding different
-  /// values.
+  /// The operation left standing keeps an id one of the folded ones already
+  /// had, and takes the **later** one when it has none of its own — a handler
+  /// is free to return a fresh operation or one of the two it was given. Any
+  /// of them works: the folded operations are consecutive, so every id among
+  /// them sorts after the change emitted before the group and before the one
+  /// emitted after it, which is all the replay order asks.
   ///
-  /// Taking the greater is safe because the operations of one transaction on
-  /// one peer are never concurrent with each other: each is stamped after a
-  /// clock tick, so the later one always wins.
+  /// ## A stamped kind is never folded
+  ///
+  /// A compound is one change, so it has one id. A handler that reads
+  /// [Operation.stamp] has already folded each constituent into its state
+  /// under **its own** id, and a peer receiving the compound would fold it
+  /// once under this one. On a compound touching a single target the two agree;
+  /// on one touching several they do not, and the disagreement is invisible
+  /// until a later concurrent write lands between the two ids and wins on one
+  /// peer while losing on the other.
+  ///
+  /// Nothing expresses "N marks in one change", so the combination is refused
+  /// rather than approximated. In debug the [assert] tells a handler author
+  /// why their `compound` is not being called.
   List<Operation> compact() {
     if (_operations.isEmpty) {
       return [];
@@ -40,37 +49,37 @@ class Compound {
     }
 
     for (final operation in _operations.skip(1)) {
-      if (operation.id == accumulator.id && _handlers[operation.id] != null) {
-        final compound =
-            _handlers[operation.id]!.compound(accumulator, operation);
-
-        if (compound == null) {
-          next(operation);
-        } else {
-          compound.stamp = _greaterStamp(accumulator.stamp, operation.stamp);
-          accumulator = compound;
-        }
-      } else {
+      final handler = _handlers[operation.id];
+      if (operation.id != accumulator.id || handler == null) {
         next(operation);
+        continue;
+      }
+
+      if (accumulator.type.stamped || operation.type.stamped) {
+        assert(
+          handler.compound(accumulator, operation) == null,
+          'A stamped kind cannot compound: the compound would be one change '
+          'with one id, where the local fold used one per operation.',
+        );
+        next(operation);
+        continue;
+      }
+
+      final compound = handler.compound(accumulator, operation);
+      if (compound == null) {
+        next(operation);
+      } else {
+        // A fresh operation has no id yet and takes the later one. A handler
+        // is also free to hand back one of the two it was given, and that one
+        // already carries its own — which the write-once setter would refuse
+        // to replace anyway.
+        compound.stamp ??= operation.stamp;
+        accumulator = compound;
       }
     }
 
     next(accumulator);
 
     return result;
-  }
-
-  /// The greater of [a] and [b]; `null` when neither is stamped.
-  ///
-  /// A handler that does not ask to be stamped folds into an unstamped
-  /// operation, exactly as it did before stamps existed.
-  static OperationId? _greaterStamp(OperationId? a, OperationId? b) {
-    if (a == null) {
-      return b;
-    }
-    if (b == null) {
-      return a;
-    }
-    return a.compareTo(b) >= 0 ? a : b;
   }
 }

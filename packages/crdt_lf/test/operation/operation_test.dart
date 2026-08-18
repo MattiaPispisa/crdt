@@ -31,11 +31,11 @@ void main() {
         expect(operation.stamp, equals(stamp(1)));
       });
 
-      // The stamp ends up inside handler state, so an operation restamped
-      // after one peer folded it leaves the two holding different values with
-      // no error anywhere. There is no legitimate second write: local ones are
-      // minted in `registerOperation`, remote ones are read off the envelope,
-      // and a compound is a fresh operation.
+      // The id ends up inside handler state, so an operation restamped after
+      // one peer folded it leaves the two holding different values with no
+      // error anywhere. There is no legitimate second write: local ones are
+      // minted in `registerOperation`, remote ones are read off the change
+      // that carried them, and a compound is a fresh operation.
       test('refuses a second write', () {
         final operation = PNCounterIncrementOperation(
           id: counter.id,
@@ -48,15 +48,21 @@ void main() {
         expect(operation.stamp, equals(stamp(1)));
       });
 
-      test('an operation the document minted refuses to be restamped', () {
+      // Every operation gets an id, whether or not its kind reads one:
+      // the id is what the change is built with, and a kind that declares
+      // itself unstamped simply never looks at it.
+      test('the document mints one for every operation it registers', () {
         counter.increment(2);
 
         final operation = counter.operations().single;
-        expect(operation.stamp, isNull, reason: 'increment is not stamped');
+        expect(counter.incrementType.stamped, isFalse);
+        expect(operation.stamp, isNotNull);
+        expect(
+          operation.stamp,
+          equals(doc.exportChanges().single.id),
+          reason: 'the id of the change carrying it',
+        );
 
-        // Nothing stops the first write on an unstamped kind, but the frame it
-        // produces is refused on decode by the handler that reads it.
-        operation.stamp = stamp(1);
         expect(() => operation.stamp = stamp(2), throwsStateError);
       });
     });

@@ -42,11 +42,12 @@ void main() {
       expect(payloads[2], equals([..._textPrefix, 2, 0, 1, 104]));
     });
 
-    // Which kinds carry a stamp is a local declaration, and getting it wrong
-    // is not an error anywhere: the writer simply spends 24 bytes it does not
-    // need, or drops the tie-break of a kind that does. Pin the ones in
-    // `lib/`, one document per handler that stamps anything.
-    test('only the kinds that resolve a conflict carry a stamp', () {
+    // Which kinds declare themselves stamped is a local decision that costs
+    // no bytes, so nothing about the size of a change would give away a wrong
+    // one. It is not free of consequences though: the declaration is what the
+    // reader checks, and a peer that flips one is refused by every other. Pin
+    // the ones in `lib/`, one document per handler that stamps anything.
+    test('only the kinds that resolve a conflict declare a stamp', () {
       final doc = CRDTDocument(peerId: PeerId.generate());
       CRDTFugueTextHandler(doc, 'fugue-text')
         ..insert(0, 'ab')
@@ -66,7 +67,7 @@ void main() {
       for (final change in doc.exportChanges().sorted()) {
         final envelope = OperationEnvelopeCodec.decode(change.payloadBytes());
         stampedByKind['${envelope.handlerId}/${envelope.kind}'] =
-            envelope.stamp != null;
+            envelope.stamped;
       }
 
       expect(stampedByKind, {
@@ -80,6 +81,39 @@ void main() {
         'movable/${OperationType.kindUpdate}': true,
         'movable/${OperationType.kindDelete}': false,
       });
+    });
+
+    // The reason the declaration is a bit and not a record: the mark a stamped
+    // handler orders by is the id of the change, which the change already
+    // carries. Nothing sits between the kind byte and the body — not for an
+    // unstamped kind, and not for a stamped one either.
+    test('a stamped kind spends no bytes on its stamp', () {
+      final doc = CRDTDocument(peerId: PeerId.generate());
+      final text = CRDTFugueTextHandler(doc, 'text')
+        ..insert(0, 'ab')
+        ..update(0, 'A');
+
+      for (final operation in text.operations()) {
+        final payload = operation.toBytes();
+        final envelope = OperationEnvelopeCodec.decode(payload);
+        final body = operation.toBodyBytes();
+
+        expect(
+          payload.length - body.length,
+          equals(envelope.bodyOffset),
+          reason: '${operation.type.toPayload()} has bytes past the body',
+        );
+        // The kind byte is the last one before the body, stamped or not.
+        expect(
+          payload[envelope.bodyOffset - 1] & OperationType.maxKind,
+          equals(operation.type.kind),
+        );
+      }
+
+      // And the mark is there anyway, taken from the change.
+      final update = text.operations().last;
+      expect(update.type.stamped, isTrue);
+      expect(update.stamp, equals(doc.exportChanges().sorted().last.id));
     });
 
     test('CRDTTextHandler operation bytes roundtrip', () {

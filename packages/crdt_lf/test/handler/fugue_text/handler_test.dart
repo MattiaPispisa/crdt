@@ -152,6 +152,32 @@ void main() {
         expect(text.indexOfStablePosition(caret), equals(3));
       });
 
+      // The change carrying an operation takes the id minted when the
+      // operation was registered, so ids have to be minted for **every**
+      // operation and not only for the stamped ones. Mint them only for the
+      // stamped ones and this transaction breaks: `insert` would take its id
+      // at commit, after `update` had already taken an earlier one, so the
+      // update would sort ahead of the insert it depends on, find no node to
+      // overwrite, and vanish without a word.
+      test('an update sees an insert made earlier in the same transaction', () {
+        final doc = CRDTDocument(peerId: PeerId.generate());
+        final text = CRDTFugueTextHandler(doc, 'text');
+
+        doc.runInTransaction(() {
+          text
+            ..insert(0, 'ab')
+            ..update(0, 'X');
+        });
+
+        expect(text.value, equals('Xb'));
+
+        // And a peer replaying the two changes in sorted order agrees.
+        final remote = CRDTDocument(peerId: PeerId.generate());
+        final remoteText = CRDTFugueTextHandler(remote, 'text');
+        remote.importChanges(doc.exportChanges());
+        expect(remoteText.value, equals('Xb'));
+      });
+
       // An update creates no node, so it must not spend a counter either.
       test('an update spends no element counter', () {
         final doc = CRDTDocument(peerId: PeerId.generate());
@@ -1321,7 +1347,7 @@ void main() {
             isA<FormatException>().having(
               (e) => e.message,
               'message',
-              contains('carries no stamp'),
+              contains('is not declared stamped by'),
             ),
           ),
         );
@@ -1355,7 +1381,7 @@ void main() {
               handlerType: handler.handlerType,
               handlerId: handler.id,
               kind: OperationType.kindInsert,
-              stamp: OperationId(author, HybridLogicalClock(l: 100, c: 1)),
+              stamped: true,
               body: body.toBytes(),
             ),
           ),
@@ -1367,7 +1393,7 @@ void main() {
             isA<FormatException>().having(
               (e) => e.message,
               'message',
-              contains('carries a stamp'),
+              contains('is declared stamped by the'),
             ),
           ),
         );

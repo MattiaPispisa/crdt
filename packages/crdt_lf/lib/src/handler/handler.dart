@@ -141,14 +141,19 @@ abstract class Handler<T>
   /// addressed to another handler.
   ///
   /// The single place the envelope is decoded: it checks the address, hands
-  /// the factory a body it does not have to slice again, and attaches the
-  /// stamp the envelope carried.
+  /// the factory a body it does not have to slice again, and gives the
+  /// operation the id of the change that carried it.
+  ///
+  /// That id **is** the stamp. It costs no bytes of its own, and it is the
+  /// same value the writing peer folded into its own state, because the
+  /// document mints it in `registerOperation` and the change is built with it
+  /// rather than with a fresh one.
   ///
   /// Both halves of a disagreement about [OperationType.stamped] are refused
-  /// here. The flag is a local declaration, so two builds can disagree about
-  /// the same kind; either way the peers would resolve a conflict by two
-  /// different rules and end up holding different values, with nothing to show
-  /// for it.
+  /// here. The flag is a local declaration — only the writer's bit travels —
+  /// so two builds can disagree about the same kind; either way the peers
+  /// would resolve a conflict by two different rules and end up holding
+  /// different values, with nothing to show for it.
   @override
   Operation? _operationFromChange(Change change) {
     final bytes = change.payloadBytes();
@@ -161,24 +166,23 @@ abstract class Handler<T>
     final body = Uint8List.sublistView(bytes, envelope.bodyOffset);
     final operation = operationFactory(envelope, body);
 
-    if (operation.type.stamped && envelope.stamp == null) {
+    if (operation.type.stamped && !envelope.stamped) {
       throw FormatException(
-        'Operation ${operation.type.toPayload()} carries no stamp, but this '
-        'kind resolves conflicts with one. The change was written by a peer '
-        'that does not stamp it.',
+        'Operation ${operation.type.toPayload()} is not declared stamped by '
+        'the peer that wrote it, but this kind resolves conflicts with a '
+        'stamp here.',
       );
     }
 
-    if (!operation.type.stamped && envelope.stamp != null) {
+    if (!operation.type.stamped && envelope.stamped) {
       throw FormatException(
-        'Operation ${operation.type.toPayload()} carries a stamp, but this '
-        'build does not stamp that kind. The change was written by a peer '
-        'that resolves it by last-writer-wins, and this one would ignore the '
-        'stamp.',
+        'Operation ${operation.type.toPayload()} is declared stamped by the '
+        'peer that wrote it, but this build does not stamp that kind and '
+        'would resolve it by another rule.',
       );
     }
 
-    return operation..stamp = envelope.stamp;
+    return operation..stamp = change.id;
   }
 
   /// Returns the [Operation]s required by this consumer to compute its state.

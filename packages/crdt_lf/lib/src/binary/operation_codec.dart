@@ -10,7 +10,7 @@ class OperationEnvelope {
     required this.handlerId,
     required this.kind,
     required this.bodyOffset,
-    this.stamp,
+    this.stamped = false,
   });
 
   /// Handler runtime type string (as in [OperationType.handler]).
@@ -19,15 +19,20 @@ class OperationEnvelope {
   /// Handler instance id (as in [Operation.id]).
   final String handlerId;
 
-  /// Operation kind, with the stamp flag already stripped.
+  /// Operation kind, with the stamped flag already stripped.
   ///
   /// Only meaningful together with [handlerType]: the same value means
   /// different things for two different handlers.
   final int kind;
 
-  /// The stamp the writer minted for this operation; `null` when the handler
-  /// does not ask to be stamped.
-  final OperationId? stamp;
+  /// Whether the peer that wrote this operation reads a stamp for its kind
+  /// (see [OperationType.stamped]).
+  ///
+  /// The stamp itself is not here — it is the id of the change carrying the
+  /// operation. This is the writer's **declaration**, and the only thing that
+  /// catches two builds disagreeing about a kind: without it the reader would
+  /// quietly resolve conflicts by a different rule.
+  final bool stamped;
 
   /// Offset in the buffer where the body starts.
   final int bodyOffset;
@@ -40,35 +45,34 @@ class OperationEnvelope {
 /// - handlerType: utf8
 /// - handlerIdLen: uvarint
 /// - handlerId: utf8
-/// - kind: u8, where bit 7 signals that a stamp follows
-/// - stamp: [OperationId.byteLength] bytes, only when bit 7 is set
+/// - kind: u8, where bit 7 declares the kind stamped
 /// - body: bytes
 ///
-/// Bit 7 of the kind byte is what caps a kind at [OperationType.maxKind].
+/// Bit 7 of the kind byte is what caps a kind at [OperationType.maxKind]. It
+/// costs no bytes of its own: a stamped operation is marked, not carried,
+/// because the mark it needs is the id of the change it travels in.
 class OperationEnvelopeCodec {
-  static const int _stampFlag = 0x80;
+  static const int _stampedFlag = 0x80;
 
   /// Encodes an [OperationEnvelope] into a byte array.
   ///
-  /// Passing a [stamp] sets bit 7 of the kind byte and writes the stamp right
-  /// after it. Leaving it out produces the same bytes as a build that knows
-  /// nothing about stamps.
+  /// [stamped] sets bit 7 of the kind byte. It adds no bytes.
   ///
   /// Throws an [ArgumentError] when [kind] does not fit in the seven bits
-  /// left by the stamp flag.
+  /// left by the stamped flag.
   static Uint8List encode({
     required String handlerType,
     required String handlerId,
     required int kind,
     required Uint8List body,
-    OperationId? stamp,
+    bool stamped = false,
   }) {
     if (kind < 0 || kind > OperationType.maxKind) {
       throw ArgumentError.value(
         kind,
         'kind',
         'must be in 0..${OperationType.maxKind}, because bit 7 of the kind '
-            'byte signals the presence of a stamp',
+            'byte declares the kind stamped',
       );
     }
 
@@ -82,21 +86,15 @@ class OperationEnvelopeCodec {
     UVarint.write(handlerIdBytes.length, out);
     out
       ..add(handlerIdBytes)
-      ..addByte(stamp == null ? kind : kind | _stampFlag);
-
-    if (stamp != null) {
-      out.add(stamp.toUint8List());
-    }
-
-    out.add(body);
+      ..addByte(stamped ? kind | _stampedFlag : kind)
+      ..add(body);
 
     return out.toBytes();
   }
 
   /// Decodes an [OperationEnvelope] from a byte array.
   ///
-  /// Throws a [FormatException] on a buffer that ends inside the envelope,
-  /// including one that flags a stamp and then stops short of it.
+  /// Throws a [FormatException] on a buffer that ends inside the envelope.
   static OperationEnvelope decode(Uint8List bytes) {
     var offset = 0;
 
@@ -130,17 +128,11 @@ class OperationEnvelopeCodec {
     final rawKind = bytes[offset];
     offset += 1;
 
-    OperationId? stamp;
-    if (rawKind & _stampFlag != 0) {
-      stamp = OperationId.readFromBytes(bytes, offset: offset);
-      offset += OperationId.byteLength;
-    }
-
     return OperationEnvelope(
       handlerType: handlerType,
       handlerId: handlerId,
       kind: rawKind & OperationType.maxKind,
-      stamp: stamp,
+      stamped: rawKind & _stampedFlag != 0,
       bodyOffset: offset,
     );
   }
