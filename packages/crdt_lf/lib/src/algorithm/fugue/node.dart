@@ -38,8 +38,7 @@ class FugueNode<T> {
 
   /// Value of the node; `null` only on the root, which stands for no element.
   ///
-  /// A tombstone keeps the value it held. Reading it means checking [deleted]
-  /// first: a value here does not say the node is part of the sequence.
+  /// [value] survives a deletion, and a node out of the sequence still has one.
   T? value;
 
   /// ID of the parent node
@@ -49,13 +48,7 @@ class FugueNode<T> {
   final FugueSide side;
 
   /// Whether this node is a tombstone.
-  ///
-  /// This is the only thing that says so. [value] survives a deletion, and a
-  /// node out of the sequence still has one.
   bool deleted;
-
-  /// Checks if the node has been deleted
-  bool get isDeleted => deleted;
 
   /// Serializes the node to JSON format
   Map<String, dynamic> toJson() => {

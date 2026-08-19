@@ -21,7 +21,7 @@ void main() {
       expect(node.value, 'a');
       expect(node.parentID, parentId);
       expect(node.side, FugueSide.right);
-      expect(node.isDeleted, false);
+      expect(node.deleted, false);
     });
 
     test('should mark node as deleted', () {
@@ -37,12 +37,12 @@ void main() {
         side: FugueSide.right,
       );
 
-      expect(node.isDeleted, false);
+      expect(node.deleted, false);
 
       // The value is what the element comes back with, so deletion says so
       // on its own instead of throwing the value away.
       node.deleted = true;
-      expect(node.isDeleted, true);
+      expect(node.deleted, true);
       expect(node.value, equals('a'));
     });
 

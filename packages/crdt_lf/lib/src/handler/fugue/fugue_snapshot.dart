@@ -130,12 +130,8 @@ class FugueSnapshot {
     out.add(runs.toBytes());
 
     _writeStamps(tree.stamps, out);
-    // Left empty on purpose: nothing reads a liveness stamp yet, and writing
-    // one costs 42 bytes per tombstone — 45x the whole blob on a document
-    // where half the elements are gone. The table is in the format so the
-    // build that does read them can fill it without moving a byte anyone
-    // else depends on. A tombstone with no stamp loses to anything, which is
-    // the answer a restore wants anyway.
+    // liveness stamps are not written by this build but is expected
+    // to prevent a future build from reading them, so we write an empty table.
     _writeStamps(const {}, out);
 
     ElementIdFloor.write(floor, out);

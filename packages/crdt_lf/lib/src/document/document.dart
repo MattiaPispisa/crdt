@@ -739,17 +739,13 @@ class CRDTDocument extends BaseCRDTDocument {
 
     final handler = _handlers[operation.id];
 
-    // The only place an operation id is minted. The change built at commit
-    // carries this one rather than a fresh one, for two reasons that pull the
-    // same way:
+    // This is the only place that mints an operation id. At commit, the
+    // `Change` reuses this id instead of minting a fresh one.
     //
-    // - the fold below happens **now**, and a stamped handler stores this id
-    //   inside its state; a change carrying a different one would make a peer
-    //   reading it back resolve conflicts against a value nobody folded;
-    // - minting only for stamped kinds would break the replay order. An
-    //   unstamped operation registered before a stamped one would take its id
-    //   at commit, after the stamped one had already taken an earlier one, so
-    //   a change would sort ahead of the change it depends on.
+    // - The fold below runs right now, before commit. A stamped handler
+    //   saves this id into its state at that moment. The `Change` must
+    //   carry the same id, or the wire and the handler's state would
+    //   disagree about which id was actually folded;
     //
     // The tick is what [prepareMutation] does and for the same reason: an id
     // has to be strictly newer than everything this peer has written, or a

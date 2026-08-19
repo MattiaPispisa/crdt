@@ -15,20 +15,10 @@ class Compound {
 
   /// Compact the operations
   ///
-  /// The operation left standing keeps an id one of the folded ones already
-  /// had, and takes the **later** one when it has none of its own — a handler
-  /// is free to return a fresh operation or one of the two it was given. Any
-  /// of them works: the folded operations are consecutive, so every id among
-  /// them sorts after the change emitted before the group and before the one
-  /// emitted after it, which is all the replay order asks.
-  ///
   /// ## A stamped kind is never folded
   ///
   /// Operations of a kind that reads [Operation.stamp] are left alone, and a
-  /// `compound` that folds one anyway fails an assertion in debug. A compound
-  /// is one change and carries one id, so folding several stamped operations
-  /// would replace their marks with a single one, and the peers that already
-  /// folded them separately would keep resolving conflicts by the old marks.
+  /// `compound` that folds one anyway fails an assertion in debug.
   List<Operation> compact() {
     if (_operations.isEmpty) {
       return [];
@@ -49,6 +39,10 @@ class Compound {
         continue;
       }
 
+      // A compound is one change and carries one id,
+      // so folding several stamped operations would replace their marks
+      // with a single one, and the peers that already
+      // folded them separately would keep resolving conflicts by the old marks.
       if (accumulator.type.stamped || operation.type.stamped) {
         assert(
           handler.compound(accumulator, operation) == null,

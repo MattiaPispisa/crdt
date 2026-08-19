@@ -203,11 +203,6 @@ base mixin CacheableStateProvider<T> on DocumentConsumer {
     }
     var state = _cachedState as T;
 
-    // The queue was emptied above and [_queueRemoteChanges] already pinned the
-    // version past these changes. Letting a throw escape with the old state
-    // still in place would make the next read answer from a cache that silently
-    // lags the document. Drop it first, so that read replays the history and
-    // fails the same way instead.
     try {
       for (final change in pending) {
         final operation = _operationFromChange(change);

@@ -88,10 +88,6 @@ class FugueTree<T> {
 
   /// The last-writer-wins stamp of the nodes whose value has been overwritten
   /// in place by [update].
-  ///
-  /// A node still carrying the value it was inserted with has no entry, and
-  /// loses against any update. Only overwritten nodes are stored, so the map
-  /// stays empty on an insert/delete-only workload.
   final Map<FugueElementID, OperationId> _stamps = {};
 
   /// The greatest stamp among the commands that took a node out of the
@@ -432,27 +428,21 @@ class FugueTree<T> {
   /// Overwrites the value of [nodeID] in place, keeping its identity, its
   /// position and its liveness.
   ///
-  /// Last-writer-wins on [stamp]: [OperationId] orders by clock first and
-  /// by peer second, and the peer is what settles two updates carrying an
-  /// identical clock — a case the clock alone cannot order, and where letting
-  /// the arrival order decide would leave two peers with different values.
-  /// Re-applying the same update is therefore a no-op.
+  /// Last-writer-wins on [stamp] (more details in [OperationId.compareTo]).
   ///
   /// Refuses unknown and tombstoned nodes. A deletion is monotone, so an
   /// update that loses the race against one — or that arrives after the
   /// tombstone has been dropped by a snapshot — must not bring the element
   /// back.
   ///
-  /// Returns whether [value] won. The positional index is deliberately left
-  /// untouched: neither liveness nor traversal order changes, so it stays
-  /// valid and the call is `O(1)`.
+  /// Returns whether [value] won.
   bool update({
     required FugueElementID nodeID,
     required T value,
     required OperationId stamp,
   }) {
     final triple = _nodes[nodeID];
-    if (triple == null || triple.node.isDeleted) {
+    if (triple == null || triple.node.deleted) {
       return false;
     }
 
@@ -646,7 +636,7 @@ class FugueTree<T> {
     if (rank == -1) {
       return null;
     }
-    return triple.node.isDeleted ? rank : rank + 1;
+    return triple.node.deleted ? rank : rank + 1;
   }
 
   /// Finds the next node after [nodeID] in the traversal, tombstones included,
