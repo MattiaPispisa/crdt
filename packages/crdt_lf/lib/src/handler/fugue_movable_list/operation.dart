@@ -6,24 +6,20 @@ class _FugueMovableListOperationFactory<T> {
 
   final CRDTFugueMovableListHandler<T> handler;
 
-  /// Decodes an operation from its binary envelope.
-  Operation fromBytes(OperationEnvelope env, Uint8List body) {
-    if (env.kind == OperationType.kindInsert) {
-      return _MovableListInsertOperation<T>.fromBodyBytes(handler, body);
-    } else if (env.kind == OperationType.kindMove) {
-      return _MovableListMoveOperation<T>.fromBodyBytes(handler, body);
-    } else if (env.kind == OperationType.kindUpdate) {
-      return _MovableListUpdateOperation<T>.fromBodyBytes(handler, body);
-    } else if (env.kind == OperationType.kindDelete) {
-      return _MovableListDeleteOperation<T>.fromBodyBytes(handler, body);
-    }
+  late final OperationDecoders _decoders = {
+    OperationType.kindInsert: (body) =>
+        _MovableListInsertOperation<T>.fromBodyBytes(handler, body),
+    OperationType.kindMove: (body) =>
+        _MovableListMoveOperation<T>.fromBodyBytes(handler, body),
+    OperationType.kindUpdate: (body) =>
+        _MovableListUpdateOperation<T>.fromBodyBytes(handler, body),
+    OperationType.kindDelete: (body) =>
+        _MovableListDeleteOperation<T>.fromBodyBytes(handler, body),
+  };
 
-    throw UnknownOperationKindException(
-      handlerType: env.handlerType,
-      handlerId: env.handlerId,
-      kind: env.kind,
-    );
-  }
+  /// Decodes an operation from its binary envelope.
+  Operation fromBytes(OperationEnvelope env, Uint8List body) =>
+      decodeOperation(env, body, _decoders);
 }
 
 /// Batch insert: introduces a contiguous run of new identities anchored at

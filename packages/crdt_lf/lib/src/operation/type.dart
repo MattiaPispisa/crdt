@@ -10,9 +10,9 @@ const _move = 'move';
 /// The kind of change an operation applies, scoped to the handler that owns it.
 ///
 /// Holds the binary kind written in the operation envelope (u8) together with
-/// the handler type it belongs to. The kind alone never identifies an
-/// operation: the envelope carries the handler type before it, so two handlers
-/// may use the same byte for two unrelated semantics.
+/// the handler type it belongs to. **The kind alone never identifies an
+/// operation**: the envelope carries the handler type before it,
+/// so two handlers may use the same byte for two unrelated semantics.
 ///
 /// It also says whether operations of this kind carry an [OperationId]
 /// (see [stamped]).
@@ -134,28 +134,6 @@ class OperationType {
 
   /// Binary kind value for move (u8 in the operation envelope).
   static const int kindMove = 3;
-
-  /// The conventional name of [kind] for the four values every handler uses
-  /// the same way, or `null` beyond them.
-  ///
-  /// Returns `null` past those four: the meaning of a higher kind depends on
-  /// the handler type that precedes it in the envelope, so a total
-  /// `kind -> name` function is not expressible.
-  static String? wellKnownName(int kind) {
-    if (kind == kindInsert) {
-      return _insert;
-    }
-    if (kind == kindDelete) {
-      return _delete;
-    }
-    if (kind == kindUpdate) {
-      return _update;
-    }
-    if (kind == kindMove) {
-      return _move;
-    }
-    return null;
-  }
 
   /// Handler type
   final String handler;

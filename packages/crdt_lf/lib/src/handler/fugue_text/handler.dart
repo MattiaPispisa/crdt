@@ -5,6 +5,7 @@ import 'package:crdt_lf/src/algorithm/fugue/tree.dart';
 import 'package:crdt_lf/src/algorithm/fugue/value_node.dart';
 import 'package:crdt_lf/src/handler/fugue/fugue_sequence_handler.dart';
 import 'package:crdt_lf/src/handler/handler_type.dart';
+import 'package:crdt_lf/src/handler/operation_decoding.dart';
 
 part 'operation.dart';
 

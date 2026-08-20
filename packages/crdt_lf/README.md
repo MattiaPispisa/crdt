@@ -894,7 +894,7 @@ Renamed or removed symbols:
 | 3.x | 4.0 | Note |
 |---|---|---|
 | `ORHandlerTag` | `OperationId` | The tie-break is the id of the change carrying the operation. A handler no longer writes its own, and it costs no bytes. |
-| `OperationType.typeNameFromKind` | `OperationType.wellKnownName` | Returns `null` past the four conventional kinds instead of throwing. |
+| `OperationType.typeNameFromKind` | removed | No caller anywhere in the monorepo; `OperationType.type` already carries the name. |
 | `OperationType.fromPayload` | removed | The payload string is a debug format and never carried a kind. |
 | `OperationFactory` | `Operation Function(OperationEnvelope envelope, Uint8List body)` | Was raw bytes. It also returns a non-nullable `Operation`, and raises `UnknownOperationKindException` instead of returning `null`. |
 | `FugueTree`, `FugueNode`, `FugueNodeTriple`, `FugueValueNode` | no longer exported | Implementation detail of the two Fugue sequence handlers. `FugueElementID` is still public. |

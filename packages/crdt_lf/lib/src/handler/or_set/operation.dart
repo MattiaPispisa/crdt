@@ -4,19 +4,15 @@ class _ORSetOperationFactory<T> {
   _ORSetOperationFactory(this.handler);
   final CRDTORSetHandler<T> handler;
 
-  Operation fromBytes(OperationEnvelope env, Uint8List body) {
-    if (env.kind == OperationType.kindInsert) {
-      return _ORSetAddOperation<T>.fromBodyBytes(handler, body);
-    } else if (env.kind == OperationType.kindDelete) {
-      return _ORSetRemoveOperation<T>.fromBodyBytes(handler, body);
-    }
+  late final OperationDecoders _decoders = {
+    OperationType.kindInsert: (body) =>
+        _ORSetAddOperation<T>.fromBodyBytes(handler, body),
+    OperationType.kindDelete: (body) =>
+        _ORSetRemoveOperation<T>.fromBodyBytes(handler, body),
+  };
 
-    throw UnknownOperationKindException(
-      handlerType: env.handlerType,
-      handlerId: env.handlerId,
-      kind: env.kind,
-    );
-  }
+  Operation fromBytes(OperationEnvelope env, Uint8List body) =>
+      decodeOperation(env, body, _decoders);
 }
 
 /// Add operation for OR-Set

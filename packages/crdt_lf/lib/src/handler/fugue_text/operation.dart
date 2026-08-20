@@ -8,22 +8,18 @@ class _FugueTextOperationFactory {
   /// The handler associated with this factory
   final Handler<dynamic> handler;
 
-  /// Creates an operation from bytes.
-  Operation fromBytes(OperationEnvelope env, Uint8List body) {
-    if (env.kind == OperationType.kindInsert) {
-      return _FugueTextInsertOperation.fromBodyBytes(handler, body);
-    } else if (env.kind == OperationType.kindDelete) {
-      return _FugueTextDeleteOperation.fromBodyBytes(handler, body);
-    } else if (env.kind == OperationType.kindUpdate) {
-      return _FugueTextUpdateOperation.fromBodyBytes(handler, body);
-    }
+  late final OperationDecoders _decoders = {
+    OperationType.kindInsert: (body) =>
+        _FugueTextInsertOperation.fromBodyBytes(handler, body),
+    OperationType.kindDelete: (body) =>
+        _FugueTextDeleteOperation.fromBodyBytes(handler, body),
+    OperationType.kindUpdate: (body) =>
+        _FugueTextUpdateOperation.fromBodyBytes(handler, body),
+  };
 
-    throw UnknownOperationKindException(
-      handlerType: env.handlerType,
-      handlerId: env.handlerId,
-      kind: env.kind,
-    );
-  }
+  /// Creates an operation from bytes.
+  Operation fromBytes(OperationEnvelope env, Uint8List body) =>
+      decodeOperation(env, body, _decoders);
 }
 
 /// Batch insert operation for the Fugue algorithm

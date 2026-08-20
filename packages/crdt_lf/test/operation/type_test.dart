@@ -145,31 +145,5 @@ void main() {
         );
       });
     });
-
-    group('wellKnownName', () {
-      test('names the four conventional kinds', () {
-        expect(
-          OperationType.wellKnownName(OperationType.kindInsert),
-          equals('insert'),
-        );
-        expect(
-          OperationType.wellKnownName(OperationType.kindDelete),
-          equals('delete'),
-        );
-        expect(
-          OperationType.wellKnownName(OperationType.kindUpdate),
-          equals('update'),
-        );
-        expect(
-          OperationType.wellKnownName(OperationType.kindMove),
-          equals('move'),
-        );
-      });
-
-      test('returns null past them, because the meaning is handler-scoped', () {
-        expect(OperationType.wellKnownName(4), isNull);
-        expect(OperationType.wellKnownName(99), isNull);
-      });
-    });
   });
 }

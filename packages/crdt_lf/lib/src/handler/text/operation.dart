@@ -4,21 +4,17 @@ class _TextOperationFactory {
   _TextOperationFactory(this.handler);
   final Handler<dynamic> handler;
 
-  Operation fromBytes(OperationEnvelope env, Uint8List body) {
-    if (env.kind == OperationType.kindInsert) {
-      return _TextInsertOperation.fromBodyBytes(handler, body);
-    } else if (env.kind == OperationType.kindDelete) {
-      return _TextDeleteOperation.fromBodyBytes(handler, body);
-    } else if (env.kind == OperationType.kindUpdate) {
-      return _TextUpdateOperation.fromBodyBytes(handler, body);
-    }
+  late final OperationDecoders _decoders = {
+    OperationType.kindInsert: (body) =>
+        _TextInsertOperation.fromBodyBytes(handler, body),
+    OperationType.kindDelete: (body) =>
+        _TextDeleteOperation.fromBodyBytes(handler, body),
+    OperationType.kindUpdate: (body) =>
+        _TextUpdateOperation.fromBodyBytes(handler, body),
+  };
 
-    throw UnknownOperationKindException(
-      handlerType: env.handlerType,
-      handlerId: env.handlerId,
-      kind: env.kind,
-    );
-  }
+  Operation fromBytes(OperationEnvelope env, Uint8List body) =>
+      decodeOperation(env, body, _decoders);
 }
 
 class _TextInsertOperation extends Operation {

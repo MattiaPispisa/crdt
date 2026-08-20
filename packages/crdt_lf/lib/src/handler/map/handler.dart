@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:crdt_lf/crdt_lf.dart';
+import 'package:crdt_lf/src/handler/operation_decoding.dart';
 import 'package:crdt_lf/src/snapshot/blob_version.dart';
 
 part 'operation.dart';

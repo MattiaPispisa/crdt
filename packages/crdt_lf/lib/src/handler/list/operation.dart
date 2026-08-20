@@ -4,21 +4,17 @@ class _ListOperationFactory<T> {
   _ListOperationFactory(this.handler);
   final CRDTListHandler<T> handler;
 
-  Operation fromBytes(OperationEnvelope env, Uint8List body) {
-    if (env.kind == OperationType.kindInsert) {
-      return _ListInsertOperation<T>.fromBodyBytes(handler, body);
-    } else if (env.kind == OperationType.kindDelete) {
-      return _ListDeleteOperation<T>.fromBodyBytes(handler, body);
-    } else if (env.kind == OperationType.kindUpdate) {
-      return _ListUpdateOperation<T>.fromBodyBytes(handler, body);
-    }
+  late final OperationDecoders _decoders = {
+    OperationType.kindInsert: (body) =>
+        _ListInsertOperation<T>.fromBodyBytes(handler, body),
+    OperationType.kindDelete: (body) =>
+        _ListDeleteOperation<T>.fromBodyBytes(handler, body),
+    OperationType.kindUpdate: (body) =>
+        _ListUpdateOperation<T>.fromBodyBytes(handler, body),
+  };
 
-    throw UnknownOperationKindException(
-      handlerType: env.handlerType,
-      handlerId: env.handlerId,
-      kind: env.kind,
-    );
-  }
+  Operation fromBytes(OperationEnvelope env, Uint8List body) =>
+      decodeOperation(env, body, _decoders);
 }
 
 class _ListInsertOperation<T> extends Operation {

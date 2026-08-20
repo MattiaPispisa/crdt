@@ -5,6 +5,7 @@ import 'package:crdt_lf/src/algorithm/fugue/tree.dart';
 import 'package:crdt_lf/src/algorithm/fugue/value_node.dart';
 import 'package:crdt_lf/src/handler/fugue/element_id_floor.dart';
 import 'package:crdt_lf/src/handler/fugue/fugue_cache.dart';
+import 'package:crdt_lf/src/handler/operation_decoding.dart';
 import 'package:crdt_lf/src/snapshot/blob_version.dart';
 
 part 'operation.dart';
