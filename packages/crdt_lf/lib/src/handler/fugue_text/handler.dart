@@ -246,9 +246,6 @@ class FugueTextState extends FugueState<String, String> {
     return FugueTextState._(FugueTree<String>.empty());
   }
 
-  // Collects into a list and joins it. A `StringBuffer` skips the list of N
-  // one-rune strings and still measures slower: `join` walks the list once to
-  // add up the lengths and fills a single allocation, while a buffer grows as
-  // it writes.
+  // Collects into a list and joins it.
   static String _join(FugueTree<String> tree) => tree.values().join();
 }

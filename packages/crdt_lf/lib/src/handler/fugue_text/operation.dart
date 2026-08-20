@@ -242,9 +242,6 @@ class _FugueTextUpdateOperation extends Operation {
   ///   - nodeID: [FugueElementID] bytes
   ///   - textLen: uvarint
   ///   - text: wtf8 bytes
-  ///
-  /// The mark that settles two concurrent updates is not in the body; it is
-  /// the operation's [Operation.stamp].
   factory _FugueTextUpdateOperation.fromBodyBytes(
     Handler<dynamic> handler,
     Uint8List body,

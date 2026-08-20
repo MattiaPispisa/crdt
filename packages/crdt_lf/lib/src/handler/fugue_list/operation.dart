@@ -252,9 +252,6 @@ class _FugueListUpdateOperation<T> extends Operation {
   ///   - nodeID: [FugueElementID] bytes
   ///   - valueLen: uvarint
   ///   - value: [ValueCodec] bytes
-  ///
-  /// The mark that settles two concurrent updates is not in the body; it is
-  /// the operation's [Operation.stamp].
   factory _FugueListUpdateOperation.fromBodyBytes(
     CRDTFugueListHandler<T> handler,
     Uint8List body,

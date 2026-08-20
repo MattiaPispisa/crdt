@@ -72,9 +72,6 @@ class FugueSnapshotData<T> {
 /// them. See `FugueSequenceHandler.encodeRun`.
 class FugueSnapshot {
   /// The version this build writes and is the only one it reads.
-  ///
-  /// It covers this blob only. The `Snapshot` wrapper carries a version of
-  /// its own.
   static const int version = 1;
 
   /// Encodes the whole sequence of [tree], tombstones included, plus [floor].

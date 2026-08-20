@@ -92,7 +92,7 @@ document costs 5.27 ms instead of 3.74 ms: twice the nodes to seed.
 
 **Date:** 2026-07-26
 
-Documentation release: refreshes the CHANGELOG and docs published on pub.dev. No functional changes since `3.4.2`.
+- Documentation release: refreshes the CHANGELOG and docs published on pub.dev. No functional changes since `3.4.2`.
 
 ## [3.4.2](https://github.com/MattiaPispisa/crdt/tree/crdt_lf-v3.4.2/packages/crdt_lf)
 
@@ -121,13 +121,13 @@ Documentation release: refreshes the CHANGELOG and docs published on pub.dev. No
 
 **Date:** 2026-07-19
 
-Documentation release: refreshes the CHANGELOG and docs published on pub.dev. No functional changes since `3.4.0`.
+- Documentation release: refreshes the CHANGELOG and docs published on pub.dev. No functional changes since `3.4.0`.
 
 ## [3.4.0+1](https://github.com/MattiaPispisa/crdt/tree/crdt_lf-v3.4.0+1/packages/crdt_lf)
 
 **Date:** 2026-07-18
 
-Documentation release: refreshes the CHANGELOG and docs published on pub.dev. No functional changes since `3.4.0`.
+- Documentation release: refreshes the CHANGELOG and docs published on pub.dev. No functional changes since `3.4.0`.
 
 ## [3.4.0](https://github.com/MattiaPispisa/crdt/tree/crdt_lf-v3.4.0/packages/crdt_lf)
 
