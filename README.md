@@ -58,7 +58,7 @@ Every shared command lives in [`melos.yaml`](./melos.yaml) and runs with
 | `format` | formats the code (80 characters per line) |
 | `analyze` | runs the analyzer with warnings and infos as errors |
 | `test` / `test_flutter` / `test_chrome` | runs the Dart, Flutter and web tests |
-| `benchmark` | runs the `crdt_lf` benchmarks |
+| `benchmark` | runs the benchmarks of every package with a `benchmarks/` folder |
 | `devtools_build` | builds the DevTools extension |
 | `docs_bs` / `docs_build` | bootstraps and builds the documentation site |
 | `update_references` | propagates package/app references into the READMEs |
@@ -110,6 +110,7 @@ workspace/
 │   │       ├── crdt_lf_hive/
 │   │       └── crdt_lf_sqlite/
 │   └── _internal/ # private, unpublished packages
+│       ├── benchmark_infrastructure/
 │       └── shared_examples_infrastructure/
 ├── apps/ # contains the applications built on top of the packages
 │   └── greyhound_markdown/
