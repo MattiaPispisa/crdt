@@ -26,7 +26,7 @@ void main() {
       logger.error('No package directory found for "$pubName"');
       badExit();
     }
-    final packageDir = packagesDir(subParts: [dir]);
+    final packageDir = packagesDir(subParts: dir);
 
     _updateReadme(
       io.File(path.join(packageDir.path, 'README.md')),
@@ -89,18 +89,17 @@ const _packagePubNames = <String>[
   'crdt_lf_sqlite',
 ];
 
-/// Maps every package's pub.dev name to its directory under `packages/`.
-Map<String, String> _pubNameToDir() {
-  final map = <String, String>{};
+/// Maps every package's pub.dev name to its path segments relative to
+/// `packages/` (e.g. `['core', 'crdt_lf']`, `['adapters', 'persistence',
+/// 'drift']`).
+Map<String, List<String>> _pubNameToDir() {
+  final map = <String, List<String>>{};
 
-  for (final dir in packagesDir().listSync().whereType<io.Directory>()) {
+  for (final dir in packageDirs()) {
     final pubspec = io.File(path.join(dir.path, 'pubspec.yaml'));
-    if (!pubspec.existsSync()) {
-      continue;
-    }
     final name = YamlReader(pubspec).stringOrNull('name');
     if (name != null) {
-      map[name] = path.basename(dir.path);
+      map[name] = path.split(path.relative(dir.path, from: packagesDir().path));
     }
   }
   return map;
@@ -191,7 +190,7 @@ void _updateReadme(io.File readme, String block) {
 /// CHANGELOG stanza.
 void _cutDocumentationRelease({
   required String pubName,
-  required String dir,
+  required List<String> dir,
   required io.File pubspec,
   required io.File changelog,
 }) {
@@ -212,7 +211,7 @@ void _cutDocumentationRelease({
   );
 
   final stanza = '## [$next](https://github.com/MattiaPispisa/crdt/tree/'
-      '$pubName-v$next/packages/$dir)\n'
+      '$pubName-v$next/packages/${dir.join('/')})\n'
       '\n'
       '**Date:** ${_today()}\n'
       '\n'

@@ -28,14 +28,14 @@
 
 ## Packages
 
-- [hlc](./packages/hlc/README.md)
-- [crdt_lf](./packages/crdt_lf/README.md)
-- [crdt_socket_sync](./packages/crdt_socket_sync/README.md)
-- [crdt_lf_flutter](./packages/crdt_lf_flutter/README.md)
-- [crdt_lf_devtools_extension](./packages/crdt_lf_devtools_extension/README.md)
-- [crdt_lf_hive](./packages/crdt_lf_hive/README.md)
-- [crdt_lf_sqlite](./packages/crdt_lf_sqlite/README.md)
-- [crdt_lf_drift](./packages/crdt_lf_drift/README.md)
+- [hlc](./packages/core/hlc/README.md)
+- [crdt_lf](./packages/core/crdt_lf/README.md)
+- [crdt_socket_sync](./packages/core/crdt_socket_sync/README.md)
+- [crdt_lf_flutter](./packages/core/crdt_lf_flutter/README.md)
+- [crdt_lf_devtools_extension](./packages/core/crdt_lf_devtools_extension/README.md)
+- [crdt_lf_hive](./packages/adapters/persistence/crdt_lf_hive/README.md)
+- [crdt_lf_sqlite](./packages/adapters/persistence/crdt_lf_sqlite/README.md)
+- [crdt_lf_drift](./packages/adapters/persistence/crdt_lf_drift/README.md)
 
 ## [Roadmap](https://github.com/users/MattiaPispisa/projects/1)
 A roadmap is available in the [project](https://github.com/users/MattiaPispisa/projects/1) page. The roadmap provides a high-level overview of the project's goals and the current status of the project.
@@ -98,14 +98,19 @@ The repository structure is organized as follows:
 workspace/
 ├── melos.yaml # melos configuration file
 ├── packages/ # contains every package of the workspace
-│   ├── crdt_lf/
-│   │   ├── lib/
-│   │   ├── example/
-│   │   └── flutter_example/
-│   └── .../
-│       ├── lib/
-│       ├── example/
-│       └── flutter_example/
+│   ├── core/ # the CRDT engine and its bindings
+│   │   ├── crdt_lf/
+│   │   │   ├── lib/
+│   │   │   ├── example/
+│   │   │   └── flutter_example/
+│   │   └── .../
+│   ├── adapters/
+│   │   └── persistence/ # storage backends for crdt_lf
+│   │       ├── crdt_lf_drift/
+│   │       ├── crdt_lf_hive/
+│   │       └── crdt_lf_sqlite/
+│   └── _internal/ # private, unpublished packages
+│       └── shared_examples_infrastructure/
 ├── apps/ # contains the applications built on top of the packages
 │   └── greyhound_markdown/
 │       ├── client/

@@ -11,9 +11,9 @@
 </div>
 
 Real-time collaborative markdown editor built on
-[`crdt_lf`](../../packages/crdt_lf),
-[`crdt_lf_flutter`](../../packages/crdt_lf_flutter) and the **relay mode** of
-[`crdt_socket_sync`](../../packages/crdt_socket_sync).
+[`crdt_lf`](../../packages/core/crdt_lf),
+[`crdt_lf_flutter`](../../packages/core/crdt_lf_flutter) and the **relay mode** of
+[`crdt_socket_sync`](../../packages/core/crdt_socket_sync).
 
 - `client/` — Flutter web app (editor + live preview, shared cursors). It
   uses the package's `WebSocketRelayClient` and `ClientAwarenessPlugin`
@@ -39,7 +39,7 @@ Wire protocol: the `crdt_socket_sync` relay protocol (JSON envelopes typed by
 integer codes, CRDT binary blobs as base64). The server (`server/src/`)
 speaks hello/welcome, push/ack, changes, snapshotUpload/compaction, ping/pong
 and awareness (100–102) — see
-[Implementing a relay server](../../packages/crdt_socket_sync/README.md#implementing-a-relay-server)
+[Implementing a relay server](../../packages/core/crdt_socket_sync/README.md#implementing-a-relay-server)
 for the message contract to keep in sync. The client has no hand-rolled
 protocol: it drives `WebSocketRelayClient` from the package.
 

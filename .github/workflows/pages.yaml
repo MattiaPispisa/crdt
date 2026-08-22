@@ -52,7 +52,7 @@ jobs:
       # --- Build the Flutter web examples ---
       # base-href must match where the app is served: <baseUrl>/examples/.
       - name: 🛠️ Build Flutter web examples
-        working-directory: packages/crdt_lf/flutter_example
+        working-directory: packages/core/crdt_lf/flutter_example
         run: flutter build web --release --base-href "/crdt/examples/"
 
       # --- Build the Greyhound Markdown web client ---
@@ -82,7 +82,7 @@ jobs:
           cp -R docs/build/. _site/
           # Flutter example under /examples.
           mkdir -p _site/examples
-          cp -R packages/crdt_lf/flutter_example/build/web/. _site/examples/
+          cp -R packages/core/crdt_lf/flutter_example/build/web/. _site/examples/
           # Greyhound Markdown client under /greyhound_markdown.
           mkdir -p _site/greyhound_markdown
           cp -R apps/greyhound_markdown/client/build/web/. _site/greyhound_markdown/
