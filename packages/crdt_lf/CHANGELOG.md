@@ -8,7 +8,8 @@
 
 - Text handlers index by runes (code points), not UTF-16 code units. [106](https://github.com/MattiaPispisa/crdt/issues/106)
 - New operation layer: a handler declares its own operation kinds, and every last-writer-wins handler
-  settles ties with the id of the change carrying the operation. [129](https://github.com/MattiaPispisa/crdt/issues/129)
+  settles ties with the id of the change carrying the operation. A handler decodes them by overriding
+  `operationDecoders`, a plain kind-to-decoder map, instead of implementing dispatch by hand. [129](https://github.com/MattiaPispisa/crdt/issues/129)
 - `update` on `CRDTFugueTextHandler` and `CRDTFugueListHandler` keeps the identity of the element
   instead of replacing it. [127](https://github.com/MattiaPispisa/crdt/issues/127)
 - `Snapshot` carries a schema version, and so does every per-handler blob inside it. [130](https://github.com/MattiaPispisa/crdt/issues/130)

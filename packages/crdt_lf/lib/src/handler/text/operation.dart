@@ -1,22 +1,5 @@
 part of 'handler.dart';
 
-class _TextOperationFactory {
-  _TextOperationFactory(this.handler);
-  final Handler<dynamic> handler;
-
-  late final OperationDecoders _decoders = {
-    OperationType.kindInsert: (body) =>
-        _TextInsertOperation.fromBodyBytes(handler, body),
-    OperationType.kindDelete: (body) =>
-        _TextDeleteOperation.fromBodyBytes(handler, body),
-    OperationType.kindUpdate: (body) =>
-        _TextUpdateOperation.fromBodyBytes(handler, body),
-  };
-
-  Operation fromBytes(OperationEnvelope env, Uint8List body) =>
-      decodeOperation(env, body, _decoders);
-}
-
 class _TextInsertOperation extends Operation {
   _TextInsertOperation({
     required this.index,

@@ -1,19 +1,5 @@
 part of 'handler.dart';
 
-class _RegisterOperationFactory<T> {
-  _RegisterOperationFactory(this.handler);
-
-  final CRDTRegisterHandler<T> handler;
-
-  late final OperationDecoders _decoders = {
-    OperationType.kindInsert: (body) =>
-        _RegisterSetOperation<T>.fromBodyBytes(handler, body),
-  };
-
-  Operation fromBytes(OperationEnvelope env, Uint8List body) =>
-      decodeOperation(env, body, _decoders);
-}
-
 /// A single "set the value" operation. The register has only one operation
 /// kind (encoded as `insert`); conflict resolution is last-writer-wins by HLC.
 class _RegisterSetOperation<T> extends Operation {

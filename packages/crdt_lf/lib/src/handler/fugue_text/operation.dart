@@ -1,27 +1,5 @@
 part of 'handler.dart';
 
-/// Factory for Fugue operations
-class _FugueTextOperationFactory {
-  /// Constructor that initializes the factory
-  _FugueTextOperationFactory(this.handler);
-
-  /// The handler associated with this factory
-  final Handler<dynamic> handler;
-
-  late final OperationDecoders _decoders = {
-    OperationType.kindInsert: (body) =>
-        _FugueTextInsertOperation.fromBodyBytes(handler, body),
-    OperationType.kindDelete: (body) =>
-        _FugueTextDeleteOperation.fromBodyBytes(handler, body),
-    OperationType.kindUpdate: (body) =>
-        _FugueTextUpdateOperation.fromBodyBytes(handler, body),
-  };
-
-  /// Creates an operation from bytes.
-  Operation fromBytes(OperationEnvelope env, Uint8List body) =>
-      decodeOperation(env, body, _decoders);
-}
-
 /// Batch insert operation for the Fugue algorithm
 class _FugueTextInsertOperation extends Operation {
   /// Constructor that initializes a batch insert operation

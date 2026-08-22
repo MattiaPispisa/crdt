@@ -25,9 +25,9 @@ abstract class Operation {
   /// Set by the document. A handler reads it, it never writes it. Whether a
   /// handler reads it at all is [OperationType.stamped].
   ///
-  /// It costs nothing on the wire: the change already carries its id, so a
-  /// stamped kind spends one bit in the envelope to declare itself and no
-  /// bytes to carry the value.
+  // It costs nothing on the wire: the change already carries its id, so a
+  // stamped kind spends one bit in the envelope to declare itself and no
+  // bytes to carry the value.
   OperationId? get stamp => _stamp;
 
   /// Assigns the id, once.
@@ -49,16 +49,14 @@ abstract class Operation {
   /// Encodes the operation as bytes.
   ///
   /// This is the representation used inside [Change] to optimize memory usage.
-  ///
-  /// The envelope declares whether the kind is stamped and does not carry the
-  /// stamp, so this does not depend on [stamp] and works on an operation the
-  /// document has not seen yet.
   Uint8List toBytes() {
     final body = toBodyBytes();
     return OperationEnvelopeCodec.encode(
       handlerType: type.handler,
       handlerId: id,
       kind: type.kind,
+      // The envelope declares whether the kind is stamped
+      // and does not carry the stamp.
       stamped: type.stamped,
       body: body,
     );

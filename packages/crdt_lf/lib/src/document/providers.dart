@@ -98,7 +98,7 @@ base mixin CacheableStateProvider<T> on DocumentConsumer {
   ///
   /// Used to drain [_pendingRemoteChanges]; `null` makes the framework fall
   /// back to a full recompute. [Handler] implements it with its
-  /// [Handler.operationFactory].
+  /// [Handler.operationDecoders].
   Operation? _operationFromChange(Change change);
 
   /// Records the newest change, in replay order, folded into the cached state.

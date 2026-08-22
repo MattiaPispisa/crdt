@@ -343,7 +343,7 @@ already out there.
 
 A handler overrides:
 
-- `id` and `operationFactory` — required: how the handler is addressed, and
+- `id` and `operationDecoders` — required: how the handler is addressed, and
   how its operations are decoded.
 - `getSnapshotState` — required: the state as bytes, seeded back through
   `lastSnapshot`.
@@ -875,7 +875,7 @@ agreed.
 **Most of the table below is harmless if you never persisted a document and
 never wrote a custom handler.** With no stored bytes there is nothing a 4.0
 peer can refuse to open, and the operation-layer rows (`ORHandlerTag`,
-`OperationFactory`, `OperationType`, `incrementCachedState`) only reach code
+`OperationDecoders`, `OperationType`, `incrementCachedState`) only reach code
 that implements `Handler` itself. Peers still have to upgrade together: a 3.x
 and a 4.0 client talking live break the same way.
 
@@ -896,7 +896,7 @@ Renamed or removed symbols:
 | `ORHandlerTag` | `OperationId` | The tie-break is the id of the change carrying the operation. A handler no longer writes its own, and it costs no bytes. |
 | `OperationType.typeNameFromKind` | removed | No caller anywhere in the monorepo; `OperationType.type` already carries the name. |
 | `OperationType.fromPayload` | removed | The payload string is a debug format and never carried a kind. |
-| `OperationFactory` | `Operation Function(OperationEnvelope envelope, Uint8List body)` | Was raw bytes. It also returns a non-nullable `Operation`, and raises `UnknownOperationKindException` instead of returning `null`. |
+| a `fromBytes(bytes)` a handler implemented by hand | `OperationDecoders operationDecoders` | Was raw bytes decoded by whatever a handler wrote. Now a `Map<int, Operation Function(Uint8List body)>` keyed by the operation's kind byte: the framework looks the kind up itself and raises `UnknownOperationKindException` on a miss, instead of a handler returning `null` or hand-rolling the same check. |
 | `FugueTree`, `FugueNode`, `FugueNodeTriple`, `FugueValueNode` | no longer exported | Implementation detail of the two Fugue sequence handlers. `FugueElementID` is still public. |
 | `update` on `CRDTFugueTextHandler` / `CRDTFugueListHandler` (delete + insert) | `update` keeps the element's identity | For the old behavior, ask for it: `doc.runInTransaction(() { text..delete(index, count)..insert(index, replacement); });` |
 | `incrementCachedState({required operation, required state})` | adds an optional `DeltaSink<Object?>? sink` | Always `null` today; an override has to declare the parameter, even unused. |

@@ -107,13 +107,13 @@ base class _StampedRegister extends Handler<int> {
   String get id => _id;
 
   @override
-  late final OperationFactory operationFactory = _fromBytes;
-
-  Operation _fromBytes(OperationEnvelope env, Uint8List body) => _StampedWrite(
-        id: id,
-        type: writeType,
-        value: UVarint.read(body, offset: 0).value,
-      );
+  late final OperationDecoders operationDecoders = {
+    writeType.kind: (body) => _StampedWrite(
+          id: id,
+          type: writeType,
+          value: UVarint.read(body, offset: 0).value,
+        ),
+  };
 
   late final OperationType writeType = OperationType.custom(
     this,

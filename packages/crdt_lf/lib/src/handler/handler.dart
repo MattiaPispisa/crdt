@@ -1,17 +1,11 @@
 part of '../document/document.dart';
 
-/// A factory function that builds an operation from an already-decoded
-/// [envelope] and its [body].
+/// A per-kind decoder, keyed by [OperationEnvelope.kind].
 ///
-/// The [envelope] is already known to address this handler, so a factory only
-/// has to dispatch on [OperationEnvelope.kind]. It always returns an
-/// operation: there is no kind it may quietly decline.
-///
-/// Throws [UnknownOperationKindException] on a kind this build cannot decode.
-typedef OperationFactory = Operation Function(
-  OperationEnvelope envelope,
-  Uint8List body,
-);
+/// A decoder is only handed the body: by the time one runs, the envelope has
+/// already been confirmed to address this handler, and the body has already
+/// been sliced out of the change's payload.
+typedef OperationDecoders = Map<int, Operation Function(Uint8List body)>;
 
 /// Abstract class for CRDT handlers
 ///
@@ -26,8 +20,8 @@ typedef OperationFactory = Operation Function(
 ///
 /// A custom handler overrides:
 ///
-/// - [id] and [operationFactory] — required: how the handler is addressed and
-///   how its operations are decoded.
+/// - [id] and [operationDecoders] — required: how the handler is addressed
+///   and how its operations are decoded.
 /// - [getSnapshotState] — required: the state as bytes, seeded back through
 ///   [lastSnapshot].
 /// - [handlerType] — for a handler that must survive dart2js minification.
@@ -69,10 +63,11 @@ abstract base class Handler<T>
 
   final String? _handlerType;
 
-  /// The factory function that creates an operation from a decoded envelope.
+  /// The decoders this handler owns, keyed by [OperationEnvelope.kind].
   ///
-  /// See [OperationFactory] for the contract.
-  OperationFactory get operationFactory;
+  /// A kind not in this map is refused with [UnknownOperationKindException]
+  /// when a change carrying it is decoded.
+  OperationDecoders get operationDecoders;
 
   /// Stable identifier of this handler's **type**.
   ///
@@ -136,11 +131,28 @@ abstract base class Handler<T>
   /// Otherwise, return `null`.
   Operation? compound(Operation accumulator, Operation current) => null;
 
+  /// Looks up [envelope]'s kind in [operationDecoders] and returns what it
+  /// decodes to.
+  ///
+  /// Throws [UnknownOperationKindException] on a kind this handler cannot
+  /// decode.
+  Operation _decodeOperation(OperationEnvelope envelope, Uint8List body) {
+    final decode = operationDecoders[envelope.kind];
+    if (decode == null) {
+      throw UnknownOperationKindException(
+        handlerType: envelope.handlerType,
+        handlerId: envelope.handlerId,
+        kind: envelope.kind,
+      );
+    }
+    return decode(body);
+  }
+
   /// Decodes the operation [change] carries, or `null` when the change is
   /// addressed to another handler.
   ///
   /// The single place the envelope is decoded: it checks the address, hands
-  /// the factory a body it does not have to slice again, and gives the
+  /// [_decodeOperation] a body it does not have to slice again, and gives the
   /// operation the id of the change that carried it.
   ///
   /// That id **is** the stamp, so it is the same value the writing peer
@@ -159,7 +171,7 @@ abstract base class Handler<T>
     }
 
     final body = Uint8List.sublistView(bytes, envelope.bodyOffset);
-    final operation = operationFactory(envelope, body);
+    final operation = _decodeOperation(envelope, body);
 
     if (operation.type.stamped && !envelope.stamped) {
       throw FormatException(

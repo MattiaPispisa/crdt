@@ -345,7 +345,7 @@ void main() {
       expect(doc.exportChanges().length, equals(before));
     });
 
-    test('operation bytes round-trip via operationFactory', () {
+    test('operation bytes round-trip via operationDecoders', () {
       final doc = CRDTDocument(peerId: PeerId.generate());
       final list = CRDTFugueMovableListHandler<String>(doc, 'l')
         ..insert(0, 'a')

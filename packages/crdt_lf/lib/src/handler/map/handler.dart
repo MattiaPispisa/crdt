@@ -2,7 +2,6 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:crdt_lf/crdt_lf.dart';
-import 'package:crdt_lf/src/handler/operation_decoding.dart';
 import 'package:crdt_lf/src/snapshot/blob_version.dart';
 
 part 'operation.dart';
@@ -46,8 +45,14 @@ base class CRDTMapHandler<T> extends Handler<Map<String, T>> {
   final ValueCodec<T> _valueCodec;
 
   @override
-  late final OperationFactory operationFactory =
-      _MapOperationFactory<T>(this).fromBytes;
+  late final OperationDecoders operationDecoders = {
+    OperationType.kindInsert: (body) =>
+        _MapInsertOperation<T>.fromBodyBytes(this, body),
+    OperationType.kindDelete: (body) =>
+        _MapDeleteOperation<T>.fromBodyBytes(this, body),
+    OperationType.kindUpdate: (body) =>
+        _MapUpdateOperation<T>.fromBodyBytes(this, body),
+  };
 
   @override
   String get id => _id;

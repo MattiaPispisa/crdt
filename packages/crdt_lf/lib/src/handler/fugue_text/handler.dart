@@ -5,7 +5,6 @@ import 'package:crdt_lf/src/algorithm/fugue/tree.dart';
 import 'package:crdt_lf/src/algorithm/fugue/value_node.dart';
 import 'package:crdt_lf/src/handler/fugue/fugue_sequence_handler.dart';
 import 'package:crdt_lf/src/handler/handler_type.dart';
-import 'package:crdt_lf/src/handler/operation_decoding.dart';
 
 part 'operation.dart';
 
@@ -42,8 +41,14 @@ base class CRDTFugueTextHandler
   String get handlerType => kFugueTextHandlerType;
 
   @override
-  late final OperationFactory operationFactory =
-      _FugueTextOperationFactory(this).fromBytes;
+  late final OperationDecoders operationDecoders = {
+    OperationType.kindInsert: (body) =>
+        _FugueTextInsertOperation.fromBodyBytes(this, body),
+    OperationType.kindDelete: (body) =>
+        _FugueTextDeleteOperation.fromBodyBytes(this, body),
+    OperationType.kindUpdate: (body) =>
+        _FugueTextUpdateOperation.fromBodyBytes(this, body),
+  };
 
   /// Inserts [text] at position [index], **in runes**
   void insert(int index, String text) {

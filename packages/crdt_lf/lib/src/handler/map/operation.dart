@@ -1,22 +1,5 @@
 part of 'handler.dart';
 
-class _MapOperationFactory<T> {
-  _MapOperationFactory(this.handler);
-  final CRDTMapHandler<T> handler;
-
-  late final OperationDecoders _decoders = {
-    OperationType.kindInsert: (body) =>
-        _MapInsertOperation<T>.fromBodyBytes(handler, body),
-    OperationType.kindDelete: (body) =>
-        _MapDeleteOperation<T>.fromBodyBytes(handler, body),
-    OperationType.kindUpdate: (body) =>
-        _MapUpdateOperation<T>.fromBodyBytes(handler, body),
-  };
-
-  Operation fromBytes(OperationEnvelope env, Uint8List body) =>
-      decodeOperation(env, body, _decoders);
-}
-
 class _MapInsertOperation<T> extends Operation {
   _MapInsertOperation({
     required this.key,

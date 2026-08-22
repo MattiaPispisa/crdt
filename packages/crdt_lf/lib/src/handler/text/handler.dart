@@ -3,7 +3,6 @@ import 'dart:typed_data';
 
 import 'package:crdt_lf/crdt_lf.dart';
 import 'package:crdt_lf/src/handler/handler_type.dart';
-import 'package:crdt_lf/src/handler/operation_decoding.dart';
 import 'package:crdt_lf/src/snapshot/blob_version.dart';
 
 part 'operation.dart';
@@ -45,8 +44,14 @@ base class CRDTTextHandler extends Handler<String> {
   String get handlerType => kTextHandlerType;
 
   @override
-  late final OperationFactory operationFactory =
-      _TextOperationFactory(this).fromBytes;
+  late final OperationDecoders operationDecoders = {
+    OperationType.kindInsert: (body) =>
+        _TextInsertOperation.fromBodyBytes(this, body),
+    OperationType.kindDelete: (body) =>
+        _TextDeleteOperation.fromBodyBytes(this, body),
+    OperationType.kindUpdate: (body) =>
+        _TextUpdateOperation.fromBodyBytes(this, body),
+  };
 
   /// Inserts [text] at the specified [index], counted **in runes**
   void insert(int index, String text) {

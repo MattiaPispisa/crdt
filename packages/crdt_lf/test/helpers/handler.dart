@@ -19,8 +19,9 @@ final class TestHandler extends Handler<dynamic> {
   }
 
   @override
-  OperationFactory get operationFactory =>
-      (env, body) => TestOperation.fromHandler(this);
+  late final OperationDecoders operationDecoders = {
+    OperationType.kindInsert: (body) => TestOperation.fromHandler(this),
+  };
 }
 
 /// A test operation for CRDT operations

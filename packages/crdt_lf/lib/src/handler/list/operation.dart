@@ -1,22 +1,5 @@
 part of 'handler.dart';
 
-class _ListOperationFactory<T> {
-  _ListOperationFactory(this.handler);
-  final CRDTListHandler<T> handler;
-
-  late final OperationDecoders _decoders = {
-    OperationType.kindInsert: (body) =>
-        _ListInsertOperation<T>.fromBodyBytes(handler, body),
-    OperationType.kindDelete: (body) =>
-        _ListDeleteOperation<T>.fromBodyBytes(handler, body),
-    OperationType.kindUpdate: (body) =>
-        _ListUpdateOperation<T>.fromBodyBytes(handler, body),
-  };
-
-  Operation fromBytes(OperationEnvelope env, Uint8List body) =>
-      decodeOperation(env, body, _decoders);
-}
-
 class _ListInsertOperation<T> extends Operation {
   _ListInsertOperation({
     required this.index,

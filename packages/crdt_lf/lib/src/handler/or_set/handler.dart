@@ -1,7 +1,6 @@
 import 'dart:typed_data';
 
 import 'package:crdt_lf/crdt_lf.dart';
-import 'package:crdt_lf/src/handler/operation_decoding.dart';
 import 'package:crdt_lf/src/snapshot/blob_version.dart';
 
 part 'operation.dart';
@@ -48,8 +47,12 @@ base class CRDTORSetHandler<T> extends Handler<ORSetState<T>> {
   String get id => _id;
 
   @override
-  late final OperationFactory operationFactory =
-      _ORSetOperationFactory<T>(this).fromBytes;
+  late final OperationDecoders operationDecoders = {
+    OperationType.kindInsert: (body) =>
+        _ORSetAddOperation<T>.fromBodyBytes(this, body),
+    OperationType.kindDelete: (body) =>
+        _ORSetRemoveOperation<T>.fromBodyBytes(this, body),
+  };
 
   /// The stamp of an `add` is the tag it stores for the added value.
   @override

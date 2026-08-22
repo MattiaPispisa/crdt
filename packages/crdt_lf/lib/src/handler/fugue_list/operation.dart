@@ -1,27 +1,5 @@
 part of 'handler.dart';
 
-/// Factory for Fugue list operations
-class _FugueListOperationFactory<T> {
-  /// Constructor that initializes the factory
-  _FugueListOperationFactory(this.handler);
-
-  /// The handler associated with this factory
-  final CRDTFugueListHandler<T> handler;
-
-  late final OperationDecoders _decoders = {
-    OperationType.kindInsert: (body) =>
-        _FugueListInsertOperation<T>.fromBodyBytes(handler, body),
-    OperationType.kindDelete: (body) =>
-        _FugueListDeleteOperation<T>.fromBodyBytes(handler, body),
-    OperationType.kindUpdate: (body) =>
-        _FugueListUpdateOperation<T>.fromBodyBytes(handler, body),
-  };
-
-  /// Creates an operation from bytes.
-  Operation fromBytes(OperationEnvelope env, Uint8List body) =>
-      decodeOperation(env, body, _decoders);
-}
-
 /// Batch insert operation for the Fugue list
 class _FugueListInsertOperation<T> extends Operation {
   /// Constructor that initializes a batch insert operation

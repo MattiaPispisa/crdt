@@ -4,7 +4,6 @@ import 'package:crdt_lf/crdt_lf.dart';
 import 'package:crdt_lf/src/algorithm/fugue/tree.dart';
 import 'package:crdt_lf/src/algorithm/fugue/value_node.dart';
 import 'package:crdt_lf/src/handler/fugue/fugue_sequence_handler.dart';
-import 'package:crdt_lf/src/handler/operation_decoding.dart';
 
 part 'operation.dart';
 
@@ -49,8 +48,14 @@ base class CRDTFugueListHandler<T>
   final ValueCodec<T> _valueCodec;
 
   @override
-  late final OperationFactory operationFactory =
-      _FugueListOperationFactory<T>(this).fromBytes;
+  late final OperationDecoders operationDecoders = {
+    OperationType.kindInsert: (body) =>
+        _FugueListInsertOperation<T>.fromBodyBytes(this, body),
+    OperationType.kindDelete: (body) =>
+        _FugueListDeleteOperation<T>.fromBodyBytes(this, body),
+    OperationType.kindUpdate: (body) =>
+        _FugueListUpdateOperation<T>.fromBodyBytes(this, body),
+  };
 
   /// Inserts [value] at position [index]
   ///

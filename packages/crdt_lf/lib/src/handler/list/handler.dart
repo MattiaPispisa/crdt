@@ -1,6 +1,5 @@
 import 'dart:typed_data';
 import 'package:crdt_lf/crdt_lf.dart';
-import 'package:crdt_lf/src/handler/operation_decoding.dart';
 import 'package:crdt_lf/src/snapshot/blob_version.dart';
 
 part 'operation.dart';
@@ -36,8 +35,14 @@ base class CRDTListHandler<T> extends Handler<List<T>> {
   }) : _valueCodec = valueCodec ?? JsonValueCodec<T>();
 
   @override
-  late final OperationFactory operationFactory =
-      _ListOperationFactory<T>(this).fromBytes;
+  late final OperationDecoders operationDecoders = {
+    OperationType.kindInsert: (body) =>
+        _ListInsertOperation<T>.fromBodyBytes(this, body),
+    OperationType.kindDelete: (body) =>
+        _ListDeleteOperation<T>.fromBodyBytes(this, body),
+    OperationType.kindUpdate: (body) =>
+        _ListUpdateOperation<T>.fromBodyBytes(this, body),
+  };
 
   /// The ID of this list in the document
   final String _id;

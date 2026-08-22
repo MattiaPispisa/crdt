@@ -1,20 +1,5 @@
 part of 'handler.dart';
 
-class _ORMapOperationFactory<K, V> {
-  _ORMapOperationFactory(this.handler);
-  final CRDTORMapHandler<K, V> handler;
-
-  late final OperationDecoders _decoders = {
-    OperationType.kindInsert: (body) =>
-        _ORMapPutOperation<K, V>.fromBodyBytes(handler, body),
-    OperationType.kindDelete: (body) =>
-        _ORMapRemoveOperation<K, V>.fromBodyBytes(handler, body),
-  };
-
-  Operation fromBytes(OperationEnvelope env, Uint8List body) =>
-      decodeOperation(env, body, _decoders);
-}
-
 /// Put operation for OR-Map
 ///
 /// The tag it adds for the pair is the operation's [Operation.stamp], so the

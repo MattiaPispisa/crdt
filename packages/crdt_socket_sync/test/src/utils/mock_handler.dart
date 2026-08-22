@@ -16,5 +16,7 @@ final class MockHandler extends Handler<String> {
   Uint8List getSnapshotState() => Uint8List.fromList(utf8.encode('test_state'));
 
   @override
-  OperationFactory get operationFactory => (env, body) => MockOperation(this);
+  late final OperationDecoders operationDecoders = {
+    OperationType.kindInsert: (body) => MockOperation(this),
+  };
 }

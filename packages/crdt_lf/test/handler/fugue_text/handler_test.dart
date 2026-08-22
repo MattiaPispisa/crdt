@@ -1281,23 +1281,32 @@ void main() {
       restored.importSnapshot(target.takeSnapshot());
       expect(restoredText.value, 'hello world');
     });
-    // The factory is the same code in all nine handlers, so its contract is
-    // asserted once, here. Addressing is no longer part of it: the framework
-    // checks the envelope belongs to this handler before calling the factory.
+    // The decode path is the same code in all nine handlers, so its contract
+    // is asserted once, here. Addressing is no longer part of it: the
+    // framework checks the envelope belongs to this handler before looking
+    // its kind up in [Handler.operationDecoders].
     group('operation decoding', () {
       test('raises on a kind this build cannot decode', () {
-        final handler = CRDTFugueTextHandler(CRDTDocument(), 'text1');
-        final envelope = OperationEnvelopeCodec.decode(
-          OperationEnvelopeCodec.encode(
-            handlerType: handler.handlerType,
-            handlerId: handler.id,
-            kind: 99,
-            body: Uint8List(0),
+        final doc = CRDTDocument();
+        final handler = CRDTFugueTextHandler(doc, 'text1');
+
+        final author = PeerId.generate();
+        doc.applyChange(
+          Change.fromPayloadBytes(
+            id: OperationId(author, HybridLogicalClock(l: 100, c: 1)),
+            deps: doc.version,
+            author: author,
+            payloadBytes: OperationEnvelopeCodec.encode(
+              handlerType: handler.handlerType,
+              handlerId: handler.id,
+              kind: 99,
+              body: Uint8List(0),
+            ),
           ),
         );
 
         expect(
-          () => handler.operationFactory(envelope, Uint8List(0)),
+          () => handler.value,
           throwsA(
             isA<UnknownOperationKindException>()
                 .having((e) => e.kind, 'kind', 99)

@@ -1,20 +1,5 @@
 part of 'handler.dart';
 
-class _ORSetOperationFactory<T> {
-  _ORSetOperationFactory(this.handler);
-  final CRDTORSetHandler<T> handler;
-
-  late final OperationDecoders _decoders = {
-    OperationType.kindInsert: (body) =>
-        _ORSetAddOperation<T>.fromBodyBytes(handler, body),
-    OperationType.kindDelete: (body) =>
-        _ORSetRemoveOperation<T>.fromBodyBytes(handler, body),
-  };
-
-  Operation fromBytes(OperationEnvelope env, Uint8List body) =>
-      decodeOperation(env, body, _decoders);
-}
-
 /// Add operation for OR-Set
 ///
 /// The tag it adds for the value is the operation's [Operation.stamp], so the

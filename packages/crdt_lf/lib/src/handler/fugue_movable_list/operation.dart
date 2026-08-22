@@ -1,27 +1,5 @@
 part of 'handler.dart';
 
-/// Factory for Fugue movable list operations.
-class _FugueMovableListOperationFactory<T> {
-  _FugueMovableListOperationFactory(this.handler);
-
-  final CRDTFugueMovableListHandler<T> handler;
-
-  late final OperationDecoders _decoders = {
-    OperationType.kindInsert: (body) =>
-        _MovableListInsertOperation<T>.fromBodyBytes(handler, body),
-    OperationType.kindMove: (body) =>
-        _MovableListMoveOperation<T>.fromBodyBytes(handler, body),
-    OperationType.kindUpdate: (body) =>
-        _MovableListUpdateOperation<T>.fromBodyBytes(handler, body),
-    OperationType.kindDelete: (body) =>
-        _MovableListDeleteOperation<T>.fromBodyBytes(handler, body),
-  };
-
-  /// Decodes an operation from its binary envelope.
-  Operation fromBytes(OperationEnvelope env, Uint8List body) =>
-      decodeOperation(env, body, _decoders);
-}
-
 /// Batch insert: introduces a contiguous run of new identities anchored at
 /// the same Fugue origin pair, chaining additional items to the previously
 /// inserted one (Fugue's non-interleaving property).

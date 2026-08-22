@@ -1,7 +1,6 @@
 import 'dart:typed_data';
 
 import 'package:crdt_lf/crdt_lf.dart';
-import 'package:crdt_lf/src/handler/operation_decoding.dart';
 import 'package:crdt_lf/src/snapshot/blob_version.dart';
 
 part 'operation.dart';
@@ -52,8 +51,12 @@ base class CRDTORMapHandler<K, V> extends Handler<ORMapState<K, V>> {
   String get id => _id;
 
   @override
-  late final OperationFactory operationFactory =
-      _ORMapOperationFactory<K, V>(this).fromBytes;
+  late final OperationDecoders operationDecoders = {
+    OperationType.kindInsert: (body) =>
+        _ORMapPutOperation<K, V>.fromBodyBytes(this, body),
+    OperationType.kindDelete: (body) =>
+        _ORMapRemoveOperation<K, V>.fromBodyBytes(this, body),
+  };
 
   /// The stamp of a `put` is the tag it stores for the written value.
   @override

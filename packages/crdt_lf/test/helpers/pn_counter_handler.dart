@@ -45,19 +45,10 @@ final class PNCounterHandler extends Handler<int> {
   );
 
   @override
-  late final OperationFactory operationFactory = _fromBytes;
-
-  Operation _fromBytes(OperationEnvelope env, Uint8List body) {
-    if (env.kind == incrementKind) {
-      return PNCounterIncrementOperation.fromBodyBytes(this, body);
-    }
-
-    throw UnknownOperationKindException(
-      handlerType: env.handlerType,
-      handlerId: env.handlerId,
-      kind: env.kind,
-    );
-  }
+  late final OperationDecoders operationDecoders = {
+    incrementKind: (body) =>
+        PNCounterIncrementOperation.fromBodyBytes(this, body),
+  };
 
   /// Adds [by] to the counter.
   void increment([int by = 1]) {

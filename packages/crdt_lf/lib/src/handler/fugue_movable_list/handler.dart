@@ -5,7 +5,6 @@ import 'package:crdt_lf/src/algorithm/fugue/tree.dart';
 import 'package:crdt_lf/src/algorithm/fugue/value_node.dart';
 import 'package:crdt_lf/src/handler/fugue/element_id_floor.dart';
 import 'package:crdt_lf/src/handler/fugue/fugue_cache.dart';
-import 'package:crdt_lf/src/handler/operation_decoding.dart';
 import 'package:crdt_lf/src/snapshot/blob_version.dart';
 
 part 'operation.dart';
@@ -63,8 +62,16 @@ base class CRDTFugueMovableListHandler<T>
   String get id => _id;
 
   @override
-  late final OperationFactory operationFactory =
-      _FugueMovableListOperationFactory<T>(this).fromBytes;
+  late final OperationDecoders operationDecoders = {
+    OperationType.kindInsert: (body) =>
+        _MovableListInsertOperation<T>.fromBodyBytes(this, body),
+    OperationType.kindMove: (body) =>
+        _MovableListMoveOperation<T>.fromBodyBytes(this, body),
+    OperationType.kindUpdate: (body) =>
+        _MovableListUpdateOperation<T>.fromBodyBytes(this, body),
+    OperationType.kindDelete: (body) =>
+        _MovableListDeleteOperation<T>.fromBodyBytes(this, body),
+  };
 
   /// `insert` seeds the two last-writer-wins clocks of an element, and
   /// `move` and `update` race against them, so all three carry a stamp.
@@ -84,13 +91,6 @@ base class CRDTFugueMovableListHandler<T>
     stamped: true,
   );
 
-  /// Every mutation commutes, so a change that arrives from the past is folded
-  /// into the cached state instead of forcing a replay.
-  ///
-  /// `insert` seeds an element's two clocks and never overwrites them, `move`
-  /// and `update` keep the greater [OperationId], and `delete` is monotone.
-  /// The tree the positions live in sorts siblings by element id, so it is a
-  /// function of the operation set alone.
   @override
   bool get stateIsOrderIndependent => true;
 

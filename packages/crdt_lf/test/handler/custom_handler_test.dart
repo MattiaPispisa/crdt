@@ -130,23 +130,13 @@ final class _MarkerHandler extends Handler<int> {
   );
 
   @override
-  late final OperationFactory operationFactory = _fromBytes;
-
-  Operation _fromBytes(OperationEnvelope env, Uint8List body) {
-    if (env.kind == setKind) {
-      return _MarkerSetOperation(
-        id: id,
-        type: setType,
-        value: UVarint.read(body, offset: 0).value,
-      );
-    }
-
-    throw UnknownOperationKindException(
-      handlerType: env.handlerType,
-      handlerId: env.handlerId,
-      kind: env.kind,
-    );
-  }
+  late final OperationDecoders operationDecoders = {
+    setKind: (body) => _MarkerSetOperation(
+          id: id,
+          type: setType,
+          value: UVarint.read(body, offset: 0).value,
+        ),
+  };
 
   void set(int value) {
     doc.registerOperation(
