@@ -337,10 +337,6 @@ own handler says `base`, `final` or `sealed` in turn:
 final class PNCounterHandler extends Handler<int> { … }
 ```
 
-That is what lets a later release add a hook with a default body — an
-`invert` for undo, a `watch` for deltas — without breaking the handlers
-already out there.
-
 A handler overrides:
 
 - `id` and `operationDecoders` — required: how the handler is addressed, and
@@ -381,9 +377,9 @@ factory OperationType.custom(
 A stamp is a unique, totally ordered mark: the `OperationId` of the change the
 operation travels in. **Every** operation carries one, declared or not: the
 document mints it when the operation is registered, and a remote one reads it
-off the change. So the flag is not about reaching the stamp — it is about
+off the change. So the flag is not about reaching the stamp — **it is about
 saying that this kind's conflict resolution reads it, which is something two
-peers have to agree on. The built-in handlers use it for two different things:
+peers have to agree on**. The built-in handlers use it for two different things:
 
 | Use | Who | What the handler does |
 |---|---|---|
@@ -433,17 +429,6 @@ print(votes.value); // 2
 (Unicode code points), not UTF-16 code units. `insert`, `delete`, `update`,
 `length`, and the Fugue handler's `stablePositionAt`/`indexOfStablePosition`
 all agree on this: one element is one rune.
-
-A rune, not a grapheme cluster, because a cluster's boundary is not stable —
-it depends on the Unicode version *and* on the characters next to it (a
-zero-width-joiner sequence changes shape when a peer inserts something
-beside it). A CRDT element's identity cannot depend on its neighbours, or it
-stops converging. A code point does not have that problem.
-
-The consequence is worth stating plainly rather than hiding it: a family
-emoji like `👨‍👩‍👧` is five code points (`U+1F468`, `U+200D`, `U+1F469`,
-`U+200D`, `U+1F467`), so it is five separate elements. A concurrent edit
-next to it can split it — the same limit Yjs, Automerge and Loro share.
 
 Building a text field on top of this in Flutter? `RenderEditable` counts
 UTF-16 code units, not runes — see [`RuneOffsets` in the crdt_lf_flutter

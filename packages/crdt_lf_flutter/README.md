@@ -18,8 +18,8 @@ Built on top of [`provider`](https://pub.dev/packages/provider) — so you also 
 
 - [CRDT LF Flutter](#crdt-lf-flutter)
   - [Features](#features)
-  - [Example](#example)
   - [Greyhound Markdown](#greyhound-markdown)
+  - [Example](#example)
   - [Getting Started](#getting-started)
   - [Usage](#usage)
     - [Provide a document](#provide-a-document)
@@ -56,18 +56,6 @@ Built on top of [`provider`](https://pub.dev/packages/provider) — so you also 
 - Context helpers: `context.crdtDocument`, `context.watchCrdtDocument()`,
   `context.selectCrdtDocument(...)`, `context.crdtHandler<H>(id)`.
 
-## Example
-
-The [`example/`](https://github.com/MattiaPispisa/crdt/tree/main/packages/crdt_lf_flutter/example)
-app demos **every widget in this package on a single screen** — each card wires
-a different handler, and a live `⟳ rebuilt ×N` badge shows exactly which regions
-re-render as you edit, so you can *see* the reactive scoping (and the
-zero-rebuild bindings) at work.
-
-<div align="center">
-  <img width="500" alt="crdt_lf_flutter_example" src="https://raw.githubusercontent.com/MattiaPispisa/crdt/main/assets/demos/crdt_lf_flutter_example.gif">
-</div>
-
 ## Greyhound Markdown
 
 A real-time collaborative markdown editor built with `crdt_lf` and
@@ -85,6 +73,18 @@ together — no install needed.
 </div>
 
 Source: [apps/greyhound_markdown](https://github.com/MattiaPispisa/crdt/tree/main/apps/greyhound_markdown).
+
+## Example
+
+The [`example/`](https://github.com/MattiaPispisa/crdt/tree/main/packages/crdt_lf_flutter/example)
+app demos **every widget in this package on a single screen** — each card wires
+a different handler, and a live `⟳ rebuilt ×N` badge shows exactly which regions
+re-render as you edit, so you can *see* the reactive scoping (and the
+zero-rebuild bindings) at work.
+
+<div align="center">
+  <img width="500" alt="crdt_lf_flutter_example" src="https://raw.githubusercontent.com/MattiaPispisa/crdt/main/assets/demos/crdt_lf_flutter_example.gif">
+</div>
 
 ## Getting Started
 
@@ -220,9 +220,7 @@ CrdtTextFieldBuilder(
 
 #### Rune ↔ UTF-16 offsets
 
-`crdt_lf`'s handler API is rune-indexed everywhere (see [Text handlers
-index by rune](https://github.com/MattiaPispisa/crdt/tree/main/packages/crdt_lf/README.md#text-handlers-index-by-rune)
-in the `crdt_lf` README). Flutter's `RenderEditable`, `TextSelection` and
+`crdt_lf`'s handler API is rune-indexed everywhere. Flutter's `RenderEditable`, `TextSelection` and
 `TextPosition` are not — they count UTF-16 code units.
 `CrdtTextFieldBuilder` and `CrdtTextCursorsOverlay` already do this
 conversion for you; you only need it yourself when building a custom text

@@ -7,22 +7,15 @@
 ### Changed
 
 - Text handlers index by runes (code points), not UTF-16 code units. [106](https://github.com/MattiaPispisa/crdt/issues/106)
-- New operation layer: a handler declares its own operation kinds, and every last-writer-wins handler
-  settles ties with the id of the change carrying the operation. A handler decodes them by overriding
-  `operationDecoders`, a plain kind-to-decoder map, instead of implementing dispatch by hand. [129](https://github.com/MattiaPispisa/crdt/issues/129)
+- New operation layer: a handler declares its own operation kinds.
+  A handler decodes them by overriding `operationDecoders`, a plain kind-to-decoder map, instead of implementing dispatch by hand. [129](https://github.com/MattiaPispisa/crdt/issues/129)
 - `update` on `CRDTFugueTextHandler` and `CRDTFugueListHandler` keeps the identity of the element
   instead of replacing it. [127](https://github.com/MattiaPispisa/crdt/issues/127)
 - `Snapshot` carries a schema version, and so does every per-handler blob inside it. [130](https://github.com/MattiaPispisa/crdt/issues/130)
 - `incrementCachedState` takes an optional `DeltaSink`. [132](https://github.com/MattiaPispisa/crdt/issues/132)
-- `Handler` is a `base` class: extend it, do not implement it. A handler you write declares
-  `base`, `final` or `sealed` in turn, which is what lets a later release add a hook with a
-  default body without breaking it.
+- `Handler` is a `base` class: extend it, do not implement it.
 - A deleted element keeps its value, its place and the id of the change that removed it, in the
   tree and in the snapshot, so it can be put back whole.
-- `binaryExportChanges` frames whole `Change`s instead of a layout of its own, so each one says
-  which schema it is in and a 3.x buffer is refused there too. Two bytes more per change, and
-  importing 1 000 of them goes from 2.40 ms to 1.96 ms: the old reader decoded every id into an
-  object only to write it straight back out.
 
 ### Breaking
 
@@ -30,14 +23,6 @@ A v3 document does not open in v4 — not from its history, not from a snapshot,
 adapter saved — so peers have to move together and existing documents have to be recreated; the
 [README](https://github.com/MattiaPispisa/crdt/tree/main/packages/crdt_lf#migrating-from-3x-to-40) lists the
 renamed and removed symbols. The Dart floor moves to `>=3.0.0`.
-
-### Performance
-
-A Fugue text snapshot of 10 000 runes from one peer is ~20x
-smaller and ~4x faster to take, and `length` on the two Fugue sequence handlers is now O(1).
-On the same 10 000 runes with half the elements deleted, keeping the tombstones inside the runs
-takes `takeSnapshot` from 3.14 ms to 1.27 ms and the blob from 5.0 KB to 11.3 KB; restoring that
-document costs 5.27 ms instead of 3.74 ms: twice the nodes to seed.
 
 ## [3.5.0](https://github.com/MattiaPispisa/crdt/tree/crdt_lf-v3.5.0/packages/crdt_lf)
 
