@@ -1,0 +1,19 @@
+name: crdt_lf
+description: Conflict-free replicated data type (CRDT) - Local-first implementation provided in dart
+homepage: https://mattiapispisa.github.io/
+repository: https://github.com/MattiaPispisa/crdt/tree/main/packages/core/crdt_lf
+topics: [crdt, local-first, fugue, hlc]
+
+version: 4.0.0
+
+environment:
+  sdk: ">=3.0.0 <4.0.0"
+
+dependencies:
+  crypto: ^3.0.0
+  hlc_dart: ^1.1.0
+
+dev_dependencies:
+  benchmark_harness: ^2.3.1
+  mocktail: ^1.0.0
+  test: ^1.24.0

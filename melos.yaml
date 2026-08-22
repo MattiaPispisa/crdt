@@ -32,7 +32,7 @@ scripts:
   benchmark:
     name: Benchmark
     description: Run the benchmarks
-    run: cd packages/crdt_lf && ./benchmark/run.sh
+    run: cd packages/core/crdt_lf && ./benchmark/run.sh
 
   test:
     name: Test
@@ -73,7 +73,7 @@ scripts:
   devtools_build:
     name: Devtools Build
     description: Build the devtools extension
-    run: cd ./packages/crdt_lf_devtools_extension && dart run devtools_extensions build_and_copy --source=. --dest=../crdt_lf/extension/devtools && dart run devtools_extensions validate --package=../crdt_lf
+    run: cd ./packages/core/crdt_lf_devtools_extension && dart run devtools_extensions build_and_copy --source=. --dest=../crdt_lf/extension/devtools && dart run devtools_extensions validate --package=../crdt_lf
 
   fix_apply:
     name: Fix Apply

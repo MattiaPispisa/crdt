@@ -34,21 +34,21 @@ jobs:
               - 'pubspec.lock'
               - 'melos.yaml'
               - 'scripts/**'
-              - 'packages/shared_examples_infrastructure/**'
+              - 'packages/_internal/shared_examples_infrastructure/**'
             hlc:
-              - 'packages/hlc/**'
+              - 'packages/core/hlc/**'
             crdt_lf:
-              - 'packages/crdt_lf/**'
+              - 'packages/core/crdt_lf/**'
             crdt_lf_hive:
-              - 'packages/crdt_lf_hive/**'
+              - 'packages/adapters/persistence/crdt_lf_hive/**'
             crdt_lf_sqlite:
-              - 'packages/crdt_lf_sqlite/**'
+              - 'packages/adapters/persistence/crdt_lf_sqlite/**'
             crdt_lf_drift:
-              - 'packages/crdt_lf_drift/**'
+              - 'packages/adapters/persistence/crdt_lf_drift/**'
             crdt_socket_sync:
-              - 'packages/crdt_socket_sync/**'
+              - 'packages/core/crdt_socket_sync/**'
             crdt_lf_flutter:
-              - 'packages/crdt_lf_flutter/**'
+              - 'packages/core/crdt_lf_flutter/**'
 
   hlc:
     needs: changes
@@ -57,7 +57,7 @@ jobs:
        || needs.changes.outputs.hlc == 'true' }}
     uses: ./.github/workflows/dart_package.yaml
     with:
-      working_directory: ./packages/hlc
+      working_directory: ./packages/core/hlc
       min_coverage: 90
       package_name: hlc_dart
     secrets:
@@ -71,7 +71,7 @@ jobs:
        || needs.changes.outputs.crdt_lf == 'true' }}
     uses: ./.github/workflows/dart_package.yaml
     with:
-      working_directory: ./packages/crdt_lf
+      working_directory: ./packages/core/crdt_lf
       min_coverage: 90
       package_name: crdt_lf
     secrets:
@@ -86,7 +86,7 @@ jobs:
        || needs.changes.outputs.crdt_lf_hive == 'true' }}
     uses: ./.github/workflows/dart_package.yaml
     with:
-      working_directory: ./packages/crdt_lf_hive
+      working_directory: ./packages/adapters/persistence/crdt_lf_hive
       min_coverage: 90
       package_name: crdt_lf_hive
     secrets:
@@ -101,7 +101,7 @@ jobs:
        || needs.changes.outputs.crdt_lf_sqlite == 'true' }}
     uses: ./.github/workflows/dart_package.yaml
     with:
-      working_directory: ./packages/crdt_lf_sqlite
+      working_directory: ./packages/adapters/persistence/crdt_lf_sqlite
       min_coverage: 90
       package_name: crdt_lf_sqlite
       install_sqlite: true
@@ -117,7 +117,7 @@ jobs:
        || needs.changes.outputs.crdt_lf_drift == 'true' }}
     uses: ./.github/workflows/dart_package.yaml
     with:
-      working_directory: ./packages/crdt_lf_drift
+      working_directory: ./packages/adapters/persistence/crdt_lf_drift
       min_coverage: 90
       package_name: crdt_lf_drift
       install_sqlite: true
@@ -134,7 +134,7 @@ jobs:
        || needs.changes.outputs.crdt_socket_sync == 'true' }}
     uses: ./.github/workflows/dart_package.yaml
     with:
-      working_directory: ./packages/crdt_socket_sync
+      working_directory: ./packages/core/crdt_socket_sync
       min_coverage: 70
       package_name: crdt_socket_sync
     secrets:
@@ -149,7 +149,7 @@ jobs:
        || needs.changes.outputs.crdt_lf_flutter == 'true' }}
     uses: ./.github/workflows/flutter_package.yaml
     with:
-      working_directory: ./packages/crdt_lf_flutter
+      working_directory: ./packages/core/crdt_lf_flutter
       min_coverage: 80
       package_name: crdt_lf_flutter
     secrets:

@@ -52,11 +52,11 @@ io.File pubspecLockOf(io.Directory dir) {
 }
 
 io.Directory crdtLfDir({List<String> subParts = const []}) {
-  return packagesDir(subParts: ['crdt_lf', ...subParts]);
+  return packagesDir(subParts: ['core', 'crdt_lf', ...subParts]);
 }
 
 io.Directory crdtLfSocketSyncDir({List<String> subParts = const []}) {
-  return packagesDir(subParts: ['crdt_socket_sync', ...subParts]);
+  return packagesDir(subParts: ['core', 'crdt_socket_sync', ...subParts]);
 }
 
 io.Directory packagesDir({List<String> subParts = const []}) {
@@ -65,6 +65,32 @@ io.Directory packagesDir({List<String> subParts = const []}) {
 
 io.Directory appsDir({List<String> subParts = const []}) {
   return [io.Directory.current.path, 'apps', ...subParts].toDir();
+}
+
+/// Every package root under `packages/`, at any nesting depth.
+///
+/// A package root is a directory containing a `pubspec.yaml`. The walk does
+/// not descend into a matched package's subdirectories, so `example/`,
+/// `flutter_example/`, `client_example/` (which have their own
+/// `pubspec.yaml`) are never returned.
+List<io.Directory> packageDirs() {
+  final result = <io.Directory>[];
+
+  void walk(io.Directory dir) {
+    if (io.File(path.join(dir.path, 'pubspec.yaml')).existsSync()) {
+      result.add(dir);
+      return;
+    }
+    for (final entity in dir.listSync().whereType<io.Directory>()) {
+      walk(entity);
+    }
+  }
+
+  for (final entity in packagesDir().listSync().whereType<io.Directory>()) {
+    walk(entity);
+  }
+
+  return result..sort((a, b) => a.path.compareTo(b.path));
 }
 
 /// Copies each `packages/<name>/README.md` into [to] as `<name>.md`.
@@ -78,10 +104,7 @@ void copyPackageReadmes({
     to.createSync(recursive: true);
   }
 
-  final packages = packagesDir().listSync().whereType<io.Directory>().toList()
-    ..sort((a, b) => a.path.compareTo(b.path));
-
-  for (final package in packages) {
+  for (final package in packageDirs()) {
     final readme = io.File(path.join(package.path, 'README.md'));
     if (!readme.existsSync()) {
       continue;

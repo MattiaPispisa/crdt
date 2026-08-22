@@ -19,7 +19,7 @@
     "prefix": "github_crdt_lf_release",
     "scope": "markdown",
     "body": [
-      "## [$1](https://github.com/MattiaPispisa/crdt/tree/crdt_lf-v$1/packages/crdt_lf)",
+      "## [$1](https://github.com/MattiaPispisa/crdt/tree/crdt_lf-v$1/packages/core/crdt_lf)",
       "",
       "**Date:** $3",
       "",
