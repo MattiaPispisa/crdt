@@ -15,8 +15,8 @@ const benchmarkResultMarker = '@@BENCHMARK_RESULT@@';
 /// JSON line per result: `{"name": ..., "microseconds": ...}`.
 ///
 /// Everything it reports is the cost of **one** `run()`, so two lines of
-/// `results.md` can be compared and a number can be quoted in a CHANGELOG as
-/// it stands.
+/// `timed_results.md` can be compared and a number can be quoted in a
+/// CHANGELOG as it stands.
 class CustomEmitter implements ScoreEmitter {
   /// Creates an emitter for a benchmark whose measured value covers
   /// [runsPerMeasure] calls of `run()`.

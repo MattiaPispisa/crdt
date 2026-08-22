@@ -5,7 +5,7 @@ import 'package:benchmark_infrastructure/src/timed/markdown_table.dart';
 
 /// Runs every `benchmarks/src/timed/*_benchmark.dart` file under
 /// [packageRoot] and writes the aggregated results to
-/// `benchmarks/results.md`.
+/// `benchmarks/timed_results.md`.
 ///
 /// Each file runs as its own `dart run` subprocess — a fresh VM per file, so
 /// no benchmark's JIT state or GC pressure leaks into the next one — in
@@ -62,7 +62,7 @@ Future<void> runTimedBenchmarks({required Directory packageRoot}) async {
     stdout.writeln('  - ✅ Finished $sourceFile');
   }
 
-  final resultsFile = File('${packageRoot.path}/benchmarks/results.md')
+  final resultsFile = File('${packageRoot.path}/benchmarks/timed_results.md')
     ..writeAsStringSync(renderResultsMarkdown(resultsBySourceFile));
 
   stdout.writeln('Benchmarks finished. Results are in ${resultsFile.path}');

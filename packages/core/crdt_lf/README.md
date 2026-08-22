@@ -167,7 +167,7 @@ Persistence is not directly handled in this library but there are some out of th
 
 ## Benchmarks
 
-This package includes a suite of benchmarks to ensure performance and stability. You can find the latest results [here](https://github.com/MattiaPispisa/crdt/tree/main/packages/core/crdt_lf/benchmarks/results.md).
+This package includes a suite of benchmarks to ensure performance and stability. You can find the latest results [here](https://github.com/MattiaPispisa/crdt/tree/main/packages/core/crdt_lf/benchmarks/timed_results.md).
 
 To run the benchmarks yourself, run from the repository root:
 
