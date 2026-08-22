@@ -7,10 +7,11 @@ publish_to: "none"
 version: 1.0.0
 
 environment:
-  sdk: ">=3.0.0 <4.0.0"
+  sdk: ">=3.2.0 <4.0.0"
 
 dependencies:
   benchmark_harness: ^2.3.1
+  vm_service: 15.0.0
 
 dev_dependencies:
   test: ^1.24.0

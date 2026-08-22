@@ -4,4 +4,5 @@ import 'package:benchmark_infrastructure/benchmark_infrastructure.dart';
 
 Future<void> main() async {
   await runTimedBenchmarks(packageRoot: Directory.current);
+  await runMemoryBenchmarks(packageRoot: Directory.current);
 }

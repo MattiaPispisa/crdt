@@ -3,7 +3,7 @@ import 'dart:io';
 import 'package:benchmark_infrastructure/src/timed/benchmark_result.dart';
 import 'package:benchmark_infrastructure/src/timed/markdown_table.dart';
 
-/// Runs every `benchmarks/src/benchmarks/*_benchmark.dart` file under
+/// Runs every `benchmarks/src/timed/*_benchmark.dart` file under
 /// [packageRoot] and writes the aggregated results to
 /// `benchmarks/results.md`.
 ///
@@ -13,12 +13,10 @@ import 'package:benchmark_infrastructure/src/timed/markdown_table.dart';
 /// [BenchmarkResult.tryParse]; a line that doesn't match is reported on
 /// stderr instead of being silently dropped.
 Future<void> runTimedBenchmarks({required Directory packageRoot}) async {
-  final benchmarksDir =
-      Directory('${packageRoot.path}/benchmarks/src/benchmarks');
+  final benchmarksDir = Directory('${packageRoot.path}/benchmarks/src/timed');
   if (!benchmarksDir.existsSync()) {
     stderr.writeln(
-      'No benchmarks/src/benchmarks directory found under '
-      '${packageRoot.path}',
+      'No benchmarks/src/timed directory found under ${packageRoot.path}',
     );
     return;
   }

@@ -1,3 +1,8 @@
+export 'src/memory/memory_benchmark_base.dart';
+export 'src/memory/memory_benchmark_result.dart';
+export 'src/memory/memory_emitter.dart';
+export 'src/memory/memory_markdown_table.dart';
+export 'src/memory/memory_runner.dart';
 export 'src/timed/benchmark_result.dart';
 export 'src/timed/custom_emitter.dart';
 export 'src/timed/markdown_table.dart';
