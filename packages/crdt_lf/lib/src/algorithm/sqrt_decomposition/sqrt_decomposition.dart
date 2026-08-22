@@ -55,6 +55,7 @@ class SqrtDecomposition<T> {
   final List<_Block<T>> _blocks = [];
   final Map<T, _Block<T>> _blockOf = {};
   int _total = 0;
+  int _live = 0;
 
   /// Target block size, ≈ √N. Monotonically non-decreasing because [_total]
   /// only grows (elements are never removed).
@@ -65,6 +66,12 @@ class SqrtDecomposition<T> {
 
   /// The number of elements (live and deleted) in the index.
   int get length => _total;
+
+  /// The number of **live** elements, in `O(1)`.
+  ///
+  /// The blocks each cache their own `liveCount`; this is the running sum, so
+  /// the answer costs no walk over the blocks or over the sequence.
+  int get liveLength => _live;
 
   /// Whether [key] is already present.
   bool contains(T key) => _blockOf.containsKey(key);
@@ -83,6 +90,7 @@ class SqrtDecomposition<T> {
     block.live.insert(offset + 1, live);
     if (live) {
       block.liveCount++;
+      _live++;
     }
     _blockOf[key] = block;
     _total++;
@@ -99,6 +107,9 @@ class SqrtDecomposition<T> {
       _blocks.add(block);
       _blockOf[key] = block;
       _total++;
+      if (live) {
+        _live++;
+      }
       return;
     }
     final block = _blocks.first;
@@ -106,6 +117,7 @@ class SqrtDecomposition<T> {
     block.live.insert(0, live);
     if (live) {
       block.liveCount++;
+      _live++;
     }
     _blockOf[key] = block;
     _total++;
@@ -124,6 +136,7 @@ class SqrtDecomposition<T> {
     }
     block.live[offset] = live;
     block.liveCount += live ? 1 : -1;
+    _live += live ? 1 : -1;
   }
 
   /// Returns the [position]-th **live** key, or `null` if [position] is
@@ -239,6 +252,21 @@ class SqrtDecomposition<T> {
     }
   }
 
+  /// Calls [action] on every key, live or not, in sequence order.
+  ///
+  /// The index holds the whole sequence: keys are only ever marked, never
+  /// removed. Use [forEachLive] when the dead ones do not matter — it skips
+  /// them a block at a time, which this cannot.
+  void forEach(void Function(T key, {required bool live}) action) {
+    for (final block in _blocks) {
+      final keys = block.keys;
+      final live = block.live;
+      for (var i = 0; i < keys.length; i++) {
+        action(keys[i], live: live[i]);
+      }
+    }
+  }
+
   /// Returns the first element in the sequence, or `null` if empty.
   T? first() {
     for (final block in _blocks) {
@@ -276,6 +304,7 @@ class SqrtDecomposition<T> {
         block.live.add(live[i]);
         if (live[i]) {
           block.liveCount++;
+          _live++;
         }
         _blockOf[keys[i]] = block;
       }
@@ -288,6 +317,7 @@ class SqrtDecomposition<T> {
     _blocks.clear();
     _blockOf.clear();
     _total = 0;
+    _live = 0;
   }
 
   /// Splits [block] in half when it grows past `2 * target`, keeping block

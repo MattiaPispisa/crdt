@@ -1,6 +1,7 @@
 import 'dart:typed_data';
 
 import 'package:crdt_lf/crdt_lf.dart';
+import 'package:hlc_dart/hlc_dart.dart';
 import 'package:test/test.dart';
 
 void main() {
@@ -79,6 +80,120 @@ void main() {
         expect(handler.value, 'HelloBeauti');
       },
     );
+
+    group('update overwrites the element in place', () {
+      /// A second document sharing [doc]'s history, so merges are
+      /// deterministic.
+      CRDTDocument peerOf(CRDTDocument doc) {
+        final remote = CRDTDocument(peerId: PeerId.generate());
+        CRDTFugueTextHandler(remote, 'text');
+        remote.importChanges(doc.exportChanges());
+        return remote;
+      }
+
+      CRDTFugueTextHandler textOf(CRDTDocument doc) =>
+          doc.registeredHandlers['text']! as CRDTFugueTextHandler;
+
+      // Two updates used to make two elements out of one. Now the losing
+      // value is simply dropped, and both peers drop the same one.
+      test('two peers updating the same element converge on one value', () {
+        final a = CRDTDocument(peerId: PeerId.generate());
+        final textA = CRDTFugueTextHandler(a, 'text')..insert(0, 'abc');
+        final b = peerOf(a);
+        final textB = textOf(b);
+
+        textA.update(1, 'X');
+        textB.update(1, 'Y');
+
+        a.importChanges(b.exportChanges());
+        b.importChanges(a.exportChanges());
+
+        expect(textA.value, equals(textB.value));
+        expect(textA.value, anyOf('aXc', 'aYc'));
+        expect(textA.length, equals(3));
+      });
+
+      test('an update loses against a concurrent delete, in both orders', () {
+        for (final deleteArrivesFirst in [true, false]) {
+          final a = CRDTDocument(peerId: PeerId.generate());
+          final textA = CRDTFugueTextHandler(a, 'text')..insert(0, 'abc');
+          final b = peerOf(a);
+          final textB = textOf(b);
+
+          textA.update(1, 'X');
+          textB.delete(1, 1);
+
+          if (deleteArrivesFirst) {
+            a.importChanges(b.exportChanges());
+            b.importChanges(a.exportChanges());
+          } else {
+            b.importChanges(a.exportChanges());
+            a.importChanges(b.exportChanges());
+          }
+
+          expect(textA.value, equals(textB.value));
+          expect(textA.value, equals('ac'));
+        }
+      });
+
+      // The reason to pick this handler over `CRDTTextHandler` is that an
+      // anchor keeps resolving. An update used to tombstone the anchored
+      // element, which broke exactly that.
+      test('an anchor survives a remote update of the anchored element', () {
+        final doc = CRDTDocument(peerId: PeerId.generate());
+        final text = CRDTFugueTextHandler(doc, 'text')..insert(0, 'hello');
+        final caret = text.stablePositionAt(3); // after the second "l"
+
+        final remote = peerOf(doc);
+        textOf(remote).update(2, 'L');
+        doc.importChanges(remote.exportChanges());
+
+        expect(text.value, equals('heLlo'));
+        expect(text.indexOfStablePosition(caret), equals(3));
+      });
+
+      // The change carrying an operation takes the id minted when the
+      // operation was registered, so ids have to be minted for **every**
+      // operation and not only for the stamped ones. Mint them only for the
+      // stamped ones and this transaction breaks: `insert` would take its id
+      // at commit, after `update` had already taken an earlier one, so the
+      // update would sort ahead of the insert it depends on, find no node to
+      // overwrite, and vanish without a word.
+      test('an update sees an insert made earlier in the same transaction', () {
+        final doc = CRDTDocument(peerId: PeerId.generate());
+        final text = CRDTFugueTextHandler(doc, 'text');
+
+        doc.runInTransaction(() {
+          text
+            ..insert(0, 'ab')
+            ..update(0, 'X');
+        });
+
+        expect(text.value, equals('Xb'));
+
+        // And a peer replaying the two changes in sorted order agrees.
+        final remote = CRDTDocument(peerId: PeerId.generate());
+        final remoteText = CRDTFugueTextHandler(remote, 'text');
+        remote.importChanges(doc.exportChanges());
+        expect(remoteText.value, equals('Xb'));
+      });
+
+      // An update creates no node, so it must not spend a counter either.
+      test('an update spends no element counter', () {
+        final doc = CRDTDocument(peerId: PeerId.generate());
+        final text = CRDTFugueTextHandler(doc, 'text')..insert(0, 'abc');
+        expect(text.nodeAt(2).counter, equals(2));
+
+        text
+          ..update(0, 'A')
+          ..update(1, 'B')
+          ..update(2, 'C')
+          ..insert(3, 'd');
+
+        expect(text.value, equals('ABCd'));
+        expect(text.nodeAt(3).counter, equals(3));
+      });
+    });
 
     test('should change text', () {
       final doc = CRDTDocument();
@@ -758,25 +873,6 @@ void main() {
       );
 
       test(
-        'scans update-op newNodeIDs during lazy counter init',
-        () {
-          final peerId = PeerId.generate();
-          final doc1 = CRDTDocument(peerId: peerId);
-          final h1 = CRDTFugueTextHandler(doc1, 'text')
-            ..insert(0, 'Hello') // counters 0-4
-            ..update(0, 'X'); // newNodeID counter 5 for peerId
-          final exported = doc1.binaryExportChanges();
-
-          final doc2 = CRDTDocument(peerId: peerId);
-          final h2 = CRDTFugueTextHandler(doc2, 'text');
-          doc2.binaryImportChanges(exported);
-          expect(h2.value, h1.value);
-          expect(() => h2.insert(h2.length, '!'), returnsNormally);
-          expect(h2.value, endsWith('!'));
-        },
-      );
-
-      test(
         'counter continues correctly after re-init (no duplicate IDs)',
         () {
           final peerId = PeerId.generate();
@@ -797,9 +893,6 @@ void main() {
 
           // Verify state is consistent and no collision occurred
           expect(handler2.value, 'Say: Hi!');
-
-          // Also verify update() triggers no collision
-          expect(() => handler2.update(0, 'X'), returnsNormally);
         },
       );
 
@@ -836,31 +929,6 @@ void main() {
 
           expect(reloadedText.value, 'abcdeXY');
           expect(peerText.value, reloadedText.value);
-        },
-      );
-
-      test(
-        'a snapshot written before the element id floor stays readable',
-        () {
-          final peerId = PeerId.generate();
-          final doc = CRDTDocument(peerId: peerId);
-          CRDTFugueTextHandler(doc, 'text').insert(0, 'legacy');
-
-          // Older versions wrote the node list and nothing else.
-          final legacy = Snapshot.create(
-            versionVector: doc.getVersionVector(),
-            data: {
-              'text': _nodesOnlySnapshotBlob(doc.takeSnapshot().data['text']!),
-            },
-          );
-
-          final reloaded = CRDTDocument(peerId: peerId);
-          final reloadedText = CRDTFugueTextHandler(reloaded, 'text');
-          reloaded.importSnapshot(legacy);
-
-          expect(reloadedText.value, 'legacy');
-          expect(() => reloadedText.insert(6, '!'), returnsNormally);
-          expect(reloadedText.value, 'legacy!');
         },
       );
     });
@@ -1106,6 +1174,62 @@ void main() {
 
         expect(reloadedText.value, equals('😀 x 𐐷'));
       });
+
+      // Two lone surrogates side by side are two elements that read as one
+      // emoji. The snapshot run holds them with no framing of its own, so
+      // only the WTF-8 sequence boundaries keep them apart.
+      test('two adjacent lone surrogates stay two elements over a snapshot',
+          () {
+        final high = String.fromCharCode(0xD83D);
+        final low = String.fromCharCode(0xDE00);
+
+        final doc = CRDTDocument();
+        final text = CRDTFugueTextHandler(doc, 'text')
+          ..insert(0, high)
+          ..insert(1, low);
+        expect(text.length, equals(2));
+
+        final snapBytes = doc.takeSnapshot(pruneHistory: false).toBytes();
+
+        final reloaded = CRDTDocument(
+          peerId: doc.peerId,
+          documentId: doc.documentId,
+        );
+        final reloadedText = CRDTFugueTextHandler(reloaded, 'text');
+        reloaded.import(snapshot: Snapshot.fromBytes(snapBytes));
+
+        expect(reloadedText.length, equals(2));
+        expect(reloadedText.value.codeUnits, equals([0xD83D, 0xDE00]));
+        // Deleting the first half leaves the second, which a fused element
+        // could not do.
+        reloadedText.delete(0, 1);
+        expect(reloadedText.value.codeUnits, equals([0xDE00]));
+      });
+
+      test(
+          'two peers concurrently inserting either side of an emoji never '
+          'produce mojibake or an unpaired surrogate', () {
+        // Under the old UTF-16 code-unit unit, offset 2 sat between the two
+        // surrogate halves of the emoji: inserting there split it. Under
+        // runes that offset does not exist; the closest valid positions are
+        // rune 1 (just before the emoji) and rune 2 (just after it).
+        final peerA = CRDTDocument();
+        final textA = CRDTFugueTextHandler(peerA, 'text')..insert(0, 'a😀b');
+
+        final peerB = CRDTDocument(documentId: peerA.documentId);
+        final textB = CRDTFugueTextHandler(peerB, 'text');
+        peerB.importChanges(peerA.exportChanges());
+
+        textA.insert(1, 'X'); // just before the emoji
+        textB.insert(2, 'Y'); // just after the emoji
+
+        peerB.importChanges(peerA.exportChanges());
+        peerA.importChanges(peerB.exportChanges());
+
+        expect(textA.value, equals(textB.value));
+        expect(textA.value, contains('😀'));
+        expect(textA.value, isNot(contains('�')));
+      });
     });
 
     test(
@@ -1157,23 +1281,189 @@ void main() {
       restored.importSnapshot(target.takeSnapshot());
       expect(restoredText.value, 'hello world');
     });
+    // The decode path is the same code in all nine handlers, so its contract
+    // is asserted once, here. Addressing is no longer part of it: the
+    // framework checks the envelope belongs to this handler before looking
+    // its kind up in [Handler.operationDecoders].
+    group('operation decoding', () {
+      test('raises on a kind this build cannot decode', () {
+        final doc = CRDTDocument();
+        final handler = CRDTFugueTextHandler(doc, 'text1');
+
+        final author = PeerId.generate();
+        doc.applyChange(
+          Change.fromPayloadBytes(
+            id: OperationId(author, HybridLogicalClock(l: 100, c: 1)),
+            deps: doc.version,
+            author: author,
+            payloadBytes: OperationEnvelopeCodec.encode(
+              handlerType: handler.handlerType,
+              handlerId: handler.id,
+              kind: 99,
+              body: Uint8List(0),
+            ),
+          ),
+        );
+
+        expect(
+          () => handler.value,
+          throwsA(
+            isA<UnknownOperationKindException>()
+                .having((e) => e.kind, 'kind', 99)
+                .having((e) => e.handlerId, 'handlerId', 'text1')
+                .having(
+                  (e) => e.handlerType,
+                  'handlerType',
+                  'CRDTFugueTextHandler',
+                ),
+          ),
+        );
+      });
+
+      // `update` is stamped and `insert` is not, so a peer that got that
+      // wrong would leave the two sides picking different winners with no
+      // error anywhere. The read has to refuse instead.
+      test('a stamped kind that arrives without a stamp raises', () {
+        final doc = CRDTDocument();
+        final handler = CRDTFugueTextHandler(doc, 'text1')..insert(0, 'ab');
+
+        // The body of a one-item update: nodeID, then the new value.
+        final body = BytesBuilder(copy: false);
+        UVarint.write(1, body);
+        body.add(handler.nodeAt(0).toBytes());
+        final value = Wtf8.encode('X');
+        UVarint.write(value.length, body);
+        body.add(value);
+
+        final author = PeerId.generate();
+        doc.applyChange(
+          Change.fromPayloadBytes(
+            id: OperationId(author, HybridLogicalClock(l: 100, c: 1)),
+            deps: doc.version,
+            author: author,
+            payloadBytes: OperationEnvelopeCodec.encode(
+              handlerType: handler.handlerType,
+              handlerId: handler.id,
+              kind: OperationType.kindUpdate,
+              body: body.toBytes(),
+            ),
+          ),
+        );
+
+        expect(
+          () => handler.value,
+          throwsA(
+            isA<FormatException>().having(
+              (e) => e.message,
+              'message',
+              contains('is not declared stamped by'),
+            ),
+          ),
+        );
+      });
+
+      // The other half of the same disagreement: a peer that stamps `insert`
+      // sends one, this build does not read it, and the two would resolve
+      // concurrent inserts by different rules. Silent, so the read refuses.
+      test('an unstamped kind that arrives with a stamp raises', () {
+        final doc = CRDTDocument();
+        final handler = CRDTFugueTextHandler(doc, 'text1')..insert(0, 'ab');
+
+        // The body of a one-item insert: the two origins it hangs off, then
+        // the item id and its value.
+        final body = BytesBuilder(copy: false)
+          ..add(handler.nodeAt(0).toBytes())
+          ..add(FugueElementID.nullID().toBytes());
+        UVarint.write(1, body);
+        body.add(FugueElementID(PeerId.generate(), 900).toBytes());
+        final value = Wtf8.encode('X');
+        UVarint.write(value.length, body);
+        body.add(value);
+
+        final author = PeerId.generate();
+        doc.applyChange(
+          Change.fromPayloadBytes(
+            id: OperationId(author, HybridLogicalClock(l: 100, c: 1)),
+            deps: doc.version,
+            author: author,
+            payloadBytes: OperationEnvelopeCodec.encode(
+              handlerType: handler.handlerType,
+              handlerId: handler.id,
+              kind: OperationType.kindInsert,
+              stamped: true,
+              body: body.toBytes(),
+            ),
+          ),
+        );
+
+        expect(
+          () => handler.value,
+          throwsA(
+            isA<FormatException>().having(
+              (e) => e.message,
+              'message',
+              contains('is declared stamped by the'),
+            ),
+          ),
+        );
+      });
+
+      test('another handler type is declined before the kind is read', () {
+        // Order matters here: an unknown kind under a foreign type tag is
+        // somebody else's business. Checking the kind first would turn every
+        // handler that shares an id into a reader of everyone else's changes.
+        final doc = CRDTDocument();
+        final handler = CRDTFugueTextHandler(doc, 'text1')..insert(0, 'Hello');
+
+        final author = PeerId.generate();
+        doc.applyChange(
+          Change.fromPayloadBytes(
+            id: OperationId(author, HybridLogicalClock(l: 100, c: 1)),
+            deps: {},
+            author: author,
+            payloadBytes: OperationEnvelopeCodec.encode(
+              handlerType: 'CRDTFugueListHandler<String>',
+              handlerId: handler.id,
+              kind: 99,
+              body: Uint8List(0),
+            ),
+          ),
+        );
+
+        expect(handler.value, 'Hello');
+      });
+
+      test('an undecodable change makes the handler raise on every read', () {
+        final doc = CRDTDocument();
+        final handler = CRDTFugueTextHandler(doc, 'text1')..insert(0, 'Hello');
+
+        final author = PeerId.generate();
+        doc.applyChange(
+          Change.fromPayloadBytes(
+            id: OperationId(author, HybridLogicalClock(l: 100, c: 1)),
+            deps: {},
+            author: author,
+            payloadBytes: OperationEnvelopeCodec.encode(
+              handlerType: handler.handlerType,
+              handlerId: handler.id,
+              kind: 99,
+              body: Uint8List(0),
+            ),
+          ),
+        );
+
+        // Applying is zero-decode, so nothing failed above. The disagreement
+        // surfaces on the read — and it has to keep surfacing: answering with
+        // the pre-change text would be the silent divergence this guards.
+        expect(
+          () => handler.value,
+          throwsA(isA<UnknownOperationKindException>()),
+        );
+        expect(
+          () => handler.value,
+          throwsA(isA<UnknownOperationKindException>()),
+        );
+      });
+    });
   });
-}
-
-/// Truncates a Fugue sequence snapshot blob right after its node list,
-/// reproducing the layout written before the element id floor trailer existed.
-Uint8List _nodesOnlySnapshotBlob(Uint8List blob) {
-  var offset = 0;
-  final countRecord = UVarint.read(blob, offset: offset);
-  offset = countRecord.nextOffset;
-
-  for (var i = 0; i < countRecord.value; i += 1) {
-    final idLength = UVarint.read(blob, offset: offset);
-    offset = idLength.nextOffset + idLength.value;
-
-    final valueLength = UVarint.read(blob, offset: offset);
-    offset = valueLength.nextOffset + valueLength.value;
-  }
-
-  return Uint8List.sublistView(blob, 0, offset);
 }

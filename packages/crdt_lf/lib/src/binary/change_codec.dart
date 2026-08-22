@@ -8,14 +8,18 @@ import 'package:crdt_lf/src/binary/varint.dart';
 ///
 /// Format (all integers are unsigned varints unless specified):
 /// - magic: 6 bytes: ASCII "CRDTLF"
-/// - version: u8 (currently 1)
+/// - version: u8 (currently 2)
 /// - count: varint
 /// - repeated `count` times:
 ///   - length: varint
 ///   - payload: `length` bytes
+///
+/// A blob is what `Change.toBytes` produces, so it carries a version of its
+/// own. [version] covers this framing and nothing else: a change to the
+/// change layout moves `Change.schemaVersion` and leaves this one alone.
 class ChangeCodec {
-  /// The version of the change codec.
-  static const int version = 1;
+  /// The version this build writes and is the only one it reads.
+  static const int version = 2;
 
   /// The magic bytes for the change codec.
   static const List<int> _magic = <int>[67, 82, 68, 84, 76, 70]; // CRDTLF
@@ -49,7 +53,10 @@ class ChangeCodec {
 
     final v = data[_magic.length];
     if (v != version) {
-      throw FormatException('Unsupported change framing version: $v');
+      throw FormatException(
+        'Unsupported change framing version: $v '
+        '(this build reads $version)',
+      );
     }
 
     var offset = _magic.length + 1;

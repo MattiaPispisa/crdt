@@ -18,8 +18,8 @@ Built on top of [`provider`](https://pub.dev/packages/provider) — so you also 
 
 - [CRDT LF Flutter](#crdt-lf-flutter)
   - [Features](#features)
+  - [Greyhound Markdown](#greyhound-markdown)
   - [Example](#example)
-  - [How it works](#how-it-works)
   - [Getting Started](#getting-started)
   - [Usage](#usage)
     - [Provide a document](#provide-a-document)
@@ -27,7 +27,11 @@ Built on top of [`provider`](https://pub.dev/packages/provider) — so you also 
     - [Handler-scoped rebuilds](#handler-scoped-rebuilds)
     - [Imperative access](#imperative-access)
     - [Collaborative text](#collaborative-text)
+      - [Remote text cursors](#remote-text-cursors)
+      - [Rune ↔ UTF-16 offsets](#rune--utf-16-offsets)
     - [Presence cursors](#presence-cursors)
+  - [(deep dive) How it works](#deep-dive-how-it-works)
+  - [Apps](#apps)
   - [Packages](#packages)
 
 ## Features
@@ -52,18 +56,6 @@ Built on top of [`provider`](https://pub.dev/packages/provider) — so you also 
 - Context helpers: `context.crdtDocument`, `context.watchCrdtDocument()`,
   `context.selectCrdtDocument(...)`, `context.crdtHandler<H>(id)`.
 
-## Example
-
-The [`example/`](https://github.com/MattiaPispisa/crdt/tree/main/packages/crdt_lf_flutter/example)
-app demos **every widget in this package on a single screen** — each card wires
-a different handler, and a live `⟳ rebuilt ×N` badge shows exactly which regions
-re-render as you edit, so you can *see* the reactive scoping (and the
-zero-rebuild bindings) at work.
-
-<div align="center">
-  <img width="500" alt="crdt_lf_flutter_example" src="https://raw.githubusercontent.com/MattiaPispisa/crdt/main/assets/demos/crdt_lf_flutter_example.gif">
-</div>
-
 ## Greyhound Markdown
 
 A real-time collaborative markdown editor built with `crdt_lf` and
@@ -81,6 +73,18 @@ together — no install needed.
 </div>
 
 Source: [apps/greyhound_markdown](https://github.com/MattiaPispisa/crdt/tree/main/apps/greyhound_markdown).
+
+## Example
+
+The [`example/`](https://github.com/MattiaPispisa/crdt/tree/main/packages/crdt_lf_flutter/example)
+app demos **every widget in this package on a single screen** — each card wires
+a different handler, and a live `⟳ rebuilt ×N` badge shows exactly which regions
+re-render as you edit, so you can *see* the reactive scoping (and the
+zero-rebuild bindings) at work.
+
+<div align="center">
+  <img width="500" alt="crdt_lf_flutter_example" src="https://raw.githubusercontent.com/MattiaPispisa/crdt/main/assets/demos/crdt_lf_flutter_example.gif">
+</div>
 
 ## Getting Started
 
@@ -213,6 +217,28 @@ CrdtTextFieldBuilder(
   ),
 );
 ```
+
+#### Rune ↔ UTF-16 offsets
+
+`crdt_lf`'s handler API is rune-indexed everywhere. Flutter's `RenderEditable`, `TextSelection` and
+`TextPosition` are not — they count UTF-16 code units.
+`CrdtTextFieldBuilder` and `CrdtTextCursorsOverlay` already do this
+conversion for you; you only need it yourself when building a custom text
+binding.
+
+The single conversion point is `RuneOffsets`, defined in `crdt_lf` itself
+and reused here as-is — deliberately not reimplemented or wrapped in this
+package:
+
+```dart
+RuneOffsets.utf16Offset('a😀b', 1); // 1 — start of the emoji
+RuneOffsets.utf16Offset('a😀b', 2); // 3 — start of 'b'
+RuneOffsets.runeIndex('a😀b', 3);   // 2 — the rune that starts at code unit 3
+```
+
+`utf16Offset` converts a handler rune index into a UTF-16 offset for
+`TextSelection`/`TextPosition`; `runeIndex` converts the other way. Both
+clamp out-of-range input to the ends of the string instead of throwing.
 
 ### Presence cursors
 

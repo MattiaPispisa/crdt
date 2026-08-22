@@ -4,7 +4,7 @@
 /// interprets CRDT data (see `relay_server.dart`): the relay persists and
 /// rebroadcasts opaque change blobs, and merging happens entirely on the
 /// clients.
-library crdt_socket_sync_relay_client;
+library;
 
 export 'src/common/client/status.dart';
 export 'src/common/common/common.dart';

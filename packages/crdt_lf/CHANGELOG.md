@@ -1,17 +1,28 @@
 ## [4.0.0](https://github.com/MattiaPispisa/crdt/tree/crdt_lf-v4.0.0/packages/crdt_lf)
 
-**Date:** 2026-07-28
+**Date:** 2026-08-18
 
-[compare to previous release](https://github.com/MattiaPispisa/crdt/compare/crdt_lf-v3.4.2+1...crdt_lf-v4.0.0)
+[compare to previous release](https://github.com/MattiaPispisa/crdt/compare/crdt_lf-v3.5.0...crdt_lf-v4.0.0)
 
-**Breaking changes**
+### Changed
 
-`CRDTFugueTextHandler`, `CRDTTextHandler` are now indexed by runes (code points) instead of UTF-16 code units [106](https://github.com/MattiaPispisa/crdt/issues/106).
- 
-Everything remains compatible with v3 as long as text stays inside the BMP.
-Only documents that already contain non-BMP characters (emoji, …) are affected:
-  - `CRDTFugueTextHandler`: a previously written non-BMP character can still be half-deleted, until it is typed again.
-  - `CRDTTextHandler`: a history holding an index that falls after a non-BMP character replays to different text. Documents in that state have to be re-created. 
+- Text handlers index by runes (code points), not UTF-16 code units. [106](https://github.com/MattiaPispisa/crdt/issues/106)
+- New operation layer: a handler declares its own operation kinds.
+  A handler decodes them by overriding `operationDecoders`, a plain kind-to-decoder map, instead of implementing dispatch by hand. [129](https://github.com/MattiaPispisa/crdt/issues/129)
+- `update` on `CRDTFugueTextHandler` and `CRDTFugueListHandler` keeps the identity of the element
+  instead of replacing it. [127](https://github.com/MattiaPispisa/crdt/issues/127)
+- `Snapshot` carries a schema version, and so does every per-handler blob inside it. [130](https://github.com/MattiaPispisa/crdt/issues/130)
+- `incrementCachedState` takes an optional `DeltaSink`. [132](https://github.com/MattiaPispisa/crdt/issues/132)
+- `Handler` is a `base` class: extend it, do not implement it.
+- A deleted element keeps its value, its place and the id of the change that removed it, in the
+  tree and in the snapshot, so it can be put back whole.
+
+### Breaking
+
+A v3 document does not open in v4 — not from its history, not from a snapshot, not from the bytes an
+adapter saved — so peers have to move together and existing documents have to be recreated; the
+[README](https://github.com/MattiaPispisa/crdt/tree/main/packages/crdt_lf#migrating-from-3x-to-40) lists the
+renamed and removed symbols. The Dart floor moves to `>=3.0.0`.
 
 ## [3.5.0](https://github.com/MattiaPispisa/crdt/tree/crdt_lf-v3.5.0/packages/crdt_lf)
 
@@ -67,7 +78,7 @@ Only documents that already contain non-BMP characters (emoji, …) are affected
 
 **Date:** 2026-07-26
 
-Documentation release: refreshes the CHANGELOG and docs published on pub.dev. No functional changes since `3.4.2`.
+- Documentation release: refreshes the CHANGELOG and docs published on pub.dev. No functional changes since `3.4.2`.
 
 ## [3.4.2](https://github.com/MattiaPispisa/crdt/tree/crdt_lf-v3.4.2/packages/crdt_lf)
 
@@ -96,13 +107,13 @@ Documentation release: refreshes the CHANGELOG and docs published on pub.dev. No
 
 **Date:** 2026-07-19
 
-Documentation release: refreshes the CHANGELOG and docs published on pub.dev. No functional changes since `3.4.0`.
+- Documentation release: refreshes the CHANGELOG and docs published on pub.dev. No functional changes since `3.4.0`.
 
 ## [3.4.0+1](https://github.com/MattiaPispisa/crdt/tree/crdt_lf-v3.4.0+1/packages/crdt_lf)
 
 **Date:** 2026-07-18
 
-Documentation release: refreshes the CHANGELOG and docs published on pub.dev. No functional changes since `3.4.0`.
+- Documentation release: refreshes the CHANGELOG and docs published on pub.dev. No functional changes since `3.4.0`.
 
 ## [3.4.0](https://github.com/MattiaPispisa/crdt/tree/crdt_lf-v3.4.0/packages/crdt_lf)
 

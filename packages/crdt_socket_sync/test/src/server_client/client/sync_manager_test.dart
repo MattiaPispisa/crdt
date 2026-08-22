@@ -216,7 +216,7 @@ void main() {
         final operation = MockOperation(handler);
         document
           ..createChange(operation)
-          ..createChange(operation);
+          ..createChange(MockOperation(handler));
 
         // Wait for local changes to be processed
         await Future<void>.delayed(Duration.zero);
@@ -326,7 +326,7 @@ void main() {
         // Create some local changes
         document
           ..createChange(operation)
-          ..createChange(operation);
+          ..createChange(MockOperation(handler));
 
         // Wait for local changes
         await Future<void>.delayed(Duration.zero);
@@ -391,7 +391,7 @@ void main() {
         final operation = MockOperation(handler);
         document
           ..createChange(operation)
-          ..createChange(operation);
+          ..createChange(MockOperation(handler));
 
         await Future<void>.delayed(Duration.zero);
 
@@ -468,12 +468,13 @@ void main() {
 
     group('Edge cases and error scenarios', () {
       test('should handle concurrent local changes', () async {
-        final operation = MockOperation(handler);
-
-        // Create multiple changes rapidly
+        // One operation per change: a change takes the id of the operation it
+        // carries, so reusing the instance would rebuild the same change.
         final futures = <Future<void>>[];
         for (var i = 0; i < 5; i++) {
-          futures.add(Future<void>(() => document.createChange(operation)));
+          futures.add(
+            Future<void>(() => document.createChange(MockOperation(handler))),
+          );
         }
 
         await Future.wait(futures);

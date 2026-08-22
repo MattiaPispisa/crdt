@@ -60,7 +60,10 @@ class Change {
     }
     final version = data[0];
     if (version != schemaVersion) {
-      throw FormatException('Unsupported Change schema version: $version');
+      throw FormatException(
+        'Unsupported Change schema version: $version '
+        '(this build reads $schemaVersion)',
+      );
     }
 
     final depsCountRec = UVarint.read(data, offset: 1);
@@ -155,7 +158,7 @@ class Change {
   }
 
   /// Schema version for the current binary layout.
-  static const int schemaVersion = 2;
+  static const int schemaVersion = 3;
 
   /// Metadata layout (indices in [meta]).
   static const int _metaSchema = 0;

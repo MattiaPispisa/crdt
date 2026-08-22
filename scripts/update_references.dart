@@ -216,7 +216,7 @@ void _cutDocumentationRelease({
       '\n'
       '**Date:** ${_today()}\n'
       '\n'
-      'Documentation release: refreshes the CHANGELOG and docs published on '
+      '- Documentation release: refreshes the CHANGELOG and docs published on '
       'pub.dev. No functional changes since `${_withoutBuild(current)}`.\n'
       '\n';
   changelog.writeAsStringSync(

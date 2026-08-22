@@ -201,9 +201,8 @@ void main() {
       expect(result.sublist(bStart, bStart + 3), ['b1', 'b2', 'b3']);
     });
 
-    test('seeds the element counter from imported update history', () {
-      // doc1 produces an insert followed by an update, so its history
-      // contains an update operation.
+    test('an imported history that holds an update replays and takes edits',
+        () {
       final doc1 = CRDTDocument(
         peerId: PeerId.parse('45ee6b65-b393-40b7-9755-8b66dc7d0518'),
       );
@@ -211,9 +210,9 @@ void main() {
         ..insert(0, 'a')
         ..update(0, 'A');
 
-      // doc2 imports that history, then performs a *local* edit. The first
-      // local edit seeds the counter by scanning the imported operations,
-      // which include the update.
+      // doc2 replays that history from scratch, then edits locally: the
+      // update has to land on the element the insert created, and the local
+      // insert has to find the right position after it.
       final doc2 = CRDTDocument(
         peerId: PeerId.parse('a90dfced-cbf0-4a49-9c64-f5b7b62fdc18'),
       );
@@ -227,6 +226,34 @@ void main() {
       // The two peers still converge after exchanging the new change.
       doc1.importChanges(doc2.exportChanges());
       expect(h1.value, ['A', 'b']);
+    });
+
+    // The list has its own operation class and its own value codec, so the
+    // update path is different code from the text one even though the rule
+    // it follows is the same.
+    test('two peers updating the same element converge on one value', () {
+      final doc1 = CRDTDocument(
+        peerId: PeerId.parse('45ee6b65-b393-40b7-9755-8b66dc7d0518'),
+      );
+      final h1 = CRDTFugueListHandler<String>(doc1, 'list1')
+        ..insert(0, 'a')
+        ..insert(1, 'b');
+
+      final doc2 = CRDTDocument(
+        peerId: PeerId.parse('a90dfced-cbf0-4a49-9c64-f5b7b62fdc18'),
+      );
+      final h2 = CRDTFugueListHandler<String>(doc2, 'list1');
+      doc2.importChanges(doc1.exportChanges());
+
+      h1.update(0, 'from 1');
+      h2.update(0, 'from 2');
+
+      doc1.importChanges(doc2.exportChanges());
+      doc2.importChanges(doc1.exportChanges());
+
+      expect(h1.value, equals(h2.value));
+      expect(h1.value.first, anyOf('from 1', 'from 2'));
+      expect(h1.length, equals(2));
     });
 
     test('toString includes id and value', () {

@@ -1,4 +1,4 @@
-import 'package:crdt_lf/crdt_lf.dart';
+import 'package:crdt_lf/src/algorithm/fugue/element_id.dart';
 
 /// Represents a node within the logical sequence
 /// maintained by a Fugue-based CRDT.

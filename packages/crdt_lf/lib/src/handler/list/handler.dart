@@ -1,5 +1,6 @@
 import 'dart:typed_data';
 import 'package:crdt_lf/crdt_lf.dart';
+import 'package:crdt_lf/src/snapshot/blob_version.dart';
 
 part 'operation.dart';
 
@@ -21,7 +22,7 @@ part 'operation.dart';
 /// list..insert(0, 'Hello')..insert(1, 'World')..update(0, 'Hello,')
 /// print(list.value.join('')); // Prints "Hello, World"
 /// ```
-class CRDTListHandler<T> extends Handler<List<T>> {
+base class CRDTListHandler<T> extends Handler<List<T>> {
   /// Creates a new CRDTList with the given document and ID
   ///
   /// [valueCodec] is an optional codec for encoding/decoding [T] values to bytes.
@@ -34,8 +35,14 @@ class CRDTListHandler<T> extends Handler<List<T>> {
   }) : _valueCodec = valueCodec ?? JsonValueCodec<T>();
 
   @override
-  late final OperationFactory operationFactory =
-      _ListOperationFactory<T>(this).fromBytes;
+  late final OperationDecoders operationDecoders = {
+    OperationType.kindInsert: (body) =>
+        _ListInsertOperation<T>.fromBodyBytes(this, body),
+    OperationType.kindDelete: (body) =>
+        _ListDeleteOperation<T>.fromBodyBytes(this, body),
+    OperationType.kindUpdate: (body) =>
+        _ListUpdateOperation<T>.fromBodyBytes(this, body),
+  };
 
   /// The ID of this list in the document
   final String _id;
@@ -117,9 +124,15 @@ class CRDTListHandler<T> extends Handler<List<T>> {
     return state;
   }
 
+  /// The version of the snapshot blob this build writes and reads.
+  ///
+  /// Layout: `version: u8`, `count: uvarint`, then per item
+  /// `itemLen: uvarint`, `item: bytes`.
+  static const int _snapshotVersion = 1;
+
   @override
   Uint8List getSnapshotState() {
-    final out = BytesBuilder(copy: false);
+    final out = BytesBuilder(copy: false)..addByte(_snapshotVersion);
     final items = value;
     UVarint.write(items.length, out);
     for (final item in items) {
@@ -249,6 +262,7 @@ class CRDTListHandler<T> extends Handler<List<T>> {
   List<T>? incrementCachedState({
     required Operation operation,
     required List<T> state,
+    DeltaSink<Object?>? sink,
   }) {
     // Mutate the cached state in place instead of copying it on
     // every operation.
@@ -268,7 +282,11 @@ class CRDTListHandler<T> extends Handler<List<T>> {
       return [];
     }
 
-    var offset = 0;
+    var offset = SnapshotBlob.read(
+      snapshot,
+      version: _snapshotVersion,
+      name: 'list',
+    );
     final countRec = UVarint.read(snapshot, offset: offset);
     offset = countRec.nextOffset;
     final items = <T>[];

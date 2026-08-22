@@ -1,7 +1,7 @@
 import 'dart:typed_data';
 
 import 'package:crdt_lf/crdt_lf.dart';
-import 'package:hlc_dart/hlc_dart.dart';
+import 'package:crdt_lf/src/snapshot/blob_version.dart';
 
 part 'operation.dart';
 
@@ -29,7 +29,7 @@ part 'operation.dart';
 /// map.remove('b');
 /// print(map.value); // Prints {'a': 10}
 /// ```
-class CRDTORMapHandler<K, V> extends Handler<ORMapState<K, V>> {
+base class CRDTORMapHandler<K, V> extends Handler<ORMapState<K, V>> {
   /// Creates a new CRDT OR-MapHandler with the given document and ID
   ///
   /// [keyCodec] and [valueCodec] are optional codecs for encoding/decoding keys and values to bytes.
@@ -51,29 +51,31 @@ class CRDTORMapHandler<K, V> extends Handler<ORMapState<K, V>> {
   String get id => _id;
 
   @override
-  late final OperationFactory operationFactory =
-      _ORMapOperationFactory<K, V>(this).fromBytes;
+  late final OperationDecoders operationDecoders = {
+    OperationType.kindInsert: (body) =>
+        _ORMapPutOperation<K, V>.fromBodyBytes(this, body),
+    OperationType.kindDelete: (body) =>
+        _ORMapRemoveOperation<K, V>.fromBodyBytes(this, body),
+  };
 
-  /// Obtains a unique tag for an operation
-  ORHandlerTag _tag() {
-    doc.prepareMutation();
-    return ORHandlerTag(
-      peerId: doc.peerId,
-      hlc: doc.hlc,
-    );
-  }
+  /// The stamp of a `put` is the tag it stores for the written value.
+  @override
+  late final OperationType insertType = OperationType.insert(
+    this,
+    stamped: true,
+  );
 
-  /// Puts [value] for [key] in the map, producing a unique tag.
+  /// Puts [value] for [key] in the map, under a tag of its own.
   ///
-  /// If the key already exists, this creates a new tag for the new value,
-  /// effectively updating the key's value. The tag is pseudo-causal,
-  /// derived from the current document clock and peer id.
+  /// Writing a key that already exists adds a new tag rather than replacing
+  /// the old one, which is how the key reads back as updated. The tag is the
+  /// [OperationId] the document mints for the operation, so two peers
+  /// writing the same key concurrently converge on the higher stamp.
   void put(K key, V value) {
     final operation = _ORMapPutOperation<K, V>.fromHandler(
       this,
       key: key,
       value: value,
-      tag: _tag(),
     );
     doc.registerOperation(operation);
   }
@@ -121,10 +123,18 @@ class CRDTORMapHandler<K, V> extends Handler<ORMapState<K, V>> {
   /// Returns the current entries in the map.
   Iterable<MapEntry<K, V>> get entries => value.entries;
 
+  /// The version of the snapshot blob this build writes and reads.
+  ///
+  /// Layout: `version: u8`, `count: uvarint`, then per entry
+  /// `keyLen: uvarint`, `key: bytes`, `valueLen: uvarint`, `value: bytes`.
+  /// The tags stay out: a snapshot holds the projected map, and the entries
+  /// come back tagless.
+  static const int _snapshotVersion = 1;
+
   /// Returns the current state for snapshotting as a binary blob.
   @override
   Uint8List getSnapshotState() {
-    final out = BytesBuilder(copy: false);
+    final out = BytesBuilder(copy: false)..addByte(_snapshotVersion);
     final entries = value;
     UVarint.write(entries.length, out);
     for (final entry in entries.entries) {
@@ -145,7 +155,7 @@ class CRDTORMapHandler<K, V> extends Handler<ORMapState<K, V>> {
       live: <K, Set<ORMapEntry<V>>>{},
       all: <K, Set<ORMapEntry<V>>>{},
       snapshotOnly: <K, V>{},
-      tombstones: <ORHandlerTag>{},
+      tombstones: <OperationId>{},
     );
 
     final snap = lastSnapshot();
@@ -156,7 +166,11 @@ class CRDTORMapHandler<K, V> extends Handler<ORMapState<K, V>> {
     // say otherwise. The snapshot is a length-prefixed sequence of
     // (key, value) pairs encoded via [_keyCodec] and [_valueCodec].
     if (snap != null) {
-      var offset = 0;
+      var offset = SnapshotBlob.read(
+        snap,
+        version: _snapshotVersion,
+        name: 'OR-map',
+      );
       final countRec = UVarint.read(snap, offset: offset);
       offset = countRec.nextOffset;
       for (var i = 0; i < countRec.value; i += 1) {
@@ -212,7 +226,9 @@ class CRDTORMapHandler<K, V> extends Handler<ORMapState<K, V>> {
   }) {
     final key = operation.key;
     final value = operation.value;
-    final tag = operation.tag;
+    // The stamp is there for every put: the handler is stamped, so the
+    // document mints one locally and the decode refuses a change without one.
+    final tag = operation.stamp!;
 
     final entry = ORMapEntry<V>(value: value, tag: tag);
 
@@ -259,6 +275,7 @@ class CRDTORMapHandler<K, V> extends Handler<ORMapState<K, V>> {
   ORMapState<K, V>? incrementCachedState({
     required Operation operation,
     required ORMapState<K, V> state,
+    DeltaSink<Object?>? sink,
   }) {
     // The cached state is never exposed by this handler, so it can be
     // mutated in place instead of deep-copied on every operation.
@@ -290,17 +307,17 @@ class ORMapState<K, V> {
     required Map<K, Set<ORMapEntry<V>>> live,
     required Map<K, Set<ORMapEntry<V>>> all,
     required Map<K, V> snapshotOnly,
-    required Set<ORHandlerTag> tombstones,
+    required Set<OperationId> tombstones,
   })  : _tombstones = tombstones,
         _snapshotOnly = snapshotOnly,
         _all = all,
         _live = live;
 
   /// Returns all tags for a given key (across all entries)
-  Set<ORHandlerTag> _allTagsForKey(K key) {
+  Set<OperationId> _allTagsForKey(K key) {
     final allForKey = _all[key];
     if (allForKey == null) {
-      return <ORHandlerTag>{};
+      return <OperationId>{};
     }
     return allForKey.map((entry) => entry.tag).toSet();
   }
@@ -315,7 +332,7 @@ class ORMapState<K, V> {
   final Map<K, V> _snapshotOnly;
 
   /// The tombstones
-  final Set<ORHandlerTag> _tombstones;
+  final Set<OperationId> _tombstones;
 
   /// The state of the OR-Map.
   /// For each key with live entries, we pick the entry with the
@@ -360,7 +377,7 @@ class ORMapEntry<V> {
   final V value;
 
   /// The unique tag for this entry
-  final ORHandlerTag tag;
+  final OperationId tag;
 
   @override
   bool operator ==(Object other) {

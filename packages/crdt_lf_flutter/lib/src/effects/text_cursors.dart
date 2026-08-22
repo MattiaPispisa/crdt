@@ -286,6 +286,7 @@ class _CrdtTextCursorsOverlayState extends State<CrdtTextCursorsOverlay>
       return;
     }
     final handler = _handler();
+    final text = handler.value;
     final scroll = _editableScroll(editable);
     final animate = widget.motionDuration > Duration.zero;
     final resolved = <_ResolvedCursor>[];
@@ -302,11 +303,17 @@ class _CrdtTextCursorsOverlayState extends State<CrdtTextCursorsOverlay>
         continue;
       }
 
+      // Handler indices count runes; RenderEditable indexes UTF-16 code
+      // units, so an emoji ahead of the cursor would otherwise shift it.
+      final extentOffset = RuneOffsets.utf16Offset(text, extent);
+      final baseOffset =
+          base == null ? null : RuneOffsets.utf16Offset(text, base);
+
       final selection = <Rect>[];
-      if (base != null && base != extent) {
+      if (baseOffset != null && baseOffset != extentOffset) {
         final range = TextSelection(
-          baseOffset: math.min(base, extent),
-          extentOffset: math.max(base, extent),
+          baseOffset: math.min(baseOffset, extentOffset),
+          extentOffset: math.max(baseOffset, extentOffset),
         );
         for (final box in editable.getBoxesForSelection(range)) {
           selection.add(box.toRect().shift(-scroll));
@@ -314,7 +321,7 @@ class _CrdtTextCursorsOverlayState extends State<CrdtTextCursorsOverlay>
       }
 
       final target = editable
-          .getLocalRectForCaret(TextPosition(offset: extent))
+          .getLocalRectForCaret(TextPosition(offset: extentOffset))
           .shift(-scroll);
       live.add(cursor.id);
       final motion = _motions[cursor.id];
@@ -593,24 +600,9 @@ class _TextCursorsPainter extends CustomPainter {
       ..save()
       ..clipRect(bounds);
 
-    // Handler indices count runes; `RenderEditable` indexes code units.
-    final text = handler.value;
-
-    for (final cursor in _state.widget.cursors) {
-      final baseIndex = handler.indexOfStablePosition(cursor.base);
-      final extentIndex = cursor.extent == cursor.base
-          ? baseIndex
-          : handler.indexOfStablePosition(cursor.extent);
-      if (extentIndex == null) {
-        // The anchored element is not known yet: hide until it arrives.
-        continue;
-      }
-
-      final extent = RuneOffsets.utf16Offset(text, extentIndex);
-      final base =
-          baseIndex == null ? null : RuneOffsets.utf16Offset(text, baseIndex);
-
-      if (base != null && base != extent) {
+    for (final resolved in _state._resolved) {
+      final cursor = resolved.cursor;
+      if (resolved.selection.isNotEmpty) {
         final highlight = Paint()..color = cursor.color.withValues(alpha: .3);
         for (final box in resolved.selection) {
           canvas.drawRect(

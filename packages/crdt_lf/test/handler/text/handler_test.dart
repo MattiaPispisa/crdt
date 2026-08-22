@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:crdt_lf/crdt_lf.dart';
 import 'package:hlc_dart/hlc_dart.dart';
@@ -319,8 +320,12 @@ void main() {
         ),
       );
       expect(snapshot.data, isMap);
+      final blob = snapshot.data[handlerId]!;
+      // The blob leads with its own version, under the one the wrapper
+      // carries, and the text follows it.
+      expect(blob[0], equals(1));
       expect(
-        utf8.decode(snapshot.data[handlerId]!),
+        utf8.decode(Uint8List.sublistView(blob, 1)),
         equals('HelloWorld'),
       );
     });
@@ -502,7 +507,7 @@ void main() {
         // Verify snapshot data (simple check)
         expect(snapshot1.data[handlerId], isNotNull);
         expect(
-          utf8.decode(snapshot1.data[handlerId]!),
+          utf8.decode(Uint8List.sublistView(snapshot1.data[handlerId]!, 1)),
           equals(convergedValue),
         );
 
@@ -580,6 +585,45 @@ void main() {
         doc2.importChanges(doc1.exportChanges());
 
         expect(text2.value, equals('hi 😀🎉'));
+      });
+
+      test('emoji update survives export/import to a second replica', () {
+        final doc1 = CRDTDocument();
+        final text1 = CRDTTextHandler(doc1, 'text')..insert(0, '😀');
+        final doc2 = CRDTDocument(documentId: doc1.documentId);
+        final text2 = CRDTTextHandler(doc2, 'text');
+        doc2.importChanges(doc1.exportChanges());
+
+        text1.update(0, '😃');
+        doc2.importChanges(doc1.exportChanges());
+
+        expect(text1.value, equals('😃'));
+        expect(text2.value, equals('😃'));
+      });
+
+      test(
+          'two peers concurrently inserting either side of an emoji never '
+          'produce mojibake or an unpaired surrogate', () {
+        // Under the old UTF-16 code-unit unit, offset 2 sat between the two
+        // surrogate halves of the emoji: inserting there split it. Under
+        // runes that offset does not exist; the closest valid positions are
+        // rune 1 (just before the emoji) and rune 2 (just after it).
+        final peerA = CRDTDocument();
+        final textA = CRDTTextHandler(peerA, 'text')..insert(0, 'a😀b');
+
+        final peerB = CRDTDocument(documentId: peerA.documentId);
+        final textB = CRDTTextHandler(peerB, 'text');
+        peerB.importChanges(peerA.exportChanges());
+
+        textA.insert(1, 'X'); // just before the emoji
+        textB.insert(2, 'Y'); // just after the emoji
+
+        peerB.importChanges(peerA.exportChanges());
+        peerA.importChanges(peerB.exportChanges());
+
+        expect(textA.value, equals(textB.value));
+        expect(textA.value, contains('😀'));
+        expect(textA.value, isNot(contains('�')));
       });
     });
   });

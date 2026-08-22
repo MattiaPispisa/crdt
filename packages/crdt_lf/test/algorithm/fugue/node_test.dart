@@ -1,4 +1,5 @@
 import 'package:crdt_lf/crdt_lf.dart';
+import 'package:crdt_lf/src/algorithm/fugue/node.dart';
 import 'package:test/test.dart';
 
 void main() {
@@ -20,7 +21,7 @@ void main() {
       expect(node.value, 'a');
       expect(node.parentID, parentId);
       expect(node.side, FugueSide.right);
-      expect(node.isDeleted, false);
+      expect(node.deleted, false);
     });
 
     test('should mark node as deleted', () {
@@ -36,10 +37,13 @@ void main() {
         side: FugueSide.right,
       );
 
-      expect(node.isDeleted, false);
+      expect(node.deleted, false);
 
-      node.value = null;
-      expect(node.isDeleted, true);
+      // The value is what the element comes back with, so deletion says so
+      // on its own instead of throwing the value away.
+      node.deleted = true;
+      expect(node.deleted, true);
+      expect(node.value, equals('a'));
     });
 
     test('should serialize to JSON correctly', () {
@@ -129,8 +133,8 @@ void main() {
         side: FugueSide.right,
       );
 
-      final expected = 'FugueNode(id: $id, value: a, parentID: $parentId,'
-          ' side: ${FugueSide.right})';
+      final expected = 'FugueNode(id: $id, value: a, deleted: false,'
+          ' parentID: $parentId, side: ${FugueSide.right})';
       expect(node.toString(), equals(expected));
     });
 
@@ -147,8 +151,8 @@ void main() {
         side: FugueSide.right,
       );
 
-      final expected = 'FugueNode(id: $id, value: null, parentID: $parentId,'
-          ' side: ${FugueSide.right})';
+      final expected = 'FugueNode(id: $id, value: null, deleted: false,'
+          ' parentID: $parentId, side: ${FugueSide.right})';
       expect(node.toString(), equals(expected));
     });
   });

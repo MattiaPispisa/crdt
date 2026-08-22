@@ -10,6 +10,12 @@ class Wtf8 {
   /// (identical to UTF-8); lone surrogates are preserved as 3-byte sequences.
   static Uint8List encode(String input) {
     final out = BytesBuilder(copy: false);
+    _encodeInto(input, out);
+    return out.toBytes();
+  }
+
+  /// Appends the WTF-8 form of [input] to [out].
+  static void _encodeInto(String input, BytesBuilder out) {
     final units = input.codeUnits;
     final len = units.length;
     var i = 0;
@@ -35,7 +41,59 @@ class Wtf8 {
       }
       _writeCodePoint(codePoint, out);
     }
+  }
+
+  /// Encodes every value of [values] on its own and concatenates the result.
+  ///
+  /// Not the same as encoding `values.join()`: a lone high surrogate followed
+  /// by a lone low surrogate would pair up there into a single 4-byte
+  /// sequence, and the two would come back as one. Encoding value by value
+  /// keeps one sequence per value, which is what makes [decodeCodePoints] the
+  /// exact inverse for values of one code point each.
+  static Uint8List encodeAll(Iterable<String> values) {
+    final out = BytesBuilder(copy: false);
+    for (final value in values) {
+      _encodeInto(value, out);
+    }
     return out.toBytes();
+  }
+
+  /// Decodes WTF-8 [bytes] into one string per encoded code point.
+  ///
+  /// Splits on the byte sequences rather than re-scanning the decoded string:
+  /// `String.runes` pairs two adjacent lone surrogates back into one code
+  /// point, which would merge two values into one.
+  ///
+  /// Throws a [FormatException] if a multi-byte sequence is truncated.
+  static List<String> decodeCodePoints(Uint8List bytes) {
+    final result = <String>[];
+    final len = bytes.length;
+    var start = 0;
+    while (start < len) {
+      final end = _sequenceEnd(bytes, start);
+      result.add(decode(Uint8List.sublistView(bytes, start, end)));
+      start = end;
+    }
+    return result;
+  }
+
+  /// The offset just past the WTF-8 sequence that starts at [start].
+  static int _sequenceEnd(Uint8List bytes, int start) {
+    final b0 = bytes[start];
+    final int width;
+    if (b0 < 0x80) {
+      width = 1;
+    } else if (b0 < 0xE0) {
+      width = 2;
+    } else if (b0 < 0xF0) {
+      width = 3;
+    } else {
+      width = 4;
+    }
+    if (start + width > bytes.length) {
+      throw const FormatException('Truncated WTF-8 sequence');
+    }
+    return start + width;
   }
 
   /// Decodes WTF-8 [bytes] back to a [String].

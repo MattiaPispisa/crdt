@@ -1,7 +1,7 @@
 import 'dart:typed_data';
 
 import 'package:crdt_lf/crdt_lf.dart';
-import 'package:hlc_dart/hlc_dart.dart';
+import 'package:crdt_lf/src/snapshot/blob_version.dart';
 
 part 'operation.dart';
 
@@ -28,7 +28,7 @@ part 'operation.dart';
 /// set.remove('value2');
 /// print(set.value); // Prints {'value1', 'value3'}
 /// ```
-class CRDTORSetHandler<T> extends Handler<ORSetState<T>> {
+base class CRDTORSetHandler<T> extends Handler<ORSetState<T>> {
   /// Creates a new CRDT OR-SetHandler with the given document and ID
   ///
   /// [valueCodec] is an optional codec for encoding/decoding [T] values to bytes.
@@ -47,27 +47,29 @@ class CRDTORSetHandler<T> extends Handler<ORSetState<T>> {
   String get id => _id;
 
   @override
-  late final OperationFactory operationFactory =
-      _ORSetOperationFactory<T>(this).fromBytes;
+  late final OperationDecoders operationDecoders = {
+    OperationType.kindInsert: (body) =>
+        _ORSetAddOperation<T>.fromBodyBytes(this, body),
+    OperationType.kindDelete: (body) =>
+        _ORSetRemoveOperation<T>.fromBodyBytes(this, body),
+  };
 
-  /// Obtains a unique tag for an operation
-  ORHandlerTag _tag() {
-    doc.prepareMutation();
-    return ORHandlerTag(
-      peerId: doc.peerId,
-      hlc: doc.hlc,
-    );
-  }
+  /// The stamp of an `add` is the tag it stores for the added value.
+  @override
+  late final OperationType insertType = OperationType.insert(
+    this,
+    stamped: true,
+  );
 
-  /// Adds [value] to the set producing a unique tag, returned to the caller.
+  /// Adds [value] to the set under a tag of its own.
   ///
-  /// The tag is pseudo-causal, derived from the current document clock
-  /// and peer id, making it unique and loosely ordered.
+  /// The tag is the [OperationId] the document mints for the operation, so
+  /// two peers adding the same value concurrently produce two tags and the
+  /// value survives either removal.
   void add(T value) {
     final operation = _ORSetAddOperation<T>.fromHandler(
       this,
       value: value,
-      tag: _tag(),
     );
     doc.registerOperation(operation);
   }
@@ -75,7 +77,7 @@ class CRDTORSetHandler<T> extends Handler<ORSetState<T>> {
   /// Removes [value] from the set by tomb-stoning observed tags.
   void remove(T value) {
     final state = _cachedOrComputedState();
-    final allTags = state._all[value] ?? <ORHandlerTag>{};
+    final allTags = state._all[value] ?? <OperationId>{};
 
     final operation = _ORSetRemoveOperation<T>.fromHandler(
       this,
@@ -103,10 +105,17 @@ class CRDTORSetHandler<T> extends Handler<ORSetState<T>> {
   /// Returns whether the set contains [value].
   bool contains(T element) => value.contains(element);
 
+  /// The version of the snapshot blob this build writes and reads.
+  ///
+  /// Layout: `version: u8`, `count: uvarint`, then per item
+  /// `itemLen: uvarint`, `item: bytes`. The tags stay out: a snapshot holds
+  /// the projected set, and the elements come back tagless.
+  static const int _snapshotVersion = 1;
+
   /// Returns the current state for snapshotting as a binary blob.
   @override
   Uint8List getSnapshotState() {
-    final out = BytesBuilder(copy: false);
+    final out = BytesBuilder(copy: false)..addByte(_snapshotVersion);
     final items = value;
     UVarint.write(items.length, out);
     for (final item in items) {
@@ -120,10 +129,10 @@ class CRDTORSetHandler<T> extends Handler<ORSetState<T>> {
   /// Computes the tag state by replaying the history.
   ORSetState<T> _computeState() {
     final state = ORSetState<T>._(
-      live: <T, Set<ORHandlerTag>>{},
-      all: <T, Set<ORHandlerTag>>{},
+      live: <T, Set<OperationId>>{},
+      all: <T, Set<OperationId>>{},
       snapshotOnly: <T>{},
-      tombstones: <ORHandlerTag>{},
+      tombstones: <OperationId>{},
     );
 
     final snap = lastSnapshot();
@@ -134,7 +143,11 @@ class CRDTORSetHandler<T> extends Handler<ORSetState<T>> {
     // otherwise. The snapshot is a length-prefixed sequence of items encoded
     // via [_valueCodec].
     if (snap != null) {
-      var offset = 0;
+      var offset = SnapshotBlob.read(
+        snap,
+        version: _snapshotVersion,
+        name: 'OR-set',
+      );
       final countRec = UVarint.read(snap, offset: offset);
       offset = countRec.nextOffset;
       for (var i = 0; i < countRec.value; i += 1) {
@@ -182,13 +195,13 @@ class CRDTORSetHandler<T> extends Handler<ORSetState<T>> {
   }) {
     // Register tag as seen (all),
     // and as live if not tomb-stoned yet.
-    state._all
-        .putIfAbsent(operation.value, () => <ORHandlerTag>{})
-        .add(operation.tag);
-    if (!state._tombstones.contains(operation.tag)) {
-      state._live
-          .putIfAbsent(operation.value, () => <ORHandlerTag>{})
-          .add(operation.tag);
+    //
+    // The stamp is there for every add: the handler is stamped, so the
+    // document mints one locally and the decode refuses a change without one.
+    final tag = operation.stamp!;
+    state._all.putIfAbsent(operation.value, () => <OperationId>{}).add(tag);
+    if (!state._tombstones.contains(tag)) {
+      state._live.putIfAbsent(operation.value, () => <OperationId>{}).add(tag);
     }
     // A concrete add overrides snapshot-only presence for this value.
     state._snapshotOnly.remove(operation.value);
@@ -226,6 +239,7 @@ class CRDTORSetHandler<T> extends Handler<ORSetState<T>> {
   ORSetState<T>? incrementCachedState({
     required Operation operation,
     required ORSetState<T> state,
+    DeltaSink<Object?>? sink,
   }) {
     // The cached state is never exposed by this handler, so it can be
     // mutated in place instead of deep-copied on every operation.
@@ -254,26 +268,26 @@ class ORSetState<T> {
   /// so far while replaying history.
   /// - [_state]: the current state of the OR-Set
   ORSetState._({
-    required Map<T, Set<ORHandlerTag>> live,
-    required Map<T, Set<ORHandlerTag>> all,
+    required Map<T, Set<OperationId>> live,
+    required Map<T, Set<OperationId>> all,
     required Set<T> snapshotOnly,
-    required Set<ORHandlerTag> tombstones,
+    required Set<OperationId> tombstones,
   })  : _tombstones = tombstones,
         _snapshotOnly = snapshotOnly,
         _all = all,
         _live = live;
 
   /// The live tags per value
-  final Map<T, Set<ORHandlerTag>> _live;
+  final Map<T, Set<OperationId>> _live;
 
   /// The all tags per value
-  final Map<T, Set<ORHandlerTag>> _all;
+  final Map<T, Set<OperationId>> _all;
 
   /// The snapshot-only values
   final Set<T> _snapshotOnly;
 
   /// The tombstones
-  final Set<ORHandlerTag> _tombstones;
+  final Set<OperationId> _tombstones;
 
   /// The state of the OR-Set
   Set<T> get _state => <T>{..._live.keys, ..._snapshotOnly};

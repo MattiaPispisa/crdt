@@ -12,9 +12,7 @@ import 'package:crdt_lf/src/peer_id.dart';
 /// Two different elements would then share an id, which corrupts the tree of
 /// every peer that still holds the original as a tombstone.
 ///
-/// The table is appended after the handler's own snapshot payload. Decoders
-/// that predate it read their payload and stop, so the trailer is compatible
-/// in both directions.
+/// The table closes the handler's own snapshot payload.
 ///
 /// Layout:
 /// - `peerCount: uvarint`
@@ -31,11 +29,12 @@ class ElementIdFloor {
 
   /// Decodes the table stored in [bytes] starting at [offset].
   ///
-  /// Returns an empty map when [offset] is already at the end of [bytes], i.e.
-  /// when the snapshot was written before this trailer existed.
+  /// Throws a [FormatException] when the table is missing or cut short. The
+  /// read is strict on purpose: a table read as empty lets two peers spend the
+  /// same element counter twice.
   static Map<PeerId, int> read(Uint8List bytes, {int offset = 0}) {
     if (offset >= bytes.length) {
-      return <PeerId, int>{};
+      throw const FormatException('Missing element id floor');
     }
 
     var cursor = offset;

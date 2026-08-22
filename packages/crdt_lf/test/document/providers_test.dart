@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:crdt_lf/crdt_lf.dart';
 import 'package:hlc_dart/hlc_dart.dart';
 import 'package:test/test.dart';
@@ -323,19 +325,19 @@ void main() {
       expect(otherText.value, 'hello world');
     });
 
-    test('a change the handler cannot decode is dropped by both paths', () {
-      // What a peer sees when a newer build sends an operation it does not
-      // know how to read.
+    test('a change for another handler type is skipped by both paths', () {
+      // The batch import groups changes by handler id alone, so a change can
+      // reach a handler that is not the one that wrote it.
       final other = CRDTDocument(peerId: PeerId.generate());
-      final otherText = _UndecodableFugueText(other, 'fugue');
+      final otherText = _ForeignTypeFugueText(other, 'fugue');
       // Warm the cache: a handler with nothing cached has nothing to advance.
       expect(otherText.value, '');
 
       other.importChanges(source.exportChanges());
 
       expect(otherText.cachedState, isNull, reason: 'the queue gave up');
-      // The recompute reads the change through the same factory, so it skips
-      // it too: folding and replaying still agree.
+      // The recompute reads the change through the same path, so it skips it
+      // too: folding and replaying still agree.
       expect(otherText.value, '');
     });
 
@@ -415,6 +417,36 @@ void main() {
       receiverList.useIncrementalCacheUpdate = false;
       expect(receiverList.value, ['a', 'b']);
       expect(receiverList.increments, 0);
+    });
+
+    // The drain empties the queue and the version is already pinned past those
+    // changes, so a throw halfway through used to leave the old state in place:
+    // one loud read, then quiet wrong answers for ever. Both reads must fail.
+    test('a change the queue cannot decode keeps failing, not just once', () {
+      final author = PeerId.generate();
+      target.applyChange(
+        Change.fromPayloadBytes(
+          id: OperationId(author, HybridLogicalClock(l: 100, c: 1)),
+          deps: {},
+          author: author,
+          payloadBytes: OperationEnvelopeCodec.encode(
+            handlerType: targetText.handlerType,
+            handlerId: targetText.id,
+            kind: 99,
+            body: Uint8List(0),
+          ),
+        ),
+      );
+
+      expect(
+        () => targetText.value,
+        throwsA(isA<UnknownOperationKindException>()),
+      );
+      expect(targetText.cachedState, isNull);
+      expect(
+        () => targetText.value,
+        throwsA(isA<UnknownOperationKindException>()),
+      );
     });
   });
 
@@ -508,27 +540,32 @@ void main() {
 /// Draining the queue gives up the same way whether the change cannot be
 /// decoded or the operation cannot be applied: it drops the cache and lets the
 /// next read replay the history.
-class _UnappliableFugueText extends CRDTFugueTextHandler {
+final class _UnappliableFugueText extends CRDTFugueTextHandler {
   _UnappliableFugueText(super.doc, super.id);
 
   @override
   FugueTextState? incrementCachedState({
     required Operation operation,
     required FugueTextState state,
+    DeltaSink<Object?>? sink,
   }) =>
       null;
 }
 
-/// A Fugue text handler that reads no operation at all.
-class _UndecodableFugueText extends CRDTFugueTextHandler {
-  _UndecodableFugueText(super.doc, super.id);
+/// A Fugue text handler under a type tag of its own.
+///
+/// A change written by the ordinary handler carries the same id, so the batch
+/// import routes it here, and a different type tag, so this handler declines
+/// it.
+final class _ForeignTypeFugueText extends CRDTFugueTextHandler {
+  _ForeignTypeFugueText(super.doc, super.id);
 
   @override
-  OperationFactory get operationFactory => (_) => null;
+  String get handlerType => 'SomeOtherFugueText';
 }
 
 /// Counts how many times the cached state is advanced by one operation.
-class _CountingListHandler extends CRDTListHandler<String> {
+final class _CountingListHandler extends CRDTListHandler<String> {
   _CountingListHandler(super.doc, super.id);
 
   int increments = 0;
@@ -537,13 +574,14 @@ class _CountingListHandler extends CRDTListHandler<String> {
   List<String>? incrementCachedState({
     required Operation operation,
     required List<String> state,
+    DeltaSink<Object?>? sink,
   }) {
     increments += 1;
     return super.incrementCachedState(operation: operation, state: state);
   }
 }
 
-class _FakeCRDTListHandler extends CRDTListHandler<String> {
+final class _FakeCRDTListHandler extends CRDTListHandler<String> {
   _FakeCRDTListHandler(super.doc, super.id);
 
   /// count of `incrementCachedState`
@@ -556,6 +594,7 @@ class _FakeCRDTListHandler extends CRDTListHandler<String> {
   List<String>? incrementCachedState({
     required Operation operation,
     required List<String> state,
+    DeltaSink<Object?>? sink,
   }) {
     _incrementedCount++;
 

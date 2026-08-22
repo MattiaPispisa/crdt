@@ -12,7 +12,7 @@ final peerIdRegex = RegExp(
 ///
 /// A [PeerId] uniquely identifies a peer in the CRDT network.
 /// It is used to distinguish between different peers when merging changes.
-class PeerId with Comparable<PeerId> {
+class PeerId implements Comparable<PeerId> {
   /// Creates a new [PeerId] with the given identifier
   PeerId._(this.id);
 

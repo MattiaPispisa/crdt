@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:crdt_lf/crdt_lf.dart';
+import 'package:crdt_lf/src/snapshot/blob_version.dart';
 
 part 'operation.dart';
 
@@ -26,7 +27,7 @@ part 'operation.dart';
 /// map.update('key2', 'value2');
 /// print(map.value); // Prints {"key2": "value2"}
 /// ```
-class CRDTMapHandler<T> extends Handler<Map<String, T>> {
+base class CRDTMapHandler<T> extends Handler<Map<String, T>> {
   /// Creates a new CRDTMap with the given document and ID
   ///
   /// [valueCodec] is an optional codec for encoding/decoding [T] values to bytes.
@@ -44,8 +45,14 @@ class CRDTMapHandler<T> extends Handler<Map<String, T>> {
   final ValueCodec<T> _valueCodec;
 
   @override
-  late final OperationFactory operationFactory =
-      _MapOperationFactory<T>(this).fromBytes;
+  late final OperationDecoders operationDecoders = {
+    OperationType.kindInsert: (body) =>
+        _MapInsertOperation<T>.fromBodyBytes(this, body),
+    OperationType.kindDelete: (body) =>
+        _MapDeleteOperation<T>.fromBodyBytes(this, body),
+    OperationType.kindUpdate: (body) =>
+        _MapUpdateOperation<T>.fromBodyBytes(this, body),
+  };
 
   @override
   String get id => _id;
@@ -102,9 +109,15 @@ class CRDTMapHandler<T> extends Handler<Map<String, T>> {
     return state;
   }
 
+  /// The version of the snapshot blob this build writes and reads.
+  ///
+  /// Layout: `version: u8`, `count: uvarint`, then per entry
+  /// `keyLen: uvarint`, `key: utf8`, `valueLen: uvarint`, `value: bytes`.
+  static const int _snapshotVersion = 1;
+
   @override
   Uint8List getSnapshotState() {
-    final out = BytesBuilder(copy: false);
+    final out = BytesBuilder(copy: false)..addByte(_snapshotVersion);
     final entries = value;
     UVarint.write(entries.length, out);
     for (final entry in entries.entries) {
@@ -239,6 +252,7 @@ class CRDTMapHandler<T> extends Handler<Map<String, T>> {
   Map<String, T>? incrementCachedState({
     required Operation operation,
     required Map<String, T> state,
+    DeltaSink<Object?>? sink,
   }) {
     // Mutate the cached state in place instead of copying it on
     // every operation.
@@ -258,7 +272,11 @@ class CRDTMapHandler<T> extends Handler<Map<String, T>> {
       return <String, T>{};
     }
 
-    var offset = 0;
+    var offset = SnapshotBlob.read(
+      snapshot,
+      version: _snapshotVersion,
+      name: 'map',
+    );
     final countRec = UVarint.read(snapshot, offset: offset);
     offset = countRec.nextOffset;
     final state = <String, T>{};

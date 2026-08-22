@@ -1,5 +1,5 @@
 /// Server library for CRDT Web Socket Sync
-library crdt_web_socket_sync_server;
+library;
 
 export 'src/common/common/common.dart';
 export 'src/common/server/client_session.dart';

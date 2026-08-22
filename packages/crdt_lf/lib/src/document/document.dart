@@ -6,6 +6,7 @@ import 'dart:typed_data';
 import 'package:crdt_lf/crdt_lf.dart';
 import 'package:crdt_lf/src/compound/compound.dart';
 import 'package:crdt_lf/src/devtools/devtools.dart' as devtools;
+import 'package:crdt_lf/src/snapshot/blob_version.dart';
 import 'package:crdt_lf/src/transaction/transaction_manager.dart';
 import 'package:crdt_lf/src/utils/uuid.dart';
 import 'package:hlc_dart/hlc_dart.dart';
@@ -351,16 +352,11 @@ class CRDTDocument extends BaseCRDTDocument {
     _clock.localEvent(pt);
   }
 
-  /// Prepares the system to perform a mutation.
+  /// Moves the document's clock forward, as registering an operation would.
   ///
-  /// What this currently does:
-  /// - updates the document's clock
-  ///
-  /// Call this only when you intend to execute a causal operation,
-  /// not just to update the clock for timekeeping.
-  ///
-  /// Examples of causal operations:
-  /// - creating a tag that references a [HybridLogicalClock]
+  /// Spends a clock value without producing an operation. Use it to bring two
+  /// documents' clocks level, so they write in the same tick on purpose. It is
+  /// not a way to keep time.
   @override
   void prepareMutation() {
     _ensureNotDisposed('prepareMutation');
@@ -676,20 +672,29 @@ class CRDTDocument extends BaseCRDTDocument {
     return _dag.versionVector;
   }
 
-  /// Creates a new [Change] from the given [operation]
+  /// Creates a new [Change] carrying [operation].
+  ///
+  /// The change takes the id [registerOperation] already minted for the
+  /// operation, rather than a fresh one: that id **is** the mark a
+  /// last-writer-wins handler folded into its state.
+  ///
+  /// An operation that never went through [registerOperation] has no id yet,
+  /// which is the [createChange] case: it gets one here.
   Change _changeFromOp(
     Operation operation, {
     int? physicalTime,
   }) {
-    _tickClock(physicalTime: physicalTime);
-
-    final id = OperationId(_peerId, _clock.copy());
-    final deps = _dag.frontiers;
+    var id = operation.stamp;
+    if (id == null) {
+      _tickClock(physicalTime: physicalTime);
+      id = OperationId(_peerId, _clock.copy());
+      operation.stamp = id;
+    }
 
     return Change(
       id: id,
-      deps: deps,
-      author: _peerId,
+      deps: _dag.frontiers,
+      author: id.peerId,
       operation: operation,
     );
   }
@@ -699,11 +704,23 @@ class CRDTDocument extends BaseCRDTDocument {
   /// The [Change] is automatically applied to this document.
   ///
   /// Subscribers are notified about the change only on transaction commit.
+  ///
+  /// [operation] must be fresh: one operation belongs to one change, because
+  /// the change takes the operation's id for its own. Throws a [StateError]
+  /// on one that has already been through here or through
+  /// [registerOperation].
   Change createChange(
     Operation operation, {
     int? physicalTime,
   }) {
     _ensureNotDisposed('createChange');
+
+    if (operation.stamp != null) {
+      throw StateError(
+        'Operation ${operation.type.toPayload()} already belongs to a change '
+        '(${operation.stamp}). Build a new operation for a new change.',
+      );
+    }
 
     final change = _changeFromOp(operation, physicalTime: physicalTime);
     final applied = _internalApplyChange(change);
@@ -720,6 +737,22 @@ class CRDTDocument extends BaseCRDTDocument {
   void registerOperation(Operation operation) {
     _ensureNotDisposed('registerOperation');
 
+    final handler = _handlers[operation.id];
+
+    // This is the only place that mints an operation id. At commit, the
+    // `Change` reuses this id instead of minting a fresh one.
+    //
+    // - The fold below runs right now, before commit. A stamped handler
+    //   saves this id into its state at that moment. The `Change` must
+    //   carry the same id, or the wire and the handler's state would
+    //   disagree about which id was actually folded;
+    //
+    // The tick is what [prepareMutation] does and for the same reason: an id
+    // has to be strictly newer than everything this peer has written, or a
+    // second write in the same millisecond would not beat the first.
+    _tickClock();
+    operation.stamp = OperationId(_peerId, _clock.copy());
+
     final openedImplicitTransaction = !isInTransaction;
 
     try {
@@ -729,7 +762,6 @@ class CRDTDocument extends BaseCRDTDocument {
 
       _transactionManager.handleOperation(operation);
 
-      final handler = _handlers[operation.id];
       if (handler != null) {
         handler._internalIncrementCachedState(operation: operation);
       }
@@ -1115,17 +1147,9 @@ class CRDTDocument extends BaseCRDTDocument {
   /// This is a versioned, length-prefixed format designed for efficient
   /// synchronization and reduced memory overhead.
   Uint8List binaryExportChanges({Set<OperationId>? from}) {
-    final changes = exportChanges(from: from);
-    final blobs = <Uint8List>[];
-
-    for (final change in changes) {
-      final out = BytesBuilder(copy: false);
-      UVarint.write(change.depsCount, out);
-      out.add(change.bytes);
-      blobs.add(out.toBytes());
-    }
-
-    return ChangeCodec.encodeBlobs(blobs);
+    return ChangeCodec.encodeBlobs([
+      for (final change in exportChanges(from: from)) change.toBytes(),
+    ]);
   }
 
   /// Imports [Change]s from the compact binary format.
@@ -1134,42 +1158,9 @@ class CRDTDocument extends BaseCRDTDocument {
   int binaryImportChanges(Uint8List data) {
     _ensureNotDisposed('binaryImportChanges');
 
-    final blobs = ChangeCodec.decodeBlobs(data);
-    final changes = <Change>[];
-
-    for (final blob in blobs) {
-      final depsCountRec = UVarint.read(blob, offset: 0);
-      final depsCount = depsCountRec.value;
-      final bytes = Uint8List.sublistView(blob, depsCountRec.nextOffset);
-
-      if (bytes.length < OperationId.byteLength) {
-        throw const FormatException('Truncated change bytes');
-      }
-
-      final id = OperationId.fromUint8List(bytes);
-      final deps = <OperationId>{};
-
-      var cursor = OperationId.byteLength;
-      for (var i = 0; i < depsCount; i += 1) {
-        if (cursor + OperationId.byteLength > bytes.length) {
-          throw const FormatException('Truncated change dependencies');
-        }
-        deps.add(OperationId.fromUint8List(bytes, offset: cursor));
-        cursor += OperationId.byteLength;
-      }
-
-      final payloadBytes = Uint8List.sublistView(bytes, cursor);
-      changes.add(
-        Change.fromPayloadBytes(
-          id: id,
-          deps: deps,
-          author: id.peerId,
-          payloadBytes: payloadBytes,
-        ),
-      );
-    }
-
-    return importChanges(changes);
+    return importChanges([
+      for (final blob in ChangeCodec.decodeBlobs(data)) Change.fromBytes(blob),
+    ]);
   }
 
   /// Imports [Change]s from another document
@@ -1398,10 +1389,13 @@ class CRDTDocument extends BaseCRDTDocument {
 /// control character keeps it from colliding with any real handler id.
 const String _handlerManifestKey = 'crdt_lf/handler-manifest';
 
-/// Encodes a `{id: type}` manifest as `[uvarint count]` followed, per entry, by
-/// `[uvarint idLen][utf8 id][uvarint typeLen][utf8 type]`.
+/// The version of the manifest blob this build writes and reads.
+const int _handlerManifestVersion = 1;
+
+/// Encodes a `{id: type}` manifest as `[u8 version][uvarint count]` followed,
+/// per entry, by `[uvarint idLen][utf8 id][uvarint typeLen][utf8 type]`.
 Uint8List _encodeHandlerManifest(Map<String, String> manifest) {
-  final out = BytesBuilder(copy: false);
+  final out = BytesBuilder(copy: false)..addByte(_handlerManifestVersion);
   UVarint.write(manifest.length, out);
   for (final entry in manifest.entries) {
     final idBytes = utf8.encode(entry.key);
@@ -1418,7 +1412,11 @@ Uint8List _encodeHandlerManifest(Map<String, String> manifest) {
 /// Decodes a manifest produced by [_encodeHandlerManifest].
 Map<String, String> _decodeHandlerManifest(Uint8List bytes) {
   final manifest = <String, String>{};
-  var offset = 0;
+  var offset = SnapshotBlob.read(
+    bytes,
+    version: _handlerManifestVersion,
+    name: 'handler manifest',
+  );
   final countRec = UVarint.read(bytes, offset: offset);
   offset = countRec.nextOffset;
   for (var i = 0; i < countRec.value; i += 1) {

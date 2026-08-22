@@ -168,6 +168,7 @@ void main() {
       final index = SqrtDecomposition<int>()..bulkBuild(keys, live);
 
       expect(index.length, 500);
+      expect(index.liveLength, 250);
       expect(index.last(), 499);
       // i-th live key is the i-th even number
       expect(index.liveAt(0), 0);
@@ -264,6 +265,9 @@ void main() {
           expect(index.first(), model.first());
           expect(index.last(), model.last());
           final liveTotal = model.liveTotal;
+          // The running sum is maintained by hand on every path that can
+          // change it, so it is worth checking against a count.
+          expect(index.liveLength, liveTotal, reason: 'liveLength at $step');
           expect(index.liveAt(liveTotal), isNull);
           expect(index.liveAt(-1), isNull);
           for (var p = 0; p < liveTotal; p++) {

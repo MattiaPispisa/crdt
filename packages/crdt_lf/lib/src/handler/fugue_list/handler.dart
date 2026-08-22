@@ -1,6 +1,8 @@
 import 'dart:typed_data';
 
 import 'package:crdt_lf/crdt_lf.dart';
+import 'package:crdt_lf/src/algorithm/fugue/tree.dart';
+import 'package:crdt_lf/src/algorithm/fugue/value_node.dart';
 import 'package:crdt_lf/src/handler/fugue/fugue_sequence_handler.dart';
 
 part 'operation.dart';
@@ -30,7 +32,7 @@ part 'operation.dart';
 /// list..insert(0, 'Hello')..insert(1, 'World');
 /// print(list.value); // Prints ['Hello', 'World']
 /// ```
-class CRDTFugueListHandler<T>
+base class CRDTFugueListHandler<T>
     extends FugueSequenceHandler<T, List<T>, FugueListState<T>> {
   /// Creates a new CRDTFugueList with the given document and ID
   ///
@@ -46,8 +48,14 @@ class CRDTFugueListHandler<T>
   final ValueCodec<T> _valueCodec;
 
   @override
-  late final OperationFactory operationFactory =
-      _FugueListOperationFactory<T>(this).fromBytes;
+  late final OperationDecoders operationDecoders = {
+    OperationType.kindInsert: (body) =>
+        _FugueListInsertOperation<T>.fromBodyBytes(this, body),
+    OperationType.kindDelete: (body) =>
+        _FugueListDeleteOperation<T>.fromBodyBytes(this, body),
+    OperationType.kindUpdate: (body) =>
+        _FugueListUpdateOperation<T>.fromBodyBytes(this, body),
+  };
 
   /// Inserts [value] at position [index]
   ///
@@ -90,31 +98,30 @@ class CRDTFugueListHandler<T>
     );
   }
 
-  /// Updates the element at position [index] with [value]
+  /// Overwrites the element at position [index] with [value], keeping the
+  /// identity of that element.
+  ///
+  /// Two peers updating the same element converge on one of the two values
+  /// instead of keeping both, anchors taken with [stablePositionAt] keep
+  /// resolving, and nothing is added to the tree. An update loses against a
+  /// concurrent deletion of the same element, and does nothing when [index]
+  /// is out of range.
   void update(int index, T value) {
     final nodeID = nodeAt(index);
     if (nodeID.isNull) {
       return;
     }
 
-    final newNodeID = FugueElementID(doc.peerId, nextCounter());
-
     doc.registerOperation(
       _FugueListUpdateOperation<T>.fromHandler(
         this,
-        items: [
-          _FugueListUpdateItem<T>(
-            nodeID: nodeID,
-            newNodeID: newNodeID,
-            value: value,
-          ),
-        ],
+        items: [_FugueListUpdateItem<T>(nodeID: nodeID, value: value)],
       ),
     );
   }
 
-  /// Gets the length of the list
-  int get length => value.length;
+  /// Gets the length of the list, in `O(1)`.
+  int get length => elementCount;
 
   /// Gets the element at the specified index
   T operator [](int index) => value[index];
@@ -134,14 +141,14 @@ class CRDTFugueListHandler<T>
       );
     } else if (operation is _FugueListDeleteOperation<T>) {
       for (final item in operation.items) {
-        tree.delete(item.nodeID);
+        tree.delete(item.nodeID, stamp: operation.stamp!);
       }
     } else if (operation is _FugueListUpdateOperation<T>) {
       for (final item in operation.items) {
         tree.update(
           nodeID: item.nodeID,
-          newID: item.newNodeID,
-          newValue: item.value,
+          value: item.value,
+          stamp: operation.stamp!,
         );
       }
     }
@@ -152,10 +159,6 @@ class CRDTFugueListHandler<T>
     if (operation is _FugueListInsertOperation<T>) {
       for (final item in operation.items) {
         yield item.id;
-      }
-    } else if (operation is _FugueListUpdateOperation<T>) {
-      for (final item in operation.items) {
-        yield item.newNodeID;
       }
     }
   }
@@ -168,11 +171,35 @@ class CRDTFugueListHandler<T>
     );
   }
 
+  /// Prefixes every value with its length: a [ValueCodec] is free to produce
+  /// anything, so nothing else tells one value from the next inside a run.
   @override
-  Uint8List encodeValue(T value) => _valueCodec.encode(value);
+  Uint8List encodeRun(List<T> values) {
+    final out = BytesBuilder(copy: false);
+    for (final value in values) {
+      final bytes = _valueCodec.encode(value);
+      UVarint.write(bytes.length, out);
+      out.add(bytes);
+    }
+    return out.toBytes();
+  }
 
   @override
-  T decodeValue(Uint8List bytes) => _valueCodec.decode(bytes);
+  List<T> decodeRun(Uint8List blob, int length) {
+    final values = <T>[];
+    var offset = 0;
+    for (var i = 0; i < length; i += 1) {
+      final lenRec = UVarint.read(blob, offset: offset);
+      offset = lenRec.nextOffset;
+      final end = offset + lenRec.value;
+      if (end > blob.length) {
+        throw const FormatException('Truncated Fugue list snapshot value');
+      }
+      values.add(_valueCodec.decode(Uint8List.sublistView(blob, offset, end)));
+      offset = end;
+    }
+    return values;
+  }
 
   /// Returns a string representation of this handler
   @override
@@ -183,12 +210,13 @@ class CRDTFugueListHandler<T>
 
 /// State of the [CRDTFugueListHandler]: the list of all live node values.
 class FugueListState<T> extends FugueState<T, List<T>> {
-  /// Creates a list state over [tree].
-  FugueListState(FugueTree<T> tree) : super(tree, _collect);
+  // Private: the tree it wraps is implementation detail, so naming it in a
+  // public signature would leak it back out.
+  FugueListState._(FugueTree<T> tree) : super(tree, _collect);
 
   /// Creates an empty list state.
   factory FugueListState.empty() {
-    return FugueListState(FugueTree<T>.empty());
+    return FugueListState._(FugueTree<T>.empty());
   }
 
   static List<T> _collect<T>(FugueTree<T> tree) => tree.values();

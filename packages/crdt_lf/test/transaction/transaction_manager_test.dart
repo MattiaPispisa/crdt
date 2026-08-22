@@ -1,12 +1,20 @@
-import 'dart:typed_data';
-
 import 'package:crdt_lf/crdt_lf.dart';
 import 'package:crdt_lf/src/transaction/transaction_manager.dart';
 import 'package:hlc_dart/hlc_dart.dart';
 import 'package:test/test.dart';
 
+import '../helpers/handler.dart';
+
 void main() {
   group('TransactionManager', () {
+    late Operation dummyOperation;
+
+    setUp(() {
+      // The manager never looks inside an operation, so any real one does.
+      final doc = CRDTDocument(peerId: PeerId.generate());
+      dummyOperation = TestOperation.fromHandler(TestHandler(doc, id: 'dummy'));
+    });
+
     test('begin/commit defers and flushes updates and local changes', () {
       final emittedOperations = <Operation>[];
       var updateCount = 0;
@@ -28,8 +36,6 @@ void main() {
       expect(updateCount, 0);
 
       // Emit local changes while in transaction
-      final dummyOperation = TestOperation('dummy');
-
       manager.handleOperation(dummyOperation);
       expect(emittedOperations, isEmpty);
       expect(updateCount, 0);
@@ -59,7 +65,6 @@ void main() {
 
       manager.requestUpdate();
 
-      final dummyOperation = TestOperation('dummy');
       final peerId = PeerId.generate();
       final dummyChange = Change(
         id: OperationId(peerId, HybridLogicalClock(l: 1, c: 1)),
@@ -97,7 +102,7 @@ void main() {
       var updateCount = 0;
       TransactionManager(
         flushWork: (_, __, ___) => updateCount++,
-      ).handleOperation(TestOperation('dummy'));
+      ).handleOperation(dummyOperation);
       expect(updateCount, 1);
     });
 
@@ -106,7 +111,7 @@ void main() {
       final peerId = PeerId.generate();
       final change = Change(
         id: OperationId(peerId, HybridLogicalClock(l: 1, c: 1)),
-        operation: TestOperation('dummy'),
+        operation: dummyOperation,
         deps: {},
         author: peerId,
       );
@@ -125,18 +130,4 @@ void main() {
       );
     });
   });
-}
-
-// Minimal Operation used by TransactionManager tests
-class TestOperation extends Operation {
-  TestOperation(String handlerId)
-      : super(
-          type: OperationType.fromPayload('Test:update'),
-          id: handlerId,
-        );
-
-  @override
-  Uint8List toBodyBytes() {
-    return Uint8List(0);
-  }
 }

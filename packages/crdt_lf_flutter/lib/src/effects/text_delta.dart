@@ -44,11 +44,9 @@ class TextDelta {
 /// [newText], or `null` when they are equal.
 ///
 /// Uses common prefix/suffix trimming — O(n) worst case and O(edit size) for
-/// the typical edit-at-caret — instead of a full diff. The boundaries are
-/// snapped so that a UTF-16 surrogate pair is never split between the kept
-/// and the replaced region. That snap is what lets the resulting code-unit
-/// offsets be converted exactly into the rune indices the `crdt_lf` text
-/// handlers use: both ends are guaranteed to sit on a code-point boundary.
+/// the typical edit-at-caret — instead of a full diff. Offsets are in UTF-16
+/// code units, and both boundaries are snapped to a code-point boundary, so a
+/// surrogate pair is never split between the kept and the replaced region.
 ///
 /// When the resulting collapsed [caret] (the selection offset *after* the
 /// edit) is known, it disambiguates edits that touch a run of identical

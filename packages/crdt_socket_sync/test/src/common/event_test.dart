@@ -1,5 +1,5 @@
 @TestOn('vm')
-library server_event_test;
+library;
 
 import 'package:crdt_socket_sync/web_socket_server.dart';
 import 'package:test/test.dart';

@@ -1,38 +1,5 @@
 part of 'handler.dart';
 
-/// Factory for Fugue operations
-class _FugueTextOperationFactory {
-  /// Constructor that initializes the factory
-  _FugueTextOperationFactory(this.handler);
-
-  /// The handler associated with this factory
-  final Handler<dynamic> handler;
-
-  /// Creates an operation from bytes.
-  Operation? fromBytes(Uint8List operationBytes) {
-    final env = OperationEnvelopeCodec.decode(operationBytes);
-    if (env.handlerId != handler.id) {
-      return null;
-    }
-
-    if (env.handlerType != handler.handlerType) {
-      return null;
-    }
-
-    final body = Uint8List.sublistView(operationBytes, env.bodyOffset);
-
-    if (env.kind == OperationType.kindInsert) {
-      return _FugueTextInsertOperation.fromBodyBytes(handler, body);
-    } else if (env.kind == OperationType.kindDelete) {
-      return _FugueTextDeleteOperation.fromBodyBytes(handler, body);
-    } else if (env.kind == OperationType.kindUpdate) {
-      return _FugueTextUpdateOperation.fromBodyBytes(handler, body);
-    }
-
-    return null;
-  }
-}
-
 /// Batch insert operation for the Fugue algorithm
 class _FugueTextInsertOperation extends Operation {
   /// Constructor that initializes a batch insert operation
@@ -247,7 +214,6 @@ class _FugueTextUpdateOperation extends Operation {
   /// - itemsCount: uvarint
   /// - repeated `itemsCount` times:
   ///   - nodeID: [FugueElementID] bytes
-  ///   - newNodeID: [FugueElementID] bytes
   ///   - textLen: uvarint
   ///   - text: wtf8 bytes
   factory _FugueTextUpdateOperation.fromBodyBytes(
@@ -264,9 +230,6 @@ class _FugueTextUpdateOperation extends Operation {
       final idRec = FugueElementID.readFromBytes(body, offset: offset);
       offset = idRec.nextOffset;
 
-      final newIdRec = FugueElementID.readFromBytes(body, offset: offset);
-      offset = newIdRec.nextOffset;
-
       final textLenRec = UVarint.read(body, offset: offset);
       offset = textLenRec.nextOffset;
       final textEnd = offset + textLenRec.value;
@@ -276,13 +239,7 @@ class _FugueTextUpdateOperation extends Operation {
       final text = Wtf8.decode(Uint8List.sublistView(body, offset, textEnd));
       offset = textEnd;
 
-      items.add(
-        _FugueUpdateItem(
-          nodeID: idRec.value,
-          newNodeID: newIdRec.value,
-          text: text,
-        ),
-      );
+      items.add(_FugueUpdateItem(nodeID: idRec.value, text: text));
     }
 
     return _FugueTextUpdateOperation(
@@ -300,9 +257,7 @@ class _FugueTextUpdateOperation extends Operation {
     final out = BytesBuilder(copy: false);
     UVarint.write(items.length, out);
     for (final item in items) {
-      out
-        ..add(item.nodeID.toBytes())
-        ..add(item.newNodeID.toBytes());
+      out.add(item.nodeID.toBytes());
       final textBytes = Wtf8.encode(item.text);
       UVarint.write(textBytes.length, out);
       out.add(textBytes);
@@ -315,11 +270,9 @@ class _FugueTextUpdateOperation extends Operation {
 class _FugueUpdateItem {
   _FugueUpdateItem({
     required this.nodeID,
-    required this.newNodeID,
     required this.text,
   });
 
   final FugueElementID nodeID;
-  final FugueElementID newNodeID;
   final String text;
 }

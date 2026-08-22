@@ -6,7 +6,7 @@ import 'package:crdt_lf/crdt_lf.dart';
 import 'mock_operation.dart';
 
 /// Test handler for testing purposes
-class MockHandler extends Handler<String> {
+final class MockHandler extends Handler<String> {
   MockHandler(super.doc);
 
   @override
@@ -16,5 +16,7 @@ class MockHandler extends Handler<String> {
   Uint8List getSnapshotState() => Uint8List.fromList(utf8.encode('test_state'));
 
   @override
-  OperationFactory get operationFactory => (payload) => MockOperation(this);
+  late final OperationDecoders operationDecoders = {
+    OperationType.kindInsert: (body) => MockOperation(this),
+  };
 }

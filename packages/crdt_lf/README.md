@@ -12,22 +12,27 @@
 
 - [CRDT LF](#crdt-lf)
   - [Features](#features)
-  - [Design](#design)
-    - [Operation based](#operation-based)
-    - [Transaction](#transaction)
-    - [State cache](#state-cache)
+  - [Greyhound Markdown](#greyhound-markdown)
   - [Getting Started](#getting-started)
   - [Usage](#usage)
     - [Basic Usage](#basic-usage)
     - [Dart Distributed Collaboration Example](#dart-distributed-collaboration-example)
     - [Flutter Distributed Collaboration Example](#flutter-distributed-collaboration-example)
   - [Sync](#sync)
+  - [Flutter](#flutter)
   - [Persistence](#persistence)
   - [Benchmarks](#benchmarks)
+  - [Design](#design)
+    - [Operation based](#operation-based)
+    - [Transaction](#transaction)
+    - [State cache](#state-cache)
   - [Architecture](#architecture)
     - [CRDTDocument](#crdtdocument)
       - [Identity](#identity)
     - [Handlers](#handlers)
+      - [Custom handlers](#custom-handlers)
+        - [When to turn `stamped` on](#when-to-turn-stamped-on)
+      - [Text handlers index by rune](#text-handlers-index-by-rune)
       - [Working with Complex Types](#working-with-complex-types)
       - [Nested Structures (Containers and References)](#nested-structures-containers-and-references)
       - [Choosing How to Model Your Data](#choosing-how-to-model-your-data)
@@ -41,7 +46,10 @@
     - [Roadmap](#roadmap)
     - [Contributing](#contributing)
   - [Acknowledgments](#acknowledgments)
+  - [Apps](#apps)
   - [Packages](#packages)
+  - [Migrations](#migrations)
+    - [Migrating from 3.x to 4.0](#migrating-from-3x-to-40)
 
 
 A Conflict-free Replicated Data Type (CRDT) implementation in Dart. 
@@ -68,6 +76,109 @@ Supporting:
 - ⏱️ **Hybrid Logical Clock**: Uses HLC for causal ordering of operations
 - 🔄 **Automatic Conflict Resolution**: Automatically resolves conflicts in a CRDT
 - 📦 **Local Availability**: Operations are available locally as soon as they are applied
+
+## Greyhound Markdown
+
+A real-time collaborative markdown editor built with `crdt_lf`. Open it on
+separate devices, join the same room and edit together — no install needed.
+
+<div align="center">
+
+[![Open the live demo](https://img.shields.io/badge/▶%20Open%20live%20demo-mattiapispisa.it%2Fcrdt%2Fgreyhound_markdown-2ea44f?style=for-the-badge&logo=flutter&logoColor=white)](https://mattiapispisa.it/crdt/greyhound_markdown/)
+
+</div>
+
+<div align="center">
+  <img width="360" alt="Greyhound Markdown home screen" src="https://raw.githubusercontent.com/MattiaPispisa/crdt/main/assets/images/greyhound_home_screen.png">
+</div>
+
+Source: [apps/greyhound_markdown](https://github.com/MattiaPispisa/crdt/tree/main/apps/greyhound_markdown).
+
+## Getting Started
+
+Add this to your package's `pubspec.yaml` file:
+
+```yaml
+dependencies:
+  crdt_lf: ^4.0.0
+```
+
+## Usage
+
+### Basic Usage
+
+```dart
+import 'package:crdt_lf/crdt_lf.dart';
+
+void main() {
+  // Create a new document
+  final doc = CRDTDocument(
+    peerId: PeerId.parse('45ee6b65-b393-40b7-9755-8b66dc7d0518'),
+  );
+
+  // Create a text handler
+  final text = CRDTFugueTextHandler(doc, 'text1');
+
+  // Insert text
+  text.insert(0, 'Hello');
+
+  // Delete text
+  text.delete(0, 2); // Deletes "He"
+
+  // Get current value
+  print(text.value); // Prints "llo"
+}
+```
+
+### [Dart Distributed Collaboration Example](https://github.com/MattiaPispisa/crdt/tree/main/packages/crdt_lf/example/main.dart)
+### [Flutter Distributed Collaboration Example](https://github.com/MattiaPispisa/crdt/tree/main/packages/crdt_lf/flutter_example)
+
+> 🚀 **Try the examples live in your browser — no install needed.**
+
+<div align="center">
+
+[![Open the live demo](https://img.shields.io/badge/▶%20Open%20live%20demo-mattiapispisa.it%2Fcrdt%2Fexamples-2ea44f?style=for-the-badge&logo=flutter&logoColor=white)](https://mattiapispisa.it/crdt/examples/)
+
+</div>
+
+<div align="center">
+  <img width="500" alt="flutter_document_example" src="https://raw.githubusercontent.com/MattiaPispisa/crdt/main/assets/demos/flutter_document_example.gif">
+</div>
+
+## Sync 
+A sync library is available in the [crdt_socket_sync](https://pub.dev/packages/crdt_socket_sync) package. And it's used to synchronize the CRDT state between peers. More info in the [README](https://github.com/MattiaPispisa/crdt/tree/main/packages/crdt_socket_sync/README.md) of the sync package.
+
+A flutter example is available in the [flutter_example](https://github.com/MattiaPispisa/crdt/tree/main/packages/crdt_socket_sync/flutter_example) and provide a synced version of the  "Flutter Distributed Collaboration" Example. 
+
+<div align="center">
+<img width="500" alt="sync_server_multi_client" src="https://raw.githubusercontent.com/MattiaPispisa/crdt/main/assets/demos/sync_server_multi_client.gif">
+</div>
+
+## Flutter
+A companion library, [crdt_lf_flutter](https://pub.dev/packages/crdt_lf_flutter),containing widgets that make it easier to use `crdt_lf` within Flutter systems. 
+
+It provides Flutter reactivity for `crdt_lf`: widgets rebuild when the CRDT state changes, with selectors, a provider and a collaborative text field. More info in the [README](https://github.com/MattiaPispisa/crdt/tree/main/packages/crdt_lf_flutter/README.md) of the Flutter package.
+
+## Persistence
+Persistence is not directly handled in this library but there are some out of the box solutions:
+- [crdt_lf_hive](https://pub.dev/packages/crdt_lf_hive): adapters and utils for persist data using [Hive](https://pub.dev/packages/hive).
+- [crdt_lf_drift](https://pub.dev/packages/crdt_lf_drift): adapters and utils for persist data using [Drift](https://pub.dev/packages/drift).
+- [crdt_lf_sqlite](https://pub.dev/packages/crdt_lf_sqlite): adapters and utils for persist data using [sqlite3](https://pub.dev/packages/sqlite3).
+
+## Benchmarks
+
+This package includes a suite of benchmarks to ensure performance and stability. You can find the latest results [here](https://github.com/MattiaPispisa/crdt/tree/main/packages/crdt_lf/benchmark/results.md).
+
+To run the benchmarks yourself, execute the following script from the `packages/crdt_lf` directory:
+
+```sh
+./benchmark/run.sh
+```
+or run:
+
+```sh
+melos run benchmark
+```
 
 ## Design
 
@@ -167,109 +278,6 @@ path off and always replay. A custom handler that resolves conflicts by replay
 order must leave `stateIsOrderIndependent` at its default `false`, otherwise two
 peers that receive the same changes in a different order diverge.
 
-## Getting Started
-
-Add this to your package's `pubspec.yaml` file:
-
-```yaml
-dependencies:
-  crdt_lf: ^1.0.0
-```
-
-## Usage
-
-### Basic Usage
-
-```dart
-import 'package:crdt_lf/crdt_lf.dart';
-
-void main() {
-  // Create a new document
-  final doc = CRDTDocument(
-    peerId: PeerId.parse('45ee6b65-b393-40b7-9755-8b66dc7d0518'),
-  );
-
-  // Create a text handler
-  final text = CRDTFugueTextHandler(doc, 'text1');
-
-  // Insert text
-  text.insert(0, 'Hello');
-
-  // Delete text
-  text.delete(0, 2); // Deletes "He"
-
-  // Get current value
-  print(text.value); // Prints "llo"
-}
-```
-
-### [Dart Distributed Collaboration Example](https://github.com/MattiaPispisa/crdt/tree/main/packages/crdt_lf/example/main.dart)
-### [Flutter Distributed Collaboration Example](https://github.com/MattiaPispisa/crdt/tree/main/packages/crdt_lf/flutter_example)
-
-> 🚀 **Try the examples live in your browser — no install needed.**
-
-<div align="center">
-
-[![Open the live demo](https://img.shields.io/badge/▶%20Open%20live%20demo-mattiapispisa.it%2Fcrdt%2Fexamples-2ea44f?style=for-the-badge&logo=flutter&logoColor=white)](https://mattiapispisa.it/crdt/examples/)
-
-</div>
-
-<div align="center">
-  <img width="500" alt="flutter_document_example" src="https://raw.githubusercontent.com/MattiaPispisa/crdt/main/assets/demos/flutter_document_example.gif">
-</div>
-
-## Sync 
-A sync library is available in the [crdt_socket_sync](https://pub.dev/packages/crdt_socket_sync) package. And it's used to synchronize the CRDT state between peers. More info in the [README](https://github.com/MattiaPispisa/crdt/tree/main/packages/crdt_socket_sync/README.md) of the sync package.
-
-A flutter example is available in the [flutter_example](https://github.com/MattiaPispisa/crdt/tree/main/packages/crdt_socket_sync/flutter_example) and provide a synced version of the  "Flutter Distributed Collaboration" Example. 
-
-<div align="center">
-<img width="500" alt="sync_server_multi_client" src="https://raw.githubusercontent.com/MattiaPispisa/crdt/main/assets/demos/sync_server_multi_client.gif">
-</div>
-
-## Flutter
-A companion library, [crdt_lf_flutter](https://pub.dev/packages/crdt_lf_flutter),containing widgets that make it easier to use `crdt_lf` within Flutter systems. 
-
-It provides Flutter reactivity for `crdt_lf`: widgets rebuild when the CRDT state changes, with selectors, a provider and a collaborative text field. More info in the [README](https://github.com/MattiaPispisa/crdt/tree/main/packages/crdt_lf_flutter/README.md) of the Flutter package.
-
-## Greyhound Markdown
-
-A real-time collaborative markdown editor built with `crdt_lf`. Open it on
-separate devices, join the same room and edit together — no install needed.
-
-<div align="center">
-
-[![Open the live demo](https://img.shields.io/badge/▶%20Open%20live%20demo-mattiapispisa.it%2Fcrdt%2Fgreyhound_markdown-2ea44f?style=for-the-badge&logo=flutter&logoColor=white)](https://mattiapispisa.it/crdt/greyhound_markdown/)
-
-</div>
-
-<div align="center">
-  <img width="360" alt="Greyhound Markdown home screen" src="https://raw.githubusercontent.com/MattiaPispisa/crdt/main/assets/images/greyhound_home_screen.png">
-</div>
-
-Source: [apps/greyhound_markdown](https://github.com/MattiaPispisa/crdt/tree/main/apps/greyhound_markdown).
-
-## Persistence
-Persistence is not directly handled in this library but there are some out of the box solutions:
-- [crdt_lf_hive](https://pub.dev/packages/crdt_lf_hive): adapters and utils for persist data using [Hive](https://pub.dev/packages/hive).
-- [crdt_lf_drift](https://pub.dev/packages/crdt_lf_drift): adapters and utils for persist data using [Drift](https://pub.dev/packages/drift).
-- [crdt_lf_sqlite](https://pub.dev/packages/crdt_lf_sqlite): adapters and utils for persist data using [sqlite3](https://pub.dev/packages/sqlite3).
-
-## Benchmarks
-
-This package includes a suite of benchmarks to ensure performance and stability. You can find the latest results [here](https://github.com/MattiaPispisa/crdt/tree/main/packages/crdt_lf/benchmark/results.md).
-
-To run the benchmarks yourself, execute the following script from the `packages/crdt_lf` directory:
-
-```sh
-./benchmark/run.sh
-```
-or run:
-
-```sh
-melos run benchmark
-```
-
 ## Architecture
 
 The library is built above the [hlc_dart](https://pub.dev/packages/hlc_dart) package and provide a solution to implement CRDT systems.
@@ -314,7 +322,118 @@ list.delete(0);
 print(list.value); // Prints "[Buy milk]"
 ```
 
-Every handler can be found in the [handlers](https://github.com/MattiaPispisa/crdt/tree/main/packages/crdt_lf/lib/src/handler) folder.
+Every handler can be found in the [handlers](https://github.com/MattiaPispisa/crdt/tree/main/packages/crdt_lf/lib/src/handler) folder. Want to add your own, with a
+kind the four conventional ones don't cover? See [Custom handlers](#custom-handlers).
+
+#### Custom handlers
+
+`Handler<T>` is an abstract class, and a handler you write yourself plugs into
+the same document, transaction system and sync path as the built-in ones.
+
+It is a **`base` class**, so you extend it and cannot implement it, and your
+own handler says `base`, `final` or `sealed` in turn:
+
+```dart
+final class PNCounterHandler extends Handler<int> { … }
+```
+
+A handler overrides:
+
+- `id` and `operationDecoders` — required: how the handler is addressed, and
+  how its operations are decoded.
+- `getSnapshotState` — required: the state as bytes, seeded back through
+  `lastSnapshot`.
+- `handlerType` — for a handler that must survive dart2js minification.
+- `incrementCachedState` — to advance the cached state by one operation
+  instead of replaying the whole history on every read.
+- `stateIsOrderIndependent` — only when the state is the same whatever order
+  causally ready operations arrive in.
+- `compound` — to collapse consecutive operations inside a transaction into
+  fewer changes.
+
+The four conventional kinds (`insert`, `delete`, `update`, `move`) are ready
+to use as `insertType`, `deleteType`, `updateType` and `moveType`. A handler
+that needs a fifth semantics declares its own:
+
+```dart
+factory OperationType.custom(
+  Handler<dynamic> handler, {
+  required int kind,
+  required String name,
+  bool stamped = false,
+})
+```
+
+- `kind` is scoped to the **handler type**, not global — two unrelated
+  handlers can both use kind `4` for two unrelated meanings, because the
+  envelope always says which handler type it addresses first. Values `0`-`3`
+  are the conventional kinds; `4` up to `OperationType.maxKind` (`127`) are
+  free. The ceiling is `127` because bit 7 of the kind byte is reserved.
+- `name` labels the kind in `toPayload` and debug output. Only `kind` is
+  written on the wire.
+
+##### When to turn `stamped` on
+
+A stamp is a unique, totally ordered mark: the `OperationId` of the change the
+operation travels in. **Every** operation carries one, declared or not: the
+document mints it when the operation is registered, and a remote one reads it
+off the change. So the flag is not about reaching the stamp — **it is about
+saying that this kind's conflict resolution reads it, which is something two
+peers have to agree on**. The built-in handlers use it for two different things:
+
+| Use | Who | What the handler does |
+|---|---|---|
+| Last-writer-wins tie-break | `update` on the Fugue sequence handlers, `insert`/`move`/`update` on the movable list | keeps the **greater** stamp, so every peer picks the same winner instead of whichever change arrived last |
+| Identity tag | `add` on `CRDTORSetHandler`, `put` on `CRDTORMapHandler` | stores the stamp as the tag a later `remove` tombstones; `CRDTORSetHandler` never compares two of them |
+
+A kind with no conflict to resolve and nothing to tag declares nothing — a
+text `insert` is one, because element ids are already unique. A `delete` is
+another: it beats everything, so there is no rule for a peer to disagree
+with. It still reads its own stamp and records it on the tombstone, against
+the day something tries to take an element back.
+
+**A stamped kind cannot be compounded.** `Compound` never folds operations of
+a stamped kind, and asserts in debug if your `compound` returns one for them.
+A compound is a single change and carries a single id, but your handler folded
+each constituent under its own; on a compound touching more than one target
+the two disagree, and nothing shows it until a later concurrent write lands
+between the two ids and wins on one peer while losing on the other. So it is
+one or the other: a kind that reads a stamp, or a kind that folds.
+
+`stamped` is a **local declaration**, not part of the wire format: bit 7 of
+the kind byte carries the writer's declaration, and nothing else. Two builds
+that disagree about it are refused on decode, in both directions. Changing the
+flag on a kind you already shipped is therefore a breaking change.
+
+A change carrying a kind this build does not recognize for that handler type
+throws `UnknownOperationKindException` instead of being dropped in silence —
+which is why a factory never returns `null`.
+
+A full worked example, a PN-counter with its own `increment` kind, lives in
+[`test/helpers/pn_counter_handler.dart`](https://github.com/MattiaPispisa/crdt/tree/main/packages/crdt_lf/test/helpers/pn_counter_handler.dart).
+It is test-only; publishing a real PN-counter is tracked by
+[issue #126](https://github.com/MattiaPispisa/crdt/issues/126). Using one
+looks like any built-in handler:
+
+```dart
+final doc = CRDTDocument(peerId: PeerId.generate());
+final votes = PNCounterHandler(doc, 'votes')
+  ..increment(3)
+  ..decrement();
+print(votes.value); // 2
+```
+
+#### Text handlers index by rune
+
+`CRDTTextHandler` and `CRDTFugueTextHandler` count positions in **runes**
+(Unicode code points), not UTF-16 code units. `insert`, `delete`, `update`,
+`length`, and the Fugue handler's `stablePositionAt`/`indexOfStablePosition`
+all agree on this: one element is one rune.
+
+Building a text field on top of this in Flutter? `RenderEditable` counts
+UTF-16 code units, not runes — see [`RuneOffsets` in the crdt_lf_flutter
+docs](https://github.com/MattiaPispisa/crdt/tree/main/packages/crdt_lf_flutter/README.md)
+for the conversion.
 
 #### Working with Complex Types
 
@@ -567,7 +686,7 @@ todos.insertRef(0, item);
 ##### A quick decision guide
 
 | Question                                                      | Lean towards                                                |
-|---------------------------------------------------------------|-------------------------------------------------------------|
+|-----------------------------------------------------------------|-------------------------------------------------------------|
 | Peers edit *different fields of the same item* concurrently?  | Nested (per-field) — model B                                |
 | Peers co-edit the *same text* in real time?                   | A text handler as a child (model B)                         |
 | Item is atomic / co-editing is rare?                          | Flat value + LWW — model A                                  |
@@ -586,6 +705,9 @@ todos.insertRef(0, item);
   also expose **stable positions** (`stablePositionAt` /
   `indexOfStablePosition`): serializable caret/cursor anchors tied to element
   identity that survive concurrent edits useful for carets and remote cursors.
+  On all three Fugue handlers `update` overwrites an element **in place**, so
+  an anchor keeps resolving across it, and two peers updating the same element
+  converge on one of the two values instead of keeping both.
 - **List — `CRDTListHandler` vs `CRDTFugueListHandler` vs
   `CRDTFugueMovableListHandler`**: HLC-ordered (cheapest) → interleaving-aware →
   interleaving-aware **plus** identity-preserving `move`.
@@ -649,7 +771,7 @@ This is the canonical wire format used by `crdt_lf_hive` for persistence and by
 directly to build your own storage or sync layer.
 
 | Type                 | Methods                                                              | Size                                                                                 |
-|----------------------|----------------------------------------------------------------------|--------------------------------------------------------------------------------------|
+|----------------------|------------------------------------------------------------------------|----------------------------------------------------------------------------------------|
 | `PeerId`             | `toUint8List()` / `fromUint8List()`                                  | 16 B                                                                                 |
 | `HybridLogicalClock` | `toUint8List()` / `fromUint8List()`                                  | 8 B                                                                                  |
 | `OperationId`        | `toUint8List()` / `fromUint8List()`                                  | 24 B (peer + hlc)                                                                    |
@@ -664,6 +786,22 @@ Operation payloads inside a `Change` are produced by the handler's
 encode their items, so the whole pipeline (operation payload → `Change` →
 `Snapshot`) is fully binary end-to-end. JSON only appears as the *default*
 `ValueCodec<T>` when the user does not provide a custom one.
+
+**Two levels of versioning.** `Snapshot.schemaVersion` (currently `1`, added
+in `crdt_lf` 4.0.0) covers only the wrapper: the document id, the version
+vector, and the framing of the per-handler entries. Inside an entry, the
+layout belongs to the handler that wrote it, and so does its version: **every
+built-in blob starts with a `version: u8` byte of its own**, so a handler can
+change its layout without moving a byte any other handler reads. The reader
+is strict — a version it does not write is refused whole rather than parsed
+as far as it happens to work. Write one in your own handler too; there is
+nothing to gain from a blob that cannot say what it is.
+
+The two Fugue sequence handlers (`CRDTFugueTextHandler`,
+`CRDTFugueListHandler`) show what the room is for: their blob groups elements
+into **runs** of consecutive ids from the same peer instead of one entry per
+element, and carries the deleted elements inside those runs, marked by a bit,
+so a deletion keeps its identity and its place instead of leaving a gap.
 
 ## Project Status
 
@@ -708,6 +846,48 @@ Other bricks of the crdt "system" are:
 - [crdt_lf_hive](https://pub.dev/packages/crdt_lf_hive)
 - [crdt_lf_drift](https://pub.dev/packages/crdt_lf_drift)
 - [crdt_lf_sqlite](https://pub.dev/packages/crdt_lf_sqlite)
+
+## Migrations
+
+### Migrating from 3.x to 4.0
+
+A 4.0 peer refuses to read v3 bytes — not from a document's history, not from
+a snapshot, not from the bytes a Hive/SQLite/Drift adapter saved. 4.0 changes
+what several of those bytes *mean*, so reading them under the old assumptions
+would leave two peers with different content while their version vectors still
+agreed.
+
+**Most of the table below is harmless if you never persisted a document and
+never wrote a custom handler.** With no stored bytes there is nothing a 4.0
+peer can refuse to open, and the operation-layer rows (`ORHandlerTag`,
+`OperationDecoders`, `OperationType`, `incrementCachedState`) only reach code
+that implements `Handler` itself. Peers still have to upgrade together: a 3.x
+and a 4.0 client talking live break the same way.
+
+The one row that reaches ordinary code either way is rune indexing. It changes
+nothing while the text stays inside the BMP — for ASCII and most Latin text a
+rune and a UTF-16 code unit are the same thing. It bites when the text holds
+emoji or other non-BMP characters, or when you hand a handler an offset taken
+from a Flutter `TextField`, which counts code units.
+
+Every package that depends on `crdt_lf` has to move to a version that requires
+`crdt_lf: ^4.0.0` as well, or a client still resolving 3.x never reaches the
+guard.
+
+Renamed or removed symbols:
+
+| 3.x | 4.0 | Note |
+|---|---|---|
+| `ORHandlerTag` | `OperationId` | The tie-break is the id of the change carrying the operation. A handler no longer writes its own, and it costs no bytes. |
+| `OperationType.typeNameFromKind` | removed | No caller anywhere in the monorepo; `OperationType.type` already carries the name. |
+| `OperationType.fromPayload` | removed | The payload string is a debug format and never carried a kind. |
+| a `fromBytes(bytes)` a handler implemented by hand | `OperationDecoders operationDecoders` | Was raw bytes decoded by whatever a handler wrote. Now a `Map<int, Operation Function(Uint8List body)>` keyed by the operation's kind byte: the framework looks the kind up itself and raises `UnknownOperationKindException` on a miss, instead of a handler returning `null` or hand-rolling the same check. |
+| `FugueTree`, `FugueNode`, `FugueNodeTriple`, `FugueValueNode` | no longer exported | Implementation detail of the two Fugue sequence handlers. `FugueElementID` is still public. |
+| `update` on `CRDTFugueTextHandler` / `CRDTFugueListHandler` (delete + insert) | `update` keeps the element's identity | For the old behavior, ask for it: `doc.runInTransaction(() { text..delete(index, count)..insert(index, replacement); });` |
+| `incrementCachedState({required operation, required state})` | adds an optional `DeltaSink<Object?>? sink` | Always `null` today; an override has to declare the parameter, even unused. |
+| `class MyHandler extends Handler<T>` | `base`/`final`/`sealed class MyHandler extends Handler<T>` | `Handler` is a `base` class now. Extending it is unchanged; implementing it is no longer allowed. See [Custom handlers](#custom-handlers). |
+| Dart `>=2.17.0` | Dart `>=3.0.0` | Class modifiers need it. `crdt_socket_sync` and `crdt_lf_hive` move with it. |
+| Text handler positions in UTF-16 code units | positions in **runes** | Affects `insert`, `delete`, `update`, `length`, `stablePositionAt`, `indexOfStablePosition` and `myersDiff`. See [Text handlers index by rune](#text-handlers-index-by-rune). |
 
 [license_badge]: https://img.shields.io/badge/license-MIT-blue.svg
 [license_link]: https://opensource.org/licenses/MIT

@@ -1,14 +1,14 @@
 import 'dart:typed_data';
 
 import 'package:crdt_lf/crdt_lf.dart';
-import 'package:crdt_lf/src/handler/fugue/element_id_floor.dart';
+import 'package:crdt_lf/src/algorithm/fugue/tree.dart';
 import 'package:crdt_lf/src/handler/fugue/fugue_cache.dart';
+import 'package:crdt_lf/src/handler/fugue/fugue_snapshot.dart';
 
 /// Lazily-resolved state shared by Fugue-based ordered-sequence handlers.
 ///
-/// Wraps a [FugueTree] (the source of truth) and memoizes the two derived
-/// projections — the ordered [FugueValueNode]s and the public value — so
-/// that a batch of mutations resolves them at most once, on the next read.
+/// Wraps a [FugueTree] (the source of truth) and memoizes the public value,
+/// so that a batch of mutations resolves it at most once, on the next read.
 ///
 /// `T` is the element type stored in the tree, `V` is the public value type
 /// (`String` for text, `List<T>` for a list). The projection from the tree to
@@ -20,19 +20,14 @@ class FugueState<T, V> {
   final FugueTree<T> _tree;
   final V Function(FugueTree<T> tree) _project;
 
-  List<FugueValueNode<T>>? _cachedNodes;
   V? _cachedValue;
-
-  /// The ordered value nodes, resolved lazily from the tree.
-  List<FugueValueNode<T>> get _nodes => _cachedNodes ??= _tree.nodes();
 
   /// The public value, resolved lazily from the tree.
   V get _value => _cachedValue ??= _project(_tree);
 
-  /// Discards the resolved projections after a tree mutation; they are
-  /// resolved again lazily on the next read.
+  /// Discards the resolved value after a tree mutation; it is resolved again
+  /// lazily on the next read.
   void _markDirty() {
-    _cachedNodes = null;
     _cachedValue = null;
   }
 }
@@ -59,10 +54,10 @@ class FugueState<T, V> {
 /// it should mix in [FugueCache] directly and own its own navigation.
 ///
 /// ## Note on `T`
-/// The Fugue tree uses a `null` value to mark a deleted element, so `T` must
-/// be non-nullable: a stored `null` would be indistinguishable from a
-/// deletion.
-abstract class FugueSequenceHandler<T, V, S extends FugueState<T, V>>
+/// `T` must be non-nullable. The Fugue tree keeps `null` for the root, the
+/// one node that stands for no element, and a stored `null` would look the
+/// same.
+abstract base class FugueSequenceHandler<T, V, S extends FugueState<T, V>>
     extends Handler<S> with FugueCache<S> {
   /// Creates a Fugue sequence handler bound to [doc] with the given [id].
   FugueSequenceHandler(super.doc, String id, {super.handlerType}) : _id = id;
@@ -72,30 +67,44 @@ abstract class FugueSequenceHandler<T, V, S extends FugueState<T, V>>
   @override
   String get id => _id;
 
+  /// `update` overwrites an element in place, so it needs a stamp to pick a
+  /// winner. `insert` and `delete` do not: element ids are unique, and a
+  /// deletion beats everything.
+  @override
+  late final OperationType updateType = OperationType.update(
+    this,
+    stamped: true,
+  );
+
   /// Creates an empty state (an empty tree with this handler's projection).
   S createEmptyState();
 
   /// Applies a single decoded [operation] to [tree].
   void applyToTree(FugueTree<T> tree, Operation operation);
 
-  /// The element ids produced by this peer in [operation] — insert ids and
-  /// update new-node ids — used to seed the counter.
+  /// The element ids this peer created in [operation], used to seed the
+  /// counter.
   ///
-  /// Returns nothing for operations that do not create nodes (e.g. delete).
+  /// Returns nothing for operations that create no node: `delete` and
+  /// `update`, which addresses an element that already exists.
   Iterable<FugueElementID> producedElementIds(Operation operation);
 
   /// Builds the delete operation for the given [nodeIDs].
   Operation buildDeleteOperation(List<FugueElementID> nodeIDs);
 
-  /// Encodes a single element value for the snapshot blob.
-  Uint8List encodeValue(T value);
+  /// Encodes the [values] of one snapshot run into a single blob.
+  ///
+  /// The blob carries no count of its own, so an implementation picks any
+  /// framing [decodeRun] can undo given the number of values.
+  Uint8List encodeRun(List<T> values);
 
-  /// Decodes a single element value from the snapshot blob.
-  T decodeValue(Uint8List bytes);
+  /// Decodes a run blob holding exactly [length] values, the inverse of
+  /// [encodeRun].
+  List<T> decodeRun(Uint8List blob, int length);
 
   @override
   Iterable<FugueElementID> knownElementIds() sync* {
-    for (final node in _initialState()) {
+    for (final node in _initialState().nodes) {
       yield node.id;
     }
     for (final op in operations()) {
@@ -108,7 +117,13 @@ abstract class FugueSequenceHandler<T, V, S extends FugueState<T, V>>
     final state = createEmptyState();
 
     // Seed from the snapshot, then replay the history.
-    state._tree.iterableInsert(0, _initialState());
+    final seed = _initialState();
+    state._tree.bulkSeed(
+      seed.nodes,
+      seed.stamps,
+      livenessStamps: seed.livenessStamps,
+      live: seed.live,
+    );
     for (final operation in operations()) {
       applyToTree(state._tree, operation);
     }
@@ -131,8 +146,8 @@ abstract class FugueSequenceHandler<T, V, S extends FugueState<T, V>>
   /// The current value, computed from changes and snapshot.
   V get value => cachedOrComputedState()._value;
 
-  /// The number of live elements
-  int get elementCount => cachedOrComputedState()._nodes.length;
+  /// The number of live elements, in `O(1)`.
+  int get elementCount => cachedOrComputedState()._tree.liveLength;
 
   /// Deletes [count] elements starting at [index].
   void delete(int index, int count) {
@@ -184,7 +199,7 @@ abstract class FugueSequenceHandler<T, V, S extends FugueState<T, V>>
       return FugueElementID.nullID();
     }
     final state = cachedOrComputedState();
-    final liveCount = state._nodes.length;
+    final liveCount = state._tree.liveLength;
     if (liveCount == 0) {
       return FugueElementID.nullID();
     }
@@ -207,58 +222,32 @@ abstract class FugueSequenceHandler<T, V, S extends FugueState<T, V>>
 
   @override
   Uint8List getSnapshotState() {
-    final nodes = cachedOrComputedState()._nodes;
-
-    final out = BytesBuilder(copy: false);
-    UVarint.write(nodes.length, out);
-    for (final node in nodes) {
-      final idBytes = node.id.toBytes();
-      UVarint.write(idBytes.length, out);
-      out.add(idBytes);
-
-      final valueBytes = encodeValue(node.value);
-      UVarint.write(valueBytes.length, out);
-      out.add(valueBytes);
-    }
-    ElementIdFloor.write(elementIdFloorForSnapshot(), out);
-    return out.toBytes();
+    return FugueSnapshot.write<T>(
+      tree: cachedOrComputedState()._tree,
+      floor: elementIdFloorForSnapshot(),
+      encodeRun: encodeRun,
+    );
   }
 
-  /// Decodes the snapshot nodes for this handler, or an empty list if there
-  /// is no snapshot.
+  /// Decodes the snapshot blob for this handler, or an empty seed if there is
+  /// no snapshot.
   ///
-  /// Also seeds the element id floor from the snapshot trailer, so counters
-  /// spent on elements that were deleted and pruned are never reissued.
-  List<FugueValueNode<T>> _initialState() {
+  /// Also seeds the element id floor from the blob, so counters spent on
+  /// elements that were deleted and pruned are never reissued.
+  FugueSnapshotData<T> _initialState() {
     final snapshot = lastSnapshot();
     if (snapshot == null) {
-      return [];
+      return FugueSnapshotData<T>(
+        nodes: const [],
+        stamps: const {},
+        live: const [],
+        livenessStamps: const {},
+        floor: const {},
+      );
     }
 
-    var offset = 0;
-    final countRec = UVarint.read(snapshot, offset: offset);
-    offset = countRec.nextOffset;
-    final nodes = <FugueValueNode<T>>[];
-    for (var i = 0; i < countRec.value; i += 1) {
-      final idLenRec = UVarint.read(snapshot, offset: offset);
-      offset = idLenRec.nextOffset;
-      final idEnd = offset + idLenRec.value;
-      final id = FugueElementID.fromBytes(
-        Uint8List.sublistView(snapshot, offset, idEnd),
-      );
-      offset = idEnd;
-
-      final valLenRec = UVarint.read(snapshot, offset: offset);
-      offset = valLenRec.nextOffset;
-      final valEnd = offset + valLenRec.value;
-      final value = decodeValue(
-        Uint8List.sublistView(snapshot, offset, valEnd),
-      );
-      offset = valEnd;
-
-      nodes.add(FugueValueNode<T>(id: id, value: value));
-    }
-    seedElementIdFloor(ElementIdFloor.read(snapshot, offset: offset));
-    return nodes;
+    final data = FugueSnapshot.read<T>(snapshot, decodeRun: decodeRun);
+    seedElementIdFloor(data.floor);
+    return data;
   }
 }

@@ -1,20 +1,26 @@
+## [0.2.0](https://github.com/MattiaPispisa/crdt/tree/crdt_lf_drift-v0.2.0/packages/crdt_lf_drift)
+
+**Date:** 2026-08-16
+
+- Requires `crdt_lf: ^4.0.0` instead of `>=3.0.0 <5.0.0`.
+
 ## [0.1.1](https://github.com/MattiaPispisa/crdt/tree/crdt_lf_drift-v0.1.1/packages/crdt_lf_drift)
 
 **Date:** 2026-07-28
 
-Widens the `crdt_lf` constraint to `>=3.0.0 <5.0.0`. No functional changes, and no migration of existing databases.
+- Widens the `crdt_lf` constraint to `>=3.0.0 <5.0.0`. No functional changes, and no migration of existing databases.
 
 ## [0.1.0+2](https://github.com/MattiaPispisa/crdt/tree/crdt_lf_drift-v0.1.0+2/packages/crdt_lf_drift)
 
 **Date:** 2026-07-19
 
-Documentation release: refreshes the CHANGELOG and docs published on pub.dev. No functional changes since `0.1.0`.
+- Documentation release: refreshes the CHANGELOG and docs published on pub.dev. No functional changes since `0.1.0`.
 
 ## [0.1.0+1](https://github.com/MattiaPispisa/crdt/tree/crdt_lf_drift-v0.1.0+1/packages/crdt_lf_drift)
 
 **Date:** 2026-07-18
 
-Documentation release: refreshes the CHANGELOG and docs published on pub.dev. No functional changes since `0.1.0`.
+- Documentation release: refreshes the CHANGELOG and docs published on pub.dev. No functional changes since `0.1.0`.
 
 ## [0.1.0](https://github.com/MattiaPispisa/crdt/tree/crdt_lf_drift-v0.1.0/packages/crdt_lf_drift)
 

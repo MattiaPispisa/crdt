@@ -1,3 +1,10 @@
+## [0.7.0](https://github.com/MattiaPispisa/crdt/tree/crdt_socket_sync-v0.7.0/packages/crdt_socket_sync)
+
+**Date:** 2026-08-16
+
+- Requires `crdt_lf: ^4.0.0` instead of `>=3.0.0 <5.0.0`. 
+- The Dart floor moves to `>=3.0.0`, which `crdt_lf` now needs.
+
 ## [0.6.1](https://github.com/MattiaPispisa/crdt/tree/crdt_socket_sync-v0.6.1/packages/crdt_socket_sync)
 
 **Date:** 2026-07-28
@@ -53,13 +60,13 @@ Session events:
 
 **Date:** 2026-07-19
 
-Documentation release: refreshes the CHANGELOG and docs published on pub.dev. No functional changes since `0.5.0`.
+- Documentation release: refreshes the CHANGELOG and docs published on pub.dev. No functional changes since `0.5.0`.
 
 ## [0.5.0+1](https://github.com/MattiaPispisa/crdt/tree/crdt_socket_sync-v0.5.0+1/packages/crdt_socket_sync)
 
 **Date:** 2026-07-18
 
-Documentation release: refreshes the CHANGELOG and docs published on pub.dev. No functional changes since `0.5.0`.
+- Documentation release: refreshes the CHANGELOG and docs published on pub.dev. No functional changes since `0.5.0`.
 
 ## [0.5.0](https://github.com/MattiaPispisa/crdt/tree/crdt_socket_sync-v0.5.0/packages/crdt_socket_sync)
 **Date:** 2026-07-08

@@ -1,34 +1,7 @@
 part of 'handler.dart';
 
-class _MapOperationFactory<T> {
-  _MapOperationFactory(this.handler);
-  final CRDTMapHandler<T> handler;
-
-  Operation? fromBytes(Uint8List operationBytes) {
-    final env = OperationEnvelopeCodec.decode(operationBytes);
-    if (env.handlerId != handler.id) {
-      return null;
-    }
-
-    if (env.handlerType != handler.handlerType) {
-      return null;
-    }
-
-    final body = Uint8List.sublistView(operationBytes, env.bodyOffset);
-    if (env.kind == OperationType.kindInsert) {
-      return _MapInsertOperation<T>.fromBodyBytes(handler, body);
-    } else if (env.kind == OperationType.kindDelete) {
-      return _MapDeleteOperation<T>.fromBodyBytes(handler, body);
-    } else if (env.kind == OperationType.kindUpdate) {
-      return _MapUpdateOperation<T>.fromBodyBytes(handler, body);
-    }
-
-    return null;
-  }
-}
-
 class _MapInsertOperation<T> extends Operation {
-  const _MapInsertOperation({
+  _MapInsertOperation({
     required this.key,
     required this.value,
     required this.valueCodec,
@@ -111,7 +84,7 @@ class _MapInsertOperation<T> extends Operation {
 }
 
 class _MapDeleteOperation<T> extends Operation {
-  const _MapDeleteOperation({
+  _MapDeleteOperation({
     required this.key,
     required super.id,
     required super.type,
@@ -163,7 +136,7 @@ class _MapDeleteOperation<T> extends Operation {
 }
 
 class _MapUpdateOperation<T> extends Operation {
-  const _MapUpdateOperation({
+  _MapUpdateOperation({
     required this.key,
     required this.value,
     required this.valueCodec,

@@ -12,7 +12,8 @@ import '../common/custom_emitter.dart';
 abstract class RemoteChangeBenchmark<H extends Handler<dynamic>>
     extends BenchmarkBase {
   /// Creates the benchmark reported under `name`.
-  RemoteChangeBenchmark(super.name) : super(emitter: const CustomEmitter());
+  RemoteChangeBenchmark(super.name)
+      : super(emitter: const CustomEmitter(runsPerMeasure: 1));
 
   static const _warmupCycles = 20;
   static const _measuredCycles = 200;
@@ -166,8 +167,7 @@ class TextRemoteBenchmark extends RemoteChangeBenchmark<CRDTTextHandler> {
 /// order rule is the only thing that makes the incremental path correct.
 class MapRemoteBenchmark extends RemoteChangeBenchmark<CRDTMapHandler<int>> {
   /// Creates the benchmark for a map of [size] keys.
-  MapRemoteBenchmark(this.size)
-      : super('Map remote set + read on $size keys');
+  MapRemoteBenchmark(this.size) : super('Map remote set + read on $size keys');
 
   /// The number of keys the map holds.
   final int size;
@@ -268,6 +268,41 @@ class OrMapRemoteBenchmark
   }
 }
 
+class MovableListRemoteBenchmark
+    extends RemoteChangeBenchmark<CRDTFugueMovableListHandler<int>> {
+  /// Creates the benchmark for a list of [size] elements.
+  MovableListRemoteBenchmark(this.size)
+      : super('Movable list remote move from the past + read on $size items');
+
+  /// The number of elements the list holds.
+  final int size;
+
+  @override
+  bool get remoteChangeIsFromThePast => true;
+
+  @override
+  CRDTFugueMovableListHandler<int> createHandler(CRDTDocument doc) =>
+      CRDTFugueMovableListHandler<int>(doc, 'movable');
+
+  @override
+  void seed(CRDTFugueMovableListHandler<int> handler) {
+    handler.insertAll(0, List<int>.generate(size, (index) => index));
+  }
+
+  /// A move rather than an insert: it is the operation whose winner the stamp
+  /// decides, and the one that used to force a replay.
+  @override
+  void edit(CRDTFugueMovableListHandler<int> handler, int round) =>
+      handler.move(round % handler.length, 0);
+
+  @override
+  void read(CRDTFugueMovableListHandler<int> handler) {
+    if (handler.value.isEmpty) {
+      throw StateError('empty value');
+    }
+  }
+}
+
 void main() {
   for (final size in [2000, 10000, 30000]) {
     FugueTextRemoteBenchmark(size).report();
@@ -283,5 +318,8 @@ void main() {
   }
   for (final size in [1000, 5000]) {
     OrMapRemoteBenchmark(size).report();
+  }
+  for (final size in [1000, 5000]) {
+    MovableListRemoteBenchmark(size).report();
   }
 }

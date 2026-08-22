@@ -1,38 +1,5 @@
 part of 'handler.dart';
 
-/// Factory for Fugue list operations
-class _FugueListOperationFactory<T> {
-  /// Constructor that initializes the factory
-  _FugueListOperationFactory(this.handler);
-
-  /// The handler associated with this factory
-  final CRDTFugueListHandler<T> handler;
-
-  /// Creates an operation from bytes.
-  Operation? fromBytes(Uint8List operationBytes) {
-    final env = OperationEnvelopeCodec.decode(operationBytes);
-    if (env.handlerId != handler.id) {
-      return null;
-    }
-
-    if (env.handlerType != handler.handlerType) {
-      return null;
-    }
-
-    final body = Uint8List.sublistView(operationBytes, env.bodyOffset);
-
-    if (env.kind == OperationType.kindInsert) {
-      return _FugueListInsertOperation<T>.fromBodyBytes(handler, body);
-    } else if (env.kind == OperationType.kindDelete) {
-      return _FugueListDeleteOperation<T>.fromBodyBytes(handler, body);
-    } else if (env.kind == OperationType.kindUpdate) {
-      return _FugueListUpdateOperation<T>.fromBodyBytes(handler, body);
-    }
-
-    return null;
-  }
-}
-
 /// Batch insert operation for the Fugue list
 class _FugueListInsertOperation<T> extends Operation {
   /// Constructor that initializes a batch insert operation
@@ -257,7 +224,6 @@ class _FugueListUpdateOperation<T> extends Operation {
   /// - itemsCount: uvarint
   /// - repeated `itemsCount` times:
   ///   - nodeID: [FugueElementID] bytes
-  ///   - newNodeID: [FugueElementID] bytes
   ///   - valueLen: uvarint
   ///   - value: [ValueCodec] bytes
   factory _FugueListUpdateOperation.fromBodyBytes(
@@ -274,9 +240,6 @@ class _FugueListUpdateOperation<T> extends Operation {
       final idRec = FugueElementID.readFromBytes(body, offset: offset);
       offset = idRec.nextOffset;
 
-      final newIdRec = FugueElementID.readFromBytes(body, offset: offset);
-      offset = newIdRec.nextOffset;
-
       final valLenRec = UVarint.read(body, offset: offset);
       offset = valLenRec.nextOffset;
       final valEnd = offset + valLenRec.value;
@@ -288,13 +251,7 @@ class _FugueListUpdateOperation<T> extends Operation {
       );
       offset = valEnd;
 
-      items.add(
-        _FugueListUpdateItem<T>(
-          nodeID: idRec.value,
-          newNodeID: newIdRec.value,
-          value: value,
-        ),
-      );
+      items.add(_FugueListUpdateItem<T>(nodeID: idRec.value, value: value));
     }
 
     return _FugueListUpdateOperation<T>(
@@ -316,9 +273,7 @@ class _FugueListUpdateOperation<T> extends Operation {
     final out = BytesBuilder(copy: false);
     UVarint.write(items.length, out);
     for (final item in items) {
-      out
-        ..add(item.nodeID.toBytes())
-        ..add(item.newNodeID.toBytes());
+      out.add(item.nodeID.toBytes());
       final valBytes = valueCodec.encode(item.value);
       UVarint.write(valBytes.length, out);
       out.add(valBytes);
@@ -331,11 +286,9 @@ class _FugueListUpdateOperation<T> extends Operation {
 class _FugueListUpdateItem<T> {
   _FugueListUpdateItem({
     required this.nodeID,
-    required this.newNodeID,
     required this.value,
   });
 
   final FugueElementID nodeID;
-  final FugueElementID newNodeID;
   final T value;
 }

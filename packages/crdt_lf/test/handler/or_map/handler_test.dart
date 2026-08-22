@@ -1,4 +1,5 @@
 import 'package:crdt_lf/crdt_lf.dart';
+import 'package:hlc_dart/hlc_dart.dart';
 import 'package:test/test.dart';
 
 void main() {
@@ -54,12 +55,20 @@ void main() {
       expect(map['x'], 3);
     });
 
-    test('should refresh clock before creating a tag', () {
+    test('each put is stamped strictly after the one before it', () {
       final doc = CRDTDocument();
       final hlc1 = doc.hlc;
-      CRDTORMapHandler<String, int>(doc, 'map1').put('x', 1);
-      expect(doc.hlc, isNot(hlc1));
+      final map = CRDTORMapHandler<String, int>(doc, 'map1')
+        ..put('x', 1)
+        ..put('x', 2);
       expect(hlc1.happenedBefore(doc.hlc), isTrue);
+
+      // The document ticks its clock before minting each stamp. Without that
+      // tick two puts in the same millisecond would share a tag, and the
+      // second could not win against the first.
+      final stamps = map.operations().map((operation) => operation.stamp!);
+      expect(stamps, hasLength(2));
+      expect(stamps.first.compareTo(stamps.last), lessThan(0));
     });
 
     test('should handle concurrent puts on different keys', () {
@@ -325,11 +334,14 @@ void main() {
 
   group('ORMapEntry', () {
     test('equality and hashCode reflect value+tag', () {
-      final tagA = ORHandlerTag.parse(
-        '37f1ec87-6ea5-430b-a627-a6b92b56a02d@1.0',
+      final peer = PeerId.parse('37f1ec87-6ea5-430b-a627-a6b92b56a02d');
+      final tagA = OperationId(
+        peer,
+        HybridLogicalClock(l: 1, c: 0),
       );
-      final tagB = ORHandlerTag.parse(
-        '37f1ec87-6ea5-430b-a627-a6b92b56a02d@2.0',
+      final tagB = OperationId(
+        peer,
+        HybridLogicalClock(l: 2, c: 0),
       );
       final entry1 = ORMapEntry<int>(value: 1, tag: tagA);
       final entry2 = ORMapEntry<int>(value: 1, tag: tagA);
@@ -343,8 +355,9 @@ void main() {
     });
 
     test('identity short-circuit and non-ORMapEntry inequality', () {
-      final tag = ORHandlerTag.parse(
-        '37f1ec87-6ea5-430b-a627-a6b92b56a02d@1.0',
+      final tag = OperationId(
+        PeerId.parse('37f1ec87-6ea5-430b-a627-a6b92b56a02d'),
+        HybridLogicalClock(l: 1, c: 0),
       );
       final entry = ORMapEntry<String>(value: 'x', tag: tag);
       // Compares same instance: triggers identical short-circuit.

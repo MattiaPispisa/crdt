@@ -1,6 +1,6 @@
 name: crdt_lf_devtools_extension
 description: DevTools extension for crdt_lf package
-version: 0.0.1
+version: 0.0.2
 publish_to: none
 
 environment:
@@ -25,7 +25,7 @@ dependencies:
   graphview: ^1.2.0
 
   # extension for
-  crdt_lf: ^1.0.0
+  crdt_lf: ^4.0.0
 
 dev_dependencies:
   flutter_test:

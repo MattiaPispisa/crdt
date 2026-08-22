@@ -156,5 +156,63 @@ void main() {
       expect(operationId1.happenedAfterOrEqual(operationId2), isFalse);
       expect(operationId1.happenedAfterOrEqual(operationId3), isTrue);
     });
+
+    // An id is also the last-writer-wins mark a stamped handler stores, so a
+    // list of them has to land in one order whatever order it is given.
+    test('sorts into one order whatever order it is given', () {
+      final peerB = PeerId.parse('00000000-0000-4000-8000-00000000000b');
+      final ids = [
+        OperationId(peerB, HybridLogicalClock(l: 5, c: 3)),
+        OperationId(peerId, HybridLogicalClock(l: 5, c: 3)),
+        OperationId(peerId, HybridLogicalClock(l: 5, c: 4)),
+        OperationId(peerB, HybridLogicalClock(l: 4, c: 9)),
+      ];
+
+      final ascending = [...ids]..sort();
+      final fromReversed = [...ids.reversed]..sort();
+
+      expect(fromReversed, equals(ascending));
+      expect(ascending.first, equals(ids[3]));
+      expect(ascending.last, equals(ids[2]));
+    });
+
+    group('readFromBytes', () {
+      test('round-trips through a fixed 24-byte record', () {
+        final id = OperationId(peerId, HybridLogicalClock(l: 123456, c: 7));
+        final bytes = id.toUint8List();
+
+        expect(bytes, hasLength(OperationId.byteLength));
+        expect(OperationId.byteLength, equals(24));
+        expect(OperationId.readFromBytes(bytes), equals(id));
+      });
+
+      test('reads from an offset inside a larger buffer', () {
+        final id = OperationId(peerId, HybridLogicalClock(l: 42, c: 1));
+        final buffer = Uint8List(OperationId.byteLength + 3)
+          ..setRange(3, OperationId.byteLength + 3, id.toUint8List());
+
+        expect(OperationId.readFromBytes(buffer, offset: 3), equals(id));
+      });
+
+      // Where `fromUint8List` blames the caller with a RangeError, this one
+      // blames the input: it reads ids embedded in snapshot blobs and
+      // operation bodies, where a short buffer means corrupt bytes.
+      test('refuses a buffer that stops inside the record', () {
+        final short = Uint8List.sublistView(
+          OperationId(peerId, hlc).toUint8List(),
+          0,
+          OperationId.byteLength - 1,
+        );
+
+        expect(
+          () => OperationId.readFromBytes(short),
+          throwsA(isA<FormatException>()),
+        );
+        expect(
+          () => OperationId.readFromBytes(Uint8List(24), offset: -1),
+          throwsA(isA<FormatException>()),
+        );
+      });
+    });
   });
 }

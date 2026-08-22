@@ -1,5 +1,5 @@
 @TestOn('vm')
-library web_socket_relay_test;
+library;
 
 import 'dart:async';
 import 'dart:io';

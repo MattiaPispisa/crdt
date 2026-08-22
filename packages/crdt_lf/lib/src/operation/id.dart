@@ -8,7 +8,7 @@ import 'package:hlc_dart/hlc_dart.dart';
 /// An [OperationId] uniquely identifies an operation in the CRDT system.
 /// It combines a [PeerId] and an [HybridLogicalClock] timestamp
 ///  to create a globally unique identifier.
-class OperationId with Comparable<OperationId> {
+class OperationId implements Comparable<OperationId> {
   /// Creates a new [OperationId] with the given [PeerId]
   /// and [HybridLogicalClock] timestamp
   OperationId(this.peerId, this.hlc);
@@ -31,6 +31,22 @@ class OperationId with Comparable<OperationId> {
     final peerId = PeerId.fromUint8List(bytes, offset: offset);
     final hlc = HybridLogicalClock.fromUint8List(bytes, offset: offset + 16);
     return OperationId(peerId, hlc);
+  }
+
+  /// Reads an [OperationId] embedded in a larger buffer at [offset].
+  ///
+  /// Same bytes as [OperationId.fromUint8List], different failure: this one
+  /// throws a [FormatException] on a buffer that stops inside the record,
+  /// treating a short buffer as corrupt input rather than a bad offset. The
+  /// cursor advances by [byteLength], which is fixed.
+  factory OperationId.readFromBytes(
+    Uint8List bytes, {
+    int offset = 0,
+  }) {
+    if (offset < 0 || offset + byteLength > bytes.length) {
+      throw const FormatException('Truncated OperationId');
+    }
+    return OperationId.fromUint8List(bytes, offset: offset);
   }
 
   /// Parses an [OperationId] from a string representation

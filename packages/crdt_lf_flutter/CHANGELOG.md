@@ -1,12 +1,18 @@
-## [0.4.0]
+## [0.4.0](https://github.com/MattiaPispisa/crdt/tree/crdt_lf_flutter-v0.4.0/packages/crdt_lf_flutter)
 
-**Date:** 2026-07-28
+**Date:** 2026-08-16
 
-[compare to previous release](https://github.com/MattiaPispisa/crdt/compare/crdt_lf_flutter-v0.2.1...crdt_lf_flutter-v0.3.0)
+[compare to previous release](https://github.com/MattiaPispisa/crdt/compare/crdt_lf_flutter-v0.3.0...crdt_lf_flutter-v0.4.0)
 
 ### Changed
 
 - Requires `crdt_lf` 4.0.0, where text is indexed by code point rather than by code unit. [106](https://github.com/MattiaPispisa/crdt/issues/106)
+
+### Fixed
+
+- `CrdtTextCursorsOverlay`: a remote cursor anchored past an emoji (or any
+  non-BMP character) now paints at the right position instead of drifting by
+  one code unit per preceding astral character. [106](https://github.com/MattiaPispisa/crdt/issues/106)
 
 ## [0.3.0](https://github.com/MattiaPispisa/crdt/tree/crdt_lf_flutter-v0.3.0/packages/crdt_lf_flutter)
 
@@ -33,7 +39,7 @@
 
 **Date:** 2026-07-19
 
-Documentation release: refreshes the CHANGELOG and docs published on pub.dev. No functional changes since `0.2.0`.
+- Documentation release: refreshes the CHANGELOG and docs published on pub.dev. No functional changes since `0.2.0`.
 
 ## [0.2.0](https://github.com/MattiaPispisa/crdt/tree/crdt_lf_flutter-v0.2.0/packages/crdt_lf_flutter)
 

@@ -1,8 +1,4 @@
 export 'src/algorithm/fugue/element_id.dart';
-export 'src/algorithm/fugue/node.dart';
-export 'src/algorithm/fugue/node_triple.dart';
-export 'src/algorithm/fugue/tree.dart';
-export 'src/algorithm/fugue/value_node.dart';
 export 'src/algorithm/meyers_diff/meyers_diff.dart';
 export 'src/algorithm/meyers_diff/ops.dart';
 export 'src/binary/binary.dart';
@@ -25,7 +21,6 @@ export 'src/handler/or_map/handler.dart';
 export 'src/handler/or_set/handler.dart';
 export 'src/handler/ref/handler_ref.dart';
 export 'src/handler/register/handler.dart';
-export 'src/handler/tag.dart';
 export 'src/handler/text/handler.dart';
 export 'src/handler/value_codec.dart';
 export 'src/operation/id.dart';

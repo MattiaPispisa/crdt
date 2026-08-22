@@ -14,6 +14,11 @@ class Compound {
   final Map<String, Handler<dynamic>> _handlers;
 
   /// Compact the operations
+  ///
+  /// ## A stamped kind is never folded
+  ///
+  /// Operations of a kind that reads [Operation.stamp] are left alone, and a
+  /// `compound` that folds one anyway fails an assertion in debug.
   List<Operation> compact() {
     if (_operations.isEmpty) {
       return [];
@@ -28,17 +33,36 @@ class Compound {
     }
 
     for (final operation in _operations.skip(1)) {
-      if (operation.id == accumulator.id && _handlers[operation.id] != null) {
-        final compound =
-            _handlers[operation.id]!.compound(accumulator, operation);
-
-        if (compound == null) {
-          next(operation);
-        } else {
-          accumulator = compound;
-        }
-      } else {
+      final handler = _handlers[operation.id];
+      if (operation.id != accumulator.id || handler == null) {
         next(operation);
+        continue;
+      }
+
+      // A compound is one change and carries one id,
+      // so folding several stamped operations would replace their marks
+      // with a single one, and the peers that already
+      // folded them separately would keep resolving conflicts by the old marks.
+      if (accumulator.type.stamped || operation.type.stamped) {
+        assert(
+          handler.compound(accumulator, operation) == null,
+          'A stamped kind cannot compound: the compound would be one change '
+          'with one id, where the local fold used one per operation.',
+        );
+        next(operation);
+        continue;
+      }
+
+      final compound = handler.compound(accumulator, operation);
+      if (compound == null) {
+        next(operation);
+      } else {
+        // A fresh operation has no id yet and takes the later one. A handler
+        // is also free to hand back one of the two it was given, and that one
+        // already carries its own — which the write-once setter would refuse
+        // to replace anyway.
+        compound.stamp ??= operation.stamp;
+        accumulator = compound;
       }
     }
 

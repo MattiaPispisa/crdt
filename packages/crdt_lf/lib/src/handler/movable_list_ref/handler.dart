@@ -19,7 +19,8 @@ import 'package:crdt_lf/src/handler/handler_type.dart';
 /// final b = CRDTMapRefHandler(doc, doc.newHandlerId());
 /// slides..insertRef(0, a)..insertRef(1, b)..move(1, 0);
 /// ```
-class CRDTMovableListRefHandler extends CRDTFugueMovableListHandler<HandlerRef>
+base class CRDTMovableListRefHandler
+    extends CRDTFugueMovableListHandler<HandlerRef>
     implements ContainerHandler {
   /// Creates a movable list-of-references handler bound to [doc] with [id].
   CRDTMovableListRefHandler(super.doc, super.id)

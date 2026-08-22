@@ -1,6 +1,8 @@
 import 'dart:typed_data';
 
 import 'package:crdt_lf/crdt_lf.dart';
+import 'package:crdt_lf/src/algorithm/fugue/tree.dart';
+import 'package:crdt_lf/src/algorithm/fugue/value_node.dart';
 import 'package:crdt_lf/src/handler/fugue/fugue_sequence_handler.dart';
 import 'package:crdt_lf/src/handler/handler_type.dart';
 
@@ -29,7 +31,7 @@ part 'operation.dart';
 /// text..insert(0, 'Hello')..insert(5, ' World');
 /// print(text.value); // Prints ["Hello"]
 /// ```
-class CRDTFugueTextHandler
+base class CRDTFugueTextHandler
     extends FugueSequenceHandler<String, String, FugueTextState> {
   /// Constructor that initializes a new Fugue text handler
   CRDTFugueTextHandler(super.doc, super.id);
@@ -39,8 +41,14 @@ class CRDTFugueTextHandler
   String get handlerType => kFugueTextHandlerType;
 
   @override
-  late final OperationFactory operationFactory =
-      _FugueTextOperationFactory(this).fromBytes;
+  late final OperationDecoders operationDecoders = {
+    OperationType.kindInsert: (body) =>
+        _FugueTextInsertOperation.fromBodyBytes(this, body),
+    OperationType.kindDelete: (body) =>
+        _FugueTextDeleteOperation.fromBodyBytes(this, body),
+    OperationType.kindUpdate: (body) =>
+        _FugueTextUpdateOperation.fromBodyBytes(this, body),
+  };
 
   /// Inserts [text] at position [index], **in runes**
   void insert(int index, String text) {
@@ -73,7 +81,17 @@ class CRDTFugueTextHandler
     );
   }
 
-  /// Updates the text at position [index], **in runes**
+  /// Overwrites the elements starting at [index] with [text], keeping the
+  /// identity of each one.
+  ///
+  /// Two peers updating the same element converge on one of the two values
+  /// instead of keeping both, anchors taken with [stablePositionAt] keep
+  /// resolving, and nothing is added to the tree. An update loses against a
+  /// concurrent deletion of the same element, and stops at the end of the
+  /// text instead of inserting.
+  ///
+  /// [index] and the length of [text] are counted in **runes**, like every
+  /// other positional API of this handler.
   void update(int index, String text) {
     if (text.isEmpty) {
       return;
@@ -84,13 +102,12 @@ class CRDTFugueTextHandler
     for (var i = 0; i < runes.length; i++) {
       final nodeID = nodeAt(index + i);
       if (nodeID.isNull) {
-        // Past the end of the text: there is nothing left to replace.
+        // Past the end of the text: there is nothing left to overwrite.
         break;
       }
       items.add(
         _FugueUpdateItem(
           nodeID: nodeID,
-          newNodeID: FugueElementID(doc.peerId, nextCounter()),
           text: String.fromCharCode(runes[i]),
         ),
       );
@@ -143,13 +160,11 @@ class CRDTFugueTextHandler
           // Insert new text at adjusted position
           insert(segment.oldStart + offset, segment.text);
           offset += segment.newEnd - segment.newStart;
-          break;
         case DiffOp.remove:
           // Remove text at adjusted position
           final count = segment.oldEnd - segment.oldStart;
           delete(segment.oldStart + offset, count);
           offset -= count;
-          break;
       }
     }
   }
@@ -172,14 +187,14 @@ class CRDTFugueTextHandler
       );
     } else if (operation is _FugueTextDeleteOperation) {
       for (final item in operation.items) {
-        tree.delete(item.nodeID);
+        tree.delete(item.nodeID, stamp: operation.stamp!);
       }
     } else if (operation is _FugueTextUpdateOperation) {
       for (final item in operation.items) {
         tree.update(
           nodeID: item.nodeID,
-          newID: item.newNodeID,
-          newValue: item.text,
+          value: item.text,
+          stamp: operation.stamp!,
         );
       }
     }
@@ -190,10 +205,6 @@ class CRDTFugueTextHandler
     if (operation is _FugueTextInsertOperation) {
       for (final item in operation.items) {
         yield item.id;
-      }
-    } else if (operation is _FugueTextUpdateOperation) {
-      for (final item in operation.items) {
-        yield item.newNodeID;
       }
     }
   }
@@ -206,14 +217,17 @@ class CRDTFugueTextHandler
     );
   }
 
+  /// Writes the run as plain WTF-8, one sequence per element and nothing
+  /// else: an element is one rune, and a rune is one WTF-8 sequence, so the
+  /// blob is self-delimiting and ASCII text costs one byte per character.
   @override
-  Uint8List encodeValue(String value) {
-    return Wtf8.encode(value);
+  Uint8List encodeRun(List<String> values) {
+    return Wtf8.encodeAll(values);
   }
 
   @override
-  String decodeValue(Uint8List bytes) {
-    return Wtf8.decode(bytes);
+  List<String> decodeRun(Uint8List blob, int length) {
+    return Wtf8.decodeCodePoints(blob);
   }
 
   /// Returns a text representation of this handler
@@ -229,13 +243,15 @@ class CRDTFugueTextHandler
 /// State of the [CRDTFugueTextHandler]: the text is the concatenation of all
 /// live node values.
 class FugueTextState extends FugueState<String, String> {
-  /// Creates a text state over [tree].
-  FugueTextState(FugueTree<String> tree) : super(tree, _join);
+  // Private: the tree it wraps is implementation detail, so naming it in a
+  // public signature would leak it back out.
+  FugueTextState._(FugueTree<String> tree) : super(tree, _join);
 
   /// Creates an empty text state.
   factory FugueTextState.empty() {
-    return FugueTextState(FugueTree<String>.empty());
+    return FugueTextState._(FugueTree<String>.empty());
   }
 
+  // Collects into a list and joins it.
   static String _join(FugueTree<String> tree) => tree.values().join();
 }

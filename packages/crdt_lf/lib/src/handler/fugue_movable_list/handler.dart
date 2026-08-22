@@ -1,9 +1,11 @@
 import 'dart:typed_data';
 
 import 'package:crdt_lf/crdt_lf.dart';
+import 'package:crdt_lf/src/algorithm/fugue/tree.dart';
+import 'package:crdt_lf/src/algorithm/fugue/value_node.dart';
 import 'package:crdt_lf/src/handler/fugue/element_id_floor.dart';
 import 'package:crdt_lf/src/handler/fugue/fugue_cache.dart';
-import 'package:hlc_dart/hlc_dart.dart';
+import 'package:crdt_lf/src/snapshot/blob_version.dart';
 
 part 'operation.dart';
 
@@ -15,10 +17,10 @@ part 'operation.dart';
 ///
 /// Conflict resolution combines:
 /// - the Fugue algorithm ([The Art of the Fugue: Minimizing Interleaving in Collaborative Text Editing](https://arxiv.org/abs/2305.00583)) to minimize interleaving;
-/// - a **last-writer-wins register** (keyed on the change HLC) for the
-///   "current position" of each element. Concurrent moves of the same element
-///   converge to a single winning destination instead of duplicating the
-///   element.
+/// - a **last-writer-wins register** on [OperationId] for the value and
+///   for the "current position" of each element. Concurrent moves of the same
+///   element converge to a single winning destination instead of duplicating
+///   the element, and so do concurrent updates of its value.
 ///
 /// ## Identities and positions
 /// Every element has a stable [FugueElementID] **identity** assigned at
@@ -38,7 +40,8 @@ part 'operation.dart';
 ///   ..move(2, 0);
 /// print(list.value); // ['phone joe', 'buy milk', 'water plants']
 /// ```
-class CRDTFugueMovableListHandler<T> extends Handler<FugueMovableListState<T>>
+base class CRDTFugueMovableListHandler<T>
+    extends Handler<FugueMovableListState<T>>
     with FugueCache<FugueMovableListState<T>> {
   /// Creates a movable list handler bound to [doc] with the given [id].
   ///
@@ -59,8 +62,37 @@ class CRDTFugueMovableListHandler<T> extends Handler<FugueMovableListState<T>>
   String get id => _id;
 
   @override
-  late final OperationFactory operationFactory =
-      _FugueMovableListOperationFactory<T>(this).fromBytes;
+  late final OperationDecoders operationDecoders = {
+    OperationType.kindInsert: (body) =>
+        _MovableListInsertOperation<T>.fromBodyBytes(this, body),
+    OperationType.kindMove: (body) =>
+        _MovableListMoveOperation<T>.fromBodyBytes(this, body),
+    OperationType.kindUpdate: (body) =>
+        _MovableListUpdateOperation<T>.fromBodyBytes(this, body),
+    OperationType.kindDelete: (body) =>
+        _MovableListDeleteOperation<T>.fromBodyBytes(this, body),
+  };
+
+  /// `insert` seeds the two last-writer-wins clocks of an element, and
+  /// `move` and `update` race against them, so all three carry a stamp.
+  /// `delete` does not: it wins over everything.
+  @override
+  late final OperationType insertType = OperationType.insert(
+    this,
+    stamped: true,
+  );
+
+  @override
+  late final OperationType moveType = OperationType.move(this, stamped: true);
+
+  @override
+  late final OperationType updateType = OperationType.update(
+    this,
+    stamped: true,
+  );
+
+  @override
+  bool get stateIsOrderIndependent => true;
 
   /// Returns the current list value.
   List<T> get value => cachedOrComputedState().value;
@@ -154,12 +186,19 @@ class CRDTFugueMovableListHandler<T> extends Handler<FugueMovableListState<T>>
         newPositionID: newPositionID,
         leftOrigin: leftOrigin,
         rightOrigin: rightOrigin,
-        hlc: doc.hlc,
       ),
     );
   }
 
-  /// Updates the value of the element currently at visible position [index].
+  /// Overwrites the value of the element at visible position [index], keeping
+  /// the identity of that element.
+  ///
+  /// Two peers updating the same element converge on one of the two values
+  /// instead of keeping both, and the element keeps its place in the list. An
+  /// update loses against a concurrent deletion of the same element, and does
+  /// nothing when [index] is out of range.
+  ///
+  /// The winner is the greater [OperationId]: clock first, peer second.
   void update(int index, T value) {
     final identity = _identityAtVisibleIndex(index);
     if (identity == null) {
@@ -169,7 +208,6 @@ class CRDTFugueMovableListHandler<T> extends Handler<FugueMovableListState<T>>
     doc.registerOperation(
       _MovableListUpdateOperation<T>.fromHandler(
         this,
-        hlc: doc.hlc,
         items: [_MovableListUpdateItem<T>(identityID: identity, value: value)],
       ),
     );
@@ -311,9 +349,13 @@ class CRDTFugueMovableListHandler<T> extends Handler<FugueMovableListState<T>>
           item.identityID,
           () => _MovableElement<T>(
             value: item.value,
-            valueHlc: HybridLogicalClock.initialize(),
+            // The insert's own stamp, not a zero clock: any later move or
+            // update has to have observed this insert, so it always carries a
+            // greater stamp. Seeding with a real one keeps the peer in the
+            // record, which is what settles a tie.
+            valueStamp: operation.stamp!,
             position: item.positionID,
-            positionHlc: HybridLogicalClock.initialize(),
+            positionStamp: operation.stamp!,
             deleted: false,
           ),
         );
@@ -327,21 +369,24 @@ class CRDTFugueMovableListHandler<T> extends Handler<FugueMovableListState<T>>
       );
       final element = state._elements[operation.identityID];
       if (element != null) {
-        if (operation.hlc.happenedAfter(element.positionHlc)) {
+        // `compareTo`, not `happenedAfter`: two moves sharing a clock are
+        // ordered by peer instead of leaving both sides refusing to move,
+        // which used to make the winner depend on the arrival order.
+        if (operation.stamp!.compareTo(element.positionStamp) > 0) {
           element
             ..position = operation.newPositionID
-            ..positionHlc = operation.hlc;
+            ..positionStamp = operation.stamp!;
         }
       }
     } else if (operation is _MovableListUpdateOperation<T>) {
       for (final item in operation.items) {
         final element = state._elements[item.identityID];
         if (element != null) {
-          // last written wins
-          if (operation.hlc.happenedAfter(element.valueHlc)) {
+          // Last writer wins, with the peer settling an identical clock.
+          if (operation.stamp!.compareTo(element.valueStamp) > 0) {
             element
               ..value = item.value
-              ..valueHlc = operation.hlc;
+              ..valueStamp = operation.stamp!;
           }
         }
       }
@@ -356,16 +401,22 @@ class CRDTFugueMovableListHandler<T> extends Handler<FugueMovableListState<T>>
     state._markDirty();
   }
 
+  /// The version of the snapshot blob this build writes and reads.
+  static const int _snapshotVersion = 1;
+
   /// Snapshot layout:
+  /// - version: u8
   /// - elementsCount: uvarint
   /// - repeated `elementsCount` times:
   ///   - identityID: [FugueElementID] bytes
   ///   - position: [FugueElementID] bytes
-  ///   - positionHlc: 8 bytes
-  ///   - valueHlc: 8 bytes
-  ///   - deleted: u8 (0/1)
+  ///   - positionStamp: [OperationId.byteLength] bytes
+  ///   - valueStamp: [OperationId.byteLength] bytes
   ///   - valueLen: uvarint
   ///   - value: [ValueCodec] bytes
+  /// - floor: [ElementIdFloor]
+  ///
+  /// Only the visible elements go out, so every element comes back live.
   ///
   /// The Fugue tree is not encoded directly: it is rebuilt at restore time by
   /// inserting the snapshot identities at their winning positions in
@@ -376,7 +427,7 @@ class CRDTFugueMovableListHandler<T> extends Handler<FugueMovableListState<T>>
     final state = cachedOrComputedState();
     final visible = state.visiblePositions;
 
-    final out = BytesBuilder(copy: false);
+    final out = BytesBuilder(copy: false)..addByte(_snapshotVersion);
     UVarint.write(visible.length, out);
     for (final positionID in visible) {
       final identityID = _identityForPosition(state, positionID)!;
@@ -385,9 +436,8 @@ class CRDTFugueMovableListHandler<T> extends Handler<FugueMovableListState<T>>
       out
         ..add(identityID.toBytes())
         ..add(element.position.toBytes())
-        ..add(element.positionHlc.toUint8List())
-        ..add(element.valueHlc.toUint8List())
-        ..addByte(element.deleted ? 1 : 0);
+        ..add(element.positionStamp.toUint8List())
+        ..add(element.valueStamp.toUint8List());
 
       final valBytes = _valueCodec.encode(element.value);
       UVarint.write(valBytes.length, out);
@@ -409,7 +459,11 @@ class CRDTFugueMovableListHandler<T> extends Handler<FugueMovableListState<T>>
       return <FugueElementID, _MovableElement<T>>{};
     }
 
-    var offset = 0;
+    var offset = SnapshotBlob.read(
+      snapshot,
+      version: _snapshotVersion,
+      name: 'movable list',
+    );
     final countRec = UVarint.read(snapshot, offset: offset);
     offset = countRec.nextOffset;
 
@@ -427,25 +481,17 @@ class CRDTFugueMovableListHandler<T> extends Handler<FugueMovableListState<T>>
       );
       offset = positionRec.nextOffset;
 
-      final positionHlc = HybridLogicalClock.fromUint8List(
+      final positionStamp = OperationId.readFromBytes(
         snapshot,
         offset: offset,
       );
-      offset += 8;
+      offset += OperationId.byteLength;
 
-      final valueHlc = HybridLogicalClock.fromUint8List(
+      final valueStamp = OperationId.readFromBytes(
         snapshot,
         offset: offset,
       );
-      offset += 8;
-
-      if (offset >= snapshot.length) {
-        throw const FormatException(
-          'Truncated movable list snapshot deleted flag',
-        );
-      }
-      final deleted = snapshot[offset] != 0;
-      offset += 1;
+      offset += OperationId.byteLength;
 
       final valLenRec = UVarint.read(snapshot, offset: offset);
       offset = valLenRec.nextOffset;
@@ -462,10 +508,11 @@ class CRDTFugueMovableListHandler<T> extends Handler<FugueMovableListState<T>>
 
       result[identityRec.value] = _MovableElement<T>(
         value: value,
-        valueHlc: valueHlc,
+        valueStamp: valueStamp,
         position: positionRec.value,
-        positionHlc: positionHlc,
-        deleted: deleted,
+        positionStamp: positionStamp,
+        // A snapshot holds the visible elements only.
+        deleted: false,
       );
     }
     seedElementIdFloor(ElementIdFloor.read(snapshot, offset: offset));
@@ -565,9 +612,9 @@ class FugueMovableListState<T> {
 class _MovableElement<T> {
   _MovableElement({
     required this.value,
-    required this.valueHlc,
+    required this.valueStamp,
     required this.position,
-    required this.positionHlc,
+    required this.positionStamp,
     required this.deleted,
   });
 
@@ -575,15 +622,18 @@ class _MovableElement<T> {
   /// concurrent `update` operations.
   T value;
 
-  /// The clock attached to the [value] (last write wins).
-  HybridLogicalClock valueHlc;
+  /// The stamp of the write that put [value] here.
+  ///
+  /// A stamp rather than a clock: two peers can write in the same tick, and
+  /// the peer is what settles which of the two wins on both of them.
+  OperationId valueStamp;
 
   /// The position currently associated with this identity, picked by LWW on
   /// concurrent `move`/`insert` operations.
   FugueElementID position;
 
-  /// The clock attached to the [position] (last write wins).
-  HybridLogicalClock positionHlc;
+  /// The stamp of the write that put this identity at [position].
+  OperationId positionStamp;
 
   /// Whether this identity has been deleted.
   bool deleted;

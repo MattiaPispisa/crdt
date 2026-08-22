@@ -3,6 +3,7 @@ import 'dart:typed_data';
 
 import 'package:crdt_lf/crdt_lf.dart';
 import 'package:crdt_lf/src/handler/handler_type.dart';
+import 'package:crdt_lf/src/snapshot/blob_version.dart';
 
 part 'operation.dart';
 
@@ -28,7 +29,7 @@ part 'operation.dart';
 /// text..insert(0, 'Hello')..insert(5, ' World!');
 /// print(text.value); // Prints "Hello World!"
 /// ```
-class CRDTTextHandler extends Handler<String> {
+base class CRDTTextHandler extends Handler<String> {
   /// Creates a new CRDTText with the given document and ID
   CRDTTextHandler(super.doc, this._id);
 
@@ -43,8 +44,14 @@ class CRDTTextHandler extends Handler<String> {
   String get handlerType => kTextHandlerType;
 
   @override
-  late final OperationFactory operationFactory =
-      _TextOperationFactory(this).fromBytes;
+  late final OperationDecoders operationDecoders = {
+    OperationType.kindInsert: (body) =>
+        _TextInsertOperation.fromBodyBytes(this, body),
+    OperationType.kindDelete: (body) =>
+        _TextDeleteOperation.fromBodyBytes(this, body),
+    OperationType.kindUpdate: (body) =>
+        _TextUpdateOperation.fromBodyBytes(this, body),
+  };
 
   /// Inserts [text] at the specified [index], counted **in runes**
   void insert(int index, String text) {
@@ -114,13 +121,11 @@ class CRDTTextHandler extends Handler<String> {
           // Insert new text at adjusted position
           insert(segment.oldStart + offset, segment.text);
           offset += segment.newEnd - segment.newStart;
-          break;
         case DiffOp.remove:
           // Remove text at adjusted position
           final count = segment.oldEnd - segment.oldStart;
           delete(segment.oldStart + offset, count);
           offset -= count;
-          break;
       }
     }
   }
@@ -141,9 +146,17 @@ class CRDTTextHandler extends Handler<String> {
     return state;
   }
 
+  /// The version of the snapshot blob this build writes and reads.
+  ///
+  /// Layout: `version: u8` then the whole text as WTF-8.
+  static const int _snapshotVersion = 1;
+
   @override
   Uint8List getSnapshotState() {
-    return Wtf8.encode(value);
+    final out = BytesBuilder(copy: false)
+      ..addByte(_snapshotVersion)
+      ..add(Wtf8.encode(value));
+    return out.toBytes();
   }
 
   /// Gets the length of the text, **in runes**
@@ -232,6 +245,7 @@ class CRDTTextHandler extends Handler<String> {
   String? incrementCachedState({
     required Operation operation,
     required String state,
+    DeltaSink<Object?>? sink,
   }) {
     if (operation is _TextInsertOperation) {
       final at = RuneOffsets.utf16Offset(state, operation.index);
@@ -357,7 +371,12 @@ class CRDTTextHandler extends Handler<String> {
     if (snapshot == null) {
       return '';
     }
-    return Wtf8.decode(snapshot);
+    final offset = SnapshotBlob.read(
+      snapshot,
+      version: _snapshotVersion,
+      name: 'text',
+    );
+    return Wtf8.decode(Uint8List.sublistView(snapshot, offset));
   }
 
   /// Returns a string representation of this text

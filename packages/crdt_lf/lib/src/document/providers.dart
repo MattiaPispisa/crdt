@@ -1,7 +1,7 @@
 part of 'document.dart';
 
 /// A consumer that can consume a CRDTDocument
-mixin DocumentConsumer {
+base mixin DocumentConsumer {
   /// The document that `this` can consume
   late final BaseCRDTDocument _document;
 
@@ -31,7 +31,7 @@ mixin DocumentConsumer {
 /// — pick whatever shape makes recomputation cheap.
 ///
 /// Set [useIncrementalCacheUpdate] to false to ignore [incrementCachedState]
-mixin CacheableStateProvider<T> on DocumentConsumer {
+base mixin CacheableStateProvider<T> on DocumentConsumer {
   @override
   String get id;
 
@@ -98,7 +98,7 @@ mixin CacheableStateProvider<T> on DocumentConsumer {
   ///
   /// Used to drain [_pendingRemoteChanges]; `null` makes the framework fall
   /// back to a full recompute. [Handler] implements it with its
-  /// [Handler.operationFactory].
+  /// [Handler.operationDecoders].
   Operation? _operationFromChange(Change change);
 
   /// Records the newest change, in replay order, folded into the cached state.
@@ -183,8 +183,9 @@ mixin CacheableStateProvider<T> on DocumentConsumer {
   ///
   /// Anything that cannot be decoded or applied drops the cache, so the next
   /// read recomputes from the history — the same failure policy
-  /// [_internalIncrementCachedState] uses.
-  void _drainPendingRemoteChanges() {
+  /// [_internalIncrementCachedState] uses. A decode that *throws* drops the
+  /// cache too, then rethrows.
+  void _drainPendingRemoteChanges({DeltaSink<Object?>? sink}) {
     final pending = _pendingRemoteChanges;
     if (pending == null) {
       return;
@@ -202,18 +203,27 @@ mixin CacheableStateProvider<T> on DocumentConsumer {
     }
     var state = _cachedState as T;
 
-    for (final change in pending) {
-      final operation = _operationFromChange(change);
-      if (operation == null) {
-        invalidateCache();
-        return;
+    try {
+      for (final change in pending) {
+        final operation = _operationFromChange(change);
+        if (operation == null) {
+          invalidateCache();
+          return;
+        }
+        final next = incrementCachedState(
+          operation: operation,
+          state: state,
+          sink: sink,
+        );
+        if (next == null) {
+          invalidateCache();
+          return;
+        }
+        state = next;
       }
-      final next = incrementCachedState(operation: operation, state: state);
-      if (next == null) {
-        invalidateCache();
-        return;
-      }
-      state = next;
+    } catch (_) {
+      invalidateCache();
+      rethrow;
     }
 
     // The pinned version already covers these changes (see
@@ -237,7 +247,10 @@ mixin CacheableStateProvider<T> on DocumentConsumer {
   /// honoring [useIncrementalCacheUpdate]. Falls back to [invalidateCache]
   /// when the host opts out, has no cached state, or cannot apply the
   /// operation incrementally.
-  void _internalIncrementCachedState({required Operation operation}) {
+  void _internalIncrementCachedState({
+    required Operation operation,
+    DeltaSink<Object?>? sink,
+  }) {
     if (!useIncrementalCacheUpdate) {
       invalidateCache();
       return;
@@ -245,7 +258,7 @@ mixin CacheableStateProvider<T> on DocumentConsumer {
 
     // A local operation must never land on a state that still has remote
     // changes waiting, so flush them first.
-    _drainPendingRemoteChanges();
+    _drainPendingRemoteChanges(sink: sink);
 
     final state = _cachedState;
     if (state == null) {
@@ -255,6 +268,7 @@ mixin CacheableStateProvider<T> on DocumentConsumer {
     final newState = incrementCachedState(
       operation: operation,
       state: state,
+      sink: sink,
     );
 
     if (newState == null) {
@@ -276,9 +290,13 @@ mixin CacheableStateProvider<T> on DocumentConsumer {
   ///
   /// May mutate [state] in place and return it. The default implementation
   /// returns `null`, i.e. no incremental path.
+  ///
+  /// [sink] collects the positional effects of [operation]; `null` when
+  /// nobody is listening, which is every call the library makes today.
   T? incrementCachedState({
     required Operation operation,
     required T state,
+    DeltaSink<Object?>? sink,
   }) {
     return null;
   }
@@ -315,7 +333,7 @@ mixin CacheableStateProvider<T> on DocumentConsumer {
 /// Snapshot state is now a binary blob owned by the consumer. The framework
 /// only frames each blob with a length prefix inside [Snapshot]; the encoding
 /// and decoding of the blob's contents is entirely up to the consumer.
-mixin SnapshotProvider on DocumentConsumer {
+base mixin SnapshotProvider on DocumentConsumer {
   @override
   String get id;
 
@@ -375,4 +393,15 @@ extension _HandlerHelper on Handler<dynamic> {
     }
     return true;
   }
+}
+
+/// Collects the positional effects of applying operations, one delta of type
+/// [D] at a time.
+///
+/// Passed to [CacheableStateProvider.incrementCachedState]. The library
+/// produces no sink of its own, so that parameter is `null` on every call it
+/// makes.
+abstract class DeltaSink<D> {
+  /// Records one delta.
+  void add(D delta);
 }

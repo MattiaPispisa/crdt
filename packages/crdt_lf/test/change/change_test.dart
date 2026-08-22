@@ -175,6 +175,28 @@ void main() {
       );
     });
 
+    test('fromBytes rejects a change written by an old version', () {
+      final change = Change(
+        id: id,
+        operation: operation,
+        deps: deps,
+        author: author,
+      );
+      // Same buffer a 3.x peer would send: identical layout, schema byte 2.
+      final legacy = Uint8List.fromList(change.toBytes())..[0] = 2;
+
+      expect(
+        () => Change.fromBytes(legacy),
+        throwsA(
+          isA<FormatException>().having(
+            (e) => e.message,
+            'message',
+            allOf(contains('2'), contains('3')),
+          ),
+        ),
+      );
+    });
+
     test('fromPayloadBytes rejects mismatched author', () {
       final otherAuthor = PeerId.generate();
       expect(

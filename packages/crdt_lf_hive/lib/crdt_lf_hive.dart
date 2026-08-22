@@ -3,7 +3,7 @@
 ///
 /// This library provides Hive adapters and storage utilities for persisting
 /// CRDT objects like Changes and Snapshots, organized by document.
-library crdt_lf_hive;
+library;
 
 export 'src/adapters/change_adapter.dart';
 export 'src/adapters/snapshot_adapter.dart';

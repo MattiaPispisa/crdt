@@ -43,12 +43,20 @@ void main() {
       expect(set.contains('c'), isFalse);
     });
 
-    test('should refresh clock before creating a tag', () {
+    test('each add is stamped strictly after the one before it', () {
       final doc = CRDTDocument();
       final hlc1 = doc.hlc;
-      CRDTORSetHandler<String>(doc, 'set1').add('x');
-      expect(doc.hlc, isNot(hlc1));
+      final set = CRDTORSetHandler<String>(doc, 'set1')
+        ..add('x')
+        ..add('y');
       expect(hlc1.happenedBefore(doc.hlc), isTrue);
+
+      // The document ticks its clock before minting each stamp. Without that
+      // tick two adds in the same millisecond would share a tag, and the
+      // second could not win against the first.
+      final stamps = set.operations().map((operation) => operation.stamp!);
+      expect(stamps, hasLength(2));
+      expect(stamps.first.compareTo(stamps.last), lessThan(0));
     });
 
     test('should handle concurrent adds', () {

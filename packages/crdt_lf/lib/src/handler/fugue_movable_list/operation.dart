@@ -1,36 +1,5 @@
 part of 'handler.dart';
 
-/// Factory for Fugue movable list operations.
-class _FugueMovableListOperationFactory<T> {
-  _FugueMovableListOperationFactory(this.handler);
-
-  final CRDTFugueMovableListHandler<T> handler;
-
-  /// Decodes an operation from its binary envelope.
-  Operation? fromBytes(Uint8List operationBytes) {
-    final env = OperationEnvelopeCodec.decode(operationBytes);
-    if (env.handlerId != handler.id) {
-      return null;
-    }
-    if (env.handlerType != handler.handlerType) {
-      return null;
-    }
-
-    final body = Uint8List.sublistView(operationBytes, env.bodyOffset);
-
-    if (env.kind == OperationType.kindInsert) {
-      return _MovableListInsertOperation<T>.fromBodyBytes(handler, body);
-    } else if (env.kind == OperationType.kindMove) {
-      return _MovableListMoveOperation<T>.fromBodyBytes(handler, body);
-    } else if (env.kind == OperationType.kindUpdate) {
-      return _MovableListUpdateOperation<T>.fromBodyBytes(handler, body);
-    } else if (env.kind == OperationType.kindDelete) {
-      return _MovableListDeleteOperation<T>.fromBodyBytes(handler, body);
-    }
-    return null;
-  }
-}
-
 /// Batch insert: introduces a contiguous run of new identities anchored at
 /// the same Fugue origin pair, chaining additional items to the previously
 /// inserted one (Fugue's non-interleaving property).
@@ -171,14 +140,15 @@ class _MovableListInsertItem<T> {
 /// - newPositionID: [FugueElementID]
 /// - leftOrigin: [FugueElementID]
 /// - rightOrigin: [FugueElementID]
-/// - hlc: 8 bytes ([HybridLogicalClock])
+///
+/// The mark this move is resolved against is the operation's
+/// [Operation.stamp], not part of the body.
 class _MovableListMoveOperation<T> extends Operation {
   _MovableListMoveOperation({
     required this.identityID,
     required this.newPositionID,
     required this.leftOrigin,
     required this.rightOrigin,
-    required this.hlc,
     required super.id,
     required super.type,
   });
@@ -189,7 +159,6 @@ class _MovableListMoveOperation<T> extends Operation {
     required FugueElementID newPositionID,
     required FugueElementID leftOrigin,
     required FugueElementID rightOrigin,
-    required HybridLogicalClock hlc,
   }) {
     return _MovableListMoveOperation<T>(
       id: handler.id,
@@ -198,7 +167,6 @@ class _MovableListMoveOperation<T> extends Operation {
       newPositionID: newPositionID,
       leftOrigin: leftOrigin,
       rightOrigin: rightOrigin,
-      hlc: hlc,
     );
   }
 
@@ -217,12 +185,6 @@ class _MovableListMoveOperation<T> extends Operation {
     offset = leftRec.nextOffset;
 
     final rightRec = FugueElementID.readFromBytes(body, offset: offset);
-    offset = rightRec.nextOffset;
-
-    if (offset + 8 > body.length) {
-      throw const FormatException('Truncated movable list move HLC');
-    }
-    final hlc = HybridLogicalClock.fromUint8List(body, offset: offset);
 
     return _MovableListMoveOperation<T>(
       id: handler.id,
@@ -231,7 +193,6 @@ class _MovableListMoveOperation<T> extends Operation {
       newPositionID: newPositionRec.value,
       leftOrigin: leftRec.value,
       rightOrigin: rightRec.value,
-      hlc: hlc,
     );
   }
 
@@ -239,7 +200,6 @@ class _MovableListMoveOperation<T> extends Operation {
   final FugueElementID newPositionID;
   final FugueElementID leftOrigin;
   final FugueElementID rightOrigin;
-  final HybridLogicalClock hlc;
 
   @override
   Uint8List toBodyBytes() {
@@ -247,18 +207,16 @@ class _MovableListMoveOperation<T> extends Operation {
       ..add(identityID.toBytes())
       ..add(newPositionID.toBytes())
       ..add(leftOrigin.toBytes())
-      ..add(rightOrigin.toBytes())
-      ..add(hlc.toUint8List());
+      ..add(rightOrigin.toBytes());
     return out.toBytes();
   }
 }
 
-/// Batch update: every item shares the same LWW [hlc] so the whole batch is
-/// applied or rejected atomically against each identity's current value
-/// clock.
+/// Batch update: every item shares the operation's [Operation.stamp], so the
+/// whole batch is applied or rejected atomically against each identity's
+/// current value stamp.
 ///
 /// Layout (body):
-/// - hlc: 8 bytes ([HybridLogicalClock])
 /// - itemsCount: uvarint
 /// - repeated `itemsCount` times:
 ///   - identityID: [FugueElementID]
@@ -266,7 +224,6 @@ class _MovableListMoveOperation<T> extends Operation {
 ///   - value: [ValueCodec] bytes
 class _MovableListUpdateOperation<T> extends Operation {
   _MovableListUpdateOperation({
-    required this.hlc,
     required this.items,
     required this.valueCodec,
     required super.id,
@@ -275,13 +232,11 @@ class _MovableListUpdateOperation<T> extends Operation {
 
   factory _MovableListUpdateOperation.fromHandler(
     CRDTFugueMovableListHandler<T> handler, {
-    required HybridLogicalClock hlc,
     required List<_MovableListUpdateItem<T>> items,
   }) {
     return _MovableListUpdateOperation<T>(
       id: handler.id,
       type: handler.updateType,
-      hlc: hlc,
       items: items,
       valueCodec: handler._valueCodec,
     );
@@ -292,12 +247,6 @@ class _MovableListUpdateOperation<T> extends Operation {
     Uint8List body,
   ) {
     var offset = 0;
-    if (offset + 8 > body.length) {
-      throw const FormatException('Truncated movable list update HLC');
-    }
-    final hlc = HybridLogicalClock.fromUint8List(body, offset: offset);
-    offset += 8;
-
     final countRec = UVarint.read(body, offset: offset);
     offset = countRec.nextOffset;
 
@@ -330,19 +279,17 @@ class _MovableListUpdateOperation<T> extends Operation {
     return _MovableListUpdateOperation<T>(
       id: handler.id,
       type: handler.updateType,
-      hlc: hlc,
       items: items,
       valueCodec: handler._valueCodec,
     );
   }
 
-  final HybridLogicalClock hlc;
   final List<_MovableListUpdateItem<T>> items;
   final ValueCodec<T> valueCodec;
 
   @override
   Uint8List toBodyBytes() {
-    final out = BytesBuilder(copy: false)..add(hlc.toUint8List());
+    final out = BytesBuilder(copy: false);
     UVarint.write(items.length, out);
     for (final item in items) {
       out.add(item.identityID.toBytes());
