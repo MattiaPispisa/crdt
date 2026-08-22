@@ -1,3 +1,13 @@
+## 0.8.0
+
+**Date:** 2026-08-22
+
+### Changed
+
+- Update `crdt_lf` to `4.0.0`
+- Update `crdt_lf_flutter` to `0.4.0`
+- Update `crdt_socket_sync` to `0.7.0` 
+
 ## 0.7.0
 
 **Date:** 2026-08-02
