@@ -12,6 +12,9 @@ import 'package:benchmark_infrastructure/src/timed/markdown_table.dart';
 /// alphabetical filename order. A file's stdout is parsed line by line with
 /// [BenchmarkResult.tryParse]; a line that doesn't match is reported on
 /// stderr instead of being silently dropped.
+///
+/// The results file is left untouched when no file produced a result, so a
+/// run that fails outright can't wipe the committed baseline.
 Future<void> runTimedBenchmarks({required Directory packageRoot}) async {
   final benchmarksDir = Directory('${packageRoot.path}/benchmarks/src/timed');
   if (!benchmarksDir.existsSync()) {
@@ -60,6 +63,14 @@ Future<void> runTimedBenchmarks({required Directory packageRoot}) async {
     resultsBySourceFile[sourceFile] = results;
 
     stdout.writeln('  - ✅ Finished $sourceFile');
+  }
+
+  if (resultsBySourceFile.values.every((results) => results.isEmpty)) {
+    stderr.writeln(
+      'No benchmark results collected. '
+      'benchmarks/timed_results.md left unchanged.',
+    );
+    return;
   }
 
   final resultsFile = File('${packageRoot.path}/benchmarks/timed_results.md')

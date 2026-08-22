@@ -51,7 +51,10 @@ class MyMemoryBenchmark extends MemoryBenchmarkBase {
   MyMemoryBenchmark() : super('My memory benchmark name');
 
   @override
-  void run() { ... }
+  Object? run() {
+    final thing = buildTheThing();
+    return thing; // measured
+  }
 }
 
 Future<void> main() async {
@@ -59,10 +62,20 @@ Future<void> main() async {
 }
 ```
 
-Memory benchmark files can't be run directly with `dart run` the way timed
-ones can — `MemoryBenchmarkBase` needs the VM service, which only exists
-when the process is launched with `--enable-vm-service` (the memory runner
-does this for you; see below).
+**`run()` must return what you want measured.** Measuring forces a GC, so
+anything `run()` only kept in a local is already collectable garbage by the
+time the heap is read. The returned value is parked in a GC root until after
+the reading, which is what makes the number the retained size of the object
+instead of leftover garbage. A benchmark that returns `null` measures noise.
+
+`report()` calls `run()` once to warm up, then measures it 5 times and
+reports the **median** delta. Pass `warmupRuns` / `samples` to change that.
+Like the timed harness, this assumes `run()` is repeatable: a benchmark that
+mutates a fixture built in `setup()` must pass `warmupRuns: 0, samples: 1`.
+
+Measuring needs the Dart VM service (to force a GC and read real isolate heap
+usage). `MemoryBenchmarkBase` starts it on demand, so a memory benchmark file
+runs with a plain `dart run`, same as a timed one.
 
 
 ## Running
@@ -83,11 +96,8 @@ Both suites run by default. Pass `--no-timed` or `--no-memory` to
 `run_benchmarks` to skip one, e.g. `dart run
 benchmark_infrastructure:run_benchmarks --no-memory`.
 
-Memory subprocesses are launched with `dart run --enable-vm-service=0
---no-pause-isolates-on-exit`: port `0` picks an unused port so back-to-back
-runs never collide, and `--no-pause-isolates-on-exit` stops the isolate from
-pausing for a debugger on exit, so the subprocess still terminates on its
-own once `main()` returns.
+Either half leaves its results file untouched when it collected no result at
+all, so a run that fails outright can't wipe the committed baseline.
 
 ## Structure
 
