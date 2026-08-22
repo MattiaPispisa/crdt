@@ -847,6 +847,48 @@ Other bricks of the crdt "system" are:
 - [crdt_lf_drift](https://pub.dev/packages/crdt_lf_drift)
 - [crdt_lf_sqlite](https://pub.dev/packages/crdt_lf_sqlite)
 
+## Migrations
+
+### Migrating from 3.x to 4.0
+
+A 4.0 peer refuses to read v3 bytes — not from a document's history, not from
+a snapshot, not from the bytes a Hive/SQLite/Drift adapter saved. 4.0 changes
+what several of those bytes *mean*, so reading them under the old assumptions
+would leave two peers with different content while their version vectors still
+agreed.
+
+**Most of the table below is harmless if you never persisted a document and
+never wrote a custom handler.** With no stored bytes there is nothing a 4.0
+peer can refuse to open, and the operation-layer rows (`ORHandlerTag`,
+`OperationDecoders`, `OperationType`, `incrementCachedState`) only reach code
+that implements `Handler` itself. Peers still have to upgrade together: a 3.x
+and a 4.0 client talking live break the same way.
+
+The one row that reaches ordinary code either way is rune indexing. It changes
+nothing while the text stays inside the BMP — for ASCII and most Latin text a
+rune and a UTF-16 code unit are the same thing. It bites when the text holds
+emoji or other non-BMP characters, or when you hand a handler an offset taken
+from a Flutter `TextField`, which counts code units.
+
+Every package that depends on `crdt_lf` has to move to a version that requires
+`crdt_lf: ^4.0.0` as well, or a client still resolving 3.x never reaches the
+guard.
+
+Renamed or removed symbols:
+
+| 3.x | 4.0 | Note |
+|---|---|---|
+| `ORHandlerTag` | `OperationId` | The tie-break is the id of the change carrying the operation. A handler no longer writes its own, and it costs no bytes. |
+| `OperationType.typeNameFromKind` | removed | No caller anywhere in the monorepo; `OperationType.type` already carries the name. |
+| `OperationType.fromPayload` | removed | The payload string is a debug format and never carried a kind. |
+| a `fromBytes(bytes)` a handler implemented by hand | `OperationDecoders operationDecoders` | Was raw bytes decoded by whatever a handler wrote. Now a `Map<int, Operation Function(Uint8List body)>` keyed by the operation's kind byte: the framework looks the kind up itself and raises `UnknownOperationKindException` on a miss, instead of a handler returning `null` or hand-rolling the same check. |
+| `FugueTree`, `FugueNode`, `FugueNodeTriple`, `FugueValueNode` | no longer exported | Implementation detail of the two Fugue sequence handlers. `FugueElementID` is still public. |
+| `update` on `CRDTFugueTextHandler` / `CRDTFugueListHandler` (delete + insert) | `update` keeps the element's identity | For the old behavior, ask for it: `doc.runInTransaction(() { text..delete(index, count)..insert(index, replacement); });` |
+| `incrementCachedState({required operation, required state})` | adds an optional `DeltaSink<Object?>? sink` | Always `null` today; an override has to declare the parameter, even unused. |
+| `class MyHandler extends Handler<T>` | `base`/`final`/`sealed class MyHandler extends Handler<T>` | `Handler` is a `base` class now. Extending it is unchanged; implementing it is no longer allowed. See [Custom handlers](#custom-handlers). |
+| Dart `>=2.17.0` | Dart `>=3.0.0` | Class modifiers need it. `crdt_socket_sync` and `crdt_lf_hive` move with it. |
+| Text handler positions in UTF-16 code units | positions in **runes** | Affects `insert`, `delete`, `update`, `length`, `stablePositionAt`, `indexOfStablePosition` and `myersDiff`. See [Text handlers index by rune](#text-handlers-index-by-rune). |
+
 [license_badge]: https://img.shields.io/badge/license-MIT-blue.svg
 [license_link]: https://opensource.org/licenses/MIT
 [crdt_lf_badge]: https://img.shields.io/pub/v/crdt_lf.svg

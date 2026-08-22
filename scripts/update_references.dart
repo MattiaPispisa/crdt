@@ -137,9 +137,11 @@ String _buildBlock({String? excludePubName, String? excludeAppName}) {
 /// Replaces the references block in [readme] with [block].
 ///
 /// The block spans the first `## Apps`/`## Packages` heading (matched
-/// leniently) up to the trailing `[label]:` link-definition footer, or to the
-/// end of file when there is no footer. When no block exists, [block] is
-/// appended at the end of the file.
+/// leniently) up to whichever comes first: the next `##` heading that is not
+/// itself Apps/Packages (e.g. a `## Migrations` section some READMEs add
+/// after the Packages list), the trailing `[label]:` link-definition footer,
+/// or the end of file. When no block exists, [block] is appended at the end
+/// of the file.
 void _updateReadme(io.File readme, String block) {
   if (!readme.existsSync()) {
     logger.error('README not found: ${_relative(readme)}');
@@ -148,6 +150,7 @@ void _updateReadme(io.File readme, String block) {
 
   final lines = readme.readAsStringSync().split('\n');
   final headingRe = RegExp(r'^\s*##\s+(Apps|Packages)\b');
+  final otherHeadingRe = RegExp(r'^\s*##\s+');
   final linkDefRe = RegExp(r'^\[[^\]]+\]:');
 
   final start = lines.indexWhere(headingRe.hasMatch);
@@ -160,10 +163,11 @@ void _updateReadme(io.File readme, String block) {
     return;
   }
 
-  var footer = -1;
-  for (var i = start; i < lines.length; i++) {
-    if (linkDefRe.hasMatch(lines[i])) {
-      footer = i;
+  var end = lines.length;
+  for (var i = start + 1; i < lines.length; i++) {
+    if (linkDefRe.hasMatch(lines[i]) ||
+        (otherHeadingRe.hasMatch(lines[i]) && !headingRe.hasMatch(lines[i]))) {
+      end = i;
       break;
     }
   }
@@ -174,10 +178,10 @@ void _updateReadme(io.File readme, String block) {
     ..write('\n\n')
     ..write(block);
 
-  if (footer != -1) {
+  if (end < lines.length) {
     buffer
       ..write('\n\n')
-      ..write(lines.sublist(footer).join('\n'));
+      ..write(lines.sublist(end).join('\n'));
   } else {
     buffer.write('\n');
   }
