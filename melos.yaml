@@ -32,7 +32,12 @@ scripts:
   benchmark:
     name: Benchmark
     description: Run the benchmarks
-    run: cd packages/core/crdt_lf && ./benchmark/run.sh
+    run: dart run benchmark_infrastructure:run_benchmarks
+    exec:
+      concurrency: 1
+    packageFilters:
+      flutter: false
+      dirExists: benchmarks
 
   test:
     name: Test

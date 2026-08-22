@@ -1,4 +1,6 @@
-# melos_managed_dependency_overrides: hlc_dart
+# melos_managed_dependency_overrides: hlc_dart,benchmark_infrastructure
 dependency_overrides:
+  benchmark_infrastructure:
+    path: ../../_internal/benchmark_infrastructure
   hlc_dart:
     path: ../hlc
