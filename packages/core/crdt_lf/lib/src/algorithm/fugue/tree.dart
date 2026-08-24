@@ -69,14 +69,6 @@ class FugueTree<T> {
       }
     }
 
-    final livenessJson = json['liveness'] as Map<String, dynamic>?;
-    if (livenessJson != null) {
-      for (final entry in livenessJson.entries) {
-        tree._liveness[FugueElementID.parse(entry.key)] =
-            OperationId.parse(entry.value as String);
-      }
-    }
-
     return tree;
   }
 
@@ -89,20 +81,6 @@ class FugueTree<T> {
   /// The last-writer-wins stamp of the nodes whose value has been overwritten
   /// in place by [update].
   final Map<FugueElementID, OperationId> _stamps = {};
-
-  /// The greatest stamp among the commands that took a node out of the
-  /// sequence.
-  ///
-  /// Written by [delete] and read by nothing: a deletion wins over everything
-  /// today, so there is no race to settle. It is kept because it can only be
-  /// known while the deletion happens.
-  ///
-  /// A stamp rather than arrival order, because arrival order is not the same
-  /// on two peers. The Fugue handlers fold a change as it turns up, while a
-  /// replay sorts by `(clock, peer)`.
-  ///
-  /// A node with no entry loses to any stamp.
-  final Map<FugueElementID, OperationId> _liveness = {};
 
   /// Positional index over the in-order sequence of all structural nodes
   /// Answers position↔id and successor queries in `O(√n)`.
@@ -175,18 +153,9 @@ class FugueTree<T> {
   Map<FugueElementID, OperationId> get stamps =>
       Map<FugueElementID, OperationId>.unmodifiable(_stamps);
 
-  /// The greatest stamp among the commands that deleted each node.
-  ///
-  /// Empty until something is deleted, and one entry per tombstone after
-  /// that. Nothing in the tree compares these today: a deletion wins over
-  /// everything, so they are recorded rather than read. A node with no entry
-  /// loses to any stamp.
-  Map<FugueElementID, OperationId> get livenessStamps =>
-      Map<FugueElementID, OperationId>.unmodifiable(_liveness);
-
-  /// Seeds an empty tree with [nodes], in sequence order, plus their [stamps]
-  /// and [livenessStamps]. [live] says which of them are still in the
-  /// sequence, one flag per node; all of them when it is left out.
+  /// Seeds an empty tree with [nodes], in sequence order, plus their [stamps].
+  /// [live] says which of them are still in the sequence, one flag per node;
+  /// all of them when it is left out.
   ///
   /// Node for node this is what `iterableInsert(0, nodes)` builds — a right
   /// spine hanging off the root — but it links the nodes directly and builds
@@ -195,7 +164,6 @@ class FugueTree<T> {
   void bulkSeed(
     List<FugueValueNode<T>> nodes,
     Map<FugueElementID, OperationId> stamps, {
-    Map<FugueElementID, OperationId> livenessStamps = const {},
     List<bool>? live,
   }) {
     assert(_nodes.length == 1, 'bulkSeed expects an empty tree');
@@ -229,7 +197,6 @@ class FugueTree<T> {
 
     _index.bulkBuild(ids, live ?? List<bool>.filled(nodes.length, true));
     _stamps.addAll(stamps);
-    _liveness.addAll(livenessStamps);
   }
 
   /// Inserts a list of nodes into the tree at the specified index.
@@ -402,23 +369,14 @@ class FugueTree<T> {
   /// The tombstone keeps its value, its place among its siblings, and the
   /// stamp of the update that last wrote it. Only its liveness goes.
   ///
-  /// [stamp] marks the command. Deleting a node twice keeps the greater of
-  /// the two, so the call is idempotent and order-independent. See
-  /// [livenessStamps] for what reads it.
+  /// A deletion is monotone: it wins over every update, and nothing brings the
+  /// node back. So there is no race to settle and no stamp to compare — the
+  /// call is idempotent and order-independent on its own.
   ///
   /// Does nothing for an id this tree does not hold.
-  void delete(FugueElementID nodeID, {required OperationId stamp}) {
+  void delete(FugueElementID nodeID) {
     final triple = _nodes[nodeID];
-    if (triple == null) {
-      return;
-    }
-
-    final current = _liveness[nodeID];
-    if (current == null || stamp.compareTo(current) > 0) {
-      _liveness[nodeID] = stamp;
-    }
-
-    if (triple.node.deleted) {
+    if (triple == null || triple.node.deleted) {
       return;
     }
     triple.node.deleted = true;
@@ -673,10 +631,8 @@ class FugueTree<T> {
 
   /// Serializes the tree to JSON format
   ///
-  /// Carries both sets of stamps next to the nodes, because both are state.
-  /// A tree restored without the [update] ones accepts an update it had
-  /// already rejected. One restored without the [delete] ones has forgotten
-  /// what settled each node's liveness.
+  /// Carries the [update] stamps next to the nodes, because they are state: a
+  /// tree restored without them accepts an update it had already rejected.
   Map<String, dynamic> toJson() {
     final nodesJson = <String, dynamic>{};
     for (final entry in _nodes.entries) {
@@ -688,15 +644,9 @@ class FugueTree<T> {
       stampsJson[entry.key.toString()] = entry.value.toString();
     }
 
-    final livenessJson = <String, dynamic>{};
-    for (final entry in _liveness.entries) {
-      livenessJson[entry.key.toString()] = entry.value.toString();
-    }
-
     return {
       'nodes': nodesJson,
       'stamps': stampsJson,
-      'liveness': livenessJson,
     };
   }
 

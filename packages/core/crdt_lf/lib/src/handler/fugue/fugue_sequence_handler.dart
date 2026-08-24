@@ -121,7 +121,6 @@ abstract base class FugueSequenceHandler<T, V, S extends FugueState<T, V>>
     state._tree.bulkSeed(
       seed.nodes,
       seed.stamps,
-      livenessStamps: seed.livenessStamps,
       live: seed.live,
     );
     for (final operation in operations()) {
@@ -241,7 +240,6 @@ abstract base class FugueSequenceHandler<T, V, S extends FugueState<T, V>>
         nodes: const [],
         stamps: const {},
         live: const [],
-        livenessStamps: const {},
         floor: const {},
       );
     }
