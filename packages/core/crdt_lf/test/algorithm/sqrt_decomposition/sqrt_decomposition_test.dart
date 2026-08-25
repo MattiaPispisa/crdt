@@ -72,6 +72,18 @@ class _Model<T> {
     return keys[at + 1];
   }
 
+  List<T> liveFrom(int position, int count) {
+    final result = <T>[];
+    for (var i = 0; i < count; i++) {
+      final key = liveAt(position + i);
+      if (key == null) {
+        break;
+      }
+      result.add(key);
+    }
+    return result;
+  }
+
   T? first() => keys.isEmpty ? null : keys.first;
 
   T? last() => keys.isEmpty ? null : keys.last;
@@ -79,8 +91,45 @@ class _Model<T> {
   int get liveTotal => live.where((l) => l).length;
 }
 
+/// [SqrtDecomposition.forEachLiveFrom] collected into a list.
+List<T> _liveFrom<T>(SqrtDecomposition<T> index, int position, int count) {
+  final result = <T>[];
+  index.forEachLiveFrom(position, count, result.add);
+  return result;
+}
+
 void main() {
   group('SqrtDecomposition', () {
+    group('forEachLiveFrom', () {
+      // 0..5 in the index, with 1 and 3 tombstoned: live sequence 0, 2, 4, 5.
+      SqrtDecomposition<int> seeded() {
+        final index = SqrtDecomposition<int>()..insertAtFront(0, live: true);
+        for (var key = 1; key <= 5; key++) {
+          index.insertAfter(key - 1, key, live: true);
+        }
+        return index
+          ..setLive(1, live: false)
+          ..setLive(3, live: false);
+      }
+
+      test('skips tombstones and stops after count', () {
+        expect(_liveFrom(seeded(), 1, 2), equals([2, 4]));
+      });
+
+      test('stops at the end instead of padding', () {
+        expect(_liveFrom(seeded(), 2, 10), equals([4, 5]));
+      });
+
+      test('yields nothing outside the live sequence', () {
+        final index = seeded();
+        expect(_liveFrom(index, 4, 3), isEmpty);
+        expect(_liveFrom(index, -1, 3), isEmpty);
+        expect(_liveFrom(index, 0, 0), isEmpty);
+        expect(_liveFrom(index, 0, -2), isEmpty);
+        expect(_liveFrom(SqrtDecomposition<int>(), 0, 3), isEmpty);
+      });
+    });
+
     test('empty index', () {
       final index = SqrtDecomposition<int>();
       expect(index.length, 0);
@@ -275,6 +324,13 @@ void main() {
               index.liveAt(p),
               model.liveAt(p),
               reason: 'liveAt($p) mismatch at step $step',
+            );
+            // A run of three from here, so the walk crosses block edges and
+            // runs off the end near the tail.
+            expect(
+              _liveFrom(index, p, 3),
+              model.liveFrom(p, 3),
+              reason: 'forEachLiveFrom($p, 3) mismatch at step $step',
             );
           }
           for (final key in model.keys) {

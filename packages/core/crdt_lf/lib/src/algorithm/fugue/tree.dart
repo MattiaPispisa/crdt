@@ -27,13 +27,7 @@ class FugueTree<T> {
       // The root stands for no element, so it is never part of the sequence.
       deleted: true,
     );
-    final nodes = {
-      rootID: FugueNodeTriple<T>(
-        node: rootNode,
-        leftChildren: [],
-        rightChildren: [],
-      ),
-    };
+    final nodes = {rootID: FugueNodeTriple<T>(rootNode)};
 
     return FugueTree._(
       nodes: nodes,
@@ -180,17 +174,19 @@ class FugueTree<T> {
     for (var i = 0; i < nodes.length; i += 1) {
       final node = nodes[i];
       _nodes[node.id] = FugueNodeTriple<T>(
-        node: FugueNode<T>(
+        FugueNode<T>(
           id: node.id,
           value: node.value,
           parentID: parentID,
           side: FugueSide.right,
           deleted: live != null && !live[i],
         ),
-        leftChildren: [],
-        rightChildren: [],
       );
-      _nodes[parentID]!.rightChildren.add(node.id);
+      _nodes[parentID]!.insertChild(
+        node.id,
+        side: FugueSide.right,
+        index: 0,
+      );
       parentID = node.id;
       ids.add(node.id);
     }
@@ -425,19 +421,15 @@ class FugueTree<T> {
     }
 
     // Create a new triple for the node
-    final nodeTriple = FugueNodeTriple<T>(
-      node: node,
-      leftChildren: [],
-      rightChildren: [],
-    );
-    _nodes[node.id] = nodeTriple;
+    _nodes[node.id] = FugueNodeTriple<T>(node);
 
     // Same-side siblings are kept sorted by id.
+    final parentTriple = _nodes[parentID]!;
     final siblings = node.side == FugueSide.left
-        ? _nodes[parentID]!.leftChildren
-        : _nodes[parentID]!.rightChildren;
+        ? parentTriple.leftChildren
+        : parentTriple.rightChildren;
     final position = _siblingInsertionPoint(siblings, node.id);
-    siblings.insert(position, node.id);
+    parentTriple.insertChild(node.id, side: node.side, index: position);
 
     _indexInsert(node, position);
   }
@@ -577,6 +569,18 @@ class FugueTree<T> {
   /// Backed by [_index]: `O(√n)` instead of a full in-order traversal.
   FugueElementID findNodeAtPosition(int position) {
     return _index.liveAt(position) ?? FugueElementID.nullID();
+  }
+
+  /// The ids of at most [count] live nodes, starting at live [position].
+  ///
+  /// Shorter than [count] when the range runs off the end of the sequence, and
+  /// empty when [position] is already past it. One walk for the whole range,
+  /// against one `O(√n)` lookup per element in [count] calls to
+  /// [findNodeAtPosition].
+  List<FugueElementID> findNodesInRange(int position, int count) {
+    final result = <FugueElementID>[];
+    _index.forEachLiveFrom(position, count, result.add);
+    return result;
   }
 
   /// The live index of a caret anchored immediately **after** [nodeID]: the

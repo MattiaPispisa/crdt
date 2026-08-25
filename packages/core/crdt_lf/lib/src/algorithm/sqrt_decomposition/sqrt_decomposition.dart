@@ -252,6 +252,52 @@ class SqrtDecomposition<T> {
     }
   }
 
+  /// Calls [action] on at most [count] **live** keys, in sequence order,
+  /// starting at the one [liveAt] would return for [position].
+  ///
+  /// Stops early at the end of the sequence, so it can yield fewer than
+  /// [count]. Yields nothing for a negative [position], a [count] of zero or
+  /// less, or a [position] past the last live element.
+  ///
+  /// One walk for the whole range: finding the start costs `O(√N)` once, and
+  /// the rest is a scan. Calling [liveAt] per element would pay the `O(√N)`
+  /// every time.
+  void forEachLiveFrom(int position, int count, void Function(T key) action) {
+    if (position < 0 || count <= 0) {
+      return;
+    }
+    var toSkip = position;
+    var left = count;
+    var started = false;
+    for (final block in _blocks) {
+      // Whole blocks of live elements before the start are skipped by their
+      // cached count; once the walk has started every block is scanned.
+      if (!started && toSkip >= block.liveCount) {
+        toSkip -= block.liveCount;
+        continue;
+      }
+      final keys = block.keys;
+      final live = block.live;
+      for (var i = 0; i < keys.length; i++) {
+        if (!live[i]) {
+          continue;
+        }
+        if (!started) {
+          if (toSkip > 0) {
+            toSkip--;
+            continue;
+          }
+          started = true;
+        }
+        action(keys[i]);
+        left--;
+        if (left == 0) {
+          return;
+        }
+      }
+    }
+  }
+
   /// Calls [action] on every key, live or not, in sequence order.
   ///
   /// The index holds the whole sequence: keys are only ever marked, never

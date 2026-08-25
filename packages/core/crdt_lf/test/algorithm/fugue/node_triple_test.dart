@@ -3,6 +3,22 @@ import 'package:crdt_lf/src/algorithm/fugue/node.dart';
 import 'package:crdt_lf/src/algorithm/fugue/node_triple.dart';
 import 'package:test/test.dart';
 
+/// A triple holding [left] and [right], appended in the order given.
+FugueNodeTriple<String> _tripleWith(
+  FugueNode<String> node, {
+  List<FugueElementID> left = const [],
+  List<FugueElementID> right = const [],
+}) {
+  final triple = FugueNodeTriple<String>(node);
+  for (var i = 0; i < left.length; i++) {
+    triple.insertChild(left[i], side: FugueSide.left, index: i);
+  }
+  for (var i = 0; i < right.length; i++) {
+    triple.insertChild(right[i], side: FugueSide.right, index: i);
+  }
+  return triple;
+}
+
 void main() {
   group('FugueNodeTriple', () {
     late FugueNode<String> node;
@@ -34,10 +50,10 @@ void main() {
     });
 
     test('should create a valid node triple', () {
-      final triple = FugueNodeTriple(
-        node: node,
-        leftChildren: leftChildren,
-        rightChildren: rightChildren,
+      final triple = _tripleWith(
+        node,
+        left: leftChildren,
+        right: rightChildren,
       );
 
       expect(triple.node, equals(node));
@@ -45,11 +61,52 @@ void main() {
       expect(triple.rightChildren, equals(rightChildren));
     });
 
+    test('a fresh triple has no children on either side', () {
+      final triple = FugueNodeTriple<String>(node);
+
+      expect(triple.leftChildren, isEmpty);
+      expect(triple.rightChildren, isEmpty);
+    });
+
+    // The empty case is a shared constant, so a leaf costs no list at all.
+    // Two triples must therefore hand out the very same object, and adding a
+    // child to one must not be visible from the other.
+    test('leaves share the empty list, and the first child breaks it apart',
+        () {
+      final one = FugueNodeTriple<String>(node);
+      final other = FugueNodeTriple<String>(node);
+
+      expect(identical(one.leftChildren, other.leftChildren), isTrue);
+      expect(identical(one.rightChildren, other.rightChildren), isTrue);
+
+      one.insertChild(leftChildren.first, side: FugueSide.left, index: 0);
+
+      expect(one.leftChildren, equals([leftChildren.first]));
+      expect(other.leftChildren, isEmpty);
+      // The side that stayed empty is untouched.
+      expect(one.rightChildren, isEmpty);
+    });
+
+    test('insertChild puts a child at the index it is given', () {
+      final triple = _tripleWith(node, left: leftChildren);
+      final middle = FugueElementID(
+        PeerId.parse('11111111-1111-4111-8111-111111111111'),
+        3,
+      );
+
+      triple.insertChild(middle, side: FugueSide.left, index: 1);
+
+      expect(
+        triple.leftChildren,
+        equals([leftChildren[0], middle, leftChildren[1]]),
+      );
+    });
+
     test('should serialize to JSON correctly', () {
-      final triple = FugueNodeTriple(
-        node: node,
-        leftChildren: leftChildren,
-        rightChildren: rightChildren,
+      final triple = _tripleWith(
+        node,
+        left: leftChildren,
+        right: rightChildren,
       );
 
       final json = triple.toJson();
@@ -81,11 +138,7 @@ void main() {
     });
 
     test('should handle empty children lists in JSON serialization', () {
-      final triple = FugueNodeTriple(
-        node: node,
-        leftChildren: [],
-        rightChildren: [],
-      );
+      final triple = FugueNodeTriple<String>(node);
 
       final json = triple.toJson();
       expect(json['leftChildren'], isEmpty);
@@ -102,16 +155,19 @@ void main() {
       final triple = FugueNodeTriple<String>.fromJson(json);
       expect(triple.leftChildren, isEmpty);
       expect(triple.rightChildren, isEmpty);
+      // A side that came back empty still allocates nothing.
+      final fresh = FugueNodeTriple<String>(node);
+      expect(identical(triple.leftChildren, fresh.leftChildren), isTrue);
     });
 
     test('should handle single child in each list', () {
       final singleLeftChild = [leftChildren.first];
       final singleRightChild = [rightChildren.first];
 
-      final triple = FugueNodeTriple(
-        node: node,
-        leftChildren: singleLeftChild,
-        rightChildren: singleRightChild,
+      final triple = _tripleWith(
+        node,
+        left: singleLeftChild,
+        right: singleRightChild,
       );
 
       final json = triple.toJson();
