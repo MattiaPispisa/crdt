@@ -15,15 +15,7 @@ import 'package:crdt_lf/src/algorithm/fugue/node.dart';
 /// - only the **last** element carries [rightChildren];
 /// - the elements in between carry no children at all.
 ///
-/// This is the run model of Yjs's `Item` and of the *bunch* in
-/// `mweidner037/list-positions`, the optimized Fugue implementation written by
-/// the author of the paper.
-///
-/// A run mixes live elements and tombstones, unlike Yjs, which only merges
-/// items that are all live or all deleted. The price is that a positional
-/// query has to walk [deletedAt] inside the run instead of stopping at the
-/// counts the index keeps; the gain is that a deletion in the middle costs a
-/// flag rather than two more runs.
+/// A run mixes live elements and tombstones.
 class FugueRun<T> {
   /// Creates a run over [values], with one [deleted] flag per value.
   ///
