@@ -284,8 +284,47 @@ extension SequenceDeltaText on SequenceDelta<String> {
   ///
   /// [base] is split by rune, the unit the text handlers index by.
   String applyToText(String base) {
-    final runes = base.runes.map(String.fromCharCode).toList();
-    return apply(runes).join();
+    if (ops.isEmpty) {
+      return base;
+    }
+
+    // Splice, rather than take the string apart into one-character pieces and
+    // put it back together: a delta usually touches a handful of characters,
+    // and a document has no reason to pay an allocation per character of it.
+    final buffer = StringBuffer();
+    var offset = 0;
+
+    for (final op in ops) {
+      switch (op) {
+        case SeqRetain<String>():
+          final end = _skipRunes(base, offset, op.count);
+          buffer.write(base.substring(offset, end));
+          offset = end;
+        case SeqInsert<String>():
+          for (final value in op.values) {
+            buffer.write(value);
+          }
+        case SeqDelete<String>():
+          offset = _skipRunes(base, offset, op.count);
+        case SeqMove<String>():
+          throw UnsupportedError('a move must be the only op of its delta');
+      }
+    }
+
+    return (buffer..write(base.substring(offset))).toString();
+  }
+
+  /// The offset [count] runes past [offset], never splitting a surrogate pair.
+  static int _skipRunes(String text, int offset, int count) {
+    var at = offset;
+    var seen = 0;
+    while (at < text.length && seen < count) {
+      final unit = text.codeUnitAt(at);
+      final isHighSurrogate = unit >= 0xD800 && unit <= 0xDBFF;
+      at += isHighSurrogate && at + 1 < text.length ? 2 : 1;
+      seen++;
+    }
+    return at;
   }
 }
 

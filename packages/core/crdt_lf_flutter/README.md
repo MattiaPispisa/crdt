@@ -159,6 +159,41 @@ CrdtHandlerListener<CRDTListHandler<String>>(
 );
 ```
 
+### What changed, not just that it changed
+
+`CrdtHandlerBuilder` and `CrdtHandlerListener` tell you *that* a handler moved
+and hand it back for you to re-read. `CrdtHandlerDeltaListener` tells you
+**what** moved, one call per change, so you can advance a projection you
+already hold — drive an `AnimatedList`, replay an edit into a controller,
+append to a log — instead of reading the whole value again.
+
+```dart
+CrdtHandlerDeltaListener<List<String>, SequenceDelta<String>>(
+  id: 'todos',
+  // Seed here: fires once on subscribe, and again whenever the value has to
+  // be taken fresh (a snapshot import, a dropped cache).
+  onReset: (context, sync, cause) => _items = [...sync.value],
+  // One call per change, with the retain/insert/delete of that change.
+  onDelta: (context, event) => _items = event.delta.apply(_items),
+  child: const TodoList(),
+);
+```
+
+The two type arguments are the handler's value and its delta:
+`SequenceDelta<T>` for the text and list handlers, `MapDelta<K, V>` for the
+maps, `SetDelta<T>` for the OR-set, `RegisterDelta<T>` for the register.
+
+The widget handles the awkward part of the contract for you: a reset means
+"read it again", and the events the fresh read already holds must not be
+applied on top of it. It performs the read and drops those events, so `onDelta`
+never reports a change twice.
+
+Like the other listener, it renders `child` unchanged and never rebuilds the
+subtree.
+
+> 📖 [Handler deltas](https://github.com/MattiaPispisa/crdt/blob/main/packages/core/crdt_lf/doc/handler_deltas.md)
+> — what a delta is, and what it costs.
+
 ### Imperative access
 
 For actions (insert/delete/change) you don't need reactivity — read the handler

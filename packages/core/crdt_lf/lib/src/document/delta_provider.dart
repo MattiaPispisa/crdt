@@ -34,6 +34,19 @@ base mixin DeltaProvider<V, D extends ComposableDelta<D>> on DocumentConsumer {
     return hub.watch();
   }
 
+  /// The point the stream has reached, without reading [value].
+  ///
+  /// [readSynced] answers "what is the value, and which events does it already
+  /// hold?" in one step, which is what a consumer that only **observes**
+  /// needs.
+  ///
+  /// A consumer that also **writes** already knows what it wrote. After its
+  /// own change it can move its copy by hand and then take this number,
+  /// saying "I account for everything published so far" — without paying for
+  /// a read it does not need. A change publishes its events while it is being
+  /// applied, so reading this straight after a write covers that write.
+  int get deltaSeq => _deltaHub?.seq ?? 0;
+
   /// The current [value] together with the point of the stream it reflects.
   ///
   /// This is the answer to a [HandlerReset]: adopt [DeltaSyncPoint.value],

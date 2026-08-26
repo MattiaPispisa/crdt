@@ -15,6 +15,10 @@
   watches costs one `null` check on the apply path. See
   [Handler deltas](https://github.com/MattiaPispisa/crdt/blob/main/packages/core/crdt_lf/doc/handler_deltas.md).
   [132](https://github.com/MattiaPispisa/crdt/issues/132)
+- `DeltaProvider.deltaSeq` reports how far the stream has got without reading the value. A consumer
+  that **writes** already knows what it wrote: it can move its own copy by hand and then take this
+  number to say "I account for everything published so far", instead of paying for a read it does
+  not need. `readSynced` stays the answer for a consumer that only observes.
 
 ### Changed
 

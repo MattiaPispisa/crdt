@@ -1,3 +1,40 @@
+## [Unreleased]
+
+**Date:** 2026-08-26
+
+[compare to previous release](https://github.com/MattiaPispisa/crdt/compare/crdt_lf_flutter-v0.4.0...crdt_lf_flutter-v0.5.0)
+
+### Added
+
+- `CrdtHandlerDeltaListener` reports **what** each change did to a handler, one call per change,
+  so a widget can move a projection it already holds instead of re-reading the value. It performs
+  the read a reset asks for and drops the events that read already covers, so a delta is never
+  applied twice. Like `CrdtHandlerListener`, it renders its child unchanged and never rebuilds the
+  subtree. [132](https://github.com/MattiaPispisa/crdt/issues/132)
+
+### Changed
+
+- Requires `crdt_lf` 4.1.0, for the handler delta streams.
+- `CrdtTextFieldBuilder` keeps its text by **moving it with the deltas** the handler reports,
+  instead of projecting the whole document again after every edit. A keystroke used to rebuild the
+  entire string; now it costs the size of the edit. On a 50 000-character document a keystroke goes
+  **785 µs → 191 µs** and taking in a remote one goes **680 µs → 81 µs**; at 10 000 characters,
+  193 → 113 µs and 130 → 65 µs. Typing is now nearly flat in the size of the document. Measured with
+  `benchmarks/src/benchmarks/text_field_benchmark.dart`; see `benchmarks/results.md`.
+  Set `debugVerifyCrdtTextFieldProjection` to `false` to skip the debug-only check that reads the
+  handler back and compares — it exists to catch a binding that drifts, and it costs exactly what
+  the field now avoids.
+- `CrdtTextFieldBuilder` takes a batch of remote changes in one at a time rather than composing them
+  into a single controller write. Each one now costs the size of its own edit, so there is nothing
+  left worth batching, and Flutter folds the writes into one frame anyway.
+- `CrdtTextFieldBuilder` places the caret from the delta the handler reports, instead of re-deriving
+  the remote edit by diffing the old and new text. A diff collapses a change that touched two
+  regions into one span covering the caret, which dragged it to the end of that span; the reported
+  delta says exactly what moved. Stable positions still come first for `CRDTFugueTextHandler` — they
+  follow element identity — so this is what `CRDTTextHandler`, which has none, gains. A batch of
+  changes is composed into one delta and adopted once, so the controller is still written a single
+  time per sync burst.
+
 ## [0.4.0](https://github.com/MattiaPispisa/crdt/tree/crdt_lf_flutter-v0.4.0/packages/crdt_lf_flutter)
 
 **Date:** 2026-08-16

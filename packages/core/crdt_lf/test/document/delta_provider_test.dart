@@ -155,6 +155,31 @@ void main() {
       await subscription.cancel();
     });
 
+    test('deltaSeq moves with a write, without reading the value', () async {
+      final doc = CRDTDocument();
+      final text = CRDTTextHandler(doc, 'text');
+
+      final subscription = text.watch().listen((_) {});
+      await _pump();
+
+      final before = text.deltaSeq;
+      text.insert(0, 'abc');
+
+      // The change published its event while it was being applied, so the
+      // number already covers it — no read in between.
+      expect(text.deltaSeq, greaterThan(before));
+      expect(text.deltaSeq, text.readSynced().seq);
+
+      await subscription.cancel();
+    });
+
+    test('deltaSeq is zero while nobody watches', () {
+      final doc = CRDTDocument();
+      final text = CRDTTextHandler(doc, 'text')..insert(0, 'abc');
+
+      expect(text.deltaSeq, 0);
+    });
+
     test('readSynced reports the point its value reflects', () async {
       final doc = CRDTDocument();
       final text = CRDTTextHandler(doc, 'text');

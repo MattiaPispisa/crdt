@@ -252,10 +252,137 @@ void main() {
       expect(controller.selection.baseOffset, 5);
     });
 
+    testWidgets(
+        'places the caret exactly across a multi-region remote edit on a '
+        'CRDTTextHandler, which has no stable positions', (tester) async {
+      // The Fugue test above is rescued by element identity. This handler has
+      // none, so the caret rides on what the handler reported it did. A diff
+      // of the two texts would collapse both regions into one span covering
+      // the caret and snap it to the end.
+      CRDTTextHandler(doc, 'note').insert(0, 'hello world');
+      await tester.pumpWidget(host());
+      await tester.tap(find.byType(TextField));
+      await tester.pump();
+      final controller = tester
+          .widget<TextField>(find.byType(TextField))
+          .controller!
+        ..selection = const TextSelection.collapsed(offset: 5);
+
+      final remote = CRDTDocument(peerId: PeerId.generate());
+      final remoteNote = CRDTTextHandler(remote, 'note');
+      remote.importChanges(doc.exportChanges());
+      remoteNote
+        ..insert(0, 'A')
+        ..insert(12, 'B');
+      doc.importChanges(
+        remote.exportChanges(fromVersionVector: doc.getVersionVector()),
+      );
+      await tester.pump();
+
+      expect(controller.text, 'Ahello worldB');
+      // Still right after "hello", shifted by the one character inserted
+      // before it — not dragged to the end.
+      expect(controller.selection.baseOffset, 6);
+    });
+
+    testWidgets('takes in a batch of changes one at a time', (tester) async {
+      final note = CRDTFugueTextHandler(doc, 'note')..insert(0, 'hello');
+      await tester.pumpWidget(host());
+      final controller =
+          tester.widget<TextField>(find.byType(TextField)).controller!;
+
+      var writes = 0;
+      controller.addListener(() => writes++);
+
+      final remote = remotePeer();
+      remote.registeredHandlers['note']! as CRDTFugueTextHandler
+        ..insert(5, ' a')
+        ..insert(7, ' b')
+        ..insert(9, ' c');
+      doc.importChanges(
+        remote.exportChanges(fromVersionVector: doc.getVersionVector()),
+      );
+      await tester.pump();
+
+      expect(controller.text, note.value);
+      // One write per change, because each one now costs the size of its own
+      // edit. Flutter folds them into a single frame anyway, which is why the
+      // subtree still builds once.
+      expect(writes, 3);
+      expect(builds, 1);
+    });
+
+    testWidgets('never projects the document again while typing',
+        (tester) async {
+      // The point of the whole thing: the field moves its text with the
+      // deltas, so `handler.value` — which rebuilds the entire string — is
+      // never asked for.
+      final note = _CountingFugueTextHandler(doc, 'note')..insert(0, 'hello');
+      await tester.pumpWidget(host());
+      final controller =
+          tester.widget<TextField>(find.byType(TextField)).controller!;
+
+      debugVerifyCrdtTextFieldProjection = false;
+      addTearDown(() => debugVerifyCrdtTextFieldProjection = true);
+      note.reads = 0;
+
+      for (var i = 0; i < 5; i++) {
+        final next = '${controller.text}x';
+        controller.value = TextEditingValue(
+          text: next,
+          selection: TextSelection.collapsed(offset: next.length),
+        );
+        await tester.pump();
+      }
+
+      expect(note.value, 'helloxxxxx');
+      expect(controller.text, 'helloxxxxx');
+      // `note.value` on the line above is the only read there was.
+      expect(note.reads, 1);
+    });
+
+    testWidgets('never projects the document again for a remote change',
+        (tester) async {
+      final note = _CountingFugueTextHandler(doc, 'note')..insert(0, 'hello');
+      await tester.pumpWidget(host());
+      final controller =
+          tester.widget<TextField>(find.byType(TextField)).controller!;
+
+      final remote = remotePeer();
+      final remoteNote =
+          remote.registeredHandlers['note']! as CRDTFugueTextHandler;
+
+      debugVerifyCrdtTextFieldProjection = false;
+      addTearDown(() => debugVerifyCrdtTextFieldProjection = true);
+      note.reads = 0;
+
+      remoteNote.insert(5, '!');
+      doc.importChanges(
+        remote.exportChanges(fromVersionVector: doc.getVersionVector()),
+      );
+      await tester.pump();
+
+      expect(controller.text, 'hello!');
+      expect(note.reads, 0);
+    });
+
     testWidgets('throws a FlutterError for a non-text handler', (tester) async {
       CRDTListHandler<String>(doc, 'note');
       await tester.pumpWidget(host());
       expect(tester.takeException(), isA<FlutterError>());
     });
   });
+}
+
+/// A Fugue text handler that counts how often its value is projected.
+final class _CountingFugueTextHandler extends CRDTFugueTextHandler {
+  _CountingFugueTextHandler(super.doc, super.id);
+
+  int reads = 0;
+
+  @override
+  String get value {
+    reads++;
+    return super.value;
+  }
 }
