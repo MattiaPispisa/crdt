@@ -1,3 +1,21 @@
+## [Unreleased]
+
+**Date:** 2026-08-25
+
+[compare to previous release](https://github.com/MattiaPispisa/crdt/compare/crdt_lf-v4.0.0...crdt_lf-v4.1.0)
+
+### Changed
+
+- The Fugue tree groups elements into **runs**: elements one peer wrote with consecutive counters,
+  adjacent in the sequence, now share a single node. Typing 100 000 characters builds 782 nodes
+  instead of 100 000, which is **8× less memory** (371 → 48 bytes per element) and **up to 4× less
+  time** wherever a document is built or loaded: appending 50 000 elements 30.1 ms → 9.4 ms,
+  restoring 100 000 from a snapshot 93.3 ms → 22.7 ms. Reads roughly halve. An edit in the middle of
+  a run splits it, so an insert at a random position costs about a third more. Nothing reaches the
+  wire: element ids, operations and the snapshot format are unchanged.
+  [125](https://github.com/MattiaPispisa/crdt/issues/125)
+- A change costs about 20% less memory to hold.
+
 ## [4.0.0](https://github.com/MattiaPispisa/crdt/tree/crdt_lf-v4.0.0/packages/crdt_lf)
 
 **Date:** 2026-08-18

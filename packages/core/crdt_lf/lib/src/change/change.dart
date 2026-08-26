@@ -174,9 +174,6 @@ class Change {
 
   // Decoded fields are cached lazily to avoid re-parsing on every access.
   late final OperationId _id = OperationId.fromUint8List(bytes);
-  late final PeerId _author = PeerId.fromUint8List(bytes);
-  late final HybridLogicalClock _hlc =
-      HybridLogicalClock.fromUint8List(bytes, offset: 16);
   late final Set<OperationId> _deps = _parseDeps();
   late final OpIdKey _key = OpIdKey.view(bytes);
 
@@ -198,7 +195,7 @@ class Change {
   OpIdKey get key => _key;
 
   /// The peer that created this change.
-  PeerId get author => _author;
+  PeerId get author => _id.peerId;
 
   /// The dependencies of this change (decoded).
   Set<OperationId> get deps => _deps;
@@ -217,7 +214,7 @@ class Change {
   }
 
   /// The timestamp when this change was created.
-  HybridLogicalClock get hlc => _hlc;
+  HybridLogicalClock get hlc => _id.hlc;
 
   /// Encodes this change into a self-describing byte buffer.
   ///
