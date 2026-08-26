@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import 'package:crdt_lf/crdt_lf.dart';
 import 'package:crdt_lf/src/algorithm/fugue/tree.dart';
 import 'package:crdt_lf/src/algorithm/fugue/value_node.dart';
+import 'package:crdt_lf/src/handler/fugue/fugue_delta.dart';
 import 'package:crdt_lf/src/handler/fugue/fugue_sequence_handler.dart';
 
 part 'operation.dart';
@@ -33,7 +34,8 @@ part 'operation.dart';
 /// print(list.value); // Prints ['Hello', 'World']
 /// ```
 base class CRDTFugueListHandler<T>
-    extends FugueSequenceHandler<T, List<T>, FugueListState<T>> {
+    extends FugueSequenceHandler<T, List<T>, FugueListState<T>>
+    with DeltaProvider<List<T>, SequenceDelta<T>> {
   /// Creates a new CRDTFugueList with the given document and ID
   ///
   /// [valueCodec] is an optional codec for encoding/decoding [T] values to
@@ -130,7 +132,11 @@ base class CRDTFugueListHandler<T>
   FugueListState<T> createEmptyState() => FugueListState<T>.empty();
 
   @override
-  void applyToTree(FugueTree<T> tree, Operation operation) {
+  void applyToTree(
+    FugueTree<T> tree,
+    Operation operation, {
+    DeltaSink<Object?>? sink,
+  }) {
     if (operation is _FugueListInsertOperation<T>) {
       tree.iterableInsertChain(
         leftOrigin: operation.leftOrigin,
@@ -139,18 +145,44 @@ base class CRDTFugueListHandler<T>
           (item) => FugueValueNode<T>(id: item.id, value: item.value),
         ),
       );
+      if (sink != null && operation.items.isNotEmpty) {
+        sink.add(
+          fugueInsertDelta<T>(
+            tree,
+            operation.items.first.id,
+            operation.items.map((item) => item.value).toList(),
+          ),
+        );
+      }
     } else if (operation is _FugueListDeleteOperation<T>) {
+      // The places have to be read while the elements are still there.
+      final places = sink == null
+          ? const <int>[]
+          : fugueLivePositions<T>(
+              tree,
+              operation.items.map((item) => item.nodeID),
+            );
       for (final item in operation.items) {
         tree.delete(item.nodeID);
       }
+      sink?.add(fugueDeleteDelta<T>(places));
     } else if (operation is _FugueListUpdateOperation<T>) {
+      final winners = <(FugueElementID, T)>[];
       for (final item in operation.items) {
-        tree.update(
+        final won = tree.update(
           nodeID: item.nodeID,
           value: item.value,
           stamp: operation.stamp!,
         );
+        // An update that loses the last-writer-wins comparison, or that lands
+        // on a tombstone, changes nothing anyone can see.
+        if (won && sink != null) {
+          winners.add((item.nodeID, item.value));
+        }
       }
+      sink?.add(fugueUpdateDelta<T>(tree, winners));
+    } else {
+      sink?.add(SequenceDelta<T>(const []));
     }
   }
 

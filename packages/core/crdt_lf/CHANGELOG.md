@@ -1,8 +1,20 @@
 ## [Unreleased]
 
-**Date:** 2026-08-25
+**Date:** 2026-08-26
 
 [compare to previous release](https://github.com/MattiaPispisa/crdt/compare/crdt_lf-v4.0.0...crdt_lf-v4.1.0)
+
+### Added
+
+- A handler publishes **deltas**: `watch()` gives one event per change describing how the handler's
+  observable state moved, so a consumer keeps its own projection without reading `handler.value`.
+  Four shapes cover every built-in handler — `SequenceDelta` (the Quill/Yjs retain/insert/delete
+  shape, plus a move that keeps element identity on the movable list), `MapDelta`, `SetDelta` and
+  `RegisterDelta`. `readSynced()` hands back the value together with the point of the stream it
+  reflects, so a reset can never be applied twice. Nothing reaches the wire, and a handler nobody
+  watches costs one `null` check on the apply path. See
+  [Handler deltas](https://github.com/MattiaPispisa/crdt/blob/main/packages/core/crdt_lf/doc/handler_deltas.md).
+  [132](https://github.com/MattiaPispisa/crdt/issues/132)
 
 ### Changed
 

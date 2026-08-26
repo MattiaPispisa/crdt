@@ -29,7 +29,8 @@ part 'operation.dart';
 /// map.remove('b');
 /// print(map.value); // Prints {'a': 10}
 /// ```
-base class CRDTORMapHandler<K, V> extends Handler<ORMapState<K, V>> {
+base class CRDTORMapHandler<K, V> extends Handler<ORMapState<K, V>>
+    with DeltaProvider<Map<K, V>, MapDelta<K, V>> {
   /// Creates a new CRDT OR-MapHandler with the given document and ID
   ///
   /// [keyCodec] and [valueCodec] are optional codecs for encoding/decoding keys and values to bytes.
@@ -94,6 +95,7 @@ base class CRDTORMapHandler<K, V> extends Handler<ORMapState<K, V>> {
   }
 
   /// Returns the current map value computed from changes and snapshot.
+  @override
   Map<K, V> get value {
     return _cachedOrComputedState()._state;
   }
@@ -268,6 +270,57 @@ base class CRDTORMapHandler<K, V> extends Handler<ORMapState<K, V>> {
     }
   }
 
+  /// The key an operation is about, or `null` for a kind that is about no
+  /// single key.
+  K? _targetKey(Operation operation) {
+    if (operation is _ORMapPutOperation<K, V>) {
+      return operation.key;
+    }
+    if (operation is _ORMapRemoveOperation<K, V>) {
+      return operation.key;
+    }
+    return null;
+  }
+
+  /// What [key] holds right now, without building the whole map.
+  ///
+  /// `null` when the key is not there. The live entry with the highest tag
+  /// wins, exactly as [ORMapState._state] resolves it.
+  (V,)? _liveEntryOf(ORMapState<K, V> state, K key) {
+    final entries = state._live[key];
+    if (entries != null && entries.isNotEmpty) {
+      ORMapEntry<V>? winning;
+      for (final entry in entries) {
+        if (winning == null || entry.tag.compareTo(winning.tag) > 0) {
+          winning = entry;
+        }
+      }
+      return (winning!.value,);
+    }
+    if (state._snapshotOnly.containsKey(key)) {
+      return (state._snapshotOnly[key] as V,);
+    }
+    return null;
+  }
+
+  /// What [key] did, given what it held before and after.
+  MapDelta<K, V> _entryDelta(K key, (V,)? before, (V,)? after) {
+    if (after != null) {
+      if (before != null && before.$1 == after.$1) {
+        return MapDelta<K, V>(const {});
+      }
+      return MapDelta<K, V>({
+        key: MapEntrySet<V>(value: after.$1, previous: before?.$1),
+      });
+    }
+    if (before != null) {
+      return MapDelta<K, V>({
+        key: MapEntryRemoved<V>(previous: before.$1),
+      });
+    }
+    return MapDelta<K, V>(const {});
+  }
+
   @override
   bool get stateIsOrderIndependent => true;
 
@@ -280,10 +333,23 @@ base class CRDTORMapHandler<K, V> extends Handler<ORMapState<K, V>> {
     // The cached state is never exposed by this handler, so it can be
     // mutated in place instead of deep-copied on every operation.
     try {
+      // Tag-level again: a put that loses the tag comparison moves the tags
+      // but not the key anyone can see. Read the key before and after.
+      final key = _targetKey(operation);
+      final before = key == null ? null : _liveEntryOf(state, key);
+
       _applyOperationToTagState(
         state: state,
         operation: operation,
       );
+
+      if (sink != null) {
+        sink.add(
+          key == null
+              ? MapDelta<K, V>(const {})
+              : _entryDelta(key, before, _liveEntryOf(state, key)),
+        );
+      }
       return state;
     } catch (_) {
       // The state may be half-mutated: invalidate the cache.

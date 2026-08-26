@@ -27,7 +27,8 @@ part 'operation.dart';
 /// map.update('key2', 'value2');
 /// print(map.value); // Prints {"key2": "value2"}
 /// ```
-base class CRDTMapHandler<T> extends Handler<Map<String, T>> {
+base class CRDTMapHandler<T> extends Handler<Map<String, T>>
+    with DeltaProvider<Map<String, T>, MapDelta<String, T>> {
   /// Creates a new CRDTMap with the given document and ID
   ///
   /// [valueCodec] is an optional codec for encoding/decoding [T] values to bytes.
@@ -94,6 +95,7 @@ base class CRDTMapHandler<T> extends Handler<Map<String, T>> {
   ///
   /// The returned map is the handler's internal state:
   /// treat it as read-only.
+  @override
   Map<String, T> get value {
     // Check if the cached state is still valid
     if (cachedState != null) {
@@ -148,13 +150,55 @@ base class CRDTMapHandler<T> extends Handler<Map<String, T>> {
   }
 
   /// Applies a single operation to a map
-  void _applyOperationToMap(Map<String, T> state, Operation operation) {
+  ///
+  /// [sink] collects what the operation did to the keys anyone can see. It is
+  /// `null` on the replay path, which nobody observes.
+  void _applyOperationToMap(
+    Map<String, T> state,
+    Operation operation, {
+    DeltaSink<Object?>? sink,
+  }) {
     if (operation is _MapInsertOperation<T>) {
+      final had = state.containsKey(operation.key);
+      final previous = state[operation.key];
       _mapInsert(state, key: operation.key, value: operation.value);
+      sink?.add(
+        MapDelta<String, T>({
+          operation.key: MapEntrySet<T>(
+            value: operation.value,
+            previous: had ? previous : null,
+          ),
+        }),
+      );
     } else if (operation is _MapDeleteOperation<T>) {
+      final had = state.containsKey(operation.key);
+      final previous = state[operation.key];
       _mapDelete(state, key: operation.key);
+      sink?.add(
+        had && previous != null
+            ? MapDelta<String, T>({
+                operation.key: MapEntryRemoved<T>(previous: previous),
+              })
+            : MapDelta<String, T>(const {}),
+      );
     } else if (operation is _MapUpdateOperation<T>) {
+      // An update of a key that is not there does nothing, so it must not
+      // report a phantom entry.
+      final had = state.containsKey(operation.key);
+      final previous = state[operation.key];
       _mapUpdate(state, key: operation.key, value: operation.value);
+      sink?.add(
+        had
+            ? MapDelta<String, T>({
+                operation.key: MapEntrySet<T>(
+                  value: operation.value,
+                  previous: previous,
+                ),
+              })
+            : MapDelta<String, T>(const {}),
+      );
+    } else {
+      sink?.add(MapDelta<String, T>(const {}));
     }
   }
 
@@ -257,7 +301,7 @@ base class CRDTMapHandler<T> extends Handler<Map<String, T>> {
     // Mutate the cached state in place instead of copying it on
     // every operation.
     try {
-      _applyOperationToMap(state, operation);
+      _applyOperationToMap(state, operation, sink: sink);
       return state;
     } catch (_) {
       // The state may be half-mutated: invalidate the cache.

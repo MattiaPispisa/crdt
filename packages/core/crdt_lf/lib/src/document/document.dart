@@ -19,6 +19,7 @@ part '../handler/handler.dart';
 // The mixins a consumer of the document is built from, and the read-only
 // document a [HistorySession] walks through.
 part 'providers.dart';
+part 'delta_provider.dart';
 part 'history.dart';
 
 /// Defines the foundational contract for a CRDT document.
@@ -523,18 +524,22 @@ class CRDTDocument extends BaseCRDTDocument {
       // update, no envelope decode (see [_refreshHandlerCaches]).
       _handlerRevisions.update(operation.id, (r) => r + 1, ifAbsent: () => 1);
 
+      final target = _handlers[operation.id];
       if (applied) {
         appliedChanges.add(change);
         // The operation was folded into the cache when it was registered; this
-        // is where it finally gets its place in the replay order.
-        _handlers[operation.id]?._noteReplayBoundary(change);
+        // is where it finally gets its place in the replay order, and where
+        // the deltas it collected finally get a change to belong to.
+        target
+          ?.._noteReplayBoundary(change)
+          .._publishBufferedUpTo(change);
         for (final handler in _handlers.values) {
           if (!handlersAffectedFromErrors.contains(handler.id)) {
             handler._updateCachedVersion();
           }
         }
       } else {
-        _handlers[operation.id]?.invalidateCache();
+        target?._invalidate(ResetCause.applyFailed);
         handlersAffectedFromErrors.add(operation.id);
       }
     }
@@ -627,6 +632,13 @@ class CRDTDocument extends BaseCRDTDocument {
       _handlerRevisions.update(handler.id, (r) => r + 1, ifAbsent: () => 1);
       if (!handler._queueRemoteChanges(pending)) {
         handler.invalidateCache();
+        continue;
+      }
+
+      // A watched handler cannot leave the queue waiting for a read that may
+      // never come, so it folds now and publishes one event per change.
+      if (handler.hasDeltaListeners) {
+        handler._drainPendingRemoteChanges(withDeltas: true);
       }
     }
   }
@@ -958,7 +970,7 @@ class CRDTDocument extends BaseCRDTDocument {
       _advanceClockPast(snapshot.versionVector);
       _bumpRevisionsForSnapshot(snapshot);
 
-      _invalidateHandlers();
+      _invalidateHandlers(ResetCause.snapshotImport);
       _emitUpdate();
       return true;
     }
@@ -991,7 +1003,7 @@ class CRDTDocument extends BaseCRDTDocument {
     if (pruneHistory) {
       _prune(_lastSnapshot!.versionVector);
     }
-    _invalidateHandlers();
+    _invalidateHandlers(ResetCause.snapshotMerge);
     _emitUpdate();
   }
 
@@ -1303,10 +1315,13 @@ class CRDTDocument extends BaseCRDTDocument {
     return result;
   }
 
-  /// Invalidates the cache of all handlers
-  void _invalidateHandlers() {
+  /// Invalidates the cache of all handlers.
+  ///
+  /// [cause] is what a watcher is told: these paths replace the base the
+  /// replay starts from, so no delta can describe them.
+  void _invalidateHandlers(ResetCause cause) {
     for (final handler in _handlers.values) {
-      handler.invalidateCache();
+      handler._invalidate(cause);
     }
   }
 
@@ -1380,6 +1395,9 @@ class CRDTDocument extends BaseCRDTDocument {
 
     _localChangesController.close();
     _updatesController.close();
+    for (final handler in _handlers.values) {
+      handler._closeDeltas();
+    }
     super.dispose();
   }
 }

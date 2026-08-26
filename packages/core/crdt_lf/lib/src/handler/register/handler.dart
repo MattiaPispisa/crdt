@@ -25,7 +25,8 @@ part 'operation.dart';
 /// done.set(true);
 /// print(done.value); // true
 /// ```
-base class CRDTRegisterHandler<T> extends Handler<T> {
+base class CRDTRegisterHandler<T> extends Handler<T>
+    with DeltaProvider<T?, RegisterDelta<T>> {
   /// Creates a new register with the given document and ID.
   ///
   /// [valueCodec] encodes/decodes `T` to bytes; default is [JsonValueCodec].
@@ -59,6 +60,7 @@ base class CRDTRegisterHandler<T> extends Handler<T> {
   }
 
   /// The current value, or `null` if it was never set.
+  @override
   T? get value {
     final cached = cachedState;
     if (cached != null) {
@@ -104,8 +106,10 @@ base class CRDTRegisterHandler<T> extends Handler<T> {
     // Only an operation that is the latest in clock order reaches this: a
     // local write, or a remote change newer than everything folded in so far.
     if (operation is _RegisterSetOperation<T>) {
+      sink?.add(RegisterDelta<T>(previous: state, current: operation.value));
       return operation.value;
     }
+    sink?.add(RegisterDelta<T>(previous: state, current: state));
     return state;
   }
 

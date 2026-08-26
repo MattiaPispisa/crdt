@@ -338,6 +338,14 @@ class FugueTree<T> {
     return result;
   }
 
+  /// Whether [nodeID] is in the tree and still part of the sequence.
+  ///
+  /// `false` for an unknown id and for a tombstone.
+  bool isLive(FugueElementID nodeID) {
+    final spot = _spotOf(nodeID);
+    return spot != null && !spot.run.deletedAt(spot.offset);
+  }
+
   /// The live index of a caret anchored immediately **after** [nodeID]: the
   /// number of live elements up to and including it — or strictly before it, if
   /// [nodeID] is a tombstone (the caret stays where the element used to be).

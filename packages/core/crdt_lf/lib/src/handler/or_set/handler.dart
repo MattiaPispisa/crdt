@@ -28,7 +28,8 @@ part 'operation.dart';
 /// set.remove('value2');
 /// print(set.value); // Prints {'value1', 'value3'}
 /// ```
-base class CRDTORSetHandler<T> extends Handler<ORSetState<T>> {
+base class CRDTORSetHandler<T> extends Handler<ORSetState<T>>
+    with DeltaProvider<Set<T>, SetDelta<T>> {
   /// Creates a new CRDT OR-SetHandler with the given document and ID
   ///
   /// [valueCodec] is an optional codec for encoding/decoding [T] values to bytes.
@@ -88,6 +89,7 @@ base class CRDTORSetHandler<T> extends Handler<ORSetState<T>> {
   }
 
   /// Returns the current set value computed from changes and snapshot.
+  @override
   Set<T> get value {
     return _cachedOrComputedState()._state;
   }
@@ -171,6 +173,22 @@ base class CRDTORSetHandler<T> extends Handler<ORSetState<T>> {
     return state;
   }
 
+  /// The value an operation is about, or `null` for a kind that is about no
+  /// single value.
+  T? _targetValue(Operation operation) {
+    if (operation is _ORSetAddOperation<T>) {
+      return operation.value;
+    }
+    if (operation is _ORSetRemoveOperation<T>) {
+      return operation.value;
+    }
+    return null;
+  }
+
+  /// Whether [value] is in the set, without building the whole set.
+  bool _isPresent(ORSetState<T> state, T value) =>
+      state._live.containsKey(value) || state._snapshotOnly.contains(value);
+
   /// Applies a single operation to the tag state
   void _applyOperationToTagState({
     required ORSetState<T> state,
@@ -244,10 +262,26 @@ base class CRDTORSetHandler<T> extends Handler<ORSetState<T>> {
     // The cached state is never exposed by this handler, so it can be
     // mutated in place instead of deep-copied on every operation.
     try {
+      // The operations are tag-level: an add of a value that already has a
+      // live tag moves the tags but not the set anyone can see. So the delta
+      // comes from membership before and after, one O(1) lookup each.
+      final target = _targetValue(operation);
+      final before = target != null && _isPresent(state, target);
+
       _applyOperationToTagState(
         state: state,
         operation: operation,
       );
+
+      if (sink != null) {
+        final after = target != null && _isPresent(state, target);
+        sink.add(
+          SetDelta<T>(
+            added: !before && after ? <T>{target as T} : <T>{},
+            removed: before && !after ? <T>{target as T} : <T>{},
+          ),
+        );
+      }
       return state;
     } catch (_) {
       // The state may be half-mutated: invalidate the cache.

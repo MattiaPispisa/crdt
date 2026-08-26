@@ -273,6 +273,56 @@ path off and always replay. A custom handler that resolves conflicts by replay
 order must leave `stateIsOrderIndependent` at its default `false`, otherwise two
 peers that receive the same changes in a different order diverge.
 
+### Handler deltas
+
+A handler tells you *that* something changed through `CRDTDocument.updates` and
+`revisionForHandler`. It can also tell you **what** changed: `watch()` publishes
+one event per `Change`, so a consumer keeps its own projection without ever
+reading `handler.value`.
+
+```dart
+final text = CRDTFugueTextHandler(doc, 'text');
+
+var mine = '';
+var seen = -1;
+
+text.watch().listen((update) {
+  switch (update) {
+    case HandlerReset():
+      // The base moved: read it, and learn which events it already holds.
+      final point = text.readSynced();
+      mine = point.value;
+      seen = point.seq;
+    case HandlerDelta():
+      if (update.seq <= seen) {
+        return; // already inside the value the last read handed over
+      }
+      mine = update.delta.applyToText(mine);
+      seen = update.seq;
+  }
+});
+```
+
+Four vocabularies cover every built-in handler, by shape rather than by
+handler: `SequenceDelta<T>` (retain / insert / delete, plus a move for the
+movable list), `MapDelta<K, V>`, `SetDelta<T>` and `RegisterDelta<T>`.
+`SequenceDelta` is the Quill/Yjs shape, so an editor binding already knows how
+to consume it. Text handlers use `SequenceDelta<String>` with one element per
+**rune**.
+
+Nothing here reaches the wire. A delta is a local observation of how this
+document's copy moved, in the order this document folded the changes in — which
+is not the replay order, so two peers holding the same state can observe two
+different sequences of events.
+
+While nobody watches, the whole thing is one `null` check on the apply path. A
+watched handler folds a remote change when it **arrives** instead of at the next
+read, because a delta stream cannot wait for a read that may never come. It is
+the same work at a different moment.
+
+> 📖 [Handler deltas](https://github.com/MattiaPispisa/crdt/blob/main/packages/core/crdt_lf/doc/handler_deltas.md)
+> — the reset causes, the compaction invariant, and what each handler pays.
+
 ## Architecture
 
 The library is built above the [hlc_dart](https://pub.dev/packages/hlc_dart) package and provide a solution to implement CRDT systems.
@@ -879,7 +929,7 @@ Renamed or removed symbols:
 | a `fromBytes(bytes)` a handler implemented by hand | `OperationDecoders operationDecoders` | Was raw bytes decoded by whatever a handler wrote. Now a `Map<int, Operation Function(Uint8List body)>` keyed by the operation's kind byte: the framework looks the kind up itself and raises `UnknownOperationKindException` on a miss, instead of a handler returning `null` or hand-rolling the same check. |
 | `FugueTree`, `FugueNode`, `FugueNodeTriple`, `FugueValueNode` | no longer exported | Implementation detail of the two Fugue sequence handlers. `FugueElementID` is still public. |
 | `update` on `CRDTFugueTextHandler` / `CRDTFugueListHandler` (delete + insert) | `update` keeps the element's identity | For the old behavior, ask for it: `doc.runInTransaction(() { text..delete(index, count)..insert(index, replacement); });` |
-| `incrementCachedState({required operation, required state})` | adds an optional `DeltaSink<Object?>? sink` | Always `null` today; an override has to declare the parameter, even unused. |
+| `incrementCachedState({required operation, required state})` | adds an optional `DeltaSink<Object?>? sink` | It is `null` unless someone watches the handler's deltas. An override that wants to publish them writes what the operation did to it; see [Handler deltas](#handler-deltas). |
 | `class MyHandler extends Handler<T>` | `base`/`final`/`sealed class MyHandler extends Handler<T>` | `Handler` is a `base` class now. Extending it is unchanged; implementing it is no longer allowed. See [Custom handlers](#custom-handlers). |
 | Dart `>=2.17.0` | Dart `>=3.0.0` | Class modifiers need it. `crdt_socket_sync` and `crdt_lf_hive` move with it. |
 | Text handler positions in UTF-16 code units | positions in **runes** | Affects `insert`, `delete`, `update`, `length`, `stablePositionAt`, `indexOfStablePosition` and `myersDiff`. See [Text handlers index by rune](#text-handlers-index-by-rune). |
