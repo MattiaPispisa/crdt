@@ -1,4 +1,5 @@
 import 'package:crdt_lf/crdt_lf.dart';
+import 'package:crdt_lf/src/utils/binary_search.dart';
 import 'package:hlc_dart/hlc_dart.dart';
 
 /// ChangeStore implementation for CRDT
@@ -286,20 +287,8 @@ class _PeerClockIndex {
 
   /// Returns the index of the first change in the sorted [list] with a
   /// clock strictly greater than [clock], or `list.length` if none.
-  static int _firstNewerThan(List<Change> list, HybridLogicalClock clock) {
-    // binary search (lower bound)
-    var low = 0;
-    var high = list.length;
-    while (low < high) {
-      final mid = (low + high) >> 1;
-      if (list[mid].hlc > clock) {
-        high = mid;
-      } else {
-        low = mid + 1;
-      }
-    }
-    return low;
-  }
+  static int _firstNewerThan(List<Change> list, HybridLogicalClock clock) =>
+      list.lowerBoundBy(clock, (c, t) => c.hlc.compareTo(t) > 0 ? 1 : -1);
 }
 
 /// Secondary index of [Change]s grouped by the id of the handler that produced

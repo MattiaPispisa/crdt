@@ -1,9 +1,8 @@
 import 'package:crdt_lf/crdt_lf.dart';
-import 'package:crdt_lf/src/algorithm/fugue/node.dart';
-import 'package:crdt_lf/src/algorithm/fugue/node_triple.dart';
 import 'package:crdt_lf/src/algorithm/fugue/run.dart';
 import 'package:crdt_lf/src/algorithm/fugue/value_node.dart';
 import 'package:crdt_lf/src/algorithm/sqrt_decomposition/sqrt_decomposition.dart';
+import 'package:crdt_lf/src/utils/binary_search.dart';
 
 /// Where an element sits: the run that holds it, and how far into it.
 typedef _Spot<T> = ({FugueRun<T> run, int offset});
@@ -31,34 +30,6 @@ class FugueTree<T> {
 
   /// Initializes a new empty Fugue tree
   factory FugueTree.empty() => FugueTree<T>._();
-
-  /// Creates a tree from a JSON object
-  ///
-  /// The JSON is **per element**, the shape this tree had before runs existed:
-  /// runs are cut again on the way in, so a document written by any build
-  /// reads back the same. See [toJson].
-  factory FugueTree.fromJson(
-    Map<String, dynamic> json,
-  ) {
-    final nodesJson = json['nodes'] as Map<String, dynamic>;
-    final elements = <FugueElementID, FugueNodeTriple<T>>{};
-    for (final entry in nodesJson.entries) {
-      elements[FugueElementID.parse(entry.key)] =
-          FugueNodeTriple<T>.fromJson(entry.value as Map<String, dynamic>);
-    }
-
-    final tree = FugueTree<T>._().._buildFromElements(elements);
-
-    final stampsJson = json['stamps'] as Map<String, dynamic>?;
-    if (stampsJson != null) {
-      for (final entry in stampsJson.entries) {
-        tree._stamps[FugueElementID.parse(entry.key)] =
-            OperationId.parse(entry.value as String);
-      }
-    }
-
-    return tree;
-  }
 
   /// How many elements one run may hold.
   ///
@@ -97,9 +68,6 @@ class FugueTree<T> {
   /// Answers position↔run and neighbour queries in `O(√R)` with `R` the number
   /// of runs; the walk inside the run is the tree's job, because the index does
   /// not know which of a run's elements are still there.
-  ///
-  /// - Never serialized;
-  /// - Rebuilt on deserialization.
   final SqrtDecomposition<FugueRun<T>> _index =
       SqrtDecomposition<FugueRun<T>>();
 
@@ -133,21 +101,21 @@ class FugueTree<T> {
       return null;
     }
     final counter = id.counter!;
-    var low = 0;
-    var high = list.length - 1;
-    while (low <= high) {
-      final middle = (low + high) >> 1;
-      final run = list[middle];
-      if (counter < run.startCounter) {
-        high = middle - 1;
-      } else if (counter >= run.startCounter + run.length) {
-        low = middle + 1;
-      } else {
-        _lastSpotRun = run;
-        return (run: run, offset: counter - run.startCounter);
-      }
+    final index = list.lowerBoundBy<int>(counter, (run, c) {
+      if (c < run.startCounter) return 1;
+      if (c >= run.startCounter + run.length) return -1;
+      return 0;
+    });
+    if (index == list.length) {
+      return null;
     }
-    return null;
+    final run = list[index];
+    if (counter < run.startCounter ||
+        counter >= run.startCounter + run.length) {
+      return null;
+    }
+    _lastSpotRun = run;
+    return (run: run, offset: counter - run.startCounter);
   }
 
   /// The run the last successful [_spotOf] landed in. See the note there.
@@ -165,16 +133,10 @@ class FugueTree<T> {
       run.startID.replicaID,
       () => <FugueRun<T>>[],
     );
-    var low = 0;
-    var high = list.length;
-    while (low < high) {
-      final middle = (low + high) >> 1;
-      if (list[middle].startCounter < run.startCounter) {
-        low = middle + 1;
-      } else {
-        high = middle;
-      }
-    }
+    final low = list.lowerBoundBy(
+      run.startCounter,
+      (r, t) => r.startCounter.compareTo(t),
+    );
     list.insert(low, run);
   }
 
@@ -286,6 +248,50 @@ class FugueTree<T> {
         );
       }
     });
+  }
+
+  /// Every element in sequence order, tombstones among them, read by following
+  /// the parent and child links instead of [_index].
+  ///
+  /// [_index] is built to mirror this walk, so [forEachNode] and this method
+  /// must always agree. Reading the order both ways is how a test tells them
+  /// apart — that is the only reason this exists. It is `O(n)` and visits every
+  /// run, so nothing on a hot path should call it.
+  List<({FugueElementID id, bool deleted})> structuralSequence() {
+    final result = <({FugueElementID id, bool deleted})>[];
+    // The stack holds frames in reverse visiting order, so the top of the
+    // stack is always what comes next.
+    final stack = <_Frame<T>>[
+      for (final id in _childrenOf(null, FugueSide.right).reversed)
+        _Frame<T>.expand(id),
+      for (final id in _childrenOf(null, FugueSide.left).reversed)
+        _Frame<T>.expand(id),
+    ];
+
+    while (stack.isNotEmpty) {
+      final frame = stack.removeLast();
+
+      final run = frame.run;
+      if (run != null) {
+        for (var offset = 0; offset < run.length; offset++) {
+          result.add((id: run.idAt(offset), deleted: run.deletedAt(offset)));
+        }
+        continue;
+      }
+
+      // A run's left children hang off its first element and its right
+      // children off its last, so the whole run sits between the two.
+      final subtree = _runAt(frame.id!);
+      for (final id in subtree.rightChildren.reversed) {
+        stack.add(_Frame<T>.expand(id));
+      }
+      stack.add(_Frame<T>.emit(subtree));
+      for (final id in subtree.leftChildren.reversed) {
+        stack.add(_Frame<T>.expand(id));
+      }
+    }
+
+    return result;
   }
 
   /// The last-writer-wins stamps of the elements an [update] overwrote.
@@ -806,19 +812,11 @@ class FugueTree<T> {
   }
 
   /// The index at which [id] belongs in the id-sorted [siblings] list.
-  int _siblingInsertionPoint(List<FugueElementID> siblings, FugueElementID id) {
-    var low = 0;
-    var high = siblings.length;
-    while (low < high) {
-      final middle = (low + high) >> 1;
-      if (siblings[middle].compareTo(id) < 0) {
-        low = middle + 1;
-      } else {
-        high = middle;
-      }
-    }
-    return low;
-  }
+  int _siblingInsertionPoint(
+    List<FugueElementID> siblings,
+    FugueElementID id,
+  ) =>
+      siblings.lowerBoundBy(id, (s, t) => s.compareTo(t));
 
   /// Keeps [_index] in sync after [run] has been linked into the tree as the
   /// child at [position] on its side.
@@ -903,197 +901,6 @@ class FugueTree<T> {
     return run;
   }
 
-  // --- Building from a per-element description --------------------------
-
-  /// Rebuilds this empty tree from a per-element description, cutting runs
-  /// wherever the elements allow it.
-  ///
-  /// Two elements share a run under the same rule [_appendToRun] applies: the
-  /// same peer, consecutive counters, the second hanging off the first on the
-  /// right and nothing else hanging there, and no left children of its own.
-  void _buildFromElements(Map<FugueElementID, FugueNodeTriple<T>> elements) {
-    final ordered = <FugueElementID>[];
-    _collectInOrder(elements, ordered);
-
-    final keys = <FugueRun<T>>[];
-    final lengths = <int>[];
-    final liveLengths = <int>[];
-
-    var start = 0;
-    while (start < ordered.length) {
-      final startID = ordered[start];
-      var end = start + 1;
-      while (end < ordered.length &&
-          end - start < maxRunLength &&
-          _continuesRun(elements, ordered[end - 1], ordered[end])) {
-        end++;
-      }
-
-      final first = elements[startID]!;
-      final last = elements[ordered[end - 1]]!;
-      final run = FugueRun<T>(
-        startID: startID,
-        parentID: first.node.parentID,
-        side: first.node.side,
-        values: [
-          for (var i = start; i < end; i++)
-            elements[ordered[i]]!.node.value as T,
-        ],
-        deleted: [
-          for (var i = start; i < end; i++) elements[ordered[i]]!.node.deleted,
-        ],
-      );
-      for (var i = 0; i < first.leftChildren.length; i++) {
-        run.insertChild(first.leftChildren[i], side: FugueSide.left, index: i);
-      }
-      for (var i = 0; i < last.rightChildren.length; i++) {
-        run.insertChild(
-          last.rightChildren[i],
-          side: FugueSide.right,
-          index: i,
-        );
-      }
-      _register(run);
-
-      keys.add(run);
-      lengths.add(run.length);
-      liveLengths.add(run.liveCount);
-      start = end;
-    }
-
-    // The root's own children come straight from the description.
-    final rootTriple = elements[_rootID];
-    if (rootTriple != null) {
-      for (var i = 0; i < rootTriple.leftChildren.length; i++) {
-        _insertChildOf(null, FugueSide.left, i, rootTriple.leftChildren[i]);
-      }
-      for (var i = 0; i < rootTriple.rightChildren.length; i++) {
-        _insertChildOf(null, FugueSide.right, i, rootTriple.rightChildren[i]);
-      }
-    }
-
-    _index.bulkBuild(keys, lengths, liveLengths);
-  }
-
-  /// Whether [next] only continues the run [previous] belongs to.
-  bool _continuesRun(
-    Map<FugueElementID, FugueNodeTriple<T>> elements,
-    FugueElementID previous,
-    FugueElementID next,
-  ) {
-    final before = elements[previous]!;
-    final after = elements[next]!;
-    return next.replicaID == previous.replicaID &&
-        next.counter == previous.counter! + 1 &&
-        after.node.parentID == previous &&
-        after.node.side == FugueSide.right &&
-        after.leftChildren.isEmpty &&
-        before.rightChildren.length == 1;
-  }
-
-  /// In-order traversal of a per-element description, collecting every element
-  /// except the root, tombstones included.
-  void _collectInOrder(
-    Map<FugueElementID, FugueNodeTriple<T>> elements,
-    List<FugueElementID> ordered,
-  ) {
-    final stack = <_TraversalStep>[_TraversalStep(_rootID, emitSelf: false)];
-
-    while (stack.isNotEmpty) {
-      final step = stack.removeLast();
-      final triple = elements[step.id];
-      if (triple == null) {
-        continue;
-      }
-
-      if (step.emitSelf) {
-        if (step.id != _rootID) {
-          ordered.add(step.id);
-        }
-        continue;
-      }
-
-      for (final childID in triple.rightChildren.reversed) {
-        stack.add(_TraversalStep(childID, emitSelf: false));
-      }
-      stack.add(_TraversalStep(step.id, emitSelf: true));
-      for (final childID in triple.leftChildren.reversed) {
-        stack.add(_TraversalStep(childID, emitSelf: false));
-      }
-    }
-  }
-
-  /// Serializes the tree to JSON format
-  ///
-  /// **Per element**, whatever the runs look like: a run is expanded back into
-  /// the chain it stands for, each element carrying the parent, side and
-  /// children it would have had on its own. Two peers that cut their runs
-  /// differently therefore write the same JSON, and [FugueTree.fromJson] reads
-  /// back anything any build wrote.
-  ///
-  /// Carries the [update] stamps next to the elements, because they are state:
-  /// a tree restored without them accepts an update it had already rejected.
-  Map<String, dynamic> toJson() {
-    final nodesJson = <String, dynamic>{
-      _rootID.toString(): FugueNodeTriple<T>(
-        FugueNode<T>(
-          id: _rootID,
-          value: null,
-          parentID: _rootID,
-          side: FugueSide.left,
-          deleted: true,
-        ),
-      ).toJson(),
-    };
-    _writeChildren(nodesJson, _rootID);
-
-    for (final runs in _runs.values) {
-      for (final run in runs) {
-        for (var offset = 0; offset < run.length; offset++) {
-          final id = run.idAt(offset);
-          final isFirst = offset == 0;
-          final isLast = offset == run.length - 1;
-          nodesJson[id.toString()] = <String, dynamic>{
-            'node': FugueNode<T>(
-              id: id,
-              value: run.valueAt(offset),
-              parentID: isFirst ? run.parentID : run.idAt(offset - 1),
-              side: isFirst ? run.side : FugueSide.right,
-              deleted: run.deletedAt(offset),
-            ).toJson(),
-            'leftChildren': isFirst
-                ? [for (final c in run.leftChildren) c.toJson()]
-                : <dynamic>[],
-            'rightChildren': isLast
-                ? [for (final c in run.rightChildren) c.toJson()]
-                : [run.idAt(offset + 1).toJson()],
-          };
-        }
-      }
-    }
-
-    final stampsJson = <String, dynamic>{};
-    for (final entry in _stamps.entries) {
-      stampsJson[entry.key.toString()] = entry.value.toString();
-    }
-
-    return {
-      'nodes': nodesJson,
-      'stamps': stampsJson,
-    };
-  }
-
-  /// Fills in the root's two child arrays, which have no run to come from.
-  void _writeChildren(Map<String, dynamic> nodesJson, FugueElementID id) {
-    final entry = nodesJson[id.toString()] as Map<String, dynamic>;
-    entry['leftChildren'] = [
-      for (final c in _childrenOf(null, FugueSide.left)) c.toJson(),
-    ];
-    entry['rightChildren'] = [
-      for (final c in _childrenOf(null, FugueSide.right)) c.toJson(),
-    ];
-  }
-
   /// Returns a string representation of the tree for debugging
   @override
   String toString() {
@@ -1133,13 +940,15 @@ class FugueTree<T> {
   }
 }
 
-/// One frame of the explicit-stack in-order traversal in [FugueTree].
+/// One frame of the explicit-stack walk in [FugueTree.structuralSequence].
 ///
-/// `emitSelf == false` expands the node (pushing its children and its own
-/// emit frame); `emitSelf == true` visits the node itself.
-class _TraversalStep {
-  _TraversalStep(this.id, {required this.emitSelf});
+/// A frame either expands the subtree rooted at [id], or emits the elements
+/// of [run].
+class _Frame<T> {
+  _Frame.expand(this.id) : run = null;
 
-  final FugueElementID id;
-  final bool emitSelf;
+  _Frame.emit(this.run) : id = null;
+
+  final FugueElementID? id;
+  final FugueRun<T>? run;
 }
