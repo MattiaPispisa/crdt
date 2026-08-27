@@ -119,9 +119,7 @@ base class CRDTORSetHandler<T> extends Handler<ORSetState<T>> {
     final items = value;
     UVarint.write(items.length, out);
     for (final item in items) {
-      final bytes = _valueCodec.encode(item);
-      UVarint.write(bytes.length, out);
-      out.add(bytes);
+      UVarint.writeBytes(_valueCodec.encode(item), out);
     }
     return out.toBytes();
   }
@@ -151,13 +149,13 @@ base class CRDTORSetHandler<T> extends Handler<ORSetState<T>> {
       final countRec = UVarint.read(snap, offset: offset);
       offset = countRec.nextOffset;
       for (var i = 0; i < countRec.value; i += 1) {
-        final lenRec = UVarint.read(snap, offset: offset);
-        offset = lenRec.nextOffset;
-        final end = offset + lenRec.value;
-        state._snapshotOnly.add(
-          _valueCodec.decode(Uint8List.sublistView(snap, offset, end)),
+        final valueRecord = UVarint.readBytes(
+          snap,
+          offset: offset,
+          what: 'OR-set snapshot value',
         );
-        offset = end;
+        state._snapshotOnly.add(_valueCodec.decode(valueRecord.value));
+        offset = valueRecord.nextOffset;
       }
     }
 

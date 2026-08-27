@@ -32,15 +32,12 @@ class _ListInsertOperation<T> extends Operation {
     final index = indexRec.value;
     offset = indexRec.nextOffset;
 
-    final lenRec = UVarint.read(body, offset: offset);
-    final len = lenRec.value;
-    offset = lenRec.nextOffset;
-    final end = offset + len;
-    if (end > body.length) {
-      throw const FormatException('Truncated list insert value');
-    }
-    final valueBytes = Uint8List.sublistView(body, offset, end);
-    final value = handler._valueCodec.decode(valueBytes);
+    final valueRecord = UVarint.readBytes(
+      body,
+      offset: offset,
+      what: 'list insert value',
+    );
+    final value = handler._valueCodec.decode(valueRecord.value);
 
     return _ListInsertOperation<T>(
       id: handler.id,
@@ -66,9 +63,7 @@ class _ListInsertOperation<T> extends Operation {
   Uint8List toBodyBytes() {
     final out = BytesBuilder(copy: false);
     UVarint.write(index, out);
-    final valBytes = valueCodec.encode(value);
-    UVarint.write(valBytes.length, out);
-    out.add(valBytes);
+    UVarint.writeBytes(valueCodec.encode(value), out);
     return out.toBytes();
   }
 }
@@ -163,15 +158,12 @@ class _ListUpdateOperation<T> extends Operation {
     final index = indexRec.value;
     offset = indexRec.nextOffset;
 
-    final lenRec = UVarint.read(body, offset: offset);
-    final len = lenRec.value;
-    offset = lenRec.nextOffset;
-    final end = offset + len;
-    if (end > body.length) {
-      throw const FormatException('Truncated list update value');
-    }
-    final valueBytes = Uint8List.sublistView(body, offset, end);
-    final value = handler._valueCodec.decode(valueBytes);
+    final valueRecord = UVarint.readBytes(
+      body,
+      offset: offset,
+      what: 'list update value',
+    );
+    final value = handler._valueCodec.decode(valueRecord.value);
 
     return _ListUpdateOperation<T>(
       id: handler.id,
@@ -197,9 +189,7 @@ class _ListUpdateOperation<T> extends Operation {
   Uint8List toBodyBytes() {
     final out = BytesBuilder(copy: false);
     UVarint.write(index, out);
-    final valBytes = valueCodec.encode(value);
-    UVarint.write(valBytes.length, out);
-    out.add(valBytes);
+    UVarint.writeBytes(valueCodec.encode(value), out);
     return out.toBytes();
   }
 }

@@ -147,8 +147,7 @@ class ChangeStore {
     // 1. identify and remove old changes
     final ids = _changes.keys.toList();
     for (final id in ids) {
-      final clock = version[id.peerId()];
-      if (clock != null && id.hlc() <= clock) {
+      if (version.hasSeen(id.peerId(), id.hlc())) {
         _changes.remove(id);
         removedIds.add(id);
       }
@@ -336,10 +335,7 @@ class _HandlerIndex {
     if (versionVector == null) {
       return list.toList();
     }
-    return list.where((change) {
-      final clock = versionVector[change.author];
-      return clock == null || change.hlc.happenedAfter(clock);
-    }).toList();
+    return list.newerThan(versionVector).toList();
   }
 
   /// Returns the number of changes for [handlerId] in O(1) (once the index is

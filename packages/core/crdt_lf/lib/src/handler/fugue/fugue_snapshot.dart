@@ -97,9 +97,7 @@ class FugueSnapshot {
       runs.add(startID!.toBytes());
       UVarint.write(values.length, runs);
       runs.add(_packLiveness(live));
-      final blob = encodeRun(values);
-      UVarint.write(blob.length, runs);
-      runs.add(blob);
+      UVarint.writeBytes(encodeRun(values), runs);
       runCount += 1;
     }
 
@@ -188,17 +186,13 @@ class FugueSnapshot {
       );
       offset += livenessBytes;
 
-      final blobLenRec = UVarint.read(bytes, offset: offset);
-      offset = blobLenRec.nextOffset;
-      final blobEnd = offset + blobLenRec.value;
-      if (blobEnd > bytes.length) {
-        throw const FormatException('Truncated Fugue snapshot run');
-      }
-      final values = decodeRun(
-        Uint8List.sublistView(bytes, offset, blobEnd),
-        lengthRec.value,
+      final blobRecord = UVarint.readBytes(
+        bytes,
+        offset: offset,
+        what: 'Fugue snapshot run',
       );
-      offset = blobEnd;
+      final values = decodeRun(blobRecord.value, lengthRec.value);
+      offset = blobRecord.nextOffset;
 
       if (values.length != lengthRec.value) {
         throw FormatException(

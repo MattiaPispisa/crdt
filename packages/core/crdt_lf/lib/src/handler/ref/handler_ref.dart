@@ -62,23 +62,22 @@ class HandlerRefCodec implements ValueCodec<HandlerRef> {
   @override
   Uint8List encode(HandlerRef value) {
     final out = BytesBuilder(copy: false);
-    final typeBytes = utf8.encode(value.type);
-    UVarint.write(typeBytes.length, out);
-    out
-      ..add(typeBytes)
-      ..add(utf8.encode(value.id));
+    UVarint.writeString(value.type, out);
+    out.add(utf8.encode(value.id));
     return out.toBytes();
   }
 
   @override
   HandlerRef decode(Uint8List bytes) {
-    final typeLenRec = UVarint.read(bytes, offset: 0);
-    final typeEnd = typeLenRec.nextOffset + typeLenRec.value;
-    final type = utf8.decode(
-      Uint8List.sublistView(bytes, typeLenRec.nextOffset, typeEnd),
+    final typeRecord = UVarint.readString(
+      bytes,
+      offset: 0,
+      what: 'HandlerRef type',
     );
-    final id = utf8.decode(Uint8List.sublistView(bytes, typeEnd));
-    return HandlerRef(id, type);
+    final id = utf8.decode(
+      Uint8List.sublistView(bytes, typeRecord.nextOffset),
+    );
+    return HandlerRef(id, typeRecord.value);
   }
 }
 

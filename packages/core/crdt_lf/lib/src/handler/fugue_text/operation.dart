@@ -57,14 +57,13 @@ class _FugueTextInsertOperation extends Operation {
       final idRec = FugueElementID.readFromBytes(body, offset: offset);
       offset = idRec.nextOffset;
 
-      final textLenRec = UVarint.read(body, offset: offset);
-      offset = textLenRec.nextOffset;
-      final textEnd = offset + textLenRec.value;
-      if (textEnd > body.length) {
-        throw const FormatException('Truncated Fugue insert text');
-      }
-      final text = Wtf8.decode(Uint8List.sublistView(body, offset, textEnd));
-      offset = textEnd;
+      final textRecord = UVarint.readBytes(
+        body,
+        offset: offset,
+        what: 'Fugue insert text',
+      );
+      final text = Wtf8.decode(textRecord.value);
+      offset = textRecord.nextOffset;
 
       items.add(_FugueInsertItem(id: idRec.value, text: text));
     }
@@ -95,9 +94,7 @@ class _FugueTextInsertOperation extends Operation {
     UVarint.write(items.length, out);
     for (final item in items) {
       out.add(item.id.toBytes());
-      final textBytes = Wtf8.encode(item.text);
-      UVarint.write(textBytes.length, out);
-      out.add(textBytes);
+      UVarint.writeBytes(Wtf8.encode(item.text), out);
     }
     return out.toBytes();
   }
@@ -230,14 +227,13 @@ class _FugueTextUpdateOperation extends Operation {
       final idRec = FugueElementID.readFromBytes(body, offset: offset);
       offset = idRec.nextOffset;
 
-      final textLenRec = UVarint.read(body, offset: offset);
-      offset = textLenRec.nextOffset;
-      final textEnd = offset + textLenRec.value;
-      if (textEnd > body.length) {
-        throw const FormatException('Truncated Fugue update text');
-      }
-      final text = Wtf8.decode(Uint8List.sublistView(body, offset, textEnd));
-      offset = textEnd;
+      final textRecord = UVarint.readBytes(
+        body,
+        offset: offset,
+        what: 'Fugue update text',
+      );
+      final text = Wtf8.decode(textRecord.value);
+      offset = textRecord.nextOffset;
 
       items.add(_FugueUpdateItem(nodeID: idRec.value, text: text));
     }
@@ -258,9 +254,7 @@ class _FugueTextUpdateOperation extends Operation {
     UVarint.write(items.length, out);
     for (final item in items) {
       out.add(item.nodeID.toBytes());
-      final textBytes = Wtf8.encode(item.text);
-      UVarint.write(textBytes.length, out);
-      out.add(textBytes);
+      UVarint.writeBytes(Wtf8.encode(item.text), out);
     }
     return out.toBytes();
   }

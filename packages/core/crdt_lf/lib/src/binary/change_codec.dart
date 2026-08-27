@@ -1,5 +1,6 @@
 import 'dart:typed_data';
 import 'package:crdt_lf/src/binary/varint.dart';
+import 'package:crdt_lf/src/utils/bytes.dart';
 
 /// Versioned binary framing for a list of encoded changes.
 ///
@@ -32,8 +33,7 @@ class ChangeCodec {
     UVarint.write(blobs.length, out);
 
     for (final blob in blobs) {
-      UVarint.write(blob.length, out);
-      out.add(blob);
+      UVarint.writeBytes(blob, out);
     }
 
     return out.toBytes();
@@ -45,10 +45,8 @@ class ChangeCodec {
       throw const FormatException('Invalid change framing (too short)');
     }
 
-    for (var i = 0; i < _magic.length; i += 1) {
-      if (data[i] != _magic[i]) {
-        throw const FormatException('Invalid change framing (bad magic)');
-      }
+    if (!startsWithBytes(data, _magic)) {
+      throw const FormatException('Invalid change framing (bad magic)');
     }
 
     final v = data[_magic.length];
@@ -67,17 +65,13 @@ class ChangeCodec {
     final blobs = <Uint8List>[]..length = 0;
 
     for (var i = 0; i < count; i += 1) {
-      final lenRec = UVarint.read(data, offset: offset);
-      final len = lenRec.value;
-      offset = lenRec.nextOffset;
-
-      final end = offset + len;
-      if (end > data.length) {
-        throw const FormatException('Truncated change blob');
-      }
-
-      blobs.add(Uint8List.sublistView(data, offset, end));
-      offset = end;
+      final blob = UVarint.readBytes(
+        data,
+        offset: offset,
+        what: 'change blob',
+      );
+      blobs.add(blob.value);
+      offset = blob.nextOffset;
     }
 
     if (offset != data.length) {

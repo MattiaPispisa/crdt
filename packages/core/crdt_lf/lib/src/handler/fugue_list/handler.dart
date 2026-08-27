@@ -177,9 +177,7 @@ base class CRDTFugueListHandler<T>
   Uint8List encodeRun(List<T> values) {
     final out = BytesBuilder(copy: false);
     for (final value in values) {
-      final bytes = _valueCodec.encode(value);
-      UVarint.write(bytes.length, out);
-      out.add(bytes);
+      UVarint.writeBytes(_valueCodec.encode(value), out);
     }
     return out.toBytes();
   }
@@ -189,14 +187,13 @@ base class CRDTFugueListHandler<T>
     final values = <T>[];
     var offset = 0;
     for (var i = 0; i < length; i += 1) {
-      final lenRec = UVarint.read(blob, offset: offset);
-      offset = lenRec.nextOffset;
-      final end = offset + lenRec.value;
-      if (end > blob.length) {
-        throw const FormatException('Truncated Fugue list snapshot value');
-      }
-      values.add(_valueCodec.decode(Uint8List.sublistView(blob, offset, end)));
-      offset = end;
+      final valueRecord = UVarint.readBytes(
+        blob,
+        offset: offset,
+        what: 'Fugue list snapshot value',
+      );
+      values.add(_valueCodec.decode(valueRecord.value));
+      offset = valueRecord.nextOffset;
     }
     return values;
   }

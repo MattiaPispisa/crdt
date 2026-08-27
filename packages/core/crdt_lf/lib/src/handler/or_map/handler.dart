@@ -138,13 +138,8 @@ base class CRDTORMapHandler<K, V> extends Handler<ORMapState<K, V>> {
     final entries = value;
     UVarint.write(entries.length, out);
     for (final entry in entries.entries) {
-      final keyBytes = _keyCodec.encode(entry.key);
-      UVarint.write(keyBytes.length, out);
-      out.add(keyBytes);
-
-      final valueBytes = _valueCodec.encode(entry.value);
-      UVarint.write(valueBytes.length, out);
-      out.add(valueBytes);
+      UVarint.writeBytes(_keyCodec.encode(entry.key), out);
+      UVarint.writeBytes(_valueCodec.encode(entry.value), out);
     }
     return out.toBytes();
   }
@@ -174,21 +169,21 @@ base class CRDTORMapHandler<K, V> extends Handler<ORMapState<K, V>> {
       final countRec = UVarint.read(snap, offset: offset);
       offset = countRec.nextOffset;
       for (var i = 0; i < countRec.value; i += 1) {
-        final keyLenRec = UVarint.read(snap, offset: offset);
-        offset = keyLenRec.nextOffset;
-        final keyEnd = offset + keyLenRec.value;
-        final key = _keyCodec.decode(
-          Uint8List.sublistView(snap, offset, keyEnd),
+        final keyRecord = UVarint.readBytes(
+          snap,
+          offset: offset,
+          what: 'OR-map snapshot key',
         );
-        offset = keyEnd;
+        final key = _keyCodec.decode(keyRecord.value);
+        offset = keyRecord.nextOffset;
 
-        final valLenRec = UVarint.read(snap, offset: offset);
-        offset = valLenRec.nextOffset;
-        final valEnd = offset + valLenRec.value;
-        state._snapshotOnly[key] = _valueCodec.decode(
-          Uint8List.sublistView(snap, offset, valEnd),
+        final valueRecord = UVarint.readBytes(
+          snap,
+          offset: offset,
+          what: 'OR-map snapshot value',
         );
-        offset = valEnd;
+        state._snapshotOnly[key] = _valueCodec.decode(valueRecord.value);
+        offset = valueRecord.nextOffset;
       }
     }
 
