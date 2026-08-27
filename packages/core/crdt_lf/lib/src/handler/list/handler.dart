@@ -136,9 +136,7 @@ base class CRDTListHandler<T> extends Handler<List<T>> {
     final items = value;
     UVarint.write(items.length, out);
     for (final item in items) {
-      final bytes = _valueCodec.encode(item);
-      UVarint.write(bytes.length, out);
-      out.add(bytes);
+      UVarint.writeBytes(_valueCodec.encode(item), out);
     }
     return out.toBytes();
   }
@@ -291,13 +289,13 @@ base class CRDTListHandler<T> extends Handler<List<T>> {
     offset = countRec.nextOffset;
     final items = <T>[];
     for (var i = 0; i < countRec.value; i += 1) {
-      final lenRec = UVarint.read(snapshot, offset: offset);
-      offset = lenRec.nextOffset;
-      final end = offset + lenRec.value;
-      items.add(
-        _valueCodec.decode(Uint8List.sublistView(snapshot, offset, end)),
+      final valueRecord = UVarint.readBytes(
+        snapshot,
+        offset: offset,
+        what: 'list snapshot value',
       );
-      offset = end;
+      items.add(_valueCodec.decode(valueRecord.value));
+      offset = valueRecord.nextOffset;
     }
     return items;
   }

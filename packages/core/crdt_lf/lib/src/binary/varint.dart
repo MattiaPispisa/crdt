@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:typed_data';
 
 /// Result of decoding an unsigned varint.
@@ -99,5 +100,57 @@ class UVarint {
     }
 
     throw const FormatException('Truncated varint: end of buffer reached');
+  }
+
+  /// Appends [bytes] to [out], prefixed by its length:
+  /// `[uvarint length][bytes]`.
+  static void writeBytes(List<int> bytes, BytesBuilder out) {
+    write(bytes.length, out);
+    out.add(bytes);
+  }
+
+  /// Reads a length-prefixed byte slice written by [writeBytes], starting at
+  /// [offset].
+  ///
+  /// The slice is a view on [bytes], not a copy. [what] names the field in the
+  /// error message.
+  ///
+  /// Throws a [FormatException] when the slice would run past the end of
+  /// [bytes]. A field is refused whole: half a value decodes into a state no
+  /// other peer holds, and says nothing about it.
+  static ({Uint8List value, int nextOffset}) readBytes(
+    Uint8List bytes, {
+    required int offset,
+    required String what,
+  }) {
+    final lengthRecord = read(bytes, offset: offset);
+    final start = lengthRecord.nextOffset;
+    final end = start + lengthRecord.value;
+    if (end > bytes.length) {
+      throw FormatException('Truncated $what');
+    }
+    return (
+      value: Uint8List.sublistView(bytes, start, end),
+      nextOffset: end,
+    );
+  }
+
+  /// Appends [value] to [out] as length-prefixed UTF-8.
+  static void writeString(String value, BytesBuilder out) {
+    writeBytes(utf8.encode(value), out);
+  }
+
+  /// Reads a length-prefixed UTF-8 string written by [writeString], starting
+  /// at [offset].
+  ///
+  /// [what] names the field in the error message. Throws a [FormatException]
+  /// on a string cut short by the end of [bytes].
+  static ({String value, int nextOffset}) readString(
+    Uint8List bytes, {
+    required int offset,
+    required String what,
+  }) {
+    final record = readBytes(bytes, offset: offset, what: what);
+    return (value: utf8.decode(record.value), nextOffset: record.nextOffset);
   }
 }

@@ -374,12 +374,7 @@ extension _HandlerHelper on Handler<dynamic> {
 
   Uint8List _buildPrefix() {
     final out = BytesBuilder(copy: false);
-    final typeBytes = utf8.encode(handlerType);
-    UVarint.write(typeBytes.length, out);
-    out.add(typeBytes);
-    final idBytes = utf8.encode(id);
-    UVarint.write(idBytes.length, out);
-    out.add(idBytes);
+    OperationEnvelopeCodec.writeEnvelopePrefix(out, handlerType, id);
     return out.toBytes();
   }
 
@@ -388,10 +383,7 @@ extension _HandlerHelper on Handler<dynamic> {
     final prefix = _envelopePrefix;
     // +1 for the kind byte that follows the prefix.
     if (payload.length < prefix.length + 1) return false;
-    for (var i = 0; i < prefix.length; i++) {
-      if (payload[i] != prefix[i]) return false;
-    }
-    return true;
+    return startsWithBytes(payload, prefix);
   }
 }
 

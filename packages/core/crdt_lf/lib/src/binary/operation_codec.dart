@@ -1,4 +1,3 @@
-import 'dart:convert';
 import 'dart:typed_data';
 import 'package:crdt_lf/crdt_lf.dart';
 
@@ -53,6 +52,21 @@ class OperationEnvelope {
 class OperationEnvelopeCodec {
   static const int _stampedFlag = 0x80;
 
+  /// Writes the part of the envelope that identifies the handler:
+  /// `[uvarint typeLen][type utf8][uvarint idLen][id utf8]`.
+  ///
+  /// [encode] starts with these bytes, and a handler matches a change by
+  /// comparing them against the head of its payload without decoding it. Both
+  /// go through here so the two can never drift apart.
+  static void writeEnvelopePrefix(
+    BytesBuilder out,
+    String handlerType,
+    String handlerId,
+  ) {
+    UVarint.writeString(handlerType, out);
+    UVarint.writeString(handlerId, out);
+  }
+
   /// Encodes an [OperationEnvelope] into a byte array.
   ///
   /// [stamped] sets bit 7 of the kind byte. It adds no bytes.
@@ -76,15 +90,8 @@ class OperationEnvelopeCodec {
     }
 
     final out = BytesBuilder(copy: false);
-
-    final handlerTypeBytes = utf8.encode(handlerType);
-    UVarint.write(handlerTypeBytes.length, out);
-    out.add(handlerTypeBytes);
-
-    final handlerIdBytes = utf8.encode(handlerId);
-    UVarint.write(handlerIdBytes.length, out);
+    writeEnvelopePrefix(out, handlerType, handlerId);
     out
-      ..add(handlerIdBytes)
       ..addByte(stamped ? kind | _stampedFlag : kind)
       ..add(body);
 
@@ -97,29 +104,21 @@ class OperationEnvelopeCodec {
   static OperationEnvelope decode(Uint8List bytes) {
     var offset = 0;
 
-    final handlerTypeLenRec = UVarint.read(bytes, offset: offset);
-    final handlerTypeLen = handlerTypeLenRec.value;
-    offset = handlerTypeLenRec.nextOffset;
-    final handlerTypeEnd = offset + handlerTypeLen;
-    if (handlerTypeEnd > bytes.length) {
-      throw const FormatException('Truncated handlerType');
-    }
-    final handlerType = utf8.decode(
-      Uint8List.sublistView(bytes, offset, handlerTypeEnd),
+    final handlerTypeRecord = UVarint.readString(
+      bytes,
+      offset: offset,
+      what: 'handlerType',
     );
-    offset = handlerTypeEnd;
+    final handlerType = handlerTypeRecord.value;
+    offset = handlerTypeRecord.nextOffset;
 
-    final handlerIdLenRec = UVarint.read(bytes, offset: offset);
-    final handlerIdLen = handlerIdLenRec.value;
-    offset = handlerIdLenRec.nextOffset;
-    final handlerIdEnd = offset + handlerIdLen;
-    if (handlerIdEnd > bytes.length) {
-      throw const FormatException('Truncated handlerId');
-    }
-    final handlerId = utf8.decode(
-      Uint8List.sublistView(bytes, offset, handlerIdEnd),
+    final handlerIdRecord = UVarint.readString(
+      bytes,
+      offset: offset,
+      what: 'handlerId',
     );
-    offset = handlerIdEnd;
+    final handlerId = handlerIdRecord.value;
+    offset = handlerIdRecord.nextOffset;
 
     if (offset >= bytes.length) {
       throw const FormatException('Missing operation kind');

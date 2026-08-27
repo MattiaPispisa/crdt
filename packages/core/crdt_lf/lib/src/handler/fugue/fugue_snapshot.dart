@@ -13,7 +13,6 @@ class FugueSnapshotData<T> {
     required this.nodes,
     required this.stamps,
     required this.live,
-    required this.livenessStamps,
     required this.floor,
   });
 
@@ -26,12 +25,6 @@ class FugueSnapshotData<T> {
   /// Which of [nodes] are still in the sequence: one flag per node, in the
   /// same order, so the two are read together.
   final List<bool> live;
-
-  /// The greatest stamp among the commands that deleted each element.
-  ///
-  /// Empty in a blob this build wrote: see `FugueSnapshot.write`. An element
-  /// with no entry loses to any stamp.
-  final Map<FugueElementID, OperationId> livenessStamps;
 
   /// The highest counter each peer is known to have spent.
   final Map<PeerId, int> floor;
@@ -57,6 +50,13 @@ class FugueSnapshotData<T> {
 /// - repeated `livenessCount` times: the same pair
 /// - `floor:` [ElementIdFloor]
 ///
+/// The liveness table is a **hole in the layout**, kept so the byte offsets
+/// stay put. This build writes it empty and skips it on the way in. It used to
+/// carry, per tombstone, the stamp of the command that removed it; nothing ever
+/// read one, because a deletion wins over everything, so the table cost more
+/// than the elements it described. The bits that say which elements are gone
+/// live in each run's `liveness` bitmap, not here.
+///
 /// A **run** is a stretch of elements, adjacent in sequence order, written by
 /// the same peer with consecutive counters. A single peer typing into a
 /// document produces one run for the whole text, so the ids cost a handful of
@@ -78,10 +78,6 @@ class FugueSnapshot {
   ///
   /// [encodeRun] turns the values of one run into a blob; it is the inverse
   /// of the `decodeRun` passed to [read].
-  ///
-  /// [FugueSnapshotData.livenessStamps] comes back empty from anything this
-  /// writes. Nothing reads a liveness stamp, and an entry costs more than the
-  /// element it belongs to.
   static Uint8List write<T>({
     required FugueTree<T> tree,
     required Map<PeerId, int> floor,
@@ -101,9 +97,7 @@ class FugueSnapshot {
       runs.add(startID!.toBytes());
       UVarint.write(values.length, runs);
       runs.add(_packLiveness(live));
-      final blob = encodeRun(values);
-      UVarint.write(blob.length, runs);
-      runs.add(blob);
+      UVarint.writeBytes(encodeRun(values), runs);
       runCount += 1;
     }
 
@@ -127,9 +121,9 @@ class FugueSnapshot {
     out.add(runs.toBytes());
 
     _writeStamps(tree.stamps, out);
-    // liveness stamps are not written by this build but is expected
-    // to prevent a future build from reading them, so we write an empty table.
-    _writeStamps(const {}, out);
+    // The liveness table is a hole in the layout: empty, and only here so the
+    // floor keeps its offset. See the class doc.
+    UVarint.write(0, out);
 
     ElementIdFloor.write(floor, out);
     return out.toBytes();
@@ -192,17 +186,13 @@ class FugueSnapshot {
       );
       offset += livenessBytes;
 
-      final blobLenRec = UVarint.read(bytes, offset: offset);
-      offset = blobLenRec.nextOffset;
-      final blobEnd = offset + blobLenRec.value;
-      if (blobEnd > bytes.length) {
-        throw const FormatException('Truncated Fugue snapshot run');
-      }
-      final values = decodeRun(
-        Uint8List.sublistView(bytes, offset, blobEnd),
-        lengthRec.value,
+      final blobRecord = UVarint.readBytes(
+        bytes,
+        offset: offset,
+        what: 'Fugue snapshot run',
       );
-      offset = blobEnd;
+      final values = decodeRun(blobRecord.value, lengthRec.value);
+      offset = blobRecord.nextOffset;
 
       if (values.length != lengthRec.value) {
         throw FormatException(
@@ -220,15 +210,28 @@ class FugueSnapshot {
     }
 
     final stamps = _readStamps(bytes, offset);
-    final livenessStamps = _readStamps(bytes, stamps.nextOffset);
+    // A blob from an older build can carry entries here. They are stepped over
+    // rather than decoded: the floor comes after them.
+    final afterLiveness = _skipStamps(bytes, stamps.nextOffset);
 
     return FugueSnapshotData<T>(
       nodes: nodes,
       stamps: stamps.value,
       live: live,
-      livenessStamps: livenessStamps.value,
-      floor: ElementIdFloor.read(bytes, offset: livenessStamps.nextOffset),
+      floor: ElementIdFloor.read(bytes, offset: afterLiveness),
     );
+  }
+
+  /// The offset just past the stamp table starting at [offset], without
+  /// building it. The ids are variable-width, so they are still parsed.
+  static int _skipStamps(Uint8List bytes, int offset) {
+    final countRec = UVarint.read(bytes, offset: offset);
+    var cursor = countRec.nextOffset;
+    for (var i = 0; i < countRec.value; i += 1) {
+      cursor = FugueElementID.readFromBytes(bytes, offset: cursor).nextOffset +
+          OperationId.byteLength;
+    }
+    return cursor;
   }
 
   static _StampsReadResult _readStamps(Uint8List bytes, int offset) {

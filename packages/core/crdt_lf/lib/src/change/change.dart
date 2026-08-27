@@ -1,6 +1,8 @@
 import 'dart:typed_data';
 
 import 'package:crdt_lf/crdt_lf.dart';
+import 'package:crdt_lf/src/utils/bytes.dart';
+import 'package:crdt_lf/src/utils/fnv1a.dart';
 import 'package:hlc_dart/hlc_dart.dart';
 
 /// Change implementation for CRDT.
@@ -82,6 +84,10 @@ class Change {
       throw const FormatException('Truncated Change deps');
     }
 
+    // Read by hand rather than through [UVarint.readBytes]: this runs once per
+    // change on import, and the helper would allocate a record and a view per
+    // change where this needs neither. Measured at +81% on the
+    // `Change fromBytes x1000` benchmark.
     final payloadLenRec = UVarint.read(data, offset: idDepsEnd);
     final payloadLen = payloadLenRec.value;
     final payloadStart = payloadLenRec.nextOffset;
@@ -174,9 +180,6 @@ class Change {
 
   // Decoded fields are cached lazily to avoid re-parsing on every access.
   late final OperationId _id = OperationId.fromUint8List(bytes);
-  late final PeerId _author = PeerId.fromUint8List(bytes);
-  late final HybridLogicalClock _hlc =
-      HybridLogicalClock.fromUint8List(bytes, offset: 16);
   late final Set<OperationId> _deps = _parseDeps();
   late final OpIdKey _key = OpIdKey.view(bytes);
 
@@ -198,7 +201,7 @@ class Change {
   OpIdKey get key => _key;
 
   /// The peer that created this change.
-  PeerId get author => _author;
+  PeerId get author => _id.peerId;
 
   /// The dependencies of this change (decoded).
   Set<OperationId> get deps => _deps;
@@ -217,7 +220,7 @@ class Change {
   }
 
   /// The timestamp when this change was created.
-  HybridLogicalClock get hlc => _hlc;
+  HybridLogicalClock get hlc => _id.hlc;
 
   /// Encodes this change into a self-describing byte buffer.
   ///
@@ -229,9 +232,7 @@ class Change {
     out.add(
       Uint8List.sublistView(bytes, 0, meta[_metaPayloadOffset]),
     );
-    final payloadLen = meta[_metaPayloadLength];
-    UVarint.write(payloadLen, out);
-    out.add(payloadBytes());
+    UVarint.writeBytes(payloadBytes(), out);
     return out.toBytes();
   }
 
@@ -261,40 +262,12 @@ class Change {
       return false;
     }
 
-    if (other.meta.length != meta.length) {
-      return false;
-    }
-    for (var i = 0; i < meta.length; i += 1) {
-      if (other.meta[i] != meta[i]) {
-        return false;
-      }
-    }
-
-    if (other.bytes.length != bytes.length) {
-      return false;
-    }
-    for (var i = 0; i < bytes.length; i += 1) {
-      if (other.bytes[i] != bytes[i]) {
-        return false;
-      }
-    }
-    return true;
+    return bytesEqual(other.meta, meta) && bytesEqual(other.bytes, bytes);
   }
 
   late final int _hashCode = _computeHashCode();
 
-  int _computeHashCode() {
-    var hash = 0x811C9DC5;
-    for (var i = 0; i < meta.length; i += 1) {
-      hash ^= meta[i];
-      hash = (hash * 0x01000193) & 0xFFFFFFFF;
-    }
-    for (var i = 0; i < bytes.length; i += 1) {
-      hash ^= bytes[i];
-      hash = (hash * 0x01000193) & 0xFFFFFFFF;
-    }
-    return hash;
-  }
+  int _computeHashCode() => fnv1a32(bytes, seed: fnv1a32(meta));
 
   /// Returns a hash code for this Change.
   @override
@@ -342,12 +315,6 @@ extension ChangeIterable on Iterable<Change> {
   /// not present in the provided vector.
   /// {@endtemplate}
   Iterable<Change> newerThan(VersionVector versionVector) {
-    return where((change) {
-      final hlc = versionVector[change.id.peerId];
-      if (hlc == null) {
-        return true;
-      }
-      return change.hlc.compareTo(hlc) > 0;
-    });
+    return where((change) => !versionVector.hasSeen(change.author, change.hlc));
   }
 }

@@ -26,14 +26,12 @@ class _RegisterSetOperation<T> extends Operation {
     CRDTRegisterHandler<T> handler,
     Uint8List body,
   ) {
-    final lenRec = UVarint.read(body, offset: 0);
-    final end = lenRec.nextOffset + lenRec.value;
-    if (end > body.length) {
-      throw const FormatException('Truncated register set value');
-    }
-    final value = handler._valueCodec.decode(
-      Uint8List.sublistView(body, lenRec.nextOffset, end),
+    final valueRecord = UVarint.readBytes(
+      body,
+      offset: 0,
+      what: 'register set value',
     );
+    final value = handler._valueCodec.decode(valueRecord.value);
     return _RegisterSetOperation<T>.fromHandler(handler, value: value);
   }
 
@@ -43,9 +41,7 @@ class _RegisterSetOperation<T> extends Operation {
   @override
   Uint8List toBodyBytes() {
     final out = BytesBuilder(copy: false);
-    final valueBytes = valueCodec.encode(value);
-    UVarint.write(valueBytes.length, out);
-    out.add(valueBytes);
+    UVarint.writeBytes(valueCodec.encode(value), out);
     return out.toBytes();
   }
 

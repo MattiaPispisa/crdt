@@ -4,7 +4,6 @@ import 'package:benchmark_infrastructure/benchmark_infrastructure.dart';
 import 'package:crdt_lf/crdt_lf.dart';
 import 'package:crdt_lf/src/algorithm/fugue/tree.dart';
 import 'package:crdt_lf/src/algorithm/fugue/value_node.dart';
-import 'package:hlc_dart/hlc_dart.dart';
 
 const _kElements = 50000;
 
@@ -105,10 +104,7 @@ class FugueTreeValuesWithTombstonesBenchmark extends TimedBenchmarkBase {
     _tree = _appendedTree(_kElements);
     for (var i = 0; i < _kElements; i++) {
       if (i % 10 != 0) {
-        _tree.delete(
-          FugueElementID(_peer, i),
-          stamp: OperationId(_peer, HybridLogicalClock(l: i, c: 0)),
-        );
+        _tree.delete(FugueElementID(_peer, i));
       }
     }
   }

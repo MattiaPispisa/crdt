@@ -35,26 +35,20 @@ class _ORMapPutOperation<K, V> extends Operation {
   ) {
     var offset = 0;
 
-    final keyLenRec = UVarint.read(body, offset: offset);
-    final keyLen = keyLenRec.value;
-    offset = keyLenRec.nextOffset;
-    final keyEnd = offset + keyLen;
-    if (keyEnd > body.length) {
-      throw const FormatException('Truncated OR-Map put key');
-    }
-    final keyBytes = Uint8List.sublistView(body, offset, keyEnd);
-    final key = handler._keyCodec.decode(keyBytes);
-    offset = keyEnd;
+    final keyRecord = UVarint.readBytes(
+      body,
+      offset: offset,
+      what: 'OR-Map put key',
+    );
+    final key = handler._keyCodec.decode(keyRecord.value);
+    offset = keyRecord.nextOffset;
 
-    final valLenRec = UVarint.read(body, offset: offset);
-    final valLen = valLenRec.value;
-    offset = valLenRec.nextOffset;
-    final valEnd = offset + valLen;
-    if (valEnd > body.length) {
-      throw const FormatException('Truncated OR-Map put value');
-    }
-    final valueBytes = Uint8List.sublistView(body, offset, valEnd);
-    final value = handler._valueCodec.decode(valueBytes);
+    final valueRecord = UVarint.readBytes(
+      body,
+      offset: offset,
+      what: 'OR-Map put value',
+    );
+    final value = handler._valueCodec.decode(valueRecord.value);
 
     return _ORMapPutOperation<K, V>(
       id: handler.id,
@@ -75,13 +69,8 @@ class _ORMapPutOperation<K, V> extends Operation {
   Uint8List toBodyBytes() {
     final out = BytesBuilder(copy: false);
 
-    final keyBytes = keyCodec.encode(key);
-    UVarint.write(keyBytes.length, out);
-    out.add(keyBytes);
-
-    final valueBytes = valueCodec.encode(value);
-    UVarint.write(valueBytes.length, out);
-    out.add(valueBytes);
+    UVarint.writeBytes(keyCodec.encode(key), out);
+    UVarint.writeBytes(valueCodec.encode(value), out);
 
     return out.toBytes();
   }
@@ -128,16 +117,13 @@ class _ORMapRemoveOperation<K, V> extends Operation {
     Uint8List body,
   ) {
     var offset = 0;
-    final keyLenRec = UVarint.read(body, offset: offset);
-    final keyLen = keyLenRec.value;
-    offset = keyLenRec.nextOffset;
-    final keyEnd = offset + keyLen;
-    if (keyEnd > body.length) {
-      throw const FormatException('Truncated OR-Map remove key');
-    }
-    final keyBytes = Uint8List.sublistView(body, offset, keyEnd);
-    final key = handler._keyCodec.decode(keyBytes);
-    offset = keyEnd;
+    final keyRecord = UVarint.readBytes(
+      body,
+      offset: offset,
+      what: 'OR-Map remove key',
+    );
+    final key = handler._keyCodec.decode(keyRecord.value);
+    offset = keyRecord.nextOffset;
 
     final countRec = UVarint.read(body, offset: offset);
     final count = countRec.value;
@@ -173,9 +159,7 @@ class _ORMapRemoveOperation<K, V> extends Operation {
   Uint8List toBodyBytes() {
     final out = BytesBuilder(copy: false);
 
-    final keyBytes = keyCodec.encode(key);
-    UVarint.write(keyBytes.length, out);
-    out.add(keyBytes);
+    UVarint.writeBytes(keyCodec.encode(key), out);
 
     UVarint.write(tags.length, out);
     for (final t in tags) {

@@ -17,33 +17,6 @@ void main() {
       expect(tree.values(), isEmpty);
     });
 
-    test('fromJson creates tree from JSON', () {
-      final json = {
-        'nodes': {
-          'null': {
-            'node': {
-              'id': {'replicaID': '', 'counter': null},
-              'value': null,
-              'parentID': {'replicaID': '', 'counter': null},
-              'side': 'left',
-            },
-            'leftChildren': <dynamic>[],
-            'rightChildren': <dynamic>[],
-          },
-        },
-      };
-
-      final tree = FugueTree<dynamic>.fromJson(json);
-      expect(tree.values(), isEmpty);
-    });
-
-    test('toJson serializes tree to JSON', () {
-      final tree = FugueTree<dynamic>.empty();
-      final json = tree.toJson();
-      expect(json, isA<Map<String, dynamic>>());
-      expect(json['nodes'], isA<Map<String, dynamic>>());
-    });
-
     test('toString returns tree representation', () {
       final tree = FugueTree<dynamic>.empty();
       final str = tree.toString();
@@ -131,7 +104,7 @@ void main() {
         ..insert(newID: a, value: 'A', leftOrigin: nullID, rightOrigin: nullID)
         ..insert(newID: b, value: 'B', leftOrigin: a, rightOrigin: nullID)
         ..insert(newID: x, value: 'X', leftOrigin: a, rightOrigin: b)
-        ..delete(a, stamp: _stamp(peerId, 1));
+        ..delete(a);
 
       expect(tree.values(), equals(['X', 'B']));
 
@@ -175,7 +148,7 @@ void main() {
 
       expect(tree.values(), equals(['test']));
 
-      tree.delete(nodeId, stamp: _stamp(peerId, 1));
+      tree.delete(nodeId);
       expect(tree.values(), isEmpty);
     });
 
@@ -271,7 +244,7 @@ void main() {
       expect(tree.values(), equals(['a', 'b', 'c']));
 
       // Delete middle value
-      tree.delete(FugueElementID(peerId, 2), stamp: _stamp(peerId, 1));
+      tree.delete(FugueElementID(peerId, 2));
       expect(tree.values(), equals(['a', 'c']));
     });
 
@@ -503,7 +476,7 @@ void main() {
       // A deletion is monotone: whichever way the two are ordered, the element
       // stays gone.
       test('a tombstone is never brought back, in either order', () {
-        final deleteFirst = abc()..delete(b, stamp: _stamp(peerId, 1));
+        final deleteFirst = abc()..delete(b);
         expect(
           deleteFirst.update(nodeID: b, value: 'B2', stamp: _stamp(peerId, 10)),
           isFalse,
@@ -511,7 +484,7 @@ void main() {
 
         final updateFirst = abc()
           ..update(nodeID: b, value: 'B2', stamp: _stamp(peerId, 10))
-          ..delete(b, stamp: _stamp(peerId, 1));
+          ..delete(b);
 
         expect(deleteFirst.values(), equals(updateFirst.values()));
         expect(deleteFirst.values(), equals(['A', 'C']));
@@ -525,7 +498,7 @@ void main() {
           () {
         final tree = abc()
           ..update(nodeID: b, value: 'B2', stamp: _stamp(peerId, 10))
-          ..delete(b, stamp: _stamp(peerId, 1));
+          ..delete(b);
 
         expect(
           tree.update(nodeID: b, value: 'B3', stamp: _stamp(peerId, 30)),
@@ -533,47 +506,19 @@ void main() {
         );
         expect(tree.values(), equals(['A', 'C']));
         expect(tree.stamps[b], equals(_stamp(peerId, 10)));
-        expect(tree.livenessStamps[b], equals(_stamp(peerId, 1)));
       });
 
-      // Nothing reads the liveness stamp yet, but it has to be the same on
-      // every peer the day something does. Arrival order is not: the Fugue
-      // handlers fold changes as they turn up, and replay orders them by
-      // clock and peer.
-      test('two deletes of the same node keep the greater stamp, either way',
-          () {
-        final low = _stamp(peerId, 5);
-        final high = _stamp(peerId, 9);
+      // A deletion carries no stamp, because it needs none: it wins over
+      // everything, so the second one has nothing left to settle.
+      test('deleting the same node twice changes nothing', () {
+        final tree = abc()
+          ..delete(b)
+          ..delete(b);
 
-        final lowFirst = abc()
-          ..delete(b, stamp: low)
-          ..delete(b, stamp: high);
-        final highFirst = abc()
-          ..delete(b, stamp: high)
-          ..delete(b, stamp: low);
-
-        expect(lowFirst.livenessStamps[b], equals(high));
-        expect(highFirst.livenessStamps[b], equals(high));
-        expect(lowFirst.values(), equals(highFirst.values()));
-      });
-
-      // Two peers can mint the same clock, and then the peer is all that is
-      // left to settle it.
-      test('the peer settles two deletes carrying the same clock', () {
-        final lowPeer = PeerId.parse('00000000-0000-4000-8000-00000000000a');
-        final highPeer = PeerId.parse('00000000-0000-4000-8000-00000000000b');
-        final fromLow = _stamp(lowPeer, 5);
-        final fromHigh = _stamp(highPeer, 5);
-
-        final lowFirst = abc()
-          ..delete(b, stamp: fromLow)
-          ..delete(b, stamp: fromHigh);
-        final highFirst = abc()
-          ..delete(b, stamp: fromHigh)
-          ..delete(b, stamp: fromLow);
-
-        expect(lowFirst.livenessStamps[b], equals(fromHigh));
-        expect(highFirst.livenessStamps[b], equals(fromHigh));
+        expect(tree.values(), equals(['A', 'C']));
+        expect(tree.liveLength, equals(2));
+        expect(tree.findNextNode(a), equals(b));
+        expect(tree.liveIndexAfter(b), equals(1));
       });
 
       // Nothing about liveness or traversal order changes, so the positional
@@ -592,21 +537,6 @@ void main() {
         tree.update(nodeID: b, value: 'B2', stamp: _stamp(peerId, 10));
 
         expect(queries(), equals(before));
-      });
-
-      test('a json round-trip keeps the stamps, so a stale update still loses',
-          () {
-        final tree = abc()
-          ..update(nodeID: b, value: 'B2', stamp: _stamp(peerId, 20));
-
-        final restored = FugueTree<String>.fromJson(tree.toJson());
-        expect(restored.values(), equals(['A', 'B2', 'C']));
-
-        expect(
-          restored.update(nodeID: b, value: 'stale', stamp: _stamp(peerId, 10)),
-          isFalse,
-        );
-        expect(restored.values(), equals(['A', 'B2', 'C']));
       });
     });
 
@@ -740,7 +670,7 @@ void main() {
 
     test(
         'randomized differential: index agrees with the traversal oracle '
-        'through inserts, deletes, updates and a json round-trip', () {
+        'through inserts, deletes and updates', () {
       final rng = Random(424242);
       final peerId = PeerId.parse('4e91a152-582f-4f46-8944-c2c2e8b217ff');
       final tree = FugueTree<String>.empty();
@@ -750,44 +680,16 @@ void main() {
       FugueElementID nextId() => FugueElementID(peerId, counter++);
 
       // Everything the tree exposes about order — `values`, `nodes`,
-      // `findNodeAtPosition`, `findNextNode` — is now served by the positional
-      // index, so the oracle has to come from somewhere else: an in-order walk
-      // of the serialized tree, which is the structure the index mirrors.
-      List<String> structuralSequence(FugueTree<String> t) {
-        final nodesJson = t.toJson()['nodes']! as Map<String, dynamic>;
-        final sequence = <String>[];
-        void visit(String id) {
-          final triple = nodesJson[id]! as Map<String, dynamic>;
-          for (final child in triple['leftChildren']! as List<dynamic>) {
-            visit(
-              FugueElementID.fromJson(child as Map<String, dynamic>).toString(),
-            );
-          }
-          if (id != 'null') {
-            sequence.add(id);
-          }
-          for (final child in triple['rightChildren']! as List<dynamic>) {
-            visit(
-              FugueElementID.fromJson(child as Map<String, dynamic>).toString(),
-            );
-          }
-        }
-
-        visit('null');
-        return sequence;
-      }
-
+      // `findNodeAtPosition`, `findNextNode` — is served by the positional
+      // index, so the oracle has to come from somewhere else:
+      // `structuralSequence` walks the parent and child links, which is the
+      // structure the index mirrors.
       void checkAgainstOracle(FugueTree<String> t, int step) {
-        final nodesJson = t.toJson()['nodes']! as Map<String, dynamic>;
-        final live = <String>[];
-        for (final id in structuralSequence(t)) {
-          final triple = nodesJson[id]! as Map<String, dynamic>;
-          final node = triple['node']! as Map<String, dynamic>;
+        final live = <String>[
           // A tombstone keeps its value, so the flag is what says it is gone.
-          if (node['deleted'] != true) {
-            live.add(id);
-          }
-        }
+          for (final element in t.structuralSequence())
+            if (!element.deleted) element.id.toString(),
+        ];
 
         expect(
           t.nodes().map((n) => n.id.toString()).toList(),
@@ -813,12 +715,12 @@ void main() {
       // `findNextNode` must also walk tombstones, which the live oracle above
       // cannot see, so it is checked against the full structural sequence.
       void checkSuccessorsAgainstOracle(FugueTree<String> t, int step) {
-        final sequence = structuralSequence(t);
+        final sequence = t.structuralSequence();
         for (var i = 0; i < sequence.length; i++) {
           expect(
-            t.findNextNode(FugueElementID.parse(sequence[i])).toString(),
-            i + 1 < sequence.length ? sequence[i + 1] : 'null',
-            reason: 'successor of ${sequence[i]} at step $step',
+            t.findNextNode(sequence[i].id).toString(),
+            i + 1 < sequence.length ? sequence[i + 1].id.toString() : 'null',
+            reason: 'successor of ${sequence[i].id} at step $step',
           );
         }
       }
@@ -845,10 +747,7 @@ void main() {
           );
           created.add(id);
         } else if (op < 8) {
-          tree.delete(
-            live[rng.nextInt(live.length)].id,
-            stamp: _stamp(peerId, step),
-          );
+          tree.delete(live[rng.nextInt(live.length)].id);
         } else {
           // A strictly growing clock, so every update wins and the value the
           // oracle sees is the one just written.
@@ -866,12 +765,139 @@ void main() {
         }
       }
       checkSuccessorsAgainstOracle(tree, 1500);
+    });
 
-      // A json round-trip rebuilds the index and reproduces the same sequence.
-      final restored = FugueTree<String>.fromJson(tree.toJson());
-      final oracle = tree.nodes().map((n) => n.id).toList();
-      expect(restored.nodes().map((n) => n.id).toList(), oracle);
-      checkAgainstOracle(restored, -1);
+    // Runs are a representation choice, so what they must never do is change
+    // an answer. These schedules push the grouping into its awkward shapes —
+    // long runs cut in the middle, runs shot full of tombstones — and check
+    // the element-level queries against a plain list.
+    group('runs', () {
+      final peerId = PeerId.parse('4e91a152-582f-4f46-8944-c2c2e8b217ff');
+      final other = PeerId.parse('ee121333-c65b-4afc-b226-4ef116df3432');
+
+      /// Types [count] elements one after another, the way a text field does.
+      FugueTree<String> typed(int count) {
+        final tree = FugueTree<String>.empty();
+        var left = FugueElementID.nullID();
+        for (var i = 0; i < count; i++) {
+          final id = FugueElementID(peerId, i);
+          tree.insert(
+            newID: id,
+            value: '$i',
+            leftOrigin: left,
+            rightOrigin: FugueElementID.nullID(),
+          );
+          left = id;
+        }
+        return tree;
+      }
+
+      /// Every positional query the tree answers, against [expected].
+      void expectSequence(FugueTree<String> tree, List<String> expected) {
+        expect(tree.values(), equals(expected));
+        expect(tree.liveLength, equals(expected.length));
+
+        final ids = tree.nodes().map((n) => n.id).toList();
+        expect(ids, hasLength(expected.length));
+        for (var i = 0; i < expected.length; i++) {
+          expect(
+            tree.findNodeAtPosition(i),
+            equals(ids[i]),
+            reason: 'findNodeAtPosition($i)',
+          );
+          expect(
+            tree.liveIndexAfter(ids[i]),
+            equals(i + 1),
+            reason: 'liveIndexAfter of the element at $i',
+          );
+        }
+        expect(tree.findNodeAtPosition(expected.length).isNull, isTrue);
+        expect(
+          tree.findNodesInRange(0, expected.length),
+          equals(ids),
+          reason: 'findNodesInRange over the whole sequence',
+        );
+      }
+
+      test('sequential typing collapses into runs', () {
+        final tree = typed(500);
+
+        expectSequence(tree, [for (var i = 0; i < 500; i++) '$i']);
+        // One run per [FugueTree.maxRunLength] elements, and nothing else.
+        expect(tree.runCount, equals((500 / FugueTree.maxRunLength).ceil()));
+      });
+
+      // The reason this tree lets a run mix live elements and tombstones,
+      // where Yjs only merges items that are all one or all the other.
+      test('deleting inside a run keeps the run whole', () {
+        final tree = typed(300);
+        final runsBefore = tree.runCount;
+
+        for (var i = 0; i < 300; i += 3) {
+          tree.delete(FugueElementID(peerId, i));
+        }
+
+        expectSequence(tree, [
+          for (var i = 0; i < 300; i++)
+            if (i % 3 != 0) '$i',
+        ]);
+        expect(tree.runCount, equals(runsBefore));
+      });
+
+      test('split-heavy: repeated inserts into the middle of a run', () {
+        final tree = typed(200);
+        final expected = [for (var i = 0; i < 200; i++) '$i'];
+
+        for (var step = 0; step < 200; step++) {
+          final at = expected.length ~/ 2;
+          final leftOrigin = tree.findNodeAtPosition(at - 1);
+          tree.insert(
+            newID: FugueElementID(other, step),
+            value: 'm$step',
+            leftOrigin: leftOrigin,
+            rightOrigin: tree.findNextNode(leftOrigin),
+          );
+          expected.insert(at, 'm$step');
+        }
+
+        expectSequence(tree, expected);
+      });
+
+      test('fragmentation-heavy: scattered single deletes', () {
+        final rng = Random(9781);
+        final tree = typed(400);
+        final expected = [for (var i = 0; i < 400; i++) '$i'];
+
+        for (var step = 0; step < 150; step++) {
+          final at = rng.nextInt(expected.length);
+          tree.delete(tree.findNodeAtPosition(at));
+          expected.removeAt(at);
+        }
+
+        expectSequence(tree, expected);
+      });
+
+      // Where the runs fall is local, so two peers holding the same sequence
+      // can disagree about it. Here one of them had to cut a run to make room
+      // for an element that is gone again; the other never saw it.
+      test('cutting a run changes nothing a reader can see', () {
+        final straight = typed(200);
+        final cut = typed(200);
+
+        final anchor = cut.findNodeAtPosition(99);
+        final foreign = FugueElementID(other, 0);
+        cut
+          ..insert(
+            newID: foreign,
+            value: 'z',
+            leftOrigin: anchor,
+            rightOrigin: cut.findNextNode(anchor),
+          )
+          ..delete(foreign);
+
+        expect(cut.runCount, greaterThan(straight.runCount));
+        expectSequence(cut, straight.values());
+      });
     });
   });
 }

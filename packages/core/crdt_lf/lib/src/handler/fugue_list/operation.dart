@@ -59,16 +59,13 @@ class _FugueListInsertOperation<T> extends Operation {
       final idRec = FugueElementID.readFromBytes(body, offset: offset);
       offset = idRec.nextOffset;
 
-      final valLenRec = UVarint.read(body, offset: offset);
-      offset = valLenRec.nextOffset;
-      final valEnd = offset + valLenRec.value;
-      if (valEnd > body.length) {
-        throw const FormatException('Truncated Fugue list insert value');
-      }
-      final value = handler._valueCodec.decode(
-        Uint8List.sublistView(body, offset, valEnd),
+      final valueRecord = UVarint.readBytes(
+        body,
+        offset: offset,
+        what: 'Fugue list insert value',
       );
-      offset = valEnd;
+      final value = handler._valueCodec.decode(valueRecord.value);
+      offset = valueRecord.nextOffset;
 
       items.add(_FugueListInsertItem<T>(id: idRec.value, value: value));
     }
@@ -103,9 +100,7 @@ class _FugueListInsertOperation<T> extends Operation {
     UVarint.write(items.length, out);
     for (final item in items) {
       out.add(item.id.toBytes());
-      final valBytes = valueCodec.encode(item.value);
-      UVarint.write(valBytes.length, out);
-      out.add(valBytes);
+      UVarint.writeBytes(valueCodec.encode(item.value), out);
     }
     return out.toBytes();
   }
@@ -240,16 +235,13 @@ class _FugueListUpdateOperation<T> extends Operation {
       final idRec = FugueElementID.readFromBytes(body, offset: offset);
       offset = idRec.nextOffset;
 
-      final valLenRec = UVarint.read(body, offset: offset);
-      offset = valLenRec.nextOffset;
-      final valEnd = offset + valLenRec.value;
-      if (valEnd > body.length) {
-        throw const FormatException('Truncated Fugue list update value');
-      }
-      final value = handler._valueCodec.decode(
-        Uint8List.sublistView(body, offset, valEnd),
+      final valueRecord = UVarint.readBytes(
+        body,
+        offset: offset,
+        what: 'Fugue list update value',
       );
-      offset = valEnd;
+      final value = handler._valueCodec.decode(valueRecord.value);
+      offset = valueRecord.nextOffset;
 
       items.add(_FugueListUpdateItem<T>(nodeID: idRec.value, value: value));
     }
@@ -274,9 +266,7 @@ class _FugueListUpdateOperation<T> extends Operation {
     UVarint.write(items.length, out);
     for (final item in items) {
       out.add(item.nodeID.toBytes());
-      final valBytes = valueCodec.encode(item.value);
-      UVarint.write(valBytes.length, out);
-      out.add(valBytes);
+      UVarint.writeBytes(valueCodec.encode(item.value), out);
     }
     return out.toBytes();
   }

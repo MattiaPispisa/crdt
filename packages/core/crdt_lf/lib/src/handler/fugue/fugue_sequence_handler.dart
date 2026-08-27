@@ -121,7 +121,6 @@ abstract base class FugueSequenceHandler<T, V, S extends FugueState<T, V>>
     state._tree.bulkSeed(
       seed.nodes,
       seed.stamps,
-      livenessStamps: seed.livenessStamps,
       live: seed.live,
     );
     for (final operation in operations()) {
@@ -150,18 +149,16 @@ abstract base class FugueSequenceHandler<T, V, S extends FugueState<T, V>>
   int get elementCount => cachedOrComputedState()._tree.liveLength;
 
   /// Deletes [count] elements starting at [index].
+  ///
+  /// A range that runs off the end deletes what it reaches. A negative [index]
+  /// starts at `0`, and the slots before it come off [count].
   void delete(int index, int count) {
     final state = cachedOrComputedState();
 
-    // Collect targets first to avoid index drift while deleting.
-    final targets = <FugueElementID>[];
-    for (var i = 0; i < count; i++) {
-      final nodeID = state._tree.findNodeAtPosition(index + i);
-      if (!nodeID.isNull) {
-        targets.add(nodeID);
-      }
-    }
+    final from = index < 0 ? 0 : index;
+    final take = index < 0 ? count + index : count;
 
+    final targets = state._tree.findNodesInRange(from, take);
     if (targets.isEmpty) {
       return;
     }
@@ -241,7 +238,6 @@ abstract base class FugueSequenceHandler<T, V, S extends FugueState<T, V>>
         nodes: const [],
         stamps: const {},
         live: const [],
-        livenessStamps: const {},
         floor: const {},
       );
     }

@@ -124,9 +124,7 @@ base class CRDTRegisterHandler<T> extends Handler<T> {
       return out.toBytes();
     }
     out.addByte(1); // set
-    final valueBytes = _valueCodec.encode(current);
-    UVarint.write(valueBytes.length, out);
-    out.add(valueBytes);
+    UVarint.writeBytes(_valueCodec.encode(current), out);
     return out.toBytes();
   }
 
@@ -146,13 +144,12 @@ base class CRDTRegisterHandler<T> extends Handler<T> {
     if (snapshot[offset] == 0) {
       return null;
     }
-    final lenRec = UVarint.read(snapshot, offset: offset + 1);
-    final end = lenRec.nextOffset + lenRec.value;
-    if (end > snapshot.length) {
-      throw const FormatException('Truncated register snapshot value');
-    }
     return _valueCodec.decode(
-      Uint8List.sublistView(snapshot, lenRec.nextOffset, end),
+      UVarint.readBytes(
+        snapshot,
+        offset: offset + 1,
+        what: 'register snapshot value',
+      ).value,
     );
   }
 

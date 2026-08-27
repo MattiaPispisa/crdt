@@ -2,6 +2,7 @@ import 'dart:typed_data';
 
 import 'package:crdt_lf/src/operation/id.dart';
 import 'package:crdt_lf/src/peer_id.dart';
+import 'package:crdt_lf/src/utils/fnv1a.dart';
 import 'package:hlc_dart/hlc_dart.dart';
 
 /// Packed key representation for an [OperationId].
@@ -119,15 +120,11 @@ class OpIdKey implements Comparable<OpIdKey> {
   @override
   int get hashCode => _hashCode;
 
-  int _computeHashCode() {
-    // FNV-1a 32-bit, small + fast for 24 bytes.
-    var hash = 0x811C9DC5;
-    for (var i = 0; i < OperationId.byteLength; i += 1) {
-      hash ^= _bytes[_offset + i];
-      hash = (hash * 0x01000193) & 0xFFFFFFFF;
-    }
-    return hash;
-  }
+  int _computeHashCode() => fnv1a32(
+        _bytes,
+        start: _offset,
+        end: _offset + OperationId.byteLength,
+      );
 
   @override
   String toString() {

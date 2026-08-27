@@ -439,9 +439,7 @@ base class CRDTFugueMovableListHandler<T>
         ..add(element.positionStamp.toUint8List())
         ..add(element.valueStamp.toUint8List());
 
-      final valBytes = _valueCodec.encode(element.value);
-      UVarint.write(valBytes.length, out);
-      out.add(valBytes);
+      UVarint.writeBytes(_valueCodec.encode(element.value), out);
     }
     ElementIdFloor.write(elementIdFloorForSnapshot(), out);
     return out.toBytes();
@@ -493,18 +491,13 @@ base class CRDTFugueMovableListHandler<T>
       );
       offset += OperationId.byteLength;
 
-      final valLenRec = UVarint.read(snapshot, offset: offset);
-      offset = valLenRec.nextOffset;
-      final valEnd = offset + valLenRec.value;
-      if (valEnd > snapshot.length) {
-        throw const FormatException(
-          'Truncated movable list snapshot value',
-        );
-      }
-      final value = _valueCodec.decode(
-        Uint8List.sublistView(snapshot, offset, valEnd),
+      final valueRecord = UVarint.readBytes(
+        snapshot,
+        offset: offset,
+        what: 'movable list snapshot value',
       );
-      offset = valEnd;
+      final value = _valueCodec.decode(valueRecord.value);
+      offset = valueRecord.nextOffset;
 
       result[identityRec.value] = _MovableElement<T>(
         value: value,

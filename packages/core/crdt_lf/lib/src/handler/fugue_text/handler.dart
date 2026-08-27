@@ -187,7 +187,7 @@ base class CRDTFugueTextHandler
       );
     } else if (operation is _FugueTextDeleteOperation) {
       for (final item in operation.items) {
-        tree.delete(item.nodeID, stamp: operation.stamp!);
+        tree.delete(item.nodeID);
       }
     } else if (operation is _FugueTextUpdateOperation) {
       for (final item in operation.items) {

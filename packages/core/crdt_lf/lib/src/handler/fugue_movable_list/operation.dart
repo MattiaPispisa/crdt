@@ -62,18 +62,13 @@ class _MovableListInsertOperation<T> extends Operation {
       final positionRec = FugueElementID.readFromBytes(body, offset: offset);
       offset = positionRec.nextOffset;
 
-      final valLenRec = UVarint.read(body, offset: offset);
-      offset = valLenRec.nextOffset;
-      final valEnd = offset + valLenRec.value;
-      if (valEnd > body.length) {
-        throw const FormatException(
-          'Truncated movable list insert value',
-        );
-      }
-      final value = handler._valueCodec.decode(
-        Uint8List.sublistView(body, offset, valEnd),
+      final valueRecord = UVarint.readBytes(
+        body,
+        offset: offset,
+        what: 'movable list insert value',
       );
-      offset = valEnd;
+      final value = handler._valueCodec.decode(valueRecord.value);
+      offset = valueRecord.nextOffset;
 
       items.add(
         _MovableListInsertItem<T>(
@@ -111,9 +106,7 @@ class _MovableListInsertOperation<T> extends Operation {
       out
         ..add(item.identityID.toBytes())
         ..add(item.positionID.toBytes());
-      final valBytes = valueCodec.encode(item.value);
-      UVarint.write(valBytes.length, out);
-      out.add(valBytes);
+      UVarint.writeBytes(valueCodec.encode(item.value), out);
     }
     return out.toBytes();
   }
@@ -255,18 +248,13 @@ class _MovableListUpdateOperation<T> extends Operation {
       final identityRec = FugueElementID.readFromBytes(body, offset: offset);
       offset = identityRec.nextOffset;
 
-      final valLenRec = UVarint.read(body, offset: offset);
-      offset = valLenRec.nextOffset;
-      final valEnd = offset + valLenRec.value;
-      if (valEnd > body.length) {
-        throw const FormatException(
-          'Truncated movable list update value',
-        );
-      }
-      final value = handler._valueCodec.decode(
-        Uint8List.sublistView(body, offset, valEnd),
+      final valueRecord = UVarint.readBytes(
+        body,
+        offset: offset,
+        what: 'movable list update value',
       );
-      offset = valEnd;
+      final value = handler._valueCodec.decode(valueRecord.value);
+      offset = valueRecord.nextOffset;
 
       items.add(
         _MovableListUpdateItem<T>(
@@ -293,9 +281,7 @@ class _MovableListUpdateOperation<T> extends Operation {
     UVarint.write(items.length, out);
     for (final item in items) {
       out.add(item.identityID.toBytes());
-      final valBytes = valueCodec.encode(item.value);
-      UVarint.write(valBytes.length, out);
-      out.add(valBytes);
+      UVarint.writeBytes(valueCodec.encode(item.value), out);
     }
     return out.toBytes();
   }

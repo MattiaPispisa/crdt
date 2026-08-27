@@ -17,16 +17,12 @@ class _TextInsertOperation extends Operation {
     final index = indexRec.value;
     offset = indexRec.nextOffset;
 
-    final lenRec = UVarint.read(body, offset: offset);
-    final len = lenRec.value;
-    offset = lenRec.nextOffset;
-
-    final end = offset + len;
-    if (end > body.length) {
-      throw const FormatException('Truncated text insert');
-    }
-
-    final text = Wtf8.decode(Uint8List.sublistView(body, offset, end));
+    final textRecord = UVarint.readBytes(
+      body,
+      offset: offset,
+      what: 'text insert',
+    );
+    final text = Wtf8.decode(textRecord.value);
 
     return _TextInsertOperation.fromHandler(
       handler,
@@ -58,9 +54,7 @@ class _TextInsertOperation extends Operation {
   Uint8List toBodyBytes() {
     final out = BytesBuilder(copy: false);
     UVarint.write(index, out);
-    final textBytes = Wtf8.encode(text);
-    UVarint.write(textBytes.length, out);
-    out.add(textBytes);
+    UVarint.writeBytes(Wtf8.encode(text), out);
     return out.toBytes();
   }
 
@@ -163,16 +157,12 @@ class _TextUpdateOperation extends Operation {
     final index = indexRec.value;
     offset = indexRec.nextOffset;
 
-    final lenRec = UVarint.read(body, offset: offset);
-    final len = lenRec.value;
-    offset = lenRec.nextOffset;
-
-    final end = offset + len;
-    if (end > body.length) {
-      throw const FormatException('Truncated text update');
-    }
-
-    final text = Wtf8.decode(Uint8List.sublistView(body, offset, end));
+    final textRecord = UVarint.readBytes(
+      body,
+      offset: offset,
+      what: 'text update',
+    );
+    final text = Wtf8.decode(textRecord.value);
 
     return _TextUpdateOperation.fromHandler(
       handler,
@@ -191,9 +181,7 @@ class _TextUpdateOperation extends Operation {
   Uint8List toBodyBytes() {
     final out = BytesBuilder(copy: false);
     UVarint.write(index, out);
-    final textBytes = Wtf8.encode(text);
-    UVarint.write(textBytes.length, out);
-    out.add(textBytes);
+    UVarint.writeBytes(Wtf8.encode(text), out);
     return out.toBytes();
   }
 
