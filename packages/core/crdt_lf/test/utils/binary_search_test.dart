@@ -37,8 +37,7 @@ void main() {
     test('a comparator that never returns 0 yields a strict upper bound', () {
       // c > target ? 1 : -1 finds the first element strictly greater than
       // target, even when target is present in the list.
-      int strictlyAfter(int element, int target) =>
-          element > target ? 1 : -1;
+      int strictlyAfter(int element, int target) => element > target ? 1 : -1;
 
       expect([1, 3, 3, 5].lowerBoundBy(3, strictlyAfter), 3);
       expect([1, 3, 3, 5].lowerBoundBy(0, strictlyAfter), 0);

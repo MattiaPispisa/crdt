@@ -38,8 +38,7 @@ int fnv1a32(
       hash ^= bytes[i];
       final low = hash & 0xFFFF;
       final high = hash >> 16;
-      hash = (low * _fnv1a32Prime +
-              (((high * _fnv1a32Prime) & 0xFFFF) << 16)) &
+      hash = (low * _fnv1a32Prime + (((high * _fnv1a32Prime) & 0xFFFF) << 16)) &
           0xFFFFFFFF;
     }
     return hash;
