@@ -91,5 +91,17 @@ void main() {
       expect(envelope.kind, equals(OperationType.maxKind));
       expect(envelope.stamped, isTrue);
     });
+
+    // A handler decides a change is its own by comparing this prefix against
+    // the head of the payload, without decoding it. If [encode] ever stopped
+    // starting with these exact bytes, that check would silently match
+    // nothing and handlers would stop seeing their own changes.
+    test('writeEnvelopePrefix produces the head of an encoded envelope', () {
+      final out = BytesBuilder(copy: false);
+      OperationEnvelopeCodec.writeEnvelopePrefix(out, 'H', 'h1');
+      final prefix = out.toBytes();
+
+      expect(_encode().take(prefix.length), orderedEquals(prefix));
+    });
   });
 }
