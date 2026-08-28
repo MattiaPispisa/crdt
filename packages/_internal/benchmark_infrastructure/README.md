@@ -42,6 +42,36 @@ void main() {
 }
 ```
 
+## Picking a base class
+
+| base | loop | use it when |
+| --- | --- | --- |
+| `TimedBenchmarkBase` | the harness default: run for at least 2 s | the default. A cycle that leaves no trace. |
+| `AsyncTimedBenchmarkBase` | same, but `run()` can await | the cycle cannot be synchronous (e.g. it ends with `await tester.pump()`). |
+| `FixedCycleTimedBenchmark` | fixed cycles, fastest batch wins | a cycle **grows** what it measures. |
+| `AsyncFixedCycleTimedBenchmark` | the same fixed-cycle loop, awaited | both of the above at once. |
+
+The fixed-cycle bases exist because the default loop keeps going until two
+seconds have passed. They run `batches`
+batches of `measuredCycles` cycles each, warm up for `warmupDuration` first,
+call `setup()` again before every batch (`setupPerBatch`), and report the
+**fastest** batch — a GC pause can only make a batch slower, so the minimum is
+the cleanest reading:
+
+```dart
+class MyGrowingBenchmark extends FixedCycleTimedBenchmark {
+  MyGrowingBenchmark() : super('My benchmark name', measuredCycles: 200);
+
+  @override
+  void setup() { ... }
+
+  @override
+  void run() { ... }
+}
+```
+
+## Installing
+
 Add this package as a `dev_dependency` with a `path:` reference (it's
 dev-only tooling, like `test`, not shipped `lib/` code):
 

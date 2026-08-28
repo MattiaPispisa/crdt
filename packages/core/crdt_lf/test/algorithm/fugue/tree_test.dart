@@ -17,33 +17,6 @@ void main() {
       expect(tree.values(), isEmpty);
     });
 
-    test('fromJson creates tree from JSON', () {
-      final json = {
-        'nodes': {
-          'null': {
-            'node': {
-              'id': {'replicaID': '', 'counter': null},
-              'value': null,
-              'parentID': {'replicaID': '', 'counter': null},
-              'side': 'left',
-            },
-            'leftChildren': <dynamic>[],
-            'rightChildren': <dynamic>[],
-          },
-        },
-      };
-
-      final tree = FugueTree<dynamic>.fromJson(json);
-      expect(tree.values(), isEmpty);
-    });
-
-    test('toJson serializes tree to JSON', () {
-      final tree = FugueTree<dynamic>.empty();
-      final json = tree.toJson();
-      expect(json, isA<Map<String, dynamic>>());
-      expect(json['nodes'], isA<Map<String, dynamic>>());
-    });
-
     test('toString returns tree representation', () {
       final tree = FugueTree<dynamic>.empty();
       final str = tree.toString();
@@ -565,21 +538,6 @@ void main() {
 
         expect(queries(), equals(before));
       });
-
-      test('a json round-trip keeps the stamps, so a stale update still loses',
-          () {
-        final tree = abc()
-          ..update(nodeID: b, value: 'B2', stamp: _stamp(peerId, 20));
-
-        final restored = FugueTree<String>.fromJson(tree.toJson());
-        expect(restored.values(), equals(['A', 'B2', 'C']));
-
-        expect(
-          restored.update(nodeID: b, value: 'stale', stamp: _stamp(peerId, 10)),
-          isFalse,
-        );
-        expect(restored.values(), equals(['A', 'B2', 'C']));
-      });
     });
 
     test('the sequence does not depend on the order operations are applied in',
@@ -712,7 +670,7 @@ void main() {
 
     test(
         'randomized differential: index agrees with the traversal oracle '
-        'through inserts, deletes, updates and a json round-trip', () {
+        'through inserts, deletes and updates', () {
       final rng = Random(424242);
       final peerId = PeerId.parse('4e91a152-582f-4f46-8944-c2c2e8b217ff');
       final tree = FugueTree<String>.empty();
@@ -722,44 +680,16 @@ void main() {
       FugueElementID nextId() => FugueElementID(peerId, counter++);
 
       // Everything the tree exposes about order — `values`, `nodes`,
-      // `findNodeAtPosition`, `findNextNode` — is now served by the positional
-      // index, so the oracle has to come from somewhere else: an in-order walk
-      // of the serialized tree, which is the structure the index mirrors.
-      List<String> structuralSequence(FugueTree<String> t) {
-        final nodesJson = t.toJson()['nodes']! as Map<String, dynamic>;
-        final sequence = <String>[];
-        void visit(String id) {
-          final triple = nodesJson[id]! as Map<String, dynamic>;
-          for (final child in triple['leftChildren']! as List<dynamic>) {
-            visit(
-              FugueElementID.fromJson(child as Map<String, dynamic>).toString(),
-            );
-          }
-          if (id != 'null') {
-            sequence.add(id);
-          }
-          for (final child in triple['rightChildren']! as List<dynamic>) {
-            visit(
-              FugueElementID.fromJson(child as Map<String, dynamic>).toString(),
-            );
-          }
-        }
-
-        visit('null');
-        return sequence;
-      }
-
+      // `findNodeAtPosition`, `findNextNode` — is served by the positional
+      // index, so the oracle has to come from somewhere else:
+      // `structuralSequence` walks the parent and child links, which is the
+      // structure the index mirrors.
       void checkAgainstOracle(FugueTree<String> t, int step) {
-        final nodesJson = t.toJson()['nodes']! as Map<String, dynamic>;
-        final live = <String>[];
-        for (final id in structuralSequence(t)) {
-          final triple = nodesJson[id]! as Map<String, dynamic>;
-          final node = triple['node']! as Map<String, dynamic>;
+        final live = <String>[
           // A tombstone keeps its value, so the flag is what says it is gone.
-          if (node['deleted'] != true) {
-            live.add(id);
-          }
-        }
+          for (final element in t.structuralSequence())
+            if (!element.deleted) element.id.toString(),
+        ];
 
         expect(
           t.nodes().map((n) => n.id.toString()).toList(),
@@ -785,12 +715,12 @@ void main() {
       // `findNextNode` must also walk tombstones, which the live oracle above
       // cannot see, so it is checked against the full structural sequence.
       void checkSuccessorsAgainstOracle(FugueTree<String> t, int step) {
-        final sequence = structuralSequence(t);
+        final sequence = t.structuralSequence();
         for (var i = 0; i < sequence.length; i++) {
           expect(
-            t.findNextNode(FugueElementID.parse(sequence[i])).toString(),
-            i + 1 < sequence.length ? sequence[i + 1] : 'null',
-            reason: 'successor of ${sequence[i]} at step $step',
+            t.findNextNode(sequence[i].id).toString(),
+            i + 1 < sequence.length ? sequence[i + 1].id.toString() : 'null',
+            reason: 'successor of ${sequence[i].id} at step $step',
           );
         }
       }
@@ -835,12 +765,6 @@ void main() {
         }
       }
       checkSuccessorsAgainstOracle(tree, 1500);
-
-      // A json round-trip rebuilds the index and reproduces the same sequence.
-      final restored = FugueTree<String>.fromJson(tree.toJson());
-      final oracle = tree.nodes().map((n) => n.id).toList();
-      expect(restored.nodes().map((n) => n.id).toList(), oracle);
-      checkAgainstOracle(restored, -1);
     });
 
     // Runs are a representation choice, so what they must never do is change
@@ -974,34 +898,138 @@ void main() {
         expect(cut.runCount, greaterThan(straight.runCount));
         expectSequence(cut, straight.values());
       });
+    });
 
-      // The JSON is per element, so reading it back has to find the runs
-      // again. A tree that was never cut comes back in one piece — and a cut
-      // that a tombstone holds open stays open, because that tombstone really
-      // does sit between the two elements, whether or not anyone can see it.
-      test('a json round-trip finds the same runs again', () {
-        final whole = typed(500);
-        final restoredWhole = FugueTree<String>.fromJson(whole.toJson());
+    // Runs are a representation choice, so what they must never do is change
+    // an answer. These schedules push the grouping into its awkward shapes —
+    // long runs cut in the middle, runs shot full of tombstones — and check
+    // the element-level queries against a plain list.
+    group('runs', () {
+      final peerId = PeerId.parse('4e91a152-582f-4f46-8944-c2c2e8b217ff');
+      final other = PeerId.parse('ee121333-c65b-4afc-b226-4ef116df3432');
 
-        expect(restoredWhole.runCount, equals(whole.runCount));
-        expectSequence(restoredWhole, whole.values());
-
-        final cut = typed(200);
-        for (var step = 0; step < 60; step++) {
-          final anchor = cut.findNodeAtPosition(3 * step + 1);
-          cut
-            ..insert(
-              newID: FugueElementID(other, step),
-              value: 'z$step',
-              leftOrigin: anchor,
-              rightOrigin: cut.findNextNode(anchor),
-            )
-            ..delete(FugueElementID(other, step));
+      /// Types [count] elements one after another, the way a text field does.
+      FugueTree<String> typed(int count) {
+        final tree = FugueTree<String>.empty();
+        var left = FugueElementID.nullID();
+        for (var i = 0; i < count; i++) {
+          final id = FugueElementID(peerId, i);
+          tree.insert(
+            newID: id,
+            value: '$i',
+            leftOrigin: left,
+            rightOrigin: FugueElementID.nullID(),
+          );
+          left = id;
         }
-        final restoredCut = FugueTree<String>.fromJson(cut.toJson());
+        return tree;
+      }
 
-        expect(restoredCut.runCount, equals(cut.runCount));
-        expectSequence(restoredCut, cut.values());
+      /// Every positional query the tree answers, against [expected].
+      void expectSequence(FugueTree<String> tree, List<String> expected) {
+        expect(tree.values(), equals(expected));
+        expect(tree.liveLength, equals(expected.length));
+
+        final ids = tree.nodes().map((n) => n.id).toList();
+        expect(ids, hasLength(expected.length));
+        for (var i = 0; i < expected.length; i++) {
+          expect(
+            tree.findNodeAtPosition(i),
+            equals(ids[i]),
+            reason: 'findNodeAtPosition($i)',
+          );
+          expect(
+            tree.liveIndexAfter(ids[i]),
+            equals(i + 1),
+            reason: 'liveIndexAfter of the element at $i',
+          );
+        }
+        expect(tree.findNodeAtPosition(expected.length).isNull, isTrue);
+        expect(
+          tree.findNodesInRange(0, expected.length),
+          equals(ids),
+          reason: 'findNodesInRange over the whole sequence',
+        );
+      }
+
+      test('sequential typing collapses into runs', () {
+        final tree = typed(500);
+
+        expectSequence(tree, [for (var i = 0; i < 500; i++) '$i']);
+        // One run per [FugueTree.maxRunLength] elements, and nothing else.
+        expect(tree.runCount, equals((500 / FugueTree.maxRunLength).ceil()));
+      });
+
+      // The reason this tree lets a run mix live elements and tombstones,
+      // where Yjs only merges items that are all one or all the other.
+      test('deleting inside a run keeps the run whole', () {
+        final tree = typed(300);
+        final runsBefore = tree.runCount;
+
+        for (var i = 0; i < 300; i += 3) {
+          tree.delete(FugueElementID(peerId, i));
+        }
+
+        expectSequence(tree, [
+          for (var i = 0; i < 300; i++)
+            if (i % 3 != 0) '$i',
+        ]);
+        expect(tree.runCount, equals(runsBefore));
+      });
+
+      test('split-heavy: repeated inserts into the middle of a run', () {
+        final tree = typed(200);
+        final expected = [for (var i = 0; i < 200; i++) '$i'];
+
+        for (var step = 0; step < 200; step++) {
+          final at = expected.length ~/ 2;
+          final leftOrigin = tree.findNodeAtPosition(at - 1);
+          tree.insert(
+            newID: FugueElementID(other, step),
+            value: 'm$step',
+            leftOrigin: leftOrigin,
+            rightOrigin: tree.findNextNode(leftOrigin),
+          );
+          expected.insert(at, 'm$step');
+        }
+
+        expectSequence(tree, expected);
+      });
+
+      test('fragmentation-heavy: scattered single deletes', () {
+        final rng = Random(9781);
+        final tree = typed(400);
+        final expected = [for (var i = 0; i < 400; i++) '$i'];
+
+        for (var step = 0; step < 150; step++) {
+          final at = rng.nextInt(expected.length);
+          tree.delete(tree.findNodeAtPosition(at));
+          expected.removeAt(at);
+        }
+
+        expectSequence(tree, expected);
+      });
+
+      // Where the runs fall is local, so two peers holding the same sequence
+      // can disagree about it. Here one of them had to cut a run to make room
+      // for an element that is gone again; the other never saw it.
+      test('cutting a run changes nothing a reader can see', () {
+        final straight = typed(200);
+        final cut = typed(200);
+
+        final anchor = cut.findNodeAtPosition(99);
+        final foreign = FugueElementID(other, 0);
+        cut
+          ..insert(
+            newID: foreign,
+            value: 'z',
+            leftOrigin: anchor,
+            rightOrigin: cut.findNextNode(anchor),
+          )
+          ..delete(foreign);
+
+        expect(cut.runCount, greaterThan(straight.runCount));
+        expectSequence(cut, straight.values());
       });
     });
   });

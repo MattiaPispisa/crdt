@@ -268,6 +268,17 @@ class VersionVector {
   /// Returns the clock for the given [peerId].
   HybridLogicalClock? operator [](PeerId peerId) => _vector[peerId];
 
+  /// Whether this vector already covers [clock] for [peerId].
+  ///
+  /// A peer's operations are totally ordered, so the clock recorded here is
+  /// the latest one seen from [peerId]: anything up to it has been seen too.
+  /// Returns `false` when [peerId] is absent, and when [clock] is strictly
+  /// newer than what this vector holds for it.
+  bool hasSeen(PeerId peerId, HybridLogicalClock clock) {
+    final known = _vector[peerId];
+    return known != null && clock.compareTo(known) <= 0;
+  }
+
   /// Returns an immutable copy of the version vector.
   VersionVector immutable() {
     return VersionVector.immutable(_copy());

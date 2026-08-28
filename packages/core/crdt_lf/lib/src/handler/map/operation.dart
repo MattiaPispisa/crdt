@@ -28,25 +28,20 @@ class _MapInsertOperation<T> extends Operation {
     Uint8List body,
   ) {
     var offset = 0;
-    final keyLenRec = UVarint.read(body, offset: offset);
-    final keyLen = keyLenRec.value;
-    offset = keyLenRec.nextOffset;
-    final keyEnd = offset + keyLen;
-    if (keyEnd > body.length) {
-      throw const FormatException('Truncated map insert key');
-    }
-    final key = utf8.decode(Uint8List.sublistView(body, offset, keyEnd));
-    offset = keyEnd;
+    final keyRecord = UVarint.readString(
+      body,
+      offset: offset,
+      what: 'map insert key',
+    );
+    final key = keyRecord.value;
+    offset = keyRecord.nextOffset;
 
-    final valLenRec = UVarint.read(body, offset: offset);
-    final valLen = valLenRec.value;
-    offset = valLenRec.nextOffset;
-    final valEnd = offset + valLen;
-    if (valEnd > body.length) {
-      throw const FormatException('Truncated map insert value');
-    }
-    final valueBytes = Uint8List.sublistView(body, offset, valEnd);
-    final value = handler._valueCodec.decode(valueBytes);
+    final valueRecord = UVarint.readBytes(
+      body,
+      offset: offset,
+      what: 'map insert value',
+    );
+    final value = handler._valueCodec.decode(valueRecord.value);
 
     return _MapInsertOperation<T>(
       id: handler.id,
@@ -64,13 +59,8 @@ class _MapInsertOperation<T> extends Operation {
   @override
   Uint8List toBodyBytes() {
     final out = BytesBuilder(copy: false);
-    final keyBytes = utf8.encode(key);
-    UVarint.write(keyBytes.length, out);
-    out.add(keyBytes);
-
-    final valBytes = valueCodec.encode(value);
-    UVarint.write(valBytes.length, out);
-    out.add(valBytes);
+    UVarint.writeString(key, out);
+    UVarint.writeBytes(valueCodec.encode(value), out);
 
     return out.toBytes();
   }
@@ -105,15 +95,11 @@ class _MapDeleteOperation<T> extends Operation {
     CRDTMapHandler<T> handler,
     Uint8List body,
   ) {
-    var offset = 0;
-    final keyLenRec = UVarint.read(body, offset: offset);
-    final keyLen = keyLenRec.value;
-    offset = keyLenRec.nextOffset;
-    final keyEnd = offset + keyLen;
-    if (keyEnd > body.length) {
-      throw const FormatException('Truncated map delete key');
-    }
-    final key = utf8.decode(Uint8List.sublistView(body, offset, keyEnd));
+    final key = UVarint.readString(
+      body,
+      offset: 0,
+      what: 'map delete key',
+    ).value;
     return _MapDeleteOperation<T>.fromHandler(handler, key: key);
   }
 
@@ -122,9 +108,7 @@ class _MapDeleteOperation<T> extends Operation {
   @override
   Uint8List toBodyBytes() {
     final out = BytesBuilder(copy: false);
-    final keyBytes = utf8.encode(key);
-    UVarint.write(keyBytes.length, out);
-    out.add(keyBytes);
+    UVarint.writeString(key, out);
     return out.toBytes();
   }
 
@@ -163,25 +147,20 @@ class _MapUpdateOperation<T> extends Operation {
     Uint8List body,
   ) {
     var offset = 0;
-    final keyLenRec = UVarint.read(body, offset: offset);
-    final keyLen = keyLenRec.value;
-    offset = keyLenRec.nextOffset;
-    final keyEnd = offset + keyLen;
-    if (keyEnd > body.length) {
-      throw const FormatException('Truncated map update key');
-    }
-    final key = utf8.decode(Uint8List.sublistView(body, offset, keyEnd));
-    offset = keyEnd;
+    final keyRecord = UVarint.readString(
+      body,
+      offset: offset,
+      what: 'map update key',
+    );
+    final key = keyRecord.value;
+    offset = keyRecord.nextOffset;
 
-    final valLenRec = UVarint.read(body, offset: offset);
-    final valLen = valLenRec.value;
-    offset = valLenRec.nextOffset;
-    final valEnd = offset + valLen;
-    if (valEnd > body.length) {
-      throw const FormatException('Truncated map update value');
-    }
-    final valueBytes = Uint8List.sublistView(body, offset, valEnd);
-    final value = handler._valueCodec.decode(valueBytes);
+    final valueRecord = UVarint.readBytes(
+      body,
+      offset: offset,
+      what: 'map update value',
+    );
+    final value = handler._valueCodec.decode(valueRecord.value);
 
     return _MapUpdateOperation<T>(
       id: handler.id,
@@ -199,13 +178,8 @@ class _MapUpdateOperation<T> extends Operation {
   @override
   Uint8List toBodyBytes() {
     final out = BytesBuilder(copy: false);
-    final keyBytes = utf8.encode(key);
-    UVarint.write(keyBytes.length, out);
-    out.add(keyBytes);
-
-    final valBytes = valueCodec.encode(value);
-    UVarint.write(valBytes.length, out);
-    out.add(valBytes);
+    UVarint.writeString(key, out);
+    UVarint.writeBytes(valueCodec.encode(value), out);
 
     return out.toBytes();
   }

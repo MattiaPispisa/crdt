@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:collection';
-import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:crdt_lf/crdt_lf.dart';
@@ -8,6 +7,7 @@ import 'package:crdt_lf/src/compound/compound.dart';
 import 'package:crdt_lf/src/devtools/devtools.dart' as devtools;
 import 'package:crdt_lf/src/snapshot/blob_version.dart';
 import 'package:crdt_lf/src/transaction/transaction_manager.dart';
+import 'package:crdt_lf/src/utils/bytes.dart';
 import 'package:crdt_lf/src/utils/uuid.dart';
 import 'package:hlc_dart/hlc_dart.dart';
 
@@ -1182,7 +1182,9 @@ class CRDTDocument extends BaseCRDTDocument {
     _ensureNotDisposed('importChanges');
 
     // Sort changes topologically
-    final sorted = _topologicalSort(_neverReceived(changes));
+    final sorted = _topologicalSort(
+      changes.newerThan(getVersionVector()).toList(),
+    );
 
     // Apply changes
     final changedApplied = <Change>[];
@@ -1236,23 +1238,6 @@ class CRDTDocument extends BaseCRDTDocument {
     } else {
       _transactionManager.requestUpdate();
     }
-  }
-
-  /// Returns a list of [Change]s never received from this document:
-  /// - the clock of the change is greater than the clock of the version vector
-  /// - the change is not in the version vector
-  List<Change> _neverReceived(List<Change> changes) {
-    final versionVector = getVersionVector();
-    final newChanges = <Change>[];
-
-    for (final change in changes) {
-      final clock = versionVector[change.author];
-      if (clock == null || change.hlc.compareTo(clock) > 0) {
-        newChanges.add(change);
-      }
-    }
-
-    return newChanges;
   }
 
   /// Sorts [Change]s topologically
@@ -1378,8 +1363,7 @@ class CRDTDocument extends BaseCRDTDocument {
 
     final versionVector = _lastSnapshot!.versionVector;
     for (final dep in deps) {
-      final snapshotClock = versionVector[dep.peerId];
-      if (snapshotClock == null || dep.hlc.compareTo(snapshotClock) > 0) {
+      if (!versionVector.hasSeen(dep.peerId, dep.hlc)) {
         return false;
       }
     }
@@ -1416,13 +1400,8 @@ Uint8List _encodeHandlerManifest(Map<String, String> manifest) {
   final out = BytesBuilder(copy: false)..addByte(_handlerManifestVersion);
   UVarint.write(manifest.length, out);
   for (final entry in manifest.entries) {
-    final idBytes = utf8.encode(entry.key);
-    UVarint.write(idBytes.length, out);
-    out.add(idBytes);
-
-    final typeBytes = utf8.encode(entry.value);
-    UVarint.write(typeBytes.length, out);
-    out.add(typeBytes);
+    UVarint.writeString(entry.key, out);
+    UVarint.writeString(entry.value, out);
   }
   return out.toBytes();
 }
@@ -1438,19 +1417,21 @@ Map<String, String> _decodeHandlerManifest(Uint8List bytes) {
   final countRec = UVarint.read(bytes, offset: offset);
   offset = countRec.nextOffset;
   for (var i = 0; i < countRec.value; i += 1) {
-    final idLenRec = UVarint.read(bytes, offset: offset);
-    offset = idLenRec.nextOffset;
-    final idEnd = offset + idLenRec.value;
-    final id = utf8.decode(Uint8List.sublistView(bytes, offset, idEnd));
-    offset = idEnd;
+    final idRecord = UVarint.readString(
+      bytes,
+      offset: offset,
+      what: 'handler manifest id',
+    );
+    offset = idRecord.nextOffset;
 
-    final typeLenRec = UVarint.read(bytes, offset: offset);
-    offset = typeLenRec.nextOffset;
-    final typeEnd = offset + typeLenRec.value;
-    final type = utf8.decode(Uint8List.sublistView(bytes, offset, typeEnd));
-    offset = typeEnd;
+    final typeRecord = UVarint.readString(
+      bytes,
+      offset: offset,
+      what: 'handler manifest type',
+    );
+    offset = typeRecord.nextOffset;
 
-    manifest[id] = type;
+    manifest[idRecord.value] = typeRecord.value;
   }
   return manifest;
 }

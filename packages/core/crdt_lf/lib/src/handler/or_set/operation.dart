@@ -28,16 +28,11 @@ class _ORSetAddOperation<T> extends Operation {
     CRDTORSetHandler<T> handler,
     Uint8List body,
   ) {
-    final valueLenRec = UVarint.read(body, offset: 0);
-    final valueEnd = valueLenRec.nextOffset + valueLenRec.value;
-    if (valueEnd > body.length) {
-      throw const FormatException('Truncated OR-Set add value');
-    }
-    final valueBytes = Uint8List.sublistView(
+    final valueBytes = UVarint.readBytes(
       body,
-      valueLenRec.nextOffset,
-      valueEnd,
-    );
+      offset: 0,
+      what: 'OR-Set add value',
+    ).value;
 
     return _ORSetAddOperation<T>(
       id: handler.id,
@@ -53,9 +48,7 @@ class _ORSetAddOperation<T> extends Operation {
   @override
   Uint8List toBodyBytes() {
     final out = BytesBuilder(copy: false);
-    final valueBytes = valueCodec.encode(value);
-    UVarint.write(valueBytes.length, out);
-    out.add(valueBytes);
+    UVarint.writeBytes(valueCodec.encode(value), out);
     return out.toBytes();
   }
 
@@ -84,16 +77,13 @@ class _ORSetRemoveOperation<T> extends Operation {
     Uint8List body,
   ) {
     var offset = 0;
-    final valueLenRec = UVarint.read(body, offset: offset);
-    final valueLen = valueLenRec.value;
-    offset = valueLenRec.nextOffset;
-    final valueEnd = offset + valueLen;
-    if (valueEnd > body.length) {
-      throw const FormatException('Truncated OR-Set remove value');
-    }
-    final valueBytes = Uint8List.sublistView(body, offset, valueEnd);
-    final value = handler._valueCodec.decode(valueBytes);
-    offset = valueEnd;
+    final valueRecord = UVarint.readBytes(
+      body,
+      offset: offset,
+      what: 'OR-Set remove value',
+    );
+    final value = handler._valueCodec.decode(valueRecord.value);
+    offset = valueRecord.nextOffset;
 
     final countRec = UVarint.read(body, offset: offset);
     final count = countRec.value;
@@ -144,9 +134,7 @@ class _ORSetRemoveOperation<T> extends Operation {
   Uint8List toBodyBytes() {
     final out = BytesBuilder(copy: false);
 
-    final valueBytes = valueCodec.encode(value);
-    UVarint.write(valueBytes.length, out);
-    out.add(valueBytes);
+    UVarint.writeBytes(valueCodec.encode(value), out);
 
     UVarint.write(tags.length, out);
     for (final t in tags) {

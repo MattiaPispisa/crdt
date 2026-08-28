@@ -1,4 +1,3 @@
-import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:crdt_lf/crdt_lf.dart';
@@ -123,13 +122,8 @@ base class CRDTMapHandler<T> extends Handler<Map<String, T>>
     final entries = value;
     UVarint.write(entries.length, out);
     for (final entry in entries.entries) {
-      final keyBytes = utf8.encode(entry.key);
-      UVarint.write(keyBytes.length, out);
-      out.add(keyBytes);
-
-      final valueBytes = _valueCodec.encode(entry.value);
-      UVarint.write(valueBytes.length, out);
-      out.add(valueBytes);
+      UVarint.writeString(entry.key, out);
+      UVarint.writeBytes(_valueCodec.encode(entry.value), out);
     }
     return out.toBytes();
   }
@@ -325,19 +319,20 @@ base class CRDTMapHandler<T> extends Handler<Map<String, T>>
     offset = countRec.nextOffset;
     final state = <String, T>{};
     for (var i = 0; i < countRec.value; i += 1) {
-      final keyLenRec = UVarint.read(snapshot, offset: offset);
-      offset = keyLenRec.nextOffset;
-      final keyEnd = offset + keyLenRec.value;
-      final key = utf8.decode(Uint8List.sublistView(snapshot, offset, keyEnd));
-      offset = keyEnd;
-
-      final valLenRec = UVarint.read(snapshot, offset: offset);
-      offset = valLenRec.nextOffset;
-      final valEnd = offset + valLenRec.value;
-      state[key] = _valueCodec.decode(
-        Uint8List.sublistView(snapshot, offset, valEnd),
+      final keyRecord = UVarint.readString(
+        snapshot,
+        offset: offset,
+        what: 'map snapshot key',
       );
-      offset = valEnd;
+      offset = keyRecord.nextOffset;
+
+      final valueRecord = UVarint.readBytes(
+        snapshot,
+        offset: offset,
+        what: 'map snapshot value',
+      );
+      state[keyRecord.value] = _valueCodec.decode(valueRecord.value);
+      offset = valueRecord.nextOffset;
     }
     return state;
   }

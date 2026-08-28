@@ -48,49 +48,40 @@ class Snapshot {
     }
     var offset = 1;
 
-    final idLenRec = UVarint.read(bytes, offset: offset);
-    offset = idLenRec.nextOffset;
-    final idEnd = offset + idLenRec.value;
-    if (idEnd > bytes.length) {
-      throw const FormatException('Truncated Snapshot id');
-    }
-    final id = utf8.decode(Uint8List.sublistView(bytes, offset, idEnd));
-    offset = idEnd;
-
-    final vvLenRec = UVarint.read(bytes, offset: offset);
-    offset = vvLenRec.nextOffset;
-    final vvEnd = offset + vvLenRec.value;
-    if (vvEnd > bytes.length) {
-      throw const FormatException('Truncated Snapshot versionVector');
-    }
-    final versionVector = VersionVector.fromBytes(
-      Uint8List.sublistView(bytes, offset, vvEnd),
+    final idRecord = UVarint.readString(
+      bytes,
+      offset: offset,
+      what: 'Snapshot id',
     );
-    offset = vvEnd;
+    final id = idRecord.value;
+    offset = idRecord.nextOffset;
+
+    final vvRecord = UVarint.readBytes(
+      bytes,
+      offset: offset,
+      what: 'Snapshot versionVector',
+    );
+    final versionVector = VersionVector.fromBytes(vvRecord.value);
+    offset = vvRecord.nextOffset;
 
     final countRec = UVarint.read(bytes, offset: offset);
     offset = countRec.nextOffset;
     final data = <String, Uint8List>{};
     for (var i = 0; i < countRec.value; i += 1) {
-      final keyLenRec = UVarint.read(bytes, offset: offset);
-      offset = keyLenRec.nextOffset;
-      final keyEnd = offset + keyLenRec.value;
-      if (keyEnd > bytes.length) {
-        throw const FormatException('Truncated Snapshot data key');
-      }
-      final key = utf8.decode(Uint8List.sublistView(bytes, offset, keyEnd));
-      offset = keyEnd;
-
-      final valueLenRec = UVarint.read(bytes, offset: offset);
-      offset = valueLenRec.nextOffset;
-      final valueEnd = offset + valueLenRec.value;
-      if (valueEnd > bytes.length) {
-        throw const FormatException('Truncated Snapshot data value');
-      }
-      data[key] = Uint8List.fromList(
-        Uint8List.sublistView(bytes, offset, valueEnd),
+      final keyRecord = UVarint.readString(
+        bytes,
+        offset: offset,
+        what: 'Snapshot data key',
       );
-      offset = valueEnd;
+      offset = keyRecord.nextOffset;
+
+      final valueRecord = UVarint.readBytes(
+        bytes,
+        offset: offset,
+        what: 'Snapshot data value',
+      );
+      data[keyRecord.value] = Uint8List.fromList(valueRecord.value);
+      offset = valueRecord.nextOffset;
     }
 
     return Snapshot(
@@ -153,22 +144,13 @@ class Snapshot {
   Uint8List toBytes() {
     final out = BytesBuilder(copy: false)..addByte(schemaVersion);
 
-    final idBytes = utf8.encode(id);
-    UVarint.write(idBytes.length, out);
-    out.add(idBytes);
-
-    final vvBytes = versionVector.toBytes();
-    UVarint.write(vvBytes.length, out);
-    out.add(vvBytes);
+    UVarint.writeString(id, out);
+    UVarint.writeBytes(versionVector.toBytes(), out);
 
     UVarint.write(data.length, out);
     for (final entry in data.entries) {
-      final keyBytes = utf8.encode(entry.key);
-      UVarint.write(keyBytes.length, out);
-      out.add(keyBytes);
-
-      UVarint.write(entry.value.length, out);
-      out.add(entry.value);
+      UVarint.writeString(entry.key, out);
+      UVarint.writeBytes(entry.value, out);
     }
 
     return out.toBytes();

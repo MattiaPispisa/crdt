@@ -1,5 +1,13 @@
 import 'package:crdt_lf/src/algorithm/fugue/element_id.dart';
-import 'package:crdt_lf/src/algorithm/fugue/node.dart';
+
+/// Which of a Fugue node's two child lists a child hangs in.
+enum FugueSide {
+  /// Left side
+  left,
+
+  /// Right side
+  right,
+}
 
 /// A stretch of elements one peer wrote with consecutive counters, held in the
 /// Fugue tree as a single node.

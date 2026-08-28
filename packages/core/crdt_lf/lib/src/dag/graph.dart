@@ -80,8 +80,7 @@ class DAG {
     final frontier = <OperationId>[];
 
     for (final entry in _nodes.entries) {
-      final clock = version[entry.key.peerId];
-      if (clock != null && entry.key.hlc <= clock) {
+      if (version.hasSeen(entry.key.peerId, entry.key.hlc)) {
         toRemove.add(entry.key);
       } else {
         if (entry.value.childCount == 0) {
