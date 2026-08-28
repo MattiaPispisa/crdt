@@ -72,4 +72,43 @@ void main() {
       }
     });
   });
+
+  group('SetDelta value semantics', () {
+    test('the empty delta moves nothing', () {
+      const delta = SetDelta<String>.empty();
+
+      expect(delta.isEmpty, isTrue);
+      expect(delta.isNotEmpty, isFalse);
+      expect(delta.apply({'a'}), {'a'});
+    });
+
+    test('a delta that moves something is not empty', () {
+      const delta = SetDelta<String>(added: {'a'}, removed: {});
+
+      expect(delta.isEmpty, isFalse);
+      expect(delta.isNotEmpty, isTrue);
+    });
+
+    test('equality ignores the order the values were listed in', () {
+      const a = SetDelta<String>(added: {'a', 'b'}, removed: {'c'});
+      const b = SetDelta<String>(added: {'b', 'a'}, removed: {'c'});
+
+      expect(a, b);
+      expect(a.hashCode, b.hashCode);
+    });
+
+    test('added and removed are told apart', () {
+      const a = SetDelta<String>(added: {'a'}, removed: {});
+      const b = SetDelta<String>(added: {}, removed: {'a'});
+
+      expect(a, isNot(b));
+    });
+
+    test('the description names both sides', () {
+      const delta = SetDelta<String>(added: {'a'}, removed: {'b'});
+
+      expect(delta.toString(), contains('added: {a}'));
+      expect(delta.toString(), contains('removed: {b}'));
+    });
+  });
 }

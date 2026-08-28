@@ -25,4 +25,41 @@ void main() {
       );
     });
   });
+
+  group('RegisterDelta value semantics', () {
+    test('a delta whose ends match moves nothing', () {
+      const delta = RegisterDelta<String>(previous: 'a', current: 'a');
+
+      expect(delta.isEmpty, isTrue);
+      expect(delta.isNotEmpty, isFalse);
+    });
+
+    test('a delta whose ends differ moves something', () {
+      const delta = RegisterDelta<String>(previous: 'a', current: 'b');
+
+      expect(delta.isEmpty, isFalse);
+      expect(delta.isNotEmpty, isTrue);
+    });
+
+    test('equal ends make equal deltas', () {
+      const a = RegisterDelta<String>(previous: 'a', current: 'b');
+      const b = RegisterDelta<String>(previous: 'a', current: 'b');
+
+      expect(a, b);
+      expect(a.hashCode, b.hashCode);
+    });
+
+    test('the two ends are told apart', () {
+      const a = RegisterDelta<String>(previous: 'a', current: 'b');
+      const b = RegisterDelta<String>(previous: 'b', current: 'a');
+
+      expect(a, isNot(b));
+    });
+
+    test('the description names both ends', () {
+      const delta = RegisterDelta<String>(previous: 'a', current: 'b');
+
+      expect(delta.toString(), 'RegisterDelta(a -> b)');
+    });
+  });
 }

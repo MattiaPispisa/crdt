@@ -124,4 +124,77 @@ void main() {
       }
     });
   });
+
+  group('MapDelta value semantics', () {
+    test('the empty delta moves nothing', () {
+      const delta = MapDelta<String, int>.empty();
+
+      expect(delta.isEmpty, isTrue);
+      expect(delta.isNotEmpty, isFalse);
+      expect(delta.apply({'a': 1}), {'a': 1});
+    });
+
+    test('a delta that touches a key is not empty', () {
+      const delta = MapDelta<String, int>({
+        'a': MapEntrySet<int>(value: 1, previous: null),
+      });
+
+      expect(delta.isEmpty, isFalse);
+      expect(delta.isNotEmpty, isTrue);
+    });
+
+    test('equality ignores the order the keys were listed in', () {
+      const a = MapDelta<String, int>({
+        'a': MapEntrySet<int>(value: 1, previous: null),
+        'b': MapEntryRemoved<int>(previous: 2),
+      });
+      const b = MapDelta<String, int>({
+        'b': MapEntryRemoved<int>(previous: 2),
+        'a': MapEntrySet<int>(value: 1, previous: null),
+      });
+
+      expect(a, b);
+      expect(a.hashCode, b.hashCode);
+    });
+
+    test('a write and a removal of the same key are told apart', () {
+      const written = MapDelta<String, int>({
+        'a': MapEntrySet<int>(value: 1, previous: null),
+      });
+      const removed = MapDelta<String, int>({
+        'a': MapEntryRemoved<int>(previous: 1),
+      });
+
+      expect(written, isNot(removed));
+    });
+
+    test('an entry change carries the value it replaced', () {
+      const first = MapEntrySet<int>(value: 1, previous: 0);
+      const same = MapEntrySet<int>(value: 1, previous: 0);
+      const other = MapEntrySet<int>(value: 1, previous: null);
+
+      expect(first, same);
+      expect(first.hashCode, same.hashCode);
+      expect(first, isNot(other));
+    });
+
+    test('a removal is equal to a removal of the same value', () {
+      const first = MapEntryRemoved<int>(previous: 1);
+
+      expect(first, const MapEntryRemoved<int>(previous: 1));
+      expect(first.hashCode, const MapEntryRemoved<int>(previous: 1).hashCode);
+      expect(first, isNot(const MapEntryRemoved<int>(previous: 2)));
+    });
+
+    test('the descriptions name what moved', () {
+      expect(
+        const MapEntrySet<int>(value: 1, previous: 0).toString(),
+        'MapEntrySet(0 -> 1)',
+      );
+      expect(
+        const MapEntryRemoved<int>(previous: 1).toString(),
+        'MapEntryRemoved(1)',
+      );
+    });
+  });
 }

@@ -262,4 +262,73 @@ void main() {
       expect(() => delta.mapOffset(0), throwsUnsupportedError);
     });
   });
+
+  group('SequenceDelta value semantics', () {
+    test('the empty delta moves nothing', () {
+      const delta = SequenceDelta<String>.empty();
+
+      expect(delta.isEmpty, isTrue);
+      expect(delta.isNotEmpty, isFalse);
+    });
+
+    test('a delta that holds a step is not empty', () {
+      final delta = SequenceDelta<String>([const SeqRetain<String>(1)]);
+
+      expect(delta.isEmpty, isFalse);
+      expect(delta.isNotEmpty, isTrue);
+    });
+
+    test('the same steps make equal deltas', () {
+      final a = SequenceDelta<String>([
+        const SeqRetain<String>(2),
+        seqInsertText('hi'),
+      ]);
+      final b = SequenceDelta<String>([
+        const SeqRetain<String>(2),
+        seqInsertText('hi'),
+      ]);
+
+      expect(a, b);
+      expect(a.hashCode, b.hashCode);
+    });
+
+    test('steps of one length but different kinds are told apart', () {
+      final retained = SequenceDelta<String>([const SeqRetain<String>(1)]);
+      final deleted = SequenceDelta<String>([const SeqDelete<String>(1)]);
+
+      expect(retained, isNot(deleted));
+      expect(const SeqRetain<String>(1), isNot(const SeqDelete<String>(1)));
+    });
+
+    test('a step is equal to the same step', () {
+      expect(
+        const SeqRetain<String>(2).hashCode,
+        const SeqRetain<String>(2).hashCode,
+      );
+      expect(
+        const SeqDelete<String>(2).hashCode,
+        const SeqDelete<String>(2).hashCode,
+      );
+      expect(seqInsertText('hi').hashCode, seqInsertText('hi').hashCode);
+      expect(
+        const SeqMove<String>(from: 0, to: 2).hashCode,
+        const SeqMove<String>(from: 0, to: 2).hashCode,
+      );
+    });
+
+    test('an insert reads back as the text it carries', () {
+      expect(seqInsertText('h\u{1F600}i').text, 'h\u{1F600}i');
+    });
+
+    test('the descriptions name the steps', () {
+      expect(
+        const SeqMove<String>(from: 0, to: 2).toString(),
+        'SeqMove(0 -> 2)',
+      );
+      expect(
+        SequenceDelta<String>([const SeqRetain<String>(1)]).toString(),
+        contains('SeqRetain'),
+      );
+    });
+  });
 }
