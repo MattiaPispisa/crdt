@@ -157,6 +157,8 @@ void main() {
       expect(decoded.deps, equals(change.deps));
       expect(decoded.author, equals(change.author));
       expect(decoded.payloadBytes(), equals(change.payloadBytes()));
+      // Read straight out of the metadata, without decoding the ids.
+      expect(decoded.depsCount, equals(3));
     });
 
     test('fromBytes rejects an unknown schema version', () {

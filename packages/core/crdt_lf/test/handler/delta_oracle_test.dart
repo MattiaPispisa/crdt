@@ -1138,6 +1138,46 @@ void main() {
   });
 
   group('CRDTORMapHandler deltas', () {
+    test('a key that came only from a snapshot reports what it held',
+        () async {
+      // After a restore, a key can live in the snapshot with no live tag of
+      // its own. Reading it has to go through the snapshot, or the delta would
+      // report a write over nothing and every watcher would lose the old
+      // value.
+      final source = CRDTDocument();
+      CRDTORMapHandler<String, int>(source, 'ormap').put('a', 1);
+      final snapshot = source.takeSnapshot();
+
+      final doc = CRDTDocument();
+      final map = CRDTORMapHandler<String, int>(doc, 'ormap');
+      expect(doc.importSnapshot(snapshot), isTrue);
+
+      final projection = _Projection<Map<String, int>, MapDelta<String, int>>(
+        readSynced: () {
+          final point = map.readSynced();
+          return DeltaSyncPoint<Map<String, int>>(
+            value: Map<String, int>.of(point.value),
+            seq: point.seq,
+          );
+        },
+        stream: map.watch(),
+        applyDelta: (delta, base) => delta.apply(base),
+      );
+      await _pump();
+      expect(projection.value, {'a': 1});
+
+      map.put('a', 2);
+      await _pump();
+
+      expect(
+        projection.deltas.single.delta.entries['a'],
+        const MapEntrySet<int>(value: 2, previous: 1),
+      );
+      expect(projection.value, map.value);
+
+      await projection.dispose();
+    });
+
     test('the projection tracks a random edit stream', () async {
       final doc = CRDTDocument();
       final map = CRDTORMapHandler<String, int>(doc, 'ormap');

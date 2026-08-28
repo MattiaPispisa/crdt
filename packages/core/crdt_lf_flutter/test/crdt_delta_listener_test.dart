@@ -16,12 +16,13 @@ void main() {
       required List<String> projection,
       required List<ResetCause> resets,
       required VoidCallback onBuild,
+      String id = 'todos',
     }) {
       return CrdtProvider.value(
         value: doc,
         child: MaterialApp(
           home: CrdtHandlerDeltaListener<List<String>, SequenceDelta<String>>(
-            id: 'todos',
+            id: id,
             onReset: (context, sync, cause) {
               resets.add(cause);
               projection
@@ -137,6 +138,35 @@ void main() {
 
       expect(list.value, ['seed', 'x']);
       expect(projection, list.value);
+    });
+
+    testWidgets('follows the handler when the id changes', (tester) async {
+      CRDTListHandler<String>(doc, 'todos').insert(0, 'first');
+      final other = CRDTListHandler<String>(doc, 'other')..insert(0, 'second');
+
+      final projection = <String>[];
+      final resets = <ResetCause>[];
+      await tester.pumpWidget(
+        host(projection: projection, resets: resets, onBuild: () {}),
+      );
+      await tester.pumpAndSettle();
+      expect(projection, ['first']);
+
+      await tester.pumpWidget(
+        host(
+          projection: projection,
+          resets: resets,
+          onBuild: () {},
+          id: 'other',
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // Seeded again from the handler it now points at, and following it.
+      expect(projection, ['second']);
+      other.insert(1, 'third');
+      await tester.pumpAndSettle();
+      expect(projection, other.value);
     });
 
     testWidgets('a mismatched delta shape fails with a readable error',

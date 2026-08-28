@@ -124,9 +124,6 @@ class FugueTree<T> {
   /// The run [startID] opens. [startID] must be a run start.
   FugueRun<T> _runAt(FugueElementID startID) => _spotOf(startID)!.run;
 
-  /// Whether this tree holds [id].
-  bool contains(FugueElementID id) => _spotOf(id) != null;
-
   /// Files [run] among its peer's runs, keeping them ordered by counter.
   void _register(FugueRun<T> run) {
     final list = _runs.putIfAbsent(

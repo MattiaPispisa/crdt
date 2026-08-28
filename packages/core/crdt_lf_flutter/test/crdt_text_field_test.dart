@@ -1,4 +1,5 @@
 import 'package:crdt_lf/crdt_lf.dart';
+import 'package:crdt_lf/src/algorithm/fugue/tree.dart';
 import 'package:crdt_lf_flutter/crdt_lf_flutter.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -259,14 +260,21 @@ void main() {
       // none, so the caret rides on what the handler reported it did. A diff
       // of the two texts would collapse both regions into one span covering
       // the caret and snap it to the end.
-      CRDTTextHandler(doc, 'note').insert(0, 'hello world');
+      final note = CRDTTextHandler(doc, 'note')..insert(0, 'hello ');
       await tester.pumpWidget(host());
       await tester.tap(find.byType(TextField));
       await tester.pump();
-      final controller = tester
-          .widget<TextField>(find.byType(TextField))
-          .controller!
-        ..selection = const TextSelection.collapsed(offset: 5);
+      final controller =
+          tester.widget<TextField>(find.byType(TextField)).controller!;
+
+      // Typed through the field, so both arms of the push reach this handler
+      // and not only the Fugue one.
+      await tester.enterText(find.byType(TextField), 'hello brave world');
+      expect(note.value, 'hello brave world');
+      await tester.enterText(find.byType(TextField), 'hello world');
+      expect(note.value, 'hello world');
+
+      controller.selection = const TextSelection.collapsed(offset: 5);
 
       final remote = CRDTDocument(peerId: PeerId.generate());
       final remoteNote = CRDTTextHandler(remote, 'note');
@@ -473,6 +481,85 @@ void main() {
       );
     });
 
+    testWidgets('adopts a remote deletion', (tester) async {
+      // The mirror of the insert cases above: text going away has to move the
+      // field's copy the same way, and the caret with it.
+      final note = CRDTFugueTextHandler(doc, 'note')..insert(0, 'hello world');
+      await tester.pumpWidget(host());
+      await tester.tap(find.byType(TextField));
+      await tester.pump();
+      final controller = tester
+          .widget<TextField>(find.byType(TextField))
+          .controller!
+        ..selection = const TextSelection.collapsed(offset: 11);
+
+      final remote = remotePeer();
+      (remote.registeredHandlers['note']! as CRDTFugueTextHandler)
+          .delete(0, 6); // "hello "
+      doc.importChanges(
+        remote.exportChanges(fromVersionVector: doc.getVersionVector()),
+      );
+      await tester.pump();
+
+      expect(controller.text, 'world');
+      expect(note.value, 'world');
+      // The caret was at the end and stays there, six characters earlier.
+      expect(controller.selection.baseOffset, 5);
+    });
+
+    testWidgets('reads the value again when the handler asks for a reset',
+        (tester) async {
+      // A snapshot replaces the base the deltas were describing, so no delta
+      // can say what moved. This is the recovery path, and the only one that
+      // reads the whole value.
+      CRDTFugueTextHandler(doc, 'note').insert(0, 'hello');
+      await tester.pumpWidget(host());
+      final controller =
+          tester.widget<TextField>(find.byType(TextField)).controller!;
+      expect(controller.text, 'hello');
+
+      final other = CRDTDocument(peerId: PeerId.generate());
+      CRDTFugueTextHandler(other, 'note').insert(0, 'something else');
+      doc.importSnapshot(other.takeSnapshot());
+      await tester.pump();
+
+      expect(
+        controller.text,
+        (doc.registeredHandlers['note']! as CRDTFugueTextHandler).value,
+      );
+    });
+
+    testWidgets('reads the handler back when its own text has drifted',
+        (tester) async {
+      // The field derives its text and never reads it back, so a handler that
+      // under-reports would leave the wrong document on screen for good. The
+      // handler below reports one character less than it applies, which is
+      // exactly the mistake the check exists to catch.
+      final note = _UnderReportingFugueTextHandler(doc, 'note')
+        ..insert(0, 'hello');
+      await tester.pumpWidget(host());
+      final controller =
+          tester.widget<TextField>(find.byType(TextField)).controller!;
+
+      // The debug check compares the whole value and would throw first; this
+      // test is about the cheap one that also runs in release.
+      debugVerifyCrdtTextFieldProjection = false;
+      addTearDown(() => debugVerifyCrdtTextFieldProjection = true);
+
+      final remote = remotePeer();
+      (remote.registeredHandlers['note']! as CRDTFugueTextHandler)
+          .insert(5, 'XY');
+      doc.importChanges(
+        remote.exportChanges(fromVersionVector: doc.getVersionVector()),
+      );
+      await tester.pump();
+
+      // The delta said one character, the handler holds two: the field noticed
+      // and read instead of showing text the document does not have.
+      expect(controller.text, note.value);
+      expect(controller.text, 'helloXY');
+    });
+
     testWidgets('throws a FlutterError for a non-text handler', (tester) async {
       CRDTListHandler<String>(doc, 'note');
       await tester.pumpWidget(host());
@@ -491,5 +578,52 @@ final class _CountingFugueTextHandler extends CRDTFugueTextHandler {
   String get value {
     reads++;
     return super.value;
+  }
+}
+
+/// A handler that reports a shorter insert than it applies.
+///
+/// It exists to make the field's projection drift on purpose. Nothing else
+/// can: every real handler reports exactly what it did, which is what
+/// `delta_oracle_test.dart` proves.
+final class _UnderReportingFugueTextHandler extends CRDTFugueTextHandler {
+  _UnderReportingFugueTextHandler(super.doc, super.id);
+
+  @override
+  void applyToTree(
+    FugueTree<String> tree,
+    Operation operation, {
+    DeltaSink<Object?>? sink,
+  }) {
+    if (sink == null) {
+      super.applyToTree(tree, operation);
+      return;
+    }
+    final lying = _TruncatingSink(sink);
+    super.applyToTree(tree, operation, sink: lying);
+  }
+}
+
+/// Passes every delta through with one inserted element dropped.
+final class _TruncatingSink implements DeltaSink<Object?> {
+  _TruncatingSink(this._inner);
+
+  final DeltaSink<Object?> _inner;
+
+  @override
+  void add(Object? delta) {
+    if (delta is! SequenceDelta<String>) {
+      _inner.add(delta);
+      return;
+    }
+    _inner.add(
+      SequenceDelta<String>([
+        for (final op in delta.ops)
+          if (op is SeqInsert<String> && op.values.length > 1)
+            SeqInsert<String>(op.values.sublist(1))
+          else
+            op,
+      ]),
+    );
   }
 }
