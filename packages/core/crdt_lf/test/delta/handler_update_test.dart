@@ -46,7 +46,9 @@ void main() {
 
       expect(event.seq, 3);
       expect(event.cause, ResetCause.cacheDropped);
-      expect(event.toString(), 'HandlerReset(seq: 3, cause: '
+      expect(
+          event.toString(),
+          'HandlerReset(seq: 3, cause: '
           'ResetCause.cacheDropped)');
     });
   });

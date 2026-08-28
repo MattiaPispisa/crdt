@@ -2,8 +2,7 @@ import 'dart:typed_data';
 
 import 'package:crdt_lf/crdt_lf.dart';
 import 'package:crdt_lf/src/algorithm/fugue/tree.dart';
-import 'package:crdt_lf/src/algorithm/fugue/value_node.dart';
-import 'package:crdt_lf/src/handler/fugue/fugue_delta.dart';
+import 'package:crdt_lf/src/handler/fugue/fugue_sequence_apply.dart';
 import 'package:crdt_lf/src/handler/fugue/fugue_sequence_handler.dart';
 import 'package:crdt_lf/src/handler/handler_type.dart';
 
@@ -183,52 +182,8 @@ base class CRDTFugueTextHandler
     Operation operation, {
     DeltaSink<Object?>? sink,
   }) {
-    if (operation is _FugueTextInsertOperation) {
-      tree.iterableInsertChain(
-        leftOrigin: operation.leftOrigin,
-        rightOrigin: operation.rightOrigin,
-        nodes: operation.items.map(
-          (item) => FugueValueNode<String>(id: item.id, value: item.text),
-        ),
-      );
-      if (sink != null && operation.items.isNotEmpty) {
-        sink.add(
-          fugueInsertDelta<String>(
-            tree,
-            operation.items.first.id,
-            operation.items.map((item) => item.text).toList(),
-          ),
-        );
-      }
-    } else if (operation is _FugueTextDeleteOperation) {
-      // The places have to be read while the elements are still there.
-      final places = sink == null
-          ? const <int>[]
-          : fugueLivePositions<String>(
-              tree,
-              operation.items.map((item) => item.nodeID),
-            );
-      for (final item in operation.items) {
-        tree.delete(item.nodeID);
-      }
-      sink?.add(fugueDeleteDelta<String>(places));
-    } else if (operation is _FugueTextUpdateOperation) {
-      final winners = <(FugueElementID, String)>[];
-      for (final item in operation.items) {
-        final won = tree.update(
-          nodeID: item.nodeID,
-          value: item.text,
-          stamp: operation.stamp!,
-        );
-        // An update that loses the last-writer-wins comparison, or that lands
-        // on a tombstone, changes nothing anyone can see.
-        if (won && sink != null) {
-          winners.add((item.nodeID, item.text));
-        }
-      }
-      sink?.add(fugueUpdateDelta<String>(tree, winners));
-    } else {
-      sink?.add(SequenceDelta<String>(const []));
+    if (!applyFugueSequenceOperation<String>(tree, operation, sink: sink)) {
+      sink?.add(const SequenceDelta<String>.empty());
     }
   }
 

@@ -15,6 +15,11 @@ final class MapEntrySet<T> extends MapEntryChange<T> {
   final T value;
 
   /// What the key held before, or `null` when the key was absent.
+  ///
+  /// For a map of a nullable type those two cases both read as `null` here,
+  /// and nothing in the delta tells them apart. It costs nothing: [value] is
+  /// what the key holds now, so [MapDelta.apply] is right either way. Only a
+  /// consumer that shows "what it used to be" is affected.
   final T? previous;
 
   @override

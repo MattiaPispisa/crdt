@@ -23,10 +23,14 @@ sealed class HandlerUpdate<D> {
 
   /// The sequence number of this event for the handler that emitted it.
   ///
-  /// It grows by one per emitted event and never restarts. It is what
-  /// reconciles a [HandlerReset] with the events that follow it: the value a
-  /// reset asks for is read separately, and [seq] says which point of the
-  /// stream that value reflects.
+  /// It only ever grows, and never restarts. It may skip a number: a second
+  /// subscriber opens with a reset of its own, which the streams already
+  /// running do not see. That is why the consumer rule is "drop everything up
+  /// to and including my number", never "expect the next one".
+  ///
+  /// It is what reconciles a [HandlerReset] with the events that follow it:
+  /// the value a reset asks for is read separately, and [seq] says which point
+  /// of the stream that value reflects.
   final int seq;
 }
 
@@ -105,7 +109,12 @@ enum ResetCause {
   /// the history, which is the cost that read already had.
   cacheDropped,
 
-  /// The operation could not be decoded, or it threw while being applied.
+  /// A change could not be folded into the state.
+  ///
+  /// Its operation could not be decoded, or it threw while being applied, or
+  /// the document refused the change outright. A handler that simply has no
+  /// incremental path for an operation is not a failure and reports
+  /// [cacheDropped] instead.
   applyFailed,
 
   /// Queued changes were folded into the state without anyone collecting

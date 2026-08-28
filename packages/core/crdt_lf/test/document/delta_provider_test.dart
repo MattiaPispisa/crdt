@@ -26,6 +26,19 @@ final class _CountingTextHandler extends CRDTTextHandler {
   }
 }
 
+/// A text handler that refuses to fold a remote change, loudly.
+final class _ThrowingTextHandler extends CRDTTextHandler {
+  _ThrowingTextHandler(super.doc, super.id);
+
+  @override
+  String? incrementCachedState({
+    required Operation operation,
+    required String state,
+    DeltaSink<Object?>? sink,
+  }) =>
+      throw StateError('this handler cannot fold anything');
+}
+
 /// A second document holding a counting text handler, already in step with
 /// the given source document.
 ({CRDTDocument doc, _CountingTextHandler text}) _mirrorOf(
@@ -198,6 +211,52 @@ void main() {
       await subscription.cancel();
     });
 
+    test('a handler that throws does not hold the others back', () async {
+      // The eager drain runs inside the loop over every handler. A throw that
+      // escaped it would end that loop, and every handler after this one would
+      // keep a version the document has already moved past.
+      final source = CRDTDocument();
+      final sourceBad = CRDTTextHandler(source, 'bad')..insert(0, 'hello');
+      final sourceGood = CRDTTextHandler(source, 'good')..insert(0, 'world');
+
+      final mirror = CRDTDocument();
+      final bad = _ThrowingTextHandler(mirror, 'bad')
+        ..useIncrementalCacheUpdate = true;
+      final good = _CountingTextHandler(mirror, 'good')
+        ..useIncrementalCacheUpdate = true;
+      mirror.importChanges(source.exportChanges());
+      // Warm both caches, so the next import is queued rather than dropped.
+      bad.value;
+      good
+        ..value
+        ..folds = 0;
+
+      final causes = <ResetCause>[];
+      final subscription = bad.watch().listen((update) {
+        if (update is HandlerReset<SequenceDelta<String>>) {
+          causes.add(update.cause);
+        }
+      });
+      await _pump();
+
+      sourceBad.insert(5, '!');
+      sourceGood.insert(5, '!');
+      mirror.importChanges(
+        source.exportChanges(fromVersionVector: mirror.getVersionVector()),
+      );
+      await _pump();
+
+      // The failing handler said why, and still reads correctly.
+      expect(causes, [ResetCause.initial, ResetCause.applyFailed]);
+      expect(bad.value, 'hello!');
+      // The one after it got its change queued instead of being skipped, so
+      // reading it folds that one change rather than replaying the history.
+      expect(good.value, 'world!');
+      expect(good.folds, 1);
+
+      await subscription.cancel();
+    });
+
     test('disposing the document ends the stream', () async {
       final doc = CRDTDocument();
       final text = CRDTTextHandler(doc, 'text');
@@ -214,6 +273,15 @@ void main() {
 
       expect(done, isTrue);
       await subscription.cancel();
+    });
+
+    test('watching a disposed document says so instead of going quiet', () {
+      final doc = CRDTDocument();
+      final text = CRDTTextHandler(doc, 'text');
+
+      doc.dispose();
+
+      expect(text.watch, throwsA(isA<DocumentDisposedException>()));
     });
   });
 }

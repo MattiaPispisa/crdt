@@ -191,7 +191,7 @@ base class CRDTListHandler<T> extends Handler<List<T>>
         sink: sink,
       );
     } else {
-      _report(sink, SequenceDelta<T>(const []));
+      sink?.add(SequenceDelta<T>.empty());
     }
   }
 
@@ -205,8 +205,7 @@ base class CRDTListHandler<T> extends Handler<List<T>>
     // or at the end if the index is out of bounds
     final at = index <= state.length ? index : state.length;
     state.insert(at, value);
-    _report(
-      sink,
+    sink?.add(
       SequenceDelta<T>([
         if (at > 0) SeqRetain<T>(at),
         SeqInsert<T>([value]),
@@ -225,8 +224,7 @@ base class CRDTListHandler<T> extends Handler<List<T>>
       final actualCount =
           index + count > state.length ? state.length - index : count;
       state.removeRange(index, index + actualCount);
-      _report(
-        sink,
+      sink?.add(
         SequenceDelta<T>([
           if (index > 0) SeqRetain<T>(index),
           if (actualCount > 0) SeqDelete<T>(actualCount),
@@ -234,7 +232,7 @@ base class CRDTListHandler<T> extends Handler<List<T>>
       );
       return;
     }
-    _report(sink, SequenceDelta<T>(const []));
+    sink?.add(SequenceDelta<T>.empty());
   }
 
   void _listUpdate(
@@ -246,8 +244,7 @@ base class CRDTListHandler<T> extends Handler<List<T>>
     // Update the element at the specified index
     if (index < state.length) {
       state[index] = value;
-      _report(
-        sink,
+      sink?.add(
         SequenceDelta<T>([
           if (index > 0) SeqRetain<T>(index),
           SeqDelete<T>(1),
@@ -256,11 +253,8 @@ base class CRDTListHandler<T> extends Handler<List<T>>
       );
       return;
     }
-    _report(sink, SequenceDelta<T>(const []));
+    sink?.add(SequenceDelta<T>.empty());
   }
-
-  void _report(DeltaSink<Object?>? sink, SequenceDelta<T> delta) =>
-      sink?.add(delta);
 
   @override
   Operation? compound(Operation accumulator, Operation current) {

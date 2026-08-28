@@ -32,8 +32,8 @@ base mixin DocumentConsumer {
 
   /// Publishes what the current operation collected as one event for
   /// [change].
-  void _publishDelta(Change change, {required bool local}) =>
-      _deltaHub?.publishDelta(change, local: local);
+  void _publishRemoteDelta(Change change) =>
+      _deltaHub?.publishRemoteDelta(change);
 
   /// Publishes everything buffered that [change] carries, as one event.
   void _publishBufferedUpTo(Change change) =>
@@ -45,8 +45,15 @@ base mixin DocumentConsumer {
   /// Tells a watcher that the state has to be read again.
   void _emitReset(ResetCause cause) => _deltaHub?.emitReset(cause);
 
-  /// Ends the delta stream.
-  void _closeDeltas() => _deltaHub?.close();
+  /// Ends the delta stream and lets the hub go.
+  ///
+  /// The hub is dropped, not just closed: keeping it would let a `watch` after
+  /// the document was disposed build a fresh controller and hand back a stream
+  /// that can never fire again.
+  void _closeDeltas() {
+    _deltaHub?.close();
+    _deltaHub = null;
+  }
 }
 
 /// Per-consumer state cache that avoids recomputing the consumer's state
@@ -269,7 +276,7 @@ base mixin CacheableStateProvider<T> on DocumentConsumer {
         }
         state = next;
         if (sink != null) {
-          _publishDelta(change, local: false);
+          _publishRemoteDelta(change);
         }
       }
     } catch (_) {
@@ -357,8 +364,9 @@ base mixin CacheableStateProvider<T> on DocumentConsumer {
   /// May mutate [state] in place and return it. The default implementation
   /// returns `null`, i.e. no incremental path.
   ///
-  /// [sink] collects the positional effects of [operation]; `null` when
-  /// nobody is listening, which is every call the library makes today.
+  /// [sink] collects the positional effects of [operation]. It is `null`
+  /// whenever nobody is watching the handler, which is the common case and
+  /// costs one comparison.
   T? incrementCachedState({
     required Operation operation,
     required T state,
@@ -461,9 +469,11 @@ extension _HandlerHelper on Handler<dynamic> {
 /// Collects the positional effects of applying operations, one delta of type
 /// [D] at a time.
 ///
-/// Passed to [CacheableStateProvider.incrementCachedState]. The library
-/// produces no sink of its own, so that parameter is `null` on every call it
-/// makes.
+/// Passed to [CacheableStateProvider.incrementCachedState]. A handler writes
+/// to it what the operation did to the value anyone can see; the document
+/// turns that into the events of [DeltaProvider.watch]. The parameter is
+/// `null` whenever nobody is watching, so a handler that never checks it
+/// still works — it simply reports nothing.
 abstract class DeltaSink<D> {
   /// Records one delta.
   void add(D delta);

@@ -44,8 +44,8 @@ final class SetDelta<T> implements ComposableDelta<SetDelta<T>> {
   /// The set [base] becomes once this delta is applied.
   ///
   /// [base] is left alone; the result is a new set.
-  Set<T> apply(Set<T> base) => {...base, ...added}
-    ..removeWhere(removed.contains);
+  Set<T> apply(Set<T> base) =>
+      {...base, ...added}..removeWhere(removed.contains);
 
   @override
   bool operator ==(Object other) =>

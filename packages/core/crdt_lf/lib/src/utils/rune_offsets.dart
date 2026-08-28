@@ -63,6 +63,26 @@ class RuneOffsets {
     return runes;
   }
 
+  /// UTF-16 code-unit offset [count] runes past [from].
+  ///
+  /// Like [utf16Offset], but it starts counting from [from] instead of from
+  /// the beginning, so walking a text in steps costs the length of the steps
+  /// rather than the length of the text. Stops at the end of [text].
+  ///
+  /// ```dart
+  /// print(RuneOffsets.skip('a😀b', 1, 1)); // Prints 3 (past the emoji)
+  /// ```
+  static int skip(String text, int from, int count) {
+    final length = text.length;
+    var offset = from;
+    var runes = 0;
+    while (offset < length && runes < count) {
+      offset += _runeWidthAt(text, offset, length);
+      runes++;
+    }
+    return offset;
+  }
+
   /// Code units spanned by the rune starting at [offset]: 2 for a well-formed
   /// surrogate pair, 1 otherwise (including an unpaired surrogate).
   static int _runeWidthAt(String text, int offset, int length) {

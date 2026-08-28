@@ -638,7 +638,16 @@ class CRDTDocument extends BaseCRDTDocument {
       // A watched handler cannot leave the queue waiting for a read that may
       // never come, so it folds now and publishes one event per change.
       if (handler.hasDeltaListeners) {
-        handler._drainPendingRemoteChanges(withDeltas: true);
+        try {
+          handler._drainPendingRemoteChanges(withDeltas: true);
+        } catch (_) {
+          // The drain has already dropped this handler's cache and told its
+          // subscribers why. Letting the throw out would end this loop, and
+          // every handler after it would keep a version the document has
+          // already moved past. One handler's bad operation is not a reason to
+          // leave the others behind — and reading this one still recomputes,
+          // and still throws, exactly as it does when nobody is watching.
+        }
       }
     }
   }

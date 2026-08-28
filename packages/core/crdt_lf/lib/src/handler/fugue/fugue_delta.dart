@@ -15,11 +15,11 @@ SequenceDelta<T> fugueInsertDelta<T>(
   List<T> values,
 ) {
   if (values.isEmpty) {
-    return SequenceDelta<T>(const []);
+    return SequenceDelta<T>.empty();
   }
   final after = tree.liveIndexAfter(firstID);
   if (after == null) {
-    return SequenceDelta<T>(const []);
+    return SequenceDelta<T>.empty();
   }
   final at = after - 1;
   return SequenceDelta<T>([
@@ -126,7 +126,7 @@ SequenceDelta<T> fugueReplaceDelta<T>(List<(int, T)> entries) {
 /// A delta that puts [values] in at [at].
 SequenceDelta<T> fugueInsertAtDelta<T>(int at, List<T> values) {
   if (values.isEmpty || at < 0) {
-    return SequenceDelta<T>(const []);
+    return SequenceDelta<T>.empty();
   }
   return SequenceDelta<T>([
     if (at > 0) SeqRetain<T>(at),

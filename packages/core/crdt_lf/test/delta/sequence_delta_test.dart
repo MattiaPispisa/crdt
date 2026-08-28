@@ -93,6 +93,24 @@ void main() {
       expect(delta.applyToText('🌐🌏'), '🌐');
     });
 
+    test('a lone surrogate counts as one element, like the handlers do', () {
+      // The text handlers index by rune and count an unpaired surrogate as
+      // one (see RuneOffsets). This repo round-trips such text on purpose, so
+      // applying a delta over it must not consume the following character.
+      const base = '\uD83D' 'ab';
+      final delta = SequenceDelta<String>([
+        const SeqRetain<String>(1),
+        const SeqDelete<String>(1),
+      ]);
+
+      expect(delta.applyToText(base), '\uD83D' 'b');
+      // The list path is the oracle: same content, same answer.
+      expect(
+        delta.apply(base.runes.map(String.fromCharCode).toList()).join(),
+        '\uD83D' 'b',
+      );
+    });
+
     test('inserted non-BMP text round-trips', () {
       final delta = SequenceDelta<String>([seqInsertText('🌐a')]);
 
@@ -252,6 +270,23 @@ void main() {
 
       expect(delta.mapOffset(4), 4);
       expect(delta.mapOffset(2), 2);
+    });
+
+    test('an offset at a splice with no retain before it stays in front', () {
+      // The same question as the two tests above, asked of a delta that starts
+      // at zero: an insert at the very beginning must not carry the offset
+      // along with it.
+      final inserted = SequenceDelta<String>([seqInsertText('xx')]);
+      final replaced = SequenceDelta<String>([
+        const SeqDelete<String>(3),
+        seqInsertText('xy'),
+      ]);
+
+      expect(inserted.mapOffset(0), 0);
+      expect(replaced.mapOffset(0), 0);
+      // Past the splice it shifts as usual.
+      expect(inserted.mapOffset(1), 3);
+      expect(replaced.mapOffset(4), 3);
     });
 
     test('a move refuses to map an offset', () {

@@ -23,9 +23,11 @@
   `CRDTTextHandler` is the one row that pays instead of gains — 44 → 54 µs — because its value is
   already a plain cached string, so building a delta buys it nothing. Measured with
   `benchmarks/src/benchmarks/text_field_benchmark.dart`; see `benchmarks/results.md`.
-  Set `debugVerifyCrdtTextFieldProjection` to `false` to skip the debug-only check that reads the
-  handler back and compares — it exists to catch a binding that drifts, and it costs exactly what
-  the field now avoids.
+  Because the text is derived and never read back, the field checks it against the handler after
+  every step and reads once to recover if the two disagree. The check is cheap on purpose: a Fugue
+  handler answers its length without projecting anything. Set
+  `debugVerifyCrdtTextFieldProjection` to `false` to skip the stricter debug-only version, which
+  compares the whole value and therefore costs exactly what the field now avoids.
 - `CrdtTextFieldBuilder` takes a batch of remote changes in one at a time rather than composing them
   into a single controller write. Each one now costs the size of its own edit, so there is nothing
   left worth batching, and Flutter folds the writes into one frame anyway.
@@ -33,9 +35,20 @@
   the remote edit by diffing the old and new text. A diff collapses a change that touched two
   regions into one span covering the caret, which dragged it to the end of that span; the reported
   delta says exactly what moved. Stable positions still come first for `CRDTFugueTextHandler` — they
-  follow element identity — so this is what `CRDTTextHandler`, which has none, gains. A batch of
-  changes is composed into one delta and adopted once, so the controller is still written a single
-  time per sync burst.
+  follow element identity — so this is what `CRDTTextHandler`, which has none, gains.
+- `CrdtTextFieldBuilder` no longer loses a remote change that was published but not yet delivered
+  when a keystroke lands in that window. It asks the stream how far it has got, and settles with one
+  read when it is behind, instead of pushing the edit against a text the handler no longer holds.
+- `CrdtTextFieldBuilder` keeps a pending IME composition across a remote change, instead of dropping
+  what the user was in the middle of typing.
+- `CrdtTextFieldBuilder` re-subscribes when its `id` changes, instead of staying bound to the
+  handler it started with.
+- `CrdtTextCursorsOverlay` counts caret offsets in the text the field is painting
+  (`RenderEditable.plainText`, already materialised) instead of asking the handler, which projected
+  the whole document on every resolve. It also re-subscribes when its `id` changes.
+- `CrdtTextFieldBuilder` reads the value once when it mounts rather than twice: seeding the field
+  and answering the reset that opens the stream are the same question, and on a large document the
+  answer is a projection of the whole text.
 
 ## [0.4.0](https://github.com/MattiaPispisa/crdt/tree/crdt_lf_flutter-v0.4.0/packages/crdt_lf_flutter)
 

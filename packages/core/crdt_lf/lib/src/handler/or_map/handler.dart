@@ -267,12 +267,17 @@ base class CRDTORMapHandler<K, V> extends Handler<ORMapState<K, V>>
 
   /// The key an operation is about, or `null` for a kind that is about no
   /// single key.
-  K? _targetKey(Operation operation) {
+  ///
+  /// A record rather than a bare `K?`, for the same reason [_liveEntryOf]
+  /// returns one: a map keyed by a nullable type can hold `null`, and "this
+  /// operation is about `null`" must not read as "this operation is about
+  /// nothing".
+  (K,)? _targetKey(Operation operation) {
     if (operation is _ORMapPutOperation<K, V>) {
-      return operation.key;
+      return (operation.key,);
     }
     if (operation is _ORMapRemoveOperation<K, V>) {
-      return operation.key;
+      return (operation.key,);
     }
     return null;
   }
@@ -302,7 +307,7 @@ base class CRDTORMapHandler<K, V> extends Handler<ORMapState<K, V>>
   MapDelta<K, V> _entryDelta(K key, (V,)? before, (V,)? after) {
     if (after != null) {
       if (before != null && before.$1 == after.$1) {
-        return MapDelta<K, V>(const {});
+        return MapDelta<K, V>.empty();
       }
       return MapDelta<K, V>({
         key: MapEntrySet<V>(value: after.$1, previous: before?.$1),
@@ -313,7 +318,7 @@ base class CRDTORMapHandler<K, V> extends Handler<ORMapState<K, V>>
         key: MapEntryRemoved<V>(previous: before.$1),
       });
     }
-    return MapDelta<K, V>(const {});
+    return MapDelta<K, V>.empty();
   }
 
   @override
@@ -330,8 +335,8 @@ base class CRDTORMapHandler<K, V> extends Handler<ORMapState<K, V>>
     try {
       // Tag-level again: a put that loses the tag comparison moves the tags
       // but not the key anyone can see. Read the key before and after.
-      final key = _targetKey(operation);
-      final before = key == null ? null : _liveEntryOf(state, key);
+      final target = _targetKey(operation);
+      final before = target == null ? null : _liveEntryOf(state, target.$1);
 
       _applyOperationToTagState(
         state: state,
@@ -340,9 +345,13 @@ base class CRDTORMapHandler<K, V> extends Handler<ORMapState<K, V>>
 
       if (sink != null) {
         sink.add(
-          key == null
-              ? MapDelta<K, V>(const {})
-              : _entryDelta(key, before, _liveEntryOf(state, key)),
+          target == null
+              ? MapDelta<K, V>.empty()
+              : _entryDelta(
+                  target.$1,
+                  before,
+                  _liveEntryOf(state, target.$1),
+                ),
         );
       }
       return state;

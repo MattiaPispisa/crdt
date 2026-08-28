@@ -15,6 +15,9 @@
   watches costs one `null` check on the apply path. See
   [Handler deltas](https://github.com/MattiaPispisa/crdt/blob/main/packages/core/crdt_lf/doc/handler_deltas.md).
   [132](https://github.com/MattiaPispisa/crdt/issues/132)
+- `RuneOffsets.skip` gives the code-unit offset a number of runes past another offset. Walking a
+  text in steps now costs the length of the steps instead of the length of the text, and it is the
+  one place that decides how wide a rune is — including an unpaired surrogate, which counts as one.
 - `DeltaProvider.deltaSeq` reports how far the stream has got without reading the value. A consumer
   that **writes** already knows what it wrote: it can move its own copy by hand and then take this
   number to say "I account for everything published so far", instead of paying for a read it does
@@ -31,6 +34,8 @@
   wire: element ids, operations and the snapshot format are unchanged.
   [125](https://github.com/MattiaPispisa/crdt/issues/125)
 - A change costs about 20% less memory to hold.
+- `watch()` on a disposed document throws `DocumentDisposedException` instead of handing back a
+  stream that opens with a reset and then stays silent for ever.
 
 ## [4.0.0](https://github.com/MattiaPispisa/crdt/tree/crdt_lf-v4.0.0/packages/crdt_lf)
 

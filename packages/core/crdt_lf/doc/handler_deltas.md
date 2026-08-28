@@ -95,11 +95,16 @@ runs every row twice. One remote keystroke plus the read that follows it:
 | `CRDTTextHandler` | 2 000 chars | 9.8 µs | 11.4 µs |
 | `CRDTTextHandler` | 10 000 chars | 12.8 µs | 18.6 µs |
 | `CRDTMapHandler` | 5 000 keys | 4.7 µs | 5.1 µs |
+| `CRDTFugueMovableListHandler` | 1 000 elements | 53 µs | 71 µs |
+| `CRDTFugueMovableListHandler` | 5 000 elements | 186 µs | 355 µs |
 
-The Fugue rows do not get slower, because the work only moves: a watched
+The Fugue text rows do not get slower, because the work only moves: a watched
 handler folds the change on arrival and the read that follows finds the state
 ready. Typing 2 000 characters locally into a Fugue text goes from 56.4 ms to
 72.5 ms, about 8 µs of event per keystroke.
+
+The movable list is the one handler that does get slower, and by an amount
+that grows with the list — see its shape below.
 
 The `CRDTTextHandler` rows type at the **end** of the text, which is the case
 that has to count the runes again because the index clamped. An edit in the
@@ -117,10 +122,14 @@ anything a regression. The shapes behind the numbers:
   an edit that clamps (typing at the very end) pays one rune walk.
 - **`CRDTMapHandler`, the OR handlers, `CRDTRegisterHandler`** — one lookup
   before the write and one after, `O(1)`.
-- **`CRDTFugueMovableListHandler`** — two walks of the visible order per
-  operation. Its visible order is a projection of the tree *through* the
-  identity map, so nothing the tree reports describes it, and a move only
-  looks like a move when you compare the order either side of the apply.
+- **`CRDTFugueMovableListHandler`** — one walk of the visible order per
+  operation, on top of the one a read pays anyway. Its visible order is a
+  projection of the tree *through* the identity map, so nothing the tree
+  reports describes it, and a move only looks like a move when you compare the
+  order either side of the apply. This is the one handler whose watched cost
+  grows with the size of the value; the walk is shared with the read, and the
+  two orders are held by reference rather than copied, but it cannot be turned
+  into the `O(√n)` query the other sequence handlers use.
 
 ## Semantics worth knowing before you rely on them
 

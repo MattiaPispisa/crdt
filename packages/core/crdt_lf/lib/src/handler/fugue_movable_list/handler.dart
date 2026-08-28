@@ -339,8 +339,11 @@ base class CRDTFugueMovableListHandler<T>
     // so nothing the tree reports describes it. Reading it either side of the
     // apply is what makes a `move` recognisable as a move instead of a delete
     // and an insert. Two walks, and only for a watched handler.
+    // Both come out of one walk, and both survive the [_markDirty] below: the
+    // state builds fresh lists rather than editing these, so holding on to
+    // them is free.
     final beforeIds = sink == null ? null : state.visibleIdentities();
-    final beforeValues = sink == null ? null : List<T>.of(state.value);
+    final beforeValues = sink == null ? null : state.value;
 
     if (operation is _MovableListInsertOperation<T>) {
       // Slots into the Fugue tree (handled by the tree's chained insert);
@@ -438,12 +441,15 @@ base class CRDTFugueMovableListHandler<T>
     final afterIds = state.visibleIdentities();
     final afterValues = state.value;
 
-    final placeBefore = <FugueElementID, int>{};
-    for (var i = 0; i < beforeIds.length; i++) {
-      placeBefore[beforeIds[i]] = i;
-    }
+    // Lazily: an insert never asks where anything used to be.
+    late final placeBefore = <FugueElementID, int>{
+      for (var i = 0; i < beforeIds.length; i++) beforeIds[i]: i,
+    };
 
     if (operation is _MovableListInsertOperation<T>) {
+      if (operation.items.isEmpty) {
+        return SequenceDelta<T>.empty();
+      }
       final first = operation.items.first.identityID;
       final at = afterIds.indexOf(first);
       return fugueInsertAtDelta<T>(
@@ -458,7 +464,7 @@ base class CRDTFugueMovableListHandler<T>
       // A move that lost the last-writer-wins comparison, or that asked for
       // the place the element already had, moves nothing.
       if (from == null || to < 0 || from == to) {
-        return SequenceDelta<T>(const []);
+        return SequenceDelta<T>.empty();
       }
       return SequenceDelta<T>([SeqMove<T>(from: from, to: to)]);
     }
@@ -486,7 +492,7 @@ base class CRDTFugueMovableListHandler<T>
       return fugueReplaceDelta<T>(entries);
     }
 
-    return SequenceDelta<T>(const []);
+    return SequenceDelta<T>.empty();
   }
 
   /// The version of the snapshot blob this build writes and reads.
@@ -644,18 +650,25 @@ class FugueMovableListState<T> {
   /// rebuilt (lazy) after every applyOperation
   List<FugueElementID>? _cachedVisiblePositions;
 
+  /// rebuilt (lazy) after every applyOperation
+  List<FugueElementID>? _cachedIdentities;
+
   void _markDirty() {
     _cachedValues = null;
     _cachedVisiblePositions = null;
+    _cachedIdentities = null;
   }
 
   void _resolveVisible() {
-    if (_cachedValues != null && _cachedVisiblePositions != null) {
+    if (_cachedValues != null &&
+        _cachedVisiblePositions != null &&
+        _cachedIdentities != null) {
       return;
     }
 
     final values = <T>[];
     final positions = <FugueElementID>[];
+    final identities = <FugueElementID>[];
     for (final node in _tree.nodes()) {
       final identity = node.value;
       final element = _elements[identity];
@@ -671,9 +684,11 @@ class FugueMovableListState<T> {
       }
       values.add(element.value);
       positions.add(node.id);
+      identities.add(identity);
     }
     _cachedValues = values;
     _cachedVisiblePositions = positions;
+    _cachedIdentities = identities;
   }
 
   /// Returns the public list value.
@@ -684,23 +699,16 @@ class FugueMovableListState<T> {
 
   /// The identity of every visible element, in order.
   ///
-  /// Walked on demand rather than cached: only a watched handler asks for it,
-  /// and holding it would cost every other handler the memory.
+  /// It comes out of the same walk that resolves [value], so a watched handler
+  /// pays one traversal per operation rather than one for the values and
+  /// another for the identities.
+  ///
+  /// The list is rebuilt from scratch whenever the state moves, so a caller
+  /// that keeps a reference keeps the order as it was — which is what makes
+  /// "before" and "after" comparable without copying either one.
   List<FugueElementID> visibleIdentities() {
-    final result = <FugueElementID>[];
-    for (final node in _tree.nodes()) {
-      final identity = node.value;
-      final element = _elements[identity];
-
-      if (element == null || element.deleted) {
-        continue;
-      }
-      if (element.position != node.id) {
-        continue;
-      }
-      result.add(identity);
-    }
-    return result;
+    _resolveVisible();
+    return _cachedIdentities!;
   }
 
   /// Returns the visible positions in traversal order.

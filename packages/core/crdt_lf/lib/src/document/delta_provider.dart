@@ -30,6 +30,10 @@ base mixin DeltaProvider<V, D extends ComposableDelta<D>> on DocumentConsumer {
   /// the decode and the apply when the change **arrives**. The work is the
   /// same; only the moment changes.
   Stream<HandlerUpdate<D>> watch() {
+    // A disposed document publishes nothing ever again, so handing back a
+    // stream that opens with a reset and then stays silent forever would be a
+    // lie. Say so instead.
+    _document._ensureNotDisposed('watch');
     final hub = _deltaHub as _DeltaHub<D>? ?? (_deltaHub = _DeltaHub<D>());
     return hub.watch();
   }
@@ -76,7 +80,7 @@ abstract class _DeltaHubBase {
 
   void bufferDelta(OperationId stamp);
 
-  void publishDelta(Change change, {required bool local});
+  void publishRemoteDelta(Change change);
 
   void publishBufferedUpTo(Change change);
 
@@ -88,17 +92,25 @@ abstract class _DeltaHubBase {
 }
 
 /// Holds the stream, the sequence number and the deltas waiting for a change.
-final class _DeltaHub<D extends ComposableDelta<D>> extends _DeltaHubBase {
+///
+/// It is also the [DeltaSink] handed to the operation being applied, so what
+/// that operation reports lands straight in [_staged].
+final class _DeltaHub<D extends ComposableDelta<D>> extends _DeltaHubBase
+    implements DeltaSink<D> {
   StreamController<HandlerUpdate<D>>? _controller;
   int _seq = 0;
 
-  /// The deltas of the operation being applied right now.
-  _DeltaStage<D>? _stage;
+  /// What the operation being applied has reported so far, as one delta.
+  ///
+  /// An operation may write here and then refuse itself (see
+  /// [CacheableStateProvider.incrementCachedState]). What it wrote describes a
+  /// state nobody holds, so [clear] drops it and it never leaves.
+  D? _staged;
 
   /// The deltas of the operations of the open transaction, in the order they
   /// were applied. They wait because the change that carries them is created
   /// on commit, after the compaction that may have fused them.
-  List<_BufferedDelta<D>>? _buffer;
+  List<(OperationId stamp, D delta)>? _buffer;
 
   @override
   bool get hasListener => _controller?.hasListener ?? false;
@@ -131,40 +143,43 @@ final class _DeltaHub<D extends ComposableDelta<D>> extends _DeltaHubBase {
   }
 
   @override
+  void add(D delta) {
+    final current = _staged;
+    _staged = current == null ? delta : current.compose(delta);
+  }
+
+  @override
   DeltaSink<Object?>? begin() {
     if (!hasListener) {
       return null;
     }
-    return _stage = _DeltaStage<D>();
+    _staged = null;
+    return this;
+  }
+
+  /// What the operation reported, clearing the slot for the next one.
+  D? _takeStaged() {
+    final staged = _staged;
+    _staged = null;
+    return staged;
   }
 
   @override
   void bufferDelta(OperationId stamp) {
-    final staged = _stage?.composed;
-    _stage = null;
+    final staged = _takeStaged();
     if (staged == null) {
       return;
     }
-    (_buffer ??= <_BufferedDelta<D>>[])
-        .add(_BufferedDelta<D>(stamp: stamp, delta: staged));
+    (_buffer ??= <(OperationId, D)>[]).add((stamp, staged));
   }
 
   @override
-  void publishDelta(Change change, {required bool local}) {
-    final staged = _stage?.composed;
-    _stage = null;
+  void publishRemoteDelta(Change change) {
+    final staged = _takeStaged();
     if (staged == null) {
       return;
     }
-    _emit(
-      HandlerDelta<D>(
-        delta: staged,
-        changeId: change.id,
-        author: change.author,
-        local: local,
-        seq: ++_seq,
-      ),
-    );
+    _emitDelta(change, staged, local: false);
   }
 
   @override
@@ -180,9 +195,9 @@ final class _DeltaHub<D extends ComposableDelta<D>> extends _DeltaHubBase {
     // exactly what this change carries.
     D? composed;
     var taken = 0;
-    while (taken < buffer.length &&
-        buffer[taken].stamp.compareTo(change.id) <= 0) {
-      final next = buffer[taken].delta;
+    while (
+        taken < buffer.length && buffer[taken].$1.compareTo(change.id) <= 0) {
+      final next = buffer[taken].$2;
       composed = composed == null ? next : composed.compose(next);
       taken++;
     }
@@ -194,20 +209,12 @@ final class _DeltaHub<D extends ComposableDelta<D>> extends _DeltaHubBase {
       _buffer = null;
     }
 
-    _emit(
-      HandlerDelta<D>(
-        delta: composed!,
-        changeId: change.id,
-        author: change.author,
-        local: true,
-        seq: ++_seq,
-      ),
-    );
+    _emitDelta(change, composed!, local: true);
   }
 
   @override
   void clear() {
-    _stage = null;
+    _staged = null;
     _buffer = null;
   }
 
@@ -225,41 +232,22 @@ final class _DeltaHub<D extends ComposableDelta<D>> extends _DeltaHubBase {
     _controller = null;
   }
 
+  void _emitDelta(Change change, D delta, {required bool local}) {
+    _emit(
+      HandlerDelta<D>(
+        delta: delta,
+        changeId: change.id,
+        author: change.author,
+        local: local,
+        seq: ++_seq,
+      ),
+    );
+  }
+
   void _emit(HandlerUpdate<D> update) {
     final controller = _controller;
     if (controller != null && !controller.isClosed) {
       controller.add(update);
     }
   }
-}
-
-/// Collects the deltas of one operation, so a half-applied operation can be
-/// thrown away whole.
-///
-/// An operation may mutate the state in place and then refuse it (see
-/// [CacheableStateProvider.incrementCachedState]). Whatever it wrote to the
-/// sink before refusing describes a state nobody holds, so it never leaves
-/// here.
-final class _DeltaStage<D extends ComposableDelta<D>> implements DeltaSink<D> {
-  D? _composed;
-
-  /// Everything this operation reported, as one delta.
-  D? get composed => _composed;
-
-  @override
-  void add(D delta) {
-    final current = _composed;
-    _composed = current == null ? delta : current.compose(delta);
-  }
-}
-
-/// One operation's delta, waiting for the change that will carry it.
-final class _BufferedDelta<D extends ComposableDelta<D>> {
-  const _BufferedDelta({required this.stamp, required this.delta});
-
-  /// The id of the operation the delta came from.
-  final OperationId stamp;
-
-  /// What the operation did.
-  final D delta;
 }

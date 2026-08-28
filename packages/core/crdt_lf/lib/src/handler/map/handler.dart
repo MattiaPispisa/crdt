@@ -165,15 +165,17 @@ base class CRDTMapHandler<T> extends Handler<Map<String, T>>
         }),
       );
     } else if (operation is _MapDeleteOperation<T>) {
+      // `containsKey`, not `previous != null`: for a map of a nullable type a
+      // key holding `null` is still a key, and removing it is still a move.
       final had = state.containsKey(operation.key);
       final previous = state[operation.key];
       _mapDelete(state, key: operation.key);
       sink?.add(
-        had && previous != null
+        had
             ? MapDelta<String, T>({
-                operation.key: MapEntryRemoved<T>(previous: previous),
+                operation.key: MapEntryRemoved<T>(previous: previous as T),
               })
-            : MapDelta<String, T>(const {}),
+            : MapDelta<String, T>.empty(),
       );
     } else if (operation is _MapUpdateOperation<T>) {
       // An update of a key that is not there does nothing, so it must not
@@ -189,10 +191,10 @@ base class CRDTMapHandler<T> extends Handler<Map<String, T>>
                   previous: previous,
                 ),
               })
-            : MapDelta<String, T>(const {}),
+            : MapDelta<String, T>.empty(),
       );
     } else {
-      sink?.add(MapDelta<String, T>(const {}));
+      sink?.add(MapDelta<String, T>.empty());
     }
   }
 

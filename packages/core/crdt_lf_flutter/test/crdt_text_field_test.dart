@@ -366,6 +366,113 @@ void main() {
       expect(note.reads, 0);
     });
 
+    testWidgets('reads the value once when it mounts', (tester) async {
+      // Seeding the field and answering the reset that opens the stream are
+      // the same question, and the answer costs a projection of the whole
+      // document. Asking it twice showed the same text twice.
+      final note = _CountingFugueTextHandler(doc, 'note')
+        ..insert(0, 'hello')
+        ..reads = 0;
+
+      debugVerifyCrdtTextFieldProjection = false;
+      addTearDown(() => debugVerifyCrdtTextFieldProjection = true);
+
+      await tester.pumpWidget(host());
+      await tester.pump();
+
+      expect(
+        tester.widget<TextField>(find.byType(TextField)).controller!.text,
+        'hello',
+      );
+      expect(note.reads, 1);
+    });
+
+    testWidgets(
+        'a remote change published but not yet delivered still lands before '
+        'a local keystroke', (tester) async {
+      // The stream says what it has published; delivery comes a microtask
+      // later. A keystroke in that window must not be pushed against a text
+      // the handler no longer holds — and must not raise the mark past the
+      // event that is still on its way, which would drop it for good.
+      final note = CRDTFugueTextHandler(doc, 'note')..insert(0, 'hello');
+      await tester.pumpWidget(host());
+      final controller =
+          tester.widget<TextField>(find.byType(TextField)).controller!;
+
+      final remote = remotePeer();
+      (remote.registeredHandlers['note']! as CRDTFugueTextHandler)
+          .insert(0, 'X');
+      doc.importChanges(
+        remote.exportChanges(fromVersionVector: doc.getVersionVector()),
+      );
+      // Deliberately no pump: the event exists, nobody has received it.
+
+      final typed = '${controller.text}!';
+      controller.value = TextEditingValue(
+        text: typed,
+        selection: TextSelection.collapsed(offset: typed.length),
+      );
+      await tester.pump();
+
+      expect(note.value, 'Xhello!');
+      expect(controller.text, note.value);
+    });
+
+    testWidgets('follows the handler when the id changes', (tester) async {
+      CRDTFugueTextHandler(doc, 'note').insert(0, 'first');
+      CRDTFugueTextHandler(doc, 'other').insert(0, 'second');
+
+      await tester.pumpWidget(host());
+      expect(
+        tester.widget<TextField>(find.byType(TextField)).controller!.text,
+        'first',
+      );
+
+      await tester.pumpWidget(host(id: 'other'));
+      await tester.pump();
+
+      expect(
+        tester.widget<TextField>(find.byType(TextField)).controller!.text,
+        'second',
+      );
+    });
+
+    testWidgets('keeps a pending IME composition across a remote change',
+        (tester) async {
+      final note = CRDTFugueTextHandler(doc, 'note')..insert(0, 'hello');
+      await tester.pumpWidget(host());
+      final controller =
+          tester.widget<TextField>(find.byType(TextField)).controller!
+            // Mid-composition: the user is typing at the end, nothing
+            // committed.
+            ..value = const TextEditingValue(
+              text: 'hellozz',
+              selection: TextSelection.collapsed(offset: 7),
+              composing: TextRange(start: 5, end: 7),
+            );
+      await tester.pump();
+
+      final remote = remotePeer();
+      (remote.registeredHandlers['note']! as CRDTFugueTextHandler)
+          .insert(0, 'X');
+      doc.importChanges(
+        remote.exportChanges(fromVersionVector: doc.getVersionVector()),
+      );
+      await tester.pump();
+
+      expect(controller.text, note.value);
+      // The composed characters moved along with the text instead of being
+      // thrown away under the user.
+      expect(controller.value.composing.isValid, isTrue);
+      expect(
+        controller.text.substring(
+          controller.value.composing.start,
+          controller.value.composing.end,
+        ),
+        'zz',
+      );
+    });
+
     testWidgets('throws a FlutterError for a non-text handler', (tester) async {
       CRDTListHandler<String>(doc, 'note');
       await tester.pumpWidget(host());

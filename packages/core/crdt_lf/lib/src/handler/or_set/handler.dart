@@ -173,12 +173,16 @@ base class CRDTORSetHandler<T> extends Handler<ORSetState<T>>
 
   /// The value an operation is about, or `null` for a kind that is about no
   /// single value.
-  T? _targetValue(Operation operation) {
+  ///
+  /// A record rather than a bare `T?`: a set of a nullable type can hold
+  /// `null`, and "this operation is about `null`" must not read as "this
+  /// operation is about nothing".
+  (T,)? _targetValue(Operation operation) {
     if (operation is _ORSetAddOperation<T>) {
-      return operation.value;
+      return (operation.value,);
     }
     if (operation is _ORSetRemoveOperation<T>) {
-      return operation.value;
+      return (operation.value,);
     }
     return null;
   }
@@ -264,7 +268,7 @@ base class CRDTORSetHandler<T> extends Handler<ORSetState<T>>
       // live tag moves the tags but not the set anyone can see. So the delta
       // comes from membership before and after, one O(1) lookup each.
       final target = _targetValue(operation);
-      final before = target != null && _isPresent(state, target);
+      final before = target != null && _isPresent(state, target.$1);
 
       _applyOperationToTagState(
         state: state,
@@ -272,11 +276,11 @@ base class CRDTORSetHandler<T> extends Handler<ORSetState<T>>
       );
 
       if (sink != null) {
-        final after = target != null && _isPresent(state, target);
+        final after = target != null && _isPresent(state, target.$1);
         sink.add(
           SetDelta<T>(
-            added: !before && after ? <T>{target as T} : <T>{},
-            removed: before && !after ? <T>{target as T} : <T>{},
+            added: !before && after ? <T>{target.$1} : <T>{},
+            removed: before && !after ? <T>{target.$1} : <T>{},
           ),
         );
       }

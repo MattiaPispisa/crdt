@@ -1,4 +1,5 @@
 import 'package:crdt_lf/src/delta/handler_update.dart';
+import 'package:crdt_lf/src/utils/rune_offsets.dart';
 
 /// One step of a [SequenceDelta].
 ///
@@ -240,9 +241,21 @@ final class SequenceDelta<T> implements ComposableDelta<SequenceDelta<T>> {
           out += op.count;
           index++;
         case SeqInsert<T>():
+          // Right here: stay in front of what is put in. The retain arm above
+          // already answers this when a retain leads, and a delta that starts
+          // at zero carries none — without this the answer would depend on
+          // that.
+          if (offset == base) {
+            return out;
+          }
           out += op.values.length;
           index++;
         case SeqDelete<T>():
+          // At the front of the removed run, so in front of what replaces it —
+          // the same answer a leading retain would have given.
+          if (offset == base) {
+            return out;
+          }
           if (offset <= base + op.count) {
             // Inside the removed run: land on the splice, past whatever takes
             // its place.
@@ -297,7 +310,7 @@ extension SequenceDeltaText on SequenceDelta<String> {
     for (final op in ops) {
       switch (op) {
         case SeqRetain<String>():
-          final end = _skipRunes(base, offset, op.count);
+          final end = RuneOffsets.skip(base, offset, op.count);
           buffer.write(base.substring(offset, end));
           offset = end;
         case SeqInsert<String>():
@@ -305,26 +318,13 @@ extension SequenceDeltaText on SequenceDelta<String> {
             buffer.write(value);
           }
         case SeqDelete<String>():
-          offset = _skipRunes(base, offset, op.count);
+          offset = RuneOffsets.skip(base, offset, op.count);
         case SeqMove<String>():
           throw UnsupportedError('a move must be the only op of its delta');
       }
     }
 
     return (buffer..write(base.substring(offset))).toString();
-  }
-
-  /// The offset [count] runes past [offset], never splitting a surrogate pair.
-  static int _skipRunes(String text, int offset, int count) {
-    var at = offset;
-    var seen = 0;
-    while (at < text.length && seen < count) {
-      final unit = text.codeUnitAt(at);
-      final isHighSurrogate = unit >= 0xD800 && unit <= 0xDBFF;
-      at += isHighSurrogate && at + 1 < text.length ? 2 : 1;
-      seen++;
-    }
-    return at;
   }
 }
 

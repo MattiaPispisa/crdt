@@ -219,6 +219,50 @@ class MapDeltaBenchmark extends DeltaEmissionBenchmark<CRDTMapHandler<int>> {
       handler.watch().listen((_) {});
 }
 
+/// The movable list, whose delta cannot come from the tree.
+///
+/// Its visible order is a projection through the identity map, so the tree
+/// says nothing about it: the delta is derived by comparing the order either
+/// side of the apply. That is the one handler whose watched cost grows with
+/// the list, which is what this row is here to show.
+class MovableListDeltaBenchmark
+    extends DeltaEmissionBenchmark<CRDTFugueMovableListHandler<int>> {
+  /// Creates the benchmark for a list of [size] elements.
+  MovableListDeltaBenchmark(this.size, {required super.watched})
+      : super(
+          'Movable list remote move + read on $size elements '
+          '(watched: $watched)',
+        );
+
+  /// The number of elements the list holds.
+  final int size;
+
+  @override
+  CRDTFugueMovableListHandler<int> createHandler(CRDTDocument doc) =>
+      CRDTFugueMovableListHandler<int>(doc, 'movable');
+
+  @override
+  void seed(CRDTFugueMovableListHandler<int> handler) =>
+      handler.insertAll(0, List<int>.generate(size, (i) => i));
+
+  @override
+  void edit(CRDTFugueMovableListHandler<int> handler, int round) =>
+      handler.move(round % size, (round + 1) % size);
+
+  @override
+  void read(CRDTFugueMovableListHandler<int> handler) {
+    if (handler.value.isEmpty) {
+      throw StateError('empty value');
+    }
+  }
+
+  @override
+  StreamSubscription<Object?> subscribe(
+    CRDTFugueMovableListHandler<int> handler,
+  ) =>
+      handler.watch().listen((_) {});
+}
+
 /// Local typing: what a watcher adds to the write path.
 class LocalTypingDeltaBenchmark extends TimedBenchmarkBase {
   /// Creates the benchmark for [keystrokes] characters.
@@ -263,6 +307,10 @@ void main() {
   for (final size in [1000, 5000]) {
     MapDeltaBenchmark(size, watched: false).report();
     MapDeltaBenchmark(size, watched: true).report();
+  }
+  for (final size in [1000, 5000]) {
+    MovableListDeltaBenchmark(size, watched: false).report();
+    MovableListDeltaBenchmark(size, watched: true).report();
   }
   for (final keystrokes in [2000]) {
     LocalTypingDeltaBenchmark(keystrokes, watched: false).report();

@@ -34,8 +34,7 @@ class _Projection<V, D extends ComposableDelta<D>> {
 
   V get value => _value;
 
-  int get resets =>
-      events.whereType<HandlerReset<D>>().length;
+  int get resets => events.whereType<HandlerReset<D>>().length;
 
   List<HandlerDelta<D>> get deltas =>
       events.whereType<HandlerDelta<D>>().toList();
@@ -216,8 +215,7 @@ void main() {
       await projection.dispose();
     });
 
-    test('a transaction that cannot compact produces one event each',
-        () async {
+    test('a transaction that cannot compact produces one event each', () async {
       final doc = CRDTDocument();
       final text = CRDTTextHandler(doc, 'text')..insert(0, 'abcdef');
       final projection = _watchText(text);
@@ -923,6 +921,41 @@ void main() {
       await projection.dispose();
     });
 
+    test('deleting a key that holds null still reports the removal', () async {
+      // "the key is there" and "the value is not null" are different
+      // questions. Confusing them drops the removal, and every watcher keeps a
+      // key the handler no longer holds.
+      final doc = CRDTDocument();
+      final map = CRDTMapHandler<String?>(doc, 'map');
+      final projection =
+          _Projection<Map<String, String?>, MapDelta<String, String?>>(
+        readSynced: () {
+          final point = map.readSynced();
+          return DeltaSyncPoint<Map<String, String?>>(
+            value: Map<String, String?>.of(point.value),
+            seq: point.seq,
+          );
+        },
+        stream: map.watch(),
+        applyDelta: (delta, base) => delta.apply(base),
+      );
+      await _pump();
+
+      map
+        ..set('a', null)
+        ..delete('a');
+      await _pump();
+
+      expect(
+        projection.deltas.last.delta.entries['a'],
+        const MapEntryRemoved<String?>(previous: null),
+      );
+      expect(projection.value, map.value);
+      expect(projection.value.containsKey('a'), isFalse);
+
+      await projection.dispose();
+    });
+
     test('an update of a key that is not there moves nothing', () async {
       final doc = CRDTDocument();
       final map = CRDTMapHandler<String>(doc, 'map');
@@ -1039,6 +1072,38 @@ void main() {
       await projection.dispose();
     });
 
+    test('a set of a nullable type reports a write of null', () async {
+      // `null` is a value here, not "no value": a delta that reported nothing
+      // would leave every watcher's projection short of a member the handler
+      // holds.
+      final doc = CRDTDocument();
+      final set = CRDTORSetHandler<String?>(doc, 'set');
+      final projection = _Projection<Set<String?>, SetDelta<String?>>(
+        readSynced: () {
+          final point = set.readSynced();
+          return DeltaSyncPoint<Set<String?>>(
+            value: Set<String?>.of(point.value),
+            seq: point.seq,
+          );
+        },
+        stream: set.watch(),
+        applyDelta: (delta, base) => delta.apply(base),
+      );
+      await _pump();
+
+      set.add(null);
+      await _pump();
+      expect(projection.deltas.single.delta.added, {null});
+      expect(projection.value, set.value);
+
+      set.remove(null);
+      await _pump();
+      expect(projection.deltas.last.delta.removed, {null});
+      expect(projection.value, set.value);
+
+      await projection.dispose();
+    });
+
     test('the projection tracks a random edit stream', () async {
       final doc = CRDTDocument();
       final set = CRDTORSetHandler<String>(doc, 'set');
@@ -1132,6 +1197,43 @@ void main() {
         projection.deltas.single.delta.ops,
         [const SeqMove<String>(from: 0, to: 2)],
       );
+      expect(projection.value, list.value);
+
+      await projection.dispose();
+    });
+
+    test('two moves in one transaction stay two changes', () async {
+      // A move delta supports neither compose nor mapOffset, so it must never
+      // share a change with anything. It does not today because this handler
+      // has no `compound`; this test is what fails if that ever changes,
+      // instead of an UnsupportedError out of the commit.
+      final doc = CRDTDocument();
+      final list = CRDTFugueMovableListHandler<String>(doc, 'movable')
+        ..insertAll(0, ['a', 'b', 'c']);
+      final projection = _Projection<List<String>, SequenceDelta<String>>(
+        readSynced: () {
+          final point = list.readSynced();
+          return DeltaSyncPoint<List<String>>(
+            value: List<String>.of(point.value),
+            seq: point.seq,
+          );
+        },
+        stream: list.watch(),
+        applyDelta: (delta, base) => delta.apply(base),
+      );
+      await _pump();
+
+      doc.runInTransaction(() {
+        list
+          ..move(0, 2)
+          ..move(0, 1);
+      });
+      await _pump();
+
+      expect(projection.deltas.length, 2);
+      for (final event in projection.deltas) {
+        expect(event.delta.ops.single, isA<SeqMove<String>>());
+      }
       expect(projection.value, list.value);
 
       await projection.dispose();

@@ -264,7 +264,7 @@ base class CRDTTextHandler extends Handler<String>
       final start = RuneOffsets.utf16Offset(state, operation.index);
       if (start >= state.length) {
         // Past the end: nothing is removed, so nothing moved.
-        _reportNothing(sink);
+        sink?.add(const SequenceDelta<String>.empty());
         return state;
       }
       final end = RuneOffsets.utf16Offset(
@@ -283,7 +283,7 @@ base class CRDTTextHandler extends Handler<String>
     } else if (operation is _TextUpdateOperation) {
       final start = RuneOffsets.utf16Offset(state, operation.index);
       if (start >= state.length) {
-        _reportNothing(sink);
+        sink?.add(const SequenceDelta<String>.empty());
         return state;
       }
       final text = operation.text;
@@ -305,7 +305,7 @@ base class CRDTTextHandler extends Handler<String>
       );
       return state.substring(0, start) + replacement + state.substring(end);
     }
-    _reportNothing(sink);
+    sink?.add(const SequenceDelta<String>.empty());
     return state;
   }
 
@@ -352,9 +352,6 @@ base class CRDTTextHandler extends Handler<String>
     }
     return RuneOffsets.runeIndex(state, offset);
   }
-
-  void _reportNothing(DeltaSink<Object?>? sink) =>
-      sink?.add(const SequenceDelta<String>.empty());
 
   @override
   Operation? compound(Operation accumulator, Operation current) {
