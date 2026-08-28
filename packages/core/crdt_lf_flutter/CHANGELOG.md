@@ -17,9 +17,11 @@
 - Requires `crdt_lf` 4.1.0, for the handler delta streams.
 - `CrdtTextFieldBuilder` keeps its text by **moving it with the deltas** the handler reports,
   instead of projecting the whole document again after every edit. A keystroke used to rebuild the
-  entire string; now it costs the size of the edit. On a 50 000-character document a keystroke goes
-  **785 µs → 191 µs** and taking in a remote one goes **680 µs → 81 µs**; at 10 000 characters,
-  193 → 113 µs and 130 → 65 µs. Typing is now nearly flat in the size of the document. Measured with
+  entire string; now it costs the size of the edit. On a 50 000-character Fugue document a keystroke
+  goes **773 µs → 162 µs** and taking in a remote one goes **704 µs → 62 µs**; at 10 000 characters,
+  134 → 57 µs and 116 → 35 µs. Typing is now nearly flat in the size of the document.
+  `CRDTTextHandler` is the one row that pays instead of gains — 44 → 54 µs — because its value is
+  already a plain cached string, so building a delta buys it nothing. Measured with
   `benchmarks/src/benchmarks/text_field_benchmark.dart`; see `benchmarks/results.md`.
   Set `debugVerifyCrdtTextFieldProjection` to `false` to skip the debug-only check that reads the
   handler back and compares — it exists to catch a binding that drifts, and it costs exactly what

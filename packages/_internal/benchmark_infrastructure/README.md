@@ -56,7 +56,14 @@ seconds have passed. They run `batches`
 batches of `measuredCycles` cycles each, warm up for `warmupDuration` first,
 call `setup()` again before every batch (`setupPerBatch`), and report the
 **fastest** batch — a GC pause can only make a batch slower, so the minimum is
-the cleanest reading:
+the cleanest reading.
+
+After each per-batch `setup()` they run `settleCycles` cycles untimed. A
+freshly built document is cold: the first operation on it may build an index
+or resolve a projection that every later operation reuses. That cost belongs
+to the document, not to the cycle, and spread over a batch it can dominate —
+one text row read 253 µs with the cold cycle inside the batch and 60 µs with
+it outside.
 
 ```dart
 class MyGrowingBenchmark extends FixedCycleTimedBenchmark {

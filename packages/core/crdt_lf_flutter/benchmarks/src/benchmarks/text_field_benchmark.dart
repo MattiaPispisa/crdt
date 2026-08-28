@@ -4,7 +4,14 @@ import 'package:crdt_lf_flutter/crdt_lf_flutter.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-/// What one keystroke costs through [CrdtTextFieldBuilder].
+/// Timed cycles per batch.
+///
+/// Lower than the shared default because every cycle adds a character. On the
+/// 1 000-character row the default would grow the document by a fifth before
+/// the batch ends.
+const _measuredCycles = 100;
+
+/// Typing into a Fugue text handler through [CrdtTextFieldBuilder].
 ///
 /// ## What is measured, and what is not
 ///
@@ -12,73 +19,26 @@ import 'package:flutter_test/flutter_test.dart';
 /// characters of real text costs far more than the binding does and would bury
 /// the very signal these rows exist to compare — and it is Flutter's cost,
 /// identical whatever the binding does underneath. So the numbers are the
-/// binding's own work per keystroke, plus one `pump`, which the last row
-/// measures on its own so it can be subtracted.
+/// binding's own work per keystroke, plus one `pump`, which
+/// [NoBindingBenchmark] measures on its own so it can be subtracted.
 ///
-/// [debugVerifyCrdtTextFieldProjection] is off throughout. It exists to catch a
-/// binding that drifts, and it does so by reading the whole value — the very
+/// [debugVerifyCrdtTextFieldProjection] is off throughout. It exists to catch
+/// a binding that drifts, and it does so by reading the whole value — the very
 /// cost these rows are about. Leaving it on would measure the check instead of
 /// the code.
 ///
 /// The rows vary the size of the document on purpose. A cost that grows with
 /// it is a cost paid for re-deriving something already known.
-abstract class FixedCycleBenchmark extends AsyncTimedBenchmarkBase {
-  /// Creates a benchmark reported under `name`.
-  FixedCycleBenchmark(super.name);
-
-  static const _warmupCycles = 20;
-  static const _cyclesPerBatch = 100;
-  static const _batches = 5;
-
-  /// Runs a fixed number of cycles instead of "as many as fit in two seconds",
-  /// and reports the **best** batch rather than the mean of all of them.
-  ///
-  /// A fixed count because every cycle **grows** what it measures: one more
-  /// character in the document. The default loop would run tens of thousands
-  /// of cycles on the smallest row and end up measuring a document fifteen
-  /// times the size the setup built.
-  ///
-  /// The best batch because a garbage collection or a scheduler hiccup can
-  /// only ever make a batch slower, so the fastest one is the closest reading
-  /// of what the code costs. Averaging lets one unlucky pause move a row by a
-  /// third — more than the differences these rows exist to show.
-  @override
-  Future<double> measure() async {
-    await setup();
-
-    for (var cycle = 0; cycle < _warmupCycles; cycle++) {
-      await run();
-    }
-
-    var best = double.infinity;
-    for (var batch = 0; batch < _batches; batch++) {
-      final stopwatch = Stopwatch()..start();
-      for (var cycle = 0; cycle < _cyclesPerBatch; cycle++) {
-        await run();
-      }
-      stopwatch.stop();
-
-      final perCycle = stopwatch.elapsedMicroseconds / _cyclesPerBatch;
-      if (perCycle < best) {
-        best = perCycle;
-      }
-    }
-
-    await teardown();
-    return best;
-  }
-}
-
-/// A benchmark that drives the binding through a mounted widget.
-abstract class TextFieldBenchmark extends FixedCycleBenchmark {
-  /// Creates a benchmark reported under `name`, driven by `tester`.
-  TextFieldBenchmark(super.name, this.tester);
+abstract class TextFieldBenchmark extends AsyncFixedCycleTimedBenchmark {
+  /// Creates a benchmark reported under `name`, driven by [tester].
+  TextFieldBenchmark(super.name, this.tester)
+      : super(measuredCycles: _measuredCycles);
 
   /// Drives the widget tree these benchmarks live in.
   final WidgetTester tester;
 
   /// The controller the binding writes to.
-  late final TextEditingController controller;
+  late TextEditingController controller;
 
   /// Mounts the binding over [document]. Nothing renders the text.
   Future<void> mount(CRDTDocument document) async {
@@ -177,9 +137,9 @@ class RemoteKeystrokeBenchmark extends TextFieldBenchmark {
   /// How many characters the document holds to begin with.
   final int size;
 
-  late final CRDTDocument _document;
-  late final CRDTDocument _peer;
-  late final CRDTFugueTextHandler _peerNote;
+  late CRDTDocument _document;
+  late CRDTDocument _peer;
+  late CRDTFugueTextHandler _peerNote;
 
   @override
   Future<void> setup() async {
@@ -207,12 +167,13 @@ class RemoteKeystrokeBenchmark extends TextFieldBenchmark {
 ///
 /// Attribution: it says how much of a keystroke is the handler rebuilding its
 /// projected string, which is the pass the deltas let the binding skip.
-class HandlerOnlyBenchmark extends FixedCycleBenchmark {
+class HandlerOnlyBenchmark extends FixedCycleTimedBenchmark {
   /// Creates the benchmark for a document of [size] characters.
   HandlerOnlyBenchmark({required this.size, required this.readsTheValue})
       : super(
           'Handler only: insert one char${readsTheValue ? ' and read' : ''}, '
           '$size chars',
+          measuredCycles: _measuredCycles,
         );
 
   /// How many characters the document holds to begin with.
@@ -221,10 +182,10 @@ class HandlerOnlyBenchmark extends FixedCycleBenchmark {
   /// Whether the cycle asks for the value, which rebuilds the whole string.
   final bool readsTheValue;
 
-  late final CRDTFugueTextHandler _note;
+  late CRDTFugueTextHandler _note;
 
   @override
-  Future<void> setup() async {
+  void setup() {
     final document = CRDTDocument();
     // Resolve the projection on the way in, so the first measured cycle is not
     // the only one paying for a cold state.
@@ -234,7 +195,7 @@ class HandlerOnlyBenchmark extends FixedCycleBenchmark {
   }
 
   @override
-  Future<void> run() async {
+  void run() {
     _note.insert(_note.length, 'x');
     if (readsTheValue && _note.value.isEmpty) {
       throw StateError('empty value');
@@ -245,10 +206,13 @@ class HandlerOnlyBenchmark extends FixedCycleBenchmark {
 /// The floor: the same loop with nothing but Flutter in it.
 ///
 /// Whatever the rows above cost, this much of it is not the binding.
-class NoBindingBenchmark extends FixedCycleBenchmark {
+class NoBindingBenchmark extends AsyncFixedCycleTimedBenchmark {
   /// Creates the benchmark for a controller of [size] characters.
   NoBindingBenchmark(this.tester, {required this.size})
-      : super('No binding: one keystroke on a bare controller, $size chars');
+      : super(
+          'No binding: one keystroke on a bare controller, $size chars',
+          measuredCycles: _measuredCycles,
+        );
 
   /// Drives the widget tree.
   final WidgetTester tester;
@@ -256,22 +220,27 @@ class NoBindingBenchmark extends FixedCycleBenchmark {
   /// How many characters the controller holds to begin with.
   final int size;
 
-  late final TextEditingController _controller;
+  TextEditingController? _controller;
 
   @override
   Future<void> setup() async {
+    _controller?.dispose();
     _controller = TextEditingController(text: 'a' * size);
     await tester.pumpWidget(const MaterialApp(home: SizedBox.shrink()));
   }
 
   @override
-  Future<void> teardown() async => _controller.dispose();
+  Future<void> teardown() async {
+    _controller?.dispose();
+    _controller = null;
+  }
 
   @override
   Future<void> run() async {
-    final at = _controller.text.length;
-    _controller.value = TextEditingValue(
-      text: _controller.text.replaceRange(at, at, 'x'),
+    final controller = _controller!;
+    final at = controller.text.length;
+    controller.value = TextEditingValue(
+      text: controller.text.replaceRange(at, at, 'x'),
       selection: TextSelection.collapsed(offset: at + 1),
     );
     await tester.pump();
@@ -312,8 +281,8 @@ void main() {
     'the handler alone, and the floor',
     (tester) async {
       for (final size in [10000, 50000]) {
-        await HandlerOnlyBenchmark(size: size, readsTheValue: false).report();
-        await HandlerOnlyBenchmark(size: size, readsTheValue: true).report();
+        HandlerOnlyBenchmark(size: size, readsTheValue: false).report();
+        HandlerOnlyBenchmark(size: size, readsTheValue: true).report();
       }
       await NoBindingBenchmark(tester, size: 10000).report();
     },
