@@ -1,3 +1,11 @@
+## 0.9.0
+
+**Date:** 2026-08-29
+
+### Changed
+
+- Thanks to the new versions of `crdt_lf` (v`4.1.0`) and `crdt_lf_flutter` (v.`0.5.0`), which introduce “run” and “delta,” the editor is faster and uses less memory
+
 ## 0.8.0
 
 **Date:** 2026-08-22
