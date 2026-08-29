@@ -174,6 +174,31 @@ void main() {
       );
     });
 
+    test('prune keeps the dependencies that survived', () {
+      // change2 above loses its only dependency, so "rebuilt" and "emptied"
+      // look the same. This one depends on a pruned change *and* a surviving
+      // one, which is the case that tells them apart.
+      final change4 = Change(
+        id: OperationId(author, HybridLogicalClock(l: 1, c: 4)),
+        operation: operation,
+        deps: {change1.id, change2.id},
+        author: author,
+      );
+
+      store
+        ..addChange(change1)
+        ..addChange(change2)
+        ..addChange(change4)
+        ..prune(VersionVector({author: change1.hlc}));
+
+      expect(store.containsChange(change1.id), isFalse);
+      expect(
+        store.getChange(change4.id)!.deps,
+        equals({change2.id}),
+        reason: 'the pruned dependency goes, the surviving one stays',
+      );
+    });
+
     test('exportChangesNewerThan filters by version vector', () {
       store
         ..addChange(change1)
@@ -201,6 +226,27 @@ void main() {
         VersionVector({author: change3.hlc}),
       );
       expect(newest, equals([change4]));
+    });
+
+    test('a late change lands in clock order in the built index', () {
+      // The index is built on the first query and kept in sync afterwards. A
+      // change that arrives out of order — a peer catching up — has to be
+      // placed, not appended, or every later query reads the list wrong.
+      store
+        ..addChange(change2)
+        ..addChange(change3);
+      // Build the index.
+      store.exportChangesNewerThan(VersionVector({})).toList();
+
+      store.addChange(change1);
+
+      expect(
+        store
+            .exportChangesNewerThan(VersionVector({}))
+            .map((change) => change.id)
+            .toList(),
+        [change1.id, change2.id, change3.id],
+      );
     });
 
     test('toString returns correct string representation', () {

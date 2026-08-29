@@ -7,12 +7,24 @@ import 'package:benchmark_infrastructure/src/timed/markdown_table.dart';
 /// [packageRoot] and writes the aggregated results to
 /// `benchmarks/results.md`.
 ///
-/// Each file runs as its own `dart run` subprocess — a fresh VM per file, so
-/// no benchmark's JIT state or GC pressure leaks into the next one — in
+/// Each file runs as its own subprocess — a fresh VM per file, so no
+/// benchmark's JIT state or GC pressure leaks into the next one — in
 /// alphabetical filename order. A file's stdout is parsed line by line with
-/// [BenchmarkResult.tryParse]; a line that doesn't match is reported on
-/// stderr instead of being silently dropped.
-Future<void> runTimedBenchmarks({required Directory packageRoot}) async {
+/// [BenchmarkResult.tryParse].
+///
+/// [command] is what launches one file, with the file path appended. The
+/// default runs it as a plain script. A benchmark that needs a Flutter binding
+/// — anything that builds a widget — passes `['flutter', 'test']` instead.
+///
+/// [reportUnparsedOutput] echoes every line that is not a result to stderr, so
+/// stray output is noticed rather than silently dropped. Turn it off for a
+/// [command] that prints progress of its own, such as a test runner, which
+/// would otherwise bury the real errors.
+Future<void> runTimedBenchmarks({
+  required Directory packageRoot,
+  List<String> command = const ['dart', 'run'],
+  bool reportUnparsedOutput = true,
+}) async {
   final benchmarksDir =
       Directory('${packageRoot.path}/benchmarks/src/benchmarks');
   if (!benchmarksDir.existsSync()) {
@@ -36,7 +48,10 @@ Future<void> runTimedBenchmarks({required Directory packageRoot}) async {
     final sourceFile = file.uri.pathSegments.last;
     stdout.writeln('  - 🔄 Running $sourceFile');
 
-    final process = await Process.run('dart', ['run', file.path]);
+    final process = await Process.run(
+      command.first,
+      [...command.skip(1), file.path],
+    );
     if (process.exitCode != 0) {
       stderr
         ..writeln(
@@ -54,7 +69,9 @@ Future<void> runTimedBenchmarks({required Directory packageRoot}) async {
       }
       final result = BenchmarkResult.tryParse(line, sourceFile: sourceFile);
       if (result == null) {
-        stderr.writeln('Unparsed output from $sourceFile: $line');
+        if (reportUnparsedOutput) {
+          stderr.writeln('Unparsed output from $sourceFile: $line');
+        }
         continue;
       }
       results.add(result);

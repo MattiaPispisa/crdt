@@ -10,6 +10,9 @@ const _defaultMeasuredCycles = 200;
 /// Default number of batches the score is taken over.
 const _defaultBatches = 5;
 
+/// Default number of untimed cycles run after each per-batch setup.
+const _defaultSettleCycles = 5;
+
 /// A [TimedBenchmarkBase] that times a fixed number of cycles instead of "as
 /// many cycles as fit in two seconds".
 ///
@@ -36,6 +39,14 @@ const _defaultBatches = 5;
 /// neither the warm-up nor the batch before it drifts the size away from the
 /// name.
 ///
+/// [settleCycles] run untimed after each per-batch [setup], and they are the
+/// difference between measuring the code and measuring the state it was handed.
+/// A freshly built document is cold: the first operation on it may build an
+/// index or resolve a projection that every later operation reuses. That is a
+/// cost of the document, not of the cycle, and spread over a batch it can
+/// dominate — one text row read 253 µs with the cold cycle inside the batch
+/// and 60 µs with it outside.
+///
 /// See [AsyncFixedCycleTimedBenchmark] for a cycle that cannot be
 /// synchronous.
 abstract class FixedCycleTimedBenchmark extends TimedBenchmarkBase {
@@ -46,6 +57,7 @@ abstract class FixedCycleTimedBenchmark extends TimedBenchmarkBase {
     this.measuredCycles = _defaultMeasuredCycles,
     this.batches = _defaultBatches,
     this.setupPerBatch = true,
+    this.settleCycles = _defaultSettleCycles,
   }) : super(runsPerMeasure: 1);
 
   /// How long to run before timing anything.
@@ -59,6 +71,10 @@ abstract class FixedCycleTimedBenchmark extends TimedBenchmarkBase {
 
   /// Whether [setup] runs again before each timed batch.
   final bool setupPerBatch;
+
+  /// Untimed cycles run after each per-batch [setup], to take the cold state
+  /// it built out of the measurement. Ignored when [setupPerBatch] is off.
+  final int settleCycles;
 
   @override
   double measure() {
@@ -74,6 +90,9 @@ abstract class FixedCycleTimedBenchmark extends TimedBenchmarkBase {
       for (var batch = 0; batch < batches; batch += 1) {
         if (setupPerBatch) {
           setup();
+          for (var cycle = 0; cycle < settleCycles; cycle += 1) {
+            run();
+          }
         }
 
         final stopwatch = Stopwatch()..start();
@@ -96,7 +115,7 @@ abstract class FixedCycleTimedBenchmark extends TimedBenchmarkBase {
 }
 
 /// The asynchronous counterpart of [FixedCycleTimedBenchmark]: same loop, same
-/// reasons, for a cycle that has to await.
+/// reasons — including [settleCycles] — for a cycle that has to await.
 ///
 /// A widget benchmark ending its cycle with `await tester.pump()` cannot be
 /// written against the synchronous base, whose `run()` returns `void`.
@@ -108,6 +127,7 @@ abstract class AsyncFixedCycleTimedBenchmark extends AsyncTimedBenchmarkBase {
     this.measuredCycles = _defaultMeasuredCycles,
     this.batches = _defaultBatches,
     this.setupPerBatch = true,
+    this.settleCycles = _defaultSettleCycles,
   });
 
   /// How long to run before timing anything.
@@ -121,6 +141,10 @@ abstract class AsyncFixedCycleTimedBenchmark extends AsyncTimedBenchmarkBase {
 
   /// Whether [setup] runs again before each timed batch.
   final bool setupPerBatch;
+
+  /// Untimed cycles run after each per-batch [setup], to take the cold state
+  /// it built out of the measurement. Ignored when [setupPerBatch] is off.
+  final int settleCycles;
 
   // The loop below repeats FixedCycleTimedBenchmark.measure on purpose.
   // Sharing one helper over a `FutureOr<void> Function()` would put an await
@@ -140,6 +164,9 @@ abstract class AsyncFixedCycleTimedBenchmark extends AsyncTimedBenchmarkBase {
       for (var batch = 0; batch < batches; batch += 1) {
         if (setupPerBatch) {
           await setup();
+          for (var cycle = 0; cycle < settleCycles; cycle += 1) {
+            await run();
+          }
         }
 
         final stopwatch = Stopwatch()..start();

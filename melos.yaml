@@ -39,6 +39,16 @@ scripts:
       flutter: false
       dirExists: benchmarks
 
+  benchmark_flutter:
+    name: Benchmark (Flutter)
+    description: Run the Flutter benchmarks
+    run: dart run benchmark_infrastructure:run_flutter_benchmarks
+    exec:
+      concurrency: 1
+    packageFilters:
+      flutter: true
+      dirExists: benchmarks
+
   test:
     name: Test
     description: Run the Dart tests

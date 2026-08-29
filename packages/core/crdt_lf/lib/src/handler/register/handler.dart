@@ -25,7 +25,8 @@ part 'operation.dart';
 /// done.set(true);
 /// print(done.value); // true
 /// ```
-base class CRDTRegisterHandler<T> extends Handler<T> {
+base class CRDTRegisterHandler<T> extends Handler<T>
+    with DeltaProvider<T?, RegisterDelta<T>> {
   /// Creates a new register with the given document and ID.
   ///
   /// [valueCodec] encodes/decodes `T` to bytes; default is [JsonValueCodec].
@@ -59,6 +60,7 @@ base class CRDTRegisterHandler<T> extends Handler<T> {
   }
 
   /// The current value, or `null` if it was never set.
+  @override
   T? get value {
     final cached = cachedState;
     if (cached != null) {
@@ -101,12 +103,20 @@ base class CRDTRegisterHandler<T> extends Handler<T> {
     required T state,
     DeltaSink<Object?>? sink,
   }) {
+    if (operation is! _RegisterSetOperation<T>) {
+      // The register has one operation kind, so a change carrying any other
+      // kind is refused before it gets here: [operationDecoders] cannot decode
+      // it. Only an operation built by hand under this handler's id reaches
+      // this line, and a recompute skips it the same way [_computeValue] does.
+      // Writing nothing to [sink] is how "nothing moved" is said — the hub
+      // then publishes no event at all.
+      return state;
+    }
     // Only an operation that is the latest in clock order reaches this: a
     // local write, or a remote change newer than everything folded in so far.
-    if (operation is _RegisterSetOperation<T>) {
-      return operation.value;
-    }
-    return state;
+    // Last-writer-wins then makes the new value the whole answer.
+    sink?.add(RegisterDelta<T>(previous: state, current: operation.value));
+    return operation.value;
   }
 
   /// The version of the snapshot blob this build writes and reads.
@@ -152,6 +162,9 @@ base class CRDTRegisterHandler<T> extends Handler<T> {
       ).value,
     );
   }
+
+  @override
+  T? applyDelta(T? base, RegisterDelta<T> delta) => delta.apply(base);
 
   /// Returns a string representation of this register.
   @override

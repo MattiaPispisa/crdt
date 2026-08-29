@@ -93,6 +93,37 @@ void main() {
       );
     });
 
+    testWidgets('resolves a caret without projecting the document',
+        (tester) async {
+      // The overlay counts offsets in the text the field is painting, which is
+      // already materialised. Asking the handler would rebuild the whole
+      // string on every resolve — the cost the field itself stopped paying.
+      final note = _CountingFugueTextHandler(doc, 'note')
+        ..insert(0, 'hello world');
+      final cursor = CrdtTextCursor(
+        id: 'peer-b',
+        color: const Color(0xFFAA0000),
+        base: note.stablePositionAt(5),
+      );
+      await tester.pumpWidget(host([cursor]));
+
+      // The field wraps the overlay here, and its debug-only self-check reads
+      // the whole value. Off, so this counts the overlay alone.
+      debugVerifyCrdtTextFieldProjection = false;
+      addTearDown(() => debugVerifyCrdtTextFieldProjection = true);
+      note.reads = 0;
+
+      final remote = CRDTDocument(peerId: PeerId.generate());
+      CRDTFugueTextHandler(remote, 'note');
+      remote.importChanges(doc.exportChanges());
+      (remote.registeredHandlers['note']! as CRDTFugueTextHandler)
+          .insert(0, 'XXX ');
+      doc.importChanges(remote.exportChanges());
+      await tester.pump();
+
+      expect(note.reads, 0);
+    });
+
     testWidgets('draws a caret at the UTF-16 offset of an anchor past an emoji',
         (tester) async {
       // Rune index 3 lands after "😀 he" — UTF-16 offset 4, one past the
@@ -427,4 +458,17 @@ void main() {
       expect(publishedB.last.$1, isNotNull);
     });
   });
+}
+
+/// A Fugue text handler that counts how often its whole value is projected.
+final class _CountingFugueTextHandler extends CRDTFugueTextHandler {
+  _CountingFugueTextHandler(super.doc, super.id);
+
+  int reads = 0;
+
+  @override
+  String get value {
+    reads++;
+    return super.value;
+  }
 }

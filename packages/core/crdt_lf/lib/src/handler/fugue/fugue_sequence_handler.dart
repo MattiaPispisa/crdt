@@ -80,7 +80,15 @@ abstract base class FugueSequenceHandler<T, V, S extends FugueState<T, V>>
   S createEmptyState();
 
   /// Applies a single decoded [operation] to [tree].
-  void applyToTree(FugueTree<T> tree, Operation operation);
+  ///
+  /// [sink] collects what the operation did to the sequence, in the
+  /// coordinates it had before. It is `null` on the replay path, which nobody
+  /// observes.
+  void applyToTree(
+    FugueTree<T> tree,
+    Operation operation, {
+    DeltaSink<Object?>? sink,
+  });
 
   /// The element ids this peer created in [operation], used to seed the
   /// counter.
@@ -135,10 +143,14 @@ abstract base class FugueSequenceHandler<T, V, S extends FugueState<T, V>>
   bool get stateIsOrderIndependent => true;
 
   @override
-  void applyOperation(S state, Operation operation) {
+  void applyOperation(
+    S state,
+    Operation operation, {
+    DeltaSink<Object?>? sink,
+  }) {
     // The tree is mutated in place; the projections are resolved lazily on
     // the next read instead of after every operation.
-    applyToTree(state._tree, operation);
+    applyToTree(state._tree, operation, sink: sink);
     state._markDirty();
   }
 

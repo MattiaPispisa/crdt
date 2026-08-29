@@ -22,7 +22,8 @@ part 'operation.dart';
 /// list..insert(0, 'Hello')..insert(1, 'World')..update(0, 'Hello,')
 /// print(list.value.join('')); // Prints "Hello, World"
 /// ```
-base class CRDTListHandler<T> extends Handler<List<T>> {
+base class CRDTListHandler<T> extends Handler<List<T>>
+    with DeltaProvider<List<T>, SequenceDelta<T>> {
   /// Creates a new CRDTList with the given document and ID
   ///
   /// [valueCodec] is an optional codec for encoding/decoding [T] values to bytes.
@@ -108,7 +109,9 @@ base class CRDTListHandler<T> extends Handler<List<T>> {
   /// Gets the current state of the list
   ///
   /// The returned list is the handler's internal state:
-  /// treat it as read-only.
+  /// treat it as read-only. `readSynced()` hands back a copy instead, so a
+  /// consumer that keeps a projection can hold what it is given.
+  @override
   List<T> get value {
     // Check if the cached state is still valid
     if (cachedState != null) {
@@ -159,25 +162,37 @@ base class CRDTListHandler<T> extends Handler<List<T>> {
   }
 
   /// Applies a single operation to a list
-  void _applyOperationToList(List<T> state, Operation operation) {
+  ///
+  /// [sink] collects what the operation really did, clamping included. It is
+  /// `null` on the replay path, which nobody observes.
+  void _applyOperationToList(
+    List<T> state,
+    Operation operation, {
+    DeltaSink<Object?>? sink,
+  }) {
     if (operation is _ListInsertOperation<T>) {
       _listInsert(
         state,
         index: operation.index,
         value: operation.value,
+        sink: sink,
       );
     } else if (operation is _ListDeleteOperation) {
       _listDelete(
         state,
         index: operation.index,
         count: operation.count,
+        sink: sink,
       );
     } else if (operation is _ListUpdateOperation<T>) {
       _listUpdate(
         state,
         index: operation.index,
         value: operation.value,
+        sink: sink,
       );
+    } else {
+      sink?.add(SequenceDelta<T>.empty());
     }
   }
 
@@ -185,38 +200,61 @@ base class CRDTListHandler<T> extends Handler<List<T>> {
     List<T> state, {
     required int index,
     required T value,
+    DeltaSink<Object?>? sink,
   }) {
     // Insert at the specified index,
     // or at the end if the index is out of bounds
-    if (index <= state.length) {
-      state.insert(index, value);
-    } else {
-      state.add(value);
-    }
+    final at = index <= state.length ? index : state.length;
+    state.insert(at, value);
+    sink?.add(
+      SequenceDelta<T>([
+        if (at > 0) SeqRetain<T>(at),
+        SeqInsert<T>([value]),
+      ]),
+    );
   }
 
   void _listDelete(
     List<T> state, {
     required int index,
     required int count,
+    DeltaSink<Object?>? sink,
   }) {
     // Delete elements if the index is valid
     if (index < state.length) {
       final actualCount =
           index + count > state.length ? state.length - index : count;
       state.removeRange(index, index + actualCount);
+      sink?.add(
+        SequenceDelta<T>([
+          if (index > 0) SeqRetain<T>(index),
+          if (actualCount > 0) SeqDelete<T>(actualCount),
+        ]),
+      );
+      return;
     }
+    sink?.add(SequenceDelta<T>.empty());
   }
 
   void _listUpdate(
     List<T> state, {
     required int index,
     required T value,
+    DeltaSink<Object?>? sink,
   }) {
     // Update the element at the specified index
     if (index < state.length) {
       state[index] = value;
+      sink?.add(
+        SequenceDelta<T>([
+          if (index > 0) SeqRetain<T>(index),
+          SeqDelete<T>(1),
+          SeqInsert<T>([value]),
+        ]),
+      );
+      return;
     }
+    sink?.add(SequenceDelta<T>.empty());
   }
 
   @override
@@ -265,7 +303,7 @@ base class CRDTListHandler<T> extends Handler<List<T>> {
     // Mutate the cached state in place instead of copying it on
     // every operation.
     try {
-      _applyOperationToList(state, operation);
+      _applyOperationToList(state, operation, sink: sink);
       return state;
     } catch (_) {
       // The state may be half-mutated: invalidate the cache.
@@ -299,6 +337,12 @@ base class CRDTListHandler<T> extends Handler<List<T>> {
     }
     return items;
   }
+
+  @override
+  List<T> applyDelta(List<T> base, SequenceDelta<T> delta) => delta.apply(base);
+
+  @override
+  List<T> copyValue(List<T> value) => List<T>.of(value);
 
   /// Returns a string representation of this list
   @override

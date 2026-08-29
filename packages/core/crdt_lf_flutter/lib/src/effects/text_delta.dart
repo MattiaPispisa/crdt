@@ -7,6 +7,16 @@ import 'package:flutter/foundation.dart';
 /// paste over a selection, autocorrect replacement), and it maps 1:1 onto the
 /// `insert`/`delete` operations of the `crdt_lf` text handlers — no full-text
 /// diff needed.
+///
+/// ## Which direction this serves
+///
+/// It carries an edit **into** a handler. A `TextEditingController` hands over
+/// a whole new string, never an edit, so the gesture has to be worked out by
+/// comparing the two — that is [computeTextDelta].
+///
+/// The other direction is not this type's job: to learn what a handler *did*,
+/// subscribe to it and read the `SequenceDelta` it reports. That one is exact
+/// and needs no diffing.
 @immutable
 class TextDelta {
   /// Creates a text delta.
@@ -119,8 +129,12 @@ TextDelta? computeTextDelta(String oldText, String newText, {int? caret}) {
 ///
 /// Offsets before the edit are unchanged, offsets inside the replaced region
 /// snap to the end of the insertion, offsets after it shift by the length
-/// difference. This keeps the caret visually anchored across a concurrent
-/// remote edit.
+/// difference.
+///
+/// Use it on an edit you had to derive by diffing. When the edit came from a
+/// handler, `SequenceDelta.mapOffset` answers the same question about the real
+/// change rather than about a diff of its result — several regions stay
+/// several regions instead of collapsing into one span.
 int mapOffsetThroughDelta(int offset, TextDelta delta) {
   if (offset <= delta.index) {
     return offset;

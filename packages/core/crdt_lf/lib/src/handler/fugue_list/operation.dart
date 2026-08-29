@@ -1,7 +1,8 @@
 part of 'handler.dart';
 
 /// Batch insert operation for the Fugue list
-class _FugueListInsertOperation<T> extends Operation {
+class _FugueListInsertOperation<T> extends Operation
+    implements FugueSequenceInsert<T> {
   /// Constructor that initializes a batch insert operation
   _FugueListInsertOperation({
     required this.leftOrigin,
@@ -81,12 +82,15 @@ class _FugueListInsertOperation<T> extends Operation {
   }
 
   /// ID of the left origin node for the batch
+  @override
   final FugueElementID leftOrigin;
 
   /// ID of the right origin node for the batch
+  @override
   final FugueElementID rightOrigin;
 
   /// Items to insert sequentially (first uses [leftOrigin], others chain)
+  @override
   final List<_FugueListInsertItem<T>> items;
 
   /// Codec used to encode the inserted values
@@ -107,18 +111,22 @@ class _FugueListInsertOperation<T> extends Operation {
 }
 
 /// A single item of a batch insert
-class _FugueListInsertItem<T> {
+class _FugueListInsertItem<T> implements FugueInsertItem<T> {
   _FugueListInsertItem({
     required this.id,
     required this.value,
   });
 
+  @override
   final FugueElementID id;
+
+  @override
   final T value;
 }
 
 /// Batch delete operation for the Fugue list
-class _FugueListDeleteOperation<T> extends Operation {
+class _FugueListDeleteOperation<T> extends Operation
+    implements FugueSequenceDelete {
   /// Constructor that initializes a batch delete operation
   _FugueListDeleteOperation({
     required this.items,
@@ -168,6 +176,7 @@ class _FugueListDeleteOperation<T> extends Operation {
   }
 
   /// Items to delete
+  @override
   final List<_FugueListDeleteItem> items;
 
   @override
@@ -182,16 +191,18 @@ class _FugueListDeleteOperation<T> extends Operation {
 }
 
 /// A single item of a batch delete
-class _FugueListDeleteItem {
+class _FugueListDeleteItem implements FugueDeleteItem {
   _FugueListDeleteItem({
     required this.nodeID,
   });
 
+  @override
   final FugueElementID nodeID;
 }
 
 /// Batch update operation for the Fugue list
-class _FugueListUpdateOperation<T> extends Operation {
+class _FugueListUpdateOperation<T> extends Operation
+    implements FugueSequenceUpdate<T> {
   /// Constructor that initializes a batch update operation
   _FugueListUpdateOperation({
     required this.items,
@@ -255,6 +266,7 @@ class _FugueListUpdateOperation<T> extends Operation {
   }
 
   /// Items to update
+  @override
   final List<_FugueListUpdateItem<T>> items;
 
   /// Codec used to encode the updated values
@@ -273,12 +285,15 @@ class _FugueListUpdateOperation<T> extends Operation {
 }
 
 /// A single item of a batch update
-class _FugueListUpdateItem<T> {
+class _FugueListUpdateItem<T> implements FugueUpdateItem<T> {
   _FugueListUpdateItem({
     required this.nodeID,
     required this.value,
   });
 
+  @override
   final FugueElementID nodeID;
+
+  @override
   final T value;
 }

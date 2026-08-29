@@ -28,7 +28,8 @@ part 'operation.dart';
 /// set.remove('value2');
 /// print(set.value); // Prints {'value1', 'value3'}
 /// ```
-base class CRDTORSetHandler<T> extends Handler<ORSetState<T>> {
+base class CRDTORSetHandler<T> extends Handler<ORSetState<T>>
+    with DeltaProvider<Set<T>, SetDelta<T>> {
   /// Creates a new CRDT OR-SetHandler with the given document and ID
   ///
   /// [valueCodec] is an optional codec for encoding/decoding [T] values to bytes.
@@ -88,6 +89,10 @@ base class CRDTORSetHandler<T> extends Handler<ORSetState<T>> {
   }
 
   /// Returns the current set value computed from changes and snapshot.
+  ///
+  /// Every read builds a fresh set, so the caller owns what it gets back and
+  /// can keep it.
+  @override
   Set<T> get value {
     return _cachedOrComputedState()._state;
   }
@@ -169,6 +174,26 @@ base class CRDTORSetHandler<T> extends Handler<ORSetState<T>> {
     return state;
   }
 
+  /// The value an operation is about, or `null` for a kind that is about no
+  /// single value.
+  ///
+  /// A record rather than a bare `T?`: a set of a nullable type can hold
+  /// `null`, and "this operation is about `null`" must not read as "this
+  /// operation is about nothing".
+  (T,)? _targetValue(Operation operation) {
+    if (operation is _ORSetAddOperation<T>) {
+      return (operation.value,);
+    }
+    if (operation is _ORSetRemoveOperation<T>) {
+      return (operation.value,);
+    }
+    return null;
+  }
+
+  /// Whether [value] is in the set, without building the whole set.
+  bool _isPresent(ORSetState<T> state, T value) =>
+      state._live.containsKey(value) || state._snapshotOnly.contains(value);
+
   /// Applies a single operation to the tag state
   void _applyOperationToTagState({
     required ORSetState<T> state,
@@ -242,16 +267,35 @@ base class CRDTORSetHandler<T> extends Handler<ORSetState<T>> {
     // The cached state is never exposed by this handler, so it can be
     // mutated in place instead of deep-copied on every operation.
     try {
+      // The operations are tag-level: an add of a value that already has a
+      // live tag moves the tags but not the set anyone can see. So the delta
+      // comes from membership before and after, one O(1) lookup each.
+      final target = _targetValue(operation);
+      final before = target != null && _isPresent(state, target.$1);
+
       _applyOperationToTagState(
         state: state,
         operation: operation,
       );
+
+      if (sink != null) {
+        final after = target != null && _isPresent(state, target.$1);
+        sink.add(
+          SetDelta<T>(
+            added: !before && after ? <T>{target.$1} : <T>{},
+            removed: before && !after ? <T>{target.$1} : <T>{},
+          ),
+        );
+      }
       return state;
     } catch (_) {
       // The state may be half-mutated: invalidate the cache.
       return null;
     }
   }
+
+  @override
+  Set<T> applyDelta(Set<T> base, SetDelta<T> delta) => delta.apply(base);
 }
 
 /// State of the [CRDTORSetHandler]

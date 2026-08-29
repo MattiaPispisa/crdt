@@ -83,6 +83,8 @@ class HomePage extends StatelessWidget {
             _CounterCard(),
             _ListenerCard(),
             _TodosCard(),
+            _DeltaCard(),
+            _DeltaBuilderCard(),
             _SettingsCard(),
             _NoteCard(),
             _PresenceCard(),
@@ -224,6 +226,94 @@ class _ListenerCard extends StatelessWidget {
           label: 'listener-child',
           child: Text('static child — the listener fires, I never rebuild'),
         ),
+      ),
+    );
+  }
+}
+
+/// A [CrdtHandlerDeltaListener]: reports **what** each change did to the todos,
+/// so a projection can be moved instead of re-read. Its child never rebuilds.
+class _DeltaCard extends StatefulWidget {
+  const _DeltaCard();
+
+  @override
+  State<_DeltaCard> createState() => _DeltaCardState();
+}
+
+class _DeltaCardState extends State<_DeltaCard> {
+  final _last = ValueNotifier<String>('waiting for the first change…');
+
+  /// A copy of the list kept only from resets and deltas — never read from
+  /// the handler.
+  List<String> _projection = const [];
+
+  @override
+  void dispose() {
+    _last.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return _DemoCard(
+      title: 'What changed — CrdtHandlerDeltaListener',
+      description:
+          'Press the todo buttons above. This card never reads the handler: '
+          'it seeds from one read and then moves its own copy with each '
+          'delta.',
+      actions: const [],
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          CrdtHandlerDeltaListener<List<String>, SequenceDelta<String>>(
+            id: _todosId,
+            onReset: (context, sync, cause) {
+              // `sync.value` is already a value this widget owns.
+              _projection = sync.value;
+              _last.value = 'read again ($cause) → ${_projection.length} items';
+            },
+            onDelta: (context, event) {
+              _projection = event.delta.apply(_projection);
+              _last.value = '${event.delta} → ${_projection.length} items';
+            },
+            child: const _RebuildBadge(
+              label: 'delta-child',
+              child: Text('static child — deltas arrive, I never rebuild'),
+            ),
+          ),
+          const SizedBox(height: 8),
+          ValueListenableBuilder<String>(
+            valueListenable: _last,
+            builder: (context, value, _) => Text(value),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// The builder half of the same stream: it holds the value and rebuilds with
+/// it already moved, so nothing reads the handler.
+class _DeltaBuilderCard extends StatelessWidget {
+  const _DeltaBuilderCard();
+
+  @override
+  Widget build(BuildContext context) {
+    return _DemoCard(
+      title: 'The value, already moved — CrdtHandlerDeltaBuilder',
+      description:
+          'Press the todo buttons above. This card rebuilds once per change, '
+          'with the list handed to it already advanced by that change.',
+      actions: const [],
+      child: CrdtHandlerDeltaBuilder<List<String>, SequenceDelta<String>>(
+        id: _todosId,
+        builder:
+            (context, todos) => _RebuildBadge(
+              label: 'delta-builder',
+              child: Text(
+                todos.isEmpty ? 'now: nothing' : 'now: ${todos.join(' · ')}',
+              ),
+            ),
       ),
     );
   }

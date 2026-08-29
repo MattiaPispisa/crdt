@@ -26,6 +26,11 @@
     - [Operation based](#operation-based)
     - [Transaction](#transaction)
     - [State cache](#state-cache)
+    - [Handler deltas](#handler-deltas)
+      - [Where a delta comes from](#where-a-delta-comes-from)
+      - [Deltas, or the value?](#deltas-or-the-value)
+      - [If you write too: your own edit comes back](#if-you-write-too-your-own-edit-comes-back)
+        - [Tagging a write](#tagging-a-write)
   - [Architecture](#architecture)
     - [CRDTDocument](#crdtdocument)
       - [Identity](#identity)
@@ -36,6 +41,9 @@
       - [Working with Complex Types](#working-with-complex-types)
       - [Nested Structures (Containers and References)](#nested-structures-containers-and-references)
       - [Choosing How to Model Your Data](#choosing-how-to-model-your-data)
+        - [Worked example: a TODO list](#worked-example-a-todo-list)
+        - [A quick decision guide](#a-quick-decision-guide)
+        - [Picking a leaf handler](#picking-a-leaf-handler)
     - [Transaction](#transaction-1)
     - [DAG](#dag)
     - [Change](#change)
@@ -76,6 +84,7 @@ Supporting:
 - ⏱️ **Hybrid Logical Clock**: Uses HLC for causal ordering of operations
 - 🔄 **Automatic Conflict Resolution**: Automatically resolves conflicts in a CRDT
 - 📦 **Local Availability**: Operations are available locally as soon as they are applied
+- 🔍 **Handler deltas**: a handler can say **what** each change did to your copy of it, not only that it changed
 
 ## Greyhound Markdown
 
@@ -272,6 +281,183 @@ Set `useIncrementalCacheUpdate = false` on a handler to turn every incremental
 path off and always replay. A custom handler that resolves conflicts by replay
 order must leave `stateIsOrderIndependent` at its default `false`, otherwise two
 peers that receive the same changes in a different order diverge.
+
+### Handler deltas
+
+A `Change` and a delta describe the same edit from two different places.
+
+A **change** is what the network carries: one peer's edit, written in **that
+peer's** terms. A Fugue text insert says "put these elements after element
+`e7`". Every peer receives that same change, and none of them can tell from it
+where the edit lands in the text *they* are looking at — `e7` is an identity,
+not a position.
+
+A **delta** is the answer to the other question: **how your own copy moved**
+when that change was folded in, written in your coordinates. "Keep the 5
+characters you have, then put ` world` after them." It is derived locally, by
+this document, from the state this document holds. It never travels.
+
+```mermaid
+graph LR
+    S["your value<br/>hello"] --> F
+    C["Change<br/>put elements after e7<br/>the author's terms"] --> F[fold into this document]
+    F --> D["Delta<br/>retain 5 · insert ' world'<br/>your terms"]
+    F --> V["your value<br/>hello world"]
+```
+
+So a change tells you *what someone did*; a delta tells you *what happened to
+what you are holding*. That is why a delta can place a caret and a change
+cannot, and why two peers that agree on the state can still see two different
+sequences of deltas — they folded the same changes in a different order.
+
+`watch()` publishes one delta event per change, so a consumer keeps its own
+projection and never reads `handler.value` again.
+
+```dart
+final text = CRDTFugueTextHandler(doc, 'text');
+
+var mine = '';
+var seen = -1;
+
+text.watch().listen((update) {
+  switch (update) {
+    case HandlerReset():
+      // The base moved: read it, and learn which events it already holds.
+      // The value it hands back is yours to keep.
+      final point = text.readSynced();
+      mine = point.value;
+      seen = point.seq;
+    case HandlerDelta():
+      if (update.seq <= seen) {
+        return; // already inside the value the last read handed over
+      }
+      // The handler is the only place that knows both its value type and its
+      // delta type, so it is the one that says how a delta moves a value.
+      mine = text.applyDelta(mine, update.delta);
+      seen = update.seq;
+  }
+});
+```
+
+Four vocabularies cover every built-in handler, by shape rather than by
+handler: `SequenceDelta<T>` (retain / insert / delete, plus a move for the
+movable list), `MapDelta<K, V>`, `SetDelta<T>` and `RegisterDelta<T>`.
+
+A reset is not an error. It is the honest answer when the base the deltas
+described has been replaced — a snapshot arrived, or the handler dropped the
+cached state. `ResetCause` says which. Every subscription opens with
+`ResetCause.initial`, so the reset path runs on the first frame instead of
+months later.
+
+#### Where a delta comes from
+
+A local edit and a remote change reach the same event by two different roads.
+
+```mermaid
+graph TD
+    L[Local edit] --> LF[Fold it in, collecting the delta]
+    LF --> LH[Hold the delta: the Change does not exist yet]
+    LH --> LC[Transaction commits]
+    LC -->|compaction may fuse operations| LP[Compose and publish under the Change]
+
+    R[Remote change arrives] --> RW{Is anyone watching?}
+    RW -->|No| RQ[Queue it: folded at the next read, no delta built]
+    RW -->|Yes| RF[Fold it now, collecting the delta]
+    RF --> RP[Publish under its Change]
+
+    LP --> E[HandlerDelta event]
+    RP --> E
+```
+
+Two things follow from that shape.
+
+A **local delta is computed early and published late**. It is built while the
+operation is applied, before the `Change` that will carry it exists, and
+published on commit — after compaction may have fused several operations into
+one. One event always covers exactly one change, so the deltas of fused
+operations are composed into one.
+
+**Watching changes *when* the work happens, not *what* work happens.**
+Unwatched, a remote change waits in the queue and is folded at the next read.
+Watched, it is folded on arrival, because a stream cannot wait for a read that
+may never come. The work is the same; only the moment differs. While nobody
+watches, the whole feature is one `null` check on the apply path.
+
+#### Deltas, or the value?
+
+Start with `handler.value`. It is cache-backed, an edit advances the cache
+instead of replaying, and for most reads it is already the right answer.
+
+Reach for deltas when the projection you keep costs more to rebuild than the
+edit costs to apply:
+
+| What you need | Reach for |
+|---|---|
+| an occasional read, or you re-render everything anyway | `handler.value` |
+| to move something expensive to rebuild — a long text, a large list | deltas |
+| to know **where** it changed: a caret, an `AnimatedList`, a scroll anchor | deltas |
+| to know **who** changed it, or which peer it came from | deltas (`HandlerDelta.author`, `.local`) |
+| to skip the echo of **your own** write | deltas ([`origin`](#if-you-write-too-your-own-edit-comes-back)) |
+
+Consuming them is three calls, all shown above: `watch()` to subscribe,
+`readSynced()` to answer a reset with a value **and** the point of the stream
+it reflects, and `applyDelta` to move that value by each delta that follows.
+The rest is the one rule that keeps the two in step — drop every event whose
+`seq` the last read already covers.
+
+#### If you write too: your own edit comes back
+
+A write publishes **while it is still being applied**, so the event reaches your
+listener before the write has even returned. If you had already moved your own
+copy by hand, you now move it twice:
+
+```dart
+items = [...items, 'bread'];  // 1. move my own copy
+list.insert(0, 'bread');      // 2. write to the CRDT
+//                            //    ← the event arrives inside this line
+//                               onDelta applies it again: ['bread', 'bread']
+```
+
+With two consumers on one document the same event must be **dropped by one and
+applied by the other**, so no property of the event alone can decide it. What
+decides is who caused it, which is what `origin` carries.
+
+| Your situation | What to use |
+|---|---|
+| you apply every delta and never touch your copy by hand | nothing |
+| you move your copy by hand (a controller, an `AnimatedList`, an optimistic update) | `origin` |
+| you want to show **who** edited, or tell the network apart from this peer | `local` / `author` |
+
+The first row is worth trying first: write to the handler, move nothing by hand,
+and let the event do the work. Then there is no echo, and nothing to tag.
+
+##### Tagging a write
+
+```dart
+final tag = Object();
+
+doc.runInTransaction(() => list.insert(0, 'bread'), origin: tag);
+
+// in the listener:
+if (identical(update.origin, tag)) {
+  return; // mine, already applied
+}
+```
+
+`origin` takes any object and is compared by identity. It never travels — a
+delta is a local observation — so it costs nothing on the wire. `importChanges`,
+`binaryImportChanges`, `applyChange`, `createChange` and `import` take it too,
+which is how a sync manager marks what arrived from the network.
+
+A `HandlerReset` carries no origin. It asks for a read, and that read is owed
+whoever caused it.
+
+In Flutter, `crdt_lf_flutter` does all of that for you.
+`CrdtHandlerDeltaBuilder` holds the value and rebuilds with it already moved —
+the first row of the table, so it needs no tag.
+`CrdtHandlerDeltaListener` hands you each change as a side effect and takes an
+`origin` for the second row. `CrdtTextFieldBuilder` drives a
+`TextEditingController` from the same stream.
 
 ## Architecture
 
@@ -879,7 +1065,7 @@ Renamed or removed symbols:
 | a `fromBytes(bytes)` a handler implemented by hand | `OperationDecoders operationDecoders` | Was raw bytes decoded by whatever a handler wrote. Now a `Map<int, Operation Function(Uint8List body)>` keyed by the operation's kind byte: the framework looks the kind up itself and raises `UnknownOperationKindException` on a miss, instead of a handler returning `null` or hand-rolling the same check. |
 | `FugueTree`, `FugueNode`, `FugueNodeTriple`, `FugueValueNode` | no longer exported | Implementation detail of the two Fugue sequence handlers. `FugueElementID` is still public. |
 | `update` on `CRDTFugueTextHandler` / `CRDTFugueListHandler` (delete + insert) | `update` keeps the element's identity | For the old behavior, ask for it: `doc.runInTransaction(() { text..delete(index, count)..insert(index, replacement); });` |
-| `incrementCachedState({required operation, required state})` | adds an optional `DeltaSink<Object?>? sink` | Always `null` today; an override has to declare the parameter, even unused. |
+| `incrementCachedState({required operation, required state})` | adds an optional `DeltaSink<Object?>? sink` | It is `null` unless someone watches the handler's deltas. An override that wants to publish them writes what the operation did to it; see [Handler deltas](#handler-deltas). |
 | `class MyHandler extends Handler<T>` | `base`/`final`/`sealed class MyHandler extends Handler<T>` | `Handler` is a `base` class now. Extending it is unchanged; implementing it is no longer allowed. See [Custom handlers](#custom-handlers). |
 | Dart `>=2.17.0` | Dart `>=3.0.0` | Class modifiers need it. `crdt_socket_sync` and `crdt_lf_hive` move with it. |
 | Text handler positions in UTF-16 code units | positions in **runes** | Affects `insert`, `delete`, `update`, `length`, `stablePositionAt`, `indexOfStablePosition` and `myersDiff`. See [Text handlers index by rune](#text-handlers-index-by-rune). |

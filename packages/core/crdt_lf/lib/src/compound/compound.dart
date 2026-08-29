@@ -62,6 +62,14 @@ class Compound {
         // already carries its own — which the write-once setter would refuse
         // to replace anyway.
         compound.stamp ??= operation.stamp;
+        assert(
+          compound.stamp == operation.stamp,
+          'A compound carries the stamp of the later operation. Hand back the '
+          'later one, or a fresh operation, but never the accumulator: the '
+          'deltas waiting for this change are drained by stamp order (see '
+          '`publishBufferedUpTo`), so an earlier stamp leaves the ones that '
+          'this change also carries behind.',
+        );
         accumulator = compound;
       }
     }

@@ -75,6 +75,28 @@ void main() {
       expect(clock1.happenedBefore(clock2), isTrue);
     });
 
+    test('prepareMutation spends a clock value without writing anything', () {
+      // It exists so two documents can be brought to the same tick on purpose
+      // — a tie in the clock is otherwise a once-a-year race. It must move the
+      // clock and nothing else.
+      final before = doc.hlc;
+
+      doc.prepareMutation();
+
+      expect(before.happenedBefore(doc.hlc), isTrue);
+      expect(doc.version, isEmpty);
+      expect(doc.isEmpty, isTrue);
+    });
+
+    test('createChange refuses an operation that already has a change', () {
+      // The stamp an operation carries is the id of the change that carries
+      // it, and it is what every last-writer-wins comparison reads. Letting one
+      // operation into two changes would put the same mark on both.
+      doc.createChange(operation);
+
+      expect(() => doc.createChange(operation), throwsStateError);
+    });
+
     test('createChange with physical time uses provided time', () {
       const physicalTime = 1000;
       final change = doc.createChange(operation, physicalTime: physicalTime);

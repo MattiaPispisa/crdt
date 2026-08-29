@@ -129,6 +129,11 @@ abstract base class Handler<T>
   /// return the **new compounded** operation (union of the two).
   ///
   /// Otherwise, return `null`.
+  ///
+  /// The result may be [current] itself, but never [accumulator]: the fused
+  /// operation carries the stamp of the later one, and the deltas waiting for
+  /// the change it becomes are drained in stamp order. An earlier stamp leaves
+  /// part of them behind. A fresh operation is stamped for you.
   Operation? compound(Operation accumulator, Operation current) => null;
 
   /// Looks up [envelope]'s kind in [operationDecoders] and returns what it

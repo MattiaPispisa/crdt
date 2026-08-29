@@ -1,7 +1,8 @@
 part of 'handler.dart';
 
 /// Batch insert operation for the Fugue algorithm
-class _FugueTextInsertOperation extends Operation {
+class _FugueTextInsertOperation extends Operation
+    implements FugueSequenceInsert<String> {
   /// Constructor that initializes a batch insert operation
   _FugueTextInsertOperation({
     required this.leftOrigin,
@@ -78,12 +79,15 @@ class _FugueTextInsertOperation extends Operation {
   }
 
   /// ID of the left origin node for the batch
+  @override
   final FugueElementID leftOrigin;
 
   /// ID of the right origin node for the batch
+  @override
   final FugueElementID rightOrigin;
 
   /// Items to insert sequentially (first uses [leftOrigin], others chain)
+  @override
   final List<_FugueInsertItem> items;
 
   @override
@@ -101,18 +105,25 @@ class _FugueTextInsertOperation extends Operation {
 }
 
 /// A single item of a batch insert
-class _FugueInsertItem {
+class _FugueInsertItem implements FugueInsertItem<String> {
   _FugueInsertItem({
     required this.id,
     required this.text,
   });
 
+  @override
   final FugueElementID id;
+
   final String text;
+
+  /// The shared name for [text]: what the element holds.
+  @override
+  String get value => text;
 }
 
 /// Batch delete operation for the Fugue algorithm
-class _FugueTextDeleteOperation extends Operation {
+class _FugueTextDeleteOperation extends Operation
+    implements FugueSequenceDelete {
   /// Constructor that initializes a batch delete operation
   _FugueTextDeleteOperation({
     required this.items,
@@ -162,6 +173,7 @@ class _FugueTextDeleteOperation extends Operation {
   }
 
   /// Items to delete
+  @override
   final List<_FugueDeleteItem> items;
 
   @override
@@ -176,16 +188,18 @@ class _FugueTextDeleteOperation extends Operation {
 }
 
 /// A single item of a batch delete
-class _FugueDeleteItem {
+class _FugueDeleteItem implements FugueDeleteItem {
   _FugueDeleteItem({
     required this.nodeID,
   });
 
+  @override
   final FugueElementID nodeID;
 }
 
 /// Batch update operation for the Fugue algorithm
-class _FugueTextUpdateOperation extends Operation {
+class _FugueTextUpdateOperation extends Operation
+    implements FugueSequenceUpdate<String> {
   /// Constructor that initializes a batch update operation
   _FugueTextUpdateOperation({
     required this.items,
@@ -246,6 +260,7 @@ class _FugueTextUpdateOperation extends Operation {
   }
 
   /// Items to update
+  @override
   final List<_FugueUpdateItem> items;
 
   @override
@@ -261,12 +276,18 @@ class _FugueTextUpdateOperation extends Operation {
 }
 
 /// A single item of a batch update
-class _FugueUpdateItem {
+class _FugueUpdateItem implements FugueUpdateItem<String> {
   _FugueUpdateItem({
     required this.nodeID,
     required this.text,
   });
 
+  @override
   final FugueElementID nodeID;
+
   final String text;
+
+  /// The shared name for [text]: what the element should hold.
+  @override
+  String get value => text;
 }

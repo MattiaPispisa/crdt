@@ -37,7 +37,14 @@ base mixin FugueCache<S> on Handler<S> {
 
   /// Applies a single [operation] to [state] in place, leaving the state's
   /// derived projections consistent (e.g. marked stale).
-  void applyOperation(S state, Operation operation);
+  ///
+  /// [sink] collects what the operation did to the observable sequence. It is
+  /// `null` on the replay path and whenever nobody is watching.
+  void applyOperation(
+    S state,
+    Operation operation, {
+    DeltaSink<Object?>? sink,
+  });
 
   // --- Per-peer element-id counter ---
 
@@ -117,7 +124,7 @@ base mixin FugueCache<S> on Handler<S> {
     // The state is mutated in place; on failure the (possibly half-mutated)
     // cache is invalidated by returning null.
     try {
-      applyOperation(state, operation);
+      applyOperation(state, operation, sink: sink);
       return state;
     } catch (_) {
       return null;

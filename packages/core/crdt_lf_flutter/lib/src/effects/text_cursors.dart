@@ -253,7 +253,12 @@ class _CrdtTextCursorsOverlayState extends State<CrdtTextCursorsOverlay>
   @override
   void didUpdateWidget(CrdtTextCursorsOverlay oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (!listEquals(oldWidget.cursors, widget.cursors) ||
+    if (oldWidget.id != widget.id) {
+      // A different handler: re-subscribe, or the anchors would keep being
+      // resolved against the one this started with.
+      _attach(_document!);
+      _invalidate();
+    } else if (!listEquals(oldWidget.cursors, widget.cursors) ||
         oldWidget.motionDuration != widget.motionDuration) {
       _invalidate();
     } else if (oldWidget.labelPlacement != widget.labelPlacement) {
@@ -286,7 +291,12 @@ class _CrdtTextCursorsOverlayState extends State<CrdtTextCursorsOverlay>
       return;
     }
     final handler = _handler();
-    final text = handler.value;
+    // The text the field is painting, not the handler's — which would project
+    // the whole document again on every resolve. It is the same text (the
+    // field is bound to this handler) and it is the one the metrics below are
+    // computed from, so it is the right string to count offsets in. The
+    // painter caches it and drops the cache when the text changes.
+    final text = editable.plainText;
     final scroll = _editableScroll(editable);
     final animate = widget.motionDuration > Duration.zero;
     final resolved = <_ResolvedCursor>[];

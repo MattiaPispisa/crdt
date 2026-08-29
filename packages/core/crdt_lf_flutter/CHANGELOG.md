@@ -1,3 +1,32 @@
+## [Unreleased]
+
+**Date:** 2026-08-26
+
+[compare to previous release](https://github.com/MattiaPispisa/crdt/compare/crdt_lf_flutter-v0.4.0...crdt_lf_flutter-v0.5.0)
+
+### Added
+
+- Reactivity on a handler's **deltas**: `CrdtHandlerDeltaBuilder` holds the handler's value and
+  rebuilds with it already moved by each change, while `CrdtHandlerDeltaListener` hands each change
+  to a callback and never rebuilds its subtree. Both cost the size of the edit instead of a read of
+  the whole value. [132](https://github.com/MattiaPispisa/crdt/issues/132)
+- `debugVerifyCrdtTextFieldProjection` turns off the debug-only whole-value check
+  `CrdtTextFieldBuilder` runs on its derived text.
+
+### Changed
+
+- Requires `crdt_lf` 4.1.0, for the handler delta streams.
+- `CrdtHandlerDeltaListener` takes an `origin`: tag your own writes with it and its `onDelta` skips
+  them, so a projection you move by hand is not moved twice.
+
+### Fixed
+
+- `CrdtTextFieldBuilder` no longer drops a remote change published in the window between a keystroke
+  and its delivery.
+- `CrdtTextFieldBuilder` keeps a pending IME composition across a remote change.
+- `CrdtTextFieldBuilder` and `CrdtTextCursorsOverlay` follow their `id` when it changes, instead of
+  staying bound to the handler they started with.
+
 ## [0.4.0](https://github.com/MattiaPispisa/crdt/tree/crdt_lf_flutter-v0.4.0/packages/crdt_lf_flutter)
 
 **Date:** 2026-08-16

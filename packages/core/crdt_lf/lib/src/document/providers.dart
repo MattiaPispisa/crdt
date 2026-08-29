@@ -7,6 +7,53 @@ base mixin DocumentConsumer {
 
   /// The unique identifier for `this` consumer
   String get id;
+
+  /// The delta bookkeeping, created by [DeltaProvider.watch] and `null` until
+  /// someone asks to watch this consumer.
+  _DeltaHubBase? _deltaHub;
+
+  /// Whether anyone is watching this consumer's deltas.
+  ///
+  /// It is what keeps the delta machinery free: while it is `false` the apply
+  /// path builds no event and is handed no sink.
+  bool get hasDeltaListeners => _deltaHub?.hasListener ?? false;
+
+  // The hooks below do nothing unless someone watches this consumer. They live
+  // here so the cache paths can call them without knowing whether the consumer
+  // publishes deltas at all.
+
+  /// Opens the collection point for the operation about to be applied, or
+  /// returns `null` when nobody is watching.
+  DeltaSink<Object?>? _beginDelta() => _deltaHub?.begin();
+
+  /// Keeps what the operation stamped [stamp] collected, until the change
+  /// that carries it exists.
+  void _bufferDelta(OperationId stamp) => _deltaHub?.bufferDelta(stamp);
+
+  /// Publishes what the current operation collected as one event for
+  /// [change].
+  void _publishRemoteDelta(Change change) =>
+      _deltaHub?.publishRemoteDelta(change);
+
+  /// Publishes everything buffered that [change] carries, as one event.
+  void _publishBufferedUpTo(Change change) =>
+      _deltaHub?.publishBufferedUpTo(change);
+
+  /// Drops every delta collected so far.
+  void _clearDeltaBuffer() => _deltaHub?.clear();
+
+  /// Tells a watcher that the state has to be read again.
+  void _emitReset(ResetCause cause) => _deltaHub?.emitReset(cause);
+
+  /// Ends the delta stream and lets the hub go.
+  ///
+  /// The hub is dropped, not just closed: keeping it would let a `watch` after
+  /// the document was disposed build a fresh controller and hand back a stream
+  /// that can never fire again.
+  void _closeDeltas() {
+    _deltaHub?.close();
+    _deltaHub = null;
+  }
 }
 
 /// Per-consumer state cache that avoids recomputing the consumer's state
@@ -185,7 +232,11 @@ base mixin CacheableStateProvider<T> on DocumentConsumer {
   /// read recomputes from the history — the same failure policy
   /// [_internalIncrementCachedState] uses. A decode that *throws* drops the
   /// cache too, then rethrows.
-  void _drainPendingRemoteChanges({DeltaSink<Object?>? sink}) {
+  ///
+  /// Set [withDeltas] to collect what each change did and publish one event
+  /// per change. It is what a watched handler does at arrival time; a drain
+  /// triggered by a plain read leaves it off.
+  void _drainPendingRemoteChanges({bool withDeltas = false}) {
     final pending = _pendingRemoteChanges;
     if (pending == null) {
       return;
@@ -199,6 +250,9 @@ base mixin CacheableStateProvider<T> on DocumentConsumer {
     }
 
     if (_cachedState == null) {
+      // Nothing to advance: these changes reach the state through the next
+      // recompute, which no delta can describe.
+      _emitReset(ResetCause.cacheDropped);
       return;
     }
     var state = _cachedState as T;
@@ -207,9 +261,10 @@ base mixin CacheableStateProvider<T> on DocumentConsumer {
       for (final change in pending) {
         final operation = _operationFromChange(change);
         if (operation == null) {
-          invalidateCache();
+          _invalidate(ResetCause.applyFailed);
           return;
         }
+        final sink = withDeltas ? _beginDelta() : null;
         final next = incrementCachedState(
           operation: operation,
           state: state,
@@ -220,15 +275,24 @@ base mixin CacheableStateProvider<T> on DocumentConsumer {
           return;
         }
         state = next;
+        if (sink != null) {
+          _publishRemoteDelta(change);
+        }
       }
     } catch (_) {
-      invalidateCache();
+      _invalidate(ResetCause.applyFailed);
       rethrow;
     }
 
     // The pinned version already covers these changes (see
     // [_queueRemoteChanges]), so only the state itself has to be stored.
     _cachedState = state;
+
+    // A read reached the queue before the eager drain did. The state is right;
+    // only the deltas that described this step are gone, so say so.
+    if (!withDeltas && hasDeltaListeners) {
+      _emitReset(ResetCause.deltasMissed);
+    }
   }
 
   /// Pins the cached version to the document's current version.
@@ -247,24 +311,27 @@ base mixin CacheableStateProvider<T> on DocumentConsumer {
   /// honoring [useIncrementalCacheUpdate]. Falls back to [invalidateCache]
   /// when the host opts out, has no cached state, or cannot apply the
   /// operation incrementally.
-  void _internalIncrementCachedState({
-    required Operation operation,
-    DeltaSink<Object?>? sink,
-  }) {
+  void _internalIncrementCachedState({required Operation operation}) {
     if (!useIncrementalCacheUpdate) {
       invalidateCache();
       return;
     }
 
     // A local operation must never land on a state that still has remote
-    // changes waiting, so flush them first.
-    _drainPendingRemoteChanges(sink: sink);
+    // changes waiting, so flush them first. Those changes carry their own
+    // deltas, published under their own ids — never under this operation's.
+    _drainPendingRemoteChanges(withDeltas: hasDeltaListeners);
 
     final state = _cachedState;
     if (state == null) {
+      // There is no state to move, so this operation reaches the value only
+      // through the next recompute. A register that still holds nothing lands
+      // here on its first write: `null` is never cached.
+      _emitReset(ResetCause.cacheDropped);
       return;
     }
 
+    final sink = _beginDelta();
     final newState = incrementCachedState(
       operation: operation,
       state: state,
@@ -277,6 +344,12 @@ base mixin CacheableStateProvider<T> on DocumentConsumer {
     }
 
     updateCachedState(newState);
+
+    if (sink != null) {
+      // The change carrying this operation does not exist yet, so the delta
+      // waits for the commit that creates it (see [_publishBufferedUpTo]).
+      _bufferDelta(operation.stamp!);
+    }
 
     // The change carrying this operation does not exist yet: it is created on
     // commit (see [_transactionFlushWork]). Until then the state holds an
@@ -291,8 +364,9 @@ base mixin CacheableStateProvider<T> on DocumentConsumer {
   /// May mutate [state] in place and return it. The default implementation
   /// returns `null`, i.e. no incremental path.
   ///
-  /// [sink] collects the positional effects of [operation]; `null` when
-  /// nobody is listening, which is every call the library makes today.
+  /// [sink] collects the positional effects of [operation]. It is `null`
+  /// whenever nobody is watching the handler, which is the common case and
+  /// costs one comparison.
   T? incrementCachedState({
     required Operation operation,
     required T state,
@@ -304,12 +378,17 @@ base mixin CacheableStateProvider<T> on DocumentConsumer {
   /// Drops the cached state. The framework calls this automatically when
   /// the consumer's state is no longer guaranteed to match the document
   /// (e.g. external changes imported, snapshot merged, history pruned).
-  void invalidateCache() {
+  void invalidateCache() => _invalidate(ResetCause.cacheDropped);
+
+  /// Drops the cached state and tells any watcher why.
+  void _invalidate(ResetCause cause) {
     _cachedState = null;
     _cachedVersion = null;
     _pendingRemoteChanges = null;
     _replayBoundary = null;
     _replayBoundaryMatchesState = false;
+    _clearDeltaBuffer();
+    _emitReset(cause);
   }
 
   /// The cached state if it still matches the document's current version,
@@ -390,9 +469,11 @@ extension _HandlerHelper on Handler<dynamic> {
 /// Collects the positional effects of applying operations, one delta of type
 /// [D] at a time.
 ///
-/// Passed to [CacheableStateProvider.incrementCachedState]. The library
-/// produces no sink of its own, so that parameter is `null` on every call it
-/// makes.
+/// Passed to [CacheableStateProvider.incrementCachedState]. A handler writes
+/// to it what the operation did to the value anyone can see; the document
+/// turns that into the events of [DeltaProvider.watch]. The parameter is
+/// `null` whenever nobody is watching, so a handler that never checks it
+/// still works — it simply reports nothing.
 abstract class DeltaSink<D> {
   /// Records one delta.
   void add(D delta);

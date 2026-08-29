@@ -2,7 +2,7 @@ import 'dart:typed_data';
 
 import 'package:crdt_lf/crdt_lf.dart';
 import 'package:crdt_lf/src/algorithm/fugue/tree.dart';
-import 'package:crdt_lf/src/algorithm/fugue/value_node.dart';
+import 'package:crdt_lf/src/handler/fugue/fugue_sequence_apply.dart';
 import 'package:crdt_lf/src/handler/fugue/fugue_sequence_handler.dart';
 
 part 'operation.dart';
@@ -33,7 +33,8 @@ part 'operation.dart';
 /// print(list.value); // Prints ['Hello', 'World']
 /// ```
 base class CRDTFugueListHandler<T>
-    extends FugueSequenceHandler<T, List<T>, FugueListState<T>> {
+    extends FugueSequenceHandler<T, List<T>, FugueListState<T>>
+    with DeltaProvider<List<T>, SequenceDelta<T>> {
   /// Creates a new CRDTFugueList with the given document and ID
   ///
   /// [valueCodec] is an optional codec for encoding/decoding [T] values to
@@ -130,27 +131,13 @@ base class CRDTFugueListHandler<T>
   FugueListState<T> createEmptyState() => FugueListState<T>.empty();
 
   @override
-  void applyToTree(FugueTree<T> tree, Operation operation) {
-    if (operation is _FugueListInsertOperation<T>) {
-      tree.iterableInsertChain(
-        leftOrigin: operation.leftOrigin,
-        rightOrigin: operation.rightOrigin,
-        nodes: operation.items.map(
-          (item) => FugueValueNode<T>(id: item.id, value: item.value),
-        ),
-      );
-    } else if (operation is _FugueListDeleteOperation<T>) {
-      for (final item in operation.items) {
-        tree.delete(item.nodeID);
-      }
-    } else if (operation is _FugueListUpdateOperation<T>) {
-      for (final item in operation.items) {
-        tree.update(
-          nodeID: item.nodeID,
-          value: item.value,
-          stamp: operation.stamp!,
-        );
-      }
+  void applyToTree(
+    FugueTree<T> tree,
+    Operation operation, {
+    DeltaSink<Object?>? sink,
+  }) {
+    if (!applyFugueSequenceOperation<T>(tree, operation, sink: sink)) {
+      sink?.add(SequenceDelta<T>.empty());
     }
   }
 
@@ -197,6 +184,12 @@ base class CRDTFugueListHandler<T>
     }
     return values;
   }
+
+  @override
+  List<T> applyDelta(List<T> base, SequenceDelta<T> delta) => delta.apply(base);
+
+  @override
+  List<T> copyValue(List<T> value) => List<T>.of(value);
 
   /// Returns a string representation of this handler
   @override

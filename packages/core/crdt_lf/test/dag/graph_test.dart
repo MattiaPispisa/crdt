@@ -31,6 +31,27 @@ void main() {
       expect(dag.frontiers, isEmpty);
     });
 
+    test('a DAG built from nodes derives its version vector from them', () {
+      // The constructor is public and takes the nodes ready-made. Its version
+      // vector cannot come from anywhere else, so it has to be the newest
+      // clock per peer, not the last one iterated.
+      final other = PeerId.generate();
+      final otherId = OperationId(other, HybridLogicalClock(l: 1, c: 9));
+      final built = DAG(
+        nodes: {
+          id1: DAGNode(id1),
+          // Deliberately not in clock order: the newest must win, not the last.
+          id3: DAGNode(id3, parents: {id1}),
+          id2: DAGNode(id2, parents: {id1}),
+          otherId: DAGNode(otherId),
+        },
+        frontiers: Frontiers(),
+      );
+
+      expect(built.versionVector[author], equals(id3.hlc));
+      expect(built.versionVector[other], equals(otherId.hlc));
+    });
+
     test('addNode adds a root node', () {
       dag.addNode(id1, {});
       expect(dag.nodeCount, equals(1));

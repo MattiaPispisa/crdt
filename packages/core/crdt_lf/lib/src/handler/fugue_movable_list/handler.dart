@@ -5,6 +5,7 @@ import 'package:crdt_lf/src/algorithm/fugue/tree.dart';
 import 'package:crdt_lf/src/algorithm/fugue/value_node.dart';
 import 'package:crdt_lf/src/handler/fugue/element_id_floor.dart';
 import 'package:crdt_lf/src/handler/fugue/fugue_cache.dart';
+import 'package:crdt_lf/src/handler/fugue/fugue_delta.dart';
 import 'package:crdt_lf/src/snapshot/blob_version.dart';
 
 part 'operation.dart';
@@ -42,7 +43,9 @@ part 'operation.dart';
 /// ```
 base class CRDTFugueMovableListHandler<T>
     extends Handler<FugueMovableListState<T>>
-    with FugueCache<FugueMovableListState<T>> {
+    with
+        FugueCache<FugueMovableListState<T>>,
+        DeltaProvider<List<T>, SequenceDelta<T>> {
   /// Creates a movable list handler bound to [doc] with the given [id].
   ///
   /// [valueCodec] is an optional codec for encoding/decoding `T` values to
@@ -95,6 +98,7 @@ base class CRDTFugueMovableListHandler<T>
   bool get stateIsOrderIndependent => true;
 
   /// Returns the current list value.
+  @override
   List<T> get value => cachedOrComputedState().value;
 
   /// Returns the length of the list.
@@ -328,8 +332,19 @@ base class CRDTFugueMovableListHandler<T>
   @override
   void applyOperation(
     FugueMovableListState<T> state,
-    Operation operation,
-  ) {
+    Operation operation, {
+    DeltaSink<Object?>? sink,
+  }) {
+    // The visible order is a projection of the tree through the identity map,
+    // so nothing the tree reports describes it. Reading it either side of the
+    // apply is what makes a `move` recognisable as a move instead of a delete
+    // and an insert. Two walks, and only for a watched handler.
+    // Both come out of one walk, and both survive the [_markDirty] below: the
+    // state builds fresh lists rather than editing these, so holding on to
+    // them is free.
+    final beforeIds = sink == null ? null : state.visibleIdentities();
+    final beforeValues = sink == null ? null : state.value;
+
     if (operation is _MovableListInsertOperation<T>) {
       // Slots into the Fugue tree (handled by the tree's chained insert);
       // identities into the elements map (first-write-wins on (peer, counter),
@@ -399,6 +414,85 @@ base class CRDTFugueMovableListHandler<T>
       }
     }
     state._markDirty();
+
+    if (sink != null) {
+      sink.add(
+        _deltaOf(
+          state,
+          operation,
+          beforeIds: beforeIds!,
+          beforeValues: beforeValues!,
+        ),
+      );
+    }
+  }
+
+  /// What [operation] did to the list anyone can see.
+  ///
+  /// Derived from the visible order either side of the apply, not from the
+  /// tree: a `move` leaves the old slot in place and puts a new one in, and a
+  /// `delete` or an `update` never touches the tree at all.
+  SequenceDelta<T> _deltaOf(
+    FugueMovableListState<T> state,
+    Operation operation, {
+    required List<FugueElementID> beforeIds,
+    required List<T> beforeValues,
+  }) {
+    final afterIds = state.visibleIdentities();
+    final afterValues = state.value;
+
+    // Lazily: an insert never asks where anything used to be.
+    late final placeBefore = <FugueElementID, int>{
+      for (var i = 0; i < beforeIds.length; i++) beforeIds[i]: i,
+    };
+
+    if (operation is _MovableListInsertOperation<T>) {
+      if (operation.items.isEmpty) {
+        return SequenceDelta<T>.empty();
+      }
+      final first = operation.items.first.identityID;
+      final at = afterIds.indexOf(first);
+      return fugueInsertAtDelta<T>(
+        at,
+        operation.items.map((item) => item.value).toList(),
+      );
+    }
+
+    if (operation is _MovableListMoveOperation<T>) {
+      final from = placeBefore[operation.identityID];
+      final to = afterIds.indexOf(operation.identityID);
+      // A move that lost the last-writer-wins comparison, or that asked for
+      // the place the element already had, moves nothing.
+      if (from == null || to < 0 || from == to) {
+        return SequenceDelta<T>.empty();
+      }
+      return SequenceDelta<T>([SeqMove<T>(from: from, to: to)]);
+    }
+
+    if (operation is _MovableListDeleteOperation<T>) {
+      final places = <int>{};
+      for (final item in operation.items) {
+        final at = placeBefore[item.identityID];
+        if (at != null) {
+          places.add(at);
+        }
+      }
+      return fugueDeleteDelta<T>(places.toList()..sort());
+    }
+
+    if (operation is _MovableListUpdateOperation<T>) {
+      final entries = <(int, T)>[];
+      for (final item in operation.items) {
+        final at = placeBefore[item.identityID];
+        // An update that lost the comparison leaves the value as it was.
+        if (at != null && beforeValues[at] != afterValues[at]) {
+          entries.add((at, afterValues[at]));
+        }
+      }
+      return fugueReplaceDelta<T>(entries);
+    }
+
+    return SequenceDelta<T>.empty();
   }
 
   /// The version of the snapshot blob this build writes and reads.
@@ -513,6 +607,12 @@ base class CRDTFugueMovableListHandler<T>
   }
 
   @override
+  List<T> applyDelta(List<T> base, SequenceDelta<T> delta) => delta.apply(base);
+
+  @override
+  List<T> copyValue(List<T> value) => List<T>.of(value);
+
+  @override
   String toString() {
     return 'CRDTFugueMovableList($id, $value)';
   }
@@ -556,18 +656,25 @@ class FugueMovableListState<T> {
   /// rebuilt (lazy) after every applyOperation
   List<FugueElementID>? _cachedVisiblePositions;
 
+  /// rebuilt (lazy) after every applyOperation
+  List<FugueElementID>? _cachedIdentities;
+
   void _markDirty() {
     _cachedValues = null;
     _cachedVisiblePositions = null;
+    _cachedIdentities = null;
   }
 
   void _resolveVisible() {
-    if (_cachedValues != null && _cachedVisiblePositions != null) {
+    if (_cachedValues != null &&
+        _cachedVisiblePositions != null &&
+        _cachedIdentities != null) {
       return;
     }
 
     final values = <T>[];
     final positions = <FugueElementID>[];
+    final identities = <FugueElementID>[];
     for (final node in _tree.nodes()) {
       final identity = node.value;
       final element = _elements[identity];
@@ -583,15 +690,31 @@ class FugueMovableListState<T> {
       }
       values.add(element.value);
       positions.add(node.id);
+      identities.add(identity);
     }
     _cachedValues = values;
     _cachedVisiblePositions = positions;
+    _cachedIdentities = identities;
   }
 
   /// Returns the public list value.
   List<T> get value {
     _resolveVisible();
     return _cachedValues!;
+  }
+
+  /// The identity of every visible element, in order.
+  ///
+  /// It comes out of the same walk that resolves [value], so a watched handler
+  /// pays one traversal per operation rather than one for the values and
+  /// another for the identities.
+  ///
+  /// The list is rebuilt from scratch whenever the state moves, so a caller
+  /// that keeps a reference keeps the order as it was — which is what makes
+  /// "before" and "after" comparable without copying either one.
+  List<FugueElementID> visibleIdentities() {
+    _resolveVisible();
+    return _cachedIdentities!;
   }
 
   /// Returns the visible positions in traversal order.

@@ -2,7 +2,7 @@ import 'dart:typed_data';
 
 import 'package:crdt_lf/crdt_lf.dart';
 import 'package:crdt_lf/src/algorithm/fugue/tree.dart';
-import 'package:crdt_lf/src/algorithm/fugue/value_node.dart';
+import 'package:crdt_lf/src/handler/fugue/fugue_sequence_apply.dart';
 import 'package:crdt_lf/src/handler/fugue/fugue_sequence_handler.dart';
 import 'package:crdt_lf/src/handler/handler_type.dart';
 
@@ -32,7 +32,8 @@ part 'operation.dart';
 /// print(text.value); // Prints ["Hello"]
 /// ```
 base class CRDTFugueTextHandler
-    extends FugueSequenceHandler<String, String, FugueTextState> {
+    extends FugueSequenceHandler<String, String, FugueTextState>
+    with DeltaProvider<String, SequenceDelta<String>> {
   /// Constructor that initializes a new Fugue text handler
   CRDTFugueTextHandler(super.doc, super.id);
 
@@ -176,27 +177,13 @@ base class CRDTFugueTextHandler
   FugueTextState createEmptyState() => FugueTextState.empty();
 
   @override
-  void applyToTree(FugueTree<String> tree, Operation operation) {
-    if (operation is _FugueTextInsertOperation) {
-      tree.iterableInsertChain(
-        leftOrigin: operation.leftOrigin,
-        rightOrigin: operation.rightOrigin,
-        nodes: operation.items.map(
-          (item) => FugueValueNode<String>(id: item.id, value: item.text),
-        ),
-      );
-    } else if (operation is _FugueTextDeleteOperation) {
-      for (final item in operation.items) {
-        tree.delete(item.nodeID);
-      }
-    } else if (operation is _FugueTextUpdateOperation) {
-      for (final item in operation.items) {
-        tree.update(
-          nodeID: item.nodeID,
-          value: item.text,
-          stamp: operation.stamp!,
-        );
-      }
+  void applyToTree(
+    FugueTree<String> tree,
+    Operation operation, {
+    DeltaSink<Object?>? sink,
+  }) {
+    if (!applyFugueSequenceOperation<String>(tree, operation, sink: sink)) {
+      sink?.add(const SequenceDelta<String>.empty());
     }
   }
 
@@ -229,6 +216,10 @@ base class CRDTFugueTextHandler
   List<String> decodeRun(Uint8List blob, int length) {
     return Wtf8.decodeCodePoints(blob);
   }
+
+  @override
+  String applyDelta(String base, SequenceDelta<String> delta) =>
+      delta.applyToText(base);
 
   /// Returns a text representation of this handler
   @override

@@ -29,7 +29,8 @@ part 'operation.dart';
 /// text..insert(0, 'Hello')..insert(5, ' World!');
 /// print(text.value); // Prints "Hello World!"
 /// ```
-base class CRDTTextHandler extends Handler<String> {
+base class CRDTTextHandler extends Handler<String>
+    with DeltaProvider<String, SequenceDelta<String>> {
   /// Creates a new CRDTText with the given document and ID
   CRDTTextHandler(super.doc, this._id);
 
@@ -131,6 +132,7 @@ base class CRDTTextHandler extends Handler<String> {
   }
 
   /// Gets the current state of the text
+  @override
   String get value {
     // Check if the cached state is still valid
     if (cachedState != null) {
@@ -249,20 +251,39 @@ base class CRDTTextHandler extends Handler<String> {
   }) {
     if (operation is _TextInsertOperation) {
       final at = RuneOffsets.utf16Offset(state, operation.index);
+      _reportSplice(
+        sink,
+        state,
+        index: operation.index,
+        start: at,
+        end: at,
+        replacement: operation.text,
+      );
       return state.substring(0, at) + operation.text + state.substring(at);
     } else if (operation is _TextDeleteOperation) {
       final start = RuneOffsets.utf16Offset(state, operation.index);
       if (start >= state.length) {
+        // Past the end: nothing is removed, so nothing moved.
+        sink?.add(const SequenceDelta<String>.empty());
         return state;
       }
       final end = RuneOffsets.utf16Offset(
         state,
         operation.index + operation.count,
       );
+      _reportSplice(
+        sink,
+        state,
+        index: operation.index,
+        start: start,
+        end: end,
+        replacement: '',
+      );
       return state.substring(0, start) + state.substring(end);
     } else if (operation is _TextUpdateOperation) {
       final start = RuneOffsets.utf16Offset(state, operation.index);
       if (start >= state.length) {
+        sink?.add(const SequenceDelta<String>.empty());
         return state;
       }
       final text = operation.text;
@@ -272,11 +293,64 @@ base class CRDTTextHandler extends Handler<String> {
         operation.index + RuneOffsets.length(text),
       );
       final replacedCount = RuneOffsets.runeIndex(state, end) - operation.index;
-      return state.substring(0, start) +
-          text.substring(0, RuneOffsets.utf16Offset(text, replacedCount)) +
-          state.substring(end);
+      final replacement =
+          text.substring(0, RuneOffsets.utf16Offset(text, replacedCount));
+      _reportSplice(
+        sink,
+        state,
+        index: operation.index,
+        start: start,
+        end: end,
+        replacement: replacement,
+      );
+      return state.substring(0, start) + replacement + state.substring(end);
     }
+    sink?.add(const SequenceDelta<String>.empty());
     return state;
+  }
+
+  /// Reports the splice this operation really performed.
+  ///
+  /// The offsets are the ones the new state is built from, so the delta can
+  /// never describe a different edit than the one that happened — including
+  /// the clamping an out-of-range index goes through.
+  void _reportSplice(
+    DeltaSink<Object?>? sink,
+    String state, {
+    required int index,
+    required int start,
+    required int end,
+    required String replacement,
+  }) {
+    if (sink == null) {
+      return;
+    }
+    final startRune = _runeStart(state, index: index, offset: start);
+    final removed =
+        end == start ? 0 : RuneOffsets.runeIndex(state, end) - startRune;
+    sink.add(
+      SequenceDelta<String>([
+        if (startRune > 0) SeqRetain<String>(startRune),
+        if (removed > 0) SeqDelete<String>(removed),
+        if (replacement.isNotEmpty) seqInsertText(replacement),
+      ]),
+    );
+  }
+
+  /// The rune [offset] sits at, knowing it came from [index].
+  ///
+  /// [RuneOffsets.utf16Offset] walks until it has counted [index] runes or run
+  /// out of text. So an [offset] short of the end means it counted them all,
+  /// and the answer is [index] itself — no second walk. Only an edit that
+  /// clamped has to be counted again.
+  int _runeStart(String state, {required int index, required int offset}) {
+    if (index <= 0) {
+      return 0;
+    }
+    if (offset < state.length) {
+      return index;
+    }
+    return RuneOffsets.runeIndex(state, offset);
   }
 
   @override
@@ -378,6 +452,10 @@ base class CRDTTextHandler extends Handler<String> {
     );
     return Wtf8.decode(Uint8List.sublistView(snapshot, offset));
   }
+
+  @override
+  String applyDelta(String base, SequenceDelta<String> delta) =>
+      delta.applyToText(base);
 
   /// Returns a string representation of this text
   @override
