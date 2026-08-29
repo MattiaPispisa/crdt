@@ -2,53 +2,42 @@ part of 'document.dart';
 
 /// Publishes what a handler's observable state did, one event per [Change].
 ///
-/// A consumer subscribes with [watch], seeds its projection from the
-/// [HandlerReset] that arrives first, and keeps it up to date from the
-/// [HandlerDelta] events that follow.
-/// **It never has to read [value] again.**
+/// A consumer subscribes with [watch], seeds its projection from the first
+/// [HandlerReset] and moves it with the [HandlerDelta] events that follow. It
+/// never has to read [value] again.
 ///
-/// **A delta is a local observation of how this
-/// document's copy moved**, in the order this document folded the changes in.
-/// That order is **not** the replay order, so two peers holding the same state
-/// can observe two different sequences of deltas.
+/// **A delta is a local observation of how this document's copy moved**, in the
+/// order this document folded the changes in. That is **not** the replay order,
+/// so two peers holding the same state can see two different delta sequences.
 base mixin DeltaProvider<V, D extends ComposableDelta<D>> on DocumentConsumer {
   /// The current observable value, the one the deltas describe.
   V get value;
 
-  /// The stream of what happened to this handler.
-  ///
-  /// The first event is always `HandlerReset(ResetCause.initial)`, so a
-  /// consumer exercises its reset path immediately instead of months later.
+  /// The stream of what happened to this handler, opening with
+  /// `HandlerReset(ResetCause.initial)`.
   ///
   /// ## When the events arrive
   ///
-  /// As the document settles, before the call that changed it returns. So
-  /// `importChanges` hands back a document whose watchers already know, and
-  /// there is no window where a change exists and a projection still shows the
-  /// text before it.
+  /// As the document settles, before the call that changed it returns — so
+  /// `importChanges` hands back a document whose watchers already know.
   ///
-  /// A listener runs when the document is idle, never in the middle of its
-  /// work, so it is free to read anything. It is also free to **write**: what
-  /// it writes reaches every listener in the same pass, after it returns —
-  /// never inside its own callback.
+  /// A listener therefore runs while the document is idle: it may read
+  /// anything, and it may **write**. What it writes reaches every listener in
+  /// the same pass, after it returns, never inside its own callback.
   ///
-  /// The opening reset is the exception: it arrives one microtask later,
-  /// because at the moment `listen` is called the listener is still being
-  /// wired up. Anything published in between waits behind it, so a reset still
-  /// comes first.
+  /// The opening reset is the exception, arriving one microtask later because
+  /// the listener is still being wired up. Events published in between wait
+  /// behind it.
   ///
   /// ## What it costs
   ///
-  /// A handler nobody reads normally costs nothing: a remote change is queued
-  /// and folded in at the next read (lazy evaluation).
-  /// A watched handler cannot wait for a read
-  /// that may never come, so it pays
-  /// the decode and the apply when the change **arrives** (eager).
-  /// The work is the same; only the moment changes.
+  /// A remote change to an unwatched handler is queued and folded at the next
+  /// read. A watched one cannot wait for a read that may never come, so it
+  /// decodes and applies on **arrival**. Same work, different moment.
+  ///
+  /// Throws [DocumentDisposedException] on a disposed document, rather than
+  /// returning a stream that could never fire again.
   Stream<HandlerUpdate<D>> watch() {
-    // A disposed document publishes nothing ever again, so handing back a
-    // stream that opens with a reset and then stays silent forever would be a
-    // lie. Say so instead.
     _document._ensureNotDisposed('watch');
     final hub =
         _deltaHub as _DeltaHub<D>? ?? (_deltaHub = _DeltaHub<D>(_document));
@@ -57,28 +46,21 @@ base mixin DeltaProvider<V, D extends ComposableDelta<D>> on DocumentConsumer {
 
   /// The point the stream has reached, without reading [value].
   ///
-  /// [readSynced] answers "what is the value, and which events does it already
-  /// hold?" in one step, which is what a consumer that only **observes**
-  /// needs.
-  ///
-  /// A consumer that also **writes** already knows what it wrote. After its
-  /// own change it can move its copy by hand and then take this number,
-  /// saying "I account for everything published so far" — without paying for
-  /// a read it does not need. A change publishes its events while it is being
-  /// applied, so reading this straight after a write covers that write.
+  /// For a consumer that **writes**: it already knows what it wrote, so it can
+  /// move its copy by hand and take this number instead of paying for a read.
+  /// A change publishes while it is being applied, so this covers that write
+  /// straight after it. A consumer that only observes wants [readSynced].
   int get deltaSeq => _deltaHub?.seq ?? 0;
 
   /// The current [value] together with the point of the stream it reflects.
   ///
-  /// This is the answer to a [HandlerReset]: adopt [DeltaSyncPoint.value],
-  /// remember [DeltaSyncPoint.seq], and drop every [HandlerDelta] whose
-  /// [HandlerUpdate.seq] is less than or equal to it.
+  /// The answer to a [HandlerReset]: adopt [DeltaSyncPoint.value], remember
+  /// [DeltaSyncPoint.seq], and drop every [HandlerDelta] whose
+  /// [HandlerUpdate.seq] it already covers.
   ///
-  /// Reading the value and learning where it sits in the stream is one
-  /// operation on purpose. Two operations would let an event land in between,
-  /// and the consumer would apply it twice.
-  ///
-  /// The value it hands back is one the caller **owns**: see [copyValue].
+  /// One operation, not two: an event landing in between would be applied
+  /// twice. The value it hands back is one the caller **owns** — see
+  /// [copyValue].
   DeltaSyncPoint<V> readSynced() {
     // The read first: it can fold queued changes in, which moves the sequence.
     final read = value;
@@ -91,13 +73,13 @@ base mixin DeltaProvider<V, D extends ComposableDelta<D>> on DocumentConsumer {
   /// The value [base] becomes once [delta] is applied.
   V applyDelta(V base, D delta);
 
-  /// A copy of [value] that the caller owns.
+  /// A copy of [value] that the caller owns; [readSynced] goes through it.
   ///
-  /// [readSynced] goes through this, and it has to: a handler folds a change
-  /// into its cached state **in place**, while the [HandlerDelta] describing
-  /// that change is delivered a microtask later. A consumer holding the state
-  /// itself would therefore find the change already inside its base, and then
-  /// apply the delta on top of it — twice.
+  /// A handler folds a change into its cached state **in place**. A consumer
+  /// holding that state itself would find the change already in its base and
+  /// then apply the delta on top of it — twice. Override it whenever [value]
+  /// exposes the cached state; a handler that builds a fresh value on every
+  /// read can keep this default.
   V copyValue(V value) => value;
 }
 
@@ -141,14 +123,13 @@ final class _DeltaHub<D extends ComposableDelta<D>> extends _DeltaHubBase
 
   /// What the operation being applied has reported so far, as one delta.
   ///
-  /// An operation may write here and then refuse itself (see
-  /// [CacheableStateProvider.incrementCachedState]). What it wrote describes a
-  /// state nobody holds, so [clear] drops it and it never leaves.
+  /// An operation may write here and then refuse itself, describing a state
+  /// nobody holds; [clear] drops it before it can leave.
   D? _staged;
 
-  /// The deltas of the operations of the open transaction, in the order they
-  /// were applied. They wait because the change that carries them is created
-  /// on commit, after the compaction that may have fused them.
+  /// The deltas of the open transaction, in apply order. They wait because the
+  /// change carrying them is created on commit, after compaction may have
+  /// fused them.
   List<(OperationId stamp, D delta)>? _buffer;
 
   @override
@@ -158,10 +139,9 @@ final class _DeltaHub<D extends ComposableDelta<D>> extends _DeltaHubBase
   int get seq => _seq;
 
   Stream<HandlerUpdate<D>> watch() {
-    // Synchronous: the outbox has already put this off to the moment the
-    // document is settled, so there is nothing left to wait for. Adding to it
-    // anywhere but from the flush is what a synchronous controller forbids,
-    // and the outbox is what makes sure nothing does.
+    // Synchronous: the outbox has already deferred this to the moment the
+    // document is settled, which is also the only place allowed to add to a
+    // synchronous controller.
     final source = (_controller ??=
             StreamController<HandlerUpdate<D>>.broadcast(sync: true))
         .stream;
@@ -169,10 +149,9 @@ final class _DeltaHub<D extends ComposableDelta<D>> extends _DeltaHubBase
     late StreamController<HandlerUpdate<D>> out;
     StreamSubscription<HandlerUpdate<D>>? subscription;
 
-    // The opening reset cannot go out from inside [onListen]: a synchronous
-    // controller would hand it to a listener that is still being wired up. It
-    // goes one microtask later instead, and anything the document publishes in
-    // between waits here, because this stream promises a reset first.
+    // A synchronous controller would hand the opening reset to a listener that
+    // is still being wired up, so it goes one microtask later. Whatever is
+    // published in between waits here: the reset comes first.
     var opened = false;
     var waiting = <HandlerUpdate<D>>[];
 
@@ -244,7 +223,7 @@ final class _DeltaHub<D extends ComposableDelta<D>> extends _DeltaHubBase
     if (staged == null) {
       return;
     }
-    _emitDelta(change, staged, local: false);
+    _emitDelta(change, staged);
   }
 
   @override
@@ -254,10 +233,9 @@ final class _DeltaHub<D extends ComposableDelta<D>> extends _DeltaHubBase
       return;
     }
 
-    // Compaction only fuses operations that sit next to each other and belong
-    // to one handler, and it hands the fused operation the stamp of the later
-    // one. So everything still waiting that is not newer than this change is
-    // exactly what this change carries.
+    // Compaction fuses only adjacent operations of one handler, and gives the
+    // result the stamp of the later one. So everything waiting that is not
+    // newer than this change is exactly what this change carries.
     D? composed;
     var taken = 0;
     while (
@@ -274,7 +252,7 @@ final class _DeltaHub<D extends ComposableDelta<D>> extends _DeltaHubBase
       _buffer = null;
     }
 
-    _emitDelta(change, composed!, local: true);
+    _emitDelta(change, composed!);
   }
 
   @override
@@ -297,13 +275,16 @@ final class _DeltaHub<D extends ComposableDelta<D>> extends _DeltaHubBase
     _controller = null;
   }
 
-  void _emitDelta(Change change, D delta, {required bool local}) {
+  void _emitDelta(Change change, D delta) {
     _emit(
       HandlerDelta<D>(
         delta: delta,
         changeId: change.id,
         author: change.author,
-        local: local,
+        // From the change, not from the publishing path: `createChange`
+        // writes locally but publishes through the remote one.
+        local: change.author == _document.peerId,
+        origin: _document._deltaOrigin,
         seq: ++_seq,
       ),
     );
@@ -314,10 +295,9 @@ final class _DeltaHub<D extends ComposableDelta<D>> extends _DeltaHubBase
     if (controller == null || controller.isClosed) {
       return;
     }
-    // Published now, handed out once the document is settled — see
-    // [BaseCRDTDocument._deltaOutbox] for why the two are not the same moment.
-    // The sequence number is already spent, so a consumer that asks how far
-    // the stream has got is told the truth even before this event reaches it.
+    // Published now, handed out once the document is settled (see
+    // `_deltaOutbox`). The sequence number is already spent, so `deltaSeq` is
+    // truthful even before this event lands.
     _document._enqueueDeltaEvent(() {
       if (!controller.isClosed) {
         controller.add(update);

@@ -218,5 +218,36 @@ void main() {
       expect(note.value, 'Hllo world');
       expect(projection, note.value);
     });
+    testWidgets('a tagged write does not come back as a delta', (tester) async {
+      final list = CRDTListHandler<String>(doc, 'todos');
+      final tag = Object();
+      final seen = <SequenceDelta<String>>[];
+
+      await tester.pumpWidget(
+        CrdtProvider.value(
+          value: doc,
+          child: MaterialApp(
+            home: CrdtHandlerDeltaListener<List<String>, SequenceDelta<String>>(
+              id: 'todos',
+              origin: tag,
+              onDelta: (context, event) => seen.add(event.delta),
+              child: const SizedBox.shrink(),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // Someone else's write is reported.
+      doc.runInTransaction(() => list.insert(0, 'theirs'));
+      await tester.pumpAndSettle();
+      expect(seen, hasLength(1));
+
+      // This listener's own is not: it already moved its copy by hand.
+      doc.runInTransaction(() => list.insert(0, 'mine'), origin: tag);
+      await tester.pumpAndSettle();
+      expect(seen, hasLength(1));
+      expect(list.value, ['mine', 'theirs']);
+    });
   });
 }

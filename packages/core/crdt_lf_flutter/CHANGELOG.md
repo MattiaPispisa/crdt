@@ -16,14 +16,8 @@
 ### Changed
 
 - Requires `crdt_lf` 4.1.0, for the handler delta streams.
-- `CrdtTextFieldBuilder` moves its text with the deltas the handler reports. It no longer diffs the
-  controller's text before and after an edit to work out what changed, and no longer projects the
-  whole document afterwards — so typing is nearly flat in the size of the document. On 50 000
-  characters a keystroke goes from roughly 770 to 160 µs, and taking in a remote one from roughly
-  700 to 60 µs. `CRDTTextHandler` is the exception (about 44 → 54 µs): its value is already a plain
-  cached string, so a delta buys it nothing.
-- `CrdtTextCursorsOverlay` counts caret offsets in the text the field is already painting instead of
-  asking the handler, which projected the whole document on every resolve.
+- `CrdtHandlerDeltaListener` takes an `origin`: tag your own writes with it and its `onDelta` skips
+  them, so a projection you move by hand is not moved twice.
 
 ### Fixed
 

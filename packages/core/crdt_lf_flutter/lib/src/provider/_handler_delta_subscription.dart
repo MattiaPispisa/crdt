@@ -33,11 +33,9 @@ DeltaProvider<V, D> resolveDeltaProvider<V, D extends ComposableDelta<D>>(
 
 /// Follows one handler's delta stream on behalf of a widget.
 ///
-/// It owns the part every consumer has to get right and none of them wants to
-/// write twice: which handler to listen to, where the last read sits in the
-/// stream, and which events that read already covers.
-///
-/// The widget keeps what it alone knows — what to do with the value.
+/// It owns what every consumer has to get right: which handler to listen to,
+/// where the last read sits in the stream, and which events that read already
+/// covers. The widget keeps only what to do with the value.
 class HandlerDeltaSubscription<V, D extends ComposableDelta<D>> {
   /// Creates a subscription that is not attached to anything yet.
   HandlerDeltaSubscription({
@@ -46,6 +44,7 @@ class HandlerDeltaSubscription<V, D extends ComposableDelta<D>> {
     required this.onDelta,
     required this.isAlive,
     required this.seed,
+    this.origin,
   });
 
   /// How to find the provider. A widget that can give a better error than
@@ -64,12 +63,18 @@ class HandlerDeltaSubscription<V, D extends ComposableDelta<D>> {
   /// Whether the owner still wants events — a `State`'s `mounted`.
   final bool Function() isAlive;
 
-  /// Whether [syncTo] reads the value as it attaches.
+  /// What the owner tags its own writes with; `null` when it never writes.
   ///
-  /// A widget that puts the value on screen wants this: the first frame then
-  /// shows the document instead of an empty one. A widget that hands the
-  /// value to a **user** callback does not, because [syncTo] runs inside
-  /// `build` and that callback may call `setState`.
+  /// A delta carrying it is the owner's own echo, already in its copy, so
+  /// [onDelta] is skipped — [synced] still advances. Deltas only: a
+  /// [HandlerReset] carries no origin and always reaches [onReset].
+  final Object? origin;
+
+  /// Whether [syncTo] reads the value as it attaches, so the first frame shows
+  /// the document instead of an empty one.
+  ///
+  /// A widget that hands the value to a **user** callback leaves it off:
+  /// [syncTo] runs inside `build`, and that callback may call `setState`.
   final bool seed;
 
   /// The document and handler id this is attached to, or `null` before the
@@ -85,11 +90,8 @@ class HandlerDeltaSubscription<V, D extends ComposableDelta<D>> {
   /// arrived yet at `-1`; sequence numbers start at one.
   int _synced = -1;
 
-  /// The handler being followed.
-  ///
-  /// Resolved once per attachment: a handler id is registered at most once and
-  /// never removed, so `(document, id)` cannot start meaning something else
-  /// while the subscription is open.
+  /// The handler being followed, resolved once per attachment: a handler id is
+  /// registered at most once and never removed.
   DeltaProvider<V, D> get provider => _provider;
 
   /// The last point of the stream this consumer accounts for.
@@ -103,14 +105,12 @@ class HandlerDeltaSubscription<V, D extends ComposableDelta<D>> {
 
   /// Attaches to [id] on [document], if that is not already what it follows.
   ///
-  /// Returns the value it read while attaching, which happens only with [seed]
-  /// on — `null` every other time. Call it from `build`: it covers both a new
-  /// document and a new id, which is why no consumer needs
-  /// `didUpdateWidget`.
+  /// Returns the value read while attaching, and `null` without [seed]. Call it
+  /// from `build`: it covers a new document and a new id alike, so no consumer
+  /// needs `didUpdateWidget`.
   ///
-  /// [onBeforeAttach] runs after the old subscription is dropped and before
-  /// the new handler is touched, for a widget that has to forget state tied to
-  /// the old one.
+  /// [onBeforeAttach] runs after the old subscription is dropped and before the
+  /// new handler is touched, for state tied to the old one.
   DeltaSyncPoint<V>? syncTo(
     CRDTDocument document,
     String id, {
@@ -141,24 +141,24 @@ class HandlerDeltaSubscription<V, D extends ComposableDelta<D>> {
 
   /// Reads the value and moves [synced] to the point it reflects.
   ///
-  /// One step on purpose: two would let an event land in between, and it
-  /// would then be applied on top of a value that already holds it.
+  /// One step: two would let an event land in between and be applied on top of
+  /// a value that already holds it.
   DeltaSyncPoint<V> readSynced() {
     final point = provider.readSynced();
     _synced = point.seq;
     return point;
   }
 
-  /// Accounts for everything published so far without reading anything.
-  ///
-  /// For a consumer that **writes**: it already knows what it wrote, so it can
-  /// move its own copy by hand and then skip its own echo.
+  /// Accounts for everything published so far without reading anything, for a
+  /// consumer that moved its own copy by hand.
   void markSyncedToPublished() => _synced = provider.deltaSeq;
 
-  /// Stops listening. The subscription can be attached again afterwards.
+  /// Stops listening. The target goes with it, so a later [syncTo] to the same
+  /// handler attaches again instead of taking the early exit and going quiet.
   void cancel() {
     unawaited(_subscription?.cancel());
     _subscription = null;
+    _target = null;
   }
 
   void _onUpdate(HandlerUpdate<D> update) {
@@ -175,18 +175,22 @@ class HandlerDeltaSubscription<V, D extends ComposableDelta<D>> {
           _synced = update.seq;
           return;
         }
-        // The base the deltas described was replaced. This is the one place
-        // that reads the whole value again.
+        // The only place that reads the whole value again.
         onReset(readSynced(), update.cause);
       case HandlerDelta<D>():
         if (update.seq <= _synced) {
           // Already inside the value the last read handed over.
           return;
         }
-        // Move first, then report. A consumer may write here from inside
-        // [onDelta] — pushing an edit and then accounting for its own echo —
-        // and an advance made on the way out would undo that.
+        // Move first, then report: a consumer may write from inside `onDelta`
+        // and account for its own echo, which an advance on the way out would
+        // undo.
         _synced = update.seq;
+        final tag = origin;
+        if (tag != null && identical(update.origin, tag)) {
+          // The owner's own write, already in its copy.
+          return;
+        }
         onDelta(update);
     }
   }

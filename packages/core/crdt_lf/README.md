@@ -29,6 +29,8 @@
     - [Handler deltas](#handler-deltas)
       - [Where a delta comes from](#where-a-delta-comes-from)
       - [Deltas, or the value?](#deltas-or-the-value)
+      - [If you write too: your own edit comes back](#if-you-write-too-your-own-edit-comes-back)
+        - [Tagging a write](#tagging-a-write)
   - [Architecture](#architecture)
     - [CRDTDocument](#crdtdocument)
       - [Identity](#identity)
@@ -394,7 +396,8 @@ edit costs to apply:
 | an occasional read, or you re-render everything anyway | `handler.value` |
 | to move something expensive to rebuild — a long text, a large list | deltas |
 | to know **where** it changed: a caret, an `AnimatedList`, a scroll anchor | deltas |
-| to know **who** changed it, or whether it was you | deltas (`HandlerDelta.author`, `.local`) |
+| to know **who** changed it, or which peer it came from | deltas (`HandlerDelta.author`, `.local`) |
+| to skip the echo of **your own** write | deltas ([`origin`](#if-you-write-too-your-own-edit-comes-back)) |
 
 Consuming them is three calls, all shown above: `watch()` to subscribe,
 `readSynced()` to answer a reset with a value **and** the point of the stream
@@ -402,10 +405,59 @@ it reflects, and `applyDelta` to move that value by each delta that follows.
 The rest is the one rule that keeps the two in step — drop every event whose
 `seq` the last read already covers.
 
-In Flutter, `crdt_lf_flutter` does all of that for you:
-`CrdtHandlerDeltaBuilder` holds the value and rebuilds with it already moved,
-`CrdtHandlerDeltaListener` hands you each change as a side effect, and
-`CrdtTextFieldBuilder` drives a `TextEditingController` from the same stream.
+#### If you write too: your own edit comes back
+
+A write publishes **while it is still being applied**, so the event reaches your
+listener before the write has even returned. If you had already moved your own
+copy by hand, you now move it twice:
+
+```dart
+items = [...items, 'bread'];  // 1. move my own copy
+list.insert(0, 'bread');      // 2. write to the CRDT
+//                            //    ← the event arrives inside this line
+//                               onDelta applies it again: ['bread', 'bread']
+```
+
+With two consumers on one document the same event must be **dropped by one and
+applied by the other**, so no property of the event alone can decide it. What
+decides is who caused it, which is what `origin` carries.
+
+| Your situation | What to use |
+|---|---|
+| you apply every delta and never touch your copy by hand | nothing |
+| you move your copy by hand (a controller, an `AnimatedList`, an optimistic update) | `origin` |
+| you want to show **who** edited, or tell the network apart from this peer | `local` / `author` |
+
+The first row is worth trying first: write to the handler, move nothing by hand,
+and let the event do the work. Then there is no echo, and nothing to tag.
+
+##### Tagging a write
+
+```dart
+final tag = Object();
+
+doc.runInTransaction(() => list.insert(0, 'bread'), origin: tag);
+
+// in the listener:
+if (identical(update.origin, tag)) {
+  return; // mine, already applied
+}
+```
+
+`origin` takes any object and is compared by identity. It never travels — a
+delta is a local observation — so it costs nothing on the wire. `importChanges`,
+`binaryImportChanges`, `applyChange`, `createChange` and `import` take it too,
+which is how a sync manager marks what arrived from the network.
+
+A `HandlerReset` carries no origin. It asks for a read, and that read is owed
+whoever caused it.
+
+In Flutter, `crdt_lf_flutter` does all of that for you.
+`CrdtHandlerDeltaBuilder` holds the value and rebuilds with it already moved —
+the first row of the table, so it needs no tag.
+`CrdtHandlerDeltaListener` hands you each change as a side effect and takes an
+`origin` for the second row. `CrdtTextFieldBuilder` drives a
+`TextEditingController` from the same stream.
 
 ## Architecture
 

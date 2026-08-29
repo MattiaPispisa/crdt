@@ -6,23 +6,15 @@ import 'package:flutter/widgets.dart';
 
 /// Whether [CrdtTextFieldBuilder] compares its whole text against the handler.
 ///
-/// The field keeps its text by moving it with the deltas the handler reports,
-/// instead of projecting the whole document again after every edit. That is
-/// what makes a keystroke cost the size of the edit rather than the size of
-/// the document.
+/// The field derives its text from the deltas instead of projecting the whole
+/// document, and checks the result after every step — in release too, with a
+/// question that costs nothing: the whole string for `CRDTTextHandler`, the
+/// O(1) length for `CRDTFugueTextHandler`. A drift that keeps the length is the
+/// one that cheap question cannot see.
 ///
-/// The field always checks the result, after every step it takes — a local
-/// push, a remote change taken in. That check runs in release too: it asks the
-/// handler a question whose answer costs nothing, and reads once to recover if
-/// the two disagree. For `CRDTTextHandler` the question is the whole string,
-/// which the handler already holds. For `CRDTFugueTextHandler` it is the
-/// length, which is O(1) — so a drift that keeps the length is the one the
-/// cheap question cannot see.
-///
-/// While this is `true`, a debug build **also** compares the whole value,
-/// which closes that gap and throws when it finds one. **That comparison reads
-/// the value, which is the very cost the field avoids**, so a benchmark
-/// measuring release behaviour has to turn it off. Nothing else should.
+/// While `true`, a debug build **also** compares the whole value and throws on
+/// a mismatch, closing that gap. That comparison reads the value, which is the
+/// cost the field exists to avoid, so only a benchmark should turn it off.
 bool debugVerifyCrdtTextFieldProjection = true;
 
 /// {@template crdt_text_field_builder}
@@ -135,13 +127,24 @@ class _CrdtTextFieldBuilderState extends State<CrdtTextFieldBuilder> {
 
   /// Whether this widget is writing into the handler right now.
   ///
-  /// A write is committed synchronously, so what it publishes comes straight
-  /// back here — before the push has written down what it did. Those events
-  /// are this widget's own echo: it already knows what it wrote, and folding
-  /// them in would apply the edit twice. An editor binding drops its echo by
-  /// tagging the write with its own identity; this stream carries a sequence
-  /// number instead, and that number cannot be checked against until the
-  /// change owning it exists, which is the very commit publishing the echo.
+  /// A write commits synchronously, so everything it publishes comes back
+  /// before the push has written down what it did. Nothing may be folded in
+  /// until then, whoever it came from:
+  ///
+  /// - **our own echo** — already in the controller; folding it in would apply
+  ///   the edit twice;
+  /// - **someone else's delta** — the flush hands our echo to the other
+  ///   watchers, and one that writes back is served in the same pass, so its
+  ///   delta reaches us still inside our `runInTransaction`. Its coordinates
+  ///   are those of a text `_lastCommittedText` does not hold yet.
+  ///
+  /// Both are dropped here and settled afterwards: `markSyncedToPublished`
+  /// accounts for them, and `_verifyProjection` reads once if the second left
+  /// the field behind.
+  ///
+  /// This is why `HandlerDelta.origin` cannot replace the flag — it identifies
+  /// the first case and lets the second through. Nor does it cover the reset,
+  /// which carries no origin.
   bool _pushing = false;
 
   /// Whether the handler asked for a read while [_pushing] was set.
@@ -261,8 +264,7 @@ class _CrdtTextFieldBuilderState extends State<CrdtTextFieldBuilder> {
         : RuneOffsets.runeIndex(against, delta.index + delta.deleted) - index;
     final inserted = RuneOffsets.length(delta.inserted);
 
-    // One body for both handlers: they answer `insert` and `delete` the same
-    // way, they simply do not say so in a shared type.
+    // One body for both handlers: same `insert` and `delete`, no shared type.
     void run() {
       if (deleted > 0) {
         if (handler is CRDTTextHandler) {
@@ -366,14 +368,12 @@ class _CrdtTextFieldBuilderState extends State<CrdtTextFieldBuilder> {
 
   /// Pushes the gesture the controller is holding into the handler.
   ///
-  /// [handlerState] is what the handler holds now, when the caller already
-  /// knows it: a reset carries its text, a delta says what to do to ours.
-  /// It is believed only while the stream is level, because it describes the
-  /// handler at **one** event — and a burst is published at once and delivered
-  /// one at a time, so the handler has already folded the rest. Whenever the
-  /// stream is ahead, one read settles it instead.
-  /// Guessing would push the edit at the wrong place, and mark the events
-  /// still on their way as accounted for, dropping them for good.
+  /// [handlerState] is what the handler holds now, when the caller knows it. It
+  /// is believed only while the stream is level: it describes **one** event,
+  /// and a burst is published at once but delivered one at a time, so the
+  /// handler has already folded the rest. When the stream is ahead, one read
+  /// settles it instead — guessing pushes the edit at the wrong index and marks
+  /// the events still in flight as accounted for, dropping them.
   void _pushLocalEdits({({String text, int runes})? handlerState}) {
     var known = handlerState;
     if (_delta.publishedSeq != _delta.synced) {
@@ -418,26 +418,23 @@ class _CrdtTextFieldBuilderState extends State<CrdtTextFieldBuilder> {
 
     final moved = _applyDelta(pushed, handlerText);
 
-    // We know what we pushed, so the new text is the old one with that splice
-    // applied — no need to project the document again to find out.
+    // We know what we pushed, so the new text is the old one spliced — no need
+    // to project the document again.
     _lastCommittedText = handlerText.replaceRange(
       pushed.index,
       pushed.index + pushed.deleted,
       pushed.inserted,
     );
     _lastCommittedRunes = handlerRunes - moved.deleted + moved.inserted;
-    // Everything published before the push is folded in above, and the push
-    // published its own events while it was being applied. So this covers our
-    // own echo: the stream skips it instead of applying it twice.
+    // Everything before the push is folded in above, and the push published its
+    // own events as it ran. So this covers our echo too.
     _delta.markSyncedToPublished();
 
     if (_resetWhilePushing) {
       _resetWhilePushing = false;
-      // The handler replaced its base while we were writing, so what the lines
-      // above worked out may describe a document that is gone. Read now rather
-      // than keep the value that reset carried: it was read mid-transaction,
-      // when this widget's operation was registered but the change carrying it
-      // did not exist yet, so a recompute could not see the edit being pushed.
+      // The base moved while we were writing, so the lines above may describe a
+      // document that is gone. The value the reset carried is no good either:
+      // read mid-transaction, it could not see the edit being pushed.
       final point = _delta.readSynced();
       _lastCommittedText = point.value;
       _lastCommittedRunes = RuneOffsets.length(point.value);
@@ -457,10 +454,8 @@ class _CrdtTextFieldBuilderState extends State<CrdtTextFieldBuilder> {
   /// [text] is the handler's whole text when it had to be read; [reported] is
   /// the delta when it did not. Exactly one of them is given.
   ///
-  /// The work is done here and now rather than booked for later: a change is
-  /// described by a delta, so taking it in costs the size of the edit, not the
-  /// size of the document. There is nothing left worth batching, and waiting
-  /// would only make the field lag behind the CRDT.
+  /// Done now rather than batched: taking a delta in costs the size of the
+  /// edit, so waiting would only make the field lag behind the CRDT.
   void _settle({String? text, SequenceDelta<String>? reported}) {
     final base = text ?? _lastCommittedText;
     final runes = text != null
@@ -508,20 +503,15 @@ class _CrdtTextFieldBuilderState extends State<CrdtTextFieldBuilder> {
 
   /// Puts the field back in step when its text has drifted from the handler.
   ///
-  /// The text is derived and never read back, so a mistake would put a
-  /// document on screen that does not exist, and leave it there until the next
-  /// reset. This is the cheapest question that catches it: a Fugue handler
-  /// answers its length without projecting anything, and the index handler's
-  /// value is a string it already holds.
-  ///
-  /// [debugVerifyCrdtTextFieldProjection] adds the strict version of the same
-  /// question in a debug build — and that one reads the whole value, which is
-  /// the cost this widget exists to avoid.
+  /// The text is derived and never read back, so a mistake would leave a
+  /// document on screen that does not exist until the next reset. This is the
+  /// cheapest question that catches it; see
+  /// [debugVerifyCrdtTextFieldProjection] for the strict version and the gap it
+  /// closes.
   void _verifyProjection() {
     if (_delta.synced != _delta.publishedSeq) {
-      // The handler is ahead on purpose: a burst of changes is published at
-      // once and delivered one at a time, so in between the two are meant to
-      // disagree. The question only means something once they are level.
+      // A burst is published at once and delivered one at a time, so the two
+      // are meant to disagree in between. Ask only once they are level.
       return;
     }
 
@@ -546,13 +536,12 @@ class _CrdtTextFieldBuilderState extends State<CrdtTextFieldBuilder> {
   ///
   /// Three ways to place an offset, best first:
   ///
-  /// 1. its **stable position** — the identity of the element left of it,
-  ///    which only a Fugue handler carries;
-  /// 2. the **delta the handler reported**, [reported], which says exactly
-  ///    what moved even when the change touched several regions;
-  /// 3. a diff of the two texts, which collapses several regions into one
-  ///    span and can only be best-effort. This is the last resort, used when
-  ///    the handler asked for a fresh read instead of reporting a move.
+  /// 1. its **stable position**, the identity of the element left of it, which
+  ///    only a Fugue handler carries;
+  /// 2. [reported], the delta the handler published, exact even when the change
+  ///    touched several regions;
+  /// 3. a diff of the two texts, which collapses several regions into one span.
+  ///    Best-effort, and only used when the handler asked for a fresh read.
   void _adopt(
     String merged, {
     required int runes,
@@ -591,9 +580,8 @@ class _CrdtTextFieldBuilderState extends State<CrdtTextFieldBuilder> {
       return mapOffsetThroughDelta(offset, diffed!).clamp(0, merged.length);
     }
 
-    // A composition in progress spans code units that have just moved. Carry
-    // it along rather than dropping it, or a remote change would throw away
-    // what the user is in the middle of typing.
+    // A composition in progress spans code units that just moved. Carry it, or
+    // a remote change throws away what the user is typing.
     var composing = TextRange.empty;
     if (old.composing.isValid) {
       final start = map(old.composing.start, null);

@@ -338,13 +338,13 @@ base class CRDTListHandler<T> extends Handler<List<T>>
     return items;
   }
 
-  /// Returns a string representation of this list
   @override
   List<T> applyDelta(List<T> base, SequenceDelta<T> delta) => delta.apply(base);
 
   @override
   List<T> copyValue(List<T> value) => List<T>.of(value);
 
+  /// Returns a string representation of this list
   @override
   String toString() {
     return 'CRDTList($_id, $value)';

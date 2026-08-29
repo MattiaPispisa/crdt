@@ -453,11 +453,11 @@ base class CRDTTextHandler extends Handler<String>
     return Wtf8.decode(Uint8List.sublistView(snapshot, offset));
   }
 
-  /// Returns a string representation of this text
   @override
   String applyDelta(String base, SequenceDelta<String> delta) =>
       delta.applyToText(base);
 
+  /// Returns a string representation of this text
   @override
   String toString() {
     final cut = RuneOffsets.utf16Offset(value, 20);

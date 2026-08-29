@@ -69,7 +69,7 @@ final class MapDelta<K, V> implements ComposableDelta<MapDelta<K, V>> {
   /// The touched keys.
   final Map<K, MapEntryChange<V>> entries;
 
-  /// Whether this delta moves nothing.
+  @override
   bool get isEmpty => entries.isEmpty;
 
   /// Whether this delta moves something.

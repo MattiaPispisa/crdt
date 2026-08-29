@@ -49,6 +49,19 @@ void main() {
       expect(result, hasLength(3));
     });
 
+    // A compound carries the later id, so the deltas waiting for the change it
+    // becomes can be drained in stamp order (see `publishBufferedUpTo`). A
+    // handler that hands back the accumulator carries the earlier one, and
+    // leaves the deltas the change also carries behind.
+    test('a handler that folds to the accumulator is told, in debug', () {
+      final backwards = _BackwardsCompoundingRegister(doc, 'backwards');
+
+      expect(
+        () => compact([_write(backwards, 1), _write(backwards, 2)]),
+        throwsA(isA<AssertionError>()),
+      );
+    });
+
     // The rule this file exists for. A compound is one change and a change has
     // one id, but a stamped handler folded each constituent under its own. On
     // a compound touching one target the two agree; on one touching several
@@ -139,6 +152,15 @@ base class _StampedRegister extends Handler<int> {
 
   @override
   Uint8List getSnapshotState() => Uint8List(0);
+}
+
+/// A handler written the way `Compound` refuses: it folds to the accumulator,
+/// so the survivor carries the earlier id.
+final class _BackwardsCompoundingRegister extends CRDTRegisterHandler<int> {
+  _BackwardsCompoundingRegister(super.doc, super.id);
+
+  @override
+  Operation? compound(Operation accumulator, Operation current) => accumulator;
 }
 
 /// A handler written the way `Compound` refuses: stamped **and** folding.

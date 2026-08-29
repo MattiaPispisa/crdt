@@ -96,9 +96,8 @@ base class CRDTORMapHandler<K, V> extends Handler<ORMapState<K, V>>
 
   /// Returns the current map value computed from changes and snapshot.
   ///
-  /// Every read builds a fresh map, so what it hands back is already a value
-  /// the caller owns — which is why this handler keeps the default
-  /// [DeltaProvider.copyValue].
+  /// Every read builds a fresh map, so the caller owns what it gets back and
+  /// can keep it.
   @override
   Map<K, V> get value {
     return _cachedOrComputedState()._state;

@@ -19,7 +19,7 @@ final class SetDelta<T> implements ComposableDelta<SetDelta<T>> {
   /// The values that were in the set before and are not now.
   final Set<T> removed;
 
-  /// Whether this delta moves nothing.
+  @override
   bool get isEmpty => added.isEmpty && removed.isEmpty;
 
   /// Whether this delta moves something.

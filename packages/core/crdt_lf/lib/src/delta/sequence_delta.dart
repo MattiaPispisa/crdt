@@ -3,8 +3,10 @@ import 'package:crdt_lf/src/utils/rune_offsets.dart';
 
 /// One step of a [SequenceDelta].
 ///
-/// Every count a step carries is expressed in the coordinates of the sequence
-/// **before** the delta is applied. Steps run left to right.
+/// Steps run left to right, and every count they carry is expressed in the
+/// coordinates of the sequence **before** the delta is applied. [SeqMove] is
+/// the exception: it names two places, and the one it moves to belongs to the
+/// sequence **after**.
 sealed class SeqOp<T> {
   /// Creates a step.
   const SeqOp();
@@ -69,13 +71,12 @@ final class SeqDelete<T> extends SeqOp<T> {
 
 /// Moves the element at [from] to [to], keeping its identity.
 ///
-/// Only `CRDTFugueMovableListHandler` emits this. A delete followed by an
-/// insert would describe the same result, but it would throw away the identity
-/// that handler exists to preserve — a list view would rebuild the row instead
-/// of animating it.
+/// Only `CRDTFugueMovableListHandler` emits this. A delete plus an insert would
+/// describe the same result but lose the identity, so a list view would rebuild
+/// the row instead of animating it.
 ///
-/// A [SequenceDelta] that holds a move holds nothing else, and such a delta
-/// supports neither [SequenceDelta.compose] nor [SequenceDelta.mapOffset].
+/// A [SequenceDelta] holding a move holds nothing else, and supports neither
+/// [SequenceDelta.compose] nor [SequenceDelta.mapOffset].
 final class SeqMove<T> extends SeqOp<T> {
   /// Moves the element at [from] to [to].
   const SeqMove({required this.from, required this.to})
@@ -99,11 +100,10 @@ final class SeqMove<T> extends SeqOp<T> {
   String toString() => 'SeqMove($from -> $to)';
 }
 
-/// How a sequence handler's value moved, as a list of steps applied left to
-/// right.
+/// How a sequence handler's value moved, as steps applied left to right.
 ///
-/// The shape is the one every editor binding already knows: retain, insert,
-/// delete, in the coordinates of the sequence before the delta.
+/// The shape every editor binding knows: retain, insert, delete, in the
+/// coordinates of the sequence before the delta.
 ///
 /// The text handlers use `SequenceDelta<String>` where one element is one
 /// **rune**, matching the way they index their text.
@@ -122,7 +122,7 @@ final class SequenceDelta<T> implements ComposableDelta<SequenceDelta<T>> {
   /// The steps, applied left to right.
   final List<SeqOp<T>> ops;
 
-  /// Whether this delta moves nothing.
+  @override
   bool get isEmpty => ops.isEmpty;
 
   /// Whether this delta moves something.
@@ -130,11 +130,9 @@ final class SequenceDelta<T> implements ComposableDelta<SequenceDelta<T>> {
 
   /// The delta that has the same effect as this one followed by [next].
   ///
-  /// [next] is read in the coordinates of the sequence **after** this delta,
-  /// which is what makes the result equal to applying the two in order.
-  ///
-  /// This is what turns the per-operation deltas of a transaction into the one
-  /// event a compacted change carries.
+  /// [next] is read in the coordinates of the sequence **after** this delta, so
+  /// the result equals applying the two in order. It is what turns the
+  /// per-operation deltas of a transaction into one event for a fused change.
   ///
   /// Throws an [UnsupportedError] when either side holds a [SeqMove].
   @override
@@ -218,11 +216,10 @@ final class SequenceDelta<T> implements ComposableDelta<SequenceDelta<T>> {
 
   /// Where [offset] ends up once this delta is applied.
   ///
-  /// [offset] counts elements of the sequence before the delta. An offset that
-  /// sits exactly where something is inserted stays in front of it; an offset
-  /// inside a removed run collapses to the point of the splice.
-  ///
-  /// This is what places a caret after a remote edit.
+  /// This is what places a caret after a remote edit. [offset] counts elements
+  /// of the sequence before the delta. An offset sitting exactly where
+  /// something is inserted stays in front of it; one inside a removed run
+  /// collapses to the splice.
   ///
   /// Throws an [UnsupportedError] when this delta holds a [SeqMove].
   int mapOffset(int offset) {
@@ -241,24 +238,21 @@ final class SequenceDelta<T> implements ComposableDelta<SequenceDelta<T>> {
           out += op.count;
           index++;
         case SeqInsert<T>():
-          // Right here: stay in front of what is put in. The retain arm above
-          // already answers this when a retain leads, and a delta that starts
-          // at zero carries none — without this the answer would depend on
-          // that.
+          // Stay in front of what is put in. The retain arm above answers this
+          // when a retain leads; a delta starting at zero carries none.
           if (offset == base) {
             return out;
           }
           out += op.values.length;
           index++;
         case SeqDelete<T>():
-          // At the front of the removed run, so in front of what replaces it —
-          // the same answer a leading retain would have given.
+          // At the front of the removed run, so in front of what replaces it.
           if (offset == base) {
             return out;
           }
           if (offset <= base + op.count) {
-            // Inside the removed run: land on the splice, past whatever takes
-            // its place.
+            // Inside the removed run: land on the splice, past what replaces
+            // it.
             var ahead = index + 1;
             while (ahead < ops.length) {
               final next = ops[ahead];
@@ -301,9 +295,8 @@ extension SequenceDeltaText on SequenceDelta<String> {
       return base;
     }
 
-    // Splice, rather than take the string apart into one-character pieces and
-    // put it back together: a delta usually touches a handful of characters,
-    // and a document has no reason to pay an allocation per character of it.
+    // Splice instead of rebuilding the string one character at a time: a delta
+    // usually touches a handful of characters.
     final buffer = StringBuffer();
     var offset = 0;
 
@@ -335,19 +328,15 @@ const _pastTheEnd = 'the delta reaches past the end of the base text';
 
 /// Whether skipping from [from] to [to] could have covered [count] runes.
 ///
-/// A delta that reaches past the end of its base was built against a different
-/// text. [RuneOffsets.skip] clamps there instead of failing, so the result
-/// comes out silently short — and a consumer that carries its length by
-/// arithmetic never notices, because it trusts the counts and never looks at
-/// the base.
+/// A delta reaching past its base was built against a different text, and
+/// [RuneOffsets.skip] clamps rather than fails — so the result comes out
+/// silently short.
 ///
-/// One rune is one code unit or two, so covering [count] runes always advances
-/// at least [count] code units: advancing fewer proves the skip ran out. The
-/// test is O(1) — [SequenceDeltaText.applyToText] costs the size of the edit,
-/// and a check that walked the whole base would be the very cost it exists to
-/// avoid. It is therefore one-sided: it never accuses a sound delta, and it
-/// lets a short one through when surrogate pairs leave enough code units
-/// behind.
+/// One rune is one code unit or two, so covering [count] runes advances at
+/// least [count] code units: fewer proves the skip ran out. O(1), because
+/// walking the whole base would cost what [SequenceDeltaText.applyToText]
+/// exists to avoid. So it is one-sided: never a false accusation, and a short
+/// delta slips through when surrogate pairs leave enough code units behind.
 bool _reached(int from, int to, int count) => to - from >= count;
 
 /// String conveniences for the insert step the text handlers emit.

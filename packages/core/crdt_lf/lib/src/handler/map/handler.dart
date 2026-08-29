@@ -352,7 +352,6 @@ base class CRDTMapHandler<T> extends Handler<Map<String, T>>
     return state;
   }
 
-  /// Returns a string representation of this map
   @override
   Map<String, T> applyDelta(Map<String, T> base, MapDelta<String, T> delta) =>
       delta.apply(base);
@@ -360,6 +359,7 @@ base class CRDTMapHandler<T> extends Handler<Map<String, T>>
   @override
   Map<String, T> copyValue(Map<String, T> value) => Map<String, T>.of(value);
 
+  /// Returns a string representation of this map
   @override
   String toString() {
     return 'CRDTMapHandler($_id, $value)';

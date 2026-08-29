@@ -185,13 +185,13 @@ base class CRDTFugueListHandler<T>
     return values;
   }
 
-  /// Returns a string representation of this handler
   @override
   List<T> applyDelta(List<T> base, SequenceDelta<T> delta) => delta.apply(base);
 
   @override
   List<T> copyValue(List<T> value) => List<T>.of(value);
 
+  /// Returns a string representation of this handler
   @override
   String toString() {
     return 'CRDTFugueList($id, $value)';

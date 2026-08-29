@@ -17,6 +17,10 @@
   time** wherever a document is built or loaded: appending 50 000 elements 30.1 ms → 9.4 ms,
   restoring 100 000 from a snapshot 93.3 ms → 22.7 ms. [125](https://github.com/MattiaPispisa/crdt/issues/125)
 - A change costs about 20% less memory to hold.
+- `runInTransaction`, `importChanges`, `binaryImportChanges`, `applyChange`, `createChange` and
+  `import` take an optional `origin`, reported back on `HandlerDelta.origin`. It is how a consumer
+  that writes drops its own echo, and how a sync manager marks what arrived from the network. It
+  never travels, so it costs nothing on the wire. A `HandlerReset` carries none.
 
 ## [4.0.0](https://github.com/MattiaPispisa/crdt/tree/crdt_lf-v4.0.0/packages/crdt_lf)
 

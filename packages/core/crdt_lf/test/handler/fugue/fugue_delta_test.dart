@@ -31,6 +31,30 @@ void main() {
     });
   });
 
+  group('fugueReplaceDelta', () {
+    test('a place named twice keeps the last value and its neighbour', () {
+      // An operation whose items name one element twice writes it twice, and
+      // only the last write is left to see. Walking the cursor past the place
+      // would take out the element after it instead.
+      final delta = fugueReplaceDelta<String>([(1, 'x'), (1, 'y')]);
+
+      expect(delta.ops, [
+        const SeqRetain<String>(1),
+        const SeqDelete<String>(1),
+        const SeqInsert<String>(['y']),
+      ]);
+      expect(delta.apply(['a', 'b', 'c']), ['a', 'y', 'c']);
+    });
+
+    test('the entries it is given are left alone', () {
+      final entries = [(2, 'x'), (0, 'y')];
+
+      fugueReplaceDelta<String>(entries);
+
+      expect(entries, [(2, 'x'), (0, 'y')]);
+    });
+  });
+
   group('fugueInsertAtDelta', () {
     test('reports nothing when there is nothing to insert', () {
       expect(fugueInsertAtDelta<String>(0, []).isEmpty, isTrue);

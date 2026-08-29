@@ -139,5 +139,20 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('hi!'), findsOneWidget);
     });
+
+    testWidgets('a change that moves nothing does not rebuild', (tester) async {
+      final list = CRDTListHandler<String>(doc, 'todos')..insert(0, 'a');
+      final seen = <List<String>>[];
+      await tester.pumpWidget(host(seen: seen));
+      expect(seen, hasLength(1));
+
+      // The handler still publishes an event: the change happened, it simply
+      // moved nothing. There is no new value to put on screen.
+      list.delete(99, 1);
+      await tester.pumpAndSettle();
+
+      expect(seen, hasLength(1));
+      expect(find.text('a'), findsOneWidget);
+    });
   });
 }

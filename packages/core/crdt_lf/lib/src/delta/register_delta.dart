@@ -11,7 +11,7 @@ final class RegisterDelta<T> implements ComposableDelta<RegisterDelta<T>> {
   /// What the register holds now, or `null` when it holds nothing.
   final T? current;
 
-  /// Whether this delta moves nothing.
+  @override
   bool get isEmpty => previous == current;
 
   /// Whether this delta moves something.
@@ -24,7 +24,11 @@ final class RegisterDelta<T> implements ComposableDelta<RegisterDelta<T>> {
   RegisterDelta<T> compose(RegisterDelta<T> next) =>
       RegisterDelta<T>(previous: previous, current: next.current);
 
-  /// What the register holds once this delta is applied.
+  /// What the register holds once this delta is applied, which is [current].
+  ///
+  /// [base] is ignored: a register keeps one value, and the delta already
+  /// carries it. The parameter is there so every delta type applies the same
+  /// way.
   T? apply(T? base) => current;
 
   @override

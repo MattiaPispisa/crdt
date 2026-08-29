@@ -378,4 +378,108 @@ void main() {
       expect(text.watch, throwsA(isA<DocumentDisposedException>()));
     });
   });
+
+  // What lets a consumer that writes drop its own echo. `local` cannot: it
+  // says which peer wrote the change, so two consumers on one document both
+  // read `true` for each other's work.
+  group('origin', () {
+    /// Every delta event of [text], origin included.
+    ({
+      List<HandlerDelta<SequenceDelta<String>>> events,
+      Future<void> Function() stop
+    }) watchDeltas(CRDTTextHandler text) {
+      // A handler with no cached state cannot advance one, so it answers a
+      // write with a reset instead of a delta. One read warms it.
+      text.value;
+      final events = <HandlerDelta<SequenceDelta<String>>>[];
+      final subscription = text.watch().listen((update) {
+        if (update is HandlerDelta<SequenceDelta<String>>) {
+          events.add(update);
+        }
+      });
+      return (events: events, stop: subscription.cancel);
+    }
+
+    test('a local write reports the origin it was tagged with', () async {
+      final doc = CRDTDocument();
+      final text = CRDTTextHandler(doc, 'text');
+      final watcher = watchDeltas(text);
+      await _pump();
+
+      final me = Object();
+      doc.runInTransaction(() => text.insert(0, 'abc'), origin: me);
+      await _pump();
+
+      expect(watcher.events.single.origin, same(me));
+      await watcher.stop();
+    });
+
+    test('an import reports the origin it was tagged with', () async {
+      final source = CRDTDocument();
+      CRDTTextHandler(source, 'text').insert(0, 'abc');
+
+      final doc = CRDTDocument();
+      final text = CRDTTextHandler(doc, 'text')
+        ..useIncrementalCacheUpdate = true
+        ..value;
+      final watcher = watchDeltas(text);
+      await _pump();
+
+      final network = Object();
+      doc.importChanges(source.exportChanges(), origin: network);
+      await _pump();
+
+      expect(watcher.events, isNotEmpty);
+      expect(
+        watcher.events.every((e) => identical(e.origin, network)),
+        isTrue,
+      );
+      await watcher.stop();
+    });
+
+    test('an untagged write reports none', () async {
+      final doc = CRDTDocument();
+      final text = CRDTTextHandler(doc, 'text');
+      final watcher = watchDeltas(text);
+      await _pump();
+
+      text.insert(0, 'abc');
+      await _pump();
+
+      expect(watcher.events.single.origin, isNull);
+      await watcher.stop();
+    });
+
+    test('a nested write keeps the origin of the outer one', () async {
+      final doc = CRDTDocument();
+      final text = CRDTTextHandler(doc, 'text');
+      final watcher = watchDeltas(text);
+      await _pump();
+
+      final me = Object();
+      doc.runInTransaction(
+        () => doc.runInTransaction(() => text.insert(0, 'abc')),
+        origin: me,
+      );
+      await _pump();
+
+      expect(watcher.events.single.origin, same(me));
+      await watcher.stop();
+    });
+
+    test('the origin ends with the call that named it', () async {
+      final doc = CRDTDocument();
+      final text = CRDTTextHandler(doc, 'text');
+      final watcher = watchDeltas(text);
+      await _pump();
+
+      doc.runInTransaction(() => text.insert(0, 'a'), origin: Object());
+      text.insert(1, 'b');
+      await _pump();
+
+      expect(watcher.events, hasLength(2));
+      expect(watcher.events.last.origin, isNull);
+      await watcher.stop();
+    });
+  });
 }

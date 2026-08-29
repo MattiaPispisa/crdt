@@ -12,23 +12,22 @@ enum FugueSide {
 /// A stretch of elements one peer wrote with consecutive counters, held in the
 /// Fugue tree as a single node.
 ///
-/// The run stands for the elements
-/// `startID.counter … startID.counter + length - 1`. Element `i + 1` is by
-/// construction the only right child of element `i`, so the run is a chain and
-/// the tree can carry it as one node. Three consequences, and the tree keeps
-/// all three true by splitting a run before it attaches anything to an inner
-/// element:
+/// It stands for the elements `startID.counter … startID.counter + length - 1`.
+/// Element `i + 1` is by construction the only right child of element `i`, so
+/// the run is a chain the tree can carry as one node. Hence three invariants,
+/// which the tree keeps by splitting a run before attaching anything to an
+/// inner element:
 ///
 /// - only the **first** element carries [leftChildren];
 /// - only the **last** element carries [rightChildren];
-/// - the elements in between carry no children at all.
+/// - the ones in between carry no children.
 ///
 /// A run mixes live elements and tombstones.
 class FugueRun<T> {
   /// Creates a run over [values], with one [deleted] flag per value.
   ///
   /// [parentID] and [side] place the run's **first** element among its
-  /// siblings, exactly as they placed a single node before runs existed.
+  /// siblings.
   FugueRun({
     required this.startID,
     required this.parentID,
@@ -91,8 +90,8 @@ class FugueRun<T> {
 
   /// Takes the element at [offset] out of the sequence.
   ///
-  /// Returns whether this call is what removed it, so the caller only reweighs
-  /// the run when something changed.
+  /// Returns whether this call is what removed it, so the caller reweighs the
+  /// run only when something changed.
   bool deleteAt(int offset) {
     if (_deleted[offset]) {
       return false;
@@ -115,8 +114,7 @@ class FugueRun<T> {
 
   /// The offset of the [liveOffset]-th live element, counting from `0`.
   ///
-  /// The caller has already established the run holds that many live elements,
-  /// which the assert restates.
+  /// The caller has already established the run holds that many.
   int offsetOfLive(int liveOffset) {
     var remaining = liveOffset;
     for (var i = 0; i < _deleted.length; i++) {
@@ -134,9 +132,8 @@ class FugueRun<T> {
 
   /// Adds [value] as the run's new last element, live.
   ///
-  /// The caller has checked that the new element continues the counters and
-  /// that nothing hangs off the current last element — see the merge rule in
-  /// `FugueTree`.
+  /// The caller has checked the merge rule in `FugueTree`: the counters
+  /// continue, and nothing hangs off the current last element.
   void append(T value) {
     _values.add(value);
     _deleted.add(false);
@@ -145,11 +142,11 @@ class FugueRun<T> {
 
   /// Cuts the run in two at [offset] and returns the new right half.
   ///
-  /// This run keeps `0 … offset - 1`; the returned one takes `offset …` along
-  /// with the right children, which belonged to the last element and still do.
-  /// The new run hangs off this one's new last element as its only right child,
-  /// which is the relation those two elements already had — so the split is
-  /// invisible to the sequence, and to every id in it.
+  /// This run keeps `0 … offset - 1`; the returned one takes `offset …` and the
+  /// right children, which belonged to the last element either way. The new run
+  /// becomes the only right child of this one's new last element — the relation
+  /// those two elements already had, so the split changes no id and no
+  /// position.
   ///
   /// The caller links the halves and updates the positional index.
   FugueRun<T> splitAt(int offset) {
@@ -169,11 +166,8 @@ class FugueRun<T> {
     return tail;
   }
 
-  /// The runs hanging off the **first** element's left side, by start id, in
-  /// id order.
-  ///
-  /// Read-only: the empty case is a shared constant. Use [insertChild] to add
-  /// one.
+  /// The runs hanging off the **first** element's left side, by start id, in id
+  /// order. Read-only — use [insertChild] to add one.
   List<FugueElementID> get leftChildren =>
       _leftChildren ?? const <FugueElementID>[];
 

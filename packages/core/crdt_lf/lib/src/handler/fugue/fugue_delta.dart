@@ -21,11 +21,7 @@ SequenceDelta<T> fugueInsertDelta<T>(
   if (after == null) {
     return SequenceDelta<T>.empty();
   }
-  final at = after - 1;
-  return SequenceDelta<T>([
-    if (at > 0) SeqRetain<T>(at),
-    SeqInsert<T>(values),
-  ]);
+  return fugueInsertAtDelta<T>(after - 1, values);
 }
 
 /// The places of the [ids] that are still part of the sequence, ascending.
@@ -105,19 +101,26 @@ SequenceDelta<T> fugueUpdateDelta<T>(
 ///
 /// The places all belong to one coordinate system, because swapping a value
 /// moves nothing.
+///
+/// A place named twice keeps the last value written to it — an operation whose
+/// items name one element twice writes it twice, and only the last write is
+/// left to see. [entries] is left alone; the sorting happens on a copy.
 SequenceDelta<T> fugueReplaceDelta<T>(List<(int, T)> entries) {
-  entries.sort((a, b) => a.$1.compareTo(b.$1));
+  // By place, so a repeat cannot walk the cursor past the element it replaces
+  // and take out its neighbour instead.
+  final byPlace = <int, T>{for (final entry in entries) entry.$1: entry.$2};
+  final places = byPlace.keys.toList()..sort();
 
   final ops = <SeqOp<T>>[];
   var cursor = 0;
-  for (final entry in entries) {
-    if (entry.$1 > cursor) {
-      ops.add(SeqRetain<T>(entry.$1 - cursor));
+  for (final place in places) {
+    if (place > cursor) {
+      ops.add(SeqRetain<T>(place - cursor));
     }
     ops
       ..add(SeqDelete<T>(1))
-      ..add(SeqInsert<T>([entry.$2]));
-    cursor = entry.$1 + 1;
+      ..add(SeqInsert<T>([byPlace[place] as T]));
+    cursor = place + 1;
   }
 
   return SequenceDelta<T>(ops);

@@ -14,17 +14,15 @@ typedef _Spot<T> = ({FugueRun<T> run, int offset});
 ///
 /// ## Elements are grouped into runs
 ///
-/// The tree does not hold one node per element. Elements one peer wrote with
-/// consecutive counters, that ended up adjacent in the sequence, share a single
-/// [FugueRun] — the model of Yjs's `Item` and of the *bunch* in
-/// `mweidner037/list-positions`. Typing a paragraph costs one run, not one node
-/// per character.
+/// The tree holds one node per **run**, not per element: elements one peer
+/// wrote with consecutive counters and that ended up adjacent share a single
+/// [FugueRun].
+/// Typing a paragraph costs one run, not one node per character.
 ///
-/// Grouping is a **local choice of representation**. Two peers that applied the
-/// same operations may cut their runs in different places and still answer
-/// every query identically: [values], [findNodeAtPosition], [findNextNode] and
-/// [liveIndexAfter] are all defined on elements, and [FugueElementID] keeps its
-/// meaning and its encoding. Nothing about a run reaches the wire.
+/// Grouping is a **local choice of representation**. Two peers may cut their
+/// runs in different places and still answer every query identically: [values],
+/// [findNodeAtPosition], [findNextNode] and [liveIndexAfter] are defined on
+/// elements, and nothing about a run reaches the wire.
 class FugueTree<T> {
   FugueTree._();
 
@@ -60,14 +58,13 @@ class FugueTree<T> {
   /// Positional index over the in-order sequence of **runs**, each carrying
   /// how many elements it holds and how many of them are live.
   ///
-  /// Keyed by the run itself rather than by its start id, so reading the
-  /// sequence hands back the runs directly. Going through the ids would put a
-  /// binary search between the index and every run it visits, which turns a
+  /// Keyed by the run itself, not by its start id: going through the ids would
+  /// put a binary search between the index and every run it visits, turning a
   /// full read from `O(n)` into `O(n log R)`.
   ///
-  /// Answers position↔run and neighbour queries in `O(√R)` with `R` the number
-  /// of runs; the walk inside the run is the tree's job, because the index does
-  /// not know which of a run's elements are still there.
+  /// Answers position↔run and neighbour queries in `O(√R)` for `R` runs. The
+  /// walk inside a run is the tree's job — the index does not know which of its
+  /// elements are still there.
   final SqrtDecomposition<FugueRun<T>> _index =
       SqrtDecomposition<FugueRun<T>>();
 
@@ -632,16 +629,14 @@ class FugueTree<T> {
   /// Grows the run the parent sits in by one element, when the new element
   /// only continues it. Returns whether it did.
   ///
-  /// This is the path sequential typing takes. `CrdtTextFieldBuilder` pushes
-  /// one gesture at a time, so a paragraph arrives as one-element operations
-  /// with consecutive counters; without this they would never share a run.
+  /// The path sequential typing takes: a gesture at a time arrives as
+  /// one-element operations with consecutive counters, which without this would
+  /// never share a run.
   ///
-  /// The rule, element for element, is Yjs's `Item.mergeWith` minus its
-  /// same-liveness condition, which a run does not need because it carries a
-  /// flag per element:
-  /// the same peer, the next counter, the new element hanging off the run's
-  /// last element on the right, nothing else already hanging there, and room
-  /// left under [maxRunLength].
+  /// The rule is Yjs's `Item.mergeWith` minus its same-liveness condition,
+  /// which a run does not need because it flags each element: same peer, next
+  /// counter, hanging off the run's last element on the right, nothing else
+  /// already there, and room under [maxRunLength].
   bool _appendToRun(
     FugueElementID newID,
     T value,
@@ -670,12 +665,12 @@ class FugueTree<T> {
   /// [side] can hang off it: last element of its run for a right child, first
   /// for a left one.
   ///
-  /// Only the first and last element of a run may carry children — everything
-  /// in between is the chain that makes the run a run. Splitting restores that,
-  /// and costs the sequence nothing: the two halves keep the parent/child
-  /// relation the two elements already had.
-  /// Returns the run the parent ends up in, which is the one that will carry
-  /// the new child — or `null` for the root, which has no run.
+  /// Only a run's first and last element may carry children. Splitting restores
+  /// that and costs the sequence nothing: the halves keep the parent/child
+  /// relation those elements already had.
+  ///
+  /// Returns the run the parent ends up in, the one that will carry the new
+  /// child; `null` for the root, which has no run.
   FugueRun<T>? _normalizeForChild(_Spot<T>? parentSpot, FugueSide side) {
     if (parentSpot == null) {
       return null;

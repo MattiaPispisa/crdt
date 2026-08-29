@@ -144,8 +144,8 @@ void main() {
     test('leaves the settle cycles out of the score', () {
       // The slow cycle is the first one of every batch, so it lands in the
       // settle window and must not reach the stopwatch.
-      final score = _CountingBenchmark(settleCycles: 1, slowEveryBatch: true)
-          .measure();
+      final score =
+          _CountingBenchmark(settleCycles: 1, slowEveryBatch: true).measure();
 
       expect(score, lessThan(100));
     });

@@ -6,6 +6,9 @@ import 'package:crdt_lf/src/peer_id.dart';
 /// [HandlerDelta.delta] is always one of these: a change that fuses several
 /// operations carries the composition of their deltas.
 abstract interface class ComposableDelta<D> {
+  /// Whether this delta moves nothing.
+  bool get isEmpty;
+
   /// The delta that has the same effect as this one followed by [next].
   ///
   /// [next] is read in the coordinates of the state **after** this delta.
@@ -23,11 +26,9 @@ sealed class HandlerUpdate<D> {
 
   /// The sequence number of this event for the handler that emitted it.
   ///
-  /// It only ever grows, and never restarts.
-  ///
-  /// It is what reconciles a [HandlerReset] with the events that follow it:
-  /// the value a reset asks for is read separately, and [seq] says which point
-  /// of the stream that value reflects.
+  /// It only grows, and never restarts. It is what reconciles a
+  /// [HandlerReset] with the events after it: the reset's value is read
+  /// separately, and [seq] says which point of the stream it reflects.
   final int seq;
 }
 
@@ -40,6 +41,7 @@ final class HandlerDelta<D> extends HandlerUpdate<D> {
     required this.author,
     required this.local,
     required super.seq,
+    this.origin,
   });
 
   /// How the state moved.
@@ -47,32 +49,53 @@ final class HandlerDelta<D> extends HandlerUpdate<D> {
   /// Its coordinates are those of the state **before** this event.
   final D delta;
 
-  /// The id of the change that carried the move.
-  ///
-  /// One event covers exactly one change. A transaction whose operations do
-  /// not compound produces several changes, and therefore several events.
+  /// The id of the change that carried the move; one event per change.
   final OperationId changeId;
 
   /// The peer that wrote the change.
   final PeerId author;
 
-  /// Whether this document wrote the change itself.
+  /// Whether this peer authored the change.
+  ///
+  /// **Not an echo flag.** It answers "did this peer write it", which is wider
+  /// than "did I just write it" in two ways: two consumers on one document read
+  /// `true` for each other's work, and a change this peer wrote in an earlier
+  /// session reads `true` when a persistence adapter loads it back. A consumer
+  /// that skipped on this would drop content it never applied. Use [origin].
+  ///
+  /// What it is good for is provenance: showing who edited, or telling an edit
+  /// of this peer from one that came over the network.
   final bool local;
+
+  /// What the call that produced this change was tagged with; `null` when it
+  /// was not tagged.
+  ///
+  /// Any object, compared by identity. It never travels, so it costs nothing on
+  /// the wire.
+  ///
+  /// A consumer that writes tags its writes and skips what comes back — a write
+  /// publishes before it has finished its own bookkeeping, so applying the echo
+  /// would apply the edit twice.
+  ///
+  /// ```dart
+  /// document.runInTransaction(() => text.insert(0, 'a'), origin: this);
+  /// // in the listener:
+  /// if (identical(update.origin, this)) return;
+  /// ```
+  ///
+  /// A [HandlerReset] carries none.
+  final Object? origin;
 
   @override
   String toString() => 'HandlerDelta(seq: $seq, changeId: $changeId, '
-      'author: $author, local: $local, delta: $delta)';
+      'author: $author, local: $local, origin: $origin, delta: $delta)';
 }
 
 /// The observable state is no longer reachable by delta: read it again.
 ///
-/// A reset is not an error. It is the honest answer when the base the replay
-/// starts from has been replaced, or when the handler dropped the cached state
-/// the deltas were describing.
-///
-/// On a reset a consumer calls the handler's `readSynced()`, adopts the value
-/// it returns, remembers its sequence number, and discards any [HandlerDelta]
-/// whose [HandlerUpdate.seq] is less than or equal to it.
+/// Ordinary traffic, not an error. On a reset a consumer calls the handler's
+/// `readSynced()`, adopts the value, and drops every [HandlerDelta] whose
+/// [HandlerUpdate.seq] the returned one already covers.
 final class HandlerReset<D> extends HandlerUpdate<D> {
   /// Creates the event that asks for a fresh read.
   const HandlerReset({required this.cause, required super.seq});
@@ -86,10 +109,8 @@ final class HandlerReset<D> extends HandlerUpdate<D> {
 
 /// Why a [HandlerReset] was emitted.
 enum ResetCause {
-  /// The first event of a subscription.
-  ///
-  /// Every subscription starts here, so a consumer exercises its reset path on
-  /// the first frame instead of months later in production.
+  /// The first event of a subscription. Every subscription starts here, so the
+  /// reset path runs on the first frame rather than only on a rare event.
   initial,
 
   /// A snapshot replaced the base the replay starts from.
@@ -100,34 +121,28 @@ enum ResetCause {
 
   /// The cached state was dropped, so there is nothing left to move.
   ///
-  /// A handler that reads its state in replay order
-  /// drops the cache whenever a change arrives that sorts before what it
-  /// already holds — two peers typing at the same time. The next read replays
-  /// the history, which is the cost that read already had.
+  /// A handler that reads in replay order drops it whenever a change arrives
+  /// that sorts before what it holds — two peers typing at once. The next read
+  /// replays the history.
   cacheDropped,
 
-  /// A change could not be folded into the state.
+  /// A change could not be folded into the state: its operation failed to
+  /// decode, threw, or was refused.
   ///
-  /// Its operation could not be decoded, or it threw while being applied, or
-  /// the document refused the change outright. A handler that simply has no
-  /// incremental path for an operation is not a failure and reports
-  /// [cacheDropped] instead.
+  /// A handler that merely has no incremental path reports [cacheDropped].
   applyFailed,
 
-  /// Queued changes were folded into the state without anyone collecting
-  /// their deltas.
+  /// Queued changes were folded without anyone collecting their deltas: a read
+  /// reached the queue before the eager drain did.
   ///
-  /// A safety net: it means a read reached the queue before the eager drain
-  /// did. The state is correct; only the deltas that described the last step
-  /// are gone.
+  /// The state is right; only the deltas describing the last step are gone.
   deltasMissed,
 }
 
 /// A value together with the point of the delta stream it reflects.
 ///
-/// Returned by a handler's `readSynced()`. Reading the value and learning
-/// which events it already includes is one operation, so a consumer cannot
-/// apply a delta twice.
+/// Returned by a handler's `readSynced()`. One operation, not two: an event
+/// landing between a read and a `seq` query would be applied twice.
 final class DeltaSyncPoint<V> {
   /// Creates a sync point.
   const DeltaSyncPoint({required this.value, required this.seq});

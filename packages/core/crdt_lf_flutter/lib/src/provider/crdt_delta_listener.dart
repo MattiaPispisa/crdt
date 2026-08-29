@@ -22,21 +22,19 @@ typedef CrdtDeltaResetCallback<V> = void Function(
 ///
 /// [CrdtHandlerListener] tells you *that* a handler changed and hands you the
 /// handler to re-read. This one hands you the change itself, so you can move a
-/// projection you already hold — drive an `AnimatedList`, replay an edit into a
-/// controller, append to a log — without reading the whole value again.
+/// projection you already hold — an `AnimatedList`, a controller, a log —
+/// without reading the whole value again.
 ///
 /// It renders [child] unchanged and **never rebuilds the subtree**.
 ///
 /// ## The reset, handled for you
 ///
-/// A delta stream sometimes has to say "read it again": a snapshot replaced the
-/// base, or the handler dropped the cached state the deltas described (see
-/// `ResetCause`). This widget performs that read, hands the value to [onReset],
-/// and drops the events the value already holds — so [onDelta] never reports a
-/// change twice, and never one the value has already absorbed.
+/// A delta stream sometimes has to say "read it again" (see `ResetCause`). This
+/// widget performs that read, hands the value to [onReset] and drops the events
+/// the value already holds, so [onDelta] never reports a change twice.
 ///
-/// [onReset] fires once when the subscription starts, with
-/// `ResetCause.initial`. Seed your projection there.
+/// [onReset] fires once at the start with `ResetCause.initial`: seed your
+/// projection there.
 ///
 /// ## Example
 ///
@@ -67,6 +65,7 @@ class CrdtHandlerDeltaListener<V, D extends ComposableDelta<D>>
     required this.id,
     this.onDelta,
     this.onReset,
+    this.origin,
     this.child,
     super.key,
   });
@@ -80,6 +79,30 @@ class CrdtHandlerDeltaListener<V, D extends ComposableDelta<D>>
   /// Called when the value has to be adopted again, with the value already
   /// read.
   final CrdtDeltaResetCallback<V>? onReset;
+
+  /// What this listener's own writes are tagged with; `null` when it never
+  /// writes.
+  ///
+  /// A write publishes before it has finished, so [onDelta] would move a
+  /// projection that already holds the edit. Tag the write with the same object
+  /// and the echo is dropped:
+  ///
+  /// ```dart
+  /// CrdtHandlerDeltaListener<List<String>, SequenceDelta<String>>(
+  ///   id: 'todos',
+  ///   origin: _tag,
+  ///   onDelta: (context, event) => _items = event.delta.apply(_items),
+  ///   child: TodoList(
+  ///     onAdd: (todo) => doc.runInTransaction(
+  ///       () => list.insert(0, todo),
+  ///       origin: _tag,
+  ///     ),
+  ///   ),
+  /// );
+  /// ```
+  ///
+  /// [onReset] still fires: a reset asks for a read, whoever caused it.
+  final Object? origin;
 
   /// The subtree rendered unchanged below the listener.
   final Widget? child;
@@ -98,6 +121,7 @@ class _CrdtHandlerDeltaListenerState<V, D extends ComposableDelta<D>>
     onReset: (point, cause) => widget.onReset?.call(context, point, cause),
     onDelta: (event) => widget.onDelta?.call(context, event),
     isAlive: () => mounted,
+    origin: widget.origin,
     // The reset that opens the subscription reaches [onReset] like any other,
     // one microtask after this build. Reading it here instead would run a
     // user callback — one free to call `setState` — inside `build`.

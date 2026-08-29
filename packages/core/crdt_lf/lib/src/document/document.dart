@@ -29,34 +29,47 @@ part 'history.dart';
 abstract class BaseCRDTDocument {
   bool _isDisposed = false;
 
-  /// Delta events that have been published but not handed out yet.
+  /// Delta events that have been published but not handed out yet;
+  /// [_flushDeltaEvents] hands them out.
   ///
-  /// This is one third of how a change reaches a watcher. The other two are
-  /// the synchronous controller in [DeltaProvider.watch] and the `onFlushed`
-  /// hook of [TransactionManager]. Each answers a different question:
-  ///
-  /// - the **outbox** moves delivery from the middle of the work to its end. A
-  ///   listener must not run while the document is half applied: it may read
-  ///   anything, and half of it would be stale.
-  /// - the **synchronous controller** makes delivery at that end immediate
-  ///   rather than a microtask later, so the call that changed the document
-  ///   returns with every watcher already told.
-  /// - **`onFlushed`** is the exact moment the document holds nothing anymore,
-  ///   and so the only point at which handing events to code that may write
-  ///   back is safe.
-  ///
-  /// [_flushDeltaEvents] is what hands them out.
+  /// One of three parts that decide when a change reaches a watcher. The outbox
+  /// moves delivery from the middle of the work to its end, so no listener runs
+  /// on a half-applied document; the synchronous controller in
+  /// [DeltaProvider.watch] makes that end immediate rather than a microtask
+  /// later; and [TransactionManager]'s `onFlushed` is the moment the document
+  /// holds nothing, the only point safe for code that may write back.
   List<void Function()>? _deltaOutbox;
 
   /// Whether [_flushDeltaEvents] is already handing events out.
   bool _flushingDeltas = false;
 
+  /// Who asked for the work running right now, stamped onto the delta events it
+  /// produces; `null` outside any call that named one.
+  ///
+  /// Set for the whole call, not the apply alone: a local delta is collected
+  /// while the operation runs and published at the commit that ends it.
+  Object? _deltaOrigin;
+
+  /// Runs [body] with [origin] on the delta events it produces.
+  ///
+  /// A nested call that names none keeps the outer origin. Restoring rather
+  /// than clearing lets a listener write back from inside a flush without
+  /// taking the origin of the work it interrupted.
+  T _withDeltaOrigin<T>(Object? origin, T Function() body) {
+    final previous = _deltaOrigin;
+    _deltaOrigin = origin ?? previous;
+    try {
+      return body();
+    } finally {
+      _deltaOrigin = previous;
+    }
+  }
+
   /// Holds one event until the document is settled.
   ///
-  /// The microtask is the safety net for the paths that end nowhere near a
-  /// transaction — a handler whose cache is dropped by hand, say. On every
-  /// normal path the commit flushes first and the microtask finds nothing
-  /// left.
+  /// The microtask covers the paths that end nowhere near a transaction — a
+  /// cache dropped by hand, say. On a normal path the commit flushes first and
+  /// the microtask finds nothing.
   void _enqueueDeltaEvent(void Function() deliver) {
     final outbox = _deltaOutbox;
     if (outbox != null) {
@@ -69,10 +82,9 @@ abstract class BaseCRDTDocument {
 
   /// Hands out every event waiting in the outbox.
   ///
-  /// A listener is free to write back, which publishes more events. The loop
-  /// picks those up, so a listener's own work reaches everyone in this same
-  /// pass — after the listener returns, never inside it. That is also why a
-  /// nested call does nothing: the loop it would duplicate is already running.
+  /// A listener may write back, publishing more events; the loop picks those up
+  /// so its work reaches everyone in this same pass, after it returns. A nested
+  /// call does nothing: the loop it would duplicate is already running.
   void _flushDeltaEvents() {
     if (_flushingDeltas) {
       return;
@@ -799,9 +811,17 @@ class CRDTDocument extends BaseCRDTDocument {
   Change createChange(
     Operation operation, {
     int? physicalTime,
+    Object? origin,
   }) {
     _ensureNotDisposed('createChange');
 
+    return _withDeltaOrigin(
+      origin,
+      () => _createChange(operation, physicalTime: physicalTime),
+    );
+  }
+
+  Change _createChange(Operation operation, {int? physicalTime}) {
     if (operation.stamp != null) {
       throw StateError(
         'Operation ${operation.type.toPayload()} already belongs to a change '
@@ -905,9 +925,15 @@ class CRDTDocument extends BaseCRDTDocument {
   /// The [Change] must be causally ready (all its dependencies must exist
   /// in the DAG).
   /// Returns `true` if the [Change] was applied, `false` if it already existed.
-  bool applyChange(Change change) {
+  ///
+  /// {@macro delta_origin}
+  bool applyChange(Change change, {Object? origin}) {
     _ensureNotDisposed('applyChange');
 
+    return _withDeltaOrigin(origin, () => _applyChange(change));
+  }
+
+  bool _applyChange(Change change) {
     final applied = _internalApplyChange(change);
     if (applied) {
       _ensureHandlerForChange(change);
@@ -1152,6 +1178,7 @@ class CRDTDocument extends BaseCRDTDocument {
     List<Change>? changes,
     bool merge = false,
     bool pruneHistory = true,
+    Object? origin,
   }) {
     _ensureNotDisposed('import');
 
@@ -1162,19 +1189,19 @@ class CRDTDocument extends BaseCRDTDocument {
     final changesToImport = changes ?? <Change>[];
 
     if (snapshot == null) {
-      return importChanges(changesToImport);
+      return importChanges(changesToImport, origin: origin);
     }
 
     if (merge) {
       mergeSnapshot(snapshot, pruneHistory: pruneHistory);
-      return importChanges(changesToImport);
+      return importChanges(changesToImport, origin: origin);
     }
 
     final imported = importSnapshot(snapshot, pruneHistory: pruneHistory);
     if (!imported) {
       return -1;
     }
-    return importChanges(changesToImport);
+    return importChanges(changesToImport, origin: origin);
   }
 
   @override
@@ -1242,20 +1269,32 @@ class CRDTDocument extends BaseCRDTDocument {
   /// Imports [Change]s from the compact binary format.
   ///
   /// Returns the number of [Change]s that were applied.
-  int binaryImportChanges(Uint8List data) {
+  ///
+  /// {@macro delta_origin}
+  int binaryImportChanges(Uint8List data, {Object? origin}) {
     _ensureNotDisposed('binaryImportChanges');
 
-    return importChanges([
-      for (final blob in ChangeCodec.decodeBlobs(data)) Change.fromBytes(blob),
-    ]);
+    return importChanges(
+      [
+        for (final blob in ChangeCodec.decodeBlobs(data))
+          Change.fromBytes(blob),
+      ],
+      origin: origin,
+    );
   }
 
   /// Imports [Change]s from another document
   ///
   /// Returns the number of [Change]s that were applied.
-  int importChanges(List<Change> changes) {
+  ///
+  /// {@macro delta_origin}
+  int importChanges(List<Change> changes, {Object? origin}) {
     _ensureNotDisposed('importChanges');
 
+    return _withDeltaOrigin(origin, () => _importChanges(changes));
+  }
+
+  int _importChanges(List<Change> changes) {
     // Sort changes topologically
     final sorted = _topologicalSort(
       changes.newerThan(getVersionVector()).toList(),
@@ -1393,10 +1432,20 @@ class CRDTDocument extends BaseCRDTDocument {
   /// At the end of the transaction, contiguous operations can be compacted
   /// into fewer operations through compound algorithms ([Handler.compound])
   /// to reduce the number of changes created.
-  T runInTransaction<T>(T Function() action) {
+  ///
+  /// {@template delta_origin}
+  /// [origin] is reported on the [HandlerDelta] events this produces, and is
+  /// `null` when none is given. Pass the object a consumer tags its own
+  /// writes with, so it can skip its own echo; a [HandlerReset] carries none.
+  /// A nested call that names none keeps the origin of the outer one.
+  /// {@endtemplate}
+  T runInTransaction<T>(T Function() action, {Object? origin}) {
     _ensureNotDisposed('runInTransaction');
 
-    return _transactionManager.run<T>(action);
+    return _withDeltaOrigin(
+      origin,
+      () => _transactionManager.run<T>(action),
+    );
   }
 
   /// Returns a string representation of this document

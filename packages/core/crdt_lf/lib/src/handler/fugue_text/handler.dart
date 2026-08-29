@@ -217,11 +217,11 @@ base class CRDTFugueTextHandler
     return Wtf8.decodeCodePoints(blob);
   }
 
-  /// Returns a text representation of this handler
   @override
   String applyDelta(String base, SequenceDelta<String> delta) =>
       delta.applyToText(base);
 
+  /// Returns a text representation of this handler
   @override
   String toString() {
     final text = value;
