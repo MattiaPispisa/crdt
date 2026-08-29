@@ -1,3 +1,6 @@
+@TestOn('vm')
+library;
+
 import 'dart:io';
 
 import 'package:benchmark_infrastructure/benchmark_infrastructure.dart';
