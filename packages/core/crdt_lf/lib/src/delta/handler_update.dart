@@ -23,10 +23,7 @@ sealed class HandlerUpdate<D> {
 
   /// The sequence number of this event for the handler that emitted it.
   ///
-  /// It only ever grows, and never restarts. It may skip a number: a second
-  /// subscriber opens with a reset of its own, which the streams already
-  /// running do not see. That is why the consumer rule is "drop everything up
-  /// to and including my number", never "expect the next one".
+  /// It only ever grows, and never restarts.
   ///
   /// It is what reconciles a [HandlerReset] with the events that follow it:
   /// the value a reset asks for is read separately, and [seq] says which point
@@ -103,7 +100,7 @@ enum ResetCause {
 
   /// The cached state was dropped, so there is nothing left to move.
   ///
-  /// This is the common one. A handler that reads its state in replay order
+  /// A handler that reads its state in replay order
   /// drops the cache whenever a change arrives that sorts before what it
   /// already holds — two peers typing at the same time. The next read replays
   /// the history, which is the cost that read already had.

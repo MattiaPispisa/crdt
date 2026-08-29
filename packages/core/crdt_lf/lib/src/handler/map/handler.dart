@@ -153,49 +153,61 @@ base class CRDTMapHandler<T> extends Handler<Map<String, T>>
     DeltaSink<Object?>? sink,
   }) {
     if (operation is _MapInsertOperation<T>) {
-      final had = state.containsKey(operation.key);
-      final previous = state[operation.key];
+      final before = _entryBefore(state, operation.key, sink);
       _mapInsert(state, key: operation.key, value: operation.value);
       sink?.add(
         MapDelta<String, T>({
           operation.key: MapEntrySet<T>(
             value: operation.value,
-            previous: had ? previous : null,
+            previous: before?.$1,
           ),
         }),
       );
     } else if (operation is _MapDeleteOperation<T>) {
-      // `containsKey`, not `previous != null`: for a map of a nullable type a
-      // key holding `null` is still a key, and removing it is still a move.
-      final had = state.containsKey(operation.key);
-      final previous = state[operation.key];
+      final before = _entryBefore(state, operation.key, sink);
       _mapDelete(state, key: operation.key);
       sink?.add(
-        had
-            ? MapDelta<String, T>({
-                operation.key: MapEntryRemoved<T>(previous: previous as T),
-              })
-            : MapDelta<String, T>.empty(),
+        before == null
+            ? MapDelta<String, T>.empty()
+            : MapDelta<String, T>({
+                operation.key: MapEntryRemoved<T>(previous: before.$1),
+              }),
       );
     } else if (operation is _MapUpdateOperation<T>) {
+      final before = _entryBefore(state, operation.key, sink);
+      _mapUpdate(state, key: operation.key, value: operation.value);
       // An update of a key that is not there does nothing, so it must not
       // report a phantom entry.
-      final had = state.containsKey(operation.key);
-      final previous = state[operation.key];
-      _mapUpdate(state, key: operation.key, value: operation.value);
       sink?.add(
-        had
-            ? MapDelta<String, T>({
+        before == null
+            ? MapDelta<String, T>.empty()
+            : MapDelta<String, T>({
                 operation.key: MapEntrySet<T>(
                   value: operation.value,
-                  previous: previous,
+                  previous: before.$1,
                 ),
-              })
-            : MapDelta<String, T>.empty(),
+              }),
       );
     } else {
       sink?.add(MapDelta<String, T>.empty());
     }
+  }
+
+  /// What [key] holds before the operation writes, or `null` when the map does
+  /// not have it — and `null` too when [sink] is `null`, because then nobody
+  /// asked and the two lookups would be thrown away.
+  ///
+  /// A record and not a bare `T?`: for a map of a nullable type a key holding
+  /// `null` is still a key, and removing it is still a move.
+  static (T,)? _entryBefore<T>(
+    Map<String, T> state,
+    String key,
+    DeltaSink<Object?>? sink,
+  ) {
+    if (sink == null || !state.containsKey(key)) {
+      return null;
+    }
+    return (state[key] as T,);
   }
 
   void _mapInsert(
