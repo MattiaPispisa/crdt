@@ -23,6 +23,7 @@ class TransactionManager {
   /// Constructor
   TransactionManager({
     required this.flushWork,
+    this.onFlushed,
   });
 
   /// Callback used to flush the work done during the transaction:
@@ -36,6 +37,17 @@ class TransactionManager {
     // ignore: avoid_positional_boolean_parameters the only boolean positional parameter
     bool otherPendingUpdates,
   ) flushWork;
+
+  /// Called once the flush is over and this manager holds nothing anymore.
+  ///
+  /// This is the moment the document is settled and idle, so it is the only
+  /// safe place to hand events to code that may write back: called any earlier,
+  /// a write would re-enter [_flushWork] while it still holds the work it is
+  /// flushing, and apply it twice.
+  ///
+  /// The document hands out its delta events from here. What waits for this
+  /// moment, and why, is written down on the outbox those events wait in.
+  final void Function()? onFlushed;
 
   /// The depth of the transaction stack.
   int _depth = 0;
@@ -135,5 +147,6 @@ class TransactionManager {
     _pendingOperations.clear();
     _pendingChanges.clear();
     _hasRequestedUpdate = false;
+    onFlushed?.call();
   }
 }

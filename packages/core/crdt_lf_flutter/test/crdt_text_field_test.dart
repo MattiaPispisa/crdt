@@ -1,3 +1,5 @@
+import 'dart:math';
+
 import 'package:crdt_lf/crdt_lf.dart';
 import 'package:crdt_lf/src/algorithm/fugue/tree.dart';
 import 'package:crdt_lf_flutter/crdt_lf_flutter.dart';
@@ -168,6 +170,49 @@ void main() {
       expect(note.value, contains('X'));
       final controller =
           tester.widget<TextField>(find.byType(TextField)).controller!;
+      expect(controller.text, note.value);
+    });
+
+    testWidgets(
+        'merges a burst of remote changes arriving while a composition is '
+        'pending', (tester) async {
+      // A batch of changes is published at once and delivered one at a time.
+      // Committing the pending composition on the first of them must not
+      // account for the ones still on their way: they would be dropped, and
+      // the field would keep text the document does not have.
+      final note = CRDTFugueTextHandler(doc, 'note')..insert(0, 'hello world');
+      await tester.pumpWidget(host());
+      await tester.showKeyboard(find.byType(TextField));
+
+      final remote = remotePeer();
+
+      // Local composition in progress (uncommitted)...
+      tester.testTextInput.updateEditingValue(
+        const TextEditingValue(
+          text: 'hello worldX',
+          selection: TextSelection.collapsed(offset: 12),
+          composing: TextRange(start: 11, end: 12),
+        ),
+      );
+      await tester.pump();
+      expect(note.value, 'hello world');
+
+      // ...while three changes land in one batch. The two after the first
+      // replace one rune with another, so they are net-zero: a field that
+      // dropped them would still hold the right *number* of runes, and the
+      // cheap length check would agree.
+      (remote.registeredHandlers['note']! as CRDTFugueTextHandler)
+        ..insert(0, 'A')
+        ..update(1, 'H')
+        ..update(7, 'W');
+      doc.importChanges(
+        remote.exportChanges(fromVersionVector: doc.getVersionVector()),
+      );
+      await tester.pumpAndSettle();
+
+      final controller =
+          tester.widget<TextField>(find.byType(TextField)).controller!;
+      expect(note.value, 'AHello WorldX');
       expect(controller.text, note.value);
     });
 
@@ -395,13 +440,11 @@ void main() {
       expect(note.reads, 1);
     });
 
-    testWidgets(
-        'a remote change published but not yet delivered still lands before '
-        'a local keystroke', (tester) async {
-      // The stream says what it has published; delivery comes a microtask
-      // later. A keystroke in that window must not be pushed against a text
-      // the handler no longer holds — and must not raise the mark past the
-      // event that is still on its way, which would drop it for good.
+    testWidgets('shows an imported change before the import returns',
+        (tester) async {
+      // The document hands its events out as it settles, so there is no window
+      // where the change exists and the field still paints the old text. A
+      // keystroke needs no pump to land in the right place either.
       final note = CRDTFugueTextHandler(doc, 'note')..insert(0, 'hello');
       await tester.pumpWidget(host());
       final controller =
@@ -413,7 +456,9 @@ void main() {
       doc.importChanges(
         remote.exportChanges(fromVersionVector: doc.getVersionVector()),
       );
-      // Deliberately no pump: the event exists, nobody has received it.
+
+      // Deliberately no pump.
+      expect(controller.text, 'Xhello');
 
       final typed = '${controller.text}!';
       controller.value = TextEditingValue(
@@ -535,7 +580,7 @@ void main() {
       // under-reports would leave the wrong document on screen for good. The
       // handler below reports one character less than it applies, which is
       // exactly the mistake the check exists to catch.
-      final note = _UnderReportingFugueTextHandler(doc, 'note')
+      final note = _LyingFugueTextHandler(doc, 'note', _dropOneInserted)
         ..insert(0, 'hello');
       await tester.pumpWidget(host());
       final controller =
@@ -559,6 +604,211 @@ void main() {
       expect(controller.text, note.value);
       expect(controller.text, 'helloXY');
     });
+
+    testWidgets('cannot see a drift that keeps the rune count', (tester) async {
+      // The counterpart of the test above, and the reason
+      // [debugVerifyCrdtTextFieldProjection] exists. This handler reports the
+      // right *number* of characters and the wrong ones, so the length is
+      // intact — and length is all a `CRDTFugueTextHandler` is asked for,
+      // because it answers that without projecting anything.
+      final note = _LyingFugueTextHandler(doc, 'note', _swapOneInserted)
+        ..insert(0, 'hello');
+      await tester.pumpWidget(host());
+      final controller =
+          tester.widget<TextField>(find.byType(TextField)).controller!;
+
+      debugVerifyCrdtTextFieldProjection = false;
+      addTearDown(() => debugVerifyCrdtTextFieldProjection = true);
+
+      final remote = remotePeer();
+      (remote.registeredHandlers['note']! as CRDTFugueTextHandler)
+          .insert(5, 'XY');
+      doc.importChanges(
+        remote.exportChanges(fromVersionVector: doc.getVersionVector()),
+      );
+      await tester.pump();
+
+      // The check agreed, so the field kept text the document does not have.
+      // Nothing in release closes this gap; the debug compare below does.
+      expect(note.value, 'helloXY');
+      expect(controller.text, 'helloQY');
+    });
+
+    testWidgets('recovers when the handler drops its cache during a push',
+        (tester) async {
+      // A handler with no incremental path invalidates on every operation, so
+      // the field's own write comes back as a **reset** rather than a delta —
+      // and it comes back while the write is still under way. A reset is not an
+      // echo: what the push worked out describes a base that is gone, so it has
+      // to read instead of trusting its own arithmetic.
+      final note = CRDTFugueTextHandler(doc, 'note')
+        ..insert(0, 'hello')
+        ..useIncrementalCacheUpdate = false;
+      await tester.pumpWidget(host());
+      final controller =
+          tester.widget<TextField>(find.byType(TextField)).controller!
+            ..value = const TextEditingValue(
+              text: 'helloX',
+              selection: TextSelection.collapsed(offset: 6),
+            );
+      await tester.pumpAndSettle();
+
+      expect(note.value, 'helloX');
+      expect(controller.text, note.value);
+
+      controller.value = const TextEditingValue(
+        text: 'heloX',
+        selection: TextSelection.collapsed(offset: 3),
+      );
+      await tester.pumpAndSettle();
+
+      expect(note.value, 'heloX');
+      expect(controller.text, note.value);
+    });
+
+    // More than one seed: one stream of random edits is one sample, and the
+    // shapes that break this widget are rare enough that one sample misses
+    // them.
+    for (final seed in [7, 13, 29, 101, 997]) {
+      testWidgets(
+          'tracks a random stream of edits against the handler '
+          '(seed $seed)', (tester) async {
+        // `delta_oracle_test.dart` is the oracle for crdt_lf: it proves a
+        // handler reports what it did. This is the same idea for the other
+        // half — the bookkeeping this widget does on top of those reports,
+        // which is the part no oracle covered and the part the burst bug
+        // lived in.
+        //
+        // The field's text is derived and only checked against a rune count in
+        // release, so a drift that keeps the count is invisible there. Here the
+        // whole text is compared every round, which is what makes such a drift
+        // fail loudly instead of quietly.
+        final note = CRDTFugueTextHandler(doc, 'note')
+          ..insert(0, 'hello world');
+        await tester.pumpWidget(host());
+        final controller =
+            tester.widget<TextField>(find.byType(TextField)).controller!;
+
+        final remote = remotePeer();
+        final remoteNote =
+            remote.registeredHandlers['note']! as CRDTFugueTextHandler;
+        final random = Random(seed);
+        var composing = false;
+
+        for (var round = 0; round < 150; round++) {
+          final text = controller.text;
+
+          switch (random.nextInt(6)) {
+            case 0:
+            case 1:
+              // A keystroke. Not while composing: the composed run is what the
+              // next case commits.
+              if (composing) {
+                break;
+              }
+              final at = _runeBoundary(text, random.nextInt(text.length + 1));
+              // An emoji now and then: the handlers index by rune, the field by
+              // code unit, and that seam has been wrong before.
+              final typed = random.nextInt(8) == 0
+                  ? '😀'
+                  : String.fromCharCode(97 + random.nextInt(26));
+              controller.value = TextEditingValue(
+                text: text.replaceRange(at, at, typed),
+                selection: TextSelection.collapsed(offset: at + typed.length),
+              );
+            case 2:
+              if (composing || text.isEmpty) {
+                break;
+              }
+              final at = _runeBoundary(text, random.nextInt(text.length));
+              // Whole rune: no editor ever deletes half a surrogate pair.
+              final end = _runeBoundary(text, at + 1) == at
+                  ? at + 2
+                  : _nextRune(text, at);
+              controller.value = TextEditingValue(
+                text: text.replaceRange(at, end, ''),
+                selection: TextSelection.collapsed(offset: at),
+              );
+            case 3:
+              // Start an IME composition: uncommitted, so the handler must not
+              // move until it ends or something remote forces the commit.
+              if (composing) {
+                break;
+              }
+              composing = true;
+              controller.value = TextEditingValue(
+                text: '${text}zz',
+                selection: TextSelection.collapsed(offset: text.length + 2),
+                composing: TextRange(start: text.length, end: text.length + 2),
+              );
+            case 4:
+              if (!composing) {
+                break;
+              }
+              composing = false;
+              controller.value = TextEditingValue(
+                text: text,
+                selection: TextSelection.collapsed(offset: text.length),
+              );
+            case 5:
+              // A batch of remote changes, published at once and handed out
+              // one at a time. `update` replaces one rune with another, so
+              // its delta is net-zero and the rune count cannot give a
+              // dropped one away.
+              if (random.nextBool()) {
+                // Sometimes caught up (causal), sometimes behind (concurrent).
+                final vector = remote.getVersionVector();
+                remote.importChanges(
+                  doc.exportChanges(fromVersionVector: vector),
+                );
+              }
+              final count = 1 + random.nextInt(3);
+              for (var i = 0; i < count; i++) {
+                final length = remoteNote.length;
+                switch (random.nextInt(3)) {
+                  case 0:
+                    remoteNote.insert(
+                      random.nextInt(length + 1),
+                      String.fromCharCode(65 + random.nextInt(26)),
+                    );
+                  case 1:
+                    if (length > 0) {
+                      remoteNote.delete(random.nextInt(length), 1);
+                    }
+                  case 2:
+                    if (length > 0) {
+                      remoteNote.update(
+                        random.nextInt(length),
+                        String.fromCharCode(65 + random.nextInt(26)),
+                      );
+                    }
+                }
+              }
+              doc.importChanges(
+                remote.exportChanges(fromVersionVector: doc.getVersionVector()),
+              );
+              // Taking a remote change in commits whatever was pending.
+              composing = false;
+          }
+
+          await tester.pumpAndSettle();
+          if (!composing) {
+            expect(controller.text, note.value, reason: 'round $round');
+          }
+        }
+
+        if (composing) {
+          // End on a committed note, or the claim below is not the field's to
+          // keep: while a composition is pending the two are meant to differ.
+          controller.value = TextEditingValue(
+            text: controller.text,
+            selection: TextSelection.collapsed(offset: controller.text.length),
+          );
+          await tester.pumpAndSettle();
+        }
+        expect(controller.text, note.value);
+      });
+    }
 
     testWidgets('throws a FlutterError for a non-text handler', (tester) async {
       CRDTListHandler<String>(doc, 'note');
@@ -589,13 +839,36 @@ final class _CountingFugueTextHandler extends CRDTFugueTextHandler {
   }
 }
 
-/// A handler that reports a shorter insert than it applies.
+/// The start of the rune that [offset] falls in.
+int _runeBoundary(String text, int offset) {
+  if (offset <= 0 || offset >= text.length) {
+    return offset.clamp(0, text.length);
+  }
+  final unit = text.codeUnitAt(offset);
+  return (unit >= 0xDC00 && unit <= 0xDFFF) ? offset - 1 : offset;
+}
+
+/// The end of the rune that starts at [at].
+int _nextRune(String text, int at) {
+  final unit = text.codeUnitAt(at);
+  return (unit >= 0xD800 && unit <= 0xDBFF && at + 1 < text.length)
+      ? at + 2
+      : at + 1;
+}
+
+/// Rewrites a delta into the one a broken handler would report.
+typedef _Lie = SequenceDelta<String> Function(SequenceDelta<String> delta);
+
+/// A handler that reports something other than what it applies.
 ///
 /// It exists to make the field's projection drift on purpose. Nothing else
 /// can: every real handler reports exactly what it did, which is what
 /// `delta_oracle_test.dart` proves.
-final class _UnderReportingFugueTextHandler extends CRDTFugueTextHandler {
-  _UnderReportingFugueTextHandler(super.doc, super.id);
+final class _LyingFugueTextHandler extends CRDTFugueTextHandler {
+  _LyingFugueTextHandler(super.doc, super.id, this.lie);
+
+  /// How this handler misreports what it did.
+  final _Lie lie;
 
   @override
   void applyToTree(
@@ -607,31 +880,40 @@ final class _UnderReportingFugueTextHandler extends CRDTFugueTextHandler {
       super.applyToTree(tree, operation);
       return;
     }
-    final lying = _TruncatingSink(sink);
-    super.applyToTree(tree, operation, sink: lying);
+    super.applyToTree(tree, operation, sink: _LyingSink(sink, lie));
   }
 }
 
-/// Passes every delta through with one inserted element dropped.
-final class _TruncatingSink implements DeltaSink<Object?> {
-  _TruncatingSink(this._inner);
+/// Passes every delta through [_lie] on its way out.
+final class _LyingSink implements DeltaSink<Object?> {
+  _LyingSink(this._inner, this._lie);
 
   final DeltaSink<Object?> _inner;
+  final _Lie _lie;
 
   @override
   void add(Object? delta) {
-    if (delta is! SequenceDelta<String>) {
-      _inner.add(delta);
-      return;
-    }
-    _inner.add(
-      SequenceDelta<String>([
-        for (final op in delta.ops)
-          if (op is SeqInsert<String> && op.values.length > 1)
-            SeqInsert<String>(op.values.sublist(1))
-          else
-            op,
-      ]),
-    );
+    _inner.add(delta is SequenceDelta<String> ? _lie(delta) : delta);
   }
 }
+
+/// Drops one inserted element: a drift the rune count gives away.
+SequenceDelta<String> _dropOneInserted(SequenceDelta<String> delta) =>
+    SequenceDelta<String>([
+      for (final op in delta.ops)
+        if (op is SeqInsert<String> && op.values.length > 1)
+          SeqInsert<String>(op.values.sublist(1))
+        else
+          op,
+    ]);
+
+/// Reports the right *number* of inserted elements and the wrong ones: a
+/// drift the rune count cannot give away.
+SequenceDelta<String> _swapOneInserted(SequenceDelta<String> delta) =>
+    SequenceDelta<String>([
+      for (final op in delta.ops)
+        if (op is SeqInsert<String> && op.values.isNotEmpty)
+          SeqInsert<String>(['Q', ...op.values.skip(1)])
+        else
+          op,
+    ]);

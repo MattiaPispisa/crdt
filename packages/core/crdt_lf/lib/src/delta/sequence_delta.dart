@@ -311,6 +311,7 @@ extension SequenceDeltaText on SequenceDelta<String> {
       switch (op) {
         case SeqRetain<String>():
           final end = RuneOffsets.skip(base, offset, op.count);
+          assert(_reached(offset, end, op.count), _pastTheEnd);
           buffer.write(base.substring(offset, end));
           offset = end;
         case SeqInsert<String>():
@@ -318,7 +319,9 @@ extension SequenceDeltaText on SequenceDelta<String> {
             buffer.write(value);
           }
         case SeqDelete<String>():
-          offset = RuneOffsets.skip(base, offset, op.count);
+          final end = RuneOffsets.skip(base, offset, op.count);
+          assert(_reached(offset, end, op.count), _pastTheEnd);
+          offset = end;
         case SeqMove<String>():
           throw UnsupportedError('a move must be the only op of its delta');
       }
@@ -327,6 +330,25 @@ extension SequenceDeltaText on SequenceDelta<String> {
     return (buffer..write(base.substring(offset))).toString();
   }
 }
+
+const _pastTheEnd = 'the delta reaches past the end of the base text';
+
+/// Whether skipping from [from] to [to] could have covered [count] runes.
+///
+/// A delta that reaches past the end of its base was built against a different
+/// text. [RuneOffsets.skip] clamps there instead of failing, so the result
+/// comes out silently short — and a consumer that carries its length by
+/// arithmetic never notices, because it trusts the counts and never looks at
+/// the base.
+///
+/// One rune is one code unit or two, so covering [count] runes always advances
+/// at least [count] code units: advancing fewer proves the skip ran out. The
+/// test is O(1) — [SequenceDeltaText.applyToText] costs the size of the edit,
+/// and a check that walked the whole base would be the very cost it exists to
+/// avoid. It is therefore one-sided: it never accuses a sound delta, and it
+/// lets a short one through when surrogate pairs leave enough code units
+/// behind.
+bool _reached(int from, int to, int count) => to - from >= count;
 
 /// String conveniences for the insert step the text handlers emit.
 extension SeqInsertText on SeqInsert<String> {

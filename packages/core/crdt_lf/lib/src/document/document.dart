@@ -29,6 +29,71 @@ part 'history.dart';
 abstract class BaseCRDTDocument {
   bool _isDisposed = false;
 
+  /// Delta events that have been published but not handed out yet.
+  ///
+  /// This is one third of how a change reaches a watcher. The other two are
+  /// the synchronous controller in [DeltaProvider.watch] and the `onFlushed`
+  /// hook of [TransactionManager]. Each answers a different question:
+  ///
+  /// - the **outbox** moves delivery from the middle of the work to its end. A
+  ///   listener must not run while the document is half applied: it may read
+  ///   anything, and half of it would be stale.
+  /// - the **synchronous controller** makes delivery at that end immediate
+  ///   rather than a microtask later, so the call that changed the document
+  ///   returns with every watcher already told.
+  /// - **`onFlushed`** is the exact moment the document holds nothing anymore,
+  ///   and so the only point at which handing events to code that may write
+  ///   back is safe.
+  ///
+  /// [_flushDeltaEvents] is what hands them out.
+  List<void Function()>? _deltaOutbox;
+
+  /// Whether [_flushDeltaEvents] is already handing events out.
+  bool _flushingDeltas = false;
+
+  /// Holds one event until the document is settled.
+  ///
+  /// The microtask is the safety net for the paths that end nowhere near a
+  /// transaction — a handler whose cache is dropped by hand, say. On every
+  /// normal path the commit flushes first and the microtask finds nothing
+  /// left.
+  void _enqueueDeltaEvent(void Function() deliver) {
+    final outbox = _deltaOutbox;
+    if (outbox != null) {
+      outbox.add(deliver);
+      return;
+    }
+    _deltaOutbox = <void Function()>[deliver];
+    scheduleMicrotask(_flushDeltaEvents);
+  }
+
+  /// Hands out every event waiting in the outbox.
+  ///
+  /// A listener is free to write back, which publishes more events. The loop
+  /// picks those up, so a listener's own work reaches everyone in this same
+  /// pass — after the listener returns, never inside it. That is also why a
+  /// nested call does nothing: the loop it would duplicate is already running.
+  void _flushDeltaEvents() {
+    if (_flushingDeltas) {
+      return;
+    }
+    _flushingDeltas = true;
+    try {
+      while (true) {
+        final outbox = _deltaOutbox;
+        if (outbox == null) {
+          return;
+        }
+        _deltaOutbox = null;
+        for (final deliver in outbox) {
+          deliver();
+        }
+      }
+    } finally {
+      _flushingDeltas = false;
+    }
+  }
+
   /// Whether the document is disposed
   bool get isDisposed => _isDisposed;
 
@@ -310,6 +375,7 @@ class CRDTDocument extends BaseCRDTDocument {
         _handlers = {} {
     _transactionManager = TransactionManager(
       flushWork: _transactionFlushWork,
+      onFlushed: _flushDeltaEvents,
     );
     devtools.handleCreated(this);
   }

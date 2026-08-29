@@ -4,7 +4,7 @@ part of 'document.dart';
 ///
 /// A consumer subscribes with [watch], seeds its projection from the
 /// [HandlerReset] that arrives first, and keeps it up to date from the
-/// [HandlerDelta] events that follow. 
+/// [HandlerDelta] events that follow.
 /// **It never has to read [value] again.**
 ///
 /// **A delta is a local observation of how this
@@ -20,20 +20,38 @@ base mixin DeltaProvider<V, D extends ComposableDelta<D>> on DocumentConsumer {
   /// The first event is always `HandlerReset(ResetCause.initial)`, so a
   /// consumer exercises its reset path immediately instead of months later.
   ///
+  /// ## When the events arrive
+  ///
+  /// As the document settles, before the call that changed it returns. So
+  /// `importChanges` hands back a document whose watchers already know, and
+  /// there is no window where a change exists and a projection still shows the
+  /// text before it.
+  ///
+  /// A listener runs when the document is idle, never in the middle of its
+  /// work, so it is free to read anything. It is also free to **write**: what
+  /// it writes reaches every listener in the same pass, after it returns —
+  /// never inside its own callback.
+  ///
+  /// The opening reset is the exception: it arrives one microtask later,
+  /// because at the moment `listen` is called the listener is still being
+  /// wired up. Anything published in between waits behind it, so a reset still
+  /// comes first.
+  ///
   /// ## What it costs
   ///
   /// A handler nobody reads normally costs nothing: a remote change is queued
-  /// and folded in at the next read (lazy evaluation). 
+  /// and folded in at the next read (lazy evaluation).
   /// A watched handler cannot wait for a read
   /// that may never come, so it pays
-  /// the decode and the apply when the change **arrives** (eager). 
+  /// the decode and the apply when the change **arrives** (eager).
   /// The work is the same; only the moment changes.
   Stream<HandlerUpdate<D>> watch() {
     // A disposed document publishes nothing ever again, so handing back a
     // stream that opens with a reset and then stays silent forever would be a
     // lie. Say so instead.
     _document._ensureNotDisposed('watch');
-    final hub = _deltaHub as _DeltaHub<D>? ?? (_deltaHub = _DeltaHub<D>());
+    final hub =
+        _deltaHub as _DeltaHub<D>? ?? (_deltaHub = _DeltaHub<D>(_document));
     return hub.watch();
   }
 
@@ -113,6 +131,11 @@ abstract class _DeltaHubBase {
 /// that operation reports lands straight in [_staged].
 final class _DeltaHub<D extends ComposableDelta<D>> extends _DeltaHubBase
     implements DeltaSink<D> {
+  _DeltaHub(this._document);
+
+  /// Where the events wait until the document is settled.
+  final BaseCRDTDocument _document;
+
   StreamController<HandlerUpdate<D>>? _controller;
   int _seq = 0;
 
@@ -135,22 +158,48 @@ final class _DeltaHub<D extends ComposableDelta<D>> extends _DeltaHubBase
   int get seq => _seq;
 
   Stream<HandlerUpdate<D>> watch() {
-    final source =
-        (_controller ??= StreamController<HandlerUpdate<D>>.broadcast()).stream;
+    // Synchronous: the outbox has already put this off to the moment the
+    // document is settled, so there is nothing left to wait for. Adding to it
+    // anywhere but from the flush is what a synchronous controller forbids,
+    // and the outbox is what makes sure nothing does.
+    final source = (_controller ??=
+            StreamController<HandlerUpdate<D>>.broadcast(sync: true))
+        .stream;
 
     late StreamController<HandlerUpdate<D>> out;
     StreamSubscription<HandlerUpdate<D>>? subscription;
 
+    // The opening reset cannot go out from inside [onListen]: a synchronous
+    // controller would hand it to a listener that is still being wired up. It
+    // goes one microtask later instead, and anything the document publishes in
+    // between waits here, because this stream promises a reset first.
+    var opened = false;
+    var waiting = <HandlerUpdate<D>>[];
+
     out = StreamController<HandlerUpdate<D>>(
+      sync: true,
       onListen: () {
-        // Both steps run in this one turn, and [out] buffers, so no event can
-        // slip between the reset and the moment [source] is listened to.
-        out.add(HandlerReset<D>(cause: ResetCause.initial, seq: ++_seq));
+        final reset = HandlerReset<D>(cause: ResetCause.initial, seq: ++_seq);
         subscription = source.listen(
-          out.add,
+          (update) => opened ? out.add(update) : waiting.add(update),
           onError: out.addError,
           onDone: out.close,
         );
+        scheduleMicrotask(() {
+          if (out.isClosed) {
+            return;
+          }
+          opened = true;
+          final held = waiting;
+          waiting = <HandlerUpdate<D>>[];
+          out.add(reset);
+          for (final update in held) {
+            if (out.isClosed) {
+              return;
+            }
+            out.add(update);
+          }
+        });
       },
       onCancel: () => subscription?.cancel(),
     );
@@ -262,8 +311,17 @@ final class _DeltaHub<D extends ComposableDelta<D>> extends _DeltaHubBase
 
   void _emit(HandlerUpdate<D> update) {
     final controller = _controller;
-    if (controller != null && !controller.isClosed) {
-      controller.add(update);
+    if (controller == null || controller.isClosed) {
+      return;
     }
+    // Published now, handed out once the document is settled — see
+    // [BaseCRDTDocument._deltaOutbox] for why the two are not the same moment.
+    // The sequence number is already spent, so a consumer that asks how far
+    // the stream has got is told the truth even before this event reaches it.
+    _document._enqueueDeltaEvent(() {
+      if (!controller.isClosed) {
+        controller.add(update);
+      }
+    });
   }
 }

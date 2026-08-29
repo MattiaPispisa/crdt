@@ -27,8 +27,7 @@ bool debugVerifyCrdtTextFieldProjection = true;
 
 /// {@template crdt_text_field_builder}
 /// Binds a [TextEditingController] to the text handler registered under [id]
-/// (`CRDTTextHandler` or `CRDTFugueTextHandler`), the way collaborative
-/// editor bindings (e.g. Yjs) do:
+/// (`CRDTTextHandler` or `CRDTFugueTextHandler`):
 ///
 /// - **Local edits** are pushed into the handler immediately, as the precise
 ///   [TextDelta] of each editing gesture (common prefix/suffix trimming — no
@@ -113,13 +112,40 @@ class _CrdtTextFieldBuilderState extends State<CrdtTextFieldBuilder> {
     // Not the generic resolver: this widget accepts two named handlers and
     // says so, which is a better error than "the wrong delta shape".
     resolve: _deltaProviderOf,
-    onReset: (point, cause) => _settle(text: point.value),
-    onDelta: (event) => _settle(reported: event.delta),
+    onReset: (point, cause) {
+      if (_pushing) {
+        // Not an echo: the base the deltas describe is gone. It cannot be
+        // dropped, only put off until the push has finished.
+        _resetWhilePushing = true;
+        return;
+      }
+      _settle(text: point.value);
+    },
+    onDelta: (event) {
+      if (_pushing) {
+        return;
+      }
+      _settle(reported: event.delta);
+    },
     isAlive: () => mounted,
     // Read while attaching, so the first frame already shows the document
     // instead of an empty field that fills in a frame later.
     seed: true,
   );
+
+  /// Whether this widget is writing into the handler right now.
+  ///
+  /// A write is committed synchronously, so what it publishes comes straight
+  /// back here — before the push has written down what it did. Those events
+  /// are this widget's own echo: it already knows what it wrote, and folding
+  /// them in would apply the edit twice. An editor binding drops its echo by
+  /// tagging the write with its own identity; this stream carries a sequence
+  /// number instead, and that number cannot be checked against until the
+  /// change owning it exists, which is the very commit publishing the echo.
+  bool _pushing = false;
+
+  /// Whether the handler asked for a read while [_pushing] was set.
+  bool _resetWhilePushing = false;
 
   /// The handler-side text this widget has last pushed or adopted. Local
   /// deltas are computed against it.
@@ -254,7 +280,12 @@ class _CrdtTextFieldBuilderState extends State<CrdtTextFieldBuilder> {
       }
     }
 
-    _document.runInTransaction(run);
+    _pushing = true;
+    try {
+      _document.runInTransaction(run);
+    } finally {
+      _pushing = false;
+    }
     return (deleted: deleted, inserted: inserted);
   }
 
@@ -337,13 +368,15 @@ class _CrdtTextFieldBuilderState extends State<CrdtTextFieldBuilder> {
   ///
   /// [handlerState] is what the handler holds now, when the caller already
   /// knows it: a reset carries its text, a delta says what to do to ours.
-  /// Without it, the stream decides — one that has published more than this
-  /// widget has taken in is settled with one read.
-  /// Guessing instead would push the edit at the wrong place, and nothing
-  /// reads the handler back afterwards to notice.
+  /// It is believed only while the stream is level, because it describes the
+  /// handler at **one** event — and a burst is published at once and delivered
+  /// one at a time, so the handler has already folded the rest. Whenever the
+  /// stream is ahead, one read settles it instead.
+  /// Guessing would push the edit at the wrong place, and mark the events
+  /// still on their way as accounted for, dropping them for good.
   void _pushLocalEdits({({String text, int runes})? handlerState}) {
     var known = handlerState;
-    if (known == null && _delta.publishedSeq != _delta.synced) {
+    if (_delta.publishedSeq != _delta.synced) {
       final point = _delta.readSynced();
       known = (text: point.value, runes: RuneOffsets.length(point.value));
     }
@@ -397,6 +430,18 @@ class _CrdtTextFieldBuilderState extends State<CrdtTextFieldBuilder> {
     // published its own events while it was being applied. So this covers our
     // own echo: the stream skips it instead of applying it twice.
     _delta.markSyncedToPublished();
+
+    if (_resetWhilePushing) {
+      _resetWhilePushing = false;
+      // The handler replaced its base while we were writing, so what the lines
+      // above worked out may describe a document that is gone. Read now rather
+      // than keep the value that reset carried: it was read mid-transaction,
+      // when this widget's operation was registered but the change carrying it
+      // did not exist yet, so a recompute could not see the edit being pushed.
+      final point = _delta.readSynced();
+      _lastCommittedText = point.value;
+      _lastCommittedRunes = RuneOffsets.length(point.value);
+    }
 
     if (_lastCommittedText != _controller!.text) {
       // The rebase above merged remote content in: adopt it.

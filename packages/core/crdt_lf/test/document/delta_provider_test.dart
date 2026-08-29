@@ -148,6 +148,56 @@ void main() {
       }
     });
 
+    test('a change reaches its watchers before the write returns', () async {
+      final doc = CRDTDocument();
+      final text = CRDTTextHandler(doc, 'text')..insert(0, 'a');
+      final seen = <HandlerUpdate<SequenceDelta<String>>>[];
+      final subscription = text.watch().listen(seen.add);
+      await _pump();
+      seen.clear();
+
+      // No pump: the document hands its events out as it settles, so there is
+      // no window where the change exists and a watcher still holds the old
+      // value.
+      text.insert(1, 'b');
+      expect(seen, hasLength(1));
+
+      final remote = CRDTDocument();
+      CRDTTextHandler(remote, 'text');
+      remote.importChanges(doc.exportChanges());
+      (remote.registeredHandlers['text']! as CRDTTextHandler).insert(2, 'c');
+      doc.importChanges(remote.exportChanges());
+      expect(seen, hasLength(2));
+
+      await subscription.cancel();
+    });
+
+    test('a watcher that writes back is served after it returns', () async {
+      final doc = CRDTDocument();
+      final text = CRDTTextHandler(doc, 'text')..insert(0, 'a');
+      final seen = <String>[];
+      late StreamSubscription<HandlerUpdate<SequenceDelta<String>>>
+          subscription;
+      subscription = text.watch().listen((update) {
+        seen.add(text.value);
+        // One write only, or this recurses forever — which is the point: the
+        // write is queued and handed out, not run inside this callback.
+        if (text.value == 'ab') {
+          text.insert(2, 'c');
+        }
+      });
+      await _pump();
+      seen.clear();
+
+      text.insert(1, 'b');
+      await _pump();
+
+      expect(seen, ['ab', 'abc']);
+      expect(text.value, 'abc');
+
+      await subscription.cancel();
+    });
+
     test('the sequence number only ever grows', () async {
       final doc = CRDTDocument();
       final text = CRDTTextHandler(doc, 'text');
