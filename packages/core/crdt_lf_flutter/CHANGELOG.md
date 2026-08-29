@@ -1,6 +1,16 @@
-## [Unreleased]
+## [0.5.0+1](https://github.com/MattiaPispisa/crdt/tree/crdt_lf_flutter-v0.5.0+1/packages/crdt_lf_flutter)
 
-**Date:** 2026-08-26
+**Date:** 2026-08-28
+
+[compare to previous release](https://github.com/MattiaPispisa/crdt/compare/crdt_lf_flutter-v0.5.0...crdt_lf_flutter-v0.5.0+1)
+
+### Fixed
+
+- chore: fixed changelog
+
+## [0.5.0](https://github.com/MattiaPispisa/crdt/tree/crdt_lf_flutter-v0.5.0/packages/crdt_lf_flutter)
+
+**Date:** 2026-08-28
 
 [compare to previous release](https://github.com/MattiaPispisa/crdt/compare/crdt_lf_flutter-v0.4.0...crdt_lf_flutter-v0.5.0)
 
