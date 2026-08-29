@@ -84,6 +84,7 @@ class HomePage extends StatelessWidget {
             _ListenerCard(),
             _TodosCard(),
             _DeltaCard(),
+            _DeltaBuilderCard(),
             _SettingsCard(),
             _NoteCard(),
             _PresenceCard(),
@@ -267,7 +268,8 @@ class _DeltaCardState extends State<_DeltaCard> {
           CrdtHandlerDeltaListener<List<String>, SequenceDelta<String>>(
             id: _todosId,
             onReset: (context, sync, cause) {
-              _projection = List<String>.of(sync.value);
+              // `sync.value` is already a value this widget owns.
+              _projection = sync.value;
               _last.value = 'read again ($cause) → ${_projection.length} items';
             },
             onDelta: (context, event) {
@@ -285,6 +287,33 @@ class _DeltaCardState extends State<_DeltaCard> {
             builder: (context, value, _) => Text(value),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// The builder half of the same stream: it holds the value and rebuilds with
+/// it already moved, so nothing reads the handler.
+class _DeltaBuilderCard extends StatelessWidget {
+  const _DeltaBuilderCard();
+
+  @override
+  Widget build(BuildContext context) {
+    return _DemoCard(
+      title: 'The value, already moved — CrdtHandlerDeltaBuilder',
+      description:
+          'Press the todo buttons above. This card rebuilds once per change, '
+          'with the list handed to it already advanced by that change.',
+      actions: const [],
+      child: CrdtHandlerDeltaBuilder<List<String>, SequenceDelta<String>>(
+        id: _todosId,
+        builder:
+            (context, todos) => _RebuildBadge(
+              label: 'delta-builder',
+              child: Text(
+                todos.isEmpty ? 'now: nothing' : 'now: ${todos.join(' · ')}',
+              ),
+            ),
       ),
     );
   }

@@ -6,49 +6,32 @@
 
 ### Added
 
-- `CrdtHandlerDeltaListener` reports **what** each change did to a handler, one call per change,
-  so a widget can move a projection it already holds instead of re-reading the value. It performs
-  the read a reset asks for and drops the events that read already covers, so a delta is never
-  applied twice. Like `CrdtHandlerListener`, it renders its child unchanged and never rebuilds the
-  subtree. [132](https://github.com/MattiaPispisa/crdt/issues/132)
+- Reactivity on a handler's **deltas**: `CrdtHandlerDeltaBuilder` holds the handler's value and
+  rebuilds with it already moved by each change, while `CrdtHandlerDeltaListener` hands each change
+  to a callback and never rebuilds its subtree. Both cost the size of the edit instead of a read of
+  the whole value. [132](https://github.com/MattiaPispisa/crdt/issues/132)
+- `debugVerifyCrdtTextFieldProjection` turns off the debug-only whole-value check
+  `CrdtTextFieldBuilder` runs on its derived text.
 
 ### Changed
 
 - Requires `crdt_lf` 4.1.0, for the handler delta streams.
-- `CrdtTextFieldBuilder` keeps its text by **moving it with the deltas** the handler reports,
-  instead of projecting the whole document again after every edit. A keystroke used to rebuild the
-  entire string; now it costs the size of the edit. On a 50 000-character Fugue document a keystroke
-  goes **773 µs → 162 µs** and taking in a remote one goes **704 µs → 62 µs**; at 10 000 characters,
-  134 → 57 µs and 116 → 35 µs. Typing is now nearly flat in the size of the document.
-  `CRDTTextHandler` is the one row that pays instead of gains — 44 → 54 µs — because its value is
-  already a plain cached string, so building a delta buys it nothing. Measured with
-  `benchmarks/src/benchmarks/text_field_benchmark.dart`; see `benchmarks/results.md`.
-  Because the text is derived and never read back, the field checks it against the handler after
-  every step and reads once to recover if the two disagree. The check is cheap on purpose: a Fugue
-  handler answers its length without projecting anything. Set
-  `debugVerifyCrdtTextFieldProjection` to `false` to skip the stricter debug-only version, which
-  compares the whole value and therefore costs exactly what the field now avoids.
-- `CrdtTextFieldBuilder` takes a batch of remote changes in one at a time rather than composing them
-  into a single controller write. Each one now costs the size of its own edit, so there is nothing
-  left worth batching, and Flutter folds the writes into one frame anyway.
-- `CrdtTextFieldBuilder` places the caret from the delta the handler reports, instead of re-deriving
-  the remote edit by diffing the old and new text. A diff collapses a change that touched two
-  regions into one span covering the caret, which dragged it to the end of that span; the reported
-  delta says exactly what moved. Stable positions still come first for `CRDTFugueTextHandler` — they
-  follow element identity — so this is what `CRDTTextHandler`, which has none, gains.
-- `CrdtTextFieldBuilder` no longer loses a remote change that was published but not yet delivered
-  when a keystroke lands in that window. It asks the stream how far it has got, and settles with one
-  read when it is behind, instead of pushing the edit against a text the handler no longer holds.
-- `CrdtTextFieldBuilder` keeps a pending IME composition across a remote change, instead of dropping
-  what the user was in the middle of typing.
-- `CrdtTextFieldBuilder` re-subscribes when its `id` changes, instead of staying bound to the
-  handler it started with.
-- `CrdtTextCursorsOverlay` counts caret offsets in the text the field is painting
-  (`RenderEditable.plainText`, already materialised) instead of asking the handler, which projected
-  the whole document on every resolve. It also re-subscribes when its `id` changes.
-- `CrdtTextFieldBuilder` reads the value once when it mounts rather than twice: seeding the field
-  and answering the reset that opens the stream are the same question, and on a large document the
-  answer is a projection of the whole text.
+- `CrdtTextFieldBuilder` moves its text with the deltas the handler reports. It no longer diffs the
+  controller's text before and after an edit to work out what changed, and no longer projects the
+  whole document afterwards — so typing is nearly flat in the size of the document. On 50 000
+  characters a keystroke goes from roughly 770 to 160 µs, and taking in a remote one from roughly
+  700 to 60 µs. `CRDTTextHandler` is the exception (about 44 → 54 µs): its value is already a plain
+  cached string, so a delta buys it nothing.
+- `CrdtTextCursorsOverlay` counts caret offsets in the text the field is already painting instead of
+  asking the handler, which projected the whole document on every resolve.
+
+### Fixed
+
+- `CrdtTextFieldBuilder` no longer drops a remote change published in the window between a keystroke
+  and its delivery.
+- `CrdtTextFieldBuilder` keeps a pending IME composition across a remote change.
+- `CrdtTextFieldBuilder` and `CrdtTextCursorsOverlay` follow their `id` when it changes, instead of
+  staying bound to the handler they started with.
 
 ## [0.4.0](https://github.com/MattiaPispisa/crdt/tree/crdt_lf_flutter-v0.4.0/packages/crdt_lf_flutter)
 

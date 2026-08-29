@@ -1,6 +1,5 @@
-import 'dart:async';
-
 import 'package:crdt_lf/crdt_lf.dart';
+import 'package:crdt_lf_flutter/src/provider/_handler_delta_subscription.dart';
 import 'package:crdt_lf_flutter/src/provider/crdt_handler.dart';
 import 'package:crdt_lf_flutter/src/provider/crdt_helper.dart';
 import 'package:flutter/widgets.dart';
@@ -92,77 +91,30 @@ class CrdtHandlerDeltaListener<V, D extends ComposableDelta<D>>
 
 class _CrdtHandlerDeltaListenerState<V, D extends ComposableDelta<D>>
     extends State<CrdtHandlerDeltaListener<V, D>> {
-  CRDTDocument? _document;
-  StreamSubscription<HandlerUpdate<D>>? _subscription;
-
-  /// The last point the value was read at. Everything up to it is already
-  /// inside what [CrdtHandlerDeltaListener.onReset] handed over.
-  int _synced = -1;
+  late final HandlerDeltaSubscription<V, D> _subscription =
+      HandlerDeltaSubscription<V, D>(
+    resolve: (document, id) =>
+        resolveDeltaProvider<V, D>(document, id, 'CrdtHandlerDeltaListener'),
+    onReset: (point, cause) => widget.onReset?.call(context, point, cause),
+    onDelta: (event) => widget.onDelta?.call(context, event),
+    isAlive: () => mounted,
+    // The reset that opens the subscription reaches [onReset] like any other,
+    // one microtask after this build. Reading it here instead would run a
+    // user callback — one free to call `setState` — inside `build`.
+    seed: false,
+  );
 
   @override
   Widget build(BuildContext context) {
-    final document = context.crdtDocument;
-    if (!identical(document, _document)) {
-      _attach(document);
-    }
+    // Covers a new document and a new id alike, which is why there is no
+    // `didUpdateWidget`: `build` always runs after one.
+    _subscription.syncTo(context.crdtDocument, widget.id);
     return widget.child ?? const SizedBox.shrink();
   }
 
   @override
-  void didUpdateWidget(covariant CrdtHandlerDeltaListener<V, D> oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.id != widget.id && _document != null) {
-      _attach(_document!);
-    }
-  }
-
-  @override
   void dispose() {
-    unawaited(_subscription?.cancel());
+    _subscription.cancel();
     super.dispose();
-  }
-
-  DeltaProvider<V, D> _provider(CRDTDocument document) {
-    final handler = document.registeredHandlers[widget.id];
-    if (handler != null && handler is DeltaProvider<V, D>) {
-      // `Handler` is a base class and `DeltaProvider` a base mixin, so the
-      // analyzer will not promote across them. The check above is the proof.
-      return handler as DeltaProvider<V, D>;
-    }
-    throw FlutterError(
-      'CrdtHandlerDeltaListener<$V, $D> expected the handler registered under '
-      'id "${widget.id}" to publish deltas of that shape, but found '
-      '${handler ?? 'none'}.\n'
-      'Check the value/delta pair of the handler you meant to observe; the '
-      'table in the CrdtHandlerDeltaListener docs lists them.',
-    );
-  }
-
-  void _attach(CRDTDocument document) {
-    unawaited(_subscription?.cancel());
-    _document = document;
-    _synced = -1;
-    _subscription = _provider(document).watch().listen(_onUpdate);
-  }
-
-  void _onUpdate(HandlerUpdate<D> update) {
-    if (!mounted) {
-      return;
-    }
-    switch (update) {
-      case HandlerReset<D>():
-        // Reading the value and learning where it sits in the stream is one
-        // operation, so nothing can land in between and be applied twice.
-        final point = _provider(_document!).readSynced();
-        _synced = point.seq;
-        widget.onReset?.call(context, point, update.cause);
-      case HandlerDelta<D>():
-        if (update.seq <= _synced) {
-          // Already inside the value the last read handed over.
-          return;
-        }
-        _synced = update.seq;
-        widget.onDelta?.call(context, update);
-    }
   }
 }

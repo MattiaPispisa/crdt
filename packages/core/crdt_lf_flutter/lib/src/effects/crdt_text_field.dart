@@ -1,7 +1,6 @@
-import 'dart:async';
-
 import 'package:crdt_lf/crdt_lf.dart';
 import 'package:crdt_lf_flutter/src/effects/text_delta.dart';
+import 'package:crdt_lf_flutter/src/provider/_handler_delta_subscription.dart';
 import 'package:crdt_lf_flutter/src/provider/crdt_helper.dart';
 import 'package:flutter/widgets.dart';
 
@@ -12,14 +11,18 @@ import 'package:flutter/widgets.dart';
 /// what makes a keystroke cost the size of the edit rather than the size of
 /// the document.
 ///
-/// The field always checks the result, in every build: it asks the handler a
-/// question whose answer costs nothing — a Fugue handler reports its length
-/// without projecting anything — and reads once to recover if the two
-/// disagree. While this is `true`, a debug build **also** compares the whole
-/// value, which catches a drift the cheap question could miss. **That
-/// comparison reads the value, which is the very cost the field avoids**, so a
-/// benchmark measuring release behaviour has to turn it off. Nothing else
-/// should.
+/// The field always checks the result, after every step it takes — a local
+/// push, a remote change taken in. That check runs in release too: it asks the
+/// handler a question whose answer costs nothing, and reads once to recover if
+/// the two disagree. For `CRDTTextHandler` the question is the whole string,
+/// which the handler already holds. For `CRDTFugueTextHandler` it is the
+/// length, which is O(1) — so a drift that keeps the length is the one the
+/// cheap question cannot see.
+///
+/// While this is `true`, a debug build **also** compares the whole value,
+/// which closes that gap and throws when it finds one. **That comparison reads
+/// the value, which is the very cost the field avoids**, so a benchmark
+/// measuring release behaviour has to turn it off. Nothing else should.
 bool debugVerifyCrdtTextFieldProjection = true;
 
 /// {@template crdt_text_field_builder}
@@ -99,8 +102,24 @@ class CrdtTextFieldBuilder extends StatefulWidget {
 
 class _CrdtTextFieldBuilderState extends State<CrdtTextFieldBuilder> {
   TextEditingController? _controller;
-  CRDTDocument? _document;
-  StreamSubscription<HandlerUpdate<SequenceDelta<String>>>? _subscription;
+
+  /// Set by the first `build`; everything else runs after one.
+  late CRDTDocument _document;
+
+  /// The handler's delta stream, and the bookkeeping every consumer of one
+  /// needs: which handler, how far it has got, what it has already taken in.
+  late final HandlerDeltaSubscription<String, SequenceDelta<String>> _delta =
+      HandlerDeltaSubscription<String, SequenceDelta<String>>(
+    // Not the generic resolver: this widget accepts two named handlers and
+    // says so, which is a better error than "the wrong delta shape".
+    resolve: _deltaProviderOf,
+    onReset: (point, cause) => _settle(text: point.value),
+    onDelta: (event) => _settle(reported: event.delta),
+    isAlive: () => mounted,
+    // Read while attaching, so the first frame already shows the document
+    // instead of an empty field that fills in a frame later.
+    seed: true,
+  );
 
   /// The handler-side text this widget has last pushed or adopted. Local
   /// deltas are computed against it.
@@ -112,12 +131,6 @@ class _CrdtTextFieldBuilderState extends State<CrdtTextFieldBuilder> {
   /// takes out — so [_verifyProjection] can ask the handler whether the two
   /// still agree without counting anything.
   int _lastCommittedRunes = 0;
-
-  /// The point of the delta stream this widget has taken in.
-  ///
-  /// "Taken in", not "was told about": it only ever moves to a number whose
-  /// content is already inside [_lastCommittedText].
-  int _syncedSeq = 0;
 
   /// Stable anchors ([CRDTFugueTextHandler.stablePositionAt]) for the current
   /// selection, captured whenever controller and handler agree. `null` while
@@ -138,9 +151,18 @@ class _CrdtTextFieldBuilderState extends State<CrdtTextFieldBuilder> {
 
   @override
   Widget build(BuildContext context) {
-    final document = context.crdtDocument;
-    if (!identical(document, _document)) {
-      _attach(document);
+    final document = _document = context.crdtDocument;
+    // Covers a new document and a new id alike, which is why there is no
+    // `didUpdateWidget`: `build` always runs after one.
+    final seed = _delta.syncTo(
+      document,
+      widget.id,
+      // The anchors belong to the old handler; they must go before anything
+      // reads the new one, because seeding captures them again.
+      onBeforeAttach: _invalidateSelectionAnchors,
+    );
+    if (seed != null) {
+      _seed(seed.value);
     }
     return Focus(
       canRequestFocus: false,
@@ -152,62 +174,46 @@ class _CrdtTextFieldBuilderState extends State<CrdtTextFieldBuilder> {
   }
 
   @override
-  void didUpdateWidget(CrdtTextFieldBuilder oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.id != widget.id) {
-      // A different handler on the same document: re-subscribe, or the field
-      // would keep showing and editing the old one.
-      _attach(_document!);
-    }
-  }
-
-  @override
   void dispose() {
-    _subscription?.cancel();
+    _delta.cancel();
     _controller?.removeListener(_onControllerChanged);
     _controller?.dispose();
     super.dispose();
   }
 
-  void _attach(CRDTDocument document) {
-    _subscription?.cancel();
-    _document = document;
-    _invalidateSelectionAnchors();
-
-    // Seed before subscribing, so the first frame already shows the document
-    // instead of an empty field that fills in a frame later.
-    final provider = _deltaProvider();
-    final point = provider.readSynced();
-    _syncedSeq = point.seq;
-    final seeded = point.value;
+  /// Takes in the text read while attaching, building the controller the
+  /// first time and adopting into it afterwards.
+  void _seed(String seeded) {
     if (_controller == null) {
       _lastCommittedText = seeded;
       _lastCommittedRunes = RuneOffsets.length(seeded);
       _controller = TextEditingController(text: seeded);
       _controller!.addListener(_onControllerChanged);
-    } else {
-      _adopt(seeded, runes: RuneOffsets.length(seeded));
+      return;
     }
-
-    // The handler's own stream, not `document.updates`: it says **what** each
-    // change did, which is what places the caret exactly.
-    _subscription = provider.watch().listen(_onHandlerUpdate);
+    _adopt(seeded, runes: RuneOffsets.length(seeded));
   }
 
-  DeltaProvider<String, SequenceDelta<String>> _deltaProvider() {
-    final handler = _handler();
-    // Both text handlers publish this shape; [_handler] refuses anything else.
-    return handler as DeltaProvider<String, SequenceDelta<String>>;
+  DeltaProvider<String, SequenceDelta<String>> _deltaProviderOf(
+    CRDTDocument document,
+    String id,
+  ) {
+    // Both text handlers publish this shape; [_handlerOf] refuses anything
+    // else.
+    return _handlerOf(document, id)
+        as DeltaProvider<String, SequenceDelta<String>>;
   }
 
-  Handler<dynamic> _handler() {
-    final handler = _document!.registeredHandlers[widget.id];
+  Handler<dynamic> _handler() => _handlerOf(_document, widget.id);
+
+  Handler<dynamic> _handlerOf(CRDTDocument document, String id) {
+    final handler = document.registeredHandlers[id];
     if (handler is CRDTTextHandler || handler is CRDTFugueTextHandler) {
       return handler!;
     }
     throw FlutterError(
       'CrdtTextFieldBuilder expected a CRDTTextHandler or '
-      'CRDTFugueTextHandler registered under id "${widget.id}", '
+      'CRDTFugueTextHandler registered under id "$id", '
       'but found ${handler ?? 'none'}.',
     );
   }
@@ -248,7 +254,7 @@ class _CrdtTextFieldBuilderState extends State<CrdtTextFieldBuilder> {
       }
     }
 
-    _document!.runInTransaction(run);
+    _document.runInTransaction(run);
     return (deleted: deleted, inserted: inserted);
   }
 
@@ -257,7 +263,7 @@ class _CrdtTextFieldBuilderState extends State<CrdtTextFieldBuilder> {
   /// Only meaningful when the controller text matches the handler text (the
   /// offsets must be valid in the handler's coordinates).
   void _captureSelectionAnchors() {
-    final handler = _document!.registeredHandlers[widget.id];
+    final handler = _document.registeredHandlers[widget.id];
     if (handler is! CRDTFugueTextHandler) {
       return;
     }
@@ -331,17 +337,14 @@ class _CrdtTextFieldBuilderState extends State<CrdtTextFieldBuilder> {
   ///
   /// [handlerState] is what the handler holds now, when the caller already
   /// knows it: a reset carries its text, a delta says what to do to ours.
-  /// Without it, [DeltaProvider.deltaSeq] decides — a stream that has
-  /// published more than this widget has taken in is settled with one read.
+  /// Without it, the stream decides — one that has published more than this
+  /// widget has taken in is settled with one read.
   /// Guessing instead would push the edit at the wrong place, and nothing
   /// reads the handler back afterwards to notice.
   void _pushLocalEdits({({String text, int runes})? handlerState}) {
-    final provider = _deltaProvider();
-
     var known = handlerState;
-    if (known == null && provider.deltaSeq != _syncedSeq) {
-      final point = provider.readSynced();
-      _syncedSeq = point.seq;
+    if (known == null && _delta.publishedSeq != _delta.synced) {
+      final point = _delta.readSynced();
       known = (text: point.value, runes: RuneOffsets.length(point.value));
     }
     final handlerText = known?.text ?? _lastCommittedText;
@@ -392,8 +395,8 @@ class _CrdtTextFieldBuilderState extends State<CrdtTextFieldBuilder> {
     _lastCommittedRunes = handlerRunes - moved.deleted + moved.inserted;
     // Everything published before the push is folded in above, and the push
     // published its own events while it was being applied. So this covers our
-    // own echo: [_onHandlerUpdate] skips it instead of applying it twice.
-    _syncedSeq = provider.deltaSeq;
+    // own echo: the stream skips it instead of applying it twice.
+    _delta.markSyncedToPublished();
 
     if (_lastCommittedText != _controller!.text) {
       // The rebase above merged remote content in: adopt it.
@@ -404,45 +407,15 @@ class _CrdtTextFieldBuilderState extends State<CrdtTextFieldBuilder> {
     _verifyProjection();
   }
 
-  /// Takes in what the handler reports, one change at a time.
-  ///
-  /// The work is done here and now rather than booked for later: a change is
-  /// now described by a delta, so taking it in costs the size of the edit, not
-  /// the size of the document. There is nothing left worth batching, and
-  /// waiting would only make the field lag behind the CRDT.
-  void _onHandlerUpdate(HandlerUpdate<SequenceDelta<String>> update) {
-    if (!mounted) {
-      return;
-    }
-    switch (update) {
-      case HandlerReset<SequenceDelta<String>>():
-        if (update.cause == ResetCause.initial &&
-            update.seq == _syncedSeq + 1) {
-          // [_attach] read the value and subscribed in one turn, and this is
-          // the very next event: the value this reset asks for is the one the
-          // field already holds.
-          _syncedSeq = update.seq;
-          return;
-        }
-        // The base the deltas described was replaced, so this is the one place
-        // that has to read the whole value again.
-        final point = _deltaProvider().readSynced();
-        _syncedSeq = point.seq;
-        _settle(text: point.value);
-      case HandlerDelta<SequenceDelta<String>>():
-        if (update.seq <= _syncedSeq) {
-          // Already inside the text the last read handed over.
-          return;
-        }
-        _syncedSeq = update.seq;
-        _settle(reported: update.delta);
-    }
-  }
-
   /// Folds one reported move into the field.
   ///
   /// [text] is the handler's whole text when it had to be read; [reported] is
   /// the delta when it did not. Exactly one of them is given.
+  ///
+  /// The work is done here and now rather than booked for later: a change is
+  /// described by a delta, so taking it in costs the size of the edit, not the
+  /// size of the document. There is nothing left worth batching, and waiting
+  /// would only make the field lag behind the CRDT.
   void _settle({String? text, SequenceDelta<String>? reported}) {
     final base = text ?? _lastCommittedText;
     final runes = text != null
@@ -500,8 +473,7 @@ class _CrdtTextFieldBuilderState extends State<CrdtTextFieldBuilder> {
   /// question in a debug build — and that one reads the whole value, which is
   /// the cost this widget exists to avoid.
   void _verifyProjection() {
-    final provider = _deltaProvider();
-    if (_syncedSeq != provider.deltaSeq) {
+    if (_delta.synced != _delta.publishedSeq) {
       // The handler is ahead on purpose: a burst of changes is published at
       // once and delivered one at a time, so in between the two are meant to
       // disagree. The question only means something once they are level.
@@ -514,14 +486,13 @@ class _CrdtTextFieldBuilderState extends State<CrdtTextFieldBuilder> {
         : (handler as CRDTTextHandler).value == _lastCommittedText;
     assert(
       !debugVerifyCrdtTextFieldProjection ||
-          provider.value == _lastCommittedText,
+          _delta.provider.value == _lastCommittedText,
       'the text derived from the deltas drifted from the handler',
     );
     if (agrees) {
       return;
     }
-    final point = provider.readSynced();
-    _syncedSeq = point.seq;
+    final point = _delta.readSynced();
     _adopt(point.value, runes: RuneOffsets.length(point.value));
   }
 

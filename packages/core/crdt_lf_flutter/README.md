@@ -44,6 +44,10 @@ Built on top of [`provider`](https://pub.dev/packages/provider) — so you also 
 - **`CrdtHandlerBuilder<H>`** / **`CrdtHandlerSelector<H, R>`** — rebuild only when
   a **specific handler** changes (optionally including nested handlers).
 - **`CrdtHandlerListener<H>`** — side-effect callback on a handler change.
+- **`CrdtHandlerDeltaBuilder<V, D>`** / **`CrdtHandlerDeltaListener<V, D>`** —
+  follow **what** a handler did, change by change. The builder keeps the value
+  and rebuilds with it already moved; the listener hands you each change as a
+  side effect and never rebuilds the subtree.
 - **`CrdtTextFieldBuilder`** — a `TextEditingController` bound to a text
   handler, the way collaborative editor bindings work.
 - **`CrdtTextCursorsOverlay`** — paints collaborators' carets/selections
@@ -172,7 +176,7 @@ CrdtHandlerDeltaListener<List<String>, SequenceDelta<String>>(
   id: 'todos',
   // Seed here: fires once on subscribe, and again whenever the value has to
   // be taken fresh (a snapshot import, a dropped cache).
-  onReset: (context, sync, cause) => _items = [...sync.value],
+  onReset: (context, sync, cause) => _items = sync.value,
   // One call per change, with the retain/insert/delete of that change.
   onDelta: (context, event) => _items = event.delta.apply(_items),
   child: const TodoList(),
@@ -186,13 +190,39 @@ maps, `SetDelta<T>` for the OR-set, `RegisterDelta<T>` for the register.
 The widget handles the awkward part of the contract for you: a reset means
 "read it again", and the events the fresh read already holds must not be
 applied on top of it. It performs the read and drops those events, so `onDelta`
-never reports a change twice.
+never reports a change twice. The value `sync.value` hands over is yours to
+keep — no copy needed.
 
 Like the other listener, it renders `child` unchanged and never rebuilds the
 subtree.
 
-> 📖 [Handler deltas](https://github.com/MattiaPispisa/crdt/blob/main/packages/core/crdt_lf/doc/handler_deltas.md)
-> — what a delta is, and what it costs.
+#### Putting the value on screen
+
+When the value *is* what you render, `CrdtHandlerDeltaBuilder` does the holding
+for you. It seeds itself while attaching, so the first frame already shows the
+document, and then moves the value by the delta of each change:
+
+```dart
+CrdtHandlerDeltaBuilder<List<String>, SequenceDelta<String>>(
+  id: 'todos',
+  builder: (context, todos) => ListView(
+    children: [for (final todo in todos) Text(todo)],
+  ),
+);
+```
+
+It rebuilds once per change, like `CrdtHandlerBuilder` — but the value arrives
+already moved, so a rebuild costs the size of the **edit** instead of a fresh
+projection of the whole document. On a long text or a large list that is the
+whole point.
+
+Which one to reach for:
+
+| You want | Widget |
+|---|---|
+| the value on screen | `CrdtHandlerDeltaBuilder` |
+| the change itself, no rebuild | `CrdtHandlerDeltaListener` |
+| just "something moved" | `CrdtHandlerBuilder` |
 
 ### Imperative access
 
@@ -337,6 +367,15 @@ applied change targeting the handler (local or imported) and on snapshot
 imports carrying its state. With `nested: true` the ids and revisions of the
 handler and its descendants (`ContainerHandler.childRefs`) are folded into one
 hash, so structural changes (a child added or removed) are detected too.
+
+The delta widgets — `CrdtHandlerDeltaBuilder`, `CrdtHandlerDeltaListener` and
+`CrdtTextFieldBuilder` — work the other way round. They subscribe to the
+handler's own `watch()` stream, which says **what** each change did, and they
+keep a projection instead of re-reading the value. All three share one piece of
+bookkeeping: which handler to follow, where the last read sits in the stream,
+and which events that read already covers. A `HandlerReset` means "the base
+moved, read it again"; the read comes back with the point of the stream it
+reflects, so no event is ever applied twice.
 
 ## Apps
 

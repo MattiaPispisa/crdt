@@ -563,7 +563,15 @@ void main() {
     testWidgets('throws a FlutterError for a non-text handler', (tester) async {
       CRDTListHandler<String>(doc, 'note');
       await tester.pumpWidget(host());
-      expect(tester.takeException(), isA<FlutterError>());
+
+      final error = tester.takeException();
+      expect(error, isA<FlutterError>());
+      // This widget takes two named handlers, so it can name them. The
+      // generic "wrong delta shape" message would be a worse answer.
+      expect(
+        error.toString(),
+        contains('expected a CRDTTextHandler or CRDTFugueTextHandler'),
+      );
     });
   });
 }

@@ -37,6 +37,7 @@ void main() {
       'todos-count',
       'todos-list',
       'delta-child',
+      'delta-builder',
       'settings-flat',
       'settings-nested',
       'note-text',
@@ -75,6 +76,10 @@ void main() {
     expect(rebuilds(tester, 'delta-child'), before['delta-child']);
     expect(find.textContaining('SeqInsert([Todo #1])'), findsOneWidget);
     expect(find.textContaining('1 items'), findsOneWidget);
+    // The delta builder did the opposite: one rebuild, with the value it was
+    // handed already carrying the insertion.
+    expect(rebuilds(tester, 'delta-builder'), before['delta-builder']! + 1);
+    expect(find.text('now: Todo #1'), findsOneWidget);
 
     // 3. Edit the first todo in place → list rebuilds, count does NOT
     //    (its length is unchanged — the selector deduplicates).
