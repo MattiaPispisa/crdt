@@ -93,7 +93,8 @@ base class CRDTMapHandler<T> extends Handler<Map<String, T>>
   /// Gets the current state of the map
   ///
   /// The returned map is the handler's internal state:
-  /// treat it as read-only.
+  /// treat it as read-only. `readSynced()` hands back a copy instead, so a
+  /// consumer that keeps a projection can hold what it is given.
   @override
   Map<String, T> get value {
     // Check if the cached state is still valid
@@ -352,6 +353,13 @@ base class CRDTMapHandler<T> extends Handler<Map<String, T>>
   }
 
   /// Returns a string representation of this map
+  @override
+  Map<String, T> applyDelta(Map<String, T> base, MapDelta<String, T> delta) =>
+      delta.apply(base);
+
+  @override
+  Map<String, T> copyValue(Map<String, T> value) => Map<String, T>.of(value);
+
   @override
   String toString() {
     return 'CRDTMapHandler($_id, $value)';

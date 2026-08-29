@@ -607,6 +607,12 @@ base class CRDTFugueMovableListHandler<T>
   }
 
   @override
+  List<T> applyDelta(List<T> base, SequenceDelta<T> delta) => delta.apply(base);
+
+  @override
+  List<T> copyValue(List<T> value) => List<T>.of(value);
+
+  @override
   String toString() {
     return 'CRDTFugueMovableList($id, $value)';
   }

@@ -211,6 +211,50 @@ void main() {
       await subscription.cancel();
     });
 
+    test('readSynced hands back a value the caller owns', () async {
+      // A handler that folds a change into its cached list in place would
+      // otherwise hand out that list, and the consumer would find the next
+      // change already inside the base it applies the delta to.
+      final doc = CRDTDocument();
+      final list = CRDTListHandler<String>(doc, 'list')..insert(0, 'a');
+
+      final deltas = <SequenceDelta<String>>[];
+      final subscription = list.watch().listen((update) {
+        if (update is HandlerDelta<SequenceDelta<String>>) {
+          deltas.add(update.delta);
+        }
+      });
+      await _pump();
+
+      final point = list.readSynced();
+      expect(point.value, ['a']);
+
+      list.insert(1, 'b');
+      await _pump();
+
+      // What the stream describes, folded onto what the read handed over.
+      expect(deltas.length, 1);
+      expect(list.applyDelta(point.value, deltas.single), list.value);
+
+      await subscription.cancel();
+    });
+
+    test('applyDelta moves the value the way the handler does', () {
+      final doc = CRDTDocument();
+      final text = CRDTTextHandler(doc, 'text');
+      final list = CRDTListHandler<String>(doc, 'list');
+
+      // The same delta shape over two value types: the text is moved by
+      // [SequenceDelta.applyToText], the list by [SequenceDelta.apply]. Only
+      // the handler knows which.
+      final delta = SequenceDelta<String>([
+        const SeqRetain<String>(1),
+        const SeqInsert<String>(['x']),
+      ]);
+      expect(text.applyDelta('ab', delta), 'axb');
+      expect(list.applyDelta(['a', 'b'], delta), ['a', 'x', 'b']);
+    });
+
     test('a handler that throws does not hold the others back', () async {
       // The eager drain runs inside the loop over every handler. A throw that
       // escaped it would end that loop, and every handler after this one would

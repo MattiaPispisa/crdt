@@ -26,6 +26,9 @@
     - [Operation based](#operation-based)
     - [Transaction](#transaction)
     - [State cache](#state-cache)
+    - [Handler deltas](#handler-deltas)
+      - [Where a delta comes from](#where-a-delta-comes-from)
+      - [Deltas, or the value?](#deltas-or-the-value)
   - [Architecture](#architecture)
     - [CRDTDocument](#crdtdocument)
       - [Identity](#identity)
@@ -36,6 +39,9 @@
       - [Working with Complex Types](#working-with-complex-types)
       - [Nested Structures (Containers and References)](#nested-structures-containers-and-references)
       - [Choosing How to Model Your Data](#choosing-how-to-model-your-data)
+        - [Worked example: a TODO list](#worked-example-a-todo-list)
+        - [A quick decision guide](#a-quick-decision-guide)
+        - [Picking a leaf handler](#picking-a-leaf-handler)
     - [Transaction](#transaction-1)
     - [DAG](#dag)
     - [Change](#change)
@@ -76,6 +82,7 @@ Supporting:
 - ⏱️ **Hybrid Logical Clock**: Uses HLC for causal ordering of operations
 - 🔄 **Automatic Conflict Resolution**: Automatically resolves conflicts in a CRDT
 - 📦 **Local Availability**: Operations are available locally as soon as they are applied
+- 🔍 **Handler deltas**: a handler can say **what** each change did to your copy of it, not only that it changed
 
 ## Greyhound Markdown
 
@@ -275,10 +282,34 @@ peers that receive the same changes in a different order diverge.
 
 ### Handler deltas
 
-A handler tells you *that* something changed through `CRDTDocument.updates` and
-`revisionForHandler`. It can also tell you **what** changed: `watch()` publishes
-one event per `Change`, so a consumer keeps its own projection without ever
-reading `handler.value`.
+A `Change` and a delta describe the same edit from two different places.
+
+A **change** is what the network carries: one peer's edit, written in **that
+peer's** terms. A Fugue text insert says "put these elements after element
+`e7`". Every peer receives that same change, and none of them can tell from it
+where the edit lands in the text *they* are looking at — `e7` is an identity,
+not a position.
+
+A **delta** is the answer to the other question: **how your own copy moved**
+when that change was folded in, written in your coordinates. "Keep the 5
+characters you have, then put ` world` after them." It is derived locally, by
+this document, from the state this document holds. It never travels.
+
+```mermaid
+graph LR
+    S["your value<br/>hello"] --> F
+    C["Change<br/>put elements after e7<br/>the author's terms"] --> F[fold into this document]
+    F --> D["Delta<br/>retain 5 · insert ' world'<br/>your terms"]
+    F --> V["your value<br/>hello world"]
+```
+
+So a change tells you *what someone did*; a delta tells you *what happened to
+what you are holding*. That is why a delta can place a caret and a change
+cannot, and why two peers that agree on the state can still see two different
+sequences of deltas — they folded the same changes in a different order.
+
+`watch()` publishes one delta event per change, so a consumer keeps its own
+projection and never reads `handler.value` again.
 
 ```dart
 final text = CRDTFugueTextHandler(doc, 'text');
@@ -290,6 +321,7 @@ text.watch().listen((update) {
   switch (update) {
     case HandlerReset():
       // The base moved: read it, and learn which events it already holds.
+      // The value it hands back is yours to keep.
       final point = text.readSynced();
       mine = point.value;
       seen = point.seq;
@@ -297,7 +329,9 @@ text.watch().listen((update) {
       if (update.seq <= seen) {
         return; // already inside the value the last read handed over
       }
-      mine = update.delta.applyToText(mine);
+      // The handler is the only place that knows both its value type and its
+      // delta type, so it is the one that says how a delta moves a value.
+      mine = text.applyDelta(mine, update.delta);
       seen = update.seq;
   }
 });
@@ -306,22 +340,72 @@ text.watch().listen((update) {
 Four vocabularies cover every built-in handler, by shape rather than by
 handler: `SequenceDelta<T>` (retain / insert / delete, plus a move for the
 movable list), `MapDelta<K, V>`, `SetDelta<T>` and `RegisterDelta<T>`.
-`SequenceDelta` is the Quill/Yjs shape, so an editor binding already knows how
-to consume it. Text handlers use `SequenceDelta<String>` with one element per
-**rune**.
 
-Nothing here reaches the wire. A delta is a local observation of how this
-document's copy moved, in the order this document folded the changes in — which
-is not the replay order, so two peers holding the same state can observe two
-different sequences of events.
+A reset is not an error. It is the honest answer when the base the deltas
+described has been replaced — a snapshot arrived, or the handler dropped the
+cached state. `ResetCause` says which. Every subscription opens with
+`ResetCause.initial`, so the reset path runs on the first frame instead of
+months later.
 
-While nobody watches, the whole thing is one `null` check on the apply path. A
-watched handler folds a remote change when it **arrives** instead of at the next
-read, because a delta stream cannot wait for a read that may never come. It is
-the same work at a different moment.
+#### Where a delta comes from
 
-> 📖 [Handler deltas](https://github.com/MattiaPispisa/crdt/blob/main/packages/core/crdt_lf/doc/handler_deltas.md)
-> — the reset causes, the compaction invariant, and what each handler pays.
+A local edit and a remote change reach the same event by two different roads.
+
+```mermaid
+graph TD
+    L[Local edit] --> LF[Fold it in, collecting the delta]
+    LF --> LH[Hold the delta: the Change does not exist yet]
+    LH --> LC[Transaction commits]
+    LC -->|compaction may fuse operations| LP[Compose and publish under the Change]
+
+    R[Remote change arrives] --> RW{Is anyone watching?}
+    RW -->|No| RQ[Queue it: folded at the next read, no delta built]
+    RW -->|Yes| RF[Fold it now, collecting the delta]
+    RF --> RP[Publish under its Change]
+
+    LP --> E[HandlerDelta event]
+    RP --> E
+```
+
+Two things follow from that shape.
+
+A **local delta is computed early and published late**. It is built while the
+operation is applied, before the `Change` that will carry it exists, and
+published on commit — after compaction may have fused several operations into
+one. One event always covers exactly one change, so the deltas of fused
+operations are composed into one.
+
+**Watching changes *when* the work happens, not *what* work happens.**
+Unwatched, a remote change waits in the queue and is folded at the next read.
+Watched, it is folded on arrival, because a stream cannot wait for a read that
+may never come. The work is the same; only the moment differs. While nobody
+watches, the whole feature is one `null` check on the apply path.
+
+#### Deltas, or the value?
+
+Start with `handler.value`. It is cache-backed, an edit advances the cache
+instead of replaying, and for most reads it is already the right answer.
+
+Reach for deltas when the projection you keep costs more to rebuild than the
+edit costs to apply:
+
+| What you need | Reach for |
+|---|---|
+| an occasional read, or you re-render everything anyway | `handler.value` |
+| to move something expensive to rebuild — a long text, a large list | deltas |
+| to know **where** it changed: a caret, an `AnimatedList`, a scroll anchor | deltas |
+| to know **who** changed it, or whether it was you | deltas (`HandlerDelta.author`, `.local`) |
+
+Consuming them is three calls, all shown above: `watch()` to subscribe,
+`readSynced()` to answer a reset with a value **and** the point of the stream
+it reflects, and `applyDelta` to move that value by each delta that follows.
+The rest is the one rule that keeps the two in step — drop every event whose
+`seq` the last read already covers.
+
+In Flutter, `crdt_lf_flutter` does all of that for you:
+`CrdtHandlerDeltaBuilder` holds the value and rebuilds with it already moved,
+`CrdtHandlerDeltaListener` hands you each change as a side effect, and
+`CrdtTextFieldBuilder` drives a `TextEditingController` from the same stream.
 
 ## Architecture
 

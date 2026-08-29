@@ -7,21 +7,7 @@
 ### Added
 
 - A handler publishes **deltas**: `watch()` gives one event per change describing how the handler's
-  observable state moved, so a consumer keeps its own projection without reading `handler.value`.
-  Four shapes cover every built-in handler — `SequenceDelta` (the Quill/Yjs retain/insert/delete
-  shape, plus a move that keeps element identity on the movable list), `MapDelta`, `SetDelta` and
-  `RegisterDelta`. `readSynced()` hands back the value together with the point of the stream it
-  reflects, so a reset can never be applied twice. Nothing reaches the wire, and a handler nobody
-  watches costs one `null` check on the apply path. See
-  [Handler deltas](https://github.com/MattiaPispisa/crdt/blob/main/packages/core/crdt_lf/doc/handler_deltas.md).
-  [132](https://github.com/MattiaPispisa/crdt/issues/132)
-- `RuneOffsets.skip` gives the code-unit offset a number of runes past another offset. Walking a
-  text in steps now costs the length of the steps instead of the length of the text, and it is the
-  one place that decides how wide a rune is — including an unpaired surrogate, which counts as one.
-- `DeltaProvider.deltaSeq` reports how far the stream has got without reading the value. A consumer
-  that **writes** already knows what it wrote: it can move its own copy by hand and then take this
-  number to say "I account for everything published so far", instead of paying for a read it does
-  not need. `readSynced` stays the answer for a consumer that only observes.
+  observable state moved, so a consumer keeps its own projection without reading `handler.value`. [132](https://github.com/MattiaPispisa/crdt/issues/132)
 
 ### Changed
 
@@ -29,13 +15,8 @@
   adjacent in the sequence, now share a single node. Typing 100 000 characters builds 782 nodes
   instead of 100 000, which is **8× less memory** (371 → 48 bytes per element) and **up to 4× less
   time** wherever a document is built or loaded: appending 50 000 elements 30.1 ms → 9.4 ms,
-  restoring 100 000 from a snapshot 93.3 ms → 22.7 ms. Reads roughly halve. An edit in the middle of
-  a run splits it, so an insert at a random position costs about a third more. Nothing reaches the
-  wire: element ids, operations and the snapshot format are unchanged.
-  [125](https://github.com/MattiaPispisa/crdt/issues/125)
+  restoring 100 000 from a snapshot 93.3 ms → 22.7 ms. [125](https://github.com/MattiaPispisa/crdt/issues/125)
 - A change costs about 20% less memory to hold.
-- `watch()` on a disposed document throws `DocumentDisposedException` instead of handing back a
-  stream that opens with a reset and then stays silent for ever.
 
 ## [4.0.0](https://github.com/MattiaPispisa/crdt/tree/crdt_lf-v4.0.0/packages/crdt_lf)
 

@@ -165,5 +165,8 @@ base class CRDTRegisterHandler<T> extends Handler<T>
 
   /// Returns a string representation of this register.
   @override
+  T? applyDelta(T? base, RegisterDelta<T> delta) => delta.apply(base);
+
+  @override
   String toString() => 'CRDTRegisterHandler($_id, $value)';
 }

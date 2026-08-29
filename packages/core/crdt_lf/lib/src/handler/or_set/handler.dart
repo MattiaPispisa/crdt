@@ -89,6 +89,10 @@ base class CRDTORSetHandler<T> extends Handler<ORSetState<T>>
   }
 
   /// Returns the current set value computed from changes and snapshot.
+  ///
+  /// Every read builds a fresh set, so what it hands back is already a value
+  /// the caller owns — which is why this handler keeps the default
+  /// [DeltaProvider.copyValue].
   @override
   Set<T> get value {
     return _cachedOrComputedState()._state;
@@ -290,6 +294,9 @@ base class CRDTORSetHandler<T> extends Handler<ORSetState<T>>
       return null;
     }
   }
+
+  @override
+  Set<T> applyDelta(Set<T> base, SetDelta<T> delta) => delta.apply(base);
 }
 
 /// State of the [CRDTORSetHandler]

@@ -4,15 +4,13 @@ part of 'document.dart';
 ///
 /// A consumer subscribes with [watch], seeds its projection from the
 /// [HandlerReset] that arrives first, and keeps it up to date from the
-/// [HandlerDelta] events that follow. It never has to read [value] again.
+/// [HandlerDelta] events that follow. 
+/// **It never has to read [value] again.**
 ///
-/// Nothing here reaches the wire. A delta is a local observation of how this
-/// document's copy moved, in the order this document folded the changes in.
+/// **A delta is a local observation of how this
+/// document's copy moved**, in the order this document folded the changes in.
 /// That order is **not** the replay order, so two peers holding the same state
 /// can observe two different sequences of deltas.
-///
-/// Everything costs one `null` check while nobody is watching: the apply path
-/// is handed no sink and no event is built.
 base mixin DeltaProvider<V, D extends ComposableDelta<D>> on DocumentConsumer {
   /// The current observable value, the one the deltas describe.
   V get value;
@@ -25,10 +23,11 @@ base mixin DeltaProvider<V, D extends ComposableDelta<D>> on DocumentConsumer {
   /// ## What it costs
   ///
   /// A handler nobody reads normally costs nothing: a remote change is queued
-  /// and folded in at the next read (see `doc/incremental_remote_apply.md`).
-  /// A watched handler cannot wait for a read that may never come, so it pays
-  /// the decode and the apply when the change **arrives**. The work is the
-  /// same; only the moment changes.
+  /// and folded in at the next read (lazy evaluation). 
+  /// A watched handler cannot wait for a read
+  /// that may never come, so it pays
+  /// the decode and the apply when the change **arrives** (eager). 
+  /// The work is the same; only the moment changes.
   Stream<HandlerUpdate<D>> watch() {
     // A disposed document publishes nothing ever again, so handing back a
     // stream that opens with a reset and then stays silent forever would be a
@@ -60,11 +59,28 @@ base mixin DeltaProvider<V, D extends ComposableDelta<D>> on DocumentConsumer {
   /// Reading the value and learning where it sits in the stream is one
   /// operation on purpose. Two operations would let an event land in between,
   /// and the consumer would apply it twice.
+  ///
+  /// The value it hands back is one the caller **owns**: see [copyValue].
   DeltaSyncPoint<V> readSynced() {
     // The read first: it can fold queued changes in, which moves the sequence.
     final read = value;
-    return DeltaSyncPoint<V>(value: read, seq: _deltaHub?.seq ?? 0);
+    return DeltaSyncPoint<V>(
+      value: copyValue(read),
+      seq: _deltaHub?.seq ?? 0,
+    );
   }
+
+  /// The value [base] becomes once [delta] is applied.
+  V applyDelta(V base, D delta);
+
+  /// A copy of [value] that the caller owns.
+  ///
+  /// [readSynced] goes through this, and it has to: a handler folds a change
+  /// into its cached state **in place**, while the [HandlerDelta] describing
+  /// that change is delivered a microtask later. A consumer holding the state
+  /// itself would therefore find the change already inside its base, and then
+  /// apply the delta on top of it — twice.
+  V copyValue(V value) => value;
 }
 
 /// What a [DocumentConsumer] delegates its delta bookkeeping to.

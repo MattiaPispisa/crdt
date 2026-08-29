@@ -109,7 +109,8 @@ base class CRDTListHandler<T> extends Handler<List<T>>
   /// Gets the current state of the list
   ///
   /// The returned list is the handler's internal state:
-  /// treat it as read-only.
+  /// treat it as read-only. `readSynced()` hands back a copy instead, so a
+  /// consumer that keeps a projection can hold what it is given.
   @override
   List<T> get value {
     // Check if the cached state is still valid
@@ -338,6 +339,12 @@ base class CRDTListHandler<T> extends Handler<List<T>>
   }
 
   /// Returns a string representation of this list
+  @override
+  List<T> applyDelta(List<T> base, SequenceDelta<T> delta) => delta.apply(base);
+
+  @override
+  List<T> copyValue(List<T> value) => List<T>.of(value);
+
   @override
   String toString() {
     return 'CRDTList($_id, $value)';

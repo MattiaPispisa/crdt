@@ -455,6 +455,10 @@ base class CRDTTextHandler extends Handler<String>
 
   /// Returns a string representation of this text
   @override
+  String applyDelta(String base, SequenceDelta<String> delta) =>
+      delta.applyToText(base);
+
+  @override
   String toString() {
     final cut = RuneOffsets.utf16Offset(value, 20);
     final truncated =

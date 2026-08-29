@@ -219,6 +219,10 @@ base class CRDTFugueTextHandler
 
   /// Returns a text representation of this handler
   @override
+  String applyDelta(String base, SequenceDelta<String> delta) =>
+      delta.applyToText(base);
+
+  @override
   String toString() {
     final text = value;
     final cut = RuneOffsets.utf16Offset(text, 20);

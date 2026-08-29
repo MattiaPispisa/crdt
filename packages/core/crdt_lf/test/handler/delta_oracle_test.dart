@@ -11,6 +11,10 @@ Future<void> _pump() => Future<void>.delayed(Duration.zero);
 ///
 /// It never reads `handler.value` on its own, which is the whole point: if it
 /// still agrees with the handler, the deltas describe the state exactly.
+///
+/// It also keeps what `readSynced()` handed it, with no copy of its own. That
+/// makes it the check on `DeltaProvider.copyValue` too: a handler that shared
+/// its cached collection here would fold the next change in twice.
 class _Projection<V, D extends ComposableDelta<D>> {
   _Projection({
     required DeltaSyncPoint<V> Function() readSynced,
@@ -70,15 +74,7 @@ _Projection<List<T>, SequenceDelta<T>> _watchList<T>(
   CRDTListHandler<T> list,
 ) =>
     _Projection<List<T>, SequenceDelta<T>>(
-      readSynced: () {
-        final point = list.readSynced();
-        // The handler hands back its own list; copy it so the projection
-        // cannot drift by sharing the handler's state.
-        return DeltaSyncPoint<List<T>>(
-          value: List<T>.of(point.value),
-          seq: point.seq,
-        );
-      },
+      readSynced: list.readSynced,
       stream: list.watch(),
       applyDelta: (delta, base) => delta.apply(base),
     );
@@ -96,13 +92,7 @@ _Projection<List<T>, SequenceDelta<T>> _watchFugueList<T>(
   CRDTFugueListHandler<T> list,
 ) =>
     _Projection<List<T>, SequenceDelta<T>>(
-      readSynced: () {
-        final point = list.readSynced();
-        return DeltaSyncPoint<List<T>>(
-          value: List<T>.of(point.value),
-          seq: point.seq,
-        );
-      },
+      readSynced: list.readSynced,
       stream: list.watch(),
       applyDelta: (delta, base) => delta.apply(base),
     );
@@ -111,13 +101,7 @@ _Projection<Map<String, T>, MapDelta<String, T>> _watchMap<T>(
   CRDTMapHandler<T> map,
 ) =>
     _Projection<Map<String, T>, MapDelta<String, T>>(
-      readSynced: () {
-        final point = map.readSynced();
-        return DeltaSyncPoint<Map<String, T>>(
-          value: Map<String, T>.of(point.value),
-          seq: point.seq,
-        );
-      },
+      readSynced: map.readSynced,
       stream: map.watch(),
       applyDelta: (delta, base) => delta.apply(base),
     );
@@ -929,13 +913,7 @@ void main() {
       final map = CRDTMapHandler<String?>(doc, 'map');
       final projection =
           _Projection<Map<String, String?>, MapDelta<String, String?>>(
-        readSynced: () {
-          final point = map.readSynced();
-          return DeltaSyncPoint<Map<String, String?>>(
-            value: Map<String, String?>.of(point.value),
-            seq: point.seq,
-          );
-        },
+        readSynced: map.readSynced,
         stream: map.watch(),
         applyDelta: (delta, base) => delta.apply(base),
       );
@@ -1050,13 +1028,7 @@ void main() {
       final doc = CRDTDocument();
       final set = CRDTORSetHandler<String>(doc, 'set')..add('a');
       final projection = _Projection<Set<String>, SetDelta<String>>(
-        readSynced: () {
-          final point = set.readSynced();
-          return DeltaSyncPoint<Set<String>>(
-            value: Set<String>.of(point.value),
-            seq: point.seq,
-          );
-        },
+        readSynced: set.readSynced,
         stream: set.watch(),
         applyDelta: (delta, base) => delta.apply(base),
       );
@@ -1079,13 +1051,7 @@ void main() {
       final doc = CRDTDocument();
       final set = CRDTORSetHandler<String?>(doc, 'set');
       final projection = _Projection<Set<String?>, SetDelta<String?>>(
-        readSynced: () {
-          final point = set.readSynced();
-          return DeltaSyncPoint<Set<String?>>(
-            value: Set<String?>.of(point.value),
-            seq: point.seq,
-          );
-        },
+        readSynced: set.readSynced,
         stream: set.watch(),
         applyDelta: (delta, base) => delta.apply(base),
       );
@@ -1108,13 +1074,7 @@ void main() {
       final doc = CRDTDocument();
       final set = CRDTORSetHandler<String>(doc, 'set');
       final projection = _Projection<Set<String>, SetDelta<String>>(
-        readSynced: () {
-          final point = set.readSynced();
-          return DeltaSyncPoint<Set<String>>(
-            value: Set<String>.of(point.value),
-            seq: point.seq,
-          );
-        },
+        readSynced: set.readSynced,
         stream: set.watch(),
         applyDelta: (delta, base) => delta.apply(base),
       );
@@ -1138,8 +1098,7 @@ void main() {
   });
 
   group('CRDTORMapHandler deltas', () {
-    test('a key that came only from a snapshot reports what it held',
-        () async {
+    test('a key that came only from a snapshot reports what it held', () async {
       // After a restore, a key can live in the snapshot with no live tag of
       // its own. Reading it has to go through the snapshot, or the delta would
       // report a write over nothing and every watcher would lose the old
@@ -1153,13 +1112,7 @@ void main() {
       expect(doc.importSnapshot(snapshot), isTrue);
 
       final projection = _Projection<Map<String, int>, MapDelta<String, int>>(
-        readSynced: () {
-          final point = map.readSynced();
-          return DeltaSyncPoint<Map<String, int>>(
-            value: Map<String, int>.of(point.value),
-            seq: point.seq,
-          );
-        },
+        readSynced: map.readSynced,
         stream: map.watch(),
         applyDelta: (delta, base) => delta.apply(base),
       );
@@ -1182,13 +1135,7 @@ void main() {
       final doc = CRDTDocument();
       final map = CRDTORMapHandler<String, int>(doc, 'ormap');
       final projection = _Projection<Map<String, int>, MapDelta<String, int>>(
-        readSynced: () {
-          final point = map.readSynced();
-          return DeltaSyncPoint<Map<String, int>>(
-            value: Map<String, int>.of(point.value),
-            seq: point.seq,
-          );
-        },
+        readSynced: map.readSynced,
         stream: map.watch(),
         applyDelta: (delta, base) => delta.apply(base),
       );
@@ -1217,13 +1164,7 @@ void main() {
       final list = CRDTFugueMovableListHandler<String>(doc, 'movable')
         ..insertAll(0, ['a', 'b', 'c']);
       final projection = _Projection<List<String>, SequenceDelta<String>>(
-        readSynced: () {
-          final point = list.readSynced();
-          return DeltaSyncPoint<List<String>>(
-            value: List<String>.of(point.value),
-            seq: point.seq,
-          );
-        },
+        readSynced: list.readSynced,
         stream: list.watch(),
         applyDelta: (delta, base) => delta.apply(base),
       );
@@ -1251,13 +1192,7 @@ void main() {
       final list = CRDTFugueMovableListHandler<String>(doc, 'movable')
         ..insertAll(0, ['a', 'b', 'c']);
       final projection = _Projection<List<String>, SequenceDelta<String>>(
-        readSynced: () {
-          final point = list.readSynced();
-          return DeltaSyncPoint<List<String>>(
-            value: List<String>.of(point.value),
-            seq: point.seq,
-          );
-        },
+        readSynced: list.readSynced,
         stream: list.watch(),
         applyDelta: (delta, base) => delta.apply(base),
       );
@@ -1283,13 +1218,7 @@ void main() {
       final doc = CRDTDocument();
       final list = CRDTFugueMovableListHandler<int>(doc, 'movable');
       final projection = _Projection<List<int>, SequenceDelta<int>>(
-        readSynced: () {
-          final point = list.readSynced();
-          return DeltaSyncPoint<List<int>>(
-            value: List<int>.of(point.value),
-            seq: point.seq,
-          );
-        },
+        readSynced: list.readSynced,
         stream: list.watch(),
         applyDelta: (delta, base) => delta.apply(base),
       );
