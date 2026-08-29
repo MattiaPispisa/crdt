@@ -25,11 +25,14 @@ Built on top of [`provider`](https://pub.dev/packages/provider) — so you also 
     - [Provide a document](#provide-a-document)
     - [Document-level rebuilds](#document-level-rebuilds)
     - [Handler-scoped rebuilds](#handler-scoped-rebuilds)
+    - [What changed, not just that it changed](#what-changed-not-just-that-it-changed)
+      - [Putting the value on screen](#putting-the-value-on-screen)
     - [Imperative access](#imperative-access)
     - [Collaborative text](#collaborative-text)
       - [Remote text cursors](#remote-text-cursors)
       - [Rune ↔ UTF-16 offsets](#rune--utf-16-offsets)
     - [Presence cursors](#presence-cursors)
+  - [Benchmarks](#benchmarks)
   - [(deep dive) How it works](#deep-dive-how-it-works)
   - [Apps](#apps)
   - [Packages](#packages)
@@ -165,11 +168,15 @@ CrdtHandlerListener<CRDTListHandler<String>>(
 
 ### What changed, not just that it changed
 
-`CrdtHandlerBuilder` and `CrdtHandlerListener` tell you *that* a handler moved
-and hand it back for you to re-read. `CrdtHandlerDeltaListener` tells you
-**what** moved, one call per change, so you can advance a projection you
-already hold — drive an `AnimatedList`, replay an edit into a controller,
-append to a log — instead of reading the whole value again.
+Start with `CrdtHandlerBuilder`: it hands you the handler, you read
+`handler.value`, done. That read is cache-backed — an edit advances the cached
+state instead of replaying the history — so for most values it is already the
+right answer, and there is nothing to keep in sync.
+
+The widgets below are for when **re-reading is the expensive part**, or when the
+value alone does not tell you enough. `CrdtHandlerDeltaListener` reports **what**
+moved, one call per change, so you can advance a projection you already hold —
+drive an `AnimatedList`, replay an edit into a controller, append to a log.
 
 ```dart
 CrdtHandlerDeltaListener<List<String>, SequenceDelta<String>>(
@@ -211,18 +218,22 @@ CrdtHandlerDeltaBuilder<List<String>, SequenceDelta<String>>(
 );
 ```
 
-It rebuilds once per change, like `CrdtHandlerBuilder` — but the value arrives
-already moved, so a rebuild costs the size of the **edit** instead of a fresh
-projection of the whole document. On a long text or a large list that is the
-whole point.
+It rebuilds once per change, exactly like `CrdtHandlerBuilder`. The difference
+is only what the rebuild costs: the value arrives already moved by the delta,
+instead of being projected again from the document. On a long text or a large
+list that is the whole point; on a handful of keys it buys nothing.
 
 Which one to reach for:
 
-| You want | Widget |
-|---|---|
-| the value on screen | `CrdtHandlerDeltaBuilder` |
-| the change itself, no rebuild | `CrdtHandlerDeltaListener` |
-| just "something moved" | `CrdtHandlerBuilder` |
+| You want | Widget | What the builder gets |
+|---|---|---|
+| the value on screen — the default | `CrdtHandlerBuilder` | the handler; read `handler.value` |
+| the same, without re-reading the value each time | `CrdtHandlerDeltaBuilder` | the value, already moved |
+| to know **where** it changed, or to not rebuild at all | `CrdtHandlerDeltaListener` | the delta of each change |
+
+All three give you the value one way or another. The first two put it on screen
+and differ only in cost; the third is the one that hands you the change itself,
+and never rebuilds its subtree.
 
 ### Imperative access
 
@@ -351,6 +362,17 @@ CrdtAwarenessCursorsOverlay(
   ),
   child: pane,
 );
+```
+
+## Benchmarks
+
+This package includes a suite of benchmarks to ensure performance and stability.
+You can find the latest results [here](https://github.com/MattiaPispisa/crdt/tree/main/packages/core/crdt_lf_flutter/benchmarks/results.md).
+
+To run the benchmarks yourself, run from the repository root:
+
+```sh
+melos run benchmark_flutter
 ```
 
 ## (deep dive) How it works
