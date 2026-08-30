@@ -236,6 +236,46 @@ base class CRDTMapHandler<T> extends Handler<Map<String, T>>
     }
   }
 
+  /// Every operation of this handler names a key, and the value that key holds
+  /// is right there in the state, so all three kinds invert exactly.
+  @override
+  bool get invertible => true;
+
+  @override
+  List<Operation> invert(Operation operation) {
+    final key = _keyOf(operation);
+    if (key == null) {
+      return const [];
+    }
+
+    // `containsKey` and not a null check: for a map of a nullable type a key
+    // holding `null` is still a key, and putting it back is still a move.
+    final state = value;
+    if (!state.containsKey(key)) {
+      // The key is not there yet. Only `set` can have put it there, and
+      // removing it again is what undoes that.
+      return operation is _MapInsertOperation<T>
+          ? [_MapDeleteOperation<T>.fromHandler(this, key: key)]
+          : const [];
+    }
+
+    final previous = state[key] as T;
+    if (operation is _MapUpdateOperation<T>) {
+      // Stay an update: `set` would also recreate a key a concurrent delete
+      // took away in the meantime.
+      return [
+        _MapUpdateOperation<T>.fromHandler(this, key: key, value: previous),
+      ];
+    }
+    if (operation is _MapInsertOperation<T> ||
+        operation is _MapDeleteOperation<T>) {
+      return [
+        _MapInsertOperation<T>.fromHandler(this, key: key, value: previous),
+      ];
+    }
+    return const [];
+  }
+
   @override
   Operation? compound(Operation accumulator, Operation current) {
     final accKey = _keyOf(accumulator);

@@ -1465,5 +1465,178 @@ void main() {
         );
       });
     });
+
+    group('invert', () {
+      CRDTDocument doc() => CRDTDocument(
+            peerId: PeerId.parse('37f1ec87-6ea5-430b-a627-a6b92b56a02d'),
+          );
+
+      test('undoes an insert by removing what it put in', () {
+        final document = doc();
+        final text = CRDTFugueTextHandler(document, 'text');
+        final undo = UndoManager(document, captureTimeout: Duration.zero)
+          ..track(text);
+
+        text.insert(0, 'Hello');
+        undo.undo();
+        expect(text.value, '');
+
+        undo.redo();
+        expect(text.value, 'Hello');
+      });
+
+      test('undoes a delete by putting the text back where it was', () {
+        final document = doc();
+        final text = CRDTFugueTextHandler(document, 'text')
+          ..insert(0, 'abcdef');
+        final undo = UndoManager(document, captureTimeout: Duration.zero)
+          ..track(text);
+
+        text.delete(2, 2);
+        expect(text.value, 'abef');
+
+        undo.undo();
+        expect(text.value, 'abcdef');
+
+        undo.redo();
+        expect(text.value, 'abef');
+      });
+
+      test('undoes a delete at the start of the text', () {
+        final document = doc();
+        final text = CRDTFugueTextHandler(document, 'text')
+          ..insert(0, 'abcdef');
+        final undo = UndoManager(document, captureTimeout: Duration.zero)
+          ..track(text);
+
+        text.delete(0, 3);
+        expect(text.value, 'def');
+
+        undo.undo();
+        expect(text.value, 'abcdef');
+      });
+
+      test('undoes a delete of the whole text', () {
+        final document = doc();
+        final text = CRDTFugueTextHandler(document, 'text')
+          ..insert(0, 'abcdef');
+        final undo = UndoManager(document, captureTimeout: Duration.zero)
+          ..track(text);
+
+        text.delete(0, 6);
+        expect(text.value, '');
+
+        undo.undo();
+        expect(text.value, 'abcdef');
+      });
+
+      test('undoes an update by writing the old runes back', () {
+        final document = doc();
+        final text = CRDTFugueTextHandler(document, 'text')
+          ..insert(0, 'abcdef');
+        final undo = UndoManager(document, captureTimeout: Duration.zero)
+          ..track(text);
+
+        text.update(2, 'XY');
+        expect(text.value, 'abXYef');
+
+        undo.undo();
+        expect(text.value, 'abcdef');
+
+        undo.redo();
+        expect(text.value, 'abXYef');
+      });
+
+      test('round-trips text outside the BMP', () {
+        final document = doc();
+        final text = CRDTFugueTextHandler(document, 'text')
+          ..insert(0, 'a\u{1F44B}b\u{1F389}c');
+        final undo = UndoManager(document, captureTimeout: Duration.zero)
+          ..track(text);
+
+        text.delete(1, 3);
+        expect(text.value, 'ac');
+
+        undo.undo();
+        expect(text.value, 'a\u{1F44B}b\u{1F389}c');
+      });
+
+      test('a whole `change` is one step', () {
+        final document = doc();
+        final text = CRDTFugueTextHandler(document, 'text')
+          ..insert(0, 'Hello World');
+        final undo = UndoManager(document, captureTimeout: Duration.zero)
+          ..track(text);
+
+        document.runInTransaction(() => text.change('Hello Brave World'));
+        expect(text.value, 'Hello Brave World');
+
+        undo.undo();
+        expect(text.value, 'Hello World');
+
+        undo.redo();
+        expect(text.value, 'Hello Brave World');
+      });
+
+      test('an undo takes back only this peer, and the two converge', () {
+        final a = CRDTDocument(
+          peerId: PeerId.parse('37f1ec87-6ea5-430b-a627-a6b92b56a02d'),
+        );
+        final b = CRDTDocument(
+          peerId: PeerId.parse('45ee6b65-b393-40b7-9755-8b66dc7d0518'),
+        );
+        final textA = CRDTFugueTextHandler(a, 'text')..insert(0, 'base');
+        b.importChanges(a.exportChanges());
+        final textB = CRDTFugueTextHandler(b, 'text');
+
+        final undo = UndoManager(a, captureTimeout: Duration.zero)
+          ..track(textA);
+
+        textA.insert(4, '-A');
+        textB.insert(4, '-B');
+
+        a.importChanges(b.exportChanges());
+        b.importChanges(a.exportChanges());
+        expect(textA.value, textB.value);
+        final merged = textA.value;
+        expect(merged, contains('-A'));
+        expect(merged, contains('-B'));
+
+        undo.undo();
+        b.importChanges(a.exportChanges());
+
+        expect(textA.value, 'base-B');
+        expect(textB.value, textA.value);
+      });
+
+      test('an undo of a delete survives a concurrent insert', () {
+        final a = CRDTDocument(
+          peerId: PeerId.parse('37f1ec87-6ea5-430b-a627-a6b92b56a02d'),
+        );
+        final b = CRDTDocument(
+          peerId: PeerId.parse('45ee6b65-b393-40b7-9755-8b66dc7d0518'),
+        );
+        final textA = CRDTFugueTextHandler(a, 'text')..insert(0, 'abcdef');
+        b.importChanges(a.exportChanges());
+        final textB = CRDTFugueTextHandler(b, 'text');
+
+        final undo = UndoManager(a, captureTimeout: Duration.zero)
+          ..track(textA);
+
+        textA.delete(2, 2); // 'cd'
+        expect(textA.value, 'abef');
+
+        // B writes at the very front while A's delete is in flight.
+        textB.insert(0, 'Z');
+        a.importChanges(b.exportChanges());
+        expect(textA.value, 'Zabef');
+
+        undo.undo();
+        b.importChanges(a.exportChanges());
+
+        expect(textA.value, 'Zabcdef');
+        expect(textB.value, textA.value);
+      });
+    });
   });
 }

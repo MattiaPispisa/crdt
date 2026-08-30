@@ -204,6 +204,36 @@ base class CRDTFugueTextHandler
     );
   }
 
+  @override
+  Operation buildInsertOperation({
+    required FugueElementID leftOrigin,
+    required FugueElementID rightOrigin,
+    required List<({FugueElementID id, String value})> items,
+  }) {
+    return _FugueTextInsertOperation.fromHandler(
+      this,
+      leftOrigin: leftOrigin,
+      rightOrigin: rightOrigin,
+      items: [
+        for (final item in items)
+          _FugueInsertItem(id: item.id, text: item.value),
+      ],
+    );
+  }
+
+  @override
+  Operation buildUpdateOperation(
+    List<({FugueElementID nodeID, String value})> items,
+  ) {
+    return _FugueTextUpdateOperation.fromHandler(
+      this,
+      items: [
+        for (final item in items)
+          _FugueUpdateItem(nodeID: item.nodeID, text: item.value),
+      ],
+    );
+  }
+
   /// Writes the run as plain WTF-8, one sequence per element and nothing
   /// else: an element is one rune, and a rune is one WTF-8 sequence, so the
   /// blob is self-delimiting and ASCII text costs one byte per character.

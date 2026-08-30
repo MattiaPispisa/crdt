@@ -86,6 +86,26 @@ base class CRDTRegisterHandler<T> extends Handler<T>
     return current;
   }
 
+  /// A set is undone by a set of the value the register held before.
+  ///
+  /// With one exception, which is why an undo of the very first write does
+  /// nothing: the register has no operation that clears it, so there is no way
+  /// back to "never written".
+  @override
+  bool get invertible => true;
+
+  @override
+  List<Operation> invert(Operation operation) {
+    if (operation is! _RegisterSetOperation<T>) {
+      return const [];
+    }
+    final previous = value;
+    if (previous == null) {
+      return const [];
+    }
+    return [_RegisterSetOperation<T>.fromHandler(this, value: previous)];
+  }
+
   @override
   Operation? compound(Operation accumulator, Operation current) {
     // Consecutive writes collapse to the last one (last-writer-wins), which is

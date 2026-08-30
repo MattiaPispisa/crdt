@@ -85,6 +85,7 @@ Supporting:
 - 🔄 **Automatic Conflict Resolution**: Automatically resolves conflicts in a CRDT
 - 📦 **Local Availability**: Operations are available locally as soon as they are applied
 - 🔍 **Handler deltas**: a handler can say **what** each change did to your copy of it, not only that it changed
+- ↩️ **Undo**: `UndoManager` takes back your own edits by writing the opposite operation, and leaves everyone else's work alone
 
 ## Greyhound Markdown
 
@@ -459,6 +460,79 @@ the first row of the table, so it needs no tag.
 `origin` for the second row. `CrdtTextFieldBuilder` drives a
 `TextEditingController` from the same stream.
 
+### Undo
+
+A change is immutable, it is already in the DAG, and it may already have reached
+other peers. So an undo never removes one: it **writes a new operation with the
+opposite effect**.
+
+```dart
+final document = CRDTDocument();
+final text = CRDTFugueTextHandler(document, 'text');
+final undo = UndoManager(document)..track(text);
+
+text.insert(0, 'Hello');
+undo.undo(); // ''
+undo.redo(); // 'Hello'
+```
+
+An inverse names CRDT identities — element ids, keys, tags — and never a
+position. That is what makes an undo right under concurrency: it takes back
+exactly what this peer did, and leaves everyone else's work alone.
+
+```dart
+// Both peers add the same value, each under a tag of its own.
+setA.add('shared');
+setB.add('shared');
+// ...they sync...
+undoA.undo(); // A's tag goes; the value stays, because B's tag is still there.
+```
+
+#### What is one step
+
+`runInTransaction` is one step, whatever it holds. Outside a transaction each
+write is its own step, and steps written within `captureTimeout` of each other
+(500 ms by default) merge — a burst of typing is one undo, not one per
+character. `Duration.zero` turns the merging off, and `stopCapturing()` ends a
+step by hand, for when the user moves the caret.
+
+#### What is recorded
+
+Only local writes, and only on the handlers you `track`. By default every local
+write counts; pass `trackedOrigins` to narrow it to the writes you tag (see
+[Tagging a write](#tagging-a-write)):
+
+```dart
+final undo = UndoManager(document, trackedOrigins: {myEditor})..track(text);
+document.runInTransaction(() => text.insert(0, 'hi'), origin: myEditor);
+```
+
+#### What it does not undo
+
+- **Remote changes.** Only what this peer writes through `registerOperation` is
+  recorded; an operation handed to `createChange` never reaches the stack.
+- **Snapshots.** `importSnapshot` and `mergeSnapshot` replace the base the state
+  is replayed from, so both stacks are dropped.
+- **A register that was never written.** A register has no operation that clears
+  it, so its first write cannot be taken back.
+- **The contents of a nested handler.** Undoing a write that stored a
+  `HandlerRef` removes the reference; the data it pointed at stays.
+
+An element that comes back is a **new** element: a CRDT never resurrects what it
+removed, so undoing a delete writes the values again under fresh ids. Undoing
+the insert that created them still removes them — the handler follows the chain
+(see `RebuiltIdentities`).
+
+#### Which handlers
+
+`CRDTFugueTextHandler`, `CRDTFugueListHandler`, `CRDTFugueMovableListHandler`,
+`CRDTMapHandler`, `CRDTORMapHandler`, `CRDTORSetHandler`,
+`CRDTRegisterHandler` and the reference handlers built on them.
+
+`CRDTTextHandler` and `CRDTListHandler` are indexed by position alone. They have
+no element identity to anchor an inverse to, so `Handler.invertible` is `false`
+for them and `track` refuses them.
+
 ## Architecture
 
 The library is built above the [hlc_dart](https://pub.dev/packages/hlc_dart) package and provide a solution to implement CRDT systems.
@@ -531,6 +605,8 @@ A handler overrides:
   causally ready operations arrive in.
 - `compound` — to collapse consecutive operations inside a transaction into
   fewer changes.
+- `invertible` and `invert` — to make the handler undoable (see
+  [Undo](#undo)).
 
 The four conventional kinds (`insert`, `delete`, `update`, `move`) are ready
 to use as `insertType`, `deleteType`, `updateType` and `moveType`. A handler
@@ -589,6 +665,41 @@ flag on a kind you already shipped is therefore a breaking change.
 A change carrying a kind this build does not recognize for that handler type
 throws `UnknownOperationKindException` instead of being dropped in silence —
 which is why a factory never returns `null`.
+
+##### Making a handler undoable
+
+`invert` returns the operations that take an operation back, read against the
+state as it is **before** it is applied. The document calls it from
+`registerOperation`, after the stamp is minted and before the operation is
+folded in, so `operation.stamp` is readable and the state has not moved yet.
+
+```dart
+@override
+bool get invertible => true;
+
+@override
+List<Operation> invert(Operation operation) {
+  if (operation is! PNCounterIncrementOperation) {
+    return const [];
+  }
+  return [
+    PNCounterIncrementOperation.fromHandler(this, by: -operation.by),
+  ];
+}
+```
+
+Name identities, never positions: an inverse is written much later, after other
+peers may have edited the same handler.
+
+The operations you return are fresh and unstamped — the document stamps them
+when they are registered, and an operation is stamped once. Return an empty
+list when there is nothing to undo, which includes an operation with no
+observable effect: undoing what changed nothing must change nothing.
+
+If your handler can **rebuild** something it removed — a CRDT never resurrects,
+so it comes back under a new identity — mix in `RebuiltIdentities`, record each
+step with `noteRebuilt`, and override `prepareInverse` to follow the chain. That
+is what makes "undo the delete, then undo the insert" end where it started.
 
 A full worked example, a PN-counter with its own `increment` kind, lives in
 [`test/helpers/pn_counter_handler.dart`](https://github.com/MattiaPispisa/crdt/tree/main/packages/core/crdt_lf/test/helpers/pn_counter_handler.dart).

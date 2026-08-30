@@ -44,6 +44,7 @@ part 'operation.dart';
 base class CRDTFugueMovableListHandler<T>
     extends Handler<FugueMovableListState<T>>
     with
+        RebuiltIdentities<FugueElementID>,
         FugueCache<FugueMovableListState<T>>,
         DeltaProvider<List<T>, SequenceDelta<T>> {
   /// Creates a movable list handler bound to [doc] with the given [id].
@@ -249,6 +250,185 @@ base class CRDTFugueMovableListHandler<T>
         items: items,
       ),
     );
+  }
+
+  /// Every operation of this handler names identities, and an element keeps
+  /// its value once deleted, so all four kinds invert exactly.
+  @override
+  bool get invertible => true;
+
+  @override
+  List<Operation> invert(Operation operation) {
+    final state = cachedOrComputedState();
+
+    if (operation is _MovableListInsertOperation<T>) {
+      // Take out the very identities it puts in.
+      final items = [
+        for (final item in operation.items)
+          _MovableListDeleteItem(identityID: item.identityID),
+      ];
+      return items.isEmpty
+          ? const []
+          : [_MovableListDeleteOperation<T>.fromHandler(this, items: items)];
+    }
+
+    if (operation is _MovableListDeleteOperation<T>) {
+      return _invertDelete(state, operation);
+    }
+
+    if (operation is _MovableListUpdateOperation<T>) {
+      final items = <_MovableListUpdateItem<T>>[];
+      for (final item in operation.items) {
+        final element = state._elements[item.identityID];
+        // An update of an element that is gone changes nothing anyone sees.
+        if (element != null && !element.deleted) {
+          items.add(
+            _MovableListUpdateItem<T>(
+              identityID: item.identityID,
+              value: element.value,
+            ),
+          );
+        }
+      }
+      return items.isEmpty
+          ? const []
+          : [_MovableListUpdateOperation<T>.fromHandler(this, items: items)];
+    }
+
+    if (operation is _MovableListMoveOperation<T>) {
+      final element = state._elements[operation.identityID];
+      if (element == null || element.deleted) {
+        return const [];
+      }
+      // Put the identity back beside the slot it holds now. That slot is
+      // orphaned by the move, so it is invisible and cannot shift the result.
+      final wasAt = element.position;
+      return [
+        _MovableListMoveOperation<T>.fromHandler(
+          this,
+          identityID: operation.identityID,
+          newPositionID: FugueElementID(doc.peerId, nextCounter()),
+          leftOrigin: wasAt,
+          rightOrigin: state._tree.findNextNode(wasAt),
+        ),
+      ];
+    }
+
+    return const [];
+  }
+
+  /// The inserts that put back what [operation] is about to take out.
+  ///
+  /// One insert per contiguous run, anchored to the slot of the **last**
+  /// element of the run. That slot stays in the tree once the element is
+  /// deleted, so the values come back exactly where they were taken from.
+  ///
+  /// They come back under new identities: a deleted element cannot be brought
+  /// back to life. [prepareInverse] follows them.
+  List<Operation> _invertDelete(
+    FugueMovableListState<T> state,
+    _MovableListDeleteOperation<T> operation,
+  ) {
+    final inverses = <Operation>[];
+    var items = <_MovableListInsertItem<T>>[];
+    var was = <FugueElementID>[];
+    var runEnd = FugueElementID.nullID();
+
+    void flush() {
+      if (items.isEmpty) {
+        return;
+      }
+      inverses.add(
+        _MovableListInsertOperation<T>.fromHandler(
+          this,
+          leftOrigin: runEnd,
+          rightOrigin: state._tree.findNextNode(runEnd),
+          items: items,
+        ),
+      );
+      for (var i = 0; i < items.length; i += 1) {
+        noteRebuilt(was[i], items[i].identityID);
+      }
+      items = <_MovableListInsertItem<T>>[];
+      was = <FugueElementID>[];
+      runEnd = FugueElementID.nullID();
+    }
+
+    for (final item in operation.items) {
+      final element = state._elements[item.identityID];
+      // An element that is gone already is not moved by this delete, so
+      // nothing puts it back. It breaks the run either way.
+      if (element == null || element.deleted) {
+        flush();
+        continue;
+      }
+      if (items.isNotEmpty &&
+          state._tree.findNextNode(runEnd) != element.position) {
+        flush();
+      }
+      items.add(
+        _MovableListInsertItem<T>(
+          identityID: FugueElementID(doc.peerId, nextCounter()),
+          positionID: FugueElementID(doc.peerId, nextCounter()),
+          value: element.value,
+        ),
+      );
+      was.add(item.identityID);
+      runEnd = element.position;
+    }
+    flush();
+
+    return inverses;
+  }
+
+  @override
+  Operation prepareInverse(Operation operation) {
+    if (!hasRebuiltIdentities) {
+      return operation;
+    }
+
+    if (operation is _MovableListDeleteOperation<T>) {
+      // Take out the whole chain: the identity the inverse names, and every
+      // identity that has stood for it since. Deleting one twice costs
+      // nothing, so naming them all is safe.
+      final items = [
+        for (final item in operation.items)
+          for (final identityID in chainOf(item.identityID))
+            _MovableListDeleteItem(identityID: identityID),
+      ];
+      return items.length == operation.items.length
+          ? operation
+          : _MovableListDeleteOperation<T>.fromHandler(this, items: items);
+    }
+
+    if (operation is _MovableListUpdateOperation<T>) {
+      return _MovableListUpdateOperation<T>.fromHandler(
+        this,
+        items: [
+          for (final item in operation.items)
+            _MovableListUpdateItem<T>(
+              identityID: latestOf(item.identityID),
+              value: item.value,
+            ),
+        ],
+      );
+    }
+
+    if (operation is _MovableListMoveOperation<T>) {
+      final identityID = latestOf(operation.identityID);
+      if (identityID == operation.identityID) {
+        return operation;
+      }
+      return _MovableListMoveOperation<T>.fromHandler(
+        this,
+        identityID: identityID,
+        newPositionID: FugueElementID(doc.peerId, nextCounter()),
+        leftOrigin: operation.leftOrigin,
+        rightOrigin: operation.rightOrigin,
+      );
+    }
+
+    return operation;
   }
 
   // --- Internal helpers ---------------------------------------------------

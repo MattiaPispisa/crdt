@@ -190,5 +190,50 @@ void main() {
       expect(s1.value, equals(s2.value));
       expect(s1.value, containsAll({'a', 'b', 'c'}));
     });
+
+    group('invert', () {
+      test('an undo takes back one tag, not the value another peer added', () {
+        final a = CRDTDocument(
+          peerId: PeerId.parse('37f1ec87-6ea5-430b-a627-a6b92b56a02d'),
+        );
+        final b = CRDTDocument(
+          peerId: PeerId.parse('45ee6b65-b393-40b7-9755-8b66dc7d0518'),
+        );
+        final setA = CRDTORSetHandler<String>(a, 'set');
+        final setB = CRDTORSetHandler<String>(b, 'set');
+        final undo = UndoManager(a)..track(setA);
+
+        // Both peers add the same value, each under a tag of its own.
+        setA.add('shared');
+        setB.add('shared');
+        a.importChanges(b.exportChanges());
+        b.importChanges(a.exportChanges());
+        expect(setA.value, {'shared'});
+
+        undo.undo();
+        b.importChanges(a.exportChanges());
+
+        // A's tag is gone, B's is not, so the value stays in the set.
+        expect(setA.value, {'shared'});
+        expect(setB.value, setA.value);
+      });
+
+      test('undoing a remove puts the value back under a new tag', () {
+        final doc = CRDTDocument(
+          peerId: PeerId.parse('37f1ec87-6ea5-430b-a627-a6b92b56a02d'),
+        );
+        final set = CRDTORSetHandler<String>(doc, 'set')..add('a');
+        final undo = UndoManager(doc)..track(set);
+
+        set.remove('a');
+        expect(set.value, <String>{});
+
+        undo.undo();
+        expect(set.value, {'a'});
+
+        undo.redo();
+        expect(set.value, <String>{});
+      });
+    });
   });
 }

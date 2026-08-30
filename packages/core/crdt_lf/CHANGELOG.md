@@ -1,3 +1,24 @@
+## [4.2.0](https://github.com/MattiaPispisa/crdt/tree/crdt_lf-v4.2.0/packages/crdt_lf)
+
+**Date:** unreleased
+
+[compare to previous release](https://github.com/MattiaPispisa/crdt/compare/crdt_lf-v4.1.0+1...crdt_lf-v4.2.0)
+
+### Added
+
+- **Undo and redo**, through the new `UndoManager`. A change is immutable and may already have
+  reached other peers, so an undo never removes one: it writes a new operation with the opposite
+  effect. The inverse names CRDT identities — element ids, keys, tags — never a position, so taking
+  back your own edit leaves what other peers wrote in the same place alone. `runInTransaction` is one
+  step; outside a transaction, writes closer together than `captureTimeout` merge into one, so a
+  burst of typing is a single undo.
+- `Handler.invertible` and `Handler.invert`: the extension point a handler implements to be
+  undoable, plus `Handler.prepareInverse` and the `RebuiltIdentities` mixin for a handler that
+  rebuilds what it removed. Implemented by the Fugue text, list and movable list handlers, the map,
+  the OR-map, the OR-set and the register. `CRDTTextHandler` and `CRDTListHandler` index by position
+  alone, have no identity to anchor an inverse to, and stay outside.
+- `FugueTree.valueOf`, which reads the value of an element, tombstones included.
+
 ## [4.1.0+1](https://github.com/MattiaPispisa/crdt/tree/crdt_lf-v4.1.0+1/packages/crdt_lf)
 
 **Date:** 2026-08-29

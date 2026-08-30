@@ -136,6 +136,49 @@ abstract base class Handler<T>
   /// part of them behind. A fresh operation is stamped for you.
   Operation? compound(Operation accumulator, Operation current) => null;
 
+  /// Whether this handler can build the inverse of its own operations.
+  ///
+  /// A handler that indexes by position alone cannot: it has no element
+  /// identity to anchor an inverse to, so the undo would land on the wrong
+  /// element as soon as another peer edits the same sequence.
+  ///
+  /// [UndoManager.track] refuses a handler that answers `false`.
+  bool get invertible => false;
+
+  /// The operations that undo [operation], read against the state as it is
+  /// **now** — that is, before [operation] is applied.
+  ///
+  /// The document calls this from [BaseCRDTDocument.registerOperation], after
+  /// it mints the stamp and before it folds the operation in. So
+  /// [Operation.stamp] is readable here, and the state has not moved yet.
+  ///
+  /// An inverse names CRDT identities — element ids, keys, tags — and never a
+  /// position. That is what keeps an undo right when other peers edited the
+  /// same handler in between.
+  ///
+  /// The returned operations are fresh and unstamped: the document stamps them
+  /// when they are registered, and an operation is stamped once. Return them in
+  /// the order they have to be applied.
+  ///
+  /// Returns an empty list when there is nothing to undo, which includes an
+  /// operation with no observable effect.
+  List<Operation> invert(Operation operation) => const [];
+
+  /// [operation], an inverse built by [invert], made ready to be written now.
+  ///
+  /// An inverse is built the moment the operation it undoes is written, and
+  /// written itself much later. In between, undoing a **later** step can
+  /// rebuild elements this one names: an element cannot come back to life, so
+  /// it comes back with a new identity, and an inverse holding the old one
+  /// would miss it.
+  ///
+  /// A handler that rebuilds elements overrides this to follow them. The
+  /// default returns [operation] unchanged.
+  ///
+  /// Return [operation] itself, or a fresh unstamped operation; never one that
+  /// has been written already.
+  Operation prepareInverse(Operation operation) => operation;
+
   /// Looks up [envelope]'s kind in [operationDecoders] and returns what it
   /// decodes to.
   ///

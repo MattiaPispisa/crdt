@@ -29,7 +29,7 @@ part 'operation.dart';
 /// print(set.value); // Prints {'value1', 'value3'}
 /// ```
 base class CRDTORSetHandler<T> extends Handler<ORSetState<T>>
-    with DeltaProvider<Set<T>, SetDelta<T>> {
+    with RebuiltIdentities<OperationId>, DeltaProvider<Set<T>, SetDelta<T>> {
   /// Creates a new CRDT OR-SetHandler with the given document and ID
   ///
   /// [valueCodec] is an optional codec for encoding/decoding [T] values to bytes.
@@ -253,6 +253,82 @@ base class CRDTORSetHandler<T> extends Handler<ORSetState<T>>
         state._live.remove(operation.value);
       }
     }
+  }
+
+  /// The stamp of an `add` is the tag it wrote, so an undo takes back that one
+  /// tag and nothing else: a value another peer added at the same time stays
+  /// in the set.
+  @override
+  bool get invertible => true;
+
+  /// What an inverse `add` brings back, so [prepareInverse] can follow the tag
+  /// it ends up written under. Weakly keyed: it dies with the operation.
+  final Expando<Set<OperationId>> _restoredTags = Expando<Set<OperationId>>();
+
+  @override
+  List<Operation> invert(Operation operation) {
+    final state = _cachedOrComputedState();
+
+    if (operation is _ORSetAddOperation<T>) {
+      // This add may itself be an undo putting the value back. Its stamp is
+      // the tag that now stands for the ones it restores.
+      final restored = _restoredTags[operation];
+      if (restored != null) {
+        for (final tag in restored) {
+          noteRebuilt(tag, operation.stamp!);
+        }
+      }
+
+      if (state._snapshotOnly.contains(operation.value)) {
+        // The value is in the set through a snapshot that carries no tags. The
+        // add gives it one and takes the snapshot presence away, and nothing
+        // can put that back — but the value is in the set either way, so an
+        // undo has nothing to show.
+        return const [];
+      }
+      return [
+        _ORSetRemoveOperation<T>.fromHandler(
+          this,
+          value: operation.value,
+          tags: {operation.stamp!},
+        ),
+      ];
+    }
+
+    if (operation is _ORSetRemoveOperation<T>) {
+      if (!_isPresent(state, operation.value)) {
+        return const [];
+      }
+      // The value comes back under a new tag: a tombstone is forever.
+      final add = _ORSetAddOperation<T>.fromHandler(
+        this,
+        value: operation.value,
+      );
+      _restoredTags[add] = operation.tags;
+      return [add];
+    }
+
+    return const [];
+  }
+
+  @override
+  Operation prepareInverse(Operation operation) {
+    if (!hasRebuiltIdentities || operation is! _ORSetRemoveOperation<T>) {
+      return operation;
+    }
+    // Tombstone the whole chain: the tag the inverse names, and every tag that
+    // has stood for it since.
+    final tags = <OperationId>{
+      for (final tag in operation.tags) ...chainOf(tag),
+    };
+    if (tags.length == operation.tags.length) {
+      return operation;
+    }
+    return _ORSetRemoveOperation<T>.fromHandler(
+      this,
+      value: operation.value,
+      tags: tags,
+    );
   }
 
   @override

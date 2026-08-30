@@ -346,6 +346,21 @@ class FugueTree<T> {
     return spot != null && !spot.run.deletedAt(spot.offset);
   }
 
+  /// The value [nodeID] holds, tombstones included; `null` for an id this tree
+  /// does not hold.
+  ///
+  /// A deleted element keeps its value, so this reads back what a node held
+  /// before it was removed. That is what lets a caller rebuild a deleted run.
+  ///
+  /// `O(log R_p)` with `R_p` the number of runs of [nodeID]'s peer.
+  T? valueOf(FugueElementID nodeID) {
+    final spot = _spotOf(nodeID);
+    if (spot == null) {
+      return null;
+    }
+    return spot.run.valueAt(spot.offset);
+  }
+
   /// The live index of a caret anchored immediately **after** [nodeID]: the
   /// number of live elements up to and including it — or strictly before it, if
   /// [nodeID] is a tombstone (the caret stays where the element used to be).

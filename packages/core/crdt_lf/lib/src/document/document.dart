@@ -22,6 +22,9 @@ part 'providers.dart';
 part 'delta_provider.dart';
 part 'history.dart';
 
+// Undo, which is written as new inverse operations rather than as a removal.
+part 'undo_manager.dart';
+
 /// Defines the foundational contract for a CRDT document.
 ///
 /// This abstract class serves as the common interfaces between
@@ -387,7 +390,7 @@ class CRDTDocument extends BaseCRDTDocument {
         _handlers = {} {
     _transactionManager = TransactionManager(
       flushWork: _transactionFlushWork,
-      onFlushed: _flushDeltaEvents,
+      onFlushed: _onTransactionFlushed,
     );
     devtools.handleCreated(this);
   }
@@ -409,6 +412,53 @@ class CRDTDocument extends BaseCRDTDocument {
 
   /// Per-handler monotonic revisions. See [revisionForHandler].
   final Map<String, int> _handlerRevisions = {};
+
+  /// The [UndoManager]s recording this document, or `null` when there is none.
+  ///
+  /// Null and not an empty list so that a document nobody undoes pays one
+  /// comparison per local write.
+  List<UndoManager>? _undoManagers;
+
+  void _registerUndoManager(UndoManager manager) {
+    (_undoManagers ??= <UndoManager>[]).add(manager);
+  }
+
+  void _unregisterUndoManager(UndoManager manager) {
+    final managers = _undoManagers;
+    if (managers == null) {
+      return;
+    }
+    managers.removeWhere((m) => identical(m, manager));
+    if (managers.isEmpty) {
+      _undoManagers = null;
+    }
+  }
+
+  /// Offers [operation] to every manager, before [handler] folds it in.
+  void _captureForUndo(Handler<dynamic> handler, Operation operation) {
+    final managers = _undoManagers;
+    if (managers == null) {
+      return;
+    }
+    for (final manager in managers) {
+      manager._capture(handler, operation);
+    }
+  }
+
+  /// Closes the undo steps a committed transaction filled, then hands out the
+  /// delta events it produced.
+  ///
+  /// In that order: a listener reacting to a delta reads a settled
+  /// [UndoManager.canUndo].
+  void _onTransactionFlushed() {
+    final managers = _undoManagers;
+    if (managers != null) {
+      for (final manager in managers) {
+        manager._closeEntry();
+      }
+    }
+    _flushDeltaEvents();
+  }
 
   @override
   PeerId get peerId => _peerId;
@@ -870,6 +920,9 @@ class CRDTDocument extends BaseCRDTDocument {
       _transactionManager.handleOperation(operation);
 
       if (handler != null) {
+        // Before the fold, so an [UndoManager] reads the state the operation
+        // is about to move, and after the stamp, so the inverse can name it.
+        _captureForUndo(handler, operation);
         handler._internalIncrementCachedState(operation: operation);
       }
     } finally {
@@ -1422,6 +1475,21 @@ class CRDTDocument extends BaseCRDTDocument {
     for (final handler in _handlers.values) {
       handler._invalidate(cause);
     }
+    if (cause == ResetCause.snapshotImport ||
+        cause == ResetCause.snapshotMerge) {
+      // A snapshot replaces the base the state is replayed from, so the
+      // identities an inverse is anchored to may not resolve any more.
+      for (final manager in _undoManagers ?? const <UndoManager>[]) {
+        manager.clear();
+      }
+      for (final handler in _handlers.values) {
+        // A cast, not a promotion: the analyzer will not narrow a [Handler] to
+        // a mixin it merely applies.
+        if (handler is RebuiltIdentities<Object>) {
+          (handler as RebuiltIdentities<Object>).clearRebuiltIdentities();
+        }
+      }
+    }
   }
 
   /// Runs [action] within a transaction, committing at the end.
@@ -1503,6 +1571,10 @@ class CRDTDocument extends BaseCRDTDocument {
 
     _localChangesController.close();
     _updatesController.close();
+    for (final manager in [...?_undoManagers]) {
+      manager.dispose();
+    }
+    _undoManagers = null;
     for (final handler in _handlers.values) {
       handler._closeDeltas();
     }
