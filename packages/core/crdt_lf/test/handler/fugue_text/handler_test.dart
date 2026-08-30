@@ -1609,6 +1609,37 @@ void main() {
         expect(textB.value, textA.value);
       });
 
+      test('a restored run comes back as one block', () {
+        final a = CRDTDocument(
+          peerId: PeerId.parse('37f1ec87-6ea5-430b-a627-a6b92b56a02d'),
+        );
+        final b = CRDTDocument(
+          peerId: PeerId.parse('45ee6b65-b393-40b7-9755-8b66dc7d0518'),
+        );
+        final textA = CRDTFugueTextHandler(a, 'text')..insert(0, 'hello');
+        b.importChanges(a.exportChanges());
+        final textB = CRDTFugueTextHandler(b, 'text');
+
+        final undo = UndoManager(a, captureTimeout: Duration.zero)
+          ..track(textA);
+
+        // A takes the whole word away while B types inside it.
+        textA.delete(0, 5);
+        textB.insert(2, 'XY');
+        a.importChanges(b.exportChanges());
+        b.importChanges(a.exportChanges());
+        expect(textA.value, 'XY');
+
+        undo.undo();
+        b.importChanges(a.exportChanges());
+
+        // The run is put back as one block, anchored past the tombstones, so
+        // what B wrote inside it sits in front rather than within. Both peers
+        // agree, which is what matters.
+        expect(textA.value, 'XYhello');
+        expect(textB.value, textA.value);
+      });
+
       test('an undo of a delete survives a concurrent insert', () {
         final a = CRDTDocument(
           peerId: PeerId.parse('37f1ec87-6ea5-430b-a627-a6b92b56a02d'),

@@ -281,12 +281,21 @@ abstract base class FugueSequenceHandler<T, V, S extends FugueState<T, V>>
     return const [];
   }
 
+  /// What an inverse insert puts back, so [prepareInverse] can record the link
+  /// only when the undo really runs. Weakly keyed: it dies with the operation.
+  final Expando<List<FugueElementID>> _restoredElements =
+      Expando<List<FugueElementID>>();
+
   /// The inserts that put back what [operation] is about to take out.
   ///
   /// One insert per contiguous run, anchored to the **last** element of the
   /// run. That element is a tombstone by the time the undo runs, and a
-  /// tombstone is still a node of the tree, so the values come back exactly
-  /// where they were taken from — no matter what other peers wrote in between.
+  /// tombstone is still a node of the tree, so the run lands back where it was
+  /// taken from, whatever else has been written around it since.
+  ///
+  /// A run comes back as **one block**. Text a peer inserted between two
+  /// deleted elements while the delete was in flight therefore ends up in
+  /// front of the restored block, not inside it.
   ///
   /// The elements come back with new ids: an element that was removed cannot
   /// be brought back to life.
@@ -309,9 +318,7 @@ abstract base class FugueSequenceHandler<T, V, S extends FugueState<T, V>>
           items: [for (final item in items) (id: item.id, value: item.value)],
         ),
       );
-      for (final item in items) {
-        noteRebuilt(item.was, item.id);
-      }
+      _restoredElements[inverses.last] = [for (final item in items) item.was];
       items = <({FugueElementID was, FugueElementID id, T value})>[];
       runEnd = FugueElementID.nullID();
     }
@@ -343,6 +350,17 @@ abstract base class FugueSequenceHandler<T, V, S extends FugueState<T, V>>
 
   @override
   Operation prepareInverse(Operation operation) {
+    final restored = _restoredElements[operation];
+    if (restored != null && operation is FugueSequenceInsert<T>) {
+      // The undo is happening: from here on, the elements this puts in stand
+      // for the ones it puts back.
+      final items = (operation as FugueSequenceInsert<T>).items;
+      for (var i = 0; i < restored.length && i < items.length; i += 1) {
+        noteRebuilt(restored[i], items[i].id);
+      }
+      return operation;
+    }
+
     if (!hasRebuiltIdentities) {
       return operation;
     }

@@ -476,16 +476,53 @@ undo.undo(); // ''
 undo.redo(); // 'Hello'
 ```
 
+#### Driving it
+
+`track` a handler to record it, then read `canUndo` / `canRedo` to enable your
+buttons and listen to `changes` to know when to read them again.
+
+```dart
+final undo = UndoManager(document)
+  ..track(text)
+  ..track(title); // one manager can hold several handlers
+
+final subscription = undo.changes.listen((_) {
+  undoButton.enabled = undo.canUndo;
+  redoButton.enabled = undo.canRedo;
+});
+
+undo.undo(); // does nothing when canUndo is false
+undo.redo();
+
+undo.stopCapturing(); // the next write starts a new step
+undo.untrack(title);  // stop recording, keep the steps already taken
+undo.clear();         // drop both stacks
+
+await subscription.cancel();
+undo.dispose();       // disposing the document does this for you
+```
+
+| | |
+|---|---|
+| `captureTimeout` | how long a step stays open for the next write to join it (500 ms; `Duration.zero` turns merging off) |
+| `stackLimit` | how many steps each stack keeps (100) |
+| `trackedOrigins` | which writes to record (every local one by default) |
+
+#### Leaving other peers alone
+
 An inverse names CRDT identities — element ids, keys, tags — and never a
 position. That is what makes an undo right under concurrency: it takes back
 exactly what this peer did, and leaves everyone else's work alone.
 
 ```dart
-// Both peers add the same value, each under a tag of its own.
+// Two peers add the same value, each under a tag of its own.
+final undoA = UndoManager(docA)..track(setA);
 setA.add('shared');
 setB.add('shared');
-// ...they sync...
-undoA.undo(); // A's tag goes; the value stays, because B's tag is still there.
+// ...they sync, and both read {'shared'}...
+
+undoA.undo();
+// A's tag is gone, B's is not, so the value stays in the set.
 ```
 
 #### What is one step
@@ -513,15 +550,22 @@ document.runInTransaction(() => text.insert(0, 'hi'), origin: myEditor);
   recorded; an operation handed to `createChange` never reaches the stack.
 - **Snapshots.** `importSnapshot` and `mergeSnapshot` replace the base the state
   is replayed from, so both stacks are dropped.
-- **A register that was never written.** A register has no operation that clears
-  it, so its first write cannot be taken back.
+- **A register back to empty.** A register has no operation that clears it, and
+  it cannot tell a stored `null` from one that was never written, so an undo
+  reaches neither.
 - **The contents of a nested handler.** Undoing a write that stored a
   `HandlerRef` removes the reference; the data it pointed at stays.
 
 An element that comes back is a **new** element: a CRDT never resurrects what it
 removed, so undoing a delete writes the values again under fresh ids. Undoing
 the insert that created them still removes them — the handler follows the chain
-(see `RebuiltIdentities`).
+(see `RebuiltIdentities`). A deleted run comes back as one block, so text a peer
+typed inside it while the delete was in flight ends up in front of the restored
+block rather than within it.
+
+`undo()` and `redo()` are transactions of their own and throw inside an open
+`runInTransaction`. A handler is recorded by one manager at a time: `track`
+refuses a handler another manager already holds.
 
 #### Which handlers
 

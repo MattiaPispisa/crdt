@@ -23,8 +23,13 @@ class _UndoEntry {
   /// What the writes of this step were tagged with; `null` when untagged.
   final Object? origin;
 
-  /// The inverses, in the order the operations they undo were written.
-  final List<Operation> operations = <Operation>[];
+  /// The inverses, one group per operation undone, in the order those
+  /// operations were written.
+  ///
+  /// A group is written in order — an operation may need more than one to be
+  /// taken back, and they can depend on each other. The groups are written
+  /// backwards.
+  final List<List<Operation>> groups = <List<Operation>>[];
 
   /// When this step was closed, in milliseconds since the epoch.
   int closedAt = 0;
@@ -74,8 +79,9 @@ class _UndoEntry {
 /// - **Snapshots.** [CRDTDocument.importSnapshot] and
 ///   [CRDTDocument.mergeSnapshot] replace the base the state is replayed from,
 ///   so both stacks are dropped.
-/// - **A register that was never written.** A register has no operation that
-///   clears it, so the first write to one cannot be taken back.
+/// - **A register back to empty.** A register has no operation that clears it,
+///   and it cannot tell a stored `null` from one that was never written, so an
+///   undo reaches neither.
 /// - **The contents of a nested handler.** Undoing a write that stored a
 ///   [HandlerRef] removes the reference; the data of the handler it pointed at
 ///   stays where it is.
@@ -144,14 +150,23 @@ class UndoManager {
   ///
   /// A signal, not a value: read the two getters when it fires. It can fire
   /// more than once for one edit.
-  Stream<void> get changes =>
-      (_changes ??= StreamController<void>.broadcast()).stream;
+  ///
+  /// Throws a [StateError] on a disposed manager, rather than returning a
+  /// stream that could never fire again.
+  Stream<void> get changes {
+    _ensureNotDisposed();
+    return (_changes ??= StreamController<void>.broadcast()).stream;
+  }
 
   /// Records the operations written on [handler] from now on.
   ///
   /// Throws an [UnsupportedError] when [handler] cannot invert its operations
-  /// (see [Handler.invertible]), and an [ArgumentError] when it belongs to
-  /// another document.
+  /// (see [Handler.invertible]), an [ArgumentError] when it belongs to another
+  /// document, and a [StateError] when another manager already tracks it.
+  ///
+  /// One handler, one manager: a handler mints the identities an inverse is
+  /// anchored to, so two managers recording the same write would each mint
+  /// their own and neither could follow the other's.
   void track(Handler<dynamic> handler) {
     _ensureNotDisposed();
     if (!identical(handler.doc, _document)) {
@@ -167,6 +182,15 @@ class UndoManager {
         'so it cannot be undone. A handler indexed by position alone has no '
         'element identity to anchor an inverse to.',
       );
+    }
+    for (final other in _document._undoManagers ?? const <UndoManager>[]) {
+      if (!identical(other, this) && other._tracked.contains(handler.id)) {
+        throw StateError(
+          "'${handler.id}' is already tracked by another UndoManager. A "
+          'handler mints the identities its inverses are anchored to, so it '
+          'can only be recorded by one.',
+        );
+      }
     }
     _tracked.add(handler.id);
   }
@@ -184,8 +208,13 @@ class UndoManager {
   /// The step moves to the redo stack, holding the inverse of the undo itself,
   /// built against the state as it is now. Does nothing when [canUndo] is
   /// `false`.
+  ///
+  /// Throws a [StateError] inside an open [CRDTDocument.runInTransaction]: an
+  /// undo is a transaction of its own, and running it inside another one would
+  /// fold the two into a single step.
   void undo() {
     _ensureNotDisposed();
+    _ensureNotInTransaction('undo');
     if (_undoStack.isEmpty) {
       return;
     }
@@ -195,8 +224,12 @@ class UndoManager {
   /// Writes back the last step taken back by [undo].
   ///
   /// The step moves to the undo stack. Does nothing when [canRedo] is `false`.
+  ///
+  /// Throws a [StateError] inside an open [CRDTDocument.runInTransaction], for
+  /// the reason [undo] does.
   void redo() {
     _ensureNotDisposed();
+    _ensureNotInTransaction('redo');
     if (_redoStack.isEmpty) {
       return;
     }
@@ -269,7 +302,7 @@ class UndoManager {
     if (inverse.isEmpty) {
       return;
     }
-    (_open ??= _UndoEntry(origin)).operations.addAll(inverse);
+    (_open ??= _UndoEntry(origin)).groups.add(inverse);
   }
 
   /// Closes the open step, if any, once the transaction that held it committed.
@@ -308,11 +341,14 @@ class UndoManager {
         () {
           // Backwards: the inverse of the second operation was captured
           // against the state the first one left, so it has to go first.
-          for (final operation in entry.operations.reversed) {
-            final handler = _document._handlers[operation.id];
-            _document.registerOperation(
-              handler == null ? operation : handler.prepareInverse(operation),
-            );
+          // Inside a group the order is the handler's, and it is kept.
+          for (final group in entry.groups.reversed) {
+            for (final operation in group) {
+              final handler = _document._handlers[operation.id];
+              _document.registerOperation(
+                handler == null ? operation : handler.prepareInverse(operation),
+              );
+            }
           }
         },
         origin: this,
@@ -335,7 +371,7 @@ class UndoManager {
       final last = stack.last;
       if (identical(last.origin, entry.origin) &&
           entry.closedAt - last.closedAt <= captureTimeout.inMilliseconds) {
-        last.operations.addAll(entry.operations);
+        last.groups.addAll(entry.groups);
         last.closedAt = entry.closedAt;
         return;
       }
@@ -357,6 +393,16 @@ class UndoManager {
   void _ensureNotDisposed() {
     if (_isDisposed) {
       throw StateError('This UndoManager is disposed.');
+    }
+  }
+
+  void _ensureNotInTransaction(String what) {
+    if (_document.isInTransaction) {
+      throw StateError(
+        'Cannot $what inside an open transaction. An $what is a transaction of '
+        'its own: running it inside another one would fold what the caller is '
+        'writing and what is being taken back into a single step.',
+      );
     }
   }
 

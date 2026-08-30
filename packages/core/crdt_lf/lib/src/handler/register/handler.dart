@@ -88,9 +88,10 @@ base class CRDTRegisterHandler<T> extends Handler<T>
 
   /// A set is undone by a set of the value the register held before.
   ///
-  /// With one exception, which is why an undo of the very first write does
-  /// nothing: the register has no operation that clears it, so there is no way
-  /// back to "never written".
+  /// With one exception: the register has no operation that clears it, so
+  /// there is no way back to a register that reads as empty. It cannot tell a
+  /// stored `null` from one that was never written either, so an undo cannot
+  /// reach either of them and returns nothing.
   @override
   bool get invertible => true;
 

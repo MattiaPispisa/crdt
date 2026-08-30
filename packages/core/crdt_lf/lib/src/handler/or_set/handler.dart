@@ -296,16 +296,37 @@ base class CRDTORSetHandler<T> extends Handler<ORSetState<T>>
     }
 
     if (operation is _ORSetRemoveOperation<T>) {
-      if (!_isPresent(state, operation.value)) {
-        return const [];
+      // One add per tag this remove takes away, so undoing an earlier add can
+      // take back its own. Collapsing them into a single add would leave the
+      // whole value hanging on one tag, and the first undo would drop it.
+      final live = state._live[operation.value];
+      final adds = <Operation>[];
+      for (final tag in operation.tags) {
+        if (live == null || !live.contains(tag)) {
+          // Already tombstoned: this remove does not take it away.
+          continue;
+        }
+        // The value comes back under a new tag: a tombstone is forever.
+        final add = _ORSetAddOperation<T>.fromHandler(
+          this,
+          value: operation.value,
+        );
+        _restoredTags[add] = {tag};
+        adds.add(add);
       }
-      // The value comes back under a new tag: a tombstone is forever.
-      final add = _ORSetAddOperation<T>.fromHandler(
-        this,
-        value: operation.value,
-      );
-      _restoredTags[add] = operation.tags;
-      return [add];
+      if (adds.isNotEmpty) {
+        return adds;
+      }
+
+      // No tag changed hands. The remove still takes away presence that comes
+      // from a snapshot carrying no tags.
+      if (operation.removeAll &&
+          state._snapshotOnly.contains(operation.value)) {
+        return [
+          _ORSetAddOperation<T>.fromHandler(this, value: operation.value),
+        ];
+      }
+      return const [];
     }
 
     return const [];

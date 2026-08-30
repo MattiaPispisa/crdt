@@ -375,18 +375,48 @@ base class CRDTORMapHandler<K, V> extends Handler<ORMapState<K, V>>
     }
 
     if (operation is _ORMapRemoveOperation<K, V>) {
-      final before = _liveEntryOf(state, operation.key);
-      if (before == null) {
-        return const [];
+      final key = operation.key;
+
+      // One put per entry this remove takes away, so undoing an earlier put
+      // can take back its own. Collapsing them into a single put would leave
+      // the key hanging on one tag, and the first undo would drop it.
+      //
+      // Oldest tag first: the puts are written in this order, so the entry
+      // that won before wins again.
+      final live = state._live[key];
+      final taken = <ORMapEntry<V>>[
+        if (live != null)
+          for (final entry in live)
+            if (operation.tags.contains(entry.tag)) entry,
+      ]..sort((a, b) => a.tag.compareTo(b.tag));
+
+      final puts = <Operation>[];
+      for (final entry in taken) {
+        // The entry comes back under a new tag: a tombstone is forever.
+        final put = _ORMapPutOperation<K, V>.fromHandler(
+          this,
+          key: key,
+          value: entry.value,
+        );
+        _restoredTags[put] = {entry.tag};
+        puts.add(put);
       }
-      // The key comes back under a new tag: a tombstone is forever.
-      final put = _ORMapPutOperation<K, V>.fromHandler(
-        this,
-        key: operation.key,
-        value: before.$1,
-      );
-      _restoredTags[put] = operation.tags;
-      return [put];
+      if (puts.isNotEmpty) {
+        return puts;
+      }
+
+      // No tag changed hands. The remove still takes away a value that comes
+      // from a snapshot carrying no tags.
+      if (operation.removeAll && state._snapshotOnly.containsKey(key)) {
+        return [
+          _ORMapPutOperation<K, V>.fromHandler(
+            this,
+            key: key,
+            value: state._snapshotOnly[key] as V,
+          ),
+        ];
+      }
+      return const [];
     }
 
     return const [];

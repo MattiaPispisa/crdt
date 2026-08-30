@@ -218,6 +218,77 @@ void main() {
         expect(setB.value, setA.value);
       });
 
+      test('a remove of two tags comes back as two tags', () {
+        final doc = CRDTDocument(
+          peerId: PeerId.parse('37f1ec87-6ea5-430b-a627-a6b92b56a02d'),
+        );
+        final set = CRDTORSetHandler<String>(doc, 'set');
+        final undo = UndoManager(doc, captureTimeout: Duration.zero)
+          ..track(set);
+
+        set
+          ..add('x')
+          ..add('x')
+          ..remove('x');
+        expect(set.value, <String>{});
+
+        undo.undo();
+        expect(set.value, {'x'});
+
+        // Restoring both tags as one would leave the value hanging on a single
+        // tag, and undoing either add would drop it.
+        undo.undo();
+        expect(set.value, {'x'});
+
+        undo.undo();
+        expect(set.value, <String>{});
+      });
+
+      test('undoes a remove of a value that only a snapshot carries', () {
+        final source = CRDTDocument(
+          peerId: PeerId.parse('a90dfced-cbf0-4a49-9c64-f5b7b62fdc18'),
+        );
+        CRDTORSetHandler<String>(source, 'set').add('a');
+        final snapshot = source.takeSnapshot();
+
+        final doc = CRDTDocument(
+          peerId: PeerId.parse('37f1ec87-6ea5-430b-a627-a6b92b56a02d'),
+        );
+        final set = CRDTORSetHandler<String>(doc, 'set');
+        doc.importSnapshot(snapshot);
+        expect(set.value, {'a'});
+
+        // The snapshot carries no tags, so this is a remove-all.
+        final undo = UndoManager(doc)..track(set);
+        set.remove('a');
+        expect(set.value, <String>{});
+
+        undo.undo();
+        expect(set.value, {'a'});
+      });
+
+      test('adding a value a snapshot already carries has nothing to undo', () {
+        final source = CRDTDocument(
+          peerId: PeerId.parse('a90dfced-cbf0-4a49-9c64-f5b7b62fdc18'),
+        );
+        CRDTORSetHandler<String>(source, 'set').add('a');
+        final snapshot = source.takeSnapshot();
+
+        final doc = CRDTDocument(
+          peerId: PeerId.parse('37f1ec87-6ea5-430b-a627-a6b92b56a02d'),
+        );
+        final set = CRDTORSetHandler<String>(doc, 'set');
+        doc.importSnapshot(snapshot);
+
+        final undo = UndoManager(doc)..track(set);
+        set.add('a');
+
+        // The add gives the value a tag and takes the snapshot presence away.
+        // Nothing puts that back, and the value is in the set either way.
+        expect(undo.canUndo, isFalse);
+        expect(set.value, {'a'});
+      });
+
       test('undoing a remove puts the value back under a new tag', () {
         final doc = CRDTDocument(
           peerId: PeerId.parse('37f1ec87-6ea5-430b-a627-a6b92b56a02d'),

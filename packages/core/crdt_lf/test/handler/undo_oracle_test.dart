@@ -12,7 +12,12 @@ import 'package:test/test.dart';
 /// what a hand-written case tends to miss.
 void main() {
   group('undo oracle', () {
-    /// Walks [steps] states, then unwinds them and winds them back.
+    /// Walks [steps] states, then checks every one of them again on the way
+    /// back and on the way forward.
+    ///
+    /// [edit] must always make a step: an operation with no observable effect
+    /// has an empty inverse and records nothing, which would put the model out
+    /// of step with the stack.
     void roundTrip({
       required String name,
       required Object Function(CRDTDocument doc) build,
@@ -26,33 +31,39 @@ void main() {
         final handler = build(doc);
         final random = Random(seed);
 
-        final start = read(handler);
         final undo = UndoManager(
           doc,
           captureTimeout: Duration.zero,
           stackLimit: steps + 1,
         )..track(handler as Handler<dynamic>);
 
-        final states = <Object?>[start];
+        final states = <Object?>[read(handler)];
         for (var i = 0; i < steps; i++) {
           edit(handler, random, i);
           states.add(read(handler));
         }
-        final end = read(handler);
-        expect(end, isNot(start), reason: 'the walk moved nothing');
+        expect(
+          states.last,
+          isNot(states.first),
+          reason: 'the walk moved nothing',
+        );
 
-        var unwound = 0;
-        while (undo.canUndo) {
+        // Back down, one step at a time: every state has to come round again.
+        for (var i = states.length - 1; i > 0; i--) {
+          expect(read(handler), states[i], reason: 'before undo to $i');
+          expect(undo.canUndo, isTrue, reason: 'the stack is short at $i');
           undo.undo();
-          unwound++;
-          expect(unwound, lessThanOrEqualTo(steps), reason: 'undo loops');
         }
-        expect(read(handler), start);
+        expect(read(handler), states.first);
+        expect(undo.canUndo, isFalse, reason: 'the stack is long');
 
-        while (undo.canRedo) {
+        // And back up.
+        for (var i = 1; i < states.length; i++) {
+          expect(undo.canRedo, isTrue, reason: 'no redo for $i');
           undo.redo();
+          expect(read(handler), states[i], reason: 'after redo to $i');
         }
-        expect(read(handler), end);
+        expect(undo.canRedo, isFalse);
       });
     }
 
@@ -124,7 +135,9 @@ void main() {
       edit: (handler, random, step) {
         final list = handler as CRDTFugueMovableListHandler<String>;
         final length = list.length;
-        switch (length == 0 ? 0 : random.nextInt(4)) {
+        // A move needs two places to choose from, and one that is not the one
+        // the element already holds: either writes nothing.
+        switch (length == 0 ? 0 : random.nextInt(length < 2 ? 3 : 4)) {
           case 0:
             list.insert(random.nextInt(length + 1), 'i$step');
           case 1:
@@ -132,7 +145,8 @@ void main() {
           case 2:
             list.update(random.nextInt(length), 'u$step');
           case _:
-            list.move(random.nextInt(length), random.nextInt(length));
+            final from = random.nextInt(length);
+            list.move(from, (from + 1 + random.nextInt(length - 1)) % length);
         }
       },
     );
@@ -144,14 +158,15 @@ void main() {
           Map<String, String>.of((handler as CRDTMapHandler<String>).value),
       edit: (handler, random, step) {
         final map = handler as CRDTMapHandler<String>;
-        final key = 'k${random.nextInt(6)}';
-        switch (random.nextInt(3)) {
+        // `delete` and `update` of a key that is not there change nothing.
+        final present = map.value.keys.toList();
+        switch (present.isEmpty ? 0 : random.nextInt(3)) {
           case 0:
-            map.set(key, 'v$step');
+            map.set('k${random.nextInt(6)}', 'v$step');
           case 1:
-            map.delete(key);
+            map.delete(present[random.nextInt(present.length)]);
           case _:
-            map.update(key, 'u$step');
+            map.update(present[random.nextInt(present.length)], 'u$step');
         }
       },
     );
@@ -163,11 +178,12 @@ void main() {
           Set<String>.of((handler as CRDTORSetHandler<String>).value),
       edit: (handler, random, step) {
         final set = handler as CRDTORSetHandler<String>;
-        final value = 'v${random.nextInt(6)}';
-        if (random.nextBool()) {
-          set.add(value);
+        // Removing a value that is not in the set changes nothing.
+        final present = set.value.toList();
+        if (present.isEmpty || random.nextBool()) {
+          set.add('v${random.nextInt(6)}');
         } else {
-          set.remove(value);
+          set.remove(present[random.nextInt(present.length)]);
         }
       },
     );
@@ -181,11 +197,12 @@ void main() {
       ),
       edit: (handler, random, step) {
         final map = handler as CRDTORMapHandler<String, String>;
-        final key = 'k${random.nextInt(6)}';
-        if (random.nextBool()) {
-          map.put(key, 'v$step');
+        // Removing a key that is not there changes nothing.
+        final present = map.value.keys.toList();
+        if (present.isEmpty || random.nextBool()) {
+          map.put('k${random.nextInt(6)}', 'v$step');
         } else {
-          map.remove(key);
+          map.remove(present[random.nextInt(present.length)]);
         }
       },
     );

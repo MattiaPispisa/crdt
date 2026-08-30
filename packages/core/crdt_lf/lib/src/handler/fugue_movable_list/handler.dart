@@ -321,7 +321,11 @@ base class CRDTFugueMovableListHandler<T>
   ///
   /// One insert per contiguous run, anchored to the slot of the **last**
   /// element of the run. That slot stays in the tree once the element is
-  /// deleted, so the values come back exactly where they were taken from.
+  /// deleted, so the run lands back where it was taken from.
+  ///
+  /// A run comes back as **one block**. An element a peer inserted between two
+  /// deleted ones while the delete was in flight therefore ends up in front of
+  /// the restored block, not inside it.
   ///
   /// They come back under new identities: a deleted element cannot be brought
   /// back to life. [prepareInverse] follows them.
@@ -346,9 +350,7 @@ base class CRDTFugueMovableListHandler<T>
           items: items,
         ),
       );
-      for (var i = 0; i < items.length; i += 1) {
-        noteRebuilt(was[i], items[i].identityID);
-      }
+      _restoredElements[inverses.last] = was;
       items = <_MovableListInsertItem<T>>[];
       was = <FugueElementID>[];
       runEnd = FugueElementID.nullID();
@@ -381,8 +383,24 @@ base class CRDTFugueMovableListHandler<T>
     return inverses;
   }
 
+  /// What an inverse insert puts back, so [prepareInverse] can record the link
+  /// only when the undo really runs. Weakly keyed: it dies with the operation.
+  final Expando<List<FugueElementID>> _restoredElements =
+      Expando<List<FugueElementID>>();
+
   @override
   Operation prepareInverse(Operation operation) {
+    final restored = _restoredElements[operation];
+    if (restored != null && operation is _MovableListInsertOperation<T>) {
+      // The undo is happening: from here on, the identities this puts in stand
+      // for the ones it puts back.
+      final items = operation.items;
+      for (var i = 0; i < restored.length && i < items.length; i += 1) {
+        noteRebuilt(restored[i], items[i].identityID);
+      }
+      return operation;
+    }
+
     if (!hasRebuiltIdentities) {
       return operation;
     }

@@ -19,6 +19,14 @@ void main() {
         expect(() => undo.track(text), throwsUnsupportedError);
       });
 
+      test('refuses a handler another manager already tracks', () {
+        final doc = _doc(_peerA);
+        final map = CRDTMapHandler<String>(doc, 'map');
+        UndoManager(doc).track(map);
+
+        expect(() => UndoManager(doc).track(map), throwsStateError);
+      });
+
       test('refuses a handler of another document', () {
         final doc = _doc(_peerA);
         final other = _doc(_peerB);
@@ -431,6 +439,31 @@ void main() {
         expect(undo.canRedo, isFalse);
       });
 
+      test('undo and redo refuse to run inside a transaction', () {
+        final doc = _doc(_peerA);
+        final map = CRDTMapHandler<String>(doc, 'map');
+        final undo = UndoManager(doc, captureTimeout: Duration.zero)
+          ..track(map);
+
+        map.set('a', '1');
+
+        // An undo is a transaction of its own. Nested, its commit would be
+        // deferred to the outer one and the step would land on the wrong
+        // stack.
+        expect(
+          () => doc.runInTransaction(undo.undo),
+          throwsStateError,
+        );
+        expect(map.value, {'a': '1'});
+        expect(undo.canUndo, isTrue);
+
+        undo.undo();
+        expect(
+          () => doc.runInTransaction(undo.redo),
+          throwsStateError,
+        );
+      });
+
       test('a disposed manager records nothing and refuses to undo', () {
         final doc = _doc(_peerA);
         final map = CRDTMapHandler<String>(doc, 'map');
@@ -442,6 +475,39 @@ void main() {
         map.set('b', '2');
         expect(undo.canUndo, isFalse);
         expect(undo.undo, throwsStateError);
+        // Not a stream that could never fire again.
+        expect(() => undo.changes, throwsStateError);
+      });
+
+      test('disposing the document disposes its managers', () {
+        final doc = _doc(_peerA);
+        final map = CRDTMapHandler<String>(doc, 'map');
+        final undo = UndoManager(doc)..track(map);
+
+        map.set('a', '1');
+        expect(undo.canUndo, isTrue);
+
+        doc.dispose();
+
+        expect(undo.canUndo, isFalse);
+        expect(undo.undo, throwsStateError);
+      });
+
+      test('toString names what each stack holds', () {
+        final doc = _doc(_peerA);
+        final map = CRDTMapHandler<String>(doc, 'map');
+        final undo = UndoManager(doc, captureTimeout: Duration.zero)
+          ..track(map);
+
+        map
+          ..set('a', '1')
+          ..set('b', '2');
+        undo.undo();
+
+        expect(
+          undo.toString(),
+          'UndoManager(undo: 1, redo: 1, handlers: 1)',
+        );
       });
 
       test('two managers on one document keep their own stacks', () {
