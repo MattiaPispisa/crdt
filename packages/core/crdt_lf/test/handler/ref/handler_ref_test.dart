@@ -42,6 +42,9 @@ void main() {
         ..insert(0, 'ft');
       final map = CRDTMapHandler<String>(doc, doc.newHandlerId())
         ..set('m', 'w');
+      final rich = CRDTRichTextHandler(doc, doc.newHandlerId())
+        ..insert(0, 'rt')
+        ..addMark(start: 0, end: 1, type: 'bold', value: true);
 
       root
         ..setRef('text', text)
@@ -51,7 +54,8 @@ void main() {
         ..setRef('orSet', orSet)
         ..setRef('orMap', orMap)
         ..setRef('fugueText', fugueText)
-        ..setRef('map', map);
+        ..setRef('map', map)
+        ..setRef('rich', rich);
 
       expect(root.resolved, {
         'text': 'text',
@@ -62,6 +66,10 @@ void main() {
         'orMap': {'k': 'v'},
         'fugueText': 'ft',
         'map': {'m': 'w'},
+        'rich': const RichTextValue(
+          text: 'rt',
+          spans: [MarkSpan(start: 0, end: 1, type: 'bold', value: true)],
+        ),
       });
     });
 

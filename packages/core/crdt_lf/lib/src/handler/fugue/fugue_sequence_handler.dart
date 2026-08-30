@@ -90,6 +90,39 @@ abstract base class FugueSequenceHandler<T, V, S extends FugueState<T, V>>
     DeltaSink<Object?>? sink,
   });
 
+  /// Applies [operation] to the whole of [state].
+  ///
+  /// The default hands the tree to [applyToTree], which is all a handler whose
+  /// state is only a sequence ever needs. A handler that keeps something
+  /// beside the tree — formatting, an index — overrides this instead, and
+  /// reaches the tree through [treeOf].
+  ///
+  /// Whatever reaches [sink] must be the delta type the handler publishes, so
+  /// an override that wraps [applyToTree] has to translate what that puts in.
+  void applyToState(
+    S state,
+    Operation operation, {
+    DeltaSink<Object?>? sink,
+  }) {
+    applyToTree(state._tree, operation, sink: sink);
+  }
+
+  /// Seeds the part of [state] that lives beside the tree from the snapshot.
+  ///
+  /// Runs once per [computeState], after the tree is seeded and before the
+  /// history is replayed. The default does nothing.
+  void seedState(S state) {}
+
+  /// The tree [state] wraps, for an [applyToState] override.
+  FugueTree<T> treeOf(S state) => state._tree;
+
+  /// The slice of [snapshot] that holds the Fugue sequence.
+  ///
+  /// The default is the whole blob. A handler that stores more in the same
+  /// blob overrides this to point past its own section, and overrides
+  /// [getSnapshotState] to write it.
+  Uint8List fugueSectionOf(Uint8List snapshot) => snapshot;
+
   /// The element ids this peer created in [operation], used to seed the
   /// counter.
   ///
@@ -131,8 +164,9 @@ abstract base class FugueSequenceHandler<T, V, S extends FugueState<T, V>>
       seed.stamps,
       live: seed.live,
     );
+    seedState(state);
     for (final operation in operations()) {
-      applyToTree(state._tree, operation);
+      applyToState(state, operation);
     }
 
     // The projections are resolved lazily on the first read.
@@ -150,7 +184,7 @@ abstract base class FugueSequenceHandler<T, V, S extends FugueState<T, V>>
   }) {
     // The tree is mutated in place; the projections are resolved lazily on
     // the next read instead of after every operation.
-    applyToTree(state._tree, operation, sink: sink);
+    applyToState(state, operation, sink: sink);
     state._markDirty();
   }
 
@@ -254,7 +288,10 @@ abstract base class FugueSequenceHandler<T, V, S extends FugueState<T, V>>
       );
     }
 
-    final data = FugueSnapshot.read<T>(snapshot, decodeRun: decodeRun);
+    final data = FugueSnapshot.read<T>(
+      fugueSectionOf(snapshot),
+      decodeRun: decodeRun,
+    );
     seedElementIdFloor(data.floor);
     return data;
   }

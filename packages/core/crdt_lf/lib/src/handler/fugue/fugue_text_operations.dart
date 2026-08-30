@@ -1,10 +1,25 @@
-part of 'handler.dart';
+import 'dart:typed_data';
 
-/// Batch insert operation for the Fugue algorithm
-class _FugueTextInsertOperation extends Operation
+import 'package:crdt_lf/crdt_lf.dart';
+import 'package:crdt_lf/src/handler/fugue/fugue_sequence_apply.dart';
+
+/// Puts a contiguous chain of runes into a Fugue tree.
+///
+/// The operation reads its address from the handler it is built for, so the
+/// same class serves every handler whose elements are single runes.
+///
+/// Layout:
+/// - `leftOrigin:` [FugueElementID] bytes
+/// - `rightOrigin:` [FugueElementID] bytes
+/// - `itemsCount:` uvarint
+/// - repeated `itemsCount` times:
+///   - `id:` [FugueElementID] bytes
+///   - `textLen:` uvarint
+///   - `text:` wtf8 bytes
+class FugueTextInsertOperation extends Operation
     implements FugueSequenceInsert<String> {
-  /// Constructor that initializes a batch insert operation
-  _FugueTextInsertOperation({
+  /// Creates an insert of [items] between [leftOrigin] and [rightOrigin].
+  FugueTextInsertOperation({
     required this.leftOrigin,
     required this.rightOrigin,
     required this.items,
@@ -12,14 +27,14 @@ class _FugueTextInsertOperation extends Operation
     required super.type,
   });
 
-  /// Factory to create a batch insert operation from a handler
-  factory _FugueTextInsertOperation.fromHandler(
+  /// Creates an insert addressed to [handler].
+  factory FugueTextInsertOperation.fromHandler(
     Handler<dynamic> handler, {
     required FugueElementID leftOrigin,
     required FugueElementID rightOrigin,
-    required List<_FugueInsertItem> items,
+    required List<FugueTextInsertItem> items,
   }) {
-    return _FugueTextInsertOperation(
+    return FugueTextInsertOperation(
       id: handler.id,
       type: handler.insertType,
       leftOrigin: leftOrigin,
@@ -28,17 +43,8 @@ class _FugueTextInsertOperation extends Operation
     );
   }
 
-  /// Decodes an insert operation body.
-  ///
-  /// Layout:
-  /// - leftOrigin: [FugueElementID] bytes
-  /// - rightOrigin: [FugueElementID] bytes
-  /// - itemsCount: uvarint
-  /// - repeated `itemsCount` times:
-  ///   - id: [FugueElementID] bytes
-  ///   - textLen: uvarint
-  ///   - text: wtf8 bytes
-  factory _FugueTextInsertOperation.fromBodyBytes(
+  /// Decodes an insert body addressed to [handler].
+  factory FugueTextInsertOperation.fromBodyBytes(
     Handler<dynamic> handler,
     Uint8List body,
   ) {
@@ -53,7 +59,7 @@ class _FugueTextInsertOperation extends Operation
     final countRec = UVarint.read(body, offset: offset);
     offset = countRec.nextOffset;
 
-    final items = <_FugueInsertItem>[];
+    final items = <FugueTextInsertItem>[];
     for (var i = 0; i < countRec.value; i += 1) {
       final idRec = FugueElementID.readFromBytes(body, offset: offset);
       offset = idRec.nextOffset;
@@ -66,10 +72,10 @@ class _FugueTextInsertOperation extends Operation
       final text = Wtf8.decode(textRecord.value);
       offset = textRecord.nextOffset;
 
-      items.add(_FugueInsertItem(id: idRec.value, text: text));
+      items.add(FugueTextInsertItem(id: idRec.value, text: text));
     }
 
-    return _FugueTextInsertOperation(
+    return FugueTextInsertOperation(
       id: handler.id,
       type: handler.insertType,
       leftOrigin: leftRec.value,
@@ -78,17 +84,17 @@ class _FugueTextInsertOperation extends Operation
     );
   }
 
-  /// ID of the left origin node for the batch
+  /// The element the chain goes after.
   @override
   final FugueElementID leftOrigin;
 
-  /// ID of the right origin node for the batch
+  /// The element the chain goes before.
   @override
   final FugueElementID rightOrigin;
 
-  /// Items to insert sequentially (first uses [leftOrigin], others chain)
+  /// The elements to put in, in order.
   @override
-  final List<_FugueInsertItem> items;
+  final List<FugueTextInsertItem> items;
 
   @override
   Uint8List toBodyBytes() {
@@ -104,9 +110,10 @@ class _FugueTextInsertOperation extends Operation
   }
 }
 
-/// A single item of a batch insert
-class _FugueInsertItem implements FugueInsertItem<String> {
-  _FugueInsertItem({
+/// One rune a [FugueTextInsertOperation] puts in.
+class FugueTextInsertItem implements FugueInsertItem<String> {
+  /// Creates an item giving [id] to [text].
+  FugueTextInsertItem({
     required this.id,
     required this.text,
   });
@@ -114,6 +121,7 @@ class _FugueInsertItem implements FugueInsertItem<String> {
   @override
   final FugueElementID id;
 
+  /// The rune the element holds.
   final String text;
 
   /// The shared name for [text]: what the element holds.
@@ -121,35 +129,34 @@ class _FugueInsertItem implements FugueInsertItem<String> {
   String get value => text;
 }
 
-/// Batch delete operation for the Fugue algorithm
-class _FugueTextDeleteOperation extends Operation
+/// Turns elements of a Fugue tree into tombstones.
+///
+/// Layout:
+/// - `itemsCount:` uvarint
+/// - repeated `itemsCount` times: `nodeID:` [FugueElementID] bytes
+class FugueTextDeleteOperation extends Operation
     implements FugueSequenceDelete {
-  /// Constructor that initializes a batch delete operation
-  _FugueTextDeleteOperation({
+  /// Creates a delete of [items].
+  FugueTextDeleteOperation({
     required this.items,
     required super.id,
     required super.type,
   });
 
-  /// Factory to create a batch delete operation from a handler
-  factory _FugueTextDeleteOperation.fromHandler(
+  /// Creates a delete addressed to [handler].
+  factory FugueTextDeleteOperation.fromHandler(
     Handler<dynamic> handler, {
-    required List<_FugueDeleteItem> items,
+    required List<FugueTextDeleteItem> items,
   }) {
-    return _FugueTextDeleteOperation(
+    return FugueTextDeleteOperation(
       id: handler.id,
       type: handler.deleteType,
       items: items,
     );
   }
 
-  /// Decodes a delete operation body.
-  ///
-  /// Layout:
-  /// - itemsCount: uvarint
-  /// - repeated `itemsCount` times:
-  ///   - nodeID: [FugueElementID] bytes
-  factory _FugueTextDeleteOperation.fromBodyBytes(
+  /// Decodes a delete body addressed to [handler].
+  factory FugueTextDeleteOperation.fromBodyBytes(
     Handler<dynamic> handler,
     Uint8List body,
   ) {
@@ -158,23 +165,23 @@ class _FugueTextDeleteOperation extends Operation
     final countRec = UVarint.read(body, offset: offset);
     offset = countRec.nextOffset;
 
-    final items = <_FugueDeleteItem>[];
+    final items = <FugueTextDeleteItem>[];
     for (var i = 0; i < countRec.value; i += 1) {
       final idRec = FugueElementID.readFromBytes(body, offset: offset);
       offset = idRec.nextOffset;
-      items.add(_FugueDeleteItem(nodeID: idRec.value));
+      items.add(FugueTextDeleteItem(nodeID: idRec.value));
     }
 
-    return _FugueTextDeleteOperation(
+    return FugueTextDeleteOperation(
       id: handler.id,
       type: handler.deleteType,
       items: items,
     );
   }
 
-  /// Items to delete
+  /// The elements to remove.
   @override
-  final List<_FugueDeleteItem> items;
+  final List<FugueTextDeleteItem> items;
 
   @override
   Uint8List toBodyBytes() {
@@ -187,9 +194,10 @@ class _FugueTextDeleteOperation extends Operation
   }
 }
 
-/// A single item of a batch delete
-class _FugueDeleteItem implements FugueDeleteItem {
-  _FugueDeleteItem({
+/// One element a [FugueTextDeleteOperation] takes out.
+class FugueTextDeleteItem implements FugueDeleteItem {
+  /// Creates an item naming [nodeID].
+  FugueTextDeleteItem({
     required this.nodeID,
   });
 
@@ -197,37 +205,37 @@ class _FugueDeleteItem implements FugueDeleteItem {
   final FugueElementID nodeID;
 }
 
-/// Batch update operation for the Fugue algorithm
-class _FugueTextUpdateOperation extends Operation
+/// Writes over elements of a Fugue tree, last writer wins.
+///
+/// Layout:
+/// - `itemsCount:` uvarint
+/// - repeated `itemsCount` times:
+///   - `nodeID:` [FugueElementID] bytes
+///   - `textLen:` uvarint
+///   - `text:` wtf8 bytes
+class FugueTextUpdateOperation extends Operation
     implements FugueSequenceUpdate<String> {
-  /// Constructor that initializes a batch update operation
-  _FugueTextUpdateOperation({
+  /// Creates an update of [items].
+  FugueTextUpdateOperation({
     required this.items,
     required super.id,
     required super.type,
   });
 
-  /// Factory to create a batch update operation from a handler
-  factory _FugueTextUpdateOperation.fromHandler(
+  /// Creates an update addressed to [handler].
+  factory FugueTextUpdateOperation.fromHandler(
     Handler<dynamic> handler, {
-    required List<_FugueUpdateItem> items,
+    required List<FugueTextUpdateItem> items,
   }) {
-    return _FugueTextUpdateOperation(
+    return FugueTextUpdateOperation(
       id: handler.id,
       type: handler.updateType,
       items: items,
     );
   }
 
-  /// Decodes an update operation body.
-  ///
-  /// Layout:
-  /// - itemsCount: uvarint
-  /// - repeated `itemsCount` times:
-  ///   - nodeID: [FugueElementID] bytes
-  ///   - textLen: uvarint
-  ///   - text: wtf8 bytes
-  factory _FugueTextUpdateOperation.fromBodyBytes(
+  /// Decodes an update body addressed to [handler].
+  factory FugueTextUpdateOperation.fromBodyBytes(
     Handler<dynamic> handler,
     Uint8List body,
   ) {
@@ -236,7 +244,7 @@ class _FugueTextUpdateOperation extends Operation
     final countRec = UVarint.read(body, offset: offset);
     offset = countRec.nextOffset;
 
-    final items = <_FugueUpdateItem>[];
+    final items = <FugueTextUpdateItem>[];
     for (var i = 0; i < countRec.value; i += 1) {
       final idRec = FugueElementID.readFromBytes(body, offset: offset);
       offset = idRec.nextOffset;
@@ -249,19 +257,19 @@ class _FugueTextUpdateOperation extends Operation
       final text = Wtf8.decode(textRecord.value);
       offset = textRecord.nextOffset;
 
-      items.add(_FugueUpdateItem(nodeID: idRec.value, text: text));
+      items.add(FugueTextUpdateItem(nodeID: idRec.value, text: text));
     }
 
-    return _FugueTextUpdateOperation(
+    return FugueTextUpdateOperation(
       id: handler.id,
       type: handler.updateType,
       items: items,
     );
   }
 
-  /// Items to update
+  /// The elements to write over.
   @override
-  final List<_FugueUpdateItem> items;
+  final List<FugueTextUpdateItem> items;
 
   @override
   Uint8List toBodyBytes() {
@@ -275,9 +283,10 @@ class _FugueTextUpdateOperation extends Operation
   }
 }
 
-/// A single item of a batch update
-class _FugueUpdateItem implements FugueUpdateItem<String> {
-  _FugueUpdateItem({
+/// One element a [FugueTextUpdateOperation] writes over.
+class FugueTextUpdateItem implements FugueUpdateItem<String> {
+  /// Creates an item writing [text] over [nodeID].
+  FugueTextUpdateItem({
     required this.nodeID,
     required this.text,
   });
@@ -285,6 +294,7 @@ class _FugueUpdateItem implements FugueUpdateItem<String> {
   @override
   final FugueElementID nodeID;
 
+  /// The rune the element should hold.
   final String text;
 
   /// The shared name for [text]: what the element should hold.

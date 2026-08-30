@@ -102,7 +102,8 @@ abstract class ContainerHandler {
 
 /// Convenience registration of the built-in factories needed to reconstruct
 /// nested documents: the three container handlers plus the non-generic leaf
-/// handlers ([CRDTTextHandler], [CRDTFugueTextHandler]).
+/// handlers ([CRDTTextHandler], [CRDTFugueTextHandler],
+/// [CRDTRichTextHandler]).
 ///
 /// Generic leaf handlers (e.g. `CRDTMapHandler<num>`) must be registered
 /// explicitly with their concrete type string, since the type carried in a
@@ -115,6 +116,7 @@ extension RegisterDefaultFactories on BaseCRDTDocument {
     registerFactory(kMovableListRefHandlerType, CRDTMovableListRefHandler.new);
     registerFactory(kTextHandlerType, CRDTTextHandler.new);
     registerFactory(kFugueTextHandlerType, CRDTFugueTextHandler.new);
+    registerFactory(kRichTextHandlerType, CRDTRichTextHandler.new);
   }
 }
 
@@ -152,6 +154,9 @@ Object? nestedValueOf(Handler<dynamic> handler, Set<String> visiting) {
     return handler.value;
   }
   if (handler is CRDTFugueTextHandler) {
+    return handler.value;
+  }
+  if (handler is CRDTRichTextHandler) {
     return handler.value;
   }
   if (handler is CRDTListHandler<dynamic>) {

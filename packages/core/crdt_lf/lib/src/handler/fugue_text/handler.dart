@@ -4,9 +4,8 @@ import 'package:crdt_lf/crdt_lf.dart';
 import 'package:crdt_lf/src/algorithm/fugue/tree.dart';
 import 'package:crdt_lf/src/handler/fugue/fugue_sequence_apply.dart';
 import 'package:crdt_lf/src/handler/fugue/fugue_sequence_handler.dart';
+import 'package:crdt_lf/src/handler/fugue/fugue_text_operations.dart';
 import 'package:crdt_lf/src/handler/handler_type.dart';
-
-part 'operation.dart';
 
 /// ## CRDT Text with Fugue implementation
 ///
@@ -44,11 +43,11 @@ base class CRDTFugueTextHandler
   @override
   late final OperationDecoders operationDecoders = {
     OperationType.kindInsert: (body) =>
-        _FugueTextInsertOperation.fromBodyBytes(this, body),
+        FugueTextInsertOperation.fromBodyBytes(this, body),
     OperationType.kindDelete: (body) =>
-        _FugueTextDeleteOperation.fromBodyBytes(this, body),
+        FugueTextDeleteOperation.fromBodyBytes(this, body),
     OperationType.kindUpdate: (body) =>
-        _FugueTextUpdateOperation.fromBodyBytes(this, body),
+        FugueTextUpdateOperation.fromBodyBytes(this, body),
   };
 
   /// Inserts [text] at position [index], **in runes**
@@ -61,10 +60,10 @@ base class CRDTFugueTextHandler
     final rightOrigin = nodeAfter(leftOrigin);
 
     // Generate one node per rune
-    final items = <_FugueInsertItem>[];
+    final items = <FugueTextInsertItem>[];
     for (final rune in text.runes) {
       items.add(
-        _FugueInsertItem(
+        FugueTextInsertItem(
           id: FugueElementID(doc.peerId, nextCounter()),
           text: String.fromCharCode(rune),
         ),
@@ -73,7 +72,7 @@ base class CRDTFugueTextHandler
 
     // Emit a single batch change containing the whole chain
     doc.registerOperation(
-      _FugueTextInsertOperation.fromHandler(
+      FugueTextInsertOperation.fromHandler(
         this,
         leftOrigin: leftOrigin,
         rightOrigin: rightOrigin,
@@ -99,7 +98,7 @@ base class CRDTFugueTextHandler
     }
 
     final runes = text.runes.toList();
-    final items = <_FugueUpdateItem>[];
+    final items = <FugueTextUpdateItem>[];
     for (var i = 0; i < runes.length; i++) {
       final nodeID = nodeAt(index + i);
       if (nodeID.isNull) {
@@ -107,7 +106,7 @@ base class CRDTFugueTextHandler
         break;
       }
       items.add(
-        _FugueUpdateItem(
+        FugueTextUpdateItem(
           nodeID: nodeID,
           text: String.fromCharCode(runes[i]),
         ),
@@ -119,7 +118,7 @@ base class CRDTFugueTextHandler
     }
 
     doc.registerOperation(
-      _FugueTextUpdateOperation.fromHandler(this, items: items),
+      FugueTextUpdateOperation.fromHandler(this, items: items),
     );
   }
 
@@ -189,7 +188,7 @@ base class CRDTFugueTextHandler
 
   @override
   Iterable<FugueElementID> producedElementIds(Operation operation) sync* {
-    if (operation is _FugueTextInsertOperation) {
+    if (operation is FugueTextInsertOperation) {
       for (final item in operation.items) {
         yield item.id;
       }
@@ -198,9 +197,9 @@ base class CRDTFugueTextHandler
 
   @override
   Operation buildDeleteOperation(List<FugueElementID> nodeIDs) {
-    return _FugueTextDeleteOperation.fromHandler(
+    return FugueTextDeleteOperation.fromHandler(
       this,
-      items: nodeIDs.map((id) => _FugueDeleteItem(nodeID: id)).toList(),
+      items: nodeIDs.map((id) => FugueTextDeleteItem(nodeID: id)).toList(),
     );
   }
 

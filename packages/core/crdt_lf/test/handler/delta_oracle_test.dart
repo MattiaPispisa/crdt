@@ -63,6 +63,15 @@ class _Projection<V, D extends ComposableDelta<D>> {
   Future<void> dispose() => _subscription.cancel();
 }
 
+_Projection<RichTextValue, RichTextDelta> _watchRichText(
+  CRDTRichTextHandler rich,
+) =>
+    _Projection<RichTextValue, RichTextDelta>(
+      readSynced: rich.readSynced,
+      stream: rich.watch(),
+      applyDelta: (delta, base) => delta.apply(base),
+    );
+
 _Projection<String, SequenceDelta<String>> _watchText(CRDTTextHandler text) =>
     _Projection<String, SequenceDelta<String>>(
       readSynced: text.readSynced,
@@ -1252,6 +1261,163 @@ void main() {
       }
 
       await projection.dispose();
+    });
+  });
+
+  group('CRDTRichTextHandler deltas', () {
+    test('text edits and marks both reach the projection', () async {
+      final doc = CRDTDocument();
+      final rich = CRDTRichTextHandler(doc, 'body');
+      final projection = _watchRichText(rich);
+      await _pump();
+
+      rich
+        ..insert(0, 'hello')
+        ..insert(5, ' world')
+        ..addMark(start: 0, end: 5, type: 'bold', value: true)
+        ..delete(0, 1)
+        ..update(0, 'E');
+      await _pump();
+
+      expect(rich.value.text, 'Ello world');
+      expect(projection.value, rich.value);
+
+      await projection.dispose();
+    });
+
+    test('an edit that leaves the formatting alone does not resend it',
+        () async {
+      final doc = CRDTDocument();
+      final rich = CRDTRichTextHandler(doc, 'body')
+        ..insert(0, 'abcdef')
+        ..addMark(start: 0, end: 2, type: 'bold', value: true);
+      final projection = _watchRichText(rich);
+      await _pump();
+
+      // Far from the marked range, so no span boundary moves.
+      rich.insert(6, 'gh');
+      await _pump();
+
+      final delta = projection.deltas.single.delta;
+      expect(delta.spans, isNull);
+      expect(delta.isEmpty, isFalse);
+      expect(projection.value, rich.value);
+
+      await projection.dispose();
+    });
+
+    test('a mark that changes nothing is still one event', () async {
+      final doc = CRDTDocument();
+      final rich = CRDTRichTextHandler(doc, 'body')..insert(0, 'abc');
+      final projection = _watchRichText(rich);
+      await _pump();
+
+      // Nothing was bold, so taking bold off leaves the formatting as it was
+      // — but the operation was written, and the change did happen.
+      rich.removeMark(start: 0, end: 2, type: 'bold');
+      await _pump();
+
+      expect(projection.deltas, hasLength(1));
+      expect(projection.deltas.single.delta.isEmpty, isTrue);
+      expect(projection.value, rich.value);
+
+      await projection.dispose();
+    });
+
+    test('tracks a random stream of edits and marks', () async {
+      final doc = CRDTDocument();
+      final rich = CRDTRichTextHandler(doc, 'body');
+      final projection = _watchRichText(rich);
+      await _pump();
+
+      const types = ['bold', 'italic', 'link'];
+      final random = Random(7);
+      for (var round = 0; round < 120; round++) {
+        final length = rich.length;
+        switch (random.nextInt(4)) {
+          case 0:
+            rich.insert(
+              length == 0 ? 0 : random.nextInt(length + 1),
+              String.fromCharCode(97 + random.nextInt(26)),
+            );
+          case 1:
+            if (length > 0) {
+              rich.delete(random.nextInt(length), 1);
+            }
+          case 2:
+            if (length > 1) {
+              final start = random.nextInt(length - 1);
+              rich.addMark(
+                start: start,
+                end: start + 1 + random.nextInt(length - start - 1),
+                type: types[random.nextInt(types.length)],
+                value: random.nextBool(),
+                expand: random.nextBool(),
+              );
+            }
+          case 3:
+            if (length > 1) {
+              final start = random.nextInt(length - 1);
+              rich.removeMark(
+                start: start,
+                end: start + 1 + random.nextInt(length - start - 1),
+                type: types[random.nextInt(types.length)],
+              );
+            }
+        }
+
+        await _pump();
+        expect(projection.value, rich.value, reason: 'round $round');
+      }
+
+      await projection.dispose();
+    });
+
+    test('two peers converge, each tracking its own projection', () async {
+      final peerA = CRDTDocument(peerId: PeerId.parse(_peerIdA));
+      final peerB = CRDTDocument(peerId: PeerId.parse(_peerIdB));
+      final richA = CRDTRichTextHandler(peerA, 'body');
+      final richB = CRDTRichTextHandler(peerB, 'body');
+
+      final projectionA = _watchRichText(richA);
+      final projectionB = _watchRichText(richB);
+      await _pump();
+
+      final random = Random(11);
+      for (var round = 0; round < 30; round++) {
+        for (final handler in [richA, richB]) {
+          final length = handler.length;
+          if (length > 2 && random.nextBool()) {
+            handler.addMark(
+              start: random.nextInt(length - 1),
+              end: length,
+              type: random.nextBool() ? 'bold' : 'italic',
+              value: true,
+            );
+          } else {
+            handler.insert(
+              length == 0 ? 0 : random.nextInt(length + 1),
+              String.fromCharCode(97 + random.nextInt(26)),
+            );
+          }
+        }
+
+        peerB.importChanges(
+          peerA.exportChanges(fromVersionVector: peerB.getVersionVector()),
+        );
+        peerA.importChanges(
+          peerB.exportChanges(fromVersionVector: peerA.getVersionVector()),
+        );
+
+        await _pump();
+        expect(projectionA.value, richA.value, reason: 'A, round $round');
+        expect(projectionB.value, richB.value, reason: 'B, round $round');
+      }
+
+      expect(richA.value, richB.value);
+
+      await projectionA.dispose();
+      await projectionB.dispose();
     });
   });
 

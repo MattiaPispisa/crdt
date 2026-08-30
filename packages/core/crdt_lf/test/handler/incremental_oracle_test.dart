@@ -188,6 +188,53 @@ void main() {
       expect(text2.value, incremental);
     });
 
+    test('CRDTRichTextHandler', () {
+      final doc = CRDTDocument(peerId: PeerId.generate());
+      final rich = CRDTRichTextHandler(doc, 'rich')
+        ..useIncrementalCacheUpdate = true;
+      final random = Random(42);
+
+      expect(rich.value, const RichTextValue.empty());
+
+      const types = ['bold', 'italic', 'link'];
+      for (var i = 0; i < 100; i++) {
+        final len = rich.length;
+        final choice = random.nextInt(5);
+        if (choice == 0 || len == 0) {
+          rich.insert(random.nextInt(len + 1), 'ins$i ');
+        } else if (choice == 1) {
+          rich.delete(random.nextInt(len), random.nextInt(3) + 1);
+        } else if (choice == 2) {
+          rich.update(random.nextInt(len), 'u$i');
+        } else if (choice == 3) {
+          final start = random.nextInt(len);
+          rich.addMark(
+            start: start,
+            end: start + 1 + random.nextInt(len - start),
+            type: types[random.nextInt(types.length)],
+            value: 'v$i',
+            expand: random.nextBool(),
+          );
+        } else {
+          final start = random.nextInt(len);
+          rich.removeMark(
+            start: start,
+            end: start + 1 + random.nextInt(len - start),
+            type: types[random.nextInt(types.length)],
+          );
+        }
+      }
+
+      final incremental = rich.value;
+      rich.invalidateCache();
+      expect(rich.value, incremental);
+
+      final doc2 = CRDTDocument(peerId: PeerId.generate());
+      final rich2 = CRDTRichTextHandler(doc2, 'rich');
+      doc2.importChanges(doc.exportChanges());
+      expect(rich2.value, incremental);
+    });
+
     test('CRDTFugueListHandler', () {
       final doc = CRDTDocument(peerId: PeerId.generate());
       final list = CRDTFugueListHandler<String>(doc, 'fugue_list')
@@ -354,6 +401,32 @@ void main() {
           }
         },
         read: (text) => text.value,
+      );
+    });
+
+    test('CRDTRichTextHandler', () {
+      _remoteOracle<CRDTRichTextHandler>(
+        create: (doc) => CRDTRichTextHandler(doc, 'rich'),
+        mutate: (rich, random, i) {
+          final len = rich.length;
+          final choice = random.nextInt(4);
+          if (choice == 0 || len == 0) {
+            rich.insert(random.nextInt(len + 1), 'ins$i ');
+          } else if (choice == 1) {
+            rich.delete(random.nextInt(len), random.nextInt(3) + 1);
+          } else if (choice == 2) {
+            rich.update(random.nextInt(len), 'u$i');
+          } else {
+            final start = random.nextInt(len);
+            rich.addMark(
+              start: start,
+              end: start + 1 + random.nextInt(len - start),
+              type: random.nextBool() ? 'bold' : 'italic',
+              value: 'v$i',
+            );
+          }
+        },
+        read: (rich) => rich.value,
       );
     });
 

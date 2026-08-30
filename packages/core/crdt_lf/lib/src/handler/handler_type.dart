@@ -17,3 +17,6 @@ const kTextHandlerType = 'CRDTTextHandler';
 
 /// Type tag of [CRDTFugueTextHandler].
 const kFugueTextHandlerType = 'CRDTFugueTextHandler';
+
+/// Type tag of [CRDTRichTextHandler].
+const kRichTextHandlerType = 'CRDTRichTextHandler';
