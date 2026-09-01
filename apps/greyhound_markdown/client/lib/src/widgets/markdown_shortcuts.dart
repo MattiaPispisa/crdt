@@ -1,11 +1,15 @@
+import 'package:crdt_lf/crdt_lf.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 /// A key binding whose primary modifier follows the platform: ⌘ on Apple
 /// platforms, Ctrl everywhere else.
-class MarkdownShortcutBinding {
+///
+/// Used by the markdown shortcuts below and by the undo/redo chords in
+/// `EditorToolbar`, so a chord reads the same wherever the editor shows one.
+class EditorShortcutBinding {
   /// Binds [trigger], optionally with Shift, to the platform modifier.
-  const MarkdownShortcutBinding(this.trigger, {this.shift = false});
+  const EditorShortcutBinding(this.trigger, {this.shift = false});
 
   /// The key pressed alongside the modifiers.
   final LogicalKeyboardKey trigger;
@@ -35,13 +39,22 @@ class MarkdownShortcutBinding {
   }
 }
 
-/// A single markdown formatting action the toolbar can apply.
+/// What a shortcut acts on: the field the editor is bound to, and the room's
+/// undo history.
 ///
-/// A [MarkdownShortcut] is a pure transform over a [TextEditingValue]: given
-/// the field's current text and selection it returns the text and caret to
-/// show next. The toolbar just iterates [kMarkdownShortcuts] and, on tap,
-/// assigns the result back to the controller — which the CRDT text binding
-/// then turns into the corresponding document edit.
+/// Both are passed to every shortcut, so the toolbar and the key bindings can
+/// treat them all the same — a formatting action and an undo are one list.
+typedef EditorShortcutTarget = ({
+  TextEditingController controller,
+  CRDTUndoManager undo,
+});
+
+/// A single action the editor toolbar shows as a button.
+///
+/// The toolbar iterates [kMarkdownShortcuts], asks each one whether it can run
+/// ([isEnabled]) and, on tap, tells it to ([run]). Most of them are
+/// [MarkdownTextShortcut]s, which rewrite the field's value; undo and redo
+/// write to the document instead. The toolbar does not know the difference.
 abstract class MarkdownShortcut {
   /// Const base constructor.
   const MarkdownShortcut({
@@ -57,11 +70,16 @@ abstract class MarkdownShortcut {
   final String tooltip;
 
   /// The keyboard chord that also triggers this action, if it has one.
-  final MarkdownShortcutBinding? binding;
+  final EditorShortcutBinding? binding;
 
-  /// Returns the new editing value (text + caret/selection) after applying
-  /// this shortcut to [value].
-  TextEditingValue apply(TextEditingValue value);
+  /// Performs this shortcut on [target].
+  void run(EditorShortcutTarget target);
+
+  /// Whether running it right now would do anything.
+  ///
+  /// A shortcut that always has something to do keeps this default; undo and
+  /// redo answer from their stack, which is what greys their buttons out.
+  bool isEnabled(EditorShortcutTarget target) => true;
 
   /// [tooltip] with the key chord appended when [binding] is set.
   String tooltipFor(TargetPlatform platform) {
@@ -73,32 +91,110 @@ abstract class MarkdownShortcut {
   }
 }
 
-/// The bindings of every shortcut that declares one, each applying itself to
-/// [controller]. Ready to hand to a [CallbackShortcuts].
+/// A shortcut that is a pure transform over the field's [TextEditingValue]:
+/// given the current text and selection it returns the text and caret to show
+/// next.
+///
+/// Running one assigns the result back to the controller — which the CRDT text
+/// binding then turns into the corresponding document edit.
+abstract class MarkdownTextShortcut extends MarkdownShortcut {
+  /// Const base constructor.
+  const MarkdownTextShortcut({
+    required super.icon,
+    required super.tooltip,
+    super.binding,
+  });
+
+  /// Returns the new editing value (text + caret/selection) after applying
+  /// this shortcut to [value].
+  TextEditingValue apply(TextEditingValue value);
+
+  @override
+  void run(EditorShortcutTarget target) =>
+      target.controller.value = apply(target.controller.value);
+}
+
+/// Which way a [_UndoManagerShortcut] moves the history.
+enum _UndoDirection { undo, redo }
+
+/// Takes back the last edit, or writes it back.
+///
+/// It does not touch the controller: it asks [CRDTUndoManager] to write the
+/// opposite operation, and the text binding adopts that like any other change.
+class _UndoManagerShortcut extends MarkdownShortcut {
+  const _UndoManagerShortcut({
+    required super.icon,
+    required super.tooltip,
+    required super.binding,
+    required this.direction,
+  });
+
+  /// Which way this one moves the history.
+  final _UndoDirection direction;
+
+  @override
+  bool isEnabled(EditorShortcutTarget target) => switch (direction) {
+    _UndoDirection.undo => target.undo.canUndo,
+    _UndoDirection.redo => target.undo.canRedo,
+  };
+
+  @override
+  void run(EditorShortcutTarget target) {
+    switch (direction) {
+      case _UndoDirection.undo:
+        target.undo.undo();
+      case _UndoDirection.redo:
+        target.undo.redo();
+    }
+  }
+}
+
+/// The bindings of every shortcut that declares one, each running itself
+/// against [target]. Ready to hand to a [CallbackShortcuts].
+///
+/// The undo and redo chords are in here with the rest, which is what puts them
+/// **below** `DefaultTextEditingShortcuts`: ⌘Z then reaches the document's
+/// history instead of the text field's own, and the field's would replay a
+/// plain text diff and take back what other peers wrote.
 Map<ShortcutActivator, VoidCallback> markdownShortcutBindings(
-  TextEditingController controller,
+  EditorShortcutTarget target,
   TargetPlatform platform,
 ) {
   return {
     for (final shortcut in kMarkdownShortcuts)
       if (shortcut.binding != null)
-        shortcut.binding!.activator(platform): () =>
-            controller.value = shortcut.apply(controller.value),
+        shortcut.binding!.activator(platform): () {
+          if (shortcut.isEnabled(target)) {
+            shortcut.run(target);
+          }
+        },
   };
 }
 
 /// The ordered set of shortcuts rendered by the editor toolbar.
 const List<MarkdownShortcut> kMarkdownShortcuts = [
+  _UndoManagerShortcut(
+    icon: Icons.undo,
+    tooltip: 'Undo',
+    binding: EditorShortcutBinding(LogicalKeyboardKey.keyZ),
+    direction: _UndoDirection.undo,
+  ),
+  _UndoManagerShortcut(
+    icon: Icons.redo,
+    tooltip: 'Redo',
+    binding: EditorShortcutBinding(LogicalKeyboardKey.keyZ, shift: true),
+    direction: _UndoDirection.redo,
+  ),
   _WrapShortcut(
     icon: Icons.format_bold,
     tooltip: 'Bold',
-    binding: MarkdownShortcutBinding(LogicalKeyboardKey.keyB),
+    binding: EditorShortcutBinding(LogicalKeyboardKey.keyB),
     marker: '**',
   ),
   _WrapShortcut(
     icon: Icons.format_italic,
     tooltip: 'Italic',
-    binding: MarkdownShortcutBinding(LogicalKeyboardKey.keyI),
+    binding: EditorShortcutBinding(LogicalKeyboardKey.keyI),
     marker: '*',
   ),
   _WrapShortcut(
@@ -109,7 +205,7 @@ const List<MarkdownShortcut> kMarkdownShortcuts = [
   _WrapShortcut(
     icon: Icons.code,
     tooltip: 'Inline code',
-    binding: MarkdownShortcutBinding(LogicalKeyboardKey.keyE),
+    binding: EditorShortcutBinding(LogicalKeyboardKey.keyE),
     marker: '`',
   ),
   _LinePrefixShortcut(icon: Icons.title, tooltip: 'Heading 1', prefix: '# '),
@@ -132,7 +228,7 @@ const List<MarkdownShortcut> kMarkdownShortcuts = [
   _LinkLikeShortcut(
     icon: Icons.link,
     tooltip: 'Link',
-    binding: MarkdownShortcutBinding(LogicalKeyboardKey.keyK),
+    binding: EditorShortcutBinding(LogicalKeyboardKey.keyK),
     open: '[',
   ),
   _LinkLikeShortcut(icon: Icons.image, tooltip: 'Image', open: '!['),
@@ -150,7 +246,7 @@ TextSelection _resolvedSelection(TextEditingValue value) {
 
 /// Wraps the selection in [marker] on both sides (bold/italic/…). With no
 /// selection, inserts `marker + marker` and drops the caret between them.
-class _WrapShortcut extends MarkdownShortcut {
+class _WrapShortcut extends MarkdownTextShortcut {
   const _WrapShortcut({
     required super.icon,
     required super.tooltip,
@@ -188,7 +284,7 @@ class _WrapShortcut extends MarkdownShortcut {
 }
 
 /// Inserts [prefix] at the start of the caret's line (headings/quote/list).
-class _LinePrefixShortcut extends MarkdownShortcut {
+class _LinePrefixShortcut extends MarkdownTextShortcut {
   const _LinePrefixShortcut({
     required super.icon,
     required super.tooltip,
@@ -221,7 +317,7 @@ class _LinePrefixShortcut extends MarkdownShortcut {
 /// Inserts a link/image template `open + label + ']()'` and drops the caret
 /// **inside the trailing `()`**, ready for the URL. Any selection becomes the
 /// label text.
-class _LinkLikeShortcut extends MarkdownShortcut {
+class _LinkLikeShortcut extends MarkdownTextShortcut {
   const _LinkLikeShortcut({
     required super.icon,
     required super.tooltip,

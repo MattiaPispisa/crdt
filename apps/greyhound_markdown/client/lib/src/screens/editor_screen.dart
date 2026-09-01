@@ -31,6 +31,7 @@ enum _ViewMode { edit, split, view }
 
 class _EditorScreenState extends State<EditorScreen> {
   late final CRDTDocument _document;
+  late final CRDTUndoManager _undo;
   late final AwarenessService _awareness;
   late final WebSocketRelayClient _sync;
   late final ValueNotifier<ConnectionStatus> _status;
@@ -43,13 +44,12 @@ class _EditorScreenState extends State<EditorScreen> {
     super.didChangeDependencies();
     if (_initialized) return;
     _initialized = true;
-    // Straight from the stored preferences rather than from route arguments,
-    // so a shared `/room/<id>` link opened cold still joins as the user.
     final profile = context.read<UserSettingsCubit>().state;
     // The document id IS the relay room key: every client of the room must
     // use the same one.
     _document = CRDTDocument(documentId: widget.roomId);
-    CRDTFugueTextHandler(_document, kHandlerId);
+    final text = CRDTFugueTextHandler(_document, kHandlerId);
+    _undo = CRDTUndoManager(_document)..track(text);
     _awareness = AwarenessService(
       name: profile.displayName,
       color: profile.color,
@@ -73,6 +73,7 @@ class _EditorScreenState extends State<EditorScreen> {
     _sync.dispose();
     _awareness.dispose();
     _status.dispose();
+    _undo.dispose();
     _document.dispose();
     super.dispose();
   }
@@ -129,7 +130,7 @@ class _EditorScreenState extends State<EditorScreen> {
         ),
         body: LayoutBuilder(
           builder: (context, constraints) {
-            final editor = EditorPane(awareness: _awareness);
+            final editor = EditorPane(awareness: _awareness, undo: _undo);
             const preview = PreviewPane();
             switch (_mode) {
               case _ViewMode.edit:
