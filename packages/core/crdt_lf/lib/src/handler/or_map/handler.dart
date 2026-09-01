@@ -331,10 +331,6 @@ base class CRDTORMapHandler<K, V> extends Handler<ORMapState<K, V>>
   @override
   bool get invertible => true;
 
-  /// What an inverse `put` brings back, so [prepareInverse] can follow the tag
-  /// it ends up written under. Weakly keyed: it dies with the operation.
-  final Expando<Set<OperationId>> _restoredTags = Expando<Set<OperationId>>();
-
   @override
   List<Operation> invert(Operation operation) {
     final state = _cachedOrComputedState();
@@ -343,13 +339,9 @@ base class CRDTORMapHandler<K, V> extends Handler<ORMapState<K, V>>
       final key = operation.key;
 
       // This put may itself be an undo putting the key back. Its stamp is the
-      // tag that now stands for the ones it restores.
-      final restored = _restoredTags[operation];
-      if (restored != null) {
-        for (final tag in restored) {
-          noteRebuilt(tag, operation.stamp!);
-        }
-      }
+      // tag that now stands for the one it restores, and the stamp exists only
+      // here: the document mints it just before this call.
+      commitRestores(operation, [operation.stamp!]);
       if (!_hasLiveTag(state, key) && state._snapshotOnly.containsKey(key)) {
         // The key is there through a snapshot that carries no tags, and the
         // put takes that presence away. Taking the new tag back would leave
@@ -398,7 +390,7 @@ base class CRDTORMapHandler<K, V> extends Handler<ORMapState<K, V>>
           key: key,
           value: entry.value,
         );
-        _restoredTags[put] = {entry.tag};
+        noteRestores(put, [entry.tag]);
         puts.add(put);
       }
       if (puts.isNotEmpty) {
@@ -424,21 +416,19 @@ base class CRDTORMapHandler<K, V> extends Handler<ORMapState<K, V>>
 
   @override
   Operation prepareInverse(Operation operation) {
-    if (!hasRebuiltIdentities || operation is! _ORMapRemoveOperation<K, V>) {
+    if (operation is! _ORMapRemoveOperation<K, V>) {
       return operation;
     }
     // Tombstone the whole chain: the tag the inverse names, and every tag that
     // has stood for it since.
-    final tags = <OperationId>{
-      for (final tag in operation.tags) ...chainOf(tag),
-    };
-    if (tags.length == operation.tags.length) {
+    final tags = expandChains(operation.tags);
+    if (tags == null) {
       return operation;
     }
     return _ORMapRemoveOperation<K, V>.fromHandler(
       this,
       key: operation.key,
-      tags: tags,
+      tags: tags.toSet(),
     );
   }
 

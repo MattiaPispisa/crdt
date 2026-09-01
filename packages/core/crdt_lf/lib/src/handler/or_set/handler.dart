@@ -261,23 +261,15 @@ base class CRDTORSetHandler<T> extends Handler<ORSetState<T>>
   @override
   bool get invertible => true;
 
-  /// What an inverse `add` brings back, so [prepareInverse] can follow the tag
-  /// it ends up written under. Weakly keyed: it dies with the operation.
-  final Expando<Set<OperationId>> _restoredTags = Expando<Set<OperationId>>();
-
   @override
   List<Operation> invert(Operation operation) {
     final state = _cachedOrComputedState();
 
     if (operation is _ORSetAddOperation<T>) {
       // This add may itself be an undo putting the value back. Its stamp is
-      // the tag that now stands for the ones it restores.
-      final restored = _restoredTags[operation];
-      if (restored != null) {
-        for (final tag in restored) {
-          noteRebuilt(tag, operation.stamp!);
-        }
-      }
+      // the tag that now stands for the one it restores, and the stamp exists
+      // only here: the document mints it just before this call.
+      commitRestores(operation, [operation.stamp!]);
 
       if (state._snapshotOnly.contains(operation.value)) {
         // The value is in the set through a snapshot that carries no tags. The
@@ -311,7 +303,7 @@ base class CRDTORSetHandler<T> extends Handler<ORSetState<T>>
           this,
           value: operation.value,
         );
-        _restoredTags[add] = {tag};
+        noteRestores(add, [tag]);
         adds.add(add);
       }
       if (adds.isNotEmpty) {
@@ -334,21 +326,19 @@ base class CRDTORSetHandler<T> extends Handler<ORSetState<T>>
 
   @override
   Operation prepareInverse(Operation operation) {
-    if (!hasRebuiltIdentities || operation is! _ORSetRemoveOperation<T>) {
+    if (operation is! _ORSetRemoveOperation<T>) {
       return operation;
     }
     // Tombstone the whole chain: the tag the inverse names, and every tag that
     // has stood for it since.
-    final tags = <OperationId>{
-      for (final tag in operation.tags) ...chainOf(tag),
-    };
-    if (tags.length == operation.tags.length) {
+    final tags = expandChains(operation.tags);
+    if (tags == null) {
       return operation;
     }
     return _ORSetRemoveOperation<T>.fromHandler(
       this,
       value: operation.value,
-      tags: tags,
+      tags: tags.toSet(),
     );
   }
 

@@ -6,6 +6,7 @@ import 'package:crdt_lf/src/algorithm/fugue/value_node.dart';
 import 'package:crdt_lf/src/handler/fugue/element_id_floor.dart';
 import 'package:crdt_lf/src/handler/fugue/fugue_cache.dart';
 import 'package:crdt_lf/src/handler/fugue/fugue_delta.dart';
+import 'package:crdt_lf/src/handler/fugue/fugue_restore_runs.dart';
 import 'package:crdt_lf/src/snapshot/blob_version.dart';
 
 part 'operation.dart';
@@ -319,13 +320,9 @@ base class CRDTFugueMovableListHandler<T>
 
   /// The inserts that put back what [operation] is about to take out.
   ///
-  /// One insert per contiguous run, anchored to the slot of the **last**
-  /// element of the run. That slot stays in the tree once the element is
-  /// deleted, so the run lands back where it was taken from.
-  ///
-  /// A run comes back as **one block**. An element a peer inserted between two
-  /// deleted ones while the delete was in flight therefore ends up in front of
-  /// the restored block, not inside it.
+  /// One insert per block, cut by [fugueRestoreRuns] over the **slots** the
+  /// elements hold: a slot stays in the tree once its element is deleted, so
+  /// the block lands back where it was taken from.
   ///
   /// They come back under new identities: a deleted element cannot be brought
   /// back to life. [prepareInverse] follows them.
@@ -333,75 +330,51 @@ base class CRDTFugueMovableListHandler<T>
     FugueMovableListState<T> state,
     _MovableListDeleteOperation<T> operation,
   ) {
-    final inverses = <Operation>[];
-    var items = <_MovableListInsertItem<T>>[];
-    var was = <FugueElementID>[];
-    var runEnd = FugueElementID.nullID();
-
-    void flush() {
-      if (items.isEmpty) {
-        return;
-      }
-      inverses.add(
-        _MovableListInsertOperation<T>.fromHandler(
-          this,
-          leftOrigin: runEnd,
-          rightOrigin: state._tree.findNextNode(runEnd),
-          items: items,
-        ),
-      );
-      _restoredElements[inverses.last] = was;
-      items = <_MovableListInsertItem<T>>[];
-      was = <FugueElementID>[];
-      runEnd = FugueElementID.nullID();
-    }
-
-    for (final item in operation.items) {
-      final element = state._elements[item.identityID];
+    final runs = fugueRestoreRuns<FugueElementID, T>(
+      ids: [for (final item in operation.items) item.identityID],
       // An element that is gone already is not moved by this delete, so
-      // nothing puts it back. It breaks the run either way.
-      if (element == null || element.deleted) {
-        flush();
-        continue;
-      }
-      if (items.isNotEmpty &&
-          state._tree.findNextNode(runEnd) != element.position) {
-        flush();
-      }
-      items.add(
-        _MovableListInsertItem<T>(
-          identityID: FugueElementID(doc.peerId, nextCounter()),
-          positionID: FugueElementID(doc.peerId, nextCounter()),
-          value: element.value,
-        ),
-      );
-      was.add(item.identityID);
-      runEnd = element.position;
-    }
-    flush();
+      // nothing puts it back.
+      probe: (identityID) {
+        final element = state._elements[identityID];
+        if (element == null || element.deleted) {
+          return null;
+        }
+        return (anchor: element.position, value: element.value);
+      },
+      nextNode: state._tree.findNextNode,
+    );
 
+    final inverses = <Operation>[];
+    for (final run in runs) {
+      final insert = _MovableListInsertOperation<T>.fromHandler(
+        this,
+        leftOrigin: run.leftOrigin,
+        rightOrigin: run.rightOrigin,
+        items: [
+          for (final item in run.items)
+            _MovableListInsertItem<T>(
+              identityID: FugueElementID(doc.peerId, nextCounter()),
+              positionID: FugueElementID(doc.peerId, nextCounter()),
+              value: item.value,
+            ),
+        ],
+      );
+      noteRestores(insert, [for (final item in run.items) item.was]);
+      inverses.add(insert);
+    }
     return inverses;
   }
 
-  /// What an inverse insert puts back, so [prepareInverse] can record the link
-  /// only when the undo really runs. Weakly keyed: it dies with the operation.
-  final Expando<List<FugueElementID>> _restoredElements =
-      Expando<List<FugueElementID>>();
-
   @override
   Operation prepareInverse(Operation operation) {
-    final restored = _restoredElements[operation];
-    if (restored != null && operation is _MovableListInsertOperation<T>) {
+    if (operation is _MovableListInsertOperation<T>) {
       // The undo is happening: from here on, the identities this puts in stand
-      // for the ones it puts back.
-      final items = operation.items;
-      for (var i = 0; i < restored.length && i < items.length; i += 1) {
-        noteRebuilt(restored[i], items[i].identityID);
-      }
-      return operation;
-    }
-
-    if (!hasRebuiltIdentities) {
+      // for the ones it puts back. Does nothing for an insert that puts
+      // nothing back.
+      commitRestores(
+        operation,
+        [for (final item in operation.items) item.identityID],
+      );
       return operation;
     }
 
@@ -409,27 +382,36 @@ base class CRDTFugueMovableListHandler<T>
       // Take out the whole chain: the identity the inverse names, and every
       // identity that has stood for it since. Deleting one twice costs
       // nothing, so naming them all is safe.
-      final items = [
-        for (final item in operation.items)
-          for (final identityID in chainOf(item.identityID))
-            _MovableListDeleteItem(identityID: identityID),
-      ];
-      return items.length == operation.items.length
+      final identityIDs = expandChains(
+        [for (final item in operation.items) item.identityID],
+      );
+      return identityIDs == null
           ? operation
-          : _MovableListDeleteOperation<T>.fromHandler(this, items: items);
+          : _MovableListDeleteOperation<T>.fromHandler(
+              this,
+              items: [
+                for (final identityID in identityIDs)
+                  _MovableListDeleteItem(identityID: identityID),
+              ],
+            );
     }
 
     if (operation is _MovableListUpdateOperation<T>) {
-      return _MovableListUpdateOperation<T>.fromHandler(
-        this,
-        items: [
-          for (final item in operation.items)
-            _MovableListUpdateItem<T>(
-              identityID: latestOf(item.identityID),
-              value: item.value,
-            ),
-        ],
-      );
+      final items = operation.items;
+      final identityIDs =
+          latestOfAll([for (final item in items) item.identityID]);
+      return identityIDs == null
+          ? operation
+          : _MovableListUpdateOperation<T>.fromHandler(
+              this,
+              items: [
+                for (var i = 0; i < items.length; i += 1)
+                  _MovableListUpdateItem<T>(
+                    identityID: identityIDs[i],
+                    value: items[i].value,
+                  ),
+              ],
+            );
     }
 
     if (operation is _MovableListMoveOperation<T>) {

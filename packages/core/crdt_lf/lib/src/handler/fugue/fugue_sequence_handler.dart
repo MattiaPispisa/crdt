@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import 'package:crdt_lf/crdt_lf.dart';
 import 'package:crdt_lf/src/algorithm/fugue/tree.dart';
 import 'package:crdt_lf/src/handler/fugue/fugue_cache.dart';
+import 'package:crdt_lf/src/handler/fugue/fugue_restore_runs.dart';
 import 'package:crdt_lf/src/handler/fugue/fugue_sequence_apply.dart';
 import 'package:crdt_lf/src/handler/fugue/fugue_snapshot.dart';
 
@@ -281,87 +282,53 @@ abstract base class FugueSequenceHandler<T, V, S extends FugueState<T, V>>
     return const [];
   }
 
-  /// What an inverse insert puts back, so [prepareInverse] can record the link
-  /// only when the undo really runs. Weakly keyed: it dies with the operation.
-  final Expando<List<FugueElementID>> _restoredElements =
-      Expando<List<FugueElementID>>();
-
   /// The inserts that put back what [operation] is about to take out.
   ///
-  /// One insert per contiguous run, anchored to the **last** element of the
-  /// run. That element is a tombstone by the time the undo runs, and a
-  /// tombstone is still a node of the tree, so the run lands back where it was
-  /// taken from, whatever else has been written around it since.
-  ///
-  /// A run comes back as **one block**. Text a peer inserted between two
-  /// deleted elements while the delete was in flight therefore ends up in
-  /// front of the restored block, not inside it.
-  ///
-  /// The elements come back with new ids: an element that was removed cannot
-  /// be brought back to life.
+  /// One insert per block, cut by [fugueRestoreRuns]. The elements come back
+  /// with new ids — an element that was removed cannot be brought back to
+  /// life — and [prepareInverse] follows them.
   List<Operation> _invertDelete(
     FugueTree<T> tree,
     FugueSequenceDelete operation,
   ) {
-    final inverses = <Operation>[];
-    var items = <({FugueElementID was, FugueElementID id, T value})>[];
-    var runEnd = FugueElementID.nullID();
-
-    void flush() {
-      if (items.isEmpty) {
-        return;
-      }
-      inverses.add(
-        buildInsertOperation(
-          leftOrigin: runEnd,
-          rightOrigin: tree.findNextNode(runEnd),
-          items: [for (final item in items) (id: item.id, value: item.value)],
-        ),
-      );
-      _restoredElements[inverses.last] = [for (final item in items) item.was];
-      items = <({FugueElementID was, FugueElementID id, T value})>[];
-      runEnd = FugueElementID.nullID();
-    }
-
-    for (final item in operation.items) {
+    final runs = fugueRestoreRuns<FugueElementID, T>(
+      ids: [for (final item in operation.items) item.nodeID],
       // An element that is not there, or is already a tombstone, is not moved
-      // by this delete, so nothing puts it back. It breaks the run either way.
-      final value = tree.isLive(item.nodeID) ? tree.valueOf(item.nodeID) : null;
-      if (value == null) {
-        flush();
-        continue;
-      }
-      if (items.isNotEmpty && tree.findNextNode(runEnd) != item.nodeID) {
-        flush();
-      }
-      items.add(
-        (
-          was: item.nodeID,
-          id: FugueElementID(doc.peerId, nextCounter()),
-          value: value,
-        ),
-      );
-      runEnd = item.nodeID;
-    }
-    flush();
+      // by this delete, so nothing puts it back.
+      probe: (nodeID) {
+        if (!tree.isLive(nodeID)) {
+          return null;
+        }
+        final value = tree.valueOf(nodeID);
+        return value == null ? null : (anchor: nodeID, value: value);
+      },
+      nextNode: tree.findNextNode,
+    );
 
+    final inverses = <Operation>[];
+    for (final run in runs) {
+      final insert = buildInsertOperation(
+        leftOrigin: run.leftOrigin,
+        rightOrigin: run.rightOrigin,
+        items: [
+          for (final item in run.items)
+            (id: FugueElementID(doc.peerId, nextCounter()), value: item.value),
+        ],
+      );
+      noteRestores(insert, [for (final item in run.items) item.was]);
+      inverses.add(insert);
+    }
     return inverses;
   }
 
   @override
   Operation prepareInverse(Operation operation) {
-    final restored = _restoredElements[operation];
-    if (restored != null && operation is FugueSequenceInsert<T>) {
+    if (operation is FugueSequenceInsert<T>) {
       // The undo is happening: from here on, the elements this puts in stand
-      // for the ones it puts back.
-      final items = (operation as FugueSequenceInsert<T>).items;
-      for (var i = 0; i < restored.length && i < items.length; i += 1) {
-        noteRebuilt(restored[i], items[i].id);
-      }
-      return operation;
-    }
-
-    if (!hasRebuiltIdentities) {
+      // for the ones it puts back. Does nothing for an insert that puts
+      // nothing back.
+      final insert = operation as FugueSequenceInsert<T>;
+      commitRestores(operation, [for (final item in insert.items) item.id]);
       return operation;
     }
 
@@ -370,20 +337,20 @@ abstract base class FugueSequenceHandler<T, V, S extends FugueState<T, V>>
       // element that has stood for it since. Deleting a tombstone twice costs
       // nothing, so naming them all is safe.
       final items = (operation as FugueSequenceDelete).items;
-      final nodeIDs = [
-        for (final item in items) ...chainOf(item.nodeID),
-      ];
-      return nodeIDs.length == items.length
-          ? operation
-          : buildDeleteOperation(nodeIDs);
+      final nodeIDs = expandChains([for (final item in items) item.nodeID]);
+      return nodeIDs == null ? operation : buildDeleteOperation(nodeIDs);
     }
 
     if (operation is FugueSequenceUpdate<T>) {
       // Write over the element that stands for the one the inverse names.
-      return buildUpdateOperation([
-        for (final item in (operation as FugueSequenceUpdate<T>).items)
-          (nodeID: latestOf(item.nodeID), value: item.value),
-      ]);
+      final items = (operation as FugueSequenceUpdate<T>).items;
+      final nodeIDs = latestOfAll([for (final item in items) item.nodeID]);
+      return nodeIDs == null
+          ? operation
+          : buildUpdateOperation([
+              for (var i = 0; i < items.length; i += 1)
+                (nodeID: nodeIDs[i], value: items[i].value),
+            ]);
     }
 
     return operation;

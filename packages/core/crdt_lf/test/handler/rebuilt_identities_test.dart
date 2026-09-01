@@ -44,6 +44,52 @@ void main() {
       expect(chain.latestOf('a'), 'a');
     });
 
+    test('expandChains returns null while nothing has moved', () {
+      final chain = _Chain();
+
+      expect(chain.expandChains(['a', 'b']), isNull);
+      // A link that touches none of the keys still leaves them alone.
+      chain.noteRebuilt('z', 'y');
+      expect(chain.expandChains(['a', 'b']), isNull);
+    });
+
+    test('expandChains gives every key its whole chain, once', () {
+      final chain = _Chain()
+        ..noteRebuilt('a', 'b')
+        ..noteRebuilt('b', 'c');
+
+      // 'b' is already inside the chain of 'a': naming both must not name it
+      // twice, or a caller comparing lengths would see a move that is not one.
+      expect(chain.expandChains(['a', 'b']), ['a', 'b', 'c']);
+      expect(chain.expandChains(['a', 'd']), ['a', 'b', 'c', 'd']);
+    });
+
+    test('latestOfAll returns null while nothing has moved', () {
+      final chain = _Chain()..noteRebuilt('z', 'y');
+
+      expect(chain.latestOfAll(['a', 'b']), isNull);
+      expect(chain.latestOfAll(['a', 'z']), ['a', 'y']);
+    });
+
+    test('commitRestores pairs what an inverse restores by position', () {
+      final chain = _Chain();
+      final inverse = Object();
+
+      chain
+        ..noteRestores(inverse, ['a', 'b'])
+        ..commitRestores(inverse, ['x', 'y']);
+
+      expect(chain.latestOf('a'), 'x');
+      expect(chain.latestOf('b'), 'y');
+    });
+
+    test('commitRestores does nothing for an inverse that restores nothing',
+        () {
+      final chain = _Chain()..commitRestores(Object(), ['x']);
+
+      expect(chain.hasRebuiltIdentities, isFalse);
+    });
+
     test('drops the oldest link past the limit', () {
       final chain = _Chain();
       // One past the cap, so exactly the first link is dropped.

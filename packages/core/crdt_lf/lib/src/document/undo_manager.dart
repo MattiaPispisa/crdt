@@ -125,6 +125,10 @@ class CRDTUndoManager {
   /// How many steps each stack keeps. The oldest is dropped past this.
   final int stackLimit;
 
+  /// How many operation groups one step holds before it stops swallowing the
+  /// next one. See [_push].
+  static const int _maxGroupsPerEntry = 1024;
+
   final Set<String> _tracked = <String>{};
   final List<_UndoEntry> _undoStack = <_UndoEntry>[];
   final List<_UndoEntry> _redoStack = <_UndoEntry>[];
@@ -197,8 +201,9 @@ class CRDTUndoManager {
 
   /// Stops recording the operations written on [handler].
   ///
-  /// The steps already on the stacks are kept; undoing one still writes its
-  /// inverses.
+  /// The steps already on the stacks are kept, and undoing one still writes its
+  /// inverses. What it no longer writes is the step that would take that undo
+  /// back, so [redo] skips the part of it that belongs to [handler].
   void untrack(Handler<dynamic> handler) {
     _tracked.remove(handler.id);
   }
@@ -236,10 +241,14 @@ class CRDTUndoManager {
     _apply(_redoStack.removeLast(), _UndoMode.redoing);
   }
 
-  /// Closes the current step, so the next write starts a new one.
+  /// Keeps the next step from joining the one before it, whatever
+  /// [captureTimeout] says.
   ///
   /// Call it when the user does something that ends an edit — moving the caret,
   /// leaving a field — and a later write should not join what came before.
+  ///
+  /// It does not close a step that a running [CRDTDocument.runInTransaction]
+  /// is still filling: a transaction is one step by definition.
   void stopCapturing() {
     _barrier = true;
   }
@@ -277,19 +286,20 @@ class CRDTUndoManager {
   /// Called by [CRDTDocument.registerOperation] on every manager the document
   /// holds.
   void _capture(Handler<dynamic> handler, Operation operation) {
-    if (!_tracked.contains(handler.id)) {
-      return;
-    }
-
+    final tracked = _tracked.contains(handler.id);
     final origin = _document._deltaOrigin;
+
     if (_mode == _UndoMode.recording) {
+      if (!tracked) {
+        return;
+      }
       // A write of this manager reaching here in recording mode would be the
       // echo of an undo that already finished, which is nobody's step.
       if (identical(origin, this)) {
         return;
       }
-      final tracked = _trackedOrigins;
-      if (tracked != null && (origin == null || !tracked.contains(origin))) {
+      final origins = _trackedOrigins;
+      if (origins != null && (origin == null || !origins.contains(origin))) {
         return;
       }
     } else if (!identical(origin, this)) {
@@ -298,8 +308,11 @@ class CRDTUndoManager {
       return;
     }
 
+    // Always, even for a handler this manager has stopped recording: building
+    // the inverse is also what tells the handler which new identity stands for
+    // the one it just put back, and a later step would miss it.
     final inverse = handler.invert(operation);
-    if (inverse.isEmpty) {
+    if (inverse.isEmpty || !tracked) {
       return;
     }
     (_open ??= _UndoEntry(origin)).groups.add(inverse);
@@ -353,6 +366,12 @@ class CRDTUndoManager {
         },
         origin: this,
       );
+    } catch (_) {
+      // An inverse that throws leaves the step half written, and the document
+      // committed that half. What is on the stacks describes a state that
+      // never existed, so drop it rather than take it back later.
+      clear();
+      rethrow;
     } finally {
       _mode = _UndoMode.recording;
       // What follows an undo is a new edit, never a continuation of the step
@@ -369,7 +388,10 @@ class CRDTUndoManager {
   }) {
     if (coalesce && stack.isNotEmpty && captureTimeout > Duration.zero) {
       final last = stack.last;
-      if (identical(last.origin, entry.origin) &&
+      // [stackLimit] counts steps, so it does not bound a step that keeps
+      // growing: a long burst of typing would merge into one entry forever.
+      if (last.groups.length < _maxGroupsPerEntry &&
+          identical(last.origin, entry.origin) &&
           entry.closedAt - last.closedAt <= captureTimeout.inMilliseconds) {
         last.groups.addAll(entry.groups);
         last.closedAt = entry.closedAt;
@@ -399,7 +421,7 @@ class CRDTUndoManager {
   void _ensureNotInTransaction(String what) {
     if (_document.isInTransaction) {
       throw StateError(
-        'Cannot $what inside an open transaction. An $what is a transaction of '
+        'Cannot $what inside an open transaction. A $what is a transaction of '
         'its own: running it inside another one would fold what the caller is '
         'writing and what is being taken back into a single step.',
       );

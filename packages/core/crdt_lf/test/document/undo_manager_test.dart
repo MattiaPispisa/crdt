@@ -60,6 +60,26 @@ void main() {
         expect(map.value, {'b': '2'});
         expect(undo.canUndo, isFalse);
       });
+
+      test('untrack keeps following the identities an undo rebuilds', () {
+        final doc = _doc(_peerA);
+        final set = CRDTORSetHandler<String>(doc, 'set');
+        final undo = CRDTUndoManager(doc, captureTimeout: Duration.zero)
+          ..track(set);
+
+        set
+          ..add('a')
+          ..remove('a');
+        undo.untrack(set);
+
+        // The value comes back under a new tag. The step that takes the `add`
+        // back names the old one, so it only lands if the link was recorded —
+        // which happens while the inverse is built, not while it is stacked.
+        undo.undo();
+        expect(set.value, {'a'});
+        undo.undo();
+        expect(set.value, <String>{});
+      });
     });
 
     group('map', () {
@@ -227,6 +247,28 @@ void main() {
 
         map.set('b', '2');
         expect(undo.canRedo, isFalse);
+      });
+
+      test('a merged step stops growing, so the limit can reach it', () {
+        final doc = _doc(_peerA);
+        final text = CRDTFugueTextHandler(doc, 'text');
+        // Long enough that nothing closes a step on its own: only the cap on
+        // how much one step swallows can.
+        final undo =
+            CRDTUndoManager(doc, captureTimeout: const Duration(days: 1))
+              ..track(text);
+
+        for (var i = 0; i < 1030; i++) {
+          text.insert(text.length, 'x');
+        }
+
+        undo.undo();
+        expect(
+          text.length,
+          lessThan(1030),
+          reason: 'one step did not swallow the whole burst',
+        );
+        expect(text.length, greaterThan(0));
       });
 
       test('the stack drops its oldest step past the limit', () {
@@ -409,6 +451,31 @@ void main() {
         doc.importSnapshot(snapshot);
         expect(undo.canUndo, isFalse);
         expect(undo.canRedo, isFalse);
+      });
+
+      test('pruning the history keeps the stack, tombstones and all', () {
+        final doc = _doc(_peerA);
+        final text = CRDTFugueTextHandler(doc, 'text');
+        final undo = CRDTUndoManager(doc, captureTimeout: Duration.zero)
+          ..track(text);
+
+        text
+          ..insert(0, 'AA-mid-ZZ')
+          ..delete(2, 5);
+
+        doc.takeSnapshot();
+        doc.garbageCollect(doc.getVersionVector());
+        expect(doc.exportChanges(), isEmpty, reason: 'the history is pruned');
+        // The inverse is anchored to tombstones. They live in the snapshot, not
+        // in the pruned history, so the state has to be rebuilt from it to show
+        // that the anchor still resolves.
+        text.invalidateCache();
+        expect(text.value, 'AAZZ');
+
+        undo.undo();
+        expect(text.value, 'AA-mid-ZZ', reason: 'the run went back in place');
+        undo.redo();
+        expect(text.value, 'AAZZ');
       });
 
       test('taking a local snapshot keeps the stack', () {
