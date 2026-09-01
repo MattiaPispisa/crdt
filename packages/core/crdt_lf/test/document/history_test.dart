@@ -291,5 +291,27 @@ void main() {
       final historySession = document.toTimeTravel();
       expect(historySession.dispose, returnsNormally);
     });
+
+    test('disposing the session ends the delta streams it handed out',
+        () async {
+      listHandler.insert(0, 'Hello');
+
+      final historySession = document.toTimeTravel();
+      final viewListHandler =
+          historySession.getHandler<CRDTListHandler<String>, List<String>>(
+        (doc) => CRDTListHandler<String>(doc, 'list'),
+      );
+
+      var done = false;
+      viewListHandler.watch().listen(null, onDone: () => done = true);
+      // The opening reset arrives one microtask later, so the subscription is
+      // wired up only after this.
+      await Future<void>.delayed(Duration.zero);
+
+      historySession.dispose();
+      await Future<void>.delayed(Duration.zero);
+
+      expect(done, isTrue);
+    });
   });
 }

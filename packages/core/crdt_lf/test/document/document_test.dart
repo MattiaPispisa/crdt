@@ -1350,6 +1350,14 @@ void main() {
           () => doc.registerOperation(operation),
           throwsA(isA<DocumentDisposedException>()),
         );
+        expect(
+          () => doc.garbageCollect(doc2.getVersionVector()),
+          throwsA(isA<DocumentDisposedException>()),
+        );
+        expect(
+          doc.reconstruct,
+          throwsA(isA<DocumentDisposedException>()),
+        );
       });
     });
   });

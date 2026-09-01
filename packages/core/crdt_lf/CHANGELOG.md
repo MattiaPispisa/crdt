@@ -9,6 +9,15 @@
 - **Undo and redo**, through the new `CRDTUndoManager`: an undo writes the opposite operation instead of
   removing a change, so it takes back your own edit and leaves everyone else's alone. [56](https://github.com/MattiaPispisa/crdt/issues/56)
 
+### Changed
+
+- A disposed document now refuses `garbageCollect` and `reconstruct`
+  with a `DocumentDisposedException`, like every other method that writes to it.
+
+### Fixed
+
+- Disposing a `HistorySession` now ends the delta streams of the handlers it handed out, so a `watch()` subscriber is told the stream is over instead of waiting on one that can never fire again.
+
 ## [4.1.0+1](https://github.com/MattiaPispisa/crdt/tree/crdt_lf-v4.1.0+1/packages/crdt_lf)
 
 **Date:** 2026-08-29

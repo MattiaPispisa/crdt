@@ -49,24 +49,8 @@ abstract class BaseCRDTDocument {
   /// Who asked for the work running right now, stamped onto the delta events it
   /// produces; `null` outside any call that named one.
   ///
-  /// Set for the whole call, not the apply alone: a local delta is collected
-  /// while the operation runs and published at the commit that ends it.
-  Object? _deltaOrigin;
-
-  /// Runs [body] with [origin] on the delta events it produces.
-  ///
-  /// A nested call that names none keeps the outer origin. Restoring rather
-  /// than clearing lets a listener write back from inside a flush without
-  /// taking the origin of the work it interrupted.
-  T _withDeltaOrigin<T>(Object? origin, T Function() body) {
-    final previous = _deltaOrigin;
-    _deltaOrigin = origin ?? previous;
-    try {
-      return body();
-    } finally {
-      _deltaOrigin = previous;
-    }
-  }
+  /// A document that takes no operation never has one.
+  Object? get _deltaOrigin => null;
 
   /// Holds one event until the document is settled.
   ///
@@ -248,6 +232,12 @@ abstract class BaseCRDTDocument {
     }
 
     _isDisposed = true;
+    // Before the registry is emptied: a watcher of any document, live or
+    // static, is told the stream ends here rather than waiting on one that can
+    // never fire again.
+    for (final handler in _handlers.values) {
+      handler._closeDeltas();
+    }
     _handlers.clear();
   }
 }
@@ -413,6 +403,27 @@ class CRDTDocument extends BaseCRDTDocument {
   /// Per-handler monotonic revisions. See [revisionForHandler].
   final Map<String, int> _handlerRevisions = {};
 
+  @override
+  Object? _deltaOrigin;
+
+  /// Runs [body] with [origin] on the delta events it produces.
+  ///
+  /// Set for the whole call, not the apply alone: a local delta is collected
+  /// while the operation runs and published at the commit that ends it.
+  ///
+  /// A nested call that names none keeps the outer origin. Restoring rather
+  /// than clearing lets a listener write back from inside a flush without
+  /// taking the origin of the work it interrupted.
+  T _withDeltaOrigin<T>(Object? origin, T Function() body) {
+    final previous = _deltaOrigin;
+    _deltaOrigin = origin ?? previous;
+    try {
+      return body();
+    } finally {
+      _deltaOrigin = previous;
+    }
+  }
+
   /// The [CRDTUndoManager]s recording this document, or `null` when there is
   /// none.
   ///
@@ -519,6 +530,8 @@ class CRDTDocument extends BaseCRDTDocument {
   /// without knowing the document structure in advance. Reading lazily from a
   /// known root via `getRef`/`resolved` also works without calling this.
   void reconstruct() {
+    _ensureNotDisposed('reconstruct');
+
     final discovered = <String, String>{};
     for (final change in exportChanges()) {
       try {
@@ -1089,6 +1102,8 @@ class CRDTDocument extends BaseCRDTDocument {
   ///
   /// {@macro pruning_strategy}
   void garbageCollect(VersionVector protectUntil) {
+    _ensureNotDisposed('garbageCollect');
+
     final effectiveVV = VersionVector.intersection(
       [
         protectUntil,
@@ -1577,9 +1592,6 @@ class CRDTDocument extends BaseCRDTDocument {
       manager.dispose();
     }
     _undoManagers = null;
-    for (final handler in _handlers.values) {
-      handler._closeDeltas();
-    }
     super.dispose();
   }
 }
