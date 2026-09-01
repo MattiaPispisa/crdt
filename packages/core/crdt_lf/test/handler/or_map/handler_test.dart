@@ -346,7 +346,7 @@ void main() {
         expect(map.value, {'k': 'a'});
 
         // The snapshot carries no tags, so this is a remove-all.
-        final undo = UndoManager(doc)..track(map);
+        final undo = CRDTUndoManager(doc)..track(map);
         map.remove('k');
         expect(map.value, <String, String>{});
 
@@ -367,7 +367,7 @@ void main() {
         final map = CRDTORMapHandler<String, String>(doc, 'ormap');
         doc.importSnapshot(snapshot);
 
-        final undo = UndoManager(doc)..track(map);
+        final undo = CRDTUndoManager(doc)..track(map);
         map.put('k', 'b');
         expect(map.value, {'k': 'b'});
 
@@ -382,7 +382,7 @@ void main() {
           peerId: PeerId.parse('37f1ec87-6ea5-430b-a627-a6b92b56a02d'),
         );
         final map = CRDTORMapHandler<String, String>(doc, 'ormap');
-        final undo = UndoManager(doc, captureTimeout: Duration.zero)
+        final undo = CRDTUndoManager(doc, captureTimeout: Duration.zero)
           ..track(map);
 
         map

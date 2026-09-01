@@ -413,17 +413,18 @@ class CRDTDocument extends BaseCRDTDocument {
   /// Per-handler monotonic revisions. See [revisionForHandler].
   final Map<String, int> _handlerRevisions = {};
 
-  /// The [UndoManager]s recording this document, or `null` when there is none.
+  /// The [CRDTUndoManager]s recording this document, or `null` when there is
+  /// none.
   ///
   /// Null and not an empty list so that a document nobody undoes pays one
   /// comparison per local write.
-  List<UndoManager>? _undoManagers;
+  List<CRDTUndoManager>? _undoManagers;
 
-  void _registerUndoManager(UndoManager manager) {
-    (_undoManagers ??= <UndoManager>[]).add(manager);
+  void _registerUndoManager(CRDTUndoManager manager) {
+    (_undoManagers ??= <CRDTUndoManager>[]).add(manager);
   }
 
-  void _unregisterUndoManager(UndoManager manager) {
+  void _unregisterUndoManager(CRDTUndoManager manager) {
     final managers = _undoManagers;
     if (managers == null) {
       return;
@@ -449,7 +450,7 @@ class CRDTDocument extends BaseCRDTDocument {
   /// delta events it produced.
   ///
   /// In that order: a listener reacting to a delta reads a settled
-  /// [UndoManager.canUndo].
+  /// [CRDTUndoManager.canUndo].
   void _onTransactionFlushed() {
     final managers = _undoManagers;
     if (managers != null) {
@@ -920,8 +921,9 @@ class CRDTDocument extends BaseCRDTDocument {
       _transactionManager.handleOperation(operation);
 
       if (handler != null) {
-        // Before the fold, so an [UndoManager] reads the state the operation
-        // is about to move, and after the stamp, so the inverse can name it.
+        // Before the fold, so a [CRDTUndoManager] reads the state the
+        // operation is about to move, and after the stamp, so the inverse can
+        // name it.
         _captureForUndo(handler, operation);
         handler._internalIncrementCachedState(operation: operation);
       }
@@ -1479,7 +1481,7 @@ class CRDTDocument extends BaseCRDTDocument {
         cause == ResetCause.snapshotMerge) {
       // A snapshot replaces the base the state is replayed from, so the
       // identities an inverse is anchored to may not resolve any more.
-      for (final manager in _undoManagers ?? const <UndoManager>[]) {
+      for (final manager in _undoManagers ?? const <CRDTUndoManager>[]) {
         manager.clear();
       }
       for (final handler in _handlers.values) {

@@ -31,12 +31,20 @@
       - [Deltas, or the value?](#deltas-or-the-value)
       - [If you write too: your own edit comes back](#if-you-write-too-your-own-edit-comes-back)
         - [Tagging a write](#tagging-a-write)
+    - [Undo](#undo)
+      - [Driving it](#driving-it)
+      - [Leaving other peers alone](#leaving-other-peers-alone)
+      - [What is one step](#what-is-one-step)
+      - [What is recorded](#what-is-recorded)
+      - [What it does not undo](#what-it-does-not-undo)
+      - [Which handlers](#which-handlers)
   - [Architecture](#architecture)
     - [CRDTDocument](#crdtdocument)
       - [Identity](#identity)
     - [Handlers](#handlers)
       - [Custom handlers](#custom-handlers)
         - [When to turn `stamped` on](#when-to-turn-stamped-on)
+        - [Making a handler undoable](#making-a-handler-undoable)
       - [Text handlers index by rune](#text-handlers-index-by-rune)
       - [Working with Complex Types](#working-with-complex-types)
       - [Nested Structures (Containers and References)](#nested-structures-containers-and-references)
@@ -85,7 +93,7 @@ Supporting:
 - 🔄 **Automatic Conflict Resolution**: Automatically resolves conflicts in a CRDT
 - 📦 **Local Availability**: Operations are available locally as soon as they are applied
 - 🔍 **Handler deltas**: a handler can say **what** each change did to your copy of it, not only that it changed
-- ↩️ **Undo**: `UndoManager` takes back your own edits by writing the opposite operation, and leaves everyone else's work alone
+- ↩️ **Undo**: `CRDTUndoManager` takes back your own edits by writing the opposite operation, and leaves everyone else's work alone
 
 ## Greyhound Markdown
 
@@ -469,7 +477,7 @@ opposite effect**.
 ```dart
 final document = CRDTDocument();
 final text = CRDTFugueTextHandler(document, 'text');
-final undo = UndoManager(document)..track(text);
+final undo = CRDTUndoManager(document)..track(text);
 
 text.insert(0, 'Hello');
 undo.undo(); // ''
@@ -482,7 +490,7 @@ undo.redo(); // 'Hello'
 buttons and listen to `changes` to know when to read them again.
 
 ```dart
-final undo = UndoManager(document)
+final undo = CRDTUndoManager(document)
   ..track(text)
   ..track(title); // one manager can hold several handlers
 
@@ -516,7 +524,7 @@ exactly what this peer did, and leaves everyone else's work alone.
 
 ```dart
 // Two peers add the same value, each under a tag of its own.
-final undoA = UndoManager(docA)..track(setA);
+final undoA = CRDTUndoManager(docA)..track(setA);
 setA.add('shared');
 setB.add('shared');
 // ...they sync, and both read {'shared'}...
@@ -540,7 +548,7 @@ write counts; pass `trackedOrigins` to narrow it to the writes you tag (see
 [Tagging a write](#tagging-a-write)):
 
 ```dart
-final undo = UndoManager(document, trackedOrigins: {myEditor})..track(text);
+final undo = CRDTUndoManager(document, trackedOrigins: {myEditor})..track(text);
 document.runInTransaction(() => text.insert(0, 'hi'), origin: myEditor);
 ```
 

@@ -142,7 +142,7 @@ abstract base class Handler<T>
   /// identity to anchor an inverse to, so the undo would land on the wrong
   /// element as soon as another peer edits the same sequence.
   ///
-  /// [UndoManager.track] refuses a handler that answers `false`.
+  /// [CRDTUndoManager.track] refuses a handler that answers `false`.
   bool get invertible => false;
 
   /// The operations that undo [operation], read against the state as it is

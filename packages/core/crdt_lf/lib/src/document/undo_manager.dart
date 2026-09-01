@@ -1,19 +1,19 @@
 part of 'document.dart';
 
-/// What an [UndoManager] is doing, which is what decides where the inverses it
-/// captures are pushed.
+/// What a [CRDTUndoManager] is doing, which is what decides where the
+/// inverses it captures are pushed.
 enum _UndoMode {
   /// Ordinary editing: inverses go on the undo stack.
   recording,
 
-  /// An [UndoManager.undo] is running: inverses go on the redo stack.
+  /// An [CRDTUndoManager.undo] is running: inverses go on the redo stack.
   undoing,
 
-  /// An [UndoManager.redo] is running: inverses go on the undo stack.
+  /// An [CRDTUndoManager.redo] is running: inverses go on the undo stack.
   redoing,
 }
 
-/// One step of an [UndoManager]'s history.
+/// One step of a [CRDTUndoManager]'s history.
 ///
 /// It holds the inverses of the operations of one step, in the order those
 /// operations were written. Undoing the step applies them backwards.
@@ -54,7 +54,7 @@ class _UndoEntry {
 /// ```dart
 /// final document = CRDTDocument();
 /// final text = CRDTFugueTextHandler(document, 'text');
-/// final undo = UndoManager(document)..track(text);
+/// final undo = CRDTUndoManager(document)..track(text);
 ///
 /// text.insert(0, 'Hello');
 /// undo.undo(); // text.value == ''
@@ -85,7 +85,7 @@ class _UndoEntry {
 /// - **The contents of a nested handler.** Undoing a write that stored a
 ///   [HandlerRef] removes the reference; the data of the handler it pointed at
 ///   stays where it is.
-class UndoManager {
+class CRDTUndoManager {
   /// Creates a manager over [document] that tracks nothing yet.
   ///
   /// [trackedOrigins] narrows what is recorded to the writes tagged with one of
@@ -94,7 +94,7 @@ class UndoManager {
   /// not tag its writes wants.
   ///
   /// Throws a [DocumentDisposedException] on a disposed document.
-  UndoManager(
+  CRDTUndoManager(
     CRDTDocument document, {
     Set<Object>? trackedOrigins,
     this.captureTimeout = const Duration(milliseconds: 500),
@@ -104,7 +104,7 @@ class UndoManager {
             ? null
             : (Set<Object>.identity()..addAll(trackedOrigins)) {
     document
-      .._ensureNotDisposed('UndoManager')
+      .._ensureNotDisposed('CRDTUndoManager')
       .._registerUndoManager(this);
   }
 
@@ -183,10 +183,10 @@ class UndoManager {
         'element identity to anchor an inverse to.',
       );
     }
-    for (final other in _document._undoManagers ?? const <UndoManager>[]) {
+    for (final other in _document._undoManagers ?? const <CRDTUndoManager>[]) {
       if (!identical(other, this) && other._tracked.contains(handler.id)) {
         throw StateError(
-          "'${handler.id}' is already tracked by another UndoManager. A "
+          "'${handler.id}' is already tracked by another CRDTUndoManager. A "
           'handler mints the identities its inverses are anchored to, so it '
           'can only be recorded by one.',
         );
@@ -392,7 +392,7 @@ class UndoManager {
 
   void _ensureNotDisposed() {
     if (_isDisposed) {
-      throw StateError('This UndoManager is disposed.');
+      throw StateError('This CRDTUndoManager is disposed.');
     }
   }
 
@@ -407,6 +407,6 @@ class UndoManager {
   }
 
   @override
-  String toString() => 'UndoManager(undo: ${_undoStack.length}, '
+  String toString() => 'CRDTUndoManager(undo: ${_undoStack.length}, '
       'redo: ${_redoStack.length}, handlers: ${_tracked.length})';
 }

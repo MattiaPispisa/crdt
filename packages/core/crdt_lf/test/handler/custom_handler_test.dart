@@ -98,7 +98,7 @@ void main() {
     test('is undone by the operations it says are the opposite', () {
       final doc = CRDTDocument(peerId: PeerId.generate());
       final counter = PNCounterHandler(doc, 'counter');
-      final undo = UndoManager(doc, captureTimeout: Duration.zero)
+      final undo = CRDTUndoManager(doc, captureTimeout: Duration.zero)
         ..track(counter);
 
       counter
@@ -128,7 +128,7 @@ void main() {
       expect(handler.invertible, isFalse);
       expect(handler.invert(operation), isEmpty);
       expect(handler.prepareInverse(operation), same(operation));
-      expect(() => UndoManager(doc).track(handler), throwsUnsupportedError);
+      expect(() => CRDTUndoManager(doc).track(handler), throwsUnsupportedError);
     });
 
     test('declines a change that shares its id but not its handler type', () {

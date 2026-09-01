@@ -201,7 +201,7 @@ void main() {
         );
         final setA = CRDTORSetHandler<String>(a, 'set');
         final setB = CRDTORSetHandler<String>(b, 'set');
-        final undo = UndoManager(a)..track(setA);
+        final undo = CRDTUndoManager(a)..track(setA);
 
         // Both peers add the same value, each under a tag of its own.
         setA.add('shared');
@@ -223,7 +223,7 @@ void main() {
           peerId: PeerId.parse('37f1ec87-6ea5-430b-a627-a6b92b56a02d'),
         );
         final set = CRDTORSetHandler<String>(doc, 'set');
-        final undo = UndoManager(doc, captureTimeout: Duration.zero)
+        final undo = CRDTUndoManager(doc, captureTimeout: Duration.zero)
           ..track(set);
 
         set
@@ -259,7 +259,7 @@ void main() {
         expect(set.value, {'a'});
 
         // The snapshot carries no tags, so this is a remove-all.
-        final undo = UndoManager(doc)..track(set);
+        final undo = CRDTUndoManager(doc)..track(set);
         set.remove('a');
         expect(set.value, <String>{});
 
@@ -280,7 +280,7 @@ void main() {
         final set = CRDTORSetHandler<String>(doc, 'set');
         doc.importSnapshot(snapshot);
 
-        final undo = UndoManager(doc)..track(set);
+        final undo = CRDTUndoManager(doc)..track(set);
         set.add('a');
 
         // The add gives the value a tag and takes the snapshot presence away.
@@ -294,7 +294,7 @@ void main() {
           peerId: PeerId.parse('37f1ec87-6ea5-430b-a627-a6b92b56a02d'),
         );
         final set = CRDTORSetHandler<String>(doc, 'set')..add('a');
-        final undo = UndoManager(doc)..track(set);
+        final undo = CRDTUndoManager(doc)..track(set);
 
         set.remove('a');
         expect(set.value, <String>{});

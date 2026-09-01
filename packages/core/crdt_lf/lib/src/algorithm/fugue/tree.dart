@@ -349,9 +349,6 @@ class FugueTree<T> {
   /// The value [nodeID] holds, tombstones included; `null` for an id this tree
   /// does not hold.
   ///
-  /// A deleted element keeps its value, so this reads back what a node held
-  /// before it was removed. That is what lets a caller rebuild a deleted run.
-  ///
   /// `O(log R_p)` with `R_p` the number of runs of [nodeID]'s peer.
   T? valueOf(FugueElementID nodeID) {
     final spot = _spotOf(nodeID);

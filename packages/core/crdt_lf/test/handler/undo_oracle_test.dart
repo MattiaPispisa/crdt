@@ -3,9 +3,9 @@ import 'dart:math';
 import 'package:crdt_lf/crdt_lf.dart';
 import 'package:test/test.dart';
 
-/// Oracle tests for [UndoManager]: undoing every step must bring the handler
-/// back to the value it started from, and redoing every step must bring it
-/// back to the value it ended on.
+/// Oracle tests for [CRDTUndoManager]: undoing every step must bring the
+/// handler back to the value it started from, and redoing every step must
+/// bring it back to the value it ended on.
 ///
 /// The point of a random walk here is the mix — inserts that split runs,
 /// deletes that span several runs, updates that land on tombstones — which is
@@ -31,7 +31,7 @@ void main() {
         final handler = build(doc);
         final random = Random(seed);
 
-        final undo = UndoManager(
+        final undo = CRDTUndoManager(
           doc,
           captureTimeout: Duration.zero,
           stackLimit: steps + 1,

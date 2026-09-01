@@ -1474,7 +1474,7 @@ void main() {
       test('undoes an insert by removing what it put in', () {
         final document = doc();
         final text = CRDTFugueTextHandler(document, 'text');
-        final undo = UndoManager(document, captureTimeout: Duration.zero)
+        final undo = CRDTUndoManager(document, captureTimeout: Duration.zero)
           ..track(text);
 
         text.insert(0, 'Hello');
@@ -1489,7 +1489,7 @@ void main() {
         final document = doc();
         final text = CRDTFugueTextHandler(document, 'text')
           ..insert(0, 'abcdef');
-        final undo = UndoManager(document, captureTimeout: Duration.zero)
+        final undo = CRDTUndoManager(document, captureTimeout: Duration.zero)
           ..track(text);
 
         text.delete(2, 2);
@@ -1506,7 +1506,7 @@ void main() {
         final document = doc();
         final text = CRDTFugueTextHandler(document, 'text')
           ..insert(0, 'abcdef');
-        final undo = UndoManager(document, captureTimeout: Duration.zero)
+        final undo = CRDTUndoManager(document, captureTimeout: Duration.zero)
           ..track(text);
 
         text.delete(0, 3);
@@ -1520,7 +1520,7 @@ void main() {
         final document = doc();
         final text = CRDTFugueTextHandler(document, 'text')
           ..insert(0, 'abcdef');
-        final undo = UndoManager(document, captureTimeout: Duration.zero)
+        final undo = CRDTUndoManager(document, captureTimeout: Duration.zero)
           ..track(text);
 
         text.delete(0, 6);
@@ -1534,7 +1534,7 @@ void main() {
         final document = doc();
         final text = CRDTFugueTextHandler(document, 'text')
           ..insert(0, 'abcdef');
-        final undo = UndoManager(document, captureTimeout: Duration.zero)
+        final undo = CRDTUndoManager(document, captureTimeout: Duration.zero)
           ..track(text);
 
         text.update(2, 'XY');
@@ -1551,7 +1551,7 @@ void main() {
         final document = doc();
         final text = CRDTFugueTextHandler(document, 'text')
           ..insert(0, 'a\u{1F44B}b\u{1F389}c');
-        final undo = UndoManager(document, captureTimeout: Duration.zero)
+        final undo = CRDTUndoManager(document, captureTimeout: Duration.zero)
           ..track(text);
 
         text.delete(1, 3);
@@ -1565,7 +1565,7 @@ void main() {
         final document = doc();
         final text = CRDTFugueTextHandler(document, 'text')
           ..insert(0, 'Hello World');
-        final undo = UndoManager(document, captureTimeout: Duration.zero)
+        final undo = CRDTUndoManager(document, captureTimeout: Duration.zero)
           ..track(text);
 
         document.runInTransaction(() => text.change('Hello Brave World'));
@@ -1589,7 +1589,7 @@ void main() {
         b.importChanges(a.exportChanges());
         final textB = CRDTFugueTextHandler(b, 'text');
 
-        final undo = UndoManager(a, captureTimeout: Duration.zero)
+        final undo = CRDTUndoManager(a, captureTimeout: Duration.zero)
           ..track(textA);
 
         textA.insert(4, '-A');
@@ -1620,7 +1620,7 @@ void main() {
         b.importChanges(a.exportChanges());
         final textB = CRDTFugueTextHandler(b, 'text');
 
-        final undo = UndoManager(a, captureTimeout: Duration.zero)
+        final undo = CRDTUndoManager(a, captureTimeout: Duration.zero)
           ..track(textA);
 
         // A takes the whole word away while B types inside it.
@@ -1651,7 +1651,7 @@ void main() {
         b.importChanges(a.exportChanges());
         final textB = CRDTFugueTextHandler(b, 'text');
 
-        final undo = UndoManager(a, captureTimeout: Duration.zero)
+        final undo = CRDTUndoManager(a, captureTimeout: Duration.zero)
           ..track(textA);
 
         textA.delete(2, 2); // 'cd'

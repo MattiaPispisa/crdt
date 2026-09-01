@@ -3,8 +3,11 @@ import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:greyhound_markdown_client/src/widgets/markdown_shortcuts.dart';
 
-MarkdownShortcut byTooltip(String tooltip) =>
-    kMarkdownShortcuts.firstWhere((s) => s.tooltip == tooltip);
+/// The text shortcut labelled [tooltip]. Undo and redo are in the same list
+/// but are not text transforms, so they are not reachable through this.
+MarkdownTextShortcut byTooltip(String tooltip) =>
+    kMarkdownShortcuts.firstWhere((s) => s.tooltip == tooltip)
+        as MarkdownTextShortcut;
 
 TextEditingValue empty() => TextEditingValue.empty;
 

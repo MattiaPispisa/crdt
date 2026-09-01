@@ -6,7 +6,7 @@
 
 ### Added
 
-- **Undo and redo**, through the new `UndoManager`: an undo writes the opposite operation instead of
+- **Undo and redo**, through the new `CRDTUndoManager`: an undo writes the opposite operation instead of
   removing a change, so it takes back your own edit and leaves everyone else's alone. [56](https://github.com/MattiaPispisa/crdt/issues/56)
 
 ## [4.1.0+1](https://github.com/MattiaPispisa/crdt/tree/crdt_lf-v4.1.0+1/packages/crdt_lf)
