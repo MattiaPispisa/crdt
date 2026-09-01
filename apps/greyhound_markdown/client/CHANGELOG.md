@@ -1,6 +1,6 @@
-## 0.10.0
+## Unreleased
 
-**Date:** 2026-08-30
+**Date:** --
 
 ### Added
 
