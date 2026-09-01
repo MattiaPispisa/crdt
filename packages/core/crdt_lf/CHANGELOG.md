@@ -16,12 +16,6 @@
 
 ### Fixed
 
-- An undo now follows the identities it rebuilds even on a handler you stopped tracking with
-  `untrack`. A CRDT gives a restored value a new tag, and the OR-Set and OR-Map handlers used to
-  record that link only while the step was being stacked, so a later undo named the dead tag and
-  did nothing.
-- An inverse that throws no longer leaves the stacks describing a state that never existed: the
-  manager drops both and rethrows.
 - Disposing a `HistorySession` now ends the delta streams of the handlers it handed out, so a `watch()` subscriber is told the stream is over instead of waiting on one that can never fire again.
 
 ## [4.1.0+1](https://github.com/MattiaPispisa/crdt/tree/crdt_lf-v4.1.0+1/packages/crdt_lf)
