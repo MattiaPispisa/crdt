@@ -70,12 +70,13 @@ void main() {
         set
           ..add('a')
           ..remove('a');
-        undo.untrack(set);
+        undo
+          ..untrack(set)
 
-        // The value comes back under a new tag. The step that takes the `add`
-        // back names the old one, so it only lands if the link was recorded —
-        // which happens while the inverse is built, not while it is stacked.
-        undo.undo();
+          // The value comes back under a new tag. The step that takes the `add`
+          // back names the old one, so it only lands if the link was recorded —
+          // which happens while the inverse is built, not while it is stacked.
+          ..undo();
         expect(set.value, {'a'});
         undo.undo();
         expect(set.value, <String>{});
@@ -463,8 +464,9 @@ void main() {
           ..insert(0, 'AA-mid-ZZ')
           ..delete(2, 5);
 
-        doc.takeSnapshot();
-        doc.garbageCollect(doc.getVersionVector());
+        doc
+          ..takeSnapshot()
+          ..garbageCollect(doc.getVersionVector());
         expect(doc.exportChanges(), isEmpty, reason: 'the history is pruned');
         // The inverse is anchored to tombstones. They live in the snapshot, not
         // in the pruned history, so the state has to be rebuilt from it to show
