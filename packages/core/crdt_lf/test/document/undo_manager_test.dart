@@ -10,6 +10,21 @@ const _peerB = '45ee6b65-b393-40b7-9755-8b66dc7d0518';
 void main() {
   group('CRDTUndoManager', () {
     group('tracking', () {
+      // A stack that keeps nothing would make every undo do nothing, and say
+      // nothing about why, so it is refused where the caller can see it.
+      test('refuses a stack limit that keeps no step', () {
+        final doc = _doc(_peerA);
+
+        expect(
+          () => CRDTUndoManager(doc, stackLimit: 0),
+          throwsA(isA<ArgumentError>()),
+        );
+        expect(
+          () => CRDTUndoManager(doc, stackLimit: -1),
+          throwsA(isA<ArgumentError>()),
+        );
+      });
+
       test('refuses a handler that cannot invert its operations', () {
         final doc = _doc(_peerA);
         final text = CRDTTextHandler(doc, 'text');
@@ -437,6 +452,48 @@ void main() {
         await subscription.cancel();
       });
 
+      // The deltas of an undo go out at the commit that ends it, while the
+      // manager is still inside `undo()`. A listener writing back from there
+      // must not be taken for part of the step being rebuilt: that would put a
+      // second entry on the redo stack, and one undo would need two redos.
+      test('a write from inside the undo flush is not part of the step',
+          () async {
+        final doc = _doc(_peerA);
+        final text = CRDTFugueTextHandler(doc, 'text');
+        final log = CRDTFugueTextHandler(doc, 'log');
+        final undo = CRDTUndoManager(doc, captureTimeout: Duration.zero)
+          ..track(text)
+          ..track(log);
+
+        // Warm the cache: a handler that has none answers a write with a
+        // reset, not a delta.
+        text.value;
+        var writeBack = false;
+        final subscription = text.watch().listen((_) {
+          if (writeBack) {
+            writeBack = false;
+            log.insert(0, '!');
+          }
+        });
+        // The opening reset is one microtask late; the stream is synchronous
+        // from there on.
+        await Future<void>.delayed(Duration.zero);
+
+        text.insert(0, 'hello');
+        expect(undo.canUndo, isTrue);
+
+        writeBack = true;
+        undo.undo();
+        expect(text.value, '');
+        expect(log.value, '!', reason: 'the listener did write');
+
+        undo.redo();
+        expect(text.value, 'hello');
+        expect(undo.canRedo, isFalse, reason: 'the step was one redo, not two');
+
+        await subscription.cancel();
+      });
+
       test('importing a snapshot drops both stacks', () {
         final source = _doc(_peerB);
         CRDTMapHandler<String>(source, 'map').set('seed', '0');
@@ -454,7 +511,7 @@ void main() {
         expect(undo.canRedo, isFalse);
       });
 
-      test('pruning the history keeps the stack, tombstones and all', () {
+      test('pruning the history drops both stacks', () {
         final doc = _doc(_peerA);
         final text = CRDTFugueTextHandler(doc, 'text');
         final undo = CRDTUndoManager(doc, captureTimeout: Duration.zero)
@@ -463,24 +520,32 @@ void main() {
         text
           ..insert(0, 'AA-mid-ZZ')
           ..delete(2, 5);
+        undo.undo();
+        expect(undo.canRedo, isTrue);
 
         doc
           ..takeSnapshot()
           ..garbageCollect(doc.getVersionVector());
         expect(doc.exportChanges(), isEmpty, reason: 'the history is pruned');
-        // The inverse is anchored to tombstones. They live in the snapshot, not
-        // in the pruned history, so the state has to be rebuilt from it to show
-        // that the anchor still resolves.
-        text.invalidateCache();
-        expect(text.value, 'AAZZ');
 
-        undo.undo();
-        expect(text.value, 'AA-mid-ZZ', reason: 'the run went back in place');
-        undo.redo();
-        expect(text.value, 'AAZZ');
+        expect(undo.canUndo, isFalse);
+        expect(undo.canRedo, isFalse);
       });
 
-      test('taking a local snapshot keeps the stack', () {
+      test('a snapshot that keeps the history keeps the stack', () {
+        final doc = _doc(_peerA);
+        final map = CRDTMapHandler<String>(doc, 'map');
+        final undo = CRDTUndoManager(doc)..track(map);
+
+        map.set('a', '1');
+        doc.takeSnapshot(pruneHistory: false);
+
+        expect(undo.canUndo, isTrue);
+        undo.undo();
+        expect(map.value, <String, String>{});
+      });
+
+      test('taking a local snapshot prunes, so it drops the stack', () {
         final doc = _doc(_peerA);
         final map = CRDTMapHandler<String>(doc, 'map');
         final undo = CRDTUndoManager(doc)..track(map);
@@ -488,9 +553,34 @@ void main() {
         map.set('a', '1');
         doc.takeSnapshot();
 
-        expect(undo.canUndo, isTrue);
-        undo.undo();
-        expect(map.value, <String, String>{});
+        expect(undo.canUndo, isFalse);
+      });
+
+      // An OR handler reads a pruned element from the snapshot, which carries
+      // no tags. The inverse names the tag the `add` wrote, so it would apply
+      // and move nothing: the step has to be gone, not merely useless.
+      test('an OR-Set step does not survive the prune that unanchors it', () {
+        final doc = _doc(_peerA);
+        final set = CRDTORSetHandler<String>(doc, 'set');
+        final undo = CRDTUndoManager(doc)..track(set);
+
+        set.add('x');
+        doc.takeSnapshot();
+
+        expect(undo.canUndo, isFalse);
+        expect(set.value, {'x'});
+      });
+
+      test('an OR-Map step does not survive the prune that unanchors it', () {
+        final doc = _doc(_peerA);
+        final map = CRDTORMapHandler<String, String>(doc, 'map');
+        final undo = CRDTUndoManager(doc)..track(map);
+
+        map.put('k', 'v');
+        doc.takeSnapshot();
+
+        expect(undo.canUndo, isFalse);
+        expect(map.value, {'k': 'v'});
       });
 
       test('clear drops both stacks', () {

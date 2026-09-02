@@ -43,17 +43,32 @@ class _EditorToolbarState extends State<EditorToolbar> {
   @override
   void initState() {
     super.initState();
-    _subscription = widget.undo.changes.listen((_) {
-      if (mounted) {
-        setState(() {});
-      }
-    });
+    _subscribe();
+  }
+
+  @override
+  void didUpdateWidget(EditorToolbar oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // Otherwise the buttons would keep greying in and out with the history the
+    // toolbar no longer acts on.
+    if (!identical(oldWidget.undo, widget.undo)) {
+      _subscription?.cancel();
+      _subscribe();
+    }
   }
 
   @override
   void dispose() {
     _subscription?.cancel();
     super.dispose();
+  }
+
+  void _subscribe() {
+    _subscription = widget.undo.changes.listen((_) {
+      if (mounted) {
+        setState(() {});
+      }
+    });
   }
 
   void _run(MarkdownShortcut shortcut, EditorShortcutTarget target) {

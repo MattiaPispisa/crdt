@@ -79,6 +79,10 @@ class _UndoEntry {
 /// - **Snapshots.** [CRDTDocument.importSnapshot] and
 ///   [CRDTDocument.mergeSnapshot] replace the base the state is replayed from,
 ///   so both stacks are dropped.
+/// - **Anything older than a prune.** [CRDTDocument.garbageCollect], and
+///   [CRDTDocument.takeSnapshot] unless you pass `pruneHistory: false`, leave
+///   the state to be read from the snapshot. A snapshot carries less identity
+///   than the changes it replaces so both stacks are dropped there too.
 /// - **A register back to empty.** A register has no operation that clears it,
 ///   and it cannot tell a stored `null` from one that was never written, so an
 ///   undo reaches neither.
@@ -103,6 +107,12 @@ class CRDTUndoManager {
         _trackedOrigins = trackedOrigins == null
             ? null
             : (Set<Object>.identity()..addAll(trackedOrigins)) {
+    if (stackLimit < 1) {
+      // Caught here rather than in [_push], which runs at the commit of an
+      // ordinary write: a stack that keeps nothing would make every [undo] do
+      // nothing, and say nothing about why.
+      throw ArgumentError.value(stackLimit, 'stackLimit', 'must be at least 1');
+    }
     document
       .._ensureNotDisposed('CRDTUndoManager')
       .._registerUndoManager(this);
@@ -118,6 +128,11 @@ class CRDTUndoManager {
   /// Two steps merge into one when they are tagged with the same origin and
   /// this much time has not passed between them. It is what makes a burst of
   /// typing one undo instead of one undo per character.
+  ///
+  /// Origin and time are all that is compared, so two writes this close to
+  /// each other merge even when they are on **different handlers**. Give them
+  /// different origins, or call [stopCapturing] between them, to keep them
+  /// apart.
   ///
   /// [Duration.zero] keeps every step separate.
   final Duration captureTimeout;
@@ -320,6 +335,16 @@ class CRDTUndoManager {
 
   /// Closes the open step, if any, once the transaction that held it committed.
   void _closeEntry() {
+    final mode = _mode;
+    if (mode != _UndoMode.recording) {
+      // The undo is over here, before the document hands out the deltas it
+      // produced. A listener that writes back from that flush is starting a
+      // new edit, not adding to the step being rebuilt — and what follows an
+      // undo never continues the step that was taken back.
+      _mode = _UndoMode.recording;
+      _barrier = true;
+    }
+
     final entry = _open;
     if (entry == null) {
       return;
@@ -329,7 +354,7 @@ class CRDTUndoManager {
     final now = DateTime.now().millisecondsSinceEpoch;
     entry.closedAt = now;
 
-    switch (_mode) {
+    switch (mode) {
       case _UndoMode.recording:
         _push(_undoStack, entry, coalesce: !_barrier);
         _barrier = false;
@@ -358,6 +383,14 @@ class CRDTUndoManager {
           for (final group in entry.groups.reversed) {
             for (final operation in group) {
               final handler = _document._handlers[operation.id];
+              // A tracked handler registers itself and the registry is only
+              // emptied on dispose, so an inverse always finds its handler.
+              // Writing one without [Handler.prepareInverse] would ignore the
+              // identities a later undo rebuilt.
+              assert(
+                handler != null,
+                "no handler registered for '${operation.id}'",
+              );
               _document.registerOperation(
                 handler == null ? operation : handler.prepareInverse(operation),
               );
@@ -373,9 +406,10 @@ class CRDTUndoManager {
       clear();
       rethrow;
     } finally {
+      // [_closeEntry] does this at the commit, early enough for the listeners
+      // the commit serves. This is the net for a transaction that reached no
+      // commit at all.
       _mode = _UndoMode.recording;
-      // What follows an undo is a new edit, never a continuation of the step
-      // that was taken back.
       _barrier = true;
     }
     _emitChange();

@@ -541,6 +541,11 @@ write is its own step, and steps written within `captureTimeout` of each other
 character. `Duration.zero` turns the merging off, and `stopCapturing()` ends a
 step by hand, for when the user moves the caret.
 
+Merging compares the origin and the time, and nothing else, so two writes this
+close together become one step even when they are on **different handlers**.
+Give them different origins, or call `stopCapturing()` between them, to keep
+them apart.
+
 #### What is recorded
 
 Only local writes, and only on the handlers you `track`. By default every local
@@ -558,6 +563,11 @@ document.runInTransaction(() => text.insert(0, 'hi'), origin: myEditor);
   recorded; an operation handed to `createChange` never reaches the stack.
 - **Snapshots.** `importSnapshot` and `mergeSnapshot` replace the base the state
   is replayed from, so both stacks are dropped.
+- **Anything older than a prune.** `garbageCollect`, and `takeSnapshot` unless
+  you pass `pruneHistory: false`, leave the state to be read from the snapshot.
+  A snapshot carries less identity than the changes it replaces — an OR-Set or
+  OR-Map element comes back without its tag — so both stacks are dropped there
+  too. Pass `pruneHistory: false` to checkpoint and keep the history.
 - **A register back to empty.** A register has no operation that clears it, and
   it cannot tell a stored `null` from one that was never written, so an undo
   reaches neither.

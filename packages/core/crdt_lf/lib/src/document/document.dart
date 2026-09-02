@@ -934,11 +934,18 @@ class CRDTDocument extends BaseCRDTDocument {
       _transactionManager.handleOperation(operation);
 
       if (handler != null) {
-        // Before the fold, so a [CRDTUndoManager] reads the state the
-        // operation is about to move, and after the stamp, so the inverse can
-        // name it.
-        _captureForUndo(handler, operation);
-        handler._internalIncrementCachedState(operation: operation);
+        try {
+          // Before the fold, so a [CRDTUndoManager] reads the state the
+          // operation is about to move, and after the stamp, so the inverse
+          // can name it.
+          _captureForUndo(handler, operation);
+        } finally {
+          // The commit below is in a `finally` too, so the operation reaches
+          // the change store whatever happens above. The fold has to happen
+          // for the same reason: a handler that skipped it would hold a state
+          // its own history does not describe, for good.
+          handler._internalIncrementCachedState(operation: operation);
+        }
       }
     } finally {
       if (openedImplicitTransaction) {
@@ -1405,6 +1412,26 @@ class CRDTDocument extends BaseCRDTDocument {
   void _prune(VersionVector version) {
     _dag.prune(version);
     _changeStore.prune(version);
+    // The state now comes from the snapshot rather than from the changes that
+    // built it, and a snapshot does not carry every identity a change did: an
+    // OR-Set or OR-Map element comes back tagless. An inverse anchored to one
+    // of those tags would apply and move nothing.
+    _dropUndoHistory();
+  }
+
+  /// Drops what an undo is anchored to: the stacks of every
+  /// [CRDTUndoManager], and the rebuilt-identity chains the handlers follow.
+  void _dropUndoHistory() {
+    for (final manager in _undoManagers ?? const <CRDTUndoManager>[]) {
+      manager.clear();
+    }
+    for (final handler in _handlers.values) {
+      // A cast, not a promotion: the analyzer will not narrow a [Handler] to
+      // a mixin it merely applies.
+      if (handler is RebuiltIdentities<Object>) {
+        (handler as RebuiltIdentities<Object>).clearRebuiltIdentities();
+      }
+    }
   }
 
   /// Emits that the document state has made an update
@@ -1495,17 +1522,10 @@ class CRDTDocument extends BaseCRDTDocument {
     if (cause == ResetCause.snapshotImport ||
         cause == ResetCause.snapshotMerge) {
       // A snapshot replaces the base the state is replayed from, so the
-      // identities an inverse is anchored to may not resolve any more.
-      for (final manager in _undoManagers ?? const <CRDTUndoManager>[]) {
-        manager.clear();
-      }
-      for (final handler in _handlers.values) {
-        // A cast, not a promotion: the analyzer will not narrow a [Handler] to
-        // a mixin it merely applies.
-        if (handler is RebuiltIdentities<Object>) {
-          (handler as RebuiltIdentities<Object>).clearRebuiltIdentities();
-        }
-      }
+      // identities an inverse is anchored to may not resolve any more. The
+      // prune these paths usually run drops the same thing; a snapshot
+      // imported with `pruneHistory: false` never reaches it.
+      _dropUndoHistory();
     }
   }
 

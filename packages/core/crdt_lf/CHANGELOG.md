@@ -8,6 +8,9 @@
 
 - **Undo and redo**, through the new `CRDTUndoManager`: an undo writes the opposite operation instead of
   removing a change, so it takes back your own edit and leaves everyone else's alone. [56](https://github.com/MattiaPispisa/crdt/issues/56)
+  An inverse is anchored to the history it was built against, so pruning that history drops both stacks —
+  `garbageCollect`, and `takeSnapshot` unless you pass `pruneHistory: false`. Use `pruneHistory: false` to
+  checkpoint a document and keep its undo history.
 
 ### Changed
 
