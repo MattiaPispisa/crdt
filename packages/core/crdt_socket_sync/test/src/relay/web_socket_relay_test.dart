@@ -99,14 +99,16 @@ void main() {
     Future<_ClientSetup> setupClient({
       required String documentId,
       List<ClientSyncPlugin>? plugins,
+      CRDTDocument? restored,
     }) async {
       await addClientConnection();
       var currentSocketIndex = outgoingServerSockets.length - 1;
 
-      final document = CRDTDocument(
-        peerId: PeerId.generate(),
-        documentId: documentId,
-      );
+      final document = restored ??
+          CRDTDocument(
+            peerId: PeerId.generate(),
+            documentId: documentId,
+          );
 
       final client = WebSocketRelayClient.test(
         url: 'ws://localhost:$port',
@@ -230,6 +232,44 @@ void main() {
         reason: 'the queued change must be delivered after the reconnect',
       );
       expect(setup1.client.pendingChangesCount, 0);
+    });
+
+    test('a restart reaches the other client with what was written offline',
+        () async {
+      await startServer();
+
+      final setup1 = await setupClient(documentId: roomId);
+      final setup2 = await setupClient(documentId: roomId);
+      final handler1 = CRDTFugueTextHandler(setup1.client.document, handlerId);
+      final handler2 = CRDTFugueTextHandler(setup2.client.document, handlerId);
+
+      final oldSocketIndex = outgoingServerSockets.length - 2;
+      final dropped = setup1.client.connectionStatus
+          .firstWhere((status) => !status.isConnected);
+      outgoingServerSockets[oldSocketIndex].simulateDisconnection();
+      await dropped;
+
+      handler1.insert(0, 'offline');
+      await Future<void>.delayed(Duration.zero);
+
+      // The device is closed: the outbox goes with the process. What a
+      // persistence adapter wrote down is the changes themselves.
+      final stored = setup1.client.document.exportChanges();
+      setup1.client.dispose();
+
+      // Next launch. Every stored change reaches the document through
+      // `importChanges`, so it is imported, never local — nothing but the
+      // welcome reconciliation would ever push it.
+      final restored =
+          CRDTDocument(peerId: PeerId.generate(), documentId: roomId)
+            ..importChanges(stored);
+      final setup3 = await setupClient(documentId: roomId, restored: restored);
+
+      await waitUntil(
+        () => handler2.value.contains('offline'),
+        reason: 'what was written offline must reach the other client',
+      );
+      await waitUntil(() => setup3.client.pendingChangesCount == 0);
     });
 
     test('compaction truncates the log and late joiners still converge',

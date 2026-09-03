@@ -1,16 +1,20 @@
 import 'dart:typed_data';
 
 import 'package:crdt_lf/crdt_lf.dart';
+import 'package:crdt_lf_persistence/crdt_lf_persistence.dart';
 import 'package:crdt_lf_sqlite/src/schema.dart';
 import 'package:crdt_lf_sqlite/src/transaction.dart';
 import 'package:sqlite3/sqlite3.dart' as sq;
 
-/// Storage utility for managing [Snapshot] objects in a SQLite [sq-Database].
+/// Stores [Snapshot] objects in a SQLite [sq.Database].
 ///
-/// This class provides high-level methods for storing, retrieving, and
-/// managing [Snapshot] objects. All rows are scoped to a single document via
-/// the [documentId] column, so several documents can share the same database.
-class CRDTSqliteSnapshotStorage {
+/// All rows are scoped to a single document via the [documentId] column, so
+/// several documents can share the same database.
+///
+/// sqlite3 is synchronous, so every method here answers without ever
+/// suspending. They return futures to keep the [CRDTSnapshotStorage] contract,
+/// which the asynchronous backends need.
+class CRDTSqliteSnapshotStorage implements CRDTSnapshotStorage {
   /// Creates a new [CRDTSqliteSnapshotStorage] instance.
   ///
   /// [database] is the SQLite database used to store [Snapshot] objects; its
@@ -23,13 +27,11 @@ class CRDTSqliteSnapshotStorage {
   /// The SQLite database used for storing [Snapshot] objects.
   final sq.Database database;
 
-  /// The unique identifier for the document these snapshots belong to.
+  @override
   final String documentId;
 
-  /// Saves a [Snapshot] to the storage.
-  ///
-  /// If a snapshot with the same id already exists it is overwritten.
-  void saveSnapshot(Snapshot snapshot) {
+  @override
+  Future<void> saveSnapshot(Snapshot snapshot) async {
     database.execute(
       'INSERT OR REPLACE INTO $snapshotsTable '
       '(document_id, snapshot_id, bytes) VALUES (?, ?, ?)',
@@ -37,12 +39,9 @@ class CRDTSqliteSnapshotStorage {
     );
   }
 
-  /// Saves multiple [Snapshot] objects to the storage.
-  ///
-  /// More efficient and atomic compared to calling [saveSnapshot] multiple
-  /// times: all inserts run in a single transaction using one prepared
-  /// statement. Either all snapshots are saved or, on error, none are.
-  void saveSnapshots(List<Snapshot> snapshots) {
+  /// {@macro crdt_lf_sqlite_batch}
+  @override
+  Future<void> saveSnapshots(List<Snapshot> snapshots) async {
     if (snapshots.isEmpty) {
       return;
     }
@@ -61,10 +60,8 @@ class CRDTSqliteSnapshotStorage {
     }
   }
 
-  /// Retrieves a [Snapshot] by its id.
-  ///
-  /// Returns the [Snapshot] if found, or null otherwise.
-  Snapshot? getSnapshot(String id) {
+  @override
+  Future<Snapshot?> getSnapshot(String id) async {
     final result = database.select(
       'SELECT bytes FROM $snapshotsTable '
       'WHERE document_id = ? AND snapshot_id = ? LIMIT 1',
@@ -76,8 +73,8 @@ class CRDTSqliteSnapshotStorage {
     return Snapshot.fromBytes(result.first['bytes'] as Uint8List);
   }
 
-  /// Retrieves all [Snapshot] objects from the storage for this document.
-  List<Snapshot> getSnapshots() {
+  @override
+  Future<List<Snapshot>> getSnapshots() async {
     final result = database.select(
       'SELECT bytes FROM $snapshotsTable WHERE document_id = ?',
       [documentId],
@@ -87,11 +84,9 @@ class CRDTSqliteSnapshotStorage {
         .toList();
   }
 
-  /// Deletes a [Snapshot] by its id.
-  ///
-  /// Returns true if the snapshot was found and deleted, false otherwise.
-  bool deleteSnapshot(String id) {
-    if (!containsSnapshot(id)) {
+  @override
+  Future<bool> deleteSnapshot(String id) async {
+    if (!_contains(id)) {
       return false;
     }
     database.execute(
@@ -101,11 +96,9 @@ class CRDTSqliteSnapshotStorage {
     return true;
   }
 
-  /// Deletes multiple [Snapshot] objects by their ids.
-  ///
-  /// All deletions run in a single transaction (all-or-nothing).
-  /// Returns the number of snapshots that were actually deleted.
-  int deleteSnapshots(List<String> ids) {
+  /// {@macro crdt_lf_sqlite_batch}
+  @override
+  Future<int> deleteSnapshots(List<String> ids) async {
     if (ids.isEmpty) {
       return 0;
     }
@@ -116,7 +109,7 @@ class CRDTSqliteSnapshotStorage {
     try {
       runInTransaction(database, () {
         for (final id in ids) {
-          if (containsSnapshot(id)) {
+          if (_contains(id)) {
             statement.execute([documentId, id]);
             deleted += 1;
           }
@@ -128,18 +121,18 @@ class CRDTSqliteSnapshotStorage {
     return deleted;
   }
 
-  /// Clears all [Snapshot] objects for this document from the storage.
-  ///
-  /// This operation cannot be undone.
-  void clear() {
+  @override
+  Future<void> clear() async {
     database.execute(
       'DELETE FROM $snapshotsTable WHERE document_id = ?',
       [documentId],
     );
   }
 
-  /// Checks if a [Snapshot] with the given [id] exists for this document.
-  bool containsSnapshot(String id) {
+  @override
+  Future<bool> containsSnapshot(String id) async => _contains(id);
+
+  bool _contains(String id) {
     return database.select(
       'SELECT 1 FROM $snapshotsTable '
       'WHERE document_id = ? AND snapshot_id = ? LIMIT 1',
@@ -147,18 +140,12 @@ class CRDTSqliteSnapshotStorage {
     ).isNotEmpty;
   }
 
-  /// Returns the number of [Snapshot] objects for this document in the storage.
-  int get count {
+  @override
+  Future<int> get count async {
     final result = database.select(
       'SELECT COUNT(*) AS c FROM $snapshotsTable WHERE document_id = ?',
       [documentId],
     );
     return result.first['c'] as int;
   }
-
-  /// Returns true if the storage is empty for this document.
-  bool get isEmpty => count == 0;
-
-  /// Returns true if the storage is not empty for this document.
-  bool get isNotEmpty => count > 0;
 }

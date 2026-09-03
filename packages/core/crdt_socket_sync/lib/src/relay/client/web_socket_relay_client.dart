@@ -175,13 +175,6 @@ class WebSocketRelayClient extends RelaySocketClient {
   int get pendingChangesCount => _syncManager.pendingChangesCount;
 
   @override
-  List<Change> get pendingChanges => _syncManager.pendingChanges;
-
-  @override
-  void restorePendingChanges(Iterable<Change> changes) =>
-      _syncManager.restorePendingChanges(changes);
-
-  @override
   int get lastKnownSeq => _syncManager.lastKnownSeq;
 
   /// Transport for communication

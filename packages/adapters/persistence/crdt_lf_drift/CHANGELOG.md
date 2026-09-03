@@ -1,3 +1,21 @@
+## [0.3.0](https://github.com/MattiaPispisa/crdt/tree/crdt_lf_drift-v0.3.0/packages/crdt_lf_drift)
+
+**Date:** --
+
+### Changed
+
+- **The storages now implement the shared contract** from the new
+  [`crdt_lf_persistence`](https://pub.dev/packages/crdt_lf_persistence) package. Code written
+  against a storage runs on any adapter now, and `CRDTDocumentPersistence` keeps a whole document
+  on disk for you — see that package's README.
+
+- `CRDTDocumentStorage` is no longer declared here. It comes from `crdt_lf_persistence` and is
+  re-exported, so the import path does not change.
+
+- `isEmpty` and `isNotEmpty` are gone from both storages. Use `count`.
+
+- Requires `crdt_lf: ^4.2.0`.
+
 ## [0.2.0](https://github.com/MattiaPispisa/crdt/tree/crdt_lf_drift-v0.2.0/packages/crdt_lf_drift)
 
 **Date:** 2026-08-16

@@ -2,21 +2,6 @@ import 'package:crdt_lf/crdt_lf.dart';
 import 'package:crdt_lf_hive/crdt_lf_hive.dart';
 import 'package:hive/hive.dart';
 
-/// Container class for both change and snapshot storage for a document.
-class CRDTDocumentStorage {
-  /// Creates a new [CRDTDocumentStorage] instance.
-  const CRDTDocumentStorage({
-    required this.changes,
-    required this.snapshots,
-  });
-
-  /// The change storage for the document.
-  final CRDTChangeStorage changes;
-
-  /// The snapshot storage for the document.
-  final CRDTSnapshotStorage snapshots;
-}
-
 /// Main utility class for initializing Hive with CRDT adapters.
 ///
 /// This class provides methods to initialize Hive with all the necessary
@@ -55,7 +40,7 @@ class CRDTHive {
       ..registerAdapter(SnapshotAdapter(typeId: snapshotTypeId));
   }
 
-  /// Creates a [CRDTChangeStorage] for a specific document.
+  /// Creates a [CRDTHiveChangeStorage] for a specific document.
   ///
   /// This provides a document-scoped interface for managing [Change]s.
   ///
@@ -64,17 +49,17 @@ class CRDTHive {
   ///
   /// [documentId] is the unique identifier for the document.
   /// [boxName] is the base name of the Hive box to use (defaults to `changes`).
-  static Future<CRDTChangeStorage> openChangeStorageForDocument(
+  static Future<CRDTHiveChangeStorage> openChangeStorageForDocument(
     String documentId, {
     String boxName = 'changes',
   }) {
     final documentBoxName = '${boxName}_$documentId';
     return Hive.openBox<Change>(documentBoxName).then(
-      (box) => CRDTChangeStorage(box, documentId),
+      (box) => CRDTHiveChangeStorage(box, documentId),
     );
   }
 
-  /// Creates a [CRDTSnapshotStorage] for a specific document.
+  /// Creates a [CRDTHiveSnapshotStorage] for a specific document.
   ///
   /// This provides a document-scoped interface for managing [Snapshot]s.
   ///
@@ -84,13 +69,13 @@ class CRDTHive {
   /// [documentId] is the unique identifier for the document.
   /// [boxName] is the base name of the Hive box
   /// to use (defaults to `snapshots`).
-  static Future<CRDTSnapshotStorage> openSnapshotStorageForDocument(
+  static Future<CRDTHiveSnapshotStorage> openSnapshotStorageForDocument(
     String documentId, {
     String boxName = 'snapshots',
   }) {
     final documentBoxName = '${boxName}_$documentId';
     return Hive.openBox<Snapshot>(documentBoxName).then(
-      (box) => CRDTSnapshotStorage(box, documentId),
+      (box) => CRDTHiveSnapshotStorage(box, documentId),
     );
   }
 
@@ -119,8 +104,8 @@ class CRDTHive {
     ]).then(
       (values) {
         return CRDTDocumentStorage(
-          changes: values[0] as CRDTChangeStorage,
-          snapshots: values[1] as CRDTSnapshotStorage,
+          changes: values[0] as CRDTHiveChangeStorage,
+          snapshots: values[1] as CRDTHiveSnapshotStorage,
         );
       },
     );

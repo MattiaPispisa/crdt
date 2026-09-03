@@ -1,5 +1,21 @@
 import 'package:crdt_lf/crdt_lf.dart';
 
+/// The work a committed transaction collected.
+///
+/// `changes` holds one entry per batch the document applied, in the order the
+/// batches happened. A [TransactionManager] never reads them: it holds them
+/// back and hands them over.
+typedef TransactionWork = ({
+  /// The operations applied during the transaction.
+  List<Operation> operations,
+
+  /// The batches of changes applied during the transaction.
+  List<DocumentChangesApplied> changes,
+
+  /// Whether there are other pending updates.
+  bool otherPendingUpdates,
+});
+
 /// Manages transactional batching of notifications and local changes emission.
 ///
 /// The owner provides callbacks to emit local [Change]s and updates.
@@ -26,23 +42,8 @@ class TransactionManager {
     this.onFlushed,
   });
 
-  /// Callback used to flush the work done during the transaction:
-  ///
-  /// - `operations`: the operations applied during the transaction
-  /// - `createdChanges`: the changes the document wrote itself
-  /// - `ingestedChanges`: the changes the document took in from elsewhere
-  /// - `otherPendingUpdates`: whether there are other pending updates
-  ///
-  /// The two lists of changes are kept apart because they answer different
-  /// questions: what to send to peers, and what to write down. A change is in
-  /// exactly one of them.
-  final void Function(
-    List<Operation> operations,
-    List<Change> createdChanges,
-    List<Change> ingestedChanges,
-    // ignore: avoid_positional_boolean_parameters the only boolean positional parameter
-    bool otherPendingUpdates,
-  ) flushWork;
+  /// Callback used to flush the work done during the transaction.
+  final void Function(TransactionWork work) flushWork;
 
   /// Called once the flush is over and this manager holds nothing anymore.
   ///
@@ -61,11 +62,10 @@ class TransactionManager {
   /// The list of pending local changes.
   final List<Operation> _pendingOperations = <Operation>[];
 
-  /// The changes the document wrote itself during the current transaction.
-  final List<Change> _pendingCreatedChanges = <Change>[];
-
-  /// The changes the document took in during the current transaction.
-  final List<Change> _pendingIngestedChanges = <Change>[];
+  /// The batches of changes applied during the current transaction, in the
+  /// order they were applied.
+  final List<DocumentChangesApplied> _pendingChanges =
+      <DocumentChangesApplied>[];
 
   /// Whether an update has been requested.
   bool _hasRequestedUpdate = false;
@@ -118,20 +118,17 @@ class TransactionManager {
     _flushWork();
   }
 
-  /// Handles changes the document has just applied.
+  /// Handles a batch of changes the document has just applied.
   ///
-  /// [created] tells the two queues apart: `true` when the document wrote the
-  /// changes, `false` when it took them in from elsewhere.
+  /// The batch arrives ready to publish: where it came from and who asked for
+  /// it are read where the work happened, not here. A nested call restores the
+  /// origin it interrupted before this manager commits, so reading it at the
+  /// flush would report the wrong one.
   ///
-  /// If a transaction is active, the changes are queued
-  /// and an update is marked as pending; otherwise changes
-  /// are emitted immediately.
-  void handleAppliedChanges(
-    List<Change> changes, {
-    required bool created,
-  }) {
-    (created ? _pendingCreatedChanges : _pendingIngestedChanges)
-        .addAll(changes);
+  /// If a transaction is active, the batch is queued and flushed, in order, at
+  /// the commit that ends it; otherwise it is emitted immediately.
+  void handleAppliedChanges(DocumentChangesApplied event) {
+    _pendingChanges.add(event);
 
     if (isInTransaction) {
       return;
@@ -156,14 +153,14 @@ class TransactionManager {
 
   void _flushWork() {
     flushWork(
-      List.of(_pendingOperations),
-      List.of(_pendingCreatedChanges),
-      List.of(_pendingIngestedChanges),
-      _hasRequestedUpdate,
+      (
+        operations: List.of(_pendingOperations),
+        changes: List.of(_pendingChanges),
+        otherPendingUpdates: _hasRequestedUpdate,
+      ),
     );
     _pendingOperations.clear();
-    _pendingCreatedChanges.clear();
-    _pendingIngestedChanges.clear();
+    _pendingChanges.clear();
     _hasRequestedUpdate = false;
     onFlushed?.call();
   }

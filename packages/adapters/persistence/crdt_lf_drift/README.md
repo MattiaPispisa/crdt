@@ -75,6 +75,23 @@ final snapshotStorage = storage.snapshotStorageForDocument(documentId);
 final documentStorage = storage.storageForDocument(documentId);
 ```
 
+## Keeping a whole document on disk
+
+Most apps do not call these methods by hand. Hand the storage to
+`CRDTDocumentPersistence` instead: it reads the document back, then follows it
+and writes down what moves.
+
+```dart
+final document = CRDTDocument(documentId: documentId);
+final persistence = await CRDTDocumentPersistence.open(
+  document,
+  storage.storageForDocument(documentId),
+);
+```
+
+It comes from [`crdt_lf_persistence`](https://pub.dev/packages/crdt_lf_persistence),
+which this package re-exports. See that README for the offline-first rules.
+
 ## Document-Scoped Storage
 
 Data for different documents lives in the same tables and is isolated through the `document_id` column.
@@ -101,7 +118,6 @@ await changeStorage.deleteChanges([change1, change2]);
 
 // Storage info
 print('Total changes: ${await changeStorage.count}');
-print('Is empty: ${await changeStorage.isEmpty}');
 ```
 
 ### CRDTDriftSnapshotStorage
@@ -162,6 +178,7 @@ Other bricks of the crdt "system" are:
 - [crdt_socket_sync](https://pub.dev/packages/crdt_socket_sync)
 - [crdt_lf_flutter](https://pub.dev/packages/crdt_lf_flutter)
 - [hlc_dart](https://pub.dev/packages/hlc_dart)
+- [crdt_lf_persistence](https://pub.dev/packages/crdt_lf_persistence)
 - [crdt_lf_hive](https://pub.dev/packages/crdt_lf_hive)
 - [crdt_lf_sqlite](https://pub.dev/packages/crdt_lf_sqlite)
 

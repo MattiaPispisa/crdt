@@ -2,8 +2,8 @@ import 'dart:io';
 
 import 'package:crdt_lf_drift/src/database.dart';
 import 'package:crdt_lf_drift/src/storage/change_storage.dart';
-import 'package:crdt_lf_drift/src/storage/document_storage.dart';
 import 'package:crdt_lf_drift/src/storage/snapshot_storage.dart';
+import 'package:crdt_lf_persistence/crdt_lf_persistence.dart';
 import 'package:drift/drift.dart';
 import 'package:drift/native.dart';
 

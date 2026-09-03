@@ -1,3 +1,30 @@
+## [0.5.0](https://github.com/MattiaPispisa/crdt/tree/crdt_lf_hive-v0.5.0/packages/crdt_lf_hive)
+
+**Date:** --
+
+### Changed
+
+- **The storages now implement the shared contract** from the new
+  [`crdt_lf_persistence`](https://pub.dev/packages/crdt_lf_persistence) package. Code written
+  against a storage runs on any adapter now, and `CRDTDocumentPersistence` keeps a whole document
+  on disk for you — see that package's README.
+
+- **`CRDTChangeStorage` and `CRDTSnapshotStorage` are now `CRDTHiveChangeStorage` and
+  `CRDTHiveSnapshotStorage`**, matching the drift and sqlite adapters. The old names belong to the
+  shared contract these classes implement.
+
+- **`getChanges` and `getSnapshots` return a `Future`**, along with `count` and
+  `containsSnapshot`. Hive answers them from memory, so nothing really suspends; the futures are
+  what the shared contract needs, so that the other backends fit the same type. Add `await` at the
+  call sites.
+
+- `CRDTDocumentStorage` is no longer declared here. It comes from `crdt_lf_persistence` and is
+  re-exported, so the import path does not change.
+
+- `isEmpty` and `isNotEmpty` are gone from both storages. Use `count`.
+
+- Requires `crdt_lf: ^4.2.0`.
+
 ## [0.4.0](https://github.com/MattiaPispisa/crdt/tree/crdt_lf_hive-v0.4.0/packages/crdt_lf_hive)
 
 **Date:** 2026-08-16

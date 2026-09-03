@@ -57,50 +57,45 @@ class RelaySyncManager {
   /// imported (`0` before the first welcome).
   int get lastKnownSeq => _seqTracker.maxContiguous;
 
-  /// The local changes not yet acknowledged by the relay, oldest first.
-  ///
-  /// {@template relay_pending_changes}
-  /// Write these down to carry at-least-once delivery across a restart, and
-  /// hand them back with [restorePendingChanges] before connecting. Without
-  /// that, a change written while offline comes back from storage as an
-  /// imported change, never as a local one, so nothing ever pushes it.
-  /// {@endtemplate}
-  List<Change> get pendingChanges => _queue.pending;
-
-  /// Seeds the queue with [changes] a previous session left unacknowledged.
-  ///
-  /// {@macro relay_pending_changes}
-  ///
-  /// Changes already queued are skipped. Call before connecting: nothing is
-  /// pushed until a welcome arrives.
-  void restorePendingChanges(Iterable<Change> changes) {
-    _queue.restore(changes);
-  }
-
   /// Enqueues [change] for the relay and flushes.
   void enqueue(Change change) {
     _queue.add(change);
     unawaited(flush());
   }
 
-  /// Imports the room state of a welcome.
+  /// Imports the room state of a welcome, then queues everything the relay
+  /// does not hold.
   ///
   /// The state is merged (`merge: true`) into the document: on a reconnect
   /// the document already holds local state that must not be clobbered.
   /// History is kept (`pruneHistory: false`) so this client can later
   /// upload a snapshot covering it.
   ///
-  /// Unacknowledged local changes survived the reconnect in the queue and
-  /// are re-pushed; peers de-duplicate re-delivered changes.
+  /// A welcome carries the whole room — the snapshot plus the log after it —
+  /// so its version vector is exactly what the relay has. Whatever the
+  /// document holds beyond that is queued and pushed, whoever wrote it. That
+  /// covers three cases with one rule: unacknowledged changes that survived
+  /// the reconnect, changes restored from storage after a restart (which
+  /// reach the document as imported ones, so nothing else would ever push
+  /// them), and changes of another peer the relay lost.
+  ///
+  /// It is the same reconciliation the server-client mode does at handshake,
+  /// and it inherits the same limit: a version vector cannot describe a hole
+  /// in the middle of one peer's sequence, only how far that peer got.
+  ///
+  /// Re-delivering a change the relay already had is harmless: the relay
+  /// appends it and every peer discards it as known.
   Future<void> onWelcome(RelayWelcomeMessage message) async {
+    final snapshot = message.snapshot != null
+        ? Snapshot.fromBytes(base64Decode(message.snapshot!))
+        : null;
+    final changes = [
+      for (final blob in message.changes) Change.fromBytes(base64Decode(blob)),
+    ];
+
     document.import(
-      snapshot: message.snapshot != null
-          ? Snapshot.fromBytes(base64Decode(message.snapshot!))
-          : null,
-      changes: [
-        for (final blob in message.changes)
-          Change.fromBytes(base64Decode(blob)),
-      ],
+      snapshot: snapshot,
+      changes: changes,
       merge: true,
       pruneHistory: false,
     );
@@ -109,10 +104,27 @@ class RelaySyncManager {
     _handshaken = true;
     _queue.resetInFlight();
 
+    _queueUnknownToRelay(snapshot, changes);
+
     await flush();
 
     if (message.compact) {
       await uploadSnapshot(message.seq);
+    }
+  }
+
+  /// Queues every change the document holds that the welcome did not carry.
+  void _queueUnknownToRelay(Snapshot? snapshot, List<Change> changes) {
+    var relayVersion = VersionVector({});
+    if (snapshot != null) {
+      relayVersion = relayVersion.merged(snapshot.versionVector);
+    }
+    for (final change in changes) {
+      relayVersion.update(change.id.peerId, change.id.hlc);
+    }
+
+    for (final change in document.exportChangesNewerThan(relayVersion)) {
+      _queue.add(change);
     }
   }
 

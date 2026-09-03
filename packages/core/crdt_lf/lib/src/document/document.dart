@@ -628,6 +628,15 @@ class CRDTDocument extends BaseCRDTDocument {
   /// Events are handed out once the document is settled, in the order the
   /// moves happened.
   ///
+  /// **Broadcast, and nothing is replayed.** A move made before you subscribe
+  /// is not reported to you: subscribe before the document is written to, or
+  /// read the state you missed with [exportChanges] and [takeSnapshot]. While
+  /// nobody listens the document does not even collect what a prune removed.
+  ///
+  /// Every event carries the `origin` of the call behind it, so a consumer can
+  /// recognise its own writes — a persistence adapter can subscribe first and
+  /// still skip the restore it performs itself. See [import].
+  ///
   /// ```dart
   /// document.events.listen((event) {
   ///   switch (event) {
@@ -701,21 +710,17 @@ class CRDTDocument extends BaseCRDTDocument {
   /// 1. Subscribers are notified about changes
   ///
   /// **Only [_transactionManager] can call this method.**
-  void _transactionFlushWork(
-    List<Operation> operations,
-    List<Change> createdChanges,
-    List<Change> ingestedChanges,
-    bool otherPendingUpdates,
-  ) {
+  void _transactionFlushWork(TransactionWork work) {
     final compacted = Compound(
-      operations: operations,
+      operations: work.operations,
       handlers: _handlers,
     ).compact();
 
     final handlersAffectedFromErrors = <String>{};
-    // The compacted operations become changes this document wrote, so they
-    // join the ones [createChange] already put in that queue.
-    final appliedChanges = createdChanges;
+    // The changes the compacted operations become. They belong at the end of
+    // the batches this transaction collected: they only exist now, at the
+    // commit, while every batch already queued happened before it.
+    final appliedChanges = <Change>[];
 
     // if generated operations are applied correctly the handlers
     // cached state can be preserved.
@@ -749,28 +754,28 @@ class CRDTDocument extends BaseCRDTDocument {
       }
     }
 
+    // In order, so a consumer reading the stream sees the moves in the order
+    // they happened. A transaction that takes changes in before it writes its
+    // own reports the ingest first, and the changes it wrote name the ingested
+    // ones among their dependencies.
+    for (final event in work.changes) {
+      _publishDocumentEvent(event);
+    }
     if (appliedChanges.isNotEmpty) {
       _publishDocumentEvent(
         DocumentChangesApplied(
           changes: appliedChanges,
           source: ChangeSource.created,
-          origin: _deltaOrigin,
-        ),
-      );
-    }
-    if (ingestedChanges.isNotEmpty) {
-      _publishDocumentEvent(
-        DocumentChangesApplied(
-          changes: ingestedChanges,
-          source: ChangeSource.ingested,
+          // Read now, and right to: the operations were collected under this
+          // origin and only become changes here.
           origin: _deltaOrigin,
         ),
       );
     }
 
     if (appliedChanges.isNotEmpty ||
-        ingestedChanges.isNotEmpty ||
-        otherPendingUpdates) {
+        work.changes.isNotEmpty ||
+        work.otherPendingUpdates) {
       _updatesController.add(null);
     }
   }
@@ -976,7 +981,7 @@ class CRDTDocument extends BaseCRDTDocument {
 
     if (applied) {
       _foldOrDropCachesForChange(change);
-      _emitUpdate(changes: [change], created: true);
+      _emitUpdate(changes: [change], source: ChangeSource.created);
     }
 
     return change;
@@ -1091,7 +1096,7 @@ class CRDTDocument extends BaseCRDTDocument {
     if (applied) {
       _ensureHandlerForChange(change);
       _foldOrDropCachesForChange(change);
-      _emitUpdate(changes: [change]);
+      _emitUpdate(changes: [change], source: ChangeSource.ingested);
     }
     return applied;
   }
@@ -1140,11 +1145,19 @@ class CRDTDocument extends BaseCRDTDocument {
   /// This ensures that you only delete history that no other peer
   /// will ever need.
   /// {@endtemplate}
+  ///
+  /// [origin] is carried by the [DocumentSnapshotUpdated] this publishes, and
+  /// by the [DocumentHistoryPruned] that follows it when [pruneHistory] is on.
   Snapshot takeSnapshot({
     bool pruneHistory = true,
+    Object? origin,
   }) {
     _ensureNotDisposed('takeSnapshot');
 
+    return _withDeltaOrigin(origin, () => _takeSnapshot(pruneHistory));
+  }
+
+  Snapshot _takeSnapshot(bool pruneHistory) {
     // Make sure every reachable nested handler is instantiated before
     // snapshotting, otherwise children never resolved on this peer would be
     // missing from the snapshot and lost on prune.
@@ -1178,6 +1191,7 @@ class CRDTDocument extends BaseCRDTDocument {
       DocumentSnapshotUpdated(
         snapshot: snapshot,
         reason: SnapshotReason.taken,
+        origin: _deltaOrigin,
       ),
     );
 
@@ -1195,9 +1209,15 @@ class CRDTDocument extends BaseCRDTDocument {
   /// **The history is always protected until the last snapshot.**
   ///
   /// {@macro pruning_strategy}
-  void garbageCollect(VersionVector protectUntil) {
+  ///
+  /// [origin] is carried by the [DocumentHistoryPruned] this publishes.
+  void garbageCollect(VersionVector protectUntil, {Object? origin}) {
     _ensureNotDisposed('garbageCollect');
 
+    _withDeltaOrigin(origin, () => _garbageCollect(protectUntil));
+  }
+
+  void _garbageCollect(VersionVector protectUntil) {
     final effectiveVV = VersionVector.intersection(
       [
         protectUntil,
@@ -1220,12 +1240,23 @@ class CRDTDocument extends BaseCRDTDocument {
   /// Use [pruneHistory] to prune the history and reduce memory usage.
   ///
   /// {@macro pruning_strategy}
+  ///
+  /// [origin] is carried by the [DocumentSnapshotUpdated] this publishes, and
+  /// by the [DocumentHistoryPruned] that follows it when [pruneHistory] is on.
   bool importSnapshot(
     Snapshot snapshot, {
     bool pruneHistory = true,
+    Object? origin,
   }) {
     _ensureNotDisposed('importSnapshot');
 
+    return _withDeltaOrigin(
+      origin,
+      () => _importSnapshot(snapshot, pruneHistory),
+    );
+  }
+
+  bool _importSnapshot(Snapshot snapshot, bool pruneHistory) {
     if (shouldApplySnapshot(snapshot)) {
       // Before the prune, for the reason written down in [takeSnapshot].
       _lastSnapshot = snapshot;
@@ -1233,6 +1264,7 @@ class CRDTDocument extends BaseCRDTDocument {
         DocumentSnapshotUpdated(
           snapshot: snapshot,
           reason: SnapshotReason.imported,
+          origin: _deltaOrigin,
         ),
       );
 
@@ -1259,12 +1291,20 @@ class CRDTDocument extends BaseCRDTDocument {
   /// Use [pruneHistory] to prune the history and reduce memory usage.
   ///
   /// {@macro pruning_strategy}
+  ///
+  /// [origin] is carried by the [DocumentSnapshotUpdated] this publishes, and
+  /// by the [DocumentHistoryPruned] that follows it when [pruneHistory] is on.
   void mergeSnapshot(
     Snapshot snapshot, {
     bool pruneHistory = true,
+    Object? origin,
   }) {
     _ensureNotDisposed('mergeSnapshot');
 
+    _withDeltaOrigin(origin, () => _mergeSnapshot(snapshot, pruneHistory));
+  }
+
+  void _mergeSnapshot(Snapshot snapshot, bool pruneHistory) {
     if (_lastSnapshot == null) {
       _lastSnapshot = snapshot;
     } else {
@@ -1279,6 +1319,7 @@ class CRDTDocument extends BaseCRDTDocument {
       DocumentSnapshotUpdated(
         snapshot: _lastSnapshot!,
         reason: SnapshotReason.merged,
+        origin: _deltaOrigin,
       ),
     );
 
@@ -1353,6 +1394,10 @@ class CRDTDocument extends BaseCRDTDocument {
   ///
   /// Use [pruneHistory] to prune the history and reduce memory usage.
   ///
+  /// [origin] is carried by every event this publishes, so a consumer of
+  /// [events] can recognise the moves it asked for — a persistence adapter
+  /// reading its own copy back, say — and skip writing them down again.
+  ///
   /// {@macro pruning_strategy}
   int import({
     Snapshot? snapshot,
@@ -1374,11 +1419,15 @@ class CRDTDocument extends BaseCRDTDocument {
     }
 
     if (merge) {
-      mergeSnapshot(snapshot, pruneHistory: pruneHistory);
+      mergeSnapshot(snapshot, pruneHistory: pruneHistory, origin: origin);
       return importChanges(changesToImport, origin: origin);
     }
 
-    final imported = importSnapshot(snapshot, pruneHistory: pruneHistory);
+    final imported = importSnapshot(
+      snapshot,
+      pruneHistory: pruneHistory,
+      origin: origin,
+    );
     if (!imported) {
       return -1;
     }
@@ -1499,7 +1548,7 @@ class CRDTDocument extends BaseCRDTDocument {
     // many handlers are present (e.g. a large nested tree).
     if (changedApplied.isNotEmpty) {
       _foldOrDropCachesForChanges(changedApplied);
-      _emitUpdate(changes: changedApplied);
+      _emitUpdate(changes: changedApplied, source: ChangeSource.ingested);
     }
 
     return changedApplied.length;
@@ -1523,6 +1572,7 @@ class CRDTDocument extends BaseCRDTDocument {
                   upTo: version,
                   removed: removed,
                   rewritten: rewritten,
+                  origin: _deltaOrigin,
                 ),
               )
           : null,
@@ -1552,9 +1602,14 @@ class CRDTDocument extends BaseCRDTDocument {
   /// Emits that the document state has made an update
   /// to be notified by listeners.
   ///
-  /// [changes] are the ones just applied, and [created] says whether this
-  /// document wrote them. Pass none for a move that applies no change, such as
-  /// a snapshot import.
+  /// [changes] are the ones just applied and [source] says how they reached
+  /// this document. Pass neither for a move that applies no change, such as a
+  /// snapshot import.
+  ///
+  /// The batch is turned into its event **here**, not at the commit: this is
+  /// where the move happens, so this is where [_deltaOrigin] still holds the
+  /// origin of the call behind it. A nested call restores the outer origin
+  /// long before the commit runs.
   ///
   /// If a transaction is active, the update
   /// is marked as pending; otherwise it is emitted immediately.
@@ -1562,12 +1617,23 @@ class CRDTDocument extends BaseCRDTDocument {
   /// Every [CRDTDocument] must call [_emitUpdate] when something happens,
   /// the only way to **directly** notify listeners
   /// is using the [_transactionManager] callbacks.
-  void _emitUpdate({List<Change>? changes, bool created = false}) {
-    if (changes != null) {
-      _transactionManager.handleAppliedChanges(changes, created: created);
-    } else {
+  void _emitUpdate({List<Change>? changes, ChangeSource? source}) {
+    // Nobody mirrors this document: the batch is not worth building, and an
+    // update on its own says everything a listener of [updates] can read.
+    if (changes == null ||
+        changes.isEmpty ||
+        !_eventsController.hasListener) {
       _transactionManager.requestUpdate();
+      return;
     }
+
+    _transactionManager.handleAppliedChanges(
+      DocumentChangesApplied(
+        changes: changes,
+        source: source!,
+        origin: _deltaOrigin,
+      ),
+    );
   }
 
   /// Sorts [Change]s topologically

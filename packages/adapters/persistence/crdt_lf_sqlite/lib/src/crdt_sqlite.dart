@@ -1,6 +1,6 @@
+import 'package:crdt_lf_persistence/crdt_lf_persistence.dart';
 import 'package:crdt_lf_sqlite/src/schema.dart';
 import 'package:crdt_lf_sqlite/src/storage/change_storage.dart';
-import 'package:crdt_lf_sqlite/src/storage/document_storage.dart';
 import 'package:crdt_lf_sqlite/src/storage/snapshot_storage.dart';
 import 'package:sqlite3/sqlite3.dart' as sq;
 

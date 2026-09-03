@@ -15,7 +15,7 @@
 - **`CRDTDocument.events`**, a stream of the moves of a document's durable state. A persistence
   adapter follows it and writes down what each event reports, instead of calling `exportChanges`
   again to work out what moved. Three events: `DocumentChangesApplied` (changes entered the store,
-  batched per transaction, tagged `ChangeSource.created` or `ChangeSource.ingested`),
+  one event per batch applied, tagged `ChangeSource.created` or `ChangeSource.ingested`),
   `DocumentSnapshotUpdated` (`taken` / `imported` / `merged`) and `DocumentHistoryPruned`.
   Until now a change that arrived through `importChanges`, and every snapshot taken locally, moved
   the document without telling anyone.
@@ -23,6 +23,14 @@
   were rebuilt — those have to be written again, or a reload replays a dependency that no longer
   exists. The snapshot event always precedes the prune its own version causes, so a consumer that
   writes on every event stores the snapshot before dropping what it covers.
+  Every event carries the `origin` of the call behind it, and `takeSnapshot`, `importSnapshot`,
+  `mergeSnapshot`, `import` and `garbageCollect` now take one. A consumer can subscribe before it
+  restores the document and still skip the restore it performed itself. The origin is the one of
+  the call that made the batch, not the one in force when the transaction commits, so a nested
+  call is still recognisable.
+  Batches are reported in the order the moves happened. A transaction that takes changes in before
+  it writes its own reports the ingest first — the changes it then wrote name the ingested ones
+  among their dependencies, so the other order would describe a history that cannot be replayed.
 
 ### Changed
 

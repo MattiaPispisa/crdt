@@ -12,7 +12,9 @@
   the browser's storage as it changes, and read back when you open it — so
   reloading offline, or on a relay that has forgotten the room, brings your
   text back instead of an empty page. Writing is delayed a quarter of a second
-  so typing never waits on the disk.
+  so typing never waits on the disk. What you write while offline reaches
+  everyone else as soon as you are back online, even if you reloaded in
+  between.
 
 ## 0.9.0
 

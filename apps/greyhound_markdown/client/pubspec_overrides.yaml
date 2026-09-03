@@ -2,9 +2,9 @@
 # unreleased fixes are picked up before they are published. Remove this file
 # to build against the pub.dev versions.
 #
-# On now because the undo needs `CRDTUndoManager` (crdt_lf 4.2.0), the
-# offline cache needs `CRDTDocument.events` (crdt_lf 4.2.0) and
-# `RelaySocketClient.pendingChanges` (crdt_socket_sync 0.8.0), none of which
+# On now because the undo needs `CRDTUndoManager` (crdt_lf 4.2.0), the local
+# copy of a room needs `crdt_lf_persistence` (new) and the relay client has to
+# catch the relay up after a restart (crdt_socket_sync 0.8.0), none of which
 # are published yet.
 dependency_overrides:
   crdt_lf:
@@ -13,5 +13,7 @@ dependency_overrides:
     path: ../../../packages/core/crdt_lf_flutter
   crdt_lf_hive:
     path: ../../../packages/adapters/persistence/crdt_lf_hive
+  crdt_lf_persistence:
+    path: ../../../packages/core/crdt_lf_persistence
   crdt_socket_sync:
     path: ../../../packages/core/crdt_socket_sync

@@ -105,6 +105,28 @@ void main() {
         expect(only<DocumentChangesApplied>(), hasLength(1));
       });
 
+      test('a transaction that ingests then writes reports them in that order',
+          () async {
+        final remote = remoteDocument();
+        final theirs = remoteChange(remote);
+        events.clear();
+
+        doc.runInTransaction(() {
+          doc
+            ..importChanges([theirs])
+            ..createChange(newOperation());
+        });
+        await pumpEventQueue();
+
+        // The ingest happened first, and the change the document went on to
+        // write names [theirs] among its dependencies. Reporting the two the
+        // other way round would describe a history that cannot be replayed.
+        expect(
+          only<DocumentChangesApplied>().map((e) => e.source),
+          [ChangeSource.ingested, ChangeSource.created],
+        );
+      });
+
       test('carries the origin the call was tagged with', () async {
         final tag = Object();
         doc.runInTransaction(
@@ -254,6 +276,78 @@ void main() {
           events.indexWhere((e) => e is DocumentSnapshotUpdated),
           lessThan(events.indexWhere((e) => e is DocumentHistoryPruned)),
         );
+      });
+    });
+
+    group('origin', () {
+      test('a snapshot and the prune it causes carry the origin', () async {
+        final tag = Object();
+        doc.createChange(newOperation());
+        await pumpEventQueue();
+        events.clear();
+
+        doc.takeSnapshot(origin: tag);
+        await pumpEventQueue();
+
+        expect(only<DocumentSnapshotUpdated>().single.origin, same(tag));
+        expect(only<DocumentHistoryPruned>().single.origin, same(tag));
+      });
+
+      test('import tags the snapshot it applies, not only the changes',
+          () async {
+        final tag = Object();
+        final remote = remoteDocument();
+        remoteChange(remote);
+        final snapshot = remote.takeSnapshot(pruneHistory: false);
+        // After the snapshot, so the change is not one the snapshot covers.
+        final change = remoteChange(remote);
+        events.clear();
+
+        doc.import(
+          snapshot: snapshot,
+          changes: [change],
+          merge: true,
+          pruneHistory: false,
+          origin: tag,
+        );
+        await pumpEventQueue();
+
+        expect(only<DocumentSnapshotUpdated>().single.origin, same(tag));
+        expect(only<DocumentChangesApplied>().single.origin, same(tag));
+      });
+
+      test('a nested call keeps its own origin, not the one at commit',
+          () async {
+        final outer = Object();
+        final inner = Object();
+        final remote = remoteDocument();
+        final theirs = remoteChange(remote);
+        events.clear();
+
+        doc.runInTransaction(
+          origin: outer,
+          () => doc.importChanges([theirs], origin: inner),
+        );
+        await pumpEventQueue();
+
+        // The import is over long before the commit runs, and it restored
+        // [outer] on its way out. The batch has to remember the origin of the
+        // call that made it, or a consumer cannot recognise its own writes.
+        expect(only<DocumentChangesApplied>().single.origin, same(inner));
+      });
+
+      test('garbageCollect carries the origin', () async {
+        final tag = Object();
+        doc
+          ..createChange(newOperation())
+          ..takeSnapshot(pruneHistory: false);
+        await pumpEventQueue();
+        events.clear();
+
+        doc.garbageCollect(doc.getVersionVector(), origin: tag);
+        await pumpEventQueue();
+
+        expect(only<DocumentHistoryPruned>().single.origin, same(tag));
       });
     });
 

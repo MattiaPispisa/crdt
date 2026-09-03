@@ -1,0 +1,15 @@
+name: persistence_conformance
+description: >-
+  Private, unpublished package holding the conformance suite every
+  `crdt_lf_persistence` storage adapter is checked against.
+publish_to: "none"
+
+version: 1.0.0
+
+environment:
+  sdk: ">=3.0.0 <4.0.0"
+
+dependencies:
+  crdt_lf: ^4.2.0
+  crdt_lf_persistence: ^0.1.0
+  test: ^1.24.0

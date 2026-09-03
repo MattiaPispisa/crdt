@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:crdt_lf/crdt_lf.dart';
 import 'package:crdt_lf_flutter/crdt_lf_flutter.dart';
+import 'package:crdt_lf_hive/crdt_lf_hive.dart';
 import 'package:crdt_socket_sync/web_socket_relay_client.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -9,7 +10,6 @@ import 'package:flutter/services.dart';
 import 'package:greyhound_markdown_client/src/application/application.dart';
 import 'package:greyhound_markdown_client/src/config.dart';
 import 'package:greyhound_markdown_client/src/services/awareness/awareness_service.dart';
-import 'package:greyhound_markdown_client/src/services/persistence/document_cache.dart';
 import 'package:greyhound_markdown_client/src/widgets/app_footer.dart';
 import 'package:greyhound_markdown_client/src/widgets/editor_pane.dart';
 import 'package:greyhound_markdown_client/src/widgets/export_menu.dart';
@@ -37,7 +37,7 @@ class _EditorScreenState extends State<EditorScreen> {
   late final WebSocketRelayClient _sync;
   late final ValueNotifier<ConnectionStatus> _status;
   StreamSubscription<ConnectionStatus>? _statusSubscription;
-  DocumentCache? _cache;
+  CRDTDocumentPersistence? _persistence;
   bool _initialized = false;
   bool _restored = false;
   _ViewMode _mode = _ViewMode.split;
@@ -77,31 +77,41 @@ class _EditorScreenState extends State<EditorScreen> {
   /// empty page for as long as the handshake takes.
   Future<void> _restoreThenConnect() async {
     try {
-      _cache = await DocumentCache.open(_document, _sync);
-    } catch (error, stackTrace) {
-      // A room with no local cache still works — it just starts empty and
-      // fills up from the relay.
-      FlutterError.reportError(
-        FlutterErrorDetails(
-          exception: error,
-          stack: stackTrace,
-          library: 'greyhound_markdown',
-          context: ErrorDescription('restoring room ${widget.roomId}'),
-        ),
+      _persistence = await CRDTDocumentPersistence.open(
+        _document,
+        await CRDTHive.openStorageForDocument(_document.documentId),
+        onError: _reportPersistenceError,
       );
+    } catch (error, stackTrace) {
+      // A room with no local copy still works — it just starts empty and
+      // fills up from the relay.
+      _reportPersistenceError(error, stackTrace);
     }
     if (!mounted) {
       return;
     }
     setState(() => _restored = true);
+    // Only now: the restored document is what the relay is caught up against,
+    // so anything written offline goes out with the next welcome.
     _sync.connect();
+  }
+
+  void _reportPersistenceError(Object error, StackTrace stackTrace) {
+    FlutterError.reportError(
+      FlutterErrorDetails(
+        exception: error,
+        stack: stackTrace,
+        library: 'greyhound_markdown',
+        context: ErrorDescription('storing room ${widget.roomId}'),
+      ),
+    );
   }
 
   @override
   void dispose() {
     _statusSubscription?.cancel();
     // Flushes whatever is still waiting to be written.
-    unawaited(_cache?.dispose());
+    unawaited(_persistence?.dispose());
     // Disposes the awareness plugin too.
     _sync.dispose();
     _awareness.dispose();

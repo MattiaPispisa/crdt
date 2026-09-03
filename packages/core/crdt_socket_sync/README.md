@@ -481,30 +481,32 @@ sequenceDiagram
 
 #### Surviving a restart
 
-A change leaves the outbox only when the relay acknowledges it. That queue
-lives in memory, so **a restart drops it** — and a change restored from storage
-reaches the document as an *imported* change, never as a local one, so nothing
-pushes it. In an offline-first app that means the text written on a plane is
-read back on the next launch but never reaches anyone else.
+A welcome carries the whole room: the snapshot, plus the log after it. So the
+client knows exactly what the relay holds, and pushes whatever the document
+holds beyond that — whoever wrote it.
 
-Write the outbox down next to the document and hand it back before connecting:
+That is all an offline-first client needs. Persist the document with
+[`crdt_lf_persistence`](https://pub.dev/packages/crdt_lf_persistence), and open
+the persistence **before** you connect:
 
 ```dart
-// When you save.
-await outbox.replaceWith([
-  for (final change in client.pendingChanges) change.id.toString(),
-]);
+final document = CRDTDocument(documentId: roomId);
+final persistence = await CRDTDocumentPersistence.open(document, storage);
 
-// On the next launch, before connect().
-client.restorePendingChanges(
-  restoredChanges.where((c) => savedIds.contains(c.id.toString())),
-);
+// Only now: the restored document is what the welcome is reconciled against.
 await client.connect();
 ```
 
-Nothing is pushed until the relay says hello, so seeding the queue before
-connecting is safe. Re-delivering a change the relay already had is harmless:
-the relay appends it and every peer discards it as known.
+The text written on a plane is read back on the next launch, and reaches
+everyone else at the next welcome. There is no outbox for your app to keep.
+
+Two things follow from the same rule. A change of another peer that the relay
+lost is pushed again by whoever still holds it, so a room heals itself. And a
+version vector cannot describe a hole in the middle of one peer's sequence,
+only how far that peer got — the same limit the server-client mode has.
+
+Re-delivering a change the relay already had is harmless: the relay appends it
+and every peer discards it as known.
 
 ### Log Compaction
 
@@ -871,6 +873,7 @@ Other bricks of the crdt "system" are:
 - [crdt_lf](https://pub.dev/packages/crdt_lf)
 - [crdt_lf_flutter](https://pub.dev/packages/crdt_lf_flutter)
 - [hlc_dart](https://pub.dev/packages/hlc_dart)
+- [crdt_lf_persistence](https://pub.dev/packages/crdt_lf_persistence)
 - [crdt_lf_hive](https://pub.dev/packages/crdt_lf_hive)
 - [crdt_lf_drift](https://pub.dev/packages/crdt_lf_drift)
 - [crdt_lf_sqlite](https://pub.dev/packages/crdt_lf_sqlite)

@@ -84,6 +84,7 @@ const _packagePubNames = <String>[
   'crdt_socket_sync',
   'crdt_lf_flutter',
   'hlc_dart',
+  'crdt_lf_persistence',
   'crdt_lf_hive',
   'crdt_lf_drift',
   'crdt_lf_sqlite',

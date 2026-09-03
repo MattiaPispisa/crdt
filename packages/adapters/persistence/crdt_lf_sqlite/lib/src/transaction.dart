@@ -1,5 +1,10 @@
 import 'package:sqlite3/sqlite3.dart' as sq;
 
+/// {@template crdt_lf_sqlite_batch}
+/// The whole batch runs in one transaction, with one prepared statement:
+/// either all of it lands, or none of it does.
+/// {@endtemplate}
+///
 /// Runs [body] inside a single SQLite transaction on [database].
 ///
 /// Commits when [body] completes normally, or rolls back and rethrows if

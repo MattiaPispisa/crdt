@@ -178,12 +178,26 @@ A companion library, [crdt_lf_flutter](https://pub.dev/packages/crdt_lf_flutter)
 It provides Flutter reactivity for `crdt_lf`: widgets rebuild when the CRDT state changes, with selectors, a provider and a collaborative text field. More info in the [README](https://github.com/MattiaPispisa/crdt/tree/main/packages/core/crdt_lf_flutter/README.md) of the Flutter package.
 
 ## Persistence
-Storage is not handled in this library, but there are some out of the box solutions:
+Storage is not handled in this library. It lives in
+[crdt_lf_persistence](https://pub.dev/packages/crdt_lf_persistence): the storage contract,
+`CRDTDocumentPersistence` to keep a document on disk as it changes, and a plain-file store for an
+app that wants no database.
+
+Pick a backend by adding the adapter that implements the contract:
 - [crdt_lf_hive](https://pub.dev/packages/crdt_lf_hive): adapters and utils for persist data using [Hive](https://pub.dev/packages/hive).
 - [crdt_lf_drift](https://pub.dev/packages/crdt_lf_drift): adapters and utils for persist data using [Drift](https://pub.dev/packages/drift).
 - [crdt_lf_sqlite](https://pub.dev/packages/crdt_lf_sqlite): adapters and utils for persist data using [sqlite3](https://pub.dev/packages/sqlite3).
 
-What the document gives them is `events`: a stream of the moves of its durable state. A consumer
+Most apps want `CRDTDocumentPersistence` and nothing else:
+
+```dart
+final persistence = await CRDTDocumentPersistence.open(document, storage);
+```
+
+What follows is what it does for you, and what to write if you keep a copy of the document
+somewhere it does not reach.
+
+The document gives a mirror `events`: a stream of the moves of its durable state. A consumer
 follows it and writes down what each event reports, so its copy on disk stays current without ever
 exporting the document again.
 
@@ -203,11 +217,14 @@ document.events.listen((event) {
 });
 ```
 
+`events` is a broadcast stream and nothing is replayed: subscribe before the document is written
+to, or the moves before your subscription are lost.
+
 Three events, and what each one is for:
 
 | event | when | what to do with it |
 | --- | --- | --- |
-| `DocumentChangesApplied` | changes entered the store, batched per transaction | append them |
+| `DocumentChangesApplied` | changes entered the store, one event per batch | append them |
 | `DocumentSnapshotUpdated` | `takeSnapshot`, `importSnapshot` or `mergeSnapshot` | store the snapshot |
 | `DocumentHistoryPruned` | history was dropped | delete `removed`, write `rewritten` again |
 
@@ -215,8 +232,14 @@ Three events, and what each one is for:
 in (`ingested`). A mirror saves both; a sync client sends only the first, which is what
 `localChanges` already hands it.
 
+Every event also carries the `origin` of the call behind it — `takeSnapshot`, `importSnapshot`,
+`mergeSnapshot`, `import` and `garbageCollect` all take one. That is how a consumer subscribes
+first and still skips the restore it performs itself.
+
 A snapshot event always arrives **before** the prune its own version causes, so a consumer that
-writes on every event stores the snapshot before dropping the changes it covers.
+writes on every event stores the snapshot before dropping the changes it covers. Events come in the
+order the moves happened: a transaction that takes changes in before it writes its own reports the
+ingest first.
 
 To restore, read both back and hand them over together:
 
@@ -1245,6 +1268,7 @@ Other bricks of the crdt "system" are:
 - [crdt_socket_sync](https://pub.dev/packages/crdt_socket_sync)
 - [crdt_lf_flutter](https://pub.dev/packages/crdt_lf_flutter)
 - [hlc_dart](https://pub.dev/packages/hlc_dart)
+- [crdt_lf_persistence](https://pub.dev/packages/crdt_lf_persistence)
 - [crdt_lf_hive](https://pub.dev/packages/crdt_lf_hive)
 - [crdt_lf_drift](https://pub.dev/packages/crdt_lf_drift)
 - [crdt_lf_sqlite](https://pub.dev/packages/crdt_lf_sqlite)

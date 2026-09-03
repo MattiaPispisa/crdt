@@ -6,8 +6,14 @@
 /// via the `document_id` column.
 library;
 
+export 'package:crdt_lf_persistence/crdt_lf_persistence.dart'
+    show
+        CRDTChangeStorage,
+        CRDTDocumentPersistence,
+        CRDTDocumentStorage,
+        CRDTSnapshotStorage;
+
 export 'src/crdt_drift.dart';
 export 'src/database.dart' show CRDTDriftDatabase;
 export 'src/storage/change_storage.dart';
-export 'src/storage/document_storage.dart';
 export 'src/storage/snapshot_storage.dart';

@@ -72,9 +72,29 @@ final snapshotStorage = storage.snapshotStorageForDocument(documentId);
 final documentStorage = storage.storageForDocument(documentId);
 ```
 
+## Keeping a whole document on disk
+
+Most apps do not call these methods by hand. Hand the storage to
+`CRDTDocumentPersistence` instead: it reads the document back, then follows it
+and writes down what moves.
+
+```dart
+final document = CRDTDocument(documentId: documentId);
+final persistence = await CRDTDocumentPersistence.open(
+  document,
+  storage.storageForDocument(documentId),
+);
+```
+
+It comes from [`crdt_lf_persistence`](https://pub.dev/packages/crdt_lf_persistence),
+which this package re-exports. See that README for the offline-first rules.
+
 ## Document-Scoped Storage
 
 Data for different documents lives in the same tables and is isolated through the `document_id` column.
+
+Every method returns a `Future`. sqlite3 is synchronous underneath, so nothing
+actually suspends — the futures are what the shared storage contract needs.
 
 ### CRDTSqliteChangeStorage
 
@@ -84,21 +104,20 @@ Manages `Change` objects for a specific document:
 final changeStorage = storage.changeStorageForDocument('doc-123');
 
 // Save individual changes
-changeStorage.saveChange(change);
+await changeStorage.saveChange(change);
 
 // Batch save multiple changes
-changeStorage.saveChanges([change1, change2, change3]);
+await changeStorage.saveChanges([change1, change2, change3]);
 
 // Load all changes for the document
-final changes = changeStorage.getChanges();
+final changes = await changeStorage.getChanges();
 
 // Delete changes
-changeStorage.deleteChange(change);
-changeStorage.deleteChanges([change1, change2]);
+await changeStorage.deleteChange(change);
+await changeStorage.deleteChanges([change1, change2]);
 
 // Storage info
-print('Total changes: ${changeStorage.count}');
-print('Is empty: ${changeStorage.isEmpty}');
+print('Total changes: ${await changeStorage.count}');
 ```
 
 ### CRDTSqliteSnapshotStorage
@@ -109,15 +128,15 @@ Manages `Snapshot` objects for a specific document:
 final snapshotStorage = storage.snapshotStorageForDocument('doc-123');
 
 // Save snapshots
-snapshotStorage.saveSnapshot(snapshot);
-snapshotStorage.saveSnapshots([snapshot1, snapshot2]);
+await snapshotStorage.saveSnapshot(snapshot);
+await snapshotStorage.saveSnapshots([snapshot1, snapshot2]);
 
 // Retrieve snapshots
-final snapshot = snapshotStorage.getSnapshot('snapshot-id');
-final allSnapshots = snapshotStorage.getSnapshots();
+final snapshot = await snapshotStorage.getSnapshot('snapshot-id');
+final allSnapshots = await snapshotStorage.getSnapshots();
 
 // Check existence
-if (snapshotStorage.containsSnapshot('snapshot-id')) {
+if (await snapshotStorage.containsSnapshot('snapshot-id')) {
   // Snapshot exists
 }
 ```
@@ -175,6 +194,7 @@ Other bricks of the crdt "system" are:
 - [crdt_socket_sync](https://pub.dev/packages/crdt_socket_sync)
 - [crdt_lf_flutter](https://pub.dev/packages/crdt_lf_flutter)
 - [hlc_dart](https://pub.dev/packages/hlc_dart)
+- [crdt_lf_persistence](https://pub.dev/packages/crdt_lf_persistence)
 - [crdt_lf_hive](https://pub.dev/packages/crdt_lf_hive)
 - [crdt_lf_drift](https://pub.dev/packages/crdt_lf_drift)
 

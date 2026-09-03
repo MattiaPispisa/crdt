@@ -11,11 +11,16 @@ import 'package:crdt_lf/crdt_lf.dart';
 /// (re-delivery is safe: peers de-duplicate imported changes).
 ///
 /// Changes are held as they are and encoded at push time, so a client that
-/// writes while offline pays nothing for a push that is not happening — and so
-/// [pending] can be written down and handed back through [restore], which is
-/// what carries at-least-once across a restart.
+/// writes while offline pays nothing for a push that is not happening.
+///
+/// Surviving a restart is not this queue's job: the document is what an app
+/// writes down, and `RelaySyncManager.onWelcome` queues everything the relay
+/// turns out not to hold.
 class RelayPendingQueue {
   final List<Change> _pending = [];
+
+  /// The ids in [_pending], so [add] skips a duplicate without a scan.
+  final Set<OperationId> _queued = <OperationId>{};
 
   /// How many changes at the head of the queue are in flight
   int _inFlight = 0;
@@ -30,31 +35,17 @@ class RelayPendingQueue {
   bool get hasInFlight => _inFlight > 0;
 
   /// The changes waiting for an ack, oldest first.
-  ///
-  /// Persist these to carry delivery across a restart: without them, a change
-  /// written while offline is restored into the document but never reaches the
-  /// relay, because it comes back as an imported change rather than a local
-  /// one.
   List<Change> get pending => List.unmodifiable(_pending);
 
-  /// Appends [change] to the queue.
-  void add(Change change) {
-    _pending.add(change);
-  }
-
-  /// Puts [changes] back at the head of the queue, skipping the ones already
-  /// queued.
+  /// Appends [change] to the queue, unless it is already waiting.
   ///
-  /// For a queue seeded from what a previous session wrote down. At the head
-  /// because they are older than anything this session produced, and the queue
-  /// is pushed in order.
-  void restore(Iterable<Change> changes) {
-    assert(!hasInFlight, 'a push is already in flight');
-    final queued = {for (final change in _pending) change.id};
-    _pending.insertAll(
-      0,
-      changes.where((change) => !queued.contains(change.id)),
-    );
+  /// The welcome reconciliation queues what the relay does not hold, and a
+  /// change written while that was in flight is already here.
+  void add(Change change) {
+    if (!_queued.add(change.id)) {
+      return;
+    }
+    _pending.add(change);
   }
 
   /// Marks every pending change as in flight and returns them.
@@ -73,6 +64,9 @@ class RelayPendingQueue {
   /// never pushed.
   void ack(int count) {
     final acked = min(min(count, _inFlight), _pending.length);
+    for (var i = 0; i < acked; i++) {
+      _queued.remove(_pending[i].id);
+    }
     _pending.removeRange(0, acked);
     _inFlight = 0;
   }

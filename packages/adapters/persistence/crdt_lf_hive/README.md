@@ -17,8 +17,8 @@
     - [2. Basic Usage with Manual Box Management](#2-basic-usage-with-manual-box-management)
     - [3. Using Document-Scoped Storage (Recommended)](#3-using-document-scoped-storage-recommended)
   - [Document-Scoped Storage](#document-scoped-storage)
-    - [CRDTChangeStorage](#crdtchangestorage)
-    - [CRDTSnapshotStorage](#crdtsnapshotstorage)
+    - [CRDTHiveChangeStorage](#crdtchangestorage)
+    - [CRDTHiveSnapshotStorage](#crdtsnapshotstorage)
   - [Snapshot Data Serialization](#snapshot-data-serialization)
   - [Examples](#examples)
     - [Storage example](#storage-example)
@@ -93,11 +93,28 @@ final snapshotStorage = await CRDTHive.openSnapshotStorageForDocument(documentId
 final documentStorage = await CRDTHive.openStorageForDocument(documentId);
 ```
 
+## Keeping a whole document on disk
+
+Most apps do not call these methods by hand. Hand the storage to
+`CRDTDocumentPersistence` instead: it reads the document back, then follows it
+and writes down what moves.
+
+```dart
+final document = CRDTDocument(documentId: documentId);
+final persistence = await CRDTDocumentPersistence.open(
+  document,
+  await CRDTHive.openStorageForDocument(documentId),
+);
+```
+
+It comes from [`crdt_lf_persistence`](https://pub.dev/packages/crdt_lf_persistence),
+which this package re-exports. See that README for the offline-first rules.
+
 ## Document-Scoped Storage
 
 The library provides optional storage utilities that organize data by document ID. Each document gets its own dedicated Hive boxes, improving isolation and performance.
 
-### CRDTChangeStorage
+### CRDTHiveChangeStorage
 
 Manages `Change` objects for a specific document:
 
@@ -111,18 +128,17 @@ await changeStorage.saveChange(change);
 await changeStorage.saveChanges([change1, change2, change3]);
 
 // Load all changes for the document
-final changes = changeStorage.getChanges();
+final changes = await changeStorage.getChanges();
 
 // Delete changes
 await changeStorage.deleteChange(change);
 await changeStorage.deleteChanges([change1, change2]);
 
 // Storage info
-print('Total changes: ${changeStorage.count}');
-print('Is empty: ${changeStorage.isEmpty}');
+print('Total changes: ${await changeStorage.count}');
 ```
 
-### CRDTSnapshotStorage
+### CRDTHiveSnapshotStorage
 
 Manages `Snapshot` objects for a specific document:
 
@@ -134,11 +150,11 @@ await snapshotStorage.saveSnapshot(snapshot);
 await snapshotStorage.saveSnapshots([snapshot1, snapshot2]);
 
 // Retrieve snapshots
-final snapshot = snapshotStorage.getSnapshot('snapshot-id');
-final allSnapshots = snapshotStorage.getSnapshots();
+final snapshot = await snapshotStorage.getSnapshot('snapshot-id');
+final allSnapshots = await snapshotStorage.getSnapshots();
 
 // Check existence
-if (snapshotStorage.containsSnapshot('snapshot-id')) {
+if (await snapshotStorage.containsSnapshot('snapshot-id')) {
   // Snapshot exists
 }
 ```
@@ -229,6 +245,7 @@ Other bricks of the crdt "system" are:
 - [crdt_socket_sync](https://pub.dev/packages/crdt_socket_sync)
 - [crdt_lf_flutter](https://pub.dev/packages/crdt_lf_flutter)
 - [hlc_dart](https://pub.dev/packages/hlc_dart)
+- [crdt_lf_persistence](https://pub.dev/packages/crdt_lf_persistence)
 - [crdt_lf_drift](https://pub.dev/packages/crdt_lf_drift)
 - [crdt_lf_sqlite](https://pub.dev/packages/crdt_lf_sqlite)
 

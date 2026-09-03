@@ -28,11 +28,14 @@ enum ChangeSource {
 /// [changes] entered the document's change store.
 final class DocumentChangesApplied extends CRDTDocumentEvent {
   /// Creates the event that reports [changes].
-  const DocumentChangesApplied({
-    required this.changes,
+  ///
+  /// [changes] is copied: the stream is broadcast, and one listener must not
+  /// be able to move what the next one reads.
+  DocumentChangesApplied({
+    required List<Change> changes,
     required this.source,
     this.origin,
-  });
+  }) : changes = List.unmodifiable(changes);
 
   /// The changes, in the order the document applied them. Never empty.
   ///
@@ -79,6 +82,7 @@ final class DocumentSnapshotUpdated extends CRDTDocumentEvent {
   const DocumentSnapshotUpdated({
     required this.snapshot,
     required this.reason,
+    this.origin,
   });
 
   /// The snapshot the document now holds.
@@ -90,19 +94,27 @@ final class DocumentSnapshotUpdated extends CRDTDocumentEvent {
   /// Which call replaced the snapshot.
   final SnapshotReason reason;
 
+  /// {@macro delta_origin}
+  final Object? origin;
+
   @override
-  String toString() =>
-      'DocumentSnapshotUpdated(reason: $reason, snapshot: ${snapshot.id})';
+  String toString() => 'DocumentSnapshotUpdated(reason: $reason, '
+      'snapshot: ${snapshot.id}, origin: $origin)';
 }
 
 /// History was pruned: the changes covered by [upTo] left the store.
 final class DocumentHistoryPruned extends CRDTDocumentEvent {
   /// Creates the event that reports a prune.
-  const DocumentHistoryPruned({
+  ///
+  /// [removed] and [rewritten] are copied, for the reason given on
+  /// [DocumentChangesApplied].
+  DocumentHistoryPruned({
     required this.upTo,
-    required this.removed,
-    required this.rewritten,
-  });
+    required List<Change> removed,
+    required List<Change> rewritten,
+    this.origin,
+  })  : removed = List.unmodifiable(removed),
+        rewritten = List.unmodifiable(rewritten);
 
   /// The version every removed change is covered by.
   final VersionVector upTo;
@@ -118,7 +130,13 @@ final class DocumentHistoryPruned extends CRDTDocumentEvent {
   /// dependency the document cannot resolve.
   final List<Change> rewritten;
 
+  /// {@macro delta_origin}
+  ///
+  /// Comes from the call that dropped the history: a snapshot taken or
+  /// imported with `pruneHistory`, or [CRDTDocument.garbageCollect].
+  final Object? origin;
+
   @override
   String toString() => 'DocumentHistoryPruned(removed: ${removed.length}, '
-      'rewritten: ${rewritten.length})';
+      'rewritten: ${rewritten.length}, origin: $origin)';
 }

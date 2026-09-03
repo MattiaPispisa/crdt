@@ -1,16 +1,20 @@
 import 'dart:typed_data';
 
 import 'package:crdt_lf/crdt_lf.dart';
+import 'package:crdt_lf_persistence/crdt_lf_persistence.dart';
 import 'package:crdt_lf_sqlite/src/schema.dart';
 import 'package:crdt_lf_sqlite/src/transaction.dart';
 import 'package:sqlite3/sqlite3.dart' as sq;
 
-/// Storage utility for managing [Change] objects in a SQLite [sq.Database].
+/// Stores [Change] objects in a SQLite [sq.Database].
 ///
-/// This class provides high-level methods for storing, retrieving, and
-/// managing [Change] objects. All rows are scoped to a single document via
-/// the [documentId] column, so several documents can share the same database.
-class CRDTSqliteChangeStorage {
+/// All rows are scoped to a single document via the [documentId] column, so
+/// several documents can share the same database.
+///
+/// sqlite3 is synchronous, so every method here answers without ever
+/// suspending. They return futures to keep the [CRDTChangeStorage] contract,
+/// which the asynchronous backends need.
+class CRDTSqliteChangeStorage implements CRDTChangeStorage {
   /// Creates a new [CRDTSqliteChangeStorage] instance.
   ///
   /// [database] is the SQLite database used to store [Change] objects; its
@@ -23,16 +27,14 @@ class CRDTSqliteChangeStorage {
   /// The SQLite database used for storing [Change] objects.
   final sq.Database database;
 
-  /// The unique identifier for the document these changes belong to.
+  @override
   final String documentId;
 
   /// Generates the row key for a change.
   String _changeKey(Change change) => change.id.toString();
 
-  /// Saves a [Change] to the storage.
-  ///
-  /// If a change with the same id already exists it is overwritten.
-  void saveChange(Change change) {
+  @override
+  Future<void> saveChange(Change change) async {
     database.execute(
       'INSERT OR REPLACE INTO $changesTable '
       '(document_id, change_id, bytes) VALUES (?, ?, ?)',
@@ -40,12 +42,9 @@ class CRDTSqliteChangeStorage {
     );
   }
 
-  /// Saves multiple [Change] objects to the storage.
-  ///
-  /// More efficient and atomic compared to calling [saveChange] multiple
-  /// times: all inserts run in a single transaction using one prepared
-  /// statement. Either all changes are saved or, on error, none are.
-  void saveChanges(List<Change> changes) {
+  /// {@macro crdt_lf_sqlite_batch}
+  @override
+  Future<void> saveChanges(List<Change> changes) async {
     if (changes.isEmpty) {
       return;
     }
@@ -64,8 +63,8 @@ class CRDTSqliteChangeStorage {
     }
   }
 
-  /// Retrieves all [Change] objects from the storage for this document.
-  List<Change> getChanges() {
+  @override
+  Future<List<Change>> getChanges() async {
     final result = database.select(
       'SELECT bytes FROM $changesTable WHERE document_id = ?',
       [documentId],
@@ -75,10 +74,8 @@ class CRDTSqliteChangeStorage {
         .toList();
   }
 
-  /// Deletes a [Change].
-  ///
-  /// Returns true if the change was found and deleted, false otherwise.
-  bool deleteChange(Change change) {
+  @override
+  Future<bool> deleteChange(Change change) async {
     final key = _changeKey(change);
     if (!_contains(key)) {
       return false;
@@ -90,11 +87,9 @@ class CRDTSqliteChangeStorage {
     return true;
   }
 
-  /// Deletes multiple [Change] objects.
-  ///
-  /// All deletions run in a single transaction (all-or-nothing).
-  /// Returns the number of changes that were actually deleted.
-  int deleteChanges(List<Change> changes) {
+  /// {@macro crdt_lf_sqlite_batch}
+  @override
+  Future<int> deleteChanges(List<Change> changes) async {
     if (changes.isEmpty) {
       return 0;
     }
@@ -118,10 +113,8 @@ class CRDTSqliteChangeStorage {
     return deleted;
   }
 
-  /// Clears all [Change] objects for this document from the storage.
-  ///
-  /// This operation cannot be undone.
-  void clear() {
+  @override
+  Future<void> clear() async {
     database.execute(
       'DELETE FROM $changesTable WHERE document_id = ?',
       [documentId],
@@ -136,18 +129,12 @@ class CRDTSqliteChangeStorage {
     ).isNotEmpty;
   }
 
-  /// Returns the number of [Change] objects for this document in the storage.
-  int get count {
+  @override
+  Future<int> get count async {
     final result = database.select(
       'SELECT COUNT(*) AS c FROM $changesTable WHERE document_id = ?',
       [documentId],
     );
     return result.first['c'] as int;
   }
-
-  /// Returns true if the storage is empty for this document.
-  bool get isEmpty => count == 0;
-
-  /// Returns true if the storage is not empty for this document.
-  bool get isNotEmpty => count > 0;
 }

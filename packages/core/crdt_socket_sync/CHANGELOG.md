@@ -4,22 +4,25 @@
 
 [compare to previous release](https://github.com/MattiaPispisa/crdt/compare/crdt_socket_sync-v0.7.0...crdt_socket_sync-v0.8.0)
 
-### Added
+### Fixed
 
-- **The relay outbox can now be written down**, through `RelaySocketClient.pendingChanges` and
-  `restorePendingChanges`. Delivery to the relay was at-least-once only for as long as the client
-  lived: the queue of unacknowledged changes was held in memory, so a reload dropped it. Anything
-  written while offline came back from storage as an *imported* change, never as a local one, and
-  nothing pushed it — it stayed on that device for good. Read `pendingChanges` when you save, hand
-  them back before connecting, and delivery survives the restart.
+- **A relay client now catches the relay up after a restart.** A welcome carries the whole room,
+  so its version vector is exactly what the relay holds; whatever the document holds beyond that
+  is pushed. Before, a change written while offline came back from storage as an *imported*
+  change, never as a local one, and nothing pushed it — it stayed on that device for good. This is
+  the same reconciliation the server-client mode already did at handshake, so an offline-first
+  client only has to persist its document, with `crdt_lf_persistence`, and open the persistence
+  before `connect()`.
+  It also heals a room the relay lost: a change of another peer the relay no longer holds is
+  pushed by whoever still has it.
 
 ### Changed
 
-- `RelayPendingQueue` holds `Change`s and encodes them at push time, instead of encoding on the way
-  in. A client writing while offline no longer pays for a push that is not happening, and the queue
-  can report which changes are waiting.
+- `RelayPendingQueue` holds `Change`s and encodes them at push time, instead of encoding on the
+  way in. A client writing while offline no longer pays for a push that is not happening. It also
+  skips a change already waiting, so the reconciliation above never queues one twice.
 
-- Requires `crdt_lf: ^4.2.0`, for `CRDTDocument.events`.
+- Requires `crdt_lf: ^4.2.0`.
 
 ## [0.7.0](https://github.com/MattiaPispisa/crdt/tree/crdt_socket_sync-v0.7.0/packages/crdt_socket_sync)
 

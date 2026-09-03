@@ -5,6 +5,13 @@
 /// CRDT objects like Changes and Snapshots, organized by document.
 library;
 
+export 'package:crdt_lf_persistence/crdt_lf_persistence.dart'
+    show
+        CRDTChangeStorage,
+        CRDTDocumentPersistence,
+        CRDTDocumentStorage,
+        CRDTSnapshotStorage;
+
 export 'src/adapters/change_adapter.dart';
 export 'src/adapters/snapshot_adapter.dart';
 export 'src/crdt_hive.dart';

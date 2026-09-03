@@ -103,7 +103,7 @@ class HiveServerRegistry extends CRDTServerRegistry {
       final item = _documents[documentId];
       if (item != null && item.loaded) {
         try {
-          final changesCount = item.storage!.changes.box.length;
+          final changesCount = await item.storage!.changes.count;
           if (changesCount > _minChangesForSnapshot) {
             _logger.info(
               'Creating snapshot for document $documentId ($changesCount changes)...',
@@ -159,8 +159,8 @@ class HiveServerRegistry extends CRDTServerRegistry {
 
     _logger.info('Lazy-loading document $documentId from persistence...');
     final storage = await _getStorage(documentId);
-    final snapshot = storage.snapshots.getSnapshots().lastOrNull;
-    final changes = storage.changes.getChanges();
+    final snapshot = (await storage.snapshots.getSnapshots()).lastOrNull;
+    final changes = await storage.changes.getChanges();
 
     item.document.import(snapshot: snapshot, changes: changes);
     item.loaded = true;
@@ -267,13 +267,23 @@ class HiveServerRegistry extends CRDTServerRegistry {
     final item = _documents[documentId];
     if (item == null) return null;
     final storage = await _getStorage(documentId);
-    return storage.snapshots.getSnapshots().lastOrNull;
+    return (await storage.snapshots.getSnapshots()).lastOrNull;
   }
 
   /// Checks if a document with the given ID exists in the registry.
   @override
   Future<bool> hasDocument(String documentId) async =>
       _documents.containsKey(documentId);
+
+  /// Closes the Hive boxes behind [storage].
+  ///
+  /// The registry opens every storage through [CRDTHive], so both halves are
+  /// always Hive ones. The contract they are typed as knows nothing about
+  /// boxes.
+  Future<void> _closeStorage(CRDTDocumentStorage storage) => Future.wait([
+        (storage.changes as CRDTHiveChangeStorage).box.close(),
+        (storage.snapshots as CRDTHiveSnapshotStorage).box.close(),
+      ]);
 
   /// Removes a document and all its associated data from both the registry and
   /// Hive storage.
@@ -284,8 +294,7 @@ class HiveServerRegistry extends CRDTServerRegistry {
     _logger.info('Removing document: $documentId');
     final item = _documents.remove(documentId);
     if (item?.storage != null) {
-      await item!.storage!.changes.box.close();
-      await item.storage!.snapshots.box.close();
+      await _closeStorage(item!.storage!);
     }
 
     final documentIdsBox = await Hive.openBox<String>(_kDocumentsBox);
@@ -301,8 +310,7 @@ class HiveServerRegistry extends CRDTServerRegistry {
     _snapshotTimer?.cancel();
     for (final item in _documents.values) {
       if (item.storage == null) continue;
-      await item.storage!.changes.box.close();
-      await item.storage!.snapshots.box.close();
+      await _closeStorage(item.storage!);
     }
     await Hive.box<String>(_kDocumentsBox).close();
     _logger.info('HiveServerRegistry closed.');
@@ -316,8 +324,8 @@ class HiveServerRegistry extends CRDTServerRegistry {
       final item = _documents[documentId]!;
       final storage = item.storage!;
 
-      final changesCount = storage.changes.box.length;
-      final snapshots = storage.snapshots.getSnapshots();
+      final changesCount = await storage.changes.count;
+      final snapshots = await storage.snapshots.getSnapshots();
       final latestSnapshot = snapshots.lastOrNull;
 
       _logger.info('Document: $documentId');

@@ -94,29 +94,26 @@ void main() {
       expect(queue.length, 1);
     });
 
-    group('restore', () {
-      test('puts what a previous session left ahead of this one', () {
-        final old = change('old');
-        final fresh = change('fresh');
+    test('adding the same change twice queues it once', () {
+      final a = change('a');
 
-        queue
-          ..add(fresh)
-          ..restore([old]);
+      queue
+        ..add(a)
+        ..add(a);
 
-        expect(queue.pending, [old, fresh]);
-      });
+      expect(queue.pending, [a]);
+    });
 
-      test('skips a change already queued, so calling it twice is harmless',
-          () {
-        final a = change('a');
+    test('a change comes back after it was acked and written again', () {
+      final a = change('a');
 
-        queue
-          ..add(a)
-          ..restore([a])
-          ..restore([a]);
+      queue
+        ..add(a)
+        ..takeInFlight()
+        ..ack(1)
+        ..add(a);
 
-        expect(queue.pending, [a]);
-      });
+      expect(queue.pending, [a], reason: 'the ack released the id');
     });
 
     test('pending is a read-only view', () {
