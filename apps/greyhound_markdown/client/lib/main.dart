@@ -1,3 +1,4 @@
+import 'package:crdt_lf_hive/crdt_lf_hive.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -29,6 +30,10 @@ Future<void> main() async {
             (await getApplicationDocumentsDirectory()).path,
           ),
   );
+
+  // Backs the per-room document cache, so a reload without a connection
+  // reopens the room instead of an empty page.
+  CRDTHive.initialize();
 
   runApp(const GreyhoundApp());
 }

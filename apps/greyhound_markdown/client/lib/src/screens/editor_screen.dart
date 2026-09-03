@@ -9,6 +9,7 @@ import 'package:flutter/services.dart';
 import 'package:greyhound_markdown_client/src/application/application.dart';
 import 'package:greyhound_markdown_client/src/config.dart';
 import 'package:greyhound_markdown_client/src/services/awareness/awareness_service.dart';
+import 'package:greyhound_markdown_client/src/services/persistence/document_cache.dart';
 import 'package:greyhound_markdown_client/src/widgets/app_footer.dart';
 import 'package:greyhound_markdown_client/src/widgets/editor_pane.dart';
 import 'package:greyhound_markdown_client/src/widgets/export_menu.dart';
@@ -36,7 +37,9 @@ class _EditorScreenState extends State<EditorScreen> {
   late final WebSocketRelayClient _sync;
   late final ValueNotifier<ConnectionStatus> _status;
   StreamSubscription<ConnectionStatus>? _statusSubscription;
+  DocumentCache? _cache;
   bool _initialized = false;
+  bool _restored = false;
   _ViewMode _mode = _ViewMode.split;
 
   @override
@@ -59,16 +62,46 @@ class _EditorScreenState extends State<EditorScreen> {
       document: _document,
       author: _document.peerId,
       plugins: [_awareness.plugin],
-    )..connect();
+    );
     _status = ValueNotifier(_sync.connectionStatusValue);
     _statusSubscription = _sync.connectionStatus.listen(
       (status) => _status.value = status,
     );
+    unawaited(_restoreThenConnect());
+  }
+
+  /// Brings back what the last session left on this device, then goes online.
+  ///
+  /// In that order on purpose: offline, or on a relay that has forgotten the
+  /// room, the local copy is all there is. Connecting first would show an
+  /// empty page for as long as the handshake takes.
+  Future<void> _restoreThenConnect() async {
+    try {
+      _cache = await DocumentCache.open(_document, _sync);
+    } catch (error, stackTrace) {
+      // A room with no local cache still works — it just starts empty and
+      // fills up from the relay.
+      FlutterError.reportError(
+        FlutterErrorDetails(
+          exception: error,
+          stack: stackTrace,
+          library: 'greyhound_markdown',
+          context: ErrorDescription('restoring room ${widget.roomId}'),
+        ),
+      );
+    }
+    if (!mounted) {
+      return;
+    }
+    setState(() => _restored = true);
+    _sync.connect();
   }
 
   @override
   void dispose() {
     _statusSubscription?.cancel();
+    // Flushes whatever is still waiting to be written.
+    unawaited(_cache?.dispose());
     // Disposes the awareness plugin too.
     _sync.dispose();
     _awareness.dispose();
@@ -128,36 +161,40 @@ class _EditorScreenState extends State<EditorScreen> {
             ),
           ),
         ),
-        body: LayoutBuilder(
-          builder: (context, constraints) {
-            final editor = EditorPane(awareness: _awareness, undo: _undo);
-            const preview = PreviewPane();
-            switch (_mode) {
-              case _ViewMode.edit:
-                return editor;
-              case _ViewMode.view:
-                return preview;
-              case _ViewMode.split:
-                // Side by side when there is room, stacked otherwise.
-                if (constraints.maxWidth < 720) {
-                  return Column(
-                    children: [
-                      Expanded(child: editor),
-                      const Divider(height: 1),
-                      const Expanded(child: preview),
-                    ],
-                  );
-                }
-                return Row(
-                  children: [
-                    Expanded(child: editor),
-                    const VerticalDivider(width: 1),
-                    const Expanded(child: preview),
-                  ],
-                );
-            }
-          },
-        ),
+        body: !_restored
+            // Reading the local copy back. Showing the editor first would let
+            // someone type into a document that is about to be replaced.
+            ? const Center(child: CircularProgressIndicator())
+            : LayoutBuilder(
+                builder: (context, constraints) {
+                  final editor = EditorPane(awareness: _awareness, undo: _undo);
+                  const preview = PreviewPane();
+                  switch (_mode) {
+                    case _ViewMode.edit:
+                      return editor;
+                    case _ViewMode.view:
+                      return preview;
+                    case _ViewMode.split:
+                      // Side by side when there is room, stacked otherwise.
+                      if (constraints.maxWidth < 720) {
+                        return Column(
+                          children: [
+                            Expanded(child: editor),
+                            const Divider(height: 1),
+                            const Expanded(child: preview),
+                          ],
+                        );
+                      }
+                      return Row(
+                        children: [
+                          Expanded(child: editor),
+                          const VerticalDivider(width: 1),
+                          const Expanded(child: preview),
+                        ],
+                      );
+                  }
+                },
+              ),
         bottomNavigationBar: Column(
           mainAxisSize: MainAxisSize.min,
           children: [

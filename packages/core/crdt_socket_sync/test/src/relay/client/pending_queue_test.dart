@@ -1,71 +1,130 @@
+import 'package:crdt_lf/crdt_lf.dart';
 import 'package:crdt_socket_sync/src/relay/client/pending_queue.dart';
+import 'package:hlc_dart/hlc_dart.dart';
 import 'package:test/test.dart';
+
+import '../../utils/mock_handler.dart';
+import '../../utils/mock_operation.dart';
 
 void main() {
   group('RelayPendingQueue', () {
     late RelayPendingQueue queue;
+    late CRDTDocument document;
+    late MockHandler handler;
 
     setUp(() {
       queue = RelayPendingQueue();
+      document = CRDTDocument(peerId: PeerId.generate());
+      handler = MockHandler(document);
     });
 
-    test('takeInFlight marks the whole queue as one window', () {
-      queue
-        ..add('a')
-        ..add('b');
+    /// A change identified by [clock], so a test can name it back.
+    Change change(String clock) {
+      final peerId = PeerId.generate();
+      return Change(
+        id: OperationId(peerId, HybridLogicalClock(l: clock.hashCode, c: 1)),
+        operation: MockOperation(handler),
+        deps: const {},
+        author: peerId,
+      );
+    }
 
-      expect(queue.takeInFlight(), ['a', 'b']);
+    test('takeInFlight marks the whole queue as one window', () {
+      final a = change('a');
+      final b = change('b');
+      queue
+        ..add(a)
+        ..add(b);
+
+      expect(queue.takeInFlight(), [a, b]);
       expect(queue.hasInFlight, isTrue);
       expect(queue.length, 2);
     });
 
     test('ack drops the acknowledged head', () {
+      final c = change('c');
       queue
-        ..add('a')
-        ..add('b')
+        ..add(change('a'))
+        ..add(change('b'))
         ..takeInFlight()
         // Queued while the push was in flight.
-        ..add('c')
+        ..add(c)
         ..ack(2);
 
       expect(queue.hasInFlight, isFalse);
       expect(queue.length, 1);
-      expect(queue.takeInFlight(), ['c']);
+      expect(queue.takeInFlight(), [c]);
     });
 
     test('ack is bounded by the in-flight window', () {
+      final b = change('b');
       queue
-        ..add('a')
+        ..add(change('a'))
         ..takeInFlight()
-        ..add('b')
-        // A count larger than the window must not drop unpushed blobs.
+        ..add(b)
+        // A count larger than the window must not drop unpushed changes.
         ..ack(5);
 
       expect(queue.length, 1);
-      expect(queue.takeInFlight(), ['b']);
+      expect(queue.takeInFlight(), [b]);
     });
 
-    test('resetInFlight keeps the blobs queued for re-delivery', () {
+    test('resetInFlight keeps the changes queued for re-delivery', () {
+      final a = change('a');
+      final b = change('b');
       queue
-        ..add('a')
-        ..add('b')
+        ..add(a)
+        ..add(b)
         ..takeInFlight()
         ..resetInFlight();
 
       expect(queue.hasInFlight, isFalse);
       expect(queue.length, 2);
-      expect(queue.takeInFlight(), ['a', 'b']);
+      expect(queue.takeInFlight(), [a, b]);
     });
 
-    test('ack after resetInFlight does not drop pending blobs', () {
+    test('ack after resetInFlight does not drop pending changes', () {
       queue
-        ..add('a')
+        ..add(change('a'))
         ..takeInFlight()
         ..resetInFlight()
         // A late ack for a push whose window was reset must be ignored.
         ..ack(1);
 
       expect(queue.length, 1);
+    });
+
+    group('restore', () {
+      test('puts what a previous session left ahead of this one', () {
+        final old = change('old');
+        final fresh = change('fresh');
+
+        queue
+          ..add(fresh)
+          ..restore([old]);
+
+        expect(queue.pending, [old, fresh]);
+      });
+
+      test('skips a change already queued, so calling it twice is harmless',
+          () {
+        final a = change('a');
+
+        queue
+          ..add(a)
+          ..restore([a])
+          ..restore([a]);
+
+        expect(queue.pending, [a]);
+      });
+    });
+
+    test('pending is a read-only view', () {
+      final a = change('a');
+      queue.add(a);
+
+      expect(queue.pending, [a]);
+      expect(() => queue.pending.add(change('b')), throwsUnsupportedError);
     });
   });
 }

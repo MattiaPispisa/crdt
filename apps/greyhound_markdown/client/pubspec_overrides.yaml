@@ -1,11 +1,17 @@
-# Local development override: build the app against the in-repo
-# crdt_lf_flutter (and crdt_lf) so unreleased fixes are picked up before they
-# are published. Remove this file to build against the pub.dev versions.
+# Local development override: build the app against the in-repo packages so
+# unreleased fixes are picked up before they are published. Remove this file
+# to build against the pub.dev versions.
 #
-# On now because the undo needs `CRDTUndoManager`, added in crdt_lf 4.2.0,
-# which is not published yet.
+# On now because the undo needs `CRDTUndoManager` (crdt_lf 4.2.0), the
+# offline cache needs `CRDTDocument.events` (crdt_lf 4.2.0) and
+# `RelaySocketClient.pendingChanges` (crdt_socket_sync 0.8.0), none of which
+# are published yet.
 dependency_overrides:
   crdt_lf:
     path: ../../../packages/core/crdt_lf
   crdt_lf_flutter:
     path: ../../../packages/core/crdt_lf_flutter
+  crdt_lf_hive:
+    path: ../../../packages/adapters/persistence/crdt_lf_hive
+  crdt_socket_sync:
+    path: ../../../packages/core/crdt_socket_sync

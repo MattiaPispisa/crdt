@@ -4,13 +4,13 @@ homepage: https://mattiapispisa.github.io/
 repository: https://github.com/MattiaPispisa/crdt/tree/main/packages/core/crdt_socket_sync
 topics: [crdt, socket, sync, fugue, hlc]
 
-version: 0.7.0
+version: 0.8.0
 
 environment:
   sdk: ">=3.0.0 <4.0.0"
 
 dependencies:
-  crdt_lf: ^4.0.0
+  crdt_lf: ^4.2.0
   hlc_dart: ^1.0.0
   meta: ^1.9.0
   web_socket_channel: ^3.0.0

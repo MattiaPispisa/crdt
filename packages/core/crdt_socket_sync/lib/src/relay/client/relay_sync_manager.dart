@@ -57,9 +57,29 @@ class RelaySyncManager {
   /// imported (`0` before the first welcome).
   int get lastKnownSeq => _seqTracker.maxContiguous;
 
+  /// The local changes not yet acknowledged by the relay, oldest first.
+  ///
+  /// {@template relay_pending_changes}
+  /// Write these down to carry at-least-once delivery across a restart, and
+  /// hand them back with [restorePendingChanges] before connecting. Without
+  /// that, a change written while offline comes back from storage as an
+  /// imported change, never as a local one, so nothing ever pushes it.
+  /// {@endtemplate}
+  List<Change> get pendingChanges => _queue.pending;
+
+  /// Seeds the queue with [changes] a previous session left unacknowledged.
+  ///
+  /// {@macro relay_pending_changes}
+  ///
+  /// Changes already queued are skipped. Call before connecting: nothing is
+  /// pushed until a welcome arrives.
+  void restorePendingChanges(Iterable<Change> changes) {
+    _queue.restore(changes);
+  }
+
   /// Enqueues [change] for the relay and flushes.
   void enqueue(Change change) {
-    _queue.add(base64Encode(change.toBytes()));
+    _queue.add(change);
     unawaited(flush());
   }
 
@@ -142,12 +162,14 @@ class RelaySyncManager {
       return;
     }
 
-    final blobs = _queue.takeInFlight();
+    final changes = _queue.takeInFlight();
     try {
       await client.sendMessage(
         RelayPushMessage(
           documentId: document.documentId,
-          changes: blobs,
+          changes: [
+            for (final change in changes) base64Encode(change.toBytes()),
+          ],
         ),
       );
     } catch (_) {

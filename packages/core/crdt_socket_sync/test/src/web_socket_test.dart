@@ -494,11 +494,13 @@ void main() {
             .where((m) => m.type == MessageType.change)
             .toList();
         expect(
-          client2Changes.length,
-          1,
-          reason: 'broadcasted change to client2',
+          client2Changes,
+          isEmpty,
+          reason: 'client2 only received the change; sending it back would '
+              'cost a round-trip the server discards as already applied',
         );
 
+        // The change still reached client2: that is what the broadcast is for.
         expectSameList();
         expectSameChanges(1);
       });

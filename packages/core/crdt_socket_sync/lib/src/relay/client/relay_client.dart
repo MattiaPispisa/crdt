@@ -20,8 +20,26 @@ abstract class RelaySocketClient extends CRDTSocketClient {
   /// Constructor
   RelaySocketClient({super.plugins});
 
-  /// Number of local change blobs not yet acknowledged by the relay.
+  /// Number of local changes not yet acknowledged by the relay.
   int get pendingChangesCount;
+
+  /// The local changes not yet acknowledged by the relay, oldest first.
+  ///
+  /// {@template relay_client_pending_changes}
+  /// At-least-once delivery holds for as long as this client lives. To keep it
+  /// across a restart, write these down and hand them back with
+  /// [restorePendingChanges] before connecting: a change written while offline
+  /// comes back from storage as an imported change, never as a local one, so
+  /// nothing else would ever push it.
+  /// {@endtemplate}
+  List<Change> get pendingChanges;
+
+  /// Seeds the queue with [changes] a previous session left unacknowledged.
+  ///
+  /// {@macro relay_client_pending_changes}
+  ///
+  /// Changes already queued are skipped, so calling it twice is harmless.
+  void restorePendingChanges(Iterable<Change> changes);
 
   /// The last relay log sequence number this client knows to have fully
   /// imported (`0` before the first welcome).

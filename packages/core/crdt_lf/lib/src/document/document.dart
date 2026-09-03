@@ -375,7 +375,7 @@ class CRDTDocument extends BaseCRDTDocument {
         _peerId = peerId ?? PeerId.generate(),
         _documentId = documentId ?? generateUuid(),
         _clock = initialClock ?? HybridLogicalClock.initialize(),
-        _localChangesController = StreamController<Change>.broadcast(),
+        _eventsController = StreamController<CRDTDocumentEvent>.broadcast(),
         _updatesController = StreamController<void>.broadcast(),
         _handlers = {} {
     _transactionManager = TransactionManager(
@@ -610,11 +610,54 @@ class CRDTDocument extends BaseCRDTDocument {
     return _decodeHandlerManifest(blob);
   }
 
-  /// A stream controller for locally generated changes.
-  final StreamController<Change> _localChangesController;
+  /// A stream controller for the moves of the durable state.
+  final StreamController<CRDTDocumentEvent> _eventsController;
 
-  /// A stream that emits [Change]s created locally by this document.
-  Stream<Change> get localChanges => _localChangesController.stream;
+  /// A stream of the moves of this document's durable state: the changes it
+  /// holds, and the snapshot they are replayed on top of.
+  ///
+  /// This is what a consumer mirroring the document follows — a persistence
+  /// adapter, a log. It reports every change that enters the store, wherever it
+  /// came from, so the mirror stays current without ever calling
+  /// [exportChanges] again.
+  ///
+  /// It is **not** the signal a view rebuilds on: it says what was written
+  /// down, not what the state now reads as. Use [revisionForHandler] or
+  /// `Handler.watch()` for that.
+  ///
+  /// Events are handed out once the document is settled, in the order the
+  /// moves happened.
+  ///
+  /// ```dart
+  /// document.events.listen((event) {
+  ///   switch (event) {
+  ///     case DocumentChangesApplied():
+  ///       storage.saveChanges(event.changes);
+  ///     case DocumentSnapshotUpdated():
+  ///       storage.saveSnapshot(event.snapshot);
+  ///     case DocumentHistoryPruned():
+  ///       storage
+  ///         ..deleteChanges(event.removed)
+  ///         ..saveChanges(event.rewritten);
+  ///   }
+  /// });
+  /// ```
+  Stream<CRDTDocumentEvent> get events => _eventsController.stream;
+
+  /// A stream that emits the [Change]s this document writes, in replay order.
+  ///
+  /// This is what a sync manager sends to its peers. A change that reached the
+  /// document from somewhere else — [applyChange], [importChanges] — is not
+  /// here: it is already known to whoever sent it.
+  ///
+  /// A view over [events]; every change on it is also reported there, carrying
+  /// [ChangeSource.created].
+  Stream<Change> get localChanges => _eventsController.stream.expand(
+        (event) => event is DocumentChangesApplied &&
+                event.source == ChangeSource.created
+            ? event.changes.sorted()
+            : const <Change>[],
+      );
 
   /// A stream controller that emits an event
   /// every time the document state updates
@@ -634,6 +677,23 @@ class CRDTDocument extends BaseCRDTDocument {
   /// Whether a transaction is currently active.
   bool get isInTransaction => _transactionManager.isInTransaction;
 
+  /// Publishes [event] to [events], to be handed out once the document is
+  /// settled.
+  ///
+  /// Rides the same outbox as the handler deltas (see [_deltaOutbox]), so a
+  /// listener never reads a half-applied document and sees the moves in the
+  /// order they happened. Nobody listening costs one field read.
+  void _publishDocumentEvent(CRDTDocumentEvent event) {
+    if (_eventsController.isClosed || !_eventsController.hasListener) {
+      return;
+    }
+    _enqueueDeltaEvent(() {
+      if (!_eventsController.isClosed) {
+        _eventsController.add(event);
+      }
+    });
+  }
+
   /// Flushes the operations to the [Compound] and applies the changes.
   ///
   /// 1. Compacts the operations
@@ -643,7 +703,8 @@ class CRDTDocument extends BaseCRDTDocument {
   /// **Only [_transactionManager] can call this method.**
   void _transactionFlushWork(
     List<Operation> operations,
-    List<Change> changes,
+    List<Change> createdChanges,
+    List<Change> ingestedChanges,
     bool otherPendingUpdates,
   ) {
     final compacted = Compound(
@@ -652,7 +713,9 @@ class CRDTDocument extends BaseCRDTDocument {
     ).compact();
 
     final handlersAffectedFromErrors = <String>{};
-    final appliedChanges = changes;
+    // The compacted operations become changes this document wrote, so they
+    // join the ones [createChange] already put in that queue.
+    final appliedChanges = createdChanges;
 
     // if generated operations are applied correctly the handlers
     // cached state can be preserved.
@@ -686,13 +749,28 @@ class CRDTDocument extends BaseCRDTDocument {
       }
     }
 
-    if (!_localChangesController.isClosed) {
-      for (final change in appliedChanges.sorted()) {
-        _localChangesController.add(change);
-      }
+    if (appliedChanges.isNotEmpty) {
+      _publishDocumentEvent(
+        DocumentChangesApplied(
+          changes: appliedChanges,
+          source: ChangeSource.created,
+          origin: _deltaOrigin,
+        ),
+      );
+    }
+    if (ingestedChanges.isNotEmpty) {
+      _publishDocumentEvent(
+        DocumentChangesApplied(
+          changes: ingestedChanges,
+          source: ChangeSource.ingested,
+          origin: _deltaOrigin,
+        ),
+      );
     }
 
-    if (appliedChanges.isNotEmpty || otherPendingUpdates) {
+    if (appliedChanges.isNotEmpty ||
+        ingestedChanges.isNotEmpty ||
+        otherPendingUpdates) {
       _updatesController.add(null);
     }
   }
@@ -898,7 +976,7 @@ class CRDTDocument extends BaseCRDTDocument {
 
     if (applied) {
       _foldOrDropCachesForChange(change);
-      _emitUpdate([change]);
+      _emitUpdate(changes: [change], created: true);
     }
 
     return change;
@@ -1013,7 +1091,7 @@ class CRDTDocument extends BaseCRDTDocument {
     if (applied) {
       _ensureHandlerForChange(change);
       _foldOrDropCachesForChange(change);
-      _emitUpdate([change]);
+      _emitUpdate(changes: [change]);
     }
     return applied;
   }
@@ -1093,11 +1171,20 @@ class CRDTDocument extends BaseCRDTDocument {
       data: state,
     );
 
+    // Before the prune, so a consumer mirroring this document writes the
+    // snapshot down before it is told to drop the changes the snapshot covers.
+    _lastSnapshot = snapshot;
+    _publishDocumentEvent(
+      DocumentSnapshotUpdated(
+        snapshot: snapshot,
+        reason: SnapshotReason.taken,
+      ),
+    );
+
     if (pruneHistory) {
       _prune(snapshot.versionVector);
     }
 
-    _lastSnapshot = snapshot;
     return snapshot;
   }
 
@@ -1140,11 +1227,19 @@ class CRDTDocument extends BaseCRDTDocument {
     _ensureNotDisposed('importSnapshot');
 
     if (shouldApplySnapshot(snapshot)) {
+      // Before the prune, for the reason written down in [takeSnapshot].
+      _lastSnapshot = snapshot;
+      _publishDocumentEvent(
+        DocumentSnapshotUpdated(
+          snapshot: snapshot,
+          reason: SnapshotReason.imported,
+        ),
+      );
+
       if (pruneHistory) {
         _prune(snapshot.versionVector);
       }
 
-      _lastSnapshot = snapshot;
       _advanceClockPast(snapshot.versionVector);
       _bumpRevisionsForSnapshot(snapshot);
 
@@ -1177,6 +1272,15 @@ class CRDTDocument extends BaseCRDTDocument {
     }
     _advanceClockPast(snapshot.versionVector);
     _bumpRevisionsForSnapshot(snapshot);
+
+    // The merged result, not the snapshot handed in: that is what the document
+    // holds now, and what a mirror has to write down.
+    _publishDocumentEvent(
+      DocumentSnapshotUpdated(
+        snapshot: _lastSnapshot!,
+        reason: SnapshotReason.merged,
+      ),
+    );
 
     if (pruneHistory) {
       _prune(_lastSnapshot!.versionVector);
@@ -1395,7 +1499,7 @@ class CRDTDocument extends BaseCRDTDocument {
     // many handlers are present (e.g. a large nested tree).
     if (changedApplied.isNotEmpty) {
       _foldOrDropCachesForChanges(changedApplied);
-      _emitUpdate();
+      _emitUpdate(changes: changedApplied);
     }
 
     return changedApplied.length;
@@ -1411,7 +1515,18 @@ class CRDTDocument extends BaseCRDTDocument {
   /// Prunes the DAG and the change store up to the given version.
   void _prune(VersionVector version) {
     _dag.prune(version);
-    _changeStore.prune(version);
+    _changeStore.prune(
+      version,
+      onPruned: _eventsController.hasListener
+          ? (removed, rewritten) => _publishDocumentEvent(
+                DocumentHistoryPruned(
+                  upTo: version,
+                  removed: removed,
+                  rewritten: rewritten,
+                ),
+              )
+          : null,
+    );
     // The state now comes from the snapshot rather than from the changes that
     // built it, and a snapshot does not carry every identity a change did: an
     // OR-Set or OR-Map element comes back tagless. An inverse anchored to one
@@ -1437,15 +1552,19 @@ class CRDTDocument extends BaseCRDTDocument {
   /// Emits that the document state has made an update
   /// to be notified by listeners.
   ///
+  /// [changes] are the ones just applied, and [created] says whether this
+  /// document wrote them. Pass none for a move that applies no change, such as
+  /// a snapshot import.
+  ///
   /// If a transaction is active, the update
   /// is marked as pending; otherwise it is emitted immediately.
   ///
   /// Every [CRDTDocument] must call [_emitUpdate] when something happens,
   /// the only way to **directly** notify listeners
   /// is using the [_transactionManager] callbacks.
-  void _emitUpdate([List<Change>? changes]) {
+  void _emitUpdate({List<Change>? changes, bool created = false}) {
     if (changes != null) {
-      _transactionManager.handleAppliedChanges(changes);
+      _transactionManager.handleAppliedChanges(changes, created: created);
     } else {
       _transactionManager.requestUpdate();
     }
@@ -1606,7 +1725,7 @@ class CRDTDocument extends BaseCRDTDocument {
       return;
     }
 
-    _localChangesController.close();
+    _eventsController.close();
     _updatesController.close();
     for (final manager in [...?_undoManagers]) {
       manager.dispose();

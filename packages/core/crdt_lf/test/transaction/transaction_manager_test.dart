@@ -20,7 +20,7 @@ void main() {
       var updateCount = 0;
 
       final manager = TransactionManager(
-        flushWork: (ops, _, ___) {
+        flushWork: (ops, _, __, ___) {
           emittedOperations.addAll(ops);
           updateCount++;
         },
@@ -53,9 +53,11 @@ void main() {
       var updateCount = 0;
 
       final manager = TransactionManager(
-        flushWork: (ops, changes, ___) {
+        flushWork: (ops, created, ingested, ___) {
           emittedOperations.addAll(ops);
-          emittedChanges.addAll(changes);
+          emittedChanges
+            ..addAll(created)
+            ..addAll(ingested);
           updateCount++;
         },
       )
@@ -75,7 +77,7 @@ void main() {
 
       manager
         ..handleOperation(dummyOperation)
-        ..handleAppliedChanges([dummyChange])
+        ..handleAppliedChanges([dummyChange], created: true)
 
         // Inner commit should not flush
         ..commit();
@@ -93,7 +95,7 @@ void main() {
     test('requestUpdate outside transaction emits immediately', () {
       var updateCount = 0;
       TransactionManager(
-        flushWork: (_, __, ___) => updateCount++,
+        flushWork: (_, __, ___, ____) => updateCount++,
       ).requestUpdate();
       expect(updateCount, 1);
     });
@@ -101,7 +103,7 @@ void main() {
     test('handleOperation outside transaction emits immediately', () {
       var updateCount = 0;
       TransactionManager(
-        flushWork: (_, __, ___) => updateCount++,
+        flushWork: (_, __, ___, ____) => updateCount++,
       ).handleOperation(dummyOperation);
       expect(updateCount, 1);
     });
@@ -116,15 +118,49 @@ void main() {
         author: peerId,
       );
       TransactionManager(
-        flushWork: (_, __, ___) => updateCount++,
-      ).handleAppliedChanges([change]);
+        flushWork: (_, __, ___, ____) => updateCount++,
+      ).handleAppliedChanges([change], created: true);
       expect(updateCount, 1);
+    });
+
+    test('created and ingested changes reach the flush in their own list', () {
+      final flushedCreated = <Change>[];
+      final flushedIngested = <Change>[];
+
+      Change changeAt(int clock) {
+        final peerId = PeerId.generate();
+        return Change(
+          id: OperationId(peerId, HybridLogicalClock(l: clock, c: 1)),
+          operation: dummyOperation,
+          deps: {},
+          author: peerId,
+        );
+      }
+
+      final mine = changeAt(1);
+      final theirs = changeAt(2);
+
+      final manager = TransactionManager(
+        flushWork: (_, created, ingested, __) {
+          flushedCreated.addAll(created);
+          flushedIngested.addAll(ingested);
+        },
+      );
+
+      manager.run(() {
+        manager
+          ..handleAppliedChanges([mine], created: true)
+          ..handleAppliedChanges([theirs], created: false);
+      });
+
+      expect(flushedCreated, [mine]);
+      expect(flushedIngested, [theirs]);
     });
 
     test('commit outside transaction throws', () {
       expect(
         () => TransactionManager(
-          flushWork: (_, __, ___) {},
+          flushWork: (_, __, ___, ____) {},
         ).commit(),
         throwsStateError,
       );

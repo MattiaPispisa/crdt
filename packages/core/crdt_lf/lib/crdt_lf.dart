@@ -12,6 +12,7 @@ export 'src/delta/register_delta.dart';
 export 'src/delta/sequence_delta.dart';
 export 'src/delta/set_delta.dart';
 export 'src/document/document.dart';
+export 'src/document/document_event.dart';
 export 'src/exceptions/exceptions.dart';
 export 'src/frontiers/frontiers.dart';
 export 'src/handler/fugue_list/handler.dart';

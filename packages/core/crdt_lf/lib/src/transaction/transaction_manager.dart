@@ -29,11 +29,17 @@ class TransactionManager {
   /// Callback used to flush the work done during the transaction:
   ///
   /// - `operations`: the operations applied during the transaction
-  /// - `changes`: the changes applied during the transaction
+  /// - `createdChanges`: the changes the document wrote itself
+  /// - `ingestedChanges`: the changes the document took in from elsewhere
   /// - `otherPendingUpdates`: whether there are other pending updates
+  ///
+  /// The two lists of changes are kept apart because they answer different
+  /// questions: what to send to peers, and what to write down. A change is in
+  /// exactly one of them.
   final void Function(
     List<Operation> operations,
-    List<Change> changes,
+    List<Change> createdChanges,
+    List<Change> ingestedChanges,
     // ignore: avoid_positional_boolean_parameters the only boolean positional parameter
     bool otherPendingUpdates,
   ) flushWork;
@@ -55,8 +61,11 @@ class TransactionManager {
   /// The list of pending local changes.
   final List<Operation> _pendingOperations = <Operation>[];
 
-  /// The list of changes applied during the current transaction.
-  final List<Change> _pendingChanges = <Change>[];
+  /// The changes the document wrote itself during the current transaction.
+  final List<Change> _pendingCreatedChanges = <Change>[];
+
+  /// The changes the document took in during the current transaction.
+  final List<Change> _pendingIngestedChanges = <Change>[];
 
   /// Whether an update has been requested.
   bool _hasRequestedUpdate = false;
@@ -109,18 +118,25 @@ class TransactionManager {
     _flushWork();
   }
 
-  /// Handles locally generated changes.
+  /// Handles changes the document has just applied.
+  ///
+  /// [created] tells the two queues apart: `true` when the document wrote the
+  /// changes, `false` when it took them in from elsewhere.
   ///
   /// If a transaction is active, the changes are queued
   /// and an update is marked as pending; otherwise changes
   /// are emitted immediately.
-  void handleAppliedChanges(List<Change> changes) {
+  void handleAppliedChanges(
+    List<Change> changes, {
+    required bool created,
+  }) {
+    (created ? _pendingCreatedChanges : _pendingIngestedChanges)
+        .addAll(changes);
+
     if (isInTransaction) {
-      _pendingChanges.addAll(changes);
       return;
     }
 
-    _pendingChanges.addAll(changes);
     _flushWork();
   }
 
@@ -141,11 +157,13 @@ class TransactionManager {
   void _flushWork() {
     flushWork(
       List.of(_pendingOperations),
-      List.of(_pendingChanges),
+      List.of(_pendingCreatedChanges),
+      List.of(_pendingIngestedChanges),
       _hasRequestedUpdate,
     );
     _pendingOperations.clear();
-    _pendingChanges.clear();
+    _pendingCreatedChanges.clear();
+    _pendingIngestedChanges.clear();
     _hasRequestedUpdate = false;
     onFlushed?.call();
   }

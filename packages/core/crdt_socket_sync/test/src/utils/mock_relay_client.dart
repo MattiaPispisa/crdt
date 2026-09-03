@@ -39,6 +39,12 @@ class MockRelaySocketClient extends RelaySocketClient {
   int get pendingChangesCount => 0;
 
   @override
+  List<Change> get pendingChanges => const [];
+
+  @override
+  void restorePendingChanges(Iterable<Change> changes) {}
+
+  @override
   int get lastKnownSeq => 0;
 
   @override

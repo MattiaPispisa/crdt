@@ -479,6 +479,33 @@ sequenceDiagram
 
 > 📖 Diagrams render best in the [live documentation](https://mattiapispisa.it/crdt/docs/documentation/packages/crdt_socket_sync).
 
+#### Surviving a restart
+
+A change leaves the outbox only when the relay acknowledges it. That queue
+lives in memory, so **a restart drops it** — and a change restored from storage
+reaches the document as an *imported* change, never as a local one, so nothing
+pushes it. In an offline-first app that means the text written on a plane is
+read back on the next launch but never reaches anyone else.
+
+Write the outbox down next to the document and hand it back before connecting:
+
+```dart
+// When you save.
+await outbox.replaceWith([
+  for (final change in client.pendingChanges) change.id.toString(),
+]);
+
+// On the next launch, before connect().
+client.restorePendingChanges(
+  restoredChanges.where((c) => savedIds.contains(c.id.toString())),
+);
+await client.connect();
+```
+
+Nothing is pushed until the relay says hello, so seeding the queue before
+connecting is safe. Re-delivering a change the relay already had is harmless:
+the relay appends it and every peer discards it as known.
+
 ### Log Compaction
 
 The room log grows with every push. Past a threshold

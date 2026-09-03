@@ -12,10 +12,33 @@
   `garbageCollect`, and `takeSnapshot` unless you pass `pruneHistory: false`. Use `pruneHistory: false` to
   checkpoint a document and keep its undo history.
 
+- **`CRDTDocument.events`**, a stream of the moves of a document's durable state. A persistence
+  adapter follows it and writes down what each event reports, instead of calling `exportChanges`
+  again to work out what moved. Three events: `DocumentChangesApplied` (changes entered the store,
+  batched per transaction, tagged `ChangeSource.created` or `ChangeSource.ingested`),
+  `DocumentSnapshotUpdated` (`taken` / `imported` / `merged`) and `DocumentHistoryPruned`.
+  Until now a change that arrived through `importChanges`, and every snapshot taken locally, moved
+  the document without telling anyone.
+  A prune reports both the changes that left the store and the surviving ones whose dependencies
+  were rebuilt — those have to be written again, or a reload replays a dependency that no longer
+  exists. The snapshot event always precedes the prune its own version causes, so a consumer that
+  writes on every event stores the snapshot before dropping what it covers.
+
 ### Changed
 
 - A disposed document now refuses `garbageCollect` and `reconstruct`
   with a `DocumentDisposedException`, like every other method that writes to it.
+
+- **`localChanges` no longer carries changes that came in through `applyChange`.** It is now a view
+  over `events` and reports only what the document itself wrote — which is what its name always
+  claimed. A sync client that applied a remote change used to see it on `localChanges` and send it
+  straight back to the server, which discarded it as already applied: one wasted round-trip per
+  remote change, now gone. Ingested changes are still reported, on `events`, carrying
+  `ChangeSource.ingested`.
+  `localChanges` is now published once the document is settled rather than in the middle of the
+  commit. Delivery to a listener was already asynchronous and stays that way, so the change is
+  invisible in practice — but a listener can no longer be handed a change while the commit that
+  produced it is still running.
 
 ### Fixed
 

@@ -141,15 +141,27 @@ class ChangeStore {
   /// the dependency is removed to preserve integrity.
   ///
   /// Returns the number of [Change]s that were removed.
-  int prune(VersionVector version) {
+  ///
+  /// [onPruned] reports what a mirror of this store has to do to stay
+  /// truthful: the changes that were removed, and the ones that stayed with
+  /// their dependencies rebuilt. It is called only when something was removed,
+  /// and nothing is collected for it when it is absent.
+  int prune(
+    VersionVector version, {
+    void Function(List<Change> removed, List<Change> rewritten)? onPruned,
+  }) {
     final removedIds = <OpIdKey>{};
+    final removed = onPruned == null ? null : <Change>[];
 
     // 1. identify and remove old changes
     final ids = _changes.keys.toList();
     for (final id in ids) {
       if (version.hasSeen(id.peerId(), id.hlc())) {
-        _changes.remove(id);
+        final change = _changes.remove(id);
         removedIds.add(id);
+        if (change != null) {
+          removed?.add(change);
+        }
       }
     }
 
@@ -191,6 +203,8 @@ class ChangeStore {
       );
     }
     _changes.addAll(updates);
+
+    onPruned?.call(removed!, updates.values.toList());
 
     return removedIds.length;
   }

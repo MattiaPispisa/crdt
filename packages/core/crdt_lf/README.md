@@ -178,10 +178,58 @@ A companion library, [crdt_lf_flutter](https://pub.dev/packages/crdt_lf_flutter)
 It provides Flutter reactivity for `crdt_lf`: widgets rebuild when the CRDT state changes, with selectors, a provider and a collaborative text field. More info in the [README](https://github.com/MattiaPispisa/crdt/tree/main/packages/core/crdt_lf_flutter/README.md) of the Flutter package.
 
 ## Persistence
-Persistence is not directly handled in this library but there are some out of the box solutions:
+Storage is not handled in this library, but there are some out of the box solutions:
 - [crdt_lf_hive](https://pub.dev/packages/crdt_lf_hive): adapters and utils for persist data using [Hive](https://pub.dev/packages/hive).
 - [crdt_lf_drift](https://pub.dev/packages/crdt_lf_drift): adapters and utils for persist data using [Drift](https://pub.dev/packages/drift).
 - [crdt_lf_sqlite](https://pub.dev/packages/crdt_lf_sqlite): adapters and utils for persist data using [sqlite3](https://pub.dev/packages/sqlite3).
+
+What the document gives them is `events`: a stream of the moves of its durable state. A consumer
+follows it and writes down what each event reports, so its copy on disk stays current without ever
+exporting the document again.
+
+```dart
+document.events.listen((event) {
+  switch (event) {
+    case DocumentChangesApplied():
+      storage.saveChanges(event.changes);
+    case DocumentSnapshotUpdated():
+      storage.saveSnapshot(event.snapshot);
+    case DocumentHistoryPruned():
+      storage
+        ..deleteChanges(event.removed)
+        // Their dependencies were rebuilt: the bytes on disk are stale.
+        ..saveChanges(event.rewritten);
+  }
+});
+```
+
+Three events, and what each one is for:
+
+| event | when | what to do with it |
+| --- | --- | --- |
+| `DocumentChangesApplied` | changes entered the store, batched per transaction | append them |
+| `DocumentSnapshotUpdated` | `takeSnapshot`, `importSnapshot` or `mergeSnapshot` | store the snapshot |
+| `DocumentHistoryPruned` | history was dropped | delete `removed`, write `rewritten` again |
+
+`DocumentChangesApplied.source` says whether the document wrote the changes (`created`) or took them
+in (`ingested`). A mirror saves both; a sync client sends only the first, which is what
+`localChanges` already hands it.
+
+A snapshot event always arrives **before** the prune its own version causes, so a consumer that
+writes on every event stores the snapshot before dropping the changes it covers.
+
+To restore, read both back and hand them over together:
+
+```dart
+document.import(
+  snapshot: await storage.snapshots.getSnapshot(id),
+  changes: await storage.changes.getChanges(),
+  merge: true,
+);
+```
+
+`events` is not the signal a view rebuilds on — it says what was written down, not what the state
+now reads as. Use `revisionForHandler` or `watch()` for that.
 
 ## Benchmarks
 

@@ -1,3 +1,26 @@
+## [Unreleased](https://github.com/MattiaPispisa/crdt/tree/crdt_socket_sync-v0.8.0/packages/crdt_socket_sync)
+
+**Date:** --
+
+[compare to previous release](https://github.com/MattiaPispisa/crdt/compare/crdt_socket_sync-v0.7.0...crdt_socket_sync-v0.8.0)
+
+### Added
+
+- **The relay outbox can now be written down**, through `RelaySocketClient.pendingChanges` and
+  `restorePendingChanges`. Delivery to the relay was at-least-once only for as long as the client
+  lived: the queue of unacknowledged changes was held in memory, so a reload dropped it. Anything
+  written while offline came back from storage as an *imported* change, never as a local one, and
+  nothing pushed it — it stayed on that device for good. Read `pendingChanges` when you save, hand
+  them back before connecting, and delivery survives the restart.
+
+### Changed
+
+- `RelayPendingQueue` holds `Change`s and encodes them at push time, instead of encoding on the way
+  in. A client writing while offline no longer pays for a push that is not happening, and the queue
+  can report which changes are waiting.
+
+- Requires `crdt_lf: ^4.2.0`, for `CRDTDocument.events`.
+
 ## [0.7.0](https://github.com/MattiaPispisa/crdt/tree/crdt_socket_sync-v0.7.0/packages/crdt_socket_sync)
 
 **Date:** 2026-08-16
