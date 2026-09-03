@@ -39,6 +39,7 @@ Widget _app({
   required CRDTDocument document,
   required AwarenessService awareness,
   required UserSettingsCubit settings,
+  required CRDTUndoManager undo,
   TargetPlatform? platform,
 }) {
   return BlocProvider<UserSettingsCubit>.value(
@@ -47,7 +48,9 @@ Widget _app({
       value: document,
       child: MaterialApp(
         theme: platform == null ? null : ThemeData(platform: platform),
-        home: Scaffold(body: EditorPane(awareness: awareness)),
+        home: Scaffold(
+          body: EditorPane(awareness: awareness, undo: undo),
+        ),
       ),
     ),
   );
@@ -58,9 +61,11 @@ Widget _app({
 /// The (never connected) relay client is what attaches the awareness plugin;
 /// without it every cursor publication throws, since the plugin reads its
 /// client as soon as the selection moves.
-({CRDTDocument document, AwarenessService awareness}) _room() {
+({CRDTDocument document, AwarenessService awareness, CRDTUndoManager undo})
+_room() {
   final document = CRDTDocument(peerId: PeerId.generate());
-  CRDTFugueTextHandler(document, kHandlerId);
+  final text = CRDTFugueTextHandler(document, kHandlerId);
+  final undo = CRDTUndoManager(document)..track(text);
   final awareness = AwarenessService(name: 'me', color: Colors.teal);
   final sync = WebSocketRelayClient(
     url: 'ws://localhost',
@@ -71,7 +76,7 @@ Widget _app({
   addTearDown(sync.dispose);
   addTearDown(awareness.dispose);
   addTearDown(document.dispose);
-  return (document: document, awareness: awareness);
+  return (document: document, awareness: awareness, undo: undo);
 }
 
 void main() {
@@ -83,6 +88,7 @@ void main() {
       _app(
         document: room.document,
         awareness: room.awareness,
+        undo: room.undo,
         settings: UserSettingsCubit(storage: MemoryStorage()),
       ),
     );
@@ -114,6 +120,7 @@ void main() {
       _app(
         document: room.document,
         awareness: room.awareness,
+        undo: room.undo,
         settings: UserSettingsCubit(storage: MemoryStorage()),
         platform: TargetPlatform.windows,
       ),
@@ -135,6 +142,139 @@ void main() {
     await tester.pump(const Duration(milliseconds: 100));
   });
 
+  // The chord is the same mechanism on both platforms, only the modifier
+  // differs
+  for (final (platform, modifier) in [
+    (TargetPlatform.windows, LogicalKeyboardKey.controlLeft),
+    (TargetPlatform.macOS, LogicalKeyboardKey.metaLeft),
+  ]) {
+    testWidgets('the undo chord reaches the document, not the field\'s own '
+        'history (${platform.name})', (tester) async {
+      final room = _room();
+      final text =
+          room.document.registeredHandlers[kHandlerId]! as CRDTFugueTextHandler;
+
+      await tester.pumpWidget(
+        _app(
+          document: room.document,
+          awareness: room.awareness,
+          undo: room.undo,
+          settings: UserSettingsCubit(storage: MemoryStorage()),
+          platform: platform,
+        ),
+      );
+
+      await tester.showKeyboard(find.byType(TextField));
+      await tester.enterText(find.byType(TextField), 'hello');
+      await tester.pump();
+      expect(text.value, 'hello');
+
+      await tester.sendKeyDownEvent(modifier);
+      await tester.sendKeyEvent(LogicalKeyboardKey.keyZ);
+      await tester.sendKeyUpEvent(modifier);
+      await tester.pump();
+
+      // The document moved, which the field's own history would never do, and
+      // the step is on the redo stack.
+      expect(text.value, '');
+      expect(room.undo.canUndo, isFalse);
+      expect(room.undo.canRedo, isTrue);
+
+      // The field followed the document.
+      final field = tester.widget<TextField>(find.byType(TextField));
+      expect(field.controller!.text, '');
+
+      await tester.sendKeyDownEvent(modifier);
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.shiftLeft);
+      await tester.sendKeyEvent(LogicalKeyboardKey.keyZ);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.shiftLeft);
+      await tester.sendKeyUpEvent(modifier);
+      await tester.pump();
+
+      expect(text.value, 'hello');
+      expect(field.controller!.text, 'hello');
+
+      await tester.pump(const Duration(milliseconds: 100));
+    });
+  }
+
+  testWidgets('the toolbar buttons follow the two stacks', (tester) async {
+    final room = _room();
+    final text =
+        room.document.registeredHandlers[kHandlerId]! as CRDTFugueTextHandler;
+
+    await tester.pumpWidget(
+      _app(
+        document: room.document,
+        awareness: room.awareness,
+        undo: room.undo,
+        settings: UserSettingsCubit(storage: MemoryStorage()),
+      ),
+    );
+
+    IconButton button(IconData icon) =>
+        tester.widget<IconButton>(find.widgetWithIcon(IconButton, icon));
+
+    // Nothing written yet: both are dead.
+    expect(button(Icons.undo).onPressed, isNull);
+    expect(button(Icons.redo).onPressed, isNull);
+
+    await tester.enterText(find.byType(TextField), 'hello');
+    await tester.pump();
+    expect(button(Icons.undo).onPressed, isNotNull);
+    expect(button(Icons.redo).onPressed, isNull);
+
+    await tester.tap(find.widgetWithIcon(IconButton, Icons.undo));
+    await tester.pump();
+
+    expect(text.value, '');
+    expect(button(Icons.undo).onPressed, isNull);
+    expect(button(Icons.redo).onPressed, isNotNull);
+
+    await tester.tap(find.widgetWithIcon(IconButton, Icons.redo));
+    await tester.pump();
+    expect(text.value, 'hello');
+
+    await tester.pump(const Duration(milliseconds: 100));
+  });
+
+  testWidgets('an undo leaves what another peer wrote alone', (tester) async {
+    final room = _room();
+    final text =
+        room.document.registeredHandlers[kHandlerId]! as CRDTFugueTextHandler;
+
+    await tester.pumpWidget(
+      _app(
+        document: room.document,
+        awareness: room.awareness,
+        undo: room.undo,
+        settings: UserSettingsCubit(storage: MemoryStorage()),
+      ),
+    );
+
+    await tester.enterText(find.byType(TextField), 'mine');
+    await tester.pump();
+
+    // A second peer joins the room and writes at the front.
+    final other = CRDTDocument(peerId: PeerId.generate());
+    final otherText = CRDTFugueTextHandler(other, kHandlerId);
+    addTearDown(other.dispose);
+    other.importChanges(room.document.exportChanges());
+    otherText.insert(0, 'theirs ');
+    room.document.importChanges(other.exportChanges());
+    await tester.pump();
+    expect(text.value, 'theirs mine');
+
+    await tester.tap(find.widgetWithIcon(IconButton, Icons.undo));
+    await tester.pump();
+
+    expect(text.value, 'theirs ');
+    final field = tester.widget<TextField>(find.byType(TextField));
+    expect(field.controller!.text, 'theirs ');
+
+    await tester.pump(const Duration(milliseconds: 100));
+  });
+
   testWidgets('the view options change the layout without remounting the '
       'field', (tester) async {
     final room = _room();
@@ -144,6 +284,7 @@ void main() {
       _app(
         document: room.document,
         awareness: room.awareness,
+        undo: room.undo,
         settings: settings,
       ),
     );

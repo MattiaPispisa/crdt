@@ -158,6 +158,36 @@ base class CRDTFugueListHandler<T>
     );
   }
 
+  @override
+  Operation buildInsertOperation({
+    required FugueElementID leftOrigin,
+    required FugueElementID rightOrigin,
+    required List<({FugueElementID id, T value})> items,
+  }) {
+    return _FugueListInsertOperation<T>.fromHandler(
+      this,
+      leftOrigin: leftOrigin,
+      rightOrigin: rightOrigin,
+      items: [
+        for (final item in items)
+          _FugueListInsertItem<T>(id: item.id, value: item.value),
+      ],
+    );
+  }
+
+  @override
+  Operation buildUpdateOperation(
+    List<({FugueElementID nodeID, T value})> items,
+  ) {
+    return _FugueListUpdateOperation<T>.fromHandler(
+      this,
+      items: [
+        for (final item in items)
+          _FugueListUpdateItem<T>(nodeID: item.nodeID, value: item.value),
+      ],
+    );
+  }
+
   /// Prefixes every value with its length: a [ValueCodec] is free to produce
   /// anything, so nothing else tells one value from the next inside a run.
   @override

@@ -1,5 +1,6 @@
 import 'dart:math' as math;
 
+import 'package:crdt_lf/crdt_lf.dart';
 import 'package:crdt_lf_flutter/crdt_lf_flutter.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
@@ -21,10 +22,10 @@ const TextStyle kEditorTextStyle = TextStyle(
   fontSize: 14,
 );
 
-/// The collaborative markdown source editor: a formatting toolbar above a
-/// [TextField] bound to the fugue text handler, with remote carets painted on
-/// top. The toolbar actions that declare a key chord are also reachable from
-/// the keyboard while focus is inside the pane.
+/// The collaborative markdown source editor: a toolbar above a [TextField]
+/// bound to the fugue text handler, with remote carets painted on top. The
+/// toolbar actions that declare a key chord — undo and redo included — are also
+/// reachable from the keyboard while focus is inside the pane.
 ///
 /// Two local view options come from [UserSettingsCubit]: an optional
 /// line-number gutter, and word wrap. They are read inside
@@ -34,9 +35,13 @@ const TextStyle kEditorTextStyle = TextStyle(
 /// The cursors listenable sits inside [CrdtTextFieldBuilder.builder] so that
 /// presence repaints never rebuild the text field itself.
 class EditorPane extends StatefulWidget {
-  const EditorPane({required this.awareness, super.key});
+  const EditorPane({required this.awareness, required this.undo, super.key});
 
   final AwarenessService awareness;
+
+  /// The room's undo history, owned by the screen so it outlives the layout
+  /// switches that take this pane out of the tree.
+  final CRDTUndoManager undo;
 
   @override
   State<EditorPane> createState() => _EditorPaneState();
@@ -71,14 +76,19 @@ class _EditorPaneState extends State<EditorPane> {
       builder: (context, controller) => CallbackShortcuts(
         // Sits below the app-wide DefaultTextEditingShortcuts and above the
         // field, so the chords win over the browser and over text editing
-        // defaults while focus is anywhere in the pane.
+        // defaults while focus is anywhere in the pane. That is what sends ⌘Z
+        // to the document's history rather than the field's own.
         bindings: markdownShortcutBindings(
-          controller,
+          (controller: controller, undo: widget.undo),
           Theme.of(context).platform,
         ),
         child: Column(
           children: [
-            EditorToolbar(controller: controller, focusNode: _focusNode),
+            EditorToolbar(
+              controller: controller,
+              focusNode: _focusNode,
+              undo: widget.undo,
+            ),
             const Divider(height: 1),
             Expanded(
               child: ValueListenableBuilder<Map<String, PeerState>>(

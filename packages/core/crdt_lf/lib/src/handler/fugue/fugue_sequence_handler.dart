@@ -3,6 +3,8 @@ import 'dart:typed_data';
 import 'package:crdt_lf/crdt_lf.dart';
 import 'package:crdt_lf/src/algorithm/fugue/tree.dart';
 import 'package:crdt_lf/src/handler/fugue/fugue_cache.dart';
+import 'package:crdt_lf/src/handler/fugue/fugue_restore_runs.dart';
+import 'package:crdt_lf/src/handler/fugue/fugue_sequence_apply.dart';
 import 'package:crdt_lf/src/handler/fugue/fugue_snapshot.dart';
 
 /// Lazily-resolved state shared by Fugue-based ordered-sequence handlers.
@@ -58,7 +60,7 @@ class FugueState<T, V> {
 /// one node that stands for no element, and a stored `null` would look the
 /// same.
 abstract base class FugueSequenceHandler<T, V, S extends FugueState<T, V>>
-    extends Handler<S> with FugueCache<S> {
+    extends Handler<S> with FugueCache<S>, RebuiltIdentities<FugueElementID> {
   /// Creates a Fugue sequence handler bound to [doc] with the given [id].
   FugueSequenceHandler(super.doc, String id, {super.handlerType}) : _id = id;
 
@@ -99,6 +101,20 @@ abstract base class FugueSequenceHandler<T, V, S extends FugueState<T, V>>
 
   /// Builds the delete operation for the given [nodeIDs].
   Operation buildDeleteOperation(List<FugueElementID> nodeIDs);
+
+  /// Builds the insert operation that puts [items] between [leftOrigin] and
+  /// [rightOrigin], one element per entry.
+  Operation buildInsertOperation({
+    required FugueElementID leftOrigin,
+    required FugueElementID rightOrigin,
+    required List<({FugueElementID id, T value})> items,
+  });
+
+  /// Builds the update operation that writes each value of [items] over the
+  /// element it names.
+  Operation buildUpdateOperation(
+    List<({FugueElementID nodeID, T value})> items,
+  );
 
   /// Encodes the [values] of one snapshot run into a single blob.
   ///
@@ -227,6 +243,117 @@ abstract base class FugueSequenceHandler<T, V, S extends FugueState<T, V>>
       return 0;
     }
     return cachedOrComputedState()._tree.liveIndexAfter(position);
+  }
+
+  /// Every operation of this handler names element ids, and a deleted element
+  /// keeps its value, so all three kinds invert exactly.
+  @override
+  bool get invertible => true;
+
+  @override
+  List<Operation> invert(Operation operation) {
+    final tree = cachedOrComputedState()._tree;
+
+    // A cast, not a promotion: the analyzer will not narrow an [Operation] to
+    // an interface it merely implements.
+    if (operation is FugueSequenceInsert<T>) {
+      // Take out the very elements it puts in. Deleting one twice is the same
+      // as deleting it once, so a concurrent delete costs nothing.
+      final insert = operation as FugueSequenceInsert<T>;
+      final nodeIDs = [for (final item in insert.items) item.id];
+      return nodeIDs.isEmpty ? const [] : [buildDeleteOperation(nodeIDs)];
+    }
+
+    if (operation is FugueSequenceDelete) {
+      return _invertDelete(tree, operation as FugueSequenceDelete);
+    }
+
+    if (operation is FugueSequenceUpdate<T>) {
+      final items = <({FugueElementID nodeID, T value})>[];
+      for (final item in (operation as FugueSequenceUpdate<T>).items) {
+        final current = tree.valueOf(item.nodeID);
+        if (current != null) {
+          items.add((nodeID: item.nodeID, value: current));
+        }
+      }
+      return items.isEmpty ? const [] : [buildUpdateOperation(items)];
+    }
+
+    return const [];
+  }
+
+  /// The inserts that put back what [operation] is about to take out.
+  ///
+  /// One insert per block, cut by [fugueRestoreRuns]. The elements come back
+  /// with new ids — an element that was removed cannot be brought back to
+  /// life — and [prepareInverse] follows them.
+  List<Operation> _invertDelete(
+    FugueTree<T> tree,
+    FugueSequenceDelete operation,
+  ) {
+    final runs = fugueRestoreRuns<FugueElementID, T>(
+      ids: [for (final item in operation.items) item.nodeID],
+      // An element that is not there, or is already a tombstone, is not moved
+      // by this delete, so nothing puts it back.
+      probe: (nodeID) {
+        if (!tree.isLive(nodeID)) {
+          return null;
+        }
+        final value = tree.valueOf(nodeID);
+        return value == null ? null : (anchor: nodeID, value: value);
+      },
+      nextNode: tree.findNextNode,
+    );
+
+    final inverses = <Operation>[];
+    for (final run in runs) {
+      final insert = buildInsertOperation(
+        leftOrigin: run.leftOrigin,
+        rightOrigin: run.rightOrigin,
+        items: [
+          for (final item in run.items)
+            (id: FugueElementID(doc.peerId, nextCounter()), value: item.value),
+        ],
+      );
+      noteRestores(insert, [for (final item in run.items) item.was]);
+      inverses.add(insert);
+    }
+    return inverses;
+  }
+
+  @override
+  Operation prepareInverse(Operation operation) {
+    if (operation is FugueSequenceInsert<T>) {
+      // The undo is happening: from here on, the elements this puts in stand
+      // for the ones it puts back. Does nothing for an insert that puts
+      // nothing back.
+      final insert = operation as FugueSequenceInsert<T>;
+      commitRestores(operation, [for (final item in insert.items) item.id]);
+      return operation;
+    }
+
+    if (operation is FugueSequenceDelete) {
+      // Take out the whole chain: the element the inverse names, and every
+      // element that has stood for it since. Deleting a tombstone twice costs
+      // nothing, so naming them all is safe.
+      final items = (operation as FugueSequenceDelete).items;
+      final nodeIDs = expandChains([for (final item in items) item.nodeID]);
+      return nodeIDs == null ? operation : buildDeleteOperation(nodeIDs);
+    }
+
+    if (operation is FugueSequenceUpdate<T>) {
+      // Write over the element that stands for the one the inverse names.
+      final items = (operation as FugueSequenceUpdate<T>).items;
+      final nodeIDs = latestOfAll([for (final item in items) item.nodeID]);
+      return nodeIDs == null
+          ? operation
+          : buildUpdateOperation([
+              for (var i = 0; i < items.length; i += 1)
+                (nodeID: nodeIDs[i], value: items[i].value),
+            ]);
+    }
+
+    return operation;
   }
 
   @override

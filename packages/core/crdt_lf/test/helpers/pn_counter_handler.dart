@@ -111,6 +111,26 @@ final class PNCounterHandler extends Handler<int> {
     return _readSigned(snapshot, 0);
   }
 
+  /// An increment is undone by the opposite increment, which needs no state
+  /// at all: a counter has no identity to anchor to and addition is its own
+  /// way back.
+  @override
+  bool get invertible => true;
+
+  @override
+  List<Operation> invert(Operation operation) {
+    if (operation is! PNCounterIncrementOperation) {
+      return const [];
+    }
+    return [
+      PNCounterIncrementOperation(
+        id: id,
+        type: incrementType,
+        delta: -operation.delta,
+      ),
+    ];
+  }
+
   @override
   String toString() => 'PNCounterHandler($_id, $value)';
 }

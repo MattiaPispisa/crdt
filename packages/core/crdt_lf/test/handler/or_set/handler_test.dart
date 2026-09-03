@@ -190,5 +190,121 @@ void main() {
       expect(s1.value, equals(s2.value));
       expect(s1.value, containsAll({'a', 'b', 'c'}));
     });
+
+    group('invert', () {
+      test('an undo takes back one tag, not the value another peer added', () {
+        final a = CRDTDocument(
+          peerId: PeerId.parse('37f1ec87-6ea5-430b-a627-a6b92b56a02d'),
+        );
+        final b = CRDTDocument(
+          peerId: PeerId.parse('45ee6b65-b393-40b7-9755-8b66dc7d0518'),
+        );
+        final setA = CRDTORSetHandler<String>(a, 'set');
+        final setB = CRDTORSetHandler<String>(b, 'set');
+        final undo = CRDTUndoManager(a)..track(setA);
+
+        // Both peers add the same value, each under a tag of its own.
+        setA.add('shared');
+        setB.add('shared');
+        a.importChanges(b.exportChanges());
+        b.importChanges(a.exportChanges());
+        expect(setA.value, {'shared'});
+
+        undo.undo();
+        b.importChanges(a.exportChanges());
+
+        // A's tag is gone, B's is not, so the value stays in the set.
+        expect(setA.value, {'shared'});
+        expect(setB.value, setA.value);
+      });
+
+      test('a remove of two tags comes back as two tags', () {
+        final doc = CRDTDocument(
+          peerId: PeerId.parse('37f1ec87-6ea5-430b-a627-a6b92b56a02d'),
+        );
+        final set = CRDTORSetHandler<String>(doc, 'set');
+        final undo = CRDTUndoManager(doc, captureTimeout: Duration.zero)
+          ..track(set);
+
+        set
+          ..add('x')
+          ..add('x')
+          ..remove('x');
+        expect(set.value, <String>{});
+
+        undo.undo();
+        expect(set.value, {'x'});
+
+        // Restoring both tags as one would leave the value hanging on a single
+        // tag, and undoing either add would drop it.
+        undo.undo();
+        expect(set.value, {'x'});
+
+        undo.undo();
+        expect(set.value, <String>{});
+      });
+
+      test('undoes a remove of a value that only a snapshot carries', () {
+        final source = CRDTDocument(
+          peerId: PeerId.parse('a90dfced-cbf0-4a49-9c64-f5b7b62fdc18'),
+        );
+        CRDTORSetHandler<String>(source, 'set').add('a');
+        final snapshot = source.takeSnapshot();
+
+        final doc = CRDTDocument(
+          peerId: PeerId.parse('37f1ec87-6ea5-430b-a627-a6b92b56a02d'),
+        );
+        final set = CRDTORSetHandler<String>(doc, 'set');
+        doc.importSnapshot(snapshot);
+        expect(set.value, {'a'});
+
+        // The snapshot carries no tags, so this is a remove-all.
+        final undo = CRDTUndoManager(doc)..track(set);
+        set.remove('a');
+        expect(set.value, <String>{});
+
+        undo.undo();
+        expect(set.value, {'a'});
+      });
+
+      test('adding a value a snapshot already carries has nothing to undo', () {
+        final source = CRDTDocument(
+          peerId: PeerId.parse('a90dfced-cbf0-4a49-9c64-f5b7b62fdc18'),
+        );
+        CRDTORSetHandler<String>(source, 'set').add('a');
+        final snapshot = source.takeSnapshot();
+
+        final doc = CRDTDocument(
+          peerId: PeerId.parse('37f1ec87-6ea5-430b-a627-a6b92b56a02d'),
+        );
+        final set = CRDTORSetHandler<String>(doc, 'set');
+        doc.importSnapshot(snapshot);
+
+        final undo = CRDTUndoManager(doc)..track(set);
+        set.add('a');
+
+        // The add gives the value a tag and takes the snapshot presence away.
+        // Nothing puts that back, and the value is in the set either way.
+        expect(undo.canUndo, isFalse);
+        expect(set.value, {'a'});
+      });
+
+      test('undoing a remove puts the value back under a new tag', () {
+        final doc = CRDTDocument(
+          peerId: PeerId.parse('37f1ec87-6ea5-430b-a627-a6b92b56a02d'),
+        );
+        final set = CRDTORSetHandler<String>(doc, 'set')..add('a');
+        final undo = CRDTUndoManager(doc)..track(set);
+
+        set.remove('a');
+        expect(set.value, <String>{});
+
+        undo.undo();
+        expect(set.value, {'a'});
+
+        undo.redo();
+        expect(set.value, <String>{});
+      });
+    });
   });
 }

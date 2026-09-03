@@ -22,6 +22,9 @@ part 'providers.dart';
 part 'delta_provider.dart';
 part 'history.dart';
 
+// Undo, which is written as new inverse operations rather than as a removal.
+part 'undo_manager.dart';
+
 /// Defines the foundational contract for a CRDT document.
 ///
 /// This abstract class serves as the common interfaces between
@@ -46,24 +49,8 @@ abstract class BaseCRDTDocument {
   /// Who asked for the work running right now, stamped onto the delta events it
   /// produces; `null` outside any call that named one.
   ///
-  /// Set for the whole call, not the apply alone: a local delta is collected
-  /// while the operation runs and published at the commit that ends it.
-  Object? _deltaOrigin;
-
-  /// Runs [body] with [origin] on the delta events it produces.
-  ///
-  /// A nested call that names none keeps the outer origin. Restoring rather
-  /// than clearing lets a listener write back from inside a flush without
-  /// taking the origin of the work it interrupted.
-  T _withDeltaOrigin<T>(Object? origin, T Function() body) {
-    final previous = _deltaOrigin;
-    _deltaOrigin = origin ?? previous;
-    try {
-      return body();
-    } finally {
-      _deltaOrigin = previous;
-    }
-  }
+  /// A document that takes no operation never has one.
+  Object? get _deltaOrigin => null;
 
   /// Holds one event until the document is settled.
   ///
@@ -245,6 +232,12 @@ abstract class BaseCRDTDocument {
     }
 
     _isDisposed = true;
+    // Before the registry is emptied: a watcher of any document, live or
+    // static, is told the stream ends here rather than waiting on one that can
+    // never fire again.
+    for (final handler in _handlers.values) {
+      handler._closeDeltas();
+    }
     _handlers.clear();
   }
 }
@@ -387,7 +380,7 @@ class CRDTDocument extends BaseCRDTDocument {
         _handlers = {} {
     _transactionManager = TransactionManager(
       flushWork: _transactionFlushWork,
-      onFlushed: _flushDeltaEvents,
+      onFlushed: _onTransactionFlushed,
     );
     devtools.handleCreated(this);
   }
@@ -409,6 +402,75 @@ class CRDTDocument extends BaseCRDTDocument {
 
   /// Per-handler monotonic revisions. See [revisionForHandler].
   final Map<String, int> _handlerRevisions = {};
+
+  @override
+  Object? _deltaOrigin;
+
+  /// Runs [body] with [origin] on the delta events it produces.
+  ///
+  /// Set for the whole call, not the apply alone: a local delta is collected
+  /// while the operation runs and published at the commit that ends it.
+  ///
+  /// A nested call that names none keeps the outer origin. Restoring rather
+  /// than clearing lets a listener write back from inside a flush without
+  /// taking the origin of the work it interrupted.
+  T _withDeltaOrigin<T>(Object? origin, T Function() body) {
+    final previous = _deltaOrigin;
+    _deltaOrigin = origin ?? previous;
+    try {
+      return body();
+    } finally {
+      _deltaOrigin = previous;
+    }
+  }
+
+  /// The [CRDTUndoManager]s recording this document, or `null` when there is
+  /// none.
+  ///
+  /// Null and not an empty list so that a document nobody undoes pays one
+  /// comparison per local write.
+  List<CRDTUndoManager>? _undoManagers;
+
+  void _registerUndoManager(CRDTUndoManager manager) {
+    (_undoManagers ??= <CRDTUndoManager>[]).add(manager);
+  }
+
+  void _unregisterUndoManager(CRDTUndoManager manager) {
+    final managers = _undoManagers;
+    if (managers == null) {
+      return;
+    }
+    managers.removeWhere((m) => identical(m, manager));
+    if (managers.isEmpty) {
+      _undoManagers = null;
+    }
+  }
+
+  /// Offers [operation] to every manager, before [handler] folds it in.
+  void _captureForUndo(Handler<dynamic> handler, Operation operation) {
+    final managers = _undoManagers;
+    if (managers == null) {
+      return;
+    }
+    for (final manager in managers) {
+      manager._capture(handler, operation);
+    }
+  }
+
+  /// Closes the undo steps a committed transaction filled, then hands out the
+  /// delta events it produced.
+  ///
+  /// In that order: a listener reacting to a delta reads a settled
+  /// [CRDTUndoManager.canUndo].
+  void _onTransactionFlushed() {
+    final managers = _undoManagers;
+    if (managers != null) {
+      for (final manager in managers) {
+        manager._closeEntry();
+      }
+    }
+    _flushDeltaEvents();
+  }
 
   @override
   PeerId get peerId => _peerId;
@@ -468,6 +530,8 @@ class CRDTDocument extends BaseCRDTDocument {
   /// without knowing the document structure in advance. Reading lazily from a
   /// known root via `getRef`/`resolved` also works without calling this.
   void reconstruct() {
+    _ensureNotDisposed('reconstruct');
+
     final discovered = <String, String>{};
     for (final change in exportChanges()) {
       try {
@@ -870,7 +934,18 @@ class CRDTDocument extends BaseCRDTDocument {
       _transactionManager.handleOperation(operation);
 
       if (handler != null) {
-        handler._internalIncrementCachedState(operation: operation);
+        try {
+          // Before the fold, so a [CRDTUndoManager] reads the state the
+          // operation is about to move, and after the stamp, so the inverse
+          // can name it.
+          _captureForUndo(handler, operation);
+        } finally {
+          // The commit below is in a `finally` too, so the operation reaches
+          // the change store whatever happens above. The fold has to happen
+          // for the same reason: a handler that skipped it would hold a state
+          // its own history does not describe, for good.
+          handler._internalIncrementCachedState(operation: operation);
+        }
       }
     } finally {
       if (openedImplicitTransaction) {
@@ -1034,6 +1109,8 @@ class CRDTDocument extends BaseCRDTDocument {
   ///
   /// {@macro pruning_strategy}
   void garbageCollect(VersionVector protectUntil) {
+    _ensureNotDisposed('garbageCollect');
+
     final effectiveVV = VersionVector.intersection(
       [
         protectUntil,
@@ -1335,6 +1412,26 @@ class CRDTDocument extends BaseCRDTDocument {
   void _prune(VersionVector version) {
     _dag.prune(version);
     _changeStore.prune(version);
+    // The state now comes from the snapshot rather than from the changes that
+    // built it, and a snapshot does not carry every identity a change did: an
+    // OR-Set or OR-Map element comes back tagless. An inverse anchored to one
+    // of those tags would apply and move nothing.
+    _dropUndoHistory();
+  }
+
+  /// Drops what an undo is anchored to: the stacks of every
+  /// [CRDTUndoManager], and the rebuilt-identity chains the handlers follow.
+  void _dropUndoHistory() {
+    for (final manager in _undoManagers ?? const <CRDTUndoManager>[]) {
+      manager.clear();
+    }
+    for (final handler in _handlers.values) {
+      // A cast, not a promotion: the analyzer will not narrow a [Handler] to
+      // a mixin it merely applies.
+      if (handler is RebuiltIdentities<Object>) {
+        (handler as RebuiltIdentities<Object>).clearRebuiltIdentities();
+      }
+    }
   }
 
   /// Emits that the document state has made an update
@@ -1422,6 +1519,14 @@ class CRDTDocument extends BaseCRDTDocument {
     for (final handler in _handlers.values) {
       handler._invalidate(cause);
     }
+    if (cause == ResetCause.snapshotImport ||
+        cause == ResetCause.snapshotMerge) {
+      // A snapshot replaces the base the state is replayed from, so the
+      // identities an inverse is anchored to may not resolve any more. The
+      // prune these paths usually run drops the same thing; a snapshot
+      // imported with `pruneHistory: false` never reaches it.
+      _dropUndoHistory();
+    }
   }
 
   /// Runs [action] within a transaction, committing at the end.
@@ -1503,9 +1608,10 @@ class CRDTDocument extends BaseCRDTDocument {
 
     _localChangesController.close();
     _updatesController.close();
-    for (final handler in _handlers.values) {
-      handler._closeDeltas();
+    for (final manager in [...?_undoManagers]) {
+      manager.dispose();
     }
+    _undoManagers = null;
     super.dispose();
   }
 }

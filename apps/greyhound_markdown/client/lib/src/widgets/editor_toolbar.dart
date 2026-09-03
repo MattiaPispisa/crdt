@@ -1,18 +1,26 @@
+import 'dart:async';
+
+import 'package:crdt_lf/crdt_lf.dart';
 import 'package:flutter/material.dart';
 
 import 'package:greyhound_markdown_client/src/widgets/markdown_shortcuts.dart';
 
-/// A horizontally scrollable row of markdown formatting buttons.
+/// A horizontally scrollable row of editor buttons.
 ///
-/// Pure iteration over [kMarkdownShortcuts]: each button applies its shortcut
-/// to the bound [controller] and hands focus back to the editor so typing can
-/// continue. Mutating [controller] is what drives the CRDT edit — the text
-/// binding listens to it.
-class EditorToolbar extends StatelessWidget {
+/// Pure iteration over [kMarkdownShortcuts]: each button asks its shortcut
+/// whether it can run, and on tap tells it to, then hands focus back to the
+/// editor so typing can continue. Undo and redo are entries of that list like
+/// any other — the toolbar does not know that they write to the document while
+/// the rest rewrite the field.
+///
+/// It rebuilds on [CRDTUndoManager.changes], which is what greys undo and redo
+/// out when their stack runs empty.
+class EditorToolbar extends StatefulWidget {
   /// Create an editor toolbar.
   const EditorToolbar({
     required this.controller,
     required this.focusNode,
+    required this.undo,
     super.key,
   });
 
@@ -22,14 +30,56 @@ class EditorToolbar extends StatelessWidget {
   /// The editor field's focus node, re-focused after a button tap.
   final FocusNode focusNode;
 
-  void _apply(MarkdownShortcut shortcut) {
-    controller.value = shortcut.apply(controller.value);
-    focusNode.requestFocus();
+  /// The room's undo history.
+  final CRDTUndoManager undo;
+
+  @override
+  State<EditorToolbar> createState() => _EditorToolbarState();
+}
+
+class _EditorToolbarState extends State<EditorToolbar> {
+  StreamSubscription<void>? _subscription;
+
+  @override
+  void initState() {
+    super.initState();
+    _subscribe();
+  }
+
+  @override
+  void didUpdateWidget(EditorToolbar oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // Otherwise the buttons would keep greying in and out with the history the
+    // toolbar no longer acts on.
+    if (!identical(oldWidget.undo, widget.undo)) {
+      _subscription?.cancel();
+      _subscribe();
+    }
+  }
+
+  @override
+  void dispose() {
+    _subscription?.cancel();
+    super.dispose();
+  }
+
+  void _subscribe() {
+    _subscription = widget.undo.changes.listen((_) {
+      if (mounted) {
+        setState(() {});
+      }
+    });
+  }
+
+  void _run(MarkdownShortcut shortcut, EditorShortcutTarget target) {
+    shortcut.run(target);
+    widget.focusNode.requestFocus();
   }
 
   @override
   Widget build(BuildContext context) {
     final platform = Theme.of(context).platform;
+    final target = (controller: widget.controller, undo: widget.undo);
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
       child: Row(
@@ -39,7 +89,9 @@ class EditorToolbar extends StatelessWidget {
               icon: Icon(shortcut.icon),
               tooltip: shortcut.tooltipFor(platform),
               iconSize: 20,
-              onPressed: () => _apply(shortcut),
+              onPressed: shortcut.isEnabled(target)
+                  ? () => _run(shortcut, target)
+                  : null,
             ),
         ],
       ),

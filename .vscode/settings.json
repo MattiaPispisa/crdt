@@ -16,6 +16,7 @@
     "pubspec",
     "rects",
     "unacked",
+    "undoable",
     "uvarint",
     "Varint",
     "varints",

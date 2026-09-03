@@ -1,3 +1,13 @@
+## Unreleased
+
+**Date:** --
+
+### Added
+
+- **Undo and redo**, from the toolbar or with ⌘Z / ⌘⇧Z (Ctrl on Windows and
+  Linux). An undo takes back what *you* wrote and leaves what everyone else
+  wrote in place. A burst of typing is one undo, not one per character.
+
 ## 0.9.0
 
 **Date:** 2026-08-29

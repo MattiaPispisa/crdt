@@ -30,7 +30,9 @@ part 'operation.dart';
 /// print(map.value); // Prints {'a': 10}
 /// ```
 base class CRDTORMapHandler<K, V> extends Handler<ORMapState<K, V>>
-    with DeltaProvider<Map<K, V>, MapDelta<K, V>> {
+    with
+        RebuiltIdentities<OperationId>,
+        DeltaProvider<Map<K, V>, MapDelta<K, V>> {
   /// Creates a new CRDT OR-MapHandler with the given document and ID
   ///
   /// [keyCodec] and [valueCodec] are optional codecs for encoding/decoding keys and values to bytes.
@@ -322,6 +324,119 @@ base class CRDTORMapHandler<K, V> extends Handler<ORMapState<K, V>>
       });
     }
     return MapDelta<K, V>.empty();
+  }
+
+  /// The stamp of a `put` is the tag it wrote, so an undo takes back that one
+  /// tag and the entry that held the key before wins again on its own.
+  @override
+  bool get invertible => true;
+
+  @override
+  List<Operation> invert(Operation operation) {
+    final state = _cachedOrComputedState();
+
+    if (operation is _ORMapPutOperation<K, V>) {
+      final key = operation.key;
+
+      // This put may itself be an undo putting the key back. Its stamp is the
+      // tag that now stands for the one it restores, and the stamp exists only
+      // here: the document mints it just before this call.
+      commitRestores(operation, [operation.stamp!]);
+      if (!_hasLiveTag(state, key) && state._snapshotOnly.containsKey(key)) {
+        // The key is there through a snapshot that carries no tags, and the
+        // put takes that presence away. Taking the new tag back would leave
+        // the key absent, so write the old value instead: what anyone can see
+        // is the same either way.
+        return [
+          _ORMapPutOperation<K, V>.fromHandler(
+            this,
+            key: key,
+            value: state._snapshotOnly[key] as V,
+          ),
+        ];
+      }
+      // Take back the one tag this put wrote; the entry that held the key
+      // before wins again on its own.
+      return [
+        _ORMapRemoveOperation<K, V>.fromHandler(
+          this,
+          key: key,
+          tags: {operation.stamp!},
+        ),
+      ];
+    }
+
+    if (operation is _ORMapRemoveOperation<K, V>) {
+      final key = operation.key;
+
+      // One put per entry this remove takes away, so undoing an earlier put
+      // can take back its own. Collapsing them into a single put would leave
+      // the key hanging on one tag, and the first undo would drop it.
+      //
+      // Oldest tag first: the puts are written in this order, so the entry
+      // that won before wins again.
+      final live = state._live[key];
+      final taken = <ORMapEntry<V>>[
+        if (live != null)
+          for (final entry in live)
+            if (operation.tags.contains(entry.tag)) entry,
+      ]..sort((a, b) => a.tag.compareTo(b.tag));
+
+      final puts = <Operation>[];
+      for (final entry in taken) {
+        // The entry comes back under a new tag: a tombstone is forever.
+        final put = _ORMapPutOperation<K, V>.fromHandler(
+          this,
+          key: key,
+          value: entry.value,
+        );
+        noteRestores(put, [entry.tag]);
+        puts.add(put);
+      }
+      if (puts.isNotEmpty) {
+        return puts;
+      }
+
+      // No tag changed hands. The remove still takes away a value that comes
+      // from a snapshot carrying no tags.
+      if (operation.removeAll && state._snapshotOnly.containsKey(key)) {
+        return [
+          _ORMapPutOperation<K, V>.fromHandler(
+            this,
+            key: key,
+            value: state._snapshotOnly[key] as V,
+          ),
+        ];
+      }
+      return const [];
+    }
+
+    return const [];
+  }
+
+  @override
+  Operation prepareInverse(Operation operation) {
+    if (operation is! _ORMapRemoveOperation<K, V>) {
+      return operation;
+    }
+    // Tombstone the whole chain: the tag the inverse names, and every tag that
+    // has stood for it since.
+    final tags = expandChains(operation.tags);
+    if (tags == null) {
+      return operation;
+    }
+    return _ORMapRemoveOperation<K, V>.fromHandler(
+      this,
+      key: operation.key,
+      tags: tags.toSet(),
+    );
+  }
+
+  /// Whether [key] has at least one live entry, so it does not read its value
+  /// from the snapshot alone.
+  bool _hasLiveTag(ORMapState<K, V> state, K key) {
+    final entries = state._live[key];
+    return entries != null && entries.isNotEmpty;
   }
 
   @override

@@ -1132,6 +1132,28 @@ void main() {
           expect(a.revisionForHandler('x'), greaterThan(revBefore));
         });
       });
+
+      // `registerOperation` commits the operation in a `finally`, so it lands
+      // in the change store whatever the undo capture does. The fold into the
+      // handler cache has to be just as certain: a handler that skipped one
+      // would answer with a state its own history does not describe, for good.
+      test('folds the operation into the cache even when the capture throws',
+          () {
+        final doc = CRDTDocument(peerId: PeerId.generate());
+        final map = _ThrowingInvertMapHandler(doc, 'map');
+        CRDTUndoManager(doc).track(map);
+
+        map.armed = true;
+        expect(() => map.set('a', '1'), throwsStateError);
+
+        // What the document says about itself, read back from its own history.
+        final replay = CRDTDocument(peerId: PeerId.generate());
+        final replayed = CRDTMapHandler<String>(replay, 'map');
+        replay.importChanges(doc.exportChanges());
+
+        expect(replayed.value, {'a': '1'}, reason: 'the write did land');
+        expect(map.value, replayed.value);
+      });
     });
 
     group('transaction', () {
@@ -1350,7 +1372,36 @@ void main() {
           () => doc.registerOperation(operation),
           throwsA(isA<DocumentDisposedException>()),
         );
+        expect(
+          () => doc.garbageCollect(doc2.getVersionVector()),
+          throwsA(isA<DocumentDisposedException>()),
+        );
+        expect(
+          doc.reconstruct,
+          throwsA(isA<DocumentDisposedException>()),
+        );
       });
     });
   });
+}
+
+/// A map handler whose [invert] fails on demand, to show what the document
+/// does with an operation whose undo capture throws.
+///
+/// It keeps the type tag of the handler it extends, so its changes decode into
+/// an ordinary [CRDTMapHandler] on the other side.
+final class _ThrowingInvertMapHandler extends CRDTMapHandler<String> {
+  _ThrowingInvertMapHandler(CRDTDocument super.doc, super.id)
+      : super(handlerType: 'CRDTMapHandler<String>');
+
+  /// Whether the next [invert] throws.
+  bool armed = false;
+
+  @override
+  List<Operation> invert(Operation operation) {
+    if (armed) {
+      throw StateError('cannot invert');
+    }
+    return super.invert(operation);
+  }
 }

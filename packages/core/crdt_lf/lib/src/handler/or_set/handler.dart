@@ -29,7 +29,7 @@ part 'operation.dart';
 /// print(set.value); // Prints {'value1', 'value3'}
 /// ```
 base class CRDTORSetHandler<T> extends Handler<ORSetState<T>>
-    with DeltaProvider<Set<T>, SetDelta<T>> {
+    with RebuiltIdentities<OperationId>, DeltaProvider<Set<T>, SetDelta<T>> {
   /// Creates a new CRDT OR-SetHandler with the given document and ID
   ///
   /// [valueCodec] is an optional codec for encoding/decoding [T] values to bytes.
@@ -253,6 +253,93 @@ base class CRDTORSetHandler<T> extends Handler<ORSetState<T>>
         state._live.remove(operation.value);
       }
     }
+  }
+
+  /// The stamp of an `add` is the tag it wrote, so an undo takes back that one
+  /// tag and nothing else: a value another peer added at the same time stays
+  /// in the set.
+  @override
+  bool get invertible => true;
+
+  @override
+  List<Operation> invert(Operation operation) {
+    final state = _cachedOrComputedState();
+
+    if (operation is _ORSetAddOperation<T>) {
+      // This add may itself be an undo putting the value back. Its stamp is
+      // the tag that now stands for the one it restores, and the stamp exists
+      // only here: the document mints it just before this call.
+      commitRestores(operation, [operation.stamp!]);
+
+      if (state._snapshotOnly.contains(operation.value)) {
+        // The value is in the set through a snapshot that carries no tags. The
+        // add gives it one and takes the snapshot presence away, and nothing
+        // can put that back — but the value is in the set either way, so an
+        // undo has nothing to show.
+        return const [];
+      }
+      return [
+        _ORSetRemoveOperation<T>.fromHandler(
+          this,
+          value: operation.value,
+          tags: {operation.stamp!},
+        ),
+      ];
+    }
+
+    if (operation is _ORSetRemoveOperation<T>) {
+      // One add per tag this remove takes away, so undoing an earlier add can
+      // take back its own. Collapsing them into a single add would leave the
+      // whole value hanging on one tag, and the first undo would drop it.
+      final live = state._live[operation.value];
+      final adds = <Operation>[];
+      for (final tag in operation.tags) {
+        if (live == null || !live.contains(tag)) {
+          // Already tombstoned: this remove does not take it away.
+          continue;
+        }
+        // The value comes back under a new tag: a tombstone is forever.
+        final add = _ORSetAddOperation<T>.fromHandler(
+          this,
+          value: operation.value,
+        );
+        noteRestores(add, [tag]);
+        adds.add(add);
+      }
+      if (adds.isNotEmpty) {
+        return adds;
+      }
+
+      // No tag changed hands. The remove still takes away presence that comes
+      // from a snapshot carrying no tags.
+      if (operation.removeAll &&
+          state._snapshotOnly.contains(operation.value)) {
+        return [
+          _ORSetAddOperation<T>.fromHandler(this, value: operation.value),
+        ];
+      }
+      return const [];
+    }
+
+    return const [];
+  }
+
+  @override
+  Operation prepareInverse(Operation operation) {
+    if (operation is! _ORSetRemoveOperation<T>) {
+      return operation;
+    }
+    // Tombstone the whole chain: the tag the inverse names, and every tag that
+    // has stood for it since.
+    final tags = expandChains(operation.tags);
+    if (tags == null) {
+      return operation;
+    }
+    return _ORSetRemoveOperation<T>.fromHandler(
+      this,
+      value: operation.value,
+      tags: tags.toSet(),
+    );
   }
 
   @override

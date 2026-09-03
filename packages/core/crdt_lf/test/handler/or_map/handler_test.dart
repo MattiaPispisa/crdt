@@ -330,6 +330,79 @@ void main() {
       map.remove('nonexistent');
       expect(map.value, isEmpty);
     });
+    group('invert', () {
+      test('undoes a remove of a key that only a snapshot carries', () {
+        final source = CRDTDocument(
+          peerId: PeerId.parse('a90dfced-cbf0-4a49-9c64-f5b7b62fdc18'),
+        );
+        CRDTORMapHandler<String, String>(source, 'ormap').put('k', 'a');
+        final snapshot = source.takeSnapshot();
+
+        final doc = CRDTDocument(
+          peerId: PeerId.parse('37f1ec87-6ea5-430b-a627-a6b92b56a02d'),
+        );
+        final map = CRDTORMapHandler<String, String>(doc, 'ormap');
+        doc.importSnapshot(snapshot);
+        expect(map.value, {'k': 'a'});
+
+        // The snapshot carries no tags, so this is a remove-all.
+        final undo = CRDTUndoManager(doc)..track(map);
+        map.remove('k');
+        expect(map.value, <String, String>{});
+
+        undo.undo();
+        expect(map.value, {'k': 'a'});
+      });
+
+      test('undoes a put over a key that only a snapshot carries', () {
+        final source = CRDTDocument(
+          peerId: PeerId.parse('a90dfced-cbf0-4a49-9c64-f5b7b62fdc18'),
+        );
+        CRDTORMapHandler<String, String>(source, 'ormap').put('k', 'a');
+        final snapshot = source.takeSnapshot();
+
+        final doc = CRDTDocument(
+          peerId: PeerId.parse('37f1ec87-6ea5-430b-a627-a6b92b56a02d'),
+        );
+        final map = CRDTORMapHandler<String, String>(doc, 'ormap');
+        doc.importSnapshot(snapshot);
+
+        final undo = CRDTUndoManager(doc)..track(map);
+        map.put('k', 'b');
+        expect(map.value, {'k': 'b'});
+
+        // Taking the new tag back would leave the key absent, so the old value
+        // is written instead.
+        undo.undo();
+        expect(map.value, {'k': 'a'});
+      });
+
+      test('a remove of two entries comes back as two entries', () {
+        final doc = CRDTDocument(
+          peerId: PeerId.parse('37f1ec87-6ea5-430b-a627-a6b92b56a02d'),
+        );
+        final map = CRDTORMapHandler<String, String>(doc, 'ormap');
+        final undo = CRDTUndoManager(doc, captureTimeout: Duration.zero)
+          ..track(map);
+
+        map
+          ..put('k', 'a')
+          ..put('k', 'b')
+          ..remove('k');
+        expect(map.value, <String, String>{});
+
+        undo.undo();
+        expect(map.value, {'k': 'b'});
+
+        // The entry that won before wins again, and the one under it is still
+        // there to come back to.
+        undo.undo();
+        expect(map.value, {'k': 'a'});
+
+        undo.undo();
+        expect(map.value, <String, String>{});
+      });
+    });
   });
 
   group('ORMapEntry', () {

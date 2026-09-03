@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import 'package:crdt_lf/crdt_lf.dart';
 import 'package:test/test.dart';
 
+import '../helpers/handler.dart';
 import '../helpers/pn_counter_handler.dart';
 
 void main() {
@@ -92,6 +93,42 @@ void main() {
       );
       expect(counter.value, equals(8));
       expect(marker.value, equals(3));
+    });
+
+    test('is undone by the operations it says are the opposite', () {
+      final doc = CRDTDocument(peerId: PeerId.generate());
+      final counter = PNCounterHandler(doc, 'counter');
+      final undo = CRDTUndoManager(doc, captureTimeout: Duration.zero)
+        ..track(counter);
+
+      counter
+        ..increment(3)
+        ..decrement(2);
+      expect(counter.value, equals(1));
+
+      undo.undo();
+      expect(counter.value, equals(3));
+
+      undo.undo();
+      expect(counter.value, equals(0));
+
+      undo
+        ..redo()
+        ..redo();
+      expect(counter.value, equals(1));
+    });
+
+    test('a handler that says nothing about undo has nothing to undo', () {
+      final doc = CRDTDocument(peerId: PeerId.generate());
+      final handler = TestHandler(doc);
+      final operation = TestOperation.fromHandler(handler);
+
+      // The defaults: no inverse, and `track` refuses it rather than
+      // recording steps that could never be taken back.
+      expect(handler.invertible, isFalse);
+      expect(handler.invert(operation), isEmpty);
+      expect(handler.prepareInverse(operation), same(operation));
+      expect(() => CRDTUndoManager(doc).track(handler), throwsUnsupportedError);
     });
 
     test('declines a change that shares its id but not its handler type', () {
