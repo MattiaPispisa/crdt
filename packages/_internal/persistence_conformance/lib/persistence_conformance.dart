@@ -3,4 +3,3 @@
 library;
 
 export 'src/conformance.dart';
-export 'src/fixtures.dart';

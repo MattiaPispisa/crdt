@@ -3,9 +3,10 @@
 # to build against the pub.dev versions.
 #
 # On now because the undo needs `CRDTUndoManager` (crdt_lf 4.2.0), the local
-# copy of a room needs `crdt_lf_persistence` (new) and the relay client has to
-# catch the relay up after a restart (crdt_socket_sync 0.8.0), none of which
-# are published yet.
+# copy of a room needs the persistence `crdt_lf_hive` re-exports, and the relay
+# client has to catch the relay up after a restart (crdt_socket_sync 0.8.0),
+# none of which are published yet. `crdt_lf_persistence` is here only because
+# `crdt_lf_hive` depends on it — the app never imports it.
 dependency_overrides:
   crdt_lf:
     path: ../../../packages/core/crdt_lf

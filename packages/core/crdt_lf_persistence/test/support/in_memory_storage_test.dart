@@ -1,5 +1,6 @@
-import 'package:crdt_lf_persistence/crdt_lf_persistence.dart';
 import 'package:persistence_conformance/persistence_conformance.dart';
+
+import 'in_memory_storage.dart';
 
 void main() {
   runDocumentStorageConformanceTests(

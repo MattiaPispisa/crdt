@@ -10,7 +10,6 @@ dependencies:
   crdt_lf: ^4.2.0
   crdt_lf_flutter: ^0.5.0
   crdt_lf_hive: ^0.5.0
-  crdt_lf_persistence: ^0.1.0
   crdt_socket_sync: ^0.8.0
   
   flutter:

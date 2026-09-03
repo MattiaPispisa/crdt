@@ -4,6 +4,8 @@ import 'package:crdt_lf/crdt_lf.dart';
 import 'package:crdt_lf_persistence/crdt_lf_persistence.dart';
 import 'package:test/test.dart';
 
+import 'support/in_memory_storage.dart';
+
 /// No delay, so a test does not wait on a timer it does not care about.
 const Duration _now = Duration.zero;
 
@@ -103,23 +105,34 @@ void main() {
       expect(await storage.changes.count, writtenByTheSeed);
     });
 
-    test('several stored snapshots are folded, not picked between', () async {
-      final other = CRDTDocument(documentId: 'doc');
-      CRDTFugueTextHandler(other, 'other').insert(0, 'x');
+    test('the newest of several stored snapshots is the one restored',
+        () async {
       final persistence = await attach();
-      text.insert(0, 'y');
-      document.takeSnapshot(pruneHistory: false);
+      text.insert(0, 'a');
+      final first = document.takeSnapshot(pruneHistory: false);
       await persistence.flush();
-      // A write interrupted halfway can leave a second one behind.
-      await storage.snapshots.saveSnapshot(other.takeSnapshot());
+      text.insert(1, 'b');
+      final second = document.takeSnapshot(pruneHistory: false);
+      await persistence.flush();
+      // A write killed between saving the new snapshot and dropping the old
+      // one leaves both behind.
+      await storage.snapshots.saveSnapshot(first);
       await persistence.dispose();
+      expect(await storage.snapshots.count, 2);
 
       final next = reopened();
-      final otherHandler = CRDTFugueTextHandler(next.document, 'other');
+      final restored = <Snapshot>[];
+      next.document.events.listen((event) {
+        if (event is DocumentSnapshotUpdated) {
+          restored.add(event.snapshot);
+        }
+      });
       await CRDTDocumentPersistence.open(next.document, storage);
+      // The events reach a listener on a microtask.
+      await Future<void>.delayed(Duration.zero);
 
-      expect(next.text.value, 'y');
-      expect(otherHandler.value, 'x');
+      expect(next.text.value, 'ab');
+      expect(restored.single.id, second.id);
     });
 
     test('a new snapshot replaces the one before it', () async {
@@ -156,6 +169,13 @@ void main() {
       expect(next.text.value, 'abc');
 
       await persistence.dispose();
+    });
+
+    test('compactAfter has to be positive', () {
+      expect(
+        () => attach(compactAfter: 0),
+        throwsA(isA<ArgumentError>()),
+      );
     });
 
     test('compactAfter snapshots and prunes once the log is long enough',

@@ -3,8 +3,8 @@ import 'package:crdt_lf_persistence/crdt_lf_persistence.dart';
 
 /// A [CRDTDocumentStorage] that keeps everything in memory.
 ///
-/// For tests, and for the conformance suite to check itself against. Nothing
-/// survives the process.
+/// The test double the other suites here run on, and what the conformance
+/// suite checks itself against. Nothing survives the process.
 class InMemoryDocumentStorage extends CRDTDocumentStorage {
   /// Creates an empty storage for [documentId].
   InMemoryDocumentStorage(String documentId)

@@ -7,9 +7,9 @@ import 'package:crdt_lf_persistence/crdt_lf_persistence.dart';
 /// [Snapshot.id]: saving one twice replaces it.
 ///
 /// A document normally has one snapshot at a time, but the store holds a
-/// collection: a write interrupted halfway can leave two, and
-/// [CRDTDocumentPersistence] folds them on the next open rather than guessing
-/// which one to trust.
+/// collection: a write interrupted halfway can leave two. Each one describes
+/// the whole document, so [CRDTDocumentPersistence] keeps the newest of them
+/// on the next open and drops the rest.
 abstract interface class CRDTSnapshotStorage {
   /// The document these snapshots belong to.
   String get documentId;

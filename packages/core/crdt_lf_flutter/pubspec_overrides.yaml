@@ -1,5 +1,7 @@
-# melos_managed_dependency_overrides: crdt_lf,hlc_dart
+# melos_managed_dependency_overrides: crdt_lf,hlc_dart,benchmark_infrastructure
 dependency_overrides:
+  benchmark_infrastructure:
+    path: ../../_internal/benchmark_infrastructure
   crdt_lf:
     path: ../crdt_lf
   hlc_dart:

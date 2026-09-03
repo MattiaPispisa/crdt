@@ -49,9 +49,10 @@ class CRDTDocumentPersistence {
   /// round-trip to the disk between the typist and the next character.
   ///
   /// [compactAfter] snapshots and prunes the document once the store holds
-  /// more than that many changes. Off by default: a prune drops the stacks of
-  /// every [CRDTUndoManager] on the document. Leave it off and the log grows
-  /// for as long as the document is edited.
+  /// more than that many changes. It has to be positive; leave it `null` to
+  /// keep compaction off. Off by default: a prune drops the stacks of every
+  /// [CRDTUndoManager] on the document. Leave it off and the log grows for as
+  /// long as the document is edited.
   ///
   /// [onError] is called when a write fails. Without it a failed write is
   /// silent.
@@ -62,10 +63,13 @@ class CRDTDocumentPersistence {
     int? compactAfter,
     void Function(Object error, StackTrace stack)? onError,
   }) async {
-    assert(
-      compactAfter == null || compactAfter > 0,
-      'compactAfter must be positive',
-    );
+    if (compactAfter != null && compactAfter <= 0) {
+      throw ArgumentError.value(
+        compactAfter,
+        'compactAfter',
+        'must be positive, or null to leave compaction off',
+      );
+    }
 
     final persistence = CRDTDocumentPersistence._(
       document,
@@ -119,14 +123,29 @@ class CRDTDocumentPersistence {
     }
 
     _document.import(
-      // Normally one snapshot, but a write interrupted halfway can leave two.
-      // Both describe the same document, so folding them loses nothing.
-      snapshot:
-          snapshots.isEmpty ? null : snapshots.reduce((a, b) => a.merged(b)),
+      snapshot: _newest(snapshots),
       changes: changes,
       merge: true,
       pruneHistory: false,
       origin: _restoreOrigin,
+    );
+  }
+
+  /// The newest of [snapshots], or `null` when there is none.
+  ///
+  /// A snapshot holds the whole state of every handler, so one is enough.
+  /// There is normally one on the store: [_writeSnapshot] drops the old one
+  /// as soon as the new one is written. A process killed between those two
+  /// steps leaves two — and the prune that removes the covered changes runs
+  /// after that write, so every change is still stored and the older snapshot
+  /// adds nothing.
+  static Snapshot? _newest(List<Snapshot> snapshots) {
+    if (snapshots.isEmpty) {
+      return null;
+    }
+    return snapshots.reduce(
+      (a, b) =>
+          b.versionVector.isStrictlyNewerOrEqualThan(a.versionVector) ? b : a,
     );
   }
 

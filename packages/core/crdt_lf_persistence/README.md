@@ -4,6 +4,15 @@ The storage contract behind the [`crdt_lf`](https://pub.dev/packages/crdt_lf)
 persistence adapters, and the consumer that keeps a document on disk as it
 changes.
 
+> **Do not put this package in your `pubspec.yaml`.**
+> It holds no store of its own. Pick an adapter —
+> [`crdt_lf_hive`](https://pub.dev/packages/crdt_lf_hive),
+> [`crdt_lf_drift`](https://pub.dev/packages/crdt_lf_drift) or
+> [`crdt_lf_sqlite`](https://pub.dev/packages/crdt_lf_sqlite) — and it gives
+> you `CRDTDocumentPersistence`, `CRDTDocumentStorage`, `CRDTChangeStorage`
+> and `CRDTSnapshotStorage` through its own barrel. This page is the contract
+> those adapters keep, and the place to read before writing a fourth one.
+
 Two things live here:
 
 - **`CRDTDocumentStorage`** — what a backend has to provide. `crdt_lf_hive`,
@@ -14,20 +23,24 @@ Two things live here:
 
 ## Local only
 
-No server, no database: a document, a file, and the two lines between them.
+No server to talk to: a document, an adapter, and the two lines between them.
+One import, the adapter's.
 
 ```dart
 import 'package:crdt_lf/crdt_lf.dart';
-import 'package:crdt_lf_persistence/crdt_lf_persistence.dart';
-import 'package:crdt_lf_persistence/io.dart';
+import 'package:crdt_lf_sqlite/crdt_lf_sqlite.dart';
 
-// The file first: it knows which document it holds.
-final storage = await FileDocumentStorage.open('note.crdt');
+const documentId = 'note';
+final database = CRDTSqlite.open('note.db');
 
-final document = CRDTDocument(documentId: storage.documentId);
+final document = CRDTDocument(documentId: documentId);
 final text = CRDTFugueTextHandler(document, 'body');
 
-final persistence = await CRDTDocumentPersistence.open(document, storage);
+// Reads the database into the document, then follows it.
+final persistence = await CRDTDocumentPersistence.open(
+  document,
+  database.storageForDocument(documentId),
+);
 
 text.insert(0, 'Hello 🌍');
 
@@ -35,7 +48,7 @@ await persistence.dispose(); // writes what is still waiting
 ```
 
 Run it again and the text is there. A runnable version is in
-[`example/bin/local_first.dart`](example/bin/local_first.dart).
+[`crdt_lf_sqlite`'s example](https://github.com/MattiaPispisa/crdt/blob/main/packages/adapters/persistence/crdt_lf_sqlite/example/main.dart).
 
 ## Offline-first, with sync
 
@@ -108,6 +121,11 @@ void main() {
   );
 }
 ```
+
+`persistence_conformance` is internal and unpublished, so an adapter outside
+this repository cannot depend on it. Read
+[the suite](https://github.com/MattiaPispisa/crdt/tree/main/packages/_internal/persistence_conformance)
+and copy what it checks.
 
 ## Apps
 
