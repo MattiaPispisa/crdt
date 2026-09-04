@@ -52,3 +52,37 @@ abstract interface class CRDTSnapshotStorage {
   /// How many snapshots of this document are stored.
   FutureOr<int> get count;
 }
+
+/// The newest of [snapshots], or `null` when there is none.
+///
+/// A snapshot holds the whole state of every handler, so one is enough. There
+/// is normally one on the store: [CRDTDocumentPersistence] drops the old one as
+/// soon as the new one is written. A process killed between those two steps
+/// leaves two, and this picks the one to restore from.
+///
+/// The choice is made on the version vector, never on the order the backend
+/// returns rows in. Two snapshots whose vectors are concurrent — neither has
+/// seen everything the other has — cannot be ordered, and the first of the two
+/// is kept.
+Snapshot? newestSnapshot(List<Snapshot> snapshots) {
+  if (snapshots.isEmpty) {
+    return null;
+  }
+  return snapshots.reduce(
+    (a, b) => b.versionVector.isStrictlyNewerOrEqualThan(a.versionVector)
+        ? b
+        : a,
+  );
+}
+
+/// The read-then-pick step a caller of a [CRDTSnapshotStorage] takes to
+/// restore.
+extension CRDTSnapshotStorageLatest on CRDTSnapshotStorage {
+  /// The newest stored snapshot, or `null` when there is none.
+  ///
+  /// Reads every snapshot and picks with [newestSnapshot]. A caller that
+  /// already holds the list calls [newestSnapshot] instead.
+  FutureOr<Snapshot?> getLatestSnapshot() {
+    return getSnapshots().chain(newestSnapshot);
+  }
+}

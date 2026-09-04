@@ -31,11 +31,11 @@ class EditorScreen extends StatefulWidget {
 enum _ViewMode { edit, split, view }
 
 class _EditorScreenState extends State<EditorScreen> {
-  late final CRDTDocument _document;
-  late final CRDTUndoManager _undo;
-  late final AwarenessService _awareness;
-  late final WebSocketRelayClient _sync;
-  late final ValueNotifier<ConnectionStatus> _status;
+  CRDTDocument? _document;
+  CRDTUndoManager? _undo;
+  AwarenessService? _awareness;
+  WebSocketRelayClient? _sync;
+  ValueNotifier<ConnectionStatus>? _status;
   StreamSubscription<ConnectionStatus>? _statusSubscription;
   CRDTDocumentPersistence? _persistence;
   bool _initialized = false;
@@ -48,26 +48,7 @@ class _EditorScreenState extends State<EditorScreen> {
     if (_initialized) return;
     _initialized = true;
     final profile = context.read<UserSettingsCubit>().state;
-    // The document id IS the relay room key: every client of the room must
-    // use the same one.
-    _document = CRDTDocument(documentId: widget.roomId);
-    final text = CRDTFugueTextHandler(_document, kHandlerId);
-    _undo = CRDTUndoManager(_document)..track(text);
-    _awareness = AwarenessService(
-      name: profile.displayName,
-      color: profile.color,
-    );
-    _sync = WebSocketRelayClient(
-      url: roomUrl(kServerUrl, widget.roomId),
-      document: _document,
-      author: _document.peerId,
-      plugins: [_awareness.plugin],
-    );
-    _status = ValueNotifier(_sync.connectionStatusValue);
-    _statusSubscription = _sync.connectionStatus.listen(
-      (status) => _status.value = status,
-    );
-    unawaited(_restoreThenConnect());
+    unawaited(_restoreThenConnect(profile));
   }
 
   /// Brings back what the last session left on this device, then goes online.
@@ -75,11 +56,40 @@ class _EditorScreenState extends State<EditorScreen> {
   /// In that order on purpose: offline, or on a relay that has forgotten the
   /// room, the local copy is all there is. Connecting first would show an
   /// empty page for as long as the handshake takes.
-  Future<void> _restoreThenConnect() async {
+  Future<void> _restoreThenConnect(UserSettingsState profile) async {
+    // The identity of the last session, so this device stays one author. A
+    // document given no peer id mints a new one, and the room's version vector
+    // would gain an entry on every launch — carried inside every snapshot from
+    // then on.
+    final peerId = await _storedPeerId();
+
+    // The document id IS the relay room key: every client of the room must
+    // use the same one.
+    final document = CRDTDocument(documentId: widget.roomId, peerId: peerId);
+    final text = CRDTFugueTextHandler(document, kHandlerId);
+    _document = document;
+    _undo = CRDTUndoManager(document)..track(text);
+    final awareness = AwarenessService(
+      name: profile.displayName,
+      color: profile.color,
+    );
+    _awareness = awareness;
+    final sync = WebSocketRelayClient(
+      url: roomUrl(kServerUrl, widget.roomId),
+      document: document,
+      author: document.peerId,
+      plugins: [awareness.plugin],
+    );
+    _sync = sync;
+    _status = ValueNotifier(sync.connectionStatusValue);
+    _statusSubscription = sync.connectionStatus.listen(
+      (status) => _status?.value = status,
+    );
+
     try {
       _persistence = await CRDTDocumentPersistence.open(
-        _document,
-        await CRDTHive.openStorageForDocument(_document.documentId),
+        document,
+        await CRDTHive.openStorageForDocument(document.documentId),
         onError: _reportPersistenceError,
       );
     } catch (error, stackTrace) {
@@ -93,7 +103,23 @@ class _EditorScreenState extends State<EditorScreen> {
     setState(() => _restored = true);
     // Only now: the restored document is what the relay is caught up against,
     // so anything written offline goes out with the next welcome.
-    _sync.connect();
+    sync.connect();
+  }
+
+  /// The id this device wrote under before, or a new one.
+  ///
+  /// A device that cannot read its storage still edits the room — under a new
+  /// identity, which is what happened on every launch before this.
+  Future<PeerId> _storedPeerId() async {
+    try {
+      final storage = await CRDTHive.openPeerIdStorageForDocument(
+        widget.roomId,
+      );
+      return await storage.loadOrCreate();
+    } catch (error, stackTrace) {
+      _reportPersistenceError(error, stackTrace);
+      return PeerId.generate();
+    }
   }
 
   void _reportPersistenceError(Object error, StackTrace stackTrace) {
@@ -113,18 +139,35 @@ class _EditorScreenState extends State<EditorScreen> {
     // Flushes whatever is still waiting to be written.
     unawaited(_persistence?.dispose());
     // Disposes the awareness plugin too.
-    _sync.dispose();
-    _awareness.dispose();
-    _status.dispose();
-    _undo.dispose();
-    _document.dispose();
+    _sync?.dispose();
+    _awareness?.dispose();
+    _status?.dispose();
+    _undo?.dispose();
+    _document?.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
+    final document = _document;
+    final awareness = _awareness;
+    final undo = _undo;
+    final status = _status;
+    if (!_restored ||
+        document == null ||
+        awareness == null ||
+        undo == null ||
+        status == null) {
+      // Reading the local copy back. Showing the editor first would let
+      // someone type into a document that is about to be replaced.
+      return Scaffold(
+        appBar: AppBar(title: Text('Room ${widget.roomId}')),
+        body: const Center(child: CircularProgressIndicator()),
+      );
+    }
+
     return CrdtProvider.value(
-      value: _document,
+      value: document,
       child: Scaffold(
         appBar: AppBar(
           title: Text('Room ${widget.roomId}'),
@@ -171,44 +214,40 @@ class _EditorScreenState extends State<EditorScreen> {
             ),
           ),
         ),
-        body: !_restored
-            // Reading the local copy back. Showing the editor first would let
-            // someone type into a document that is about to be replaced.
-            ? const Center(child: CircularProgressIndicator())
-            : LayoutBuilder(
-                builder: (context, constraints) {
-                  final editor = EditorPane(awareness: _awareness, undo: _undo);
-                  const preview = PreviewPane();
-                  switch (_mode) {
-                    case _ViewMode.edit:
-                      return editor;
-                    case _ViewMode.view:
-                      return preview;
-                    case _ViewMode.split:
-                      // Side by side when there is room, stacked otherwise.
-                      if (constraints.maxWidth < 720) {
-                        return Column(
-                          children: [
-                            Expanded(child: editor),
-                            const Divider(height: 1),
-                            const Expanded(child: preview),
-                          ],
-                        );
-                      }
-                      return Row(
-                        children: [
-                          Expanded(child: editor),
-                          const VerticalDivider(width: 1),
-                          const Expanded(child: preview),
-                        ],
-                      );
-                  }
-                },
-              ),
+        body: LayoutBuilder(
+          builder: (context, constraints) {
+            final editor = EditorPane(awareness: awareness, undo: undo);
+            const preview = PreviewPane();
+            switch (_mode) {
+              case _ViewMode.edit:
+                return editor;
+              case _ViewMode.view:
+                return preview;
+              case _ViewMode.split:
+                // Side by side when there is room, stacked otherwise.
+                if (constraints.maxWidth < 720) {
+                  return Column(
+                    children: [
+                      Expanded(child: editor),
+                      const Divider(height: 1),
+                      const Expanded(child: preview),
+                    ],
+                  );
+                }
+                return Row(
+                  children: [
+                    Expanded(child: editor),
+                    const VerticalDivider(width: 1),
+                    const Expanded(child: preview),
+                  ],
+                );
+            }
+          },
+        ),
         bottomNavigationBar: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            StatusBar(status: _status, peers: _awareness.peers),
+            StatusBar(status: status, peers: awareness.peers),
             const AppFooter(),
           ],
         ),

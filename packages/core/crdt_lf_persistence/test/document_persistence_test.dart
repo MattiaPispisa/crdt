@@ -2,9 +2,8 @@ import 'dart:async';
 
 import 'package:crdt_lf/crdt_lf.dart';
 import 'package:crdt_lf_persistence/crdt_lf_persistence.dart';
+import 'package:persistence_conformance/persistence_conformance.dart';
 import 'package:test/test.dart';
-
-import 'support/in_memory_storage.dart';
 
 /// No delay, so a test does not wait on a timer it does not care about.
 const Duration _now = Duration.zero;
@@ -24,12 +23,13 @@ void main() {
     Future<CRDTDocumentPersistence> attach({
       CRDTDocument? to,
       int? compactAfter,
+      Duration writeDelay = _now,
       void Function(Object, StackTrace)? onError,
     }) =>
         CRDTDocumentPersistence.open(
           to ?? document,
           storage,
-          writeDelay: _now,
+          writeDelay: writeDelay,
           compactAfter: compactAfter,
           onError: onError,
         );
@@ -164,6 +164,30 @@ void main() {
       expect(await storage.changes.count, 0);
 
       // The state still comes back: it lives in the snapshot now.
+      final next = reopened();
+      await CRDTDocumentPersistence.open(next.document, storage);
+      expect(next.text.value, 'abc');
+
+      await persistence.dispose();
+    });
+
+    test('a change pruned before it was ever written stays off the disk',
+        () async {
+      // A long delay, so the edits are still queued when the snapshot prunes
+      // them. Written afterwards they would land after the delete meant to
+      // remove them, and no later prune would name them again: a prune only
+      // reports what the document still holds.
+      final persistence = await attach(
+        writeDelay: const Duration(seconds: 5),
+      );
+      text.insert(0, 'abc');
+      expect(await storage.changes.count, 0);
+
+      document.takeSnapshot();
+      await persistence.flush();
+
+      expect(await storage.changes.count, 0);
+
       final next = reopened();
       await CRDTDocumentPersistence.open(next.document, storage);
       expect(next.text.value, 'abc');

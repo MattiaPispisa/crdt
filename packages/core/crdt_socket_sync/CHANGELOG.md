@@ -4,6 +4,23 @@
 
 [compare to previous release](https://github.com/MattiaPispisa/crdt/compare/crdt_socket_sync-v0.7.0...crdt_socket_sync-v0.8.0)
 
+### Added
+
+- **`PersistentServerRegistry`**: a `CRDTServerRegistry` that keeps every document it serves on
+  disk, on any adapter. It holds the live documents and routes to them the way any registry does,
+  but it never reads or writes storage by hand: each document gets a `CRDTDocumentPersistence`,
+  which follows `CRDTDocument.events`. So changes are batched instead of written one by one, a
+  snapshot replaces the one before it, and a prune drops exactly what it covered — inside a
+  transaction where the backend has one. Documents open lazily, so a server with many rooms holds
+  only the ones being edited. `compactAfter` snapshots a document once its log gets long, and the
+  `snapshots` stream is how a server learns to broadcast the new status.
+
+- **`ServerDocumentCatalog`**, with `InMemoryServerDocumentCatalog`: the document ids a server
+  serves. It is the one piece `PersistentServerRegistry` cannot get from a storage — a
+  `CRDTDocumentStorage` holds one document and knows nothing about the others — so a server that
+  wants its documents back after a restart writes three methods over a box or a table. The example
+  server shows one over Hive.
+
 ### Fixed
 
 - **A relay client now catches the relay up after a restart.** A welcome carries the whole room,
@@ -22,7 +39,9 @@
   way in. A client writing while offline no longer pays for a push that is not happening. It also
   skips a change already waiting, so the reconciliation above never queues one twice.
 
-- Requires `crdt_lf: ^4.2.0`.
+- Requires `crdt_lf: ^4.2.0`, and now depends on `crdt_lf_persistence`. That package is the storage
+  contract only — it depends on `crdt_lf` and nothing else — so this does not tie the sync to any
+  backend: a caller still hands `PersistentServerRegistry` whichever adapter it likes.
 
 ## [0.7.0](https://github.com/MattiaPispisa/crdt/tree/crdt_socket_sync-v0.7.0/packages/core/crdt_socket_sync)
 

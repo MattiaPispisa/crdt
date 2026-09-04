@@ -40,3 +40,15 @@ First release.
 - `CRDTDocumentStorage.close()` and `CRDTDocumentStorage.transaction()`. Both come with a working
   default — do nothing, and run the body — so an adapter only fills in what its backend can do.
   A prune now drops the covered changes and rewrites the survivors inside one `transaction()`.
+
+- `newestSnapshot(List<Snapshot>)` and `CRDTSnapshotStorage.getLatestSnapshot()`: which of the
+  stored snapshots to restore from. The answer comes from the version vector, never from the order
+  a backend returns its rows in. `CRDTDocumentPersistence` restores through the same function, so
+  a caller reading the snapshot itself and the restore never disagree.
+
+- **A change pruned before it was ever written no longer comes back.** A snapshot taken while
+  changes were still queued deleted them from a store they had not reached yet, and the queue then
+  wrote them down. No later prune would ever name them again — a prune only reports what the
+  document still holds — so they sat on the disk for the life of the store, and compaction did not
+  shrink it. The queue now takes the prune too: removed changes leave it, and a survivor's old
+  bytes are replaced by the rewritten ones.

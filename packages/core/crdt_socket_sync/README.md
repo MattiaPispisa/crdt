@@ -25,6 +25,8 @@
       - [Out-of-sync Recovery](#out-of-sync-recovery)
     - [Server Registry](#server-registry)
       - [Persisting changes \& snapshots](#persisting-changes--snapshots)
+        - [The one piece you write: the catalog](#the-one-piece-you-write-the-catalog)
+        - [Broadcasting a compaction](#broadcasting-a-compaction)
     - [Server Events](#server-events)
     - [Imports](#imports)
   - [Relay Mode](#relay-mode)
@@ -272,9 +274,11 @@ sequenceDiagram
 
 ### Server Registry
 
-The server stores documents through a `CRDTServerRegistry`. The bundled
-`InMemoryCRDTServerRegistry` keeps everything in memory (documents are lost on
-restart); implement the interface to plug in your own persistence backend.
+The server stores documents through a `CRDTServerRegistry`. Two come with the
+package: `InMemoryCRDTServerRegistry`, which keeps everything in memory, and
+[`PersistentServerRegistry`](#persisting-changes--snapshots), which keeps every
+document on disk through any `crdt_lf` storage adapter. Implement the interface
+yourself only if neither fits.
 
 The interface is fully asynchronous:
 
@@ -312,20 +316,102 @@ class CustomServerRegistry implements CRDTServerRegistry {
 
 #### Persisting changes & snapshots
 
-`InMemoryCRDTServerRegistry` is not durable — documents are lost on restart. To
-persist a registry, back it with one of the `crdt_lf` storage adapters. Each
-exposes a `CRDTDocumentStorage` with `changes` and `snapshots` stores you
-read/write from inside your `CRDTServerRegistry` (`saveChanges`, `getChanges`,
-`saveSnapshot`, `getSnapshots`, …):
+`InMemoryCRDTServerRegistry` is not durable — documents are lost on restart.
+You do not have to write the durable one yourself: **`PersistentServerRegistry`**
+is a `CRDTServerRegistry` that keeps every document it serves on disk, on any
+adapter.
+
+```dart
+final catalog = await HiveDocumentCatalog.open();
+
+final registry = PersistentServerRegistry(
+  openStorage: CRDTHive.openStorageForDocument,
+  openPeerIdStorage: CRDTHive.openPeerIdStorageForDocument,
+  catalog: catalog,
+  // Snapshot a document once its log passes this many changes.
+  compactAfter: 500,
+);
+```
+
+It holds the live documents and routes to them, the way any registry does. What
+it does **not** do is read and write storage by hand: each document gets a
+[`CRDTDocumentPersistence`](https://pub.dev/packages/crdt_lf_persistence), which
+follows `CRDTDocument.events` and writes down what each event reports. So:
+
+- a change applied through `applyChange` is **batched** with the ones around it
+  instead of costing one write each,
+- a snapshot replaces the one before it, and the prune that follows drops
+  exactly the changes it covered — both inside one transaction where the
+  backend has one,
+- documents open **lazily**, so a server with many rooms holds only the ones
+  being edited.
+
+`writeDelay` is how long a change waits for the ones after it. It leaves a
+window where a change is acknowledged but not yet on disk, and that is safe: a
+client reconciles at the next handshake and re-sends whatever the server no
+longer has. Pass `Duration.zero` to make the window as small as it gets.
+
+Pick your backend — the registry only ever sees the storage contract:
 
 - [crdt_lf_hive](https://pub.dev/packages/crdt_lf_hive) — Hive-backed storage
 - [crdt_lf_drift](https://pub.dev/packages/crdt_lf_drift) — Drift (SQL) storage
 - [crdt_lf_sqlite](https://pub.dev/packages/crdt_lf_sqlite) — `sqlite3` storage
 
-For a complete server-side implementation, see the example
-[`HiveServerRegistry`](https://github.com/MattiaPispisa/crdt/blob/main/packages/core/crdt_socket_sync/example/lib/src/registry.dart):
-it lazy-loads documents from Hive on first access, appends each change to
-storage, and periodically snapshots to compact the change history.
+##### The one piece you write: the catalog
+
+A `CRDTDocumentStorage` holds **one** document and knows nothing about the
+others, so nothing in the storage contract can list them. That list is a
+`ServerDocumentCatalog` — three methods over whatever your backend already has:
+
+```dart
+class HiveDocumentCatalog implements ServerDocumentCatalog {
+  HiveDocumentCatalog(this._box);
+
+  final Box<String> _box;
+
+  @override
+  Future<Set<String>> get documentIds async => _box.values.toSet();
+
+  @override
+  Future<void> add(String documentId) => _box.put(documentId, documentId);
+
+  @override
+  Future<void> remove(String documentId) => _box.delete(documentId);
+}
+```
+
+Leave `catalog` out and the ids are kept in memory: the documents stay on disk,
+but the server forgets they exist and starts empty.
+
+##### Broadcasting a compaction
+
+A snapshot comes with a prune, so the history it covers leaves the server. A
+client still replaying that history has to be given the snapshot instead. The
+`snapshots` stream reports each one as it is taken:
+
+```dart
+registry.snapshots.listen((event) async {
+  final document = (await registry.getDocument(event.documentId))!;
+  await server.broadcastMessage(
+    SyncMessage.documentStatus(
+      documentId: event.documentId,
+      snapshot: event.snapshot,
+      changes: document.exportChanges(),
+      versionVector: document.getVersionVector(),
+    ),
+  );
+});
+```
+
+The example server puts all of this together:
+[`registry.dart`](https://github.com/MattiaPispisa/crdt/blob/main/packages/core/crdt_socket_sync/example/lib/src/registry.dart).
+
+> The **relay** mode does not use any of this. A `RelayStore` keeps opaque
+> blobs the relay never decodes, keyed by a per-room sequence number, so it is
+> deliberately not built on `crdt_lf_persistence` — a relay does not have to be
+> written in Dart, let alone know what a CRDT is. On the relay **client** side
+> persistence is the app's own document: open it before `connect()`, and the
+> welcome reconciliation pushes whatever the relay is missing.
 
 ### Server Events
 

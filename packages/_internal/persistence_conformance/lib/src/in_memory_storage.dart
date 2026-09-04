@@ -3,8 +3,8 @@ import 'package:crdt_lf_persistence/crdt_lf_persistence.dart';
 
 /// A [CRDTDocumentStorage] that keeps everything in memory.
 ///
-/// The test double the other suites here run on, and what the conformance
-/// suite checks itself against. Nothing survives the process.
+/// The test double every suite in this monorepo runs on, and what the
+/// conformance suite checks itself against. Nothing survives the process.
 ///
 /// Every method answers without suspending, so this is also what the
 /// synchronous half of the contract — [CRDTDocumentPersistence.openSync] — is

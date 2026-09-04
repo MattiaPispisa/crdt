@@ -14,8 +14,10 @@ final _kDefaultHost = InternetAddress.anyIPv4.host;
 final _kDocumentId = '30669830-9256-4320-9ed5-f1860cd47d9f';
 final _kDocumentPeerId = PeerId.parse('97a6b8b3-fffc-4ebe-8dd4-f94e6a01c52f');
 
-late HiveServerRegistry _registry;
+late HiveDocumentCatalog _catalog;
+late PersistentServerRegistry _registry;
 late WebSocketServer _server;
+StreamSubscription<ServerSnapshot>? _snapshotBroadcast;
 
 Future<void> run({
   int? port,
@@ -45,7 +47,9 @@ Future<void> run({
 
   // db initialization
   Hive.init(_kDefaultDbLocation);
-  _registry = await HiveServerRegistry.init(
+  _catalog = await HiveDocumentCatalog.open();
+  _registry = await openHiveRegistry(
+    catalog: _catalog,
     logger: logger.getConfiguredInstance(prefix: 'HiveServerRegistry'),
   );
 
@@ -53,7 +57,10 @@ Future<void> run({
   await _setupExampleDocuments();
 
   if (verbose) {
-    await _registry.showPersistence();
+    await showPersistence(
+      registry: _registry,
+      logger: logger.getConfiguredInstance(prefix: 'HiveServerRegistry'),
+    );
   }
 
   _server = WebSocketServer(
@@ -66,7 +73,11 @@ Future<void> run({
     // symmetric. Defaults to NoCompression when null.
     compressor: compressor,
   );
-  _registry.setServer(_server);
+  _snapshotBroadcast = broadcastSnapshots(
+    registry: _registry,
+    server: _server,
+    logger: logger.getConfiguredInstance(prefix: 'HiveServerRegistry'),
+  );
 
   _setupSigintHandler(logger: logger.getConfiguredInstance(prefix: 'Bin'));
 
@@ -126,7 +137,9 @@ void _setupSigintHandler({required EnLogger logger}) {
   ProcessSignal.sigint.watch().listen((signal) async {
     logger.info('\n⏹️  Received SIGINT, shutting down gracefully...');
     await _server.stop();
+    await _snapshotBroadcast?.cancel();
     await _registry.close();
+    await _catalog.close();
     logger.info('✅ Server stopped.');
     exit(0);
   });

@@ -215,29 +215,11 @@ class CRDTDocumentPersistence {
     }
 
     _document.import(
-      snapshot: _newest(snapshots),
+      snapshot: newestSnapshot(snapshots),
       changes: changes,
       merge: true,
       pruneHistory: false,
       origin: _restoreOrigin,
-    );
-  }
-
-  /// The newest of [snapshots], or `null` when there is none.
-  ///
-  /// A snapshot holds the whole state of every handler, so one is enough.
-  /// There is normally one on the store: [_writeSnapshot] drops the old one
-  /// as soon as the new one is written. A process killed between those two
-  /// steps leaves two — and the prune that removes the covered changes runs
-  /// after that write, so every change is still stored and the older snapshot
-  /// adds nothing.
-  static Snapshot? _newest(List<Snapshot> snapshots) {
-    if (snapshots.isEmpty) {
-      return null;
-    }
-    return snapshots.reduce(
-      (a, b) =>
-          b.versionVector.isStrictlyNewerOrEqualThan(a.versionVector) ? b : a,
     );
   }
 
@@ -257,7 +239,41 @@ class CRDTDocumentPersistence {
         }
         _enqueue(() => _writeSnapshot(event.snapshot));
       case DocumentHistoryPruned():
+        _prunePending(event.removed, event.rewritten);
         _enqueue(() => _writePrune(event.removed, event.rewritten));
+    }
+  }
+
+  /// Applies the prune to the queue as well as to the store.
+  ///
+  /// A change pruned before it was ever written is still waiting here. Left
+  /// alone it would be written **after** the delete meant to remove it, and
+  /// nothing would remove it later: a prune only names what the document still
+  /// holds, and the document no longer holds this one. It would sit on the
+  /// disk for the life of the store.
+  ///
+  /// A survivor is the same story told with its old bytes: [_writePrune] saves
+  /// the rewritten version, and the queued one would overwrite it with a
+  /// dependency that is already gone.
+  void _prunePending(List<Change> removed, List<Change> rewritten) {
+    if (_pending.isEmpty) {
+      return;
+    }
+
+    final gone = removed.map((change) => change.id).toSet();
+    _pending.removeWhere((change) => gone.contains(change.id));
+
+    if (rewritten.isEmpty) {
+      return;
+    }
+    final replacements = {
+      for (final change in rewritten) change.id: change,
+    };
+    for (var i = 0; i < _pending.length; i++) {
+      final replacement = replacements[_pending[i].id];
+      if (replacement != null) {
+        _pending[i] = replacement;
+      }
     }
   }
 
