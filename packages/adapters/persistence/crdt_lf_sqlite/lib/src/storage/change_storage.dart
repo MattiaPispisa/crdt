@@ -12,8 +12,8 @@ import 'package:sqlite3/sqlite3.dart' as sq;
 /// several documents can share the same database.
 ///
 /// sqlite3 is synchronous, so every method here answers without ever
-/// suspending. They return futures to keep the [CRDTChangeStorage] contract,
-/// which the asynchronous backends need.
+/// suspending, and says so in its return type. The [CRDTChangeStorage]
+/// contract asks only for a [FutureOr], which a plain value satisfies.
 class CRDTSqliteChangeStorage implements CRDTChangeStorage {
   /// Creates a new [CRDTSqliteChangeStorage] instance.
   ///
@@ -34,7 +34,7 @@ class CRDTSqliteChangeStorage implements CRDTChangeStorage {
   String _changeKey(Change change) => change.id.toString();
 
   @override
-  Future<void> saveChange(Change change) async {
+  void saveChange(Change change) {
     database.execute(
       'INSERT OR REPLACE INTO $changesTable '
       '(document_id, change_id, bytes) VALUES (?, ?, ?)',
@@ -44,7 +44,7 @@ class CRDTSqliteChangeStorage implements CRDTChangeStorage {
 
   /// {@macro crdt_lf_sqlite_batch}
   @override
-  Future<void> saveChanges(List<Change> changes) async {
+  void saveChanges(List<Change> changes) {
     if (changes.isEmpty) {
       return;
     }
@@ -64,18 +64,23 @@ class CRDTSqliteChangeStorage implements CRDTChangeStorage {
   }
 
   @override
-  Future<List<Change>> getChanges() async {
+  List<Change> getChanges({
+    VersionVector? newerThan,
+    VersionVector? upTo,
+  }) {
     final result = database.select(
       'SELECT bytes FROM $changesTable WHERE document_id = ?',
       [documentId],
     );
-    return result
-        .map((row) => Change.fromBytes(row['bytes'] as Uint8List))
-        .toList();
+    return filterByVersion(
+      result.map((row) => Change.fromBytes(row['bytes'] as Uint8List)).toList(),
+      newerThan: newerThan,
+      upTo: upTo,
+    );
   }
 
   @override
-  Future<bool> deleteChange(Change change) async {
+  bool deleteChange(Change change) {
     final key = _changeKey(change);
     if (!_contains(key)) {
       return false;
@@ -89,7 +94,7 @@ class CRDTSqliteChangeStorage implements CRDTChangeStorage {
 
   /// {@macro crdt_lf_sqlite_batch}
   @override
-  Future<int> deleteChanges(List<Change> changes) async {
+  int deleteChanges(List<Change> changes) {
     if (changes.isEmpty) {
       return 0;
     }
@@ -114,7 +119,7 @@ class CRDTSqliteChangeStorage implements CRDTChangeStorage {
   }
 
   @override
-  Future<void> clear() async {
+  void clear() {
     database.execute(
       'DELETE FROM $changesTable WHERE document_id = ?',
       [documentId],
@@ -130,7 +135,7 @@ class CRDTSqliteChangeStorage implements CRDTChangeStorage {
   }
 
   @override
-  Future<int> get count async {
+  int get count {
     final result = database.select(
       'SELECT COUNT(*) AS c FROM $changesTable WHERE document_id = ?',
       [documentId],

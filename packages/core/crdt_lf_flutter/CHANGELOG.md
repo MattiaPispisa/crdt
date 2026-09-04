@@ -1,4 +1,4 @@
-## [0.5.0+1](https://github.com/MattiaPispisa/crdt/tree/crdt_lf_flutter-v0.5.0+1/packages/crdt_lf_flutter)
+## [0.5.0+1](https://github.com/MattiaPispisa/crdt/tree/crdt_lf_flutter-v0.5.0+1/packages/core/crdt_lf_flutter)
 
 **Date:** 2026-08-28
 
@@ -8,7 +8,7 @@
 
 - chore: fixed changelog
 
-## [0.5.0](https://github.com/MattiaPispisa/crdt/tree/crdt_lf_flutter-v0.5.0/packages/crdt_lf_flutter)
+## [0.5.0](https://github.com/MattiaPispisa/crdt/tree/crdt_lf_flutter-v0.5.0/packages/core/crdt_lf_flutter)
 
 **Date:** 2026-08-28
 
@@ -37,7 +37,7 @@
 - `CrdtTextFieldBuilder` and `CrdtTextCursorsOverlay` follow their `id` when it changes, instead of
   staying bound to the handler they started with.
 
-## [0.4.0](https://github.com/MattiaPispisa/crdt/tree/crdt_lf_flutter-v0.4.0/packages/crdt_lf_flutter)
+## [0.4.0](https://github.com/MattiaPispisa/crdt/tree/crdt_lf_flutter-v0.4.0/packages/core/crdt_lf_flutter)
 
 **Date:** 2026-08-16
 

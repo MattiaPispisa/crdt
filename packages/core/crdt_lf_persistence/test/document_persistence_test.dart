@@ -231,6 +231,107 @@ void main() {
       await persistence.dispose();
     });
 
+    test('a failed write is tried again, not dropped', () async {
+      final storage = _FailingStorage('doc', failures: 1);
+      final persistence = await CRDTDocumentPersistence.open(
+        document,
+        storage,
+        writeDelay: _now,
+        onError: (_, __) {},
+      );
+
+      text.insert(0, 'a');
+      await persistence.flush();
+      expect(
+        persistence.hasUnwrittenChanges,
+        isTrue,
+        reason: 'the batch the failed write carried stays queued',
+      );
+
+      await persistence.flush();
+      expect(persistence.hasUnwrittenChanges, isFalse);
+      expect(await storage.changes.count, 1);
+
+      await persistence.dispose();
+      final next = reopened();
+      await (await CRDTDocumentPersistence.open(next.document, storage))
+          .dispose();
+      expect(next.text.value, 'a');
+    });
+
+    test('a write that keeps failing leaves the changes waiting', () async {
+      final persistence = await CRDTDocumentPersistence.open(
+        document,
+        _FailingStorage('doc'),
+        writeDelay: _now,
+        onError: (_, __) {},
+      );
+
+      text.insert(0, 'a');
+      // The timeout is the assertion: a flush that retried a storage which
+      // keeps refusing would never end.
+      await persistence.flush();
+
+      expect(persistence.hasUnwrittenChanges, isTrue);
+      await persistence.dispose();
+    });
+
+    test('openSync restores before it returns', () async {
+      final persistence = await attach();
+      text.insert(0, 'Hello 🌍');
+      await persistence.dispose();
+
+      final next = reopened();
+      CRDTDocumentPersistence.openSync(next.document, storage);
+
+      expect(next.text.value, 'Hello 🌍');
+    });
+
+    test('openSync refuses a storage that suspends', () async {
+      final slow = _SuspendingStorage('doc');
+      final next = reopened();
+
+      expect(
+        () => CRDTDocumentPersistence.openSync(next.document, slow),
+        throwsA(isA<StateError>()),
+      );
+
+      // The restore it started must not land, and nothing must be following
+      // the document: a write after the refusal reaches no storage.
+      next.text.insert(0, 'after');
+      await Future<void>.delayed(_now);
+
+      expect(next.text.value, 'after', reason: 'the restore did not land');
+      expect(slow.written, isEmpty, reason: 'nothing followed the document');
+    });
+
+    test('a document reopened with its stored id stays one author', () async {
+      InMemoryPeerIdStorage.reset();
+      final peers = InMemoryPeerIdStorage('doc');
+
+      final firstId = await peers.loadOrCreate();
+      final first = CRDTDocument(documentId: 'doc', peerId: firstId);
+      final firstText = CRDTFugueTextHandler(first, 'text');
+      final firstRun = await attach(to: first);
+      firstText.insert(0, 'a');
+      await firstRun.dispose();
+
+      final secondId = await peers.loadOrCreate();
+      final second = CRDTDocument(documentId: 'doc', peerId: secondId);
+      final secondText = CRDTFugueTextHandler(second, 'text');
+      final secondRun = await attach(to: second);
+      secondText.insert(1, 'b');
+      await secondRun.dispose();
+
+      expect(secondId, firstId, reason: 'the identity came back');
+      expect(secondText.value, 'ab');
+      expect(
+        second.getVersionVector().entries.map((e) => e.key).toList(),
+        [firstId],
+        reason: 'a second session must not add a second author',
+      );
+    });
+
     test('nothing is written after dispose', () async {
       final persistence = await attach();
       text.insert(0, 'a');
@@ -245,19 +346,78 @@ void main() {
   });
 }
 
-/// A storage whose writes always fail.
-class _FailingStorage extends CRDTDocumentStorage {
-  _FailingStorage(String documentId)
+/// A storage that suspends on every read, as drift does.
+class _SuspendingStorage extends CRDTDocumentStorage {
+  _SuspendingStorage(String documentId)
       : super(
-          changes: _FailingChangeStorage(documentId),
+          changes: _SuspendingChangeStorage(documentId),
+          snapshots: InMemorySnapshotStorage(documentId),
+        );
+
+  /// What reached the storage, so a test can show nothing did.
+  List<Change> get written => (changes as _SuspendingChangeStorage).written;
+}
+
+class _SuspendingChangeStorage implements CRDTChangeStorage {
+  _SuspendingChangeStorage(this.documentId);
+
+  @override
+  final String documentId;
+
+  /// What reached this storage.
+  final List<Change> written = <Change>[];
+
+  @override
+  Future<List<Change>> getChanges({
+    VersionVector? newerThan,
+    VersionVector? upTo,
+  }) async =>
+      <Change>[];
+
+  @override
+  Future<void> saveChange(Change change) async => written.add(change);
+
+  @override
+  Future<void> saveChanges(List<Change> changes) async =>
+      written.addAll(changes);
+
+  @override
+  Future<bool> deleteChange(Change change) async => false;
+
+  @override
+  Future<int> deleteChanges(List<Change> changes) async => 0;
+
+  @override
+  Future<void> clear() async => written.clear();
+
+  @override
+  Future<int> get count async => written.length;
+}
+
+/// A storage whose first [failures] writes fail.
+///
+/// `-1` fails every write.
+class _FailingStorage extends CRDTDocumentStorage {
+  _FailingStorage(String documentId, {int failures = -1})
+      : super(
+          changes: _FailingChangeStorage(documentId, failures),
           snapshots: InMemorySnapshotStorage(documentId),
         );
 }
 
 class _FailingChangeStorage extends InMemoryChangeStorage {
-  _FailingChangeStorage(super.documentId);
+  _FailingChangeStorage(super.documentId, this._failures);
+
+  int _failures;
 
   @override
-  Future<void> saveChanges(List<Change> changes) async =>
+  Future<void> saveChanges(List<Change> changes) async {
+    if (_failures != 0) {
+      if (_failures > 0) {
+        _failures -= 1;
+      }
       throw StateError('disk full');
+    }
+    return super.saveChanges(changes);
+  }
 }

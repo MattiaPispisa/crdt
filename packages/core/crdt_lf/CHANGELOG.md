@@ -1,4 +1,4 @@
-## [Unreleased](https://github.com/MattiaPispisa/crdt/tree/crdt_lf-v4.2.0/packages/crdt_lf)
+## [Unreleased](https://github.com/MattiaPispisa/crdt/tree/crdt_lf-v4.2.0/packages/core/crdt_lf)
 
 **Date:** --
 
@@ -52,7 +52,7 @@
 
 - Disposing a `HistorySession` now ends the delta streams of the handlers it handed out, so a `watch()` subscriber is told the stream is over instead of waiting on one that can never fire again.
 
-## [4.1.0+1](https://github.com/MattiaPispisa/crdt/tree/crdt_lf-v4.1.0+1/packages/crdt_lf)
+## [4.1.0+1](https://github.com/MattiaPispisa/crdt/tree/crdt_lf-v4.1.0+1/packages/core/crdt_lf)
 
 **Date:** 2026-08-29
 
@@ -62,7 +62,7 @@
 
 - chore: fixed changelog
 
-## [4.1.0](https://github.com/MattiaPispisa/crdt/tree/crdt_lf-v4.1.0/packages/crdt_lf)
+## [4.1.0](https://github.com/MattiaPispisa/crdt/tree/crdt_lf-v4.1.0/packages/core/crdt_lf)
 
 **Date:** 2026-08-29
 
@@ -86,7 +86,7 @@
   that writes drops its own echo, and how a sync manager marks what arrived from the network. It
   never travels, so it costs nothing on the wire. A `HandlerReset` carries none.
 
-## [4.0.0](https://github.com/MattiaPispisa/crdt/tree/crdt_lf-v4.0.0/packages/crdt_lf)
+## [4.0.0](https://github.com/MattiaPispisa/crdt/tree/crdt_lf-v4.0.0/packages/core/crdt_lf)
 
 **Date:** 2026-08-18
 

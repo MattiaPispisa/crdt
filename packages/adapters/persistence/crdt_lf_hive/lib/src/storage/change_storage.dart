@@ -6,6 +6,10 @@ import 'package:hive/hive.dart';
 ///
 /// The box holds one document: [CRDTHive.openChangeStorageForDocument] names
 /// it after the document id, so nothing filters by document here.
+///
+/// A Hive box keeps its entries in memory, so every read here answers without
+/// suspending and says so in its return type. Writes go through the box
+/// journal and stay asynchronous.
 class CRDTHiveChangeStorage implements CRDTChangeStorage {
   /// Creates a new [CRDTHiveChangeStorage] instance.
   ///
@@ -41,8 +45,15 @@ class CRDTHiveChangeStorage implements CRDTChangeStorage {
   }
 
   @override
-  Future<List<Change>> getChanges() async {
-    return box.values.toList();
+  List<Change> getChanges({
+    VersionVector? newerThan,
+    VersionVector? upTo,
+  }) {
+    return filterByVersion(
+      box.values.toList(),
+      newerThan: newerThan,
+      upTo: upTo,
+    );
   }
 
   @override
@@ -57,8 +68,10 @@ class CRDTHiveChangeStorage implements CRDTChangeStorage {
 
   @override
   Future<int> deleteChanges(List<Change> changes) async {
+    // A set, so a change named twice in one batch is counted once: the
+    // answer is how many were there, not how many were asked for.
     final existingKeys =
-        changes.map(_getChangeKey).where(box.containsKey).toList();
+        changes.map(_getChangeKey).where(box.containsKey).toSet();
     await box.deleteAll(existingKeys);
     return existingKeys.length;
   }
@@ -69,5 +82,5 @@ class CRDTHiveChangeStorage implements CRDTChangeStorage {
   }
 
   @override
-  Future<int> get count async => box.length;
+  int get count => box.length;
 }

@@ -487,16 +487,214 @@ class SnapshotsCompanion extends UpdateCompanion<SnapshotRow> {
   }
 }
 
+class $PeersTable extends Peers with TableInfo<$PeersTable, PeerRow> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $PeersTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _documentIdMeta =
+      const VerificationMeta('documentId');
+  @override
+  late final GeneratedColumn<String> documentId = GeneratedColumn<String>(
+      'document_id', aliasedName, false,
+      type: DriftSqlType.string, requiredDuringInsert: true);
+  static const VerificationMeta _peerIdMeta = const VerificationMeta('peerId');
+  @override
+  late final GeneratedColumn<String> peerId = GeneratedColumn<String>(
+      'peer_id', aliasedName, false,
+      type: DriftSqlType.string, requiredDuringInsert: true);
+  @override
+  List<GeneratedColumn> get $columns => [documentId, peerId];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'peers';
+  @override
+  VerificationContext validateIntegrity(Insertable<PeerRow> instance,
+      {bool isInserting = false}) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('document_id')) {
+      context.handle(
+          _documentIdMeta,
+          documentId.isAcceptableOrUnknown(
+              data['document_id']!, _documentIdMeta));
+    } else if (isInserting) {
+      context.missing(_documentIdMeta);
+    }
+    if (data.containsKey('peer_id')) {
+      context.handle(_peerIdMeta,
+          peerId.isAcceptableOrUnknown(data['peer_id']!, _peerIdMeta));
+    } else if (isInserting) {
+      context.missing(_peerIdMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {documentId};
+  @override
+  PeerRow map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return PeerRow(
+      documentId: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}document_id'])!,
+      peerId: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}peer_id'])!,
+    );
+  }
+
+  @override
+  $PeersTable createAlias(String alias) {
+    return $PeersTable(attachedDatabase, alias);
+  }
+}
+
+class PeerRow extends DataClass implements Insertable<PeerRow> {
+  /// Identifier of the document the identity belongs to.
+  final String documentId;
+
+  /// The peer id as text (`PeerId.toString()`).
+  final String peerId;
+  const PeerRow({required this.documentId, required this.peerId});
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['document_id'] = Variable<String>(documentId);
+    map['peer_id'] = Variable<String>(peerId);
+    return map;
+  }
+
+  PeersCompanion toCompanion(bool nullToAbsent) {
+    return PeersCompanion(
+      documentId: Value(documentId),
+      peerId: Value(peerId),
+    );
+  }
+
+  factory PeerRow.fromJson(Map<String, dynamic> json,
+      {ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return PeerRow(
+      documentId: serializer.fromJson<String>(json['documentId']),
+      peerId: serializer.fromJson<String>(json['peerId']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'documentId': serializer.toJson<String>(documentId),
+      'peerId': serializer.toJson<String>(peerId),
+    };
+  }
+
+  PeerRow copyWith({String? documentId, String? peerId}) => PeerRow(
+        documentId: documentId ?? this.documentId,
+        peerId: peerId ?? this.peerId,
+      );
+  PeerRow copyWithCompanion(PeersCompanion data) {
+    return PeerRow(
+      documentId:
+          data.documentId.present ? data.documentId.value : this.documentId,
+      peerId: data.peerId.present ? data.peerId.value : this.peerId,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('PeerRow(')
+          ..write('documentId: $documentId, ')
+          ..write('peerId: $peerId')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(documentId, peerId);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is PeerRow &&
+          other.documentId == this.documentId &&
+          other.peerId == this.peerId);
+}
+
+class PeersCompanion extends UpdateCompanion<PeerRow> {
+  final Value<String> documentId;
+  final Value<String> peerId;
+  final Value<int> rowid;
+  const PeersCompanion({
+    this.documentId = const Value.absent(),
+    this.peerId = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  PeersCompanion.insert({
+    required String documentId,
+    required String peerId,
+    this.rowid = const Value.absent(),
+  })  : documentId = Value(documentId),
+        peerId = Value(peerId);
+  static Insertable<PeerRow> custom({
+    Expression<String>? documentId,
+    Expression<String>? peerId,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (documentId != null) 'document_id': documentId,
+      if (peerId != null) 'peer_id': peerId,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  PeersCompanion copyWith(
+      {Value<String>? documentId, Value<String>? peerId, Value<int>? rowid}) {
+    return PeersCompanion(
+      documentId: documentId ?? this.documentId,
+      peerId: peerId ?? this.peerId,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (documentId.present) {
+      map['document_id'] = Variable<String>(documentId.value);
+    }
+    if (peerId.present) {
+      map['peer_id'] = Variable<String>(peerId.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('PeersCompanion(')
+          ..write('documentId: $documentId, ')
+          ..write('peerId: $peerId, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$CRDTDriftDatabase extends GeneratedDatabase {
   _$CRDTDriftDatabase(QueryExecutor e) : super(e);
   $CRDTDriftDatabaseManager get managers => $CRDTDriftDatabaseManager(this);
   late final $ChangesTable changes = $ChangesTable(this);
   late final $SnapshotsTable snapshots = $SnapshotsTable(this);
+  late final $PeersTable peers = $PeersTable(this);
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
   @override
-  List<DatabaseSchemaEntity> get allSchemaEntities => [changes, snapshots];
+  List<DatabaseSchemaEntity> get allSchemaEntities =>
+      [changes, snapshots, peers];
 }
 
 typedef $$ChangesTableCreateCompanionBuilder = ChangesCompanion Function({
@@ -775,6 +973,126 @@ typedef $$SnapshotsTableProcessedTableManager = ProcessedTableManager<
     ),
     SnapshotRow,
     PrefetchHooks Function()>;
+typedef $$PeersTableCreateCompanionBuilder = PeersCompanion Function({
+  required String documentId,
+  required String peerId,
+  Value<int> rowid,
+});
+typedef $$PeersTableUpdateCompanionBuilder = PeersCompanion Function({
+  Value<String> documentId,
+  Value<String> peerId,
+  Value<int> rowid,
+});
+
+class $$PeersTableFilterComposer
+    extends Composer<_$CRDTDriftDatabase, $PeersTable> {
+  $$PeersTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get documentId => $composableBuilder(
+      column: $table.documentId, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<String> get peerId => $composableBuilder(
+      column: $table.peerId, builder: (column) => ColumnFilters(column));
+}
+
+class $$PeersTableOrderingComposer
+    extends Composer<_$CRDTDriftDatabase, $PeersTable> {
+  $$PeersTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get documentId => $composableBuilder(
+      column: $table.documentId, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<String> get peerId => $composableBuilder(
+      column: $table.peerId, builder: (column) => ColumnOrderings(column));
+}
+
+class $$PeersTableAnnotationComposer
+    extends Composer<_$CRDTDriftDatabase, $PeersTable> {
+  $$PeersTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get documentId => $composableBuilder(
+      column: $table.documentId, builder: (column) => column);
+
+  GeneratedColumn<String> get peerId =>
+      $composableBuilder(column: $table.peerId, builder: (column) => column);
+}
+
+class $$PeersTableTableManager extends RootTableManager<
+    _$CRDTDriftDatabase,
+    $PeersTable,
+    PeerRow,
+    $$PeersTableFilterComposer,
+    $$PeersTableOrderingComposer,
+    $$PeersTableAnnotationComposer,
+    $$PeersTableCreateCompanionBuilder,
+    $$PeersTableUpdateCompanionBuilder,
+    (PeerRow, BaseReferences<_$CRDTDriftDatabase, $PeersTable, PeerRow>),
+    PeerRow,
+    PrefetchHooks Function()> {
+  $$PeersTableTableManager(_$CRDTDriftDatabase db, $PeersTable table)
+      : super(TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$PeersTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$PeersTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$PeersTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback: ({
+            Value<String> documentId = const Value.absent(),
+            Value<String> peerId = const Value.absent(),
+            Value<int> rowid = const Value.absent(),
+          }) =>
+              PeersCompanion(
+            documentId: documentId,
+            peerId: peerId,
+            rowid: rowid,
+          ),
+          createCompanionCallback: ({
+            required String documentId,
+            required String peerId,
+            Value<int> rowid = const Value.absent(),
+          }) =>
+              PeersCompanion.insert(
+            documentId: documentId,
+            peerId: peerId,
+            rowid: rowid,
+          ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ));
+}
+
+typedef $$PeersTableProcessedTableManager = ProcessedTableManager<
+    _$CRDTDriftDatabase,
+    $PeersTable,
+    PeerRow,
+    $$PeersTableFilterComposer,
+    $$PeersTableOrderingComposer,
+    $$PeersTableAnnotationComposer,
+    $$PeersTableCreateCompanionBuilder,
+    $$PeersTableUpdateCompanionBuilder,
+    (PeerRow, BaseReferences<_$CRDTDriftDatabase, $PeersTable, PeerRow>),
+    PeerRow,
+    PrefetchHooks Function()>;
 
 class $CRDTDriftDatabaseManager {
   final _$CRDTDriftDatabase _db;
@@ -783,4 +1101,6 @@ class $CRDTDriftDatabaseManager {
       $$ChangesTableTableManager(_db, _db.changes);
   $$SnapshotsTableTableManager get snapshots =>
       $$SnapshotsTableTableManager(_db, _db.snapshots);
+  $$PeersTableTableManager get peers =>
+      $$PeersTableTableManager(_db, _db.peers);
 }

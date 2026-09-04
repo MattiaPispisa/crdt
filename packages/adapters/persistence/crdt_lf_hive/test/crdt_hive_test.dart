@@ -24,6 +24,8 @@ void main() {
   runDocumentStorageConformanceTests(
     name: 'CRDTHive',
     open: CRDTHive.openStorageForDocument,
+    synchronous: true,
+    openPeerIds: CRDTHive.openPeerIdStorageForDocument,
     // Hive keeps a box open once, so reopening means closing every box first.
     dispose: (_) => CRDTHive.closeAllBoxes(),
   );
@@ -35,6 +37,18 @@ void main() {
       expect(storage.documentId, 'doc');
       expect(storage.changes, isA<CRDTHiveChangeStorage>());
       expect(storage.snapshots, isA<CRDTHiveSnapshotStorage>());
+    });
+
+    test('close leaves the boxes of other documents open', () async {
+      final mine = await CRDTHive.openStorageForDocument('doc-close-mine');
+      final other = await CRDTHive.openStorageForDocument('doc-close-other');
+
+      await mine.close();
+
+      expect((mine.changes as CRDTHiveChangeStorage).box.isOpen, isFalse);
+      expect((mine.snapshots as CRDTHiveSnapshotStorage).box.isOpen, isFalse);
+      expect((other.changes as CRDTHiveChangeStorage).box.isOpen, isTrue);
+      expect((other.snapshots as CRDTHiveSnapshotStorage).box.isOpen, isTrue);
     });
 
     test('every document gets its own boxes', () async {

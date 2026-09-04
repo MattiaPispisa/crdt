@@ -235,9 +235,8 @@ class HiveServerRegistry extends CRDTServerRegistry {
 
     await storage.snapshots.saveSnapshot(snapshot);
 
-    await storage.changes.clear().then((_) {
-      return storage.changes.saveChanges(item.document.exportChanges());
-    });
+    await storage.changes.clear();
+    await storage.changes.saveChanges(item.document.exportChanges());
 
     return snapshot;
   }
@@ -275,16 +274,6 @@ class HiveServerRegistry extends CRDTServerRegistry {
   Future<bool> hasDocument(String documentId) async =>
       _documents.containsKey(documentId);
 
-  /// Closes the Hive boxes behind [storage].
-  ///
-  /// The registry opens every storage through [CRDTHive], so both halves are
-  /// always Hive ones. The contract they are typed as knows nothing about
-  /// boxes.
-  Future<void> _closeStorage(CRDTDocumentStorage storage) => Future.wait([
-        (storage.changes as CRDTHiveChangeStorage).box.close(),
-        (storage.snapshots as CRDTHiveSnapshotStorage).box.close(),
-      ]);
-
   /// Removes a document and all its associated data from both the registry and
   /// Hive storage.
   ///
@@ -294,7 +283,7 @@ class HiveServerRegistry extends CRDTServerRegistry {
     _logger.info('Removing document: $documentId');
     final item = _documents.remove(documentId);
     if (item?.storage != null) {
-      await _closeStorage(item!.storage!);
+      await item!.storage!.close();
     }
 
     final documentIdsBox = await Hive.openBox<String>(_kDocumentsBox);
@@ -310,7 +299,7 @@ class HiveServerRegistry extends CRDTServerRegistry {
     _snapshotTimer?.cancel();
     for (final item in _documents.values) {
       if (item.storage == null) continue;
-      await _closeStorage(item.storage!);
+      await item.storage!.close();
     }
     await Hive.box<String>(_kDocumentsBox).close();
     _logger.info('HiveServerRegistry closed.');

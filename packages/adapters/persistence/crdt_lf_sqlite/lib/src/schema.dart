@@ -4,6 +4,9 @@ const String changesTable = 'changes';
 /// Name of the table used to store `Snapshot`s.
 const String snapshotsTable = 'snapshots';
 
+/// Name of the table used to store the `PeerId` a document writes under.
+const String peersTable = 'peers';
+
 /// DDL that creates the tables used by the storage classes.
 ///
 /// Both `Change` and `Snapshot` are persisted as opaque binary blobs (via
@@ -22,5 +25,11 @@ CREATE TABLE IF NOT EXISTS $snapshotsTable (
   snapshot_id TEXT NOT NULL,
   bytes       BLOB NOT NULL,
   PRIMARY KEY (document_id, snapshot_id)
+);
+
+CREATE TABLE IF NOT EXISTS $peersTable (
+  document_id TEXT NOT NULL,
+  peer_id     TEXT NOT NULL,
+  PRIMARY KEY (document_id)
 );
 ''';

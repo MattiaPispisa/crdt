@@ -1,4 +1,4 @@
-## [0.5.0](https://github.com/MattiaPispisa/crdt/tree/crdt_lf_hive-v0.5.0/packages/crdt_lf_hive)
+## [0.5.0](https://github.com/MattiaPispisa/crdt/tree/crdt_lf_hive-v0.5.0/packages/adapters/persistence/crdt_lf_hive)
 
 **Date:** --
 
@@ -13,19 +13,37 @@
   `CRDTHiveSnapshotStorage`**, matching the drift and sqlite adapters. The old names belong to the
   shared contract these classes implement.
 
-- **`getChanges` and `getSnapshots` return a `Future`**, along with `count` and
-  `containsSnapshot`. Hive answers them from memory, so nothing really suspends; the futures are
-  what the shared contract needs, so that the other backends fit the same type. Add `await` at the
-  call sites.
+- **`getChanges`, `getSnapshots`, `count` and `containsSnapshot` stay synchronous.** A Hive box
+  keeps its entries in memory, and the return types say so. The shared contract asks only for a
+  `FutureOr`, which a plain value satisfies, so the same code still runs on the asynchronous
+  backends. `await` on these reads is no longer valid — drop it. Writes go through the box journal
+  and stay asynchronous.
+
+- **`CRDTHivePeerIdStorage` keeps the `PeerId` a document writes under.** Without it every restart
+  writes under a new author, and the version vector grows by one peer per session. Open it with
+  `CRDTHive.openPeerIdStorageForDocument`, and read it before building the document. Every
+  document shares one `peer_ids` box keyed by document id — a box of its own would cost an open
+  for a single string — and the value is text, so no new type adapter and no new type id.
+
+- **`getChanges` takes `newerThan` and `upTo`**, both `VersionVector`s: what a vector has not seen,
+  what it has seen, or the range between them.
+
+- `deleteDocumentData` now removes the stored identity too. It is a key in the shared box, not a
+  box to delete.
 
 - `CRDTDocumentStorage` is no longer declared here. It comes from `crdt_lf_persistence` and is
   re-exported, so the import path does not change.
 
 - `isEmpty` and `isNotEmpty` are gone from both storages. Use `count`.
 
+- `openStorageForDocument` now returns a `CRDTHiveDocumentStorage`, whose `close()` closes the two
+  boxes of that document and nothing else. An app that opens one document after another needs this:
+  `closeAllBoxes()` closes every Hive box the app has open, yours included. Hive has no
+  transactions, so the contract's `transaction()` keeps its default and just runs the body.
+
 - Requires `crdt_lf: ^4.2.0`.
 
-## [0.4.0](https://github.com/MattiaPispisa/crdt/tree/crdt_lf_hive-v0.4.0/packages/crdt_lf_hive)
+## [0.4.0](https://github.com/MattiaPispisa/crdt/tree/crdt_lf_hive-v0.4.0/packages/adapters/persistence/crdt_lf_hive)
 
 **Date:** 2026-08-16
 

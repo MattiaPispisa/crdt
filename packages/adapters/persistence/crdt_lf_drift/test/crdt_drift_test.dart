@@ -34,6 +34,11 @@ void main() {
 
   runDocumentStorageConformanceTests(
     name: 'CRDTDrift',
+    atomicTransactions: true,
+    // drift is asynchronous end to end, so no `synchronous: true` here.
+    openPeerIds: (documentId) async => (database ??=
+            CRDTDrift.open(File(dbPath)))
+        .peerIdStorageForDocument(documentId),
     open: (documentId) async =>
         (database ??= CRDTDrift.open(File(dbPath))).storageForDocument(
       documentId,

@@ -6,6 +6,10 @@ import 'package:hive/hive.dart';
 ///
 /// The box holds one document: [CRDTHive.openSnapshotStorageForDocument]
 /// names it after the document id, so nothing filters by document here.
+///
+/// A Hive box keeps its entries in memory, so every read here answers without
+/// suspending and says so in its return type. Writes go through the box
+/// journal and stay asynchronous.
 class CRDTHiveSnapshotStorage implements CRDTSnapshotStorage {
   /// Creates a new [CRDTHiveSnapshotStorage] instance.
   ///
@@ -21,7 +25,10 @@ class CRDTHiveSnapshotStorage implements CRDTSnapshotStorage {
   @override
   final String documentId;
 
-  /// Generates a composite key for storing snapshots by document.
+  /// The key a snapshot is stored under.
+  ///
+  /// The snapshot id, as it is: the box already holds one document, so there
+  /// is nothing to scope it by.
   String _getSnapshotKey(String snapshotId) => snapshotId;
 
   @override
@@ -41,13 +48,13 @@ class CRDTHiveSnapshotStorage implements CRDTSnapshotStorage {
   }
 
   @override
-  Future<Snapshot?> getSnapshot(String id) async {
+  Snapshot? getSnapshot(String id) {
     final key = _getSnapshotKey(id);
     return box.get(key);
   }
 
   @override
-  Future<List<Snapshot>> getSnapshots() async {
+  List<Snapshot> getSnapshots() {
     return box.values.toList();
   }
 
@@ -63,8 +70,10 @@ class CRDTHiveSnapshotStorage implements CRDTSnapshotStorage {
 
   @override
   Future<int> deleteSnapshots(List<String> ids) async {
+    // A set, so an id named twice in one batch is counted once: the answer
+    // is how many were there, not how many were asked for.
     final existingKeys =
-        ids.map(_getSnapshotKey).where(box.containsKey).toList();
+        ids.map(_getSnapshotKey).where(box.containsKey).toSet();
     await box.deleteAll(existingKeys);
     return existingKeys.length;
   }
@@ -75,10 +84,10 @@ class CRDTHiveSnapshotStorage implements CRDTSnapshotStorage {
   }
 
   @override
-  Future<int> get count async => box.length;
+  int get count => box.length;
 
   @override
-  Future<bool> containsSnapshot(String id) async {
+  bool containsSnapshot(String id) {
     final key = _getSnapshotKey(id);
     return box.containsKey(key);
   }

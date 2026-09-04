@@ -11,9 +11,14 @@ export 'package:crdt_lf_persistence/crdt_lf_persistence.dart'
         CRDTChangeStorage,
         CRDTDocumentPersistence,
         CRDTDocumentStorage,
-        CRDTSnapshotStorage;
+        CRDTPeerIdStorage,
+        CRDTPeerIdStorageLoad,
+        CRDTSnapshotStorage,
+        filterByVersion;
 
 export 'src/crdt_drift.dart';
 export 'src/database.dart' show CRDTDriftDatabase;
 export 'src/storage/change_storage.dart';
+export 'src/storage/document_storage.dart';
+export 'src/storage/peer_id_storage.dart';
 export 'src/storage/snapshot_storage.dart';

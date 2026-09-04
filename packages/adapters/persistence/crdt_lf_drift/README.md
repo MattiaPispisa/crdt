@@ -21,7 +21,6 @@
   - [How Data Is Stored](#how-data-is-stored)
   - [Examples](#examples)
   - [Storage Management](#storage-management)
-  - [Important Notes](#important-notes)
   - [Roadmap](#roadmap)
   - [Packages](#packages)
 
@@ -30,7 +29,7 @@ A [drift](https://pub.dev/packages/drift) storage implementation for [CRDT LF](h
 ## Features
 
 - **Compact Binary Storage**: `Change` and `Snapshot` are persisted as the self-describing binary blobs produced by `crdt_lf`'s native `toBytes()` / `fromBytes()` methods
-- **Single Database, Many Documents**: one database holds `changes` and `snapshots` tables; 
+- **Single Database, Many Documents**: one database holds `changes` and `snapshots` tables
 - **Document-Scoped Storage**: utilities that organize data by document ID for better isolation and querying
 
 ## Quick Start
@@ -92,6 +91,14 @@ final persistence = await CRDTDocumentPersistence.open(
 It comes from [`crdt_lf_persistence`](https://pub.dev/packages/crdt_lf_persistence),
 which this package re-exports. See that README for the offline-first rules.
 
+`storageForDocument` hands back a `CRDTDriftDocumentStorage`, which backs
+`transaction()` with `database.transaction(...)`: a prune drops the covered
+changes and rewrites the survivors, and either all of it lands or none of it
+does.
+
+`close()` on it does nothing on purpose. One database file holds every
+document, so the connection is `CRDTDrift.close()`'s to release.
+
 ## Document-Scoped Storage
 
 Data for different documents lives in the same tables and is isolated through the `document_id` column.
@@ -111,6 +118,10 @@ await changeStorage.saveChanges([change1, change2, change3]);
 
 // Load all changes for the document
 final changes = await changeStorage.getChanges();
+
+// Or only part of the log, by version vector
+final missing = await changeStorage.getChanges(newerThan: theirVersion);
+final past = await changeStorage.getChanges(upTo: oldVersion);
 
 // Delete changes
 await changeStorage.deleteChange(change);
@@ -140,6 +151,31 @@ if (await snapshotStorage.containsSnapshot('snapshot-id')) {
   // Snapshot exists
 }
 ```
+
+
+### CRDTDriftPeerIdStorage
+
+Keeps the `PeerId` the document writes under, in the `peers` table. Without it
+`CRDTDocument` mints a new author on every restart, and the version vector
+grows by one peer per session.
+
+Read it **before** building the document — the id has to exist first:
+
+```dart
+final peers = storage.peerIdStorageForDocument('doc-123');
+
+final document = CRDTDocument(
+  documentId: 'doc-123',
+  peerId: await peers.loadOrCreate(),
+);
+```
+
+The `peers` table arrived with schema version 2. A database written by
+version 1 gains it on the next open, and its changes and snapshots stay as
+they are.
+
+drift is asynchronous end to end, so every method here returns a `Future`,
+and `CRDTDocumentPersistence.openSync` does not work on it. Use `open`.
 
 ## How Data Is Stored
 

@@ -31,7 +31,7 @@ class CRDTSqliteSnapshotStorage implements CRDTSnapshotStorage {
   final String documentId;
 
   @override
-  Future<void> saveSnapshot(Snapshot snapshot) async {
+  void saveSnapshot(Snapshot snapshot) {
     database.execute(
       'INSERT OR REPLACE INTO $snapshotsTable '
       '(document_id, snapshot_id, bytes) VALUES (?, ?, ?)',
@@ -41,7 +41,7 @@ class CRDTSqliteSnapshotStorage implements CRDTSnapshotStorage {
 
   /// {@macro crdt_lf_sqlite_batch}
   @override
-  Future<void> saveSnapshots(List<Snapshot> snapshots) async {
+  void saveSnapshots(List<Snapshot> snapshots) {
     if (snapshots.isEmpty) {
       return;
     }
@@ -61,7 +61,7 @@ class CRDTSqliteSnapshotStorage implements CRDTSnapshotStorage {
   }
 
   @override
-  Future<Snapshot?> getSnapshot(String id) async {
+  Snapshot? getSnapshot(String id) {
     final result = database.select(
       'SELECT bytes FROM $snapshotsTable '
       'WHERE document_id = ? AND snapshot_id = ? LIMIT 1',
@@ -74,7 +74,7 @@ class CRDTSqliteSnapshotStorage implements CRDTSnapshotStorage {
   }
 
   @override
-  Future<List<Snapshot>> getSnapshots() async {
+  List<Snapshot> getSnapshots() {
     final result = database.select(
       'SELECT bytes FROM $snapshotsTable WHERE document_id = ?',
       [documentId],
@@ -85,7 +85,7 @@ class CRDTSqliteSnapshotStorage implements CRDTSnapshotStorage {
   }
 
   @override
-  Future<bool> deleteSnapshot(String id) async {
+  bool deleteSnapshot(String id) {
     if (!_contains(id)) {
       return false;
     }
@@ -98,7 +98,7 @@ class CRDTSqliteSnapshotStorage implements CRDTSnapshotStorage {
 
   /// {@macro crdt_lf_sqlite_batch}
   @override
-  Future<int> deleteSnapshots(List<String> ids) async {
+  int deleteSnapshots(List<String> ids) {
     if (ids.isEmpty) {
       return 0;
     }
@@ -122,7 +122,7 @@ class CRDTSqliteSnapshotStorage implements CRDTSnapshotStorage {
   }
 
   @override
-  Future<void> clear() async {
+  void clear() {
     database.execute(
       'DELETE FROM $snapshotsTable WHERE document_id = ?',
       [documentId],
@@ -130,7 +130,7 @@ class CRDTSqliteSnapshotStorage implements CRDTSnapshotStorage {
   }
 
   @override
-  Future<bool> containsSnapshot(String id) async => _contains(id);
+  bool containsSnapshot(String id) => _contains(id);
 
   bool _contains(String id) {
     return database.select(
@@ -141,7 +141,7 @@ class CRDTSqliteSnapshotStorage implements CRDTSnapshotStorage {
   }
 
   @override
-  Future<int> get count async {
+  int get count {
     final result = database.select(
       'SELECT COUNT(*) AS c FROM $snapshotsTable WHERE document_id = ?',
       [documentId],

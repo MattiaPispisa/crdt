@@ -52,11 +52,18 @@ class CRDTDriftChangeStorage implements CRDTChangeStorage {
   }
 
   @override
-  Future<List<Change>> getChanges() async {
+  Future<List<Change>> getChanges({
+    VersionVector? newerThan,
+    VersionVector? upTo,
+  }) async {
     final query = database.select(database.changes)
       ..where((row) => row.documentId.equals(documentId));
     final rows = await query.get();
-    return rows.map((row) => Change.fromBytes(row.bytes)).toList();
+    return filterByVersion(
+      rows.map((row) => Change.fromBytes(row.bytes)).toList(),
+      newerThan: newerThan,
+      upTo: upTo,
+    );
   }
 
   @override

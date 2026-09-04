@@ -14,9 +14,10 @@ import 'package:hive/hive.dart';
 /// ```
 /// or by leveraging the convenience utilities provided by [CRDTHive]:
 ///
-/// - [CRDTHive.openSnapshotStorageForDocument]
+/// - [CRDTHive.openChangeStorageForDocument]
 /// - [CRDTHive.openSnapshotStorageForDocument]
 /// - [CRDTHive.openStorageForDocument]
+/// - [CRDTHive.openPeerIdStorageForDocument]
 class CRDTHive {
   /// Initializes Hive with all CRDT adapters.
   ///
@@ -79,6 +80,33 @@ class CRDTHive {
     );
   }
 
+  /// Creates a [CRDTHivePeerIdStorage] for a specific document.
+  ///
+  /// Unlike the two above, every document shares one box here, keyed by
+  /// document id: a box of its own would cost an open for a single string.
+  ///
+  /// Read it before building the document, so the document keeps the identity
+  /// it wrote under last time:
+  ///
+  /// ```dart
+  /// final peers = await CRDTHive.openPeerIdStorageForDocument('doc-1');
+  /// final document = CRDTDocument(
+  ///   documentId: 'doc-1',
+  ///   peerId: await peers.loadOrCreate(),
+  /// );
+  /// ```
+  ///
+  /// [documentId] is the unique identifier for the document.
+  /// [boxName] is the name of the shared Hive box (defaults to `peer_ids`).
+  static Future<CRDTHivePeerIdStorage> openPeerIdStorageForDocument(
+    String documentId, {
+    String boxName = 'peer_ids',
+  }) {
+    return Hive.openBox<String>(boxName).then(
+      (box) => CRDTHivePeerIdStorage(box, documentId),
+    );
+  }
+
   /// Creates both change and snapshot storage for a specific document.
   ///
   /// Returns a [CRDTDocumentStorage] containing both storage instances
@@ -87,7 +115,7 @@ class CRDTHive {
   /// [documentId] is the unique identifier for the document.
   ///
   /// [changesBoxName] and [snapshotsBoxName] can be customized.
-  static Future<CRDTDocumentStorage> openStorageForDocument(
+  static Future<CRDTHiveDocumentStorage> openStorageForDocument(
     String documentId, {
     String changesBoxName = 'changes',
     String snapshotsBoxName = 'snapshots',
@@ -103,7 +131,7 @@ class CRDTHive {
       ),
     ]).then(
       (values) {
-        return CRDTDocumentStorage(
+        return CRDTHiveDocumentStorage(
           changes: values[0] as CRDTHiveChangeStorage,
           snapshots: values[1] as CRDTHiveSnapshotStorage,
         );
@@ -129,18 +157,24 @@ class CRDTHive {
 
   /// Deletes all data for a specific document by deleting its dedicated boxes.
   ///
-  /// This removes all changes and snapshots associated with the document.
+  /// This removes the changes, snapshots and stored identity of the document.
   /// Use with caution as this operation cannot be undone.
   static Future<void> deleteDocumentData(
     String documentId, {
     String changesBoxName = 'changes',
     String snapshotsBoxName = 'snapshots',
-  }) {
+    String peerIdsBoxName = 'peer_ids',
+  }) async {
     final changesDocumentBoxName = '${changesBoxName}_$documentId';
     final snapshotsDocumentBoxName = '${snapshotsBoxName}_$documentId';
-    return Future.wait([
+    await Future.wait([
       deleteBox(changesDocumentBoxName),
       deleteBox(snapshotsDocumentBoxName),
     ]);
+
+    // Every document shares the identity box, so this one is a key to remove
+    // rather than a box to delete.
+    final peers = await Hive.openBox<String>(peerIdsBoxName);
+    await peers.delete(documentId);
   }
 }

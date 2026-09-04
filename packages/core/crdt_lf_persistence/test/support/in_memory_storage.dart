@@ -5,6 +5,10 @@ import 'package:crdt_lf_persistence/crdt_lf_persistence.dart';
 ///
 /// The test double the other suites here run on, and what the conformance
 /// suite checks itself against. Nothing survives the process.
+///
+/// Every method answers without suspending, so this is also what the
+/// synchronous half of the contract — [CRDTDocumentPersistence.openSync] — is
+/// checked against.
 class InMemoryDocumentStorage extends CRDTDocumentStorage {
   /// Creates an empty storage for [documentId].
   InMemoryDocumentStorage(String documentId)
@@ -25,26 +29,35 @@ class InMemoryChangeStorage implements CRDTChangeStorage {
   final Map<String, Change> _changes = <String, Change>{};
 
   @override
-  Future<void> saveChange(Change change) async {
+  void saveChange(Change change) {
     _changes[change.id.toString()] = change;
   }
 
   @override
-  Future<void> saveChanges(List<Change> changes) async {
+  void saveChanges(List<Change> changes) {
     for (final change in changes) {
       _changes[change.id.toString()] = change;
     }
   }
 
   @override
-  Future<List<Change>> getChanges() async => _changes.values.toList();
+  List<Change> getChanges({
+    VersionVector? newerThan,
+    VersionVector? upTo,
+  }) {
+    return filterByVersion(
+      _changes.values.toList(),
+      newerThan: newerThan,
+      upTo: upTo,
+    );
+  }
 
   @override
-  Future<bool> deleteChange(Change change) async =>
+  bool deleteChange(Change change) =>
       _changes.remove(change.id.toString()) != null;
 
   @override
-  Future<int> deleteChanges(List<Change> changes) async {
+  int deleteChanges(List<Change> changes) {
     var deleted = 0;
     for (final change in changes) {
       if (_changes.remove(change.id.toString()) != null) {
@@ -55,10 +68,10 @@ class InMemoryChangeStorage implements CRDTChangeStorage {
   }
 
   @override
-  Future<void> clear() async => _changes.clear();
+  void clear() => _changes.clear();
 
   @override
-  Future<int> get count async => _changes.length;
+  int get count => _changes.length;
 }
 
 /// The [CRDTSnapshotStorage] of an [InMemoryDocumentStorage].
@@ -72,31 +85,31 @@ class InMemorySnapshotStorage implements CRDTSnapshotStorage {
   final Map<String, Snapshot> _snapshots = <String, Snapshot>{};
 
   @override
-  Future<void> saveSnapshot(Snapshot snapshot) async {
+  void saveSnapshot(Snapshot snapshot) {
     _snapshots[snapshot.id] = snapshot;
   }
 
   @override
-  Future<void> saveSnapshots(List<Snapshot> snapshots) async {
+  void saveSnapshots(List<Snapshot> snapshots) {
     for (final snapshot in snapshots) {
       _snapshots[snapshot.id] = snapshot;
     }
   }
 
   @override
-  Future<Snapshot?> getSnapshot(String id) async => _snapshots[id];
+  Snapshot? getSnapshot(String id) => _snapshots[id];
 
   @override
-  Future<List<Snapshot>> getSnapshots() async => _snapshots.values.toList();
+  List<Snapshot> getSnapshots() => _snapshots.values.toList();
 
   @override
-  Future<bool> containsSnapshot(String id) async => _snapshots.containsKey(id);
+  bool containsSnapshot(String id) => _snapshots.containsKey(id);
 
   @override
-  Future<bool> deleteSnapshot(String id) async => _snapshots.remove(id) != null;
+  bool deleteSnapshot(String id) => _snapshots.remove(id) != null;
 
   @override
-  Future<int> deleteSnapshots(List<String> ids) async {
+  int deleteSnapshots(List<String> ids) {
     var deleted = 0;
     for (final id in ids) {
       if (_snapshots.remove(id) != null) {
@@ -107,8 +120,32 @@ class InMemorySnapshotStorage implements CRDTSnapshotStorage {
   }
 
   @override
-  Future<void> clear() async => _snapshots.clear();
+  void clear() => _snapshots.clear();
 
   @override
-  Future<int> get count async => _snapshots.length;
+  int get count => _snapshots.length;
+}
+
+/// The [CRDTPeerIdStorage] of an [InMemoryDocumentStorage].
+class InMemoryPeerIdStorage implements CRDTPeerIdStorage {
+  /// Creates an empty peer id storage for [documentId].
+  InMemoryPeerIdStorage(this.documentId);
+
+  /// The identities of every document, so two storages of one process share
+  /// them the way two openings of one database would.
+  static final Map<String, PeerId> _peers = <String, PeerId>{};
+
+  /// Forgets every stored identity.
+  static void reset() => _peers.clear();
+
+  @override
+  final String documentId;
+
+  @override
+  PeerId? getPeerId() => _peers[documentId];
+
+  @override
+  void savePeerId(PeerId peerId) {
+    _peers[documentId] = peerId;
+  }
 }

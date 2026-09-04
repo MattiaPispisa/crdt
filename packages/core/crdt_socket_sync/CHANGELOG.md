@@ -1,4 +1,4 @@
-## [Unreleased](https://github.com/MattiaPispisa/crdt/tree/crdt_socket_sync-v0.8.0/packages/crdt_socket_sync)
+## [Unreleased](https://github.com/MattiaPispisa/crdt/tree/crdt_socket_sync-v0.8.0/packages/core/crdt_socket_sync)
 
 **Date:** --
 
@@ -24,7 +24,7 @@
 
 - Requires `crdt_lf: ^4.2.0`.
 
-## [0.7.0](https://github.com/MattiaPispisa/crdt/tree/crdt_socket_sync-v0.7.0/packages/crdt_socket_sync)
+## [0.7.0](https://github.com/MattiaPispisa/crdt/tree/crdt_socket_sync-v0.7.0/packages/core/crdt_socket_sync)
 
 **Date:** 2026-08-16
 

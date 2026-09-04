@@ -1,6 +1,7 @@
 @TestOn('vm')
 library;
 
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
@@ -33,6 +34,10 @@ void main() {
 
   runDocumentStorageConformanceTests(
     name: 'CRDTSqlite',
+    atomicTransactions: true,
+    synchronous: true,
+    openPeerIds: (documentId) async =>
+        CRDTSqlite.open(dbPath).peerIdStorageForDocument(documentId),
     open: (documentId) async {
       final database = CRDTSqlite.open(dbPath);
       final storage = database.storageForDocument(documentId);
@@ -87,16 +92,69 @@ void main() {
         throwsA(isA<StateError>()),
       );
 
-      expect(await changes.count, isZero, reason: 'partial work rolled back');
+      expect(changes.count, isZero, reason: 'partial work rolled back');
+    });
+
+    // Two documents sharing one connection write at the same time. Each
+    // CRDTDocumentPersistence has its own write chain, so nothing serialises
+    // them, and an asynchronous body suspends inside the open transaction.
+    // A savepoint rolls back every write made after it, the other document's
+    // included, so the two must not overlap.
+    test('a failing transaction leaves a concurrent one intact', () async {
+      final a = storage.changeStorageForDocument('doc-a');
+      final aWrote = Completer<void>();
+
+      final futureA = runInTransaction(storage.database, () async {
+        await Future<void>.delayed(Duration.zero);
+        a.saveChange(makeChange(1, 1));
+        aWrote.complete();
+        return 'a';
+      });
+
+      final futureB = runInTransaction(storage.database, () async {
+        await aWrote.future;
+        throw StateError('boom');
+      });
+
+      await futureA;
+      await expectLater(futureB, throwsA(isA<StateError>()));
+
+      expect(
+        a.count,
+        1,
+        reason: "B's rollback must not undo A's write",
+      );
+    });
+
+    // A batch method opens a savepoint of its own, and drops the result. If a
+    // nested call queued behind the transaction it is already inside, the work
+    // would be deferred past that transaction and lost with it.
+    test('a storage call nested after an await still lands', () async {
+      final changes = storage.changeStorageForDocument('doc-nested');
+
+      final result = runInTransaction(storage.database, () async {
+        await Future<void>.delayed(Duration.zero);
+        changes.saveChanges([makeChange(1, 1)]);
+        return 'done';
+      });
+      await (result as Future<String>);
+
+      expect(changes.count, 1);
+    });
+
+    test('a synchronous body never suspends', () {
+      final result = runInTransaction(storage.database, () => 'done');
+
+      expect(result, isNot(isA<Future<dynamic>>()));
+      expect(result, 'done');
     });
 
     test('memory() works without a file', () async {
       final memory = CRDTSqlite.memory();
-      final changes = memory.changeStorageForDocument('doc');
+      final changes = memory.changeStorageForDocument('doc')
+        ..saveChange(makeChange(1, 1));
 
-      await changes.saveChange(makeChange(1, 1));
-
-      expect(await changes.count, 1);
+      expect(changes.count, 1);
       memory.close();
     });
 
@@ -104,10 +162,10 @@ void main() {
       final memory = CRDTSqlite.memory();
       final wrapped = CRDTSqlite.fromDatabase(memory.database);
 
-      final changes = wrapped.changeStorageForDocument('doc');
-      await changes.saveChange(makeChange(1, 1));
+      final changes = wrapped.changeStorageForDocument('doc')
+        ..saveChange(makeChange(1, 1));
 
-      expect(await changes.count, 1);
+      expect(changes.count, 1);
       memory.close();
     });
 
@@ -116,8 +174,8 @@ void main() {
       final b = storage.storageForDocument('doc-b');
       final id = OperationId(PeerId.generate(), HybridLogicalClock(l: 5, c: 1));
 
-      await a.changes.saveChange(makeChange(1, 1));
-      await a.snapshots.saveSnapshot(
+      a.changes.saveChange(makeChange(1, 1));
+      a.snapshots.saveSnapshot(
         Snapshot(
           id: 's-del',
           versionVector: VersionVector({id.peerId: id.hlc}),
@@ -126,13 +184,13 @@ void main() {
           },
         ),
       );
-      await b.changes.saveChange(makeChange(2, 1));
+      b.changes.saveChange(makeChange(2, 1));
 
       storage.deleteDocumentData('doc-a');
 
-      expect(await a.changes.count, 0);
-      expect(await a.snapshots.count, 0);
-      expect(await b.changes.count, 1, reason: 'doc-b must be untouched');
+      expect(a.changes.count, 0);
+      expect(a.snapshots.count, 0);
+      expect(b.changes.count, 1, reason: 'doc-b must be untouched');
     });
   });
 }

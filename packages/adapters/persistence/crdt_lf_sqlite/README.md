@@ -21,7 +21,6 @@
   - [How Data Is Stored](#how-data-is-stored)
   - [Examples](#examples)
   - [Storage Management](#storage-management)
-  - [Important Notes](#important-notes)
   - [Roadmap](#roadmap)
   - [Packages](#packages)
 
@@ -32,7 +31,7 @@ A [sqlite3](https://pub.dev/packages/sqlite3) storage implementation for [CRDT L
 - **Compact Binary Storage**: `Change` and `Snapshot` are persisted as the self-describing binary blobs produced by `crdt_lf`'s native `toBytes()` / `fromBytes()` methods
 - **Single Database, Many Documents**: one database holds `changes` and `snapshots` tables
 - **Document-Scoped Storage**: utilities that organize data by document ID for better isolation and querying
-- **Synchronous API**: `sqlite3` is synchronous (FFI), so the storage API is synchronous too
+- **Nothing suspends**: `sqlite3` is synchronous (FFI), and every storage method here says so in its return type. That is also what lets `CRDTDocumentPersistence.openSync` restore a document before it returns
 
 ## Quick Start
 
@@ -89,12 +88,23 @@ final persistence = await CRDTDocumentPersistence.open(
 It comes from [`crdt_lf_persistence`](https://pub.dev/packages/crdt_lf_persistence),
 which this package re-exports. See that README for the offline-first rules.
 
+`storageForDocument` hands back a `CRDTSqliteDocumentStorage`, which backs
+`transaction()` with a real SQLite transaction: a prune drops the covered
+changes and rewrites the survivors, and either all of it lands or none of it
+does. It is built on savepoints, so a batch that opens a transaction of its own
+nests inside instead of failing.
+
+`close()` on it does nothing on purpose. One database file holds every
+document, so the connection is `CRDTSqlite.close()`'s to release.
+
 ## Document-Scoped Storage
 
 Data for different documents lives in the same tables and is isolated through the `document_id` column.
 
-Every method returns a `Future`. sqlite3 is synchronous underneath, so nothing
-actually suspends — the futures are what the shared storage contract needs.
+Every method answers on the spot. sqlite3 is synchronous underneath, and the
+return types say so: `getChanges()` gives a `List<Change>`, `saveChange()`
+gives `void`. The shared contract asks only for a `FutureOr`, so the same code
+still runs on drift — but here there is nothing to `await`.
 
 ### CRDTSqliteChangeStorage
 
@@ -104,20 +114,24 @@ Manages `Change` objects for a specific document:
 final changeStorage = storage.changeStorageForDocument('doc-123');
 
 // Save individual changes
-await changeStorage.saveChange(change);
+changeStorage.saveChange(change);
 
 // Batch save multiple changes
-await changeStorage.saveChanges([change1, change2, change3]);
+changeStorage.saveChanges([change1, change2, change3]);
 
 // Load all changes for the document
-final changes = await changeStorage.getChanges();
+final changes = changeStorage.getChanges();
+
+// Or only part of the log, by version vector
+final missing = changeStorage.getChanges(newerThan: theirVersion);
+final past = changeStorage.getChanges(upTo: oldVersion);
 
 // Delete changes
-await changeStorage.deleteChange(change);
-await changeStorage.deleteChanges([change1, change2]);
+changeStorage.deleteChange(change);
+changeStorage.deleteChanges([change1, change2]);
 
 // Storage info
-print('Total changes: ${await changeStorage.count}');
+print('Total changes: ${changeStorage.count}');
 ```
 
 ### CRDTSqliteSnapshotStorage
@@ -128,17 +142,34 @@ Manages `Snapshot` objects for a specific document:
 final snapshotStorage = storage.snapshotStorageForDocument('doc-123');
 
 // Save snapshots
-await snapshotStorage.saveSnapshot(snapshot);
-await snapshotStorage.saveSnapshots([snapshot1, snapshot2]);
+snapshotStorage.saveSnapshot(snapshot);
+snapshotStorage.saveSnapshots([snapshot1, snapshot2]);
 
 // Retrieve snapshots
-final snapshot = await snapshotStorage.getSnapshot('snapshot-id');
-final allSnapshots = await snapshotStorage.getSnapshots();
+final snapshot = snapshotStorage.getSnapshot('snapshot-id');
+final allSnapshots = snapshotStorage.getSnapshots();
 
 // Check existence
-if (await snapshotStorage.containsSnapshot('snapshot-id')) {
+if (snapshotStorage.containsSnapshot('snapshot-id')) {
   // Snapshot exists
 }
+```
+
+### CRDTSqlitePeerIdStorage
+
+Keeps the `PeerId` the document writes under, in the `peers` table. Without it
+`CRDTDocument` mints a new author on every restart, and the version vector
+grows by one peer per session.
+
+Read it **before** building the document — the id has to exist first:
+
+```dart
+final peers = storage.peerIdStorageForDocument('doc-123');
+
+final document = CRDTDocument(
+  documentId: 'doc-123',
+  peerId: peers.loadOrCreate() as PeerId, // synchronous here
+);
 ```
 
 ## How Data Is Stored

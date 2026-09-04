@@ -110,6 +110,15 @@ final persistence = await CRDTDocumentPersistence.open(
 It comes from [`crdt_lf_persistence`](https://pub.dev/packages/crdt_lf_persistence),
 which this package re-exports. See that README for the offline-first rules.
 
+`openStorageForDocument` hands back a `CRDTHiveDocumentStorage`. Its `close()`
+closes the two boxes of that document and nothing else — the one to reach for
+in an app that opens one document after another, since
+`CRDTHive.closeAllBoxes()` closes every Hive box the app has open, yours
+included.
+
+Hive has no transactions, so `transaction()` just runs its body. That is still
+conformant: every step the persistence takes is safe to repeat.
+
 ## Document-Scoped Storage
 
 The library provides optional storage utilities that organize data by document ID. Each document gets its own dedicated Hive boxes, improving isolation and performance.
@@ -128,14 +137,18 @@ await changeStorage.saveChange(change);
 await changeStorage.saveChanges([change1, change2, change3]);
 
 // Load all changes for the document
-final changes = await changeStorage.getChanges();
+final changes = changeStorage.getChanges();
+
+// Or only part of the log, by version vector
+final missing = changeStorage.getChanges(newerThan: theirVersion);
+final past = changeStorage.getChanges(upTo: oldVersion);
 
 // Delete changes
 await changeStorage.deleteChange(change);
 await changeStorage.deleteChanges([change1, change2]);
 
 // Storage info
-print('Total changes: ${await changeStorage.count}');
+print('Total changes: ${changeStorage.count}');
 ```
 
 ### CRDTHiveSnapshotStorage
@@ -150,14 +163,39 @@ await snapshotStorage.saveSnapshot(snapshot);
 await snapshotStorage.saveSnapshots([snapshot1, snapshot2]);
 
 // Retrieve snapshots
-final snapshot = await snapshotStorage.getSnapshot('snapshot-id');
-final allSnapshots = await snapshotStorage.getSnapshots();
+final snapshot = snapshotStorage.getSnapshot('snapshot-id');
+final allSnapshots = snapshotStorage.getSnapshots();
 
 // Check existence
-if (await snapshotStorage.containsSnapshot('snapshot-id')) {
+if (snapshotStorage.containsSnapshot('snapshot-id')) {
   // Snapshot exists
 }
 ```
+
+### CRDTHivePeerIdStorage
+
+Keeps the `PeerId` the document writes under. Without it `CRDTDocument` mints
+a new author on every restart, and the version vector grows by one peer per
+session.
+
+Every document shares one `peer_ids` box, keyed by document id: a box of its
+own would cost an open for a single string. The value is text, so no type
+adapter and no type id are involved.
+
+Read it **before** building the document — the id has to exist first:
+
+```dart
+final peers = await CRDTHive.openPeerIdStorageForDocument('doc-123');
+
+final document = CRDTDocument(
+  documentId: 'doc-123',
+  peerId: await peers.loadOrCreate(),
+);
+```
+
+A Hive box holds its entries in memory, so reads here answer without
+suspending — `getChanges`, `getSnapshots`, `count` and `containsSnapshot` are
+not futures. Writes go through the box journal and stay asynchronous.
 
 ## Snapshot Data Serialization
 

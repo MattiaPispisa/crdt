@@ -166,7 +166,7 @@ void main() {
 ## Sync 
 A sync library is available in the [crdt_socket_sync](https://pub.dev/packages/crdt_socket_sync) package. And it's used to synchronize the CRDT state between peers. More info in the [README](https://github.com/MattiaPispisa/crdt/tree/main/packages/core/crdt_socket_sync/README.md) of the sync package.
 
-A flutter example is available in the [flutter_example](https://github.com/MattiaPispisa/crdt/tree/main/packages/core/crdt_socket_sync/flutter_example) and provide a synced version of the  "Flutter Distributed Collaboration" Example. 
+A flutter example is available in the [client_example](https://github.com/MattiaPispisa/crdt/tree/main/packages/core/crdt_socket_sync/client_example) and provide a synced version of the  "Flutter Distributed Collaboration" Example. 
 
 <div align="center">
 <img width="500" alt="sync_server_multi_client" src="https://raw.githubusercontent.com/MattiaPispisa/crdt/main/assets/demos/sync_server_multi_client.gif">

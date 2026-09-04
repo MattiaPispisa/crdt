@@ -16,7 +16,7 @@
       "[license_link]: https://opensource.org/licenses/MIT",
       "[package_badge]: https://img.shields.io/pub/v/${1:package}.svg",
       "[codecov_badge]: https://img.shields.io/codecov/c/github/MattiaPispisa/crdt/main?flag=${1:package}&logo=codecov",
-      "[codecov_link]: https://app.codecov.io/gh/MattiaPispisa/crdt/tree/main/packages/${1:package}",
+      "[codecov_link]: https://app.codecov.io/gh/MattiaPispisa/crdt/tree/main/packages/${2:core/package}",
       "[ci_badge]: https://img.shields.io/github/actions/workflow/status/MattiaPispisa/crdt/main.yaml",
       "[ci_link]: https://github.com/MattiaPispisa/crdt/actions/workflows/main.yaml",
       "[pub_points_badge]: https://img.shields.io/pub/points/${1:package}",

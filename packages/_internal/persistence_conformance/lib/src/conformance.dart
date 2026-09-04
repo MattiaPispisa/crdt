@@ -25,10 +25,29 @@ import 'package:test/test.dart';
 ///
 /// [dispose] is called after each test with the storages it opened, for a
 /// backend that has to close a handle.
+///
+/// Pass `atomicTransactions: true` for a backend whose
+/// [CRDTDocumentStorage.transaction] really rolls back. The default is the
+/// contract's own default, which just runs the body: a backend without
+/// transactions is still conformant, so the rollback case only runs when the
+/// adapter claims it.
+///
+/// Pass `synchronous: true` for a backend whose reads answer without
+/// suspending, and the suite checks that they really do and that
+/// [CRDTDocumentPersistence.openSync] restores through them. An asynchronous
+/// backend is still conformant, so the group only runs when the adapter
+/// claims it.
+///
+/// [openPeerIds] gives the [CRDTPeerIdStorage] of a document id, and adds the
+/// group that checks stored identity. Leave it out on an adapter that keeps
+/// no identity.
 void runDocumentStorageConformanceTests({
   required String name,
   required Future<CRDTDocumentStorage> Function(String documentId) open,
   bool durable = true,
+  bool atomicTransactions = false,
+  bool synchronous = false,
+  Future<CRDTPeerIdStorage> Function(String documentId)? openPeerIds,
   Future<void> Function(CRDTDocumentStorage storage)? dispose,
 }) {
   group('$name conformance', () {
@@ -124,6 +143,17 @@ void runDocumentStorageConformanceTests({
         expect(await storage.changes.count, 0);
       });
 
+      test('a change named twice in one batch counts once', () async {
+        final changes = fixtures.changes(1);
+        await storage.changes.saveChanges(changes);
+
+        expect(
+          await storage.changes.deleteChanges([...changes, ...changes]),
+          1,
+        );
+        expect(await storage.changes.count, 0);
+      });
+
       test('the empty batch is not an error', () async {
         await storage.changes.saveChanges([]);
         expect(await storage.changes.deleteChanges([]), 0);
@@ -208,6 +238,17 @@ void runDocumentStorageConformanceTests({
         );
       });
 
+      test('an id named twice in one batch counts once', () async {
+        final snapshot = fixtures.snapshot();
+        await storage.snapshots.saveSnapshot(snapshot);
+
+        expect(
+          await storage.snapshots.deleteSnapshots([snapshot.id, snapshot.id]),
+          1,
+        );
+        expect(await storage.snapshots.count, 0);
+      });
+
       test('the empty batch is not an error', () async {
         await storage.snapshots.saveSnapshots([]);
         expect(await storage.snapshots.deleteSnapshots([]), 0);
@@ -252,6 +293,85 @@ void runDocumentStorageConformanceTests({
       });
     });
 
+    group('version vector', () {
+      test('newerThan keeps only what the vector has not seen', () async {
+        final before = fixtures.changes(2);
+        final seen = fixtures.document.getVersionVector();
+        final after = fixtures.changes(3);
+        await storage.changes.saveChanges([...before, ...after]);
+
+        final read = await storage.changes.getChanges(newerThan: seen);
+
+        expect(
+          read.map((c) => c.id.toString()),
+          unorderedEquals(after.map((c) => c.id.toString())),
+        );
+      });
+
+      test('upTo keeps only what the vector has seen', () async {
+        final before = fixtures.changes(2);
+        final seen = fixtures.document.getVersionVector();
+        final after = fixtures.changes(3);
+        await storage.changes.saveChanges([...before, ...after]);
+
+        final read = await storage.changes.getChanges(upTo: seen);
+
+        expect(
+          read.map((c) => c.id.toString()),
+          unorderedEquals(before.map((c) => c.id.toString())),
+        );
+      });
+
+      test('the two together keep what sits between them', () async {
+        final before = fixtures.changes(2);
+        final start = fixtures.document.getVersionVector();
+        final middle = fixtures.changes(3);
+        final end = fixtures.document.getVersionVector();
+        final after = fixtures.changes(2);
+        await storage.changes.saveChanges([...before, ...middle, ...after]);
+
+        final read = await storage.changes.getChanges(
+          newerThan: start,
+          upTo: end,
+        );
+
+        expect(
+          read.map((c) => c.id.toString()),
+          unorderedEquals(middle.map((c) => c.id.toString())),
+        );
+      });
+
+      test('an empty vector has seen nothing', () async {
+        final changes = fixtures.changes(3);
+        await storage.changes.saveChanges(changes);
+
+        expect(
+          await storage.changes.getChanges(newerThan: VersionVector({})),
+          hasLength(3),
+        );
+        expect(
+          await storage.changes.getChanges(upTo: VersionVector({})),
+          isEmpty,
+        );
+      });
+
+      test('a peer the vector never heard of is newer than it', () async {
+        final mine = fixtures.changes(2);
+        final other = ConformanceFixtures('$documentId-stranger');
+        final theirs = other.changes(2);
+        await storage.changes.saveChanges([...mine, ...theirs]);
+
+        final read = await storage.changes.getChanges(
+          newerThan: fixtures.document.getVersionVector(),
+        );
+
+        expect(
+          read.map((c) => c.id.toString()),
+          unorderedEquals(theirs.map((c) => c.id.toString())),
+        );
+      });
+    });
+
     test('documentId is the same on both halves', () {
       expect(storage.documentId, documentId);
       expect(storage.changes.documentId, documentId);
@@ -274,7 +394,134 @@ void runDocumentStorageConformanceTests({
       expect(await other.changes.count, 3);
     });
 
+    group('transactions', () {
+      test('runs the body and hands back what it returned', () async {
+        final changes = fixtures.changes(2);
+
+        final written = await storage.transaction(() async {
+          await storage.changes.saveChanges(changes);
+          return storage.changes.count;
+        });
+
+        expect(written, 2);
+        expect(await storage.changes.count, 2);
+      });
+
+      test('a body that throws throws through', () async {
+        await expectLater(
+          storage.transaction(() async => throw StateError('no')),
+          throwsA(isA<StateError>()),
+        );
+      });
+
+      if (atomicTransactions) {
+        test('a body that throws leaves nothing behind', () async {
+          await storage.changes.saveChanges(fixtures.changes(1));
+
+          await expectLater(
+            storage.transaction(() async {
+              await storage.changes.saveChanges(fixtures.changes(2));
+              throw StateError('no');
+            }),
+            throwsA(isA<StateError>()),
+          );
+
+          expect(
+            await storage.changes.count,
+            1,
+            reason: 'only what was there before the transaction',
+          );
+        });
+      }
+    });
+
+    if (openPeerIds != null) {
+      group('peer id', () {
+        test('reads back null before anything wrote one', () async {
+          final peers = await openPeerIds(documentId);
+
+          expect(await peers.getPeerId(), isNull);
+        });
+
+        test('round-trips the stored id', () async {
+          final peers = await openPeerIds(documentId);
+          final id = PeerId.generate();
+
+          await peers.savePeerId(id);
+
+          expect(await peers.getPeerId(), id);
+        });
+
+        test('loadOrCreate mints one and then keeps it', () async {
+          final peers = await openPeerIds(documentId);
+
+          final first = await peers.loadOrCreate();
+          final second = await peers.loadOrCreate();
+
+          expect(second, first);
+          expect(await peers.getPeerId(), first);
+        });
+
+        test('two documents do not share an identity', () async {
+          final mine = await openPeerIds(documentId);
+          final other = await openPeerIds('$documentId-other');
+
+          expect(await other.loadOrCreate(), isNot(await mine.loadOrCreate()));
+        });
+      });
+    }
+
+    if (synchronous) {
+      group('synchronous', () {
+        test('reads answer without suspending', () {
+          expect(storage.changes.getChanges(), isNot(isA<Future<dynamic>>()));
+          expect(storage.changes.count, isNot(isA<Future<dynamic>>()));
+          expect(
+            storage.snapshots.getSnapshots(),
+            isNot(isA<Future<dynamic>>()),
+          );
+          expect(storage.snapshots.count, isNot(isA<Future<dynamic>>()));
+        });
+
+        test('openSync restores the document before it returns', () async {
+          final changes = fixtures.changes(3);
+          await storage.changes.saveChanges(changes);
+
+          final document = CRDTDocument(documentId: documentId);
+          final persistence = CRDTDocumentPersistence.openSync(
+            document,
+            storage,
+          );
+
+          expect(
+            document.exportChanges().map((c) => c.id.toString()),
+            unorderedEquals(changes.map((c) => c.id.toString())),
+          );
+
+          await persistence.dispose();
+        });
+      });
+    }
+
+    test('close is not an error the second time', () async {
+      await storage.close();
+      await storage.close();
+    });
+
     if (durable) {
+      test('what was stored is still there after closing', () async {
+        final changes = fixtures.changes(2);
+        await storage.changes.saveChanges(changes);
+        await storage.close();
+
+        final reopened = await openStorage(documentId);
+
+        expect(
+          (await reopened.changes.getChanges()).map((c) => c.toBytes()),
+          unorderedEquals(changes.map((c) => c.toBytes())),
+        );
+      });
+
       test('what was stored is still there after reopening', () async {
         final changes = fixtures.changes(3);
         fixtures.changes(1);

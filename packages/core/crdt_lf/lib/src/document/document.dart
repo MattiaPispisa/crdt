@@ -1620,9 +1620,7 @@ class CRDTDocument extends BaseCRDTDocument {
   void _emitUpdate({List<Change>? changes, ChangeSource? source}) {
     // Nobody mirrors this document: the batch is not worth building, and an
     // update on its own says everything a listener of [updates] can read.
-    if (changes == null ||
-        changes.isEmpty ||
-        !_eventsController.hasListener) {
+    if (changes == null || changes.isEmpty || !_eventsController.hasListener) {
       _transactionManager.requestUpdate();
       return;
     }

@@ -2,8 +2,9 @@ import 'dart:io';
 
 import 'package:crdt_lf_drift/src/database.dart';
 import 'package:crdt_lf_drift/src/storage/change_storage.dart';
+import 'package:crdt_lf_drift/src/storage/document_storage.dart';
+import 'package:crdt_lf_drift/src/storage/peer_id_storage.dart';
 import 'package:crdt_lf_drift/src/storage/snapshot_storage.dart';
-import 'package:crdt_lf_persistence/crdt_lf_persistence.dart';
 import 'package:drift/drift.dart';
 import 'package:drift/native.dart';
 
@@ -56,25 +57,49 @@ class CRDTDrift {
     return CRDTDriftSnapshotStorage(database, documentId);
   }
 
+  /// Creates a [CRDTDriftPeerIdStorage] scoped to [documentId].
+  ///
+  /// Read it before building the document, so the document keeps the identity
+  /// it wrote under last time:
+  ///
+  /// ```dart
+  /// final peers = database.peerIdStorageForDocument('doc-1');
+  /// final document = CRDTDocument(
+  ///   documentId: 'doc-1',
+  ///   peerId: await peers.loadOrCreate(),
+  /// );
+  /// ```
+  CRDTDriftPeerIdStorage peerIdStorageForDocument(String documentId) {
+    return CRDTDriftPeerIdStorage(database, documentId);
+  }
+
   /// Creates both change and snapshot storage for [documentId], bundled in a
-  /// [CRDTDocumentStorage].
-  CRDTDocumentStorage storageForDocument(String documentId) {
-    return CRDTDocumentStorage(
+  /// [CRDTDriftDocumentStorage].
+  CRDTDriftDocumentStorage storageForDocument(String documentId) {
+    return CRDTDriftDocumentStorage(
+      database: database,
       changes: changeStorageForDocument(documentId),
       snapshots: snapshotStorageForDocument(documentId),
     );
   }
 
-  /// Deletes all changes and snapshots associated with [documentId].
+  /// Deletes the changes, snapshots and stored identity of [documentId].
   ///
-  /// Use with caution as this operation cannot be undone.
-  Future<void> deleteDocumentData(String documentId) async {
-    await (database.delete(database.changes)
-          ..where((row) => row.documentId.equals(documentId)))
-        .go();
-    await (database.delete(database.snapshots)
-          ..where((row) => row.documentId.equals(documentId)))
-        .go();
+  /// Use with caution as this operation cannot be undone. The three deletes
+  /// go in one transaction, so the document never comes back as a half of
+  /// itself.
+  Future<void> deleteDocumentData(String documentId) {
+    return database.transaction(() async {
+      await (database.delete(database.changes)
+            ..where((row) => row.documentId.equals(documentId)))
+          .go();
+      await (database.delete(database.snapshots)
+            ..where((row) => row.documentId.equals(documentId)))
+          .go();
+      await (database.delete(database.peers)
+            ..where((row) => row.documentId.equals(documentId)))
+          .go();
+    });
   }
 
   /// Closes the underlying database and releases its resources.
