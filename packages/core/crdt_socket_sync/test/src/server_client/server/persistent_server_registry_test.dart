@@ -15,13 +15,15 @@ const Duration _now = Duration.zero;
 /// One instance per document id, handed to every registry that asks. That is
 /// what a restart looks like from the registry's side: a new registry, the
 /// same bytes.
-class _Backend {
+class _Backend implements CRDTStorageBackend {
   final Map<String, _CountingChangeStorage> changes =
       <String, _CountingChangeStorage>{};
   final Map<String, InMemorySnapshotStorage> snapshots =
       <String, InMemorySnapshotStorage>{};
+  final Map<String, PeerId> peers = <String, PeerId>{};
 
-  CRDTDocumentStorage open(String documentId) {
+  @override
+  CRDTDocumentStorage storageForDocument(String documentId) {
     return CRDTDocumentStorage(
       changes: changes.putIfAbsent(
         documentId,
@@ -33,6 +35,24 @@ class _Backend {
       ),
     );
   }
+
+  @override
+  InMemoryPeerIdStorage peerIdStorageForDocument(String documentId) =>
+      InMemoryPeerIdStorage(documentId, peers);
+
+  @override
+  Set<String> get documentIds =>
+      <String>{...changes.keys, ...snapshots.keys, ...peers.keys};
+
+  @override
+  void deleteDocument(String documentId) {
+    changes.remove(documentId);
+    snapshots.remove(documentId);
+    peers.remove(documentId);
+  }
+
+  @override
+  void close() {}
 }
 
 /// A change storage that counts the writes it is asked for.
@@ -86,27 +106,26 @@ List<Change> _authored(void Function(CRDTListHandler<String> list) edit) {
 
 void main() {
   late _Backend backend;
-  late InMemoryServerDocumentCatalog catalog;
+  late InMemoryServerDocumentCatalog inMemoryCatalog;
 
   PersistentServerRegistry build({
     int? compactAfter,
     Duration writeDelay = _now,
-    bool storePeerIds = false,
+    ServerDocumentCatalog? catalog,
+    Duration? idleAfter,
   }) {
     return PersistentServerRegistry(
-      openStorage: backend.open,
-      catalog: catalog,
-      openPeerIdStorage:
-          storePeerIds ? (id) => InMemoryPeerIdStorage(id) : null,
+      backend: backend,
+      catalog: catalog ?? inMemoryCatalog,
       writeDelay: writeDelay,
       compactAfter: compactAfter,
+      idleAfter: idleAfter,
     );
   }
 
   setUp(() {
     backend = _Backend();
-    catalog = InMemoryServerDocumentCatalog();
-    InMemoryPeerIdStorage.reset();
+    inMemoryCatalog = InMemoryServerDocumentCatalog();
   });
 
   group('PersistentServerRegistry', () {
@@ -254,14 +273,14 @@ void main() {
     test('an explicit author seeds the stored id, and never beats it',
         () async {
       final chosen = PeerId.generate();
-      final first = build(storePeerIds: true);
+      final first = build();
       await first.addDocument('doc', author: chosen);
       expect((await first.getDocument('doc'))!.peerId, chosen);
       await first.close();
 
       // A second add naming somebody else must not fork the identity: the
       // document already wrote under the first one.
-      final second = build(storePeerIds: true);
+      final second = build();
       addTearDown(second.close);
       await second.addDocument('doc', author: PeerId.generate());
 
@@ -269,12 +288,12 @@ void main() {
     });
 
     test('the peer id survives a restart when one is stored', () async {
-      final first = build(storePeerIds: true);
+      final first = build();
       await first.addDocument('doc');
       final before = (await first.getDocument('doc'))!.peerId;
       await first.close();
 
-      final second = build(storePeerIds: true);
+      final second = build();
       addTearDown(second.close);
 
       expect((await second.getDocument('doc'))!.peerId, before);
@@ -305,8 +324,107 @@ void main() {
       await registry.removeDocument('doc');
 
       expect(await registry.hasDocument('doc'), isFalse);
-      expect(await catalog.documentIds, isEmpty);
+      expect(await inMemoryCatalog.documentIds, isEmpty);
       expect(await registry.documentCount, 0);
+    });
+
+    test('the default catalog finds the documents again after a restart',
+        () async {
+      final first = PersistentServerRegistry(backend: backend);
+      await first.addDocument('doc');
+      CRDTFugueTextHandler(
+        (await first.getDocument('doc'))!,
+        'text',
+      ).insert(0, 'hello');
+      await first.close();
+
+      // A new registry over the same backend: nothing was written down
+      // anywhere else, and it still knows what it serves.
+      final second = PersistentServerRegistry(backend: backend);
+      addTearDown(second.close);
+
+      expect(await second.documentIds, {'doc'});
+      expect(
+        CRDTFugueTextHandler((await second.getDocument('doc'))!, 'text').value,
+        'hello',
+      );
+    });
+
+    test('removeDocument deletes the data when the catalog is the backend',
+        () async {
+      final registry = PersistentServerRegistry(backend: backend);
+      addTearDown(registry.close);
+      await registry.addDocument('doc');
+
+      await registry.removeDocument('doc');
+
+      expect(await registry.hasDocument('doc'), isFalse);
+      expect(backend.documentIds, isEmpty);
+    });
+
+    test('releaseDocument writes what is waiting and keeps serving the id',
+        () async {
+      final registry = build(writeDelay: const Duration(seconds: 5));
+      addTearDown(registry.close);
+      await registry.addDocument('doc');
+      final document = (await registry.getDocument('doc'))!;
+      CRDTFugueTextHandler(document, 'text').insert(0, 'hello');
+
+      // The write delay has not run out, so nothing is on the disk yet.
+      expect(backend.changes['doc']!.saveCalls, 0);
+
+      await registry.releaseDocument('doc');
+
+      expect(backend.changes['doc']!.saveCalls, 1);
+      expect(document.isDisposed, isTrue);
+      expect(
+        await registry.hasDocument('doc'),
+        isTrue,
+        reason: 'released is not removed: the document is still served',
+      );
+
+      final again = (await registry.getDocument('doc'))!;
+      expect(again, isNot(same(document)));
+      expect(CRDTFugueTextHandler(again, 'text').value, 'hello');
+    });
+
+    test('releasing a document nobody opened is not an error', () async {
+      final registry = build();
+      addTearDown(registry.close);
+
+      await registry.releaseDocument('never-opened');
+    });
+
+    test('idleAfter releases a document nothing asked for', () async {
+      final registry = build(idleAfter: const Duration(milliseconds: 100));
+      addTearDown(registry.close);
+      await registry.addDocument('doc');
+      final document = (await registry.getDocument('doc'))!;
+      CRDTFugueTextHandler(document, 'text').insert(0, 'hello');
+
+      await Future<void>.delayed(const Duration(milliseconds: 300));
+
+      expect(document.isDisposed, isTrue);
+      expect(CRDTFugueTextHandler((await registry.getDocument('doc'))!, 'text')
+          .value, 'hello');
+    });
+
+    test('every ask restarts the idle countdown', () async {
+      final registry = build(idleAfter: const Duration(milliseconds: 200));
+      addTearDown(registry.close);
+      await registry.addDocument('doc');
+      final document = (await registry.getDocument('doc'))!;
+
+      for (var i = 0; i < 4; i++) {
+        await Future<void>.delayed(const Duration(milliseconds: 60));
+        await registry.getDocument('doc');
+      }
+
+      expect(
+        document.isDisposed,
+        isFalse,
+        reason: 'the countdown never ran out: something asked for it',
+      );
     });
 
     test('addDocument twice keeps the first document', () async {

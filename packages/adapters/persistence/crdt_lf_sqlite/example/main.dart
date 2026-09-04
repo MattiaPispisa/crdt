@@ -14,17 +14,13 @@ Future<void> main() async {
   final dbLocation =
       '${io.File.fromUri(io.Platform.script).parent.path}/crdt_example.db';
 
-  final database = CRDTSqlite.open(dbLocation);
+  final backend = CRDTSqlite.open(dbLocation);
 
-  final document = CRDTDocument(documentId: documentId);
-  final list = CRDTListHandler<String>(document, 'list');
-
-  // Reads the database into the document, then follows it: everything written
-  // from here on is stored without another line of code.
-  final persistence = await CRDTDocumentPersistence.open(
-    document,
-    database.storageForDocument(documentId),
-  );
+  // Reads the database into a document and follows it: everything written from
+  // here on is stored without another line of code. The identity comes from
+  // the backend too, so every run is the same author.
+  final note = await backend.openDocument(documentId);
+  final list = CRDTListHandler<String>(note.document, 'list');
 
   print('read back: ${list.value}');
 
@@ -35,9 +31,11 @@ Future<void> main() async {
 
   // Writes what is still waiting. Without it the process could end before the
   // delayed write runs.
-  await persistence.dispose();
-  document.dispose();
-  database.close();
+  await note.persistence.dispose();
+  note.document.dispose();
 
   print('now: ${list.value}');
+  print('documents in the database: ${backend.documentIds.length}');
+
+  backend.close();
 }

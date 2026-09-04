@@ -13,39 +13,51 @@ changes.
 > and `CRDTSnapshotStorage` through its own barrel. This page is the contract
 > those adapters keep, and the place to read before writing a fourth one.
 
-Two things live here:
+Three levels live here, smallest first:
 
-- **`CRDTDocumentStorage`** — what a backend has to provide. `crdt_lf_hive`,
-  `crdt_lf_drift` and `crdt_lf_sqlite` all implement it, so code written
-  against it runs on any of them.
+- **`CRDTChangeStorage` / `CRDTSnapshotStorage` / `CRDTPeerIdStorage`** — what
+  one document has on disk. `CRDTDocumentStorage` bundles the first two.
+- **`CRDTStorageBackend`** — the whole database: the documents it holds, and
+  the storages of each one. `crdt_lf_hive`, `crdt_lf_drift` and
+  `crdt_lf_sqlite` all implement it, so an app can change backend without
+  changing anything but the line that opens it.
 - **`CRDTDocumentPersistence`** — the part you would otherwise write yourself:
   read the document back, then follow it and write down what moves.
 
+And the functions that use them, so you never write these either:
+
+All of them are **methods on the backend**, so you find them by typing a dot:
+
+| you want to | call |
+| --- | --- |
+| open a document that is going to be edited | `backend.openDocument(id)` |
+| read one without following it (a preview, a list) | `backend.readDocument(id)` |
+| see it as it was at some version | `backend.documentAt(id, version)` |
+| back it up, or move it to another adapter | `backend.copyDocumentTo(other, id)` |
+| stop the log from growing, now | `persistence.compact()` |
+
+The last three are also on a single `CRDTDocumentStorage` — `storage.readDocument()`,
+`storage.documentAt(version)`, `storage.copyTo(other)` — for when that is all
+you hold.
+
 ## Local only
 
-No server to talk to: a document, an adapter, and the two lines between them.
-One import, the adapter's.
+No server to talk to: an adapter, and one call. One import, the adapter's.
 
 ```dart
 import 'package:crdt_lf/crdt_lf.dart';
 import 'package:crdt_lf_sqlite/crdt_lf_sqlite.dart';
 
-const documentId = 'note';
-final database = CRDTSqlite.open('note.db');
+final backend = CRDTSqlite.open('note.db');
 
-final document = CRDTDocument(documentId: documentId);
-final text = CRDTFugueTextHandler(document, 'body');
-
-// Reads the database into the document, then follows it.
-final persistence = await CRDTDocumentPersistence.open(
-  document,
-  database.storageForDocument(documentId),
-);
+// Reads the database into a document, then follows it.
+final note = await backend.openDocument('note');
+final text = CRDTFugueTextHandler(note.document, 'body');
 
 text.insert(0, 'Hello 🌍');
 
-await persistence.dispose(); // writes what is still waiting
-database.close();
+await note.persistence.dispose(); // writes what is still waiting
+backend.close();
 ```
 
 Run it again and the text is there.
@@ -57,11 +69,10 @@ the contract in a map, so you can read what an adapter has to fill in.
 
 ## Offline-first, with sync
 
-Same two lines, plus one rule: **open the persistence before you connect.**
+Same call, plus one rule: **open the document before you connect.**
 
 ```dart
-final document = CRDTDocument(documentId: roomId);
-final persistence = await CRDTDocumentPersistence.open(document, storage);
+final room = await backend.openDocument(roomId);
 
 // Only now.
 await client.connect();
@@ -147,9 +158,14 @@ behind `writeDelay` anyway.
 
 ## When a write fails
 
-A write that fails keeps what it carried. The changes stay queued and the next
-`flush()` tries the whole batch again — saving a change twice replaces it, so a
-write that half landed costs nothing.
+A write that fails keeps what it carried. The changes stay queued and the whole
+batch is written again — saving a change twice replaces it, so a write that half
+landed costs nothing.
+
+Trying again is not something you have to arrange. A failure arms a retry, and
+each failure in a row waits longer than the one before it: 250 ms, doubling, up
+to 30 s. Without that, a document that goes quiet right after a failure would
+keep its changes in memory and nowhere else.
 
 That matters more than losing one edit: the changes after a dropped one name it
 as a dependency, so a reload would replay them against something the document
@@ -174,12 +190,13 @@ After `dispose()` it reads `true` only when those edits never reached the disk.
 restart writes under a new author**. The version vector gains 24 bytes per
 session and carries them inside every snapshot from then on.
 
-`CRDTPeerIdStorage` keeps that identity. Read it **before** you build the
-document — the id has to exist before the document that writes under it, so
-this is not something `CRDTDocumentPersistence.open` can do for you:
+`CRDTPeerIdStorage` keeps that identity, and `backend.openDocument` reads it
+for you. Reach for it by hand only when you build the document yourself — the
+id has to exist **before** the document that writes under it, so this is not
+something `CRDTDocumentPersistence.open` can do:
 
 ```dart
-final peers = database.peerIdStorageForDocument(documentId);
+final peers = backend.peerIdStorageForDocument(documentId);
 
 final document = CRDTDocument(
   documentId: documentId,
@@ -192,12 +209,122 @@ can still use this, and nothing else.
 
 Reusing a stored id is safe: a document advances its clock past every change
 it applies and every snapshot it imports, so a restored document never mints
-an operation id twice. `open` restores before the first local write, which is
-what that rests on.
+an operation id twice. The restore happens before the first local write, which
+is what that rests on.
 
 Never let two writers share one id: an operation is identified by peer id plus
 clock, so two documents writing under one id can mint the same operation
 twice. One writer per document per device.
+
+## The whole opening, in one call
+
+Identity, then document, then restore. They have to happen in that order — the
+`PeerId` before the document that writes under it — and `openDocument` is them:
+
+```dart
+final backend = CRDTSqlite.open('notes.db');
+
+final room = await backend.openDocument('note-1');
+
+room.document;    // already full, already the author it was last time
+room.persistence; // dispose this when you are done
+
+final text = CRDTFugueTextHandler(room.document, 'body');
+```
+
+Build the handlers on the document it hands back, as above. A handler reads its
+state from the document whenever it is created, so one made after the restore
+reads exactly what one made before it would have.
+
+| argument | what it is for |
+| --- | --- |
+| `author` | the identity to use for a document that has none stored yet, and it is stored |
+| `onDocument` | runs before the restore, for what has to exist first — a listener on `events`, the factories for nested handlers |
+
+`writeDelay`, `compactAfter` and `onError` mean what they mean on
+`CRDTDocumentPersistence.open`.
+
+The identity is always kept. A stored id beats `author`: it is what the
+document already wrote under, and writing under a second one would make one
+device look like two peers.
+
+If the restore fails the document is disposed and the failure is thrown, so you
+never get half a document back. Connect the sync client **after** this returns,
+never before.
+
+Use `CRDTDocumentPersistence.open` directly where there is no backend — a
+single `CRDTDocumentStorage` you wrote by hand.
+
+## Many documents
+
+An app has notes, not a note. `CRDTStorageBackend` is the database itself, and
+every adapter is one:
+
+```dart
+final backend = CRDTSqlite.open('notes.db');
+
+for (final documentId in await backend.documentIds) { ... }
+
+await backend.deleteDocument('note-1');  // changes, snapshots and identity
+backend.close();
+```
+
+`documentIds` lists a document once anything about it is stored, its identity
+included — so a note that was created and never typed into is still there, and
+still empty.
+
+> **Hive note.** Hive cannot list its boxes, and this adapter gives every
+> document a box of its own, so `CRDTHive.open()` keeps a small registry box.
+> A document costs one extra row, written the first time it is opened. A
+> document stored by an older version of the adapter is not on that list until
+> it is opened once; its data is untouched either way.
+
+## Reading without writing
+
+Not every document is going to be edited. A list of fifty notes wants fifty
+titles, not fifty `CRDTDocumentPersistence`s that will never write anything.
+
+```dart
+final note = await backend.readDocument('note-1');
+final title = CRDTFugueTextHandler(note, 'body').value;
+```
+
+Nothing follows what it hands back: an edit made on it stays in memory. On a
+synchronous backend it returns without suspending, so the whole list is built
+inside one frame.
+
+`documentAt` is the same thing with a bound — the document as it stood at a
+version, which is what a history view reads:
+
+```dart
+final before = await backend.documentAt('note-1', lastWeek);
+```
+
+How far back it reaches is what the log still holds. A prune deletes the
+changes a snapshot covers, so a compacted document cannot be rebuilt at a
+version older than its snapshot — and it says so, by throwing, instead of
+handing back a document that is quietly short.
+
+## Backup, restore, and changing adapter
+
+`copyDocumentTo` moves a whole document to another backend, identity included:
+
+```dart
+await hive.copyDocumentTo(sqlite, 'note-1');
+```
+
+Rows already in the target with the same ids are replaced, so copying twice
+leaves what copying once left. What the target holds and the source does not is
+left alone: clear it first for an exact copy.
+
+To **duplicate** a document into a new one, go through the storages and leave
+the identities out — two documents writing under one `PeerId` can mint the same
+operation id twice:
+
+```dart
+await (await backend.storageForDocument('note-1'))
+    .copyTo(await backend.storageForDocument('note-1-copy'));
+```
 
 ## Growth
 
@@ -211,9 +338,17 @@ changes:
 await CRDTDocumentPersistence.open(document, storage, compactAfter: 1000);
 ```
 
-It is off by default because a prune drops the stacks of every
-`CRDTUndoManager` on the document. Turn it on for a document that lives a long
-time, and leave it off where undo matters more.
+`compact()` does the same on demand — a "save and compact" button, or the
+moment an app goes to the background:
+
+```dart
+await persistence.compact();
+```
+
+Both are off by default because a prune drops the stacks of every
+`CRDTUndoManager` on the document. Turn `compactAfter` on for a document that
+lives a long time; where undo matters more, leave it off and call `compact()`
+at a moment the user cannot be in the middle of something.
 
 ## Writing an adapter
 
@@ -242,10 +377,27 @@ silently, since the transaction that lost the write never saw an error. `close()
 document only**: a connection shared between documents stays open, and the
 backend closes that itself.
 
-`CRDTPeerIdStorage` is separate, and optional. Implement it to let a document
-keep the identity it writes under; two methods, and the value is a string
-(`PeerId.toString()` / `PeerId.parse`). Hand it out from your own entry point,
-not from `CRDTDocumentStorage`: it is needed before the document exists.
+`CRDTPeerIdStorage` is separate. Implement it to let a document keep the
+identity it writes under; two methods, and the value is a string
+(`PeerId.toString()` / `PeerId.parse`). It is needed before the document
+exists, so it comes from the backend rather than from `CRDTDocumentStorage`.
+
+Then implement `CRDTStorageBackend` on your entry point — the class that owns
+the database. Five members, and four of them you already have:
+
+| member | what it answers |
+| --- | --- |
+| `storageForDocument(id)` | the changes and snapshots of one document |
+| `peerIdStorageForDocument(id)` | the identity of one document |
+| `documentIds` | every document this backend holds |
+| `deleteDocument(id)` | drop all three of them |
+| `close()` | let the database go; twice is not an error |
+
+`documentIds` is the one that needs thought. A backend with a `document_id`
+column answers it with a `UNION` over the three tables — the third one matters,
+because a document that was created and never written to exists only as an
+identity. A backend that cannot ask the question has to write the ids down
+itself, which is what the Hive adapter does.
 
 Return a plain value wherever the backend can. Every method is declared
 `FutureOr`, so narrowing the return type to `List<Change>` or `void` is a
@@ -267,6 +419,13 @@ void main() {
     atomicTransactions: true,
     synchronous: true,
     openPeerIds: (documentId) => MyPeerIds.open(documentId),
+  );
+
+  runStorageBackendConformanceTests(
+    name: 'MyBackend',
+    open: () => MyBackend.open(path),
+    // Leave this out for a backend that cannot be reopened on the same data.
+    reopen: (_) => MyBackend.open(path),
   );
 }
 ```

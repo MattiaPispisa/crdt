@@ -9,4 +9,9 @@ void main() {
     synchronous: true,
     openPeerIds: (documentId) async => InMemoryPeerIdStorage(documentId),
   );
+
+  runStorageBackendConformanceTests(
+    name: 'InMemoryStorageBackend',
+    open: InMemoryStorageBackend.new,
+  );
 }

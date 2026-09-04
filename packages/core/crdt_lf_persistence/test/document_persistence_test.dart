@@ -151,6 +151,60 @@ void main() {
       await persistence.dispose();
     });
 
+    test('replacing the snapshot reads no snapshot back', () async {
+      final snapshots = _CountingSnapshotStorage('doc');
+      final storage = CRDTDocumentStorage(
+        changes: InMemoryChangeStorage('doc'),
+        snapshots: snapshots,
+      );
+      final persistence = await CRDTDocumentPersistence.open(
+        document,
+        storage,
+        writeDelay: _now,
+      );
+      final afterRestore = snapshots.reads;
+
+      text.insert(0, 'a');
+      document.takeSnapshot(pruneHistory: false);
+      await persistence.flush();
+      text.insert(1, 'b');
+      document.takeSnapshot(pruneHistory: false);
+      await persistence.flush();
+
+      expect(
+        snapshots.reads,
+        afterRestore,
+        reason: 'which snapshot to replace is already known, so reading every '
+            'one of them back would decode the whole previous state',
+      );
+      expect(await snapshots.count, 1);
+
+      await persistence.dispose();
+    });
+
+    test('a restore drops the snapshots it did not restore from', () async {
+      final persistence = await attach();
+      text.insert(0, 'a');
+      final first = document.takeSnapshot(pruneHistory: false);
+      await persistence.flush();
+      text.insert(1, 'b');
+      final second = document.takeSnapshot(pruneHistory: false);
+      await persistence.flush();
+      // A write killed between saving the new snapshot and dropping the old
+      // one leaves both behind.
+      await storage.snapshots.saveSnapshot(first);
+      await persistence.dispose();
+
+      final next = reopened();
+      final restored =
+          await CRDTDocumentPersistence.open(next.document, storage);
+      await restored.flush();
+
+      final stored = await storage.snapshots.getSnapshots();
+      expect(stored.single.id, second.id);
+      await restored.dispose();
+    });
+
     test('a prune drops what left the store and rewrites what stayed',
         () async {
       final persistence = await attach();
@@ -193,6 +247,50 @@ void main() {
       expect(next.text.value, 'abc');
 
       await persistence.dispose();
+    });
+
+    test('a change pruned while a failed write held it stays off the disk',
+        () async {
+      // The write is in flight when the prune happens, so the change it
+      // carries is not in the queue for the prune to drop. The write then
+      // fails and puts it back — after the prune has already been told about
+      // it. Written from there it would land after the delete meant to remove
+      // it, and no later prune would ever name it again.
+      final storage = _GatedStorage('doc');
+      final gate = Completer<void>();
+      storage.gated.gate = gate;
+
+      final persistence = await CRDTDocumentPersistence.open(
+        document,
+        storage,
+        writeDelay: _now,
+        onError: (_, __) {},
+      );
+
+      text.insert(0, 'abc');
+      await storage.gated.started.future;
+
+      document.takeSnapshot();
+      // The events reach the persistence on a microtask, so the prune is
+      // queued behind the write that is still failing.
+      await Future<void>.delayed(Duration.zero);
+      gate.complete();
+
+      await persistence.flush();
+
+      final onDisk = (await storage.changes.getChanges()).map((c) => c.id);
+      final held = document.exportChanges().map((c) => c.id).toSet();
+      expect(
+        onDisk.where((id) => !held.contains(id)),
+        isEmpty,
+        reason: 'the store holds a change the prune removed',
+      );
+
+      await persistence.dispose();
+      final next = reopened();
+      await (await CRDTDocumentPersistence.open(next.document, storage))
+          .dispose();
+      expect(next.text.value, 'abc');
     });
 
     test('compactAfter has to be positive', () {
@@ -239,6 +337,26 @@ void main() {
       await persistence.dispose();
     });
 
+    test('compact snapshots, prunes, and waits for the disk', () async {
+      final persistence = await attach(writeDelay: const Duration(seconds: 5));
+      text.insert(0, 'abc');
+
+      final snapshot = await persistence.compact();
+
+      expect((await storage.snapshots.getSnapshots()).single.id, snapshot.id);
+      expect(
+        await storage.changes.count,
+        0,
+        reason: 'the history the snapshot covers is gone, disk included',
+      );
+
+      await persistence.dispose();
+      final next = reopened();
+      await (await CRDTDocumentPersistence.open(next.document, storage))
+          .dispose();
+      expect(next.text.value, 'abc');
+    });
+
     test('a failed write reaches onError', () async {
       final errors = <Object>[];
       final persistence = await CRDTDocumentPersistence.open(
@@ -281,6 +399,33 @@ void main() {
       await (await CRDTDocumentPersistence.open(next.document, storage))
           .dispose();
       expect(next.text.value, 'a');
+    });
+
+    test('a failed write is retried without a flush and without a new edit',
+        () async {
+      final storage = _FailingStorage('doc', failures: 1);
+      final persistence = await CRDTDocumentPersistence.open(
+        document,
+        storage,
+        writeDelay: _now,
+        onError: (_, __) {},
+      );
+
+      text.insert(0, 'a');
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+      expect(
+        persistence.hasUnwrittenChanges,
+        isTrue,
+        reason: 'the first write failed',
+      );
+
+      // Nothing is called here. A document that goes quiet after a failure
+      // would otherwise keep its changes in memory and nowhere else.
+      await Future<void>.delayed(const Duration(milliseconds: 500));
+
+      expect(persistence.hasUnwrittenChanges, isFalse);
+      expect(await storage.changes.count, 1);
+      await persistence.dispose();
     });
 
     test('a write that keeps failing leaves the changes waiting', () async {
@@ -443,5 +588,55 @@ class _FailingChangeStorage extends InMemoryChangeStorage {
       throw StateError('disk full');
     }
     return super.saveChanges(changes);
+  }
+}
+
+/// A storage that counts how often its snapshots are read back.
+class _CountingSnapshotStorage extends InMemorySnapshotStorage {
+  _CountingSnapshotStorage(super.documentId);
+
+  /// How many times [getSnapshots] was called.
+  int reads = 0;
+
+  @override
+  List<Snapshot> getSnapshots() {
+    reads += 1;
+    return super.getSnapshots();
+  }
+}
+
+/// A storage whose next write waits for the test, and then fails.
+class _GatedStorage extends CRDTDocumentStorage {
+  _GatedStorage(String documentId)
+      : super(
+          changes: _GatedChangeStorage(documentId),
+          snapshots: InMemorySnapshotStorage(documentId),
+        );
+
+  /// The change storage, as what it really is.
+  _GatedChangeStorage get gated => changes as _GatedChangeStorage;
+}
+
+class _GatedChangeStorage extends InMemoryChangeStorage {
+  _GatedChangeStorage(super.documentId);
+
+  /// Set by the test to hold the next write open; every write after it lands
+  /// normally.
+  Completer<void>? gate;
+
+  /// Completes once the held write has started.
+  final Completer<void> started = Completer<void>();
+
+  @override
+  Future<void> saveChanges(List<Change> changes) async {
+    final gate = this.gate;
+    if (gate == null) {
+      return super.saveChanges(changes);
+    }
+
+    this.gate = null;
+    started.complete();
+    await gate.future;
+    throw StateError('disk full');
   }
 }

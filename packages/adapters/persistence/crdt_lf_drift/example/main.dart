@@ -6,44 +6,36 @@ import 'package:crdt_lf/crdt_lf.dart';
 import 'package:crdt_lf_drift/crdt_lf_drift.dart';
 
 Future<void> main() async {
-  const changesToInsert = 3;
-  final documentId = PeerId.parse('784ff372-6f0a-4fe9-8e63-19b72fd18c23');
+  const itemsToAdd = 3;
+  const documentId = '784ff372-6f0a-4fe9-8e63-19b72fd18c23';
 
   // Resolve the database next to this script so the example works regardless
   // of the current working directory.
   final dbLocation =
       '${io.File.fromUri(io.Platform.script).parent.path}/crdt_example.db';
 
-  final storage = CRDTDrift.open(io.File(dbLocation));
-  final changeStorage = storage.changeStorageForDocument(
-    documentId.toString(),
-  );
+  final backend = CRDTDrift.open(io.File(dbLocation));
 
-  final changesToSave = <Change>[];
+  // Reads the database into a document and follows it: everything written from
+  // here on is stored without another line of code. The identity comes from
+  // the backend too, so every run is the same author.
+  final note = await backend.openDocument(documentId);
+  final list = CRDTListHandler<String>(note.document, 'list');
 
-  final document = CRDTDocument(peerId: documentId)
-    ..importChanges(await changeStorage.getChanges())
-    ..localChanges.listen(changesToSave.add);
-  final list = CRDTListHandler<String>(document, 'list');
+  print('read back: ${list.value}');
 
   final length = list.value.length;
-
-  for (var i = length; i < length + changesToInsert; i++) {
+  for (var i = length; i < length + itemsToAdd; i++) {
     list.insert(i, 'Item $i');
   }
 
-  print('${document.exportChanges().length} changes ');
-  print('${list.value}');
+  // Writes what is still waiting. Without it the process could end before the
+  // delayed write runs.
+  await note.persistence.dispose();
+  note.document.dispose();
 
-  await Future<void>.delayed(const Duration(seconds: 1));
+  print('now: ${list.value}');
+  print('documents in the database: ${(await backend.documentIds).length}');
 
-  print('${changesToSave.length} changes to save');
-
-  await changeStorage.saveChanges(changesToSave);
-
-  print('changes saved');
-
-  await storage.close();
-
-  print('database closed');
+  await backend.close();
 }

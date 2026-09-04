@@ -12,15 +12,13 @@ Future<void> main() async {
   Hive.init(dbLocation);
   CRDTHive.initialize();
 
-  final document = CRDTDocument(documentId: documentId);
-  final list = CRDTListHandler<String>(document, 'list');
+  final backend = await CRDTHive.open();
 
-  // Reads the boxes into the document, then follows it: everything written
-  // from here on is stored without another line of code.
-  final persistence = await CRDTDocumentPersistence.open(
-    document,
-    await CRDTHive.openStorageForDocument(documentId),
-  );
+  // Reads the boxes into a document and follows it: everything written from
+  // here on is stored without another line of code. The identity comes from
+  // the backend too, so every run is the same author.
+  final note = await backend.openDocument(documentId);
+  final list = CRDTListHandler<String>(note.document, 'list');
 
   print('read back: ${list.value}');
 
@@ -31,9 +29,12 @@ Future<void> main() async {
 
   // Writes what is still waiting. Without it the process could end before the
   // delayed write runs.
-  await persistence.dispose();
-  document.dispose();
-  await CRDTHive.closeAllBoxes();
+  await note.persistence.dispose();
+  note.document.dispose();
 
   print('now: ${list.value}');
+  print('documents in the database: ${(await backend.documentIds).length}');
+
+  await backend.close();
+  await CRDTHive.closeAllBoxes();
 }

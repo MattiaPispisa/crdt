@@ -1,3 +1,4 @@
+import 'package:crdt_lf_persistence/crdt_lf_persistence.dart';
 import 'package:crdt_lf_sqlite/src/schema.dart';
 import 'package:crdt_lf_sqlite/src/storage/change_storage.dart';
 import 'package:crdt_lf_sqlite/src/storage/document_storage.dart';
@@ -13,13 +14,25 @@ import 'package:sqlite3/sqlite3.dart' as sq;
 /// the same tables and is isolated through an indexed `document_id` column, so
 /// you can persist any number of documents in a single database file.
 ///
+/// It is the [CRDTStorageBackend] of this adapter: it lists the documents it
+/// holds, hands out the storages of each one, and deletes one whole.
+///
 /// ```dart
-/// final storage = CRDTSqlite.open('app.db');
-/// final changes = storage.changeStorageForDocument('doc-1');
-/// ...
-/// storage.close();
+/// final backend = CRDTSqlite.open('app.db');
+///
+/// for (final documentId in backend.documentIds) {
+///   final note = backend.readDocument(documentId);
+///   // ...show it in a list
+/// }
+///
+/// final open = await backend.openDocument('doc-1');
+///
+/// backend.close();
 /// ```
-class CRDTSqlite {
+///
+/// sqlite3 is synchronous, so every method here answers without ever
+/// suspending and says so in its return type.
+class CRDTSqlite implements CRDTStorageBackend {
   CRDTSqlite._(this.database);
 
   /// Opens (creating it if necessary) the SQLite database at [path] and
@@ -54,6 +67,18 @@ class CRDTSqlite {
     database.execute(createSchemaSql);
   }
 
+  @override
+  Set<String> get documentIds {
+    // The three tables, so a document that has only an identity — added and
+    // never written to — is listed as well.
+    final rows = database.select(
+      'SELECT document_id FROM $changesTable '
+      'UNION SELECT document_id FROM $snapshotsTable '
+      'UNION SELECT document_id FROM $peersTable',
+    );
+    return {for (final row in rows) row['document_id'] as String};
+  }
+
   /// Creates a [CRDTSqliteChangeStorage] scoped to [documentId].
   CRDTSqliteChangeStorage changeStorageForDocument(String documentId) {
     return CRDTSqliteChangeStorage(database, documentId);
@@ -73,12 +98,14 @@ class CRDTSqlite {
   /// final peerId = database.peerIdStorageForDocument('doc-1').loadOrCreate();
   /// final document = CRDTDocument(documentId: 'doc-1', peerId: peerId);
   /// ```
+  @override
   CRDTSqlitePeerIdStorage peerIdStorageForDocument(String documentId) {
     return CRDTSqlitePeerIdStorage(database, documentId);
   }
 
   /// Creates both change and snapshot storage for [documentId], bundled in a
   /// [CRDTSqliteDocumentStorage].
+  @override
   CRDTSqliteDocumentStorage storageForDocument(String documentId) {
     return CRDTSqliteDocumentStorage(
       database: database,
@@ -92,7 +119,8 @@ class CRDTSqlite {
   /// Use with caution as this operation cannot be undone. The three deletes
   /// go in one transaction, so the document never comes back as a half of
   /// itself.
-  void deleteDocumentData(String documentId) {
+  @override
+  void deleteDocument(String documentId) {
     runInTransaction(database, () {
       database
         ..execute(
@@ -111,6 +139,9 @@ class CRDTSqlite {
   }
 
   /// Closes the underlying database and releases its resources.
+  ///
+  /// Closing twice is not an error: `sqlite3` ignores the second call.
+  @override
   void close() {
     database.close();
   }

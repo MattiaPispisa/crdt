@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:crdt_lf/crdt_lf.dart';
 import 'package:crdt_lf_persistence/crdt_lf_persistence.dart';
 import 'package:persistence_conformance/src/fixtures.dart';
@@ -77,6 +79,38 @@ void runDocumentStorageConformanceTests({
         await dispose?.call(each);
       }
       opened.clear();
+    });
+
+    group('copying', () {
+      test('copyDocument carries a whole document to another storage',
+          () async {
+        final changes = fixtures.everyHandler();
+        final snapshot = fixtures.snapshot();
+        await storage.changes.saveChanges(changes);
+        await storage.snapshots.saveSnapshot(snapshot);
+
+        final other = await openStorage('$documentId-copy');
+        await storage.copyTo(other);
+
+        expect(await other.changes.count, changes.length);
+        expect((await other.snapshots.getSnapshots()).single.id, snapshot.id);
+
+        final rebuilt = await other.readDocument();
+        ConformanceFixtures.expectEveryHandler(
+          rebuilt,
+          (actual, expected) => expect(actual, expected),
+        );
+      });
+
+      test('copying twice leaves what copying once left', () async {
+        await storage.changes.saveChanges(fixtures.changes(3));
+
+        final other = await openStorage('$documentId-copy');
+        await storage.copyTo(other);
+        await storage.copyTo(other);
+
+        expect(await other.changes.count, 3);
+      });
     });
 
     group('changes', () {
@@ -543,6 +577,178 @@ void runDocumentStorageConformanceTests({
           (await reopened.snapshots.getSnapshots()).single.toBytes(),
           snapshot.toBytes(),
         );
+      });
+    }
+  });
+}
+
+
+/// Checks a [CRDTStorageBackend] implementation against the contract every
+/// adapter has to keep.
+///
+/// The other half of [runDocumentStorageConformanceTests]: that one checks
+/// what holds one document, this one checks what holds the documents.
+///
+/// ```dart
+/// void main() {
+///   runStorageBackendConformanceTests(
+///     name: 'CRDTSqlite',
+///     open: () => CRDTSqlite.memory(),
+///   );
+/// }
+/// ```
+///
+/// [open] returns a fresh, empty backend. Pass [reopen] as well for a backend
+/// that can be closed and opened again on the same data — it is what checks
+/// that [CRDTStorageBackend.documentIds] survives a restart, and it is skipped
+/// without it.
+void runStorageBackendConformanceTests({
+  required String name,
+  required FutureOr<CRDTStorageBackend> Function() open,
+  FutureOr<CRDTStorageBackend> Function(CRDTStorageBackend previous)? reopen,
+}) {
+  group('$name backend conformance', () {
+    late CRDTStorageBackend backend;
+    late ConformanceFixtures fixtures;
+
+    setUp(() async {
+      backend = await open();
+      fixtures = ConformanceFixtures('doc-a');
+    });
+
+    tearDown(() async {
+      await backend.close();
+    });
+
+    /// Stores one change under [documentId], so the document exists.
+    Future<void> write(String documentId) async {
+      final storage = await backend.storageForDocument(documentId);
+      await storage.changes.saveChanges(fixtures.changes(1));
+    }
+
+    test('an empty backend holds no documents', () async {
+      expect(await backend.documentIds, isEmpty);
+    });
+
+    test('a document is listed once something of it is stored', () async {
+      await write('doc-a');
+
+      expect(await backend.documentIds, {'doc-a'});
+    });
+
+    test('a document whose only trace is its identity is listed too',
+        () async {
+      final peers = await backend.peerIdStorageForDocument('doc-a');
+      await peers.savePeerId(PeerId.generate());
+
+      expect(
+        await backend.documentIds,
+        {'doc-a'},
+        reason: 'a document that was opened and never written to still exists',
+      );
+    });
+
+    test('asking twice gives a storage that reads the first one back',
+        () async {
+      await write('doc-a');
+
+      final again = await backend.storageForDocument('doc-a');
+
+      expect(await again.changes.count, 1);
+    });
+
+    test('the storage of a document is scoped to that document', () async {
+      await write('doc-a');
+
+      final other = await backend.storageForDocument('doc-b');
+
+      expect(await other.changes.count, 0);
+      expect(other.documentId, 'doc-b');
+    });
+
+    test('every document keeps its own identity', () async {
+      final a = await backend.peerIdStorageForDocument('doc-a');
+      final b = await backend.peerIdStorageForDocument('doc-b');
+      final id = PeerId.generate();
+      await a.savePeerId(id);
+
+      expect(await a.getPeerId(), id);
+      expect(await b.getPeerId(), isNull);
+    });
+
+    test('deleteDocument removes the changes, the snapshots and the identity',
+        () async {
+      final storage = await backend.storageForDocument('doc-a');
+      await storage.changes.saveChanges(fixtures.changes(2));
+      await storage.snapshots.saveSnapshot(fixtures.snapshot());
+      final peers = await backend.peerIdStorageForDocument('doc-a');
+      await peers.savePeerId(PeerId.generate());
+
+      await backend.deleteDocument('doc-a');
+
+      expect(await backend.documentIds, isEmpty);
+      final after = await backend.storageForDocument('doc-a');
+      expect(await after.changes.count, 0);
+      expect(await after.snapshots.count, 0);
+      expect(
+        await (await backend.peerIdStorageForDocument('doc-a')).getPeerId(),
+        isNull,
+      );
+    });
+
+    test('deleteDocument leaves the other documents alone', () async {
+      await write('doc-a');
+      await write('doc-b');
+
+      await backend.deleteDocument('doc-a');
+
+      expect(await backend.documentIds, {'doc-b'});
+      expect(
+        await (await backend.storageForDocument('doc-b')).changes.count,
+        1,
+      );
+    });
+
+    test('deleting a document that is not there is not an error', () async {
+      await backend.deleteDocument('never-existed');
+    });
+
+    test('close is not an error the second time', () async {
+      await backend.close();
+      await backend.close();
+    });
+
+    test('a document moves to another backend whole', () async {
+      final storage = await backend.storageForDocument('doc-a');
+      await storage.changes.saveChanges(fixtures.everyHandler());
+      final peers = await backend.peerIdStorageForDocument('doc-a');
+      final identity = PeerId.generate();
+      await peers.savePeerId(identity);
+
+      final other = await open();
+      addTearDown(() async => other.close());
+      await backend.copyDocumentTo(other, 'doc-a');
+
+      expect(await other.documentIds, contains('doc-a'));
+      expect(
+        await (await other.peerIdStorageForDocument('doc-a')).getPeerId(),
+        identity,
+      );
+      ConformanceFixtures.expectEveryHandler(
+        await other.readDocument('doc-a'),
+        (actual, expected) => expect(actual, expected),
+      );
+    });
+
+    if (reopen != null) {
+      test('the documents are still listed after a reopen', () async {
+        await write('doc-a');
+        await write('doc-b');
+        await backend.close();
+
+        backend = await reopen(backend);
+
+        expect(await backend.documentIds, {'doc-a', 'doc-b'});
       });
     }
   });

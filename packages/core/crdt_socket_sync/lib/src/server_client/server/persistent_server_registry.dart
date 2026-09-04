@@ -22,32 +22,32 @@ typedef ServerSnapshot = ({String documentId, Snapshot snapshot});
 ///
 /// ```dart
 /// final registry = PersistentServerRegistry(
-///   openStorage: CRDTHive.openStorageForDocument,
-///   openPeerIdStorage: CRDTHive.openPeerIdStorageForDocument,
-///   catalog: myCatalog,
+///   backend: await CRDTHive.open(),
 ///   compactAfter: 500,
 /// );
 /// ```
 ///
 /// Documents are opened lazily: a document costs nothing until something asks
-/// for it, and a server with ten thousand rooms holds only the live ones.
+/// for it. Getting one **out** of memory is the other half, and it does not
+/// happen on its own — call [releaseDocument] when a room empties, or pass
+/// `idleAfter` and let the registry do it. Without either, a server holds
+/// every document it has ever been asked for.
 ///
 /// Call [close] on shutdown. It flushes every open document.
 class PersistentServerRegistry implements CRDTServerRegistry {
-  /// Creates a registry that stores its documents through [openStorage].
+  /// Creates a registry that stores its documents in [backend].
   ///
-  /// [openStorage] is asked once per document, the first time that document is
-  /// needed. An adapter's `openStorageForDocument` fits it directly.
+  /// [backend] is an adapter's `CRDTHive`, `CRDTDrift` or `CRDTSqlite`. It is
+  /// asked for a document's storages the first time that document is needed,
+  /// and for the identity the server writes it under — so a restarted server
+  /// is the same author it was before, instead of growing every document's
+  /// version vector by an entry that never leaves.
   ///
-  /// [catalog] is where the document ids live between restarts. Without one
-  /// the ids are kept in memory only: the documents stay on disk, but the
-  /// server forgets they exist. See [ServerDocumentCatalog].
-  ///
-  /// [openPeerIdStorage] gives the server a stable identity per document.
-  /// Without it a restarted server writes under a new [PeerId] and the
-  /// document's version vector gains an entry that never leaves. Pass it
-  /// unless the server never authors anything. The `author` of [addDocument]
-  /// is then the identity of a document that has none yet, and it is stored.
+  /// [catalog] is what answers `documentIds`, `hasDocument` and
+  /// `documentCount`. It defaults to a [BackendDocumentCatalog] over
+  /// [backend], which is what makes the server find its documents again after
+  /// a restart. Pass an [InMemoryServerDocumentCatalog] for a server that
+  /// should start empty and fill up as clients name their documents.
   ///
   /// [writeDelay] is how long a change waits for the ones after it, so a burst
   /// of edits is one write instead of twenty. It leaves a window where a change
@@ -58,30 +58,38 @@ class PersistentServerRegistry implements CRDTServerRegistry {
   /// [compactAfter] snapshots and prunes a document once its store holds more
   /// than that many changes. Leave it `null` to keep the whole log.
   ///
+  /// [idleAfter] releases a document that nothing has asked for in that long,
+  /// the way [releaseDocument] does. Leave it `null` and a document stays open
+  /// until [releaseDocument] or [close] is called. See [releaseDocument] for
+  /// the one race it has, and why the explicit call does not.
+  ///
   /// [onError] is called when a write fails. Without it a failed write is
-  /// silent; what it carried stays queued and the next flush tries again.
+  /// silent; what it carried stays queued and the next flush tries again. It
+  /// also reports a release that failed to write what it was holding.
   PersistentServerRegistry({
-    required FutureOr<CRDTDocumentStorage> Function(String documentId)
-        openStorage,
+    required CRDTStorageBackend backend,
     ServerDocumentCatalog? catalog,
-    FutureOr<CRDTPeerIdStorage> Function(String documentId)? openPeerIdStorage,
     Duration writeDelay = const Duration(milliseconds: 250),
     int? compactAfter,
+    Duration? idleAfter,
     void Function(Object error, StackTrace stack)? onError,
-  })  : _openStorage = openStorage,
-        _openPeerIdStorage = openPeerIdStorage,
-        _catalog = catalog ?? InMemoryServerDocumentCatalog(),
+  })  : _backend = backend,
+        _catalog = catalog ?? BackendDocumentCatalog(backend),
         _writeDelay = writeDelay,
         _compactAfter = compactAfter,
+        _idleAfter = idleAfter,
         _onError = onError;
 
-  final FutureOr<CRDTDocumentStorage> Function(String documentId) _openStorage;
-  final FutureOr<CRDTPeerIdStorage> Function(String documentId)?
-      _openPeerIdStorage;
+  final CRDTStorageBackend _backend;
   final ServerDocumentCatalog _catalog;
   final Duration _writeDelay;
   final int? _compactAfter;
+  final Duration? _idleAfter;
   final void Function(Object error, StackTrace stack)? _onError;
+
+  /// The countdown to the release of each open document, when `idleAfter` is
+  /// set.
+  final Map<String, Timer> _idleTimers = <String, Timer>{};
 
   /// The documents that are open, and the ones being opened.
   ///
@@ -104,15 +112,20 @@ class PersistentServerRegistry implements CRDTServerRegistry {
   /// The catalog this registry keeps its document ids in.
   ServerDocumentCatalog get catalog => _catalog;
 
+  /// Where this registry keeps its documents.
+  CRDTStorageBackend get backend => _backend;
+
   @override
   Future<void> addDocument(String documentId, {PeerId? author}) async {
     if (await hasDocument(documentId)) {
       return;
     }
-    await _catalog.add(documentId);
     // Opened now rather than on the first read, so a document that was just
-    // added is already following its storage when the first change lands.
+    // added is already following its storage when the first change lands —
+    // and before the catalog, because a catalog that stores identities would
+    // mint one first, and a stored id always beats the [author] handed in.
     await _openDocument(documentId, author: author);
+    await _catalog.add(documentId);
   }
 
   @override
@@ -195,16 +208,41 @@ class PersistentServerRegistry implements CRDTServerRegistry {
   /// Forgets [documentId]: flushes it, closes it, and drops it from the
   /// catalog.
   ///
-  /// What the backend holds is left alone. Deleting rows is the adapter's job,
-  /// and a caller that wants the bytes gone calls the adapter after this.
+  /// **With the default catalog this deletes what the document holds** — see
+  /// [BackendDocumentCatalog]. Use [releaseDocument] to get a document out of
+  /// memory and keep it on disk.
   @override
   Future<void> removeDocument(String documentId) async {
-    final opening = _open.remove(documentId);
-    if (opening != null) {
-      final open = await opening;
-      await open.dispose();
-    }
+    await releaseDocument(documentId);
     await _catalog.remove(documentId);
+  }
+
+  /// Writes what [documentId] is holding, closes it, and lets go of it.
+  ///
+  /// The other half of the lazy open. A document stays in memory once it has
+  /// been asked for, so a server that never calls this holds every room it has
+  /// ever served. Call it when the last client of a room disconnects.
+  ///
+  /// The id stays in the catalog — the document is still served, it is just
+  /// not in memory. That is what separates this from [removeDocument]. The
+  /// next [getDocument] reads it back from the storage.
+  ///
+  /// Nothing here is lost: the persistence flushes before the storage closes.
+  ///
+  /// One rule: **the document must not be in use.** This disposes it, and a
+  /// caller holding the [CRDTDocument] a previous [getDocument] handed back
+  /// would be writing into a disposed one. Every session in this package
+  /// re-reads through [getDocument], so calling this between two requests is
+  /// safe; `idleAfter` takes the same risk on a timer, which is why it should
+  /// be far longer than a request takes.
+  Future<void> releaseDocument(String documentId) async {
+    _idleTimers.remove(documentId)?.cancel();
+
+    final opening = _open.remove(documentId);
+    if (opening == null) {
+      return;
+    }
+    await (await opening).dispose();
   }
 
   /// Flushes and closes every open document.
@@ -212,6 +250,11 @@ class PersistentServerRegistry implements CRDTServerRegistry {
   /// The catalog is left as it is: it describes what this server serves, and
   /// that is still true after a shutdown.
   Future<void> close() async {
+    for (final timer in _idleTimers.values) {
+      timer.cancel();
+    }
+    _idleTimers.clear();
+
     final opening = List<Future<_OpenDocument>>.of(_open.values);
     _open.clear();
     for (final open in opening) {
@@ -222,6 +265,8 @@ class PersistentServerRegistry implements CRDTServerRegistry {
 
   /// The open document for [documentId], opening it if this is the first ask.
   Future<_OpenDocument> _openDocument(String documentId, {PeerId? author}) {
+    _touch(documentId);
+
     return _open.putIfAbsent(
       documentId,
       () => _restore(documentId, author).catchError(
@@ -236,57 +281,56 @@ class PersistentServerRegistry implements CRDTServerRegistry {
   }
 
   Future<_OpenDocument> _restore(String documentId, PeerId? author) async {
-    final peerId = await _peerIdFor(documentId, author);
-    final document = CRDTDocument(documentId: documentId, peerId: peerId);
-
-    // Only the snapshots this document takes. The restore below merges the
-    // stored one back in, and that is not news anybody is waiting for.
-    final subscription = document.events.listen((event) {
-      if (event is DocumentSnapshotUpdated &&
-          event.reason == SnapshotReason.taken) {
-        _snapshots.add((documentId: documentId, snapshot: event.snapshot));
-      }
-    });
+    StreamSubscription<CRDTDocumentEvent>? subscription;
 
     try {
-      final persistence = await CRDTDocumentPersistence.open(
-        document,
-        await _openStorage(documentId),
+      final open = await _backend.openDocument(
+        documentId,
+        author: author,
+        // Only the snapshots this document takes. The restore that follows
+        // merges the stored one back in, and that is not news anybody is
+        // waiting for.
+        onDocument: (document) {
+          subscription = document.events.listen((event) {
+            if (event is DocumentSnapshotUpdated &&
+                event.reason == SnapshotReason.taken) {
+              _snapshots.add(
+                (documentId: documentId, snapshot: event.snapshot),
+              );
+            }
+          });
+        },
         writeDelay: _writeDelay,
         compactAfter: _compactAfter,
         onError: _onError,
       );
-      return _OpenDocument(document, persistence, subscription);
+      return _OpenDocument(open.document, open.persistence, subscription!);
     } catch (_) {
-      await subscription.cancel();
-      document.dispose();
+      // The document itself is disposed by [CRDTStorageBackendDocuments
+      // .openDocument]; this subscription is the one thing it does not know
+      // about.
+      await subscription?.cancel();
       rethrow;
     }
   }
 
-  /// The identity [documentId] is written under.
-  ///
-  /// A stored id wins over [author]: it is what the document already wrote
-  /// under, and writing under a second one would make this server look like
-  /// two peers. [author] is the seed for a document that has none yet, and it
-  /// is stored, so the next restart finds it.
-  Future<PeerId> _peerIdFor(String documentId, PeerId? author) async {
-    final open = _openPeerIdStorage;
-    if (open == null) {
-      return author ?? PeerId.generate();
+  /// Restarts the idle countdown of [documentId], if there is one.
+  void _touch(String documentId) {
+    final idleAfter = _idleAfter;
+    if (idleAfter == null) {
+      return;
     }
 
-    final storage = await open(documentId);
-    if (author == null) {
-      return storage.loadOrCreate();
-    }
-
-    final stored = await storage.getPeerId();
-    if (stored != null) {
-      return stored;
-    }
-    await storage.savePeerId(author);
-    return author;
+    _idleTimers.remove(documentId)?.cancel();
+    _idleTimers[documentId] = Timer(idleAfter, () async {
+      try {
+        await releaseDocument(documentId);
+      } catch (error, stack) {
+        // A release writes before it closes, so it fails for the reason any
+        // write fails. Reported where every other write failure is.
+        _onError?.call(error, stack);
+      }
+    });
   }
 }
 

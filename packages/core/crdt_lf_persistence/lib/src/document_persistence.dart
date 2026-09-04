@@ -1,7 +1,19 @@
 import 'dart:async';
+import 'dart:math';
 
 import 'package:crdt_lf/crdt_lf.dart';
 import 'package:crdt_lf_persistence/crdt_lf_persistence.dart';
+
+/// How long the first retry after a failed write waits.
+///
+/// It doubles per consecutive failure, up to [_maxRetryDelay]. It does not
+/// follow the `writeDelay` of [CRDTDocumentPersistence.open]: that one can be
+/// [Duration.zero], and retrying a broken disk as fast as the event loop
+/// allows helps nobody.
+const _firstRetryDelay = Duration(milliseconds: 250);
+
+/// The longest a retry waits.
+const _maxRetryDelay = Duration(seconds: 30);
 
 /// Keeps a [CRDTDocument] on disk as it changes.
 ///
@@ -177,6 +189,19 @@ class CRDTDocumentPersistence {
   /// How many changes the store holds, for the `compactAfter` of [open].
   int _stored = 0;
 
+  /// The snapshot that is on the disk right now, or `null` when there is none.
+  ///
+  /// Kept here so replacing it costs no read: a snapshot is the biggest blob
+  /// of the store, and reading every one of them back to learn an id would
+  /// decode the whole previous document state on each write.
+  String? _snapshotOnDisk;
+
+  /// How many writes failed in a row, for the backoff of [_scheduleRetry].
+  int _failures = 0;
+
+  /// [dispose] has run, so nothing must arm a timer any more.
+  bool _disposed = false;
+
   Timer? _timer;
 
   /// A write already running, so two never overlap.
@@ -214,8 +239,22 @@ class CRDTDocumentPersistence {
       return;
     }
 
+    final newest = newestSnapshot(snapshots);
+    _snapshotOnDisk = newest?.id;
+    if (snapshots.length > 1) {
+      // A process killed between the write of a snapshot and the delete of the
+      // one before it left both here. The loser describes a state the winner
+      // already covers, so it costs disk and nothing else.
+      _enqueue(
+        () => storage.snapshots.deleteSnapshots([
+          for (final snapshot in snapshots)
+            if (snapshot.id != newest!.id) snapshot.id,
+        ]),
+      );
+    }
+
     _document.import(
-      snapshot: newestSnapshot(snapshots),
+      snapshot: newest,
       changes: changes,
       merge: true,
       pruneHistory: false,
@@ -239,12 +278,16 @@ class CRDTDocumentPersistence {
         }
         _enqueue(() => _writeSnapshot(event.snapshot));
       case DocumentHistoryPruned():
-        _prunePending(event.removed, event.rewritten);
         _enqueue(() => _writePrune(event.removed, event.rewritten));
     }
   }
 
   /// Applies the prune to the queue as well as to the store.
+  ///
+  /// Called from [_writePrune], not from [_onEvent]: by then every write that
+  /// was in flight has settled, error handler included. A write that failed
+  /// puts its batch back in the queue, and a batch put back after this ran
+  /// would carry a pruned change past the delete meant to remove it.
   ///
   /// A change pruned before it was ever written is still waiting here. Left
   /// alone it would be written **after** the delete meant to remove it, and
@@ -287,7 +330,35 @@ class CRDTDocumentPersistence {
 
   void _report(Object error, StackTrace stack) {
     _failed = true;
+    _failures++;
     _onError?.call(error, stack);
+    _scheduleRetry();
+  }
+
+  /// Arms the timer again after a failed write.
+  ///
+  /// Without this a document that goes quiet after a failure keeps its changes
+  /// in memory only: the timer of [_onEvent] is armed by an event, and no
+  /// event is coming. The wait doubles per consecutive failure up to
+  /// [_maxRetryDelay], so a disk that is gone is not asked again every
+  /// quarter second.
+  void _scheduleRetry() {
+    if (_disposed || _pending.isEmpty || _timer != null) {
+      return;
+    }
+
+    // Capped before the shift, so the doubling cannot overflow on a storage
+    // that has been failing for a long time.
+    final doublings = min(_failures - 1, 16);
+    _timer = Timer(
+      Duration(
+        microseconds: min(
+          _firstRetryDelay.inMicroseconds * (1 << doublings),
+          _maxRetryDelay.inMicroseconds,
+        ),
+      ),
+      _flush,
+    );
   }
 
   /// Writes what is waiting, now, and waits for it.
@@ -378,6 +449,7 @@ class CRDTDocumentPersistence {
   }
 
   void _afterWrite(List<Change> batch) {
+    _failures = 0;
     _stored += batch.length;
     _compactIfNeeded();
   }
@@ -405,21 +477,29 @@ class CRDTDocumentPersistence {
   /// at all — and once the history it covers is pruned, that state has nowhere
   /// else to come from.
   ///
-  /// All three steps go in one [CRDTDocumentStorage.transaction]. The order
-  /// still stands inside it: a backend without transactions runs them as they
-  /// are written and depends on it.
+  /// Both steps go in one [CRDTDocumentStorage.transaction]. The order still
+  /// stands inside it: a backend without transactions runs them as they are
+  /// written and depends on it.
+  ///
+  /// Which snapshot to replace is read from [_snapshotOnDisk] rather than from
+  /// the storage: asking the storage would decode the whole previous state to
+  /// learn one id. The field is moved only once the transaction has landed, so
+  /// a rollback leaves it naming what is really there.
   FutureOr<void> _writeSnapshot(Snapshot snapshot) {
-    return storage.transaction<void>(
-      () => storage.snapshots.getSnapshots().chain((stored) {
-        final stale =
-            stored.map((s) => s.id).where((id) => id != snapshot.id).toList();
+    final stale = _snapshotOnDisk;
 
-        return storage.snapshots
-            .saveSnapshot(snapshot)
-            .chain((_) => storage.snapshots.deleteSnapshots(stale))
-            .chain((_) {});
-      }),
-    );
+    return storage
+        .transaction<void>(
+          () => storage.snapshots.saveSnapshot(snapshot).chain((_) {
+            if (stale == null || stale == snapshot.id) {
+              return null;
+            }
+            return storage.snapshots.deleteSnapshots([stale]).chain((_) {});
+          }),
+        )
+        .chain((_) {
+          _snapshotOnDisk = snapshot.id;
+        });
   }
 
   /// Drops what the prune removed, and writes the survivors again.
@@ -431,6 +511,8 @@ class CRDTDocumentPersistence {
   /// has transactions never leaves a survivor with its old bytes next to a
   /// dependency that is already gone.
   FutureOr<void> _writePrune(List<Change> removed, List<Change> rewritten) {
+    _prunePending(removed, rewritten);
+
     return storage
         .transaction<void>(
           () => storage.changes
@@ -444,6 +526,25 @@ class CRDTDocumentPersistence {
         );
   }
 
+  /// Snapshots the document, drops the history the snapshot covers, and waits
+  /// for both to reach the disk.
+  ///
+  /// What the `compactAfter` of [open] does on its own, on demand: a "save and
+  /// compact" button, or the moment an app goes to the background. The log
+  /// stops growing, and the next open reads one snapshot instead of every
+  /// change ever written.
+  ///
+  /// It costs what a prune costs: **every [CRDTUndoManager] on the document
+  /// loses its stacks.** In an editor undo usually matters more than a short
+  /// log, so compact where the user cannot be in the middle of something.
+  ///
+  /// Returns the snapshot that was written.
+  Future<Snapshot> compact() async {
+    final snapshot = _document.takeSnapshot();
+    await flush();
+    return snapshot;
+  }
+
   /// Writes what is still waiting and stops following the document.
   ///
   /// It does not close [storage]: the caller opened it, and on a backend that
@@ -455,6 +556,9 @@ class CRDTDocumentPersistence {
   /// the disk.
   Future<void> dispose() async {
     await flush();
+    _disposed = true;
+    _timer?.cancel();
+    _timer = null;
     await _subscription?.cancel();
     _subscription = null;
   }

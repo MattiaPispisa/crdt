@@ -27,7 +27,9 @@ class ConformanceFixtures {
   List<Change> changes(int count) {
     final before = document.exportChanges().length;
     for (var i = 0; i < count; i++) {
-      text.insert(text.value.length, 'a🌍$i');
+      // `text.length`, not `text.value.length`: the text is indexed by rune
+      // and 🌍 is two code units, so the string length would overshoot.
+      text.insert(text.length, 'a🌍$i');
     }
     final all = document.exportChanges()..sort((a, b) => a.id.compareTo(b.id));
     return all.sublist(before);

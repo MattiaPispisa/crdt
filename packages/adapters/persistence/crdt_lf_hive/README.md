@@ -93,19 +93,46 @@ final snapshotStorage = await CRDTHive.openSnapshotStorageForDocument(documentId
 final documentStorage = await CRDTHive.openStorageForDocument(documentId);
 ```
 
-## Keeping a whole document on disk
+## Many documents in one place
 
-Most apps do not call these methods by hand. Hand the storage to
-`CRDTDocumentPersistence` instead: it reads the document back, then follows it
-and writes down what moves.
+`CRDTHive` is a `CRDTStorageBackend`: it lists the documents it holds, hands out
+the storages of each one, and deletes one whole. Code written against that
+interface runs on any adapter, so an app can change backend without changing
+anything but the line that opens it.
 
 ```dart
-final document = CRDTDocument(documentId: documentId);
-final persistence = await CRDTDocumentPersistence.open(
-  document,
-  await CRDTHive.openStorageForDocument(documentId),
-);
+CRDTHive.initialize();
+final backend = await CRDTHive.open();
+
+for (final documentId in await backend.documentIds) {
+  final note = await backend.readDocument(documentId);
+  // ...show it in a list
+}
+
+await backend.deleteDocument('doc-123'); // changes, snapshots and identity
+await backend.close();
 ```
+
+> Hive cannot list its boxes, and this adapter gives every document a box of
+> its own, so `CRDTHive.open()` keeps a small registry box (`documents` by
+> default). A document costs one extra row, written the first time it is
+> opened. A document stored before this registry existed is not on the list
+> until it is opened once — its data is untouched either way.
+
+## Keeping a whole document on disk
+
+Most apps do not call these methods by hand. `openDocument` reads the document
+back — its stored identity included — and follows it from there:
+
+```dart
+final note = await backend.openDocument(documentId);
+final text = CRDTFugueTextHandler(note.document, 'body');
+```
+
+Everything written from there on is stored. The backend has the read-only half
+too: `readDocument(id)` for a preview or a list, `documentAt(id, version)` for
+the document as it was, `copyDocumentTo(other, id)` for a backup or a move to
+another adapter.
 
 It comes from [`crdt_lf_persistence`](https://pub.dev/packages/crdt_lf_persistence),
 which this package re-exports. See that README for the offline-first rules.
@@ -240,7 +267,7 @@ This ensures each document has isolated storage while allowing custom box name p
 await CRDTHive.closeAllBoxes();
 
 // Delete all data for a specific document
-await CRDTHive.deleteDocumentData('doc-123');
+await backend.deleteDocument('doc-123');
 
 // Delete a specific box
 await CRDTHive.deleteBox('changes_doc-123');

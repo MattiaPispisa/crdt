@@ -32,6 +32,14 @@ void main() {
   // Drift warns when the same file is opened twice at once, so never two.
   CRDTDrift? database;
 
+  // Drift warns when the same file is opened twice at once, so the backend
+  // suite gets a file of its own per test.
+  runStorageBackendConformanceTests(
+    name: 'CRDTDrift',
+    open: () => CRDTDrift.open(File('$dbPath-backend')),
+    reopen: (_) => CRDTDrift.open(File('$dbPath-backend')),
+  );
+
   runDocumentStorageConformanceTests(
     name: 'CRDTDrift',
     atomicTransactions: true,
@@ -103,7 +111,7 @@ void main() {
       await wrapped.close();
     });
 
-    test('deleteDocumentData removes only the target document', () async {
+    test('deleteDocument removes only the target document', () async {
       final a = storage.storageForDocument('doc-a');
       final b = storage.storageForDocument('doc-b');
       final id = OperationId(PeerId.generate(), HybridLogicalClock(l: 5, c: 1));
@@ -120,7 +128,7 @@ void main() {
       );
       await b.changes.saveChange(makeChange(2, 1));
 
-      await storage.deleteDocumentData('doc-a');
+      await storage.deleteDocument('doc-a');
 
       expect(await a.changes.count, 0);
       expect(await a.snapshots.count, 0);

@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:crdt_lf/crdt_lf.dart';
+import 'package:crdt_lf_hive/crdt_lf_hive.dart';
 import 'package:crdt_socket_sync/web_socket_server.dart';
 import 'package:en_logger/en_logger.dart';
 import 'package:crdt_socket_sync_example/src/example_ids.dart';
@@ -14,7 +15,7 @@ final _kDefaultHost = InternetAddress.anyIPv4.host;
 final _kDocumentId = '30669830-9256-4320-9ed5-f1860cd47d9f';
 final _kDocumentPeerId = PeerId.parse('97a6b8b3-fffc-4ebe-8dd4-f94e6a01c52f');
 
-late HiveDocumentCatalog _catalog;
+late CRDTHiveBackend _backend;
 late PersistentServerRegistry _registry;
 late WebSocketServer _server;
 StreamSubscription<ServerSnapshot>? _snapshotBroadcast;
@@ -47,9 +48,10 @@ Future<void> run({
 
   // db initialization
   Hive.init(_kDefaultDbLocation);
-  _catalog = await HiveDocumentCatalog.open();
+  CRDTHive.initialize();
+  _backend = await CRDTHive.open();
   _registry = await openHiveRegistry(
-    catalog: _catalog,
+    backend: _backend,
     logger: logger.getConfiguredInstance(prefix: 'HiveServerRegistry'),
   );
 
@@ -139,7 +141,7 @@ void _setupSigintHandler({required EnLogger logger}) {
     await _server.stop();
     await _snapshotBroadcast?.cancel();
     await _registry.close();
-    await _catalog.close();
+    await _backend.close();
     logger.info('✅ Server stopped.');
     exit(0);
   });

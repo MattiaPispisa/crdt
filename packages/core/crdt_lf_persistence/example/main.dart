@@ -4,44 +4,108 @@
 // `crdt_lf_hive`, `crdt_lf_drift`, `crdt_lf_sqlite` — and never depends on
 // this package directly.
 //
-// So the example does both halves: `_MapStorage` is the smallest thing that
-// keeps the contract, and the `main` below is what your app writes on top of
-// any adapter that keeps it too.
+// So the example does both halves: `_MapBackend` and `_MapStorage` are the
+// smallest thing that keeps the contract, and the `main` below is what your
+// app writes on top of any adapter that keeps it too.
 //
 //     dart run example/main.dart
 import 'package:crdt_lf/crdt_lf.dart';
 import 'package:crdt_lf_persistence/crdt_lf_persistence.dart';
 
 Future<void> main() async {
-  const documentId = 'note';
-  final storage = _MapStorage(documentId);
+  final backend = _MapBackend();
 
   // The first session writes a line.
-  await _session(storage, 'hello 🌍');
+  await _session(backend, 'note', 'hello 🌍');
 
   // The second reads back what the first wrote, and appends to it. In an app
-  // this is the restart: same storage, new document.
-  await _session(storage, ' and again');
+  // this is the restart: same backend, new document.
+  await _session(backend, 'note', ' and again');
 
-  print('stored changes: ${await storage.changes.count}');
+  // A second document, to have something to list.
+  await _session(backend, 'shopping', 'milk');
+
+  print('documents: ${(await backend.documentIds).toList()..sort()}');
+
+  // Reading one without following it: what a list of notes shows.
+  final note = await backend.readDocument('note');
+  print('note reads: ${CRDTFugueTextHandler(note, 'body').value}');
+
+  await backend.deleteDocument('shopping');
+  print('after delete: ${(await backend.documentIds).toList()}');
+
+  await backend.close();
 }
 
-/// Opens a document on [storage], appends [line], and closes down.
-Future<void> _session(CRDTDocumentStorage storage, String line) async {
-  final document = CRDTDocument(documentId: storage.documentId);
-  final text = CRDTFugueTextHandler(document, 'body');
-
-  // Reads the storage into the document, then follows it: everything written
-  // from here on is stored without another line of code.
-  final persistence = await CRDTDocumentPersistence.open(document, storage);
+/// Opens [documentId] on [backend], appends [line], and closes down.
+Future<void> _session(
+  _MapBackend backend,
+  String documentId,
+  String line,
+) async {
+  // Reads the storage into a document and follows it: everything written from
+  // here on is stored without another line of code. The identity comes from
+  // the backend too, so every session is the same author.
+  final open = await backend.openDocument(documentId);
+  // Built after the restore, which reads the same as building it before.
+  final text = CRDTFugueTextHandler(open.document, 'body');
 
   print('read back: ${text.value.isEmpty ? '(empty)' : text.value}');
-  text.insert(text.value.length, line);
+  // `text.length`, not `text.value.length`: the text is indexed by rune and
+  // 🌍 is two code units, so the string length would overshoot the end.
+  text.insert(text.length, line);
 
   // Writes what is still waiting. Without it the process could end before the
   // delayed write runs.
-  await persistence.dispose();
-  document.dispose();
+  await open.persistence.dispose();
+  open.document.dispose();
+}
+
+/// The whole database, kept in a map.
+///
+/// The three things a backend answers: which documents it holds, what each of
+/// them is made of, and how to get rid of one.
+class _MapBackend implements CRDTStorageBackend {
+  final Map<String, _MapStorage> _documents = <String, _MapStorage>{};
+  final Map<String, PeerId> _peers = <String, PeerId>{};
+
+  @override
+  Future<Set<String>> get documentIds async =>
+      <String>{..._documents.keys, ..._peers.keys};
+
+  @override
+  Future<_MapStorage> storageForDocument(String documentId) async =>
+      _documents.putIfAbsent(documentId, () => _MapStorage(documentId));
+
+  @override
+  Future<CRDTPeerIdStorage> peerIdStorageForDocument(String documentId) async =>
+      _MapPeerIdStorage(documentId, _peers);
+
+  @override
+  Future<void> deleteDocument(String documentId) async {
+    _documents.remove(documentId);
+    _peers.remove(documentId);
+  }
+
+  @override
+  Future<void> close() async {}
+}
+
+class _MapPeerIdStorage implements CRDTPeerIdStorage {
+  _MapPeerIdStorage(this.documentId, this._peers);
+
+  @override
+  final String documentId;
+
+  final Map<String, PeerId> _peers;
+
+  @override
+  Future<PeerId?> getPeerId() async => _peers[documentId];
+
+  @override
+  Future<void> savePeerId(PeerId peerId) async {
+    _peers[documentId] = peerId;
+  }
 }
 
 /// The whole contract, kept in a map.

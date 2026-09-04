@@ -128,18 +128,23 @@ class InMemorySnapshotStorage implements CRDTSnapshotStorage {
 
 /// The [CRDTPeerIdStorage] of an [InMemoryDocumentStorage].
 class InMemoryPeerIdStorage implements CRDTPeerIdStorage {
-  /// Creates an empty peer id storage for [documentId].
-  InMemoryPeerIdStorage(this.documentId);
+  /// Creates a peer id storage for [documentId].
+  ///
+  /// [peers] is where the identities are kept. Without it they go in a map
+  /// shared by every instance of this class, so two storages of one process
+  /// see each other's the way two openings of one database would.
+  InMemoryPeerIdStorage(this.documentId, [Map<String, PeerId>? peers])
+      : _peers = peers ?? _shared;
 
-  /// The identities of every document, so two storages of one process share
-  /// them the way two openings of one database would.
-  static final Map<String, PeerId> _peers = <String, PeerId>{};
+  static final Map<String, PeerId> _shared = <String, PeerId>{};
 
-  /// Forgets every stored identity.
-  static void reset() => _peers.clear();
+  /// Forgets every identity kept in the shared map.
+  static void reset() => _shared.clear();
 
   @override
   final String documentId;
+
+  final Map<String, PeerId> _peers;
 
   @override
   PeerId? getPeerId() => _peers[documentId];
@@ -148,4 +153,43 @@ class InMemoryPeerIdStorage implements CRDTPeerIdStorage {
   void savePeerId(PeerId peerId) {
     _peers[documentId] = peerId;
   }
+}
+
+/// A [CRDTStorageBackend] that keeps everything in memory.
+///
+/// The whole contract, one process wide: documents, their storages and their
+/// identities. Nothing survives the process, so a suite that reopens it is
+/// told to skip.
+///
+/// Every method answers without suspending.
+class InMemoryStorageBackend implements CRDTStorageBackend {
+  final Map<String, InMemoryDocumentStorage> _documents =
+      <String, InMemoryDocumentStorage>{};
+
+  final Map<String, PeerId> _peers = <String, PeerId>{};
+
+  @override
+  InMemoryDocumentStorage storageForDocument(String documentId) {
+    return _documents.putIfAbsent(
+      documentId,
+      () => InMemoryDocumentStorage(documentId),
+    );
+  }
+
+  @override
+  InMemoryPeerIdStorage peerIdStorageForDocument(String documentId) {
+    return InMemoryPeerIdStorage(documentId, _peers);
+  }
+
+  @override
+  Set<String> get documentIds => <String>{..._documents.keys, ..._peers.keys};
+
+  @override
+  void deleteDocument(String documentId) {
+    _documents.remove(documentId);
+    _peers.remove(documentId);
+  }
+
+  @override
+  void close() {}
 }

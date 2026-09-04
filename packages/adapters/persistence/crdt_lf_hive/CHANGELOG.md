@@ -7,7 +7,23 @@
 - **The storages now implement the shared contract** from the new
   [`crdt_lf_persistence`](https://pub.dev/packages/crdt_lf_persistence) package. Code written
   against a storage runs on any adapter now, and `CRDTDocumentPersistence` keeps a whole document
-  on disk for you — see that package's README.
+  on disk for you — see that package's README. The contract is re-exported here, so one import is
+  enough: `openPersistentDocument` reads the stored identity, builds the document and restores it
+  in one call, `readDocument` gives a document to read and not follow, and `copyDocument` moves one
+  to another adapter.
+
+- **`CRDTHive.open()` gives a `CRDTHiveBackend`**, the `CRDTStorageBackend` of this adapter: it
+  lists the documents, hands out the storages of each one, and deletes one whole. App code written
+  against the interface runs on any adapter.
+
+  Hive cannot list its boxes and this adapter gives every document a box of its own, so the backend
+  keeps a small registry box (`documents` by default). A document costs one extra row, written the
+  first time it is opened. **A document stored before this registry existed is not on the list
+  until it is opened once** — its data is untouched either way, and one open puts it back.
+
+- **`deleteDocumentData` is now `deleteDocument`**, which is the name the interface uses. The
+  static one leaves the registry box alone; `CRDTHiveBackend.deleteDocument` is the one that
+  forgets the document as well.
 
 - **`CRDTChangeStorage` and `CRDTSnapshotStorage` are now `CRDTHiveChangeStorage` and
   `CRDTHiveSnapshotStorage`**, matching the drift and sqlite adapters. The old names belong to the
@@ -28,7 +44,7 @@
 - **`getChanges` takes `newerThan` and `upTo`**, both `VersionVector`s: what a vector has not seen,
   what it has seen, or the range between them.
 
-- `deleteDocumentData` now removes the stored identity too. It is a key in the shared box, not a
+- `deleteDocument` now removes the stored identity too. It is a key in the shared box, not a
   box to delete.
 
 - `CRDTDocumentStorage` is no longer declared here. It comes from `crdt_lf_persistence` and is

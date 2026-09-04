@@ -32,6 +32,12 @@ void main() {
   // reopens really reads the file back.
   final handles = <CRDTDocumentStorage, CRDTSqlite>{};
 
+  runStorageBackendConformanceTests(
+    name: 'CRDTSqlite',
+    open: () => CRDTSqlite.open(dbPath),
+    reopen: (_) => CRDTSqlite.open(dbPath),
+  );
+
   runDocumentStorageConformanceTests(
     name: 'CRDTSqlite',
     atomicTransactions: true,
@@ -169,7 +175,7 @@ void main() {
       memory.close();
     });
 
-    test('deleteDocumentData removes only the target document', () async {
+    test('deleteDocument removes only the target document', () async {
       final a = storage.storageForDocument('doc-a');
       final b = storage.storageForDocument('doc-b');
       final id = OperationId(PeerId.generate(), HybridLogicalClock(l: 5, c: 1));
@@ -186,7 +192,7 @@ void main() {
       );
       b.changes.saveChange(makeChange(2, 1));
 
-      storage.deleteDocumentData('doc-a');
+      storage.deleteDocument('doc-a');
 
       expect(a.changes.count, 0);
       expect(a.snapshots.count, 0);

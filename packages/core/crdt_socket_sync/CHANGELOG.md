@@ -7,19 +7,30 @@
 ### Added
 
 - **`PersistentServerRegistry`**: a `CRDTServerRegistry` that keeps every document it serves on
-  disk, on any adapter. It holds the live documents and routes to them the way any registry does,
+  disk. It takes a `CRDTStorageBackend` — an adapter's `CRDTHive`, `CRDTDrift` or `CRDTSqlite` —
+  and works on any of them. It holds the live documents and routes to them the way any registry does,
   but it never reads or writes storage by hand: each document gets a `CRDTDocumentPersistence`,
   which follows `CRDTDocument.events`. So changes are batched instead of written one by one, a
   snapshot replaces the one before it, and a prune drops exactly what it covered — inside a
-  transaction where the backend has one. Documents open lazily, so a server with many rooms holds
-  only the ones being edited. `compactAfter` snapshots a document once its log gets long, and the
+  transaction where the backend has one. Documents open lazily, so a document costs nothing until
+  something asks for it. `compactAfter` snapshots a document once its log gets long, and the
   `snapshots` stream is how a server learns to broadcast the new status.
 
-- **`ServerDocumentCatalog`**, with `InMemoryServerDocumentCatalog`: the document ids a server
-  serves. It is the one piece `PersistentServerRegistry` cannot get from a storage — a
-  `CRDTDocumentStorage` holds one document and knows nothing about the others — so a server that
-  wants its documents back after a restart writes three methods over a box or a table. The example
-  server shows one over Hive.
+- **`PersistentServerRegistry.releaseDocument`**, and the `idleAfter` that calls it on a timer: the
+  other half of the lazy open. A document stays in memory once it has been asked for, so a server
+  that never releases holds every room it has ever served. `releaseDocument` writes what the
+  document is holding, closes it, and leaves the id in the catalog — the room is still served, it
+  is just not in memory, and the next `getDocument` reads it back. Call it when the last client of
+  a room disconnects, or pass `idleAfter` and let the registry do it after that long without an
+  ask.
+
+- **`ServerDocumentCatalog`**, with `BackendDocumentCatalog` and `InMemoryServerDocumentCatalog`:
+  what answers `documentIds`, `hasDocument` and `documentCount`. The default is
+  `BackendDocumentCatalog`, which asks the `CRDTStorageBackend` — it already lists the documents it
+  holds, so the server keeps no second list that can drift from the first, and it finds its
+  documents again after a restart with nothing to configure. Note that `removeDocument` is then a
+  delete, not a forget: use `releaseDocument` to get a document out of memory and keep it on disk.
+  `InMemoryServerDocumentCatalog` is there for a server that should start empty every time.
 
 ### Fixed
 

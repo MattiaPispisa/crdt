@@ -2,8 +2,6 @@ import 'package:crdt_lf_hive/crdt_lf_hive.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:highlight/highlight.dart' show highlight;
-import 'package:highlight/languages/all.dart' show allLanguages;
 import 'package:hydrated_bloc/hydrated_bloc.dart';
 import 'package:path_provider/path_provider.dart';
 
@@ -13,13 +11,10 @@ import 'package:greyhound_markdown_client/src/screens/changelog_screen.dart';
 import 'package:greyhound_markdown_client/src/screens/editor_screen.dart';
 import 'package:greyhound_markdown_client/src/screens/home_screen.dart';
 import 'package:greyhound_markdown_client/src/screens/settings_screen.dart';
+import 'package:greyhound_markdown_client/src/widgets/code_element_builder.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-
-  // Register every grammar so fenced code blocks (```lang) highlight in the
-  // preview regardless of the language the author uses.
-  allLanguages.forEach(highlight.registerLanguage);
 
   // Backs [UserSettingsCubit]. The documents directory rather than the
   // temporary one: preferences have to survive an OS cleanup.
@@ -36,6 +31,10 @@ Future<void> main() async {
   CRDTHive.initialize();
 
   runApp(const GreyhoundApp());
+
+  // Not before runApp: this is tens of milliseconds of work, and nothing on
+  // screen needs it until the first code block. See [warmUpHighlight].
+  WidgetsBinding.instance.addPostFrameCallback((_) => warmUpHighlight());
 }
 
 /// The app theme for [brightness], seeded from a single color so light and

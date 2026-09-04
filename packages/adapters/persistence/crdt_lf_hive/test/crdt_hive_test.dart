@@ -21,6 +21,16 @@ void main() {
     await Hive.deleteFromDisk();
   });
 
+  runStorageBackendConformanceTests(
+    name: 'CRDTHive',
+    open: CRDTHive.open,
+    // Hive keeps a box open once, so reopening means closing every box first.
+    reopen: (_) async {
+      await CRDTHive.closeAllBoxes();
+      return CRDTHive.open();
+    },
+  );
+
   runDocumentStorageConformanceTests(
     name: 'CRDTHive',
     open: CRDTHive.openStorageForDocument,
@@ -77,7 +87,7 @@ void main() {
       await reopened.close();
     });
 
-    test('deleteDocumentData removes both boxes', () async {
+    test('deleteDocument removes both boxes', () async {
       const documentId = 'doc-del-data';
       final storage = await CRDTHive.openStorageForDocument(documentId);
       final id = OperationId(PeerId.generate(), HybridLogicalClock(l: 5, c: 1));
@@ -101,7 +111,7 @@ void main() {
       );
 
       await CRDTHive.closeAllBoxes();
-      await CRDTHive.deleteDocumentData(documentId);
+      await CRDTHive.deleteDocument(documentId);
 
       final reopened = await CRDTHive.openStorageForDocument(documentId);
       expect(await reopened.changes.count, 0);

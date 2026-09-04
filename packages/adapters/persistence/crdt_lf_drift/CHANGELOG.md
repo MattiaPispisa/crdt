@@ -7,7 +7,19 @@
 - **The storages now implement the shared contract** from the new
   [`crdt_lf_persistence`](https://pub.dev/packages/crdt_lf_persistence) package. Code written
   against a storage runs on any adapter now, and `CRDTDocumentPersistence` keeps a whole document
-  on disk for you — see that package's README.
+  on disk for you — see that package's README. The contract is re-exported here, so one import is
+  enough: `openPersistentDocument` reads the stored identity, builds the document and restores it
+  in one call, `readDocument` gives a document to read and not follow, and `copyDocument` moves one
+  to another adapter.
+
+- **`CRDTDrift` is now a `CRDTStorageBackend`.** It answers `documentIds` with a `UNION` over the
+  three tables — the `peers` one included, so a document that was created and never written to is
+  still listed — and `storageForDocument`, `peerIdStorageForDocument` and `close` were already
+  there under those names. `close` is now idempotent. App code written against the interface runs
+  on any adapter.
+
+- **`deleteDocumentData` is now `deleteDocument`**, which is the name the interface uses. Same
+  behaviour: the changes, the snapshots and the identity, in one transaction.
 
 - **`CRDTDriftPeerIdStorage` keeps the `PeerId` a document writes under**, in a new `peers` table.
   Without it every restart writes under a new author, and the version vector grows by one peer per
@@ -25,7 +37,7 @@
   end, so every method here still returns a `Future` and call sites do not change. `transaction`
   now accepts a `FutureOr` body, which it wraps.
 
-- `deleteDocumentData` now removes the stored identity too, and does its deletes in one
+- `deleteDocument` now removes the stored identity too, and does its deletes in one
   transaction.
 
 - `CRDTDocumentStorage` is no longer declared here. It comes from `crdt_lf_persistence` and is

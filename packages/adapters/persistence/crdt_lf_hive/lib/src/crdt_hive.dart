@@ -18,6 +18,10 @@ import 'package:hive/hive.dart';
 /// - [CRDTHive.openSnapshotStorageForDocument]
 /// - [CRDTHive.openStorageForDocument]
 /// - [CRDTHive.openPeerIdStorageForDocument]
+///
+/// [CRDTHive.open] gives the [CRDTStorageBackend] of this adapter, which is
+/// what an app with more than one document wants: it lists them, hands out
+/// the storages of each one, and deletes one whole.
 class CRDTHive {
   /// Initializes Hive with all CRDT adapters.
   ///
@@ -39,6 +43,36 @@ class CRDTHive {
     Hive
       ..registerAdapter(ChangeAdapter(typeId: changeTypeId))
       ..registerAdapter(SnapshotAdapter(typeId: snapshotTypeId));
+  }
+
+  /// The [CRDTStorageBackend] of this adapter.
+  ///
+  /// Everything below is a piece of it; this is the whole database:
+  ///
+  /// ```dart
+  /// CRDTHive.initialize();
+  /// final backend = await CRDTHive.open();
+  ///
+  /// for (final documentId in await backend.documentIds) { /* ... */ }
+  /// ```
+  ///
+  /// [registryBoxName] is the box the document ids live in — see
+  /// [CRDTHiveBackend] for why Hive needs one. The other three name the boxes
+  /// of the storages, and mean what they mean on the methods below.
+  static Future<CRDTHiveBackend> open({
+    String changesBoxName = 'changes',
+    String snapshotsBoxName = 'snapshots',
+    String peerIdsBoxName = 'peer_ids',
+    String registryBoxName = 'documents',
+  }) {
+    return Hive.openBox<String>(registryBoxName).then(
+      (registry) => CRDTHiveBackend(
+        registry: registry,
+        changesBoxName: changesBoxName,
+        snapshotsBoxName: snapshotsBoxName,
+        peerIdsBoxName: peerIdsBoxName,
+      ),
+    );
   }
 
   /// Creates a [CRDTHiveChangeStorage] for a specific document.
@@ -159,7 +193,11 @@ class CRDTHive {
   ///
   /// This removes the changes, snapshots and stored identity of the document.
   /// Use with caution as this operation cannot be undone.
-  static Future<void> deleteDocumentData(
+  ///
+  /// It does **not** touch the registry box of [CRDTHiveBackend], which is
+  /// what knows the document exists. Call [CRDTHiveBackend.deleteDocument]
+  /// instead when there is a backend.
+  static Future<void> deleteDocument(
     String documentId, {
     String changesBoxName = 'changes',
     String snapshotsBoxName = 'snapshots',

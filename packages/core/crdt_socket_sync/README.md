@@ -322,16 +322,18 @@ is a `CRDTServerRegistry` that keeps every document it serves on disk, on any
 adapter.
 
 ```dart
-final catalog = await HiveDocumentCatalog.open();
-
 final registry = PersistentServerRegistry(
-  openStorage: CRDTHive.openStorageForDocument,
-  openPeerIdStorage: CRDTHive.openPeerIdStorageForDocument,
-  catalog: catalog,
+  backend: await CRDTHive.open(),
   // Snapshot a document once its log passes this many changes.
   compactAfter: 500,
 );
 ```
+
+That is the whole setup. `backend` is a
+[`CRDTStorageBackend`](https://pub.dev/packages/crdt_lf_persistence) — an
+adapter's `CRDTHive`, `CRDTDrift` or `CRDTSqlite` — and it is where the
+documents, their snapshots and the identity the server writes them under all
+live.
 
 It holds the live documents and routes to them, the way any registry does. What
 it does **not** do is read and write storage by hand: each document gets a
@@ -343,45 +345,77 @@ follows `CRDTDocument.events` and writes down what each event reports. So:
 - a snapshot replaces the one before it, and the prune that follows drops
   exactly the changes it covered — both inside one transaction where the
   backend has one,
-- documents open **lazily**, so a server with many rooms holds only the ones
-  being edited.
+- documents open **lazily**, so a document costs nothing until something asks
+  for it.
 
 `writeDelay` is how long a change waits for the ones after it. It leaves a
 window where a change is acknowledged but not yet on disk, and that is safe: a
 client reconciles at the next handshake and re-sends whatever the server no
 longer has. Pass `Duration.zero` to make the window as small as it gets.
 
-Pick your backend — the registry only ever sees the storage contract:
+##### Getting a document back out of memory
+
+Opening lazily is one half. A document stays in memory once it has been asked
+for, so a server that never lets go holds every room it has ever served.
+
+```dart
+// When the last client of a room disconnects.
+await registry.releaseDocument(roomId);
+```
+
+`releaseDocument` writes what the document is holding, closes it, and leaves the
+id in the catalog: the room is still served, it is just not in memory, and the
+next `getDocument` reads it back from the storage. That is what separates it
+from `removeDocument`, which forgets the room.
+
+`idleAfter` does the same on a timer, for a server that has nowhere good to put
+the call:
+
+```dart
+final registry = PersistentServerRegistry(
+  backend: await CRDTHive.open(),
+  idleAfter: const Duration(minutes: 10),
+);
+```
+
+One rule either way: **the document must not be in use.** Releasing disposes it,
+and a caller still holding what an earlier `getDocument` handed back would be
+writing into a disposed document. Every session in this package re-reads through
+`getDocument`, so releasing between two requests is safe — which is why
+`idleAfter` should be far longer than a request takes.
+
+Pick your backend — the registry only ever sees the `CRDTStorageBackend`
+interface:
 
 - [crdt_lf_hive](https://pub.dev/packages/crdt_lf_hive) — Hive-backed storage
 - [crdt_lf_drift](https://pub.dev/packages/crdt_lf_drift) — Drift (SQL) storage
 - [crdt_lf_sqlite](https://pub.dev/packages/crdt_lf_sqlite) — `sqlite3` storage
 
-##### The one piece you write: the catalog
+##### The list of documents
 
-A `CRDTDocumentStorage` holds **one** document and knows nothing about the
-others, so nothing in the storage contract can list them. That list is a
-`ServerDocumentCatalog` — three methods over whatever your backend already has:
+`documentIds`, `hasDocument` and `documentCount` come from a
+`ServerDocumentCatalog`. You do not have to write one: the default is
+`BackendDocumentCatalog`, which asks the backend, because a `CRDTStorageBackend`
+already lists the documents it holds. The server keeps no second list that can
+drift from the first, and it finds its documents again after a restart with
+nothing to configure.
+
+One consequence to know: with that catalog, `removeDocument` **deletes** the
+document — its changes, its snapshots and its identity. Forgetting a document
+without deleting it is not something the backend can express, and
+`releaseDocument` is what you want to get one out of memory.
+
+Pass `InMemoryServerDocumentCatalog` for a server that should start empty every
+time and fill up as clients name their documents, or write your own three
+methods over whatever list you already keep:
 
 ```dart
-class HiveDocumentCatalog implements ServerDocumentCatalog {
-  HiveDocumentCatalog(this._box);
-
-  final Box<String> _box;
-
-  @override
-  Future<Set<String>> get documentIds async => _box.values.toSet();
-
-  @override
-  Future<void> add(String documentId) => _box.put(documentId, documentId);
-
-  @override
-  Future<void> remove(String documentId) => _box.delete(documentId);
+abstract interface class ServerDocumentCatalog {
+  Future<Set<String>> get documentIds;
+  Future<void> add(String documentId);
+  Future<void> remove(String documentId);
 }
 ```
-
-Leave `catalog` out and the ids are kept in memory: the documents stay on disk,
-but the server forgets they exist and starts empty.
 
 ##### Broadcasting a compaction
 

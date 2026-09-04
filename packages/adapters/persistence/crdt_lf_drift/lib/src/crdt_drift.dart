@@ -5,6 +5,7 @@ import 'package:crdt_lf_drift/src/storage/change_storage.dart';
 import 'package:crdt_lf_drift/src/storage/document_storage.dart';
 import 'package:crdt_lf_drift/src/storage/peer_id_storage.dart';
 import 'package:crdt_lf_drift/src/storage/snapshot_storage.dart';
+import 'package:crdt_lf_persistence/crdt_lf_persistence.dart';
 import 'package:drift/drift.dart';
 import 'package:drift/native.dart';
 
@@ -15,13 +16,25 @@ import 'package:drift/native.dart';
 /// the same tables and is isolated through the `document_id` column, so you
 /// can persist any number of documents in a single database.
 ///
+/// It is the [CRDTStorageBackend] of this adapter: it lists the documents it
+/// holds, hands out the storages of each one, and deletes one whole.
+///
 /// ```dart
-/// final storage = CRDTDrift.open(File('app.db'));
-/// final changes = storage.changeStorageForDocument('doc-1');
-/// ...
-/// await storage.close();
+/// final backend = CRDTDrift.open(File('app.db'));
+///
+/// for (final documentId in await backend.documentIds) {
+///   final note = await backend.readDocument(documentId);
+///   // ...show it in a list
+/// }
+///
+/// final open = await backend.openDocument('doc-1');
+///
+/// await backend.close();
 /// ```
-class CRDTDrift {
+///
+/// drift is asynchronous end to end, so every method here returns a [Future].
+/// That is what makes `CRDTDocumentPersistence.openSync` refuse this adapter.
+class CRDTDrift implements CRDTStorageBackend {
   CRDTDrift._(this.database);
 
   /// Opens (creating it if necessary) a database backed by [file].
@@ -47,6 +60,24 @@ class CRDTDrift {
   /// The underlying drift database.
   final CRDTDriftDatabase database;
 
+  bool _closed = false;
+
+  @override
+  Future<Set<String>> get documentIds async {
+    // The three tables, so a document that has only an identity — added and
+    // never written to — is listed as well.
+    final rows = await database
+        .customSelect(
+          'SELECT document_id FROM ${database.changes.actualTableName} '
+          'UNION SELECT document_id '
+          'FROM ${database.snapshots.actualTableName} '
+          'UNION SELECT document_id FROM ${database.peers.actualTableName}',
+          readsFrom: {database.changes, database.snapshots, database.peers},
+        )
+        .get();
+    return {for (final row in rows) row.read<String>('document_id')};
+  }
+
   /// Creates a [CRDTDriftChangeStorage] scoped to [documentId].
   CRDTDriftChangeStorage changeStorageForDocument(String documentId) {
     return CRDTDriftChangeStorage(database, documentId);
@@ -69,12 +100,14 @@ class CRDTDrift {
   ///   peerId: await peers.loadOrCreate(),
   /// );
   /// ```
+  @override
   CRDTDriftPeerIdStorage peerIdStorageForDocument(String documentId) {
     return CRDTDriftPeerIdStorage(database, documentId);
   }
 
   /// Creates both change and snapshot storage for [documentId], bundled in a
   /// [CRDTDriftDocumentStorage].
+  @override
   CRDTDriftDocumentStorage storageForDocument(String documentId) {
     return CRDTDriftDocumentStorage(
       database: database,
@@ -88,7 +121,8 @@ class CRDTDrift {
   /// Use with caution as this operation cannot be undone. The three deletes
   /// go in one transaction, so the document never comes back as a half of
   /// itself.
-  Future<void> deleteDocumentData(String documentId) {
+  @override
+  Future<void> deleteDocument(String documentId) {
     return database.transaction(() async {
       await (database.delete(database.changes)
             ..where((row) => row.documentId.equals(documentId)))
@@ -103,7 +137,14 @@ class CRDTDrift {
   }
 
   /// Closes the underlying database and releases its resources.
-  Future<void> close() {
-    return database.close();
+  ///
+  /// Closing twice is not an error: the second call does nothing.
+  @override
+  Future<void> close() async {
+    if (_closed) {
+      return;
+    }
+    _closed = true;
+    await database.close();
   }
 }

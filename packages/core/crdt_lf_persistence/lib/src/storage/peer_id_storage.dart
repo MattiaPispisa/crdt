@@ -45,12 +45,28 @@ extension CRDTPeerIdStorageLoad on CRDTPeerIdStorage {
   /// final peerId = await peers.loadOrCreate();
   /// final document = CRDTDocument(documentId: 'note', peerId: peerId);
   /// ```
-  FutureOr<PeerId> loadOrCreate() {
+  ///
+  /// [CRDTStorageBackendDocuments.openDocument] does this for you.
+  FutureOr<PeerId> loadOrCreate() => _loadOr(PeerId.generate);
+
+  /// The stored [PeerId], or [author], saved before it is returned.
+  ///
+  /// The stored one wins: it is what the document already wrote under, and
+  /// writing under a second one would make one device look like two peers.
+  /// [author] is the seed for a document that has no identity yet.
+  FutureOr<PeerId> loadOr(PeerId author) => _loadOr(() => author);
+
+  /// The stored [PeerId], or what [fallback] gives, saved before it is
+  /// returned.
+  ///
+  /// [fallback] is called only when there is nothing stored, so minting an id
+  /// costs nothing on the usual path.
+  FutureOr<PeerId> _loadOr(PeerId Function() fallback) {
     return getPeerId().chain((stored) {
       if (stored != null) {
         return stored;
       }
-      final minted = PeerId.generate();
+      final minted = fallback();
       return savePeerId(minted).chain((_) => minted);
     });
   }

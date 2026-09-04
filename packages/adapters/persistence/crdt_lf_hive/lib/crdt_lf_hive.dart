@@ -10,13 +10,20 @@ export 'package:crdt_lf_persistence/crdt_lf_persistence.dart'
         CRDTChangeStorage,
         CRDTDocumentPersistence,
         CRDTDocumentStorage,
+        CRDTDocumentStorageReading,
         CRDTPeerIdStorage,
         CRDTPeerIdStorageLoad,
         CRDTSnapshotStorage,
-        filterByVersion;
+        CRDTSnapshotStorageLatest,
+        CRDTStorageBackend,
+        CRDTStorageBackendDocuments,
+        PersistentDocument,
+        filterByVersion,
+        newestSnapshot;
 
 export 'src/adapters/change_adapter.dart';
 export 'src/adapters/snapshot_adapter.dart';
+export 'src/backend.dart';
 export 'src/crdt_hive.dart';
 export 'src/storage/change_storage.dart';
 export 'src/storage/document_storage.dart';
