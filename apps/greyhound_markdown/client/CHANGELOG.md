@@ -7,7 +7,6 @@
 - **Undo and redo**, from the toolbar or with ⌘Z / ⌘⇧Z (Ctrl on Windows and
   Linux). An undo takes back what *you* wrote and leaves what everyone else
   wrote in place. A burst of typing is one undo, not one per character.
-
 - **A room now survives a reload without a connection.** Each room is kept in
   the browser's storage as it changes, and read back when you open it — so
   reloading offline, or on a relay that has forgotten the room, brings your
