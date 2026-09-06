@@ -1,4 +1,4 @@
-# crdt_lf_persistence
+# CRDT LF PERSISTENCE
 
 The storage contract behind the [`crdt_lf`](https://pub.dev/packages/crdt_lf)
 persistence adapters, and the consumer that keeps a document on disk as it
