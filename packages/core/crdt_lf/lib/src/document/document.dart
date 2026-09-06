@@ -1209,7 +1209,6 @@ class CRDTDocument extends BaseCRDTDocument {
   /// **The history is always protected until the last snapshot.**
   ///
   /// {@macro pruning_strategy}
-<<<<<<< HEAD
   ///
   /// [origin] is carried by the [DocumentHistoryPruned] this publishes.
   void garbageCollect(VersionVector protectUntil, {Object? origin}) {
@@ -1219,11 +1218,6 @@ class CRDTDocument extends BaseCRDTDocument {
   }
 
   void _garbageCollect(VersionVector protectUntil) {
-=======
-  void garbageCollect(VersionVector protectUntil) {
-    _ensureNotDisposed('garbageCollect');
-
->>>>>>> main
     final effectiveVV = VersionVector.intersection(
       [
         protectUntil,
@@ -1570,7 +1564,6 @@ class CRDTDocument extends BaseCRDTDocument {
   /// Prunes the DAG and the change store up to the given version.
   void _prune(VersionVector version) {
     _dag.prune(version);
-<<<<<<< HEAD
     _changeStore.prune(
       version,
       onPruned: _eventsController.hasListener
@@ -1584,9 +1577,6 @@ class CRDTDocument extends BaseCRDTDocument {
               )
           : null,
     );
-=======
-    _changeStore.prune(version);
->>>>>>> main
     // The state now comes from the snapshot rather than from the changes that
     // built it, and a snapshot does not carry every identity a change did: an
     // OR-Set or OR-Map element comes back tagless. An inverse anchored to one
