@@ -405,8 +405,11 @@ void main() {
       await Future<void>.delayed(const Duration(milliseconds: 300));
 
       expect(document.isDisposed, isTrue);
-      expect(CRDTFugueTextHandler((await registry.getDocument('doc'))!, 'text')
-          .value, 'hello');
+      expect(
+        CRDTFugueTextHandler((await registry.getDocument('doc'))!, 'text')
+            .value,
+        'hello',
+      );
     });
 
     test('every ask restarts the idle countdown', () async {

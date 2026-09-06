@@ -36,7 +36,7 @@ class CRDTSqliteDocumentStorage extends CRDTDocumentStorage {
   /// Does nothing, and that is the whole of it.
   ///
   /// One database holds every document, so closing it here would take the
-  /// others down with it. 
+  /// others down with it.
   @override
   void close() {}
 }

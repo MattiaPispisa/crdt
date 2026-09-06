@@ -177,7 +177,7 @@ void main() {
         reason: 'which snapshot to replace is already known, so reading every '
             'one of them back would decode the whole previous state',
       );
-      expect(await snapshots.count, 1);
+      expect(snapshots.count, 1);
 
       await persistence.dispose();
     });
@@ -291,6 +291,61 @@ void main() {
       await (await CRDTDocumentPersistence.open(next.document, storage))
           .dispose();
       expect(next.text.value, 'abc');
+    });
+
+    test('a prune rewrites a survivor that is still waiting in the queue',
+        () async {
+      // A long delay, so both edits are still queued when the prune runs. The
+      // second one depends on the first, and the prune drops the first: the
+      // queued bytes still name a dependency that is gone. Written as they
+      // are, a reload could not replay them.
+      final persistence = await attach(
+        writeDelay: const Duration(seconds: 5),
+      );
+
+      text.insert(0, 'a');
+      final coveredByTheSnapshot = document.takeSnapshot(pruneHistory: false);
+      text.insert(1, 'b');
+
+      document.garbageCollect(coveredByTheSnapshot.versionVector);
+      await persistence.flush();
+
+      final onDisk = await storage.changes.getChanges();
+      expect(onDisk, hasLength(1));
+      expect(
+        onDisk.single.deps,
+        isEmpty,
+        reason: 'the queue holds the rewritten survivor, not its old bytes',
+      );
+
+      final next = reopened();
+      await CRDTDocumentPersistence.open(next.document, storage);
+      expect(next.text.value, 'ab');
+
+      await persistence.dispose();
+    });
+
+    test('a write that fails without suspending keeps its batch queued',
+        () async {
+      final storage = _SyncFailingStorage('doc');
+      final persistence = await CRDTDocumentPersistence.open(
+        document,
+        storage,
+        writeDelay: _now,
+        onError: (_, __) {},
+      );
+
+      text.insert(0, 'a');
+      await persistence.flush();
+      expect(persistence.hasUnwrittenChanges, isTrue);
+      expect(storage.sync.saved, isEmpty);
+
+      storage.sync.failing = false;
+      await persistence.flush();
+
+      expect(persistence.hasUnwrittenChanges, isFalse);
+      expect(storage.sync.saved, hasLength(1));
+      await persistence.dispose();
     });
 
     test('compactAfter has to be positive', () {
@@ -563,7 +618,7 @@ class _SuspendingChangeStorage implements CRDTChangeStorage {
   Future<int> get count async => written.length;
 }
 
-/// A storage whose first [failures] writes fail.
+/// A storage whose first `failures` writes fail.
 ///
 /// `-1` fails every write.
 class _FailingStorage extends CRDTDocumentStorage {
@@ -638,5 +693,35 @@ class _GatedChangeStorage extends InMemoryChangeStorage {
     started.complete();
     await gate.future;
     throw StateError('disk full');
+  }
+}
+
+/// A storage that refuses a write without suspending first.
+class _SyncFailingStorage extends CRDTDocumentStorage {
+  _SyncFailingStorage(String documentId)
+      : super(
+          changes: _SyncFailingChangeStorage(documentId),
+          snapshots: InMemorySnapshotStorage(documentId),
+        );
+
+  /// The change storage, as what it really is.
+  _SyncFailingChangeStorage get sync => changes as _SyncFailingChangeStorage;
+}
+
+class _SyncFailingChangeStorage extends InMemoryChangeStorage {
+  _SyncFailingChangeStorage(super.documentId);
+
+  /// While this is on, a write throws before it saves anything.
+  bool failing = true;
+
+  /// What reached the storage.
+  List<Change> get saved => getChanges();
+
+  @override
+  void saveChanges(List<Change> changes) {
+    if (failing) {
+      throw StateError('disk full');
+    }
+    return super.saveChanges(changes);
   }
 }

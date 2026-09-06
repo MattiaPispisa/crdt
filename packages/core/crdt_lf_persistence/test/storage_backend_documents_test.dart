@@ -68,9 +68,9 @@ void main() {
       final seen = <String>[];
       final second = await backend.openDocument(
         'doc',
-        onDocument: (document) => seen.add(document.exportChanges().isEmpty
-            ? 'empty'
-            : 'already restored'),
+        onDocument: (document) => seen.add(
+          document.exportChanges().isEmpty ? 'empty' : 'already restored',
+        ),
         writeDelay: Duration.zero,
       );
 
@@ -94,6 +94,83 @@ void main() {
         isTrue,
         reason: 'a caller never gets half a document back',
       );
+    });
+  });
+
+  group('CRDTStorageBackend.documentAt', () {
+    test('reads the document of a given id as it was at a version', () async {
+      final backend = InMemoryStorageBackend();
+      final opened = await backend.openDocument(
+        'doc',
+        writeDelay: Duration.zero,
+      );
+      final text = CRDTFugueTextHandler(opened.document, 'text')
+        ..insert(0, 'a');
+      final afterA = opened.document.getVersionVector();
+      text.insert(1, 'b');
+      await opened.persistence.dispose();
+
+      final before = await backend.documentAt('doc', afterA);
+      expect(CRDTFugueTextHandler(before, 'text').value, 'a');
+
+      late CRDTFugueTextHandler registered;
+      final now = await backend.documentAt(
+        'doc',
+        opened.document.getVersionVector(),
+        peerId: opened.document.peerId,
+        onDocument: (document) =>
+            registered = CRDTFugueTextHandler(document, 'text'),
+      );
+      expect(registered.value, 'ab');
+      expect(now.peerId, opened.document.peerId);
+    });
+  });
+
+  group('CRDTStorageBackend.readDocument', () {
+    test('reads the document of a given id', () async {
+      final backend = InMemoryStorageBackend();
+      final opened = await backend.openDocument(
+        'doc',
+        writeDelay: Duration.zero,
+      );
+      CRDTFugueTextHandler(opened.document, 'text').insert(0, 'a🌍');
+      await opened.persistence.dispose();
+
+      late CRDTFugueTextHandler registered;
+      final read = await backend.readDocument(
+        'doc',
+        peerId: opened.document.peerId,
+        onDocument: (document) =>
+            registered = CRDTFugueTextHandler(document, 'text'),
+      );
+
+      expect(registered.value, 'a🌍');
+      expect(read.peerId, opened.document.peerId);
+    });
+  });
+
+  group('CRDTStorageBackend.copyDocumentTo', () {
+    test('carries the document and its identity to the other backend',
+        () async {
+      final backend = InMemoryStorageBackend();
+      final opened = await backend.openDocument(
+        'doc',
+        writeDelay: Duration.zero,
+      );
+      CRDTFugueTextHandler(opened.document, 'text').insert(0, 'a🌍');
+      await opened.persistence.dispose();
+
+      final other = InMemoryStorageBackend();
+      await backend.copyDocumentTo(other, 'doc');
+
+      expect(other.documentIds, contains('doc'));
+      expect(
+        other.peerIdStorageForDocument('doc').getPeerId(),
+        opened.document.peerId,
+        reason: 'it is the same document, in another place',
+      );
+      final copied = await other.readDocument('doc');
+      expect(CRDTFugueTextHandler(copied, 'text').value, 'a🌍');
     });
   });
 }

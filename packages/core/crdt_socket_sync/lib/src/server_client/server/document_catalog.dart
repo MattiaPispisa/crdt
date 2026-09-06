@@ -53,7 +53,6 @@ class InMemoryServerDocumentCatalog implements ServerDocumentCatalog {
   }
 }
 
-
 /// A [ServerDocumentCatalog] that asks the backend.
 ///
 /// The default of [PersistentServerRegistry], and the one to use unless there

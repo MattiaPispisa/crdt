@@ -1,6 +1,4 @@
-import 'package:crdt_lf_hive/src/storage/change_storage.dart';
-import 'package:crdt_lf_hive/src/storage/snapshot_storage.dart';
-import 'package:crdt_lf_persistence/crdt_lf_persistence.dart';
+import 'package:crdt_lf_hive/crdt_lf_hive.dart';
 
 /// The changes and snapshots of one document, in two Hive boxes.
 ///

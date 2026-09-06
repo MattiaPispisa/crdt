@@ -21,9 +21,7 @@ void main() {
 
     test('picks the newest vector, not the last of the list', () {
       final document = CRDTDocument(documentId: 'doc');
-      final text = CRDTFugueTextHandler(document, 'body');
-
-      text.insert(0, 'a');
+      final text = CRDTFugueTextHandler(document, 'body')..insert(0, 'a');
       final older = document.takeSnapshot(pruneHistory: false);
       text.insert(1, 'b');
       final newer = document.takeSnapshot(pruneHistory: false);
@@ -49,9 +47,7 @@ void main() {
     test('reads the store and picks the newest', () async {
       final storage = InMemorySnapshotStorage('doc');
       final document = CRDTDocument(documentId: 'doc');
-      final text = CRDTFugueTextHandler(document, 'body');
-
-      text.insert(0, 'a');
+      final text = CRDTFugueTextHandler(document, 'body')..insert(0, 'a');
       final older = document.takeSnapshot(pruneHistory: false);
       text.insert(1, 'b');
       final newer = document.takeSnapshot(pruneHistory: false);

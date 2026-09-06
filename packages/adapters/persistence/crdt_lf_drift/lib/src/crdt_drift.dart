@@ -66,15 +66,13 @@ class CRDTDrift implements CRDTStorageBackend {
   Future<Set<String>> get documentIds async {
     // The three tables, so a document that has only an identity — added and
     // never written to — is listed as well.
-    final rows = await database
-        .customSelect(
-          'SELECT document_id FROM ${database.changes.actualTableName} '
-          'UNION SELECT document_id '
-          'FROM ${database.snapshots.actualTableName} '
-          'UNION SELECT document_id FROM ${database.peers.actualTableName}',
-          readsFrom: {database.changes, database.snapshots, database.peers},
-        )
-        .get();
+    final rows = await database.customSelect(
+      'SELECT document_id FROM ${database.changes.actualTableName} '
+      'UNION SELECT document_id '
+      'FROM ${database.snapshots.actualTableName} '
+      'UNION SELECT document_id FROM ${database.peers.actualTableName}',
+      readsFrom: {database.changes, database.snapshots, database.peers},
+    ).get();
     return {for (final row in rows) row.read<String>('document_id')};
   }
 

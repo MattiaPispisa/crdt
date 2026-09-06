@@ -99,6 +99,22 @@ jobs:
     secrets:
       CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
 
+  persistence_conformance:
+    needs: changes
+    if: >-
+      ${{ needs.changes.outputs.global == 'true'
+       || needs.changes.outputs.hlc == 'true'
+       || needs.changes.outputs.crdt_lf == 'true'
+       || needs.changes.outputs.crdt_lf_persistence == 'true'
+       || needs.changes.outputs.persistence_conformance == 'true' }}
+    uses: ./.github/workflows/dart_package.yaml
+    with:
+      working_directory: ./packages/_internal/persistence_conformance
+      min_coverage: 100
+      package_name: persistence_conformance
+    secrets:
+      CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+
   crdt_lf_hive:
     needs: changes
     if: >-
@@ -192,6 +208,7 @@ jobs:
       - hlc
       - crdt_lf
       - crdt_lf_persistence
+      - persistence_conformance
       - crdt_lf_hive
       - crdt_lf_sqlite
       - crdt_lf_drift

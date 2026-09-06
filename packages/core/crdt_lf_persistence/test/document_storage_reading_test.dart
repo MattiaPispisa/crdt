@@ -167,5 +167,35 @@ void main() {
         reason: 'a copy is not a replace: clear the target for an exact one',
       );
     });
+
+    test('the identity comes along when both peer id storages are given',
+        () async {
+      await write(['hello']);
+      final peerId = PeerId.generate();
+      backend.peerIdStorageForDocument('doc').savePeerId(peerId);
+
+      final other = InMemoryStorageBackend();
+      await storage.copyTo(
+        other.storageForDocument('doc'),
+        fromPeerIds: backend.peerIdStorageForDocument('doc'),
+        toPeerIds: other.peerIdStorageForDocument('doc'),
+      );
+
+      expect(
+        other.peerIdStorageForDocument('doc').getPeerId(),
+        peerId,
+        reason: 'the document is the same writer on the other side',
+      );
+    });
+
+    test('without the peer id storages the copy is the content only', () async {
+      await write(['hello']);
+      backend.peerIdStorageForDocument('doc').savePeerId(PeerId.generate());
+
+      final other = InMemoryStorageBackend();
+      await storage.copyTo(other.storageForDocument('doc'));
+
+      expect(other.peerIdStorageForDocument('doc').getPeerId(), isNull);
+    });
   });
 }

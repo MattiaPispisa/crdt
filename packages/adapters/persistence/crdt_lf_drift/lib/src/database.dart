@@ -2,6 +2,12 @@ import 'package:drift/drift.dart';
 
 part 'database.g.dart';
 
+// The column getters below are read by the drift generator, not by the
+// running program: the generated `$ChangesTable` and friends override them
+// with the real `GeneratedColumn`s. Nothing ever calls these bodies, so
+// coverage counts them as dead lines forever.
+// coverage:ignore-start
+
 /// Table storing serialized `Change` objects.
 ///
 /// Each row holds one change as an opaque binary blob (`Change.toBytes()`),
@@ -55,6 +61,8 @@ class Peers extends Table {
   @override
   Set<Column<Object>> get primaryKey => {documentId};
 }
+
+// coverage:ignore-end
 
 /// The drift database backing the CRDT storage adapters.
 ///

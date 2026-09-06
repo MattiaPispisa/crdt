@@ -490,16 +490,16 @@ class CRDTDocumentPersistence {
 
     return storage
         .transaction<void>(
-          () => storage.snapshots.saveSnapshot(snapshot).chain((_) {
-            if (stale == null || stale == snapshot.id) {
-              return null;
-            }
-            return storage.snapshots.deleteSnapshots([stale]).chain((_) {});
-          }),
-        )
+      () => storage.snapshots.saveSnapshot(snapshot).chain((_) {
+        if (stale == null || stale == snapshot.id) {
+          return null;
+        }
+        return storage.snapshots.deleteSnapshots([stale]).chain((_) {});
+      }),
+    )
         .chain((_) {
-          _snapshotOnDisk = snapshot.id;
-        });
+      _snapshotOnDisk = snapshot.id;
+    });
   }
 
   /// Drops what the prune removed, and writes the survivors again.

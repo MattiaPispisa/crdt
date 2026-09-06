@@ -68,9 +68,8 @@ Snapshot? newestSnapshot(Iterable<Snapshot> snapshots) {
     return null;
   }
   return snapshots.reduce(
-    (a, b) => b.versionVector.isStrictlyNewerOrEqualThan(a.versionVector)
-        ? b
-        : a,
+    (a, b) =>
+        b.versionVector.isStrictlyNewerOrEqualThan(a.versionVector) ? b : a,
   );
 }
 

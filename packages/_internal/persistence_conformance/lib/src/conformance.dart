@@ -98,7 +98,7 @@ void runDocumentStorageConformanceTests({
         final rebuilt = await other.readDocument();
         ConformanceFixtures.expectEveryHandler(
           rebuilt,
-          (actual, expected) => expect(actual, expected),
+          expect,
         );
       });
 
@@ -466,6 +466,12 @@ void runDocumentStorageConformanceTests({
             reason: 'only what was there before the transaction',
           );
         });
+      } else {
+        test(
+          'a body that throws leaves nothing behind',
+          _notRun,
+          skip: 'the adapter did not pass atomicTransactions: true',
+        );
       }
     });
 
@@ -503,6 +509,12 @@ void runDocumentStorageConformanceTests({
           expect(await other.loadOrCreate(), isNot(await mine.loadOrCreate()));
         });
       });
+    } else {
+      test(
+        'peer id',
+        _notRun,
+        skip: 'the adapter did not pass openPeerIds',
+      );
     }
 
     if (synchronous) {
@@ -535,6 +547,12 @@ void runDocumentStorageConformanceTests({
           await persistence.dispose();
         });
       });
+    } else {
+      test(
+        'synchronous',
+        _notRun,
+        skip: 'the adapter did not pass synchronous: true',
+      );
     }
 
     test('close is not an error the second time', () async {
@@ -578,10 +596,15 @@ void runDocumentStorageConformanceTests({
           snapshot.toBytes(),
         );
       });
+    } else {
+      test(
+        'what was stored is still there after reopening',
+        _notRun,
+        skip: 'the adapter passed durable: false',
+      );
     }
   });
 }
-
 
 /// Checks a [CRDTStorageBackend] implementation against the contract every
 /// adapter has to keep.
@@ -636,8 +659,7 @@ void runStorageBackendConformanceTests({
       expect(await backend.documentIds, {'doc-a'});
     });
 
-    test('a document whose only trace is its identity is listed too',
-        () async {
+    test('a document whose only trace is its identity is listed too', () async {
       final peers = await backend.peerIdStorageForDocument('doc-a');
       await peers.savePeerId(PeerId.generate());
 
@@ -736,7 +758,7 @@ void runStorageBackendConformanceTests({
       );
       ConformanceFixtures.expectEveryHandler(
         await other.readDocument('doc-a'),
-        (actual, expected) => expect(actual, expected),
+        expect,
       );
     });
 
@@ -750,6 +772,20 @@ void runStorageBackendConformanceTests({
 
         expect(await backend.documentIds, {'doc-a', 'doc-b'});
       });
+    } else {
+      test(
+        'the documents are still listed after a reopen',
+        _notRun,
+        skip: 'the adapter did not pass reopen',
+      );
     }
   });
 }
+
+/// The body of a test that is only there to be skipped.
+///
+/// One place, so the lines a skipped test never runs are one line. That line
+/// is dead by construction: a skipped test does not run its body.
+// coverage:ignore-start
+void _notRun() {}
+// coverage:ignore-end

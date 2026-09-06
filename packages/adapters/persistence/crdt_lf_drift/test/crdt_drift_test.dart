@@ -1,3 +1,5 @@
+// ignore_for_file: missing_whitespace_between_adjacent_strings sql
+
 @TestOn('vm')
 library;
 
@@ -109,6 +111,52 @@ void main() {
 
       expect(await changes.count, 1);
       await wrapped.close();
+    });
+
+    test('a database written by schema 1 gains the peers table', () async {
+      // Schema 1 held changes and snapshots only. A database on disk from
+      // that version has to keep them and gain the identity table, or a
+      // reopened document comes back as a different author.
+      final onSchemaOne = CRDTDrift.fromDatabase(
+        CRDTDriftDatabase(
+          NativeDatabase.memory(
+            setup: (db) {
+              db
+                ..execute(
+                  'CREATE TABLE changes ('
+                  'document_id TEXT NOT NULL, '
+                  'change_id TEXT NOT NULL, '
+                  'bytes BLOB NOT NULL, '
+                  'PRIMARY KEY (document_id, change_id));',
+                )
+                ..execute(
+                  'CREATE TABLE snapshots ('
+                  'document_id TEXT NOT NULL, '
+                  'snapshot_id TEXT NOT NULL, '
+                  'bytes BLOB NOT NULL, '
+                  'PRIMARY KEY (document_id, snapshot_id));',
+                )
+                ..execute(
+                  "INSERT INTO changes VALUES ('doc', 'kept', x'01');",
+                )
+                ..userVersion = 1;
+            },
+          ),
+        ),
+      );
+
+      final peerId = PeerId.generate();
+      final peers = onSchemaOne.peerIdStorageForDocument('doc');
+      await peers.savePeerId(peerId);
+
+      expect(await peers.getPeerId(), peerId);
+      expect(
+        await onSchemaOne.changeStorageForDocument('doc').count,
+        1,
+        reason: 'the upgrade only adds the new table',
+      );
+
+      await onSchemaOne.close();
     });
 
     test('deleteDocument removes only the target document', () async {
