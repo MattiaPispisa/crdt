@@ -13,14 +13,10 @@
   checkpoint a document and keep its undo history.
 
 - **`CRDTDocument.events`**, a stream of the moves of a document's durable state:
-  `DocumentChangesApplied` (one event per batch applied, `ChangeSource.created` or
-  `ChangeSource.ingested`), `DocumentSnapshotUpdated` (`taken` / `imported` / `merged`) and
-  `DocumentHistoryPruned` (the changes that left the store, and the surviving ones whose
-  dependencies were rebuilt).
-  Every event carries the `origin` of the call behind it, so a consumer can skip what it did
-  itself; `takeSnapshot`, `importSnapshot`, `mergeSnapshot`, `import` and `garbageCollect` now take
-  one. It is the origin of the call that made the batch, not the one in force at the commit, so a
-  nested call stays recognizable.
+  `DocumentChangesApplied`, `DocumentSnapshotUpdated` and `DocumentHistoryPruned`. It is what a
+  persistence layer follows. Every event carries the `origin` of the call behind it, so a consumer
+  can skip what it did itself; `takeSnapshot`, `importSnapshot`, `mergeSnapshot`, `import` and
+  `garbageCollect` now take one.
 
 ### Changed
 
@@ -28,11 +24,8 @@
   with a `DocumentDisposedException`, like every other method that writes to it.
 
 - **`localChanges` no longer carries changes that came in through `applyChange`.** It is now a view
-  over `events` and reports only what the document itself wrote — which is what its name always
-  claimed. It is also published once the document is settled, rather than in the middle of the
-  commit. Delivery to a listener was already asynchronous and stays that way, so the change is
-  invisible in practice — but a listener can no longer be handed a change while the commit that
-  produced it is still running.
+  over `events` and reports only what the document itself wrote, published once the commit is over
+  rather than in the middle of it.
 
 ### Fixed
 

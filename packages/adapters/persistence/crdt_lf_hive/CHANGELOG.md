@@ -4,83 +4,56 @@
 
 ### Changed
 
-- **The storages now implement the shared contract** from the new
-  [`crdt_lf_persistence`](https://pub.dev/packages/crdt_lf_persistence) package. Code written
-  against a storage runs on any adapter now, and `CRDTDocumentPersistence` keeps a whole document
-  on disk for you — see that package's README. The contract is re-exported here, so one import is
-  enough: `openDocument` reads the stored identity, builds the document and restores it in one
-  call, `readDocument` gives a document to read and not follow, and `copyDocumentTo` moves one to
-  another adapter. The whole of `crdt_lf_persistence` is re-exported, not a hand-kept list of it.
+- **The storages implement the shared contract** from the new
+  [`crdt_lf_persistence`](https://pub.dev/packages/crdt_lf_persistence), re-exported here so one
+  import stays enough. Code written against a storage now runs on any adapter, and
+  `CRDTDocumentPersistence` keeps a whole document on disk for you — see that package's README.
 
-  The storages take an `onWrite` callback, which is how the backend learns a document exists
-  without writing it down on every open.
+- **`CRDTHive.open()` gives a `CRDTHiveBackend`**, the `CRDTStorageBackend` of this adapter. Hive
+  cannot list its boxes, so the backend keeps a small registry box (`documents` by default), written
+  the first time a document is opened. **A document stored before this registry existed is not on
+  the list until it is opened once** — its data is untouched either way.
 
-- **`CRDTHive.open()` gives a `CRDTHiveBackend`**, the `CRDTStorageBackend` of this adapter: it
-  lists the documents, hands out the storages of each one, and deletes one whole. App code written
-  against the interface runs on any adapter.
-
-  Hive cannot list its boxes and this adapter gives every document a box of its own, so the backend
-  keeps a small registry box (`documents` by default). A document costs one extra row, written the
-  first time it is opened. **A document stored before this registry existed is not on the list
-  until it is opened once** — its data is untouched either way, and one open puts it back.
-
-- **`deleteDocumentData` is now `deleteDocument`**, which is the name the interface uses. The
-  static one leaves the registry box alone; `CRDTHiveBackend.deleteDocument` is the one that
-  forgets the document as well.
+- **`deleteDocumentData` is now `deleteDocument`**, the name the contract uses. The static one leaves
+  the registry alone; `CRDTHiveBackend.deleteDocument` forgets the document as well, identity
+  included.
 
 - **`CRDTChangeStorage` and `CRDTSnapshotStorage` are now `CRDTHiveChangeStorage` and
-  `CRDTHiveSnapshotStorage`**, matching the drift and sqlite adapters. The old names belong to the
-  shared contract these classes implement.
+  `CRDTHiveSnapshotStorage`**, matching the other adapters. The old names belong to the contract they
+  implement. `CRDTDocumentStorage` comes from `crdt_lf_persistence` and is re-exported, so the import
+  path does not change.
 
-- **`getChanges`, `getSnapshots`, `count` and `containsSnapshot` stay synchronous.** A Hive box
-  keeps its entries in memory, and the return types say so. The shared contract asks only for a
-  `FutureOr`, which a plain value satisfies, so the same code still runs on the asynchronous
-  backends. `await` on these reads is no longer valid — drop it. Writes go through the box journal
-  and stay asynchronous.
+- **`getChanges`, `getSnapshots`, `count` and `containsSnapshot` stay synchronous** — a Hive box
+  keeps its entries in memory, and the return types say so. **`await` on them is no longer valid,
+  drop it.** Writes go through the box journal and stay asynchronous.
 
-- **`CRDTHivePeerIdStorage` keeps the `PeerId` a document writes under.** Without it every restart
-  writes under a new author, and the version vector grows by one peer per session. Open it with
-  `CRDTHive.openPeerIdStorageForDocument`, and read it before building the document. Every
-  document shares one `peer_ids` box keyed by document id — a box of its own would cost an open
-  for a single string — and the value is text, so no new type adapter and no new type id.
+- **`CRDTHivePeerIdStorage` keeps the `PeerId` a document writes under**, so a restart no longer adds
+  a peer to the version vector. Open it with `CRDTHive.openPeerIdStorageForDocument` and read it
+  before building the document; every document shares one `peer_ids` box, keyed by document id.
 
-- **`getChanges` takes `newerThan` and `upTo`**, both `VersionVector`s: what a vector has not seen,
-  what it has seen, or the range between them.
-
-- `deleteDocument` now removes the stored identity too. It is a key in the shared box, not a
-  box to delete.
-
-- `CRDTDocumentStorage` is no longer declared here. It comes from `crdt_lf_persistence` and is
-  re-exported, so the import path does not change.
+- `getChanges` takes `newerThan` and `upTo`, both `VersionVector`s: what a vector has not seen, what
+  it has seen, or the range between them.
 
 - `isEmpty` and `isNotEmpty` are gone from both storages. Use `count`.
 
-- `openStorageForDocument` now returns a `CRDTHiveDocumentStorage`, whose `close()` closes the two
-  boxes of that document and nothing else. An app that opens one document after another needs this:
-  `closeAllBoxes()` closes every Hive box the app has open, yours included. Hive has no
-  transactions, so the contract's `transaction()` keeps its default and just runs the body.
+- `openStorageForDocument` returns a `CRDTHiveDocumentStorage`, whose `close()` closes that
+  document's two boxes and nothing else. Hive has no transactions, so `transaction()` keeps its
+  default and just runs the body.
 
 - Requires `crdt_lf: ^4.2.0`.
 
 ### Fixed
 
-- **Deleting an open document no longer hangs on the web.** On the web a box is an IndexedDB
-  database, and the browser does not delete one while a connection to it is open — it waits. Hive
-  deletes without closing first, so `deleteDocument` waited for a connection nothing was going to
-  close, and every later read of that box waited behind it. `deleteDocument` now closes the two
-  boxes before it deletes them. This is the normal case: an app deletes the note it was just
-  reading. Nothing changes on the VM, where the delete never blocked.
+- **Deleting an open document no longer hangs on the web.** A box is an IndexedDB database, and the
+  browser waits for every connection to close before it deletes one. `deleteDocument` now closes the
+  two boxes first. `deleteBox` is unchanged — close the box yourself if you opened it.
 
-  `deleteBox` is unchanged and still deletes the box you name: close it first if you opened it.
-
-- **A document id no longer goes into a box name as it is.** Hive lower-cases every box name and
-  refuses a non-ASCII one, so `Note` and `note` used to share one box and merge into one document,
-  and an id with an accent or an emoji tripped an assert. The id is now escaped: anything outside
-  `a-z`, `0-9` and `-` becomes `~` plus the hex of the byte, over its UTF-8 bytes.
-  **An id that was already safe keeps exactly the box name it had**, so a store written by 0.4.0
-  is read back unchanged for lower-case ASCII ids. Only the ids that were already ambiguous or
-  already broken move — those with upper-case letters, `_`, or anything outside ASCII.
-  `documentBoxNameFor` is exported, for a migration written by hand.
+- **A document id no longer goes into a box name as it is.** Hive lower-cases box names and refuses
+  non-ASCII ones, so `Note` and `note` merged into one document and an accented id tripped an
+  assert. Ids are now escaped: anything outside `a-z`, `0-9` and `-` becomes `~` plus the hex of the
+  byte, over UTF-8. **A lower-case ASCII id keeps exactly the box name it had**, so a 0.4.0 store
+  reads back unchanged; only the ambiguous or broken ids move. `documentBoxNameFor` is exported, for
+  a migration written by hand.
 
 ## [0.4.0](https://github.com/MattiaPispisa/crdt/tree/crdt_lf_hive-v0.4.0/packages/adapters/persistence/crdt_lf_hive)
 

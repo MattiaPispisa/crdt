@@ -2,109 +2,38 @@
 
 **Date:** --
 
-First release.
+First release. The storage contract behind the `crdt_lf` persistence adapters — the
+[README](https://github.com/MattiaPispisa/crdt/tree/main/packages/core/crdt_lf_persistence) has the
+API and the examples.
 
 ### Added
 
-- `CRDTChangeStorage`, `CRDTSnapshotStorage` and `CRDTDocumentStorage`: the contract every
-  `crdt_lf` storage adapter keeps for **one** document.
+- `CRDTChangeStorage`, `CRDTSnapshotStorage`, `CRDTDocumentStorage` and `CRDTPeerIdStorage`: what
+  one document has on disk. `crdt_lf_hive`, `crdt_lf_drift` and `crdt_lf_sqlite` implement them, so
+  code written against the contract runs on any adapter.
 
-- `CRDTStorageBackend`: the contract for the database itself — `storageForDocument`,
-  `peerIdStorageForDocument`, `documentIds`, `deleteDocument`, `close`. An app has notes, not a
-  note, and a `CRDTDocumentStorage` knows nothing about the documents next to it. Code written
-  against this runs on any adapter, so changing backend changes only the line that opens it.
-  `crdt_lf_hive`, `crdt_lf_drift` and `crdt_lf_sqlite` all implement it.
+- `CRDTStorageBackend`: the database itself — `storageForDocument`, `peerIdStorageForDocument`,
+  `documentIds`, `deleteDocument`, `close`.
 
-- `CRDTDocumentPersistence`: keeps a `CRDTDocument` on disk as it changes. A write that fails keeps
-  what it carried and arms a retry, waiting longer after each failure in a row (250 ms, doubling,
-  capped at 30 s), so a document that goes quiet after a failure still reaches the disk;
-  `hasUnwrittenChanges` says whether anything is still waiting, and `flush()` gives up for the round
-  instead of retrying a storage that just refused it.
+- `CRDTDocumentPersistence`: keeps a `CRDTDocument` on disk as it changes. Writes are batched, a
+  failed write is retried with a growing delay (250 ms, doubling, capped at 30 s),
+  `hasUnwrittenChanges` says whether anything is still waiting, and `compact()` snapshots and
+  prunes on demand. `openSync` restores before it returns, on a backend whose reads are synchronous,
+  so a Flutter app builds its first frame from stored state.
 
-  It takes a document that has already been edited: what the document holds and the storage does
-  not is queued for the next write, so a document written to before `open` is kept whole rather
-  than from the first edit after it.
+- On the backend, everything an app does with a stored document: `openDocument(id)` (identity,
+  document and restore in one call), `readDocument(id)` for a preview or a read-only view,
+  `documentAt(id, version)` for a history view, and `copyDocumentTo(other, id)` for a backup or a
+  move to another adapter. The three read-and-copy calls are also on a single `CRDTDocumentStorage`.
 
-  A prune writes the rebuilt survivors **before** it deletes what it removed. Both go in one
-  transaction where the backend has one; where it does not — Hive — a crash between the two steps
-  now costs a copy too many, which the next prune clears, instead of survivors that nothing ever
-  writes again.
+- `CRDTChangeStorage.getChanges` takes `newerThan` and `upTo`, both `VersionVector`s;
+  `filterByVersion` is the fallback for a backend that cannot ask its own query language.
 
-- `newestSnapshot`: the snapshot to restore from when a crash left two. A version vector is a
-  partial order and no adapter orders the rows it reads back, so two concurrent snapshots are
-  settled by the smaller id — the same answer on every backend, from the same bytes.
+- `newestSnapshot`: which snapshot to restore from when a crash left two. Settled by version vector,
+  then by the smaller id, so every backend answers the same from the same bytes.
 
-- `CRDTPeerIdStorage`: the `PeerId` a document writes under, kept so a reopened document is the
-  same author it was before. Without it `CRDTDocument` mints a new id per restart, and the version
-  vector gains an entry that never leaves. It stands apart from `CRDTDocumentStorage` because it
-  is needed earlier — the id has to exist before the document — so an app that stores no changes
-  and no snapshots can still use it. `loadOrCreate()` is the read-or-mint step, and `loadOr(author)`
-  is the same with a seed for a document that has no identity yet — a stored id always wins.
+- Every storage method returns a `FutureOr`, so a backend that answers without touching the disk
+  never suspends; `CRDTFutureOr.chain` works on either.
 
-- `CRDTStorageBackendDocuments`, the extension that puts everything an app does on the backend
-  itself, so it is all one dot away:
-
-  - `openDocument(id)`: the steps of opening a stored document, in the order they have to happen.
-    Read the stored `PeerId` — it has to exist before the document, so
-    `CRDTDocumentPersistence.open` cannot do it — build the `CRDTDocument`, restore. It hands back
-    both the document and the persistence, and disposes the document if the restore fails, so a
-    caller never gets half of one. Build the handlers on the document it returns; connect a sync
-    client after it, never before.
-  - `readDocument(id)`, for everything that reads and does not write back — a preview in a list of
-    notes, a read-only view, an export. Nothing follows what it hands back, and on a synchronous
-    backend it returns without suspending, so a list of fifty notes is built inside one frame.
-  - `documentAt(id, version)`: the document as it stood at a version, which is what a history view
-    reads. It is the consumer `CRDTChangeStorage.getChanges(upTo:)` was for. How far back it
-    reaches is what the log still holds, and it says so by throwing rather than handing back a
-    document that is quietly short.
-  - `copyDocumentTo(other, id)`: a whole document to another backend, identity included — a backup,
-    a restore, or a move to another adapter.
-
-- `CRDTDocumentStorageReading`: `readDocument()`, `documentAt(version)` and `copyTo(other)` on a
-  single `CRDTDocumentStorage`, for when that is all you hold. `copyTo` also takes the storage of a
-  **different** document, which is how a document is duplicated — leave the identities out there,
-  since two documents writing under one `PeerId` can mint the same operation id twice. The whole
-  copy goes in one `transaction()` on the target, the identity included, so a backend with
-  transactions never holds a document whose content arrived without its author. The body of that
-  transaction never suspends on a synchronous backend, so nothing else on the connection can slip
-  inside it and be taken away by a rollback.
-
-- `CRDTDocumentPersistence.compact()`: what `compactAfter` does on its own, on demand — a "save and
-  compact" button, or the moment an app goes to the background. It waits for the snapshot and the
-  prune to reach the disk.
-
-- `CRDTPeerIdStorage.loadOr(author)`: the stored id, or `author`, saved before it is returned. The
-  stored one always wins.
-
-- **Every storage method returns a `FutureOr`.** A backend that answers without touching the disk
-  returns the value itself and narrows its return type to say so; an asynchronous backend returns
-  a `Future`. `CRDTFutureOr.chain` is how a caller works on either without an `await` that would
-  suspend a backend that never needed to.
-
-- `CRDTDocumentPersistence.openSync`: the `open` a storage with synchronous reads allows. The
-  document is restored before it returns, so a Flutter app builds its first frame from stored
-  state. It throws a `StateError` on a backend whose reads return a `Future`.
-
-- **`CRDTChangeStorage.getChanges` takes `newerThan` and `upTo`**, both `VersionVector`s: what a
-  vector has not seen, what it has seen, or the range between them. `filterByVersion` is the
-  meaning of both bounds, and the fallback for a backend that cannot ask its own query language.
-  It uses the same test as `CRDTDocument.exportChangesNewerThan`.
-
-- `CRDTDocumentStorage.close()` and `CRDTDocumentStorage.transaction()`. Both come with a working
-  default — do nothing, and run the body — so an adapter only fills in what its backend can do.
-  A prune drops the covered changes and rewrites the survivors inside one `transaction()`, and a
-  snapshot write reads what is stored, writes the new snapshot and drops the old one inside
-  another. `transaction` carries one rule for the adapters that implement it: a body that returns
-  without suspending must be carried through without suspending, or on a backend with one shared
-  connection another document can write inside the transaction and lose that write to a rollback.
-
-- `newestSnapshot(Iterable<Snapshot>)` and `CRDTSnapshotStorage.getLatestSnapshot()`: which of the
-  stored snapshots to restore from. The answer comes from the version vector, never from the order
-  a backend returns its rows in. `CRDTDocumentPersistence` restores through the same function, so
-  a caller reading the snapshot itself and the restore never disagree.
-
-- **A change pruned while it was still queued never reaches the disk.** A prune reports only what
-  the document still holds, so a change deleted before its write would never be named again: it
-  would sit in the store for good, and compaction would not shrink the file. The prune goes through
-  the queue as well — removed changes leave it, and a survivor's old bytes are replaced by the
-  rewritten ones.
+- `CRDTDocumentStorage.close()` and `transaction()`, both with a working default, so an adapter only
+  fills in what its backend can do.

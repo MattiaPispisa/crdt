@@ -4,79 +4,57 @@
 
 ### Changed
 
-- **A change is named by its author and its clock**, not by a string. `changes` names a change by
-  `author`, `hlc_l` and `hlc_c` instead of by the one text column `change.id.toString()` used to
-  fill. It is the same name written apart — an `OperationId` **is** a peer and a clock — so
-  nothing is stored twice. Kept apart, SQL can compare it, which is what a version vector asks,
-  and the primary key `(document_id, author, hlc_l, hlc_c)` is already the index that comparison
-  wants. The clock takes two columns because `l` is 48 bits and `c` is 16: together they stay
-  inside the 53 bits an integer keeps exactly in JavaScript.
+- **A change is named by its author and its clock**, not by a string: `changes` has `author`, `hlc_l`
+  and `hlc_c` in place of the one text column. It is the same name written apart, so nothing is
+  stored twice — and SQL can compare it, which is what a version vector asks. The primary key
+  `(document_id, author, hlc_l, hlc_c)` is already the index that comparison wants.
 
-- **The database now carries a schema version**, in `PRAGMA user_version`, and this build writes
-  version 2. There was none before: `CREATE TABLE IF NOT EXISTS` gives a database a missing table
-  but never a different shape, so a database written by `0.2.0` would have kept the old one.
-  Opening it now rebuilds `changes`, reading the old `change_id` column and not the stored bytes,
-  so a change whose blob this build cannot decode still migrates. It all happens in one savepoint:
-  half a rebuilt table is worse than none. Every later open reads the version and returns without
-  touching the database.
+- **The database carries a schema version**, in `PRAGMA user_version`, and this build writes version
+  2. There was none before, and `CREATE TABLE IF NOT EXISTS` never reshapes an existing table, so
+  opening a `0.2.0` database rebuilds `changes` — from its old `change_id` column rather than from
+  the stored bytes, so a change this build cannot decode still migrates. It runs in one savepoint,
+  and every later open reads the version and returns.
 
-- **The storages now implement the shared contract** from the new
-  [`crdt_lf_persistence`](https://pub.dev/packages/crdt_lf_persistence) package. Code written
-  against a storage runs on any adapter now, and `CRDTDocumentPersistence` keeps a whole document
-  on disk for you — see that package's README. The contract is re-exported here, so one import is
-  enough: `openDocument` reads the stored identity, builds the document and restores it in one
-  call, `readDocument` gives a document to read and not follow, and `copyDocumentTo` moves one to
-  another adapter.
+- **The storages implement the shared contract** from the new
+  [`crdt_lf_persistence`](https://pub.dev/packages/crdt_lf_persistence), re-exported here so one
+  import stays enough. Code written against a storage now runs on any adapter, and
+  `CRDTDocumentPersistence` keeps a whole document on disk for you — see that package's README.
 
-- **`CRDTSqlite` is now a `CRDTStorageBackend`.** It answers `documentIds` with a `UNION` over the
-  three tables — the `peers` one included, so a document that was created and never written to is
-  still listed — and `storageForDocument`, `peerIdStorageForDocument` and `close` were already
-  there under those names. App code written against the interface runs on any adapter.
+- **`CRDTSqlite` is now a `CRDTStorageBackend`.** `documentIds` is a `UNION` over the three tables,
+  the `peers` one included, so a document that was created and never written to is still listed.
+  `close()` is idempotent.
 
-- **`deleteDocumentData` is now `deleteDocument`**, which is the name the interface uses. Same
-  behavior: the changes, the snapshots and the identity, in one transaction.
+- **`deleteDocumentData` is now `deleteDocument`**, the name the contract uses. Same behavior: the
+  changes, the snapshots and the identity, in one transaction.
 
-- **Every storage method stays synchronous.** sqlite3 answers on the spot, and the return types
-  say so: `getChanges()` gives a `List<Change>`, `saveChange()` gives `void`. The shared contract
-  asks only for a `FutureOr`, which a plain value satisfies, so the same code still runs on the
-  asynchronous backends. `await` on these calls is no longer valid — drop it.
+- **Every storage method stays synchronous** — sqlite3 answers on the spot, and the return types say
+  so. **`await` on these calls is no longer valid, drop it.**
 
-- **A transaction no longer lets another document write inside it.** Two documents sharing one
-  connection could interleave: savepoints are a stack on the connection, so a rollback undid
-  every write made after it, the other document's included, and the transaction that lost the
-  write never saw an error. Each transaction now takes a name of its own, a synchronous body is
-  carried through without suspending, and an asynchronous one waits for whatever is already open.
-  A call made from *inside* a transaction still nests, so a batch method run after an `await` is
-  not deferred past the transaction it belongs to.
+- **A transaction no longer lets another document write inside it.** Savepoints are a stack on the
+  connection, so two documents sharing one could interleave and a rollback would silently undo the
+  other's writes. Each transaction now takes a name of its own, a synchronous body is carried through
+  without suspending, and an asynchronous one waits for whatever is already open. A call made from
+  inside a transaction still nests.
 
 - `runInTransactionAsync` is gone. `runInTransaction` takes a `FutureOr` body and covers both.
 
-- **`CRDTSqlitePeerIdStorage` keeps the `PeerId` a document writes under**, in a new `peers`
-  table. Without it every restart writes under a new author, and the version vector grows by one
-  peer per session. Read it before building the document:
-  `CRDTDocument(documentId: id, peerId: database.peerIdStorageForDocument(id).loadOrCreate())`.
-  The table is created by the same `CREATE TABLE IF NOT EXISTS` run as the other two, so an
-  existing database picks it up on the next open.
+- **`CRDTSqlitePeerIdStorage` keeps the `PeerId` a document writes under**, in a new `peers` table, so
+  a restart no longer adds a peer to the version vector. Read it before building the document:
+  `CRDTDocument(documentId: id, peerId: database.peerIdStorageForDocument(id).loadOrCreate())`. An
+  existing database picks the table up on the next open.
 
-- **`getChanges` takes `newerThan` and `upTo`**, both `VersionVector`s: what a vector has not seen,
-  what it has seen, or the range between them. The database answers it: a change outside the range
-  is never read and never decoded, which is the cost of asking a long history what is new.
+- **`getChanges` takes `newerThan` and `upTo`**, both `VersionVector`s. The database answers it: a
+  change outside the range is never read and never decoded.
 
-- `deleteDocument` now removes the stored identity too, and does its deletes in one
-  transaction.
-
-- `CRDTDocumentStorage` is no longer declared here. It comes from `crdt_lf_persistence` and is
-  re-exported, so the import path does not change.
+- `CRDTDocumentStorage` comes from `crdt_lf_persistence` and is re-exported, so the import path does
+  not change.
 
 - `isEmpty` and `isNotEmpty` are gone from both storages. Use `count`.
 
-- `storageForDocument` now returns a `CRDTSqliteDocumentStorage`, which backs the contract's
-  `transaction()` with a real SQLite transaction: a prune either lands whole or not at all. It is
-  built on savepoints, so a batch that opens a transaction of its own nests inside instead of
-  failing on a second `BEGIN`. Its `close()` does nothing — one database file holds every document,
-  so the connection stays `CRDTSqlite.close()`'s to release.
-
-- `CRDTSqlite.close()` is idempotent: `sqlite3` ignores the second call.
+- `storageForDocument` returns a `CRDTSqliteDocumentStorage`, whose `transaction()` is a real SQLite
+  transaction: a prune lands whole or not at all. It is built on savepoints, so a batch that opens a
+  transaction of its own nests instead of failing on a second `BEGIN`. Its `close()` does nothing —
+  one file holds every document, so the connection stays `CRDTSqlite.close()`'s to release.
 
 - Requires `crdt_lf: ^4.2.0`.
 

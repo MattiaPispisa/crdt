@@ -8,16 +8,13 @@
   Linux). An undo takes back what *you* wrote and leaves what everyone else
   wrote in place. A burst of typing is one undo, not one per character.
 - **A room now survives a reload without a connection.** Each room is kept in
-  the browser's storage as it changes, and read back when you open it — so
-  reloading offline, or on a relay that has forgotten the room, brings your
-  text back instead of an empty page. Writing is delayed a quarter of a second
-  so typing never waits on the disk. What you write while offline reaches
-  everyone else as soon as you are back online, even if you reloaded in
-  between.
-- **The last rooms you opened are listed on the home page**, under the name
-  and the room field. The room id is the only name a document has, so this is
-  the way back into one you did not write down — it works offline, because the
-  room is already on your device.
+  the browser's storage as it changes, so reloading offline — or on a relay
+  that has forgotten the room — brings your text back instead of an empty
+  page. What you wrote offline reaches everyone else as soon as you are back
+  online.
+- **The last rooms you opened are listed on the home page.** The room id is
+  the only name a document has, so this is the way back into one you did not
+  write down. It works offline: the room is already on your device.
 
 ## 0.9.0
 
