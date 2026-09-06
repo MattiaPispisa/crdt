@@ -30,6 +30,7 @@ mixin RoomHost<T extends StatefulWidget> on State<T> {
   String get roomId;
 
   RoomSession? _room;
+  CRDTHiveBackend? _backend;
   WebSocketRelayClient? _sync;
   ValueNotifier<ConnectionStatus>? _status;
   StreamSubscription<ConnectionStatus>? _statusSubscription;
@@ -70,8 +71,9 @@ mixin RoomHost<T extends StatefulWidget> on State<T> {
     // `dispose` can have run while the storage was being read. It found
     // nothing built yet and had nothing to close, so this closes it here.
     if (_disposed) {
-      unawaited(opened.persistence?.dispose());
-      opened.document.dispose();
+      unawaited(
+        _closeStorage(opened.document, opened.persistence, _backend),
+      );
       return;
     }
 
@@ -122,7 +124,7 @@ mixin RoomHost<T extends StatefulWidget> on State<T> {
   Future<({CRDTDocument document, CRDTDocumentPersistence? persistence})>
       _openDocument() async {
     try {
-      final backend = await CRDTHive.open();
+      final backend = _backend = await CRDTHive.open();
       // The backend keeps the identity too, so the device writes under the
       // same author on every launch. A new one per launch would grow the
       // room's version vector by an entry that never leaves — carried inside
@@ -161,16 +163,36 @@ mixin RoomHost<T extends StatefulWidget> on State<T> {
   void dispose() {
     _disposed = true;
     _statusSubscription?.cancel();
-    // Not awaited: the flush finishes after the widget is gone, and the
-    // worst it costs is one delayed write.
-    unawaited(_room?.persistence?.dispose());
     // The client owns the awareness plugin, so this disposes that too. The
     // service below is a different object.
     _sync?.dispose();
     _room?.awareness.dispose();
     _status?.dispose();
     _room?.undo.dispose();
-    _room?.document.dispose();
+    unawaited(
+      _closeStorage(_room?.document, _room?.persistence, _backend),
+    );
     super.dispose();
+  }
+
+  /// Writes what is still waiting, then lets the document and the store go.
+  ///
+  /// In that order, and not awaited by [dispose]: the flush suspends, and a
+  /// document disposed while it runs closes the event stream the persistence
+  /// is still reading. The last keystrokes would never reach the disk.
+  static Future<void> _closeStorage(
+    CRDTDocument? document,
+    CRDTDocumentPersistence? persistence,
+    CRDTHiveBackend? backend,
+  ) async {
+    try {
+      await persistence?.dispose();
+    } finally {
+      document?.dispose();
+      // The two boxes of this document, then the registry box. Left open on
+      // the web they are IndexedDB connections that never close.
+      await persistence?.storage.close();
+      await backend?.close();
+    }
   }
 }

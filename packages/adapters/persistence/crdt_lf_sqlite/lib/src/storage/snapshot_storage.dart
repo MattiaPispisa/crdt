@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:crdt_lf/crdt_lf.dart';
@@ -12,8 +13,11 @@ import 'package:sqlite3/sqlite3.dart' as sq;
 /// several documents can share the same database.
 ///
 /// sqlite3 is synchronous, so every method here answers without ever
-/// suspending. They return futures to keep the [CRDTSnapshotStorage] contract,
-/// which the asynchronous backends need.
+/// suspending, and says so in its return type.
+///
+/// The batch methods are the exception: they keep the [FutureOr] because
+/// [runInTransaction] defers them when another asynchronous transaction holds
+/// the connection.
 class CRDTSqliteSnapshotStorage implements CRDTSnapshotStorage {
   /// Creates a new [CRDTSqliteSnapshotStorage] instance.
   ///
@@ -40,24 +44,26 @@ class CRDTSqliteSnapshotStorage implements CRDTSnapshotStorage {
   }
 
   /// {@macro crdt_lf_sqlite_batch}
+  ///
+  /// {@macro crdt_lf_sqlite_batch_defer}
   @override
-  void saveSnapshots(List<Snapshot> snapshots) {
+  FutureOr<void> saveSnapshots(List<Snapshot> snapshots) {
     if (snapshots.isEmpty) {
-      return;
+      return null;
     }
-    final statement = database.prepare(
-      'INSERT OR REPLACE INTO $snapshotsTable '
-      '(document_id, snapshot_id, bytes) VALUES (?, ?, ?)',
-    );
-    try {
-      runInTransaction(database, () {
+    return runInTransaction(database, () {
+      final statement = database.prepare(
+        'INSERT OR REPLACE INTO $snapshotsTable '
+        '(document_id, snapshot_id, bytes) VALUES (?, ?, ?)',
+      );
+      try {
         for (final snapshot in snapshots) {
           statement.execute([documentId, snapshot.id, snapshot.toBytes()]);
         }
-      });
-    } finally {
-      statement.close();
-    }
+      } finally {
+        statement.close();
+      }
+    });
   }
 
   @override
@@ -84,41 +90,49 @@ class CRDTSqliteSnapshotStorage implements CRDTSnapshotStorage {
         .toList();
   }
 
+  /// Deletes the snapshot with the given [id], and says whether it was there.
+  ///
+  /// The check and the delete go in one transaction: two statements without
+  /// one would let another write on this connection land between them.
   @override
-  bool deleteSnapshot(String id) {
-    if (!_contains(id)) {
-      return false;
-    }
-    database.execute(
-      'DELETE FROM $snapshotsTable WHERE document_id = ? AND snapshot_id = ?',
-      [documentId, id],
-    );
-    return true;
+  FutureOr<bool> deleteSnapshot(String id) {
+    return runInTransaction(database, () {
+      if (!_contains(id)) {
+        return false;
+      }
+      database.execute(
+        'DELETE FROM $snapshotsTable WHERE document_id = ? AND snapshot_id = ?',
+        [documentId, id],
+      );
+      return true;
+    });
   }
 
   /// {@macro crdt_lf_sqlite_batch}
+  ///
+  /// {@macro crdt_lf_sqlite_batch_defer}
   @override
-  int deleteSnapshots(List<String> ids) {
+  FutureOr<int> deleteSnapshots(List<String> ids) {
     if (ids.isEmpty) {
       return 0;
     }
-    var deleted = 0;
-    final statement = database.prepare(
-      'DELETE FROM $snapshotsTable WHERE document_id = ? AND snapshot_id = ?',
-    );
-    try {
-      runInTransaction(database, () {
+    return runInTransaction(database, () {
+      var deleted = 0;
+      final statement = database.prepare(
+        'DELETE FROM $snapshotsTable WHERE document_id = ? AND snapshot_id = ?',
+      );
+      try {
         for (final id in ids) {
           if (_contains(id)) {
             statement.execute([documentId, id]);
             deleted += 1;
           }
         }
-      });
-    } finally {
-      statement.close();
-    }
-    return deleted;
+      } finally {
+        statement.close();
+      }
+      return deleted;
+    });
   }
 
   @override

@@ -17,6 +17,10 @@ import 'package:sqlite3/sqlite3.dart' as sq;
 /// sqlite3 is synchronous, so every method here answers without ever
 /// suspending, and says so in its return type. The [CRDTChangeStorage]
 /// contract asks only for a [FutureOr], which a plain value satisfies.
+///
+/// The batch methods are the exception: they keep the [FutureOr] because
+/// [runInTransaction] defers them when another asynchronous transaction holds
+/// the connection.
 class CRDTSqliteChangeStorage implements CRDTChangeStorage {
   /// Creates a new [CRDTSqliteChangeStorage] instance.
   ///
@@ -60,21 +64,30 @@ class CRDTSqliteChangeStorage implements CRDTChangeStorage {
   }
 
   /// {@macro crdt_lf_sqlite_batch}
+  ///
+  /// {@template crdt_lf_sqlite_batch_defer}
+  /// The statement is prepared **inside** the transaction body and the result
+  /// of [runInTransaction] is returned, not dropped. Both matter when another
+  /// asynchronous transaction is already open on the connection: the body is
+  /// deferred until that one ends, so a statement prepared out here would
+  /// already be closed by the time the body runs, and a dropped future would
+  /// tell the caller the batch had landed while nothing had been written.
+  /// {@endtemplate}
   @override
-  void saveChanges(List<Change> changes) {
+  FutureOr<void> saveChanges(List<Change> changes) {
     if (changes.isEmpty) {
-      return;
+      return null;
     }
-    final statement = database.prepare(_insertSql);
-    try {
-      runInTransaction(database, () {
+    return runInTransaction(database, () {
+      final statement = database.prepare(_insertSql);
+      try {
         for (final change in changes) {
           statement.execute(_row(change));
         }
-      });
-    } finally {
-      statement.close();
-    }
+      } finally {
+        statement.close();
+      }
+    });
   }
 
   /// The condition that holds for a change [vector] has already seen, and the
@@ -134,41 +147,49 @@ class CRDTSqliteChangeStorage implements CRDTChangeStorage {
     ];
   }
 
+  /// Deletes [change], and says whether it was there.
+  ///
+  /// The check and the delete go in one transaction: two statements without
+  /// one would let another write on this connection land between them.
   @override
-  bool deleteChange(Change change) {
-    if (!_contains(change)) {
-      return false;
-    }
-    database.execute(
-      'DELETE FROM $changesTable WHERE $_rowOfSql',
-      _rowOf(change),
-    );
-    return true;
+  FutureOr<bool> deleteChange(Change change) {
+    return runInTransaction(database, () {
+      if (!_contains(change)) {
+        return false;
+      }
+      database.execute(
+        'DELETE FROM $changesTable WHERE $_rowOfSql',
+        _rowOf(change),
+      );
+      return true;
+    });
   }
 
   /// {@macro crdt_lf_sqlite_batch}
+  ///
+  /// {@macro crdt_lf_sqlite_batch_defer}
   @override
-  int deleteChanges(List<Change> changes) {
+  FutureOr<int> deleteChanges(List<Change> changes) {
     if (changes.isEmpty) {
       return 0;
     }
-    var deleted = 0;
-    final statement = database.prepare(
-      'DELETE FROM $changesTable WHERE $_rowOfSql',
-    );
-    try {
-      runInTransaction(database, () {
+    return runInTransaction(database, () {
+      var deleted = 0;
+      final statement = database.prepare(
+        'DELETE FROM $changesTable WHERE $_rowOfSql',
+      );
+      try {
         for (final change in changes) {
           if (_contains(change)) {
             statement.execute(_rowOf(change));
             deleted += 1;
           }
         }
-      });
-    } finally {
-      statement.close();
-    }
-    return deleted;
+      } finally {
+        statement.close();
+      }
+      return deleted;
+    });
   }
 
   @override
@@ -180,10 +201,12 @@ class CRDTSqliteChangeStorage implements CRDTChangeStorage {
   }
 
   bool _contains(Change change) {
-    return database.select(
-      'SELECT 1 FROM $changesTable WHERE $_rowOfSql LIMIT 1',
-      _rowOf(change),
-    ).isNotEmpty;
+    return database
+        .select(
+          'SELECT 1 FROM $changesTable WHERE $_rowOfSql LIMIT 1',
+          _rowOf(change),
+        )
+        .isNotEmpty;
   }
 
   @override

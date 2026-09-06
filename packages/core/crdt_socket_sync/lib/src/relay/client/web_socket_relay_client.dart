@@ -693,6 +693,8 @@ class WebSocketRelayClient extends RelaySocketClient {
 
     _messageController.close();
     _connectionStatusController.close();
-    _syncManager.dispose();
+    // Not awaited: `dispose` is synchronous, and the flag inside is set before
+    // the first await, so nothing more reaches this client either way.
+    unawaited(_syncManager.dispose());
   }
 }

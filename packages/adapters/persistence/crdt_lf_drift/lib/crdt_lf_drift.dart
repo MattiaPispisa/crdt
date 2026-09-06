@@ -7,21 +7,10 @@
 /// writes under, so a reopened document is the same author it was before.
 library;
 
-export 'package:crdt_lf_persistence/crdt_lf_persistence.dart'
-    show
-        CRDTChangeStorage,
-        CRDTDocumentPersistence,
-        CRDTDocumentStorage,
-        CRDTDocumentStorageReading,
-        CRDTPeerIdStorage,
-        CRDTPeerIdStorageLoad,
-        CRDTSnapshotStorage,
-        CRDTSnapshotStorageLatest,
-        CRDTStorageBackend,
-        CRDTStorageBackendDocuments,
-        PersistentDocument,
-        filterByVersion,
-        newestSnapshot;
+// The whole contract, not a curated list of it. Three adapters re-exporting
+// the same names by hand is three places to forget one, and a name missing
+// from one of them is a symbol its users cannot reach at all.
+export 'package:crdt_lf_persistence/crdt_lf_persistence.dart';
 
 export 'src/crdt_drift.dart';
 export 'src/database.dart' show CRDTDriftDatabase;

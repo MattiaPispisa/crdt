@@ -4,6 +4,17 @@
 
 [compare to previous release](https://github.com/MattiaPispisa/crdt/compare/crdt_socket_sync-v0.7.0...crdt_socket_sync-v0.8.0)
 
+### Fixed
+
+- **A server shutdown writes what its clients had already sent.** `WebSocketServer.dispose` walked
+  `documentIds` and disposed each document by hand — which, on a durable registry, read every
+  document on disk back into memory just to dispose it, never flushed the pending writes, and left
+  the registry holding disposed documents. `CRDTServerRegistry` now has a `close()`, no-op by
+  default, and `dispose` calls that instead.
+
+- **`RelaySyncManager.dispose` stops the pushes.** A `flush` already in flight could still write to
+  a client that was closing.
+
 ### Added
 
 - **`PersistentServerRegistry`**: a `CRDTServerRegistry` that keeps every document it serves on

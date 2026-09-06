@@ -134,13 +134,20 @@ extension CRDTDocumentStorageReading on CRDTDocumentStorage {
     final snapshots = await this.snapshots.getSnapshots();
     final peerId = fromPeerIds == null ? null : await fromPeerIds.getPeerId();
 
-    await other.transaction<void>(() async {
-      await other.changes.saveChanges(changes);
-      await other.snapshots.saveSnapshots(snapshots);
-      if (peerId != null && toPeerIds != null) {
-        await toPeerIds.savePeerId(peerId);
-      }
-    });
+    // Chained rather than awaited step by step. `await` suspends even on a
+    // value that is not a future, and a suspension inside a transaction lets
+    // another document write into it on a backend where one connection serves
+    // them all — a rollback would then take that write with it.
+    await other.transaction<void>(
+      () => other.changes.saveChanges(changes).chain(
+            (_) => other.snapshots.saveSnapshots(snapshots).chain((_) {
+              if (peerId == null || toPeerIds == null) {
+                return null;
+              }
+              return toPeerIds.savePeerId(peerId);
+            }),
+          ),
+    );
   }
 }
 

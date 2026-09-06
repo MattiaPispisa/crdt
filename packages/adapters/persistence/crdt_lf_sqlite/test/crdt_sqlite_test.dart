@@ -150,6 +150,60 @@ void main() {
       expect(changes.count, 1);
     });
 
+    // The bug this pins: a batch prepared its statement outside
+    // `runInTransaction` and dropped the returned future. While another
+    // asynchronous transaction holds the connection the body is deferred, so
+    // the statement was already closed when it ran, and the caller was told
+    // the batch had landed while nothing had been written.
+    test('a batch deferred behind another transaction still lands', () async {
+      final other = storage.changeStorageForDocument('doc-other');
+      final batch = storage.changeStorageForDocument('doc-batch');
+      final holding = Completer<void>();
+      final release = Completer<void>();
+
+      final held = runInTransaction(storage.database, () async {
+        holding.complete();
+        await release.future;
+        other.saveChange(makeChange(1, 1));
+      });
+
+      await holding.future;
+      final written = batch.saveChanges([makeChange(2, 1), makeChange(2, 2)]);
+      expect(
+        written,
+        isA<Future<void>>(),
+        reason: 'a deferred batch must say so instead of reporting success',
+      );
+
+      release.complete();
+      await held;
+      await written;
+
+      expect(batch.count, 2);
+      expect(other.count, 1);
+    });
+
+    test('a deferred delete batch reports what it really deleted', () async {
+      final batch = storage.changeStorageForDocument('doc-deferred-delete');
+      final changes = [makeChange(3, 1), makeChange(3, 2)];
+      await batch.saveChanges(changes);
+
+      final holding = Completer<void>();
+      final release = Completer<void>();
+      final held = runInTransaction(storage.database, () async {
+        holding.complete();
+        await release.future;
+      });
+
+      await holding.future;
+      final deleting = batch.deleteChanges(changes);
+      release.complete();
+      await held;
+
+      expect(await deleting, 2);
+      expect(batch.count, isZero);
+    });
+
     test('a synchronous body never suspends', () {
       final result = runInTransaction(storage.database, () => 'done');
 
@@ -223,7 +277,7 @@ CREATE TABLE $changesTable (
           );
         }
       } finally {
-        database.dispose();
+        database.close();
       }
     }
 
@@ -267,9 +321,8 @@ CREATE TABLE $changesTable (
 
       final upgraded = CRDTSqlite.open(dbPath);
       final peerId = PeerId.generate();
-      final peers = upgraded.peerIdStorageForDocument('doc');
-
-      peers.savePeerId(peerId);
+      final peers = upgraded.peerIdStorageForDocument('doc')
+        ..savePeerId(peerId);
 
       expect(peers.getPeerId(), peerId);
       upgraded.close();
@@ -281,8 +334,7 @@ CREATE TABLE $changesTable (
       // decode would once have stopped the upgrade; now it moves across and
       // fails later, when someone actually asks for it.
       final id = OperationId(PeerId.generate(), HybridLogicalClock(l: 7, c: 0));
-      final database = sq.sqlite3.open(dbPath);
-      database
+      sq.sqlite3.open(dbPath)
         ..execute('''
 CREATE TABLE $changesTable (
   document_id TEXT NOT NULL,
@@ -293,9 +345,13 @@ CREATE TABLE $changesTable (
 ''')
         ..execute(
           'INSERT INTO $changesTable VALUES (?, ?, ?)',
-          ['doc', id.toString(), Uint8List.fromList([1])],
+          [
+            'doc',
+            id.toString(),
+            Uint8List.fromList([1]),
+          ],
         )
-        ..dispose();
+        ..close();
 
       final upgraded = CRDTSqlite.open(dbPath);
 
@@ -311,12 +367,12 @@ CREATE TABLE $changesTable (
       upgraded.close();
     });
 
-    test('an upgrade that cannot read a change id leaves the database as it '
+    test(
+        'an upgrade that cannot read a change id leaves the database as it '
         'was', () async {
       // A name the split cannot parse stops the upgrade. Half the rows moved
       // and half left behind is worse than refusing to open.
-      final database = sq.sqlite3.open(dbPath);
-      database
+      sq.sqlite3.open(dbPath)
         ..execute('''
 CREATE TABLE $changesTable (
   document_id TEXT NOT NULL,
@@ -328,7 +384,7 @@ CREATE TABLE $changesTable (
         ..execute(
           "INSERT INTO $changesTable VALUES ('doc', 'not-an-id', x'01')",
         )
-        ..dispose();
+        ..close();
 
       expect(() => CRDTSqlite.open(dbPath), throwsA(isA<FormatException>()));
 
@@ -337,7 +393,7 @@ CREATE TABLE $changesTable (
           .select('PRAGMA table_info($changesTable)')
           .map((row) => row['name'])
           .toSet();
-      after.dispose();
+      after.close();
 
       expect(
         columns,

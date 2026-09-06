@@ -18,10 +18,20 @@ class CRDTHiveChangeStorage implements CRDTChangeStorage {
   ///
   /// [documentId] is the unique identifier
   /// for the document these changes belong to.
-  CRDTHiveChangeStorage(this.box, this.documentId);
+  ///
+  /// [onWrite] runs before every write that adds something.
+  ///
+  /// It is how [CRDTHiveBackend] learns a document exists: Hive cannot list
+  /// its boxes, so the backend keeps a registry, and a document belongs on it
+  /// once something about it has been stored — not merely because it was
+  /// opened to be read.
+  CRDTHiveChangeStorage(this.box, this.documentId, {this.onWrite});
 
   /// The Hive box used for storing [Change] objects.
   final Box<Change> box;
+
+  /// Called before a write that adds something. See the constructor.
+  final Future<void> Function()? onWrite;
 
   @override
   final String documentId;
@@ -29,19 +39,20 @@ class CRDTHiveChangeStorage implements CRDTChangeStorage {
   String _getChangeKey(Change change) => change.id.toString();
 
   @override
-  Future<void> saveChange(Change change) {
-    final key = _getChangeKey(change);
-    return box.put(key, change).then((_) => null);
+  Future<void> saveChange(Change change) async {
+    await onWrite?.call();
+    await box.put(_getChangeKey(change), change);
   }
 
   @override
-  Future<void> saveChanges(List<Change> changes) {
-    final entries = <String, Change>{};
-    for (final change in changes) {
-      final key = _getChangeKey(change);
-      entries[key] = change;
+  Future<void> saveChanges(List<Change> changes) async {
+    if (changes.isEmpty) {
+      return;
     }
-    return box.putAll(entries).then((_) => null);
+    await onWrite?.call();
+    await box.putAll(<String, Change>{
+      for (final change in changes) _getChangeKey(change): change,
+    });
   }
 
   /// The stored changes of this document, in no particular order.

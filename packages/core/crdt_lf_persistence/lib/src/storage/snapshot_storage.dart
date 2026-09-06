@@ -61,16 +61,26 @@ abstract interface class CRDTSnapshotStorage {
 ///
 /// The choice is made on the version vector, never on the order the backend
 /// returns rows in. Two snapshots whose vectors are concurrent — neither has
-/// seen everything the other has — cannot be ordered, and the first of the two
-/// is kept.
+/// seen everything the other has — cannot be ordered by it, and the smaller
+/// [Snapshot.id] wins.
+///
+/// That tie-break is the whole point of the second test. A version vector is a
+/// partial order, and no adapter orders the rows it reads back, so picking
+/// "the first of the two" would restore a different document per adapter from
+/// the same bytes — on exactly the crash this function exists for.
 Snapshot? newestSnapshot(Iterable<Snapshot> snapshots) {
   if (snapshots.isEmpty) {
     return null;
   }
-  return snapshots.reduce(
-    (a, b) =>
-        b.versionVector.isStrictlyNewerOrEqualThan(a.versionVector) ? b : a,
-  );
+  return snapshots.reduce((a, b) {
+    if (b.versionVector.isStrictlyNewerOrEqualThan(a.versionVector)) {
+      return b;
+    }
+    if (a.versionVector.isStrictlyNewerOrEqualThan(b.versionVector)) {
+      return a;
+    }
+    return a.id.compareTo(b.id) <= 0 ? a : b;
+  });
 }
 
 /// The read-then-pick step a caller of a [CRDTSnapshotStorage] takes to

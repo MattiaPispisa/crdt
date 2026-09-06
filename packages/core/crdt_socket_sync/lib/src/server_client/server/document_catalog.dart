@@ -17,13 +17,13 @@ abstract interface class ServerDocumentCatalog {
   Future<Set<String>> get documentIds;
 
   /// Remembers [documentId].
-///
-/// Adding the same id twice is not an error.
+  ///
+  /// Adding the same id twice is not an error.
   Future<void> add(String documentId);
 
   /// Forgets [documentId].
-///
-/// Removing an id that is not there is not an error.
+  ///
+  /// Removing an id that is not there is not an error.
   Future<void> remove(String documentId);
 }
 

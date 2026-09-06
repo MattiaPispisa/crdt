@@ -113,8 +113,7 @@ void main() {
       await wrapped.close();
     });
 
-    test('a database written by schema 1 is upgraded, rows included',
-        () async {
+    test('a database written by schema 1 is upgraded, rows included', () async {
       // Schema 1 held changes and snapshots only, and no author or clock
       // column. A database on disk from that version has to keep its rows,
       // gain the identity table, and end up filterable by version — the

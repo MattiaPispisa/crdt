@@ -131,22 +131,21 @@ class CRDTDriftChangeStorage implements CRDTChangeStorage {
 
     // One statement per change, not one `IN (?, ?, ...)` over all of them: a
     // prune hands over everything it removed at once, and SQLite refuses a
-    // statement that binds more variables than it allows. A batch has no such
-    // ceiling, and every delete here is a hit on the primary key.
+    // statement that binds more variables than it allows. Every delete here is
+    // a hit on the primary key, and they all run inside one transaction.
     //
-    // A batch cannot report how many rows each statement removed, so the
-    // count comes from the difference.
+    // Each one is awaited for its own row count rather than batched. A batch
+    // reports nothing per statement, so the count would have to come from the
+    // difference between two `COUNT(*)`s — and anything writing to this
+    // document between them would make the answer wrong, or negative.
     return database.transaction(() async {
-      final before = await count;
-      await database.batch((batch) {
-        for (final change in changes) {
-          batch.deleteWhere(
-            database.changes,
-            (row) => _rowOf(change, row),
-          );
-        }
-      });
-      return before - await count;
+      var deleted = 0;
+      for (final change in changes) {
+        deleted += await (database.delete(database.changes)
+              ..where((row) => _rowOf(change, row)))
+            .go();
+      }
+      return deleted;
     });
   }
 

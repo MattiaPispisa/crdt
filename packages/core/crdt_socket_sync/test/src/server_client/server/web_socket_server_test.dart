@@ -5,7 +5,6 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:crdt_lf/crdt_lf.dart';
-import 'package:crdt_socket_sync/src/server_client/server/in_memory_server_registry.dart';
 import 'package:crdt_socket_sync/web_socket_server.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:test/test.dart';

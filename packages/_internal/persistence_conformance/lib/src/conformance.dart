@@ -82,8 +82,7 @@ void runDocumentStorageConformanceTests({
     });
 
     group('copying', () {
-      test('copyTo carries a whole document to another storage',
-          () async {
+      test('copyTo carries a whole document to another storage', () async {
         final changes = fixtures.everyHandler();
         final snapshot = fixtures.snapshot();
         await storage.changes.saveChanges(changes);
@@ -295,6 +294,21 @@ void runDocumentStorageConformanceTests({
         await storage.snapshots.clear();
 
         expect(await storage.snapshots.getSnapshots(), isEmpty);
+      });
+
+      // A crash between the write of a snapshot and the delete of the one
+      // before it leaves two. No adapter orders the rows it reads back, so
+      // the pick has to come from the snapshots themselves — otherwise the
+      // same bytes restore a different document per backend.
+      test('two stored snapshots pick the same one on every backend', () async {
+        fixtures.changes(1);
+        final older = fixtures.snapshot();
+        fixtures.changes(1);
+        final newer = fixtures.snapshot();
+
+        await storage.snapshots.saveSnapshots([newer, older]);
+
+        expect((await storage.snapshots.getLatestSnapshot())!.id, newer.id);
       });
     });
 
@@ -696,6 +710,27 @@ void runStorageBackendConformanceTests({
         await backend.documentIds,
         {'doc-a'},
         reason: 'a document that was opened and never written to still exists',
+      );
+    });
+
+    // Hive names a box after the document id and lower-cases it, so the two
+    // used to share one box and merge into one document.
+    test('two ids that differ only in case are two documents', () async {
+      final upper = await backend.storageForDocument('Doc');
+      final lower = await backend.storageForDocument('doc');
+      await upper.changes.saveChanges(fixtures.changes(1));
+
+      expect(await lower.changes.count, isZero);
+      expect(await upper.changes.count, 1);
+    });
+
+    test('a document that was only read is not listed', () async {
+      await backend.readDocument('doc-never-written');
+
+      expect(
+        await backend.documentIds,
+        isEmpty,
+        reason: 'reading a document that is not there must not create it',
       );
     });
 

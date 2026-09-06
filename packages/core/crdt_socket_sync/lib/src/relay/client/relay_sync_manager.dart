@@ -47,6 +47,9 @@ class RelaySyncManager {
   /// Whether a welcome was received on the current connection
   bool _handshaken = false;
 
+  /// [dispose] has run, so nothing must reach the client any more.
+  bool _disposed = false;
+
   /// Subscription to the local changes stream
   StreamSubscription<Change>? _localChangesSubscription;
 
@@ -172,7 +175,7 @@ class RelaySyncManager {
   /// connection and no other push is in flight (acks pair with pushes
   /// one-to-one).
   Future<void> flush() async {
-    if (!_handshaken || _queue.hasInFlight || _queue.isEmpty) {
+    if (_disposed || !_handshaken || _queue.hasInFlight || _queue.isEmpty) {
       return;
     }
 
@@ -228,8 +231,12 @@ class RelaySyncManager {
   }
 
   /// Dispose the resources
-  void dispose() {
-    _localChangesSubscription?.cancel();
+  ///
+  /// Marks the manager as gone before it lets the subscription go, so a
+  /// [flush] already in flight does not write to a client that is closing.
+  Future<void> dispose() async {
+    _disposed = true;
+    await _localChangesSubscription?.cancel();
     _localChangesSubscription = null;
   }
 }

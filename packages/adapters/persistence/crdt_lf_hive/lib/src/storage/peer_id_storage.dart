@@ -18,10 +18,20 @@ class CRDTHivePeerIdStorage implements CRDTPeerIdStorage {
   /// [box] is the shared Hive box that holds every document's identity.
   ///
   /// [documentId] is the document this identity belongs to.
-  CRDTHivePeerIdStorage(this.box, this.documentId);
+  ///
+  /// [onWrite] runs before every write that adds something.
+  ///
+  /// It is how [CRDTHiveBackend] learns a document exists: Hive cannot list
+  /// its boxes, so the backend keeps a registry, and a document belongs on it
+  /// once something about it has been stored — not merely because it was
+  /// opened to be read.
+  CRDTHivePeerIdStorage(this.box, this.documentId, {this.onWrite});
 
   /// The Hive box used for storing peer ids.
   final Box<String> box;
+
+  /// Called before a write that adds something. See the constructor.
+  final Future<void> Function()? onWrite;
 
   @override
   final String documentId;
@@ -33,7 +43,8 @@ class CRDTHivePeerIdStorage implements CRDTPeerIdStorage {
   }
 
   @override
-  Future<void> savePeerId(PeerId peerId) {
-    return box.put(documentId, peerId.toString());
+  Future<void> savePeerId(PeerId peerId) async {
+    await onWrite?.call();
+    await box.put(documentId, peerId.toString());
   }
 }

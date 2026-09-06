@@ -88,10 +88,11 @@ class CRDTHive {
   static Future<CRDTHiveChangeStorage> openChangeStorageForDocument(
     String documentId, {
     String boxName = 'changes',
+    Future<void> Function()? onWrite,
   }) {
-    final documentBoxName = '${boxName}_$documentId';
+    final documentBoxName = documentBoxNameFor(boxName, documentId);
     return Hive.openBox<Change>(documentBoxName).then(
-      (box) => CRDTHiveChangeStorage(box, documentId),
+      (box) => CRDTHiveChangeStorage(box, documentId, onWrite: onWrite),
     );
   }
 
@@ -108,10 +109,11 @@ class CRDTHive {
   static Future<CRDTHiveSnapshotStorage> openSnapshotStorageForDocument(
     String documentId, {
     String boxName = 'snapshots',
+    Future<void> Function()? onWrite,
   }) {
-    final documentBoxName = '${boxName}_$documentId';
+    final documentBoxName = documentBoxNameFor(boxName, documentId);
     return Hive.openBox<Snapshot>(documentBoxName).then(
-      (box) => CRDTHiveSnapshotStorage(box, documentId),
+      (box) => CRDTHiveSnapshotStorage(box, documentId, onWrite: onWrite),
     );
   }
 
@@ -136,9 +138,10 @@ class CRDTHive {
   static Future<CRDTHivePeerIdStorage> openPeerIdStorageForDocument(
     String documentId, {
     String boxName = 'peer_ids',
+    Future<void> Function()? onWrite,
   }) {
     return Hive.openBox<String>(boxName).then(
-      (box) => CRDTHivePeerIdStorage(box, documentId),
+      (box) => CRDTHivePeerIdStorage(box, documentId, onWrite: onWrite),
     );
   }
 
@@ -154,15 +157,18 @@ class CRDTHive {
     String documentId, {
     String changesBoxName = 'changes',
     String snapshotsBoxName = 'snapshots',
+    Future<void> Function()? onWrite,
   }) {
     return Future.wait([
       openChangeStorageForDocument(
         documentId,
         boxName: changesBoxName,
+        onWrite: onWrite,
       ),
       openSnapshotStorageForDocument(
         documentId,
         boxName: snapshotsBoxName,
+        onWrite: onWrite,
       ),
     ]).then(
       (values) {
@@ -222,8 +228,10 @@ class CRDTHive {
     String snapshotsBoxName = 'snapshots',
     String peerIdsBoxName = 'peer_ids',
   }) async {
-    final changesDocumentBoxName = '${changesBoxName}_$documentId';
-    final snapshotsDocumentBoxName = '${snapshotsBoxName}_$documentId';
+    final changesDocumentBoxName =
+        documentBoxNameFor(changesBoxName, documentId);
+    final snapshotsDocumentBoxName =
+        documentBoxNameFor(snapshotsBoxName, documentId);
 
     // Closed first: the browser will not delete an open IndexedDB database,
     // and Hive deletes without closing. See `deleteBox`.
@@ -236,8 +244,14 @@ class CRDTHive {
     ]);
 
     // Every document shares the identity box, so this one is a key to remove
-    // rather than a box to delete.
+    // rather than a box to delete. Closed again when this call opened it: on
+    // the web a box is an IndexedDB connection, and one left open is what
+    // blocks the next delete.
+    final wasOpen = Hive.isBoxOpen(peerIdsBoxName);
     final peers = await Hive.openBox<String>(peerIdsBoxName);
     await peers.delete(documentId);
+    if (!wasOpen) {
+      await peers.close();
+    }
   }
 }

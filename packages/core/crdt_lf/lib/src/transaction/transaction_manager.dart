@@ -2,14 +2,14 @@ import 'package:crdt_lf/crdt_lf.dart';
 
 /// The work a committed transaction collected.
 ///
-/// `changes` holds one entry per batch the document applied, in the order the
-/// batches happened.
+/// `events` holds one entry per move of the durable state, in the order the
+/// moves happened.
 typedef TransactionWork = ({
   /// The operations applied during the transaction.
   List<Operation> operations,
 
-  /// The batches of changes applied during the transaction.
-  List<DocumentChangesApplied> changes,
+  /// The events the document collected during the transaction, in order.
+  List<CRDTDocumentEvent> events,
 
   /// Whether there are other pending updates.
   bool otherPendingUpdates,
@@ -64,10 +64,13 @@ class TransactionManager {
   /// The list of pending local changes.
   final List<Operation> _pendingOperations = <Operation>[];
 
-  /// The batches of changes applied during the current transaction, in the
-  /// order they were applied.
-  final List<DocumentChangesApplied> _pendingChanges =
-      <DocumentChangesApplied>[];
+  /// The events the current transaction collected, in the order the document
+  /// moved.
+  ///
+  /// One list for every kind of event, not one per kind: a snapshot taken
+  /// after a change was applied has to reach a listener after that change, and
+  /// two queues drained one after the other cannot say which came first.
+  final List<CRDTDocumentEvent> _pendingEvents = <CRDTDocumentEvent>[];
 
   /// Whether an update has been requested.
   bool _hasRequestedUpdate = false;
@@ -130,13 +133,30 @@ class TransactionManager {
   /// If a transaction is active, the batch is queued and flushed, in order, at
   /// the commit that ends it; otherwise it is emitted immediately.
   void handleAppliedChanges(DocumentChangesApplied event) {
-    _pendingChanges.add(event);
+    _pendingEvents.add(event);
 
     if (isInTransaction) {
       return;
     }
 
     _flushWork();
+  }
+
+  /// Queues [event] when a transaction is open, and says whether it did.
+  ///
+  /// Snapshots and prunes come this way. They move the store the moment they
+  /// are called, while the changes of the same transaction are only published
+  /// at the commit — so publishing them straight away would report a prune
+  /// before the change it removed.
+  ///
+  /// `false` means no transaction is open and the caller publishes the event
+  /// itself: outside a transaction there is nothing to order it against.
+  bool queueEvent(CRDTDocumentEvent event) {
+    if (!isInTransaction) {
+      return false;
+    }
+    _pendingEvents.add(event);
+    return true;
   }
 
   /// Requests an update notification.
@@ -157,12 +177,12 @@ class TransactionManager {
     flushWork(
       (
         operations: List.of(_pendingOperations),
-        changes: List.of(_pendingChanges),
+        events: List.of(_pendingEvents),
         otherPendingUpdates: _hasRequestedUpdate,
       ),
     );
     _pendingOperations.clear();
-    _pendingChanges.clear();
+    _pendingEvents.clear();
     _hasRequestedUpdate = false;
     onFlushed?.call();
   }

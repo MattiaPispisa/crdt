@@ -10,7 +10,10 @@
   on disk for you — see that package's README. The contract is re-exported here, so one import is
   enough: `openDocument` reads the stored identity, builds the document and restores it in one
   call, `readDocument` gives a document to read and not follow, and `copyDocumentTo` moves one to
-  another adapter.
+  another adapter. The whole of `crdt_lf_persistence` is re-exported, not a hand-kept list of it.
+
+  The storages take an `onWrite` callback, which is how the backend learns a document exists
+  without writing it down on every open.
 
 - **`CRDTHive.open()` gives a `CRDTHiveBackend`**, the `CRDTStorageBackend` of this adapter: it
   lists the documents, hands out the storages of each one, and deletes one whole. App code written
@@ -69,6 +72,15 @@
   reading. Nothing changes on the VM, where the delete never blocked.
 
   `deleteBox` is unchanged and still deletes the box you name: close it first if you opened it.
+
+- **A document id no longer goes into a box name as it is.** Hive lower-cases every box name and
+  refuses a non-ASCII one, so `Note` and `note` used to share one box and merge into one document,
+  and an id with an accent or an emoji tripped an assert. The id is now escaped: anything outside
+  `a-z`, `0-9` and `-` becomes `~` plus the hex of the byte, over its UTF-8 bytes.
+  **An id that was already safe keeps exactly the box name it had**, so a store written by 0.4.0
+  is read back unchanged for lower-case ASCII ids. Only the ids that were already ambiguous or
+  already broken move — those with upper-case letters, `_`, or anything outside ASCII.
+  `documentBoxNameFor` is exported, for a migration written by hand.
 
 ## [0.4.0](https://github.com/MattiaPispisa/crdt/tree/crdt_lf_hive-v0.4.0/packages/adapters/persistence/crdt_lf_hive)
 

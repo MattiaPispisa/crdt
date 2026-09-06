@@ -567,6 +567,34 @@ void main() {
 
       expect(await storage.changes.count, written);
     });
+    group('a document edited before open', () {
+      // The bug this pins: nothing reported those changes — an event is only
+      // built once something listens, and the persistence subscribes at
+      // `open`. They stayed in memory, while the changes written after them
+      // reached the disk naming dependencies that were never stored.
+      test('is written whole, not from the first edit after open', () async {
+        text.insert(0, 'before');
+
+        final persistence = await attach();
+        text.insert(text.length, ' and after');
+        await persistence.dispose();
+
+        final read = await storage.readDocument();
+        expect(CRDTFugueTextHandler(read, 'text').value, 'before and after');
+      });
+
+      test('queues nothing when the storage already holds it', () async {
+        text.insert(0, 'hello');
+        await (await attach()).dispose();
+
+        final reopened = CRDTDocument(documentId: 'doc');
+        final second = await attach(to: reopened);
+
+        expect(second.hasUnwrittenChanges, isFalse);
+        await second.dispose();
+        reopened.dispose();
+      });
+    });
   });
 }
 

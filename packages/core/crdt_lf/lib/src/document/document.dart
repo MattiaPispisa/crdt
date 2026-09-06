@@ -85,7 +85,16 @@ abstract class BaseCRDTDocument {
         }
         _deltaOutbox = null;
         for (final deliver in outbox) {
-          deliver();
+          try {
+            deliver();
+          } catch (error, stack) {
+            // A handler delta goes out on a synchronous controller, so a
+            // subscriber that throws throws right here. Letting it out would
+            // end this loop, and every event queued behind it — a document
+            // event a persistence adapter is waiting for included — would be
+            // dropped: the list is already detached and nothing requeues it.
+            Zone.current.handleUncaughtError(error, stack);
+          }
         }
       }
     } finally {
@@ -697,6 +706,12 @@ class CRDTDocument extends BaseCRDTDocument {
     if (_eventsController.isClosed || !_eventsController.hasListener) {
       return;
     }
+    // A transaction holds the event until the commit, so the order a listener
+    // reads is the order the store moved in. Outside one there is nothing to
+    // order against, and the outbox takes it now.
+    if (_transactionManager.queueEvent(event)) {
+      return;
+    }
     _enqueueDeltaEvent(() {
       if (!_eventsController.isClosed) {
         _eventsController.add(event);
@@ -758,8 +773,13 @@ class CRDTDocument extends BaseCRDTDocument {
     // In order, so a consumer reading the stream sees the moves in the order
     // they happened. A transaction that takes changes in before it writes its
     // own reports the ingest first, and the changes it wrote name the ingested
-    // ones among their dependencies.
-    for (final event in work.changes) {
+    // ones among their dependencies — and a snapshot taken in the middle sits
+    // where it was taken, so the prune that follows it never reaches a
+    // listener before the change it removed.
+    //
+    // Straight to the outbox: the transaction is over, so `queueEvent` would
+    // answer `false` for every one of them anyway.
+    for (final event in work.events) {
       _publishDocumentEvent(event);
     }
     if (appliedChanges.isNotEmpty) {
@@ -774,8 +794,11 @@ class CRDTDocument extends BaseCRDTDocument {
       );
     }
 
+    // Only the applied changes count here, not every event: `updates` has
+    // always meant "the document took a change in", and a snapshot has never
+    // woken it.
     if (appliedChanges.isNotEmpty ||
-        work.changes.isNotEmpty ||
+        work.events.any((event) => event is DocumentChangesApplied) ||
         work.otherPendingUpdates) {
       _updatesController.add(null);
     }
@@ -1784,12 +1807,18 @@ class CRDTDocument extends BaseCRDTDocument {
   }
 
   /// Disposes of the document
+  ///
+  /// Events already published but not handed out yet are delivered first. A
+  /// consumer that mirrors this document — a persistence adapter — would
+  /// otherwise never learn about the last move, because the closed controller
+  /// drops what the outbox still holds.
   @override
   void dispose() {
     if (_isDisposed) {
       return;
     }
 
+    _flushDeltaEvents();
     _eventsController.close();
     _updatesController.close();
     for (final manager in [...?_undoManagers]) {

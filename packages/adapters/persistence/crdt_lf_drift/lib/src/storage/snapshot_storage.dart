@@ -117,7 +117,19 @@ class CRDTDriftSnapshotStorage implements CRDTSnapshotStorage {
 
   @override
   Future<bool> containsSnapshot(String id) async {
-    return (await getSnapshot(id)) != null;
+    // The id column, not the row: a snapshot is the biggest blob in the store,
+    // and fetching and decoding one to answer a boolean costs the size of the
+    // whole document — and throws on a blob this build cannot read, where the
+    // honest answer is `true`.
+    final query = database.selectOnly(database.snapshots)
+      ..addColumns([database.snapshots.snapshotId])
+      ..where(
+        database.snapshots.documentId.equals(documentId) &
+            database.snapshots.snapshotId.equals(id),
+      )
+      ..limit(1);
+
+    return (await query.getSingleOrNull()) != null;
   }
 
   @override

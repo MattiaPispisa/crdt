@@ -136,4 +136,33 @@ void main() {
       expect(await reopened.snapshots.count, 0);
     });
   });
+  group('documentBoxNameFor', () {
+    test('leaves an already safe id exactly as it was', () {
+      // A store written before the escaping keeps working for these.
+      expect(documentBoxNameFor('changes', 'note-1'), 'changes_note-1');
+    });
+
+    test('two ids that differ only in case get two boxes', () {
+      // Hive lower-cases every box name, so the raw ids would collide and the
+      // two documents would merge into one.
+      expect(
+        documentBoxNameFor('changes', 'Note'),
+        isNot(documentBoxNameFor('changes', 'note')),
+      );
+    });
+
+    test('a non-ASCII id gives an ASCII name', () {
+      final name = documentBoxNameFor('changes', 'nota-caffè');
+
+      expect(name.codeUnits.every((unit) => unit < 128), isTrue);
+      expect(name, isNot(contains('è')));
+    });
+
+    test('the separator cannot be forged from a prefix', () {
+      expect(
+        documentBoxNameFor('changes_a', 'b'),
+        isNot(documentBoxNameFor('changes', 'a_b')),
+      );
+    });
+  });
 }

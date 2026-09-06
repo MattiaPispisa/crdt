@@ -12,10 +12,23 @@ import 'package:crdt_lf_persistence/crdt_lf_persistence.dart';
 class InMemoryDocumentStorage extends CRDTDocumentStorage {
   /// Creates an empty storage for [documentId].
   InMemoryDocumentStorage(String documentId)
-      : super(
-          changes: InMemoryChangeStorage(documentId),
-          snapshots: InMemorySnapshotStorage(documentId),
+      : this._(
+          InMemoryChangeStorage(documentId),
+          InMemorySnapshotStorage(documentId),
         );
+
+  InMemoryDocumentStorage._(
+    InMemoryChangeStorage changes,
+    InMemorySnapshotStorage snapshots,
+  )   : _changes = changes,
+        _snapshots = snapshots,
+        super(changes: changes, snapshots: snapshots);
+
+  final InMemoryChangeStorage _changes;
+  final InMemorySnapshotStorage _snapshots;
+
+  /// Whether anything at all is stored for this document.
+  bool get isNotEmpty => _changes.count > 0 || _snapshots.count > 0;
 }
 
 /// The [CRDTChangeStorage] of an [InMemoryDocumentStorage].
@@ -182,7 +195,13 @@ class InMemoryStorageBackend implements CRDTStorageBackend {
   }
 
   @override
-  Set<String> get documentIds => <String>{..._documents.keys, ..._peers.keys};
+  Set<String> get documentIds => <String>{
+        for (final entry in _documents.entries)
+          // Asked for, not written to: `storageForDocument` builds a storage
+          // for any id, and a document that was only read does not exist.
+          if (entry.value.isNotEmpty) entry.key,
+        ..._peers.keys,
+      };
 
   @override
   void deleteDocument(String documentId) {

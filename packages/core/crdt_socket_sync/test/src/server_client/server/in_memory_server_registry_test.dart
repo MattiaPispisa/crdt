@@ -46,7 +46,7 @@ void main() {
 
       expect(await registry.documentCount, 0);
       expect(registry.documents, isEmpty);
-      expect(registry.snapshots, isEmpty);
+      expect(registry.snapshotsByDocument, isEmpty);
     });
 
     test('createSnapshot throws for an unknown document', () {

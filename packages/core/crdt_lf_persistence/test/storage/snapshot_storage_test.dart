@@ -32,14 +32,17 @@ void main() {
       expect(newestSnapshot([newer, older]), same(newer));
     });
 
-    test('keeps the first of two concurrent vectors', () {
+    test('picks the same one of two concurrent vectors either way', () {
       final left = _snapshotOf('left', 'a');
       final right = _snapshotOf('right', 'b');
+      final expected = left.id.compareTo(right.id) <= 0 ? left : right;
 
-      // Neither has seen the other, so neither is newer. The choice is
-      // arbitrary but must be stable: the first one stays.
-      expect(newestSnapshot([left, right]), same(left));
-      expect(newestSnapshot([right, left]), same(right));
+      // Neither has seen the other, so the vector cannot choose. The id does,
+      // and it has to choose the same one whatever order the rows came in:
+      // no adapter orders them, so anything else restores a different
+      // document per backend from the same bytes.
+      expect(newestSnapshot([left, right]), same(expected));
+      expect(newestSnapshot([right, left]), same(expected));
     });
   });
 

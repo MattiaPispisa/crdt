@@ -68,7 +68,8 @@ void main() {
       final manager = TransactionManager(
         flushWork: (work) {
           emittedOperations.addAll(work.operations);
-          for (final applied in work.changes) {
+          for (final applied
+              in work.events.whereType<DocumentChangesApplied>()) {
             emittedChanges.addAll(applied.changes);
           }
           updateCount++;
@@ -133,7 +134,8 @@ void main() {
       final theirsAgain = changeAt(3);
 
       final manager = TransactionManager(
-        flushWork: (work) => flushed = work.changes,
+        flushWork: (work) =>
+            flushed = work.events.whereType<DocumentChangesApplied>().toList(),
       );
 
       manager.run(() {

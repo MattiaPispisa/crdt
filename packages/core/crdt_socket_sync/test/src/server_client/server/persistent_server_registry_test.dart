@@ -441,5 +441,52 @@ void main() {
       expect(await registry.getDocument('doc'), same(first));
       expect(await registry.documentCount, 1);
     });
+
+    test('a closed registry refuses to open anything', () async {
+      final registry = build();
+      await registry.addDocument('doc');
+      await registry.close();
+
+      await expectLater(registry.getDocument('doc'), throwsStateError);
+      await expectLater(registry.addDocument('other'), throwsStateError);
+    });
+
+    // The bug this pins: `close` took one pass over what was open, so a
+    // release still writing was neither waited for nor reported.
+    test('close waits for a release that is still running', () async {
+      final registry = build();
+      await registry.addDocument('doc');
+      for (final change in _authored((list) => list.insert(0, 'a'))) {
+        await registry.applyChange('doc', change);
+      }
+
+      final releasing = registry.releaseDocument('doc');
+      await registry.close();
+
+      await releasing;
+      expect(await backend.changes['doc']!.count, isPositive);
+    });
+
+    // The bug this pins: `releaseDocument` dropped the id from the open map
+    // before the flush, so an open arriving during it installed a new entry
+    // whose storage the release then closed.
+    test('releasing while the same document is being opened is serialised',
+        () async {
+      final registry = build();
+      addTearDown(registry.close);
+      await registry.addDocument('doc');
+
+      final releasing = registry.releaseDocument('doc');
+      final reopening = registry.getDocument('doc');
+      await releasing;
+
+      final document = await reopening;
+      expect(document, isNotNull);
+      expect(
+        document!.isDisposed,
+        isFalse,
+        reason: 'the reopened document must not be closed under the caller',
+      );
+    });
   });
 }

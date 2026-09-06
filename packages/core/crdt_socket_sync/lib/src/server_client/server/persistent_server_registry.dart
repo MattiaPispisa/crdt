@@ -35,7 +35,9 @@ typedef ServerSnapshot = ({String documentId, Snapshot snapshot});
 /// been asked for.
 ///
 /// Call [close] on shutdown. It flushes every open document.
-class PersistentServerRegistry implements CRDTServerRegistry {
+class PersistentServerRegistry
+    with CRDTServerRegistryDocuments
+    implements CRDTServerRegistry {
   /// Creates a registry that stores its documents in [backend].
   ///
   /// [backend] is what an adapter opens: `CRDTHive.open()`, `CRDTDrift.open()`
@@ -103,6 +105,17 @@ class PersistentServerRegistry implements CRDTServerRegistry {
   final StreamController<ServerSnapshot> _snapshots =
       StreamController<ServerSnapshot>.broadcast();
 
+  /// [close] has run, so nothing must be opened again.
+  bool _closed = false;
+
+  /// The releases still running, by document id.
+  ///
+  /// A release writes before it closes, so it takes as long as a write takes.
+  /// An open of the same document arriving in that window has to wait for it:
+  /// the storage is about to be closed, and a backend hands the same storage
+  /// back for the same document.
+  final Map<String, Future<void>> _releasing = <String, Future<void>>{};
+
   /// The snapshot each document takes, as it takes it.
   ///
   /// A server broadcasts the new document status on this, so clients replace
@@ -152,57 +165,13 @@ class PersistentServerRegistry implements CRDTServerRegistry {
   @override
   Future<int> get documentCount async => (await _catalog.documentIds).length;
 
-  /// Applies [change] to [documentId] and returns whether it was new.
-  ///
-  /// The write is not here: the [DocumentChangesApplied] this publishes reaches
-  /// the document's [CRDTDocumentPersistence], which batches it with whatever
-  /// else arrives inside the `writeDelay`.
-  ///
-  /// [CausallyNotReadyException] propagates, as [CRDTServerRegistry] requires:
-  /// the server needs it to tell a client it is out of sync. Any other failure
-  /// gives `false`.
-  ///
-  /// Throws [ArgumentError] when [documentId] is not one this registry serves.
-  @override
-  Future<bool> applyChange(String documentId, Change change) async {
-    final document = await getDocument(documentId);
-    if (document == null) {
-      throw ArgumentError.value(
-        documentId,
-        'documentId',
-        'no such document',
-      );
-    }
-
-    try {
-      return document.applyChange(change);
-    } on CausallyNotReadyException {
-      rethrow;
-    } catch (_) {
-      // Swallowed on purpose: only a causal gap is worth reporting to a
-      // client. Anything else is a bad change, and one bad change must not
-      // take the session down.
-      return false;
-    }
-  }
-
-  /// Snapshots [documentId], prunes the history it covers, and waits for both
-  /// to reach the disk.
+  /// Waits for the snapshot and the prune it caused to reach the disk.
   ///
   /// The waiting is the point: a caller that broadcasts this snapshot has to
   /// know it survives a crash before the clients start replaying against it.
-  ///
-  /// Throws [ArgumentError] when [documentId] is not one this registry serves.
   @override
-  Future<Snapshot> createSnapshot(String documentId) async {
-    if (!await hasDocument(documentId)) {
-      throw ArgumentError.value(documentId, 'documentId', 'no such document');
-    }
-
-    final open = await _openDocument(documentId);
-    final snapshot = open.document.takeSnapshot();
-    await open.persistence.flush();
-    return snapshot;
+  Future<void> afterSnapshot(String documentId, Snapshot snapshot) async {
+    await (await _openDocument(documentId)).persistence.flush();
   }
 
   /// The newest snapshot stored for [documentId].
@@ -248,36 +217,92 @@ class PersistentServerRegistry implements CRDTServerRegistry {
   /// re-reads through [getDocument], so calling this between two requests is
   /// safe; `idleAfter` takes the same risk on a timer, which is why it should
   /// be far longer than a request takes.
-  Future<void> releaseDocument(String documentId) async {
+  Future<void> releaseDocument(String documentId) {
     _idleTimers.remove(documentId)?.cancel();
 
     final opening = _open.remove(documentId);
     if (opening == null) {
-      return;
+      // Nothing open, but a release may still be running: join it rather than
+      // reporting a document as let go while its last write is in flight.
+      return _releasing[documentId] ?? Future<void>.value();
     }
-    await (await opening).dispose();
+
+    final releasing = _release(documentId, opening);
+    _releasing[documentId] = releasing;
+    return releasing;
+  }
+
+  Future<void> _release(
+    String documentId,
+    Future<_OpenDocument> opening,
+  ) async {
+    try {
+      await (await opening).dispose();
+    } finally {
+      // `removeWhere`, not `remove`: the value is a future, and dropping it
+      // by name reads as an unawaited one.
+      _releasing.removeWhere((id, _) => id == documentId);
+    }
   }
 
   /// Flushes and closes every open document.
   ///
   /// The catalog is left as it is: it describes what this server serves, and
   /// that is still true after a shutdown.
+  ///
+  /// Asking this registry for a document afterwards throws a [StateError].
+  @override
   Future<void> close() async {
+    _closed = true;
     for (final timer in _idleTimers.values) {
       timer.cancel();
     }
     _idleTimers.clear();
 
-    final opening = List<Future<_OpenDocument>>.of(_open.values);
-    _open.clear();
-    for (final open in opening) {
-      await (await open).dispose();
+    // A loop, not one pass: an open started before `_closed` was set is still
+    // in flight, and it installs its entry when it lands. A single pass over
+    // the map would leave that document writing for the life of the process.
+    while (_open.isNotEmpty || _releasing.isNotEmpty) {
+      final releasing = List<Future<void>>.of(_releasing.values);
+      final opening = List<Future<_OpenDocument>>.of(_open.values);
+      _open.clear();
+
+      for (final release in releasing) {
+        try {
+          await release;
+        } catch (error, stack) {
+          _onError?.call(error, stack);
+        }
+      }
+      for (final open in opening) {
+        try {
+          await (await open).dispose();
+        } catch (error, stack) {
+          // One document that cannot be written must not keep the others open.
+          _onError?.call(error, stack);
+        }
+      }
     }
+
     await _snapshots.close();
   }
 
   /// The open document for [documentId], opening it if this is the first ask.
   Future<_OpenDocument> _openDocument(String documentId, {PeerId? author}) {
+    // The one place every open goes through, so one check covers them all.
+    if (_closed) {
+      throw StateError(
+        'this registry is closed, so $documentId cannot be opened',
+      );
+    }
+
+    // A release of this document is still writing. Opening now would hand back
+    // the very document it is about to dispose, so wait and open a fresh one.
+    final releasing = _releasing[documentId];
+    if (releasing != null) {
+      return releasing.then((_) => _openDocument(documentId, author: author));
+    }
+
     _touch(documentId);
 
     return _open.putIfAbsent(
@@ -305,8 +330,13 @@ class PersistentServerRegistry implements CRDTServerRegistry {
         // waiting for.
         onDocument: (document) {
           subscription = document.events.listen((event) {
+            // `isClosed` because a document released during a shutdown can
+            // still snapshot while its persistence flushes, and adding to a
+            // closed controller throws inside a listener, where nothing
+            // catches it.
             if (event is DocumentSnapshotUpdated &&
-                event.reason == SnapshotReason.taken) {
+                event.reason == SnapshotReason.taken &&
+                !_snapshots.isClosed) {
               _snapshots.add(
                 (documentId: documentId, snapshot: event.snapshot),
               );

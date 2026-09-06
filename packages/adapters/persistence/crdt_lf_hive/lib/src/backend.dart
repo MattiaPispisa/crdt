@@ -9,9 +9,13 @@ import 'package:hive/hive.dart';
 /// **Hive cannot list its boxes.** It answers `boxExists(name)` and nothing
 /// else, and this adapter gives every document a box of its own, so the
 /// documents have to be written down somewhere. That somewhere is the registry
-/// box: [storageForDocument] and [peerIdStorageForDocument] put the id in it,
-/// and [documentIds] reads it back. A document therefore costs one extra row,
-/// written the first time it is opened.
+/// box: the storages this backend hands out put the id in it the first time
+/// they write, and [documentIds] reads it back. A document therefore costs one
+/// extra row, written with its first change, snapshot or identity.
+///
+/// Written on the first **write**, not on the open: [readDocument] opens the
+/// storage of a document that may not exist, and a document that was only
+/// looked at is not one this backend holds.
 ///
 /// A document written by an older version of this adapter — before the
 /// registry existed — is not in the box, so [documentIds] does not report it.
@@ -40,23 +44,23 @@ class CRDTHiveBackend implements CRDTStorageBackend {
   Future<Set<String>> get documentIds async => _registry.values.toSet();
 
   @override
-  Future<CRDTHiveDocumentStorage> storageForDocument(String documentId) async {
-    await _remember(documentId);
+  Future<CRDTHiveDocumentStorage> storageForDocument(String documentId) {
     return CRDTHive.openStorageForDocument(
       documentId,
       changesBoxName: changesBoxName,
       snapshotsBoxName: snapshotsBoxName,
+      onWrite: () => _remember(documentId),
     );
   }
 
   @override
   Future<CRDTHivePeerIdStorage> peerIdStorageForDocument(
     String documentId,
-  ) async {
-    await _remember(documentId);
+  ) {
     return CRDTHive.openPeerIdStorageForDocument(
       documentId,
       boxName: peerIdsBoxName,
+      onWrite: () => _remember(documentId),
     );
   }
 

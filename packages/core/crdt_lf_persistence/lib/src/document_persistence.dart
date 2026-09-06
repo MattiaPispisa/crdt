@@ -91,6 +91,10 @@ class CRDTDocumentPersistence {
   /// on a reopen the document may already hold changes of this session, and a
   /// sync client may still be asked for a snapshot covering that history.
   ///
+  /// A change the document already held and the storage did not is queued for
+  /// the next write, so a document edited before this was called is kept whole
+  /// rather than half.
+  ///
   /// [writeDelay] is how long a change waits for the ones after it. One
   /// keystroke is one transaction, so writing on every event would put a
   /// round-trip to the disk between the typist and the next character.
@@ -155,6 +159,9 @@ class CRDTDocumentPersistence {
       // The read is already in flight and cannot be called back. Abandoning it
       // is what keeps it from importing into the document after this throws.
       persistence._abandoned = true;
+      // Nobody is left to await it, so a failure would become an unhandled
+      // asynchronous error rather than the [StateError] below.
+      unawaited(restoring.catchError((Object _, StackTrace __) {}));
       unawaited(persistence._subscription?.cancel());
       persistence._subscription = null;
       throw StateError(
@@ -234,6 +241,7 @@ class CRDTDocumentPersistence {
       return;
     }
     _stored = changes.length;
+    _queueWhatOnlyTheDocumentHas(changes);
 
     if (changes.isEmpty && snapshots.isEmpty) {
       return;
@@ -260,6 +268,34 @@ class CRDTDocumentPersistence {
       pruneHistory: false,
       origin: _restoreOrigin,
     );
+  }
+
+  /// Queues the changes the document held before this started following it.
+  ///
+  /// Nothing reported them: an event is built only once something listens, and
+  /// this subscribes when it is built. A document edited before [open] — which
+  /// is the whole point of taking one as an argument — would otherwise keep
+  /// those changes in memory only, while the changes written after them reach
+  /// the disk naming dependencies that are not there. The next open then
+  /// cannot replay them.
+  ///
+  /// [stored] is what the storage already holds, so a normal reopen queues
+  /// nothing and pays one set of ids.
+  void _queueWhatOnlyTheDocumentHas(List<Change> stored) {
+    final mine = _document.exportChanges();
+    if (mine.isEmpty) {
+      return;
+    }
+
+    final onDisk = stored.map((change) => change.id).toSet();
+    for (final change in mine) {
+      if (!onDisk.contains(change.id)) {
+        _pending.add(change);
+      }
+    }
+    if (_pending.isNotEmpty) {
+      _timer ??= Timer(_writeDelay, _flush);
+    }
   }
 
   void _onEvent(CRDTDocumentEvent event) {
@@ -501,7 +537,7 @@ class CRDTDocumentPersistence {
     });
   }
 
-  /// Drops what the prune removed, and writes the survivors again.
+  /// Writes the survivors again, and drops what the prune removed.
   ///
   /// A change that pointed at a pruned dependency was rebuilt without it, so
   /// the bytes on disk describe a change that no longer exists.
@@ -509,14 +545,22 @@ class CRDTDocumentPersistence {
   /// Both steps go in one [CRDTDocumentStorage.transaction]: a backend that
   /// has transactions never leaves a survivor with its old bytes next to a
   /// dependency that is already gone.
+  ///
+  /// The survivors are written **first**, which is what a backend without
+  /// transactions rests on. Stopped halfway this way, the store holds the new
+  /// bytes next to changes that should have gone — a copy too many, which the
+  /// next prune removes. The other way round it would hold survivors naming a
+  /// dependency that is already deleted, which nothing writes again and which
+  /// a reload cannot replay.
   FutureOr<void> _writePrune(List<Change> removed, List<Change> rewritten) {
     _prunePending(removed, rewritten);
 
     return storage
         .transaction<void>(
           () => storage.changes
-              .deleteChanges(removed)
-              .chain((_) => storage.changes.saveChanges(rewritten)),
+              .saveChanges(rewritten)
+              .chain((_) => storage.changes.deleteChanges(removed))
+              .chain((_) {}),
         )
         .chain(
           (_) => storage.changes.count.chain((stored) {

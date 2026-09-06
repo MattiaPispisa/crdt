@@ -352,6 +352,17 @@ window where a change is acknowledged but not yet on disk, and that is safe: a
 client reconciles at the next handshake and re-sends whatever the server no
 longer has. Pass `Duration.zero` to make the window as small as it gets.
 
+That window is also why a shutdown has to close the registry: what is still
+waiting has to be written before the process ends. `WebSocketServer.dispose`
+does it for you. Closing the registry by hand is only for a server that owns
+one without a `WebSocketServer` around it:
+
+```dart
+await registry.close();
+```
+
+The registry refuses to open anything after that.
+
 ##### Getting a document back out of memory
 
 Opening lazily is one half. A document stays in memory once it has been asked

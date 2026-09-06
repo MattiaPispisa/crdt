@@ -21,6 +21,19 @@ First release.
   `hasUnwrittenChanges` says whether anything is still waiting, and `flush()` gives up for the round
   instead of retrying a storage that just refused it.
 
+  It takes a document that has already been edited: what the document holds and the storage does
+  not is queued for the next write, so a document written to before `open` is kept whole rather
+  than from the first edit after it.
+
+  A prune writes the rebuilt survivors **before** it deletes what it removed. Both go in one
+  transaction where the backend has one; where it does not — Hive — a crash between the two steps
+  now costs a copy too many, which the next prune clears, instead of survivors that nothing ever
+  writes again.
+
+- `newestSnapshot`: the snapshot to restore from when a crash left two. A version vector is a
+  partial order and no adapter orders the rows it reads back, so two concurrent snapshots are
+  settled by the smaller id — the same answer on every backend, from the same bytes.
+
 - `CRDTPeerIdStorage`: the `PeerId` a document writes under, kept so a reopened document is the
   same author it was before. Without it `CRDTDocument` mints a new id per restart, and the version
   vector gains an entry that never leaves. It stands apart from `CRDTDocumentStorage` because it
@@ -52,7 +65,9 @@ First release.
   **different** document, which is how a document is duplicated — leave the identities out there,
   since two documents writing under one `PeerId` can mint the same operation id twice. The whole
   copy goes in one `transaction()` on the target, the identity included, so a backend with
-  transactions never holds a document whose content arrived without its author.
+  transactions never holds a document whose content arrived without its author. The body of that
+  transaction never suspends on a synchronous backend, so nothing else on the connection can slip
+  inside it and be taken away by a rollback.
 
 - `CRDTDocumentPersistence.compact()`: what `compactAfter` does on its own, on demand — a "save and
   compact" button, or the moment an app goes to the background. It waits for the snapshot and the

@@ -17,10 +17,20 @@ class CRDTHiveSnapshotStorage implements CRDTSnapshotStorage {
   ///
   /// [documentId] is the unique identifier
   /// for the document these snapshots belong to.
-  CRDTHiveSnapshotStorage(this.box, this.documentId);
+  ///
+  /// [onWrite] runs before every write that adds something.
+  ///
+  /// It is how [CRDTHiveBackend] learns a document exists: Hive cannot list
+  /// its boxes, so the backend keeps a registry, and a document belongs on it
+  /// once something about it has been stored — not merely because it was
+  /// opened to be read.
+  CRDTHiveSnapshotStorage(this.box, this.documentId, {this.onWrite});
 
   /// The Hive box used for storing [Snapshot] objects.
   final Box<Snapshot> box;
+
+  /// Called before a write that adds something. See the constructor.
+  final Future<void> Function()? onWrite;
 
   @override
   final String documentId;
@@ -32,19 +42,20 @@ class CRDTHiveSnapshotStorage implements CRDTSnapshotStorage {
   String _getSnapshotKey(String snapshotId) => snapshotId;
 
   @override
-  Future<void> saveSnapshot(Snapshot snapshot) {
-    final key = _getSnapshotKey(snapshot.id);
-    return box.put(key, snapshot).then((_) => null);
+  Future<void> saveSnapshot(Snapshot snapshot) async {
+    await onWrite?.call();
+    await box.put(_getSnapshotKey(snapshot.id), snapshot);
   }
 
   @override
-  Future<void> saveSnapshots(List<Snapshot> snapshots) {
-    final entries = <String, Snapshot>{};
-    for (final snapshot in snapshots) {
-      final key = _getSnapshotKey(snapshot.id);
-      entries[key] = snapshot;
+  Future<void> saveSnapshots(List<Snapshot> snapshots) async {
+    if (snapshots.isEmpty) {
+      return;
     }
-    return box.putAll(entries).then((_) => null);
+    await onWrite?.call();
+    await box.putAll(<String, Snapshot>{
+      for (final snapshot in snapshots) _getSnapshotKey(snapshot.id): snapshot,
+    });
   }
 
   @override

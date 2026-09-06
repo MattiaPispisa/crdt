@@ -7,7 +7,9 @@ import 'package:crdt_socket_sync/src/server_client/server/registry.dart';
 /// This implementation stores all documents in memory using a [Map].
 /// Documents are lost when the server restarts.
 /// {@endtemplate}
-class InMemoryCRDTServerRegistry implements CRDTServerRegistry {
+class InMemoryCRDTServerRegistry
+    with CRDTServerRegistryDocuments
+    implements CRDTServerRegistry {
   /// {@macro in_memory_crdt_server_registry}
   ///
   /// Creates a new [InMemoryCRDTServerRegistry]
@@ -59,16 +61,11 @@ class InMemoryCRDTServerRegistry implements CRDTServerRegistry {
     return _documents.length;
   }
 
+  /// Keeps the snapshot [createSnapshot] just took, so [getLatestSnapshot]
+  /// can hand it back. There is nowhere else for it to go.
   @override
-  Future<Snapshot> createSnapshot(String documentId) async {
-    final document = _documents[documentId];
-    if (document == null) {
-      throw ArgumentError('Document with ID "$documentId" not found');
-    }
-
-    final snapshot = document.takeSnapshot();
+  Future<void> afterSnapshot(String documentId, Snapshot snapshot) async {
     _snapshots[documentId] = snapshot;
-    return snapshot;
   }
 
   @override
@@ -76,23 +73,15 @@ class InMemoryCRDTServerRegistry implements CRDTServerRegistry {
     return _snapshots[documentId];
   }
 
+  /// Disposes every document and forgets it.
+  ///
+  /// Nothing is written: this registry has nowhere to write to, and says so.
   @override
-  Future<bool> applyChange(String documentId, Change change) async {
-    final document = _documents[documentId];
-    if (document == null) {
-      throw ArgumentError('Document with ID "$documentId" not found');
+  Future<void> close() async {
+    for (final document in _documents.values) {
+      document.dispose();
     }
-
-    try {
-      return document.applyChange(change);
-    } on CausallyNotReadyException {
-      // The change depends on operations we don't have. Let this propagate so
-      // the server can tell the client it is out of sync and needs to re-sync.
-      rethrow;
-    } catch (e) {
-      // Any other failure: the change could not be applied.
-      return false;
-    }
+    await clear();
   }
 
   /// Clear all documents and snapshots
@@ -105,5 +94,9 @@ class InMemoryCRDTServerRegistry implements CRDTServerRegistry {
   Map<String, CRDTDocument> get documents => Map.unmodifiable(_documents);
 
   /// Get a copy of all snapshots (for debugging/testing purposes)
-  Map<String, Snapshot> get snapshots => Map.unmodifiable(_snapshots);
+  ///
+  /// Named for what it holds, not `snapshots`: the durable registry uses that
+  /// name for a stream of the snapshots as they are taken, and one name for
+  /// two unrelated things on one interface is a trap.
+  Map<String, Snapshot> get snapshotsByDocument => Map.unmodifiable(_snapshots);
 }

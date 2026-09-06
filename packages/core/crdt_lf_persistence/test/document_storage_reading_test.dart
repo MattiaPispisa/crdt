@@ -221,6 +221,29 @@ void main() {
         reason: 'the identity goes in with the content, or not at all',
       );
     });
+
+    // A synchronous backend runs the whole body inside its open transaction.
+    // An `async` body suspends there, and on a backend where one connection
+    // serves every document another write can land inside the transaction and
+    // be taken away by a rollback.
+    test('the transaction body never suspends on a synchronous backend',
+        () async {
+      await write(['hello']);
+      backend.peerIdStorageForDocument('doc').savePeerId(PeerId.generate());
+
+      final other = InMemoryStorageBackend();
+      final target = _WatchedTransaction(other.storageForDocument('doc'));
+
+      await storage.copyTo(
+        target,
+        fromPeerIds: backend.peerIdStorageForDocument('doc'),
+        toPeerIds: other.peerIdStorageForDocument('doc'),
+      );
+
+      expect(target.bodySuspended, isFalse);
+      expect(await target.changes.count, await storage.changes.count);
+      expect(other.peerIdStorageForDocument('doc').getPeerId(), isNotNull);
+    });
   });
 }
 
@@ -233,4 +256,20 @@ class _RefusedTransaction extends CRDTDocumentStorage {
   @override
   FutureOr<T> transaction<T>(FutureOr<T> Function() body) =>
       throw StateError('rolled back');
+}
+
+/// A storage that records whether the body of its transaction suspended.
+class _WatchedTransaction extends CRDTDocumentStorage {
+  _WatchedTransaction(InMemoryDocumentStorage inner)
+      : super(changes: inner.changes, snapshots: inner.snapshots);
+
+  /// Whether the last body handed back a [Future] instead of a value.
+  bool bodySuspended = false;
+
+  @override
+  FutureOr<T> transaction<T>(FutureOr<T> Function() body) {
+    final result = body();
+    bodySuspended = result is Future<T>;
+    return result;
+  }
 }

@@ -165,6 +165,36 @@ void main() {
         expect(updated.single.snapshot, same(snapshot));
       });
 
+      // The bug this pins: a snapshot moved the store the moment it was
+      // called, while the changes of the same transaction waited for the
+      // commit. A persistence mirror following the stream then deleted a
+      // change and wrote it back straight afterwards, leaving an orphan on
+      // disk with a dependency the document no longer holds.
+      test(
+          'a snapshot inside a transaction is reported after the changes '
+          'it covers', () async {
+        final remote = remoteDocument();
+        final theirs = remoteChange(remote);
+        events.clear();
+
+        doc.runInTransaction(() {
+          doc
+            ..importChanges([theirs])
+            ..takeSnapshot();
+        });
+        await pumpEventQueue();
+
+        expect(events, [
+          isA<DocumentChangesApplied>(),
+          isA<DocumentSnapshotUpdated>(),
+          isA<DocumentHistoryPruned>(),
+        ]);
+        expect(
+          only<DocumentHistoryPruned>().single.removed.map((c) => c.id),
+          contains(theirs.id),
+        );
+      });
+
       test('a snapshot that is not applied reports nothing', () async {
         doc.createChange(newOperation());
         final newer = doc.takeSnapshot(pruneHistory: false);
@@ -368,6 +398,63 @@ void main() {
         // One event for the whole transaction, and the document already holds
         // both changes when it lands — never a half-applied read.
         expect(changeCountWhenDelivered, [2]);
+      });
+
+      // The bug this pins: `dispose` closed the controller without draining
+      // the outbox, so a snapshot taken just before it was never reported and
+      // a mirror kept a document it had already pruned.
+      test('an event published just before dispose still arrives', () async {
+        doc.createChange(newOperation());
+        await pumpEventQueue();
+        events.clear();
+
+        doc
+          ..takeSnapshot()
+          ..dispose();
+        await pumpEventQueue();
+
+        expect(events, [
+          isA<DocumentSnapshotUpdated>(),
+          isA<DocumentHistoryPruned>(),
+        ]);
+      });
+
+      // The bug this pins: the outbox delivered in a bare loop, so a handler
+      // delta subscriber that threw — deltas go out synchronously — ended the
+      // loop and took every event queued behind it with it.
+      test('a listener that throws does not take the other events with it',
+          () async {
+        final document = CRDTDocument(peerId: PeerId.generate());
+        addTearDown(document.dispose);
+        // Warm the cache: a handler with none answers a write with a reset.
+        final text = CRDTFugueTextHandler(document, 'text')..value;
+
+        final seen = <CRDTDocumentEvent>[];
+        final documentEvents = document.events.listen(seen.add);
+        addTearDown(documentEvents.cancel);
+        // Registered inside the guard, not outside: a broadcast controller
+        // hands a listener's error to the zone the listener was registered
+        // in, and the test's own zone would fail on it.
+        await runZonedGuarded(
+          () async {
+            // A synchronous controller, so a delta throws inside the outbox
+            // flush. The reset `watch` opens with is let through: it arrives on
+            // a microtask of its own, nowhere near the flush.
+            text.watch().listen((update) {
+              if (update is HandlerDelta) {
+                throw StateError('boom');
+              }
+            });
+            await pumpEventQueue();
+            seen.clear();
+
+            text.insert(0, 'a');
+            await pumpEventQueue();
+          },
+          (_, __) {},
+        );
+
+        expect(seen.whereType<DocumentChangesApplied>(), hasLength(1));
       });
 
       test('the stream closes on dispose', () async {
