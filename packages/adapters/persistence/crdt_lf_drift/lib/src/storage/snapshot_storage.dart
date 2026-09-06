@@ -1,4 +1,5 @@
 import 'package:crdt_lf/crdt_lf.dart';
+import 'package:crdt_lf_drift/src/chunks.dart';
 import 'package:crdt_lf_drift/src/database.dart';
 import 'package:crdt_lf_persistence/crdt_lf_persistence.dart';
 import 'package:drift/drift.dart';
@@ -89,12 +90,22 @@ class CRDTDriftSnapshotStorage implements CRDTSnapshotStorage {
     if (ids.isEmpty) {
       return 0;
     }
-    return (database.delete(database.snapshots)
-          ..where(
-            (row) =>
-                row.documentId.equals(documentId) & row.snapshotId.isIn(ids),
-          ))
-        .go();
+
+    // Chunked for the reason written down on [idChunks]. Snapshots are few in
+    // practice, but the caller decides how many, not this class.
+    return database.transaction(() async {
+      var deleted = 0;
+      for (final chunk in idChunks(ids)) {
+        deleted += await (database.delete(database.snapshots)
+              ..where(
+                (row) =>
+                    row.documentId.equals(documentId) &
+                    row.snapshotId.isIn(chunk),
+              ))
+            .go();
+      }
+      return deleted;
+    });
   }
 
   @override

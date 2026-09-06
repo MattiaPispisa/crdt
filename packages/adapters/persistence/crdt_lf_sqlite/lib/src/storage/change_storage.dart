@@ -31,16 +31,30 @@ class CRDTSqliteChangeStorage implements CRDTChangeStorage {
   @override
   final String documentId;
 
-  /// Generates the row key for a change.
-  String _changeKey(Change change) => change.id.toString();
+  static const String _insertSql = 'INSERT OR REPLACE INTO $changesTable '
+      '(document_id, author, hlc_l, hlc_c, bytes) VALUES (?, ?, ?, ?, ?)';
+
+  /// The one row [change] is: `document_id` and the three columns its
+  /// `OperationId` is written in.
+  static const String _rowOfSql =
+      'document_id = ? AND author = ? AND hlc_l = ? AND hlc_c = ?';
+
+  /// The parameters [_rowOfSql] binds, for [change].
+  List<Object?> _rowOf(Change change) => [
+        documentId,
+        change.author.toString(),
+        change.hlc.l,
+        change.hlc.c,
+      ];
+
+  List<Object?> _row(Change change) => [
+        ..._rowOf(change),
+        change.toBytes(),
+      ];
 
   @override
   void saveChange(Change change) {
-    database.execute(
-      'INSERT OR REPLACE INTO $changesTable '
-      '(document_id, change_id, bytes) VALUES (?, ?, ?)',
-      [documentId, _changeKey(change), change.toBytes()],
-    );
+    database.execute(_insertSql, _row(change));
   }
 
   /// {@macro crdt_lf_sqlite_batch}
@@ -49,14 +63,11 @@ class CRDTSqliteChangeStorage implements CRDTChangeStorage {
     if (changes.isEmpty) {
       return;
     }
-    final statement = database.prepare(
-      'INSERT OR REPLACE INTO $changesTable '
-      '(document_id, change_id, bytes) VALUES (?, ?, ?)',
-    );
+    final statement = database.prepare(_insertSql);
     try {
       runInTransaction(database, () {
         for (final change in changes) {
-          statement.execute([documentId, _changeKey(change), change.toBytes()]);
+          statement.execute(_row(change));
         }
       });
     } finally {
@@ -64,31 +75,71 @@ class CRDTSqliteChangeStorage implements CRDTChangeStorage {
     }
   }
 
+  /// The condition that holds for a change [vector] has already seen, and the
+  /// parameters it binds.
+  ///
+  /// A change is seen when the vector holds an entry for its author and that
+  /// entry is at least as new as the change — the same test
+  /// [VersionVector.hasSeen] makes, written in SQL. A vector that names no
+  /// peer has seen nothing, so it answers `0` rather than an empty condition.
+  ///
+  /// Four parameters per peer, and no document has a vector long enough for
+  /// that to reach the limit SQLite puts on them.
+  static ({String sql, List<Object?> params}) _seenBy(VersionVector vector) {
+    final terms = <String>[];
+    final params = <Object?>[];
+
+    for (final entry in vector.entries) {
+      terms.add('(author = ? AND (hlc_l < ? OR (hlc_l = ? AND hlc_c <= ?)))');
+      final clock = entry.value;
+      params.addAll([entry.key.toString(), clock.l, clock.l, clock.c]);
+    }
+
+    if (terms.isEmpty) {
+      return (sql: '0', params: const <Object?>[]);
+    }
+    return (sql: '(${terms.join(' OR ')})', params: params);
+  }
+
   @override
   List<Change> getChanges({
     VersionVector? newerThan,
     VersionVector? upTo,
   }) {
+    // The bounds go to the database, not to `filterByVersion`: the rows that
+    // fall outside are never read and never decoded. That is the whole cost
+    // of asking a long history what is new.
+    final where = StringBuffer('document_id = ?');
+    final params = <Object?>[documentId];
+
+    if (newerThan != null) {
+      final seen = _seenBy(newerThan);
+      where.write(' AND NOT ${seen.sql}');
+      params.addAll(seen.params);
+    }
+    if (upTo != null) {
+      final seen = _seenBy(upTo);
+      where.write(' AND ${seen.sql}');
+      params.addAll(seen.params);
+    }
+
     final result = database.select(
-      'SELECT bytes FROM $changesTable WHERE document_id = ?',
-      [documentId],
+      'SELECT bytes FROM $changesTable WHERE $where',
+      params,
     );
-    return filterByVersion(
-      result.map((row) => Change.fromBytes(row['bytes'] as Uint8List)).toList(),
-      newerThan: newerThan,
-      upTo: upTo,
-    );
+    return [
+      for (final row in result) Change.fromBytes(row['bytes'] as Uint8List),
+    ];
   }
 
   @override
   bool deleteChange(Change change) {
-    final key = _changeKey(change);
-    if (!_contains(key)) {
+    if (!_contains(change)) {
       return false;
     }
     database.execute(
-      'DELETE FROM $changesTable WHERE document_id = ? AND change_id = ?',
-      [documentId, key],
+      'DELETE FROM $changesTable WHERE $_rowOfSql',
+      _rowOf(change),
     );
     return true;
   }
@@ -101,14 +152,13 @@ class CRDTSqliteChangeStorage implements CRDTChangeStorage {
     }
     var deleted = 0;
     final statement = database.prepare(
-      'DELETE FROM $changesTable WHERE document_id = ? AND change_id = ?',
+      'DELETE FROM $changesTable WHERE $_rowOfSql',
     );
     try {
       runInTransaction(database, () {
         for (final change in changes) {
-          final key = _changeKey(change);
-          if (_contains(key)) {
-            statement.execute([documentId, key]);
+          if (_contains(change)) {
+            statement.execute(_rowOf(change));
             deleted += 1;
           }
         }
@@ -127,11 +177,10 @@ class CRDTSqliteChangeStorage implements CRDTChangeStorage {
     );
   }
 
-  bool _contains(String changeId) {
+  bool _contains(Change change) {
     return database.select(
-      'SELECT 1 FROM $changesTable '
-      'WHERE document_id = ? AND change_id = ? LIMIT 1',
-      [documentId, changeId],
+      'SELECT 1 FROM $changesTable WHERE $_rowOfSql LIMIT 1',
+      _rowOf(change),
     ).isNotEmpty;
   }
 

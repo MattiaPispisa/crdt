@@ -64,7 +64,7 @@ class CRDTSqlite implements CRDTStorageBackend {
   final sq.Database database;
 
   static void _createSchema(sq.Database database) {
-    database.execute(createSchemaSql);
+    createOrUpgradeSchema(database);
   }
 
   @override

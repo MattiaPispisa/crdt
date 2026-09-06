@@ -8,9 +8,11 @@ import 'dart:typed_data';
 
 import 'package:crdt_lf/crdt_lf.dart';
 import 'package:crdt_lf_sqlite/crdt_lf_sqlite.dart';
+import 'package:crdt_lf_sqlite/src/schema.dart';
 import 'package:crdt_lf_sqlite/src/transaction.dart';
 import 'package:hlc_dart/hlc_dart.dart';
 import 'package:persistence_conformance/persistence_conformance.dart';
+import 'package:sqlite3/sqlite3.dart' as sq;
 import 'package:test/test.dart';
 
 void main() {
@@ -197,6 +199,173 @@ void main() {
       expect(a.changes.count, 0);
       expect(a.snapshots.count, 0);
       expect(b.changes.count, 1, reason: 'doc-b must be untouched');
+    });
+  });
+
+  group('schema upgrade', () {
+    /// Writes a database in the shape version 1 left behind, holding
+    /// [changes].
+    void writeSchemaOne(List<Change> changes) {
+      final database = sq.sqlite3.open(dbPath);
+      try {
+        database.execute('''
+CREATE TABLE $changesTable (
+  document_id TEXT NOT NULL,
+  change_id   TEXT NOT NULL,
+  bytes       BLOB NOT NULL,
+  PRIMARY KEY (document_id, change_id)
+);
+''');
+        for (final change in changes) {
+          database.execute(
+            'INSERT INTO $changesTable VALUES (?, ?, ?)',
+            ['doc', change.id.toString(), change.toBytes()],
+          );
+        }
+      } finally {
+        database.dispose();
+      }
+    }
+
+    test('a database written by version 1 keeps its rows and can be filtered',
+        () async {
+      // Version 1 had no author and no clock column, and no `user_version`
+      // either. The upgrade adds the columns and fills them from the bytes
+      // that are already on disk, or the bounds would answer on zeros.
+      final author = PeerId.generate();
+      Change atClock(int l) => Change.fromPayloadBytes(
+            id: OperationId(author, HybridLogicalClock(l: l, c: 1)),
+            deps: const {},
+            author: author,
+            payloadBytes: Uint8List.fromList(utf8.encode('$l')),
+          );
+      final older = atClock(1);
+      final newer = atClock(2);
+      writeSchemaOne([older, newer]);
+
+      final upgraded = CRDTSqlite.open(dbPath);
+      final changes = upgraded.changeStorageForDocument('doc');
+
+      expect(
+        changes.count,
+        2,
+        reason: 'the upgrade only adds, it does not drop rows',
+      );
+      expect(
+        changes
+            .getChanges(newerThan: VersionVector({author: older.hlc}))
+            .map((change) => change.id.toString()),
+        [newer.id.toString()],
+        reason: 'the columns were filled from the bytes already on disk',
+      );
+
+      upgraded.close();
+    });
+
+    test('the tables version 1 never had are created', () async {
+      writeSchemaOne([]);
+
+      final upgraded = CRDTSqlite.open(dbPath);
+      final peerId = PeerId.generate();
+      final peers = upgraded.peerIdStorageForDocument('doc');
+
+      peers.savePeerId(peerId);
+
+      expect(peers.getPeerId(), peerId);
+      upgraded.close();
+    });
+
+    test('a change whose bytes this build cannot read still migrates',
+        () async {
+      // The split reads `change_id`, not the blob. A row this build could not
+      // decode would once have stopped the upgrade; now it moves across and
+      // fails later, when someone actually asks for it.
+      final id = OperationId(PeerId.generate(), HybridLogicalClock(l: 7, c: 0));
+      final database = sq.sqlite3.open(dbPath);
+      database
+        ..execute('''
+CREATE TABLE $changesTable (
+  document_id TEXT NOT NULL,
+  change_id   TEXT NOT NULL,
+  bytes       BLOB NOT NULL,
+  PRIMARY KEY (document_id, change_id)
+);
+''')
+        ..execute(
+          'INSERT INTO $changesTable VALUES (?, ?, ?)',
+          ['doc', id.toString(), Uint8List.fromList([1])],
+        )
+        ..dispose();
+
+      final upgraded = CRDTSqlite.open(dbPath);
+
+      expect(upgraded.changeStorageForDocument('doc').count, 1);
+      expect(
+        () => upgraded
+            .changeStorageForDocument('doc')
+            .getChanges(upTo: VersionVector({id.peerId: id.hlc})),
+        // Reading it is what fails, and only for whoever asks.
+        throwsA(isA<FormatException>()),
+      );
+
+      upgraded.close();
+    });
+
+    test('an upgrade that cannot read a change id leaves the database as it '
+        'was', () async {
+      // A name the split cannot parse stops the upgrade. Half the rows moved
+      // and half left behind is worse than refusing to open.
+      final database = sq.sqlite3.open(dbPath);
+      database
+        ..execute('''
+CREATE TABLE $changesTable (
+  document_id TEXT NOT NULL,
+  change_id   TEXT NOT NULL,
+  bytes       BLOB NOT NULL,
+  PRIMARY KEY (document_id, change_id)
+);
+''')
+        ..execute(
+          "INSERT INTO $changesTable VALUES ('doc', 'not-an-id', x'01')",
+        )
+        ..dispose();
+
+      expect(() => CRDTSqlite.open(dbPath), throwsA(isA<FormatException>()));
+
+      final after = sq.sqlite3.open(dbPath);
+      final columns = after
+          .select('PRAGMA table_info($changesTable)')
+          .map((row) => row['name'])
+          .toSet();
+      after.dispose();
+
+      expect(
+        columns,
+        contains('change_id'),
+        reason: 'the table went back to the shape it had',
+      );
+    });
+
+    test('opening twice does not upgrade twice', () async {
+      final author = PeerId.generate();
+      final change = Change.fromPayloadBytes(
+        id: OperationId(author, HybridLogicalClock(l: 1, c: 1)),
+        deps: const {},
+        author: author,
+        payloadBytes: Uint8List.fromList(utf8.encode('a')),
+      );
+      writeSchemaOne([change]);
+
+      CRDTSqlite.open(dbPath).close();
+      final again = CRDTSqlite.open(dbPath);
+
+      expect(
+        again
+            .changeStorageForDocument('doc')
+            .getChanges(newerThan: VersionVector({author: change.hlc})),
+        isEmpty,
+      );
+      again.close();
     });
   });
 }

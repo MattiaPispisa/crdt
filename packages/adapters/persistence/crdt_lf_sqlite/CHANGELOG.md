@@ -43,8 +43,8 @@
   existing database picks it up on the next open.
 
 - **`getChanges` takes `newerThan` and `upTo`**, both `VersionVector`s: what a vector has not seen,
-  what it has seen, or the range between them. Filtered in Dart for now, so it narrows the result
-  and not the rows read.
+  what it has seen, or the range between them. The database answers it: a change outside the range
+  is never read and never decoded, which is the cost of asking a long history what is new.
 
 - `deleteDocument` now removes the stored identity too, and does its deletes in one
   transaction.
@@ -61,6 +61,22 @@
   so the connection stays `CRDTSqlite.close()`'s to release.
 
 - Requires `crdt_lf: ^4.2.0`.
+
+- **A change is named by its author and its clock**, not by a string. `changes` names a change
+  by `author`, `hlc_l` and `hlc_c` instead of by the one text column `change.id.toString()` used
+  to fill. It is the same name written apart — an `OperationId` **is** a peer and a clock — so
+  nothing is stored twice: kept apart, SQL can compare it, which is what a version vector asks, and
+  the
+  primary key `(document_id, author, hlc_l, hlc_c)` is already the index that comparison wants.
+  The clock is two columns because `l` is 48 bits and `c` is 16: together they pass the 53 bits an
+  integer keeps exactly in JavaScript.
+
+  **The database now carries a schema version**, in `PRAGMA user_version`. There was none before:
+  `CREATE TABLE IF NOT EXISTS` gives a database a missing table but never a different shape, so a
+  database written by `0.2.0` would have kept the old one. Opening it now rebuilds `changes`,
+  reading the old `change_id` column — not the stored bytes, so a change whose blob this build
+  cannot decode still migrates. It all happens in one savepoint: half a rebuilt table is worse
+  than none.
 
 ## [0.2.0](https://github.com/MattiaPispisa/crdt/tree/crdt_lf_sqlite-v0.2.0/packages/adapters/persistence/crdt_lf_sqlite)
 

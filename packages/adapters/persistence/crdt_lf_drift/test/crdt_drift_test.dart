@@ -113,10 +113,22 @@ void main() {
       await wrapped.close();
     });
 
-    test('a database written by schema 1 gains the peers table', () async {
-      // Schema 1 held changes and snapshots only. A database on disk from
-      // that version has to keep them and gain the identity table, or a
-      // reopened document comes back as a different author.
+    test('a database written by schema 1 is upgraded, rows included',
+        () async {
+      // Schema 1 held changes and snapshots only, and no author or clock
+      // column. A database on disk from that version has to keep its rows,
+      // gain the identity table, and end up filterable by version — the
+      // upgrade reads the stored bytes to fill the new columns.
+      final author = PeerId.generate();
+      Change atClock(int l) => Change.fromPayloadBytes(
+            id: OperationId(author, HybridLogicalClock(l: l, c: 1)),
+            deps: const {},
+            author: author,
+            payloadBytes: Uint8List.fromList(utf8.encode('$l')),
+          );
+      final older = atClock(1);
+      final newer = atClock(2);
+
       final onSchemaOne = CRDTDrift.fromDatabase(
         CRDTDriftDatabase(
           NativeDatabase.memory(
@@ -135,11 +147,14 @@ void main() {
                   'snapshot_id TEXT NOT NULL, '
                   'bytes BLOB NOT NULL, '
                   'PRIMARY KEY (document_id, snapshot_id));',
-                )
-                ..execute(
-                  "INSERT INTO changes VALUES ('doc', 'kept', x'01');",
-                )
-                ..userVersion = 1;
+                );
+              for (final change in [older, newer]) {
+                db.execute(
+                  'INSERT INTO changes VALUES (?, ?, ?);',
+                  ['doc', change.id.toString(), change.toBytes()],
+                );
+              }
+              db.userVersion = 1;
             },
           ),
         ),
@@ -148,15 +163,49 @@ void main() {
       final peerId = PeerId.generate();
       final peers = onSchemaOne.peerIdStorageForDocument('doc');
       await peers.savePeerId(peerId);
-
       expect(await peers.getPeerId(), peerId);
+
+      final changes = onSchemaOne.changeStorageForDocument('doc');
       expect(
-        await onSchemaOne.changeStorageForDocument('doc').count,
-        1,
-        reason: 'the upgrade only adds the new table',
+        await changes.count,
+        2,
+        reason: 'the upgrade only adds, it does not drop rows',
+      );
+
+      final seenOlder = VersionVector({author: older.hlc});
+      expect(
+        (await changes.getChanges(newerThan: seenOlder))
+            .map((change) => change.id.toString()),
+        [newer.id.toString()],
+        reason: 'the columns were filled from the bytes already on disk',
       );
 
       await onSchemaOne.close();
+    });
+
+    test('a delete of more changes than SQLite binds at once still works',
+        () async {
+      // One `IN (?, ?, ...)` per id: past SQLITE_MAX_VARIABLE_NUMBER the
+      // statement is refused and nothing is deleted. A prune hands over
+      // everything it removed at once, and `compactAfter` is off by default,
+      // so a document that ran for a long time gets here.
+      const count = 40000;
+      final author = PeerId.generate();
+      final many = [
+        for (var i = 0; i < count; i++)
+          Change.fromPayloadBytes(
+            id: OperationId(author, HybridLogicalClock(l: 1, c: i)),
+            deps: const {},
+            author: author,
+            payloadBytes: Uint8List.fromList(utf8.encode('$i')),
+          ),
+      ];
+      final changes = storage.changeStorageForDocument('doc-many');
+      await changes.saveChanges(many);
+      expect(await changes.count, count);
+
+      expect(await changes.deleteChanges(many), count);
+      expect(await changes.count, 0);
     });
 
     test('deleteDocument removes only the target document', () async {

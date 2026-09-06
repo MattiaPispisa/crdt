@@ -26,12 +26,14 @@
   session. Read it before building the document, with
   `database.peerIdStorageForDocument(id).loadOrCreate()`.
 
-- **The schema is at version 2**, and the package now has a `MigrationStrategy`. The upgrade only
-  creates the `peers` table; changes and snapshots written by version 1 stay as they are.
+- **The schema is at version 2**, and the package now has a `MigrationStrategy`. A database
+  written by `0.2.0` is at version 1: it gains the `peers` table, and `changes` is rebuilt into
+  its new shape. The rebuild reads the old `change_id` column, not the stored bytes, so a change
+  whose blob this build cannot decode still migrates. Snapshots stay as they are.
 
 - **`getChanges` takes `newerThan` and `upTo`**, both `VersionVector`s: what a vector has not seen,
-  what it has seen, or the range between them. Filtered in Dart for now, so it narrows the result
-  and not the rows read.
+  what it has seen, or the range between them. The database answers it: a change outside the range
+  is never read and never decoded, which is the cost of asking a long history what is new.
 
 - **Storage methods are declared `FutureOr` by the shared contract.** drift is asynchronous end to
   end, so every method here still returns a `Future` and call sites do not change. `transaction`
@@ -51,6 +53,24 @@
   `CRDTDrift.close()`'s to release.
 
 - Requires `crdt_lf: ^4.2.0`.
+
+- **A change is named by its author and its clock**, not by a string. `changes` names a change by
+  `author`, `hlcL` and `hlcC` instead of by the one text column `change.id.toString()` used to
+  fill. It is the same name written apart — an `OperationId` **is** a peer and a clock — so
+  nothing is stored twice: kept apart, SQL can compare it, which is what a version vector asks,
+  and the primary key `(documentId, author, hlcL, hlcC)` is already the index that comparison
+  wants. The clock is two columns because `l` is 48 bits and `c` is 16: together they pass the 53
+  bits an integer keeps exactly in JavaScript, and this adapter runs on the web.
+
+### Fixed
+
+- **A delete of very many changes no longer fails.** `deleteChanges` built a single
+  `IN (?, ?, …)` with one variable per id, and SQLite refuses a statement that binds more than
+  `SQLITE_MAX_VARIABLE_NUMBER` of them — 32766 on a current build, 999 on an older one. A prune
+  hands over everything it removed at once, and compaction is off by default, so a document that
+  ran for a long time reached it. Deletes now go through a batch, one hit on the primary key each,
+  which has no such ceiling. `deleteSnapshots` still names its ids in one statement — a snapshot
+  id is an opaque string, not a key the table is ordered by — so it cuts them into pieces instead.
 
 ## [0.2.0](https://github.com/MattiaPispisa/crdt/tree/crdt_lf_drift-v0.2.0/packages/adapters/persistence/crdt_lf_drift)
 

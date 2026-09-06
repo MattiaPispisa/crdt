@@ -389,6 +389,35 @@ void runDocumentStorageConformanceTests({
         );
       });
 
+      test('a vector that names several peers is honoured for each of them',
+          () async {
+        // A store that turns the vector into a query writes one term per peer
+        // and joins them. One that honoured only the first would still pass
+        // every test above, because every one of them names a single peer.
+        final mine = fixtures.changes(2);
+        final other = ConformanceFixtures('$documentId-second');
+        final theirsSeen = other.changes(2);
+        final theirsNew = other.changes(1);
+        await storage.changes.saveChanges([
+          ...mine,
+          ...theirsSeen,
+          ...theirsNew,
+        ]);
+
+        final seen = VersionVector({
+          fixtures.document.peerId: mine.last.hlc,
+          other.document.peerId: theirsSeen.last.hlc,
+        });
+
+        final read = await storage.changes.getChanges(newerThan: seen);
+
+        expect(
+          read.map((c) => c.id.toString()),
+          unorderedEquals(theirsNew.map((c) => c.id.toString())),
+          reason: 'both peers are covered, and only the last change is not',
+        );
+      });
+
       test('a peer the vector never heard of is newer than it', () async {
         final mine = fixtures.changes(2);
         final other = ConformanceFixtures('$documentId-stranger');
