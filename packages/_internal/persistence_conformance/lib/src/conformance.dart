@@ -82,7 +82,7 @@ void runDocumentStorageConformanceTests({
     });
 
     group('copying', () {
-      test('copyDocument carries a whole document to another storage',
+      test('copyTo carries a whole document to another storage',
           () async {
         final changes = fixtures.everyHandler();
         final snapshot = fixtures.snapshot();
@@ -672,7 +672,7 @@ void runStorageBackendConformanceTests({
       await backend.close();
     });
 
-    /// Stores one change under [documentId], so the document exists.
+    // Stores one change under the id, so the document exists.
     Future<void> write(String documentId) async {
       final storage = await backend.storageForDocument(documentId);
       await storage.changes.saveChanges(fixtures.changes(1));
@@ -813,7 +813,7 @@ void runStorageBackendConformanceTests({
 
 /// The body of a test that is only there to be skipped.
 ///
-/// One place, so the lines a skipped test never runs are one line. That line
+/// One shared body, so the never-run lines are one line and not a dozen. It
 /// is dead by construction: a skipped test does not run its body.
 // coverage:ignore-start
 void _notRun() {}

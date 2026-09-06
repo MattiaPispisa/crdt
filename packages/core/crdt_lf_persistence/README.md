@@ -24,9 +24,8 @@ Three levels live here, smallest first:
 - **`CRDTDocumentPersistence`** — the part you would otherwise write yourself:
   read the document back, then follow it and write down what moves.
 
-And the functions that use them, so you never write these either:
-
-All of them are **methods on the backend**, so you find them by typing a dot:
+And the functions that use them, so you never write these either. Most are
+**methods on the backend**, so you find them by typing a dot:
 
 | you want to | call |
 | --- | --- |
@@ -36,13 +35,15 @@ All of them are **methods on the backend**, so you find them by typing a dot:
 | back it up, or move it to another adapter | `backend.copyDocumentTo(other, id)` |
 | stop the log from growing, now | `persistence.compact()` |
 
-The last three are also on a single `CRDTDocumentStorage` — `storage.readDocument()`,
-`storage.documentAt(version)`, `storage.copyTo(other)` — for when that is all
-you hold.
+The three read-and-copy calls are also on a single `CRDTDocumentStorage` —
+`storage.readDocument()`, `storage.documentAt(version)`,
+`storage.copyTo(other)` — for when that is all you hold. `compact()` is the
+odd one out: it lives on the `CRDTDocumentPersistence` that follows a
+document, not on the backend.
 
 ## Local only
 
-No server to talk to: an adapter, and one call. One import, the adapter's.
+No server to talk to: an adapter, and one call.
 
 ```dart
 import 'package:crdt_lf/crdt_lf.dart';
@@ -263,7 +264,9 @@ every adapter is one:
 ```dart
 final backend = CRDTSqlite.open('notes.db');
 
-for (final documentId in await backend.documentIds) { ... }
+for (final documentId in await backend.documentIds) {
+  // ...show it in a list
+}
 
 await backend.deleteDocument('note-1');  // changes, snapshots and identity
 backend.close();
@@ -345,10 +348,10 @@ moment an app goes to the background:
 await persistence.compact();
 ```
 
-Both are off by default because a prune drops the stacks of every
-`CRDTUndoManager` on the document. Turn `compactAfter` on for a document that
-lives a long time; where undo matters more, leave it off and call `compact()`
-at a moment the user cannot be in the middle of something.
+Compaction never happens on its own, because a prune drops the stacks of
+every `CRDTUndoManager` on the document. Turn `compactAfter` on for a document
+that lives a long time; where undo matters more, leave it off and call
+`compact()` at a moment the user cannot be in the middle of something.
 
 ## Writing an adapter
 
@@ -373,9 +376,10 @@ One rule if you do implement it: **a `body` that returns without suspending
 must be carried through without suspending.** On a backend where one
 connection serves every document, a suspension inside an open transaction lets
 another document write into it, and a rollback then takes that write with it —
-silently, since the transaction that lost the write never saw an error. `close()` releases what belongs to **this
-document only**: a connection shared between documents stays open, and the
-backend closes that itself.
+silently, since the transaction that lost the write never saw an error.
+
+`close()` releases what belongs to **this document only**: a connection shared
+between documents stays open, and the backend closes that itself.
 
 `CRDTPeerIdStorage` is separate. Implement it to let a document keep the
 identity it writes under; two methods, and the value is a string

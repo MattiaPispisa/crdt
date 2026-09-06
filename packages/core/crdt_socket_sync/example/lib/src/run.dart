@@ -52,7 +52,7 @@ Future<void> run({
   _backend = await CRDTHive.open();
   _registry = await openHiveRegistry(
     backend: _backend,
-    logger: logger.getConfiguredInstance(prefix: 'HiveServerRegistry'),
+    logger: logger.getConfiguredInstance(prefix: 'Registry'),
   );
 
   await _setupDocument();
@@ -61,7 +61,7 @@ Future<void> run({
   if (verbose) {
     await showPersistence(
       registry: _registry,
-      logger: logger.getConfiguredInstance(prefix: 'HiveServerRegistry'),
+      logger: logger.getConfiguredInstance(prefix: 'Registry'),
     );
   }
 
@@ -78,7 +78,7 @@ Future<void> run({
   _snapshotBroadcast = broadcastSnapshots(
     registry: _registry,
     server: _server,
-    logger: logger.getConfiguredInstance(prefix: 'HiveServerRegistry'),
+    logger: logger.getConfiguredInstance(prefix: 'Registry'),
   );
 
   _setupSigintHandler(logger: logger.getConfiguredInstance(prefix: 'Bin'));
@@ -89,7 +89,8 @@ Future<void> run({
   );
 }
 
-/// setup a document with id [_kDocumentId] and register a handler for the todo list.
+/// setup a document with id [_kDocumentId] and register a handler for the
+/// todo list.
 ///
 /// The same handler is used across all sync examples.
 Future<void> _setupDocument() async {

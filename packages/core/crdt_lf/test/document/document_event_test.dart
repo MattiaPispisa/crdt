@@ -119,7 +119,7 @@ void main() {
         await pumpEventQueue();
 
         // The ingest happened first, and the change the document went on to
-        // write names [theirs] among its dependencies. Reporting the two the
+        // write names `theirs` among its dependencies. Reporting the two the
         // other way round would describe a history that cannot be replayed.
         expect(
           only<DocumentChangesApplied>().map((e) => e.source),
@@ -331,7 +331,7 @@ void main() {
         await pumpEventQueue();
 
         // The import is over long before the commit runs, and it restored
-        // [outer] on its way out. The batch has to remember the origin of the
+        // `outer` on its way out. The batch has to remember the origin of the
         // call that made it, or a consumer cannot recognise its own writes.
         expect(only<DocumentChangesApplied>().single.origin, same(inner));
       });

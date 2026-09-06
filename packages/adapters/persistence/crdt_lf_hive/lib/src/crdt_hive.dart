@@ -12,7 +12,7 @@ import 'package:hive/hive.dart';
 /// Hive.openBox<Change>(kBoxName)
 /// Hive.openBox<Snapshot>(kBoxName)
 /// ```
-/// or by leveraging the convenience utilities provided by [CRDTHive]:
+/// or with the helpers on [CRDTHive]:
 ///
 /// - [CRDTHive.openChangeStorageForDocument]
 /// - [CRDTHive.openSnapshotStorageForDocument]
@@ -34,8 +34,9 @@ class CRDTHive {
   /// the self-describing format provided by `crdt_lf`. No recursive Hive
   /// adapters are involved.
   ///
-  /// The typeId parameters allow customizing the Hive type IDs for each adapter
-  /// if needed to avoid conflicts with other adapters in your application.
+  /// [changeTypeId] and [snapshotTypeId] set the Hive type id of each adapter,
+  /// for an app whose other adapters already use those ids; `null` keeps the
+  /// default of the adapter.
   static void initialize({
     int? changeTypeId,
     int? snapshotTypeId,
@@ -143,8 +144,8 @@ class CRDTHive {
 
   /// Creates both change and snapshot storage for a specific document.
   ///
-  /// Returns a [CRDTDocumentStorage] containing both storage instances
-  /// for convenience.
+  /// Returns a [CRDTHiveDocumentStorage]; its `close()` closes the two boxes
+  /// of this document.
   ///
   /// [documentId] is the unique identifier for the document.
   ///
@@ -173,10 +174,11 @@ class CRDTHive {
     );
   }
 
-  /// Closes all CRDT-related boxes.
+  /// Closes every Hive box this app has open, not only the CRDT ones.
   ///
-  /// This method closes all boxes that were opened for CRDT objects.
-  /// It's useful for cleanup when shutting down the application.
+  /// It is for shutting the app down. An app that opens one document after
+  /// another wants [CRDTHiveDocumentStorage.close] instead, which closes the
+  /// two boxes of that document and leaves the rest alone.
   static Future<void> closeAllBoxes() {
     return Hive.close();
   }
@@ -223,11 +225,8 @@ class CRDTHive {
     final changesDocumentBoxName = '${changesBoxName}_$documentId';
     final snapshotsDocumentBoxName = '${snapshotsBoxName}_$documentId';
 
-    // Closed first, one after the other, and only then deleted. On the web a
-    // box is an IndexedDB database: the browser refuses to delete one while a
-    // connection to it is open, and Hive deletes without closing. The delete
-    // then waits for a connection nothing is going to close, and every later
-    // read of that box waits behind it.
+    // Closed first: the browser will not delete an open IndexedDB database,
+    // and Hive deletes without closing. See `deleteBox`.
     await _closeForDelete<Change>(changesDocumentBoxName);
     await _closeForDelete<Snapshot>(snapshotsDocumentBoxName);
 

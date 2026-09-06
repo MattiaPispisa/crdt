@@ -25,7 +25,8 @@
       - [Out-of-sync Recovery](#out-of-sync-recovery)
     - [Server Registry](#server-registry)
       - [Persisting changes \& snapshots](#persisting-changes--snapshots)
-        - [The one piece you write: the catalog](#the-one-piece-you-write-the-catalog)
+        - [Getting a document back out of memory](#getting-a-document-back-out-of-memory)
+        - [The list of documents](#the-list-of-documents)
         - [Broadcasting a compaction](#broadcasting-a-compaction)
     - [Server Events](#server-events)
     - [Imports](#imports)
@@ -47,8 +48,6 @@
     - [Wire format \& type codes](#wire-format--type-codes)
   - [Examples](#examples)
   - [Apps](#apps)
-  - [Roadmap](#roadmap)
-  - [Contributing](#contributing)
   - [Packages](#packages)
 
 A comprehensive Dart package for synchronizing Conflict-free Replicated Data Types (CRDTs) between multiple clients and a server.
@@ -331,12 +330,12 @@ final registry = PersistentServerRegistry(
 
 That is the whole setup. `backend` is a
 [`CRDTStorageBackend`](https://pub.dev/packages/crdt_lf_persistence) — an
-adapter's `CRDTHive`, `CRDTDrift` or `CRDTSqlite` — and it is where the
+adapter's `CRDTHive.open()`, `CRDTDrift.open()` or `CRDTSqlite.open()` — and it is where the
 documents, their snapshots and the identity the server writes them under all
 live.
 
-It holds the live documents and routes to them, the way any registry does. What
-it does **not** do is read and write storage by hand: each document gets a
+It holds the live documents and routes to them, the way any registry does. It
+never reads or writes storage by hand. Each document gets a
 [`CRDTDocumentPersistence`](https://pub.dev/packages/crdt_lf_persistence), which
 follows `CRDTDocument.events` and writes down what each event reports. So:
 
@@ -366,10 +365,11 @@ await registry.releaseDocument(roomId);
 `releaseDocument` writes what the document is holding, closes it, and leaves the
 id in the catalog: the room is still served, it is just not in memory, and the
 next `getDocument` reads it back from the storage. That is what separates it
-from `removeDocument`, which forgets the room.
+from `removeDocument`, which drops the room from the catalog — and with the
+default catalog, deletes it.
 
-`idleAfter` does the same on a timer, for a server that has nowhere good to put
-the call:
+`idleAfter` does the same on a timer, for a server with no natural place to
+call `releaseDocument`:
 
 ```dart
 final registry = PersistentServerRegistry(

@@ -16,8 +16,10 @@ import 'package:greyhound_markdown_client/src/widgets/status_bar.dart';
 /// [RoomBuilder]. This screen only draws it, and the only state it keeps is
 /// which of the three layouts is showing.
 class EditorScreen extends StatefulWidget {
+  /// Creates the editor of the room named by [roomId].
   const EditorScreen({required this.roomId, super.key});
 
+  /// The room to open. It is the document id and the relay room key.
   final String roomId;
 
   @override
@@ -102,7 +104,6 @@ class _EditorScreenState extends State<EditorScreen> {
             case _ViewMode.view:
               return preview;
             case _ViewMode.split:
-              // Side by side when there is room, stacked otherwise.
               if (constraints.maxWidth < 720) {
                 return Column(
                   children: [

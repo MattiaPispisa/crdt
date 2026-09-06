@@ -9,7 +9,7 @@ void main() {
     fixtures = ConformanceFixtures('doc');
   });
 
-  /// A document holding [changes] and nothing else.
+  // A document holding the changes and nothing else.
   CRDTDocument rebuilt(List<Change> changes) =>
       CRDTDocument(documentId: 'doc')..importChanges(changes);
 
@@ -74,7 +74,7 @@ void main() {
   });
 
   group('ConformanceFixtures.expectEveryHandler', () {
-    /// Runs the check and returns the pairs that did not match.
+    // Runs the check and returns the pairs that did not match.
     List<String> mismatches(CRDTDocument document) {
       final found = <String>[];
       ConformanceFixtures.expectEveryHandler(document, (actual, expected) {

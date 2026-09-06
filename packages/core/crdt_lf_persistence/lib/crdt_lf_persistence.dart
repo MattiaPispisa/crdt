@@ -17,6 +17,8 @@
 /// alongside its own.
 library;
 
+// These imports carry no code. They are what makes the doc links in the
+// library comment above resolve.
 import 'package:crdt_lf/crdt_lf.dart';
 import 'package:crdt_lf_persistence/src/document_persistence.dart';
 import 'package:crdt_lf_persistence/src/document_storage_reading.dart';

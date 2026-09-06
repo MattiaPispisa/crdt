@@ -3,8 +3,7 @@ import 'package:crdt_lf/crdt_lf.dart';
 /// The work a committed transaction collected.
 ///
 /// `changes` holds one entry per batch the document applied, in the order the
-/// batches happened. A [TransactionManager] never reads them: it holds them
-/// back and hands them over.
+/// batches happened.
 typedef TransactionWork = ({
   /// The operations applied during the transaction.
   List<Operation> operations,
@@ -43,6 +42,9 @@ class TransactionManager {
   });
 
   /// Callback used to flush the work done during the transaction.
+  ///
+  /// The lists it gets are copies: this manager clears its own right after
+  /// the call, so the callback may keep them.
   final void Function(TransactionWork work) flushWork;
 
   /// Called once the flush is over and this manager holds nothing anymore.

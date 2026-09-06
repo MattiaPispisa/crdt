@@ -1,4 +1,5 @@
-// ignore_for_file: avoid_print just for example
+// The example prints its result, and it is not a library entry point.
+// ignore_for_file: avoid_print
 
 // This package is the contract, not a store. A real app picks an adapter —
 // `crdt_lf_hive`, `crdt_lf_drift`, `crdt_lf_sqlite` — and never depends on
@@ -15,7 +16,6 @@ import 'package:crdt_lf_persistence/crdt_lf_persistence.dart';
 Future<void> main() async {
   final backend = _MapBackend();
 
-  // The first session writes a line.
   await _session(backend, 'note', 'hello 🌍');
 
   // The second reads back what the first wrote, and appends to it. In an app
@@ -27,7 +27,7 @@ Future<void> main() async {
 
   print('documents: ${(await backend.documentIds).toList()..sort()}');
 
-  // Reading one without following it: what a list of notes shows.
+  // What a list of notes shows: read, and not followed.
   final note = await backend.readDocument('note');
   print('note reads: ${CRDTFugueTextHandler(note, 'body').value}');
 

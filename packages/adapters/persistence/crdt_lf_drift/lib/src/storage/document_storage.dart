@@ -7,9 +7,8 @@ import 'package:crdt_lf_persistence/crdt_lf_persistence.dart';
 
 /// The changes and snapshots of one document, in a drift database.
 ///
-/// It adds a real
-/// [transaction] to the shared contract: the work inside one either all lands
-/// or none of it does.
+/// It adds a real [transaction] to the shared contract: the work inside one
+/// either all lands, or none of it does.
 class CRDTDriftDocumentStorage extends CRDTDocumentStorage {
   /// Creates the storage of the document [changes] and [snapshots] belong to,
   /// on [database].
@@ -33,10 +32,10 @@ class CRDTDriftDocumentStorage extends CRDTDocumentStorage {
   Future<T> transaction<T>(FutureOr<T> Function() body) =>
       database.transaction(() async => body());
 
-  /// Does nothing, and that is the whole of it.
+  /// Does nothing: one database holds every document.
   ///
-  /// One database holds every document, so closing it here would take the
-  /// others down with it.
+  /// Closing it here would take the other documents down with it. `CRDTDrift`
+  /// closes the database itself.
   @override
   Future<void> close() async {}
 }

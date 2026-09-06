@@ -3,9 +3,9 @@ import 'package:crdt_lf/crdt_lf.dart';
 /// One move of the durable state of a [CRDTDocument]: the changes it holds and
 /// the snapshot they are replayed on top of.
 ///
-/// A consumer that mirrors a document — a persistence adapter, a log — follows
-/// [CRDTDocument.events] and writes down what each event reports, instead of
-/// exporting the whole document again to find out what moved.
+/// A consumer that mirrors a document — a persistence adapter, a log —
+/// follows [CRDTDocument.events] and writes down what each event reports,
+/// instead of exporting the whole document again to find out what moved.
 ///
 /// Events are handed out once the document is settled, so a listener always
 /// reads a document that holds nothing half-applied.
@@ -37,7 +37,8 @@ final class DocumentChangesApplied extends CRDTDocumentEvent {
     this.origin,
   }) : changes = List.unmodifiable(changes);
 
-  /// The changes, in the order the document applied them. Never empty.
+  /// The changes, in the order the document applied them. Never empty, and
+  /// unmodifiable.
   ///
   /// Every change here is new to the document: one that was already in the
   /// store is not reported again.
@@ -95,6 +96,8 @@ final class DocumentSnapshotUpdated extends CRDTDocumentEvent {
   final SnapshotReason reason;
 
   /// {@macro delta_origin}
+  ///
+  /// Comes from the call that replaced the snapshot.
   final Object? origin;
 
   @override

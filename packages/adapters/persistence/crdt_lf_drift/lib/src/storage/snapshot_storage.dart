@@ -91,7 +91,7 @@ class CRDTDriftSnapshotStorage implements CRDTSnapshotStorage {
       return 0;
     }
 
-    // Chunked for the reason written down on [idChunks]. Snapshots are few in
+    // Chunked for the reason written down on `idChunks`. Snapshots are few in
     // practice, but the caller decides how many, not this class.
     return database.transaction(() async {
       var deleted = 0;

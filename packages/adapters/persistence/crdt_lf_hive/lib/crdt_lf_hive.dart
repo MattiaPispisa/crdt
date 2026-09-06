@@ -2,7 +2,9 @@
 /// (Conflict-free Replicated Data Type) objects.
 ///
 /// This library provides Hive adapters and storage utilities for persisting
-/// CRDT objects like Changes and Snapshots, organized by document.
+/// CRDT objects like Changes and Snapshots, organized by document. It also
+/// stores the `PeerId` each document writes under, so a reopened document is
+/// the same author it was before.
 library;
 
 export 'package:crdt_lf_persistence/crdt_lf_persistence.dart'

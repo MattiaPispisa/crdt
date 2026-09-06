@@ -14,11 +14,14 @@
   - [Features](#features)
   - [Quick Start](#quick-start)
     - [1. Initialize Hive with CRDT Adapters](#1-initialize-hive-with-crdt-adapters)
-    - [2. Basic Usage with Manual Box Management](#2-basic-usage-with-manual-box-management)
-    - [3. Using Document-Scoped Storage (Recommended)](#3-using-document-scoped-storage-recommended)
+    - [2. Document-scoped storage](#2-document-scoped-storage)
+    - [3. Managing the boxes by hand](#3-managing-the-boxes-by-hand)
+  - [Many documents in one place](#many-documents-in-one-place)
+  - [Keeping a whole document on disk](#keeping-a-whole-document-on-disk)
   - [Document-Scoped Storage](#document-scoped-storage)
-    - [CRDTHiveChangeStorage](#crdtchangestorage)
-    - [CRDTHiveSnapshotStorage](#crdtsnapshotstorage)
+    - [CRDTHiveChangeStorage](#crdthivechangestorage)
+    - [CRDTHiveSnapshotStorage](#crdthivesnapshotstorage)
+    - [CRDTHivePeerIdStorage](#crdthivepeeridstorage)
   - [Snapshot Data Serialization](#snapshot-data-serialization)
   - [Examples](#examples)
     - [Storage example](#storage-example)
@@ -29,6 +32,7 @@
     - [Box Customization](#box-customization)
   - [Important Notes](#important-notes)
   - [Roadmap](#roadmap)
+  - [Apps](#apps)
   - [Packages](#packages)
 
 
@@ -61,23 +65,7 @@ void main() async {
 }
 ```
 
-### 2. Basic Usage with Manual Box Management
-
-```dart
-import 'package:crdt_lf/crdt_lf.dart';
-import 'package:hive/hive.dart';
-
-// Open boxes manually
-final changeBox = await Hive.openBox<Change>('changes');
-final snapshotBox = await Hive.openBox<Snapshot>('snapshots');
-
-// Store and retrieve changes
-final change = /* your change */;
-await changeBox.put(change.id.toString(), change);
-final retrievedChange = changeBox.get(change.id.toString());
-```
-
-### 3. Using Document-Scoped Storage (Recommended)
+### 2. Document-scoped storage
 
 ```dart
 import 'package:crdt_lf/crdt_lf.dart';
@@ -91,6 +79,24 @@ final snapshotStorage = await CRDTHive.openSnapshotStorageForDocument(documentId
 
 // Or open both at once
 final documentStorage = await CRDTHive.openStorageForDocument(documentId);
+```
+
+### 3. Managing the boxes by hand
+
+The low-level path, for an app that wants the boxes and not the storages:
+
+```dart
+import 'package:crdt_lf/crdt_lf.dart';
+import 'package:hive/hive.dart';
+
+// Open boxes manually
+final changeBox = await Hive.openBox<Change>('changes');
+final snapshotBox = await Hive.openBox<Snapshot>('snapshots');
+
+// Store and retrieve changes
+final change = /* your change */;
+await changeBox.put(change.id.toString(), change);
+final retrievedChange = changeBox.get(change.id.toString());
 ```
 
 ## Many documents in one place
@@ -149,6 +155,10 @@ conformant: every step the persistence takes is safe to repeat.
 ## Document-Scoped Storage
 
 The library provides optional storage utilities that organize data by document ID. Each document gets its own dedicated Hive boxes, improving isolation and performance.
+
+A Hive box holds its entries in memory, so reads here answer without
+suspending — `getChanges`, `getSnapshots`, `count` and `containsSnapshot` are
+not futures. Writes go through the box journal and stay asynchronous.
 
 ### CRDTHiveChangeStorage
 
@@ -220,10 +230,6 @@ final document = CRDTDocument(
 );
 ```
 
-A Hive box holds its entries in memory, so reads here answer without
-suspending — `getChanges`, `getSnapshots`, `count` and `containsSnapshot` are
-not futures. Writes go through the box journal and stay asynchronous.
-
 ## Snapshot Data Serialization
 
 `Snapshot` is persisted via `Snapshot.toBytes()` (the same self-describing
@@ -257,6 +263,10 @@ When using document-scoped storage, boxes are named using the pattern:
 - Snapshots: `{boxName}_{documentId}` (default: `snapshots_{documentId}`)
 
 This ensures each document has isolated storage while allowing custom box name prefixes.
+
+Two boxes are **shared**, one per app and not one per document:
+- `peer_ids`: the `PeerId` each document writes under, keyed by document id.
+- `documents`: the list of document ids the backend holds.
 
 ## Storage Management
 

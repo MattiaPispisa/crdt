@@ -364,11 +364,10 @@ class CRDTDocumentPersistence {
   /// Writes what is waiting, now, and waits for it.
   ///
   /// Loops until a whole round produces nothing new, for two reasons.
-  /// [CRDTDocument.events] hands an event to its listeners on a microtask, so
-  /// the ones already published have to be let through first — otherwise
-  /// flushing right after an edit would write everything except that edit. And
-  /// a write can cause more work: a compaction snapshots the document, which
-  /// publishes events of its own.
+  /// [CRDTDocument.events] hands an event to its listeners on a microtask. The
+  /// ones already published have to be let through first, or a flush right
+  /// after an edit would miss that edit. And a write can cause more work: a
+  /// compaction snapshots the document, which publishes events of its own.
   ///
   /// A write made while this runs is written by it too, so a flush that races
   /// a typist takes one more round.
@@ -382,7 +381,7 @@ class CRDTDocumentPersistence {
 
     while (true) {
       // A zero delay runs after the microtask queue, which is where a
-      // published event reaches [_onEvent].
+      // published event reaches `_onEvent`.
       await Future<void>.delayed(Duration.zero);
       // Every round, not once: the events let through above arm a timer of
       // their own, and it would write this round's work a second time.

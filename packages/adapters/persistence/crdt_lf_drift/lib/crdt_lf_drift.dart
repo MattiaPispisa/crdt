@@ -3,7 +3,8 @@
 ///
 /// This library provides storage utilities for persisting CRDT objects like
 /// Changes and Snapshots in a single drift database, organized by document
-/// via the `document_id` column.
+/// via the `document_id` column. It also stores the `PeerId` each document
+/// writes under, so a reopened document is the same author it was before.
 library;
 
 export 'package:crdt_lf_persistence/crdt_lf_persistence.dart'

@@ -5,9 +5,9 @@ import 'package:crdt_lf_persistence/crdt_lf_persistence.dart';
 
 /// The [Change]s of one document, as a backend keeps them.
 ///
-/// Every adapter — Hive, drift, sqlite, a plain file — implements this, so
-/// code written against it runs on any of them. A change is identified by its
-/// [Change.id]: saving one twice replaces it rather than adding a second copy.
+/// Code written against this runs on any adapter. A change is identified by
+/// its [Change.id]: saving one twice replaces it rather than adding a second
+/// copy.
 ///
 /// The store is a plain collection. It does not prune, compact, or know which
 /// changes a snapshot covers: that is [CRDTDocumentPersistence]'s job, driven
@@ -37,9 +37,9 @@ abstract interface class CRDTChangeStorage {
   /// The stored changes of this document, in no particular order.
   ///
   /// Without arguments this is every one of them. [newerThan] keeps only what
-  /// the given vector has not seen, which is what restoring on top of a
-  /// document already holding state needs. [upTo] keeps only what it has seen,
-  /// which rebuilds the document as it was at that version. Together they
+  /// the given vector has not seen. That is what a restore on top of a document
+  /// that already holds state needs. [upTo] keeps only what the vector has
+  /// seen, which rebuilds the document as it was at that version. Together they
   /// describe the range between the two.
   ///
   /// See [filterByVersion], which is the meaning of both bounds and the

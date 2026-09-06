@@ -4,13 +4,26 @@
 
 ### Changed
 
+- **A change is named by its author and its clock**, not by a string. `changes` names a change by
+  `author`, `hlcL` and `hlcC` instead of by the one text column `change.id.toString()` used to
+  fill. It is the same name written apart — an `OperationId` **is** a peer and a clock — so
+  nothing is stored twice. Kept apart, SQL can compare it, which is what a version vector asks,
+  and the primary key `(documentId, author, hlcL, hlcC)` is already the index that comparison
+  wants. The clock takes two columns because `l` is 48 bits and `c` is 16: together they stay
+  inside the 53 bits an integer keeps exactly in JavaScript, and this adapter runs on the web.
+
+- **The schema is at version 2**, and the package now has a `MigrationStrategy`. A database
+  written by `0.2.0` is at version 1: it gains the `peers` table, and `changes` is rebuilt into
+  its new shape. The rebuild reads the old `change_id` column, not the stored bytes, so a change
+  whose blob this build cannot decode still migrates. Snapshots stay as they are.
+
 - **The storages now implement the shared contract** from the new
   [`crdt_lf_persistence`](https://pub.dev/packages/crdt_lf_persistence) package. Code written
   against a storage runs on any adapter now, and `CRDTDocumentPersistence` keeps a whole document
   on disk for you — see that package's README. The contract is re-exported here, so one import is
-  enough: `openPersistentDocument` reads the stored identity, builds the document and restores it
-  in one call, `readDocument` gives a document to read and not follow, and `copyDocument` moves one
-  to another adapter.
+  enough: `openDocument` reads the stored identity, builds the document and restores it in one
+  call, `readDocument` gives a document to read and not follow, and `copyDocumentTo` moves one to
+  another adapter.
 
 - **`CRDTDrift` is now a `CRDTStorageBackend`.** It answers `documentIds` with a `UNION` over the
   three tables — the `peers` one included, so a document that was created and never written to is
@@ -19,17 +32,12 @@
   on any adapter.
 
 - **`deleteDocumentData` is now `deleteDocument`**, which is the name the interface uses. Same
-  behaviour: the changes, the snapshots and the identity, in one transaction.
+  behavior: the changes, the snapshots and the identity, in one transaction.
 
 - **`CRDTDriftPeerIdStorage` keeps the `PeerId` a document writes under**, in a new `peers` table.
   Without it every restart writes under a new author, and the version vector grows by one peer per
   session. Read it before building the document, with
   `database.peerIdStorageForDocument(id).loadOrCreate()`.
-
-- **The schema is at version 2**, and the package now has a `MigrationStrategy`. A database
-  written by `0.2.0` is at version 1: it gains the `peers` table, and `changes` is rebuilt into
-  its new shape. The rebuild reads the old `change_id` column, not the stored bytes, so a change
-  whose blob this build cannot decode still migrates. Snapshots stay as they are.
 
 - **`getChanges` takes `newerThan` and `upTo`**, both `VersionVector`s: what a vector has not seen,
   what it has seen, or the range between them. The database answers it: a change outside the range
@@ -53,14 +61,6 @@
   `CRDTDrift.close()`'s to release.
 
 - Requires `crdt_lf: ^4.2.0`.
-
-- **A change is named by its author and its clock**, not by a string. `changes` names a change by
-  `author`, `hlcL` and `hlcC` instead of by the one text column `change.id.toString()` used to
-  fill. It is the same name written apart — an `OperationId` **is** a peer and a clock — so
-  nothing is stored twice: kept apart, SQL can compare it, which is what a version vector asks,
-  and the primary key `(documentId, author, hlcL, hlcC)` is already the index that comparison
-  wants. The clock is two columns because `l` is 48 bits and `c` is 16: together they pass the 53
-  bits an integer keeps exactly in JavaScript, and this adapter runs on the web.
 
 ### Fixed
 

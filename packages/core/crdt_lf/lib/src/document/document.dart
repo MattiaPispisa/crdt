@@ -630,8 +630,9 @@ class CRDTDocument extends BaseCRDTDocument {
   ///
   /// **Broadcast, and nothing is replayed.** A move made before you subscribe
   /// is not reported to you: subscribe before the document is written to, or
-  /// read the state you missed with [exportChanges] and [takeSnapshot]. While
-  /// nobody listens the document does not even collect what a prune removed.
+  /// read the state you missed with [exportChanges] and [takeSnapshot]. With no
+  /// listener the document builds no event at all, so an unused [events] costs
+  /// nothing.
   ///
   /// Every event carries the `origin` of the call behind it, so a consumer can
   /// recognise its own writes — a persistence adapter can subscribe first and
@@ -766,8 +767,8 @@ class CRDTDocument extends BaseCRDTDocument {
         DocumentChangesApplied(
           changes: appliedChanges,
           source: ChangeSource.created,
-          // Read now, and right to: the operations were collected under this
-          // origin and only become changes here.
+          // Read here on purpose: the operations were collected under this
+          // origin, and only become changes at the commit.
           origin: _deltaOrigin,
         ),
       );
@@ -1618,8 +1619,8 @@ class CRDTDocument extends BaseCRDTDocument {
   /// the only way to **directly** notify listeners
   /// is using the [_transactionManager] callbacks.
   void _emitUpdate({List<Change>? changes, ChangeSource? source}) {
-    // Nobody mirrors this document: the batch is not worth building, and an
-    // update on its own says everything a listener of [updates] can read.
+    // No listener on `events`, so the batch is never read: skip building it
+    // and just wake `updates`.
     if (changes == null || changes.isEmpty || !_eventsController.hasListener) {
       _transactionManager.requestUpdate();
       return;

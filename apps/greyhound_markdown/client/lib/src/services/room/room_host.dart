@@ -8,7 +8,8 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 
 import 'package:greyhound_markdown_client/src/application/application.dart';
 import 'package:greyhound_markdown_client/src/config.dart';
-import 'package:greyhound_markdown_client/src/services/awareness/awareness_service.dart';
+import 'package:greyhound_markdown_client/src/services/awareness/'
+    'awareness_service.dart';
 import 'package:greyhound_markdown_client/src/services/room/room_session.dart';
 
 /// Opens a room and keeps it alive for as long as the [State] using it is in
@@ -59,7 +60,7 @@ mixin RoomHost<T extends StatefulWidget> on State<T> {
   Future<void> _restoreThenConnect(UserSettingsState profile) async {
     final opened = await _openDocument();
 
-    // [dispose] can have run while the storage was being read. It found
+    // `dispose` can have run while the storage was being read. It found
     // nothing built yet and had nothing to close, so this closes it here.
     if (_disposed) {
       unawaited(opened.persistence?.dispose());
@@ -153,9 +154,11 @@ mixin RoomHost<T extends StatefulWidget> on State<T> {
   void dispose() {
     _disposed = true;
     _statusSubscription?.cancel();
-    // Flushes whatever is still waiting to be written.
+    // Not awaited: the flush finishes after the widget is gone, and the
+    // worst it costs is one delayed write.
     unawaited(_room?.persistence?.dispose());
-    // Disposes the awareness plugin too.
+    // The client owns the awareness plugin, so this disposes that too. The
+    // service below is a different object.
     _sync?.dispose();
     _room?.awareness.dispose();
     _status?.dispose();

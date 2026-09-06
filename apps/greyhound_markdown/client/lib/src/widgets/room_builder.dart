@@ -6,13 +6,16 @@ import 'package:greyhound_markdown_client/src/services/room/room_session.dart';
 
 /// Opens the room named by [roomId] and builds the UI with it.
 ///
-/// It owns the whole room for as long as it is in the tree — the document, its
-/// undo history, the awareness service, the relay client — and hands them out
-/// as a [RoomSession]. A screen under it gets all of that ready to use and
-/// closes none of it.
+/// It owns the whole room for as long as it is in the tree — the document,
+/// its undo history, the awareness service, the relay client — and hands them
+/// out as a [RoomSession]. A screen under it gets all of that ready to use
+/// and closes none of it.
 ///
 /// The document is also put in the tree with `CrdtProvider`, so anything below
 /// reaches it without being handed it.
+///
+/// It rebuilds once, when the room opens. The panes below it follow the
+/// document themselves.
 ///
 /// ```dart
 /// RoomBuilder(

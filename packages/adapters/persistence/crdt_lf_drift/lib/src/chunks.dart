@@ -9,9 +9,9 @@ const int _idsPerStatement = 900;
 
 /// Cuts [ids] into lists short enough for one SQL statement.
 ///
-/// For the keys a table is not ordered by, which have to be named in an
-/// `IN (...)`: past the limit the statement is refused and the whole delete
-/// fails. A change is found by its primary key instead, one statement each.
+/// Each chunk holds at most [_idsPerStatement] ids, so one `IN (...)` never
+/// binds more variables than SQLite allows. The input order is kept, and the
+/// last chunk may be shorter.
 Iterable<List<String>> idChunks(List<String> ids) sync* {
   for (var start = 0; start < ids.length; start += _idsPerStatement) {
     final end = start + _idsPerStatement;

@@ -9,10 +9,11 @@ import 'package:sqlite3/sqlite3.dart' as sq;
 
 /// Main utility class for persisting CRDT objects in a SQLite database.
 ///
-/// A single [CRDTSqlite] instance wraps one SQLite [sq.Database] holding two
-/// tables (`changes` and `snapshots`). Data for different documents lives in
-/// the same tables and is isolated through an indexed `document_id` column, so
-/// you can persist any number of documents in a single database file.
+/// A single [CRDTSqlite] instance wraps one SQLite [sq.Database] holding
+/// three tables (`changes`, `snapshots` and `peers`). Data for different
+/// documents lives in the same tables and is isolated through an indexed
+/// `document_id` column, so you can persist any number of documents in a
+/// single database file.
 ///
 /// It is the [CRDTStorageBackend] of this adapter: it lists the documents it
 /// holds, hands out the storages of each one, and deletes one whole.
@@ -21,11 +22,13 @@ import 'package:sqlite3/sqlite3.dart' as sq;
 /// final backend = CRDTSqlite.open('app.db');
 ///
 /// for (final documentId in backend.documentIds) {
-///   final note = backend.readDocument(documentId);
+///   // Synchronous here, so the cast holds.
+///   final note = backend.readDocument(documentId) as CRDTDocument;
 ///   // ...show it in a list
 /// }
 ///
-/// final open = await backend.openDocument('doc-1');
+/// final note = await backend.openDocument('doc-1');
+/// final text = CRDTFugueTextHandler(note.document, 'body');
 ///
 /// backend.close();
 /// ```

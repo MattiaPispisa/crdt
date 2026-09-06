@@ -8,9 +8,9 @@
   [`crdt_lf_persistence`](https://pub.dev/packages/crdt_lf_persistence) package. Code written
   against a storage runs on any adapter now, and `CRDTDocumentPersistence` keeps a whole document
   on disk for you — see that package's README. The contract is re-exported here, so one import is
-  enough: `openPersistentDocument` reads the stored identity, builds the document and restores it
-  in one call, `readDocument` gives a document to read and not follow, and `copyDocument` moves one
-  to another adapter.
+  enough: `openDocument` reads the stored identity, builds the document and restores it in one
+  call, `readDocument` gives a document to read and not follow, and `copyDocumentTo` moves one to
+  another adapter.
 
 - **`CRDTHive.open()` gives a `CRDTHiveBackend`**, the `CRDTStorageBackend` of this adapter: it
   lists the documents, hands out the storages of each one, and deletes one whole. App code written

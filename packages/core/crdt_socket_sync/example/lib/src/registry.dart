@@ -12,14 +12,14 @@ const _kIdleAfter = Duration(minutes: 10);
 
 /// A server-side registry that keeps every document in Hive.
 ///
-/// There is nothing to write here. [PersistentServerRegistry] restores a
-/// document on first use, writes the changes that land on it, replaces the
-/// snapshot and drops the history a snapshot covers — all driven by
-/// `CRDTDocument.events` — and it reads the list of documents from the backend
-/// itself. This function only says *where*.
+/// There is nothing to write here. [PersistentServerRegistry] does the
+/// storing on its own, and this function only says *where*.
 ///
 /// Documents are opened lazily and released after [_kIdleAfter] without an
 /// ask, so a server with many rooms holds only the ones being edited.
+///
+/// The caller owns what it gets back: close the registry on shutdown, and
+/// [backend] after it.
 Future<PersistentServerRegistry> openHiveRegistry({
   required CRDTHiveBackend backend,
   required EnLogger logger,
@@ -39,6 +39,8 @@ Future<PersistentServerRegistry> openHiveRegistry({
 /// A snapshot comes with a prune: the history it covers leaves the server. A
 /// client still replaying that history has to be given the snapshot instead,
 /// or it asks for changes nobody has any more.
+///
+/// Cancel the returned subscription on shutdown, before closing [registry].
 StreamSubscription<ServerSnapshot> broadcastSnapshots({
   required PersistentServerRegistry registry,
   required WebSocketServer server,

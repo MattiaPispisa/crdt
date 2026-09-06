@@ -71,20 +71,22 @@ class RelaySyncManager {
   /// History is kept (`pruneHistory: false`) so this client can later
   /// upload a snapshot covering it.
   ///
-  /// A welcome carries the whole room — the snapshot plus the log after it —
-  /// so its version vector is exactly what the relay has. Whatever the
+  /// A welcome carries the whole room — the snapshot plus the log after it
+  /// — so its version vector is exactly what the relay has. Whatever the
   /// document holds beyond that is queued and pushed, whoever wrote it. That
   /// covers three cases with one rule: unacknowledged changes that survived
   /// the reconnect, changes restored from storage after a restart (which
   /// reach the document as imported ones, so nothing else would ever push
   /// them), and changes of another peer the relay lost.
   ///
-  /// It is the same reconciliation the server-client mode does at handshake,
-  /// and it inherits the same limit: a version vector cannot describe a hole
-  /// in the middle of one peer's sequence, only how far that peer got.
+  /// One limit comes with the version vector: it cannot describe a hole in
+  /// the middle of one peer's sequence, only how far that peer got.
   ///
   /// Re-delivering a change the relay already had is harmless: the relay
   /// appends it and every peer discards it as known.
+  ///
+  /// A malformed welcome throws out of here, from `Snapshot.fromBytes` or
+  /// `Change.fromBytes`. The transport is expected to drop the connection.
   Future<void> onWelcome(RelayWelcomeMessage message) async {
     final snapshot = message.snapshot != null
         ? Snapshot.fromBytes(base64Decode(message.snapshot!))

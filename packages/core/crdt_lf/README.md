@@ -190,8 +190,8 @@ move it makes, compact it, copy it. You write none of that.
 final (:document, :persistence) = await backend.openDocument(id);
 ```
 
-The package holds no store of its own, so you never depend on it directly. Pick an adapter and it
-gives you the whole API through its own barrel:
+The package holds no store of its own. An adapter re-exports the whole API, so your `pubspec.yaml`
+only names the adapter:
 - [crdt_lf_hive](https://pub.dev/packages/crdt_lf_hive): adapters and utils for persist data using [Hive](https://pub.dev/packages/hive).
 - [crdt_lf_drift](https://pub.dev/packages/crdt_lf_drift): adapters and utils for persist data using [Drift](https://pub.dev/packages/drift).
 - [crdt_lf_sqlite](https://pub.dev/packages/crdt_lf_sqlite): adapters and utils for persist data using [sqlite3](https://pub.dev/packages/sqlite3).
@@ -205,9 +205,9 @@ The rest of this section is what `CRDTDocumentPersistence` does under the hood. 
 a copy of the document somewhere that package does not reach — a remote service, a cache of your
 own. If you use it, you can skip to [Benchmarks](#benchmarks).
 
-The document gives a mirror `events`: a stream of the moves of its durable state. A consumer
-follows it and writes down what each event reports, so its copy on disk stays current without ever
-exporting the document again.
+A mirror gets one thing from the document: `events`, a stream of the moves of its durable state. A
+consumer follows it and writes down what each event reports, so its copy on disk stays current
+without ever exporting the document again.
 
 ```dart
 document.events.listen((event) {

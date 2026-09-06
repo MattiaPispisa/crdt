@@ -67,11 +67,12 @@ String? resolveHighlightLanguage(String token) {
 Map<String, TextStyle> highlightTheme(Brightness brightness) =>
     brightness == Brightness.dark ? atomOneDarkTheme : atomOneLightTheme;
 
-/// The background [HighlightView] fills a code block with, for [brightness].
+/// The background [HighlightView] fills a code block with, for [brightness];
+/// `null` when the palette defines no `root` background.
 ///
-/// The block sits in a container the style sheet decorates. Reading the colour
+/// The block sits in a container the style sheet decorates. Reading the color
 /// from the palette keeps the two from fighting: the container can round the
-/// corners without a strip of another colour showing through.
+/// corners without a strip of another color showing through.
 Color? highlightBackground(Brightness brightness) =>
     highlightTheme(brightness)['root']?.backgroundColor;
 
@@ -80,13 +81,13 @@ Color? highlightBackground(Brightness brightness) =>
 /// `package:highlight`'s global instance registers all ~190 grammars the first
 /// time anything touches it — about 30 ms on the Dart VM, more on web, on the
 /// UI thread. Importing fewer grammars does not help: the global pins
-/// [allLanguages] itself, so they are in the bundle either way. What we can
-/// choose is *when* the bill lands. Left alone it lands on the frame that
-/// first paints a code block; call this after the first frame instead, so it
-/// falls in idle time.
+/// [allLanguages] itself, so they are in the bundle either way. Only the
+/// timing can be chosen. Left alone the bill lands on the frame that first
+/// paints a code block; call this after the first frame instead, so it falls
+/// in idle time.
 ///
-/// Parsing a `dart` snippet also compiles that grammar's regexes, which is the
-/// language the welcome text uses.
+/// The snippet is Dart because the welcome text is, so this also compiles
+/// that grammar's regexes.
 void warmUpHighlight() {
   highlight.parse('void main() {}', language: 'dart');
 }

@@ -11,9 +11,8 @@ import 'package:crdt_lf_persistence/crdt_lf_persistence.dart';
 /// a database once and asks it for many documents — list them, open one,
 /// delete another. That is this.
 ///
-/// Every adapter has one: `CRDTHive`, `CRDTDrift`, `CRDTSqlite`. Code written
-/// against this runs on all of them, so a note app can change backend without
-/// changing anything but the line that opens it:
+/// Every adapter has one. Code written against this runs on any of them, so
+/// a note app can change backend by changing the line that opens it:
 ///
 /// ```dart
 /// final backend = CRDTSqlite.open('notes.db');
@@ -29,9 +28,7 @@ import 'package:crdt_lf_persistence/crdt_lf_persistence.dart';
 /// [CRDTStorageBackendDocuments] is where `openDocument`, `readDocument`,
 /// `documentAt` and `copyDocumentTo` live.
 ///
-/// Every method returns a [FutureOr], on the same terms as
-/// [CRDTChangeStorage]: a backend that answers without touching the disk
-/// returns the value itself and narrows its return type to say so.
+/// {@macro storage.future_or}
 abstract interface class CRDTStorageBackend {
   /// The changes and snapshots of [documentId].
   ///

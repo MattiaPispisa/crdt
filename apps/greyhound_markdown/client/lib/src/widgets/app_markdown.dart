@@ -3,7 +3,8 @@ import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import 'package:greyhound_markdown_client/src/config.dart';
-import 'package:greyhound_markdown_client/src/widgets/code_element_builder.dart';
+import 'package:greyhound_markdown_client/src/widgets/'
+    'code_element_builder.dart';
 
 /// One builder per brightness, kept for the life of the app.
 ///
@@ -14,19 +15,16 @@ final CodeElementBuilder _lightCodeBuilder =
     CodeElementBuilder(Brightness.light);
 final CodeElementBuilder _darkCodeBuilder = CodeElementBuilder(Brightness.dark);
 
-/// Space above and below a heading, per level.
+/// Space above and below a heading, one constant per level.
 ///
-/// A heading belongs to what comes *after* it, so the gap above it is several
-/// times the gap below: that is what makes a section read as one block instead
-/// of a line floating between two. The gap also shrinks with the rank, so the
-/// outline of a long document is visible while scrolling past it. The package
-/// default is [EdgeInsets.zero] for all six levels, which leaves every rank
-/// with the same gap as an ordinary paragraph.
+/// Two rules shape the six values. A heading belongs to what comes *after*
+/// it, so the gap above is several times the gap below: that is what makes a
+/// section read as one block. And the gaps shrink with the rank, so the
+/// outline of a long document stays visible while scrolling.
 ///
-/// These sit on top of [MarkdownStyleSheet.blockSpacing], which the builder
-/// inserts between any two blocks. The gap below is therefore small on purpose:
-/// `blockSpacing` alone already keeps the heading off the first line of its
-/// section, and the lowest ranks need nothing more than that.
+/// They sit on top of [MarkdownStyleSheet.blockSpacing], which the builder
+/// already inserts between any two blocks. That is why the gap below is
+/// small. The package default is [EdgeInsets.zero] for all six levels.
 const EdgeInsets _kH1Padding = EdgeInsets.only(top: 22, bottom: 4);
 const EdgeInsets _kH2Padding = EdgeInsets.only(top: 16, bottom: 3);
 const EdgeInsets _kH3Padding = EdgeInsets.only(top: 12, bottom: 2);
@@ -100,7 +98,7 @@ MarkdownStyleSheet appMarkdownStyleSheet(ThemeData theme) {
       ),
     ),
     // Only reached by a fence whose language the highlighter does not know;
-    // the rest carry [HighlightView]'s own padding, which this matches.
+    // the rest carry `HighlightView`'s own padding, which this matches.
     codeblockPadding: const EdgeInsets.all(12),
     codeblockDecoration: BoxDecoration(
       color: highlightBackground(theme.brightness),

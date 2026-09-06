@@ -23,7 +23,8 @@ const Duration kPreviewDebounce = Duration(milliseconds: 150);
 /// therefore listens to the cheap per-handler revision and only reads and
 /// renders once typing pauses for [kPreviewDebounce].
 class PreviewPane extends StatelessWidget {
-  /// Creates the preview pane.
+  /// Creates a preview bound to the [kHandlerId] handler of the document in
+  /// scope.
   const PreviewPane({super.key});
 
   @override
@@ -31,9 +32,9 @@ class PreviewPane extends StatelessWidget {
     return CrdtHandlerBuilder<CRDTFugueTextHandler>(
       id: kHandlerId,
       builder: (context, handler) => _DebouncedMarkdown(
-        // A non-listening read: the rebuild already comes from
-        // CrdtHandlerBuilder, this only tells the two apart from a rebuild
-        // caused by an ancestor.
+        // `revisionForHandler` does not subscribe. The rebuild already comes
+        // from `CrdtHandlerBuilder`; the revision only separates a real edit
+        // from an ancestor rebuild.
         revision: context.crdtDocument.revisionForHandler(kHandlerId),
         readText: () => handler.value,
       ),

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:crdt_lf/crdt_lf.dart';
 import 'package:crdt_lf_persistence/crdt_lf_persistence.dart';
 import 'package:persistence_conformance/persistence_conformance.dart';
@@ -197,5 +199,38 @@ void main() {
 
       expect(other.peerIdStorageForDocument('doc').getPeerId(), isNull);
     });
+
+    test('a transaction that refuses the copy leaves no identity behind',
+        () async {
+      await write(['hello']);
+      backend.peerIdStorageForDocument('doc').savePeerId(PeerId.generate());
+
+      final other = InMemoryStorageBackend();
+      await expectLater(
+        storage.copyTo(
+          _RefusedTransaction(other.storageForDocument('doc')),
+          fromPeerIds: backend.peerIdStorageForDocument('doc'),
+          toPeerIds: other.peerIdStorageForDocument('doc'),
+        ),
+        throwsStateError,
+      );
+
+      expect(
+        other.peerIdStorageForDocument('doc').getPeerId(),
+        isNull,
+        reason: 'the identity goes in with the content, or not at all',
+      );
+    });
   });
+}
+
+/// A storage whose transaction refuses the whole body, the way a rollback
+/// leaves a backend that has one.
+class _RefusedTransaction extends CRDTDocumentStorage {
+  _RefusedTransaction(InMemoryDocumentStorage inner)
+      : super(changes: inner.changes, snapshots: inner.snapshots);
+
+  @override
+  FutureOr<T> transaction<T>(FutureOr<T> Function() body) =>
+      throw StateError('rolled back');
 }

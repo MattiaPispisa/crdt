@@ -5,7 +5,8 @@ import 'package:hive/hive.dart';
 /// Stores [Change] objects in a Hive [box].
 ///
 /// The box holds one document: [CRDTHive.openChangeStorageForDocument] names
-/// it after the document id, so nothing filters by document here.
+/// it after the document id, so nothing filters by document here. One entry
+/// per change, keyed by `change.id.toString()`.
 ///
 /// A Hive box keeps its entries in memory, so every read here answers without
 /// suspending and says so in its return type. Writes go through the box
@@ -25,7 +26,6 @@ class CRDTHiveChangeStorage implements CRDTChangeStorage {
   @override
   final String documentId;
 
-  /// Generates a key for storing changes.
   String _getChangeKey(Change change) => change.id.toString();
 
   @override
@@ -44,6 +44,10 @@ class CRDTHiveChangeStorage implements CRDTChangeStorage {
     return box.putAll(entries).then((_) => null);
   }
 
+  /// The stored changes of this document, in no particular order.
+  ///
+  /// It reads the whole box and filters in memory, so a bound costs the same
+  /// as no bound. The SQL adapters filter in the database instead.
   @override
   List<Change> getChanges({
     VersionVector? newerThan,

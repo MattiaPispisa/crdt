@@ -13,9 +13,8 @@ import 'package:crdt_lf/crdt_lf.dart';
 /// Changes are held as they are and encoded at push time, so a client that
 /// writes while offline pays nothing for a push that is not happening.
 ///
-/// Surviving a restart is not this queue's job: the document is what an app
-/// writes down, and `RelaySyncManager.onWelcome` queues everything the relay
-/// turns out not to hold.
+/// The queue lives in memory only. Delivery across a restart comes from the
+/// welcome reconciliation, not from here.
 class RelayPendingQueue {
   final List<Change> _pending = [];
 
@@ -39,8 +38,8 @@ class RelayPendingQueue {
 
   /// Appends [change] to the queue, unless it is already waiting.
   ///
-  /// The welcome reconciliation queues what the relay does not hold, and a
-  /// change written while that was in flight is already here.
+  /// A duplicate is matched on `Change.id`, and only while the change is
+  /// still waiting: once [ack] drops it, adding it again queues it again.
   void add(Change change) {
     if (!_queued.add(change.id)) {
       return;
@@ -62,6 +61,9 @@ class RelayPendingQueue {
   /// [count] is the number of changes the relay persisted; it is bounded by
   /// the in-flight window so a misbehaving ack cannot drop changes that were
   /// never pushed.
+  ///
+  /// An acked change is forgotten, so pushing the same change again queues it
+  /// again.
   void ack(int count) {
     final acked = min(min(count, _inFlight), _pending.length);
     for (var i = 0; i < acked; i++) {

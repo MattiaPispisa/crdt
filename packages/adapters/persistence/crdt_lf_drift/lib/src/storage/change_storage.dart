@@ -5,9 +5,10 @@ import 'package:drift/drift.dart';
 
 /// Storage utility for managing [Change] objects in a drift database.
 ///
-/// This class provides high-level methods for storing, retrieving, and
-/// managing [Change] objects. All rows are scoped to a single document via
-/// the [documentId] column, so several documents can share the same database.
+/// One row per change, keyed by `(document_id, author, hlc_l, hlc_c)`, with
+/// the change itself as an opaque `Change.toBytes()` blob. Every row is
+/// scoped to a single document through its `document_id`, so several
+/// documents can share the same database.
 class CRDTDriftChangeStorage implements CRDTChangeStorage {
   /// Creates a new [CRDTDriftChangeStorage] instance.
   ///
@@ -33,7 +34,7 @@ class CRDTDriftChangeStorage implements CRDTChangeStorage {
     );
   }
 
-  /// The one row [change] is, if this storage holds it.
+  /// Matches the single row of [change] in this document.
   Expression<bool> _rowOf(Change change, $ChangesTable row) {
     return row.documentId.equals(documentId) &
         row.author.equals(change.author.toString()) &
@@ -117,6 +118,11 @@ class CRDTDriftChangeStorage implements CRDTChangeStorage {
     return deleted > 0;
   }
 
+  /// Deletes [changes] in one batch.
+  ///
+  /// A change that is not stored is not counted, and a change named twice
+  /// counts once: the answer is how many rows went, not how many were asked
+  /// for.
   @override
   Future<int> deleteChanges(List<Change> changes) {
     if (changes.isEmpty) {
@@ -128,10 +134,8 @@ class CRDTDriftChangeStorage implements CRDTChangeStorage {
     // statement that binds more variables than it allows. A batch has no such
     // ceiling, and every delete here is a hit on the primary key.
     //
-    // What a batch cannot report is how many rows each statement removed, so
-    // the count comes from the difference. That also answers the two things
-    // the contract asks: a change that was not there changes nothing, and a
-    // change named twice is one row either way.
+    // A batch cannot report how many rows each statement removed, so the
+    // count comes from the difference.
     return database.transaction(() async {
       final before = await count;
       await database.batch((batch) {

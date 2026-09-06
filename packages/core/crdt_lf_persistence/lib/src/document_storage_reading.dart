@@ -9,8 +9,8 @@ import 'package:crdt_lf_persistence/crdt_lf_persistence.dart';
 /// These are for everything else: a preview, a read-only view, a history view,
 /// a backup.
 ///
-/// A [CRDTStorageBackend] has the same three, taking a document id — reach for
-/// those when you hold the backend rather than one storage.
+/// A [CRDTStorageBackend] has the same three, taking a document id. Reach
+/// for those when you hold the backend rather than one storage.
 extension CRDTDocumentStorageReading on CRDTDocumentStorage {
   /// The document this storage holds, built and handed over, not followed.
   ///
@@ -117,8 +117,14 @@ extension CRDTDocumentStorageReading on CRDTDocumentStorage {
   /// documents writing under one [PeerId] can mint the same operation id
   /// twice.
   ///
-  /// Everything lands in one [CRDTDocumentStorage.transaction] on [other], so
-  /// a backend with transactions never holds half a document.
+  /// Everything lands in one [CRDTDocumentStorage.transaction] on [other],
+  /// the identity included, so a backend with transactions never holds half a
+  /// document.
+  ///
+  /// That last part asks [toPeerIds] to come from the same backend as [other],
+  /// which is what [CRDTStorageBackendDocuments.copyDocumentTo] passes. A
+  /// [toPeerIds] from a third backend is still written inside the transaction,
+  /// and [CRDTDocumentStorage.transaction] asks a body to await nothing else.
   Future<void> copyTo(
     CRDTDocumentStorage other, {
     CRDTPeerIdStorage? fromPeerIds,
@@ -131,11 +137,10 @@ extension CRDTDocumentStorageReading on CRDTDocumentStorage {
     await other.transaction<void>(() async {
       await other.changes.saveChanges(changes);
       await other.snapshots.saveSnapshots(snapshots);
+      if (peerId != null && toPeerIds != null) {
+        await toPeerIds.savePeerId(peerId);
+      }
     });
-
-    if (peerId != null && toPeerIds != null) {
-      await toPeerIds.savePeerId(peerId);
-    }
   }
 }
 

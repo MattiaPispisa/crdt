@@ -29,7 +29,7 @@
 
 - **`localChanges` no longer carries changes that came in through `applyChange`.** It is now a view
   over `events` and reports only what the document itself wrote — which is what its name always
-  claimed. `localChanges` is now published once the document is settled rather than in the middle of the
+  claimed. It is also published once the document is settled, rather than in the middle of the
   commit. Delivery to a listener was already asynchronous and stays that way, so the change is
   invisible in practice — but a listener can no longer be handed a change while the commit that
   produced it is still running.

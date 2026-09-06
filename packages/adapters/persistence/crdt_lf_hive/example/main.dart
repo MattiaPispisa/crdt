@@ -1,4 +1,5 @@
-// ignore_for_file: avoid_print just for example
+// The example prints its result, and it is not a library entry point.
+// ignore_for_file: avoid_print
 
 import 'package:crdt_lf/crdt_lf.dart';
 import 'package:crdt_lf_hive/crdt_lf_hive.dart';

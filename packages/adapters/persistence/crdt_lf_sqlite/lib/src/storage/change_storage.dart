@@ -9,8 +9,10 @@ import 'package:sqlite3/sqlite3.dart' as sq;
 
 /// Stores [Change] objects in a SQLite [sq.Database].
 ///
-/// All rows are scoped to a single document via the [documentId] column, so
-/// several documents can share the same database.
+/// One row per change, keyed by `(document_id, author, hlc_l, hlc_c)`, with
+/// the change itself as an opaque `Change.toBytes()` blob. Every row is
+/// scoped to a single document through its `document_id`, so several
+/// documents can share the same database.
 ///
 /// sqlite3 is synchronous, so every method here answers without ever
 /// suspending, and says so in its return type. The [CRDTChangeStorage]
@@ -34,12 +36,12 @@ class CRDTSqliteChangeStorage implements CRDTChangeStorage {
   static const String _insertSql = 'INSERT OR REPLACE INTO $changesTable '
       '(document_id, author, hlc_l, hlc_c, bytes) VALUES (?, ?, ?, ?, ?)';
 
-  /// The one row [change] is: `document_id` and the three columns its
-  /// `OperationId` is written in.
+  /// Matches one row: `document_id` plus the three columns an `OperationId`
+  /// is written in.
   static const String _rowOfSql =
       'document_id = ? AND author = ? AND hlc_l = ? AND hlc_c = ?';
 
-  /// The parameters [_rowOfSql] binds, for [change].
+  /// The parameters [_rowOfSql] binds for [change].
   List<Object?> _rowOf(Change change) => [
         documentId,
         change.author.toString(),

@@ -2,7 +2,8 @@ import 'dart:async';
 
 import 'package:crdt_lf/crdt_lf.dart';
 import 'package:crdt_lf_persistence/crdt_lf_persistence.dart';
-import 'package:crdt_socket_sync/src/server_client/server/document_catalog.dart';
+import 'package:crdt_socket_sync/src/server_client/server/'
+    'document_catalog.dart';
 import 'package:crdt_socket_sync/src/server_client/server/registry.dart';
 
 /// A snapshot a document just took, and the document it belongs to.
@@ -11,11 +12,11 @@ typedef ServerSnapshot = ({String documentId, Snapshot snapshot});
 /// A [CRDTServerRegistry] that keeps every document it serves on disk.
 ///
 /// It holds the live [CRDTDocument]s and routes to them, the way any registry
-/// does. What it does **not** do is read and write storage by hand: each
-/// document gets a [CRDTDocumentPersistence], which follows
-/// [CRDTDocument.events] and writes down what each event reports. So a change
-/// applied here is stored, a snapshot replaces the one before it, and a prune
-/// drops exactly the changes it covered — all of it batched, and inside a
+/// does. It never reads or writes storage by hand. Each document gets a
+/// [CRDTDocumentPersistence], which follows [CRDTDocument.events] and writes
+/// down what each event reports. So a change applied here is stored, a
+/// snapshot replaces the one before it, and a prune drops exactly the changes
+/// it covered — all of it batched, and inside a
 /// [CRDTDocumentStorage.transaction] where the backend has one.
 ///
 /// It works on any adapter, because it only ever sees the storage contract:
@@ -28,17 +29,18 @@ typedef ServerSnapshot = ({String documentId, Snapshot snapshot});
 /// ```
 ///
 /// Documents are opened lazily: a document costs nothing until something asks
-/// for it. Getting one **out** of memory is the other half, and it does not
-/// happen on its own — call [releaseDocument] when a room empties, or pass
-/// `idleAfter` and let the registry do it. Without either, a server holds
-/// every document it has ever been asked for.
+/// for it. Getting one back **out** of memory never happens on its own. Call
+/// [releaseDocument] when a room empties, or pass `idleAfter` and let the
+/// registry do it. With neither, a server holds every document it has ever
+/// been asked for.
 ///
 /// Call [close] on shutdown. It flushes every open document.
 class PersistentServerRegistry implements CRDTServerRegistry {
   /// Creates a registry that stores its documents in [backend].
   ///
-  /// [backend] is an adapter's `CRDTHive`, `CRDTDrift` or `CRDTSqlite`. It is
-  /// asked for a document's storages the first time that document is needed,
+  /// [backend] is what an adapter opens: `CRDTHive.open()`, `CRDTDrift.open()`
+  /// or `CRDTSqlite.open()`. It is asked for a document's storages the first
+  /// time that document is needed,
   /// and for the identity the server writes it under — so a restarted server
   /// is the same author it was before, instead of growing every document's
   /// version vector by an entry that never leaves.
@@ -123,7 +125,7 @@ class PersistentServerRegistry implements CRDTServerRegistry {
     // Opened now rather than on the first read, so a document that was just
     // added is already following its storage when the first change lands —
     // and before the catalog, because a catalog that stores identities would
-    // mint one first, and a stored id always beats the [author] handed in.
+    // mint one first, and a stored id always beats the `author` handed in.
     await _openDocument(documentId, author: author);
     await _catalog.add(documentId);
   }
@@ -157,7 +159,10 @@ class PersistentServerRegistry implements CRDTServerRegistry {
   /// else arrives inside the `writeDelay`.
   ///
   /// [CausallyNotReadyException] propagates, as [CRDTServerRegistry] requires:
-  /// the server needs it to tell a client it is out of sync.
+  /// the server needs it to tell a client it is out of sync. Any other failure
+  /// gives `false`.
+  ///
+  /// Throws [ArgumentError] when [documentId] is not one this registry serves.
   @override
   Future<bool> applyChange(String documentId, Change change) async {
     final document = await getDocument(documentId);
@@ -174,7 +179,9 @@ class PersistentServerRegistry implements CRDTServerRegistry {
     } on CausallyNotReadyException {
       rethrow;
     } catch (_) {
-      // Any other failure: the change could not be applied.
+      // Swallowed on purpose: only a causal gap is worth reporting to a
+      // client. Anything else is a bad change, and one bad change must not
+      // take the session down.
       return false;
     }
   }
@@ -184,6 +191,8 @@ class PersistentServerRegistry implements CRDTServerRegistry {
   ///
   /// The waiting is the point: a caller that broadcasts this snapshot has to
   /// know it survives a crash before the clients start replaying against it.
+  ///
+  /// Throws [ArgumentError] when [documentId] is not one this registry serves.
   @override
   Future<Snapshot> createSnapshot(String documentId) async {
     if (!await hasDocument(documentId)) {
@@ -196,6 +205,10 @@ class PersistentServerRegistry implements CRDTServerRegistry {
     return snapshot;
   }
 
+  /// The newest snapshot stored for [documentId].
+  ///
+  /// `null` when this registry does not serve [documentId], and `null` when it
+  /// serves it but no snapshot has been stored yet.
   @override
   Future<Snapshot?> getLatestSnapshot(String documentId) async {
     if (!await hasDocument(documentId)) {
@@ -306,9 +319,8 @@ class PersistentServerRegistry implements CRDTServerRegistry {
       );
       return _OpenDocument(open.document, open.persistence, subscription!);
     } catch (_) {
-      // The document itself is disposed by [CRDTStorageBackendDocuments
-      // .openDocument]; this subscription is the one thing it does not know
-      // about.
+      // `CRDTStorageBackendDocuments.openDocument` disposes the document
+      // itself. This subscription is the one thing it does not know about.
       await subscription?.cancel();
       rethrow;
     }

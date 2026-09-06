@@ -8,9 +8,8 @@ import 'package:sqlite3/sqlite3.dart' as sq;
 
 /// The changes and snapshots of one document, in a SQLite database.
 ///
-/// It adds a real
-/// [transaction] to the shared contract: the work inside one either all lands
-/// or none of it does.
+/// It adds a real [transaction] to the shared contract: the work inside one
+/// either all lands, or none of it does.
 class CRDTSqliteDocumentStorage extends CRDTDocumentStorage {
   /// Creates the storage of the document [changes] and [snapshots] belong to,
   /// on [database].
@@ -33,10 +32,10 @@ class CRDTSqliteDocumentStorage extends CRDTDocumentStorage {
   FutureOr<T> transaction<T>(FutureOr<T> Function() body) =>
       runInTransaction(database, body);
 
-  /// Does nothing, and that is the whole of it.
+  /// Does nothing: one database holds every document.
   ///
-  /// One database holds every document, so closing it here would take the
-  /// others down with it.
+  /// Closing it here would take the other documents down with it. `CRDTSqlite`
+  /// closes the database itself.
   @override
   void close() {}
 }

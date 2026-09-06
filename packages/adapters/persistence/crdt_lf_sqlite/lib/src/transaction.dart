@@ -16,15 +16,15 @@ int _savepoints = 0;
 /// share one connection, and the queue belongs to the connection.
 final Expando<Future<void>> _running = Expando<Future<void>>('crdt_lf');
 
+/// Runs [body] inside a single SQLite transaction on [database].
+///
 /// {@template crdt_lf_sqlite_batch}
 /// The whole batch runs in one transaction, with one prepared statement:
 /// either all of it lands, or none of it does.
 /// {@endtemplate}
 ///
-/// Runs [body] inside a single SQLite transaction on [database].
-///
-/// Releases when [body] completes normally, or rolls back and rethrows if it
-/// throws. This makes batch operations atomic and avoids one implicit commit
+/// It releases when [body] completes normally, and rolls back and rethrows if
+/// [body] throws. That makes a batch atomic, and saves one implicit commit
 /// per statement.
 ///
 /// A [body] that returns without suspending is carried through without
@@ -39,7 +39,7 @@ final Expando<Future<void>> _running = Expando<Future<void>>('crdt_lf');
 /// writing meanwhile would lose that write without ever seeing an error.
 ///
 /// Built on `SAVEPOINT` rather than `BEGIN`, so it nests: a batch called from
-/// inside another transaction keeps its own all-or-nothing behaviour instead
+/// inside another transaction keeps its own all-or-nothing behavior instead
 /// of failing on a second `BEGIN`. At the outermost level a `RELEASE` commits,
 /// which is what `COMMIT` would have done.
 FutureOr<T> runInTransaction<T>(

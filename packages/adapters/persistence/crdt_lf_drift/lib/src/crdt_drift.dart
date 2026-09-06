@@ -11,10 +11,10 @@ import 'package:drift/native.dart';
 
 /// Main utility class for persisting CRDT objects in a drift database.
 ///
-/// A single [CRDTDrift] instance wraps one [CRDTDriftDatabase] holding two
-/// tables (`changes` and `snapshots`). Data for different documents lives in
-/// the same tables and is isolated through the `document_id` column, so you
-/// can persist any number of documents in a single database.
+/// A single [CRDTDrift] instance wraps one [CRDTDriftDatabase] holding three
+/// tables (`changes`, `snapshots` and `peers`). Data for different documents
+/// lives in the same tables and is isolated through the `document_id` column,
+/// so you can persist any number of documents in a single database.
 ///
 /// It is the [CRDTStorageBackend] of this adapter: it lists the documents it
 /// holds, hands out the storages of each one, and deletes one whole.
@@ -27,13 +27,14 @@ import 'package:drift/native.dart';
 ///   // ...show it in a list
 /// }
 ///
-/// final open = await backend.openDocument('doc-1');
+/// final note = await backend.openDocument('doc-1');
+/// final text = CRDTFugueTextHandler(note.document, 'body');
 ///
 /// await backend.close();
 /// ```
 ///
 /// drift is asynchronous end to end, so every method here returns a [Future].
-/// That is what makes `CRDTDocumentPersistence.openSync` refuse this adapter.
+/// That is what makes [CRDTDocumentPersistence.openSync] refuse this adapter.
 class CRDTDrift implements CRDTStorageBackend {
   CRDTDrift._(this.database);
 

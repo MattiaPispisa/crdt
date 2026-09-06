@@ -18,8 +18,9 @@ import 'package:crdt_lf_persistence/crdt_lf_persistence.dart';
 ///
 /// Reusing a stored id is safe. A document advances its clock past every
 /// change it applies and every snapshot it imports, so a restored document
-/// never mints an operation id twice — as long as it is restored before the
-/// first local write, which [CRDTDocumentPersistence.open] guarantees.
+/// never mints an operation id twice. This holds only when the restore comes
+/// before the first local write. [CRDTDocumentPersistence.open] guarantees
+/// that order.
 ///
 /// Never let two writers share one id: an operation is identified by peer id
 /// plus clock, so two documents writing under one id can mint the same

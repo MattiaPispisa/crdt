@@ -33,7 +33,7 @@ Future<void> main() async {
   runApp(const GreyhoundApp());
 
   // Not before runApp: this is tens of milliseconds of work, and nothing on
-  // screen needs it until the first code block. See [warmUpHighlight].
+  // screen needs it until the first code block. See `warmUpHighlight`.
   WidgetsBinding.instance.addPostFrameCallback((_) => warmUpHighlight());
 }
 

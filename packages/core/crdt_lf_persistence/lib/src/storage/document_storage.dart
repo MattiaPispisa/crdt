@@ -4,8 +4,8 @@ import 'package:crdt_lf_persistence/crdt_lf_persistence.dart';
 
 /// Everything one document has on disk: its changes and its snapshots.
 ///
-/// This is what an adapter hands back for a document id, and what
-/// [CRDTDocumentPersistence] writes to.
+/// An adapter hands one back for a document id. The two storages always
+/// belong to that same document.
 class CRDTDocumentStorage {
   /// Creates the storage of the document [changes] and [snapshots] belong to.
   CRDTDocumentStorage({
@@ -44,8 +44,8 @@ class CRDTDocumentStorage {
   /// step [CRDTDocumentPersistence] takes is safe to repeat.
   ///
   /// [body] must call methods of this storage and await nothing else. A body
-  /// that waits on something outside holds the transaction open across it,
-  /// and on a backend with one connection that blocks every other document.
+  /// that waits on something outside holds the transaction open across that
+  /// wait. On a backend with one connection, that blocks every other document.
   ///
   /// A [body] that returns without suspending must be carried through without
   /// suspending either. On a backend where one connection serves every

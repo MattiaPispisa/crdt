@@ -15,13 +15,17 @@
   - [Quick Start](#quick-start)
     - [1. Open a database](#1-open-a-database)
     - [2. Document-scoped storage](#2-document-scoped-storage)
+  - [Many documents in one place](#many-documents-in-one-place)
+  - [Keeping a whole document on disk](#keeping-a-whole-document-on-disk)
   - [Document-Scoped Storage](#document-scoped-storage)
     - [CRDTDriftChangeStorage](#crdtdriftchangestorage)
     - [CRDTDriftSnapshotStorage](#crdtdriftsnapshotstorage)
+    - [CRDTDriftPeerIdStorage](#crdtdriftpeeridstorage)
   - [How Data Is Stored](#how-data-is-stored)
   - [Examples](#examples)
   - [Storage Management](#storage-management)
   - [Roadmap](#roadmap)
+  - [Apps](#apps)
   - [Packages](#packages)
 
 A [drift](https://pub.dev/packages/drift) storage implementation for [CRDT LF](https://pub.dev/packages/crdt_lf) objects, providing efficient persistence for `Change` and `Snapshot` objects with document-scoped organization in a single drift database.
@@ -29,7 +33,7 @@ A [drift](https://pub.dev/packages/drift) storage implementation for [CRDT LF](h
 ## Features
 
 - **Compact Binary Storage**: `Change` and `Snapshot` are persisted as the self-describing binary blobs produced by `crdt_lf`'s native `toBytes()` / `fromBytes()` methods
-- **Single Database, Many Documents**: one database holds `changes` and `snapshots` tables
+- **Single Database, Many Documents**: one database holds the `changes`, `snapshots` and `peers` tables
 - **Document-Scoped Storage**: utilities that organize data by document ID for better isolation and querying
 
 ## Quick Start
@@ -123,6 +127,9 @@ document, so the connection is `CRDTDrift.close()`'s to release.
 
 Data for different documents lives in the same tables and is isolated through the `document_id` column.
 
+drift is asynchronous end to end, so every method here returns a `Future`, and
+`CRDTDocumentPersistence.openSync` does not work on it. Use `open`.
+
 ### CRDTDriftChangeStorage
 
 Manages `Change` objects for a specific document:
@@ -194,16 +201,23 @@ The `peers` table arrived with schema version 2. A database written by
 version 1 gains it on the next open, and its changes and snapshots stay as
 they are.
 
-drift is asynchronous end to end, so every method here returns a `Future`,
-and `CRDTDocumentPersistence.openSync` does not work on it. Use `open`.
-
 ## How Data Is Stored
 
 Both `Change` and `Snapshot` are stored as opaque binary blobs using the
 self-describing format provided by `crdt_lf` (`toBytes()` / `fromBytes()`). The
-schema is two tables, `changes` and `snapshots`, each with a `document_id`
-column, an id column (`change_id` / `snapshot_id`) and a `bytes` blob column.
-Changes are keyed by `change.id`, snapshots by `snapshot.id`.
+schema is three tables:
+
+- `changes`, keyed by `(document_id, author, hlc_l, hlc_c)`, with the change
+  itself in a `bytes` blob column.
+- `snapshots`, keyed by `(document_id, snapshot_id)`, same blob column.
+- `peers`, one row per document: the `PeerId` this device writes it under.
+
+A change is named by its author and its clock, not by one text id. An
+`OperationId` **is** a peer and a clock, and kept apart SQL can compare it,
+which is what a version vector asks. The primary key is then already the index
+that comparison wants. The clock takes two columns because `l` is 48 bits and
+`c` is 16: together they stay inside the 53 bits an integer keeps exactly in
+JavaScript.
 
 ## Examples
 

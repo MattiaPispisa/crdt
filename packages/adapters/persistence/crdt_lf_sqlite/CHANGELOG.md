@@ -4,13 +4,29 @@
 
 ### Changed
 
+- **A change is named by its author and its clock**, not by a string. `changes` names a change by
+  `author`, `hlc_l` and `hlc_c` instead of by the one text column `change.id.toString()` used to
+  fill. It is the same name written apart — an `OperationId` **is** a peer and a clock — so
+  nothing is stored twice. Kept apart, SQL can compare it, which is what a version vector asks,
+  and the primary key `(document_id, author, hlc_l, hlc_c)` is already the index that comparison
+  wants. The clock takes two columns because `l` is 48 bits and `c` is 16: together they stay
+  inside the 53 bits an integer keeps exactly in JavaScript.
+
+- **The database now carries a schema version**, in `PRAGMA user_version`, and this build writes
+  version 2. There was none before: `CREATE TABLE IF NOT EXISTS` gives a database a missing table
+  but never a different shape, so a database written by `0.2.0` would have kept the old one.
+  Opening it now rebuilds `changes`, reading the old `change_id` column and not the stored bytes,
+  so a change whose blob this build cannot decode still migrates. It all happens in one savepoint:
+  half a rebuilt table is worse than none. Every later open reads the version and returns without
+  touching the database.
+
 - **The storages now implement the shared contract** from the new
   [`crdt_lf_persistence`](https://pub.dev/packages/crdt_lf_persistence) package. Code written
   against a storage runs on any adapter now, and `CRDTDocumentPersistence` keeps a whole document
   on disk for you — see that package's README. The contract is re-exported here, so one import is
-  enough: `openPersistentDocument` reads the stored identity, builds the document and restores it
-  in one call, `readDocument` gives a document to read and not follow, and `copyDocument` moves one
-  to another adapter.
+  enough: `openDocument` reads the stored identity, builds the document and restores it in one
+  call, `readDocument` gives a document to read and not follow, and `copyDocumentTo` moves one to
+  another adapter.
 
 - **`CRDTSqlite` is now a `CRDTStorageBackend`.** It answers `documentIds` with a `UNION` over the
   three tables — the `peers` one included, so a document that was created and never written to is
@@ -18,7 +34,7 @@
   there under those names. App code written against the interface runs on any adapter.
 
 - **`deleteDocumentData` is now `deleteDocument`**, which is the name the interface uses. Same
-  behaviour: the changes, the snapshots and the identity, in one transaction.
+  behavior: the changes, the snapshots and the identity, in one transaction.
 
 - **Every storage method stays synchronous.** sqlite3 answers on the spot, and the return types
   say so: `getChanges()` gives a `List<Change>`, `saveChange()` gives `void`. The shared contract
@@ -60,23 +76,9 @@
   failing on a second `BEGIN`. Its `close()` does nothing — one database file holds every document,
   so the connection stays `CRDTSqlite.close()`'s to release.
 
+- `CRDTSqlite.close()` is idempotent: `sqlite3` ignores the second call.
+
 - Requires `crdt_lf: ^4.2.0`.
-
-- **A change is named by its author and its clock**, not by a string. `changes` names a change
-  by `author`, `hlc_l` and `hlc_c` instead of by the one text column `change.id.toString()` used
-  to fill. It is the same name written apart — an `OperationId` **is** a peer and a clock — so
-  nothing is stored twice: kept apart, SQL can compare it, which is what a version vector asks, and
-  the
-  primary key `(document_id, author, hlc_l, hlc_c)` is already the index that comparison wants.
-  The clock is two columns because `l` is 48 bits and `c` is 16: together they pass the 53 bits an
-  integer keeps exactly in JavaScript.
-
-  **The database now carries a schema version**, in `PRAGMA user_version`. There was none before:
-  `CREATE TABLE IF NOT EXISTS` gives a database a missing table but never a different shape, so a
-  database written by `0.2.0` would have kept the old one. Opening it now rebuilds `changes`,
-  reading the old `change_id` column — not the stored bytes, so a change whose blob this build
-  cannot decode still migrates. It all happens in one savepoint: half a rebuilt table is worse
-  than none.
 
 ## [0.2.0](https://github.com/MattiaPispisa/crdt/tree/crdt_lf_sqlite-v0.2.0/packages/adapters/persistence/crdt_lf_sqlite)
 
