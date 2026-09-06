@@ -185,8 +185,21 @@ class CRDTHive {
   ///
   /// This permanently deletes the specified box and all its data.
   /// Use with caution as this operation cannot be undone.
+  ///
+  /// **Close the box first.** On the web a box is an IndexedDB database, and
+  /// the browser does not delete one while a connection to it is open: the
+  /// delete waits instead, and it waits forever. [deleteDocument] closes the
+  /// boxes it deletes; a box opened by hand is the caller's to close.
   static Future<void> deleteBox(String boxName) {
     return Hive.deleteBoxFromDisk(boxName);
+  }
+
+  /// Closes [boxName] when it is open, so it can be deleted.
+  static Future<void> _closeForDelete<E>(String boxName) {
+    if (!Hive.isBoxOpen(boxName)) {
+      return Future<void>.value();
+    }
+    return Hive.box<E>(boxName).close();
   }
 
   /// Deletes all data for a specific document by deleting its dedicated boxes.
@@ -197,6 +210,10 @@ class CRDTHive {
   /// It does **not** touch the registry box of [CRDTHiveBackend], which is
   /// what knows the document exists. Call [CRDTHiveBackend.deleteDocument]
   /// instead when there is a backend.
+  ///
+  /// The two boxes are closed before they are deleted, so deleting a document
+  /// that is open works. It is the normal case: an app deletes the note it
+  /// was just reading.
   static Future<void> deleteDocument(
     String documentId, {
     String changesBoxName = 'changes',
@@ -205,6 +222,15 @@ class CRDTHive {
   }) async {
     final changesDocumentBoxName = '${changesBoxName}_$documentId';
     final snapshotsDocumentBoxName = '${snapshotsBoxName}_$documentId';
+
+    // Closed first, one after the other, and only then deleted. On the web a
+    // box is an IndexedDB database: the browser refuses to delete one while a
+    // connection to it is open, and Hive deletes without closing. The delete
+    // then waits for a connection nothing is going to close, and every later
+    // read of that box waits behind it.
+    await _closeForDelete<Change>(changesDocumentBoxName);
+    await _closeForDelete<Snapshot>(snapshotsDocumentBoxName);
+
     await Future.wait([
       deleteBox(changesDocumentBoxName),
       deleteBox(snapshotsDocumentBoxName),

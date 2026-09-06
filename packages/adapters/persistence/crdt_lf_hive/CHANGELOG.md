@@ -59,6 +59,17 @@
 
 - Requires `crdt_lf: ^4.2.0`.
 
+### Fixed
+
+- **Deleting an open document no longer hangs on the web.** On the web a box is an IndexedDB
+  database, and the browser does not delete one while a connection to it is open — it waits. Hive
+  deletes without closing first, so `deleteDocument` waited for a connection nothing was going to
+  close, and every later read of that box waited behind it. `deleteDocument` now closes the two
+  boxes before it deletes them. This is the normal case: an app deletes the note it was just
+  reading. Nothing changes on the VM, where the delete never blocked.
+
+  `deleteBox` is unchanged and still deletes the box you name: close it first if you opened it.
+
 ## [0.4.0](https://github.com/MattiaPispisa/crdt/tree/crdt_lf_hive-v0.4.0/packages/adapters/persistence/crdt_lf_hive)
 
 **Date:** 2026-08-16

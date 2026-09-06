@@ -12,7 +12,18 @@ import 'helpers/hive_test_path.dart';
 void main() {
   setUpAll(CRDTHive.initialize);
 
+  // Box names of its own for every test of the backend suite, which reuses
+  // the ids `doc-a` and `doc-b`. On the VM a fresh temp directory already
+  // keeps one test out of the next; on the web a box is an IndexedDB database
+  // named after the box alone, `Hive.init` ignores the path, and
+  // `Hive.deleteFromDisk` walks the boxes that are still open — so after
+  // `closeAllBoxes` it deletes nothing and the rows of the test before are
+  // still there.
+  var run = 0;
+  var suffix = '';
+
   setUp(() async {
+    suffix = '-${run++}';
     Hive.init(await hiveTestPath());
   });
 
@@ -21,13 +32,20 @@ void main() {
     await Hive.deleteFromDisk();
   });
 
+  Future<CRDTHiveBackend> openBackend() => CRDTHive.open(
+        changesBoxName: 'changes$suffix',
+        snapshotsBoxName: 'snapshots$suffix',
+        peerIdsBoxName: 'peer_ids$suffix',
+        registryBoxName: 'documents$suffix',
+      );
+
   runStorageBackendConformanceTests(
     name: 'CRDTHive',
-    open: CRDTHive.open,
+    open: openBackend,
     // Hive keeps a box open once, so reopening means closing every box first.
     reopen: (_) async {
       await CRDTHive.closeAllBoxes();
-      return CRDTHive.open();
+      return openBackend();
     },
   );
 
