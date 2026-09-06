@@ -13,8 +13,7 @@ import 'package:crdt_lf_persistence/crdt_lf_persistence.dart';
 /// the whole document, so [CRDTDocumentPersistence] keeps the newest of them
 /// on the next open and drops the rest.
 ///
-/// Every method returns a [FutureOr], on the same terms as
-/// [CRDTChangeStorage].
+/// {@macro storage.future_or}
 abstract interface class CRDTSnapshotStorage {
   /// The document these snapshots belong to.
   String get documentId;
@@ -64,7 +63,7 @@ abstract interface class CRDTSnapshotStorage {
 /// returns rows in. Two snapshots whose vectors are concurrent — neither has
 /// seen everything the other has — cannot be ordered, and the first of the two
 /// is kept.
-Snapshot? newestSnapshot(List<Snapshot> snapshots) {
+Snapshot? newestSnapshot(Iterable<Snapshot> snapshots) {
   if (snapshots.isEmpty) {
     return null;
   }

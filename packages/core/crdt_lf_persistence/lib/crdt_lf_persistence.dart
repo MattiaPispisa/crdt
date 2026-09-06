@@ -25,7 +25,6 @@ import 'package:crdt_lf_persistence/src/storage/document_storage.dart';
 import 'package:crdt_lf_persistence/src/storage/peer_id_storage.dart';
 import 'package:crdt_lf_persistence/src/storage/snapshot_storage.dart';
 import 'package:crdt_lf_persistence/src/storage/storage_backend.dart';
-import 'package:crdt_lf_persistence/src/storage_backend_documents.dart';
 
 export 'src/document_persistence.dart';
 export 'src/document_storage_reading.dart';

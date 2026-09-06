@@ -13,12 +13,14 @@ import 'package:crdt_lf_persistence/crdt_lf_persistence.dart';
 /// changes a snapshot covers: that is [CRDTDocumentPersistence]'s job, driven
 /// by [CRDTDocument.events].
 ///
+/// {@template storage.future_or}
 /// Every method returns a [FutureOr]. A backend that answers without touching
 /// the disk — sqlite, or a Hive box already in memory — returns the value
 /// itself and narrows the return type to say so; an asynchronous backend
 /// returns a [Future]. Callers that must work on any adapter use
 /// [CRDTFutureOr.chain], which suspends only when there is a future to wait
 /// for.
+/// {@endtemplate}
 abstract interface class CRDTChangeStorage {
   /// The document these changes belong to.
   String get documentId;
