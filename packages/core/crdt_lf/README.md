@@ -21,6 +21,7 @@
   - [Sync](#sync)
   - [Flutter](#flutter)
   - [Persistence](#persistence)
+    - [Following the moves yourself](#following-the-moves-yourself)
   - [Benchmarks](#benchmarks)
   - [Design](#design)
     - [Operation based](#operation-based)
@@ -178,24 +179,31 @@ A companion library, [crdt_lf_flutter](https://pub.dev/packages/crdt_lf_flutter)
 It provides Flutter reactivity for `crdt_lf`: widgets rebuild when the CRDT state changes, with selectors, a provider and a collaborative text field. More info in the [README](https://github.com/MattiaPispisa/crdt/tree/main/packages/core/crdt_lf_flutter/README.md) of the Flutter package.
 
 ## Persistence
-Storage is not handled in this library. It lives in
-[crdt_lf_persistence](https://pub.dev/packages/crdt_lf_persistence): the storage contract,
-`CRDTDocumentPersistence` to keep a document on disk as it changes, and a plain-file store for an
-app that wants no database.
+Storage is not handled in this library. **Use
+[crdt_lf_persistence](https://pub.dev/packages/crdt_lf_persistence)**: it holds the storage
+contract and the API that does the saving for you — open a document, follow it, write down every
+move it makes, compact it, copy it. You write none of that.
 
-Pick a backend by adding the adapter that implements the contract:
+```dart
+// `document` is already holding what was on disk; `persistence` follows it
+// from here on.
+final (:document, :persistence) = await backend.openDocument(id);
+```
+
+The package holds no store of its own, so you never depend on it directly. Pick an adapter and it
+gives you the whole API through its own barrel:
 - [crdt_lf_hive](https://pub.dev/packages/crdt_lf_hive): adapters and utils for persist data using [Hive](https://pub.dev/packages/hive).
 - [crdt_lf_drift](https://pub.dev/packages/crdt_lf_drift): adapters and utils for persist data using [Drift](https://pub.dev/packages/drift).
 - [crdt_lf_sqlite](https://pub.dev/packages/crdt_lf_sqlite): adapters and utils for persist data using [sqlite3](https://pub.dev/packages/sqlite3).
 
-Most apps want `CRDTDocumentPersistence` and nothing else:
+For a backend none of them covers, implement the storage contract and everything above works on it
+unchanged.
 
-```dart
-final persistence = await CRDTDocumentPersistence.open(document, storage);
-```
+### Following the moves yourself
 
-What follows is what it does for you, and what to write if you keep a copy of the document
-somewhere it does not reach.
+The rest of this section is what `CRDTDocumentPersistence` does under the hood. Read it if you keep
+a copy of the document somewhere that package does not reach — a remote service, a cache of your
+own. If you use it, you can skip to [Benchmarks](#benchmarks).
 
 The document gives a mirror `events`: a stream of the moves of its durable state. A consumer
 follows it and writes down what each event reports, so its copy on disk stays current without ever
