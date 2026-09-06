@@ -49,7 +49,7 @@ mixin RoomHost<T extends StatefulWidget> on State<T> {
       return;
     }
     _opening = true;
-    unawaited(_restoreThenConnect(context.read<UserSettingsCubit>().state));
+    unawaited(_restoreThenConnect(context.read<UserSettingsCubit>()));
   }
 
   /// Brings back what the last session left on this device, then goes online.
@@ -57,8 +57,15 @@ mixin RoomHost<T extends StatefulWidget> on State<T> {
   /// In that order on purpose: offline, or on a relay that has forgotten the
   /// room, the local copy is all there is. Connecting first would show an
   /// empty page for as long as the handshake takes.
-  Future<void> _restoreThenConnect(UserSettingsState profile) async {
+  Future<void> _restoreThenConnect(UserSettingsCubit settings) async {
+    final profile = settings.state;
     final opened = await _openDocument();
+
+    // After the first await on purpose: the cubit is read while the tree is
+    // building, and emitting there would change state mid-build. The room is
+    // recorded even when the teardown below wins, because the user did open
+    // it.
+    settings.recordRoomOpened(roomId);
 
     // `dispose` can have run while the storage was being read. It found
     // nothing built yet and had nothing to close, so this closes it here.

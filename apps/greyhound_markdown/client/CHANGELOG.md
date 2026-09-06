@@ -14,6 +14,10 @@
   so typing never waits on the disk. What you write while offline reaches
   everyone else as soon as you are back online, even if you reloaded in
   between.
+- **The last rooms you opened are listed on the home page**, under the name
+  and the room field. The room id is the only name a document has, so this is
+  the way back into one you did not write down — it works offline, because the
+  room is already on your device.
 
 ## 0.9.0
 

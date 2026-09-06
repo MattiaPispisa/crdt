@@ -4,12 +4,14 @@ import 'package:equatable/equatable.dart';
 import 'package:flutter/material.dart';
 import 'package:hydrated_bloc/hydrated_bloc.dart';
 
+import 'package:greyhound_markdown_client/src/application/room/room_id.dart';
 import 'package:greyhound_markdown_client/src/config.dart';
 
 part 'user_settings_state.dart';
 
 /// The user's preferences, persisted across sessions: who they are in a room
-/// (name, color) and how the app looks (theme mode).
+/// (name, color), how the app looks (theme mode) and which rooms they opened
+/// last.
 ///
 /// Restored synchronously when constructed, so the first frame already renders
 /// the stored theme and prefills the home screen.
@@ -47,6 +49,23 @@ class UserSettingsCubit extends HydratedCubit<UserSettingsState> {
   void setWordWrap({required bool value}) =>
       emit(state.copyWith(wordWrap: value));
 
+  /// Puts [roomId] at the front of the recent rooms, dropping the oldest one
+  /// past [kRecentRoomsLimit].
+  ///
+  /// Opening a room again moves it back to the front instead of listing it
+  /// twice.
+  void recordRoomOpened(String roomId) {
+    final rooms = [
+      RecentRoom(roomId: roomId, openedAt: DateTime.now().toUtc()),
+      ...state.recentRooms.where((room) => room.roomId != roomId),
+    ];
+    emit(
+      state.copyWith(
+        recentRooms: rooms.take(kRecentRoomsLimit).toList(),
+      ),
+    );
+  }
+
   @override
   UserSettingsState fromJson(Map<String, dynamic> json) {
     final fallback = UserSettingsState.initial();
@@ -62,6 +81,7 @@ class UserSettingsCubit extends HydratedCubit<UserSettingsState> {
       wordWrap: json['wordWrap'] is bool
           ? json['wordWrap'] as bool
           : fallback.wordWrap,
+      recentRooms: _recentRoomsFrom(json['recentRooms']),
     );
   }
 
@@ -72,6 +92,13 @@ class UserSettingsCubit extends HydratedCubit<UserSettingsState> {
     'themeMode': state.themeMode.name,
     'showLineNumbers': state.showLineNumbers,
     'wordWrap': state.wordWrap,
+    'recentRooms': [
+      for (final room in state.recentRooms)
+        {
+          'roomId': room.roomId,
+          'openedAt': room.openedAt.millisecondsSinceEpoch,
+        },
+    ],
   };
 }
 
@@ -86,4 +113,35 @@ ThemeMode? _themeModeFrom(Object? value) {
     'system' => ThemeMode.system,
     _ => null,
   };
+}
+
+/// The recent rooms [value] holds, skipping anything it cannot read.
+///
+/// The limit is applied here too, so lowering [kRecentRoomsLimit] takes effect
+/// on the next launch without a migration.
+List<RecentRoom> _recentRoomsFrom(Object? value) {
+  if (value is! List<dynamic>) {
+    return const [];
+  }
+
+  final rooms = <RecentRoom>[];
+  for (final Object? entry in value) {
+    if (entry is! Map<String, dynamic>) {
+      continue;
+    }
+    final Object? roomId = entry['roomId'];
+    final Object? openedAt = entry['openedAt'];
+    // An id this app would never have created cannot name a room: it comes
+    // from a hand-edited or corrupted payload, and the route would reject it.
+    if (roomId is! String || parseRoomId(roomId) == null || openedAt is! int) {
+      continue;
+    }
+    rooms.add(
+      RecentRoom(
+        roomId: roomId,
+        openedAt: DateTime.fromMillisecondsSinceEpoch(openedAt, isUtc: true),
+      ),
+    );
+  }
+  return rooms.take(kRecentRoomsLimit).toList();
 }

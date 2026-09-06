@@ -4,11 +4,12 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:greyhound_markdown_client/src/application/application.dart';
 import 'package:greyhound_markdown_client/src/config.dart';
 import 'package:greyhound_markdown_client/src/widgets/app_footer.dart';
+import 'package:greyhound_markdown_client/src/widgets/recent_rooms.dart';
 
 const _logoWidth = 300.0;
 
-/// Landing page: pick a display name and color, then create a new room or
-/// join an existing one by id.
+/// Landing page: pick a display name and color, then create a new room, join
+/// an existing one by id, or go back into a recently opened one.
 ///
 /// Name and color are kept in [UserSettingsCubit], so they come back on the
 /// next visit and the editor reads them straight from there.
@@ -112,6 +113,9 @@ class _HomeScreenState extends State<HomeScreen> {
                             onSubmit: _submit,
                           ),
                         ),
+                        // Its own top spacing, so an empty list leaves the
+                        // page exactly as it was.
+                        RecentRooms(onOpen: _openRoom),
                       ],
                     ),
                   ),
