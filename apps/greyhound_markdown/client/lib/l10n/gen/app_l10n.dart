@@ -5,8 +5,12 @@ import 'package:flutter/widgets.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:intl/intl.dart' as intl;
 
+import 'app_l10n_de.dart';
 import 'app_l10n_en.dart';
+import 'app_l10n_es.dart';
+import 'app_l10n_fr.dart';
 import 'app_l10n_it.dart';
+import 'app_l10n_pt.dart';
 
 // ignore_for_file: type=lint
 
@@ -93,8 +97,12 @@ abstract class AppL10n {
 
   /// A list of this localizations delegate's supported locales.
   static const List<Locale> supportedLocales = <Locale>[
+    Locale('de'),
     Locale('en'),
+    Locale('es'),
+    Locale('fr'),
     Locale('it'),
+    Locale('pt'),
   ];
 
   /// Title of the settings page, and the footer entry to it.
@@ -491,8 +499,14 @@ class _AppL10nDelegate extends LocalizationsDelegate<AppL10n> {
   }
 
   @override
-  bool isSupported(Locale locale) =>
-      <String>['en', 'it'].contains(locale.languageCode);
+  bool isSupported(Locale locale) => <String>[
+    'de',
+    'en',
+    'es',
+    'fr',
+    'it',
+    'pt',
+  ].contains(locale.languageCode);
 
   @override
   bool shouldReload(_AppL10nDelegate old) => false;
@@ -501,10 +515,18 @@ class _AppL10nDelegate extends LocalizationsDelegate<AppL10n> {
 AppL10n lookupAppL10n(Locale locale) {
   // Lookup logic when only language code is specified.
   switch (locale.languageCode) {
+    case 'de':
+      return AppL10nDe();
     case 'en':
       return AppL10nEn();
+    case 'es':
+      return AppL10nEs();
+    case 'fr':
+      return AppL10nFr();
     case 'it':
       return AppL10nIt();
+    case 'pt':
+      return AppL10nPt();
   }
 
   throw FlutterError(

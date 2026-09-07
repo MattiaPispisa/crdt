@@ -3,6 +3,12 @@ import 'package:flutter/widgets.dart';
 /// The welcome document for [locale], falling back to English for a language
 /// it is not written in.
 ///
+/// Written in English and Italian only, while the interface is translated
+/// into more: this is long prose, and most of what it shows — the code fence,
+/// the URLs, the markdown syntax itself — reads the same in every language.
+/// A reader on a third language gets the English version, which is why the
+/// fallback is the `_` branch rather than an error.
+///
 /// Kept in Dart rather than in the ARB files: the document embeds a Dart code
 /// fence, and gen-l10n reads every `{` in a message as the start of an ICU
 /// placeholder. Escaping each brace would make the markdown unreadable in the

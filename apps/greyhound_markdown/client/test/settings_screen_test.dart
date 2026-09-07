@@ -64,8 +64,11 @@ void main() {
 
     expect(cubit.state.language, AppLanguage.system);
 
-    await tester.tap(find.text('Italiano'));
-    await tester.pump();
+    // The list lives behind a dropdown, so the entry has to be opened first.
+    await tester.tap(find.byType(DropdownButton<AppLanguage>));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Italiano').last);
+    await tester.pumpAndSettle();
 
     expect(cubit.state.language, AppLanguage.italian);
   });

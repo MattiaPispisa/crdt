@@ -148,37 +148,44 @@ class _ThemeModeSelector extends StatelessWidget {
   }
 }
 
-/// Follow the device language, or force English or Italian.
+/// Follow the device language, or force one of the languages the app is
+/// translated into.
 ///
-/// Only "System" is translated: a language reads best written in itself, so
-/// someone who landed on a language they cannot read still finds their own.
+/// A dropdown rather than the [SegmentedButton] the theme mode uses: the list
+/// is as long as [AppLanguage.values] and grows with every translation, well
+/// past what a row of segments can hold.
+///
+/// Only "System" is translated. Every real language names itself
+/// ([AppLanguage.endonym]), so a reader who landed on a language they cannot
+/// read still finds their own in the list.
 class _LanguageSelector extends StatelessWidget {
   const _LanguageSelector();
 
   /// How [language] is offered in the picker.
   String _label(BuildContext context, AppLanguage language) {
-    return switch (language) {
-      AppLanguage.system => context.l10n.languageSystem,
-      AppLanguage.english => 'English',
-      AppLanguage.italian => 'Italiano',
-    };
+    return language == AppLanguage.system
+        ? context.l10n.languageSystem
+        : language.endonym;
   }
 
   @override
   Widget build(BuildContext context) {
     return BlocBuilder<UserSettingsCubit, UserSettingsState>(
-      builder: (context, settings) => SegmentedButton<AppLanguage>(
-        segments: [
+      builder: (context, settings) => DropdownButton<AppLanguage>(
+        value: settings.language,
+        isExpanded: true,
+        items: [
           for (final language in AppLanguage.values)
-            ButtonSegment(
+            DropdownMenuItem(
               value: language,
-              label: Text(_label(context, language)),
+              child: Text(_label(context, language)),
             ),
         ],
-        selected: {settings.language},
-        showSelectedIcon: false,
-        onSelectionChanged: (selection) =>
-            context.read<UserSettingsCubit>().setLanguage(selection.single),
+        onChanged: (language) {
+          if (language != null) {
+            context.read<UserSettingsCubit>().setLanguage(language);
+          }
+        },
       ),
     );
   }
