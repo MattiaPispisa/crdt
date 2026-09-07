@@ -65,7 +65,7 @@ Run it again and the text is there.
 [`crdt_lf_sqlite`'s example](https://github.com/MattiaPispisa/crdt/blob/main/packages/adapters/persistence/crdt_lf_sqlite/example/main.dart)
 is that, runnable.
 
-[`example/main.dart`](example/main.dart) here takes the other side: it keeps
+[`example/main.dart`](https://github.com/MattiaPispisa/crdt/blob/main/packages/core/crdt_lf_persistence/example/main.dart) here takes the other side: it keeps
 the contract in a map, so you can read what an adapter has to fill in.
 
 ## Offline-first, with sync
@@ -434,7 +434,7 @@ void main() {
 }
 ```
 
-[`example/main.dart`](example/main.dart) keeps the whole contract in a map —
+[`example/main.dart`](https://github.com/MattiaPispisa/crdt/blob/main/packages/core/crdt_lf_persistence/example/main.dart) keeps the whole contract in a map —
 the shortest version of what you are about to write.
 
 `persistence_conformance` is internal and unpublished, so an adapter outside
