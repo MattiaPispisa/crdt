@@ -4,6 +4,7 @@ import 'package:crdt_lf/crdt_lf.dart';
 import 'package:crdt_lf_flutter/crdt_lf_flutter.dart';
 import 'package:flutter/material.dart';
 
+import 'package:greyhound_markdown_client/src/l10n/placeholder_markdown.dart';
 import 'package:greyhound_markdown_client/src/config.dart';
 import 'package:greyhound_markdown_client/src/widgets/app_markdown.dart';
 
@@ -15,8 +16,9 @@ const Duration kPreviewDebounce = Duration(milliseconds: 150);
 
 /// Rendered markdown preview.
 ///
-/// When the document is still empty the [kPlaceholderMarkdown] welcome text is
-/// rendered instead — purely visual, never written into the shared document.
+/// When the document is still empty the welcome text of the current locale
+/// ([placeholderMarkdown]) is rendered instead — purely visual, never written
+/// into the shared document.
 ///
 /// Reading the text out of the handler and parsing it are both O(document), so
 /// doing them per keystroke drops frames on a long document. This pane
@@ -94,7 +96,9 @@ class _DebouncedMarkdownState extends State<_DebouncedMarkdown> {
   @override
   Widget build(BuildContext context) {
     return AppMarkdown(
-      data: _text.isEmpty ? kPlaceholderMarkdown : _text,
+      data: _text.isEmpty
+          ? placeholderMarkdown(Localizations.localeOf(context))
+          : _text,
     );
   }
 }

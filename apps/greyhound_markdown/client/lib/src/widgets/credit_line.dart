@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'package:greyhound_markdown_client/src/config.dart';
+import 'package:greyhound_markdown_client/src/l10n/l10n_extension.dart';
 import 'package:greyhound_markdown_client/src/widgets/footer_link.dart';
 
 /// The credit line, with the author's name linking to their site.
@@ -21,7 +22,7 @@ class CreditLine extends StatelessWidget {
       alignment: alignment,
       crossAxisAlignment: WrapCrossAlignment.center,
       children: [
-        Text(kCreditPrefix, style: theme.textTheme.bodySmall),
+        Text(context.l10n.creditPrefix, style: theme.textTheme.bodySmall),
         const FooterLink(label: kAuthor, url: kAuthorUrl),
       ],
     );

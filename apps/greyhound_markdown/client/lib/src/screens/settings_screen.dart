@@ -5,6 +5,8 @@ import 'package:url_launcher/url_launcher.dart';
 
 import 'package:greyhound_markdown_client/src/application/application.dart';
 import 'package:greyhound_markdown_client/src/config.dart';
+import 'package:greyhound_markdown_client/src/l10n/l10n_extension.dart';
+import 'package:greyhound_markdown_client/src/l10n/labels.dart';
 import 'package:greyhound_markdown_client/src/widgets/credit_line.dart';
 
 /// Formats a bundle version as `v<version>` plus the build number when the
@@ -23,8 +25,9 @@ class SettingsScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final l10n = context.l10n;
     return Scaffold(
-      appBar: AppBar(title: const Text('Settings')),
+      appBar: AppBar(title: Text(l10n.settings)),
       body: SafeArea(
         child: ListView(
           padding: const EdgeInsets.all(24),
@@ -42,20 +45,24 @@ class SettingsScreen extends StatelessWidget {
             const Center(child: _VersionLabel()),
             const SizedBox(height: 16),
             Text(
-              kAppTagline,
+              l10n.appTagline,
               style: theme.textTheme.bodyMedium,
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 32),
-            Text('Appearance', style: theme.textTheme.titleSmall),
+            Text(l10n.appearance, style: theme.textTheme.titleSmall),
             const SizedBox(height: 12),
             const _ThemeModeSelector(),
             const SizedBox(height: 32),
-            Text('Editor', style: theme.textTheme.titleSmall),
+            Text(l10n.language, style: theme.textTheme.titleSmall),
+            const SizedBox(height: 12),
+            const _LanguageSelector(),
+            const SizedBox(height: 32),
+            Text(l10n.editorSection, style: theme.textTheme.titleSmall),
             const _EditorOptions(),
             const SizedBox(height: 32),
-            Text('Links', style: theme.textTheme.titleSmall),
-            for (final link in kProjectLinks) _LinkTile(link: link),
+            Text(l10n.links, style: theme.textTheme.titleSmall),
+            for (final link in ProjectLink.values) _LinkTile(link: link),
             const Divider(height: 40),
             const CreditLine(alignment: WrapAlignment.center),
             const SizedBox(height: 4),
@@ -68,7 +75,7 @@ class SettingsScreen extends StatelessWidget {
             Center(
               child: OutlinedButton.icon(
                 icon: const Icon(Icons.history),
-                label: const Text('View changelog'),
+                label: Text(l10n.viewChangelog),
                 onPressed: () =>
                     Navigator.of(context).pushNamed(kChangelogRoute),
               ),
@@ -77,7 +84,7 @@ class SettingsScreen extends StatelessWidget {
             Center(
               child: OutlinedButton.icon(
                 icon: const Icon(Icons.description_outlined),
-                label: const Text('View licenses'),
+                label: Text(l10n.viewLicenses),
                 onPressed: () => _showLicenses(context),
               ),
             ),
@@ -115,27 +122,70 @@ class _ThemeModeSelector extends StatelessWidget {
   Widget build(BuildContext context) {
     return BlocBuilder<UserSettingsCubit, UserSettingsState>(
       builder: (context, settings) => SegmentedButton<ThemeMode>(
-        segments: const [
+        segments: [
           ButtonSegment(
             value: ThemeMode.light,
-            icon: Icon(Icons.light_mode),
-            label: Text('Light'),
+            icon: const Icon(Icons.light_mode),
+            label: Text(context.l10n.themeLight),
           ),
           ButtonSegment(
             value: ThemeMode.dark,
-            icon: Icon(Icons.dark_mode),
-            label: Text('Dark'),
+            icon: const Icon(Icons.dark_mode),
+            label: Text(context.l10n.themeDark),
           ),
           ButtonSegment(
             value: ThemeMode.system,
-            icon: Icon(Icons.brightness_auto),
-            label: Text('System'),
+            icon: const Icon(Icons.brightness_auto),
+            label: Text(context.l10n.themeSystem),
           ),
         ],
         selected: {settings.themeMode},
         showSelectedIcon: false,
         onSelectionChanged: (selection) =>
             context.read<UserSettingsCubit>().setThemeMode(selection.single),
+      ),
+    );
+  }
+}
+
+/// Follow the device language, or force one of the languages the app is
+/// translated into.
+///
+/// A dropdown rather than the [SegmentedButton] the theme mode uses: the list
+/// is as long as [AppLanguage.values] and grows with every translation, well
+/// past what a row of segments can hold.
+///
+/// Only "System" is translated. Every real language names itself
+/// ([AppLanguage.endonym]), so a reader who landed on a language they cannot
+/// read still finds their own in the list.
+class _LanguageSelector extends StatelessWidget {
+  const _LanguageSelector();
+
+  /// How [language] is offered in the picker.
+  String _label(BuildContext context, AppLanguage language) {
+    return language == AppLanguage.system
+        ? context.l10n.languageSystem
+        : language.endonym;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return BlocBuilder<UserSettingsCubit, UserSettingsState>(
+      builder: (context, settings) => DropdownButton<AppLanguage>(
+        value: settings.language,
+        isExpanded: true,
+        items: [
+          for (final language in AppLanguage.values)
+            DropdownMenuItem(
+              value: language,
+              child: Text(_label(context, language)),
+            ),
+        ],
+        onChanged: (language) {
+          if (language != null) {
+            context.read<UserSettingsCubit>().setLanguage(language);
+          }
+        },
       ),
     );
   }
@@ -155,8 +205,8 @@ class _EditorOptions extends StatelessWidget {
         children: [
           SwitchListTile(
             contentPadding: EdgeInsets.zero,
-            title: const Text('Line numbers'),
-            subtitle: const Text('Show a numbered gutter next to the source'),
+            title: Text(context.l10n.lineNumbers),
+            subtitle: Text(context.l10n.lineNumbersSubtitle),
             value: settings.showLineNumbers,
             onChanged: (value) => context
                 .read<UserSettingsCubit>()
@@ -164,10 +214,8 @@ class _EditorOptions extends StatelessWidget {
           ),
           SwitchListTile(
             contentPadding: EdgeInsets.zero,
-            title: const Text('Word wrap'),
-            subtitle: const Text(
-              'Wrap long lines instead of scrolling sideways',
-            ),
+            title: Text(context.l10n.wordWrap),
+            subtitle: Text(context.l10n.wordWrapSubtitle),
             value: settings.wordWrap,
             onChanged: (value) =>
                 context.read<UserSettingsCubit>().setWordWrap(value: value),
@@ -188,7 +236,9 @@ class _VersionLabel extends StatelessWidget {
       future: PackageInfo.fromPlatform(),
       builder: (context, snapshot) {
         final info = snapshot.data;
-        final label = info == null ? '—' : formatVersion(info);
+        final label = info == null
+            ? context.l10n.versionUnknown
+            : formatVersion(info);
         return Text(
           label,
           style: Theme.of(context).textTheme.labelMedium?.copyWith(
@@ -205,10 +255,10 @@ class _LinkTile extends StatelessWidget {
 
   final ProjectLink link;
 
-  IconData get _icon => switch (link.url) {
-        kRepoUrl => Icons.code,
-        kAppSourceUrl => Icons.folder_open,
-        _ => Icons.menu_book,
+  IconData get _icon => switch (link) {
+        ProjectLink.repo => Icons.code,
+        ProjectLink.appSource => Icons.folder_open,
+        ProjectLink.docs => Icons.menu_book,
       };
 
   @override
@@ -216,7 +266,7 @@ class _LinkTile extends StatelessWidget {
     return ListTile(
       contentPadding: EdgeInsets.zero,
       leading: Icon(_icon),
-      title: Text(link.label),
+      title: Text(projectLinkLabel(context, link)),
       subtitle: Text(link.url),
       trailing: const Icon(Icons.open_in_new, size: 18),
       onTap: () => launchUrl(

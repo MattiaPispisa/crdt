@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
 import 'package:greyhound_markdown_client/src/config.dart';
+import 'package:greyhound_markdown_client/src/l10n/l10n_extension.dart';
+import 'package:greyhound_markdown_client/src/l10n/labels.dart';
 import 'package:greyhound_markdown_client/src/widgets/credit_line.dart';
 import 'package:greyhound_markdown_client/src/widgets/footer_link.dart';
 
@@ -22,8 +24,12 @@ class AppFooter extends StatelessWidget {
         spacing: 8,
         children: [
           const CreditLine(),
-          for (final link in kProjectLinks)
-            FooterLink(label: link.label, url: link.url, style: linkStyle),
+          for (final link in ProjectLink.values)
+            FooterLink(
+              label: projectLinkLabel(context, link),
+              url: link.url,
+              style: linkStyle,
+            ),
           InkWell(
             onTap: () => Navigator.of(context).pushNamed(kSettingsRoute),
             child: Row(
@@ -35,7 +41,7 @@ class AppFooter extends StatelessWidget {
                   color: theme.colorScheme.primary,
                 ),
                 const SizedBox(width: 4),
-                Text('Settings', style: linkStyle),
+                Text(context.l10n.settings, style: linkStyle),
               ],
             ),
           ),

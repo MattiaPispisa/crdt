@@ -3,11 +3,13 @@ import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:greyhound_markdown_client/src/screens/changelog_screen.dart';
 
+import 'helpers/localized_app.dart';
+
 void main() {
   testWidgets('renders the bundled changelog asset as markdown', (
     tester,
   ) async {
-    await tester.pumpWidget(const MaterialApp(home: ChangelogScreen()));
+    await tester.pumpWidget(localizedApp(const ChangelogScreen()));
     // First frame: FutureBuilder is still loading the asset.
     expect(find.byType(CircularProgressIndicator), findsOneWidget);
 

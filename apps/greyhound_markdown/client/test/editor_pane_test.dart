@@ -8,10 +8,12 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:greyhound_markdown_client/src/application/application.dart';
 import 'package:greyhound_markdown_client/src/config.dart';
+import 'package:greyhound_markdown_client/src/l10n/placeholder_markdown.dart';
 import 'package:greyhound_markdown_client/src/services/awareness/awareness_service.dart';
 import 'package:greyhound_markdown_client/src/widgets/editor_pane.dart';
 import 'package:greyhound_markdown_client/src/widgets/line_number_gutter.dart';
 
+import 'helpers/localized_app.dart';
 import 'helpers/memory_storage.dart';
 
 /// The [RenderEditable] under [root] — the object that says how the text was
@@ -46,11 +48,9 @@ Widget _app({
     value: settings,
     child: CrdtProvider.value(
       value: document,
-      child: MaterialApp(
+      child: localizedApp(
+        Scaffold(body: EditorPane(awareness: awareness, undo: undo)),
         theme: platform == null ? null : ThemeData(platform: platform),
-        home: Scaffold(
-          body: EditorPane(awareness: awareness, undo: undo),
-        ),
       ),
     ),
   );
@@ -97,7 +97,7 @@ void main() {
     expect(
       find.descendant(
         of: find.byType(SingleChildScrollView),
-        matching: find.text(kPlaceholderMarkdown),
+        matching: find.text(placeholderMarkdown(const Locale('en'))),
       ),
       findsOneWidget,
     );
@@ -105,7 +105,10 @@ void main() {
     // Typing removes the placeholder.
     await tester.enterText(find.byType(TextField), 'hello');
     await tester.pump();
-    expect(find.text(kPlaceholderMarkdown), findsNothing);
+    expect(
+      find.text(placeholderMarkdown(const Locale('en'))),
+      findsNothing,
+    );
 
     // Let the awareness throttle timer drain before teardown.
     await tester.pump(const Duration(milliseconds: 100));

@@ -2,6 +2,7 @@ import 'package:crdt_socket_sync/web_socket_relay_client.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
+import 'package:greyhound_markdown_client/src/l10n/l10n_extension.dart';
 import 'package:greyhound_markdown_client/src/services/awareness/awareness_service.dart';
 
 /// Connection indicator plus one chip per connected peer.
@@ -37,11 +38,14 @@ class StatusBar extends StatelessWidget {
                   ),
                   const SizedBox(width: 6),
                   Text(switch (value) {
-                    ConnectionStatus.connected => 'Connected',
-                    ConnectionStatus.connecting => 'Connecting…',
-                    ConnectionStatus.reconnecting => 'Reconnecting…',
-                    ConnectionStatus.disconnected => 'Disconnected',
-                    ConnectionStatus.error => 'Connection error',
+                    ConnectionStatus.connected => context.l10n.statusConnected,
+                    ConnectionStatus.connecting =>
+                      context.l10n.statusConnecting,
+                    ConnectionStatus.reconnecting =>
+                      context.l10n.statusReconnecting,
+                    ConnectionStatus.disconnected =>
+                      context.l10n.statusDisconnected,
+                    ConnectionStatus.error => context.l10n.statusError,
                   }),
                 ],
               ),

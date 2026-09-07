@@ -9,6 +9,8 @@ void main() {
 
       expect(html, startsWith('<!DOCTYPE html>'));
       expect(html, contains('<meta charset="utf-8">'));
+      // English unless the caller says otherwise.
+      expect(html, contains('<html lang="en">'));
       expect(html, contains('<title>Notes</title>'));
       // The style sheet is inline, so the file opens with no network.
       expect(html, contains('<style>'));
@@ -40,6 +42,16 @@ void main() {}
       expect(html, contains('<li>one</li>'));
       expect(html, contains('<table>'));
       expect(html, contains('<code class="language-dart">'));
+    });
+
+    test('declares the language it was exported in', () {
+      final html = markdownToHtmlDocument(
+        '# Ciao',
+        title: 'Note',
+        languageCode: 'it',
+      );
+
+      expect(html, contains('<html lang="it">'));
     });
 
     test('escapes markup coming from the document and from the title', () {

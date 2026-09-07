@@ -1,8 +1,9 @@
 import 'dart:convert';
 
+import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:greyhound_markdown_client/src/config.dart';
+import 'package:greyhound_markdown_client/src/l10n/placeholder_markdown.dart';
 import 'package:greyhound_markdown_client/src/services/export/pdf_export.dart';
 
 void main() {
@@ -11,11 +12,11 @@ void main() {
 
   group('markdownToPdfBytes', () {
     test('renders every construct the welcome document uses', () async {
-      // kPlaceholderMarkdown is the app's own showcase: headings, emphasis,
+      // The welcome document is the app's own showcase: headings, emphasis,
       // inline and fenced code, nested lists, a quote, a table, a rule, a
       // link and an image. If the walk misses a tag, it throws here.
       final bytes = await markdownToPdfBytes(
-        kPlaceholderMarkdown,
+        placeholderMarkdown(const Locale('en')),
         title: 'Welcome',
       );
 

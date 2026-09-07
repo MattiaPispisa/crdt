@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:greyhound_markdown_client/l10n/gen/app_l10n.dart';
 import 'package:greyhound_markdown_client/src/application/application.dart';
 import 'package:greyhound_markdown_client/src/screens/home_screen.dart';
 
@@ -21,6 +22,8 @@ Future<List<String>> _pumpHome(
     BlocProvider(
       create: (_) => UserSettingsCubit(storage: storage),
       child: MaterialApp(
+        localizationsDelegates: AppL10n.localizationsDelegates,
+        supportedLocales: AppL10n.supportedLocales,
         onGenerateRoute: (settings) {
           final name = settings.name ?? '/';
           if (name != '/') pushed.add(name);

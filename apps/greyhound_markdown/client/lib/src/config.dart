@@ -14,57 +14,6 @@ final md.ExtensionSet kMarkdownExtensionSet = md.ExtensionSet.gitHubFlavored;
 /// Must be identical across peers for the Fugue merge to converge.
 const String kHandlerId = 'content';
 
-/// Welcome document shown while a room is still empty: the raw markdown as the
-/// editor's grey hint, and the rendered version as the preview's empty state.
-///
-/// Purely visual — it is **never** written into the CRDT document (which is
-/// shared across every peer of the room, so seeding it would duplicate on each
-/// joiner). It doubles as a live showcase of the supported markdown features.
-const String kPlaceholderMarkdown = '''
-# Greyhound Markdown
-
-**Greyhound Markdown** is a *real-time collaborative* editor built on
-[`crdt_lf`](https://mattiapispisa.it/crdt/). Copy the **room link** from the
-top bar and share it — everyone edits the same document live.
-
-![crdt_lf](https://raw.githubusercontent.com/MattiaPispisa/crdt/main/assets/images/logo.png)
-
-## Formatting
-Toolbar or plain Markdown: **bold**, *italic*, ~~strikethrough~~ and
-`inline code`. Headings run from `#` to `###`.
-
-## Lists
-- Bullet points
-- with items
-  1. and nested
-  2. ordered steps
-
-> CRDTs let everyone type at once and still converge — no locks, no conflicts.
-
-## Code
-Fenced blocks are highlighted per language:
-
-```dart
-void main() {
-  final doc = CRDTDocument();
-  final text = CRDTFugueTextHandler(doc, 'content');
-  text.insert(0, 'Hello, collaborative world!');
-  print(text.value);
-}
-```
-
-## Tables
-| Feature       | Supported |
-| ------------- | :-------: |
-| Live cursors  |    yes    |
-| Offline edits |    yes    |
-| Conflict-free |    yes    |
-
----
-Start typing to make it yours — this welcome text disappears as soon as the
-document has any content.
-''';
-
 /// Asset path of the app logo (home screen, about page, licenses page).
 const String kLogoAsset = 'assets/images/greyhound_markdown_logo.png';
 
@@ -113,26 +62,28 @@ const String kAuthorUrl = 'https://mattiapispisa.it';
 /// Display name of the application (title bars, about/licenses pages).
 const String kAppName = 'Greyhound Markdown';
 
-/// One-line description shown on the about/settings page.
-const String kAppTagline =
-    'A real-time collaborative markdown editor built on crdt_lf.';
-
-/// Footer/about credit line, up to the author's name — [kAuthor] follows it as
-/// a link to [kAuthorUrl], so the line is a widget rather than a single string.
-const String kCreditPrefix = 'Powered by crdt_lf · created by ';
-
 /// Legal line shown on the about/settings and licenses pages.
 const String kAppLegalese = '© $kAuthor';
 
-/// A labelled external link.
-typedef ProjectLink = ({String label, String url});
+/// An external link shown by the footer and the settings page.
+///
+/// Only the address lives here: the label is translated, so the widget that
+/// draws a link reads it from the app's localizations.
+enum ProjectLink {
+  /// The monorepo.
+  repo(kRepoUrl),
 
-/// Project and documentation links, shared by the footer and the about page.
-const List<ProjectLink> kProjectLinks = [
-  (label: 'GitHub', url: kRepoUrl),
-  (label: 'App source', url: kAppSourceUrl),
-  (label: 'crdt_lf docs', url: kDocsUrl),
-];
+  /// This app's own source folder.
+  appSource(kAppSourceUrl),
+
+  /// The crdt_lf documentation site.
+  docs(kDocsUrl);
+
+  const ProjectLink(this.url);
+
+  /// The address opened on tap.
+  final String url;
+}
 
 /// Project and documentation link targets.
 const String kRepoUrl = 'https://github.com/MattiaPispisa/crdt';

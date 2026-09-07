@@ -43,8 +43,11 @@ const config: Config = {
     'docusaurus-plugin-pagefind',
   ],
 
-  // Set the production url of your site here
-  url: 'https://MattiaPispisa.github.io',
+  // Set the production url of your site here.
+  // The GitHub Pages custom domain, not the github.io one: that host only
+  // 301s here, and a canonical (or a sitemap entry) on it would point every
+  // crawler at a redirect on another domain.
+  url: 'https://mattiapispisa.it',
   // Set the /<baseUrl>/ pathname under which your site is served
   // For GitHub pages deployment, it is often '/<projectName>/'
   baseUrl: '/crdt/',
@@ -75,6 +78,15 @@ const config: Config = {
         },
         theme: {
           customCss: './src/css/custom.css',
+        },
+        sitemap: {
+          // Docusaurus only knows its own routes. The Flutter web apps are
+          // static folders the Pages workflow copies into the built site
+          // afterwards, so they reach the sitemap only by being added here.
+          createSitemapItems: async ({ defaultCreateSitemapItems, ...rest }) => [
+            ...(await defaultCreateSitemapItems(rest)),
+            { url: greyhoundUrl, changefreq: 'weekly', priority: 0.8 },
+          ],
         },
       } satisfies Preset.Options,
     ],

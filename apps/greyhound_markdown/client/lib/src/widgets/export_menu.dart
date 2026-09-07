@@ -3,6 +3,7 @@ import 'package:crdt_lf_flutter/crdt_lf_flutter.dart';
 import 'package:flutter/material.dart';
 
 import 'package:greyhound_markdown_client/src/config.dart';
+import 'package:greyhound_markdown_client/src/l10n/l10n_extension.dart';
 import 'package:greyhound_markdown_client/src/services/export/document_export.dart';
 
 /// App-bar button that saves the room's document in a chosen format.
@@ -60,21 +61,27 @@ class _ExportMenuState extends State<ExportMenu> {
     }
 
     final messenger = ScaffoldMessenger.of(context);
+    final l10n = context.l10n;
     setState(() => _busy = true);
     try {
       final saved = await _exporter.export(
         markdown: markdown,
         format: format,
         fileName: fileName,
+        languageCode: Localizations.localeOf(context).languageCode,
       );
       if (saved) {
         messenger.showSnackBar(
-          SnackBar(content: Text('Saved $fileName.${format.extension}')),
+          SnackBar(
+            content: Text(
+              l10n.exportSaved('$fileName.${format.extension}'),
+            ),
+          ),
         );
       }
     } catch (error) {
       messenger.showSnackBar(
-        SnackBar(content: Text('Export failed: $error')),
+        SnackBar(content: Text(l10n.exportFailed('$error'))),
       );
     } finally {
       if (mounted) {
@@ -89,7 +96,7 @@ class _ExportMenuState extends State<ExportMenu> {
       id: kHandlerId,
       selector: (context, handler) => handler.value.isEmpty,
       builder: (context, isEmpty) => PopupMenuButton<ExportFormat>(
-        tooltip: 'Export document',
+        tooltip: context.l10n.exportDocument,
         icon: const Icon(Icons.save_alt),
         enabled: !isEmpty && !_busy,
         onSelected: _export,
@@ -140,22 +147,22 @@ class _ExportDialogState extends State<_ExportDialog> {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: Text('Export as ${widget.format.label}'),
+      title: Text(context.l10n.exportAs(widget.format.label)),
       content: TextField(
         controller: _controller,
         autofocus: true,
         onSubmitted: (_) => _submit(),
         decoration: InputDecoration(
-          labelText: 'File name',
+          labelText: context.l10n.exportFileName,
           suffixText: '.${widget.format.extension}',
         ),
       ),
       actions: [
         TextButton(
           onPressed: () => Navigator.of(context).pop(),
-          child: const Text('Cancel'),
+          child: Text(context.l10n.cancel),
         ),
-        FilledButton(onPressed: _submit, child: const Text('Save')),
+        FilledButton(onPressed: _submit, child: Text(context.l10n.save)),
       ],
     );
   }

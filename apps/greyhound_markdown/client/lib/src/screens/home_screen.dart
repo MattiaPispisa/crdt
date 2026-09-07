@@ -3,6 +3,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 
 import 'package:greyhound_markdown_client/src/application/application.dart';
 import 'package:greyhound_markdown_client/src/config.dart';
+import 'package:greyhound_markdown_client/src/l10n/l10n_extension.dart';
 import 'package:greyhound_markdown_client/src/widgets/app_footer.dart';
 import 'package:greyhound_markdown_client/src/widgets/recent_rooms.dart';
 
@@ -95,9 +96,9 @@ class _HomeScreenState extends State<HomeScreen> {
                           onChanged: context.read<UserSettingsCubit>().setName,
                           textInputAction: TextInputAction.go,
                           onSubmitted: (_) => _submit(),
-                          decoration: const InputDecoration(
-                            labelText: 'Your name',
-                            border: OutlineInputBorder(),
+                          decoration: InputDecoration(
+                            labelText: context.l10n.yourName,
+                            border: const OutlineInputBorder(),
                           ),
                         ),
                         const SizedBox(height: 16),
@@ -181,8 +182,8 @@ class _RoomActions extends StatelessWidget {
     // which is what keeps Create the highlighted action.
     final joining = parseRoomId(controller.text) != null;
     const createIcon = Icon(Icons.add);
-    const createLabel = Text('Create a new room');
-    const joinLabel = Text('Join');
+    final createLabel = Text(context.l10n.createRoom);
+    final joinLabel = Text(context.l10n.join);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -207,9 +208,9 @@ class _RoomActions extends StatelessWidget {
                 controller: controller,
                 textInputAction: TextInputAction.go,
                 onSubmitted: (_) => onSubmit(),
-                decoration: const InputDecoration(
-                  labelText: 'Room id',
-                  border: OutlineInputBorder(),
+                decoration: InputDecoration(
+                  labelText: context.l10n.roomId,
+                  border: const OutlineInputBorder(),
                 ),
               ),
             ),
@@ -219,7 +220,7 @@ class _RoomActions extends StatelessWidget {
             else
               // Disabled rather than a no-op: with no room to join, the only
               // live action left is the filled one above.
-              const OutlinedButton(onPressed: null, child: joinLabel),
+              OutlinedButton(onPressed: null, child: joinLabel),
           ],
         ),
       ],

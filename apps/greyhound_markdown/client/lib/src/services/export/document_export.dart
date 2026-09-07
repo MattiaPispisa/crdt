@@ -45,17 +45,25 @@ class DocumentExporter {
   /// Renders [markdown] as [format] and saves it under [fileName] (without
   /// the extension, which [format] adds).
   ///
+  /// [languageCode] is the language the document is written in; only the HTML
+  /// page carries it, in its `lang` attribute.
+  ///
   /// Returns `false` when the user closed the save dialog without choosing a
   /// destination.
   Future<bool> export({
     required String markdown,
     required ExportFormat format,
     required String fileName,
+    String languageCode = 'en',
   }) async {
     final bytes = switch (format) {
       ExportFormat.markdown => utf8.encode(markdown),
       ExportFormat.html => utf8.encode(
-        markdownToHtmlDocument(markdown, title: fileName),
+        markdownToHtmlDocument(
+          markdown,
+          title: fileName,
+          languageCode: languageCode,
+        ),
       ),
       ExportFormat.pdf => await markdownToPdfBytes(markdown, title: fileName),
     };

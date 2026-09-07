@@ -15,6 +15,9 @@
 - **The last rooms you opened are listed on the home page.** The room id is
   the only name a document has, so this is the way back into one you did not
   write down. It works offline: the room is already on your device.
+- **Added localization.** English, Spanish, French, German, Italian and
+  Portuguese. It follows your device language on the first visit, and Settings
+  has a Language picker to force one or go back to following the device.
 
 ## 0.9.0
 

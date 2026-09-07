@@ -1,0 +1,9 @@
+# Generates `AppL10n` from the ARB files. Flutter no longer builds a synthetic
+# package, so the output lands in `lib/l10n/gen/` as real, committed source:
+# `flutter test` then works without a preceding `flutter pub get`.
+arb-dir: lib/l10n
+output-dir: lib/l10n/gen
+output-localization-file: app_l10n.dart
+output-class: AppL10n
+template-arb-file: app_en.arb
+nullable-getter: false
