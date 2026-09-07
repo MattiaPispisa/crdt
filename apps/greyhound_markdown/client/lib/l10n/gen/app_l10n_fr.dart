@@ -40,14 +40,14 @@ class AppL10nFr extends AppL10n {
 
   @override
   String get lineNumbersSubtitle =>
-      'Affiche les numéros de ligne à côté du source';
+      'Affiche les numéros de ligne à côté du code source';
 
   @override
   String get wordWrap => 'Retour à la ligne';
 
   @override
   String get wordWrapSubtitle =>
-      'Coupe les longues lignes au lieu de défiler sur le côté';
+      'Coupe les longues lignes au lieu de défiler horizontalement';
 
   @override
   String get viewChangelog => 'Voir le changelog';
@@ -60,7 +60,7 @@ class AppL10nFr extends AppL10n {
 
   @override
   String get appTagline =>
-      'Un éditeur markdown collaboratif en temps réel, bâti sur crdt_lf.';
+      'Un éditeur markdown collaboratif en temps réel, basé sur crdt_lf.';
 
   @override
   String get creditPrefix => 'Powered by crdt_lf · créé par ';
@@ -69,7 +69,7 @@ class AppL10nFr extends AppL10n {
   String get linkRepo => 'GitHub';
 
   @override
-  String get linkAppSource => 'Source de l\'app';
+  String get linkAppSource => 'Code source de l\'app';
 
   @override
   String get linkDocs => 'Documentation crdt_lf';
@@ -84,7 +84,7 @@ class AppL10nFr extends AppL10n {
   String get join => 'Rejoindre';
 
   @override
-  String get roomId => 'Id du salon';
+  String get roomId => 'ID du salon';
 
   @override
   String get recentlyOpened => 'Ouverts récemment';
@@ -133,13 +133,13 @@ class AppL10nFr extends AppL10n {
   }
 
   @override
-  String get copyRoomId => 'Copier l\'id du salon';
+  String get copyRoomId => 'Copier l\'ID du salon';
 
   @override
-  String get roomIdCopied => 'Id du salon copié';
+  String get roomIdCopied => 'ID du salon copié';
 
   @override
-  String get viewModeEdit => 'Éditer';
+  String get viewModeEdit => 'Modifier';
 
   @override
   String get viewModeSplit => 'Partagé';
@@ -181,12 +181,12 @@ class AppL10nFr extends AppL10n {
 
   @override
   String exportSaved(String fileName) {
-    return 'Enregistré $fileName';
+    return '$fileName enregistré';
   }
 
   @override
   String exportFailed(String error) {
-    return 'Échec de l\'export : $error';
+    return 'Échec de l\'export : $error';
   }
 
   @override
@@ -211,7 +211,7 @@ class AppL10nFr extends AppL10n {
   String get shortcutStrikethrough => 'Barré';
 
   @override
-  String get shortcutInlineCode => 'Code en ligne';
+  String get shortcutInlineCode => 'Code inline';
 
   @override
   String get shortcutHeading1 => 'Titre 1';

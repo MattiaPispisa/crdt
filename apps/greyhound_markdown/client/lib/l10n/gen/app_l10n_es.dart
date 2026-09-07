@@ -40,20 +40,20 @@ class AppL10nEs extends AppL10n {
 
   @override
   String get lineNumbersSubtitle =>
-      'Muestra los números de línea junto al código';
+      'Muestra los números de línea junto al código fuente';
 
   @override
   String get wordWrap => 'Ajuste de línea';
 
   @override
   String get wordWrapSubtitle =>
-      'Ajusta las líneas largas en vez de desplazarse de lado';
+      'Ajusta las líneas largas en vez de desplazar la vista en horizontal';
 
   @override
-  String get viewChangelog => 'Ver el changelog';
+  String get viewChangelog => 'Ver changelog';
 
   @override
-  String get viewLicenses => 'Ver las licencias';
+  String get viewLicenses => 'Ver licencias';
 
   @override
   String get versionUnknown => '—';
@@ -84,10 +84,10 @@ class AppL10nEs extends AppL10n {
   String get join => 'Entrar';
 
   @override
-  String get roomId => 'Id de la sala';
+  String get roomId => 'ID de la sala';
 
   @override
-  String get recentlyOpened => 'Abiertas hace poco';
+  String get recentlyOpened => 'Abiertas recientemente';
 
   @override
   String get relativeJustNow => 'ahora mismo';
@@ -133,10 +133,10 @@ class AppL10nEs extends AppL10n {
   }
 
   @override
-  String get copyRoomId => 'Copiar el id de la sala';
+  String get copyRoomId => 'Copiar ID de la sala';
 
   @override
-  String get roomIdCopied => 'Id de la sala copiado';
+  String get roomIdCopied => 'ID de la sala copiado';
 
   @override
   String get viewModeEdit => 'Editar';
@@ -169,7 +169,7 @@ class AppL10nEs extends AppL10n {
   String get statusError => 'Error de conexión';
 
   @override
-  String get exportDocument => 'Exportar el documento';
+  String get exportDocument => 'Exportar documento';
 
   @override
   String exportAs(String format) {
@@ -181,7 +181,7 @@ class AppL10nEs extends AppL10n {
 
   @override
   String exportSaved(String fileName) {
-    return 'Guardado $fileName';
+    return '$fileName guardado';
   }
 
   @override

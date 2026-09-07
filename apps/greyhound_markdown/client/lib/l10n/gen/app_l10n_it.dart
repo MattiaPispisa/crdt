@@ -84,13 +84,13 @@ class AppL10nIt extends AppL10n {
   String get join => 'Entra';
 
   @override
-  String get roomId => 'Id della stanza';
+  String get roomId => 'ID della stanza';
 
   @override
   String get recentlyOpened => 'Aperte di recente';
 
   @override
-  String get relativeJustNow => 'adesso';
+  String get relativeJustNow => 'poco fa';
 
   @override
   String relativeMinutesAgo(int count) {
@@ -133,10 +133,10 @@ class AppL10nIt extends AppL10n {
   }
 
   @override
-  String get copyRoomId => 'Copia l\'id della stanza';
+  String get copyRoomId => 'Copia l\'ID della stanza';
 
   @override
-  String get roomIdCopied => 'Id della stanza copiato';
+  String get roomIdCopied => 'ID della stanza copiato';
 
   @override
   String get viewModeEdit => 'Modifica';

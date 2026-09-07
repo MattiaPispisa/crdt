@@ -46,7 +46,7 @@ class AppL10nDe extends AppL10n {
 
   @override
   String get wordWrapSubtitle =>
-      'Bricht lange Zeilen um, statt seitwärts zu scrollen';
+      'Bricht lange Zeilen um, statt horizontal zu scrollen';
 
   @override
   String get viewChangelog => 'Changelog ansehen';
@@ -156,10 +156,10 @@ class AppL10nDe extends AppL10n {
   String get statusConnected => 'Verbunden';
 
   @override
-  String get statusConnecting => 'Verbinden…';
+  String get statusConnecting => 'Verbinde…';
 
   @override
-  String get statusReconnecting => 'Neu verbinden…';
+  String get statusReconnecting => 'Verbinde neu…';
 
   @override
   String get statusDisconnected => 'Getrennt';

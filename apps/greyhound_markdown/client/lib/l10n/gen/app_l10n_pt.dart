@@ -40,20 +40,20 @@ class AppL10nPt extends AppL10n {
 
   @override
   String get lineNumbersSubtitle =>
-      'Mostra os números de linha ao lado do código';
+      'Mostra os números de linha ao lado do código-fonte';
 
   @override
   String get wordWrap => 'Quebra de linha';
 
   @override
   String get wordWrapSubtitle =>
-      'Quebra as linhas longas em vez de rolar para o lado';
+      'Quebra as linhas longas em vez de rolar na horizontal';
 
   @override
-  String get viewChangelog => 'Ver o changelog';
+  String get viewChangelog => 'Ver changelog';
 
   @override
-  String get viewLicenses => 'Ver as licenças';
+  String get viewLicenses => 'Ver licenças';
 
   @override
   String get versionUnknown => '—';
@@ -84,7 +84,7 @@ class AppL10nPt extends AppL10n {
   String get join => 'Entrar';
 
   @override
-  String get roomId => 'Id da sala';
+  String get roomId => 'ID da sala';
 
   @override
   String get recentlyOpened => 'Abertas recentemente';
@@ -133,10 +133,10 @@ class AppL10nPt extends AppL10n {
   }
 
   @override
-  String get copyRoomId => 'Copiar o id da sala';
+  String get copyRoomId => 'Copiar ID da sala';
 
   @override
-  String get roomIdCopied => 'Id da sala copiado';
+  String get roomIdCopied => 'ID da sala copiado';
 
   @override
   String get viewModeEdit => 'Editar';
@@ -169,7 +169,7 @@ class AppL10nPt extends AppL10n {
   String get statusError => 'Erro de conexão';
 
   @override
-  String get exportDocument => 'Exportar o documento';
+  String get exportDocument => 'Exportar documento';
 
   @override
   String exportAs(String format) {
@@ -208,10 +208,10 @@ class AppL10nPt extends AppL10n {
   String get shortcutItalic => 'Itálico';
 
   @override
-  String get shortcutStrikethrough => 'Riscado';
+  String get shortcutStrikethrough => 'Tachado';
 
   @override
-  String get shortcutInlineCode => 'Código embutido';
+  String get shortcutInlineCode => 'Código inline';
 
   @override
   String get shortcutHeading1 => 'Título 1';
