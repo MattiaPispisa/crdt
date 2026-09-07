@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
   <!--
     If you are serving your web app in a path other than the root, change the
@@ -18,7 +18,40 @@
 
   <meta charset="UTF-8">
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
-  <meta name="description" content="Real-time collaborative markdown editor built on crdt_lf.">
+  <!--
+    The engine injects a viewport at runtime, but crawlers judge mobile
+    friendliness on the HTML as served, before any script runs.
+  -->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Greyhound Markdown is a real-time collaborative markdown editor: write together in the same document, see everyone's cursor live, and export to Markdown, HTML or PDF. Built on crdt_lf, in Dart and Flutter.">
+  <meta name="robots" content="index, follow, max-image-preview:large">
+  <meta name="theme-color" content="#006A60">
+
+  <!--
+    Absolute, and repeated across the tags below: `base href` is rewritten at
+    build time by `--base-href`, and social scrapers never resolve relative
+    URLs anyway.
+  -->
+  <link rel="canonical" href="https://mattiapispisa.it/crdt/greyhound_markdown/">
+
+  <!-- Open Graph -->
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="Greyhound Markdown">
+  <meta property="og:title" content="Greyhound Markdown — real-time collaborative markdown editor">
+  <meta property="og:description" content="Write markdown together in the same document, with live cursors and conflict-free merging. A demo app for crdt_lf, the CRDT library for Dart.">
+  <meta property="og:url" content="https://mattiapispisa.it/crdt/greyhound_markdown/">
+  <meta property="og:locale" content="en_US">
+  <meta property="og:image" content="https://mattiapispisa.it/crdt/greyhound_markdown/icons/Icon-512.png">
+  <meta property="og:image:width" content="512">
+  <meta property="og:image:height" content="512">
+  <meta property="og:image:alt" content="Greyhound Markdown logo">
+
+  <!-- The icon is square, so the small card is the honest one. -->
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:creator" content="@MattiaPispisa">
+  <meta name="twitter:title" content="Greyhound Markdown — real-time collaborative markdown editor">
+  <meta name="twitter:description" content="Write markdown together in the same document, with live cursors and conflict-free merging. A demo app for crdt_lf, the CRDT library for Dart.">
+  <meta name="twitter:image" content="https://mattiapispisa.it/crdt/greyhound_markdown/icons/Icon-512.png">
 
   <!-- iOS meta tags & icons -->
   <meta name="mobile-web-app-capable" content="yes">
@@ -33,10 +66,50 @@
   <title>Greyhound Markdown</title>
   <link rel="manifest" href="manifest.json">
 
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "WebApplication",
+    "name": "Greyhound Markdown",
+    "url": "https://mattiapispisa.it/crdt/greyhound_markdown/",
+    "description": "A real-time collaborative markdown editor built on crdt_lf. Several people edit the same document at once, with live cursors and conflict-free merging.",
+    "applicationCategory": "ProductivityApplication",
+    "operatingSystem": "Any",
+    "browserRequirements": "Requires JavaScript and WebAssembly",
+    "image": "https://mattiapispisa.it/crdt/greyhound_markdown/icons/Icon-512.png",
+    "isAccessibleForFree": true,
+    "offers": {
+      "@type": "Offer",
+      "price": "0",
+      "priceCurrency": "EUR"
+    },
+    "author": {
+      "@type": "Person",
+      "name": "Mattia Pispisa",
+      "url": "https://mattiapispisa.it"
+    },
+    "softwareHelp": "https://mattiapispisa.it/crdt/"
+  }
+  </script>
+
   <!--
     Loading indicator, shown until the Flutter engine paints its first frame.
     Fetching the engine takes a few seconds on a cold cache, and without this
     the page stays blank white for the whole wait.
+
+    It also carries the page's only crawlable text. Flutter paints into a
+    canvas, so a crawler that renders the app reads nothing from it: the HTML
+    as served is all there is. The heading gives the name, and the prose that
+    describes the app lives in the `description` meta tag and in the JSON-LD
+    above, which no visitor ever sees.
+
+    That split is deliberate. The app itself is localized, this file is not:
+    it is one static document, and the language the user picked lives in the
+    app's own storage, which is not readable before the engine boots. Keeping
+    the visible text down to the product name is what lets a single English
+    document stay honest — `html lang` and `og:locale` describe metadata that
+    really is English, and nothing here is shown untranslated to an Italian
+    reader.
 
     The colours are those of ColorScheme.fromSeed(seedColor: Colors.teal), the
     app's own theme, so the app fades in over an identical background.
@@ -67,9 +140,15 @@
       height: 96px;
     }
 
-    #loading p {
+    /*
+      Sized and weighted by hand: the element is an h1 because it names the
+      page, but the browser default would draw it twice as large as this
+      quiet loading screen wants.
+    */
+    #loading h1 {
       margin: 0;
       font-size: 16px;
+      font-weight: 400;
       letter-spacing: 0.3px;
       /* colorScheme.onSurfaceVariant */
       color: #3F4947;
@@ -102,7 +181,7 @@
       /* colorScheme.surface */
       #loading { background: #0E1513; }
       /* colorScheme.onSurfaceVariant */
-      #loading p { color: #BEC9C6; }
+      #loading h1 { color: #BEC9C6; }
       /* colorScheme.primary */
       #loading .spinner {
         border-color: rgba(130, 213, 200, 0.2);
@@ -113,8 +192,9 @@
 </head>
 <body>
   <div id="loading">
+    <!-- Empty alt on purpose: the heading beside it already says the name. -->
     <img src="icons/Icon-192.png" alt="">
-    <p>Greyhound Markdown</p>
+    <h1>Greyhound Markdown</h1>
     <div class="spinner"></div>
   </div>
 
