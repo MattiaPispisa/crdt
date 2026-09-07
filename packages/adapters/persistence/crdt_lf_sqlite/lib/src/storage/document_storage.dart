@@ -1,23 +1,41 @@
-import 'package:crdt_lf_sqlite/crdt_lf_sqlite.dart';
+import 'dart:async';
 
-/// Container class for both change and snapshot storage for a document.
-class CRDTDocumentStorage {
-  /// Creates a new [CRDTDocumentStorage] instance.
-  CRDTDocumentStorage({
-    required this.changes,
-    required this.snapshots,
-  }) : assert(
-          changes.documentId == snapshots.documentId,
-          'changes storage and snapshot storage'
-          ' must refer to the same document',
-        );
+import 'package:crdt_lf_persistence/crdt_lf_persistence.dart';
+import 'package:crdt_lf_sqlite/src/storage/change_storage.dart';
+import 'package:crdt_lf_sqlite/src/storage/snapshot_storage.dart';
+import 'package:crdt_lf_sqlite/src/transaction.dart';
+import 'package:sqlite3/sqlite3.dart' as sq;
 
-  /// The document id
-  String get documentId => changes.documentId;
+/// The changes and snapshots of one document, in a SQLite database.
+///
+/// It adds a real [transaction] to the shared contract: the work inside one
+/// either all lands, or none of it does.
+class CRDTSqliteDocumentStorage extends CRDTDocumentStorage {
+  /// Creates the storage of the document [changes] and [snapshots] belong to,
+  /// on [database].
+  CRDTSqliteDocumentStorage({
+    required this.database,
+    required CRDTSqliteChangeStorage changes,
+    required CRDTSqliteSnapshotStorage snapshots,
+  }) : super(changes: changes, snapshots: snapshots);
 
-  /// The change storage for the document.
-  final CRDTSqliteChangeStorage changes;
+  /// The database both halves write to.
+  final sq.Database database;
 
-  /// The snapshot storage for the document.
-  final CRDTSqliteSnapshotStorage snapshots;
+  /// Runs [body] in one SQLite transaction.
+  ///
+  /// Nests: a batch that opens a transaction of its own keeps working inside
+  /// this one, because both are savepoints. A [body] that returns without
+  /// suspending — every storage method here does — is carried through without
+  /// suspending, so no other document can write inside this transaction.
+  @override
+  FutureOr<T> transaction<T>(FutureOr<T> Function() body) =>
+      runInTransaction(database, body);
+
+  /// Does nothing: one database holds every document.
+  ///
+  /// Closing it here would take the other documents down with it. `CRDTSqlite`
+  /// closes the database itself.
+  @override
+  void close() {}
 }

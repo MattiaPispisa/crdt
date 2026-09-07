@@ -25,6 +25,7 @@ void main(List<String> args) async {
   try {
     copyPackageReadmes(
       to: docsDir(subParts: ['docs', 'documentation', 'packages']),
+      exclude: isInternalPackage,
       logger: logger,
     );
   } catch (error) {

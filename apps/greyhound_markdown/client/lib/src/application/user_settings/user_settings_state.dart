@@ -1,5 +1,23 @@
 part of 'user_settings_cubit.dart';
 
+/// A room this device has opened, and when it last did.
+///
+/// The room id is the only name a document has, so this is what the home
+/// screen shows as a way back in.
+class RecentRoom extends Equatable {
+  /// Creates an entry for [roomId], opened at [openedAt].
+  const RecentRoom({required this.roomId, required this.openedAt});
+
+  /// The room that was opened. It is also the document id.
+  final String roomId;
+
+  /// When the room was last opened, in UTC.
+  final DateTime openedAt;
+
+  @override
+  List<Object?> get props => [roomId, openedAt];
+}
+
 /// The persisted preferences of the local user.
 class UserSettingsState extends Equatable {
   /// Creates settings with every field given.
@@ -9,6 +27,7 @@ class UserSettingsState extends Equatable {
     required this.themeMode,
     required this.showLineNumbers,
     required this.wordWrap,
+    this.recentRooms = const [],
   });
 
   /// The settings of a first visit: no name yet, a random palette color so two
@@ -42,6 +61,12 @@ class UserSettingsState extends Equatable {
   /// sideways.
   final bool wordWrap;
 
+  /// The rooms this device opened last, most recent first.
+  ///
+  /// At most [kRecentRoomsLimit] long, and a room appears once however many
+  /// times it was opened.
+  final List<RecentRoom> recentRooms;
+
   /// [name], or [kDefaultUserName] while the user has not picked one.
   String get displayName => name.trim().isEmpty ? kDefaultUserName : name;
 
@@ -52,6 +77,7 @@ class UserSettingsState extends Equatable {
     ThemeMode? themeMode,
     bool? showLineNumbers,
     bool? wordWrap,
+    List<RecentRoom>? recentRooms,
   }) {
     return UserSettingsState(
       name: name ?? this.name,
@@ -59,6 +85,7 @@ class UserSettingsState extends Equatable {
       themeMode: themeMode ?? this.themeMode,
       showLineNumbers: showLineNumbers ?? this.showLineNumbers,
       wordWrap: wordWrap ?? this.wordWrap,
+      recentRooms: recentRooms ?? this.recentRooms,
     );
   }
 
@@ -69,5 +96,6 @@ class UserSettingsState extends Equatable {
     themeMode,
     showLineNumbers,
     wordWrap,
+    recentRooms,
   ];
 }

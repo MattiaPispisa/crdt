@@ -1,278 +1,242 @@
 @TestOn('vm')
 library;
 
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:crdt_lf/crdt_lf.dart';
 import 'package:crdt_lf_sqlite/crdt_lf_sqlite.dart';
+import 'package:crdt_lf_sqlite/src/schema.dart';
 import 'package:crdt_lf_sqlite/src/transaction.dart';
 import 'package:hlc_dart/hlc_dart.dart';
+import 'package:persistence_conformance/persistence_conformance.dart';
+import 'package:sqlite3/sqlite3.dart' as sq;
 import 'package:test/test.dart';
 
 void main() {
+  late Directory tempDir;
+  late String dbPath;
+
+  setUp(() {
+    tempDir = Directory.systemTemp.createTempSync('crdt_sqlite_test');
+    dbPath = '${tempDir.path}/crdt.db';
+  });
+
+  tearDown(() {
+    if (tempDir.existsSync()) {
+      tempDir.deleteSync(recursive: true);
+    }
+  });
+
+  // One database handle per storage, closed by the suite, so the group that
+  // reopens really reads the file back.
+  final handles = <CRDTDocumentStorage, CRDTSqlite>{};
+
+  runStorageBackendConformanceTests(
+    name: 'CRDTSqlite',
+    open: () => CRDTSqlite.open(dbPath),
+    reopen: (_) => CRDTSqlite.open(dbPath),
+  );
+
+  runDocumentStorageConformanceTests(
+    name: 'CRDTSqlite',
+    atomicTransactions: true,
+    synchronous: true,
+    openPeerIds: (documentId) async =>
+        CRDTSqlite.open(dbPath).peerIdStorageForDocument(documentId),
+    open: (documentId) async {
+      final database = CRDTSqlite.open(dbPath);
+      final storage = database.storageForDocument(documentId);
+      handles[storage] = database;
+      return storage;
+    },
+    dispose: (storage) async => handles.remove(storage)?.close(),
+  );
+
   group('CRDTSqlite', () {
-    late Directory tempDir;
-    late String dbPath;
     late CRDTSqlite storage;
 
     setUp(() {
-      tempDir = Directory.systemTemp.createTempSync('crdt_sqlite_test');
-      dbPath = '${tempDir.path}/crdt.db';
       storage = CRDTSqlite.open(dbPath);
     });
 
     tearDown(() {
       storage.close();
-      if (tempDir.existsSync()) {
-        tempDir.deleteSync(recursive: true);
-      }
     });
 
-    Change makeChange(int l, int c, {Set<OperationId> deps = const {}}) {
+    Change makeChange(int l, int c) {
       final id = OperationId(
         PeerId.generate(),
         HybridLogicalClock(l: l, c: c),
       );
       return Change.fromPayloadBytes(
         id: id,
-        deps: deps,
+        deps: const {},
         author: id.peerId,
         payloadBytes: Uint8List.fromList(utf8.encode('$l.$c')),
       );
     }
 
-    test('round-trips binary payload bytes across reopen', () {
-      const documentId = 'doc-1';
-      final changeStorage = storage.changeStorageForDocument(documentId);
+    test('storageForDocument returns the sqlite storages', () {
+      final documentStorage = storage.storageForDocument('doc');
 
-      final id = OperationId(
-        PeerId.generate(),
-        HybridLogicalClock(l: 123, c: 4),
-      );
-      final payloadBytes = Uint8List.fromList([1, 2, 3, 4, 5, 250, 251]);
-      final change = Change.fromPayloadBytes(
-        id: id,
-        deps: {},
-        author: id.peerId,
-        payloadBytes: payloadBytes,
-      );
-
-      changeStorage.saveChange(change);
-
-      storage.close();
-      storage = CRDTSqlite.open(dbPath);
-      final reopened = storage.changeStorageForDocument(documentId);
-
-      final changes = reopened.getChanges();
-      expect(changes.length, equals(1));
-      expect(changes.first.payloadBytes(), equals(payloadBytes));
-      expect(changes.first.id, equals(id));
-      expect(changes.first.author, equals(id.peerId));
-      expect(reopened.isEmpty, isFalse);
-      expect(reopened.isNotEmpty, isTrue);
+      expect(documentStorage.documentId, 'doc');
+      expect(documentStorage.changes, isA<CRDTSqliteChangeStorage>());
+      expect(documentStorage.snapshots, isA<CRDTSqliteSnapshotStorage>());
     });
 
-    test('saveChanges/deleteChanges/clear and empty-list branches', () {
-      const documentId = 'doc-2';
-      // Empty-list fast paths.
-      final changeStorage = storage.changeStorageForDocument(documentId)
-        ..saveChanges([]);
-      expect(changeStorage.deleteChanges([]), isZero);
-      expect(changeStorage.count, isZero);
-
-      final c1 = makeChange(1, 1);
-      final c2 = makeChange(1, 2);
-      final c3 = makeChange(2, 1);
-
-      changeStorage.saveChanges([c1, c2, c3]);
-      expect(changeStorage.count, 3);
-      expect(changeStorage.isEmpty, isFalse);
-      expect(changeStorage.isNotEmpty, isTrue);
-
-      expect(changeStorage.deleteChanges([c1, c3]), 2);
-      expect(changeStorage.count, 1);
-
-      changeStorage.clear();
-      expect(changeStorage.count, 0);
-      expect(changeStorage.getChanges(), isEmpty);
-      expect(changeStorage.isEmpty, isTrue);
-      expect(changeStorage.isNotEmpty, isFalse);
-    });
-
-    test('deleteChange returns true then false', () {
-      const documentId = 'doc-del-change';
-      final changeStorage = storage.changeStorageForDocument(documentId);
-
-      final change = makeChange(1, 1);
-      changeStorage.saveChange(change);
-      expect(changeStorage.count, 1);
-
-      expect(changeStorage.deleteChange(change), isTrue);
-      expect(changeStorage.count, isZero);
-      expect(changeStorage.deleteChange(change), isFalse);
-    });
-
-    test('runInTransaction rolls back partial work on error', () {
-      final changeStorage = storage.changeStorageForDocument('doc-rollback');
+    test('runInTransaction rolls back partial work on error', () async {
+      final changes = storage.changeStorageForDocument('doc-rollback');
 
       expect(
         () => runInTransaction(storage.database, () {
           // This insert happens inside the open transaction...
-          changeStorage.saveChange(makeChange(1, 1));
+          changes.saveChange(makeChange(1, 1));
           // ...but the failure must roll it back.
           throw StateError('boom');
         }),
         throwsA(isA<StateError>()),
       );
 
-      expect(changeStorage.count, isZero, reason: 'partial work rolled back');
+      expect(changes.count, isZero, reason: 'partial work rolled back');
     });
 
-    test('snapshot ops: save/delete/clear and empty-list branches', () {
-      const documentId = 'doc-snap';
-      final snapshotStorage = storage.snapshotStorageForDocument(documentId);
+    // Two documents sharing one connection write at the same time. Each
+    // CRDTDocumentPersistence has its own write chain, so nothing serialises
+    // them, and an asynchronous body suspends inside the open transaction.
+    // A savepoint rolls back every write made after it, the other document's
+    // included, so the two must not overlap.
+    test('a failing transaction leaves a concurrent one intact', () async {
+      final a = storage.changeStorageForDocument('doc-a');
+      final aWrote = Completer<void>();
 
-      Snapshot makeSnapshot(int l, int c, Map<String, Uint8List> data) {
-        return Snapshot(
-          id: 's_${l}_$c',
-          versionVector: VersionVector(
-            {PeerId.generate(): HybridLogicalClock(l: l, c: c)},
-          ),
-          data: data,
-        );
-      }
-
-      snapshotStorage.saveSnapshots([]);
-      expect(snapshotStorage.deleteSnapshots([]), isZero);
-      expect(snapshotStorage.count, isZero);
-
-      final s1 = makeSnapshot(1, 1, {
-        'a': Uint8List.fromList([1]),
-      });
-      final s2 = makeSnapshot(1, 2, {
-        'b': Uint8List.fromList([0]),
-      });
-      final s3 = makeSnapshot(2, 1, {
-        'list': Uint8List.fromList([1, 2]),
+      final futureA = runInTransaction(storage.database, () async {
+        await Future<void>.delayed(Duration.zero);
+        a.saveChange(makeChange(1, 1));
+        aWrote.complete();
+        return 'a';
       });
 
-      snapshotStorage.saveSnapshots([s1, s2, s3]);
-      expect(snapshotStorage.count, 3);
-      expect(snapshotStorage.isEmpty, isFalse);
-      expect(snapshotStorage.isNotEmpty, isTrue);
+      final futureB = runInTransaction(storage.database, () async {
+        await aWrote.future;
+        throw StateError('boom');
+      });
 
-      expect(snapshotStorage.deleteSnapshots([s1.id, s3.id]), 2);
-      expect(snapshotStorage.count, 1);
+      await futureA;
+      await expectLater(futureB, throwsA(isA<StateError>()));
 
-      snapshotStorage.clear();
-      expect(snapshotStorage.count, 0);
-      expect(snapshotStorage.getSnapshots(), isEmpty);
-      expect(snapshotStorage.isEmpty, isTrue);
-      expect(snapshotStorage.isNotEmpty, isFalse);
+      expect(
+        a.count,
+        1,
+        reason: "B's rollback must not undo A's write",
+      );
     });
 
-    test('snapshot round-trips opaque binary blobs across reopen', () {
-      const documentId = 'doc-snap-roundtrip';
-      final snapshotStorage = storage.snapshotStorageForDocument(documentId);
+    // A batch method opens a savepoint of its own, and drops the result. If a
+    // nested call queued behind the transaction it is already inside, the work
+    // would be deferred past that transaction and lost with it.
+    test('a storage call nested after an await still lands', () async {
+      final changes = storage.changeStorageForDocument('doc-nested');
 
-      final author = PeerId.generate();
-      final vv = VersionVector({author: HybridLogicalClock(l: 999, c: 2)});
-      final data = <String, Uint8List>{
-        'title': Uint8List.fromList(utf8.encode('doc')),
-        'count': Uint8List.fromList([42, 0, 0, 0]),
-        'blob': Uint8List.fromList(List<int>.generate(32, (i) => i)),
-      };
+      final result = runInTransaction(storage.database, () async {
+        await Future<void>.delayed(Duration.zero);
+        changes.saveChanges([makeChange(1, 1)]);
+        return 'done';
+      });
+      await (result as Future<String>);
 
-      snapshotStorage.saveSnapshot(
-        Snapshot(id: 'snap', versionVector: vv, data: data),
+      expect(changes.count, 1);
+    });
+
+    // The bug this pins: a batch prepared its statement outside
+    // `runInTransaction` and dropped the returned future. While another
+    // asynchronous transaction holds the connection the body is deferred, so
+    // the statement was already closed when it ran, and the caller was told
+    // the batch had landed while nothing had been written.
+    test('a batch deferred behind another transaction still lands', () async {
+      final other = storage.changeStorageForDocument('doc-other');
+      final batch = storage.changeStorageForDocument('doc-batch');
+      final holding = Completer<void>();
+      final release = Completer<void>();
+
+      final held = runInTransaction(storage.database, () async {
+        holding.complete();
+        await release.future;
+        other.saveChange(makeChange(1, 1));
+      });
+
+      await holding.future;
+      final written = batch.saveChanges([makeChange(2, 1), makeChange(2, 2)]);
+      expect(
+        written,
+        isA<Future<void>>(),
+        reason: 'a deferred batch must say so instead of reporting success',
       );
 
-      storage.close();
-      storage = CRDTSqlite.open(dbPath);
-      final reopened = storage.snapshotStorageForDocument(documentId);
+      release.complete();
+      await held;
+      await written;
 
-      final loaded = reopened.getSnapshot('snap');
-      expect(loaded, isNotNull);
-      expect(loaded!.id, equals('snap'));
-      expect(loaded.versionVector.entries.length, equals(1));
-      expect(loaded.data.keys.toSet(), equals(data.keys.toSet()));
-      for (final key in data.keys) {
-        expect(loaded.data[key], equals(data[key]));
-      }
-      expect(reopened.getSnapshot('absent'), isNull);
+      expect(batch.count, 2);
+      expect(other.count, 1);
     });
 
-    test('deleteSnapshot and containsSnapshot reflect presence', () {
-      const documentId = 'doc-contains';
-      final snapshotStorage = storage.snapshotStorageForDocument(documentId);
+    test('a deferred delete batch reports what it really deleted', () async {
+      final batch = storage.changeStorageForDocument('doc-deferred-delete');
+      final changes = [makeChange(3, 1), makeChange(3, 2)];
+      await batch.saveChanges(changes);
 
-      expect(snapshotStorage.containsSnapshot('absent'), isFalse);
-      expect(snapshotStorage.deleteSnapshot('absent'), isFalse);
+      final holding = Completer<void>();
+      final release = Completer<void>();
+      final held = runInTransaction(storage.database, () async {
+        holding.complete();
+        await release.future;
+      });
 
-      final author = PeerId.generate();
-      snapshotStorage.saveSnapshot(
-        Snapshot(
-          id: 'present',
-          versionVector:
-              VersionVector({author: HybridLogicalClock(l: 1, c: 1)}),
-          data: {
-            'k': Uint8List.fromList([1]),
-          },
-        ),
-      );
-      expect(snapshotStorage.containsSnapshot('present'), isTrue);
-      expect(snapshotStorage.deleteSnapshot('present'), isTrue);
-      expect(snapshotStorage.containsSnapshot('present'), isFalse);
+      await holding.future;
+      final deleting = batch.deleteChanges(changes);
+      release.complete();
+      await held;
+
+      expect(await deleting, 2);
+      expect(batch.count, isZero);
     });
 
-    test('memory() database works without a file', () {
+    test('a synchronous body never suspends', () {
+      final result = runInTransaction(storage.database, () => 'done');
+
+      expect(result, isNot(isA<Future<dynamic>>()));
+      expect(result, 'done');
+    });
+
+    test('memory() works without a file', () async {
       final memory = CRDTSqlite.memory();
-      final changeStorage = memory.changeStorageForDocument('doc');
-      final change = makeChange(1, 1);
-      changeStorage.saveChange(change);
-      expect(changeStorage.count, 1);
-      expect(changeStorage.getChanges().first.id, equals(change.id));
+      final changes = memory.changeStorageForDocument('doc')
+        ..saveChange(makeChange(1, 1));
+
+      expect(changes.count, 1);
       memory.close();
     });
 
-    test('fromDatabase wraps an existing connection', () {
+    test('fromDatabase wraps an existing connection', () async {
       final memory = CRDTSqlite.memory();
       final wrapped = CRDTSqlite.fromDatabase(memory.database);
-      wrapped.changeStorageForDocument('doc').saveChange(makeChange(1, 1));
-      expect(wrapped.changeStorageForDocument('doc').count, 1);
+
+      final changes = wrapped.changeStorageForDocument('doc')
+        ..saveChange(makeChange(1, 1));
+
+      expect(changes.count, 1);
       memory.close();
     });
 
-    test('documents are isolated by document_id in a single database', () {
-      final s1 = storage.changeStorageForDocument('doc-a');
-      final s2 = storage.changeStorageForDocument('doc-b');
-
-      s1.saveChanges([makeChange(1, 1), makeChange(1, 2)]);
-      s2.saveChange(makeChange(2, 1));
-
-      expect(s1.count, 2);
-      expect(s2.count, 1);
-
-      s1.clear();
-      expect(s1.count, 0);
-      expect(s2.count, 1, reason: 'clearing doc-a must not affect doc-b');
-    });
-
-    test('deleteDocumentData removes only the target document', () {
+    test('deleteDocument removes only the target document', () async {
       final a = storage.storageForDocument('doc-a');
       final b = storage.storageForDocument('doc-b');
-
       final id = OperationId(PeerId.generate(), HybridLogicalClock(l: 5, c: 1));
-      a.changes.saveChange(
-        Change.fromPayloadBytes(
-          id: id,
-          deps: {},
-          author: id.peerId,
-          payloadBytes: Uint8List.fromList(const [9, 8, 7]),
-        ),
-      );
+
+      a.changes.saveChange(makeChange(1, 1));
       a.snapshots.saveSnapshot(
         Snapshot(
           id: 's-del',
@@ -282,318 +246,182 @@ void main() {
           },
         ),
       );
-      b.changes.saveChange(makeChange(1, 1));
+      b.changes.saveChange(makeChange(2, 1));
 
-      storage.deleteDocumentData('doc-a');
+      storage.deleteDocument('doc-a');
 
       expect(a.changes.count, 0);
       expect(a.snapshots.count, 0);
       expect(b.changes.count, 1, reason: 'doc-b must be untouched');
     });
-
-    group('CRDTDocumentStorage', () {
-      test('storageForDocument opens both storages and persists', () {
-        const documentId = 'doc-open-both';
-        final docStorage = storage.storageForDocument(documentId);
-
-        expect(docStorage.documentId, documentId);
-        expect(docStorage.changes, isA<CRDTSqliteChangeStorage>());
-        expect(docStorage.snapshots, isA<CRDTSqliteSnapshotStorage>());
-
-        final id =
-            OperationId(PeerId.generate(), HybridLogicalClock(l: 1, c: 1));
-        docStorage.changes.saveChange(
-          Change.fromPayloadBytes(
-            id: id,
-            deps: {},
-            author: id.peerId,
-            payloadBytes: Uint8List.fromList(const [1, 2, 3]),
-          ),
-        );
-        docStorage.snapshots.saveSnapshot(
-          Snapshot(
-            id: 'snap-1',
-            versionVector: VersionVector({id.peerId: id.hlc}),
-            data: {
-              'k': Uint8List.fromList([1]),
-            },
-          ),
-        );
-
-        storage.close();
-        storage = CRDTSqlite.open(dbPath);
-        final reopened = storage.storageForDocument(documentId);
-        expect(reopened.changes.getChanges(), isNotEmpty);
-        expect(reopened.snapshots.getSnapshots(), isNotEmpty);
-      });
-
-      test('constructor holds both storages', () {
-        const documentId = 'doc-store-ctor';
-        final docStorage = CRDTDocumentStorage(
-          changes: storage.changeStorageForDocument(documentId),
-          snapshots: storage.snapshotStorageForDocument(documentId),
-        );
-        expect(docStorage.changes, isA<CRDTSqliteChangeStorage>());
-        expect(docStorage.snapshots, isA<CRDTSqliteSnapshotStorage>());
-      });
-    });
-
-    group('Complex value types', () {
-      const v1 = ObjectValue(height: 10, width: 20, offsetX: 1.5, offsetY: 2.5);
-      const v2 = ObjectValue(height: 30, width: 40, offsetX: 3.5, offsetY: 4.5);
-
-      test('CRDTListHandler<ObjectValue> round-trips changes', () {
-        const documentId = 'doc-complex-value';
-        var changeStorage = storage.changeStorageForDocument(documentId);
-
-        final document = CRDTDocument(peerId: PeerId.generate());
-        CRDTListHandler<ObjectValue>(
-          document,
-          'shapes',
-          valueCodec: const ObjectValueCodec(),
-        )
-          ..insert(0, v1)
-          ..insert(1, v2);
-
-        changeStorage.saveChanges(document.exportChanges());
-        storage.close();
-        storage = CRDTSqlite.open(dbPath);
-        changeStorage = storage.changeStorageForDocument(documentId);
-
-        final restored = CRDTDocument(peerId: PeerId.generate())
-          ..importChanges(changeStorage.getChanges());
-        final restoredList = CRDTListHandler<ObjectValue>(
-          restored,
-          'shapes',
-          valueCodec: const ObjectValueCodec(),
-        );
-        expect(restoredList.value, equals([v1, v2]));
-      });
-
-      test('CRDTListHandler<ObjectValue> round-trips snapshot state', () {
-        const documentId = 'doc-complex-snapshot';
-        final snapshotStorage = storage.snapshotStorageForDocument(documentId);
-
-        final document = CRDTDocument(peerId: PeerId.generate());
-        CRDTListHandler<ObjectValue>(
-          document,
-          'shapes',
-          valueCodec: const ObjectValueCodec(),
-        )
-          ..insert(0, v1)
-          ..insert(1, v2);
-
-        final snapshot = document.takeSnapshot(pruneHistory: false);
-        snapshotStorage.saveSnapshot(snapshot);
-        storage.close();
-        storage = CRDTSqlite.open(dbPath);
-
-        final loaded = storage
-            .snapshotStorageForDocument(documentId)
-            .getSnapshot(snapshot.id);
-        expect(loaded, isNotNull);
-
-        final restoredDoc = CRDTDocument(peerId: PeerId.generate())
-          ..mergeSnapshot(loaded!, pruneHistory: false);
-        final restoredList = CRDTListHandler<ObjectValue>(
-          restoredDoc,
-          'shapes',
-          valueCodec: const ObjectValueCodec(),
-        );
-        expect(restoredList.value, equals([v1, v2]));
-      });
-    });
-
-    group('All handlers', () {
-      late List<Change> changesToSave;
-      late String documentId;
-      late CRDTDocument document;
-      late CRDTListHandler<String> list;
-      late CRDTMapHandler<int> map;
-      late CRDTTextHandler text;
-      late CRDTFugueTextHandler fugueText;
-      late CRDTORSetHandler<String> orSet;
-      late CRDTORMapHandler<String, int> orMap;
-      var testIndex = 0;
-
-      setUp(() {
-        changesToSave = [];
-        documentId = 'doc-all-handlers-${testIndex++}';
-        document = CRDTDocument(peerId: PeerId.generate())
-          ..localChanges.listen(changesToSave.add);
-        list = CRDTListHandler<String>(document, 'list');
-        map = CRDTMapHandler<int>(document, 'map');
-        text = CRDTTextHandler(document, 'text');
-        fugueText = CRDTFugueTextHandler(document, 'fugueText');
-        orSet = CRDTORSetHandler(document, 'orSet');
-        orMap = CRDTORMapHandler(document, 'orMap');
-      });
-
-      test('save and load changes for all handlers', () async {
-        var changeStorage = storage.changeStorageForDocument(documentId);
-
-        list
-          ..insert(0, 'first')
-          ..insert(1, 'second');
-        map
-          ..set('count', 42)
-          ..set('total', 100);
-        text.insert(0, 'Hello World');
-        fugueText.insert(0, 'Fugue Text');
-        orSet
-          ..add('alpha')
-          ..add('beta');
-        orMap
-          ..put('x', 10)
-          ..put('y', 20);
-
-        await Future<void>.delayed(Duration.zero);
-        expect(changesToSave, isNotEmpty);
-
-        changeStorage.saveChanges(changesToSave);
-        storage.close();
-        storage = CRDTSqlite.open(dbPath);
-        changeStorage = storage.changeStorageForDocument(documentId);
-        expect(changeStorage.count, equals(changesToSave.length));
-
-        final newDocument = CRDTDocument(peerId: PeerId.generate())
-          ..importChanges(changeStorage.getChanges());
-
-        expect(
-          CRDTListHandler<String>(newDocument, 'list').value,
-          equals(['first', 'second']),
-        );
-        expect(
-          CRDTMapHandler<int>(newDocument, 'map').value,
-          equals({'count': 42, 'total': 100}),
-        );
-        expect(
-          CRDTTextHandler(newDocument, 'text').value,
-          equals('Hello World'),
-        );
-        expect(
-          CRDTFugueTextHandler(newDocument, 'fugueText').value,
-          equals('Fugue Text'),
-        );
-        expect(
-          CRDTORSetHandler<String>(newDocument, 'orSet').value,
-          equals({'alpha', 'beta'}),
-        );
-        expect(
-          CRDTORMapHandler<String, int>(newDocument, 'orMap').value,
-          equals({'x': 10, 'y': 20}),
-        );
-      });
-
-      test('save and load snapshots for all handlers', () {
-        final snapshotStorage = storage.snapshotStorageForDocument(documentId);
-
-        list
-          ..insert(0, 'a')
-          ..insert(1, 'b');
-        map
-          ..set('key1', 10)
-          ..set('key2', 20);
-        orSet
-          ..add('set1')
-          ..add('set2');
-        orMap
-          ..put('k1', 1)
-          ..put('k2', 2);
-        text.insert(0, 'Text content');
-        fugueText.insert(0, 'Fugue content');
-
-        final snapshot = document.takeSnapshot();
-        snapshotStorage.saveSnapshots([snapshot]);
-        storage.close();
-        storage = CRDTSqlite.open(dbPath);
-
-        final loaded = storage
-            .snapshotStorageForDocument(documentId)
-            .getSnapshot(snapshot.id);
-        expect(loaded, isNotNull);
-
-        final newDocument = CRDTDocument(peerId: PeerId.generate())
-          ..importSnapshot(loaded!);
-        expect(
-          CRDTListHandler<String>(newDocument, 'list').value,
-          equals(['a', 'b']),
-        );
-        expect(
-          CRDTMapHandler<int>(newDocument, 'map').value,
-          equals({'key1': 10, 'key2': 20}),
-        );
-        expect(
-          CRDTTextHandler(newDocument, 'text').value,
-          equals('Text content'),
-        );
-        expect(
-          CRDTFugueTextHandler(newDocument, 'fugueText').value,
-          equals('Fugue content'),
-        );
-        expect(
-          CRDTORSetHandler<String>(newDocument, 'orSet').value,
-          equals({'set1', 'set2'}),
-        );
-        expect(
-          CRDTORMapHandler<String, int>(newDocument, 'orMap').value,
-          equals({'k1': 1, 'k2': 2}),
-        );
-      });
-    });
-  });
-}
-
-class ObjectValue {
-  const ObjectValue({
-    required this.height,
-    required this.width,
-    required this.offsetX,
-    required this.offsetY,
   });
 
-  final double height;
-  final double width;
-  final double offsetX;
-  final double offsetY;
-
-  @override
-  bool operator ==(Object other) {
-    if (identical(this, other)) {
-      return true;
+  group('schema upgrade', () {
+    /// Writes a database in the shape version 1 left behind, holding
+    /// [changes].
+    void writeSchemaOne(List<Change> changes) {
+      final database = sq.sqlite3.open(dbPath);
+      try {
+        database.execute('''
+CREATE TABLE $changesTable (
+  document_id TEXT NOT NULL,
+  change_id   TEXT NOT NULL,
+  bytes       BLOB NOT NULL,
+  PRIMARY KEY (document_id, change_id)
+);
+''');
+        for (final change in changes) {
+          database.execute(
+            'INSERT INTO $changesTable VALUES (?, ?, ?)',
+            ['doc', change.id.toString(), change.toBytes()],
+          );
+        }
+      } finally {
+        database.close();
+      }
     }
-    return other is ObjectValue &&
-        other.height == height &&
-        other.width == width &&
-        other.offsetX == offsetX &&
-        other.offsetY == offsetY;
-  }
 
-  @override
-  int get hashCode => Object.hash(height, width, offsetX, offsetY);
-}
+    test('a database written by version 1 keeps its rows and can be filtered',
+        () async {
+      // Version 1 had no author and no clock column, and no `user_version`
+      // either. The upgrade adds the columns and fills them from the bytes
+      // that are already on disk, or the bounds would answer on zeros.
+      final author = PeerId.generate();
+      Change atClock(int l) => Change.fromPayloadBytes(
+            id: OperationId(author, HybridLogicalClock(l: l, c: 1)),
+            deps: const {},
+            author: author,
+            payloadBytes: Uint8List.fromList(utf8.encode('$l')),
+          );
+      final older = atClock(1);
+      final newer = atClock(2);
+      writeSchemaOne([older, newer]);
 
-class ObjectValueCodec implements ValueCodec<ObjectValue> {
-  const ObjectValueCodec();
+      final upgraded = CRDTSqlite.open(dbPath);
+      final changes = upgraded.changeStorageForDocument('doc');
 
-  @override
-  Uint8List encode(ObjectValue value) {
-    final out = ByteData(32)
-      ..setFloat64(0, value.height)
-      ..setFloat64(8, value.width)
-      ..setFloat64(16, value.offsetX)
-      ..setFloat64(24, value.offsetY);
-    return out.buffer.asUint8List();
-  }
+      expect(
+        changes.count,
+        2,
+        reason: 'the upgrade only adds, it does not drop rows',
+      );
+      expect(
+        changes
+            .getChanges(newerThan: VersionVector({author: older.hlc}))
+            .map((change) => change.id.toString()),
+        [newer.id.toString()],
+        reason: 'the columns were filled from the bytes already on disk',
+      );
 
-  @override
-  ObjectValue decode(Uint8List bytes) {
-    final view = ByteData.sublistView(bytes);
-    return ObjectValue(
-      height: view.getFloat64(0),
-      width: view.getFloat64(8),
-      offsetX: view.getFloat64(16),
-      offsetY: view.getFloat64(24),
-    );
-  }
+      upgraded.close();
+    });
+
+    test('the tables version 1 never had are created', () async {
+      writeSchemaOne([]);
+
+      final upgraded = CRDTSqlite.open(dbPath);
+      final peerId = PeerId.generate();
+      final peers = upgraded.peerIdStorageForDocument('doc')
+        ..savePeerId(peerId);
+
+      expect(peers.getPeerId(), peerId);
+      upgraded.close();
+    });
+
+    test('a change whose bytes this build cannot read still migrates',
+        () async {
+      // The split reads `change_id`, not the blob. A row this build could not
+      // decode would once have stopped the upgrade; now it moves across and
+      // fails later, when someone actually asks for it.
+      final id = OperationId(PeerId.generate(), HybridLogicalClock(l: 7, c: 0));
+      sq.sqlite3.open(dbPath)
+        ..execute('''
+CREATE TABLE $changesTable (
+  document_id TEXT NOT NULL,
+  change_id   TEXT NOT NULL,
+  bytes       BLOB NOT NULL,
+  PRIMARY KEY (document_id, change_id)
+);
+''')
+        ..execute(
+          'INSERT INTO $changesTable VALUES (?, ?, ?)',
+          [
+            'doc',
+            id.toString(),
+            Uint8List.fromList([1]),
+          ],
+        )
+        ..close();
+
+      final upgraded = CRDTSqlite.open(dbPath);
+
+      expect(upgraded.changeStorageForDocument('doc').count, 1);
+      expect(
+        () => upgraded
+            .changeStorageForDocument('doc')
+            .getChanges(upTo: VersionVector({id.peerId: id.hlc})),
+        // Reading it is what fails, and only for whoever asks.
+        throwsA(isA<FormatException>()),
+      );
+
+      upgraded.close();
+    });
+
+    test(
+        'an upgrade that cannot read a change id leaves the database as it '
+        'was', () async {
+      // A name the split cannot parse stops the upgrade. Half the rows moved
+      // and half left behind is worse than refusing to open.
+      sq.sqlite3.open(dbPath)
+        ..execute('''
+CREATE TABLE $changesTable (
+  document_id TEXT NOT NULL,
+  change_id   TEXT NOT NULL,
+  bytes       BLOB NOT NULL,
+  PRIMARY KEY (document_id, change_id)
+);
+''')
+        ..execute(
+          "INSERT INTO $changesTable VALUES ('doc', 'not-an-id', x'01')",
+        )
+        ..close();
+
+      expect(() => CRDTSqlite.open(dbPath), throwsA(isA<FormatException>()));
+
+      final after = sq.sqlite3.open(dbPath);
+      final columns = after
+          .select('PRAGMA table_info($changesTable)')
+          .map((row) => row['name'])
+          .toSet();
+      after.close();
+
+      expect(
+        columns,
+        contains('change_id'),
+        reason: 'the table went back to the shape it had',
+      );
+    });
+
+    test('opening twice does not upgrade twice', () async {
+      final author = PeerId.generate();
+      final change = Change.fromPayloadBytes(
+        id: OperationId(author, HybridLogicalClock(l: 1, c: 1)),
+        deps: const {},
+        author: author,
+        payloadBytes: Uint8List.fromList(utf8.encode('a')),
+      );
+      writeSchemaOne([change]);
+
+      CRDTSqlite.open(dbPath).close();
+      final again = CRDTSqlite.open(dbPath);
+
+      expect(
+        again
+            .changeStorageForDocument('doc')
+            .getChanges(newerThan: VersionVector({author: change.hlc})),
+        isEmpty,
+      );
+      again.close();
+    });
+  });
 }

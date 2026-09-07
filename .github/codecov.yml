@@ -26,6 +26,9 @@ flags:
   crdt_lf_flutter:
     paths: [packages/core/crdt_lf_flutter]
     carryforward: true
+  persistence_conformance:
+    paths: [packages/_internal/persistence_conformance]
+    carryforward: true
   crdt_lf_hive:
     paths: [packages/adapters/persistence/crdt_lf_hive]
     carryforward: true

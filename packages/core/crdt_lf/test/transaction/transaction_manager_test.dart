@@ -15,13 +15,26 @@ void main() {
       dummyOperation = TestOperation.fromHandler(TestHandler(doc, id: 'dummy'));
     });
 
+    Change changeAt(int clock) {
+      final peerId = PeerId.generate();
+      return Change(
+        id: OperationId(peerId, HybridLogicalClock(l: clock, c: 1)),
+        operation: dummyOperation,
+        deps: {},
+        author: peerId,
+      );
+    }
+
+    DocumentChangesApplied batch(List<Change> changes, ChangeSource source) =>
+        DocumentChangesApplied(changes: changes, source: source);
+
     test('begin/commit defers and flushes updates and local changes', () {
       final emittedOperations = <Operation>[];
       var updateCount = 0;
 
       final manager = TransactionManager(
-        flushWork: (ops, _, ___) {
-          emittedOperations.addAll(ops);
+        flushWork: (work) {
+          emittedOperations.addAll(work.operations);
           updateCount++;
         },
       )
@@ -53,9 +66,12 @@ void main() {
       var updateCount = 0;
 
       final manager = TransactionManager(
-        flushWork: (ops, changes, ___) {
-          emittedOperations.addAll(ops);
-          emittedChanges.addAll(changes);
+        flushWork: (work) {
+          emittedOperations.addAll(work.operations);
+          for (final applied
+              in work.events.whereType<DocumentChangesApplied>()) {
+            emittedChanges.addAll(applied.changes);
+          }
           updateCount++;
         },
       )
@@ -65,17 +81,11 @@ void main() {
 
       manager.requestUpdate();
 
-      final peerId = PeerId.generate();
-      final dummyChange = Change(
-        id: OperationId(peerId, HybridLogicalClock(l: 1, c: 1)),
-        operation: dummyOperation,
-        deps: {},
-        author: peerId,
-      );
+      final dummyChange = changeAt(1);
 
       manager
         ..handleOperation(dummyOperation)
-        ..handleAppliedChanges([dummyChange])
+        ..handleAppliedChanges(batch([dummyChange], ChangeSource.created))
 
         // Inner commit should not flush
         ..commit();
@@ -93,7 +103,7 @@ void main() {
     test('requestUpdate outside transaction emits immediately', () {
       var updateCount = 0;
       TransactionManager(
-        flushWork: (_, __, ___) => updateCount++,
+        flushWork: (_) => updateCount++,
       ).requestUpdate();
       expect(updateCount, 1);
     });
@@ -101,30 +111,56 @@ void main() {
     test('handleOperation outside transaction emits immediately', () {
       var updateCount = 0;
       TransactionManager(
-        flushWork: (_, __, ___) => updateCount++,
+        flushWork: (_) => updateCount++,
       ).handleOperation(dummyOperation);
       expect(updateCount, 1);
     });
 
     test('handleChanges outside transaction emits immediately', () {
       var updateCount = 0;
-      final peerId = PeerId.generate();
-      final change = Change(
-        id: OperationId(peerId, HybridLogicalClock(l: 1, c: 1)),
-        operation: dummyOperation,
-        deps: {},
-        author: peerId,
-      );
       TransactionManager(
-        flushWork: (_, __, ___) => updateCount++,
-      ).handleAppliedChanges([change]);
+        flushWork: (_) => updateCount++,
+      ).handleAppliedChanges(
+        batch([changeAt(1)], ChangeSource.created),
+      );
       expect(updateCount, 1);
+    });
+
+    test('batches reach the flush in the order they were handed in', () {
+      var flushed = <DocumentChangesApplied>[];
+
+      final theirs = changeAt(1);
+      final mine = changeAt(2);
+      final theirsAgain = changeAt(3);
+
+      final manager = TransactionManager(
+        flushWork: (work) =>
+            flushed = work.events.whereType<DocumentChangesApplied>().toList(),
+      );
+
+      manager.run(() {
+        manager
+          ..handleAppliedChanges(batch([theirs], ChangeSource.ingested))
+          ..handleAppliedChanges(batch([mine], ChangeSource.created))
+          ..handleAppliedChanges(batch([theirsAgain], ChangeSource.ingested));
+      });
+
+      // Three batches, not two merged by source: the manager keeps the order
+      // the moves happened in and never groups them.
+      expect(
+        flushed.map((b) => b.source),
+        [ChangeSource.ingested, ChangeSource.created, ChangeSource.ingested],
+      );
+      expect(
+        flushed.expand((b) => b.changes),
+        [theirs, mine, theirsAgain],
+      );
     });
 
     test('commit outside transaction throws', () {
       expect(
         () => TransactionManager(
-          flushWork: (_, __, ___) {},
+          flushWork: (_) {},
         ).commit(),
         throwsStateError,
       );

@@ -218,6 +218,72 @@ void main() {
       expect(client.getSentMessagesOfType<RelayPushMessage>(), hasLength(1));
     });
 
+    group('welcome reconciliation', () {
+      /// A document holding [text], as a restart would restore one: every
+      /// change reaches it through `importChanges`, so it is imported, never
+      /// local, and `localChanges` never carries it.
+      void restoreIntoDocument(String text) {
+        final peer = CRDTDocument(peerId: PeerId.generate());
+        CRDTFugueTextHandler(peer, 'content').insert(0, text);
+        document.importChanges(peer.exportChanges());
+      }
+
+      test('pushes what the document holds and the welcome did not carry',
+          () async {
+        // Written offline in a previous session, read back from storage.
+        restoreIntoDocument('offline');
+        await pump();
+        expect(
+          manager.pendingChangesCount,
+          0,
+          reason: 'an imported change never reaches localChanges',
+        );
+
+        await manager.onWelcome(welcome());
+
+        final push = client.getSentMessagesOfType<RelayPushMessage>().single;
+        expect(push.changes, hasLength(document.exportChanges().length));
+      });
+
+      test('does not push back what the welcome already carried', () async {
+        final remote = blobsOfText('theirs');
+
+        await manager.onWelcome(
+          welcome(changes: remote, seq: remote.length),
+        );
+
+        expect(client.getSentMessagesOfType<RelayPushMessage>(), isEmpty);
+        expect(manager.pendingChangesCount, 0);
+      });
+
+      test('does not push what the welcome snapshot already covers', () async {
+        final peer = CRDTDocument(peerId: PeerId.generate());
+        CRDTFugueTextHandler(peer, 'content').insert(0, 'theirs');
+        final snapshot = peer.takeSnapshot(pruneHistory: false);
+        // The document holds the changes; the relay holds only the snapshot.
+        document.importChanges(peer.exportChanges());
+        await pump();
+
+        await manager.onWelcome(
+          welcome(snapshot: base64Encode(snapshot.toBytes()), seq: 1),
+        );
+
+        expect(client.getSentMessagesOfType<RelayPushMessage>(), isEmpty);
+      });
+
+      test('queues an unacked change once, not twice', () async {
+        handler.insert(0, 'a');
+        await pump();
+        expect(manager.pendingChangesCount, 1);
+
+        // The welcome does not carry it, so reconciliation finds it too.
+        await manager.onWelcome(welcome());
+
+        final push = client.getSentMessagesOfType<RelayPushMessage>().single;
+        expect(push.changes, hasLength(1));
+      });
+    });
+
     test('requestState sends a state request', () async {
       await manager.requestState();
       expect(

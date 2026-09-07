@@ -1,4 +1,4 @@
-## [Unreleased](https://github.com/MattiaPispisa/crdt/tree/crdt_lf-v4.2.0/packages/crdt_lf)
+## [Unreleased](https://github.com/MattiaPispisa/crdt/tree/crdt_lf-v4.2.0/packages/core/crdt_lf)
 
 **Date:** --
 
@@ -12,16 +12,26 @@
   `garbageCollect`, and `takeSnapshot` unless you pass `pruneHistory: false`. Use `pruneHistory: false` to
   checkpoint a document and keep its undo history.
 
+- **`CRDTDocument.events`**, a stream of the moves of a document's durable state:
+  `DocumentChangesApplied`, `DocumentSnapshotUpdated` and `DocumentHistoryPruned`. It is what a
+  persistence layer follows. Every event carries the `origin` of the call behind it, so a consumer
+  can skip what it did itself; `takeSnapshot`, `importSnapshot`, `mergeSnapshot`, `import` and
+  `garbageCollect` now take one.
+
 ### Changed
 
 - A disposed document now refuses `garbageCollect` and `reconstruct`
   with a `DocumentDisposedException`, like every other method that writes to it.
 
+- **`localChanges` no longer carries changes that came in through `applyChange`.** It is now a view
+  over `events` and reports only what the document itself wrote, published once the commit is over
+  rather than in the middle of it.
+
 ### Fixed
 
 - Disposing a `HistorySession` now ends the delta streams of the handlers it handed out, so a `watch()` subscriber is told the stream is over instead of waiting on one that can never fire again.
 
-## [4.1.0+1](https://github.com/MattiaPispisa/crdt/tree/crdt_lf-v4.1.0+1/packages/crdt_lf)
+## [4.1.0+1](https://github.com/MattiaPispisa/crdt/tree/crdt_lf-v4.1.0+1/packages/core/crdt_lf)
 
 **Date:** 2026-08-29
 
@@ -31,7 +41,7 @@
 
 - chore: fixed changelog
 
-## [4.1.0](https://github.com/MattiaPispisa/crdt/tree/crdt_lf-v4.1.0/packages/crdt_lf)
+## [4.1.0](https://github.com/MattiaPispisa/crdt/tree/crdt_lf-v4.1.0/packages/core/crdt_lf)
 
 **Date:** 2026-08-29
 
@@ -55,7 +65,7 @@
   that writes drops its own echo, and how a sync manager marks what arrived from the network. It
   never travels, so it costs nothing on the wire. A `HandlerReset` carries none.
 
-## [4.0.0](https://github.com/MattiaPispisa/crdt/tree/crdt_lf-v4.0.0/packages/crdt_lf)
+## [4.0.0](https://github.com/MattiaPispisa/crdt/tree/crdt_lf-v4.0.0/packages/core/crdt_lf)
 
 **Date:** 2026-08-18
 

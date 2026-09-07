@@ -1,0 +1,18 @@
+name: crdt_lf_persistence
+description: The storage contract behind the crdt_lf persistence adapters, and the consumer that keeps a document on disk as it changes.
+homepage: https://mattiapispisa.github.io/
+repository: https://github.com/MattiaPispisa/crdt/tree/main/packages/core/crdt_lf_persistence
+topics: [crdt, local-first, persistence, offline-first, dart]
+
+version: 0.1.0
+
+environment:
+  sdk: ">=3.0.0 <4.0.0"
+
+dependencies:
+  crdt_lf: ^4.2.0
+
+dev_dependencies:
+  persistence_conformance:
+    path: ../../_internal/persistence_conformance
+  test: ^1.24.0

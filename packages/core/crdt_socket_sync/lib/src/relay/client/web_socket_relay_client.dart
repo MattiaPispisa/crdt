@@ -4,7 +4,8 @@ import 'dart:math';
 import 'package:crdt_lf/crdt_lf.dart';
 import 'package:crdt_socket_sync/src/common/client/handshake_gate.dart';
 import 'package:crdt_socket_sync/src/common/client/status.dart';
-import 'package:crdt_socket_sync/src/common/client/web_socket/channel_connector.dart';
+import 'package:crdt_socket_sync/src/common/client/web_socket/'
+    'channel_connector.dart';
 import 'package:crdt_socket_sync/src/common/common/common.dart';
 import 'package:crdt_socket_sync/src/common/common/utils.dart';
 import 'package:crdt_socket_sync/src/plugins/client/client.dart';
@@ -692,6 +693,8 @@ class WebSocketRelayClient extends RelaySocketClient {
 
     _messageController.close();
     _connectionStatusController.close();
-    _syncManager.dispose();
+    // Not awaited: `dispose` is synchronous, and the flag inside is set before
+    // the first await, so nothing more reaches this client either way.
+    unawaited(_syncManager.dispose());
   }
 }

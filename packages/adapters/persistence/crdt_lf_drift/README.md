@@ -15,14 +15,17 @@
   - [Quick Start](#quick-start)
     - [1. Open a database](#1-open-a-database)
     - [2. Document-scoped storage](#2-document-scoped-storage)
+  - [Many documents in one place](#many-documents-in-one-place)
+  - [Keeping a whole document on disk](#keeping-a-whole-document-on-disk)
   - [Document-Scoped Storage](#document-scoped-storage)
     - [CRDTDriftChangeStorage](#crdtdriftchangestorage)
     - [CRDTDriftSnapshotStorage](#crdtdriftsnapshotstorage)
+    - [CRDTDriftPeerIdStorage](#crdtdriftpeeridstorage)
   - [How Data Is Stored](#how-data-is-stored)
   - [Examples](#examples)
   - [Storage Management](#storage-management)
-  - [Important Notes](#important-notes)
   - [Roadmap](#roadmap)
+  - [Apps](#apps)
   - [Packages](#packages)
 
 A [drift](https://pub.dev/packages/drift) storage implementation for [CRDT LF](https://pub.dev/packages/crdt_lf) objects, providing efficient persistence for `Change` and `Snapshot` objects with document-scoped organization in a single drift database.
@@ -30,7 +33,7 @@ A [drift](https://pub.dev/packages/drift) storage implementation for [CRDT LF](h
 ## Features
 
 - **Compact Binary Storage**: `Change` and `Snapshot` are persisted as the self-describing binary blobs produced by `crdt_lf`'s native `toBytes()` / `fromBytes()` methods
-- **Single Database, Many Documents**: one database holds `changes` and `snapshots` tables; 
+- **Single Database, Many Documents**: one database holds the `changes`, `snapshots` and `peers` tables
 - **Document-Scoped Storage**: utilities that organize data by document ID for better isolation and querying
 
 ## Quick Start
@@ -75,9 +78,57 @@ final snapshotStorage = storage.snapshotStorageForDocument(documentId);
 final documentStorage = storage.storageForDocument(documentId);
 ```
 
+## Many documents in one place
+
+`CRDTDrift` is a `CRDTStorageBackend`: it lists the documents it holds, hands out
+the storages of each one, and deletes one whole. Code written against that
+interface runs on any adapter, so an app can change backend without changing
+anything but the line that opens it.
+
+```dart
+final backend = CRDTDrift.open(File('app.db'));
+
+for (final documentId in await backend.documentIds) {
+  final note = await backend.readDocument(documentId);
+  // ...show it in a list
+}
+
+await backend.deleteDocument('doc-123'); // changes, snapshots and identity
+await backend.close();
+```
+
+## Keeping a whole document on disk
+
+Most apps do not call these methods by hand. `openDocument` reads the document
+back — its stored identity included — and follows it from there:
+
+```dart
+final note = await backend.openDocument(documentId);
+final text = CRDTFugueTextHandler(note.document, 'body');
+```
+
+Everything written from there on is stored. The backend has the read-only half
+too: `readDocument(id)` for a preview or a list, `documentAt(id, version)` for
+the document as it was, `copyDocumentTo(other, id)` for a backup or a move to
+another adapter.
+
+It comes from [`crdt_lf_persistence`](https://pub.dev/packages/crdt_lf_persistence),
+which this package re-exports. See that README for the offline-first rules.
+
+`storageForDocument` hands back a `CRDTDriftDocumentStorage`, which backs
+`transaction()` with `database.transaction(...)`: a prune drops the covered
+changes and rewrites the survivors, and either all of it lands or none of it
+does.
+
+`close()` on it does nothing on purpose. One database file holds every
+document, so the connection is `CRDTDrift.close()`'s to release.
+
 ## Document-Scoped Storage
 
 Data for different documents lives in the same tables and is isolated through the `document_id` column.
+
+drift is asynchronous end to end, so every method here returns a `Future`, and
+`CRDTDocumentPersistence.openSync` does not work on it. Use `open`.
 
 ### CRDTDriftChangeStorage
 
@@ -95,13 +146,16 @@ await changeStorage.saveChanges([change1, change2, change3]);
 // Load all changes for the document
 final changes = await changeStorage.getChanges();
 
+// Or only part of the log, by version vector
+final missing = await changeStorage.getChanges(newerThan: theirVersion);
+final past = await changeStorage.getChanges(upTo: oldVersion);
+
 // Delete changes
 await changeStorage.deleteChange(change);
 await changeStorage.deleteChanges([change1, change2]);
 
 // Storage info
 print('Total changes: ${await changeStorage.count}');
-print('Is empty: ${await changeStorage.isEmpty}');
 ```
 
 ### CRDTDriftSnapshotStorage
@@ -125,13 +179,45 @@ if (await snapshotStorage.containsSnapshot('snapshot-id')) {
 }
 ```
 
+
+### CRDTDriftPeerIdStorage
+
+Keeps the `PeerId` the document writes under, in the `peers` table. Without it
+`CRDTDocument` mints a new author on every restart, and the version vector
+grows by one peer per session.
+
+Read it **before** building the document — the id has to exist first:
+
+```dart
+final peers = storage.peerIdStorageForDocument('doc-123');
+
+final document = CRDTDocument(
+  documentId: 'doc-123',
+  peerId: await peers.loadOrCreate(),
+);
+```
+
+The `peers` table arrived with schema version 2. A database written by
+version 1 gains it on the next open, and its changes and snapshots stay as
+they are.
+
 ## How Data Is Stored
 
 Both `Change` and `Snapshot` are stored as opaque binary blobs using the
 self-describing format provided by `crdt_lf` (`toBytes()` / `fromBytes()`). The
-schema is two tables, `changes` and `snapshots`, each with a `document_id`
-column, an id column (`change_id` / `snapshot_id`) and a `bytes` blob column.
-Changes are keyed by `change.id`, snapshots by `snapshot.id`.
+schema is three tables:
+
+- `changes`, keyed by `(document_id, author, hlc_l, hlc_c)`, with the change
+  itself in a `bytes` blob column.
+- `snapshots`, keyed by `(document_id, snapshot_id)`, same blob column.
+- `peers`, one row per document: the `PeerId` this device writes it under.
+
+A change is named by its author and its clock, not by one text id. An
+`OperationId` **is** a peer and a clock, and kept apart SQL can compare it,
+which is what a version vector asks. The primary key is then already the index
+that comparison wants. The clock takes two columns because `l` is 48 bits and
+`c` is 16: together they stay inside the 53 bits an integer keeps exactly in
+JavaScript.
 
 ## Examples
 
@@ -141,7 +227,7 @@ A complete example is available [here](https://github.com/MattiaPispisa/crdt/blo
 
 ```dart
 // Delete all data for a specific document
-await storage.deleteDocumentData('doc-123');
+await backend.deleteDocument('doc-123');
 
 // Close the database and release resources
 await storage.close();
@@ -162,6 +248,7 @@ Other bricks of the crdt "system" are:
 - [crdt_socket_sync](https://pub.dev/packages/crdt_socket_sync)
 - [crdt_lf_flutter](https://pub.dev/packages/crdt_lf_flutter)
 - [hlc_dart](https://pub.dev/packages/hlc_dart)
+- [crdt_lf_persistence](https://pub.dev/packages/crdt_lf_persistence)
 - [crdt_lf_hive](https://pub.dev/packages/crdt_lf_hive)
 - [crdt_lf_sqlite](https://pub.dev/packages/crdt_lf_sqlite)
 

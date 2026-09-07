@@ -1,61 +1,77 @@
 import 'package:crdt_lf/crdt_lf.dart';
+import 'package:crdt_lf_hive/crdt_lf_hive.dart';
 import 'package:hive/hive.dart';
 
-/// Storage utility for managing [Change] objects in Hive.
+/// Stores [Change] objects in a Hive [box].
 ///
-/// This class provides high-level methods for storing, retrieving, and
-/// managing [Change] objects in a Hive box.
-class CRDTChangeStorage {
-  /// Creates a new [CRDTChangeStorage] instance.
+/// The box holds one document: [CRDTHive.openChangeStorageForDocument] names
+/// it after the document id, so nothing filters by document here. One entry
+/// per change, keyed by `change.id.toString()`.
+///
+/// A Hive box keeps its entries in memory, so every read here answers without
+/// suspending and says so in its return type. Writes go through the box
+/// journal and stay asynchronous.
+class CRDTHiveChangeStorage implements CRDTChangeStorage {
+  /// Creates a new [CRDTHiveChangeStorage] instance.
   ///
   /// [box] is the Hive box that will be used to store [Change] objects.
   ///
   /// [documentId] is the unique identifier
   /// for the document these changes belong to.
-  CRDTChangeStorage(this.box, this.documentId);
+  ///
+  /// [onWrite] runs before every write that adds something.
+  ///
+  /// It is how [CRDTHiveBackend] learns a document exists: Hive cannot list
+  /// its boxes, so the backend keeps a registry, and a document belongs on it
+  /// once something about it has been stored — not merely because it was
+  /// opened to be read.
+  CRDTHiveChangeStorage(this.box, this.documentId, {this.onWrite});
 
   /// The Hive box used for storing [Change] objects.
   final Box<Change> box;
 
-  /// The unique identifier for the document these changes belong to.
+  /// Called before a write that adds something. See the constructor.
+  final Future<void> Function()? onWrite;
+
+  @override
   final String documentId;
 
-  /// Generates a key for storing changes.
   String _getChangeKey(Change change) => change.id.toString();
 
-  /// Saves a [Change] to the storage.
-  ///
-  /// The change is stored using a composite key (documentId_changeId).
-  /// Returns the change ID that was used to store the change.
-  Future<void> saveChange(Change change) {
-    final key = _getChangeKey(change);
-    return box.put(key, change).then((_) => null);
+  @override
+  Future<void> saveChange(Change change) async {
+    await onWrite?.call();
+    await box.put(_getChangeKey(change), change);
   }
 
-  /// Saves multiple [Change] objects to the storage.
-  ///
-  /// This method is more efficient than calling [saveChange] multiple times
-  /// as it performs batch operations.
-  /// Returns a list of change IDs that were used to store the changes.
-  Future<void> saveChanges(List<Change> changes) {
-    final entries = <String, Change>{};
-    for (final change in changes) {
-      final key = _getChangeKey(change);
-      entries[key] = change;
+  @override
+  Future<void> saveChanges(List<Change> changes) async {
+    if (changes.isEmpty) {
+      return;
     }
-    return box.putAll(entries).then((_) => null);
+    await onWrite?.call();
+    await box.putAll(<String, Change>{
+      for (final change in changes) _getChangeKey(change): change,
+    });
   }
 
-  /// Retrieves all [Change] objects from the storage for this document.
+  /// The stored changes of this document, in no particular order.
   ///
-  /// Returns a list of all stored changes for this document.
-  List<Change> getChanges() {
-    return box.values.toList();
+  /// It reads the whole box and filters in memory, so a bound costs the same
+  /// as no bound. The SQL adapters filter in the database instead.
+  @override
+  List<Change> getChanges({
+    VersionVector? newerThan,
+    VersionVector? upTo,
+  }) {
+    return filterByVersion(
+      box.values.toList(),
+      newerThan: newerThan,
+      upTo: upTo,
+    );
   }
 
-  /// Deletes a [Change] by its ID.
-  ///
-  /// Returns true if the change was found and deleted, false otherwise.
+  @override
   Future<bool> deleteChange(Change change) async {
     final key = _getChangeKey(change);
     if (box.containsKey(key)) {
@@ -65,29 +81,21 @@ class CRDTChangeStorage {
     return false;
   }
 
-  /// Deletes multiple [Change] objects by their IDs.
-  ///
-  /// Returns the number of changes that were actually deleted.
+  @override
   Future<int> deleteChanges(List<Change> changes) async {
+    // A set, so a change named twice in one batch is counted once: the
+    // answer is how many were there, not how many were asked for.
     final existingKeys =
-        changes.map(_getChangeKey).where(box.containsKey).toList();
+        changes.map(_getChangeKey).where(box.containsKey).toSet();
     await box.deleteAll(existingKeys);
     return existingKeys.length;
   }
 
-  /// Clears all [Change] objects for this document from the storage.
-  ///
-  /// This operation cannot be undone.
+  @override
   Future<void> clear() async {
     await box.clear();
   }
 
-  /// Returns the number of [Change] objects for this document in the storage.
+  @override
   int get count => box.length;
-
-  /// Returns true if the storage is empty for this document.
-  bool get isEmpty => box.isEmpty;
-
-  /// Returns true if the storage is not empty for this document.
-  bool get isNotEmpty => box.isNotEmpty;
 }

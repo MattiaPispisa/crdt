@@ -1,13 +1,15 @@
 import 'package:crdt_lf/crdt_lf.dart';
 import 'package:crdt_lf_drift/src/database.dart';
+import 'package:crdt_lf_persistence/crdt_lf_persistence.dart';
 import 'package:drift/drift.dart';
 
 /// Storage utility for managing [Change] objects in a drift database.
 ///
-/// This class provides high-level methods for storing, retrieving, and
-/// managing [Change] objects. All rows are scoped to a single document via
-/// the [documentId] column, so several documents can share the same database.
-class CRDTDriftChangeStorage {
+/// One row per change, keyed by `(document_id, author, hlc_l, hlc_c)`, with
+/// the change itself as an opaque `Change.toBytes()` blob. Every row is
+/// scoped to a single document through its `document_id`, so several
+/// documents can share the same database.
+class CRDTDriftChangeStorage implements CRDTChangeStorage {
   /// Creates a new [CRDTDriftChangeStorage] instance.
   ///
   /// [database] is the drift database used to store [Change] objects.
@@ -19,30 +21,59 @@ class CRDTDriftChangeStorage {
   /// The drift database used for storing [Change] objects.
   final CRDTDriftDatabase database;
 
-  /// The unique identifier for the document these changes belong to.
+  @override
   final String documentId;
 
   ChangesCompanion _companion(Change change) {
     return ChangesCompanion.insert(
       documentId: documentId,
-      changeId: change.id.toString(),
+      author: change.author.toString(),
+      hlcL: change.hlc.l,
+      hlcC: change.hlc.c,
       bytes: change.toBytes(),
     );
   }
 
-  /// Saves a [Change] to the storage.
+  /// Matches the single row of [change] in this document.
+  Expression<bool> _rowOf(Change change, $ChangesTable row) {
+    return row.documentId.equals(documentId) &
+        row.author.equals(change.author.toString()) &
+        row.hlcL.equals(change.hlc.l) &
+        row.hlcC.equals(change.hlc.c);
+  }
+
+  /// The rows [vector] has already seen.
   ///
-  /// If a change with the same id already exists it is overwritten.
+  /// A change is seen when the vector holds an entry for its author and that
+  /// entry is at least as new as the change — the same test
+  /// [VersionVector.hasSeen] makes, written in SQL. A vector that names no
+  /// peer has seen nothing, so it answers false rather than nothing at all.
+  ///
+  /// Four variables per peer, and no document has a vector long enough for
+  /// that to reach the limit SQLite puts on them.
+  Expression<bool> _seenBy(VersionVector vector, $ChangesTable row) {
+    Expression<bool>? seen;
+
+    for (final entry in vector.entries) {
+      final clock = entry.value;
+      final term = row.author.equals(entry.key.toString()) &
+          (row.hlcL.isSmallerThanValue(clock.l) |
+              (row.hlcL.equals(clock.l) &
+                  row.hlcC.isSmallerOrEqualValue(clock.c)));
+      seen = seen == null ? term : seen | term;
+    }
+
+    return seen ?? const Constant(false);
+  }
+
+  @override
   Future<void> saveChange(Change change) {
     return database
         .into(database.changes)
         .insertOnConflictUpdate(_companion(change));
   }
 
-  /// Saves multiple [Change] objects to the storage.
-  ///
-  /// This method is more efficient than calling [saveChange] multiple times
-  /// as it performs a single batch.
+  @override
   Future<void> saveChanges(List<Change> changes) async {
     if (changes.isEmpty) {
       return;
@@ -55,65 +86,83 @@ class CRDTDriftChangeStorage {
     });
   }
 
-  /// Retrieves all [Change] objects from the storage for this document.
-  Future<List<Change>> getChanges() async {
+  @override
+  Future<List<Change>> getChanges({
+    VersionVector? newerThan,
+    VersionVector? upTo,
+  }) async {
+    // The bounds go to the database, not to `filterByVersion`: the rows that
+    // fall outside are never read and never decoded. That is the whole cost
+    // of asking a long history what is new.
     final query = database.select(database.changes)
-      ..where((row) => row.documentId.equals(documentId));
+      ..where((row) {
+        var filter = row.documentId.equals(documentId);
+        if (newerThan != null) {
+          filter = filter & _seenBy(newerThan, row).not();
+        }
+        if (upTo != null) {
+          filter = filter & _seenBy(upTo, row);
+        }
+        return filter;
+      });
+
     final rows = await query.get();
     return rows.map((row) => Change.fromBytes(row.bytes)).toList();
   }
 
-  /// Deletes a [Change].
-  ///
-  /// Returns true if the change was found and deleted, false otherwise.
+  @override
   Future<bool> deleteChange(Change change) async {
     final deleted = await (database.delete(database.changes)
-          ..where(
-            (row) =>
-                row.documentId.equals(documentId) &
-                row.changeId.equals(change.id.toString()),
-          ))
+          ..where((row) => _rowOf(change, row)))
         .go();
     return deleted > 0;
   }
 
-  /// Deletes multiple [Change] objects.
+  /// Deletes [changes] in one batch.
   ///
-  /// Returns the number of changes that were actually deleted.
-  Future<int> deleteChanges(List<Change> changes) async {
+  /// A change that is not stored is not counted, and a change named twice
+  /// counts once: the answer is how many rows went, not how many were asked
+  /// for.
+  @override
+  Future<int> deleteChanges(List<Change> changes) {
     if (changes.isEmpty) {
-      return 0;
+      return Future<int>.value(0);
     }
-    final ids = changes.map((change) => change.id.toString()).toList();
-    return (database.delete(database.changes)
-          ..where(
-            (row) => row.documentId.equals(documentId) & row.changeId.isIn(ids),
-          ))
-        .go();
+
+    // One statement per change, not one `IN (?, ?, ...)` over all of them: a
+    // prune hands over everything it removed at once, and SQLite refuses a
+    // statement that binds more variables than it allows. Every delete here is
+    // a hit on the primary key, and they all run inside one transaction.
+    //
+    // Each one is awaited for its own row count rather than batched. A batch
+    // reports nothing per statement, so the count would have to come from the
+    // difference between two `COUNT(*)`s — and anything writing to this
+    // document between them would make the answer wrong, or negative.
+    return database.transaction(() async {
+      var deleted = 0;
+      for (final change in changes) {
+        deleted += await (database.delete(database.changes)
+              ..where((row) => _rowOf(change, row)))
+            .go();
+      }
+      return deleted;
+    });
   }
 
-  /// Clears all [Change] objects for this document from the storage.
-  ///
-  /// This operation cannot be undone.
+  @override
   Future<void> clear() async {
     await (database.delete(database.changes)
           ..where((row) => row.documentId.equals(documentId)))
         .go();
   }
 
-  /// Returns the number of [Change] objects for this document in the storage.
+  @override
   Future<int> get count async {
-    final countExp = database.changes.changeId.count();
+    final countExp = database.changes.author.count();
     final query = database.selectOnly(database.changes)
       ..addColumns([countExp])
       ..where(database.changes.documentId.equals(documentId));
     final row = await query.getSingle();
     return row.read(countExp) ?? 0;
   }
-
-  /// Returns true if the storage is empty for this document.
-  Future<bool> get isEmpty async => (await count) == 0;
-
-  /// Returns true if the storage is not empty for this document.
-  Future<bool> get isNotEmpty async => (await count) > 0;
 }

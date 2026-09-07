@@ -20,7 +20,7 @@ abstract class RelaySocketClient extends CRDTSocketClient {
   /// Constructor
   RelaySocketClient({super.plugins});
 
-  /// Number of local change blobs not yet acknowledged by the relay.
+  /// Number of local changes not yet acknowledged by the relay.
   int get pendingChangesCount;
 
   /// The last relay log sequence number this client knows to have fully

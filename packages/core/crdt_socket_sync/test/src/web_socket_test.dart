@@ -6,7 +6,6 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:crdt_lf/crdt_lf.dart';
-import 'package:crdt_socket_sync/src/server_client/server/in_memory_server_registry.dart';
 import 'package:crdt_socket_sync/web_socket_client.dart';
 import 'package:crdt_socket_sync/web_socket_server.dart';
 import 'package:test/test.dart';
@@ -494,11 +493,13 @@ void main() {
             .where((m) => m.type == MessageType.change)
             .toList();
         expect(
-          client2Changes.length,
-          1,
-          reason: 'broadcasted change to client2',
+          client2Changes,
+          isEmpty,
+          reason: 'client2 only received the change; sending it back would '
+              'cost a round-trip the server discards as already applied',
         );
 
+        // The change still reached client2: that is what the broadcast is for.
         expectSameList();
         expectSameChanges(1);
       });

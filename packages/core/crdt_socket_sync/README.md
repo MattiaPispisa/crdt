@@ -25,6 +25,9 @@
       - [Out-of-sync Recovery](#out-of-sync-recovery)
     - [Server Registry](#server-registry)
       - [Persisting changes \& snapshots](#persisting-changes--snapshots)
+        - [Getting a document back out of memory](#getting-a-document-back-out-of-memory)
+        - [The list of documents](#the-list-of-documents)
+        - [Broadcasting a compaction](#broadcasting-a-compaction)
     - [Server Events](#server-events)
     - [Imports](#imports)
   - [Relay Mode](#relay-mode)
@@ -45,8 +48,6 @@
     - [Wire format \& type codes](#wire-format--type-codes)
   - [Examples](#examples)
   - [Apps](#apps)
-  - [Roadmap](#roadmap)
-  - [Contributing](#contributing)
   - [Packages](#packages)
 
 A comprehensive Dart package for synchronizing Conflict-free Replicated Data Types (CRDTs) between multiple clients and a server.
@@ -272,9 +273,11 @@ sequenceDiagram
 
 ### Server Registry
 
-The server stores documents through a `CRDTServerRegistry`. The bundled
-`InMemoryCRDTServerRegistry` keeps everything in memory (documents are lost on
-restart); implement the interface to plug in your own persistence backend.
+The server stores documents through a `CRDTServerRegistry`. Two come with the
+package: `InMemoryCRDTServerRegistry`, which keeps everything in memory, and
+[`PersistentServerRegistry`](#persisting-changes--snapshots), which keeps every
+document on disk through any `crdt_lf` storage adapter. Implement the interface
+yourself only if neither fits.
 
 The interface is fully asynchronous:
 
@@ -312,20 +315,148 @@ class CustomServerRegistry implements CRDTServerRegistry {
 
 #### Persisting changes & snapshots
 
-`InMemoryCRDTServerRegistry` is not durable — documents are lost on restart. To
-persist a registry, back it with one of the `crdt_lf` storage adapters. Each
-exposes a `CRDTDocumentStorage` with `changes` and `snapshots` stores you
-read/write from inside your `CRDTServerRegistry` (`saveChanges`, `getChanges`,
-`saveSnapshot`, `getSnapshots`, …):
+`InMemoryCRDTServerRegistry` is not durable — documents are lost on restart.
+You do not have to write the durable one yourself: **`PersistentServerRegistry`**
+is a `CRDTServerRegistry` that keeps every document it serves on disk, on any
+adapter.
+
+```dart
+final registry = PersistentServerRegistry(
+  backend: await CRDTHive.open(),
+  // Snapshot a document once its log passes this many changes.
+  compactAfter: 500,
+);
+```
+
+That is the whole setup. `backend` is a
+[`CRDTStorageBackend`](https://pub.dev/packages/crdt_lf_persistence) — an
+adapter's `CRDTHive.open()`, `CRDTDrift.open()` or `CRDTSqlite.open()` — and it is where the
+documents, their snapshots and the identity the server writes them under all
+live.
+
+It holds the live documents and routes to them, the way any registry does. It
+never reads or writes storage by hand. Each document gets a
+[`CRDTDocumentPersistence`](https://pub.dev/packages/crdt_lf_persistence), which
+follows `CRDTDocument.events` and writes down what each event reports. So:
+
+- a change applied through `applyChange` is **batched** with the ones around it
+  instead of costing one write each,
+- a snapshot replaces the one before it, and the prune that follows drops
+  exactly the changes it covered — both inside one transaction where the
+  backend has one,
+- documents open **lazily**, so a document costs nothing until something asks
+  for it.
+
+`writeDelay` is how long a change waits for the ones after it. It leaves a
+window where a change is acknowledged but not yet on disk, and that is safe: a
+client reconciles at the next handshake and re-sends whatever the server no
+longer has. Pass `Duration.zero` to make the window as small as it gets.
+
+That window is also why a shutdown has to close the registry: what is still
+waiting has to be written before the process ends. `WebSocketServer.dispose`
+does it for you. Closing the registry by hand is only for a server that owns
+one without a `WebSocketServer` around it:
+
+```dart
+await registry.close();
+```
+
+The registry refuses to open anything after that.
+
+##### Getting a document back out of memory
+
+Opening lazily is one half. A document stays in memory once it has been asked
+for, so a server that never lets go holds every room it has ever served.
+
+```dart
+// When the last client of a room disconnects.
+await registry.releaseDocument(roomId);
+```
+
+`releaseDocument` writes what the document is holding, closes it, and leaves the
+id in the catalog: the room is still served, it is just not in memory, and the
+next `getDocument` reads it back from the storage. That is what separates it
+from `removeDocument`, which drops the room from the catalog — and with the
+default catalog, deletes it.
+
+`idleAfter` does the same on a timer, for a server with no natural place to
+call `releaseDocument`:
+
+```dart
+final registry = PersistentServerRegistry(
+  backend: await CRDTHive.open(),
+  idleAfter: const Duration(minutes: 10),
+);
+```
+
+One rule either way: **the document must not be in use.** Releasing disposes it,
+and a caller still holding what an earlier `getDocument` handed back would be
+writing into a disposed document. Every session in this package re-reads through
+`getDocument`, so releasing between two requests is safe — which is why
+`idleAfter` should be far longer than a request takes.
+
+Pick your backend — the registry only ever sees the `CRDTStorageBackend`
+interface:
 
 - [crdt_lf_hive](https://pub.dev/packages/crdt_lf_hive) — Hive-backed storage
 - [crdt_lf_drift](https://pub.dev/packages/crdt_lf_drift) — Drift (SQL) storage
 - [crdt_lf_sqlite](https://pub.dev/packages/crdt_lf_sqlite) — `sqlite3` storage
 
-For a complete server-side implementation, see the example
-[`HiveServerRegistry`](https://github.com/MattiaPispisa/crdt/blob/main/packages/core/crdt_socket_sync/example/lib/src/registry.dart):
-it lazy-loads documents from Hive on first access, appends each change to
-storage, and periodically snapshots to compact the change history.
+##### The list of documents
+
+`documentIds`, `hasDocument` and `documentCount` come from a
+`ServerDocumentCatalog`. You do not have to write one: the default is
+`BackendDocumentCatalog`, which asks the backend, because a `CRDTStorageBackend`
+already lists the documents it holds. The server keeps no second list that can
+drift from the first, and it finds its documents again after a restart with
+nothing to configure.
+
+One consequence to know: with that catalog, `removeDocument` **deletes** the
+document — its changes, its snapshots and its identity. Forgetting a document
+without deleting it is not something the backend can express, and
+`releaseDocument` is what you want to get one out of memory.
+
+Pass `InMemoryServerDocumentCatalog` for a server that should start empty every
+time and fill up as clients name their documents, or write your own three
+methods over whatever list you already keep:
+
+```dart
+abstract interface class ServerDocumentCatalog {
+  Future<Set<String>> get documentIds;
+  Future<void> add(String documentId);
+  Future<void> remove(String documentId);
+}
+```
+
+##### Broadcasting a compaction
+
+A snapshot comes with a prune, so the history it covers leaves the server. A
+client still replaying that history has to be given the snapshot instead. The
+`snapshots` stream reports each one as it is taken:
+
+```dart
+registry.snapshots.listen((event) async {
+  final document = (await registry.getDocument(event.documentId))!;
+  await server.broadcastMessage(
+    SyncMessage.documentStatus(
+      documentId: event.documentId,
+      snapshot: event.snapshot,
+      changes: document.exportChanges(),
+      versionVector: document.getVersionVector(),
+    ),
+  );
+});
+```
+
+The example server puts all of this together:
+[`registry.dart`](https://github.com/MattiaPispisa/crdt/blob/main/packages/core/crdt_socket_sync/example/lib/src/registry.dart).
+
+> The **relay** mode does not use any of this. A `RelayStore` keeps opaque
+> blobs the relay never decodes, keyed by a per-room sequence number, so it is
+> deliberately not built on `crdt_lf_persistence` — a relay does not have to be
+> written in Dart, let alone know what a CRDT is. On the relay **client** side
+> persistence is the app's own document: open it before `connect()`, and the
+> welcome reconciliation pushes whatever the relay is missing.
 
 ### Server Events
 
@@ -478,6 +609,35 @@ sequenceDiagram
 ```
 
 > 📖 Diagrams render best in the [live documentation](https://mattiapispisa.it/crdt/docs/documentation/packages/crdt_socket_sync).
+
+#### Surviving a restart
+
+A welcome carries the whole room: the snapshot, plus the log after it. So the
+client knows exactly what the relay holds, and pushes whatever the document
+holds beyond that — whoever wrote it.
+
+That is all an offline-first client needs. Persist the document with
+[`crdt_lf_persistence`](https://pub.dev/packages/crdt_lf_persistence), and open
+the persistence **before** you connect:
+
+```dart
+final document = CRDTDocument(documentId: roomId);
+final persistence = await CRDTDocumentPersistence.open(document, storage);
+
+// Only now: the restored document is what the welcome is reconciled against.
+await client.connect();
+```
+
+The text written on a plane is read back on the next launch, and reaches
+everyone else at the next welcome. There is no outbox for your app to keep.
+
+Two things follow from the same rule. A change of another peer that the relay
+lost is pushed again by whoever still holds it, so a room heals itself. And a
+version vector cannot describe a hole in the middle of one peer's sequence,
+only how far that peer got — the same limit the server-client mode has.
+
+Re-delivering a change the relay already had is harmless: the relay appends it
+and every peer discards it as known.
 
 ### Log Compaction
 
@@ -844,6 +1004,7 @@ Other bricks of the crdt "system" are:
 - [crdt_lf](https://pub.dev/packages/crdt_lf)
 - [crdt_lf_flutter](https://pub.dev/packages/crdt_lf_flutter)
 - [hlc_dart](https://pub.dev/packages/hlc_dart)
+- [crdt_lf_persistence](https://pub.dev/packages/crdt_lf_persistence)
 - [crdt_lf_hive](https://pub.dev/packages/crdt_lf_hive)
 - [crdt_lf_drift](https://pub.dev/packages/crdt_lf_drift)
 - [crdt_lf_sqlite](https://pub.dev/packages/crdt_lf_sqlite)

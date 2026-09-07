@@ -47,6 +47,9 @@ class RelaySyncManager {
   /// Whether a welcome was received on the current connection
   bool _handshaken = false;
 
+  /// [dispose] has run, so nothing must reach the client any more.
+  bool _disposed = false;
+
   /// Subscription to the local changes stream
   StreamSubscription<Change>? _localChangesSubscription;
 
@@ -59,28 +62,45 @@ class RelaySyncManager {
 
   /// Enqueues [change] for the relay and flushes.
   void enqueue(Change change) {
-    _queue.add(base64Encode(change.toBytes()));
+    _queue.add(change);
     unawaited(flush());
   }
 
-  /// Imports the room state of a welcome.
+  /// Imports the room state of a welcome, then queues everything the relay
+  /// does not hold.
   ///
   /// The state is merged (`merge: true`) into the document: on a reconnect
   /// the document already holds local state that must not be clobbered.
   /// History is kept (`pruneHistory: false`) so this client can later
   /// upload a snapshot covering it.
   ///
-  /// Unacknowledged local changes survived the reconnect in the queue and
-  /// are re-pushed; peers de-duplicate re-delivered changes.
+  /// A welcome carries the whole room — the snapshot plus the log after it
+  /// — so its version vector is exactly what the relay has. Whatever the
+  /// document holds beyond that is queued and pushed, whoever wrote it. That
+  /// covers three cases with one rule: unacknowledged changes that survived
+  /// the reconnect, changes restored from storage after a restart (which
+  /// reach the document as imported ones, so nothing else would ever push
+  /// them), and changes of another peer the relay lost.
+  ///
+  /// One limit comes with the version vector: it cannot describe a hole in
+  /// the middle of one peer's sequence, only how far that peer got.
+  ///
+  /// Re-delivering a change the relay already had is harmless: the relay
+  /// appends it and every peer discards it as known.
+  ///
+  /// A malformed welcome throws out of here, from `Snapshot.fromBytes` or
+  /// `Change.fromBytes`. The transport is expected to drop the connection.
   Future<void> onWelcome(RelayWelcomeMessage message) async {
+    final snapshot = message.snapshot != null
+        ? Snapshot.fromBytes(base64Decode(message.snapshot!))
+        : null;
+    final changes = [
+      for (final blob in message.changes) Change.fromBytes(base64Decode(blob)),
+    ];
+
     document.import(
-      snapshot: message.snapshot != null
-          ? Snapshot.fromBytes(base64Decode(message.snapshot!))
-          : null,
-      changes: [
-        for (final blob in message.changes)
-          Change.fromBytes(base64Decode(blob)),
-      ],
+      snapshot: snapshot,
+      changes: changes,
       merge: true,
       pruneHistory: false,
     );
@@ -89,10 +109,27 @@ class RelaySyncManager {
     _handshaken = true;
     _queue.resetInFlight();
 
+    _queueUnknownToRelay(snapshot, changes);
+
     await flush();
 
     if (message.compact) {
       await uploadSnapshot(message.seq);
+    }
+  }
+
+  /// Queues every change the document holds that the welcome did not carry.
+  void _queueUnknownToRelay(Snapshot? snapshot, List<Change> changes) {
+    var relayVersion = VersionVector({});
+    if (snapshot != null) {
+      relayVersion = relayVersion.merged(snapshot.versionVector);
+    }
+    for (final change in changes) {
+      relayVersion.update(change.id.peerId, change.id.hlc);
+    }
+
+    for (final change in document.exportChangesNewerThan(relayVersion)) {
+      _queue.add(change);
     }
   }
 
@@ -138,16 +175,18 @@ class RelaySyncManager {
   /// connection and no other push is in flight (acks pair with pushes
   /// one-to-one).
   Future<void> flush() async {
-    if (!_handshaken || _queue.hasInFlight || _queue.isEmpty) {
+    if (_disposed || !_handshaken || _queue.hasInFlight || _queue.isEmpty) {
       return;
     }
 
-    final blobs = _queue.takeInFlight();
+    final changes = _queue.takeInFlight();
     try {
       await client.sendMessage(
         RelayPushMessage(
           documentId: document.documentId,
-          changes: blobs,
+          changes: [
+            for (final change in changes) base64Encode(change.toBytes()),
+          ],
         ),
       );
     } catch (_) {
@@ -192,8 +231,12 @@ class RelaySyncManager {
   }
 
   /// Dispose the resources
-  void dispose() {
-    _localChangesSubscription?.cancel();
+  ///
+  /// Marks the manager as gone before it lets the subscription go, so a
+  /// [flush] already in flight does not write to a client that is closing.
+  Future<void> dispose() async {
+    _disposed = true;
+    await _localChangesSubscription?.cancel();
     _localChangesSubscription = null;
   }
 }

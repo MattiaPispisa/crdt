@@ -14,11 +14,14 @@
   - [Features](#features)
   - [Quick Start](#quick-start)
     - [1. Initialize Hive with CRDT Adapters](#1-initialize-hive-with-crdt-adapters)
-    - [2. Basic Usage with Manual Box Management](#2-basic-usage-with-manual-box-management)
-    - [3. Using Document-Scoped Storage (Recommended)](#3-using-document-scoped-storage-recommended)
+    - [2. Document-scoped storage](#2-document-scoped-storage)
+    - [3. Managing the boxes by hand](#3-managing-the-boxes-by-hand)
+  - [Many documents in one place](#many-documents-in-one-place)
+  - [Keeping a whole document on disk](#keeping-a-whole-document-on-disk)
   - [Document-Scoped Storage](#document-scoped-storage)
-    - [CRDTChangeStorage](#crdtchangestorage)
-    - [CRDTSnapshotStorage](#crdtsnapshotstorage)
+    - [CRDTHiveChangeStorage](#crdthivechangestorage)
+    - [CRDTHiveSnapshotStorage](#crdthivesnapshotstorage)
+    - [CRDTHivePeerIdStorage](#crdthivepeeridstorage)
   - [Snapshot Data Serialization](#snapshot-data-serialization)
   - [Examples](#examples)
     - [Storage example](#storage-example)
@@ -29,6 +32,7 @@
     - [Box Customization](#box-customization)
   - [Important Notes](#important-notes)
   - [Roadmap](#roadmap)
+  - [Apps](#apps)
   - [Packages](#packages)
 
 
@@ -61,23 +65,7 @@ void main() async {
 }
 ```
 
-### 2. Basic Usage with Manual Box Management
-
-```dart
-import 'package:crdt_lf/crdt_lf.dart';
-import 'package:hive/hive.dart';
-
-// Open boxes manually
-final changeBox = await Hive.openBox<Change>('changes');
-final snapshotBox = await Hive.openBox<Snapshot>('snapshots');
-
-// Store and retrieve changes
-final change = /* your change */;
-await changeBox.put(change.id.toString(), change);
-final retrievedChange = changeBox.get(change.id.toString());
-```
-
-### 3. Using Document-Scoped Storage (Recommended)
+### 2. Document-scoped storage
 
 ```dart
 import 'package:crdt_lf/crdt_lf.dart';
@@ -93,11 +81,86 @@ final snapshotStorage = await CRDTHive.openSnapshotStorageForDocument(documentId
 final documentStorage = await CRDTHive.openStorageForDocument(documentId);
 ```
 
+### 3. Managing the boxes by hand
+
+The low-level path, for an app that wants the boxes and not the storages:
+
+```dart
+import 'package:crdt_lf/crdt_lf.dart';
+import 'package:hive/hive.dart';
+
+// Open boxes manually
+final changeBox = await Hive.openBox<Change>('changes');
+final snapshotBox = await Hive.openBox<Snapshot>('snapshots');
+
+// Store and retrieve changes
+final change = /* your change */;
+await changeBox.put(change.id.toString(), change);
+final retrievedChange = changeBox.get(change.id.toString());
+```
+
+## Many documents in one place
+
+`CRDTHive` is a `CRDTStorageBackend`: it lists the documents it holds, hands out
+the storages of each one, and deletes one whole. Code written against that
+interface runs on any adapter, so an app can change backend without changing
+anything but the line that opens it.
+
+```dart
+CRDTHive.initialize();
+final backend = await CRDTHive.open();
+
+for (final documentId in await backend.documentIds) {
+  final note = await backend.readDocument(documentId);
+  // ...show it in a list
+}
+
+await backend.deleteDocument('doc-123'); // changes, snapshots and identity
+await backend.close();
+```
+
+> Hive cannot list its boxes, and this adapter gives every document a box of
+> its own, so `CRDTHive.open()` keeps a small registry box (`documents` by
+> default). A document costs one extra row, written the first time it is
+> opened. A document stored before this registry existed is not on the list
+> until it is opened once — its data is untouched either way.
+
+## Keeping a whole document on disk
+
+Most apps do not call these methods by hand. `openDocument` reads the document
+back — its stored identity included — and follows it from there:
+
+```dart
+final note = await backend.openDocument(documentId);
+final text = CRDTFugueTextHandler(note.document, 'body');
+```
+
+Everything written from there on is stored. The backend has the read-only half
+too: `readDocument(id)` for a preview or a list, `documentAt(id, version)` for
+the document as it was, `copyDocumentTo(other, id)` for a backup or a move to
+another adapter.
+
+It comes from [`crdt_lf_persistence`](https://pub.dev/packages/crdt_lf_persistence),
+which this package re-exports. See that README for the offline-first rules.
+
+`openStorageForDocument` hands back a `CRDTHiveDocumentStorage`. Its `close()`
+closes the two boxes of that document and nothing else — the one to reach for
+in an app that opens one document after another, since
+`CRDTHive.closeAllBoxes()` closes every Hive box the app has open, yours
+included.
+
+Hive has no transactions, so `transaction()` just runs its body. That is still
+conformant: every step the persistence takes is safe to repeat.
+
 ## Document-Scoped Storage
 
 The library provides optional storage utilities that organize data by document ID. Each document gets its own dedicated Hive boxes, improving isolation and performance.
 
-### CRDTChangeStorage
+A Hive box holds its entries in memory, so reads here answer without
+suspending — `getChanges`, `getSnapshots`, `count` and `containsSnapshot` are
+not futures. Writes go through the box journal and stay asynchronous.
+
+### CRDTHiveChangeStorage
 
 Manages `Change` objects for a specific document:
 
@@ -113,16 +176,19 @@ await changeStorage.saveChanges([change1, change2, change3]);
 // Load all changes for the document
 final changes = changeStorage.getChanges();
 
+// Or only part of the log, by version vector
+final missing = changeStorage.getChanges(newerThan: theirVersion);
+final past = changeStorage.getChanges(upTo: oldVersion);
+
 // Delete changes
 await changeStorage.deleteChange(change);
 await changeStorage.deleteChanges([change1, change2]);
 
 // Storage info
 print('Total changes: ${changeStorage.count}');
-print('Is empty: ${changeStorage.isEmpty}');
 ```
 
-### CRDTSnapshotStorage
+### CRDTHiveSnapshotStorage
 
 Manages `Snapshot` objects for a specific document:
 
@@ -141,6 +207,27 @@ final allSnapshots = snapshotStorage.getSnapshots();
 if (snapshotStorage.containsSnapshot('snapshot-id')) {
   // Snapshot exists
 }
+```
+
+### CRDTHivePeerIdStorage
+
+Keeps the `PeerId` the document writes under. Without it `CRDTDocument` mints
+a new author on every restart, and the version vector grows by one peer per
+session.
+
+Every document shares one `peer_ids` box, keyed by document id: a box of its
+own would cost an open for a single string. The value is text, so no type
+adapter and no type id are involved.
+
+Read it **before** building the document — the id has to exist first:
+
+```dart
+final peers = await CRDTHive.openPeerIdStorageForDocument('doc-123');
+
+final document = CRDTDocument(
+  documentId: 'doc-123',
+  peerId: await peers.loadOrCreate(),
+);
 ```
 
 ## Snapshot Data Serialization
@@ -177,6 +264,10 @@ When using document-scoped storage, boxes are named using the pattern:
 
 This ensures each document has isolated storage while allowing custom box name prefixes.
 
+Two boxes are **shared**, one per app and not one per document:
+- `peer_ids`: the `PeerId` each document writes under, keyed by document id.
+- `documents`: the list of document ids the backend holds.
+
 ## Storage Management
 
 ### Cleanup Operations
@@ -186,7 +277,7 @@ This ensures each document has isolated storage while allowing custom box name p
 await CRDTHive.closeAllBoxes();
 
 // Delete all data for a specific document
-await CRDTHive.deleteDocumentData('doc-123');
+await backend.deleteDocument('doc-123');
 
 // Delete a specific box
 await CRDTHive.deleteBox('changes_doc-123');
@@ -229,6 +320,7 @@ Other bricks of the crdt "system" are:
 - [crdt_socket_sync](https://pub.dev/packages/crdt_socket_sync)
 - [crdt_lf_flutter](https://pub.dev/packages/crdt_lf_flutter)
 - [hlc_dart](https://pub.dev/packages/hlc_dart)
+- [crdt_lf_persistence](https://pub.dev/packages/crdt_lf_persistence)
 - [crdt_lf_drift](https://pub.dev/packages/crdt_lf_drift)
 - [crdt_lf_sqlite](https://pub.dev/packages/crdt_lf_sqlite)
 

@@ -74,6 +74,12 @@ const String kMonospaceFontFamily = 'monospace';
 /// Fallback display name for a peer that did not pick one.
 const String kDefaultUserName = 'anonymous';
 
+/// How many recently opened rooms the home screen offers as a way back in.
+///
+/// The room id is the only way back into a document, so the list is what a
+/// user has left when they are offline and did not write the id down.
+const int kRecentRoomsLimit = 3;
+
 /// The colors a peer can pick as its identity — used for the avatar dot on the
 /// home screen and for the remote cursors in the editor. Kept saturated and
 /// far apart so two peers are told apart at a glance.

@@ -21,6 +21,9 @@
   - [Sync](#sync)
   - [Flutter](#flutter)
   - [Persistence](#persistence)
+    - [Setting it up](#setting-it-up)
+  - [Complete example](#complete-example)
+    - [The editor on top of it](#the-editor-on-top-of-it)
   - [Benchmarks](#benchmarks)
   - [Design](#design)
     - [Operation based](#operation-based)
@@ -166,7 +169,24 @@ void main() {
 ## Sync 
 A sync library is available in the [crdt_socket_sync](https://pub.dev/packages/crdt_socket_sync) package. And it's used to synchronize the CRDT state between peers. More info in the [README](https://github.com/MattiaPispisa/crdt/tree/main/packages/core/crdt_socket_sync/README.md) of the sync package.
 
-A flutter example is available in the [flutter_example](https://github.com/MattiaPispisa/crdt/tree/main/packages/core/crdt_socket_sync/flutter_example) and provide a synced version of the  "Flutter Distributed Collaboration" Example. 
+A client takes the document and a URL. This is the setup
+[greyhound_markdown](https://github.com/MattiaPispisa/crdt/blob/main/apps/greyhound_markdown/client/lib/src/services/room/room_host.dart)
+uses, over a relay:
+
+```dart
+final sync = WebSocketRelayClient(
+  url: roomUrl(kServerUrl, roomId),
+  document: document,
+  author: document.peerId,
+);
+
+// Only after the document was restored from disk: the restored state is what
+// the relay is caught up against, so what was written offline goes out with
+// the next welcome.
+sync.connect();
+```
+
+A flutter example is available in the [client_example](https://github.com/MattiaPispisa/crdt/tree/main/packages/core/crdt_socket_sync/client_example) and provide a synced version of the  "Flutter Distributed Collaboration" Example. 
 
 <div align="center">
 <img width="500" alt="sync_server_multi_client" src="https://raw.githubusercontent.com/MattiaPispisa/crdt/main/assets/demos/sync_server_multi_client.gif">
@@ -178,10 +198,148 @@ A companion library, [crdt_lf_flutter](https://pub.dev/packages/crdt_lf_flutter)
 It provides Flutter reactivity for `crdt_lf`: widgets rebuild when the CRDT state changes, with selectors, a provider and a collaborative text field. More info in the [README](https://github.com/MattiaPispisa/crdt/tree/main/packages/core/crdt_lf_flutter/README.md) of the Flutter package.
 
 ## Persistence
-Persistence is not directly handled in this library but there are some out of the box solutions:
+Storage is not handled in this library. **Use
+[crdt_lf_persistence](https://pub.dev/packages/crdt_lf_persistence)**: it holds the storage
+contract and the API that does the saving for you — open a document, follow it, write down every
+move it makes, compact it, copy it. You write none of that.
+
+The package holds no store of its own. An adapter re-exports the whole API, so your `pubspec.yaml`
+only names the adapter:
 - [crdt_lf_hive](https://pub.dev/packages/crdt_lf_hive): adapters and utils for persist data using [Hive](https://pub.dev/packages/hive).
 - [crdt_lf_drift](https://pub.dev/packages/crdt_lf_drift): adapters and utils for persist data using [Drift](https://pub.dev/packages/drift).
 - [crdt_lf_sqlite](https://pub.dev/packages/crdt_lf_sqlite): adapters and utils for persist data using [sqlite3](https://pub.dev/packages/sqlite3).
+
+For a backend none of them covers, implement the storage contract and everything above works on it
+unchanged.
+
+### Setting it up
+
+One document, one storage, three lines. This is what
+[greyhound_markdown](https://github.com/MattiaPispisa/crdt/blob/main/apps/greyhound_markdown/client/lib/src/services/room/room_host.dart)
+does on every launch, with the Hive adapter:
+
+```dart
+// The backend keeps the identity too, so this device writes under the same
+// author on every launch.
+final backend = await CRDTHive.open();
+final (:document, :persistence) = await backend.openDocument(roomId);
+
+// Build the handlers on the document it hands back: it already holds what
+// was on disk.
+final text = CRDTFugueTextHandler(document, 'content');
+
+// ...edit. Every change is written down.
+
+await persistence.dispose(); // writes what is still waiting
+await backend.close();
+```
+
+`openDocument` reads the stored `PeerId`, builds the document, restores it, and
+follows it from there. For everything else — how the writes are batched, when a
+prune runs, how to compact or copy a document — see the
+[crdt_lf_persistence README](https://github.com/MattiaPispisa/crdt/tree/main/packages/core/crdt_lf_persistence/README.md).
+
+## Complete example
+
+The two halves together, as
+[greyhound_markdown](https://github.com/MattiaPispisa/crdt/tree/main/apps/greyhound_markdown)
+puts them: a document restored from this device, then a relay client on top of
+it. The order matters. Restore first, connect second — offline, or on a relay
+that has forgotten the room, the local copy is all there is.
+
+Source:
+[room_host.dart](https://github.com/MattiaPispisa/crdt/blob/main/apps/greyhound_markdown/client/lib/src/services/room/room_host.dart).
+
+```dart
+// 1. The document as this device last left it. The backend keeps the identity
+//    too, so the device writes under the same author on every launch.
+final backend = await CRDTHive.open();
+final (:document, :persistence) = await backend.openDocument(roomId);
+
+// 2. The handler, built on the document `openDocument` handed back.
+final text = CRDTFugueTextHandler(document, kHandlerId);
+final undo = CRDTUndoManager(document)..track(text);
+
+// 3. Who else is in the room, and where their carets are. `AwarenessService`
+//    is the app's own wrapper over the awareness plugin of crdt_socket_sync.
+final awareness = AwarenessService(
+  name: profile.displayName,
+  color: profile.color,
+);
+
+// 4. The relay client, with awareness riding along as a plugin.
+final sync = WebSocketRelayClient(
+  url: roomUrl(kServerUrl, roomId),
+  document: document,
+  author: document.peerId,
+  plugins: [awareness.plugin],
+);
+
+// 5. Only now: what was written offline goes out with the next welcome.
+sync.connect();
+```
+
+Closing it has an order of its own. The flush suspends, and a document disposed
+while it runs closes the event stream the persistence is still reading — the
+last keystrokes would never reach the disk. So the document goes **after** the
+flush, never before it:
+
+```dart
+sync.dispose(); // disposes the awareness plugin with it
+awareness.dispose();
+undo.dispose();
+
+await persistence.dispose(); // writes what is still waiting
+document.dispose();
+await persistence.storage.close(); // this document's boxes
+await backend.close();
+```
+
+### The editor on top of it
+
+`crdt_lf_flutter` turns the handler into a `TextEditingController` and draws the
+remote carets. `CrdtTextFieldBuilder` owns the controller and keeps it in step
+with the document both ways; `onSelectionAnchorsChanged` reports this user's
+caret to awareness, and `CrdtTextCursorsOverlay` paints everyone else's.
+
+Source:
+[editor_pane.dart](https://github.com/MattiaPispisa/crdt/blob/main/apps/greyhound_markdown/client/lib/src/widgets/editor_pane.dart).
+
+```dart
+CrdtTextFieldBuilder(
+  id: kHandlerId,
+  // This user's caret, on every selection change.
+  onSelectionAnchorsChanged: awareness.setLocalCursor,
+  builder: (context, controller) =>
+      ValueListenableBuilder<Map<String, PeerState>>(
+    // Everyone else's, as they move.
+    valueListenable: awareness.peers,
+    builder: (context, peers, child) => CrdtTextCursorsOverlay(
+      id: kHandlerId,
+      cursors: [
+        for (final entry in peers.entries)
+          if (entry.value.base != null)
+            CrdtTextCursor(
+              id: entry.key,
+              label: entry.value.name,
+              color: entry.value.color,
+              base: entry.value.base!,
+              extent: entry.value.extent,
+            ),
+      ],
+      child: child!,
+    ),
+    child: TextField(controller: controller, maxLines: null),
+  ),
+)
+```
+
+The document is reached through `CrdtProvider`, so nothing above has to be
+handed down. See the
+[crdt_lf_flutter README](https://github.com/MattiaPispisa/crdt/tree/main/packages/core/crdt_lf_flutter/README.md)
+for the widgets, and the
+[crdt_socket_sync README](https://github.com/MattiaPispisa/crdt/tree/main/packages/core/crdt_socket_sync/README.md)
+for the awareness plugin.
 
 ## Benchmarks
 
@@ -1197,6 +1355,7 @@ Other bricks of the crdt "system" are:
 - [crdt_socket_sync](https://pub.dev/packages/crdt_socket_sync)
 - [crdt_lf_flutter](https://pub.dev/packages/crdt_lf_flutter)
 - [hlc_dart](https://pub.dev/packages/hlc_dart)
+- [crdt_lf_persistence](https://pub.dev/packages/crdt_lf_persistence)
 - [crdt_lf_hive](https://pub.dev/packages/crdt_lf_hive)
 - [crdt_lf_drift](https://pub.dev/packages/crdt_lf_drift)
 - [crdt_lf_sqlite](https://pub.dev/packages/crdt_lf_sqlite)

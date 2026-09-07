@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:crdt_lf/crdt_lf.dart';
+import 'package:crdt_lf_hive/crdt_lf_hive.dart';
 import 'package:crdt_socket_sync/web_socket_server.dart';
 import 'package:en_logger/en_logger.dart';
 import 'package:crdt_socket_sync_example/src/example_ids.dart';
@@ -14,8 +15,10 @@ final _kDefaultHost = InternetAddress.anyIPv4.host;
 final _kDocumentId = '30669830-9256-4320-9ed5-f1860cd47d9f';
 final _kDocumentPeerId = PeerId.parse('97a6b8b3-fffc-4ebe-8dd4-f94e6a01c52f');
 
-late HiveServerRegistry _registry;
+late CRDTHiveBackend _backend;
+late PersistentServerRegistry _registry;
 late WebSocketServer _server;
+StreamSubscription<ServerSnapshot>? _snapshotBroadcast;
 
 Future<void> run({
   int? port,
@@ -45,15 +48,21 @@ Future<void> run({
 
   // db initialization
   Hive.init(_kDefaultDbLocation);
-  _registry = await HiveServerRegistry.init(
-    logger: logger.getConfiguredInstance(prefix: 'HiveServerRegistry'),
+  CRDTHive.initialize();
+  _backend = await CRDTHive.open();
+  _registry = await openHiveRegistry(
+    backend: _backend,
+    logger: logger.getConfiguredInstance(prefix: 'Registry'),
   );
 
   await _setupDocument();
   await _setupExampleDocuments();
 
   if (verbose) {
-    await _registry.showPersistence();
+    await showPersistence(
+      registry: _registry,
+      logger: logger.getConfiguredInstance(prefix: 'Registry'),
+    );
   }
 
   _server = WebSocketServer(
@@ -66,7 +75,11 @@ Future<void> run({
     // symmetric. Defaults to NoCompression when null.
     compressor: compressor,
   );
-  _registry.setServer(_server);
+  _snapshotBroadcast = broadcastSnapshots(
+    registry: _registry,
+    server: _server,
+    logger: logger.getConfiguredInstance(prefix: 'Registry'),
+  );
 
   _setupSigintHandler(logger: logger.getConfiguredInstance(prefix: 'Bin'));
 
@@ -76,7 +89,8 @@ Future<void> run({
   );
 }
 
-/// setup a document with id [_kDocumentId] and register a handler for the todo list.
+/// setup a document with id [_kDocumentId] and register a handler for the
+/// todo list.
 ///
 /// The same handler is used across all sync examples.
 Future<void> _setupDocument() async {
@@ -126,7 +140,9 @@ void _setupSigintHandler({required EnLogger logger}) {
   ProcessSignal.sigint.watch().listen((signal) async {
     logger.info('\n⏹️  Received SIGINT, shutting down gracefully...');
     await _server.stop();
+    await _snapshotBroadcast?.cancel();
     await _registry.close();
+    await _backend.close();
     logger.info('✅ Server stopped.');
     exit(0);
   });

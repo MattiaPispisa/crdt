@@ -7,6 +7,14 @@
 - **Undo and redo**, from the toolbar or with ⌘Z / ⌘⇧Z (Ctrl on Windows and
   Linux). An undo takes back what *you* wrote and leaves what everyone else
   wrote in place. A burst of typing is one undo, not one per character.
+- **A room now survives a reload without a connection.** Each room is kept in
+  the browser's storage as it changes, so reloading offline — or on a relay
+  that has forgotten the room — brings your text back instead of an empty
+  page. What you wrote offline reaches everyone else as soon as you are back
+  online.
+- **The last rooms you opened are listed on the home page.** The room id is
+  the only name a document has, so this is the way back into one you did not
+  write down. It works offline: the room is already on your device.
 
 ## 0.9.0
 

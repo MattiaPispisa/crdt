@@ -93,11 +93,27 @@ List<io.Directory> packageDirs() {
   return result..sort((a, b) => a.path.compareTo(b.path));
 }
 
+/// The folder under `packages/` holding the packages that support the
+/// repository itself: benchmark harnesses, shared test suites, shared example
+/// code. They are never published and never documented.
+const internalPackagesFolder = '_internal';
+
+/// Whether [package] lives under `packages/_internal/`.
+///
+/// Pass this to [copyPackageReadmes] as `exclude` to keep the internal
+/// packages out of the docs site.
+bool isInternalPackage(io.Directory package) {
+  final relative = path.relative(package.path, from: packagesDir().path);
+  return path.split(relative).first == internalPackagesFolder;
+}
+
 /// Copies each `packages/<name>/README.md` into [to] as `<name>.md`.
 ///
 /// Used to surface every package's entry-point README inside the docs site.
+/// A package for which [exclude] answers true is skipped.
 void copyPackageReadmes({
   required io.Directory to,
+  bool Function(io.Directory package)? exclude,
   EnLogger? logger,
 }) {
   if (!to.existsSync()) {
@@ -105,6 +121,10 @@ void copyPackageReadmes({
   }
 
   for (final package in packageDirs()) {
+    if (exclude?.call(package) ?? false) {
+      logger?.info('Skipped ${path.basename(package.path)}');
+      continue;
+    }
     final readme = io.File(path.join(package.path, 'README.md'));
     if (!readme.existsSync()) {
       continue;
@@ -160,12 +180,67 @@ String _absoluteRepositoryLinks(String content) {
 
 /// Prepares a README for Docusaurus.
 ///
+/// Drops what only makes sense outside the docs site: the inline table of
+/// contents (see [_dropInlineToc]) and the callouts pointing back at the docs
+/// (see [_dropDocsSiteCallouts]).
+String _parseReadme(String content) {
+  return _dropDocsSiteCallouts(_dropInlineToc(content));
+}
+
+/// The docs site's own pages.
+const _docsSiteUrl = 'https://mattiapispisa.it/crdt/docs/';
+
+/// Drops the blockquote callouts that send the reader to the docs site.
+///
+/// A README is also read on GitHub and on pub.dev, where mermaid has no
+/// renderer, so it carries notes like "Diagrams render best in the live
+/// documentation". On the docs site the reader is already there, so the note
+/// is noise.
+///
+/// Removes every contiguous `>` block holding a link to [_docsSiteUrl], and
+/// the blank line the block leaves behind.
+String _dropDocsSiteCallouts(String content) {
+  final lines = content.split('\n');
+  final result = <String>[];
+  bool isQuote(String line) => line.trimLeft().startsWith('>');
+
+  var i = 0;
+  while (i < lines.length) {
+    if (!isQuote(lines[i])) {
+      result.add(lines[i]);
+      i += 1;
+      continue;
+    }
+
+    var end = i;
+    while (end < lines.length && isQuote(lines[end])) {
+      end += 1;
+    }
+
+    final block = lines.sublist(i, end);
+    if (block.any((line) => line.contains(_docsSiteUrl))) {
+      // Keep one blank line where the block was, not two.
+      if (end < lines.length && lines[end].trim().isEmpty) {
+        end += 1;
+      } else if (result.isNotEmpty && result.last.trim().isEmpty) {
+        result.removeLast();
+      }
+    } else {
+      result.addAll(block);
+    }
+    i = end;
+  }
+
+  return result.join('\n');
+}
+
 /// Removes the leading auto-generated table of contents — the first contiguous
 /// block of list items linking to in-page anchors (e.g. `- [Title](#title)`).
+///
 /// Those links target the page H1, which Docusaurus renders as the doc title
 /// without that anchor, producing broken-anchor warnings; Docusaurus also shows
 /// its own TOC, so the inline one is redundant.
-String _parseReadme(String content) {
+String _dropInlineToc(String content) {
   final lines = content.split('\n');
   final tocItem = RegExp(r'^\s*[-*] \[.+\]\(#.+\)\s*$');
 

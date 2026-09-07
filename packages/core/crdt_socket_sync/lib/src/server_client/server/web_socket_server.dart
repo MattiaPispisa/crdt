@@ -534,33 +534,30 @@ class WebSocketServer extends CRDTSocketServer {
   @override
   Future<void> dispose() async {
     await stop();
-    unawaited(_serverEventController.close());
 
     for (final plugin in plugins) {
       plugin.dispose();
     }
 
-    final documentIds = await _serverRegistry.documentIds;
-
-    // Free the document registry resources
-    for (final documentId in documentIds) {
-      try {
-        final document = await _serverRegistry.getDocument(documentId);
-        if (document != null) {
-          document.dispose();
-        }
-      } catch (e) {
-        _addServerEvent(
-          ServerEvent(
-            type: ServerEventType.error,
-            message: 'Error disposing document: $e',
-            data: {
-              'documentId': documentId,
-            },
-          ),
-        );
-      }
+    // The registry closes what it holds open, and a durable one writes what
+    // is still waiting first. Walking `documentIds` here instead would read
+    // every document on disk back into memory just to dispose it, and would
+    // leave the registry holding disposed documents.
+    //
+    // Before the event controller, so a failure to write still reaches a
+    // listener.
+    try {
+      await _serverRegistry.close();
+    } catch (e) {
+      _addServerEvent(
+        ServerEvent(
+          type: ServerEventType.error,
+          message: 'Error closing the document registry: $e',
+        ),
+      );
     }
+
+    unawaited(_serverEventController.close());
   }
 
   void _addServerEvent(ServerEvent event) {

@@ -134,6 +134,25 @@ void main() {
       expect(parseRoomId(pushed.single.split('/').last), isNotNull);
     });
 
+    testWidgets('a recently opened room leads back into it', (tester) async {
+      final pushed = await _pumpHome(
+        tester,
+        stored: {
+          'recentRooms': <Object>[
+            {'roomId': 'abc123', 'openedAt': 1000},
+          ],
+        },
+      );
+
+      // The list sits at the bottom of a scrolling page.
+      await tester.ensureVisible(find.text('abc123'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('abc123'));
+      await tester.pumpAndSettle();
+
+      expect(pushed, ['/room/abc123']);
+    });
+
     testWidgets('enter on the name field goes in too', (tester) async {
       final pushed = await _pumpHome(tester);
 

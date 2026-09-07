@@ -4,17 +4,20 @@ homepage: https://mattiapispisa.github.io/
 repository: https://github.com/MattiaPispisa/crdt/tree/main/packages/adapters/persistence/crdt_lf_drift
 topics: [crdt, local-first, drift, persistence, dart]
 
-version: 0.2.0
+version: 0.3.0
 
 environment:
   sdk: ">=3.0.0 <4.0.0"
 
 dependencies:
-  crdt_lf: ^4.0.0
+  crdt_lf: ^4.2.0
+  crdt_lf_persistence: ^0.1.0
   drift: ^2.34.0
   hlc_dart: ^1.0.0
 
 dev_dependencies:
   build_runner: ^2.4.0
   drift_dev: ^2.34.0
+  persistence_conformance:
+    path: ../../../_internal/persistence_conformance
   test: ^1.24.0

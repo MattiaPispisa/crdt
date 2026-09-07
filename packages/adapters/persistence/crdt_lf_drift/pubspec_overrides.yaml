@@ -1,6 +1,10 @@
-# melos_managed_dependency_overrides: crdt_lf,hlc_dart
+# melos_managed_dependency_overrides: crdt_lf,crdt_lf_persistence,hlc_dart,persistence_conformance
 dependency_overrides:
   crdt_lf:
     path: ../../../core/crdt_lf
+  crdt_lf_persistence:
+    path: ../../../core/crdt_lf_persistence
   hlc_dart:
     path: ../../../core/hlc
+  persistence_conformance:
+    path: ../../../_internal/persistence_conformance

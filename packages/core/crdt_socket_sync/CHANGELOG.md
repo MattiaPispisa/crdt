@@ -1,4 +1,53 @@
-## [0.7.0](https://github.com/MattiaPispisa/crdt/tree/crdt_socket_sync-v0.7.0/packages/crdt_socket_sync)
+## [Unreleased](https://github.com/MattiaPispisa/crdt/tree/crdt_socket_sync-v0.8.0/packages/core/crdt_socket_sync)
+
+**Date:** --
+
+[compare to previous release](https://github.com/MattiaPispisa/crdt/compare/crdt_socket_sync-v0.7.0...crdt_socket_sync-v0.8.0)
+
+### Added
+
+- **`PersistentServerRegistry`**: a `CRDTServerRegistry` that keeps every document it serves on disk.
+  It takes any `CRDTStorageBackend` — `CRDTHive`, `CRDTDrift` or `CRDTSqlite` — and gives each
+  document a `CRDTDocumentPersistence`, so writes are batched, a snapshot replaces the one before it,
+  and a prune drops exactly what it covered. Documents open lazily, `compactAfter` snapshots one once
+  its log gets long, and the `snapshots` stream is how a server learns to broadcast the new status.
+
+- **`PersistentServerRegistry.releaseDocument`**, and the `idleAfter` that calls it on a timer: the
+  other half of the lazy open. It writes what the document holds, closes it, and leaves the id in the
+  catalog — the room is still served, and the next `getDocument` reads it back. Without it a server
+  holds every room it has ever served.
+
+- **`ServerDocumentCatalog`**, with `BackendDocumentCatalog` and `InMemoryServerDocumentCatalog`: what
+  answers `documentIds`, `hasDocument` and `documentCount`. The default asks the backend, so the
+  server keeps no second list and finds its documents again after a restart — which also makes
+  `removeDocument` a delete rather than a forget; use `releaseDocument` for that.
+  `InMemoryServerDocumentCatalog` is for a server that should start empty every time.
+
+### Fixed
+
+- **A relay client now catches the relay up after a restart.** A change written while offline came
+  back from storage as an imported change, never as a local one, so nothing pushed it and it stayed
+  on that device for good. The welcome's version vector is now reconciled against the document, as
+  the server-client mode already did at handshake — so an offline-first client only has to open its
+  persistence before `connect()`. It also heals a room the relay lost.
+
+- **A server shutdown writes what its clients had already sent.** `WebSocketServer.dispose` disposed
+  each document by hand, which on a durable registry read every document back into memory, never
+  flushed the pending writes, and left the registry holding disposed documents. `CRDTServerRegistry`
+  now has a `close()`, no-op by default, and `dispose` calls that instead.
+
+- **`RelaySyncManager.dispose` stops the pushes.** A `flush` already in flight could still write to a
+  client that was closing.
+
+### Changed
+
+- `RelayPendingQueue` holds `Change`s and encodes them at push time, so a client writing while
+  offline no longer pays for a push that is not happening. It also skips a change already waiting.
+
+- Requires `crdt_lf: ^4.2.0`, and now depends on `crdt_lf_persistence` — the storage contract only, so
+  the sync is still tied to no backend.
+
+## [0.7.0](https://github.com/MattiaPispisa/crdt/tree/crdt_socket_sync-v0.7.0/packages/core/crdt_socket_sync)
 
 **Date:** 2026-08-16
 
