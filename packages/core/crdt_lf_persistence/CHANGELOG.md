@@ -1,6 +1,6 @@
 ## [0.1.0](https://github.com/MattiaPispisa/crdt/tree/crdt_lf_persistence-v0.1.0/packages/core/crdt_lf_persistence)
 
-**Date:** --
+**Date:** 2026-09-07
 
 First release. The storage contract behind the `crdt_lf` persistence adapters — the
 [README](https://github.com/MattiaPispisa/crdt/tree/main/packages/core/crdt_lf_persistence) has the

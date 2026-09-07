@@ -1,6 +1,6 @@
-## [Unreleased](https://github.com/MattiaPispisa/crdt/tree/crdt_lf-v4.2.0/packages/core/crdt_lf)
+## [4.2.0](https://github.com/MattiaPispisa/crdt/tree/crdt_lf-v4.2.0/packages/core/crdt_lf)
 
-**Date:** --
+**Date:** 2026-09-07
 
 [compare to previous release](https://github.com/MattiaPispisa/crdt/compare/crdt_lf-v4.1.0+1...crdt_lf-v4.2.0)
 
