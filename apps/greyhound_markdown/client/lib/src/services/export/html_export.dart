@@ -2,19 +2,24 @@ import 'package:markdown/markdown.dart' as md;
 
 import 'package:greyhound_markdown_client/src/config.dart';
 
-/// Renders [markdown] as a standalone HTML page titled [title].
+/// Renders [markdown] as a standalone HTML page titled [title], declared as
+/// written in [languageCode].
 ///
 /// Everything the page needs is inside it — the style sheet is inline and no
 /// script runs — so the file opens from disk with no network at all. Images
 /// keep their original URLs, so remote ones still need a connection.
-String markdownToHtmlDocument(String markdown, {required String title}) {
+String markdownToHtmlDocument(
+  String markdown, {
+  required String title,
+  String languageCode = 'en',
+}) {
   final body = md.markdownToHtml(
     markdown,
     extensionSet: kMarkdownExtensionSet,
   );
   return '''
 <!DOCTYPE html>
-<html lang="en">
+<html lang="$languageCode">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">

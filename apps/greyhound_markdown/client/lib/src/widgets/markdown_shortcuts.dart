@@ -2,6 +2,8 @@ import 'package:crdt_lf/crdt_lf.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import 'package:greyhound_markdown_client/l10n/gen/app_l10n.dart';
+
 /// A key binding whose primary modifier follows the platform: ⌘ on Apple
 /// platforms, Ctrl everywhere else.
 ///
@@ -49,6 +51,71 @@ typedef EditorShortcutTarget = ({
   CRDTUndoManager undo,
 });
 
+/// Which action a [MarkdownShortcut] is, and so which tooltip it shows.
+///
+/// A key rather than the text itself: [kMarkdownShortcuts] is a top-level
+/// `const` list, built long before there is a [BuildContext] to read the
+/// translations from.
+enum MarkdownShortcutLabel {
+  /// Take back the last edit.
+  undo,
+
+  /// Write back the edit that was taken away.
+  redo,
+
+  /// Bold the selection.
+  bold,
+
+  /// Italicize the selection.
+  italic,
+
+  /// Strike the selection through.
+  strikethrough,
+
+  /// Mark the selection as code.
+  inlineCode,
+
+  /// Turn the line into a top-level heading.
+  heading1,
+
+  /// Turn the line into a second-level heading.
+  heading2,
+
+  /// Turn the line into a third-level heading.
+  heading3,
+
+  /// Turn the line into a block quote.
+  quote,
+
+  /// Turn the line into a list item.
+  bulletList,
+
+  /// Wrap the selection in a link.
+  link,
+
+  /// Wrap the selection in an image.
+  image;
+
+  /// How this action is named in [l10n].
+  String text(AppL10n l10n) {
+    return switch (this) {
+      MarkdownShortcutLabel.undo => l10n.shortcutUndo,
+      MarkdownShortcutLabel.redo => l10n.shortcutRedo,
+      MarkdownShortcutLabel.bold => l10n.shortcutBold,
+      MarkdownShortcutLabel.italic => l10n.shortcutItalic,
+      MarkdownShortcutLabel.strikethrough => l10n.shortcutStrikethrough,
+      MarkdownShortcutLabel.inlineCode => l10n.shortcutInlineCode,
+      MarkdownShortcutLabel.heading1 => l10n.shortcutHeading1,
+      MarkdownShortcutLabel.heading2 => l10n.shortcutHeading2,
+      MarkdownShortcutLabel.heading3 => l10n.shortcutHeading3,
+      MarkdownShortcutLabel.quote => l10n.shortcutQuote,
+      MarkdownShortcutLabel.bulletList => l10n.shortcutBulletList,
+      MarkdownShortcutLabel.link => l10n.shortcutLink,
+      MarkdownShortcutLabel.image => l10n.shortcutImage,
+    };
+  }
+}
+
 /// A single action the editor toolbar shows as a button.
 ///
 /// The toolbar iterates [kMarkdownShortcuts], asks each one whether it can run
@@ -59,15 +126,15 @@ abstract class MarkdownShortcut {
   /// Const base constructor.
   const MarkdownShortcut({
     required this.icon,
-    required this.tooltip,
+    required this.label,
     this.binding,
   });
 
   /// The button glyph.
   final IconData icon;
 
-  /// The button tooltip / semantics label.
-  final String tooltip;
+  /// Which action this is; the tooltip is its translation.
+  final MarkdownShortcutLabel label;
 
   /// The keyboard chord that also triggers this action, if it has one.
   final EditorShortcutBinding? binding;
@@ -81,13 +148,15 @@ abstract class MarkdownShortcut {
   /// redo answer from their stack, which is what greys their buttons out.
   bool isEnabled(EditorShortcutTarget target) => true;
 
-  /// [tooltip] with the key chord appended when [binding] is set.
-  String tooltipFor(TargetPlatform platform) {
+  /// The translated [label], with the key chord appended when [binding] is
+  /// set.
+  String tooltipFor(AppL10n l10n, TargetPlatform platform) {
+    final text = label.text(l10n);
     final binding = this.binding;
     if (binding == null) {
-      return tooltip;
+      return text;
     }
-    return '$tooltip (${binding.label(platform)})';
+    return '$text (${binding.label(platform)})';
   }
 }
 
@@ -101,7 +170,7 @@ abstract class MarkdownTextShortcut extends MarkdownShortcut {
   /// Const base constructor.
   const MarkdownTextShortcut({
     required super.icon,
-    required super.tooltip,
+    required super.label,
     super.binding,
   });
 
@@ -124,7 +193,7 @@ enum _UndoDirection { undo, redo }
 class _UndoManagerShortcut extends MarkdownShortcut {
   const _UndoManagerShortcut({
     required super.icon,
-    required super.tooltip,
+    required super.label,
     required super.binding,
     required this.direction,
   });
@@ -175,63 +244,63 @@ Map<ShortcutActivator, VoidCallback> markdownShortcutBindings(
 const List<MarkdownShortcut> kMarkdownShortcuts = [
   _UndoManagerShortcut(
     icon: Icons.undo,
-    tooltip: 'Undo',
+    label: MarkdownShortcutLabel.undo,
     binding: EditorShortcutBinding(LogicalKeyboardKey.keyZ),
     direction: _UndoDirection.undo,
   ),
   _UndoManagerShortcut(
     icon: Icons.redo,
-    tooltip: 'Redo',
+    label: MarkdownShortcutLabel.redo,
     binding: EditorShortcutBinding(LogicalKeyboardKey.keyZ, shift: true),
     direction: _UndoDirection.redo,
   ),
   _WrapShortcut(
     icon: Icons.format_bold,
-    tooltip: 'Bold',
+    label: MarkdownShortcutLabel.bold,
     binding: EditorShortcutBinding(LogicalKeyboardKey.keyB),
     marker: '**',
   ),
   _WrapShortcut(
     icon: Icons.format_italic,
-    tooltip: 'Italic',
+    label: MarkdownShortcutLabel.italic,
     binding: EditorShortcutBinding(LogicalKeyboardKey.keyI),
     marker: '*',
   ),
   _WrapShortcut(
     icon: Icons.strikethrough_s,
-    tooltip: 'Strikethrough',
+    label: MarkdownShortcutLabel.strikethrough,
     marker: '~~',
   ),
   _WrapShortcut(
     icon: Icons.code,
-    tooltip: 'Inline code',
+    label: MarkdownShortcutLabel.inlineCode,
     binding: EditorShortcutBinding(LogicalKeyboardKey.keyE),
     marker: '`',
   ),
-  _LinePrefixShortcut(icon: Icons.title, tooltip: 'Heading 1', prefix: '# '),
+  _LinePrefixShortcut(icon: Icons.title, label: MarkdownShortcutLabel.heading1, prefix: '# '),
   _LinePrefixShortcut(
     icon: Icons.text_fields,
-    tooltip: 'Heading 2',
+    label: MarkdownShortcutLabel.heading2,
     prefix: '## ',
   ),
   _LinePrefixShortcut(
     icon: Icons.short_text,
-    tooltip: 'Heading 3',
+    label: MarkdownShortcutLabel.heading3,
     prefix: '### ',
   ),
-  _LinePrefixShortcut(icon: Icons.format_quote, tooltip: 'Quote', prefix: '> '),
+  _LinePrefixShortcut(icon: Icons.format_quote, label: MarkdownShortcutLabel.quote, prefix: '> '),
   _LinePrefixShortcut(
     icon: Icons.format_list_bulleted,
-    tooltip: 'Bullet list',
+    label: MarkdownShortcutLabel.bulletList,
     prefix: '- ',
   ),
   _LinkLikeShortcut(
     icon: Icons.link,
-    tooltip: 'Link',
+    label: MarkdownShortcutLabel.link,
     binding: EditorShortcutBinding(LogicalKeyboardKey.keyK),
     open: '[',
   ),
-  _LinkLikeShortcut(icon: Icons.image, tooltip: 'Image', open: '!['),
+  _LinkLikeShortcut(icon: Icons.image, label: MarkdownShortcutLabel.image, open: '!['),
 ];
 
 /// The caret as an offset, defaulting to end-of-text when the field has never
@@ -249,7 +318,7 @@ TextSelection _resolvedSelection(TextEditingValue value) {
 class _WrapShortcut extends MarkdownTextShortcut {
   const _WrapShortcut({
     required super.icon,
-    required super.tooltip,
+    required super.label,
     required this.marker,
     super.binding,
   });
@@ -287,7 +356,7 @@ class _WrapShortcut extends MarkdownTextShortcut {
 class _LinePrefixShortcut extends MarkdownTextShortcut {
   const _LinePrefixShortcut({
     required super.icon,
-    required super.tooltip,
+    required super.label,
     required this.prefix,
   });
 
@@ -320,7 +389,7 @@ class _LinePrefixShortcut extends MarkdownTextShortcut {
 class _LinkLikeShortcut extends MarkdownTextShortcut {
   const _LinkLikeShortcut({
     required super.icon,
-    required super.tooltip,
+    required super.label,
     required this.open,
     super.binding,
   });

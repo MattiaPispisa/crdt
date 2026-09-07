@@ -1,0 +1,288 @@
+{
+  "@@locale": "en",
+
+  "settings": "Settings",
+  "@settings": {
+    "description": "Title of the settings page, and the footer entry to it."
+  },
+  "appearance": "Appearance",
+  "@appearance": {
+    "description": "Settings section holding the theme mode."
+  },
+  "language": "Language",
+  "@language": {
+    "description": "Settings section holding the language picker."
+  },
+  "editorSection": "Editor",
+  "@editorSection": {
+    "description": "Settings section holding the editor view options."
+  },
+  "links": "Links",
+  "@links": {
+    "description": "Settings section holding the project links."
+  },
+  "themeLight": "Light",
+  "@themeLight": {
+    "description": "Theme mode: always the light palette."
+  },
+  "themeDark": "Dark",
+  "@themeDark": {
+    "description": "Theme mode: always the dark palette."
+  },
+  "themeSystem": "System",
+  "@themeSystem": {
+    "description": "Theme mode: follow the device setting."
+  },
+  "languageSystem": "System",
+  "@languageSystem": {
+    "description": "Language choice: follow the device language."
+  },
+  "lineNumbers": "Line numbers",
+  "@lineNumbers": {
+    "description": "Editor option: draw a numbered gutter."
+  },
+  "lineNumbersSubtitle": "Show a numbered gutter next to the source",
+  "@lineNumbersSubtitle": {
+    "description": "Subtitle of the line numbers option."
+  },
+  "wordWrap": "Word wrap",
+  "@wordWrap": {
+    "description": "Editor option: wrap long lines."
+  },
+  "wordWrapSubtitle": "Wrap long lines instead of scrolling sideways",
+  "@wordWrapSubtitle": {
+    "description": "Subtitle of the word wrap option."
+  },
+  "viewChangelog": "View changelog",
+  "@viewChangelog": {
+    "description": "Button opening the changelog page."
+  },
+  "viewLicenses": "View licenses",
+  "@viewLicenses": {
+    "description": "Button opening the open-source licenses page."
+  },
+  "versionUnknown": "—",
+  "@versionUnknown": {
+    "description": "Placeholder shown while the app version is still loading."
+  },
+  "appTagline": "A real-time collaborative markdown editor built on crdt_lf.",
+  "@appTagline": {
+    "description": "One-line description of the app on the settings page."
+  },
+  "creditPrefix": "Powered by crdt_lf · created by ",
+  "@creditPrefix": {
+    "description": "Credit line, up to the author's name, which follows it as a link."
+  },
+  "linkRepo": "GitHub",
+  "@linkRepo": {
+    "description": "Link to the monorepo on GitHub."
+  },
+  "linkAppSource": "App source",
+  "@linkAppSource": {
+    "description": "Link to this app's own source folder."
+  },
+  "linkDocs": "crdt_lf docs",
+  "@linkDocs": {
+    "description": "Link to the crdt_lf documentation site."
+  },
+
+  "yourName": "Your name",
+  "@yourName": {
+    "description": "Home screen field for the name shown to the other peers."
+  },
+  "createRoom": "Create a new room",
+  "@createRoom": {
+    "description": "Home screen button opening a brand new room."
+  },
+  "join": "Join",
+  "@join": {
+    "description": "Home screen button entering the room whose id is typed."
+  },
+  "roomId": "Room id",
+  "@roomId": {
+    "description": "Home screen field for the id of the room to join."
+  },
+  "recentlyOpened": "Recently opened",
+  "@recentlyOpened": {
+    "description": "Header of the recently opened rooms list."
+  },
+
+  "relativeJustNow": "just now",
+  "@relativeJustNow": {
+    "description": "A room opened less than a minute ago."
+  },
+  "relativeMinutesAgo": "{count, plural, =1{1 min ago} other{{count} min ago}}",
+  "@relativeMinutesAgo": {
+    "description": "How many minutes ago a room was opened.",
+    "placeholders": {
+      "count": { "type": "int" }
+    }
+  },
+  "relativeHoursAgo": "{count, plural, =1{1 h ago} other{{count} h ago}}",
+  "@relativeHoursAgo": {
+    "description": "How many hours ago a room was opened.",
+    "placeholders": {
+      "count": { "type": "int" }
+    }
+  },
+  "relativeYesterday": "yesterday",
+  "@relativeYesterday": {
+    "description": "A room opened one day ago."
+  },
+  "relativeDaysAgo": "{count, plural, other{{count} days ago}}",
+  "@relativeDaysAgo": {
+    "description": "How many days ago a room was opened. Only ever 2 to 6 days: one day reads as yesterday, and a week or more shows the date.",
+    "placeholders": {
+      "count": { "type": "int" }
+    }
+  },
+
+  "roomTitle": "Room {roomId}",
+  "@roomTitle": {
+    "description": "Editor app bar title.",
+    "placeholders": {
+      "roomId": { "type": "String" }
+    }
+  },
+  "copyRoomId": "Copy room id",
+  "@copyRoomId": {
+    "description": "Tooltip of the editor button copying the room id."
+  },
+  "roomIdCopied": "Room id copied",
+  "@roomIdCopied": {
+    "description": "Confirmation shown after the room id was copied."
+  },
+  "viewModeEdit": "Edit",
+  "@viewModeEdit": {
+    "description": "Editor layout: the source only."
+  },
+  "viewModeSplit": "Split",
+  "@viewModeSplit": {
+    "description": "Editor layout: source and preview side by side."
+  },
+  "viewModeView": "View",
+  "@viewModeView": {
+    "description": "Editor layout: the preview only."
+  },
+
+  "changelog": "Changelog",
+  "@changelog": {
+    "description": "Title of the changelog page."
+  },
+  "changelogLoadError": "Could not load the changelog.",
+  "@changelogLoadError": {
+    "description": "Shown when the bundled changelog cannot be read."
+  },
+
+  "statusConnected": "Connected",
+  "@statusConnected": {
+    "description": "The room is in sync with the relay."
+  },
+  "statusConnecting": "Connecting…",
+  "@statusConnecting": {
+    "description": "The first connection to the relay is being opened."
+  },
+  "statusReconnecting": "Reconnecting…",
+  "@statusReconnecting": {
+    "description": "The connection dropped and is being opened again."
+  },
+  "statusDisconnected": "Disconnected",
+  "@statusDisconnected": {
+    "description": "There is no connection to the relay."
+  },
+  "statusError": "Connection error",
+  "@statusError": {
+    "description": "The connection to the relay failed."
+  },
+
+  "exportDocument": "Export document",
+  "@exportDocument": {
+    "description": "Tooltip of the export button in the editor app bar."
+  },
+  "exportAs": "Export as {format}",
+  "@exportAs": {
+    "description": "Title of the export dialog.",
+    "placeholders": {
+      "format": { "type": "String" }
+    }
+  },
+  "exportFileName": "File name",
+  "@exportFileName": {
+    "description": "Export dialog field for the name to save the file under."
+  },
+  "exportSaved": "Saved {fileName}",
+  "@exportSaved": {
+    "description": "Confirmation shown after a file was saved.",
+    "placeholders": {
+      "fileName": { "type": "String" }
+    }
+  },
+  "exportFailed": "Export failed: {error}",
+  "@exportFailed": {
+    "description": "Shown when rendering or saving the file threw.",
+    "placeholders": {
+      "error": { "type": "String" }
+    }
+  },
+  "cancel": "Cancel",
+  "@cancel": {
+    "description": "Dismisses a dialog without doing anything."
+  },
+  "save": "Save",
+  "@save": {
+    "description": "Confirms the export dialog."
+  },
+
+  "shortcutUndo": "Undo",
+  "@shortcutUndo": {
+    "description": "Editor toolbar: take back the last edit."
+  },
+  "shortcutRedo": "Redo",
+  "@shortcutRedo": {
+    "description": "Editor toolbar: write back the edit that was taken away."
+  },
+  "shortcutBold": "Bold",
+  "@shortcutBold": {
+    "description": "Editor toolbar: bold the selection."
+  },
+  "shortcutItalic": "Italic",
+  "@shortcutItalic": {
+    "description": "Editor toolbar: italicize the selection."
+  },
+  "shortcutStrikethrough": "Strikethrough",
+  "@shortcutStrikethrough": {
+    "description": "Editor toolbar: strike the selection through."
+  },
+  "shortcutInlineCode": "Inline code",
+  "@shortcutInlineCode": {
+    "description": "Editor toolbar: mark the selection as code."
+  },
+  "shortcutHeading1": "Heading 1",
+  "@shortcutHeading1": {
+    "description": "Editor toolbar: turn the line into a top-level heading."
+  },
+  "shortcutHeading2": "Heading 2",
+  "@shortcutHeading2": {
+    "description": "Editor toolbar: turn the line into a second-level heading."
+  },
+  "shortcutHeading3": "Heading 3",
+  "@shortcutHeading3": {
+    "description": "Editor toolbar: turn the line into a third-level heading."
+  },
+  "shortcutQuote": "Quote",
+  "@shortcutQuote": {
+    "description": "Editor toolbar: turn the line into a block quote."
+  },
+  "shortcutBulletList": "Bullet list",
+  "@shortcutBulletList": {
+    "description": "Editor toolbar: turn the line into a list item."
+  },
+  "shortcutLink": "Link",
+  "@shortcutLink": {
+    "description": "Editor toolbar: wrap the selection in a link."
+  },
+  "shortcutImage": "Image",
+  "@shortcutImage": {
+    "description": "Editor toolbar: wrap the selection in an image."
+  }
+}

@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:crdt_lf/crdt_lf.dart';
 import 'package:flutter/material.dart';
 
+import 'package:greyhound_markdown_client/src/l10n/l10n_extension.dart';
 import 'package:greyhound_markdown_client/src/widgets/markdown_shortcuts.dart';
 
 /// A horizontally scrollable row of editor buttons.
@@ -87,7 +88,7 @@ class _EditorToolbarState extends State<EditorToolbar> {
           for (final shortcut in kMarkdownShortcuts)
             IconButton(
               icon: Icon(shortcut.icon),
-              tooltip: shortcut.tooltipFor(platform),
+              tooltip: shortcut.tooltipFor(context.l10n, platform),
               iconSize: 20,
               onPressed: shortcut.isEnabled(target)
                   ? () => _run(shortcut, target)

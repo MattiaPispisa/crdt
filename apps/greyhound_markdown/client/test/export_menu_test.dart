@@ -7,6 +7,7 @@ import 'package:greyhound_markdown_client/src/config.dart';
 import 'package:greyhound_markdown_client/src/services/export/document_export.dart';
 import 'package:greyhound_markdown_client/src/widgets/export_menu.dart';
 
+import 'helpers/localized_app.dart';
 import 'helpers/recording_file_saver.dart';
 
 void main() {
@@ -26,8 +27,8 @@ void main() {
     await tester.pumpWidget(
       CrdtProvider.value(
         value: document,
-        child: MaterialApp(
-          home: Scaffold(
+        child: localizedApp(
+          Scaffold(
             appBar: AppBar(
               actions: [
                 ExportMenu(

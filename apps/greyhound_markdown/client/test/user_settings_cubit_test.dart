@@ -14,6 +14,7 @@ void main() {
         ..setName('Ada')
         ..setColor(kAvatarPalette.last)
         ..setThemeMode(ThemeMode.dark)
+        ..setLanguage(AppLanguage.italian)
         ..setShowLineNumbers(value: true)
         ..setWordWrap(value: false)
         ..recordRoomOpened('abc123');
@@ -23,6 +24,7 @@ void main() {
       expect(restored.name, 'Ada');
       expect(restored.color, kAvatarPalette.last);
       expect(restored.themeMode, ThemeMode.dark);
+      expect(restored.language, AppLanguage.italian);
       expect(restored.showLineNumbers, isTrue);
       expect(restored.wordWrap, isFalse);
       expect(
@@ -35,11 +37,13 @@ void main() {
       final cubit = UserSettingsCubit(
         storage: MemoryStorage({
           // Written by a build that stored the theme by index, a color as the
-          // string it used to be, and knew nothing of the editor options.
+          // string it used to be, a language this one does not speak, and
+          // knew nothing of the editor options.
           'UserSettings': {
             'name': 'Ada',
             'color': '#ff0000',
             'themeMode': 1,
+            'language': 'esperanto',
             'wordWrap': 'yes',
             'recentRooms': <Object>[
               {'roomId': 'kept', 'openedAt': 1000},
@@ -56,6 +60,7 @@ void main() {
       expect(cubit.state.name, 'Ada');
       expect(cubit.state.color, isIn(kAvatarPalette));
       expect(cubit.state.themeMode, ThemeMode.system);
+      expect(cubit.state.language, AppLanguage.system);
       expect(cubit.state.showLineNumbers, isFalse);
       expect(cubit.state.wordWrap, isTrue);
       expect(cubit.state.recentRooms.map((room) => room.roomId), ['kept']);

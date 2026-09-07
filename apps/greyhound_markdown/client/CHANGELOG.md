@@ -15,6 +15,11 @@
 - **The last rooms you opened are listed on the home page.** The room id is
   the only name a document has, so this is the way back into one you did not
   write down. It works offline: the room is already on your device.
+- **The app speaks English and Italian.** It follows your device language on
+  the first visit, and Settings has a Language picker to force one or go back
+  to following the device. The welcome document and the toolbar tooltips are
+  translated too, and an exported HTML page now says which language it is
+  written in.
 
 ## 0.9.0
 

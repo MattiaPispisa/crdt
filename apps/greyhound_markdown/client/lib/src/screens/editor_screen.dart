@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import 'package:greyhound_markdown_client/src/l10n/l10n_extension.dart';
 import 'package:greyhound_markdown_client/src/services/room/room_session.dart';
 import 'package:greyhound_markdown_client/src/widgets/app_footer.dart';
 import 'package:greyhound_markdown_client/src/widgets/editor_pane.dart';
@@ -37,7 +38,7 @@ class _EditorScreenState extends State<EditorScreen> {
       roomId: widget.roomId,
       // The frame of the page, so nothing jumps when the room arrives.
       loading: (context) => Scaffold(
-        appBar: AppBar(title: Text('Room ${widget.roomId}')),
+        appBar: AppBar(title: Text(context.l10n.roomTitle(widget.roomId))),
         body: const Center(child: CircularProgressIndicator()),
       ),
       builder: _buildRoom,
@@ -47,16 +48,16 @@ class _EditorScreenState extends State<EditorScreen> {
   Widget _buildRoom(BuildContext context, RoomSession room) {
     return Scaffold(
       appBar: AppBar(
-        title: Text('Room ${widget.roomId}'),
+        title: Text(context.l10n.roomTitle(widget.roomId)),
         actions: [
           IconButton(
-            tooltip: 'Copy room id',
+            tooltip: context.l10n.copyRoomId,
             icon: const Icon(Icons.copy),
             onPressed: () {
               Clipboard.setData(ClipboardData(text: widget.roomId));
-              ScaffoldMessenger.of(
-                context,
-              ).showSnackBar(const SnackBar(content: Text('Room id copied')));
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text(context.l10n.roomIdCopied)),
+              );
             },
           ),
           ExportMenu(fallbackName: 'greyhound-${widget.roomId}'),
@@ -66,21 +67,21 @@ class _EditorScreenState extends State<EditorScreen> {
           child: Padding(
             padding: const EdgeInsets.only(bottom: 8),
             child: SegmentedButton<_ViewMode>(
-              segments: const [
+              segments: [
                 ButtonSegment(
                   value: _ViewMode.edit,
-                  icon: Icon(Icons.edit),
-                  label: Text('Edit'),
+                  icon: const Icon(Icons.edit),
+                  label: Text(context.l10n.viewModeEdit),
                 ),
                 ButtonSegment(
                   value: _ViewMode.split,
-                  icon: Icon(Icons.vertical_split),
-                  label: Text('Split'),
+                  icon: const Icon(Icons.vertical_split),
+                  label: Text(context.l10n.viewModeSplit),
                 ),
                 ButtonSegment(
                   value: _ViewMode.view,
-                  icon: Icon(Icons.visibility),
-                  label: Text('View'),
+                  icon: const Icon(Icons.visibility),
+                  label: Text(context.l10n.viewModeView),
                 ),
               ],
               selected: {_mode},

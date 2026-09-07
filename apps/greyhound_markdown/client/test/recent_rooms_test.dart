@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:intl/intl.dart';
 
+import 'package:greyhound_markdown_client/l10n/gen/app_l10n.dart';
 import 'package:greyhound_markdown_client/src/application/application.dart';
 import 'package:greyhound_markdown_client/src/widgets/recent_rooms.dart';
 
+import 'helpers/localized_app.dart';
 import 'helpers/memory_storage.dart';
 
 /// Pumps the list over settings holding [rooms], collecting the ids it opens.
@@ -24,9 +27,7 @@ Future<List<String>> _pumpRooms(
           'UserSettings': {'recentRooms': rooms},
         }),
       ),
-      child: MaterialApp(
-        home: Scaffold(body: RecentRooms(onOpen: opened.add)),
-      ),
+      child: localizedApp(Scaffold(body: RecentRooms(onOpen: opened.add))),
     ),
   );
   return opened;
@@ -66,9 +67,15 @@ void main() {
 
   group('relativeTime', () {
     final now = DateTime.utc(2026, 9, 6, 12);
+    late AppL10n l10n;
+
+    setUpAll(() async {
+      l10n = await englishL10n();
+    });
 
     test('counts up in the coarsest unit that fits', () {
-      String ago(Duration elapsed) => relativeTime(now.subtract(elapsed), now);
+      String ago(Duration elapsed) =>
+          relativeTime(l10n, now.subtract(elapsed), now);
 
       expect(ago(const Duration(seconds: 30)), 'just now');
       expect(ago(const Duration(minutes: 5)), '5 min ago');
@@ -79,13 +86,11 @@ void main() {
 
     test('gives the date once the week is past', () {
       final past = DateTime.utc(2026, 8, 4, 12);
-      // Read in the local zone, so the date shown is the user's own.
-      final local = past.toLocal();
-      final expected =
-          '${local.year}-${local.month.toString().padLeft(2, '0')}'
-          '-${local.day.toString().padLeft(2, '0')}';
+      // Read in the local zone, so the date shown is the user's own, and
+      // written the way the locale writes a date.
+      final expected = DateFormat.yMd('en').format(past.toLocal());
 
-      expect(relativeTime(past, now), expected);
+      expect(relativeTime(l10n, past, now), expected);
     });
   });
 }

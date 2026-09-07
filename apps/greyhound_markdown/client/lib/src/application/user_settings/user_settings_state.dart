@@ -25,19 +25,21 @@ class UserSettingsState extends Equatable {
     required this.name,
     required this.color,
     required this.themeMode,
+    required this.language,
     required this.showLineNumbers,
     required this.wordWrap,
     this.recentRooms = const [],
   });
 
   /// The settings of a first visit: no name yet, a random palette color so two
-  /// peers rarely collide, the platform's own light/dark preference, and the
-  /// editor defaults (no gutter, lines wrapped).
+  /// peers rarely collide, the platform's own light/dark and language
+  /// preferences, and the editor defaults (no gutter, lines wrapped).
   factory UserSettingsState.initial() {
     return UserSettingsState(
       name: '',
       color: kAvatarPalette[Random().nextInt(kAvatarPalette.length)],
       themeMode: ThemeMode.system,
+      language: AppLanguage.system,
       showLineNumbers: false,
       wordWrap: true,
     );
@@ -51,6 +53,9 @@ class UserSettingsState extends Equatable {
 
   /// Whether the app follows the system theme or is forced light/dark.
   final ThemeMode themeMode;
+
+  /// Whether the app follows the system language or is forced to one.
+  final AppLanguage language;
 
   /// Whether the editor draws a line-number gutter next to the source.
   final bool showLineNumbers;
@@ -75,6 +80,7 @@ class UserSettingsState extends Equatable {
     String? name,
     Color? color,
     ThemeMode? themeMode,
+    AppLanguage? language,
     bool? showLineNumbers,
     bool? wordWrap,
     List<RecentRoom>? recentRooms,
@@ -83,6 +89,7 @@ class UserSettingsState extends Equatable {
       name: name ?? this.name,
       color: color ?? this.color,
       themeMode: themeMode ?? this.themeMode,
+      language: language ?? this.language,
       showLineNumbers: showLineNumbers ?? this.showLineNumbers,
       wordWrap: wordWrap ?? this.wordWrap,
       recentRooms: recentRooms ?? this.recentRooms,
@@ -94,6 +101,7 @@ class UserSettingsState extends Equatable {
     name,
     color,
     themeMode,
+    language,
     showLineNumbers,
     wordWrap,
     recentRooms,

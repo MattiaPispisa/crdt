@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:intl/intl.dart';
 
+import 'package:greyhound_markdown_client/l10n/gen/app_l10n.dart';
 import 'package:greyhound_markdown_client/src/application/application.dart';
 import 'package:greyhound_markdown_client/src/config.dart';
+import 'package:greyhound_markdown_client/src/l10n/l10n_extension.dart';
 
 /// The rooms this device opened last, as a discreet list of shortcuts back
 /// into them.
@@ -42,7 +45,7 @@ class RecentRooms extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Text(
-                'Recently opened',
+                context.l10n.recentlyOpened,
                 style: theme.textTheme.titleSmall?.copyWith(color: grey),
               ),
               for (final room in rooms)
@@ -95,7 +98,10 @@ class _RecentRoomRow extends StatelessWidget {
               ),
             ),
             const SizedBox(width: 12),
-            Text(relativeTime(room.openedAt, now), style: style),
+            Text(
+              relativeTime(context.l10n, room.openedAt, now),
+              style: style,
+            ),
           ],
         ),
       ),
@@ -103,29 +109,29 @@ class _RecentRoomRow extends StatelessWidget {
   }
 }
 
-/// How long before [now] the moment [past] was, in words.
+/// How long before [now] the moment [past] was, in the words of [l10n].
 ///
 /// Coarse on purpose: the list only has to say which room was left most
 /// recently. Past a week it gives the date instead, where the exact day says
-/// more than "13 days ago".
+/// more than "13 days ago" — written the way the locale writes a date, so an
+/// Italian reader gets `05/03/2026` and an English one `3/5/2026`.
 @visibleForTesting
-String relativeTime(DateTime past, DateTime now) {
+String relativeTime(AppL10n l10n, DateTime past, DateTime now) {
   final elapsed = now.difference(past);
   if (elapsed.inMinutes < 1) {
-    return 'just now';
+    return l10n.relativeJustNow;
   }
   if (elapsed.inHours < 1) {
-    return '${elapsed.inMinutes} min ago';
+    return l10n.relativeMinutesAgo(elapsed.inMinutes);
   }
   if (elapsed.inDays < 1) {
-    return '${elapsed.inHours} h ago';
+    return l10n.relativeHoursAgo(elapsed.inHours);
   }
   if (elapsed.inDays < 7) {
-    return elapsed.inDays == 1 ? 'yesterday' : '${elapsed.inDays} days ago';
+    return elapsed.inDays == 1
+        ? l10n.relativeYesterday
+        : l10n.relativeDaysAgo(elapsed.inDays);
   }
 
-  final local = past.toLocal();
-  final month = local.month.toString().padLeft(2, '0');
-  final day = local.day.toString().padLeft(2, '0');
-  return '${local.year}-$month-$day';
+  return DateFormat.yMd(l10n.localeName).format(past.toLocal());
 }

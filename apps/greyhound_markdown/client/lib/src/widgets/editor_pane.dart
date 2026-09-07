@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
+import 'package:greyhound_markdown_client/src/l10n/placeholder_markdown.dart';
 import 'package:greyhound_markdown_client/src/application/application.dart';
 import 'package:greyhound_markdown_client/src/config.dart';
 import 'package:greyhound_markdown_client/src/services/awareness/awareness_service.dart';
@@ -401,7 +402,7 @@ class _EditorPlaceholder extends StatelessWidget {
       child: SingleChildScrollView(
         padding: const EdgeInsets.all(kEditorPadding),
         child: Text(
-          kPlaceholderMarkdown,
+          placeholderMarkdown(Localizations.localeOf(context)),
           style: kEditorTextStyle.copyWith(
             color: Theme.of(context).hintColor,
           ),

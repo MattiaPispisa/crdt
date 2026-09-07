@@ -5,16 +5,17 @@ import 'package:flutter/material.dart';
 import 'package:hydrated_bloc/hydrated_bloc.dart';
 
 import 'package:greyhound_markdown_client/src/application/room/room_id.dart';
+import 'package:greyhound_markdown_client/src/application/user_settings/app_language.dart';
 import 'package:greyhound_markdown_client/src/config.dart';
 
 part 'user_settings_state.dart';
 
 /// The user's preferences, persisted across sessions: who they are in a room
-/// (name, color), how the app looks (theme mode) and which rooms they opened
-/// last.
+/// (name, color), how the app looks (theme mode, language) and which rooms
+/// they opened last.
 ///
 /// Restored synchronously when constructed, so the first frame already renders
-/// the stored theme and prefills the home screen.
+/// the stored theme and language, and prefills the home screen.
 class UserSettingsCubit extends HydratedCubit<UserSettingsState> {
   /// Starts from the persisted settings, or from [UserSettingsState.initial]
   /// on a first visit.
@@ -40,6 +41,10 @@ class UserSettingsCubit extends HydratedCubit<UserSettingsState> {
 
   /// Sets whether the app follows the system theme or is forced light/dark.
   void setThemeMode(ThemeMode mode) => emit(state.copyWith(themeMode: mode));
+
+  /// Sets the language the app is shown in.
+  void setLanguage(AppLanguage language) =>
+      emit(state.copyWith(language: language));
 
   /// Sets whether the editor draws a line-number gutter.
   void setShowLineNumbers({required bool value}) =>
@@ -75,6 +80,7 @@ class UserSettingsCubit extends HydratedCubit<UserSettingsState> {
           ? Color(json['color'] as int)
           : fallback.color,
       themeMode: _themeModeFrom(json['themeMode']) ?? fallback.themeMode,
+      language: _languageFrom(json['language']) ?? fallback.language,
       showLineNumbers: json['showLineNumbers'] is bool
           ? json['showLineNumbers'] as bool
           : fallback.showLineNumbers,
@@ -90,6 +96,7 @@ class UserSettingsCubit extends HydratedCubit<UserSettingsState> {
     'name': state.name,
     'color': state.color.toARGB32(),
     'themeMode': state.themeMode.name,
+    'language': state.language.name,
     'showLineNumbers': state.showLineNumbers,
     'wordWrap': state.wordWrap,
     'recentRooms': [
@@ -113,6 +120,19 @@ ThemeMode? _themeModeFrom(Object? value) {
     'system' => ThemeMode.system,
     _ => null,
   };
+}
+
+/// The [AppLanguage] named [value], or `null` when it names none.
+///
+/// Stored by name for the same reason as the theme mode: a value written by an
+/// older build must never be read as a different language.
+AppLanguage? _languageFrom(Object? value) {
+  for (final language in AppLanguage.values) {
+    if (language.name == value) {
+      return language;
+    }
+  }
+  return null;
 }
 
 /// The recent rooms [value] holds, skipping anything it cannot read.

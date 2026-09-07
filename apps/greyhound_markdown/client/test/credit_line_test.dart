@@ -5,13 +5,15 @@ import 'package:greyhound_markdown_client/src/config.dart';
 import 'package:greyhound_markdown_client/src/widgets/credit_line.dart';
 import 'package:greyhound_markdown_client/src/widgets/footer_link.dart';
 
+import 'helpers/localized_app.dart';
+
 void main() {
   testWidgets('CreditLine links the author to their site', (tester) async {
     await tester.pumpWidget(
-      const MaterialApp(home: Scaffold(body: CreditLine())),
+      localizedApp(const Scaffold(body: CreditLine())),
     );
 
-    expect(find.text(kCreditPrefix), findsOneWidget);
+    expect(find.text((await englishL10n()).creditPrefix), findsOneWidget);
     final link = tester.widget<FooterLink>(find.byType(FooterLink));
     expect(link.label, kAuthor);
     expect(link.url, kAuthorUrl);

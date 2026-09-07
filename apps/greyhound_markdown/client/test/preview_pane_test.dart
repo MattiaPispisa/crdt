@@ -5,6 +5,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:greyhound_markdown_client/src/config.dart';
 import 'package:greyhound_markdown_client/src/widgets/preview_pane.dart';
 
+import 'helpers/localized_app.dart';
+
 ({CRDTDocument document, CRDTFugueTextHandler text}) _room() {
   final document = CRDTDocument(peerId: PeerId.generate());
   final text = CRDTFugueTextHandler(document, kHandlerId);
@@ -16,7 +18,7 @@ Future<void> _pump(WidgetTester tester, CRDTDocument document) {
   return tester.pumpWidget(
     CrdtProvider.value(
       value: document,
-      child: const MaterialApp(home: Scaffold(body: PreviewPane())),
+      child: localizedApp(const Scaffold(body: PreviewPane())),
     ),
   );
 }
