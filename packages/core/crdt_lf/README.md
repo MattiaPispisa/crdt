@@ -121,7 +121,7 @@ Add this to your package's `pubspec.yaml` file:
 
 ```yaml
 dependencies:
-  crdt_lf: ^4.0.0
+  crdt_lf: 
 ```
 
 ## Usage
