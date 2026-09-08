@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:crdt_lf/crdt_lf.dart';
 import 'package:crdt_socket_sync/src/common/client/client.dart';
 import 'package:crdt_socket_sync/src/common/client/handshake_gate.dart';
+import 'package:crdt_socket_sync/src/common/client/incompatibility.dart';
 import 'package:crdt_socket_sync/src/common/client/status.dart';
 import 'package:crdt_socket_sync/src/common/client/web_socket/channel_connector.dart';
 import 'package:crdt_socket_sync/src/common/common/common.dart';
@@ -185,6 +186,12 @@ class WebSocketClient extends CRDTSocketClient {
   Future<bool> connect() async {
     if (_connectionStatusValue.isConnected) {
       return true;
+    }
+
+    // The server has already refused this build. Connecting again would only
+    // earn the same refusal.
+    if (isUnsupported) {
+      return false;
     }
 
     if (_handshakeGate.inProgress) {
@@ -391,7 +398,7 @@ class WebSocketClient extends CRDTSocketClient {
     if (!_isReconnecting) {
       _updateConnectionStatus(ConnectionStatus.error);
     }
-    if (attemptReconnect) {
+    if (attemptReconnect && !isUnsupported) {
       _attemptReconnect();
     }
   }
@@ -399,7 +406,7 @@ class WebSocketClient extends CRDTSocketClient {
   /// Attempt to reconnect calling with [Protocol.reconnectInterval] interval
   /// the [connect] method
   Future<void> _attemptReconnect() async {
-    if (_isReconnecting) {
+    if (_isReconnecting || isUnsupported) {
       return;
     }
 
@@ -495,6 +502,7 @@ class WebSocketClient extends CRDTSocketClient {
       versionVector: document.getVersionVector(),
       documentId: document.documentId,
       author: author,
+      capabilities: SyncCapabilities.of(document),
     );
 
     return _handshakeGate.perform(
@@ -589,6 +597,11 @@ class WebSocketClient extends CRDTSocketClient {
       return;
     }
 
+    if (SyncIncompatibility.isTerminalCode(message.code)) {
+      _handleIncompatibility(message);
+      return;
+    }
+
     _updateConnectionStatus(ConnectionStatus.error);
 
     if (message.code == Protocol.errorHandshakeFailed &&
@@ -597,10 +610,32 @@ class WebSocketClient extends CRDTSocketClient {
     }
   }
 
+  /// The server refused this build: stop for good.
+  ///
+  /// Latches the reason, frees anyone waiting on the handshake, and closes the
+  /// transport. From here [connect] and the reconnect timer are both no-ops,
+  /// and the status stays [ConnectionStatus.unsupported].
+  void _handleIncompatibility(ErrorMessage message) {
+    markUnsupported(
+      SyncIncompatibility(code: message.code, message: message.message),
+    );
+
+    _handshakeGate.reset();
+    
+    _updateConnectionStatus(ConnectionStatus.unsupported);
+    unawaited(disconnect());
+  }
+
   /// If [status] is different from [_connectionStatusValue]
   /// then update the connection status and notify the listeners
   void _updateConnectionStatus(ConnectionStatus status) {
     if (status == _connectionStatusValue) {
+      return;
+    }
+
+    // [ConnectionStatus.unsupported] is terminal: the teardown that follows it
+    // (and any late frame) must not report the client as merely disconnected.
+    if (_connectionStatusValue.isUnsupported) {
       return;
     }
 

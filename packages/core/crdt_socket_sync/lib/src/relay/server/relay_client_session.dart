@@ -115,10 +115,36 @@ class RelayClientSession extends ClientSession {
 
   /// Handle a join request
   ///
+  /// 1. Refuse a client that speaks another protocol version
   /// 1. Register the room subscription (notifying plugins)
   /// 1. Send the persisted room state as a welcome
   Future<void> _handleHello(RelayHelloMessage message) async {
     final documentId = message.documentId;
+
+    if (message.protocolVersion != Protocol.protocolVersion) {
+      final reason = 'The client speaks protocol version '
+          '${message.protocolVersion}, this relay speaks '
+          '${Protocol.protocolVersion}.';
+
+      await sendMessage(
+        Message.error(
+          documentId: documentId,
+          code: Protocol.errorUnsupportedProtocolVersion,
+          message: reason,
+        ),
+      );
+
+      addSessionEvent(
+        SessionEventGeneric(
+          sessionId: id,
+          type: SessionEventType.error,
+          message: 'Client refused for relay room $documentId: $reason',
+        ),
+      );
+
+      await close();
+      return;
+    }
 
     _clientAuthor = message.author;
     registerDocument(documentId);

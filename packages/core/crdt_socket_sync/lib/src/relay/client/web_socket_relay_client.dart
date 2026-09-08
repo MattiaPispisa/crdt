@@ -3,6 +3,7 @@ import 'dart:math';
 
 import 'package:crdt_lf/crdt_lf.dart';
 import 'package:crdt_socket_sync/src/common/client/handshake_gate.dart';
+import 'package:crdt_socket_sync/src/common/client/incompatibility.dart';
 import 'package:crdt_socket_sync/src/common/client/status.dart';
 import 'package:crdt_socket_sync/src/common/client/web_socket/'
     'channel_connector.dart';
@@ -274,6 +275,12 @@ class WebSocketRelayClient extends RelaySocketClient {
       return true;
     }
 
+    // The relay has already refused this build. Connecting again would only
+    // earn the same refusal.
+    if (isUnsupported) {
+      return false;
+    }
+
     if (_handshakeGate.inProgress) {
       // already under connection
       return _handshakeGate.pending!;
@@ -478,7 +485,7 @@ class WebSocketRelayClient extends RelaySocketClient {
     if (!_isReconnecting) {
       _updateConnectionStatus(ConnectionStatus.error);
     }
-    if (attemptReconnect) {
+    if (attemptReconnect && !isUnsupported) {
       _attemptReconnect();
     }
   }
@@ -499,7 +506,7 @@ class WebSocketRelayClient extends RelaySocketClient {
   ///
   /// Retries forever unless [maxReconnectAttempts] is set.
   Future<void> _attemptReconnect() async {
-    if (_isReconnecting) {
+    if (_isReconnecting || isUnsupported) {
       return;
     }
 
@@ -660,6 +667,11 @@ class WebSocketRelayClient extends RelaySocketClient {
   }
 
   void _handleErrorMessage(ErrorMessage message) {
+    if (SyncIncompatibility.isTerminalCode(message.code)) {
+      _handleIncompatibility(message);
+      return;
+    }
+
     _updateConnectionStatus(ConnectionStatus.error);
 
     if (message.code == Protocol.errorHandshakeFailed &&
@@ -668,10 +680,34 @@ class WebSocketRelayClient extends RelaySocketClient {
     }
   }
 
+  /// The relay refused this build: stop for good.
+  ///
+  /// Latches the reason, frees anyone waiting on the join, and closes the
+  /// transport. From here [connect] and the reconnect timer are both no-ops,
+  /// and the status stays [ConnectionStatus.unsupported].
+  void _handleIncompatibility(ErrorMessage message) {
+    markUnsupported(
+      SyncIncompatibility(code: message.code, message: message.message),
+    );
+
+    _handshakeGate.reset();
+    // Set the terminal status before tearing the transport down: the teardown
+    // would otherwise report a plain disconnect, and the status is sticky from
+    // here on.
+    _updateConnectionStatus(ConnectionStatus.unsupported);
+    unawaited(disconnect());
+  }
+
   /// If [status] is different from [_connectionStatusValue]
   /// then update the connection status and notify the listeners
   void _updateConnectionStatus(ConnectionStatus status) {
     if (status == _connectionStatusValue) {
+      return;
+    }
+
+    // [ConnectionStatus.unsupported] is terminal: the teardown that follows it
+    // (and any late frame) must not report the client as merely disconnected.
+    if (_connectionStatusValue.isUnsupported) {
       return;
     }
 

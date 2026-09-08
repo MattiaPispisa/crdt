@@ -2,6 +2,7 @@
 library;
 
 export 'src/common/client/client.dart';
+export 'src/common/client/incompatibility.dart';
 export 'src/common/client/status.dart';
 export 'src/common/common/common.dart';
 export 'src/plugins/client.dart';

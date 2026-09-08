@@ -59,21 +59,34 @@ class SyncManager {
   }
 
   /// Applies a change
+  ///
+  /// {@template sync_manager_apply_failure}
+  /// A causal gap is the one failure a resync can close, so it is the only one
+  /// answered with [requestDocumentStatus]. Anything else is left to throw:
+  /// re-serving the same document would fail the same way, and asking for it
+  /// again is a loop, not a recovery.
+  /// {@endtemplate}
   void applyChange(Change change) {
     try {
       document.applyChange(change);
-    } catch (e) {
+    } on CausallyNotReadyException {
+      requestDocumentStatus();
+    } on MissingDependencyException {
       requestDocumentStatus();
     }
   }
 
   /// Applies a list of changes
+  ///
+  /// {@macro sync_manager_apply_failure}
   void applyChanges(List<Change> changes) {
     try {
       for (final change in changes) {
         document.applyChange(change);
       }
-    } catch (e) {
+    } on CausallyNotReadyException {
+      requestDocumentStatus();
+    } on MissingDependencyException {
       requestDocumentStatus();
     }
   }

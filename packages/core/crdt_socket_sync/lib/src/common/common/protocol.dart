@@ -3,6 +3,9 @@ class Protocol {
   /// The major version of the wire protocol this build speaks.
   static const int protocolVersion = 1;
 
+  /// The version a frame that carries no version field speaks.
+  static const int firstProtocolVersion = 1;
+
   /// Handshake timeout
   static const Duration handshakeTimeout = Duration(milliseconds: 5000);
 
