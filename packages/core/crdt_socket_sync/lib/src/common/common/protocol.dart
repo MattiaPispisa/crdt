@@ -1,7 +1,7 @@
 /// Class that handles the communication protocol.
 class Protocol {
-  /// Version
-  static const String version = '1.0.0';
+  /// The major version of the wire protocol this build speaks.
+  static const int protocolVersion = 1;
 
   /// Handshake timeout
   static const Duration handshakeTimeout = Duration(milliseconds: 5000);
@@ -45,4 +45,15 @@ class Protocol {
 
   /// Error client out of sync
   static const String errorOutOfSync = 'OUT_OF_SYNC';
+
+  /// Error: the peer speaks a different [protocolVersion].
+  static const String errorUnsupportedProtocolVersion =
+      'UNSUPPORTED_PROTOCOL_VERSION';
+
+  /// Error: the client cannot decode operations the server's document holds.
+  ///
+  /// Sent when the handshake capabilities miss an operation kind the server
+  /// has (see `SyncCapabilities`). Permanent: only a newer client build fixes
+  /// it.
+  static const String errorUnsupportedClient = 'UNSUPPORTED_CLIENT';
 }

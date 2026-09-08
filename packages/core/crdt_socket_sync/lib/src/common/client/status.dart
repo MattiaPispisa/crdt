@@ -13,7 +13,10 @@ enum ConnectionStatus {
   reconnecting,
 
   /// An error occurred in the connection
-  error;
+  error,
+
+  /// The server refused this client build
+  unsupported;
 
   /// Whether the client is connected to the server
   bool get isConnected => this == connected;
@@ -29,4 +32,7 @@ enum ConnectionStatus {
 
   /// Whether the client is in an error state
   bool get isError => this == error;
+
+  /// Whether the server refused this client build
+  bool get isUnsupported => this == unsupported;
 }

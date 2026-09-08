@@ -1,3 +1,4 @@
+export 'capabilities.dart';
 export 'codec.dart';
 export 'compressor.dart';
 export 'message.dart';

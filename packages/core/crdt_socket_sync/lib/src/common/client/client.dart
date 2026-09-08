@@ -1,7 +1,9 @@
 import 'package:crdt_lf/crdt_lf.dart';
+import 'package:crdt_socket_sync/src/common/client/incompatibility.dart';
 import 'package:crdt_socket_sync/src/common/client/status.dart';
 import 'package:crdt_socket_sync/src/common/common/common.dart';
 import 'package:crdt_socket_sync/src/plugins/client/client.dart';
+import 'package:meta/meta.dart';
 
 /// Interface for the CRDT client
 abstract class CRDTSocketClient {
@@ -20,6 +22,30 @@ abstract class CRDTSocketClient {
 
   /// The client plugins
   final List<ClientSyncPlugin> plugins;
+
+  SyncIncompatibility? _incompatibility;
+
+  /// Why the server refused this build, or `null` while it has not.
+  ///
+  /// Once it is set the client is done: [connect] gives up at once and no
+  /// reconnect is scheduled, because no retry can change the answer. Show it
+  /// to the user — it means the app has to be updated.
+  SyncIncompatibility? get incompatibility => _incompatibility;
+
+  /// Whether the server has refused this build.
+  ///
+  /// The latch behind [ConnectionStatus.unsupported]. It is never cleared: the
+  /// condition depends on the build, not on the connection.
+  bool get isUnsupported => _incompatibility != null;
+
+  /// Records the refusal [incompatibility] and latches the client.
+  ///
+  /// Called by a client when the server answers with a terminal error code
+  /// (see [SyncIncompatibility.isTerminalCode]).
+  @protected
+  void markUnsupported(SyncIncompatibility incompatibility) {
+    _incompatibility ??= incompatibility;
+  }
 
   /// The local CRDT document
   CRDTDocument get document;
