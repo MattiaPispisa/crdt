@@ -33,7 +33,8 @@ class StatusBar extends StatelessWidget {
                       ConnectionStatus.connecting ||
                       ConnectionStatus.reconnecting => Colors.orange,
                       ConnectionStatus.disconnected ||
-                      ConnectionStatus.error => Colors.red,
+                      ConnectionStatus.error ||
+                      ConnectionStatus.unsupported => Colors.red,
                     },
                   ),
                   const SizedBox(width: 6),
@@ -46,6 +47,8 @@ class StatusBar extends StatelessWidget {
                     ConnectionStatus.disconnected =>
                       context.l10n.statusDisconnected,
                     ConnectionStatus.error => context.l10n.statusError,
+                    ConnectionStatus.unsupported =>
+                      context.l10n.statusUnsupported,
                   }),
                 ],
               ),

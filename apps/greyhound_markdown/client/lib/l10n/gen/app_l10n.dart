@@ -369,6 +369,12 @@ abstract class AppL10n {
   /// **'Connection error'**
   String get statusError;
 
+  /// The relay refused this app build: it is too old to read what the room holds, or it speaks another protocol version. Reconnecting cannot fix it.
+  ///
+  /// In en, this message translates to:
+  /// **'Update required'**
+  String get statusUnsupported;
+
   /// Tooltip of the export button in the editor app bar.
   ///
   /// In en, this message translates to:

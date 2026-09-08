@@ -50,6 +50,7 @@
   "statusReconnecting": "Riconnessione…",
   "statusDisconnected": "Disconnesso",
   "statusError": "Errore di connessione",
+  "statusUnsupported": "Aggiornamento richiesto",
 
   "exportDocument": "Esporta il documento",
   "exportAs": "Esporta come {format}",

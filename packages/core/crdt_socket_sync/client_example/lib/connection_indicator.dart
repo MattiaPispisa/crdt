@@ -39,6 +39,12 @@ class ConnectionIndicator extends StatelessWidget {
         );
       case ConnectionStatus.error:
         return (color: Colors.red, icon: Icons.cloud_off, label: 'Error');
+      case ConnectionStatus.unsupported:
+        return (
+          color: Colors.red,
+          icon: Icons.system_update,
+          label: 'Update required',
+        );
     }
   }
 
@@ -53,14 +59,21 @@ class ConnectionIndicator extends StatelessWidget {
 
         // Once the automatic reconnects are exhausted (error) or the client is
         // disconnected, offer a manual retry: tapping re-runs connect().
+        // `unsupported` is left out on purpose: the server refused this build,
+        // and connect() would give up at once.
         final canRetry =
             status == ConnectionStatus.disconnected ||
             status == ConnectionStatus.error;
 
+        // The server explains a refusal (a protocol version, or the operation
+        // kinds this build cannot decode). Show it instead of a bare label.
+        final reason = client.incompatibility?.message;
+
         return IconButton(
           icon: Icon(visual.icon, color: visual.color),
-          tooltip:
-              canRetry ? '${visual.label} — tap to reconnect' : visual.label,
+          tooltip: canRetry
+              ? '${visual.label} — tap to reconnect'
+              : [visual.label, if (reason != null) reason].join(': '),
           onPressed: canRetry ? () => client.connect() : null,
         );
       },
