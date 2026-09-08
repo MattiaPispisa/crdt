@@ -84,9 +84,67 @@ class DocumentClientSession extends ClientSession {
     }
   }
 
+  /// The operation kinds this server's document uses and the client cannot
+  /// read.
+
+  /// Only handler types both sides have opened are compared — see
+  /// [SyncCapabilities.missingFrom] for why, and for the limit that comes with
+  /// lazily registered handlers.
+  Future<List<MissingOperationKind>> _missingClientCapabilities({
+    required String documentId,
+    required SyncCapabilities? clientCapabilities,
+  }) async {
+    if (clientCapabilities == null) {
+      return const [];
+    }
+
+    final document = await _serverRegistry.getDocument(documentId);
+    if (document == null) {
+      return const [];
+    }
+
+    return clientCapabilities.missingFrom(SyncCapabilities.of(document));
+  }
+
+  /// Refuses the client with [code] and [reason], and closes the session.
+  Future<void> _refuseClient({
+    required String documentId,
+    required String code,
+    required String reason,
+  }) async {
+    await sendMessage(
+      Message.error(
+        documentId: documentId,
+        code: code,
+        message: reason,
+      ),
+    );
+
+    addSessionEvent(
+      SessionEventGeneric(
+        sessionId: id,
+        type: SessionEventType.error,
+        message: 'Client refused for document $documentId: $reason',
+      ),
+    );
+
+    await close();
+  }
+
   /// Handle handshake
   Future<void> _handleHandshakeRequest(HandshakeRequestMessage message) async {
     final documentId = message.documentId;
+
+    if (message.protocolVersion != Protocol.protocolVersion) {
+      return _refuseClient(
+        documentId: documentId,
+        code: Protocol.errorUnsupportedProtocolVersion,
+        reason: 'The client speaks protocol version '
+            '${message.protocolVersion}, this server speaks '
+            '${Protocol.protocolVersion}.',
+      );
+    }
+
     final hasDocument = await _serverRegistry.hasDocument(documentId);
 
     if (!hasDocument) {
@@ -97,6 +155,20 @@ class DocumentClientSession extends ClientSession {
           code: Protocol.errorDocumentNotFound,
           message: 'Document not found: $documentId',
         ),
+      );
+    }
+
+    final missing = await _missingClientCapabilities(
+      documentId: documentId,
+      clientCapabilities: message.capabilities,
+    );
+
+    if (missing.isNotEmpty) {
+      return _refuseClient(
+        documentId: documentId,
+        code: Protocol.errorUnsupportedClient,
+        reason: 'The client cannot decode operations this document holds: '
+            '${missing.join(', ')}.',
       );
     }
 

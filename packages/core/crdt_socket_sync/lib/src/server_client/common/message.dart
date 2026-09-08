@@ -112,14 +112,23 @@ class HandshakeRequestMessage extends SyncMessage {
     required this.versionVector,
     required String documentId,
     required this.author,
+    this.protocolVersion = Protocol.protocolVersion,
+    this.capabilities,
   }) : super(MessageType.handshakeRequest, documentId);
 
   /// Create a handshake message from a JSON map
   factory HandshakeRequestMessage.fromJson(Map<String, dynamic> json) {
+    final capabilities = json['capabilities'];
+
     return HandshakeRequestMessage(
       versionVector: _decodeVersionVector(json['versionVector'] as String),
       documentId: json['documentId'] as String,
       author: PeerId.parse(json['author'] as String),
+      protocolVersion:
+          json['protocolVersion'] as int? ?? Protocol.firstProtocolVersion,
+      capabilities: capabilities != null
+          ? SyncCapabilities.fromJson(capabilities as Map<String, dynamic>)
+          : null,
     );
   }
 
@@ -129,6 +138,20 @@ class HandshakeRequestMessage extends SyncMessage {
   /// The author of the message
   final PeerId author;
 
+  /// The wire protocol major version the client speaks.
+  ///
+  /// The server refuses a value different from its own
+  /// [Protocol.protocolVersion], with the error code
+  /// [Protocol.errorUnsupportedProtocolVersion].
+  final int protocolVersion;
+
+  /// The operation kinds the client can decode, or `null` when it declares
+  /// none.
+  ///
+  /// `null` means the client is from a build that predates the field, so the
+  /// server has nothing to compare and lets it through.
+  final SyncCapabilities? capabilities;
+
   @override
   Map<String, dynamic> toJson() {
     return {
@@ -136,13 +159,16 @@ class HandshakeRequestMessage extends SyncMessage {
       'documentId': documentId,
       'author': author.toString(),
       'versionVector': _encodeVersionVector(versionVector),
+      'protocolVersion': protocolVersion,
+      if (capabilities != null) 'capabilities': capabilities!.toJson(),
     };
   }
 
   @override
   String toString() {
     return 'HandshakeRequestMessage(versionVector: $versionVector, '
-        'documentId: $documentId, author: $author)';
+        'documentId: $documentId, author: $author, '
+        'protocolVersion: $protocolVersion, capabilities: $capabilities)';
   }
 }
 
@@ -155,6 +181,7 @@ class HandshakeResponseMessage extends SyncMessage {
     required this.versionVector,
     this.snapshot,
     this.changes,
+    this.protocolVersion = Protocol.protocolVersion,
   }) : super(MessageType.handshakeResponse, documentId);
 
   /// Create a handshake response message from a JSON map
@@ -171,6 +198,8 @@ class HandshakeResponseMessage extends SyncMessage {
           : null,
       sessionId: json['sessionId'] as String,
       versionVector: _decodeVersionVector(json['versionVector'] as String),
+      protocolVersion:
+          json['protocolVersion'] as int? ?? Protocol.firstProtocolVersion,
     );
   }
 
@@ -186,6 +215,13 @@ class HandshakeResponseMessage extends SyncMessage {
   /// The server version vector after applying snapshot and changes
   final VersionVector versionVector;
 
+  /// The wire protocol major version the server speaks.
+  ///
+  /// The server only answers a client it accepts, so this always matches. It
+  /// is echoed so a newer client can tell an older server apart from one that
+  /// simply never sent the field.
+  final int protocolVersion;
+
   @override
   Map<String, dynamic> toJson() {
     return {
@@ -195,6 +231,7 @@ class HandshakeResponseMessage extends SyncMessage {
       'changes': changes?.map(_encodeChange).toList(),
       'sessionId': sessionId,
       'versionVector': _encodeVersionVector(versionVector),
+      'protocolVersion': protocolVersion,
     };
   }
 
@@ -202,7 +239,7 @@ class HandshakeResponseMessage extends SyncMessage {
   String toString() {
     return 'HandshakeResponseMessage(snapshot: $snapshot, '
         'changes: $changes, sessionId: $sessionId,'
-        ' versionVector: $versionVector)';
+        ' versionVector: $versionVector, protocolVersion: $protocolVersion)';
   }
 }
 
