@@ -14,10 +14,16 @@ class _FakeTransport implements Transport {
   _FakeTransport({
     required this.documentId,
     required this.respondToPings,
+    this.refuseWith,
   });
 
   final String documentId;
   final bool respondToPings;
+
+  /// When set, the handshake is answered with an [ErrorMessage] carrying this
+  /// code instead of a [HandshakeResponseMessage], the way a server refuses a
+  /// build it cannot serve. The transport then fails, as a closed socket does.
+  final String? refuseWith;
 
   final _incoming = StreamController<List<int>>.broadcast();
   final _codec = JsonMessageCodec<Message>(
@@ -39,6 +45,18 @@ class _FakeTransport implements Transport {
     if (message == null) return;
 
     if (message.type == MessageType.handshakeRequest) {
+      final code = refuseWith;
+      if (code != null) {
+        _push(
+          Message.error(
+            documentId: documentId,
+            code: code,
+            message: 'refused by the test server',
+          ),
+        );
+        _fail();
+        return;
+      }
       _push(
         HandshakeResponseMessage(
           documentId: documentId,
@@ -57,6 +75,12 @@ class _FakeTransport implements Transport {
         ),
       );
     }
+  }
+
+  /// Fails the incoming stream, the way a socket dropped by the server does.
+  void _fail() {
+    if (_closed || _incoming.isClosed) return;
+    _incoming.addError(StateError('connection closed by the server'));
   }
 
   void _push(Message message) {
@@ -166,5 +190,60 @@ void main() {
 
       await sub.cancel();
     });
+  });
+
+  group('WebSocketClient refused build', () {
+    const documentId = 'doc';
+    const pingInterval = Duration(milliseconds: 50);
+    const pingTimeout = Duration(milliseconds: 500);
+
+  test('a refused build stops for good and never reconnects', () async {
+    final doc = CRDTDocument(
+      peerId: PeerId.generate(),
+      documentId: documentId,
+    );
+    final client = WebSocketClient.test(
+      url: 'ws://localhost:0',
+      document: doc,
+      author: doc.peerId,
+      pingInterval: pingInterval,
+      pingTimeout: pingTimeout,
+      transportFactory: () => _FakeTransport(
+        documentId: documentId,
+        respondToPings: false,
+        refuseWith: Protocol.errorUnsupportedClient,
+      ),
+    );
+    addTearDown(client.dispose);
+
+    final statuses = <ConnectionStatus>[];
+    final sub = client.connectionStatus.listen(statuses.add);
+
+    expect(await client.connect(), isFalse);
+
+    expect(client.connectionStatusValue, ConnectionStatus.unsupported);
+    expect(client.isUnsupported, isTrue);
+    expect(
+      client.incompatibility!.code,
+      Protocol.errorUnsupportedClient,
+    );
+    expect(client.incompatibility!.isMissingOperationKinds, isTrue);
+
+    // The transport failed right after the refusal. A plain error would
+    // schedule a reconnect here; a refusal must not, because retrying can
+    // never change the answer.
+    await Future<void>.delayed(pingTimeout);
+
+    expect(client.connectionStatusValue, ConnectionStatus.unsupported);
+    expect(statuses, isNot(contains(ConnectionStatus.reconnecting)));
+    // The terminal status is sticky: the teardown does not downgrade it.
+    expect(statuses.last, ConnectionStatus.unsupported);
+
+    // And connecting again gives up at once, without touching the socket.
+    expect(await client.connect(), isFalse);
+    expect(client.connectionStatusValue, ConnectionStatus.unsupported);
+
+    await sub.cancel();
+  });
   });
 }

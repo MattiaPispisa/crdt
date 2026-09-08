@@ -85,6 +85,31 @@ void main() {
         expect(sentMessage!.documentId, equals(document.documentId));
       });
 
+      test('does not request a status for a failure a resync cannot fix',
+          () async {
+        // Only a causal gap is worth re-serving the document for. Anything
+        // else (an undecodable operation, a disposed document) fails the same
+        // way on the served copy, so asking again is a loop, not a recovery.
+        final operation = MockOperation(handler);
+        final peer = PeerId.generate();
+        final change = Change(
+          id: OperationId(peer, HybridLogicalClock(l: 1, c: 1)),
+          operation: operation,
+          deps: {},
+          author: peer,
+        );
+
+        document.dispose();
+
+        expect(
+          () => syncManager.applyChange(change),
+          throwsA(isA<DocumentDisposedException>()),
+        );
+
+        await Future<void>.delayed(Duration.zero);
+        expect(mockClient.sentMessages, isEmpty);
+      });
+
       test('should handle error when requesting missing changes gracefully',
           () async {
         mockClient.setShouldThrowOnSendMessage = true;

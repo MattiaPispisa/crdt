@@ -8,6 +8,8 @@ import 'package:crdt_socket_sync/src/server_client/server/document_client_sessio
 import 'package:crdt_socket_sync/src/server_client/server/in_memory_server_registry.dart';
 import 'package:test/test.dart';
 
+import '../../utils/mock_handler.dart';
+
 /// A connection whose sends never complete, so bytes accumulate in the
 /// session's outbound queue.
 class _StallingConnection implements TransportConnection {
@@ -120,13 +122,19 @@ void main() {
     List<Message> decodeSent() =>
         connection.sent.map(codec.decode).whereType<Message>().toList();
 
-    Future<void> handshake({VersionVector? versionVector}) async {
+    Future<void> handshake({
+      VersionVector? versionVector,
+      int protocolVersion = Protocol.protocolVersion,
+      SyncCapabilities? capabilities,
+    }) async {
       connection.inbound(
         codec.encode(
           HandshakeRequestMessage(
             author: PeerId.generate(),
             documentId: documentId,
             versionVector: versionVector ?? VersionVector({}),
+            protocolVersion: protocolVersion,
+            capabilities: capabilities,
           ),
         )!,
       );
@@ -152,6 +160,82 @@ void main() {
         hasLength(1),
       );
       expect(session.isSubscribedTo(documentId), isTrue);
+    });
+
+    test('refuses a client that speaks another protocol version', () async {
+      await registry.addDocument(documentId);
+      await handshake(protocolVersion: Protocol.protocolVersion + 1);
+
+      final errors = decodeSent().whereType<ErrorMessage>().toList();
+      expect(errors, hasLength(1));
+      expect(errors.single.code, Protocol.errorUnsupportedProtocolVersion);
+      // Refused before any state is served.
+      expect(decodeSent().whereType<HandshakeResponseMessage>(), isEmpty);
+      expect(session.isSubscribedTo(documentId), isFalse);
+      expect(connection.isConnected, isFalse);
+    });
+
+    test('the version is checked before the document exists', () async {
+      // A client on the wrong protocol learns that, not that the document is
+      // missing: the version is the more useful answer, and the document
+      // lookup can be skipped.
+      await handshake(protocolVersion: Protocol.protocolVersion + 1);
+
+      final errors = decodeSent().whereType<ErrorMessage>().toList();
+      expect(errors.single.code, Protocol.errorUnsupportedProtocolVersion);
+    });
+
+    test('refuses a client missing an operation kind the document uses',
+        () async {
+      await registry.addDocument(documentId);
+      NewerMockHandler((await registry.getDocument(documentId))!);
+
+      await handshake(
+        capabilities: SyncCapabilities({
+          'MockHandler': {OperationType.kindInsert},
+        }),
+      );
+
+      final errors = decodeSent().whereType<ErrorMessage>().toList();
+      expect(errors, hasLength(1));
+      expect(errors.single.code, Protocol.errorUnsupportedClient);
+      // The reason names the concrete kind, not just "not supported".
+      expect(errors.single.message, contains('MockHandler'));
+      expect(
+        errors.single.message,
+        contains('kind ${OperationType.kindDelete}'),
+      );
+      expect(decodeSent().whereType<HandshakeResponseMessage>(), isEmpty);
+      expect(connection.isConnected, isFalse);
+    });
+
+    test('accepts a client whose capabilities cover the document', () async {
+      await registry.addDocument(documentId);
+      NewerMockHandler((await registry.getDocument(documentId))!);
+
+      await handshake(
+        capabilities: SyncCapabilities({
+          'MockHandler': {
+            OperationType.kindInsert,
+            OperationType.kindDelete,
+          },
+        }),
+      );
+
+      expect(decodeSent().whereType<HandshakeResponseMessage>(), hasLength(1));
+      expect(decodeSent().whereType<ErrorMessage>(), isEmpty);
+    });
+
+    test('accepts a client that declares no capabilities at all', () async {
+      // Backward compatibility: a 0.8.x client sends no capabilities. With
+      // nothing to compare there is nothing to refuse.
+      await registry.addDocument(documentId);
+      NewerMockHandler((await registry.getDocument(documentId))!);
+
+      await handshake();
+
+      expect(decodeSent().whereType<HandshakeResponseMessage>(), hasLength(1));
+      expect(decodeSent().whereType<ErrorMessage>(), isEmpty);
     });
 
     test('emits an error for a change to an unsubscribed document', () async {

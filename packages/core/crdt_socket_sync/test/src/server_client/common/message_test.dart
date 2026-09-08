@@ -2,7 +2,9 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:crdt_lf/crdt_lf.dart';
+import 'package:crdt_socket_sync/src/common/common/capabilities.dart';
 import 'package:crdt_socket_sync/src/common/common/message.dart';
+import 'package:crdt_socket_sync/src/common/common/protocol.dart';
 import 'package:crdt_socket_sync/src/server_client/common/message.dart';
 import 'package:hlc_dart/hlc_dart.dart';
 import 'package:test/test.dart';
@@ -159,6 +161,48 @@ void main() {
       expect(string, contains('HandshakeRequestMessage'));
       expect(string, contains(documentId));
       expect(string, contains(author.toString()));
+    });
+
+    test('carries the protocol version and the capabilities', () {
+      final capabilities = SyncCapabilities({
+        'MockHandler': {0, 1},
+      });
+
+      final json = HandshakeRequestMessage(
+        documentId: documentId,
+        author: author,
+        versionVector: versionVector,
+        capabilities: capabilities,
+      ).toJson();
+
+      expect(json['protocolVersion'], Protocol.protocolVersion);
+      expect(json['capabilities'], {
+        'MockHandler': [0, 1],
+      });
+
+      final decoded = HandshakeRequestMessage.fromJson(json);
+      expect(decoded.protocolVersion, Protocol.protocolVersion);
+      expect(decoded.capabilities!.operationKinds, capabilities.operationKinds);
+    });
+
+    test('a request from a build without the fields still decodes', () {
+      // Backward compatibility: a 0.8.x client sends neither field. The
+      // version reads as 1 and the capabilities as null, which the server
+      // takes as "nothing to check".
+      final message = HandshakeRequestMessage.fromJson({
+        'type': MessageType.handshakeRequest.value,
+        'documentId': documentId,
+        'author': author.toString(),
+        'versionVector': _encVV(versionVector),
+      });
+
+      // The literal, on purpose. A 0.8.x frame speaks version 1 forever, so
+      // this must not follow Protocol.protocolVersion when that moves on —
+      // reading an old frame as the current version would accept a peer the
+      // check exists to refuse.
+      expect(message.protocolVersion, 1);
+      expect(Protocol.firstProtocolVersion, 1);
+      expect(message.capabilities, isNull);
     });
   });
 

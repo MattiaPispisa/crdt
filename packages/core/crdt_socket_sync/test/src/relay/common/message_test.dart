@@ -28,6 +28,36 @@ void main() {
         RelayHelloMessage(documentId: documentId, author: author),
       );
       expect(decoded.author, author);
+      expect(decoded.protocolVersion, Protocol.protocolVersion);
+    });
+
+    test('hello and welcome from a build without the version still decode', () {
+      // Backward compatibility: a 0.8.x peer sends no protocolVersion. It
+      // reads as 1, the version those frames actually speak.
+      //
+      // The literal below is on purpose: it must not follow
+      // Protocol.protocolVersion when that moves on, or an old peer would be
+      // read as current and accepted.
+      final author = PeerId.generate();
+
+      final hello = RelayHelloMessage.fromJson({
+        'type': RelayMessageType.relayHello.value,
+        'documentId': documentId,
+        'author': author.toString(),
+      });
+      expect(hello.protocolVersion, 1);
+      expect(Protocol.firstProtocolVersion, 1);
+
+      final welcome = RelayWelcomeMessage.fromJson({
+        'type': RelayMessageType.relayWelcome.value,
+        'documentId': documentId,
+        'sessionId': 'session-1',
+        'changes': <String>[],
+        'seq': 0,
+        'logLength': 0,
+        'compact': false,
+      });
+      expect(welcome.protocolVersion, 1);
     });
 
     test('welcome round-trips', () {
@@ -48,6 +78,7 @@ void main() {
       expect(decoded.seq, 12);
       expect(decoded.logLength, 2);
       expect(decoded.compact, isTrue);
+      expect(decoded.protocolVersion, Protocol.protocolVersion);
     });
 
     test('welcome round-trips without snapshot', () {
