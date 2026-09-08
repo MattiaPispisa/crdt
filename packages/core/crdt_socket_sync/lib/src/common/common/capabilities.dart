@@ -49,7 +49,6 @@ class SyncCapabilities {
         );
 
   /// Reads the capabilities of [document] from the handlers registered on it.
-
   factory SyncCapabilities.of(CRDTDocument document) {
     final kinds = <String, Set<int>>{};
 

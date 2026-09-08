@@ -35,6 +35,7 @@
     - [Relay Quick Start](#relay-quick-start)
     - [Join \& Welcome](#join--welcome)
     - [Push, Ack \& Rebroadcast](#push-ack--rebroadcast)
+      - [Surviving a restart](#surviving-a-restart)
     - [Log Compaction](#log-compaction)
     - [Client seq window](#client-seq-window)
     - [Relay Plugins \& Awareness](#relay-plugins--awareness)
@@ -45,6 +46,7 @@
       - [Awareness Plugin](#awareness-plugin)
     - [Compression](#compression)
     - [Connection status \& error handling](#connection-status--error-handling)
+    - [Version \& capability negotiation](#version--capability-negotiation)
     - [Wire format \& type codes](#wire-format--type-codes)
   - [Examples](#examples)
   - [Apps](#apps)
@@ -941,6 +943,10 @@ client.connectionStatus.listen((status) {
     case ConnectionStatus.disconnected:
       // Clean disconnection
       break;
+    case ConnectionStatus.unsupported:
+      // The server refused this build. Terminal: ask the user to update.
+      showUpdateRequired(client.incompatibility!.message);
+      break;
   }
 });
 ```
@@ -949,6 +955,59 @@ Liveness is tracked with ping/pong: a missing pong within the ping timeout is
 treated as a dead (half-open) connection and triggers a reconnect. The
 CRDT-aware client reconnects on a fixed interval with capped attempts; the relay
 client uses exponential backoff with jitter and retries forever by default.
+
+`ConnectionStatus.unsupported` is the one status the client never leaves: see
+[version & capability negotiation](#version--capability-negotiation).
+
+### Version & capability negotiation
+
+Two builds can disagree in two ways, and the handshake checks both **before**
+any document state is served.
+
+**The protocol version.** The client sends `Protocol.protocolVersion` in its
+"hello" protocol. A server that speaks another one answers
+`ErrorMessage(Protocol.errorUnsupportedProtocolVersion)` and closes the session.
+
+**The operation kinds.** An operation kind belongs to the handler that defines it.
+What a build can state is the set it decodes, which is exactly the keys of
+`Handler.operationDecoders`. The client sends that set, keyed by
+`Handler.handlerType`:
+
+```json
+{ "CRDTFugueTextHandler": [0, 1, 2], "CRDTMapHandler": [0, 1] }
+```
+
+The server compares it with its own document and, if the client is missing a
+kind the document uses, answers
+`ErrorMessage(Protocol.errorUnsupportedClient)` naming the handler type and the
+kind, then closes the session.
+
+Both refusals are permanent. The client latches them: it moves to
+`ConnectionStatus.unsupported`, fills `client.incompatibility`, and stops. It
+schedules no reconnect and `connect()` gives up at once, because no retry can
+change the answer.
+
+```dart
+final incompatibility = client.incompatibility;
+if (incompatibility != null) {
+  print(incompatibility.message);
+  print(incompatibility.isMissingOperationKinds); // vs. a version mismatch
+}
+```
+
+Two limits worth knowing:
+
+- **A relay checks only the version.** It carries CRDT payloads as opaque
+  blobs and never decodes them, so it cannot tell what a client can read.
+- **Handlers register lazily**, so a client declares the handlers it has opened
+  so far. A handler it opens later is absent from the list, the server has
+  nothing to compare for it, and the handshake passes. A change for that
+  handler then throws `UnknownOperationKindException` on the first read — the
+  failure this check exists to prevent.
+
+  Open the handlers you need before you call `connect()`. On a document that
+  already holds data, `document.reconstruct()` builds every handler that data
+  reaches, so the declaration covers them too.
 
 ### Wire format & type codes
 
