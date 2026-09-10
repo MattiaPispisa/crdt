@@ -1,6 +1,5 @@
 import 'dart:typed_data';
 import 'package:crdt_lf/crdt_lf.dart';
-import 'package:crdt_lf/src/snapshot/blob_version.dart';
 
 part 'operation.dart';
 
@@ -136,7 +135,7 @@ base class CRDTListHandler<T> extends Handler<List<T>>
 
   @override
   Uint8List getSnapshotState() {
-    final out = BytesBuilder(copy: false)..addByte(snapshotBlobVersion);
+    final out = snapshotHeader();
     final items = value;
     UVarint.write(items.length, out);
     for (final item in items) {
@@ -319,11 +318,7 @@ base class CRDTListHandler<T> extends Handler<List<T>>
       return [];
     }
 
-    var offset = SnapshotBlob.read(
-      snapshot,
-      version: snapshotBlobVersion,
-      name: 'list',
-    );
+    var offset = readSnapshotHeader(snapshot);
     final countRec = UVarint.read(snapshot, offset: offset);
     offset = countRec.nextOffset;
     final items = <T>[];

@@ -1,7 +1,6 @@
 import 'dart:typed_data';
 
 import 'package:crdt_lf/crdt_lf.dart';
-import 'package:crdt_lf/src/snapshot/blob_version.dart';
 
 part 'operation.dart';
 
@@ -149,7 +148,7 @@ base class CRDTRegisterHandler<T> extends Handler<T>
 
   @override
   Uint8List getSnapshotState() {
-    final out = BytesBuilder(copy: false)..addByte(snapshotBlobVersion);
+    final out = snapshotHeader();
     final current = value;
     if (current == null) {
       out.addByte(0); // unset
@@ -165,11 +164,7 @@ base class CRDTRegisterHandler<T> extends Handler<T>
     if (snapshot == null) {
       return null;
     }
-    final offset = SnapshotBlob.read(
-      snapshot,
-      version: snapshotBlobVersion,
-      name: 'register',
-    );
+    final offset = readSnapshotHeader(snapshot);
     if (offset >= snapshot.length) {
       throw const FormatException('Truncated register snapshot');
     }

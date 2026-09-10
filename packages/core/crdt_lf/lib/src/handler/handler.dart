@@ -72,9 +72,34 @@ abstract base class Handler<T>
   /// The operation kinds this build can decode.
   Set<int> get decodableKinds => operationDecoders.keys.toSet();
 
-  /// The version of the blob [getSnapshotState] writes, and the only one this
-  /// build reads back.
+  /// The version of the blob [getSnapshotState] writes.
+  ///
+  /// A peer that raises it is telling the others that they cannot read what it
+  /// writes.
   int get snapshotBlobVersion => 1;
+
+  /// A builder holding the head of this handler's snapshot blob.
+  ///
+  /// ```dart
+  /// @override
+  /// Uint8List getSnapshotState() {
+  ///   final out = snapshotHeader()..add(Wtf8.encode(value));
+  ///   return out.toBytes();
+  /// }
+  /// ```
+  BytesBuilder snapshotHeader() =>
+      BytesBuilder(copy: false)..addByte(snapshotBlobVersion);
+
+  /// Checks the head [snapshotHeader] wrote and returns the offset of what
+  /// follows it.
+  ///
+  /// Throws a [FormatException] naming this handler when [bytes] was written
+  /// by a build with another [snapshotBlobVersion].
+  int readSnapshotHeader(Uint8List bytes) => SnapshotBlob.read(
+        bytes,
+        version: snapshotBlobVersion,
+        name: handlerType,
+      );
 
   /// Stable identifier of this handler's **type**.
   ///

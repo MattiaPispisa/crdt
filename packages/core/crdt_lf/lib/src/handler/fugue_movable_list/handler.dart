@@ -7,7 +7,6 @@ import 'package:crdt_lf/src/handler/fugue/element_id_floor.dart';
 import 'package:crdt_lf/src/handler/fugue/fugue_cache.dart';
 import 'package:crdt_lf/src/handler/fugue/fugue_delta.dart';
 import 'package:crdt_lf/src/handler/fugue/fugue_restore_runs.dart';
-import 'package:crdt_lf/src/snapshot/blob_version.dart';
 
 part 'operation.dart';
 
@@ -702,7 +701,7 @@ base class CRDTFugueMovableListHandler<T>
     final state = cachedOrComputedState();
     final visible = state.visiblePositions;
 
-    final out = BytesBuilder(copy: false)..addByte(snapshotBlobVersion);
+    final out = snapshotHeader();
     UVarint.write(visible.length, out);
     for (final positionID in visible) {
       final identityID = _identityForPosition(state, positionID)!;
@@ -732,11 +731,7 @@ base class CRDTFugueMovableListHandler<T>
       return <FugueElementID, _MovableElement<T>>{};
     }
 
-    var offset = SnapshotBlob.read(
-      snapshot,
-      version: snapshotBlobVersion,
-      name: 'movable list',
-    );
+    var offset = readSnapshotHeader(snapshot);
     final countRec = UVarint.read(snapshot, offset: offset);
     offset = countRec.nextOffset;
 

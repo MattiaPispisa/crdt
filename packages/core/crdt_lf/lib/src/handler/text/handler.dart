@@ -3,7 +3,6 @@ import 'dart:typed_data';
 
 import 'package:crdt_lf/crdt_lf.dart';
 import 'package:crdt_lf/src/handler/handler_type.dart';
-import 'package:crdt_lf/src/snapshot/blob_version.dart';
 
 part 'operation.dart';
 
@@ -156,9 +155,7 @@ base class CRDTTextHandler extends Handler<String>
 
   @override
   Uint8List getSnapshotState() {
-    final out = BytesBuilder(copy: false)
-      ..addByte(snapshotBlobVersion)
-      ..add(Wtf8.encode(value));
+    final out = snapshotHeader()..add(Wtf8.encode(value));
     return out.toBytes();
   }
 
@@ -446,11 +443,7 @@ base class CRDTTextHandler extends Handler<String>
     if (snapshot == null) {
       return '';
     }
-    final offset = SnapshotBlob.read(
-      snapshot,
-      version: snapshotBlobVersion,
-      name: 'text',
-    );
+    final offset = readSnapshotHeader(snapshot);
     return Wtf8.decode(Uint8List.sublistView(snapshot, offset));
   }
 

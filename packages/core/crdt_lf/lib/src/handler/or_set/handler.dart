@@ -1,7 +1,6 @@
 import 'dart:typed_data';
 
 import 'package:crdt_lf/crdt_lf.dart';
-import 'package:crdt_lf/src/snapshot/blob_version.dart';
 
 part 'operation.dart';
 
@@ -121,7 +120,7 @@ base class CRDTORSetHandler<T> extends Handler<ORSetState<T>>
   /// Returns the current state for snapshotting as a binary blob.
   @override
   Uint8List getSnapshotState() {
-    final out = BytesBuilder(copy: false)..addByte(snapshotBlobVersion);
+    final out = snapshotHeader();
     final items = value;
     UVarint.write(items.length, out);
     for (final item in items) {
@@ -147,11 +146,7 @@ base class CRDTORSetHandler<T> extends Handler<ORSetState<T>>
     // otherwise. The snapshot is a length-prefixed sequence of items encoded
     // via [_valueCodec].
     if (snap != null) {
-      var offset = SnapshotBlob.read(
-        snap,
-        version: snapshotBlobVersion,
-        name: 'OR-set',
-      );
+      var offset = readSnapshotHeader(snap);
       final countRec = UVarint.read(snap, offset: offset);
       offset = countRec.nextOffset;
       for (var i = 0; i < countRec.value; i += 1) {

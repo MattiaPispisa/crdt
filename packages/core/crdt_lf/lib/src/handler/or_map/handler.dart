@@ -1,7 +1,6 @@
 import 'dart:typed_data';
 
 import 'package:crdt_lf/crdt_lf.dart';
-import 'package:crdt_lf/src/snapshot/blob_version.dart';
 
 part 'operation.dart';
 
@@ -142,7 +141,7 @@ base class CRDTORMapHandler<K, V> extends Handler<ORMapState<K, V>>
   /// Returns the current state for snapshotting as a binary blob.
   @override
   Uint8List getSnapshotState() {
-    final out = BytesBuilder(copy: false)..addByte(snapshotBlobVersion);
+    final out = snapshotHeader();
     final entries = value;
     UVarint.write(entries.length, out);
     for (final entry in entries.entries) {
@@ -169,11 +168,7 @@ base class CRDTORMapHandler<K, V> extends Handler<ORMapState<K, V>>
     // say otherwise. The snapshot is a length-prefixed sequence of
     // (key, value) pairs encoded via [_keyCodec] and [_valueCodec].
     if (snap != null) {
-      var offset = SnapshotBlob.read(
-        snap,
-        version: snapshotBlobVersion,
-        name: 'OR-map',
-      );
+      var offset = readSnapshotHeader(snap);
       final countRec = UVarint.read(snap, offset: offset);
       offset = countRec.nextOffset;
       for (var i = 0; i < countRec.value; i += 1) {

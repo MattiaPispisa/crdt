@@ -567,10 +567,6 @@ class CRDTDocument extends BaseCRDTDocument {
     _materializeReachable();
   }
 
-  // Capabilities: the state and the members that fold it. They belong to
-  // [CRDTDocument], so they live here; everything that does not — the value
-  // types, the snapshot record, the factory probe — is in `capabilities.dart`.
-
   /// The operation kinds this document's data holds, by handler type.
   ///
   /// Grows only: a change can add a kind, never take one away. That is what
