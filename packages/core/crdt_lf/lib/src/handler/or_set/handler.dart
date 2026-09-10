@@ -115,12 +115,13 @@ base class CRDTORSetHandler<T> extends Handler<ORSetState<T>>
   /// Layout: `version: u8`, `count: uvarint`, then per item
   /// `itemLen: uvarint`, `item: bytes`. The tags stay out: a snapshot holds
   /// the projected set, and the elements come back tagless.
-  static const int _snapshotVersion = 1;
+  @override
+  int get snapshotBlobVersion => 1;
 
   /// Returns the current state for snapshotting as a binary blob.
   @override
   Uint8List getSnapshotState() {
-    final out = BytesBuilder(copy: false)..addByte(_snapshotVersion);
+    final out = BytesBuilder(copy: false)..addByte(snapshotBlobVersion);
     final items = value;
     UVarint.write(items.length, out);
     for (final item in items) {
@@ -148,7 +149,7 @@ base class CRDTORSetHandler<T> extends Handler<ORSetState<T>>
     if (snap != null) {
       var offset = SnapshotBlob.read(
         snap,
-        version: _snapshotVersion,
+        version: snapshotBlobVersion,
         name: 'OR-set',
       );
       final countRec = UVarint.read(snap, offset: offset);

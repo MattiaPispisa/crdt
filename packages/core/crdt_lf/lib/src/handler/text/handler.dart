@@ -151,12 +151,13 @@ base class CRDTTextHandler extends Handler<String>
   /// The version of the snapshot blob this build writes and reads.
   ///
   /// Layout: `version: u8` then the whole text as WTF-8.
-  static const int _snapshotVersion = 1;
+  @override
+  int get snapshotBlobVersion => 1;
 
   @override
   Uint8List getSnapshotState() {
     final out = BytesBuilder(copy: false)
-      ..addByte(_snapshotVersion)
+      ..addByte(snapshotBlobVersion)
       ..add(Wtf8.encode(value));
     return out.toBytes();
   }
@@ -447,7 +448,7 @@ base class CRDTTextHandler extends Handler<String>
     }
     final offset = SnapshotBlob.read(
       snapshot,
-      version: _snapshotVersion,
+      version: snapshotBlobVersion,
       name: 'text',
     );
     return Wtf8.decode(Uint8List.sublistView(snapshot, offset));

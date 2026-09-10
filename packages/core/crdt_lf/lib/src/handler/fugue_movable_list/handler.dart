@@ -676,7 +676,8 @@ base class CRDTFugueMovableListHandler<T>
   }
 
   /// The version of the snapshot blob this build writes and reads.
-  static const int _snapshotVersion = 1;
+  @override
+  int get snapshotBlobVersion => 1;
 
   /// Snapshot layout:
   /// - version: u8
@@ -701,7 +702,7 @@ base class CRDTFugueMovableListHandler<T>
     final state = cachedOrComputedState();
     final visible = state.visiblePositions;
 
-    final out = BytesBuilder(copy: false)..addByte(_snapshotVersion);
+    final out = BytesBuilder(copy: false)..addByte(snapshotBlobVersion);
     UVarint.write(visible.length, out);
     for (final positionID in visible) {
       final identityID = _identityForPosition(state, positionID)!;
@@ -733,7 +734,7 @@ base class CRDTFugueMovableListHandler<T>
 
     var offset = SnapshotBlob.read(
       snapshot,
-      version: _snapshotVersion,
+      version: snapshotBlobVersion,
       name: 'movable list',
     );
     final countRec = UVarint.read(snapshot, offset: offset);

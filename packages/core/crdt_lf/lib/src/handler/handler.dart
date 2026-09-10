@@ -69,6 +69,14 @@ abstract base class Handler<T>
   /// when a change carrying it is decoded.
   OperationDecoders get operationDecoders;
 
+  /// The operation kinds this build can decode.
+  ///
+  Set<int> get decodableKinds => operationDecoders.keys.toSet();
+
+  /// The version of the blob [getSnapshotState] writes, and the only one this
+  /// build reads back.
+  int get snapshotBlobVersion => 1;
+
   /// Stable identifier of this handler's **type**.
   ///
   /// Used as the type tag in operation envelopes, in the snapshot handler

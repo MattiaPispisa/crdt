@@ -144,11 +144,12 @@ base class CRDTRegisterHandler<T> extends Handler<T>
   ///
   /// Layout: `version: u8`, `present: u8`, then, when present,
   /// `valueLen: uvarint`, `value: bytes`.
-  static const int _snapshotVersion = 1;
+  @override
+  int get snapshotBlobVersion => 1;
 
   @override
   Uint8List getSnapshotState() {
-    final out = BytesBuilder(copy: false)..addByte(_snapshotVersion);
+    final out = BytesBuilder(copy: false)..addByte(snapshotBlobVersion);
     final current = value;
     if (current == null) {
       out.addByte(0); // unset
@@ -166,7 +167,7 @@ base class CRDTRegisterHandler<T> extends Handler<T>
     }
     final offset = SnapshotBlob.read(
       snapshot,
-      version: _snapshotVersion,
+      version: snapshotBlobVersion,
       name: 'register',
     );
     if (offset >= snapshot.length) {

@@ -136,12 +136,13 @@ base class CRDTORMapHandler<K, V> extends Handler<ORMapState<K, V>>
   /// `keyLen: uvarint`, `key: bytes`, `valueLen: uvarint`, `value: bytes`.
   /// The tags stay out: a snapshot holds the projected map, and the entries
   /// come back tagless.
-  static const int _snapshotVersion = 1;
+  @override
+  int get snapshotBlobVersion => 1;
 
   /// Returns the current state for snapshotting as a binary blob.
   @override
   Uint8List getSnapshotState() {
-    final out = BytesBuilder(copy: false)..addByte(_snapshotVersion);
+    final out = BytesBuilder(copy: false)..addByte(snapshotBlobVersion);
     final entries = value;
     UVarint.write(entries.length, out);
     for (final entry in entries.entries) {
@@ -170,7 +171,7 @@ base class CRDTORMapHandler<K, V> extends Handler<ORMapState<K, V>>
     if (snap != null) {
       var offset = SnapshotBlob.read(
         snap,
-        version: _snapshotVersion,
+        version: snapshotBlobVersion,
         name: 'OR-map',
       );
       final countRec = UVarint.read(snap, offset: offset);

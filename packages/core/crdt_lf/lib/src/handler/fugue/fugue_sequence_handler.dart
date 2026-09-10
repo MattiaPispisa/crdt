@@ -356,6 +356,11 @@ abstract base class FugueSequenceHandler<T, V, S extends FugueState<T, V>>
     return operation;
   }
 
+  /// The version [FugueSnapshot] writes and reads, shared by every handler
+  /// built on the Fugue tree.
+  @override
+  int get snapshotBlobVersion => FugueSnapshot.version;
+
   @override
   Uint8List getSnapshotState() {
     return FugueSnapshot.write<T>(

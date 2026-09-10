@@ -131,11 +131,12 @@ base class CRDTListHandler<T> extends Handler<List<T>>
   ///
   /// Layout: `version: u8`, `count: uvarint`, then per item
   /// `itemLen: uvarint`, `item: bytes`.
-  static const int _snapshotVersion = 1;
+  @override
+  int get snapshotBlobVersion => 1;
 
   @override
   Uint8List getSnapshotState() {
-    final out = BytesBuilder(copy: false)..addByte(_snapshotVersion);
+    final out = BytesBuilder(copy: false)..addByte(snapshotBlobVersion);
     final items = value;
     UVarint.write(items.length, out);
     for (final item in items) {
@@ -320,7 +321,7 @@ base class CRDTListHandler<T> extends Handler<List<T>>
 
     var offset = SnapshotBlob.read(
       snapshot,
-      version: _snapshotVersion,
+      version: snapshotBlobVersion,
       name: 'list',
     );
     final countRec = UVarint.read(snapshot, offset: offset);

@@ -115,11 +115,12 @@ base class CRDTMapHandler<T> extends Handler<Map<String, T>>
   ///
   /// Layout: `version: u8`, `count: uvarint`, then per entry
   /// `keyLen: uvarint`, `key: utf8`, `valueLen: uvarint`, `value: bytes`.
-  static const int _snapshotVersion = 1;
+  @override
+  int get snapshotBlobVersion => 1;
 
   @override
   Uint8List getSnapshotState() {
-    final out = BytesBuilder(copy: false)..addByte(_snapshotVersion);
+    final out = BytesBuilder(copy: false)..addByte(snapshotBlobVersion);
     final entries = value;
     UVarint.write(entries.length, out);
     for (final entry in entries.entries) {
@@ -367,7 +368,7 @@ base class CRDTMapHandler<T> extends Handler<Map<String, T>>
 
     var offset = SnapshotBlob.read(
       snapshot,
-      version: _snapshotVersion,
+      version: snapshotBlobVersion,
       name: 'map',
     );
     final countRec = UVarint.read(snapshot, offset: offset);
