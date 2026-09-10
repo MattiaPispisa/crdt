@@ -16,6 +16,12 @@ import 'package:hlc_dart/hlc_dart.dart';
 // members a custom handler is meant to override.
 part '../handler/handler.dart';
 
+// What a build can read and what a document's data holds, the pair the sync
+// layer compares to spot an incompatible peer. Holds the value types, the
+// record a snapshot carries, and the factory probe; the document's own members
+// cannot follow them there, because Dart has no partial classes.
+part 'capabilities.dart';
+
 // The mixins a consumer of the document is built from, and the read-only
 // document a [HistorySession] walks through.
 part 'providers.dart';
@@ -208,13 +214,6 @@ abstract class BaseCRDTDocument {
   void registerFactory(String type, HandlerFactory factory) {
     _factories[type] = factory;
   }
-
-  /// The handler types this build can construct, as registered with
-  /// [registerFactory].
-  ///
-  /// It says what the build is able to build, whether or not a handler of that
-  /// type has been opened yet.
-  Iterable<String> get registeredFactoryTypes => _factories.keys;
 
   /// Resolves [ref] to a handler instance.
   ///
@@ -503,18 +502,6 @@ class CRDTDocument extends BaseCRDTDocument {
   @override
   final Map<String, Handler<dynamic>> _handlers;
 
-  /// The operation kinds seen in the changes folded so far, by handler type.
-  ///
-  /// Grows only: a change can add a kind, never take one away. That is what
-  /// lets [describeDataCapabilities] fold new changes onto it instead of
-  /// walking the whole history again, and what keeps a prune from losing what
-  /// the pruned changes had already contributed.
-  final Map<String, Set<int>> _dataKindsByType = {};
-
-  /// How far [_dataKindsByType] has been folded, or `null` before the first
-  /// fold.
-  VersionVector? _dataKindsUpTo;
-
   /// Updates the document's clock to the current physical time.
   void _tickClock({int? physicalTime}) {
     final pt = physicalTime ?? DateTime.now().millisecondsSinceEpoch;
@@ -580,38 +567,81 @@ class CRDTDocument extends BaseCRDTDocument {
     _materializeReachable();
   }
 
+  // Capabilities: the state and the members that fold it. They belong to
+  // [CRDTDocument], so they live here; everything that does not — the value
+  // types, the snapshot record, the factory probe — is in `capabilities.dart`.
+
   /// The operation kinds this document's data holds, by handler type.
   ///
-  /// **Read from the data itself, not from the handlers that happen to be
-  /// registered.**
-  Map<String, Set<int>> describeDataCapabilities() {
-    _ensureNotDisposed('describeDataCapabilities');
-    _foldDataKinds();
+  /// Grows only: a change can add a kind, never take one away. That is what
+  /// keeps a prune from losing what the pruned changes had already
+  /// contributed, and what lets a snapshot carry the description forward
+  /// (see [_capabilitiesKey]).
+  final Map<String, Set<int>> _dataKindsByType = {};
 
-    return Map.unmodifiable({
+  /// The snapshot blob version each handler type was last seen writing.
+  ///
+  /// Only ever filled from a handler this build holds, or from the record a
+  /// snapshot carries. A change envelope says nothing about snapshots, so a
+  /// type known from its changes alone is missing here.
+  final Map<String, int> _dataBlobVersionByType = {};
+
+  /// Whether [_dataKindsByType] is kept in step on the apply path.
+  ///
+  /// Off until the first [describeDataCapabilities]. A document nobody asks
+  /// pays nothing, and once asked every change is folded exactly where it
+  /// enters, so no cursor can miss one that arrives out of order.
+  bool _tracksDataKinds = false;
+
+  /// What this document's **data** holds, by handler type.
+  ///
+  /// Read from the data itself, not from the handlers that happen to be
+  /// registered: a server that only stores and forwards a document opens no
+  /// handler at all, and still has to be able to say what it is holding.
+  ///
+  /// Sources, in order: the record the last snapshot carries (see
+  /// [takeSnapshot]), then every change in the log. The first call walks the
+  /// whole log; after that each change is folded as it is applied.
+  ///
+  /// [HandlerCapability.snapshotBlobVersion] is filled only for the types a
+  /// snapshot recorded. A type known from its changes alone leaves it `null`:
+  /// an operation envelope carries no snapshot version.
+  DocumentCapabilities describeDataCapabilities() {
+    _ensureNotDisposed('describeDataCapabilities');
+    _startTrackingDataKinds();
+
+    return DocumentCapabilities({
       for (final entry in _dataKindsByType.entries)
-        entry.key: Set<int>.unmodifiable(entry.value),
+        entry.key: HandlerCapability(
+          operationKinds: entry.value,
+          snapshotBlobVersion: _dataBlobVersionByType[entry.key],
+        ),
     });
   }
 
-  /// The operation kinds this **build** can decode, by handler type.
+  /// What this **build** can read, by handler type.
   ///
-  /// Covers the handlers already registered here and the ones the registered
+  /// Covers the handlers already open here and the ones the registered
   /// factories could build (see [registerFactory]). A handler registers itself
-  /// when it is created, so reading the registry alone would report only what
-  /// has been opened so far, and a handler opened a moment later would be
-  /// missing from the answer.
-  Map<String, Set<int>> describeBuildCapabilities() {
+  /// when it is created, so reading the handler registry alone would report
+  /// only what has been opened so far.
+  ///
+  /// It describes a build, but it can only see this document: a factory
+  /// registered **after** this call is not in the answer. A peer that sends
+  /// the description over a wire has to register its factories first — see the
+  /// `crdt_socket_sync` README.
+  DocumentCapabilities describeBuildCapabilities() {
     _ensureNotDisposed('describeBuildCapabilities');
 
-    final kinds = <String, Set<int>>{};
+    final capabilities = <String, HandlerCapability>{};
 
-    void add(String type, Set<int> decodable) {
-      kinds.putIfAbsent(type, () => <int>{}).addAll(decodable);
+    void add(String type, HandlerCapability capability) {
+      final mine = capabilities[type];
+      capabilities[type] = mine == null ? capability : mine.merge(capability);
     }
 
     for (final handler in _handlers.values) {
-      add(handler.handlerType, handler.decodableKinds);
+      add(handler.handlerType, _capabilityOf(handler));
     }
 
     for (final type in _factories.keys) {
@@ -623,18 +653,15 @@ class CRDTDocument extends BaseCRDTDocument {
       }
     }
 
-    return Map.unmodifiable({
-      for (final entry in kinds.entries)
-        entry.key: Set<int>.unmodifiable(entry.value),
-    });
+    return DocumentCapabilities(capabilities);
   }
 
-  /// The type tag and decodable kinds of the handler the factory for [type]
-  /// builds, or `null` when it cannot be built.
+  /// The type tag and capability of the handler the factory for [type] builds,
+  /// or `null` when it cannot be built.
   ///
   /// Probed once per type and kept: the answer depends on the build, not on
   /// anything that moves.
-  MapEntry<String, Set<int>>? _probeFactory(String type) {
+  MapEntry<String, HandlerCapability>? _probeFactory(String type) {
     final cached = _probedFactories[type];
     if (cached != null) {
       return cached;
@@ -645,44 +672,110 @@ class CRDTDocument extends BaseCRDTDocument {
       return null;
     }
 
+    // A document of its own, so the handler the factory builds registers
+    // itself there and never reaches this one.
+    final scratch = CRDTDocument(peerId: peerId);
     try {
-      // A document of its own, so the handler the factory builds registers
-      // itself there and never reaches this one.
-      final scratch = CRDTDocument(peerId: peerId);
       final handler = factory(scratch, _probeHandlerId);
-      final probed = MapEntry(handler.handlerType, handler.decodableKinds);
+      final probed = MapEntry(handler.handlerType, _capabilityOf(handler));
       _probedFactories[type] = probed;
       return probed;
     } catch (_) {
       // A factory that cannot run says nothing about the rest of the build.
       return null;
+    } finally {
+      scratch.dispose();
     }
   }
 
   /// What [_probeFactory] has already read, by the type it was registered
   /// under.
-  final Map<String, MapEntry<String, Set<int>>> _probedFactories = {};
+  final Map<String, MapEntry<String, HandlerCapability>> _probedFactories = {};
 
-  /// Folds into [_dataKindsByType] the changes that arrived since the last
-  /// fold.
-  void _foldDataKinds() {
-    final upTo = _dataKindsUpTo;
-    final pending =
-        upTo == null ? exportChanges() : exportChangesNewerThan(upTo);
+  /// Reads the whole log into [_dataKindsByType] once, then keeps it in step
+  /// on the apply path.
+  void _startTrackingDataKinds() {
+    if (_tracksDataKinds) {
+      return;
+    }
+    // Set first: the walk below must not be folded twice if anything it
+    // touches ends up applying a change.
+    _tracksDataKinds = true;
 
-    for (final change in pending) {
-      try {
-        final envelope = OperationEnvelopeCodec.decode(change.payloadBytes());
-        _dataKindsByType
-            .putIfAbsent(envelope.handlerType, () => <int>{})
-            .add(envelope.kind);
-      } catch (_) {
-        // Ignore changes whose envelope cannot be decoded: nothing can be said
-        // about a payload that cannot even be addressed.
-      }
+    _readCapabilitiesRecord(_lastSnapshot);
+    for (final change in exportChanges()) {
+      _foldChangeKinds(change);
+    }
+  }
+
+  /// Folds the kind [change] carries into [_dataKindsByType].
+  void _foldChangeKinds(Change change) {
+    try {
+      final envelope = OperationEnvelopeCodec.decode(change.payloadBytes());
+      _dataKindsByType
+          .putIfAbsent(envelope.handlerType, () => <int>{})
+          .add(envelope.kind);
+    } catch (_) {
+      // Ignore changes whose envelope cannot be decoded: nothing can be said
+      // about a payload that cannot even be addressed.
+    }
+  }
+
+  /// What the next snapshot records about this document's data.
+  ///
+  /// The union of what the last snapshot already recorded, what the changes
+  /// hold, and what the open handlers write. Grows only, so a build that
+  /// cannot read a type still passes on that the data needs it.
+  ///
+  /// Written on every snapshot, whether or not anyone ever asks for it: a
+  /// record that only appears when someone happened to ask is the silent gap
+  /// this exists to close. The first snapshot of a document therefore decodes
+  /// one envelope per change; after that the fold is kept in step as changes
+  /// arrive.
+  DocumentCapabilities _capabilitiesToRecord() {
+    _startTrackingDataKinds();
+
+    for (final handler in _handlers.values) {
+      _dataBlobVersionByType[handler.handlerType] = handler.snapshotBlobVersion;
     }
 
-    _dataKindsUpTo = getVersionVector();
+    return DocumentCapabilities({
+      for (final entry in _dataKindsByType.entries)
+        entry.key: HandlerCapability(
+          operationKinds: entry.value,
+          snapshotBlobVersion: _dataBlobVersionByType[entry.key],
+        ),
+    });
+  }
+
+  /// Folds the record [snapshot] carries into what this document knows about
+  /// its own data.
+  ///
+  /// Does nothing for a snapshot that predates the record, or one whose record
+  /// this build cannot read: an unreadable record is a reason to say less, not
+  /// a reason to refuse the snapshot.
+  void _readCapabilitiesRecord(Snapshot? snapshot) {
+    final blob = snapshot?.data[_capabilitiesKey];
+    if (blob == null) {
+      return;
+    }
+
+    final DocumentCapabilities record;
+    try {
+      record = _decodeCapabilities(blob);
+    } catch (_) {
+      return;
+    }
+
+    for (final entry in record.byHandlerType.entries) {
+      _dataKindsByType
+          .putIfAbsent(entry.key, () => <int>{})
+          .addAll(entry.value.operationKinds);
+      final blobVersion = entry.value.snapshotBlobVersion;
+      if (blobVersion != null) {
+        _dataBlobVersionByType.putIfAbsent(entry.key, () => blobVersion);
+      }
+    }
   }
 
   /// The handlers that are not referenced by any other container handler,
@@ -1209,6 +1302,11 @@ class CRDTDocument extends BaseCRDTDocument {
 
     // Add the change to the store
     _changeStore.addChange(change);
+    if (_tracksDataKinds) {
+      // Here, and not on a cursor over the store: this is the one point every
+      // change passes exactly once, whatever order it arrived in.
+      _foldChangeKinds(change);
+    }
     devtools.postChangedEvent(this);
 
     // Add the change to the DAG
@@ -1327,6 +1425,8 @@ class CRDTDocument extends BaseCRDTDocument {
           provider.id: provider.handlerType,
       });
     }
+    state[_capabilitiesKey] = _encodeCapabilities(_capabilitiesToRecord());
+
     final snapshot = Snapshot.create(
       versionVector: getVersionVector(),
       data: state,
@@ -1406,6 +1506,10 @@ class CRDTDocument extends BaseCRDTDocument {
 
   bool _importSnapshot(Snapshot snapshot, bool pruneHistory) {
     if (shouldApplySnapshot(snapshot)) {
+      // Before the prune, which is about to take away the changes this
+      // snapshot stands for.
+      _readCapabilitiesRecord(snapshot);
+
       // Before the prune, for the reason written down in [takeSnapshot].
       _lastSnapshot = snapshot;
       _publishDocumentEvent(
@@ -1453,6 +1557,8 @@ class CRDTDocument extends BaseCRDTDocument {
   }
 
   void _mergeSnapshot(Snapshot snapshot, bool pruneHistory) {
+    _readCapabilitiesRecord(snapshot);
+
     if (_lastSnapshot == null) {
       _lastSnapshot = snapshot;
     } else {
@@ -1618,7 +1724,7 @@ class CRDTDocument extends BaseCRDTDocument {
   /// Bumps the revision of every handler whose state is carried by [snapshot].
   void _bumpRevisionsForSnapshot(Snapshot snapshot) {
     for (final handlerId in snapshot.data.keys) {
-      if (handlerId == _handlerManifestKey) {
+      if (_reservedSnapshotKeys.contains(handlerId)) {
         continue;
       }
       _handlerRevisions.update(handlerId, (r) => r + 1, ifAbsent: () => 1);
@@ -1958,13 +2064,15 @@ class CRDTDocument extends BaseCRDTDocument {
 /// control character keeps it from colliding with any real handler id.
 const String _handlerManifestKey = 'crdt_lf/handler-manifest';
 
-/// The id handed to a factory when it is called only to read what its handler
-/// decodes. It lives on a throwaway document, so it never collides with a real
-/// handler id.
-const String _probeHandlerId = 'crdt_lf/capability-probe';
-
 /// The version of the manifest blob this build writes and reads.
 const int _handlerManifestVersion = 1;
+
+/// The [Snapshot] data keys that hold document metadata rather than a
+/// handler's state, so nothing reads them as a handler id.
+const Set<String> _reservedSnapshotKeys = {
+  _handlerManifestKey,
+  _capabilitiesKey,
+};
 
 /// Encodes a `{id: type}` manifest as `[u8 version][uvarint count]` followed,
 /// per entry, by `[uvarint idLen][utf8 id][uvarint typeLen][utf8 type]`.
