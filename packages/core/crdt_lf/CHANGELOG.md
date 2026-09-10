@@ -1,3 +1,18 @@
+## [4.3.0](https://github.com/MattiaPispisa/crdt/tree/crdt_lf-v4.3.0/packages/core/crdt_lf)
+
+**Date:** 2026-09-10
+
+[compare to previous release](https://github.com/MattiaPispisa/crdt/compare/crdt_lf-v4.2.0...crdt_lf-v4.3.0)
+
+### Added
+
+- **A document can now say what it can read and what it needs read.**
+  `describeBuildCapabilities()` reports the operation kinds this build decodes, per handler type,
+  covering the registered factories as well as the handlers already open — a factory is run once on
+  a throwaway document to read its kinds, and the document it is called on is left untouched.
+  `describeDataCapabilities()` reports the kinds a document's data actually holds.
+  [142](https://github.com/MattiaPispisa/crdt/issues/142)
+
 ## [4.2.0](https://github.com/MattiaPispisa/crdt/tree/crdt_lf-v4.2.0/packages/core/crdt_lf)
 
 **Date:** 2026-09-07

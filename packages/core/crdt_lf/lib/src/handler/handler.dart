@@ -70,7 +70,6 @@ abstract base class Handler<T>
   OperationDecoders get operationDecoders;
 
   /// The operation kinds this build can decode.
-  ///
   Set<int> get decodableKinds => operationDecoders.keys.toSet();
 
   /// The version of the blob [getSnapshotState] writes, and the only one this

@@ -8,7 +8,6 @@ import 'package:crdt_socket_sync/src/server_client/server/document_client_sessio
 import 'package:crdt_socket_sync/src/server_client/server/in_memory_server_registry.dart';
 import 'package:test/test.dart';
 
-import '../../utils/mock_handler.dart';
 
 /// A connection whose sends never complete, so bytes accumulate in the
 /// session's outbound queue.
@@ -185,14 +184,32 @@ void main() {
       expect(errors.single.code, Protocol.errorUnsupportedProtocolVersion);
     });
 
-    test('refuses a client missing an operation kind the document uses',
+    /// Fills the server document with real data: a list that was inserted
+    /// into and then deleted from, so its changes carry two kinds.
+    ///
+    /// No handler and no factory is registered on the server document — the
+    /// way a server that only stores and forwards holds one.
+    Future<String> seedServerDocument() async {
+      final author = CRDTDocument(peerId: PeerId.generate());
+      final list = CRDTListHandler<String>(author, 'list')
+        ..insert(0, 'x')
+        ..delete(0, 1);
+
+      final serverDocument = (await registry.getDocument(documentId))!
+        ..importChanges(author.exportChanges());
+      expect(serverDocument.registeredHandlers, isEmpty);
+
+      return list.handlerType;
+    }
+
+    test('refuses a client missing an operation kind the document holds',
         () async {
       await registry.addDocument(documentId);
-      NewerMockHandler((await registry.getDocument(documentId))!);
+      final type = await seedServerDocument();
 
       await handshake(
         capabilities: SyncCapabilities({
-          'MockHandler': {OperationType.kindInsert},
+          type: {OperationType.kindInsert},
         }),
       );
 
@@ -200,7 +217,7 @@ void main() {
       expect(errors, hasLength(1));
       expect(errors.single.code, Protocol.errorUnsupportedClient);
       // The reason names the concrete kind, not just "not supported".
-      expect(errors.single.message, contains('MockHandler'));
+      expect(errors.single.message, contains(type));
       expect(
         errors.single.message,
         contains('kind ${OperationType.kindDelete}'),
@@ -211,14 +228,11 @@ void main() {
 
     test('accepts a client whose capabilities cover the document', () async {
       await registry.addDocument(documentId);
-      NewerMockHandler((await registry.getDocument(documentId))!);
+      final type = await seedServerDocument();
 
       await handshake(
         capabilities: SyncCapabilities({
-          'MockHandler': {
-            OperationType.kindInsert,
-            OperationType.kindDelete,
-          },
+          type: {OperationType.kindInsert, OperationType.kindDelete},
         }),
       );
 
@@ -226,13 +240,39 @@ void main() {
       expect(decodeSent().whereType<ErrorMessage>(), isEmpty);
     });
 
+    test('refuses a client that stays silent about a type in the data',
+        () async {
+      // The client has not opened that handler, so it declares nothing for it.
+      // Passing it over would let it join a document it has no way of reading
+      // — the failure this check exists to prevent.
+      await registry.addDocument(documentId);
+      await seedServerDocument();
+
+      await handshake(capabilities: SyncCapabilities({}));
+
+      final errors = decodeSent().whereType<ErrorMessage>().toList();
+      expect(errors, hasLength(1));
+      expect(errors.single.code, Protocol.errorUnsupportedClient);
+      expect(decodeSent().whereType<HandshakeResponseMessage>(), isEmpty);
+    });
+
     test('accepts a client that declares no capabilities at all', () async {
       // Backward compatibility: a 0.8.x client sends no capabilities. With
       // nothing to compare there is nothing to refuse.
       await registry.addDocument(documentId);
-      NewerMockHandler((await registry.getDocument(documentId))!);
+      await seedServerDocument();
 
       await handshake();
+
+      expect(decodeSent().whereType<HandshakeResponseMessage>(), hasLength(1));
+      expect(decodeSent().whereType<ErrorMessage>(), isEmpty);
+    });
+
+    test('accepts every client while the document holds no data', () async {
+      // Nothing to be unable to read yet, so nothing to refuse.
+      await registry.addDocument(documentId);
+
+      await handshake(capabilities: SyncCapabilities({}));
 
       expect(decodeSent().whereType<HandshakeResponseMessage>(), hasLength(1));
       expect(decodeSent().whereType<ErrorMessage>(), isEmpty);

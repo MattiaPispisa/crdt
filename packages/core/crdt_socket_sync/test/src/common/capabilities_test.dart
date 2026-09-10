@@ -8,29 +8,16 @@ import '../utils/mock_handler.dart';
 
 void main() {
   group('SyncCapabilities', () {
-    test('reads the decodable kinds of every registered handler', () {
-      final document = CRDTDocument();
-      MockHandler(document);
-
-      final capabilities = SyncCapabilities.of(document);
-
-      expect(
-        capabilities.operationKinds,
-        {
-          'MockHandler': {OperationType.kindInsert},
-        },
-      );
-    });
-
-    test('keys on handlerType, so two peers agree after minification', () {
+    test('carries what a build declares, keyed by handler type', () {
       final document = CRDTDocument();
       NewerMockHandler(document);
 
-      // The class is NewerMockHandler, the declared type tag is MockHandler.
-      expect(
-        SyncCapabilities.of(document).operationKinds.keys,
-        ['MockHandler'],
-      );
+      // The class is NewerMockHandler, the declared type tag is MockHandler:
+      // the tag is what travels, so it is what both peers key on.
+      final capabilities =
+          SyncCapabilities(document.describeBuildCapabilities());
+
+      expect(capabilities.operationKinds.keys, ['MockHandler']);
     });
 
     test('json round-trips, with kinds in a stable order', () {
@@ -50,16 +37,15 @@ void main() {
     });
 
     group('missingFrom', () {
-      test('names the kind the other peer has and this one lacks', () {
-        final older = CRDTDocument();
-        MockHandler(older);
-        final newer = CRDTDocument();
-        NewerMockHandler(newer);
+      test('names the kind the other side holds and this one cannot read', () {
+        final older = SyncCapabilities({
+          'MockHandler': {OperationType.kindInsert},
+        });
+        final data = SyncCapabilities({
+          'MockHandler': {OperationType.kindInsert, OperationType.kindDelete},
+        });
 
-        final missing =
-            SyncCapabilities.of(older).missingFrom(SyncCapabilities.of(newer));
-
-        expect(missing, [
+        expect(older.missingFrom(data), [
           const MissingOperationKind(
             handlerType: 'MockHandler',
             kind: OperationType.kindDelete,
@@ -67,31 +53,50 @@ void main() {
         ]);
       });
 
-      test('is empty when this peer is the newer one', () {
-        final older = CRDTDocument();
-        MockHandler(older);
-        final newer = CRDTDocument();
-        NewerMockHandler(newer);
+      test('is empty when this build reads more than the other side holds', () {
+        final newer = SyncCapabilities({
+          'MockHandler': {OperationType.kindInsert, OperationType.kindDelete},
+        });
+        final data = SyncCapabilities({
+          'MockHandler': {OperationType.kindInsert},
+        });
 
-        expect(
-          SyncCapabilities.of(newer).missingFrom(SyncCapabilities.of(older)),
-          isEmpty,
-        );
+        expect(newer.missingFrom(data), isEmpty);
       });
 
-      test('ignores a handler type this peer has not opened', () {
-        // Not a fault: a peer legitimately syncs a document whose handlers it
-        // never opens, and lazy registration means it may not have opened them
-        // yet.
+      test('a type this build says nothing about counts as unreadable', () {
+        // These describe a build, not a moment: silence about a type means the
+        // build cannot read it. Passing it over is what used to let a client
+        // through on data it had no way of reading.
         final client = SyncCapabilities({
           'MockHandler': {0},
         });
-        final server = SyncCapabilities({
+        final data = SyncCapabilities({
           'MockHandler': {0},
           'CRDTFugueTextHandler': {0, 1, 2},
         });
 
-        expect(client.missingFrom(server), isEmpty);
+        expect(
+          client.missingFrom(data),
+          [
+            const MissingOperationKind(
+              handlerType: 'CRDTFugueTextHandler',
+              kind: 0,
+            ),
+            const MissingOperationKind(
+              handlerType: 'CRDTFugueTextHandler',
+              kind: 1,
+            ),
+            const MissingOperationKind(
+              handlerType: 'CRDTFugueTextHandler',
+              kind: 2,
+            ),
+          ],
+        );
+      });
+
+      test('is empty against data that holds nothing', () {
+        expect(SyncCapabilities({}).missingFrom(SyncCapabilities({})), isEmpty);
       });
     });
   });

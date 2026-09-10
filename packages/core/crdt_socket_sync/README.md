@@ -968,17 +968,27 @@ any document state is served.
 "hello" protocol. A server that speaks another one answers
 `ErrorMessage(Protocol.errorUnsupportedProtocolVersion)` and closes the session.
 
-**The operation kinds.** An operation kind belongs to the handler that defines it.
-What a build can state is the set it decodes, which is exactly the keys of
-`Handler.operationDecoders`. The client sends that set, keyed by
-`Handler.handlerType`:
+**The operation kinds.** An operation kind belongs to the handler that defines
+it, so no version number describes it. What each side can state is a set of
+kinds, keyed by `Handler.handlerType`:
 
 ```json
 { "CRDTFugueTextHandler": [0, 1, 2], "CRDTMapHandler": [0, 1] }
 ```
 
-The server compares it with its own document and, if the client is missing a
-kind the document uses, answers
+The two sides answer **different questions**, and that is what makes the check
+work:
+
+- the client sends what its **build** can decode
+  (`CRDTDocument.describeBuildCapabilities()`), which covers the handlers it has
+  opened *and* the types its registered factories could build;
+- the server reads what the document's **data** holds
+  (`CRDTDocument.describeDataCapabilities()`), straight from the change
+  envelopes, so it answers even for a document it merely stores and forwards
+  with no handler registered.
+
+If the client cannot read a kind the data holds — including a handler type it
+says nothing about — the server answers
 `ErrorMessage(Protocol.errorUnsupportedClient)` naming the handler type and the
 kind, then closes the session.
 
@@ -995,19 +1005,23 @@ if (incompatibility != null) {
 }
 ```
 
-Two limits worth knowing:
+Two things the handshake does **not** cover:
 
-- **A relay checks only the version.** It carries CRDT payloads as opaque
-  blobs and never decodes them, so it cannot tell what a client can read.
-- **Handlers register lazily**, so a client declares the handlers it has opened
-  so far. A handler it opens later is absent from the list, the server has
-  nothing to compare for it, and the handshake passes. A change for that
-  handler then throws `UnknownOperationKindException` on the first read — the
-  failure this check exists to prevent.
+- **A relay checks the version only.** It carries CRDT payloads as opaque blobs
+  and never decodes them, so it cannot tell what a client can read.
+- **The snapshot blob version is not negotiated.** Each handler writes its own
+  version at the head of its snapshot blob and refuses another one
+  (`SnapshotBlob`), but that version is nowhere recorded as data: it can only be
+  guessed from a byte that the handlers shipped here write by convention and a
+  custom handler need not. A build that raised a blob version still meets an
+  older peer at read time, with a `FormatException` naming the handler.
 
-  Open the handlers you need before you call `connect()`. On a document that
-  already holds data, `document.reconstruct()` builds every handler that data
-  reaches, so the declaration covers them too.
+And one that no handshake can cover: a peer that invents a **new** kind after
+the handshake. That data does not exist yet when the two sides compare notes.
+There the answer stays the one `crdt_lf` already gives —
+`UnknownOperationKindException` on read, which fails fast instead of diverging
+in silence, while the change itself is kept in the document and forwarded intact
+to peers that do understand it.
 
 ### Wire format & type codes
 

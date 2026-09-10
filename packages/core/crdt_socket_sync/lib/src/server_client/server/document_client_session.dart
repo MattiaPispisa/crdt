@@ -84,12 +84,17 @@ class DocumentClientSession extends ClientSession {
     }
   }
 
-  /// The operation kinds this server's document uses and the client cannot
+  /// The operation kinds this document's data holds and the client cannot
   /// read.
-
-  /// Only handler types both sides have opened are compared — see
-  /// [SyncCapabilities.missingFrom] for why, and for the limit that comes with
-  /// lazily registered handlers.
+  ///
+  /// The document is asked what its **data** contains
+  /// ([CRDTDocument.describeDataCapabilities]), not which handlers it happens
+  /// to have opened. A server that only stores and forwards a document
+  /// registers no handler at all, so anything read from the registry would be
+  /// empty and no client would ever be refused.
+  ///
+  /// Empty when the client declares nothing: a peer from a build before the
+  /// field existed has nothing to compare.
   Future<List<MissingOperationKind>> _missingClientCapabilities({
     required String documentId,
     required SyncCapabilities? clientCapabilities,
@@ -103,7 +108,9 @@ class DocumentClientSession extends ClientSession {
       return const [];
     }
 
-    return clientCapabilities.missingFrom(SyncCapabilities.of(document));
+    return clientCapabilities.missingFrom(
+      SyncCapabilities(document.describeDataCapabilities()),
+    );
   }
 
   /// Refuses the client with [code] and [reason], and closes the session.

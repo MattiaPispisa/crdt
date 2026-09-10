@@ -502,7 +502,9 @@ class WebSocketClient extends CRDTSocketClient {
       versionVector: document.getVersionVector(),
       documentId: document.documentId,
       author: author,
-      capabilities: SyncCapabilities.of(document),
+      // What this build can read, not what it has opened so far: a handler the
+      // app opens after connecting is covered too.
+      capabilities: SyncCapabilities(document.describeBuildCapabilities()),
     );
 
     return _handshakeGate.perform(

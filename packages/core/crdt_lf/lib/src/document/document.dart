@@ -209,6 +209,13 @@ abstract class BaseCRDTDocument {
     _factories[type] = factory;
   }
 
+  /// The handler types this build can construct, as registered with
+  /// [registerFactory].
+  ///
+  /// It says what the build is able to build, whether or not a handler of that
+  /// type has been opened yet.
+  Iterable<String> get registeredFactoryTypes => _factories.keys;
+
   /// Resolves [ref] to a handler instance.
   ///
   /// Returns the already-registered handler with `ref.id`, or instantiates it
@@ -496,6 +503,18 @@ class CRDTDocument extends BaseCRDTDocument {
   @override
   final Map<String, Handler<dynamic>> _handlers;
 
+  /// The operation kinds seen in the changes folded so far, by handler type.
+  ///
+  /// Grows only: a change can add a kind, never take one away. That is what
+  /// lets [describeDataCapabilities] fold new changes onto it instead of
+  /// walking the whole history again, and what keeps a prune from losing what
+  /// the pruned changes had already contributed.
+  final Map<String, Set<int>> _dataKindsByType = {};
+
+  /// How far [_dataKindsByType] has been folded, or `null` before the first
+  /// fold.
+  VersionVector? _dataKindsUpTo;
+
   /// Updates the document's clock to the current physical time.
   void _tickClock({int? physicalTime}) {
     final pt = physicalTime ?? DateTime.now().millisecondsSinceEpoch;
@@ -559,6 +578,111 @@ class CRDTDocument extends BaseCRDTDocument {
     }
 
     _materializeReachable();
+  }
+
+  /// The operation kinds this document's data holds, by handler type.
+  ///
+  /// **Read from the data itself, not from the handlers that happen to be
+  /// registered.**
+  Map<String, Set<int>> describeDataCapabilities() {
+    _ensureNotDisposed('describeDataCapabilities');
+    _foldDataKinds();
+
+    return Map.unmodifiable({
+      for (final entry in _dataKindsByType.entries)
+        entry.key: Set<int>.unmodifiable(entry.value),
+    });
+  }
+
+  /// The operation kinds this **build** can decode, by handler type.
+  ///
+  /// Covers the handlers already registered here and the ones the registered
+  /// factories could build (see [registerFactory]). A handler registers itself
+  /// when it is created, so reading the registry alone would report only what
+  /// has been opened so far, and a handler opened a moment later would be
+  /// missing from the answer.
+  Map<String, Set<int>> describeBuildCapabilities() {
+    _ensureNotDisposed('describeBuildCapabilities');
+
+    final kinds = <String, Set<int>>{};
+
+    void add(String type, Set<int> decodable) {
+      kinds.putIfAbsent(type, () => <int>{}).addAll(decodable);
+    }
+
+    for (final handler in _handlers.values) {
+      add(handler.handlerType, handler.decodableKinds);
+    }
+
+    for (final type in _factories.keys) {
+      final probed = _probeFactory(type);
+      if (probed != null) {
+        // Keyed by the handler's own type tag, which is what travels in an
+        // envelope, rather than by the key it was registered under.
+        add(probed.key, probed.value);
+      }
+    }
+
+    return Map.unmodifiable({
+      for (final entry in kinds.entries)
+        entry.key: Set<int>.unmodifiable(entry.value),
+    });
+  }
+
+  /// The type tag and decodable kinds of the handler the factory for [type]
+  /// builds, or `null` when it cannot be built.
+  ///
+  /// Probed once per type and kept: the answer depends on the build, not on
+  /// anything that moves.
+  MapEntry<String, Set<int>>? _probeFactory(String type) {
+    final cached = _probedFactories[type];
+    if (cached != null) {
+      return cached;
+    }
+
+    final factory = _factories[type];
+    if (factory == null) {
+      return null;
+    }
+
+    try {
+      // A document of its own, so the handler the factory builds registers
+      // itself there and never reaches this one.
+      final scratch = CRDTDocument(peerId: peerId);
+      final handler = factory(scratch, _probeHandlerId);
+      final probed = MapEntry(handler.handlerType, handler.decodableKinds);
+      _probedFactories[type] = probed;
+      return probed;
+    } catch (_) {
+      // A factory that cannot run says nothing about the rest of the build.
+      return null;
+    }
+  }
+
+  /// What [_probeFactory] has already read, by the type it was registered
+  /// under.
+  final Map<String, MapEntry<String, Set<int>>> _probedFactories = {};
+
+  /// Folds into [_dataKindsByType] the changes that arrived since the last
+  /// fold.
+  void _foldDataKinds() {
+    final upTo = _dataKindsUpTo;
+    final pending =
+        upTo == null ? exportChanges() : exportChangesNewerThan(upTo);
+
+    for (final change in pending) {
+      try {
+        final envelope = OperationEnvelopeCodec.decode(change.payloadBytes());
+        _dataKindsByType
+            .putIfAbsent(envelope.handlerType, () => <int>{})
+            .add(envelope.kind);
+      } catch (_) {
+        // Ignore changes whose envelope cannot be decoded: nothing can be said
+        // about a payload that cannot even be addressed.
+      }
+    }
+
+    _dataKindsUpTo = getVersionVector();
   }
 
   /// The handlers that are not referenced by any other container handler,
@@ -1833,6 +1957,11 @@ class CRDTDocument extends BaseCRDTDocument {
 /// used to reconstruct nested handlers after history pruning. The leading
 /// control character keeps it from colliding with any real handler id.
 const String _handlerManifestKey = 'crdt_lf/handler-manifest';
+
+/// The id handed to a factory when it is called only to read what its handler
+/// decodes. It lives on a throwaway document, so it never collides with a real
+/// handler id.
+const String _probeHandlerId = 'crdt_lf/capability-probe';
 
 /// The version of the manifest blob this build writes and reads.
 const int _handlerManifestVersion = 1;

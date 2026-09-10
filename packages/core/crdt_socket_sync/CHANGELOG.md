@@ -1,3 +1,29 @@
+## [0.9.0](https://github.com/MattiaPispisa/crdt/tree/crdt_socket_sync-v0.9.0/packages/core/crdt_socket_sync)
+
+**Date:** 2026-09-10
+
+[compare to previous release](https://github.com/MattiaPispisa/crdt/compare/crdt_socket_sync-v0.8.0...crdt_socket_sync-v0.9.0)
+
+### Added
+
+- **An incompatible client is refused at the handshake instead of failing later.** The client sends
+  the protocol version it speaks (`Protocol.protocolVersion`) and the operation kinds its build can
+  decode; the server compares them with what the document's data actually holds and answers
+  `UNSUPPORTED_PROTOCOL_VERSION` or `UNSUPPORTED_CLIENT`, naming the handler type and kind, then
+  closes. The client latches the refusal in the new terminal `ConnectionStatus.unsupported`, stops
+  reconnecting, and exposes the reason on `CRDTSocketClient.incompatibility`. Before, it joined and
+  threw `UnknownOperationKindException` on the first read of that handler, and on every read after.
+  A relay checks the version only, since it never decodes CRDT payloads; the snapshot blob version
+  is not negotiated. Both handshake fields are optional, so 0.8.0 peers still connect.
+  [142](https://github.com/MattiaPispisa/crdt/issues/142)
+  **Breaking:** `ConnectionStatus` has a new value, and the never-sent `Protocol.version` is gone.
+
+### Changed
+
+- **`SyncManager` re-requests the document status only for a causal gap.** It used to answer any
+  apply failure with `requestDocumentStatus()`; anything else fails the same way on the re-served
+  document, so asking again was a loop rather than a recovery.
+
 ## [0.8.0](https://github.com/MattiaPispisa/crdt/tree/crdt_socket_sync-v0.8.0/packages/core/crdt_socket_sync)
 
 **Date:** 2026-09-07

@@ -1,5 +1,3 @@
-import 'package:crdt_lf/crdt_lf.dart';
-
 /// One operation kind a peer cannot decode.
 ///
 /// Returned by [SyncCapabilities.missingFrom] to name the concrete reason a
@@ -48,19 +46,6 @@ class SyncCapabilities {
           ),
         );
 
-  /// Reads the capabilities of [document] from the handlers registered on it.
-  factory SyncCapabilities.of(CRDTDocument document) {
-    final kinds = <String, Set<int>>{};
-
-    for (final handler in document.registeredHandlers.values) {
-      kinds
-          .putIfAbsent(handler.handlerType, () => <int>{})
-          .addAll(handler.operationDecoders.keys);
-    }
-
-    return SyncCapabilities(kinds);
-  }
-
   /// Reads capabilities from the JSON form written by [toJson].
   factory SyncCapabilities.fromJson(Map<String, dynamic> json) {
     return SyncCapabilities(
@@ -76,23 +61,19 @@ class SyncCapabilities {
   /// The decodable kinds, keyed by `Handler.handlerType`. Unmodifiable.
   final Map<String, Set<int>> operationKinds;
 
-  /// The kinds [other] can decode and this build cannot.
+  /// The kinds [other] holds and this build cannot decode.
   ///
-  /// Only handler types **both** sides declare are compared. A handler type
-  /// missing here is not a fault: a peer legitimately syncs a document whose
-  /// handlers it never opens, and lazy registration means it may not have
-  /// opened them yet.
+  /// A handler type this build says nothing about counts as unreadable, not as
+  /// nothing to check: these capabilities describe what a **build** can read,
+  /// so silence about a type means the build cannot read it, whether or not a
+  /// handler of that type has been opened yet.
   ///
-  /// An empty result means every operation [other] can write for a shared
-  /// handler type is readable here.
+  /// An empty result means every operation [other] holds is readable here.
   List<MissingOperationKind> missingFrom(SyncCapabilities other) {
     final missing = <MissingOperationKind>[];
 
     for (final entry in other.operationKinds.entries) {
-      final mine = operationKinds[entry.key];
-      if (mine == null) {
-        continue;
-      }
+      final mine = operationKinds[entry.key] ?? const <int>{};
       for (final kind in entry.value) {
         if (!mine.contains(kind)) {
           missing.add(
