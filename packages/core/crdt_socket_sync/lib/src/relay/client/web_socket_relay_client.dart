@@ -297,7 +297,7 @@ class WebSocketRelayClient extends RelaySocketClient {
         maxBufferSize: _maxBufferSize,
       );
 
-      _updateConnectionStatus(
+      updateConnectionStatus(
         _connectionStatusValue.isDisconnected
             ? ConnectionStatus.connecting
             : ConnectionStatus.reconnecting,
@@ -315,7 +315,7 @@ class WebSocketRelayClient extends RelaySocketClient {
         // Seed liveness so a fresh connection is not immediately judged dead.
         _lastPongAt = DateTime.now();
         _startPingTimer();
-        _updateConnectionStatus(ConnectionStatus.connected);
+        updateConnectionStatus(ConnectionStatus.connected);
         for (final plugin in plugins) {
           plugin.onConnected();
         }
@@ -323,7 +323,7 @@ class WebSocketRelayClient extends RelaySocketClient {
 
       return connected;
     } catch (e) {
-      _updateConnectionStatus(ConnectionStatus.error);
+      updateConnectionStatus(ConnectionStatus.error);
       return false;
     }
   }
@@ -351,7 +351,7 @@ class WebSocketRelayClient extends RelaySocketClient {
       plugin.onDisconnected();
     }
 
-    _updateConnectionStatus(ConnectionStatus.disconnected);
+    updateConnectionStatus(ConnectionStatus.disconnected);
   }
 
   /// Send a message to the relay
@@ -400,7 +400,7 @@ class WebSocketRelayClient extends RelaySocketClient {
       await (_outboundQueue?.add(data) ?? _transport!.send(data));
 
       if (await _handshakeGate.completed) {
-        _updateConnectionStatus(ConnectionStatus.connected);
+        updateConnectionStatus(ConnectionStatus.connected);
       }
     } catch (e) {
       _handleTransportError(
@@ -483,7 +483,7 @@ class WebSocketRelayClient extends RelaySocketClient {
     // on reconnecting if an error occurs do not update the status
     // to error, because the reconnect will handle it.
     if (!_isReconnecting) {
-      _updateConnectionStatus(ConnectionStatus.error);
+      updateConnectionStatus(ConnectionStatus.error);
     }
     if (attemptReconnect && !isUnsupported) {
       _attemptReconnect();
@@ -514,14 +514,14 @@ class WebSocketRelayClient extends RelaySocketClient {
 
     final maxAttempts = maxReconnectAttempts;
     if (maxAttempts != null && _reconnectAttempts >= maxAttempts) {
-      _updateConnectionStatus(ConnectionStatus.error);
+      updateConnectionStatus(ConnectionStatus.error);
       _isReconnecting = false;
       return;
     }
 
     final delay = _reconnectDelay();
     _reconnectAttempts++;
-    _updateConnectionStatus(ConnectionStatus.reconnecting);
+    updateConnectionStatus(ConnectionStatus.reconnecting);
 
     await Future<void>.delayed(delay);
 
@@ -649,6 +649,10 @@ class WebSocketRelayClient extends RelaySocketClient {
   /// A welcome can also answer a [RelayStateRequestMessage] on an already
   /// joined connection: only the state import runs in that case.
   Future<void> _handleWelcome(RelayWelcomeMessage message) async {
+    if (refuseServerProtocolMismatch(message.protocolVersion)) {
+      return;
+    }
+
     _sessionId = message.sessionId;
 
     // Complete the join first so that the sync manager can send messages
@@ -668,11 +672,11 @@ class WebSocketRelayClient extends RelaySocketClient {
 
   void _handleErrorMessage(ErrorMessage message) {
     if (SyncIncompatibility.isTerminalCode(message.code)) {
-      _handleIncompatibility(message);
+      refuseBuild(code: message.code, reason: message.message);
       return;
     }
 
-    _updateConnectionStatus(ConnectionStatus.error);
+    updateConnectionStatus(ConnectionStatus.error);
 
     if (message.code == Protocol.errorHandshakeFailed &&
         _handshakeGate.isActive) {
@@ -680,34 +684,12 @@ class WebSocketRelayClient extends RelaySocketClient {
     }
   }
 
-  /// The relay refused this build: stop for good.
-  ///
-  /// Latches the reason, frees anyone waiting on the join, and closes the
-  /// transport. From here [connect] and the reconnect timer are both no-ops,
-  /// and the status stays [ConnectionStatus.unsupported].
-  void _handleIncompatibility(ErrorMessage message) {
-    markUnsupported(
-      SyncIncompatibility(code: message.code, message: message.message),
-    );
+  @override
+  void abandonHandshake() => _handshakeGate.reset();
 
-    _handshakeGate.reset();
-    // Set the terminal status before tearing the transport down: the teardown
-    // would otherwise report a plain disconnect, and the status is sticky from
-    // here on.
-    _updateConnectionStatus(ConnectionStatus.unsupported);
-    unawaited(disconnect());
-  }
-
-  /// If [status] is different from [_connectionStatusValue]
-  /// then update the connection status and notify the listeners
-  void _updateConnectionStatus(ConnectionStatus status) {
+  @override
+  void publishConnectionStatus(ConnectionStatus status) {
     if (status == _connectionStatusValue) {
-      return;
-    }
-
-    // [ConnectionStatus.unsupported] is terminal: the teardown that follows it
-    // (and any late frame) must not report the client as merely disconnected.
-    if (_connectionStatusValue.isUnsupported) {
       return;
     }
 

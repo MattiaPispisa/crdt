@@ -124,8 +124,7 @@ class HandshakeRequestMessage extends SyncMessage {
       versionVector: _decodeVersionVector(json['versionVector'] as String),
       documentId: json['documentId'] as String,
       author: PeerId.parse(json['author'] as String),
-      protocolVersion:
-          json['protocolVersion'] as int? ?? Protocol.firstProtocolVersion,
+      protocolVersion: Protocol.readVersion(json),
       capabilities: capabilities != null
           ? SyncCapabilities.fromJson(capabilities as Map<String, dynamic>)
           : null,
@@ -198,8 +197,7 @@ class HandshakeResponseMessage extends SyncMessage {
           : null,
       sessionId: json['sessionId'] as String,
       versionVector: _decodeVersionVector(json['versionVector'] as String),
-      protocolVersion:
-          json['protocolVersion'] as int? ?? Protocol.firstProtocolVersion,
+      protocolVersion: Protocol.readVersion(json),
     );
   }
 

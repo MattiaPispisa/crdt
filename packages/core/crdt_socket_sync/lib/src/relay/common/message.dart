@@ -98,8 +98,7 @@ class RelayHelloMessage extends RelayMessage {
     return RelayHelloMessage(
       documentId: json['documentId'] as String,
       author: PeerId.parse(json['author'] as String),
-      protocolVersion:
-          json['protocolVersion'] as int? ?? Protocol.firstProtocolVersion,
+      protocolVersion: Protocol.readVersion(json),
     );
   }
 
@@ -150,8 +149,7 @@ class RelayWelcomeMessage extends RelayMessage {
       seq: json['seq'] as int,
       logLength: json['logLength'] as int,
       compact: json['compact'] as bool,
-      protocolVersion:
-          json['protocolVersion'] as int? ?? Protocol.firstProtocolVersion,
+      protocolVersion: Protocol.readVersion(json),
     );
   }
 

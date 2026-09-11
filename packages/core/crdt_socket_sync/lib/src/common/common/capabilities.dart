@@ -1,16 +1,20 @@
-/// One operation kind a peer cannot decode.
-///
-/// Returned by [SyncCapabilities.missingFrom] to name the concrete reason a
-/// build is refused, instead of a bare "not supported".
-class MissingOperationKind {
+import 'package:crdt_lf/crdt_lf.dart';
+
+/// One reason a build cannot handle what another peer holds.
+sealed class CapabilityMismatch {
+  const CapabilityMismatch(this.handlerType);
+
+  /// The [Handler.handlerType] the disagreement is about.
+  final String handlerType;
+}
+
+/// An operation kind the other peer holds and this build cannot decode.
+final class MissingOperationKind extends CapabilityMismatch {
   /// Constructor
   const MissingOperationKind({
-    required this.handlerType,
+    required String handlerType,
     required this.kind,
-  });
-
-  /// The `Handler.handlerType` of the handler that owns the kind.
-  final String handlerType;
+  }) : super(handlerType);
 
   /// The kind byte (`OperationEnvelope.kind`) that cannot be decoded.
   final int kind;
@@ -28,73 +32,118 @@ class MissingOperationKind {
   String toString() => '$handlerType(kind $kind)';
 }
 
-/// The operation kinds a build can decode, keyed by `Handler.handlerType`.
+/// A snapshot blob this build would read with another layout.
 ///
-/// An operation kind is defined by the handler that owns it. 
-/// What a build can state is the set it knows, which is exactly the keys of
-/// `Handler.operationDecoders`.
+/// A blob is refused whole, so the two peers cannot share a snapshot for this
+/// handler type at all.
+final class SnapshotBlobVersionMismatch extends CapabilityMismatch {
+  /// Constructor
+  const SnapshotBlobVersionMismatch({
+    required String handlerType,
+    required this.reads,
+    required this.holds,
+  }) : super(handlerType);
+
+  /// The [Handler.snapshotBlobVersion] this build reads.
+  final int reads;
+
+  /// The version the other peer's blob is written with.
+  final int holds;
+
+  @override
+  bool operator ==(Object other) =>
+      other is SnapshotBlobVersionMismatch &&
+      other.handlerType == handlerType &&
+      other.reads == reads &&
+      other.holds == holds;
+
+  @override
+  int get hashCode => Object.hash(handlerType, reads, holds);
+
+  @override
+  String toString() =>
+      '$handlerType(snapshot blob v$holds, this build reads v$reads)';
+}
+
+/// A [DocumentCapabilities] on the wire.
 ///
-/// The client sends this in the handshake. The server compares it with its own
-/// and refuses a client that would receive operations it cannot read — see
-/// [missingFrom].
+/// `crdt_lf` describes what a build can read and what a document's data holds;
+/// this adds the JSON form the handshake carries, and the comparison that
+/// decides whether the two fit together.
 class SyncCapabilities {
-  /// Creates capabilities from an explicit map.
-  SyncCapabilities(Map<String, Set<int>> operationKinds)
-      : operationKinds = Map.unmodifiable(
-          operationKinds.map(
-            (type, kinds) => MapEntry(type, Set<int>.unmodifiable(kinds)),
-          ),
-        );
+  /// Wraps a description produced by `crdt_lf`.
+  const SyncCapabilities(this.capabilities);
 
   /// Reads capabilities from the JSON form written by [toJson].
   factory SyncCapabilities.fromJson(Map<String, dynamic> json) {
     return SyncCapabilities(
-      json.map(
-        (type, kinds) => MapEntry(
-          type,
-          (kinds as List<dynamic>).map((k) => k as int).toSet(),
-        ),
-      ),
+      DocumentCapabilities({
+        for (final entry in json.entries)
+          entry.key: _capabilityFromJson(entry.value as Map<String, dynamic>),
+      }),
     );
   }
 
-  /// The decodable kinds, keyed by `Handler.handlerType`. Unmodifiable.
-  final Map<String, Set<int>> operationKinds;
+  /// What the peer says, keyed by [Handler.handlerType].
+  final DocumentCapabilities capabilities;
 
-  /// The kinds [other] holds and this build cannot decode.
+  /// The reasons this build cannot handle what [other] holds.
   ///
-  /// A handler type this build says nothing about counts as unreadable, not as
-  /// nothing to check: these capabilities describe what a **build** can read,
-  /// so silence about a type means the build cannot read it, whether or not a
-  /// handler of that type has been opened yet.
-  ///
-  /// An empty result means every operation [other] holds is readable here.
-  List<MissingOperationKind> missingFrom(SyncCapabilities other) {
-    final missing = <MissingOperationKind>[];
+  /// An empty result means everything [other] holds is readable here.
+  List<CapabilityMismatch> missingFrom(SyncCapabilities other) {
+    final missing = <CapabilityMismatch>[];
 
-    for (final entry in other.operationKinds.entries) {
-      final mine = operationKinds[entry.key] ?? const <int>{};
-      for (final kind in entry.value) {
-        if (!mine.contains(kind)) {
+    for (final entry in other.capabilities.byHandlerType.entries) {
+      final mine = capabilities[entry.key];
+
+      for (final kind in entry.value.operationKinds) {
+        if (mine == null || !mine.operationKinds.contains(kind)) {
           missing.add(
             MissingOperationKind(handlerType: entry.key, kind: kind),
           );
         }
+      }
+
+      // Only when both sides know one. A type described from change envelopes
+      // alone carries no snapshot version, and silence is not a disagreement.
+      final reads = mine?.snapshotBlobVersion;
+      final holds = entry.value.snapshotBlobVersion;
+      if (reads != null && holds != null && reads != holds) {
+        missing.add(
+          SnapshotBlobVersionMismatch(
+            handlerType: entry.key,
+            reads: reads,
+            holds: holds,
+          ),
+        );
       }
     }
 
     return missing;
   }
 
-  /// The JSON form: `{"CRDTFugueTextHandler": [0, 1, 2], ...}`.
+  /// The JSON form:
+  /// `{"CRDTFugueTextHandler": {"kinds": [0, 1, 2], "blob": 1}}`.
   ///
   /// Kinds are sorted so the same capabilities always encode to the same JSON.
   Map<String, dynamic> toJson() {
-    return operationKinds.map(
-      (type, kinds) => MapEntry(type, kinds.toList()..sort()),
-    );
+    return {
+      for (final entry in capabilities.byHandlerType.entries)
+        entry.key: <String, dynamic>{
+          'kinds': entry.value.operationKinds.toList()..sort(),
+          if (entry.value.snapshotBlobVersion != null)
+            'blob': entry.value.snapshotBlobVersion,
+        },
+    };
   }
 
   @override
   String toString() => 'SyncCapabilities(${toJson()})';
+}
+
+HandlerCapability _capabilityFromJson(Map<String, dynamic> json) {
+  return HandlerCapability(
+    operationKinds: (json['kinds'] as List<dynamic>).cast<int>().toSet(),
+    snapshotBlobVersion: json['blob'] as int?,
+  );
 }

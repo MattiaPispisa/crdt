@@ -121,28 +121,11 @@ class RelayClientSession extends ClientSession {
   Future<void> _handleHello(RelayHelloMessage message) async {
     final documentId = message.documentId;
 
-    if (message.protocolVersion != Protocol.protocolVersion) {
-      final reason = 'The client speaks protocol version '
-          '${message.protocolVersion}, this relay speaks '
-          '${Protocol.protocolVersion}.';
-
-      await sendMessage(
-        Message.error(
-          documentId: documentId,
-          code: Protocol.errorUnsupportedProtocolVersion,
-          message: reason,
-        ),
-      );
-
-      addSessionEvent(
-        SessionEventGeneric(
-          sessionId: id,
-          type: SessionEventType.error,
-          message: 'Client refused for relay room $documentId: $reason',
-        ),
-      );
-
-      await close();
+    final mismatched = await refuseProtocolMismatch(
+      documentId: documentId,
+      clientVersion: message.protocolVersion,
+    );
+    if (mismatched) {
       return;
     }
 

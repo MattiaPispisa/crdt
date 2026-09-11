@@ -84,8 +84,7 @@ class DocumentClientSession extends ClientSession {
     }
   }
 
-  /// The operation kinds this document's data holds and the client cannot
-  /// read.
+  /// What this document's data holds and the client cannot read.
   ///
   /// The document is asked what its **data** contains
   /// ([CRDTDocument.describeDataCapabilities]), not which handlers it happens
@@ -95,7 +94,7 @@ class DocumentClientSession extends ClientSession {
   ///
   /// Empty when the client declares nothing: a peer from a build before the
   /// field existed has nothing to compare.
-  Future<List<MissingOperationKind>> _missingClientCapabilities({
+  Future<List<CapabilityMismatch>> _missingClientCapabilities({
     required String documentId,
     required SyncCapabilities? clientCapabilities,
   }) async {
@@ -113,43 +112,16 @@ class DocumentClientSession extends ClientSession {
     );
   }
 
-  /// Refuses the client with [code] and [reason], and closes the session.
-  Future<void> _refuseClient({
-    required String documentId,
-    required String code,
-    required String reason,
-  }) async {
-    await sendMessage(
-      Message.error(
-        documentId: documentId,
-        code: code,
-        message: reason,
-      ),
-    );
-
-    addSessionEvent(
-      SessionEventGeneric(
-        sessionId: id,
-        type: SessionEventType.error,
-        message: 'Client refused for document $documentId: $reason',
-      ),
-    );
-
-    await close();
-  }
-
   /// Handle handshake
   Future<void> _handleHandshakeRequest(HandshakeRequestMessage message) async {
     final documentId = message.documentId;
 
-    if (message.protocolVersion != Protocol.protocolVersion) {
-      return _refuseClient(
-        documentId: documentId,
-        code: Protocol.errorUnsupportedProtocolVersion,
-        reason: 'The client speaks protocol version '
-            '${message.protocolVersion}, this server speaks '
-            '${Protocol.protocolVersion}.',
-      );
+    final mismatched = await refuseProtocolMismatch(
+      documentId: documentId,
+      clientVersion: message.protocolVersion,
+    );
+    if (mismatched) {
+      return;
     }
 
     final hasDocument = await _serverRegistry.hasDocument(documentId);
@@ -171,10 +143,10 @@ class DocumentClientSession extends ClientSession {
     );
 
     if (missing.isNotEmpty) {
-      return _refuseClient(
+      return refuse(
         documentId: documentId,
         code: Protocol.errorUnsupportedClient,
-        reason: 'The client cannot decode operations this document holds: '
+        reason: 'The client cannot read what this document holds: '
             '${missing.join(', ')}.',
       );
     }

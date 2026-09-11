@@ -6,6 +6,13 @@ class Protocol {
   /// The version a frame that carries no version field speaks.
   static const int firstProtocolVersion = 1;
 
+  /// Reads the protocol version out of a decoded frame.
+  ///
+  /// A frame without the field comes from a build that predates it, which by
+  /// definition speaks [firstProtocolVersion].
+  static int readVersion(Map<String, dynamic> json) =>
+      json['protocolVersion'] as int? ?? firstProtocolVersion;
+
   /// Handshake timeout
   static const Duration handshakeTimeout = Duration(milliseconds: 5000);
 

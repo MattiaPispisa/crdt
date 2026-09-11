@@ -95,6 +95,54 @@ abstract class ClientSession {
   /// Bounded, serialized outbound send queue.
   late final OutboundQueue _outboundQueue;
 
+  /// Refuses the client with [code] and [reason], and closes the session.
+  ///
+  /// A refusal is permanent: the client is told why, the server records it,
+  /// and the session ends. Nothing here can be retried into a success.
+  @protected
+  Future<void> refuse({
+    required String documentId,
+    required String code,
+    required String reason,
+  }) async {
+    await sendMessage(
+      Message.error(documentId: documentId, code: code, message: reason),
+    );
+
+    addSessionEvent(
+      SessionEventGeneric(
+        sessionId: id,
+        type: SessionEventType.error,
+        message: 'Client refused for document $documentId: $reason',
+      ),
+    );
+
+    await close();
+  }
+
+  /// Refuses a client that speaks another [Protocol.protocolVersion], and
+  /// says whether it did.
+  ///
+  /// The first thing a session checks: two peers that do not agree on the
+  /// frames cannot agree on anything carried inside them.
+  @protected
+  Future<bool> refuseProtocolMismatch({
+    required String documentId,
+    required int clientVersion,
+  }) async {
+    if (clientVersion == Protocol.protocolVersion) {
+      return false;
+    }
+
+    await refuse(
+      documentId: documentId,
+      code: Protocol.errorUnsupportedProtocolVersion,
+      reason: 'The client speaks protocol version $clientVersion, '
+          'this server speaks ${Protocol.protocolVersion}.',
+    );
+    return true;
+  }
+
   /// Send a message to the client
   Future<void> sendMessage(Message message) async {
     if (_isClosed) {
