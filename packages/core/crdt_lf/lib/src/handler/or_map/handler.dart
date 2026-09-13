@@ -36,28 +36,36 @@ base class CRDTORMapHandler<K, V> extends Handler<ORMapState<K, V>>
   ///
   /// [keyCodec] and [valueCodec] are optional codecs for encoding/decoding keys and values to bytes.
   /// Default is [JsonValueCodec].
+  ///
+  /// [handlerType] names the **kind** of handler this is.
+  /// {@macro handler_type_tag}
   CRDTORMapHandler(
     super.doc,
     this._id, {
+    required String handlerType,
     ValueCodec<K>? keyCodec,
     ValueCodec<V>? valueCodec,
-    String? handlerType,
-  })  : _keyCodec = keyCodec ?? JsonValueCodec<K>(),
-        _valueCodec = valueCodec ?? JsonValueCodec<V>(),
-        super(
-          spec: handlerType == null
-              ? null
-              : CRDTORMapHandler.spec<K, V>(
-                  handlerType,
-                  keyCodec: keyCodec,
-                  valueCodec: valueCodec,
-                ),
-        );
+  })  : _handlerType = handlerType,
+        _keyCodec = keyCodec ?? JsonValueCodec<K>(),
+        _valueCodec = valueCodec ?? JsonValueCodec<V>();
 
 
   final String _id;
   final ValueCodec<K> _keyCodec;
   final ValueCodec<V> _valueCodec;
+
+  final String _handlerType;
+
+  /// {@macro handler_spec}
+  ///
+  /// Built once from the tag the constructor asked for: [handlerType] reads it
+  /// on every operation encode, so a fresh one per call would allocate there.
+  @override
+  late final HandlerSpec<CRDTORMapHandler<K, V>> spec = _spec<K, V>(
+    _handlerType,
+    keyCodec: _keyCodec,
+    valueCodec: _valueCodec,
+  );
 
   @override
   String get id => _id;
@@ -140,17 +148,17 @@ base class CRDTORMapHandler<K, V> extends Handler<ORMapState<K, V>>
   Iterable<MapEntry<K, V>> get entries => value.entries;
 
   /// {@macro generic_handler_spec}
-  static HandlerSpec<CRDTORMapHandler<K, V>> spec<K, V>(
+  static HandlerSpec<CRDTORMapHandler<K, V>> _spec<K, V>(
     String type, {
     ValueCodec<K>? keyCodec,
     ValueCodec<V>? valueCodec,
   }) =>
       HandlerSpec<CRDTORMapHandler<K, V>>(
         type,
-        (doc, id, spec) => CRDTORMapHandler<K, V>(
+        (doc, id) => CRDTORMapHandler<K, V>(
           doc,
           id,
-          handlerType: spec.type,
+          handlerType: type,
           keyCodec: keyCodec,
           valueCodec: valueCodec,
         ),

@@ -19,7 +19,7 @@ class TodoDocumentState
     return CRDTListHandler<EncodedTodoListType>(
       doc,
       ExampleHandlerIds.todoList,
-    );
+     handlerType: 'CRDTListHandler<EncodedTodoListType>');
   }
 
   /// The current todos (live or time-travel view).

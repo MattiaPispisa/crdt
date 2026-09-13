@@ -192,7 +192,11 @@ void main() {
     /// way a server that only stores and forwards holds one.
     Future<String> seedServerDocument() async {
       final author = CRDTDocument(peerId: PeerId.generate());
-      final list = CRDTListHandler<String>(author, 'list')
+      final list = CRDTListHandler<String>(
+        author,
+        'list',
+        handlerType: 'CRDTListHandler<String>',
+      )
         ..insert(0, 'x')
         ..delete(0, 1);
 
@@ -334,7 +338,11 @@ void main() {
       await registry.addDocument(documentId);
       // No handshake -> not subscribed.
       final authorDoc = CRDTDocument(peerId: PeerId.generate());
-      CRDTListHandler<String>(authorDoc, 'list').insert(0, 'x');
+      CRDTListHandler<String>(
+        authorDoc,
+        'list',
+        handlerType: 'CRDTListHandler<String>',
+      ).insert(0, 'x');
       final change = authorDoc.exportChanges().first;
 
       connection.inbound(
@@ -355,11 +363,19 @@ void main() {
         () async {
       await registry.addDocument(documentId);
       final serverDoc = (await registry.getDocument(documentId))!;
-      CRDTListHandler<String>(serverDoc, 'list');
+      CRDTListHandler<String>(
+        serverDoc,
+        'list',
+        handlerType: 'CRDTListHandler<String>',
+      );
       await handshake();
 
       final authorDoc = CRDTDocument(peerId: PeerId.generate());
-      CRDTListHandler<String>(authorDoc, 'list').insert(0, 'x');
+      CRDTListHandler<String>(
+        authorDoc,
+        'list',
+        handlerType: 'CRDTListHandler<String>',
+      ).insert(0, 'x');
       final change = authorDoc.exportChanges().first;
 
       connection.inbound(
@@ -415,7 +431,11 @@ void main() {
     test('replies to a ping with a pong and records the version vector',
         () async {
       final doc = CRDTDocument(peerId: PeerId.generate());
-      CRDTListHandler<String>(doc, 'list').insert(0, 'x');
+      CRDTListHandler<String>(
+        doc,
+        'list',
+        handlerType: 'CRDTListHandler<String>',
+      ).insert(0, 'x');
       final vv = doc.getVersionVector();
 
       connection.inbound(

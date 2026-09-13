@@ -7,7 +7,11 @@ void main() {
       final doc = CRDTDocument();
       // Default tag is runtimeType-based and includes the generic argument.
       expect(
-        CRDTORSetHandler<String>(doc, 's').handlerType,
+        CRDTORSetHandler<String>(
+          doc,
+          's',
+          handlerType: 'CRDTORSetHandler<String>',
+        ).handlerType,
         'CRDTORSetHandler<String>',
       );
 
@@ -23,7 +27,11 @@ void main() {
       final doc = CRDTDocument(
         peerId: PeerId.parse('37f1ec87-6ea5-430b-a627-a6b92b56a02d'),
       );
-      final set = CRDTORSetHandler<String>(doc, 'set1')
+      final set = CRDTORSetHandler<String>(
+        doc,
+        'set1',
+        handlerType: 'CRDTORSetHandler<String>',
+      )
         ..add('a')
         ..add('b');
       expect(set.value, {'a', 'b'});
@@ -45,7 +53,11 @@ void main() {
     test('each add is stamped strictly after the one before it', () {
       final doc = CRDTDocument();
       final hlc1 = doc.hlc;
-      final set = CRDTORSetHandler<String>(doc, 'set1')
+      final set = CRDTORSetHandler<String>(
+        doc,
+        'set1',
+        handlerType: 'CRDTORSetHandler<String>',
+      )
         ..add('x')
         ..add('y');
       expect(hlc1.happenedBefore(doc.hlc), isTrue);
@@ -62,12 +74,20 @@ void main() {
       final doc1 = CRDTDocument(
         peerId: PeerId.parse('45ee6b65-b393-40b7-9755-8b66dc7d0518'),
       );
-      final s1 = CRDTORSetHandler<String>(doc1, 'set1');
+      final s1 = CRDTORSetHandler<String>(
+        doc1,
+        'set1',
+        handlerType: 'CRDTORSetHandler<String>',
+      );
 
       final doc2 = CRDTDocument(
         peerId: PeerId.parse('a90dfced-cbf0-4a49-9c64-f5b7b62fdc18'),
       );
-      final s2 = CRDTORSetHandler<String>(doc2, 'set1');
+      final s2 = CRDTORSetHandler<String>(
+        doc2,
+        'set1',
+        handlerType: 'CRDTORSetHandler<String>',
+      );
 
       s1.add('x');
 
@@ -96,7 +116,11 @@ void main() {
       final doc = CRDTDocument(
         peerId: PeerId.parse('45ee6b65-b393-40b7-9755-8b66dc7d0518'),
       );
-      final set = CRDTORSetHandler<String>(doc, 'set1')
+      final set = CRDTORSetHandler<String>(
+        doc,
+        'set1',
+        handlerType: 'CRDTORSetHandler<String>',
+      )
         ..add('v')
         ..add('v');
       expect(set.value, {'v'});
@@ -109,8 +133,16 @@ void main() {
     test('concurrent add/remove converge', () {
       final doc1 = CRDTDocument();
       final doc2 = CRDTDocument();
-      final s1 = CRDTORSetHandler<String>(doc1, 'set1');
-      final s2 = CRDTORSetHandler<String>(doc2, 'set1');
+      final s1 = CRDTORSetHandler<String>(
+        doc1,
+        'set1',
+        handlerType: 'CRDTORSetHandler<String>',
+      );
+      final s2 = CRDTORSetHandler<String>(
+        doc2,
+        'set1',
+        handlerType: 'CRDTORSetHandler<String>',
+      );
 
       s1.add('k');
       doc2.importChanges(doc1.exportChanges());
@@ -138,7 +170,11 @@ void main() {
       final doc1 = CRDTDocument(
         peerId: PeerId.parse('45ee6b65-b393-40b7-9755-8b66dc7d0518'),
       );
-      final s1 = CRDTORSetHandler<String>(doc1, 'set1')
+      final s1 = CRDTORSetHandler<String>(
+        doc1,
+        'set1',
+        handlerType: 'CRDTORSetHandler<String>',
+      )
         ..add('a')
         ..add('b');
 
@@ -147,7 +183,11 @@ void main() {
       final doc2 = CRDTDocument(
         peerId: PeerId.parse('a90dfced-cbf0-4a49-9c64-f5b7b62fdc18'),
       );
-      final s2 = CRDTORSetHandler<String>(doc2, 'set1');
+      final s2 = CRDTORSetHandler<String>(
+        doc2,
+        'set1',
+        handlerType: 'CRDTORSetHandler<String>',
+      );
       doc2.mergeSnapshot(snap, pruneHistory: false);
 
       expect(s2.value, equals(s1.value));
@@ -157,12 +197,20 @@ void main() {
       final doc1 = CRDTDocument(
         peerId: PeerId.parse('45ee6b65-b393-40b7-9755-8b66dc7d0518'),
       );
-      final s1 = CRDTORSetHandler<String>(doc1, 'set1');
+      final s1 = CRDTORSetHandler<String>(
+        doc1,
+        'set1',
+        handlerType: 'CRDTORSetHandler<String>',
+      );
 
       final doc2 = CRDTDocument(
         peerId: PeerId.parse('a90dfced-cbf0-4a49-9c64-f5b7b62fdc18'),
       );
-      final s2 = CRDTORSetHandler<String>(doc2, 'set1');
+      final s2 = CRDTORSetHandler<String>(
+        doc2,
+        'set1',
+        handlerType: 'CRDTORSetHandler<String>',
+      );
 
       s1
         ..add('a')
@@ -198,8 +246,16 @@ void main() {
         final b = CRDTDocument(
           peerId: PeerId.parse('45ee6b65-b393-40b7-9755-8b66dc7d0518'),
         );
-        final setA = CRDTORSetHandler<String>(a, 'set');
-        final setB = CRDTORSetHandler<String>(b, 'set');
+        final setA = CRDTORSetHandler<String>(
+          a,
+          'set',
+          handlerType: 'CRDTORSetHandler<String>',
+        );
+        final setB = CRDTORSetHandler<String>(
+          b,
+          'set',
+          handlerType: 'CRDTORSetHandler<String>',
+        );
         final undo = CRDTUndoManager(a)..track(setA);
 
         // Both peers add the same value, each under a tag of its own.
@@ -221,7 +277,11 @@ void main() {
         final doc = CRDTDocument(
           peerId: PeerId.parse('37f1ec87-6ea5-430b-a627-a6b92b56a02d'),
         );
-        final set = CRDTORSetHandler<String>(doc, 'set');
+        final set = CRDTORSetHandler<String>(
+          doc,
+          'set',
+          handlerType: 'CRDTORSetHandler<String>',
+        );
         final undo = CRDTUndoManager(doc, captureTimeout: Duration.zero)
           ..track(set);
 
@@ -247,13 +307,21 @@ void main() {
         final source = CRDTDocument(
           peerId: PeerId.parse('a90dfced-cbf0-4a49-9c64-f5b7b62fdc18'),
         );
-        CRDTORSetHandler<String>(source, 'set').add('a');
+        CRDTORSetHandler<String>(
+          source,
+          'set',
+          handlerType: 'CRDTORSetHandler<String>',
+        ).add('a');
         final snapshot = source.takeSnapshot();
 
         final doc = CRDTDocument(
           peerId: PeerId.parse('37f1ec87-6ea5-430b-a627-a6b92b56a02d'),
         );
-        final set = CRDTORSetHandler<String>(doc, 'set');
+        final set = CRDTORSetHandler<String>(
+          doc,
+          'set',
+          handlerType: 'CRDTORSetHandler<String>',
+        );
         doc.importSnapshot(snapshot);
         expect(set.value, {'a'});
 
@@ -270,13 +338,21 @@ void main() {
         final source = CRDTDocument(
           peerId: PeerId.parse('a90dfced-cbf0-4a49-9c64-f5b7b62fdc18'),
         );
-        CRDTORSetHandler<String>(source, 'set').add('a');
+        CRDTORSetHandler<String>(
+          source,
+          'set',
+          handlerType: 'CRDTORSetHandler<String>',
+        ).add('a');
         final snapshot = source.takeSnapshot();
 
         final doc = CRDTDocument(
           peerId: PeerId.parse('37f1ec87-6ea5-430b-a627-a6b92b56a02d'),
         );
-        final set = CRDTORSetHandler<String>(doc, 'set');
+        final set = CRDTORSetHandler<String>(
+          doc,
+          'set',
+          handlerType: 'CRDTORSetHandler<String>',
+        );
         doc.importSnapshot(snapshot);
 
         final undo = CRDTUndoManager(doc)..track(set);
@@ -292,7 +368,11 @@ void main() {
         final doc = CRDTDocument(
           peerId: PeerId.parse('37f1ec87-6ea5-430b-a627-a6b92b56a02d'),
         );
-        final set = CRDTORSetHandler<String>(doc, 'set')..add('a');
+        final set = CRDTORSetHandler<String>(
+          doc,
+          'set',
+          handlerType: 'CRDTORSetHandler<String>',
+        )..add('a');
         final undo = CRDTUndoManager(doc)..track(set);
 
         set.remove('a');

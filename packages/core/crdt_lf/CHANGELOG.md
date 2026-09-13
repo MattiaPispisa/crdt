@@ -6,42 +6,24 @@
 
 ### Added
 
-- **`HandlerSpec`: a handler type states its tag, how to build one and what it reads, in one
-  place.** The tag used to be repeated across `registerFactory`, the `handlerType:` argument and
-  every call site, where a typo stopped a peer rebuilding the child in silence. `document.register(spec)`
-  declares it once, `document.handler(spec, id)` opens a handler by id, and
-  `container.child(key, spec)` / `insertChild(index, spec)` make a nested child one call — `child`
-  returns the one already there, so it is safe to call twice where building by hand throws
-  `HandlerAlreadyRegisteredException`. `HandlerSpec.create` checks in debug that the handler it built
-  carries the tag it is registered under and reads what the spec declares, which is what catches a
-  declaration drifting from `operationDecoders`. The built-in containers and text handlers ship a
-  ready `spec`; a generic handler needs its own, which is where the tag has to be stable anyway.
-  **A handler created with a spec declares its own type.** The `Handler` constructor takes
-  `spec:`, and it is the one point every creation passes, so building a handler by hand,
-  `document.handler(spec, id)` and `container.child(key, spec)` all leave the document able to
-  rebuild that type — which is what a peer resolving a `HandlerRef` needs and what `reconstruct()`
-  walks. Before, only an explicit registration did: a handler built by hand, or a child created
-  from a spec, left a subtree no peer could rebuild, in silence. The built-in handlers carry their
-  own spec, so nested containers and text now survive a reload with nothing registered.
-  **Breaking for a handler of your own:** `Handler`'s constructor takes `spec:` and no longer a bare
-  `handlerType:` — a tag alone could not rebuild anything, which is what made `reconstruct()` and a
-  ref received from a peer fail in silence. The built-in handlers are unaffected: they keep taking
-  `handlerType:` and turn it into the spec themselves.
-  Writing the spec of a built-in generic handler takes a line —
-  `CRDTListHandler.spec<Todo>('todos')` — because the class already holds its formats and knows how
-  to build itself; only the tag is yours. And a built-in constructor asks for nothing more than that
-  tag: `CRDTListHandler<Todo>(doc, 'todos', handlerType: 'todos')` makes the spec itself, so the
-  type becomes rebuildable without the caller saying how. The `formats` constants are private now,
-  reachable through the spec (`CRDTTextHandler.spec.formats`), and `HandlerSpec.build` and the dead
-  `HandlerSpec.factory` getter are gone from the public surface.
-  **Breaking:** `registerFactory` is gone — `register(HandlerSpec.factory(type, factory, formats:))`
-  replaces it — and `registerHandler` is now private, which is what the `Handler` constructor has
-  always called for you.
-  `HandlerSpec` compares by value on its tag and formats: every constructor that takes a tag mints
-  its own spec, and two handlers of one declared type are not a conflict.
-  `document.handler(spec, id)` and `container.child(key, spec)` refuse an id or a key held by another
-  **tag**, not only another Dart type — a mismatch a tree received from a peer would otherwise
-  resolve to the wrong handler.
+- **A handler cannot exist without naming its kind.** `Handler.spec` is an abstract, non-nullable
+  getter: every handler answers a `HandlerSpec` — its tag, how to build one, and the formats it
+  reads — and the document reads it as the handler registers. So opening a handler is what teaches
+  the document to rebuild that kind, which is what a peer resolving a `HandlerRef` needs and what
+  `reconstruct()` walks. Before, only an explicit registration did, and a handler built by hand left
+  a subtree no peer could rebuild, in silence.
+  One rule now holds for every kind alike: a document rebuilds the kinds it has opened a handler of,
+  plus the ones passed to `register`. Naming a kind at a call site means passing the **constructor** —
+  `doc.handler(CRDTMapRefHandler.new, 'root')`, `root.child('title', CRDTFugueTextHandler.new)` —
+  and `register(build)` reads the tag and the formats off a handler it makes, so neither is restated
+  and neither can drift from the decoders that dispatch.
+  **Breaking:** a generic handler's `handlerType:` is now **required** — its default carried the type
+  argument, which dart2js minifies away, so the old default was a trap rather than a convenience.
+  `registerFactory`, `registerDefaultFactories`, `Handler.hasStableHandlerType`, the per-class
+  `spec` statics and `HandlerSpec.factory` are gone; `registerHandler` is private. `importChanges` no
+  longer materializes the tree eagerly: a handler comes into being when you open it or when someone
+  resolves the reference that names it.
+  [142](https://github.com/MattiaPispisa/crdt/issues/142)
 
 - **A document can say what it can read and what it asks to be read.**
   `describeBuildCapabilities()` returns a `DocumentCapabilities` — what this build decodes, covering
@@ -54,20 +36,14 @@
   `crdt_socket_sync` refuses an incompatible peer.
   **Breaking:** a document reports only what it has been set up for, where the built-in types used to
   be reported whether or not anything registered or opened one.
-  `registerDefaultFactories()` is **gone** and needs no replacement: the handler types this package
-  ships resolve with nothing registered, because the classes are in your build and a reference to one
-  can always be rebuilt. What that call also did — materializing the whole tree during
-  `importChanges` — now follows the types **you** registered; a tree of built-in types resolves as
-  you read it instead. [142](https://github.com/MattiaPispisa/crdt/issues/142)
+  [142](https://github.com/MattiaPispisa/crdt/issues/142)
 
 - **A snapshot blob names the layouts its reader understands, not just one.** A handler declares
   `snapshotBlobVersion` (what it writes) and `minReadableSnapshotBlobVersion` (the oldest it still
   reads); `snapshotHeader()` writes the byte and `readSnapshotHeader()` checks it and hands back the
   version it found, so a newer build can read an older blob and migrate it on the way in instead of
-  refusing the peer that wrote it. The pair travels as a `BlobVersionRange`.
-  `Handler.hasStableHandlerType` says whether the type tag is a constant this build controls or the
-  `runtimeType.toString()` fallback that dart2js minifies away; the built-in handlers now pass theirs
-  through the constructor.
+  refusing the peer that wrote it. The pair travels as a `BlobVersionRange`, which is half of the
+  `HandlerFormats` a kind declares.
 
 ## [4.2.0](https://github.com/MattiaPispisa/crdt/tree/crdt_lf-v4.2.0/packages/core/crdt_lf)
 

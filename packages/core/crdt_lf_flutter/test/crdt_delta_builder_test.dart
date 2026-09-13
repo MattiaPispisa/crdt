@@ -32,7 +32,11 @@ void main() {
     }
 
     testWidgets('the first frame already shows the value', (tester) async {
-      final list = CRDTListHandler<String>(doc, 'todos')..insert(0, 'a');
+      final list = CRDTListHandler<String>(
+        doc,
+        'todos',
+        handlerType: 'CRDTListHandler<String>',
+      )..insert(0, 'a');
       final seen = <List<String>>[];
 
       await tester.pumpWidget(host(seen: seen));
@@ -46,7 +50,11 @@ void main() {
 
     testWidgets('moves the value with each change, local and remote',
         (tester) async {
-      final list = CRDTListHandler<String>(doc, 'todos')..insert(0, 'a');
+      final list = CRDTListHandler<String>(
+        doc,
+        'todos',
+        handlerType: 'CRDTListHandler<String>',
+      )..insert(0, 'a');
       final seen = <List<String>>[];
       await tester.pumpWidget(host(seen: seen));
 
@@ -55,7 +63,11 @@ void main() {
       expect(seen.last, ['a', 'b']);
 
       final remote = CRDTDocument(peerId: PeerId.generate());
-      final remoteList = CRDTListHandler<String>(remote, 'todos');
+      final remoteList = CRDTListHandler<String>(
+        remote,
+        'todos',
+        handlerType: 'CRDTListHandler<String>',
+      );
       remote.importChanges(doc.exportChanges());
       remoteList.insert(2, 'c');
       doc.importChanges(
@@ -74,12 +86,20 @@ void main() {
 
     testWidgets('a snapshot import makes it read the value again',
         (tester) async {
-      final list = CRDTListHandler<String>(doc, 'todos')..insert(0, 'a');
+      final list = CRDTListHandler<String>(
+        doc,
+        'todos',
+        handlerType: 'CRDTListHandler<String>',
+      )..insert(0, 'a');
       final seen = <List<String>>[];
       await tester.pumpWidget(host(seen: seen));
 
       final other = CRDTDocument(peerId: PeerId.generate());
-      CRDTListHandler<String>(other, 'todos')
+      CRDTListHandler<String>(
+        other,
+        'todos',
+        handlerType: 'CRDTListHandler<String>',
+      )
         ..insert(0, 'x')
         ..insert(1, 'y');
       doc.importSnapshot(other.takeSnapshot());
@@ -93,8 +113,16 @@ void main() {
     });
 
     testWidgets('follows the handler when the id changes', (tester) async {
-      CRDTListHandler<String>(doc, 'todos').insert(0, 'a');
-      CRDTListHandler<String>(doc, 'other').insert(0, 'z');
+      CRDTListHandler<String>(
+        doc,
+        'todos',
+        handlerType: 'CRDTListHandler<String>',
+      ).insert(0, 'a');
+      CRDTListHandler<String>(
+        doc,
+        'other',
+        handlerType: 'CRDTListHandler<String>',
+      ).insert(0, 'z');
       final seen = <List<String>>[];
 
       await tester.pumpWidget(host(seen: seen));
@@ -141,7 +169,11 @@ void main() {
     });
 
     testWidgets('a change that moves nothing does not rebuild', (tester) async {
-      final list = CRDTListHandler<String>(doc, 'todos')..insert(0, 'a');
+      final list = CRDTListHandler<String>(
+        doc,
+        'todos',
+        handlerType: 'CRDTListHandler<String>',
+      )..insert(0, 'a');
       final seen = <List<String>>[];
       await tester.pumpWidget(host(seen: seen));
       expect(seen, hasLength(1));

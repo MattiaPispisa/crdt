@@ -26,7 +26,21 @@ import 'package:crdt_lf/crdt_lf.dart';
 /// ```
 final class PNCounterHandler extends Handler<int> {
   /// Creates a counter addressed by [id] in [doc].
-  PNCounterHandler(super.doc, this._id, {super.spec});
+  PNCounterHandler(
+    super.doc,
+    this._id, {
+    String handlerType = 'PNCounterHandler',
+  }) : spec = HandlerSpec(
+          handlerType,
+          (doc, id) => PNCounterHandler(doc, id, handlerType: handlerType),
+          formats: const HandlerFormats(
+            operationKinds: {incrementKind},
+            blobVersions: BlobVersionRange.single(1),
+          ),
+        );
+
+  @override
+  final HandlerSpec<PNCounterHandler> spec;
 
   /// The binary kind of an increment, the first value past the four
   /// conventional ones.

@@ -403,7 +403,11 @@ void main() {
 
         await registry.addDocument(documentId);
         final registryDoc = (await registry.getDocument(documentId))!;
-        serverTodoListHandler = CRDTListHandler(registryDoc, todoList, handlerType: todoList);
+        serverTodoListHandler = CRDTListHandler(
+          registryDoc,
+          todoList,
+          handlerType: todoList,
+        );
 
         await server.start();
 
@@ -421,7 +425,11 @@ void main() {
         );
         client1 = client1Setup.client;
         updateClient1SocketIndex = client1Setup.updateSocketIndex;
-        client1TodoListHandler = CRDTListHandler(client1.document, todoList, handlerType: todoList);
+        client1TodoListHandler = CRDTListHandler(
+          client1.document,
+          todoList,
+          handlerType: todoList,
+        );
 
         await Future<void>.delayed(Duration.zero);
 
@@ -438,7 +446,11 @@ void main() {
           ],
         ))
             .client;
-        client2TodoListHandler = CRDTListHandler(client2.document, todoList, handlerType: todoList);
+        client2TodoListHandler = CRDTListHandler(
+          client2.document,
+          todoList,
+          handlerType: todoList,
+        );
 
         await Future<void>.delayed(Duration.zero);
 
@@ -1081,7 +1093,11 @@ void main() {
 
         await registry.addDocument(documentId);
         final registryDoc = (await registry.getDocument(documentId))!;
-        serverTodoListHandler = CRDTListHandler(registryDoc, todoList, handlerType: todoList);
+        serverTodoListHandler = CRDTListHandler(
+          registryDoc,
+          todoList,
+          handlerType: todoList,
+        );
 
         await server.start();
 
@@ -1099,7 +1115,11 @@ void main() {
         ))
             .client;
 
-        client1TodoListHandler = CRDTListHandler(client1.document, todoList, handlerType: todoList);
+        client1TodoListHandler = CRDTListHandler(
+          client1.document,
+          todoList,
+          handlerType: todoList,
+        );
 
         await Future<void>.delayed(Duration.zero);
 
@@ -1116,7 +1136,11 @@ void main() {
           ],
         ))
             .client;
-        client2TodoListHandler = CRDTListHandler(client2.document, todoList, handlerType: todoList);
+        client2TodoListHandler = CRDTListHandler(
+          client2.document,
+          todoList,
+          handlerType: todoList,
+        );
 
         await Future<void>.delayed(Duration.zero);
       });

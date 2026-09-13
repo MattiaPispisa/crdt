@@ -20,8 +20,16 @@ const _noteId = 'note';
 /// widget/callback resolves them by id from the ambient [CrdtProvider].
 CRDTDocument _buildDocument() {
   final doc = CRDTDocument();
-  CRDTRegisterHandler<int>(doc, _counterId).set(0);
-  CRDTListHandler<String>(doc, _todosId);
+  CRDTRegisterHandler<int>(
+    doc,
+    _counterId,
+    handlerType: 'CRDTRegisterHandler<int>',
+  ).set(0);
+  CRDTListHandler<String>(
+    doc,
+    _todosId,
+    handlerType: 'CRDTListHandler<String>',
+  );
   // A container handler ("settings") holding a nested text handler.
   CRDTMapRefHandler(
     doc,

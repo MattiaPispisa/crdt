@@ -51,25 +51,31 @@ base class CRDTFugueMovableListHandler<T>
   ///
   /// [valueCodec] is an optional codec for encoding/decoding `T` values to
   /// bytes; default is [JsonValueCodec].
+  ///
+  /// [handlerType] names the **kind** of handler this is.
+  /// {@macro handler_type_tag}
   CRDTFugueMovableListHandler(
     super.doc,
     String id, {
+    required String handlerType,
     ValueCodec<T>? valueCodec,
-    String? handlerType,
   })  : _id = id,
-        _valueCodec = valueCodec ?? JsonValueCodec<T>(),
-        super(
-          spec: handlerType == null
-              ? null
-              : CRDTFugueMovableListHandler.spec<T>(
-                  handlerType,
-                  valueCodec: valueCodec,
-                ),
-        );
+        _handlerType = handlerType,
+        _valueCodec = valueCodec ?? JsonValueCodec<T>();
 
 
   final String _id;
   final ValueCodec<T> _valueCodec;
+
+  final String _handlerType;
+
+  /// {@macro handler_spec}
+  ///
+  /// Built once from the tag the constructor asked for: [handlerType] reads it
+  /// on every operation encode, so a fresh one per call would allocate there.
+  @override
+  late final HandlerSpec<CRDTFugueMovableListHandler<T>> spec =
+      _spec<T>(_handlerType, valueCodec: _valueCodec);
 
   @override
   String get id => _id;
@@ -684,16 +690,16 @@ base class CRDTFugueMovableListHandler<T>
   }
 
   /// {@macro generic_handler_spec}
-  static HandlerSpec<CRDTFugueMovableListHandler<T>> spec<T>(
+  static HandlerSpec<CRDTFugueMovableListHandler<T>> _spec<T>(
     String type, {
     ValueCodec<T>? valueCodec,
   }) =>
       HandlerSpec<CRDTFugueMovableListHandler<T>>(
         type,
-        (doc, id, spec) => CRDTFugueMovableListHandler<T>(
+        (doc, id) => CRDTFugueMovableListHandler<T>(
           doc,
           id,
-          handlerType: spec.type,
+          handlerType: type,
           valueCodec: valueCodec,
         ),
         formats: _formats,

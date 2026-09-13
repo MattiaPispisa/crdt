@@ -1,5 +1,4 @@
 import 'package:crdt_lf/crdt_lf.dart';
-import 'package:crdt_lf/src/handler/handler_type.dart';
 
 /// # CRDT Map of references
 ///
@@ -24,7 +23,12 @@ base class CRDTMapRefHandler extends CRDTMapHandler<HandlerRef>
     implements ContainerHandler {
   /// Creates a map-of-references handler bound to [doc] with the given [id].
   CRDTMapRefHandler(super.doc, super.id)
-      : super(valueCodec: const HandlerRefCodec());
+      : super(
+          // The parent asks for a tag; the kind this class really is comes from
+          // the [spec] override below, which the document reads.
+          handlerType: _handlerType,
+          valueCodec: const HandlerRefCodec(),
+        );
 
   /// What this build reads for this handler type.
   ///
@@ -41,15 +45,21 @@ base class CRDTMapRefHandler extends CRDTMapHandler<HandlerRef>
     blobVersions: BlobVersionRange.single(1),
   );
 
+  /// The tag this kind travels under; see [Handler.handlerType].
+  ///
+  /// Fixed here because this handler is not generic: there is no type argument
+  /// to carry, so there is nothing for a caller to choose.
+  static const String _handlerType = 'CRDTMapRefHandler';
+
   /// {@macro builtin_handler_spec}
-  static final HandlerSpec<CRDTMapRefHandler> spec = HandlerSpec.factory(
-    kMapRefHandlerType,
+  static final HandlerSpec<CRDTMapRefHandler> _spec = HandlerSpec(
+    _handlerType,
     CRDTMapRefHandler.new,
     formats: _formats,
   );
 
   @override
-  HandlerSpec<CRDTMapRefHandler> get handlerSpec => spec;
+  HandlerSpec<CRDTMapRefHandler> get spec => _spec;
 
   /// Associates [key] with a reference to [handler].
   ///
@@ -58,36 +68,47 @@ base class CRDTMapRefHandler extends CRDTMapHandler<HandlerRef>
     set(key, HandlerRef.of(handler));
   }
 
-  /// The child at [key], created from [spec] when [key] holds nothing yet.
+  /// The child at [key], made by [build] when [key] holds nothing yet.
   ///
   /// Safe to call again: the second call resolves the reference the first one
-  /// wrote and returns that handler, so the caller does not have to check
-  /// first. Creating a handler by hand instead throws on an id already taken.
-  ///
-  /// ```dart
-  /// final done = todo.child(doneKey, doneSpec)..set(true);
-  /// ```
-  ///
-  /// Register [spec] on the document ([BaseCRDTDocument.register]) so a peer
-  /// that receives the reference can rebuild the child from its tag.
+  /// wrote and hands back that handler. Pass a constructor tear-off —
+  /// `todo.child('done', CRDTFugueTextHandler.new)`.
   ///
   /// Throws [HandlerAlreadyRegisteredException] when [key] already holds a
-  /// child of another kind.
-  T child<T extends Handler<dynamic>>(String key, HandlerSpec<T> spec) {
-    final existing = value[key];
-    if (existing != null) {
-      // The ref carries the type, so a key holding another kind is caught even
-      // when that child was never opened here — which is the usual case for a
-      // tree that arrived from a peer.
-      if (existing.type != spec.type) {
+  /// child of another kind. A reference carries the kind, so that holds even
+  /// for a child this peer has never opened. That is the usual shape for a tree
+  /// that arrived from a peer.
+  ///
+  /// Learning the kind of an undeclared child means building it first. So in
+  /// that one case the handler stays on the document, the way
+  /// [HandlerSpec.create] leaves one whose checks failed.
+  T child<T extends Handler<dynamic>>(String key, HandlerBuilder<T> build) {
+    final ref = value[key];
+    if (ref != null) {
+      // A kind this document knows: resolving it checks the tag for free.
+      final resolved = doc.resolveHandler(ref);
+      if (resolved != null) {
+        if (resolved is T) {
+          return resolved;
+        }
         throw HandlerAlreadyRegisteredException(
-          'Key $key holds a ${existing.type}, not a ${spec.type}',
+          'Key $key holds a ${ref.type}, which is not a $T',
         );
       }
-      return doc.handler<T>(spec, existing.id);
+
+      // A kind nothing here declared. `build` is the only thing that can say
+      // what kind it makes, and it only says it by making one — so the check
+      // comes after.
+      final built = build(doc, ref.id);
+      if (built.handlerType != ref.type) {
+        throw HandlerAlreadyRegisteredException(
+          'Key $key holds a ${ref.type}, not a ${built.handlerType}',
+        );
+      }
+      return built;
     }
 
-    final created = spec.create(doc, doc.newHandlerId());
+    final created = build(doc, doc.newHandlerId());
     setRef(key, created);
     return created;
   }

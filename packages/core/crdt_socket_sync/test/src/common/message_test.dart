@@ -144,7 +144,11 @@ void main() {
 
     test('should round-trip the reported versionVector', () {
       final doc = CRDTDocument(peerId: PeerId.generate());
-      CRDTListHandler<String>(doc, 'list').insert(0, 'a');
+      CRDTListHandler<String>(
+        doc,
+        'list',
+        handlerType: 'CRDTListHandler<String>',
+      ).insert(0, 'a');
       final versionVector = doc.getVersionVector();
 
       final message = PingMessage(

@@ -316,7 +316,11 @@ void main() {
   group('CRDTListHandler deltas', () {
     test('insert, update and delete reach the projection', () async {
       final doc = CRDTDocument();
-      final list = CRDTListHandler<String>(doc, 'list');
+      final list = CRDTListHandler<String>(
+        doc,
+        'list',
+        handlerType: 'CRDTListHandler<String>',
+      );
       final projection = _watchList(list);
       await _pump();
 
@@ -335,7 +339,11 @@ void main() {
 
     test('an out-of-range operation reports the clamped effect', () async {
       final doc = CRDTDocument();
-      final list = CRDTListHandler<String>(doc, 'list')..insert(0, 'a');
+      final list = CRDTListHandler<String>(
+        doc,
+        'list',
+        handlerType: 'CRDTListHandler<String>',
+      )..insert(0, 'a');
       final projection = _watchList(list);
       await _pump();
 
@@ -353,7 +361,11 @@ void main() {
 
     test('the projection tracks a random edit stream', () async {
       final doc = CRDTDocument();
-      final list = CRDTListHandler<int>(doc, 'list');
+      final list = CRDTListHandler<int>(
+        doc,
+        'list',
+        handlerType: 'CRDTListHandler<int>',
+      );
       final projection = _watchList(list);
       await _pump();
 
@@ -814,7 +826,11 @@ void main() {
   group('CRDTFugueListHandler deltas', () {
     test('the projection tracks a random edit stream', () async {
       final doc = CRDTDocument();
-      final list = CRDTFugueListHandler<int>(doc, 'list');
+      final list = CRDTFugueListHandler<int>(
+        doc,
+        'list',
+        handlerType: 'CRDTFugueListHandler<int>',
+      );
       final projection = _watchFugueList(list);
       await _pump();
 
@@ -847,11 +863,19 @@ void main() {
 
     test('a remote batch keeps the projection in step', () async {
       final source = CRDTDocument(peerId: PeerId.parse(_peerIdA));
-      final sourceList = CRDTFugueListHandler<int>(source, 'list')
+      final sourceList = CRDTFugueListHandler<int>(
+        source,
+        'list',
+        handlerType: 'CRDTFugueListHandler<int>',
+      )
         ..insert(0, 1);
 
       final mirror = CRDTDocument(peerId: PeerId.parse(_peerIdB));
-      final mirrorList = CRDTFugueListHandler<int>(mirror, 'list');
+      final mirrorList = CRDTFugueListHandler<int>(
+        mirror,
+        'list',
+        handlerType: 'CRDTFugueListHandler<int>',
+      );
       mirror.importChanges(source.exportChanges());
 
       final projection = _watchFugueList(mirrorList);
@@ -877,7 +901,11 @@ void main() {
   group('CRDTMapHandler deltas', () {
     test('insert, update and delete carry the previous value', () async {
       final doc = CRDTDocument();
-      final map = CRDTMapHandler<String>(doc, 'map');
+      final map = CRDTMapHandler<String>(
+        doc,
+        'map',
+        handlerType: 'CRDTMapHandler<String>',
+      );
       final projection = _watchMap(map);
       await _pump();
 
@@ -910,7 +938,11 @@ void main() {
       // questions. Confusing them drops the removal, and every watcher keeps a
       // key the handler no longer holds.
       final doc = CRDTDocument();
-      final map = CRDTMapHandler<String?>(doc, 'map');
+      final map = CRDTMapHandler<String?>(
+        doc,
+        'map',
+        handlerType: 'CRDTMapHandler<String?>',
+      );
       final projection =
           _Projection<Map<String, String?>, MapDelta<String, String?>>(
         readSynced: map.readSynced,
@@ -936,7 +968,11 @@ void main() {
 
     test('an update of a key that is not there moves nothing', () async {
       final doc = CRDTDocument();
-      final map = CRDTMapHandler<String>(doc, 'map');
+      final map = CRDTMapHandler<String>(
+        doc,
+        'map',
+        handlerType: 'CRDTMapHandler<String>',
+      );
       final projection = _watchMap(map);
       await _pump();
 
@@ -954,7 +990,11 @@ void main() {
 
     test('the projection tracks a random edit stream', () async {
       final doc = CRDTDocument();
-      final map = CRDTMapHandler<int>(doc, 'map');
+      final map = CRDTMapHandler<int>(
+        doc,
+        'map',
+        handlerType: 'CRDTMapHandler<int>',
+      );
       final projection = _watchMap(map);
       await _pump();
 
@@ -981,7 +1021,11 @@ void main() {
   group('CRDTRegisterHandler deltas', () {
     test('a write reports both ends', () async {
       final doc = CRDTDocument();
-      final register = CRDTRegisterHandler<String>(doc, 'reg')..set('one');
+      final register = CRDTRegisterHandler<String>(
+        doc,
+        'reg',
+        handlerType: 'CRDTRegisterHandler<String>',
+      )..set('one');
       final projection = _Projection<String?, RegisterDelta<String>>(
         readSynced: register.readSynced,
         stream: register.watch(),
@@ -1003,7 +1047,11 @@ void main() {
 
     test('the first write of an empty register asks for a read', () async {
       final doc = CRDTDocument();
-      final register = CRDTRegisterHandler<String>(doc, 'reg');
+      final register = CRDTRegisterHandler<String>(
+        doc,
+        'reg',
+        handlerType: 'CRDTRegisterHandler<String>',
+      );
       final projection = _Projection<String?, RegisterDelta<String>>(
         readSynced: register.readSynced,
         stream: register.watch(),
@@ -1026,7 +1074,11 @@ void main() {
   group('CRDTORSetHandler deltas', () {
     test('adding a value that is already in moves nothing', () async {
       final doc = CRDTDocument();
-      final set = CRDTORSetHandler<String>(doc, 'set')..add('a');
+      final set = CRDTORSetHandler<String>(
+        doc,
+        'set',
+        handlerType: 'CRDTORSetHandler<String>',
+      )..add('a');
       final projection = _Projection<Set<String>, SetDelta<String>>(
         readSynced: set.readSynced,
         stream: set.watch(),
@@ -1049,7 +1101,11 @@ void main() {
       // would leave every watcher's projection short of a member the handler
       // holds.
       final doc = CRDTDocument();
-      final set = CRDTORSetHandler<String?>(doc, 'set');
+      final set = CRDTORSetHandler<String?>(
+        doc,
+        'set',
+        handlerType: 'CRDTORSetHandler<String?>',
+      );
       final projection = _Projection<Set<String?>, SetDelta<String?>>(
         readSynced: set.readSynced,
         stream: set.watch(),
@@ -1072,7 +1128,11 @@ void main() {
 
     test('the projection tracks a random edit stream', () async {
       final doc = CRDTDocument();
-      final set = CRDTORSetHandler<String>(doc, 'set');
+      final set = CRDTORSetHandler<String>(
+        doc,
+        'set',
+        handlerType: 'CRDTORSetHandler<String>',
+      );
       final projection = _Projection<Set<String>, SetDelta<String>>(
         readSynced: set.readSynced,
         stream: set.watch(),
@@ -1104,11 +1164,19 @@ void main() {
       // report a write over nothing and every watcher would lose the old
       // value.
       final source = CRDTDocument();
-      CRDTORMapHandler<String, int>(source, 'ormap').put('a', 1);
+      CRDTORMapHandler<String, int>(
+        source,
+        'ormap',
+        handlerType: 'CRDTORMapHandler<String, int>',
+      ).put('a', 1);
       final snapshot = source.takeSnapshot();
 
       final doc = CRDTDocument();
-      final map = CRDTORMapHandler<String, int>(doc, 'ormap');
+      final map = CRDTORMapHandler<String, int>(
+        doc,
+        'ormap',
+        handlerType: 'CRDTORMapHandler<String, int>',
+      );
       expect(doc.importSnapshot(snapshot), isTrue);
 
       final projection = _Projection<Map<String, int>, MapDelta<String, int>>(
@@ -1133,7 +1201,11 @@ void main() {
 
     test('the projection tracks a random edit stream', () async {
       final doc = CRDTDocument();
-      final map = CRDTORMapHandler<String, int>(doc, 'ormap');
+      final map = CRDTORMapHandler<String, int>(
+        doc,
+        'ormap',
+        handlerType: 'CRDTORMapHandler<String, int>',
+      );
       final projection = _Projection<Map<String, int>, MapDelta<String, int>>(
         readSynced: map.readSynced,
         stream: map.watch(),
@@ -1161,7 +1233,11 @@ void main() {
   group('CRDTFugueMovableListHandler deltas', () {
     test('a move keeps the element instead of rebuilding it', () async {
       final doc = CRDTDocument();
-      final list = CRDTFugueMovableListHandler<String>(doc, 'movable')
+      final list = CRDTFugueMovableListHandler<String>(
+        doc,
+        'movable',
+        handlerType: 'CRDTFugueMovableListHandler<String>',
+      )
         ..insertAll(0, ['a', 'b', 'c']);
       final projection = _Projection<List<String>, SequenceDelta<String>>(
         readSynced: list.readSynced,
@@ -1189,7 +1265,11 @@ void main() {
       // has no `compound`; this test is what fails if that ever changes,
       // instead of an UnsupportedError out of the commit.
       final doc = CRDTDocument();
-      final list = CRDTFugueMovableListHandler<String>(doc, 'movable')
+      final list = CRDTFugueMovableListHandler<String>(
+        doc,
+        'movable',
+        handlerType: 'CRDTFugueMovableListHandler<String>',
+      )
         ..insertAll(0, ['a', 'b', 'c']);
       final projection = _Projection<List<String>, SequenceDelta<String>>(
         readSynced: list.readSynced,
@@ -1216,7 +1296,11 @@ void main() {
 
     test('the projection tracks a random edit stream', () async {
       final doc = CRDTDocument();
-      final list = CRDTFugueMovableListHandler<int>(doc, 'movable');
+      final list = CRDTFugueMovableListHandler<int>(
+        doc,
+        'movable',
+        handlerType: 'CRDTFugueMovableListHandler<int>',
+      );
       final projection = _Projection<List<int>, SequenceDelta<int>>(
         readSynced: list.readSynced,
         stream: list.watch(),

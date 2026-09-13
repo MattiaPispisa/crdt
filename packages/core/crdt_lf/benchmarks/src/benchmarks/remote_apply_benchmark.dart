@@ -171,7 +171,7 @@ class MapRemoteBenchmark extends RemoteChangeBenchmark<CRDTMapHandler<int>> {
 
   @override
   CRDTMapHandler<int> createHandler(CRDTDocument doc) =>
-      CRDTMapHandler<int>(doc, 'map');
+      CRDTMapHandler<int>(doc, 'map', handlerType: 'CRDTMapHandler<int>');
 
   @override
   void seed(CRDTMapHandler<int> handler) {
@@ -208,7 +208,7 @@ class OrSetRemoteBenchmark
 
   @override
   CRDTORSetHandler<int> createHandler(CRDTDocument doc) =>
-      CRDTORSetHandler<int>(doc, 'set');
+      CRDTORSetHandler<int>(doc, 'set', handlerType: 'CRDTORSetHandler<int>');
 
   @override
   void seed(CRDTORSetHandler<int> handler) {
@@ -244,7 +244,11 @@ class OrMapRemoteBenchmark
 
   @override
   CRDTORMapHandler<String, int> createHandler(CRDTDocument doc) =>
-      CRDTORMapHandler<String, int>(doc, 'or_map');
+      CRDTORMapHandler<String, int>(
+        doc,
+        'or_map',
+        handlerType: 'CRDTORMapHandler<String, int>',
+      );
 
   @override
   void seed(CRDTORMapHandler<String, int> handler) {
@@ -279,7 +283,11 @@ class MovableListRemoteBenchmark
 
   @override
   CRDTFugueMovableListHandler<int> createHandler(CRDTDocument doc) =>
-      CRDTFugueMovableListHandler<int>(doc, 'movable');
+      CRDTFugueMovableListHandler<int>(
+        doc,
+        'movable',
+        handlerType: 'CRDTFugueMovableListHandler<int>',
+      );
 
   @override
   void seed(CRDTFugueMovableListHandler<int> handler) {

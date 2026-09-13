@@ -25,7 +25,12 @@ void main() {
         ..setRef('chapters', chapters);
 
       // --- Peer B receives the document and rebuilds it. ---
-      final docB = CRDTDocument();
+      // It declares the kinds the tree is made of: every child arrives as a ref
+      // to a handler B never opened.
+      final docB = CRDTDocument()
+        ..register(CRDTMapRefHandler.new)
+        ..register(CRDTListRefHandler.new)
+        ..register(CRDTFugueTextHandler.new);
       final rootB = CRDTMapRefHandler(docB, 'root');
       docB
         ..importChanges(docA.exportChanges())

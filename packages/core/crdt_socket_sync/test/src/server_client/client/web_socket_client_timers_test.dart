@@ -286,7 +286,11 @@ void main() {
         // A change arrives after the document is gone: a real race between a
         // late frame and a teardown.
         final author = CRDTDocument(peerId: PeerId.generate());
-        CRDTListHandler<String>(author, 'list').insert(0, 'x');
+        CRDTListHandler<String>(
+          author,
+          'list',
+          handlerType: 'CRDTListHandler<String>',
+        ).insert(0, 'x');
         final change = author.exportChanges().single;
         doc.dispose();
 

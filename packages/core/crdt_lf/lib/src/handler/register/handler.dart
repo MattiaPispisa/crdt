@@ -29,24 +29,30 @@ base class CRDTRegisterHandler<T> extends Handler<T>
   /// Creates a new register with the given document and ID.
   ///
   /// [valueCodec] encodes/decodes `T` to bytes; default is [JsonValueCodec].
+  ///
+  /// [handlerType] names the **kind** of handler this is.
+  /// {@macro handler_type_tag}
   CRDTRegisterHandler(
     super.doc,
     this._id, {
+    required String handlerType,
     ValueCodec<T>? valueCodec,
-    String? handlerType,
-  }) : _valueCodec = valueCodec ?? JsonValueCodec<T>(),
-        super(
-          spec: handlerType == null
-              ? null
-              : CRDTRegisterHandler.spec<T>(
-                  handlerType,
-                  valueCodec: valueCodec,
-                ),
-        );
+  })  : _handlerType = handlerType,
+        _valueCodec = valueCodec ?? JsonValueCodec<T>();
 
 
   final String _id;
   final ValueCodec<T> _valueCodec;
+
+  final String _handlerType;
+
+  /// {@macro handler_spec}
+  ///
+  /// Built once from the tag the constructor asked for: [handlerType] reads it
+  /// on every operation encode, so a fresh one per call would allocate there.
+  @override
+  late final HandlerSpec<CRDTRegisterHandler<T>> spec =
+      _spec<T>(_handlerType, valueCodec: _valueCodec);
 
   @override
   String get id => _id;
@@ -149,16 +155,16 @@ base class CRDTRegisterHandler<T> extends Handler<T>
   }
 
   /// {@macro generic_handler_spec}
-  static HandlerSpec<CRDTRegisterHandler<T>> spec<T>(
+  static HandlerSpec<CRDTRegisterHandler<T>> _spec<T>(
     String type, {
     ValueCodec<T>? valueCodec,
   }) =>
       HandlerSpec<CRDTRegisterHandler<T>>(
         type,
-        (doc, id, spec) => CRDTRegisterHandler<T>(
+        (doc, id) => CRDTRegisterHandler<T>(
           doc,
           id,
-          handlerType: spec.type,
+          handlerType: type,
           valueCodec: valueCodec,
         ),
         formats: _formats,

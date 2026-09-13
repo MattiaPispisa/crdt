@@ -3,16 +3,25 @@ import 'package:test/test.dart';
 
 /// Integration test modelling a Figma/PowerPoint-like canvas:
 /// slides (movable) → slide → element → (pos {x,y} as a LWW map, label text).
+/// The positioned map every element carries, under one tag.
+CRDTMapHandler<num> newPos(BaseCRDTDocument doc, String id) =>
+    CRDTMapHandler<num>(doc, id, handlerType: 'pos');
+
 void main() {
   group('canvas (Figma-like)', () {
+    // The kinds this tree is made of, so a peer resolves a child it never
+    // opened.
     CRDTDocument newDoc() => CRDTDocument()
-      ..register(CRDTMapHandler.spec<num>('CRDTMapHandler<num>'));
+      ..register(newPos)
+      ..register(CRDTMapRefHandler.new)
+      ..register(CRDTMovableListRefHandler.new)
+      ..register(CRDTFugueTextHandler.new);
 
     test('concurrent slide reorder and coordinate updates converge', () {
       // --- Peer A builds two slides, each with one positioned element. ---
       final docA = newDoc();
 
-      final pos0 = CRDTMapHandler<num>(docA, 's0.pos')
+      final pos0 = newPos(docA, 's0.pos')
         ..set('x', 0)
         ..set('y', 0);
       final label0 = CRDTFugueTextHandler(docA, 's0.label')..insert(0, 'A');
@@ -21,7 +30,7 @@ void main() {
         ..setRef('label', label0);
       final slide0 = CRDTMapRefHandler(docA, 's0')..setRef('el', el0);
 
-      final pos1 = CRDTMapHandler<num>(docA, 's1.pos')
+      final pos1 = newPos(docA, 's1.pos')
         ..set('x', 0)
         ..set('y', 0);
       final label1 = CRDTFugueTextHandler(docA, 's1.label')..insert(0, 'B');

@@ -9,7 +9,11 @@ class ListHandlerBenchmark
       : super(
           handlerName: 'CRDTListHandler',
           handlerFactory: (document) =>
-              CRDTListHandler<String>(document, 'list'),
+              CRDTListHandler<String>(
+                document,
+                'list',
+                handlerType: 'CRDTListHandler<String>',
+              ),
         );
 
   @override

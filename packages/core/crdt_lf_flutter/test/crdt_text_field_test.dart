@@ -811,7 +811,11 @@ void main() {
     }
 
     testWidgets('throws a FlutterError for a non-text handler', (tester) async {
-      CRDTListHandler<String>(doc, 'note');
+      CRDTListHandler<String>(
+        doc,
+        'note',
+        handlerType: 'CRDTListHandler<String>',
+      );
       await tester.pumpWidget(host());
 
       final error = tester.takeException();

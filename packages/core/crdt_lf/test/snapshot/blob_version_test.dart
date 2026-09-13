@@ -40,7 +40,11 @@ final _blobs = <_Blob>[
     return h;
   }),
   _Blob('list', 'list', (doc, {required seed}) {
-    final h = CRDTListHandler<String>(doc, 'list');
+    final h = CRDTListHandler<String>(
+      doc,
+      'list',
+      handlerType: 'CRDTListHandler<String>',
+    );
     if (seed) {
       h.insert(0, 'a');
     } else {
@@ -49,7 +53,11 @@ final _blobs = <_Blob>[
     return h;
   }),
   _Blob('map', 'map', (doc, {required seed}) {
-    final h = CRDTMapHandler<int>(doc, 'map');
+    final h = CRDTMapHandler<int>(
+      doc,
+      'map',
+      handlerType: 'CRDTMapHandler<int>',
+    );
     if (seed) {
       h.set('k', 1);
     } else {
@@ -58,7 +66,11 @@ final _blobs = <_Blob>[
     return h;
   }),
   _Blob('register', 'register', (doc, {required seed}) {
-    final h = CRDTRegisterHandler<int>(doc, 'register');
+    final h = CRDTRegisterHandler<int>(
+      doc,
+      'register',
+      handlerType: 'CRDTRegisterHandler<int>',
+    );
     if (seed) {
       h.set(7);
     } else {
@@ -67,7 +79,11 @@ final _blobs = <_Blob>[
     return h;
   }),
   _Blob('OR-set', 'or_set', (doc, {required seed}) {
-    final h = CRDTORSetHandler<String>(doc, 'or_set');
+    final h = CRDTORSetHandler<String>(
+      doc,
+      'or_set',
+      handlerType: 'CRDTORSetHandler<String>',
+    );
     if (seed) {
       h.add('x');
     } else {
@@ -76,7 +92,11 @@ final _blobs = <_Blob>[
     return h;
   }),
   _Blob('OR-map', 'or_map', (doc, {required seed}) {
-    final h = CRDTORMapHandler<String, int>(doc, 'or_map');
+    final h = CRDTORMapHandler<String, int>(
+      doc,
+      'or_map',
+      handlerType: 'CRDTORMapHandler<String, int>',
+    );
     if (seed) {
       h.put('k', 1);
     } else {
@@ -94,7 +114,11 @@ final _blobs = <_Blob>[
     return h;
   }),
   _Blob('movable list', 'movable', (doc, {required seed}) {
-    final h = CRDTFugueMovableListHandler<String>(doc, 'movable');
+    final h = CRDTFugueMovableListHandler<String>(
+      doc,
+      'movable',
+      handlerType: 'CRDTFugueMovableListHandler<String>',
+    );
     if (seed) {
       h.insert(0, 'a');
     } else {
@@ -127,6 +151,19 @@ Snapshot _withBlob(Snapshot snapshot, String key, Uint8List blob) {
 /// `minReadableSnapshotBlobVersion`.
 final class _MigratingHandler extends Handler<String> {
   _MigratingHandler(super.doc, {required this.writes});
+
+  @override
+  HandlerSpec<_MigratingHandler> get spec => HandlerSpec(
+        '_MigratingHandler',
+        (doc, id) => _MigratingHandler(doc, writes: writes),
+        formats: HandlerFormats(
+          operationKinds: const {OperationType.kindInsert},
+          blobVersions: BlobVersionRange(
+            minReadableSnapshotBlobVersion,
+            snapshotBlobVersion,
+          ),
+        ),
+      );
 
   final int writes;
 

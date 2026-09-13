@@ -6,7 +6,11 @@ void main() {
     test('the tag is runtimeType by default, and a spec fixes it', () {
       final doc = CRDTDocument();
       expect(
-        CRDTFugueListHandler<String>(doc, 'l').handlerType,
+        CRDTFugueListHandler<String>(
+          doc,
+          'l',
+          handlerType: 'CRDTFugueListHandler<String>',
+        ).handlerType,
         'CRDTFugueListHandler<String>',
       );
 
@@ -27,7 +31,11 @@ void main() {
       final doc = CRDTDocument(
         peerId: PeerId.parse('37f1ec87-6ea5-430b-a627-a6b92b56a02d'),
       );
-      final handler = CRDTFugueListHandler<String>(doc, 'list1')
+      final handler = CRDTFugueListHandler<String>(
+        doc,
+        'list1',
+        handlerType: 'CRDTFugueListHandler<String>',
+      )
         ..insert(0, 'Hello')
         ..insert(1, 'World')
         ..insert(2, '!');
@@ -59,7 +67,11 @@ void main() {
 
     test('should work with non-string values', () {
       final doc = CRDTDocument();
-      final handler = CRDTFugueListHandler<int>(doc, 'ints')
+      final handler = CRDTFugueListHandler<int>(
+        doc,
+        'ints',
+        handlerType: 'CRDTFugueListHandler<int>',
+      )
         ..insert(0, 1)
         ..insert(1, 2)
         ..insert(2, 3);
@@ -74,7 +86,11 @@ void main() {
       final docA = CRDTDocument(
         peerId: PeerId.parse('37f1ec87-6ea5-430b-a627-a6b92b56a02d'),
       );
-      final a = CRDTFugueListHandler<String>(docA, 'list1')
+      final a = CRDTFugueListHandler<String>(
+        docA,
+        'list1',
+        handlerType: 'CRDTFugueListHandler<String>',
+      )
         ..useIncrementalCacheUpdate = true
         ..insert(0, 'a')
         ..insert(1, 'b')
@@ -85,7 +101,11 @@ void main() {
       final docB = CRDTDocument(
         peerId: PeerId.parse('37f1ec87-6ea5-430b-a627-a6b92b56a02d'),
       );
-      final b = CRDTFugueListHandler<String>(docB, 'list1')
+      final b = CRDTFugueListHandler<String>(
+        docB,
+        'list1',
+        handlerType: 'CRDTFugueListHandler<String>',
+      )
         ..useIncrementalCacheUpdate = false
         ..insert(0, 'a')
         ..insert(1, 'b')
@@ -100,12 +120,20 @@ void main() {
       final doc1 = CRDTDocument(
         peerId: PeerId.parse('45ee6b65-b393-40b7-9755-8b66dc7d0518'),
       );
-      final handler1 = CRDTFugueListHandler<String>(doc1, 'list1');
+      final handler1 = CRDTFugueListHandler<String>(
+        doc1,
+        'list1',
+        handlerType: 'CRDTFugueListHandler<String>',
+      );
 
       final doc2 = CRDTDocument(
         peerId: PeerId.parse('a90dfced-cbf0-4a49-9c64-f5b7b62fdc18'),
       );
-      final handler2 = CRDTFugueListHandler<String>(doc2, 'list1');
+      final handler2 = CRDTFugueListHandler<String>(
+        doc2,
+        'list1',
+        handlerType: 'CRDTFugueListHandler<String>',
+      );
 
       handler1.insert(0, 'Hello');
       doc2.importChanges(doc1.exportChanges());
@@ -131,12 +159,20 @@ void main() {
       final doc1 = CRDTDocument(
         peerId: PeerId.parse('45ee6b65-b393-40b7-9755-8b66dc7d0518'),
       );
-      final h1 = CRDTFugueListHandler<String>(doc1, 'list1');
+      final h1 = CRDTFugueListHandler<String>(
+        doc1,
+        'list1',
+        handlerType: 'CRDTFugueListHandler<String>',
+      );
 
       final doc2 = CRDTDocument(
         peerId: PeerId.parse('a90dfced-cbf0-4a49-9c64-f5b7b62fdc18'),
       );
-      final h2 = CRDTFugueListHandler<String>(doc2, 'list1');
+      final h2 = CRDTFugueListHandler<String>(
+        doc2,
+        'list1',
+        handlerType: 'CRDTFugueListHandler<String>',
+      );
 
       // Both peers insert a run of three elements at the front concurrently
       h1
@@ -165,7 +201,11 @@ void main() {
 
     test('insertAll inserts a contiguous run atomically', () {
       final doc = CRDTDocument();
-      final handler = CRDTFugueListHandler<String>(doc, 'list1')
+      final handler = CRDTFugueListHandler<String>(
+        doc,
+        'list1',
+        handlerType: 'CRDTFugueListHandler<String>',
+      )
         ..insert(0, 'a')
         ..insert(1, 'd')
         ..insertAll(1, ['b', 'c']);
@@ -181,12 +221,20 @@ void main() {
       final doc1 = CRDTDocument(
         peerId: PeerId.parse('45ee6b65-b393-40b7-9755-8b66dc7d0518'),
       );
-      final h1 = CRDTFugueListHandler<String>(doc1, 'list1');
+      final h1 = CRDTFugueListHandler<String>(
+        doc1,
+        'list1',
+        handlerType: 'CRDTFugueListHandler<String>',
+      );
 
       final doc2 = CRDTDocument(
         peerId: PeerId.parse('a90dfced-cbf0-4a49-9c64-f5b7b62fdc18'),
       );
-      final h2 = CRDTFugueListHandler<String>(doc2, 'list1');
+      final h2 = CRDTFugueListHandler<String>(
+        doc2,
+        'list1',
+        handlerType: 'CRDTFugueListHandler<String>',
+      );
 
       // Both peers insert a run of three elements at the front concurrently
       h1.insertAll(0, ['a1', 'a2', 'a3']);
@@ -210,7 +258,11 @@ void main() {
       final doc1 = CRDTDocument(
         peerId: PeerId.parse('45ee6b65-b393-40b7-9755-8b66dc7d0518'),
       );
-      final h1 = CRDTFugueListHandler<String>(doc1, 'list1')
+      final h1 = CRDTFugueListHandler<String>(
+        doc1,
+        'list1',
+        handlerType: 'CRDTFugueListHandler<String>',
+      )
         ..insert(0, 'a')
         ..update(0, 'A');
 
@@ -220,7 +272,11 @@ void main() {
       final doc2 = CRDTDocument(
         peerId: PeerId.parse('a90dfced-cbf0-4a49-9c64-f5b7b62fdc18'),
       );
-      final h2 = CRDTFugueListHandler<String>(doc2, 'list1');
+      final h2 = CRDTFugueListHandler<String>(
+        doc2,
+        'list1',
+        handlerType: 'CRDTFugueListHandler<String>',
+      );
       doc2.importChanges(doc1.exportChanges());
       expect(h2.value, ['A']);
 
@@ -239,14 +295,22 @@ void main() {
       final doc1 = CRDTDocument(
         peerId: PeerId.parse('45ee6b65-b393-40b7-9755-8b66dc7d0518'),
       );
-      final h1 = CRDTFugueListHandler<String>(doc1, 'list1')
+      final h1 = CRDTFugueListHandler<String>(
+        doc1,
+        'list1',
+        handlerType: 'CRDTFugueListHandler<String>',
+      )
         ..insert(0, 'a')
         ..insert(1, 'b');
 
       final doc2 = CRDTDocument(
         peerId: PeerId.parse('a90dfced-cbf0-4a49-9c64-f5b7b62fdc18'),
       );
-      final h2 = CRDTFugueListHandler<String>(doc2, 'list1');
+      final h2 = CRDTFugueListHandler<String>(
+        doc2,
+        'list1',
+        handlerType: 'CRDTFugueListHandler<String>',
+      );
       doc2.importChanges(doc1.exportChanges());
 
       h1.update(0, 'from 1');
@@ -262,7 +326,11 @@ void main() {
 
     test('toString includes id and value', () {
       final doc = CRDTDocument();
-      final handler = CRDTFugueListHandler<String>(doc, 'list1')
+      final handler = CRDTFugueListHandler<String>(
+        doc,
+        'list1',
+        handlerType: 'CRDTFugueListHandler<String>',
+      )
         ..insert(0, 'a');
       expect(handler.toString(), contains('list1'));
       expect(handler.toString(), contains('a'));
@@ -270,7 +338,11 @@ void main() {
 
     test('should survive a snapshot round-trip', () {
       final doc = CRDTDocument();
-      final handler = CRDTFugueListHandler<String>(doc, 'list1')
+      final handler = CRDTFugueListHandler<String>(
+        doc,
+        'list1',
+        handlerType: 'CRDTFugueListHandler<String>',
+      )
         ..insert(0, 'Hello')
         ..insert(1, 'World')
         ..insert(2, 'Dart');
@@ -282,7 +354,11 @@ void main() {
       // Rebuild from the snapshot + later changes to exercise the
       // snapshot decode path in [_initialState].
       final reopened = CRDTDocument();
-      final reopenedHandler = CRDTFugueListHandler<String>(reopened, 'list1');
+      final reopenedHandler = CRDTFugueListHandler<String>(
+        reopened,
+        'list1',
+        handlerType: 'CRDTFugueListHandler<String>',
+      );
       reopened
         ..mergeSnapshot(snapshot)
         ..importChanges(doc.exportChanges());

@@ -9,7 +9,11 @@ class FugueListHandlerBenchmark
       : super(
           handlerName: 'CRDTFugueListHandler',
           handlerFactory: (document) =>
-              CRDTFugueListHandler<String>(document, 'list'),
+              CRDTFugueListHandler<String>(
+                document,
+                'list',
+                handlerType: 'CRDTFugueListHandler<String>',
+              ),
         );
 
   @override

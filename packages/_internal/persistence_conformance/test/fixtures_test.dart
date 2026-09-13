@@ -47,7 +47,11 @@ void main() {
     test('is one change, and the nested value comes back whole', () {
       final change = fixtures.complexChange();
 
-      final map = CRDTMapHandler<Object>(rebuilt([change]), 'map');
+      final map = CRDTMapHandler<Object>(
+        rebuilt([change]),
+        'map',
+        handlerType: 'CRDTMapHandler<Object>',
+      );
 
       expect(map.value['nested'], {
         'list': <Object>[1, 'two', 3.5, true],

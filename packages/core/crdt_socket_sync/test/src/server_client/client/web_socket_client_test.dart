@@ -145,7 +145,11 @@ void main() {
       setup.transport.sent.clear();
 
       final authorDoc = CRDTDocument(peerId: PeerId.generate());
-      CRDTListHandler<String>(authorDoc, 'list').insert(0, 'x');
+      CRDTListHandler<String>(
+        authorDoc,
+        'list',
+        handlerType: 'CRDTListHandler<String>',
+      ).insert(0, 'x');
       final change = authorDoc.exportChanges().first;
 
       await setup.client.sendChange(change);
@@ -162,7 +166,11 @@ void main() {
 
       // Mutating the local document emits a local change that the sync manager
       // forwards to the server.
-      CRDTListHandler<String>(setup.client.document, 'list').insert(0, 'y');
+      CRDTListHandler<String>(
+        setup.client.document,
+        'list',
+        handlerType: 'CRDTListHandler<String>',
+      ).insert(0, 'y');
       await Future<void>.delayed(Duration.zero);
 
       expect(setup.transport.sent.whereType<ChangeMessage>(), hasLength(1));

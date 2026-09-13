@@ -47,7 +47,11 @@ class TypingWithManagersBenchmark extends FixedCycleTimedBenchmark {
       CRDTUndoManager(doc).track(text);
     }
     for (var i = 1; i < managers; i++) {
-      CRDTUndoManager(doc).track(CRDTMapHandler<int>(doc, 'scope$i'));
+      CRDTUndoManager(doc).track(CRDTMapHandler<int>(
+        doc,
+        'scope$i',
+        handlerType: 'CRDTMapHandler<int>',
+      ));
     }
 
     for (var i = 0; i < keystrokes; i++) {
@@ -151,7 +155,11 @@ class MapUndoBenchmark extends UndoRedoBenchmark {
   @override
   CRDTUndoManager build() {
     final doc = CRDTDocument();
-    final map = CRDTMapHandler<int>(doc, 'map');
+    final map = CRDTMapHandler<int>(
+      doc,
+      'map',
+      handlerType: 'CRDTMapHandler<int>',
+    );
     for (var i = 0; i < size; i++) {
       map.set('k$i', i);
     }
@@ -175,7 +183,11 @@ class ORSetUndoBenchmark extends UndoRedoBenchmark {
   @override
   CRDTUndoManager build() {
     final doc = CRDTDocument();
-    final set = CRDTORSetHandler<String>(doc, 'set');
+    final set = CRDTORSetHandler<String>(
+      doc,
+      'set',
+      handlerType: 'CRDTORSetHandler<String>',
+    );
     for (var i = 0; i < size; i++) {
       set.add('v$i');
     }

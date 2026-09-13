@@ -31,26 +31,32 @@ base class CRDTMapHandler<T> extends Handler<Map<String, T>>
   ///
   /// [valueCodec] is an optional codec for encoding/decoding [T] values to bytes.
   /// Default is [JsonValueCodec].
+  ///
+  /// [handlerType] names the **kind** of handler this is.
+  /// {@macro handler_type_tag}
   CRDTMapHandler(
     super.doc,
     this._id, {
+    required String handlerType,
     ValueCodec<T>? valueCodec,
-    String? handlerType,
-  }) : _valueCodec = valueCodec ?? JsonValueCodec<T>(),
-        super(
-          spec: handlerType == null
-              ? null
-              : CRDTMapHandler.spec<T>(
-                  handlerType,
-                  valueCodec: valueCodec,
-                ),
-        );
+  })  : _handlerType = handlerType,
+        _valueCodec = valueCodec ?? JsonValueCodec<T>();
 
 
   /// The ID of this map in the document
   final String _id;
 
   final ValueCodec<T> _valueCodec;
+
+  final String _handlerType;
+
+  /// {@macro handler_spec}
+  ///
+  /// Built once from the tag the constructor asked for: [handlerType] reads it
+  /// on every operation encode, so a fresh one per call would allocate there.
+  @override
+  late final HandlerSpec<CRDTMapHandler<T>> spec =
+      _spec<T>(_handlerType, valueCodec: _valueCodec);
 
   @override
   late final OperationDecoders operationDecoders = {
@@ -120,16 +126,16 @@ base class CRDTMapHandler<T> extends Handler<Map<String, T>>
   }
 
   /// {@macro generic_handler_spec}
-  static HandlerSpec<CRDTMapHandler<T>> spec<T>(
+  static HandlerSpec<CRDTMapHandler<T>> _spec<T>(
     String type, {
     ValueCodec<T>? valueCodec,
   }) =>
       HandlerSpec<CRDTMapHandler<T>>(
         type,
-        (doc, id, spec) => CRDTMapHandler<T>(
+        (doc, id) => CRDTMapHandler<T>(
           doc,
           id,
-          handlerType: spec.type,
+          handlerType: type,
           valueCodec: valueCodec,
         ),
         formats: _formats,

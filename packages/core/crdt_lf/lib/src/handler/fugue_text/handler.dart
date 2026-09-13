@@ -5,7 +5,6 @@ import 'package:crdt_lf/src/algorithm/fugue/tree.dart';
 import 'package:crdt_lf/src/handler/fugue/fugue_sequence_apply.dart';
 import 'package:crdt_lf/src/handler/fugue/fugue_sequence_handler.dart';
 import 'package:crdt_lf/src/handler/fugue/fugue_snapshot.dart';
-import 'package:crdt_lf/src/handler/handler_type.dart';
 
 part 'operation.dart';
 
@@ -38,15 +37,21 @@ base class CRDTFugueTextHandler
   /// Constructor that initializes a new Fugue text handler
   CRDTFugueTextHandler(super.doc, super.id);
 
+  /// The tag this kind travels under; see [Handler.handlerType].
+  ///
+  /// Fixed here because this handler is not generic: there is no type argument
+  /// to carry, so there is nothing for a caller to choose.
+  static const String _handlerType = 'CRDTFugueTextHandler';
+
   /// {@macro builtin_handler_spec}
-  static final HandlerSpec<CRDTFugueTextHandler> spec = HandlerSpec.factory(
-    kFugueTextHandlerType,
+  static final HandlerSpec<CRDTFugueTextHandler> _spec = HandlerSpec(
+    _handlerType,
     CRDTFugueTextHandler.new,
     formats: _formats,
   );
 
   @override
-  HandlerSpec<CRDTFugueTextHandler> get handlerSpec => spec;
+  HandlerSpec<CRDTFugueTextHandler> get spec => _spec;
 
   /// What this build reads for this handler type.
   ///

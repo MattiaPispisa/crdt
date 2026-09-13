@@ -8,8 +8,16 @@ void main() {
     testWidgets('rebuilds on its handler change but not on an unrelated one',
         (tester) async {
       final doc = CRDTDocument(peerId: PeerId.generate());
-      final a = CRDTListHandler<String>(doc, 'a');
-      final b = CRDTListHandler<String>(doc, 'b');
+      final a = CRDTListHandler<String>(
+        doc,
+        'a',
+        handlerType: 'CRDTListHandler<String>',
+      );
+      final b = CRDTListHandler<String>(
+        doc,
+        'b',
+        handlerType: 'CRDTListHandler<String>',
+      );
 
       var builds = 0;
       await tester.pumpWidget(
@@ -46,7 +54,7 @@ void main() {
     testWidgets('rebuilds when a remote change for its handler is imported',
         (tester) async {
       final doc = CRDTDocument(peerId: PeerId.generate());
-      CRDTListHandler<String>(doc, 'a');
+      CRDTListHandler<String>(doc, 'a', handlerType: 'CRDTListHandler<String>');
 
       var builds = 0;
       await tester.pumpWidget(
@@ -66,7 +74,11 @@ void main() {
       expect(builds, 1);
 
       final remote = CRDTDocument(peerId: PeerId.generate());
-      CRDTListHandler<String>(remote, 'a').insert(0, 'r');
+      CRDTListHandler<String>(
+        remote,
+        'a',
+        handlerType: 'CRDTListHandler<String>',
+      ).insert(0, 'r');
       doc.importChanges(remote.exportChanges());
       await tester.pumpAndSettle();
       expect(builds, 2);
@@ -76,12 +88,16 @@ void main() {
         (tester) async {
       // Peer that produced a snapshot with content for handler "a".
       final source = CRDTDocument(peerId: PeerId.generate());
-      CRDTListHandler<String>(source, 'a').insert(0, 'fromSnapshot');
+      CRDTListHandler<String>(
+        source,
+        'a',
+        handlerType: 'CRDTListHandler<String>',
+      ).insert(0, 'fromSnapshot');
       final snapshot = source.takeSnapshot();
 
       // Observed doc registers "a" with zero local changes.
       final doc = CRDTDocument(peerId: PeerId.generate());
-      CRDTListHandler<String>(doc, 'a');
+      CRDTListHandler<String>(doc, 'a', handlerType: 'CRDTListHandler<String>');
 
       var builds = 0;
       await tester.pumpWidget(
@@ -114,7 +130,7 @@ void main() {
     testWidgets('throws a FlutterError when the handler type is omitted',
         (tester) async {
       final doc = CRDTDocument(peerId: PeerId.generate());
-      CRDTListHandler<String>(doc, 'a');
+      CRDTListHandler<String>(doc, 'a', handlerType: 'CRDTListHandler<String>');
       await tester.pumpWidget(
         CrdtProvider.value(
           value: doc,
@@ -134,7 +150,11 @@ void main() {
     testWidgets('rebuilds when a descendant handler changes', (tester) async {
       final doc = CRDTDocument(peerId: PeerId.generate());
       final root = CRDTMapRefHandler(doc, 'root');
-      final child = CRDTListHandler<String>(doc, 'child');
+      final child = CRDTListHandler<String>(
+        doc,
+        'child',
+        handlerType: 'CRDTListHandler<String>',
+      );
       root.setRef('child', child);
 
       var nestedBuilds = 0;
@@ -190,7 +210,11 @@ void main() {
     testWidgets('rebuilds only when the selected slice changes',
         (tester) async {
       final doc = CRDTDocument(peerId: PeerId.generate());
-      final a = CRDTListHandler<Map<String, dynamic>>(doc, 'a');
+      final a = CRDTListHandler<Map<String, dynamic>>(
+        doc,
+        'a',
+        handlerType: 'CRDTListHandler<Map<String, dynamic>>',
+      );
 
       var builds = 0;
       await tester.pumpWidget(
@@ -224,8 +248,16 @@ void main() {
   group('CrdtHandlerListener', () {
     testWidgets('fires only on its handler change', (tester) async {
       final doc = CRDTDocument(peerId: PeerId.generate());
-      final a = CRDTListHandler<String>(doc, 'a');
-      final b = CRDTListHandler<String>(doc, 'b');
+      final a = CRDTListHandler<String>(
+        doc,
+        'a',
+        handlerType: 'CRDTListHandler<String>',
+      );
+      final b = CRDTListHandler<String>(
+        doc,
+        'b',
+        handlerType: 'CRDTListHandler<String>',
+      );
 
       var fires = 0;
       await tester.pumpWidget(

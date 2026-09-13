@@ -58,7 +58,9 @@ void main() {
       s0.insert(0, 'zero');
       s1.insert(0, 'one');
 
-      final docB = CRDTDocument();
+      // B declares the kind of the children it is about to read: they arrive
+      // as refs to handlers it never opened.
+      final docB = CRDTDocument()..register(CRDTFugueTextHandler.new);
       final slidesB = CRDTMovableListRefHandler(docB, 'slides');
       docB.importChanges(docA.exportChanges());
 

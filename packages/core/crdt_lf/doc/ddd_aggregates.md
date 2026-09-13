@@ -83,16 +83,19 @@ Each todo is a `CRDTMapRefHandler`, and each field is its own handler. The
 root is a `CRDTMapRefHandler` keyed by todo id.
 
 ```dart
-// One spec per field type, so the tag is written once. The class knows the
-// rest.
-final nameSpec = CRDTRegisterHandler.spec<String>('todo/name');
-final doneSpec = CRDTRegisterHandler.spec<bool>('todo/done');
+// One builder per field type, so the tag is written once.
+CRDTRegisterHandler<String> newName(BaseCRDTDocument d, String id) =>
+    CRDTRegisterHandler<String>(d, id, handlerType: 'todo/name');
+CRDTRegisterHandler<bool> newDone(BaseCRDTDocument d, String id) =>
+    CRDTRegisterHandler<bool>(d, id, handlerType: 'todo/done');
 
 void registerTodoTypes(CRDTDocument d) {
-  // Only the generic ones: CRDTMapRefHandler and friends need no registration.
+  // Every kind the tree is made of, so a child received from a peer resolves
+  // without being opened here first.
   d
-    ..register(nameSpec)
-    ..register(doneSpec);
+    ..register(newName)
+    ..register(newDone)
+    ..register(CRDTMapRefHandler.new);
 }
 
 // Child ids come from the todo id, not from doc.newHandlerId(). That is why
@@ -106,9 +109,9 @@ CRDTMapRefHandler openTodo(
   if (existing != null) {
     return existing as CRDTMapRefHandler;
   }
-  final todo = doc.handler(CRDTMapRefHandler.spec, 'todo/$todoId')
-    ..setRef('displayName', doc.handler(nameSpec, 'todo/$todoId/displayName'))
-    ..setRef('done', doc.handler(doneSpec, 'todo/$todoId/done'));
+  final todo = doc.handler(CRDTMapRefHandler.new, 'todo/$todoId')
+    ..setRef('displayName', doc.handler(newName, 'todo/$todoId/displayName'))
+    ..setRef('done', doc.handler(newDone, 'todo/$todoId/done'));
   root.setRef(todoId, todo);
   return todo;
 }
@@ -152,16 +155,17 @@ The payoff of this design is the choice of CRDT per field. `done` is a
 `CRDTRegisterHandler<bool>`. A `displayName` that two people type into at the
 same time can be a `CRDTFugueTextHandler` instead, and merge per character.
 
-Keep the constant tag the specs carry. The default type tag of a generic
-handler is built from `runtimeType`, and `dart2js` minifies it in a Flutter web
-release build. A constant string keeps it stable across builds and peers.
+A generic handler is required to name its tag for a reason: the default would be
+built from `runtimeType`, and `dart2js` minifies that in a Flutter web release
+build. A constant keeps it stable across builds and peers.
 
 ### Option 2: flat composite keys
 
 Keep one OR-Map and put the field name in the key.
 
 ```dart
-final todos = CRDTORMapHandler<String, Object?>(doc, 'todos');
+final todos =
+    CRDTORMapHandler<String, Object?>(doc, 'todos', handlerType: 'todos');
 
 doc.runInTransaction(() {
   todos
@@ -174,7 +178,7 @@ todos.put('1/done', true);         // installation B, at the same time
 // both survive: {1/displayName: foo, 1/done: true}
 ```
 
-No factories, no refs, no nested handlers. Every field merges on its own,
+No refs, no nested handlers, nothing to declare. Every field merges on its own,
 last-writer-wins. The costs:
 
 - **A delete can leave half a todo.** Deleting means removing every key of
@@ -196,7 +200,7 @@ last-writer-wins. The costs:
 | CRDT per field (text, counter…) | yes | no, LWW only |
 | concurrent create of the same id | merges, with derived ids | merges |
 | delete vs concurrent edit | delete wins | partial todo survives |
-| setup | specs, refs | none |
+| setup | builders, refs | none |
 
 Start with the flat keys when the fields are scalars, as `ToDo` is. Move to
 one handler per field when a field needs its own CRDT, or when a nested

@@ -7,7 +7,11 @@ void main() {
       final doc = CRDTDocument(
         peerId: PeerId.parse('37f1ec87-6ea5-430b-a627-a6b92b56a02d'),
       );
-      final handler = CRDTMapHandler<String>(doc, 'map1')
+      final handler = CRDTMapHandler<String>(
+        doc,
+        'map1',
+        handlerType: 'CRDTMapHandler<String>',
+      )
 
         // Set key-value pairs
         ..set('a', 'Hello')
@@ -39,12 +43,20 @@ void main() {
       final doc1 = CRDTDocument(
         peerId: PeerId.parse('45ee6b65-b393-40b7-9755-8b66dc7d0518'),
       );
-      final handler1 = CRDTMapHandler<String>(doc1, 'map1');
+      final handler1 = CRDTMapHandler<String>(
+        doc1,
+        'map1',
+        handlerType: 'CRDTMapHandler<String>',
+      );
 
       final doc2 = CRDTDocument(
         peerId: PeerId.parse('a90dfced-cbf0-4a49-9c64-f5b7b62fdc18'),
       );
-      final handler2 = CRDTMapHandler<String>(doc2, 'map1');
+      final handler2 = CRDTMapHandler<String>(
+        doc2,
+        'map1',
+        handlerType: 'CRDTMapHandler<String>',
+      );
 
       // Initial state
       handler1.set('a', 'Hello');
@@ -78,12 +90,20 @@ void main() {
       final doc1 = CRDTDocument(
         peerId: PeerId.parse('45ee6b65-b393-40b7-9755-8b66dc7d0518'),
       );
-      final handler1 = CRDTMapHandler<String>(doc1, 'map1');
+      final handler1 = CRDTMapHandler<String>(
+        doc1,
+        'map1',
+        handlerType: 'CRDTMapHandler<String>',
+      );
 
       final doc2 = CRDTDocument(
         peerId: PeerId.parse('a90dfced-cbf0-4a49-9c64-f5b7b62fdc18'),
       );
-      final handler2 = CRDTMapHandler<String>(doc2, 'map1');
+      final handler2 = CRDTMapHandler<String>(
+        doc2,
+        'map1',
+        handlerType: 'CRDTMapHandler<String>',
+      );
 
       // Initial state
       handler1
@@ -118,12 +138,20 @@ void main() {
       final doc1 = CRDTDocument(
         peerId: PeerId.parse('45ee6b65-b393-40b7-9755-8b66dc7d0518'),
       );
-      final handler1 = CRDTMapHandler<String>(doc1, 'map1');
+      final handler1 = CRDTMapHandler<String>(
+        doc1,
+        'map1',
+        handlerType: 'CRDTMapHandler<String>',
+      );
 
       final doc2 = CRDTDocument(
         peerId: PeerId.parse('a90dfced-cbf0-4a49-9c64-f5b7b62fdc18'),
       );
-      final handler2 = CRDTMapHandler<String>(doc2, 'map1');
+      final handler2 = CRDTMapHandler<String>(
+        doc2,
+        'map1',
+        handlerType: 'CRDTMapHandler<String>',
+      );
 
       // Initial state: key 'a' and 'b' exists
       handler1
@@ -154,7 +182,11 @@ void main() {
       final doc = CRDTDocument(
         peerId: PeerId.parse('45ee6b65-b393-40b7-9755-8b66dc7d0518'),
       );
-      final handler = CRDTMapHandler<int>(doc, 'map1')
+      final handler = CRDTMapHandler<int>(
+        doc,
+        'map1',
+        handlerType: 'CRDTMapHandler<int>',
+      )
 
         // Set key-value pairs
         ..set('one', 1)
@@ -171,7 +203,11 @@ void main() {
       final doc = CRDTDocument(
         peerId: PeerId.parse('37f1ec87-6ea5-430b-a627-a6b92b56a02d'),
       );
-      final handler = CRDTMapHandler<String>(doc, 'map1');
+      final handler = CRDTMapHandler<String>(
+        doc,
+        'map1',
+        handlerType: 'CRDTMapHandler<String>',
+      );
       expect(handler.toString(), equals('CRDTMapHandler(map1, {})'));
     });
 
@@ -180,7 +216,11 @@ void main() {
       final doc = CRDTDocument(
         peerId: PeerId.parse('37f1ec87-6ea5-430b-a627-a6b92b56a02d'),
       );
-      final handler = CRDTMapHandler<String>(doc, 'map1')
+      final handler = CRDTMapHandler<String>(
+        doc,
+        'map1',
+        handlerType: 'CRDTMapHandler<String>',
+      )
         ..set('a', 'Hello')
         ..set('b', 'World');
       expect(
@@ -193,12 +233,20 @@ void main() {
       final doc1 = CRDTDocument(
         peerId: PeerId.parse('45ee6b65-b393-40b7-9755-8b66dc7d0518'),
       );
-      final handler1 = CRDTMapHandler<String>(doc1, 'map1');
+      final handler1 = CRDTMapHandler<String>(
+        doc1,
+        'map1',
+        handlerType: 'CRDTMapHandler<String>',
+      );
 
       final doc2 = CRDTDocument(
         peerId: PeerId.parse('a90dfced-cbf0-4a49-9c64-f5b7b62fdc18'),
       );
-      final handler2 = CRDTMapHandler<String>(doc2, 'map1');
+      final handler2 = CRDTMapHandler<String>(
+        doc2,
+        'map1',
+        handlerType: 'CRDTMapHandler<String>',
+      );
 
       // Set values
       handler1
@@ -257,7 +305,11 @@ void main() {
 
       test('set + set -> last value', () {
         final doc = freshDoc();
-        final handler = CRDTMapHandler<String>(doc, 'map1');
+        final handler = CRDTMapHandler<String>(
+          doc,
+          'map1',
+          handlerType: 'CRDTMapHandler<String>',
+        );
         doc.runInTransaction(() {
           handler
             ..set('k', 'v1')
@@ -269,7 +321,11 @@ void main() {
 
       test('set + update -> last value', () {
         final doc = freshDoc();
-        final handler = CRDTMapHandler<String>(doc, 'map1');
+        final handler = CRDTMapHandler<String>(
+          doc,
+          'map1',
+          handlerType: 'CRDTMapHandler<String>',
+        );
         doc.runInTransaction(() {
           handler
             ..set('k', 'v1')
@@ -281,7 +337,11 @@ void main() {
 
       test('set + delete -> absent', () {
         final doc = freshDoc();
-        final handler = CRDTMapHandler<String>(doc, 'map1');
+        final handler = CRDTMapHandler<String>(
+          doc,
+          'map1',
+          handlerType: 'CRDTMapHandler<String>',
+        );
         doc.runInTransaction(() {
           handler
             ..set('k', 'v1')
@@ -293,7 +353,11 @@ void main() {
 
       test('update + update on existing key -> last value', () {
         final doc = freshDoc();
-        final handler = CRDTMapHandler<String>(doc, 'map1')..set('k', 'v0');
+        final handler = CRDTMapHandler<String>(
+          doc,
+          'map1',
+          handlerType: 'CRDTMapHandler<String>',
+        )..set('k', 'v0');
         final before = doc.exportChanges().length;
         doc.runInTransaction(() {
           handler
@@ -306,7 +370,11 @@ void main() {
 
       test('update + update on missing key stays absent', () {
         final doc = freshDoc();
-        final handler = CRDTMapHandler<String>(doc, 'map1');
+        final handler = CRDTMapHandler<String>(
+          doc,
+          'map1',
+          handlerType: 'CRDTMapHandler<String>',
+        );
         doc.runInTransaction(() {
           handler
             ..update('k', 'v1')
@@ -318,7 +386,11 @@ void main() {
 
       test('update + delete -> absent', () {
         final doc = freshDoc();
-        final handler = CRDTMapHandler<String>(doc, 'map1')..set('k', 'v0');
+        final handler = CRDTMapHandler<String>(
+          doc,
+          'map1',
+          handlerType: 'CRDTMapHandler<String>',
+        )..set('k', 'v0');
         final before = doc.exportChanges().length;
         doc.runInTransaction(() {
           handler
@@ -331,7 +403,11 @@ void main() {
 
       test('delete + set -> present with new value', () {
         final doc = freshDoc();
-        final handler = CRDTMapHandler<String>(doc, 'map1')..set('k', 'v0');
+        final handler = CRDTMapHandler<String>(
+          doc,
+          'map1',
+          handlerType: 'CRDTMapHandler<String>',
+        )..set('k', 'v0');
         final before = doc.exportChanges().length;
         doc.runInTransaction(() {
           handler
@@ -344,7 +420,11 @@ void main() {
 
       test('delete + update on existing key -> absent', () {
         final doc = freshDoc();
-        final handler = CRDTMapHandler<String>(doc, 'map1')..set('k', 'v0');
+        final handler = CRDTMapHandler<String>(
+          doc,
+          'map1',
+          handlerType: 'CRDTMapHandler<String>',
+        )..set('k', 'v0');
         final before = doc.exportChanges().length;
         doc.runInTransaction(() {
           handler
@@ -357,7 +437,11 @@ void main() {
 
       test('delete + delete -> absent', () {
         final doc = freshDoc();
-        final handler = CRDTMapHandler<String>(doc, 'map1')..set('k', 'v0');
+        final handler = CRDTMapHandler<String>(
+          doc,
+          'map1',
+          handlerType: 'CRDTMapHandler<String>',
+        )..set('k', 'v0');
         final before = doc.exportChanges().length;
         doc.runInTransaction(() {
           handler
@@ -370,7 +454,11 @@ void main() {
 
       test('writes to different keys are not merged', () {
         final doc = freshDoc();
-        final handler = CRDTMapHandler<String>(doc, 'map1');
+        final handler = CRDTMapHandler<String>(
+          doc,
+          'map1',
+          handlerType: 'CRDTMapHandler<String>',
+        );
         doc.runInTransaction(() {
           handler
             ..set('a', '1')
@@ -384,12 +472,20 @@ void main() {
         final doc1 = CRDTDocument(
           peerId: PeerId.parse('45ee6b65-b393-40b7-9755-8b66dc7d0518'),
         );
-        final handler1 = CRDTMapHandler<String>(doc1, 'map1')..set('k', 'v0');
+        final handler1 = CRDTMapHandler<String>(
+          doc1,
+          'map1',
+          handlerType: 'CRDTMapHandler<String>',
+        )..set('k', 'v0');
 
         final doc2 = CRDTDocument(
           peerId: PeerId.parse('a90dfced-cbf0-4a49-9c64-f5b7b62fdc18'),
         );
-        final handler2 = CRDTMapHandler<String>(doc2, 'map1');
+        final handler2 = CRDTMapHandler<String>(
+          doc2,
+          'map1',
+          handlerType: 'CRDTMapHandler<String>',
+        );
 
         doc1.runInTransaction(() {
           handler1

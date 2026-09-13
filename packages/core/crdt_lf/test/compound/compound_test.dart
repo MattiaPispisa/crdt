@@ -13,7 +13,11 @@ void main() {
 
     setUp(() {
       doc = CRDTDocument(peerId: _peer);
-      plain = CRDTRegisterHandler<int>(doc, 'plain');
+      plain = CRDTRegisterHandler<int>(
+        doc,
+        'plain',
+        handlerType: 'CRDTRegisterHandler<int>',
+      );
     });
 
     List<Operation> compact(List<Operation> operations) => Compound(
@@ -39,7 +43,11 @@ void main() {
     });
 
     test('operations of different handlers are left alone', () {
-      final other = CRDTRegisterHandler<int>(doc, 'other');
+      final other = CRDTRegisterHandler<int>(
+        doc,
+        'other',
+        handlerType: 'CRDTRegisterHandler<int>',
+      );
       final result = compact([
         _write(plain, 1),
         _write(other, 2),
@@ -120,6 +128,15 @@ base class _StampedRegister extends Handler<int> {
   String get id => _id;
 
   @override
+  HandlerSpec<_StampedRegister> get spec => HandlerSpec(
+        '_StampedRegister',
+        (doc, id) => _StampedRegister(doc, id),
+        formats: const HandlerFormats(
+          operationKinds: {OperationType.kindInsert},
+        ),
+      );
+
+  @override
   late final OperationDecoders operationDecoders = {
     writeType.kind: (body) => _StampedWrite(
           id: id,
@@ -157,7 +174,8 @@ base class _StampedRegister extends Handler<int> {
 /// A handler written the way `Compound` refuses: it folds to the accumulator,
 /// so the survivor carries the earlier id.
 final class _BackwardsCompoundingRegister extends CRDTRegisterHandler<int> {
-  _BackwardsCompoundingRegister(super.doc, super.id);
+  _BackwardsCompoundingRegister(super.doc, super.id)
+      : super(handlerType: 'CRDTRegisterHandler<int>');
 
   @override
   Operation? compound(Operation accumulator, Operation current) => accumulator;
@@ -166,6 +184,15 @@ final class _BackwardsCompoundingRegister extends CRDTRegisterHandler<int> {
 /// A handler written the way `Compound` refuses: stamped **and** folding.
 final class _CompoundingStampedRegister extends _StampedRegister {
   _CompoundingStampedRegister(super.doc, super.id);
+
+  @override
+  HandlerSpec<_CompoundingStampedRegister> get spec => HandlerSpec(
+        '_CompoundingStampedRegister',
+        (doc, id) => _CompoundingStampedRegister(doc, id),
+        formats: const HandlerFormats(
+          operationKinds: {OperationType.kindInsert},
+        ),
+      );
 
   @override
   Operation? compound(Operation accumulator, Operation current) {

@@ -5,7 +5,6 @@ import 'dart:typed_data';
 import 'package:crdt_lf/crdt_lf.dart';
 import 'package:crdt_lf/src/capabilities/data_requirements_tracker.dart';
 import 'package:crdt_lf/src/capabilities/formats_of.dart';
-import 'package:crdt_lf/src/handler/built_in_specs.dart';
 import 'package:crdt_lf/src/compound/compound.dart';
 import 'package:crdt_lf/src/devtools/devtools.dart' as devtools;
 import 'package:crdt_lf/src/snapshot/blob_version.dart';
@@ -197,18 +196,16 @@ abstract class BaseCRDTDocument {
     _handlers[handler.id] = handler;
     handler._document = this;
 
-    // The one place every creation path meets, so it is where a handler that
-    // knows how it is rebuilt says so. `putIfAbsent`: an explicit [register]
-    // made earlier wins.
-    if (handler.handlerSpec case final spec?) {
-      assert(
-        _specs[spec.type] == null || _specs[spec.type] == spec,
-        'Two specs claim the tag ${spec.type} and read different formats. '
-        'One tag has to mean one wire format, or a peer is told this build '
-        'reads something it cannot.',
-      );
-      _specs.putIfAbsent(spec.type, () => spec);
-    }
+    // The one place every creation path meets, so it is where a handler says
+    // what kind it is. `putIfAbsent`: an explicit [register] made earlier wins.
+    final spec = handler.spec;
+    assert(
+      _specs[spec.type] == null || _specs[spec.type] == spec,
+      'Two specs claim the tag ${spec.type} and read different formats. '
+      'One tag has to mean one wire format, or a peer is told this build '
+      'reads something it cannot.',
+    );
+    _specs.putIfAbsent(spec.type, () => spec);
   }
 
   /// How to rebuild a handler from its type tag, and what that type reads,
@@ -226,16 +223,6 @@ abstract class BaseCRDTDocument {
   /// ```
   final Map<String, HandlerSpec<Handler<dynamic>>> _specs = {};
 
-  /// The spec registered for [type], or the built-in one this package ships.
-  ///
-  /// The fallback covers a type this peer never opened, which is what a nested
-  /// child received from a peer always is. It is read here and by
-  /// [CRDTDocument.reconstruct], both of which resolve one handler on demand —
-  /// never by the change apply path, which stays behind the `_specs.isEmpty`
-  /// check so a flat document pays no envelope decode.
-  HandlerSpec<Handler<dynamic>>? _specFor(String type) =>
-      _specs[type] ?? kBuiltInHandlerSpecs[type];
-
   /// Generates a globally-unique id for a handler created dynamically.
   ///
   /// The id is a random UUID.
@@ -243,58 +230,61 @@ abstract class BaseCRDTDocument {
   /// so remote peers reuse the same id verbatim when reconstructing the tree.
   String newHandlerId() => generateUuid();
 
-  /// Declares one handler **type**: how to rebuild a handler of it, and what
-  /// it reads.
+  /// Declares one handler **kind**, for one this peer never opens itself.
   ///
-  /// Needed for a type this peer never opens itself — a server that stores and
-  /// forwards, or a client waiting for a subtree a peer is about to send. A
-  /// handler created with a [HandlerSpec] declares its own type on the way in,
-  /// so opening one covers it already.
+  /// A handler declares its own kind as it is constructed. So this is only for
+  /// a kind that arrives without ever being opened here: a subtree a peer is
+  /// about to send, or a kind a store-and-forward server has to name.
   ///
-  /// Rebuilding is what lets a peer resolve a [HandlerRef] it receives, and
-  /// what [CRDTDocument.reconstruct] walks. The formats are what
-  /// [CRDTDocument.describeBuildCapabilities] reports, before anything opens a
-  /// handler: being able to rebuild a type does not mean being able to read it.
-  ///
-  /// Registering the same [HandlerSpec.type] twice replaces what was there.
+  /// Takes only how to build one. The tag and the formats are read off a
+  /// handler [build] makes, so neither is restated, and neither can drift from
+  /// the handler that ends up on the wire. Declaring the same kind twice
+  /// replaces what was there.
   ///
   /// ```dart
-  /// document.register(CRDTListHandler.spec<Todo>('CRDTListHandler<Todo>'));
+  /// document.register(CRDTFugueTextHandler.new);
+  ///
+  /// // A generic one carries its tag in the closure, written once.
+  /// document.register(
+  ///   (doc, id) => CRDTListHandler<Todo>(doc, id, handlerType: 'todo-list'),
+  /// );
   /// ```
-  void register<T extends Handler<dynamic>>(HandlerSpec<T> spec) {
+  ///
+  /// Throws [DocumentDisposedException] on a disposed document.
+  void register<T extends Handler<dynamic>>(HandlerBuilder<T> build) {
     _ensureNotDisposed('register');
 
-    _specs[spec.type] = spec;
+    // A throwaway handler on a throwaway document: with none of this kind open
+    // here there is nothing else to read the tag and the formats off, and the
+    // probe must not land on this document.
+    final probe = build(CRDTDocument(peerId: PeerId.generate()), 'probe');
+
+    _specs[probe.handlerType] = HandlerSpec<T>(
+      probe.handlerType,
+      build,
+      formats: formatsOf(probe),
+    );
   }
 
-  /// The handler [spec] describes under [id], built if it is not open yet.
+  /// The handler [build] makes under [id], or the one already open there.
   ///
-  /// Safe to call again: the second call finds the handler the first one left
-  /// registered instead of throwing
-  /// [HandlerAlreadyRegisteredException], which is what building one by hand
-  /// does.
+  /// Safe to call again, which is what a constructor is not: building a handler
+  /// by hand under a taken id throws. Pass a constructor tear-off —
+  /// `doc.handler(CRDTMapRefHandler.new, 'root')`.
   ///
-  /// Use it whenever the handler may already be there — and once a spec for
-  /// its type is registered, that includes the handlers the document builds by
-  /// itself: applying a change for an id nobody opened instantiates it.
-  ///
-  /// Throws [HandlerAlreadyRegisteredException] when [id] is taken by a
-  /// handler of another kind.
-  T handler<T extends Handler<dynamic>>(HandlerSpec<T> spec, String id) {
+  /// Throws [HandlerAlreadyRegisteredException] when [id] is taken by a handler
+  /// that is not a [T].
+  T handler<T extends Handler<dynamic>>(HandlerBuilder<T> build, String id) {
     final existing = _handlers[id];
     if (existing != null) {
-      // Both checks: the tag is what routes changes between peers, and a Dart
-      // type alone would accept a subclass, or the same class opened under
-      // another tag.
-      if (existing is T && existing.handlerType == spec.type) {
+      if (existing is T) {
         return existing;
       }
       throw HandlerAlreadyRegisteredException(
-        'Handler with ID $id is a ${existing.handlerType}, '
-        'not a ${spec.type}',
+        'Handler with ID $id is a ${existing.handlerType}, not a $T',
       );
     }
-    return spec.create(this, id);
+    return build(this, id);
   }
 
   /// Resolves [ref] to a handler instance.
@@ -307,7 +297,7 @@ abstract class BaseCRDTDocument {
     if (existing != null) {
       return existing;
     }
-    return _specFor(ref.type)?.create(this, ref.id);
+    return _specs[ref.type]?.create(this, ref.id);
   }
 
   /// If [_isDisposed] is `true`, throws [DocumentDisposedException]
@@ -631,7 +621,7 @@ class CRDTDocument extends BaseCRDTDocument {
 
     for (final entry in discovered.entries) {
       if (!_handlers.containsKey(entry.key)) {
-        _specFor(entry.value)?.create(this, entry.key);
+        _specs[entry.value]?.create(this, entry.key);
       }
     }
 
@@ -1049,35 +1039,6 @@ class CRDTDocument extends BaseCRDTDocument {
     }
   }
 
-  /// Auto-registers the handler targeted by [change] when it is not yet
-  /// registered and a [HandlerSpec] is registered for its type.
-  ///
-  /// This keeps the handler registry in sync with imported data: a peer that
-  /// registered the relevant types (see [register]) sees nested handlers appear
-  /// as their changes arrive, without having to call [reconstruct].
-  ///
-  /// The types this package ships are left out on purpose: they resolve on
-  /// demand instead, which keeps this off the apply path of a document that
-  /// registered nothing.
-  ///
-  /// It is a no-op when nothing is registered (the classic flat usage), so
-  /// existing documents are completely unaffected. Children reached only
-  /// through a parent reference after history pruning are not covered here
-  /// (they have no change to import) — use [reconstruct] for that case.
-  void _ensureHandlerForChange(Change change) {
-    if (_specs.isEmpty) {
-      return;
-    }
-    try {
-      final envelope = OperationEnvelopeCodec.decode(change.payloadBytes());
-      if (_handlers.containsKey(envelope.handlerId)) {
-        return;
-      }
-      _specs[envelope.handlerType]?.create(this, envelope.handlerId);
-    } catch (_) {
-      // Ignore changes whose envelope cannot be decoded.
-    }
-  }
 
   /// It represents the **latest operation for each peer** of this document
   ///
@@ -1274,7 +1235,6 @@ class CRDTDocument extends BaseCRDTDocument {
   bool _applyChange(Change change) {
     final applied = _internalApplyChange(change);
     if (applied) {
-      _ensureHandlerForChange(change);
       _foldOrDropCachesForChange(change);
       _emitUpdate(changes: [change], source: ChangeSource.ingested);
     }
@@ -1729,7 +1689,6 @@ class CRDTDocument extends BaseCRDTDocument {
     for (final change in sorted) {
       try {
         if (_internalApplyChange(change)) {
-          _ensureHandlerForChange(change);
           changedApplied.add(change);
         }
       } catch (e) {

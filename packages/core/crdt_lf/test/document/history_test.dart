@@ -8,7 +8,11 @@ void main() {
 
     setUp(() {
       document = CRDTDocument();
-      listHandler = CRDTListHandler<String>(document, 'list');
+      listHandler = CRDTListHandler<String>(
+        document,
+        'list',
+        handlerType: 'CRDTListHandler<String>',
+      );
     });
 
     test(
@@ -34,7 +38,11 @@ void main() {
       final historySession = document.toTimeTravel();
       final viewListHandler =
           historySession.getHandler<CRDTListHandler<String>, List<String>>(
-        (doc) => CRDTListHandler<String>(doc, 'list'),
+        (doc) => CRDTListHandler<String>(
+          doc,
+          'list',
+          handlerType: 'CRDTListHandler<String>',
+        ),
       );
 
       expect(viewListHandler.doc.documentId, document.documentId);
@@ -63,7 +71,11 @@ void main() {
       final historySession = document.toTimeTravel();
       final viewListHandler =
           historySession.getHandler<CRDTListHandler<String>, List<String>>(
-        (doc) => CRDTListHandler<String>(doc, 'list'),
+        (doc) => CRDTListHandler<String>(
+          doc,
+          'list',
+          handlerType: 'CRDTListHandler<String>',
+        ),
       );
 
       expect(viewListHandler.value, ['Hello', 'World', 'Dart']);
@@ -93,7 +105,11 @@ void main() {
       final historySession = document.toTimeTravel();
       final viewListHandler =
           historySession.getHandler<CRDTListHandler<String>, List<String>>(
-        (doc) => CRDTListHandler<String>(doc, 'list'),
+        (doc) => CRDTListHandler<String>(
+          doc,
+          'list',
+          handlerType: 'CRDTListHandler<String>',
+        ),
       );
       expect(viewListHandler.value, ['Hello', 'World', 'Dart']);
 
@@ -116,12 +132,20 @@ void main() {
       final historySession = document.toTimeTravel();
       final viewListHandler =
           historySession.getHandler<CRDTListHandler<String>, List<String>>(
-        (doc) => CRDTListHandler<String>(doc, 'list'),
+        (doc) => CRDTListHandler<String>(
+          doc,
+          'list',
+          handlerType: 'CRDTListHandler<String>',
+        ),
       );
       expect(viewListHandler.value, ['Hello', 'World', 'Dart']);
 
       final doc2 = CRDTDocument();
-      CRDTListHandler<String>(doc2, 'list')
+      CRDTListHandler<String>(
+        doc2,
+        'list',
+        handlerType: 'CRDTListHandler<String>',
+      )
         ..insert(0, 'Welcome')
         ..insert(1, 'to')
         ..insert(2, 'Flutter');
@@ -142,7 +166,11 @@ void main() {
       final historySession = document.toTimeTravel();
       final viewListHandler =
           historySession.getHandler<CRDTListHandler<String>, List<String>>(
-        (doc) => CRDTListHandler<String>(doc, 'list'),
+        (doc) => CRDTListHandler<String>(
+          doc,
+          'list',
+          handlerType: 'CRDTListHandler<String>',
+        ),
       );
 
       expect(viewListHandler.value, ['Hello', 'World', 'Dart']);
@@ -185,7 +213,11 @@ void main() {
       final historySession = document.toTimeTravel();
       final viewListHandler =
           historySession.getHandler<CRDTListHandler<String>, List<String>>(
-        (doc) => CRDTListHandler<String>(doc, 'list'),
+        (doc) => CRDTListHandler<String>(
+          doc,
+          'list',
+          handlerType: 'CRDTListHandler<String>',
+        ),
       );
 
       expect(viewListHandler.value, ['Hello', 'World', 'Dart']);
@@ -241,7 +273,11 @@ void main() {
       final historySession = document.toTimeTravel();
       final viewListHandler =
           historySession.getHandler<CRDTListHandler<String>, List<String>>(
-        (doc) => CRDTListHandler<String>(doc, 'list'),
+        (doc) => CRDTListHandler<String>(
+          doc,
+          'list',
+          handlerType: 'CRDTListHandler<String>',
+        ),
       );
       expect(
         () {
@@ -256,12 +292,20 @@ void main() {
         ..insert(0, 'Hello')
         ..insert(1, 'World')
         ..insert(2, 'Dart');
-      CRDTListHandler<String>(document, 'other').insert(0, 'Elsewhere');
+      CRDTListHandler<String>(
+        document,
+        'other',
+        handlerType: 'CRDTListHandler<String>',
+      ).insert(0, 'Elsewhere');
 
       final historySession = document.toTimeTravel();
       final viewDocument = historySession
           .getHandler<CRDTListHandler<String>, List<String>>(
-            (doc) => CRDTListHandler<String>(doc, 'list'),
+            (doc) => CRDTListHandler<String>(
+              doc,
+              'list',
+              handlerType: 'CRDTListHandler<String>',
+            ),
           )
           .doc;
 
@@ -299,7 +343,11 @@ void main() {
       final historySession = document.toTimeTravel();
       final viewListHandler =
           historySession.getHandler<CRDTListHandler<String>, List<String>>(
-        (doc) => CRDTListHandler<String>(doc, 'list'),
+        (doc) => CRDTListHandler<String>(
+          doc,
+          'list',
+          handlerType: 'CRDTListHandler<String>',
+        ),
       );
 
       var done = false;

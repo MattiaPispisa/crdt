@@ -27,21 +27,16 @@ base class CRDTListHandler<T> extends Handler<List<T>>
   ///
   /// [valueCodec] is an optional codec for encoding/decoding [T] values to bytes.
   /// Default is [JsonValueCodec].
+  ///
+  /// [handlerType] names the **kind** of handler this is.
+  /// {@macro handler_type_tag}
   CRDTListHandler(
     super.doc,
     this._id, {
+    required String handlerType,
     ValueCodec<T>? valueCodec,
-    String? handlerType,
-  }) : _valueCodec = valueCodec ?? JsonValueCodec<T>(),
-        super(
-          spec: handlerType == null
-              ? null
-              : CRDTListHandler.spec<T>(
-                  handlerType,
-                  valueCodec: valueCodec,
-                ),
-        );
-
+  })  : _handlerType = handlerType,
+        _valueCodec = valueCodec ?? JsonValueCodec<T>();
 
   @override
   late final OperationDecoders operationDecoders = {
@@ -57,6 +52,16 @@ base class CRDTListHandler<T> extends Handler<List<T>>
   final String _id;
 
   final ValueCodec<T> _valueCodec;
+
+  final String _handlerType;
+
+  /// {@macro handler_spec}
+  ///
+  /// Built once from the tag the constructor asked for: [handlerType] reads it
+  /// on every operation encode, so a fresh one per call would allocate there.
+  @override
+  late final HandlerSpec<CRDTListHandler<T>> spec =
+      _spec<T>(_handlerType, valueCodec: _valueCodec);
 
   @override
   String get id => _id;
@@ -153,16 +158,16 @@ base class CRDTListHandler<T> extends Handler<List<T>>
   /// doc.register(todos);                    // for a peer that receives one
   /// final list = doc.handler(todos, 'todos');
   /// ```
-  static HandlerSpec<CRDTListHandler<T>> spec<T>(
+  static HandlerSpec<CRDTListHandler<T>> _spec<T>(
     String type, {
     ValueCodec<T>? valueCodec,
   }) =>
       HandlerSpec<CRDTListHandler<T>>(
         type,
-        (doc, id, spec) => CRDTListHandler<T>(
+        (doc, id) => CRDTListHandler<T>(
           doc,
           id,
-          handlerType: spec.type,
+          handlerType: type,
           valueCodec: valueCodec,
         ),
         formats: _formats,

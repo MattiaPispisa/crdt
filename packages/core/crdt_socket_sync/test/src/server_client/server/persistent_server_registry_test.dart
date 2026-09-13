@@ -100,7 +100,11 @@ class _CountingChangeStorage implements CRDTChangeStorage {
 /// A change written by somebody else, ready to be applied.
 List<Change> _authored(void Function(CRDTListHandler<String> list) edit) {
   final document = CRDTDocument(peerId: PeerId.generate());
-  edit(CRDTListHandler<String>(document, 'list'));
+  edit(CRDTListHandler<String>(
+    document,
+    'list',
+    handlerType: 'CRDTListHandler<String>',
+  ));
   return document.exportChanges();
 }
 
@@ -152,7 +156,11 @@ void main() {
       addTearDown(second.close);
 
       final document = (await second.getDocument('doc'))!;
-      expect(CRDTListHandler<String>(document, 'list').value, ['a']);
+      expect(CRDTListHandler<String>(
+        document,
+        'list',
+        handlerType: 'CRDTListHandler<String>',
+      ).value, ['a']);
     });
 
     test('a burst of changes is one write, not one write each', () async {

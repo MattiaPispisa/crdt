@@ -7,7 +7,11 @@ void main() {
       final doc = CRDTDocument(
         peerId: PeerId.parse('37f1ec87-6ea5-430b-a627-a6b92b56a02d'),
       );
-      final list = CRDTFugueMovableListHandler<String>(doc, 'list')
+      final list = CRDTFugueMovableListHandler<String>(
+        doc,
+        'list',
+        handlerType: 'CRDTFugueMovableListHandler<String>',
+      )
         ..insert(0, 'Hello')
         ..insert(1, 'World')
         ..insert(2, '!');
@@ -27,7 +31,11 @@ void main() {
       final doc = CRDTDocument(
         peerId: PeerId.parse('45ee6b65-b393-40b7-9755-8b66dc7d0518'),
       );
-      final list = CRDTFugueMovableListHandler<String>(doc, 'todo')
+      final list = CRDTFugueMovableListHandler<String>(
+        doc,
+        'todo',
+        handlerType: 'CRDTFugueMovableListHandler<String>',
+      )
         ..insert(0, 'buy milk')
         ..insert(1, 'water plants')
         ..insert(2, 'phone joe')
@@ -52,7 +60,11 @@ void main() {
       final doc = CRDTDocument(
         peerId: PeerId.parse('45ee6b65-b393-40b7-9755-8b66dc7d0518'),
       );
-      final list = CRDTFugueMovableListHandler<String>(doc, 'l')
+      final list = CRDTFugueMovableListHandler<String>(
+        doc,
+        'l',
+        handlerType: 'CRDTFugueMovableListHandler<String>',
+      )
         ..insert(0, 'a')
         ..insert(1, 'b')
         ..insert(2, 'c')
@@ -73,13 +85,21 @@ void main() {
         final docB = CRDTDocument(
           peerId: PeerId.parse('a90dfced-cbf0-4a49-9c64-f5b7b62fdc18'),
         );
-        final a = CRDTFugueMovableListHandler<String>(docA, 'l')
+        final a = CRDTFugueMovableListHandler<String>(
+          docA,
+          'l',
+          handlerType: 'CRDTFugueMovableListHandler<String>',
+        )
           ..insert(0, 'buy milk')
           ..insert(1, 'water plants')
           ..insert(2, 'phone joe');
 
         // Sync initial state to B.
-        final b = CRDTFugueMovableListHandler<String>(docB, 'l');
+        final b = CRDTFugueMovableListHandler<String>(
+          docB,
+          'l',
+          handlerType: 'CRDTFugueMovableListHandler<String>',
+        );
         docB.importChanges(docA.exportChanges());
         expect(b.value, equals(['buy milk', 'water plants', 'phone joe']));
 
@@ -108,13 +128,21 @@ void main() {
       final docB = CRDTDocument(
         peerId: PeerId.parse('a90dfced-cbf0-4a49-9c64-f5b7b62fdc18'),
       );
-      final a = CRDTFugueMovableListHandler<String>(docA, 'l')
+      final a = CRDTFugueMovableListHandler<String>(
+        docA,
+        'l',
+        handlerType: 'CRDTFugueMovableListHandler<String>',
+      )
         ..insert(0, 'a')
         ..insert(1, 'b')
         ..insert(2, 'c')
         ..insert(3, 'd');
 
-      final b = CRDTFugueMovableListHandler<String>(docB, 'l');
+      final b = CRDTFugueMovableListHandler<String>(
+        docB,
+        'l',
+        handlerType: 'CRDTFugueMovableListHandler<String>',
+      );
       docB.importChanges(docA.exportChanges());
 
       a.move(0, 3); // a → end on A: ['b','c','d','a']
@@ -137,12 +165,20 @@ void main() {
       final docB = CRDTDocument(
         peerId: PeerId.parse('a90dfced-cbf0-4a49-9c64-f5b7b62fdc18'),
       );
-      final a = CRDTFugueMovableListHandler<String>(docA, 'l')
+      final a = CRDTFugueMovableListHandler<String>(
+        docA,
+        'l',
+        handlerType: 'CRDTFugueMovableListHandler<String>',
+      )
         ..insert(0, 'x')
         ..insert(1, 'y')
         ..insert(2, 'z');
 
-      final b = CRDTFugueMovableListHandler<String>(docB, 'l');
+      final b = CRDTFugueMovableListHandler<String>(
+        docB,
+        'l',
+        handlerType: 'CRDTFugueMovableListHandler<String>',
+      );
       docB.importChanges(docA.exportChanges());
 
       a.delete(1); // delete y on A
@@ -162,8 +198,16 @@ void main() {
       final docB = CRDTDocument(
         peerId: PeerId.parse('a90dfced-cbf0-4a49-9c64-f5b7b62fdc18'),
       );
-      final a = CRDTFugueMovableListHandler<String>(docA, 'l')..insert(0, 'a');
-      final b = CRDTFugueMovableListHandler<String>(docB, 'l');
+      final a = CRDTFugueMovableListHandler<String>(
+        docA,
+        'l',
+        handlerType: 'CRDTFugueMovableListHandler<String>',
+      )..insert(0, 'a');
+      final b = CRDTFugueMovableListHandler<String>(
+        docB,
+        'l',
+        handlerType: 'CRDTFugueMovableListHandler<String>',
+      );
       docB.importChanges(docA.exportChanges());
 
       a.update(0, 'A');
@@ -189,10 +233,18 @@ void main() {
       final docB = CRDTDocument(
         peerId: PeerId.parse('ffffffff-ffff-4fff-bfff-ffffffffffff'),
       );
-      final a = CRDTFugueMovableListHandler<String>(docA, 'l')
+      final a = CRDTFugueMovableListHandler<String>(
+        docA,
+        'l',
+        handlerType: 'CRDTFugueMovableListHandler<String>',
+      )
         ..insert(0, 'A1')
         ..insert(1, 'A2');
-      final b = CRDTFugueMovableListHandler<String>(docB, 'l')
+      final b = CRDTFugueMovableListHandler<String>(
+        docB,
+        'l',
+        handlerType: 'CRDTFugueMovableListHandler<String>',
+      )
         ..insert(0, 'B1')
         ..insert(1, 'B2');
 
@@ -214,7 +266,11 @@ void main() {
       final docA = CRDTDocument(
         peerId: PeerId.parse('45ee6b65-b393-40b7-9755-8b66dc7d0518'),
       );
-      final a = CRDTFugueMovableListHandler<String>(docA, 'l')
+      final a = CRDTFugueMovableListHandler<String>(
+        docA,
+        'l',
+        handlerType: 'CRDTFugueMovableListHandler<String>',
+      )
         ..insert(0, 'a')
         ..insert(1, 'b')
         ..insert(2, 'c')
@@ -228,7 +284,11 @@ void main() {
       final docB = CRDTDocument(
         peerId: PeerId.parse('a90dfced-cbf0-4a49-9c64-f5b7b62fdc18'),
       );
-      final b = CRDTFugueMovableListHandler<String>(docB, 'l');
+      final b = CRDTFugueMovableListHandler<String>(
+        docB,
+        'l',
+        handlerType: 'CRDTFugueMovableListHandler<String>',
+      );
       docB.mergeSnapshot(snap, pruneHistory: false);
       expect(b.value, equals(a.value));
 
@@ -246,12 +306,20 @@ void main() {
       () {
         final peerId = PeerId.parse('45ee6b65-b393-40b7-9755-8b66dc7d0518');
         final docA = CRDTDocument(peerId: peerId);
-        final a = CRDTFugueMovableListHandler<String>(docA, 'l');
+        final a = CRDTFugueMovableListHandler<String>(
+          docA,
+          'l',
+          handlerType: 'CRDTFugueMovableListHandler<String>',
+        );
 
         final docB = CRDTDocument(
           peerId: PeerId.parse('a90dfced-cbf0-4a49-9c64-f5b7b62fdc18'),
         );
-        final b = CRDTFugueMovableListHandler<String>(docB, 'l');
+        final b = CRDTFugueMovableListHandler<String>(
+          docB,
+          'l',
+          handlerType: 'CRDTFugueMovableListHandler<String>',
+        );
 
         a.insertAll(0, ['a', 'b', 'c', 'd']);
         docB.importChanges(docA.exportChanges());
@@ -264,7 +332,11 @@ void main() {
         // Reload: the snapshot only carries the live identities, so without
         // the element id floor the counters of 'c' and 'd' come back.
         final reloaded = CRDTDocument(peerId: peerId);
-        final reloadedList = CRDTFugueMovableListHandler<String>(reloaded, 'l');
+        final reloadedList = CRDTFugueMovableListHandler<String>(
+          reloaded,
+          'l',
+          handlerType: 'CRDTFugueMovableListHandler<String>',
+        );
         reloaded.importSnapshot(snapshot);
         expect(reloadedList.value, equals(['a', 'b']));
 
@@ -285,9 +357,17 @@ void main() {
       final docB = CRDTDocument(
         peerId: PeerId.parse('ffffffff-ffff-4fff-bfff-ffffffffffff'),
       );
-      final a = CRDTFugueMovableListHandler<String>(docA, 'l')
+      final a = CRDTFugueMovableListHandler<String>(
+        docA,
+        'l',
+        handlerType: 'CRDTFugueMovableListHandler<String>',
+      )
         ..insertAll(0, ['A1', 'A2', 'A3']);
-      final b = CRDTFugueMovableListHandler<String>(docB, 'l')
+      final b = CRDTFugueMovableListHandler<String>(
+        docB,
+        'l',
+        handlerType: 'CRDTFugueMovableListHandler<String>',
+      )
         ..insertAll(0, ['B1', 'B2', 'B3']);
 
       docA.importChanges(docB.exportChanges());
@@ -306,7 +386,11 @@ void main() {
 
     test('insertAll with empty iterable is a no-op', () {
       final doc = CRDTDocument(peerId: PeerId.generate());
-      final list = CRDTFugueMovableListHandler<String>(doc, 'l')
+      final list = CRDTFugueMovableListHandler<String>(
+        doc,
+        'l',
+        handlerType: 'CRDTFugueMovableListHandler<String>',
+      )
         ..insertAll(0, const <String>[]);
       expect(list.value, isEmpty);
       expect(doc.exportChanges(), isEmpty);
@@ -314,7 +398,11 @@ void main() {
 
     test('delete(index, count) removes a contiguous range in one op', () {
       final doc = CRDTDocument(peerId: PeerId.generate());
-      final list = CRDTFugueMovableListHandler<String>(doc, 'l')
+      final list = CRDTFugueMovableListHandler<String>(
+        doc,
+        'l',
+        handlerType: 'CRDTFugueMovableListHandler<String>',
+      )
         ..insertAll(0, ['a', 'b', 'c', 'd', 'e']);
       final beforeChangesCount = doc.exportChanges().length;
 
@@ -327,7 +415,11 @@ void main() {
 
     test('delete(index, count) clamps to the end of the visible list', () {
       final doc = CRDTDocument(peerId: PeerId.generate());
-      final list = CRDTFugueMovableListHandler<String>(doc, 'l')
+      final list = CRDTFugueMovableListHandler<String>(
+        doc,
+        'l',
+        handlerType: 'CRDTFugueMovableListHandler<String>',
+      )
         ..insertAll(0, ['a', 'b', 'c'])
         ..delete(1, 99);
       expect(list.value, equals(['a']));
@@ -335,7 +427,11 @@ void main() {
 
     test('delete with non-positive count is a no-op', () {
       final doc = CRDTDocument(peerId: PeerId.generate());
-      final list = CRDTFugueMovableListHandler<String>(doc, 'l')
+      final list = CRDTFugueMovableListHandler<String>(
+        doc,
+        'l',
+        handlerType: 'CRDTFugueMovableListHandler<String>',
+      )
         ..insertAll(0, ['a', 'b']);
       final before = doc.exportChanges().length;
       list
@@ -347,7 +443,11 @@ void main() {
 
     test('operation bytes round-trip via operationDecoders', () {
       final doc = CRDTDocument(peerId: PeerId.generate());
-      final list = CRDTFugueMovableListHandler<String>(doc, 'l')
+      final list = CRDTFugueMovableListHandler<String>(
+        doc,
+        'l',
+        handlerType: 'CRDTFugueMovableListHandler<String>',
+      )
         ..insert(0, 'a')
         ..insert(1, 'b')
         ..move(1, 0)

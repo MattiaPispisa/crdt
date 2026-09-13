@@ -2,7 +2,6 @@ import 'dart:math';
 import 'dart:typed_data';
 
 import 'package:crdt_lf/crdt_lf.dart';
-import 'package:crdt_lf/src/handler/handler_type.dart';
 
 part 'operation.dart';
 
@@ -143,27 +142,29 @@ base class CRDTTextHandler extends Handler<String>
     return state;
   }
 
+  /// The tag this kind travels under; see [Handler.handlerType].
+  ///
+  /// Fixed here because this handler is not generic: there is no type argument
+  /// to carry, so there is nothing for a caller to choose.
+  static const String _handlerType = 'CRDTTextHandler';
+
   /// {@template builtin_handler_spec}
-  /// How to build one of these, for [BaseCRDTDocument.register] and for a
-  /// container's child methods.
+  /// The kind this handler is, named once for the whole class.
   ///
-  /// Building one by hand throws when the id is already open; going through a
-  /// spec finds the open handler instead.
-  ///
-  /// It is what the [Handler.handlerSpec] override answers, so opening one by
-  /// hand tells the document how to rebuild the type. That looks circular and
-  /// is not: [HandlerSpec.factory] stores the constructor tear-off without
-  /// calling it, so this lazy static finishes initializing before the getter
-  /// ever reads it.
+  /// Private: a caller names this kind with the constructor —
+  /// `doc.handler(CRDTTextHandler.new, id)` — and the document learns it from
+  /// [Handler.spec]. Reading it from the getter looks circular and is not: the
+  /// initializer stores the constructor tear-off without calling it. This lazy
+  /// static therefore finishes before the getter ever reads it.
   /// {@endtemplate}
-  static final HandlerSpec<CRDTTextHandler> spec = HandlerSpec.factory(
-    kTextHandlerType,
+  static final HandlerSpec<CRDTTextHandler> _spec = HandlerSpec(
+    _handlerType,
     CRDTTextHandler.new,
     formats: _formats,
   );
 
   @override
-  HandlerSpec<CRDTTextHandler> get handlerSpec => spec;
+  HandlerSpec<CRDTTextHandler> get spec => _spec;
 
   /// What this build reads for this handler type.
   ///

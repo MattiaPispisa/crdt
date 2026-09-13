@@ -46,22 +46,22 @@ class DocumentExampleState extends ExampleDocument<CRDTMovableListRefHandler> {
   static const _kDoneKey = 'done';
 
   // The todo `done` flag is a nested CRDTRegisterHandler<bool>. A generic
-  // handler carries its type argument in its tag, and the default tag
-  // (`runtimeType.toString()`) is an opaque `"minified:..."` token in a
-  // Flutter web `--release` build — so it needs a stable one of its own. The
-  // spec holds it once, and hands it to every place that needs it.
-  static final _doneSpec =
-      CRDTRegisterHandler.spec<bool>('CRDTRegisterHandler<bool>');
+  // handler carries its type argument in its tag, so the tag is written here,
+  // once, and this builder is what every place that needs one passes around.
+  static CRDTRegisterHandler<bool> _newDone(BaseCRDTDocument doc, String id) =>
+      CRDTRegisterHandler<bool>(doc, id, handlerType: 'todo.done');
 
   @override
   CRDTMovableListRefHandler createHandler(BaseCRDTDocument doc) {
-    // Register the factories so children received from a remote peer (or a
-    // time-travel session) can be reconstructed by type.
+    // Declare every kind this tree is made of, so a child received from a peer
+    // (or from a time-travel session) can be rebuilt without being opened here
+    // first.
     doc
-      // Not in the default set: that one covers the non-generic types only.
-      ..register(_doneSpec);
+      ..register(_newDone)
+      ..register(CRDTMapRefHandler.new)
+      ..register(CRDTFugueTextHandler.new);
     return doc.handler(
-      CRDTMovableListRefHandler.spec,
+      CRDTMovableListRefHandler.new,
       ExampleHandlerIds.document,
     );
   }
@@ -188,7 +188,7 @@ class DocumentExampleState extends ExampleDocument<CRDTMovableListRefHandler> {
     final item =
         CRDTMapRefHandler(document, _newId())
           ..setRef(_kTextKey, _newText(text))
-          ..setRef(_kDoneKey, _newDone(value: false));
+          ..setRef(_kDoneKey, _newDoneFlag(value: false));
     todoList.insertRef(todoList.value.length, item);
   }
 
@@ -238,6 +238,6 @@ class DocumentExampleState extends ExampleDocument<CRDTMovableListRefHandler> {
     return handler;
   }
 
-  CRDTRegisterHandler<bool> _newDone({required bool value}) =>
-      document.handler(_doneSpec, _newId())..set(value);
+  CRDTRegisterHandler<bool> _newDoneFlag({required bool value}) =>
+      document.handler(_newDone, _newId())..set(value);
 }

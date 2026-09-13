@@ -39,7 +39,7 @@ void main() {
     test('describeDocumentJson returns summary plus handler list', () {
       final doc = CRDTDocument();
       CRDTTextHandler(doc, 'text');
-      CRDTListHandler<int>(doc, 'list');
+      CRDTListHandler<int>(doc, 'list', handlerType: 'CRDTListHandler<int>');
       final trackedId = TrackedDocument.all.first.id;
 
       final result = describeDocumentJson(trackedId);

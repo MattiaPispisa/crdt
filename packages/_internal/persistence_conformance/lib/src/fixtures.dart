@@ -9,7 +9,11 @@ class ConformanceFixtures {
   ConformanceFixtures(String documentId)
       : document = CRDTDocument(documentId: documentId) {
     text = CRDTFugueTextHandler(document, 'text');
-    map = CRDTMapHandler<Object>(document, 'map');
+    map = CRDTMapHandler<Object>(
+      document,
+      'map',
+      handlerType: 'CRDTMapHandler<Object>',
+    );
   }
 
   /// The document the fixtures are written by.
@@ -57,18 +61,30 @@ class ConformanceFixtures {
   List<Change> everyHandler() {
     final before = document.exportChanges().length;
 
-    CRDTListHandler<String>(document, 'list')
+    CRDTListHandler<String>(
+      document,
+      'list',
+      handlerType: 'CRDTListHandler<String>',
+    )
       ..insert(0, 'first')
       ..insert(1, 'second');
-    CRDTMapHandler<int>(document, 'counts')
+    CRDTMapHandler<int>(document, 'counts', handlerType: 'CRDTMapHandler<int>')
       ..set('count', 42)
       ..set('total', 100);
     CRDTTextHandler(document, 'plain').insert(0, 'Hello World');
     CRDTFugueTextHandler(document, 'fugue').insert(0, 'Fugue 🌍');
-    CRDTORSetHandler<String>(document, 'set')
+    CRDTORSetHandler<String>(
+      document,
+      'set',
+      handlerType: 'CRDTORSetHandler<String>',
+    )
       ..add('alpha')
       ..add('beta');
-    CRDTORMapHandler<String, int>(document, 'orMap')
+    CRDTORMapHandler<String, int>(
+      document,
+      'orMap',
+      handlerType: 'CRDTORMapHandler<String, int>',
+    )
       ..put('x', 10)
       ..put('y', 20);
 
@@ -82,18 +98,34 @@ class ConformanceFixtures {
     void Function(Object? actual, Object? expected) check,
   ) {
     check(
-      CRDTListHandler<String>(document, 'list').value,
+      CRDTListHandler<String>(
+        document,
+        'list',
+        handlerType: 'CRDTListHandler<String>',
+      ).value,
       ['first', 'second'],
     );
     check(
-      CRDTMapHandler<int>(document, 'counts').value,
+      CRDTMapHandler<int>(
+        document,
+        'counts',
+        handlerType: 'CRDTMapHandler<int>',
+      ).value,
       {'count': 42, 'total': 100},
     );
     check(CRDTTextHandler(document, 'plain').value, 'Hello World');
     check(CRDTFugueTextHandler(document, 'fugue').value, 'Fugue 🌍');
-    check(CRDTORSetHandler<String>(document, 'set').value, {'alpha', 'beta'});
+    check(CRDTORSetHandler<String>(
+      document,
+      'set',
+      handlerType: 'CRDTORSetHandler<String>',
+    ).value, {'alpha', 'beta'});
     check(
-      CRDTORMapHandler<String, int>(document, 'orMap').value,
+      CRDTORMapHandler<String, int>(
+        document,
+        'orMap',
+        handlerType: 'CRDTORMapHandler<String, int>',
+      ).value,
       {'x': 10, 'y': 20},
     );
   }

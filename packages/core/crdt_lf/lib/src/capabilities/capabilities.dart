@@ -155,20 +155,14 @@ abstract class _FormatsByHandlerType {
   /// Whether this says nothing at all.
   bool get isEmpty => byHandlerType.isEmpty;
 
-  /// [byHandlerType] unioned with [other]'s, per handler type.
-  Map<String, HandlerFormats> _mergedMap(_FormatsByHandlerType other) {
-    final merged = <String, HandlerFormats>{...byHandlerType};
-    for (final entry in other.byHandlerType.entries) {
-      HandlerFormats.mergeInto(merged, entry.key, entry.value);
-    }
-    return merged;
-  }
-
   /// Equal when both sides are the **same** subclass and hold the same map.
   ///
-  /// The subclass is part of it: capabilities and requirements answer
-  /// different questions, so one never equals the other however alike their
-  /// maps look.
+  /// The subclass is part of it: capabilities and requirements answer different
+  /// questions, so one never equals the other however alike their maps look.
+  ///
+  /// Compared where a description travels. `crdt_socket_sync` round-trips one
+  /// through JSON in a handshake and checks it came back whole. So the caller
+  /// lives in another package, not in this one's tests.
   @override
   bool operator ==(Object other) =>
       other is _FormatsByHandlerType &&
@@ -181,6 +175,16 @@ abstract class _FormatsByHandlerType {
   int get hashCode => Object.hashAllUnordered(
         byHandlerType.entries.map((e) => Object.hash(e.key, e.value)),
       );
+
+  /// [byHandlerType] unioned with [other]'s, per handler type.
+  Map<String, HandlerFormats> _mergedMap(_FormatsByHandlerType other) {
+    final merged = <String, HandlerFormats>{...byHandlerType};
+    for (final entry in other.byHandlerType.entries) {
+      HandlerFormats.mergeInto(merged, entry.key, entry.value);
+    }
+    return merged;
+  }
+
 }
 
 /// What a peer **can read**.
@@ -206,13 +210,6 @@ abstract class _FormatsByHandlerType {
 class DocumentCapabilities extends _FormatsByHandlerType {
   /// Creates capabilities from [byHandlerType].
   DocumentCapabilities(super.byHandlerType);
-
-  /// Every type either side names, with the formats of both.
-  ///
-  /// Only adds, so folding several sources together cannot drop a type or a
-  /// kind one of them named.
-  DocumentCapabilities merge(DocumentCapabilities other) =>
-      DocumentCapabilities(_mergedMap(other));
 
   @override
   String toString() => 'DocumentCapabilities($byHandlerType)';

@@ -6,6 +6,11 @@ import 'dart:io' as io;
 import 'package:crdt_lf/crdt_lf.dart';
 import 'package:crdt_lf_sqlite/crdt_lf_sqlite.dart';
 
+/// The kind of the list in this example. A generic handler names its kind: the
+/// default would carry the type argument, which dart2js minifies away.
+const kList = 'string-list';
+
+
 Future<void> main() async {
   const itemsToAdd = 3;
   const documentId = '784ff372-6f0a-4fe9-8e63-19b72fd18c23';
@@ -21,7 +26,8 @@ Future<void> main() async {
   // here on is stored without another line of code. The identity comes from
   // the backend too, so every run is the same author.
   final note = await backend.openDocument(documentId);
-  final list = CRDTListHandler<String>(note.document, 'list');
+  final list =
+      CRDTListHandler<String>(note.document, 'list', handlerType: kList);
 
   print('read back: ${list.value}');
 

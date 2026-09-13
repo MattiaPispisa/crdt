@@ -980,15 +980,15 @@ it. What each side can state is a record per handler type, keyed by
 
 ```json
 {
-  "CRDTFugueTextHandler": { "kinds": [0, 1, 2], "blob": [1] },
-  "CRDTMapHandler<int>":  { "kinds": [0, 1, 2], "blob": [1] }
+  "CRDTFugueTextHandler": { "kinds": [0, 1, 2], "blob": { "min": 1, "max": 1 } },
+  "todo-list":            { "kinds": [0, 1, 2], "blob": { "min": 1, "max": 1 } }
 }
 ```
 
-`kinds` are what the peer can decode; `blob` holds the
-`Handler.snapshotBlobVersion`s involved — one for a build, more than one for a
-document that merged snapshots written by peers on different builds. A blob is refused whole on read, so a disagreement there is as
-terminal as a missing kind — and it used to surface as a bare `FormatException`
+`kinds` are what the peer can decode; `blob` is the range of snapshot layouts it
+reads — `min == max` for a build that reads only what it writes, wider for one
+that still reads an older layout and migrates it. A blob is refused whole on
+read, so a disagreement there is as terminal as a missing kind — and it used to surface as a bare `FormatException`
 at the first read of the handler, far from the sync layer that accepted the
 snapshot.
 
@@ -1033,9 +1033,9 @@ WebSocketClient(
   document: document,
   author: author,
   capabilities: DocumentCapabilities({
-    'CRDTListHandler<Todo>': const HandlerFormats(
+    'todo-list': const HandlerFormats(
       operationKinds: {0, 1, 2},
-      snapshotBlobVersions: {1},
+      blobVersions: BlobVersionRange.single(1),
     ),
   }),
 );
@@ -1044,30 +1044,23 @@ WebSocketClient(
 Either way, a type that **is** named is checked in full: a kind it lacks, or a
 snapshot blob written with another layout, refuses the client.
 
-A handler that travels over a socket must also pass a **constant**
-`handlerType`. The default is `runtimeType.toString()`, which dart2js minifies
-in a Flutter web release build — and `handlerType` is the key of this whole
-comparison.
-
-`connect()` refuses a **generic** handler that left the tag derived, in debug
-builds only. Its tag carries the type argument (`CRDTListHandler<Todo>`), so it
-is both minified away and impossible for the library to declare on your behalf:
+`handlerType` is the key of this whole comparison, and a **generic** handler is
+required to name it: its default would carry the type argument
+(`CRDTListHandler<Todo>`), which dart2js minifies in a Flutter web release build.
+So the compiler asks, and there is nothing left to refuse at connect time:
 
 ```dart
-// Refused: the tag changes between debug and a web release build.
-CRDTListHandler<Todo>(document, 'todos');
-
-// Fine: the tag is yours, so it is the same everywhere.
 CRDTListHandler<Todo>(document, 'todos', handlerType: 'todos');
 ```
 
 The tag is all the constructor asks for: the handler turns it into a
-`HandlerSpec`, so the document also learns how to **rebuild** that type. A peer
-that has to know the type before it opens one — a store-and-forward server —
+`HandlerSpec`, so the document also learns how to **rebuild** that kind. A peer
+that has to know the kind before it opens one — a store-and-forward server —
 declares it instead:
 
 ```dart
-document.register(CRDTListHandler.spec<Todo>('todos'));
+document.register(
+    (doc, id) => CRDTListHandler<Todo>(doc, id, handlerType: 'todos'));
 ```
 
 #### Refusals are permanent

@@ -260,7 +260,11 @@ void main() {
       // stamped kind is recorded as a kind nobody has.
       final doc = CRDTDocument(peerId: PeerId.generate());
       // A movable list stamps update and move.
-      CRDTFugueMovableListHandler<String>(doc, 'list')
+      CRDTFugueMovableListHandler<String>(
+        doc,
+        'list',
+        handlerType: 'CRDTFugueMovableListHandler<String>',
+      )
         ..insert(0, 'a')
         ..insert(1, 'b')
         ..move(0, 1);

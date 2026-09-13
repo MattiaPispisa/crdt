@@ -1,6 +1,5 @@
 import 'package:crdt_lf/crdt_lf.dart';
 import 'package:crdt_lf/src/handler/fugue/fugue_snapshot.dart';
-import 'package:crdt_lf/src/handler/handler_type.dart';
 
 /// # CRDT ordered list of references
 ///
@@ -26,7 +25,12 @@ base class CRDTListRefHandler extends CRDTFugueListHandler<HandlerRef>
     implements ContainerHandler {
   /// Creates an ordered list-of-references handler bound to [doc] with [id].
   CRDTListRefHandler(super.doc, super.id)
-      : super(valueCodec: const HandlerRefCodec());
+      : super(
+          // The parent asks for a tag; the kind this class really is comes from
+          // the [spec] override below, which the document reads.
+          handlerType: _handlerType,
+          valueCodec: const HandlerRefCodec(),
+        );
 
   /// Inserts a reference to [handler] at position [index].
   ///
@@ -71,29 +75,32 @@ base class CRDTListRefHandler extends CRDTFugueListHandler<HandlerRef>
     blobVersions: BlobVersionRange.single(FugueSnapshot.version),
   );
 
+  /// The tag this kind travels under; see [Handler.handlerType].
+  ///
+  /// Fixed here because this handler is not generic: there is no type argument
+  /// to carry, so there is nothing for a caller to choose.
+  static const String _handlerType = 'CRDTListRefHandler';
+
   /// {@macro builtin_handler_spec}
-  static final HandlerSpec<CRDTListRefHandler> spec = HandlerSpec.factory(
-    kListRefHandlerType,
+  static final HandlerSpec<CRDTListRefHandler> _spec = HandlerSpec(
+    _handlerType,
     CRDTListRefHandler.new,
     formats: _formats,
   );
 
   @override
-  HandlerSpec<CRDTListRefHandler> get handlerSpec => spec;
+  HandlerSpec<CRDTListRefHandler> get spec => _spec;
 
-  /// Inserts a child built from [spec] at [index], and returns it.
+  /// Inserts a child made by [build] at [index], and returns it.
   ///
   /// Always a new child: an insert adds an element, so there is no key to be
-  /// idempotent about. Use [getRefAtAs] to read one back.
-  ///
-  /// ```dart
-  /// final block = blocks.insertChild(0, textSpec)..insert(0, 'Hello');
-  /// ```
-  ///
-  /// Register [spec] on the document ([BaseCRDTDocument.register]) so a peer
-  /// that receives the reference can rebuild the child from its tag.
-  T insertChild<T extends Handler<dynamic>>(int index, HandlerSpec<T> spec) {
-    final created = spec.create(doc, doc.newHandlerId());
+  /// idempotent about. Use [getRefAtAs] to read one back. Pass a constructor
+  /// tear-off — `blocks.insertChild(0, CRDTFugueTextHandler.new)`.
+  T insertChild<T extends Handler<dynamic>>(
+    int index,
+    HandlerBuilder<T> build,
+  ) {
+    final created = build(doc, doc.newHandlerId());
     insertRef(index, created);
     return created;
   }

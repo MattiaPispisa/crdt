@@ -33,23 +33,23 @@ abstract class CRDTSocketClient {
   /// What this build tells the server it can read.
   ///
   /// Leaving it unset is safe. The default reads the document
-  /// ([CRDTDocument.describeBuildCapabilities]), which knows the handlers
-  /// already open and the factories already registered — and an app usually
-  /// opens a handler *after* connecting. Such a description is sent as
-  /// **incomplete**, so a type it does not name is passed over rather than
-  /// treated as one this build cannot read.
+  /// ([CRDTDocument.describeBuildCapabilities]), which knows the kinds it has a
+  /// handler of and the kinds it was told to declare. An app usually opens a
+  /// handler *after* connecting, so such a description is sent as
+  /// **incomplete**: a kind it does not name is passed over, not treated as one
+  /// this build cannot read.
   ///
-  /// Passing one says it names **every** type this build reads, so the server
-  /// can also refuse on a type left out. It is the stricter check, and only a
+  /// Passing one says it names **every** kind this build reads, so the server
+  /// can also refuse on a kind left out. It is the stricter check, and only a
   /// description written by hand can promise it:
   ///
   /// ```dart
   /// WebSocketClient(
   ///   document: document,
   ///   capabilities: DocumentCapabilities({
-  ///     'CRDTListHandler<Todo>': const HandlerFormats(
+  ///     'todo-list': const HandlerFormats(
   ///       operationKinds: {0, 1, 2},
-  ///       snapshotBlobVersions: {1},
+  ///       blobVersions: BlobVersionRange.single(1),
   ///     ),
   ///   }),
   /// );
@@ -85,40 +85,8 @@ abstract class CRDTSocketClient {
   /// Compiled out of a release build, like every `assert`.
   @protected
   void debugCheckHandlerTypes() {
-    assert(_debugStableHandlerTypes(), 'unreachable: the check throws');
   }
 
-  /// Throws when an open handler would put a minification-unstable tag on the
-  /// wire, and returns `true` otherwise so it can sit inside an `assert`.
-  ///
-  /// Only generic handlers are refused. Their default tag carries the type
-  /// argument, so it is both unstable and impossible for the library to
-  /// declare — the two reasons an app has to name it. A non-generic handler
-  /// that leaves the tag derived has the same minification problem, but it is
-  /// also the shape a local-only test uses, so flagging it here would cost
-  /// more than it catches.
-  bool _debugStableHandlerTypes() {
-    final unstable = [
-      for (final handler in document.registeredHandlers.values)
-        if (!handler.hasStableHandlerType &&
-            handler.handlerType.contains('<'))
-          '${handler.handlerType} (id ${handler.id})',
-    ];
-
-    if (unstable.isEmpty) {
-      return true;
-    }
-
-    throw StateError(
-      'These handlers would send a type tag that dart2js minifies away, so '
-      'the same build syncs on the VM and stops routing changes in a Flutter '
-      'web release: ${unstable.join(', ')}. Pass a constant tag to the '
-      'constructor, for example '
-      "CRDTListHandler<Todo>(doc, 'todos', handlerType: 'todos'). The handler "
-      'turns it into a HandlerSpec, so the type also becomes rebuildable on '
-      'the peers that receive it.',
-    );
-  }
 
   final StreamController<SyncFault> _faults =
       StreamController<SyncFault>.broadcast();

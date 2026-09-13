@@ -2,19 +2,10 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:crdt_lf/crdt_lf.dart';
-import 'package:crdt_lf/src/handler/handler_type.dart';
 
 /// A factory that instantiates a [Handler] of a specific runtime type for a
 /// given [BaseCRDTDocument] and handler id.
 ///
-/// Registered on the document and used to rebuild nested handlers on a peer
-/// that only received the [Change]s/[Snapshot], without prior knowledge of the
-/// document structure.
-typedef HandlerFactory = Handler<dynamic> Function(
-  BaseCRDTDocument doc,
-  String id,
-);
-
 /// A serializable reference to another [Handler].
 ///
 /// Container handlers (see [ContainerHandler]) store [HandlerRef]s instead of
@@ -22,7 +13,7 @@ typedef HandlerFactory = Handler<dynamic> Function(
 /// document registry keyed by its [id], and a parent points to a child by id.
 ///
 /// The [type] is the child handler's [Handler.handlerType], which is the key
-/// used to look up a [HandlerFactory] when reconstructing the tree on a remote
+/// used to look up a [HandlerSpec] when reconstructing the tree on a remote
 /// peer.
 class HandlerRef {
   /// Creates a reference to the handler with the given [id] and [type].

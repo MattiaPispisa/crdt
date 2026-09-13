@@ -790,7 +790,7 @@ final doc = CRDTDocument(
   documentId: 'todo-list-123',
   peerId: PeerId.parse('45ee6b65-b393-40b7-9755-8b66dc7d0518'),
 );
-final list = CRDTListHandler(doc, 'todo-list');
+final list = CRDTListHandler<String>(doc, 'todo-list', handlerType: 'todos');
 list.insert(0, 'Buy apples');
 list.insert(1, 'Buy milk');
 list.delete(0);
@@ -818,9 +818,9 @@ A handler overrides:
   how its operations are decoded.
 - `getSnapshotState` — required: the state as bytes, seeded back through
   `lastSnapshot`.
-- `spec` on the constructor — for a handler that syncs, persists, or must
-  survive dart2js minification. It fixes the type tag and tells the document
-  how to rebuild the handler.
+- `spec` — required: what kind of handler this is. It names the kind on the
+  wire and tells the document how to build one, which is what a peer that
+  receives a reference needs.
 - `incrementCachedState` — to advance the cached state by one operation
   instead of replaying the whole history on every read.
 - `stateIsOrderIndependent` — only when the state is the same whatever order
@@ -886,7 +886,7 @@ flag on a kind you already shipped is therefore a breaking change.
 
 A change carrying a kind this build does not recognize for that handler type
 throws `UnknownOperationKindException` instead of being dropped in silence —
-which is why a factory never returns `null`.
+which is why a decoder in `operationDecoders` never returns `null`.
 
 ##### Making a handler undoable
 
@@ -1049,30 +1049,29 @@ Each container exposes both views:
 Children are resolved **lazily** through the document registry, so the state is
 computed only when read.
 
-A child is created from a [`HandlerSpec`](#handlerspec): it holds the type tag,
-how to build one, and what it reads. The built-in containers and text handlers
-ship one ready to use.
+A child is created from its **constructor**, passed as a tear-off. The handler
+names its own kind as it is built, so the document learns how to rebuild it.
 
 ```dart
 final doc = CRDTDocument();
 
 // Root container. `handler` builds it, or returns the one already open.
-final root = doc.handler(CRDTMapRefHandler.spec, 'root');
+final root = doc.handler(CRDTMapRefHandler.new, 'root');
 
 // A nested, sortable list of chapters.
-final chapters = root.child('chapters', CRDTListRefHandler.spec);
+final chapters = root.child('chapters', CRDTListRefHandler.new);
 
 // A chapter holding collaborative text.
-final chapter = chapters.insertChild(0, CRDTMapRefHandler.spec);
-chapter.child('title', CRDTFugueTextHandler.spec).insert(0, 'Intro');
+final chapter = chapters.insertChild(0, CRDTMapRefHandler.new);
+chapter.child('title', CRDTFugueTextHandler.new).insert(0, 'Intro');
 
 // Read the whole tree resolved to plain Dart values.
 print(root.resolved); // {chapters: [{title: Intro}]}
 ```
 
-`child(key, spec)` creates the child or returns the one the key already holds,
+`child(key, build)` creates the child or returns the one the key already holds,
 so it is safe to call twice — building a handler by hand throws when the id is
-taken. `insertChild(index, spec)` always adds a new one: an insert adds an
+taken. `insertChild(index, build)` always adds a new one: an insert adds an
 element, so there is no key to be idempotent about.
 
 `setRef` / `insertRef` / `getRefAs` still work and are unchanged; a spec is a
@@ -1103,35 +1102,37 @@ graph TD
 
 > 📖 Diagrams render best in the [live documentation](https://mattiapispisa.it/crdt/docs/documentation/packages/crdt_lf).
 
-> On a remote peer the same resolution step recreates children through the
-> registered factories; once they are registered, `importChanges`
-> auto-instantiates them (see below).
+> On a remote peer the same resolution step recreates children, as long as that
+> peer knows their kinds — see below. Reading is what brings them in:
+> `importChanges` builds nothing on its own.
 
 Every node is a standard CRDT, so concurrent edits at **any depth** merge
 conflict-free (e.g. one peer adds a chapter while another types into an
 existing paragraph).
 
 **Reconstructing the tree on a remote peer.** A peer that only received the
-`Change`s does not know the structure in advance. The document keeps a registry
-keyed by handler `type`, so it can rebuild the right handler from the `type`
-carried in each operation payload.
+`Change`s does not know the structure in advance. The document keeps, per handler
+**kind**, how to build one — so it can rebuild the right handler from the kind
+carried in each reference and in each operation payload.
 
 Setting a document up takes two calls, one per **type** and one per
 **instance**:
 
-- `doc.register(spec)` declares one type: how to rebuild a handler of it, and
-  the formats a sync layer reports before anything opens one.
-- `doc.handler(spec, id)` returns that handler, building it when it is not open.
+- `doc.register(build)` declares one kind, for one this peer never opens itself.
+  It reads the tag and the formats off a handler `build` makes, so neither is
+  restated.
+- `doc.handler(build, id)` returns that handler, building it when it is not
+  open.
 
-**A handler created with a spec declares its own type.** The constructor is the
-one point every creation passes, so `CRDTTextHandler(doc, 'id')`,
-`doc.handler(spec, id)` and `container.child(key, spec)` all leave the document
-able to rebuild that type.
+**A handler names its own kind as it is constructed.** The constructor is the one
+point every creation passes, so `CRDTTextHandler(doc, 'id')`,
+`doc.handler(build, id)` and `container.child(key, build)` all leave the document
+able to rebuild that kind.
 
-**The types this package ships need no registration at all.** The containers and
-the two text handlers are compiled into your build, so a reference to one always
-resolves — that is what lets a peer read a nested child of a type it never
-opened. `register` is for **your** types: a generic handler, or one you wrote.
+One rule, for every kind alike: **a document rebuilds the kinds it has opened a
+handler of, plus the ones passed to `register`.** A reference to anything else
+resolves to `null`, so a peer that reads a tree it received declares the kinds
+that tree is made of, or opens one of each.
 
 `register` is then for the one case a constructor cannot cover: a type this peer
 **never opens** — a server that stores and forwards, or a client waiting for a
@@ -1141,45 +1142,40 @@ there is no handler.
 `doc.resolveHandler(ref)` resolves a reference, and `doc.newHandlerId()` mints
 an id for a child; the containers call both for you.
 
-##### HandlerSpec
+##### Naming a generic handler
 
-A generic handler needs one of its own: its tag carries the type argument
-(`CRDTRegisterHandler<bool>`), and the default tag is `runtimeType.toString()`,
-which dart2js minifies away in a Flutter web `--release` build.
+A generic handler must be given a tag: its default would carry the type argument
+(`CRDTRegisterHandler<bool>`), and dart2js minifies that away in a Flutter web
+`--release` build. So the tag is **required**, and it is written once — in a
+builder you pass around:
 
 ```dart
-// The class fills in the rest: only the tag is yours.
-final doneSpec = CRDTRegisterHandler.spec<bool>('todo.done');
+CRDTRegisterHandler<bool> newDone(BaseCRDTDocument doc, String id) =>
+    CRDTRegisterHandler<bool>(doc, id, handlerType: 'todo.done');
 
-final done = todo.child('done', doneSpec)..set(true);
+final done = todo.child('done', newDone)..set(true);
+doc.register(newDone);   // for a peer that receives one without opening it
 ```
 
-Each built-in generic handler has the same `spec<T>(tag)`, so writing one takes
-a line. Reach for the `HandlerSpec` constructor only for a handler of your own.
+A non-generic handler needs nothing: its class fixes the tag, so
+`CRDTFugueTextHandler.new` is all a call site passes.
 
-You need a spec by name only where something else takes one — `register`,
-`child`, `insertChild`, `handler`. To just open a handler, the tag is enough:
+`HandlerSpec` is the type behind all of this — what a kind **is**: its tag, how
+to build one, and the formats it reads. Every handler answers one from
+`Handler.spec`. You write one by hand only for a handler of your own.
 
-```dart
-// Same effect: the class turns the tag into the spec.
-final done = CRDTRegisterHandler<bool>(doc, id, handlerType: 'todo.done');
-```
-
-Either way the tag is written **once** and the document learns how to rebuild
-the type. A handler of your own passes `spec:` to `Handler` directly — that is
-the only way in, because a tag alone leaves a subtree no peer can rebuild and
-`reconstruct()` cannot restore.
-
-When factories are registered, **importing changes auto-instantiates** the
-referenced handlers, so the tree is ready right after `importChanges` — no extra
-step:
+Reading the tree is what brings it in: `importChanges` builds nothing, and a
+child materializes when the reference that names it is resolved.
 
 ```dart
-// Peer B registers the same factories, then imports.
-final docB = CRDTDocument();
+// Peer B declares the kinds the tree is made of, then imports.
+final docB = CRDTDocument()
+  ..register(CRDTMapRefHandler.new)
+  ..register(CRDTListRefHandler.new)
+  ..register(CRDTFugueTextHandler.new);
 docB.importChanges(docA.exportChanges());
 
-final rootB = docB.registeredHandlers['root']! as CRDTMapRefHandler;
+final rootB = docB.handler(CRDTMapRefHandler.new, 'root');
 print(rootB.resolved); // same tree as docA
 
 // doc.roots() returns the entry points (containers not referenced by another).
@@ -1189,12 +1185,11 @@ For state coming from a **pruned snapshot** (where the changes have been removed
 and only the snapshot `{id: type}` manifest remains), call `doc.reconstruct()`
 to rebuild every reachable handler from the manifest and the references.
 
-> Note on generics: a spec is keyed by the handler's tag, which for a generic
-> handler includes its type argument — so a generic one (e.g.
-> `CRDTMapHandler<num>`) needs its own [`HandlerSpec`](#handlerspec), while the
-> types this package ships resolve on their own. Eager materialization on import
-> is **opt-in**: it follows the types you registered. With nothing registered the
-> classic flat usage is unchanged, and a nested tree resolves as you read it.
+> Note on generics: a kind is keyed by the handler's tag, which for a generic
+> handler would include its type argument — so a generic one (e.g.
+> `CRDTMapHandler<num>`) is **required** to name its tag, and a non-generic one
+> fixes it itself. Nothing is materialized at import: a handler comes into being
+> when you open it, or when someone resolves the reference that names it.
 
 A complete, interactive example is available in the Flutter example app under
 the **Document** entry (sortable chapters → paragraphs → collaborative text and
@@ -1239,14 +1234,15 @@ todos.update(0, {'text': 'Buy milk', 'done': true});
 **B — List of references to per-item sub-documents**
 
 ```dart
-// `done` is generic, so it needs a spec of its own — see HandlerSpec above.
-final doneSpec = CRDTRegisterHandler.spec<bool>('todo.done');
+// `done` is generic, so its tag is required — written once in a builder.
+CRDTRegisterHandler<bool> newDone(BaseCRDTDocument doc, String id) =>
+    CRDTRegisterHandler<bool>(doc, id, handlerType: 'todo.done');
 
-final todos = doc.handler(CRDTMovableListRefHandler.spec, 'todos');
+final todos = doc.handler(CRDTMovableListRefHandler.new, 'todos');
 
-final item = todos.insertChild(0, CRDTMapRefHandler.spec);
-item.child('text', CRDTFugueTextHandler.spec).insert(0, 'Buy milk');
-item.child('done', doneSpec).set(false);
+final item = todos.insertChild(0, CRDTMapRefHandler.new);
+item.child('text', CRDTFugueTextHandler.new).insert(0, 'Buy milk');
+item.child('done', newDone).set(false);
 ```
 
 - Conflict resolution reaches **each field**: one peer editing `text` while

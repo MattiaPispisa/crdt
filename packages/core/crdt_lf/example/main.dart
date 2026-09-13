@@ -3,6 +3,11 @@
 
 import 'package:crdt_lf/crdt_lf.dart';
 
+/// The kind of the list in this example. A generic handler names its kind: the
+/// default would carry the type argument, which dart2js minifies away.
+const kList = 'string-list';
+
+
 void main() {
   // Create two documents (simulating different peers)
   final doc1 = CRDTDocument(
@@ -39,8 +44,8 @@ void main() {
   print(fugueTextDoc2.value); // Prints the same as text1
 
   // Create list handler
-  final list1 = CRDTListHandler<String>(doc1, 'list');
-  final list2 = CRDTListHandler<String>(doc2, 'list');
+  final list1 = CRDTListHandler<String>(doc1, 'list', handlerType: kList);
+  final list2 = CRDTListHandler<String>(doc2, 'list', handlerType: kList);
 
   list1
     ..insert(0, 'Hello')
@@ -59,7 +64,7 @@ void main() {
   final historySession = doc1.toTimeTravel();
   final viewListHandler =
       historySession.getHandler<CRDTListHandler<String>, List<String>>(
-    (doc) => CRDTListHandler<String>(doc, 'list'),
+    (doc) => CRDTListHandler<String>(doc, 'list', handlerType: kList),
   );
   print(viewListHandler.value); // Prints ["Hello", "World", "Dart"]
 

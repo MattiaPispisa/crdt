@@ -375,12 +375,20 @@ void main() {
 
       // server doc
       final serverDoc = CRDTDocument(peerId: documentId);
-      CRDTListHandler<String>(serverDoc, 'list');
+      CRDTListHandler<String>(
+        serverDoc,
+        'list',
+        handlerType: 'CRDTListHandler<String>',
+      );
       await registry.addDocument(documentId.id);
 
       // client doc
       final clientDoc = CRDTDocument(peerId: documentId);
-      CRDTListHandler<String>(clientDoc, 'list').insert(0, 'Hello');
+      CRDTListHandler<String>(
+        clientDoc,
+        'list',
+        handlerType: 'CRDTListHandler<String>',
+      ).insert(0, 'Hello');
       final change = clientDoc.exportChanges().first;
 
       final completer = Completer<Message>();
@@ -452,7 +460,11 @@ void main() {
         // Build two causally dependent changes; only the second is sent to the
         // server, whose document has neither — so it is not causally ready.
         final authorDoc = CRDTDocument(peerId: PeerId.generate());
-        CRDTListHandler<String>(authorDoc, 'list')
+        CRDTListHandler<String>(
+          authorDoc,
+          'list',
+          handlerType: 'CRDTListHandler<String>',
+        )
           ..insert(0, 'a')
           ..insert(1, 'b');
         final orphanChange = authorDoc.exportChanges()[1];
@@ -495,7 +507,11 @@ void main() {
     /// non-empty state, and returns the resulting server version vector.
     Future<VersionVector> seedServerChange(String documentId) async {
       final authorDoc = CRDTDocument(peerId: PeerId.generate());
-      CRDTListHandler<String>(authorDoc, 'list').insert(0, 'a');
+      CRDTListHandler<String>(
+        authorDoc,
+        'list',
+        handlerType: 'CRDTListHandler<String>',
+      ).insert(0, 'a');
       final change = authorDoc.exportChanges().first;
       await registry.applyChange(documentId, change);
       return (await registry.getDocument(documentId))!.getVersionVector();
@@ -623,7 +639,11 @@ void main() {
 
         // Build a change to broadcast.
         final clientDoc = CRDTDocument(peerId: PeerId.generate());
-        CRDTListHandler<String>(clientDoc, 'list').insert(0, 'Hi');
+        CRDTListHandler<String>(
+          clientDoc,
+          'list',
+          handlerType: 'CRDTListHandler<String>',
+        ).insert(0, 'Hi');
         final change = clientDoc.exportChanges().first;
 
         final setup = await setupServer();

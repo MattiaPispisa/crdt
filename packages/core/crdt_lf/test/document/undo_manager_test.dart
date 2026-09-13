@@ -36,7 +36,11 @@ void main() {
 
       test('refuses a handler another manager already tracks', () {
         final doc = _doc(_peerA);
-        final map = CRDTMapHandler<String>(doc, 'map');
+        final map = CRDTMapHandler<String>(
+          doc,
+          'map',
+          handlerType: 'CRDTMapHandler<String>',
+        );
         CRDTUndoManager(doc).track(map);
 
         expect(() => CRDTUndoManager(doc).track(map), throwsStateError);
@@ -45,14 +49,22 @@ void main() {
       test('refuses a handler of another document', () {
         final doc = _doc(_peerA);
         final other = _doc(_peerB);
-        final map = CRDTMapHandler<String>(other, 'map');
+        final map = CRDTMapHandler<String>(
+          other,
+          'map',
+          handlerType: 'CRDTMapHandler<String>',
+        );
 
         expect(() => CRDTUndoManager(doc).track(map), throwsArgumentError);
       });
 
       test('records nothing for an untracked handler', () {
         final doc = _doc(_peerA);
-        final map = CRDTMapHandler<String>(doc, 'map');
+        final map = CRDTMapHandler<String>(
+          doc,
+          'map',
+          handlerType: 'CRDTMapHandler<String>',
+        );
         final undo = CRDTUndoManager(doc);
 
         map.set('a', '1');
@@ -62,7 +74,11 @@ void main() {
 
       test('untrack stops the recording but keeps the steps', () {
         final doc = _doc(_peerA);
-        final map = CRDTMapHandler<String>(doc, 'map');
+        final map = CRDTMapHandler<String>(
+          doc,
+          'map',
+          handlerType: 'CRDTMapHandler<String>',
+        );
         final undo = CRDTUndoManager(doc, captureTimeout: Duration.zero)
           ..track(map);
 
@@ -78,7 +94,11 @@ void main() {
 
       test('untrack keeps following the identities an undo rebuilds', () {
         final doc = _doc(_peerA);
-        final set = CRDTORSetHandler<String>(doc, 'set');
+        final set = CRDTORSetHandler<String>(
+          doc,
+          'set',
+          handlerType: 'CRDTORSetHandler<String>',
+        );
         final undo = CRDTUndoManager(doc, captureTimeout: Duration.zero)
           ..track(set);
 
@@ -101,7 +121,11 @@ void main() {
     group('map', () {
       test('undoes a set of a new key by removing it', () {
         final doc = _doc(_peerA);
-        final map = CRDTMapHandler<String>(doc, 'map');
+        final map = CRDTMapHandler<String>(
+          doc,
+          'map',
+          handlerType: 'CRDTMapHandler<String>',
+        );
         final undo = CRDTUndoManager(doc)..track(map);
 
         map.set('a', '1');
@@ -117,7 +141,11 @@ void main() {
 
       test('undoes a set over a key by putting the old value back', () {
         final doc = _doc(_peerA);
-        final map = CRDTMapHandler<String>(doc, 'map')..set('a', '1');
+        final map = CRDTMapHandler<String>(
+          doc,
+          'map',
+          handlerType: 'CRDTMapHandler<String>',
+        )..set('a', '1');
         final undo = CRDTUndoManager(doc)..track(map);
 
         map.set('a', '2');
@@ -128,7 +156,11 @@ void main() {
 
       test('undoes a delete by putting the entry back', () {
         final doc = _doc(_peerA);
-        final map = CRDTMapHandler<String>(doc, 'map')..set('a', '1');
+        final map = CRDTMapHandler<String>(
+          doc,
+          'map',
+          handlerType: 'CRDTMapHandler<String>',
+        )..set('a', '1');
         final undo = CRDTUndoManager(doc)..track(map);
 
         map.delete('a');
@@ -140,7 +172,11 @@ void main() {
 
       test('undoes an update, and records nothing for a missing key', () {
         final doc = _doc(_peerA);
-        final map = CRDTMapHandler<String>(doc, 'map')..set('a', '1');
+        final map = CRDTMapHandler<String>(
+          doc,
+          'map',
+          handlerType: 'CRDTMapHandler<String>',
+        )..set('a', '1');
         final undo = CRDTUndoManager(doc)..track(map);
 
         map.update('missing', 'x');
@@ -155,7 +191,11 @@ void main() {
     group('register', () {
       test('undoes a set by writing the previous value', () {
         final doc = _doc(_peerA);
-        final register = CRDTRegisterHandler<String>(doc, 'reg')..set('one');
+        final register = CRDTRegisterHandler<String>(
+          doc,
+          'reg',
+          handlerType: 'CRDTRegisterHandler<String>',
+        )..set('one');
         final undo = CRDTUndoManager(doc)..track(register);
 
         register.set('two');
@@ -170,7 +210,11 @@ void main() {
 
       test('cannot take back the first write: there is no unset', () {
         final doc = _doc(_peerA);
-        final register = CRDTRegisterHandler<String>(doc, 'reg');
+        final register = CRDTRegisterHandler<String>(
+          doc,
+          'reg',
+          handlerType: 'CRDTRegisterHandler<String>',
+        );
         final undo = CRDTUndoManager(doc)..track(register);
 
         register.set('one');
@@ -183,7 +227,11 @@ void main() {
     group('steps', () {
       test('a transaction is one step, whatever it holds', () {
         final doc = _doc(_peerA);
-        final map = CRDTMapHandler<String>(doc, 'map');
+        final map = CRDTMapHandler<String>(
+          doc,
+          'map',
+          handlerType: 'CRDTMapHandler<String>',
+        );
         final undo = CRDTUndoManager(doc, captureTimeout: Duration.zero)
           ..track(map);
 
@@ -201,7 +249,11 @@ void main() {
 
       test('one step per write when the capture timeout is zero', () {
         final doc = _doc(_peerA);
-        final map = CRDTMapHandler<String>(doc, 'map');
+        final map = CRDTMapHandler<String>(
+          doc,
+          'map',
+          handlerType: 'CRDTMapHandler<String>',
+        );
         final undo = CRDTUndoManager(doc, captureTimeout: Duration.zero)
           ..track(map);
 
@@ -217,7 +269,11 @@ void main() {
 
       test('writes close together merge into one step', () {
         final doc = _doc(_peerA);
-        final map = CRDTMapHandler<String>(doc, 'map');
+        final map = CRDTMapHandler<String>(
+          doc,
+          'map',
+          handlerType: 'CRDTMapHandler<String>',
+        );
         final undo = CRDTUndoManager(
           doc,
           captureTimeout: const Duration(seconds: 30),
@@ -235,7 +291,11 @@ void main() {
 
       test('stopCapturing ends the step', () {
         final doc = _doc(_peerA);
-        final map = CRDTMapHandler<String>(doc, 'map');
+        final map = CRDTMapHandler<String>(
+          doc,
+          'map',
+          handlerType: 'CRDTMapHandler<String>',
+        );
         final undo = CRDTUndoManager(
           doc,
           captureTimeout: const Duration(seconds: 30),
@@ -253,7 +313,11 @@ void main() {
 
       test('a new write drops the redo stack', () {
         final doc = _doc(_peerA);
-        final map = CRDTMapHandler<String>(doc, 'map');
+        final map = CRDTMapHandler<String>(
+          doc,
+          'map',
+          handlerType: 'CRDTMapHandler<String>',
+        );
         final undo = CRDTUndoManager(doc, captureTimeout: Duration.zero)
           ..track(map);
 
@@ -289,7 +353,11 @@ void main() {
 
       test('the stack drops its oldest step past the limit', () {
         final doc = _doc(_peerA);
-        final map = CRDTMapHandler<String>(doc, 'map');
+        final map = CRDTMapHandler<String>(
+          doc,
+          'map',
+          handlerType: 'CRDTMapHandler<String>',
+        );
         final undo = CRDTUndoManager(
           doc,
           captureTimeout: Duration.zero,
@@ -311,7 +379,11 @@ void main() {
 
       test('redo replays the steps in order', () {
         final doc = _doc(_peerA);
-        final map = CRDTMapHandler<String>(doc, 'map');
+        final map = CRDTMapHandler<String>(
+          doc,
+          'map',
+          handlerType: 'CRDTMapHandler<String>',
+        );
         final undo = CRDTUndoManager(doc, captureTimeout: Duration.zero)
           ..track(map);
 
@@ -335,7 +407,11 @@ void main() {
     group('origin', () {
       test('records only the tracked origins when they are given', () {
         final doc = _doc(_peerA);
-        final map = CRDTMapHandler<String>(doc, 'map');
+        final map = CRDTMapHandler<String>(
+          doc,
+          'map',
+          handlerType: 'CRDTMapHandler<String>',
+        );
         final mine = Object();
         final undo = CRDTUndoManager(
           doc,
@@ -358,7 +434,11 @@ void main() {
 
       test('records every local write when no origin is given', () {
         final doc = _doc(_peerA);
-        final map = CRDTMapHandler<String>(doc, 'map');
+        final map = CRDTMapHandler<String>(
+          doc,
+          'map',
+          handlerType: 'CRDTMapHandler<String>',
+        );
         final undo = CRDTUndoManager(doc, captureTimeout: Duration.zero)
           ..track(map);
 
@@ -373,7 +453,11 @@ void main() {
 
       test('an undo is tagged with the manager', () async {
         final doc = _doc(_peerA);
-        final map = CRDTMapHandler<String>(doc, 'map');
+        final map = CRDTMapHandler<String>(
+          doc,
+          'map',
+          handlerType: 'CRDTMapHandler<String>',
+        );
         final undo = CRDTUndoManager(doc)..track(map);
 
         map
@@ -402,8 +486,16 @@ void main() {
       test('a remote change is never on the stack', () {
         final local = _doc(_peerA);
         final remote = _doc(_peerB);
-        final localMap = CRDTMapHandler<String>(local, 'map');
-        CRDTMapHandler<String>(remote, 'map').set('a', '1');
+        final localMap = CRDTMapHandler<String>(
+          local,
+          'map',
+          handlerType: 'CRDTMapHandler<String>',
+        );
+        CRDTMapHandler<String>(
+          remote,
+          'map',
+          handlerType: 'CRDTMapHandler<String>',
+        ).set('a', '1');
 
         final undo = CRDTUndoManager(local)..track(localMap);
         local.importChanges(remote.exportChanges());
@@ -415,8 +507,16 @@ void main() {
       test('an undo takes back only this peer, and the two converge', () {
         final a = _doc(_peerA);
         final b = _doc(_peerB);
-        final mapA = CRDTMapHandler<String>(a, 'map');
-        final mapB = CRDTMapHandler<String>(b, 'map');
+        final mapA = CRDTMapHandler<String>(
+          a,
+          'map',
+          handlerType: 'CRDTMapHandler<String>',
+        );
+        final mapB = CRDTMapHandler<String>(
+          b,
+          'map',
+          handlerType: 'CRDTMapHandler<String>',
+        );
         final undo = CRDTUndoManager(a)..track(mapA);
 
         mapA.set('a', 'from-a');
@@ -437,7 +537,11 @@ void main() {
     group('lifecycle', () {
       test('changes fires when a stack moves', () async {
         final doc = _doc(_peerA);
-        final map = CRDTMapHandler<String>(doc, 'map');
+        final map = CRDTMapHandler<String>(
+          doc,
+          'map',
+          handlerType: 'CRDTMapHandler<String>',
+        );
         final undo = CRDTUndoManager(doc, captureTimeout: Duration.zero)
           ..track(map);
 
@@ -496,11 +600,19 @@ void main() {
 
       test('importing a snapshot drops both stacks', () {
         final source = _doc(_peerB);
-        CRDTMapHandler<String>(source, 'map').set('seed', '0');
+        CRDTMapHandler<String>(
+          source,
+          'map',
+          handlerType: 'CRDTMapHandler<String>',
+        ).set('seed', '0');
         final snapshot = source.takeSnapshot();
 
         final doc = _doc(_peerA);
-        final map = CRDTMapHandler<String>(doc, 'map');
+        final map = CRDTMapHandler<String>(
+          doc,
+          'map',
+          handlerType: 'CRDTMapHandler<String>',
+        );
         final undo = CRDTUndoManager(doc)..track(map);
 
         map.set('a', '1');
@@ -534,7 +646,11 @@ void main() {
 
       test('a snapshot that keeps the history keeps the stack', () {
         final doc = _doc(_peerA);
-        final map = CRDTMapHandler<String>(doc, 'map');
+        final map = CRDTMapHandler<String>(
+          doc,
+          'map',
+          handlerType: 'CRDTMapHandler<String>',
+        );
         final undo = CRDTUndoManager(doc)..track(map);
 
         map.set('a', '1');
@@ -547,7 +663,11 @@ void main() {
 
       test('taking a local snapshot prunes, so it drops the stack', () {
         final doc = _doc(_peerA);
-        final map = CRDTMapHandler<String>(doc, 'map');
+        final map = CRDTMapHandler<String>(
+          doc,
+          'map',
+          handlerType: 'CRDTMapHandler<String>',
+        );
         final undo = CRDTUndoManager(doc)..track(map);
 
         map.set('a', '1');
@@ -561,7 +681,11 @@ void main() {
       // and move nothing: the step has to be gone, not merely useless.
       test('an OR-Set step does not survive the prune that unanchors it', () {
         final doc = _doc(_peerA);
-        final set = CRDTORSetHandler<String>(doc, 'set');
+        final set = CRDTORSetHandler<String>(
+          doc,
+          'set',
+          handlerType: 'CRDTORSetHandler<String>',
+        );
         final undo = CRDTUndoManager(doc)..track(set);
 
         set.add('x');
@@ -573,7 +697,11 @@ void main() {
 
       test('an OR-Map step does not survive the prune that unanchors it', () {
         final doc = _doc(_peerA);
-        final map = CRDTORMapHandler<String, String>(doc, 'map');
+        final map = CRDTORMapHandler<String, String>(
+          doc,
+          'map',
+          handlerType: 'CRDTORMapHandler<String, String>',
+        );
         final undo = CRDTUndoManager(doc)..track(map);
 
         map.put('k', 'v');
@@ -585,7 +713,11 @@ void main() {
 
       test('clear drops both stacks', () {
         final doc = _doc(_peerA);
-        final map = CRDTMapHandler<String>(doc, 'map');
+        final map = CRDTMapHandler<String>(
+          doc,
+          'map',
+          handlerType: 'CRDTMapHandler<String>',
+        );
         final undo = CRDTUndoManager(doc, captureTimeout: Duration.zero)
           ..track(map);
 
@@ -600,7 +732,11 @@ void main() {
 
       test('undo and redo refuse to run inside a transaction', () {
         final doc = _doc(_peerA);
-        final map = CRDTMapHandler<String>(doc, 'map');
+        final map = CRDTMapHandler<String>(
+          doc,
+          'map',
+          handlerType: 'CRDTMapHandler<String>',
+        );
         final undo = CRDTUndoManager(doc, captureTimeout: Duration.zero)
           ..track(map);
 
@@ -625,7 +761,11 @@ void main() {
 
       test('a disposed manager records nothing and refuses to undo', () {
         final doc = _doc(_peerA);
-        final map = CRDTMapHandler<String>(doc, 'map');
+        final map = CRDTMapHandler<String>(
+          doc,
+          'map',
+          handlerType: 'CRDTMapHandler<String>',
+        );
         final undo = CRDTUndoManager(doc)..track(map);
 
         map.set('a', '1');
@@ -640,7 +780,11 @@ void main() {
 
       test('disposing the document disposes its managers', () {
         final doc = _doc(_peerA);
-        final map = CRDTMapHandler<String>(doc, 'map');
+        final map = CRDTMapHandler<String>(
+          doc,
+          'map',
+          handlerType: 'CRDTMapHandler<String>',
+        );
         final undo = CRDTUndoManager(doc)..track(map);
 
         map.set('a', '1');
@@ -654,7 +798,11 @@ void main() {
 
       test('toString names what each stack holds', () {
         final doc = _doc(_peerA);
-        final map = CRDTMapHandler<String>(doc, 'map');
+        final map = CRDTMapHandler<String>(
+          doc,
+          'map',
+          handlerType: 'CRDTMapHandler<String>',
+        );
         final undo = CRDTUndoManager(doc, captureTimeout: Duration.zero)
           ..track(map);
 
@@ -671,8 +819,16 @@ void main() {
 
       test('two managers on one document keep their own stacks', () {
         final doc = _doc(_peerA);
-        final one = CRDTMapHandler<String>(doc, 'one');
-        final two = CRDTMapHandler<String>(doc, 'two');
+        final one = CRDTMapHandler<String>(
+          doc,
+          'one',
+          handlerType: 'CRDTMapHandler<String>',
+        );
+        final two = CRDTMapHandler<String>(
+          doc,
+          'two',
+          handlerType: 'CRDTMapHandler<String>',
+        );
         final undoOne = CRDTUndoManager(doc)..track(one);
         final undoTwo = CRDTUndoManager(doc)..track(two);
 

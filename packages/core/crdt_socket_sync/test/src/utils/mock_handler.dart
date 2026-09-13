@@ -10,6 +10,17 @@ final class MockHandler extends Handler<String> {
   MockHandler(super.doc);
 
   @override
+  HandlerSpec<MockHandler> get spec => _spec;
+
+  static final HandlerSpec<MockHandler> _spec = HandlerSpec(
+    'MockHandler',
+    (doc, id) => MockHandler(doc),
+    formats: const HandlerFormats(
+      operationKinds: {OperationType.kindInsert},
+    ),
+  );
+
+  @override
   String get id => 'test-handler';
 
   @override
@@ -26,11 +37,14 @@ final class MockHandler extends Handler<String> {
 /// Stands for a newer build: the same handler type on the wire, plus a kind an
 /// older peer has never heard of.
 final class NewerMockHandler extends Handler<String> {
-  NewerMockHandler(super.doc) : super(spec: spec);
+  NewerMockHandler(super.doc);
 
-  /// The tag [MockHandler] answers with, so both stand for the same type on
-  /// the wire.
-  static final HandlerSpec<NewerMockHandler> spec = HandlerSpec.factory(
+  /// The tag [MockHandler] answers with, so both stand for the same kind on the
+  /// wire.
+  @override
+  HandlerSpec<NewerMockHandler> get spec => _spec;
+
+  static final HandlerSpec<NewerMockHandler> _spec = HandlerSpec(
     'MockHandler',
     (doc, id) => NewerMockHandler(doc),
     formats: const HandlerFormats(

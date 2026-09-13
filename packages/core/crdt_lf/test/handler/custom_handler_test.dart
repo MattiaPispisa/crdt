@@ -153,6 +153,13 @@ void main() {
 final class _MarkerHandler extends Handler<int> {
   _MarkerHandler(super.doc, this._id);
 
+  @override
+  HandlerSpec<_MarkerHandler> get spec => HandlerSpec(
+        '_MarkerHandler',
+        (doc, id) => _MarkerHandler(doc, id),
+        formats: const HandlerFormats(operationKinds: {setKind}),
+      );
+
   static const int setKind = 4;
 
   final String _id;

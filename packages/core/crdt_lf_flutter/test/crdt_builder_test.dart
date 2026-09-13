@@ -7,7 +7,11 @@ void main() {
   group('CrdtBuilder', () {
     testWidgets('rebuilds on local and remote changes', (tester) async {
       final doc = CRDTDocument(peerId: PeerId.generate());
-      final list = CRDTListHandler<String>(doc, 'list');
+      final list = CRDTListHandler<String>(
+        doc,
+        'list',
+        handlerType: 'CRDTListHandler<String>',
+      );
 
       await tester.pumpWidget(
         CrdtProvider.value(
@@ -31,7 +35,11 @@ void main() {
 
       // Remote edit imported into the observed document.
       final remote = CRDTDocument(peerId: PeerId.generate());
-      CRDTListHandler<String>(remote, 'list').insert(0, 'b');
+      CRDTListHandler<String>(
+        remote,
+        'list',
+        handlerType: 'CRDTListHandler<String>',
+      ).insert(0, 'b');
       doc.importChanges(remote.exportChanges());
       await tester.pumpAndSettle();
       expect(list.value.contains('b'), isTrue);
@@ -42,7 +50,11 @@ void main() {
     testWidgets('rebuilds only when the selected slice changes',
         (tester) async {
       final doc = CRDTDocument(peerId: PeerId.generate());
-      final list = CRDTListHandler<Map<String, dynamic>>(doc, 'list');
+      final list = CRDTListHandler<Map<String, dynamic>>(
+        doc,
+        'list',
+        handlerType: 'CRDTListHandler<Map<String, dynamic>>',
+      );
 
       var builds = 0;
       await tester.pumpWidget(

@@ -1,6 +1,9 @@
 import 'package:crdt_lf/crdt_lf.dart';
 import 'package:test/test.dart';
 
+CRDTRegisterHandler<bool> newFlag(BaseCRDTDocument doc, String id) =>
+    CRDTRegisterHandler<bool>(doc, id, handlerType: 'flag');
+
 void main() {
   group('CRDTRegisterHandler', () {
     late CRDTDocument doc;
@@ -8,7 +11,11 @@ void main() {
 
     setUp(() {
       doc = CRDTDocument();
-      register = CRDTRegisterHandler<bool>(doc, 'flag');
+      register = CRDTRegisterHandler<bool>(
+        doc,
+        'flag',
+        handlerType: 'CRDTRegisterHandler<bool>',
+      );
     });
 
     test('is null until set, then holds the value', () {
@@ -50,8 +57,16 @@ void main() {
       final docB = CRDTDocument(
         peerId: PeerId.parse('a90dfced-cbf0-4a49-9c64-f5b7b62fdc18'),
       );
-      final a = CRDTRegisterHandler<int>(docA, 'r');
-      final b = CRDTRegisterHandler<int>(docB, 'r');
+      final a = CRDTRegisterHandler<int>(
+        docA,
+        'r',
+        handlerType: 'CRDTRegisterHandler<int>',
+      );
+      final b = CRDTRegisterHandler<int>(
+        docB,
+        'r',
+        handlerType: 'CRDTRegisterHandler<int>',
+      );
 
       a.set(1);
       b.set(2);
@@ -68,7 +83,11 @@ void main() {
       final snapshot = doc.takeSnapshot();
 
       final docB = CRDTDocument()..importSnapshot(snapshot);
-      final registerB = CRDTRegisterHandler<bool>(docB, 'flag');
+      final registerB = CRDTRegisterHandler<bool>(
+        docB,
+        'flag',
+        handlerType: 'CRDTRegisterHandler<bool>',
+      );
       expect(registerB.value, isTrue);
     });
 
@@ -76,17 +95,21 @@ void main() {
       final snapshot = doc.takeSnapshot();
 
       final docB = CRDTDocument()..importSnapshot(snapshot);
-      final registerB = CRDTRegisterHandler<bool>(docB, 'flag');
+      final registerB = CRDTRegisterHandler<bool>(
+        docB,
+        'flag',
+        handlerType: 'CRDTRegisterHandler<bool>',
+      );
       expect(registerB.value, isNull);
     });
 
     test('resolves as a leaf value inside a ref container', () {
       final nested = CRDTDocument()
-        ..register(
-          CRDTRegisterHandler.spec<bool>('CRDTRegisterHandler<bool>'),
-        );
+        ..register(newFlag)
+        ..register(CRDTMapRefHandler.new)
+        ..register(CRDTFugueTextHandler.new);
       final root = CRDTMapRefHandler(nested, 'root');
-      final done = CRDTRegisterHandler<bool>(nested, nested.newHandlerId())
+      final done = newFlag(nested, nested.newHandlerId())
         ..set(true);
       final text = CRDTFugueTextHandler(nested, nested.newHandlerId())
         ..insert(0, 'task');
@@ -117,7 +140,11 @@ void main() {
 
     test('compacted sets replay identically on a remote peer', () {
       final doc2 = CRDTDocument(peerId: PeerId.generate());
-      final register2 = CRDTRegisterHandler<bool>(doc2, 'flag');
+      final register2 = CRDTRegisterHandler<bool>(
+        doc2,
+        'flag',
+        handlerType: 'CRDTRegisterHandler<bool>',
+      );
 
       doc.runInTransaction(() {
         register

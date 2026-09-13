@@ -9,7 +9,11 @@ class ORSetHandlerBenchmark
       : super(
           handlerName: 'CRDTORSetHandler',
           handlerFactory: (document) =>
-              CRDTORSetHandler<String>(document, 'set'),
+              CRDTORSetHandler<String>(
+                document,
+                'set',
+                handlerType: 'CRDTORSetHandler<String>',
+              ),
         );
 
   @override
