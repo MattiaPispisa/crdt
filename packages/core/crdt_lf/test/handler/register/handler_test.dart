@@ -30,16 +30,15 @@ void main() {
       expect(register.toString(), contains('CRDTRegisterHandler'));
     });
 
-    test('handlerType defaults to runtimeType, or a constructor override', () {
+    test('the tag is runtimeType by default, and a spec fixes it', () {
       // Default (minification-fragile) tag.
       expect(register.handlerType, 'CRDTRegisterHandler<bool>');
-      // A generic handler can be given a stable tag so it keeps working as a
-      // nested ref in a dart2js-minified build; the tag flows into HandlerRef.
-      final tagged = CRDTRegisterHandler<bool>(
-        doc,
-        'flag2',
-        handlerType: 'register/bool',
-      );
+
+      // A generic handler needs a tag so it keeps working as a nested ref in
+      // a dart2js-minified build; it flows into HandlerRef.
+      final tagged =
+          CRDTRegisterHandler<bool>(doc, 'flag2', handlerType: 'register/bool');
+
       expect(tagged.handlerType, 'register/bool');
       expect(HandlerRef.of(tagged).type, 'register/bool');
     });
@@ -83,10 +82,8 @@ void main() {
 
     test('resolves as a leaf value inside a ref container', () {
       final nested = CRDTDocument()
-        ..registerDefaultFactories()
-        ..registerFactory(
-          'CRDTRegisterHandler<bool>',
-          CRDTRegisterHandler<bool>.new,
+        ..register(
+          CRDTRegisterHandler.spec<bool>('CRDTRegisterHandler<bool>'),
         );
       final root = CRDTMapRefHandler(nested, 'root');
       final done = CRDTRegisterHandler<bool>(nested, nested.newHandlerId())

@@ -127,13 +127,11 @@ Future<void> _setupExampleDocuments() async {
   );
   final document = await ensure(ExampleDocumentIds.document);
   document
-    ..registerDefaultFactories()
-    ..registerFactory(
-      kDoneHandlerType,
-      (BaseCRDTDocument d, String id) =>
-          CRDTRegisterHandler<bool>(d, id, handlerType: kDoneHandlerType),
-    );
-  CRDTMovableListRefHandler(document, ExampleHandlerIds.document);
+    ..register(CRDTRegisterHandler.spec<bool>(kDoneHandlerType));
+  document.handler(
+    CRDTMovableListRefHandler.spec,
+    ExampleHandlerIds.document,
+  );
 }
 
 void _setupSigintHandler({required EnLogger logger}) {

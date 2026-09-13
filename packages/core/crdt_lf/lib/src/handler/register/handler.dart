@@ -33,7 +33,27 @@ base class CRDTRegisterHandler<T> extends Handler<T>
     super.doc,
     this._id, {
     ValueCodec<T>? valueCodec,
-    super.handlerType,
+    String? handlerType,
+  }) : _valueCodec = valueCodec ?? JsonValueCodec<T>(),
+        super(
+          spec: handlerType == null
+              ? null
+              : CRDTRegisterHandler.spec<T>(
+                  handlerType,
+                  valueCodec: valueCodec,
+                ),
+        );
+
+  /// Builds one from [spec], for the builder [spec] itself holds.
+  ///
+  /// The public constructor takes a tag and makes the spec; this takes one
+  /// ready-made, so the same object reaches every handler the spec builds and
+  /// the document sees one spec per tag.
+  CRDTRegisterHandler._fromSpec(
+    super.doc,
+    this._id, {
+    required super.spec,
+    ValueCodec<T>? valueCodec,
   }) : _valueCodec = valueCodec ?? JsonValueCodec<T>();
 
   final String _id;
@@ -139,12 +159,39 @@ base class CRDTRegisterHandler<T> extends Handler<T>
     return operation.value;
   }
 
+  /// {@macro generic_handler_spec}
+  static HandlerSpec<CRDTRegisterHandler<T>> spec<T>(
+    String type, {
+    ValueCodec<T>? valueCodec,
+  }) =>
+      HandlerSpec<CRDTRegisterHandler<T>>(
+        type,
+        (doc, id, spec) =>
+            CRDTRegisterHandler<T>._fromSpec(
+              doc,
+              id,
+              spec: spec,
+              valueCodec: valueCodec,
+            ),
+        formats: _formats,
+      );
+
+  /// What this build reads for this handler type.
+  ///
+  /// {@macro handler_formats_constant}
+  static const HandlerFormats _formats = HandlerFormats(
+    operationKinds: {
+      OperationType.kindInsert,
+    },
+    blobVersions: BlobVersionRange.single(1),
+  );
+
   /// The version of the snapshot blob this build writes and reads.
   ///
   /// Layout: `version: u8`, `present: u8`, then, when present,
   /// `valueLen: uvarint`, `value: bytes`.
   @override
-  int get snapshotBlobVersion => 1;
+  int get snapshotBlobVersion => _formats.blobVersions!.max;
 
   @override
   Uint8List getSnapshotState() {
@@ -164,7 +211,7 @@ base class CRDTRegisterHandler<T> extends Handler<T>
     if (snapshot == null) {
       return null;
     }
-    final offset = readSnapshotHeader(snapshot);
+    final offset = readSnapshotHeader(snapshot).offset;
     if (offset >= snapshot.length) {
       throw const FormatException('Truncated register snapshot');
     }

@@ -55,7 +55,28 @@ base class CRDTFugueMovableListHandler<T>
     super.doc,
     String id, {
     ValueCodec<T>? valueCodec,
-    super.handlerType,
+    String? handlerType,
+  })  : _id = id,
+        _valueCodec = valueCodec ?? JsonValueCodec<T>(),
+        super(
+          spec: handlerType == null
+              ? null
+              : CRDTFugueMovableListHandler.spec<T>(
+                  handlerType,
+                  valueCodec: valueCodec,
+                ),
+        );
+
+  /// Builds one from [spec], for the builder [spec] itself holds.
+  ///
+  /// The public constructor takes a tag and makes the spec; this takes one
+  /// ready-made, so the same object reaches every handler the spec builds and
+  /// the document sees one spec per tag.
+  CRDTFugueMovableListHandler._fromSpec(
+    super.doc,
+    String id, {
+    required super.spec,
+    ValueCodec<T>? valueCodec,
   })  : _id = id,
         _valueCodec = valueCodec ?? JsonValueCodec<T>();
 
@@ -674,9 +695,38 @@ base class CRDTFugueMovableListHandler<T>
     return SequenceDelta<T>.empty();
   }
 
+  /// {@macro generic_handler_spec}
+  static HandlerSpec<CRDTFugueMovableListHandler<T>> spec<T>(
+    String type, {
+    ValueCodec<T>? valueCodec,
+  }) =>
+      HandlerSpec<CRDTFugueMovableListHandler<T>>(
+        type,
+        (doc, id, spec) => CRDTFugueMovableListHandler<T>._fromSpec(
+          doc,
+          id,
+          spec: spec,
+          valueCodec: valueCodec,
+        ),
+        formats: _formats,
+      );
+
+  /// What this build reads for this handler type.
+  ///
+  /// {@macro handler_formats_constant}
+  static const HandlerFormats _formats = HandlerFormats(
+    operationKinds: {
+      OperationType.kindInsert,
+      OperationType.kindMove,
+      OperationType.kindUpdate,
+      OperationType.kindDelete,
+    },
+    blobVersions: BlobVersionRange.single(1),
+  );
+
   /// The version of the snapshot blob this build writes and reads.
   @override
-  int get snapshotBlobVersion => 1;
+  int get snapshotBlobVersion => _formats.blobVersions!.max;
 
   /// Snapshot layout:
   /// - version: u8
@@ -731,7 +781,7 @@ base class CRDTFugueMovableListHandler<T>
       return <FugueElementID, _MovableElement<T>>{};
     }
 
-    var offset = readSnapshotHeader(snapshot);
+    var offset = readSnapshotHeader(snapshot).offset;
     final countRec = UVarint.read(snapshot, offset: offset);
     offset = countRec.nextOffset;
 

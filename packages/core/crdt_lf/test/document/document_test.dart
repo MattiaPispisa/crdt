@@ -1391,6 +1391,8 @@ void main() {
 /// It keeps the type tag of the handler it extends, so its changes decode into
 /// an ordinary [CRDTMapHandler] on the other side.
 final class _ThrowingInvertMapHandler extends CRDTMapHandler<String> {
+  // It borrows CRDTMapHandler's own tag, which is what makes its changes decode
+  // as an ordinary map on the other side.
   _ThrowingInvertMapHandler(CRDTDocument super.doc, super.id)
       : super(handlerType: 'CRDTMapHandler<String>');
 

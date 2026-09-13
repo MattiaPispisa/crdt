@@ -47,6 +47,9 @@
     - [Compression](#compression)
     - [Connection status \& error handling](#connection-status--error-handling)
     - [Version \& capability negotiation](#version--capability-negotiation)
+      - [Declare what your build can read](#declare-what-your-build-can-read)
+      - [Refusals are permanent](#refusals-are-permanent)
+      - [What the handshake does not cover](#what-the-handshake-does-not-cover)
     - [Wire format \& type codes](#wire-format--type-codes)
   - [Examples](#examples)
   - [Apps](#apps)
@@ -961,41 +964,117 @@ client uses exponential backoff with jitter and retries forever by default.
 
 ### Version & capability negotiation
 
-Two builds can disagree in two ways, and the handshake checks both **before**
-any document state is served.
+Two builds can disagree in three ways, and the handshake checks all three
+**before** any document state is served.
 
-**The protocol version.** The client sends `Protocol.protocolVersion` in its
-"hello" protocol. A server that speaks another one answers
+**The protocol version.** Each side sends `Protocol.protocolVersion`. A server
+that speaks another one answers
 `ErrorMessage(Protocol.errorUnsupportedProtocolVersion)` and closes the session.
+The client checks the version the server echoes back, which is how it spots an
+**older** server: one that never read the field and let it in anyway.
 
-**The operation kinds.** An operation kind belongs to the handler that defines
-it, so no version number describes it. What each side can state is a set of
-kinds, keyed by `Handler.handlerType`:
+**The operation kinds, and the snapshot blob version.** An operation kind
+belongs to the handler that defines it, so no single version number describes
+it. What each side can state is a record per handler type, keyed by
+`Handler.handlerType`:
 
 ```json
-{ "CRDTFugueTextHandler": [0, 1, 2], "CRDTMapHandler": [0, 1] }
+{
+  "CRDTFugueTextHandler": { "kinds": [0, 1, 2], "blob": [1] },
+  "CRDTMapHandler<int>":  { "kinds": [0, 1, 2], "blob": [1] }
+}
 ```
+
+`kinds` are what the peer can decode; `blob` holds the
+`Handler.snapshotBlobVersion`s involved — one for a build, more than one for a
+document that merged snapshots written by peers on different builds. A blob is refused whole on read, so a disagreement there is as
+terminal as a missing kind — and it used to surface as a bare `FormatException`
+at the first read of the handler, far from the sync layer that accepted the
+snapshot.
 
 The two sides answer **different questions**, and that is what makes the check
 work:
 
-- the client sends what its **build** can decode
-  (`CRDTDocument.describeBuildCapabilities()`), which covers the handlers it has
-  opened *and* the types its registered factories could build;
+- the client sends what its **build** can read (see below);
 - the server reads what the document's **data** holds
-  (`CRDTDocument.describeDataCapabilities()`), straight from the change
-  envelopes, so it answers even for a document it merely stores and forwards
-  with no handler registered.
+  (`CRDTDocument.describeDataRequirements()`) — from the change envelopes, and
+  from the record every snapshot carries, so it answers even for a document it
+  merely stores and forwards with no handler registered, and even after it has
+  compacted and restarted.
 
-If the client cannot read a kind the data holds — including a handler type it
-says nothing about — the server answers
+If the client cannot read something the data holds, the server answers
 `ErrorMessage(Protocol.errorUnsupportedClient)` naming the handler type and the
-kind, then closes the session.
+reason, then closes the session.
 
-Both refusals are permanent. The client latches them: it moves to
-`ConnectionStatus.unsupported`, fills `client.incompatibility`, and stops. It
-schedules no reconnect and `connect()` gives up at once, because no retry can
-change the answer.
+#### Declare what your build can read
+
+A client states what it can read in one of two ways, and they are checked
+differently.
+
+**By default it is derived** from the document
+(`describeBuildCapabilities()`), which knows the handlers already open and the
+factories already registered. An app usually opens a handler *after* it
+connects, so such a description is **incomplete** by construction and is sent
+as such: a type it does not name is passed over.
+
+```dart
+CRDTListHandler<Todo>(document, 'todos');
+await client.connect();                    // names that one type
+CRDTMapHandler<String>(document, 'meta');  // opened later: still fine
+```
+
+**State it by hand** and it is sent as **complete** — it names every type the
+build reads, so the server also refuses on a type left out. That is the
+stricter check, and the only declaration that can honestly promise it:
+
+```dart
+WebSocketClient(
+  url: url,
+  document: document,
+  author: author,
+  capabilities: DocumentCapabilities({
+    'CRDTListHandler<Todo>': const HandlerFormats(
+      operationKinds: {0, 1, 2},
+      snapshotBlobVersions: {1},
+    ),
+  }),
+);
+```
+
+Either way, a type that **is** named is checked in full: a kind it lacks, or a
+snapshot blob written with another layout, refuses the client.
+
+A handler that travels over a socket must also pass a **constant**
+`handlerType`. The default is `runtimeType.toString()`, which dart2js minifies
+in a Flutter web release build — and `handlerType` is the key of this whole
+comparison.
+
+`connect()` refuses a **generic** handler that left the tag derived, in debug
+builds only. Its tag carries the type argument (`CRDTListHandler<Todo>`), so it
+is both minified away and impossible for the library to declare on your behalf:
+
+```dart
+// Refused: the tag changes between debug and a web release build.
+CRDTListHandler<Todo>(document, 'todos');
+
+// Fine: the tag is yours, so it is the same everywhere.
+CRDTListHandler<Todo>(document, 'todos', handlerType: 'todos');
+```
+
+The tag is all the constructor asks for: the handler turns it into a
+`HandlerSpec`, so the document also learns how to **rebuild** that type. A peer
+that has to know the type before it opens one — a store-and-forward server —
+declares it instead:
+
+```dart
+document.register(CRDTListHandler.spec<Todo>('todos'));
+```
+
+#### Refusals are permanent
+
+The client latches them: it moves to `ConnectionStatus.unsupported`, fills
+`client.incompatibility`, and stops. It schedules no reconnect and `connect()`
+gives up at once, because no retry can change the answer.
 
 ```dart
 final incompatibility = client.incompatibility;
@@ -1005,23 +1084,68 @@ if (incompatibility != null) {
 }
 ```
 
-Two things the handshake does **not** cover:
+#### When something gets through anyway
+
+A refusal is about the build. `client.faults` is about one piece of data: a
+change or a state the client could not take in, on a connection that works.
+
+```dart
+client.faults.listen((fault) {
+  log('${fault.reason}: ${fault.error}');
+});
+```
+
+Nothing is retried, and the connection stays up. It is reported rather than
+thrown because applying runs inside the callback that reads the socket, where a
+throw reaches no `catch` and no `onError` and ends up as an uncaught error in
+the zone — a crash on Flutter.
+
+#### An unknown kind is kept, never dropped
+
+A change whose operation kind this build cannot decode is **stored and
+forwarded whole**. The apply path never decodes the envelope, so the change
+reaches the log, the snapshot and every other peer byte for byte, and a peer
+that does understand it reads it in full. Reading that handler *here* throws
+`UnknownOperationKindException`; nothing is lost or rewritten.
+
+This is the same guarantee protobuf gives with unknown fields, and it is why
+the handshake check is a safety net rather than the only defence.
+
+#### What the handshake does not cover
 
 - **A relay checks the version only.** It carries CRDT payloads as opaque blobs
   and never decodes them, so it cannot tell what a client can read.
-- **The snapshot blob version is not negotiated.** Each handler writes its own
-  version at the head of its snapshot blob and refuses another one
-  (`SnapshotBlob`), but that version is nowhere recorded as data: it can only be
-  guessed from a byte that the handlers shipped here write by convention and a
-  custom handler need not. A build that raised a blob version still meets an
-  older peer at read time, with a `FormatException` naming the handler.
-
-And one that no handshake can cover: a peer that invents a **new** kind after
-the handshake. That data does not exist yet when the two sides compare notes.
-There the answer stays the one `crdt_lf` already gives —
-`UnknownOperationKindException` on read, which fails fast instead of diverging
-in silence, while the change itself is kept in the document and forwarded intact
-to peers that do understand it.
+- **The other direction.** The check protects a document from a client that
+  cannot read it. It does nothing for the clients already connected when a
+  **newer** client writes a kind they have never heard of: that data does not
+  exist yet when the two sides compare notes. There the answer stays the one
+  `crdt_lf` already gives — `UnknownOperationKindException` on read, which fails
+  fast instead of diverging in silence, while the change itself is kept in the
+  document and forwarded intact to peers that do understand it.
+- **A document restored from a snapshot older than `crdt_lf` 4.3.0.** The
+  record that says what a document holds is written by every snapshot from
+  4.3.0 on. An older snapshot carries none, so a document that imports one with
+  `pruneHistory: true` loses the changes *and* has nothing to read the
+  requirements back from: it reports that it needs nothing, and every client is
+  let through. It answers in full again after it takes its own snapshot.
+- **A blob layout the reader can migrate.** A handler states the range it
+  reads (`minReadableSnapshotBlobVersion..snapshotBlobVersion`) and writes the
+  top of it. Lower the minimum to keep reading an older layout and upgrade it
+  on the way in: `readSnapshotHeader` hands back the version it found. Only a
+  blob outside the range refuses the peer, as `SnapshotBlobTooNew` (needs a
+  newer build) or `SnapshotBlobTooOld` (a layout this build dropped).
+- **A handler that writes its snapshot blob by hand.** The blob version is
+  only meaningful when the blob carries it (`Handler.snapshotHeader` /
+  `readSnapshotHeader`). A handler that writes its state without them still
+  reports `1`, so two builds with genuinely different layouts both claim `1`
+  and look compatible: such a handler opts out of the blob check rather than
+  passing it.
+- **Whether a kind is stamped.** `OperationType.stamped` is a build's own
+  decision about a kind, not part of what travels, and a capability names the
+  kind without it. Two builds that disagree about one kind therefore pass the
+  handshake and meet at read time instead, with the `FormatException` `crdt_lf`
+  raises for exactly that. Declaring it would mean a build could enumerate the
+  kinds it stamps, which a handler with custom kinds can only do by hand.
 
 ### Wire format & type codes
 

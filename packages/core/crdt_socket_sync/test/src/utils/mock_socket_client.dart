@@ -11,6 +11,7 @@ class MockCRDTSocketClient extends CRDTSocketClient {
     required this.document,
     required this.author,
     super.plugins,
+    super.capabilities,
   });
 
   @override
@@ -45,6 +46,15 @@ class MockCRDTSocketClient extends CRDTSocketClient {
 
   @override
   Stream<Message> get messages => _messagesController.stream;
+
+  @override
+  void abandonHandshake() {}
+
+  @override
+  void publishConnectionStatus(ConnectionStatus status) {
+    _connectionStatusValue = status;
+    _connectionStatusController.add(status);
+  }
 
   @override
   Future<bool> connect() async {

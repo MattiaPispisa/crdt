@@ -365,6 +365,12 @@ void main() {
 
       final error = decodeSent().whereType<ErrorMessage>().single;
       expect(error.code, Protocol.errorInvalidMessage);
+      // Answered *and* logged: the reply goes to the client, the event is the
+      // only thing the relay's operator ever sees.
+      expect(
+        events.where((e) => e.type == SessionEventType.error),
+        hasLength(1),
+      );
     });
 
     test('ping is answered with pong', () async {

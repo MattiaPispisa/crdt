@@ -66,4 +66,16 @@ class Protocol {
   /// has (see `SyncCapabilities`). Permanent: only a newer client build fixes
   /// it.
   static const String errorUnsupportedClient = 'UNSUPPORTED_CLIENT';
+
+  /// The error codes a client can never recover from by trying again.
+  ///
+  /// A refusal of the **build**: only a newer one changes the answer, so a
+  /// client that hears one stops instead of reconnecting. Every other code in
+  /// this class names something that can pass. A new terminal code belongs
+  /// here, and nowhere else — the clients read this set rather than each
+  /// naming the codes themselves.
+  static const Set<String> terminalErrors = {
+    errorUnsupportedProtocolVersion,
+    errorUnsupportedClient,
+  };
 }

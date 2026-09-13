@@ -4,6 +4,7 @@ import 'package:crdt_lf/crdt_lf.dart';
 import 'package:crdt_lf/src/algorithm/fugue/tree.dart';
 import 'package:crdt_lf/src/handler/fugue/fugue_sequence_apply.dart';
 import 'package:crdt_lf/src/handler/fugue/fugue_sequence_handler.dart';
+import 'package:crdt_lf/src/handler/fugue/fugue_snapshot.dart';
 import 'package:crdt_lf/src/handler/handler_type.dart';
 
 part 'operation.dart';
@@ -37,9 +38,30 @@ base class CRDTFugueTextHandler
   /// Constructor that initializes a new Fugue text handler
   CRDTFugueTextHandler(super.doc, super.id);
 
-  /// Stable type tag (minification-safe). See [Handler.handlerType].
+  /// {@macro builtin_handler_spec}
+  static final HandlerSpec<CRDTFugueTextHandler> spec = HandlerSpec.factory(
+    kFugueTextHandlerType,
+    CRDTFugueTextHandler.new,
+    formats: _formats,
+  );
+
   @override
-  String get handlerType => kFugueTextHandlerType;
+  HandlerSpec<CRDTFugueTextHandler> get handlerSpec => spec;
+
+  /// What this build reads for this handler type.
+  ///
+  /// {@macro handler_formats_constant}
+  ///
+  /// The blob range is [FugueSnapshot.version], shared by every handler built
+  /// on the Fugue tree.
+  static const HandlerFormats _formats = HandlerFormats(
+    operationKinds: {
+      OperationType.kindInsert,
+      OperationType.kindDelete,
+      OperationType.kindUpdate,
+    },
+    blobVersions: BlobVersionRange.single(FugueSnapshot.version),
+  );
 
   @override
   late final OperationDecoders operationDecoders = {

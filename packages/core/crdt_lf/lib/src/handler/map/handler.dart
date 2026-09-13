@@ -35,7 +35,27 @@ base class CRDTMapHandler<T> extends Handler<Map<String, T>>
     super.doc,
     this._id, {
     ValueCodec<T>? valueCodec,
-    super.handlerType,
+    String? handlerType,
+  }) : _valueCodec = valueCodec ?? JsonValueCodec<T>(),
+        super(
+          spec: handlerType == null
+              ? null
+              : CRDTMapHandler.spec<T>(
+                  handlerType,
+                  valueCodec: valueCodec,
+                ),
+        );
+
+  /// Builds one from [spec], for the builder [spec] itself holds.
+  ///
+  /// The public constructor takes a tag and makes the spec; this takes one
+  /// ready-made, so the same object reaches every handler the spec builds and
+  /// the document sees one spec per tag.
+  CRDTMapHandler._fromSpec(
+    super.doc,
+    this._id, {
+    required super.spec,
+    ValueCodec<T>? valueCodec,
   }) : _valueCodec = valueCodec ?? JsonValueCodec<T>();
 
   /// The ID of this map in the document
@@ -110,12 +130,41 @@ base class CRDTMapHandler<T> extends Handler<Map<String, T>>
     return state;
   }
 
+  /// {@macro generic_handler_spec}
+  static HandlerSpec<CRDTMapHandler<T>> spec<T>(
+    String type, {
+    ValueCodec<T>? valueCodec,
+  }) =>
+      HandlerSpec<CRDTMapHandler<T>>(
+        type,
+        (doc, id, spec) =>
+            CRDTMapHandler<T>._fromSpec(
+              doc,
+              id,
+              spec: spec,
+              valueCodec: valueCodec,
+            ),
+        formats: _formats,
+      );
+
+  /// What this build reads for this handler type.
+  ///
+  /// {@macro handler_formats_constant}
+  static const HandlerFormats _formats = HandlerFormats(
+    operationKinds: {
+      OperationType.kindInsert,
+      OperationType.kindDelete,
+      OperationType.kindUpdate,
+    },
+    blobVersions: BlobVersionRange.single(1),
+  );
+
   /// The version of the snapshot blob this build writes and reads.
   ///
   /// Layout: `version: u8`, `count: uvarint`, then per entry
   /// `keyLen: uvarint`, `key: utf8`, `valueLen: uvarint`, `value: bytes`.
   @override
-  int get snapshotBlobVersion => 1;
+  int get snapshotBlobVersion => _formats.blobVersions!.max;
 
   @override
   Uint8List getSnapshotState() {
@@ -365,7 +414,7 @@ base class CRDTMapHandler<T> extends Handler<Map<String, T>>
       return <String, T>{};
     }
 
-    var offset = readSnapshotHeader(snapshot);
+    var offset = readSnapshotHeader(snapshot).offset;
     final countRec = UVarint.read(snapshot, offset: offset);
     offset = countRec.nextOffset;
     final state = <String, T>{};

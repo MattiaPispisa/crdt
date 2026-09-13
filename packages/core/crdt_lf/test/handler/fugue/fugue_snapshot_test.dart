@@ -221,7 +221,10 @@ void main() {
               isA<FormatException>().having(
                 (e) => e.message,
                 'message',
-                contains('Unsupported Fugue snapshot version: $version'),
+                // Reworded when the reader moved to a min..max range: the
+                // message now says which side of it the blob falls on.
+                allOf(contains('Fugue snapshot version $version'),
+                    contains('this build reads')),
               ),
             ),
           );

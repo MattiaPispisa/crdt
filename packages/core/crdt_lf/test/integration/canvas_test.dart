@@ -6,8 +6,7 @@ import 'package:test/test.dart';
 void main() {
   group('canvas (Figma-like)', () {
     CRDTDocument newDoc() => CRDTDocument()
-      ..registerDefaultFactories()
-      ..registerFactory('CRDTMapHandler<num>', CRDTMapHandler<num>.new);
+      ..register(CRDTMapHandler.spec<num>('CRDTMapHandler<num>'));
 
     test('concurrent slide reorder and coordinate updates converge', () {
       // --- Peer A builds two slides, each with one positioned element. ---

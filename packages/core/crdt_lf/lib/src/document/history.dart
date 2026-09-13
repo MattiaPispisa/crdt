@@ -175,9 +175,9 @@ class HistorySession {
       lastSnapshot: document._lastSnapshot,
       handlers: {},
     );
-    // Carry over the factories so nested handlers resolved through the
+    // Carry over the registered types so nested handlers resolved through the
     // read-only session can be reconstructed against the historical changes.
-    proxy._factories.addAll(document._factories);
+    proxy._specs.addAll(document._specs);
 
     return HistorySession._(
       cursor: cursor,

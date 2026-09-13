@@ -7,7 +7,7 @@ void main() {
     late CRDTListRefHandler list;
 
     setUp(() {
-      doc = CRDTDocument()..registerDefaultFactories();
+      doc = CRDTDocument();
       list = CRDTListRefHandler(doc, 'list');
     });
 
@@ -49,13 +49,13 @@ void main() {
     });
 
     test('concurrent insertions in the same region converge', () {
-      final docA = CRDTDocument()..registerDefaultFactories();
+      final docA = CRDTDocument();
       final listA = CRDTListRefHandler(docA, 'list');
       final first = CRDTFugueTextHandler(docA, 'first');
       listA.insertRef(0, first);
       first.insert(0, 'first');
 
-      final docB = CRDTDocument()..registerDefaultFactories();
+      final docB = CRDTDocument();
       final listB = CRDTListRefHandler(docB, 'list');
       docB.importChanges(docA.exportChanges());
 
@@ -73,6 +73,24 @@ void main() {
 
       expect(listA.resolved, listB.resolved);
       expect(listA.resolved.length, 3);
+    });
+  });
+
+  group('CRDTListRefHandler.insertChild', () {
+    test('adds a new child every time, unlike a keyed child', () {
+      // An insert adds an element, so there is no key to be idempotent about.
+      final doc = CRDTDocument(peerId: PeerId.generate());
+      final blocks = CRDTListRefHandler(doc, 'blocks');
+
+      final first = blocks.insertChild(0, CRDTFugueTextHandler.spec)
+        ..insert(0, 'a');
+      final second = blocks.insertChild(1, CRDTFugueTextHandler.spec)
+        ..insert(0, 'b');
+
+      expect(identical(first, second), isFalse);
+      expect(blocks.value, hasLength(2));
+      expect(blocks.getRefAtAs<CRDTFugueTextHandler>(0)?.value, 'a');
+      expect(blocks.getRefAtAs<CRDTFugueTextHandler>(1)?.value, 'b');
     });
   });
 }

@@ -2,216 +2,222 @@
 
 | Benchmark | RunTime (us) | RunTime (ms) | RunTime (s) |
 | --- | --- | --- | --- |
-| Apply 1000 changes | 951.2633 | 0.9513 | 0.000951 |
+| Apply 1000 changes | 1079.4700 | 1.0795 | 0.001079 |
+
+### apply_changes_capabilities_benchmark.dart
+
+| Benchmark | RunTime (us) | RunTime (ms) | RunTime (s) |
+| --- | --- | --- | --- |
+| Apply 1000 changes (capabilities tracked) | 994.0426 | 0.9940 | 0.000994 |
 
 ### change_roundtrip_benchmark.dart
 
 | Benchmark | RunTime (us) | RunTime (ms) | RunTime (s) |
 | --- | --- | --- | --- |
-| Change toBytes x1000 | 61.0764 | 0.0611 | 0.000061 |
-| Change fromBytes x1000 | 18.7105 | 0.0187 | 0.000019 |
-| Change roundtrip x1000 | 82.3081 | 0.0823 | 0.000082 |
+| Change toBytes x1000 | 62.8546 | 0.0629 | 0.000063 |
+| Change fromBytes x1000 | 18.7267 | 0.0187 | 0.000019 |
+| Change roundtrip x1000 | 83.0559 | 0.0831 | 0.000083 |
 
 ### dag_benchmark.dart
 
 | Benchmark | RunTime (us) | RunTime (ms) | RunTime (s) |
 | --- | --- | --- | --- |
-| DAG addNode chain of 1000 | 174.9783 | 0.1750 | 0.000175 |
-| DAG getAncestors chain of 200 | 7.4178 | 0.0074 | 0.000007 |
+| DAG addNode chain of 1000 | 186.8041 | 0.1868 | 0.000187 |
+| DAG getAncestors chain of 200 | 7.5958 | 0.0076 | 0.000008 |
 
 ### delta_emission_benchmark.dart
 
 | Benchmark | RunTime (us) | RunTime (ms) | RunTime (s) |
 | --- | --- | --- | --- |
-| Fugue text remote keystroke + read on 2000 chars (watched: false) | 41.8950 | 0.0419 | 0.000042 |
-| Fugue text remote keystroke + read on 2000 chars (watched: true) | 34.5300 | 0.0345 | 0.000035 |
-| Fugue text remote keystroke + read on 10000 chars (watched: false) | 90.2800 | 0.0903 | 0.000090 |
-| Fugue text remote keystroke + read on 10000 chars (watched: true) | 83.6000 | 0.0836 | 0.000084 |
-| Text remote keystroke + read on 2000 chars (watched: false) | 9.2450 | 0.0092 | 0.000009 |
-| Text remote keystroke + read on 2000 chars (watched: true) | 12.4200 | 0.0124 | 0.000012 |
-| Text remote keystroke + read on 10000 chars (watched: false) | 10.5550 | 0.0106 | 0.000011 |
-| Text remote keystroke + read on 10000 chars (watched: true) | 19.6700 | 0.0197 | 0.000020 |
-| Map remote write + read on 1000 keys (watched: false) | 7.4900 | 0.0075 | 0.000007 |
-| Map remote write + read on 1000 keys (watched: true) | 10.0450 | 0.0100 | 0.000010 |
-| Map remote write + read on 5000 keys (watched: false) | 4.7000 | 0.0047 | 0.000005 |
-| Map remote write + read on 5000 keys (watched: true) | 5.3550 | 0.0054 | 0.000005 |
-| Movable list remote move + read on 1000 elements (watched: false) | 52.0850 | 0.0521 | 0.000052 |
-| Movable list remote move + read on 1000 elements (watched: true) | 74.8100 | 0.0748 | 0.000075 |
-| Movable list remote move + read on 5000 elements (watched: false) | 187.1500 | 0.1872 | 0.000187 |
-| Movable list remote move + read on 5000 elements (watched: true) | 355.0950 | 0.3551 | 0.000355 |
-| Fugue text type 2000 chars locally (watched: false) | 62957.6389 | 62.9576 | 0.062958 |
-| Fugue text type 2000 chars locally (watched: true) | 85177.2273 | 85.1772 | 0.085177 |
+| Fugue text remote keystroke + read on 2000 chars (watched: false) | 44.9850 | 0.0450 | 0.000045 |
+| Fugue text remote keystroke + read on 2000 chars (watched: true) | 36.1650 | 0.0362 | 0.000036 |
+| Fugue text remote keystroke + read on 10000 chars (watched: false) | 88.7100 | 0.0887 | 0.000089 |
+| Fugue text remote keystroke + read on 10000 chars (watched: true) | 85.2450 | 0.0852 | 0.000085 |
+| Text remote keystroke + read on 2000 chars (watched: false) | 9.1750 | 0.0092 | 0.000009 |
+| Text remote keystroke + read on 2000 chars (watched: true) | 12.1000 | 0.0121 | 0.000012 |
+| Text remote keystroke + read on 10000 chars (watched: false) | 10.5950 | 0.0106 | 0.000011 |
+| Text remote keystroke + read on 10000 chars (watched: true) | 15.9050 | 0.0159 | 0.000016 |
+| Map remote write + read on 1000 keys (watched: false) | 8.4550 | 0.0085 | 0.000008 |
+| Map remote write + read on 1000 keys (watched: true) | 9.8350 | 0.0098 | 0.000010 |
+| Map remote write + read on 5000 keys (watched: false) | 4.8850 | 0.0049 | 0.000005 |
+| Map remote write + read on 5000 keys (watched: true) | 6.2500 | 0.0063 | 0.000006 |
+| Movable list remote move + read on 1000 elements (watched: false) | 45.8550 | 0.0459 | 0.000046 |
+| Movable list remote move + read on 1000 elements (watched: true) | 75.1850 | 0.0752 | 0.000075 |
+| Movable list remote move + read on 5000 elements (watched: false) | 186.0700 | 0.1861 | 0.000186 |
+| Movable list remote move + read on 5000 elements (watched: true) | 347.2300 | 0.3472 | 0.000347 |
+| Fugue text type 2000 chars locally (watched: false) | 57069.1111 | 57.0691 | 0.057069 |
+| Fugue text type 2000 chars locally (watched: true) | 92038.3929 | 92.0384 | 0.092038 |
 
 ### fugue_list_handler_benchmark.dart
 
 | Benchmark | RunTime (us) | RunTime (ms) | RunTime (s) |
 | --- | --- | --- | --- |
-| CRDTFugueListHandler do 1000 operations and get value (incremental cache update: true) | 3237.6125 | 3.2376 | 0.003238 |
+| CRDTFugueListHandler do 1000 operations and get value (incremental cache update: true) | 3136.6397 | 3.1366 | 0.003137 |
 
 ### fugue_snapshot_benchmark.dart
 
 | Benchmark | RunTime (us) | RunTime (ms) | RunTime (s) |
 | --- | --- | --- | --- |
-| Fugue text takeSnapshot of 10000 elements (tombstones: false) | 1051.9640 | 1.0520 | 0.001052 |
-| Fugue text restore of 10000 elements from snapshot (tombstones: false) | 1308.7712 | 1.3088 | 0.001309 |
-| Fugue text takeSnapshot of 10000 elements (tombstones: true) | 1092.7487 | 1.0927 | 0.001093 |
-| Fugue text restore of 10000 elements from snapshot (tombstones: true) | 1352.4041 | 1.3524 | 0.001352 |
-| Fugue text takeSnapshot of 100000 elements (tombstones: false) | 31974.0909 | 31.9741 | 0.031974 |
-| Fugue text restore of 100000 elements from snapshot (tombstones: false) | 23244.2071 | 23.2442 | 0.023244 |
-| Fugue text takeSnapshot of 100000 elements (tombstones: true) | 52436.6250 | 52.4366 | 0.052437 |
-| Fugue text restore of 100000 elements from snapshot (tombstones: true) | 14042.8267 | 14.0428 | 0.014043 |
+| Fugue text takeSnapshot of 10000 elements (tombstones: false) | 1057.2079 | 1.0572 | 0.001057 |
+| Fugue text restore of 10000 elements from snapshot (tombstones: false) | 1142.6395 | 1.1426 | 0.001143 |
+| Fugue text takeSnapshot of 10000 elements (tombstones: true) | 1132.6033 | 1.1326 | 0.001133 |
+| Fugue text restore of 10000 elements from snapshot (tombstones: true) | 1355.5021 | 1.3555 | 0.001356 |
+| Fugue text takeSnapshot of 100000 elements (tombstones: false) | 37758.8818 | 37.7589 | 0.037759 |
+| Fugue text restore of 100000 elements from snapshot (tombstones: false) | 21154.6500 | 21.1547 | 0.021155 |
+| Fugue text takeSnapshot of 100000 elements (tombstones: true) | 42491.5778 | 42.4916 | 0.042492 |
+| Fugue text restore of 100000 elements from snapshot (tombstones: true) | 27802.1400 | 27.8021 | 0.027802 |
 
 ### fugue_text_handler_benchmark.dart
 
 | Benchmark | RunTime (us) | RunTime (ms) | RunTime (s) |
 | --- | --- | --- | --- |
-| Fugue text keystroke + length on 30000 chars | 13.6350 | 0.0136 | 0.000014 |
-| Fugue text keystroke + value on 30000 chars | 325.5450 | 0.3255 | 0.000326 |
-| Fugue text update on 30000 chars | 1.6900 | 0.0017 | 0.000002 |
+| Fugue text keystroke + length on 30000 chars | 13.2800 | 0.0133 | 0.000013 |
+| Fugue text keystroke + value on 30000 chars | 357.3400 | 0.3573 | 0.000357 |
+| Fugue text update on 30000 chars | 1.7350 | 0.0017 | 0.000002 |
 
 ### fugue_tree_benchmark.dart
 
 | Benchmark | RunTime (us) | RunTime (ms) | RunTime (s) |
 | --- | --- | --- | --- |
-| FugueTree append 50000 elements | 11015.1632 | 11.0152 | 0.011015 |
-| FugueTree prepend 50000 elements | 100827.9000 | 100.8279 | 0.100828 |
-| FugueTree random insert 50000 elements | 120768.0000 | 120.7680 | 0.120768 |
-| FugueTree values() over 50000 live elements | 375.9187 | 0.3759 | 0.000376 |
-| FugueTree values() over 50000 elements, 90% tombstones | 62.7264 | 0.0627 | 0.000063 |
+| FugueTree append 50000 elements | 10973.4474 | 10.9734 | 0.010973 |
+| FugueTree prepend 50000 elements | 93993.5500 | 93.9935 | 0.093994 |
+| FugueTree random insert 50000 elements | 118734.6500 | 118.7346 | 0.118735 |
+| FugueTree values() over 50000 live elements | 376.2848 | 0.3763 | 0.000376 |
+| FugueTree values() over 50000 elements, 90% tombstones | 62.7273 | 0.0627 | 0.000063 |
 
 ### hlc_benchmark.dart
 
 | Benchmark | RunTime (us) | RunTime (ms) | RunTime (s) |
 | --- | --- | --- | --- |
-| HLC toUint8List x100k | 24.6837 | 0.0247 | 0.000025 |
-| HLC fromUint8List x100k | 517.0050 | 0.5170 | 0.000517 |
-| HLC compareTo x100k | 45.6921 | 0.0457 | 0.000046 |
+| HLC toUint8List x100k | 25.1833 | 0.0252 | 0.000025 |
+| HLC fromUint8List x100k | 498.8837 | 0.4989 | 0.000499 |
+| HLC compareTo x100k | 45.9227 | 0.0459 | 0.000046 |
 
 ### list_handler_benchmark.dart
 
 | Benchmark | RunTime (us) | RunTime (ms) | RunTime (s) |
 | --- | --- | --- | --- |
-| CRDTListHandler do 1000 operations and get value (incremental cache update: true) | 2442.7182 | 2.4427 | 0.002443 |
+| CRDTListHandler do 1000 operations and get value (incremental cache update: true) | 2508.9767 | 2.5090 | 0.002509 |
 
 ### map_handler_benchmark.dart
 
 | Benchmark | RunTime (us) | RunTime (ms) | RunTime (s) |
 | --- | --- | --- | --- |
-| CRDTMapHandler do 1000 operations and get value (incremental cache update: true) | 2614.3701 | 2.6144 | 0.002614 |
+| CRDTMapHandler do 1000 operations and get value (incremental cache update: true) | 2435.9202 | 2.4359 | 0.002436 |
 
 ### nested_handler_benchmark.dart
 
 | Benchmark | RunTime (us) | RunTime (ms) | RunTime (s) |
 | --- | --- | --- | --- |
-| Resolve nested tree with 50 leaves (cold caches) | 110.7708 | 0.1108 | 0.000111 |
-| Resolve nested tree with 200 leaves (cold caches) | 488.0908 | 0.4881 | 0.000488 |
-| Resolve nested tree with 800 leaves (cold caches) | 1975.4375 | 1.9754 | 0.001975 |
-| Import + resolve nested tree with 50 leaves (fresh peer) | 397.8477 | 0.3978 | 0.000398 |
-| Import + resolve nested tree with 200 leaves (fresh peer) | 1554.5484 | 1.5545 | 0.001555 |
-| Import + resolve nested tree with 800 leaves (fresh peer) | 6125.6167 | 6.1256 | 0.006126 |
+| Resolve nested tree with 50 leaves (cold caches) | 110.9641 | 0.1110 | 0.000111 |
+| Resolve nested tree with 200 leaves (cold caches) | 477.2144 | 0.4772 | 0.000477 |
+| Resolve nested tree with 800 leaves (cold caches) | 2008.3160 | 2.0083 | 0.002008 |
+| Import + resolve nested tree with 50 leaves (fresh peer) | 386.1575 | 0.3862 | 0.000386 |
+| Import + resolve nested tree with 200 leaves (fresh peer) | 1501.0758 | 1.5011 | 0.001501 |
+| Import + resolve nested tree with 800 leaves (fresh peer) | 7503.8744 | 7.5039 | 0.007504 |
 
 ### op_id_key_benchmark.dart
 
 | Benchmark | RunTime (us) | RunTime (ms) | RunTime (s) |
 | --- | --- | --- | --- |
-| OpIdKey view x100k | 484.4658 | 0.4845 | 0.000484 |
-| OpIdKey hashCode x100k (cold) | 1848.1143 | 1.8481 | 0.001848 |
-| OpIdKey map lookup x10k | 70.7404 | 0.0707 | 0.000071 |
-| OperationId map lookup x10k | 65.1054 | 0.0651 | 0.000065 |
+| OpIdKey view x100k | 474.4272 | 0.4744 | 0.000474 |
+| OpIdKey hashCode x100k (cold) | 1836.0116 | 1.8360 | 0.001836 |
+| OpIdKey map lookup x10k | 64.1378 | 0.0641 | 0.000064 |
+| OperationId map lookup x10k | 61.2321 | 0.0612 | 0.000061 |
 
 ### or_set_handler_benchmark.dart
 
 | Benchmark | RunTime (us) | RunTime (ms) | RunTime (s) |
 | --- | --- | --- | --- |
-| CRDTORSetHandler do 1000 operations and get value (incremental cache update: true) | 2905.0026 | 2.9050 | 0.002905 |
+| CRDTORSetHandler do 1000 operations and get value (incremental cache update: true) | 2812.9465 | 2.8129 | 0.002813 |
 
 ### peer_id_benchmark.dart
 
 | Benchmark | RunTime (us) | RunTime (ms) | RunTime (s) |
 | --- | --- | --- | --- |
-| PeerId generate x100 | 164.8645 | 0.1649 | 0.000165 |
-| PeerId toUint8List x1000 | 32.0435 | 0.0320 | 0.000032 |
-| PeerId fromUint8List x1000 | 54.5756 | 0.0546 | 0.000055 |
+| PeerId generate x100 | 162.3251 | 0.1623 | 0.000162 |
+| PeerId toUint8List x1000 | 32.0184 | 0.0320 | 0.000032 |
+| PeerId fromUint8List x1000 | 54.0535 | 0.0541 | 0.000054 |
 
 ### remote_apply_benchmark.dart
 
 | Benchmark | RunTime (us) | RunTime (ms) | RunTime (s) |
 | --- | --- | --- | --- |
-| Fugue text remote keystroke + read on 2000 chars | 41.9450 | 0.0419 | 0.000042 |
-| Fugue text remote keystroke + read on 10000 chars | 93.8250 | 0.0938 | 0.000094 |
-| Fugue text remote keystroke + read on 30000 chars | 322.2050 | 0.3222 | 0.000322 |
+| Fugue text remote keystroke + read on 2000 chars | 43.2700 | 0.0433 | 0.000043 |
+| Fugue text remote keystroke + read on 10000 chars | 92.1000 | 0.0921 | 0.000092 |
+| Fugue text remote keystroke + read on 30000 chars | 318.7050 | 0.3187 | 0.000319 |
 | Text remote keystroke + read on 2000 chars | 9.7150 | 0.0097 | 0.000010 |
-| Text remote keystroke + read on 10000 chars | 12.4100 | 0.0124 | 0.000012 |
-| Text remote keystroke + read on 30000 chars | 17.2300 | 0.0172 | 0.000017 |
-| Map remote set + read on 1000 keys | 12.0300 | 0.0120 | 0.000012 |
-| Map remote set + read on 5000 keys | 11.8800 | 0.0119 | 0.000012 |
-| OR-set remote add from the past + read on 1000 values | 44.0250 | 0.0440 | 0.000044 |
-| OR-set remote add from the past + read on 5000 values | 92.6400 | 0.0926 | 0.000093 |
-| OR-map remote put from the past + read on 1000 keys | 58.6450 | 0.0586 | 0.000059 |
-| OR-map remote put from the past + read on 5000 keys | 233.5400 | 0.2335 | 0.000234 |
-| Movable list remote move from the past + read on 1000 items | 46.3300 | 0.0463 | 0.000046 |
-| Movable list remote move from the past + read on 5000 items | 174.0200 | 0.1740 | 0.000174 |
+| Text remote keystroke + read on 10000 chars | 12.2300 | 0.0122 | 0.000012 |
+| Text remote keystroke + read on 30000 chars | 18.9650 | 0.0190 | 0.000019 |
+| Map remote set + read on 1000 keys | 10.2100 | 0.0102 | 0.000010 |
+| Map remote set + read on 5000 keys | 5.0350 | 0.0050 | 0.000005 |
+| OR-set remote add from the past + read on 1000 values | 34.3400 | 0.0343 | 0.000034 |
+| OR-set remote add from the past + read on 5000 values | 104.3000 | 0.1043 | 0.000104 |
+| OR-map remote put from the past + read on 1000 keys | 61.5800 | 0.0616 | 0.000062 |
+| OR-map remote put from the past + read on 5000 keys | 236.3600 | 0.2364 | 0.000236 |
+| Movable list remote move from the past + read on 1000 items | 49.8500 | 0.0498 | 0.000050 |
+| Movable list remote move from the past + read on 5000 items | 178.4500 | 0.1784 | 0.000178 |
 
 ### scaling_benchmark.dart
 
 | Benchmark | RunTime (us) | RunTime (ms) | RunTime (s) |
 | --- | --- | --- | --- |
-| Import 1000 chained changes | 951.9770 | 0.9520 | 0.000952 |
-| Import 10000 chained changes | 11688.6348 | 11.6886 | 0.011689 |
-| exportChangesNewerThan on 50000 changes / 10 peers (99% caught-up) | 1.9312 | 0.0019 | 0.000002 |
-| takeSnapshot(pruneHistory) with 10000 changes | 27311.5000 | 27.3115 | 0.027311 |
-| takeSnapshot(pruneHistory) with 100 concurrent heads | 4025.1149 | 4.0251 | 0.004025 |
+| Import 1000 chained changes | 928.6139 | 0.9286 | 0.000929 |
+| Import 10000 chained changes | 11151.6167 | 11.1516 | 0.011152 |
+| exportChangesNewerThan on 50000 changes / 10 peers (99% caught-up) | 2.0129 | 0.0020 | 0.000002 |
+| takeSnapshot(pruneHistory) with 10000 changes | 22577.3111 | 22.5773 | 0.022577 |
+| takeSnapshot(pruneHistory) with 100 concurrent heads | 4073.3220 | 4.0733 | 0.004073 |
 
 ### serialization_benchmark.dart
 
 | Benchmark | RunTime (us) | RunTime (ms) | RunTime (s) |
 | --- | --- | --- | --- |
-| Binary encode/decode 1000 changes | 1483.4269 | 1.4834 | 0.001483 |
+| Binary encode/decode 1000 changes | 1548.8440 | 1.5488 | 0.001549 |
 
 ### snapshot_benchmark.dart
 
 | Benchmark | RunTime (us) | RunTime (ms) | RunTime (s) |
 | --- | --- | --- | --- |
-| Take snapshot with 1000 changes | 132.5393 | 0.1325 | 0.000133 |
+| Take snapshot with 1000 changes | 132.9742 | 0.1330 | 0.000133 |
 
 ### text_handler_benchmark.dart
 
 | Benchmark | RunTime (us) | RunTime (ms) | RunTime (s) |
 | --- | --- | --- | --- |
-| CRDTTextHandler do 1000 operations and get value (incremental cache update: true) | 2885.6645 | 2.8857 | 0.002886 |
-| CRDTTextHandler do 1000 operations and get value (incremental cache update: false) | 3008.6198 | 3.0086 | 0.003009 |
+| CRDTTextHandler do 1000 operations and get value (incremental cache update: true) | 2936.9671 | 2.9370 | 0.002937 |
+| CRDTTextHandler do 1000 operations and get value (incremental cache update: false) | 3084.6137 | 3.0846 | 0.003085 |
 
 ### topological_sort_benchmark.dart
 
 | Benchmark | RunTime (us) | RunTime (ms) | RunTime (s) |
 | --- | --- | --- | --- |
-| Import 1000 concurrent changes | 946.1235 | 0.9461 | 0.000946 |
+| Import 1000 concurrent changes | 932.4526 | 0.9325 | 0.000932 |
 
 ### undo_manager_benchmark.dart
 
 | Benchmark | RunTime (us) | RunTime (ms) | RunTime (s) |
 | --- | --- | --- | --- |
-| Fugue text type 300 chars locally (undo managers: 0) | 737.2333 | 0.7372 | 0.000737 |
-| Fugue text type 300 chars locally (undo managers: 1) | 795.2000 | 0.7952 | 0.000795 |
-| Fugue text type 300 chars locally (undo managers: 2) | 863.1333 | 0.8631 | 0.000863 |
-| Fugue text type 300 chars locally (undo managers: 3) | 873.5667 | 0.8736 | 0.000874 |
-| Fugue text type 300 chars locally (undo managers: 5) | 906.8000 | 0.9068 | 0.000907 |
-| Fugue text undo+redo one keystroke on 2000 chars | 13.6000 | 0.0136 | 0.000014 |
-| Fugue text undo+redo one keystroke on 10000 chars | 4.5000 | 0.0045 | 0.000005 |
-| Fugue text undo+redo a 1-char delete on 5000 chars | 4.4500 | 0.0044 | 0.000004 |
-| Fugue text undo+redo a 100-char delete on 5000 chars | 58.4000 | 0.0584 | 0.000058 |
-| Fugue text undo+redo a 500-char delete on 5000 chars | 350.4500 | 0.3504 | 0.000350 |
+| Fugue text type 300 chars locally (undo managers: 0) | 736.8000 | 0.7368 | 0.000737 |
+| Fugue text type 300 chars locally (undo managers: 1) | 858.8333 | 0.8588 | 0.000859 |
+| Fugue text type 300 chars locally (undo managers: 2) | 871.0667 | 0.8711 | 0.000871 |
+| Fugue text type 300 chars locally (undo managers: 3) | 861.9000 | 0.8619 | 0.000862 |
+| Fugue text type 300 chars locally (undo managers: 5) | 908.9667 | 0.9090 | 0.000909 |
+| Fugue text undo+redo one keystroke on 2000 chars | 4.5000 | 0.0045 | 0.000005 |
+| Fugue text undo+redo one keystroke on 10000 chars | 4.5500 | 0.0046 | 0.000005 |
+| Fugue text undo+redo a 1-char delete on 5000 chars | 12.7500 | 0.0127 | 0.000013 |
+| Fugue text undo+redo a 100-char delete on 5000 chars | 56.4500 | 0.0565 | 0.000056 |
+| Fugue text undo+redo a 500-char delete on 5000 chars | 358.4500 | 0.3584 | 0.000358 |
 | Map undo+redo one set on 5000 keys | 3.8500 | 0.0039 | 0.000004 |
-| OR-set undo+redo one add on 5000 values | 4.7500 | 0.0047 | 0.000005 |
-| Fugue text undo/redo ping-pong x10 on 2000 chars | 475.6667 | 0.4757 | 0.000476 |
-| Fugue text undo/redo ping-pong x100 on 2000 chars | 1367.6667 | 1.3677 | 0.001368 |
-| Fugue text undo/redo ping-pong x1000 on 2000 chars | 12466.6667 | 12.4667 | 0.012467 |
+| OR-set undo+redo one add on 5000 values | 4.6500 | 0.0047 | 0.000005 |
+| Fugue text undo/redo ping-pong x10 on 2000 chars | 481.6667 | 0.4817 | 0.000482 |
+| Fugue text undo/redo ping-pong x100 on 2000 chars | 1624.0000 | 1.6240 | 0.001624 |
+| Fugue text undo/redo ping-pong x1000 on 2000 chars | 12281.3333 | 12.2813 | 0.012281 |
 
 ### version_vector_benchmark.dart
 
 | Benchmark | RunTime (us) | RunTime (ms) | RunTime (s) |
 | --- | --- | --- | --- |
-| VersionVector toBytes 10 peers x1000 | 418.3634 | 0.4184 | 0.000418 |
-| VersionVector fromBytes 10 peers x1000 | 650.2140 | 0.6502 | 0.000650 |
-| VersionVector intersection 10 peers x1000 | 202.2140 | 0.2022 | 0.000202 |
+| VersionVector toBytes 10 peers x1000 | 463.7518 | 0.4638 | 0.000464 |
+| VersionVector fromBytes 10 peers x1000 | 683.5023 | 0.6835 | 0.000684 |
+| VersionVector intersection 10 peers x1000 | 212.3910 | 0.2124 | 0.000212 |
 

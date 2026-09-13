@@ -132,8 +132,7 @@ void main() {
 
   group('CrdtHandlerBuilder (nested)', () {
     testWidgets('rebuilds when a descendant handler changes', (tester) async {
-      final doc = CRDTDocument(peerId: PeerId.generate())
-        ..registerDefaultFactories();
+      final doc = CRDTDocument(peerId: PeerId.generate());
       final root = CRDTMapRefHandler(doc, 'root');
       final child = CRDTListHandler<String>(doc, 'child');
       root.setRef('child', child);

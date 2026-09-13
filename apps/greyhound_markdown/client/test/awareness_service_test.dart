@@ -43,6 +43,12 @@ class _FakeClient extends RelaySocketClient {
   Stream<Message> get messages => const Stream.empty();
 
   @override
+  void abandonHandshake() {}
+
+  @override
+  void publishConnectionStatus(ConnectionStatus status) {}
+
+  @override
   Future<bool> connect() async => true;
 
   @override

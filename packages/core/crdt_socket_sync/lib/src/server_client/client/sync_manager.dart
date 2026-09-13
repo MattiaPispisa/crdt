@@ -62,9 +62,14 @@ class SyncManager {
   ///
   /// {@template sync_manager_apply_failure}
   /// A causal gap is the one failure a resync can close, so it is the only one
-  /// answered with [requestDocumentStatus]. Anything else is left to throw:
-  /// re-serving the same document would fail the same way, and asking for it
-  /// again is a loop, not a recovery.
+  /// answered with [requestDocumentStatus]: re-serving the same document would
+  /// fail the same way for any other reason, and asking again is a loop rather
+  /// than a recovery.
+  ///
+  /// Anything else is reported on [CRDTSocketClient.faults] and not thrown.
+  /// This runs inside the callback that reads the socket, where a throw reaches
+  /// no `catch` and no `onError` — it lands in the zone, which on Flutter is a
+  /// crash instead of a message.
   /// {@endtemplate}
   void applyChange(Change change) {
     try {
@@ -73,7 +78,24 @@ class SyncManager {
       requestDocumentStatus();
     } on MissingDependencyException {
       requestDocumentStatus();
+    } catch (error, stackTrace) {
+      _reportApplyFailure(error, stackTrace, count: 1);
     }
+  }
+
+  /// Reports a failure that no resync can fix.
+  void _reportApplyFailure(
+    Object error,
+    StackTrace stackTrace, {
+    required int count,
+  }) {
+    client.reportSyncFault(
+      SyncFault(
+        reason: 'Could not apply $count change(s) from the server',
+        error: error,
+        stackTrace: stackTrace,
+      ),
+    );
   }
 
   /// Applies a list of changes
@@ -88,21 +110,39 @@ class SyncManager {
       requestDocumentStatus();
     } on MissingDependencyException {
       requestDocumentStatus();
+    } catch (error, stackTrace) {
+      _reportApplyFailure(error, stackTrace, count: changes.length);
     }
   }
 
   /// [CRDTDocument.import] with:
   /// - `merge: false`
   /// - `pruneHistory: true`
+  ///
+  /// A failure is reported on [CRDTSocketClient.faults] rather than thrown,
+  /// for the same reason [applyChange] does it: this runs inside the socket's
+  /// read callback, where a throw would land in the zone. Nothing is sent back
+  /// when the import fails — there is no state to report yet.
   void import({
     required VersionVector serverVersionVector,
     List<Change>? changes,
     Snapshot? snapshot,
   }) {
-    document.import(
-      changes: changes,
-      snapshot: snapshot,
-    );
+    try {
+      document.import(
+        changes: changes,
+        snapshot: snapshot,
+      );
+    } catch (error, stackTrace) {
+      client.reportSyncFault(
+        SyncFault(
+          reason: 'Could not import the state the server served',
+          error: error,
+          stackTrace: stackTrace,
+        ),
+      );
+      return;
+    }
 
     _sendUnknownChangesToServerSync(
       document.exportChangesNewerThan(serverVersionVector),

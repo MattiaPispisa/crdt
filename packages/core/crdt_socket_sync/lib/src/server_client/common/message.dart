@@ -126,7 +126,10 @@ class HandshakeRequestMessage extends SyncMessage {
       author: PeerId.parse(json['author'] as String),
       protocolVersion: Protocol.readVersion(json),
       capabilities: capabilities != null
-          ? SyncCapabilities.fromJson(capabilities as Map<String, dynamic>)
+          ? SyncCapabilities.fromJson(
+              capabilities as Map<String, dynamic>,
+              complete: json['capabilitiesComplete'] as bool? ?? false,
+            )
           : null,
     );
   }
@@ -159,7 +162,12 @@ class HandshakeRequestMessage extends SyncMessage {
       'author': author.toString(),
       'versionVector': _encodeVersionVector(versionVector),
       'protocolVersion': protocolVersion,
-      if (capabilities != null) 'capabilities': capabilities!.toJson(),
+      if (capabilities != null) ...{
+        'capabilities': capabilities!.toJson(),
+        // Absent means "not complete", which is what a peer that predates the
+        // field meant too.
+        if (capabilities!.complete) 'capabilitiesComplete': true,
+      },
     };
   }
 

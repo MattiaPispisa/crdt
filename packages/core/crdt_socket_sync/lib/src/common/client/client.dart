@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:crdt_lf/crdt_lf.dart';
 import 'package:crdt_socket_sync/src/common/client/incompatibility.dart';
 import 'package:crdt_socket_sync/src/common/client/status.dart';
+import 'package:crdt_socket_sync/src/common/client/sync_fault.dart';
 import 'package:crdt_socket_sync/src/common/common/common.dart';
 import 'package:crdt_socket_sync/src/plugins/client/client.dart';
 import 'package:meta/meta.dart';
@@ -31,35 +32,122 @@ abstract class CRDTSocketClient {
 
   /// What this build tells the server it can read.
   ///
-  /// The server refuses a client that would receive operations it cannot
-  /// decode, so an **incomplete** declaration locks a perfectly good client
-  /// out. The default reads the document
-  /// ([CRDTDocument.describeBuildCapabilities]), which only knows the handlers
-  /// already open and the factories already registered — and the usual order
-  /// is to open a handler *after* connecting.
+  /// Leaving it unset is safe. The default reads the document
+  /// ([CRDTDocument.describeBuildCapabilities]), which knows the handlers
+  /// already open and the factories already registered — and an app usually
+  /// opens a handler *after* connecting. Such a description is sent as
+  /// **incomplete**, so a type it does not name is passed over rather than
+  /// treated as one this build cannot read.
   ///
-  /// So either register the factories before [connect]:
-  ///
-  /// ```dart
-  /// document.registerFactory('CRDTListHandler<Todo>', CRDTListHandler<Todo>.new);
-  /// await client.connect();
-  /// ```
-  ///
-  /// or state the build once, at construction, and stop depending on timing:
+  /// Passing one says it names **every** type this build reads, so the server
+  /// can also refuse on a type left out. It is the stricter check, and only a
+  /// description written by hand can promise it:
   ///
   /// ```dart
   /// WebSocketClient(
   ///   document: document,
   ///   capabilities: DocumentCapabilities({
-  ///     'CRDTListHandler<Todo>': const HandlerCapability(
+  ///     'CRDTListHandler<Todo>': const HandlerFormats(
   ///       operationKinds: {0, 1, 2},
-  ///       snapshotBlobVersion: 1,
+  ///       snapshotBlobVersions: {1},
   ///     ),
   ///   }),
   /// );
   /// ```
+  ///
+  /// Either way, a type that **is** named is checked in full: a kind it lacks,
+  /// or a snapshot blob written with another layout, refuses the client.
   DocumentCapabilities get capabilities =>
       _declaredCapabilities ?? document.describeBuildCapabilities();
+
+  /// [capabilities] as the peer states them, or `null` when they claim nothing.
+  ///
+  /// A description passed at construction is sent as **complete**: it was
+  /// written out, so it names every type this build reads, and the server can
+  /// treat silence about a type as "cannot read it". One derived from the
+  /// document is sent as incomplete, because it only knows the handlers opened
+  /// so far.
+  @protected
+  SyncCapabilities? get statedCapabilities {
+    final stated = capabilities;
+    if (stated.isEmpty) {
+      return null;
+    }
+    return SyncCapabilities(stated, complete: _declaredCapabilities != null);
+  }
+
+  /// Refuses, in debug builds, to let a minification-unstable type tag travel.
+  ///
+  /// Call it from `connect()` **before** any `try`: a throw from inside one is
+  /// swallowed into a failed connection, which turns a clear message into a
+  /// client that never connects and never says why.
+  ///
+  /// Compiled out of a release build, like every `assert`.
+  @protected
+  void debugCheckHandlerTypes() {
+    assert(_debugStableHandlerTypes(), 'unreachable: the check throws');
+  }
+
+  /// Throws when an open handler would put a minification-unstable tag on the
+  /// wire, and returns `true` otherwise so it can sit inside an `assert`.
+  ///
+  /// Only generic handlers are refused. Their default tag carries the type
+  /// argument, so it is both unstable and impossible for the library to
+  /// declare — the two reasons an app has to name it. A non-generic handler
+  /// that leaves the tag derived has the same minification problem, but it is
+  /// also the shape a local-only test uses, so flagging it here would cost
+  /// more than it catches.
+  bool _debugStableHandlerTypes() {
+    final unstable = [
+      for (final handler in document.registeredHandlers.values)
+        if (!handler.hasStableHandlerType &&
+            handler.handlerType.contains('<'))
+          '${handler.handlerType} (id ${handler.id})',
+    ];
+
+    if (unstable.isEmpty) {
+      return true;
+    }
+
+    throw StateError(
+      'These handlers would send a type tag that dart2js minifies away, so '
+      'the same build syncs on the VM and stops routing changes in a Flutter '
+      'web release: ${unstable.join(', ')}. Pass a constant tag to the '
+      'constructor, for example '
+      "CRDTListHandler<Todo>(doc, 'todos', handlerType: 'todos'). The handler "
+      'turns it into a HandlerSpec, so the type also becomes rebuildable on '
+      'the peers that receive it.',
+    );
+  }
+
+  final StreamController<SyncFault> _faults =
+      StreamController<SyncFault>.broadcast();
+
+  /// What the client could not do with something the server sent.
+  ///
+  /// The connection is still up and the peers still understand each other;
+  /// one piece of data could not be taken in. Nothing is retried, so an app
+  /// that cares has to decide for itself whether to re-sync or to tell the
+  /// user.
+  ///
+  /// Broadcast, and nothing is replayed: a fault reported before you subscribe
+  /// is gone.
+  Stream<SyncFault> get faults => _faults.stream;
+
+  /// Reports [fault] on [faults].
+  ///
+  /// Called by the sync machinery instead of throwing: the apply runs inside
+  /// the socket's read callback, where a throw reaches no `catch` and no
+  /// `onError` and ends up as an uncaught error in the zone.
+  void reportSyncFault(SyncFault fault) {
+    if (!_faults.isClosed) {
+      _faults.add(fault);
+    }
+  }
+
+  /// Ends [faults]. A client calls it from its own `dispose`.
+  @protected
+  void closeFaults() => _faults.close();
 
   SyncIncompatibility? _incompatibility;
 
@@ -117,6 +205,30 @@ abstract class CRDTSocketClient {
           'this client speaks ${Protocol.protocolVersion}.',
     );
     return true;
+  }
+
+  /// Acts on an [ErrorMessage] the peer sent, for the codes every client
+  /// answers the same way.
+  ///
+  /// A terminal code refuses the build for good; anything else moves the
+  /// client to [ConnectionStatus.error], and a failed handshake also frees
+  /// whoever is waiting on it.
+  ///
+  /// A client that has codes of its own handles those first and calls this for
+  /// the rest, so a terminal code added to [Protocol.terminalErrors] reaches
+  /// every client without being wired up twice.
+  @protected
+  void handleErrorMessage(ErrorMessage message) {
+    if (SyncIncompatibility.isTerminalCode(message.code)) {
+      refuseBuild(code: message.code, reason: message.message);
+      return;
+    }
+
+    updateConnectionStatus(ConnectionStatus.error);
+
+    if (message.code == Protocol.errorHandshakeFailed) {
+      abandonHandshake();
+    }
   }
 
   /// Frees whoever is waiting on the handshake that will never complete.

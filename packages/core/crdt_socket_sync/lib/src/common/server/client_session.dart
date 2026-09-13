@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:crdt_socket_sync/src/common/common/common.dart';
 import 'package:crdt_socket_sync/src/common/common/utils.dart';
@@ -214,6 +215,11 @@ abstract class ClientSession {
           },
         ),
       );
+      // A frame that throws on the way in is as undecodable as one that
+      // decodes to nothing, and the peer is owed the same answer. Without it
+      // the client sits on a connection that works and waits for a reply that
+      // is never coming.
+      handleUndecodable(data);
     }
   }
 
@@ -274,11 +280,15 @@ abstract class ClientSession {
   @protected
   Future<void> handleTypedMessage(Message message);
 
-  /// Called for an incoming [data] frame no codec could decode.
+  /// Called for an incoming [data] frame this session could not read.
   ///
-  /// The default reports a [SessionEventType.error] event. Sessions may
-  /// override it to answer the peer (for example, a relay session diagnoses a
-  /// CRDT-aware sync client that connected to the wrong server).
+  /// Covers a frame no codec claimed and one that threw on the way in. The
+  /// default reports a [SessionEventType.error] event **and answers the peer**
+  /// with [Protocol.errorInvalidMessage]: a client that hears nothing back
+  /// cannot tell a rejected frame from a slow one, and waits for a reply that
+  /// is never coming. Sessions may override it to say something more precise
+  /// first (a relay session diagnoses a CRDT-aware sync client that connected
+  /// to the wrong server).
   @protected
   void handleUndecodable(List<int> data) {
     addSessionEvent(
@@ -289,6 +299,44 @@ abstract class ClientSession {
             'This message is not supported by any plugin.',
       ),
     );
+
+    // Only for a frame that belongs to the protocol. A plugin frame this build
+    // cannot read means the peer has a plugin this one does not — a difference
+    // in configuration, and answering it would turn every frame of a working
+    // connection into an error the peer displays.
+    final type = Message.getTypeOrNull(data);
+    if (type != null && type >= MessageTypeValue.firstPluginValue) {
+      return;
+    }
+
+    unawaited(
+      sendMessage(
+        Message.error(
+          documentId: documentIdOf(data) ?? '',
+          code: Protocol.errorInvalidMessage,
+          message: 'This frame could not be read.',
+        ),
+      ),
+    );
+  }
+
+  /// Best-effort read of the `documentId` field of a [data] frame that could
+  /// not be decoded.
+  ///
+  /// Returns `null` when the frame is not JSON or names no document — an
+  /// answer can still be sent, it just cannot say which document it is about.
+  @protected
+  String? documentIdOf(List<int> data) {
+    try {
+      final json = jsonDecode(utf8.decode(data));
+      if (json is Map<String, dynamic>) {
+        final id = json['documentId'];
+        return id is String ? id : null;
+      }
+    } catch (_) {
+      // Not JSON: no documentId to report.
+    }
+    return null;
   }
 
   /// Mark this session as subscribed to [documentId].

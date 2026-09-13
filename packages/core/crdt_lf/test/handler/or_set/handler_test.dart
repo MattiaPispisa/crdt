@@ -3,19 +3,18 @@ import 'package:test/test.dart';
 
 void main() {
   group('CRDTORSetHandler', () {
-    test('handlerType: generic default, and a stable constructor override', () {
+    test('the tag is runtimeType by default, and a spec fixes it', () {
       final doc = CRDTDocument();
       // Default tag is runtimeType-based and includes the generic argument.
       expect(
         CRDTORSetHandler<String>(doc, 's').handlerType,
         'CRDTORSetHandler<String>',
       );
-      // A custom tag survives minification and flows into the HandlerRef.
-      final tagged = CRDTORSetHandler<String>(
-        doc,
-        's2',
-        handlerType: 'orset/str',
-      );
+
+      // The tag survives minification and flows into the HandlerRef.
+      final tagged =
+          CRDTORSetHandler<String>(doc, 's2', handlerType: 'orset/str');
+
       expect(tagged.handlerType, 'orset/str');
       expect(HandlerRef.of(tagged).type, 'orset/str');
     });

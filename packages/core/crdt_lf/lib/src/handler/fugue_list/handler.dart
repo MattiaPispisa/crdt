@@ -4,6 +4,7 @@ import 'package:crdt_lf/crdt_lf.dart';
 import 'package:crdt_lf/src/algorithm/fugue/tree.dart';
 import 'package:crdt_lf/src/handler/fugue/fugue_sequence_apply.dart';
 import 'package:crdt_lf/src/handler/fugue/fugue_sequence_handler.dart';
+import 'package:crdt_lf/src/handler/fugue/fugue_snapshot.dart';
 
 part 'operation.dart';
 
@@ -43,10 +44,61 @@ base class CRDTFugueListHandler<T>
     super.doc,
     super.id, {
     ValueCodec<T>? valueCodec,
-    super.handlerType,
+    String? handlerType,
+  }) : _valueCodec = valueCodec ?? JsonValueCodec<T>(),
+        super(
+          spec: handlerType == null
+              ? null
+              : CRDTFugueListHandler.spec<T>(
+                  handlerType,
+                  valueCodec: valueCodec,
+                ),
+        );
+
+  /// Builds one from [spec], for the builder [spec] itself holds.
+  ///
+  /// The public constructor takes a tag and makes the spec; this takes one
+  /// ready-made, so the same object reaches every handler the spec builds and
+  /// the document sees one spec per tag.
+  CRDTFugueListHandler._fromSpec(
+    super.doc,
+    super.id, {
+    required super.spec,
+    ValueCodec<T>? valueCodec,
   }) : _valueCodec = valueCodec ?? JsonValueCodec<T>();
 
   final ValueCodec<T> _valueCodec;
+
+  /// {@macro generic_handler_spec}
+  static HandlerSpec<CRDTFugueListHandler<T>> spec<T>(
+    String type, {
+    ValueCodec<T>? valueCodec,
+  }) =>
+      HandlerSpec<CRDTFugueListHandler<T>>(
+        type,
+        (doc, id, spec) => CRDTFugueListHandler<T>._fromSpec(
+          doc,
+          id,
+          spec: spec,
+          valueCodec: valueCodec,
+        ),
+        formats: _formats,
+      );
+
+  /// What this build reads for this handler type.
+  ///
+  /// {@macro handler_formats_constant}
+  ///
+  /// The blob range is [FugueSnapshot.version], shared by every handler built
+  /// on the Fugue tree.
+  static const HandlerFormats _formats = HandlerFormats(
+    operationKinds: {
+      OperationType.kindInsert,
+      OperationType.kindDelete,
+      OperationType.kindUpdate,
+    },
+    blobVersions: BlobVersionRange.single(FugueSnapshot.version),
+  );
 
   @override
   late final OperationDecoders operationDecoders = {

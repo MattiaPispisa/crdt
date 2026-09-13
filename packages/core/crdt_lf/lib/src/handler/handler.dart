@@ -24,7 +24,9 @@ typedef OperationDecoders = Map<int, Operation Function(Uint8List body)>;
 ///   and how its operations are decoded.
 /// - [getSnapshotState] — required: the state as bytes, seeded back through
 ///   [lastSnapshot].
-/// - [handlerType] — for a handler that must survive dart2js minification.
+/// - `spec` on the constructor — for a handler that syncs, persists, or must
+///   survive dart2js minification. It fixes the type tag and tells the document
+///   how to rebuild the handler.
 /// - [incrementCachedState] — to advance the cached state by one operation
 ///   instead of replaying the history.
 /// - [stateIsOrderIndependent] — only when the state is the same
@@ -50,18 +52,33 @@ abstract base class Handler<T>
     with DocumentConsumer, SnapshotProvider, CacheableStateProvider<T> {
   /// Creates a new handler for the given document.
   ///
-  /// [handlerType] optionally overrides the type tag
-  /// (see [Handler.handlerType]);
-  /// pass a stable constant for generic handlers
-  /// that must work in a minified build.
-  Handler(this.doc, {String? handlerType}) : _handlerType = handlerType {
-    doc.registerHandler(this);
+  /// [spec] is how this kind of handler is rebuilt. It does two things at once:
+  /// it fixes the type tag, and it tells [doc] how to build a handler of this
+  /// kind — which is what a peer resolving a [HandlerRef] needs, and what
+  /// [CRDTDocument.reconstruct] walks.
+  ///
+  /// Leave it out and the handler still works, under a tag derived from
+  /// `runtimeType`: that is the flat mode, where every peer creates the same
+  /// ids by hand. Nothing can rebuild it, and the tag does not survive dart2js.
+  Handler(this.doc, {HandlerSpec<Handler<dynamic>>? spec}) : _spec = spec {
+    doc._registerHandler(this);
   }
 
   /// The document that owns this handler
   final BaseCRDTDocument doc;
 
-  final String? _handlerType;
+  final HandlerSpec<Handler<dynamic>>? _spec;
+
+  /// How to rebuild a handler of this kind; `null` when this build cannot say.
+  ///
+  /// The document reads it when the handler registers, so a handler that
+  /// answers one declares its own type — which is what a peer resolving a
+  /// [HandlerRef] needs, and what [CRDTDocument.reconstruct] walks.
+  ///
+  /// Defaults to the `spec` passed to the constructor. A class whose tag is
+  /// fixed overrides it with its own constant instead, so opening one declares
+  /// the type with nothing registered.
+  HandlerSpec<Handler<dynamic>>? get handlerSpec => _spec;
 
   /// The decoders this handler owns, keyed by [OperationEnvelope.kind].
   ///
@@ -69,14 +86,42 @@ abstract base class Handler<T>
   /// when a change carrying it is decoded.
   OperationDecoders get operationDecoders;
 
-  /// The operation kinds this build can decode.
-  Set<int> get decodableKinds => operationDecoders.keys.toSet();
-
   /// The version of the blob [getSnapshotState] writes.
   ///
-  /// A peer that raises it is telling the others that they cannot read what it
-  /// writes.
+  /// Raising it tells the other peers that they cannot read what this build
+  /// writes, unless they raised [minReadableSnapshotBlobVersion] to match.
+  ///
+  /// It only means that when the blob actually carries it, which is what
+  /// [snapshotHeader] and [readSnapshotHeader] are for. A handler that writes
+  /// its state without them still answers `1` here, and two such handlers with
+  /// genuinely different layouts both claim `1` and look compatible — so a
+  /// handler that skips the header opts out of this check rather than passing
+  /// it.
   int get snapshotBlobVersion => 1;
+
+  /// The oldest blob version this build still reads.
+  ///
+  /// Defaults to [snapshotBlobVersion]: a handler reads only what it writes,
+  /// and a blob from any other build is refused. Lower it to keep reading an
+  /// older layout and migrate it on the way in. [readSnapshotHeader] hands
+  /// back the version it found, so wherever the handler reads [lastSnapshot]
+  /// back it can branch on it:
+  ///
+  /// ```dart
+  /// @override
+  /// int get snapshotBlobVersion => 2;
+  /// @override
+  /// int get minReadableSnapshotBlobVersion => 1;
+  ///
+  /// final head = readSnapshotHeader(bytes);
+  /// final state = head.version == 1
+  ///     ? _readV1(bytes, head.offset)
+  ///     : _readV2(bytes, head.offset);
+  /// ```
+  ///
+  /// The next [getSnapshotState] writes [snapshotBlobVersion], so the old
+  /// layout leaves the document at the first snapshot after the upgrade.
+  int get minReadableSnapshotBlobVersion => snapshotBlobVersion;
 
   /// A builder holding the head of this handler's snapshot blob.
   ///
@@ -90,14 +135,19 @@ abstract base class Handler<T>
   BytesBuilder snapshotHeader() =>
       BytesBuilder(copy: false)..addByte(snapshotBlobVersion);
 
-  /// Checks the head [snapshotHeader] wrote and returns the offset of what
-  /// follows it.
+  /// Checks the head [snapshotHeader] wrote and returns the version it
+  /// carries, with the offset of what follows it.
   ///
-  /// Throws a [FormatException] naming this handler when [bytes] was written
-  /// by a build with another [snapshotBlobVersion].
-  int readSnapshotHeader(Uint8List bytes) => SnapshotBlob.read(
+  /// Branch on `version` to read an older layout; see
+  /// [minReadableSnapshotBlobVersion].
+  ///
+  /// Throws a [FormatException] naming this handler when [bytes] falls outside
+  /// `minReadableSnapshotBlobVersion..snapshotBlobVersion`.
+  ({int version, int offset}) readSnapshotHeader(Uint8List bytes) =>
+      SnapshotBlob.read(
         bytes,
-        version: snapshotBlobVersion,
+        min: minReadableSnapshotBlobVersion,
+        max: snapshotBlobVersion,
         name: handlerType,
       );
 
@@ -105,15 +155,32 @@ abstract base class Handler<T>
   ///
   /// Used as the type tag in operation envelopes, in the snapshot handler
   /// manifest and in [HandlerRef]s, and as the key under which a
-  /// [HandlerFactory] is registered (see [BaseCRDTDocument.registerFactory]).
+  /// [HandlerSpec] is registered (see [BaseCRDTDocument.register]).
   /// The same value is produced on every peer so changes route to the matching
   /// handler and nested handlers can be reconstructed remotely.
   ///
   /// Defaults to `runtimeType.toString()`, which is convenient but **not
-  /// stable under dart2js minification**. Custom handlers
-  /// that must work in a minified build (or persist/sync across builds) should
-  /// override it with their own constant, or pass one to the constructor.
-  String get handlerType => _handlerType ?? runtimeType.toString();
+  /// stable under dart2js minification**. A handler that syncs or persists
+  /// across builds must pass a [HandlerSpec] to the constructor instead; see
+  /// [hasStableHandlerType], which is how the sync layer spots one that did
+  /// not.
+  ///
+  /// A generic handler needs it most: its default tag carries the type
+  /// argument (`CRDTListHandler<Todo>`), so the tag both changes with `T` and
+  /// is minified away.
+  String get handlerType => handlerSpec?.type ?? runtimeType.toString();
+
+  /// Whether [handlerType] is a constant this build controls.
+  ///
+  /// `false` when it falls back to `runtimeType.toString()`. That tag works on
+  /// the VM and in a debug web build, and then changes under dart2js
+  /// minification in a Flutter web release — where a peer suddenly cannot
+  /// route the changes it used to. `dart test -p chrome` does not minify, so
+  /// it never catches this.
+  ///
+  /// `crdt_socket_sync` checks it before a handshake and refuses, in debug
+  /// only, to let such a tag travel.
+  bool get hasStableHandlerType => handlerSpec != null;
 
   /// Cached insert type instance for this handler, used in operations.
   ///

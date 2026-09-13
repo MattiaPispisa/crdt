@@ -26,7 +26,7 @@ import 'package:crdt_lf/crdt_lf.dart';
 /// ```
 final class PNCounterHandler extends Handler<int> {
   /// Creates a counter addressed by [id] in [doc].
-  PNCounterHandler(super.doc, this._id, {super.handlerType});
+  PNCounterHandler(super.doc, this._id, {super.spec});
 
   /// The binary kind of an increment, the first value past the four
   /// conventional ones.

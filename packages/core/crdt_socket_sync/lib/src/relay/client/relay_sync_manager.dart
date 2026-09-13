@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:crdt_lf/crdt_lf.dart';
+import 'package:crdt_socket_sync/src/common/client/sync_fault.dart';
 import 'package:crdt_socket_sync/src/common/common/utils.dart';
 import 'package:crdt_socket_sync/src/relay/client/pending_queue.dart';
 import 'package:crdt_socket_sync/src/relay/client/relay_client.dart';
@@ -88,22 +89,46 @@ class RelaySyncManager {
   /// Re-delivering a change the relay already had is harmless: the relay
   /// appends it and every peer discards it as known.
   ///
-  /// A malformed welcome throws out of here, from `Snapshot.fromBytes` or
-  /// `Change.fromBytes`. The transport is expected to drop the connection.
+  /// A welcome this client cannot take in — a blob `Snapshot.fromBytes` or
+  /// `Change.fromBytes` refuses, or a state the document will not import — is
+  /// reported on `CRDTSocketClient.faults` and the join is abandoned. It is
+  /// reported rather than thrown because this runs inside the callback that
+  /// reads the socket, where a throw reaches no `catch` and no `onError` and
+  /// ends up as an uncaught error in the zone.
+  ///
+  /// {@template relay_import_fault}
+  /// A relay checks the protocol version and nothing else, so it is this path,
+  /// not the CRDT-aware one, that meets unreadable state most often.
+  /// {@endtemplate}
   Future<void> onWelcome(RelayWelcomeMessage message) async {
-    final snapshot = message.snapshot != null
-        ? Snapshot.fromBytes(base64Decode(message.snapshot!))
-        : null;
-    final changes = [
-      for (final blob in message.changes) Change.fromBytes(base64Decode(blob)),
-    ];
+    final Snapshot? snapshot;
+    final List<Change> changes;
 
-    document.import(
-      snapshot: snapshot,
-      changes: changes,
-      merge: true,
-      pruneHistory: false,
-    );
+    try {
+      snapshot = message.snapshot != null
+          ? Snapshot.fromBytes(base64Decode(message.snapshot!))
+          : null;
+      changes = [
+        for (final blob in message.changes)
+          Change.fromBytes(base64Decode(blob)),
+      ];
+
+      document.import(
+        snapshot: snapshot,
+        changes: changes,
+        merge: true,
+        pruneHistory: false,
+      );
+    } catch (error, stackTrace) {
+      client.reportSyncFault(
+        SyncFault(
+          reason: 'Could not import the room state the relay served',
+          error: error,
+          stackTrace: stackTrace,
+        ),
+      );
+      return;
+    }
 
     _seqTracker.markThrough(message.seq);
     _handshaken = true;
@@ -150,10 +175,26 @@ class RelaySyncManager {
   ///
   /// [CRDTDocument.importChanges] de-duplicates, so re-delivered blobs are
   /// harmless.
+  ///
+  /// {@macro relay_import_fault}
   void onChanges(RelayChangesMessage message) {
-    document.importChanges([
-      for (final blob in message.changes) Change.fromBytes(base64Decode(blob)),
-    ]);
+    try {
+      document.importChanges([
+        for (final blob in message.changes)
+          Change.fromBytes(base64Decode(blob)),
+      ]);
+    } catch (error, stackTrace) {
+      client.reportSyncFault(
+        SyncFault(
+          reason: 'Could not import ${message.changes.length} change blob(s) '
+              'the relay rebroadcast',
+          error: error,
+          stackTrace: stackTrace,
+        ),
+      );
+      return;
+    }
+
     _seqTracker.addRange(
       from: message.seq - message.changes.length,
       to: message.seq,

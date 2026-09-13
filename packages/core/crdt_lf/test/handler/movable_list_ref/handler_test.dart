@@ -7,7 +7,7 @@ void main() {
     late CRDTMovableListRefHandler slides;
 
     setUp(() {
-      doc = CRDTDocument()..registerDefaultFactories();
+      doc = CRDTDocument();
       slides = CRDTMovableListRefHandler(doc, 'slides');
     });
 
@@ -48,7 +48,7 @@ void main() {
     });
 
     test('concurrent move and child edit converge without duplicates', () {
-      final docA = CRDTDocument()..registerDefaultFactories();
+      final docA = CRDTDocument();
       final slidesA = CRDTMovableListRefHandler(docA, 'slides');
       final s0 = CRDTFugueTextHandler(docA, 's0');
       final s1 = CRDTFugueTextHandler(docA, 's1');
@@ -58,7 +58,7 @@ void main() {
       s0.insert(0, 'zero');
       s1.insert(0, 'one');
 
-      final docB = CRDTDocument()..registerDefaultFactories();
+      final docB = CRDTDocument();
       final slidesB = CRDTMovableListRefHandler(docB, 'slides');
       docB.importChanges(docA.exportChanges());
 

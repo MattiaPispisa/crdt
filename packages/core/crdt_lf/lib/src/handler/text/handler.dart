@@ -39,10 +39,6 @@ base class CRDTTextHandler extends Handler<String>
   @override
   String get id => _id;
 
-  /// Stable type tag (minification-safe). See [Handler.handlerType].
-  @override
-  String get handlerType => kTextHandlerType;
-
   @override
   late final OperationDecoders operationDecoders = {
     OperationType.kindInsert: (body) =>
@@ -147,11 +143,44 @@ base class CRDTTextHandler extends Handler<String>
     return state;
   }
 
+  /// {@template builtin_handler_spec}
+  /// How to build one of these, for [BaseCRDTDocument.register] and for a
+  /// container's child methods.
+  ///
+  /// Building one by hand throws when the id is already open; going through a
+  /// spec finds the open handler instead.
+  ///
+  /// The constructor hands it to `super`, so opening one by hand also tells
+  /// the document how to rebuild the type. That looks circular and is not:
+  /// [HandlerSpec.factory] stores the constructor tear-off without calling it,
+  /// so this lazy static finishes initializing before any handler is built.
+  /// {@endtemplate}
+  static final HandlerSpec<CRDTTextHandler> spec = HandlerSpec.factory(
+    kTextHandlerType,
+    CRDTTextHandler.new,
+    formats: _formats,
+  );
+
+  @override
+  HandlerSpec<CRDTTextHandler> get handlerSpec => spec;
+
+  /// What this build reads for this handler type.
+  ///
+  /// {@macro handler_formats_constant}
+  static const HandlerFormats _formats = HandlerFormats(
+    operationKinds: {
+      OperationType.kindInsert,
+      OperationType.kindDelete,
+      OperationType.kindUpdate,
+    },
+    blobVersions: BlobVersionRange.single(1),
+  );
+
   /// The version of the snapshot blob this build writes and reads.
   ///
   /// Layout: `version: u8` then the whole text as WTF-8.
   @override
-  int get snapshotBlobVersion => 1;
+  int get snapshotBlobVersion => _formats.blobVersions!.max;
 
   @override
   Uint8List getSnapshotState() {
@@ -443,7 +472,7 @@ base class CRDTTextHandler extends Handler<String>
     if (snapshot == null) {
       return '';
     }
-    final offset = readSnapshotHeader(snapshot);
+    final offset = readSnapshotHeader(snapshot).offset;
     return Wtf8.decode(Uint8List.sublistView(snapshot, offset));
   }
 

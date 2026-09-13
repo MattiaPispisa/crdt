@@ -164,9 +164,14 @@ void main() {
     });
 
     test('carries the protocol version and the capabilities', () {
-      final capabilities = SyncCapabilities({
-        'MockHandler': {0, 1},
-      });
+      final capabilities = SyncCapabilities(
+        DocumentCapabilities({
+          'MockHandler': const HandlerFormats(
+            operationKinds: {0, 1},
+            blobVersions: BlobVersionRange.single(1),
+          ),
+        }),
+      );
 
       final json = HandshakeRequestMessage(
         documentId: documentId,
@@ -177,12 +182,15 @@ void main() {
 
       expect(json['protocolVersion'], Protocol.protocolVersion);
       expect(json['capabilities'], {
-        'MockHandler': [0, 1],
+        'MockHandler': {
+          'kinds': [0, 1],
+          'blob': {'min': 1, 'max': 1},
+        },
       });
 
       final decoded = HandshakeRequestMessage.fromJson(json);
       expect(decoded.protocolVersion, Protocol.protocolVersion);
-      expect(decoded.capabilities!.operationKinds, capabilities.operationKinds);
+      expect(decoded.capabilities!.capabilities, capabilities.capabilities);
     });
 
     test('a request from a build without the fields still decodes', () {

@@ -3,20 +3,24 @@ import 'package:test/test.dart';
 
 void main() {
   group('CRDTFugueListHandler', () {
-    test('handlerType: generic default, and a stable constructor override', () {
+    test('the tag is runtimeType by default, and a spec fixes it', () {
       final doc = CRDTDocument();
       expect(
         CRDTFugueListHandler<String>(doc, 'l').handlerType,
         'CRDTFugueListHandler<String>',
       );
+
       // Forwarded through FugueSequenceHandler to the base Handler.
-      final tagged = CRDTFugueListHandler<String>(
-        doc,
-        'l2',
-        handlerType: 'fuguelist/str',
-      );
+      final tagged =
+          CRDTFugueListHandler<String>(doc, 'l2', handlerType: 'fuguelist/str');
+
       expect(tagged.handlerType, 'fuguelist/str');
       expect(HandlerRef.of(tagged).type, 'fuguelist/str');
+      // And the tag is not all the spec gives: the type is rebuildable.
+      expect(
+        doc.resolveHandler(const HandlerRef('l3', 'fuguelist/str')),
+        isA<CRDTFugueListHandler<String>>(),
+      );
     });
 
     test('should handle basic operations', () {

@@ -13,7 +13,7 @@ import 'package:crdt_lf/src/handler/handler_type.dart';
 ///
 /// ## Example
 /// ```dart
-/// final doc = CRDTDocument()..registerDefaultFactories();
+/// final doc = CRDTDocument();
 /// final slides = CRDTMovableListRefHandler(doc, 'slides');
 /// final a = CRDTMapRefHandler(doc, doc.newHandlerId());
 /// final b = CRDTMapRefHandler(doc, doc.newHandlerId());
@@ -25,10 +25,6 @@ base class CRDTMovableListRefHandler
   /// Creates a movable list-of-references handler bound to [doc] with [id].
   CRDTMovableListRefHandler(super.doc, super.id)
       : super(valueCodec: const HandlerRefCodec());
-
-  /// Stable type tag (minification-safe). See [Handler.handlerType].
-  @override
-  String get handlerType => kMovableListRefHandlerType;
 
   /// Inserts a reference to [handler] at position [index].
   ///
@@ -46,6 +42,50 @@ base class CRDTMovableListRefHandler
       return null;
     }
     return doc.resolveHandler(refs[index]);
+  }
+
+  /// What this build reads for this handler type.
+  ///
+  /// A copy of what the handler this one extends reads, because that one's
+  /// constant is private to its own file. The two agreeing is pinned by the
+  /// table in `test/capabilities/capabilities_test.dart`, which compares every
+  /// declaration against the decoders that actually dispatch.
+  static const HandlerFormats _formats = HandlerFormats(
+    operationKinds: {
+      OperationType.kindInsert,
+      OperationType.kindMove,
+      OperationType.kindUpdate,
+      OperationType.kindDelete,
+    },
+    blobVersions: BlobVersionRange.single(1),
+  );
+
+  /// {@macro builtin_handler_spec}
+  static final HandlerSpec<CRDTMovableListRefHandler> spec =
+      HandlerSpec.factory(
+    kMovableListRefHandlerType,
+    CRDTMovableListRefHandler.new,
+    formats: _formats,
+  );
+
+  @override
+  HandlerSpec<CRDTMovableListRefHandler> get handlerSpec => spec;
+
+  /// Inserts a child built from [spec] at [index], and returns it.
+  ///
+  /// Always a new child: an insert adds an element, so there is no key to be
+  /// idempotent about. Use [getRefAtAs] to read one back.
+  ///
+  /// ```dart
+  /// final block = blocks.insertChild(0, textSpec)..insert(0, 'Hello');
+  /// ```
+  ///
+  /// Register [spec] on the document ([BaseCRDTDocument.register]) so a peer
+  /// that receives the reference can rebuild the child from its tag.
+  T insertChild<T extends Handler<dynamic>>(int index, HandlerSpec<T> spec) {
+    final created = spec.create(doc, doc.newHandlerId());
+    insertRef(index, created);
+    return created;
   }
 
   /// Like [getRefAt] but returns the handler only when it is a [T], otherwise

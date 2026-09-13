@@ -28,6 +28,11 @@ abstract class CRDTServerRegistry {
   Future<Snapshot> createSnapshot(String documentId);
 
   /// Get the latest snapshot of a document
+  ///
+  /// It must be one the document from [getDocument] has taken or imported. A
+  /// handshake serves this snapshot but decides whether the client can read it
+  /// by asking the **document**, so a snapshot the document never saw would be
+  /// served past a check that never looked at it.
   Future<Snapshot?> getLatestSnapshot(String documentId);
 
   /// Apply a change to a document.

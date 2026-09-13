@@ -76,8 +76,7 @@ class NestedReconstructBenchmark extends TimedBenchmarkBase {
 
   @override
   void run() {
-    final doc = CRDTDocument(peerId: PeerId.generate())
-      ..registerDefaultFactories();
+    final doc = CRDTDocument(peerId: PeerId.generate());
     final root = CRDTListRefHandler(doc, 'root');
     doc.importChanges(_changes);
     final resolved = root.resolved;

@@ -62,7 +62,7 @@ class FugueState<T, V> {
 abstract base class FugueSequenceHandler<T, V, S extends FugueState<T, V>>
     extends Handler<S> with FugueCache<S>, RebuiltIdentities<FugueElementID> {
   /// Creates a Fugue sequence handler bound to [doc] with the given [id].
-  FugueSequenceHandler(super.doc, String id, {super.handlerType}) : _id = id;
+  FugueSequenceHandler(super.doc, String id, {super.spec}) : _id = id;
 
   final String _id;
 

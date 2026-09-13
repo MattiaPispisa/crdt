@@ -3,7 +3,6 @@ import 'dart:async';
 import 'package:crdt_lf/crdt_lf.dart';
 import 'package:crdt_socket_sync/src/common/client/client.dart';
 import 'package:crdt_socket_sync/src/common/client/handshake_gate.dart';
-import 'package:crdt_socket_sync/src/common/client/incompatibility.dart';
 import 'package:crdt_socket_sync/src/common/client/status.dart';
 import 'package:crdt_socket_sync/src/common/client/web_socket/channel_connector.dart';
 import 'package:crdt_socket_sync/src/common/common/common.dart';
@@ -194,6 +193,8 @@ class WebSocketClient extends CRDTSocketClient {
     if (isUnsupported) {
       return false;
     }
+
+    debugCheckHandlerTypes();
 
     if (_handshakeGate.inProgress) {
       // already under connection
@@ -503,7 +504,7 @@ class WebSocketClient extends CRDTSocketClient {
       versionVector: document.getVersionVector(),
       documentId: document.documentId,
       author: author,
-      capabilities: SyncCapabilities(capabilities),
+      capabilities: statedCapabilities,
     );
 
     return _handshakeGate.perform(
@@ -597,22 +598,14 @@ class WebSocketClient extends CRDTSocketClient {
   }
 
   void _handleErrorMessage(ErrorMessage message) {
+    // The one code this mode answers by itself: a resync can close a gap, and
+    // the connection stays up.
     if (message.code == Protocol.errorOutOfSync) {
       requestSync();
       return;
     }
 
-    if (SyncIncompatibility.isTerminalCode(message.code)) {
-      refuseBuild(code: message.code, reason: message.message);
-      return;
-    }
-
-    updateConnectionStatus(ConnectionStatus.error);
-
-    if (message.code == Protocol.errorHandshakeFailed &&
-        _handshakeGate.isActive) {
-      _handshakeGate.reset();
-    }
+    handleErrorMessage(message);
   }
 
   @override
@@ -640,6 +633,7 @@ class WebSocketClient extends CRDTSocketClient {
       plugin.dispose();
     }
 
+    closeFaults();
     _messageController.close();
     _connectionStatusController.close();
     _syncManager.dispose();

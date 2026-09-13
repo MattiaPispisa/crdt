@@ -83,6 +83,9 @@ class _FakeTransport implements Transport {
     _incoming.addError(StateError('connection closed by the server'));
   }
 
+  /// Pushes [message] to the client the way the server would.
+  void deliver(Message message) => _push(message);
+
   void _push(Message message) {
     if (_closed || _incoming.isClosed) return;
     final data = _codec.encode(message);
@@ -245,5 +248,59 @@ void main() {
 
     await sub.cancel();
   });
+  });
+
+  group('WebSocketClient fault reporting', () {
+    const documentId = 'doc';
+
+    test('a change it cannot apply is reported, not thrown into the zone',
+        () async {
+      // The regression: applying runs inside the socket's read callback, so a
+      // throw there reaches no `catch` and no `onError` — it lands in the zone,
+      // which on Flutter is a crash. It has to arrive as a fault instead.
+      final zoneErrors = <Object>[];
+      final faults = <SyncFault>[];
+
+      await runZonedGuarded(() async {
+        final doc = CRDTDocument(
+          peerId: PeerId.generate(),
+          documentId: documentId,
+        );
+        late _FakeTransport transport;
+        final client = WebSocketClient.test(
+          url: 'ws://localhost:0',
+          document: doc,
+          author: doc.peerId,
+          transportFactory: () => transport = _FakeTransport(
+            documentId: documentId,
+            respondToPings: false,
+          ),
+        );
+        addTearDown(client.dispose);
+
+        final sub = client.faults.listen(faults.add);
+        addTearDown(sub.cancel);
+
+        await client.connect();
+
+        // A change arrives after the document is gone: a real race between a
+        // late frame and a teardown.
+        final author = CRDTDocument(peerId: PeerId.generate());
+        CRDTListHandler<String>(author, 'list').insert(0, 'x');
+        final change = author.exportChanges().single;
+        doc.dispose();
+
+        transport.deliver(
+          ChangeMessage(change: change, documentId: documentId),
+        );
+        await Future<void>.delayed(const Duration(milliseconds: 50));
+      },
+        (error, stack) => zoneErrors.add(error),
+      );
+
+      expect(zoneErrors, isEmpty);
+      expect(faults, hasLength(1));
+      expect(faults.single.error, isA<DocumentDisposedException>());
+    });
   });
 }

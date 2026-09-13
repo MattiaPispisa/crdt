@@ -31,7 +31,27 @@ base class CRDTListHandler<T> extends Handler<List<T>>
     super.doc,
     this._id, {
     ValueCodec<T>? valueCodec,
-    super.handlerType,
+    String? handlerType,
+  }) : _valueCodec = valueCodec ?? JsonValueCodec<T>(),
+        super(
+          spec: handlerType == null
+              ? null
+              : CRDTListHandler.spec<T>(
+                  handlerType,
+                  valueCodec: valueCodec,
+                ),
+        );
+
+  /// Builds one from [spec], for the builder [spec] itself holds.
+  ///
+  /// The public constructor takes a tag and makes the spec; this takes one
+  /// ready-made, so the same object reaches every handler the spec builds and
+  /// the document sees one spec per tag.
+  CRDTListHandler._fromSpec(
+    super.doc,
+    this._id, {
+    required super.spec,
+    ValueCodec<T>? valueCodec,
   }) : _valueCodec = valueCodec ?? JsonValueCodec<T>();
 
   @override
@@ -126,12 +146,58 @@ base class CRDTListHandler<T> extends Handler<List<T>>
     return state;
   }
 
+  /// {@template generic_handler_spec}
+  /// A spec for this handler under [type], the tag peers address it by.
+  ///
+  /// Only the tag is asked for: the formats are [formats] and the builder is
+  /// this class, so neither has to be written out again. A generic handler
+  /// needs a spec because its default tag carries the type argument, which
+  /// dart2js minifies away in a Flutter web release build.
+  ///
+  /// The spec also travels into the handler it builds, so creating one tells
+  /// the document how to rebuild the type — see [Handler].
+  /// {@endtemplate}
+  ///
+  /// ```dart
+  /// final todos = CRDTListHandler.spec<Todo>('todos');
+  ///
+  /// doc.register(todos);              // for a peer that receives one
+  /// final list = todos.create(doc, 'todos');
+  /// ```
+  static HandlerSpec<CRDTListHandler<T>> spec<T>(
+    String type, {
+    ValueCodec<T>? valueCodec,
+  }) =>
+      HandlerSpec<CRDTListHandler<T>>(
+        type,
+        (doc, id, spec) =>
+            CRDTListHandler<T>._fromSpec(
+              doc,
+              id,
+              spec: spec,
+              valueCodec: valueCodec,
+            ),
+        formats: _formats,
+      );
+
+  /// What this build reads for this handler type.
+  ///
+  /// {@macro handler_formats_constant}
+  static const HandlerFormats _formats = HandlerFormats(
+    operationKinds: {
+      OperationType.kindInsert,
+      OperationType.kindDelete,
+      OperationType.kindUpdate,
+    },
+    blobVersions: BlobVersionRange.single(1),
+  );
+
   /// The version of the snapshot blob this build writes and reads.
   ///
   /// Layout: `version: u8`, `count: uvarint`, then per item
   /// `itemLen: uvarint`, `item: bytes`.
   @override
-  int get snapshotBlobVersion => 1;
+  int get snapshotBlobVersion => _formats.blobVersions!.max;
 
   @override
   Uint8List getSnapshotState() {
@@ -318,7 +384,7 @@ base class CRDTListHandler<T> extends Handler<List<T>>
       return [];
     }
 
-    var offset = readSnapshotHeader(snapshot);
+    var offset = readSnapshotHeader(snapshot).offset;
     final countRec = UVarint.read(snapshot, offset: offset);
     offset = countRec.nextOffset;
     final items = <T>[];

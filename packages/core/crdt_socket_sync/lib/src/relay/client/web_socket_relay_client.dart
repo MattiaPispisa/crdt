@@ -3,7 +3,6 @@ import 'dart:math';
 
 import 'package:crdt_lf/crdt_lf.dart';
 import 'package:crdt_socket_sync/src/common/client/handshake_gate.dart';
-import 'package:crdt_socket_sync/src/common/client/incompatibility.dart';
 import 'package:crdt_socket_sync/src/common/client/status.dart';
 import 'package:crdt_socket_sync/src/common/client/web_socket/'
     'channel_connector.dart';
@@ -280,6 +279,8 @@ class WebSocketRelayClient extends RelaySocketClient {
     if (isUnsupported) {
       return false;
     }
+
+    debugCheckHandlerTypes();
 
     if (_handshakeGate.inProgress) {
       // already under connection
@@ -634,7 +635,7 @@ class WebSocketRelayClient extends RelaySocketClient {
       return _handlePongMessage(message);
     }
     if (message is ErrorMessage) {
-      return _handleErrorMessage(message);
+      return handleErrorMessage(message);
     }
   }
 
@@ -670,20 +671,6 @@ class WebSocketRelayClient extends RelaySocketClient {
     await sendMessage(pongMessage);
   }
 
-  void _handleErrorMessage(ErrorMessage message) {
-    if (SyncIncompatibility.isTerminalCode(message.code)) {
-      refuseBuild(code: message.code, reason: message.message);
-      return;
-    }
-
-    updateConnectionStatus(ConnectionStatus.error);
-
-    if (message.code == Protocol.errorHandshakeFailed &&
-        _handshakeGate.isActive) {
-      _handshakeGate.reset();
-    }
-  }
-
   @override
   void abandonHandshake() => _handshakeGate.reset();
 
@@ -709,6 +696,7 @@ class WebSocketRelayClient extends RelaySocketClient {
       plugin.dispose();
     }
 
+    closeFaults();
     _messageController.close();
     _connectionStatusController.close();
     // Not awaited: `dispose` is synchronous, and the flag inside is set before

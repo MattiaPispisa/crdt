@@ -19,7 +19,7 @@ const _noteId = 'note';
 /// Handlers auto-register on construction, so we don't keep references: every
 /// widget/callback resolves them by id from the ambient [CrdtProvider].
 CRDTDocument _buildDocument() {
-  final doc = CRDTDocument()..registerDefaultFactories();
+  final doc = CRDTDocument();
   CRDTRegisterHandler<int>(doc, _counterId).set(0);
   CRDTListHandler<String>(doc, _todosId);
   // A container handler ("settings") holding a nested text handler.

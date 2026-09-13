@@ -20,6 +20,14 @@ VersionVector _decodeVersionVector(String value) =>
 abstract class MessageTypeValue {
   /// index
   int get value;
+
+  /// The first code a plugin may mint.
+  ///
+  /// Below it a frame belongs to the protocol itself, so a session that cannot
+  /// read one is looking at something broken. At or above it a frame belongs to
+  /// a plugin the peer has and this build may simply not: a difference in
+  /// configuration, not a fault.
+  static const int firstPluginValue = 100;
 }
 
 /// Core protocol message types (range `0-19`).

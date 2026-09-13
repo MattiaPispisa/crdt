@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:crdt_lf/crdt_lf.dart';
 import 'package:crdt_socket_sync/src/common/common/common.dart';
@@ -208,9 +209,13 @@ void main() {
       final type = await seedServerDocument();
 
       await handshake(
-        capabilities: SyncCapabilities({
-          type: {OperationType.kindInsert},
-        }),
+        capabilities: SyncCapabilities(
+          DocumentCapabilities({
+            type: const HandlerFormats(
+              operationKinds: {OperationType.kindInsert},
+            ),
+          }),
+        ),
       );
 
       final errors = decodeSent().whereType<ErrorMessage>().toList();
@@ -231,29 +236,76 @@ void main() {
       final type = await seedServerDocument();
 
       await handshake(
-        capabilities: SyncCapabilities({
-          type: {OperationType.kindInsert, OperationType.kindDelete},
-        }),
+        capabilities: SyncCapabilities(
+          DocumentCapabilities({
+            type: const HandlerFormats(
+              operationKinds: {
+                OperationType.kindInsert,
+                OperationType.kindDelete,
+              },
+            ),
+          }),
+        ),
       );
 
       expect(decodeSent().whereType<HandshakeResponseMessage>(), hasLength(1));
       expect(decodeSent().whereType<ErrorMessage>(), isEmpty);
     });
 
-    test('refuses a client that stays silent about a type in the data',
+    test('refuses a client whose complete claim leaves out a type in the data',
         () async {
-      // The client has not opened that handler, so it declares nothing for it.
-      // Passing it over would let it join a document it has no way of reading
-      // — the failure this check exists to prevent.
+      // "Complete" is the client saying it named every type it can read, so a
+      // type it left out really is one it cannot read.
       await registry.addDocument(documentId);
       await seedServerDocument();
 
-      await handshake(capabilities: SyncCapabilities({}));
+      await handshake(
+        capabilities: SyncCapabilities(
+          DocumentCapabilities({
+            'SomeOtherHandler': const HandlerFormats(operationKinds: {0}),
+          }),
+          complete: true,
+        ),
+      );
 
       final errors = decodeSent().whereType<ErrorMessage>().toList();
       expect(errors, hasLength(1));
       expect(errors.single.code, Protocol.errorUnsupportedClient);
       expect(decodeSent().whereType<HandshakeResponseMessage>(), isEmpty);
+    });
+
+    test('accepts the same claim when it does not promise to be complete',
+        () async {
+      // The ordinary shape of an app: one handler open, connect, open another.
+      // A derived claim is partial by construction, so silence about a type
+      // cannot be read as "cannot read it" without locking out a good client.
+      await registry.addDocument(documentId);
+      await seedServerDocument();
+
+      await handshake(
+        capabilities: SyncCapabilities(
+          DocumentCapabilities({
+            'SomeOtherHandler': const HandlerFormats(operationKinds: {0}),
+          }),
+        ),
+      );
+
+      expect(decodeSent().whereType<HandshakeResponseMessage>(), hasLength(1));
+      expect(decodeSent().whereType<ErrorMessage>(), isEmpty);
+    });
+
+    test('accepts a client whose description claims nothing', () async {
+      // An empty description is not a claim: it means the handlers are not
+      // open yet, which is the normal order for an app that connects first.
+      // Refusing on it locks a working client out for good, and the latch
+      // means it never recovers once the handler does open.
+      await registry.addDocument(documentId);
+      await seedServerDocument();
+
+      await handshake(capabilities: SyncCapabilities(DocumentCapabilities({})));
+
+      expect(decodeSent().whereType<HandshakeResponseMessage>(), hasLength(1));
+      expect(decodeSent().whereType<ErrorMessage>(), isEmpty);
     });
 
     test('accepts a client that declares no capabilities at all', () async {
@@ -272,7 +324,7 @@ void main() {
       // Nothing to be unable to read yet, so nothing to refuse.
       await registry.addDocument(documentId);
 
-      await handshake(capabilities: SyncCapabilities({}));
+      await handshake(capabilities: SyncCapabilities(DocumentCapabilities({})));
 
       expect(decodeSent().whereType<HandshakeResponseMessage>(), hasLength(1));
       expect(decodeSent().whereType<ErrorMessage>(), isEmpty);
@@ -381,6 +433,53 @@ void main() {
         hasLength(1),
       );
       expect(session.lastKnownVersionVector?.toBytes(), vv.toBytes());
+    });
+
+    test('answers a handshake whose capabilities cannot be read', () async {
+      // The whole point of the check is to tell peers apart, so a capability
+      // block this build cannot parse deserves an answer. It used to throw
+      // inside the codec, be logged, and leave the client waiting on a reply
+      // that never came.
+      await registry.addDocument(documentId);
+
+      connection.inbound(
+        utf8.encode(
+          jsonEncode({
+            'type': MessageType.handshakeRequest.value,
+            'documentId': documentId,
+            'author': PeerId.generate().toString(),
+            'versionVector': base64Encode(VersionVector({}).toBytes()),
+            'capabilities': {'MockHandler': 'not an object'},
+          }),
+        ),
+      );
+      await Future<void>.delayed(Duration.zero);
+
+      final errors = decodeSent().whereType<ErrorMessage>().toList();
+      expect(errors, hasLength(1));
+      expect(errors.single.code, Protocol.errorInvalidMessage);
+      expect(errors.single.documentId, documentId);
+      expect(decodeSent().whereType<HandshakeResponseMessage>(), isEmpty);
+    });
+
+    test('stays quiet about a frame belonging to a plugin it does not have',
+        () async {
+      // The peer has a plugin this build does not: a difference in setup, not
+      // a fault. Answering would turn every frame of a working connection —
+      // one per cursor move, for awareness — into an error the peer displays.
+      connection.inbound(
+        utf8.encode(
+          jsonEncode({
+            'type': MessageTypeValue.firstPluginValue,
+            'documentId': documentId,
+          }),
+        ),
+      );
+      await Future<void>.delayed(Duration.zero);
+
+      expect(decodeSent().whereType<ErrorMessage>(), isEmpty);
+      // Still reported to whoever runs the server.
+      expect(events.where((e) => e.type == SessionEventType.error), isNotEmpty);
     });
 
     test('emits an error when an undecodable frame arrives', () async {

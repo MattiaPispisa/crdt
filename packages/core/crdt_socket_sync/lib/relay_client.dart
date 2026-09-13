@@ -6,7 +6,9 @@
 /// clients.
 library;
 
+export 'src/common/client/incompatibility.dart';
 export 'src/common/client/status.dart';
+export 'src/common/client/sync_fault.dart';
 export 'src/common/common/common.dart';
 export 'src/plugins/client.dart';
 export 'src/relay/client/relay_client.dart';

@@ -26,13 +26,13 @@ class SyncIncompatibility {
   /// Whether this build cannot decode operations the document holds.
   bool get isMissingOperationKinds => code == Protocol.errorUnsupportedClient;
 
-  /// Whether [code] is one of the two permanent refusals.
+  /// Whether [code] is a refusal a client cannot recover from.
   ///
-  /// Used to tell a refusal apart from the recoverable error codes that travel
-  /// on the same `ErrorMessage`.
+  /// Tells a refusal apart from the recoverable error codes that travel on the
+  /// same `ErrorMessage`. The set itself lives on [Protocol.terminalErrors], so
+  /// a new terminal code is added in one place.
   static bool isTerminalCode(String code) =>
-      code == Protocol.errorUnsupportedProtocolVersion ||
-      code == Protocol.errorUnsupportedClient;
+      Protocol.terminalErrors.contains(code);
 
   @override
   String toString() => 'SyncIncompatibility($code: $message)';
