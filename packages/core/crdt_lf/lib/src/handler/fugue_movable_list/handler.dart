@@ -67,18 +67,6 @@ base class CRDTFugueMovableListHandler<T>
                 ),
         );
 
-  /// Builds one from [spec], for the builder [spec] itself holds.
-  ///
-  /// The public constructor takes a tag and makes the spec; this takes one
-  /// ready-made, so the same object reaches every handler the spec builds and
-  /// the document sees one spec per tag.
-  CRDTFugueMovableListHandler._fromSpec(
-    super.doc,
-    String id, {
-    required super.spec,
-    ValueCodec<T>? valueCodec,
-  })  : _id = id,
-        _valueCodec = valueCodec ?? JsonValueCodec<T>();
 
   final String _id;
   final ValueCodec<T> _valueCodec;
@@ -702,10 +690,10 @@ base class CRDTFugueMovableListHandler<T>
   }) =>
       HandlerSpec<CRDTFugueMovableListHandler<T>>(
         type,
-        (doc, id, spec) => CRDTFugueMovableListHandler<T>._fromSpec(
+        (doc, id, spec) => CRDTFugueMovableListHandler<T>(
           doc,
           id,
-          spec: spec,
+          handlerType: spec.type,
           valueCodec: valueCodec,
         ),
         formats: _formats,
@@ -721,12 +709,18 @@ base class CRDTFugueMovableListHandler<T>
       OperationType.kindUpdate,
       OperationType.kindDelete,
     },
-    blobVersions: BlobVersionRange.single(1),
+    blobVersions: BlobVersionRange.single(_blobVersion),
   );
 
   /// The version of the snapshot blob this build writes and reads.
+  /// The version [getSnapshotState] writes at the head of its blob.
+  ///
+  /// Declared here and read by [_formats], not the other way round: the wire
+  /// format is the fact, and what this build advertises follows from it.
+  static const int _blobVersion = 1;
+
   @override
-  int get snapshotBlobVersion => _formats.blobVersions!.max;
+  int get snapshotBlobVersion => _blobVersion;
 
   /// Snapshot layout:
   /// - version: u8

@@ -88,10 +88,20 @@ class HandlerSpec<T extends Handler<dynamic>> {
 
   /// Builds the handler [id] on [doc].
   ///
-  /// The way in for everything that creates from a spec, so what [build]
+  /// Prefer [BaseCRDTDocument.handler]: this throws
+  /// [HandlerAlreadyRegisteredException] when [id] is already open, where that
+  /// one hands back the handler already there. Reach for this only when the id
+  /// is fresh, the way a container's child methods do.
+  ///
+  /// The way in for everything that creates from a spec, so what the builder
   /// produces is checked against [formats] once per call in debug: a spec that
   /// names kinds its handler does not decode tells a peer this build reads
   /// something it cannot, and the peer sends it.
+  ///
+  /// The checks run after the handler is built, and a handler registers itself
+  /// as it is constructed — so a spec that fails them leaves that handler on
+  /// [doc]. In debug that is a crash either way; nothing reads the document
+  /// afterwards.
   T create(BaseCRDTDocument doc, String id) {
     final created = _build(doc, id, this);
 
@@ -112,6 +122,26 @@ class HandlerSpec<T extends Handler<dynamic>> {
   /// The operation kinds and snapshot blob versions handlers of this kind
   /// read.
   final HandlerFormats formats;
+
+  /// Two specs are the same when they claim the same [type] and the same
+  /// [formats].
+  ///
+  /// Value equality, because a spec is minted wherever a tag is: every
+  /// `CRDTListHandler<Todo>(doc, id, handlerType: 'todos')` builds a fresh one,
+  /// and they all describe the same type. Comparing by identity would make two
+  /// handlers of one declared type look like a conflict.
+  ///
+  /// [build] is **not** compared — two closures are never equal, and it is
+  /// what carries a value codec. So two specs that share a tag and differ only
+  /// in the codec they capture compare equal here, and the document keeps
+  /// whichever arrived first. One tag has to mean one wire format; this cannot
+  /// catch a build that breaks that.
+  @override
+  bool operator ==(Object other) =>
+      other is HandlerSpec && other.type == type && other.formats == formats;
+
+  @override
+  int get hashCode => Object.hash(type, formats);
 
   @override
   String toString() => 'HandlerSpec<$T>($type)';

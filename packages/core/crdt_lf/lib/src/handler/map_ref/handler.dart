@@ -76,6 +76,14 @@ base class CRDTMapRefHandler extends CRDTMapHandler<HandlerRef>
   T child<T extends Handler<dynamic>>(String key, HandlerSpec<T> spec) {
     final existing = value[key];
     if (existing != null) {
+      // The ref carries the type, so a key holding another kind is caught even
+      // when that child was never opened here — which is the usual case for a
+      // tree that arrived from a peer.
+      if (existing.type != spec.type) {
+        throw HandlerAlreadyRegisteredException(
+          'Key $key holds a ${existing.type}, not a ${spec.type}',
+        );
+      }
       return doc.handler<T>(spec, existing.id);
     }
 

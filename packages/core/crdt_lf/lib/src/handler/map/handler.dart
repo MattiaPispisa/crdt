@@ -46,17 +46,6 @@ base class CRDTMapHandler<T> extends Handler<Map<String, T>>
                 ),
         );
 
-  /// Builds one from [spec], for the builder [spec] itself holds.
-  ///
-  /// The public constructor takes a tag and makes the spec; this takes one
-  /// ready-made, so the same object reaches every handler the spec builds and
-  /// the document sees one spec per tag.
-  CRDTMapHandler._fromSpec(
-    super.doc,
-    this._id, {
-    required super.spec,
-    ValueCodec<T>? valueCodec,
-  }) : _valueCodec = valueCodec ?? JsonValueCodec<T>();
 
   /// The ID of this map in the document
   final String _id;
@@ -137,13 +126,12 @@ base class CRDTMapHandler<T> extends Handler<Map<String, T>>
   }) =>
       HandlerSpec<CRDTMapHandler<T>>(
         type,
-        (doc, id, spec) =>
-            CRDTMapHandler<T>._fromSpec(
-              doc,
-              id,
-              spec: spec,
-              valueCodec: valueCodec,
-            ),
+        (doc, id, spec) => CRDTMapHandler<T>(
+          doc,
+          id,
+          handlerType: spec.type,
+          valueCodec: valueCodec,
+        ),
         formats: _formats,
       );
 
@@ -156,15 +144,21 @@ base class CRDTMapHandler<T> extends Handler<Map<String, T>>
       OperationType.kindDelete,
       OperationType.kindUpdate,
     },
-    blobVersions: BlobVersionRange.single(1),
+    blobVersions: BlobVersionRange.single(_blobVersion),
   );
 
   /// The version of the snapshot blob this build writes and reads.
   ///
   /// Layout: `version: u8`, `count: uvarint`, then per entry
   /// `keyLen: uvarint`, `key: utf8`, `valueLen: uvarint`, `value: bytes`.
+  /// The version [getSnapshotState] writes at the head of its blob.
+  ///
+  /// Declared here and read by [_formats], not the other way round: the wire
+  /// format is the fact, and what this build advertises follows from it.
+  static const int _blobVersion = 1;
+
   @override
-  int get snapshotBlobVersion => _formats.blobVersions!.max;
+  int get snapshotBlobVersion => _blobVersion;
 
   @override
   Uint8List getSnapshotState() {

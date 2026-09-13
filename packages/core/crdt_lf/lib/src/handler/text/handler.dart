@@ -150,10 +150,11 @@ base class CRDTTextHandler extends Handler<String>
   /// Building one by hand throws when the id is already open; going through a
   /// spec finds the open handler instead.
   ///
-  /// The constructor hands it to `super`, so opening one by hand also tells
-  /// the document how to rebuild the type. That looks circular and is not:
-  /// [HandlerSpec.factory] stores the constructor tear-off without calling it,
-  /// so this lazy static finishes initializing before any handler is built.
+  /// It is what the [Handler.handlerSpec] override answers, so opening one by
+  /// hand tells the document how to rebuild the type. That looks circular and
+  /// is not: [HandlerSpec.factory] stores the constructor tear-off without
+  /// calling it, so this lazy static finishes initializing before the getter
+  /// ever reads it.
   /// {@endtemplate}
   static final HandlerSpec<CRDTTextHandler> spec = HandlerSpec.factory(
     kTextHandlerType,
@@ -173,14 +174,20 @@ base class CRDTTextHandler extends Handler<String>
       OperationType.kindDelete,
       OperationType.kindUpdate,
     },
-    blobVersions: BlobVersionRange.single(1),
+    blobVersions: BlobVersionRange.single(_blobVersion),
   );
 
   /// The version of the snapshot blob this build writes and reads.
   ///
   /// Layout: `version: u8` then the whole text as WTF-8.
+  /// The version [getSnapshotState] writes at the head of its blob.
+  ///
+  /// Declared here and read by [_formats], not the other way round: the wire
+  /// format is the fact, and what this build advertises follows from it.
+  static const int _blobVersion = 1;
+
   @override
-  int get snapshotBlobVersion => _formats.blobVersions!.max;
+  int get snapshotBlobVersion => _blobVersion;
 
   @override
   Uint8List getSnapshotState() {

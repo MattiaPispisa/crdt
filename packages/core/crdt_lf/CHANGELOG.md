@@ -37,6 +37,11 @@
   **Breaking:** `registerFactory` is gone — `register(HandlerSpec.factory(type, factory, formats:))`
   replaces it — and `registerHandler` is now private, which is what the `Handler` constructor has
   always called for you.
+  `HandlerSpec` compares by value on its tag and formats: every constructor that takes a tag mints
+  its own spec, and two handlers of one declared type are not a conflict.
+  `document.handler(spec, id)` and `container.child(key, spec)` refuse an id or a key held by another
+  **tag**, not only another Dart type — a mismatch a tree received from a peer would otherwise
+  resolve to the wrong handler.
 
 - **A document can say what it can read and what it asks to be read.**
   `describeBuildCapabilities()` returns a `DocumentCapabilities` — what this build decodes, covering

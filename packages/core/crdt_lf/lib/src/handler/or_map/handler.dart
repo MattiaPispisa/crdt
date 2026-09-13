@@ -54,19 +54,6 @@ base class CRDTORMapHandler<K, V> extends Handler<ORMapState<K, V>>
                 ),
         );
 
-  /// Builds one from [spec], for the builder [spec] itself holds.
-  ///
-  /// The public constructor takes a tag and makes the spec; this takes one
-  /// ready-made, so the same object reaches every handler the spec builds and
-  /// the document sees one spec per tag.
-  CRDTORMapHandler._fromSpec(
-    super.doc,
-    this._id, {
-    required super.spec,
-    ValueCodec<K>? keyCodec,
-    ValueCodec<V>? valueCodec,
-  })  : _keyCodec = keyCodec ?? JsonValueCodec<K>(),
-        _valueCodec = valueCodec ?? JsonValueCodec<V>();
 
   final String _id;
   final ValueCodec<K> _keyCodec;
@@ -160,10 +147,10 @@ base class CRDTORMapHandler<K, V> extends Handler<ORMapState<K, V>>
   }) =>
       HandlerSpec<CRDTORMapHandler<K, V>>(
         type,
-        (doc, id, spec) => CRDTORMapHandler<K, V>._fromSpec(
+        (doc, id, spec) => CRDTORMapHandler<K, V>(
           doc,
           id,
-          spec: spec,
+          handlerType: spec.type,
           keyCodec: keyCodec,
           valueCodec: valueCodec,
         ),
@@ -178,7 +165,7 @@ base class CRDTORMapHandler<K, V> extends Handler<ORMapState<K, V>>
       OperationType.kindInsert,
       OperationType.kindDelete,
     },
-    blobVersions: BlobVersionRange.single(1),
+    blobVersions: BlobVersionRange.single(_blobVersion),
   );
 
   /// The version of the snapshot blob this build writes and reads.
@@ -187,8 +174,14 @@ base class CRDTORMapHandler<K, V> extends Handler<ORMapState<K, V>>
   /// `keyLen: uvarint`, `key: bytes`, `valueLen: uvarint`, `value: bytes`.
   /// The tags stay out: a snapshot holds the projected map, and the entries
   /// come back tagless.
+  /// The version [getSnapshotState] writes at the head of its blob.
+  ///
+  /// Declared here and read by [_formats], not the other way round: the wire
+  /// format is the fact, and what this build advertises follows from it.
+  static const int _blobVersion = 1;
+
   @override
-  int get snapshotBlobVersion => _formats.blobVersions!.max;
+  int get snapshotBlobVersion => _blobVersion;
 
   /// Returns the current state for snapshotting as a binary blob.
   @override

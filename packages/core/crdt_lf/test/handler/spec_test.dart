@@ -165,6 +165,42 @@ void main() {
 
   });
 
+  group('one tag, one meaning', () {
+    test('two handlers of one declared type are not a conflict', () {
+      // Each constructor mints its own spec from the tag, so comparing them by
+      // identity used to make this ordinary shape throw in debug.
+      final doc = CRDTDocument(peerId: PeerId.generate());
+
+      expect(
+        () {
+          CRDTListHandler<String>(doc, 'active', handlerType: 'todos');
+          CRDTListHandler<String>(doc, 'archived', handlerType: 'todos');
+        },
+        returnsNormally,
+      );
+    });
+
+    test('a spec built twice from the same tag compares equal', () {
+      expect(
+        CRDTListHandler.spec<String>('todos'),
+        CRDTListHandler.spec<String>('todos'),
+      );
+      expect(
+        CRDTListHandler.spec<String>('todos'),
+        isNot(CRDTListHandler.spec<String>('other')),
+      );
+    });
+
+    test('register refuses a disposed document', () {
+      final doc = CRDTDocument(peerId: PeerId.generate())..dispose();
+
+      expect(
+        () => doc.register(CRDTListHandler.spec<String>('todos')),
+        throwsA(isA<DocumentDisposedException>()),
+      );
+    });
+  });
+
   group('BaseCRDTDocument.handler', () {
     test('returns the open handler instead of throwing', () {
       // Building one by hand twice throws; this is the idempotent way.
@@ -174,6 +210,18 @@ void main() {
       final second = doc.handler(doneSpec, 'x');
 
       expect(identical(first, second), isTrue);
+    });
+
+    test('refuses an id held by the same class under another tag', () {
+      // The tag is what routes changes, so a Dart-type check alone would hand
+      // back a handler no peer addresses as this spec's type.
+      final doc = CRDTDocument(peerId: PeerId.generate());
+      CRDTRegisterHandler<bool>(doc, 'x');
+
+      expect(
+        () => doc.handler(CRDTRegisterHandler.spec<bool>('todo.done'), 'x'),
+        throwsA(isA<HandlerAlreadyRegisteredException>()),
+      );
     });
 
     test('refuses an id held by a handler of another kind', () {

@@ -361,6 +361,12 @@ abstract base class FugueSequenceHandler<T, V, S extends FugueState<T, V>>
   @override
   int get snapshotBlobVersion => FugueSnapshot.version;
 
+  /// The same version: [FugueSnapshot.read] accepts exactly one layout, so a
+  /// subclass cannot widen this without teaching that reader first. Left
+  /// pinned so the range this build advertises is one it can actually serve.
+  @override
+  int get minReadableSnapshotBlobVersion => FugueSnapshot.version;
+
   @override
   Uint8List getSnapshotState() {
     return FugueSnapshot.write<T>(

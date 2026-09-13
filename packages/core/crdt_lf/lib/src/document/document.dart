@@ -203,7 +203,9 @@ abstract class BaseCRDTDocument {
     if (handler.handlerSpec case final spec?) {
       assert(
         _specs[spec.type] == null || _specs[spec.type] == spec,
-        'Two different specs claim the tag ${spec.type}.',
+        'Two specs claim the tag ${spec.type} and read different formats. '
+        'One tag has to mean one wire format, or a peer is told this build '
+        'reads something it cannot.',
       );
       _specs.putIfAbsent(spec.type, () => spec);
     }
@@ -260,6 +262,8 @@ abstract class BaseCRDTDocument {
   /// document.register(CRDTListHandler.spec<Todo>('CRDTListHandler<Todo>'));
   /// ```
   void register<T extends Handler<dynamic>>(HandlerSpec<T> spec) {
+    _ensureNotDisposed('register');
+
     _specs[spec.type] = spec;
   }
 
@@ -279,7 +283,10 @@ abstract class BaseCRDTDocument {
   T handler<T extends Handler<dynamic>>(HandlerSpec<T> spec, String id) {
     final existing = _handlers[id];
     if (existing != null) {
-      if (existing is T) {
+      // Both checks: the tag is what routes changes between peers, and a Dart
+      // type alone would accept a subclass, or the same class opened under
+      // another tag.
+      if (existing is T && existing.handlerType == spec.type) {
         return existing;
       }
       throw HandlerAlreadyRegisteredException(

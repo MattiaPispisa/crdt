@@ -55,17 +55,6 @@ base class CRDTFugueListHandler<T>
                 ),
         );
 
-  /// Builds one from [spec], for the builder [spec] itself holds.
-  ///
-  /// The public constructor takes a tag and makes the spec; this takes one
-  /// ready-made, so the same object reaches every handler the spec builds and
-  /// the document sees one spec per tag.
-  CRDTFugueListHandler._fromSpec(
-    super.doc,
-    super.id, {
-    required super.spec,
-    ValueCodec<T>? valueCodec,
-  }) : _valueCodec = valueCodec ?? JsonValueCodec<T>();
 
   final ValueCodec<T> _valueCodec;
 
@@ -76,10 +65,10 @@ base class CRDTFugueListHandler<T>
   }) =>
       HandlerSpec<CRDTFugueListHandler<T>>(
         type,
-        (doc, id, spec) => CRDTFugueListHandler<T>._fromSpec(
+        (doc, id, spec) => CRDTFugueListHandler<T>(
           doc,
           id,
-          spec: spec,
+          handlerType: spec.type,
           valueCodec: valueCodec,
         ),
         formats: _formats,
