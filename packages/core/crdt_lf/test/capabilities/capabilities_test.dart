@@ -1,5 +1,4 @@
 import 'package:crdt_lf/crdt_lf.dart';
-import 'package:crdt_lf/src/capabilities/formats_of.dart';
 import 'package:test/test.dart';
 
 import '../helpers/pn_counter_handler.dart';
@@ -51,7 +50,7 @@ void main() {
         // The blob range is derived from the same constant, so this pins the
         // derivation rather than a second hand-written value.
         expect(
-          formatsOf(handler).blobVersions,
+          HandlerFormats.of(handler).blobVersions,
           handler.spec.formats.blobVersions,
         );
       });

@@ -4,7 +4,6 @@ import 'dart:typed_data';
 
 import 'package:crdt_lf/crdt_lf.dart';
 import 'package:crdt_lf/src/capabilities/data_requirements_tracker.dart';
-import 'package:crdt_lf/src/capabilities/formats_of.dart';
 import 'package:crdt_lf/src/compound/compound.dart';
 import 'package:crdt_lf/src/devtools/devtools.dart' as devtools;
 import 'package:crdt_lf/src/snapshot/blob_version.dart';
@@ -203,10 +202,10 @@ abstract class BaseCRDTDocument {
     // nowhere else.
     final spec = handler.spec;
     assert(
-      formatsOf(handler) == spec.formats,
+      HandlerFormats.of(handler) == spec.formats,
       '${spec.type} declares ${spec.formats} but reads '
-      '${formatsOf(handler)}. A peer is told this build reads something it '
-      'cannot decode, and sends it.',
+      '${HandlerFormats.of(handler)}. A peer is told this build reads '
+      'something it cannot decode, and sends it.',
     );
     assert(
       _specs[spec.type] == null || _specs[spec.type] == spec,

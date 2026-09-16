@@ -125,6 +125,43 @@ void main() {
     });
   });
 
+  group('a declaration is checked against the decoders', () {
+    test('a handler whose formats disagree with its decoders is caught', () {
+      // A wrong `formats` tells a peer this build reads a kind it cannot
+      // decode, so the peer sends it. A handler of your own is the one stating
+      // them, so this is where the risk lives.
+      //
+      // Built by hand on purpose: registering is what every handler does, and
+      // it is the only point a handler that never went through a spec reaches.
+      final doc = CRDTDocument(peerId: PeerId.generate());
+
+      expect(
+        () => _WrongFormats<int>(doc, 'x'),
+        throwsA(isA<AssertionError>()),
+      );
+    });
+
+    test('a spec that builds another kind is caught', () {
+      // A handler built under a tag nobody addresses is a child a peer never
+      // finds. Only [HandlerSpec.create] can see this: the handler itself is
+      // self-consistent.
+      final doc = CRDTDocument(peerId: PeerId.generate());
+      final mislabelled = HandlerSpec<CRDTFugueTextHandler>(
+        'not-the-tag-it-carries',
+        CRDTFugueTextHandler.new,
+        formats: CRDTFugueTextHandler(
+          CRDTDocument(peerId: PeerId.generate()),
+          'probe',
+        ).spec.formats,
+      );
+
+      expect(
+        () => mislabelled.create(doc, 'x'),
+        throwsA(isA<AssertionError>()),
+      );
+    });
+  });
+
   group('BaseCRDTDocument.register', () {
     test('declares a kind this peer never opens', () {
       final doc = CRDTDocument(peerId: PeerId.generate())
@@ -161,36 +198,6 @@ void main() {
       expect(
         () => doc.register(newDone),
         throwsA(isA<DocumentDisposedException>()),
-      );
-    });
-  });
-
-  group('HandlerSpec.create', () {
-    test('a spec whose formats disagree with the handler is caught', () {
-      // A wrong `formats` tells a peer this build reads a kind it cannot
-      // decode, so the peer sends it. A handler of your own is the one stating
-      // them, so this is where the risk lives.
-      final doc = CRDTDocument(peerId: PeerId.generate());
-
-      expect(() => _wrongSpec.create(doc, 'x'), throwsA(isA<AssertionError>()));
-    });
-
-    test('a spec whose builder uses another tag is caught', () {
-      // A handler built under a tag nobody addresses is a child a peer never
-      // finds.
-      final doc = CRDTDocument(peerId: PeerId.generate());
-      final mislabelled = HandlerSpec<CRDTFugueTextHandler>(
-        'not-the-tag-it-carries',
-        CRDTFugueTextHandler.new,
-        formats: CRDTFugueTextHandler(
-          CRDTDocument(peerId: PeerId.generate()),
-          'probe',
-        ).spec.formats,
-      );
-
-      expect(
-        () => mislabelled.create(doc, 'x'),
-        throwsA(isA<AssertionError>()),
       );
     });
   });

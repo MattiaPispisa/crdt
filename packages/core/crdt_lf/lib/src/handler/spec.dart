@@ -1,5 +1,4 @@
 import 'package:crdt_lf/crdt_lf.dart';
-import 'package:crdt_lf/src/capabilities/formats_of.dart';
 
 /// Builds the handler [id] on [doc].
 ///
@@ -91,21 +90,17 @@ class HandlerSpec<T extends Handler<dynamic>> {
   /// one hands back the handler already there. Reach for this only when the id
   /// is fresh.
   ///
-  /// What the builder produces is checked against [type] and [formats] once per
-  /// call in debug. A spec that names kinds its handler cannot decode tells a
-  /// peer this build reads them, and the peer sends them.
+  /// What the builder produces is checked against [type] once per call in
+  /// debug: a spec that builds a handler of another kind is one no peer can
+  /// address. The formats are checked where every handler passes, as it
+  /// registers on [doc].
   ///
-  /// The checks run after the handler is built, and a handler registers itself
-  /// as it is constructed. So a spec that fails them leaves that handler on
+  /// The check runs after the handler is built, and a handler registers itself
+  /// as it is constructed. So a spec that fails it leaves that handler on
   /// [doc]. In debug that is a crash either way.
   T create(BaseCRDTDocument doc, String id) {
     final created = _build(doc, id);
 
-    assert(
-      formatsOf(created) == formats,
-      'The spec for $type declares $formats but builds a handler reading '
-      '${formatsOf(created)}.',
-    );
     assert(
       created.handlerType == type,
       'The spec for $type builds a handler tagged ${created.handlerType}, '

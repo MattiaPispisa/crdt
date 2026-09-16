@@ -54,6 +54,25 @@ class HandlerFormats {
     this.blobVersions,
   });
 
+  /// What [handler] reads, derived from the handler itself.
+  ///
+  /// The kinds are the keys of [Handler.operationDecoders], so they name
+  /// exactly what this build dispatches. The range is
+  /// `minReadableSnapshotBlobVersion..snapshotBlobVersion`, of which the
+  /// handler writes the newest.
+  ///
+  /// This is the truth; what a [HandlerSpec] carries is the claim. The document
+  /// compares the two as a handler registers, so a claim that drifted from the
+  /// decoders is caught in debug. Use it to check your own handler the same
+  /// way.
+  factory HandlerFormats.of(Handler<dynamic> handler) => HandlerFormats(
+        operationKinds: handler.operationDecoders.keys.toSet(),
+        blobVersions: BlobVersionRange(
+          handler.minReadableSnapshotBlobVersion,
+          handler.snapshotBlobVersion,
+        ),
+      );
+
   /// The operation kinds, as in `OperationEnvelope.kind`.
   ///
   /// A kind belongs to the handler type it is keyed by, so the same value
