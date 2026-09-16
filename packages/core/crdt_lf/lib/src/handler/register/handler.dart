@@ -171,8 +171,6 @@ base class CRDTRegisterHandler<T> extends Handler<T>
       );
 
   /// What this build reads for this handler type.
-  ///
-  /// {@macro handler_formats_constant}
   static const HandlerFormats _formats = HandlerFormats(
     operationKinds: {
       OperationType.kindInsert,

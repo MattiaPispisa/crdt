@@ -157,7 +157,7 @@ base class CRDTTextHandler extends Handler<String>
   /// initializer stores the constructor tear-off without calling it. This lazy
   /// static therefore finishes before the getter ever reads it.
   /// {@endtemplate}
-  static final HandlerSpec<CRDTTextHandler> _spec = HandlerSpec(
+  static const HandlerSpec<CRDTTextHandler> _spec = HandlerSpec(
     _handlerType,
     CRDTTextHandler.new,
     formats: _formats,
@@ -167,8 +167,6 @@ base class CRDTTextHandler extends Handler<String>
   HandlerSpec<CRDTTextHandler> get spec => _spec;
 
   /// What this build reads for this handler type.
-  ///
-  /// {@macro handler_formats_constant}
   static const HandlerFormats _formats = HandlerFormats(
     operationKinds: {
       OperationType.kindInsert,
@@ -179,12 +177,6 @@ base class CRDTTextHandler extends Handler<String>
   );
 
   /// The version of the snapshot blob this build writes and reads.
-  ///
-  /// Layout: `version: u8` then the whole text as WTF-8.
-  /// The version [getSnapshotState] writes at the head of its blob.
-  ///
-  /// Declared here and read by [_formats], not the other way round: the wire
-  /// format is the fact, and what this build advertises follows from it.
   static const int _blobVersion = 1;
 
   @override

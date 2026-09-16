@@ -41,19 +41,11 @@ class BlobVersionRange {
   String toString() => min == max ? 'v$min' : 'v$min..v$max';
 }
 
-/// The operation kinds and snapshot blob versions of one handler type.
+/// The format of a handler.
 ///
 /// What they stand for depends on what holds them: the formats a peer reads
 /// in a [DocumentCapabilities], the formats a document holds in a
 /// [DocumentRequirements].
-///
-/// {@template handler_formats_constant}
-/// Each built-in handler holds one as a private constant, for the places that
-/// have no instance to read: `snapshotBlobVersion` derives from it and its
-/// [HandlerSpec] carries it, which is the only way out —
-/// `CRDTListHandler.spec<Todo>('todos').formats`.
-/// [HandlerSpec.create] checks it against a handler it builds.
-/// {@endtemplate}
 class HandlerFormats {
   /// Creates formats holding [operationKinds] and, when it is known,
   /// [blobVersions].

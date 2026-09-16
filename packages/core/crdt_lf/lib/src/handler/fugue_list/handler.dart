@@ -82,8 +82,6 @@ base class CRDTFugueListHandler<T>
 
   /// What this build reads for this handler type.
   ///
-  /// {@macro handler_formats_constant}
-  ///
   /// The blob range is [FugueSnapshot.version], shared by every handler built
   /// on the Fugue tree.
   static const HandlerFormats _formats = HandlerFormats(

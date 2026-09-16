@@ -141,8 +141,6 @@ base class CRDTORSetHandler<T> extends Handler<ORSetState<T>>
       );
 
   /// What this build reads for this handler type.
-  ///
-  /// {@macro handler_formats_constant}
   static const HandlerFormats _formats = HandlerFormats(
     operationKinds: {
       OperationType.kindInsert,

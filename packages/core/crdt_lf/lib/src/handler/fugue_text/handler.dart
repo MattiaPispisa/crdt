@@ -44,7 +44,7 @@ base class CRDTFugueTextHandler
   static const String _handlerType = 'CRDTFugueTextHandler';
 
   /// {@macro builtin_handler_spec}
-  static final HandlerSpec<CRDTFugueTextHandler> _spec = HandlerSpec(
+  static const HandlerSpec<CRDTFugueTextHandler> _spec = HandlerSpec(
     _handlerType,
     CRDTFugueTextHandler.new,
     formats: _formats,
@@ -54,8 +54,6 @@ base class CRDTFugueTextHandler
   HandlerSpec<CRDTFugueTextHandler> get spec => _spec;
 
   /// What this build reads for this handler type.
-  ///
-  /// {@macro handler_formats_constant}
   ///
   /// The blob range is [FugueSnapshot.version], shared by every handler built
   /// on the Fugue tree.
