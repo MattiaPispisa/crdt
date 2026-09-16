@@ -48,21 +48,18 @@ base class CRDTFugueListHandler<T>
     super.id, {
     required String handlerType,
     ValueCodec<T>? valueCodec,
-  })  : _handlerType = handlerType,
+  })  : spec = _spec<T>(handlerType, valueCodec: valueCodec),
         _valueCodec = valueCodec ?? JsonValueCodec<T>();
 
 
   final ValueCodec<T> _valueCodec;
 
-  final String _handlerType;
-
   /// {@macro handler_spec}
   ///
-  /// Built once from the tag the constructor asked for: [handlerType] reads it
+  /// Built once, from the tag the constructor asked for: [handlerType] reads it
   /// on every operation encode, so a fresh one per call would allocate there.
   @override
-  late final HandlerSpec<CRDTFugueListHandler<T>> spec =
-      _spec<T>(_handlerType, valueCodec: _valueCodec);
+  final HandlerSpec<CRDTFugueListHandler<T>> spec;
 
   /// {@macro generic_handler_spec}
   static HandlerSpec<CRDTFugueListHandler<T>> _spec<T>(

@@ -17,6 +17,7 @@ final class MockHandler extends Handler<String> {
     (doc, id) => MockHandler(doc),
     formats: const HandlerFormats(
       operationKinds: {OperationType.kindInsert},
+      blobVersions: BlobVersionRange.single(1),
     ),
   );
 
@@ -49,6 +50,7 @@ final class NewerMockHandler extends Handler<String> {
     (doc, id) => NewerMockHandler(doc),
     formats: const HandlerFormats(
       operationKinds: {OperationType.kindInsert, OperationType.kindDelete},
+      blobVersions: BlobVersionRange.single(1),
     ),
   );
 

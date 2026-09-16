@@ -6,6 +6,9 @@ import 'package:test/test.dart';
 
 final _peer = PeerId.parse('45ee6b65-b393-40b7-9755-8b66dc7d0518');
 
+/// The custom kind both stamped fixtures dispatch on.
+const _stampedWriteKind = 4;
+
 void main() {
   group('Compound', () {
     late CRDTDocument doc;
@@ -132,7 +135,8 @@ base class _StampedRegister extends Handler<int> {
         '_StampedRegister',
         (doc, id) => _StampedRegister(doc, id),
         formats: const HandlerFormats(
-          operationKinds: {OperationType.kindInsert},
+          operationKinds: {_stampedWriteKind},
+          blobVersions: BlobVersionRange.single(1),
         ),
       );
 
@@ -147,7 +151,7 @@ base class _StampedRegister extends Handler<int> {
 
   late final OperationType writeType = OperationType.custom(
     this,
-    kind: 4,
+    kind: _stampedWriteKind,
     name: 'write',
     stamped: true,
   );
@@ -190,7 +194,8 @@ final class _CompoundingStampedRegister extends _StampedRegister {
         '_CompoundingStampedRegister',
         (doc, id) => _CompoundingStampedRegister(doc, id),
         formats: const HandlerFormats(
-          operationKinds: {OperationType.kindInsert},
+          operationKinds: {_stampedWriteKind},
+          blobVersions: BlobVersionRange.single(1),
         ),
       );
 

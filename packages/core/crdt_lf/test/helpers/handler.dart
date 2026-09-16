@@ -14,6 +14,7 @@ final class TestHandler extends Handler<dynamic> {
           (doc, id) => TestHandler(doc, id: id, handlerType: handlerType),
           formats: const HandlerFormats(
             operationKinds: {OperationType.kindInsert},
+            blobVersions: BlobVersionRange.single(1),
           ),
         );
 

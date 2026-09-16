@@ -157,7 +157,8 @@ final class _MigratingHandler extends Handler<String> {
         '_MigratingHandler',
         (doc, id) => _MigratingHandler(doc, writes: writes),
         formats: HandlerFormats(
-          operationKinds: const {OperationType.kindInsert},
+          // It carries state in its blob and decodes nothing.
+          operationKinds: const {},
           blobVersions: BlobVersionRange(
             minReadableSnapshotBlobVersion,
             snapshotBlobVersion,

@@ -37,22 +37,19 @@ base class CRDTRegisterHandler<T> extends Handler<T>
     this._id, {
     required String handlerType,
     ValueCodec<T>? valueCodec,
-  })  : _handlerType = handlerType,
+  })  : spec = _spec<T>(handlerType, valueCodec: valueCodec),
         _valueCodec = valueCodec ?? JsonValueCodec<T>();
 
 
   final String _id;
   final ValueCodec<T> _valueCodec;
 
-  final String _handlerType;
-
   /// {@macro handler_spec}
   ///
-  /// Built once from the tag the constructor asked for: [handlerType] reads it
+  /// Built once, from the tag the constructor asked for: [handlerType] reads it
   /// on every operation encode, so a fresh one per call would allocate there.
   @override
-  late final HandlerSpec<CRDTRegisterHandler<T>> spec =
-      _spec<T>(_handlerType, valueCodec: _valueCodec);
+  final HandlerSpec<CRDTRegisterHandler<T>> spec;
 
   @override
   String get id => _id;

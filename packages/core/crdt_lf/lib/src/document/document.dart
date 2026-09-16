@@ -197,14 +197,24 @@ abstract class BaseCRDTDocument {
     handler._document = this;
 
     // The one place every creation path meets, so it is where a handler says
-    // what kind it is. `putIfAbsent`: an explicit [register] made earlier wins.
+    // what kind it is — and the only place a declaration can be checked against
+    // the decoders that actually dispatch. [HandlerSpec.create] sees a handler
+    // built from a spec; a handler built by its own constructor passes here and
+    // nowhere else.
     final spec = handler.spec;
+    assert(
+      formatsOf(handler) == spec.formats,
+      '${spec.type} declares ${spec.formats} but reads '
+      '${formatsOf(handler)}. A peer is told this build reads something it '
+      'cannot decode, and sends it.',
+    );
     assert(
       _specs[spec.type] == null || _specs[spec.type] == spec,
       'Two specs claim the tag ${spec.type} and read different formats. '
-      'One tag has to mean one wire format, or a peer is told this build '
-      'reads something it cannot.',
+      'One tag has to mean one wire format.',
     );
+
+    // `putIfAbsent`: an explicit [register] made earlier wins.
     _specs.putIfAbsent(spec.type, () => spec);
   }
 
@@ -262,7 +272,7 @@ abstract class BaseCRDTDocument {
     _specs[probe.handlerType] = HandlerSpec<T>(
       probe.handlerType,
       build,
-      formats: formatsOf(probe),
+      formats: probe.spec.formats,
     );
   }
 
@@ -683,20 +693,11 @@ class CRDTDocument extends BaseCRDTDocument {
   DocumentCapabilities describeBuildCapabilities() {
     _ensureNotDisposed('describeBuildCapabilities');
 
-    final capabilities = <String, HandlerFormats>{};
-
-    for (final spec in _specs.values) {
-      HandlerFormats.mergeInto(capabilities, spec.type, spec.formats);
-    }
-    for (final handler in _handlers.values) {
-      HandlerFormats.mergeInto(
-        capabilities,
-        handler.handlerType,
-        formatsOf(handler),
-      );
-    }
-
-    return DocumentCapabilities(capabilities);
+    // Only [_specs]: a handler declares its kind as it registers, so every kind
+    // this document has open is already a key here.
+    return DocumentCapabilities({
+      for (final spec in _specs.values) spec.type: spec.formats,
+    });
   }
 
   /// The handlers that are not referenced by any other container handler,

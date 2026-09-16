@@ -39,7 +39,7 @@ base class CRDTMapHandler<T> extends Handler<Map<String, T>>
     this._id, {
     required String handlerType,
     ValueCodec<T>? valueCodec,
-  })  : _handlerType = handlerType,
+  })  : spec = _spec<T>(handlerType, valueCodec: valueCodec),
         _valueCodec = valueCodec ?? JsonValueCodec<T>();
 
 
@@ -48,15 +48,12 @@ base class CRDTMapHandler<T> extends Handler<Map<String, T>>
 
   final ValueCodec<T> _valueCodec;
 
-  final String _handlerType;
-
   /// {@macro handler_spec}
   ///
-  /// Built once from the tag the constructor asked for: [handlerType] reads it
+  /// Built once, from the tag the constructor asked for: [handlerType] reads it
   /// on every operation encode, so a fresh one per call would allocate there.
   @override
-  late final HandlerSpec<CRDTMapHandler<T>> spec =
-      _spec<T>(_handlerType, valueCodec: _valueCodec);
+  final HandlerSpec<CRDTMapHandler<T>> spec;
 
   @override
   late final OperationDecoders operationDecoders = {

@@ -45,7 +45,11 @@ base class CRDTORMapHandler<K, V> extends Handler<ORMapState<K, V>>
     required String handlerType,
     ValueCodec<K>? keyCodec,
     ValueCodec<V>? valueCodec,
-  })  : _handlerType = handlerType,
+  })  : spec = _spec<K, V>(
+          handlerType,
+          keyCodec: keyCodec,
+          valueCodec: valueCodec,
+        ),
         _keyCodec = keyCodec ?? JsonValueCodec<K>(),
         _valueCodec = valueCodec ?? JsonValueCodec<V>();
 
@@ -54,18 +58,12 @@ base class CRDTORMapHandler<K, V> extends Handler<ORMapState<K, V>>
   final ValueCodec<K> _keyCodec;
   final ValueCodec<V> _valueCodec;
 
-  final String _handlerType;
-
   /// {@macro handler_spec}
   ///
-  /// Built once from the tag the constructor asked for: [handlerType] reads it
+  /// Built once, from the tag the constructor asked for: [handlerType] reads it
   /// on every operation encode, so a fresh one per call would allocate there.
   @override
-  late final HandlerSpec<CRDTORMapHandler<K, V>> spec = _spec<K, V>(
-    _handlerType,
-    keyCodec: _keyCodec,
-    valueCodec: _valueCodec,
-  );
+  final HandlerSpec<CRDTORMapHandler<K, V>> spec;
 
   @override
   String get id => _id;

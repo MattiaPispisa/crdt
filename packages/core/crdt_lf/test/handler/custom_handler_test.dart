@@ -157,7 +157,10 @@ final class _MarkerHandler extends Handler<int> {
   HandlerSpec<_MarkerHandler> get spec => HandlerSpec(
         '_MarkerHandler',
         (doc, id) => _MarkerHandler(doc, id),
-        formats: const HandlerFormats(operationKinds: {setKind}),
+        formats: const HandlerFormats(
+          operationKinds: {setKind},
+          blobVersions: BlobVersionRange.single(1),
+        ),
       );
 
   static const int setKind = 4;
