@@ -24,8 +24,22 @@ class HandlerSpec<T extends Handler<dynamic>> {
   /// envelope and in every [HandlerRef], so every peer has to spell it the
   /// same way. Make it a constant of your own.
   ///
+  /// Handlers that hold the same thing share one tag, under different ids:
+  ///
+  /// ```dart
+  /// const kind = 'todo-list';
+  ///
+  /// final todos = CRDTListHandler<Todo>(doc, 'todos', handlerType: kind);
+  /// final done = CRDTListHandler<Todo>(doc, 'done', handlerType: kind);
+  /// ```
+  ///
   /// It is not the handler's id. An id picks one handler; this says what kind
   /// that handler is.
+  ///
+  /// You write it by hand because `runtimeType.toString()` cannot name a
+  /// kind: dart2js renames types in a Flutter web release build, so the same
+  /// handler would travel under one name from the web and another name from
+  /// everywhere else.
   /// {@endtemplate}
   final String type;
 
