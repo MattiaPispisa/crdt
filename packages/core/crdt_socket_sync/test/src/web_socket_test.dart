@@ -83,8 +83,11 @@ void main() {
 
       await registry.addDocument(documentId);
       final registryDoc = (await registry.getDocument(documentId))!;
-      CRDTListHandler<String>(registryDoc, 'test-list',
-          handlerType: 'test-list');
+      CRDTListHandler<String>(
+        registryDoc,
+        'test-list',
+        handlerType: 'test-list',
+      );
 
       await server.start();
 

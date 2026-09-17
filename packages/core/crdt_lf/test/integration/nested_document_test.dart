@@ -28,9 +28,9 @@ void main() {
       // It declares the kinds the tree is made of: every child arrives as a ref
       // to a handler B never opened.
       final docB = CRDTDocument()
-        ..register(CRDTMapRefHandler.new)
-        ..register(CRDTListRefHandler.new)
-        ..register(CRDTFugueTextHandler.new);
+        ..register(CRDTMapRefHandler.spec)
+        ..register(CRDTListRefHandler.spec)
+        ..register(CRDTFugueTextHandler.spec);
       final rootB = CRDTMapRefHandler(docB, 'root');
       docB
         ..importChanges(docA.exportChanges())

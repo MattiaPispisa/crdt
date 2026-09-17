@@ -35,23 +35,18 @@ base class CRDTFugueTextHandler
     extends FugueSequenceHandler<String, String, FugueTextState>
     with DeltaProvider<String, SequenceDelta<String>> {
   /// Constructor that initializes a new Fugue text handler
-  CRDTFugueTextHandler(super.doc, super.id);
+  CRDTFugueTextHandler(super.doc, super.id)
+      : super(spec: CRDTFugueTextHandler.spec);
 
   /// The tag this kind travels under; see [Handler.handlerType].
-  ///
-  /// Fixed here because this handler is not generic: there is no type argument
-  /// to carry, so there is nothing for a caller to choose.
   static const String _handlerType = 'CRDTFugueTextHandler';
 
   /// {@macro builtin_handler_spec}
-  static const HandlerSpec<CRDTFugueTextHandler> _spec = HandlerSpec(
+  static const HandlerSpec<CRDTFugueTextHandler> spec = HandlerSpec(
     _handlerType,
     CRDTFugueTextHandler.new,
     formats: _formats,
   );
-
-  @override
-  HandlerSpec<CRDTFugueTextHandler> get spec => _spec;
 
   /// What this build reads for this handler type.
   ///

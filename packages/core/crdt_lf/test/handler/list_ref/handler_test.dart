@@ -82,9 +82,9 @@ void main() {
       final doc = CRDTDocument(peerId: PeerId.generate());
       final blocks = CRDTListRefHandler(doc, 'blocks');
 
-      final first = blocks.insertChild(0, CRDTFugueTextHandler.new)
+      final first = blocks.insertChild(0, CRDTFugueTextHandler.spec)
         ..insert(0, 'a');
-      final second = blocks.insertChild(1, CRDTFugueTextHandler.new)
+      final second = blocks.insertChild(1, CRDTFugueTextHandler.spec)
         ..insert(0, 'b');
 
       expect(identical(first, second), isFalse);

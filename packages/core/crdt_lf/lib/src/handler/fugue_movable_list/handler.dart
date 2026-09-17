@@ -55,12 +55,31 @@ base class CRDTFugueMovableListHandler<T>
   /// [handlerType] names the **kind** of handler this is.
   /// {@macro handler_type_tag}
   CRDTFugueMovableListHandler(
-    super.doc,
+    BaseCRDTDocument doc,
     String id, {
     required String handlerType,
     ValueCodec<T>? valueCodec,
+  }) : this.fromSpec(
+          doc,
+          id,
+          spec: spec<T>(handlerType, valueCodec: valueCodec),
+          valueCodec: valueCodec,
+        );
+
+  /// Builds one of a kind stated in full, instead of named by a tag.
+  ///
+  /// The hook for a subclass that is **its own kind** — a container built on
+  /// this handler, say. It passes its own spec up rather than letting this
+  /// class make one from a tag, which would name this class and leave a peer
+  /// rebuilding the reference with the wrong one.
+  ///
+  /// A plain use wants the unnamed constructor: it makes the spec for you.
+  CRDTFugueMovableListHandler.fromSpec(
+    super.doc,
+    String id, {
+    required super.spec,
+    ValueCodec<T>? valueCodec,
   })  : _id = id,
-        spec = _spec<T>(handlerType, valueCodec: valueCodec),
         _valueCodec = valueCodec ?? JsonValueCodec<T>();
 
   final String _id;
@@ -70,8 +89,6 @@ base class CRDTFugueMovableListHandler<T>
   ///
   /// Built once, from the tag the constructor asked for: [handlerType] reads it
   /// on every operation encode, so a fresh one per call would allocate there.
-  @override
-  final HandlerSpec<CRDTFugueMovableListHandler<T>> spec;
 
   @override
   String get id => _id;
@@ -686,7 +703,7 @@ base class CRDTFugueMovableListHandler<T>
   }
 
   /// {@macro generic_handler_spec}
-  static HandlerSpec<CRDTFugueMovableListHandler<T>> _spec<T>(
+  static HandlerSpec<CRDTFugueMovableListHandler<T>> spec<T>(
     String type, {
     ValueCodec<T>? valueCodec,
   }) =>
@@ -714,9 +731,6 @@ base class CRDTFugueMovableListHandler<T>
 
   /// The version of the snapshot blob this build writes and reads.
   /// The version [getSnapshotState] writes at the head of its blob.
-  ///
-  /// Declared here and read by [_formats], not the other way round: the wire
-  /// format is the fact, and what this build advertises follows from it.
   static const int _blobVersion = 1;
 
   @override

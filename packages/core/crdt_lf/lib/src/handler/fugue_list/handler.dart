@@ -44,13 +44,31 @@ base class CRDTFugueListHandler<T>
   /// [handlerType] names the **kind** of handler this is.
   /// {@macro handler_type_tag}
   CRDTFugueListHandler(
-    super.doc,
-    super.id, {
+    BaseCRDTDocument doc,
+    String id, {
     required String handlerType,
     ValueCodec<T>? valueCodec,
-  })  : spec = _spec<T>(handlerType, valueCodec: valueCodec),
-        _valueCodec = valueCodec ?? JsonValueCodec<T>();
+  }) : this.fromSpec(
+          doc,
+          id,
+          spec: spec<T>(handlerType, valueCodec: valueCodec),
+          valueCodec: valueCodec,
+        );
 
+  /// Builds one of a kind stated in full, instead of named by a tag.
+  ///
+  /// The hook for a subclass that is **its own kind** — a container built on
+  /// this handler, say. It passes its own spec up rather than letting this
+  /// class make one from a tag, which would name this class and leave a peer
+  /// rebuilding the reference with the wrong one.
+  ///
+  /// A plain use wants the unnamed constructor: it makes the spec for you.
+  CRDTFugueListHandler.fromSpec(
+    super.doc,
+    super.id, {
+    required super.spec,
+    ValueCodec<T>? valueCodec,
+  }) : _valueCodec = valueCodec ?? JsonValueCodec<T>();
 
   final ValueCodec<T> _valueCodec;
 
@@ -58,11 +76,9 @@ base class CRDTFugueListHandler<T>
   ///
   /// Built once, from the tag the constructor asked for: [handlerType] reads it
   /// on every operation encode, so a fresh one per call would allocate there.
-  @override
-  final HandlerSpec<CRDTFugueListHandler<T>> spec;
 
   /// {@macro generic_handler_spec}
-  static HandlerSpec<CRDTFugueListHandler<T>> _spec<T>(
+  static HandlerSpec<CRDTFugueListHandler<T>> spec<T>(
     String type, {
     ValueCodec<T>? valueCodec,
   }) =>

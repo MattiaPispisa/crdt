@@ -867,8 +867,7 @@ void main() {
         source,
         'list',
         handlerType: 'CRDTFugueListHandler<int>',
-      )
-        ..insert(0, 1);
+      )..insert(0, 1);
 
       final mirror = CRDTDocument(peerId: PeerId.parse(_peerIdB));
       final mirrorList = CRDTFugueListHandler<int>(
@@ -1237,8 +1236,7 @@ void main() {
         doc,
         'movable',
         handlerType: 'CRDTFugueMovableListHandler<String>',
-      )
-        ..insertAll(0, ['a', 'b', 'c']);
+      )..insertAll(0, ['a', 'b', 'c']);
       final projection = _Projection<List<String>, SequenceDelta<String>>(
         readSynced: list.readSynced,
         stream: list.watch(),
@@ -1269,8 +1267,7 @@ void main() {
         doc,
         'movable',
         handlerType: 'CRDTFugueMovableListHandler<String>',
-      )
-        ..insertAll(0, ['a', 'b', 'c']);
+      )..insertAll(0, ['a', 'b', 'c']);
       final projection = _Projection<List<String>, SequenceDelta<String>>(
         readSynced: list.readSynced,
         stream: list.watch(),

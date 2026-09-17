@@ -183,8 +183,7 @@ void main() {
         ]);
       });
 
-      test('refuses a build against data holding a version it cannot read',
-          () {
+      test('refuses a build against data holding a version it cannot read', () {
         // A document that merged snapshots from two peers on different builds
         // holds a range covering both, and a build that stops at v1 cannot
         // read the top of it.

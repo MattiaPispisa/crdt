@@ -114,15 +114,15 @@ void main() {
 
     test('records the blob version of every type it snapshotted', () {
       final doc = _documentWithChanges();
-      final written = doc
-          .describeBuildCapabilities()['CRDTFugueTextHandler']!
-          .blobVersions;
+      final written =
+          doc.describeBuildCapabilities()['CRDTFugueTextHandler']!.blobVersions;
 
       final reloaded = CRDTDocument(peerId: PeerId.generate())
         ..importSnapshot(doc.takeSnapshot());
 
       expect(
-        reloaded.describeDataRequirements()['CRDTFugueTextHandler']
+        reloaded
+            .describeDataRequirements()['CRDTFugueTextHandler']
             ?.blobVersions,
         written,
       );
@@ -216,7 +216,9 @@ void main() {
         ),
       });
       expect(
-        doc.describeDataRequirements().merge(foreign)['CRDTFugueTextHandler']!
+        doc
+            .describeDataRequirements()
+            .merge(foreign)['CRDTFugueTextHandler']!
             .blobVersions,
         const BlobVersionRange(1, 99),
       );

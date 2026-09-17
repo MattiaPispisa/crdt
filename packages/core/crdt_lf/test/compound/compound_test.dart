@@ -123,22 +123,21 @@ Operation _write(CRDTRegisterHandler<int> handler, int value) {
 /// A stamped handler that does **not** compound, which is the only shape a
 /// stamped handler is allowed to have.
 base class _StampedRegister extends Handler<int> {
-  _StampedRegister(super.doc, this._id);
+  _StampedRegister(super.doc, this._id) : super(spec: _spec);
+
+  static const HandlerSpec<_StampedRegister> _spec = HandlerSpec(
+    '_StampedRegister',
+    _StampedRegister.new,
+    formats: HandlerFormats(
+      operationKinds: {_stampedWriteKind},
+      blobVersions: BlobVersionRange.single(1),
+    ),
+  );
 
   final String _id;
 
   @override
   String get id => _id;
-
-  @override
-  HandlerSpec<_StampedRegister> get spec => HandlerSpec(
-        '_StampedRegister',
-        (doc, id) => _StampedRegister(doc, id),
-        formats: const HandlerFormats(
-          operationKinds: {_stampedWriteKind},
-          blobVersions: BlobVersionRange.single(1),
-        ),
-      );
 
   @override
   late final OperationDecoders operationDecoders = {
@@ -188,16 +187,6 @@ final class _BackwardsCompoundingRegister extends CRDTRegisterHandler<int> {
 /// A handler written the way `Compound` refuses: stamped **and** folding.
 final class _CompoundingStampedRegister extends _StampedRegister {
   _CompoundingStampedRegister(super.doc, super.id);
-
-  @override
-  HandlerSpec<_CompoundingStampedRegister> get spec => HandlerSpec(
-        '_CompoundingStampedRegister',
-        (doc, id) => _CompoundingStampedRegister(doc, id),
-        formats: const HandlerFormats(
-          operationKinds: {_stampedWriteKind},
-          blobVersions: BlobVersionRange.single(1),
-        ),
-      );
 
   @override
   Operation? compound(Operation accumulator, Operation current) {

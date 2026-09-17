@@ -32,21 +32,17 @@ void main() {
         doc,
         doc.newHandlerId(),
         handlerType: 'CRDTListHandler<String>',
-      )
-        ..insert(0, 'a');
+      )..insert(0, 'a');
       final fugueList = CRDTFugueListHandler<String>(
         doc,
         doc.newHandlerId(),
         handlerType: 'CRDTFugueListHandler<String>',
-      )
-        ..insert(0, 'b');
-      final movable =
-          CRDTFugueMovableListHandler<String>(
-            doc,
-            doc.newHandlerId(),
-            handlerType: 'CRDTFugueMovableListHandler<String>',
-          )
-            ..insert(0, 'c');
+      )..insert(0, 'b');
+      final movable = CRDTFugueMovableListHandler<String>(
+        doc,
+        doc.newHandlerId(),
+        handlerType: 'CRDTFugueMovableListHandler<String>',
+      )..insert(0, 'c');
       final orSet = CRDTORSetHandler<String>(
         doc,
         doc.newHandlerId(),
@@ -56,16 +52,14 @@ void main() {
         doc,
         doc.newHandlerId(),
         handlerType: 'CRDTORMapHandler<String, String>',
-      )
-        ..put('k', 'v');
+      )..put('k', 'v');
       final fugueText = CRDTFugueTextHandler(doc, doc.newHandlerId())
         ..insert(0, 'ft');
       final map = CRDTMapHandler<String>(
         doc,
         doc.newHandlerId(),
         handlerType: 'CRDTMapHandler<String>',
-      )
-        ..set('m', 'w');
+      )..set('m', 'w');
 
       root
         ..setRef('text', text)

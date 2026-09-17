@@ -3,9 +3,6 @@ import 'dart:typed_data';
 
 import 'package:crdt_lf/crdt_lf.dart';
 
-/// A factory that instantiates a [Handler] of a specific runtime type for a
-/// given [BaseCRDTDocument] and handler id.
-///
 /// A serializable reference to another [Handler].
 ///
 /// Container handlers (see [ContainerHandler]) store [HandlerRef]s instead of
@@ -26,9 +23,7 @@ class HandlerRef {
   /// The referenced handler's unique id.
   final String id;
 
-  /// The referenced handler's type tag (factory key).
-  ///
-  /// See [Handler.handlerType].
+  /// The kind of the referenced handler; see [Handler.handlerType].
   final String type;
 
   @override

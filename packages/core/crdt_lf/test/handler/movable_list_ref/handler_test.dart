@@ -60,7 +60,7 @@ void main() {
 
       // B declares the kind of the children it is about to read: they arrive
       // as refs to handlers it never opened.
-      final docB = CRDTDocument()..register(CRDTFugueTextHandler.new);
+      final docB = CRDTDocument()..register(CRDTFugueTextHandler.spec);
       final slidesB = CRDTMovableListRefHandler(docB, 'slides');
       docB.importChanges(docA.exportChanges());
 

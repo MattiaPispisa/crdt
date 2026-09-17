@@ -9,20 +9,20 @@ final class TestHandler extends Handler<dynamic> {
     super.doc, {
     this.id = 'test-handler',
     String handlerType = 'TestHandler',
-  }) : spec = HandlerSpec(
-          handlerType,
-          (doc, id) => TestHandler(doc, id: id, handlerType: handlerType),
-          formats: const HandlerFormats(
-            operationKinds: {OperationType.kindInsert},
-            blobVersions: BlobVersionRange.single(1),
-          ),
-        );
+  }) : super(spec: specFor(handlerType));
+
+  /// The kind a test handler under [handlerType] is.
+  static HandlerSpec<TestHandler> specFor(String handlerType) => HandlerSpec(
+        handlerType,
+        (doc, id) => TestHandler(doc, id: id, handlerType: handlerType),
+        formats: const HandlerFormats(
+          operationKinds: {OperationType.kindInsert},
+          blobVersions: BlobVersionRange.single(1),
+        ),
+      );
 
   @override
   final String id;
-
-  @override
-  final HandlerSpec<TestHandler> spec;
 
   @override
   Uint8List getSnapshotState() {

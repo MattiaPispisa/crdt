@@ -7,7 +7,6 @@ import 'package:crdt_lf/crdt_lf.dart';
 /// default would carry the type argument, which dart2js minifies away.
 const kList = 'string-list';
 
-
 void main() {
   // Create two documents (simulating different peers)
   final doc1 = CRDTDocument(

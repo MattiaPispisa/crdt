@@ -32,16 +32,12 @@ abstract class CRDTSocketClient {
 
   /// What this build tells the server it can read.
   ///
-  /// Leaving it unset is safe. The default reads the document
-  /// ([CRDTDocument.describeBuildCapabilities]), which knows the kinds it has a
-  /// handler of and the kinds it was told to declare. An app usually opens a
-  /// handler *after* connecting, so such a description is sent as
-  /// **incomplete**: a kind it does not name is passed over, not treated as one
-  /// this build cannot read.
+  /// Defaults to [CRDTDocument.describeBuildCapabilities], sent as
+  /// **incomplete**: an app usually opens a handler after connecting, so a kind
+  /// it does not name is passed over rather than refused.
   ///
-  /// Passing one says it names **every** kind this build reads, so the server
-  /// can also refuse on a kind left out. It is the stricter check, and only a
-  /// description written by hand can promise it:
+  /// One passed at construction is sent as complete, and the server also
+  /// refuses on a kind left out:
   ///
   /// ```dart
   /// WebSocketClient(
@@ -55,8 +51,8 @@ abstract class CRDTSocketClient {
   /// );
   /// ```
   ///
-  /// Either way, a type that **is** named is checked in full: a kind it lacks,
-  /// or a snapshot blob written with another layout, refuses the client.
+  /// Either way, a kind that **is** named is checked in full: a missing kind,
+  /// or a snapshot blob of another layout, refuses the client.
   DocumentCapabilities get capabilities =>
       _declaredCapabilities ?? document.describeBuildCapabilities();
 
@@ -84,9 +80,7 @@ abstract class CRDTSocketClient {
   ///
   /// Compiled out of a release build, like every `assert`.
   @protected
-  void debugCheckHandlerTypes() {
-  }
-
+  void debugCheckHandlerTypes() {}
 
   final StreamController<SyncFault> _faults =
       StreamController<SyncFault>.broadcast();

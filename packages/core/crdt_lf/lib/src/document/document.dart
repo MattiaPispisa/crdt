@@ -195,12 +195,7 @@ abstract class BaseCRDTDocument {
     _handlers[handler.id] = handler;
     handler._document = this;
 
-    // The one place every creation path meets, so it is where a handler says
-    // what kind it is — and the only place a declaration can be checked against
-    // the decoders that actually dispatch. [HandlerSpec.create] sees a handler
-    // built from a spec; a handler built by its own constructor passes here and
-    // nowhere else.
-    final spec = handler.spec;
+    final spec = handler._instanceSpec;
     assert(
       HandlerFormats.of(handler) == spec.formats,
       '${spec.type} declares ${spec.formats} but reads '
@@ -239,61 +234,47 @@ abstract class BaseCRDTDocument {
   /// so remote peers reuse the same id verbatim when reconstructing the tree.
   String newHandlerId() => generateUuid();
 
-  /// Declares one handler **kind**, for one this peer never opens itself.
+  /// Declares a kind this peer never opens itself, so a reference to one can
+  /// still be rebuilt.
   ///
-  /// A handler declares its own kind as it is constructed. So this is only for
-  /// a kind that arrives without ever being opened here: a subtree a peer is
-  /// about to send, or a kind a store-and-forward server has to name.
-  ///
-  /// Takes only how to build one. The tag and the formats are read off a
-  /// handler [build] makes, so neither is restated, and neither can drift from
-  /// the handler that ends up on the wire. Declaring the same kind twice
-  /// replaces what was there.
+  /// A handler declares its own kind as it is constructed, so this is only for
+  /// a kind that arrives without being opened here. Declaring the same kind
+  /// twice replaces what was there.
   ///
   /// ```dart
-  /// document.register(CRDTFugueTextHandler.new);
-  ///
-  /// // A generic one carries its tag in the closure, written once.
-  /// document.register(
-  ///   (doc, id) => CRDTListHandler<Todo>(doc, id, handlerType: 'todo-list'),
-  /// );
+  /// document.register(CRDTFugueTextHandler.spec);
+  /// document.register(CRDTListHandler.spec<Todo>('todo-list'));
   /// ```
   ///
   /// Throws [DocumentDisposedException] on a disposed document.
-  void register<T extends Handler<dynamic>>(HandlerBuilder<T> build) {
+  void register<T extends Handler<dynamic>>(HandlerSpec<T> spec) {
     _ensureNotDisposed('register');
 
-    // A throwaway handler on a throwaway document: with none of this kind open
-    // here there is nothing else to read the tag and the formats off, and the
-    // probe must not land on this document.
-    final probe = build(CRDTDocument(peerId: PeerId.generate()), 'probe');
-
-    _specs[probe.handlerType] = HandlerSpec<T>(
-      probe.handlerType,
-      build,
-      formats: probe.spec.formats,
-    );
+    _specs[spec.type] = spec;
   }
 
-  /// The handler [build] makes under [id], or the one already open there.
+  /// The handler [spec] describes under [id], or the one already open there.
   ///
-  /// Safe to call again, which is what a constructor is not: building a handler
-  /// by hand under a taken id throws. Pass a constructor tear-off —
-  /// `doc.handler(CRDTMapRefHandler.new, 'root')`.
+  /// Safe to call again, unlike a constructor.
+  ///
+  /// ```dart
+  /// final root = doc.handler(CRDTMapRefHandler.spec, 'root');
+  /// ```
   ///
   /// Throws [HandlerAlreadyRegisteredException] when [id] is taken by a handler
-  /// that is not a [T].
-  T handler<T extends Handler<dynamic>>(HandlerBuilder<T> build, String id) {
+  /// of another kind.
+  T handler<T extends Handler<dynamic>>(HandlerSpec<T> spec, String id) {
     final existing = _handlers[id];
     if (existing != null) {
-      if (existing is T) {
+      if (existing is T && existing.handlerType == spec.type) {
         return existing;
       }
       throw HandlerAlreadyRegisteredException(
-        'Handler with ID $id is a ${existing.handlerType}, not a $T',
+        'Handler with ID $id is a ${existing.handlerType}, '
+        'not a ${spec.type}',
       );
     }
-    return build(this, id);
+    return spec.create(this, id);
   }
 
   /// Resolves [ref] to a handler instance.
@@ -607,13 +588,12 @@ class CRDTDocument extends BaseCRDTDocument {
   Map<String, Handler<dynamic>> get registeredHandlers =>
       Map.unmodifiable(_handlers);
 
-  /// Reconstructs every handler reachable from the data currently held by this
-  /// document (changes and snapshot), using the registered factories.
+  /// Rebuilds every handler reachable from the data this document holds.
   ///
-  /// A peer that received only the [Change]s (or a [Snapshot]) and registered
-  /// the relevant factories can call this to rebuild the full handler tree
-  /// without knowing the document structure in advance. Reading lazily from a
-  /// known root via `getRef`/`resolved` also works without calling this.
+  /// For a peer that received only changes or a snapshot and does not know the
+  /// structure in advance. Only kinds this document knows are rebuilt — see
+  /// [register]. Reading from a known root with `getRef` or `resolved` works
+  /// without this.
   void reconstruct() {
     _ensureNotDisposed('reconstruct');
 
@@ -649,22 +629,14 @@ class CRDTDocument extends BaseCRDTDocument {
         changes: exportChanges,
       );
 
-  /// The formats this document's data is written in, by handler type.
+  /// The formats this document's data is written in, by handler kind.
   ///
-  /// A peer that cannot decode one of them cannot read that part of the
-  /// document; compare with [describeBuildCapabilities] to find out which.
+  /// Read from the changes and the last snapshot, so it answers on a document
+  /// that has opened no handler. Compare it with [describeBuildCapabilities] to
+  /// find the kinds this peer cannot read.
   ///
-  /// Read from the data, so it answers on a document that has opened no
-  /// handler and registered no factory.
-  ///
-  /// Covers the record the last snapshot carries and every change in the log.
-  /// The first call walks the whole log; after that each change is folded as
-  /// it is applied, so a change that arrives out of order is still counted.
-  ///
-  /// [HandlerFormats.blobVersions] holds a range only for a type a snapshot
-  /// recorded. It is `null` for a type known from its changes alone, and covers
-  /// several versions once snapshots from peers on different builds were
-  /// merged.
+  /// [HandlerFormats.blobVersions] is `null` for a kind known from its changes
+  /// alone: an envelope carries no snapshot version.
   ///
   /// Throws [DocumentDisposedException] on a disposed document.
   DocumentRequirements describeDataRequirements() {
@@ -674,19 +646,14 @@ class CRDTDocument extends BaseCRDTDocument {
     return _dataRequirements.describe();
   }
 
-  /// What this build can read, by handler type.
+  /// What this build can read, by handler kind.
   ///
-  /// What this document has been set up for: the formats declared with
-  /// [register] and the handlers already open, which report their own. Neither
-  /// source builds anything.
+  /// Names the kinds this document has a handler of, plus those passed to
+  /// [register]. Builds nothing.
   ///
-  /// The handler types this package ships are **not** in here: a build can
-  /// always rebuild one, but rebuilding is not reading, and a relay that only
-  /// forwards bytes should not claim five types it never uses.
-  ///
-  /// A type is absent when nothing declared it and nothing opened one. That is
-  /// why a description derived from a document is sent as incomplete: silence
-  /// about a type means "not set up here", not "cannot read".
+  /// A kind is absent when nothing opened or declared it, which is why a
+  /// description read off a document is sent as incomplete: silence means "not
+  /// set up here", not "cannot read".
   ///
   /// Throws [DocumentDisposedException] on a disposed document.
   DocumentCapabilities describeBuildCapabilities() {
@@ -1038,7 +1005,6 @@ class CRDTDocument extends BaseCRDTDocument {
       }
     }
   }
-
 
   /// It represents the **latest operation for each peer** of this document
   ///

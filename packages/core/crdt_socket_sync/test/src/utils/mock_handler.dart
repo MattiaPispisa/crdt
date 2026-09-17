@@ -7,12 +7,9 @@ import 'mock_operation.dart';
 
 /// Test handler for testing purposes
 final class MockHandler extends Handler<String> {
-  MockHandler(super.doc);
+  MockHandler(super.doc) : super(spec: spec);
 
-  @override
-  HandlerSpec<MockHandler> get spec => _spec;
-
-  static final HandlerSpec<MockHandler> _spec = HandlerSpec(
+  static final HandlerSpec<MockHandler> spec = HandlerSpec(
     'MockHandler',
     (doc, id) => MockHandler(doc),
     formats: const HandlerFormats(
@@ -38,14 +35,12 @@ final class MockHandler extends Handler<String> {
 /// Stands for a newer build: the same handler type on the wire, plus a kind an
 /// older peer has never heard of.
 final class NewerMockHandler extends Handler<String> {
-  NewerMockHandler(super.doc);
+  NewerMockHandler(super.doc) : super(spec: spec);
 
   /// The tag [MockHandler] answers with, so both stand for the same kind on the
   /// wire.
-  @override
-  HandlerSpec<NewerMockHandler> get spec => _spec;
 
-  static final HandlerSpec<NewerMockHandler> _spec = HandlerSpec(
+  static final HandlerSpec<NewerMockHandler> spec = HandlerSpec(
     'MockHandler',
     (doc, id) => NewerMockHandler(doc),
     formats: const HandlerFormats(

@@ -12,10 +12,10 @@ void main() {
     // The kinds this tree is made of, so a peer resolves a child it never
     // opened.
     CRDTDocument newDoc() => CRDTDocument()
-      ..register(newPos)
-      ..register(CRDTMapRefHandler.new)
-      ..register(CRDTMovableListRefHandler.new)
-      ..register(CRDTFugueTextHandler.new);
+      ..register(CRDTMapHandler.spec<num>('pos'))
+      ..register(CRDTMapRefHandler.spec)
+      ..register(CRDTMovableListRefHandler.spec)
+      ..register(CRDTFugueTextHandler.spec);
 
     test('concurrent slide reorder and coordinate updates converge', () {
       // --- Peer A builds two slides, each with one positioned element. ---

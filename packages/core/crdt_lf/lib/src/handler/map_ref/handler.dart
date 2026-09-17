@@ -23,10 +23,11 @@ base class CRDTMapRefHandler extends CRDTMapHandler<HandlerRef>
     implements ContainerHandler {
   /// Creates a map-of-references handler bound to [doc] with the given [id].
   CRDTMapRefHandler(super.doc, super.id)
-      : super(
-          // The parent asks for a tag; the kind this class really is comes from
-          // the [spec] override below, which the document reads.
-          handlerType: _handlerType,
+      : super.fromSpec(
+          // Its own kind, not one the parent makes from a tag: a spec the
+          // parent minted would build the parent's class, and a peer rebuilding
+          // this ref would get a handler that is not a container.
+          spec: spec,
           valueCodec: const HandlerRefCodec(),
         );
 
@@ -46,20 +47,14 @@ base class CRDTMapRefHandler extends CRDTMapHandler<HandlerRef>
   );
 
   /// The tag this kind travels under; see [Handler.handlerType].
-  ///
-  /// Fixed here because this handler is not generic: there is no type argument
-  /// to carry, so there is nothing for a caller to choose.
   static const String _handlerType = 'CRDTMapRefHandler';
 
   /// {@macro builtin_handler_spec}
-  static final HandlerSpec<CRDTMapRefHandler> _spec = HandlerSpec(
+  static const HandlerSpec<CRDTMapRefHandler> spec = HandlerSpec(
     _handlerType,
     CRDTMapRefHandler.new,
     formats: _formats,
   );
-
-  @override
-  HandlerSpec<CRDTMapRefHandler> get spec => _spec;
 
   /// Associates [key] with a reference to [handler].
   ///
@@ -68,47 +63,29 @@ base class CRDTMapRefHandler extends CRDTMapHandler<HandlerRef>
     set(key, HandlerRef.of(handler));
   }
 
-  /// The child at [key], made by [build] when [key] holds nothing yet.
+  /// The child at [key], of the kind [spec] names, created when [key] holds
+  /// nothing yet.
   ///
-  /// Safe to call again: the second call resolves the reference the first one
-  /// wrote and hands back that handler. Pass a constructor tear-off —
-  /// `todo.child('done', CRDTFugueTextHandler.new)`.
+  /// Safe to call again: the second call hands back the child the first wrote.
   ///
-  /// Throws [HandlerAlreadyRegisteredException] when [key] already holds a
-  /// child of another kind. A reference carries the kind, so that holds even
-  /// for a child this peer has never opened. That is the usual shape for a tree
-  /// that arrived from a peer.
+  /// ```dart
+  /// final title = chapter.child('title', CRDTFugueTextHandler.spec);
+  /// ```
   ///
-  /// Learning the kind of an undeclared child means building it first. So in
-  /// that one case the handler stays on the document, the way
-  /// [HandlerSpec.create] leaves one whose checks failed.
-  T child<T extends Handler<dynamic>>(String key, HandlerBuilder<T> build) {
+  /// Throws [HandlerAlreadyRegisteredException] when [key] holds a child of
+  /// another kind, even one this peer has never opened.
+  T child<T extends Handler<dynamic>>(String key, HandlerSpec<T> spec) {
     final ref = value[key];
     if (ref != null) {
-      // A kind this document knows: resolving it checks the tag for free.
-      final resolved = doc.resolveHandler(ref);
-      if (resolved != null) {
-        if (resolved is T) {
-          return resolved;
-        }
+      if (ref.type != spec.type) {
         throw HandlerAlreadyRegisteredException(
-          'Key $key holds a ${ref.type}, which is not a $T',
+          'Key $key holds a ${ref.type}, not a ${spec.type}',
         );
       }
-
-      // A kind nothing here declared. `build` is the only thing that can say
-      // what kind it makes, and it only says it by making one — so the check
-      // comes after.
-      final built = build(doc, ref.id);
-      if (built.handlerType != ref.type) {
-        throw HandlerAlreadyRegisteredException(
-          'Key $key holds a ${ref.type}, not a ${built.handlerType}',
-        );
-      }
-      return built;
+      return doc.handler<T>(spec, ref.id);
     }
 
-    final created = build(doc, doc.newHandlerId());
+    final created = spec.create(doc, doc.newHandlerId());
     setRef(key, created);
     return created;
   }

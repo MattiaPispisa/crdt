@@ -200,54 +200,54 @@ void main() {
     const pingInterval = Duration(milliseconds: 50);
     const pingTimeout = Duration(milliseconds: 500);
 
-  test('a refused build stops for good and never reconnects', () async {
-    final doc = CRDTDocument(
-      peerId: PeerId.generate(),
-      documentId: documentId,
-    );
-    final client = WebSocketClient.test(
-      url: 'ws://localhost:0',
-      document: doc,
-      author: doc.peerId,
-      pingInterval: pingInterval,
-      pingTimeout: pingTimeout,
-      transportFactory: () => _FakeTransport(
+    test('a refused build stops for good and never reconnects', () async {
+      final doc = CRDTDocument(
+        peerId: PeerId.generate(),
         documentId: documentId,
-        respondToPings: false,
-        refuseWith: Protocol.errorUnsupportedClient,
-      ),
-    );
-    addTearDown(client.dispose);
+      );
+      final client = WebSocketClient.test(
+        url: 'ws://localhost:0',
+        document: doc,
+        author: doc.peerId,
+        pingInterval: pingInterval,
+        pingTimeout: pingTimeout,
+        transportFactory: () => _FakeTransport(
+          documentId: documentId,
+          respondToPings: false,
+          refuseWith: Protocol.errorUnsupportedClient,
+        ),
+      );
+      addTearDown(client.dispose);
 
-    final statuses = <ConnectionStatus>[];
-    final sub = client.connectionStatus.listen(statuses.add);
+      final statuses = <ConnectionStatus>[];
+      final sub = client.connectionStatus.listen(statuses.add);
 
-    expect(await client.connect(), isFalse);
+      expect(await client.connect(), isFalse);
 
-    expect(client.connectionStatusValue, ConnectionStatus.unsupported);
-    expect(client.isUnsupported, isTrue);
-    expect(
-      client.incompatibility!.code,
-      Protocol.errorUnsupportedClient,
-    );
-    expect(client.incompatibility!.isMissingOperationKinds, isTrue);
+      expect(client.connectionStatusValue, ConnectionStatus.unsupported);
+      expect(client.isUnsupported, isTrue);
+      expect(
+        client.incompatibility!.code,
+        Protocol.errorUnsupportedClient,
+      );
+      expect(client.incompatibility!.isMissingOperationKinds, isTrue);
 
-    // The transport failed right after the refusal. A plain error would
-    // schedule a reconnect here; a refusal must not, because retrying can
-    // never change the answer.
-    await Future<void>.delayed(pingTimeout);
+      // The transport failed right after the refusal. A plain error would
+      // schedule a reconnect here; a refusal must not, because retrying can
+      // never change the answer.
+      await Future<void>.delayed(pingTimeout);
 
-    expect(client.connectionStatusValue, ConnectionStatus.unsupported);
-    expect(statuses, isNot(contains(ConnectionStatus.reconnecting)));
-    // The terminal status is sticky: the teardown does not downgrade it.
-    expect(statuses.last, ConnectionStatus.unsupported);
+      expect(client.connectionStatusValue, ConnectionStatus.unsupported);
+      expect(statuses, isNot(contains(ConnectionStatus.reconnecting)));
+      // The terminal status is sticky: the teardown does not downgrade it.
+      expect(statuses.last, ConnectionStatus.unsupported);
 
-    // And connecting again gives up at once, without touching the socket.
-    expect(await client.connect(), isFalse);
-    expect(client.connectionStatusValue, ConnectionStatus.unsupported);
+      // And connecting again gives up at once, without touching the socket.
+      expect(await client.connect(), isFalse);
+      expect(client.connectionStatusValue, ConnectionStatus.unsupported);
 
-    await sub.cancel();
-  });
+      await sub.cancel();
+    });
   });
 
   group('WebSocketClient fault reporting', () {
@@ -261,44 +261,45 @@ void main() {
       final zoneErrors = <Object>[];
       final faults = <SyncFault>[];
 
-      await runZonedGuarded(() async {
-        final doc = CRDTDocument(
-          peerId: PeerId.generate(),
-          documentId: documentId,
-        );
-        late _FakeTransport transport;
-        final client = WebSocketClient.test(
-          url: 'ws://localhost:0',
-          document: doc,
-          author: doc.peerId,
-          transportFactory: () => transport = _FakeTransport(
+      await runZonedGuarded(
+        () async {
+          final doc = CRDTDocument(
+            peerId: PeerId.generate(),
             documentId: documentId,
-            respondToPings: false,
-          ),
-        );
-        addTearDown(client.dispose);
+          );
+          late _FakeTransport transport;
+          final client = WebSocketClient.test(
+            url: 'ws://localhost:0',
+            document: doc,
+            author: doc.peerId,
+            transportFactory: () => transport = _FakeTransport(
+              documentId: documentId,
+              respondToPings: false,
+            ),
+          );
+          addTearDown(client.dispose);
 
-        final sub = client.faults.listen(faults.add);
-        addTearDown(sub.cancel);
+          final sub = client.faults.listen(faults.add);
+          addTearDown(sub.cancel);
 
-        await client.connect();
+          await client.connect();
 
-        // A change arrives after the document is gone: a real race between a
-        // late frame and a teardown.
-        final author = CRDTDocument(peerId: PeerId.generate());
-        CRDTListHandler<String>(
-          author,
-          'list',
-          handlerType: 'CRDTListHandler<String>',
-        ).insert(0, 'x');
-        final change = author.exportChanges().single;
-        doc.dispose();
+          // A change arrives after the document is gone: a real race between a
+          // late frame and a teardown.
+          final author = CRDTDocument(peerId: PeerId.generate());
+          CRDTListHandler<String>(
+            author,
+            'list',
+            handlerType: 'CRDTListHandler<String>',
+          ).insert(0, 'x');
+          final change = author.exportChanges().single;
+          doc.dispose();
 
-        transport.deliver(
-          ChangeMessage(change: change, documentId: documentId),
-        );
-        await Future<void>.delayed(const Duration(milliseconds: 50));
-      },
+          transport.deliver(
+            ChangeMessage(change: change, documentId: documentId),
+          );
+          await Future<void>.delayed(const Duration(milliseconds: 50));
+        },
         (error, stack) => zoneErrors.add(error),
       );
 

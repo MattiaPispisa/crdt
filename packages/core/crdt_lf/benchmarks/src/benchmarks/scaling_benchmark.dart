@@ -56,11 +56,12 @@ class ExportNewerThanBenchmark extends TimedBenchmarkBase {
       (_) => CRDTDocument(peerId: PeerId.generate()),
     );
     final lists = [
-      for (final d in docs) CRDTListHandler<String>(
-        d,
-        'list',
-        handlerType: 'CRDTListHandler<String>',
-      ),
+      for (final d in docs)
+        CRDTListHandler<String>(
+          d,
+          'list',
+          handlerType: 'CRDTListHandler<String>',
+        ),
     ];
     final perPeer = count ~/ peers;
     for (var p = 0; p < peers; p++) {

@@ -115,11 +115,14 @@ class ConformanceFixtures {
     );
     check(CRDTTextHandler(document, 'plain').value, 'Hello World');
     check(CRDTFugueTextHandler(document, 'fugue').value, 'Fugue 🌍');
-    check(CRDTORSetHandler<String>(
-      document,
-      'set',
-      handlerType: 'CRDTORSetHandler<String>',
-    ).value, {'alpha', 'beta'});
+    check(
+      CRDTORSetHandler<String>(
+        document,
+        'set',
+        handlerType: 'CRDTORSetHandler<String>',
+      ).value,
+      {'alpha', 'beta'},
+    );
     check(
       CRDTORMapHandler<String, int>(
         document,

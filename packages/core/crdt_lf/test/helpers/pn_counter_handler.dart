@@ -30,17 +30,17 @@ final class PNCounterHandler extends Handler<int> {
     super.doc,
     this._id, {
     String handlerType = 'PNCounterHandler',
-  }) : spec = HandlerSpec(
-          handlerType,
-          (doc, id) => PNCounterHandler(doc, id, handlerType: handlerType),
-          formats: const HandlerFormats(
-            operationKinds: {incrementKind},
-            blobVersions: BlobVersionRange.single(1),
-          ),
-        );
+  }) : super(spec: spec(handlerType));
 
-  @override
-  final HandlerSpec<PNCounterHandler> spec;
+  /// The kind a counter under [handlerType] is.
+  static HandlerSpec<PNCounterHandler> spec(String handlerType) => HandlerSpec(
+        handlerType,
+        (doc, id) => PNCounterHandler(doc, id, handlerType: handlerType),
+        formats: const HandlerFormats(
+          operationKinds: {incrementKind},
+          blobVersions: BlobVersionRange.single(1),
+        ),
+      );
 
   /// The binary kind of an increment, the first value past the four
   /// conventional ones.

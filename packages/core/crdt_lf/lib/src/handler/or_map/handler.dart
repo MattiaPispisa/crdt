@@ -40,19 +40,35 @@ base class CRDTORMapHandler<K, V> extends Handler<ORMapState<K, V>>
   /// [handlerType] names the **kind** of handler this is.
   /// {@macro handler_type_tag}
   CRDTORMapHandler(
-    super.doc,
-    this._id, {
+    BaseCRDTDocument doc,
+    String id, {
     required String handlerType,
     ValueCodec<K>? keyCodec,
     ValueCodec<V>? valueCodec,
-  })  : spec = _spec<K, V>(
-          handlerType,
+  }) : this._fromSpec(
+          doc,
+          id,
+          spec: spec<K, V>(
+            handlerType,
+            keyCodec: keyCodec,
+            valueCodec: valueCodec,
+          ),
           keyCodec: keyCodec,
           valueCodec: valueCodec,
-        ),
-        _keyCodec = keyCodec ?? JsonValueCodec<K>(),
-        _valueCodec = valueCodec ?? JsonValueCodec<V>();
+        );
 
+  /// Builds one of a kind stated in full, instead of named by a tag.
+  ///
+  /// Private: the unnamed constructor is the way in, and it makes the spec from
+  /// the tag. Nothing outside this file builds one of these another way.
+  CRDTORMapHandler._fromSpec(
+    super.doc,
+    this._id, {
+    required super.spec,
+    ValueCodec<K>? keyCodec,
+    ValueCodec<V>? valueCodec,
+  })  : _keyCodec = keyCodec ?? JsonValueCodec<K>(),
+        _valueCodec = valueCodec ?? JsonValueCodec<V>();
 
   final String _id;
   final ValueCodec<K> _keyCodec;
@@ -62,8 +78,6 @@ base class CRDTORMapHandler<K, V> extends Handler<ORMapState<K, V>>
   ///
   /// Built once, from the tag the constructor asked for: [handlerType] reads it
   /// on every operation encode, so a fresh one per call would allocate there.
-  @override
-  final HandlerSpec<CRDTORMapHandler<K, V>> spec;
 
   @override
   String get id => _id;
@@ -146,7 +160,7 @@ base class CRDTORMapHandler<K, V> extends Handler<ORMapState<K, V>>
   Iterable<MapEntry<K, V>> get entries => value.entries;
 
   /// {@macro generic_handler_spec}
-  static HandlerSpec<CRDTORMapHandler<K, V>> _spec<K, V>(
+  static HandlerSpec<CRDTORMapHandler<K, V>> spec<K, V>(
     String type, {
     ValueCodec<K>? keyCodec,
     ValueCodec<V>? valueCodec,
@@ -179,9 +193,6 @@ base class CRDTORMapHandler<K, V> extends Handler<ORMapState<K, V>>
   /// The tags stay out: a snapshot holds the projected map, and the entries
   /// come back tagless.
   /// The version [getSnapshotState] writes at the head of its blob.
-  ///
-  /// Declared here and read by [_formats], not the other way round: the wire
-  /// format is the fact, and what this build advertises follows from it.
   static const int _blobVersion = 1;
 
   @override

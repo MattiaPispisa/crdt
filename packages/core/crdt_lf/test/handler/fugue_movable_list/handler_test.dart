@@ -361,14 +361,12 @@ void main() {
         docA,
         'l',
         handlerType: 'CRDTFugueMovableListHandler<String>',
-      )
-        ..insertAll(0, ['A1', 'A2', 'A3']);
+      )..insertAll(0, ['A1', 'A2', 'A3']);
       final b = CRDTFugueMovableListHandler<String>(
         docB,
         'l',
         handlerType: 'CRDTFugueMovableListHandler<String>',
-      )
-        ..insertAll(0, ['B1', 'B2', 'B3']);
+      )..insertAll(0, ['B1', 'B2', 'B3']);
 
       docA.importChanges(docB.exportChanges());
       docB.importChanges(docA.exportChanges());
@@ -390,8 +388,7 @@ void main() {
         doc,
         'l',
         handlerType: 'CRDTFugueMovableListHandler<String>',
-      )
-        ..insertAll(0, const <String>[]);
+      )..insertAll(0, const <String>[]);
       expect(list.value, isEmpty);
       expect(doc.exportChanges(), isEmpty);
     });
@@ -402,8 +399,7 @@ void main() {
         doc,
         'l',
         handlerType: 'CRDTFugueMovableListHandler<String>',
-      )
-        ..insertAll(0, ['a', 'b', 'c', 'd', 'e']);
+      )..insertAll(0, ['a', 'b', 'c', 'd', 'e']);
       final beforeChangesCount = doc.exportChanges().length;
 
       list.delete(1, 3); // remove b, c, d
@@ -431,8 +427,7 @@ void main() {
         doc,
         'l',
         handlerType: 'CRDTFugueMovableListHandler<String>',
-      )
-        ..insertAll(0, ['a', 'b']);
+      )..insertAll(0, ['a', 'b']);
       final before = doc.exportChanges().length;
       list
         ..delete(0, 0)

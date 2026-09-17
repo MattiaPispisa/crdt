@@ -124,21 +124,19 @@ Future<void> _setupExampleDocuments() async {
   CRDTListHandler<Map<String, dynamic>>(
     await ensure(ExampleDocumentIds.todoList),
     ExampleHandlerIds.todoList,
-   handlerType: 'CRDTListHandler<Map<String, dynamic>>');
+    handlerType: 'CRDTListHandler<Map<String, dynamic>>',
+  );
   CRDTFugueMovableListHandler<Map<String, dynamic>>(
     await ensure(ExampleDocumentIds.sortableTodoList),
     ExampleHandlerIds.sortableTodoList,
-   handlerType: 'CRDTFugueMovableListHandler<Map<String, dynamic>>');
+    handlerType: 'CRDTFugueMovableListHandler<Map<String, dynamic>>',
+  );
   final document = await ensure(ExampleDocumentIds.document);
   document
-    ..register((doc, id) =>
-        CRDTRegisterHandler<bool>(doc, id, handlerType: kDoneHandlerType))
-    ..register(CRDTMapRefHandler.new)
-    ..register(CRDTFugueTextHandler.new);
-  document.handler(
-    CRDTMovableListRefHandler.new,
-    ExampleHandlerIds.document,
-  );
+    ..register(CRDTRegisterHandler.spec<bool>(kDoneHandlerType))
+    ..register(CRDTMapRefHandler.spec)
+    ..register(CRDTFugueTextHandler.spec);
+  document.handler(CRDTMovableListRefHandler.spec, ExampleHandlerIds.document);
 }
 
 void _setupSigintHandler({required EnLogger logger}) {

@@ -143,26 +143,22 @@ Snapshot _withBlob(Snapshot snapshot, String key, Uint8List blob) {
   );
 }
 
-
 /// A handler whose blob layout changed between two builds.
 ///
 /// v1 stores the text raw; v2 length-prefixes it. [writes] picks which build
 /// this instance stands for, and it reads both — which is the whole point of
 /// `minReadableSnapshotBlobVersion`.
 final class _MigratingHandler extends Handler<String> {
-  _MigratingHandler(super.doc, {required this.writes});
+  _MigratingHandler(super.doc, {required this.writes})
+      : super(spec: _specFor(writes));
 
-  @override
-  HandlerSpec<_MigratingHandler> get spec => HandlerSpec(
+  /// The kind a migrating handler is, at the version [writes] it writes.
+  static HandlerSpec<_MigratingHandler> _specFor(int writes) => HandlerSpec(
         '_MigratingHandler',
         (doc, id) => _MigratingHandler(doc, writes: writes),
         formats: HandlerFormats(
-          // It carries state in its blob and decodes nothing.
           operationKinds: const {},
-          blobVersions: BlobVersionRange(
-            minReadableSnapshotBlobVersion,
-            snapshotBlobVersion,
-          ),
+          blobVersions: BlobVersionRange(1, writes),
         ),
       );
 

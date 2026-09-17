@@ -48,8 +48,7 @@ class DocumentExampleState extends ExampleDocument<CRDTMovableListRefHandler> {
   // The todo `done` flag is a nested CRDTRegisterHandler<bool>. A generic
   // handler carries its type argument in its tag, so the tag is written here,
   // once, and this builder is what every place that needs one passes around.
-  static CRDTRegisterHandler<bool> _newDone(BaseCRDTDocument doc, String id) =>
-      CRDTRegisterHandler<bool>(doc, id, handlerType: 'todo.done');
+  static final _doneSpec = CRDTRegisterHandler.spec<bool>('todo.done');
 
   @override
   CRDTMovableListRefHandler createHandler(BaseCRDTDocument doc) {
@@ -57,11 +56,11 @@ class DocumentExampleState extends ExampleDocument<CRDTMovableListRefHandler> {
     // (or from a time-travel session) can be rebuilt without being opened here
     // first.
     doc
-      ..register(_newDone)
-      ..register(CRDTMapRefHandler.new)
-      ..register(CRDTFugueTextHandler.new);
+      ..register(_doneSpec)
+      ..register(CRDTMapRefHandler.spec)
+      ..register(CRDTFugueTextHandler.spec);
     return doc.handler(
-      CRDTMovableListRefHandler.new,
+      CRDTMovableListRefHandler.spec,
       ExampleHandlerIds.document,
     );
   }
@@ -239,5 +238,5 @@ class DocumentExampleState extends ExampleDocument<CRDTMovableListRefHandler> {
   }
 
   CRDTRegisterHandler<bool> _newDoneFlag({required bool value}) =>
-      document.handler(_newDone, _newId())..set(value);
+      document.handler(_doneSpec, _newId())..set(value);
 }

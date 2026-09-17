@@ -9,7 +9,6 @@ import 'package:crdt_socket_sync/src/server_client/server/document_client_sessio
 import 'package:crdt_socket_sync/src/server_client/server/in_memory_server_registry.dart';
 import 'package:test/test.dart';
 
-
 /// A connection whose sends never complete, so bytes accumulate in the
 /// session's outbound queue.
 class _StallingConnection implements TransportConnection {

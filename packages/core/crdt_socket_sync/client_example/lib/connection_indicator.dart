@@ -71,9 +71,10 @@ class ConnectionIndicator extends StatelessWidget {
 
         return IconButton(
           icon: Icon(visual.icon, color: visual.color),
-          tooltip: canRetry
-              ? '${visual.label} — tap to reconnect'
-              : [visual.label, if (reason != null) reason].join(': '),
+          tooltip:
+              canRetry
+                  ? '${visual.label} — tap to reconnect'
+                  : [visual.label, if (reason != null) reason].join(': '),
           onPressed: canRetry ? () => client.connect() : null,
         );
       },

@@ -2,10 +2,7 @@ import 'package:crdt_lf/crdt_lf.dart';
 
 /// The range of snapshot blob layouts a peer reads, or a document holds.
 ///
-/// A build reads every layout from [min] to [max] and writes [max]. A range
-/// rather than a set is what makes the comparison two integer checks, and what
-/// lets a newer build accept an older blob and migrate it on the way in — see
-/// [Handler.minReadableSnapshotBlobVersion].
+/// A build reads every layout from [min] to [max], and writes [max].
 class BlobVersionRange {
   /// Creates the range `min..max`.
   const BlobVersionRange(this.min, this.max);
@@ -21,10 +18,7 @@ class BlobVersionRange {
   /// The newest layout, inclusive.
   final int max;
 
-  /// The narrowest range holding both this and [other].
-  ///
-  /// Widens, so folding several sources cannot exclude a layout one of them
-  /// named.
+  /// The narrowest range holding both this and [other]. Only widens.
   BlobVersionRange merge(BlobVersionRange other) => BlobVersionRange(
         min < other.min ? min : other.min,
         max > other.max ? max : other.max,
@@ -56,15 +50,9 @@ class HandlerFormats {
 
   /// What [handler] reads, derived from the handler itself.
   ///
-  /// The kinds are the keys of [Handler.operationDecoders], so they name
-  /// exactly what this build dispatches. The range is
-  /// `minReadableSnapshotBlobVersion..snapshotBlobVersion`, of which the
-  /// handler writes the newest.
-  ///
-  /// This is the truth; what a [HandlerSpec] carries is the claim. The document
-  /// compares the two as a handler registers, so a claim that drifted from the
-  /// decoders is caught in debug. Use it to check your own handler the same
-  /// way.
+  /// What a [HandlerSpec] carries is a claim; this is what the handler does.
+  /// The document compares the two as a handler registers, and a handler of
+  /// your own can be checked the same way.
   factory HandlerFormats.of(Handler<dynamic> handler) => HandlerFormats(
         operationKinds: handler.operationDecoders.keys.toSet(),
         blobVersions: BlobVersionRange(
@@ -75,25 +63,17 @@ class HandlerFormats {
 
   /// The operation kinds, as in `OperationEnvelope.kind`.
   ///
-  /// A kind belongs to the handler type it is keyed by, so the same value
-  /// means different things under two types.
+  /// A kind belongs to the handler kind it is keyed by: the same byte means
+  /// different things under two of them.
   final Set<int> operationKinds;
 
-  /// The snapshot blob layouts involved; `null` when none is known.
+  /// The snapshot blob layouts involved.
   ///
-  /// For a build it is what it reads,
-  /// `minReadableSnapshotBlobVersion..snapshotBlobVersion`. For a document it
-  /// is what its blobs are written with, widened to cover them all when
-  /// snapshots from peers on different builds were merged.
-  ///
-  /// `null` for a type known from change envelopes alone: an envelope carries
+  /// `null` for a kind known from change envelopes alone: an envelope carries
   /// no snapshot version.
   final BlobVersionRange? blobVersions;
 
-  /// Both sets of this and [other], together.
-  ///
-  /// Two blob versions do not resolve to one: a document that holds both keeps
-  /// both.
+  /// Both sets of this and [other], together, and the range that covers both.
   HandlerFormats merge(HandlerFormats other) {
     final mine = blobVersions;
     final theirs = other.blobVersions;
@@ -105,10 +85,7 @@ class HandlerFormats {
     );
   }
 
-  /// Merges [formats] into [target] under [handlerType].
-  ///
-  /// Mutates [target]. An entry already there becomes [merge] of the two, so a
-  /// type named by two sources keeps what each of them knew.
+  /// Merges [formats] into [target] under [handlerType]. Mutates [target].
   static void mergeInto(
     Map<String, HandlerFormats> target,
     String handlerType,
@@ -171,9 +148,8 @@ abstract class _FormatsByHandlerType {
   /// The subclass is part of it: capabilities and requirements answer different
   /// questions, so one never equals the other however alike their maps look.
   ///
-  /// Compared where a description travels. `crdt_socket_sync` round-trips one
-  /// through JSON in a handshake and checks it came back whole. So the caller
-  /// lives in another package, not in this one's tests.
+  /// Compared where a description travels: `crdt_socket_sync` round-trips one
+  /// through JSON in a handshake and checks it came back whole.
   @override
   bool operator ==(Object other) =>
       other is _FormatsByHandlerType &&
@@ -195,27 +171,20 @@ abstract class _FormatsByHandlerType {
     }
     return merged;
   }
-
 }
 
-/// What a peer **can read**.
+/// What a peer **can read**, by handler kind.
 ///
-/// Covers the handlers a document has opened and the types its registered
-/// factories can build. A handler decodes through the value codec its instance
-/// holds, so a type nothing has wired up is absent even when this package
-/// ships the class.
-///
-/// Read one with [CRDTDocument.describeBuildCapabilities]. Compare it with the
-/// [DocumentRequirements] of a document to find the types this peer cannot
-/// read:
+/// Read one with [CRDTDocument.describeBuildCapabilities]. A kind it does not
+/// name is one this peer was not set up for, not one it cannot read.
 ///
 /// ```dart
 /// final reads = document.describeBuildCapabilities();
 /// final needed = document.describeDataRequirements();
 ///
 /// final missing = <String>[
-///   for (final type in needed.handlerTypes)
-///     if (reads[type] == null) type,
+///   for (final kind in needed.handlerTypes)
+///     if (reads[kind] == null) kind,
 /// ];
 /// ```
 class DocumentCapabilities extends _FormatsByHandlerType {
@@ -226,28 +195,23 @@ class DocumentCapabilities extends _FormatsByHandlerType {
   String toString() => 'DocumentCapabilities($byHandlerType)';
 }
 
-/// The formats a document's data is written in, by handler type.
+/// The formats a document's data is written in, by handler kind.
 ///
-/// A peer that cannot decode one of them cannot read that part of the
-/// document; compare with a [DocumentCapabilities] to find out which.
+/// Read one with [CRDTDocument.describeDataRequirements], and compare it with a
+/// [DocumentCapabilities] to find the kinds a peer cannot read.
 ///
-/// Read from the changes and the snapshot rather than from the handlers, so a
-/// document that has opened none still answers in full. Use
-/// [CRDTDocument.describeDataRequirements].
-///
-/// A document can require more than it reads: applying a change never decodes
-/// its operation, so one written by a peer that knows more is stored and
-/// forwarded whole. Reading that handler then throws
-/// [UnknownOperationKindException].
+/// A document can require more than it reads: a change written by a peer that
+/// knows more is stored and forwarded whole, and reading that handler then
+/// throws [UnknownOperationKindException].
 class DocumentRequirements extends _FormatsByHandlerType {
   /// Creates requirements from [byHandlerType].
   DocumentRequirements(super.byHandlerType);
 
-  /// Every type either side names, with the formats of both.
+  /// Every kind either side names, with the formats of both. Only adds.
   ///
-  /// Only adds. A document drops a blob version instead when it snapshots, so
-  /// use [CRDTDocument.describeDataRequirements] rather than folding by hand
-  /// across a [CRDTDocument.takeSnapshot].
+  /// A snapshot drops a blob version instead, so read
+  /// [CRDTDocument.describeDataRequirements] again rather than folding across a
+  /// [CRDTDocument.takeSnapshot].
   DocumentRequirements merge(DocumentRequirements other) =>
       DocumentRequirements(_mergedMap(other));
 

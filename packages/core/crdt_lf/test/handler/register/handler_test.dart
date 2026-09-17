@@ -1,8 +1,7 @@
 import 'package:crdt_lf/crdt_lf.dart';
 import 'package:test/test.dart';
 
-CRDTRegisterHandler<bool> newFlag(BaseCRDTDocument doc, String id) =>
-    CRDTRegisterHandler<bool>(doc, id, handlerType: 'flag');
+final newFlagSpec = CRDTRegisterHandler.spec<bool>('flag');
 
 void main() {
   group('CRDTRegisterHandler', () {
@@ -105,12 +104,11 @@ void main() {
 
     test('resolves as a leaf value inside a ref container', () {
       final nested = CRDTDocument()
-        ..register(newFlag)
-        ..register(CRDTMapRefHandler.new)
-        ..register(CRDTFugueTextHandler.new);
+        ..register(newFlagSpec)
+        ..register(CRDTMapRefHandler.spec)
+        ..register(CRDTFugueTextHandler.spec);
       final root = CRDTMapRefHandler(nested, 'root');
-      final done = newFlag(nested, nested.newHandlerId())
-        ..set(true);
+      final done = newFlagSpec.create(nested, nested.newHandlerId())..set(true);
       final text = CRDTFugueTextHandler(nested, nested.newHandlerId())
         ..insert(0, 'task');
       root

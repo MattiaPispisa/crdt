@@ -24,11 +24,11 @@ void main() {
 
       // B knows only the factories and the received changes.
       final docB = CRDTDocument()
-        ..register(CRDTMapRefHandler.new)
-        ..register(CRDTListRefHandler.new)
-        ..register(CRDTMovableListRefHandler.new)
-        ..register(CRDTFugueTextHandler.new)
-        ..register(CRDTTextHandler.new)
+        ..register(CRDTMapRefHandler.spec)
+        ..register(CRDTListRefHandler.spec)
+        ..register(CRDTMovableListRefHandler.spec)
+        ..register(CRDTFugueTextHandler.spec)
+        ..register(CRDTTextHandler.spec)
         ..importChanges(docA.exportChanges())
         ..reconstruct();
 
@@ -51,11 +51,11 @@ void main() {
       expect(docA.exportChanges(), isEmpty);
 
       final docB = CRDTDocument()
-        ..register(CRDTMapRefHandler.new)
-        ..register(CRDTListRefHandler.new)
-        ..register(CRDTMovableListRefHandler.new)
-        ..register(CRDTFugueTextHandler.new)
-        ..register(CRDTTextHandler.new)
+        ..register(CRDTMapRefHandler.spec)
+        ..register(CRDTListRefHandler.spec)
+        ..register(CRDTMovableListRefHandler.spec)
+        ..register(CRDTFugueTextHandler.spec)
+        ..register(CRDTTextHandler.spec)
         ..importSnapshot(snapshot)
         ..reconstruct();
 
@@ -91,9 +91,9 @@ void main() {
       // when someone resolves the ref that names it. Reading the root is what
       // walks the tree and brings the children in.
       final docB = CRDTDocument()
-        ..register(CRDTMapRefHandler.new)
-        ..register(CRDTListRefHandler.new)
-        ..register(CRDTFugueTextHandler.new)
+        ..register(CRDTMapRefHandler.spec)
+        ..register(CRDTListRefHandler.spec)
+        ..register(CRDTFugueTextHandler.spec)
         ..importChanges(docA.exportChanges());
       final rootB = CRDTMapRefHandler(docB, 'root');
 
@@ -124,16 +124,15 @@ void main() {
       // nested ref keeps working in a minified build. One spec holds the tag
       // and the builder, so the two cannot disagree.
       const tag = 'register/bool';
-      CRDTRegisterHandler<bool> newFlag(BaseCRDTDocument d, String id) =>
-          CRDTRegisterHandler<bool>(d, id, handlerType: tag);
+      final newFlagSpec = CRDTRegisterHandler.spec<bool>(tag);
 
       final docA = CRDTDocument();
-      final flagA = newFlag(docA, 'flag')..set(true);
+      final flagA = newFlagSpec.create(docA, 'flag')..set(true);
       CRDTMapRefHandler(docA, 'root').setRef('done', flagA);
 
       final docB = CRDTDocument()
-        ..register(newFlag)
-        ..register(CRDTMapRefHandler.new)
+        ..register(newFlagSpec)
+        ..register(CRDTMapRefHandler.spec)
         ..importChanges(docA.exportChanges())
         ..reconstruct();
 
@@ -149,16 +148,14 @@ void main() {
       // factory registered under tag-B, so the ref must not resolve. This
       // proves handlerType (not the runtime class) drives factory lookup.
       final docA = CRDTDocument();
-      final flagA = CRDTRegisterHandler<bool>(docA, 'flag',
-          handlerType: 'tag-A')
-        ..set(true);
+      final flagA =
+          CRDTRegisterHandler<bool>(docA, 'flag', handlerType: 'tag-A')
+            ..set(true);
       CRDTMapRefHandler(docA, 'root').setRef('done', flagA);
 
       final docB = CRDTDocument()
-        ..register(
-          (d, id) => CRDTRegisterHandler<bool>(d, id, handlerType: 'tag-B'),
-        )
-        ..register(CRDTMapRefHandler.new)
+        ..register(CRDTRegisterHandler.spec<bool>('tag-B'))
+        ..register(CRDTMapRefHandler.spec)
         ..importChanges(docA.exportChanges())
         ..reconstruct();
 

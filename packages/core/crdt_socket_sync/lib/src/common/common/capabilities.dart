@@ -40,8 +40,7 @@ final class MissingOperationKind extends CapabilityMismatch {
 /// the reason is not a missing kind, it is a missing handler.
 final class UnknownHandlerType extends CapabilityMismatch {
   /// Constructor
-  const UnknownHandlerType({required String handlerType})
-      : super(handlerType);
+  const UnknownHandlerType({required String handlerType}) : super(handlerType);
 
   @override
   bool operator ==(Object other) =>

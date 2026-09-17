@@ -7,8 +7,7 @@ import '../helpers/pn_counter_handler.dart';
 
 const doneType = 'todo.done';
 
-CRDTRegisterHandler<bool> newDone(BaseCRDTDocument doc, String id) =>
-    CRDTRegisterHandler<bool>(doc, id, handlerType: doneType);
+final doneSpec = CRDTRegisterHandler.spec<bool>(doneType);
 
 void main() {
   group('a handler names its own kind', () {
@@ -16,7 +15,7 @@ void main() {
       // The whole reason a tag is asked for: the document now knows how to
       // build that kind, for an id nobody opened.
       final doc = CRDTDocument(peerId: PeerId.generate());
-      newDone(doc, 'mine');
+      doneSpec.create(doc, 'mine');
 
       expect(
         doc.resolveHandler(const HandlerRef('other', doneType)),
@@ -63,7 +62,7 @@ void main() {
 
     test('child leaves the kind behind, so it outlives the call', () {
       final doc = CRDTDocument(peerId: PeerId.generate());
-      CRDTMapRefHandler(doc, 'root').child('done', newDone);
+      CRDTMapRefHandler(doc, 'root').child('done', doneSpec);
 
       expect(
         doc.resolveHandler(const HandlerRef('other', doneType)),
@@ -86,15 +85,13 @@ void main() {
     });
 
     test('a spec built twice from the same tag compares equal', () {
-      final doc = CRDTDocument(peerId: PeerId.generate());
-
       expect(
-        newDone(doc, 'a').spec,
-        newDone(doc, 'b').spec,
+        CRDTRegisterHandler.spec<bool>(doneType),
+        CRDTRegisterHandler.spec<bool>(doneType),
       );
       expect(
-        newDone(doc, 'c').spec,
-        isNot(CRDTRegisterHandler<bool>(doc, 'd', handlerType: 'other').spec),
+        CRDTRegisterHandler.spec<bool>(doneType),
+        isNot(CRDTRegisterHandler.spec<bool>('other')),
       );
     });
   });
@@ -103,9 +100,8 @@ void main() {
     test('equal descriptions land on one another in a set', () {
       // They are compared and hashed wherever a kind is looked up, so `==` and
       // `hashCode` have to agree.
-      final doc = CRDTDocument(peerId: PeerId.generate());
-      final one = newDone(doc, 'a').spec;
-      final same = newDone(doc, 'b').spec;
+      final one = CRDTRegisterHandler.spec<bool>(doneType);
+      final same = CRDTRegisterHandler.spec<bool>(doneType);
 
       expect({one, same}, hasLength(1));
       expect({one.formats, same.formats}, hasLength(1));
@@ -116,10 +112,8 @@ void main() {
     });
 
     test('a different tag is a different kind', () {
-      final doc = CRDTDocument(peerId: PeerId.generate());
-      final done = newDone(doc, 'a').spec;
-      final other =
-          CRDTRegisterHandler<bool>(doc, 'b', handlerType: 'other').spec;
+      final done = CRDTRegisterHandler.spec<bool>(doneType);
+      final other = CRDTRegisterHandler.spec<bool>('other');
 
       expect({done, other}, hasLength(2));
     });
@@ -149,10 +143,7 @@ void main() {
       final mislabelled = HandlerSpec<CRDTFugueTextHandler>(
         'not-the-tag-it-carries',
         CRDTFugueTextHandler.new,
-        formats: CRDTFugueTextHandler(
-          CRDTDocument(peerId: PeerId.generate()),
-          'probe',
-        ).spec.formats,
+        formats: CRDTFugueTextHandler.spec.formats,
       );
 
       expect(
@@ -164,8 +155,7 @@ void main() {
 
   group('BaseCRDTDocument.register', () {
     test('declares a kind this peer never opens', () {
-      final doc = CRDTDocument(peerId: PeerId.generate())
-        ..register(newDone);
+      final doc = CRDTDocument(peerId: PeerId.generate())..register(doneSpec);
 
       expect(doc.registeredHandlers, isEmpty);
       expect(doc.resolveHandler(const HandlerRef('x', doneType)), isNotNull);
@@ -174,7 +164,7 @@ void main() {
     test('reads the formats off a handler instead of restating them', () {
       // Derived, so they cannot drift from the decoders that dispatch.
       final doc = CRDTDocument(peerId: PeerId.generate())
-        ..register(PNCounterHandler.new);
+        ..register(PNCounterHandler.spec('PNCounterHandler'));
 
       // The tag comes off the probe too, so it is the one the handler carries.
       expect(
@@ -184,8 +174,7 @@ void main() {
     });
 
     test('the probe does not land on this document', () {
-      final doc = CRDTDocument(peerId: PeerId.generate())
-        ..register(newDone);
+      final doc = CRDTDocument(peerId: PeerId.generate())..register(doneSpec);
 
       expect(doc.registeredHandlers, isEmpty);
       expect(doc.exportChanges(), isEmpty);
@@ -196,7 +185,7 @@ void main() {
       final doc = CRDTDocument(peerId: PeerId.generate())..dispose();
 
       expect(
-        () => doc.register(newDone),
+        () => doc.register(doneSpec),
         throwsA(isA<DocumentDisposedException>()),
       );
     });
@@ -207,8 +196,8 @@ void main() {
       // Building one by hand twice throws; this is the idempotent way.
       final doc = CRDTDocument(peerId: PeerId.generate());
 
-      final first = doc.handler(newDone, 'x');
-      final second = doc.handler(newDone, 'x');
+      final first = doc.handler(doneSpec, 'x');
+      final second = doc.handler(doneSpec, 'x');
 
       expect(identical(first, second), isTrue);
     });
@@ -218,17 +207,17 @@ void main() {
       CRDTFugueTextHandler(doc, 'x');
 
       expect(
-        () => doc.handler(newDone, 'x'),
+        () => doc.handler(doneSpec, 'x'),
         throwsA(isA<HandlerAlreadyRegisteredException>()),
       );
     });
   });
 }
 
-final _wrongSpec = HandlerSpec<_WrongFormats<int>>(
+const _wrongSpec = HandlerSpec<_WrongFormats<int>>(
   'WrongFormats<T>',
-  (doc, id) => _WrongFormats<int>(doc, id),
-  formats: const HandlerFormats(
+  _WrongFormats<int>.new,
+  formats: HandlerFormats(
     operationKinds: {OperationType.kindInsert, OperationType.kindDelete},
     blobVersions: BlobVersionRange.single(1),
   ),
@@ -236,15 +225,12 @@ final _wrongSpec = HandlerSpec<_WrongFormats<int>>(
 
 /// A generic handler that decodes one kind; `_wrongSpec` claims two.
 final class _WrongFormats<T> extends Handler<int> {
-  _WrongFormats(super.doc, this._id);
+  _WrongFormats(super.doc, this._id) : super(spec: _wrongSpec);
 
   final String _id;
 
   @override
   String get id => _id;
-
-  @override
-  HandlerSpec<_WrongFormats<int>> get spec => _wrongSpec;
 
   @override
   late final OperationDecoders operationDecoders = {

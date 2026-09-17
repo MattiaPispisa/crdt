@@ -24,8 +24,8 @@ typedef OperationDecoders = Map<int, Operation Function(Uint8List body)>;
 ///   and how its operations are decoded.
 /// - [getSnapshotState] — required: the state as bytes, seeded back through
 ///   [lastSnapshot].
-/// - [spec] — required: what kind of handler this is, so a peer that receives
-///   a reference to one can rebuild it.
+/// - the `spec` its constructor passes up — required: what kind of handler this
+///   is, so a peer that receives a reference to one can rebuild it.
 /// - [incrementCachedState] — to advance the cached state by one operation
 ///   instead of replaying the history.
 /// - [stateIsOrderIndependent] — only when the state is the same
@@ -46,31 +46,19 @@ typedef OperationDecoders = Map<int, Operation Function(Uint8List body)>;
 /// ```
 abstract base class Handler<T>
     with DocumentConsumer, SnapshotProvider, CacheableStateProvider<T> {
-  /// Creates a new handler for the given document.
+  /// Creates a handler of the kind [spec] names, registered on [doc].
   ///
-  /// The handler registers itself on [doc], under the kind [spec] names.
-  Handler(this.doc) {
+  /// {@macro handler_spec}
+  Handler(this.doc, {required HandlerSpec<Handler<dynamic>> spec})
+      : _instanceSpec = spec {
     doc._registerHandler(this);
   }
 
   /// The document that owns this handler
   final BaseCRDTDocument doc;
 
-  /// What kind of handler this is.
-  ///
-  /// {@macro handler_spec}
-  ///
-  /// The document reads it when this handler registers, so every handler
-  /// declares its own kind. That is what a peer resolving a [HandlerRef] needs,
-  /// and what [CRDTDocument.reconstruct] walks.
-  ///
-  /// Abstract on purpose. A handler that cannot name its kind is one no peer
-  /// can rebuild, and that is worth a compile error rather than a surprise at
-  /// read time.
-  ///
-  /// Answer it with a constant. A fresh one per call would allocate on every
-  /// [handlerType], which every operation encode reads.
-  HandlerSpec<Handler<dynamic>> get spec;
+  /// The kind this handler is. Read by [BaseCRDTDocument] as it registers.
+  final HandlerSpec<Handler<dynamic>> _instanceSpec;
 
   /// The decoders this handler owns, keyed by [OperationEnvelope.kind].
   ///
@@ -80,39 +68,15 @@ abstract base class Handler<T>
 
   /// The version of the blob [getSnapshotState] writes.
   ///
-  /// Raising it tells the other peers that they cannot read what this build
-  /// writes, unless they raised [minReadableSnapshotBlobVersion] to match.
-  ///
-  /// It only means that when the blob actually carries it, which is what
-  /// [snapshotHeader] and [readSnapshotHeader] are for. A handler that writes
-  /// its state without them still answers `1` here, and two such handlers with
-  /// genuinely different layouts both claim `1` and look compatible — so a
-  /// handler that skips the header opts out of this check rather than passing
-  /// it.
+  /// Raise it when the layout changes, and write it with [snapshotHeader]: a
+  /// peer that cannot read the version is refused the blob whole.
   int get snapshotBlobVersion => 1;
 
   /// The oldest blob version this build still reads.
   ///
-  /// Defaults to [snapshotBlobVersion]: a handler reads only what it writes,
-  /// and a blob from any other build is refused. Lower it to keep reading an
-  /// older layout and migrate it on the way in. [readSnapshotHeader] hands
-  /// back the version it found, so wherever the handler reads [lastSnapshot]
-  /// back it can branch on it:
-  ///
-  /// ```dart
-  /// @override
-  /// int get snapshotBlobVersion => 2;
-  /// @override
-  /// int get minReadableSnapshotBlobVersion => 1;
-  ///
-  /// final head = readSnapshotHeader(bytes);
-  /// final state = head.version == 1
-  ///     ? _readV1(bytes, head.offset)
-  ///     : _readV2(bytes, head.offset);
-  /// ```
-  ///
-  /// The next [getSnapshotState] writes [snapshotBlobVersion], so the old
-  /// layout leaves the document at the first snapshot after the upgrade.
+  /// Defaults to [snapshotBlobVersion], which refuses a blob from any other
+  /// build. Lower it to keep reading an older layout, and branch on the version
+  /// [readSnapshotHeader] returns.
   int get minReadableSnapshotBlobVersion => snapshotBlobVersion;
 
   /// A builder holding the head of this handler's snapshot blob.
@@ -127,14 +91,10 @@ abstract base class Handler<T>
   BytesBuilder snapshotHeader() =>
       BytesBuilder(copy: false)..addByte(snapshotBlobVersion);
 
-  /// Checks the head [snapshotHeader] wrote and returns the version it
-  /// carries, with the offset of what follows it.
+  /// The version at the head of [bytes], and the offset of what follows it.
   ///
-  /// Branch on `version` to read an older layout; see
-  /// [minReadableSnapshotBlobVersion].
-  ///
-  /// Throws a [FormatException] naming this handler when [bytes] falls outside
-  /// `minReadableSnapshotBlobVersion..snapshotBlobVersion`.
+  /// Throws a [FormatException] naming this handler when the version falls
+  /// outside `minReadableSnapshotBlobVersion..snapshotBlobVersion`.
   ({int version, int offset}) readSnapshotHeader(Uint8List bytes) =>
       SnapshotBlob.read(
         bytes,
@@ -146,10 +106,10 @@ abstract base class Handler<T>
   /// {@macro handler_type_tag}
   ///
   /// Used as the type tag in operation envelopes, in the snapshot handler
-  /// manifest and in [HandlerRef]s, and as the key [spec] is registered under.
-  /// The same value is produced on every peer, so changes route to the matching
-  /// handler and nested handlers can be reconstructed remotely.
-  String get handlerType => spec.type;
+  /// manifest and in [HandlerRef]s, and as the key the kind is registered
+  /// under. The same value is produced on every peer, so changes route to the
+  /// matching handler and nested handlers can be reconstructed remotely.
+  String get handlerType => _instanceSpec.type;
 
   /// Cached insert type instance for this handler, used in operations.
   ///
@@ -184,67 +144,41 @@ abstract base class Handler<T>
   OperationType get moveType => _moveType ??= OperationType.move(this);
   OperationType? _moveType;
 
-  /// During transaction consecutive operations can be compounded.
+  /// [accumulator] and [current] fused into one operation, or `null` when they
+  /// cannot be.
   ///
-  /// By default, no compaction occurs and operations are returned as-is.
+  /// Called on consecutive operations inside a transaction. The default fuses
+  /// nothing.
   ///
-  /// Override this method to implement a compact algorithm.
-  ///
-  /// [accumulator] is the previous operation
-  /// [current] is the current operation
-  ///
-  /// If [current] can be compounded with [accumulator],
-  /// return the **new compounded** operation (union of the two).
-  ///
-  /// Otherwise, return `null`.
-  ///
-  /// The result may be [current] itself, but never [accumulator]: the fused
-  /// operation carries the stamp of the later one, and the deltas waiting for
-  /// the change it becomes are drained in stamp order. An earlier stamp leaves
-  /// part of them behind. A fresh operation is stamped for you.
+  /// Return [current] or a fresh operation, never [accumulator]: the result
+  /// takes the stamp of the later one, and an earlier stamp strands the deltas
+  /// that change also carries.
   Operation? compound(Operation accumulator, Operation current) => null;
 
   /// Whether this handler can build the inverse of its own operations.
   ///
-  /// A handler that indexes by position alone cannot: it has no element
-  /// identity to anchor an inverse to, so the undo would land on the wrong
-  /// element as soon as another peer edits the same sequence.
-  ///
-  /// [CRDTUndoManager.track] refuses a handler that answers `false`.
+  /// [CRDTUndoManager.track] refuses a handler that answers `false`. A handler
+  /// that indexes by position alone has no identity to anchor an inverse to.
   bool get invertible => false;
 
-  /// The operations that undo [operation], read against the state as it is
-  /// **now** — that is, before [operation] is applied.
+  /// The operations that undo [operation], against the state as it is
+  /// **before** [operation] is applied. Empty when there is nothing to undo.
   ///
-  /// The document calls this from [BaseCRDTDocument.registerOperation], after
-  /// it mints the stamp and before it folds the operation in. So
-  /// [Operation.stamp] is readable here, and the state has not moved yet.
+  /// [Operation.stamp] is readable here. Name CRDT identities — element ids,
+  /// keys, tags — never positions, so the undo stays right when other peers
+  /// edited the same handler in between.
   ///
-  /// An inverse names CRDT identities — element ids, keys, tags — and never a
-  /// position. That is what keeps an undo right when other peers edited the
-  /// same handler in between.
-  ///
-  /// The returned operations are fresh and unstamped: the document stamps them
-  /// when they are registered, and an operation is stamped once. Return them in
-  /// the order they have to be applied.
-  ///
-  /// Returns an empty list when there is nothing to undo, which includes an
-  /// operation with no observable effect.
+  /// Return fresh, unstamped operations, in the order they have to be applied.
   List<Operation> invert(Operation operation) => const [];
 
   /// [operation], an inverse built by [invert], made ready to be written now.
   ///
-  /// An inverse is built the moment the operation it undoes is written, and
-  /// written itself much later. In between, undoing a **later** step can
-  /// rebuild elements this one names: an element cannot come back to life, so
-  /// it comes back with a new identity, and an inverse holding the old one
-  /// would miss it.
+  /// An inverse is built long before it is written, and in between an element
+  /// it names may have come back under a new identity. Override this to follow
+  /// them; the default returns [operation] unchanged.
   ///
-  /// A handler that rebuilds elements overrides this to follow them. The
-  /// default returns [operation] unchanged.
-  ///
-  /// Return [operation] itself, or a fresh unstamped operation; never one that
-  /// has been written already.
+  /// Return [operation] or a fresh unstamped operation, never one already
+  /// written.
   Operation prepareInverse(Operation operation) => operation;
 
   /// Looks up [envelope]'s kind in [operationDecoders] and returns what it

@@ -47,8 +47,7 @@ void main() {
         doc,
         'list',
         handlerType: 'CRDTListHandler<String>',
-      )
-        ..useIncrementalCacheUpdate = true;
+      )..useIncrementalCacheUpdate = true;
       final random = Random(42);
 
       expect(list.value, isEmpty);
@@ -85,8 +84,7 @@ void main() {
         doc,
         'map',
         handlerType: 'CRDTMapHandler<int>',
-      )
-        ..useIncrementalCacheUpdate = true;
+      )..useIncrementalCacheUpdate = true;
       final random = Random(42);
 
       expect(map.value, isEmpty);
@@ -123,8 +121,7 @@ void main() {
         doc,
         'set',
         handlerType: 'CRDTORSetHandler<String>',
-      )
-        ..useIncrementalCacheUpdate = true;
+      )..useIncrementalCacheUpdate = true;
       final random = Random(42);
       final existing = <String>[];
 
@@ -161,8 +158,7 @@ void main() {
         doc,
         'or_map',
         handlerType: 'CRDTORMapHandler<String, int>',
-      )
-        ..useIncrementalCacheUpdate = true;
+      )..useIncrementalCacheUpdate = true;
       final random = Random(42);
 
       expect(map.value, isEmpty);
@@ -226,8 +222,7 @@ void main() {
         doc,
         'fugue_list',
         handlerType: 'CRDTFugueListHandler<String>',
-      )
-        ..useIncrementalCacheUpdate = true;
+      )..useIncrementalCacheUpdate = true;
       final random = Random(42);
 
       expect(list.value, isEmpty);
@@ -264,8 +259,7 @@ void main() {
         doc,
         'set',
         handlerType: 'CRDTORSetHandler<String>',
-      )
-        ..useIncrementalCacheUpdate = true;
+      )..useIncrementalCacheUpdate = true;
 
       expect(set.value, isEmpty);
       set
@@ -423,12 +417,11 @@ void main() {
 
     test('CRDTFugueMovableListHandler', () {
       _remoteOracle<CRDTFugueMovableListHandler<String>>(
-        create: (doc) =>
-            CRDTFugueMovableListHandler<String>(
-              doc,
-              'movable_list',
-              handlerType: 'CRDTFugueMovableListHandler<String>',
-            ),
+        create: (doc) => CRDTFugueMovableListHandler<String>(
+          doc,
+          'movable_list',
+          handlerType: 'CRDTFugueMovableListHandler<String>',
+        ),
         mutate: (list, random, i) {
           final len = list.length;
           final choice = random.nextInt(4);
@@ -639,12 +632,11 @@ void main() {
 
     test('CRDTFugueMovableListHandler', () {
       _concurrentOracle<CRDTFugueMovableListHandler<String>>(
-        create: (doc) =>
-            CRDTFugueMovableListHandler<String>(
-              doc,
-              'movable_list',
-              handlerType: 'CRDTFugueMovableListHandler<String>',
-            ),
+        create: (doc) => CRDTFugueMovableListHandler<String>(
+          doc,
+          'movable_list',
+          handlerType: 'CRDTFugueMovableListHandler<String>',
+        ),
         mutate: (list, random, round) {
           final len = list.length;
           final choice = random.nextInt(3);

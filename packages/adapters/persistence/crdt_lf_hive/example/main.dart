@@ -9,7 +9,6 @@ import 'package:hive/hive.dart';
 /// default would carry the type argument, which dart2js minifies away.
 const kList = 'string-list';
 
-
 Future<void> main() async {
   const itemsToAdd = 3;
   const dbLocation = './example/db';

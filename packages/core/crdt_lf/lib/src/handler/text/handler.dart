@@ -30,7 +30,7 @@ part 'operation.dart';
 base class CRDTTextHandler extends Handler<String>
     with DeltaProvider<String, SequenceDelta<String>> {
   /// Creates a new CRDTText with the given document and ID
-  CRDTTextHandler(super.doc, this._id);
+  CRDTTextHandler(super.doc, this._id) : super(spec: CRDTTextHandler.spec);
 
   /// The ID of this text in the document
   final String _id;
@@ -143,28 +143,19 @@ base class CRDTTextHandler extends Handler<String>
   }
 
   /// The tag this kind travels under; see [Handler.handlerType].
-  ///
-  /// Fixed here because this handler is not generic: there is no type argument
-  /// to carry, so there is nothing for a caller to choose.
   static const String _handlerType = 'CRDTTextHandler';
 
   /// {@template builtin_handler_spec}
-  /// The kind this handler is, named once for the whole class.
+  /// The kind this handler is.
   ///
-  /// Private: a caller names this kind with the constructor —
-  /// `doc.handler(CRDTTextHandler.new, id)` — and the document learns it from
-  /// [Handler.spec]. Reading it from the getter looks circular and is not: the
-  /// initializer stores the constructor tear-off without calling it. This lazy
-  /// static therefore finishes before the getter ever reads it.
+  /// Pass it wherever a kind is named: [BaseCRDTDocument.register],
+  /// [BaseCRDTDocument.handler], and a container's `child` and `insertChild`.
   /// {@endtemplate}
-  static const HandlerSpec<CRDTTextHandler> _spec = HandlerSpec(
+  static const HandlerSpec<CRDTTextHandler> spec = HandlerSpec(
     _handlerType,
     CRDTTextHandler.new,
     formats: _formats,
   );
-
-  @override
-  HandlerSpec<CRDTTextHandler> get spec => _spec;
 
   /// What this build reads for this handler type.
   static const HandlerFormats _formats = HandlerFormats(

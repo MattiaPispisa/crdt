@@ -8,12 +8,11 @@ class ORSetHandlerBenchmark
   ORSetHandlerBenchmark({required super.useIncrementalCacheUpdate})
       : super(
           handlerName: 'CRDTORSetHandler',
-          handlerFactory: (document) =>
-              CRDTORSetHandler<String>(
-                document,
-                'set',
-                handlerType: 'CRDTORSetHandler<String>',
-              ),
+          handlerFactory: (document) => CRDTORSetHandler<String>(
+            document,
+            'set',
+            handlerType: 'CRDTORSetHandler<String>',
+          ),
         );
 
   @override

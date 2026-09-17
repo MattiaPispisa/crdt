@@ -13,30 +13,55 @@ import '../helpers/pn_counter_handler.dart';
 ///
 /// It matters most for the three ref containers: their declaration is a
 /// **copy** of the handler they extend, and this table keeps the copy honest.
-final _handlers = <Handler<dynamic> Function(CRDTDocument doc)>[
-  (doc) => CRDTTextHandler(doc, 'text'),
-  (doc) => CRDTFugueTextHandler(doc, 'fugue_text'),
-  (doc) => CRDTFugueListHandler<String>(doc, 'fugue_list',
-      handlerType: 'CRDTFugueListHandler<String>'),
-  (doc) => CRDTFugueMovableListHandler<String>(doc, 'movable',
-      handlerType: 'CRDTFugueMovableListHandler<String>'),
-  (doc) => CRDTListHandler<String>(doc, 'list',
-      handlerType: 'CRDTListHandler<String>'),
-  (doc) => CRDTMapHandler<int>(doc, 'map', handlerType: 'CRDTMapHandler<int>'),
-  (doc) => CRDTORSetHandler<String>(doc, 'or_set',
-      handlerType: 'CRDTORSetHandler<String>'),
-  (doc) => CRDTORMapHandler<String, int>(doc, 'or_map',
-      handlerType: 'CRDTORMapHandler<String, int>'),
-  (doc) => CRDTRegisterHandler<int>(doc, 'register',
-      handlerType: 'CRDTRegisterHandler<int>'),
-  (doc) => CRDTMapRefHandler(doc, 'map_ref'),
-  (doc) => CRDTListRefHandler(doc, 'list_ref'),
-  (doc) => CRDTMovableListRefHandler(doc, 'movable_ref'),
+final _handlers = <(
+  HandlerSpec<Handler<dynamic>>,
+  Handler<dynamic> Function(CRDTDocument doc)
+)>[
+  (CRDTTextHandler.spec, (doc) => CRDTTextHandler(doc, 'text')),
+  (CRDTFugueTextHandler.spec, (doc) => CRDTFugueTextHandler(doc, 'fugue_text')),
+  (
+    CRDTFugueListHandler.spec<String>('fl'),
+    (doc) => CRDTFugueListHandler<String>(doc, 'fugue_list', handlerType: 'fl'),
+  ),
+  (
+    CRDTFugueMovableListHandler.spec<String>('ml'),
+    (doc) => CRDTFugueMovableListHandler<String>(
+          doc,
+          'movable',
+          handlerType: 'ml',
+        ),
+  ),
+  (
+    CRDTListHandler.spec<String>('l'),
+    (doc) => CRDTListHandler<String>(doc, 'list', handlerType: 'l'),
+  ),
+  (
+    CRDTMapHandler.spec<int>('m'),
+    (doc) => CRDTMapHandler<int>(doc, 'map', handlerType: 'm'),
+  ),
+  (
+    CRDTORSetHandler.spec<String>('os'),
+    (doc) => CRDTORSetHandler<String>(doc, 'or_set', handlerType: 'os'),
+  ),
+  (
+    CRDTORMapHandler.spec<String, int>('om'),
+    (doc) => CRDTORMapHandler<String, int>(doc, 'or_map', handlerType: 'om'),
+  ),
+  (
+    CRDTRegisterHandler.spec<int>('r'),
+    (doc) => CRDTRegisterHandler<int>(doc, 'register', handlerType: 'r'),
+  ),
+  (CRDTMapRefHandler.spec, (doc) => CRDTMapRefHandler(doc, 'map_ref')),
+  (CRDTListRefHandler.spec, (doc) => CRDTListRefHandler(doc, 'list_ref')),
+  (
+    CRDTMovableListRefHandler.spec,
+    (doc) => CRDTMovableListRefHandler(doc, 'movable_ref'),
+  ),
 ];
 
 void main() {
   group('a handler declares what it reads', () {
-    for (final build in _handlers) {
+    for (final (declared, build) in _handlers) {
       final handler = build(CRDTDocument(peerId: PeerId.generate()));
       test('${handler.handlerType} declares the decoders it dispatches on', () {
         // A decoder added without adding its kind to the declaration would make
@@ -44,14 +69,14 @@ void main() {
         // let in and then fail on read.
         expect(
           handler.operationDecoders.keys.toSet(),
-          handler.spec.formats.operationKinds,
+          declared.formats.operationKinds,
         );
 
         // The blob range is derived from the same constant, so this pins the
         // derivation rather than a second hand-written value.
         expect(
           HandlerFormats.of(handler).blobVersions,
-          handler.spec.formats.blobVersions,
+          declared.formats.blobVersions,
         );
       });
     }
@@ -79,7 +104,7 @@ void main() {
       // reading the handler registry alone would report nothing here. Silence
       // still means nobody set the type up, not that this build cannot read it.
       final doc = CRDTDocument(peerId: PeerId.generate())
-        ..register(PNCounterHandler.new);
+        ..register(PNCounterHandler.spec('PNCounterHandler'));
 
       expect(doc.registeredHandlers, isEmpty);
       final capabilities = doc.describeBuildCapabilities();
@@ -90,19 +115,29 @@ void main() {
       expect(capabilities['NeverSetUp'], isNull);
     });
 
-    test('asking twice builds nothing and moves nothing', () {
-      // Registering reads the formats off one probe handler, on a document of
-      // its own. Asking the question afterwards touches neither.
-      var calls = 0;
+    test('declaring a kind builds nothing and moves nothing', () {
+      // A spec says what a kind is without making one. Nothing is constructed,
+      // here or anywhere: the builder it holds runs only when a reference has
+      // to be resolved.
+      var built = 0;
+      final counted = HandlerSpec<PNCounterHandler>(
+        'counter',
+        (doc, id) {
+          built += 1;
+          return PNCounterHandler(doc, id, handlerType: 'counter');
+        },
+        formats: const HandlerFormats(
+          operationKinds: {PNCounterHandler.incrementKind},
+          blobVersions: BlobVersionRange.single(1),
+        ),
+      );
+
       final doc = CRDTDocument(peerId: PeerId.generate())
-        ..register((d, id) {
-          calls += 1;
-          return PNCounterHandler(d, id);
-        })
+        ..register(counted)
         ..describeBuildCapabilities()
         ..describeBuildCapabilities();
 
-      expect(calls, 1, reason: 'the probe, and nothing after it');
+      expect(built, 0);
       expect(doc.registeredHandlers, isEmpty);
       expect(doc.exportChanges(), isEmpty);
       expect(doc.version, isEmpty);

@@ -10,7 +10,6 @@ import 'package:crdt_lf_sqlite/crdt_lf_sqlite.dart';
 /// default would carry the type argument, which dart2js minifies away.
 const kList = 'string-list';
 
-
 Future<void> main() async {
   const itemsToAdd = 3;
   const documentId = '784ff372-6f0a-4fe9-8e63-19b72fd18c23';

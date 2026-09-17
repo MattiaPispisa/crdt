@@ -330,8 +330,7 @@ void main() {
         doc,
         'list1',
         handlerType: 'CRDTFugueListHandler<String>',
-      )
-        ..insert(0, 'a');
+      )..insert(0, 'a');
       expect(handler.toString(), contains('list1'));
       expect(handler.toString(), contains('a'));
     });

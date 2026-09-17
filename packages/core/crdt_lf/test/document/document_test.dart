@@ -827,8 +827,7 @@ void main() {
         clientDoc,
         'todos',
         handlerType: 'CRDTListHandler<String>',
-      )
-        ..insert(0, 'initial');
+      )..insert(0, 'initial');
       serverDoc
         ..importChanges(clientDoc.exportChanges())
         // Server compacts history, removing the dependency node
