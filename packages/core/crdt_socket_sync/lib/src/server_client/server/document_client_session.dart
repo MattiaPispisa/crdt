@@ -86,17 +86,11 @@ class DocumentClientSession extends ClientSession {
 
   /// What this document's data holds and the client cannot read.
   ///
-  /// The document is asked what its **data** contains
-  /// ([CRDTDocument.describeDataRequirements]), not which handlers it happens
-  /// to have opened. A server that only stores and forwards a document
-  /// registers no handler at all, so anything read from the registry would be
-  /// empty and no client would ever be refused.
+  /// Read from [CRDTDocument.describeDataRequirements], so a server that only
+  /// stores and forwards a document still answers.
   ///
-  /// Empty when the client declares nothing: a peer from a build before the
-  /// field existed has nothing to compare, and neither has one that sent an
-  /// empty description ([SyncCapabilities.isEmpty]). The client is not trusted
-  /// to leave it out — refusing on silence is a refusal the client can never
-  /// recover from.
+  /// Empty when the client declares nothing: silence is never a refusal, since
+  /// the client could never recover from one.
   Future<List<CapabilityMismatch>> _missingClientCapabilities({
     required String documentId,
     required SyncCapabilities? clientCapabilities,

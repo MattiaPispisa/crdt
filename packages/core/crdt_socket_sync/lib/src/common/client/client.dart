@@ -58,11 +58,8 @@ abstract class CRDTSocketClient {
 
   /// [capabilities] as the peer states them, or `null` when they claim nothing.
   ///
-  /// A description passed at construction is sent as **complete**: it was
-  /// written out, so it names every type this build reads, and the server can
-  /// treat silence about a type as "cannot read it". One derived from the
-  /// document is sent as incomplete, because it only knows the handlers opened
-  /// so far.
+  /// Complete when they were passed at construction, incomplete when they come
+  /// from the document; see [capabilities].
   @protected
   SyncCapabilities? get statedCapabilities {
     final stated = capabilities;
@@ -71,16 +68,6 @@ abstract class CRDTSocketClient {
     }
     return SyncCapabilities(stated, complete: _declaredCapabilities != null);
   }
-
-  /// Refuses, in debug builds, to let a minification-unstable type tag travel.
-  ///
-  /// Call it from `connect()` **before** any `try`: a throw from inside one is
-  /// swallowed into a failed connection, which turns a clear message into a
-  /// client that never connects and never says why.
-  ///
-  /// Compiled out of a release build, like every `assert`.
-  @protected
-  void debugCheckHandlerTypes() {}
 
   final StreamController<SyncFault> _faults =
       StreamController<SyncFault>.broadcast();

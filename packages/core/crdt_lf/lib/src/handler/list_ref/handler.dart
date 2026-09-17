@@ -49,9 +49,8 @@ base class CRDTListRefHandler extends CRDTFugueListHandler<HandlerRef>
   /// Returns the handler referenced at [index], or `null` if out of range.
   ///
   /// {@template ref_get_resolution}
-  /// The handler is resolved — and lazily instantiated if needed — through the
-  /// document registry; it is `null` when the reference's type has no
-  /// registered factory.
+  /// The handler is resolved — and built if needed — through the document; it
+  /// is `null` when the document knows no kind under the reference's type.
   /// {@endtemplate}
   Handler<dynamic>? getRefAt(int index) {
     final refs = value;
@@ -62,11 +61,6 @@ base class CRDTListRefHandler extends CRDTFugueListHandler<HandlerRef>
   }
 
   /// What this build reads for this handler type.
-  ///
-  /// A copy of what the handler this one extends reads, because that one's
-  /// constant is private to its own file. The two agreeing is pinned by the
-  /// table in `test/capabilities/capabilities_test.dart`, which compares every
-  /// declaration against the decoders that actually dispatch.
   static const HandlerFormats _formats = HandlerFormats(
     operationKinds: {
       OperationType.kindInsert,

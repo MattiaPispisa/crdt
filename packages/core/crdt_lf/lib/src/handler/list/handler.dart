@@ -68,11 +68,6 @@ base class CRDTListHandler<T> extends Handler<List<T>>
 
   final ValueCodec<T> _valueCodec;
 
-  /// {@macro handler_spec}
-  ///
-  /// Built once, from the tag the constructor asked for: [handlerType] reads it
-  /// on every operation encode, so a fresh one per call would allocate there.
-
   @override
   String get id => _id;
 
@@ -153,9 +148,7 @@ base class CRDTListHandler<T> extends Handler<List<T>>
   /// {@template generic_handler_spec}
   /// The kind this handler is, under [type].
   ///
-  /// Only the tag is asked for: the class knows the rest. A generic handler
-  /// needs one of its own because its default tag would carry the type
-  /// argument, which dart2js rewrites in a Flutter web release build.
+  /// Only the tag is asked for: the class knows the rest.
   ///
   /// Pass it wherever a kind is named: [BaseCRDTDocument.register],
   /// [BaseCRDTDocument.handler], and a container's `child` and `insertChild`.

@@ -280,8 +280,6 @@ class WebSocketRelayClient extends RelaySocketClient {
       return false;
     }
 
-    debugCheckHandlerTypes();
-
     if (_handshakeGate.inProgress) {
       // already under connection
       return _handshakeGate.pending!;

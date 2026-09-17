@@ -32,11 +32,6 @@ base class CRDTMapRefHandler extends CRDTMapHandler<HandlerRef>
         );
 
   /// What this build reads for this handler type.
-  ///
-  /// A copy of what the handler this one extends reads, because that one's
-  /// constant is private to its own file. The two agreeing is pinned by the
-  /// table in `test/capabilities/capabilities_test.dart`, which compares every
-  /// declaration against the decoders that actually dispatch.
   static const HandlerFormats _formats = HandlerFormats(
     operationKinds: {
       OperationType.kindInsert,

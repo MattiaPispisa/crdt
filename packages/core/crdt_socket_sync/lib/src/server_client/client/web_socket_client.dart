@@ -194,8 +194,6 @@ class WebSocketClient extends CRDTSocketClient {
       return false;
     }
 
-    debugCheckHandlerTypes();
-
     if (_handshakeGate.inProgress) {
       // already under connection
       return _handshakeGate.pending!;

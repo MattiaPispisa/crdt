@@ -74,11 +74,6 @@ base class CRDTORMapHandler<K, V> extends Handler<ORMapState<K, V>>
   final ValueCodec<K> _keyCodec;
   final ValueCodec<V> _valueCodec;
 
-  /// {@macro handler_spec}
-  ///
-  /// Built once, from the tag the constructor asked for: [handlerType] reads it
-  /// on every operation encode, so a fresh one per call would allocate there.
-
   @override
   String get id => _id;
 

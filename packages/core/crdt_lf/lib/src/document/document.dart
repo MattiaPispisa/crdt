@@ -212,19 +212,7 @@ abstract class BaseCRDTDocument {
     _specs.putIfAbsent(spec.type, () => spec);
   }
 
-  /// How to rebuild a handler from its type tag, and what that type reads,
-  /// keyed by [HandlerSpec.type].
-  ///
-  /// A handler is never inserted directly: when a spec builds one, the handler
-  /// self-registers into [_handlers] through this chain:
-  ///
-  /// ```md
-  /// spec.create(this, id)
-  /// → new CRDTMapRefHandler(doc, id)
-  ///   → super Handler(doc)
-  ///     → doc._registerHandler(this)
-  ///       → _handlers[id] = this
-  /// ```
+  /// How to rebuild a handler of a kind, keyed by [HandlerSpec.type].
   final Map<String, HandlerSpec<Handler<dynamic>>> _specs = {};
 
   /// Generates a globally-unique id for a handler created dynamically.

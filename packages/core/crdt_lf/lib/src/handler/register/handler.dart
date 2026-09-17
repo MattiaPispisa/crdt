@@ -58,11 +58,6 @@ base class CRDTRegisterHandler<T> extends Handler<T>
   final String _id;
   final ValueCodec<T> _valueCodec;
 
-  /// {@macro handler_spec}
-  ///
-  /// Built once, from the tag the constructor asked for: [handlerType] reads it
-  /// on every operation encode, so a fresh one per call would allocate there.
-
   @override
   String get id => _id;
 
