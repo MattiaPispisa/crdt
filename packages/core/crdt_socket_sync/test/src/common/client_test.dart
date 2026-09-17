@@ -56,7 +56,7 @@ void main() {
       final seen = <ConnectionStatus>[];
       client.connectionStatus.listen(seen.add);
 
-      client.refuseBuild(
+      client.refuse(
         code: Protocol.errorUnsupportedClient,
         reason: 'nope',
       );
@@ -70,17 +70,17 @@ void main() {
 
     test('keeps the first reason, and the status stays terminal', () async {
       final client = _client()
-        ..refuseBuild(
+        ..refuse(
           code: Protocol.errorUnsupportedProtocolVersion,
           reason: 'first',
         )
-        ..refuseBuild(code: Protocol.errorUnsupportedClient, reason: 'second');
+        ..refuse(code: Protocol.errorUnsupportedClient, reason: 'second');
 
       expect(client.incompatibility?.message, 'first');
 
       // A refusal is terminal: the teardown that follows it must not report
       // the client as merely disconnected.
-      client.updateConnectionStatus(ConnectionStatus.disconnected);
+      client.moveTo(ConnectionStatus.disconnected);
       expect(client.connectionStatusValue, ConnectionStatus.unsupported);
     });
   });
@@ -90,7 +90,7 @@ void main() {
       final client = _client();
 
       expect(
-        client.refuseServerProtocolMismatch(Protocol.protocolVersion + 1),
+        client.refuseProtocolMismatch(Protocol.protocolVersion + 1),
         isTrue,
       );
       expect(client.incompatibility?.isProtocolVersionMismatch, isTrue);
@@ -100,7 +100,7 @@ void main() {
       final client = _client();
 
       expect(
-        client.refuseServerProtocolMismatch(Protocol.protocolVersion),
+        client.refuseProtocolMismatch(Protocol.protocolVersion),
         isFalse,
       );
       expect(client.isUnsupported, isFalse);

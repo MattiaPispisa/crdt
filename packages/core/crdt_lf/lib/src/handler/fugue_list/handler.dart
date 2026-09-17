@@ -76,7 +76,7 @@ base class CRDTFugueListHandler<T>
   ///
   /// Built once, from the tag the constructor asked for: [handlerType] reads it
   /// on every operation encode, so a fresh one per call would allocate there.
-
+  /// 
   /// {@macro generic_handler_spec}
   static HandlerSpec<CRDTFugueListHandler<T>> spec<T>(
     String type, {

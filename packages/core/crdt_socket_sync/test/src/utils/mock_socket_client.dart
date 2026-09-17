@@ -101,6 +101,20 @@ class MockCRDTSocketClient extends CRDTSocketClient {
     _messagesController.close();
   }
 
+  // The protected surface, reachable from a test.
+  //
+  // A subclass may use its own protected members; a test may not. These forward
+  // so the refusal paths can be driven without silencing the lint at every call
+  // site.
+
+  void refuse({required String code, required String reason}) =>
+      refuseBuild(code: code, reason: reason);
+
+  bool refuseProtocolMismatch(int serverVersion) =>
+      refuseServerProtocolMismatch(serverVersion);
+
+  void moveTo(ConnectionStatus status) => updateConnectionStatus(status);
+
   // Test helper methods
   set setShouldThrowOnSendMessage(bool shouldThrow) {
     _shouldThrowOnSendMessage = shouldThrow;

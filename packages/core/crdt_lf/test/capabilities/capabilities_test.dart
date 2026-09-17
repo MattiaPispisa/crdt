@@ -7,9 +7,8 @@ import '../helpers/pn_counter_handler.dart';
 /// the decoders it dispatches on.
 ///
 /// The two are written a few lines apart in the same file and nothing makes
-/// them agree. This is where they are compared — and it is the only way to a
-/// declaration now, since each class keeps it private and answers it through
-/// [Handler.spec].
+/// them agree. This is where they are compared, against the kind each class
+/// names.
 ///
 /// It matters most for the three ref containers: their declaration is a
 /// **copy** of the handler they extend, and this table keeps the copy honest.

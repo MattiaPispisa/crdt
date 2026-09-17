@@ -151,21 +151,20 @@ base class CRDTListHandler<T> extends Handler<List<T>>
   }
 
   /// {@template generic_handler_spec}
-  /// A spec for this handler under [type], the tag peers address it by.
+  /// The kind this handler is, under [type].
   ///
-  /// Only the tag is asked for: the formats are [formats] and the builder is
-  /// this class, so neither has to be written out again. A generic handler
-  /// needs a spec because its default tag carries the type argument, which
-  /// dart2js minifies away in a Flutter web release build.
+  /// Only the tag is asked for: the class knows the rest. A generic handler
+  /// needs one of its own because its default tag would carry the type
+  /// argument, which dart2js rewrites in a Flutter web release build.
   ///
-  /// The spec also travels into the handler it builds, so creating one tells
-  /// the document how to rebuild the type — see [Handler].
+  /// Pass it wherever a kind is named: [BaseCRDTDocument.register],
+  /// [BaseCRDTDocument.handler], and a container's `child` and `insertChild`.
   /// {@endtemplate}
   ///
   /// ```dart
-  /// final todos = CRDTListHandler.spec<Todo>('todos');
+  /// final todos = CRDTListHandler.spec<Todo>('todo-list');
   ///
-  /// doc.register(todos);                    // for a peer that receives one
+  /// doc.register(todos);
   /// final list = doc.handler(todos, 'todos');
   /// ```
   static HandlerSpec<CRDTListHandler<T>> spec<T>(

@@ -12,7 +12,7 @@ typedef HandlerBuilder<T extends Handler<dynamic>> = T Function(
 /// {@endtemplate}
 ///
 /// A peer that receives a reference holds `(id, kind)`, so the kind is what
-/// lets it build the handler. Every handler answers one from [Handler.spec];
+/// lets it build the handler. Every handler is given one by its constructor;
 /// write one by hand for a handler of your own, or to declare a kind this peer
 /// never opens — see [BaseCRDTDocument.register].
 class HandlerSpec<T extends Handler<dynamic>> {
