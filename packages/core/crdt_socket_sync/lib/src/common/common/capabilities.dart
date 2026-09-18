@@ -1,16 +1,21 @@
 import 'package:crdt_lf/crdt_lf.dart';
 
+/// {@template capability_mismatch}
 /// One reason a build cannot handle what another peer holds.
+/// {@endtemplate}
 sealed class CapabilityMismatch {
+  /// {@macro capability_mismatch}
   const CapabilityMismatch(this.handlerType);
 
   /// The [Handler.handlerType] the disagreement is about.
   final String handlerType;
 }
 
+/// {@template missing_operation_kind}
 /// An operation kind the other peer holds and this build cannot decode.
+/// {@endtemplate}
 final class MissingOperationKind extends CapabilityMismatch {
-  /// Records that [handlerType] holds an operation of [kind].
+  /// {@macro missing_operation_kind}
   const MissingOperationKind({
     required String handlerType,
     required this.kind,
@@ -32,13 +37,11 @@ final class MissingOperationKind extends CapabilityMismatch {
   String toString() => '$handlerType(kind $kind)';
 }
 
+/// {@template unknown_handler_type}
 /// A handler type the other peer holds and this build says nothing about.
-///
-/// Only ever a mismatch against a [SyncCapabilities.complete] description,
-/// where a type left out is a type the build cannot read. Reported once for
-/// the type, not once per kind.
+/// {@endtemplate}
 final class UnknownHandlerType extends CapabilityMismatch {
-  /// Records that [handlerType] is one this build does not name.
+  /// {@macro unknown_handler_type}
   const UnknownHandlerType({required String handlerType}) : super(handlerType);
 
   @override
@@ -52,14 +55,11 @@ final class UnknownHandlerType extends CapabilityMismatch {
   String toString() => '$handlerType(not readable by this build)';
 }
 
+/// {@template snapshot_blob_out_of_range}
 /// A snapshot blob outside the range of layouts this build reads.
-///
-/// A blob is refused whole, so the two peers cannot share a snapshot for this
-/// handler type at all. The two subclasses say which way it missed, because
-/// they call for different fixes: one needs a newer build, the other names a
-/// layout this build stopped reading on purpose.
+/// {@endtemplate}
 sealed class SnapshotBlobOutOfRange extends CapabilityMismatch {
-  /// Records that [handlerType] holds a blob at [holds], outside [reads].
+  /// {@macro snapshot_blob_out_of_range}
   const SnapshotBlobOutOfRange({
     required String handlerType,
     required this.reads,
@@ -84,9 +84,11 @@ sealed class SnapshotBlobOutOfRange extends CapabilityMismatch {
   int get hashCode => Object.hash(runtimeType, handlerType, reads, holds);
 }
 
+/// {@template snapshot_blob_too_new}
 /// A blob written by a build newer than this one; only a newer build reads it.
+/// {@endtemplate}
 final class SnapshotBlobTooNew extends SnapshotBlobOutOfRange {
-  /// Records that [handlerType] holds a blob newer than [reads].
+  /// {@macro snapshot_blob_too_new}
   const SnapshotBlobTooNew({
     required super.handlerType,
     required super.reads,
@@ -98,11 +100,11 @@ final class SnapshotBlobTooNew extends SnapshotBlobOutOfRange {
       '$handlerType(snapshot blob v$holds is newer than $reads)';
 }
 
+/// {@template snapshot_blob_too_old}
 /// A blob in a layout this build no longer reads.
-///
-/// The handler's [Handler.minReadableSnapshotBlobVersion] sits above it.
+/// {@endtemplate}
 final class SnapshotBlobTooOld extends SnapshotBlobOutOfRange {
-  /// Records that [handlerType] holds a blob older than [reads].
+  /// {@macro snapshot_blob_too_old}
   const SnapshotBlobTooOld({
     required super.handlerType,
     required super.reads,
