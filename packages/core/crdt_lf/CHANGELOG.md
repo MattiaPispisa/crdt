@@ -1,41 +1,43 @@
-## [4.3.0](https://github.com/MattiaPispisa/crdt/tree/crdt_lf-v4.3.0/packages/core/crdt_lf)
+## [5.0.0](https://github.com/MattiaPispisa/crdt/tree/crdt_lf-v5.0.0/packages/core/crdt_lf)
 
-**Date:** 2026-09-10
+**Date:** 2026-09-18
 
-[compare to previous release](https://github.com/MattiaPispisa/crdt/compare/crdt_lf-v4.2.0...crdt_lf-v4.3.0)
+[compare to previous release](https://github.com/MattiaPispisa/crdt/compare/crdt_lf-v4.2.0...crdt_lf-v5.0.0)
+
+### Breaking
+
+Source only: changes and snapshot blobs keep the same bytes, so a stored document opens as it is.
+See [Migrating from 4.x to 5.0](https://github.com/MattiaPispisa/crdt/tree/main/packages/core/crdt_lf#migrating-from-4x-to-50).
+
+- `handlerType:` is **required** on every generic handler. Its default carried the type argument,
+  which dart2js minifies away in a Flutter web release build.
+- `Handler`'s constructor takes a `HandlerSpec`, so a handler cannot exist without naming its kind.
+- `registerFactory`, `registerDefaultFactories` and `HandlerFactory` are gone, replaced by
+  `register(HandlerSpec)`. `registerHandler` is private: the constructor registers.
+- A document rebuilds the kinds it has opened a handler of, plus the ones passed to `register`.
+  The built-in kinds are no longer a special case that one call registered all at once.
 
 ### Added
 
-- **A handler cannot exist without naming its kind.** `Handler.spec` is an abstract, non-nullable
-  getter: every handler answers a `HandlerSpec` — its tag, how to build one, and the formats it
-  reads — and the document reads it as the handler registers. So opening a handler is what teaches
-  the document to rebuild that kind, which is what a peer resolving a `HandlerRef` needs and what
-  `reconstruct()` walks. Before, only an explicit registration did, and a handler built by hand left
-  a subtree no peer could rebuild, in silence.
-  One rule now holds for every kind alike: a document rebuilds the kinds it has opened a handler of,
-  plus the ones passed to `register`. Naming a kind at a call site means passing the **constructor** —
-  `doc.handler(CRDTMapRefHandler.new, 'root')`, `root.child('title', CRDTFugueTextHandler.new)` —
-  and `register(build)` reads the tag and the formats off a handler it makes, so neither is restated
-  and neither can drift from the decoders that dispatch.
-  **Breaking:** a generic handler's `handlerType:` is now **required** — its default carried the type
-  argument, which dart2js minifies away, so the old default was a trap rather than a convenience.
-  `registerFactory`, `registerDefaultFactories`, `Handler.hasStableHandlerType`, the per-class
-  `spec` statics and `HandlerSpec.factory` are gone; `registerHandler` is private. `importChanges` no
-  longer materializes the tree eagerly: a handler comes into being when you open it or when someone
-  resolves the reference that names it.
-  [142](https://github.com/MattiaPispisa/crdt/issues/142)
+- **A handler names its own kind, as a `HandlerSpec`:** a tag, how to build one, and the formats it
+  reads. Every handler class carries one — `CRDTFugueTextHandler.spec`,
+  `CRDTListHandler.spec<Todo>('todo-list')` — so opening a handler is what teaches the document to
+  rebuild that kind, which is what resolving a `HandlerRef` and `reconstruct()` need. `register(spec)`
+  declares a kind this peer never opens itself, and `handler(spec, id)` returns the handler already
+  open under `id` or builds it. [142](https://github.com/MattiaPispisa/crdt/issues/142)
+
+- **Nested handlers in one call:** a container's `child(key, spec)` and `insertChild(index, spec)`
+  mint the id, build the child and attach the reference. `child` returns the one the key already
+  holds, so calling it twice is safe. [142](https://github.com/MattiaPispisa/crdt/issues/142)
 
 - **A document can say what it can read and what it asks to be read.**
   `describeBuildCapabilities()` returns a `DocumentCapabilities` — what this build decodes, covering
-  registered types as well as open handlers. `describeDataRequirements()` returns a
+  registered kinds as well as open handlers. `describeDataRequirements()` returns a
   `DocumentRequirements` — what the data asks for, read from change envelopes and from a record every
   snapshot now carries, so a peer that reloads a compacted document can still say what it is holding.
-  Two types, because neither contains the other: a server that only stores and forwards requires
-  every type it holds and is capable of none. Both list, per handler type, the `HandlerFormats`
-  involved: the operation kinds and the snapshot blob versions. Comparing the two is how
-  `crdt_socket_sync` refuses an incompatible peer.
-  **Breaking:** a document reports only what it has been set up for, where the built-in types used to
-  be reported whether or not anything registered or opened one.
+  Neither contains the other: a server that only stores and forwards requires every kind it holds and
+  is capable of none. Both list, per kind, the `HandlerFormats` involved: the operation kinds and the
+  snapshot blob versions. Comparing the two is how `crdt_socket_sync` refuses an incompatible peer.
   [142](https://github.com/MattiaPispisa/crdt/issues/142)
 
 - **A snapshot blob names the layouts its reader understands, not just one.** A handler declares

@@ -25,8 +25,7 @@ dependencies:
   graphview: ^1.2.0
 
   # extension for
-  crdt_lf: ^4.0.0
-
+  crdt_lf: ">=4.0.0 <6.0.0"
 dev_dependencies:
   flutter_test:
     sdk: flutter
