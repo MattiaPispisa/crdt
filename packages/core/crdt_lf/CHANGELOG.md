@@ -28,7 +28,7 @@ See [Migrating from 4.x to 5.0](https://github.com/MattiaPispisa/crdt/tree/main/
 
 - **Nested handlers in one call:** a container's `child(key, spec)` and `insertChild(index, spec)`
   mint the id, build the child and attach the reference. `child` returns the one the key already
-  holds, so calling it twice is safe. [142](https://github.com/MattiaPispisa/crdt/issues/142)
+  holds, so calling it twice is safe. [143](https://github.com/MattiaPispisa/crdt/issues/142)
 
 - **A document can say what it can read and what it asks to be read.**
   `describeBuildCapabilities()` returns a `DocumentCapabilities` — what this build decodes, covering
