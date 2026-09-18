@@ -26,14 +26,9 @@ class WebSocketClient extends CRDTSocketClient {
     super.plugins,
     super.capabilities,
   })  : _messageController = StreamController<Message>.broadcast(),
-        _connectionStatusController =
-            StreamController<ConnectionStatus>.broadcast()
-              ..add(ConnectionStatus.disconnected),
-        _connectionStatusValue = ConnectionStatus.disconnected,
         _pingInterval = pingInterval ?? Protocol.pingInterval,
         _pingTimeout = pingTimeout ?? Protocol.pingTimeout,
         _maxBufferSize = maxBufferSize ?? Protocol.maxBufferSize,
-        _handshakeGate = HandshakeGate(),
         _transportFactory =
             (() => Transport.create(WebSocketChannelConnector(url))) {
     _syncManager = SyncManager(document: document, client: this);
@@ -66,14 +61,9 @@ class WebSocketClient extends CRDTSocketClient {
     int? maxBufferSize,
     super.plugins,
   })  : _messageController = StreamController<Message>.broadcast(),
-        _connectionStatusController =
-            StreamController<ConnectionStatus>.broadcast()
-              ..add(ConnectionStatus.disconnected),
-        _connectionStatusValue = ConnectionStatus.disconnected,
         _pingInterval = pingInterval ?? Protocol.pingInterval,
         _pingTimeout = pingTimeout ?? Protocol.pingTimeout,
         _maxBufferSize = maxBufferSize ?? Protocol.maxBufferSize,
-        _handshakeGate = HandshakeGate(),
         _transportFactory = transportFactory {
     _syncManager = SyncManager(document: document, client: this);
     _messageCodec = CompressedCodec<Message>(
@@ -117,10 +107,6 @@ class WebSocketClient extends CRDTSocketClient {
   /// Incoming (transporter) messages controller
   final StreamController<Message> _messageController;
 
-  /// Connection status controller
-  final StreamController<ConnectionStatus> _connectionStatusController;
-  ConnectionStatus _connectionStatusValue;
-
   final Transport Function() _transportFactory;
 
   /// Number of reconnect attempts
@@ -153,18 +139,8 @@ class WebSocketClient extends CRDTSocketClient {
   /// connection (one where sends still appear to succeed but the peer is gone).
   DateTime? _lastPongAt;
 
-  /// Coordinates the handshake lifecycle (completer, timeout race, reset).
-  final HandshakeGate _handshakeGate;
-
   /// Codec for messages
   late final MessageCodec<Message> _messageCodec;
-
-  @override
-  Stream<ConnectionStatus> get connectionStatus =>
-      _connectionStatusController.stream;
-
-  @override
-  ConnectionStatus get connectionStatusValue => _connectionStatusValue;
 
   @override
   Stream<Message> get messages => _messageController.stream;
@@ -184,7 +160,7 @@ class WebSocketClient extends CRDTSocketClient {
   /// If the handshake fails then the client will attempt to reconnect
   @override
   Future<bool> connect() async {
-    if (_connectionStatusValue.isConnected) {
+    if (connectionStatusValue.isConnected) {
       return true;
     }
 
@@ -194,9 +170,9 @@ class WebSocketClient extends CRDTSocketClient {
       return false;
     }
 
-    if (_handshakeGate.inProgress) {
+    if (handshake.inProgress) {
       // already under connection
-      return _handshakeGate.pending!;
+      return handshake.pending!;
     }
 
     try {
@@ -211,7 +187,7 @@ class WebSocketClient extends CRDTSocketClient {
       );
 
       updateConnectionStatus(
-        _connectionStatusValue.isDisconnected
+        connectionStatusValue.isDisconnected
             ? ConnectionStatus.connecting
             : ConnectionStatus.reconnecting,
       );
@@ -274,7 +250,7 @@ class WebSocketClient extends CRDTSocketClient {
     Message message, {
     bool attemptReconnect = true,
   }) async {
-    if (_connectionStatusValue.isDisconnected || _transport == null) {
+    if (connectionStatusValue.isDisconnected || _transport == null) {
       throw StateError('Client not connected');
     }
 
@@ -283,7 +259,7 @@ class WebSocketClient extends CRDTSocketClient {
     final isHandshakeOrPong = message.type == MessageType.handshakeRequest ||
         message.type == MessageType.pong;
 
-    if (!isHandshakeOrPong && !await _handshakeGate.completed) {
+    if (!isHandshakeOrPong && !await handshake.completed) {
       // If handshake is not completed, wait or skip the message
       throw StateError('Handshake not completed');
     }
@@ -310,7 +286,7 @@ class WebSocketClient extends CRDTSocketClient {
     try {
       await (_outboundQueue?.add(data) ?? _transport!.send(data));
 
-      if (await _handshakeGate.completed) {
+      if (await handshake.completed) {
         updateConnectionStatus(ConnectionStatus.connected);
       }
     } catch (e) {
@@ -389,8 +365,8 @@ class WebSocketClient extends CRDTSocketClient {
     dynamic error, {
     bool attemptReconnect = true,
   }) {
-    if (_handshakeGate.isActive) {
-      _handshakeGate.reset();
+    if (handshake.isActive) {
+      handshake.reset();
     }
 
     // on reconnecting if an error occurs do not update the status
@@ -432,7 +408,7 @@ class WebSocketClient extends CRDTSocketClient {
       _isReconnecting = false;
     }
 
-    if (!_connectionStatusValue.isConnected) {
+    if (!connectionStatusValue.isConnected) {
       unawaited(_attemptReconnect());
     }
   }
@@ -464,7 +440,7 @@ class WebSocketClient extends CRDTSocketClient {
   /// existing reconnect machinery (status transitions, [Protocol
   /// .maxReconnectAttempts]) is reused.
   Future<void> _sendPing() async {
-    if (_connectionStatusValue.isDisconnected) {
+    if (connectionStatusValue.isDisconnected) {
       return;
     }
 
@@ -505,7 +481,7 @@ class WebSocketClient extends CRDTSocketClient {
       capabilities: statedCapabilities,
     );
 
-    return _handshakeGate.perform(
+    return handshake.perform(
       // do not attempt to reconnect on handshake error
       // because the reconnect will handle it.
       send: () => sendMessage(handshakeRequest, attemptReconnect: false),
@@ -565,7 +541,7 @@ class WebSocketClient extends CRDTSocketClient {
     _sessionId = message.sessionId;
 
     // Complete the handshake first so that merge can send messages
-    _handshakeGate.succeed();
+    handshake.succeed();
 
     _syncManager.import(
       changes: message.changes,
@@ -607,23 +583,6 @@ class WebSocketClient extends CRDTSocketClient {
   }
 
   @override
-  void abandonHandshake() => _handshakeGate.reset();
-
-  @override
-  void publishConnectionStatus(ConnectionStatus status) {
-    if (status == _connectionStatusValue) {
-      return;
-    }
-
-    _connectionStatusValue = status;
-    if (_connectionStatusController.isClosed) {
-      return;
-    }
-
-    _connectionStatusController.add(status);
-  }
-
-  @override
   void dispose() {
     disconnect();
 
@@ -631,9 +590,8 @@ class WebSocketClient extends CRDTSocketClient {
       plugin.dispose();
     }
 
-    closeFaults();
+    closeClientStreams();
     _messageController.close();
-    _connectionStatusController.close();
     _syncManager.dispose();
   }
 }

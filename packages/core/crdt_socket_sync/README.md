@@ -72,6 +72,8 @@ CRDT Socket Sync provides a robust, real-time synchronization system that allows
 - 💓 **Liveness Detection**: Ping/pong tracking detects half-open connections and reconnects
 - 🚰 **Backpressure**: Bounded per-connection send queue drops peers that cannot keep up (they re-sync on reconnect)
 - 🗜️ **History Pruning**: Server takes a snapshot and prunes confirmed history once every client aligns on a common frontier
+- 🤝 **Version & Capability Handshake**: A client whose build cannot read what the document holds is refused at connect time, not on the first broken read ([details](#version--capability-negotiation))
+- 🩹 **Faults**: Data the client received but could not take in is reported on a stream instead of crashing the zone ([details](#faults-data-that-did-not-make-it-in))
 - 🎯 **Type Safety**: Full Dart type safety with generic document handlers
 - 📊 **Event Monitoring**: Comprehensive event streams for connection and synchronization monitoring
 - 🔌 **Plugins**: Extendable plugin system for custom functionality
@@ -966,6 +968,31 @@ client uses exponential backoff with jitter and retries forever by default.
 `ConnectionStatus.unsupported` is the one status the client never leaves: see
 [version & capability negotiation](#version--capability-negotiation).
 
+#### Faults: data that did not make it in
+
+A status is about the connection. **`client.faults` is about one piece of
+data**: a change or a state the client received on a working connection and
+could not fold into the document — a blob it cannot read, a document already
+disposed.
+
+```dart
+client.faults.listen((fault) {
+  log('${fault.reason}: ${fault.error}');
+});
+
+// faults replays nothing, so a late listener reads this instead.
+final missed = client.lastFault;
+```
+
+Reported, never thrown: applying runs inside the callback that reads the
+socket, where a throw reaches no `catch` and no `onError` and ends up as an
+uncaught error in the zone.
+
+Nothing is retried and the connection stays up, so an app that cares decides
+for itself whether to re-sync or to tell the user. A causal gap is **not** a
+fault: the client asks the server to re-serve the document, which is the one
+failure a resync closes.
+
 ### Version & capability negotiation
 
 Two builds can disagree in three ways, and the handshake checks all three
@@ -1046,19 +1073,12 @@ WebSocketClient(
 Either way, a type that **is** named is checked in full: a kind it lacks, or a
 snapshot blob written with another layout, refuses the client.
 
-`handlerType` is the key of this whole comparison, and a **generic** handler is
-required to name it: its default would carry the type argument
-(`CRDTListHandler<Todo>`), which dart2js minifies in a Flutter web release build.
-So the compiler asks, and there is nothing left to refuse at connect time:
+`handlerType` is the key of this whole comparison, so two peers have to spell a
+kind the same way — which is why `crdt_lf` 5.0 makes a generic handler name it
+([why](https://github.com/MattiaPispisa/crdt/tree/main/packages/core/crdt_lf#migrating-from-4x-to-50)).
 
-```dart
-CRDTListHandler<Todo>(document, 'todos', handlerType: 'todo-list');
-```
-
-The tag is all the constructor asks for: the handler turns it into a
-`HandlerSpec`, so the document also learns how to **rebuild** that kind. A peer
-that has to know the kind before it opens one — a store-and-forward server —
-declares the spec instead:
+A peer that has to know a kind **before** it opens one — a store-and-forward
+server — declares the spec instead of opening a handler:
 
 ```dart
 document.register(CRDTListHandler.spec<Todo>('todo-list'));
@@ -1078,22 +1098,6 @@ if (incompatibility != null) {
 }
 ```
 
-#### When something gets through anyway
-
-A refusal is about the build. `client.faults` is about one piece of data: a
-change or a state the client could not take in, on a connection that works.
-
-```dart
-client.faults.listen((fault) {
-  log('${fault.reason}: ${fault.error}');
-});
-```
-
-Nothing is retried, and the connection stays up. It is reported rather than
-thrown because applying runs inside the callback that reads the socket, where a
-throw reaches no `catch` and no `onError` and ends up as an uncaught error in
-the zone — a crash on Flutter.
-
 #### An unknown kind is kept, never dropped
 
 A change whose operation kind this build cannot decode is **stored and
@@ -1110,36 +1114,27 @@ the handshake check is a safety net rather than the only defence.
 - **A relay checks the version only.** It carries CRDT payloads as opaque blobs
   and never decodes them, so it cannot tell what a client can read.
 - **The other direction.** The check protects a document from a client that
-  cannot read it. It does nothing for the clients already connected when a
-  **newer** client writes a kind they have never heard of: that data does not
-  exist yet when the two sides compare notes. There the answer stays the one
-  `crdt_lf` already gives — `UnknownOperationKindException` on read, which fails
-  fast instead of diverging in silence, while the change itself is kept in the
-  document and forwarded intact to peers that do understand it.
-- **A document restored from a snapshot older than `crdt_lf` 5.0.0.** The
-  record that says what a document holds is written by every snapshot from
-  5.0.0 on. An older snapshot carries none, so a document that imports one with
-  `pruneHistory: true` loses the changes *and* has nothing to read the
-  requirements back from: it reports that it needs nothing, and every client is
-  let through. It answers in full again after it takes its own snapshot.
-- **A blob layout the reader can migrate.** A handler states the range it
-  reads (`minReadableSnapshotBlobVersion..snapshotBlobVersion`) and writes the
-  top of it. Lower the minimum to keep reading an older layout and upgrade it
-  on the way in: `readSnapshotHeader` hands back the version it found. Only a
-  blob outside the range refuses the peer, as `SnapshotBlobTooNew` (needs a
+  cannot read it, not the clients already connected when a **newer** one writes
+  a kind they never heard of — that data does not exist yet when the two sides
+  compare notes. There the answer stays `UnknownOperationKindException` on read
+  (see above: the change is kept and forwarded intact).
+- **A document restored from a snapshot older than `crdt_lf` 5.0.0.** An older
+  snapshot carries no record of what it holds, so a document that imports one
+  with `pruneHistory: true` reports that it needs nothing and lets every client
+  through. It answers in full again after it takes its own snapshot.
+- **A blob layout the reader can migrate.** Lower
+  `minReadableSnapshotBlobVersion` to keep reading an older layout and upgrade
+  it on the way in; `readSnapshotHeader` hands back the version it found. Only
+  a blob outside the range refuses the peer, as `SnapshotBlobTooNew` (needs a
   newer build) or `SnapshotBlobTooOld` (a layout this build dropped).
-- **A handler that writes its snapshot blob by hand.** The blob version is
-  only meaningful when the blob carries it (`Handler.snapshotHeader` /
-  `readSnapshotHeader`). A handler that writes its state without them still
-  reports `1`, so two builds with genuinely different layouts both claim `1`
-  and look compatible: such a handler opts out of the blob check rather than
-  passing it.
+- **A handler that writes its snapshot blob by hand.** The version is only
+  meaningful when the blob carries it (`Handler.snapshotHeader` /
+  `readSnapshotHeader`). One that writes its state without them still reports
+  `1`, so it opts out of the blob check rather than passing it.
 - **Whether a kind is stamped.** `OperationType.stamped` is a build's own
-  decision about a kind, not part of what travels, and a capability names the
-  kind without it. Two builds that disagree about one kind therefore pass the
-  handshake and meet at read time instead, with the `FormatException` `crdt_lf`
-  raises for exactly that. Declaring it would mean a build could enumerate the
-  kinds it stamps, which a handler with custom kinds can only do by hand.
+  decision, not part of what travels, so two builds that disagree about one
+  kind pass the handshake and meet at read time, with the `FormatException`
+  `crdt_lf` raises for exactly that.
 
 ### Wire format & type codes
 
@@ -1215,7 +1210,7 @@ Renamed or removed symbols:
 |---|---|---|
 | `Protocol.version` (`'1.0.0'`) | `Protocol.protocolVersion` (`1`) | An `int`, so a peer can tell an older version from a newer one. `Protocol.firstProtocolVersion` is what a frame without the field is read as. |
 | `ConnectionStatus` with four values | adds `unsupported` | An exhaustive `switch` over it needs another case. It is terminal: see [Refusals are permanent](#refusals-are-permanent). |
-| a `CRDTSocketClient` subclass | implements `abandonHandshake` and `publishConnectionStatus` | The first frees whoever waits on a handshake that will never complete; the second hands a status to the listeners with no rule of its own, so the base class can make `unsupported` sticky. |
+| a `CRDTSocketClient` subclass owning its status stream | the base class owns it | `connectionStatus`, `connectionStatusValue` and the handshake gate move up; a transport only calls `updateConnectionStatus`, and the base makes `unsupported` sticky. |
 
 Nothing else moves: `WebSocketClient`, `WebSocketRelayClient`, the server
 registries, the plugins and the wire codecs keep their 0.8.x signatures.

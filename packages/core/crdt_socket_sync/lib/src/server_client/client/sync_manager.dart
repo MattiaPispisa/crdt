@@ -5,16 +5,15 @@ import 'package:crdt_socket_sync/client.dart';
 import 'package:crdt_socket_sync/src/common/common/utils.dart';
 
 /// {@template sync_manager}
-/// Manager for the CRDT client
+/// Keeps a [CRDTDocument] and a [CRDTSocketClient] in step.
 ///
-/// it's responsible for:
-/// - implementing the requested changes to the [document]
-/// - submitting the changes to the [document]
+/// It sends what the document writes locally, and applies what the server
+/// sends back.
 /// {@endtemplate}
 class SyncManager {
   /// {@macro sync_manager}
   ///
-  /// Constructor
+  /// Subscribes to [CRDTDocument.localChanges] at once; [dispose] ends it.
   SyncManager({
     required this.document,
     required this.client,
@@ -66,10 +65,8 @@ class SyncManager {
   /// fail the same way for any other reason, and asking again is a loop rather
   /// than a recovery.
   ///
-  /// Anything else is reported on [CRDTSocketClient.faults] and not thrown.
-  /// This runs inside the callback that reads the socket, where a throw reaches
-  /// no `catch` and no `onError` — it lands in the zone, which on Flutter is a
-  /// crash instead of a message.
+  /// Anything else becomes a [SyncFault].
+  /// {@macro sync_fault_not_thrown}
   /// {@endtemplate}
   void applyChange(Change change) {
     try {
@@ -119,10 +116,9 @@ class SyncManager {
   /// - `merge: false`
   /// - `pruneHistory: true`
   ///
-  /// A failure is reported on [CRDTSocketClient.faults] rather than thrown,
-  /// for the same reason [applyChange] does it: this runs inside the socket's
-  /// read callback, where a throw would land in the zone. Nothing is sent back
-  /// when the import fails — there is no state to report yet.
+  /// A failure becomes a [SyncFault], and nothing is sent back: there is no
+  /// state to report yet.
+  /// {@macro sync_fault_not_thrown}
   void import({
     required VersionVector serverVersionVector,
     List<Change>? changes,

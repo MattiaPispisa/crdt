@@ -11,8 +11,9 @@ read. See [Migrating from 0.8.x to 0.9.0](https://github.com/MattiaPispisa/crdt/
 
 - `Protocol.version` (the string `'1.0.0'`) is replaced by `Protocol.protocolVersion`, an `int`.
 - `ConnectionStatus` has a new value, `unsupported`, so an exhaustive `switch` needs another case.
-- A `CRDTSocketClient` subclass implements two more members: `abandonHandshake` and
-  `publishConnectionStatus`.
+- A `CRDTSocketClient` subclass no longer provides `connectionStatus`,
+  `connectionStatusValue` or a status controller of its own: the base class owns
+  them, and a transport only calls `updateConnectionStatus`.
 
 ### Added
 
@@ -31,7 +32,8 @@ read. See [Migrating from 0.8.x to 0.9.0](https://github.com/MattiaPispisa/crdt/
 - **What the client cannot apply is reported on the new `CRDTSocketClient.faults`, not thrown.**
   Applying runs inside the socket's read callback, where a throw became an uncaught zone error.
   Only a causal gap still triggers `requestDocumentStatus()`; re-serving the document cannot fix
-  anything else.
+  anything else. `faults` replays nothing, so `CRDTSocketClient.lastFault` holds the last one for
+  a listener that subscribed late.
 
 - **A frame the server cannot read is answered with `INVALID_MESSAGE`.** One that threw on the way
   in used to be logged and nothing more, leaving the client waiting for a reply that never came.

@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:crdt_lf/crdt_lf.dart';
+import 'package:crdt_socket_sync/src/common/client/handshake_gate.dart';
 import 'package:crdt_socket_sync/src/common/client/incompatibility.dart';
 import 'package:crdt_socket_sync/src/common/client/status.dart';
 import 'package:crdt_socket_sync/src/common/client/sync_fault.dart';
@@ -31,6 +32,19 @@ abstract class CRDTSocketClient {
   /// The client plugins
   final List<ClientSyncPlugin> plugins;
 
+  /// The handshake of the current connection attempt.
+  ///
+  /// A transport drives it: [HandshakeGate.perform] around the opening frame,
+  /// [HandshakeGate.succeed] when the peer answers. The base class resets it
+  /// on its own when it gives up on the connection.
+  @protected
+  final HandshakeGate handshake = HandshakeGate();
+
+  final StreamController<ConnectionStatus> _connectionStatus =
+      StreamController<ConnectionStatus>.broadcast();
+
+  ConnectionStatus _connectionStatusValue = ConnectionStatus.disconnected;
+
   final DocumentCapabilities? _declaredCapabilities;
 
   /// What this build tells the server it can read.
@@ -49,7 +63,6 @@ abstract class CRDTSocketClient {
   ///
   /// Complete when they were passed at construction, incomplete when they come
   /// from the document; see [capabilities].
-  @protected
   SyncCapabilities? get statedCapabilities {
     final stated = capabilities;
     if (stated.isEmpty) {
@@ -72,20 +85,24 @@ abstract class CRDTSocketClient {
   /// is gone.
   Stream<SyncFault> get faults => _faults.stream;
 
-  /// Reports [fault] on [faults].
+  SyncFault? _lastFault;
+
+  /// The last fault, or `null` while there has been none.
   ///
-  /// Called by the sync machinery instead of throwing: the apply runs inside
-  /// the socket's read callback, where a throw reaches no `catch` and no
-  /// `onError` and ends up as an uncaught error in the zone.
+  /// [faults] replays nothing, so a listener attached after the fact reads
+  /// this instead. Like [incompatibility] it is never cleared: it says what
+  /// failed, not what is failing now.
+  SyncFault? get lastFault => _lastFault;
+
+  /// Reports [fault] on [faults] and latches it on [lastFault].
+  ///
+  /// {@macro sync_fault_not_thrown}
   void reportSyncFault(SyncFault fault) {
+    _lastFault = fault;
     if (!_faults.isClosed) {
       _faults.add(fault);
     }
   }
-
-  /// Ends [faults]. A client calls it from its own `dispose`.
-  @protected
-  void closeFaults() => _faults.close();
 
   SyncIncompatibility? _incompatibility;
 
@@ -116,7 +133,7 @@ abstract class CRDTSocketClient {
   void refuseBuild({required String code, required String reason}) {
     _incompatibility ??= SyncIncompatibility(code: code, message: reason);
 
-    abandonHandshake();
+    handshake.reset();
     // Set the terminal status before tearing the transport down: the teardown
     // would otherwise report a plain disconnect, and the status is sticky from
     // here on.
@@ -165,30 +182,36 @@ abstract class CRDTSocketClient {
     updateConnectionStatus(ConnectionStatus.error);
 
     if (message.code == Protocol.errorHandshakeFailed) {
-      abandonHandshake();
+      handshake.reset();
     }
   }
 
-  /// Frees whoever is waiting on the handshake that will never complete.
-  @protected
-  void abandonHandshake();
-
-  /// Moves the client to [status].
+  /// Moves the client to [status], and publishes it when it is a move.
   ///
-  /// [ConnectionStatus.unsupported] is terminal: once the build has been
-  /// refused, the teardown that follows (and any late frame) must not report
-  /// the client as merely disconnected.
+  /// The same status twice is dropped. [ConnectionStatus.unsupported] is
+  /// terminal: once the build has been refused, the teardown that follows
+  /// (and any late frame) cannot report the client as merely disconnected.
   @protected
   void updateConnectionStatus(ConnectionStatus status) {
     if (isUnsupported && !status.isUnsupported) {
       return;
     }
-    publishConnectionStatus(status);
+    if (status == _connectionStatusValue) {
+      return;
+    }
+
+    _connectionStatusValue = status;
+    if (!_connectionStatus.isClosed) {
+      _connectionStatus.add(status);
+    }
   }
 
-  /// Hands [status] to the listeners, with no rule of its own.
+  /// Ends [faults] and [connectionStatus]. Call it from `dispose`.
   @protected
-  void publishConnectionStatus(ConnectionStatus status);
+  void closeClientStreams() {
+    _faults.close();
+    _connectionStatus.close();
+  }
 
   /// The local CRDT document
   CRDTDocument get document;
@@ -203,11 +226,15 @@ abstract class CRDTSocketClient {
   /// If the client is not connected, [sessionId] is `null`.
   String? get sessionId;
 
-  /// Stream of connection status changes between client and server
-  Stream<ConnectionStatus> get connectionStatus;
+  /// Stream of connection status changes between client and server.
+  ///
+  /// Broadcast, and nothing is replayed: read [connectionStatusValue] for the
+  /// status a late listener missed.
+  Stream<ConnectionStatus> get connectionStatus => _connectionStatus.stream;
 
-  /// The current connection status
-  ConnectionStatus get connectionStatusValue;
+  /// The current connection status. [ConnectionStatus.disconnected] until the
+  /// first move.
+  ConnectionStatus get connectionStatusValue => _connectionStatusValue;
 
   /// Stream of incoming server messages
   Stream<Message> get messages;

@@ -10,7 +10,7 @@ import 'package:crdt_socket_sync/src/relay/client/seq_tracker.dart';
 import 'package:crdt_socket_sync/src/relay/common/common.dart';
 
 /// {@template relay_sync_manager}
-/// Manager for a relay client.
+/// Keeps a [CRDTDocument] and a relay client in step.
 ///
 /// It is responsible for:
 /// - enqueueing local [document] changes and pushing them to the relay
@@ -23,7 +23,7 @@ import 'package:crdt_socket_sync/src/relay/common/common.dart';
 class RelaySyncManager {
   /// {@macro relay_sync_manager}
   ///
-  /// Constructor
+  /// Subscribes to [CRDTDocument.localChanges] at once; [dispose] ends it.
   RelaySyncManager({
     required this.document,
     required this.client,
@@ -90,11 +90,9 @@ class RelaySyncManager {
   /// appends it and every peer discards it as known.
   ///
   /// A welcome this client cannot take in — a blob `Snapshot.fromBytes` or
-  /// `Change.fromBytes` refuses, or a state the document will not import — is
-  /// reported on `CRDTSocketClient.faults` and the join is abandoned. It is
-  /// reported rather than thrown because this runs inside the callback that
-  /// reads the socket, where a throw reaches no `catch` and no `onError` and
-  /// ends up as an uncaught error in the zone.
+  /// `Change.fromBytes` refuses, or a state the document will not import —
+  /// becomes a [SyncFault], and the join is abandoned.
+  /// {@macro sync_fault_not_thrown}
   ///
   /// {@template relay_import_fault}
   /// A relay checks the protocol version and nothing else, so it is this path,
@@ -175,6 +173,9 @@ class RelaySyncManager {
   ///
   /// [CRDTDocument.importChanges] de-duplicates, so re-delivered blobs are
   /// harmless.
+  ///
+  /// A blob this client cannot read becomes a [SyncFault].
+  /// {@macro sync_fault_not_thrown}
   ///
   /// {@macro relay_import_fault}
   void onChanges(RelayChangesMessage message) {

@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:convert';
 
 import 'package:crdt_socket_sync/src/common/common/common.dart';
 import 'package:crdt_socket_sync/src/common/common/utils.dart';
@@ -318,25 +317,6 @@ abstract class ClientSession {
         ),
       ),
     );
-  }
-
-  /// Best-effort read of the `documentId` field of a [data] frame that could
-  /// not be decoded.
-  ///
-  /// Returns `null` when the frame is not JSON or names no document — an
-  /// answer can still be sent, it just cannot say which document it is about.
-  @protected
-  String? documentIdOf(List<int> data) {
-    try {
-      final json = jsonDecode(utf8.decode(data));
-      if (json is Map<String, dynamic>) {
-        final id = json['documentId'];
-        return id is String ? id : null;
-      }
-    } catch (_) {
-      // Not JSON: no documentId to report.
-    }
-    return null;
   }
 
   /// Mark this session as subscribed to [documentId].

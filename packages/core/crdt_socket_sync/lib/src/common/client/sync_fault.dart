@@ -5,7 +5,13 @@
 /// this one piece of data could not be taken in. The connection stays up, and
 /// the client keeps going with what it already had.
 ///
-/// Reported on `CRDTSocketClient.faults`, never thrown, and never retried.
+/// {@template sync_fault_not_thrown}
+/// Reported on `CRDTSocketClient.faults`, never thrown: this runs inside the
+/// callback that reads the socket, where a throw reaches no `catch` and no
+/// `onError` and ends up as an uncaught error in the zone.
+/// {@endtemplate}
+///
+/// Nothing is retried.
 class SyncFault {
   /// Records that [reason] failed with [error].
   const SyncFault({

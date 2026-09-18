@@ -80,7 +80,7 @@ void main() {
 
       // A refusal is terminal: the teardown that follows it must not report
       // the client as merely disconnected.
-      client.moveTo(ConnectionStatus.disconnected);
+      client.setConnectionStatus(ConnectionStatus.disconnected);
       expect(client.connectionStatusValue, ConnectionStatus.unsupported);
     });
   });
@@ -104,6 +104,29 @@ void main() {
         isFalse,
       );
       expect(client.isUnsupported, isFalse);
+    });
+  });
+
+  group('CRDTSocketClient.lastFault', () {
+    SyncFault fault(String reason) =>
+        SyncFault(reason: reason, error: StateError(reason));
+
+    test('is null until something fails', () {
+      expect(_client().lastFault, isNull);
+    });
+
+    test('holds the fault for a listener that subscribed too late', () {
+      final client = _client()..reportSyncFault(fault('first'));
+
+      expect(client.lastFault?.reason, 'first');
+    });
+
+    test('keeps the latest one, and is never cleared', () {
+      final client = _client()
+        ..reportSyncFault(fault('first'))
+        ..reportSyncFault(fault('second'));
+
+      expect(client.lastFault?.reason, 'second');
     });
   });
 }

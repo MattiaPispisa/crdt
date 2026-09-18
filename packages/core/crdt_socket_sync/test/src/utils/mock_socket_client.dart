@@ -27,10 +27,6 @@ class MockCRDTSocketClient extends CRDTSocketClient {
 
   List<Message> get sentMessages => List.from(_sentMessages);
 
-  ConnectionStatus _connectionStatusValue = ConnectionStatus.disconnected;
-
-  final StreamController<ConnectionStatus> _connectionStatusController =
-      StreamController<ConnectionStatus>.broadcast();
   final StreamController<Message> _messagesController =
       StreamController<Message>.broadcast();
 
@@ -38,35 +34,19 @@ class MockCRDTSocketClient extends CRDTSocketClient {
   bool _shouldThrowOnSendMessage = false;
 
   @override
-  Stream<ConnectionStatus> get connectionStatus =>
-      _connectionStatusController.stream;
-
-  @override
-  ConnectionStatus get connectionStatusValue => _connectionStatusValue;
-
-  @override
   Stream<Message> get messages => _messagesController.stream;
-
-  @override
-  void abandonHandshake() {}
-
-  @override
-  void publishConnectionStatus(ConnectionStatus status) {
-    _connectionStatusValue = status;
-    _connectionStatusController.add(status);
-  }
 
   @override
   Future<bool> connect() async {
     _isConnected = true;
-    _connectionStatusController.add(ConnectionStatus.connected);
+    updateConnectionStatus(ConnectionStatus.connected);
     return true;
   }
 
   @override
   Future<void> disconnect() async {
     _isConnected = false;
-    _connectionStatusController.add(ConnectionStatus.disconnected);
+    updateConnectionStatus(ConnectionStatus.disconnected);
   }
 
   @override
@@ -97,7 +77,7 @@ class MockCRDTSocketClient extends CRDTSocketClient {
 
   @override
   void dispose() {
-    _connectionStatusController.close();
+    closeClientStreams();
     _messagesController.close();
   }
 
@@ -112,8 +92,6 @@ class MockCRDTSocketClient extends CRDTSocketClient {
 
   bool refuseProtocolMismatch(int serverVersion) =>
       refuseServerProtocolMismatch(serverVersion);
-
-  void moveTo(ConnectionStatus status) => updateConnectionStatus(status);
 
   // Test helper methods
   set setShouldThrowOnSendMessage(bool shouldThrow) {
@@ -134,8 +112,6 @@ class MockCRDTSocketClient extends CRDTSocketClient {
 
   bool get isConnected => _isConnected;
 
-  void setConnectionStatus(ConnectionStatus status) {
-    _connectionStatusValue = status;
-    _connectionStatusController.add(_connectionStatusValue);
-  }
+  void setConnectionStatus(ConnectionStatus status) =>
+      updateConnectionStatus(status);
 }

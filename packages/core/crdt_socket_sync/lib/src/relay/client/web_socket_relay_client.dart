@@ -116,10 +116,6 @@ class WebSocketRelayClient extends RelaySocketClient {
     Random? random,
     super.plugins,
   })  : _messageController = StreamController<Message>.broadcast(),
-        _connectionStatusController =
-            StreamController<ConnectionStatus>.broadcast()
-              ..add(ConnectionStatus.disconnected),
-        _connectionStatusValue = ConnectionStatus.disconnected,
         _pingInterval = pingInterval ?? Protocol.pingInterval,
         _pingTimeout = pingTimeout ?? Protocol.pingTimeout,
         _handshakeTimeout = handshakeTimeout ?? Protocol.handshakeTimeout,
@@ -130,7 +126,6 @@ class WebSocketRelayClient extends RelaySocketClient {
             reconnectMaxDelay ?? RelayProtocol.reconnectMaxDelay,
         _reconnectJitter = reconnectJitter ?? RelayProtocol.reconnectJitter,
         _random = random ?? Random(),
-        _handshakeGate = HandshakeGate(),
         _transportFactory = transportFactory ??
             (() => Transport.create(WebSocketChannelConnector(url))) {
     _syncManager = RelaySyncManager(document: document, client: this);
@@ -184,10 +179,6 @@ class WebSocketRelayClient extends RelaySocketClient {
   /// Incoming (transporter) messages controller
   final StreamController<Message> _messageController;
 
-  /// Connection status controller
-  final StreamController<ConnectionStatus> _connectionStatusController;
-  ConnectionStatus _connectionStatusValue;
-
   final Transport Function() _transportFactory;
 
   /// Base delay of the exponential reconnect backoff
@@ -239,18 +230,8 @@ class WebSocketRelayClient extends RelaySocketClient {
   /// gone).
   DateTime? _lastPongAt;
 
-  /// Coordinates the join lifecycle (completer, timeout race, reset).
-  final HandshakeGate _handshakeGate;
-
   /// Codec for messages
   late final MessageCodec<Message> _messageCodec;
-
-  @override
-  Stream<ConnectionStatus> get connectionStatus =>
-      _connectionStatusController.stream;
-
-  @override
-  ConnectionStatus get connectionStatusValue => _connectionStatusValue;
 
   @override
   Stream<Message> get messages => _messageController.stream;
@@ -270,7 +251,7 @@ class WebSocketRelayClient extends RelaySocketClient {
   /// If the join fails then the client will attempt to reconnect.
   @override
   Future<bool> connect() async {
-    if (_connectionStatusValue.isConnected) {
+    if (connectionStatusValue.isConnected) {
       return true;
     }
 
@@ -280,9 +261,9 @@ class WebSocketRelayClient extends RelaySocketClient {
       return false;
     }
 
-    if (_handshakeGate.inProgress) {
+    if (handshake.inProgress) {
       // already under connection
-      return _handshakeGate.pending!;
+      return handshake.pending!;
     }
 
     try {
@@ -297,7 +278,7 @@ class WebSocketRelayClient extends RelaySocketClient {
       );
 
       updateConnectionStatus(
-        _connectionStatusValue.isDisconnected
+        connectionStatusValue.isDisconnected
             ? ConnectionStatus.connecting
             : ConnectionStatus.reconnecting,
       );
@@ -362,7 +343,7 @@ class WebSocketRelayClient extends RelaySocketClient {
     Message message, {
     bool attemptReconnect = true,
   }) async {
-    if (_connectionStatusValue.isDisconnected || _transport == null) {
+    if (connectionStatusValue.isDisconnected || _transport == null) {
       throw StateError('Client not connected');
     }
 
@@ -371,7 +352,7 @@ class WebSocketRelayClient extends RelaySocketClient {
     final isHelloOrPong = message.type == RelayMessageType.relayHello ||
         message.type == MessageType.pong;
 
-    if (!isHelloOrPong && !await _handshakeGate.completed) {
+    if (!isHelloOrPong && !await handshake.completed) {
       // If the join is not completed, wait or skip the message
       throw StateError('Handshake not completed');
     }
@@ -398,7 +379,7 @@ class WebSocketRelayClient extends RelaySocketClient {
     try {
       await (_outboundQueue?.add(data) ?? _transport!.send(data));
 
-      if (await _handshakeGate.completed) {
+      if (await handshake.completed) {
         updateConnectionStatus(ConnectionStatus.connected);
       }
     } catch (e) {
@@ -473,8 +454,8 @@ class WebSocketRelayClient extends RelaySocketClient {
     dynamic error, {
     bool attemptReconnect = true,
   }) {
-    if (_handshakeGate.isActive) {
-      _handshakeGate.reset();
+    if (handshake.isActive) {
+      handshake.reset();
     }
 
     _syncManager.onConnectionLost();
@@ -533,7 +514,7 @@ class WebSocketRelayClient extends RelaySocketClient {
       _isReconnecting = false;
     }
 
-    if (!_connectionStatusValue.isConnected) {
+    if (!connectionStatusValue.isConnected) {
       unawaited(_attemptReconnect());
     }
   }
@@ -564,7 +545,7 @@ class WebSocketRelayClient extends RelaySocketClient {
   /// may still appear to succeed. Route this through [_handleTransportError]
   /// so the existing reconnect machinery is reused.
   Future<void> _sendPing() async {
-    if (_connectionStatusValue.isDisconnected) {
+    if (connectionStatusValue.isDisconnected) {
       return;
     }
 
@@ -599,7 +580,7 @@ class WebSocketRelayClient extends RelaySocketClient {
       author: author,
     );
 
-    return _handshakeGate.perform(
+    return handshake.perform(
       // do not attempt to reconnect on join error
       // because the reconnect will handle it.
       send: () => sendMessage(hello, attemptReconnect: false),
@@ -655,7 +636,7 @@ class WebSocketRelayClient extends RelaySocketClient {
     _sessionId = message.sessionId;
 
     // Complete the join first so that the sync manager can send messages
-    _handshakeGate.succeed();
+    handshake.succeed();
 
     await _syncManager.onWelcome(message);
   }
@@ -670,23 +651,6 @@ class WebSocketRelayClient extends RelaySocketClient {
   }
 
   @override
-  void abandonHandshake() => _handshakeGate.reset();
-
-  @override
-  void publishConnectionStatus(ConnectionStatus status) {
-    if (status == _connectionStatusValue) {
-      return;
-    }
-
-    _connectionStatusValue = status;
-    if (_connectionStatusController.isClosed) {
-      return;
-    }
-
-    _connectionStatusController.add(status);
-  }
-
-  @override
   void dispose() {
     disconnect();
 
@@ -694,9 +658,8 @@ class WebSocketRelayClient extends RelaySocketClient {
       plugin.dispose();
     }
 
-    closeFaults();
+    closeClientStreams();
     _messageController.close();
-    _connectionStatusController.close();
     // Not awaited: `dispose` is synchronous, and the flag inside is set before
     // the first await, so nothing more reaches this client either way.
     unawaited(_syncManager.dispose());
