@@ -10,7 +10,7 @@ sealed class CapabilityMismatch {
 
 /// An operation kind the other peer holds and this build cannot decode.
 final class MissingOperationKind extends CapabilityMismatch {
-  /// Constructor
+  /// Records that [handlerType] holds an operation of [kind].
   const MissingOperationKind({
     required String handlerType,
     required this.kind,
@@ -34,12 +34,11 @@ final class MissingOperationKind extends CapabilityMismatch {
 
 /// A handler type the other peer holds and this build says nothing about.
 ///
-/// Only ever a mismatch against a [SyncCapabilities.complete] description: one
-/// that names every type a build reads, so a type left out is one it cannot
-/// read at all. It is reported once for the type rather than once per kind —
-/// the reason is not a missing kind, it is a missing handler.
+/// Only ever a mismatch against a [SyncCapabilities.complete] description,
+/// where a type left out is a type the build cannot read. Reported once for
+/// the type, not once per kind.
 final class UnknownHandlerType extends CapabilityMismatch {
-  /// Constructor
+  /// Records that [handlerType] is one this build does not name.
   const UnknownHandlerType({required String handlerType}) : super(handlerType);
 
   @override
@@ -87,7 +86,7 @@ sealed class SnapshotBlobOutOfRange extends CapabilityMismatch {
 
 /// A blob written by a build newer than this one; only a newer build reads it.
 final class SnapshotBlobTooNew extends SnapshotBlobOutOfRange {
-  /// Constructor
+  /// Records that [handlerType] holds a blob newer than [reads].
   const SnapshotBlobTooNew({
     required super.handlerType,
     required super.reads,
@@ -101,10 +100,9 @@ final class SnapshotBlobTooNew extends SnapshotBlobOutOfRange {
 
 /// A blob in a layout this build no longer reads.
 ///
-/// The handler raised [Handler.minReadableSnapshotBlobVersion] past it, so the
-/// migration that used to carry that layout forward is gone.
+/// The handler's [Handler.minReadableSnapshotBlobVersion] sits above it.
 final class SnapshotBlobTooOld extends SnapshotBlobOutOfRange {
-  /// Constructor
+  /// Records that [handlerType] holds a blob older than [reads].
   const SnapshotBlobTooOld({
     required super.handlerType,
     required super.reads,
@@ -157,11 +155,9 @@ class SyncCapabilities {
 
   /// Whether this claims nothing at all.
   ///
-  /// **An empty description is not a claim.** A build that could read nothing
-  /// at all would have no reason to sync, so an empty map never means "this
-  /// peer reads nothing" — it means the peer had nothing to say yet, usually
-  /// because its handlers open after it connects. Sending it as a claim, or
-  /// reading it as one, refuses a working client for good.
+  /// It is not a claim that the peer reads nothing: it means the peer had
+  /// nothing to say yet, usually because its handlers open after it connects.
+  /// So it never refuses anyone.
   bool get isEmpty => capabilities.isEmpty;
 
   /// The reasons this build cannot handle what [requirements] ask for.
@@ -170,11 +166,6 @@ class SyncCapabilities {
   /// snapshot blob written with another layout, is a refusal. A type it does
   /// **not** name is a refusal only when this description is [complete] — see
   /// that field for why silence cannot be read as "cannot" otherwise.
-  ///
-  /// The two sides are different types on purpose. Capabilities are what a
-  /// peer can read and requirements are what data asks for; neither contains
-  /// the other, and taking them in the wrong order would quietly answer the
-  /// opposite question.
   ///
   /// An empty result means everything [requirements] ask for is readable here.
   List<CapabilityMismatch> missingFrom(DocumentRequirements requirements) {

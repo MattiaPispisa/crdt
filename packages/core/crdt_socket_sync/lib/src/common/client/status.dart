@@ -15,7 +15,7 @@ enum ConnectionStatus {
   /// An error occurred in the connection
   error,
 
-  /// The server refused this client build
+  /// The server refused this client build; terminal, the client never leaves it
   unsupported;
 
   /// Whether the client is connected to the server

@@ -162,7 +162,11 @@ void main() async {
   final document = CRDTDocument(peerId: PeerId.generate());
 
   // Register handlers for different data types
-  final listHandler = CRDTListHandler<String>(document, 'shared_list');
+  final listHandler = CRDTListHandler<String>(
+    document,
+    'shared_list',
+    handlerType: 'shared-list',
+  );
 
   // Create the client
   final client = WebSocketClient(
@@ -988,9 +992,7 @@ it. What each side can state is a record per handler type, keyed by
 `kinds` are what the peer can decode; `blob` is the range of snapshot layouts it
 reads — `min == max` for a build that reads only what it writes, wider for one
 that still reads an older layout and migrates it. A blob is refused whole on
-read, so a disagreement there is as terminal as a missing kind — and it used to surface as a bare `FormatException`
-at the first read of the handler, far from the sync layer that accepted the
-snapshot.
+read, so a disagreement there is as terminal as a missing kind.
 
 The two sides answer **different questions**, and that is what makes the check
 work:
@@ -1013,14 +1015,14 @@ differently.
 
 **By default it is derived** from the document
 (`describeBuildCapabilities()`), which knows the handlers already open and the
-factories already registered. An app usually opens a handler *after* it
+kinds already registered. An app usually opens a handler *after* it
 connects, so such a description is **incomplete** by construction and is sent
 as such: a type it does not name is passed over.
 
 ```dart
-CRDTListHandler<Todo>(document, 'todos');
-await client.connect();                    // names that one type
-CRDTMapHandler<String>(document, 'meta');  // opened later: still fine
+CRDTListHandler<Todo>(document, 'todos', handlerType: 'todo-list');
+await client.connect();                 // names that one kind
+CRDTMapHandler<String>(document, 'meta', handlerType: 'meta'); // later: fine
 ```
 
 **State it by hand** and it is sent as **complete** — it names every type the
@@ -1050,17 +1052,16 @@ required to name it: its default would carry the type argument
 So the compiler asks, and there is nothing left to refuse at connect time:
 
 ```dart
-CRDTListHandler<Todo>(document, 'todos', handlerType: 'todos');
+CRDTListHandler<Todo>(document, 'todos', handlerType: 'todo-list');
 ```
 
 The tag is all the constructor asks for: the handler turns it into a
 `HandlerSpec`, so the document also learns how to **rebuild** that kind. A peer
 that has to know the kind before it opens one — a store-and-forward server —
-declares it instead:
+declares the spec instead:
 
 ```dart
-document.register(
-    (doc, id) => CRDTListHandler<Todo>(doc, id, handlerType: 'todos'));
+document.register(CRDTListHandler.spec<Todo>('todo-list'));
 ```
 
 #### Refusals are permanent
@@ -1115,9 +1116,9 @@ the handshake check is a safety net rather than the only defence.
   `crdt_lf` already gives — `UnknownOperationKindException` on read, which fails
   fast instead of diverging in silence, while the change itself is kept in the
   document and forwarded intact to peers that do understand it.
-- **A document restored from a snapshot older than `crdt_lf` 4.3.0.** The
+- **A document restored from a snapshot older than `crdt_lf` 5.0.0.** The
   record that says what a document holds is written by every snapshot from
-  4.3.0 on. An older snapshot carries none, so a document that imports one with
+  5.0.0 on. An older snapshot carries none, so a document that imports one with
   `pruneHistory: true` loses the changes *and* has nothing to read the
   requirements back from: it reports that it needs nothing, and every client is
   let through. It answers in full again after it takes its own snapshot.
@@ -1182,6 +1183,42 @@ For a full **relay mode** application (relay client from this library + a
 Cloudflare Worker relay server), see the [greyhound_markdown](#apps) app.
 
 <img width="500" alt="sync_server_multi_client" src="https://raw.githubusercontent.com/MattiaPispisa/crdt/main/assets/demos/sync_server_multi_client.gif">
+
+## Migrations
+
+### Migrating from 0.8.x to 0.9.0
+
+**A 0.8.x peer still connects.** Both handshake fields this release adds are
+optional on read: a frame without them is read as protocol version 1 and as a
+peer that states no capabilities, which is what a 0.8.x peer meant. So the two
+sides can be upgraded one at a time.
+
+What changes is the Dart API, and the `crdt_lf` floor: this release needs
+`crdt_lf: ^5.0.0`, so a generic handler names its kind out loud — see the
+[crdt_lf migration guide](https://github.com/MattiaPispisa/crdt/tree/main/packages/core/crdt_lf#migrating-from-4x-to-50).
+
+```dart
+// 0.8.x
+final list = CRDTListHandler<Todo>(document, 'todos');
+
+// 0.9.0
+final list = CRDTListHandler<Todo>(document, 'todos', handlerType: 'todo-list');
+```
+
+That tag is what the handshake compares, so pick it once and keep it: two peers
+spelling the same kind differently now refuse each other at connect time
+instead of diverging quietly.
+
+Renamed or removed symbols:
+
+| 0.8.x | 0.9.0 | Note |
+|---|---|---|
+| `Protocol.version` (`'1.0.0'`) | `Protocol.protocolVersion` (`1`) | An `int`, so a peer can tell an older version from a newer one. `Protocol.firstProtocolVersion` is what a frame without the field is read as. |
+| `ConnectionStatus` with four values | adds `unsupported` | An exhaustive `switch` over it needs another case. It is terminal: see [Refusals are permanent](#refusals-are-permanent). |
+| a `CRDTSocketClient` subclass | implements `abandonHandshake` and `publishConnectionStatus` | The first frees whoever waits on a handshake that will never complete; the second hands a status to the listeners with no rule of its own, so the base class can make `unsupported` sticky. |
+
+Nothing else moves: `WebSocketClient`, `WebSocketRelayClient`, the server
+registries, the plugins and the wire codecs keep their 0.8.x signatures.
 
 ## Apps
 

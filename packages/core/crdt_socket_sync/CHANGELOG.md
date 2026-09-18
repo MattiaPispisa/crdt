@@ -1,22 +1,30 @@
 ## [0.9.0](https://github.com/MattiaPispisa/crdt/tree/crdt_socket_sync-v0.9.0/packages/core/crdt_socket_sync)
 
-**Date:** 2026-09-10
+**Date:** 2026-09-18
 
 [compare to previous release](https://github.com/MattiaPispisa/crdt/compare/crdt_socket_sync-v0.8.0...crdt_socket_sync-v0.9.0)
+
+### Breaking
+
+Needs `crdt_lf: ^5.0.0`. A 0.8.0 peer still connects: both new handshake fields are optional on
+read. See [Migrating from 0.8.x to 0.9.0](https://github.com/MattiaPispisa/crdt/tree/main/packages/core/crdt_socket_sync#migrating-from-08x-to-090).
+
+- `Protocol.version` (the string `'1.0.0'`) is replaced by `Protocol.protocolVersion`, an `int`.
+- `ConnectionStatus` has a new value, `unsupported`, so an exhaustive `switch` needs another case.
+- A `CRDTSocketClient` subclass implements two more members: `abandonHandshake` and
+  `publishConnectionStatus`.
 
 ### Added
 
 - **An incompatible client is refused at the handshake instead of failing later.** Both peers state
-  the protocol version they speak and what their build can read (`DocumentCapabilities`), and the
-  server compares that with what the document's data asks for (`DocumentRequirements`), answering `UNSUPPORTED_PROTOCOL_VERSION` or `UNSUPPORTED_CLIENT` and closing. The client
-  latches the refusal in the new terminal `ConnectionStatus.unsupported` and exposes it on
-  `CRDTSocketClient.incompatibility`. A type a peer names is checked in full; a type it leaves out
-  refuses it only when the description was written by hand, since one derived from a document is
-  incomplete by construction. A relay checks the version only. Both handshake fields are optional,
-  so 0.8.0 peers still connect. See the README for how to declare a build.
+  the protocol version they speak, and the client states what its build can read
+  (`DocumentCapabilities`). The server compares that with what the document's data asks for
+  (`DocumentRequirements`), answers `UNSUPPORTED_PROTOCOL_VERSION` or `UNSUPPORTED_CLIENT`, and
+  closes. Snapshot blob layouts are compared as a range per handler type, so a build that reads an
+  older layout is not refused; `SnapshotBlobTooNew` and `SnapshotBlobTooOld` say which way it failed.
+  The client latches the refusal in the terminal `ConnectionStatus.unsupported` and exposes it on
+  `CRDTSocketClient.incompatibility`. A relay checks the version only.
   [142](https://github.com/MattiaPispisa/crdt/issues/142)
-  **Breaking:** `ConnectionStatus` has a new value, `Protocol.version` is gone, and
-  `CRDTSocketClient` subclasses now implement `abandonHandshake` and `publishConnectionStatus`.
 
 ### Changed
 
@@ -27,17 +35,6 @@
 
 - **A frame the server cannot read is answered with `INVALID_MESSAGE`.** One that threw on the way
   in used to be logged and nothing more, leaving the client waiting for a reply that never came.
-
-- **A generic handler that would sync a minified type tag is caught at `connect()`.** Its default
-  `handlerType` carries the type argument, so it changes under dart2js and the same build routes
-  changes in debug and stops in a Flutter web release. Debug builds only, and it names the handlers
-  to fix. Pass a constant `handlerType` to the constructor.
-
-- **Snapshot blob layouts are negotiated as a range, not a set.** A peer states
-  `min..max` per handler type, the way a Kafka broker states a version range per API, so the check
-  is two comparisons and a newer build can read an older blob instead of refusing the peer that
-  wrote it. `SnapshotBlobVersionMismatch` is replaced by `SnapshotBlobTooNew` and
-  `SnapshotBlobTooOld`, which call for different fixes.
 
 ## [0.8.0](https://github.com/MattiaPispisa/crdt/tree/crdt_socket_sync-v0.8.0/packages/core/crdt_socket_sync)
 

@@ -5,11 +5,9 @@
 /// this one piece of data could not be taken in. The connection stays up, and
 /// the client keeps going with what it already had.
 ///
-/// Reported instead of thrown. The apply runs inside the callback that reads
-/// the socket, and a throw there reaches no `catch` and no `onError` — it goes
-/// straight to the zone, which on Flutter is a crash rather than a message.
+/// Reported on `CRDTSocketClient.faults`, never thrown, and never retried.
 class SyncFault {
-  /// Constructor
+  /// Records that [reason] failed with [error].
   const SyncFault({
     required this.reason,
     required this.error,

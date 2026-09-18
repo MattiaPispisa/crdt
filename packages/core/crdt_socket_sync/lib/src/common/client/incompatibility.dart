@@ -7,7 +7,7 @@ import 'package:crdt_socket_sync/src/common/common/common.dart';
 /// an older document) can. A client that holds one stops trying and stays in
 /// [ConnectionStatus.unsupported].
 class SyncIncompatibility {
-  /// Constructor
+  /// Records a refusal the server sent as [code], explained by [message].
   const SyncIncompatibility({
     required this.code,
     required this.message,
@@ -28,9 +28,8 @@ class SyncIncompatibility {
 
   /// Whether [code] is a refusal a client cannot recover from.
   ///
-  /// Tells a refusal apart from the recoverable error codes that travel on the
-  /// same `ErrorMessage`. The set itself lives on [Protocol.terminalErrors], so
-  /// a new terminal code is added in one place.
+  /// The recoverable codes travel on the same `ErrorMessage`; the terminal ones
+  /// are listed in [Protocol.terminalErrors].
   static bool isTerminalCode(String code) =>
       Protocol.terminalErrors.contains(code);
 

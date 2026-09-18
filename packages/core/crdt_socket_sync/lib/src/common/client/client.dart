@@ -10,11 +10,14 @@ import 'package:meta/meta.dart';
 
 /// Interface for the CRDT client
 abstract class CRDTSocketClient {
-  /// Constructor
+  /// Creates a client, with [plugins] attached to it.
   ///
-  /// [plugins] is the list of plugins to use for the client.
+  /// [plugins] extend what the client does with the frames it exchanges.
   ///
-  /// The plugins are used to extend the client functionality.
+  /// [capabilities] states what this build can read. One passed here is sent
+  /// as **complete**, so the server also refuses a kind left out. Leave it out
+  /// and it is derived from the document with
+  /// [CRDTDocument.describeBuildCapabilities], sent as incomplete.
   CRDTSocketClient({
     List<ClientSyncPlugin>? plugins,
     DocumentCapabilities? capabilities,
@@ -34,25 +37,11 @@ abstract class CRDTSocketClient {
   ///
   /// Defaults to [CRDTDocument.describeBuildCapabilities], sent as
   /// **incomplete**: an app usually opens a handler after connecting, so a kind
-  /// it does not name is passed over rather than refused.
+  /// it does not name is passed over rather than refused. One passed at
+  /// construction is sent as complete, and a kind left out refuses the client.
   ///
-  /// One passed at construction is sent as complete, and the server also
-  /// refuses on a kind left out:
-  ///
-  /// ```dart
-  /// WebSocketClient(
-  ///   document: document,
-  ///   capabilities: DocumentCapabilities({
-  ///     'todo-list': const HandlerFormats(
-  ///       operationKinds: {0, 1, 2},
-  ///       blobVersions: BlobVersionRange.single(1),
-  ///     ),
-  ///   }),
-  /// );
-  /// ```
-  ///
-  /// Either way, a kind that **is** named is checked in full: a missing kind,
-  /// or a snapshot blob of another layout, refuses the client.
+  /// Either way, a kind that **is** named is checked in full: a missing
+  /// operation kind, or a snapshot blob of another layout, refuses the client.
   DocumentCapabilities get capabilities =>
       _declaredCapabilities ?? document.describeBuildCapabilities();
 
