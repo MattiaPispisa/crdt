@@ -47,8 +47,9 @@ class DocumentExampleState extends ExampleDocument<CRDTMovableListRefHandler> {
 
   // The kind is shared with the demo server, so it comes from the one place
   // both sides read.
-  static final _doneSpec =
-      CRDTRegisterHandler.spec<bool>(ExampleHandlerTypes.done);
+  static final _doneSpec = CRDTRegisterHandler.spec<bool>(
+    ExampleHandlerTypes.done,
+  );
 
   @override
   CRDTMovableListRefHandler createHandler(BaseCRDTDocument doc) {

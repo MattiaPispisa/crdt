@@ -2,7 +2,6 @@ import 'dart:async';
 import 'dart:math';
 
 import 'package:crdt_lf/crdt_lf.dart';
-import 'package:crdt_socket_sync/src/common/client/handshake_gate.dart';
 import 'package:crdt_socket_sync/src/common/client/status.dart';
 import 'package:crdt_socket_sync/src/common/client/web_socket/'
     'channel_connector.dart';
@@ -446,7 +445,7 @@ class WebSocketRelayClient extends RelaySocketClient {
 
         throw StateError(
           '[WebSocketRelayClient] received a message'
-          '${type != null ? ' of type $type' : ''}'
+          '${' of type $type'}'
           ' that cannot be decoded.'
           ' Have you added the plugin to the client?'
           '\nFrame: ${frame.join(', ')}',
@@ -606,8 +605,7 @@ class WebSocketRelayClient extends RelaySocketClient {
     // document whatever the field says. The server may not be able to name it
     // — it answers a frame it could not read — and dropping the answer would
     // leave the client waiting for it.
-    if (message is! ErrorMessage &&
-        message.documentId != document.documentId) {
+    if (message is! ErrorMessage && message.documentId != document.documentId) {
       return;
     }
 

@@ -52,15 +52,6 @@ class MockRelaySocketClient extends RelaySocketClient {
   Stream<Message> get messages => _messagesController.stream;
 
   @override
-  void abandonHandshake() {}
-
-  @override
-  void publishConnectionStatus(ConnectionStatus status) {
-    _connectionStatusValue = status;
-    _connectionStatusController.add(status);
-  }
-
-  @override
   Future<bool> connect() async {
     setConnectionStatus(ConnectionStatus.connected);
     return true;

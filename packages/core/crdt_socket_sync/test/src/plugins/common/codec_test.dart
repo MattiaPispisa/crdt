@@ -34,8 +34,9 @@ class _MarkedCodec implements MessageCodec<Message> {
   static const int marker = 0xAA;
 
   @override
-  List<int>? encode(Message message) =>
-      message is _PluginMessage ? [marker, ...utf8.encode(message.documentId)] : null;
+  List<int>? encode(Message message) => message is _PluginMessage
+      ? [marker, ...utf8.encode(message.documentId)]
+      : null;
 
   @override
   Message? decode(List<int> data) => data.isNotEmpty && data.first == marker
@@ -81,7 +82,8 @@ void main() {
 
     test('reads back what either side wrote', () {
       final plugin = codec().encode(const _PluginMessage(documentId: 'doc'))!;
-      final core = codec().encode(Message.ping(documentId: 'doc', timestamp: 0))!;
+      final core =
+          codec().encode(Message.ping(documentId: 'doc', timestamp: 0))!;
 
       expect(codec().decode(plugin), isA<_PluginMessage>());
       expect(codec().decode(core), isA<PingMessage>());

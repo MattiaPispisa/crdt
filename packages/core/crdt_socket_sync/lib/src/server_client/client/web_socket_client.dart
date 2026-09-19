@@ -2,7 +2,6 @@ import 'dart:async';
 
 import 'package:crdt_lf/crdt_lf.dart';
 import 'package:crdt_socket_sync/src/common/client/client.dart';
-import 'package:crdt_socket_sync/src/common/client/handshake_gate.dart';
 import 'package:crdt_socket_sync/src/common/client/status.dart';
 import 'package:crdt_socket_sync/src/common/client/web_socket/channel_connector.dart';
 import 'package:crdt_socket_sync/src/common/common/common.dart';
@@ -358,7 +357,7 @@ class WebSocketClient extends CRDTSocketClient {
 
         throw StateError(
           '[WebSocketClient] received a message'
-          '${type != null ? ' of type $type' : ''}'
+          '${' of type $type'}'
           ' that cannot be decoded.'
           ' Have you added the plugin to the client?'
           '\nFrame: ${frame.join(', ')}',
@@ -508,8 +507,7 @@ class WebSocketClient extends CRDTSocketClient {
     // document whatever the field says. The server may not be able to name it
     // — it answers a frame it could not read — and dropping the answer would
     // leave the client waiting for it.
-    if (message is! ErrorMessage &&
-        message.documentId != document.documentId) {
+    if (message is! ErrorMessage && message.documentId != document.documentId) {
       return;
     }
 
