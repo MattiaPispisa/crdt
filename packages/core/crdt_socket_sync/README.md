@@ -77,8 +77,6 @@ CRDT Socket Sync provides a robust, real-time synchronization system that allows
 - 🚰 **Backpressure**: Bounded per-connection send queue drops peers that cannot keep up (they re-sync on reconnect)
 - 🗜️ **History Pruning**: Server takes a snapshot and prunes confirmed history once every client aligns on a common frontier
 - 🤝 **Version & Capability Handshake**: A client whose build cannot read what the document holds is refused at connect time, not on the first broken read ([details](#version--capability-negotiation))
-- 🩹 **Faults**: Data the client received but could not take in is reported on a stream instead of crashing the zone ([details](#faults-data-that-did-not-make-it-in))
-- 🎯 **Type Safety**: Full Dart type safety with generic document handlers
 - 📊 **Event Monitoring**: Comprehensive event streams for connection and synchronization monitoring
 - 🔌 **Plugins**: Extendable plugin system for custom functionality
 - 📮 **Relay Mode**: An alternative sync model where the server is a CRDT-agnostic relay — it persists and rebroadcasts opaque change blobs while merging happens entirely on the clients ([details](#relay-mode))
