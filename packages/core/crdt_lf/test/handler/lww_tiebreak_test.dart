@@ -54,8 +54,16 @@ void main() {
     test('or_map keeps the value of the higher peer, in both orders', () {
       final a = _doc(_peerA);
       final b = _doc(_peerB);
-      final mapA = CRDTORMapHandler<String, String>(a, 'm')..put('k', 'from A');
-      final mapB = CRDTORMapHandler<String, String>(b, 'm')..put('k', 'from B');
+      final mapA = CRDTORMapHandler<String, String>(
+        a,
+        'm',
+        handlerType: 'CRDTORMapHandler<String, String>',
+      )..put('k', 'from A');
+      final mapB = CRDTORMapHandler<String, String>(
+        b,
+        'm',
+        handlerType: 'CRDTORMapHandler<String, String>',
+      )..put('k', 'from B');
 
       _expectTie(mapA.operations().single, mapB.operations().single);
 
@@ -69,8 +77,16 @@ void main() {
     test('or_set keeps two tags, so one removal does not take both', () {
       final a = _doc(_peerA);
       final b = _doc(_peerB);
-      final setA = CRDTORSetHandler<String>(a, 's')..add('x');
-      final setB = CRDTORSetHandler<String>(b, 's')..add('x');
+      final setA = CRDTORSetHandler<String>(
+        a,
+        's',
+        handlerType: 'CRDTORSetHandler<String>',
+      )..add('x');
+      final setB = CRDTORSetHandler<String>(
+        b,
+        's',
+        handlerType: 'CRDTORSetHandler<String>',
+      )..add('x');
 
       _expectTie(setA.operations().single, setB.operations().single);
 
@@ -138,7 +154,11 @@ void main() {
 
       test('fugue list', () {
         expectSameWinner<CRDTFugueListHandler<String>>(
-          create: (doc) => CRDTFugueListHandler<String>(doc, 'h'),
+          create: (doc) => CRDTFugueListHandler<String>(
+            doc,
+            'h',
+            handlerType: 'CRDTFugueListHandler<String>',
+          ),
           seed: (handler) => handler.insert(0, 'x'),
           update: (handler, value) => handler.update(0, value),
           read: (handler) => handler.value,
@@ -148,7 +168,11 @@ void main() {
 
       test('fugue movable list', () {
         expectSameWinner<CRDTFugueMovableListHandler<String>>(
-          create: (doc) => CRDTFugueMovableListHandler<String>(doc, 'h'),
+          create: (doc) => CRDTFugueMovableListHandler<String>(
+            doc,
+            'h',
+            handlerType: 'CRDTFugueMovableListHandler<String>',
+          ),
           seed: (handler) => handler.insert(0, 'x'),
           update: (handler, value) => handler.update(0, value),
           read: (handler) => handler.value,
@@ -160,11 +184,19 @@ void main() {
     test('a movable list move converges instead of going by arrival', () {
       final a = _doc(_peerA);
       final b = _doc(_peerB);
-      final listA = CRDTFugueMovableListHandler<String>(a, 'l')
+      final listA = CRDTFugueMovableListHandler<String>(
+        a,
+        'l',
+        handlerType: 'CRDTFugueMovableListHandler<String>',
+      )
         ..insert(0, 'x')
         ..insert(1, 'y')
         ..insert(2, 'z');
-      final listB = CRDTFugueMovableListHandler<String>(b, 'l');
+      final listB = CRDTFugueMovableListHandler<String>(
+        b,
+        'l',
+        handlerType: 'CRDTFugueMovableListHandler<String>',
+      );
       b.importChanges(a.exportChanges());
       expect(listB.value, equals(['x', 'y', 'z']));
 

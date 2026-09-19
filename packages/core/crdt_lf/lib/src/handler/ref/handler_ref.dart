@@ -2,18 +2,6 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:crdt_lf/crdt_lf.dart';
-import 'package:crdt_lf/src/handler/handler_type.dart';
-
-/// A factory that instantiates a [Handler] of a specific runtime type for a
-/// given [BaseCRDTDocument] and handler id.
-///
-/// Registered on the document and used to rebuild nested handlers on a peer
-/// that only received the [Change]s/[Snapshot], without prior knowledge of the
-/// document structure.
-typedef HandlerFactory = Handler<dynamic> Function(
-  BaseCRDTDocument doc,
-  String id,
-);
 
 /// A serializable reference to another [Handler].
 ///
@@ -22,7 +10,7 @@ typedef HandlerFactory = Handler<dynamic> Function(
 /// document registry keyed by its [id], and a parent points to a child by id.
 ///
 /// The [type] is the child handler's [Handler.handlerType], which is the key
-/// used to look up a [HandlerFactory] when reconstructing the tree on a remote
+/// used to look up a [HandlerSpec] when reconstructing the tree on a remote
 /// peer.
 class HandlerRef {
   /// Creates a reference to the handler with the given [id] and [type].
@@ -35,9 +23,7 @@ class HandlerRef {
   /// The referenced handler's unique id.
   final String id;
 
-  /// The referenced handler's type tag (factory key).
-  ///
-  /// See [Handler.handlerType].
+  /// The kind of the referenced handler; see [Handler.handlerType].
   final String type;
 
   @override
@@ -98,24 +84,6 @@ abstract class ContainerHandler {
   /// resolution path; a reference whose id is already in [visiting] is a cycle
   /// and resolves to `null` instead of recursing forever.
   Object? toNested(Set<String> visiting);
-}
-
-/// Convenience registration of the built-in factories needed to reconstruct
-/// nested documents: the three container handlers plus the non-generic leaf
-/// handlers ([CRDTTextHandler], [CRDTFugueTextHandler]).
-///
-/// Generic leaf handlers (e.g. `CRDTMapHandler<num>`) must be registered
-/// explicitly with their concrete type string, since the type carried in a
-/// [HandlerRef] includes the generic arguments.
-extension RegisterDefaultFactories on BaseCRDTDocument {
-  /// Registers the built-in container and non-generic leaf factories.
-  void registerDefaultFactories() {
-    registerFactory(kMapRefHandlerType, CRDTMapRefHandler.new);
-    registerFactory(kListRefHandlerType, CRDTListRefHandler.new);
-    registerFactory(kMovableListRefHandlerType, CRDTMovableListRefHandler.new);
-    registerFactory(kTextHandlerType, CRDTTextHandler.new);
-    registerFactory(kFugueTextHandlerType, CRDTFugueTextHandler.new);
-  }
 }
 
 /// Casts an already-resolved [reference] to the handler type [T], returning

@@ -53,10 +53,18 @@ void main() {
         ..insert(0, 'ab')
         ..update(0, 'A')
         ..delete(1, 1);
-      CRDTORSetHandler<String>(doc, 'oset')
+      CRDTORSetHandler<String>(
+        doc,
+        'oset',
+        handlerType: 'CRDTORSetHandler<String>',
+      )
         ..add('x')
         ..remove('x');
-      CRDTFugueMovableListHandler<String>(doc, 'movable')
+      CRDTFugueMovableListHandler<String>(
+        doc,
+        'movable',
+        handlerType: 'CRDTFugueMovableListHandler<String>',
+      )
         ..insert(0, 'a')
         ..insert(1, 'b')
         ..move(1, 0)
@@ -136,7 +144,11 @@ void main() {
 
     test('CRDTListHandler operation bytes roundtrip exercises toPayload', () {
       final doc = CRDTDocument(peerId: PeerId.generate());
-      final list = CRDTListHandler<String>(doc, 'list')
+      final list = CRDTListHandler<String>(
+        doc,
+        'list',
+        handlerType: 'CRDTListHandler<String>',
+      )
         ..insert(0, 'a')
         ..insert(1, 'b')
         ..update(0, 'A')
@@ -155,7 +167,11 @@ void main() {
 
     test('CRDTMapHandler operation bytes roundtrip exercises toPayload', () {
       final doc = CRDTDocument(peerId: PeerId.generate());
-      final map = CRDTMapHandler<String>(doc, 'map')
+      final map = CRDTMapHandler<String>(
+        doc,
+        'map',
+        handlerType: 'CRDTMapHandler<String>',
+      )
         ..set('k1', 'v1')
         ..set('k2', 'v2')
         ..update('k1', 'V1')
@@ -174,7 +190,11 @@ void main() {
 
     test('CRDTORSetHandler operation bytes roundtrip exercises toPayload', () {
       final doc = CRDTDocument(peerId: PeerId.generate());
-      final set = CRDTORSetHandler<String>(doc, 'oset')
+      final set = CRDTORSetHandler<String>(
+        doc,
+        'oset',
+        handlerType: 'CRDTORSetHandler<String>',
+      )
         ..add('x')
         ..add('y')
         ..remove('x');
@@ -192,7 +212,11 @@ void main() {
 
     test('CRDTORMapHandler operation bytes roundtrip exercises toPayload', () {
       final doc = CRDTDocument(peerId: PeerId.generate());
-      final orMap = CRDTORMapHandler<String, int>(doc, 'omap')
+      final orMap = CRDTORMapHandler<String, int>(
+        doc,
+        'omap',
+        handlerType: 'CRDTORMapHandler<String, int>',
+      )
         ..put('k1', 1)
         ..put('k2', 2)
         ..remove('k1');

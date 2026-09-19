@@ -8,7 +8,11 @@ class MapHandlerBenchmark
   MapHandlerBenchmark({required super.useIncrementalCacheUpdate})
       : super(
           handlerName: 'CRDTMapHandler',
-          handlerFactory: (document) => CRDTMapHandler<String>(document, 'map'),
+          handlerFactory: (document) => CRDTMapHandler<String>(
+            document,
+            'map',
+            handlerType: 'CRDTMapHandler<String>',
+          ),
         );
 
   @override

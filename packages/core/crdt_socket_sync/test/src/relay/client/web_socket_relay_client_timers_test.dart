@@ -12,10 +12,16 @@ class _FakeTransport implements Transport {
   _FakeTransport({
     required this.documentId,
     required this.respondToPings,
+    this.refuseWith,
   });
 
   final String documentId;
   final bool respondToPings;
+
+  /// When set, the hello is answered with an [ErrorMessage] carrying this code
+  /// instead of a [RelayWelcomeMessage], the way a relay refuses a build it
+  /// cannot serve. The transport then fails, as a closed socket does.
+  final String? refuseWith;
 
   final _incoming = StreamController<List<int>>.broadcast();
   final _codec = JsonMessageCodec<Message>(
@@ -37,6 +43,18 @@ class _FakeTransport implements Transport {
     if (message == null) return;
 
     if (message is RelayHelloMessage) {
+      final code = refuseWith;
+      if (code != null) {
+        _push(
+          Message.error(
+            documentId: documentId,
+            code: code,
+            message: 'refused by the test relay',
+          ),
+        );
+        fail();
+        return;
+      }
       _push(
         RelayWelcomeMessage(
           documentId: documentId,
@@ -273,6 +291,51 @@ void main() {
 
       expect(client.connectionStatusValue, ConnectionStatus.disconnected);
       expect(statuses, isNot(contains(ConnectionStatus.reconnecting)));
+
+      await sub.cancel();
+    });
+  });
+
+  group('WebSocketRelayClient refused build', () {
+    const documentId = 'room-1';
+
+    test('a refused build stops for good and never reconnects', () async {
+      final doc = CRDTDocument(
+        peerId: PeerId.generate(),
+        documentId: documentId,
+      );
+      final client = WebSocketRelayClient.test(
+        url: 'ws://localhost:0',
+        document: doc,
+        author: doc.peerId,
+        pingInterval: const Duration(milliseconds: 50),
+        pingTimeout: const Duration(milliseconds: 500),
+        reconnectBaseDelay: const Duration(milliseconds: 10),
+        reconnectMaxDelay: const Duration(milliseconds: 40),
+        reconnectJitter: Duration.zero,
+        transportFactory: () => _FakeTransport(
+          documentId: documentId,
+          respondToPings: false,
+          refuseWith: Protocol.errorUnsupportedProtocolVersion,
+        ),
+      );
+      addTearDown(client.dispose);
+
+      final statuses = <ConnectionStatus>[];
+      final sub = client.connectionStatus.listen(statuses.add);
+
+      expect(await client.connect(), isFalse);
+
+      expect(client.connectionStatusValue, ConnectionStatus.unsupported);
+      expect(client.incompatibility!.isProtocolVersionMismatch, isTrue);
+
+      // The relay client retries forever by default, so this is where the
+      // latch earns its keep: the refusal must end the loop.
+      await Future<void>.delayed(const Duration(milliseconds: 200));
+
+      expect(client.connectionStatusValue, ConnectionStatus.unsupported);
+      expect(statuses, isNot(contains(ConnectionStatus.reconnecting)));
+      expect(statuses.last, ConnectionStatus.unsupported);
 
       await sub.cancel();
     });

@@ -169,6 +169,9 @@ class AppL10nPt extends AppL10n {
   String get statusError => 'Erro de conexão';
 
   @override
+  String get statusUnsupported => 'Atualização necessária';
+
+  @override
   String get exportDocument => 'Exportar documento';
 
   @override

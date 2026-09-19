@@ -45,26 +45,25 @@ class DocumentExampleState extends ExampleDocument<CRDTMovableListRefHandler> {
   static const _kBlocksKey = 'blocks';
   static const _kDoneKey = 'done';
 
-  // Stable type tag for the todo `done` register. Used both as the factory key
-  // and as the handler's `handlerType`, so the two match even in a minified
-  // (Flutter web `--release`) build where `runtimeType.toString()` would be an
-  // opaque `"minified:..."` token. See [Handler.handlerType].
-  static const _kDoneType = 'CRDTRegisterHandler<bool>';
+  // The kind is shared with the demo server, so it comes from the one place
+  // both sides read.
+  static final _doneSpec = CRDTRegisterHandler.spec<bool>(
+    ExampleHandlerTypes.done,
+  );
 
   @override
   CRDTMovableListRefHandler createHandler(BaseCRDTDocument doc) {
-    // Register the factories so children received from a remote peer (or a
-    // time-travel session) can be reconstructed by type.
-    doc.registerDefaultFactories();
-    // The todo `done` flag is a nested CRDTRegisterHandler<bool> (a LWW
-    // register), which is generic and therefore not part of the default
-    // (non-generic) set, so register it explicitly — with the same stable tag
-    // the handler is created with below.
-    doc.registerFactory(
-      _kDoneType,
-      (d, id) => CRDTRegisterHandler<bool>(d, id, handlerType: _kDoneType),
+    // Declare every kind this tree is made of, so a child received from a peer
+    // (or from a time-travel session) can be rebuilt without being opened here
+    // first.
+    doc
+      ..register(_doneSpec)
+      ..register(CRDTMapRefHandler.spec)
+      ..register(CRDTFugueTextHandler.spec);
+    return doc.handler(
+      CRDTMovableListRefHandler.spec,
+      ExampleHandlerIds.document,
     );
-    return CRDTMovableListRefHandler(doc, ExampleHandlerIds.document);
   }
 
   /// The block specs available to add, used to build the "Add block" menu.
@@ -189,7 +188,7 @@ class DocumentExampleState extends ExampleDocument<CRDTMovableListRefHandler> {
     final item =
         CRDTMapRefHandler(document, _newId())
           ..setRef(_kTextKey, _newText(text))
-          ..setRef(_kDoneKey, _newDone(value: false));
+          ..setRef(_kDoneKey, _newDoneFlag(value: false));
     todoList.insertRef(todoList.value.length, item);
   }
 
@@ -239,13 +238,6 @@ class DocumentExampleState extends ExampleDocument<CRDTMovableListRefHandler> {
     return handler;
   }
 
-  CRDTRegisterHandler<bool> _newDone({required bool value}) {
-    final handler = CRDTRegisterHandler<bool>(
-      document,
-      _newId(),
-      handlerType: _kDoneType,
-    );
-    handler.set(value);
-    return handler;
-  }
+  CRDTRegisterHandler<bool> _newDoneFlag({required bool value}) =>
+      document.handler(_doneSpec, _newId())..set(value);
 }

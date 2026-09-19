@@ -566,7 +566,8 @@ final class _ForeignTypeFugueText extends CRDTFugueTextHandler {
 
 /// Counts how many times the cached state is advanced by one operation.
 final class _CountingListHandler extends CRDTListHandler<String> {
-  _CountingListHandler(super.doc, super.id);
+  _CountingListHandler(super.doc, super.id)
+      : super(handlerType: 'CRDTListHandler<String>');
 
   int increments = 0;
 
@@ -582,7 +583,8 @@ final class _CountingListHandler extends CRDTListHandler<String> {
 }
 
 final class _FakeCRDTListHandler extends CRDTListHandler<String> {
-  _FakeCRDTListHandler(super.doc, super.id);
+  _FakeCRDTListHandler(super.doc, super.id)
+      : super(handlerType: 'CRDTListHandler<String>');
 
   /// count of `incrementCachedState`
   var _incrementedCount = 0;

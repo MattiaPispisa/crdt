@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:crdt_socket_sync_client_example/_logger.dart';
 import 'package:crdt_socket_sync_client_example/awareness_cursors.dart';
 import 'package:crdt_socket_sync_client_example/connection_indicator.dart';
 import 'package:crdt_socket_sync_client_example/gzip_compression.dart';
@@ -40,6 +41,7 @@ WidgetBuilder _socket(_ExampleScreen screen, String documentId) {
               label: 'This device',
               metadata: {'name': user.username},
               compressor: _useCompression ? const GzipCompression() : null,
+              logger: context.loggerInstance('socket_sync'),
             ),
           ],
       appBarActionsBuilder:

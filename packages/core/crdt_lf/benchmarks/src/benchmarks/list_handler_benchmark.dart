@@ -8,8 +8,11 @@ class ListHandlerBenchmark
   ListHandlerBenchmark({required super.useIncrementalCacheUpdate})
       : super(
           handlerName: 'CRDTListHandler',
-          handlerFactory: (document) =>
-              CRDTListHandler<String>(document, 'list'),
+          handlerFactory: (document) => CRDTListHandler<String>(
+            document,
+            'list',
+            handlerType: 'CRDTListHandler<String>',
+          ),
         );
 
   @override

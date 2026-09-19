@@ -161,7 +161,9 @@ class FugueSnapshot {
     Uint8List bytes, {
     required List<T> Function(Uint8List blob, int length) decodeRun,
   }) {
-    var offset = SnapshotBlob.read(bytes, version: version, name: 'Fugue');
+    var offset =
+        SnapshotBlob.read(bytes, min: version, max: version, name: 'Fugue')
+            .offset;
 
     final runCountRec = UVarint.read(bytes, offset: offset);
     offset = runCountRec.nextOffset;

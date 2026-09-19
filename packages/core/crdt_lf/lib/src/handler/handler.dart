@@ -24,7 +24,8 @@ typedef OperationDecoders = Map<int, Operation Function(Uint8List body)>;
 ///   and how its operations are decoded.
 /// - [getSnapshotState] — required: the state as bytes, seeded back through
 ///   [lastSnapshot].
-/// - [handlerType] — for a handler that must survive dart2js minification.
+/// - the `spec` its constructor passes up — required: what kind of handler this
+///   is, so a peer that receives a reference to one can rebuild it.
 /// - [incrementCachedState] — to advance the cached state by one operation
 ///   instead of replaying the history.
 /// - [stateIsOrderIndependent] — only when the state is the same
@@ -43,25 +44,21 @@ typedef OperationDecoders = Map<int, Operation Function(Uint8List body)>;
 /// late final OperationType incrementType =
 ///     OperationType.custom(this, kind: 4, name: 'increment');
 /// ```
-///
-/// The hooks the framework calls on a handler are private to this library, so
-/// they never show up on a handler you hold.
 abstract base class Handler<T>
     with DocumentConsumer, SnapshotProvider, CacheableStateProvider<T> {
-  /// Creates a new handler for the given document.
+  /// Creates a handler of the kind [spec] names, registered on [doc].
   ///
-  /// [handlerType] optionally overrides the type tag
-  /// (see [Handler.handlerType]);
-  /// pass a stable constant for generic handlers
-  /// that must work in a minified build.
-  Handler(this.doc, {String? handlerType}) : _handlerType = handlerType {
-    doc.registerHandler(this);
+  /// {@macro handler_spec}
+  Handler(this.doc, {required HandlerSpec<Handler<dynamic>> spec})
+      : _instanceSpec = spec {
+    doc._registerHandler(this);
   }
 
   /// The document that owns this handler
   final BaseCRDTDocument doc;
 
-  final String? _handlerType;
+  /// The kind this handler is. Read by [BaseCRDTDocument] as it registers.
+  final HandlerSpec<Handler<dynamic>> _instanceSpec;
 
   /// The decoders this handler owns, keyed by [OperationEnvelope.kind].
   ///
@@ -69,19 +66,50 @@ abstract base class Handler<T>
   /// when a change carrying it is decoded.
   OperationDecoders get operationDecoders;
 
-  /// Stable identifier of this handler's **type**.
+  /// The version of the blob [getSnapshotState] writes.
+  ///
+  /// Raise it when the layout changes, and write it with [snapshotHeader]: a
+  /// peer that cannot read the version is refused the blob whole.
+  int get snapshotBlobVersion => 1;
+
+  /// The oldest blob version this build still reads.
+  ///
+  /// Defaults to [snapshotBlobVersion], which refuses a blob from any other
+  /// build. Lower it to keep reading an older layout, and branch on the version
+  /// [readSnapshotHeader] returns.
+  int get minReadableSnapshotBlobVersion => snapshotBlobVersion;
+
+  /// A builder holding the head of this handler's snapshot blob.
+  ///
+  /// ```dart
+  /// @override
+  /// Uint8List getSnapshotState() {
+  ///   final out = snapshotHeader()..add(Wtf8.encode(value));
+  ///   return out.toBytes();
+  /// }
+  /// ```
+  BytesBuilder snapshotHeader() =>
+      BytesBuilder(copy: false)..addByte(snapshotBlobVersion);
+
+  /// The version at the head of [bytes], and the offset of what follows it.
+  ///
+  /// Throws a [FormatException] naming this handler when the version falls
+  /// outside `minReadableSnapshotBlobVersion..snapshotBlobVersion`.
+  ({int version, int offset}) readSnapshotHeader(Uint8List bytes) =>
+      SnapshotBlob.read(
+        bytes,
+        min: minReadableSnapshotBlobVersion,
+        max: snapshotBlobVersion,
+        name: handlerType,
+      );
+
+  /// {@macro handler_type_tag}
   ///
   /// Used as the type tag in operation envelopes, in the snapshot handler
-  /// manifest and in [HandlerRef]s, and as the key under which a
-  /// [HandlerFactory] is registered (see [BaseCRDTDocument.registerFactory]).
-  /// The same value is produced on every peer so changes route to the matching
-  /// handler and nested handlers can be reconstructed remotely.
-  ///
-  /// Defaults to `runtimeType.toString()`, which is convenient but **not
-  /// stable under dart2js minification**. Custom handlers
-  /// that must work in a minified build (or persist/sync across builds) should
-  /// override it with their own constant, or pass one to the constructor.
-  String get handlerType => _handlerType ?? runtimeType.toString();
+  /// manifest and in [HandlerRef]s, and as the key the kind is registered
+  /// under. The same value is produced on every peer, so changes route to the
+  /// matching handler and nested handlers can be reconstructed remotely.
+  String get handlerType => _instanceSpec.type;
 
   /// Cached insert type instance for this handler, used in operations.
   ///
@@ -116,67 +144,41 @@ abstract base class Handler<T>
   OperationType get moveType => _moveType ??= OperationType.move(this);
   OperationType? _moveType;
 
-  /// During transaction consecutive operations can be compounded.
+  /// [accumulator] and [current] fused into one operation, or `null` when they
+  /// cannot be.
   ///
-  /// By default, no compaction occurs and operations are returned as-is.
+  /// Called on consecutive operations inside a transaction. The default fuses
+  /// nothing.
   ///
-  /// Override this method to implement a compact algorithm.
-  ///
-  /// [accumulator] is the previous operation
-  /// [current] is the current operation
-  ///
-  /// If [current] can be compounded with [accumulator],
-  /// return the **new compounded** operation (union of the two).
-  ///
-  /// Otherwise, return `null`.
-  ///
-  /// The result may be [current] itself, but never [accumulator]: the fused
-  /// operation carries the stamp of the later one, and the deltas waiting for
-  /// the change it becomes are drained in stamp order. An earlier stamp leaves
-  /// part of them behind. A fresh operation is stamped for you.
+  /// Return [current] or a fresh operation, never [accumulator]: the result
+  /// takes the stamp of the later one, and an earlier stamp strands the deltas
+  /// that change also carries.
   Operation? compound(Operation accumulator, Operation current) => null;
 
   /// Whether this handler can build the inverse of its own operations.
   ///
-  /// A handler that indexes by position alone cannot: it has no element
-  /// identity to anchor an inverse to, so the undo would land on the wrong
-  /// element as soon as another peer edits the same sequence.
-  ///
-  /// [CRDTUndoManager.track] refuses a handler that answers `false`.
+  /// [CRDTUndoManager.track] refuses a handler that answers `false`. A handler
+  /// that indexes by position alone has no identity to anchor an inverse to.
   bool get invertible => false;
 
-  /// The operations that undo [operation], read against the state as it is
-  /// **now** — that is, before [operation] is applied.
+  /// The operations that undo [operation], against the state as it is
+  /// **before** [operation] is applied. Empty when there is nothing to undo.
   ///
-  /// The document calls this from [BaseCRDTDocument.registerOperation], after
-  /// it mints the stamp and before it folds the operation in. So
-  /// [Operation.stamp] is readable here, and the state has not moved yet.
+  /// [Operation.stamp] is readable here. Name CRDT identities — element ids,
+  /// keys, tags — never positions, so the undo stays right when other peers
+  /// edited the same handler in between.
   ///
-  /// An inverse names CRDT identities — element ids, keys, tags — and never a
-  /// position. That is what keeps an undo right when other peers edited the
-  /// same handler in between.
-  ///
-  /// The returned operations are fresh and unstamped: the document stamps them
-  /// when they are registered, and an operation is stamped once. Return them in
-  /// the order they have to be applied.
-  ///
-  /// Returns an empty list when there is nothing to undo, which includes an
-  /// operation with no observable effect.
+  /// Return fresh, unstamped operations, in the order they have to be applied.
   List<Operation> invert(Operation operation) => const [];
 
   /// [operation], an inverse built by [invert], made ready to be written now.
   ///
-  /// An inverse is built the moment the operation it undoes is written, and
-  /// written itself much later. In between, undoing a **later** step can
-  /// rebuild elements this one names: an element cannot come back to life, so
-  /// it comes back with a new identity, and an inverse holding the old one
-  /// would miss it.
+  /// An inverse is built long before it is written, and in between an element
+  /// it names may have come back under a new identity. Override this to follow
+  /// them; the default returns [operation] unchanged.
   ///
-  /// A handler that rebuilds elements overrides this to follow them. The
-  /// default returns [operation] unchanged.
-  ///
-  /// Return [operation] itself, or a fresh unstamped operation; never one that
-  /// has been written already.
+  /// Return [operation] or a fresh unstamped operation, never one already
+  /// written.
   Operation prepareInverse(Operation operation) => operation;
 
   /// Looks up [envelope]'s kind in [operationDecoders] and returns what it

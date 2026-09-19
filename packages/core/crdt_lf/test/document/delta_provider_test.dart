@@ -266,7 +266,11 @@ void main() {
       // otherwise hand out that list, and the consumer would find the next
       // change already inside the base it applies the delta to.
       final doc = CRDTDocument();
-      final list = CRDTListHandler<String>(doc, 'list')..insert(0, 'a');
+      final list = CRDTListHandler<String>(
+        doc,
+        'list',
+        handlerType: 'CRDTListHandler<String>',
+      )..insert(0, 'a');
 
       final deltas = <SequenceDelta<String>>[];
       final subscription = list.watch().listen((update) {
@@ -292,7 +296,11 @@ void main() {
     test('applyDelta moves the value the way the handler does', () {
       final doc = CRDTDocument();
       final text = CRDTTextHandler(doc, 'text');
-      final list = CRDTListHandler<String>(doc, 'list');
+      final list = CRDTListHandler<String>(
+        doc,
+        'list',
+        handlerType: 'CRDTListHandler<String>',
+      );
 
       // The same delta shape over two value types: the text is moved by
       // [SequenceDelta.applyToText], the list by [SequenceDelta.apply]. Only

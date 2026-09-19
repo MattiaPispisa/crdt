@@ -8,8 +8,11 @@ class FugueListHandlerBenchmark
   FugueListHandlerBenchmark({required super.useIncrementalCacheUpdate})
       : super(
           handlerName: 'CRDTFugueListHandler',
-          handlerFactory: (document) =>
-              CRDTFugueListHandler<String>(document, 'list'),
+          handlerFactory: (document) => CRDTFugueListHandler<String>(
+            document,
+            'list',
+            handlerType: 'CRDTFugueListHandler<String>',
+          ),
         );
 
   @override

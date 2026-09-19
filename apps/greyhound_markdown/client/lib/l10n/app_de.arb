@@ -45,6 +45,7 @@
   "statusReconnecting": "Verbinde neu…",
   "statusDisconnected": "Getrennt",
   "statusError": "Verbindungsfehler",
+  "statusUnsupported": "Update erforderlich",
   "exportDocument": "Dokument exportieren",
   "exportAs": "Als {format} exportieren",
   "exportFileName": "Dateiname",

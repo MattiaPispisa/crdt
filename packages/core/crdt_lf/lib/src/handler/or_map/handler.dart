@@ -1,7 +1,6 @@
 import 'dart:typed_data';
 
 import 'package:crdt_lf/crdt_lf.dart';
-import 'package:crdt_lf/src/snapshot/blob_version.dart';
 
 part 'operation.dart';
 
@@ -37,12 +36,37 @@ base class CRDTORMapHandler<K, V> extends Handler<ORMapState<K, V>>
   ///
   /// [keyCodec] and [valueCodec] are optional codecs for encoding/decoding keys and values to bytes.
   /// Default is [JsonValueCodec].
+  ///
+  /// [handlerType] names the **kind** of handler this is.
+  /// {@macro handler_type_tag}
   CRDTORMapHandler(
-    super.doc,
-    this._id, {
+    BaseCRDTDocument doc,
+    String id, {
+    required String handlerType,
     ValueCodec<K>? keyCodec,
     ValueCodec<V>? valueCodec,
-    super.handlerType,
+  }) : this._fromSpec(
+          doc,
+          id,
+          spec: spec<K, V>(
+            handlerType,
+            keyCodec: keyCodec,
+            valueCodec: valueCodec,
+          ),
+          keyCodec: keyCodec,
+          valueCodec: valueCodec,
+        );
+
+  /// Builds one of a kind stated in full, instead of named by a tag.
+  ///
+  /// Private: the unnamed constructor is the way in, and it makes the spec from
+  /// the tag. Nothing outside this file builds one of these another way.
+  CRDTORMapHandler._fromSpec(
+    super.doc,
+    this._id, {
+    required super.spec,
+    ValueCodec<K>? keyCodec,
+    ValueCodec<V>? valueCodec,
   })  : _keyCodec = keyCodec ?? JsonValueCodec<K>(),
         _valueCodec = valueCodec ?? JsonValueCodec<V>();
 
@@ -130,18 +154,49 @@ base class CRDTORMapHandler<K, V> extends Handler<ORMapState<K, V>>
   /// Returns the current entries in the map.
   Iterable<MapEntry<K, V>> get entries => value.entries;
 
+  /// {@macro generic_handler_spec}
+  static HandlerSpec<CRDTORMapHandler<K, V>> spec<K, V>(
+    String type, {
+    ValueCodec<K>? keyCodec,
+    ValueCodec<V>? valueCodec,
+  }) =>
+      HandlerSpec<CRDTORMapHandler<K, V>>(
+        type,
+        (doc, id) => CRDTORMapHandler<K, V>(
+          doc,
+          id,
+          handlerType: type,
+          keyCodec: keyCodec,
+          valueCodec: valueCodec,
+        ),
+        formats: _formats,
+      );
+
+  /// What this build reads for this handler type.
+  static const HandlerFormats _formats = HandlerFormats(
+    operationKinds: {
+      OperationType.kindInsert,
+      OperationType.kindDelete,
+    },
+    blobVersions: BlobVersionRange.single(_blobVersion),
+  );
+
   /// The version of the snapshot blob this build writes and reads.
   ///
   /// Layout: `version: u8`, `count: uvarint`, then per entry
   /// `keyLen: uvarint`, `key: bytes`, `valueLen: uvarint`, `value: bytes`.
   /// The tags stay out: a snapshot holds the projected map, and the entries
   /// come back tagless.
-  static const int _snapshotVersion = 1;
+  /// The version [getSnapshotState] writes at the head of its blob.
+  static const int _blobVersion = 1;
+
+  @override
+  int get snapshotBlobVersion => _blobVersion;
 
   /// Returns the current state for snapshotting as a binary blob.
   @override
   Uint8List getSnapshotState() {
-    final out = BytesBuilder(copy: false)..addByte(_snapshotVersion);
+    final out = snapshotHeader();
     final entries = value;
     UVarint.write(entries.length, out);
     for (final entry in entries.entries) {
@@ -168,11 +223,7 @@ base class CRDTORMapHandler<K, V> extends Handler<ORMapState<K, V>>
     // say otherwise. The snapshot is a length-prefixed sequence of
     // (key, value) pairs encoded via [_keyCodec] and [_valueCodec].
     if (snap != null) {
-      var offset = SnapshotBlob.read(
-        snap,
-        version: _snapshotVersion,
-        name: 'OR-map',
-      );
+      var offset = readSnapshotHeader(snap).offset;
       final countRec = UVarint.read(snap, offset: offset);
       offset = countRec.nextOffset;
       for (var i = 0; i < countRec.value; i += 1) {

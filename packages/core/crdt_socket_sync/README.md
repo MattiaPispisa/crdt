@@ -35,6 +35,7 @@
     - [Relay Quick Start](#relay-quick-start)
     - [Join \& Welcome](#join--welcome)
     - [Push, Ack \& Rebroadcast](#push-ack--rebroadcast)
+      - [Surviving a restart](#surviving-a-restart)
     - [Log Compaction](#log-compaction)
     - [Client seq window](#client-seq-window)
     - [Relay Plugins \& Awareness](#relay-plugins--awareness)
@@ -45,8 +46,16 @@
       - [Awareness Plugin](#awareness-plugin)
     - [Compression](#compression)
     - [Connection status \& error handling](#connection-status--error-handling)
+      - [Faults: data that did not make it in](#faults-data-that-did-not-make-it-in)
+    - [Version \& capability negotiation](#version--capability-negotiation)
+      - [Declare what your build can read](#declare-what-your-build-can-read)
+      - [Refusals are permanent](#refusals-are-permanent)
+      - [An unknown kind is kept, never dropped](#an-unknown-kind-is-kept-never-dropped)
+      - [What the handshake does not cover](#what-the-handshake-does-not-cover)
     - [Wire format \& type codes](#wire-format--type-codes)
   - [Examples](#examples)
+  - [Migrations](#migrations)
+    - [Migrating from 0.8.x to 0.9.0](#migrating-from-08x-to-090)
   - [Apps](#apps)
   - [Packages](#packages)
 
@@ -67,7 +76,7 @@ CRDT Socket Sync provides a robust, real-time synchronization system that allows
 - 💓 **Liveness Detection**: Ping/pong tracking detects half-open connections and reconnects
 - 🚰 **Backpressure**: Bounded per-connection send queue drops peers that cannot keep up (they re-sync on reconnect)
 - 🗜️ **History Pruning**: Server takes a snapshot and prunes confirmed history once every client aligns on a common frontier
-- 🎯 **Type Safety**: Full Dart type safety with generic document handlers
+- 🤝 **Version & Capability Handshake**: A client whose build cannot read what the document holds is refused at connect time, not on the first broken read ([details](#version--capability-negotiation))
 - 📊 **Event Monitoring**: Comprehensive event streams for connection and synchronization monitoring
 - 🔌 **Plugins**: Extendable plugin system for custom functionality
 - 📮 **Relay Mode**: An alternative sync model where the server is a CRDT-agnostic relay — it persists and rebroadcasts opaque change blobs while merging happens entirely on the clients ([details](#relay-mode))
@@ -157,7 +166,11 @@ void main() async {
   final document = CRDTDocument(peerId: PeerId.generate());
 
   // Register handlers for different data types
-  final listHandler = CRDTListHandler<String>(document, 'shared_list');
+  final listHandler = CRDTListHandler<String>(
+    document,
+    'shared_list',
+    handlerType: 'shared-list',
+  );
 
   // Create the client
   final client = WebSocketClient(
@@ -750,18 +763,18 @@ Frames are JSON envelopes typed by an integer `type` code, with `documentId`
 identifying the room. CRDT change/snapshot payloads travel as **opaque
 base64 strings**. Your server must handle:
 
-| Code | Name | Dir | Fields (beyond `type`, `documentId`) |
-|---|---|---|---|
-| 20 | hello | C→S | `author` |
-| 21 | welcome | S→C | `sessionId`, `snapshot: string\|null`, `changes: string[]`, `seq`, `logLength`, `compact` |
-| 22 | push | C→S | `changes: string[]` |
-| 23 | ack | S→C | `seq`, `count`, `logLength`, `compact` |
-| 24 | changes | S→others | `changes: string[]`, `seq`, `from: string\|null` |
-| 25 | snapshotUpload | C→S | `snapshot`, `upToSeq` |
-| 26 | stateRequest | C→S | — (reply with a welcome, same `sessionId`) |
-| 5 | ping | C→S | `timestamp` → reply pong (6) `{originalTimestamp, responseTimestamp}` |
-| 7 | error | S→C | `code`, `message` |
-| 100–102 | awareness | C↔S | presence passthrough (store + rebroadcast) |
+| Code    | Name           | Dir      | Fields (beyond `type`, `documentId`)                                                      |
+|---------|----------------|----------|-------------------------------------------------------------------------------------------|
+| 20      | hello          | C→S      | `author`                                                                                  |
+| 21      | welcome        | S→C      | `sessionId`, `snapshot: string\|null`, `changes: string[]`, `seq`, `logLength`, `compact` |
+| 22      | push           | C→S      | `changes: string[]`                                                                       |
+| 23      | ack            | S→C      | `seq`, `count`, `logLength`, `compact`                                                    |
+| 24      | changes        | S→others | `changes: string[]`, `seq`, `from: string\|null`                                          |
+| 25      | snapshotUpload | C→S      | `snapshot`, `upToSeq`                                                                     |
+| 26      | stateRequest   | C→S      | — (reply with a welcome, same `sessionId`)                                                |
+| 5       | ping           | C→S      | `timestamp` → reply pong (6) `{originalTimestamp, responseTimestamp}`                     |
+| 7       | error          | S→C      | `code`, `message`                                                                         |
+| 100–102 | awareness      | C↔S      | presence passthrough (store + rebroadcast)                                                |
 
 Server responsibilities: assign a `sessionId` per connection and return it in
 the welcome; append pushed blobs to a per-room log with monotonic sequence
@@ -941,6 +954,10 @@ client.connectionStatus.listen((status) {
     case ConnectionStatus.disconnected:
       // Clean disconnection
       break;
+    case ConnectionStatus.unsupported:
+      // The server refused this build. Terminal: ask the user to update.
+      showUpdateRequired(client.incompatibility!.message);
+      break;
   }
 });
 ```
@@ -949,6 +966,177 @@ Liveness is tracked with ping/pong: a missing pong within the ping timeout is
 treated as a dead (half-open) connection and triggers a reconnect. The
 CRDT-aware client reconnects on a fixed interval with capped attempts; the relay
 client uses exponential backoff with jitter and retries forever by default.
+
+`ConnectionStatus.unsupported` is the one status the client never leaves: see
+[version & capability negotiation](#version--capability-negotiation).
+
+#### Faults: data that did not make it in
+
+A status is about the connection. **`client.faults` is about one piece of
+data**: a change or a state the client received on a working connection and
+could not fold into the document — a blob it cannot read, a document already
+disposed.
+
+```dart
+client.faults.listen((fault) {
+  log('${fault.reason}: ${fault.error}');
+});
+
+// faults replays nothing, so a late listener reads this instead.
+final missed = client.lastFault;
+```
+
+Reported, never thrown: applying runs inside the callback that reads the
+socket, where a throw reaches no `catch` and no `onError` and ends up as an
+uncaught error in the zone.
+
+Nothing is retried and the connection stays up, so an app that cares decides
+for itself whether to re-sync or to tell the user. A causal gap is **not** a
+fault: the client asks the server to re-serve the document, which is the one
+failure a resync closes.
+
+### Version & capability negotiation
+
+Two builds can disagree in three ways, and the handshake checks all three
+**before** any document state is served.
+
+**The protocol version.** Each side sends `Protocol.protocolVersion`. A server
+that speaks another one answers
+`ErrorMessage(Protocol.errorUnsupportedProtocolVersion)` and closes the session.
+The client checks the version the server echoes back, which is how it spots an
+**older** server: one that never read the field and let it in anyway.
+
+**The operation kinds, and the snapshot blob version.** An operation kind
+belongs to the handler that defines it, so no single version number describes
+it. What each side can state is a record per handler type, keyed by
+`Handler.handlerType`:
+
+```json
+{
+  "CRDTFugueTextHandler": { "kinds": [0, 1, 2], "blob": { "min": 1, "max": 1 } },
+  "todo-list":            { "kinds": [0, 1, 2], "blob": { "min": 1, "max": 1 } }
+}
+```
+
+`kinds` are what the peer can decode; `blob` is the range of snapshot layouts it
+reads — `min == max` for a build that reads only what it writes, wider for one
+that still reads an older layout and migrates it. A blob is refused whole on
+read, so a disagreement there is as terminal as a missing kind.
+
+The two sides answer **different questions**, and that is what makes the check
+work:
+
+- the client sends what its **build** can read (see below);
+- the server reads what the document's **data** holds
+  (`CRDTDocument.describeDataRequirements()`) — from the change envelopes, and
+  from the record every snapshot carries, so it answers even for a document it
+  merely stores and forwards with no handler registered, and even after it has
+  compacted and restarted.
+
+If the client cannot read something the data holds, the server answers
+`ErrorMessage(Protocol.errorUnsupportedClient)` naming the handler type and the
+reason, then closes the session.
+
+#### Declare what your build can read
+
+A client states what it can read in one of two ways, and they are checked
+differently.
+
+**By default it is derived** from the document
+(`describeBuildCapabilities()`), which knows the handlers already open and the
+kinds already registered. An app usually opens a handler *after* it
+connects, so such a description is **incomplete** by construction and is sent
+as such: a type it does not name is passed over.
+
+```dart
+CRDTListHandler<Todo>(document, 'todos', handlerType: 'todo-list');
+await client.connect();                 // names that one kind
+CRDTMapHandler<String>(document, 'meta', handlerType: 'meta'); // later: fine
+```
+
+**State it by hand** and it is sent as **complete** — it names every type the
+build reads, so the server also refuses on a type left out. That is the
+stricter check, and the only declaration that can honestly promise it:
+
+```dart
+WebSocketClient(
+  url: url,
+  document: document,
+  author: author,
+  capabilities: DocumentCapabilities({
+    'todo-list': const HandlerFormats(
+      operationKinds: {0, 1, 2},
+      blobVersions: BlobVersionRange.single(1),
+    ),
+  }),
+);
+```
+
+Either way, a type that **is** named is checked in full: a kind it lacks, or a
+snapshot blob written with another layout, refuses the client.
+
+`handlerType` is the key of this whole comparison, so two peers have to spell a
+kind the same way — which is why `crdt_lf` 5.0 makes a generic handler name it
+([why](https://github.com/MattiaPispisa/crdt/tree/main/packages/core/crdt_lf#migrating-from-4x-to-50)).
+
+A peer that has to know a kind **before** it opens one — a store-and-forward
+server — declares the spec instead of opening a handler:
+
+```dart
+document.register(CRDTListHandler.spec<Todo>('todo-list'));
+```
+
+#### Refusals are permanent
+
+The client latches them: it moves to `ConnectionStatus.unsupported`, fills
+`client.incompatibility`, and stops. It schedules no reconnect and `connect()`
+gives up at once, because no retry can change the answer.
+
+```dart
+final incompatibility = client.incompatibility;
+if (incompatibility != null) {
+  print(incompatibility.message);
+  print(incompatibility.isMissingOperationKinds); // vs. a version mismatch
+}
+```
+
+#### An unknown kind is kept, never dropped
+
+A change whose operation kind this build cannot decode is **stored and
+forwarded whole**. The apply path never decodes the envelope, so the change
+reaches the log, the snapshot and every other peer byte for byte, and a peer
+that does understand it reads it in full. Reading that handler *here* throws
+`UnknownOperationKindException`; nothing is lost or rewritten.
+
+This is the same guarantee protobuf gives with unknown fields, and it is why
+the handshake check is a safety net rather than the only defence.
+
+#### What the handshake does not cover
+
+- **A relay checks the version only.** It carries CRDT payloads as opaque blobs
+  and never decodes them, so it cannot tell what a client can read.
+- **The other direction.** The check protects a document from a client that
+  cannot read it, not the clients already connected when a **newer** one writes
+  a kind they never heard of — that data does not exist yet when the two sides
+  compare notes. There the answer stays `UnknownOperationKindException` on read
+  (see above: the change is kept and forwarded intact).
+- **A document restored from a snapshot older than `crdt_lf` 5.0.0.** An older
+  snapshot carries no record of what it holds, so a document that imports one
+  with `pruneHistory: true` reports that it needs nothing and lets every client
+  through. It answers in full again after it takes its own snapshot.
+- **A blob layout the reader can migrate.** Lower
+  `minReadableSnapshotBlobVersion` to keep reading an older layout and upgrade
+  it on the way in; `readSnapshotHeader` hands back the version it found. Only
+  a blob outside the range refuses the peer, as `SnapshotBlobTooNew` (needs a
+  newer build) or `SnapshotBlobTooOld` (a layout this build dropped).
+- **A handler that writes its snapshot blob by hand.** The version is only
+  meaningful when the blob carries it (`Handler.snapshotHeader` /
+  `readSnapshotHeader`). One that writes its state without them still reports
+  `1`, so it opts out of the blob check rather than passing it.
+- **Whether a kind is stamped.** `OperationType.stamped` is a build's own
+  decision, not part of what travels, so two builds that disagree about one
+  kind pass the handshake and meet at read time, with the `FormatException`
+  `crdt_lf` raises for exactly that.
 
 ### Wire format & type codes
 
@@ -992,6 +1180,39 @@ For a full **relay mode** application (relay client from this library + a
 Cloudflare Worker relay server), see the [greyhound_markdown](#apps) app.
 
 <img width="500" alt="sync_server_multi_client" src="https://raw.githubusercontent.com/MattiaPispisa/crdt/main/assets/demos/sync_server_multi_client.gif">
+
+## Migrations
+
+### Migrating from 0.8.x to 0.9.0
+
+**A 0.8.x peer still connects.** Both handshake fields this release adds are
+optional on read: a frame without them is read as protocol version 1 and as a
+peer that states no capabilities, which is what a 0.8.x peer meant. So the two
+sides can be upgraded one at a time.
+
+What changes is the Dart API, and the `crdt_lf` floor: this release needs
+`crdt_lf: ^5.0.0`, so a generic handler names its kind out loud — see the
+[crdt_lf migration guide](https://github.com/MattiaPispisa/crdt/tree/main/packages/core/crdt_lf#migrating-from-4x-to-50).
+
+```dart
+// 0.8.x
+final list = CRDTListHandler<Todo>(document, 'todos');
+
+// 0.9.0
+final list = CRDTListHandler<Todo>(document, 'todos', handlerType: 'todo-list');
+```
+
+Renamed or removed symbols:
+
+| 0.8.x                                                  | 0.9.0                            | Note                                                                                                                                                                  |
+|--------------------------------------------------------|----------------------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `Protocol.version` (`'1.0.0'`)                         | `Protocol.protocolVersion` (`1`) | An `int`, so a peer can tell an older version from a newer one. `Protocol.firstProtocolVersion` is what a frame without the field is read as.                         |
+| `ConnectionStatus` with four values                    | adds `unsupported`               | An exhaustive `switch` over it needs another case. It is terminal: see [Refusals are permanent](#refusals-are-permanent).                                             |
+| a `CRDTSocketClient` subclass owning its status stream | the base class owns it           | `connectionStatus`, `connectionStatusValue` and the handshake gate move up; a transport only calls `updateConnectionStatus`, and the base makes `unsupported` sticky. |
+| `PluginAwareMessageCodec(codecs)` | `PluginAwareMessageCodec(defaultCodec: ..., pluginCodecs: ...)` | Kept apart so a message routes by type: from `MessageTypeValue.firstPluginValue` up it goes to a plugin's codec, which is what makes a plugin's encoder run at all. `fromPlugins` is unchanged. |
+
+Nothing else moves: `WebSocketClient`, `WebSocketRelayClient`, the server
+registries, the plugins and the wire codecs keep their 0.8.x signatures.
 
 ## Apps
 

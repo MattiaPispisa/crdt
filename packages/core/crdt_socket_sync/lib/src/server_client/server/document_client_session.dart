@@ -84,9 +84,41 @@ class DocumentClientSession extends ClientSession {
     }
   }
 
+  /// What this document's data holds and the client cannot read.
+  ///
+  /// Read from [CRDTDocument.describeDataRequirements], so a server that only
+  /// stores and forwards a document still answers.
+  ///
+  /// Empty when the client declares nothing: silence is never a refusal, since
+  /// the client could never recover from one.
+  Future<List<CapabilityMismatch>> _missingClientCapabilities({
+    required String documentId,
+    required SyncCapabilities? clientCapabilities,
+  }) async {
+    if (clientCapabilities == null || clientCapabilities.isEmpty) {
+      return const [];
+    }
+
+    final document = await _serverRegistry.getDocument(documentId);
+    if (document == null) {
+      return const [];
+    }
+
+    return clientCapabilities.missingFrom(document.describeDataRequirements());
+  }
+
   /// Handle handshake
   Future<void> _handleHandshakeRequest(HandshakeRequestMessage message) async {
     final documentId = message.documentId;
+
+    final mismatched = await refuseProtocolMismatch(
+      documentId: documentId,
+      clientVersion: message.protocolVersion,
+    );
+    if (mismatched) {
+      return;
+    }
+
     final hasDocument = await _serverRegistry.hasDocument(documentId);
 
     if (!hasDocument) {
@@ -97,6 +129,20 @@ class DocumentClientSession extends ClientSession {
           code: Protocol.errorDocumentNotFound,
           message: 'Document not found: $documentId',
         ),
+      );
+    }
+
+    final missing = await _missingClientCapabilities(
+      documentId: documentId,
+      clientCapabilities: message.capabilities,
+    );
+
+    if (missing.isNotEmpty) {
+      return refuse(
+        documentId: documentId,
+        code: Protocol.errorUnsupportedClient,
+        reason: 'The client cannot read what this document holds: '
+            '${missing.join(', ')}.',
       );
     }
 

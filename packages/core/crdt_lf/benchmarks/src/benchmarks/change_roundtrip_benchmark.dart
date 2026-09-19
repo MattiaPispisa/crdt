@@ -15,7 +15,11 @@ class ChangeToBytesBenchmark extends TimedBenchmarkBase {
   @override
   void setup() {
     final doc = CRDTDocument(peerId: PeerId.generate());
-    final list = CRDTListHandler<String>(doc, 'list');
+    final list = CRDTListHandler<String>(
+      doc,
+      'list',
+      handlerType: 'CRDTListHandler<String>',
+    );
     for (var i = 0; i < 1000; i++) {
       list.insert(i, 'item $i');
     }
@@ -43,7 +47,11 @@ class ChangeFromBytesBenchmark extends TimedBenchmarkBase {
   @override
   void setup() {
     final doc = CRDTDocument(peerId: PeerId.generate());
-    final list = CRDTListHandler<String>(doc, 'list');
+    final list = CRDTListHandler<String>(
+      doc,
+      'list',
+      handlerType: 'CRDTListHandler<String>',
+    );
     for (var i = 0; i < 1000; i++) {
       list.insert(i, 'item $i');
     }
@@ -67,7 +75,11 @@ class ChangeRoundtripBenchmark extends TimedBenchmarkBase {
   @override
   void setup() {
     final doc = CRDTDocument(peerId: PeerId.generate());
-    final list = CRDTListHandler<String>(doc, 'list');
+    final list = CRDTListHandler<String>(
+      doc,
+      'list',
+      handlerType: 'CRDTListHandler<String>',
+    );
     for (var i = 0; i < 1000; i++) {
       list.insert(i, 'item $i');
     }

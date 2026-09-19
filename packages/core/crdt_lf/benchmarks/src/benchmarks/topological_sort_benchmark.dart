@@ -16,8 +16,16 @@ class ConcurrentChangesBenchmark extends TimedBenchmarkBase {
     doc1 = CRDTDocument(peerId: PeerId.generate());
     doc2 = CRDTDocument(peerId: PeerId.generate());
 
-    final list1 = CRDTListHandler<String>(doc1, 'list');
-    final list2 = CRDTListHandler<String>(doc2, 'list');
+    final list1 = CRDTListHandler<String>(
+      doc1,
+      'list',
+      handlerType: 'CRDTListHandler<String>',
+    );
+    final list2 = CRDTListHandler<String>(
+      doc2,
+      'list',
+      handlerType: 'CRDTListHandler<String>',
+    );
 
     // Create 1000 interleaved changes from two documents
     final random = Random();

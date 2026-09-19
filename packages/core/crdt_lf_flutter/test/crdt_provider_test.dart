@@ -61,7 +61,11 @@ void main() {
     testWidgets('context.select rebuilds only when the slice changes',
         (tester) async {
       final doc = CRDTDocument(peerId: PeerId.generate());
-      final list = CRDTListHandler<Map<String, dynamic>>(doc, 'list');
+      final list = CRDTListHandler<Map<String, dynamic>>(
+        doc,
+        'list',
+        handlerType: 'CRDTListHandler<Map<String, dynamic>>',
+      );
 
       var builds = 0;
       await tester.pumpWidget(

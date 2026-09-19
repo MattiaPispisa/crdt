@@ -101,7 +101,11 @@ Future<void> _setupDocument() async {
   }
 
   final document = (await _registry.getDocument(_kDocumentId))!;
-  CRDTListHandler<Map<String, dynamic>>(document, ExampleHandlerIds.todoList);
+  CRDTListHandler<Map<String, dynamic>>(
+    document,
+    ExampleHandlerIds.todoList,
+    handlerType: ExampleHandlerTypes.todoList,
+  );
 }
 
 /// Registers the three sync-example documents (todo / sortable / document),
@@ -120,20 +124,19 @@ Future<void> _setupExampleDocuments() async {
   CRDTListHandler<Map<String, dynamic>>(
     await ensure(ExampleDocumentIds.todoList),
     ExampleHandlerIds.todoList,
+    handlerType: ExampleHandlerTypes.todoList,
   );
   CRDTFugueMovableListHandler<Map<String, dynamic>>(
     await ensure(ExampleDocumentIds.sortableTodoList),
     ExampleHandlerIds.sortableTodoList,
+    handlerType: ExampleHandlerTypes.sortableTodoList,
   );
   final document = await ensure(ExampleDocumentIds.document);
   document
-    ..registerDefaultFactories()
-    ..registerFactory(
-      kDoneHandlerType,
-      (BaseCRDTDocument d, String id) =>
-          CRDTRegisterHandler<bool>(d, id, handlerType: kDoneHandlerType),
-    );
-  CRDTMovableListRefHandler(document, ExampleHandlerIds.document);
+    ..register(CRDTRegisterHandler.spec<bool>(ExampleHandlerTypes.done))
+    ..register(CRDTMapRefHandler.spec)
+    ..register(CRDTFugueTextHandler.spec);
+  document.handler(CRDTMovableListRefHandler.spec, ExampleHandlerIds.document);
 }
 
 void _setupSigintHandler({required EnLogger logger}) {

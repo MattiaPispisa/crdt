@@ -10,6 +10,28 @@ class _Payload {
   final String value;
 }
 
+/// A compressor that is not the identity, so a test can tell a frame that went
+/// through it from one that did not.
+///
+/// Reverses the bytes behind a marker. [decompress] throws on anything without
+/// the marker, the way a real one throws on bytes it did not write.
+class _Reversing implements Compressor {
+  const _Reversing();
+
+  static const int _marker = 0x01;
+
+  @override
+  List<int> compress(List<int> data) => [_marker, ...data.reversed];
+
+  @override
+  List<int> decompress(List<int> data) {
+    if (data.isEmpty || data.first != _marker) {
+      throw const FormatException('Not compressed by this compressor');
+    }
+    return data.skip(1).toList().reversed.toList();
+  }
+}
+
 void main() {
   JsonMessageCodec<_Payload> codec({bool encodeNull = false}) {
     return JsonMessageCodec<_Payload>(
@@ -75,6 +97,53 @@ void main() {
         compressed.encode(const _Payload('z')),
         equals(codec().encode(const _Payload('z'))),
       );
+    });
+
+    test('round-trips through a compressor that is not the identity', () {
+      final compressed = CompressedCodec<_Payload>(
+        codec(),
+        compressor: const _Reversing(),
+      );
+
+      final bytes = compressed.encode(const _Payload('world'))!;
+      expect(bytes, isNot(equals(codec().encode(const _Payload('world')))));
+      expect(compressed.decode(bytes)!.value, 'world');
+    });
+
+    test('frameOf hands back what the inner codec is given', () {
+      final compressed = CompressedCodec<_Payload>(
+        codec(),
+        compressor: const _Reversing(),
+      );
+
+      final bytes = compressed.encode(const _Payload('world'))!;
+      expect(
+        compressed.tryFrameOf(bytes),
+        equals(codec().encode(const _Payload('world'))),
+      );
+    });
+
+    test('decode refuses a frame that did not go through the compressor', () {
+      // Peers have to agree on the compressor. Reading an uncompressed frame
+      // as if it were fine would hide the one setup where they do not, while
+      // everything this side sends back stays unreadable to the other.
+      final compressed = CompressedCodec<_Payload>(
+        codec(),
+        compressor: const _Reversing(),
+      );
+      final plain = codec().encode(const _Payload('world'))!;
+
+      expect(() => compressed.decode(plain), throwsFormatException);
+    });
+
+    test('frameOf hands back the data itself when it does not decompress', () {
+      final compressed = CompressedCodec<_Payload>(
+        codec(),
+        compressor: const _Reversing(),
+      );
+      final plain = utf8.encode('never compressed');
+
+      expect(compressed.tryFrameOf(plain), same(plain));
     });
   });
 }

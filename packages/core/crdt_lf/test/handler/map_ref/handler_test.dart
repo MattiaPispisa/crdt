@@ -1,13 +1,17 @@
 import 'package:crdt_lf/crdt_lf.dart';
 import 'package:test/test.dart';
 
+const doneType = 'todo.done';
+
+final doneSpec = CRDTRegisterHandler.spec<bool>(doneType);
+
 void main() {
   group('CRDTMapRefHandler', () {
     late CRDTDocument doc;
     late CRDTMapRefHandler root;
 
     setUp(() {
-      doc = CRDTDocument()..registerDefaultFactories();
+      doc = CRDTDocument();
       root = CRDTMapRefHandler(doc, 'root');
     });
 
@@ -74,11 +78,13 @@ void main() {
     });
 
     test('two peers converge on a nested structure', () {
-      final docA = CRDTDocument()..registerDefaultFactories();
+      final docA = CRDTDocument();
       final titleA = CRDTFugueTextHandler(docA, 'title')..insert(0, 'Hello');
       final rootA = CRDTMapRefHandler(docA, 'root')..setRef('title', titleA);
 
-      final docB = CRDTDocument()..registerDefaultFactories();
+      // B declares the kind of the child it is about to read: it arrives as a
+      // ref to a handler B never opened.
+      final docB = CRDTDocument()..register(CRDTFugueTextHandler.spec);
       final rootB = CRDTMapRefHandler(docB, 'root');
 
       docB.importChanges(docA.exportChanges());
@@ -95,12 +101,78 @@ void main() {
       final snapshot = doc.takeSnapshot();
 
       final docB = CRDTDocument()
-        ..registerDefaultFactories()
+        ..register(CRDTMapRefHandler.spec)
+        ..register(CRDTListRefHandler.spec)
+        ..register(CRDTMovableListRefHandler.spec)
+        ..register(CRDTFugueTextHandler.spec)
+        ..register(CRDTTextHandler.spec)
         ..importSnapshot(snapshot)
         ..reconstruct();
 
       final rootB = docB.registeredHandlers['root']! as CRDTMapRefHandler;
       expect(rootB.resolved, {'title': 'Hello'});
+    });
+  });
+
+  group('CRDTMapRefHandler.child', () {
+    test('creates once and resolves after that', () {
+      final doc = CRDTDocument(peerId: PeerId.generate())..register(doneSpec);
+      final todo = CRDTMapRefHandler(doc, 'todo');
+
+      final first = todo.child('done', doneSpec)..set(true);
+      final second = todo.child('done', doneSpec);
+
+      expect(identical(first, second), isTrue);
+      expect(second.value, isTrue);
+    });
+
+    test('rebuilds a child a peer created, instead of making a second one', () {
+      // The case the ceremony used to break in silence: if the tag did not
+      // match on both sides the child simply never came back.
+      final author = CRDTDocument(peerId: PeerId.generate())
+        ..register(doneSpec);
+      CRDTMapRefHandler(author, 'todo').child('done', doneSpec).set(true);
+
+      final peer = CRDTDocument(peerId: PeerId.generate())
+        ..register(doneSpec)
+        ..importChanges(author.exportChanges());
+
+      final todo = peer.handler(CRDTMapRefHandler.spec, 'todo');
+      final done = todo.child('done', doneSpec);
+
+      expect(done.value, isTrue);
+      expect(done.handlerType, doneType);
+    });
+
+    test('refuses a key whose kind this peer has not declared', () {
+      // The child arrives as a ref and its kind is neither open nor declared,
+      // so the only way to learn what it is is to build it. `child` does, then
+      // compares — the wrong kind must not end up under the right id.
+      final source = CRDTDocument(peerId: PeerId.generate());
+      CRDTMapRefHandler(source, 'root')
+          .child('title', CRDTFugueTextHandler.spec)
+          .insert(0, 'Intro');
+
+      // Declares CRDTMapRefHandler by opening the root, and nothing else.
+      final peer = CRDTDocument(peerId: PeerId.generate());
+      final root = CRDTMapRefHandler(peer, 'root');
+      peer.importChanges(source.exportChanges());
+
+      expect(
+        () => root.child('title', doneSpec),
+        throwsA(isA<HandlerAlreadyRegisteredException>()),
+      );
+    });
+
+    test('refuses a key holding a child of another kind', () {
+      final doc = CRDTDocument(peerId: PeerId.generate())..register(doneSpec);
+      final todo = CRDTMapRefHandler(doc, 'todo')
+        ..setRef('done', CRDTFugueTextHandler(doc, doc.newHandlerId()));
+
+      expect(
+        () => todo.child('done', doneSpec),
+        throwsA(isA<HandlerAlreadyRegisteredException>()),
+      );
     });
   });
 }

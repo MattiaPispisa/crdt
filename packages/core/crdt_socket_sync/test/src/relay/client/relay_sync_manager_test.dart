@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:crdt_lf/crdt_lf.dart';
+import 'package:crdt_socket_sync/src/common/client/sync_fault.dart';
 import 'package:crdt_socket_sync/src/relay/client/relay_sync_manager.dart';
 import 'package:crdt_socket_sync/src/relay/common/common.dart';
 import 'package:test/test.dart';
@@ -290,6 +291,39 @@ void main() {
         client.getSentMessagesOfType<RelayStateRequestMessage>(),
         hasLength(1),
       );
+    });
+  });
+
+  group('RelaySyncManager fault reporting', () {
+    test('a room state it cannot read is reported, not thrown', () async {
+      final document = CRDTDocument(peerId: PeerId.generate());
+      final client = MockRelaySocketClient(
+        document: document,
+        author: document.peerId,
+      );
+      final manager = RelaySyncManager(document: document, client: client);
+      addTearDown(manager.dispose);
+
+      final faults = <SyncFault>[];
+      final sub = client.faults.listen(faults.add);
+      addTearDown(sub.cancel);
+
+      // A relay carries opaque blobs and never checks them, so this is the
+      // path that meets unreadable state most often.
+      await manager.onWelcome(
+        const RelayWelcomeMessage(
+          documentId: 'room',
+          sessionId: 's',
+          snapshot: 'bm90LWEtc25hcHNob3Q=',
+          changes: [],
+          seq: 0,
+          logLength: 0,
+          compact: false,
+        ),
+      );
+
+      expect(faults, hasLength(1));
+      expect(faults.single.reason, contains('room state'));
     });
   });
 }

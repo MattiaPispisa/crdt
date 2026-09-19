@@ -48,7 +48,22 @@ class CompressedCodec<T> implements MessageCodec<T> {
 
   @override
   T? decode(List<int> data) {
-    final decompressed = _compressor.decompress(data);
-    return _codec.decode(decompressed);
+    return _codec.decode(_frameOf(data));
+  }
+
+  /// [data] as the inner codec sees it: the transport compression undone.
+  ///
+  /// Unlike [decode] this never throws: it hands back [data] itself when it
+  /// does not decompress.
+  List<int> tryFrameOf(List<int> data) {
+    try {
+      return _frameOf(data);
+    } catch (_) {
+      return data;
+    }
+  }
+
+  List<int> _frameOf(List<int> data) {
+    return _compressor.decompress(data);
   }
 }

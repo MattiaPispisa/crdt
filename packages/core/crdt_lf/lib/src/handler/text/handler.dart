@@ -2,8 +2,6 @@ import 'dart:math';
 import 'dart:typed_data';
 
 import 'package:crdt_lf/crdt_lf.dart';
-import 'package:crdt_lf/src/handler/handler_type.dart';
-import 'package:crdt_lf/src/snapshot/blob_version.dart';
 
 part 'operation.dart';
 
@@ -32,17 +30,13 @@ part 'operation.dart';
 base class CRDTTextHandler extends Handler<String>
     with DeltaProvider<String, SequenceDelta<String>> {
   /// Creates a new CRDTText with the given document and ID
-  CRDTTextHandler(super.doc, this._id);
+  CRDTTextHandler(super.doc, this._id) : super(spec: CRDTTextHandler.spec);
 
   /// The ID of this text in the document
   final String _id;
 
   @override
   String get id => _id;
-
-  /// Stable type tag (minification-safe). See [Handler.handlerType].
-  @override
-  String get handlerType => kTextHandlerType;
 
   @override
   late final OperationDecoders operationDecoders = {
@@ -148,16 +142,40 @@ base class CRDTTextHandler extends Handler<String>
     return state;
   }
 
-  /// The version of the snapshot blob this build writes and reads.
+  /// The tag this kind travels under; see [Handler.handlerType].
+  static const String _handlerType = 'CRDTTextHandler';
+
+  /// {@template builtin_handler_spec}
+  /// The kind this handler is.
   ///
-  /// Layout: `version: u8` then the whole text as WTF-8.
-  static const int _snapshotVersion = 1;
+  /// Pass it wherever a kind is named: [BaseCRDTDocument.register],
+  /// [BaseCRDTDocument.handler], and a container's `child` and `insertChild`.
+  /// {@endtemplate}
+  static const HandlerSpec<CRDTTextHandler> spec = HandlerSpec(
+    _handlerType,
+    CRDTTextHandler.new,
+    formats: _formats,
+  );
+
+  /// What this build reads for this handler type.
+  static const HandlerFormats _formats = HandlerFormats(
+    operationKinds: {
+      OperationType.kindInsert,
+      OperationType.kindDelete,
+      OperationType.kindUpdate,
+    },
+    blobVersions: BlobVersionRange.single(_blobVersion),
+  );
+
+  /// The version of the snapshot blob this build writes and reads.
+  static const int _blobVersion = 1;
+
+  @override
+  int get snapshotBlobVersion => _blobVersion;
 
   @override
   Uint8List getSnapshotState() {
-    final out = BytesBuilder(copy: false)
-      ..addByte(_snapshotVersion)
-      ..add(Wtf8.encode(value));
+    final out = snapshotHeader()..add(Wtf8.encode(value));
     return out.toBytes();
   }
 
@@ -445,11 +463,7 @@ base class CRDTTextHandler extends Handler<String>
     if (snapshot == null) {
       return '';
     }
-    final offset = SnapshotBlob.read(
-      snapshot,
-      version: _snapshotVersion,
-      name: 'text',
-    );
+    final offset = readSnapshotHeader(snapshot).offset;
     return Wtf8.decode(Uint8List.sublistView(snapshot, offset));
   }
 

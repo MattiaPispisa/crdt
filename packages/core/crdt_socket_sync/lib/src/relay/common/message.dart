@@ -90,6 +90,7 @@ class RelayHelloMessage extends RelayMessage {
   const RelayHelloMessage({
     required String documentId,
     required this.author,
+    this.protocolVersion = Protocol.protocolVersion,
   }) : super(RelayMessageType.relayHello, documentId);
 
   /// Create a hello message from a JSON map
@@ -97,11 +98,15 @@ class RelayHelloMessage extends RelayMessage {
     return RelayHelloMessage(
       documentId: json['documentId'] as String,
       author: PeerId.parse(json['author'] as String),
+      protocolVersion: Protocol.readVersion(json),
     );
   }
 
   /// The author of the joining client
   final PeerId author;
+
+  /// The wire protocol major version the client speaks.
+  final int protocolVersion;
 
   @override
   Map<String, dynamic> toJson() {
@@ -109,12 +114,14 @@ class RelayHelloMessage extends RelayMessage {
       'type': type.value,
       'documentId': documentId,
       'author': author.toString(),
+      'protocolVersion': protocolVersion,
     };
   }
 
   @override
   String toString() {
-    return 'RelayHelloMessage(documentId: $documentId, author: $author)';
+    return 'RelayHelloMessage(documentId: $documentId, author: $author, '
+        'protocolVersion: $protocolVersion)';
   }
 }
 
@@ -129,6 +136,7 @@ class RelayWelcomeMessage extends RelayMessage {
     required this.logLength,
     required this.compact,
     this.snapshot,
+    this.protocolVersion = Protocol.protocolVersion,
   }) : super(RelayMessageType.relayWelcome, documentId);
 
   /// Create a welcome message from a JSON map
@@ -141,6 +149,7 @@ class RelayWelcomeMessage extends RelayMessage {
       seq: json['seq'] as int,
       logLength: json['logLength'] as int,
       compact: json['compact'] as bool,
+      protocolVersion: Protocol.readVersion(json),
     );
   }
 
@@ -163,6 +172,9 @@ class RelayWelcomeMessage extends RelayMessage {
   /// (see [RelaySnapshotUploadMessage])
   final bool compact;
 
+  /// The wire protocol major version the relay speaks.
+  final int protocolVersion;
+
   @override
   Map<String, dynamic> toJson() {
     return {
@@ -174,6 +186,7 @@ class RelayWelcomeMessage extends RelayMessage {
       'seq': seq,
       'logLength': logLength,
       'compact': compact,
+      'protocolVersion': protocolVersion,
     };
   }
 
@@ -182,7 +195,8 @@ class RelayWelcomeMessage extends RelayMessage {
     return 'RelayWelcomeMessage(documentId: $documentId, '
         'sessionId: $sessionId, snapshot: ${snapshot != null}, '
         'changes: ${changes.length}, seq: $seq, '
-        'logLength: $logLength, compact: $compact)';
+        'logLength: $logLength, compact: $compact, '
+        'protocolVersion: $protocolVersion)';
   }
 }
 

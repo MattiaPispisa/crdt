@@ -151,7 +151,17 @@ void main() {
 /// Holds the last value it was set to, under the same kind byte the
 /// PN-counter uses for an increment.
 final class _MarkerHandler extends Handler<int> {
-  _MarkerHandler(super.doc, this._id);
+  _MarkerHandler(super.doc, this._id) : super(spec: spec);
+
+  /// The kind a marker is.
+  static const HandlerSpec<_MarkerHandler> spec = HandlerSpec(
+    '_MarkerHandler',
+    _MarkerHandler.new,
+    formats: HandlerFormats(
+      operationKinds: {setKind},
+      blobVersions: BlobVersionRange.single(1),
+    ),
+  );
 
   static const int setKind = 4;
 

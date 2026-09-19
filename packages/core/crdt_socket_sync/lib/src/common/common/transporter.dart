@@ -60,6 +60,13 @@ class _TransportImpl implements Transport {
 
   @override
   Future<void> send(List<int> data) async {
+    if (_incomingController.isClosed) {
+      throw StateError(
+        'This transport is done: the peer closed the connection, or close() '
+        'ran. Open a new one instead of sending on it.',
+      );
+    }
+
     if (_connection == null || !_connection!.isConnected) {
       await _connect();
     }
@@ -80,16 +87,29 @@ class _TransportImpl implements Transport {
   bool get isConnected => _connection?.isConnected ?? false;
 
   Future<void> _connect() async {
+    await _incomingSubscription?.cancel();
     _connection = await _connector.connect();
 
     // Forward incoming messages to the controller
     _incomingSubscription = _connection!.incoming.listen(
       _incomingController.add,
       onError: _incomingController.addError,
-      onDone: () {
-        // If the connection is closed, try to reconnect
-        _connection = null;
-      },
+      onDone: _handlePeerClosed,
     );
+  }
+
+  /// Ends this transport, reporting the close on [incoming] as an error.
+  void _handlePeerClosed() {
+    _connection = null;
+    if (_incomingController.isClosed) {
+      return;
+    }
+
+    // An error, because a consumer of [incoming] gets no onDone of its own:
+    // without it the peer's close is silent.
+    _incomingController.addError(
+      StateError('The peer closed the connection.'),
+    );
+    unawaited(_incomingController.close());
   }
 }

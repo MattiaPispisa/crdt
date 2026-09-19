@@ -19,12 +19,16 @@ CRDTMapRefHandler buildTree(CRDTDocument doc) {
 void main() {
   group('reconstruct', () {
     test('a fresh peer rebuilds the whole tree from changes alone', () {
-      final docA = CRDTDocument()..registerDefaultFactories();
+      final docA = CRDTDocument();
       final rootA = buildTree(docA);
 
       // B knows only the factories and the received changes.
       final docB = CRDTDocument()
-        ..registerDefaultFactories()
+        ..register(CRDTMapRefHandler.spec)
+        ..register(CRDTListRefHandler.spec)
+        ..register(CRDTMovableListRefHandler.spec)
+        ..register(CRDTFugueTextHandler.spec)
+        ..register(CRDTTextHandler.spec)
         ..importChanges(docA.exportChanges())
         ..reconstruct();
 
@@ -40,14 +44,18 @@ void main() {
     });
 
     test('reconstructs from a pruned snapshot via the manifest', () {
-      final docA = CRDTDocument()..registerDefaultFactories();
+      final docA = CRDTDocument();
       buildTree(docA);
       final snapshot = docA.takeSnapshot();
       // History is pruned: no changes remain to discover types from.
       expect(docA.exportChanges(), isEmpty);
 
       final docB = CRDTDocument()
-        ..registerDefaultFactories()
+        ..register(CRDTMapRefHandler.spec)
+        ..register(CRDTListRefHandler.spec)
+        ..register(CRDTMovableListRefHandler.spec)
+        ..register(CRDTFugueTextHandler.spec)
+        ..register(CRDTTextHandler.spec)
         ..importSnapshot(snapshot)
         ..reconstruct();
 
@@ -64,8 +72,10 @@ void main() {
 
       final snapshot = doc.takeSnapshot();
 
-      // The snapshot of a flat document is unchanged: only the handler id.
-      expect(snapshot.data.keys, ['text']);
+      // A flat document writes no manifest: there is no nested handler to
+      // reconstruct, so there is no {id: type} pair worth carrying.
+      expect(snapshot.data.keys, isNot(contains('crdt_lf/handler-manifest')));
+      expect(snapshot.data.keys, contains('text'));
       expect(text.value, 'hello');
 
       final docB = CRDTDocument()..importSnapshot(snapshot);
@@ -73,24 +83,26 @@ void main() {
       expect(textB.value, 'hello');
     });
 
-    test('importing changes auto-registers handlers (no reconstruct call)', () {
-      final docA = CRDTDocument()..registerDefaultFactories();
+    test('a declared tree resolves as it is read, with no reconstruct', () {
+      final docA = CRDTDocument();
       final rootA = buildTree(docA);
 
-      // No reconstruct(): handlers must be instantiated during import because
-      // factories are registered.
+      // Importing builds nothing: a handler materializes when it is opened or
+      // when someone resolves the ref that names it. Reading the root is what
+      // walks the tree and brings the children in.
       final docB = CRDTDocument()
-        ..registerDefaultFactories()
+        ..register(CRDTMapRefHandler.spec)
+        ..register(CRDTListRefHandler.spec)
+        ..register(CRDTFugueTextHandler.spec)
         ..importChanges(docA.exportChanges());
+      final rootB = CRDTMapRefHandler(docB, 'root');
 
+      expect(rootB.resolved, rootA.resolved);
       expect(
         docB.registeredHandlers.keys,
         containsAll(<String>['root', 'title', 'chapters', 'intro']),
       );
       expect(docB.roots().map((h) => h.id), ['root']);
-
-      final rootB = docB.registeredHandlers['root']! as CRDTMapRefHandler;
-      expect(rootB.resolved, rootA.resolved);
     });
 
     test('without factories, import does not auto-register (legacy)', () {
@@ -107,23 +119,20 @@ void main() {
       expect(textB.value, text.value);
     });
 
-    test('a generic ref with a custom handlerType reconstructs remotely', () {
+    test('a generic ref with a spec of its own reconstructs remotely', () {
       // Mirrors how the example tags its CRDTRegisterHandler<bool> so the
-      // nested ref keeps working in a minified build. The factory key and the
-      // handler's handlerType are the same custom tag.
+      // nested ref keeps working in a minified build. One spec holds the tag
+      // and the builder, so the two cannot disagree.
       const tag = 'register/bool';
-      CRDTRegisterHandler<bool> newFlag(BaseCRDTDocument d, String id) =>
-          CRDTRegisterHandler<bool>(d, id, handlerType: tag);
+      final newFlagSpec = CRDTRegisterHandler.spec<bool>(tag);
 
-      final docA = CRDTDocument()
-        ..registerDefaultFactories()
-        ..registerFactory(tag, newFlag);
-      final flagA = newFlag(docA, 'flag')..set(true);
+      final docA = CRDTDocument();
+      final flagA = newFlagSpec.create(docA, 'flag')..set(true);
       CRDTMapRefHandler(docA, 'root').setRef('done', flagA);
 
       final docB = CRDTDocument()
-        ..registerDefaultFactories()
-        ..registerFactory(tag, newFlag)
+        ..register(newFlagSpec)
+        ..register(CRDTMapRefHandler.spec)
         ..importChanges(docA.exportChanges())
         ..reconstruct();
 
@@ -138,20 +147,15 @@ void main() {
       // The handler is created with tag-A, but the remote peer only knows a
       // factory registered under tag-B, so the ref must not resolve. This
       // proves handlerType (not the runtime class) drives factory lookup.
-      final docA = CRDTDocument()..registerDefaultFactories();
-      final flagA = CRDTRegisterHandler<bool>(
-        docA,
-        'flag',
-        handlerType: 'tag-A',
-      )..set(true);
+      final docA = CRDTDocument();
+      final flagA =
+          CRDTRegisterHandler<bool>(docA, 'flag', handlerType: 'tag-A')
+            ..set(true);
       CRDTMapRefHandler(docA, 'root').setRef('done', flagA);
 
       final docB = CRDTDocument()
-        ..registerDefaultFactories()
-        ..registerFactory(
-          'tag-B',
-          (d, id) => CRDTRegisterHandler<bool>(d, id, handlerType: 'tag-B'),
-        )
+        ..register(CRDTRegisterHandler.spec<bool>('tag-B'))
+        ..register(CRDTMapRefHandler.spec)
         ..importChanges(docA.exportChanges())
         ..reconstruct();
 

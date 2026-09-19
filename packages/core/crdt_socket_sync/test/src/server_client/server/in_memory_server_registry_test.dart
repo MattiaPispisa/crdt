@@ -58,7 +58,11 @@ void main() {
 
     test('applyChange throws for an unknown document', () {
       final doc = CRDTDocument(peerId: PeerId.generate());
-      CRDTListHandler<String>(doc, 'list').insert(0, 'a');
+      CRDTListHandler<String>(
+        doc,
+        'list',
+        handlerType: 'CRDTListHandler<String>',
+      ).insert(0, 'a');
       final change = doc.exportChanges().first;
 
       expect(
@@ -71,7 +75,11 @@ void main() {
       await registry.addDocument('doc');
 
       final authorDoc = CRDTDocument(peerId: PeerId.generate());
-      CRDTListHandler<String>(authorDoc, 'list').insert(0, 'a');
+      CRDTListHandler<String>(
+        authorDoc,
+        'list',
+        handlerType: 'CRDTListHandler<String>',
+      ).insert(0, 'a');
       final change = authorDoc.exportChanges().first;
 
       expect(await registry.applyChange('doc', change), isTrue);
@@ -86,7 +94,11 @@ void main() {
 
         // Two causally dependent changes; apply only the second.
         final authorDoc = CRDTDocument(peerId: PeerId.generate());
-        CRDTListHandler<String>(authorDoc, 'list')
+        CRDTListHandler<String>(
+          authorDoc,
+          'list',
+          handlerType: 'CRDTListHandler<String>',
+        )
           ..insert(0, 'a')
           ..insert(1, 'b');
         final orphan = authorDoc.exportChanges()[1];

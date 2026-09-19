@@ -90,10 +90,58 @@ abstract class ClientSession {
   List<String> get subscribedDocuments => _subscribedDocuments.toList();
 
   /// Message codec
-  final MessageCodec<Message> _messageCodec;
+  final CompressedCodec<Message> _messageCodec;
 
   /// Bounded, serialized outbound send queue.
   late final OutboundQueue _outboundQueue;
+
+  /// Refuses the client with [code] and [reason], and closes the session.
+  ///
+  /// A refusal is permanent: the client is told why, the server records it,
+  /// and the session ends. Nothing here can be retried into a success.
+  @protected
+  Future<void> refuse({
+    required String documentId,
+    required String code,
+    required String reason,
+  }) async {
+    await sendMessage(
+      Message.error(documentId: documentId, code: code, message: reason),
+    );
+
+    addSessionEvent(
+      SessionEventGeneric(
+        sessionId: id,
+        type: SessionEventType.error,
+        message: 'Client refused for document $documentId: $reason',
+      ),
+    );
+
+    await close();
+  }
+
+  /// Refuses a client that speaks another [Protocol.protocolVersion], and
+  /// says whether it did.
+  ///
+  /// The first thing a session checks: two peers that do not agree on the
+  /// frames cannot agree on anything carried inside them.
+  @protected
+  Future<bool> refuseProtocolMismatch({
+    required String documentId,
+    required int clientVersion,
+  }) async {
+    if (clientVersion == Protocol.protocolVersion) {
+      return false;
+    }
+
+    await refuse(
+      documentId: documentId,
+      code: Protocol.errorUnsupportedProtocolVersion,
+      reason: 'The client speaks protocol version $clientVersion, '
+          'this server speaks ${Protocol.protocolVersion}.',
+    );
+    return true;
+  }
 
   /// Send a message to the client
   Future<void> sendMessage(Message message) async {
@@ -133,16 +181,13 @@ abstract class ClientSession {
       );
 
       // If we can't send, assume connection is dead
-      _closeSession(reason: 'Failed to send message: $e');
+      unawaited(_closeSession(reason: 'Failed to send message: $e'));
       rethrow;
     }
   }
 
   /// Close the session
-  Future<void> close() async {
-    _closeSession(reason: 'Session manually closed');
-    await tryCatchIgnore(_connection.close);
-  }
+  Future<void> close() => _closeSession(reason: 'Session manually closed');
 
   /// Handle incoming data from the transport
   void _handleData(List<int> data) {
@@ -151,7 +196,7 @@ abstract class ClientSession {
     try {
       final message = _messageCodec.decode(data);
       if (message == null) {
-        handleUndecodable(data);
+        handleUndecodable(_messageCodec.tryFrameOf(data));
         return;
       }
       _handleMessage(message);
@@ -166,6 +211,11 @@ abstract class ClientSession {
           },
         ),
       );
+      // A frame that throws on the way in is as undecodable as one that
+      // decodes to nothing, and the peer is owed the same answer. Without it
+      // the client sits on a connection that works and waits for a reply that
+      // is never coming.
+      handleUndecodable(_messageCodec.tryFrameOf(data));
     }
   }
 
@@ -184,7 +234,7 @@ abstract class ClientSession {
     );
 
     // Close the session on connection error
-    _closeSession(reason: 'Connection error: $error');
+    unawaited(_closeSession(reason: 'Connection error: $error'));
   }
 
   /// Handle connection closed
@@ -193,7 +243,7 @@ abstract class ClientSession {
       return;
     }
 
-    _closeSession(reason: 'Client disconnected');
+    unawaited(_closeSession(reason: 'Client disconnected'));
   }
 
   /// Handle incoming message
@@ -226,11 +276,15 @@ abstract class ClientSession {
   @protected
   Future<void> handleTypedMessage(Message message);
 
-  /// Called for an incoming [data] frame no codec could decode.
+  /// Called for an incoming [data] frame this session could not read.
   ///
-  /// The default reports a [SessionEventType.error] event. Sessions may
-  /// override it to answer the peer (for example, a relay session diagnoses a
-  /// CRDT-aware sync client that connected to the wrong server).
+  /// Covers a frame no codec claimed and one that threw on the way in. The
+  /// default reports a [SessionEventType.error] event **and answers the peer**
+  /// with [Protocol.errorInvalidMessage]: a client that hears nothing back
+  /// cannot tell a rejected frame from a slow one, and waits for a reply that
+  /// is never coming. Sessions may override it to say something more precise
+  /// first (a relay session diagnoses a CRDT-aware sync client that connected
+  /// to the wrong server).
   @protected
   void handleUndecodable(List<int> data) {
     addSessionEvent(
@@ -239,6 +293,28 @@ abstract class ClientSession {
         type: SessionEventType.error,
         message: 'Failed to decode message: $data. '
             'This message is not supported by any plugin.',
+      ),
+    );
+
+    // Only for a frame that belongs to the protocol. A plugin frame this build
+    // cannot read means the peer has a plugin this one does not — a difference
+    // in configuration, and answering it would turn every frame of a working
+    // connection into an error the peer displays.
+    final type = Message.getTypeOrNull(data);
+    if (type != null && type >= MessageTypeValue.firstPluginValue) {
+      return;
+    }
+
+    unawaited(
+      sendMessage(
+        Message.error(
+          // Names no document, because this answer is not about one: the frame
+          // it answers did not decode, and it is the frame that would have
+          // said which. A client takes an error that names none.
+          documentId: '',
+          code: Protocol.errorInvalidMessage,
+          message: 'This frame could not be read.',
+        ),
       ),
     );
   }
@@ -308,7 +384,7 @@ abstract class ClientSession {
       ),
     );
 
-    _closeSession(reason: 'Client timeout');
+    unawaited(_closeSession(reason: 'Client timeout'));
   }
 
   /// Update last activity timestamp
@@ -317,9 +393,10 @@ abstract class ClientSession {
   }
 
   /// Close the session with reason
-  void _closeSession({
+  /// Ends the session and closes the socket under it. Runs once.
+  Future<void> _closeSession({
     required String reason,
-  }) {
+  }) async {
     if (_isClosed) {
       return;
     }
@@ -344,11 +421,13 @@ abstract class ClientSession {
         },
       ),
     );
+
+    await tryCatchIgnore(_connection.close);
   }
 
   /// Dispose the session
   void dispose() {
-    _closeSession(reason: 'Session disposed');
+    unawaited(_closeSession(reason: 'Session disposed'));
     _sessionEventController.close();
   }
 

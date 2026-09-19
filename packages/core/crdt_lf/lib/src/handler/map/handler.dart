@@ -1,7 +1,6 @@
 import 'dart:typed_data';
 
 import 'package:crdt_lf/crdt_lf.dart';
-import 'package:crdt_lf/src/snapshot/blob_version.dart';
 
 part 'operation.dart';
 
@@ -32,11 +31,34 @@ base class CRDTMapHandler<T> extends Handler<Map<String, T>>
   ///
   /// [valueCodec] is an optional codec for encoding/decoding [T] values to bytes.
   /// Default is [JsonValueCodec].
+  ///
+  /// [handlerType] names the **kind** of handler this is.
+  /// {@macro handler_type_tag}
   CRDTMapHandler(
+    BaseCRDTDocument doc,
+    String id, {
+    required String handlerType,
+    ValueCodec<T>? valueCodec,
+  }) : this.fromSpec(
+          doc,
+          id,
+          spec: spec<T>(handlerType, valueCodec: valueCodec),
+          valueCodec: valueCodec,
+        );
+
+  /// Builds one of a kind stated in full, instead of named by a tag.
+  ///
+  /// The hook for a subclass that is **its own kind** — a container built on
+  /// this handler, say. It passes its own spec up rather than letting this
+  /// class make one from a tag, which would name this class and leave a peer
+  /// rebuilding the reference with the wrong one.
+  ///
+  /// A plain use wants the unnamed constructor: it makes the spec for you.
+  CRDTMapHandler.fromSpec(
     super.doc,
     this._id, {
+    required super.spec,
     ValueCodec<T>? valueCodec,
-    super.handlerType,
   }) : _valueCodec = valueCodec ?? JsonValueCodec<T>();
 
   /// The ID of this map in the document
@@ -111,15 +133,45 @@ base class CRDTMapHandler<T> extends Handler<Map<String, T>>
     return state;
   }
 
+  /// {@macro generic_handler_spec}
+  static HandlerSpec<CRDTMapHandler<T>> spec<T>(
+    String type, {
+    ValueCodec<T>? valueCodec,
+  }) =>
+      HandlerSpec<CRDTMapHandler<T>>(
+        type,
+        (doc, id) => CRDTMapHandler<T>(
+          doc,
+          id,
+          handlerType: type,
+          valueCodec: valueCodec,
+        ),
+        formats: _formats,
+      );
+
+  /// What this build reads for this handler type.
+  static const HandlerFormats _formats = HandlerFormats(
+    operationKinds: {
+      OperationType.kindInsert,
+      OperationType.kindDelete,
+      OperationType.kindUpdate,
+    },
+    blobVersions: BlobVersionRange.single(_blobVersion),
+  );
+
   /// The version of the snapshot blob this build writes and reads.
   ///
   /// Layout: `version: u8`, `count: uvarint`, then per entry
   /// `keyLen: uvarint`, `key: utf8`, `valueLen: uvarint`, `value: bytes`.
-  static const int _snapshotVersion = 1;
+  /// The version [getSnapshotState] writes at the head of its blob.
+  static const int _blobVersion = 1;
+
+  @override
+  int get snapshotBlobVersion => _blobVersion;
 
   @override
   Uint8List getSnapshotState() {
-    final out = BytesBuilder(copy: false)..addByte(_snapshotVersion);
+    final out = snapshotHeader();
     final entries = value;
     UVarint.write(entries.length, out);
     for (final entry in entries.entries) {
@@ -365,11 +417,7 @@ base class CRDTMapHandler<T> extends Handler<Map<String, T>>
       return <String, T>{};
     }
 
-    var offset = SnapshotBlob.read(
-      snapshot,
-      version: _snapshotVersion,
-      name: 'map',
-    );
+    var offset = readSnapshotHeader(snapshot).offset;
     final countRec = UVarint.read(snapshot, offset: offset);
     offset = countRec.nextOffset;
     final state = <String, T>{};

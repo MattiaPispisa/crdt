@@ -2,7 +2,6 @@ import 'dart:async';
 import 'dart:math';
 
 import 'package:crdt_lf/crdt_lf.dart';
-import 'package:crdt_socket_sync/src/common/client/handshake_gate.dart';
 import 'package:crdt_socket_sync/src/common/client/status.dart';
 import 'package:crdt_socket_sync/src/common/client/web_socket/'
     'channel_connector.dart';
@@ -116,10 +115,6 @@ class WebSocketRelayClient extends RelaySocketClient {
     Random? random,
     super.plugins,
   })  : _messageController = StreamController<Message>.broadcast(),
-        _connectionStatusController =
-            StreamController<ConnectionStatus>.broadcast()
-              ..add(ConnectionStatus.disconnected),
-        _connectionStatusValue = ConnectionStatus.disconnected,
         _pingInterval = pingInterval ?? Protocol.pingInterval,
         _pingTimeout = pingTimeout ?? Protocol.pingTimeout,
         _handshakeTimeout = handshakeTimeout ?? Protocol.handshakeTimeout,
@@ -130,7 +125,6 @@ class WebSocketRelayClient extends RelaySocketClient {
             reconnectMaxDelay ?? RelayProtocol.reconnectMaxDelay,
         _reconnectJitter = reconnectJitter ?? RelayProtocol.reconnectJitter,
         _random = random ?? Random(),
-        _handshakeGate = HandshakeGate(),
         _transportFactory = transportFactory ??
             (() => Transport.create(WebSocketChannelConnector(url))) {
     _syncManager = RelaySyncManager(document: document, client: this);
@@ -184,10 +178,6 @@ class WebSocketRelayClient extends RelaySocketClient {
   /// Incoming (transporter) messages controller
   final StreamController<Message> _messageController;
 
-  /// Connection status controller
-  final StreamController<ConnectionStatus> _connectionStatusController;
-  ConnectionStatus _connectionStatusValue;
-
   final Transport Function() _transportFactory;
 
   /// Base delay of the exponential reconnect backoff
@@ -239,18 +229,8 @@ class WebSocketRelayClient extends RelaySocketClient {
   /// gone).
   DateTime? _lastPongAt;
 
-  /// Coordinates the join lifecycle (completer, timeout race, reset).
-  final HandshakeGate _handshakeGate;
-
   /// Codec for messages
-  late final MessageCodec<Message> _messageCodec;
-
-  @override
-  Stream<ConnectionStatus> get connectionStatus =>
-      _connectionStatusController.stream;
-
-  @override
-  ConnectionStatus get connectionStatusValue => _connectionStatusValue;
+  late final CompressedCodec<Message> _messageCodec;
 
   @override
   Stream<Message> get messages => _messageController.stream;
@@ -270,13 +250,19 @@ class WebSocketRelayClient extends RelaySocketClient {
   /// If the join fails then the client will attempt to reconnect.
   @override
   Future<bool> connect() async {
-    if (_connectionStatusValue.isConnected) {
+    if (connectionStatusValue.isConnected) {
       return true;
     }
 
-    if (_handshakeGate.inProgress) {
+    // The relay has already refused this build. Connecting again would only
+    // earn the same refusal.
+    if (isUnsupported) {
+      return false;
+    }
+
+    if (handshake.inProgress) {
       // already under connection
-      return _handshakeGate.pending!;
+      return handshake.pending!;
     }
 
     try {
@@ -290,8 +276,8 @@ class WebSocketRelayClient extends RelaySocketClient {
         maxBufferSize: _maxBufferSize,
       );
 
-      _updateConnectionStatus(
-        _connectionStatusValue.isDisconnected
+      updateConnectionStatus(
+        connectionStatusValue.isDisconnected
             ? ConnectionStatus.connecting
             : ConnectionStatus.reconnecting,
       );
@@ -308,7 +294,7 @@ class WebSocketRelayClient extends RelaySocketClient {
         // Seed liveness so a fresh connection is not immediately judged dead.
         _lastPongAt = DateTime.now();
         _startPingTimer();
-        _updateConnectionStatus(ConnectionStatus.connected);
+        updateConnectionStatus(ConnectionStatus.connected);
         for (final plugin in plugins) {
           plugin.onConnected();
         }
@@ -316,7 +302,7 @@ class WebSocketRelayClient extends RelaySocketClient {
 
       return connected;
     } catch (e) {
-      _updateConnectionStatus(ConnectionStatus.error);
+      updateConnectionStatus(ConnectionStatus.error);
       return false;
     }
   }
@@ -344,7 +330,7 @@ class WebSocketRelayClient extends RelaySocketClient {
       plugin.onDisconnected();
     }
 
-    _updateConnectionStatus(ConnectionStatus.disconnected);
+    updateConnectionStatus(ConnectionStatus.disconnected);
   }
 
   /// Send a message to the relay
@@ -356,7 +342,7 @@ class WebSocketRelayClient extends RelaySocketClient {
     Message message, {
     bool attemptReconnect = true,
   }) async {
-    if (_connectionStatusValue.isDisconnected || _transport == null) {
+    if (connectionStatusValue.isDisconnected || _transport == null) {
       throw StateError('Client not connected');
     }
 
@@ -365,7 +351,7 @@ class WebSocketRelayClient extends RelaySocketClient {
     final isHelloOrPong = message.type == RelayMessageType.relayHello ||
         message.type == MessageType.pong;
 
-    if (!isHelloOrPong && !await _handshakeGate.completed) {
+    if (!isHelloOrPong && !await handshake.completed) {
       // If the join is not completed, wait or skip the message
       throw StateError('Handshake not completed');
     }
@@ -392,8 +378,8 @@ class WebSocketRelayClient extends RelaySocketClient {
     try {
       await (_outboundQueue?.add(data) ?? _transport!.send(data));
 
-      if (await _handshakeGate.completed) {
-        _updateConnectionStatus(ConnectionStatus.connected);
+      if (await handshake.completed) {
+        updateConnectionStatus(ConnectionStatus.connected);
       }
     } catch (e) {
       _handleTransportError(
@@ -444,13 +430,25 @@ class WebSocketRelayClient extends RelaySocketClient {
     // ignore: prefer_asserts_with_message assert function
     assert(() {
       if (message == null) {
-        final type = Message.getTypeOrNull(data);
+        // Read from the frame, not from `data`: the type is a JSON field, and
+        // a compressed frame hides it exactly when this message is needed.
+        final frame = _messageCodec.tryFrameOf(data);
+        final type = Message.getTypeOrNull(frame);
+
+        // Quiet for a frame this build was never meant to read: one from a
+        // plugin it does not have, or bytes with no type to read at all. The
+        // server answers those with silence too — a peer set up differently
+        // is not a fault. What is left is a frame of the protocol itself.
+        if (type == null || type >= MessageTypeValue.firstPluginValue) {
+          return true;
+        }
+
         throw StateError(
           '[WebSocketRelayClient] received a message'
-          '${type != null ? ' of type $type' : ''}'
+          '${' of type $type'}'
           ' that cannot be decoded.'
           ' Have you added the plugin to the client?'
-          '\nFrame: ${data.join(', ')}',
+          '\nFrame: ${frame.join(', ')}',
         );
       }
       return true;
@@ -467,8 +465,8 @@ class WebSocketRelayClient extends RelaySocketClient {
     dynamic error, {
     bool attemptReconnect = true,
   }) {
-    if (_handshakeGate.isActive) {
-      _handshakeGate.reset();
+    if (handshake.isActive) {
+      handshake.reset();
     }
 
     _syncManager.onConnectionLost();
@@ -476,9 +474,9 @@ class WebSocketRelayClient extends RelaySocketClient {
     // on reconnecting if an error occurs do not update the status
     // to error, because the reconnect will handle it.
     if (!_isReconnecting) {
-      _updateConnectionStatus(ConnectionStatus.error);
+      updateConnectionStatus(ConnectionStatus.error);
     }
-    if (attemptReconnect) {
+    if (attemptReconnect && !isUnsupported) {
       _attemptReconnect();
     }
   }
@@ -499,7 +497,7 @@ class WebSocketRelayClient extends RelaySocketClient {
   ///
   /// Retries forever unless [maxReconnectAttempts] is set.
   Future<void> _attemptReconnect() async {
-    if (_isReconnecting) {
+    if (_isReconnecting || isUnsupported) {
       return;
     }
 
@@ -507,14 +505,14 @@ class WebSocketRelayClient extends RelaySocketClient {
 
     final maxAttempts = maxReconnectAttempts;
     if (maxAttempts != null && _reconnectAttempts >= maxAttempts) {
-      _updateConnectionStatus(ConnectionStatus.error);
+      updateConnectionStatus(ConnectionStatus.error);
       _isReconnecting = false;
       return;
     }
 
     final delay = _reconnectDelay();
     _reconnectAttempts++;
-    _updateConnectionStatus(ConnectionStatus.reconnecting);
+    updateConnectionStatus(ConnectionStatus.reconnecting);
 
     await Future<void>.delayed(delay);
 
@@ -527,7 +525,7 @@ class WebSocketRelayClient extends RelaySocketClient {
       _isReconnecting = false;
     }
 
-    if (!_connectionStatusValue.isConnected) {
+    if (!connectionStatusValue.isConnected) {
       unawaited(_attemptReconnect());
     }
   }
@@ -558,7 +556,7 @@ class WebSocketRelayClient extends RelaySocketClient {
   /// may still appear to succeed. Route this through [_handleTransportError]
   /// so the existing reconnect machinery is reused.
   Future<void> _sendPing() async {
-    if (_connectionStatusValue.isDisconnected) {
+    if (connectionStatusValue.isDisconnected) {
       return;
     }
 
@@ -593,7 +591,7 @@ class WebSocketRelayClient extends RelaySocketClient {
       author: author,
     );
 
-    return _handshakeGate.perform(
+    return handshake.perform(
       // do not attempt to reconnect on join error
       // because the reconnect will handle it.
       send: () => sendMessage(hello, attemptReconnect: false),
@@ -603,7 +601,11 @@ class WebSocketRelayClient extends RelaySocketClient {
 
   /// Handles incoming messages
   Future<void> _handleMessage(Message message) async {
-    if (message.documentId != document.documentId) {
+    // An error arrives on this connection, so it is about this client's one
+    // document whatever the field says. The server may not be able to name it
+    // — it answers a frame it could not read — and dropping the answer would
+    // leave the client waiting for it.
+    if (message is! ErrorMessage && message.documentId != document.documentId) {
       return;
     }
 
@@ -627,7 +629,7 @@ class WebSocketRelayClient extends RelaySocketClient {
       return _handlePongMessage(message);
     }
     if (message is ErrorMessage) {
-      return _handleErrorMessage(message);
+      return handleErrorMessage(message);
     }
   }
 
@@ -642,12 +644,23 @@ class WebSocketRelayClient extends RelaySocketClient {
   /// A welcome can also answer a [RelayStateRequestMessage] on an already
   /// joined connection: only the state import runs in that case.
   Future<void> _handleWelcome(RelayWelcomeMessage message) async {
+    if (refuseServerProtocolMismatch(message.protocolVersion)) {
+      return;
+    }
+
     _sessionId = message.sessionId;
 
     // Complete the join first so that the sync manager can send messages
-    _handshakeGate.succeed();
+    handshake.succeed();
 
-    await _syncManager.onWelcome(message);
+    // The join is already marked successful, so nothing else would report a
+    // failed import: the client would look connected while the sync manager
+    // refuses to push, and every local edit would queue for good. Rejoining
+    // serves the same room state, so the status stays `error` instead of
+    // starting a loop. Read `lastFault` for the reason.
+    if (!await _syncManager.onWelcome(message)) {
+      updateConnectionStatus(ConnectionStatus.error);
+    }
   }
 
   Future<void> _handlePingMessage(PingMessage message) async {
@@ -659,30 +672,6 @@ class WebSocketRelayClient extends RelaySocketClient {
     await sendMessage(pongMessage);
   }
 
-  void _handleErrorMessage(ErrorMessage message) {
-    _updateConnectionStatus(ConnectionStatus.error);
-
-    if (message.code == Protocol.errorHandshakeFailed &&
-        _handshakeGate.isActive) {
-      _handshakeGate.reset();
-    }
-  }
-
-  /// If [status] is different from [_connectionStatusValue]
-  /// then update the connection status and notify the listeners
-  void _updateConnectionStatus(ConnectionStatus status) {
-    if (status == _connectionStatusValue) {
-      return;
-    }
-
-    _connectionStatusValue = status;
-    if (_connectionStatusController.isClosed) {
-      return;
-    }
-
-    _connectionStatusController.add(status);
-  }
-
   @override
   void dispose() {
     disconnect();
@@ -691,8 +680,8 @@ class WebSocketRelayClient extends RelaySocketClient {
       plugin.dispose();
     }
 
+    closeClientStreams();
     _messageController.close();
-    _connectionStatusController.close();
     // Not awaited: `dispose` is synchronous, and the flag inside is set before
     // the first await, so nothing more reaches this client either way.
     unawaited(_syncManager.dispose());

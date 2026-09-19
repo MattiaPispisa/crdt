@@ -11,6 +11,7 @@ class MockCRDTSocketClient extends CRDTSocketClient {
     required this.document,
     required this.author,
     super.plugins,
+    super.capabilities,
   });
 
   @override
@@ -26,10 +27,6 @@ class MockCRDTSocketClient extends CRDTSocketClient {
 
   List<Message> get sentMessages => List.from(_sentMessages);
 
-  ConnectionStatus _connectionStatusValue = ConnectionStatus.disconnected;
-
-  final StreamController<ConnectionStatus> _connectionStatusController =
-      StreamController<ConnectionStatus>.broadcast();
   final StreamController<Message> _messagesController =
       StreamController<Message>.broadcast();
 
@@ -37,26 +34,19 @@ class MockCRDTSocketClient extends CRDTSocketClient {
   bool _shouldThrowOnSendMessage = false;
 
   @override
-  Stream<ConnectionStatus> get connectionStatus =>
-      _connectionStatusController.stream;
-
-  @override
-  ConnectionStatus get connectionStatusValue => _connectionStatusValue;
-
-  @override
   Stream<Message> get messages => _messagesController.stream;
 
   @override
   Future<bool> connect() async {
     _isConnected = true;
-    _connectionStatusController.add(ConnectionStatus.connected);
+    updateConnectionStatus(ConnectionStatus.connected);
     return true;
   }
 
   @override
   Future<void> disconnect() async {
     _isConnected = false;
-    _connectionStatusController.add(ConnectionStatus.disconnected);
+    updateConnectionStatus(ConnectionStatus.disconnected);
   }
 
   @override
@@ -87,9 +77,21 @@ class MockCRDTSocketClient extends CRDTSocketClient {
 
   @override
   void dispose() {
-    _connectionStatusController.close();
+    closeClientStreams();
     _messagesController.close();
   }
+
+  // The protected surface, reachable from a test.
+  //
+  // A subclass may use its own protected members; a test may not. These forward
+  // so the refusal paths can be driven without silencing the lint at every call
+  // site.
+
+  void refuse({required String code, required String reason}) =>
+      refuseBuild(code: code, reason: reason);
+
+  bool refuseProtocolMismatch(int serverVersion) =>
+      refuseServerProtocolMismatch(serverVersion);
 
   // Test helper methods
   set setShouldThrowOnSendMessage(bool shouldThrow) {
@@ -110,8 +112,6 @@ class MockCRDTSocketClient extends CRDTSocketClient {
 
   bool get isConnected => _isConnected;
 
-  void setConnectionStatus(ConnectionStatus status) {
-    _connectionStatusValue = status;
-    _connectionStatusController.add(_connectionStatusValue);
-  }
+  void setConnectionStatus(ConnectionStatus status) =>
+      updateConnectionStatus(status);
 }

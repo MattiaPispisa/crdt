@@ -1,5 +1,5 @@
 import 'package:crdt_lf/crdt_lf.dart';
-import 'package:crdt_lf/src/handler/handler_type.dart';
+import 'package:crdt_lf/src/handler/fugue/fugue_snapshot.dart';
 
 /// # CRDT ordered list of references
 ///
@@ -14,7 +14,7 @@ import 'package:crdt_lf/src/handler/handler_type.dart';
 ///
 /// ## Example
 /// ```dart
-/// final doc = CRDTDocument()..registerDefaultFactories();
+/// final doc = CRDTDocument();
 /// final chapters = CRDTListRefHandler(doc, 'chapters');
 /// final intro = CRDTFugueTextHandler(doc, doc.newHandlerId());
 /// chapters.insertRef(0, intro);
@@ -25,11 +25,13 @@ base class CRDTListRefHandler extends CRDTFugueListHandler<HandlerRef>
     implements ContainerHandler {
   /// Creates an ordered list-of-references handler bound to [doc] with [id].
   CRDTListRefHandler(super.doc, super.id)
-      : super(valueCodec: const HandlerRefCodec());
-
-  /// Stable type tag (minification-safe). See [Handler.handlerType].
-  @override
-  String get handlerType => kListRefHandlerType;
+      : super.fromSpec(
+          // Its own kind, not one the parent makes from a tag: a spec the
+          // parent minted would build the parent's class, and a peer rebuilding
+          // this ref would get a handler that is not a container.
+          spec: spec,
+          valueCodec: const HandlerRefCodec(),
+        );
 
   /// Inserts a reference to [handler] at position [index].
   ///
@@ -47,9 +49,8 @@ base class CRDTListRefHandler extends CRDTFugueListHandler<HandlerRef>
   /// Returns the handler referenced at [index], or `null` if out of range.
   ///
   /// {@template ref_get_resolution}
-  /// The handler is resolved — and lazily instantiated if needed — through the
-  /// document registry; it is `null` when the reference's type has no
-  /// registered factory.
+  /// The handler is resolved — and built if needed — through the document; it
+  /// is `null` when the document knows no kind under the reference's type.
   /// {@endtemplate}
   Handler<dynamic>? getRefAt(int index) {
     final refs = value;
@@ -57,6 +58,39 @@ base class CRDTListRefHandler extends CRDTFugueListHandler<HandlerRef>
       return null;
     }
     return doc.resolveHandler(refs[index]);
+  }
+
+  /// What this build reads for this handler type.
+  static const HandlerFormats _formats = HandlerFormats(
+    operationKinds: {
+      OperationType.kindInsert,
+      OperationType.kindDelete,
+      OperationType.kindUpdate,
+    },
+    blobVersions: BlobVersionRange.single(FugueSnapshot.version),
+  );
+
+  /// The tag this kind travels under; see [Handler.handlerType].
+  static const String _handlerType = 'CRDTListRefHandler';
+
+  /// {@macro builtin_handler_spec}
+  static const HandlerSpec<CRDTListRefHandler> spec = HandlerSpec(
+    _handlerType,
+    CRDTListRefHandler.new,
+    formats: _formats,
+  );
+
+  /// Inserts a child of the kind [spec] names at [index], and returns it.
+  ///
+  /// Always a new child; use [getRefAtAs] to read one back.
+  ///
+  /// ```dart
+  /// final block = blocks.insertChild(0, CRDTFugueTextHandler.spec);
+  /// ```
+  T insertChild<T extends Handler<dynamic>>(int index, HandlerSpec<T> spec) {
+    final created = spec.create(doc, doc.newHandlerId());
+    insertRef(index, created);
+    return created;
   }
 
   /// Like [getRefAt] but returns the handler only when it is a [T], otherwise

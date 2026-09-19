@@ -315,7 +315,11 @@ void main() {
 
     testWidgets('throws a FlutterError for a non-Fugue handler',
         (tester) async {
-      CRDTListHandler<String>(doc, 'note');
+      CRDTListHandler<String>(
+        doc,
+        'note',
+        handlerType: 'CRDTListHandler<String>',
+      );
       await tester.pumpWidget(host(const []));
       expect(tester.takeException(), isA<FlutterError>());
     });

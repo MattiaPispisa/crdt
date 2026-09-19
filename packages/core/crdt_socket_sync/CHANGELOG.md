@@ -1,3 +1,70 @@
+## [0.9.0](https://github.com/MattiaPispisa/crdt/tree/crdt_socket_sync-v0.9.0/packages/core/crdt_socket_sync)
+
+**Date:** 2026-09-18
+
+[compare to previous release](https://github.com/MattiaPispisa/crdt/compare/crdt_socket_sync-v0.8.0...crdt_socket_sync-v0.9.0)
+
+### Breaking
+
+Needs `crdt_lf: ^5.0.0`. A 0.8.0 peer still connects: both new handshake fields are optional on
+read. See [Migrating from 0.8.x to 0.9.0](https://github.com/MattiaPispisa/crdt/tree/main/packages/core/crdt_socket_sync#migrating-from-08x-to-090).
+
+- `Protocol.version` (the string `'1.0.0'`) is replaced by `Protocol.protocolVersion`, an `int`.
+- `ConnectionStatus` has a new value, `unsupported`, so an exhaustive `switch` needs another case.
+- A `CRDTSocketClient` subclass no longer provides `connectionStatus`,
+  `connectionStatusValue` or a status controller of its own: the base class owns
+  them, and a transport only calls `updateConnectionStatus`.
+- `PluginAwareMessageCodec` takes the protocol's codec and the plugins' codecs
+  apart (`PluginAwareMessageCodec(defaultCodec: ..., pluginCodecs: ...)`)
+  instead of one flat list. `fromPlugins` is unchanged.
+
+### Added
+
+- **An incompatible client is refused at the handshake instead of failing later.** Both peers state
+  the protocol version they speak, and the client states what its build can read
+  (`DocumentCapabilities`). The server compares that with what the document's data asks for
+  (`DocumentRequirements`), answers `UNSUPPORTED_PROTOCOL_VERSION` or `UNSUPPORTED_CLIENT`, and
+  closes. Snapshot blob layouts are compared as a range per handler type, so a build that reads an
+  older layout is not refused; `SnapshotBlobTooNew` and `SnapshotBlobTooOld` say which way it failed.
+  The client latches the refusal in the terminal `ConnectionStatus.unsupported` and exposes it on
+  `CRDTSocketClient.incompatibility`. A relay checks the version only.
+  [142](https://github.com/MattiaPispisa/crdt/issues/142)
+
+### Changed
+
+- **What the client cannot apply is reported on the new `CRDTSocketClient.faults`, not thrown.**
+  Applying runs inside the socket's read callback, where a throw became an uncaught zone error.
+  Only a causal gap still triggers `requestDocumentStatus()`; re-serving the document cannot fix
+  anything else. `faults` replays nothing, so `CRDTSocketClient.lastFault` holds the last one for
+  a listener that subscribed late.
+
+- **A frame the server cannot read is answered with `INVALID_MESSAGE`.** One that threw on the way
+  in used to be logged and nothing more, leaving the client waiting for a reply that never came.
+
+### Fixed
+
+- **A plugin's codec now writes the plugin's messages.** It only took part in decoding before: the
+  protocol's codec answered for every message, so a plugin whose codec is not the default JSON —
+  binary, an envelope, encrypted — put the wrong bytes on the wire and the peer refused them. A
+  message from `MessageTypeValue.firstPluginValue` up now goes to the plugins' codecs, anything
+  below to the protocol's.
+
+- **A codec that throws no longer hides the ones after it.** Handed a frame it was not written for,
+  a codec can throw instead of declining, and that ended the search — so adding a plugin could stop
+  an existing one's messages from being read.
+
+- **A transport says when the peer closes it.** A clean close left no trace: the next frame opened a
+  second socket behind the client's back, one that never handshakes, so the client looked connected
+  and every change it sent was dropped by the server in silence. The close is now reported on
+  `Transport.incoming`, which is what drives the reconnect, and sending on a closed transport throws.
+
+- **A session closes its socket however it ends.** Only `close()` did, so a client dropped for a
+  heartbeat timeout — or for a transport error, or a failed send — left its socket and its incoming
+  subscription alive for the life of the process.
+
+- **A client no longer throws in debug on a frame it was not meant to read.** A frame from a plugin
+  it does not have, or bytes with no readable type, are dropped the way the server drops them.
+
 ## [0.8.0](https://github.com/MattiaPispisa/crdt/tree/crdt_socket_sync-v0.8.0/packages/core/crdt_socket_sync)
 
 **Date:** 2026-09-07

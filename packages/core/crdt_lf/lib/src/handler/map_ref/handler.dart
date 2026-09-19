@@ -1,5 +1,4 @@
 import 'package:crdt_lf/crdt_lf.dart';
-import 'package:crdt_lf/src/handler/handler_type.dart';
 
 /// # CRDT Map of references
 ///
@@ -13,7 +12,7 @@ import 'package:crdt_lf/src/handler/handler_type.dart';
 ///
 /// ## Example
 /// ```dart
-/// final doc = CRDTDocument()..registerDefaultFactories();
+/// final doc = CRDTDocument();
 /// final root = CRDTMapRefHandler(doc, 'root');
 /// final title = CRDTFugueTextHandler(doc, doc.newHandlerId());
 /// root.setRef('title', title);
@@ -24,17 +23,66 @@ base class CRDTMapRefHandler extends CRDTMapHandler<HandlerRef>
     implements ContainerHandler {
   /// Creates a map-of-references handler bound to [doc] with the given [id].
   CRDTMapRefHandler(super.doc, super.id)
-      : super(valueCodec: const HandlerRefCodec());
+      : super.fromSpec(
+          // Its own kind, not one the parent makes from a tag: a spec the
+          // parent minted would build the parent's class, and a peer rebuilding
+          // this ref would get a handler that is not a container.
+          spec: spec,
+          valueCodec: const HandlerRefCodec(),
+        );
 
-  /// Stable type tag (minification-safe). See [Handler.handlerType].
-  @override
-  String get handlerType => kMapRefHandlerType;
+  /// What this build reads for this handler type.
+  static const HandlerFormats _formats = HandlerFormats(
+    operationKinds: {
+      OperationType.kindInsert,
+      OperationType.kindDelete,
+      OperationType.kindUpdate,
+    },
+    blobVersions: BlobVersionRange.single(1),
+  );
+
+  /// The tag this kind travels under; see [Handler.handlerType].
+  static const String _handlerType = 'CRDTMapRefHandler';
+
+  /// {@macro builtin_handler_spec}
+  static const HandlerSpec<CRDTMapRefHandler> spec = HandlerSpec(
+    _handlerType,
+    CRDTMapRefHandler.new,
+    formats: _formats,
+  );
 
   /// Associates [key] with a reference to [handler].
   ///
   /// {@macro handlers_in_ref}
   void setRef(String key, Handler<dynamic> handler) {
     set(key, HandlerRef.of(handler));
+  }
+
+  /// The child at [key], of the kind [spec] names, created when [key] holds
+  /// nothing yet.
+  ///
+  /// Safe to call again: the second call hands back the child the first wrote.
+  ///
+  /// ```dart
+  /// final title = chapter.child('title', CRDTFugueTextHandler.spec);
+  /// ```
+  ///
+  /// Throws [HandlerAlreadyRegisteredException] when [key] holds a child of
+  /// another kind, even one this peer has never opened.
+  T child<T extends Handler<dynamic>>(String key, HandlerSpec<T> spec) {
+    final ref = value[key];
+    if (ref != null) {
+      if (ref.type != spec.type) {
+        throw HandlerAlreadyRegisteredException(
+          'Key $key holds a ${ref.type}, not a ${spec.type}',
+        );
+      }
+      return doc.handler<T>(spec, ref.id);
+    }
+
+    final created = spec.create(doc, doc.newHandlerId());
+    setRef(key, created);
+    return created;
   }
 
   /// Returns the handler referenced by [key], or `null` if [key] is absent.

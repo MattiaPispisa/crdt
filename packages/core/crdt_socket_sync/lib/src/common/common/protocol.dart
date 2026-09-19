@@ -1,7 +1,17 @@
 /// Class that handles the communication protocol.
 class Protocol {
-  /// Version
-  static const String version = '1.0.0';
+  /// The major version of the wire protocol this build speaks.
+  static const int protocolVersion = 1;
+
+  /// The version a frame that carries no version field speaks.
+  static const int firstProtocolVersion = 1;
+
+  /// Reads the protocol version out of a decoded frame.
+  ///
+  /// A frame without the field comes from a build that predates it, which by
+  /// definition speaks [firstProtocolVersion].
+  static int readVersion(Map<String, dynamic> json) =>
+      json['protocolVersion'] as int? ?? firstProtocolVersion;
 
   /// Handshake timeout
   static const Duration handshakeTimeout = Duration(milliseconds: 5000);
@@ -45,4 +55,27 @@ class Protocol {
 
   /// Error client out of sync
   static const String errorOutOfSync = 'OUT_OF_SYNC';
+
+  /// Error: the peer speaks a different [protocolVersion].
+  static const String errorUnsupportedProtocolVersion =
+      'UNSUPPORTED_PROTOCOL_VERSION';
+
+  /// Error: the client cannot decode operations the server's document holds.
+  ///
+  /// Sent when the handshake capabilities miss an operation kind the server
+  /// has (see `SyncCapabilities`). Permanent: only a newer client build fixes
+  /// it.
+  static const String errorUnsupportedClient = 'UNSUPPORTED_CLIENT';
+
+  /// The error codes a client can never recover from by trying again.
+  ///
+  /// A refusal of the **build**: only a newer one changes the answer, so a
+  /// client that hears one stops instead of reconnecting. Every other code in
+  /// this class names something that can pass. A new terminal code belongs
+  /// here, and nowhere else — the clients read this set rather than each
+  /// naming the codes themselves.
+  static const Set<String> terminalErrors = {
+    errorUnsupportedProtocolVersion,
+    errorUnsupportedClient,
+  };
 }

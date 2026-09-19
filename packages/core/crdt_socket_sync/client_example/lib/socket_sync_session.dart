@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:crdt_lf/crdt_lf.dart';
 import 'package:crdt_socket_sync/web_socket_client.dart';
+import 'package:en_logger/en_logger.dart';
 import 'package:crdt_socket_sync_client_example/awareness_text_presence.dart';
 import 'package:hlc_dart/hlc_dart.dart';
 import 'package:shared_examples_infrastructure/shared_examples_infrastructure.dart';
@@ -20,6 +21,10 @@ class SocketSyncSession implements ExampleSyncSession {
   /// Creates and connects a session to `url` for `documentId`.
   ///
   /// `metadata` seeds the awareness plugin (presence) sent to the server.
+  ///
+  /// `logger` receives the faults the client reports: data that reached this
+  /// peer and could not be folded into the document. Nothing is retried, so an
+  /// app that cares has to decide what to do — here, logging is enough.
   SocketSyncSession({
     required String url,
     required String documentId,
@@ -27,6 +32,7 @@ class SocketSyncSession implements ExampleSyncSession {
     required this.label,
     Map<String, dynamic>? metadata,
     Compressor? compressor,
+    EnLogger? logger,
   }) : document = CRDTDocument(
          documentId: documentId,
          peerId: author,
@@ -52,8 +58,13 @@ class SocketSyncSession implements ExampleSyncSession {
       // Assigned by the server on connect: read it lazily.
       localSessionId: () => client.sessionId,
     );
+    _faults = client.faults.listen((fault) {
+      logger?.error('${fault.reason}: ${fault.error}');
+    });
     unawaited(client.connect());
   }
+
+  StreamSubscription<SyncFault>? _faults;
 
   @override
   final CRDTDocument document;
@@ -74,6 +85,7 @@ class SocketSyncSession implements ExampleSyncSession {
 
   @override
   void dispose() {
+    unawaited(_faults?.cancel());
     textPresence.dispose();
     client.dispose();
     document.dispose();

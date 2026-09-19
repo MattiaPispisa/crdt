@@ -7,7 +7,7 @@ void main() {
   group('nested document (Google Docs-like)', () {
     test('concurrent row insert and cell edit converge', () {
       // --- Peer A builds the initial document. ---
-      final docA = CRDTDocument()..registerDefaultFactories();
+      final docA = CRDTDocument();
       final cell = CRDTFugueTextHandler(docA, 'r0c0')..insert(0, 'hi');
       final row0 = CRDTListRefHandler(docA, 'r0')..insertRef(0, cell);
       final table = CRDTListRefHandler(docA, 'table')..insertRef(0, row0);
@@ -25,7 +25,12 @@ void main() {
         ..setRef('chapters', chapters);
 
       // --- Peer B receives the document and rebuilds it. ---
-      final docB = CRDTDocument()..registerDefaultFactories();
+      // It declares the kinds the tree is made of: every child arrives as a ref
+      // to a handler B never opened.
+      final docB = CRDTDocument()
+        ..register(CRDTMapRefHandler.spec)
+        ..register(CRDTListRefHandler.spec)
+        ..register(CRDTFugueTextHandler.spec);
       final rootB = CRDTMapRefHandler(docB, 'root');
       docB
         ..importChanges(docA.exportChanges())

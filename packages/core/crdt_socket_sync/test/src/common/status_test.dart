@@ -33,6 +33,15 @@ void main() {
       expect(ConnectionStatus.error.isConnecting, isFalse);
       expect(ConnectionStatus.error.isReconnecting, isFalse);
       expect(ConnectionStatus.error.isError, isTrue);
+      expect(ConnectionStatus.error.isUnsupported, isFalse);
+
+      expect(ConnectionStatus.unsupported.isConnected, isFalse);
+      expect(ConnectionStatus.unsupported.isDisconnected, isFalse);
+      expect(ConnectionStatus.unsupported.isConnecting, isFalse);
+      expect(ConnectionStatus.unsupported.isReconnecting, isFalse);
+      // Not an error: the connection worked, the build did not.
+      expect(ConnectionStatus.unsupported.isError, isFalse);
+      expect(ConnectionStatus.unsupported.isUnsupported, isTrue);
     });
   });
 }

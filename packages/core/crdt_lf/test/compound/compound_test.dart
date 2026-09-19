@@ -6,6 +6,9 @@ import 'package:test/test.dart';
 
 final _peer = PeerId.parse('45ee6b65-b393-40b7-9755-8b66dc7d0518');
 
+/// The custom kind both stamped fixtures dispatch on.
+const _stampedWriteKind = 4;
+
 void main() {
   group('Compound', () {
     late CRDTDocument doc;
@@ -13,7 +16,11 @@ void main() {
 
     setUp(() {
       doc = CRDTDocument(peerId: _peer);
-      plain = CRDTRegisterHandler<int>(doc, 'plain');
+      plain = CRDTRegisterHandler<int>(
+        doc,
+        'plain',
+        handlerType: 'CRDTRegisterHandler<int>',
+      );
     });
 
     List<Operation> compact(List<Operation> operations) => Compound(
@@ -39,7 +46,11 @@ void main() {
     });
 
     test('operations of different handlers are left alone', () {
-      final other = CRDTRegisterHandler<int>(doc, 'other');
+      final other = CRDTRegisterHandler<int>(
+        doc,
+        'other',
+        handlerType: 'CRDTRegisterHandler<int>',
+      );
       final result = compact([
         _write(plain, 1),
         _write(other, 2),
@@ -112,7 +123,16 @@ Operation _write(CRDTRegisterHandler<int> handler, int value) {
 /// A stamped handler that does **not** compound, which is the only shape a
 /// stamped handler is allowed to have.
 base class _StampedRegister extends Handler<int> {
-  _StampedRegister(super.doc, this._id);
+  _StampedRegister(super.doc, this._id) : super(spec: _spec);
+
+  static const HandlerSpec<_StampedRegister> _spec = HandlerSpec(
+    '_StampedRegister',
+    _StampedRegister.new,
+    formats: HandlerFormats(
+      operationKinds: {_stampedWriteKind},
+      blobVersions: BlobVersionRange.single(1),
+    ),
+  );
 
   final String _id;
 
@@ -130,7 +150,7 @@ base class _StampedRegister extends Handler<int> {
 
   late final OperationType writeType = OperationType.custom(
     this,
-    kind: 4,
+    kind: _stampedWriteKind,
     name: 'write',
     stamped: true,
   );
@@ -157,7 +177,8 @@ base class _StampedRegister extends Handler<int> {
 /// A handler written the way `Compound` refuses: it folds to the accumulator,
 /// so the survivor carries the earlier id.
 final class _BackwardsCompoundingRegister extends CRDTRegisterHandler<int> {
-  _BackwardsCompoundingRegister(super.doc, super.id);
+  _BackwardsCompoundingRegister(super.doc, super.id)
+      : super(handlerType: 'CRDTRegisterHandler<int>');
 
   @override
   Operation? compound(Operation accumulator, Operation current) => accumulator;

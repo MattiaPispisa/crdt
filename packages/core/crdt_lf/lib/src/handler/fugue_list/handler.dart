@@ -4,6 +4,7 @@ import 'package:crdt_lf/crdt_lf.dart';
 import 'package:crdt_lf/src/algorithm/fugue/tree.dart';
 import 'package:crdt_lf/src/handler/fugue/fugue_sequence_apply.dart';
 import 'package:crdt_lf/src/handler/fugue/fugue_sequence_handler.dart';
+import 'package:crdt_lf/src/handler/fugue/fugue_snapshot.dart';
 
 part 'operation.dart';
 
@@ -39,14 +40,66 @@ base class CRDTFugueListHandler<T>
   ///
   /// [valueCodec] is an optional codec for encoding/decoding [T] values to
   /// bytes. Default is [JsonValueCodec].
+  ///
+  /// [handlerType] names the **kind** of handler this is.
+  /// {@macro handler_type_tag}
   CRDTFugueListHandler(
+    BaseCRDTDocument doc,
+    String id, {
+    required String handlerType,
+    ValueCodec<T>? valueCodec,
+  }) : this.fromSpec(
+          doc,
+          id,
+          spec: spec<T>(handlerType, valueCodec: valueCodec),
+          valueCodec: valueCodec,
+        );
+
+  /// Builds one of a kind stated in full, instead of named by a tag.
+  ///
+  /// The hook for a subclass that is **its own kind** — a container built on
+  /// this handler, say. It passes its own spec up rather than letting this
+  /// class make one from a tag, which would name this class and leave a peer
+  /// rebuilding the reference with the wrong one.
+  ///
+  /// A plain use wants the unnamed constructor: it makes the spec for you.
+  CRDTFugueListHandler.fromSpec(
     super.doc,
     super.id, {
+    required super.spec,
     ValueCodec<T>? valueCodec,
-    super.handlerType,
   }) : _valueCodec = valueCodec ?? JsonValueCodec<T>();
 
   final ValueCodec<T> _valueCodec;
+
+  /// {@macro generic_handler_spec}
+  static HandlerSpec<CRDTFugueListHandler<T>> spec<T>(
+    String type, {
+    ValueCodec<T>? valueCodec,
+  }) =>
+      HandlerSpec<CRDTFugueListHandler<T>>(
+        type,
+        (doc, id) => CRDTFugueListHandler<T>(
+          doc,
+          id,
+          handlerType: type,
+          valueCodec: valueCodec,
+        ),
+        formats: _formats,
+      );
+
+  /// What this build reads for this handler type.
+  ///
+  /// The blob range is [FugueSnapshot.version], shared by every handler built
+  /// on the Fugue tree.
+  static const HandlerFormats _formats = HandlerFormats(
+    operationKinds: {
+      OperationType.kindInsert,
+      OperationType.kindDelete,
+      OperationType.kindUpdate,
+    },
+    blobVersions: BlobVersionRange.single(FugueSnapshot.version),
+  );
 
   @override
   late final OperationDecoders operationDecoders = {

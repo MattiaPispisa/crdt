@@ -7,7 +7,11 @@ void main() {
       final doc = CRDTDocument(
         peerId: PeerId.parse('37f1ec87-6ea5-430b-a627-a6b92b56a02d'),
       );
-      final handler = CRDTListHandler<String>(doc, 'list1')
+      final handler = CRDTListHandler<String>(
+        doc,
+        'list1',
+        handlerType: 'CRDTListHandler<String>',
+      )
 
         // Insert elements
         ..insert(0, 'Hello')
@@ -45,12 +49,20 @@ void main() {
       final doc1 = CRDTDocument(
         peerId: PeerId.parse('45ee6b65-b393-40b7-9755-8b66dc7d0518'),
       );
-      final handler1 = CRDTListHandler<String>(doc1, 'list1');
+      final handler1 = CRDTListHandler<String>(
+        doc1,
+        'list1',
+        handlerType: 'CRDTListHandler<String>',
+      );
 
       final doc2 = CRDTDocument(
         peerId: PeerId.parse('a90dfced-cbf0-4a49-9c64-f5b7b62fdc18'),
       );
-      final handler2 = CRDTListHandler<String>(doc2, 'list1');
+      final handler2 = CRDTListHandler<String>(
+        doc2,
+        'list1',
+        handlerType: 'CRDTListHandler<String>',
+      );
 
       // Initial state
       handler1.insert(0, 'Hello');
@@ -84,12 +96,20 @@ void main() {
       final doc1 = CRDTDocument(
         peerId: PeerId.parse('45ee6b65-b393-40b7-9755-8b66dc7d0518'),
       );
-      final handler1 = CRDTListHandler<String>(doc1, 'list1');
+      final handler1 = CRDTListHandler<String>(
+        doc1,
+        'list1',
+        handlerType: 'CRDTListHandler<String>',
+      );
 
       final doc2 = CRDTDocument(
         peerId: PeerId.parse('a90dfced-cbf0-4a49-9c64-f5b7b62fdc18'),
       );
-      final handler2 = CRDTListHandler<String>(doc2, 'list1');
+      final handler2 = CRDTListHandler<String>(
+        doc2,
+        'list1',
+        handlerType: 'CRDTListHandler<String>',
+      );
 
       // Initial state
       handler1
@@ -124,7 +144,11 @@ void main() {
       final doc = CRDTDocument(
         peerId: PeerId.parse('45ee6b65-b393-40b7-9755-8b66dc7d0518'),
       );
-      final handler = CRDTListHandler<int>(doc, 'list1')
+      final handler = CRDTListHandler<int>(
+        doc,
+        'list1',
+        handlerType: 'CRDTListHandler<int>',
+      )
 
         // Insert numbers
         ..insert(0, 1)
@@ -141,7 +165,11 @@ void main() {
       final doc = CRDTDocument(
         peerId: PeerId.parse('45ee6b65-b393-40b7-9755-8b66dc7d0518'),
       );
-      final handler = CRDTListHandler<String>(doc, 'list1')
+      final handler = CRDTListHandler<String>(
+        doc,
+        'list1',
+        handlerType: 'CRDTListHandler<String>',
+      )
 
         // Insert at out of bounds index
         ..insert(5, 'Hello');
@@ -160,12 +188,20 @@ void main() {
       final doc1 = CRDTDocument(
         peerId: PeerId.parse('45ee6b65-b393-40b7-9755-8b66dc7d0518'),
       );
-      final handler1 = CRDTListHandler<String>(doc1, 'list1');
+      final handler1 = CRDTListHandler<String>(
+        doc1,
+        'list1',
+        handlerType: 'CRDTListHandler<String>',
+      );
 
       final doc2 = CRDTDocument(
         peerId: PeerId.parse('a90dfced-cbf0-4a49-9c64-f5b7b62fdc18'),
       );
-      final handler2 = CRDTListHandler<String>(doc2, 'list1');
+      final handler2 = CRDTListHandler<String>(
+        doc2,
+        'list1',
+        handlerType: 'CRDTListHandler<String>',
+      );
 
       // Initial state
       handler1.insert(0, 'Hello');
@@ -198,7 +234,11 @@ void main() {
       final doc1 = CRDTDocument(
         peerId: PeerId.parse('45ee6b65-b393-40b7-9755-8b66dc7d0518'),
       );
-      final handler1 = CRDTListHandler<String>(doc1, 'list1');
+      final handler1 = CRDTListHandler<String>(
+        doc1,
+        'list1',
+        handlerType: 'CRDTListHandler<String>',
+      );
 
       var counter = 0;
 
@@ -225,7 +265,11 @@ void main() {
       final doc = CRDTDocument(
         peerId: PeerId.parse('37f1ec87-6ea5-430b-a627-a6b92b56a02d'),
       );
-      final handler = CRDTListHandler<String>(doc, 'list1');
+      final handler = CRDTListHandler<String>(
+        doc,
+        'list1',
+        handlerType: 'CRDTListHandler<String>',
+      );
       expect(handler.toString(), equals('CRDTList(list1, [])'));
     });
 
@@ -235,7 +279,11 @@ void main() {
       final doc = CRDTDocument(
         peerId: PeerId.parse('37f1ec87-6ea5-430b-a627-a6b92b56a02d'),
       );
-      final handler = CRDTListHandler<String>(doc, 'list1')
+      final handler = CRDTListHandler<String>(
+        doc,
+        'list1',
+        handlerType: 'CRDTListHandler<String>',
+      )
         ..insert(0, 'Hello')
         ..insert(1, 'World');
       expect(handler.toString(), equals('CRDTList(list1, [Hello, World])'));
@@ -245,12 +293,20 @@ void main() {
       final doc1 = CRDTDocument(
         peerId: PeerId.parse('45ee6b65-b393-40b7-9755-8b66dc7d0518'),
       );
-      final handler1 = CRDTListHandler<String>(doc1, 'list1');
+      final handler1 = CRDTListHandler<String>(
+        doc1,
+        'list1',
+        handlerType: 'CRDTListHandler<String>',
+      );
 
       final doc2 = CRDTDocument(
         peerId: PeerId.parse('a90dfced-cbf0-4a49-9c64-f5b7b62fdc18'),
       );
-      final handler2 = CRDTListHandler<String>(doc2, 'list1');
+      final handler2 = CRDTListHandler<String>(
+        doc2,
+        'list1',
+        handlerType: 'CRDTListHandler<String>',
+      );
 
       // Insert numbers
       handler1
@@ -297,7 +353,11 @@ void main() {
         final doc = CRDTDocument(
           peerId: PeerId.parse('37f1ec87-6ea5-430b-a627-a6b92b56a02d'),
         );
-        final handler = CRDTListHandler<String>(doc, 'list1')
+        final handler = CRDTListHandler<String>(
+          doc,
+          'list1',
+          handlerType: 'CRDTListHandler<String>',
+        )
           ..insert(0, 'a')
           ..insert(1, 'b')
           ..insert(2, 'c')
@@ -318,7 +378,11 @@ void main() {
         final doc = CRDTDocument(
           peerId: PeerId.parse('37f1ec87-6ea5-430b-a627-a6b92b56a02d'),
         );
-        final handler = CRDTListHandler<String>(doc, 'list1')
+        final handler = CRDTListHandler<String>(
+          doc,
+          'list1',
+          handlerType: 'CRDTListHandler<String>',
+        )
           ..insert(0, 'a')
           ..insert(1, 'b')
           ..insert(2, 'c')
@@ -339,7 +403,11 @@ void main() {
         final doc = CRDTDocument(
           peerId: PeerId.parse('37f1ec87-6ea5-430b-a627-a6b92b56a02d'),
         );
-        final handler = CRDTListHandler<String>(doc, 'list1')
+        final handler = CRDTListHandler<String>(
+          doc,
+          'list1',
+          handlerType: 'CRDTListHandler<String>',
+        )
           ..insert(0, 'a')
           ..insert(1, 'b');
         final before = doc.exportChanges().length;
@@ -359,7 +427,11 @@ void main() {
         final doc = CRDTDocument(
           peerId: PeerId.parse('37f1ec87-6ea5-430b-a627-a6b92b56a02d'),
         );
-        final handler = CRDTListHandler<String>(doc, 'list1')
+        final handler = CRDTListHandler<String>(
+          doc,
+          'list1',
+          handlerType: 'CRDTListHandler<String>',
+        )
           ..insert(0, 'a')
           ..insert(1, 'b');
         final before = doc.exportChanges().length;
@@ -378,7 +450,11 @@ void main() {
         final doc1 = CRDTDocument(
           peerId: PeerId.parse('45ee6b65-b393-40b7-9755-8b66dc7d0518'),
         );
-        final handler1 = CRDTListHandler<String>(doc1, 'list1')
+        final handler1 = CRDTListHandler<String>(
+          doc1,
+          'list1',
+          handlerType: 'CRDTListHandler<String>',
+        )
           ..insert(0, 'a')
           ..insert(1, 'b')
           ..insert(2, 'c');
@@ -386,7 +462,11 @@ void main() {
         final doc2 = CRDTDocument(
           peerId: PeerId.parse('a90dfced-cbf0-4a49-9c64-f5b7b62fdc18'),
         );
-        final handler2 = CRDTListHandler<String>(doc2, 'list1');
+        final handler2 = CRDTListHandler<String>(
+          doc2,
+          'list1',
+          handlerType: 'CRDTListHandler<String>',
+        );
 
         doc1.runInTransaction(() {
           handler1

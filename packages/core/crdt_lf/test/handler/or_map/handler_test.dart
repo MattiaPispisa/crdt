@@ -4,18 +4,24 @@ import 'package:test/test.dart';
 
 void main() {
   group('CRDTORMapHandler', () {
-    test('handlerType: generic default, and a stable constructor override', () {
+    test('the tag is runtimeType by default, and a spec fixes it', () {
       final doc = CRDTDocument();
       // Default tag is runtimeType-based and includes both generic arguments.
       expect(
-        CRDTORMapHandler<String, String>(doc, 'm').handlerType,
+        CRDTORMapHandler<String, String>(
+          doc,
+          'm',
+          handlerType: 'CRDTORMapHandler<String, String>',
+        ).handlerType,
         'CRDTORMapHandler<String, String>',
       );
+
       final tagged = CRDTORMapHandler<String, String>(
         doc,
         'm2',
         handlerType: 'ormap/str',
       );
+
       expect(tagged.handlerType, 'ormap/str');
       expect(HandlerRef.of(tagged).type, 'ormap/str');
     });
@@ -24,7 +30,11 @@ void main() {
       final doc = CRDTDocument(
         peerId: PeerId.parse('37f1ec87-6ea5-430b-a627-a6b92b56a02d'),
       );
-      final map = CRDTORMapHandler<String, int>(doc, 'map1')
+      final map = CRDTORMapHandler<String, int>(
+        doc,
+        'map1',
+        handlerType: 'CRDTORMapHandler<String, int>',
+      )
         ..put('a', 1)
         ..put('b', 2);
       expect(map.value, {'a': 1, 'b': 2});
@@ -45,7 +55,11 @@ void main() {
 
     test('should handle updates to existing keys', () {
       final doc = CRDTDocument();
-      final map = CRDTORMapHandler<String, int>(doc, 'map1')
+      final map = CRDTORMapHandler<String, int>(
+        doc,
+        'map1',
+        handlerType: 'CRDTORMapHandler<String, int>',
+      )
         ..put('x', 1)
         ..put('x', 2)
         ..put('x', 3);
@@ -58,7 +72,11 @@ void main() {
     test('each put is stamped strictly after the one before it', () {
       final doc = CRDTDocument();
       final hlc1 = doc.hlc;
-      final map = CRDTORMapHandler<String, int>(doc, 'map1')
+      final map = CRDTORMapHandler<String, int>(
+        doc,
+        'map1',
+        handlerType: 'CRDTORMapHandler<String, int>',
+      )
         ..put('x', 1)
         ..put('x', 2);
       expect(hlc1.happenedBefore(doc.hlc), isTrue);
@@ -75,12 +93,20 @@ void main() {
       final doc1 = CRDTDocument(
         peerId: PeerId.parse('45ee6b65-b393-40b7-9755-8b66dc7d0518'),
       );
-      final m1 = CRDTORMapHandler<String, int>(doc1, 'map1');
+      final m1 = CRDTORMapHandler<String, int>(
+        doc1,
+        'map1',
+        handlerType: 'CRDTORMapHandler<String, int>',
+      );
 
       final doc2 = CRDTDocument(
         peerId: PeerId.parse('a90dfced-cbf0-4a49-9c64-f5b7b62fdc18'),
       );
-      final m2 = CRDTORMapHandler<String, int>(doc2, 'map1');
+      final m2 = CRDTORMapHandler<String, int>(
+        doc2,
+        'map1',
+        handlerType: 'CRDTORMapHandler<String, int>',
+      );
 
       m1.put('x', 10);
 
@@ -109,12 +135,20 @@ void main() {
       final doc1 = CRDTDocument(
         peerId: PeerId.parse('45ee6b65-b393-40b7-9755-8b66dc7d0518'),
       );
-      final m1 = CRDTORMapHandler<String, String>(doc1, 'map1');
+      final m1 = CRDTORMapHandler<String, String>(
+        doc1,
+        'map1',
+        handlerType: 'CRDTORMapHandler<String, String>',
+      );
 
       final doc2 = CRDTDocument(
         peerId: PeerId.parse('a90dfced-cbf0-4a49-9c64-f5b7b62fdc18'),
       );
-      final m2 = CRDTORMapHandler<String, String>(doc2, 'map1');
+      final m2 = CRDTORMapHandler<String, String>(
+        doc2,
+        'map1',
+        handlerType: 'CRDTORMapHandler<String, String>',
+      );
 
       // Initial sync
       m1.put('key', 'initial');
@@ -143,7 +177,11 @@ void main() {
       final doc = CRDTDocument(
         peerId: PeerId.parse('45ee6b65-b393-40b7-9755-8b66dc7d0518'),
       );
-      final map = CRDTORMapHandler<String, String>(doc, 'map1')
+      final map = CRDTORMapHandler<String, String>(
+        doc,
+        'map1',
+        handlerType: 'CRDTORMapHandler<String, String>',
+      )
         ..put('k', 'v1')
         ..put('k', 'v2');
 
@@ -158,8 +196,16 @@ void main() {
     test('concurrent put/remove converge with add-wins semantics', () {
       final doc1 = CRDTDocument();
       final doc2 = CRDTDocument();
-      final m1 = CRDTORMapHandler<String, int>(doc1, 'map1');
-      final m2 = CRDTORMapHandler<String, int>(doc2, 'map1');
+      final m1 = CRDTORMapHandler<String, int>(
+        doc1,
+        'map1',
+        handlerType: 'CRDTORMapHandler<String, int>',
+      );
+      final m2 = CRDTORMapHandler<String, int>(
+        doc2,
+        'map1',
+        handlerType: 'CRDTORMapHandler<String, int>',
+      );
 
       m1.put('k', 100);
       doc2.importChanges(doc1.exportChanges());
@@ -182,7 +228,11 @@ void main() {
 
     test('should provide map accessors', () {
       final doc = CRDTDocument();
-      final map = CRDTORMapHandler<String, int>(doc, 'map1')
+      final map = CRDTORMapHandler<String, int>(
+        doc,
+        'map1',
+        handlerType: 'CRDTORMapHandler<String, int>',
+      )
         ..put('a', 1)
         ..put('b', 2)
         ..put('c', 3);
@@ -200,12 +250,20 @@ void main() {
       final doc1 = CRDTDocument(
         peerId: PeerId.parse('45ee6b65-b393-40b7-9755-8b66dc7d0518'),
       );
-      final m1 = CRDTORMapHandler<String, int>(doc1, 'map1');
+      final m1 = CRDTORMapHandler<String, int>(
+        doc1,
+        'map1',
+        handlerType: 'CRDTORMapHandler<String, int>',
+      );
 
       final doc2 = CRDTDocument(
         peerId: PeerId.parse('a90dfced-cbf0-4a49-9c64-f5b7b62fdc18'),
       );
-      final m2 = CRDTORMapHandler<String, int>(doc2, 'map1');
+      final m2 = CRDTORMapHandler<String, int>(
+        doc2,
+        'map1',
+        handlerType: 'CRDTORMapHandler<String, int>',
+      );
 
       m1
         ..put('a', 1)
@@ -241,9 +299,21 @@ void main() {
       final doc2 = CRDTDocument();
       final doc3 = CRDTDocument();
 
-      final m1 = CRDTORMapHandler<String, String>(doc1, 'map1');
-      final m2 = CRDTORMapHandler<String, String>(doc2, 'map1');
-      final m3 = CRDTORMapHandler<String, String>(doc3, 'map1');
+      final m1 = CRDTORMapHandler<String, String>(
+        doc1,
+        'map1',
+        handlerType: 'CRDTORMapHandler<String, String>',
+      );
+      final m2 = CRDTORMapHandler<String, String>(
+        doc2,
+        'map1',
+        handlerType: 'CRDTORMapHandler<String, String>',
+      );
+      final m3 = CRDTORMapHandler<String, String>(
+        doc3,
+        'map1',
+        handlerType: 'CRDTORMapHandler<String, String>',
+      );
 
       // Initial puts from each peer
       m1.put('key1', 'peer1-value1');
@@ -290,7 +360,11 @@ void main() {
 
     test('should handle remove followed by put on same key', () {
       final doc = CRDTDocument();
-      final map = CRDTORMapHandler<String, int>(doc, 'map1')
+      final map = CRDTORMapHandler<String, int>(
+        doc,
+        'map1',
+        handlerType: 'CRDTORMapHandler<String, int>',
+      )
         ..put('key', 1)
         ..remove('key')
         ..put('key', 2);
@@ -300,7 +374,11 @@ void main() {
 
     test('should handle multiple updates and removes', () {
       final doc = CRDTDocument();
-      final map = CRDTORMapHandler<String, String>(doc, 'map1')
+      final map = CRDTORMapHandler<String, String>(
+        doc,
+        'map1',
+        handlerType: 'CRDTORMapHandler<String, String>',
+      )
         ..put('a', 'v1')
         ..put('b', 'v2')
         ..put('c', 'v3')
@@ -318,7 +396,11 @@ void main() {
 
     test('empty map operations', () {
       final doc = CRDTDocument();
-      final map = CRDTORMapHandler<String, int>(doc, 'map1');
+      final map = CRDTORMapHandler<String, int>(
+        doc,
+        'map1',
+        handlerType: 'CRDTORMapHandler<String, int>',
+      );
 
       expect(map.value, isEmpty);
       expect(map.keys, isEmpty);
@@ -335,13 +417,21 @@ void main() {
         final source = CRDTDocument(
           peerId: PeerId.parse('a90dfced-cbf0-4a49-9c64-f5b7b62fdc18'),
         );
-        CRDTORMapHandler<String, String>(source, 'ormap').put('k', 'a');
+        CRDTORMapHandler<String, String>(
+          source,
+          'ormap',
+          handlerType: 'CRDTORMapHandler<String, String>',
+        ).put('k', 'a');
         final snapshot = source.takeSnapshot();
 
         final doc = CRDTDocument(
           peerId: PeerId.parse('37f1ec87-6ea5-430b-a627-a6b92b56a02d'),
         );
-        final map = CRDTORMapHandler<String, String>(doc, 'ormap');
+        final map = CRDTORMapHandler<String, String>(
+          doc,
+          'ormap',
+          handlerType: 'CRDTORMapHandler<String, String>',
+        );
         doc.importSnapshot(snapshot);
         expect(map.value, {'k': 'a'});
 
@@ -358,13 +448,21 @@ void main() {
         final source = CRDTDocument(
           peerId: PeerId.parse('a90dfced-cbf0-4a49-9c64-f5b7b62fdc18'),
         );
-        CRDTORMapHandler<String, String>(source, 'ormap').put('k', 'a');
+        CRDTORMapHandler<String, String>(
+          source,
+          'ormap',
+          handlerType: 'CRDTORMapHandler<String, String>',
+        ).put('k', 'a');
         final snapshot = source.takeSnapshot();
 
         final doc = CRDTDocument(
           peerId: PeerId.parse('37f1ec87-6ea5-430b-a627-a6b92b56a02d'),
         );
-        final map = CRDTORMapHandler<String, String>(doc, 'ormap');
+        final map = CRDTORMapHandler<String, String>(
+          doc,
+          'ormap',
+          handlerType: 'CRDTORMapHandler<String, String>',
+        );
         doc.importSnapshot(snapshot);
 
         final undo = CRDTUndoManager(doc)..track(map);
@@ -381,7 +479,11 @@ void main() {
         final doc = CRDTDocument(
           peerId: PeerId.parse('37f1ec87-6ea5-430b-a627-a6b92b56a02d'),
         );
-        final map = CRDTORMapHandler<String, String>(doc, 'ormap');
+        final map = CRDTORMapHandler<String, String>(
+          doc,
+          'ormap',
+          handlerType: 'CRDTORMapHandler<String, String>',
+        );
         final undo = CRDTUndoManager(doc, captureTimeout: Duration.zero)
           ..track(map);
 

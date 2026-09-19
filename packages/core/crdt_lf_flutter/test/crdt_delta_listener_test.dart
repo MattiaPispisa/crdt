@@ -48,7 +48,11 @@ void main() {
 
     testWidgets('seeds from an initial reset, then follows the deltas',
         (tester) async {
-      final list = CRDTListHandler<String>(doc, 'todos')..insert(0, 'seed');
+      final list = CRDTListHandler<String>(
+        doc,
+        'todos',
+        handlerType: 'CRDTListHandler<String>',
+      )..insert(0, 'seed');
 
       final projection = <String>[];
       final resets = <ResetCause>[];
@@ -77,10 +81,18 @@ void main() {
     });
 
     testWidgets('follows a remote change too', (tester) async {
-      CRDTListHandler<String>(doc, 'todos').insert(0, 'seed');
+      CRDTListHandler<String>(
+        doc,
+        'todos',
+        handlerType: 'CRDTListHandler<String>',
+      ).insert(0, 'seed');
 
       final remote = CRDTDocument(peerId: PeerId.generate());
-      final remoteList = CRDTListHandler<String>(remote, 'todos');
+      final remoteList = CRDTListHandler<String>(
+        remote,
+        'todos',
+        handlerType: 'CRDTListHandler<String>',
+      );
       remote.importChanges(doc.exportChanges());
 
       final projection = <String>[];
@@ -101,7 +113,11 @@ void main() {
     });
 
     testWidgets('a snapshot import asks for the value again', (tester) async {
-      CRDTListHandler<String>(doc, 'todos').insert(0, 'seed');
+      CRDTListHandler<String>(
+        doc,
+        'todos',
+        handlerType: 'CRDTListHandler<String>',
+      ).insert(0, 'seed');
 
       final projection = <String>[];
       final resets = <ResetCause>[];
@@ -119,7 +135,11 @@ void main() {
 
     testWidgets('the deltas a reset already covers are not replayed',
         (tester) async {
-      final list = CRDTListHandler<String>(doc, 'todos')..insert(0, 'seed');
+      final list = CRDTListHandler<String>(
+        doc,
+        'todos',
+        handlerType: 'CRDTListHandler<String>',
+      )..insert(0, 'seed');
 
       final projection = <String>[];
       final resets = <ResetCause>[];
@@ -141,8 +161,16 @@ void main() {
     });
 
     testWidgets('follows the handler when the id changes', (tester) async {
-      CRDTListHandler<String>(doc, 'todos').insert(0, 'first');
-      final other = CRDTListHandler<String>(doc, 'other')..insert(0, 'second');
+      CRDTListHandler<String>(
+        doc,
+        'todos',
+        handlerType: 'CRDTListHandler<String>',
+      ).insert(0, 'first');
+      final other = CRDTListHandler<String>(
+        doc,
+        'other',
+        handlerType: 'CRDTListHandler<String>',
+      )..insert(0, 'second');
 
       final projection = <String>[];
       final resets = <ResetCause>[];
@@ -171,7 +199,11 @@ void main() {
 
     testWidgets('a mismatched delta shape fails with a readable error',
         (tester) async {
-      CRDTMapHandler<String>(doc, 'todos').set('k', 'v');
+      CRDTMapHandler<String>(
+        doc,
+        'todos',
+        handlerType: 'CRDTMapHandler<String>',
+      ).set('k', 'v');
 
       final projection = <String>[];
       final resets = <ResetCause>[];
@@ -219,7 +251,11 @@ void main() {
       expect(projection, note.value);
     });
     testWidgets('a tagged write does not come back as a delta', (tester) async {
-      final list = CRDTListHandler<String>(doc, 'todos');
+      final list = CRDTListHandler<String>(
+        doc,
+        'todos',
+        handlerType: 'CRDTListHandler<String>',
+      );
       final tag = Object();
       final seen = <SequenceDelta<String>>[];
 

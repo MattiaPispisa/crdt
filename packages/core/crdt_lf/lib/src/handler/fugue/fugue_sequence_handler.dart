@@ -62,7 +62,7 @@ class FugueState<T, V> {
 abstract base class FugueSequenceHandler<T, V, S extends FugueState<T, V>>
     extends Handler<S> with FugueCache<S>, RebuiltIdentities<FugueElementID> {
   /// Creates a Fugue sequence handler bound to [doc] with the given [id].
-  FugueSequenceHandler(super.doc, String id, {super.handlerType}) : _id = id;
+  FugueSequenceHandler(super.doc, String id, {required super.spec}) : _id = id;
 
   final String _id;
 
@@ -355,6 +355,17 @@ abstract base class FugueSequenceHandler<T, V, S extends FugueState<T, V>>
 
     return operation;
   }
+
+  /// The version [FugueSnapshot] writes and reads, shared by every handler
+  /// built on the Fugue tree.
+  @override
+  int get snapshotBlobVersion => FugueSnapshot.version;
+
+  /// The same version: [FugueSnapshot.read] accepts exactly one layout, so a
+  /// subclass cannot widen this without teaching that reader first. Left
+  /// pinned so the range this build advertises is one it can actually serve.
+  @override
+  int get minReadableSnapshotBlobVersion => FugueSnapshot.version;
 
   @override
   Uint8List getSnapshotState() {

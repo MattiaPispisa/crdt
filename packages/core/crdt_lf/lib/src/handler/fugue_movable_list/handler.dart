@@ -7,7 +7,6 @@ import 'package:crdt_lf/src/handler/fugue/element_id_floor.dart';
 import 'package:crdt_lf/src/handler/fugue/fugue_cache.dart';
 import 'package:crdt_lf/src/handler/fugue/fugue_delta.dart';
 import 'package:crdt_lf/src/handler/fugue/fugue_restore_runs.dart';
-import 'package:crdt_lf/src/snapshot/blob_version.dart';
 
 part 'operation.dart';
 
@@ -52,11 +51,34 @@ base class CRDTFugueMovableListHandler<T>
   ///
   /// [valueCodec] is an optional codec for encoding/decoding `T` values to
   /// bytes; default is [JsonValueCodec].
+  ///
+  /// [handlerType] names the **kind** of handler this is.
+  /// {@macro handler_type_tag}
   CRDTFugueMovableListHandler(
+    BaseCRDTDocument doc,
+    String id, {
+    required String handlerType,
+    ValueCodec<T>? valueCodec,
+  }) : this.fromSpec(
+          doc,
+          id,
+          spec: spec<T>(handlerType, valueCodec: valueCodec),
+          valueCodec: valueCodec,
+        );
+
+  /// Builds one of a kind stated in full, instead of named by a tag.
+  ///
+  /// The hook for a subclass that is **its own kind** — a container built on
+  /// this handler, say. It passes its own spec up rather than letting this
+  /// class make one from a tag, which would name this class and leave a peer
+  /// rebuilding the reference with the wrong one.
+  ///
+  /// A plain use wants the unnamed constructor: it makes the spec for you.
+  CRDTFugueMovableListHandler.fromSpec(
     super.doc,
     String id, {
+    required super.spec,
     ValueCodec<T>? valueCodec,
-    super.handlerType,
   })  : _id = id,
         _valueCodec = valueCodec ?? JsonValueCodec<T>();
 
@@ -675,8 +697,39 @@ base class CRDTFugueMovableListHandler<T>
     return SequenceDelta<T>.empty();
   }
 
+  /// {@macro generic_handler_spec}
+  static HandlerSpec<CRDTFugueMovableListHandler<T>> spec<T>(
+    String type, {
+    ValueCodec<T>? valueCodec,
+  }) =>
+      HandlerSpec<CRDTFugueMovableListHandler<T>>(
+        type,
+        (doc, id) => CRDTFugueMovableListHandler<T>(
+          doc,
+          id,
+          handlerType: type,
+          valueCodec: valueCodec,
+        ),
+        formats: _formats,
+      );
+
+  /// What this build reads for this handler type.
+  static const HandlerFormats _formats = HandlerFormats(
+    operationKinds: {
+      OperationType.kindInsert,
+      OperationType.kindMove,
+      OperationType.kindUpdate,
+      OperationType.kindDelete,
+    },
+    blobVersions: BlobVersionRange.single(_blobVersion),
+  );
+
   /// The version of the snapshot blob this build writes and reads.
-  static const int _snapshotVersion = 1;
+  /// The version [getSnapshotState] writes at the head of its blob.
+  static const int _blobVersion = 1;
+
+  @override
+  int get snapshotBlobVersion => _blobVersion;
 
   /// Snapshot layout:
   /// - version: u8
@@ -701,7 +754,7 @@ base class CRDTFugueMovableListHandler<T>
     final state = cachedOrComputedState();
     final visible = state.visiblePositions;
 
-    final out = BytesBuilder(copy: false)..addByte(_snapshotVersion);
+    final out = snapshotHeader();
     UVarint.write(visible.length, out);
     for (final positionID in visible) {
       final identityID = _identityForPosition(state, positionID)!;
@@ -731,11 +784,7 @@ base class CRDTFugueMovableListHandler<T>
       return <FugueElementID, _MovableElement<T>>{};
     }
 
-    var offset = SnapshotBlob.read(
-      snapshot,
-      version: _snapshotVersion,
-      name: 'movable list',
-    );
+    var offset = readSnapshotHeader(snapshot).offset;
     final countRec = UVarint.read(snapshot, offset: offset);
     offset = countRec.nextOffset;
 

@@ -14,7 +14,11 @@ class ImportChainBenchmark extends TimedBenchmarkBase {
   @override
   void setup() {
     final doc = CRDTDocument(peerId: PeerId.generate());
-    final list = CRDTListHandler<String>(doc, 'list');
+    final list = CRDTListHandler<String>(
+      doc,
+      'list',
+      handlerType: 'CRDTListHandler<String>',
+    );
     for (var i = 0; i < count; i++) {
       list.insert(i, 'item $i');
     }
@@ -52,7 +56,12 @@ class ExportNewerThanBenchmark extends TimedBenchmarkBase {
       (_) => CRDTDocument(peerId: PeerId.generate()),
     );
     final lists = [
-      for (final d in docs) CRDTListHandler<String>(d, 'list'),
+      for (final d in docs)
+        CRDTListHandler<String>(
+          d,
+          'list',
+          handlerType: 'CRDTListHandler<String>',
+        ),
     ];
     final perPeer = count ~/ peers;
     for (var p = 0; p < peers; p++) {
@@ -91,7 +100,11 @@ class SnapshotPruneBenchmark extends TimedBenchmarkBase {
   @override
   void setup() {
     final doc = CRDTDocument(peerId: PeerId.generate());
-    final list = CRDTListHandler<String>(doc, 'list');
+    final list = CRDTListHandler<String>(
+      doc,
+      'list',
+      handlerType: 'CRDTListHandler<String>',
+    );
     for (var i = 0; i < count; i++) {
       list.insert(i, 'item $i');
     }
@@ -101,7 +114,11 @@ class SnapshotPruneBenchmark extends TimedBenchmarkBase {
   @override
   void run() {
     final doc = CRDTDocument(peerId: PeerId.generate());
-    CRDTListHandler<String>(doc, 'list');
+    CRDTListHandler<String>(
+      doc,
+      'list',
+      handlerType: 'CRDTListHandler<String>',
+    );
     doc
       ..importChanges(changes)
       ..takeSnapshot();
@@ -124,7 +141,11 @@ class ConcurrentFrontierPruneBenchmark extends TimedBenchmarkBase {
     peerChanges = [];
     for (var p = 0; p < peers; p++) {
       final doc = CRDTDocument(peerId: PeerId.generate());
-      final list = CRDTListHandler<String>(doc, 'list');
+      final list = CRDTListHandler<String>(
+        doc,
+        'list',
+        handlerType: 'CRDTListHandler<String>',
+      );
       for (var i = 0; i < 10; i++) {
         list.insert(i, 'p$p item $i');
       }
@@ -135,7 +156,11 @@ class ConcurrentFrontierPruneBenchmark extends TimedBenchmarkBase {
   @override
   void run() {
     final doc = CRDTDocument(peerId: PeerId.generate());
-    CRDTListHandler<String>(doc, 'list');
+    CRDTListHandler<String>(
+      doc,
+      'list',
+      handlerType: 'CRDTListHandler<String>',
+    );
     for (final changes in peerChanges) {
       doc.importChanges(changes);
     }

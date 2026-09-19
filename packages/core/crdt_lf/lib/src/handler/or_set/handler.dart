@@ -1,7 +1,6 @@
 import 'dart:typed_data';
 
 import 'package:crdt_lf/crdt_lf.dart';
-import 'package:crdt_lf/src/snapshot/blob_version.dart';
 
 part 'operation.dart';
 
@@ -34,11 +33,30 @@ base class CRDTORSetHandler<T> extends Handler<ORSetState<T>>
   ///
   /// [valueCodec] is an optional codec for encoding/decoding [T] values to bytes.
   /// Default is [JsonValueCodec].
+  ///
+  /// [handlerType] names the **kind** of handler this is.
+  /// {@macro handler_type_tag}
   CRDTORSetHandler(
+    BaseCRDTDocument doc,
+    String id, {
+    required String handlerType,
+    ValueCodec<T>? valueCodec,
+  }) : this._fromSpec(
+          doc,
+          id,
+          spec: spec<T>(handlerType, valueCodec: valueCodec),
+          valueCodec: valueCodec,
+        );
+
+  /// Builds one of a kind stated in full, instead of named by a tag.
+  ///
+  /// Private: the unnamed constructor is the way in, and it makes the spec from
+  /// the tag. Nothing outside this file builds one of these another way.
+  CRDTORSetHandler._fromSpec(
     super.doc,
     this._id, {
+    required super.spec,
     ValueCodec<T>? valueCodec,
-    super.handlerType,
   }) : _valueCodec = valueCodec ?? JsonValueCodec<T>();
 
   final String _id;
@@ -110,17 +128,46 @@ base class CRDTORSetHandler<T> extends Handler<ORSetState<T>>
   /// Returns whether the set contains [value].
   bool contains(T element) => value.contains(element);
 
+  /// {@macro generic_handler_spec}
+  static HandlerSpec<CRDTORSetHandler<T>> spec<T>(
+    String type, {
+    ValueCodec<T>? valueCodec,
+  }) =>
+      HandlerSpec<CRDTORSetHandler<T>>(
+        type,
+        (doc, id) => CRDTORSetHandler<T>(
+          doc,
+          id,
+          handlerType: type,
+          valueCodec: valueCodec,
+        ),
+        formats: _formats,
+      );
+
+  /// What this build reads for this handler type.
+  static const HandlerFormats _formats = HandlerFormats(
+    operationKinds: {
+      OperationType.kindInsert,
+      OperationType.kindDelete,
+    },
+    blobVersions: BlobVersionRange.single(_blobVersion),
+  );
+
   /// The version of the snapshot blob this build writes and reads.
   ///
   /// Layout: `version: u8`, `count: uvarint`, then per item
   /// `itemLen: uvarint`, `item: bytes`. The tags stay out: a snapshot holds
   /// the projected set, and the elements come back tagless.
-  static const int _snapshotVersion = 1;
+  /// The version [getSnapshotState] writes at the head of its blob.
+  static const int _blobVersion = 1;
+
+  @override
+  int get snapshotBlobVersion => _blobVersion;
 
   /// Returns the current state for snapshotting as a binary blob.
   @override
   Uint8List getSnapshotState() {
-    final out = BytesBuilder(copy: false)..addByte(_snapshotVersion);
+    final out = snapshotHeader();
     final items = value;
     UVarint.write(items.length, out);
     for (final item in items) {
@@ -146,11 +193,7 @@ base class CRDTORSetHandler<T> extends Handler<ORSetState<T>>
     // otherwise. The snapshot is a length-prefixed sequence of items encoded
     // via [_valueCodec].
     if (snap != null) {
-      var offset = SnapshotBlob.read(
-        snap,
-        version: _snapshotVersion,
-        name: 'OR-set',
-      );
+      var offset = readSnapshotHeader(snap).offset;
       final countRec = UVarint.read(snap, offset: offset);
       offset = countRec.nextOffset;
       for (var i = 0; i < countRec.value; i += 1) {

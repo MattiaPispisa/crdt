@@ -20,6 +20,9 @@ VersionVector _decodeVersionVector(String value) =>
 abstract class MessageTypeValue {
   /// index
   int get value;
+
+  /// The first code a plugin may mint.
+  static const int firstPluginValue = 100;
 }
 
 /// Core protocol message types (range `0-19`).

@@ -12,6 +12,17 @@
 // bytes) travel as base64 strings and are opaque to the server: all merging
 // happens in the clients.
 
+/** The wire protocol version this server speaks.
+ *
+ * Echoed in every welcome. A Dart client compares it with its own and refuses
+ * a server that speaks another one; a frame without the field is read as
+ * version 1, which is why the field can be added without breaking old peers.
+ *
+ * Keep in sync with `Protocol.protocolVersion`
+ * (packages/core/crdt_socket_sync/lib/src/common/common/protocol.dart).
+ */
+export const PROTOCOL_VERSION = 1;
+
 export const MessageType = {
   /** C→S: liveness probe. The server MUST reply with a pong: the client
    * treats a missing pong within its ping timeout as a dead connection. */
@@ -68,11 +79,15 @@ export interface RelayHelloMessage {
   type: typeof MessageType.relayHello;
   documentId: string;
   author: string;
+  /** The version the client speaks; absent from a client older than the
+   * field, which means version 1. */
+  protocolVersion?: number;
 }
 
 export interface RelayWelcomeMessage {
   type: typeof MessageType.relayWelcome;
   documentId: string;
+  protocolVersion: number;
   sessionId: string;
   snapshot: string | null;
   changes: string[];

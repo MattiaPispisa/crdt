@@ -107,8 +107,11 @@ void main() {
 
     roundTrip(
       name: 'CRDTFugueListHandler',
-      build: (doc) =>
-          CRDTFugueListHandler<String>(doc, 'list')..insertAll(0, ['a', 'b']),
+      build: (doc) => CRDTFugueListHandler<String>(
+        doc,
+        'list',
+        handlerType: 'CRDTFugueListHandler<String>',
+      )..insertAll(0, ['a', 'b']),
       read: (handler) =>
           List<String>.of((handler as CRDTFugueListHandler<String>).value),
       edit: (handler, random, step) {
@@ -127,8 +130,11 @@ void main() {
 
     roundTrip(
       name: 'CRDTFugueMovableListHandler',
-      build: (doc) => CRDTFugueMovableListHandler<String>(doc, 'movable')
-        ..insertAll(0, ['a', 'b', 'c']),
+      build: (doc) => CRDTFugueMovableListHandler<String>(
+        doc,
+        'movable',
+        handlerType: 'CRDTFugueMovableListHandler<String>',
+      )..insertAll(0, ['a', 'b', 'c']),
       read: (handler) => List<String>.of(
         (handler as CRDTFugueMovableListHandler<String>).value,
       ),
@@ -153,7 +159,11 @@ void main() {
 
     roundTrip(
       name: 'CRDTMapHandler',
-      build: (doc) => CRDTMapHandler<String>(doc, 'map')..set('seed', '0'),
+      build: (doc) => CRDTMapHandler<String>(
+        doc,
+        'map',
+        handlerType: 'CRDTMapHandler<String>',
+      )..set('seed', '0'),
       read: (handler) =>
           Map<String, String>.of((handler as CRDTMapHandler<String>).value),
       edit: (handler, random, step) {
@@ -173,7 +183,11 @@ void main() {
 
     roundTrip(
       name: 'CRDTORSetHandler',
-      build: (doc) => CRDTORSetHandler<String>(doc, 'set')..add('seed'),
+      build: (doc) => CRDTORSetHandler<String>(
+        doc,
+        'set',
+        handlerType: 'CRDTORSetHandler<String>',
+      )..add('seed'),
       read: (handler) =>
           Set<String>.of((handler as CRDTORSetHandler<String>).value),
       edit: (handler, random, step) {
@@ -190,8 +204,11 @@ void main() {
 
     roundTrip(
       name: 'CRDTORMapHandler',
-      build: (doc) =>
-          CRDTORMapHandler<String, String>(doc, 'ormap')..put('seed', '0'),
+      build: (doc) => CRDTORMapHandler<String, String>(
+        doc,
+        'ormap',
+        handlerType: 'CRDTORMapHandler<String, String>',
+      )..put('seed', '0'),
       read: (handler) => Map<String, String>.of(
         (handler as CRDTORMapHandler<String, String>).value,
       ),
@@ -209,7 +226,11 @@ void main() {
 
     roundTrip(
       name: 'CRDTRegisterHandler',
-      build: (doc) => CRDTRegisterHandler<String>(doc, 'reg')..set('seed'),
+      build: (doc) => CRDTRegisterHandler<String>(
+        doc,
+        'reg',
+        handlerType: 'CRDTRegisterHandler<String>',
+      )..set('seed'),
       read: (handler) => (handler as CRDTRegisterHandler<String>).value,
       edit: (handler, random, step) =>
           (handler as CRDTRegisterHandler<String>).set('v$step'),

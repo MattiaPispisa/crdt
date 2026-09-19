@@ -4,7 +4,7 @@ import 'package:test/test.dart';
 void main() {
   group('nested time-travel', () {
     test('resolved subtree reflects the history cursor position', () {
-      final doc = CRDTDocument()..registerDefaultFactories();
+      final doc = CRDTDocument();
       final title = CRDTFugueTextHandler(doc, 'title');
       CRDTMapRefHandler(doc, 'root').setRef('title', title); // change 1
       title

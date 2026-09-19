@@ -1,6 +1,8 @@
 import 'package:crdt_lf/crdt_lf.dart';
 import 'package:test/test.dart';
 
+final newFlagSpec = CRDTRegisterHandler.spec<bool>('flag');
+
 void main() {
   group('CRDTRegisterHandler', () {
     late CRDTDocument doc;
@@ -8,7 +10,11 @@ void main() {
 
     setUp(() {
       doc = CRDTDocument();
-      register = CRDTRegisterHandler<bool>(doc, 'flag');
+      register = CRDTRegisterHandler<bool>(
+        doc,
+        'flag',
+        handlerType: 'CRDTRegisterHandler<bool>',
+      );
     });
 
     test('is null until set, then holds the value', () {
@@ -30,16 +36,15 @@ void main() {
       expect(register.toString(), contains('CRDTRegisterHandler'));
     });
 
-    test('handlerType defaults to runtimeType, or a constructor override', () {
+    test('the tag is runtimeType by default, and a spec fixes it', () {
       // Default (minification-fragile) tag.
       expect(register.handlerType, 'CRDTRegisterHandler<bool>');
-      // A generic handler can be given a stable tag so it keeps working as a
-      // nested ref in a dart2js-minified build; the tag flows into HandlerRef.
-      final tagged = CRDTRegisterHandler<bool>(
-        doc,
-        'flag2',
-        handlerType: 'register/bool',
-      );
+
+      // A generic handler needs a tag so it keeps working as a nested ref in
+      // a dart2js-minified build; it flows into HandlerRef.
+      final tagged =
+          CRDTRegisterHandler<bool>(doc, 'flag2', handlerType: 'register/bool');
+
       expect(tagged.handlerType, 'register/bool');
       expect(HandlerRef.of(tagged).type, 'register/bool');
     });
@@ -51,8 +56,16 @@ void main() {
       final docB = CRDTDocument(
         peerId: PeerId.parse('a90dfced-cbf0-4a49-9c64-f5b7b62fdc18'),
       );
-      final a = CRDTRegisterHandler<int>(docA, 'r');
-      final b = CRDTRegisterHandler<int>(docB, 'r');
+      final a = CRDTRegisterHandler<int>(
+        docA,
+        'r',
+        handlerType: 'CRDTRegisterHandler<int>',
+      );
+      final b = CRDTRegisterHandler<int>(
+        docB,
+        'r',
+        handlerType: 'CRDTRegisterHandler<int>',
+      );
 
       a.set(1);
       b.set(2);
@@ -69,7 +82,11 @@ void main() {
       final snapshot = doc.takeSnapshot();
 
       final docB = CRDTDocument()..importSnapshot(snapshot);
-      final registerB = CRDTRegisterHandler<bool>(docB, 'flag');
+      final registerB = CRDTRegisterHandler<bool>(
+        docB,
+        'flag',
+        handlerType: 'CRDTRegisterHandler<bool>',
+      );
       expect(registerB.value, isTrue);
     });
 
@@ -77,20 +94,21 @@ void main() {
       final snapshot = doc.takeSnapshot();
 
       final docB = CRDTDocument()..importSnapshot(snapshot);
-      final registerB = CRDTRegisterHandler<bool>(docB, 'flag');
+      final registerB = CRDTRegisterHandler<bool>(
+        docB,
+        'flag',
+        handlerType: 'CRDTRegisterHandler<bool>',
+      );
       expect(registerB.value, isNull);
     });
 
     test('resolves as a leaf value inside a ref container', () {
       final nested = CRDTDocument()
-        ..registerDefaultFactories()
-        ..registerFactory(
-          'CRDTRegisterHandler<bool>',
-          CRDTRegisterHandler<bool>.new,
-        );
+        ..register(newFlagSpec)
+        ..register(CRDTMapRefHandler.spec)
+        ..register(CRDTFugueTextHandler.spec);
       final root = CRDTMapRefHandler(nested, 'root');
-      final done = CRDTRegisterHandler<bool>(nested, nested.newHandlerId())
-        ..set(true);
+      final done = newFlagSpec.create(nested, nested.newHandlerId())..set(true);
       final text = CRDTFugueTextHandler(nested, nested.newHandlerId())
         ..insert(0, 'task');
       root
@@ -120,7 +138,11 @@ void main() {
 
     test('compacted sets replay identically on a remote peer', () {
       final doc2 = CRDTDocument(peerId: PeerId.generate());
-      final register2 = CRDTRegisterHandler<bool>(doc2, 'flag');
+      final register2 = CRDTRegisterHandler<bool>(
+        doc2,
+        'flag',
+        handlerType: 'CRDTRegisterHandler<bool>',
+      );
 
       doc.runInTransaction(() {
         register

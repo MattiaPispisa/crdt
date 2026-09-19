@@ -168,6 +168,9 @@ class AppL10nEn extends AppL10n {
   String get statusError => 'Connection error';
 
   @override
+  String get statusUnsupported => 'Update required';
+
+  @override
   String get exportDocument => 'Export document';
 
   @override

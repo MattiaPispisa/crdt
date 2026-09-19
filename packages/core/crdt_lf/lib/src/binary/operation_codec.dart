@@ -98,40 +98,58 @@ class OperationEnvelopeCodec {
     return out.toBytes();
   }
 
+  /// Where the handler type sits in [bytes], and the kind that follows the
+  /// handler id, without turning either string into a [String].
+  ///
+  /// `typeStart` and `typeEnd` bound the UTF-8 of the handler type, so a
+  /// caller that only has to recognize a type it has already seen can compare
+  /// bytes and skip the decode. `kind` has the stamped flag stripped and
+  /// `stamped` carries it, exactly as [decode] reports them.
+  ///
+  /// Throws a [FormatException] on a buffer that ends inside the envelope.
+  static ({int typeStart, int typeEnd, int kind, bool stamped, int bodyOffset})
+      readTypeAndKind(Uint8List bytes) {
+    final typeLength = UVarint.read(bytes, offset: 0);
+    final typeStart = typeLength.nextOffset;
+    final typeEnd = typeStart + typeLength.value;
+
+    final idLength = UVarint.read(bytes, offset: typeEnd);
+    final kindOffset = idLength.nextOffset + idLength.value;
+
+    if (kindOffset >= bytes.length) {
+      throw const FormatException('Missing operation kind');
+    }
+    final rawKind = bytes[kindOffset];
+
+    return (
+      typeStart: typeStart,
+      typeEnd: typeEnd,
+      kind: rawKind & OperationType.maxKind,
+      stamped: rawKind & _stampedFlag != 0,
+      bodyOffset: kindOffset + 1,
+    );
+  }
+
   /// Decodes an [OperationEnvelope] from a byte array.
   ///
   /// Throws a [FormatException] on a buffer that ends inside the envelope.
   static OperationEnvelope decode(Uint8List bytes) {
-    var offset = 0;
-
-    final handlerTypeRecord = UVarint.readString(
-      bytes,
-      offset: offset,
-      what: 'handlerType',
-    );
-    final handlerType = handlerTypeRecord.value;
-    offset = handlerTypeRecord.nextOffset;
-
-    final handlerIdRecord = UVarint.readString(
-      bytes,
-      offset: offset,
-      what: 'handlerId',
-    );
-    final handlerId = handlerIdRecord.value;
-    offset = handlerIdRecord.nextOffset;
-
-    if (offset >= bytes.length) {
-      throw const FormatException('Missing operation kind');
-    }
-    final rawKind = bytes[offset];
-    offset += 1;
+    final head = readTypeAndKind(bytes);
 
     return OperationEnvelope(
-      handlerType: handlerType,
-      handlerId: handlerId,
-      kind: rawKind & OperationType.maxKind,
-      stamped: rawKind & _stampedFlag != 0,
-      bodyOffset: offset,
+      handlerType: UVarint.readString(
+        bytes,
+        offset: 0,
+        what: 'handlerType',
+      ).value,
+      handlerId: UVarint.readString(
+        bytes,
+        offset: head.typeEnd,
+        what: 'handlerId',
+      ).value,
+      kind: head.kind,
+      stamped: head.stamped,
+      bodyOffset: head.bodyOffset,
     );
   }
 }

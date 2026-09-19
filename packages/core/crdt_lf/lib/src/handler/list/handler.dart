@@ -1,6 +1,5 @@
 import 'dart:typed_data';
 import 'package:crdt_lf/crdt_lf.dart';
-import 'package:crdt_lf/src/snapshot/blob_version.dart';
 
 part 'operation.dart';
 
@@ -28,11 +27,30 @@ base class CRDTListHandler<T> extends Handler<List<T>>
   ///
   /// [valueCodec] is an optional codec for encoding/decoding [T] values to bytes.
   /// Default is [JsonValueCodec].
+  ///
+  /// [handlerType] names the **kind** of handler this is.
+  /// {@macro handler_type_tag}
   CRDTListHandler(
+    BaseCRDTDocument doc,
+    String id, {
+    required String handlerType,
+    ValueCodec<T>? valueCodec,
+  }) : this._fromSpec(
+          doc,
+          id,
+          spec: spec<T>(handlerType, valueCodec: valueCodec),
+          valueCodec: valueCodec,
+        );
+
+  /// Builds one of a kind stated in full, instead of named by a tag.
+  ///
+  /// Private: the unnamed constructor is the way in, and it makes the spec from
+  /// the tag. Nothing outside this file builds one of these another way.
+  CRDTListHandler._fromSpec(
     super.doc,
     this._id, {
+    required super.spec,
     ValueCodec<T>? valueCodec,
-    super.handlerType,
   }) : _valueCodec = valueCodec ?? JsonValueCodec<T>();
 
   @override
@@ -127,15 +145,59 @@ base class CRDTListHandler<T> extends Handler<List<T>>
     return state;
   }
 
+  /// {@template generic_handler_spec}
+  /// The kind this handler is, under [type].
+  ///
+  /// Only the tag is asked for: the class knows the rest.
+  ///
+  /// Pass it wherever a kind is named: [BaseCRDTDocument.register],
+  /// [BaseCRDTDocument.handler], and a container's `child` and `insertChild`.
+  /// {@endtemplate}
+  ///
+  /// ```dart
+  /// final todos = CRDTListHandler.spec<Todo>('todo-list');
+  ///
+  /// doc.register(todos);
+  /// final list = doc.handler(todos, 'todos');
+  /// ```
+  static HandlerSpec<CRDTListHandler<T>> spec<T>(
+    String type, {
+    ValueCodec<T>? valueCodec,
+  }) =>
+      HandlerSpec<CRDTListHandler<T>>(
+        type,
+        (doc, id) => CRDTListHandler<T>(
+          doc,
+          id,
+          handlerType: type,
+          valueCodec: valueCodec,
+        ),
+        formats: _formats,
+      );
+
+  /// What this build reads for this handler type.
+  static const HandlerFormats _formats = HandlerFormats(
+    operationKinds: {
+      OperationType.kindInsert,
+      OperationType.kindDelete,
+      OperationType.kindUpdate,
+    },
+    blobVersions: BlobVersionRange.single(_blobVersion),
+  );
+
   /// The version of the snapshot blob this build writes and reads.
   ///
   /// Layout: `version: u8`, `count: uvarint`, then per item
   /// `itemLen: uvarint`, `item: bytes`.
-  static const int _snapshotVersion = 1;
+  /// The version [getSnapshotState] writes at the head of its blob.
+  static const int _blobVersion = 1;
+
+  @override
+  int get snapshotBlobVersion => _blobVersion;
 
   @override
   Uint8List getSnapshotState() {
-    final out = BytesBuilder(copy: false)..addByte(_snapshotVersion);
+    final out = snapshotHeader();
     final items = value;
     UVarint.write(items.length, out);
     for (final item in items) {
@@ -318,11 +380,7 @@ base class CRDTListHandler<T> extends Handler<List<T>>
       return [];
     }
 
-    var offset = SnapshotBlob.read(
-      snapshot,
-      version: _snapshotVersion,
-      name: 'list',
-    );
+    var offset = readSnapshotHeader(snapshot).offset;
     final countRec = UVarint.read(snapshot, offset: offset);
     offset = countRec.nextOffset;
     final items = <T>[];

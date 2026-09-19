@@ -1,7 +1,6 @@
 import 'dart:typed_data';
 
 import 'package:crdt_lf/crdt_lf.dart';
-import 'package:crdt_lf/src/snapshot/blob_version.dart';
 
 part 'operation.dart';
 
@@ -30,11 +29,30 @@ base class CRDTRegisterHandler<T> extends Handler<T>
   /// Creates a new register with the given document and ID.
   ///
   /// [valueCodec] encodes/decodes `T` to bytes; default is [JsonValueCodec].
+  ///
+  /// [handlerType] names the **kind** of handler this is.
+  /// {@macro handler_type_tag}
   CRDTRegisterHandler(
+    BaseCRDTDocument doc,
+    String id, {
+    required String handlerType,
+    ValueCodec<T>? valueCodec,
+  }) : this._fromSpec(
+          doc,
+          id,
+          spec: spec<T>(handlerType, valueCodec: valueCodec),
+          valueCodec: valueCodec,
+        );
+
+  /// Builds one of a kind stated in full, instead of named by a tag.
+  ///
+  /// Private: the unnamed constructor is the way in, and it makes the spec from
+  /// the tag. Nothing outside this file builds one of these another way.
+  CRDTRegisterHandler._fromSpec(
     super.doc,
     this._id, {
+    required super.spec,
     ValueCodec<T>? valueCodec,
-    super.handlerType,
   }) : _valueCodec = valueCodec ?? JsonValueCodec<T>();
 
   final String _id;
@@ -140,15 +158,43 @@ base class CRDTRegisterHandler<T> extends Handler<T>
     return operation.value;
   }
 
+  /// {@macro generic_handler_spec}
+  static HandlerSpec<CRDTRegisterHandler<T>> spec<T>(
+    String type, {
+    ValueCodec<T>? valueCodec,
+  }) =>
+      HandlerSpec<CRDTRegisterHandler<T>>(
+        type,
+        (doc, id) => CRDTRegisterHandler<T>(
+          doc,
+          id,
+          handlerType: type,
+          valueCodec: valueCodec,
+        ),
+        formats: _formats,
+      );
+
+  /// What this build reads for this handler type.
+  static const HandlerFormats _formats = HandlerFormats(
+    operationKinds: {
+      OperationType.kindInsert,
+    },
+    blobVersions: BlobVersionRange.single(_blobVersion),
+  );
+
   /// The version of the snapshot blob this build writes and reads.
   ///
   /// Layout: `version: u8`, `present: u8`, then, when present,
   /// `valueLen: uvarint`, `value: bytes`.
-  static const int _snapshotVersion = 1;
+  /// The version [getSnapshotState] writes at the head of its blob.
+  static const int _blobVersion = 1;
+
+  @override
+  int get snapshotBlobVersion => _blobVersion;
 
   @override
   Uint8List getSnapshotState() {
-    final out = BytesBuilder(copy: false)..addByte(_snapshotVersion);
+    final out = snapshotHeader();
     final current = value;
     if (current == null) {
       out.addByte(0); // unset
@@ -164,11 +210,7 @@ base class CRDTRegisterHandler<T> extends Handler<T>
     if (snapshot == null) {
       return null;
     }
-    final offset = SnapshotBlob.read(
-      snapshot,
-      version: _snapshotVersion,
-      name: 'register',
-    );
+    final offset = readSnapshotHeader(snapshot).offset;
     if (offset >= snapshot.length) {
       throw const FormatException('Truncated register snapshot');
     }

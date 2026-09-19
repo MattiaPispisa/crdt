@@ -85,6 +85,38 @@ void main() {
         expect(sentMessage!.documentId, equals(document.documentId));
       });
 
+      test('does not request a status for a failure a resync cannot fix',
+          () async {
+        // Only a causal gap is worth re-serving the document for. Anything
+        // else (an undecodable operation, a disposed document) fails the same
+        // way on the served copy, so asking again is a loop, not a recovery.
+        final operation = MockOperation(handler);
+        final peer = PeerId.generate();
+        final change = Change(
+          id: OperationId(peer, HybridLogicalClock(l: 1, c: 1)),
+          operation: operation,
+          deps: {},
+          author: peer,
+        );
+
+        document.dispose();
+
+        final faults = <SyncFault>[];
+        final sub = mockClient.faults.listen(faults.add);
+        addTearDown(sub.cancel);
+
+        // Reported, never thrown: this runs inside the socket's read callback,
+        // where a throw reaches no `catch` and no `onError` and ends up as an
+        // uncaught zone error — a crash on Flutter.
+        expect(() => syncManager.applyChange(change), returnsNormally);
+
+        await Future<void>.delayed(Duration.zero);
+        expect(mockClient.sentMessages, isEmpty);
+        expect(faults, hasLength(1));
+        expect(faults.single.error, isA<DocumentDisposedException>());
+        expect(faults.single.stackTrace, isNotNull);
+      });
+
       test('should handle error when requesting missing changes gracefully',
           () async {
         mockClient.setShouldThrowOnSendMessage = true;

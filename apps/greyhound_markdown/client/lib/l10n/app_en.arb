@@ -195,6 +195,11 @@
     "description": "The connection to the relay failed."
   },
 
+  "statusUnsupported": "Update required",
+  "@statusUnsupported": {
+    "description": "The relay refused this app build: it is too old to read what the room holds, or it speaks another protocol version. Reconnecting cannot fix it."
+  },
+
   "exportDocument": "Export document",
   "@exportDocument": {
     "description": "Tooltip of the export button in the editor app bar."

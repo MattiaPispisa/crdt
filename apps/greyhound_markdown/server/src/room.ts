@@ -6,6 +6,7 @@ import {
   ClientMessage,
   MessageType,
   PingMessage,
+  PROTOCOL_VERSION,
   RelayAckMessage,
   RelayChangesMessage,
   RelayHelloMessage,
@@ -161,6 +162,7 @@ export class RoomDO extends DurableObject {
     const welcome: RelayWelcomeMessage = {
       type: MessageType.relayWelcome,
       documentId: att.documentId ?? "",
+      protocolVersion: PROTOCOL_VERSION,
       sessionId: att.sessionId,
       snapshot,
       changes: [...log.values()],

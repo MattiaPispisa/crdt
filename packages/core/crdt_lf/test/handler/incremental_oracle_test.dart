@@ -43,8 +43,11 @@ void main() {
 
     test('CRDTListHandler', () {
       final doc = CRDTDocument(peerId: PeerId.generate());
-      final list = CRDTListHandler<String>(doc, 'list')
-        ..useIncrementalCacheUpdate = true;
+      final list = CRDTListHandler<String>(
+        doc,
+        'list',
+        handlerType: 'CRDTListHandler<String>',
+      )..useIncrementalCacheUpdate = true;
       final random = Random(42);
 
       expect(list.value, isEmpty);
@@ -66,15 +69,22 @@ void main() {
       expect(list.value, incremental);
 
       final doc2 = CRDTDocument(peerId: PeerId.generate());
-      final list2 = CRDTListHandler<String>(doc2, 'list');
+      final list2 = CRDTListHandler<String>(
+        doc2,
+        'list',
+        handlerType: 'CRDTListHandler<String>',
+      );
       doc2.importChanges(doc.exportChanges());
       expect(list2.value, incremental);
     });
 
     test('CRDTMapHandler', () {
       final doc = CRDTDocument(peerId: PeerId.generate());
-      final map = CRDTMapHandler<int>(doc, 'map')
-        ..useIncrementalCacheUpdate = true;
+      final map = CRDTMapHandler<int>(
+        doc,
+        'map',
+        handlerType: 'CRDTMapHandler<int>',
+      )..useIncrementalCacheUpdate = true;
       final random = Random(42);
 
       expect(map.value, isEmpty);
@@ -96,15 +106,22 @@ void main() {
       expect(map.value, incremental);
 
       final doc2 = CRDTDocument(peerId: PeerId.generate());
-      final map2 = CRDTMapHandler<int>(doc2, 'map');
+      final map2 = CRDTMapHandler<int>(
+        doc2,
+        'map',
+        handlerType: 'CRDTMapHandler<int>',
+      );
       doc2.importChanges(doc.exportChanges());
       expect(map2.value, incremental);
     });
 
     test('CRDTORSetHandler', () {
       final doc = CRDTDocument(peerId: PeerId.generate());
-      final set = CRDTORSetHandler<String>(doc, 'set')
-        ..useIncrementalCacheUpdate = true;
+      final set = CRDTORSetHandler<String>(
+        doc,
+        'set',
+        handlerType: 'CRDTORSetHandler<String>',
+      )..useIncrementalCacheUpdate = true;
       final random = Random(42);
       final existing = <String>[];
 
@@ -126,15 +143,22 @@ void main() {
       expect(set.value, incremental);
 
       final doc2 = CRDTDocument(peerId: PeerId.generate());
-      final set2 = CRDTORSetHandler<String>(doc2, 'set');
+      final set2 = CRDTORSetHandler<String>(
+        doc2,
+        'set',
+        handlerType: 'CRDTORSetHandler<String>',
+      );
       doc2.importChanges(doc.exportChanges());
       expect(set2.value, incremental);
     });
 
     test('CRDTORMapHandler', () {
       final doc = CRDTDocument(peerId: PeerId.generate());
-      final map = CRDTORMapHandler<String, int>(doc, 'or_map')
-        ..useIncrementalCacheUpdate = true;
+      final map = CRDTORMapHandler<String, int>(
+        doc,
+        'or_map',
+        handlerType: 'CRDTORMapHandler<String, int>',
+      )..useIncrementalCacheUpdate = true;
       final random = Random(42);
 
       expect(map.value, isEmpty);
@@ -153,7 +177,11 @@ void main() {
       expect(map.value, incremental);
 
       final doc2 = CRDTDocument(peerId: PeerId.generate());
-      final map2 = CRDTORMapHandler<String, int>(doc2, 'or_map');
+      final map2 = CRDTORMapHandler<String, int>(
+        doc2,
+        'or_map',
+        handlerType: 'CRDTORMapHandler<String, int>',
+      );
       doc2.importChanges(doc.exportChanges());
       expect(map2.value, incremental);
     });
@@ -190,8 +218,11 @@ void main() {
 
     test('CRDTFugueListHandler', () {
       final doc = CRDTDocument(peerId: PeerId.generate());
-      final list = CRDTFugueListHandler<String>(doc, 'fugue_list')
-        ..useIncrementalCacheUpdate = true;
+      final list = CRDTFugueListHandler<String>(
+        doc,
+        'fugue_list',
+        handlerType: 'CRDTFugueListHandler<String>',
+      )..useIncrementalCacheUpdate = true;
       final random = Random(42);
 
       expect(list.value, isEmpty);
@@ -213,15 +244,22 @@ void main() {
       expect(list.value, incremental);
 
       final doc2 = CRDTDocument(peerId: PeerId.generate());
-      final list2 = CRDTFugueListHandler<String>(doc2, 'fugue_list');
+      final list2 = CRDTFugueListHandler<String>(
+        doc2,
+        'fugue_list',
+        handlerType: 'CRDTFugueListHandler<String>',
+      );
       doc2.importChanges(doc.exportChanges());
       expect(list2.value, incremental);
     });
 
     test('snapshot state matches after incremental updates', () {
       final doc = CRDTDocument(peerId: PeerId.generate());
-      final set = CRDTORSetHandler<String>(doc, 'set')
-        ..useIncrementalCacheUpdate = true;
+      final set = CRDTORSetHandler<String>(
+        doc,
+        'set',
+        handlerType: 'CRDTORSetHandler<String>',
+      )..useIncrementalCacheUpdate = true;
 
       expect(set.value, isEmpty);
       set
@@ -257,7 +295,11 @@ void main() {
 
     test('CRDTListHandler', () {
       _remoteOracle<CRDTListHandler<String>>(
-        create: (doc) => CRDTListHandler<String>(doc, 'list'),
+        create: (doc) => CRDTListHandler<String>(
+          doc,
+          'list',
+          handlerType: 'CRDTListHandler<String>',
+        ),
         mutate: (list, random, i) {
           final len = list.length;
           final choice = random.nextInt(3);
@@ -275,7 +317,11 @@ void main() {
 
     test('CRDTMapHandler', () {
       _remoteOracle<CRDTMapHandler<int>>(
-        create: (doc) => CRDTMapHandler<int>(doc, 'map'),
+        create: (doc) => CRDTMapHandler<int>(
+          doc,
+          'map',
+          handlerType: 'CRDTMapHandler<int>',
+        ),
         mutate: (map, random, i) {
           final key = 'key${random.nextInt(20)}';
           final choice = random.nextInt(3);
@@ -293,7 +339,11 @@ void main() {
 
     test('CRDTRegisterHandler', () {
       _remoteOracle<CRDTRegisterHandler<int>>(
-        create: (doc) => CRDTRegisterHandler<int>(doc, 'register'),
+        create: (doc) => CRDTRegisterHandler<int>(
+          doc,
+          'register',
+          handlerType: 'CRDTRegisterHandler<int>',
+        ),
         mutate: (register, random, i) => register.set(i),
         read: (register) => register.value,
       );
@@ -311,7 +361,11 @@ void main() {
 
     test('CRDTORSetHandler', () {
       _remoteOracle<CRDTORSetHandler<String>>(
-        create: (doc) => CRDTORSetHandler<String>(doc, 'set'),
+        create: (doc) => CRDTORSetHandler<String>(
+          doc,
+          'set',
+          handlerType: 'CRDTORSetHandler<String>',
+        ),
         mutate: (set, random, i) {
           final current = set.value.toList();
           if (current.isEmpty || random.nextBool()) {
@@ -326,7 +380,11 @@ void main() {
 
     test('CRDTORMapHandler', () {
       _remoteOracle<CRDTORMapHandler<String, int>>(
-        create: (doc) => CRDTORMapHandler<String, int>(doc, 'or_map'),
+        create: (doc) => CRDTORMapHandler<String, int>(
+          doc,
+          'or_map',
+          handlerType: 'CRDTORMapHandler<String, int>',
+        ),
         mutate: (map, random, i) {
           final key = 'key${random.nextInt(20)}';
           if (random.nextInt(3) < 2) {
@@ -359,8 +417,11 @@ void main() {
 
     test('CRDTFugueMovableListHandler', () {
       _remoteOracle<CRDTFugueMovableListHandler<String>>(
-        create: (doc) =>
-            CRDTFugueMovableListHandler<String>(doc, 'movable_list'),
+        create: (doc) => CRDTFugueMovableListHandler<String>(
+          doc,
+          'movable_list',
+          handlerType: 'CRDTFugueMovableListHandler<String>',
+        ),
         mutate: (list, random, i) {
           final len = list.length;
           final choice = random.nextInt(4);
@@ -380,10 +441,18 @@ void main() {
 
     test('CRDTFugueListHandler fed one change at a time by applyChange', () {
       final source = CRDTDocument(peerId: PeerId.generate());
-      final sourceList = CRDTFugueListHandler<String>(source, 'fugue_list');
+      final sourceList = CRDTFugueListHandler<String>(
+        source,
+        'fugue_list',
+        handlerType: 'CRDTFugueListHandler<String>',
+      );
 
       final queued = CRDTDocument(peerId: PeerId.generate());
-      final queuedList = CRDTFugueListHandler<String>(queued, 'fugue_list');
+      final queuedList = CRDTFugueListHandler<String>(
+        queued,
+        'fugue_list',
+        handlerType: 'CRDTFugueListHandler<String>',
+      );
       expect(queuedList.value, isEmpty);
 
       final random = Random(11);
@@ -434,7 +503,11 @@ void main() {
 
     test('CRDTORSetHandler under concurrent editing', () {
       _concurrentOracle<CRDTORSetHandler<String>>(
-        create: (doc) => CRDTORSetHandler<String>(doc, 'set'),
+        create: (doc) => CRDTORSetHandler<String>(
+          doc,
+          'set',
+          handlerType: 'CRDTORSetHandler<String>',
+        ),
         mutate: (set, random, round) {
           final current = set.value.toList();
           if (current.isEmpty || random.nextBool()) {
@@ -449,7 +522,11 @@ void main() {
 
     test('CRDTORMapHandler under concurrent editing', () {
       _concurrentOracle<CRDTORMapHandler<String, int>>(
-        create: (doc) => CRDTORMapHandler<String, int>(doc, 'or_map'),
+        create: (doc) => CRDTORMapHandler<String, int>(
+          doc,
+          'or_map',
+          handlerType: 'CRDTORMapHandler<String, int>',
+        ),
         mutate: (map, random, round) {
           final key = 'key${random.nextInt(10)}';
           if (random.nextInt(3) < 2) {
@@ -497,7 +574,11 @@ void main() {
 
     test('CRDTListHandler', () {
       _concurrentOracle<CRDTListHandler<String>>(
-        create: (doc) => CRDTListHandler<String>(doc, 'list'),
+        create: (doc) => CRDTListHandler<String>(
+          doc,
+          'list',
+          handlerType: 'CRDTListHandler<String>',
+        ),
         mutate: (list, random, round) {
           final len = list.length;
           if (len == 0 || random.nextBool()) {
@@ -514,7 +595,11 @@ void main() {
 
     test('CRDTMapHandler', () {
       _concurrentOracle<CRDTMapHandler<int>>(
-        create: (doc) => CRDTMapHandler<int>(doc, 'map'),
+        create: (doc) => CRDTMapHandler<int>(
+          doc,
+          'map',
+          handlerType: 'CRDTMapHandler<int>',
+        ),
         mutate: (map, random, round) {
           final key = 'key${random.nextInt(8)}';
           if (random.nextInt(3) < 2) {
@@ -531,7 +616,11 @@ void main() {
 
     test('CRDTRegisterHandler', () {
       _concurrentOracle<CRDTRegisterHandler<int>>(
-        create: (doc) => CRDTRegisterHandler<int>(doc, 'register'),
+        create: (doc) => CRDTRegisterHandler<int>(
+          doc,
+          'register',
+          handlerType: 'CRDTRegisterHandler<int>',
+        ),
         // Each peer must write its own values, otherwise the two writes of a
         // round are indistinguishable and last-writer-wins proves nothing.
         mutate: (register, random, round) => register.set(random.nextInt(1000)),
@@ -543,8 +632,11 @@ void main() {
 
     test('CRDTFugueMovableListHandler', () {
       _concurrentOracle<CRDTFugueMovableListHandler<String>>(
-        create: (doc) =>
-            CRDTFugueMovableListHandler<String>(doc, 'movable_list'),
+        create: (doc) => CRDTFugueMovableListHandler<String>(
+          doc,
+          'movable_list',
+          handlerType: 'CRDTFugueMovableListHandler<String>',
+        ),
         mutate: (list, random, round) {
           final len = list.length;
           final choice = random.nextInt(3);

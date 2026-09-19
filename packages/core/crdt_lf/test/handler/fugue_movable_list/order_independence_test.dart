@@ -14,7 +14,11 @@ const _peerC = '00000000-0000-4000-8000-00000000000c';
 class _Replica {
   _Replica(String peerId, [List<Change> history = const []])
       : doc = CRDTDocument(peerId: PeerId.parse(peerId)) {
-    list = CRDTFugueMovableListHandler<String>(doc, 'list');
+    list = CRDTFugueMovableListHandler<String>(
+      doc,
+      'list',
+      handlerType: 'CRDTFugueMovableListHandler<String>',
+    );
     if (history.isNotEmpty) {
       doc.importChanges(history);
     }

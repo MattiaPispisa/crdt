@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:convert';
 
 import 'package:crdt_lf/crdt_lf.dart';
 import 'package:crdt_socket_sync/src/common/common/common.dart';
@@ -82,10 +81,23 @@ class RelayClientSession extends ClientSession {
     // surface here as undecodable — answer with a diagnostic instead of a
     // silent drop. Ping/pong/error decode fine and never reach this path.
     if (type != null && type < RelayMessageType.relayHello.value) {
+      // Logged as well as answered: the operator of the relay is the one who
+      // can tell the client it connected to the wrong server, and a reply that
+      // leaves no trace here says nothing to them.
+      addSessionEvent(
+        SessionEventGeneric(
+          sessionId: id,
+          type: SessionEventType.error,
+          message: 'Refused a CRDT-aware sync frame (type $type): '
+              'this server runs the relay protocol.',
+        ),
+      );
+
       unawaited(
         sendMessage(
           Message.error(
-            documentId: _documentIdOf(data) ?? '',
+            // Names no document: see ClientSession.handleUndecodable.
+            documentId: '',
             code: Protocol.errorInvalidMessage,
             message: 'This server runs the relay protocol: '
                 'the CRDT-aware sync protocol is not supported. '
@@ -99,26 +111,21 @@ class RelayClientSession extends ClientSession {
     super.handleUndecodable(data);
   }
 
-  /// Best-effort read of the `documentId` field of an undecodable [data] frame.
-  String? _documentIdOf(List<int> data) {
-    try {
-      final json = jsonDecode(utf8.decode(data));
-      if (json is Map<String, dynamic>) {
-        final id = json['documentId'];
-        return id is String ? id : null;
-      }
-    } catch (_) {
-      // Not JSON: no documentId to report.
-    }
-    return null;
-  }
-
   /// Handle a join request
   ///
+  /// 1. Refuse a client that speaks another protocol version
   /// 1. Register the room subscription (notifying plugins)
   /// 1. Send the persisted room state as a welcome
   Future<void> _handleHello(RelayHelloMessage message) async {
     final documentId = message.documentId;
+
+    final mismatched = await refuseProtocolMismatch(
+      documentId: documentId,
+      clientVersion: message.protocolVersion,
+    );
+    if (mismatched) {
+      return;
+    }
 
     _clientAuthor = message.author;
     registerDocument(documentId);

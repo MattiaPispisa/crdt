@@ -31,9 +31,18 @@ abstract final class ExampleDocumentIds {
   static const String document = 'a1b2c3d4-0001-4000-8000-000000000003';
 }
 
-/// Handler type token for the todo `done` flag.
+/// CRDT handler **kinds** used by the example states.
 ///
-/// Must equal the `handlerType` the Flutter clients register (see
-/// `shared_examples_infrastructure/.../document/_state.dart`) so encoded
-/// changes decode to the same handler even under dart2js minification.
-const String kDoneHandlerType = 'CRDTRegisterHandler<bool>';
+/// A kind travels in every operation envelope, so these must equal
+/// `ExampleHandlerTypes` in the mirrored file. A handler whose kind differs
+/// ignores every change addressed to it, in silence.
+abstract final class ExampleHandlerTypes {
+  /// Kind of the plain todo list.
+  static const String todoList = 'todo.list';
+
+  /// Kind of the sortable todo list.
+  static const String sortableTodoList = 'todo.sortable-list';
+
+  /// Kind of the `done` flag nested under a todo.
+  static const String done = 'todo.done';
+}

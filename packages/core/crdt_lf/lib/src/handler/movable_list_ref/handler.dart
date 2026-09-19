@@ -1,5 +1,4 @@
 import 'package:crdt_lf/crdt_lf.dart';
-import 'package:crdt_lf/src/handler/handler_type.dart';
 
 /// # CRDT movable ordered list of references
 ///
@@ -13,7 +12,7 @@ import 'package:crdt_lf/src/handler/handler_type.dart';
 ///
 /// ## Example
 /// ```dart
-/// final doc = CRDTDocument()..registerDefaultFactories();
+/// final doc = CRDTDocument();
 /// final slides = CRDTMovableListRefHandler(doc, 'slides');
 /// final a = CRDTMapRefHandler(doc, doc.newHandlerId());
 /// final b = CRDTMapRefHandler(doc, doc.newHandlerId());
@@ -24,11 +23,13 @@ base class CRDTMovableListRefHandler
     implements ContainerHandler {
   /// Creates a movable list-of-references handler bound to [doc] with [id].
   CRDTMovableListRefHandler(super.doc, super.id)
-      : super(valueCodec: const HandlerRefCodec());
-
-  /// Stable type tag (minification-safe). See [Handler.handlerType].
-  @override
-  String get handlerType => kMovableListRefHandlerType;
+      : super.fromSpec(
+          // Its own kind, not one the parent makes from a tag: a spec the
+          // parent minted would build the parent's class, and a peer rebuilding
+          // this ref would get a handler that is not a container.
+          spec: spec,
+          valueCodec: const HandlerRefCodec(),
+        );
 
   /// Inserts a reference to [handler] at position [index].
   ///
@@ -46,6 +47,40 @@ base class CRDTMovableListRefHandler
       return null;
     }
     return doc.resolveHandler(refs[index]);
+  }
+
+  /// What this build reads for this handler type.
+  static const HandlerFormats _formats = HandlerFormats(
+    operationKinds: {
+      OperationType.kindInsert,
+      OperationType.kindMove,
+      OperationType.kindUpdate,
+      OperationType.kindDelete,
+    },
+    blobVersions: BlobVersionRange.single(1),
+  );
+
+  /// The tag this kind travels under; see [Handler.handlerType].
+  static const String _handlerType = 'CRDTMovableListRefHandler';
+
+  /// {@macro builtin_handler_spec}
+  static const HandlerSpec<CRDTMovableListRefHandler> spec = HandlerSpec(
+    _handlerType,
+    CRDTMovableListRefHandler.new,
+    formats: _formats,
+  );
+
+  /// Inserts a child of the kind [spec] names at [index], and returns it.
+  ///
+  /// Always a new child; use [getRefAtAs] to read one back.
+  ///
+  /// ```dart
+  /// final block = blocks.insertChild(0, CRDTFugueTextHandler.spec);
+  /// ```
+  T insertChild<T extends Handler<dynamic>>(int index, HandlerSpec<T> spec) {
+    final created = spec.create(doc, doc.newHandlerId());
+    insertRef(index, created);
+    return created;
   }
 
   /// Like [getRefAt] but returns the handler only when it is a [T], otherwise

@@ -4,7 +4,7 @@ import 'package:crdt_lf/crdt_lf.dart';
 import 'package:crdt_lf/src/algorithm/fugue/tree.dart';
 import 'package:crdt_lf/src/handler/fugue/fugue_sequence_apply.dart';
 import 'package:crdt_lf/src/handler/fugue/fugue_sequence_handler.dart';
-import 'package:crdt_lf/src/handler/handler_type.dart';
+import 'package:crdt_lf/src/handler/fugue/fugue_snapshot.dart';
 
 part 'operation.dart';
 
@@ -35,11 +35,31 @@ base class CRDTFugueTextHandler
     extends FugueSequenceHandler<String, String, FugueTextState>
     with DeltaProvider<String, SequenceDelta<String>> {
   /// Constructor that initializes a new Fugue text handler
-  CRDTFugueTextHandler(super.doc, super.id);
+  CRDTFugueTextHandler(super.doc, super.id)
+      : super(spec: CRDTFugueTextHandler.spec);
 
-  /// Stable type tag (minification-safe). See [Handler.handlerType].
-  @override
-  String get handlerType => kFugueTextHandlerType;
+  /// The tag this kind travels under; see [Handler.handlerType].
+  static const String _handlerType = 'CRDTFugueTextHandler';
+
+  /// {@macro builtin_handler_spec}
+  static const HandlerSpec<CRDTFugueTextHandler> spec = HandlerSpec(
+    _handlerType,
+    CRDTFugueTextHandler.new,
+    formats: _formats,
+  );
+
+  /// What this build reads for this handler type.
+  ///
+  /// The blob range is [FugueSnapshot.version], shared by every handler built
+  /// on the Fugue tree.
+  static const HandlerFormats _formats = HandlerFormats(
+    operationKinds: {
+      OperationType.kindInsert,
+      OperationType.kindDelete,
+      OperationType.kindUpdate,
+    },
+    blobVersions: BlobVersionRange.single(FugueSnapshot.version),
+  );
 
   @override
   late final OperationDecoders operationDecoders = {

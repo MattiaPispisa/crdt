@@ -419,7 +419,11 @@ void main() {
             c: 0,
           ),
         );
-        CRDTListHandler<String>(source, 'list')
+        CRDTListHandler<String>(
+          source,
+          'list',
+          handlerType: 'CRDTListHandler<String>',
+        )
           ..insert(0, 'a')
           ..insert(1, 'b')
           ..insert(2, 'c');
@@ -429,7 +433,11 @@ void main() {
         // advance its clock, so it would otherwise restart from zero and
         // reissue operation ids its peers already hold.
         final reloaded = CRDTDocument(peerId: peerId);
-        final reloadedList = CRDTListHandler<String>(reloaded, 'list');
+        final reloadedList = CRDTListHandler<String>(
+          reloaded,
+          'list',
+          handlerType: 'CRDTListHandler<String>',
+        );
         reloaded.importSnapshot(snapshot);
         expect(reloadedList.value, equals(['a', 'b', 'c']));
 
@@ -439,7 +447,11 @@ void main() {
 
         // A peer that holds the original history accepts the new change.
         final peer = CRDTDocument(peerId: PeerId.generate());
-        final peerList = CRDTListHandler<String>(peer, 'list');
+        final peerList = CRDTListHandler<String>(
+          peer,
+          'list',
+          handlerType: 'CRDTListHandler<String>',
+        );
         peer
           ..mergeSnapshot(snapshot, pruneHistory: false)
           ..importChanges([change]);
@@ -447,7 +459,11 @@ void main() {
       });
 
       test('safe pruning, should conserve changes', () {
-        CRDTListHandler<String>(doc, 'list')
+        CRDTListHandler<String>(
+          doc,
+          'list',
+          handlerType: 'CRDTListHandler<String>',
+        )
           ..insert(0, 'Hello')
           ..insert(1, 'World');
 
@@ -458,7 +474,11 @@ void main() {
       });
 
       test('safe pruning, should garbage collect correctly', () {
-        CRDTListHandler<String>(doc, 'list')
+        CRDTListHandler<String>(
+          doc,
+          'list',
+          handlerType: 'CRDTListHandler<String>',
+        )
           ..insert(0, 'Hello')
           ..insert(1, 'World');
         doc.takeSnapshot(pruneHistory: false);
@@ -471,7 +491,11 @@ void main() {
 
       test('safe pruning, should preserve history because no snapshot is taken',
           () {
-        CRDTListHandler<String>(doc, 'list')
+        CRDTListHandler<String>(
+          doc,
+          'list',
+          handlerType: 'CRDTListHandler<String>',
+        )
           ..insert(0, 'Hello')
           ..insert(1, 'World');
 
@@ -481,7 +505,11 @@ void main() {
       });
 
       test('safe pruning, should import correctly', () {
-        CRDTListHandler<String>(doc, 'list')
+        CRDTListHandler<String>(
+          doc,
+          'list',
+          handlerType: 'CRDTListHandler<String>',
+        )
           ..insert(0, 'Hello')
           ..insert(1, 'World');
 
@@ -491,10 +519,18 @@ void main() {
         expect(changes, hasLength(2));
 
         final doc2 = CRDTDocument();
-        final listDoc2 = CRDTListHandler<String>(doc2, 'list');
+        final listDoc2 = CRDTListHandler<String>(
+          doc2,
+          'list',
+          handlerType: 'CRDTListHandler<String>',
+        );
 
         final doc3 = CRDTDocument();
-        final listDoc3 = CRDTListHandler<String>(doc3, 'list');
+        final listDoc3 = CRDTListHandler<String>(
+          doc3,
+          'list',
+          handlerType: 'CRDTListHandler<String>',
+        );
 
         final imported2 = doc2.import(
           changes: changes,
@@ -524,7 +560,11 @@ void main() {
 
         // import with snapshot only (no changes argument)
         final doc5 = CRDTDocument();
-        CRDTListHandler<String>(doc5, 'list');
+        CRDTListHandler<String>(
+          doc5,
+          'list',
+          handlerType: 'CRDTListHandler<String>',
+        );
         expect(doc5.import(snapshot: snapshot), equals(0));
         expect(doc5.exportChanges(), isEmpty);
       });
@@ -633,7 +673,11 @@ void main() {
       final author2 = PeerId.generate();
 
       final doc1 = CRDTDocument(peerId: author1);
-      final handler1 = CRDTListHandler<String>(doc1, 'list');
+      final handler1 = CRDTListHandler<String>(
+        doc1,
+        'list',
+        handlerType: 'CRDTListHandler<String>',
+      );
 
       final doc2 = CRDTDocument(peerId: author2);
 
@@ -658,7 +702,11 @@ void main() {
 
       // import() with an older snapshot should return -1
       final doc3 = CRDTDocument(peerId: author2);
-      CRDTListHandler<String>(doc3, 'list');
+      CRDTListHandler<String>(
+        doc3,
+        'list',
+        handlerType: 'CRDTListHandler<String>',
+      );
       doc3.importSnapshot(snapshot2);
       expect(doc3.import(snapshot: snapshot1), equals(-1));
     });
@@ -668,10 +716,18 @@ void main() {
       final author2 = PeerId.generate();
 
       final doc1 = CRDTDocument(peerId: author1);
-      final handler1 = CRDTListHandler<String>(doc1, 'list');
+      final handler1 = CRDTListHandler<String>(
+        doc1,
+        'list',
+        handlerType: 'CRDTListHandler<String>',
+      );
 
       final doc2 = CRDTDocument(peerId: author2);
-      final handler2 = CRDTListHandler<String>(doc2, 'list');
+      final handler2 = CRDTListHandler<String>(
+        doc2,
+        'list',
+        handlerType: 'CRDTListHandler<String>',
+      );
 
       handler1
         ..insert(0, 'Hello')
@@ -710,10 +766,18 @@ void main() {
       final author2 = PeerId.generate();
 
       final doc1 = CRDTDocument(peerId: author1);
-      final handler1 = CRDTListHandler<String>(doc1, 'list');
+      final handler1 = CRDTListHandler<String>(
+        doc1,
+        'list',
+        handlerType: 'CRDTListHandler<String>',
+      );
 
       final doc2 = CRDTDocument(peerId: author2);
-      final handler2 = CRDTListHandler<String>(doc2, 'list');
+      final handler2 = CRDTListHandler<String>(
+        doc2,
+        'list',
+        handlerType: 'CRDTListHandler<String>',
+      );
 
       handler1
         ..insert(0, 'Hello')
@@ -754,9 +818,16 @@ void main() {
       final serverDoc = CRDTDocument();
       final clientDoc = CRDTDocument();
 
-      final serverHandler = CRDTListHandler<String>(serverDoc, 'todos');
-      final clientHandler = CRDTListHandler<String>(clientDoc, 'todos')
-        ..insert(0, 'initial');
+      final serverHandler = CRDTListHandler<String>(
+        serverDoc,
+        'todos',
+        handlerType: 'CRDTListHandler<String>',
+      );
+      final clientHandler = CRDTListHandler<String>(
+        clientDoc,
+        'todos',
+        handlerType: 'CRDTListHandler<String>',
+      )..insert(0, 'initial');
       serverDoc
         ..importChanges(clientDoc.exportChanges())
         // Server compacts history, removing the dependency node
@@ -829,13 +900,29 @@ void main() {
 
         final text1 = CRDTTextHandler(doc1, 'text');
         final fugue1 = CRDTFugueTextHandler(doc1, 'fugue');
-        final list1 = CRDTListHandler<String>(doc1, 'list');
-        final map1 = CRDTORMapHandler<String, int>(doc1, 'or_map');
+        final list1 = CRDTListHandler<String>(
+          doc1,
+          'list',
+          handlerType: 'CRDTListHandler<String>',
+        );
+        final map1 = CRDTORMapHandler<String, int>(
+          doc1,
+          'or_map',
+          handlerType: 'CRDTORMapHandler<String, int>',
+        );
 
         final text2 = CRDTTextHandler(doc2, 'text');
         final fugue2 = CRDTFugueTextHandler(doc2, 'fugue');
-        final list2 = CRDTListHandler<String>(doc2, 'list');
-        final map2 = CRDTORMapHandler<String, int>(doc2, 'or_map');
+        final list2 = CRDTListHandler<String>(
+          doc2,
+          'list',
+          handlerType: 'CRDTListHandler<String>',
+        );
+        final map2 = CRDTORMapHandler<String, int>(
+          doc2,
+          'or_map',
+          handlerType: 'CRDTORMapHandler<String, int>',
+        );
 
         text1.insert(0, 'plain');
         fugue1
@@ -896,8 +983,16 @@ void main() {
       setUp(() {
         serverDoc = CRDTDocument();
         clientDoc = CRDTDocument();
-        serverHandler = CRDTListHandler<String>(serverDoc, 'todo_list');
-        clientHandler = CRDTListHandler<String>(clientDoc, 'todo_list');
+        serverHandler = CRDTListHandler<String>(
+          serverDoc,
+          'todo_list',
+          handlerType: 'CRDTListHandler<String>',
+        );
+        clientHandler = CRDTListHandler<String>(
+          clientDoc,
+          'todo_list',
+          handlerType: 'CRDTListHandler<String>',
+        );
       });
 
       test('should be consistent', () {
@@ -1031,7 +1126,11 @@ void main() {
       group('revision', () {
         test('grows on local edits and on imported changes', () {
           final a = CRDTDocument(peerId: PeerId.generate());
-          final listA = CRDTListHandler<String>(a, 'x');
+          final listA = CRDTListHandler<String>(
+            a,
+            'x',
+            handlerType: 'CRDTListHandler<String>',
+          );
           expect(a.revisionForHandler('x'), 0);
 
           listA
@@ -1043,15 +1142,27 @@ void main() {
           // A remote peer edits the same handler id; importing its changes
           // bumps the revision too.
           final b = CRDTDocument(peerId: PeerId.generate());
-          CRDTListHandler<String>(b, 'x').insert(0, 'c');
+          CRDTListHandler<String>(
+            b,
+            'x',
+            handlerType: 'CRDTListHandler<String>',
+          ).insert(0, 'c');
           a.importChanges(b.exportChanges());
           expect(a.revisionForHandler('x'), greaterThan(afterLocal));
         });
 
         test('is unaffected by an unrelated handler', () {
           final a = CRDTDocument(peerId: PeerId.generate());
-          CRDTListHandler<String>(a, 'x');
-          final listY = CRDTListHandler<String>(a, 'y')..insert(0, 'y0');
+          CRDTListHandler<String>(
+            a,
+            'x',
+            handlerType: 'CRDTListHandler<String>',
+          );
+          final listY = CRDTListHandler<String>(
+            a,
+            'y',
+            handlerType: 'CRDTListHandler<String>',
+          )..insert(0, 'y0');
 
           expect(a.revisionForHandler('x'), 0);
           final y1 = a.revisionForHandler('y');
@@ -1067,12 +1178,20 @@ void main() {
           () {
             // Peer B edits handler "x" and snapshots it.
             final b = CRDTDocument(peerId: PeerId.generate());
-            CRDTListHandler<String>(b, 'x').insert(0, 'a');
+            CRDTListHandler<String>(
+              b,
+              'x',
+              handlerType: 'CRDTListHandler<String>',
+            ).insert(0, 'a');
             final snapshot = b.takeSnapshot();
 
             // Peer A registers "x" but never edits it: zero changes for "x".
             final a = CRDTDocument(peerId: PeerId.generate());
-            final listA = CRDTListHandler<String>(a, 'x');
+            final listA = CRDTListHandler<String>(
+              a,
+              'x',
+              handlerType: 'CRDTListHandler<String>',
+            );
             expect(listA.value, isEmpty);
             expect(a.changeCountForHandler('x'), 0);
             expect(a.revisionForHandler('x'), 0);
@@ -1090,11 +1209,23 @@ void main() {
         test('mergeSnapshot bumps only the handlers carried by the snapshot',
             () {
           final a = CRDTDocument(peerId: PeerId.generate());
-          CRDTListHandler<String>(a, 'x');
-          CRDTListHandler<String>(a, 'y');
+          CRDTListHandler<String>(
+            a,
+            'x',
+            handlerType: 'CRDTListHandler<String>',
+          );
+          CRDTListHandler<String>(
+            a,
+            'y',
+            handlerType: 'CRDTListHandler<String>',
+          );
 
           final b = CRDTDocument(peerId: PeerId.generate());
-          CRDTListHandler<String>(b, 'x').insert(0, 'z');
+          CRDTListHandler<String>(
+            b,
+            'x',
+            handlerType: 'CRDTListHandler<String>',
+          ).insert(0, 'z');
 
           a.mergeSnapshot(b.takeSnapshot(), pruneHistory: false);
           expect(a.revisionForHandler('x'), greaterThan(0));
@@ -1103,7 +1234,11 @@ void main() {
 
         test('takeSnapshot does not bump: observable state is unchanged', () {
           final a = CRDTDocument(peerId: PeerId.generate());
-          CRDTListHandler<String>(a, 'x').insert(0, 'a');
+          CRDTListHandler<String>(
+            a,
+            'x',
+            handlerType: 'CRDTListHandler<String>',
+          ).insert(0, 'a');
 
           final before = a.revisionForHandler('x');
           a.takeSnapshot(pruneHistory: false);
@@ -1113,7 +1248,11 @@ void main() {
         test('never decreases when history pruning shrinks the change count',
             () {
           final a = CRDTDocument(peerId: PeerId.generate());
-          final listA = CRDTListHandler<String>(a, 'x')
+          final listA = CRDTListHandler<String>(
+            a,
+            'x',
+            handlerType: 'CRDTListHandler<String>',
+          )
             ..insert(0, 'a')
             ..insert(1, 'b');
 
@@ -1148,7 +1287,11 @@ void main() {
 
         // What the document says about itself, read back from its own history.
         final replay = CRDTDocument(peerId: PeerId.generate());
-        final replayed = CRDTMapHandler<String>(replay, 'map');
+        final replayed = CRDTMapHandler<String>(
+          replay,
+          'map',
+          handlerType: 'CRDTMapHandler<String>',
+        );
         replay.importChanges(doc.exportChanges());
 
         expect(replayed.value, {'a': '1'}, reason: 'the write did land');
@@ -1160,7 +1303,11 @@ void main() {
       test('runInTransaction batches updates and notifies only once', () async {
         final events = <void>[];
         final sub = doc.updates.listen((_) => events.add(null));
-        final listHandler = CRDTListHandler<String>(doc, 'tx-list');
+        final listHandler = CRDTListHandler<String>(
+          doc,
+          'tx-list',
+          handlerType: 'CRDTListHandler<String>',
+        );
 
         // Multiple operations within a transaction should emit a single update
         doc.runInTransaction<void>(() {
@@ -1180,7 +1327,11 @@ void main() {
           () async {
         final events = <void>[];
         final sub = doc.updates.listen((_) => events.add(null));
-        final listHandler = CRDTListHandler<String>(doc, 'tx-list-2');
+        final listHandler = CRDTListHandler<String>(
+          doc,
+          'tx-list-2',
+          handlerType: 'CRDTListHandler<String>',
+        );
 
         // Prepare another document with a change and a snapshot
         final otherDocument = CRDTDocument(peerId: PeerId.generate());
@@ -1217,7 +1368,11 @@ void main() {
         () async {
           final events = <void>[];
           final sub = doc.updates.listen((_) => events.add(null));
-          final listHandler = CRDTListHandler<String>(doc, 'tx-list');
+          final listHandler = CRDTListHandler<String>(
+            doc,
+            'tx-list',
+            handlerType: 'CRDTListHandler<String>',
+          );
 
           // Prepare another document with a change and a snapshot
           final otherDocument = CRDTDocument(peerId: PeerId.generate());
@@ -1301,14 +1456,22 @@ void main() {
 
       test('"write" operations should throw when the document is disposed', () {
         final doc2 = CRDTDocument();
-        CRDTListHandler<String>(doc2, 'list')
+        CRDTListHandler<String>(
+          doc2,
+          'list',
+          handlerType: 'CRDTListHandler<String>',
+        )
           ..insert(0, 'Hello')
           ..insert(1, 'World');
         final doc2Changes = doc2.exportChanges();
         final doc2BinaryChanges = doc2.binaryExportChanges();
         final doc2Snap = doc2.takeSnapshot();
 
-        final list = CRDTListHandler<String>(doc, 'list');
+        final list = CRDTListHandler<String>(
+          doc,
+          'list',
+          handlerType: 'CRDTListHandler<String>',
+        );
         doc.dispose();
 
         expect(
@@ -1361,7 +1524,11 @@ void main() {
           throwsA(isA<DocumentDisposedException>()),
         );
         expect(
-          () => CRDTListHandler<String>(doc, 'second-list'),
+          () => CRDTListHandler<String>(
+            doc,
+            'second-list',
+            handlerType: 'CRDTListHandler<String>',
+          ),
           throwsA(isA<DocumentDisposedException>()),
         );
         expect(
@@ -1391,6 +1558,8 @@ void main() {
 /// It keeps the type tag of the handler it extends, so its changes decode into
 /// an ordinary [CRDTMapHandler] on the other side.
 final class _ThrowingInvertMapHandler extends CRDTMapHandler<String> {
+  // It borrows CRDTMapHandler's own tag, which is what makes its changes decode
+  // as an ordinary map on the other side.
   _ThrowingInvertMapHandler(CRDTDocument super.doc, super.id)
       : super(handlerType: 'CRDTMapHandler<String>');
 

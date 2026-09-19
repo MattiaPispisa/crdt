@@ -194,7 +194,7 @@ class MapDeltaBenchmark extends DeltaEmissionBenchmark<CRDTMapHandler<int>> {
 
   @override
   CRDTMapHandler<int> createHandler(CRDTDocument doc) =>
-      CRDTMapHandler<int>(doc, 'map');
+      CRDTMapHandler<int>(doc, 'map', handlerType: 'CRDTMapHandler<int>');
 
   @override
   void seed(CRDTMapHandler<int> handler) {
@@ -239,7 +239,11 @@ class MovableListDeltaBenchmark
 
   @override
   CRDTFugueMovableListHandler<int> createHandler(CRDTDocument doc) =>
-      CRDTFugueMovableListHandler<int>(doc, 'movable');
+      CRDTFugueMovableListHandler<int>(
+        doc,
+        'movable',
+        handlerType: 'CRDTFugueMovableListHandler<int>',
+      );
 
   @override
   void seed(CRDTFugueMovableListHandler<int> handler) =>

@@ -51,6 +51,7 @@
       - [Text handlers index by rune](#text-handlers-index-by-rune)
       - [Working with Complex Types](#working-with-complex-types)
       - [Nested Structures (Containers and References)](#nested-structures-containers-and-references)
+        - [Naming a generic handler](#naming-a-generic-handler)
       - [Choosing How to Model Your Data](#choosing-how-to-model-your-data)
         - [Worked example: a TODO list](#worked-example-a-todo-list)
         - [A quick decision guide](#a-quick-decision-guide)
@@ -68,6 +69,7 @@
   - [Apps](#apps)
   - [Packages](#packages)
   - [Migrations](#migrations)
+    - [Migrating from 4.x to 5.0](#migrating-from-4x-to-50)
     - [Migrating from 3.x to 4.0](#migrating-from-3x-to-40)
 
 
@@ -558,13 +560,13 @@ instead of replaying, and for most reads it is already the right answer.
 Reach for deltas when the projection you keep costs more to rebuild than the
 edit costs to apply:
 
-| What you need | Reach for |
-|---|---|
-| an occasional read, or you re-render everything anyway | `handler.value` |
-| to move something expensive to rebuild — a long text, a large list | deltas |
-| to know **where** it changed: a caret, an `AnimatedList`, a scroll anchor | deltas |
-| to know **who** changed it, or which peer it came from | deltas (`HandlerDelta.author`, `.local`) |
-| to skip the echo of **your own** write | deltas ([`origin`](#if-you-write-too-your-own-edit-comes-back)) |
+| What you need                                                             | Reach for                                                       |
+|---------------------------------------------------------------------------|-----------------------------------------------------------------|
+| an occasional read, or you re-render everything anyway                    | `handler.value`                                                 |
+| to move something expensive to rebuild — a long text, a large list        | deltas                                                          |
+| to know **where** it changed: a caret, an `AnimatedList`, a scroll anchor | deltas                                                          |
+| to know **who** changed it, or which peer it came from                    | deltas (`HandlerDelta.author`, `.local`)                        |
+| to skip the echo of **your own** write                                    | deltas ([`origin`](#if-you-write-too-your-own-edit-comes-back)) |
 
 Consuming them is three calls, all shown above: `watch()` to subscribe,
 `readSynced()` to answer a reset with a value **and** the point of the stream
@@ -589,11 +591,11 @@ With two consumers on one document the same event must be **dropped by one and
 applied by the other**, so no property of the event alone can decide it. What
 decides is who caused it, which is what `origin` carries.
 
-| Your situation | What to use |
-|---|---|
-| you apply every delta and never touch your copy by hand | nothing |
-| you move your copy by hand (a controller, an `AnimatedList`, an optimistic update) | `origin` |
-| you want to show **who** edited, or tell the network apart from this peer | `local` / `author` |
+| Your situation                                                                     | What to use        |
+|------------------------------------------------------------------------------------|--------------------|
+| you apply every delta and never touch your copy by hand                            | nothing            |
+| you move your copy by hand (a controller, an `AnimatedList`, an optimistic update) | `origin`           |
+| you want to show **who** edited, or tell the network apart from this peer          | `local` / `author` |
 
 The first row is worth trying first: write to the handler, move nothing by hand,
 and let the event do the work. Then there is no echo, and nothing to tag.
@@ -668,11 +670,11 @@ await subscription.cancel();
 undo.dispose();       // disposing the document does this for you
 ```
 
-| | |
-|---|---|
+|                  |                                                                                                      |
+|------------------|------------------------------------------------------------------------------------------------------|
 | `captureTimeout` | how long a step stays open for the next write to join it (500 ms; `Duration.zero` turns merging off) |
-| `stackLimit` | how many steps each stack keeps (100) |
-| `trackedOrigins` | which writes to record (every local one by default) |
+| `stackLimit`     | how many steps each stack keeps (100)                                                                |
+| `trackedOrigins` | which writes to record (every local one by default)                                                  |
 
 #### Leaving other peers alone
 
@@ -790,7 +792,7 @@ final doc = CRDTDocument(
   documentId: 'todo-list-123',
   peerId: PeerId.parse('45ee6b65-b393-40b7-9755-8b66dc7d0518'),
 );
-final list = CRDTListHandler(doc, 'todo-list');
+final list = CRDTListHandler<String>(doc, 'my-todos', handlerType: 'todo-list');
 list.insert(0, 'Buy apples');
 list.insert(1, 'Buy milk');
 list.delete(0);
@@ -812,13 +814,51 @@ own handler says `base`, `final` or `sealed` in turn:
 final class PNCounterHandler extends Handler<int> { … }
 ```
 
+Its constructor passes a **`HandlerSpec`** to `super`, which is what names the
+kind on the wire and tells the document how to build one — what a peer that
+receives a reference needs:
+
+```dart
+final class PNCounterHandler extends Handler<int> {
+  PNCounterHandler(super.doc, this.id) : super(spec: PNCounterHandler.spec);
+
+  /// The kind this handler is.
+  static const HandlerSpec<PNCounterHandler> spec = HandlerSpec(
+    'pn-counter',
+    PNCounterHandler.new,
+    formats: HandlerFormats(
+      operationKinds: {OperationType.kindUpdate},
+      blobVersions: BlobVersionRange.single(1),
+    ),
+  );
+
+  @override
+  final String id;
+
+  @override
+  late final OperationDecoders operationDecoders = {
+    OperationType.kindUpdate: PNCounterOperation.fromBytes,
+  };
+  …
+}
+```
+
+The tag has to be a constant of your own: `runtimeType.toString()` cannot do
+the job, because dart2js renames types in a Flutter web release build.
+
+`formats` states the operation kinds the handler decodes and the snapshot blob
+versions it reads, which is what `doc.describeBuildCapabilities()` reports to a
+sync layer. It has to agree with the handler: the kinds it lists are the keys of
+`operationDecoders`, and the blob versions are `snapshotBlobVersion` and
+`minReadableSnapshotBlobVersion`. An assertion checks it as the handler
+registers, so a declaration cannot drift from what the code actually decodes.
+
 A handler overrides:
 
 - `id` and `operationDecoders` — required: how the handler is addressed, and
   how its operations are decoded.
 - `getSnapshotState` — required: the state as bytes, seeded back through
   `lastSnapshot`.
-- `handlerType` — for a handler that must survive dart2js minification.
 - `incrementCachedState` — to advance the cached state by one operation
   instead of replaying the whole history on every read.
 - `stateIsOrderIndependent` — only when the state is the same whatever order
@@ -858,10 +898,10 @@ off the change. So the flag is not about reaching the stamp — **it is about
 saying that this kind's conflict resolution reads it, which is something two
 peers have to agree on**. The built-in handlers use it for two different things:
 
-| Use | Who | What the handler does |
-|---|---|---|
+| Use                        | Who                                                                                   | What the handler does                                                                                     |
+|----------------------------|---------------------------------------------------------------------------------------|-----------------------------------------------------------------------------------------------------------|
 | Last-writer-wins tie-break | `update` on the Fugue sequence handlers, `insert`/`move`/`update` on the movable list | keeps the **greater** stamp, so every peer picks the same winner instead of whichever change arrived last |
-| Identity tag | `add` on `CRDTORSetHandler`, `put` on `CRDTORMapHandler` | stores the stamp as the tag a later `remove` tombstones; `CRDTORSetHandler` never compares two of them |
+| Identity tag               | `add` on `CRDTORSetHandler`, `put` on `CRDTORMapHandler`                              | stores the stamp as the tag a later `remove` tombstones; `CRDTORSetHandler` never compares two of them    |
 
 A kind with no conflict to resolve and nothing to tag declares nothing — a
 text `insert` is one, because element ids are already unique. A `delete` is
@@ -884,7 +924,7 @@ flag on a kind you already shipped is therefore a breaking change.
 
 A change carrying a kind this build does not recognize for that handler type
 throws `UnknownOperationKindException` instead of being dropped in silence —
-which is why a factory never returns `null`.
+which is why a decoder in `operationDecoders` never returns `null`.
 
 ##### Making a handler undoable
 
@@ -990,6 +1030,7 @@ class MyDataCodec implements ValueCodec<MyData> {
 final list = CRDTListHandler<MyData>(
   doc,
   'my-data-list',
+  handlerType: 'my-data',
   valueCodec: const MyDataCodec(),
 );
 
@@ -1013,7 +1054,11 @@ If you don't need a custom binary layout and you're fine with JSON, you can rely
 
 ```dart
 // 1. Declare the handler with a raw type
-final rawList = CRDTListHandler<Map<String, dynamic>>(doc, 'my-raw-list');
+final rawList = CRDTListHandler<Map<String, dynamic>>(
+  doc,
+  'my-raw-list',
+  handlerType: 'my-raw',
+);
 
 // 2. Serialize before inserting/updating
 rawList.insert(0, const MyData('item2', 1).toJson());
@@ -1047,25 +1092,37 @@ Each container exposes both views:
 Children are resolved **lazily** through the document registry, so the state is
 computed only when read.
 
-```dart
-final doc = CRDTDocument()..registerDefaultFactories();
+A child is named by a **spec**: every handler class exposes one, and it says
+which kind the child is, so the document learns how to rebuild it. A generic
+handler's takes the tag — `CRDTListHandler.spec<Todo>('todo-list')` — and a
+non-generic one is a plain constant.
 
-// Root container.
-final root = CRDTMapRefHandler(doc, 'root');
+```dart
+final doc = CRDTDocument();
+
+// Root container. `handler` builds it, or returns the one already open.
+final root = doc.handler(CRDTMapRefHandler.spec, 'root');
 
 // A nested, sortable list of chapters.
-final chapters = CRDTListRefHandler(doc, doc.newHandlerId());
-root.setRef('chapters', chapters);
+final chapters = root.child('chapters', CRDTListRefHandler.spec);
 
 // A chapter holding collaborative text.
-final chapter = CRDTMapRefHandler(doc, doc.newHandlerId());
-final title = CRDTFugueTextHandler(doc, doc.newHandlerId())..insert(0, 'Intro');
-chapter.setRef('title', title);
-chapters.insertRef(0, chapter);
+final chapter = chapters.insertChild(0, CRDTMapRefHandler.spec);
+chapter.child('title', CRDTFugueTextHandler.spec).insert(0, 'Intro');
 
 // Read the whole tree resolved to plain Dart values.
 print(root.resolved); // {chapters: [{title: Intro}]}
 ```
+
+Both calls mint the child's id and attach the reference for you.
+`child(key, spec)` returns the one the key already holds, so calling it twice is
+safe — building a handler by hand throws when the id is taken.
+`insertChild(index, spec)` always adds a new one: an insert adds an element, so
+there is no key to be idempotent about.
+
+`setRef` / `insertRef` / `getRefAs` still work and are unchanged: `child` and
+`insertChild` are a front door over them, for the common case where the child
+does not exist yet.
 
 The lifecycle of a nested handler — create and attach it, then visualize the
 tree — looks like this:
@@ -1092,33 +1149,75 @@ graph TD
 
 > 📖 Diagrams render best in the [live documentation](https://mattiapispisa.it/crdt/docs/documentation/packages/crdt_lf).
 
-> On a remote peer the same resolution step recreates children through the
-> registered factories; once they are registered, `importChanges`
-> auto-instantiates them (see below).
+> On a remote peer the same resolution step recreates children, as long as that
+> peer knows their kinds — see below. Reading is what brings them in:
+> `importChanges` builds nothing on its own.
 
 Every node is a standard CRDT, so concurrent edits at **any depth** merge
 conflict-free (e.g. one peer adds a chapter while another types into an
 existing paragraph).
 
 **Reconstructing the tree on a remote peer.** A peer that only received the
-`Change`s does not know the structure in advance. The document keeps a registry
-of **factories** keyed by handler `type` so it can rebuild the correct handler
-from the `type` carried in each operation payload:
+`Change`s does not know the structure in advance. The document keeps, per handler
+**kind**, how to build one — so it can rebuild the right handler from the kind
+carried in each reference and in each operation payload.
 
-- `doc.registerFactory(type, (doc, id) => Handler)` registers a factory; `doc.registerDefaultFactories()` registers the built-in containers plus the non-generic leaf handlers (`CRDTTextHandler`, `CRDTFugueTextHandler`).
-- `doc.newHandlerId()` generates a globally-unique id for a dynamically-created child (carried inside the reference, so peers reuse the same id).
-- `doc.resolveHandler(ref)` returns the registered handler or instantiates it via its factory.
+Setting a document up takes two calls, one per **kind** and one per
+**instance**:
 
-When factories are registered, **importing changes auto-instantiates** the
-referenced handlers, so the tree is ready right after `importChanges` — no extra
-step:
+- `doc.register(spec)` declares one kind, for one this peer never opens itself.
+- `doc.handler(spec, id)` returns that handler, building it when it is not open.
+
+**A handler names its own kind as it is constructed.** The constructor is the one
+point every creation passes, so `CRDTTextHandler(doc, 'id')`,
+`doc.handler(spec, id)` and `container.child(key, spec)` all leave the document
+able to rebuild that kind.
+
+One rule, for every kind alike: **a document rebuilds the kinds it has opened a
+handler of, plus the ones passed to `register`.** A reference to anything else
+resolves to `null`, so a peer that reads a tree it received declares the kinds
+that tree is made of, or opens one of each.
+
+`register` is then for the one case a constructor cannot cover: a kind this peer
+**never opens** — a server that stores and forwards, or a client waiting for a
+subtree a peer is about to send.
+
+`doc.resolveHandler(ref)` resolves a reference, and `doc.newHandlerId()` mints
+an id for a child; the containers call both for you.
+
+##### Naming a generic handler
+
+A generic handler must be given a tag: its default would carry the type argument
+(`CRDTRegisterHandler<bool>`), and dart2js minifies that away in a Flutter web
+`--release` build. So the tag is **required**, on the constructor and on `spec`
+alike. Write it once, in the spec you pass around:
 
 ```dart
-// Peer B registers the same factories, then imports.
-final docB = CRDTDocument()..registerDefaultFactories();
+final doneKind = CRDTRegisterHandler.spec<bool>('todo.done');
+
+todo.child('done', doneKind).set(true);
+doc.register(doneKind);   // for a peer that receives one without opening it
+```
+
+A non-generic handler fixes its own tag, so its spec takes no argument:
+`CRDTFugueTextHandler.spec`.
+
+`HandlerSpec` is the type behind all of this — what a kind **is**: its tag, how
+to build one, and the formats it reads. You write one by hand only for a handler
+of your own; see [Custom handlers](#custom-handlers).
+
+Reading the tree is what brings it in: `importChanges` builds nothing, and a
+child materializes when the reference that names it is resolved.
+
+```dart
+// Peer B declares the kinds the tree is made of, then imports.
+final docB = CRDTDocument()
+  ..register(CRDTMapRefHandler.spec)
+  ..register(CRDTListRefHandler.spec)
+  ..register(CRDTFugueTextHandler.spec);
 docB.importChanges(docA.exportChanges());
 
-final rootB = docB.registeredHandlers['root']! as CRDTMapRefHandler;
+final rootB = docB.handler(CRDTMapRefHandler.spec, 'root');
 print(rootB.resolved); // same tree as docA
 
 // doc.roots() returns the entry points (containers not referenced by another).
@@ -1127,14 +1226,6 @@ print(rootB.resolved); // same tree as docA
 For state coming from a **pruned snapshot** (where the changes have been removed
 and only the snapshot `{id: type}` manifest remains), call `doc.reconstruct()`
 to rebuild every reachable handler from the manifest and the references.
-
-> Note on generics: a factory is keyed by `runtimeType.toString()`, which
-> includes generic arguments. `registerDefaultFactories()` therefore registers
-> only the non-generic leaf handlers; generic leaves (e.g.
-> `CRDTMapHandler<num>`) must be registered explicitly with their concrete type
-> string. Auto-registration is **opt-in**: with no factory registered the
-> classic flat usage is unchanged (handlers are created explicitly with a known
-> id on each peer).
 
 A complete, interactive example is available in the Flutter example app under
 the **Document** entry (sortable chapters → paragraphs → collaborative text and
@@ -1165,7 +1256,11 @@ Each todo has a `text` and a `done` flag. Two reasonable models:
 
 ```dart
 // TodoItem is a plain value: {text, done}, encoded via a ValueCodec/JSON.
-final todos = CRDTFugueListHandler<Map<String, dynamic>>(doc, 'todos');
+final todos = CRDTFugueListHandler<Map<String, dynamic>>(
+  doc,
+  'todos',
+  handlerType: 'todo-list',
+);
 todos.insert(0, {'text': 'Buy milk', 'done': false});
 todos.update(0, {'text': 'Buy milk', 'done': true});
 ```
@@ -1179,12 +1274,14 @@ todos.update(0, {'text': 'Buy milk', 'done': true});
 **B — List of references to per-item sub-documents**
 
 ```dart
-final todos = CRDTMovableListRefHandler(doc, 'todos');
+// `done` is generic, so its tag is required — written once in its spec.
+final doneKind = CRDTRegisterHandler.spec<bool>('todo.done');
 
-final item = CRDTMapRefHandler(doc, doc.newHandlerId())
-  ..setRef('text', CRDTFugueTextHandler(doc, doc.newHandlerId()))
-  ..setRef('done', CRDTRegisterHandler<bool>(doc, doc.newHandlerId()));
-todos.insertRef(0, item);
+final todos = doc.handler(CRDTMovableListRefHandler.spec, 'todos');
+
+final item = todos.insertChild(0, CRDTMapRefHandler.spec);
+item.child('text', CRDTFugueTextHandler.spec).insert(0, 'Buy milk');
+item.child('done', doneKind).set(false);
 ```
 
 - Conflict resolution reaches **each field**: one peer editing `text` while
@@ -1198,7 +1295,7 @@ todos.insertRef(0, item);
 ##### A quick decision guide
 
 | Question                                                      | Lean towards                                                |
-|-----------------------------------------------------------------|-------------------------------------------------------------|
+|---------------------------------------------------------------|-------------------------------------------------------------|
 | Peers edit *different fields of the same item* concurrently?  | Nested (per-field) — model B                                |
 | Peers co-edit the *same text* in real time?                   | A text handler as a child (model B)                         |
 | Item is atomic / co-editing is rare?                          | Flat value + LWW — model A                                  |
@@ -1283,7 +1380,7 @@ This is the canonical wire format used by `crdt_lf_hive` for persistence and by
 directly to build your own storage or sync layer.
 
 | Type                 | Methods                                                              | Size                                                                                 |
-|----------------------|------------------------------------------------------------------------|----------------------------------------------------------------------------------------|
+|----------------------|----------------------------------------------------------------------|--------------------------------------------------------------------------------------|
 | `PeerId`             | `toUint8List()` / `fromUint8List()`                                  | 16 B                                                                                 |
 | `HybridLogicalClock` | `toUint8List()` / `fromUint8List()`                                  | 8 B                                                                                  |
 | `OperationId`        | `toUint8List()` / `fromUint8List()`                                  | 24 B (peer + hlc)                                                                    |
@@ -1362,6 +1459,65 @@ Other bricks of the crdt "system" are:
 
 ## Migrations
 
+### Migrating from 4.x to 5.0
+
+**The bytes do not change.** Changes and snapshot blobs keep the 4.x layout, so
+a stored document opens as it is and a 4.x peer and a 5.0 peer read the same
+data. What changes is the Dart API: a handler now always says **which kind it
+is**, out loud.
+
+In 4.x a generic handler could leave its kind implicit and fall back on
+`runtimeType.toString()`. That reads `CRDTRegisterHandler<bool>` on the VM, and
+a short renamed symbol in a Flutter web `--release` build, where dart2js
+minifies type names. So two peers on two platforms wrote two different tags for
+the same kind, and a reference from one could not be rebuilt by the other —
+and `dart test -p chrome` does not minify, so nothing caught it.
+
+The tag is therefore explicit:
+
+```dart
+// 4.x — the tag came from the class name
+final done = CRDTRegisterHandler<bool>(doc, 'todo.1.done');
+
+// 5.0 — you name the kind
+final done = CRDTRegisterHandler<bool>(
+  doc,
+  'todo.1.done',
+  handlerType: 'todo.done',
+);
+```
+
+Only the seven **generic** handlers ask for it: `CRDTListHandler`,
+`CRDTMapHandler`, `CRDTRegisterHandler`, `CRDTORSetHandler`, `CRDTORMapHandler`,
+`CRDTFugueListHandler`, `CRDTFugueMovableListHandler`. A non-generic one fixes
+its own tag, so `CRDTTextHandler(doc, 'text')` still compiles.
+
+Pick the tag once and keep it: it travels in every operation envelope and in
+every reference, so every peer has to spell it the same way. It is not the
+handler's id — many ids share one tag. See
+[Naming a generic handler](#naming-a-generic-handler).
+
+Registration follows the same idea. A kind is now a `HandlerSpec`, which every
+handler class exposes as `spec`, and the three calls that name a kind take one:
+`doc.register(spec)`, `doc.handler(spec, id)` and a container's
+`child(key, spec)` / `insertChild(index, spec)` — see
+[Nested Structures](#nested-structures-containers-and-references).
+
+Renamed or removed symbols:
+
+| 4.x                                                 | 5.0                                                            | Note                                                                                                                          |
+|-----------------------------------------------------|----------------------------------------------------------------|-------------------------------------------------------------------------------------------------------------------------------|
+| `CRDTListHandler<T>(doc, id)`                       | `CRDTListHandler<T>(doc, id, handlerType: 'todo-list')`        | And the same for the six other generic handlers.                                                                              |
+| `registerFactory(type, factory)`                    | `register(HandlerSpec)`                                        | The spec carries the tag, the builder and the formats together, so the tag is not passed beside a factory that also knows it. |
+| `registerDefaultFactories()`                        | removed                                                        | There is no privileged set of kinds any more. Open a handler of the kind, or `register(CRDTMapRefHandler.spec)`.              |
+| `registerHandler(handler)`                          | removed                                                        | The constructor registers the handler on the document it is given.                                                            |
+| `HandlerFactory`                                    | `HandlerBuilder<T>`                                            | Same shape, `(doc, id) => handler`, with the handler type on the signature.                                                   |
+| a custom handler's `MyHandler(super.doc, this.id);` | `MyHandler(super.doc, this.id) : super(spec: MyHandler.spec);` | A handler cannot exist without naming its kind. See [Custom handlers](#custom-handlers).                                      |
+
+A 5.0 snapshot carries one extra reserved `data` entry (`crdt_lf/capabilities`),
+which records what the blobs are written in so a pruned document can still say
+what it holds. A 4.x peer ignores it.
+
 ### Migrating from 3.x to 4.0
 
 A 4.0 peer refuses to read v3 bytes — not from a document's history, not from
@@ -1389,18 +1545,18 @@ guard.
 
 Renamed or removed symbols:
 
-| 3.x | 4.0 | Note |
-|---|---|---|
-| `ORHandlerTag` | `OperationId` | The tie-break is the id of the change carrying the operation. A handler no longer writes its own, and it costs no bytes. |
-| `OperationType.typeNameFromKind` | removed | No caller anywhere in the monorepo; `OperationType.type` already carries the name. |
-| `OperationType.fromPayload` | removed | The payload string is a debug format and never carried a kind. |
-| a `fromBytes(bytes)` a handler implemented by hand | `OperationDecoders operationDecoders` | Was raw bytes decoded by whatever a handler wrote. Now a `Map<int, Operation Function(Uint8List body)>` keyed by the operation's kind byte: the framework looks the kind up itself and raises `UnknownOperationKindException` on a miss, instead of a handler returning `null` or hand-rolling the same check. |
-| `FugueTree`, `FugueNode`, `FugueNodeTriple`, `FugueValueNode` | no longer exported | Implementation detail of the two Fugue sequence handlers. `FugueElementID` is still public. |
-| `update` on `CRDTFugueTextHandler` / `CRDTFugueListHandler` (delete + insert) | `update` keeps the element's identity | For the old behavior, ask for it: `doc.runInTransaction(() { text..delete(index, count)..insert(index, replacement); });` |
-| `incrementCachedState({required operation, required state})` | adds an optional `DeltaSink<Object?>? sink` | It is `null` unless someone watches the handler's deltas. An override that wants to publish them writes what the operation did to it; see [Handler deltas](#handler-deltas). |
-| `class MyHandler extends Handler<T>` | `base`/`final`/`sealed class MyHandler extends Handler<T>` | `Handler` is a `base` class now. Extending it is unchanged; implementing it is no longer allowed. See [Custom handlers](#custom-handlers). |
-| Dart `>=2.17.0` | Dart `>=3.0.0` | Class modifiers need it. `crdt_socket_sync` and `crdt_lf_hive` move with it. |
-| Text handler positions in UTF-16 code units | positions in **runes** | Affects `insert`, `delete`, `update`, `length`, `stablePositionAt`, `indexOfStablePosition` and `myersDiff`. See [Text handlers index by rune](#text-handlers-index-by-rune). |
+| 3.x                                                                           | 4.0                                                        | Note                                                                                                                                                                                                                                                                                                           |
+|-------------------------------------------------------------------------------|------------------------------------------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `ORHandlerTag`                                                                | `OperationId`                                              | The tie-break is the id of the change carrying the operation. A handler no longer writes its own, and it costs no bytes.                                                                                                                                                                                       |
+| `OperationType.typeNameFromKind`                                              | removed                                                    | No caller anywhere in the monorepo; `OperationType.type` already carries the name.                                                                                                                                                                                                                             |
+| `OperationType.fromPayload`                                                   | removed                                                    | The payload string is a debug format and never carried a kind.                                                                                                                                                                                                                                                 |
+| a `fromBytes(bytes)` a handler implemented by hand                            | `OperationDecoders operationDecoders`                      | Was raw bytes decoded by whatever a handler wrote. Now a `Map<int, Operation Function(Uint8List body)>` keyed by the operation's kind byte: the framework looks the kind up itself and raises `UnknownOperationKindException` on a miss, instead of a handler returning `null` or hand-rolling the same check. |
+| `FugueTree`, `FugueNode`, `FugueNodeTriple`, `FugueValueNode`                 | no longer exported                                         | Implementation detail of the two Fugue sequence handlers. `FugueElementID` is still public.                                                                                                                                                                                                                    |
+| `update` on `CRDTFugueTextHandler` / `CRDTFugueListHandler` (delete + insert) | `update` keeps the element's identity                      | For the old behavior, ask for it: `doc.runInTransaction(() { text..delete(index, count)..insert(index, replacement); });`                                                                                                                                                                                      |
+| `incrementCachedState({required operation, required state})`                  | adds an optional `DeltaSink<Object?>? sink`                | It is `null` unless someone watches the handler's deltas. An override that wants to publish them writes what the operation did to it; see [Handler deltas](#handler-deltas).                                                                                                                                   |
+| `class MyHandler extends Handler<T>`                                          | `base`/`final`/`sealed class MyHandler extends Handler<T>` | `Handler` is a `base` class now. Extending it is unchanged; implementing it is no longer allowed. See [Custom handlers](#custom-handlers).                                                                                                                                                                     |
+| Dart `>=2.17.0`                                                               | Dart `>=3.0.0`                                             | Class modifiers need it. `crdt_socket_sync` and `crdt_lf_hive` move with it.                                                                                                                                                                                                                                   |
+| Text handler positions in UTF-16 code units                                   | positions in **runes**                                     | Affects `insert`, `delete`, `update`, `length`, `stablePositionAt`, `indexOfStablePosition` and `myersDiff`. See [Text handlers index by rune](#text-handlers-index-by-rune).                                                                                                                                  |
 
 [license_badge]: https://img.shields.io/badge/license-MIT-blue.svg
 [license_link]: https://opensource.org/licenses/MIT

@@ -118,12 +118,13 @@ void main() {
 
   Future<void> pump() => Future<void>.delayed(Duration.zero);
 
-  Future<void> hello() async {
+  Future<void> hello({int protocolVersion = Protocol.protocolVersion}) async {
     connection.inbound(
       codec.encode(
         RelayHelloMessage(
           documentId: documentId,
           author: PeerId.generate(),
+          protocolVersion: protocolVersion,
         ),
       )!,
     );
@@ -147,6 +148,18 @@ void main() {
         events.whereType<RelaySessionEventJoined>().single.documentId,
         documentId,
       );
+    });
+
+    test('refuses a client that speaks another protocol version', () async {
+      await hello(protocolVersion: Protocol.protocolVersion + 1);
+
+      final errors = decodeSent().whereType<ErrorMessage>().toList();
+      expect(errors, hasLength(1));
+      expect(errors.single.code, Protocol.errorUnsupportedProtocolVersion);
+      // Refused before the room state is served.
+      expect(decodeSent().whereType<RelayWelcomeMessage>(), isEmpty);
+      expect(session.isSubscribedTo(documentId), isFalse);
+      expect(connection.isConnected, isFalse);
     });
 
     test('hello on a room with state serves snapshot plus newer log', () async {
@@ -352,6 +365,12 @@ void main() {
 
       final error = decodeSent().whereType<ErrorMessage>().single;
       expect(error.code, Protocol.errorInvalidMessage);
+      // Answered *and* logged: the reply goes to the client, the event is the
+      // only thing the relay's operator ever sees.
+      expect(
+        events.where((e) => e.type == SessionEventType.error),
+        hasLength(1),
+      );
     });
 
     test('ping is answered with pong', () async {

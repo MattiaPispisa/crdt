@@ -5,16 +5,15 @@ import 'package:crdt_socket_sync/client.dart';
 import 'package:crdt_socket_sync/src/common/common/utils.dart';
 
 /// {@template sync_manager}
-/// Manager for the CRDT client
+/// Keeps a [CRDTDocument] and a [CRDTSocketClient] in step.
 ///
-/// it's responsible for:
-/// - implementing the requested changes to the [document]
-/// - submitting the changes to the [document]
+/// It sends what the document writes locally, and applies what the server
+/// sends back.
 /// {@endtemplate}
 class SyncManager {
   /// {@macro sync_manager}
   ///
-  /// Constructor
+  /// Subscribes to [CRDTDocument.localChanges] at once; [dispose] ends it.
   SyncManager({
     required this.document,
     required this.client,
@@ -59,21 +58,62 @@ class SyncManager {
   }
 
   /// Applies a change
+  ///
+  /// {@template sync_manager_apply_failure}
+  /// A causal gap is the one failure a resync can close, so it is the only one
+  /// answered with [requestDocumentStatus]: re-serving the same document would
+  /// fail the same way for any other reason, and asking again is a loop rather
+  /// than a recovery.
+  ///
+  /// Anything else becomes a [SyncFault].
+  /// {@macro sync_fault_not_thrown}
+  /// {@endtemplate}
   void applyChange(Change change) {
-    try {
-      document.applyChange(change);
-    } catch (e) {
+    if (_applyOne(change)) {
       requestDocumentStatus();
     }
   }
 
-  /// Applies a list of changes
-  void applyChanges(List<Change> changes) {
+  /// Applies [change], and says whether it left a causal gap.
+  ///
+  /// {@macro sync_manager_apply_failure}
+  bool _applyOne(Change change) {
     try {
-      for (final change in changes) {
-        document.applyChange(change);
-      }
-    } catch (e) {
+      document.applyChange(change);
+    } on CausallyNotReadyException {
+      return true;
+    } on MissingDependencyException {
+      return true;
+    } catch (error, stackTrace) {
+      _reportApplyFailure(change, error, stackTrace);
+    }
+    return false;
+  }
+
+  /// Reports a failure that no resync can fix, naming the change it was on.
+  void _reportApplyFailure(Change change, Object error, StackTrace stackTrace) {
+    client.reportSyncFault(
+      SyncFault(
+        reason: 'Could not apply change ${change.id} from the server',
+        error: error,
+        stackTrace: stackTrace,
+      ),
+    );
+  }
+
+  /// Applies a list of changes.
+  ///
+  /// Every change is tried, so one the document refuses does not hold back
+  /// the ones behind it. One status request covers the whole batch.
+  ///
+  /// {@macro sync_manager_apply_failure}
+  void applyChanges(List<Change> changes) {
+    var gap = false;
+    for (final change in changes) {
+      gap |= _applyOne(change);
+    }
+
+    if (gap) {
       requestDocumentStatus();
     }
   }
@@ -81,19 +121,37 @@ class SyncManager {
   /// [CRDTDocument.import] with:
   /// - `merge: false`
   /// - `pruneHistory: true`
-  void import({
+  ///
+  /// Returns whether the state went in. On `false` nothing is sent back: this
+  /// peer never took the server's state, so what it holds is not an answer.
+  ///
+  /// A failure becomes a [SyncFault].
+  /// {@macro sync_fault_not_thrown}
+  bool import({
     required VersionVector serverVersionVector,
     List<Change>? changes,
     Snapshot? snapshot,
   }) {
-    document.import(
-      changes: changes,
-      snapshot: snapshot,
-    );
+    try {
+      document.import(
+        changes: changes,
+        snapshot: snapshot,
+      );
+    } catch (error, stackTrace) {
+      client.reportSyncFault(
+        SyncFault(
+          reason: 'Could not import the state the server served',
+          error: error,
+          stackTrace: stackTrace,
+        ),
+      );
+      return false;
+    }
 
     _sendUnknownChangesToServerSync(
       document.exportChangesNewerThan(serverVersionVector),
     );
+    return true;
   }
 
   /// Send a list of changes that were already exported (synchronous version)
