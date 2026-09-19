@@ -1,3 +1,12 @@
+## 0.11.0
+
+**Date:** 2026-09-19
+
+### Changed
+
+- Update `crdt_lf` to `5.0.0`
+- Update `crdt_socket_sync` to `0.9.0` 
+
 ## 0.10.0
 
 **Date:** 2026-09-07
