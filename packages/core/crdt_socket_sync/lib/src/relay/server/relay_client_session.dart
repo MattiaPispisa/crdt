@@ -2,7 +2,6 @@ import 'dart:async';
 
 import 'package:crdt_lf/crdt_lf.dart';
 import 'package:crdt_socket_sync/src/common/common/common.dart';
-import 'package:crdt_socket_sync/src/common/common/utils.dart';
 import 'package:crdt_socket_sync/src/common/server/client_session.dart';
 import 'package:crdt_socket_sync/src/common/server/client_session_event.dart';
 import 'package:crdt_socket_sync/src/relay/common/common.dart';
@@ -97,7 +96,8 @@ class RelayClientSession extends ClientSession {
       unawaited(
         sendMessage(
           Message.error(
-            documentId: documentIdOf(data) ?? '',
+            // Names no document: see ClientSession.handleUndecodable.
+            documentId: '',
             code: Protocol.errorInvalidMessage,
             message: 'This server runs the relay protocol: '
                 'the CRDT-aware sync protocol is not supported. '

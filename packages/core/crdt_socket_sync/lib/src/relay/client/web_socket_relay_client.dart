@@ -231,7 +231,7 @@ class WebSocketRelayClient extends RelaySocketClient {
   DateTime? _lastPongAt;
 
   /// Codec for messages
-  late final MessageCodec<Message> _messageCodec;
+  late final CompressedCodec<Message> _messageCodec;
 
   @override
   Stream<Message> get messages => _messageController.stream;
@@ -431,13 +431,25 @@ class WebSocketRelayClient extends RelaySocketClient {
     // ignore: prefer_asserts_with_message assert function
     assert(() {
       if (message == null) {
-        final type = Message.getTypeOrNull(data);
+        // Read from the frame, not from `data`: the type is a JSON field, and
+        // a compressed frame hides it exactly when this message is needed.
+        final frame = _messageCodec.tryFrameOf(data);
+        final type = Message.getTypeOrNull(frame);
+
+        // Quiet for a frame this build was never meant to read: one from a
+        // plugin it does not have, or bytes with no type to read at all. The
+        // server answers those with silence too — a peer set up differently
+        // is not a fault. What is left is a frame of the protocol itself.
+        if (type == null || type >= MessageTypeValue.firstPluginValue) {
+          return true;
+        }
+
         throw StateError(
           '[WebSocketRelayClient] received a message'
           '${type != null ? ' of type $type' : ''}'
           ' that cannot be decoded.'
           ' Have you added the plugin to the client?'
-          '\nFrame: ${data.join(', ')}',
+          '\nFrame: ${frame.join(', ')}',
         );
       }
       return true;
@@ -590,7 +602,12 @@ class WebSocketRelayClient extends RelaySocketClient {
 
   /// Handles incoming messages
   Future<void> _handleMessage(Message message) async {
-    if (message.documentId != document.documentId) {
+    // An error arrives on this connection, so it is about this client's one
+    // document whatever the field says. The server may not be able to name it
+    // — it answers a frame it could not read — and dropping the answer would
+    // leave the client waiting for it.
+    if (message is! ErrorMessage &&
+        message.documentId != document.documentId) {
       return;
     }
 
@@ -638,7 +655,14 @@ class WebSocketRelayClient extends RelaySocketClient {
     // Complete the join first so that the sync manager can send messages
     handshake.succeed();
 
-    await _syncManager.onWelcome(message);
+    // The join is already marked successful, so nothing else would report a
+    // failed import: the client would look connected while the sync manager
+    // refuses to push, and every local edit would queue for good. Rejoining
+    // serves the same room state, so the status stays `error` instead of
+    // starting a loop. Read `lastFault` for the reason.
+    if (!await _syncManager.onWelcome(message)) {
+      updateConnectionStatus(ConnectionStatus.error);
+    }
   }
 
   Future<void> _handlePingMessage(PingMessage message) async {

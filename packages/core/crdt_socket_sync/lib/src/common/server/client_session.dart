@@ -90,7 +90,7 @@ abstract class ClientSession {
   List<String> get subscribedDocuments => _subscribedDocuments.toList();
 
   /// Message codec
-  final MessageCodec<Message> _messageCodec;
+  final CompressedCodec<Message> _messageCodec;
 
   /// Bounded, serialized outbound send queue.
   late final OutboundQueue _outboundQueue;
@@ -181,16 +181,13 @@ abstract class ClientSession {
       );
 
       // If we can't send, assume connection is dead
-      _closeSession(reason: 'Failed to send message: $e');
+      unawaited(_closeSession(reason: 'Failed to send message: $e'));
       rethrow;
     }
   }
 
   /// Close the session
-  Future<void> close() async {
-    _closeSession(reason: 'Session manually closed');
-    await tryCatchIgnore(_connection.close);
-  }
+  Future<void> close() => _closeSession(reason: 'Session manually closed');
 
   /// Handle incoming data from the transport
   void _handleData(List<int> data) {
@@ -199,7 +196,7 @@ abstract class ClientSession {
     try {
       final message = _messageCodec.decode(data);
       if (message == null) {
-        handleUndecodable(data);
+        handleUndecodable(_messageCodec.tryFrameOf(data));
         return;
       }
       _handleMessage(message);
@@ -218,7 +215,7 @@ abstract class ClientSession {
       // decodes to nothing, and the peer is owed the same answer. Without it
       // the client sits on a connection that works and waits for a reply that
       // is never coming.
-      handleUndecodable(data);
+      handleUndecodable(_messageCodec.tryFrameOf(data));
     }
   }
 
@@ -237,7 +234,7 @@ abstract class ClientSession {
     );
 
     // Close the session on connection error
-    _closeSession(reason: 'Connection error: $error');
+    unawaited(_closeSession(reason: 'Connection error: $error'));
   }
 
   /// Handle connection closed
@@ -246,7 +243,7 @@ abstract class ClientSession {
       return;
     }
 
-    _closeSession(reason: 'Client disconnected');
+    unawaited(_closeSession(reason: 'Client disconnected'));
   }
 
   /// Handle incoming message
@@ -311,7 +308,10 @@ abstract class ClientSession {
     unawaited(
       sendMessage(
         Message.error(
-          documentId: documentIdOf(data) ?? '',
+          // Names no document, because this answer is not about one: the frame
+          // it answers did not decode, and it is the frame that would have
+          // said which. A client takes an error that names none.
+          documentId: '',
           code: Protocol.errorInvalidMessage,
           message: 'This frame could not be read.',
         ),
@@ -384,7 +384,7 @@ abstract class ClientSession {
       ),
     );
 
-    _closeSession(reason: 'Client timeout');
+    unawaited(_closeSession(reason: 'Client timeout'));
   }
 
   /// Update last activity timestamp
@@ -393,9 +393,10 @@ abstract class ClientSession {
   }
 
   /// Close the session with reason
-  void _closeSession({
+  /// Ends the session and closes the socket under it. Runs once.
+  Future<void> _closeSession({
     required String reason,
-  }) {
+  }) async {
     if (_isClosed) {
       return;
     }
@@ -420,11 +421,13 @@ abstract class ClientSession {
         },
       ),
     );
+
+    await tryCatchIgnore(_connection.close);
   }
 
   /// Dispose the session
   void dispose() {
-    _closeSession(reason: 'Session disposed');
+    unawaited(_closeSession(reason: 'Session disposed'));
     _sessionEventController.close();
   }
 
