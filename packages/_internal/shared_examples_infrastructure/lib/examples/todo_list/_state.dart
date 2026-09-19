@@ -19,7 +19,7 @@ class TodoDocumentState
     return CRDTListHandler<EncodedTodoListType>(
       doc,
       ExampleHandlerIds.todoList,
-      handlerType: 'CRDTListHandler<EncodedTodoListType>',
+      handlerType: ExampleHandlerTypes.todoList,
     );
   }
 

@@ -32,3 +32,21 @@ abstract final class ExampleDocumentIds {
   /// Document (nested refs) document id.
   static const String document = 'a1b2c3d4-0001-4000-8000-000000000003';
 }
+
+/// CRDT handler **kinds** used by the example states.
+///
+/// A kind is what travels in every operation envelope, so the client and the
+/// demo server have to spell it the same way. They are written out here rather
+/// than derived from a class name: a type argument (`CRDTListHandler<Todo>`)
+/// is not stable across builds, and a typedef makes two sides that look equal
+/// write two different strings.
+abstract final class ExampleHandlerTypes {
+  /// Kind of the plain todo list.
+  static const String todoList = 'todo.list';
+
+  /// Kind of the sortable todo list.
+  static const String sortableTodoList = 'todo.sortable-list';
+
+  /// Kind of the `done` flag nested under a todo.
+  static const String done = 'todo.done';
+}

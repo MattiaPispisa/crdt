@@ -46,12 +46,16 @@
       - [Awareness Plugin](#awareness-plugin)
     - [Compression](#compression)
     - [Connection status \& error handling](#connection-status--error-handling)
+      - [Faults: data that did not make it in](#faults-data-that-did-not-make-it-in)
     - [Version \& capability negotiation](#version--capability-negotiation)
       - [Declare what your build can read](#declare-what-your-build-can-read)
       - [Refusals are permanent](#refusals-are-permanent)
+      - [An unknown kind is kept, never dropped](#an-unknown-kind-is-kept-never-dropped)
       - [What the handshake does not cover](#what-the-handshake-does-not-cover)
     - [Wire format \& type codes](#wire-format--type-codes)
   - [Examples](#examples)
+  - [Migrations](#migrations)
+    - [Migrating from 0.8.x to 0.9.0](#migrating-from-08x-to-090)
   - [Apps](#apps)
   - [Packages](#packages)
 
@@ -761,18 +765,18 @@ Frames are JSON envelopes typed by an integer `type` code, with `documentId`
 identifying the room. CRDT change/snapshot payloads travel as **opaque
 base64 strings**. Your server must handle:
 
-| Code | Name | Dir | Fields (beyond `type`, `documentId`) |
-|---|---|---|---|
-| 20 | hello | C→S | `author` |
-| 21 | welcome | S→C | `sessionId`, `snapshot: string\|null`, `changes: string[]`, `seq`, `logLength`, `compact` |
-| 22 | push | C→S | `changes: string[]` |
-| 23 | ack | S→C | `seq`, `count`, `logLength`, `compact` |
-| 24 | changes | S→others | `changes: string[]`, `seq`, `from: string\|null` |
-| 25 | snapshotUpload | C→S | `snapshot`, `upToSeq` |
-| 26 | stateRequest | C→S | — (reply with a welcome, same `sessionId`) |
-| 5 | ping | C→S | `timestamp` → reply pong (6) `{originalTimestamp, responseTimestamp}` |
-| 7 | error | S→C | `code`, `message` |
-| 100–102 | awareness | C↔S | presence passthrough (store + rebroadcast) |
+| Code    | Name           | Dir      | Fields (beyond `type`, `documentId`)                                                      |
+|---------|----------------|----------|-------------------------------------------------------------------------------------------|
+| 20      | hello          | C→S      | `author`                                                                                  |
+| 21      | welcome        | S→C      | `sessionId`, `snapshot: string\|null`, `changes: string[]`, `seq`, `logLength`, `compact` |
+| 22      | push           | C→S      | `changes: string[]`                                                                       |
+| 23      | ack            | S→C      | `seq`, `count`, `logLength`, `compact`                                                    |
+| 24      | changes        | S→others | `changes: string[]`, `seq`, `from: string\|null`                                          |
+| 25      | snapshotUpload | C→S      | `snapshot`, `upToSeq`                                                                     |
+| 26      | stateRequest   | C→S      | — (reply with a welcome, same `sessionId`)                                                |
+| 5       | ping           | C→S      | `timestamp` → reply pong (6) `{originalTimestamp, responseTimestamp}`                     |
+| 7       | error          | S→C      | `code`, `message`                                                                         |
+| 100–102 | awareness      | C↔S      | presence passthrough (store + rebroadcast)                                                |
 
 Server responsibilities: assign a `sessionId` per connection and return it in
 the welcome; append pushed blobs to a per-room log with monotonic sequence
@@ -1200,17 +1204,14 @@ final list = CRDTListHandler<Todo>(document, 'todos');
 final list = CRDTListHandler<Todo>(document, 'todos', handlerType: 'todo-list');
 ```
 
-That tag is what the handshake compares, so pick it once and keep it: two peers
-spelling the same kind differently now refuse each other at connect time
-instead of diverging quietly.
-
 Renamed or removed symbols:
 
-| 0.8.x | 0.9.0 | Note |
-|---|---|---|
-| `Protocol.version` (`'1.0.0'`) | `Protocol.protocolVersion` (`1`) | An `int`, so a peer can tell an older version from a newer one. `Protocol.firstProtocolVersion` is what a frame without the field is read as. |
-| `ConnectionStatus` with four values | adds `unsupported` | An exhaustive `switch` over it needs another case. It is terminal: see [Refusals are permanent](#refusals-are-permanent). |
-| a `CRDTSocketClient` subclass owning its status stream | the base class owns it | `connectionStatus`, `connectionStatusValue` and the handshake gate move up; a transport only calls `updateConnectionStatus`, and the base makes `unsupported` sticky. |
+| 0.8.x                                                  | 0.9.0                            | Note                                                                                                                                                                  |
+|--------------------------------------------------------|----------------------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `Protocol.version` (`'1.0.0'`)                         | `Protocol.protocolVersion` (`1`) | An `int`, so a peer can tell an older version from a newer one. `Protocol.firstProtocolVersion` is what a frame without the field is read as.                         |
+| `ConnectionStatus` with four values                    | adds `unsupported`               | An exhaustive `switch` over it needs another case. It is terminal: see [Refusals are permanent](#refusals-are-permanent).                                             |
+| a `CRDTSocketClient` subclass owning its status stream | the base class owns it           | `connectionStatus`, `connectionStatusValue` and the handshake gate move up; a transport only calls `updateConnectionStatus`, and the base makes `unsupported` sticky. |
+| `PluginAwareMessageCodec(codecs)` | `PluginAwareMessageCodec(defaultCodec: ..., pluginCodecs: ...)` | Kept apart so a message routes by type: from `MessageTypeValue.firstPluginValue` up it goes to a plugin's codec, which is what makes a plugin's encoder run at all. `fromPlugins` is unchanged. |
 
 Nothing else moves: `WebSocketClient`, `WebSocketRelayClient`, the server
 registries, the plugins and the wire codecs keep their 0.8.x signatures.

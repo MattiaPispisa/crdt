@@ -14,6 +14,9 @@ read. See [Migrating from 0.8.x to 0.9.0](https://github.com/MattiaPispisa/crdt/
 - A `CRDTSocketClient` subclass no longer provides `connectionStatus`,
   `connectionStatusValue` or a status controller of its own: the base class owns
   them, and a transport only calls `updateConnectionStatus`.
+- `PluginAwareMessageCodec` takes the protocol's codec and the plugins' codecs
+  apart (`PluginAwareMessageCodec(defaultCodec: ..., pluginCodecs: ...)`)
+  instead of one flat list. `fromPlugins` is unchanged.
 
 ### Added
 
@@ -37,6 +40,30 @@ read. See [Migrating from 0.8.x to 0.9.0](https://github.com/MattiaPispisa/crdt/
 
 - **A frame the server cannot read is answered with `INVALID_MESSAGE`.** One that threw on the way
   in used to be logged and nothing more, leaving the client waiting for a reply that never came.
+
+### Fixed
+
+- **A plugin's codec now writes the plugin's messages.** It only took part in decoding before: the
+  protocol's codec answered for every message, so a plugin whose codec is not the default JSON —
+  binary, an envelope, encrypted — put the wrong bytes on the wire and the peer refused them. A
+  message from `MessageTypeValue.firstPluginValue` up now goes to the plugins' codecs, anything
+  below to the protocol's.
+
+- **A codec that throws no longer hides the ones after it.** Handed a frame it was not written for,
+  a codec can throw instead of declining, and that ended the search — so adding a plugin could stop
+  an existing one's messages from being read.
+
+- **A transport says when the peer closes it.** A clean close left no trace: the next frame opened a
+  second socket behind the client's back, one that never handshakes, so the client looked connected
+  and every change it sent was dropped by the server in silence. The close is now reported on
+  `Transport.incoming`, which is what drives the reconnect, and sending on a closed transport throws.
+
+- **A session closes its socket however it ends.** Only `close()` did, so a client dropped for a
+  heartbeat timeout — or for a transport error, or a failed send — left its socket and its incoming
+  subscription alive for the life of the process.
+
+- **A client no longer throws in debug on a frame it was not meant to read.** A frame from a plugin
+  it does not have, or bytes with no readable type, are dropped the way the server drops them.
 
 ## [0.8.0](https://github.com/MattiaPispisa/crdt/tree/crdt_socket_sync-v0.8.0/packages/core/crdt_socket_sync)
 

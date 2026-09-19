@@ -137,6 +137,46 @@ void main() {
       expect(setup.client.connectionStatusValue, ConnectionStatus.error);
     });
 
+    test('an error that names no document still reaches the client', () async {
+      // The server answers a frame it could not read, so it cannot say which
+      // document the answer is about. Dropping it would leave the client
+      // waiting for the reply that error is.
+      final setup = build();
+      addTearDown(setup.client.dispose);
+
+      await setup.client.connect();
+      expect(setup.client.connectionStatusValue, ConnectionStatus.connected);
+
+      setup.transport.push(
+        Message.error(
+          documentId: '',
+          code: Protocol.errorInvalidMessage,
+          message: 'This frame could not be read.',
+        ),
+      );
+      await Future<void>.delayed(Duration.zero);
+
+      expect(setup.client.connectionStatusValue, ConnectionStatus.error);
+    });
+
+    test('another message that names no document is dropped', () async {
+      // Only an error is exempt from the address check: anything else with an
+      // empty document id is a frame this client has no reason to act on.
+      final setup = build();
+      addTearDown(setup.client.dispose);
+
+      await setup.client.connect();
+      setup.transport.sent.clear();
+
+      // A ping is the one frame with a visible answer: a pong goes back.
+      setup.transport.push(
+        Message.ping(documentId: '', timestamp: 0),
+      );
+      await Future<void>.delayed(Duration.zero);
+
+      expect(setup.transport.sent.whereType<PongMessage>(), isEmpty);
+    });
+
     test('sendChange sends a change message to the server', () async {
       final setup = build();
       addTearDown(setup.client.dispose);

@@ -23,7 +23,7 @@ class SortableDocumentState
     return CRDTFugueMovableListHandler<EncodedTodoListType>(
       doc,
       ExampleHandlerIds.sortableTodoList,
-      handlerType: 'CRDTFugueMovableListHandler<EncodedTodoListType>',
+      handlerType: ExampleHandlerTypes.sortableTodoList,
     );
   }
 

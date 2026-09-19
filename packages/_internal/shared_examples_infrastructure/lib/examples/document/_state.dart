@@ -45,10 +45,10 @@ class DocumentExampleState extends ExampleDocument<CRDTMovableListRefHandler> {
   static const _kBlocksKey = 'blocks';
   static const _kDoneKey = 'done';
 
-  // The todo `done` flag is a nested CRDTRegisterHandler<bool>. A generic
-  // handler carries its type argument in its tag, so the tag is written here,
-  // once, and this builder is what every place that needs one passes around.
-  static final _doneSpec = CRDTRegisterHandler.spec<bool>('todo.done');
+  // The kind is shared with the demo server, so it comes from the one place
+  // both sides read.
+  static final _doneSpec =
+      CRDTRegisterHandler.spec<bool>(ExampleHandlerTypes.done);
 
   @override
   CRDTMovableListRefHandler createHandler(BaseCRDTDocument doc) {

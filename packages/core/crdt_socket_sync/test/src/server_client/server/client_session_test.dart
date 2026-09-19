@@ -38,6 +38,9 @@ class _FakeConnection implements TransportConnection {
 
   void inbound(List<int> data) => _incoming.add(data);
 
+  /// Fails the incoming stream, the way a broken socket does.
+  void inboundError(Object error) => _incoming.addError(error);
+
   @override
   Stream<List<int>> get incoming => _incoming.stream;
 
@@ -54,6 +57,29 @@ class _FakeConnection implements TransportConnection {
 
   @override
   bool get isConnected => _connected;
+}
+
+/// A compressor that is not the identity, so a frame that went through it is
+/// no longer readable as JSON.
+///
+/// The bug this guards against only shows with one: with [NoCompression] the
+/// transport bytes already are the JSON, so every by-hand read of a frame
+/// works by accident.
+class _Reversing implements Compressor {
+  const _Reversing();
+
+  static const int _marker = 0x01;
+
+  @override
+  List<int> compress(List<int> data) => [_marker, ...data.reversed];
+
+  @override
+  List<int> decompress(List<int> data) {
+    if (data.isEmpty || data.first != _marker) {
+      throw const FormatException('Not compressed by this compressor');
+    }
+    return data.skip(1).toList().reversed.toList();
+  }
 }
 
 void main() {
@@ -477,7 +503,9 @@ void main() {
       final errors = decodeSent().whereType<ErrorMessage>().toList();
       expect(errors, hasLength(1));
       expect(errors.single.code, Protocol.errorInvalidMessage);
-      expect(errors.single.documentId, documentId);
+      // The answer names no document: the frame did not decode, so the server
+      // does not read one out of it. A client takes an error that names none.
+      expect(errors.single.documentId, isEmpty);
       expect(decodeSent().whereType<HandshakeResponseMessage>(), isEmpty);
     });
 
@@ -501,11 +529,90 @@ void main() {
       expect(events.where((e) => e.type == SessionEventType.error), isNotEmpty);
     });
 
+    test('names no document in an error about a frame it could not read',
+        () async {
+      // Not even once the session knows which document it serves: the answer
+      // is about a frame, not about a document, and the frame that failed is
+      // the one that would have said which.
+      await registry.addDocument(documentId);
+      await handshake();
+      connection.sent.clear();
+
+      connection.inbound([0xff, 0xfe, 0x00, 0x01]);
+      await Future<void>.delayed(Duration.zero);
+
+      expect(
+        decodeSent().whereType<ErrorMessage>().single.documentId,
+        isEmpty,
+      );
+    });
+
+    test('closes the socket when the session dies', () async {
+      // Only close() used to close it, so a session that ended any other way
+      // left the socket and its subscription alive for the process's life.
+      expect(connection.isConnected, isTrue);
+
+      connection.inboundError(StateError('socket broke'));
+      await Future<void>.delayed(Duration.zero);
+
+      expect(connection.isConnected, isFalse);
+    });
+
     test('emits an error when an undecodable frame arrives', () async {
       connection.inbound([0xff, 0xfe, 0x00, 0x01]);
       await Future<void>.delayed(Duration.zero);
 
       expect(events.where((e) => e.type == SessionEventType.error), isNotEmpty);
+    });
+
+    group('with a compressor that is not the identity', () {
+      late _FakeConnection compressedConnection;
+      late DocumentClientSession compressedSession;
+      late CompressedCodec<Message> compressedCodec;
+
+      setUp(() {
+        compressedConnection = _FakeConnection();
+        compressedSession = DocumentClientSession(
+          id: 'session-compressed',
+          connection: compressedConnection,
+          serverRegistry: registry,
+          compressor: const _Reversing(),
+        );
+        compressedCodec =
+            CompressedCodec<Message>(codec, compressor: const _Reversing());
+      });
+
+      tearDown(() => compressedSession.dispose());
+
+      test('stays quiet about a plugin frame it cannot read', () async {
+        // Reading the type out of the raw transport bytes fails here, and the
+        // session used to fall through to an error reply — one per frame, on a
+        // connection that works.
+        compressedConnection.inbound(
+          compressedCodec.encode(
+            Message.ping(documentId: documentId, timestamp: 0),
+          )!,
+        );
+        await Future<void>.delayed(Duration.zero);
+        compressedConnection.sent.clear();
+
+        compressedConnection.inbound(
+          const _Reversing().compress(
+            utf8.encode(
+              jsonEncode({
+                'type': MessageTypeValue.firstPluginValue,
+                'documentId': documentId,
+              }),
+            ),
+          ),
+        );
+        await Future<void>.delayed(Duration.zero);
+
+        final sent = compressedConnection.sent
+            .map(compressedCodec.decode)
+            .whereType<Message>();
+        expect(sent.whereType<ErrorMessage>(), isEmpty);
+      });
     });
 
     test('sending on a closed session emits an error and does not throw',
