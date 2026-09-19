@@ -89,16 +89,17 @@ class RelaySyncManager {
   /// Re-delivering a change the relay already had is harmless: the relay
   /// appends it and every peer discards it as known.
   ///
-  /// A welcome this client cannot take in — a blob `Snapshot.fromBytes` or
-  /// `Change.fromBytes` refuses, or a state the document will not import —
-  /// becomes a [SyncFault], and the join is abandoned.
+  /// Returns whether the room state went in; on `false` the join is
+  /// abandoned and nothing is pushed.
+  ///
+  /// A state this client cannot take in becomes a [SyncFault].
   /// {@macro sync_fault_not_thrown}
   ///
   /// {@template relay_import_fault}
   /// A relay checks the protocol version and nothing else, so it is this path,
   /// not the CRDT-aware one, that meets unreadable state most often.
   /// {@endtemplate}
-  Future<void> onWelcome(RelayWelcomeMessage message) async {
+  Future<bool> onWelcome(RelayWelcomeMessage message) async {
     final Snapshot? snapshot;
     final List<Change> changes;
 
@@ -125,7 +126,7 @@ class RelaySyncManager {
           stackTrace: stackTrace,
         ),
       );
-      return;
+      return false;
     }
 
     _seqTracker.markThrough(message.seq);
@@ -139,6 +140,7 @@ class RelaySyncManager {
     if (message.compact) {
       await uploadSnapshot(message.seq);
     }
+    return true;
   }
 
   /// Queues every change the document holds that the welcome did not carry.
