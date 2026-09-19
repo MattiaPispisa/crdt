@@ -1,3 +1,10 @@
+## [0.5.1](https://github.com/MattiaPispisa/crdt/tree/crdt_lf_flutter-v0.5.1/packages/core/crdt_lf_flutter)
+
+**Date:** 2026-09-19
+
+Widens the `crdt_lf` constraint to `>=4.1.0 <6.0.0`, so this package resolves against
+`crdt_lf` 5.0.0 as well as 4.x. No functional changes.
+
 ## [0.5.0+1](https://github.com/MattiaPispisa/crdt/tree/crdt_lf_flutter-v0.5.0+1/packages/core/crdt_lf_flutter)
 
 **Date:** 2026-08-28

@@ -1,3 +1,10 @@
+## [0.1.1](https://github.com/MattiaPispisa/crdt/tree/crdt_lf_persistence-v0.1.1/packages/core/crdt_lf_persistence)
+
+**Date:** 2026-09-19
+
+Widens the `crdt_lf` constraint to `>=4.2.0 <6.0.0`, so this package resolves against
+`crdt_lf` 5.0.0 as well as 4.x. No functional changes.
+
 ## [0.1.0](https://github.com/MattiaPispisa/crdt/tree/crdt_lf_persistence-v0.1.0/packages/core/crdt_lf_persistence)
 
 **Date:** 2026-09-07
