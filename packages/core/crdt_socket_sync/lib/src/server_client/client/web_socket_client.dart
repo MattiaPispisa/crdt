@@ -60,6 +60,7 @@ class WebSocketClient extends CRDTSocketClient {
     Duration? pingTimeout,
     int? maxBufferSize,
     super.plugins,
+    super.capabilities,
   })  : _messageController = StreamController<Message>.broadcast(),
         _pingInterval = pingInterval ?? Protocol.pingInterval,
         _pingTimeout = pingTimeout ?? Protocol.pingTimeout,
@@ -140,7 +141,7 @@ class WebSocketClient extends CRDTSocketClient {
   DateTime? _lastPongAt;
 
   /// Codec for messages
-  late final MessageCodec<Message> _messageCodec;
+  late final CompressedCodec<Message> _messageCodec;
 
   @override
   Stream<Message> get messages => _messageController.stream;
@@ -342,13 +343,25 @@ class WebSocketClient extends CRDTSocketClient {
     // ignore: prefer_asserts_with_message assert function
     assert(() {
       if (message == null) {
-        final type = Message.getTypeOrNull(data);
+        // Read from the frame, not from `data`: the type is a JSON field, and
+        // a compressed frame hides it exactly when this message is needed.
+        final frame = _messageCodec.tryFrameOf(data);
+        final type = Message.getTypeOrNull(frame);
+
+        // Quiet for a frame this build was never meant to read: one from a
+        // plugin it does not have, or bytes with no type to read at all. The
+        // server answers those with silence too — a peer set up differently
+        // is not a fault. What is left is a frame of the protocol itself.
+        if (type == null || type >= MessageTypeValue.firstPluginValue) {
+          return true;
+        }
+
         throw StateError(
           '[WebSocketClient] received a message'
           '${type != null ? ' of type $type' : ''}'
           ' that cannot be decoded.'
           ' Have you added the plugin to the client?'
-          '\nFrame: ${data.join(', ')}',
+          '\nFrame: ${frame.join(', ')}',
         );
       }
       return true;
@@ -491,7 +504,12 @@ class WebSocketClient extends CRDTSocketClient {
 
   /// Handles incoming messages
   Future<void> _handleMessage(Message message) async {
-    if (message.documentId != document.documentId) {
+    // An error arrives on this connection, so it is about this client's one
+    // document whatever the field says. The server may not be able to name it
+    // — it answers a frame it could not read — and dropping the answer would
+    // leave the client waiting for it.
+    if (message is! ErrorMessage &&
+        message.documentId != document.documentId) {
       return;
     }
 
@@ -543,11 +561,19 @@ class WebSocketClient extends CRDTSocketClient {
     // Complete the handshake first so that merge can send messages
     handshake.succeed();
 
-    _syncManager.import(
+    final imported = _syncManager.import(
       changes: message.changes,
       snapshot: message.snapshot,
       serverVersionVector: message.versionVector,
     );
+
+    // The handshake is already done, so nothing else would report this: the
+    // client would look connected while holding none of the server's state.
+    // Reconnecting re-serves the same state, so the status stays `error`
+    // instead of starting a loop. Read `lastFault` for the reason.
+    if (!imported) {
+      updateConnectionStatus(ConnectionStatus.error);
+    }
   }
 
   void _handleChangeMessage(ChangeMessage message) {

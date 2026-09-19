@@ -69,46 +69,52 @@ class SyncManager {
   /// {@macro sync_fault_not_thrown}
   /// {@endtemplate}
   void applyChange(Change change) {
-    try {
-      document.applyChange(change);
-    } on CausallyNotReadyException {
+    if (_applyOne(change)) {
       requestDocumentStatus();
-    } on MissingDependencyException {
-      requestDocumentStatus();
-    } catch (error, stackTrace) {
-      _reportApplyFailure(error, stackTrace, count: 1);
     }
   }
 
-  /// Reports a failure that no resync can fix.
-  void _reportApplyFailure(
-    Object error,
-    StackTrace stackTrace, {
-    required int count,
-  }) {
+  /// Applies [change], and says whether it left a causal gap.
+  ///
+  /// {@macro sync_manager_apply_failure}
+  bool _applyOne(Change change) {
+    try {
+      document.applyChange(change);
+    } on CausallyNotReadyException {
+      return true;
+    } on MissingDependencyException {
+      return true;
+    } catch (error, stackTrace) {
+      _reportApplyFailure(change, error, stackTrace);
+    }
+    return false;
+  }
+
+  /// Reports a failure that no resync can fix, naming the change it was on.
+  void _reportApplyFailure(Change change, Object error, StackTrace stackTrace) {
     client.reportSyncFault(
       SyncFault(
-        reason: 'Could not apply $count change(s) from the server',
+        reason: 'Could not apply change ${change.id} from the server',
         error: error,
         stackTrace: stackTrace,
       ),
     );
   }
 
-  /// Applies a list of changes
+  /// Applies a list of changes.
+  ///
+  /// Every change is tried, so one the document refuses does not hold back
+  /// the ones behind it. One status request covers the whole batch.
   ///
   /// {@macro sync_manager_apply_failure}
   void applyChanges(List<Change> changes) {
-    try {
-      for (final change in changes) {
-        document.applyChange(change);
-      }
-    } on CausallyNotReadyException {
+    var gap = false;
+    for (final change in changes) {
+      gap |= _applyOne(change);
+    }
+
+    if (gap) {
       requestDocumentStatus();
-    } on MissingDependencyException {
-      requestDocumentStatus();
-    } catch (error, stackTrace) {
-      _reportApplyFailure(error, stackTrace, count: changes.length);
     }
   }
 
@@ -116,10 +122,12 @@ class SyncManager {
   /// - `merge: false`
   /// - `pruneHistory: true`
   ///
-  /// A failure becomes a [SyncFault], and nothing is sent back: there is no
-  /// state to report yet.
+  /// Returns whether the state went in. On `false` nothing is sent back: this
+  /// peer never took the server's state, so what it holds is not an answer.
+  ///
+  /// A failure becomes a [SyncFault].
   /// {@macro sync_fault_not_thrown}
-  void import({
+  bool import({
     required VersionVector serverVersionVector,
     List<Change>? changes,
     Snapshot? snapshot,
@@ -137,12 +145,13 @@ class SyncManager {
           stackTrace: stackTrace,
         ),
       );
-      return;
+      return false;
     }
 
     _sendUnknownChangesToServerSync(
       document.exportChangesNewerThan(serverVersionVector),
     );
+    return true;
   }
 
   /// Send a list of changes that were already exported (synchronous version)
