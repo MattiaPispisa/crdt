@@ -2,14 +2,17 @@
 library;
 
 export 'src/common/common/common.dart';
+export 'src/common/common/web_socket_channel_connection.dart';
 export 'src/common/server/client_session.dart';
 export 'src/common/server/client_session_event.dart';
 export 'src/common/server/event.dart';
 export 'src/common/server/server.dart';
+export 'src/common/server/session_host.dart';
 export 'src/plugins/server.dart';
 export 'src/server_client/common/common.dart';
 export 'src/server_client/server/document_catalog.dart';
 export 'src/server_client/server/document_client_session.dart';
+export 'src/server_client/server/document_session_host.dart';
 export 'src/server_client/server/in_memory_server_registry.dart';
 export 'src/server_client/server/persistent_server_registry.dart';
 export 'src/server_client/server/registry.dart';

@@ -42,6 +42,7 @@
     - [Implementing a relay server](#implementing-a-relay-server)
     - [Relay Imports](#relay-imports)
   - [Shared topics](#shared-topics)
+    - [Hosting the server on another runtime](#hosting-the-server-on-another-runtime)
     - [Plugins](#plugins)
       - [Awareness Plugin](#awareness-plugin)
     - [Compression](#compression)
@@ -502,10 +503,11 @@ import 'package:crdt_socket_sync/client.dart';
 // WebSocket client implementation
 import 'package:crdt_socket_sync/web_socket_client.dart';
 
-// Basic server interfaces
+// Server interfaces and the transport-free DocumentSessionHost
+// (no dart:io — the import for Dart Frog, shelf, ...)
 import 'package:crdt_socket_sync/server.dart';
 
-// WebSocket server implementation
+// WebSocket server implementation (dart:io)
 import 'package:crdt_socket_sync/web_socket_server.dart';
 ```
 
@@ -808,16 +810,64 @@ import 'package:crdt_socket_sync/relay_client.dart';
 // WebSocket relay client implementation
 import 'package:crdt_socket_sync/web_socket_relay_client.dart';
 
-// Relay server interfaces (RelayStore, compaction, session)
+// Relay server interfaces (RelayStore, compaction, session) and the
+// transport-free RelaySessionHost (no dart:io)
 import 'package:crdt_socket_sync/relay_server.dart';
 
-// WebSocket relay server implementation
+// WebSocket relay server implementation (dart:io)
 import 'package:crdt_socket_sync/web_socket_relay_server.dart';
 ```
-
 ## Shared topics
 
 The following concerns work the same way in both communication modes.
+
+### Hosting the server on another runtime
+
+`WebSocketServer` and `WebSocketRelayServer` own a `dart:io` `HttpServer`: they
+bind it on `start()` and upgrade the requests themselves. When the HTTP server
+belongs to a framework — [Dart Frog](https://pub.dev/packages/dart_frog),
+shelf, anything that hands you an already-upgraded socket — use the host
+underneath instead.
+
+`DocumentSessionHost` (CRDT-aware) and `RelaySessionHost` (relay) are those two
+servers minus the socket. They keep the registry or the store, the sessions, the
+broadcasting, the `ServerEvent` stream and the aligned-snapshot coordinator;
+what they do not have is a way to accept a connection on their own. You give
+them one:
+
+```dart
+import 'package:crdt_socket_sync/server.dart';
+
+final host = DocumentSessionHost(serverRegistry: registry);
+await host.start();
+
+// Wherever your framework hands you a connected socket:
+host.acceptConnection(WebSocketChannelConnection(channel));
+```
+
+`acceptConnection` takes any `TransportConnection`:
+`WebSocketChannelConnection` covers every framework built on
+`package:web_socket_channel`, and anything else is four members over a byte
+stream. It returns the session, or `null` after closing the connection when the
+host cannot take it — stopped, disposed, or handed a session id already in use.
+
+Two things worth knowing:
+
+- **`start()` is optional here.** A host with no transport of its own starts on
+  its first connection. Call it explicitly when you want the
+  `ServerEventType.started` event at a point you choose, and call `stop()` to
+  refuse further connections and close the open ones.
+- **`isRunning` means "accepting sessions", not "listening on a socket".** It
+  is what gates the snapshot coordinator, so a stopped host takes no snapshot
+  even with every client aligned.
+
+`server.dart` and `relay_server.dart` are free of `dart:io` and stay that way —
+a test in this package walks their imports and fails if one creeps in. Only
+`web_socket_server.dart` and `web_socket_relay_server.dart` pull it in.
+
+For Dart Frog there is a ready-made adapter,
+[`crdt_socket_sync_dart_frog`](https://github.com/MattiaPispisa/crdt/tree/main/packages/adapters/sync/dart_frog),
+which is this plus a `Handler`.
 
 ### Plugins
 
@@ -1229,6 +1279,7 @@ Other bricks of the crdt "system" are:
 - [crdt_lf_hive](https://pub.dev/packages/crdt_lf_hive)
 - [crdt_lf_drift](https://pub.dev/packages/crdt_lf_drift)
 - [crdt_lf_sqlite](https://pub.dev/packages/crdt_lf_sqlite)
+- [crdt_socket_sync_dart_frog](https://pub.dev/packages/crdt_socket_sync_dart_frog)
 
 [crdt_socket_sync_badge]: https://img.shields.io/pub/v/crdt_socket_sync.svg
 [license_badge]: https://img.shields.io/badge/license-MIT-blue.svg

@@ -23,6 +23,7 @@ jobs:
       persistence_conformance: ${{ steps.filter.outputs.persistence_conformance }}
       crdt_socket_sync: ${{ steps.filter.outputs.crdt_socket_sync }}
       crdt_lf_flutter: ${{ steps.filter.outputs.crdt_lf_flutter }}
+      crdt_socket_sync_dart_frog: ${{ steps.filter.outputs.crdt_socket_sync_dart_frog }}
     steps:
       - uses: actions/checkout@v7
       - uses: dorny/paths-filter@v4
@@ -55,6 +56,8 @@ jobs:
               - 'packages/core/crdt_socket_sync/**'
             crdt_lf_flutter:
               - 'packages/core/crdt_lf_flutter/**'
+            crdt_socket_sync_dart_frog:
+              - 'packages/adapters/sync/dart_frog/**'
 
   hlc:
     needs: changes
@@ -184,6 +187,23 @@ jobs:
     secrets:
       CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
 
+  crdt_socket_sync_dart_frog:
+    needs: changes
+    if: >-
+      ${{ needs.changes.outputs.global == 'true'
+       || needs.changes.outputs.hlc == 'true'
+       || needs.changes.outputs.crdt_lf == 'true'
+       || needs.changes.outputs.crdt_lf_persistence == 'true'
+       || needs.changes.outputs.crdt_socket_sync == 'true'
+       || needs.changes.outputs.crdt_socket_sync_dart_frog == 'true' }}
+    uses: ./.github/workflows/dart_package.yaml
+    with:
+      working_directory: ./packages/adapters/sync/dart_frog
+      min_coverage: 90
+      package_name: crdt_socket_sync_dart_frog
+    secrets:
+      CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+
   crdt_lf_flutter:
     needs: changes
     if: >-
@@ -213,6 +233,7 @@ jobs:
       - crdt_lf_sqlite
       - crdt_lf_drift
       - crdt_socket_sync
+      - crdt_socket_sync_dart_frog
       - crdt_lf_flutter
     steps:
       - name: Verify no job failed

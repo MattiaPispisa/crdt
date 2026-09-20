@@ -1,3 +1,39 @@
+## [0.10.0](https://github.com/MattiaPispisa/crdt/tree/crdt_socket_sync-v0.10.0/packages/core/crdt_socket_sync)
+
+**Date:** 2026-09-20
+
+[compare to previous release](https://github.com/MattiaPispisa/crdt/compare/crdt_socket_sync-v0.9.0...crdt_socket_sync-v0.10.0)
+
+### Added
+
+- **The server half of both protocols can now run inside an HTTP server it does not own.**
+  `SessionHostServer` holds everything a server does once a peer is connected — the session map,
+  broadcasting, the `ServerEvent` stream, teardown — and takes connections through
+  `acceptConnection(TransportConnection)`. `DocumentSessionHost` and `RelaySessionHost` are the two
+  complete hosts on top of it, with no transport of their own, and are exported from `server.dart`
+  and `relay_server.dart`, which stay free of `dart:io`. Hosting the protocol on Dart Frog, shelf or
+  a worker runtime is now a matter of building a `TransportConnection` and handing it over; see
+  [Hosting the server on another runtime](https://github.com/MattiaPispisa/crdt/tree/main/packages/core/crdt_socket_sync#hosting-the-server-on-another-runtime).
+- `WebSocketChannelConnection` is now public, from `server.dart` and `relay_server.dart`. The client
+  already used it internally; a server handed a `WebSocketChannel` by its framework needs the same
+  frame normalization, and a second copy of it would be free to drift from what the client sends.
+- `SessionHostState`, `SessionHostServer.state` and `SessionHostServer.isRunning` say whether a host
+  accepts sessions. This is what gates the aligned-snapshot coordinator, so it deliberately says
+  nothing about a listening socket: an embedded host has none and is still running.
+- `DocumentSessionHost.maybeTakeAlignedSnapshot` and `maybeTakeAlignedSnapshotForSession` are
+  public, so an embedder can force the coordinator before an orderly shutdown.
+- `RelaySessionHost.compaction` exposes the coordinator the host shares across its sessions.
+
+### Changed
+
+- `WebSocketServer` and `WebSocketRelayServer` are now thin `dart:io` subclasses of
+  `DocumentSessionHost` and `RelaySessionHost`. Their constructors, `host`, `port`, `store`, the
+  `ServerEvent`s they emit and the order they emit them in are unchanged — the existing test suite
+  covers them and was not touched.
+- `dispose()` on a relay server now disposes the plugins before closing the event stream, as the
+  document server already did. A plugin that reported something while being disposed used to hit a
+  closed controller.
+
 ## [0.9.0](https://github.com/MattiaPispisa/crdt/tree/crdt_socket_sync-v0.9.0/packages/core/crdt_socket_sync)
 
 **Date:** 2026-09-19
