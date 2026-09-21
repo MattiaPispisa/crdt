@@ -1,4 +1,14 @@
-# CRDT LF PERSISTENCE
+# CRDT LF Persistence
+
+[![crdt_lf_persistence_badge][crdt_lf_persistence_badge]](https://pub.dev/packages/crdt_lf_persistence)
+[![pub points][pub_points]][pub_link]
+[![pub likes][pub_likes]][pub_link]
+[![codecov][codecov_badge]][codecov_link]
+[![ci_badge][ci_badge]][ci_link]
+[![License: MIT][license_badge]][license_link]
+[![pub publisher][pub_publisher]][pub_publisher_link]
+
+[![docs_badge]][docs_link]
 
 The storage contract behind the [`crdt_lf`](https://pub.dev/packages/crdt_lf)
 persistence adapters, and the consumer that keeps a document on disk as it
@@ -457,3 +467,18 @@ Other bricks of the crdt "system" are:
 - [crdt_lf_hive](https://pub.dev/packages/crdt_lf_hive)
 - [crdt_lf_drift](https://pub.dev/packages/crdt_lf_drift)
 - [crdt_lf_sqlite](https://pub.dev/packages/crdt_lf_sqlite)
+
+[crdt_lf_persistence_badge]: https://img.shields.io/pub/v/crdt_lf_persistence.svg
+[license_badge]: https://img.shields.io/badge/license-MIT-blue.svg
+[license_link]: https://opensource.org/licenses/MIT
+[codecov_badge]: https://img.shields.io/codecov/c/github/MattiaPispisa/crdt/main?flag=crdt_lf_persistence&logo=codecov
+[codecov_link]: https://app.codecov.io/gh/MattiaPispisa/crdt/tree/main/packages/core/crdt_lf_persistence
+[pub_link]: https://pub.dev/packages/crdt_lf_persistence
+[pub_points]: https://img.shields.io/pub/points/crdt_lf_persistence
+[pub_likes]: https://img.shields.io/pub/likes/crdt_lf_persistence
+[ci_badge]: https://img.shields.io/github/actions/workflow/status/MattiaPispisa/crdt/main.yaml
+[ci_link]: https://github.com/MattiaPispisa/crdt/actions/workflows/main.yaml
+[pub_publisher]: https://img.shields.io/pub/publisher/crdt_lf_persistence
+[pub_publisher_link]: https://pub.dev/packages?q=publisher%3Amattiapispisa.it
+[docs_badge]: https://img.shields.io/badge/docs-crdt-blue?style=for-the-badge&logo=read-the-docs
+[docs_link]: https://mattiapispisa.it/crdt/
