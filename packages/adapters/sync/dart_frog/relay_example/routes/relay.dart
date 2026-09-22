@@ -1,4 +1,4 @@
-import 'package:crdt_socket_sync_dart_frog/crdt_socket_sync_dart_frog.dart';
+import 'package:crdt_socket_sync_dart_frog/relay.dart';
 import 'package:dart_frog/dart_frog.dart';
 
 /// Relay mode: the server rebroadcasts opaque CRDT blobs to the other clients

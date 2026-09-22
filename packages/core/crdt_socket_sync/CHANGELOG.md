@@ -11,9 +11,12 @@
   broadcasting, the `ServerEvent` stream, teardown — and takes connections through
   `acceptConnection(TransportConnection)`. `DocumentSessionHost` and `RelaySessionHost` are the two
   complete hosts on top of it, with no transport of their own, and are exported from `server.dart`
-  and `relay_server.dart`, which stay free of `dart:io`. Hosting the protocol on Dart Frog, shelf or
-  a worker runtime is now a matter of building a `TransportConnection` and handing it over; see
-  [Hosting the server on another runtime](https://github.com/MattiaPispisa/crdt/tree/main/packages/core/crdt_socket_sync#hosting-the-server-on-another-runtime).
+  and `relay_server.dart`, which stay free of `dart:io`. Hosting the protocol on another HTTP
+  framework is now a matter of building a `TransportConnection` and handing it over; see
+  [Hosting on your own transport](https://github.com/MattiaPispisa/crdt/tree/main/packages/core/crdt_socket_sync#advanced-hosting-on-your-own-transport).
+- `IoWebSocketHost` and `IoWebSocketConnection` are exported from `web_socket_server.dart` and
+  `web_socket_relay_server.dart`: the mixin that gives a host its `dart:io` `HttpServer` is the
+  reference for writing a host over another transport.
 - `WebSocketChannelConnection` is now public, from `server.dart` and `relay_server.dart`. The client
   already used it internally; a server handed a `WebSocketChannel` by its framework needs the same
   frame normalization, and a second copy of it would be free to drift from what the client sends.

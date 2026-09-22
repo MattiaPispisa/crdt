@@ -11,7 +11,7 @@ import 'package:meta/meta.dart';
 /// A [DocumentSessionHost] that owns a `dart:io` [HttpServer]: it binds on
 /// [start], upgrades every WebSocket request it receives and hands the socket
 /// to the host. To serve the same protocol from an HTTP server you already
-/// have (Dart Frog, shelf, ...), use [DocumentSessionHost] directly and call
+/// have, use [DocumentSessionHost] directly and call
 /// `acceptConnection` yourself.
 class WebSocketServer extends DocumentSessionHost
     with IoWebSocketHost<DocumentClientSession> {

@@ -2,5 +2,7 @@
 library;
 
 export 'server.dart';
+export 'src/common/server/web_socket/io_connection.dart';
+export 'src/common/server/web_socket/io_host.dart';
 export 'src/common/server/web_socket/transformer.dart';
 export 'src/server_client/server/web_socket_server.dart';

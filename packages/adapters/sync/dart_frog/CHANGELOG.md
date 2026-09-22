@@ -5,10 +5,10 @@
 ### Initial Release
 
 Serve `crdt_socket_sync` from a [Dart Frog](https://pub.dev/packages/dart_frog)
-backend. `crdtSyncWebSocketHandler` and `crdtRelayWebSocketHandler` upgrade a
-route's request and hand the socket to a `DocumentSessionHost` or a
-`RelaySessionHost`; `crdtSyncHostProvider` and `crdtRelayHostProvider` put the
-host where `context.read` will find it.
+backend, one library per mode. `sync.dart`: `crdtSyncWebSocketHandler` upgrades
+a route's request and hands the socket to a `DocumentSessionHost`,
+`crdtSyncHostProvider` puts the host where `context.read` will find it.
+`relay.dart`: the same two for a `RelaySessionHost`.
 
 Because the upgrade happens inside a route, the request — headers, cookies,
 whatever middleware put in the context — is available before the socket exists,

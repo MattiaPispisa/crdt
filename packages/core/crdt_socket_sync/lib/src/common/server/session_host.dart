@@ -40,7 +40,7 @@ enum SessionHostState {
 ///
 /// Connections arrive through [acceptConnection], which is the seam every
 /// transport shares: `dart:io` hosts call it after upgrading an `HttpRequest`,
-/// and an embedder (Dart Frog, shelf, a test) calls it with whatever
+/// and an embedder (an HTTP framework, a test) calls it with whatever
 /// [TransportConnection] it already holds.
 ///
 /// ## Plugins are per host
@@ -160,19 +160,34 @@ abstract class SessionHostServer<S extends ClientSession>
   ///
   /// Runs before the [ServerEventType.started] event, so anything the event's
   /// message reports (a host and port, say) is already known.
+  ///
+  /// Throws [UnimplementedError] unless overridden: a host that claims its
+  /// transport must also drive it.
   @protected
-  Future<void> onStart() async {}
+  Future<void> onStart() async => throw _missingHook('onStart');
 
   /// Start serving requests. Only called when [ownsTransport].
   ///
   /// Runs after the host is [isRunning], so a connection accepted
   /// synchronously finds a host that is already up.
+  ///
+  /// Throws [UnimplementedError] unless overridden.
   @protected
-  Future<void> onStarted() async {}
+  Future<void> onStarted() async => throw _missingHook('onStarted');
 
   /// Tear down the transport this host owns. Only called when [ownsTransport].
+  ///
+  /// Throws [UnimplementedError] unless overridden.
   @protected
-  Future<void> onStop() async {}
+  Future<void> onStop() async => throw _missingHook('onStop');
+
+  UnimplementedError _missingHook(String hook) {
+    return UnimplementedError(
+      '[$debugLabel] ownsTransport is true but $hook() is not overridden. '
+      'Mix in IoWebSocketHost, or override onStart(), onStarted() and '
+      'onStop() to drive the transport this host owns.',
+    );
+  }
 
   /// Release what this host holds beyond its sessions and plugins.
   ///
@@ -294,7 +309,9 @@ abstract class SessionHostServer<S extends ClientSession>
       }
 
       return true;
-    } catch (e) {
+    } on Exception catch (e) {
+      // Only exceptions: a failed bind is reported as an event, a programming
+      // error (a missing transport hook, say) must surface.
       addServerEvent(
         ServerEvent(
           type: ServerEventType.error,

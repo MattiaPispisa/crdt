@@ -1,7 +1,7 @@
 import 'dart:io';
 
-import 'package:crdt_socket_sync_dart_frog/crdt_socket_sync_dart_frog.dart';
-import 'package:crdt_socket_sync_dart_frog_example/src/hosts.dart';
+import 'package:crdt_socket_sync_dart_frog/sync.dart';
+import 'package:crdt_socket_sync_dart_frog_example/src/host.dart';
 import 'package:dart_frog/dart_frog.dart';
 
 /// Server–client mode: the server holds the document, validates the changes

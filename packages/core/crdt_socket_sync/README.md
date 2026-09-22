@@ -42,7 +42,9 @@
     - [Implementing a relay server](#implementing-a-relay-server)
     - [Relay Imports](#relay-imports)
   - [Shared topics](#shared-topics)
-    - [Hosting the server on another runtime](#hosting-the-server-on-another-runtime)
+    - [Advanced: hosting on your own transport](#advanced-hosting-on-your-own-transport)
+      - [An HTTP server you do not own](#an-http-server-you-do-not-own)
+      - [A transport the host owns](#a-transport-the-host-owns)
     - [Plugins](#plugins)
       - [Awareness Plugin](#awareness-plugin)
     - [Compression](#compression)
@@ -503,8 +505,7 @@ import 'package:crdt_socket_sync/client.dart';
 // WebSocket client implementation
 import 'package:crdt_socket_sync/web_socket_client.dart';
 
-// Server interfaces and the transport-free DocumentSessionHost
-// (no dart:io — the import for Dart Frog, shelf, ...)
+// Server interfaces and the transport-free DocumentSessionHost (no dart:io)
 import 'package:crdt_socket_sync/server.dart';
 
 // WebSocket server implementation (dart:io)
@@ -821,19 +822,25 @@ import 'package:crdt_socket_sync/web_socket_relay_server.dart';
 
 The following concerns work the same way in both communication modes.
 
-### Hosting the server on another runtime
+### Advanced: hosting on your own transport
 
-`WebSocketServer` and `WebSocketRelayServer` own a `dart:io` `HttpServer`: they
-bind it on `start()` and upgrade the requests themselves. When the HTTP server
-belongs to a framework — [Dart Frog](https://pub.dev/packages/dart_frog),
-shelf, anything that hands you an already-upgraded socket — use the host
-underneath instead.
+Every server in this package is two parts:
 
-`DocumentSessionHost` (CRDT-aware) and `RelaySessionHost` (relay) are those two
-servers minus the socket. They keep the registry or the store, the sessions, the
-broadcasting, the `ServerEvent` stream and the aligned-snapshot coordinator;
-what they do not have is a way to accept a connection on their own. You give
-them one:
+- a **session host** — `DocumentSessionHost` (CRDT-aware) or
+  `RelaySessionHost` (relay). It keeps the registry or the store, the sessions,
+  the broadcasting, the `ServerEvent` stream and the aligned-snapshot
+  coordinator. Both extend `SessionHostServer` and have no socket of their own.
+- a **transport** that feeds it connections through
+  `acceptConnection(TransportConnection)`.
+
+`WebSocketServer` and `WebSocketRelayServer` are those hosts plus
+`IoWebSocketHost`, a mixin that owns a `dart:io` `HttpServer`. There are two
+ways to put the protocol on a different transport.
+
+#### An HTTP server you do not own
+
+When a framework accepts the connections for you, use the host directly and
+hand it each socket:
 
 ```dart
 import 'package:crdt_socket_sync/server.dart';
@@ -848,8 +855,9 @@ host.acceptConnection(WebSocketChannelConnection(channel));
 `acceptConnection` takes any `TransportConnection`:
 `WebSocketChannelConnection` covers every framework built on
 `package:web_socket_channel`, and anything else is four members over a byte
-stream. It returns the session, or `null` after closing the connection when the
-host cannot take it — stopped, disposed, or handed a session id already in use.
+stream (`incoming`, `send`, `close`, `isConnected`). It returns the session, or
+`null` after closing the connection when the host cannot take it — stopped,
+disposed, or handed a session id already in use.
 
 Two things worth knowing:
 
@@ -865,9 +873,66 @@ Two things worth knowing:
 a test in this package walks their imports and fails if one creeps in. Only
 `web_socket_server.dart` and `web_socket_relay_server.dart` pull it in.
 
-For Dart Frog there is a ready-made adapter,
-[`crdt_socket_sync_dart_frog`](https://github.com/MattiaPispisa/crdt/tree/main/packages/adapters/sync/dart_frog),
-which is this plus a `Handler`.
+#### A transport the host owns
+
+When the host should bind and listen itself, write a mixin like
+`IoWebSocketHost` (exported from `web_socket_server.dart` and
+`web_socket_relay_server.dart`, and worth reading — it is under 70 lines). The
+contract with `SessionHostServer` is three hooks and one flag:
+
+| Member | Role |
+| --- | --- |
+| `ownsTransport` | Return `true`. `start()` and `stop()` now call the hooks, and a connection handed over before `start()` is refused. |
+| `onStart()` | Bind. Runs before the `started` event, so `startedMessage` can report the address. A thrown `Exception` becomes an error event and `start()` returns `false`. |
+| `onStarted()` | Listen. Runs after the host is `isRunning`, so a connection accepted synchronously finds it up. |
+| `onStop()` | Close the listener. Runs after every session has been closed. |
+
+The hooks throw `UnimplementedError` when `ownsTransport` is `true` and they
+are not overridden, so a forgotten mixin fails at `start()` rather than
+serving nothing. `onDispose()` stays a no-op and is the place to release
+anything else the host holds.
+
+Each accepted connection becomes a `TransportConnection`; for a `dart:io`
+`WebSocket` that is `IoWebSocketConnection`. The whole of `IoWebSocketHost` is
+this shape:
+
+```dart
+mixin MyTransportHost<S extends ClientSession> on SessionHostServer<S> {
+  MyListener? _listener;
+
+  @override
+  bool get ownsTransport => true;
+
+  @override
+  Future<void> onStart() async {
+    _listener = await MyListener.bind();
+  }
+
+  @override
+  Future<void> onStarted() async {
+    _listener!.connections.listen(
+      (socket) => acceptConnection(MyConnection(socket)),
+    );
+  }
+
+  @override
+  Future<void> onStop() async {
+    await _listener?.close();
+    _listener = null;
+  }
+}
+
+class MyDocumentServer extends DocumentSessionHost
+    with MyTransportHost<DocumentClientSession> {
+  MyDocumentServer({required super.serverRegistry});
+
+  @override
+  String get debugLabel => 'MyDocumentServer';
+}
+```
+
+`debugLabel` names the host in diagnostics; `startedMessage`,
+`stoppedMessage` and `startFailureMessage` are the other overridable strings.
 
 ### Plugins
 

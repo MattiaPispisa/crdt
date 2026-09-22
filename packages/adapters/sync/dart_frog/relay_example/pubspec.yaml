@@ -1,7 +1,6 @@
-name: crdt_socket_sync_dart_frog_example
+name: crdt_socket_sync_dart_frog_relay_example
 description: >-
-  Example Dart Frog backend serving the crdt_socket_sync server–client mode on
-  /sync, with the documents kept in Hive.
+  Example Dart Frog backend serving the crdt_socket_sync relay mode on /relay.
 version: 1.0.0
 publish_to: none
 
@@ -9,11 +8,9 @@ environment:
   sdk: ">=3.0.0 <4.0.0"
 
 dependencies:
-  crdt_lf_hive: ">=0.5.0 <1.0.0"
   crdt_socket_sync: ">=0.10.0 <1.0.0"
   crdt_socket_sync_dart_frog: ">=0.1.0 <1.0.0"
   dart_frog: ^1.2.6
-  hive: ^2.0.0
 
 dev_dependencies:
   lints: ^5.0.0

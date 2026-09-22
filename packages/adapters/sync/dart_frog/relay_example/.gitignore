@@ -6,8 +6,5 @@
 .dart_frog/
 build/
 
-# Hive database written at runtime by the example server
-db/
-
 # FVM Version Cache
 .fvm/

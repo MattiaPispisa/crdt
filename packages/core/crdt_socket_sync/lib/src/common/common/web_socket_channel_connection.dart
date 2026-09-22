@@ -7,8 +7,7 @@ import 'package:web_socket_channel/web_socket_channel.dart';
 ///
 /// Works on both ends of the wire: a client channel opened with
 /// [WebSocketChannel.connect], and a server channel handed over by an HTTP
-/// framework that already performed the upgrade (`shelf_web_socket`,
-/// `dart_frog_web_socket`, ...). A server-side channel arrives connected, so
+/// framework **that already performed the upgrade** so
 /// nothing here waits on [WebSocketChannel.ready] — the caller does that when
 /// it opened the channel itself.
 class WebSocketChannelConnection implements TransportConnection {

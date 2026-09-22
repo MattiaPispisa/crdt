@@ -13,7 +13,7 @@ import 'package:meta/meta.dart';
 /// A [RelaySessionHost] that owns a `dart:io` [HttpServer]: it binds on
 /// [start], upgrades every WebSocket request it receives and hands the socket
 /// to the host. To serve the relay protocol from an HTTP server you already
-/// have (Dart Frog, shelf, ...), use [RelaySessionHost] directly and call
+/// have, use [RelaySessionHost] directly and call
 /// `acceptConnection` yourself.
 ///
 /// A relay server rebroadcasts opaque CRDT change blobs to the other clients

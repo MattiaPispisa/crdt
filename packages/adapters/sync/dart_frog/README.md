@@ -20,7 +20,7 @@
   - [Lifecycle](#lifecycle)
   - [Two kinds of ping](#two-kinds-of-ping)
   - [Gotchas](#gotchas)
-  - [Example](#example)
+  - [Examples](#examples)
   - [Roadmap](#roadmap)
 
 ## What it does
@@ -47,6 +47,18 @@ bundled servers cannot — **the request, before the socket exists**.
 dart pub add crdt_socket_sync_dart_frog
 ```
 
+One library per communication mode, like `crdt_socket_sync` itself:
+
+```dart
+// Server–client mode: crdtSyncWebSocketHandler, crdtSyncHostProvider,
+// DocumentSessionHost
+import 'package:crdt_socket_sync_dart_frog/sync.dart';
+
+// Relay mode: crdtRelayWebSocketHandler, crdtRelayHostProvider,
+// RelaySessionHost
+import 'package:crdt_socket_sync_dart_frog/relay.dart';
+```
+
 ## Quick start
 
 ### Relay mode
@@ -63,7 +75,7 @@ final relayHost = RelaySessionHost(store: InMemoryRelayStore());
 
 ```dart
 // routes/_middleware.dart
-import 'package:crdt_socket_sync_dart_frog/crdt_socket_sync_dart_frog.dart';
+import 'package:crdt_socket_sync_dart_frog/relay.dart';
 import 'package:dart_frog/dart_frog.dart';
 
 import '../lib/src/host.dart';
@@ -75,7 +87,7 @@ Handler middleware(Handler handler) {
 
 ```dart
 // routes/relay.dart
-import 'package:crdt_socket_sync_dart_frog/crdt_socket_sync_dart_frog.dart';
+import 'package:crdt_socket_sync_dart_frog/relay.dart';
 import 'package:dart_frog/dart_frog.dart';
 
 Future<Response> onRequest(RequestContext context) async {
@@ -92,20 +104,36 @@ The CRDT-aware mode keeps the documents server-side in a `CRDTServerRegistry`,
 validates changes and takes aligned snapshots.
 
 ```dart
+// lib/src/host.dart
+import 'package:crdt_socket_sync/server.dart';
+
 final syncHost = DocumentSessionHost(
   serverRegistry: InMemoryCRDTServerRegistry(),
 );
 ```
 
 ```dart
+// routes/_middleware.dart
+Handler middleware(Handler handler) {
+  return handler.use(crdtSyncHostProvider(syncHost));
+}
+```
+
+```dart
 // routes/sync.dart
+import 'package:crdt_socket_sync_dart_frog/sync.dart';
+import 'package:dart_frog/dart_frog.dart';
+
 Future<Response> onRequest(RequestContext context) async {
   return crdtSyncWebSocketHandler(context.read<DocumentSessionHost>())(context);
 }
 ```
 
 Use a persistent registry (`PersistentServerRegistry` with `crdt_lf_hive`,
-`crdt_lf_sqlite`, `crdt_lf_drift`) for anything that must survive a restart.
+`crdt_lf_sqlite`, `crdt_lf_drift`) for anything that must survive a restart —
+[`example/`](./example) does, with Hive. A registry is opened asynchronously,
+so build it in Dart Frog's `init()` (see [Lifecycle](#lifecycle)) and keep it
+in a top-level `late final`.
 
 ## Authenticating before the upgrade
 
@@ -209,13 +237,18 @@ complementary — setting one is not a reason to drop the other.
   disposed closes the socket instead, which the client sees as its stream
   ending.
 
-## Example
+## Examples
 
-[`example/`](./example) is a runnable Dart Frog project with both routes, a
-custom `init()` that starts the hosts and a custom entrypoint:
+Two runnable Dart Frog projects, one per mode, each with a custom `init()`
+that starts the host and a custom entrypoint:
+
+- [`example/`](./example) — server–client mode on `/sync`, documents kept in
+  Hive through `crdt_lf_hive`, a token check in front of the route.
+- [`relay_example/`](./relay_example) — relay mode on `/relay`, rooms kept in
+  memory.
 
 ```sh
-cd example
+cd example   # or relay_example
 dart_frog dev
 ```
 

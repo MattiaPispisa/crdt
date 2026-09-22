@@ -2,6 +2,7 @@
 library;
 
 import 'dart:async';
+import 'dart:io';
 
 import 'package:crdt_socket_sync/server.dart';
 import 'package:test/test.dart';
@@ -36,6 +37,15 @@ class _EmbeddedHost extends SessionHostServer<_InertSession> {
   }
 }
 
+/// A host that claims a transport and forgets to drive it.
+class _ForgetfulHost extends _EmbeddedHost {
+  @override
+  bool get ownsTransport => true;
+
+  @override
+  String get debugLabel => '_ForgetfulHost';
+}
+
 /// A host that claims to own its transport, without actually opening one.
 class _OwningHost extends _EmbeddedHost {
   _OwningHost({this.failOnStart = false});
@@ -56,7 +66,7 @@ class _OwningHost extends _EmbeddedHost {
   Future<void> onStart() async {
     startCalls++;
     if (failOnStart) {
-      throw StateError('bind failed');
+      throw const SocketException('bind failed');
     }
   }
 
@@ -295,6 +305,23 @@ void main() {
       await host.stop();
 
       expect(host.stopCalls, 1);
+    });
+
+    test('a host that owns its transport must override the hooks', () async {
+      final host = _ForgetfulHost();
+
+      // A programming error, so it is thrown rather than turned into an
+      // error event like a failed bind.
+      await expectLater(
+        host.start(),
+        throwsA(
+          isA<UnimplementedError>().having(
+            (e) => e.message,
+            'message',
+            contains('onStart()'),
+          ),
+        ),
+      );
     });
 
     test('it refuses a connection it was handed before starting', () async {

@@ -1,7 +1,6 @@
-import 'package:crdt_socket_sync/relay_server.dart';
 import 'package:crdt_socket_sync/server.dart';
+import 'package:crdt_socket_sync_dart_frog/src/common/web_socket_handler.dart';
 import 'package:dart_frog/dart_frog.dart';
-import 'package:dart_frog_web_socket/dart_frog_web_socket.dart';
 
 /// A Dart Frog [Handler] that upgrades the request and hands the socket to
 /// [host], the CRDT-aware ([DocumentSessionHost]) side of the protocol.
@@ -40,54 +39,8 @@ Handler crdtSyncWebSocketHandler(
   Iterable<String>? allowedOrigins,
   Duration? pingInterval,
 }) {
-  return _handlerFor(
+  return hostWebSocketHandler(
     host,
-    protocols: protocols,
-    allowedOrigins: allowedOrigins,
-    pingInterval: pingInterval,
-  );
-}
-
-/// A Dart Frog [Handler] that upgrades the request and hands the socket to
-/// [host], the relay ([RelaySessionHost]) side of the protocol.
-///
-/// ```dart
-/// // routes/relay.dart
-/// Future<Response> onRequest(RequestContext context) async {
-///   return crdtRelayWebSocketHandler(context.read<RelaySessionHost>())(
-///     context,
-///   );
-/// }
-/// ```
-///
-/// {@macro crdt_socket_sync_dart_frog.ping_interval}
-Handler crdtRelayWebSocketHandler(
-  RelaySessionHost host, {
-  Iterable<String>? protocols,
-  Iterable<String>? allowedOrigins,
-  Duration? pingInterval,
-}) {
-  return _handlerFor(
-    host,
-    protocols: protocols,
-    allowedOrigins: allowedOrigins,
-    pingInterval: pingInterval,
-  );
-}
-
-/// Upgrades the request and hands the channel to [host].
-Handler _handlerFor(
-  SessionHostServer<ClientSession> host, {
-  required Iterable<String>? protocols,
-  required Iterable<String>? allowedOrigins,
-  required Duration? pingInterval,
-}) {
-  return webSocketHandler(
-    (channel, protocol) {
-      // A refusal returns null after closing the channel, which is all the
-      // caller can do here: the response is already a 101.
-      host.acceptConnection(WebSocketChannelConnection(channel));
-    },
     protocols: protocols,
     allowedOrigins: allowedOrigins,
     pingInterval: pingInterval,

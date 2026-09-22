@@ -1,4 +1,3 @@
-import 'package:crdt_socket_sync/relay_server.dart';
 import 'package:crdt_socket_sync/server.dart';
 import 'package:dart_frog/dart_frog.dart';
 
@@ -21,11 +20,4 @@ import 'package:dart_frog/dart_frog.dart';
 /// host, and a second binding throws.
 Middleware crdtSyncHostProvider(DocumentSessionHost host) {
   return provider<DocumentSessionHost>((_) => host);
-}
-
-/// [Middleware] that gives the routes below it the relay [host].
-///
-/// See [crdtSyncHostProvider] for why this is not written inline.
-Middleware crdtRelayHostProvider(RelaySessionHost host) {
-  return provider<RelaySessionHost>((_) => host);
 }
