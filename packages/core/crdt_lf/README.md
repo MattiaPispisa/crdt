@@ -350,7 +350,7 @@ This package includes a suite of benchmarks to ensure performance and stability.
 To run the benchmarks yourself, run from the repository root:
 
 ```sh
-melos run benchmark
+melos run benchmark_dart
 ```
 
 ## Design
