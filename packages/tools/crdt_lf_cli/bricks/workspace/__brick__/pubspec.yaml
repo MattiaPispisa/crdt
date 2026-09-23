@@ -1,0 +1,8 @@
+name: {{name}}_workspace
+publish_to: none
+
+environment:
+  sdk: ^3.8.0
+
+workspace:
+{{{members}}}

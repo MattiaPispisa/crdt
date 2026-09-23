@@ -3,6 +3,10 @@ name: crdt
 packages:
   - packages/**
 
+ignore:
+  # Mason templates: their pubspecs are not packages.
+  - packages/tools/crdt_lf_cli/bricks/**
+
 repository: https://github.com/MattiaPispisa/crdt
 
 sdkPath: .fvm/flutter_sdk

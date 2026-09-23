@@ -1,0 +1,12 @@
+name: shared
+description: "The package that client and server share: the document id and its handlers."
+version: 0.1.0+1
+
+environment:
+  mason: ">=0.1.0 <0.2.0"
+
+vars:
+  name:
+    type: string
+    description: The project name, in snake_case.
+    prompt: What is the project name?

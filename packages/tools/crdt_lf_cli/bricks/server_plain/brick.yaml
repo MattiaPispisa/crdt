@@ -1,0 +1,12 @@
+name: server_plain
+description: "A crdt_socket_sync WebSocket server that keeps its documents in a storage backend."
+version: 0.1.0+1
+
+environment:
+  mason: ">=0.1.0 <0.2.0"
+
+vars:
+  name:
+    type: string
+    description: The project name, in snake_case.
+    prompt: What is the project name?

@@ -1,0 +1,5 @@
+.dart_tool/
+build/
+
+# Where the server keeps its documents.
+data/

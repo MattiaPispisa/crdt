@@ -1,0 +1,14 @@
+name: {{name}}_shared
+description: The document of {{name}}, as client and server both see it.
+publish_to: none
+
+environment:
+  sdk: ^3.8.0
+
+resolution: workspace
+
+dependencies:
+{{{dependencies}}}
+
+dev_dependencies:
+{{{dev_dependencies}}}

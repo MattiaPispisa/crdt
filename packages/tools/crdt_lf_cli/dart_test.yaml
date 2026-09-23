@@ -1,0 +1,5 @@
+tags:
+  e2e:
+    # Runs `dart pub get` and `dart test` on every generated project.
+    skip: "Slow. Run it with: dart test --run-skipped -t e2e"
+    timeout: 10x

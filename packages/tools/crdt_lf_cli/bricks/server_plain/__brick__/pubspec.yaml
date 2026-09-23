@@ -1,0 +1,16 @@
+name: {{name}}_server
+description: The sync server of {{name}}.
+publish_to: none
+
+environment:
+  sdk: ^3.8.0
+
+resolution: workspace
+
+dependencies:
+  {{name}}_shared:
+    path: ../{{name}}_shared
+{{{dependencies}}}
+
+dev_dependencies:
+{{{dev_dependencies}}}
