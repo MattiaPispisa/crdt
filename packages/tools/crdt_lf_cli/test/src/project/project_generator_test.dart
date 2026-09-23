@@ -65,6 +65,24 @@ void main() {
     expect(storage, contains('CRDTHive.open()'));
   });
 
+  test('throws on a brick without a bundle', () {
+    final generator = ProjectGenerator(
+      logger: Logger(level: Level.quiet),
+      bundleByName: const {},
+    );
+    final options = ProjectOptions(
+      name: 'notes',
+      server: ServerKind.plain,
+      serverStorage: StorageKind.sqlite,
+      handler: HandlerKind.none,
+    );
+
+    expect(
+      generator.generate(options, Directory(p.join(temp.path, 'notes'))),
+      throwsStateError,
+    );
+  });
+
   // Resolves every project against the packages of this repository and runs
   // its tests. Slow: it runs `dart pub get` and `dart test` once per project.
   group('every generated project passes its own tests', () {

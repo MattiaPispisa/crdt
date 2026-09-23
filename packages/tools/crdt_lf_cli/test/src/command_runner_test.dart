@@ -38,6 +38,13 @@ void main() {
     expect(logger.errors.single, contains('project name'));
   });
 
+  test('lists the create command in its usage', () {
+    expect(
+      CrdtLfCommandRunner().usage,
+      contains('create   Generates a new crdt_lf project.'),
+    );
+  });
+
   test('the version matches the pubspec', () {
     final pubspec = File('pubspec.yaml').readAsLinesSync();
     expect(pubspec, contains('version: $packageVersion'));

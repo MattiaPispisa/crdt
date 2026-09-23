@@ -6,6 +6,7 @@ import 'package:crdt_lf_cli/src/project/project_generator.dart';
 import 'package:crdt_lf_cli/src/project/project_options.dart';
 import 'package:mason/mason.dart';
 import 'package:path/path.dart' as p;
+import 'package:test/fake.dart';
 import 'package:test/test.dart';
 
 /// Records what it is asked to generate, and writes nothing.
@@ -24,6 +25,39 @@ class _RecordingGenerator extends ProjectGenerator {
   }
 }
 
+/// Answers every prompt with its last choice, and keeps what it showed.
+class _PromptLogger extends Logger {
+  _PromptLogger({this.failWith}) : super(level: Level.quiet);
+
+  /// Thrown by every prompt instead of an answer.
+  final Exception? failWith;
+
+  final questions = <String>[];
+  final shown = <String>[];
+
+  @override
+  T chooseOne<T extends Object?>(
+    String? message, {
+    required List<T> choices,
+    T? defaultValue,
+    String Function(T choice)? display,
+  }) {
+    final error = failWith;
+    if (error != null) {
+      throw error;
+    }
+    questions.add('$message');
+    shown.addAll(choices.map(display!));
+    return choices.last;
+  }
+}
+
+/// A stdin that says it is a terminal.
+class _Terminal extends Fake implements Stdin {
+  @override
+  bool get hasTerminal => true;
+}
+
 void main() {
   late Directory temp;
   late _RecordingGenerator generator;
@@ -39,11 +73,11 @@ void main() {
 
   tearDown(() => temp.delete(recursive: true));
 
-  Future<int?> run(List<String> args) {
+  Future<int?> run(List<String> args, {Logger? logger}) {
     final runner = CommandRunner<int>('crdt_lf', 'test')
       ..addCommand(
         CreateCommand(
-          logger: Logger(level: Level.quiet),
+          logger: logger ?? Logger(level: Level.quiet),
           generator: generator,
           pubGet: (directory) async {
             pubGets.add(directory);
@@ -111,4 +145,71 @@ void main() {
   test('rejects a missing project name as a usage error', () {
     expect(run(['--no-interactive']), throwsA(isA<UsageException>()));
   });
+
+  test('asks for every choice without a flag on a terminal', () async {
+    final logger = _PromptLogger();
+
+    await IOOverrides.runZoned(
+      () => run(['notes', '--handler', 'none'], logger: logger),
+      stdin: _Terminal.new,
+    );
+
+    final (options, _) = generator.generated.single;
+    expect(options.serverStorage, StorageKind.sqlite);
+    expect(options.handler, HandlerKind.none);
+    // One server only: it is taken without a question.
+    expect(logger.questions, ['Where does the server keep its documents?']);
+    expect(logger.shown, contains('hive: Hive, with crdt_lf_hive.'));
+  });
+
+  test('takes the default when the terminal cannot prompt', () async {
+    await IOOverrides.runZoned(
+      () => run(
+        ['notes'],
+        logger: _PromptLogger(failWith: const StdinException('no echo')),
+      ),
+      stdin: _Terminal.new,
+    );
+
+    final (options, _) = generator.generated.single;
+    expect(options.serverStorage, StorageKind.sqlite);
+    expect(options.handler, HandlerKind.fugueText);
+  });
+
+  test('runs dart pub get in the new project by default', () async {
+    final runner = CommandRunner<int>('crdt_lf', 'test')
+      ..addCommand(
+        CreateCommand(
+          logger: Logger(level: Level.quiet),
+          generator: _PubspecGenerator(),
+        ),
+      );
+
+    final code = await runner.run(
+      ['create', 'notes', '--no-interactive', '-o', temp.path],
+    );
+
+    expect(code, ExitCode.success.code);
+    final root = p.join(temp.path, 'notes');
+    expect(File(p.join(root, 'pubspec.lock')).existsSync(), isTrue);
+  });
+}
+
+/// Writes a pubspec with no dependencies, which resolves offline.
+class _PubspecGenerator extends ProjectGenerator {
+  _PubspecGenerator() : super(logger: Logger(level: Level.quiet));
+
+  @override
+  Future<List<GeneratedFile>> generate(
+    ProjectOptions options,
+    Directory root,
+  ) async {
+    root.createSync(recursive: true);
+    File(p.join(root.path, 'pubspec.yaml')).writeAsStringSync(
+      'name: ${options.name}\n'
+      'environment:\n'
+      '  sdk: ^3.8.0\n',
+    );
+    return const [];
+  }
 }
