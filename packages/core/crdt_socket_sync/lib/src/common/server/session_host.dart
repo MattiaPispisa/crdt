@@ -184,8 +184,9 @@ abstract class SessionHostServer<S extends ClientSession>
   UnimplementedError _missingHook(String hook) {
     return UnimplementedError(
       '[$debugLabel] ownsTransport is true but $hook() is not overridden. '
-      'Mix in IoWebSocketHost, or override onStart(), onStarted() and '
-      'onStop() to drive the transport this host owns.',
+      'Override onStart(), onStarted() and '
+      'onStop() to drive the transport this host owns'
+      ' (see IoWebSocketHost)',
     );
   }
 
