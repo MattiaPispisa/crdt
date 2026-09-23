@@ -5,6 +5,8 @@
 /// never interprets CRDT data.
 library;
 
+import 'package:crdt_socket_sync/relay_server.dart';
+
 export 'package:crdt_socket_sync/relay_server.dart'
     show
         RelayCompactionCoordinator,

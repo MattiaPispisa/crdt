@@ -14,11 +14,24 @@ import 'package:dart_frog/dart_frog.dart';
 /// }
 /// ```
 ///
-/// Because the upgrade happens inside a route, the [RequestContext] is
-/// available *before* the socket exists. Authenticate there and return a
-/// [Response] instead of calling this, and the client never reaches the
-/// protocol. The room (document id) travels inside the hello frame, not in
-/// the URL.
+/// {@macro crdt_socket_sync_dart_frog.refuse_before_upgrade}
+///
+/// ```dart
+/// Future<Response> onRequest(RequestContext context) async {
+///   final token = context.request.headers[HttpHeaders.authorizationHeader];
+///   if (!await isAuthorized(token)) {
+///     return Response(statusCode: HttpStatus.unauthorized);
+///   }
+///   return crdtRelayWebSocketHandler(context.read<RelaySessionHost>())(
+///     context,
+///   );
+/// }
+/// ```
+///
+/// {@macro crdt_socket_sync_dart_frog.is_running}
+///
+/// The room (document id) travels inside the hello frame, not in the URL, so
+/// one route serves every room.
 ///
 /// {@macro crdt_socket_sync_dart_frog.ping_interval}
 Handler crdtRelayWebSocketHandler(

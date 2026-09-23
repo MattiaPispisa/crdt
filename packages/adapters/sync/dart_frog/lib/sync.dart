@@ -5,6 +5,8 @@
 /// snapshots.
 library;
 
+import 'package:crdt_socket_sync/web_socket_server.dart';
+
 export 'package:crdt_socket_sync/server.dart'
     show
         CRDTServerRegistry,

@@ -14,10 +14,30 @@ import 'package:dart_frog/dart_frog.dart';
 /// }
 /// ```
 ///
-/// Because the upgrade happens inside a route, the [RequestContext] — headers,
-/// cookies, whatever middleware put there — is available *before* the socket
-/// exists. Authenticate there and return a [Response] instead of calling this,
-/// and the client never reaches the protocol.
+/// {@template crdt_socket_sync_dart_frog.refuse_before_upgrade}
+/// Calling this completes the WebSocket upgrade. From then on the response is
+/// a `101`, so a client the host will not take — stopped, disposed, or a
+/// session id already in use — is hung up on, with no status code and no
+/// reason. Refuse before the call to answer with one:
+/// {@endtemplate}
+///
+/// ```dart
+/// Future<Response> onRequest(RequestContext context) async {
+///   final token = context.request.headers[HttpHeaders.authorizationHeader];
+///   if (!await isAuthorized(token)) {
+///     return Response(statusCode: HttpStatus.unauthorized);
+///   }
+///   return crdtSyncWebSocketHandler(context.read<DocumentSessionHost>())(
+///     context,
+///   );
+/// }
+/// ```
+///
+/// {@template crdt_socket_sync_dart_frog.is_running}
+/// The same window is where [SessionHostServer.isRunning] belongs, for a
+/// shutdown that should answer `503` rather than accept a socket and close
+/// it.
+/// {@endtemplate}
 ///
 /// The document id travels inside the protocol's own frames, not in the URL,
 /// so no route parameter is needed. A `routes/sync/[documentId].dart` route

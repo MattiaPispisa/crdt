@@ -4,9 +4,6 @@ import 'package:dart_frog_web_socket/dart_frog_web_socket.dart';
 
 /// A Dart Frog [Handler] that upgrades the request and hands the channel to
 /// [host].
-///
-/// Shared by both modes: the protocol is the host's business, the upgrade is
-/// the same.
 Handler hostWebSocketHandler(
   SessionHostServer<ClientSession> host, {
   required Iterable<String>? protocols,
@@ -15,8 +12,9 @@ Handler hostWebSocketHandler(
 }) {
   return webSocketHandler(
     (channel, protocol) {
-      // A refusal returns null after closing the channel, which is all the
-      // caller can do here: the response is already a 101.
+      // The 101 has already been sent, so a refusal has no status code left
+      // to carry: the host closes the channel and returns null, and there is
+      // nothing to do with it. A route refuses before calling this.
       host.acceptConnection(WebSocketChannelConnection(channel));
     },
     protocols: protocols,
