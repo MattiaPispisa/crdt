@@ -1,4 +1,3 @@
-import 'dart:async';
 
 import 'package:crdt_lf/crdt_lf.dart';
 import 'package:crdt_socket_sync/src/common/common/common.dart';
@@ -14,32 +13,7 @@ import 'package:crdt_socket_sync/src/relay/server/store.dart';
 import 'package:crdt_socket_sync/src/server_client/common/common.dart';
 import 'package:test/test.dart';
 
-/// A controllable bidirectional connection: the test pushes inbound frames on
-/// [inbound] and inspects captured outbound frames in [sent].
-class _FakeConnection implements TransportConnection {
-  final _incoming = StreamController<List<int>>();
-  final List<List<int>> sent = [];
-  bool _connected = true;
-
-  void inbound(List<int> data) => _incoming.add(data);
-
-  @override
-  Stream<List<int>> get incoming => _incoming.stream;
-
-  @override
-  Future<void> send(List<int> data) async => sent.add(data);
-
-  @override
-  Future<void> close() async {
-    _connected = false;
-    if (!_incoming.isClosed) {
-      await _incoming.close();
-    }
-  }
-
-  @override
-  bool get isConnected => _connected;
-}
+import '../../utils/fake_connection.dart';
 
 /// A codec that never encodes nor decodes anything.
 class _NullCodec implements MessageCodec<Message> {
@@ -88,7 +62,7 @@ void main() {
 
   late InMemoryRelayStore store;
   late RelayCompactionCoordinator compaction;
-  late _FakeConnection connection;
+  late FakeTransportConnection connection;
   late RelayClientSession session;
   late List<SessionEvent> events;
 
@@ -105,7 +79,7 @@ void main() {
   setUp(() {
     store = InMemoryRelayStore();
     compaction = RelayCompactionCoordinator(logCompactThreshold: 5);
-    connection = _FakeConnection();
+    connection = FakeTransportConnection();
     session = createSession();
     events = [];
     session.events.listen(events.add);
@@ -119,7 +93,7 @@ void main() {
   Future<void> pump() => Future<void>.delayed(Duration.zero);
 
   Future<void> hello({int protocolVersion = Protocol.protocolVersion}) async {
-    connection.inbound(
+    connection.receive(
       codec.encode(
         RelayHelloMessage(
           documentId: documentId,
@@ -181,7 +155,7 @@ void main() {
     test('hello fires plugin hooks in order', () async {
       final plugin = _RecordingPlugin();
       session.dispose();
-      connection = _FakeConnection();
+      connection = FakeTransportConnection();
       session = createSession(plugins: [plugin]);
 
       await hello();
@@ -201,7 +175,7 @@ void main() {
     test('persists blobs, acks and emits the pushed event', () async {
       await hello();
 
-      connection.inbound(
+      connection.receive(
         codec.encode(
           const RelayPushMessage(documentId: documentId, changes: ['a', 'b']),
         )!,
@@ -225,7 +199,7 @@ void main() {
     test('asks for compaction past the log threshold', () async {
       await hello();
 
-      connection.inbound(
+      connection.receive(
         codec.encode(
           const RelayPushMessage(
             documentId: documentId,
@@ -241,7 +215,7 @@ void main() {
     });
 
     test('push without a join is rejected', () async {
-      connection.inbound(
+      connection.receive(
         codec.encode(
           const RelayPushMessage(documentId: documentId, changes: ['a']),
         )!,
@@ -259,7 +233,7 @@ void main() {
     test('an empty push is ignored', () async {
       await hello();
 
-      connection.inbound(
+      connection.receive(
         codec.encode(
           const RelayPushMessage(documentId: documentId, changes: []),
         )!,
@@ -275,7 +249,7 @@ void main() {
     test('persists the snapshot, truncates the log and resets the limiter',
         () async {
       await hello();
-      connection.inbound(
+      connection.receive(
         codec.encode(
           const RelayPushMessage(
             documentId: documentId,
@@ -290,7 +264,7 @@ void main() {
         isTrue,
       );
 
-      connection.inbound(
+      connection.receive(
         codec.encode(
           const RelaySnapshotUploadMessage(
             documentId: documentId,
@@ -311,7 +285,7 @@ void main() {
 
       // The limiter was reset: the next threshold crossing asks again
       // without waiting for the retry interval.
-      connection.inbound(
+      connection.receive(
         codec.encode(
           const RelayPushMessage(
             documentId: documentId,
@@ -330,14 +304,14 @@ void main() {
   group('RelayClientSession state request', () {
     test('answers with the current room state', () async {
       await hello();
-      connection.inbound(
+      connection.receive(
         codec.encode(
           const RelayPushMessage(documentId: documentId, changes: ['a']),
         )!,
       );
       await pump();
 
-      connection.inbound(
+      connection.receive(
         codec.encode(
           const RelayStateRequestMessage(documentId: documentId),
         )!,
@@ -353,7 +327,7 @@ void main() {
 
   group('RelayClientSession protocol guards', () {
     test('CRDT sync protocol messages are answered with an error', () async {
-      connection.inbound(
+      connection.receive(
         codec.encode(
           SyncMessage.documentStatusRequest(
             documentId: documentId,
@@ -374,7 +348,7 @@ void main() {
     });
 
     test('ping is answered with pong', () async {
-      connection.inbound(
+      connection.receive(
         codec.encode(Message.ping(documentId: documentId, timestamp: 7))!,
       );
       await pump();

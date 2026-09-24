@@ -1,42 +1,14 @@
-import 'dart:async';
-
 import 'package:crdt_socket_sync/src/common/common/transporter.dart';
 import 'package:test/test.dart';
 
-/// A connection whose incoming stream the test drives.
-class _FakeConnection implements TransportConnection {
-  final _incoming = StreamController<List<int>>();
-  final List<List<int>> sent = [];
-  bool _connected = true;
-
-  /// Ends the incoming stream, the way a peer closing the socket does.
-  Future<void> peerCloses() async {
-    _connected = false;
-    await _incoming.close();
-  }
-
-  @override
-  Stream<List<int>> get incoming => _incoming.stream;
-
-  @override
-  Future<void> send(List<int> data) async => sent.add(data);
-
-  @override
-  Future<void> close() async {
-    _connected = false;
-    if (!_incoming.isClosed) await _incoming.close();
-  }
-
-  @override
-  bool get isConnected => _connected;
-}
+import '../utils/fake_connection.dart';
 
 class _FakeConnector implements TransportConnector {
-  final List<_FakeConnection> opened = [];
+  final List<FakeTransportConnection> opened = [];
 
   @override
   Future<TransportConnection> connect() async {
-    final connection = _FakeConnection();
+    final connection = FakeTransportConnection();
     opened.add(connection);
     return connection;
   }
