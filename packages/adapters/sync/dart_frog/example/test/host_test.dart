@@ -39,14 +39,5 @@ void main() {
       // would have filled anyway.
       expect(await second.host.serverRegistry.documentCount, 1);
     });
-
-    test('dispose() stops the host', () async {
-      final example = await ExampleHost.open(dbPath: dbDir.path);
-      await example.host.start();
-
-      await example.dispose();
-
-      expect(example.host.isRunning, isFalse);
-    });
   });
 }

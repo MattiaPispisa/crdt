@@ -33,6 +33,8 @@ For the server–client mode see [`../example`](../example).
 
 - `melos run analyze` covers `lib` and `test` only, so `routes/` and `main.dart`
   are not analyzed by it. Run `dart analyze routes main.dart` for those.
+- There is nothing here to unit-test: every line that is not wiring belongs to
+  `crdt_socket_sync` or to the adapter, and is tested there.
 - `dart_frog build` does not work from inside this monorepo: the example depends
   on its own parent package through a path override, and the production build
   copies path dependencies into `build/`, which it cannot do for an ancestor

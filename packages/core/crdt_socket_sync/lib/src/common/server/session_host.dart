@@ -40,7 +40,7 @@ enum SessionHostState {
 ///
 /// Connections arrive through [acceptConnection], which is the seam every
 /// transport shares: `dart:io` hosts call it after upgrading an `HttpRequest`,
-/// and an embedder (an HTTP framework, a test) calls it with whatever
+/// and an embedder (another runtime, a test) calls it with whatever
 /// [TransportConnection] it already holds.
 ///
 /// ## Plugins are per host

@@ -6,7 +6,8 @@
 
 ### Added
 
-- **The server half of both protocols can now run inside an HTTP server it does not own.**
+- **The server half of both protocols can now run on a transport it does not own** (an HTTP
+  framework, an isolate port, a test pipe).
   `SessionHostServer` holds everything a server does once a peer is connected — the session map,
   broadcasting, the `ServerEvent` stream, teardown — and takes connections through
   `acceptConnection(TransportConnection)`. `DocumentSessionHost` and `RelaySessionHost` are the two

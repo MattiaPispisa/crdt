@@ -43,7 +43,7 @@
     - [Relay Imports](#relay-imports)
   - [Shared topics](#shared-topics)
     - [Advanced: hosting on your own transport](#advanced-hosting-on-your-own-transport)
-      - [An HTTP server you do not own](#an-http-server-you-do-not-own)
+      - [A transport you do not own](#a-transport-you-do-not-own)
       - [A transport the host owns](#a-transport-the-host-owns)
     - [Plugins](#plugins)
       - [Awareness Plugin](#awareness-plugin)
@@ -837,7 +837,7 @@ Every server in this package is two parts:
 `IoWebSocketHost`, a mixin that owns a `dart:io` `HttpServer`. There are two
 ways to put the protocol on a different transport.
 
-#### An HTTP server you do not own
+#### A transport you do not own
 
 When a framework accepts the connections for you, use the host directly and
 hand it each socket:
@@ -854,10 +854,16 @@ host.acceptConnection(WebSocketChannelConnection(channel));
 
 `acceptConnection` takes any `TransportConnection`:
 `WebSocketChannelConnection` covers every framework built on
-`package:web_socket_channel`, and anything else is four members over a byte
-stream (`incoming`, `send`, `close`, `isConnected`). It returns the session, or
+`package:web_socket_channel`, and anything else is four members
+(`incoming`, `send`, `close`, `isConnected`). It returns the session, or
 `null` after closing the connection when the host cannot take it — stopped,
 disposed, or handed a session id already in use.
+
+The transport does not have to be HTTP, or even a socket: the host tests drive
+both protocols over a plain `StreamController`. What it must do is keep the
+message boundaries — one `send`, one event on the peer's `incoming`. A
+WebSocket or an isolate port does; a raw TCP socket does not, and needs its
+own framing first.
 
 Two things worth knowing:
 

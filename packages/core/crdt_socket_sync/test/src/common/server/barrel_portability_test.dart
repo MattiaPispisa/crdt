@@ -7,8 +7,9 @@ import 'package:path/path.dart' as p;
 import 'package:test/test.dart';
 
 /// `server.dart` and `relay_server.dart` are the entry points an embedder
-/// imports to host the protocol on a transport of its own — Dart Frog, shelf,
-/// a worker runtime. The moment one of them pulls in `dart:io`, that stops
+/// imports to host the protocol on a transport of its own. 
+/// 
+/// The moment one of them pulls in `dart:io`, that stops
 /// working, and it stops working at compile time in someone else's package,
 /// far from whatever import caused it.
 ///
