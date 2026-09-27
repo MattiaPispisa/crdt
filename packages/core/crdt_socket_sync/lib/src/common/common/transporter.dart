@@ -31,11 +31,22 @@ abstract class TransportConnector {
 /// An interface for transporting messages,
 /// define the methods necessary to send and receive messages,
 /// independently from the underlying transport mechanism.
+///
+/// ## Messages, not bytes
+///
+/// The transport has to keep the message boundaries: one [send] must reach
+/// the peer as exactly one event on its [incoming]. Every frame is decoded on
+/// its own, so a frame that arrives split in two, or glued to the next one,
+/// does not decode and is reported as undecodable instead of being buffered.
+///
+/// A WebSocket, an isolate port or an in-memory pipe give this for free. A
+/// raw TCP socket does not — it delivers whatever chunks it pleases, so it
+/// needs a framing layer of its own underneath.
 abstract class TransportConnection {
-  /// Stream of incoming data
+  /// Stream of incoming data, one event per message sent by the peer.
   Stream<List<int>> get incoming;
 
-  /// Send data
+  /// Send [data] as a single message.
   Future<void> send(List<int> data);
 
   /// Close the connection

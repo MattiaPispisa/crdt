@@ -9,6 +9,8 @@ import 'package:crdt_socket_sync/src/server_client/server/document_client_sessio
 import 'package:crdt_socket_sync/src/server_client/server/in_memory_server_registry.dart';
 import 'package:test/test.dart';
 
+import '../../utils/fake_connection.dart';
+
 /// A connection whose sends never complete, so bytes accumulate in the
 /// session's outbound queue.
 class _StallingConnection implements TransportConnection {
@@ -27,36 +29,6 @@ class _StallingConnection implements TransportConnection {
 
   @override
   bool get isConnected => true;
-}
-
-/// A controllable bidirectional connection: the test pushes inbound frames on
-/// [inbound] and inspects captured outbound frames in [sent].
-class _FakeConnection implements TransportConnection {
-  final _incoming = StreamController<List<int>>();
-  final List<List<int>> sent = [];
-  bool _connected = true;
-
-  void inbound(List<int> data) => _incoming.add(data);
-
-  /// Fails the incoming stream, the way a broken socket does.
-  void inboundError(Object error) => _incoming.addError(error);
-
-  @override
-  Stream<List<int>> get incoming => _incoming.stream;
-
-  @override
-  Future<void> send(List<int> data) async => sent.add(data);
-
-  @override
-  Future<void> close() async {
-    _connected = false;
-    if (!_incoming.isClosed) {
-      await _incoming.close();
-    }
-  }
-
-  @override
-  bool get isConnected => _connected;
 }
 
 /// A compressor that is not the identity, so a frame that went through it is
@@ -126,13 +98,13 @@ void main() {
   group('ClientSession message handling', () {
     const documentId = 'doc';
     late InMemoryCRDTServerRegistry registry;
-    late _FakeConnection connection;
+    late FakeTransportConnection connection;
     late DocumentClientSession session;
     late List<SessionEvent> events;
 
     setUp(() {
       registry = InMemoryCRDTServerRegistry();
-      connection = _FakeConnection();
+      connection = FakeTransportConnection();
       session = DocumentClientSession(
         id: 'session-1',
         connection: connection,
@@ -152,7 +124,7 @@ void main() {
       int protocolVersion = Protocol.protocolVersion,
       SyncCapabilities? capabilities,
     }) async {
-      connection.inbound(
+      connection.receive(
         codec.encode(
           HandshakeRequestMessage(
             author: PeerId.generate(),
@@ -370,7 +342,7 @@ void main() {
       ).insert(0, 'x');
       final change = authorDoc.exportChanges().first;
 
-      connection.inbound(
+      connection.receive(
         codec.encode(
           ChangeMessage(change: change, documentId: documentId),
         )!,
@@ -403,7 +375,7 @@ void main() {
       ).insert(0, 'x');
       final change = authorDoc.exportChanges().first;
 
-      connection.inbound(
+      connection.receive(
         codec.encode(
           ChangeMessage(change: change, documentId: documentId),
         )!,
@@ -420,7 +392,7 @@ void main() {
         () async {
       await registry.addDocument(documentId);
 
-      connection.inbound(
+      connection.receive(
         codec.encode(
           DocumentStatusRequestMessage(
             documentId: documentId,
@@ -441,7 +413,7 @@ void main() {
 
     test('errors on a document status request for a missing document',
         () async {
-      connection.inbound(
+      connection.receive(
         codec.encode(
           const DocumentStatusRequestMessage(documentId: documentId),
         )!,
@@ -463,7 +435,7 @@ void main() {
       ).insert(0, 'x');
       final vv = doc.getVersionVector();
 
-      connection.inbound(
+      connection.receive(
         codec.encode(
           PingMessage(documentId: documentId, timestamp: 7, versionVector: vv),
         )!,
@@ -487,7 +459,7 @@ void main() {
       // that never came.
       await registry.addDocument(documentId);
 
-      connection.inbound(
+      connection.receive(
         utf8.encode(
           jsonEncode({
             'type': MessageType.handshakeRequest.value,
@@ -514,7 +486,7 @@ void main() {
       // The peer has a plugin this build does not: a difference in setup, not
       // a fault. Answering would turn every frame of a working connection —
       // one per cursor move, for awareness — into an error the peer displays.
-      connection.inbound(
+      connection.receive(
         utf8.encode(
           jsonEncode({
             'type': MessageTypeValue.firstPluginValue,
@@ -538,7 +510,7 @@ void main() {
       await handshake();
       connection.sent.clear();
 
-      connection.inbound([0xff, 0xfe, 0x00, 0x01]);
+      connection.receive([0xff, 0xfe, 0x00, 0x01]);
       await Future<void>.delayed(Duration.zero);
 
       expect(
@@ -552,26 +524,26 @@ void main() {
       // left the socket and its subscription alive for the process's life.
       expect(connection.isConnected, isTrue);
 
-      connection.inboundError(StateError('socket broke'));
+      connection.receiveError(StateError('socket broke'));
       await Future<void>.delayed(Duration.zero);
 
       expect(connection.isConnected, isFalse);
     });
 
     test('emits an error when an undecodable frame arrives', () async {
-      connection.inbound([0xff, 0xfe, 0x00, 0x01]);
+      connection.receive([0xff, 0xfe, 0x00, 0x01]);
       await Future<void>.delayed(Duration.zero);
 
       expect(events.where((e) => e.type == SessionEventType.error), isNotEmpty);
     });
 
     group('with a compressor that is not the identity', () {
-      late _FakeConnection compressedConnection;
+      late FakeTransportConnection compressedConnection;
       late DocumentClientSession compressedSession;
       late CompressedCodec<Message> compressedCodec;
 
       setUp(() {
-        compressedConnection = _FakeConnection();
+        compressedConnection = FakeTransportConnection();
         compressedSession = DocumentClientSession(
           id: 'session-compressed',
           connection: compressedConnection,
@@ -588,7 +560,7 @@ void main() {
         // Reading the type out of the raw transport bytes fails here, and the
         // session used to fall through to an error reply — one per frame, on a
         // connection that works.
-        compressedConnection.inbound(
+        compressedConnection.receive(
           compressedCodec.encode(
             Message.ping(documentId: documentId, timestamp: 0),
           )!,
@@ -596,7 +568,7 @@ void main() {
         await Future<void>.delayed(Duration.zero);
         compressedConnection.sent.clear();
 
-        compressedConnection.inbound(
+        compressedConnection.receive(
           const _Reversing().compress(
             utf8.encode(
               jsonEncode({

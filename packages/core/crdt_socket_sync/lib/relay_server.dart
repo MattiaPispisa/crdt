@@ -6,14 +6,17 @@
 library;
 
 export 'src/common/common/common.dart';
+export 'src/common/common/web_socket_channel_connection.dart';
 export 'src/common/server/client_session.dart';
 export 'src/common/server/client_session_event.dart';
 export 'src/common/server/event.dart';
 export 'src/common/server/server.dart';
+export 'src/common/server/session_host.dart';
 export 'src/plugins/server.dart';
 export 'src/relay/common/common.dart';
 export 'src/relay/server/compaction.dart';
 export 'src/relay/server/in_memory_relay_store.dart';
 export 'src/relay/server/relay_client_session.dart';
 export 'src/relay/server/relay_session_event.dart';
+export 'src/relay/server/relay_session_host.dart';
 export 'src/relay/server/store.dart';

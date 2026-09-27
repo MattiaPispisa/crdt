@@ -23,6 +23,9 @@ flags:
   crdt_socket_sync:
     paths: [packages/core/crdt_socket_sync]
     carryforward: true
+  crdt_socket_sync_dart_frog:
+    paths: [packages/adapters/sync/dart_frog]
+    carryforward: true
   crdt_lf_flutter:
     paths: [packages/core/crdt_lf_flutter]
     carryforward: true

@@ -171,12 +171,9 @@ class _TodoBlockBody extends StatelessWidget {
             physics: const NeverScrollableScrollPhysics(),
             buildDefaultDragHandles: false,
             itemCount: todos.length,
-            onReorder: (oldIndex, newIndex) {
-              if (newIndex > oldIndex) {
-                newIndex -= 1;
-              }
-              state.reorderTodos(list!, oldIndex, newIndex);
-            },
+            onReorderItem:
+                (oldIndex, newIndex) =>
+                    state.reorderTodos(list!, oldIndex, newIndex),
             itemBuilder:
                 (context, i) => _ReorderItemScope(
                   key: ValueKey('todo-${todos[i].id}'),

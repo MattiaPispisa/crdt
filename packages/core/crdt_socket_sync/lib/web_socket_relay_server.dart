@@ -2,5 +2,7 @@
 library;
 
 export 'relay_server.dart';
+export 'src/common/server/web_socket/io_connection.dart';
+export 'src/common/server/web_socket/io_host.dart';
 export 'src/common/server/web_socket/transformer.dart';
 export 'src/relay/server/web_socket_relay_server.dart';

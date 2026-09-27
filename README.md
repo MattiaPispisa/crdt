@@ -36,6 +36,7 @@
 - [crdt_lf_hive](./packages/adapters/persistence/crdt_lf_hive/README.md)
 - [crdt_lf_sqlite](./packages/adapters/persistence/crdt_lf_sqlite/README.md)
 - [crdt_lf_drift](./packages/adapters/persistence/crdt_lf_drift/README.md)
+- [crdt_socket_sync_dart_frog](./packages/adapters/sync/dart_frog/README.md)
 
 ## [Roadmap](https://github.com/users/MattiaPispisa/projects/1)
 A roadmap is available in the [project](https://github.com/users/MattiaPispisa/projects/1) page. The roadmap provides a high-level overview of the project's goals and the current status of the project.
@@ -105,10 +106,12 @@ workspace/
 │   │   │   └── flutter_example/
 │   │   └── .../
 │   ├── adapters/
-│   │   └── persistence/ # storage backends for crdt_lf
-│   │       ├── crdt_lf_drift/
-│   │       ├── crdt_lf_hive/
-│   │       └── crdt_lf_sqlite/
+│   │   ├── persistence/ # storage backends for crdt_lf
+│   │   │   ├── crdt_lf_drift/
+│   │   │   ├── crdt_lf_hive/
+│   │   │   └── crdt_lf_sqlite/
+│   │   └── sync/ # server runtimes for crdt_socket_sync
+│   │       └── dart_frog/
 │   └── _internal/ # private, unpublished packages
 │       ├── benchmark_infrastructure/
 │       └── shared_examples_infrastructure/
