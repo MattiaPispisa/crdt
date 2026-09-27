@@ -2,6 +2,7 @@
 // emitted the builder call of `HandlerSpec.create` twice, but only in a
 // program that builds handlers from a single spec. Keep this file to one spec,
 // or it stops reproducing. Run it with `dart test -p chrome`.
+// https://github.com/dart-lang/sdk/issues/64410
 import 'package:crdt_lf/crdt_lf.dart';
 import 'package:test/test.dart';
 

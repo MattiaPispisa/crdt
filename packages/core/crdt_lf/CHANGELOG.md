@@ -1,14 +1,13 @@
-## [5.0.0+1](https://github.com/MattiaPispisa/crdt/tree/crdt_lf-v5.0.0+1/packages/core/crdt_lf)
+## [5.0.1](https://github.com/MattiaPispisa/crdt/tree/crdt_lf-v5.0.1/packages/core/crdt_lf)
 
 **Date:** 2026-09-27
 
-[compare to previous release](https://github.com/MattiaPispisa/crdt/compare/crdt_lf-v5.0.0...crdt_lf-v5.0.0+1)
-
-- Documentation release: refreshes the CHANGELOG and docs published on pub.dev.
+[compare to previous release](https://github.com/MattiaPispisa/crdt/compare/crdt_lf-v5.0.0...crdt_lf-v5.0.1)
 
 ### Fixed
 
-- `CRDTDocument.handler` threw "already registered" on the web: dart2js built the handler twice.
+- `CRDTDocument.handler` threw "already registered" on the web: dart2js built the handler twice
+  ([dart-lang/sdk#64410](https://github.com/dart-lang/sdk/issues/64410)).
 
 ## [5.0.0](https://github.com/MattiaPispisa/crdt/tree/crdt_lf-v5.0.0/packages/core/crdt_lf)
 
