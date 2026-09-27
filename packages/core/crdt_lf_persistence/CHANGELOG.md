@@ -1,3 +1,11 @@
+## [0.1.1+1](https://github.com/MattiaPispisa/crdt/tree/crdt_lf_persistence-v0.1.1+1/packages/core/crdt_lf_persistence)
+
+**Date:** 2026-09-27
+
+[compare to previous release](https://github.com/MattiaPispisa/crdt/compare/crdt_lf_persistence-v0.1.1...crdt_lf_persistence-v0.1.1+1)
+
+- Documentation release: refreshes the CHANGELOG and docs published on pub.dev. No functional changes since `0.1.1`.
+
 ## [0.1.1](https://github.com/MattiaPispisa/crdt/tree/crdt_lf_persistence-v0.1.1/packages/core/crdt_lf_persistence)
 
 **Date:** 2026-09-19

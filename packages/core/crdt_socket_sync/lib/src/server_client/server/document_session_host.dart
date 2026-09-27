@@ -20,10 +20,8 @@ import 'package:meta/meta.dart';
 /// aligned snapshot once every subscribed client has confirmed the server's
 /// state.
 ///
-/// With a [PersistentServerRegistry], it also sends every snapshot the
-/// registry takes to the clients of that document. A snapshot prunes the
-/// history it covers, so a client still behind that history gets the
-/// snapshot instead of asking for changes the server no longer has.
+/// With a [PersistentServerRegistry], it also sends each snapshot the
+/// registry takes to the clients of that document.
 ///
 /// Feed it connections with [SessionHostServer.acceptConnection]. For a host
 /// that owns its own `dart:io` socket, use `WebSocketServer` instead.

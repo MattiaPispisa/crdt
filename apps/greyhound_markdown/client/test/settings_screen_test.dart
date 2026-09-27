@@ -80,10 +80,7 @@ void main() {
     await tester.pumpWidget(
       BlocProvider.value(
         value: cubit,
-        child: localizedApp(
-          const SettingsScreen(),
-          locale: const Locale('it'),
-        ),
+        child: localizedApp(const SettingsScreen(), locale: const Locale('it')),
       ),
     );
 

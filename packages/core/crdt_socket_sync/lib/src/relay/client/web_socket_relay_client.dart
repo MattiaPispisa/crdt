@@ -319,10 +319,7 @@ class WebSocketRelayClient extends RelaySocketClient {
     }
   }
 
-  /// Starts the reconnect loop after a [connect] that failed.
-  ///
-  /// A connect made by the loop itself is retried by the loop, so this only
-  /// starts one for the first attempt.
+  /// Starts the reconnect loop after a failed [connect], if it is not running.
   void _retryFailedConnect() {
     if (_isReconnecting || !_wantsConnection || isUnsupported) {
       return;

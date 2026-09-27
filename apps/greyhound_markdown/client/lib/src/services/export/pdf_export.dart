@@ -19,7 +19,9 @@ Future<Uint8List> markdownToPdfBytes(
   required String title,
 }) async {
   final fonts = await _loadFonts();
-  final nodes = md.Document(extensionSet: kMarkdownExtensionSet).parse(markdown);
+  final nodes = md.Document(
+    extensionSet: kMarkdownExtensionSet,
+  ).parse(markdown);
   final document = pw.Document(title: title)
     ..addPage(
       pw.MultiPage(
@@ -220,9 +222,7 @@ class _Renderer {
       margin: const pw.EdgeInsets.only(bottom: 10),
       padding: const pw.EdgeInsets.only(left: 12),
       decoration: const pw.BoxDecoration(
-        border: pw.Border(
-          left: pw.BorderSide(color: _kRuleColor, width: 3),
-        ),
+        border: pw.Border(left: pw.BorderSide(color: _kRuleColor, width: 3)),
       ),
       child: pw.Column(
         crossAxisAlignment: pw.CrossAxisAlignment.start,
@@ -269,9 +269,11 @@ class _Renderer {
 
   pw.Widget _table(md.Element element) {
     final rows = <pw.TableRow>[];
-    for (final section in (element.children ?? const []).whereType<md.Element>()) {
+    for (final section
+        in (element.children ?? const []).whereType<md.Element>()) {
       final header = section.tag == 'thead';
-      for (final row in (section.children ?? const []).whereType<md.Element>()) {
+      for (final row
+          in (section.children ?? const []).whereType<md.Element>()) {
         if (row.tag != 'tr') {
           continue;
         }
@@ -320,9 +322,7 @@ class _Renderer {
   pw.TextSpan _span(List<md.Node> nodes, pw.TextStyle parent) {
     return pw.TextSpan(
       style: parent,
-      children: [
-        for (final node in nodes) _inline(node, parent),
-      ],
+      children: [for (final node in nodes) _inline(node, parent)],
     );
   }
 

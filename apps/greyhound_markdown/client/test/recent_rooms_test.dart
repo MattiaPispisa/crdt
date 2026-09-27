@@ -15,10 +15,7 @@ import 'helpers/memory_storage.dart';
 /// [rooms] is a `List<Object>` on purpose: hydrated_bloc rewrites the list it
 /// reads in place, so a stricter element type makes the whole payload fail to
 /// load — which is not what these tests are about.
-Future<List<String>> _pumpRooms(
-  WidgetTester tester,
-  List<Object> rooms,
-) async {
+Future<List<String>> _pumpRooms(WidgetTester tester, List<Object> rooms) async {
   final opened = <String>[];
   await tester.pumpWidget(
     BlocProvider(

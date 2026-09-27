@@ -27,8 +27,11 @@ void main() {
 
     test('every alias resolves to a registered grammar', () {
       for (final canonical in kLanguageAliases.values) {
-        expect(allLanguages.containsKey(canonical), isTrue,
-            reason: '"$canonical" is not a registered grammar');
+        expect(
+          allLanguages.containsKey(canonical),
+          isTrue,
+          reason: '"$canonical" is not a registered grammar',
+        );
       }
     });
   });

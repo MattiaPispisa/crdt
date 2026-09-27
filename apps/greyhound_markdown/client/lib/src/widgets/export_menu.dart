@@ -35,8 +35,7 @@ class ExportMenu extends StatefulWidget {
 }
 
 class _ExportMenuState extends State<ExportMenu> {
-  late final DocumentExporter _exporter =
-      widget.exporter ?? DocumentExporter();
+  late final DocumentExporter _exporter = widget.exporter ?? DocumentExporter();
 
   /// True while a file is being rendered: a big document takes a moment, and
   /// a second tap would render it twice.
@@ -50,10 +49,7 @@ class _ExportMenuState extends State<ExportMenu> {
       context: context,
       builder: (context) => _ExportDialog(
         format: format,
-        initialName: suggestedFileName(
-          markdown,
-          fallback: widget.fallbackName,
-        ),
+        initialName: suggestedFileName(markdown, fallback: widget.fallbackName),
       ),
     );
     if (fileName == null || !mounted) {
@@ -73,9 +69,7 @@ class _ExportMenuState extends State<ExportMenu> {
       if (saved) {
         messenger.showSnackBar(
           SnackBar(
-            content: Text(
-              l10n.exportSaved('$fileName.${format.extension}'),
-            ),
+            content: Text(l10n.exportSaved('$fileName.${format.extension}')),
           ),
         );
       }

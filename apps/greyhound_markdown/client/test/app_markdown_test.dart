@@ -7,7 +7,9 @@ import 'package:greyhound_markdown_client/src/widgets/app_markdown.dart';
 
 Future<void> _pump(WidgetTester tester, String data) {
   return tester.pumpWidget(
-    MaterialApp(home: Scaffold(body: AppMarkdown(data: data))),
+    MaterialApp(
+      home: Scaffold(body: AppMarkdown(data: data)),
+    ),
   );
 }
 
@@ -31,18 +33,27 @@ void main() {
       final (style, padding) = headings[i];
       // The gap above carries the separation the reader sees; the gap below
       // has to stay smaller or the heading floats between two sections.
-      expect(padding.top, greaterThan(padding.bottom),
-          reason: 'h${i + 1} is not bound to the text under it');
+      expect(
+        padding.top,
+        greaterThan(padding.bottom),
+        reason: 'h${i + 1} is not bound to the text under it',
+      );
       if (i == 0) {
         continue;
       }
       // Mapping levels onto textTheme roles silently broke this: titleSmall is
       // 14 and bodyLarge is 16, so an h5 came out bigger than an h4.
       final (previous, previousPadding) = headings[i - 1];
-      expect(style.fontSize, lessThan(previous.fontSize!),
-          reason: 'h${i + 1} is not smaller than h$i');
-      expect(padding.top, lessThan(previousPadding.top),
-          reason: 'h${i + 1} does not separate less than h$i');
+      expect(
+        style.fontSize,
+        lessThan(previous.fontSize!),
+        reason: 'h${i + 1} is not smaller than h$i',
+      );
+      expect(
+        padding.top,
+        lessThan(previousPadding.top),
+        reason: 'h${i + 1} does not separate less than h$i',
+      );
     }
   });
 

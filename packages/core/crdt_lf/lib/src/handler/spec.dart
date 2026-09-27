@@ -57,10 +57,9 @@ class HandlerSpec<T extends Handler<dynamic>> {
   /// Prefer [BaseCRDTDocument.handler], which hands back the handler already
   /// open under [id]; this throws [HandlerAlreadyRegisteredException] instead.
   T create(BaseCRDTDocument doc, String id) {
-    // Through a local, not `_build(doc, id)` straight into `created`: dart2js
-    // (Dart 3.13) emits that call twice, so the second handler finds the id
-    // taken and throws. The VM is fine; see spec_dart2js_test.dart.
-    final HandlerBuilder<T> build = _build;
+    // A local on purpose: dart2js 3.13 emits `_build(doc, id)` twice
+    // when it is assigned straight to `created` (spec_dart2js_test.dart).
+    final build = _build;
     final created = build(doc, id);
 
     assert(
