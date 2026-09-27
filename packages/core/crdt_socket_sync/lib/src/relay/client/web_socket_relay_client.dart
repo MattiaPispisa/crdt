@@ -19,7 +19,10 @@ import 'package:crdt_socket_sync/src/relay/common/common.dart';
 /// Reconnects with exponential backoff plus jitter
 /// ([RelayProtocol.reconnectBaseDelay], doubled per attempt up to
 /// [RelayProtocol.reconnectMaxDelay]) and, unlike `WebSocketClient`,
-/// retries forever by default ([maxReconnectAttempts] can bound it).
+/// retries forever by default ([maxReconnectAttempts] can bound it). A first
+/// [connect] that fails retries the same way, so a client started offline
+/// joins once the relay is reachable. [disconnect] and [dispose] stop the
+/// retries.
 /// {@endtemplate}
 class WebSocketRelayClient extends RelaySocketClient {
   /// {@macro web_socket_relay_client}
@@ -198,6 +201,10 @@ class WebSocketRelayClient extends RelaySocketClient {
   /// If client is reconnecting
   bool _isReconnecting = false;
 
+  /// Whether the app wants this client connected: set by [connect], cleared
+  /// by [disconnect]. A reconnect runs only while it is set.
+  bool _wantsConnection = false;
+
   /// Timer for periodic ping
   Timer? _pingTimer;
 
@@ -250,6 +257,8 @@ class WebSocketRelayClient extends RelaySocketClient {
   /// If the join fails then the client will attempt to reconnect.
   @override
   Future<bool> connect() async {
+    _wantsConnection = true;
+
     if (connectionStatusValue.isConnected) {
       return true;
     }
@@ -298,20 +307,38 @@ class WebSocketRelayClient extends RelaySocketClient {
         for (final plugin in plugins) {
           plugin.onConnected();
         }
+      } else {
+        _retryFailedConnect();
       }
 
       return connected;
     } catch (e) {
       updateConnectionStatus(ConnectionStatus.error);
+      _retryFailedConnect();
       return false;
     }
   }
 
+  /// Starts the reconnect loop after a [connect] that failed.
+  ///
+  /// A connect made by the loop itself is retried by the loop, so this only
+  /// starts one for the first attempt.
+  void _retryFailedConnect() {
+    if (_isReconnecting || !_wantsConnection || isUnsupported) {
+      return;
+    }
+    unawaited(_attemptReconnect());
+  }
+
   @override
   Future<void> disconnect() async {
+    _wantsConnection = false;
     _stopPingTimer();
 
     if (_transport == null) {
+      // No transport was ever opened, but a failed first connect can have
+      // left the status on reconnecting.
+      updateConnectionStatus(ConnectionStatus.disconnected);
       return;
     }
 
@@ -497,7 +524,7 @@ class WebSocketRelayClient extends RelaySocketClient {
   ///
   /// Retries forever unless [maxReconnectAttempts] is set.
   Future<void> _attemptReconnect() async {
-    if (_isReconnecting || isUnsupported) {
+    if (_isReconnecting || !_wantsConnection || isUnsupported) {
       return;
     }
 
@@ -515,6 +542,12 @@ class WebSocketRelayClient extends RelaySocketClient {
     updateConnectionStatus(ConnectionStatus.reconnecting);
 
     await Future<void>.delayed(delay);
+
+    // `disconnect` or `dispose` ran while this waited.
+    if (!_wantsConnection) {
+      _isReconnecting = false;
+      return;
+    }
 
     try {
       final success = await connect();

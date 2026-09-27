@@ -42,6 +42,7 @@
     - [Implementing a relay server](#implementing-a-relay-server)
     - [Relay Imports](#relay-imports)
   - [Shared topics](#shared-topics)
+    - [Opening a replica](#opening-a-replica)
     - [Advanced: hosting on your own transport](#advanced-hosting-on-your-own-transport)
       - [A transport you do not own](#a-transport-you-do-not-own)
       - [A transport the host owns](#a-transport-the-host-owns)
@@ -447,22 +448,11 @@ abstract interface class ServerDocumentCatalog {
 ##### Broadcasting a compaction
 
 A snapshot comes with a prune, so the history it covers leaves the server. A
-client still replaying that history has to be given the snapshot instead. The
-`snapshots` stream reports each one as it is taken:
-
-```dart
-registry.snapshots.listen((event) async {
-  final document = (await registry.getDocument(event.documentId))!;
-  await server.broadcastMessage(
-    SyncMessage.documentStatus(
-      documentId: event.documentId,
-      snapshot: event.snapshot,
-      changes: document.exportChanges(),
-      versionVector: document.getVersionVector(),
-    ),
-  );
-});
-```
+client still replaying that history has to be given the snapshot instead.
+There is nothing to wire for it: a `WebSocketServer` or `DocumentSessionHost`
+built on a `PersistentServerRegistry` sends each snapshot the registry takes
+to the clients of that document. The `snapshots` stream of the registry
+reports them too, for logging or metrics.
 
 The example server puts all of this together:
 [`registry.dart`](https://github.com/MattiaPispisa/crdt/blob/main/packages/core/crdt_socket_sync/example/lib/src/registry.dart).
@@ -504,6 +494,9 @@ import 'package:crdt_socket_sync/client.dart';
 
 // WebSocket client implementation
 import 'package:crdt_socket_sync/web_socket_client.dart';
+
+// CRDTReplica: the document, its local storage and its client, in order
+import 'package:crdt_socket_sync/replica.dart';
 
 // Server interfaces and the transport-free DocumentSessionHost (no dart:io)
 import 'package:crdt_socket_sync/server.dart';
@@ -643,6 +636,8 @@ final persistence = await CRDTDocumentPersistence.open(document, storage);
 // Only now: the restored document is what the welcome is reconciled against.
 await client.connect();
 ```
+
+[`CRDTReplica`](#opening-a-replica) does both steps, in this order.
 
 The text written on a plane is read back on the next launch, and reaches
 everyone else at the next welcome. There is no outbox for your app to keep.
@@ -811,6 +806,9 @@ import 'package:crdt_socket_sync/relay_client.dart';
 // WebSocket relay client implementation
 import 'package:crdt_socket_sync/web_socket_relay_client.dart';
 
+// CRDTReplica: the document, its local storage and its client, in order
+import 'package:crdt_socket_sync/replica.dart';
+
 // Relay server interfaces (RelayStore, compaction, session) and the
 // transport-free RelaySessionHost (no dart:io)
 import 'package:crdt_socket_sync/relay_server.dart';
@@ -821,6 +819,46 @@ import 'package:crdt_socket_sync/web_socket_relay_server.dart';
 ## Shared topics
 
 The following concerns work the same way in both communication modes.
+
+### Opening a replica
+
+A client app needs three things together: the document as this device last
+left it, a storage that keeps writing it down, and a sync client. They open
+and close in a set order. `CRDTReplica` holds all three and keeps that order:
+
+```dart
+import 'package:crdt_lf/crdt_lf.dart';
+import 'package:crdt_lf_sqlite/crdt_lf_sqlite.dart';
+import 'package:crdt_socket_sync/replica.dart';
+import 'package:crdt_socket_sync/web_socket_client.dart';
+
+final replica = await CRDTReplica.open(
+  documentId: 'notes',
+  storage: () => CRDTSqlite.open('notes.db'),
+  sync: (document) => WebSocketClient(
+    url: 'ws://localhost:8080',
+    document: document,
+    author: document.peerId,
+  ),
+);
+final text = CRDTFugueTextHandler(replica.document, 'body');
+
+// ...edit
+
+await replica.close();
+```
+
+- `open` restores the document first, then builds the client on it and
+  starts to connect. It returns without waiting for the network, so the local
+  copy is ready at once. Follow `replica.client!.connectionStatus` for the
+  connection.
+- `close` disposes the client, writes what is still waiting, then closes the
+  document and the storage.
+- Leave `storage` out to keep the document in memory. Leave `sync` out to
+  keep it on this device. For the relay, return a `WebSocketRelayClient` from
+  `sync`.
+- Pass `onStorageError` to keep going when the storage cannot be read: the
+  document then starts empty, in memory. Without it, `open` throws.
 
 ### Advanced: hosting on your own transport
 

@@ -7,6 +7,7 @@ import 'package:crdt_socket_sync/src/common/server/event.dart';
 import 'package:crdt_socket_sync/src/common/server/session_host.dart';
 import 'package:crdt_socket_sync/src/server_client/common/common.dart';
 import 'package:crdt_socket_sync/src/server_client/server/document_client_session.dart';
+import 'package:crdt_socket_sync/src/server_client/server/persistent_server_registry.dart';
 import 'package:crdt_socket_sync/src/server_client/server/registry.dart';
 import 'package:meta/meta.dart';
 
@@ -19,6 +20,11 @@ import 'package:meta/meta.dart';
 /// aligned snapshot once every subscribed client has confirmed the server's
 /// state.
 ///
+/// With a [PersistentServerRegistry], it also sends every snapshot the
+/// registry takes to the clients of that document. A snapshot prunes the
+/// history it covers, so a client still behind that history gets the
+/// snapshot instead of asking for changes the server no longer has.
+///
 /// Feed it connections with [SessionHostServer.acceptConnection]. For a host
 /// that owns its own `dart:io` socket, use `WebSocketServer` instead.
 /// {@endtemplate}
@@ -30,9 +36,16 @@ class DocumentSessionHost extends SessionHostServer<DocumentClientSession> {
     super.messageCodec,
     super.maxBufferSize,
     super.plugins,
-  }) : _serverRegistry = serverRegistry;
+  }) : _serverRegistry = serverRegistry {
+    if (serverRegistry is PersistentServerRegistry) {
+      _registrySnapshots =
+          serverRegistry.snapshots.listen(_broadcastRegistrySnapshot);
+    }
+  }
 
   final CRDTServerRegistry _serverRegistry;
+
+  StreamSubscription<ServerSnapshot>? _registrySnapshots;
 
   /// The registry holding the documents this host serves.
   CRDTServerRegistry get serverRegistry => _serverRegistry;
@@ -61,6 +74,9 @@ class DocumentSessionHost extends SessionHostServer<DocumentClientSession> {
   @protected
   @override
   Future<void> onDispose() async {
+    await _registrySnapshots?.cancel();
+    _registrySnapshots = null;
+
     // The registry closes what it holds open, and a durable one writes what
     // is still waiting first. Walking `documentIds` here instead would read
     // every document on disk back into memory just to dispose it, and would
@@ -203,6 +219,32 @@ class DocumentSessionHost extends SessionHostServer<DocumentClientSession> {
         },
       ),
     );
+  }
+
+  /// Sends the document status after [event] to the clients of its document.
+  Future<void> _broadcastRegistrySnapshot(ServerSnapshot event) async {
+    try {
+      final document = await _serverRegistry.getDocument(event.documentId);
+      if (document == null) {
+        return;
+      }
+      await broadcastMessage(
+        SyncMessage.documentStatus(
+          documentId: event.documentId,
+          snapshot: event.snapshot,
+          changes: document.exportChanges(),
+          versionVector: document.getVersionVector(),
+        ),
+      );
+    } catch (e) {
+      addServerEvent(
+        ServerEvent(
+          type: ServerEventType.error,
+          message: 'Error broadcasting the snapshot of document '
+              '${event.documentId}: $e',
+        ),
+      );
+    }
   }
 
   /// 1. Add a server event for the change applied

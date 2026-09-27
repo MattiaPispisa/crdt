@@ -3,6 +3,7 @@ library;
 
 import 'package:crdt_lf/crdt_lf.dart';
 import 'package:crdt_socket_sync/server.dart';
+import 'package:persistence_conformance/persistence_conformance.dart';
 import 'package:test/test.dart';
 
 import '../../utils/fake_connection.dart';
@@ -38,7 +39,13 @@ void main() {
 
     /// Applies a single change so the registry document has a non-empty
     /// state, and returns the resulting server version vector.
-    Future<VersionVector> seedServerChange(String documentId) async {
+    ///
+    /// [into] defaults to the in-memory registry of the group.
+    Future<VersionVector> seedServerChange(
+      String documentId, {
+      CRDTServerRegistry? into,
+    }) async {
+      final target = into ?? registry;
       final authorDoc = CRDTDocument(peerId: PeerId.generate());
       CRDTListHandler<String>(
         authorDoc,
@@ -46,14 +53,19 @@ void main() {
         handlerType: 'CRDTListHandler<String>',
       ).insert(0, 'a');
       final change = authorDoc.exportChanges().first;
-      await registry.applyChange(documentId, change);
-      return (await registry.getDocument(documentId))!.getVersionVector();
+      await target.applyChange(documentId, change);
+      return (await target.getDocument(documentId))!.getVersionVector();
     }
 
     /// Accepts a connection and completes the handshake on it.
-    Future<FakeTransportConnection> addClient(String documentId) async {
+    ///
+    /// [on] defaults to the host of the group.
+    Future<FakeTransportConnection> addClient(
+      String documentId, {
+      DocumentSessionHost? on,
+    }) async {
       final connection = FakeTransportConnection();
-      host.acceptConnection(connection);
+      (on ?? host).acceptConnection(connection);
       await Future<void>.delayed(Duration.zero);
 
       connection.receive(
@@ -207,6 +219,32 @@ void main() {
         author.sent.map(codec.decode).nonNulls.whereType<ChangeMessage>(),
         isEmpty,
       );
+    });
+
+    test('sends each snapshot of a persistent registry to its clients',
+        () async {
+      final persistent = PersistentServerRegistry(
+        backend: InMemoryStorageBackend(),
+        writeDelay: Duration.zero,
+      );
+      final persistentHost = DocumentSessionHost(serverRegistry: persistent);
+      addTearDown(persistentHost.dispose);
+
+      final documentId = PeerId.generate().id;
+      await persistent.addDocument(documentId);
+      await seedServerChange(documentId, into: persistent);
+      await persistentHost.start();
+      final client = await addClient(documentId, on: persistentHost);
+
+      await persistent.createSnapshot(documentId);
+      await pumpEventQueue();
+
+      final statuses = client.sent
+          .map(codec.decode)
+          .nonNulls
+          .whereType<DocumentStatusMessage>()
+          .toList();
+      expect(statuses.single.snapshot, isA<Snapshot>());
     });
 
     test('dispose() closes the registry', () async {

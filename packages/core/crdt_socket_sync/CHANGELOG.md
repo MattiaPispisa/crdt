@@ -27,9 +27,17 @@
 - `DocumentSessionHost.maybeTakeAlignedSnapshot` and `maybeTakeAlignedSnapshotForSession` are
   public, so an embedder can force the coordinator before an orderly shutdown.
 - `RelaySessionHost.compaction` exposes the coordinator the host shares across its sessions.
+- **`CRDTReplica` opens a document on a client with its local storage and its sync client, in
+  the order that keeps the data**: restore, then connect; stop the client, flush, then close. It
+  works with both clients, and storage and sync are each optional. New entry point
+  `replica.dart`; see
+  [Opening a replica](https://github.com/MattiaPispisa/crdt/tree/main/packages/core/crdt_socket_sync#opening-a-replica).
 
 ### Changed
 
+- A `DocumentSessionHost` (and so a `WebSocketServer`) built on a `PersistentServerRegistry` now
+  sends each snapshot the registry takes to the clients of that document. A server that did this
+  by hand from `PersistentServerRegistry.snapshots` now sends it twice, so that listener can go.
 - `WebSocketServer` and `WebSocketRelayServer` are now thin `dart:io` subclasses of
   `DocumentSessionHost` and `RelaySessionHost`. Their constructors, `host`, `port`, `store`, the
   `ServerEvent`s they emit and the order they emit them in are unchanged — the existing test suite
@@ -37,6 +45,13 @@
 - `dispose()` on a relay server now disposes the plugins before closing the event stream, as the
   document server already did. A plugin that reported something while being disposed used to hit a
   closed controller.
+
+### Fixed
+
+- **A client whose first `connect()` fails now retries**, by the same rules as after a dropped
+  connection: forever with backoff for `WebSocketRelayClient`, up to `Protocol.maxReconnectAttempts`
+  for `WebSocketClient`. An app opened offline used to stay in `error` until it called `connect()`
+  again. `disconnect()` and `dispose()` now also stop a retry that is waiting.
 
 ## [0.9.0](https://github.com/MattiaPispisa/crdt/tree/crdt_socket_sync-v0.9.0/packages/core/crdt_socket_sync)
 
