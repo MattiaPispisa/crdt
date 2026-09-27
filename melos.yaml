@@ -31,7 +31,12 @@ scripts:
     run: dart run scripts/update_references.dart
   benchmark:
     name: Benchmark
-    description: Run the benchmarks
+    description: Run the Dart and the Flutter benchmarks
+    run: melos run benchmark_dart && melos run benchmark_flutter
+
+  benchmark_dart:
+    name: Benchmark (Dart)
+    description: Run the Dart benchmarks
     run: dart run benchmark_infrastructure:run_benchmarks
     exec:
       concurrency: 1

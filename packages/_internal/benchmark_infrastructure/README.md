@@ -7,8 +7,8 @@ folder in this monorepo.
 ## The `benchmarks/` convention
 
 Any package can opt into `melos run benchmark` by adding a `benchmarks/`
-folder (plural — this is what `melos.yaml`'s `benchmark` script filters on)
-laid out like this:
+folder (plural — this is what `melos.yaml`'s `benchmark_dart` and
+`benchmark_flutter` scripts filter on) laid out like this:
 
 ```
 benchmarks/
@@ -90,8 +90,9 @@ dev_dependencies:
 
 ## Running
 
-`melos run benchmark` runs every package with a `benchmarks/` folder. From
-inside one such package, `dart run benchmark_infrastructure:run_benchmarks`
+`melos run benchmark` runs every package with a `benchmarks/` folder: first
+the Dart packages (`melos run benchmark_dart`), then the Flutter packages
+(`melos run benchmark_flutter`). From inside one such Dart package, `dart run benchmark_infrastructure:run_benchmarks`
 does the same for just that package: it discovers every
 `benchmarks/src/benchmarks/*_benchmark.dart` file, runs each as its own
 `dart run` subprocess (a fresh VM per file), and writes the aggregated
