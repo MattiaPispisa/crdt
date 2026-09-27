@@ -76,15 +76,7 @@ class _SortableListView extends StatelessWidget {
       // We provide our own drag handle (ReorderableDragStartListener in
       // SortableTodoItem), so disable the automatic ones to avoid two handles.
       buildDefaultDragHandles: false,
-      onReorder: (oldIndex, newIndex) {
-        // ReorderableListView reports newIndex assuming the item is still in
-        // place; convert it to the post-removal destination index expected by
-        // the handler's move().
-        if (newIndex > oldIndex) {
-          newIndex -= 1;
-        }
-        state.reorder(oldIndex, newIndex);
-      },
+      onReorderItem: state.reorder,
       itemBuilder:
           (context, index) => SortableTodoItem(
             key: ValueKey(index),
