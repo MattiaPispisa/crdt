@@ -272,6 +272,7 @@ Other bricks of the crdt "system" are:
 - [crdt_lf_hive](https://pub.dev/packages/crdt_lf_hive)
 - [crdt_lf_drift](https://pub.dev/packages/crdt_lf_drift)
 - [crdt_lf_sqlite](https://pub.dev/packages/crdt_lf_sqlite)
+- [crdt_socket_sync_serverpod](https://pub.dev/packages/crdt_socket_sync_serverpod)
 
 [crdt_socket_sync_dart_frog_badge]: https://img.shields.io/pub/v/crdt_socket_sync_dart_frog.svg
 [license_badge]: https://img.shields.io/badge/license-MIT-blue.svg
