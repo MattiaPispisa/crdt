@@ -7,7 +7,6 @@ import 'package:crdt_socket_sync/src/common/server/event.dart';
 import 'package:crdt_socket_sync/src/common/server/session_host.dart';
 import 'package:crdt_socket_sync/src/server_client/common/common.dart';
 import 'package:crdt_socket_sync/src/server_client/server/document_client_session.dart';
-import 'package:crdt_socket_sync/src/server_client/server/persistent_server_registry.dart';
 import 'package:crdt_socket_sync/src/server_client/server/registry.dart';
 import 'package:meta/meta.dart';
 
@@ -20,8 +19,8 @@ import 'package:meta/meta.dart';
 /// aligned snapshot once every subscribed client has confirmed the server's
 /// state.
 ///
-/// With a [PersistentServerRegistry], it also sends each snapshot the
-/// registry takes to the clients of that document.
+/// Once running, it also sends each snapshot a document of the registry takes
+/// to the clients of that document.
 ///
 /// Feed it connections with [SessionHostServer.acceptConnection]. For a host
 /// that owns its own `dart:io` socket, use `WebSocketServer` instead.
@@ -34,12 +33,7 @@ class DocumentSessionHost extends SessionHostServer<DocumentClientSession> {
     super.messageCodec,
     super.maxBufferSize,
     super.plugins,
-  }) : _serverRegistry = serverRegistry {
-    if (serverRegistry is PersistentServerRegistry) {
-      _registrySnapshots =
-          serverRegistry.snapshots.listen(_broadcastRegistrySnapshot);
-    }
-  }
+  }) : _serverRegistry = serverRegistry;
 
   final CRDTServerRegistry _serverRegistry;
 
@@ -67,6 +61,13 @@ class DocumentSessionHost extends SessionHostServer<DocumentClientSession> {
       messageCodec: messageCodec,
       maxBufferSize: maxBufferSize,
     );
+  }
+
+  @protected
+  @override
+  void onRunning() {
+    _registrySnapshots ??=
+        _serverRegistry.snapshots.listen(_broadcastRegistrySnapshot);
   }
 
   @protected

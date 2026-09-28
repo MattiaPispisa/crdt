@@ -283,6 +283,22 @@ void main() {
       expect(await backend.changes['doc']!.count, lessThan(3));
     });
 
+    test('a released document is reported again once reopened', () async {
+      final registry = build();
+      addTearDown(registry.close);
+      await registry.addDocument('doc');
+
+      final taken = <String>[];
+      registry.snapshots.listen((event) => taken.add(event.documentId));
+
+      await registry.releaseDocument('doc');
+      final reopened = (await registry.getDocument('doc'))!..takeSnapshot();
+      await pumpEventQueue();
+
+      expect(reopened.isDisposed, isFalse);
+      expect(taken, ['doc']);
+    });
+
     test('an explicit author seeds the stored id, and never beats it',
         () async {
       final chosen = PeerId.generate();

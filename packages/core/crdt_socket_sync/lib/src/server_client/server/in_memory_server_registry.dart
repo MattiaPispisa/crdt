@@ -16,8 +16,17 @@ class InMemoryCRDTServerRegistry
   InMemoryCRDTServerRegistry({
     Map<String, CRDTDocument>? documents,
     Map<String, Snapshot>? snapshots,
-  })  : _documents = documents ?? <String, CRDTDocument>{},
-        _snapshots = snapshots ?? <String, Snapshot>{};
+  }) : this._(
+          documents ?? <String, CRDTDocument>{},
+          snapshots ?? <String, Snapshot>{},
+        );
+
+  InMemoryCRDTServerRegistry._(this._documents, this._snapshots)
+      : _feed = DocumentSnapshotFeed(
+          onSnapshot: (taken) => _snapshots[taken.documentId] = taken.snapshot,
+        ) {
+    _startSnapshots();
+  }
 
   /// Internal storage for documents
   final Map<String, CRDTDocument> _documents;
@@ -25,14 +34,18 @@ class InMemoryCRDTServerRegistry
   /// Internal storage for snapshots
   final Map<String, Snapshot> _snapshots;
 
+  final DocumentSnapshotFeed _feed;
+
   @override
   Future<void> addDocument(
     String documentId, {
     PeerId? author,
   }) async {
-    _documents[documentId] = CRDTDocument(
+    final document = _documents[documentId] = CRDTDocument(
+      documentId: documentId,
       peerId: author ?? PeerId.generate(),
     );
+    _feed.track(documentId, document);
   }
 
   @override
@@ -47,6 +60,7 @@ class InMemoryCRDTServerRegistry
 
   @override
   Future<void> removeDocument(String documentId) async {
+    await _feed.untrack(documentId);
     _documents.remove(documentId);
     _snapshots.remove(documentId);
   }
@@ -57,8 +71,11 @@ class InMemoryCRDTServerRegistry
   }
 
   @override
-  Future<int> get documentCount async {
-    return _documents.length;
+  Stream<ServerSnapshot> get snapshots => _feed.snapshots;
+
+  void _startSnapshots() {
+    _documents.forEach(_feed.track);
+    _feed.start();
   }
 
   /// Keeps the snapshot [createSnapshot] just took, so [getLatestSnapshot]
@@ -82,10 +99,14 @@ class InMemoryCRDTServerRegistry
       document.dispose();
     }
     await clear();
+    await _feed.close();
   }
 
   /// Clear all documents and snapshots
   Future<void> clear() async {
+    for (final documentId in List.of(_documents.keys)) {
+      await _feed.untrack(documentId);
+    }
     _documents.clear();
     _snapshots.clear();
   }
@@ -95,8 +116,7 @@ class InMemoryCRDTServerRegistry
 
   /// Get a copy of all snapshots (for debugging/testing purposes)
   ///
-  /// Named for what it holds, not `snapshots`: the durable registry uses that
-  /// name for a stream of the snapshots as they are taken, and one name for
-  /// two unrelated things on one interface is a trap.
+  /// The latest snapshot of each document; [snapshots] streams them as they
+  /// are taken.
   Map<String, Snapshot> get snapshotsByDocument => Map.unmodifiable(_snapshots);
 }

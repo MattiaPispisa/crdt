@@ -1,5 +1,10 @@
+import 'dart:async';
+
 import 'package:crdt_lf/crdt_lf.dart';
 import 'package:meta/meta.dart';
+
+/// A snapshot a document just took, and the document it belongs to.
+typedef ServerSnapshot = ({String documentId, Snapshot snapshot});
 
 /// Class managing the CRDT document registry on the server.
 abstract class CRDTServerRegistry {
@@ -30,6 +35,12 @@ abstract class CRDTServerRegistry {
   /// Get the latest snapshot of a document
   Future<Snapshot?> getLatestSnapshot(String documentId);
 
+  /// The snapshots the documents of this registry take, as they take them.
+  ///
+  /// The default is empty, so a registry written before this getter existed
+  /// keeps working.
+  Stream<ServerSnapshot> get snapshots => const Stream<ServerSnapshot>.empty();
+
   /// Apply a change to a document.
   ///
   /// Returns `true` if the change was applied, `false` if it was a duplicate
@@ -56,15 +67,15 @@ abstract class CRDTServerRegistry {
 /// The part of a [CRDTServerRegistry] that does not depend on where the
 /// documents are kept.
 ///
-/// A registry differs in how it finds a document and what it does once one has
-/// snapshotted. Looking one up, refusing an id it does not serve, and deciding
-/// which failures of [applyChange] a client is told about are the same
-/// everywhere — and they were written twice before this existed, with two
-/// different error messages and no way to keep them in step.
+/// Looking a document up, applying a change, snapshotting and counting work
+/// the same on any storage.
 ///
 /// Mix it in and give [getDocument]; override [afterSnapshot] when the
 /// snapshot has somewhere to go.
 mixin CRDTServerRegistryDocuments implements CRDTServerRegistry {
+  @override
+  Future<int> get documentCount async => (await documentIds).length;
+
   /// The document [documentId] holds, or throws [ArgumentError] when this
   /// registry does not serve it.
   @protected
@@ -113,4 +124,85 @@ mixin CRDTServerRegistryDocuments implements CRDTServerRegistry {
   /// nowhere. The default does nothing.
   @protected
   Future<void> afterSnapshot(String documentId, Snapshot snapshot) async {}
+}
+
+/// Reports the snapshots a set of documents take, once started.
+///
+/// A registry [track]s each document it opens and [untrack]s it when it lets
+/// go. Nothing is watched before [start].
+class DocumentSnapshotFeed {
+  /// Creates a feed; [onSnapshot] runs for each reported snapshot, before
+  /// the stream gets it.
+  DocumentSnapshotFeed({void Function(ServerSnapshot snapshot)? onSnapshot})
+      : _onSnapshot = onSnapshot,
+        _controller = StreamController<ServerSnapshot>.broadcast(),
+        _documents = <String, CRDTDocument>{},
+        _subscriptions = <String, StreamSubscription<CRDTDocumentEvent>>{};
+
+  final void Function(ServerSnapshot snapshot)? _onSnapshot;
+
+  final StreamController<ServerSnapshot> _controller;
+
+  final Map<String, CRDTDocument> _documents;
+
+  final Map<String, StreamSubscription<CRDTDocumentEvent>> _subscriptions;
+
+  bool _started = false;
+
+  /// Reports the snapshots [document] takes, as [documentId], once started.
+  ///
+  /// A later call for the same [documentId] replaces this one.
+  void track(String documentId, CRDTDocument document) {
+    if (_controller.isClosed) {
+      return;
+    }
+    _documents[documentId] = document;
+    if (_started) {
+      _subscribe(documentId, document);
+    }
+  }
+
+  /// Stops reporting the snapshots of [documentId].
+  Future<void> untrack(String documentId) async {
+    _documents.remove(documentId);
+    await _subscriptions.remove(documentId)?.cancel();
+  }
+
+  /// The snapshots the tracked documents take, once [start] has run.
+  Stream<ServerSnapshot> get snapshots => _controller.stream;
+
+  /// Starts watching the tracked documents. Calling it again does nothing.
+  void start() {
+    if (_started) {
+      return;
+    }
+    _started = true;
+    _documents.forEach(_subscribe);
+  }
+
+  /// Stops watching and ends the stream.
+  Future<void> close() async {
+    _documents.clear();
+    final subscriptions = List.of(_subscriptions.values);
+    _subscriptions.clear();
+    for (final subscription in subscriptions) {
+      await subscription.cancel();
+    }
+    await _controller.close();
+  }
+
+  void _subscribe(String documentId, CRDTDocument document) {
+    unawaited(_subscriptions.remove(documentId)?.cancel());
+    _subscriptions[documentId] = document.events.listen((event) {
+      // A document released during a shutdown can still snapshot while its
+      // persistence flushes, after the stream is closed.
+      if (event is DocumentSnapshotUpdated &&
+          event.reason == SnapshotReason.taken &&
+          !_controller.isClosed) {
+        final snapshot = (documentId: documentId, snapshot: event.snapshot);
+        _onSnapshot?.call(snapshot);
+        _controller.add(snapshot);
+      }
+    });
+  }
 }

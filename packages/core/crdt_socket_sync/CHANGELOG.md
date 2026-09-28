@@ -15,6 +15,8 @@
   and `relay_server.dart`, which stay free of `dart:io`. Hosting the protocol on another HTTP
   framework is now a matter of building a `TransportConnection` and handing it over; see
   [Hosting on your own transport](https://github.com/MattiaPispisa/crdt/tree/main/packages/core/crdt_socket_sync#advanced-hosting-on-your-own-transport).
+- **`CRDTReplica`** (`replica.dart`) opens a client document with its local storage and its sync
+  client, and closes them, in the order that keeps the data. [144](https://github.com/MattiaPispisa/crdt/issues/144)
 - `IoWebSocketHost` and `IoWebSocketConnection` are exported from `web_socket_server.dart` and
   `web_socket_relay_server.dart`: the mixin that gives a host its `dart:io` `HttpServer` is the
   reference for writing a host over another transport.
@@ -27,13 +29,12 @@
 - `DocumentSessionHost.maybeTakeAlignedSnapshot` and `maybeTakeAlignedSnapshotForSession` are
   public, so an embedder can force the coordinator before an orderly shutdown.
 - `RelaySessionHost.compaction` exposes the coordinator the host shares across its sessions.
-- **`CRDTReplica`** (`replica.dart`) opens a client document with its local storage and its sync
-  client, and closes them, in the order that keeps the data.
 
 ### Changed
 
-- A `DocumentSessionHost` on a `PersistentServerRegistry` now sends each snapshot the registry
-  takes to its clients: a hand-written `snapshots` listener can go.
+- A running `DocumentSessionHost` now sends each snapshot a document of any registry takes to its
+  clients, in-memory included. `snapshots` moved to `CRDTServerRegistry`, empty by default; a
+  `DocumentSnapshotFeed` fills it.
 - `WebSocketServer` and `WebSocketRelayServer` are now thin `dart:io` subclasses of
   `DocumentSessionHost` and `RelaySessionHost`. Their constructors, `host`, `port`, `store`, the
   `ServerEvent`s they emit and the order they emit them in are unchanged — the existing test suite
@@ -44,6 +45,8 @@
 
 ### Fixed
 
+- `InMemoryCRDTServerRegistry.addDocument` built the document under a random id, not its own.
+- `InMemoryCRDTServerRegistry.getLatestSnapshot` now returns a snapshot a document took by itself.
 - A client whose first `connect()` fails now retries, as after a dropped connection;
   `disconnect()` and `dispose()` stop a waiting retry.
 

@@ -6,9 +6,6 @@ import 'package:crdt_socket_sync/src/server_client/server/'
     'document_catalog.dart';
 import 'package:crdt_socket_sync/src/server_client/server/registry.dart';
 
-/// A snapshot a document just took, and the document it belongs to.
-typedef ServerSnapshot = ({String documentId, Snapshot snapshot});
-
 /// A [CRDTServerRegistry] that keeps every document it serves on disk.
 ///
 /// It holds the live [CRDTDocument]s and routes to them, the way any registry
@@ -82,7 +79,10 @@ class PersistentServerRegistry
         _writeDelay = writeDelay,
         _compactAfter = compactAfter,
         _idleAfter = idleAfter,
-        _onError = onError;
+        _onError = onError,
+        _feed = DocumentSnapshotFeed() {
+    _startSnapshots();
+  }
 
   final CRDTStorageBackend _backend;
   final ServerDocumentCatalog _catalog;
@@ -102,9 +102,6 @@ class PersistentServerRegistry
   final Map<String, Future<_OpenDocument>> _open =
       <String, Future<_OpenDocument>>{};
 
-  final StreamController<ServerSnapshot> _snapshots =
-      StreamController<ServerSnapshot>.broadcast();
-
   /// [close] has run, so nothing must be opened again.
   bool _closed = false;
 
@@ -116,13 +113,12 @@ class PersistentServerRegistry
   /// back for the same document.
   final Map<String, Future<void>> _releasing = <String, Future<void>>{};
 
-  /// The snapshot each document takes, as it takes it.
-  ///
-  /// A server broadcasts the new document status on this, so clients replace
-  /// their history instead of replaying a log the server has already pruned.
-  /// It carries the snapshots [createSnapshot] takes and the ones
-  /// `compactAfter` causes.
-  Stream<ServerSnapshot> get snapshots => _snapshots.stream;
+  final DocumentSnapshotFeed _feed;
+
+  @override
+  Stream<ServerSnapshot> get snapshots => _feed.snapshots;
+
+  void _startSnapshots() => _feed.start();
 
   /// The catalog this registry keeps its document ids in.
   ServerDocumentCatalog get catalog => _catalog;
@@ -161,9 +157,6 @@ class PersistentServerRegistry
 
   @override
   Future<Set<String>> get documentIds => _catalog.documentIds;
-
-  @override
-  Future<int> get documentCount async => (await _catalog.documentIds).length;
 
   /// Waits for the snapshot and the prune it caused to reach the disk.
   ///
@@ -239,6 +232,7 @@ class PersistentServerRegistry
     try {
       await (await opening).dispose();
     } finally {
+      await _feed.untrack(documentId);
       // `removeWhere`, not `remove`: the value is a future, and dropping it
       // by name reads as an unawaited one.
       _releasing.removeWhere((id, _) => id == documentId);
@@ -284,7 +278,7 @@ class PersistentServerRegistry
       }
     }
 
-    await _snapshots.close();
+    await _feed.close();
   }
 
   /// The open document for [documentId], opening it if this is the first ask.
@@ -319,39 +313,18 @@ class PersistentServerRegistry
   }
 
   Future<_OpenDocument> _restore(String documentId, PeerId? author) async {
-    StreamSubscription<CRDTDocumentEvent>? subscription;
-
     try {
       final open = await _backend.openDocument(
         documentId,
         author: author,
-        // Only the snapshots this document takes. The restore that follows
-        // merges the stored one back in, and that is not news anybody is
-        // waiting for.
-        onDocument: (document) {
-          subscription = document.events.listen((event) {
-            // `isClosed` because a document released during a shutdown can
-            // still snapshot while its persistence flushes, and adding to a
-            // closed controller throws inside a listener, where nothing
-            // catches it.
-            if (event is DocumentSnapshotUpdated &&
-                event.reason == SnapshotReason.taken &&
-                !_snapshots.isClosed) {
-              _snapshots.add(
-                (documentId: documentId, snapshot: event.snapshot),
-              );
-            }
-          });
-        },
+        onDocument: (document) => _feed.track(documentId, document),
         writeDelay: _writeDelay,
         compactAfter: _compactAfter,
         onError: _onError,
       );
-      return _OpenDocument(open.document, open.persistence, subscription!);
+      return _OpenDocument(open.document, open.persistence);
     } catch (_) {
-      // `CRDTStorageBackendDocuments.openDocument` disposes the document
-      // itself. This subscription is the one thing it does not know about.
-      await subscription?.cancel();
+      await _feed.untrack(documentId);
       rethrow;
     }
   }
@@ -378,18 +351,16 @@ class PersistentServerRegistry
 
 /// A document this registry holds open, and what it holds open with it.
 class _OpenDocument {
-  _OpenDocument(this.document, this.persistence, this._events);
+  _OpenDocument(this.document, this.persistence);
 
   final CRDTDocument document;
   final CRDTDocumentPersistence persistence;
-  final StreamSubscription<CRDTDocumentEvent> _events;
 
   /// Writes what is waiting, then lets go of everything.
   ///
   /// The storage is closed here because this registry opened it.
   Future<void> dispose() async {
     await persistence.dispose();
-    await _events.cancel();
     await persistence.storage.close();
     document.dispose();
   }

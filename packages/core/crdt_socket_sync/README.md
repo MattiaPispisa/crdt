@@ -293,21 +293,34 @@ sequenceDiagram
 The server stores documents through a `CRDTServerRegistry`. Two come with the
 package: `InMemoryCRDTServerRegistry`, which keeps everything in memory, and
 [`PersistentServerRegistry`](#persisting-changes--snapshots), which keeps every
-document on disk through any `crdt_lf` storage adapter. Implement the interface
-yourself only if neither fits.
+document on disk through any `crdt_lf` storage adapter. Write your own only if
+neither fits.
 
-The interface is fully asynchronous:
+Mix in `CRDTServerRegistryDocuments`: it applies changes, takes snapshots and
+counts documents. You say where the documents live. A `DocumentSnapshotFeed`
+reports the snapshots your documents take: track each document you open,
+untrack it when you let it go.
 
 ```dart
-class CustomServerRegistry implements CRDTServerRegistry {
-  final Map<String, CRDTDocument> _documents = {};
+class CustomServerRegistry
+    with CRDTServerRegistryDocuments
+    implements CRDTServerRegistry {
+  CustomServerRegistry()
+      : _documents = {},
+        _feed = DocumentSnapshotFeed() {
+    _feed.start();
+  }
+
+  final Map<String, CRDTDocument> _documents;
+  final DocumentSnapshotFeed _feed;
 
   @override
   Future<void> addDocument(String documentId, {PeerId? author}) async {
-    _documents[documentId] = CRDTDocument(
+    final document = _documents[documentId] = CRDTDocument(
       peerId: author ?? PeerId.generate(),
       documentId: documentId,
     );
+    _feed.track(documentId, document);
   }
 
   @override
@@ -321,8 +334,11 @@ class CustomServerRegistry implements CRDTServerRegistry {
   @override
   Future<Set<String>> get documentIds async => _documents.keys.toSet();
 
-  // ... removeDocument, documentCount, createSnapshot, getLatestSnapshot,
-  //     applyChange (see the CRDTServerRegistry interface for the full list).
+  @override
+  Stream<ServerSnapshot> get snapshots => _feed.snapshots;
+
+  // ... removeDocument (with _feed.untrack), getLatestSnapshot, and close
+  //     (with _feed.close).
 }
 ```
 
@@ -450,9 +466,9 @@ abstract interface class ServerDocumentCatalog {
 A snapshot comes with a prune, so the history it covers leaves the server. A
 client still replaying that history has to be given the snapshot instead.
 There is nothing to wire for it: a `WebSocketServer` or `DocumentSessionHost`
-built on a `PersistentServerRegistry` sends each snapshot the registry takes
-to the clients of that document. The `snapshots` stream of the registry
-reports them too, for logging or metrics.
+sends each snapshot a document of its registry takes to the clients of that
+document, once it runs. The `snapshots` stream of the registry reports them
+too, for logging or metrics.
 
 The example server puts all of this together:
 [`registry.dart`](https://github.com/MattiaPispisa/crdt/blob/main/packages/core/crdt_socket_sync/example/lib/src/registry.dart).
