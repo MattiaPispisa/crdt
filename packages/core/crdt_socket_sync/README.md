@@ -15,6 +15,7 @@
     - [Built-in Plugins](#built-in-plugins)
   - [Installation](#installation)
   - [Communication modes](#communication-modes)
+  - [Opening a replica](#opening-a-replica)
   - [Server–Client mode (CRDT-aware)](#serverclient-mode-crdt-aware)
     - [Quick Start](#quick-start)
       - [Server Setup](#server-setup)
@@ -42,7 +43,6 @@
     - [Implementing a relay server](#implementing-a-relay-server)
     - [Relay Imports](#relay-imports)
   - [Shared topics](#shared-topics)
-    - [Opening a replica](#opening-a-replica)
     - [Advanced: hosting on your own transport](#advanced-hosting-on-your-own-transport)
       - [A transport you do not own](#a-transport-you-do-not-own)
       - [A transport the host owns](#a-transport-the-host-owns)
@@ -124,6 +124,46 @@ shared, but the server responsibilities are very different:
 Cross-cutting concerns (plugins, compression, wire format, connection status)
 are documented once under [Shared topics](#shared-topics).
 
+## Opening a replica
+
+A client app needs three things together: the document as this device last
+left it, a storage that keeps writing it down, and a sync client. They open
+and close in a set order. `CRDTReplica` holds all three and keeps that order:
+
+```dart
+import 'package:crdt_lf/crdt_lf.dart';
+import 'package:crdt_lf_sqlite/crdt_lf_sqlite.dart';
+import 'package:crdt_socket_sync/replica.dart';
+import 'package:crdt_socket_sync/web_socket_client.dart';
+
+final replica = await CRDTReplica.open(
+  documentId: 'notes',
+  storage: () => CRDTSqlite.open('notes.db'),
+  sync: (document) => WebSocketClient(
+    url: 'ws://localhost:8080',
+    document: document,
+    author: document.peerId,
+  ),
+);
+final text = CRDTFugueTextHandler(replica.document, 'body');
+
+// ...edit
+
+await replica.close();
+```
+
+- `open` restores the document first, then builds the client on it and
+  starts to connect. It returns without waiting for the network, so the local
+  copy is ready at once. Follow `replica.client!.connectionStatus` for the
+  connection.
+- `close` disposes the client, writes what is still waiting, then closes the
+  document and the storage.
+- Leave `storage` out to keep the document in memory. Leave `sync` out to
+  keep it on this device. For the relay, return a `WebSocketRelayClient` from
+  `sync`.
+- Pass `onStorageError` to keep going when the storage cannot be read: the
+  document then starts empty, in memory. Without it, `open` throws.
+
 ## Server–Client mode (CRDT-aware)
 
 In this mode the server owns the documents through a
@@ -198,6 +238,8 @@ void main() async {
   }
 }
 ```
+
+In an app, open the document through [`CRDTReplica`](#opening-a-replica).
 
 ### How it works
 
@@ -583,6 +625,8 @@ void main() async {
 }
 ```
 
+In an app, open the document through [`CRDTReplica`](#opening-a-replica).
+
 Local edits are delivered **at-least-once**: a change leaves the client
 queue only when the relay acknowledges it, and unacked changes survive
 reconnects (re-delivery is harmless because peers de-duplicate imported
@@ -835,46 +879,6 @@ import 'package:crdt_socket_sync/web_socket_relay_server.dart';
 ## Shared topics
 
 The following concerns work the same way in both communication modes.
-
-### Opening a replica
-
-A client app needs three things together: the document as this device last
-left it, a storage that keeps writing it down, and a sync client. They open
-and close in a set order. `CRDTReplica` holds all three and keeps that order:
-
-```dart
-import 'package:crdt_lf/crdt_lf.dart';
-import 'package:crdt_lf_sqlite/crdt_lf_sqlite.dart';
-import 'package:crdt_socket_sync/replica.dart';
-import 'package:crdt_socket_sync/web_socket_client.dart';
-
-final replica = await CRDTReplica.open(
-  documentId: 'notes',
-  storage: () => CRDTSqlite.open('notes.db'),
-  sync: (document) => WebSocketClient(
-    url: 'ws://localhost:8080',
-    document: document,
-    author: document.peerId,
-  ),
-);
-final text = CRDTFugueTextHandler(replica.document, 'body');
-
-// ...edit
-
-await replica.close();
-```
-
-- `open` restores the document first, then builds the client on it and
-  starts to connect. It returns without waiting for the network, so the local
-  copy is ready at once. Follow `replica.client!.connectionStatus` for the
-  connection.
-- `close` disposes the client, writes what is still waiting, then closes the
-  document and the storage.
-- Leave `storage` out to keep the document in memory. Leave `sync` out to
-  keep it on this device. For the relay, return a `WebSocketRelayClient` from
-  `sync`.
-- Pass `onStorageError` to keep going when the storage cannot be read: the
-  document then starts empty, in memory. Without it, `open` throws.
 
 ### Advanced: hosting on your own transport
 

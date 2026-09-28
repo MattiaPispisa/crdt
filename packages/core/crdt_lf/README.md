@@ -171,23 +171,26 @@ void main() {
 ## Sync 
 A sync library is available in the [crdt_socket_sync](https://pub.dev/packages/crdt_socket_sync) package. And it's used to synchronize the CRDT state between peers. More info in the [README](https://github.com/MattiaPispisa/crdt/tree/main/packages/core/crdt_socket_sync/README.md) of the sync package.
 
-A client takes the document and a URL. Over a relay:
+`CRDTReplica`, from the sync package, opens the document and puts a sync client
+on it. Over a relay:
 
 ```dart
-final sync = WebSocketRelayClient(
-  url: roomUrl(kServerUrl, roomId),
-  document: document,
-  author: document.peerId,
+final replica = await CRDTReplica.open(
+  documentId: 'my-room',
+  sync: (document) => WebSocketRelayClient(
+    url: 'ws://localhost:8080',
+    document: document,
+    author: document.peerId,
+  ),
 );
+final text = CRDTFugueTextHandler(replica.document, 'content');
 
-// Only after the document was restored from disk: the restored state is what
-// the relay is caught up against, so what was written offline goes out with
-// the next welcome.
-sync.connect();
+// ...edit
+
+await replica.close();
 ```
 
-`CRDTReplica`, from the sync package, restores and connects in this order for
-you; see [Complete example](#complete-example).
+To keep the document on disk too, see [Complete example](#complete-example).
 
 A flutter example is available in the [client_example](https://github.com/MattiaPispisa/crdt/tree/main/packages/core/crdt_socket_sync/client_example) and provide a synced version of the  "Flutter Distributed Collaboration" Example. 
 
