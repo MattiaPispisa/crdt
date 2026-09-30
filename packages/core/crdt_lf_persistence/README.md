@@ -102,7 +102,7 @@ The document reports every move of its durable state on
 | event | what the persistence does |
 | --- | --- |
 | `DocumentChangesApplied` | appends the changes |
-| `DocumentSnapshotUpdated` | stores the snapshot, then drops the old one |
+| `DocumentSnapshotUpdated` | stores the snapshot, then drops the oldest past `keepSnapshots` |
 | `DocumentHistoryPruned` | deletes what left the store, writes the survivors again |
 
 Both sources of a change are saved: what this peer wrote, and what it took in
@@ -112,6 +112,16 @@ of it.
 Writes are batched behind `writeDelay` (250 ms by default). One keystroke is
 one transaction, so writing on every event would put a round-trip to the disk
 between the typist and the next character.
+
+A snapshot is written before the prune that comes with it, and the prune waits
+for it: a failed snapshot write holds its prune back, so the disk never loses
+changes that no snapshot covers.
+
+The document passed to `open` may already hold state. It is merged with the
+stored one, and what only the document held — changes and snapshot — is
+written. One limit: two snapshots merge per handler, and the newer one wins
+whole. When the document and the disk each hold a snapshot of concurrent
+histories, the state of one side is kept only where its changes still are.
 
 ## Reading part of the log
 
@@ -195,6 +205,22 @@ the same changes to a storage that just refused them. Ask
 `persistence.hasUnwrittenChanges` to know whether anything is still waiting.
 After `dispose()` it reads `true` only when those edits never reached the disk.
 
+To know for sure, ask for the outcome, in one of two ways:
+
+- `flush(throwOnError: true)` writes now, and throws the first failure.
+  `compact()` waits the same way, so it throws too.
+- `whenStored(version)` waits until the disk can bring back `version`, and
+  waits through failed writes while they are retried. It throws only when
+  `dispose()` comes first. `storedVersion` is what the disk holds now.
+
+```dart
+text.insert(0, 'Hello');
+await persistence.whenStored(document.getVersionVector()); // survives a crash
+
+final snapshot = document.takeSnapshot();
+await persistence.whenStored(snapshot.versionVector); // safe to send
+```
+
 ## Peer identity
 
 `CRDTDocument` mints a new `PeerId` when you do not pass one, so **every
@@ -252,8 +278,8 @@ reads exactly what one made before it would have.
 | `author` | the identity to use for a document that has none stored yet, and it is stored |
 | `onDocument` | runs before the restore, for what has to exist first — a listener on `events`, the factories for nested handlers |
 
-`writeDelay`, `compactAfter` and `onError` mean what they mean on
-`CRDTDocumentPersistence.open`.
+`writeDelay`, `compactAfter`, `keepSnapshots` and `onError` mean what they
+mean on `CRDTDocumentPersistence.open`.
 
 The identity is always kept. A stored id beats `author`: it is what the
 document already wrote under, and writing under a second one would make one
@@ -317,6 +343,14 @@ How far back it reaches is what the log still holds. A prune deletes the
 changes a snapshot covers, so a compacted document cannot be rebuilt at a
 version older than its snapshot — and it says so, by throwing, instead of
 handing back a document that is quietly short.
+
+`keepSnapshots` keeps more than the newest snapshot on the disk (1 by default,
+`null` for all). Each older one gives back its own version, so a history view
+can reach it after a compaction:
+
+```dart
+await CRDTDocumentPersistence.open(document, storage, keepSnapshots: 5);
+```
 
 ## Backup, restore, and changing adapter
 

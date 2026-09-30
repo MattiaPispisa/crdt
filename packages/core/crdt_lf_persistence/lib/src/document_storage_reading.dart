@@ -64,11 +64,11 @@ extension CRDTDocumentStorageReading on CRDTDocumentStorage {
   ///
   /// **How far back it reaches is what the log still holds.** A prune deletes
   /// the changes a snapshot covers, so a document that has been compacted
-  /// cannot be rebuilt at a version older than its snapshot. It never comes
-  /// back quietly wrong: the changes that are left name dependencies the
-  /// document cannot resolve and it throws [CausallyNotReadyException], and
-  /// where the prune left nothing at all to replay it throws a [StateError]
-  /// instead of handing back an empty document.
+  /// cannot be rebuilt at a version older than its snapshot. An older snapshot
+  /// kept by the `keepSnapshots` of [CRDTDocumentPersistence.open] still
+  /// gives its own version. It never comes back quietly wrong: it throws
+  /// [CausallyNotReadyException] or a [StateError] when the history [version]
+  /// needs is gone.
   ///
   /// A stored snapshot is used only when [version] has seen everything in it —
   /// otherwise it describes a state that had not happened yet at [version].
@@ -187,9 +187,30 @@ FutureOr<CRDTDocument> _read({
             merge: true,
             pruneHistory: false,
           );
+          if (upTo != null) {
+            _checkReached(document, snapshots, upTo);
+          }
           return document;
         }),
       );
+}
+
+/// Throws when [document] is short of what [upTo] had seen of [snapshots].
+void _checkReached(
+  CRDTDocument document,
+  List<Snapshot> snapshots,
+  VersionVector upTo,
+) {
+  final reached = document.getVersionVector();
+  for (final snapshot in snapshots) {
+    final seen = VersionVector.intersection([upTo, snapshot.versionVector]);
+    if (!reached.isStrictlyNewerOrEqualThan(seen)) {
+      throw StateError(
+        'the history of ${document.documentId} before this version has been '
+        'pruned, so the document cannot be rebuilt at it',
+      );
+    }
+  }
 }
 
 /// The newest of [snapshots] that [upTo] has seen all of, or the newest of

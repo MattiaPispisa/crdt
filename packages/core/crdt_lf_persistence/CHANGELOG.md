@@ -1,3 +1,29 @@
+## [0.1.2](https://github.com/MattiaPispisa/crdt/tree/crdt_lf_persistence-v0.1.2/packages/core/crdt_lf_persistence)
+
+**Date:** 2026-09-29
+
+[compare to previous release](https://github.com/MattiaPispisa/crdt/compare/crdt_lf_persistence-v0.1.1+1...crdt_lf_persistence-v0.1.2)
+
+### Added
+
+- `keepSnapshots` on `open`, `openSync` and `openDocument`: how many snapshots stay on the disk
+  (1 by default, `null` for all).
+- `whenStored(version)` completes once the disk can bring back that version, changes or snapshot;
+  `storedVersion` is what the disk holds now.
+- `flush(throwOnError: true)` throws a failed write instead of returning.
+
+### Changed
+
+- `compact()` throws when the snapshot or the prune fails to write.
+- Needs Dart 3.3 and `crdt_lf` 5.1.0 or later.
+
+### Fixed
+
+- A snapshot the document took before `open` is written; the next open lost it.
+- A failed snapshot write no longer lets its prune delete the changes it covers, and is retried.
+- Two concurrent `flush()` calls no longer hide a failed write from each other.
+- `documentAt` throws instead of answering a version whose history was pruned with an older state.
+
 ## [0.1.1+1](https://github.com/MattiaPispisa/crdt/tree/crdt_lf_persistence-v0.1.1+1/packages/core/crdt_lf_persistence)
 
 **Date:** 2026-09-27

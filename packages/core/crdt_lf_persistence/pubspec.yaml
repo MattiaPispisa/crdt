@@ -7,10 +7,10 @@ topics: [crdt, local-first, persistence, offline-first, dart]
 version: 0.1.2
 
 environment:
-  sdk: ">=3.0.0 <4.0.0"
+  sdk: ">=3.3.0 <4.0.0"
 
 dependencies:
-  crdt_lf: ">=4.2.0 <6.0.0"
+  crdt_lf: ">=5.1.0 <6.0.0"
 dev_dependencies:
   persistence_conformance:
     path: ../../_internal/persistence_conformance

@@ -150,6 +150,43 @@ void main() {
         throwsA(isA<StateError>()),
       );
     });
+
+    group('with an older snapshot kept', () {
+      late List<VersionVector> versions;
+
+      setUp(() async {
+        final document = CRDTDocument(documentId: 'doc');
+        final text = CRDTFugueTextHandler(document, 'text');
+        final persistence = await CRDTDocumentPersistence.open(
+          document,
+          storage,
+          writeDelay: Duration.zero,
+          keepSnapshots: 2,
+        );
+        versions = [];
+        for (final line in ['one ', 'two ', 'three']) {
+          text.insert(text.length, line);
+          versions.add(document.getVersionVector());
+          if (line != 'two ') {
+            await persistence.compact();
+          }
+        }
+        await persistence.dispose();
+      });
+
+      test('gives the document at the version of that snapshot', () async {
+        final past = await storage.documentAt(versions.first);
+
+        expect(CRDTFugueTextHandler(past, 'text').value, 'one ');
+      });
+
+      test('refuses a version whose history the newer snapshot pruned', () {
+        expect(
+          () => storage.documentAt(versions[1]),
+          throwsA(isA<StateError>()),
+        );
+      });
+    });
   });
 
   group('CRDTDocumentStorage.copyTo', () {
