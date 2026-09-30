@@ -1,8 +1,16 @@
-## [5.0.1](https://github.com/MattiaPispisa/crdt/tree/crdt_lf-v5.0.1/packages/core/crdt_lf)
+## [5.1.0](https://github.com/MattiaPispisa/crdt/tree/crdt_lf-v5.1.0/packages/core/crdt_lf)
 
-**Date:** 2026-09-27
+**Date:** 2026-09-30
 
-[compare to previous release](https://github.com/MattiaPispisa/crdt/compare/crdt_lf-v5.0.0...crdt_lf-v5.0.1)
+[compare to previous release](https://github.com/MattiaPispisa/crdt/compare/crdt_lf-v5.0.0...crdt_lf-v5.1.0)
+
+### Added
+
+- `CRDTDocument.snapshot`: a read-only copy of the snapshot the document holds.
+
+### Changed
+
+- Needs Dart 3.3 or later.
 
 ### Fixed
 

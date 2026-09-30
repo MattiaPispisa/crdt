@@ -1368,6 +1368,7 @@ A structure that manages the frontiers (latest operations) of the CRDT.
 
 ### Snapshot
 A snapshot of the CRDT state, including the version vector and the data.
+`document.snapshot` reads the one the document holds, as a read-only copy.
 
 ### Binary representation
 

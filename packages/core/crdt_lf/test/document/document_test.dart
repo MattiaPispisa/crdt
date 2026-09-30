@@ -407,6 +407,43 @@ void main() {
     });
 
     group('snapshot', () {
+      test('the getter is null until a snapshot, then reads the one taken', () {
+        final source = CRDTDocument();
+        CRDTListHandler<String>(
+          source,
+          'list',
+          handlerType: 'CRDTListHandler<String>',
+        ).insert(0, 'a');
+        expect(source.snapshot, isNull);
+
+        final taken = source.takeSnapshot();
+
+        expect(source.snapshot!.id, taken.id);
+        expect(source.snapshot!.toBytes(), taken.toBytes());
+      });
+
+      test('the getter hands out a copy that cannot be written to', () {
+        final source = CRDTDocument();
+        CRDTListHandler<String>(
+          source,
+          'list',
+          handlerType: 'CRDTListHandler<String>',
+        ).insert(0, 'a');
+        final before = source.takeSnapshot().toBytes();
+        final copy = source.snapshot!;
+
+        expect(() => copy.data['x'] = Uint8List(1), throwsUnsupportedError);
+        expect(() => copy.data.values.first[0] = 1, throwsUnsupportedError);
+        expect(
+          () => copy.versionVector.update(
+            PeerId.generate(),
+            HybridLogicalClock(l: 1, c: 0),
+          ),
+          throwsUnsupportedError,
+        );
+        expect(source.snapshot!.toBytes(), before);
+      });
+
       test('importing a snapshot advances the clock past its version vector',
           () {
         final peerId = PeerId.generate();
