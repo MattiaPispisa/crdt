@@ -251,6 +251,22 @@ void main() {
       expect(attempts, 1);
       expect(client.connectionStatusValue, ConnectionStatus.disconnected);
     });
+
+    test('disconnect cancels a connect that has not opened its transport',
+        () async {
+      var attempts = 0;
+      final client = buildClient(() {
+        attempts++;
+        return _FakeTransport(documentId: documentId, respondToPings: true);
+      });
+
+      final connecting = client.connect();
+      await client.disconnect();
+
+      expect(await connecting, isFalse);
+      expect(attempts, 0);
+      expect(client.connectionStatusValue, ConnectionStatus.disconnected);
+    });
   });
 
   group('WebSocketClient refused build', () {

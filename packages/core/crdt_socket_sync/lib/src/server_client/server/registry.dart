@@ -35,10 +35,9 @@ abstract class CRDTServerRegistry {
   /// Get the latest snapshot of a document
   Future<Snapshot?> getLatestSnapshot(String documentId);
 
-  /// The snapshots the documents of this registry take, as they take them.
+  /// The snapshots the documents of this registry take, once stored.
   ///
-  /// The default is empty, so a registry written before this getter existed
-  /// keeps working.
+  /// Empty by default.
   Stream<ServerSnapshot> get snapshots => const Stream<ServerSnapshot>.empty();
 
   /// Apply a change to a document.
@@ -75,6 +74,9 @@ abstract class CRDTServerRegistry {
 mixin CRDTServerRegistryDocuments implements CRDTServerRegistry {
   @override
   Future<int> get documentCount async => (await documentIds).length;
+
+  @override
+  Stream<ServerSnapshot> get snapshots => const Stream<ServerSnapshot>.empty();
 
   /// The document [documentId] holds, or throws [ArgumentError] when this
   /// registry does not serve it.
@@ -131,15 +133,17 @@ mixin CRDTServerRegistryDocuments implements CRDTServerRegistry {
 /// A registry [track]s each document it opens and [untrack]s it when it lets
 /// go. Nothing is watched before [start].
 class DocumentSnapshotFeed {
-  /// Creates a feed; [onSnapshot] runs for each reported snapshot, before
-  /// the stream gets it.
-  DocumentSnapshotFeed({void Function(ServerSnapshot snapshot)? onSnapshot})
-      : _onSnapshot = onSnapshot,
-        _controller = StreamController<ServerSnapshot>.broadcast(),
+  /// Creates a feed that watches nothing yet.
+  DocumentSnapshotFeed()
+      : _controller = StreamController<ServerSnapshot>.broadcast(),
         _documents = <String, CRDTDocument>{},
-        _subscriptions = <String, StreamSubscription<CRDTDocumentEvent>>{};
+        _subscriptions = <String, StreamSubscription<CRDTDocumentEvent>>{},
+        _reporting = Future<void>.value();
 
-  final void Function(ServerSnapshot snapshot)? _onSnapshot;
+  FutureOr<void> Function(ServerSnapshot snapshot)? _onSnapshot;
+
+  /// The reports in flight, so the stream gets them in the order taken.
+  Future<void> _reporting;
 
   final StreamController<ServerSnapshot> _controller;
 
@@ -172,11 +176,17 @@ class DocumentSnapshotFeed {
   Stream<ServerSnapshot> get snapshots => _controller.stream;
 
   /// Starts watching the tracked documents. Calling it again does nothing.
-  void start() {
+  ///
+  /// [onSnapshot] runs on each snapshot as soon as it is taken. The stream
+  /// gets the snapshot once what [onSnapshot] returns completes, and never
+  /// when it fails: a registry that stores snapshots waits there for the
+  /// storage.
+  void start({FutureOr<void> Function(ServerSnapshot snapshot)? onSnapshot}) {
     if (_started) {
       return;
     }
     _started = true;
+    _onSnapshot = onSnapshot;
     _documents.forEach(_subscribe);
   }
 
@@ -199,8 +209,18 @@ class DocumentSnapshotFeed {
       if (event is DocumentSnapshotUpdated &&
           event.reason == SnapshotReason.taken &&
           !_controller.isClosed) {
-        final snapshot = (documentId: documentId, snapshot: event.snapshot);
-        _onSnapshot?.call(snapshot);
+        _report((documentId: documentId, snapshot: event.snapshot));
+      }
+    });
+  }
+
+  void _report(ServerSnapshot snapshot) {
+    final handled = Future<void>.sync(() => _onSnapshot?.call(snapshot)).then(
+      (_) => true,
+      onError: (Object _) => false,
+    );
+    _reporting = _reporting.then((_) async {
+      if (await handled && !_controller.isClosed) {
         _controller.add(snapshot);
       }
     });

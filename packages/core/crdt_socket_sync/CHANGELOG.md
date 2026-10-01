@@ -4,6 +4,11 @@
 
 [compare to previous release](https://github.com/MattiaPispisa/crdt/compare/crdt_socket_sync-v0.9.0...crdt_socket_sync-v0.10.0)
 
+### Breaking
+
+- `CRDTServerRegistry` has a new getter, `snapshots`. A registry that `implements` it without
+  `CRDTServerRegistryDocuments` must add it; return `const Stream.empty()` to keep the old behavior.
+
 ### Added
 
 - **The server half of both protocols can run on a transport it does not own** (an HTTP
@@ -13,17 +18,21 @@
   [Hosting on your own transport](https://github.com/MattiaPispisa/crdt/tree/main/packages/core/crdt_socket_sync#advanced-hosting-on-your-own-transport).
 - **`CRDTReplica`** opens and closes a client document with its local storage and its sync
   client, in the order that keeps the data. [144](https://github.com/MattiaPispisa/crdt/issues/144)
+- `keepSnapshots` on `PersistentServerRegistry`: how many snapshots each document keeps on disk.
 
 ### Changed
 
-- A running `DocumentSessionHost` sends each snapshot a document takes to its clients, with any
-  registry. `snapshots` moved to `CRDTServerRegistry`, filled by `DocumentSnapshotFeed`.
+- A running `DocumentSessionHost` sends each snapshot a document takes to its clients, once the
+  registry has stored it; `PersistentServerRegistry` waits for `whenStored` on the snapshot
+  version. `snapshots` moved to `CRDTServerRegistry`, filled by `DocumentSnapshotFeed`.
+- Needs Dart 3.3 and `crdt_lf_persistence` 0.2.0 or later.
 
 ### Fixed
 
 - `InMemoryCRDTServerRegistry` builds each document under its own id, and `getLatestSnapshot`
   returns a snapshot a document took by itself.
-- A client whose first `connect()` fails now retries; `disconnect()` and `dispose()` stop it.
+- A client whose first `connect()` fails now retries; `disconnect()` and `dispose()` stop it, and
+  also stop a `connect()` still in progress.
 - A relay server disposes its plugins before closing its event stream.
 
 ## [0.9.0](https://github.com/MattiaPispisa/crdt/tree/crdt_socket_sync-v0.9.0/packages/core/crdt_socket_sync)

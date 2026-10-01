@@ -49,7 +49,9 @@ class CRDTReplica {
   ///
   /// [onStorageError] gets every storage error. When the storage fails to open
   /// or to restore, the document starts empty and in memory, and [persistence]
-  /// is `null`. Without [onStorageError] that error is rethrown.
+  /// is `null`. [onDocument] then runs a second time, on that document. Without
+  /// [onStorageError] that error is rethrown. An error thrown by [onDocument]
+  /// is always rethrown.
   ///
   /// [ownsStorage] says whether [close] also closes the backend. When [sync]
   /// throws, what was opened is closed and the error is rethrown.
@@ -141,12 +143,22 @@ class CRDTReplica {
       return _inMemory(documentId, onDocument);
     }
 
+    Object? onDocumentError;
     CRDTStorageBackend? backend;
     try {
       backend = await storage();
       final (:document, :persistence) = await backend.openDocument(
         documentId,
-        onDocument: onDocument,
+        onDocument: onDocument == null
+            ? null
+            : (document) {
+                try {
+                  onDocument(document);
+                } catch (error) {
+                  onDocumentError = error;
+                  rethrow;
+                }
+              },
         onError: onStorageError,
       );
       return (document: document, persistence: persistence, backend: backend);
@@ -154,7 +166,7 @@ class CRDTReplica {
       if (ownsStorage && backend != null) {
         await tryCatchIgnore(backend.close);
       }
-      if (onStorageError == null) {
+      if (onStorageError == null || identical(error, onDocumentError)) {
         rethrow;
       }
       onStorageError(error, stackTrace);

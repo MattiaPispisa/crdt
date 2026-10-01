@@ -15,8 +15,14 @@ class _Backend extends InMemoryStorageBackend {
 
   final Map<String, _Storage> _storages = <String, _Storage>{};
 
+  /// Fails the open after the document is built, as a restore that fails.
+  bool fails = false;
+
   @override
   _Storage storageForDocument(String documentId) {
+    if (fails) {
+      throw StateError('corrupt');
+    }
     return _storages.putIfAbsent(documentId, () => _Storage(documentId, log));
   }
 
@@ -169,6 +175,40 @@ void main() {
       expect(_textOf(replica.document).value, 'still editable');
 
       await replica.close();
+    });
+
+    test('runs onDocument again on the in-memory document of a failed restore',
+        () async {
+      backend.fails = true;
+      final documents = <CRDTDocument>[];
+      final replica = await CRDTReplica.open(
+        documentId: 'doc',
+        storage: () => backend,
+        onDocument: documents.add,
+        onStorageError: (_, __) {},
+      );
+
+      expect(documents, hasLength(2));
+      expect(documents.first.isDisposed, isTrue);
+      expect(documents.last, same(replica.document));
+
+      await replica.close();
+    });
+
+    test('rethrows an error of onDocument, even with onStorageError', () async {
+      final errors = <Object>[];
+      await expectLater(
+        CRDTReplica.open(
+          documentId: 'doc',
+          storage: () => backend,
+          onDocument: (_) => throw ArgumentError('bad setup'),
+          onStorageError: (error, _) => errors.add(error),
+        ),
+        throwsArgumentError,
+      );
+
+      expect(errors, isEmpty);
+      expect(log, ['backend']);
     });
 
     test('rethrows a storage failure without onStorageError', () {

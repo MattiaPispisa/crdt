@@ -162,7 +162,8 @@ await replica.close();
   keep it on this device. For the relay, return a `WebSocketRelayClient` from
   `sync`.
 - Pass `onStorageError` to keep going when the storage cannot be read: the
-  document then starts empty, in memory. Without it, `open` throws.
+  document then starts empty, in memory, and `onDocument` runs again on it.
+  Without it, `open` throws.
 
 ## Server–Client mode (CRDT-aware)
 
@@ -341,7 +342,8 @@ neither fits.
 Mix in `CRDTServerRegistryDocuments`: it applies changes, takes snapshots and
 counts documents. You say where the documents live. A `DocumentSnapshotFeed`
 reports the snapshots your documents take: track each document you open,
-untrack it when you let it go.
+untrack it when you let it go. If you store snapshots, pass `onSnapshot` to
+`start`: the feed reports a snapshot once the future it returns completes.
 
 ```dart
 class CustomServerRegistry
@@ -509,8 +511,10 @@ A snapshot comes with a prune, so the history it covers leaves the server. A
 client still replaying that history has to be given the snapshot instead.
 There is nothing to wire for it: a `WebSocketServer` or `DocumentSessionHost`
 sends each snapshot a document of its registry takes to the clients of that
-document, once it runs. The `snapshots` stream of the registry reports them
-too, for logging or metrics.
+document, once it runs and once the registry has stored the snapshot.
+`PersistentServerRegistry` waits until the disk can bring back the version of
+the snapshot, so a client never gets a state the server could lose. The `snapshots` stream of the registry reports them too,
+for logging or metrics.
 
 The example server puts all of this together:
 [`registry.dart`](https://github.com/MattiaPispisa/crdt/blob/main/packages/core/crdt_socket_sync/example/lib/src/registry.dart).

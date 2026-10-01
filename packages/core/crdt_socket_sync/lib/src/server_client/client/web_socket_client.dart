@@ -123,6 +123,10 @@ class WebSocketClient extends CRDTSocketClient {
   /// by [disconnect]. A reconnect runs only while it is set.
   bool _wantsConnection = false;
 
+  /// Bumped by [disconnect]. A [connect] that started under an older value
+  /// has been cancelled.
+  int _connectGeneration = 0;
+
   /// Timer for periodic ping
   Timer? _pingTimer;
 
@@ -185,10 +189,14 @@ class WebSocketClient extends CRDTSocketClient {
       return handshake.pending!;
     }
 
+    final generation = _connectGeneration;
     try {
       await tryCatchIgnore(() async {
         await _transport?.close();
       });
+      if (generation != _connectGeneration) {
+        return false;
+      }
 
       _transport = _transportFactory();
       _outboundQueue = OutboundQueue(
@@ -210,6 +218,11 @@ class WebSocketClient extends CRDTSocketClient {
       );
 
       final connected = await _performHandshake();
+      // `disconnect` or `dispose` ran during the handshake and closed this
+      // transport.
+      if (generation != _connectGeneration) {
+        return false;
+      }
       if (connected) {
         // Seed liveness so a fresh connection is not immediately judged dead.
         _lastPongAt = DateTime.now();
@@ -224,6 +237,9 @@ class WebSocketClient extends CRDTSocketClient {
 
       return connected;
     } catch (e) {
+      if (generation != _connectGeneration) {
+        return false;
+      }
       updateConnectionStatus(ConnectionStatus.error);
       _retryFailedConnect();
       return false;
@@ -241,6 +257,7 @@ class WebSocketClient extends CRDTSocketClient {
   @override
   Future<void> disconnect() async {
     _wantsConnection = false;
+    _connectGeneration++;
     _stopPingTimer();
 
     if (_transport == null) {

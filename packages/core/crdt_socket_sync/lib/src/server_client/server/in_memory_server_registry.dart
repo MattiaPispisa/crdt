@@ -22,9 +22,7 @@ class InMemoryCRDTServerRegistry
         );
 
   InMemoryCRDTServerRegistry._(this._documents, this._snapshots)
-      : _feed = DocumentSnapshotFeed(
-          onSnapshot: (taken) => _snapshots[taken.documentId] = taken.snapshot,
-        ) {
+      : _feed = DocumentSnapshotFeed() {
     _startSnapshots();
   }
 
@@ -75,7 +73,9 @@ class InMemoryCRDTServerRegistry
 
   void _startSnapshots() {
     _documents.forEach(_feed.track);
-    _feed.start();
+    _feed.start(
+      onSnapshot: (taken) => _snapshots[taken.documentId] = taken.snapshot,
+    );
   }
 
   /// Keeps the snapshot [createSnapshot] just took, so [getLatestSnapshot]

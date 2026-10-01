@@ -59,6 +59,9 @@ class PersistentServerRegistry
   /// [compactAfter] snapshots and prunes a document once its store holds more
   /// than that many changes. Leave it `null` to keep the whole log.
   ///
+  /// [keepSnapshots] is how many snapshots each document keeps on the disk, as
+  /// on `CRDTDocumentPersistence.open`.
+  ///
   /// [idleAfter] releases a document that nothing has asked for in that long,
   /// the way [releaseDocument] does. Leave it `null` and a document stays open
   /// until [releaseDocument] or [close] is called. See [releaseDocument] for
@@ -72,12 +75,14 @@ class PersistentServerRegistry
     ServerDocumentCatalog? catalog,
     Duration writeDelay = const Duration(milliseconds: 250),
     int? compactAfter,
+    int? keepSnapshots = 1,
     Duration? idleAfter,
     void Function(Object error, StackTrace stack)? onError,
   })  : _backend = backend,
         _catalog = catalog ?? BackendDocumentCatalog(backend),
         _writeDelay = writeDelay,
         _compactAfter = compactAfter,
+        _keepSnapshots = keepSnapshots,
         _idleAfter = idleAfter,
         _onError = onError,
         _feed = DocumentSnapshotFeed() {
@@ -88,6 +93,7 @@ class PersistentServerRegistry
   final ServerDocumentCatalog _catalog;
   final Duration _writeDelay;
   final int? _compactAfter;
+  final int? _keepSnapshots;
   final Duration? _idleAfter;
   final void Function(Object error, StackTrace stack)? _onError;
 
@@ -113,12 +119,29 @@ class PersistentServerRegistry
   /// back for the same document.
   final Map<String, Future<void>> _releasing = <String, Future<void>>{};
 
+  /// The documents [_releasing] is letting go of.
+  final Map<String, Future<_OpenDocument>> _released =
+      <String, Future<_OpenDocument>>{};
+
   final DocumentSnapshotFeed _feed;
 
   @override
   Stream<ServerSnapshot> get snapshots => _feed.snapshots;
 
-  void _startSnapshots() => _feed.start();
+  void _startSnapshots() => _feed.start(onSnapshot: _waitForStored);
+
+  /// Waits until the storage of the document can bring back the version of
+  /// [taken]. Throws when the document closes first.
+  ///
+  /// It reads [_open] and [_released] and never [_openDocument]: a snapshot
+  /// taken while a document is released must not open it again.
+  Future<void> _waitForStored(ServerSnapshot taken) async {
+    final opening = _open[taken.documentId] ?? _released[taken.documentId];
+    if (opening == null) {
+      throw StateError('${taken.documentId} is not open');
+    }
+    await (await opening).persistence.whenStored(taken.snapshot.versionVector);
+  }
 
   /// The catalog this registry keeps its document ids in.
   ServerDocumentCatalog get catalog => _catalog;
@@ -162,9 +185,12 @@ class PersistentServerRegistry
   ///
   /// The waiting is the point: a caller that broadcasts this snapshot has to
   /// know it survives a crash before the clients start replaying against it.
+  /// Throws when either write fails.
   @override
   Future<void> afterSnapshot(String documentId, Snapshot snapshot) async {
-    await (await _openDocument(documentId)).persistence.flush();
+    await (await _openDocument(documentId))
+        .persistence
+        .flush(throwOnError: true);
   }
 
   /// The newest snapshot stored for [documentId].
@@ -220,6 +246,7 @@ class PersistentServerRegistry
       return _releasing[documentId] ?? Future<void>.value();
     }
 
+    _released[documentId] = opening;
     final releasing = _release(documentId, opening);
     _releasing[documentId] = releasing;
     return releasing;
@@ -236,6 +263,7 @@ class PersistentServerRegistry
       // `removeWhere`, not `remove`: the value is a future, and dropping it
       // by name reads as an unawaited one.
       _releasing.removeWhere((id, _) => id == documentId);
+      _released.removeWhere((id, _) => id == documentId);
     }
   }
 
@@ -320,6 +348,7 @@ class PersistentServerRegistry
         onDocument: (document) => _feed.track(documentId, document),
         writeDelay: _writeDelay,
         compactAfter: _compactAfter,
+        keepSnapshots: _keepSnapshots,
         onError: _onError,
       );
       return _OpenDocument(open.document, open.persistence);

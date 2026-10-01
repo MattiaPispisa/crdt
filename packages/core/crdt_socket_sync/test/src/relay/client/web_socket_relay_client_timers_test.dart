@@ -315,6 +315,24 @@ void main() {
       expect(client.connectionStatusValue, ConnectionStatus.disconnected);
     });
 
+    test('disconnect cancels a connect that has not opened its transport',
+        () async {
+      var attempts = 0;
+      final client = buildClient(
+        transportFactory: () {
+          attempts++;
+          return _FakeTransport(documentId: documentId, respondToPings: true);
+        },
+      );
+
+      final connecting = client.connect();
+      await client.disconnect();
+
+      expect(await connecting, isFalse);
+      expect(attempts, 0);
+      expect(client.connectionStatusValue, ConnectionStatus.disconnected);
+    });
+
     test('disconnect stops the ping timer (no reconnect afterwards)', () async {
       final client = buildClient(
         transportFactory: () =>
