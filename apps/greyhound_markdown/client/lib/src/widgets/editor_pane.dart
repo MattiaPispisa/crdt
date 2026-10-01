@@ -79,10 +79,10 @@ class _EditorPaneState extends State<EditorPane> {
         // field, so the chords win over the browser and over text editing
         // defaults while focus is anywhere in the pane. That is what sends ⌘Z
         // to the document's history rather than the field's own.
-        bindings: markdownShortcutBindings(
-          (controller: controller, undo: widget.undo),
-          Theme.of(context).platform,
-        ),
+        bindings: markdownShortcutBindings((
+          controller: controller,
+          undo: widget.undo,
+        ), Theme.of(context).platform),
         child: Column(
           children: [
             EditorToolbar(
@@ -273,10 +273,8 @@ class _EditorSurfaceState extends State<EditorSurface> {
   @override
   Widget build(BuildContext context) {
     return BlocSelector<UserSettingsCubit, UserSettingsState, EditorOptions>(
-      selector: (settings) => (
-        lineNumbers: settings.showLineNumbers,
-        wordWrap: settings.wordWrap,
-      ),
+      selector: (settings) =>
+          (lineNumbers: settings.showLineNumbers, wordWrap: settings.wordWrap),
       builder: (context, options) {
         final numberStyle = kEditorTextStyle.copyWith(
           color: Theme.of(context).colorScheme.outline,
@@ -403,9 +401,7 @@ class _EditorPlaceholder extends StatelessWidget {
         padding: const EdgeInsets.all(kEditorPadding),
         child: Text(
           placeholderMarkdown(Localizations.localeOf(context)),
-          style: kEditorTextStyle.copyWith(
-            color: Theme.of(context).hintColor,
-          ),
+          style: kEditorTextStyle.copyWith(color: Theme.of(context).hintColor),
         ),
       ),
     );

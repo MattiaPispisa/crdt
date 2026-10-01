@@ -8,10 +8,9 @@ import 'package:crdt_lf_persistence/crdt_lf_persistence.dart';
 /// The counterpart of [CRDTChangeStorage]. A snapshot is identified by its
 /// [Snapshot.id]: saving one twice replaces it.
 ///
-/// A document normally has one snapshot at a time, but the store holds a
-/// collection: a write interrupted halfway can leave two. Each one describes
-/// the whole document, so [CRDTDocumentPersistence] keeps the newest of them
-/// on the next open and drops the rest.
+/// Each snapshot describes the whole document. [CRDTDocumentPersistence]
+/// keeps the newest ones, as many as its `keepSnapshots`, and restores from
+/// the newest.
 ///
 /// {@macro storage.future_or}
 abstract interface class CRDTSnapshotStorage {
@@ -54,10 +53,8 @@ abstract interface class CRDTSnapshotStorage {
 
 /// The newest of [snapshots], or `null` when there is none.
 ///
-/// A snapshot holds the whole state of every handler, so one is enough. There
-/// is normally one on the store: [CRDTDocumentPersistence] drops the old one as
-/// soon as the new one is written. A process killed between those two steps
-/// leaves two, and this picks the one to restore from.
+/// A snapshot holds the whole state of every handler, so one is enough to
+/// restore from, and this picks it.
 ///
 /// The choice is made on the version vector, never on the order the backend
 /// returns rows in. Two snapshots whose vectors are concurrent — neither has

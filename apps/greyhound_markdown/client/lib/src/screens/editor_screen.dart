@@ -94,10 +94,7 @@ class _EditorScreenState extends State<EditorScreen> {
       ),
       body: LayoutBuilder(
         builder: (context, constraints) {
-          final editor = EditorPane(
-            awareness: room.awareness,
-            undo: room.undo,
-          );
+          final editor = EditorPane(awareness: room.awareness, undo: room.undo);
           const preview = PreviewPane();
           switch (_mode) {
             case _ViewMode.edit:

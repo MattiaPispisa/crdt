@@ -79,7 +79,10 @@ void main() {
 
       expect(saver.fileName, 'greyhound-42.html');
       expect(saver.mimeType, 'text/html');
-      expect(utf8.decode(saver.bytes!), contains('<title>greyhound-42</title>'));
+      expect(
+        utf8.decode(saver.bytes!),
+        contains('<title>greyhound-42</title>'),
+      );
     });
 
     test('renders a PDF for the pdf format', () async {

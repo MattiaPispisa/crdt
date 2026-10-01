@@ -22,6 +22,9 @@ class _Backend implements CRDTStorageBackend {
       <String, InMemorySnapshotStorage>{};
   final Map<String, PeerId> peers = <String, PeerId>{};
 
+  /// While this is on, every snapshot write fails.
+  bool failSnapshots = false;
+
   @override
   CRDTDocumentStorage storageForDocument(String documentId) {
     return CRDTDocumentStorage(
@@ -31,7 +34,7 @@ class _Backend implements CRDTStorageBackend {
       ),
       snapshots: snapshots.putIfAbsent(
         documentId,
-        () => InMemorySnapshotStorage(documentId),
+        () => _FailingSnapshotStorage(documentId, this),
       ),
     );
   }
@@ -53,6 +56,21 @@ class _Backend implements CRDTStorageBackend {
 
   @override
   void close() {}
+}
+
+/// A snapshot storage that fails while its backend says so.
+class _FailingSnapshotStorage extends InMemorySnapshotStorage {
+  _FailingSnapshotStorage(super.documentId, this._backend);
+
+  final _Backend _backend;
+
+  @override
+  Future<void> saveSnapshot(Snapshot snapshot) async {
+    if (_backend.failSnapshots) {
+      throw StateError('disk full');
+    }
+    return super.saveSnapshot(snapshot);
+  }
 }
 
 /// A change storage that counts the writes it is asked for.
@@ -277,10 +295,71 @@ void main() {
       }
       // Lets the write, the snapshot and the prune settle.
       await registry.createSnapshot('doc');
+      await pumpEventQueue();
 
       expect(taken, contains('doc'));
       // The prune dropped what the snapshot covers.
       expect(await backend.changes['doc']!.count, lessThan(3));
+    });
+
+    test('reports a snapshot once it is on the storage', () async {
+      final registry = build(writeDelay: const Duration(hours: 1));
+      addTearDown(registry.close);
+      await registry.addDocument('doc');
+      for (final change in _authored((list) => list.insert(0, 'a'))) {
+        await registry.applyChange('doc', change);
+      }
+
+      final stored = <Snapshot?>[];
+      registry.snapshots.listen((event) async {
+        stored.add(await backend.snapshots['doc']!.getLatestSnapshot());
+      });
+
+      final snapshot = (await registry.getDocument('doc'))!.takeSnapshot();
+      await pumpEventQueue();
+
+      expect(stored, [snapshot]);
+    });
+
+    test('reports a refused snapshot once its version is on the storage',
+        () async {
+      final registry = build(writeDelay: const Duration(hours: 1));
+      addTearDown(() {
+        backend.failSnapshots = false;
+        return registry.close();
+      });
+      await registry.addDocument('doc');
+      for (final change in _authored((list) => list.insert(0, 'a'))) {
+        await registry.applyChange('doc', change);
+      }
+      final taken = <String>[];
+      registry.snapshots.listen((event) => taken.add(event.documentId));
+
+      backend.failSnapshots = true;
+      (await registry.getDocument('doc'))!.takeSnapshot();
+      await pumpEventQueue();
+      expect(taken, isEmpty);
+
+      backend.failSnapshots = false;
+      await registry.releaseDocument('doc');
+      await pumpEventQueue();
+      expect(taken, ['doc']);
+    });
+
+    test('a released document is reported again once reopened', () async {
+      final registry = build();
+      addTearDown(registry.close);
+      await registry.addDocument('doc');
+
+      final taken = <String>[];
+      registry.snapshots.listen((event) => taken.add(event.documentId));
+
+      await registry.releaseDocument('doc');
+      final reopened = (await registry.getDocument('doc'))!..takeSnapshot();
+      await pumpEventQueue();
+
+      expect(reopened.isDisposed, isFalse);
+      expect(taken, ['doc']);
     });
 
     test('an explicit author seeds the stored id, and never beats it',

@@ -1008,6 +1008,27 @@ class CRDTDocument extends BaseCRDTDocument {
     return _dag.versionVector;
   }
 
+  /// The snapshot the history of this document is replayed on top of; `null`
+  /// before the first one.
+  ///
+  /// A read-only copy: writing to its [Snapshot.data] or its
+  /// [Snapshot.versionVector] throws an [UnsupportedError]. Each read returns
+  /// a new copy, so compare two of them by [Snapshot.id].
+  Snapshot? get snapshot {
+    final snapshot = _lastSnapshot;
+    if (snapshot == null) {
+      return null;
+    }
+    return Snapshot(
+      id: snapshot.id,
+      versionVector: snapshot.versionVector.immutable(),
+      data: {
+        for (final MapEntry(:key, :value) in snapshot.data.entries)
+          key: value.asUnmodifiableView(),
+      },
+    );
+  }
+
   /// Creates a new [Change] carrying [operation].
   ///
   /// The change takes the id [registerOperation] already minted for the

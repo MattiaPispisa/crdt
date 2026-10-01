@@ -19,6 +19,9 @@ import 'package:meta/meta.dart';
 /// aligned snapshot once every subscribed client has confirmed the server's
 /// state.
 ///
+/// Once running, it also sends each snapshot a document of the registry takes
+/// to the clients of that document.
+///
 /// Feed it connections with [SessionHostServer.acceptConnection]. For a host
 /// that owns its own `dart:io` socket, use `WebSocketServer` instead.
 /// {@endtemplate}
@@ -33,6 +36,8 @@ class DocumentSessionHost extends SessionHostServer<DocumentClientSession> {
   }) : _serverRegistry = serverRegistry;
 
   final CRDTServerRegistry _serverRegistry;
+
+  StreamSubscription<ServerSnapshot>? _registrySnapshots;
 
   /// The registry holding the documents this host serves.
   CRDTServerRegistry get serverRegistry => _serverRegistry;
@@ -60,7 +65,17 @@ class DocumentSessionHost extends SessionHostServer<DocumentClientSession> {
 
   @protected
   @override
+  void onRunning() {
+    _registrySnapshots ??=
+        _serverRegistry.snapshots.listen(_broadcastRegistrySnapshot);
+  }
+
+  @protected
+  @override
   Future<void> onDispose() async {
+    await _registrySnapshots?.cancel();
+    _registrySnapshots = null;
+
     // The registry closes what it holds open, and a durable one writes what
     // is still waiting first. Walking `documentIds` here instead would read
     // every document on disk back into memory just to dispose it, and would
@@ -203,6 +218,32 @@ class DocumentSessionHost extends SessionHostServer<DocumentClientSession> {
         },
       ),
     );
+  }
+
+  /// Sends the document status after [event] to the clients of its document.
+  Future<void> _broadcastRegistrySnapshot(ServerSnapshot event) async {
+    try {
+      final document = await _serverRegistry.getDocument(event.documentId);
+      if (document == null) {
+        return;
+      }
+      await broadcastMessage(
+        SyncMessage.documentStatus(
+          documentId: event.documentId,
+          snapshot: event.snapshot,
+          changes: document.exportChanges(),
+          versionVector: document.getVersionVector(),
+        ),
+      );
+    } catch (e) {
+      addServerEvent(
+        ServerEvent(
+          type: ServerEventType.error,
+          message: 'Error broadcasting the snapshot of document '
+              '${event.documentId}: $e',
+        ),
+      );
+    }
   }
 
   /// 1. Add a server event for the change applied

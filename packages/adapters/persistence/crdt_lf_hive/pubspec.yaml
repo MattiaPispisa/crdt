@@ -4,14 +4,14 @@ homepage: https://mattiapispisa.github.io/
 repository: https://github.com/MattiaPispisa/crdt/tree/main/packages/adapters/persistence/crdt_lf_hive
 topics: [crdt, local-first, hive, persistence, dart]
 
-version: 0.5.1
+version: 0.5.2
 
 environment:
-  sdk: ">=3.0.0 <4.0.0"
+  sdk: ">=3.3.0 <4.0.0"
 
 dependencies:
   crdt_lf: ">=4.2.0 <6.0.0"
-  crdt_lf_persistence: ^0.1.0
+  crdt_lf_persistence: ">=0.1.0 <0.3.0"
   hive: ^2.0.0
   hlc_dart: ^1.0.0
 

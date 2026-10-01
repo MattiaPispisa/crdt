@@ -22,8 +22,8 @@ class UserSettingsCubit extends HydratedCubit<UserSettingsState> {
   ///
   /// [storage] overrides the global `HydratedBloc.storage`, which tests use to
   /// stay off the real disk.
-  UserSettingsCubit({Storage? storage})
-    : super(UserSettingsState.initial(), storage: storage);
+  UserSettingsCubit({super.storage})
+    : super(UserSettingsState.initial());
 
   /// The storage key.
   ///
@@ -64,11 +64,7 @@ class UserSettingsCubit extends HydratedCubit<UserSettingsState> {
       RecentRoom(roomId: roomId, openedAt: DateTime.now().toUtc()),
       ...state.recentRooms.where((room) => room.roomId != roomId),
     ];
-    emit(
-      state.copyWith(
-        recentRooms: rooms.take(kRecentRoomsLimit).toList(),
-      ),
-    );
+    emit(state.copyWith(recentRooms: rooms.take(kRecentRoomsLimit).toList()));
   }
 
   @override

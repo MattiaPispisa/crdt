@@ -47,10 +47,7 @@ class PreviewPane extends StatelessWidget {
 /// Renders the markdown returned by [readText], refreshed at most once per
 /// [kPreviewDebounce] and only when [revision] moves.
 class _DebouncedMarkdown extends StatefulWidget {
-  const _DebouncedMarkdown({
-    required this.revision,
-    required this.readText,
-  });
+  const _DebouncedMarkdown({required this.revision, required this.readText});
 
   /// The handler revision the current [readText] belongs to.
   final int revision;

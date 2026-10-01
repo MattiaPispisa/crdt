@@ -171,22 +171,26 @@ void main() {
 ## Sync 
 A sync library is available in the [crdt_socket_sync](https://pub.dev/packages/crdt_socket_sync) package. And it's used to synchronize the CRDT state between peers. More info in the [README](https://github.com/MattiaPispisa/crdt/tree/main/packages/core/crdt_socket_sync/README.md) of the sync package.
 
-A client takes the document and a URL. This is the setup
-[greyhound_markdown](https://github.com/MattiaPispisa/crdt/blob/main/apps/greyhound_markdown/client/lib/src/services/room/room_host.dart)
-uses, over a relay:
+`CRDTReplica`, from the sync package, opens the document and puts a sync client
+on it. Over a relay:
 
 ```dart
-final sync = WebSocketRelayClient(
-  url: roomUrl(kServerUrl, roomId),
-  document: document,
-  author: document.peerId,
+final replica = await CRDTReplica.open(
+  documentId: 'my-room',
+  sync: (document) => WebSocketRelayClient(
+    url: 'ws://localhost:8080',
+    document: document,
+    author: document.peerId,
+  ),
 );
+final text = CRDTFugueTextHandler(replica.document, 'content');
 
-// Only after the document was restored from disk: the restored state is what
-// the relay is caught up against, so what was written offline goes out with
-// the next welcome.
-sync.connect();
+// ...edit
+
+await replica.close();
 ```
+
+To keep the document on disk too, see [Complete example](#complete-example).
 
 A flutter example is available in the [client_example](https://github.com/MattiaPispisa/crdt/tree/main/packages/core/crdt_socket_sync/client_example) and provide a synced version of the  "Flutter Distributed Collaboration" Example. 
 
@@ -245,56 +249,49 @@ prune runs, how to compact or copy a document — see the
 
 The two halves together, as
 [greyhound_markdown](https://github.com/MattiaPispisa/crdt/tree/main/apps/greyhound_markdown)
-puts them: a document restored from this device, then a relay client on top of
-it. The order matters. Restore first, connect second — offline, or on a relay
-that has forgotten the room, the local copy is all there is.
+puts them. `CRDTReplica`, from
+[crdt_socket_sync](https://pub.dev/packages/crdt_socket_sync), opens the
+document from this device and puts a relay client on it, in the order that keeps
+the data: restore first, connect second. Offline, or on a relay that has
+forgotten the room, the local copy is all there is.
 
 Source:
 [room_host.dart](https://github.com/MattiaPispisa/crdt/blob/main/apps/greyhound_markdown/client/lib/src/services/room/room_host.dart).
 
 ```dart
-// 1. The document as this device last left it. The backend keeps the identity
-//    too, so the device writes under the same author on every launch.
-final backend = await CRDTHive.open();
-final (:document, :persistence) = await backend.openDocument(roomId);
-
-// 2. The handler, built on the document `openDocument` handed back.
-final text = CRDTFugueTextHandler(document, kHandlerId);
-final undo = CRDTUndoManager(document)..track(text);
-
-// 3. Who else is in the room, and where their carets are. `AwarenessService`
+// 1. Who else is in the room, and where their carets are. `AwarenessService`
 //    is the app's own wrapper over the awareness plugin of crdt_socket_sync.
 final awareness = AwarenessService(
   name: profile.displayName,
   color: profile.color,
 );
 
-// 4. The relay client, with awareness riding along as a plugin.
-final sync = WebSocketRelayClient(
-  url: roomUrl(kServerUrl, roomId),
-  document: document,
-  author: document.peerId,
-  plugins: [awareness.plugin],
+// 2. The document as this device last left it, and the relay client on it.
+//    The backend keeps the identity too, so the device writes under the same
+//    author on every launch.
+final replica = await CRDTReplica.open(
+  documentId: roomId,
+  storage: CRDTHive.open,
+  sync: (document) => WebSocketRelayClient(
+    url: roomUrl(kServerUrl, roomId),
+    document: document,
+    author: document.peerId,
+    plugins: [awareness.plugin],
+  ),
 );
 
-// 5. Only now: what was written offline goes out with the next welcome.
-sync.connect();
+// 3. The handler, built on the restored document.
+final text = CRDTFugueTextHandler(replica.document, kHandlerId);
+final undo = CRDTUndoManager(replica.document)..track(text);
 ```
 
-Closing it has an order of its own. The flush suspends, and a document disposed
-while it runs closes the event stream the persistence is still reading — the
-last keystrokes would never reach the disk. So the document goes **after** the
-flush, never before it:
+Closing is one call too. What the app built goes first; then `close` stops the
+client, writes what is still waiting, and lets the document and the storage go:
 
 ```dart
-sync.dispose(); // disposes the awareness plugin with it
-awareness.dispose();
 undo.dispose();
-
-await persistence.dispose(); // writes what is still waiting
-document.dispose();
-await persistence.storage.close(); // this document's boxes
-await backend.close();
+awareness.dispose();
+await replica.close();
 ```
 
 ### The editor on top of it
@@ -1371,6 +1368,7 @@ A structure that manages the frontiers (latest operations) of the CRDT.
 
 ### Snapshot
 A snapshot of the CRDT state, including the version vector and the data.
+`document.snapshot` reads the one the document holds, as a read-only copy.
 
 ### Binary representation
 

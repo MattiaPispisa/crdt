@@ -32,9 +32,7 @@ class SettingsScreen extends StatelessWidget {
         child: ListView(
           padding: const EdgeInsets.all(24),
           children: [
-            Center(
-              child: Image.asset(kLogoAsset, height: 160),
-            ),
+            Center(child: Image.asset(kLogoAsset, height: 160)),
             const SizedBox(height: 8),
             Text(
               kAppName,
@@ -242,8 +240,8 @@ class _VersionLabel extends StatelessWidget {
         return Text(
           label,
           style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                color: Theme.of(context).colorScheme.outline,
-              ),
+            color: Theme.of(context).colorScheme.outline,
+          ),
         );
       },
     );
@@ -256,10 +254,10 @@ class _LinkTile extends StatelessWidget {
   final ProjectLink link;
 
   IconData get _icon => switch (link) {
-        ProjectLink.repo => Icons.code,
-        ProjectLink.appSource => Icons.folder_open,
-        ProjectLink.docs => Icons.menu_book,
-      };
+    ProjectLink.repo => Icons.code,
+    ProjectLink.appSource => Icons.folder_open,
+    ProjectLink.docs => Icons.menu_book,
+  };
 
   @override
   Widget build(BuildContext context) {
@@ -269,10 +267,8 @@ class _LinkTile extends StatelessWidget {
       title: Text(projectLinkLabel(context, link)),
       subtitle: Text(link.url),
       trailing: const Icon(Icons.open_in_new, size: 18),
-      onTap: () => launchUrl(
-        Uri.parse(link.url),
-        mode: LaunchMode.externalApplication,
-      ),
+      onTap: () =>
+          launchUrl(Uri.parse(link.url), mode: LaunchMode.externalApplication),
     );
   }
 }

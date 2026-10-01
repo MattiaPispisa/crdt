@@ -209,6 +209,39 @@ void main() {
       );
     });
 
+    test('sends each snapshot a document takes to its clients', () async {
+      final documentId = PeerId.generate().id;
+      await registry.addDocument(documentId);
+      await seedServerChange(documentId);
+      await host.start();
+      final client = await addClient(documentId);
+
+      (await registry.getDocument(documentId))!.takeSnapshot();
+      await pumpEventQueue();
+
+      final statuses = client.sent
+          .map(codec.decode)
+          .nonNulls
+          .whereType<DocumentStatusMessage>()
+          .toList();
+      expect(statuses.single.snapshot, isA<Snapshot>());
+    });
+
+    test('sends snapshots once started by its first connection', () async {
+      final documentId = PeerId.generate().id;
+      await registry.addDocument(documentId);
+      await seedServerChange(documentId);
+      final client = await addClient(documentId);
+
+      (await registry.getDocument(documentId))!.takeSnapshot();
+      await pumpEventQueue();
+
+      expect(
+        client.sent.map(codec.decode).whereType<DocumentStatusMessage>(),
+        hasLength(1),
+      );
+    });
+
     test('dispose() closes the registry', () async {
       await host.start();
       await host.dispose();

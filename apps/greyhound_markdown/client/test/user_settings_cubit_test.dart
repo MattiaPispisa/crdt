@@ -27,10 +27,7 @@ void main() {
       expect(restored.language, AppLanguage.italian);
       expect(restored.showLineNumbers, isTrue);
       expect(restored.wordWrap, isFalse);
-      expect(
-        restored.recentRooms.map((room) => room.roomId),
-        ['abc123'],
-      );
+      expect(restored.recentRooms.map((room) => room.roomId), ['abc123']);
     });
 
     test('falls back per field on a payload it does not recognize', () {
@@ -92,10 +89,10 @@ void main() {
         ..recordRoomOpened('first')
         ..recordRoomOpened('second');
 
-      expect(
-        cubit.state.recentRooms.map((room) => room.roomId),
-        ['second', 'first'],
-      );
+      expect(cubit.state.recentRooms.map((room) => room.roomId), [
+        'second',
+        'first',
+      ]);
     });
 
     test('recordRoomOpened moves a room back to the front, once', () {
@@ -104,10 +101,10 @@ void main() {
         ..recordRoomOpened('second')
         ..recordRoomOpened('first');
 
-      expect(
-        cubit.state.recentRooms.map((room) => room.roomId),
-        ['first', 'second'],
-      );
+      expect(cubit.state.recentRooms.map((room) => room.roomId), [
+        'first',
+        'second',
+      ]);
     });
 
     test('recordRoomOpened keeps at most kRecentRoomsLimit rooms', () {

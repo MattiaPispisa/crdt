@@ -49,7 +49,9 @@ Widget _app({
     child: CrdtProvider.value(
       value: document,
       child: localizedApp(
-        Scaffold(body: EditorPane(awareness: awareness, undo: undo)),
+        Scaffold(
+          body: EditorPane(awareness: awareness, undo: undo),
+        ),
         theme: platform == null ? null : ThemeData(platform: platform),
       ),
     ),
@@ -105,10 +107,7 @@ void main() {
     // Typing removes the placeholder.
     await tester.enterText(find.byType(TextField), 'hello');
     await tester.pump();
-    expect(
-      find.text(placeholderMarkdown(const Locale('en'))),
-      findsNothing,
-    );
+    expect(find.text(placeholderMarkdown(const Locale('en'))), findsNothing);
 
     // Let the awareness throttle timer drain before teardown.
     await tester.pump(const Duration(milliseconds: 100));
@@ -327,7 +326,9 @@ void main() {
     // ...and wide enough that the long line takes a single row: three logical
     // lines, three visual ones. Measuring the text by hand read short here,
     // and the line wrapped anyway.
-    final editable = _editableUnder(tester.renderObject(find.byType(TextField)));
+    final editable = _editableUnder(
+      tester.renderObject(find.byType(TextField)),
+    );
     expect(
       editable.size.height / editable.preferredLineHeight,
       closeTo(3, 0.01),

@@ -11,6 +11,10 @@ import 'package:crdt_socket_sync/src/server_client/client/sync_manager.dart';
 import 'package:crdt_socket_sync/src/server_client/common/common.dart';
 
 /// [CRDTSocketClient] implementation using web socket
+///
+/// Retries a failed connection up to [Protocol.maxReconnectAttempts] times,
+/// [Protocol.reconnectInterval] apart. A first [connect] that fails retries the
+/// same way. [disconnect] and [dispose] stop the retries.
 class WebSocketClient extends CRDTSocketClient {
   /// Constructor
   WebSocketClient({
@@ -115,6 +119,14 @@ class WebSocketClient extends CRDTSocketClient {
   /// If client is reconnecting
   bool _isReconnecting = false;
 
+  /// Whether the app wants this client connected: set by [connect], cleared
+  /// by [disconnect]. A reconnect runs only while it is set.
+  bool _wantsConnection = false;
+
+  /// Bumped by [disconnect]. A [connect] that started under an older value
+  /// has been cancelled.
+  int _connectGeneration = 0;
+
   /// Timer for periodic ping
   Timer? _pingTimer;
 
@@ -160,6 +172,8 @@ class WebSocketClient extends CRDTSocketClient {
   /// If the handshake fails then the client will attempt to reconnect
   @override
   Future<bool> connect() async {
+    _wantsConnection = true;
+
     if (connectionStatusValue.isConnected) {
       return true;
     }
@@ -175,10 +189,14 @@ class WebSocketClient extends CRDTSocketClient {
       return handshake.pending!;
     }
 
+    final generation = _connectGeneration;
     try {
       await tryCatchIgnore(() async {
         await _transport?.close();
       });
+      if (generation != _connectGeneration) {
+        return false;
+      }
 
       _transport = _transportFactory();
       _outboundQueue = OutboundQueue(
@@ -200,6 +218,11 @@ class WebSocketClient extends CRDTSocketClient {
       );
 
       final connected = await _performHandshake();
+      // `disconnect` or `dispose` ran during the handshake and closed this
+      // transport.
+      if (generation != _connectGeneration) {
+        return false;
+      }
       if (connected) {
         // Seed liveness so a fresh connection is not immediately judged dead.
         _lastPongAt = DateTime.now();
@@ -208,20 +231,39 @@ class WebSocketClient extends CRDTSocketClient {
         for (final plugin in plugins) {
           plugin.onConnected();
         }
+      } else {
+        _retryFailedConnect();
       }
 
       return connected;
     } catch (e) {
+      if (generation != _connectGeneration) {
+        return false;
+      }
       updateConnectionStatus(ConnectionStatus.error);
+      _retryFailedConnect();
       return false;
     }
   }
 
+  /// Starts the reconnect loop after a failed [connect], if it is not running.
+  void _retryFailedConnect() {
+    if (_isReconnecting || !_wantsConnection || isUnsupported) {
+      return;
+    }
+    unawaited(_attemptReconnect());
+  }
+
   @override
   Future<void> disconnect() async {
+    _wantsConnection = false;
+    _connectGeneration++;
     _stopPingTimer();
 
     if (_transport == null) {
+      // No transport was ever opened, but a failed first connect can have
+      // left the status on reconnecting.
+      updateConnectionStatus(ConnectionStatus.disconnected);
       return;
     }
 
@@ -394,7 +436,7 @@ class WebSocketClient extends CRDTSocketClient {
   /// Attempt to reconnect calling with [Protocol.reconnectInterval] interval
   /// the [connect] method
   Future<void> _attemptReconnect() async {
-    if (_isReconnecting || isUnsupported) {
+    if (_isReconnecting || !_wantsConnection || isUnsupported) {
       return;
     }
 
@@ -410,6 +452,12 @@ class WebSocketClient extends CRDTSocketClient {
     updateConnectionStatus(ConnectionStatus.reconnecting);
 
     await Future<void>.delayed(Protocol.reconnectInterval);
+
+    // `disconnect` or `dispose` ran while this waited.
+    if (!_wantsConnection) {
+      _isReconnecting = false;
+      return;
+    }
 
     try {
       final success = await connect();

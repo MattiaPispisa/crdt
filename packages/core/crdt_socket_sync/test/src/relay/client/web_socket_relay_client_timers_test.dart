@@ -274,6 +274,65 @@ void main() {
       expect(attempts, attemptsAtStop);
     });
 
+    test('retries a first connect that fails, until the relay is reachable',
+        () async {
+      var attempts = 0;
+      final client = buildClient(
+        transportFactory: () {
+          attempts++;
+          // The relay is down for the first two attempts: the app was opened
+          // offline.
+          if (attempts < 3) {
+            throw Exception('connection refused');
+          }
+          return _FakeTransport(documentId: documentId, respondToPings: true);
+        },
+      );
+
+      expect(await client.connect(), isFalse);
+      await client.connectionStatus
+          .firstWhere((s) => s == ConnectionStatus.connected)
+          .timeout(const Duration(seconds: 2));
+
+      expect(attempts, 3);
+    });
+
+    test('disconnect stops the retries of a first connect that fails',
+        () async {
+      var attempts = 0;
+      final client = buildClient(
+        transportFactory: () {
+          attempts++;
+          throw Exception('connection refused');
+        },
+      );
+
+      expect(await client.connect(), isFalse);
+      await client.disconnect();
+      await Future<void>.delayed(const Duration(milliseconds: 200));
+
+      expect(attempts, 1);
+      expect(client.connectionStatusValue, ConnectionStatus.disconnected);
+    });
+
+    test('disconnect cancels a connect that has not opened its transport',
+        () async {
+      var attempts = 0;
+      final client = buildClient(
+        transportFactory: () {
+          attempts++;
+          return _FakeTransport(documentId: documentId, respondToPings: true);
+        },
+      );
+
+      final connecting = client.connect();
+      await client.disconnect();
+
+      expect(await connecting, isFalse);
+      expect(attempts, 0);
+      expect(client.connectionStatusValue, ConnectionStatus.disconnected);
+    });
+
     test('disconnect stops the ping timer (no reconnect afterwards)', () async {
       final client = buildClient(
         transportFactory: () =>
