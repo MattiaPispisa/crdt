@@ -4,7 +4,8 @@
 
 [compare to previous release](https://github.com/MattiaPispisa/crdt/compare/crdt_lf_hive-v0.5.1...crdt_lf_hive-v0.5.2)
 
-Needs Dart 3.3 or later, like `crdt_lf` 5.1.0. No functional changes.
+Needs Dart 3.3 or later, like `crdt_lf` 5.1.0, and widens the `crdt_lf_persistence` constraint
+to `>=0.1.0 <0.3.0`. No functional changes.
 
 ## [0.5.1](https://github.com/MattiaPispisa/crdt/tree/crdt_lf_hive-v0.5.1/packages/adapters/persistence/crdt_lf_hive)
 

@@ -105,13 +105,44 @@ The document reports every move of its durable state on
 | `DocumentSnapshotUpdated` | stores the snapshot, then drops the oldest past `keepSnapshots` |
 | `DocumentHistoryPruned` | deletes what left the store, writes the survivors again |
 
+```mermaid
+graph TD
+    A[open] --> B[Read changes and snapshots]
+    B --> C[Merge them into the document]
+    C --> D[Queue what only the document holds]
+    D --> E[Follow the document events]
+
+    E -->|DocumentChangesApplied| F[Pending changes]
+    F -->|writeDelay or flush| G[Write one batch]
+
+    E -->|DocumentSnapshotUpdated| H[Steps, in order]
+    E -->|DocumentHistoryPruned| H
+    H --> I[Write the first step]
+
+    G --> J{Landed?}
+    I --> J
+    J -->|Yes| K[storedVersion grows, whenStored completes]
+    J -->|No| L[onError, retry with backoff]
+    L -.->|batch back in the queue| F
+    L -.->|step stays first| H
+
+    K -->|store past compactAfter| M[takeSnapshot]
+    M --> E
+```
+
+> 📖 Diagrams render best in the [live documentation](https://mattiapispisa.it/crdt/docs/documentation/packages/crdt_lf_persistence).
+
+Both write paths share one chain, so two writes never overlap.
+
 Both sources of a change are saved: what this peer wrote, and what it took in
 from a peer. Reopening offline has to bring back the whole document, not half
 of it.
 
 Writes are batched behind `writeDelay` (250 ms by default). One keystroke is
 one transaction, so writing on every event would put a round-trip to the disk
-between the typist and the next character.
+between the typist and the next character. The first change starts the wait
+and the next ones join it, so a document edited without a pause is still
+written about every `writeDelay`.
 
 A snapshot is written before the prune that comes with it, and the prune waits
 for it: a failed snapshot write holds its prune back, so the disk never loses
@@ -200,8 +231,10 @@ final persistence = await CRDTDocumentPersistence.open(
 );
 ```
 
-`flush()` gives up for the round as soon as a write fails, rather than handing
-the same changes to a storage that just refused them. Ask
+`flush()` waits for what was queued when it was called, not for the edits made
+while it runs, so a document that keeps changing cannot hold it up. It gives up
+as soon as a write fails, rather than handing the same changes to a storage
+that just refused them. Ask
 `persistence.hasUnwrittenChanges` to know whether anything is still waiting.
 After `dispose()` it reads `true` only when those edits never reached the disk.
 

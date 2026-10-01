@@ -1,8 +1,8 @@
-## [0.1.2](https://github.com/MattiaPispisa/crdt/tree/crdt_lf_persistence-v0.1.2/packages/core/crdt_lf_persistence)
+## [0.2.0](https://github.com/MattiaPispisa/crdt/tree/crdt_lf_persistence-v0.2.0/packages/core/crdt_lf_persistence)
 
-**Date:** 2026-09-29
+**Date:** 2026-10-01
 
-[compare to previous release](https://github.com/MattiaPispisa/crdt/compare/crdt_lf_persistence-v0.1.1+1...crdt_lf_persistence-v0.1.2)
+[compare to previous release](https://github.com/MattiaPispisa/crdt/compare/crdt_lf_persistence-v0.1.1+1...crdt_lf_persistence-v0.2.0)
 
 ### Added
 
@@ -22,6 +22,8 @@
 - A snapshot the document took before `open` is written; the next open lost it.
 - A failed snapshot write no longer lets its prune delete the changes it covers, and is retried.
 - Two concurrent `flush()` calls no longer hide a failed write from each other.
+- `flush()` waits only for what was queued when it was called: with edits arriving faster than the
+  writes it never returned, and neither did `dispose()` or `compact()`.
 - `documentAt` throws instead of answering a version whose history was pruned with an older state.
 
 ## [0.1.1+1](https://github.com/MattiaPispisa/crdt/tree/crdt_lf_persistence-v0.1.1+1/packages/core/crdt_lf_persistence)

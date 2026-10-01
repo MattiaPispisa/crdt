@@ -4,12 +4,8 @@ import 'dart:math';
 import 'package:crdt_lf/crdt_lf.dart';
 import 'package:crdt_lf_persistence/crdt_lf_persistence.dart';
 
-/// How long the first retry after a failed write waits.
-///
-/// It doubles per consecutive failure, up to [_maxRetryDelay]. It does not
-/// follow the `writeDelay` of [CRDTDocumentPersistence.open]: that one can be
-/// [Duration.zero], and retrying a broken disk as fast as the event loop
-/// allows helps nobody.
+/// How long the first retry after a failed write waits. It doubles per
+/// failure in a row, up to [_maxRetryDelay].
 const _firstRetryDelay = Duration(milliseconds: 250);
 
 /// The longest a retry waits.
@@ -17,29 +13,15 @@ const _maxRetryDelay = Duration(seconds: 30);
 
 /// Keeps a [CRDTDocument] on disk as it changes.
 ///
-/// It reads the document back at [open], then follows [CRDTDocument.events]
-/// and writes down what each event reports. The document is never exported
-/// again: it says what moved, and only that is written.
-///
-/// This is the whole of the local-only use case — a document, a storage, and
-/// this:
+/// [open] reads the stored document back. Then every change, snapshot and
+/// prune the document reports on [CRDTDocument.events] is written down. See
+/// the README, "How it works".
 ///
 /// ```dart
-/// final document = CRDTDocument();
-/// final text = CRDTFugueTextHandler(document, 'body');
 /// final persistence = await CRDTDocumentPersistence.open(document, storage);
-///
 /// text.insert(0, 'Hello');
-///
 /// await persistence.dispose(); // writes what is still waiting
 /// ```
-///
-/// On a storage that reads without suspending, [openSync] does the same
-/// without an await, so the document is already full when it is first used.
-///
-/// In a synced app it is also what makes the client offline-first: the
-/// document comes back after a restart, and a sync client catches its peer up
-/// from the restored state.
 class CRDTDocumentPersistence {
   CRDTDocumentPersistence._(
     this._document,
@@ -54,14 +36,10 @@ class CRDTDocumentPersistence {
         ),
         _keepSnapshots = keepSnapshots == null ? null : max(1, keepSnapshots),
         _restore = _Restore(_document, storage),
-        _storedVersion = VersionVector({}),
-        _waiters = <_Waiter>[];
+        _storedVersion = _StoredVersion();
 
-  /// Builds the persistence and points it at [document], ready to restore.
-  ///
-  /// Subscribing happens before the restore, not after: a change applied while
-  /// the storage is being read would otherwise never be written down. The
-  /// restore tags itself, and [_onEvent] skips what carries that tag.
+  /// Subscribes before the restore, so an edit made while [open] runs is still
+  /// written. The restore's own events carry its origin and are skipped.
   factory CRDTDocumentPersistence._following(
     CRDTDocument document,
     CRDTDocumentStorage storage,
@@ -91,39 +69,24 @@ class CRDTDocumentPersistence {
     return persistence;
   }
 
-  /// Reads the stored document into [document], then follows it.
+  /// Reads the stored document into [document], then writes down what it
+  /// reports.
   ///
-  /// Call this **before** connecting a sync client: the restored state is what
-  /// the client reconciles against, so what was written offline reaches the
-  /// peer instead of sitting on this device.
+  /// [document] may already hold state. It is merged with the stored one, the
+  /// history is kept, and what only [document] holds is written too.
   ///
-  /// The stored state is merged rather than imported, and the history is kept:
-  /// on a reopen the document may already hold changes of this session, and a
-  /// sync client may still be asked for a snapshot covering that history.
+  /// - [writeDelay]: how long a change waits, so the changes of that time go
+  ///   to the disk in one write.
+  /// - [compactAfter]: snapshots and prunes once the store holds more changes
+  ///   than that; `null` keeps the whole log. A prune empties the stacks of
+  ///   every [CRDTUndoManager] on the document.
+  /// - [keepSnapshots]: how many snapshots stay on the disk, for
+  ///   [CRDTDocumentStorageReading.documentAt]; `null` keeps all of them, and
+  ///   less than 1 counts as 1.
+  /// - [onError]: gets every failed write. The write stays queued and is
+  ///   retried.
   ///
-  /// A change the document already held and the storage did not is queued for
-  /// the next write, so a document edited before this was called is kept whole
-  /// rather than half.
-  ///
-  /// [writeDelay] is how long a change waits for the ones after it. One
-  /// keystroke is one transaction, so writing on every event would put a
-  /// round-trip to the disk between the typist and the next character.
-  ///
-  /// [compactAfter] snapshots and prunes the document once the store holds
-  /// more than that many changes. It has to be positive; leave it `null` to
-  /// keep compaction off. Off by default: a prune drops the stacks of every
-  /// [CRDTUndoManager] on the document. Leave it off and the log grows for as
-  /// long as the document is edited.
-  ///
-  /// [keepSnapshots] is how many of the newest snapshots stay on the disk; an
-  /// older one lets [CRDTDocumentStorageReading.documentAt] reach further
-  /// back. It has to be positive, and counts as 1 when it is not; leave it
-  /// `null` to keep every snapshot.
-  ///
-  /// [onError] is called when a write fails. Without it a failed write is
-  /// silent. What the write carried stays in the queue, so the next [flush]
-  /// tries again; [hasUnwrittenChanges] says whether anything is still
-  /// waiting.
+  /// Throws an [ArgumentError] when [compactAfter] is not positive.
   static Future<CRDTDocumentPersistence> open(
     CRDTDocument document,
     CRDTDocumentStorage storage, {
@@ -145,17 +108,11 @@ class CRDTDocumentPersistence {
     return persistence;
   }
 
-  /// The [open] that a storage reading without suspending allows.
+  /// [open] for a storage that reads without suspending: the document is
+  /// already restored when this returns.
   ///
-  /// The document is restored before this returns, so it is already full the
-  /// first time anything reads it. A Flutter app builds its first frame from
-  /// the stored state instead of an empty document.
-  ///
-  /// Throws a [StateError] on a storage whose reads return a [Future] — drift
-  /// is always one of them. The restore that was already started is abandoned,
-  /// and the document is left untouched. Use [open] there.
-  ///
-  /// The options mean what they mean on [open].
+  /// Throws a [StateError] when a read returns a [Future], as drift's do, and
+  /// leaves the document untouched. The options are those of [open].
   static CRDTDocumentPersistence openSync(
     CRDTDocument document,
     CRDTDocumentStorage storage, {
@@ -175,11 +132,9 @@ class CRDTDocumentPersistence {
 
     final restoring = persistence._restoreFromStorage();
     if (restoring is Future<void>) {
-      // The read is already in flight and cannot be called back. Abandoning it
-      // is what keeps it from importing into the document after this throws.
+      // The read is in flight: abandoned, it never imports after this throws.
       persistence._restore.abandon();
-      // Nobody is left to await it, so a failure would become an unhandled
-      // asynchronous error rather than the [StateError] below.
+      // Nobody awaits it, so a failure would surface as an unhandled error.
       unawaited(restoring.catchError((Object _, StackTrace __) {}));
       unawaited(persistence._subscription?.cancel());
       persistence._subscription = null;
@@ -202,71 +157,54 @@ class CRDTDocumentPersistence {
   final int? _keepSnapshots;
   final void Function(Object error, StackTrace stack)? _onError;
 
-  /// The first read, which fills the document from the storage.
   final _Restore _restore;
 
   StreamSubscription<CRDTDocumentEvent>? _subscription;
 
-  /// Changes waiting for the next write.
   final List<Change> _pending = <Change>[];
 
   /// How many changes the store holds, for the `compactAfter` of [open].
   int _stored = 0;
 
-  /// The ids of the snapshots on the disk right now, oldest first.
-  ///
-  /// Kept here so replacing one costs no read: a snapshot is the biggest blob
-  /// of the store, and reading every one of them back to learn an id would
-  /// decode the whole previous document state on each write.
+  /// The ids of the snapshots on the disk, oldest first. Kept here: reading
+  /// them back would decode every stored snapshot.
   List<String> _snapshotsOnDisk = <String>[];
 
-  /// Snapshot, prune and cleanup writes, in order. One runs only once the one
-  /// before it has landed.
+  /// Snapshot, prune and cleanup writes. One starts once the one before it has
+  /// landed.
   final List<_Step> _steps = <_Step>[];
 
-  /// What the storage can bring back: the landed changes and snapshots.
-  ///
-  /// One clock per author is enough. The changes of an author land in the
-  /// order the document applied them, so the older ones are always on disk.
-  final VersionVector _storedVersion;
+  final _StoredVersion _storedVersion;
 
-  /// The callers of [whenStored] still waiting.
-  final List<_Waiter> _waiters;
-
-  /// How many writes failed in a row, for the backoff of [_scheduleRetry].
+  /// Failed writes in a row, for the backoff of [_scheduleRetry].
   int _failures = 0;
 
-  /// [dispose] has run, so nothing must arm a timer any more.
   bool _disposed = false;
 
   Timer? _timer;
 
-  /// A write already running, so two never overlap.
+  /// The writes, chained: one runs at a time, in order.
   Future<void> _writing = Future<void>.value();
 
-  /// How many writes have failed since this was opened.
+  /// Failed writes since [open], for [flush].
   int _failureCount = 0;
 
   late Object _lastError;
   late StackTrace _lastStackTrace;
 
-  /// Whether changes, snapshots or prunes are still waiting to be written.
+  /// Whether changes, snapshots or prunes still wait to be written.
   ///
-  /// A write that failed leaves what it carried here, so a later [flush] can
-  /// try again. After [dispose] it means those changes never reached the
-  /// storage: the document still holds them, the disk does not.
+  /// After [dispose], `true` means they never reached the disk.
   bool get hasUnwrittenChanges => _pending.isNotEmpty || _steps.isNotEmpty;
 
   FutureOr<void> _restoreFromStorage() => _restore.run().chain(_catchUp);
 
-  /// Takes on what the restore found: the store as it is, and the work the
-  /// document left for the queue.
   void _catchUp(_Restored? restored) {
     if (restored == null) {
       return;
     }
     _stored = restored.changeCount;
-    _cover(restored.version);
+    _storedVersion.addVersion(restored.version);
 
     final ids = restored.snapshotIds;
     final limit = _keepSnapshots;
@@ -274,8 +212,8 @@ class CRDTDocumentPersistence {
         limit == null || ids.length <= limit ? 0 : ids.length - limit;
     _snapshotsOnDisk = ids.sublist(staleCount);
     if (staleCount > 0) {
-      // A process killed between the write of a snapshot and the delete of an
-      // older one, or a smaller `keepSnapshots`, left too many here.
+      // A crash between a snapshot write and its delete, or a smaller
+      // `keepSnapshots`, left too many.
       final stale = ids.sublist(0, staleCount);
       _addStep(
         _Step(() => storage.snapshots.deleteSnapshots(stale).chain((_) {})),
@@ -298,8 +236,7 @@ class CRDTDocumentPersistence {
         if (identical(event.origin, _restore.origin)) {
           return;
         }
-        // Both sources: what this peer wrote, and what came from a peer.
-        // Reopening offline has to bring back the whole document, not half.
+        // Remote changes too: a reopen offline brings back the whole document.
         _pending.addAll(event.changes);
         _timer ??= Timer(_writeDelay, _flush);
       case DocumentSnapshotUpdated():
@@ -317,11 +254,8 @@ class CRDTDocumentPersistence {
         covers: snapshot.versionVector,
       );
 
-  /// Queues [step] behind the ones already waiting.
-  ///
-  /// Only the first step of an empty queue starts a run: a run in progress
-  /// picks up what is added behind it, and a failed one is retried by the
-  /// timer of [_scheduleRetry].
+  /// Only the first step of an empty queue starts a run: a running one picks
+  /// up the steps added behind it.
   void _addStep(_Step step) {
     _steps.add(step);
     if (_steps.length == 1) {
@@ -329,7 +263,7 @@ class CRDTDocumentPersistence {
     }
   }
 
-  /// Writes the queued steps in order, and stops at the first that fails.
+  /// Writes the steps in order, and stops at the first that fails.
   FutureOr<void> _writeSteps() {
     if (_steps.isEmpty) {
       return null;
@@ -352,43 +286,16 @@ class CRDTDocumentPersistence {
     _failures = 0;
     final covers = step.covers;
     if (covers != null) {
-      _cover(covers);
-      _wakeWaiters();
+      _storedVersion.addVersion(covers);
     }
   }
 
-  void _cover(VersionVector version) {
-    for (final MapEntry(key: peer, value: clock) in version.entries) {
-      _storedVersion.update(peer, clock);
-    }
-  }
-
-  void _wakeWaiters() {
-    _waiters.removeWhere((waiter) {
-      if (!_storedVersion.isStrictlyNewerOrEqualThan(waiter.version)) {
-        return false;
-      }
-      waiter.completer.complete();
-      return true;
-    });
-  }
-
-  /// Applies the prune to the queue as well as to the store.
+  /// Applies the prune to [_pending] too.
   ///
-  /// Called from [_writePrune], not from [_onEvent]: by then every write that
-  /// was in flight has settled, error handler included. A write that failed
-  /// puts its batch back in the queue, and a batch put back after this ran
-  /// would carry a pruned change past the delete meant to remove it.
-  ///
-  /// A change pruned before it was ever written is still waiting here. Left
-  /// alone it would be written **after** the delete meant to remove it, and
-  /// nothing would remove it later: a prune only names what the document still
-  /// holds, and the document no longer holds this one. It would sit on the
-  /// disk for the life of the store.
-  ///
-  /// A survivor is the same story told with its old bytes: [_writePrune] saves
-  /// the rewritten version, and the queued one would overwrite it with a
-  /// dependency that is already gone.
+  /// A pruned change still waiting would be written after the delete meant to
+  /// remove it, and stay on the disk for good. A waiting survivor would
+  /// overwrite its rewritten bytes. Runs from [_writePrune], once a failed
+  /// batch before it is back in [_pending].
   void _prunePending(List<Change> removed, List<Change> rewritten) {
     if (_pending.isEmpty) {
       return;
@@ -411,10 +318,6 @@ class CRDTDocumentPersistence {
     }
   }
 
-  /// Runs [work] after whatever is already writing.
-  ///
-  /// The order matters: a snapshot has to reach the disk before the prune that
-  /// drops the changes it covers.
   void _enqueue(FutureOr<void> Function() work) {
     _writing = _writing.then((_) => work()).catchError(_report);
   }
@@ -428,20 +331,14 @@ class CRDTDocumentPersistence {
     _scheduleRetry();
   }
 
-  /// Arms the timer again after a failed write.
-  ///
-  /// Without this a document that goes quiet after a failure keeps its changes
-  /// in memory only: the timer of [_onEvent] is armed by an event, and no
-  /// event is coming. The wait doubles per consecutive failure up to
-  /// [_maxRetryDelay], so a disk that is gone is not asked again every
-  /// quarter second.
+  /// Arms the timer after a failed write: a document that goes quiet has no
+  /// event left to arm it.
   void _scheduleRetry() {
     if (_disposed || !hasUnwrittenChanges || _timer != null) {
       return;
     }
 
-    // Capped before the shift, so the doubling cannot overflow on a storage
-    // that has been failing for a long time.
+    // Capped before the shift, so a long run of failures cannot overflow it.
     final doublings = min(_failures - 1, 16);
     _timer = Timer(
       Duration(
@@ -454,57 +351,42 @@ class CRDTDocumentPersistence {
     );
   }
 
-  /// Writes what is waiting, now, and waits for it.
+  /// Writes what is waiting now, and waits for it.
   ///
-  /// Loops until a whole round produces nothing new, for two reasons.
-  /// [CRDTDocument.events] hands an event to its listeners on a microtask. The
-  /// ones already published have to be let through first, or a flush right
-  /// after an edit would miss that edit. And a write can cause more work: a
-  /// compaction snapshots the document, which publishes events of its own.
+  /// It waits for the work queued when it was called. Edits made meanwhile,
+  /// and a compaction its own writes start, are written after it returns.
   ///
-  /// A write made while this runs is written by it too, so a flush that races
-  /// a typist takes one more round.
-  ///
-  /// It gives up for this round as soon as a write fails, rather than handing
-  /// the same changes to a storage that just refused them. The changes stay
-  /// queued, the error reaches the `onError` of [open], and
-  /// [hasUnwrittenChanges] reads `true`.
-  ///
-  /// With [throwOnError] a failed write is also thrown, to every flush that
-  /// was running when it failed. A flush that returns has written everything
-  /// that was waiting when it was called.
+  /// A failed write ends it and stays queued for a retry; with [throwOnError]
+  /// the failure is also thrown.
   Future<void> flush({bool throwOnError = false}) async {
     final failuresBefore = _failureCount;
+    // Events arrive on a microtask: lets in the edits made before this call.
+    await Future<void>.delayed(Duration.zero);
+    final target = _FlushTarget(_pending, _steps);
 
-    while (true) {
-      // A zero delay runs after the microtask queue, which is where a
-      // published event reaches `_onEvent`.
-      await Future<void>.delayed(Duration.zero);
-      // Every round, not once: the events let through above arm a timer of
-      // their own, and it would write this round's work a second time.
-      _timer?.cancel();
-      _timer = null;
-      if (_pending.isNotEmpty) {
-        _enqueue(_writePending);
-      }
-      if (_steps.isNotEmpty) {
-        _enqueue(_writeSteps);
-      }
-      final tail = _writing;
-      await tail;
-      await Future<void>.delayed(Duration.zero);
+    // The timer would write this work a second time.
+    _timer?.cancel();
+    _timer = null;
+    if (_pending.isNotEmpty) {
+      _enqueue(_writePending);
+    }
+    if (_steps.isNotEmpty) {
+      _enqueue(_writeSteps);
+    }
+    // The chain is serial, so this also waits for a write already running.
+    await _writing;
 
-      // Before the check below, not after: a failed write puts its changes
-      // back, so the queue never empties and the loop would never end.
-      if (_failureCount != failuresBefore) {
-        if (throwOnError) {
-          Error.throwWithStackTrace(_lastError, _lastStackTrace);
-        }
-        return;
-      }
-      if (!hasUnwrittenChanges && identical(tail, _writing)) {
-        return;
-      }
+    // The target first: a failure of work queued after the call belongs to
+    // the next flush.
+    if (target.isReached(_storedVersion, _steps)) {
+      return;
+    }
+    assert(
+      _failureCount != failuresBefore,
+      'one round writes the whole target unless a write fails',
+    );
+    if (throwOnError) {
+      Error.throwWithStackTrace(_lastError, _lastStackTrace);
     }
   }
 
@@ -514,14 +396,10 @@ class CRDTDocumentPersistence {
     _enqueue(_writeSteps);
   }
 
-  /// Writes the queue, and keeps it when the write fails.
+  /// Writes [_pending] in one batch, and puts it back when the write fails.
   ///
-  /// A dropped batch is not one lost edit: the changes after it name it as a
-  /// dependency, so a reload replays them against something the document
-  /// cannot resolve. Back in the queue it goes instead, ahead of whatever
-  /// arrived while the write ran, and the next [flush] tries the whole batch
-  /// again — saving a change twice replaces it, so a write that half landed
-  /// costs nothing.
+  /// A dropped batch would break the changes after it, which name it as a
+  /// dependency. Writing a change twice replaces it, so a retry is safe.
   FutureOr<void> _writePending() {
     if (_pending.isEmpty) {
       return null;
@@ -553,45 +431,31 @@ class CRDTDocumentPersistence {
   void _afterWrite(List<Change> batch) {
     _failures = 0;
     _stored += batch.length;
-    for (final change in batch) {
-      _storedVersion.update(change.author, change.hlc);
-    }
-    _wakeWaiters();
+    _storedVersion.addChanges(batch);
     _compactIfNeeded();
   }
 
-  /// Snapshots and prunes once the store holds more than the `compactAfter`
-  /// of [open].
-  ///
-  /// The snapshot and prune events that follow do the writing through the
-  /// normal path. [_stored] drops to zero here rather than when the prune
-  /// lands, so the writes queued in between do not each ask for a snapshot of
-  /// their own; [_writePrune] then reads the real count back.
+  /// Snapshots the document past `compactAfter`, while this still follows it:
+  /// the snapshot and prune events do the writing.
   void _compactIfNeeded() {
     final limit = _compactAfter;
-    if (limit == null || _stored <= limit || _document.isDisposed) {
+    if (limit == null ||
+        _stored <= limit ||
+        _document.isDisposed ||
+        _subscription == null) {
       return;
     }
+    // Now, not when the prune lands: the writes in between must not snapshot
+    // again. [_writePrune] reads the real count back.
     _stored = 0;
     _document.takeSnapshot();
   }
 
-  /// Writes [snapshot], and drops the oldest ones past the `keepSnapshots` of
-  /// [open].
+  /// Writes [snapshot] and drops the ones past `keepSnapshots`, in one
+  /// transaction.
   ///
-  /// Written before the old ones are dropped, never after. A process killed
-  /// between the two steps would otherwise leave the document with no snapshot
-  /// at all — and once the history it covers is pruned, that state has nowhere
-  /// else to come from.
-  ///
-  /// Both steps go in one [CRDTDocumentStorage.transaction]. The order still
-  /// stands inside it: a backend without transactions runs them as they are
-  /// written and depends on it.
-  ///
-  /// Which snapshots to drop is read from [_snapshotsOnDisk] rather than from
-  /// the storage: asking the storage would decode the whole previous state to
-  /// learn the ids. The field is moved only once the transaction has landed,
-  /// so a rollback leaves it naming what is really there.
+  /// The write comes first: on a backend without transactions, a crash in
+  /// between leaves a snapshot too many instead of none.
   FutureOr<void> _writeSnapshot(Snapshot snapshot) {
     final kept = [
       for (final id in _snapshotsOnDisk)
@@ -613,25 +477,17 @@ class CRDTDocumentPersistence {
       }),
     )
         .chain((_) {
+      // Only once landed, so a rollback leaves the ids true.
       _snapshotsOnDisk = kept.sublist(stale.length);
     });
   }
 
-  /// Writes the survivors again, and drops what the prune removed.
+  /// Writes the survivors again and deletes what the prune removed, in one
+  /// transaction.
   ///
-  /// A change that pointed at a pruned dependency was rebuilt without it, so
-  /// the bytes on disk describe a change that no longer exists.
-  ///
-  /// Both steps go in one [CRDTDocumentStorage.transaction]: a backend that
-  /// has transactions never leaves a survivor with its old bytes next to a
-  /// dependency that is already gone.
-  ///
-  /// The survivors are written **first**, which is what a backend without
-  /// transactions rests on. Stopped halfway this way, the store holds the new
-  /// bytes next to changes that should have gone — a copy too many, which the
-  /// next prune removes. The other way round it would hold survivors naming a
-  /// dependency that is already deleted, which nothing writes again and which
-  /// a reload cannot replay.
+  /// The survivors come first: on a backend without transactions, a crash in
+  /// between leaves a change too many, which the next prune removes, instead
+  /// of a survivor naming a deleted dependency.
   FutureOr<void> _writePrune(List<Change> removed, List<Change> rewritten) {
     _prunePending(removed, rewritten);
 
@@ -649,108 +505,73 @@ class CRDTDocumentPersistence {
         );
   }
 
-  /// Snapshots the document, drops the history the snapshot covers, and waits
+  /// Snapshots the document, prunes the history the snapshot covers, and waits
   /// for both to reach the disk.
   ///
-  /// What the `compactAfter` of [open] does on its own, on demand: a "save and
-  /// compact" button, or the moment an app goes to the background. The log
-  /// stops growing, and the next open reads one snapshot instead of every
-  /// change ever written.
+  /// The `compactAfter` of [open], on demand. **Every [CRDTUndoManager] on the
+  /// document loses its stacks.**
   ///
-  /// It costs what a prune costs: **every [CRDTUndoManager] on the document
-  /// loses its stacks.** In an editor undo usually matters more than a short
-  /// log, so compact where the user cannot be in the middle of something.
-  ///
-  /// Returns the snapshot that was written. Throws when the snapshot or the
-  /// prune fails to write; the write is tried again later, as any other.
+  /// Returns the snapshot. Throws when a write fails; it is retried like any
+  /// other.
   Future<Snapshot> compact() async {
     final snapshot = _document.takeSnapshot();
     await flush(throwOnError: true);
     return snapshot;
   }
 
-  /// The version of the document the storage brings back after a crash.
-  ///
-  /// It counts what [open] read and every change or snapshot written since.
-  /// It only grows.
-  VersionVector get storedVersion => _storedVersion.immutable();
+  /// The version of the document the storage brings back after a crash. It
+  /// only grows.
+  VersionVector get storedVersion => _storedVersion.value;
 
   /// Completes once [storedVersion] covers [version].
-  ///
-  /// Pass the version of the document right after an edit, or the version of
-  /// a snapshot, to know it survives a crash:
   ///
   /// ```dart
   /// text.insert(0, 'Hello');
   /// await persistence.whenStored(document.getVersionVector());
   /// ```
   ///
-  /// A failed write keeps this waiting while the write is tried again; the
-  /// error reaches the `onError` of [open]. Add a `timeout` to give up
-  /// earlier, or use [flush] with `throwOnError` to fail on the first error.
-  ///
-  /// Throws a [StateError] when [dispose] runs before [version] is stored.
-  Future<void> whenStored(VersionVector version) {
-    if (_storedVersion.isStrictlyNewerOrEqualThan(version)) {
-      return Future<void>.value();
-    }
-    if (_disposed) {
-      return Future<void>.error(_notStored(version));
-    }
-    final waiter = _Waiter(version);
-    _waiters.add(waiter);
-    return waiter.completer.future;
-  }
+  /// A failed write keeps it waiting while the write is retried. Throws a
+  /// [StateError] when [dispose] comes first.
+  Future<void> whenStored(VersionVector version) =>
+      _storedVersion.whenCovers(version);
 
-  StateError _notStored(VersionVector version) =>
-      StateError('version $version was not stored before dispose');
-
-  /// Writes what is still waiting and stops following the document.
+  /// Stops following the document and writes what is still waiting.
   ///
-  /// It does not close [storage]: the caller opened it, and on a backend that
-  /// shares one connection between documents it is not this document's to
-  /// close. Call [CRDTDocumentStorage.close] afterwards.
-  ///
-  /// [hasUnwrittenChanges] after this means the last write failed and nothing
-  /// will try again: those changes stayed in the document and never reached
-  /// the disk.
+  /// Edits made after this stay in the document only. [storage] stays open:
+  /// close it with [CRDTDocumentStorage.close].
   Future<void> dispose() async {
+    // Lets in the edits made before this call.
+    await Future<void>.delayed(Duration.zero);
+    // Before the flush, so the queue stops growing.
+    await _subscription?.cancel();
+    _subscription = null;
+
     await flush();
     _disposed = true;
     _timer?.cancel();
     _timer = null;
-    await _subscription?.cancel();
-    _subscription = null;
-
-    final waiters = List.of(_waiters);
-    _waiters.clear();
-    for (final waiter in waiters) {
-      waiter.completer.completeError(_notStored(waiter.version));
-    }
+    _storedVersion.close();
   }
 }
 
-/// The first read of a [CRDTDocumentPersistence]: merges the storage into the
-/// document, and reports what the storage holds and what only the document
-/// has.
+/// The first read: merges the storage into the document, and reports what the
+/// storage holds and what only the document has.
 class _Restore {
   _Restore(this._document, this._storage) : origin = Object();
 
   final CRDTDocument _document;
   final CRDTDocumentStorage _storage;
 
-  /// Tags the import, so the events it publishes are not written back.
+  /// Tags the import, so its events are not written back.
   final Object origin;
 
   bool _abandoned = false;
 
-  /// Makes a read still in flight land nowhere.
+  /// Makes a read in flight land nowhere.
   void abandon() => _abandoned = true;
 
-  /// Reads the storage back into the document.
-  ///
-  /// Returns without suspending when the storage answers both reads without
-  /// suspending, which is what [CRDTDocumentPersistence.openSync] rests on.
+  /// Returns without suspending when both reads do, for
+  /// [CRDTDocumentPersistence.openSync].
   FutureOr<_Restored?> run() {
     return _storage.changes.getChanges().chain(
           (changes) => _storage.snapshots
@@ -795,18 +616,10 @@ class _Restore {
     );
   }
 
-  /// The changes the document held before the persistence started following
-  /// it.
+  /// The changes the document held before it was followed, and [stored] lacks.
   ///
-  /// Nothing reported them: an event is built only once something listens, and
-  /// the persistence subscribes when it is built. A document edited before
-  /// `open` — which is the whole point of taking one as an argument — would
-  /// otherwise keep those changes in memory only, while the changes written
-  /// after them reach the disk naming dependencies that are not there. The
-  /// next open then cannot replay them.
-  ///
-  /// [stored] is what the storage already holds, so a normal reopen finds
-  /// nothing and pays one set of ids.
+  /// No event reported them: a document publishes only to listeners. Left
+  /// out, the changes written after them would name missing dependencies.
   List<Change> _changesOnlyTheDocumentHas(List<Change> stored) {
     final mine = _document.exportChanges();
     if (mine.isEmpty) {
@@ -819,8 +632,7 @@ class _Restore {
     ];
   }
 
-  /// [snapshots] from the oldest to the newest, in the order [newestSnapshot]
-  /// picks them.
+  /// [snapshots], oldest first, as [newestSnapshot] ranks them.
   List<Snapshot> _oldestFirst(List<Snapshot> snapshots) {
     final left = List<Snapshot>.of(snapshots);
     final ordered = <Snapshot>[];
@@ -833,7 +645,7 @@ class _Restore {
   }
 }
 
-/// What [_Restore.run] found on the storage, and what only the document had.
+/// What [_Restore.run] found.
 class _Restored {
   _Restored({
     required this.changeCount,
@@ -846,7 +658,7 @@ class _Restored {
   /// How many changes the storage holds.
   final int changeCount;
 
-  /// The version the storage brings back: its changes and its snapshots.
+  /// The version the storage brings back.
   final VersionVector version;
 
   /// The ids of the stored snapshots, from the oldest to the newest.
@@ -855,8 +667,8 @@ class _Restored {
   /// The changes the document held and the storage did not.
   final List<Change> unwrittenChanges;
 
-  /// The snapshot of the document after the restore, when the storage does not
-  /// hold it; `null` otherwise.
+  /// The document's snapshot after the restore; `null` when the storage holds
+  /// it.
   final Snapshot? unwrittenSnapshot;
 }
 
@@ -869,10 +681,104 @@ class _Step {
   final VersionVector? covers;
 }
 
+/// The version the storage brings back, and the callers waiting for it.
+///
+/// One clock per author is enough: the changes of an author land in the order
+/// the document applied them.
+class _StoredVersion {
+  _StoredVersion()
+      : _version = VersionVector({}),
+        _waiters = <_Waiter>[];
+
+  final VersionVector _version;
+  final List<_Waiter> _waiters;
+  bool _closed = false;
+
+  VersionVector get value => _version.immutable();
+
+  bool covers(VersionVector version) =>
+      _version.isStrictlyNewerOrEqualThan(version);
+
+  void addChanges(Iterable<Change> changes) {
+    for (final change in changes) {
+      _version.update(change.author, change.hlc);
+    }
+    _wakeWaiters();
+  }
+
+  void addVersion(VersionVector version) {
+    for (final MapEntry(key: peer, value: clock) in version.entries) {
+      _version.update(peer, clock);
+    }
+    _wakeWaiters();
+  }
+
+  Future<void> whenCovers(VersionVector version) {
+    if (covers(version)) {
+      return Future<void>.value();
+    }
+    if (_closed) {
+      return Future<void>.error(_notStored(version));
+    }
+    final waiter = _Waiter(version);
+    _waiters.add(waiter);
+    return waiter.completer.future;
+  }
+
+  /// Fails every caller still waiting; the ones after this fail at once.
+  void close() {
+    _closed = true;
+    final waiters = List.of(_waiters);
+    _waiters.clear();
+    for (final waiter in waiters) {
+      waiter.completer.completeError(_notStored(waiter.version));
+    }
+  }
+
+  void _wakeWaiters() {
+    _waiters.removeWhere((waiter) {
+      if (!covers(waiter.version)) {
+        return false;
+      }
+      waiter.completer.complete();
+      return true;
+    });
+  }
+
+  static StateError _notStored(VersionVector version) =>
+      StateError('version $version was not stored before dispose');
+}
+
 class _Waiter {
   _Waiter(this.version) : completer = Completer<void>();
 
   final VersionVector version;
 
   final Completer<void> completer;
+}
+
+/// What a [CRDTDocumentPersistence.flush] waits for: the work queued when it
+/// was called.
+class _FlushTarget {
+  _FlushTarget(List<Change> pending, List<_Step> steps)
+      : _changes = _versionOf(pending),
+        _lastStep = steps.lastOrNull;
+
+  final VersionVector _changes;
+  final _Step? _lastStep;
+
+  /// The steps land in order, so the last one stands for all of them.
+  bool isReached(_StoredVersion stored, List<_Step> steps) {
+    final lastStep = _lastStep;
+    return stored.covers(_changes) &&
+        (lastStep == null || !steps.contains(lastStep));
+  }
+
+  static VersionVector _versionOf(List<Change> changes) {
+    final version = VersionVector({});
+    for (final change in changes) {
+      version.update(change.author, change.hlc);
+    }
+    return version;
+  }
 }

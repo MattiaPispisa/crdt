@@ -376,7 +376,8 @@ void main() {
       await persistence.dispose();
     });
 
-    test('one flush covers the work the compaction itself causes', () async {
+    test('the compaction a flush causes is written by the next flush',
+        () async {
       final persistence = await attach(compactAfter: 1);
 
       // Two calls, so two transactions, so two changes: the store goes past
@@ -385,13 +386,46 @@ void main() {
         ..insert(0, 'a')
         ..insert(1, 'b');
       await persistence.flush();
+      await persistence.flush();
 
-      // The snapshot and the prune it causes are written inside this flush,
-      // not left for the next one.
       expect(await storage.snapshots.count, 1);
       expect(await storage.changes.count, 0);
 
       await persistence.dispose();
+    });
+
+    test(
+        'flush returns once what was queued at the call is written, while '
+        'edits keep coming', () async {
+      final changes = _TypingChangeStorage('doc');
+      final persistence = await CRDTDocumentPersistence.open(
+        document,
+        CRDTDocumentStorage(
+          changes: changes,
+          snapshots: InMemorySnapshotStorage('doc'),
+        ),
+        writeDelay: const Duration(hours: 1),
+      );
+      text.insert(0, 'a');
+      final queued = document.getVersionVector();
+      // Every write brings a new edit, as a typist that never stops.
+      changes.onSave = () => text.insert(text.length, 'x');
+
+      await persistence.flush().timeout(const Duration(seconds: 5));
+      await pumpEventQueue();
+
+      expect(
+        persistence.storedVersion.isStrictlyNewerOrEqualThan(queued),
+        isTrue,
+      );
+      expect(
+        persistence.hasUnwrittenChanges,
+        isTrue,
+        reason: 'the edits made after the call wait for the next write',
+      );
+      changes.onSave = null;
+      await persistence.dispose();
+      expect(persistence.hasUnwrittenChanges, isFalse);
     });
 
     test('compact snapshots, prunes, and waits for the disk', () async {
@@ -930,6 +964,19 @@ class _FailingChangeStorage extends InMemoryChangeStorage {
       throw StateError('disk full');
     }
     return super.saveChanges(changes);
+  }
+}
+
+/// A change storage that runs [onSave] on every write, before it saves.
+class _TypingChangeStorage extends InMemoryChangeStorage {
+  _TypingChangeStorage(super.documentId);
+
+  void Function()? onSave;
+
+  @override
+  void saveChanges(List<Change> changes) {
+    onSave?.call();
+    super.saveChanges(changes);
   }
 }
 
