@@ -131,7 +131,7 @@ Future<Response> onRequest(RequestContext context) async {
 
 Use a persistent registry (`PersistentServerRegistry` with `crdt_lf_hive`,
 `crdt_lf_sqlite`, `crdt_lf_drift`) for anything that must survive a restart —
-[`example/`](./example) does, with Hive. A registry is opened asynchronously,
+[`example/`](https://github.com/MattiaPispisa/crdt/tree/main/packages/adapters/sync/dart_frog/example) does, with Hive. A registry is opened asynchronously,
 so build it in Dart Frog's `init()` (see [Lifecycle](#lifecycle)) and keep it
 in a top-level `late final`.
 
@@ -242,9 +242,9 @@ complementary — setting one is not a reason to drop the other.
 Two runnable Dart Frog projects, one per mode, each with a custom `init()`
 that starts the host and a custom entrypoint:
 
-- [`example/`](./example) — server–client mode on `/sync`, documents kept in
+- [`example/`](https://github.com/MattiaPispisa/crdt/tree/main/packages/adapters/sync/dart_frog/example) — server–client mode on `/sync`, documents kept in
   Hive through `crdt_lf_hive`, a token check in front of the route.
-- [`relay_example/`](./relay_example) — relay mode on `/relay`, rooms kept in
+- [`relay_example/`](https://github.com/MattiaPispisa/crdt/tree/main/packages/adapters/sync/dart_frog/relay_example) — relay mode on `/relay`, rooms kept in
   memory.
 
 ```sh
