@@ -1,6 +1,6 @@
 ## [0.3.2](https://github.com/MattiaPispisa/crdt/tree/crdt_lf_drift-v0.3.2/packages/adapters/persistence/crdt_lf_drift)
 
-**Date:** 2026-09-30
+**Date:** 2026-10-04
 
 [compare to previous release](https://github.com/MattiaPispisa/crdt/compare/crdt_lf_drift-v0.3.1...crdt_lf_drift-v0.3.2)
 

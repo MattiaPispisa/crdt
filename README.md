@@ -32,6 +32,7 @@
 - [crdt_lf](./packages/core/crdt_lf/README.md)
 - [crdt_socket_sync](./packages/core/crdt_socket_sync/README.md)
 - [crdt_lf_flutter](./packages/core/crdt_lf_flutter/README.md)
+- [crdt_lf_persistence](./packages/core/crdt_lf_persistence/README.md)
 - [crdt_lf_devtools_extension](./packages/core/crdt_lf_devtools_extension/README.md)
 - [crdt_lf_hive](./packages/adapters/persistence/crdt_lf_hive/README.md)
 - [crdt_lf_sqlite](./packages/adapters/persistence/crdt_lf_sqlite/README.md)

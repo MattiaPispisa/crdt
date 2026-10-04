@@ -1,8 +1,8 @@
 ## [0.2.0](https://github.com/MattiaPispisa/crdt/tree/crdt_lf_persistence-v0.2.0/packages/core/crdt_lf_persistence)
 
-**Date:** 2026-10-01
+**Date:** 2026-10-04
 
-[compare to previous release](https://github.com/MattiaPispisa/crdt/compare/crdt_lf_persistence-v0.1.1+1...crdt_lf_persistence-v0.2.0)
+[compare to previous release](https://github.com/MattiaPispisa/crdt/compare/crdt_lf_persistence-v0.1.1...crdt_lf_persistence-v0.2.0)
 
 ### Added
 
