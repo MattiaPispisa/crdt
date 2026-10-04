@@ -113,6 +113,25 @@ void main() {
     await tester.pump(const Duration(milliseconds: 100));
   });
 
+  testWidgets('empty editor shows no placeholder with the option off', (
+    tester,
+  ) async {
+    final room = _room();
+    final settings = UserSettingsCubit(storage: MemoryStorage())
+      ..setShowPlaceholder(value: false);
+
+    await tester.pumpWidget(
+      _app(
+        document: room.document,
+        awareness: room.awareness,
+        undo: room.undo,
+        settings: settings,
+      ),
+    );
+
+    expect(find.text(placeholderMarkdown(const Locale('en'))), findsNothing);
+  });
+
   testWidgets('the platform chord applies the matching toolbar action', (
     tester,
   ) async {

@@ -43,12 +43,6 @@ const List<Color> kAvatarPalette = [
   Color(0xFF6D4C41),
 ];
 
-/// Named route of the about/settings page.
-const String kSettingsRoute = '/settings';
-
-/// Named route of the changelog page.
-const String kChangelogRoute = '/changelog';
-
 /// Asset path of the app changelog, rendered on the changelog page.
 const String kChangelogAsset = 'CHANGELOG.md';
 

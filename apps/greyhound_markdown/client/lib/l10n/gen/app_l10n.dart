@@ -183,6 +183,18 @@ abstract class AppL10n {
   /// **'Wrap long lines instead of scrolling sideways'**
   String get wordWrapSubtitle;
 
+  /// Editor option: show the sample document in an empty room.
+  ///
+  /// In en, this message translates to:
+  /// **'Markdown preview'**
+  String get markdownPreview;
+
+  /// Subtitle of the markdown preview option.
+  ///
+  /// In en, this message translates to:
+  /// **'Show a sample markdown document while the room is empty'**
+  String get markdownPreviewSubtitle;
+
   /// Button opening the changelog page.
   ///
   /// In en, this message translates to:

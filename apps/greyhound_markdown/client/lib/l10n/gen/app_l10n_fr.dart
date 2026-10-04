@@ -50,6 +50,13 @@ class AppL10nFr extends AppL10n {
       'Coupe les longues lignes au lieu de défiler horizontalement';
 
   @override
+  String get markdownPreview => 'Aperçu markdown';
+
+  @override
+  String get markdownPreviewSubtitle =>
+      'Affiche un document markdown d\'exemple tant que la salle est vide';
+
+  @override
   String get viewChangelog => 'Voir le changelog';
 
   @override
