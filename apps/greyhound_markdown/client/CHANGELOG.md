@@ -11,7 +11,9 @@
 
 - Navigation moves to declarative `go_router` routes. The changelog page is
   now `/settings/changelog`; the old `/changelog` link still opens it.
-- Add `get_it` as the service locator; it provides the router.
+- Add `get_it` as the service locator; it provides the router and the loggers.
+- Info logs with `en_logger`, one prefixed logger per area (`[ROOM]`,
+  `[SYNC]`, `[ROUTER]`, …): rooms, connection, peers, settings, exports.
 
 ## 0.12.0
 

@@ -1,6 +1,10 @@
 import 'dart:convert';
 import 'dart:typed_data';
 
+import 'package:en_logger/en_logger.dart';
+
+import 'package:greyhound_markdown_client/src/di/service_locator.dart';
+import 'package:greyhound_markdown_client/src/logging/app_logger.dart';
 import 'package:greyhound_markdown_client/src/services/export/html_export.dart';
 import 'package:greyhound_markdown_client/src/services/export/pdf_export.dart';
 import 'package:greyhound_markdown_client/src/services/file_saver/file_saver.dart';
@@ -38,9 +42,12 @@ class DocumentExporter {
   /// [saver] defaults to the platform one; tests pass their own to stay off
   /// the disk.
   DocumentExporter({FileSaver? saver})
-    : _saver = saver ?? FileSaver.forPlatform();
+    : _saver = saver ?? FileSaver.forPlatform(),
+      _logger = loggerFor(LogScope.export);
 
   final FileSaver _saver;
+
+  final EnLogger _logger;
 
   /// Renders [markdown] as [format] and saves it under [fileName] (without
   /// the extension, which [format] adds).
@@ -55,6 +62,33 @@ class DocumentExporter {
     required ExportFormat format,
     required String fileName,
     String languageCode = 'en',
+  }) async {
+    final file = '$fileName.${format.extension}';
+    _logger.info('Exporting $file');
+    try {
+      final saved = await _save(
+        markdown: markdown,
+        format: format,
+        fileName: fileName,
+        languageCode: languageCode,
+      );
+      _logger.info(saved ? 'Saved $file' : 'Save of $file cancelled');
+      return saved;
+    } catch (error, stackTrace) {
+      _logger.error(
+        'Export of $file failed',
+        error: error,
+        stackTrace: stackTrace,
+      );
+      rethrow;
+    }
+  }
+
+  Future<bool> _save({
+    required String markdown,
+    required ExportFormat format,
+    required String fileName,
+    required String languageCode,
   }) async {
     final bytes = switch (format) {
       ExportFormat.markdown => utf8.encode(markdown),

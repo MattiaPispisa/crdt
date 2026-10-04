@@ -4,11 +4,14 @@ import 'package:crdt_lf/crdt_lf.dart';
 import 'package:crdt_lf_hive/crdt_lf_hive.dart';
 import 'package:crdt_socket_sync/replica.dart';
 import 'package:crdt_socket_sync/web_socket_relay_client.dart';
+import 'package:en_logger/en_logger.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import 'package:greyhound_markdown_client/src/application/application.dart';
 import 'package:greyhound_markdown_client/src/config.dart';
+import 'package:greyhound_markdown_client/src/di/service_locator.dart';
+import 'package:greyhound_markdown_client/src/logging/app_logger.dart';
 import 'package:greyhound_markdown_client/src/services/awareness/'
     'awareness_service.dart';
 import 'package:greyhound_markdown_client/src/services/room/room_session.dart';
@@ -49,6 +52,7 @@ mixin RoomHost<T extends StatefulWidget> on State<T> {
       return;
     }
 
+    _roomLogger.info('Opening room $roomId');
     final settings = context.read<UserSettingsCubit>();
     final profile = settings.state;
     // Before the replica: the relay client carries its plugin.
@@ -59,12 +63,16 @@ mixin RoomHost<T extends StatefulWidget> on State<T> {
     final replica = _replica = CRDTReplica.open(
       documentId: roomId,
       storage: CRDTHive.open,
-      sync: (document) => WebSocketRelayClient(
-        url: roomUrl(kServerUrl, roomId),
-        document: document,
-        author: document.peerId,
-        plugins: [awareness.plugin],
-      ),
+      sync: (document) {
+        final url = roomUrl(kServerUrl, roomId);
+        _syncLogger.info('Relay client created for $url');
+        return WebSocketRelayClient(
+          url: url,
+          document: document,
+          author: document.peerId,
+          plugins: [awareness.plugin],
+        );
+      },
       // A device that cannot read its storage still edits the room. It starts
       // empty, fills up from the relay, and keeps nothing for the next launch.
       onStorageError: reportRoomError,
@@ -93,11 +101,17 @@ mixin RoomHost<T extends StatefulWidget> on State<T> {
 
     final sync = replica.client!;
     final status = _status = ValueNotifier(sync.connectionStatusValue);
-    _statusSubscription = sync.connectionStatus.listen(
-      (value) => status.value = value,
-    );
+    _statusSubscription = sync.connectionStatus.listen((value) {
+      _logStatus(value);
+      status.value = value;
+    });
 
     final text = CRDTFugueTextHandler(replica.document, kHandlerId);
+    _roomLogger.info(
+      'Document of room $roomId opened: peer ${replica.document.peerId}, '
+      '${text.value.length} characters, '
+      '${replica.persistence == null ? 'no' : 'with'} local storage',
+    );
     setState(() {
       _room = RoomSession(
         roomId: roomId,
@@ -113,10 +127,15 @@ mixin RoomHost<T extends StatefulWidget> on State<T> {
 
   /// Reports a failure of the local copy, which never stops the room.
   ///
-  /// Override it to show the user something; the default hands it to
-  /// [FlutterError.reportError].
+  /// Override it to show the user something; the default logs it and hands it
+  /// to [FlutterError.reportError].
   @protected
   void reportRoomError(Object error, StackTrace stackTrace) {
+    _roomLogger.error(
+      'Local storage of room $roomId failed',
+      error: error,
+      stackTrace: stackTrace,
+    );
     FlutterError.reportError(
       FlutterErrorDetails(
         exception: error,
@@ -135,7 +154,26 @@ mixin RoomHost<T extends StatefulWidget> on State<T> {
     _awareness?.dispose();
     // Not awaited: `dispose` cannot wait. The replica writes what is still
     // waiting before it lets the document go.
+    _roomLogger.info('Closing room $roomId');
     unawaited(_replica?.then((replica) => replica.close()));
     super.dispose();
+  }
+
+  EnLogger get _roomLogger => loggerFor(LogScope.room);
+
+  EnLogger get _syncLogger => loggerFor(LogScope.sync);
+
+  void _logStatus(ConnectionStatus status) {
+    final message = 'Room $roomId: ${status.name}';
+    switch (status) {
+      case ConnectionStatus.connected:
+      case ConnectionStatus.connecting:
+      case ConnectionStatus.reconnecting:
+        _syncLogger.info(message);
+      case ConnectionStatus.disconnected:
+      case ConnectionStatus.error:
+      case ConnectionStatus.unsupported:
+        _syncLogger.warning(message);
+    }
   }
 }
