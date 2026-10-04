@@ -1,3 +1,14 @@
+## [5.1.1](https://github.com/MattiaPispisa/crdt/tree/crdt_lf-v5.1.1/packages/core/crdt_lf)
+
+**Date:** 2026-10-04
+
+[compare to previous release](https://github.com/MattiaPispisa/crdt/compare/crdt_lf-v5.1.0...crdt_lf-v5.1.1)
+
+### Changed
+
+- Needs `hlc_dart` 1.2.0: an `OperationId` keeps its byte order after 65535 operations in the
+  same millisecond.
+
 ## [5.1.0](https://github.com/MattiaPispisa/crdt/tree/crdt_lf-v5.1.0/packages/core/crdt_lf)
 
 **Date:** 2026-10-04

@@ -173,7 +173,7 @@ void main() {
 
           final unexpectedDep = OperationId(
             PeerId.generate(),
-            HybridLogicalClock(l: 9999999, c: 9999999),
+            HybridLogicalClock(l: 9999999, c: 9999),
           );
           doc.applyChange(
             Change(

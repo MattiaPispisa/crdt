@@ -28,10 +28,11 @@ class DAG {
   ) {
     final vector = <PeerId, HybridLogicalClock>{};
     for (final id in nodes.keys) {
-      final current = vector[id.peerId];
-      if (current == null || id.hlc > current) {
-        vector[id.peerId] = id.hlc;
-      }
+      vector.update(
+        id.peerId,
+        (current) => HybridLogicalClock.max(current, id.hlc),
+        ifAbsent: () => id.hlc,
+      );
     }
     return vector;
   }

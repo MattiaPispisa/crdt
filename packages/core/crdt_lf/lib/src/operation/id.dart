@@ -120,22 +120,23 @@ class OperationId implements Comparable<OperationId> {
     return peerId.compareTo(other.peerId);
   }
 
-  /// Checks if this [OperationId] happened before another [OperationId]
+  /// Whether this id orders before [other] (see [compareTo]).
   ///
-  /// Returns true if this [OperationId] happened before the other [OperationId]
+  /// `true` for every operation that happened before [other], and also for
+  /// some concurrent operations.
   bool happenedBefore(OperationId other) {
     return compareTo(other) < 0;
   }
 
-  /// Checks if this [OperationId] happened after another [OperationId]
+  /// Whether this id orders after [other] (see [compareTo]).
   ///
-  /// Returns true if this [OperationId] happened after the other [OperationId]
+  /// `true` for every operation that happened after [other], and also for
+  /// some concurrent operations.
   bool happenedAfter(OperationId other) {
     return compareTo(other) > 0;
   }
 
-  /// Checks if this [OperationId] happened
-  /// after or equal to another [OperationId]
+  /// Whether this id orders after [other] or equals it (see [compareTo]).
   bool happenedAfterOrEqual(OperationId other) {
     return compareTo(other) >= 0;
   }
