@@ -1,6 +1,6 @@
 ## [0.10.0](https://github.com/MattiaPispisa/crdt/tree/crdt_socket_sync-v0.10.0/packages/core/crdt_socket_sync)
 
-**Date:** 2026-09-20
+**Date:** 2026-10-04
 
 [compare to previous release](https://github.com/MattiaPispisa/crdt/compare/crdt_socket_sync-v0.9.0...crdt_socket_sync-v0.10.0)
 
