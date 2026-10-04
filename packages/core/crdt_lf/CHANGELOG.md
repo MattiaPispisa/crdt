@@ -15,7 +15,8 @@
 ### Fixed
 
 - `mergeSnapshot` and `import(merge: true)` throw a `ConcurrentSnapshotException` on a snapshot that
-  holds a handler at a version concurrent with the document's, instead of keeping one side.
+  holds a handler at a version concurrent with the document's, instead of keeping one side. 
+  [151](https://github.com/MattiaPispisa/crdt/issues/151)
 - `CRDTDocument.handler` threw "already registered" on the web: dart2js built the handler twice
   ([dart-lang/sdk#64410](https://github.com/dart-lang/sdk/issues/64410)).
 
