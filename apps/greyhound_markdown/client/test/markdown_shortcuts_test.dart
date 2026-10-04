@@ -28,19 +28,26 @@ void main() {
     });
 
     test('heading at the very start of non-empty text', () {
-      final result = byLabel(MarkdownShortcutLabel.heading2).apply(withCaret('title', 0));
+      final result = byLabel(
+        MarkdownShortcutLabel.heading2,
+      ).apply(withCaret('title', 0));
       expect(result.text, '## title');
       expect(result.selection.baseOffset, 3); // after "## "
     });
 
     test('heading prefixes the caret line, not the whole document', () {
       // Caret on the second line ("world"), offset 6.
-      final result = byLabel(MarkdownShortcutLabel.heading3).apply(withCaret('hello\nworld', 6));
+      final result = byLabel(
+        MarkdownShortcutLabel.heading3,
+      ).apply(withCaret('hello\nworld', 6));
       expect(result.text, 'hello\n### world');
     });
 
     test('bullet list on empty text', () {
-      expect(byLabel(MarkdownShortcutLabel.bulletList).apply(empty()).text, '- ');
+      expect(
+        byLabel(MarkdownShortcutLabel.bulletList).apply(empty()).text,
+        '- ',
+      );
     });
   });
 

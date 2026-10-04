@@ -195,6 +195,80 @@ void main() {
     });
   });
 
+  group('WebSocketClient first connect', () {
+    const documentId = 'doc';
+
+    WebSocketClient buildClient(Transport Function() transportFactory) {
+      final doc = CRDTDocument(
+        peerId: PeerId.generate(),
+        documentId: documentId,
+      );
+      final client = WebSocketClient.test(
+        url: 'ws://localhost:0',
+        document: doc,
+        author: doc.peerId,
+        transportFactory: transportFactory,
+      );
+      addTearDown(client.dispose);
+      return client;
+    }
+
+    test('retries a first connect that fails, until the server is reachable',
+        () async {
+      var attempts = 0;
+      final client = buildClient(() {
+        attempts++;
+        // The server is down for the first attempt: the app was opened
+        // offline.
+        if (attempts < 2) {
+          throw Exception('connection refused');
+        }
+        return _FakeTransport(documentId: documentId, respondToPings: true);
+      });
+
+      expect(await client.connect(), isFalse);
+      await client.connectionStatus
+          .firstWhere((s) => s == ConnectionStatus.connected)
+          .timeout(Protocol.reconnectInterval * 3);
+
+      expect(attempts, 2);
+    });
+
+    test('disconnect stops the retries of a first connect that fails',
+        () async {
+      var attempts = 0;
+      final client = buildClient(() {
+        attempts++;
+        throw Exception('connection refused');
+      });
+
+      expect(await client.connect(), isFalse);
+      await client.disconnect();
+      await Future<void>.delayed(
+        Protocol.reconnectInterval + const Duration(milliseconds: 200),
+      );
+
+      expect(attempts, 1);
+      expect(client.connectionStatusValue, ConnectionStatus.disconnected);
+    });
+
+    test('disconnect cancels a connect that has not opened its transport',
+        () async {
+      var attempts = 0;
+      final client = buildClient(() {
+        attempts++;
+        return _FakeTransport(documentId: documentId, respondToPings: true);
+      });
+
+      final connecting = client.connect();
+      await client.disconnect();
+
+      expect(await connecting, isFalse);
+      expect(attempts, 0);
+      expect(client.connectionStatusValue, ConnectionStatus.disconnected);
+    });
+  });
+
   group('WebSocketClient refused build', () {
     const documentId = 'doc';
     const pingInterval = Duration(milliseconds: 50);

@@ -24,8 +24,9 @@ class PlatformFileSaver extends FileSaver {
     final directory =
         await getDownloadsDirectory() ??
         await getApplicationDocumentsDirectory();
-    await File('${directory.path}${Platform.pathSeparator}$fileName')
-        .writeAsBytes(bytes);
+    await File(
+      '${directory.path}${Platform.pathSeparator}$fileName',
+    ).writeAsBytes(bytes);
     return true;
   }
 }

@@ -11,8 +11,9 @@ import 'package:greyhound_markdown_client/src/widgets/'
 /// [Markdown] rebuilds its whole widget tree whenever the data changes, so the
 /// builder map is read often; there is no reason to allocate a new one each
 /// time.
-final CodeElementBuilder _lightCodeBuilder =
-    CodeElementBuilder(Brightness.light);
+final CodeElementBuilder _lightCodeBuilder = CodeElementBuilder(
+  Brightness.light,
+);
 final CodeElementBuilder _darkCodeBuilder = CodeElementBuilder(Brightness.dark);
 
 /// Space above and below a heading, one constant per level.
@@ -93,9 +94,7 @@ MarkdownStyleSheet appMarkdownStyleSheet(ThemeData theme) {
     blockquote: body.copyWith(color: colors.onSurfaceVariant),
     blockquotePadding: const EdgeInsets.only(left: 16, top: 2, bottom: 2),
     blockquoteDecoration: BoxDecoration(
-      border: Border(
-        left: BorderSide(color: colors.outline, width: 4),
-      ),
+      border: Border(left: BorderSide(color: colors.outline, width: 4)),
     ),
     // Only reached by a fence whose language the highlighter does not know;
     // the rest carry `HighlightView`'s own padding, which this matches.

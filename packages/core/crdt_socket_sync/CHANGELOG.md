@@ -1,42 +1,41 @@
 ## [0.10.0](https://github.com/MattiaPispisa/crdt/tree/crdt_socket_sync-v0.10.0/packages/core/crdt_socket_sync)
 
-**Date:** 2026-09-20
+**Date:** 2026-10-04
 
 [compare to previous release](https://github.com/MattiaPispisa/crdt/compare/crdt_socket_sync-v0.9.0...crdt_socket_sync-v0.10.0)
 
+### Breaking
+
+- `CRDTServerRegistry` has a new getter, `snapshots`. A registry that `implements` it without
+  `CRDTServerRegistryDocuments` must add it; return `const Stream.empty()` to keep the old behavior.
+
 ### Added
 
-- **The server half of both protocols can now run on a transport it does not own** (an HTTP
-  framework, an isolate port, a test pipe).
-  `SessionHostServer` holds everything a server does once a peer is connected — the session map,
-  broadcasting, the `ServerEvent` stream, teardown — and takes connections through
-  `acceptConnection(TransportConnection)`. `DocumentSessionHost` and `RelaySessionHost` are the two
-  complete hosts on top of it, with no transport of their own, and are exported from `server.dart`
-  and `relay_server.dart`, which stay free of `dart:io`. Hosting the protocol on another HTTP
-  framework is now a matter of building a `TransportConnection` and handing it over; see
+- **The server half of both protocols can run on a transport it does not own** (an HTTP
+  framework, an isolate port, a test pipe): `DocumentSessionHost` and `RelaySessionHost` take
+  connections through `acceptConnection`. `WebSocketServer` and `WebSocketRelayServer` are now
+  their `dart:io` subclasses, with the same API. See
   [Hosting on your own transport](https://github.com/MattiaPispisa/crdt/tree/main/packages/core/crdt_socket_sync#advanced-hosting-on-your-own-transport).
-- `IoWebSocketHost` and `IoWebSocketConnection` are exported from `web_socket_server.dart` and
-  `web_socket_relay_server.dart`: the mixin that gives a host its `dart:io` `HttpServer` is the
-  reference for writing a host over another transport.
-- `WebSocketChannelConnection` is now public, from `server.dart` and `relay_server.dart`. The client
-  already used it internally; a server handed a `WebSocketChannel` by its framework needs the same
-  frame normalization, and a second copy of it would be free to drift from what the client sends.
-- `SessionHostState`, `SessionHostServer.state` and `SessionHostServer.isRunning` say whether a host
-  accepts sessions. This is what gates the aligned-snapshot coordinator, so it deliberately says
-  nothing about a listening socket: an embedded host has none and is still running.
-- `DocumentSessionHost.maybeTakeAlignedSnapshot` and `maybeTakeAlignedSnapshotForSession` are
-  public, so an embedder can force the coordinator before an orderly shutdown.
-- `RelaySessionHost.compaction` exposes the coordinator the host shares across its sessions.
+- **`CRDTReplica`** opens and closes a client document with its local storage and its sync
+  client, in the order that keeps the data. [144](https://github.com/MattiaPispisa/crdt/issues/144)
+- `keepSnapshots` on `PersistentServerRegistry`: how many snapshots each document keeps on disk.
 
 ### Changed
 
-- `WebSocketServer` and `WebSocketRelayServer` are now thin `dart:io` subclasses of
-  `DocumentSessionHost` and `RelaySessionHost`. Their constructors, `host`, `port`, `store`, the
-  `ServerEvent`s they emit and the order they emit them in are unchanged — the existing test suite
-  covers them and was not touched.
-- `dispose()` on a relay server now disposes the plugins before closing the event stream, as the
-  document server already did. A plugin that reported something while being disposed used to hit a
-  closed controller.
+- A running `DocumentSessionHost` sends each snapshot a document takes to its clients, once the
+  registry has stored it; `PersistentServerRegistry` waits for `whenStored` on the snapshot
+  version. `snapshots` moved to `CRDTServerRegistry`, filled by `DocumentSnapshotFeed`.
+- Needs Dart 3.3 and `crdt_lf_persistence` 0.2.0 or later.
+
+### Fixed
+
+- A relay welcome whose snapshot is concurrent with the client's becomes a `SyncFault`, instead of
+  a silent divergence between peers.
+- `InMemoryCRDTServerRegistry` builds each document under its own id, and `getLatestSnapshot`
+  returns a snapshot a document took by itself.
+- A client whose first `connect()` fails now retries; `disconnect()` and `dispose()` stop it, and
+  also stop a `connect()` still in progress.
+- A relay server disposes its plugins before closing its event stream.
 
 ## [0.9.0](https://github.com/MattiaPispisa/crdt/tree/crdt_socket_sync-v0.9.0/packages/core/crdt_socket_sync)
 

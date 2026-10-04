@@ -23,6 +23,7 @@ void main() {
     Future<CRDTDocumentPersistence> attach({
       CRDTDocument? to,
       int? compactAfter,
+      int? keepSnapshots = 1,
       Duration writeDelay = _now,
       void Function(Object, StackTrace)? onError,
     }) =>
@@ -31,6 +32,7 @@ void main() {
           storage,
           writeDelay: writeDelay,
           compactAfter: compactAfter,
+          keepSnapshots: keepSnapshots,
           onError: onError,
         );
 
@@ -374,7 +376,8 @@ void main() {
       await persistence.dispose();
     });
 
-    test('one flush covers the work the compaction itself causes', () async {
+    test('the compaction a flush causes is written by the next flush',
+        () async {
       final persistence = await attach(compactAfter: 1);
 
       // Two calls, so two transactions, so two changes: the store goes past
@@ -383,13 +386,46 @@ void main() {
         ..insert(0, 'a')
         ..insert(1, 'b');
       await persistence.flush();
+      await persistence.flush();
 
-      // The snapshot and the prune it causes are written inside this flush,
-      // not left for the next one.
       expect(await storage.snapshots.count, 1);
       expect(await storage.changes.count, 0);
 
       await persistence.dispose();
+    });
+
+    test(
+        'flush returns once what was queued at the call is written, while '
+        'edits keep coming', () async {
+      final changes = _TypingChangeStorage('doc');
+      final persistence = await CRDTDocumentPersistence.open(
+        document,
+        CRDTDocumentStorage(
+          changes: changes,
+          snapshots: InMemorySnapshotStorage('doc'),
+        ),
+        writeDelay: const Duration(hours: 1),
+      );
+      text.insert(0, 'a');
+      final queued = document.getVersionVector();
+      // Every write brings a new edit, as a typist that never stops.
+      changes.onSave = () => text.insert(text.length, 'x');
+
+      await persistence.flush().timeout(const Duration(seconds: 5));
+      await pumpEventQueue();
+
+      expect(
+        persistence.storedVersion.isStrictlyNewerOrEqualThan(queued),
+        isTrue,
+      );
+      expect(
+        persistence.hasUnwrittenChanges,
+        isTrue,
+        reason: 'the edits made after the call wait for the next write',
+      );
+      changes.onSave = null;
+      await persistence.dispose();
+      expect(persistence.hasUnwrittenChanges, isFalse);
     });
 
     test('compact snapshots, prunes, and waits for the disk', () async {
@@ -500,6 +536,224 @@ void main() {
       await persistence.dispose();
     });
 
+    group('keepSnapshots', () {
+      /// Takes [count] snapshots, one edit apart, and returns their ids.
+      Future<List<String>> snapshot(
+        CRDTDocumentPersistence persistence,
+        int count,
+      ) async {
+        final ids = <String>[];
+        for (var i = 0; i < count; i++) {
+          text.insert(text.length, '$i');
+          ids.add(document.takeSnapshot(pruneHistory: false).id);
+          await persistence.flush();
+        }
+        return ids;
+      }
+
+      Future<List<String>> storedIds() async => [
+            for (final snapshot in await storage.snapshots.getSnapshots())
+              snapshot.id,
+          ];
+
+      test('has to be positive', () {
+        expect(
+          () => attach(keepSnapshots: 0),
+          throwsA(isA<AssertionError>()),
+        );
+      });
+
+      test('keeps that many of the newest snapshots', () async {
+        final persistence = await attach(keepSnapshots: 3);
+        final ids = await snapshot(persistence, 5);
+
+        expect(await storedIds(), unorderedEquals(ids.skip(2)));
+        await persistence.dispose();
+      });
+
+      test('null keeps every snapshot', () async {
+        final persistence = await attach(keepSnapshots: null);
+        final ids = await snapshot(persistence, 4);
+
+        expect(await storedIds(), unorderedEquals(ids));
+        await persistence.dispose();
+      });
+
+      test('a restore drops the oldest beyond the limit', () async {
+        final persistence = await attach(keepSnapshots: null);
+        final ids = await snapshot(persistence, 3);
+        await persistence.dispose();
+
+        final next = reopened();
+        final restored = await CRDTDocumentPersistence.open(
+          next.document,
+          storage,
+          keepSnapshots: 2,
+        );
+        await restored.flush();
+
+        expect(await storedIds(), unorderedEquals(ids.skip(1)));
+        expect(next.text.value, '012');
+        await restored.dispose();
+      });
+    });
+
+    group('a snapshot write that fails', () {
+      late _FailingSnapshotStorage snapshots;
+      late CRDTDocumentPersistence persistence;
+
+      setUp(() async {
+        snapshots = _FailingSnapshotStorage('doc');
+        storage = InMemoryDocumentStorage('doc');
+        persistence = await CRDTDocumentPersistence.open(
+          document,
+          CRDTDocumentStorage(changes: storage.changes, snapshots: snapshots),
+          writeDelay: _now,
+          onError: (_, __) {},
+        );
+        text.insert(0, 'abc');
+        await persistence.flush();
+      });
+
+      tearDown(() async {
+        snapshots.failing = false;
+        await persistence.dispose();
+      });
+
+      test('holds back its prune, and is tried again', () async {
+        final written = await storage.changes.count;
+
+        document.takeSnapshot();
+        await persistence.flush();
+
+        expect(snapshots.count, 0);
+        expect(
+          await storage.changes.count,
+          written,
+          reason: 'the prune waits for the snapshot that covers it',
+        );
+        expect(persistence.hasUnwrittenChanges, isTrue);
+
+        snapshots.failing = false;
+        await persistence.flush();
+
+        expect(snapshots.count, 1);
+        expect(await storage.changes.count, 0);
+        expect(persistence.hasUnwrittenChanges, isFalse);
+      });
+
+      test('makes flush(throwOnError: true) throw, in every caller', () async {
+        document.takeSnapshot();
+
+        final results = await Future.wait(
+          [
+            persistence.flush(throwOnError: true).then((_) => 'ok'),
+            persistence.flush(throwOnError: true).then((_) => 'ok'),
+          ].map((flush) => flush.catchError((Object _) => 'thrown')),
+        );
+
+        expect(results, ['thrown', 'thrown']);
+      });
+
+      test('makes compact throw', () async {
+        await expectLater(persistence.compact(), throwsStateError);
+      });
+    });
+
+    group('whenStored', () {
+      test('completes once the changes are on the storage, not before',
+          () async {
+        final persistence = await attach(writeDelay: const Duration(hours: 1));
+        text.insert(0, 'a');
+
+        var done = false;
+        final stored = persistence
+            .whenStored(document.getVersionVector())
+            .then((_) => done = true);
+        await pumpEventQueue();
+        expect(done, isFalse);
+
+        await persistence.flush();
+        await stored;
+        expect(await storage.changes.count, 1);
+        await persistence.dispose();
+      });
+
+      test('waits through a failed write, and completes once a retry lands',
+          () async {
+        final persistence = await CRDTDocumentPersistence.open(
+          document,
+          _FailingStorage('doc', failures: 1),
+          writeDelay: _now,
+          onError: (_, __) {},
+        );
+        text.insert(0, 'a');
+
+        var done = false;
+        final stored = persistence
+            .whenStored(document.getVersionVector())
+            .then((_) => done = true);
+        await persistence.flush();
+        await pumpEventQueue();
+        expect(done, isFalse, reason: 'the first write failed');
+
+        await persistence.flush();
+        await stored;
+        await persistence.dispose();
+      });
+
+      test('counts what a reopen read back, from every peer', () async {
+        final remote = CRDTDocument(documentId: 'doc');
+        CRDTFugueTextHandler(remote, 'text').insert(0, 'theirs');
+        final persistence = await attach();
+        text.insert(0, 'mine ');
+        document.importChanges(remote.exportChanges());
+        await persistence.dispose();
+
+        final next = reopened();
+        final restored = await attach(to: next.document);
+
+        expect(
+          restored.storedVersion
+              .isStrictlyNewerOrEqualThan(next.document.getVersionVector()),
+          isTrue,
+        );
+        await restored.dispose();
+      });
+
+      test(
+          'counts a snapshot for the changes it pruned before they were '
+          'written', () async {
+        final persistence = await attach(writeDelay: const Duration(hours: 1));
+        text.insert(0, 'a');
+        final snapshot = document.takeSnapshot();
+
+        await persistence.whenStored(snapshot.versionVector);
+
+        expect(await storage.changes.count, 0);
+        await persistence.dispose();
+      });
+
+      test('throws at dispose for a version the storage never got', () async {
+        final persistence = await CRDTDocumentPersistence.open(
+          document,
+          _FailingStorage('doc'),
+          writeDelay: _now,
+          onError: (_, __) {},
+        );
+        text.insert(0, 'a');
+        final version = document.getVersionVector();
+        final outcome = expectLater(
+          persistence.whenStored(version),
+          throwsStateError,
+        );
+
+        await persistence.dispose();
+        await outcome;
+        await expectLater(persistence.whenStored(version), throwsStateError);
+      });
+    });
+
     test('openSync restores before it returns', () async {
       final persistence = await attach();
       text.insert(0, 'Hello 🌍');
@@ -581,6 +835,86 @@ void main() {
 
         final read = await storage.readDocument();
         expect(CRDTFugueTextHandler(read, 'text').value, 'before and after');
+      });
+
+      test('keeps a snapshot taken before open', () async {
+        text.insert(0, 'abc');
+        document.takeSnapshot();
+
+        final persistence = await attach();
+        await persistence.whenStored(document.getVersionVector());
+        await persistence.dispose();
+
+        final next = reopened();
+        final restored = await attach(to: next.document);
+        expect(next.text.value, 'abc');
+        expect(
+          restored.hasUnwrittenChanges,
+          isFalse,
+          reason: 'the snapshot read back is already on the disk',
+        );
+        await restored.dispose();
+      });
+
+      test('writes its snapshot over the older one on the disk', () async {
+        final first = await attach();
+        text.insert(0, 'abc');
+        await first.compact();
+        await first.dispose();
+
+        text.insert(3, 'd');
+        final newer = document.takeSnapshot();
+
+        final second = await attach();
+        await second.whenStored(newer.versionVector);
+        await second.flush();
+        expect((await storage.snapshots.getSnapshots()).single.id, newer.id);
+        await second.dispose();
+
+        final next = reopened();
+        await (await attach(to: next.document)).dispose();
+        expect(next.text.value, 'abcd');
+      });
+
+      test(
+          'throws on a stored snapshot concurrent with its own, and stops '
+          'following', () async {
+        final theirs = CRDTDocument(documentId: 'doc');
+        CRDTFugueTextHandler(theirs, 'text').insert(0, 'BBB');
+        final stored = theirs.takeSnapshot();
+        await storage.snapshots.saveSnapshot(stored);
+        text.insert(0, 'AAA');
+        document.takeSnapshot();
+
+        await expectLater(
+          attach(),
+          throwsA(isA<ConcurrentSnapshotException>()),
+        );
+        expect(text.value, 'AAA', reason: 'the document is left as it was');
+
+        text.insert(3, '!');
+        await pumpEventQueue();
+        expect(await storage.changes.count, 0);
+        expect((await storage.snapshots.getSnapshots()).single.id, stored.id);
+      });
+
+      test(
+          'openSync throws on a concurrent stored snapshot, and stops '
+          'following', () async {
+        final theirs = CRDTDocument(documentId: 'doc');
+        CRDTFugueTextHandler(theirs, 'text').insert(0, 'BBB');
+        await storage.snapshots.saveSnapshot(theirs.takeSnapshot());
+        text.insert(0, 'AAA');
+        document.takeSnapshot();
+
+        expect(
+          () => CRDTDocumentPersistence.openSync(document, storage),
+          throwsA(isA<ConcurrentSnapshotException>()),
+        );
+
+        text.insert(3, '!');
+        await pumpEventQueue();
+        expect(await storage.changes.count, 0);
       });
 
       test('queues nothing when the storage already holds it', () async {
@@ -671,6 +1005,34 @@ class _FailingChangeStorage extends InMemoryChangeStorage {
       throw StateError('disk full');
     }
     return super.saveChanges(changes);
+  }
+}
+
+/// A change storage that runs [onSave] on every write, before it saves.
+class _TypingChangeStorage extends InMemoryChangeStorage {
+  _TypingChangeStorage(super.documentId);
+
+  void Function()? onSave;
+
+  @override
+  void saveChanges(List<Change> changes) {
+    onSave?.call();
+    super.saveChanges(changes);
+  }
+}
+
+/// A snapshot storage that refuses every write while [failing] is on.
+class _FailingSnapshotStorage extends InMemorySnapshotStorage {
+  _FailingSnapshotStorage(super.documentId);
+
+  bool failing = true;
+
+  @override
+  Future<void> saveSnapshot(Snapshot snapshot) async {
+    if (failing) {
+      throw StateError('disk full');
+    }
+    return super.saveSnapshot(snapshot);
   }
 }
 

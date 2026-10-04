@@ -196,9 +196,7 @@ class _LineNumberGutterState extends State<LineNumberGutter> {
       width: widget.width,
       // Decoration only. A CustomPaint absorbs hits by default, which would
       // eat a drag that started on the gutter.
-      child: IgnorePointer(
-        child: CustomPaint(painter: _GutterPainter(this)),
-      ),
+      child: IgnorePointer(child: CustomPaint(painter: _GutterPainter(this))),
     );
   }
 
@@ -275,9 +273,7 @@ class _GutterPainter extends CustomPainter {
       final painter = _state._numberPainter(line.number, style);
       // Past the gutter's widest digit count a number is shrunk to fit
       // instead of spilling over the text.
-      final scale = painter.width > available
-          ? available / painter.width
-          : 1.0;
+      final scale = painter.width > available ? available / painter.width : 1.0;
       if (scale == 1) {
         painter.paint(
           canvas,

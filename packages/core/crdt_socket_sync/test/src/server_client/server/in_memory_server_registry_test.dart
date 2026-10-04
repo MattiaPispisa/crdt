@@ -26,6 +26,41 @@ void main() {
       expect(await registry.documentIds, {'doc'});
     });
 
+    test('builds each document under its own id', () async {
+      await registry.addDocument('doc');
+
+      expect((await registry.getDocument('doc'))!.documentId, 'doc');
+    });
+
+    test('reports the snapshots its documents take, until removed', () async {
+      final seed = CRDTDocument(documentId: 'seed');
+      registry = InMemoryCRDTServerRegistry(documents: {'seed': seed});
+      await registry.addDocument('doc');
+      final doc = (await registry.getDocument('doc'))!;
+      final taken = <String>[];
+      registry.snapshots.listen((event) => taken.add(event.documentId));
+
+      seed.takeSnapshot();
+      await pumpEventQueue();
+      doc.takeSnapshot();
+      await pumpEventQueue();
+      expect(taken, ['seed', 'doc']);
+
+      await registry.removeDocument('doc');
+      doc.takeSnapshot();
+      await pumpEventQueue();
+      expect(taken, ['seed', 'doc']);
+    });
+
+    test('keeps the snapshot a document takes by itself', () async {
+      await registry.addDocument('doc');
+
+      final snapshot = (await registry.getDocument('doc'))!.takeSnapshot();
+      await pumpEventQueue();
+
+      expect(await registry.getLatestSnapshot('doc'), snapshot);
+    });
+
     test('removes documents and their snapshots', () async {
       await registry.addDocument('doc');
       await registry.createSnapshot('doc');

@@ -18,7 +18,6 @@ final _kDocumentPeerId = PeerId.parse('97a6b8b3-fffc-4ebe-8dd4-f94e6a01c52f');
 late CRDTHiveBackend _backend;
 late PersistentServerRegistry _registry;
 late WebSocketServer _server;
-StreamSubscription<ServerSnapshot>? _snapshotBroadcast;
 
 Future<void> run({
   int? port,
@@ -75,12 +74,6 @@ Future<void> run({
     // symmetric. Defaults to NoCompression when null.
     compressor: compressor,
   );
-  _snapshotBroadcast = broadcastSnapshots(
-    registry: _registry,
-    server: _server,
-    logger: logger.getConfiguredInstance(prefix: 'Registry'),
-  );
-
   _setupSigintHandler(logger: logger.getConfiguredInstance(prefix: 'Bin'));
 
   await _startServer(
@@ -143,7 +136,6 @@ void _setupSigintHandler({required EnLogger logger}) {
   ProcessSignal.sigint.watch().listen((signal) async {
     logger.info('\n⏹️  Received SIGINT, shutting down gracefully...');
     await _server.stop();
-    await _snapshotBroadcast?.cancel();
     await _registry.close();
     await _backend.close();
     logger.info('✅ Server stopped.');

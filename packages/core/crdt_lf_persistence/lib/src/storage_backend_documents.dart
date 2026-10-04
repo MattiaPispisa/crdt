@@ -61,8 +61,8 @@ extension CRDTStorageBackendDocuments on CRDTStorageBackend {
   /// on [CRDTDocument.events] that wants to see the restore, or the factories
   /// a document needs to resolve nested handlers. Handlers do not need it.
   ///
-  /// [writeDelay], [compactAfter] and [onError] mean what they mean on
-  /// [CRDTDocumentPersistence.open].
+  /// [writeDelay], [compactAfter], [keepSnapshots] and [onError] mean what
+  /// they mean on [CRDTDocumentPersistence.open].
   ///
   /// The document is disposed and the failure rethrown when the restore fails,
   /// so a caller never gets half of one back. Nothing is closed: the backend
@@ -77,6 +77,7 @@ extension CRDTStorageBackendDocuments on CRDTStorageBackend {
     void Function(CRDTDocument document)? onDocument,
     Duration writeDelay = const Duration(milliseconds: 250),
     int? compactAfter,
+    int? keepSnapshots = 1,
     void Function(Object error, StackTrace stack)? onError,
   }) async {
     final peers = await peerIdStorageForDocument(documentId);
@@ -95,6 +96,7 @@ extension CRDTStorageBackendDocuments on CRDTStorageBackend {
         await storageForDocument(documentId),
         writeDelay: writeDelay,
         compactAfter: compactAfter,
+        keepSnapshots: keepSnapshots,
         onError: onError,
       );
       return (document: document, persistence: persistence);

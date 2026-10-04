@@ -1,3 +1,13 @@
+## 0.12.0
+
+**Date:** 2026-09-27
+
+### Changed
+
+- Update `crdt_socket_sync` to `0.10.0`: a room opens through `CRDTReplica`.
+- A room opened without a connection now joins the relay by itself once it is reachable 
+  (related to `crdt_socket_sync: 0.10.0`).
+
 ## 0.11.0
 
 **Date:** 2026-09-19

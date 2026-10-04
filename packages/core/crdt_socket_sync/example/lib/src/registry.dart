@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:crdt_lf_hive/crdt_lf_hive.dart';
 import 'package:crdt_socket_sync/web_socket_server.dart';
 import 'package:en_logger/en_logger.dart';
@@ -32,36 +30,6 @@ Future<PersistentServerRegistry> openHiveRegistry({
     idleAfter: _kIdleAfter,
     onError: (error, stack) => logger.error('Storage write failed.\n$error'),
   );
-}
-
-/// Tells every client about each snapshot the registry takes.
-///
-/// A snapshot comes with a prune: the history it covers leaves the server. A
-/// client still replaying that history has to be given the snapshot instead,
-/// or it asks for changes nobody has any more.
-///
-/// Cancel the returned subscription on shutdown, before closing [registry].
-StreamSubscription<ServerSnapshot> broadcastSnapshots({
-  required PersistentServerRegistry registry,
-  required WebSocketServer server,
-  required EnLogger logger,
-}) {
-  return registry.snapshots.listen((event) async {
-    final document = await registry.getDocument(event.documentId);
-    if (document == null) {
-      return;
-    }
-
-    logger.info('Broadcasting snapshot of ${event.documentId}...');
-    await server.broadcastMessage(
-      SyncMessage.documentStatus(
-        documentId: event.documentId,
-        snapshot: event.snapshot,
-        changes: document.exportChanges(),
-        versionVector: document.getVersionVector(),
-      ),
-    );
-  });
 }
 
 /// Logs what each document holds, for the demo.

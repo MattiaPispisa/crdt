@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:crdt_lf/crdt_lf.dart';
 import 'package:crdt_lf_hive/crdt_lf_hive.dart';
+import 'package:crdt_socket_sync/replica.dart';
 import 'package:crdt_socket_sync/web_socket_relay_client.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -15,9 +16,9 @@ import 'package:greyhound_markdown_client/src/services/room/room_session.dart';
 /// Opens a room and keeps it alive for as long as the [State] using it is in
 /// the tree.
 ///
-/// Everything a room is made of, in the order it has to be built: the stored
-/// identity, the document restored from this device, the undo history, the
-/// awareness service, the relay client. [room] is `null` until all of it is
+/// A room is a [CRDTReplica] — the document restored from this device, and
+/// the relay client on it — plus what the app builds on top: the undo
+/// history and the awareness service. [room] is `null` until all of it is
 /// ready, and disposing the state closes all of it.
 ///
 /// `RoomBuilder` is this mixin as a widget, and is what a screen should use.
@@ -29,13 +30,11 @@ mixin RoomHost<T extends StatefulWidget> on State<T> {
   /// The room to open.
   String get roomId;
 
+  Future<CRDTReplica>? _replica;
+  AwarenessService? _awareness;
   RoomSession? _room;
-  CRDTHiveBackend? _backend;
-  WebSocketRelayClient? _sync;
   ValueNotifier<ConnectionStatus>? _status;
   StreamSubscription<ConnectionStatus>? _statusSubscription;
-  bool _opening = false;
-  bool _disposed = false;
 
   /// The open room, or `null` while the local copy is still being read.
   ///
@@ -46,21 +45,39 @@ mixin RoomHost<T extends StatefulWidget> on State<T> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    if (_opening) {
+    if (_replica != null) {
       return;
     }
-    _opening = true;
-    unawaited(_restoreThenConnect(context.read<UserSettingsCubit>()));
+
+    final settings = context.read<UserSettingsCubit>();
+    final profile = settings.state;
+    // Before the replica: the relay client carries its plugin.
+    final awareness = _awareness = AwarenessService(
+      name: profile.displayName,
+      color: profile.color,
+    );
+    final replica = _replica = CRDTReplica.open(
+      documentId: roomId,
+      storage: CRDTHive.open,
+      sync: (document) => WebSocketRelayClient(
+        url: roomUrl(kServerUrl, roomId),
+        document: document,
+        author: document.peerId,
+        plugins: [awareness.plugin],
+      ),
+      // A device that cannot read its storage still edits the room. It starts
+      // empty, fills up from the relay, and keeps nothing for the next launch.
+      onStorageError: reportRoomError,
+    );
+    unawaited(_showRoom(replica, settings, awareness));
   }
 
-  /// Brings back what the last session left on this device, then goes online.
-  ///
-  /// In that order on purpose: offline, or on a relay that has forgotten the
-  /// room, the local copy is all there is. Connecting first would show an
-  /// empty page for as long as the handshake takes.
-  Future<void> _restoreThenConnect(UserSettingsCubit settings) async {
-    final profile = settings.state;
-    final opened = await _openDocument();
+  Future<void> _showRoom(
+    Future<CRDTReplica> opening,
+    UserSettingsCubit settings,
+    AwarenessService awareness,
+  ) async {
+    final replica = await opening;
 
     // After the first await on purpose: the cubit is read while the tree is
     // building, and emitting there would change state mid-build. The room is
@@ -68,79 +85,30 @@ mixin RoomHost<T extends StatefulWidget> on State<T> {
     // it.
     settings.recordRoomOpened(roomId);
 
-    // `dispose` can have run while the storage was being read. It found
-    // nothing built yet and had nothing to close, so this closes it here.
-    if (_disposed) {
-      unawaited(
-        _closeStorage(opened.document, opened.persistence, _backend),
-      );
+    // `dispose` ran while the storage was being read, and closes the replica
+    // on its own.
+    if (!mounted) {
       return;
     }
 
-    // Nothing below suspends, so the teardown cannot cut in again.
-    final document = opened.document;
-    final text = CRDTFugueTextHandler(document, kHandlerId);
-    final awareness = AwarenessService(
-      name: profile.displayName,
-      color: profile.color,
-    );
-    final sync = WebSocketRelayClient(
-      url: roomUrl(kServerUrl, roomId),
-      document: document,
-      author: document.peerId,
-      plugins: [awareness.plugin],
-    );
-    final status = ValueNotifier(sync.connectionStatusValue);
-
-    _sync = sync;
-    _status = status;
+    final sync = replica.client!;
+    final status = _status = ValueNotifier(sync.connectionStatusValue);
     _statusSubscription = sync.connectionStatus.listen(
-      (value) => _status?.value = value,
+      (value) => status.value = value,
     );
 
+    final text = CRDTFugueTextHandler(replica.document, kHandlerId);
     setState(() {
       _room = RoomSession(
         roomId: roomId,
-        document: document,
+        document: replica.document,
         text: text,
-        undo: CRDTUndoManager(document)..track(text),
+        undo: CRDTUndoManager(replica.document)..track(text),
         awareness: awareness,
         status: status,
-        persistence: opened.persistence,
+        persistence: replica.persistence,
       );
     });
-
-    // Only now: the restored document is what the relay is caught up against,
-    // so anything written offline goes out with the next welcome.
-    sync.connect();
-  }
-
-  /// The document as this device last left it, and what keeps writing it down.
-  ///
-  /// A device that cannot read its storage still edits the room. It starts
-  /// empty, fills up from the relay, and writes under a new identity — which
-  /// is what happened on every launch before there was a local copy. The
-  /// `persistence` is `null` there, and nothing is kept for the next launch.
-  Future<({CRDTDocument document, CRDTDocumentPersistence? persistence})>
-      _openDocument() async {
-    try {
-      final backend = _backend = await CRDTHive.open();
-      // The backend keeps the identity too, so the device writes under the
-      // same author on every launch. A new one per launch would grow the
-      // room's version vector by an entry that never leaves — carried inside
-      // every snapshot from then on.
-      final opened = await backend.openDocument(
-        roomId,
-        onError: reportRoomError,
-      );
-      return (document: opened.document, persistence: opened.persistence);
-    } catch (error, stackTrace) {
-      reportRoomError(error, stackTrace);
-      return (
-        document: CRDTDocument(documentId: roomId),
-        persistence: null,
-      );
-    }
   }
 
   /// Reports a failure of the local copy, which never stops the room.
@@ -161,38 +129,13 @@ mixin RoomHost<T extends StatefulWidget> on State<T> {
 
   @override
   void dispose() {
-    _disposed = true;
     _statusSubscription?.cancel();
-    // The client owns the awareness plugin, so this disposes that too. The
-    // service below is a different object.
-    _sync?.dispose();
-    _room?.awareness.dispose();
     _status?.dispose();
     _room?.undo.dispose();
-    unawaited(
-      _closeStorage(_room?.document, _room?.persistence, _backend),
-    );
+    _awareness?.dispose();
+    // Not awaited: `dispose` cannot wait. The replica writes what is still
+    // waiting before it lets the document go.
+    unawaited(_replica?.then((replica) => replica.close()));
     super.dispose();
-  }
-
-  /// Writes what is still waiting, then lets the document and the store go.
-  ///
-  /// In that order, and not awaited by [dispose]: the flush suspends, and a
-  /// document disposed while it runs closes the event stream the persistence
-  /// is still reading. The last keystrokes would never reach the disk.
-  static Future<void> _closeStorage(
-    CRDTDocument? document,
-    CRDTDocumentPersistence? persistence,
-    CRDTHiveBackend? backend,
-  ) async {
-    try {
-      await persistence?.dispose();
-    } finally {
-      document?.dispose();
-      // The two boxes of this document, then the registry box. Left open on
-      // the web they are IndexedDB connections that never close.
-      await persistence?.storage.close();
-      await backend?.close();
-    }
   }
 }

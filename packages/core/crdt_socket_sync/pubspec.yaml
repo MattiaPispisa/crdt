@@ -7,11 +7,11 @@ topics: [crdt, socket, sync, fugue, hlc]
 version: 0.10.0
 
 environment:
-  sdk: ">=3.0.0 <4.0.0"
+  sdk: ">=3.3.0 <4.0.0"
 
 dependencies:
   crdt_lf: ^5.0.0
-  crdt_lf_persistence: ^0.1.0
+  crdt_lf_persistence: ^0.2.0
   hlc_dart: ^1.0.0
   meta: ^1.9.0
   web_socket_channel: ^3.0.0

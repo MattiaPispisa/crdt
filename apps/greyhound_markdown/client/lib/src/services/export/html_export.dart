@@ -13,10 +13,7 @@ String markdownToHtmlDocument(
   required String title,
   String languageCode = 'en',
 }) {
-  final body = md.markdownToHtml(
-    markdown,
-    extensionSet: kMarkdownExtensionSet,
-  );
+  final body = md.markdownToHtml(markdown, extensionSet: kMarkdownExtensionSet);
   return '''
 <!DOCTYPE html>
 <html lang="$languageCode">

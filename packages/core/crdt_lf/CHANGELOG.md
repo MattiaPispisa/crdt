@@ -1,3 +1,25 @@
+## [5.1.0](https://github.com/MattiaPispisa/crdt/tree/crdt_lf-v5.1.0/packages/core/crdt_lf)
+
+**Date:** 2026-10-04
+
+[compare to previous release](https://github.com/MattiaPispisa/crdt/compare/crdt_lf-v5.0.0...crdt_lf-v5.1.0)
+
+### Added
+
+- `CRDTDocument.snapshot`: a read-only copy of the snapshot the document holds.
+
+### Changed
+
+- Needs Dart 3.3 or later.
+
+### Fixed
+
+- `mergeSnapshot` and `import(merge: true)` throw a `ConcurrentSnapshotException` on a snapshot that
+  holds a handler at a version concurrent with the document's, instead of keeping one side. 
+  [151](https://github.com/MattiaPispisa/crdt/issues/151)
+- `CRDTDocument.handler` threw "already registered" on the web: dart2js built the handler twice
+  ([dart-lang/sdk#64410](https://github.com/dart-lang/sdk/issues/64410)).
+
 ## [5.0.0](https://github.com/MattiaPispisa/crdt/tree/crdt_lf-v5.0.0/packages/core/crdt_lf)
 
 **Date:** 2026-09-19
