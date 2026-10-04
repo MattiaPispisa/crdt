@@ -2,6 +2,7 @@ name: crdt
 
 packages:
   - packages/**
+  - apps/**
 
 repository: https://github.com/MattiaPispisa/crdt
 

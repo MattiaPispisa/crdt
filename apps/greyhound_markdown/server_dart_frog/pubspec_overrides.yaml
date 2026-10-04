@@ -1,6 +1,4 @@
-# Builds the server against the in-repo packages: melos does not reach apps/,
-# so this file is written by hand. crdt_socket_sync_dart_frog is the reason it
-# exists; the others keep the whole graph on the in-repo versions.
+# melos_managed_dependency_overrides: crdt_lf,crdt_lf_persistence,crdt_socket_sync,crdt_socket_sync_dart_frog,hlc_dart
 dependency_overrides:
   crdt_lf:
     path: ../../../packages/core/crdt_lf
