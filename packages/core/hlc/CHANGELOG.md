@@ -1,3 +1,23 @@
+## [1.2.0](https://github.com/MattiaPispisa/crdt/tree/hlc_dart-v1.2.0/packages/core/hlc)
+
+**Date:** 2026-10-04
+
+[compare to previous release](https://github.com/MattiaPispisa/crdt/compare/hlc_dart-v1.1.0+3...hlc_dart-v1.2.0)
+
+### Added
+
+- `HybridLogicalClock.max` and `HybridLogicalClock.min`.
+- Benchmarks for encoding, decoding, comparing, `localEvent` and `receiveEvent`.
+
+### Changed
+
+- The constructor asserts that `l` fits in 48 bits and `c` in 16 bits.
+
+### Fixed
+
+- A counter past 65535 wrapped in `toUint8List` and `toInt64`: `localEvent` and `receiveEvent`
+  now move `l` forward by 1 and restart `c` from 0. The 8-byte format is unchanged.
+
 ## [1.1.0+3](https://github.com/MattiaPispisa/crdt/tree/hlc_dart-v1.1.0+3/packages/core/hlc)
 
 **Date:** 2026-10-04

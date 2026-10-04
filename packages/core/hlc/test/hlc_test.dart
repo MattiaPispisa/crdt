@@ -20,6 +20,13 @@ void main() {
       );
     });
 
+    test('throws AssertionError for a counter wider than 16 bits', () {
+      expect(
+        () => HybridLogicalClock(l: 0, c: 0x10000),
+        throwsA(isA<AssertionError>()),
+      );
+    });
+
     test('initialize creates a zero HLC', () {
       final hlc = HybridLogicalClock.initialize();
       expect(hlc.l, equals(0));
@@ -366,6 +373,49 @@ void main() {
       });
     });
 
+    group('counter overflow', () {
+      test('a burst of local events keeps every timestamp ordered in bytes',
+          () {
+        var clock = HybridLogicalClock(l: 1000, c: 0xFFFE);
+        var bytes = clock.toUint8List();
+        for (var i = 0; i < 3; i++) {
+          final next = clock.nextTimestamp(500);
+          final nextBytes = next.toUint8List();
+
+          expect(HybridLogicalClock.fromUint8List(nextBytes), equals(next));
+          expect(_compareBytes(bytes, nextBytes), lessThan(0));
+          clock = next;
+          bytes = nextBytes;
+        }
+        expect(clock, equals(HybridLogicalClock(l: 1001, c: 1)));
+      });
+
+      test('a received clock with a full counter stays behind the receiver',
+          () {
+        final received = HybridLogicalClock(l: 1000, c: 0xFFFF);
+        final clock = HybridLogicalClock(l: 900, c: 0).merge(500, received);
+
+        expect(clock > received, isTrue);
+        expect(
+          HybridLogicalClock.fromUint8List(clock.toUint8List()),
+          equals(clock),
+        );
+      });
+    });
+
+    test('max and min fold clocks to the latest and the earliest', () {
+      final first = HybridLogicalClock(l: 1000, c: 8);
+      final clocks = [
+        HybridLogicalClock(l: 1000, c: 7),
+        first,
+        HybridLogicalClock(l: 900, c: 9),
+        first.copy(),
+      ];
+
+      expect(clocks.reduce(HybridLogicalClock.max), same(first));
+      expect(clocks.reduce(HybridLogicalClock.min), same(clocks[2]));
+    });
+
     test('asDateTime returns correct DateTime object', () {
       final now = DateTime.now();
       final hlc = HybridLogicalClock(l: now.millisecondsSinceEpoch, c: 5);
@@ -375,4 +425,13 @@ void main() {
       );
     });
   });
+}
+
+int _compareBytes(Uint8List a, Uint8List b) {
+  for (var i = 0; i < a.length; i++) {
+    if (a[i] != b[i]) {
+      return a[i].compareTo(b[i]);
+    }
+  }
+  return 0;
 }
