@@ -3,9 +3,12 @@ import 'dart:ui';
 
 import 'package:crdt_lf/crdt_lf.dart';
 import 'package:crdt_socket_sync/web_socket_relay_client.dart';
+import 'package:en_logger/en_logger.dart';
 import 'package:flutter/foundation.dart';
 
 import 'package:greyhound_markdown_client/src/config.dart';
+import 'package:greyhound_markdown_client/src/di/service_locator.dart';
+import 'package:greyhound_markdown_client/src/logging/app_logger.dart';
 
 /// Presence state of a remote peer: identity plus an optional text cursor
 /// anchored to stable fugue positions.
@@ -63,7 +66,8 @@ class AwarenessService {
   }) : plugin = ClientAwarenessPlugin(
          throttleDuration: throttle,
          initialMetadata: PeerState(name: name, color: color).toJson(),
-       ) {
+       ),
+       _logger = loggerFor(LogScope.awareness) {
     _subscription = plugin.awarenessStream.listen(_onAwareness);
   }
 
@@ -76,17 +80,30 @@ class AwarenessService {
   /// Remote peers keyed by session id (self excluded).
   final ValueNotifier<Map<String, PeerState>> peers = ValueNotifier(const {});
 
+  final EnLogger _logger;
+
   StreamSubscription<DocumentAwareness>? _subscription;
 
   void _onAwareness(DocumentAwareness awareness) {
     final sessionId = plugin.client.sessionId;
-    peers.value = {
+    final previous = peers.value;
+    final next = peers.value = {
       for (final entry in awareness.states.entries)
         // Skip self and peers that have not published a state yet
         // (a fresh joiner has empty metadata until its first update).
         if (entry.key != sessionId && entry.value.metadata.isNotEmpty)
           entry.key: PeerState.fromJson(entry.value.metadata),
     };
+    for (final MapEntry(key: id, value: peer) in next.entries) {
+      if (!previous.containsKey(id)) {
+        _logger.info('${peer.name} joined ($id)');
+      }
+    }
+    for (final MapEntry(key: id, value: peer) in previous.entries) {
+      if (!next.containsKey(id)) {
+        _logger.info('${peer.name} left ($id)');
+      }
+    }
   }
 
   /// Updates the local text cursor; `null` anchors withdraw it (blur).
