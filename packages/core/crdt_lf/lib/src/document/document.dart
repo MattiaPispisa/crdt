@@ -1411,8 +1411,9 @@ class CRDTDocument extends BaseCRDTDocument {
 
   /// Merges a [Snapshot] with the current snapshot
   ///
-  /// This operation is always successful, even if the snapshot is older than
-  /// the current snapshot.
+  /// It succeeds even when [snapshot] is older than the current one. Throws a
+  /// [ConcurrentSnapshotException], and leaves the document as it was, when
+  /// both hold a handler at concurrent versions.
   ///
   /// Use [pruneHistory] to prune the history and reduce memory usage.
   ///
@@ -1431,6 +1432,14 @@ class CRDTDocument extends BaseCRDTDocument {
   }
 
   void _mergeSnapshot(Snapshot snapshot, bool pruneHistory) {
+    final current = _lastSnapshot;
+    if (current != null && _mergeLosesState(current, snapshot)) {
+      throw ConcurrentSnapshotException(
+        currentId: current.id,
+        incomingId: snapshot.id,
+      );
+    }
+
     _dataRequirements.readRecord(snapshot);
 
     if (_lastSnapshot == null) {
@@ -1457,6 +1466,25 @@ class CRDTDocument extends BaseCRDTDocument {
     }
     _invalidateHandlers(ResetCause.snapshotMerge);
     _emitUpdate();
+  }
+
+  /// Whether merging the two would drop a handler's state: both hold it, with
+  /// different bytes, at concurrent versions.
+  bool _mergeLosesState(Snapshot a, Snapshot b) {
+    if (a.versionVector.isStrictlyNewerOrEqualThan(b.versionVector) ||
+        b.versionVector.isStrictlyNewerOrEqualThan(a.versionVector)) {
+      return false;
+    }
+    for (final MapEntry(key: handlerId, value: blob) in a.data.entries) {
+      if (SnapshotRecords.reservedKeys.contains(handlerId)) {
+        continue;
+      }
+      final other = b.data[handlerId];
+      if (other != null && !bytesEqual(blob, other)) {
+        return true;
+      }
+    }
+    return false;
   }
 
   /// Advances the clock past every entry of [versionVector].
@@ -1514,7 +1542,7 @@ class CRDTDocument extends BaseCRDTDocument {
   /// if [snapshot] is not imported.
   ///
   /// If [merge] is `true`, [snapshot] is merged with the current snapshot
-  /// (snapshot is imported using [mergeSnapshot])
+  /// (snapshot is imported using [mergeSnapshot], and throws as it does)
   /// and [changes] are applied to the merged snapshot.
   ///
   /// For more details:

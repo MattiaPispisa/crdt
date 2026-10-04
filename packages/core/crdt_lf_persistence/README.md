@@ -150,9 +150,10 @@ changes that no snapshot covers.
 
 The document passed to `open` may already hold state. It is merged with the
 stored one, and what only the document held — changes and snapshot — is
-written. One limit: two snapshots merge per handler, and the newer one wins
-whole. When the document and the disk each hold a snapshot of concurrent
-histories, the state of one side is kept only where its changes still are.
+written. One limit: a snapshot keeps a state, not the history to merge it.
+When the document and the disk hold snapshots of concurrent histories for the
+same handler, `open` throws a `ConcurrentSnapshotException` and leaves both as
+they are.
 
 ## Reading part of the log
 

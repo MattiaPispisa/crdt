@@ -444,6 +444,23 @@ void main() {
         expect(source.snapshot!.toBytes(), before);
       });
 
+      test(
+          'mergeSnapshot refuses a concurrent state of the same handler, and '
+          'leaves the document as it was', () {
+        final mine = CRDTDocument();
+        final text = CRDTFugueTextHandler(mine, 'text')..insert(0, 'AAA');
+        final held = mine.takeSnapshot();
+        final theirs = CRDTDocument();
+        CRDTFugueTextHandler(theirs, 'text').insert(0, 'BBB');
+
+        expect(
+          () => mine.mergeSnapshot(theirs.takeSnapshot()),
+          throwsA(isA<ConcurrentSnapshotException>()),
+        );
+        expect(mine.snapshot!.id, held.id);
+        expect(text.value, 'AAA');
+      });
+
       test('importing a snapshot advances the clock past its version vector',
           () {
         final peerId = PeerId.generate();

@@ -29,6 +29,8 @@
 
 ### Fixed
 
+- A relay welcome whose snapshot is concurrent with the client's becomes a `SyncFault`, instead of
+  a silent divergence between peers.
 - `InMemoryCRDTServerRegistry` builds each document under its own id, and `getLatestSnapshot`
   returns a snapshot a document took by itself.
 - A client whose first `connect()` fails now retries; `disconnect()` and `dispose()` stop it, and

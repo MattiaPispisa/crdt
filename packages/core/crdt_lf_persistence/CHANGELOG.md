@@ -19,6 +19,8 @@
 
 ### Fixed
 
+- `open` throws when the document and the storage hold concurrent snapshots, instead of dropping
+  one side; a failed `open` stops following the document.
 - A snapshot the document took before `open` is written; the next open lost it.
 - A failed snapshot write no longer lets its prune delete the changes it covers, and is retried.
 - Two concurrent `flush()` calls no longer hide a failed write from each other.

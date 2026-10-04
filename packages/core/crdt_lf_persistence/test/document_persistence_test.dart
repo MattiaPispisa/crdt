@@ -876,6 +876,47 @@ void main() {
         expect(next.text.value, 'abcd');
       });
 
+      test(
+          'throws on a stored snapshot concurrent with its own, and stops '
+          'following', () async {
+        final theirs = CRDTDocument(documentId: 'doc');
+        CRDTFugueTextHandler(theirs, 'text').insert(0, 'BBB');
+        final stored = theirs.takeSnapshot();
+        await storage.snapshots.saveSnapshot(stored);
+        text.insert(0, 'AAA');
+        document.takeSnapshot();
+
+        await expectLater(
+          attach(),
+          throwsA(isA<ConcurrentSnapshotException>()),
+        );
+        expect(text.value, 'AAA', reason: 'the document is left as it was');
+
+        text.insert(3, '!');
+        await pumpEventQueue();
+        expect(await storage.changes.count, 0);
+        expect((await storage.snapshots.getSnapshots()).single.id, stored.id);
+      });
+
+      test(
+          'openSync throws on a concurrent stored snapshot, and stops '
+          'following', () async {
+        final theirs = CRDTDocument(documentId: 'doc');
+        CRDTFugueTextHandler(theirs, 'text').insert(0, 'BBB');
+        await storage.snapshots.saveSnapshot(theirs.takeSnapshot());
+        text.insert(0, 'AAA');
+        document.takeSnapshot();
+
+        expect(
+          () => CRDTDocumentPersistence.openSync(document, storage),
+          throwsA(isA<ConcurrentSnapshotException>()),
+        );
+
+        text.insert(3, '!');
+        await pumpEventQueue();
+        expect(await storage.changes.count, 0);
+      });
+
       test('queues nothing when the storage already holds it', () async {
         text.insert(0, 'hello');
         await (await attach()).dispose();

@@ -86,7 +86,10 @@ class CRDTDocumentPersistence {
   /// - [onError]: gets every failed write. The write stays queued and is
   ///   retried.
   ///
-  /// Throws an [ArgumentError] when [compactAfter] is not positive.
+  /// Throws an [ArgumentError] when [compactAfter] is not positive. Throws
+  /// what the restore throws — a [ConcurrentSnapshotException] when
+  /// [document] and the storage hold concurrent snapshots — and then stops
+  /// following [document].
   static Future<CRDTDocumentPersistence> open(
     CRDTDocument document,
     CRDTDocumentStorage storage, {
@@ -104,15 +107,20 @@ class CRDTDocumentPersistence {
       onError,
     );
 
-    await persistence._restoreFromStorage();
+    try {
+      await persistence._restoreFromStorage();
+    } catch (_) {
+      persistence._stopFollowing();
+      rethrow;
+    }
     return persistence;
   }
 
   /// [open] for a storage that reads without suspending: the document is
   /// already restored when this returns.
   ///
-  /// Throws a [StateError] when a read returns a [Future], as drift's do, and
-  /// leaves the document untouched. The options are those of [open].
+  /// Throws a [StateError] when a read returns a [Future].
+  /// The options are those of [open].
   static CRDTDocumentPersistence openSync(
     CRDTDocument document,
     CRDTDocumentStorage storage, {
@@ -130,14 +138,19 @@ class CRDTDocumentPersistence {
       onError,
     );
 
-    final restoring = persistence._restoreFromStorage();
+    final FutureOr<void> restoring;
+    try {
+      restoring = persistence._restoreFromStorage();
+    } catch (_) {
+      persistence._stopFollowing();
+      rethrow;
+    }
     if (restoring is Future<void>) {
       // The read is in flight: abandoned, it never imports after this throws.
       persistence._restore.abandon();
       // Nobody awaits it, so a failure would surface as an unhandled error.
       unawaited(restoring.catchError((Object _, StackTrace __) {}));
-      unawaited(persistence._subscription?.cancel());
-      persistence._subscription = null;
+      persistence._stopFollowing();
       throw StateError(
         'openSync needs a storage that reads without suspending, and '
         '${storage.runtimeType} returned a future. Use open() instead.',
@@ -198,6 +211,15 @@ class CRDTDocumentPersistence {
   bool get hasUnwrittenChanges => _pending.isNotEmpty || _steps.isNotEmpty;
 
   FutureOr<void> _restoreFromStorage() => _restore.run().chain(_catchUp);
+
+  /// Undoes [CRDTDocumentPersistence._following], for an open that fails.
+  void _stopFollowing() {
+    unawaited(_subscription?.cancel());
+    _subscription = null;
+    _disposed = true;
+    _timer?.cancel();
+    _timer = null;
+  }
 
   void _catchUp(_Restored? restored) {
     if (restored == null) {
