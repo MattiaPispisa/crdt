@@ -16,6 +16,7 @@
   - [Usage](#usage)
     - [Basic Usage](#basic-usage)
     - [Complete Example](#complete-example)
+  - [Benchmarks](#benchmarks)
   - [Roadmap](#roadmap)
   - [Packages](#packages)
 
@@ -25,18 +26,20 @@ A hybrid logical clock implementation in Dart based on the paper
 
 This library provides a Hybrid Logical Clock (HLC) implementation that combines the benefits of logical clocks and physical clocks:
 - Captures causality like logical clocks (e hb f => l.e < l.f)
-- Maintains closeness to physical/NTP time (l.e is close to pt.e)
-- Compatible with 64-bit NTP timestamp format
+- Maintains closeness to physical time (l.e is close to pt.e)
+- Fits in 64 bits: 48 bits of milliseconds since the Unix epoch, 16 bits of counter
 - Works in peer-to-peer architectures without a central server
+
+If `e` happened before `f`, then `e < f`. The reverse does not hold: `e < f` also when `e` and `f` are concurrent, so the order alone cannot detect concurrency.
 
 ## Features
 
 - Local event handling
 - Message exchange between peers
-- Causality detection
+- Total order that respects causality (`compareTo`, `<`, `>`, `max`, `min`)
 - Serialization to/from 64-bit integers (`toInt64` / `fromInt64`)
 - Compact 8-byte big-endian binary representation (`toUint8List` / `fromUint8List`) — usable as a building block inside larger binary frames (e.g. `OperationId` in `crdt_lf`)
-- Thread-safe implementation
+- A full counter moves `l` forward by 1 ms, so the 8-byte form never wraps
 - Zero dependencies
 - Drift detection
 - Mutable and immutable methods for every needed operation
@@ -85,6 +88,16 @@ final fromBytes = HybridLogicalClock.fromUint8List(bytes);
 ```
 
 ### [Complete Example](https://github.com/MattiaPispisa/crdt/blob/main/packages/core/hlc/example/main.dart)
+
+## Benchmarks
+
+The latest results are [here](https://github.com/MattiaPispisa/crdt/tree/main/packages/core/hlc/benchmarks/results.md).
+
+To run the benchmarks yourself, run from the repository root:
+
+```sh
+melos run benchmark_dart
+```
 
 ## Roadmap
 A roadmap is available in the [project](https://github.com/users/MattiaPispisa/projects/1) page. The roadmap provides a high-level overview of the project's goals and the current status of the project.

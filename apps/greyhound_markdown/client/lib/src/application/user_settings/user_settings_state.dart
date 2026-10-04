@@ -28,12 +28,14 @@ class UserSettingsState extends Equatable {
     required this.language,
     required this.showLineNumbers,
     required this.wordWrap,
+    required this.showPlaceholder,
     this.recentRooms = const [],
   });
 
   /// The settings of a first visit: no name yet, a random palette color so two
   /// peers rarely collide, the platform's own light/dark and language
-  /// preferences, and the editor defaults (no gutter, lines wrapped).
+  /// preferences, and the editor defaults (no gutter, lines wrapped, welcome
+  /// document shown).
   factory UserSettingsState.initial() {
     return UserSettingsState(
       name: '',
@@ -42,6 +44,7 @@ class UserSettingsState extends Equatable {
       language: AppLanguage.system,
       showLineNumbers: false,
       wordWrap: true,
+      showPlaceholder: true,
     );
   }
 
@@ -66,6 +69,10 @@ class UserSettingsState extends Equatable {
   /// sideways.
   final bool wordWrap;
 
+  /// Whether an empty room shows the welcome document, in the editor and in
+  /// the preview.
+  final bool showPlaceholder;
+
   /// The rooms this device opened last, most recent first.
   ///
   /// At most [kRecentRoomsLimit] long, and a room appears once however many
@@ -83,6 +90,7 @@ class UserSettingsState extends Equatable {
     AppLanguage? language,
     bool? showLineNumbers,
     bool? wordWrap,
+    bool? showPlaceholder,
     List<RecentRoom>? recentRooms,
   }) {
     return UserSettingsState(
@@ -92,6 +100,7 @@ class UserSettingsState extends Equatable {
       language: language ?? this.language,
       showLineNumbers: showLineNumbers ?? this.showLineNumbers,
       wordWrap: wordWrap ?? this.wordWrap,
+      showPlaceholder: showPlaceholder ?? this.showPlaceholder,
       recentRooms: recentRooms ?? this.recentRooms,
     );
   }
@@ -104,6 +113,7 @@ class UserSettingsState extends Equatable {
     language,
     showLineNumbers,
     wordWrap,
+    showPlaceholder,
     recentRooms,
   ];
 }

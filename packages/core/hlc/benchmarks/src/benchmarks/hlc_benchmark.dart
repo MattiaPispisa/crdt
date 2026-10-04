@@ -4,9 +4,6 @@ import 'package:benchmark_infrastructure/benchmark_infrastructure.dart';
 import 'package:hlc_dart/hlc_dart.dart';
 
 /// Benchmarks HybridLogicalClock.toUint8List() — encodes l/c to 8 bytes.
-///
-/// The current implementation uses float division: (_l / 4294967296).floor().
-/// The fix uses integer truncating division: _l ~/ 0x100000000.
 class HLCToBytesBenchmark extends TimedBenchmarkBase {
   HLCToBytesBenchmark() : super('HLC toUint8List x100k');
 
@@ -73,8 +70,52 @@ class HLCCompareBenchmark extends TimedBenchmarkBase {
   }
 }
 
+/// Benchmarks HybridLogicalClock.localEvent() with a physical time that
+/// stays behind the clock, so every call increments the counter.
+class HLCLocalEventBenchmark extends TimedBenchmarkBase {
+  HLCLocalEventBenchmark() : super('HLC localEvent x100k');
+
+  static const int _base = 1700000000000;
+
+  @override
+  void run() {
+    final clock = HybridLogicalClock(l: _base, c: 0);
+    for (var i = 0; i < 100000; i++) {
+      clock.localEvent(_base);
+    }
+  }
+}
+
+/// Benchmarks HybridLogicalClock.receiveEvent() with received clocks just
+/// before, equal to and just after the local one.
+class HLCReceiveEventBenchmark extends TimedBenchmarkBase {
+  HLCReceiveEventBenchmark() : super('HLC receiveEvent x100k');
+
+  static const int _base = 1700000000000;
+
+  late final List<HybridLogicalClock> received;
+
+  @override
+  void setup() {
+    received = List.generate(
+      100000,
+      (i) => HybridLogicalClock(l: _base + i ~/ 2 + (i % 3) - 1, c: i % 8),
+    );
+  }
+
+  @override
+  void run() {
+    final clock = HybridLogicalClock(l: _base, c: 0);
+    for (var i = 0; i < received.length; i++) {
+      clock.receiveEvent(_base + i ~/ 4, received[i]);
+    }
+  }
+}
+
 void main() {
   HLCToBytesBenchmark().report();
   HLCFromBytesBenchmark().report();
   HLCCompareBenchmark().report();
+  HLCLocalEventBenchmark().report();
+  HLCReceiveEventBenchmark().report();
 }

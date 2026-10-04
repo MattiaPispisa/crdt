@@ -14,6 +14,8 @@
   "lineNumbersSubtitle": "Mostra i numeri di riga accanto al sorgente",
   "wordWrap": "A capo automatico",
   "wordWrapSubtitle": "Manda a capo le righe lunghe invece di scorrere di lato",
+  "markdownPreview": "Anteprima markdown",
+  "markdownPreviewSubtitle": "Mostra un documento markdown di esempio quando la stanza è vuota",
   "viewChangelog": "Vedi il changelog",
   "viewLicenses": "Vedi le licenze",
   "versionUnknown": "—",

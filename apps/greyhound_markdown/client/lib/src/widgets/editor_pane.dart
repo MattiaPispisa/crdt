@@ -28,8 +28,8 @@ const TextStyle kEditorTextStyle = TextStyle(
 /// toolbar actions that declare a key chord — undo and redo included — are also
 /// reachable from the keyboard while focus is inside the pane.
 ///
-/// Two local view options come from [UserSettingsCubit]: an optional
-/// line-number gutter, and word wrap. They are read inside
+/// Three local view options come from [UserSettingsCubit]: an optional
+/// line-number gutter, word wrap, and the welcome placeholder. They are read inside
 /// [CrdtTextFieldBuilder.builder] rather than above the pane, so flipping one
 /// never rebuilds the CRDT binding.
 ///
@@ -112,8 +112,12 @@ class _EditorPaneState extends State<EditorPane> {
   }
 }
 
-/// The two view options the editor reads from the user's settings.
-typedef EditorOptions = ({bool lineNumbers, bool wordWrap});
+/// The view options the editor reads from the user's settings.
+typedef EditorOptions = ({
+  bool lineNumbers,
+  bool wordWrap,
+  bool showPlaceholder,
+});
 
 /// The editing surface: the optional line-number gutter, and the text field
 /// inside the viewport that gives it word wrap or sideways scrolling.
@@ -273,8 +277,11 @@ class _EditorSurfaceState extends State<EditorSurface> {
   @override
   Widget build(BuildContext context) {
     return BlocSelector<UserSettingsCubit, UserSettingsState, EditorOptions>(
-      selector: (settings) =>
-          (lineNumbers: settings.showLineNumbers, wordWrap: settings.wordWrap),
+      selector: (settings) => (
+        lineNumbers: settings.showLineNumbers,
+        wordWrap: settings.wordWrap,
+        showPlaceholder: settings.showPlaceholder,
+      ),
       builder: (context, options) {
         final numberStyle = kEditorTextStyle.copyWith(
           color: Theme.of(context).colorScheme.outline,
@@ -346,7 +353,7 @@ class _EditorSurfaceState extends State<EditorSurface> {
                             // don't scroll). Shown only while the document is
                             // empty, and beside the gutter rather than over
                             // it. A tap focuses the editor.
-                            if (value.text.isEmpty)
+                            if (value.text.isEmpty && options.showPlaceholder)
                               Positioned.fill(
                                 child: _EditorPlaceholder(
                                   focusNode: widget.focusNode,

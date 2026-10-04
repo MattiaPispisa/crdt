@@ -37,8 +37,9 @@ void main() {
 
     expect(cubit.state.showLineNumbers, isFalse);
     expect(cubit.state.wordWrap, isTrue);
+    expect(cubit.state.showPlaceholder, isTrue);
 
-    // Both switches sit below the fold of the test surface, far enough down
+    // The switches sit below the fold of the test surface, far enough down
     // that the ListView has not built them yet.
     Future<void> toggle(String label) async {
       await tester.scrollUntilVisible(find.text(label), 100);
@@ -48,9 +49,11 @@ void main() {
 
     await toggle('Line numbers');
     await toggle('Word wrap');
+    await toggle('Markdown preview');
 
     expect(cubit.state.showLineNumbers, isTrue);
     expect(cubit.state.wordWrap, isFalse);
+    expect(cubit.state.showPlaceholder, isFalse);
   });
 
   testWidgets('SettingsScreen stores the picked language', (tester) async {

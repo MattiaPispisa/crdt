@@ -49,6 +49,13 @@ class AppL10nDe extends AppL10n {
       'Bricht lange Zeilen um, statt horizontal zu scrollen';
 
   @override
+  String get markdownPreview => 'Markdown-Vorschau';
+
+  @override
+  String get markdownPreviewSubtitle =>
+      'Zeigt ein Markdown-Beispieldokument, solange der Raum leer ist';
+
+  @override
   String get viewChangelog => 'Changelog ansehen';
 
   @override

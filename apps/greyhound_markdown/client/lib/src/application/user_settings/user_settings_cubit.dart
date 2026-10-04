@@ -22,8 +22,7 @@ class UserSettingsCubit extends HydratedCubit<UserSettingsState> {
   ///
   /// [storage] overrides the global `HydratedBloc.storage`, which tests use to
   /// stay off the real disk.
-  UserSettingsCubit({super.storage})
-    : super(UserSettingsState.initial());
+  UserSettingsCubit({super.storage}) : super(UserSettingsState.initial());
 
   /// The storage key.
   ///
@@ -54,6 +53,10 @@ class UserSettingsCubit extends HydratedCubit<UserSettingsState> {
   void setWordWrap({required bool value}) =>
       emit(state.copyWith(wordWrap: value));
 
+  /// Sets whether an empty room shows the welcome document.
+  void setShowPlaceholder({required bool value}) =>
+      emit(state.copyWith(showPlaceholder: value));
+
   /// Puts [roomId] at the front of the recent rooms, dropping the oldest one
   /// past [kRecentRoomsLimit].
   ///
@@ -83,6 +86,9 @@ class UserSettingsCubit extends HydratedCubit<UserSettingsState> {
       wordWrap: json['wordWrap'] is bool
           ? json['wordWrap'] as bool
           : fallback.wordWrap,
+      showPlaceholder: json['showPlaceholder'] is bool
+          ? json['showPlaceholder'] as bool
+          : fallback.showPlaceholder,
       recentRooms: _recentRoomsFrom(json['recentRooms']),
     );
   }
@@ -95,6 +101,7 @@ class UserSettingsCubit extends HydratedCubit<UserSettingsState> {
     'language': state.language.name,
     'showLineNumbers': state.showLineNumbers,
     'wordWrap': state.wordWrap,
+    'showPlaceholder': state.showPlaceholder,
     'recentRooms': [
       for (final room in state.recentRooms)
         {

@@ -53,6 +53,14 @@
   "@wordWrapSubtitle": {
     "description": "Subtitle of the word wrap option."
   },
+  "markdownPreview": "Markdown preview",
+  "@markdownPreview": {
+    "description": "Editor option: show the sample document in an empty room."
+  },
+  "markdownPreviewSubtitle": "Show a sample markdown document while the room is empty",
+  "@markdownPreviewSubtitle": {
+    "description": "Subtitle of the markdown preview option."
+  },
   "viewChangelog": "View changelog",
   "@viewChangelog": {
     "description": "Button opening the changelog page."

@@ -1,4 +1,4 @@
-import 'dart:math';
+import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'package:hlc_dart/src/exception.dart';
@@ -9,18 +9,27 @@ import 'package:hlc_dart/src/exception.dart';
 /// [HybridLogicalClock] combines the benefits of
 /// logical clocks and physical clocks:
 /// - Captures causality like logical clocks (e hb f => l.e < l.f)
-/// - Maintains closeness to physical/NTP time (l.e is close to pt.e)
-/// - Compatible with 64-bit NTP timestamp format
+/// - Maintains closeness to physical time (l.e is close to pt.e)
+/// - Fits in 64 bits: 48 bits for `l`, 16 bits for `c`
 /// - Works in peer-to-peer architectures without a central server
+///
+/// If `e` happened before `f`, then `e < f`. The reverse does not hold:
+/// `e < f` also when `e` and `f` are concurrent, so the order alone
+/// cannot detect concurrency.
 class HybridLogicalClock with Comparable<HybridLogicalClock> {
-  /// Creates a new HLC with the given logical time and counter
+  /// Creates a new HLC with the given logical time and counter.
+  ///
+  /// Throws a [RangeError] unless [l] fits in 48 bits and [c] in 16 bits,
+  /// both non-negative.
   HybridLogicalClock({
     required int l,
     required int c,
-  })  : assert(l >= 0, 'l must be non-negative'),
-        assert(c >= 0, 'c must be non-negative'),
-        _c = c,
-        _l = l;
+  })  : _l = _inRange(l, _maxLogical, 'l'),
+        _c = _inRange(c, _maxCounter, 'c');
+
+  // Skips the range check: only for values in range by construction, such as
+  // decoded bytes, where the check would cost on every decoded change.
+  HybridLogicalClock._(this._l, this._c);
 
   /// Creates a new [HybridLogicalClock] initialized to zero
   factory HybridLogicalClock.initialize() => HybridLogicalClock(
@@ -38,10 +47,7 @@ class HybridLogicalClock with Comparable<HybridLogicalClock> {
 
   /// Creates a new [HybridLogicalClock] from another [HybridLogicalClock]
   factory HybridLogicalClock.fromHlc(HybridLogicalClock other) {
-    return HybridLogicalClock(
-      l: other.l,
-      c: other.c,
-    );
+    return HybridLogicalClock._(other._l, other._c);
   }
 
   /// Creates an [HybridLogicalClock] from a 64-bit integer
@@ -51,7 +57,7 @@ class HybridLogicalClock with Comparable<HybridLogicalClock> {
   factory HybridLogicalClock.fromInt64(int value) {
     final l = (value >> 16) & 0xFFFFFFFFFFFF;
     final c = value & 0xFFFF;
-    return HybridLogicalClock(l: l, c: c);
+    return HybridLogicalClock._(l, c);
   }
 
   /// Decodes a [HybridLogicalClock] from a byte buffer (Big Endian).
@@ -79,19 +85,33 @@ class HybridLogicalClock with Comparable<HybridLogicalClock> {
 
     final c = (bytes[offset + 6] * 256) + bytes[offset + 7];
 
-    return HybridLogicalClock(l: l, c: c);
+    return HybridLogicalClock._(l, c);
   }
 
   /// Creates an [HybridLogicalClock] from a string representation
+  ///
+  /// Throws a [FormatException] when [value] is not `l.c`, or when `l` or
+  /// `c` is out of range.
   factory HybridLogicalClock.parse(String value) {
     final parts = value.split('.');
     if (parts.length != 2) {
       throw FormatException('Invalid HLC format: $value');
     }
-    return HybridLogicalClock(
-      l: int.parse(parts[0]),
-      c: int.parse(parts[1]),
-    );
+    final l = int.parse(parts[0]);
+    final c = int.parse(parts[1]);
+    if (l < 0 || l > _maxLogical || c < 0 || c > _maxCounter) {
+      throw FormatException('HLC out of range: $value');
+    }
+    return HybridLogicalClock._(l, c);
+  }
+
+  static const int _maxLogical = 0xFFFFFFFFFFFF;
+
+  static const int _maxCounter = 0xFFFF;
+
+  static int _inRange(int value, int max, String name) {
+    RangeError.checkValueInInterval(value, 0, max, name);
+    return value;
   }
 
   /// The logical/physical part of the timestamp
@@ -116,16 +136,16 @@ class HybridLogicalClock with Comparable<HybridLogicalClock> {
   /// if (l = l') then c := c + 1
   /// else c := 0
   /// ```
+  ///
+  /// {@template hlc_counter_carry}
+  /// When `c` passes 65535, `l` moves forward by 1 and `c` starts again from
+  /// 0. The clock stays ahead of every input and fits in [toUint8List].
+  /// {@endtemplate}
   void localEvent(int physicalTime) {
     final lOld = _l;
-    _l = max(lOld, physicalTime);
-
-    if (_l == lOld) {
-      _c += 1;
-      return;
-    }
-
-    _c = 0;
+    _l = math.max(lOld, physicalTime);
+    _c = _l == lOld ? _c + 1 : 0;
+    _carryCounter();
   }
 
   /// Handles a receive event
@@ -149,6 +169,8 @@ class HybridLogicalClock with Comparable<HybridLogicalClock> {
   /// else if (l = l_m) then c := c_m + 1
   /// else c := 0
   /// ```
+  ///
+  /// {@macro hlc_counter_carry}
   void receiveEvent(
     int physicalTime,
     HybridLogicalClock received, {
@@ -164,15 +186,24 @@ class HybridLogicalClock with Comparable<HybridLogicalClock> {
     }
 
     final lOld = _l;
-    _l = max(max(lOld, received._l), physicalTime);
+    _l = math.max(math.max(lOld, received._l), physicalTime);
 
     if (_l == lOld && _l == received._l) {
-      _c = max(_c, received._c) + 1;
+      _c = math.max(_c, received._c) + 1;
     } else if (_l == lOld) {
       _c += 1;
     } else if (_l == received._l) {
       _c = received._c + 1;
     } else {
+      _c = 0;
+    }
+    _carryCounter();
+  }
+
+  // prevent overflow
+  void _carryCounter() {
+    if (_c > _maxCounter) {
+      _l += 1;
       _c = 0;
     }
   }
@@ -191,12 +222,10 @@ class HybridLogicalClock with Comparable<HybridLogicalClock> {
     return copy()..localEvent(physicalTime);
   }
 
-  /// Checks if this [HybridLogicalClock] happened
-  /// before another [HybridLogicalClock]
+  /// Whether this clock orders before [other].
   ///
-  /// Returns true if this [HybridLogicalClock] happened
-  /// before the other [HybridLogicalClock]
-  /// (e hb f => l.e < l.f || (l.e = l.f && c.e < c.f))
+  /// `true` for every event that happened before [other], and also for some
+  /// concurrent events.
   bool happenedBefore(HybridLogicalClock other) {
     return compareTo(other) < 0;
   }
@@ -215,19 +244,18 @@ class HybridLogicalClock with Comparable<HybridLogicalClock> {
     return copy()..receiveEvent(physicalTime, received);
   }
 
-  /// Checks if this [HybridLogicalClock] happened
-  /// after another [HybridLogicalClock]
+  /// Whether this clock orders after [other].
   ///
-  /// Returns true if this [HybridLogicalClock] happened
-  /// after the other [HybridLogicalClock]
+  /// `true` for every event that happened after [other], and also for some
+  /// concurrent events.
   bool happenedAfter(HybridLogicalClock other) {
     return compareTo(other) > 0;
   }
 
-  /// Checks if this [HybridLogicalClock] is concurrent
-  /// with another [HybridLogicalClock]
+  /// Whether this clock holds the same timestamp as [other].
   ///
-  /// Returns true if neither [HybridLogicalClock] happened before the other
+  /// Equal timestamps mean concurrent events. Concurrent events with
+  /// different timestamps return `false`.
   bool isConcurrentWith(HybridLogicalClock other) {
     return compareTo(other) == 0;
   }
@@ -312,11 +340,18 @@ class HybridLogicalClock with Comparable<HybridLogicalClock> {
   @override
   int get hashCode => Object.hash(_l, _c);
 
+  /// Returns the later of [a] and [b]; [a] when they are equal.
+  static HybridLogicalClock max(HybridLogicalClock a, HybridLogicalClock b) {
+    return b.compareTo(a) > 0 ? b : a;
+  }
+
+  /// Returns the earlier of [a] and [b]; [a] when they are equal.
+  static HybridLogicalClock min(HybridLogicalClock a, HybridLogicalClock b) {
+    return b.compareTo(a) < 0 ? b : a;
+  }
+
   /// Creates a copy of this [HybridLogicalClock]
-  HybridLogicalClock copy() => HybridLogicalClock(
-        l: _l,
-        c: _c,
-      );
+  HybridLogicalClock copy() => HybridLogicalClock._(_l, _c);
 
   /// Compares this [HybridLogicalClock] with another [HybridLogicalClock]
   ///

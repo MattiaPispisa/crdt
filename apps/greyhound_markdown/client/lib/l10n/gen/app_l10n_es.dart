@@ -50,6 +50,13 @@ class AppL10nEs extends AppL10n {
       'Ajusta las líneas largas en vez de desplazar la vista en horizontal';
 
   @override
+  String get markdownPreview => 'Vista previa de markdown';
+
+  @override
+  String get markdownPreviewSubtitle =>
+      'Muestra un documento markdown de ejemplo mientras la sala está vacía';
+
+  @override
   String get viewChangelog => 'Ver changelog';
 
   @override

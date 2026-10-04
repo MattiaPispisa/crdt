@@ -17,6 +17,7 @@ void main() {
         ..setLanguage(AppLanguage.italian)
         ..setShowLineNumbers(value: true)
         ..setWordWrap(value: false)
+        ..setShowPlaceholder(value: false)
         ..recordRoomOpened('abc123');
 
       // A fresh cubit over the same storage is what a relaunch looks like.
@@ -27,6 +28,7 @@ void main() {
       expect(restored.language, AppLanguage.italian);
       expect(restored.showLineNumbers, isTrue);
       expect(restored.wordWrap, isFalse);
+      expect(restored.showPlaceholder, isFalse);
       expect(restored.recentRooms.map((room) => room.roomId), ['abc123']);
     });
 
@@ -42,6 +44,7 @@ void main() {
             'themeMode': 1,
             'language': 'esperanto',
             'wordWrap': 'yes',
+            'showPlaceholder': 'no',
             'recentRooms': <Object>[
               {'roomId': 'kept', 'openedAt': 1000},
               // An id no route would accept, a timestamp that is not a
@@ -60,6 +63,7 @@ void main() {
       expect(cubit.state.language, AppLanguage.system);
       expect(cubit.state.showLineNumbers, isFalse);
       expect(cubit.state.wordWrap, isTrue);
+      expect(cubit.state.showPlaceholder, isTrue);
       expect(cubit.state.recentRooms.map((room) => room.roomId), ['kept']);
     });
 
