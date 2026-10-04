@@ -63,17 +63,17 @@ class OpIdKey implements Comparable<OpIdKey> {
     return HybridLogicalClock.fromUint8List(_bytes, offset: _offset + 16);
   }
 
-  /// Returns true if this operation happened after or equal to [other].
+  /// Whether this key orders after [other] or equals it.
   bool happenedAfterOrEqual(OpIdKey other) {
     return compareTo(other) >= 0;
   }
 
-  /// Returns true if this operation happened after [other].
+  /// Whether this key orders after [other].
   bool happenedAfter(OpIdKey other) {
     return compareTo(other) > 0;
   }
 
-  /// Returns true if this operation happened before [other].
+  /// Whether this key orders before [other].
   bool happenedBefore(OpIdKey other) {
     return compareTo(other) < 0;
   }

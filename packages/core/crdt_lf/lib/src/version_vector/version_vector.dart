@@ -120,7 +120,7 @@ class VersionVector {
 
     _vector.update(
       id,
-      (value) => value.compareTo(clock) > 0 ? value : clock,
+      (value) => HybridLogicalClock.max(value, clock),
       ifAbsent: () => clock,
     );
   }
@@ -159,10 +159,9 @@ class VersionVector {
     final merged = <PeerId, HybridLogicalClock>{..._vector};
     for (final entry in other._vector.entries) {
       final current = merged[entry.key];
-
-      if (current == null || entry.value.compareTo(current) > 0) {
-        merged[entry.key] = entry.value;
-      }
+      merged[entry.key] = current == null
+          ? entry.value
+          : HybridLogicalClock.max(current, entry.value);
     }
 
     return immutable ? VersionVector.immutable(merged) : VersionVector(merged);
@@ -229,26 +228,18 @@ class VersionVector {
   ///
   /// Returns null if the version vector is empty.
   HybridLogicalClock? mostRecent() {
-    HybridLogicalClock? result;
-    for (final entry in _vector.entries) {
-      if (result == null || entry.value.compareTo(result) > 0) {
-        result = entry.value;
-      }
-    }
-    return result;
+    return _vector.values.isEmpty
+        ? null
+        : _vector.values.reduce(HybridLogicalClock.max);
   }
 
   /// Returns the most oldest clock for this version vector.
   ///
   /// Returns null if the version vector is empty.
   HybridLogicalClock? mostOldest() {
-    HybridLogicalClock? result;
-    for (final entry in _vector.entries) {
-      if (result == null || entry.value.compareTo(result) < 0) {
-        result = entry.value;
-      }
-    }
-    return result;
+    return _vector.values.isEmpty
+        ? null
+        : _vector.values.reduce(HybridLogicalClock.min);
   }
 
   /// Encodes this version vector to a compact binary representation.

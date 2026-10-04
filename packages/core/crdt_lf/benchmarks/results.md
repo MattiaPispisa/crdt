@@ -85,14 +85,6 @@
 | FugueTree values() over 50000 live elements | 385.8894 | 0.3859 | 0.000386 |
 | FugueTree values() over 50000 elements, 90% tombstones | 61.5764 | 0.0616 | 0.000062 |
 
-### hlc_benchmark.dart
-
-| Benchmark | RunTime (us) | RunTime (ms) | RunTime (s) |
-| --- | --- | --- | --- |
-| HLC toUint8List x100k | 24.5533 | 0.0246 | 0.000025 |
-| HLC fromUint8List x100k | 500.8198 | 0.5008 | 0.000501 |
-| HLC compareTo x100k | 46.8188 | 0.0468 | 0.000047 |
-
 ### list_handler_benchmark.dart
 
 | Benchmark | RunTime (us) | RunTime (ms) | RunTime (s) |
