@@ -6,24 +6,24 @@ import 'package:test/test.dart';
 void main() {
   const isWeb = identical(0, 0.0);
   group('HybridLogicalClock', () {
-    test('throws AssertionError for negative logical time', () {
+    test('throws RangeError for negative logical time', () {
       expect(
         () => HybridLogicalClock(l: -1, c: 0),
-        throwsA(isA<AssertionError>()),
+        throwsA(isA<RangeError>()),
       );
     });
 
-    test('throws AssertionError for negative counter', () {
+    test('throws RangeError for negative counter', () {
       expect(
         () => HybridLogicalClock(l: 0, c: -1),
-        throwsA(isA<AssertionError>()),
+        throwsA(isA<RangeError>()),
       );
     });
 
-    test('throws AssertionError for a counter wider than 16 bits', () {
+    test('throws RangeError for a counter wider than 16 bits', () {
       expect(
         () => HybridLogicalClock(l: 0, c: 0x10000),
-        throwsA(isA<AssertionError>()),
+        throwsA(isA<RangeError>()),
       );
     });
 
@@ -80,6 +80,13 @@ void main() {
         final hlc = HybridLogicalClock.parse('1234567890.42');
         expect(hlc.l, equals(1234567890));
         expect(hlc.c, equals(42));
+      });
+
+      test('throws FormatException for a stored counter past 16 bits', () {
+        expect(
+          () => HybridLogicalClock.parse('1234567890.65536'),
+          throwsA(isA<FormatException>()),
+        );
       });
 
       test('throws FormatException for invalid format - no dot', () {

@@ -1,6 +1,6 @@
 ## [1.2.0](https://github.com/MattiaPispisa/crdt/tree/hlc_dart-v1.2.0/packages/core/hlc)
 
-**Date:** 2026-10-04
+**Date:** --
 
 [compare to previous release](https://github.com/MattiaPispisa/crdt/compare/hlc_dart-v1.1.0+3...hlc_dart-v1.2.0)
 
@@ -11,7 +11,8 @@
 
 ### Changed
 
-- The constructor asserts that `l` fits in 48 bits and `c` in 16 bits.
+- The constructor throws a `RangeError` unless `l` fits in 48 bits and `c` in 16 bits, both
+  non-negative (it asserted only the sign before); `parse` throws a `FormatException`.
 
 ### Fixed
 

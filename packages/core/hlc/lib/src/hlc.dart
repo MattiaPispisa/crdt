@@ -19,16 +19,17 @@ import 'package:hlc_dart/src/exception.dart';
 class HybridLogicalClock with Comparable<HybridLogicalClock> {
   /// Creates a new HLC with the given logical time and counter.
   ///
-  /// [l] fits in 48 bits and [c] in 16 bits.
+  /// Throws a [RangeError] unless [l] fits in 48 bits and [c] in 16 bits,
+  /// both non-negative.
   HybridLogicalClock({
     required int l,
     required int c,
-  })  : assert(l >= 0, 'l must be non-negative'),
-        assert(l <= _maxLogical, 'l must fit in 48 bits'),
-        assert(c >= 0, 'c must be non-negative'),
-        assert(c <= _maxCounter, 'c must fit in 16 bits'),
-        _c = c,
-        _l = l;
+  })  : _l = _inRange(l, _maxLogical, 'l'),
+        _c = _inRange(c, _maxCounter, 'c');
+
+  // Skips the range check: only for values in range by construction, such as
+  // decoded bytes, where the check would cost on every decoded change.
+  HybridLogicalClock._(this._l, this._c);
 
   /// Creates a new [HybridLogicalClock] initialized to zero
   factory HybridLogicalClock.initialize() => HybridLogicalClock(
@@ -46,10 +47,7 @@ class HybridLogicalClock with Comparable<HybridLogicalClock> {
 
   /// Creates a new [HybridLogicalClock] from another [HybridLogicalClock]
   factory HybridLogicalClock.fromHlc(HybridLogicalClock other) {
-    return HybridLogicalClock(
-      l: other.l,
-      c: other.c,
-    );
+    return HybridLogicalClock._(other._l, other._c);
   }
 
   /// Creates an [HybridLogicalClock] from a 64-bit integer
@@ -59,7 +57,7 @@ class HybridLogicalClock with Comparable<HybridLogicalClock> {
   factory HybridLogicalClock.fromInt64(int value) {
     final l = (value >> 16) & 0xFFFFFFFFFFFF;
     final c = value & 0xFFFF;
-    return HybridLogicalClock(l: l, c: c);
+    return HybridLogicalClock._(l, c);
   }
 
   /// Decodes a [HybridLogicalClock] from a byte buffer (Big Endian).
@@ -87,24 +85,34 @@ class HybridLogicalClock with Comparable<HybridLogicalClock> {
 
     final c = (bytes[offset + 6] * 256) + bytes[offset + 7];
 
-    return HybridLogicalClock(l: l, c: c);
+    return HybridLogicalClock._(l, c);
   }
 
   /// Creates an [HybridLogicalClock] from a string representation
+  ///
+  /// Throws a [FormatException] when [value] is not `l.c`, or when `l` or
+  /// `c` is out of range.
   factory HybridLogicalClock.parse(String value) {
     final parts = value.split('.');
     if (parts.length != 2) {
       throw FormatException('Invalid HLC format: $value');
     }
-    return HybridLogicalClock(
-      l: int.parse(parts[0]),
-      c: int.parse(parts[1]),
-    );
+    final l = int.parse(parts[0]);
+    final c = int.parse(parts[1]);
+    if (l < 0 || l > _maxLogical || c < 0 || c > _maxCounter) {
+      throw FormatException('HLC out of range: $value');
+    }
+    return HybridLogicalClock._(l, c);
   }
 
   static const int _maxLogical = 0xFFFFFFFFFFFF;
 
   static const int _maxCounter = 0xFFFF;
+
+  static int _inRange(int value, int max, String name) {
+    RangeError.checkValueInInterval(value, 0, max, name);
+    return value;
+  }
 
   /// The logical/physical part of the timestamp
   int _l;
@@ -343,10 +351,7 @@ class HybridLogicalClock with Comparable<HybridLogicalClock> {
   }
 
   /// Creates a copy of this [HybridLogicalClock]
-  HybridLogicalClock copy() => HybridLogicalClock(
-        l: _l,
-        c: _c,
-      );
+  HybridLogicalClock copy() => HybridLogicalClock._(_l, _c);
 
   /// Compares this [HybridLogicalClock] with another [HybridLogicalClock]
   ///
