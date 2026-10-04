@@ -200,7 +200,7 @@ class HybridLogicalClock with Comparable<HybridLogicalClock> {
     _carryCounter();
   }
 
-  // The paper (§6.2) lets `c` roll over; the byte order of an id must hold.
+  // prevent overflow
   void _carryCounter() {
     if (_c > _maxCounter) {
       _l += 1;
