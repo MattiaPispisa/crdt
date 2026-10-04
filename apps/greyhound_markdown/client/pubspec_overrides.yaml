@@ -6,7 +6,8 @@
 # copy of a room needs the persistence `crdt_lf_hive` re-exports, and the relay
 # client has to catch the relay up after a restart (crdt_socket_sync 0.8.0),
 # none of which are published yet. `crdt_lf_persistence` is here only because
-# `crdt_lf_hive` depends on it — the app never imports it.
+# `crdt_lf_hive` depends on it — the app never imports it. `hlc_dart` is here
+# because the in-repo `crdt_lf` needs a version that is not published yet.
 dependency_overrides:
   crdt_lf:
     path: ../../../packages/core/crdt_lf
@@ -18,3 +19,5 @@ dependency_overrides:
     path: ../../../packages/core/crdt_lf_persistence
   crdt_socket_sync:
     path: ../../../packages/core/crdt_socket_sync
+  hlc_dart:
+    path: ../../../packages/core/hlc

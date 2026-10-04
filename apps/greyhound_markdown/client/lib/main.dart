@@ -10,10 +10,13 @@ import 'package:greyhound_markdown_client/l10n/gen/app_l10n.dart';
 import 'package:greyhound_markdown_client/src/application/application.dart';
 import 'package:greyhound_markdown_client/src/config.dart';
 import 'package:greyhound_markdown_client/src/di/service_locator.dart';
+import 'package:greyhound_markdown_client/src/logging/app_logger.dart';
 import 'package:greyhound_markdown_client/src/widgets/code_element_builder.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  setupServiceLocator();
+  final logger = loggerFor(LogScope.app);
 
   // Backs [UserSettingsCubit]. The documents directory rather than the
   // temporary one: preferences have to survive an OS cleanup.
@@ -24,14 +27,15 @@ Future<void> main() async {
             (await getApplicationDocumentsDirectory()).path,
           ),
   );
+  logger.info('Settings storage ready');
 
   // Backs the per-room document cache, so a reload without a connection
   // reopens the room instead of an empty page.
   CRDTHive.initialize();
-
-  setupServiceLocator();
+  logger.info('Room storage ready');
 
   runApp(const GreyhoundApp());
+  logger.info('App started, relay server at $kServerUrl');
 
   // Not before runApp: this is tens of milliseconds of work, and nothing on
   // screen needs it until the first code block. See `warmUpHighlight`.

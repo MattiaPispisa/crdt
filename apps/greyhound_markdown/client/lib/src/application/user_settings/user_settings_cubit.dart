@@ -2,11 +2,14 @@ import 'dart:math';
 
 import 'package:equatable/equatable.dart';
 import 'package:flutter/material.dart';
+import 'package:en_logger/en_logger.dart';
 import 'package:hydrated_bloc/hydrated_bloc.dart';
 
 import 'package:greyhound_markdown_client/src/application/room/room_id.dart';
 import 'package:greyhound_markdown_client/src/application/user_settings/app_language.dart';
 import 'package:greyhound_markdown_client/src/config.dart';
+import 'package:greyhound_markdown_client/src/di/service_locator.dart';
+import 'package:greyhound_markdown_client/src/logging/app_logger.dart';
 
 part 'user_settings_state.dart';
 
@@ -22,7 +25,11 @@ class UserSettingsCubit extends HydratedCubit<UserSettingsState> {
   ///
   /// [storage] overrides the global `HydratedBloc.storage`, which tests use to
   /// stay off the real disk.
-  UserSettingsCubit({super.storage}) : super(UserSettingsState.initial());
+  UserSettingsCubit({super.storage})
+    : _logger = loggerFor(LogScope.settings),
+      super(UserSettingsState.initial());
+
+  final EnLogger _logger;
 
   /// The storage key.
   ///
@@ -36,26 +43,40 @@ class UserSettingsCubit extends HydratedCubit<UserSettingsState> {
   void setName(String name) => emit(state.copyWith(name: name));
 
   /// Sets the color of this peer's cursor and avatar.
-  void setColor(Color color) => emit(state.copyWith(color: color));
+  void setColor(Color color) {
+    _logger.info('Color: ${color.toARGB32().toRadixString(16)}');
+    emit(state.copyWith(color: color));
+  }
 
   /// Sets whether the app follows the system theme or is forced light/dark.
-  void setThemeMode(ThemeMode mode) => emit(state.copyWith(themeMode: mode));
+  void setThemeMode(ThemeMode mode) {
+    _logger.info('Theme mode: ${mode.name}');
+    emit(state.copyWith(themeMode: mode));
+  }
 
   /// Sets the language the app is shown in.
-  void setLanguage(AppLanguage language) =>
-      emit(state.copyWith(language: language));
+  void setLanguage(AppLanguage language) {
+    _logger.info('Language: ${language.name}');
+    emit(state.copyWith(language: language));
+  }
 
   /// Sets whether the editor draws a line-number gutter.
-  void setShowLineNumbers({required bool value}) =>
-      emit(state.copyWith(showLineNumbers: value));
+  void setShowLineNumbers({required bool value}) {
+    _logger.info('Line numbers: $value');
+    emit(state.copyWith(showLineNumbers: value));
+  }
 
   /// Sets whether long editor lines wrap at the pane edge.
-  void setWordWrap({required bool value}) =>
-      emit(state.copyWith(wordWrap: value));
+  void setWordWrap({required bool value}) {
+    _logger.info('Word wrap: $value');
+    emit(state.copyWith(wordWrap: value));
+  }
 
   /// Sets whether an empty room shows the welcome document.
-  void setShowPlaceholder({required bool value}) =>
-      emit(state.copyWith(showPlaceholder: value));
+  void setShowPlaceholder({required bool value}) {
+    _logger.info('Markdown preview: $value');
+    emit(state.copyWith(showPlaceholder: value));
+  }
 
   /// Puts [roomId] at the front of the recent rooms, dropping the oldest one
   /// past [kRecentRoomsLimit].
@@ -63,6 +84,7 @@ class UserSettingsCubit extends HydratedCubit<UserSettingsState> {
   /// Opening a room again moves it back to the front instead of listing it
   /// twice.
   void recordRoomOpened(String roomId) {
+    _logger.info('Room $roomId added to the recent rooms');
     final rooms = [
       RecentRoom(roomId: roomId, openedAt: DateTime.now().toUtc()),
       ...state.recentRooms.where((room) => room.roomId != roomId),
