@@ -23,6 +23,27 @@
       ]
     },
     {
+      "name": "🐕 🖥️ greyhound_markdown server [wrangler]",
+      "type": "node-terminal",
+      "request": "launch",
+      "cwd": "${workspaceFolder}/apps/greyhound_markdown/server",
+      "command": "npx wrangler dev"
+    },
+    {
+      "name": "🐕 🖥️ greyhound_markdown server [dart_frog]",
+      "type": "node-terminal",
+      "request": "launch",
+      "cwd": "${workspaceFolder}/apps/greyhound_markdown/server_dart_frog",
+      "command": "fvm exec dart_frog dev --port 8787"
+    },
+    {
+      "name": "🐕 🖥️ greyhound_markdown server [serverpod]",
+      "cwd": "apps/greyhound_markdown/server_serverpod",
+      "request": "launch",
+      "type": "dart",
+      "program": "${workspaceFolder}/apps/greyhound_markdown/server_serverpod/bin/main.dart"
+    },
+    {
       "name": "[crdt_lf] flutter_example",
       "cwd": "packages/core/crdt_lf/flutter_example",
       "request": "launch",

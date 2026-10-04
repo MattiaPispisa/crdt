@@ -1,0 +1,17 @@
+name: greyhound_markdown_server_serverpod
+description: >-
+  Local Serverpod relay server for the Greyhound Markdown client, on
+  crdt_socket_sync_serverpod.
+version: 1.0.0
+publish_to: none
+
+environment:
+  sdk: ">=3.12.2 <4.0.0"
+
+dependencies:
+  crdt_socket_sync: ">=0.10.0 <1.0.0"
+  crdt_socket_sync_serverpod: ">=0.1.0 <1.0.0"
+  serverpod: ^4.0.3
+
+dev_dependencies:
+  lints: ^5.0.0

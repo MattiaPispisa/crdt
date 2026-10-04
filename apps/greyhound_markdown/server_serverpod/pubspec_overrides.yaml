@@ -1,0 +1,14 @@
+# Builds the server against the in-repo packages: melos does not reach apps/,
+# so this file is written by hand. crdt_socket_sync_serverpod is the reason it
+# exists; the others keep the whole graph on the in-repo versions.
+dependency_overrides:
+  crdt_lf:
+    path: ../../../packages/core/crdt_lf
+  crdt_lf_persistence:
+    path: ../../../packages/core/crdt_lf_persistence
+  crdt_socket_sync:
+    path: ../../../packages/core/crdt_socket_sync
+  crdt_socket_sync_serverpod:
+    path: ../../../packages/adapters/sync/serverpod
+  hlc_dart:
+    path: ../../../packages/core/hlc

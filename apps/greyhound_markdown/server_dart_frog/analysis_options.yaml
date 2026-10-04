@@ -1,0 +1,6 @@
+include: package:lints/recommended.yaml
+
+linter:
+  rules:
+    # Dart Frog names a dynamic route after its parameter: `routes/room/[id].dart`.
+    file_names: false

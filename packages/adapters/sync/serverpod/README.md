@@ -105,7 +105,7 @@ pod.webServer.addRoute(CrdtSyncRoute(syncHost), '/sync');
 
 Use a persistent registry (`PersistentServerRegistry` with `crdt_lf_hive`,
 `crdt_lf_sqlite`, `crdt_lf_drift`) for anything that must survive a restart —
-[`example/`](./example) does, with Hive.
+[`example/`](https://github.com/MattiaPispisa/crdt/tree/main/packages/adapters/sync/serverpod/example) does, with Hive.
 
 ## Authenticating before the upgrade
 
@@ -204,9 +204,9 @@ Two runnable Serverpod servers, one per mode. They build the pod without a
 database and without generated code, to stay small: a real project passes its
 generated `Protocol()` and `Endpoints()`.
 
-- [`example/`](./example) — server–client mode on `/sync`, documents kept in
+- [`example/`](https://github.com/MattiaPispisa/crdt/tree/main/packages/adapters/sync/serverpod/example) — server–client mode on `/sync`, documents kept in
   Hive through `crdt_lf_hive`, a token check in front of the upgrade.
-- [`relay_example/`](./relay_example) — relay mode on `/relay`, rooms kept in
+- [`relay_example/`](https://github.com/MattiaPispisa/crdt/tree/main/packages/adapters/sync/serverpod/relay_example) — relay mode on `/relay`, rooms kept in
   memory.
 
 ```sh
