@@ -108,10 +108,7 @@ void main() {
         tester.renderObject(find.byType(TextField)),
       );
       final number = TextPainter(
-        text: TextSpan(
-          text: '1',
-          style: gutterNumberStyle(editable, _style),
-        ),
+        text: TextSpan(text: '1', style: gutterNumberStyle(editable, _style)),
         textDirection: TextDirection.ltr,
       )..layout();
 
@@ -134,18 +131,14 @@ void main() {
       expect((await lines(tester, '')).single.number, 1);
     });
 
-    testWidgets('one number per line, each below the previous', (
-      tester,
-    ) async {
+    testWidgets('one number per line, each below the previous', (tester) async {
       final result = await lines(tester, 'one\ntwo\nthree');
       expect(result.map((line) => line.number), [1, 2, 3]);
       expect(result[1].top, greaterThan(result[0].top));
       expect(result[2].top, greaterThan(result[1].top));
     });
 
-    testWidgets('a wrapped line still gets exactly one number', (
-      tester,
-    ) async {
+    testWidgets('a wrapped line still gets exactly one number', (tester) async {
       // The first line is far too long for the pane, so it wraps over several
       // visual rows. Its number must not repeat, and the next one has to skip
       // past every row the wrap took.

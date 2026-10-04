@@ -9,9 +9,7 @@ import 'helpers/localized_app.dart';
 
 void main() {
   testWidgets('CreditLine links the author to their site', (tester) async {
-    await tester.pumpWidget(
-      localizedApp(const Scaffold(body: CreditLine())),
-    );
+    await tester.pumpWidget(localizedApp(const Scaffold(body: CreditLine())));
 
     expect(find.text((await englishL10n()).creditPrefix), findsOneWidget);
     final link = tester.widget<FooterLink>(find.byType(FooterLink));

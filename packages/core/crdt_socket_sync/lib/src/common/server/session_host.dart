@@ -190,6 +190,11 @@ abstract class SessionHostServer<S extends ClientSession>
     );
   }
 
+  /// Runs each time this host becomes [isRunning]: on [start], or on the
+  /// first [acceptConnection] of a host that does not own its transport.
+  @protected
+  void onRunning() {}
+
   /// Release what this host holds beyond its sessions and plugins.
   ///
   /// Runs while the event stream is still open, so a failure here can still
@@ -233,8 +238,7 @@ abstract class SessionHostServer<S extends ClientSession>
         return _refuseConnection(connection, 'the host is not started');
       }
       // Embedded in another server: the connection is the start signal.
-      _addStartedEvent();
-      _state = SessionHostState.running;
+      _markRunning();
     }
 
     final id = sessionId ?? generateSessionId();
@@ -301,9 +305,7 @@ abstract class SessionHostServer<S extends ClientSession>
         await onStart();
       }
 
-      _addStartedEvent();
-
-      _state = SessionHostState.running;
+      _markRunning();
 
       if (ownsTransport) {
         await onStarted();
@@ -546,12 +548,14 @@ abstract class SessionHostServer<S extends ClientSession>
     _serverEventController.add(event);
   }
 
-  void _addStartedEvent() {
+  void _markRunning() {
     addServerEvent(
       ServerEvent(
         type: ServerEventType.started,
         message: startedMessage,
       ),
     );
+    _state = SessionHostState.running;
+    onRunning();
   }
 }

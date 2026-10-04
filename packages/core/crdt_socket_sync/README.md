@@ -15,6 +15,7 @@
     - [Built-in Plugins](#built-in-plugins)
   - [Installation](#installation)
   - [Communication modes](#communication-modes)
+  - [Opening a replica](#opening-a-replica)
   - [Server–Client mode (CRDT-aware)](#serverclient-mode-crdt-aware)
     - [Quick Start](#quick-start)
       - [Server Setup](#server-setup)
@@ -123,6 +124,47 @@ shared, but the server responsibilities are very different:
 Cross-cutting concerns (plugins, compression, wire format, connection status)
 are documented once under [Shared topics](#shared-topics).
 
+## Opening a replica
+
+A client app needs three things together: the document as this device last
+left it, a storage that keeps writing it down, and a sync client. They open
+and close in a set order. `CRDTReplica` holds all three and keeps that order:
+
+```dart
+import 'package:crdt_lf/crdt_lf.dart';
+import 'package:crdt_lf_sqlite/crdt_lf_sqlite.dart';
+import 'package:crdt_socket_sync/replica.dart';
+import 'package:crdt_socket_sync/web_socket_client.dart';
+
+final replica = await CRDTReplica.open(
+  documentId: 'notes',
+  storage: () => CRDTSqlite.open('notes.db'),
+  sync: (document) => WebSocketClient(
+    url: 'ws://localhost:8080',
+    document: document,
+    author: document.peerId,
+  ),
+);
+final text = CRDTFugueTextHandler(replica.document, 'body');
+
+// ...edit
+
+await replica.close();
+```
+
+- `open` restores the document first, then builds the client on it and
+  starts to connect. It returns without waiting for the network, so the local
+  copy is ready at once. Follow `replica.client!.connectionStatus` for the
+  connection.
+- `close` disposes the client, writes what is still waiting, then closes the
+  document and the storage.
+- Leave `storage` out to keep the document in memory. Leave `sync` out to
+  keep it on this device. For the relay, return a `WebSocketRelayClient` from
+  `sync`.
+- Pass `onStorageError` to keep going when the storage cannot be read: the
+  document then starts empty, in memory, and `onDocument` runs again on it.
+  Without it, `open` throws.
+
 ## Server–Client mode (CRDT-aware)
 
 In this mode the server owns the documents through a
@@ -197,6 +239,8 @@ void main() async {
   }
 }
 ```
+
+In an app, open the document through [`CRDTReplica`](#opening-a-replica).
 
 ### How it works
 
@@ -292,21 +336,35 @@ sequenceDiagram
 The server stores documents through a `CRDTServerRegistry`. Two come with the
 package: `InMemoryCRDTServerRegistry`, which keeps everything in memory, and
 [`PersistentServerRegistry`](#persisting-changes--snapshots), which keeps every
-document on disk through any `crdt_lf` storage adapter. Implement the interface
-yourself only if neither fits.
+document on disk through any `crdt_lf` storage adapter. Write your own only if
+neither fits.
 
-The interface is fully asynchronous:
+Mix in `CRDTServerRegistryDocuments`: it applies changes, takes snapshots and
+counts documents. You say where the documents live. A `DocumentSnapshotFeed`
+reports the snapshots your documents take: track each document you open,
+untrack it when you let it go. If you store snapshots, pass `onSnapshot` to
+`start`: the feed reports a snapshot once the future it returns completes.
 
 ```dart
-class CustomServerRegistry implements CRDTServerRegistry {
-  final Map<String, CRDTDocument> _documents = {};
+class CustomServerRegistry
+    with CRDTServerRegistryDocuments
+    implements CRDTServerRegistry {
+  CustomServerRegistry()
+      : _documents = {},
+        _feed = DocumentSnapshotFeed() {
+    _feed.start();
+  }
+
+  final Map<String, CRDTDocument> _documents;
+  final DocumentSnapshotFeed _feed;
 
   @override
   Future<void> addDocument(String documentId, {PeerId? author}) async {
-    _documents[documentId] = CRDTDocument(
+    final document = _documents[documentId] = CRDTDocument(
       peerId: author ?? PeerId.generate(),
       documentId: documentId,
     );
+    _feed.track(documentId, document);
   }
 
   @override
@@ -320,8 +378,11 @@ class CustomServerRegistry implements CRDTServerRegistry {
   @override
   Future<Set<String>> get documentIds async => _documents.keys.toSet();
 
-  // ... removeDocument, documentCount, createSnapshot, getLatestSnapshot,
-  //     applyChange (see the CRDTServerRegistry interface for the full list).
+  @override
+  Stream<ServerSnapshot> get snapshots => _feed.snapshots;
+
+  // ... removeDocument (with _feed.untrack), getLatestSnapshot, and close
+  //     (with _feed.close).
 }
 ```
 
@@ -447,22 +508,13 @@ abstract interface class ServerDocumentCatalog {
 ##### Broadcasting a compaction
 
 A snapshot comes with a prune, so the history it covers leaves the server. A
-client still replaying that history has to be given the snapshot instead. The
-`snapshots` stream reports each one as it is taken:
-
-```dart
-registry.snapshots.listen((event) async {
-  final document = (await registry.getDocument(event.documentId))!;
-  await server.broadcastMessage(
-    SyncMessage.documentStatus(
-      documentId: event.documentId,
-      snapshot: event.snapshot,
-      changes: document.exportChanges(),
-      versionVector: document.getVersionVector(),
-    ),
-  );
-});
-```
+client still replaying that history has to be given the snapshot instead.
+There is nothing to wire for it: a `WebSocketServer` or `DocumentSessionHost`
+sends each snapshot a document of its registry takes to the clients of that
+document, once it runs and once the registry has stored the snapshot.
+`PersistentServerRegistry` waits until the disk can bring back the version of
+the snapshot, so a client never gets a state the server could lose. The `snapshots` stream of the registry reports them too,
+for logging or metrics.
 
 The example server puts all of this together:
 [`registry.dart`](https://github.com/MattiaPispisa/crdt/blob/main/packages/core/crdt_socket_sync/example/lib/src/registry.dart).
@@ -504,6 +556,9 @@ import 'package:crdt_socket_sync/client.dart';
 
 // WebSocket client implementation
 import 'package:crdt_socket_sync/web_socket_client.dart';
+
+// CRDTReplica: the document, its local storage and its client, in order
+import 'package:crdt_socket_sync/replica.dart';
 
 // Server interfaces and the transport-free DocumentSessionHost (no dart:io)
 import 'package:crdt_socket_sync/server.dart';
@@ -574,6 +629,8 @@ void main() async {
 }
 ```
 
+In an app, open the document through [`CRDTReplica`](#opening-a-replica).
+
 Local edits are delivered **at-least-once**: a change leaves the client
 queue only when the relay acknowledges it, and unacked changes survive
 reconnects (re-delivery is harmless because peers de-duplicate imported
@@ -643,6 +700,8 @@ final persistence = await CRDTDocumentPersistence.open(document, storage);
 // Only now: the restored document is what the welcome is reconciled against.
 await client.connect();
 ```
+
+[`CRDTReplica`](#opening-a-replica) does both steps, in this order.
 
 The text written on a plane is read back on the next launch, and reaches
 everyone else at the next welcome. There is no outbox for your app to keep.
@@ -810,6 +869,9 @@ import 'package:crdt_socket_sync/relay_client.dart';
 
 // WebSocket relay client implementation
 import 'package:crdt_socket_sync/web_socket_relay_client.dart';
+
+// CRDTReplica: the document, its local storage and its client, in order
+import 'package:crdt_socket_sync/replica.dart';
 
 // Relay server interfaces (RelayStore, compaction, session) and the
 // transport-free RelaySessionHost (no dart:io)

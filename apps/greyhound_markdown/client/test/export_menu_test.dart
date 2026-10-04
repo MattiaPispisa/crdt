@@ -76,9 +76,7 @@ void main() {
     expect(find.text('Saved my-draft.html'), findsOneWidget);
   });
 
-  testWidgets('backing out of the name dialog exports nothing', (
-    tester,
-  ) async {
+  testWidgets('backing out of the name dialog exports nothing', (tester) async {
     final saver = await pumpMenu(tester, '# Notes');
 
     await tester.tap(find.byType(PopupMenuButton<ExportFormat>));

@@ -277,7 +277,11 @@ const List<MarkdownShortcut> kMarkdownShortcuts = [
     binding: EditorShortcutBinding(LogicalKeyboardKey.keyE),
     marker: '`',
   ),
-  _LinePrefixShortcut(icon: Icons.title, label: MarkdownShortcutLabel.heading1, prefix: '# '),
+  _LinePrefixShortcut(
+    icon: Icons.title,
+    label: MarkdownShortcutLabel.heading1,
+    prefix: '# ',
+  ),
   _LinePrefixShortcut(
     icon: Icons.text_fields,
     label: MarkdownShortcutLabel.heading2,
@@ -288,7 +292,11 @@ const List<MarkdownShortcut> kMarkdownShortcuts = [
     label: MarkdownShortcutLabel.heading3,
     prefix: '### ',
   ),
-  _LinePrefixShortcut(icon: Icons.format_quote, label: MarkdownShortcutLabel.quote, prefix: '> '),
+  _LinePrefixShortcut(
+    icon: Icons.format_quote,
+    label: MarkdownShortcutLabel.quote,
+    prefix: '> ',
+  ),
   _LinePrefixShortcut(
     icon: Icons.format_list_bulleted,
     label: MarkdownShortcutLabel.bulletList,
@@ -300,7 +308,11 @@ const List<MarkdownShortcut> kMarkdownShortcuts = [
     binding: EditorShortcutBinding(LogicalKeyboardKey.keyK),
     open: '[',
   ),
-  _LinkLikeShortcut(icon: Icons.image, label: MarkdownShortcutLabel.image, open: '!['),
+  _LinkLikeShortcut(
+    icon: Icons.image,
+    label: MarkdownShortcutLabel.image,
+    open: '![',
+  ),
 ];
 
 /// The caret as an offset, defaulting to end-of-text when the field has never

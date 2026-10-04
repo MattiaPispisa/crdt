@@ -98,3 +98,21 @@ class DocumentDisposedException extends CrdtException {
       : super('Cannot execute $methodInvoked.'
             ' The document has been disposed.');
 }
+
+/// {@template concurrent_snapshot_exception}
+/// Thrown when two snapshots hold the same handler at concurrent versions.
+/// {@endtemplate}
+class ConcurrentSnapshotException extends CrdtException {
+  /// {@macro concurrent_snapshot_exception}
+  const ConcurrentSnapshotException({
+    required this.currentId,
+    required this.incomingId,
+  }) : super('Cannot merge snapshot $incomingId into $currentId: their '
+            'versions are concurrent.');
+
+  /// The id of the snapshot the document holds.
+  final String currentId;
+
+  /// The id of the snapshot that was refused.
+  final String incomingId;
+}

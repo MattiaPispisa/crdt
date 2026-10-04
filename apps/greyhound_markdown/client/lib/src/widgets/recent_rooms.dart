@@ -25,8 +25,7 @@ class RecentRooms extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return BlocSelector<UserSettingsCubit, UserSettingsState,
-        List<RecentRoom>>(
+    return BlocSelector<UserSettingsCubit, UserSettingsState, List<RecentRoom>>(
       selector: (settings) => settings.recentRooms,
       builder: (context, rooms) {
         if (rooms.isEmpty) {
@@ -98,10 +97,7 @@ class _RecentRoomRow extends StatelessWidget {
               ),
             ),
             const SizedBox(width: 12),
-            Text(
-              relativeTime(context.l10n, room.openedAt, now),
-              style: style,
-            ),
+            Text(relativeTime(context.l10n, room.openedAt, now), style: style),
           ],
         ),
       ),
