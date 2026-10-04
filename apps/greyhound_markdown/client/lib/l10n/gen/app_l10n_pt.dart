@@ -50,6 +50,13 @@ class AppL10nPt extends AppL10n {
       'Quebra as linhas longas em vez de rolar na horizontal';
 
   @override
+  String get markdownPreview => 'Pré-visualização de markdown';
+
+  @override
+  String get markdownPreviewSubtitle =>
+      'Mostra um documento markdown de exemplo enquanto a sala está vazia';
+
+  @override
   String get viewChangelog => 'Ver changelog';
 
   @override

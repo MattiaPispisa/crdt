@@ -7,6 +7,7 @@ import 'package:greyhound_markdown_client/src/application/application.dart';
 import 'package:greyhound_markdown_client/src/config.dart';
 import 'package:greyhound_markdown_client/src/l10n/l10n_extension.dart';
 import 'package:greyhound_markdown_client/src/l10n/labels.dart';
+import 'package:greyhound_markdown_client/src/routing/app_navigation.dart';
 import 'package:greyhound_markdown_client/src/widgets/credit_line.dart';
 
 /// Formats a bundle version as `v<version>` plus the build number when the
@@ -74,8 +75,8 @@ class SettingsScreen extends StatelessWidget {
               child: OutlinedButton.icon(
                 icon: const Icon(Icons.history),
                 label: Text(l10n.viewChangelog),
-                onPressed: () =>
-                    Navigator.of(context).pushNamed(kChangelogRoute),
+                // Pushed: Settings may be on top of an open room.
+                onPressed: context.pushChangelog,
               ),
             ),
             const SizedBox(height: 12),
@@ -217,6 +218,15 @@ class _EditorOptions extends StatelessWidget {
             value: settings.wordWrap,
             onChanged: (value) =>
                 context.read<UserSettingsCubit>().setWordWrap(value: value),
+          ),
+          SwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            title: Text(context.l10n.markdownPreview),
+            subtitle: Text(context.l10n.markdownPreviewSubtitle),
+            value: settings.showPlaceholder,
+            onChanged: (value) => context
+                .read<UserSettingsCubit>()
+                .setShowPlaceholder(value: value),
           ),
         ],
       ),

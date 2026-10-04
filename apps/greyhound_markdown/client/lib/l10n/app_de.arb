@@ -14,6 +14,8 @@
   "lineNumbersSubtitle": "Zeigt Zeilennummern neben dem Quelltext",
   "wordWrap": "Zeilenumbruch",
   "wordWrapSubtitle": "Bricht lange Zeilen um, statt horizontal zu scrollen",
+  "markdownPreview": "Markdown-Vorschau",
+  "markdownPreviewSubtitle": "Zeigt ein Markdown-Beispieldokument, solange der Raum leer ist",
   "viewChangelog": "Changelog ansehen",
   "viewLicenses": "Lizenzen ansehen",
   "versionUnknown": "—",

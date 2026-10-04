@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:greyhound_markdown_client/src/config.dart';
 import 'package:greyhound_markdown_client/src/l10n/l10n_extension.dart';
 import 'package:greyhound_markdown_client/src/l10n/labels.dart';
+import 'package:greyhound_markdown_client/src/routing/app_navigation.dart';
 import 'package:greyhound_markdown_client/src/widgets/credit_line.dart';
 import 'package:greyhound_markdown_client/src/widgets/footer_link.dart';
 
@@ -31,7 +32,9 @@ class AppFooter extends StatelessWidget {
               style: linkStyle,
             ),
           InkWell(
-            onTap: () => Navigator.of(context).pushNamed(kSettingsRoute),
+            // Pushed, not gone to: the footer is also under a room, which has
+            // to stay open while Settings is on top.
+            onTap: context.pushSettings,
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [

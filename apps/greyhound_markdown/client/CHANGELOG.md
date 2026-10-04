@@ -1,3 +1,18 @@
+## 0.13.0
+
+**Date:** --
+
+### Added
+
+- **Markdown preview** option in Settings: turn it off to leave an empty room
+  blank, without the sample document in the editor and the preview.
+
+### Changed
+
+- Navigation moves to declarative `go_router` routes. The changelog page is
+  now `/settings/changelog`; the old `/changelog` link still opens it.
+- Add `get_it` as the service locator; it provides the router.
+
 ## 0.12.0
 
 **Date:** 2026-09-27

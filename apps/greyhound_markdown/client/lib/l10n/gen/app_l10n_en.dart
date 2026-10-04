@@ -49,6 +49,13 @@ class AppL10nEn extends AppL10n {
       'Wrap long lines instead of scrolling sideways';
 
   @override
+  String get markdownPreview => 'Markdown preview';
+
+  @override
+  String get markdownPreviewSubtitle =>
+      'Show a sample markdown document while the room is empty';
+
+  @override
   String get viewChangelog => 'View changelog';
 
   @override

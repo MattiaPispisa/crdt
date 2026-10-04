@@ -50,6 +50,13 @@ class AppL10nIt extends AppL10n {
       'Manda a capo le righe lunghe invece di scorrere di lato';
 
   @override
+  String get markdownPreview => 'Anteprima markdown';
+
+  @override
+  String get markdownPreviewSubtitle =>
+      'Mostra un documento markdown di esempio quando la stanza è vuota';
+
+  @override
   String get viewChangelog => 'Vedi il changelog';
 
   @override

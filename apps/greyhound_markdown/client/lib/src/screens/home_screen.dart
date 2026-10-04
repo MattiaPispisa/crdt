@@ -4,6 +4,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:greyhound_markdown_client/src/application/application.dart';
 import 'package:greyhound_markdown_client/src/config.dart';
 import 'package:greyhound_markdown_client/src/l10n/l10n_extension.dart';
+import 'package:greyhound_markdown_client/src/routing/app_navigation.dart';
 import 'package:greyhound_markdown_client/src/widgets/app_footer.dart';
 import 'package:greyhound_markdown_client/src/widgets/recent_rooms.dart';
 
@@ -47,7 +48,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   void _openRoom(String roomId) {
-    Navigator.of(context).pushNamed(roomRoute(roomId));
+    context.goRoom(roomId);
   }
 
   /// Enter, from either field: into the room whose id is typed, or into a

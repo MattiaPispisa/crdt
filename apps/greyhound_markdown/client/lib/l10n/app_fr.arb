@@ -14,6 +14,8 @@
   "lineNumbersSubtitle": "Affiche les numéros de ligne à côté du code source",
   "wordWrap": "Retour à la ligne",
   "wordWrapSubtitle": "Coupe les longues lignes au lieu de défiler horizontalement",
+  "markdownPreview": "Aperçu markdown",
+  "markdownPreviewSubtitle": "Affiche un document markdown d'exemple tant que la salle est vide",
   "viewChangelog": "Voir le changelog",
   "viewLicenses": "Voir les licences",
   "versionUnknown": "—",

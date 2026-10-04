@@ -14,6 +14,8 @@
   "lineNumbersSubtitle": "Muestra los números de línea junto al código fuente",
   "wordWrap": "Ajuste de línea",
   "wordWrapSubtitle": "Ajusta las líneas largas en vez de desplazar la vista en horizontal",
+  "markdownPreview": "Vista previa de markdown",
+  "markdownPreviewSubtitle": "Muestra un documento markdown de ejemplo mientras la sala está vacía",
   "viewChangelog": "Ver changelog",
   "viewLicenses": "Ver licencias",
   "versionUnknown": "—",

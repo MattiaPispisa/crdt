@@ -2,16 +2,14 @@ import 'package:crdt_lf_hive/crdt_lf_hive.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:go_router/go_router.dart';
 import 'package:hydrated_bloc/hydrated_bloc.dart';
 import 'package:path_provider/path_provider.dart';
 
 import 'package:greyhound_markdown_client/l10n/gen/app_l10n.dart';
 import 'package:greyhound_markdown_client/src/application/application.dart';
 import 'package:greyhound_markdown_client/src/config.dart';
-import 'package:greyhound_markdown_client/src/screens/changelog_screen.dart';
-import 'package:greyhound_markdown_client/src/screens/editor_screen.dart';
-import 'package:greyhound_markdown_client/src/screens/home_screen.dart';
-import 'package:greyhound_markdown_client/src/screens/settings_screen.dart';
+import 'package:greyhound_markdown_client/src/di/service_locator.dart';
 import 'package:greyhound_markdown_client/src/widgets/code_element_builder.dart';
 
 Future<void> main() async {
@@ -30,6 +28,8 @@ Future<void> main() async {
   // Backs the per-room document cache, so a reload without a connection
   // reopens the room instead of an empty page.
   CRDTHive.initialize();
+
+  setupServiceLocator();
 
   runApp(const GreyhoundApp());
 
@@ -54,8 +54,7 @@ class GreyhoundApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Above the MaterialApp so every route — including the ones pushed by
-    // onGenerateRoute — reads the same settings.
+    // Above the MaterialApp so every route reads the same settings.
     return BlocProvider(
       create: (_) => UserSettingsCubit(),
       // Only what the MaterialApp itself needs is read here, so typing a name
@@ -66,7 +65,7 @@ class GreyhoundApp extends StatelessWidget {
           themeMode: userSettings.themeMode,
           language: userSettings.language,
         ),
-        builder: (context, appearance) => MaterialApp(
+        builder: (context, appearance) => MaterialApp.router(
           title: kAppName,
           theme: greyhoundTheme(Brightness.light),
           darkTheme: greyhoundTheme(Brightness.dark),
@@ -77,39 +76,9 @@ class GreyhoundApp extends StatelessWidget {
           locale: appearance.language.locale,
           localizationsDelegates: AppL10n.localizationsDelegates,
           supportedLocales: AppL10n.supportedLocales,
-          onGenerateRoute: _routeFor,
+          routerConfig: getIt<GoRouter>(),
         ),
       ),
-    );
-  }
-
-  /// The page [settings] names.
-  Route<dynamic> _routeFor(RouteSettings settings) {
-    final uri = Uri.parse(settings.name ?? '/');
-    final roomId = parseRoomRoute(uri);
-    if (roomId != null) {
-      return MaterialPageRoute<void>(
-        settings: settings,
-        builder: (_) => EditorScreen(roomId: roomId),
-      );
-    }
-    if (uri.path == kSettingsRoute) {
-      return MaterialPageRoute<void>(
-        settings: settings,
-        builder: (_) => const SettingsScreen(),
-      );
-    }
-    if (uri.path == kChangelogRoute) {
-      return MaterialPageRoute<void>(
-        settings: settings,
-        builder: (_) => const ChangelogScreen(),
-      );
-    }
-    // Anything else — including a `/room/…` link whose id is not one — lands
-    // on the home page rather than on a broken room.
-    return MaterialPageRoute<void>(
-      settings: settings,
-      builder: (_) => const HomeScreen(),
     );
   }
 }

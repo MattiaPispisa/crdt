@@ -1,11 +1,14 @@
 import 'package:crdt_lf/crdt_lf.dart';
 import 'package:crdt_lf_flutter/crdt_lf_flutter.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:greyhound_markdown_client/src/application/application.dart';
 import 'package:greyhound_markdown_client/src/config.dart';
 import 'package:greyhound_markdown_client/src/widgets/preview_pane.dart';
 
 import 'helpers/localized_app.dart';
+import 'helpers/memory_storage.dart';
 
 ({CRDTDocument document, CRDTFugueTextHandler text}) _room() {
   final document = CRDTDocument(peerId: PeerId.generate());
@@ -14,11 +17,21 @@ import 'helpers/localized_app.dart';
   return (document: document, text: text);
 }
 
-Future<void> _pump(WidgetTester tester, CRDTDocument document) {
+Future<void> _pump(
+  WidgetTester tester,
+  CRDTDocument document, {
+  Map<String, dynamic>? stored,
+}) {
+  final storage = MemoryStorage(
+    stored == null ? null : {'UserSettings': stored},
+  );
   return tester.pumpWidget(
-    CrdtProvider.value(
-      value: document,
-      child: localizedApp(const Scaffold(body: PreviewPane())),
+    BlocProvider(
+      create: (_) => UserSettingsCubit(storage: storage),
+      child: CrdtProvider.value(
+        value: document,
+        child: localizedApp(const Scaffold(body: PreviewPane())),
+      ),
     ),
   );
 }
@@ -31,6 +44,15 @@ void main() {
     await _pump(tester, room.document);
 
     expect(find.textContaining('Greyhound Markdown'), findsWidgets);
+  });
+
+  testWidgets('an empty document stays blank with the placeholder off', (
+    tester,
+  ) async {
+    final room = _room();
+    await _pump(tester, room.document, stored: {'showPlaceholder': false});
+
+    expect(find.textContaining('Greyhound Markdown'), findsNothing);
   });
 
   testWidgets('renders the document on the first frame, without waiting', (
