@@ -1,8 +1,8 @@
 @TestOn('vm')
 library;
 
-// End-to-end test against a real relay server. Requires `npx wrangler dev`
-// running in ../server; run explicitly with:
+// End-to-end test against a real relay server on ws://localhost:8787: one of
+// ../server, ../server_dart_frog, ../server_serverpod. Run explicitly with:
 //   flutter test --dart-define=E2E=true test/e2e_test.dart
 import 'dart:math';
 import 'dart:ui';
@@ -52,7 +52,7 @@ _makeClient(String roomId, String name) {
 void main() {
   test(
     'two clients converge through the real relay server',
-    skip: _e2e ? false : 'requires wrangler dev (run with -DE2E=true)',
+    skip: _e2e ? false : 'requires a local relay server (run with -DE2E=true)',
     () async {
       final roomId = 'e2e${Random().nextInt(1 << 30)}';
       final a = _makeClient(roomId, 'Ann');

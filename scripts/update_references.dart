@@ -89,6 +89,7 @@ const _packagePubNames = <String>[
   'crdt_lf_drift',
   'crdt_lf_sqlite',
   'crdt_socket_sync_dart_frog',
+  'crdt_socket_sync_serverpod',
 ];
 
 /// Maps every package's pub.dev name to its path segments relative to

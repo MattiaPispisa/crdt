@@ -28,6 +28,11 @@ Real-time collaborative markdown editor built on
   storage. All CRDT merge happens client-side. It is a **TypeScript
   reference implementation of the `crdt_socket_sync` relay protocol** — the
   same contract `WebSocketRelayServer` implements in Dart.
+- `server_dart_frog/` and `server_serverpod/` — the same relay in Dart, for
+  local testing: the package's `RelaySessionHost` served from
+  [Dart Frog](../../packages/adapters/sync/dart_frog) or
+  [Serverpod](../../packages/adapters/sync/serverpod). Rooms live in memory
+  and any origin may connect, so they are not for production.
 
 ## Architecture
 
@@ -46,19 +51,34 @@ for the message contract to keep in sync. The client has no hand-rolled
 protocol: it drives `WebSocketRelayClient` from the package.
 
 This app demonstrates that the relay server contract is host-agnostic: a
-Cloudflare Worker serves the same package client that a Dart
-`WebSocketRelayServer` would.
+Cloudflare Worker, a Dart Frog backend and a Serverpod web server all serve
+the same package client.
 
 ## Run it
 
-Server (terminal 1):
+Server (terminal 1). All three listen on `ws://localhost:8787`, the client's
+default URL: start one at a time.
 
 ```sh
+# Cloudflare Worker
 cd server
 npm install   # if sharp fails building from source because a global
               # libvips is installed: SHARP_IGNORE_GLOBAL_LIBVIPS=1 npm install
-npx wrangler dev   # ws://localhost:8787, state persists in .wrangler/state
+npx wrangler dev   # state persists in .wrangler/state
+
+# or Dart Frog (needs the dart_frog CLI: dart pub global activate dart_frog_cli)
+cd server_dart_frog
+fvm dart pub get
+fvm exec dart_frog dev --port 8787
+
+# or Serverpod
+cd server_serverpod
+fvm dart pub get
+fvm dart run bin/main.dart
 ```
+
+In VS Code, the `🐕 🖥️ greyhound_markdown server [...]` launch
+configurations start each of them.
 
 Client (terminals 2 and 3, from `client/`):
 
@@ -78,11 +98,12 @@ Point the client at a deployed worker with
 ```sh
 cd client
 fvm flutter test                                        # unit tests
-fvm flutter test --dart-define=E2E=true test/e2e_test.dart  # needs wrangler dev
+fvm flutter test --dart-define=E2E=true test/e2e_test.dart  # needs a server
 ```
 
-The e2e test drives two real `WebSocketRelayClient`s through the local worker
-and checks convergence, awareness propagation and late-joiner catch-up.
+The e2e test drives two real `WebSocketRelayClient`s through the local server
+(any of the three) and checks convergence, awareness propagation and
+late-joiner catch-up.
 
 ## Packages
 
@@ -97,3 +118,4 @@ Other bricks of the crdt "system" are:
 - [crdt_lf_drift](https://pub.dev/packages/crdt_lf_drift)
 - [crdt_lf_sqlite](https://pub.dev/packages/crdt_lf_sqlite)
 - [crdt_socket_sync_dart_frog](https://pub.dev/packages/crdt_socket_sync_dart_frog)
+- [crdt_socket_sync_serverpod](https://pub.dev/packages/crdt_socket_sync_serverpod)
