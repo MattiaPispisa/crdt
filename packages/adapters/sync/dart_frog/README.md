@@ -9,6 +9,11 @@
 
 [![docs_badge]][docs_link]
 
+This package is one of the sync adapters for popular Dart server
+frameworks. It keeps the documents of the [`crdt_lf`](https://pub.dev/packages/crdt_lf) library in sync
+through a [Dart Frog](https://pub.dev/packages/dart_frog) backend. New to CRDTs? Start from the
+[`crdt_lf`](https://pub.dev/packages/crdt_lf) documentation.
+
 - [CRDT Socket Sync — Dart Frog](#crdt-socket-sync--dart-frog)
   - [What it does](#what-it-does)
   - [Installation](#installation)
@@ -16,30 +21,25 @@
     - [Relay mode](#relay-mode)
     - [Server–client mode](#serverclient-mode)
   - [Authenticating before the upgrade](#authenticating-before-the-upgrade)
-  - [Routing and document ids](#routing-and-document-ids)
   - [Lifecycle](#lifecycle)
-  - [Two kinds of ping](#two-kinds-of-ping)
   - [Gotchas](#gotchas)
   - [Examples](#examples)
   - [Roadmap](#roadmap)
 
 ## What it does
 
-[`crdt_socket_sync`](https://pub.dev/packages/crdt_socket_sync) ships two
-WebSocket servers that own a `dart:io` `HttpServer`. Under
-[Dart Frog](https://pub.dev/packages/dart_frog) the HTTP server is the
-framework's, so those two are not usable: there is no server to create and no
-request to upgrade yourself.
+[`crdt_socket_sync`](https://pub.dev/packages/crdt_socket_sync) for [Dart Frog](https://pub.dev/packages/dart_frog).
 
-This package bridges that. It takes the session hosts from `crdt_socket_sync` —
-`DocumentSessionHost` (CRDT-aware) and `RelaySessionHost` (relay) — and gives
-you a Dart Frog `Handler` that upgrades the request and hands the socket over.
-Everything else is unchanged: same protocol, same handshake, same plugins, same
-aligned snapshots and log compaction.
+It gives Dart Frog handlers, ready to return from a route, that serve
+`crdt_socket_sync` sessions: `crdtSyncWebSocketHandler` for the server–client
+mode and `crdtRelayWebSocketHandler` for the relay mode, plus a middleware
+provider for each host. Clients connect with the plain `WebSocketClient` /
+`WebSocketRelayClient` of `crdt_socket_sync`.
 
-It is deliberately thin. The interesting code lives in `crdt_socket_sync`;
-what this adds is the seam, plus the one thing Dart Frog gives you that the
-bundled servers cannot — **the request, before the socket exists**.
+- How the sync works (modes, protocol, plugins, persistence): the
+  [`crdt_socket_sync`](https://pub.dev/packages/crdt_socket_sync) documentation.
+- Routes, middleware, WebSocket options and server setup: the
+  [Dart Frog documentation](https://dart-frog.dev).
 
 ## Installation
 
@@ -62,9 +62,6 @@ import 'package:crdt_socket_sync_dart_frog/relay.dart';
 ## Quick start
 
 ### Relay mode
-
-The relay never interprets CRDT data: it rebroadcasts opaque blobs to the other
-clients of a room and persists them. It is the simpler of the two.
 
 ```dart
 // lib/src/host.dart — built once, shared by every request
@@ -100,9 +97,6 @@ Clients connect with `WebSocketRelayClient` from `crdt_socket_sync`, pointed at
 
 ### Server–client mode
 
-The CRDT-aware mode keeps the documents server-side in a `CRDTServerRegistry`,
-validates changes and takes aligned snapshots.
-
 ```dart
 // lib/src/host.dart
 import 'package:crdt_socket_sync/server.dart';
@@ -137,8 +131,8 @@ in a top-level `late final`.
 
 ## Authenticating before the upgrade
 
-This is the reason to reach for Dart Frog here. The handler is just a value:
-call it only once the request has earned it.
+The handler is a value: check the request first, and call the handler only
+when the check passes.
 
 ```dart
 Future<Response> onRequest(RequestContext context) async {
@@ -150,30 +144,7 @@ Future<Response> onRequest(RequestContext context) async {
 }
 ```
 
-A rejected client gets a plain `401` and never reaches the protocol. With the
-bundled `WebSocketServer` the socket is already up by the time you could look
-at anything.
-
-## Routing and document ids
-
-The document id travels **inside** the protocol frames (the handshake in
-server–client mode, the hello in relay mode), not in the URL. A single route
-therefore serves every document, and this package does no routing of its own.
-
-A parameterised route is still useful — for authorizing per document:
-
-```dart
-// routes/sync/[documentId].dart
-Future<Response> onRequest(RequestContext context, String documentId) async {
-  if (!await canAccess(context, documentId)) {
-    return Response(statusCode: HttpStatus.forbidden);
-  }
-  return crdtSyncWebSocketHandler(context.read<DocumentSessionHost>())(context);
-}
-```
-
-Note that the path segment is what *you* check; the host still takes the
-document id from the frames.
+A rejected client gets a plain `401` and never reaches the protocol.
 
 ## Lifecycle
 
@@ -213,17 +184,6 @@ under them — for a durable registry that is where pending writes get flushed,
 so skipping it loses data. A `RelayStore` has no close: a durable one is yours
 to close after `dispose()`.
 
-## Two kinds of ping
-
-`crdtSyncWebSocketHandler` and `crdtRelayWebSocketHandler` forward `protocols`,
-`allowedOrigins` and `pingInterval` to `dart_frog_web_socket`. Set
-`allowedOrigins` if browsers connect; unset, any origin may.
-
-`pingInterval` is a **WebSocket-level** ping. It is not the protocol's own ping
-(`Protocol.pingInterval`, 15s), which carries the client's version vector and
-drives both liveness detection and the aligned-snapshot coordinator. They are
-complementary — setting one is not a reason to drop the other.
-
 ## Gotchas
 
 - **`Handler` is ambiguous.** `crdt_lf` exports a CRDT `Handler` and `dart_frog`
@@ -251,6 +211,10 @@ that starts the host and a custom entrypoint:
 cd example   # or relay_example
 dart_frog dev
 ```
+
+The [greyhound_markdown](https://github.com/MattiaPispisa/crdt/tree/main/apps/greyhound_markdown) app also runs locally
+against a Dart Frog relay server:
+[`server_dart_frog/`](https://github.com/MattiaPispisa/crdt/tree/main/apps/greyhound_markdown/server_dart_frog).
 
 ## Roadmap
 

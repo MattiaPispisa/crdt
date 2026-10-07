@@ -9,6 +9,11 @@
 
 [![docs_badge]][docs_link]
 
+This package is one of the sync adapters for popular Dart server
+frameworks. It keeps the documents of the [`crdt_lf`](https://pub.dev/packages/crdt_lf) library in sync
+through a [Serverpod](https://pub.dev/packages/serverpod) backend. New to CRDTs? Start from the
+[`crdt_lf`](https://pub.dev/packages/crdt_lf) documentation.
+
 - [CRDT Socket Sync — Serverpod](#crdt-socket-sync--serverpod)
   - [What it does](#what-it-does)
   - [Installation](#installation)
@@ -16,32 +21,24 @@
     - [Relay mode](#relay-mode)
     - [Server–client mode](#serverclient-mode)
   - [Authenticating before the upgrade](#authenticating-before-the-upgrade)
-  - [Routing and document ids](#routing-and-document-ids)
   - [Lifecycle](#lifecycle)
-  - [Origins and pings](#origins-and-pings)
   - [Gotchas](#gotchas)
   - [Examples](#examples)
   - [Roadmap](#roadmap)
 
 ## What it does
 
-[`crdt_socket_sync`](https://pub.dev/packages/crdt_socket_sync) ships two
-WebSocket servers that own a `dart:io` `HttpServer`. Under
-[Serverpod](https://pub.dev/packages/serverpod) the HTTP server is the
-framework's, so those two do not fit: there is no server to create and no
-request to upgrade yourself.
+[`crdt_socket_sync`](https://pub.dev/packages/crdt_socket_sync) for [Serverpod](https://pub.dev/packages/serverpod).
 
-This package bridges that. It takes the session hosts from `crdt_socket_sync` —
-`DocumentSessionHost` (CRDT-aware) and `RelaySessionHost` (relay) — and gives
-you a Serverpod web `Route` that upgrades the request and hands the socket over.
-Everything else is unchanged: same protocol, same handshake, same plugins, same
-aligned snapshots and log compaction. Clients stay the plain
-`WebSocketClient` / `WebSocketRelayClient` of `crdt_socket_sync`: they do not
-need the generated Serverpod client.
+It gives Serverpod web routes, ready to add to your pod, that serve
+`crdt_socket_sync` sessions: `CrdtSyncRoute` for the server–client mode and
+`CrdtRelayRoute` for the relay mode. Clients connect with the plain
+`WebSocketClient` / `WebSocketRelayClient` of `crdt_socket_sync`.
 
-It is thin on purpose. The protocol lives in `crdt_socket_sync`; this package
-adds the seam, plus the one thing Serverpod gives you that the bundled servers
-cannot — **the request and its `Session`, before the socket exists**.
+- How the sync works (modes, protocol, plugins, persistence): the
+  [`crdt_socket_sync`](https://pub.dev/packages/crdt_socket_sync) documentation.
+- Routes, sessions, authentication and server configuration: the
+  [Serverpod documentation](https://docs.serverpod.dev).
 
 ## Installation
 
@@ -62,9 +59,6 @@ import 'package:crdt_socket_sync_serverpod/relay.dart';
 ## Quick start
 
 ### Relay mode
-
-The relay never interprets CRDT data: it rebroadcasts opaque blobs to the other
-clients of a room and persists them. It is the simpler of the two.
 
 ```dart
 import 'package:crdt_socket_sync/relay_server.dart' show InMemoryRelayStore;
@@ -88,9 +82,6 @@ Clients connect with `WebSocketRelayClient` from `crdt_socket_sync`, pointed at
 the web server's `/relay` (`ws://localhost:8080/relay` in the examples).
 
 ### Server–client mode
-
-The CRDT-aware mode keeps the documents server-side in a `CRDTServerRegistry`,
-validates changes and takes aligned snapshots.
 
 ```dart
 import 'package:crdt_socket_sync/server.dart' show InMemoryCRDTServerRegistry;
@@ -136,14 +127,6 @@ before `handleCall` runs. A malformed header gets a `400`.
 Browsers cannot set headers on a WebSocket. For a browser client, send the key
 in a query parameter or a cookie, and check it yourself in `handleCall`.
 
-## Routing and document ids
-
-The document id travels **inside** the protocol frames (the handshake in
-server–client mode, the hello in relay mode), not in the URL. A single route
-therefore serves every document, and this package does no routing of its own.
-To authorize per document, check the request in `handleCall`: the host still
-takes the document id from the frames.
-
 ## Lifecycle
 
 Build the host once, outside the request. A host per request would give every
@@ -165,19 +148,6 @@ between minor versions.
 under them — for a durable registry that is where pending writes get flushed,
 so skipping it loses data. A `RelayStore` has no close: a durable one is yours
 to close after `dispose()`.
-
-## Origins and pings
-
-`CrdtSyncRoute` and `CrdtRelayRoute` take `allowAnyOrigin` and `pingInterval`.
-
-By default a browser page on another host gets a `403` on upgrade. Set
-`allowAnyOrigin: true` when the client is served from a different origin, and
-authenticate the request yourself.
-
-`pingInterval` is a **WebSocket-level** ping. It is not the protocol's own ping
-(`Protocol.pingInterval`, 15s), which carries the client's version vector and
-drives both liveness detection and the aligned-snapshot coordinator. They are
-complementary — setting one is not a reason to drop the other.
 
 ## Gotchas
 
@@ -213,6 +183,10 @@ generated `Protocol()` and `Endpoints()`.
 cd example   # or relay_example
 dart run bin/main.dart
 ```
+
+The [greyhound_markdown](https://github.com/MattiaPispisa/crdt/tree/main/apps/greyhound_markdown) app also runs locally
+against a Serverpod relay server:
+[`server_serverpod/`](https://github.com/MattiaPispisa/crdt/tree/main/apps/greyhound_markdown/server_serverpod).
 
 ## Roadmap
 
