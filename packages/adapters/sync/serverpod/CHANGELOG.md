@@ -1,6 +1,6 @@
 ## [0.1.0](https://github.com/MattiaPispisa/crdt/tree/crdt_socket_sync_serverpod-v0.1.0/packages/adapters/sync/serverpod)
 
-**Date:** --
+**Date:** 2026-10-07
 
 ### Initial Release
 

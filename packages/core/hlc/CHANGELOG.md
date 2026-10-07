@@ -1,6 +1,6 @@
 ## [1.2.0](https://github.com/MattiaPispisa/crdt/tree/hlc_dart-v1.2.0/packages/core/hlc)
 
-**Date:** --
+**Date:** 2026-10-07
 
 [compare to previous release](https://github.com/MattiaPispisa/crdt/compare/hlc_dart-v1.1.0+3...hlc_dart-v1.2.0)
 
