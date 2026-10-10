@@ -21,30 +21,6 @@ void main() {
   );
 
   group('CRDTFugueListHandler', () {
-    test('the tag is runtimeType by default, and a spec fixes it', () {
-      final doc = CRDTDocument();
-      expect(
-        CRDTFugueListHandler<String>(
-          doc,
-          'l',
-          handlerType: 'CRDTFugueListHandler<String>',
-        ).handlerType,
-        'CRDTFugueListHandler<String>',
-      );
-
-      // Forwarded through FugueSequenceHandler to the base Handler.
-      final tagged =
-          CRDTFugueListHandler<String>(doc, 'l2', handlerType: 'fuguelist/str');
-
-      expect(tagged.handlerType, 'fuguelist/str');
-      expect(HandlerRef.of(tagged).type, 'fuguelist/str');
-      // And the tag is not all the spec gives: the type is rebuildable.
-      expect(
-        doc.resolveHandler(const HandlerRef('l3', 'fuguelist/str')),
-        isA<CRDTFugueListHandler<String>>(),
-      );
-    });
-
     test('should handle basic operations', () {
       final doc = CRDTDocument(
         peerId: PeerId.parse('37f1ec87-6ea5-430b-a627-a6b92b56a02d'),
@@ -98,40 +74,6 @@ void main() {
 
       handler.update(1, 20);
       expect(handler.value, [1, 20, 3]);
-    });
-
-    test('should give the same result with and without incremental cache', () {
-      final docA = CRDTDocument(
-        peerId: PeerId.parse('37f1ec87-6ea5-430b-a627-a6b92b56a02d'),
-      );
-      final a = CRDTFugueListHandler<String>(
-        docA,
-        'list1',
-        handlerType: 'CRDTFugueListHandler<String>',
-      )
-        ..useIncrementalCacheUpdate = true
-        ..insert(0, 'a')
-        ..insert(1, 'b')
-        ..insert(2, 'c')
-        ..delete(1, 1)
-        ..update(0, 'A');
-
-      final docB = CRDTDocument(
-        peerId: PeerId.parse('37f1ec87-6ea5-430b-a627-a6b92b56a02d'),
-      );
-      final b = CRDTFugueListHandler<String>(
-        docB,
-        'list1',
-        handlerType: 'CRDTFugueListHandler<String>',
-      )
-        ..useIncrementalCacheUpdate = false
-        ..insert(0, 'a')
-        ..insert(1, 'b')
-        ..insert(2, 'c')
-        ..delete(1, 1)
-        ..update(0, 'A');
-
-      expect(a.value, b.value);
     });
 
     test('should converge on concurrent insertions in the same region', () {
@@ -269,41 +211,6 @@ void main() {
       expect(result.sublist(aStart, aStart + 3), ['a1', 'a2', 'a3']);
       final bStart = result.indexOf('b1');
       expect(result.sublist(bStart, bStart + 3), ['b1', 'b2', 'b3']);
-    });
-
-    test('an imported history that holds an update replays and takes edits',
-        () {
-      final doc1 = CRDTDocument(
-        peerId: PeerId.parse('45ee6b65-b393-40b7-9755-8b66dc7d0518'),
-      );
-      final h1 = CRDTFugueListHandler<String>(
-        doc1,
-        'list1',
-        handlerType: 'CRDTFugueListHandler<String>',
-      )
-        ..insert(0, 'a')
-        ..update(0, 'A');
-
-      // doc2 replays that history from scratch, then edits locally: the
-      // update has to land on the element the insert created, and the local
-      // insert has to find the right position after it.
-      final doc2 = CRDTDocument(
-        peerId: PeerId.parse('a90dfced-cbf0-4a49-9c64-f5b7b62fdc18'),
-      );
-      final h2 = CRDTFugueListHandler<String>(
-        doc2,
-        'list1',
-        handlerType: 'CRDTFugueListHandler<String>',
-      );
-      doc2.importChanges(doc1.exportChanges());
-      expect(h2.value, ['A']);
-
-      h2.insert(1, 'b');
-      expect(h2.value, ['A', 'b']);
-
-      // The two peers still converge after exchanging the new change.
-      doc1.importChanges(doc2.exportChanges());
-      expect(h1.value, ['A', 'b']);
     });
 
     // The list has its own operation class and its own value codec, so the

@@ -21,6 +21,41 @@ void main() {
   register('needs a live document', _NeedsLiveDocument.new);
   register('reports no change', _ReportsNoChange.new);
   register('cannot undo', _CannotUndo.new);
+  register('snapshots what it last read', _SnapshotsLastRead.new);
+
+  runHandlerConformanceTests(
+    spec: _spec(
+      'reissues spent ids',
+      _ReissuesSpentIds.new,
+      CRDTFugueTextHandler.spec.formats,
+    ),
+    read: (text) => text.value,
+    edit: (text, random, token) {
+      final length = text.length;
+      if (length == 0 || random.nextBool()) {
+        text.insert(random.nextInt(length + 1), token);
+      } else {
+        text.delete(random.nextInt(length), random.nextInt(3) + 1);
+      }
+    },
+  );
+
+  runHandlerConformanceTests(
+    spec: _spec(
+      'forgets pruned ids',
+      _ForgetsPrunedIds.new,
+      CRDTFugueMovableListHandler.spec<String>('').formats,
+    ),
+    read: (list) => List.of(list.value),
+    edit: (list, random, token) {
+      final length = list.length;
+      if (length == 0 || random.nextBool()) {
+        list.insert(random.nextInt(length + 1), token);
+      } else {
+        list.delete(random.nextInt(length), random.nextInt(3) + 1);
+      }
+    },
+  );
 
   runHandlerConformanceTests(
     spec: _spec(
@@ -148,6 +183,51 @@ final class _CannotUndo extends _Register {
 
   @override
   List<Operation> invert(Operation operation) => const [];
+}
+
+/// Snapshots the value it held at the last read, not the one it holds now.
+final class _SnapshotsLastRead extends _Register {
+  _SnapshotsLastRead(super.doc, super.id, super.type);
+
+  String? _lastRead;
+
+  @override
+  String? get value => _lastRead = super.value;
+
+  @override
+  Uint8List getSnapshotState() {
+    final lastRead = _lastRead;
+    if (lastRead == null) {
+      return (snapshotHeader()..addByte(0)).toBytes();
+    }
+    final out = snapshotHeader()..addByte(1);
+    UVarint.writeBytes(const JsonValueCodec<String>().encode(lastRead), out);
+    return out.toBytes();
+  }
+}
+
+/// Seeds its element counter from nothing, so a reload hands out the
+/// counters it already spent.
+final class _ReissuesSpentIds extends CRDTFugueTextHandler {
+  _ReissuesSpentIds(super.doc, super.id, this._type);
+
+  final String _type;
+
+  @override
+  String get handlerType => _type;
+
+  @override
+  Iterable<FugueElementID> knownElementIds() => const [];
+}
+
+/// Leaves the element id floor out of its snapshots, so a reload hands out
+/// the counters of the elements the snapshot pruned.
+final class _ForgetsPrunedIds extends CRDTFugueMovableListHandler<String> {
+  _ForgetsPrunedIds(super.doc, super.id, String type)
+      : super(handlerType: type);
+
+  @override
+  Map<PeerId, int> elementIdFloorForSnapshot() => const {};
 }
 
 /// Fuses two inserts into the later one, losing the earlier.

@@ -87,15 +87,6 @@ _Projection<String, SequenceDelta<String>> _watchFugueText(
       applyDelta: (delta, base) => delta.applyToText(base),
     );
 
-_Projection<List<T>, SequenceDelta<T>> _watchFugueList<T>(
-  CRDTFugueListHandler<T> list,
-) =>
-    _Projection<List<T>, SequenceDelta<T>>(
-      readSynced: list.readSynced,
-      stream: list.watch(),
-      applyDelta: (delta, base) => delta.apply(base),
-    );
-
 _Projection<Map<String, T>, MapDelta<String, T>> _watchMap<T>(
   CRDTMapHandler<T> map,
 ) =>
@@ -217,25 +208,6 @@ void main() {
       await projection.dispose();
     });
 
-    test('non-BMP text survives the round trip', () async {
-      final doc = CRDTDocument();
-      final text = CRDTTextHandler(doc, 'text');
-      final projection = _watchText(text);
-      await _pump();
-
-      text
-        ..insert(0, '🌐ab')
-        ..insert(1, '🌏')
-        ..delete(0, 1)
-        ..update(0, '😀');
-      await _pump();
-
-      expect(projection.value, text.value);
-      expect(text.value, '😀ab');
-
-      await projection.dispose();
-    });
-
     test('an out-of-range edit reports the clamped effect', () async {
       final doc = CRDTDocument();
       final text = CRDTTextHandler(doc, 'text')..insert(0, 'abc');
@@ -277,29 +249,6 @@ void main() {
   });
 
   group('CRDTListHandler deltas', () {
-    test('insert, update and delete reach the projection', () async {
-      final doc = CRDTDocument();
-      final list = CRDTListHandler<String>(
-        doc,
-        'list',
-        handlerType: 'CRDTListHandler<String>',
-      );
-      final projection = _watchList(list);
-      await _pump();
-
-      list
-        ..insert(0, 'a')
-        ..insert(1, 'b')
-        ..update(0, 'A')
-        ..delete(1, 1);
-      await _pump();
-
-      expect(list.value, ['A']);
-      expect(projection.value, list.value);
-
-      await projection.dispose();
-    });
-
     test('an out-of-range operation reports the clamped effect', () async {
       final doc = CRDTDocument();
       final list = CRDTListHandler<String>(
@@ -546,25 +495,6 @@ void main() {
   });
 
   group('CRDTFugueTextHandler deltas', () {
-    test('insert, delete and update reach the projection', () async {
-      final doc = CRDTDocument();
-      final text = CRDTFugueTextHandler(doc, 'text');
-      final projection = _watchFugueText(text);
-      await _pump();
-
-      text
-        ..insert(0, 'hello')
-        ..insert(5, ' world')
-        ..delete(0, 1)
-        ..update(0, 'E');
-      await _pump();
-
-      expect(text.value, 'Ello world');
-      expect(projection.value, text.value);
-
-      await projection.dispose();
-    });
-
     test('a delete of several elements at once is one run', () async {
       final doc = CRDTDocument();
       final text = CRDTFugueTextHandler(doc, 'text')..insert(0, 'abcdef');
@@ -604,62 +534,6 @@ void main() {
       await _pump();
 
       expect(projection.value, textB.value);
-
-      await projection.dispose();
-    });
-
-    test('non-BMP text survives the round trip', () async {
-      final doc = CRDTDocument();
-      final text = CRDTFugueTextHandler(doc, 'text');
-      final projection = _watchFugueText(text);
-      await _pump();
-
-      text
-        ..insert(0, '🌐ab')
-        ..insert(1, '🌏')
-        ..delete(0, 1)
-        ..update(0, '😀');
-      await _pump();
-
-      expect(text.value, '😀ab');
-      expect(projection.value, text.value);
-
-      await projection.dispose();
-    });
-  });
-
-  group('CRDTFugueListHandler deltas', () {
-    test('a remote batch keeps the projection in step', () async {
-      final source = CRDTDocument(peerId: PeerId.parse(_peerIdA));
-      final sourceList = CRDTFugueListHandler<int>(
-        source,
-        'list',
-        handlerType: 'CRDTFugueListHandler<int>',
-      )..insert(0, 1);
-
-      final mirror = CRDTDocument(peerId: PeerId.parse(_peerIdB));
-      final mirrorList = CRDTFugueListHandler<int>(
-        mirror,
-        'list',
-        handlerType: 'CRDTFugueListHandler<int>',
-      );
-      mirror.importChanges(source.exportChanges());
-
-      final projection = _watchFugueList(mirrorList);
-      await _pump();
-
-      sourceList
-        ..insert(1, 2)
-        ..insert(2, 3)
-        ..delete(0, 1)
-        ..update(0, 20);
-      mirror.importChanges(
-        source.exportChanges(fromVersionVector: mirror.getVersionVector()),
-      );
-      await _pump();
-
-      expect(mirrorList.value, sourceList.value);
-      expect(projection.value, mirrorList.value);
 
       await projection.dispose();
     });

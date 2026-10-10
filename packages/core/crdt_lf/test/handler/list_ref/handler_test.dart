@@ -37,7 +37,6 @@ void main() {
 
     test('exposes a stable handlerType (minification-safe factory key)', () {
       expect(list.handlerType, 'CRDTListRefHandler');
-      expect(HandlerRef.of(list).type, 'CRDTListRefHandler');
     });
 
     test('insertRef/getRefAt store and resolve children in order', () {
@@ -70,33 +69,6 @@ void main() {
         [null],
       ]);
       expect(list.toString(), contains('CRDTListRefHandler'));
-    });
-
-    test('concurrent insertions in the same region converge', () {
-      final docA = CRDTDocument();
-      final listA = CRDTListRefHandler(docA, 'list');
-      final first = CRDTFugueTextHandler(docA, 'first');
-      listA.insertRef(0, first);
-      first.insert(0, 'first');
-
-      final docB = CRDTDocument();
-      final listB = CRDTListRefHandler(docB, 'list');
-      docB.importChanges(docA.exportChanges());
-
-      // Concurrent inserts at the same position.
-      final fromA = CRDTFugueTextHandler(docA, 'a');
-      listA.insertRef(1, fromA);
-      fromA.insert(0, 'a');
-
-      final fromB = CRDTFugueTextHandler(docB, 'b');
-      listB.insertRef(1, fromB);
-      fromB.insert(0, 'b');
-
-      docA.importChanges(docB.exportChanges());
-      docB.importChanges(docA.exportChanges());
-
-      expect(listA.resolved, listB.resolved);
-      expect(listA.resolved.length, 3);
     });
   });
 

@@ -84,6 +84,31 @@ void runHandlerConformanceTests<H extends Handler<dynamic>, V>({
     return docs;
   }
 
+  /// Reopens peer 0 in a new session every round, from what [reload] keeps
+  /// of the session before, while a second peer edits next to it.
+  void expectReloadConverges(
+    CRDTDocument Function(CRDTDocument session) reload,
+  ) {
+    final random = Random(seed);
+    var session = document();
+    walk(open(session), random, steps ~/ 4, 'before');
+    final other = document(1);
+    final otherHandler = open(other);
+    _pull(other, session);
+
+    // A reload every round: a single one rarely prunes the highest id spent.
+    for (var round = 0; round < steps ~/ 2; round++) {
+      session = reload(session);
+      final handler = open(session);
+      edit(handler, random, 'r$round');
+      edit(otherHandler, random, 'o$round');
+      _pull(other, session);
+      _pull(session, other);
+
+      expect(read(handler), read(otherHandler), reason: 'round $round');
+    }
+  }
+
   group('${spec.type} conformance', () {
     group('cache', () {
       test('the folded value equals a value computed from scratch', () {
@@ -167,6 +192,13 @@ void runHandlerConformanceTests<H extends Handler<dynamic>, V>({
           expect(read(bHandler), replayed, reason: 'round $round, peer b');
         }
       });
+
+      test('edits after a reload from the history converge with another peer',
+          () {
+        expectReloadConverges(
+          (session) => document()..importChanges(session.exportChanges()),
+        );
+      });
     });
 
     group('arrival order', () {
@@ -243,24 +275,28 @@ void runHandlerConformanceTests<H extends Handler<dynamic>, V>({
       });
 
       test('edits after a reload converge with a full-history peer', () {
-        final random = Random(seed);
+        expectReloadConverges(
+          (session) => document()..importSnapshot(session.takeSnapshot()),
+        );
+      });
+
+      test('a snapshot taken right after an import holds what it imported', () {
         final source = document();
-        walk(open(source), random, steps ~/ 2, 'before');
-        final other = document(1);
-        _pull(other, source);
+        final sourceHandler = open(source);
+        final target = document(1);
+        final handler = open(target);
+        final random = Random(seed);
 
-        // Same peer, new session: only the pruned snapshot is left.
-        final reloaded = document()..importSnapshot(source.takeSnapshot());
-        final reloadedHandler = open(reloaded);
-        final otherHandler = open(other);
-        for (var round = 0; round < steps ~/ 4; round++) {
-          edit(reloadedHandler, random, 'r$round');
-          edit(otherHandler, random, 'o$round');
-        }
-        _pull(other, reloaded);
-        _pull(reloaded, other);
+        walk(sourceHandler, random, steps ~/ 2, 'before');
+        _pull(target, source);
+        read(handler);
+        // Left queued: nothing reads the handler before the snapshot.
+        walk(sourceHandler, random, steps ~/ 2, 'after');
+        _pull(target, source);
 
-        expect(read(reloadedHandler), read(otherHandler));
+        final restored = document(2)..importSnapshot(target.takeSnapshot());
+
+        expect(read(open(restored)), read(sourceHandler));
       });
 
       test('a peer that is behind merges a snapshot to its value', () {

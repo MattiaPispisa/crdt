@@ -44,6 +44,15 @@ const _mustFail = <String, List<String>>{
   'cannot undo': [
     'undo walks back every step, redo walks forward again',
   ],
+  'snapshots what it last read': [
+    'a snapshot taken right after an import holds what it imported',
+  ],
+  'reissues spent ids': [
+    'edits after a reload from the history converge with another peer',
+  ],
+  'forgets pruned ids': [
+    'edits after a reload converge with a full-history peer',
+  ],
 };
 
 void main() {

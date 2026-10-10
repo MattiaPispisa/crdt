@@ -286,92 +286,6 @@ void main() {
       expect(bRun2, equals(bRun + 1));
     });
 
-    test('snapshot round-trips visible list, identities and clocks', () {
-      final docA = CRDTDocument(
-        peerId: PeerId.parse('45ee6b65-b393-40b7-9755-8b66dc7d0518'),
-      );
-      final a = CRDTFugueMovableListHandler<String>(
-        docA,
-        'l',
-        handlerType: 'CRDTFugueMovableListHandler<String>',
-      )
-        ..insert(0, 'a')
-        ..insert(1, 'b')
-        ..insert(2, 'c')
-        ..move(2, 0)
-        ..update(1, 'A');
-
-      final snap = docA.takeSnapshot(pruneHistory: false);
-      expect(a.value, equals(['c', 'A', 'b']));
-
-      // Import the snapshot into an empty document and verify the list.
-      final docB = CRDTDocument(
-        peerId: PeerId.parse('a90dfced-cbf0-4a49-9c64-f5b7b62fdc18'),
-      );
-      final b = CRDTFugueMovableListHandler<String>(
-        docB,
-        'l',
-        handlerType: 'CRDTFugueMovableListHandler<String>',
-      );
-      docB.mergeSnapshot(snap, pruneHistory: false);
-      expect(b.value, equals(a.value));
-
-      // Further edits on B continue to work.
-      b
-        ..insert(b.length, 'D')
-        ..move(0, b.length - 1);
-      expect(b.value.last, equals('c'));
-      expect(b.value.contains('D'), isTrue);
-    });
-
-    test(
-      'a reload from a snapshot does not reissue the counters of pruned '
-      'identities',
-      () {
-        final peerId = PeerId.parse('45ee6b65-b393-40b7-9755-8b66dc7d0518');
-        final docA = CRDTDocument(peerId: peerId);
-        final a = CRDTFugueMovableListHandler<String>(
-          docA,
-          'l',
-          handlerType: 'CRDTFugueMovableListHandler<String>',
-        );
-
-        final docB = CRDTDocument(
-          peerId: PeerId.parse('a90dfced-cbf0-4a49-9c64-f5b7b62fdc18'),
-        );
-        final b = CRDTFugueMovableListHandler<String>(
-          docB,
-          'l',
-          handlerType: 'CRDTFugueMovableListHandler<String>',
-        );
-
-        a.insertAll(0, ['a', 'b', 'c', 'd']);
-        docB.importChanges(docA.exportChanges());
-        a.delete(2, 2);
-        docB.importChanges(docA.exportChanges());
-        expect(b.value, equals(['a', 'b']));
-
-        final snapshot = docA.takeSnapshot();
-
-        // Reload: the snapshot only carries the live identities, so without
-        // the element id floor the counters of 'c' and 'd' come back.
-        final reloaded = CRDTDocument(peerId: peerId);
-        final reloadedList = CRDTFugueMovableListHandler<String>(
-          reloaded,
-          'l',
-          handlerType: 'CRDTFugueMovableListHandler<String>',
-        );
-        reloaded.importSnapshot(snapshot);
-        expect(reloadedList.value, equals(['a', 'b']));
-
-        reloadedList.insertAll(2, ['x', 'y']);
-        docB.importChanges(reloaded.exportChanges());
-
-        expect(reloadedList.value, equals(['a', 'b', 'x', 'y']));
-        expect(b.value, equals(reloadedList.value));
-      },
-    );
-
     test('insertAll inserts a contiguous run with Fugue non-interleaving', () {
       // Two peers both run an `insertAll` at the same anchor; each peer's
       // batch must stay contiguous in the merged result.
@@ -460,23 +374,57 @@ void main() {
       expect(doc.exportChanges().length, equals(before));
     });
 
-    test('operation bytes round-trip via operationDecoders', () {
-      final doc = CRDTDocument(peerId: PeerId.generate());
-      final list = CRDTFugueMovableListHandler<String>(
-        doc,
-        'l',
-        handlerType: 'CRDTFugueMovableListHandler<String>',
-      )
-        ..insert(0, 'a')
-        ..insert(1, 'b')
-        ..move(1, 0)
-        ..update(0, 'A')
-        ..delete(1);
+    test('a delete beats a concurrent move and update, in every order', () {
+      // Pinned: a move and an update that share a clock are settled by the
+      // peer, so a generated id would make the result depend on the run.
+      final peers = [
+        PeerId.parse('00000000-0000-4000-8000-00000000000a'),
+        PeerId.parse('00000000-0000-4000-8000-00000000000b'),
+        PeerId.parse('00000000-0000-4000-8000-00000000000c'),
+      ];
+      CRDTFugueMovableListHandler<String> open(CRDTDocument doc) =>
+          CRDTFugueMovableListHandler<String>(
+            doc,
+            'list',
+            handlerType: 'CRDTFugueMovableListHandler<String>',
+          );
 
-      final operations = list.operations();
-      expect(operations, isNotEmpty);
-      for (final operation in operations) {
-        expect(operation.id, equals('l'));
+      final seed = CRDTDocument(peerId: peers[0]);
+      open(seed).insertAll(0, ['a', 'b', 'c']);
+      final history = seed.exportChanges();
+
+      Change concurrent(
+        int peer,
+        void Function(CRDTFugueMovableListHandler<String> list) edit,
+      ) {
+        final doc = CRDTDocument(peerId: peers[peer]);
+        final list = open(doc);
+        doc.importChanges(history);
+        edit(list);
+        return doc.exportChanges().where((c) => !history.contains(c)).single;
+      }
+
+      final changes = [
+        concurrent(0, (list) => list.delete(1)),
+        concurrent(1, (list) => list.update(1, 'B')),
+        concurrent(2, (list) => list.move(1, 0)),
+      ];
+
+      for (final order in const [
+        [0, 1, 2],
+        [0, 2, 1],
+        [1, 0, 2],
+        [1, 2, 0],
+        [2, 0, 1],
+        [2, 1, 0],
+      ]) {
+        final doc = CRDTDocument(peerId: peers[0]);
+        final list = open(doc);
+        doc.importChanges(history);
+        for (final index in order) {
+          doc.importChanges([changes[index]]);
+        }
+        expect(list.value, equals(['a', 'c']), reason: 'order $order');
       }
     });
   });

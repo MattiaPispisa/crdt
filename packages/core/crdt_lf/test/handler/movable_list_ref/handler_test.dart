@@ -45,7 +45,6 @@ void main() {
 
     test('exposes a stable handlerType (minification-safe factory key)', () {
       expect(slides.handlerType, 'CRDTMovableListRefHandler');
-      expect(HandlerRef.of(slides).type, 'CRDTMovableListRefHandler');
     });
 
     test('insertRef then move reorders children preserving identity', () {

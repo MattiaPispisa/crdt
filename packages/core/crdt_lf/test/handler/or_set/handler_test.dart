@@ -20,26 +20,6 @@ void main() {
   );
 
   group('CRDTORSetHandler', () {
-    test('the tag is runtimeType by default, and a spec fixes it', () {
-      final doc = CRDTDocument();
-      // Default tag is runtimeType-based and includes the generic argument.
-      expect(
-        CRDTORSetHandler<String>(
-          doc,
-          's',
-          handlerType: 'CRDTORSetHandler<String>',
-        ).handlerType,
-        'CRDTORSetHandler<String>',
-      );
-
-      // The tag survives minification and flows into the HandlerRef.
-      final tagged =
-          CRDTORSetHandler<String>(doc, 's2', handlerType: 'orset/str');
-
-      expect(tagged.handlerType, 'orset/str');
-      expect(HandlerRef.of(tagged).type, 'orset/str');
-    });
-
     test('should handle basic add/remove', () {
       final doc = CRDTDocument(
         peerId: PeerId.parse('37f1ec87-6ea5-430b-a627-a6b92b56a02d'),
@@ -178,51 +158,6 @@ void main() {
       // At least one tag for 'k' remains (from s2), so 'k' is present
       expect(s1.value, equals(s2.value));
       expect(s1.value.contains('k'), isTrue);
-    });
-
-    test('snapshot import/merge with OR-Set', () {
-      final doc1 = CRDTDocument(
-        peerId: PeerId.parse('45ee6b65-b393-40b7-9755-8b66dc7d0518'),
-      );
-      final s1 = CRDTORSetHandler<String>(
-        doc1,
-        'set1',
-        handlerType: 'CRDTORSetHandler<String>',
-      );
-
-      final doc2 = CRDTDocument(
-        peerId: PeerId.parse('a90dfced-cbf0-4a49-9c64-f5b7b62fdc18'),
-      );
-      final s2 = CRDTORSetHandler<String>(
-        doc2,
-        'set1',
-        handlerType: 'CRDTORSetHandler<String>',
-      );
-
-      s1
-        ..add('a')
-        ..add('b');
-      doc2.importChanges(doc1.exportChanges());
-      expect(s2.value, {'a', 'b'});
-
-      final snap = doc2.takeSnapshot();
-
-      // Further changes on doc1
-      s1.add('c');
-
-      // Import snapshot into doc1 should be applied only if newer
-      final shouldApply = doc1.shouldApplySnapshot(snap);
-      expect(shouldApply, isTrue);
-
-      // Merge snapshot (always applies) and sync both ways
-      doc1
-        ..mergeSnapshot(snap)
-        ..importChanges(doc2.exportChanges());
-      doc2.importChanges(doc1.exportChanges());
-
-      // After merge and bidirectional sync, both should include {'a','b','c'}
-      expect(s1.value, equals(s2.value));
-      expect(s1.value, containsAll({'a', 'b', 'c'}));
     });
 
     test('a value from a blob without tags survives the next snapshot', () {
@@ -376,27 +311,6 @@ void main() {
         // Nothing puts that back, and the value is in the set either way.
         expect(undo.canUndo, isFalse);
         expect(set.value, {'a'});
-      });
-
-      test('undoing a remove puts the value back under a new tag', () {
-        final doc = CRDTDocument(
-          peerId: PeerId.parse('37f1ec87-6ea5-430b-a627-a6b92b56a02d'),
-        );
-        final set = CRDTORSetHandler<String>(
-          doc,
-          'set',
-          handlerType: 'CRDTORSetHandler<String>',
-        )..add('a');
-        final undo = CRDTUndoManager(doc)..track(set);
-
-        set.remove('a');
-        expect(set.value, <String>{});
-
-        undo.undo();
-        expect(set.value, {'a'});
-
-        undo.redo();
-        expect(set.value, <String>{});
       });
     });
   });

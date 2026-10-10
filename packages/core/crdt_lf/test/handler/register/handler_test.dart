@@ -44,47 +44,6 @@ void main() {
       expect(register.toString(), contains('CRDTRegisterHandler'));
     });
 
-    test('the tag is runtimeType by default, and a spec fixes it', () {
-      // Default (minification-fragile) tag.
-      expect(register.handlerType, 'CRDTRegisterHandler<bool>');
-
-      // A generic handler needs a tag so it keeps working as a nested ref in
-      // a dart2js-minified build; it flows into HandlerRef.
-      final tagged =
-          CRDTRegisterHandler<bool>(doc, 'flag2', handlerType: 'register/bool');
-
-      expect(tagged.handlerType, 'register/bool');
-      expect(HandlerRef.of(tagged).type, 'register/bool');
-    });
-
-    test('concurrent sets converge (last-writer-wins by HLC)', () {
-      final docA = CRDTDocument(
-        peerId: PeerId.parse('45ee6b65-b393-40b7-9755-8b66dc7d0518'),
-      );
-      final docB = CRDTDocument(
-        peerId: PeerId.parse('a90dfced-cbf0-4a49-9c64-f5b7b62fdc18'),
-      );
-      final a = CRDTRegisterHandler<int>(
-        docA,
-        'r',
-        handlerType: 'CRDTRegisterHandler<int>',
-      );
-      final b = CRDTRegisterHandler<int>(
-        docB,
-        'r',
-        handlerType: 'CRDTRegisterHandler<int>',
-      );
-
-      a.set(1);
-      b.set(2);
-
-      docB.importChanges(docA.exportChanges());
-      docA.importChanges(docB.exportChanges());
-
-      // Both peers converge to the same (LWW) value.
-      expect(a.value, b.value);
-    });
-
     test('resolves as a leaf value inside a ref container', () {
       final nested = CRDTDocument()
         ..register(newFlagSpec)

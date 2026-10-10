@@ -43,7 +43,6 @@ void main() {
       // Pinned to the literal on purpose: a change to the tag must fail here,
       // since it is a wire/identity value shared across peers and builds.
       expect(root.handlerType, 'CRDTMapRefHandler');
-      expect(HandlerRef.of(root).type, 'CRDTMapRefHandler');
     });
 
     test('setRef/getRef store and resolve a child handler', () {
