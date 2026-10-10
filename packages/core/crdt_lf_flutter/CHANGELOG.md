@@ -1,6 +1,6 @@
 ## [0.5.3](https://github.com/MattiaPispisa/crdt/tree/crdt_lf_flutter-v0.5.3/packages/core/crdt_lf_flutter)
 
-**Date:** --
+**Date:** 2026-10-10
 
 [compare to previous release](https://github.com/MattiaPispisa/crdt/compare/crdt_lf_flutter-v0.5.2...crdt_lf_flutter-v0.5.3)
 

@@ -1,6 +1,6 @@
 ## [0.3.3](https://github.com/MattiaPispisa/crdt/tree/crdt_lf_sqlite-v0.3.3/packages/adapters/persistence/crdt_lf_sqlite)
 
-**Date:** --
+**Date:** 2026-10-10
 
 [compare to previous release](https://github.com/MattiaPispisa/crdt/compare/crdt_lf_sqlite-v0.3.2...crdt_lf_sqlite-v0.3.3)
 
