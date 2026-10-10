@@ -74,6 +74,16 @@ void main() {
       expect(listA.resolved, listB.resolved);
       expect(listA.resolved.length, 3);
     });
+
+    test('removeChildAt removes the element and deletes the child', () {
+      final child = list.insertChild(0, CRDTFugueTextHandler.spec);
+
+      list.removeChildAt(0);
+
+      expect(list.value, isEmpty);
+      expect(child.isDeleted, isTrue);
+      expect(() => list.removeChildAt(0), throwsRangeError);
+    });
   });
 
   group('CRDTListRefHandler.insertChild', () {

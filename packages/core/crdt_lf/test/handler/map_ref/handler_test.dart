@@ -77,6 +77,17 @@ void main() {
       expect(root.toString(), contains('CRDTMapRefHandler'));
     });
 
+    test('removeChild removes the key and deletes the child', () {
+      final title = root.child('title', CRDTFugueTextHandler.spec);
+
+      root
+        ..removeChild('title')
+        ..removeChild('missing');
+
+      expect(root.value, isEmpty);
+      expect(title.isDeleted, isTrue);
+    });
+
     test('two peers converge on a nested structure', () {
       final docA = CRDTDocument();
       final titleA = CRDTFugueTextHandler(docA, 'title')..insert(0, 'Hello');

@@ -58,8 +58,9 @@ base class CRDTMapRefHandler extends CRDTMapHandler<HandlerRef>
     set(key, HandlerRef.of(handler));
   }
 
+  /// {@template ref_child}
   /// The child at [key], of the kind [spec] names, created when [key] holds
-  /// nothing yet.
+  /// nothing yet or a deleted child.
   ///
   /// Safe to call again: the second call hands back the child the first wrote.
   ///
@@ -69,9 +70,10 @@ base class CRDTMapRefHandler extends CRDTMapHandler<HandlerRef>
   ///
   /// Throws [HandlerAlreadyRegisteredException] when [key] holds a child of
   /// another kind, even one this peer has never opened.
+  /// {@endtemplate}
   T child<T extends Handler<dynamic>>(String key, HandlerSpec<T> spec) {
     final ref = value[key];
-    if (ref != null) {
+    if (ref != null && !doc.isDeleted(ref.id)) {
       if (ref.type != spec.type) {
         throw HandlerAlreadyRegisteredException(
           'Key $key holds a ${ref.type}, not a ${spec.type}',
@@ -100,23 +102,32 @@ base class CRDTMapRefHandler extends CRDTMapHandler<HandlerRef>
   T? getRefAs<T extends Handler<dynamic>>(String key) =>
       typedRef<T>(getRef(key));
 
+  /// Removes [key] and deletes the child it references, in one transaction.
+  ///
+  /// {@macro remove_child}
+  ///
+  /// Does nothing when [key] is absent.
+  void removeChild(String key) {
+    final child = getRef(key);
+    doc.runInTransaction(() {
+      delete(key);
+      if (child != null) {
+        doc.deleteHandler(child);
+      }
+    });
+  }
+
   @override
-  Iterable<HandlerRef> childRefs() => value.values;
+  Iterable<HandlerRef> childRefs() =>
+      value.values.where((ref) => !doc.isDeleted(ref.id));
 
   @override
   Object? toNested(Set<String> visiting) {
-    final out = <String, Object?>{};
-    for (final entry in value.entries) {
-      final ref = entry.value;
-      if (visiting.contains(ref.id)) {
-        out[entry.key] = null;
-        continue;
-      }
-      final child = doc.resolveHandler(ref);
-      out[entry.key] =
-          child == null ? null : nestedValueOf(child, {...visiting, ref.id});
-    }
-    return out;
+    return {
+      for (final entry in value.entries)
+        if (!doc.isDeleted(entry.value.id))
+          entry.key: resolveNestedRef(doc, entry.value, visiting),
+    };
   }
 
   /// The fully resolved subtree, as a `Map<String, Object?>`.

@@ -100,23 +100,39 @@ base class CRDTListRefHandler extends CRDTFugueListHandler<HandlerRef>
   T? getRefAtAs<T extends Handler<dynamic>>(int index) =>
       typedRef<T>(getRefAt(index));
 
+  /// Removes the element at [index] and deletes the child it references, in
+  /// one transaction.
+  ///
+  /// {@template remove_child}
+  /// The child is deleted with [BaseCRDTDocument.deleteHandler], subtree
+  /// included, for every peer. An undo puts the reference back, and the
+  /// reference stays out of `resolved`: a delete is final.
+  /// {@endtemplate}
+  ///
+  /// Throws a [RangeError] when [index] is out of range.
+  void removeChildAt(int index) {
+    final refs = value;
+    if (index < 0 || index >= refs.length) {
+      throw RangeError.index(index, refs, 'index');
+    }
+    final child = doc.resolveHandler(refs[index]);
+    doc.runInTransaction(() {
+      delete(index, 1);
+      if (child != null) {
+        doc.deleteHandler(child);
+      }
+    });
+  }
+
   @override
-  Iterable<HandlerRef> childRefs() => value;
+  Iterable<HandlerRef> childRefs() =>
+      value.where((ref) => !doc.isDeleted(ref.id));
 
   @override
   Object? toNested(Set<String> visiting) {
-    final out = <Object?>[];
-    for (final ref in value) {
-      if (visiting.contains(ref.id)) {
-        out.add(null);
-        continue;
-      }
-      final child = doc.resolveHandler(ref);
-      out.add(
-        child == null ? null : nestedValueOf(child, {...visiting, ref.id}),
-      );
-    }
-    return out;
+    return [
+      for (final ref in childRefs()) resolveNestedRef(doc, ref, visiting),
+    ];
   }
 
   /// The fully resolved subtree rooted at this list, as a `List<Object?>`.
@@ -124,7 +140,8 @@ base class CRDTListRefHandler extends CRDTFugueListHandler<HandlerRef>
   /// {@template ref_resolved}
   /// Each reference is replaced by the resolved value of the child handler,
   /// recursively; a leaf handler resolves to its `value`. A reference that
-  /// closes a cycle resolves to `null`.
+  /// closes a cycle resolves to `null`, and a reference to a deleted handler
+  /// is left out.
   /// {@endtemplate}
   List<Object?> get resolved {
     final result = toNested(<String>{});

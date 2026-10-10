@@ -102,6 +102,23 @@ T? typedRef<T extends Handler<dynamic>>(Handler<dynamic>? reference) {
   return reference is T ? reference : null;
 }
 
+/// Resolves [ref] to a plain value through [doc], with [nestedValueOf].
+///
+/// [visiting] is the set of handler ids on the current resolution path, as in
+/// [ContainerHandler.toNested]. Returns `null` for a reference that closes a
+/// cycle, or that [BaseCRDTDocument.resolveHandler] cannot resolve.
+Object? resolveNestedRef(
+  BaseCRDTDocument doc,
+  HandlerRef ref,
+  Set<String> visiting,
+) {
+  if (visiting.contains(ref.id)) {
+    return null;
+  }
+  final child = doc.resolveHandler(ref);
+  return child == null ? null : nestedValueOf(child, {...visiting, ref.id});
+}
+
 /// Resolves [handler] to a plain value: recurses through [ContainerHandler]s
 /// and reads `value` from the built-in leaf handlers (text, list, map, ...).
 ///

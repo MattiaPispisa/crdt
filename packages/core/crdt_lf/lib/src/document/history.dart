@@ -57,6 +57,16 @@ class _CRDTStaticProxyDocument extends BaseCRDTDocument {
   }
 
   @override
+  void deleteHandler(Handler<dynamic> handler) {
+    throw const ReadOnlyDocumentException('deleteHandler');
+  }
+
+  @override
+  T runInTransaction<T>(T Function() action, {Object? origin}) {
+    throw const ReadOnlyDocumentException('runInTransaction');
+  }
+
+  @override
   Set<OperationId> get version {
     if (_visibleCount == 0) {
       return {};

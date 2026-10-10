@@ -59,6 +59,14 @@ void main() {
         viewListHandler.doc.prepareMutation,
         throwsA(isA<ReadOnlyDocumentException>()),
       );
+      expect(
+        () => viewListHandler.doc.deleteHandler(viewListHandler),
+        throwsA(isA<ReadOnlyDocumentException>()),
+      );
+      expect(
+        () => viewListHandler.doc.runInTransaction(() {}),
+        throwsA(isA<ReadOnlyDocumentException>()),
+      );
     });
 
     test(

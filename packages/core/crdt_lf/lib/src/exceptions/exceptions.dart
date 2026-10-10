@@ -116,3 +116,16 @@ class ConcurrentSnapshotException extends CrdtException {
   /// The id of the snapshot that was refused.
   final String incomingId;
 }
+
+/// {@template handler_deleted_exception}
+/// Thrown when writing to, opening or building a handler that was deleted with
+/// `CRDTDocument.deleteHandler`.
+/// {@endtemplate}
+class HandlerDeletedException extends CrdtException {
+  /// {@macro handler_deleted_exception}
+  const HandlerDeletedException(this.handlerId)
+      : super('Handler $handlerId has been deleted.');
+
+  /// The id of the deleted handler.
+  final String handlerId;
+}

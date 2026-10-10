@@ -1604,6 +1604,234 @@ void main() {
       });
     });
   });
+
+  group('CRDTDocument.deleteHandler', () {
+    late CRDTDocument doc;
+    late CRDTMapRefHandler root;
+    late CRDTListRefHandler chapters;
+    late CRDTFugueTextHandler title;
+
+    setUp(() {
+      doc = CRDTDocument(peerId: PeerId.generate());
+      root = CRDTMapRefHandler(doc, 'root');
+      chapters = root.child('chapters', CRDTListRefHandler.spec);
+      title = chapters.insertChild(0, CRDTFugueTextHandler.spec)
+        ..insert(0, 'Intro');
+    });
+
+    test('deletes the handler and its whole subtree', () {
+      doc.deleteHandler(chapters);
+
+      expect(chapters.isDeleted, isTrue);
+      expect(title.isDeleted, isTrue);
+      expect(root.isDeleted, isFalse);
+      expect(doc.registeredHandlers.keys, ['root']);
+      expect(doc.roots(), [root]);
+      expect(root.resolved, isEmpty);
+      expect(root.getRef('chapters'), isNull);
+    });
+
+    test('a deleted id can be neither written, opened nor built', () {
+      doc.deleteHandler(title);
+
+      expect(
+        () => title.insert(0, 'x'),
+        throwsA(isA<HandlerDeletedException>()),
+      );
+      expect(
+        () => doc.handler(CRDTFugueTextHandler.spec, title.id),
+        throwsA(
+          isA<HandlerDeletedException>()
+              .having((e) => e.handlerId, 'handlerId', title.id),
+        ),
+      );
+      expect(
+        () => CRDTFugueTextHandler(doc, title.id),
+        throwsA(isA<HandlerDeletedException>()),
+      );
+      expect(doc.resolveHandler(HandlerRef.of(title)), isNull);
+    });
+
+    test('ends the delta stream of the deleted handler', () async {
+      final done = expectLater(title.watch(), emitsThrough(emitsDone));
+
+      doc.deleteHandler(title);
+
+      await done;
+    });
+
+    test('deleting twice, or a cycle, terminates and writes once', () {
+      final loop = CRDTMapRefHandler(doc, doc.newHandlerId());
+      loop.setRef('self', loop);
+      final changes = doc.exportChanges().length;
+
+      doc
+        ..deleteHandler(loop)
+        ..deleteHandler(loop);
+
+      expect(loop.isDeleted, isTrue);
+      expect(doc.exportChanges().length, changes + 1);
+    });
+
+    test('a child shared by two parents is deleted for both', () {
+      final other = CRDTMapRefHandler(doc, 'other')..setRef('title', title);
+
+      doc.deleteHandler(chapters);
+
+      expect(other.resolved, isEmpty);
+      expect(other.childRefs(), isEmpty);
+      expect(other.value.keys, ['title']);
+    });
+
+    test('child() makes a new child where a deleted one was', () {
+      final old = root.child('chapters', CRDTListRefHandler.spec);
+      doc.deleteHandler(old);
+
+      final fresh = root.child('chapters', CRDTListRefHandler.spec);
+
+      expect(fresh.id, isNot(old.id));
+      expect(root.resolved, {'chapters': <Object?>[]});
+    });
+
+    test('refuses the reserved id and a handler of another document', () {
+      const reserved = 'crdt_lf/deleted-handlers';
+      // Opens the registry: the reserved id must stay out of reach even then.
+      doc.deleteHandler(title);
+
+      expect(
+        () => CRDTFugueTextHandler(doc, reserved),
+        throwsA(isA<ArgumentError>()),
+      );
+      expect(
+        () => CRDTORSetHandler<String>(doc, reserved, handlerType: reserved),
+        throwsA(isA<ArgumentError>()),
+      );
+      expect(
+        () => doc.handler(CRDTORSetHandler.spec<String>(reserved), reserved),
+        throwsA(isA<ArgumentError>()),
+      );
+      expect(doc.resolveHandler(const HandlerRef(reserved, reserved)), isNull);
+      final stranger = CRDTFugueTextHandler(CRDTDocument(), 'stranger');
+      expect(
+        () => doc.deleteHandler(stranger),
+        throwsA(isA<ArgumentError>()),
+      );
+    });
+
+    test('a document that deletes nothing snapshots as before', () {
+      final snapshot = doc.takeSnapshot();
+
+      expect(snapshot.data.containsKey('crdt_lf/deleted-handlers'), isFalse);
+      expect(
+        doc.describeBuildCapabilities()['crdt_lf/deleted-handlers'],
+        isNull,
+      );
+    });
+
+    test('a peer closes what an imported change deletes', () async {
+      final peer = CRDTDocument(peerId: PeerId.generate())
+        ..register(CRDTListRefHandler.spec)
+        ..register(CRDTFugueTextHandler.spec)
+        ..importChanges(doc.exportChanges());
+      final peerRoot = peer.handler(CRDTMapRefHandler.spec, 'root');
+      final peerTitle = peer.handler(CRDTFugueTextHandler.spec, title.id);
+      expect(peerTitle.value, 'Intro');
+      final done = expectLater(peerTitle.watch(), emitsThrough(emitsDone));
+
+      doc.deleteHandler(chapters);
+      for (final change in doc.exportChanges()) {
+        peer.applyChange(change);
+      }
+
+      expect(peerTitle.isDeleted, isTrue);
+      expect(peerRoot.resolved, isEmpty);
+      await done;
+    });
+
+    test('a peer with no handler open learns the deletes it imports', () {
+      doc.deleteHandler(title);
+
+      final server = CRDTDocument(peerId: PeerId.generate())
+        ..importChanges(doc.exportChanges());
+
+      expect(server.isDeleted(title.id), isTrue);
+      expect(server.registeredHandlers, isEmpty);
+    });
+
+    test('a delete wins over a concurrent edit', () {
+      final peer = CRDTDocument(peerId: PeerId.generate())
+        ..register(CRDTListRefHandler.spec)
+        ..register(CRDTFugueTextHandler.spec)
+        ..importChanges(doc.exportChanges());
+      final peerRoot = peer.handler(CRDTMapRefHandler.spec, 'root');
+      final peerTitle = peer.handler(CRDTFugueTextHandler.spec, title.id);
+
+      doc.deleteHandler(title);
+      peerTitle.insert(5, '!');
+
+      doc.importChanges(peer.exportChanges());
+      peer.importChanges(doc.exportChanges());
+
+      expect(doc.isDeleted(title.id), isTrue);
+      expect(peer.isDeleted(title.id), isTrue);
+      expect(root.resolved, {'chapters': <Object?>[]});
+      expect(peerRoot.resolved, root.resolved);
+
+      // The changes of the deleted handler are still in the log.
+      peer.reconstruct();
+      expect(peer.registeredHandlers.containsKey(title.id), isFalse);
+    });
+
+    test('a snapshot drops the deleted handlers, and carries the deletes', () {
+      doc.deleteHandler(chapters);
+
+      final snapshot = doc.takeSnapshot();
+
+      expect(snapshot.data.containsKey(chapters.id), isFalse);
+      expect(snapshot.data.containsKey(title.id), isFalse);
+      expect(doc.changeCountForHandler(title.id), 0);
+
+      final peer = CRDTDocument(peerId: PeerId.generate())
+        ..importSnapshot(snapshot);
+      expect(peer.isDeleted(title.id), isTrue);
+      final merged = CRDTDocument(peerId: PeerId.generate())
+        ..mergeSnapshot(snapshot);
+      expect(merged.isDeleted(chapters.id), isTrue);
+    });
+
+    test('an undo manager forgets the steps of a deleted handler', () {
+      final undo = CRDTUndoManager(doc)..track(title);
+      title.insert(5, '!');
+      expect(undo.canUndo, isTrue);
+
+      doc.deleteHandler(title);
+
+      expect(undo.canUndo, isFalse);
+    });
+
+    test('a delete in the transaction that edited the handler leaves no step',
+        () {
+      final undo = CRDTUndoManager(doc)..track(title);
+
+      doc.runInTransaction(() {
+        title.insert(5, '!');
+        doc.deleteHandler(title);
+      });
+
+      expect(undo.canUndo, isFalse);
+      expect(doc.isDeleted(title.id), isTrue);
+    });
+
+    test('undoing a removeChildAt brings the reference, not the child', () {
+      final undo = CRDTUndoManager(doc)..track(chapters);
+
+      chapters.removeChildAt(0);
+      undo.undo();
+
+      expect(chapters.value, [HandlerRef.of(title)]);
+      expect(chapters.resolved, isEmpty);
+    });
+  });
 }
 
 /// A map handler whose [invert] fails on demand, to show what the document

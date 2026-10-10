@@ -45,7 +45,7 @@ base class CRDTORMapHandler<K, V> extends Handler<ORMapState<K, V>>
     required String handlerType,
     ValueCodec<K>? keyCodec,
     ValueCodec<V>? valueCodec,
-  }) : this._fromSpec(
+  }) : this.fromSpec(
           doc,
           id,
           spec: spec<K, V>(
@@ -59,9 +59,13 @@ base class CRDTORMapHandler<K, V> extends Handler<ORMapState<K, V>>
 
   /// Builds one of a kind stated in full, instead of named by a tag.
   ///
-  /// Private: the unnamed constructor is the way in, and it makes the spec from
-  /// the tag. Nothing outside this file builds one of these another way.
-  CRDTORMapHandler._fromSpec(
+  /// The hook for a subclass that is **its own kind** — a container built on
+  /// this handler, say. It passes its own spec up rather than letting this
+  /// class make one from a tag, which would name this class and leave a peer
+  /// rebuilding the reference with the wrong one.
+  ///
+  /// A plain use wants the unnamed constructor: it makes the spec for you.
+  CRDTORMapHandler.fromSpec(
     super.doc,
     this._id, {
     required super.spec,
