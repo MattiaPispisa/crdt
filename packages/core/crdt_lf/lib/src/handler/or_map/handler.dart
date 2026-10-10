@@ -178,32 +178,80 @@ base class CRDTORMapHandler<K, V> extends Handler<ORMapState<K, V>>
       OperationType.kindInsert,
       OperationType.kindDelete,
     },
-    blobVersions: BlobVersionRange.single(_blobVersion),
+    blobVersions: BlobVersionRange(_firstBlobVersion, _blobVersion),
   );
 
-  /// The version of the snapshot blob this build writes and reads.
-  ///
-  /// Layout: `version: u8`, `count: uvarint`, then per entry
-  /// `keyLen: uvarint`, `key: bytes`, `valueLen: uvarint`, `value: bytes`.
-  /// The tags stay out: a snapshot holds the projected map, and the entries
-  /// come back tagless.
-  /// The version [getSnapshotState] writes at the head of its blob.
-  static const int _blobVersion = 1;
+  /// The version of the snapshot blob this build writes.
+  static const int _blobVersion = 2;
+
+  /// The oldest blob this build reads
+  static const int _firstBlobVersion = 1;
 
   @override
   int get snapshotBlobVersion => _blobVersion;
 
+  @override
+  int get minReadableSnapshotBlobVersion => _firstBlobVersion;
+
   /// Returns the current state for snapshotting as a binary blob.
   @override
   Uint8List getSnapshotState() {
+    final state = _cachedOrComputedState();
     final out = snapshotHeader();
-    final entries = value;
-    UVarint.write(entries.length, out);
-    for (final entry in entries.entries) {
-      UVarint.writeBytes(_keyCodec.encode(entry.key), out);
-      UVarint.writeBytes(_valueCodec.encode(entry.value), out);
+    UVarint.write(
+      state._live.values.fold<int>(0, (sum, entries) => sum + entries.length),
+      out,
+    );
+    for (final MapEntry(key: key, value: entries) in state._live.entries) {
+      final keyBytes = _keyCodec.encode(key);
+      for (final entry in entries) {
+        UVarint.writeBytes(keyBytes, out);
+        out.add(entry.tag.toUint8List());
+        UVarint.writeBytes(_valueCodec.encode(entry.value), out);
+      }
+    }
+    UVarint.write(state._snapshotOnly.length, out);
+    for (final MapEntry(:key, :value) in state._snapshotOnly.entries) {
+      UVarint.writeBytes(_keyCodec.encode(key), out);
+      UVarint.writeBytes(_valueCodec.encode(value), out);
     }
     return out.toBytes();
+  }
+
+  /// Seeds [state] with what [snapshot] holds.
+  void _seedFromSnapshot(ORMapState<K, V> state, Uint8List snapshot) {
+    final header = readSnapshotHeader(snapshot);
+    var offset = header.offset;
+
+    Uint8List readBytes(String what) {
+      final record = UVarint.readBytes(snapshot, offset: offset, what: what);
+      offset = record.nextOffset;
+      return record.value;
+    }
+
+    if (header.version >= 2) {
+      final tagged = UVarint.read(snapshot, offset: offset);
+      offset = tagged.nextOffset;
+      for (var i = 0; i < tagged.value; i += 1) {
+        final key = _keyCodec.decode(readBytes('OR-map snapshot key'));
+        final tag = OperationId.readFromBytes(snapshot, offset: offset);
+        offset += OperationId.byteLength;
+        final entry = ORMapEntry<V>(
+          value: _valueCodec.decode(readBytes('OR-map snapshot value')),
+          tag: tag,
+        );
+        state._live.putIfAbsent(key, () => <ORMapEntry<V>>{}).add(entry);
+        state._all.putIfAbsent(key, () => <ORMapEntry<V>>{}).add(entry);
+      }
+    }
+
+    final tagless = UVarint.read(snapshot, offset: offset);
+    offset = tagless.nextOffset;
+    for (var i = 0; i < tagless.value; i += 1) {
+      final key = _keyCodec.decode(readBytes('OR-map snapshot key'));
+      state._snapshotOnly[key] =
+          _valueCodec.decode(readBytes('OR-map snapshot value'));
+    }
   }
 
   /// Computes the tag state by replaying the history.
@@ -215,34 +263,9 @@ base class CRDTORMapHandler<K, V> extends Handler<ORMapState<K, V>>
       tombstones: <OperationId>{},
     );
 
-    final snap = lastSnapshot();
-
-    // Seed from snapshot:
-    // If a prior snapshot contained key-value pairs for this handler,
-    // we treat them as present without tags (snapshot-only) until changes
-    // say otherwise. The snapshot is a length-prefixed sequence of
-    // (key, value) pairs encoded via [_keyCodec] and [_valueCodec].
-    if (snap != null) {
-      var offset = readSnapshotHeader(snap).offset;
-      final countRec = UVarint.read(snap, offset: offset);
-      offset = countRec.nextOffset;
-      for (var i = 0; i < countRec.value; i += 1) {
-        final keyRecord = UVarint.readBytes(
-          snap,
-          offset: offset,
-          what: 'OR-map snapshot key',
-        );
-        final key = _keyCodec.decode(keyRecord.value);
-        offset = keyRecord.nextOffset;
-
-        final valueRecord = UVarint.readBytes(
-          snap,
-          offset: offset,
-          what: 'OR-map snapshot value',
-        );
-        state._snapshotOnly[key] = _valueCodec.decode(valueRecord.value);
-        offset = valueRecord.nextOffset;
-      }
+    final snapshot = lastSnapshot();
+    if (snapshot != null) {
+      _seedFromSnapshot(state, snapshot);
     }
 
     for (final operation in operations()) {
