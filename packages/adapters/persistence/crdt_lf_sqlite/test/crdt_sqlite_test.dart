@@ -87,7 +87,7 @@ void main() {
       expect(documentStorage.snapshots, isA<CRDTSqliteSnapshotStorage>());
     });
 
-    test('runInTransaction rolls back partial work on error', () async {
+    test('runInTransaction rolls back partial work on error', () {
       final changes = storage.changeStorageForDocument('doc-rollback');
 
       expect(

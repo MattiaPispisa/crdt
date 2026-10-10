@@ -1,1 +1,1 @@
-include: package:lints/recommended.yaml
+include: package:ws_lint/dart.yaml

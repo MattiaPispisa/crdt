@@ -194,7 +194,7 @@ packages:
     source: hosted
     version: "0.7.0"
   flutter_lints:
-    dependency: "direct dev"
+    dependency: transitive
     description:
       name: flutter_lints
       sha256: "3105dc8492f6183fb076ccf1f351ac3d60564bff92e20bfc4af9cc1651f4e7e1"
@@ -796,6 +796,13 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "5.15.0"
+  ws_lint:
+    dependency: "direct dev"
+    description:
+      path: "../../../packages/_internal/ws_lint"
+      relative: true
+    source: path
+    version: "1.0.0"
   xdg_directories:
     dependency: transitive
     description:

@@ -1,13 +1,2 @@
-analyzer:
-  exclude:
-    - build/**
-    - android/**
-    - ios/**
-    - web/**
-    - windows/**
-    - macos/**
-    - linux/**
-include: package:flutter_lints/flutter.yaml
 
-linter:
-  rules:
+include: package:ws_lint/flutter.yaml

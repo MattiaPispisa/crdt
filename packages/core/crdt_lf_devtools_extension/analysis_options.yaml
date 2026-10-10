@@ -1,6 +1,5 @@
-analyzer:
-  exclude:
-    - build/**
-    - web/**
-include: 
-  - package:flutter_lints/flutter.yaml
+
+include: package:ws_lint/flutter.yaml
+
+lint:
+  

@@ -21,10 +21,11 @@ dependencies:
   url_launcher: ^6.3.0
 
 dev_dependencies:
-  flutter_lints: ^5.0.0
   flutter_test:
     sdk: flutter
-  test: 
+  test:
+  ws_lint:
+    path: ../ws_lint
 
 flutter:
   uses-material-design: true

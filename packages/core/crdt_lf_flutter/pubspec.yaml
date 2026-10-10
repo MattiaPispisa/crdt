@@ -18,9 +18,10 @@ dependencies:
 dev_dependencies:
   benchmark_infrastructure:
     path: ../../_internal/benchmark_infrastructure
-  flutter_lints: ^6.0.0
   flutter_test:
     sdk: flutter
+  ws_lint:
+    path: ../../_internal/ws_lint
 
 flutter:
   uses-material-design: true

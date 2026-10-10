@@ -34,6 +34,7 @@ jobs:
             global:
               - '.github/workflows/**'
               - 'analysis_options.yaml'
+              - 'packages/_internal/ws_lint/**'
               - 'pubspec.yaml'
               - 'pubspec.lock'
               - 'melos.yaml'

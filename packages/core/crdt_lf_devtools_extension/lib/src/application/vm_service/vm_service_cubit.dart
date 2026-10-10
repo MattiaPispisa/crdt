@@ -15,11 +15,11 @@ class VmServiceCubit extends Cubit<VmServiceState> {
     _observeState();
   }
 
-  _observeState() {
+  void _observeState() {
     serviceManager.connectedState.addListener(_onConnectedStateChange);
   }
 
-  _onConnectedStateChange() {
+  void _onConnectedStateChange() {
     final connectedState = serviceManager.connectedState.value;
 
     if (connectedState.connected) {
