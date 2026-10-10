@@ -12,11 +12,65 @@ updates:
         patterns:
           - "*"
 
+  # Version updates open a PR only for a new major: the caret constraints
+  # already accept minors and patches. Security updates ignore the
+  # `update-types` filter, so they arrive for every level.
+  # A new package must be added to `directories`.
   - package-ecosystem: "pub"
-    directory: "/"
+    directories:
+      - "/"
+      - "/packages/core/hlc"
+      - "/packages/core/crdt_lf"
+      - "/packages/core/crdt_lf/flutter_example"
+      - "/packages/core/crdt_lf_persistence"
+      - "/packages/core/crdt_socket_sync"
+      - "/packages/core/crdt_socket_sync/example"
+      - "/packages/core/crdt_socket_sync/client_example"
+      - "/packages/core/crdt_lf_flutter"
+      - "/packages/core/crdt_lf_flutter/example"
+      - "/packages/core/crdt_lf_devtools_extension"
+      - "/packages/adapters/persistence/crdt_lf_hive"
+      - "/packages/adapters/persistence/crdt_lf_sqlite"
+      - "/packages/adapters/persistence/crdt_lf_drift"
+      - "/packages/adapters/sync/dart_frog"
+      - "/packages/adapters/sync/dart_frog/example"
+      - "/packages/adapters/sync/dart_frog/relay_example"
+      - "/packages/adapters/sync/serverpod"
+      - "/packages/adapters/sync/serverpod/example"
+      - "/packages/adapters/sync/serverpod/relay_example"
+      - "/packages/_internal/benchmark_infrastructure"
+      - "/packages/_internal/persistence_conformance"
+      - "/packages/_internal/shared_examples_infrastructure"
+      - "/apps/greyhound_markdown/client"
+      - "/apps/greyhound_markdown/server_dart_frog"
+      - "/apps/greyhound_markdown/server_serverpod"
     schedule:
       interval: "weekly"
       day: "monday"
     open-pull-requests-limit: 10
+    groups:
+      pub:
+        group-by: dependency-name
     ignore:
       - dependency-name: "melos"
+      - dependency-name: "*"
+        update-types:
+          - "version-update:semver-minor"
+          - "version-update:semver-patch"
+
+  - package-ecosystem: "npm"
+    directories:
+      - "/docs"
+      - "/apps/greyhound_markdown/server"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 10
+    groups:
+      npm:
+        group-by: dependency-name
+    ignore:
+      - dependency-name: "*"
+        update-types:
+          - "version-update:semver-minor"
+          - "version-update:semver-patch"
