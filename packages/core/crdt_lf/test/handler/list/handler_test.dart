@@ -1,7 +1,25 @@
 import 'package:crdt_lf/crdt_lf.dart';
 import 'package:test/test.dart';
 
+import '../conformance/handler_conformance.dart';
+
 void main() {
+  runHandlerConformanceTests(
+    spec: CRDTListHandler.spec<String>('CRDTListHandler<String>'),
+    read: (list) => List.of(list.value),
+    edit: (list, random, token) {
+      final length = list.length;
+      switch (length == 0 ? 0 : random.nextInt(3)) {
+        case 0:
+          list.insert(random.nextInt(length + 1), token);
+        case 1:
+          list.delete(random.nextInt(length), random.nextInt(3) + 1);
+        case _:
+          list.update(random.nextInt(length), token);
+      }
+    },
+  );
+
   group('CRDTListHandler', () {
     test('should handle basic operations', () {
       final doc = CRDTDocument(
@@ -444,38 +462,6 @@ void main() {
 
         expect(handler.value, ['x', 'y']);
         expect(doc.exportChanges().length, before + 2);
-      });
-
-      test('compacted operations replay identically on a remote peer', () {
-        final doc1 = CRDTDocument(
-          peerId: PeerId.parse('45ee6b65-b393-40b7-9755-8b66dc7d0518'),
-        );
-        final handler1 = CRDTListHandler<String>(
-          doc1,
-          'list1',
-          handlerType: 'CRDTListHandler<String>',
-        )
-          ..insert(0, 'a')
-          ..insert(1, 'b')
-          ..insert(2, 'c');
-
-        final doc2 = CRDTDocument(
-          peerId: PeerId.parse('a90dfced-cbf0-4a49-9c64-f5b7b62fdc18'),
-        );
-        final handler2 = CRDTListHandler<String>(
-          doc2,
-          'list1',
-          handlerType: 'CRDTListHandler<String>',
-        );
-
-        doc1.runInTransaction(() {
-          handler1
-            ..delete(1, 1)
-            ..update(1, 'C');
-        });
-
-        doc2.importChanges(doc1.exportChanges());
-        expect(handler2.value, handler1.value);
       });
     });
   });

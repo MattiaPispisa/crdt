@@ -1,9 +1,17 @@
 import 'package:crdt_lf/crdt_lf.dart';
 import 'package:test/test.dart';
 
+import '../conformance/handler_conformance.dart';
+
 final newFlagSpec = CRDTRegisterHandler.spec<bool>('flag');
 
 void main() {
+  runHandlerConformanceTests(
+    spec: CRDTRegisterHandler.spec<String>('CRDTRegisterHandler<String>'),
+    read: (register) => register.value,
+    edit: (register, random, token) => register.set(token),
+  );
+
   group('CRDTRegisterHandler', () {
     late CRDTDocument doc;
     late CRDTRegisterHandler<bool> register;
@@ -77,31 +85,6 @@ void main() {
       expect(a.value, b.value);
     });
 
-    test('snapshot round-trip preserves a set value', () {
-      register.set(true);
-      final snapshot = doc.takeSnapshot();
-
-      final docB = CRDTDocument()..importSnapshot(snapshot);
-      final registerB = CRDTRegisterHandler<bool>(
-        docB,
-        'flag',
-        handlerType: 'CRDTRegisterHandler<bool>',
-      );
-      expect(registerB.value, isTrue);
-    });
-
-    test('snapshot round-trip preserves the unset state', () {
-      final snapshot = doc.takeSnapshot();
-
-      final docB = CRDTDocument()..importSnapshot(snapshot);
-      final registerB = CRDTRegisterHandler<bool>(
-        docB,
-        'flag',
-        handlerType: 'CRDTRegisterHandler<bool>',
-      );
-      expect(registerB.value, isNull);
-    });
-
     test('resolves as a leaf value inside a ref container', () {
       final nested = CRDTDocument()
         ..register(newFlagSpec)
@@ -134,24 +117,6 @@ void main() {
       });
       expect(register.value, isTrue);
       expect(doc.exportChanges().length, 1);
-    });
-
-    test('compacted sets replay identically on a remote peer', () {
-      final doc2 = CRDTDocument(peerId: PeerId.generate());
-      final register2 = CRDTRegisterHandler<bool>(
-        doc2,
-        'flag',
-        handlerType: 'CRDTRegisterHandler<bool>',
-      );
-
-      doc.runInTransaction(() {
-        register
-          ..set(true)
-          ..set(false);
-      });
-
-      doc2.importChanges(doc.exportChanges());
-      expect(register2.value, register.value);
     });
   });
 }

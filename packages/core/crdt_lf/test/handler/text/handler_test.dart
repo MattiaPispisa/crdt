@@ -6,8 +6,25 @@ import 'package:hlc_dart/hlc_dart.dart';
 import 'package:test/test.dart';
 
 import '../../helpers/matcher.dart';
+import '../conformance/handler_conformance.dart';
 
 void main() {
+  runHandlerConformanceTests(
+    spec: CRDTTextHandler.spec,
+    read: (text) => text.value,
+    edit: (text, random, token) {
+      final length = text.length;
+      switch (length == 0 ? 0 : random.nextInt(3)) {
+        case 0:
+          text.insert(random.nextInt(length + 1), token);
+        case 1:
+          text.delete(random.nextInt(length), random.nextInt(3) + 1);
+        case _:
+          text.update(random.nextInt(length), token);
+      }
+    },
+  );
+
   group('CRDTTextHandler', () {
     late String handlerId;
     late PeerId author;
@@ -228,21 +245,6 @@ void main() {
 
       expect(text.value, equals('Hello Wo'));
       expect(doc.exportChanges().length, before + 1);
-    });
-
-    test('compacted deletes replay identically on a remote peer', () {
-      final doc2 = CRDTDocument(peerId: PeerId.generate());
-      final text2 = CRDTTextHandler(doc2, handlerId);
-
-      text.insert(0, 'Hello World');
-      doc.runInTransaction(() {
-        text
-          ..delete(5, 1)
-          ..delete(5, 5);
-      });
-
-      doc2.importChanges(doc.exportChanges());
-      expect(text2.value, equals(text.value));
     });
 
     test('value maintains cache across multiple reads', () {

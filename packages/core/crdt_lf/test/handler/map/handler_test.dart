@@ -1,7 +1,25 @@
 import 'package:crdt_lf/crdt_lf.dart';
 import 'package:test/test.dart';
 
+import '../conformance/handler_conformance.dart';
+
 void main() {
+  runHandlerConformanceTests(
+    spec: CRDTMapHandler.spec<String>('CRDTMapHandler<String>'),
+    read: (map) => Map.of(map.value),
+    edit: (map, random, token) {
+      final present = map.value.keys.toList();
+      switch (present.isEmpty ? 0 : random.nextInt(3)) {
+        case 0:
+          map.set('k${random.nextInt(8)}', token);
+        case 1:
+          map.delete(present[random.nextInt(present.length)]);
+        case _:
+          map.update(present[random.nextInt(present.length)], token);
+      }
+    },
+  );
+
   group('CRDTMapHandler', () {
     test('should handle basic operations', () {
       final doc = CRDTDocument(
@@ -466,36 +484,6 @@ void main() {
         });
         expect(handler.value, {'a': '1', 'b': '2'});
         expect(doc.exportChanges().length, 2);
-      });
-
-      test('compacted operations replay identically on a remote peer', () {
-        final doc1 = CRDTDocument(
-          peerId: PeerId.parse('45ee6b65-b393-40b7-9755-8b66dc7d0518'),
-        );
-        final handler1 = CRDTMapHandler<String>(
-          doc1,
-          'map1',
-          handlerType: 'CRDTMapHandler<String>',
-        )..set('k', 'v0');
-
-        final doc2 = CRDTDocument(
-          peerId: PeerId.parse('a90dfced-cbf0-4a49-9c64-f5b7b62fdc18'),
-        );
-        final handler2 = CRDTMapHandler<String>(
-          doc2,
-          'map1',
-          handlerType: 'CRDTMapHandler<String>',
-        );
-
-        doc1.runInTransaction(() {
-          handler1
-            ..set('k', 'v1')
-            ..update('k', 'v2')
-            ..set('other', 'x');
-        });
-
-        doc2.importChanges(doc1.exportChanges());
-        expect(handler2.value, handler1.value);
       });
     });
   });

@@ -1,7 +1,35 @@
 import 'package:crdt_lf/crdt_lf.dart';
 import 'package:test/test.dart';
 
+import '../conformance/handler_conformance.dart';
+
 void main() {
+  runHandlerConformanceTests(
+    spec: CRDTMovableListRefHandler.spec,
+    read: (list) => List.of(list.value),
+    edit: (list, random, token) {
+      final length = list.length;
+      // A move needs a place other than the one the element holds.
+      switch (length == 0 ? 0 : random.nextInt(length < 2 ? 3 : 4)) {
+        case 0:
+          list.insert(
+            random.nextInt(length + 1),
+            HandlerRef(token, CRDTFugueTextHandler.spec.type),
+          );
+        case 1:
+          list.delete(random.nextInt(length), random.nextInt(3) + 1);
+        case 2:
+          list.update(
+            random.nextInt(length),
+            HandlerRef(token, CRDTFugueTextHandler.spec.type),
+          );
+        case _:
+          final from = random.nextInt(length);
+          list.move(from, (from + 1 + random.nextInt(length - 1)) % length);
+      }
+    },
+  );
+
   group('CRDTMovableListRefHandler', () {
     late CRDTDocument doc;
     late CRDTMovableListRefHandler slides;

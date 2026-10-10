@@ -5,8 +5,15 @@ import 'package:test/test.dart';
 
 import '../helpers/handler.dart';
 import '../helpers/pn_counter_handler.dart';
+import 'conformance/handler_conformance.dart';
 
 void main() {
+  runHandlerConformanceTests(
+    spec: PNCounterHandler.spec('PNCounterHandler'),
+    read: (counter) => counter.value,
+    edit: (counter, random, token) => counter.increment(random.nextInt(5) + 1),
+  );
+
   group('a handler that declares its own operation kind', () {
     test('sums the deltas it is given', () {
       final doc = CRDTDocument(peerId: PeerId.generate());

@@ -1,10 +1,29 @@
+import 'dart:math';
 import 'dart:typed_data';
 
 import 'package:crdt_lf/crdt_lf.dart';
 import 'package:hlc_dart/hlc_dart.dart';
 import 'package:test/test.dart';
 
+import '../conformance/handler_conformance.dart';
+
 void main() {
+  runHandlerConformanceTests(
+    spec: CRDTFugueTextHandler.spec,
+    read: (text) => text.value,
+    edit: (text, random, token) {
+      final length = text.length;
+      switch (length == 0 ? 0 : random.nextInt(3)) {
+        case 0:
+          text.insert(random.nextInt(length + 1), token);
+        case 1:
+          text.delete(random.nextInt(length), random.nextInt(3) + 1);
+        case _:
+          text.update(random.nextInt(length), token);
+      }
+    },
+  );
+
   group('CRDTFugueTextHandler', () {
     test('exposes a stable handlerType (minification-safe factory key)', () {
       final handler = CRDTFugueTextHandler(CRDTDocument(), 'text1');
@@ -1667,6 +1686,42 @@ void main() {
 
         expect(textA.value, 'Zabcdef');
         expect(textB.value, textA.value);
+      });
+
+      test('undo and redo walk over text outside the BMP', () {
+        final document = doc();
+        final text = CRDTFugueTextHandler(document, 'text')
+          ..insert(0, 'a\u{1F44B}b\u{1F389}c');
+        final undo = CRDTUndoManager(
+          document,
+          captureTimeout: Duration.zero,
+          stackLimit: 61,
+        )..track(text);
+        final random = Random(42);
+
+        final states = [text.value];
+        for (var step = 0; step < 60; step++) {
+          final length = text.length;
+          switch (length == 0 ? 0 : random.nextInt(3)) {
+            case 0:
+              text.insert(random.nextInt(length + 1), '\u{1F600}$step');
+            case 1:
+              text.delete(random.nextInt(length), random.nextInt(3) + 1);
+            case _:
+              text.update(random.nextInt(length), '\u{1F680}');
+          }
+          states.add(text.value);
+        }
+
+        for (var i = states.length - 1; i > 0; i--) {
+          expect(text.value, states[i], reason: 'before undo to $i');
+          undo.undo();
+        }
+        expect(text.value, states.first);
+        for (var i = 1; i < states.length; i++) {
+          undo.redo();
+          expect(text.value, states[i], reason: 'after redo to $i');
+        }
       });
     });
   });

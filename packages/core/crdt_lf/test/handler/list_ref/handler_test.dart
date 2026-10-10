@@ -1,7 +1,31 @@
 import 'package:crdt_lf/crdt_lf.dart';
 import 'package:test/test.dart';
 
+import '../conformance/handler_conformance.dart';
+
 void main() {
+  runHandlerConformanceTests(
+    spec: CRDTListRefHandler.spec,
+    read: (list) => List.of(list.value),
+    edit: (list, random, token) {
+      final length = list.length;
+      switch (length == 0 ? 0 : random.nextInt(3)) {
+        case 0:
+          list.insert(
+            random.nextInt(length + 1),
+            HandlerRef(token, CRDTFugueTextHandler.spec.type),
+          );
+        case 1:
+          list.delete(random.nextInt(length), random.nextInt(3) + 1);
+        case _:
+          list.update(
+            random.nextInt(length),
+            HandlerRef(token, CRDTFugueTextHandler.spec.type),
+          );
+      }
+    },
+  );
+
   group('CRDTListRefHandler', () {
     late CRDTDocument doc;
     late CRDTListRefHandler list;

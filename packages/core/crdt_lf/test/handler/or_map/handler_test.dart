@@ -1,8 +1,27 @@
+import 'dart:typed_data';
+
 import 'package:crdt_lf/crdt_lf.dart';
 import 'package:hlc_dart/hlc_dart.dart';
 import 'package:test/test.dart';
 
+import '../conformance/handler_conformance.dart';
+
 void main() {
+  runHandlerConformanceTests(
+    spec: CRDTORMapHandler.spec<String, String>(
+      'CRDTORMapHandler<String, String>',
+    ),
+    read: (map) => map.value,
+    edit: (map, random, token) {
+      final present = map.keys.toList();
+      if (present.isEmpty || random.nextBool()) {
+        map.put('k${random.nextInt(8)}', token);
+      } else {
+        map.remove(present[random.nextInt(present.length)]);
+      }
+    },
+  );
+
   group('CRDTORMapHandler', () {
     test('the tag is runtimeType by default, and a spec fixes it', () {
       final doc = CRDTDocument();
@@ -412,6 +431,35 @@ void main() {
       map.remove('nonexistent');
       expect(map.value, isEmpty);
     });
+    test('a pair from a blob without tags survives the next snapshot', () {
+      final source = CRDTDocument();
+      CRDTORMapHandler<String, String>(
+        source,
+        'ormap',
+        handlerType: 'CRDTORMapHandler<String, String>',
+      ).put('x', 'y');
+      final legacy = CRDTDocument()
+        ..importSnapshot(
+          _tagless(source.takeSnapshot(), 'ormap', {'k': 'a'}),
+        );
+      CRDTORMapHandler<String, String>(
+        legacy,
+        'ormap',
+        handlerType: 'CRDTORMapHandler<String, String>',
+      ).put('j', 'b');
+
+      final restored = CRDTDocument()..importSnapshot(legacy.takeSnapshot());
+
+      expect(
+        CRDTORMapHandler<String, String>(
+          restored,
+          'ormap',
+          handlerType: 'CRDTORMapHandler<String, String>',
+        ).value,
+        {'k': 'a', 'j': 'b'},
+      );
+    });
+
     group('invert', () {
       test('undoes a remove of a key that only a snapshot carries', () {
         final source = CRDTDocument(
@@ -422,7 +470,7 @@ void main() {
           'ormap',
           handlerType: 'CRDTORMapHandler<String, String>',
         ).put('k', 'a');
-        final snapshot = source.takeSnapshot();
+        final snapshot = _tagless(source.takeSnapshot(), 'ormap', {'k': 'a'});
 
         final doc = CRDTDocument(
           peerId: PeerId.parse('37f1ec87-6ea5-430b-a627-a6b92b56a02d'),
@@ -453,7 +501,7 @@ void main() {
           'ormap',
           handlerType: 'CRDTORMapHandler<String, String>',
         ).put('k', 'a');
-        final snapshot = source.takeSnapshot();
+        final snapshot = _tagless(source.takeSnapshot(), 'ormap', {'k': 'a'});
 
         final doc = CRDTDocument(
           peerId: PeerId.parse('37f1ec87-6ea5-430b-a627-a6b92b56a02d'),
@@ -542,4 +590,20 @@ void main() {
       expect(entry == 'x', isFalse);
     });
   });
+}
+
+/// [snapshot] with the map [id] holding [pairs] the way a build before tags
+/// wrote it: blob v1, every pair tagless.
+Snapshot _tagless(Snapshot snapshot, String id, Map<String, String> pairs) {
+  const codec = JsonValueCodec<String>();
+  final out = BytesBuilder()..addByte(1);
+  UVarint.write(pairs.length, out);
+  for (final MapEntry(:key, :value) in pairs.entries) {
+    UVarint.writeBytes(codec.encode(key), out);
+    UVarint.writeBytes(codec.encode(value), out);
+  }
+  return Snapshot.create(
+    versionVector: snapshot.versionVector,
+    data: {...snapshot.data, id: out.toBytes()},
+  );
 }

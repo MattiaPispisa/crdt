@@ -1,7 +1,25 @@
 import 'package:crdt_lf/crdt_lf.dart';
 import 'package:test/test.dart';
 
+import '../conformance/handler_conformance.dart';
+
 void main() {
+  runHandlerConformanceTests(
+    spec: CRDTFugueListHandler.spec<String>('CRDTFugueListHandler<String>'),
+    read: (list) => List.of(list.value),
+    edit: (list, random, token) {
+      final length = list.length;
+      switch (length == 0 ? 0 : random.nextInt(3)) {
+        case 0:
+          list.insert(random.nextInt(length + 1), token);
+        case 1:
+          list.delete(random.nextInt(length), random.nextInt(3) + 1);
+        case _:
+          list.update(random.nextInt(length), token);
+      }
+    },
+  );
+
   group('CRDTFugueListHandler', () {
     test('the tag is runtimeType by default, and a spec fixes it', () {
       final doc = CRDTDocument();
@@ -333,35 +351,6 @@ void main() {
       )..insert(0, 'a');
       expect(handler.toString(), contains('list1'));
       expect(handler.toString(), contains('a'));
-    });
-
-    test('should survive a snapshot round-trip', () {
-      final doc = CRDTDocument();
-      final handler = CRDTFugueListHandler<String>(
-        doc,
-        'list1',
-        handlerType: 'CRDTFugueListHandler<String>',
-      )
-        ..insert(0, 'Hello')
-        ..insert(1, 'World')
-        ..insert(2, 'Dart');
-
-      final snapshot = doc.takeSnapshot();
-      handler.insert(3, '!');
-      expect(handler.value, ['Hello', 'World', 'Dart', '!']);
-
-      // Rebuild from the snapshot + later changes to exercise the
-      // snapshot decode path in [_initialState].
-      final reopened = CRDTDocument();
-      final reopenedHandler = CRDTFugueListHandler<String>(
-        reopened,
-        'list1',
-        handlerType: 'CRDTFugueListHandler<String>',
-      );
-      reopened
-        ..mergeSnapshot(snapshot)
-        ..importChanges(doc.exportChanges());
-      expect(reopenedHandler.value, handler.value);
     });
   });
 }

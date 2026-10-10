@@ -1,7 +1,24 @@
+import 'dart:typed_data';
+
 import 'package:crdt_lf/crdt_lf.dart';
 import 'package:test/test.dart';
 
+import '../conformance/handler_conformance.dart';
+
 void main() {
+  runHandlerConformanceTests(
+    spec: CRDTORSetHandler.spec<String>('CRDTORSetHandler<String>'),
+    read: (set) => set.value,
+    edit: (set, random, token) {
+      final present = set.value.toList();
+      if (present.isEmpty || random.nextBool()) {
+        set.add(token);
+      } else {
+        set.remove(present[random.nextInt(present.length)]);
+      }
+    },
+  );
+
   group('CRDTORSetHandler', () {
     test('the tag is runtimeType by default, and a spec fixes it', () {
       final doc = CRDTDocument();
@@ -163,36 +180,6 @@ void main() {
       expect(s1.value.contains('k'), isTrue);
     });
 
-    test('takeSnapshot + mergeSnapshot round-trips the OR-Set state', () {
-      // The OR-Set's snapshot is the binary blob produced by its own
-      // getSnapshotState. We exercise the seed path of _computeState by
-      // taking a snapshot on one document and merging it into another.
-      final doc1 = CRDTDocument(
-        peerId: PeerId.parse('45ee6b65-b393-40b7-9755-8b66dc7d0518'),
-      );
-      final s1 = CRDTORSetHandler<String>(
-        doc1,
-        'set1',
-        handlerType: 'CRDTORSetHandler<String>',
-      )
-        ..add('a')
-        ..add('b');
-
-      final snap = doc1.takeSnapshot();
-
-      final doc2 = CRDTDocument(
-        peerId: PeerId.parse('a90dfced-cbf0-4a49-9c64-f5b7b62fdc18'),
-      );
-      final s2 = CRDTORSetHandler<String>(
-        doc2,
-        'set1',
-        handlerType: 'CRDTORSetHandler<String>',
-      );
-      doc2.mergeSnapshot(snap, pruneHistory: false);
-
-      expect(s2.value, equals(s1.value));
-    });
-
     test('snapshot import/merge with OR-Set', () {
       final doc1 = CRDTDocument(
         peerId: PeerId.parse('45ee6b65-b393-40b7-9755-8b66dc7d0518'),
@@ -236,6 +223,33 @@ void main() {
       // After merge and bidirectional sync, both should include {'a','b','c'}
       expect(s1.value, equals(s2.value));
       expect(s1.value, containsAll({'a', 'b', 'c'}));
+    });
+
+    test('a value from a blob without tags survives the next snapshot', () {
+      final source = CRDTDocument();
+      CRDTORSetHandler<String>(
+        source,
+        'set',
+        handlerType: 'CRDTORSetHandler<String>',
+      ).add('x');
+      final legacy = CRDTDocument()
+        ..importSnapshot(_tagless(source.takeSnapshot(), 'set', {'a'}));
+      CRDTORSetHandler<String>(
+        legacy,
+        'set',
+        handlerType: 'CRDTORSetHandler<String>',
+      ).add('b');
+
+      final restored = CRDTDocument()..importSnapshot(legacy.takeSnapshot());
+
+      expect(
+        CRDTORSetHandler<String>(
+          restored,
+          'set',
+          handlerType: 'CRDTORSetHandler<String>',
+        ).value,
+        {'a', 'b'},
+      );
     });
 
     group('invert', () {
@@ -312,7 +326,7 @@ void main() {
           'set',
           handlerType: 'CRDTORSetHandler<String>',
         ).add('a');
-        final snapshot = source.takeSnapshot();
+        final snapshot = _tagless(source.takeSnapshot(), 'set', {'a'});
 
         final doc = CRDTDocument(
           peerId: PeerId.parse('37f1ec87-6ea5-430b-a627-a6b92b56a02d'),
@@ -343,7 +357,7 @@ void main() {
           'set',
           handlerType: 'CRDTORSetHandler<String>',
         ).add('a');
-        final snapshot = source.takeSnapshot();
+        final snapshot = _tagless(source.takeSnapshot(), 'set', {'a'});
 
         final doc = CRDTDocument(
           peerId: PeerId.parse('37f1ec87-6ea5-430b-a627-a6b92b56a02d'),
@@ -386,4 +400,18 @@ void main() {
       });
     });
   });
+}
+
+/// [snapshot] with the set [id] holding [items] the way a build before tags
+/// wrote it: blob v1, every item tagless.
+Snapshot _tagless(Snapshot snapshot, String id, Set<String> items) {
+  final out = BytesBuilder()..addByte(1);
+  UVarint.write(items.length, out);
+  for (final item in items) {
+    UVarint.writeBytes(const JsonValueCodec<String>().encode(item), out);
+  }
+  return Snapshot.create(
+    versionVector: snapshot.versionVector,
+    data: {...snapshot.data, id: out.toBytes()},
+  );
 }
