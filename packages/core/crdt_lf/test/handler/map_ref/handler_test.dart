@@ -1,11 +1,35 @@
 import 'package:crdt_lf/crdt_lf.dart';
 import 'package:test/test.dart';
 
+import '../conformance/handler_conformance.dart';
+
 const doneType = 'todo.done';
 
 final doneSpec = CRDTRegisterHandler.spec<bool>(doneType);
 
 void main() {
+  runHandlerConformanceTests(
+    spec: CRDTMapRefHandler.spec,
+    read: (map) => Map.of(map.value),
+    edit: (map, random, token) {
+      final present = map.value.keys.toList();
+      switch (present.isEmpty ? 0 : random.nextInt(3)) {
+        case 0:
+          map.set(
+            'k${random.nextInt(8)}',
+            HandlerRef(token, CRDTFugueTextHandler.spec.type),
+          );
+        case 1:
+          map.delete(present[random.nextInt(present.length)]);
+        case _:
+          map.update(
+            present[random.nextInt(present.length)],
+            HandlerRef(token, CRDTFugueTextHandler.spec.type),
+          );
+      }
+    },
+  );
+
   group('CRDTMapRefHandler', () {
     late CRDTDocument doc;
     late CRDTMapRefHandler root;
@@ -19,7 +43,6 @@ void main() {
       // Pinned to the literal on purpose: a change to the tag must fail here,
       // since it is a wire/identity value shared across peers and builds.
       expect(root.handlerType, 'CRDTMapRefHandler');
-      expect(HandlerRef.of(root).type, 'CRDTMapRefHandler');
     });
 
     test('setRef/getRef store and resolve a child handler', () {

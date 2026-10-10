@@ -333,6 +333,8 @@ class PersistentServerRegistry
         (Object error, StackTrace stack) {
           // A failed open must not be cached: the next caller retries instead
           // of getting the same broken future for as long as the server lives.
+          // Drops the cache entry: the caller awaits this future.
+          // ignore: discarded_futures
           _open.remove(documentId);
           Error.throwWithStackTrace(error, stack);
         },

@@ -518,7 +518,7 @@ class WebSocketRelayClient extends RelaySocketClient {
       updateConnectionStatus(ConnectionStatus.error);
     }
     if (attemptReconnect && !isUnsupported) {
-      _attemptReconnect();
+      unawaited(_attemptReconnect());
     }
   }
 
@@ -721,14 +721,14 @@ class WebSocketRelayClient extends RelaySocketClient {
 
   @override
   void dispose() {
-    disconnect();
+    unawaited(disconnect());
 
     for (final plugin in plugins) {
       plugin.dispose();
     }
 
     closeClientStreams();
-    _messageController.close();
+    unawaited(_messageController.close());
     // Not awaited: `dispose` is synchronous, and the flag inside is set before
     // the first await, so nothing more reaches this client either way.
     unawaited(_syncManager.dispose());

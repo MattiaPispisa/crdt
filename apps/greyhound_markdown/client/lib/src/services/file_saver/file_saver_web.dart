@@ -2,9 +2,8 @@ import 'dart:js_interop';
 import 'dart:js_interop_unsafe';
 import 'dart:typed_data';
 
-import 'package:web/web.dart' as web;
-
 import 'package:greyhound_markdown_client/src/services/file_saver/file_saver.dart';
+import 'package:web/web.dart' as web;
 
 /// `window.showSaveFilePicker`, from the File System Access API.
 ///
@@ -108,8 +107,9 @@ class PlatformFileSaver extends FileSaver {
       ..download = fileName
       ..style.display = 'none';
     web.document.body!.appendChild(anchor);
-    anchor.click();
-    anchor.remove();
+    anchor
+      ..click()
+      ..remove();
     web.URL.revokeObjectURL(url);
   }
 }

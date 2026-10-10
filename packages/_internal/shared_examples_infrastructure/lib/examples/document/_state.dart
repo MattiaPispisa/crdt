@@ -1,8 +1,7 @@
 import 'package:crdt_lf/crdt_lf.dart';
+import 'package:shared_examples_infrastructure/examples/document/_blocks.dart';
 import 'package:shared_examples_infrastructure/examples/ids.dart';
 import 'package:shared_examples_infrastructure/shared/example_document.dart';
-
-import '_blocks.dart';
 
 /// Document controller for the nested "document" example.
 ///
@@ -15,7 +14,7 @@ import '_blocks.dart';
 /// The whole document is a tree of nested CRDT containers stored flat in the
 /// [CRDTDocument] registry and linked by references:
 ///
-/// ```
+/// ```text
 /// document            CRDTMovableListRefHandler   (sortable chapters)
 ///   └ chapter         CRDTMapRefHandler
 ///       ├ title       CRDTFugueTextHandler        (collaborative text)
@@ -27,8 +26,8 @@ import '_blocks.dart';
 ///                         ├ 'text' → CRDTFugueTextHandler         (Text block)
 ///                         └ 'todo' → CRDTMovableListRefHandler    (Todo block)
 ///                               └ todo  CRDTMapRefHandler
-///                                     ├ 'text' → CRDTFugueTextHandler  item text
-///                                     └ 'done' → CRDTMapHandler<bool>  LWW flag
+///                                     ├ 'text' → CRDTFugueTextHandler
+///                                     └ 'done' → CRDTMapHandler<bool> (LWW)
 /// ```
 ///
 /// Every node is a standard CRDT, so concurrent edits merge conflict-free and

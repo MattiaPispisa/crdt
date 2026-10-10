@@ -1,7 +1,25 @@
 import 'package:crdt_lf/crdt_lf.dart';
 import 'package:test/test.dart';
 
+import '../conformance/handler_conformance.dart';
+
 void main() {
+  runHandlerConformanceTests(
+    spec: CRDTORMapRefHandler.spec,
+    read: (map) => Map.of(map.value),
+    edit: (map, random, token) {
+      final present = map.keys.toList();
+      if (present.isEmpty || random.nextBool()) {
+        map.put(
+          'k${random.nextInt(8)}',
+          HandlerRef(token, CRDTFugueTextHandler.spec.type),
+        );
+      } else {
+        map.remove(present[random.nextInt(present.length)]);
+      }
+    },
+  );
+
   group('CRDTORMapRefHandler', () {
     late CRDTDocument doc;
     late CRDTORMapRefHandler root;
@@ -14,7 +32,6 @@ void main() {
     test('exposes a stable handlerType', () {
       // Pinned to the literal: the tag is a wire value shared across peers.
       expect(root.handlerType, 'CRDTORMapRefHandler');
-      expect(HandlerRef.of(root).type, 'CRDTORMapRefHandler');
     });
 
     test('putRef/getRef store and resolve a child handler', () {
@@ -49,28 +66,6 @@ void main() {
       );
     });
 
-    test('a put concurrent with a remove of the same key wins', () {
-      final docA = CRDTDocument(peerId: PeerId.generate());
-      final rootA = CRDTORMapRefHandler(docA, 'root')
-        ..child('item', CRDTFugueTextHandler.spec).insert(0, 'old');
-
-      final docB = CRDTDocument(peerId: PeerId.generate())
-        ..register(CRDTFugueTextHandler.spec)
-        ..importChanges(docA.exportChanges());
-      final rootB = docB.handler(CRDTORMapRefHandler.spec, 'root');
-
-      rootA.remove('item');
-      final replacement = CRDTFugueTextHandler(docB, docB.newHandlerId())
-        ..insert(0, 'new');
-      rootB.putRef('item', replacement);
-
-      docA.importChanges(docB.exportChanges());
-      docB.importChanges(docA.exportChanges());
-
-      expect(rootA.resolved, {'item': 'new'});
-      expect(rootB.resolved, {'item': 'new'});
-    });
-
     test('removeChild removes the key and deletes the child', () {
       final title = root.child('title', CRDTFugueTextHandler.spec)
         ..insert(0, 'Hello');
@@ -82,20 +77,6 @@ void main() {
       expect(root.value, isEmpty);
       expect(root.resolved, isEmpty);
       expect(title.isDeleted, isTrue);
-    });
-
-    test('a peer rebuilds the tree from a pruned snapshot', () {
-      root.child('title', CRDTFugueTextHandler.spec).insert(0, 'Hello');
-      final snapshot = doc.takeSnapshot();
-
-      final docB = CRDTDocument()
-        ..register(CRDTORMapRefHandler.spec)
-        ..register(CRDTFugueTextHandler.spec)
-        ..importSnapshot(snapshot)
-        ..reconstruct();
-
-      final rootB = docB.registeredHandlers['root']! as CRDTORMapRefHandler;
-      expect(rootB.resolved, {'title': 'Hello'});
     });
   });
 }

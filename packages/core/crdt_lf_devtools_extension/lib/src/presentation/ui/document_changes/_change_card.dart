@@ -4,8 +4,8 @@ import 'package:flutter/material.dart';
 /// Compact card for a single CRDT change descriptor.
 class CrdtLfChangeCard extends StatelessWidget {
   const CrdtLfChangeCard({
-    super.key,
     required this.change,
+    super.key,
     this.highlighted = true,
   });
 

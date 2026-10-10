@@ -1,17 +1,24 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '_state.dart';
+import 'package:shared_examples_infrastructure/examples/todo_list/_state.dart';
 
+/// One row of the todo list: a checkbox, the text and a delete button.
 class TodoItem extends StatelessWidget {
+  /// Creates the row of [todo], at [index] in the list.
   const TodoItem({
-    super.key,
     required this.todo,
     required this.index,
     required this.interactive,
+    super.key,
   });
 
+  /// The todo this row shows.
   final Todo todo;
+
+  /// The position of [todo] in the list.
   final int index;
+
+  /// Whether the checkbox and the delete button react to taps.
   final bool interactive;
 
   @override

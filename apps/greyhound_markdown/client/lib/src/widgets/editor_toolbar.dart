@@ -53,14 +53,14 @@ class _EditorToolbarState extends State<EditorToolbar> {
     // Otherwise the buttons would keep greying in and out with the history the
     // toolbar no longer acts on.
     if (!identical(oldWidget.undo, widget.undo)) {
-      _subscription?.cancel();
+      unawaited(_subscription?.cancel());
       _subscribe();
     }
   }
 
   @override
   void dispose() {
-    _subscription?.cancel();
+    unawaited(_subscription?.cancel());
     super.dispose();
   }
 

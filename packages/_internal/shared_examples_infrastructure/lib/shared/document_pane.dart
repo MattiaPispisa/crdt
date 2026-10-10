@@ -1,7 +1,7 @@
+import 'package:flutter/material.dart';
 import 'package:shared_examples_infrastructure/shared/add_item_dialog.dart';
 import 'package:shared_examples_infrastructure/shared/document_controls.dart';
 import 'package:shared_examples_infrastructure/shared/example_document.dart';
-import 'package:flutter/material.dart';
 
 /// One pane of an example: the document info, the list [body], the time-travel
 /// slider and the bottom actions, plus an add FAB.
@@ -12,10 +12,10 @@ import 'package:flutter/material.dart';
 class DocumentPane extends StatelessWidget {
   /// Creates a pane for [state] rendering [body].
   const DocumentPane({
-    super.key,
     required this.state,
     required this.body,
     required this.onAdd,
+    super.key,
     this.addDialogTitle = 'Add New Todo',
   });
 
@@ -34,7 +34,6 @@ class DocumentPane extends StatelessWidget {
   Future<void> _showAddDialog(BuildContext context) {
     return showDialog<void>(
       context: context,
-      barrierDismissible: true,
       builder: (_) => AddItemDialog(title: addDialogTitle, onAdd: onAdd),
     );
   }
@@ -45,7 +44,7 @@ class DocumentPane extends StatelessWidget {
       return const SizedBox.shrink();
     }
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16.0),
+      padding: const EdgeInsets.symmetric(horizontal: 16),
       child: DocumentHistorySlider(historySession: session),
     );
   }
@@ -62,7 +61,7 @@ class DocumentPane extends StatelessWidget {
     return Align(
       alignment: Alignment.bottomLeft,
       child: Padding(
-        padding: const EdgeInsets.all(8.0),
+        padding: const EdgeInsets.all(8),
         child: Row(children: children),
       ),
     );

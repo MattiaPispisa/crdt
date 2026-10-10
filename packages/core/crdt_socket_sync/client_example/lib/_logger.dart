@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 class LoggerProvider extends StatelessWidget {
-  const LoggerProvider({super.key, required this.child});
+  const LoggerProvider({required this.child, super.key});
 
   final Widget child;
 
@@ -11,7 +11,7 @@ class LoggerProvider extends StatelessWidget {
   Widget build(BuildContext context) {
     return Provider(
       create:
-          (_) => EnLogger(defaultPrefixFormat: PrefixFormat.snakeSquare())
+          (_) => EnLogger(defaultPrefixFormat: const PrefixFormat.snakeSquare())
             ..addHandler(PrinterHandler(writeIfNotContains: ['PongMessage'])),
       child: child,
     );

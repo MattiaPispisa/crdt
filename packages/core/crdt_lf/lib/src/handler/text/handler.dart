@@ -444,8 +444,9 @@ base class CRDTTextHandler extends Handler<String>
     _TextInsertOperation accumulator,
     _TextInsertOperation current,
   ) {
-    return accumulator.index + RuneOffsets.length(accumulator.text) >=
-        current.index;
+    return current.index >= accumulator.index &&
+        current.index <=
+            accumulator.index + RuneOffsets.length(accumulator.text);
   }
 
   bool _isDeletingPartialInsertion(

@@ -1,15 +1,14 @@
 import 'dart:math';
 
+import 'package:en_logger/en_logger.dart';
 import 'package:equatable/equatable.dart';
 import 'package:flutter/material.dart';
-import 'package:en_logger/en_logger.dart';
-import 'package:hydrated_bloc/hydrated_bloc.dart';
-
 import 'package:greyhound_markdown_client/src/application/room/room_id.dart';
 import 'package:greyhound_markdown_client/src/application/user_settings/app_language.dart';
 import 'package:greyhound_markdown_client/src/config.dart';
 import 'package:greyhound_markdown_client/src/di/service_locator.dart';
 import 'package:greyhound_markdown_client/src/logging/app_logger.dart';
+import 'package:hydrated_bloc/hydrated_bloc.dart';
 
 part 'user_settings_state.dart';
 

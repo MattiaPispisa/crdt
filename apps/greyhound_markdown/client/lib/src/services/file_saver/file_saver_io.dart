@@ -1,9 +1,8 @@
 import 'dart:io';
 import 'dart:typed_data';
 
-import 'package:path_provider/path_provider.dart';
-
 import 'package:greyhound_markdown_client/src/services/file_saver/file_saver.dart';
+import 'package:path_provider/path_provider.dart';
 
 /// Writes a file next to the user's other documents.
 ///

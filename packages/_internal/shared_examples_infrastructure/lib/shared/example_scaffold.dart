@@ -33,11 +33,11 @@ typedef PaneWrapper = Widget Function(ExampleSyncSession session, Widget child);
 class ExampleScaffold<S extends ExampleDocument> extends StatefulWidget {
   /// Creates an example scaffold.
   const ExampleScaffold({
-    super.key,
     required this.title,
     required this.sessionsFactory,
     required this.stateBuilder,
     required this.paneBuilder,
+    super.key,
     this.appBarActionsBuilder,
     this.paneWrapper,
   });

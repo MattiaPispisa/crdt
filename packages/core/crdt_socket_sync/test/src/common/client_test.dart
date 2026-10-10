@@ -68,7 +68,7 @@ void main() {
       expect(seen, contains(ConnectionStatus.unsupported));
     });
 
-    test('keeps the first reason, and the status stays terminal', () async {
+    test('keeps the first reason, and the status stays terminal', () {
       final client = _client()
         ..refuse(
           code: Protocol.errorUnsupportedProtocolVersion,

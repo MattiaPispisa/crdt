@@ -482,7 +482,7 @@ void main() {
     });
 
     group('documentId getter', () {
-      test('should return document peer ID as string', () {
+      test('should return document peer ID as string', () async {
         // We can't directly test the private getter,
         // but we can verify it through
         // the messages sent which use this getter
@@ -491,10 +491,9 @@ void main() {
         document.createChange(operation);
 
         // Wait for the message to be sent
-        Future<void>.delayed(Duration.zero).then((_) {
-          final sentMessage = mockClient.getLastSentMessage();
-          expect(sentMessage!.documentId, equals(document.documentId));
-        });
+        await Future<void>.delayed(Duration.zero);
+        final sentMessage = mockClient.getLastSentMessage();
+        expect(sentMessage!.documentId, equals(document.documentId));
       });
     });
 

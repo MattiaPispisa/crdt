@@ -1,6 +1,5 @@
-import 'package:markdown/markdown.dart' as md;
-
 import 'package:greyhound_markdown_client/src/config.dart';
+import 'package:markdown/markdown.dart' as md;
 
 /// Renders [markdown] as a standalone HTML page titled [title], declared as
 /// written in [languageCode].

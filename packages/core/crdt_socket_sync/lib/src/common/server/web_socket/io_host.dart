@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'dart:io';
 
 import 'package:crdt_socket_sync/src/common/server/client_session.dart';
@@ -52,12 +54,14 @@ mixin IoWebSocketHost<S extends ClientSession> on SessionHostServer<S> {
 
   void _handleRequest(HttpRequest request) {
     if (serverTransformer.isUpgradeRequest(request)) {
-      serverTransformer.upgrade(request).then(
-            (webSocket) => acceptConnection(IoWebSocketConnection(webSocket)),
-          );
+      unawaited(
+        serverTransformer.upgrade(request).then(
+              (webSocket) => acceptConnection(IoWebSocketConnection(webSocket)),
+            ),
+      );
     } else {
       request.response.statusCode = HttpStatus.badRequest;
-      request.response.close();
+      unawaited(request.response.close());
     }
   }
 }

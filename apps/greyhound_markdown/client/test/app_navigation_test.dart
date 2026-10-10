@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:greyhound_markdown_client/src/routing/app_navigation.dart';
@@ -45,11 +47,11 @@ void main() {
         initialLocation: '/room/abc123',
       );
 
-      contextOf(router).pushSettings();
+      unawaited(contextOf(router).pushSettings());
       await tester.pumpAndSettle();
       expect(find.byType(SettingsScreen), findsOneWidget);
 
-      contextOf(router).pushChangelog();
+      unawaited(contextOf(router).pushChangelog());
       await _pumpPastTransition(tester);
       expect(find.byType(ChangelogScreen), findsOneWidget);
 

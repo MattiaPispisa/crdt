@@ -3,11 +3,10 @@ import 'package:flutter_highlight/flutter_highlight.dart';
 import 'package:flutter_highlight/themes/atom-one-dark.dart';
 import 'package:flutter_highlight/themes/atom-one-light.dart';
 import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
+import 'package:greyhound_markdown_client/src/config.dart';
 import 'package:highlight/highlight.dart' show highlight;
 import 'package:highlight/languages/all.dart';
 import 'package:markdown/markdown.dart' as md;
-
-import 'package:greyhound_markdown_client/src/config.dart';
 
 /// The class markdown puts on a fenced code block: `language-<name>`.
 const String _kLanguageClassPrefix = 'language-';

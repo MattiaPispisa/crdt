@@ -162,9 +162,9 @@ void main() {
         expect(handshakeResponse.versionVector, isNotNull);
       }
 
-      await expectLater(() async => client.disconnect(), returnsNormally);
+      await expectLater(client.disconnect, returnsNormally);
       expect(client.dispose, returnsNormally);
-      await expectLater(() async => server.dispose(), returnsNormally);
+      await expectLater(server.dispose, returnsNormally);
 
       await Future<void>.delayed(Duration.zero);
 

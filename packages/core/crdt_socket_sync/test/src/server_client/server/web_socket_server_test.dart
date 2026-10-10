@@ -55,10 +55,10 @@ void main() {
       );
     });
 
-    tearDown(() {
-      server.stop();
-      registry.clear();
-      httpRequestController.close();
+    tearDown(() async {
+      await server.stop();
+      await registry.clear();
+      await httpRequestController.close();
     });
 
     test('should create a server', () {

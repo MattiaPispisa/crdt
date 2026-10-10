@@ -1,0 +1,7 @@
+include: 
+  - package:flutter_lints/flutter.yaml
+  - package:ws_lint/dart.yaml 
+
+analyzer:
+  errors:
+    public_member_api_docs: ignore

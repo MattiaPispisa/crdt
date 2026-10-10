@@ -1,7 +1,25 @@
 import 'package:crdt_lf/crdt_lf.dart';
 import 'package:test/test.dart';
 
+import '../conformance/handler_conformance.dart';
+
 void main() {
+  runHandlerConformanceTests(
+    spec: CRDTMapHandler.spec<String>('CRDTMapHandler<String>'),
+    read: (map) => Map.of(map.value),
+    edit: (map, random, token) {
+      final present = map.value.keys.toList();
+      switch (present.isEmpty ? 0 : random.nextInt(3)) {
+        case 0:
+          map.set('k${random.nextInt(8)}', token);
+        case 1:
+          map.delete(present[random.nextInt(present.length)]);
+        case _:
+          map.update(present[random.nextInt(present.length)], token);
+      }
+    },
+  );
+
   group('CRDTMapHandler', () {
     test('should handle basic operations', () {
       final doc = CRDTDocument(
@@ -229,75 +247,6 @@ void main() {
       );
     });
 
-    test('should use snapshot correctly', () {
-      final doc1 = CRDTDocument(
-        peerId: PeerId.parse('45ee6b65-b393-40b7-9755-8b66dc7d0518'),
-      );
-      final handler1 = CRDTMapHandler<String>(
-        doc1,
-        'map1',
-        handlerType: 'CRDTMapHandler<String>',
-      );
-
-      final doc2 = CRDTDocument(
-        peerId: PeerId.parse('a90dfced-cbf0-4a49-9c64-f5b7b62fdc18'),
-      );
-      final handler2 = CRDTMapHandler<String>(
-        doc2,
-        'map1',
-        handlerType: 'CRDTMapHandler<String>',
-      );
-
-      // Set values
-      handler1
-        ..set('a', 'Hello')
-        ..set('b', 'World');
-      handler2.set('c', 'Dart!');
-
-      final changes1 = doc1.exportChanges();
-
-      expect(
-        doc1.shouldApplySnapshot(doc2.takeSnapshot()),
-        isTrue,
-      );
-      expect(
-        doc2.shouldApplySnapshot(doc1.takeSnapshot()),
-        isFalse,
-      );
-
-      expect(
-        doc2.importChanges(changes1),
-        equals(2),
-      );
-
-      expect(
-        doc1.shouldApplySnapshot(
-          doc2.takeSnapshot(),
-        ),
-        isTrue,
-      );
-      expect(
-        doc2.shouldApplySnapshot(doc1.takeSnapshot()),
-        isFalse,
-      );
-
-      expect(doc1.importSnapshot(doc2.takeSnapshot()), isTrue);
-      doc1.importChanges(doc2.exportChanges());
-
-      // After snapshot import and sync, states should be identical
-      // and reflect the merged state before snapshotting doc2.
-      expect(handler1.value, handler2.value);
-      expect(handler1.value, {'a': 'Hello', 'b': 'World', 'c': 'Dart!'});
-
-      // Further operations post-snapshot
-      handler1.set('d', 'New Value');
-      final changesPostSnapshot = doc1.exportChanges();
-      doc2.importChanges(changesPostSnapshot);
-
-      expect(handler1.value, handler2.value);
-      expect(handler1.value['d'], 'New Value');
-    });
-
     group('compound (same-key collapse)', () {
       CRDTDocument freshDoc() => CRDTDocument(
             peerId: PeerId.parse('37f1ec87-6ea5-430b-a627-a6b92b56a02d'),
@@ -466,36 +415,6 @@ void main() {
         });
         expect(handler.value, {'a': '1', 'b': '2'});
         expect(doc.exportChanges().length, 2);
-      });
-
-      test('compacted operations replay identically on a remote peer', () {
-        final doc1 = CRDTDocument(
-          peerId: PeerId.parse('45ee6b65-b393-40b7-9755-8b66dc7d0518'),
-        );
-        final handler1 = CRDTMapHandler<String>(
-          doc1,
-          'map1',
-          handlerType: 'CRDTMapHandler<String>',
-        )..set('k', 'v0');
-
-        final doc2 = CRDTDocument(
-          peerId: PeerId.parse('a90dfced-cbf0-4a49-9c64-f5b7b62fdc18'),
-        );
-        final handler2 = CRDTMapHandler<String>(
-          doc2,
-          'map1',
-          handlerType: 'CRDTMapHandler<String>',
-        );
-
-        doc1.runInTransaction(() {
-          handler1
-            ..set('k', 'v1')
-            ..update('k', 'v2')
-            ..set('other', 'x');
-        });
-
-        doc2.importChanges(doc1.exportChanges());
-        expect(handler2.value, handler1.value);
       });
     });
   });

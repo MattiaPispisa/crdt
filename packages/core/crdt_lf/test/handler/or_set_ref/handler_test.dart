@@ -1,7 +1,24 @@
 import 'package:crdt_lf/crdt_lf.dart';
 import 'package:test/test.dart';
 
+import '../conformance/handler_conformance.dart';
+
 void main() {
+  runHandlerConformanceTests(
+    spec: CRDTORSetRefHandler.spec,
+    // The sorted references, not the raw set: the order every peer reads is
+    // part of the contract.
+    read: (set) => set.childRefs().toList(),
+    edit: (set, random, token) {
+      final present = set.value.toList();
+      if (present.isEmpty || random.nextBool()) {
+        set.add(HandlerRef(token, CRDTFugueTextHandler.spec.type));
+      } else {
+        set.remove(present[random.nextInt(present.length)]);
+      }
+    },
+  );
+
   group('CRDTORSetRefHandler', () {
     late CRDTDocument doc;
     late CRDTORSetRefHandler tags;
@@ -14,7 +31,6 @@ void main() {
     test('exposes a stable handlerType', () {
       // Pinned to the literal: the tag is a wire value shared across peers.
       expect(tags.handlerType, 'CRDTORSetRefHandler');
-      expect(HandlerRef.of(tags).type, 'CRDTORSetRefHandler');
     });
 
     test('addRef/removeRef/containsRef manage the references', () {
@@ -56,29 +72,6 @@ void main() {
 
       expect(tags.value, isEmpty);
       expect(child.isDeleted, isTrue);
-    });
-
-    test('two peers resolve to the same list, whatever the order of adds', () {
-      final docA = CRDTDocument(peerId: PeerId.generate())
-        ..register(CRDTFugueTextHandler.spec);
-      final docB = CRDTDocument(peerId: PeerId.generate())
-        ..register(CRDTFugueTextHandler.spec);
-      final setA = CRDTORSetRefHandler(docA, 'tags');
-      final setB = CRDTORSetRefHandler(docB, 'tags');
-
-      for (var i = 0; i < 5; i++) {
-        setA.addChild(CRDTFugueTextHandler.spec).insert(0, 'a$i');
-        setB.addChild(CRDTFugueTextHandler.spec).insert(0, 'b$i');
-      }
-      // Warm caches fold the remote adds incrementally, in arrival order.
-      expect(setA.value, hasLength(5));
-      expect(setB.value, hasLength(5));
-
-      docA.importChanges(docB.exportChanges());
-      docB.importChanges(docA.exportChanges());
-
-      expect(setA.resolved, hasLength(10));
-      expect(setA.resolved, setB.resolved);
     });
   });
 }

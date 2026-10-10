@@ -4,9 +4,9 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 class PersistenceProvider extends StatelessWidget {
   const PersistenceProvider({
-    super.key,
     required this.preferences,
     required this.child,
+    super.key,
   });
 
   final SharedPreferences preferences;

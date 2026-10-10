@@ -7,7 +7,7 @@ import 'package:vm_service/vm_service.dart';
 
 /// Loads the VM service and the documents
 class Bootstrap extends StatelessWidget {
-  const Bootstrap({super.key, required this.child});
+  const Bootstrap({required this.child, super.key});
 
   final Widget child;
 

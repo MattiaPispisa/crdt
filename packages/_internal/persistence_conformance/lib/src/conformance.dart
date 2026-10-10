@@ -486,7 +486,7 @@ void runDocumentStorageConformanceTests({
 
       test('a body that throws throws through', () async {
         await expectLater(
-          storage.transaction(() async => throw StateError('no')),
+          storage.transaction(() => Future<void>.error(StateError('no'))),
           throwsA(isA<StateError>()),
         );
       });
@@ -812,7 +812,7 @@ void runStorageBackendConformanceTests({
       await peers.savePeerId(identity);
 
       final other = await open();
-      addTearDown(() async => other.close());
+      addTearDown(other.close);
       await backend.copyDocumentTo(other, 'doc-a');
 
       expect(await other.documentIds, contains('doc-a'));

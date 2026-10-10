@@ -1,13 +1,13 @@
 import 'package:crdt_lf/crdt_lf.dart';
 import 'package:crdt_lf_flutter/crdt_lf_flutter.dart' show CrdtBuilder;
-import 'package:shared_examples_infrastructure/shared/example_document.dart';
 import 'package:flutter/material.dart';
+import 'package:shared_examples_infrastructure/shared/example_document.dart';
 
 /// Shows a tooltip with the document info (peer id, change count, time-travel
 /// status). Shared by every example.
 class DocumentInfo extends StatelessWidget {
   /// Creates a document info indicator for [state].
-  const DocumentInfo({super.key, required this.state});
+  const DocumentInfo({required this.state, super.key});
 
   /// The document controller to read the info from.
   final ExampleDocument state;
@@ -33,7 +33,7 @@ class DocumentInfo extends StatelessWidget {
     return CrdtBuilder(
       builder:
           (context, document) => Padding(
-            padding: const EdgeInsets.only(left: 24.0, bottom: 24.0),
+            padding: const EdgeInsets.only(left: 24, bottom: 24),
             child: Tooltip(message: _info(), child: const Icon(Icons.info)),
           ),
     );
@@ -44,7 +44,7 @@ class DocumentInfo extends StatelessWidget {
 /// history).
 class ToHistoryViewButton extends StatelessWidget {
   /// Creates a time-travel entry button for [state].
-  const ToHistoryViewButton({super.key, required this.state});
+  const ToHistoryViewButton({required this.state, super.key});
 
   /// The document controller to time travel.
   final ExampleDocument state;
@@ -71,7 +71,7 @@ class ToHistoryViewButton extends StatelessWidget {
 /// Closes the time-travel session of [state].
 class BackToLiveButton extends StatelessWidget {
   /// Creates a back-to-live button for [state].
-  const BackToLiveButton({super.key, required this.state});
+  const BackToLiveButton({required this.state, super.key});
 
   /// The document controller to bring back to live.
   final ExampleDocument state;
@@ -89,7 +89,7 @@ class BackToLiveButton extends StatelessWidget {
 /// Takes a snapshot and garbage collects the history of [state].
 class GarbageCollectionButton extends StatelessWidget {
   /// Creates a garbage-collection button for [state].
-  const GarbageCollectionButton({super.key, required this.state});
+  const GarbageCollectionButton({required this.state, super.key});
 
   /// The document controller to garbage collect.
   final ExampleDocument state;
@@ -109,7 +109,7 @@ class GarbageCollectionButton extends StatelessWidget {
 /// Slider bound to a [HistorySession] cursor.
 class DocumentHistorySlider extends StatelessWidget {
   /// Creates a history slider for [historySession].
-  const DocumentHistorySlider({super.key, required this.historySession});
+  const DocumentHistorySlider({required this.historySession, super.key});
 
   /// The session whose cursor the slider controls.
   final HistorySession historySession;
@@ -122,7 +122,6 @@ class DocumentHistorySlider extends StatelessWidget {
     return Slider.adaptive(
       divisions: max.toInt(),
       value: value,
-      min: 0,
       max: max,
       label: '${value.toInt()}/${max.toInt()}',
       onChanged: (value) => historySession.jump(value.toInt()),

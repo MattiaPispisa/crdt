@@ -5,8 +5,15 @@ import 'package:test/test.dart';
 
 import '../helpers/handler.dart';
 import '../helpers/pn_counter_handler.dart';
+import 'conformance/handler_conformance.dart';
 
 void main() {
+  runHandlerConformanceTests(
+    spec: PNCounterHandler.spec('PNCounterHandler'),
+    read: (counter) => counter.value,
+    edit: (counter, random, token) => counter.increment(random.nextInt(5) + 1),
+  );
+
   group('a handler that declares its own operation kind', () {
     test('sums the deltas it is given', () {
       final doc = CRDTDocument(peerId: PeerId.generate());
@@ -60,23 +67,6 @@ void main() {
       expect(counterB.value, equals(13));
     });
 
-    test('survives a snapshot of its own state', () {
-      final doc = CRDTDocument(peerId: PeerId.generate());
-      final counter = PNCounterHandler(doc, 'counter')
-        ..increment(7)
-        ..decrement(9);
-      final snapshot = doc.takeSnapshot();
-
-      final restored = CRDTDocument(peerId: PeerId.generate());
-      final restoredCounter = PNCounterHandler(restored, 'counter');
-      restored
-        ..importSnapshot(snapshot)
-        ..importChanges(doc.exportChanges());
-
-      expect(restoredCounter.value, equals(counter.value));
-      expect(restoredCounter.value, equals(-2));
-    });
-
     test('two handlers may give the same kind two meanings', () {
       final doc = CRDTDocument(peerId: PeerId.generate());
       final counter = PNCounterHandler(doc, 'counter')
@@ -93,29 +83,6 @@ void main() {
       );
       expect(counter.value, equals(8));
       expect(marker.value, equals(3));
-    });
-
-    test('is undone by the operations it says are the opposite', () {
-      final doc = CRDTDocument(peerId: PeerId.generate());
-      final counter = PNCounterHandler(doc, 'counter');
-      final undo = CRDTUndoManager(doc, captureTimeout: Duration.zero)
-        ..track(counter);
-
-      counter
-        ..increment(3)
-        ..decrement(2);
-      expect(counter.value, equals(1));
-
-      undo.undo();
-      expect(counter.value, equals(3));
-
-      undo.undo();
-      expect(counter.value, equals(0));
-
-      undo
-        ..redo()
-        ..redo();
-      expect(counter.value, equals(1));
     });
 
     test('a handler that says nothing about undo has nothing to undo', () {

@@ -10,6 +10,18 @@
 - `CRDTDocument.deleteHandler` and `removeChild` / `removeChildAt` on every container: delete a
   handler and its subtree for every peer; the next snapshot drops their data.
 
+### Fixed
+
+- `CRDTTextHandler`: a transaction that inserts before an earlier insert of the same transaction
+  no longer moves it; the compacted change replays to the text the peer sees.
+  [188](https://github.com/MattiaPispisa/crdt/issues/188)
+- `CRDTORSetHandler` and `CRDTORMapHandler`: a remove made after a pruning snapshot now reaches
+  every peer. The snapshot blob (v2) keeps the tags; v1 blobs still read, tagless.
+  [189](https://github.com/MattiaPispisa/crdt/issues/189)
+- `dispose` handles its async work better: the futures it does not wait for
+  (closing streams, cancelling subscriptions) are now in `unawaited`.
+  No change in behavior.
+
 ## [5.1.1](https://github.com/MattiaPispisa/crdt/tree/crdt_lf-v5.1.1/packages/core/crdt_lf)
 
 **Date:** 2026-10-07

@@ -82,8 +82,8 @@ class MockRelaySocketClient extends RelaySocketClient {
 
   @override
   void dispose() {
-    _connectionStatusController.close();
-    _messagesController.close();
+    unawaited(_connectionStatusController.close());
+    unawaited(_messagesController.close());
   }
 
   // Test helper methods

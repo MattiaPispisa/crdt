@@ -36,7 +36,7 @@ base class CRDTORMapRefHandler extends CRDTORMapHandler<String, HandlerRef>
       OperationType.kindInsert,
       OperationType.kindDelete,
     },
-    blobVersions: BlobVersionRange.single(1),
+    blobVersions: BlobVersionRange(1, 2),
   );
 
   /// The tag this kind travels under; see [Handler.handlerType].

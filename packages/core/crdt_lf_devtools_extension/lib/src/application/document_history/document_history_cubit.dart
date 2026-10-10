@@ -29,7 +29,7 @@ class DocumentHistoryCubitArgs {
 /// operation (no roundtrip to the VM service required).
 class DocumentHistoryCubit extends Cubit<DocumentHistoryState> {
   DocumentHistoryCubit(this.args) : super(DocumentHistoryState.initial()) {
-    _load();
+    unawaited(_load());
     _setupEventSubscription();
   }
 
@@ -42,7 +42,7 @@ class DocumentHistoryCubit extends Cubit<DocumentHistoryState> {
     _eventStreamSubscription = args.service.onExtensionEvent.listen((event) {
       if (event.isDocumentChangedEvent &&
           event.documentId == args.document.id) {
-        _load();
+        unawaited(_load());
       }
     });
   }
@@ -50,7 +50,7 @@ class DocumentHistoryCubit extends Cubit<DocumentHistoryState> {
   Future<void> _load() async {
     if (state.loading) return;
 
-    emit(state.copyWith(loading: true, error: null));
+    emit(state.copyWith(loading: true));
 
     try {
       _alive?.dispose();
@@ -114,7 +114,7 @@ class DocumentHistoryCubit extends Cubit<DocumentHistoryState> {
   @override
   Future<void> close() {
     _alive?.dispose();
-    _eventStreamSubscription?.cancel();
+    unawaited(_eventStreamSubscription?.cancel());
     return super.close();
   }
 }

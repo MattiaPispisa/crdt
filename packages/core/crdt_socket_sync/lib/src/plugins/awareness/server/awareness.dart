@@ -40,9 +40,11 @@ class ServerAwarenessPlugin extends ServerSyncPlugin {
 
     switch (message.type) {
       case AwarenessMessageType.awarenessUpdate:
-        _handleAwarenessUpdate(
-          session,
-          message as AwarenessUpdateMessage,
+        unawaited(
+          _handleAwarenessUpdate(
+            session,
+            message as AwarenessUpdateMessage,
+          ),
         );
         return;
       case AwarenessMessageType.awarenessQuery:
@@ -90,7 +92,7 @@ class ServerAwarenessPlugin extends ServerSyncPlugin {
     ClientSession session,
     AwarenessQueryMessage message,
   ) {
-    _sendAwarenessStateToClient(message.documentId, session.id);
+    unawaited(_sendAwarenessStateToClient(message.documentId, session.id));
   }
 
   @override
@@ -107,7 +109,7 @@ class ServerAwarenessPlugin extends ServerSyncPlugin {
         _documentAwareness[documentId] =
             awareness.copyWithRemovedClient(session.id);
 
-        _broadcastAwarenessState(documentId);
+        unawaited(_broadcastAwarenessState(documentId));
 
         _updateController(
           ServerAwarenessEvent(
@@ -123,7 +125,7 @@ class ServerAwarenessPlugin extends ServerSyncPlugin {
   @override
   void dispose() {
     _documentAwareness.clear();
-    _awarenessController.close();
+    unawaited(_awarenessController.close());
   }
 
   /// broadcast the **full** awareness state to all clients
@@ -207,14 +209,18 @@ class ServerAwarenessPlugin extends ServerSyncPlugin {
 
     // send to all clients except the one that joined
     // the new incoming data
-    _broadcastAwarenessUpdate(
-      documentId,
-      session.id,
-      excludeClientIds: [session.id],
+    unawaited(
+      _broadcastAwarenessUpdate(
+        documentId,
+        session.id,
+        excludeClientIds: [session.id],
+      ),
     );
-    _sendAwarenessStateToClient(
-      documentId,
-      session.id,
+    unawaited(
+      _sendAwarenessStateToClient(
+        documentId,
+        session.id,
+      ),
     );
 
     _updateController(

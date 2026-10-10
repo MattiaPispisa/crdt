@@ -4,6 +4,8 @@ library;
 // End-to-end test against a real relay server on ws://localhost:8787: one of
 // ../server, ../server_dart_frog, ../server_serverpod. Run explicitly with:
 //   flutter test --dart-define=E2E=true test/e2e_test.dart
+import 'dart:async';
+
 import 'dart:math';
 import 'dart:ui';
 
@@ -45,7 +47,8 @@ _makeClient(String roomId, String name) {
     document: doc,
     author: doc.peerId,
     plugins: [awareness.plugin],
-  )..connect();
+  );
+  unawaited(sync.connect());
   return (doc: doc, text: text, sync: sync, awareness: awareness);
 }
 
@@ -74,7 +77,7 @@ void main() {
       a.text.insert(0, 'hello');
       await _eventually(
         () => b.text.value == 'hello',
-        reason: 'A\'s edit reaches B',
+        reason: "A's edit reaches B",
       );
 
       b.text.insert(5, ' world');
@@ -89,7 +92,7 @@ void main() {
         () => b.awareness.peers.value.values.any(
           (p) => p.name == 'Ann' && p.base != null,
         ),
-        reason: 'B sees Ann\'s cursor',
+        reason: "B sees Ann's cursor",
       );
 
       // A late joiner catches up from the persisted log/snapshot.

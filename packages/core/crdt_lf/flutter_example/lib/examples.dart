@@ -10,13 +10,6 @@ import 'package:shared_examples_infrastructure/shared_examples_infrastructure.da
 const _docsUrl = 'https://mattiapispisa.github.io/crdt/';
 const _pubDevUrl = 'https://pub.dev/packages/crdt_lf';
 
-/// Signature of the shared example screen builders.
-typedef _ExampleScreen =
-    Widget Function({
-      required SessionsFactory sessionsFactory,
-      AppBarActionsBuilder? appBarActionsBuilder,
-    });
-
 // Two distinct peers per example, sharing one in-memory network bus.
 final _todoAuthors = [
   PeerId.parse('79a716de-176e-4347-ba6e-1d9a2de02e15'),
@@ -44,7 +37,14 @@ List<Widget> _appBarActions(List<ExampleSyncSession> _) => const [
 
 /// Wraps a shared example [screen] with two simulated peers over the app's
 /// [Network] (read from the widget tree at navigation time).
-WidgetBuilder _simulated(_ExampleScreen screen, List<PeerId> authors) {
+WidgetBuilder _simulated(
+  Widget Function({
+    required SessionsFactory sessionsFactory,
+    AppBarActionsBuilder? appBarActionsBuilder,
+  })
+  screen,
+  List<PeerId> authors,
+) {
   return (context) {
     final network = context.read<Network>();
     return screen(
