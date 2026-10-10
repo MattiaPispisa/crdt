@@ -2,11 +2,10 @@ import 'package:crdt_lf/crdt_lf.dart';
 import 'package:crdt_lf_flutter/crdt_lf_flutter.dart' show CrdtHandlerBuilder;
 import 'package:flutter/material.dart';
 import 'package:shared_examples_infrastructure/examples/ids.dart';
+import 'package:shared_examples_infrastructure/examples/todo_list/_state.dart';
+import 'package:shared_examples_infrastructure/examples/todo_list/_todo_item.dart';
 import 'package:shared_examples_infrastructure/shared/document_pane.dart';
 import 'package:shared_examples_infrastructure/shared/example_scaffold.dart';
-
-import '_state.dart';
-import '_todo_item.dart';
 
 /// Builds the Todo List example screen (backed by `CRDTListHandler`) from the
 /// given [sessionsFactory].

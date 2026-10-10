@@ -1,3 +1,15 @@
+## [0.5.3](https://github.com/MattiaPispisa/crdt/tree/crdt_lf_flutter-v0.5.3/packages/core/crdt_lf_flutter)
+
+**Date:** --
+
+[compare to previous release](https://github.com/MattiaPispisa/crdt/compare/crdt_lf_flutter-v0.5.2...crdt_lf_flutter-v0.5.3)
+
+### Fixed
+
+- `dispose` handles its async work better: the futures it does not wait for
+  (closing streams, cancelling subscriptions) are now in `unawaited`.
+  No change in behavior.
+
 ## [0.5.2](https://github.com/MattiaPispisa/crdt/tree/crdt_lf_flutter-v0.5.2/packages/core/crdt_lf_flutter)
 
 **Date:** 2026-10-04

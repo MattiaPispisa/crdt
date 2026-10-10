@@ -122,7 +122,7 @@ class AwarenessService {
   }
 
   void dispose() {
-    _subscription?.cancel();
+    unawaited(_subscription?.cancel());
     _subscription = null;
     peers.dispose();
   }

@@ -1951,8 +1951,8 @@ class CRDTDocument extends BaseCRDTDocument {
     }
 
     _flushDeltaEvents();
-    _eventsController.close();
-    _updatesController.close();
+    unawaited(_eventsController.close());
+    unawaited(_updatesController.close());
     for (final manager in [...?_undoManagers]) {
       manager.dispose();
     }

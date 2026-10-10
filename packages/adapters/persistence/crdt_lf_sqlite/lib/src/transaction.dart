@@ -106,12 +106,14 @@ void _hold(sq.Database database, Future<void> work) {
     onError: (Object _, StackTrace __) {},
   );
   _running[database] = gate;
-  gate.whenComplete(() {
-    // Only when nothing queued behind it: a later transaction owns the slot.
-    if (identical(_running[database], gate)) {
-      _running[database] = null;
-    }
-  });
+  unawaited(
+    gate.whenComplete(() {
+      // Only when nothing queued behind it: a later transaction owns the slot.
+      if (identical(_running[database], gate)) {
+        _running[database] = null;
+      }
+    }),
+  );
 }
 
 void _rollback(sq.Database database, String savepoint) {

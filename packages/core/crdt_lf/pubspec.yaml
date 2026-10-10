@@ -4,7 +4,7 @@ homepage: https://mattiapispisa.github.io/
 repository: https://github.com/MattiaPispisa/crdt/tree/main/packages/core/crdt_lf
 topics: [crdt, local-first, fugue, hlc]
 
-version: 5.1.1
+version: 5.1.2
 
 environment:
   sdk: ">=3.3.0 <4.0.0"
@@ -18,3 +18,5 @@ dev_dependencies:
     path: ../../_internal/benchmark_infrastructure
   mocktail: ^1.0.0
   test: ^1.24.0
+  ws_lint:
+    path: ../../_internal/ws_lint

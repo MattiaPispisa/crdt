@@ -1,8 +1,8 @@
-import 'package:flutter/material.dart';
 import 'package:crdt_socket_sync_client_example/_logger.dart';
 import 'package:crdt_socket_sync_client_example/_persistence.dart';
 import 'package:crdt_socket_sync_client_example/routing.dart';
 import 'package:crdt_socket_sync_client_example/user/_state.dart';
+import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// Default server URL; override at build time with
@@ -24,7 +24,7 @@ void main() async {
 /// Root widget of the socket client example.
 class MyApp extends StatelessWidget {
   /// Creates the app with the resolved [preferences].
-  const MyApp({super.key, required this.preferences});
+  const MyApp({required this.preferences, super.key});
 
   /// Persisted preferences (server URL, display name).
   final SharedPreferences preferences;

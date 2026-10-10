@@ -57,7 +57,7 @@ final class _ThrowingTextHandler extends CRDTTextHandler {
 
 void main() {
   group('cost when nobody watches', () {
-    test('an imported change waits for a read', () async {
+    test('an imported change waits for a read', () {
       final source = CRDTDocument();
       final sourceText = CRDTTextHandler(source, 'text')..insert(0, 'hello');
       final mirror = _mirrorOf(source);

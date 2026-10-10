@@ -8,10 +8,10 @@ import 'package:url_launcher/url_launcher.dart';
 class AppBarLinks extends StatelessWidget {
   /// Creates the app bar external links.
   const AppBarLinks({
-    super.key,
     required this.docsUrl,
     required this.pubDevUrl,
     required this.pubTooltip,
+    super.key,
   });
 
   /// Documentation URL.
@@ -24,7 +24,7 @@ class AppBarLinks extends StatelessWidget {
   final String pubTooltip;
 
   Future<void> _open(String url) {
-    return launchUrl(Uri.parse(url), mode: LaunchMode.platformDefault);
+    return launchUrl(Uri.parse(url));
   }
 
   @override

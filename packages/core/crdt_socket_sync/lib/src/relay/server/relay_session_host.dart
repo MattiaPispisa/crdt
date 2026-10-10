@@ -86,6 +86,8 @@ class RelaySessionHost extends SessionHostServer<RelayClientSession> {
 
   @protected
   @override
+  // `async` lets one switch return both void and Future handlers.
+  // ignore: unnecessary_async
   FutureOr<void> handleSessionEvent(SessionEvent event) async {
     if (event is RelaySessionEvent) {
       switch (event.type) {

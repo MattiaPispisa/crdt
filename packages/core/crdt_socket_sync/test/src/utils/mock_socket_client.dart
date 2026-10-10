@@ -78,7 +78,7 @@ class MockCRDTSocketClient extends CRDTSocketClient {
   @override
   void dispose() {
     closeClientStreams();
-    _messagesController.close();
+    unawaited(_messagesController.close());
   }
 
   // The protected surface, reachable from a test.

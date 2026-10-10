@@ -1,7 +1,7 @@
-import 'package:flutter/material.dart';
 import 'package:crdt_socket_sync_client_example/connect_page.dart';
 import 'package:crdt_socket_sync_client_example/examples.dart';
 import 'package:crdt_socket_sync_client_example/generated.dart';
+import 'package:flutter/material.dart';
 import 'package:shared_examples_infrastructure/shared_examples_infrastructure.dart';
 
 /// Application routes: the connect page, the shared examples home, and one

@@ -11,7 +11,7 @@ library;
 
 /// CRDT handler ids used by the example states.
 abstract final class ExampleHandlerIds {
-  /// Todo list handler id.
+  /// Handler id of the todo list.
   static const String todoList = 'todo-list';
 
   /// Sortable todo list handler id.
@@ -23,7 +23,7 @@ abstract final class ExampleHandlerIds {
 
 /// Document ids used by the socket client + server to address each example.
 abstract final class ExampleDocumentIds {
-  /// Todo list document id.
+  /// Document id of the todo list.
   static const String todoList = 'a1b2c3d4-0001-4000-8000-000000000001';
 
   /// Sortable todo list document id.

@@ -25,8 +25,8 @@ void main() {
       manager = RelaySyncManager(document: document, client: client);
     });
 
-    tearDown(() {
-      manager.dispose();
+    tearDown(() async {
+      await manager.dispose();
       client.dispose();
       document.dispose();
     });

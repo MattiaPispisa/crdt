@@ -271,7 +271,7 @@ final class _DeltaHub<D extends ComposableDelta<D>> extends _DeltaHubBase
 
   @override
   void close() {
-    _controller?.close();
+    unawaited(_controller?.close());
     _controller = null;
   }
 

@@ -4,7 +4,7 @@ homepage: https://mattiapispisa.github.io/
 repository: https://github.com/MattiaPispisa/crdt/tree/main/packages/core/crdt_lf_flutter
 topics: [crdt, local-first, flutter, reactive]
 
-version: 0.5.2
+version: 0.5.3
 
 environment:
   sdk: ">=3.3.0 <4.0.0"
@@ -18,9 +18,10 @@ dependencies:
 dev_dependencies:
   benchmark_infrastructure:
     path: ../../_internal/benchmark_infrastructure
-  flutter_lints: ^6.0.0
   flutter_test:
     sdk: flutter
+  ws_lint:
+    path: ../../_internal/ws_lint
 
 flutter:
   uses-material-design: true

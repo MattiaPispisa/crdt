@@ -141,6 +141,8 @@ abstract class SessionHostServer<S extends ClientSession>
   /// Overrides deal with their own protocol's events first and forward the
   /// rest with `super.handleSessionEvent(event)`.
   @protected
+  // `async` lets one switch return both void and Future handlers.
+  // ignore: unnecessary_async
   FutureOr<void> handleSessionEvent(SessionEvent event) async {
     if (event is SessionEventGeneric) {
       switch (event.type) {

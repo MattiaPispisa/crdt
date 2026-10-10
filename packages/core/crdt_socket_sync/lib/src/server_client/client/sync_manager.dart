@@ -70,7 +70,7 @@ class SyncManager {
   /// {@endtemplate}
   void applyChange(Change change) {
     if (_applyOne(change)) {
-      requestDocumentStatus();
+      unawaited(requestDocumentStatus());
     }
   }
 
@@ -114,7 +114,7 @@ class SyncManager {
     }
 
     if (gap) {
-      requestDocumentStatus();
+      unawaited(requestDocumentStatus());
     }
   }
 
@@ -179,7 +179,7 @@ class SyncManager {
 
   /// Dispose the resources
   void dispose() {
-    _localChangesSubscription?.cancel();
+    unawaited(_localChangesSubscription?.cancel());
     _localChangesSubscription = null;
   }
 }

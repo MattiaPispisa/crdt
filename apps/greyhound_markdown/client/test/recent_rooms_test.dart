@@ -1,11 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:intl/intl.dart';
-
 import 'package:greyhound_markdown_client/l10n/gen/app_l10n.dart';
 import 'package:greyhound_markdown_client/src/application/application.dart';
 import 'package:greyhound_markdown_client/src/widgets/recent_rooms.dart';
+import 'package:intl/intl.dart';
 
 import 'helpers/localized_app.dart';
 import 'helpers/memory_storage.dart';

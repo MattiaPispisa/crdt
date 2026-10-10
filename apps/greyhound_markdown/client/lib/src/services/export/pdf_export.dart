@@ -1,11 +1,10 @@
 import 'dart:typed_data';
 
 import 'package:flutter/services.dart' show rootBundle;
+import 'package:greyhound_markdown_client/src/config.dart';
 import 'package:markdown/markdown.dart' as md;
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
-
-import 'package:greyhound_markdown_client/src/config.dart';
 
 /// Renders [markdown] as an A4 PDF titled [title].
 ///

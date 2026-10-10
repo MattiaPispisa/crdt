@@ -5,10 +5,9 @@ import 'package:crdt_lf_flutter/crdt_lf_flutter.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-
-import 'package:greyhound_markdown_client/src/l10n/placeholder_markdown.dart';
 import 'package:greyhound_markdown_client/src/application/application.dart';
 import 'package:greyhound_markdown_client/src/config.dart';
+import 'package:greyhound_markdown_client/src/l10n/placeholder_markdown.dart';
 import 'package:greyhound_markdown_client/src/services/awareness/awareness_service.dart';
 import 'package:greyhound_markdown_client/src/widgets/editor_toolbar.dart';
 import 'package:greyhound_markdown_client/src/widgets/line_number_gutter.dart';
@@ -29,9 +28,9 @@ const TextStyle kEditorTextStyle = TextStyle(
 /// reachable from the keyboard while focus is inside the pane.
 ///
 /// Three local view options come from [UserSettingsCubit]: an optional
-/// line-number gutter, word wrap, and the welcome placeholder. They are read inside
-/// [CrdtTextFieldBuilder.builder] rather than above the pane, so flipping one
-/// never rebuilds the CRDT binding.
+/// line-number gutter, word wrap, and the welcome placeholder. They are read
+/// inside [CrdtTextFieldBuilder.builder] rather than above the pane, so
+/// flipping one never rebuilds the CRDT binding.
 ///
 /// The cursors listenable sits inside [CrdtTextFieldBuilder.builder] so that
 /// presence repaints never rebuild the text field itself.
@@ -295,8 +294,8 @@ class _EditorSurfaceState extends State<EditorSurface> {
                   final gutterWidth = options.lineNumbers
                       ? lineNumberGutterWidth(lineCount, numberStyle)
                       : 0.0;
-                  final viewport = math.max(
-                    0.0,
+                  final viewport = math.max<double>(
+                    0,
                     constraints.maxWidth - gutterWidth,
                   );
                   return Row(

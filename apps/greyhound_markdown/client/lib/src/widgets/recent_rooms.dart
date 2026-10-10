@@ -1,11 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:intl/intl.dart';
-
 import 'package:greyhound_markdown_client/l10n/gen/app_l10n.dart';
 import 'package:greyhound_markdown_client/src/application/application.dart';
 import 'package:greyhound_markdown_client/src/config.dart';
 import 'package:greyhound_markdown_client/src/l10n/l10n_extension.dart';
+import 'package:intl/intl.dart';
 
 /// The rooms this device opened last, as a discreet list of shortcuts back
 /// into them.

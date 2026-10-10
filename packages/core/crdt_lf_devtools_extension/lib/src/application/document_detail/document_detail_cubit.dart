@@ -24,10 +24,10 @@ class DocumentDetailCubitArgs {
 /// Cubit loading the full state of a single document, including handler list.
 ///
 /// Reloads when the target emits `crdt_lf:document:changed` for
-/// [args.document], so each newly applied change refreshes the visible state.
+/// `args.document`, so each newly applied change refreshes the visible state.
 class DocumentDetailCubit extends Cubit<DocumentDetailState> {
   DocumentDetailCubit(this.args) : super(DocumentDetailState.initial()) {
-    _load();
+    unawaited(_load());
     _setupEventSubscription();
   }
 
@@ -40,7 +40,7 @@ class DocumentDetailCubit extends Cubit<DocumentDetailState> {
     _eventStreamSubscription = args.service.onExtensionEvent.listen((event) {
       if (event.isDocumentChangedEvent &&
           event.documentId == args.document.id) {
-        _load();
+        unawaited(_load());
       }
     });
   }
@@ -48,7 +48,7 @@ class DocumentDetailCubit extends Cubit<DocumentDetailState> {
   Future<void> _load() async {
     if (state.loading) return;
 
-    emit(state.copyWith(loading: true, error: null));
+    emit(state.copyWith(loading: true));
 
     try {
       _alive?.dispose();
@@ -83,7 +83,7 @@ class DocumentDetailCubit extends Cubit<DocumentDetailState> {
   @override
   Future<void> close() {
     _alive?.dispose();
-    _eventStreamSubscription?.cancel();
+    unawaited(_eventStreamSubscription?.cancel());
     return super.close();
   }
 }

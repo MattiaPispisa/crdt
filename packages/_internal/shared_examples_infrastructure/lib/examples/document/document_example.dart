@@ -1,12 +1,11 @@
 import 'package:crdt_lf/crdt_lf.dart';
 import 'package:crdt_lf_flutter/crdt_lf_flutter.dart' show CrdtHandlerBuilder;
 import 'package:flutter/material.dart';
+import 'package:shared_examples_infrastructure/examples/document/_state.dart';
+import 'package:shared_examples_infrastructure/examples/document/_views.dart';
 import 'package:shared_examples_infrastructure/examples/ids.dart';
 import 'package:shared_examples_infrastructure/shared/document_pane.dart';
 import 'package:shared_examples_infrastructure/shared/example_scaffold.dart';
-
-import '_state.dart';
-import '_views.dart';
 
 /// Builds the nested Document example screen (built on the reference handlers)
 /// from the given [sessionsFactory].
