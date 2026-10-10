@@ -2,7 +2,7 @@ import 'package:flutter/widgets.dart';
 
 /// The language the app is shown in.
 ///
-/// An enum rather than a nullable `Locale` field, so it mirrors [ThemeMode]:
+/// An enum rather than a nullable `Locale` field, so it mirrors `ThemeMode`:
 /// [system] is a real value, which keeps `copyWith` free of a "clear" flag and
 /// lets the setting be stored by name.
 ///

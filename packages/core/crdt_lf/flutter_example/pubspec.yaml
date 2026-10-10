@@ -24,10 +24,9 @@ dependencies:
 dev_dependencies:
   flutter_test:
     sdk: flutter
-
-  test: 
-  flutter_lints: ^5.0.0
-
+  test:
+  ws_lint:
+    path: ../../../_internal/ws_lint
 
 flutter:
   uses-material-design: true

@@ -1,17 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '_state.dart';
+import 'package:shared_examples_infrastructure/examples/sortable_todo_list/_state.dart';
 
 /// A single row of the sortable todo list: checkbox, text, delete and (when
 /// interactive) a drag handle to reorder.
 class SortableTodoItem extends StatelessWidget {
   /// Creates a sortable todo item.
   const SortableTodoItem({
-    super.key,
     required this.todo,
     required this.index,
     required this.interactive,
+    super.key,
   });
 
   /// The todo to render.
@@ -55,7 +55,7 @@ class SortableTodoItem extends StatelessWidget {
             ReorderableDragStartListener(
               index: index,
               child: const Padding(
-                padding: EdgeInsets.symmetric(horizontal: 8.0),
+                padding: EdgeInsets.symmetric(horizontal: 8),
                 child: Icon(Icons.drag_handle),
               ),
             ),

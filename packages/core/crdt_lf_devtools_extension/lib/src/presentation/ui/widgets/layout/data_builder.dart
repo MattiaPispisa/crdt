@@ -4,11 +4,11 @@ import 'package:flutter/material.dart';
 
 class AppDataBuilder<T> extends StatelessWidget {
   const AppDataBuilder({
-    super.key,
     required this.loading,
     required this.error,
     required this.data,
     required this.builder,
+    super.key,
   });
 
   final String? error;

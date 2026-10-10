@@ -41,6 +41,7 @@ updates:
       - "/packages/_internal/benchmark_infrastructure"
       - "/packages/_internal/persistence_conformance"
       - "/packages/_internal/shared_examples_infrastructure"
+      - "/packages/_internal/ws_lint"
       - "/apps/greyhound_markdown/client"
       - "/apps/greyhound_markdown/server_dart_frog"
       - "/apps/greyhound_markdown/server_serverpod"

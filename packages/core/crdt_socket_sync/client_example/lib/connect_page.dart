@@ -1,6 +1,6 @@
-import 'package:flutter/material.dart';
 import 'package:crdt_socket_sync_client_example/user/_state.dart';
 import 'package:crdt_socket_sync_client_example/widgets/custom_form_field.dart';
+import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 /// Entry screen: pick the server URL (and a display name), then open the

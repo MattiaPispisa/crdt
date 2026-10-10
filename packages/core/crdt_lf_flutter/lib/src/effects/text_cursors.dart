@@ -269,7 +269,7 @@ class _CrdtTextCursorsOverlayState extends State<CrdtTextCursorsOverlay>
 
   @override
   void dispose() {
-    _subscription?.cancel();
+    unawaited(_subscription?.cancel());
     _ticker.dispose();
     _repaint.dispose();
     super.dispose();
@@ -401,7 +401,7 @@ class _CrdtTextCursorsOverlayState extends State<CrdtTextCursorsOverlay>
   }
 
   void _attach(CRDTDocument document) {
-    _subscription?.cancel();
+    unawaited(_subscription?.cancel());
     _document = document;
     _lastRevision = document.revisionForHandler(widget.id);
     _handler(); // fail fast on a wrong handler type

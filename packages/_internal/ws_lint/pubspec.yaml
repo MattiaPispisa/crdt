@@ -1,0 +1,14 @@
+name: ws_lint
+description: >-
+  Private, unpublished package holding the analysis options every package
+  of the workspace includes.
+publish_to: "none"
+
+version: 1.0.0
+
+environment:
+  sdk: ^3.8.0
+
+dependencies:
+  flutter_lints: ^6.0.0
+  lints: ^6.0.0

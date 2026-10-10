@@ -1,3 +1,15 @@
+## [5.1.2](https://github.com/MattiaPispisa/crdt/tree/crdt_lf-v5.1.2/packages/core/crdt_lf)
+
+**Date:** --
+
+[compare to previous release](https://github.com/MattiaPispisa/crdt/compare/crdt_lf-v5.1.1...crdt_lf-v5.1.2)
+
+### Fixed
+
+- `dispose` handles its async work better: the futures it does not wait for
+  (closing streams, cancelling subscriptions) are now in `unawaited`.
+  No change in behavior.
+
 ## [5.1.1](https://github.com/MattiaPispisa/crdt/tree/crdt_lf-v5.1.1/packages/core/crdt_lf)
 
 **Date:** 2026-10-07

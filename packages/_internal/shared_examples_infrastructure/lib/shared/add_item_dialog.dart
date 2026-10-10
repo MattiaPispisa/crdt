@@ -5,8 +5,8 @@ import 'package:flutter/material.dart';
 class AddItemDialog extends StatefulWidget {
   /// Creates an add-item dialog.
   const AddItemDialog({
-    super.key,
     required this.onAdd,
+    super.key,
     this.title = 'Add New Todo',
     this.hint = 'Enter todo text',
   });

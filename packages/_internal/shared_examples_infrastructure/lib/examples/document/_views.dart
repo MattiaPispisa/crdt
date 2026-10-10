@@ -1,22 +1,23 @@
+import 'dart:async';
+
 import 'package:crdt_lf/crdt_lf.dart';
-import 'package:shared_examples_infrastructure/shared/crdt_text_field.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-
-import '_blocks.dart';
-import '_state.dart';
+import 'package:shared_examples_infrastructure/examples/document/_blocks.dart';
+import 'package:shared_examples_infrastructure/examples/document/_state.dart';
+import 'package:shared_examples_infrastructure/shared/crdt_text_field.dart';
 
 /// Up / down reorder buttons plus a delete button, shared by every level.
 class ReorderControls extends StatelessWidget {
   /// Creates reorder controls.
   const ReorderControls({
-    super.key,
     required this.interactive,
     required this.canMoveUp,
     required this.canMoveDown,
     required this.onMoveUp,
     required this.onMoveDown,
     required this.onDelete,
+    super.key,
   });
 
   /// Whether the controls are enabled.
@@ -70,11 +71,11 @@ class ReorderControls extends StatelessWidget {
 class ChapterCard extends StatelessWidget {
   /// Creates a chapter card.
   const ChapterCard({
-    super.key,
     required this.chapter,
     required this.index,
     required this.count,
     required this.interactive,
+    super.key,
   });
 
   /// The chapter container handler.
@@ -166,12 +167,12 @@ class ChapterCard extends StatelessWidget {
 class ParagraphCard extends StatelessWidget {
   /// Creates a paragraph card.
   const ParagraphCard({
-    super.key,
     required this.paragraph,
     required this.parentList,
     required this.index,
     required this.count,
     required this.interactive,
+    super.key,
   });
 
   /// The paragraph container handler.
@@ -262,26 +263,28 @@ class ParagraphCard extends StatelessWidget {
     DocumentExampleState state,
     CRDTMovableListRefHandler blocks,
   ) {
-    showModalBottomSheet<void>(
-      context: context,
-      builder:
-          (sheetContext) => SafeArea(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const ListTile(title: Text('Add block')),
-                for (final spec in state.blockSpecs)
-                  ListTile(
-                    leading: Icon(spec.icon),
-                    title: Text(spec.label),
-                    onTap: () {
-                      Navigator.of(sheetContext).pop();
-                      state.addBlock(blocks, spec);
-                    },
-                  ),
-              ],
+    unawaited(
+      showModalBottomSheet<void>(
+        context: context,
+        builder:
+            (sheetContext) => SafeArea(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const ListTile(title: Text('Add block')),
+                  for (final spec in state.blockSpecs)
+                    ListTile(
+                      leading: Icon(spec.icon),
+                      title: Text(spec.label),
+                      onTap: () {
+                        Navigator.of(sheetContext).pop();
+                        state.addBlock(blocks, spec);
+                      },
+                    ),
+                ],
+              ),
             ),
-          ),
+      ),
     );
   }
 }
@@ -291,12 +294,12 @@ class ParagraphCard extends StatelessWidget {
 class BlockCard extends StatelessWidget {
   /// Creates a block card.
   const BlockCard({
-    super.key,
     required this.block,
     required this.parentList,
     required this.index,
     required this.count,
     required this.interactive,
+    super.key,
   });
 
   /// The block container handler.
@@ -347,7 +350,7 @@ class BlockCard extends StatelessWidget {
             ],
           ),
           if (spec != null)
-            spec.buildBody(context, state, block, interactive)
+            spec.buildBody(context, state, block, interactive: interactive)
           else
             const Text(
               'Unsupported block',

@@ -137,8 +137,8 @@ String? documentTitle(String markdown) {
 String fileNameOf(String title, {required String fallback}) {
   final slug = title
       .toLowerCase()
-      .replaceAll(RegExp(r'[^a-z0-9]+'), '-')
-      .replaceAll(RegExp('^-+|-+\$'), '');
+      .replaceAll(RegExp('[^a-z0-9]+'), '-')
+      .replaceAll(RegExp(r'^-+|-+$'), '');
   if (slug.isEmpty) {
     return fallback;
   }

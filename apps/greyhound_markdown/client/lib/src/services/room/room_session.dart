@@ -7,7 +7,7 @@ import 'package:greyhound_markdown_client/src/services/awareness/awareness_servi
 
 /// An open room, with everything the UI needs to draw it.
 ///
-/// Built by [RoomHost] and handed out by `RoomBuilder`. Nothing here is the
+/// Built by `RoomHost` and handed out by `RoomBuilder`. Nothing here is the
 /// caller's to dispose: the room owns all of it for as long as it is open.
 class RoomSession {
   /// Creates a session over an already open room.

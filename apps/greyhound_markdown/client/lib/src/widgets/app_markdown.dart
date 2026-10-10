@@ -1,10 +1,11 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
-import 'package:url_launcher/url_launcher.dart';
-
 import 'package:greyhound_markdown_client/src/config.dart';
 import 'package:greyhound_markdown_client/src/widgets/'
     'code_element_builder.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 /// One builder per brightness, kept for the life of the app.
 ///
@@ -30,8 +31,8 @@ const EdgeInsets _kH1Padding = EdgeInsets.only(top: 22, bottom: 4);
 const EdgeInsets _kH2Padding = EdgeInsets.only(top: 16, bottom: 3);
 const EdgeInsets _kH3Padding = EdgeInsets.only(top: 12, bottom: 2);
 const EdgeInsets _kH4Padding = EdgeInsets.only(top: 10, bottom: 1);
-const EdgeInsets _kH5Padding = EdgeInsets.only(top: 8, bottom: 0);
-const EdgeInsets _kH6Padding = EdgeInsets.only(top: 4, bottom: 0);
+const EdgeInsets _kH5Padding = EdgeInsets.only(top: 8);
+const EdgeInsets _kH6Padding = EdgeInsets.only(top: 4);
 
 /// Heading size per level, as a multiple of the body size.
 ///
@@ -148,7 +149,9 @@ class AppMarkdown extends StatelessWidget {
         if (href == null) {
           return;
         }
-        launchUrl(Uri.parse(href), mode: LaunchMode.externalApplication);
+        unawaited(
+          launchUrl(Uri.parse(href), mode: LaunchMode.externalApplication),
+        );
       },
     );
   }

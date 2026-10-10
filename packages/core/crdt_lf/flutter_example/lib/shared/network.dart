@@ -62,6 +62,8 @@ class Network extends ChangeNotifier {
   DelayLevel get delayLevel => _delayLevel;
 
   /// Enables or disables the random broadcast delay.
+  // A `Switch.onChanged` tear-off: the flag stays positional.
+  // ignore: avoid_positional_boolean_parameters
   void setRandomDelay(bool enabled) {
     if (_randomDelay == enabled) {
       return;
@@ -82,6 +84,8 @@ class Network extends ChangeNotifier {
   /// Sets the online status of the network.
   ///
   /// If transitioning to online, sends any queued offline changes.
+  // A `Switch.onChanged` tear-off: the flag stays positional.
+  // ignore: avoid_positional_boolean_parameters
   void setOnlineStatus(bool online) {
     // No change
     if (_isOnline == online) {
@@ -112,8 +116,8 @@ class Network extends ChangeNotifier {
   ///
   /// If the network is online, the change is broadcast (immediately, or after a
   /// random delay when [randomDelay] is enabled).
-  /// If offline, the change is queued and sent when the network comes back online.
-  /// Listeners will receive this change unless their listener ID matches the senderId.
+  /// If offline, the change is queued and sent when the network comes back
+  /// online. Every listener receives it, except the sender's own.
   void sendChange(Change change) {
     final changeTuple = (change.author, change);
     if (_isOnline) {
@@ -198,14 +202,14 @@ class Network extends ChangeNotifier {
   @override
   void dispose() {
     _deliveryTimer?.cancel();
-    _changesController.close();
+    unawaited(_changesController.close());
     super.dispose();
   }
 }
 
 class NetworkProvider extends StatelessWidget {
   /// Provide to children a [Network] instance.
-  const NetworkProvider({super.key, required this.child});
+  const NetworkProvider({required this.child, super.key});
 
   final Widget child;
 

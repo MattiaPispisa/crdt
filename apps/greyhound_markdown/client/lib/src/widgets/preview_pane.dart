@@ -3,10 +3,9 @@ import 'dart:async';
 import 'package:crdt_lf/crdt_lf.dart';
 import 'package:crdt_lf_flutter/crdt_lf_flutter.dart';
 import 'package:flutter/material.dart';
-
 import 'package:greyhound_markdown_client/src/application/application.dart';
-import 'package:greyhound_markdown_client/src/l10n/placeholder_markdown.dart';
 import 'package:greyhound_markdown_client/src/config.dart';
+import 'package:greyhound_markdown_client/src/l10n/placeholder_markdown.dart';
 import 'package:greyhound_markdown_client/src/widgets/app_markdown.dart';
 
 /// How long typing has to pause before the preview re-renders.

@@ -6,7 +6,7 @@ import 'package:shared_examples_infrastructure/shared_examples_infrastructure.da
 
 /// An [ExampleSyncSession] backed by the simulated in-memory [Network].
 ///
-/// Owns a fresh [CRDTDocument] for [author] and wires it to the shared network
+/// Owns a fresh [CRDTDocument] for `author` and wires it to the shared network
 /// bus: local changes are broadcast, remote changes (from the other peer) are
 /// applied. The bus preserves send order, so applied changes are always
 /// causally ready.
@@ -22,9 +22,7 @@ class SimulatedSyncSession implements ExampleSyncSession {
     this.textPresence,
   }) : document = CRDTDocument(peerId: author),
        _network = network {
-    _remote = _network.stream(document.peerId).listen((change) {
-      document.applyChange(change);
-    });
+    _remote = _network.stream(document.peerId).listen(document.applyChange);
     _local = document.localChanges.listen(_network.sendChange);
   }
 
@@ -43,8 +41,8 @@ class SimulatedSyncSession implements ExampleSyncSession {
 
   @override
   void dispose() {
-    _remote.cancel();
-    _local.cancel();
+    unawaited(_remote.cancel());
+    unawaited(_local.cancel());
     document.dispose();
   }
 }

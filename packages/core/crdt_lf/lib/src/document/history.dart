@@ -253,7 +253,7 @@ class HistorySession {
 
   /// Releases resources used by this session.
   void dispose() {
-    _cursorController.close();
+    unawaited(_cursorController.close());
     _document.dispose();
   }
 }

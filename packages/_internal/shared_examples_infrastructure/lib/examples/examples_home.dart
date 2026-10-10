@@ -22,10 +22,10 @@ class PackageVersion {
 class ExamplesHome extends StatelessWidget {
   /// Creates the examples landing page.
   const ExamplesHome({
-    super.key,
     required this.title,
     required this.logo,
     required this.examples,
+    super.key,
     this.versions = const [],
     this.actions = const [],
   });
@@ -64,7 +64,7 @@ class ExamplesHome extends StatelessWidget {
             child: ListView.separated(
               padding: const EdgeInsets.all(8),
               itemCount: examples.length,
-              separatorBuilder: (_, __) => const SizedBox(height: 8),
+              separatorBuilder: (_, _) => const SizedBox(height: 8),
               itemBuilder: (context, index) {
                 final example = examples[index];
                 return Card(
