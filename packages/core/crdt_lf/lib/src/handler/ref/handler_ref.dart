@@ -140,5 +140,8 @@ Object? nestedValueOf(Handler<dynamic> handler, Set<String> visiting) {
   if (handler is CRDTORMapHandler<dynamic, dynamic>) {
     return handler.value;
   }
+  if (handler is CRDTAggregateHandler<Object, dynamic>) {
+    return handler.value;
+  }
   return null;
 }

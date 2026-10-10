@@ -1,3 +1,19 @@
+## [5.2.0](https://github.com/MattiaPispisa/crdt/tree/crdt_lf-v5.2.0/packages/core/crdt_lf)
+
+**Date:** --
+
+[compare to previous release](https://github.com/MattiaPispisa/crdt/compare/crdt_lf-v5.1.1...crdt_lf-v5.2.0)
+
+### Added
+
+- `CRDTAggregateHandler`: one aggregate built from domain events replayed in `(HLC, author)`
+  order, with atomic `dispatchAll`, stable `EventId`s, deltas, undo and versioned migrations.
+
+### Changed
+
+- The cost of applying a change no longer grows with the number of handlers on the document;
+  a batch import routes each change by handler type and id, as the single-change path does.
+
 ## [5.1.1](https://github.com/MattiaPispisa/crdt/tree/crdt_lf-v5.1.1/packages/core/crdt_lf)
 
 **Date:** 2026-10-07

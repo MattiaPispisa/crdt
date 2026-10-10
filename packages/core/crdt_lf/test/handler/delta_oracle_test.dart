@@ -4,6 +4,8 @@ import 'dart:math';
 import 'package:crdt_lf/crdt_lf.dart';
 import 'package:test/test.dart';
 
+import '../helpers/asset_aggregate.dart';
+
 /// Lets the async delta stream deliver everything it holds.
 Future<void> _pump() => Future<void>.delayed(Duration.zero);
 
@@ -894,6 +896,55 @@ void main() {
       expect(projection.value, mirrorList.value);
 
       await projection.dispose();
+    });
+  });
+
+  group('CRDTAggregateHandler deltas', () {
+    test('two peers converge, each tracking its own projection', () async {
+      final peerA = CRDTDocument(peerId: PeerId.parse(_peerIdA));
+      final peerB = CRDTDocument(peerId: PeerId.parse(_peerIdB));
+      CRDTAggregateHandler<Asset, AssetEvent> create(CRDTDocument doc) =>
+          CRDTAggregateHandler<Asset, AssetEvent>(
+            doc,
+            'asset',
+            definition: const AssetAggregate(),
+          );
+      final assetA = create(peerA);
+      final assetB = create(peerB);
+
+      _Projection<Asset, AggregateDelta<Asset, AssetEvent>> watch(
+        CRDTAggregateHandler<Asset, AssetEvent> asset,
+      ) =>
+          _Projection<Asset, AggregateDelta<Asset, AssetEvent>>(
+            readSynced: asset.readSynced,
+            stream: asset.watch(),
+            applyDelta: (delta, base) => delta.apply(base),
+          );
+      final projectionA = watch(assetA);
+      final projectionB = watch(assetB);
+      await _pump();
+
+      final random = Random(19);
+      for (var round = 0; round < 30; round++) {
+        randomAssetEdit(assetA, random, round);
+        randomAssetEdit(assetB, random, round);
+
+        peerB.importChanges(
+          peerA.exportChanges(fromVersionVector: peerB.getVersionVector()),
+        );
+        peerA.importChanges(
+          peerB.exportChanges(fromVersionVector: peerA.getVersionVector()),
+        );
+
+        await _pump();
+        expect(projectionA.value, assetA.value, reason: 'A, round $round');
+        expect(projectionB.value, assetB.value, reason: 'B, round $round');
+      }
+
+      expect(assetA.value, assetB.value);
+
+      await projectionA.dispose();
+      await projectionB.dispose();
     });
   });
 

@@ -3,6 +3,7 @@ import 'dart:math';
 import 'package:crdt_lf/crdt_lf.dart';
 import 'package:test/test.dart';
 
+import '../helpers/asset_aggregate.dart';
 import '../helpers/pn_counter_handler.dart';
 
 /// Oracle tests: the incrementally-updated cached state must be identical
@@ -415,6 +416,18 @@ void main() {
       );
     });
 
+    test('CRDTAggregateHandler', () {
+      _remoteOracle<CRDTAggregateHandler<Asset, AssetEvent>>(
+        create: (doc) => CRDTAggregateHandler<Asset, AssetEvent>(
+          doc,
+          'asset',
+          definition: const AssetAggregate(),
+        ),
+        mutate: randomAssetEdit,
+        read: (asset) => asset.value,
+      );
+    });
+
     test('CRDTFugueMovableListHandler', () {
       _remoteOracle<CRDTFugueMovableListHandler<String>>(
         create: (doc) => CRDTFugueMovableListHandler<String>(
@@ -625,6 +638,20 @@ void main() {
         // round are indistinguishable and last-writer-wins proves nothing.
         mutate: (register, random, round) => register.set(random.nextInt(1000)),
         read: (register) => register.value,
+        keepsCache: false,
+        seed: 19,
+      );
+    });
+
+    test('CRDTAggregateHandler', () {
+      _concurrentOracle<CRDTAggregateHandler<Asset, AssetEvent>>(
+        create: (doc) => CRDTAggregateHandler<Asset, AssetEvent>(
+          doc,
+          'asset',
+          definition: const AssetAggregate(),
+        ),
+        mutate: randomAssetEdit,
+        read: (asset) => asset.value,
         keepsCache: false,
         seed: 19,
       );

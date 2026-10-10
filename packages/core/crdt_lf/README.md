@@ -54,6 +54,8 @@
         - [Naming a generic handler](#naming-a-generic-handler)
       - [Choosing How to Model Your Data](#choosing-how-to-model-your-data)
         - [Worked example: a TODO list](#worked-example-a-todo-list)
+        - [Aggregates built from events](#aggregates-built-from-events)
+          - [Versions and migrations](#versions-and-migrations)
         - [A quick decision guide](#a-quick-decision-guide)
         - [Picking a leaf handler](#picking-a-leaf-handler)
     - [Transaction](#transaction-1)
@@ -746,7 +748,9 @@ refuses a handler another manager already holds.
 
 `CRDTFugueTextHandler`, `CRDTFugueListHandler`, `CRDTFugueMovableListHandler`,
 `CRDTMapHandler`, `CRDTORMapHandler`, `CRDTORSetHandler`,
-`CRDTRegisterHandler` and the reference handlers built on them.
+`CRDTRegisterHandler` and the reference handlers built on them, and
+`CRDTAggregateHandler` when its definition is an
+`InvertibleAggregateDefinition`.
 
 `CRDTTextHandler` and `CRDTListHandler` are indexed by position alone. They have
 no element identity to anchor an inverse to, so `Handler.invertible` is `false`
@@ -777,6 +781,7 @@ Handlers are the core components of the library. They manage the state of a spec
 - `CRDTRegisterHandler`: Holds a single value with last-writer-wins (the scalar counterpart of the collections — a flag, a number, a non-collaborative string).
 - `CRDTORSetHandler`: Handles set editing with the Observed-Removed (OR) algorithm.
 - `CRDTORMapHandler`: Handles map editing with the Observed-Removed (OR) algorithm.
+- `CRDTAggregateHandler`: Holds one aggregate — an object with several fields — built from the events written on it (see [Aggregates built from events](#aggregates-built-from-events)).
 
 Container handlers, used to model nested structures (see [Nested Structures](#nested-structures-containers-and-references)):
 
@@ -1289,6 +1294,130 @@ item.child('done', doneKind).set(false);
 - A **movable** list keeps each item's identity across concurrent reorders (no
   duplicates). Costs more handlers and setup.
 
+##### Aggregates built from events
+
+Model C. An `Asset` has a name, notes and measures, and the app changes it
+through domain operations: create it, add a note, update a note. Write those
+operations as **events**, and say once how each event moves the state:
+
+```dart
+class AssetAggregate extends AggregateDefinition<Asset, AssetEvent> {
+  const AssetAggregate();
+
+  @override
+  String get handlerType => 'asset';
+
+  @override
+  Asset initial() => const Asset();
+
+  @override
+  Asset reduce(Asset state, AssetEvent event, EventContext context) =>
+      switch (event) {
+        Renamed(:final name) => state.copyWith(displayName: name),
+        // The note takes the id of the event that created it.
+        NoteAdded(:final text) => state.addNote(Note(context.id, text)),
+        NoteUpdated(:final note, :final text) => state.updateNote(note, text),
+      };
+
+  @override
+  ValueCodec<AssetEvent> get eventCodec => const AssetEventCodec();
+
+  @override
+  ValueCodec<Asset> get stateCodec => const AssetCodec();
+}
+
+final asset = doc.handler(
+  CRDTAggregateHandler.spec(const AssetAggregate()),
+  'asset-42',
+);
+asset.dispatchAll([const Renamed('P-101'), const NoteAdded('Installed')]);
+asset.dispatch(NoteUpdated(noteId, 'Serviced'));
+print(asset.value.displayName); // P-101
+```
+
+`CRDTAggregateHandler` replays the events of every peer in the replay order,
+`(HLC, author)`, through `reduce`. Peers that hold the same events hold the same
+state. What you get, compared with models A and B:
+
+- **One handler per aggregate**, with a typed `value`, one `watch()` stream and
+  one `CRDTUndoManager.track` (give the definition an `invert` by extending
+  `InvertibleAggregateDefinition`).
+- **Atomic writes.** `dispatchAll` puts its events in one change: a peer
+  receives all of them or none.
+- **Stable identities.** `EventContext.id` is the same on every peer, so an
+  entity an event creates can keep it, and later events name that entity instead
+  of a position that a concurrent insert may shift.
+
+The rules of `reduce` are what keeps peers equal:
+
+- **Pure and deterministic.** No clock, no randomness, no iteration over an
+  unordered set. Take the author and the event id from `EventContext`.
+- **Identities, never positions.** `NoteUpdated(noteId, …)`, not
+  `NoteUpdated(2, …)`.
+- **A new state for every event.** The handler keeps the state it returns and
+  hands it out as its `value`.
+- **An event on a missing target does nothing.** An update of a note another
+  peer removed finds nothing, and that is the merged result.
+
+What it does not do: merge two concurrent edits of the same field. The event
+later in the replay order wins, the whole field at once. For text that peers
+type together, keep a `CRDTFugueTextHandler` beside the aggregate. An event that
+arrives older than the newest one already applied makes the next read replay
+the aggregate's history since the last snapshot, so keep one aggregate small and
+take snapshots.
+
+###### Versions and migrations
+
+Events and the snapshot state are written in the definition's `version`. When
+the bytes of `eventCodec` or `stateCodec` change, or an event takes a new
+meaning in `reduce`, raise `version` and add one `AggregateMigration` from the
+previous version:
+
+```dart
+class AssetV1ToV2 extends AggregateMigration {
+  const AssetV1ToV2();
+
+  @override
+  int get from => 1;
+
+  @override
+  Uint8List upEvent(Uint8List event) => /* v1 event bytes → v2 */;
+
+  @override
+  Uint8List upState(Uint8List state) => /* v1 state bytes → v2 */;
+}
+
+class AssetAggregate extends AggregateDefinition<Asset, AssetEvent> {
+  @override
+  int get version => 2;
+
+  @override
+  int get minReadableVersion => 1;
+
+  @override
+  List<AggregateMigration> get migrations => const [AssetV1ToV2()];
+  // ...
+}
+```
+
+The history keeps the bytes each peer wrote, so a migration never rewrites it:
+it runs every time old data is read. Three rules follow:
+
+1. **Pure and deterministic**, like `reduce`.
+2. **One event in, one event out.** An event id is its place in its change, so
+   dropping or splitting an event would move the ids of the events after it.
+3. **`upState` agrees with `upEvent`.** The upgraded snapshot has to equal the
+   state the upgraded events replay to, or a peer that starts from a snapshot
+   diverges from one that replays the history. Keep the bytes an old build wrote
+   as test fixtures and check both paths.
+
+Every version travels under its own operation kind and snapshot blob version,
+so a build that meets a newer version refuses it, and the capability check of a
+sync layer reports the mismatch before that. Peers have to upgrade before they
+write in a new version. A snapshot is always written in the current version:
+once every replica took one that pruned the old events, raise
+`minReadableVersion` and drop the migrations below it.
+
 ##### A quick decision guide
 
 | Question                                                      | Lean towards                                                |
@@ -1298,6 +1427,7 @@ item.child('done', doneKind).set(false);
 | Item is atomic / co-editing is rare?                          | Flat value + LWW — model A                                  |
 | Need drag-to-reorder without duplicating on concurrent moves? | `CRDTMovableListRefHandler` / `CRDTFugueMovableListHandler` |
 | Order matters and peers insert at the same spot?              | A Fugue list (less interleaving)                            |
+| An object changed by domain events, as one unit?              | `CRDTAggregateHandler` — model C                            |
 
 ##### Picking a leaf handler
 

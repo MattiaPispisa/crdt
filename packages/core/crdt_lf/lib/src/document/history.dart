@@ -247,7 +247,9 @@ class HistorySession {
     }
 
     _cursor = cursor;
-    _document._visibleCount = _cursor;
+    _document
+      .._visibleCount = _cursor
+      .._cacheEpoch += 1;
     _cursorController.add(_cursor);
   }
 

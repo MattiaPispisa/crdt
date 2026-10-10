@@ -3,6 +3,8 @@ import 'dart:math';
 import 'package:crdt_lf/crdt_lf.dart';
 import 'package:test/test.dart';
 
+import '../helpers/asset_aggregate.dart';
+
 /// Oracle tests for [CRDTUndoManager]: undoing every step must bring the
 /// handler back to the value it started from, and redoing every step must
 /// bring it back to the value it ended on.
@@ -234,6 +236,23 @@ void main() {
       read: (handler) => (handler as CRDTRegisterHandler<String>).value,
       edit: (handler, random, step) =>
           (handler as CRDTRegisterHandler<String>).set('v$step'),
+    );
+
+    roundTrip(
+      name: 'CRDTAggregateHandler',
+      build: (doc) => CRDTAggregateHandler<Asset, AssetEvent>(
+        doc,
+        'asset',
+        definition: const AssetAggregate(),
+      )..dispatch(const Renamed('seed')),
+      read: (handler) =>
+          (handler as CRDTAggregateHandler<Asset, AssetEvent>).value,
+      edit: (handler, random, step) => randomAssetEdit(
+        handler as CRDTAggregateHandler<Asset, AssetEvent>,
+        random,
+        step,
+        undoable: true,
+      ),
     );
   });
 }
