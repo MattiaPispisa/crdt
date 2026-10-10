@@ -100,9 +100,10 @@ packages:
   crdt_lf:
     dependency: "direct main"
     description:
-      path: "../crdt_lf"
-      relative: true
-    source: path
+      name: crdt_lf
+      sha256: "43669b0163319bbad4ada0049273b9c5402614054857343311a0de73be957010"
+      url: "https://pub.dev"
+    source: hosted
     version: "5.1.1"
   crypto:
     dependency: transitive
@@ -209,10 +210,10 @@ packages:
     dependency: "direct dev"
     description:
       name: flutter_lints
-      sha256: "5398f14efa795ffb7a33e9b6a08798b26a180edac4ad7db3f231e40f82ce11e1"
+      sha256: "3105dc8492f6183fb076ccf1f351ac3d60564bff92e20bfc4af9cc1651f4e7e1"
       url: "https://pub.dev"
     source: hosted
-    version: "5.0.0"
+    version: "6.0.0"
   flutter_test:
     dependency: "direct dev"
     description: flutter
@@ -250,9 +251,10 @@ packages:
   hlc_dart:
     dependency: "direct overridden"
     description:
-      path: "../hlc"
-      relative: true
-    source: path
+      name: hlc_dart
+      sha256: b6e798b4fe648fa1a054a9541238e28ba6fe2e6fe28d7d7a2d13ca893187a127
+      url: "https://pub.dev"
+    source: hosted
     version: "1.2.0"
   http:
     dependency: transitive
@@ -322,10 +324,10 @@ packages:
     dependency: transitive
     description:
       name: lints
-      sha256: c35bb79562d980e9a453fc715854e1ed39e24e7d0297a880ef54e17f9874a9d7
+      sha256: "12f842a479589fea194fe5c5a3095abc7be0c1f2ddfa9a0e76aed1dbd26a87df"
       url: "https://pub.dev"
     source: hosted
-    version: "5.1.1"
+    version: "6.1.0"
   logging:
     dependency: transitive
     description:
