@@ -6,8 +6,26 @@ import 'package:hlc_dart/hlc_dart.dart';
 import 'package:test/test.dart';
 
 import '../../helpers/matcher.dart';
+import '../conformance/handler_conformance.dart';
 
 void main() {
+  // Non-BMP tokens, so every clause also walks text outside the BMP.
+  runHandlerConformanceTests(
+    spec: CRDTTextHandler.spec,
+    read: (text) => text.value,
+    edit: (text, random, token) {
+      final length = text.length;
+      switch (length == 0 ? 0 : random.nextInt(3)) {
+        case 0:
+          text.insert(random.nextInt(length + 1), '\u{1F600}$token');
+        case 1:
+          text.delete(random.nextInt(length), random.nextInt(3) + 1);
+        case _:
+          text.update(random.nextInt(length), '\u{1F389}$token');
+      }
+    },
+  );
+
   group('CRDTTextHandler', () {
     late String handlerId;
     late PeerId author;
@@ -27,7 +45,6 @@ void main() {
 
     test('exposes a stable handlerType (minification-safe factory key)', () {
       expect(text.handlerType, 'CRDTTextHandler');
-      expect(HandlerRef.of(text).type, 'CRDTTextHandler');
     });
 
     test('insert adds text at specified index', () {
@@ -151,54 +168,6 @@ void main() {
       expect(identical(value1, value2), isTrue);
     });
 
-    test('value recomputes when version changes', () {
-      text.insert(0, 'Hello');
-      final value1 = text.value;
-      text.insert(5, ' World');
-      final value2 = text.value;
-      expect(identical(value1, value2), isFalse);
-      expect(value2, equals('Hello World'));
-    });
-
-    test('value recomputes after cache invalidation', () {
-      text.insert(0, 'Hello');
-      final value1 = text.value;
-
-      // Force cache invalidation
-      text.insert(5, ' World');
-
-      final value2 = text.value;
-      expect(identical(value1, value2), isFalse);
-      expect(value2, equals('Hello World'));
-    });
-
-    test('should compound insert operations', () {
-      doc.runInTransaction(() {
-        text
-          ..insert(0, 'Hello')
-          ..insert(5, ' World');
-      });
-      expect(text.value, equals('Hello World'));
-    });
-
-    test('should compound insert operations with overlap', () {
-      doc.runInTransaction(() {
-        text
-          ..insert(0, 'Hello Flutter')
-          ..insert(5, ' World Dart');
-      });
-      expect(text.value, equals('Hello World Dart Flutter'));
-    });
-
-    test('should compound delete operations', () {
-      doc.runInTransaction(() {
-        text
-          ..insert(0, 'Hello Flutter')
-          ..delete(5, 8);
-      });
-      expect(text.value, equals('Hello'));
-    });
-
     test('should compound consecutive forward deletes (Delete key)', () {
       text.insert(0, 'Hello World');
       final before = doc.exportChanges().length;
@@ -228,21 +197,6 @@ void main() {
 
       expect(text.value, equals('Hello Wo'));
       expect(doc.exportChanges().length, before + 1);
-    });
-
-    test('compacted deletes replay identically on a remote peer', () {
-      final doc2 = CRDTDocument(peerId: PeerId.generate());
-      final text2 = CRDTTextHandler(doc2, handlerId);
-
-      text.insert(0, 'Hello World');
-      doc.runInTransaction(() {
-        text
-          ..delete(5, 1)
-          ..delete(5, 5);
-      });
-
-      doc2.importChanges(doc.exportChanges());
-      expect(text2.value, equals(text.value));
     });
 
     test('value maintains cache across multiple reads', () {
@@ -330,222 +284,6 @@ void main() {
       );
     });
 
-    test('should be able to continue from snapshot', () {
-      text
-        ..insert(0, 'Hello')
-        ..insert(5, ' World')
-        ..delete(5, 1);
-
-      doc.takeSnapshot();
-
-      text.insert(0, 'Beautiful');
-
-      expect(text.value, equals('BeautifulHelloWorld'));
-    });
-
-    test('operations from different peers merge correctly using snapshots', () {
-      final doc1 = CRDTDocument();
-      final doc2 = CRDTDocument();
-      final text1 = CRDTTextHandler(doc1, 'test-text');
-      final text2 = CRDTTextHandler(doc2, 'test-text');
-
-      text1.insert(0, 'Hello');
-      text2.insert(0, 'World');
-
-      doc1.importChanges(doc2.exportChanges());
-      doc2.importChanges(doc1.exportChanges());
-
-      final snapshot1 = doc1.takeSnapshot();
-      final snapshot2 = doc2.takeSnapshot();
-
-      // Merge changes
-      doc2.importSnapshot(snapshot1);
-      doc1.importSnapshot(snapshot2);
-
-      // Both documents should have the same state.
-      // snapshot does not preserve changes so the newest snapshot is used.
-      expect(text1.value, equals(text2.value));
-      expect(text1.value, contains('World'));
-      expect(text2.value, contains('Hello'));
-      expect(
-        text1.value == 'HelloWorld' || text1.value == 'WorldHello',
-        isTrue,
-      );
-    });
-
-    test(
-      'operations from different peers merge correctly using snapshots ',
-      () {
-        final doc1 = CRDTDocument();
-        final doc2 = CRDTDocument();
-        final text1 = CRDTTextHandler(doc1, 'test-text');
-        final text2 = CRDTTextHandler(doc2, 'test-text');
-
-        text1.insert(0, 'Hello');
-        text2.insert(0, 'World');
-
-        expect(doc1.shouldApplySnapshot(doc2.takeSnapshot()), isTrue);
-
-        final changes = doc1.exportChanges();
-        final applied = doc2.importChanges(changes);
-
-        expect(applied, equals(1));
-
-        expect(doc2.shouldApplySnapshot(doc1.takeSnapshot()), isFalse);
-        expect(doc1.shouldApplySnapshot(doc2.takeSnapshot()), isTrue);
-
-        doc1.importSnapshot(doc2.takeSnapshot());
-
-        expect(text1.value, equals(text2.value));
-        expect(text1.value, equals('HelloWorld'));
-      },
-    );
-
-    test(
-      'operations from different peers merge correctly using snapshots,'
-      ' preserving history',
-      () {
-        final doc1 = CRDTDocument();
-        final doc2 = CRDTDocument();
-        final doc3 = CRDTDocument();
-        final text1 = CRDTTextHandler(doc1, 'test-text');
-        final text2 = CRDTTextHandler(doc2, 'test-text');
-        final text3 = CRDTTextHandler(doc3, 'test-text');
-
-        text1.insert(0, 'Hello');
-        text2.insert(0, 'World');
-
-        final changes = doc1.exportChanges();
-        doc2.importChanges(changes);
-        doc3.importChanges(changes);
-
-        // doc2 preserves history and doc1
-        // aggressively prunes history until snapshot
-        doc1.import(
-          snapshot: doc2.takeSnapshot(pruneHistory: false),
-          changes: changes,
-        );
-        doc3.import(
-          snapshot: doc2.takeSnapshot(pruneHistory: false),
-          changes: changes,
-          pruneHistory: false,
-        );
-
-        expect(text1.value, equals(text2.value));
-        expect(text1.value, equals(text3.value));
-        expect(text2.value, equals(text3.value));
-      },
-    );
-
-    test(
-      'complex scenario with 3 peers, changes, and snapshots',
-      () {
-        // setup
-        final peerId1 = PeerId.generate();
-        final peerId2 = PeerId.generate();
-        final peerId3 = PeerId.generate();
-
-        final doc1 = CRDTDocument(peerId: peerId1);
-        final doc2 = CRDTDocument(peerId: peerId2);
-        final doc3 = CRDTDocument(peerId: peerId3);
-
-        const handlerId = 'complex-text';
-        final text1 = CRDTTextHandler(doc1, handlerId);
-        final text2 = CRDTTextHandler(doc2, handlerId);
-        final text3 = CRDTTextHandler(doc3, handlerId);
-
-        //initial edits
-        text1.insert(0, 'A');
-        text2.insert(0, 'B');
-        text3.insert(0, 'C');
-
-        expect(text1.value, 'A');
-        expect(text2.value, 'B');
-        expect(text3.value, 'C');
-
-        // sync changes (partial: doc2 does not have changes from doc3)
-        // 1 -> 2
-        expect(doc2.importChanges(doc1.exportChanges()), equals(1));
-        // 2 -> 3
-        expect(doc3.importChanges(doc2.exportChanges()), equals(2));
-        // 3 -> 1
-        expect(doc1.importChanges(doc3.exportChanges()), equals(2));
-
-        // check convergence
-        expect(text1.value.length, 3);
-        expect(text1.value, equals(text3.value));
-
-        expect(text1.value, contains('A'));
-        expect(text1.value, contains('B'));
-        expect(text1.value, contains('C'));
-
-        expect(text1.value, isNot(equals(text2.value)));
-
-        //concurrent edits
-        text1.insert(text1.length, 'X');
-        text2.delete(0, 1);
-        text3.insert(0, 'Y');
-        text1.update(0, 'PK');
-
-        // sync all changes
-        var changes1 = doc1.exportChanges();
-        var changes2 = doc2.exportChanges();
-        var changes3 = doc3.exportChanges();
-
-        doc1.importChanges([...changes2, ...changes3]);
-        doc2.importChanges([...changes1, ...changes3]);
-        doc3.importChanges([...changes1, ...changes2]);
-
-        expect(text1.value, equals(text2.value));
-        expect(text1.value, equals(text3.value));
-        expect(text2.value, equals(text3.value));
-        final convergedValue = text1.value;
-
-        // take snapshot and sync
-        final snapshot1 = doc1.takeSnapshot();
-
-        // Verify snapshot data (simple check)
-        expect(snapshot1.data[handlerId], isNotNull);
-        expect(
-          utf8.decode(Uint8List.sublistView(snapshot1.data[handlerId]!, 1)),
-          equals(convergedValue),
-        );
-
-        // Check if snapshots should be applied
-        expect(doc2.shouldApplySnapshot(snapshot1), isTrue);
-        expect(doc3.shouldApplySnapshot(snapshot1), isTrue);
-
-        final applied2 = doc2.importSnapshot(snapshot1);
-        final applied3 = doc3.importSnapshot(snapshot1);
-
-        expect(applied2, isTrue);
-        expect(applied3, isTrue);
-
-        // edits post-snapshot & final sync
-        text2.insert(0, 'Z'); // doc2 state diverges
-        text3.delete(text3.length - 1, 1); // doc3 state diverges
-
-        // sync all changes again
-        changes1 =
-            doc1.exportChanges(); // Should be empty as no new changes in doc1
-        changes2 =
-            doc2.exportChanges(); // Should contain only 'Z' insertion ops
-        changes3 = doc3.exportChanges(); // Should contain only deletion ops
-
-        expect(changes1, isEmpty);
-        expect(changes2, isNotEmpty);
-        expect(changes3, isNotEmpty);
-
-        doc1.importChanges([...changes2, ...changes3]);
-        doc2.importChanges([...changes1, ...changes3]);
-        doc3.importChanges([...changes1, ...changes2]);
-
-        // Final convergence check
-        expect(text1.value, equals(text2.value));
-        expect(text2.value, equals(text3.value));
-      },
-    );
-
     group('non-BMP round-trip', () {
       test('change() replaces a whole emoji, not a surrogate half', () {
         final doc1 = CRDTDocument();
@@ -574,31 +312,6 @@ void main() {
         // Deleting the single position the emoji occupies removes all of it.
         text.delete(1, 1);
         expect(text.value, equals('ab'));
-      });
-
-      test('emoji insert survives export/import to a second replica', () {
-        final doc1 = CRDTDocument();
-        CRDTTextHandler(doc1, 'text').insert(0, 'hi 😀🎉');
-
-        final doc2 = CRDTDocument(documentId: doc1.documentId);
-        final text2 = CRDTTextHandler(doc2, 'text');
-        doc2.importChanges(doc1.exportChanges());
-
-        expect(text2.value, equals('hi 😀🎉'));
-      });
-
-      test('emoji update survives export/import to a second replica', () {
-        final doc1 = CRDTDocument();
-        final text1 = CRDTTextHandler(doc1, 'text')..insert(0, '😀');
-        final doc2 = CRDTDocument(documentId: doc1.documentId);
-        final text2 = CRDTTextHandler(doc2, 'text');
-        doc2.importChanges(doc1.exportChanges());
-
-        text1.update(0, '😃');
-        doc2.importChanges(doc1.exportChanges());
-
-        expect(text1.value, equals('😃'));
-        expect(text2.value, equals('😃'));
       });
 
       test(

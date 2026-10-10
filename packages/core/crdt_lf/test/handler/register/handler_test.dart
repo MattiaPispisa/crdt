@@ -1,9 +1,17 @@
 import 'package:crdt_lf/crdt_lf.dart';
 import 'package:test/test.dart';
 
+import '../conformance/handler_conformance.dart';
+
 final newFlagSpec = CRDTRegisterHandler.spec<bool>('flag');
 
 void main() {
+  runHandlerConformanceTests(
+    spec: CRDTRegisterHandler.spec<String>('CRDTRegisterHandler<String>'),
+    read: (register) => register.value,
+    edit: (register, random, token) => register.set(token),
+  );
+
   group('CRDTRegisterHandler', () {
     late CRDTDocument doc;
     late CRDTRegisterHandler<bool> register;
@@ -34,72 +42,6 @@ void main() {
 
     test('toString includes the id', () {
       expect(register.toString(), contains('CRDTRegisterHandler'));
-    });
-
-    test('the tag is runtimeType by default, and a spec fixes it', () {
-      // Default (minification-fragile) tag.
-      expect(register.handlerType, 'CRDTRegisterHandler<bool>');
-
-      // A generic handler needs a tag so it keeps working as a nested ref in
-      // a dart2js-minified build; it flows into HandlerRef.
-      final tagged =
-          CRDTRegisterHandler<bool>(doc, 'flag2', handlerType: 'register/bool');
-
-      expect(tagged.handlerType, 'register/bool');
-      expect(HandlerRef.of(tagged).type, 'register/bool');
-    });
-
-    test('concurrent sets converge (last-writer-wins by HLC)', () {
-      final docA = CRDTDocument(
-        peerId: PeerId.parse('45ee6b65-b393-40b7-9755-8b66dc7d0518'),
-      );
-      final docB = CRDTDocument(
-        peerId: PeerId.parse('a90dfced-cbf0-4a49-9c64-f5b7b62fdc18'),
-      );
-      final a = CRDTRegisterHandler<int>(
-        docA,
-        'r',
-        handlerType: 'CRDTRegisterHandler<int>',
-      );
-      final b = CRDTRegisterHandler<int>(
-        docB,
-        'r',
-        handlerType: 'CRDTRegisterHandler<int>',
-      );
-
-      a.set(1);
-      b.set(2);
-
-      docB.importChanges(docA.exportChanges());
-      docA.importChanges(docB.exportChanges());
-
-      // Both peers converge to the same (LWW) value.
-      expect(a.value, b.value);
-    });
-
-    test('snapshot round-trip preserves a set value', () {
-      register.set(true);
-      final snapshot = doc.takeSnapshot();
-
-      final docB = CRDTDocument()..importSnapshot(snapshot);
-      final registerB = CRDTRegisterHandler<bool>(
-        docB,
-        'flag',
-        handlerType: 'CRDTRegisterHandler<bool>',
-      );
-      expect(registerB.value, isTrue);
-    });
-
-    test('snapshot round-trip preserves the unset state', () {
-      final snapshot = doc.takeSnapshot();
-
-      final docB = CRDTDocument()..importSnapshot(snapshot);
-      final registerB = CRDTRegisterHandler<bool>(
-        docB,
-        'flag',
-        handlerType: 'CRDTRegisterHandler<bool>',
-      );
-      expect(registerB.value, isNull);
     });
 
     test('resolves as a leaf value inside a ref container', () {
@@ -134,24 +76,6 @@ void main() {
       });
       expect(register.value, isTrue);
       expect(doc.exportChanges().length, 1);
-    });
-
-    test('compacted sets replay identically on a remote peer', () {
-      final doc2 = CRDTDocument(peerId: PeerId.generate());
-      final register2 = CRDTRegisterHandler<bool>(
-        doc2,
-        'flag',
-        handlerType: 'CRDTRegisterHandler<bool>',
-      );
-
-      doc.runInTransaction(() {
-        register
-          ..set(true)
-          ..set(false);
-      });
-
-      doc2.importChanges(doc.exportChanges());
-      expect(register2.value, register.value);
     });
   });
 }

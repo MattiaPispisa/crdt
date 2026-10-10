@@ -4,12 +4,30 @@ import 'package:crdt_lf/crdt_lf.dart';
 import 'package:hlc_dart/hlc_dart.dart';
 import 'package:test/test.dart';
 
+import '../conformance/handler_conformance.dart';
+
 void main() {
+  // Non-BMP tokens, so every clause also walks text outside the BMP.
+  runHandlerConformanceTests(
+    spec: CRDTFugueTextHandler.spec,
+    read: (text) => text.value,
+    edit: (text, random, token) {
+      final length = text.length;
+      switch (length == 0 ? 0 : random.nextInt(3)) {
+        case 0:
+          text.insert(random.nextInt(length + 1), '\u{1F600}$token');
+        case 1:
+          text.delete(random.nextInt(length), random.nextInt(3) + 1);
+        case _:
+          text.update(random.nextInt(length), '\u{1F389}$token');
+      }
+    },
+  );
+
   group('CRDTFugueTextHandler', () {
     test('exposes a stable handlerType (minification-safe factory key)', () {
       final handler = CRDTFugueTextHandler(CRDTDocument(), 'text1');
       expect(handler.handlerType, 'CRDTFugueTextHandler');
-      expect(HandlerRef.of(handler).type, 'CRDTFugueTextHandler');
     });
 
     test('should insert text', () {
@@ -65,18 +83,6 @@ void main() {
         expect(handler.value, 'Hello World');
 
         handler.update(5, 'Beautiful');
-        expect(handler.value, 'HelloBeauti');
-      },
-    );
-
-    test(
-      'should update text',
-      () {
-        final doc = CRDTDocument();
-        final handler = CRDTFugueTextHandler(doc, 'text1')
-          ..useIncrementalCacheUpdate = false
-          ..insert(0, 'Hello World')
-          ..update(5, 'Beautiful');
         expect(handler.value, 'HelloBeauti');
       },
     );
@@ -531,111 +537,6 @@ void main() {
     });
 
     test(
-      'complex scenario with 3 peers, changes, and snapshots',
-      () {
-        // setup
-        final peerId1 = PeerId.generate();
-        final peerId2 = PeerId.generate();
-        final peerId3 = PeerId.generate();
-
-        final doc1 = CRDTDocument(peerId: peerId1);
-        final doc2 = CRDTDocument(peerId: peerId2);
-        final doc3 = CRDTDocument(peerId: peerId3);
-
-        const handlerId = 'complex-text';
-        final text1 = CRDTFugueTextHandler(doc1, handlerId);
-        final text2 = CRDTFugueTextHandler(doc2, handlerId);
-        final text3 = CRDTFugueTextHandler(doc3, handlerId);
-
-        //initial edits
-        text1.insert(0, 'A');
-        text2.insert(0, 'B');
-        text3.insert(0, 'C');
-
-        expect(text1.value, 'A');
-        expect(text2.value, 'B');
-        expect(text3.value, 'C');
-
-        // sync changes (partial: doc2 does not have changes from doc3)
-        // 1 -> 2
-        expect(doc2.importChanges(doc1.exportChanges()), equals(1));
-        // 2 -> 3
-        expect(doc3.importChanges(doc2.exportChanges()), equals(2));
-        // 3 -> 1
-        expect(doc1.importChanges(doc3.exportChanges()), equals(2));
-
-        // check convergence
-        expect(text1.value.length, 3);
-        expect(text1.value, equals(text3.value));
-        expect(text1.value, contains('A'));
-        expect(text1.value, contains('B'));
-        expect(text1.value, contains('C'));
-
-        expect(text1.value, isNot(equals(text2.value)));
-
-        //concurrent edits
-        text1.insert(text1.length, 'X');
-        text2.delete(0, 1);
-        text3.insert(0, 'Y');
-
-        // sync all changes
-        var changes1 = doc1.exportChanges();
-        var changes2 = doc2.exportChanges();
-        var changes3 = doc3.exportChanges();
-
-        expect(doc1.importChanges([...changes2, ...changes3]), equals(2));
-        expect(doc2.importChanges([...changes1, ...changes3]), equals(3));
-        expect(doc3.importChanges([...changes1, ...changes2]), equals(2));
-
-        expect(text1.value, equals(text2.value));
-        expect(text1.value, equals(text3.value));
-        expect(text2.value, equals(text3.value));
-
-        // take snapshot and sync
-        final snapshot1 = doc1.takeSnapshot();
-
-        // Verify snapshot data (simple check)
-        expect(snapshot1.data[handlerId], isNotNull);
-
-        // Check if snapshots should be applied
-        expect(doc2.shouldApplySnapshot(snapshot1), isTrue);
-        expect(doc3.shouldApplySnapshot(snapshot1), isTrue);
-
-        final applied2 = doc2.importSnapshot(snapshot1);
-        final applied3 = doc3.importSnapshot(snapshot1);
-
-        expect(applied2, isTrue);
-        expect(applied3, isTrue);
-
-        // edits post-snapshot & final sync
-        text2.insert(0, 'Z');
-        expect(text2.value.contains('Z'), isTrue);
-        text3.delete(text3.length - 1, 1);
-        expect(text3.value.contains('Y'), isTrue);
-
-        // sync all changes again
-        changes1 =
-            doc1.exportChanges(); // Should be empty as no new changes in doc1
-        changes2 =
-            doc2.exportChanges(); // Should contain only 'Z' insertion ops
-        changes3 = doc3.exportChanges(); // Should contain only deletion ops
-
-        expect(changes1, isEmpty);
-        expect(changes2, isNotEmpty);
-        expect(changes3, isNotEmpty);
-
-        expect(doc1.importChanges([...changes2, ...changes3]), equals(2));
-        expect(doc2.importChanges([...changes1, ...changes3]), equals(1));
-        expect(doc3.importChanges([...changes1, ...changes2]), equals(1));
-
-        // Final convergence check
-        expect(text1.value, equals(text2.value));
-        expect(text2.value, equals(text3.value));
-        expect(text1.value.length, equals(4));
-      },
-    );
-
-    test(
       'complex scenario with 3 peers using concurrent change operations',
       () {
         final peerId1 = PeerId.parse('1427949a-f573-4a07-9a49-c41c4ef4b05e');
@@ -788,220 +689,6 @@ void main() {
       },
     );
 
-    test(
-      'insert/delete/update operations round-trip through binary payload',
-      () {
-        final doc = CRDTDocument(peerId: PeerId.generate());
-        final handler = CRDTFugueTextHandler(doc, 'text-bin')
-          ..insert(0, 'Hello')
-          ..delete(1, 1)
-          ..update(0, 'X');
-
-        final doc2 = CRDTDocument(peerId: PeerId.generate());
-        final handler2 = CRDTFugueTextHandler(doc2, 'text-bin');
-        doc2.binaryImportChanges(doc.binaryExportChanges());
-        expect(handler2.value, equals(handler.value));
-
-        // Each operation must successfully decode from its payload bytes
-        // (otherwise `operations()` would have thrown).
-        final changeCount = doc.exportChanges().length;
-        expect(changeCount, greaterThanOrEqualTo(3));
-      },
-    );
-
-    group('counter re-initialisation after import', () {
-      test(
-        'does not throw after binaryImportChanges with same peerId',
-        () {
-          final peerId = PeerId.generate();
-
-          final doc1 = CRDTDocument(peerId: peerId);
-          final handler1 = CRDTFugueTextHandler(doc1, 'text')
-            ..insert(0, 'Hello');
-          expect(handler1.value, 'Hello');
-          final exported = doc1.binaryExportChanges();
-
-          // Simulate restart: new document with the same peer ID imports the
-          // previous state.  Before the fix this threw
-          // CrdtException('Node already exists') on the first insert.
-          final doc2 = CRDTDocument(peerId: peerId);
-          final handler2 = CRDTFugueTextHandler(doc2, 'text');
-          doc2.binaryImportChanges(exported);
-
-          expect(handler2.value, 'Hello');
-          expect(() => handler2.insert(5, ' World'), returnsNormally);
-          expect(handler2.value, 'Hello World');
-        },
-      );
-
-      test(
-        'does not throw after importChanges with same peerId',
-        () {
-          final peerId = PeerId.generate();
-
-          final doc1 = CRDTDocument(peerId: peerId);
-          CRDTFugueTextHandler(doc1, 'text').insert(0, 'CRDT');
-          final exported = doc1.exportChanges();
-
-          final doc2 = CRDTDocument(peerId: peerId);
-          final handler2 = CRDTFugueTextHandler(doc2, 'text');
-          doc2.importChanges(exported);
-
-          expect(handler2.value, 'CRDT');
-          expect(() => handler2.insert(4, '!'), returnsNormally);
-          expect(handler2.value, 'CRDT!');
-        },
-      );
-
-      test(
-        'does not throw after importSnapshot with same peerId',
-        () {
-          final peerId = PeerId.generate();
-
-          final doc1 = CRDTDocument(peerId: peerId);
-          CRDTFugueTextHandler(doc1, 'text').insert(0, 'Snapshot');
-          final snap = doc1.takeSnapshot();
-
-          final doc2 = CRDTDocument(peerId: peerId);
-          final handler2 = CRDTFugueTextHandler(doc2, 'text');
-          doc2.importSnapshot(snap);
-
-          expect(handler2.value, 'Snapshot');
-          expect(() => handler2.insert(8, '!'), returnsNormally);
-          expect(handler2.value, 'Snapshot!');
-        },
-      );
-
-      test(
-        'counter continues correctly after re-init (no duplicate IDs)',
-        () {
-          final peerId = PeerId.generate();
-
-          // doc1 creates "Hi" (counters 0, 1 for peerId)
-          final doc1 = CRDTDocument(peerId: peerId);
-          CRDTFugueTextHandler(doc1, 'text').insert(0, 'Hi');
-          final exported = doc1.binaryExportChanges();
-
-          // doc2 (same peerId) imports the state then edits further
-          final doc2 = CRDTDocument(peerId: peerId);
-          final handler2 = CRDTFugueTextHandler(doc2, 'text');
-          doc2.binaryImportChanges(exported);
-
-          handler2
-            ..insert(2, '!') // counter must be >= 2
-            ..insert(0, 'Say: ');
-
-          // Verify state is consistent and no collision occurred
-          expect(handler2.value, 'Say: Hi!');
-        },
-      );
-
-      test(
-        'a reload from a snapshot does not reissue the counters of pruned '
-        'tombstones',
-        () {
-          final peerId = PeerId.generate();
-
-          final doc1 = CRDTDocument(peerId: peerId);
-          final text1 = CRDTFugueTextHandler(doc1, 'text');
-          final peer = CRDTDocument(peerId: PeerId.generate());
-          final peerText = CRDTFugueTextHandler(peer, 'text');
-
-          // Counters 0-9, then the tail is deleted: the peer keeps 5-9 as
-          // tombstones while doc1 prunes them away.
-          text1.insert(0, 'abcdefghij');
-          peer.importChanges(doc1.exportChanges());
-          text1.delete(5, 5);
-          peer.importChanges(doc1.exportChanges());
-          expect(peerText.value, 'abcde');
-
-          final snapshot = doc1.takeSnapshot();
-
-          // Reload: only the snapshot survives, so the live elements alone
-          // would put the counter back at 5.
-          final reloaded = CRDTDocument(peerId: peerId);
-          final reloadedText = CRDTFugueTextHandler(reloaded, 'text');
-          reloaded.importSnapshot(snapshot);
-          expect(reloadedText.value, 'abcde');
-
-          reloadedText.insert(5, 'XY');
-          peer.importChanges(reloaded.exportChanges());
-
-          expect(reloadedText.value, 'abcdeXY');
-          expect(peerText.value, reloadedText.value);
-        },
-      );
-    });
-
-    test(
-      'takeSnapshot computes state from scratch when handler cache is null',
-      () {
-        final doc1 = CRDTDocument();
-        CRDTFugueTextHandler(doc1, 'text').insert(0, 'Hi');
-
-        final doc2 = CRDTDocument();
-        final h2 = CRDTFugueTextHandler(doc2, 'text')
-          ..insert(0, 'start'); // populates h2's cache
-
-        // Importing an external change for the same
-        // handler invalidates h2's cache
-        doc2.importChanges(doc1.exportChanges());
-
-        // h2's cache is null; takeSnapshot must recompute it from scratch
-        final snap = doc2.takeSnapshot();
-        expect(snap.data['text'], isNotNull);
-        expect(h2.value, contains('Hi'));
-      },
-    );
-
-    test(
-      'should handle late import that sorts between existing changes',
-      () {
-        // Setup two documents and sync initial state
-        final doc1 = CRDTDocument();
-        final doc2 = CRDTDocument();
-
-        const handlerId = 'mid-import-text';
-        final text1 = CRDTFugueTextHandler(doc1, handlerId);
-        final text2 = CRDTFugueTextHandler(doc2, handlerId);
-
-        // Initial content from doc1
-        text1.insert(0, 'AB');
-        expect(text1.value, 'AB');
-
-        // Sync doc1 -> doc2
-        expect(doc2.importChanges(doc1.exportChanges()), greaterThan(0));
-        expect(text2.value, 'AB');
-
-        // Doc1 appends 'CD' locally after the sync
-        text1.insert(2, 'CD'); // doc1: 'ABCD'
-        expect(text1.value, 'ABCD');
-
-        // Concurrently, doc2 inserts 'X' in the middle before receiving 'CD'
-        text2.insert(2, 'X'); // doc2: 'ABX'
-        expect(text2.value, 'ABX');
-
-        // Now exchange changes both ways
-        final ch1 = doc1.exportChanges();
-        final ch2 = doc2.exportChanges();
-
-        expect(doc1.importChanges(ch2), greaterThan(0));
-        expect(doc2.importChanges(ch1), greaterThan(0));
-
-        // Both documents should converge and not interleave 'X' with 'CD'
-        expect(text1.value, equals(text2.value));
-        final finalText = text1.value;
-
-        // Ensure both segments are present
-        expect(finalText.contains('X'), isTrue);
-        expect(finalText.contains('CD'), isTrue);
-
-        // Ensure segments are not interleaved (contiguous substrings)
-        expect(finalText.contains('CD'), isTrue);
-        expect(finalText.contains('X'), isTrue);
-      },
-    );
-
     group('stablePositionAt / indexOfStablePosition', () {
       late CRDTDocument doc;
       late CRDTFugueTextHandler text;
@@ -1086,18 +773,6 @@ void main() {
     });
 
     group('non-BMP round-trip', () {
-      test('emoji survives export/import to a second replica', () {
-        final doc1 = CRDTDocument();
-        CRDTFugueTextHandler(doc1, 'text').insert(0, 'a😀b🎉c');
-
-        final doc2 = CRDTDocument(documentId: doc1.documentId);
-        final text2 = CRDTFugueTextHandler(doc2, 'text');
-        doc2.importChanges(doc1.exportChanges());
-
-        expect(text2.value, equals('a😀b🎉c'));
-        expect(text2.value.codeUnits, equals('a😀b🎉c'.codeUnits));
-      });
-
       test('an emoji is one indivisible element', () {
         final doc = CRDTDocument();
         final text = CRDTFugueTextHandler(doc, 'text')..insert(0, 'a😀b');
@@ -1143,36 +818,6 @@ void main() {
             reason: 'anchor at rune index $i',
           );
         }
-      });
-
-      test('emoji update survives export/import to a second replica', () {
-        final doc1 = CRDTDocument();
-        final text1 = CRDTFugueTextHandler(doc1, 'text')..insert(0, '😀');
-        final doc2 = CRDTDocument(documentId: doc1.documentId);
-        final text2 = CRDTFugueTextHandler(doc2, 'text');
-        doc2.importChanges(doc1.exportChanges());
-
-        text1.update(0, '😃');
-        doc2.importChanges(doc1.exportChanges());
-
-        expect(text1.value, equals('😃'));
-        expect(text2.value, equals('😃'));
-      });
-
-      test('emoji survives a snapshot round-trip (bytes -> reload)', () {
-        final doc = CRDTDocument();
-        CRDTFugueTextHandler(doc, 'text').insert(0, '😀 x 𐐷');
-
-        final snapBytes = doc.takeSnapshot(pruneHistory: false).toBytes();
-
-        final reloaded = CRDTDocument(
-          peerId: doc.peerId,
-          documentId: doc.documentId,
-        );
-        final reloadedText = CRDTFugueTextHandler(reloaded, 'text');
-        reloaded.import(snapshot: Snapshot.fromBytes(snapBytes));
-
-        expect(reloadedText.value, equals('😀 x 𐐷'));
       });
 
       // Two lone surrogates side by side are two elements that read as one
@@ -1258,28 +903,6 @@ void main() {
       final restoredText = CRDTFugueTextHandler(restored, 'text');
       restored.importSnapshot(snapshot);
       expect(restoredText.value, equals(text.value));
-    });
-
-    test('a snapshot taken right after an import includes the new changes', () {
-      final source = CRDTDocument();
-      final sourceText = CRDTFugueTextHandler(source, 'text')
-        ..insert(0, 'hello');
-
-      final target = CRDTDocument();
-      final targetText = CRDTFugueTextHandler(target, 'text');
-      target.importChanges(source.exportChanges());
-      // Warm the cache, then import more without reading the value.
-      expect(targetText.value, 'hello');
-
-      sourceText.insert(5, ' world');
-      target.importChanges(
-        source.exportChanges(fromVersionVector: target.getVersionVector()),
-      );
-
-      final restored = CRDTDocument();
-      final restoredText = CRDTFugueTextHandler(restored, 'text');
-      restored.importSnapshot(target.takeSnapshot());
-      expect(restoredText.value, 'hello world');
     });
     // The decode path is the same code in all nine handlers, so its contract
     // is asserted once, here. Addressing is no longer part of it: the
@@ -1471,37 +1094,6 @@ void main() {
             peerId: PeerId.parse('37f1ec87-6ea5-430b-a627-a6b92b56a02d'),
           );
 
-      test('undoes an insert by removing what it put in', () {
-        final document = doc();
-        final text = CRDTFugueTextHandler(document, 'text');
-        final undo = CRDTUndoManager(document, captureTimeout: Duration.zero)
-          ..track(text);
-
-        text.insert(0, 'Hello');
-        undo.undo();
-        expect(text.value, '');
-
-        undo.redo();
-        expect(text.value, 'Hello');
-      });
-
-      test('undoes a delete by putting the text back where it was', () {
-        final document = doc();
-        final text = CRDTFugueTextHandler(document, 'text')
-          ..insert(0, 'abcdef');
-        final undo = CRDTUndoManager(document, captureTimeout: Duration.zero)
-          ..track(text);
-
-        text.delete(2, 2);
-        expect(text.value, 'abef');
-
-        undo.undo();
-        expect(text.value, 'abcdef');
-
-        undo.redo();
-        expect(text.value, 'abef');
-      });
-
       test('undoes a delete at the start of the text', () {
         final document = doc();
         final text = CRDTFugueTextHandler(document, 'text')
@@ -1528,37 +1120,6 @@ void main() {
 
         undo.undo();
         expect(text.value, 'abcdef');
-      });
-
-      test('undoes an update by writing the old runes back', () {
-        final document = doc();
-        final text = CRDTFugueTextHandler(document, 'text')
-          ..insert(0, 'abcdef');
-        final undo = CRDTUndoManager(document, captureTimeout: Duration.zero)
-          ..track(text);
-
-        text.update(2, 'XY');
-        expect(text.value, 'abXYef');
-
-        undo.undo();
-        expect(text.value, 'abcdef');
-
-        undo.redo();
-        expect(text.value, 'abXYef');
-      });
-
-      test('round-trips text outside the BMP', () {
-        final document = doc();
-        final text = CRDTFugueTextHandler(document, 'text')
-          ..insert(0, 'a\u{1F44B}b\u{1F389}c');
-        final undo = CRDTUndoManager(document, captureTimeout: Duration.zero)
-          ..track(text);
-
-        text.delete(1, 3);
-        expect(text.value, 'ac');
-
-        undo.undo();
-        expect(text.value, 'a\u{1F44B}b\u{1F389}c');
       });
 
       test('a whole `change` is one step', () {

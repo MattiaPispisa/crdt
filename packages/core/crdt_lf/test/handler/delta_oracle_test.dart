@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:math';
 
 import 'package:crdt_lf/crdt_lf.dart';
 import 'package:test/test.dart';
@@ -86,15 +85,6 @@ _Projection<String, SequenceDelta<String>> _watchFugueText(
       readSynced: text.readSynced,
       stream: text.watch(),
       applyDelta: (delta, base) => delta.applyToText(base),
-    );
-
-_Projection<List<T>, SequenceDelta<T>> _watchFugueList<T>(
-  CRDTFugueListHandler<T> list,
-) =>
-    _Projection<List<T>, SequenceDelta<T>>(
-      readSynced: list.readSynced,
-      stream: list.watch(),
-      applyDelta: (delta, base) => delta.apply(base),
     );
 
 _Projection<Map<String, T>, MapDelta<String, T>> _watchMap<T>(
@@ -218,25 +208,6 @@ void main() {
       await projection.dispose();
     });
 
-    test('non-BMP text survives the round trip', () async {
-      final doc = CRDTDocument();
-      final text = CRDTTextHandler(doc, 'text');
-      final projection = _watchText(text);
-      await _pump();
-
-      text
-        ..insert(0, '🌐ab')
-        ..insert(1, '🌏')
-        ..delete(0, 1)
-        ..update(0, '😀');
-      await _pump();
-
-      expect(projection.value, text.value);
-      expect(text.value, '😀ab');
-
-      await projection.dispose();
-    });
-
     test('an out-of-range edit reports the clamped effect', () async {
       final doc = CRDTDocument();
       final text = CRDTTextHandler(doc, 'text')..insert(0, 'abc');
@@ -275,68 +246,9 @@ void main() {
 
       await projection.dispose();
     });
-
-    test('the projection tracks a random edit stream', () async {
-      final doc = CRDTDocument();
-      final text = CRDTTextHandler(doc, 'text');
-      final projection = _watchText(text);
-      await _pump();
-
-      final random = Random(42);
-      for (var round = 0; round < 200; round++) {
-        final length = text.length;
-        switch (random.nextInt(3)) {
-          case 0:
-            text.insert(
-              length == 0 ? 0 : random.nextInt(length + 1),
-              String.fromCharCode(97 + random.nextInt(26)),
-            );
-          case 1:
-            if (length > 0) {
-              final index = random.nextInt(length);
-              text.delete(index, 1 + random.nextInt(length - index));
-            }
-          case 2:
-            if (length > 0) {
-              text.update(
-                random.nextInt(length),
-                String.fromCharCode(97 + random.nextInt(26)),
-              );
-            }
-        }
-
-        await _pump();
-        expect(projection.value, text.value, reason: 'round $round');
-      }
-
-      await projection.dispose();
-    });
   });
 
   group('CRDTListHandler deltas', () {
-    test('insert, update and delete reach the projection', () async {
-      final doc = CRDTDocument();
-      final list = CRDTListHandler<String>(
-        doc,
-        'list',
-        handlerType: 'CRDTListHandler<String>',
-      );
-      final projection = _watchList(list);
-      await _pump();
-
-      list
-        ..insert(0, 'a')
-        ..insert(1, 'b')
-        ..update(0, 'A')
-        ..delete(1, 1);
-      await _pump();
-
-      expect(list.value, ['A']);
-      expect(projection.value, list.value);
-
-      await projection.dispose();
-    });
-
     test('an out-of-range operation reports the clamped effect', () async {
       final doc = CRDTDocument();
       final list = CRDTListHandler<String>(
@@ -355,43 +267,6 @@ void main() {
 
       expect(list.value, ['a', 'z']);
       expect(projection.value, list.value);
-
-      await projection.dispose();
-    });
-
-    test('the projection tracks a random edit stream', () async {
-      final doc = CRDTDocument();
-      final list = CRDTListHandler<int>(
-        doc,
-        'list',
-        handlerType: 'CRDTListHandler<int>',
-      );
-      final projection = _watchList(list);
-      await _pump();
-
-      final random = Random(7);
-      for (var round = 0; round < 200; round++) {
-        final length = list.value.length;
-        switch (random.nextInt(3)) {
-          case 0:
-            list.insert(
-              length == 0 ? 0 : random.nextInt(length + 1),
-              random.nextInt(1000),
-            );
-          case 1:
-            if (length > 0) {
-              final index = random.nextInt(length);
-              list.delete(index, 1 + random.nextInt(length - index));
-            }
-          case 2:
-            if (length > 0) {
-              list.update(random.nextInt(length), random.nextInt(1000));
-            }
-        }
-
-        await _pump();
-        expect(projection.value, list.value, reason: 'round $round');
-      }
 
       await projection.dispose();
     });
@@ -617,71 +492,9 @@ void main() {
 
       await projection.dispose();
     });
-
-    test('two peers converge, each tracking its own projection', () async {
-      final peerA = CRDTDocument(peerId: PeerId.parse(_peerIdA));
-      final peerB = CRDTDocument(peerId: PeerId.parse(_peerIdB));
-      final textA = CRDTTextHandler(peerA, 'text');
-      final textB = CRDTTextHandler(peerB, 'text');
-
-      final projectionA = _watchText(textA);
-      final projectionB = _watchText(textB);
-      await _pump();
-
-      final random = Random(19);
-      for (var round = 0; round < 30; round++) {
-        for (final pair in [(peerA, textA), (peerB, textB)]) {
-          final handler = pair.$2;
-          final length = handler.length;
-          if (length > 0 && random.nextBool()) {
-            handler.delete(random.nextInt(length), 1);
-          } else {
-            handler.insert(
-              length == 0 ? 0 : random.nextInt(length + 1),
-              String.fromCharCode(97 + random.nextInt(26)),
-            );
-          }
-        }
-
-        peerB.importChanges(
-          peerA.exportChanges(fromVersionVector: peerB.getVersionVector()),
-        );
-        peerA.importChanges(
-          peerB.exportChanges(fromVersionVector: peerA.getVersionVector()),
-        );
-
-        await _pump();
-        expect(projectionA.value, textA.value, reason: 'A, round $round');
-        expect(projectionB.value, textB.value, reason: 'B, round $round');
-      }
-
-      expect(textA.value, textB.value);
-
-      await projectionA.dispose();
-      await projectionB.dispose();
-    });
   });
 
   group('CRDTFugueTextHandler deltas', () {
-    test('insert, delete and update reach the projection', () async {
-      final doc = CRDTDocument();
-      final text = CRDTFugueTextHandler(doc, 'text');
-      final projection = _watchFugueText(text);
-      await _pump();
-
-      text
-        ..insert(0, 'hello')
-        ..insert(5, ' world')
-        ..delete(0, 1)
-        ..update(0, 'E');
-      await _pump();
-
-      expect(text.value, 'Ello world');
-      expect(projection.value, text.value);
-
-      await projection.dispose();
-    });
-
     test('a delete of several elements at once is one run', () async {
       final doc = CRDTDocument();
       final text = CRDTFugueTextHandler(doc, 'text')..insert(0, 'abcdef');
@@ -721,177 +534,6 @@ void main() {
       await _pump();
 
       expect(projection.value, textB.value);
-
-      await projection.dispose();
-    });
-
-    test('non-BMP text survives the round trip', () async {
-      final doc = CRDTDocument();
-      final text = CRDTFugueTextHandler(doc, 'text');
-      final projection = _watchFugueText(text);
-      await _pump();
-
-      text
-        ..insert(0, '🌐ab')
-        ..insert(1, '🌏')
-        ..delete(0, 1)
-        ..update(0, '😀');
-      await _pump();
-
-      expect(text.value, '😀ab');
-      expect(projection.value, text.value);
-
-      await projection.dispose();
-    });
-
-    test('the projection tracks a random edit stream', () async {
-      final doc = CRDTDocument();
-      final text = CRDTFugueTextHandler(doc, 'text');
-      final projection = _watchFugueText(text);
-      await _pump();
-
-      final random = Random(23);
-      for (var round = 0; round < 150; round++) {
-        final length = text.length;
-        switch (random.nextInt(3)) {
-          case 0:
-            text.insert(
-              length == 0 ? 0 : random.nextInt(length + 1),
-              String.fromCharCode(97 + random.nextInt(26)),
-            );
-          case 1:
-            if (length > 0) {
-              final index = random.nextInt(length);
-              text.delete(index, 1 + random.nextInt(length - index));
-            }
-          case 2:
-            if (length > 0) {
-              text.update(
-                random.nextInt(length),
-                String.fromCharCode(97 + random.nextInt(26)),
-              );
-            }
-        }
-
-        await _pump();
-        expect(projection.value, text.value, reason: 'round $round');
-      }
-
-      await projection.dispose();
-    });
-
-    test('two peers converge, each tracking its own projection', () async {
-      final peerA = CRDTDocument(peerId: PeerId.parse(_peerIdA));
-      final peerB = CRDTDocument(peerId: PeerId.parse(_peerIdB));
-      final textA = CRDTFugueTextHandler(peerA, 'text');
-      final textB = CRDTFugueTextHandler(peerB, 'text');
-
-      final projectionA = _watchFugueText(textA);
-      final projectionB = _watchFugueText(textB);
-      await _pump();
-
-      final random = Random(31);
-      for (var round = 0; round < 30; round++) {
-        for (final handler in [textA, textB]) {
-          final length = handler.length;
-          if (length > 0 && random.nextBool()) {
-            handler.delete(random.nextInt(length), 1);
-          } else {
-            handler.insert(
-              length == 0 ? 0 : random.nextInt(length + 1),
-              String.fromCharCode(97 + random.nextInt(26)),
-            );
-          }
-        }
-
-        peerB.importChanges(
-          peerA.exportChanges(fromVersionVector: peerB.getVersionVector()),
-        );
-        peerA.importChanges(
-          peerB.exportChanges(fromVersionVector: peerA.getVersionVector()),
-        );
-
-        await _pump();
-        expect(projectionA.value, textA.value, reason: 'A, round $round');
-        expect(projectionB.value, textB.value, reason: 'B, round $round');
-      }
-
-      expect(textA.value, textB.value);
-
-      await projectionA.dispose();
-      await projectionB.dispose();
-    });
-  });
-
-  group('CRDTFugueListHandler deltas', () {
-    test('the projection tracks a random edit stream', () async {
-      final doc = CRDTDocument();
-      final list = CRDTFugueListHandler<int>(
-        doc,
-        'list',
-        handlerType: 'CRDTFugueListHandler<int>',
-      );
-      final projection = _watchFugueList(list);
-      await _pump();
-
-      final random = Random(37);
-      for (var round = 0; round < 150; round++) {
-        final length = list.value.length;
-        switch (random.nextInt(3)) {
-          case 0:
-            list.insert(
-              length == 0 ? 0 : random.nextInt(length + 1),
-              random.nextInt(1000),
-            );
-          case 1:
-            if (length > 0) {
-              final index = random.nextInt(length);
-              list.delete(index, 1 + random.nextInt(length - index));
-            }
-          case 2:
-            if (length > 0) {
-              list.update(random.nextInt(length), random.nextInt(1000));
-            }
-        }
-
-        await _pump();
-        expect(projection.value, list.value, reason: 'round $round');
-      }
-
-      await projection.dispose();
-    });
-
-    test('a remote batch keeps the projection in step', () async {
-      final source = CRDTDocument(peerId: PeerId.parse(_peerIdA));
-      final sourceList = CRDTFugueListHandler<int>(
-        source,
-        'list',
-        handlerType: 'CRDTFugueListHandler<int>',
-      )..insert(0, 1);
-
-      final mirror = CRDTDocument(peerId: PeerId.parse(_peerIdB));
-      final mirrorList = CRDTFugueListHandler<int>(
-        mirror,
-        'list',
-        handlerType: 'CRDTFugueListHandler<int>',
-      );
-      mirror.importChanges(source.exportChanges());
-
-      final projection = _watchFugueList(mirrorList);
-      await _pump();
-
-      sourceList
-        ..insert(1, 2)
-        ..insert(2, 3)
-        ..delete(0, 1)
-        ..update(0, 20);
-      mirror.importChanges(
-        source.exportChanges(fromVersionVector: mirror.getVersionVector()),
-      );
-      await _pump();
-
-      expect(mirrorList.value, sourceList.value);
-      expect(projection.value, mirrorList.value);
 
       await projection.dispose();
     });
@@ -983,35 +625,6 @@ void main() {
       expect(projection.deltas, hasLength(2));
       expect(projection.deltas.every((d) => d.delta.isEmpty), isTrue);
       expect(projection.value, map.value);
-
-      await projection.dispose();
-    });
-
-    test('the projection tracks a random edit stream', () async {
-      final doc = CRDTDocument();
-      final map = CRDTMapHandler<int>(
-        doc,
-        'map',
-        handlerType: 'CRDTMapHandler<int>',
-      );
-      final projection = _watchMap(map);
-      await _pump();
-
-      final random = Random(53);
-      for (var round = 0; round < 150; round++) {
-        final key = 'k${random.nextInt(6)}';
-        switch (random.nextInt(3)) {
-          case 0:
-            map.set(key, random.nextInt(100));
-          case 1:
-            map.update(key, random.nextInt(100));
-          case 2:
-            map.delete(key);
-        }
-
-        await _pump();
-        expect(projection.value, map.value, reason: 'round $round');
-      }
 
       await projection.dispose();
     });
@@ -1124,36 +737,6 @@ void main() {
 
       await projection.dispose();
     });
-
-    test('the projection tracks a random edit stream', () async {
-      final doc = CRDTDocument();
-      final set = CRDTORSetHandler<String>(
-        doc,
-        'set',
-        handlerType: 'CRDTORSetHandler<String>',
-      );
-      final projection = _Projection<Set<String>, SetDelta<String>>(
-        readSynced: set.readSynced,
-        stream: set.watch(),
-        applyDelta: (delta, base) => delta.apply(base),
-      );
-      await _pump();
-
-      final random = Random(61);
-      for (var round = 0; round < 150; round++) {
-        final value = 'v${random.nextInt(5)}';
-        if (random.nextBool()) {
-          set.add(value);
-        } else {
-          set.remove(value);
-        }
-
-        await _pump();
-        expect(projection.value, set.value, reason: 'round $round');
-      }
-
-      await projection.dispose();
-    });
   });
 
   group('CRDTORMapHandler deltas', () {
@@ -1194,36 +777,6 @@ void main() {
         const MapEntrySet<int>(value: 2, previous: 1),
       );
       expect(projection.value, map.value);
-
-      await projection.dispose();
-    });
-
-    test('the projection tracks a random edit stream', () async {
-      final doc = CRDTDocument();
-      final map = CRDTORMapHandler<String, int>(
-        doc,
-        'ormap',
-        handlerType: 'CRDTORMapHandler<String, int>',
-      );
-      final projection = _Projection<Map<String, int>, MapDelta<String, int>>(
-        readSynced: map.readSynced,
-        stream: map.watch(),
-        applyDelta: (delta, base) => delta.apply(base),
-      );
-      await _pump();
-
-      final random = Random(67);
-      for (var round = 0; round < 150; round++) {
-        final key = 'k${random.nextInt(5)}';
-        if (random.nextBool()) {
-          map.put(key, random.nextInt(100));
-        } else {
-          map.remove(key);
-        }
-
-        await _pump();
-        expect(projection.value, map.value, reason: 'round $round');
-      }
 
       await projection.dispose();
     });
@@ -1287,50 +840,6 @@ void main() {
         expect(event.delta.ops.single, isA<SeqMove<String>>());
       }
       expect(projection.value, list.value);
-
-      await projection.dispose();
-    });
-
-    test('the projection tracks a random edit stream', () async {
-      final doc = CRDTDocument();
-      final list = CRDTFugueMovableListHandler<int>(
-        doc,
-        'movable',
-        handlerType: 'CRDTFugueMovableListHandler<int>',
-      );
-      final projection = _Projection<List<int>, SequenceDelta<int>>(
-        readSynced: list.readSynced,
-        stream: list.watch(),
-        applyDelta: (delta, base) => delta.apply(base),
-      );
-      await _pump();
-
-      final random = Random(71);
-      for (var round = 0; round < 150; round++) {
-        final length = list.length;
-        switch (random.nextInt(4)) {
-          case 0:
-            list.insert(
-              length == 0 ? 0 : random.nextInt(length + 1),
-              random.nextInt(1000),
-            );
-          case 1:
-            if (length > 0) {
-              list.delete(random.nextInt(length));
-            }
-          case 2:
-            if (length > 0) {
-              list.update(random.nextInt(length), random.nextInt(1000));
-            }
-          case 3:
-            if (length > 1) {
-              list.move(random.nextInt(length), random.nextInt(length));
-            }
-        }
-
-        await _pump();
-        expect(projection.value, list.value, reason: 'round $round');
-      }
 
       await projection.dispose();
     });

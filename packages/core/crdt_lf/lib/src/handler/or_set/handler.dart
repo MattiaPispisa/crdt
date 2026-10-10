@@ -150,30 +150,76 @@ base class CRDTORSetHandler<T> extends Handler<ORSetState<T>>
       OperationType.kindInsert,
       OperationType.kindDelete,
     },
-    blobVersions: BlobVersionRange.single(_blobVersion),
+    blobVersions: BlobVersionRange(_firstBlobVersion, _blobVersion),
   );
 
-  /// The version of the snapshot blob this build writes and reads.
-  ///
-  /// Layout: `version: u8`, `count: uvarint`, then per item
-  /// `itemLen: uvarint`, `item: bytes`. The tags stay out: a snapshot holds
-  /// the projected set, and the elements come back tagless.
-  /// The version [getSnapshotState] writes at the head of its blob.
-  static const int _blobVersion = 1;
+  /// The version of the snapshot blob this build writes.
+  static const int _blobVersion = 2;
+
+  /// The oldest blob this build reads
+  static const int _firstBlobVersion = 1;
 
   @override
   int get snapshotBlobVersion => _blobVersion;
 
+  @override
+  int get minReadableSnapshotBlobVersion => _firstBlobVersion;
+
   /// Returns the current state for snapshotting as a binary blob.
   @override
   Uint8List getSnapshotState() {
+    final state = _cachedOrComputedState();
     final out = snapshotHeader();
-    final items = value;
-    UVarint.write(items.length, out);
-    for (final item in items) {
+    UVarint.write(
+      state._live.values.fold<int>(0, (sum, tags) => sum + tags.length),
+      out,
+    );
+    for (final MapEntry(key: item, value: tags) in state._live.entries) {
+      final itemBytes = _valueCodec.encode(item);
+      for (final tag in tags) {
+        UVarint.writeBytes(itemBytes, out);
+        out.add(tag.toUint8List());
+      }
+    }
+    UVarint.write(state._snapshotOnly.length, out);
+    for (final item in state._snapshotOnly) {
       UVarint.writeBytes(_valueCodec.encode(item), out);
     }
     return out.toBytes();
+  }
+
+  /// Seeds [state] with what [snapshot] holds.
+  void _seedFromSnapshot(ORSetState<T> state, Uint8List snapshot) {
+    final header = readSnapshotHeader(snapshot);
+    var offset = header.offset;
+
+    T readItem() {
+      final record = UVarint.readBytes(
+        snapshot,
+        offset: offset,
+        what: 'OR-set snapshot value',
+      );
+      offset = record.nextOffset;
+      return _valueCodec.decode(record.value);
+    }
+
+    if (header.version >= 2) {
+      final tagged = UVarint.read(snapshot, offset: offset);
+      offset = tagged.nextOffset;
+      for (var i = 0; i < tagged.value; i += 1) {
+        final item = readItem();
+        final tag = OperationId.readFromBytes(snapshot, offset: offset);
+        offset += OperationId.byteLength;
+        state._live.putIfAbsent(item, () => <OperationId>{}).add(tag);
+        state._all.putIfAbsent(item, () => <OperationId>{}).add(tag);
+      }
+    }
+
+    final tagless = UVarint.read(snapshot, offset: offset);
+    offset = tagless.nextOffset;
+    for (var i = 0; i < tagless.value; i += 1) {
+      state._snapshotOnly.add(readItem());
+    }
   }
 
   /// Computes the tag state by replaying the history.
@@ -185,26 +231,9 @@ base class CRDTORSetHandler<T> extends Handler<ORSetState<T>>
       tombstones: <OperationId>{},
     );
 
-    final snap = lastSnapshot();
-
-    // Seed from snapshot:
-    // If a prior snapshot contained values for this handler,
-    // we treat them as present without tags (snapshot-only) until changes say
-    // otherwise. The snapshot is a length-prefixed sequence of items encoded
-    // via [_valueCodec].
-    if (snap != null) {
-      var offset = readSnapshotHeader(snap).offset;
-      final countRec = UVarint.read(snap, offset: offset);
-      offset = countRec.nextOffset;
-      for (var i = 0; i < countRec.value; i += 1) {
-        final valueRecord = UVarint.readBytes(
-          snap,
-          offset: offset,
-          what: 'OR-set snapshot value',
-        );
-        state._snapshotOnly.add(_valueCodec.decode(valueRecord.value));
-        offset = valueRecord.nextOffset;
-      }
+    final snapshot = lastSnapshot();
+    if (snapshot != null) {
+      _seedFromSnapshot(state, snapshot);
     }
 
     for (final operation in operations()) {
