@@ -26,10 +26,10 @@ class DocumentChangesCubitArgs {
 /// Cubit loading the change list of a single tracked document.
 ///
 /// Reloads automatically whenever the target emits
-/// `crdt_lf:document:changed` for [args.document].
+/// `crdt_lf:document:changed` for `args.document`.
 class DocumentChangesCubit extends Cubit<DocumentChangesState> {
   DocumentChangesCubit(this.args) : super(DocumentChangesState.initial()) {
-    _load();
+    unawaited(_load());
     _setupEventSubscription();
   }
 
@@ -42,7 +42,7 @@ class DocumentChangesCubit extends Cubit<DocumentChangesState> {
     _eventStreamSubscription = args.service.onExtensionEvent.listen((event) {
       if (event.isDocumentChangedEvent &&
           event.documentId == args.document.id) {
-        _load();
+        unawaited(_load());
       }
     });
   }
@@ -50,7 +50,7 @@ class DocumentChangesCubit extends Cubit<DocumentChangesState> {
   Future<void> _load() async {
     if (state.loading) return;
 
-    emit(state.copyWith(loading: true, error: null));
+    emit(state.copyWith(loading: true));
 
     try {
       _alive?.dispose();
@@ -75,7 +75,7 @@ class DocumentChangesCubit extends Cubit<DocumentChangesState> {
   @override
   Future<void> close() {
     _alive?.dispose();
-    _eventStreamSubscription?.cancel();
+    unawaited(_eventStreamSubscription?.cancel());
     return super.close();
   }
 }

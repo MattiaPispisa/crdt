@@ -303,7 +303,8 @@ void main() {
     for (final blob in _blobs) {
       test('a ${blob.name} blob from a newer build is refused', () {
         final snapshot = _seeded().takeSnapshot(pruneHistory: false);
-        final bumped = Uint8List.fromList(snapshot.data[blob.id]!)..[0] = 2;
+        final newer = snapshot.data[blob.id]![0] + 1;
+        final bumped = Uint8List.fromList(snapshot.data[blob.id]!)..[0] = newer;
 
         final other = CRDTDocument(peerId: PeerId.generate())
           ..importSnapshot(_withBlob(snapshot, blob.id, bumped));
@@ -314,7 +315,7 @@ void main() {
             isA<FormatException>().having(
               (e) => e.message,
               'message',
-              allOf(contains(blob.readerName), contains('2'), contains('1')),
+              allOf(contains(blob.readerName), contains('$newer')),
             ),
           ),
         );

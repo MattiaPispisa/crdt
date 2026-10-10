@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 class ExtensionStatus extends StatelessWidget {
-  const ExtensionStatus({super.key, required this.child});
+  const ExtensionStatus({required this.child, super.key});
 
   final Widget child;
 

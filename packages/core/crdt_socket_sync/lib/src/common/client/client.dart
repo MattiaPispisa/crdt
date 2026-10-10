@@ -209,8 +209,8 @@ abstract class CRDTSocketClient {
   /// Ends [faults] and [connectionStatus]. Call it from `dispose`.
   @protected
   void closeClientStreams() {
-    _faults.close();
-    _connectionStatus.close();
+    unawaited(_faults.close());
+    unawaited(_connectionStatus.close());
   }
 
   /// The local CRDT document

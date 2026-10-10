@@ -1,6 +1,6 @@
 import 'package:crdt_lf_hive/crdt_lf_hive.dart';
 import 'package:crdt_socket_sync/web_socket_server.dart';
-import 'package:en_logger/en_logger.dart';
+import 'package:en_logger/en_logger.dart' as l;
 
 /// Snapshot a document once its log passes this many changes.
 const _kCompactAfter = 20;
@@ -20,7 +20,7 @@ const _kIdleAfter = Duration(minutes: 10);
 /// [backend] after it.
 Future<PersistentServerRegistry> openHiveRegistry({
   required CRDTHiveBackend backend,
-  required EnLogger logger,
+  required l.EnLogger logger,
 }) async {
   logger.info('Found ${(await backend.documentIds).length} documents.');
 
@@ -35,7 +35,7 @@ Future<PersistentServerRegistry> openHiveRegistry({
 /// Logs what each document holds, for the demo.
 Future<void> showPersistence({
   required PersistentServerRegistry registry,
-  required EnLogger logger,
+  required l.EnLogger logger,
 }) async {
   logger.info('Showing persistence state...');
   for (final documentId in await registry.documentIds) {

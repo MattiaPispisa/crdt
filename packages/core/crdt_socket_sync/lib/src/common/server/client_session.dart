@@ -199,7 +199,7 @@ abstract class ClientSession {
         handleUndecodable(_messageCodec.tryFrameOf(data));
         return;
       }
-      _handleMessage(message);
+      unawaited(_handleMessage(message));
     } catch (e, stackTrace) {
       addSessionEvent(
         SessionEventGeneric(
@@ -428,7 +428,7 @@ abstract class ClientSession {
   /// Dispose the session
   void dispose() {
     unawaited(_closeSession(reason: 'Session disposed'));
-    _sessionEventController.close();
+    unawaited(_sessionEventController.close());
   }
 
   /// Emit a [SessionEvent] on [events].

@@ -13,3 +13,5 @@ dev_dependencies:
   benchmark_infrastructure:
     path: ../../_internal/benchmark_infrastructure
   test: ^1.26.3
+  ws_lint:
+    path: ../../_internal/ws_lint

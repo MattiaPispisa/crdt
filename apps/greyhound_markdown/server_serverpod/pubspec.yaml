@@ -14,5 +14,6 @@ dependencies:
   serverpod: ^4.0.3
 
 dev_dependencies:
-  lints: ^5.0.0
   test: ^1.24.0
+  ws_lint:
+    path: ../../../packages/_internal/ws_lint

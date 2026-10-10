@@ -6,10 +6,10 @@ import 'package:crdt_lf/crdt_lf.dart';
 import 'package:test/test.dart';
 
 import '../../helpers/asset_aggregate.dart';
+import '../conformance/handler_conformance.dart';
 
 const _peerA = '00000000-0000-4000-8000-00000000000a';
 const _peerB = '00000000-0000-4000-8000-00000000000b';
-const _peerC = '00000000-0000-4000-8000-00000000000c';
 
 CRDTAggregateHandler<Asset, AssetEvent> _asset(BaseCRDTDocument doc) =>
     doc.handler(CRDTAggregateHandler.spec(const AssetAggregate()), 'asset-1');
@@ -21,6 +21,12 @@ void _sync(CRDTDocument from, CRDTDocument to) {
 }
 
 void main() {
+  runHandlerConformanceTests(
+    spec: CRDTAggregateHandler.spec(const AssetAggregate()),
+    read: (asset) => asset.value.content,
+    edit: randomAssetEdit,
+  );
+
   group('CRDTAggregateHandler', () {
     test('a fresh aggregate reads its initial state', () {
       final asset = _asset(CRDTDocument());
@@ -92,92 +98,6 @@ void main() {
       final winner = changes.last.author == a.peerId ? 'from a' : 'from b';
       expect(assetA.value.displayName, winner);
       expect(assetB.value.displayName, winner);
-    });
-
-    test('peers that receive the same events in any order converge', () {
-      final base = CRDTDocument(peerId: PeerId.parse(_peerA));
-      _asset(base).dispatchAll(const [
-        Renamed('base'),
-        NoteAdded('one'),
-        NoteAdded('two'),
-      ]);
-      final baseChanges = base.exportChanges();
-      final notes = _asset(base).value.notes;
-
-      final peers = [
-        for (final id in [_peerA, _peerB, _peerC])
-          CRDTDocument(peerId: PeerId.parse(id))..importChanges(baseChanges),
-      ];
-      _asset(peers[0]).dispatchAll([
-        NoteRemoved(notes.first.id),
-        const Renamed('a'),
-      ]);
-      _asset(peers[1]).dispatchAll([
-        NoteUpdated(notes.first.id, 'one by b'),
-        NoteAdded('after two', after: notes.last.id),
-      ]);
-      _asset(peers[2]).dispatchAll(const [
-        Renamed('c'),
-        MeasureAdded('5 bar'),
-      ]);
-      final batches = [
-        for (final peer in peers)
-          peer.exportChanges().where((c) => !baseChanges.contains(c)).toList(),
-      ];
-
-      Asset? expected;
-      for (final order in const [
-        [0, 1, 2],
-        [0, 2, 1],
-        [1, 0, 2],
-        [1, 2, 0],
-        [2, 0, 1],
-        [2, 1, 0],
-      ]) {
-        final replica = CRDTDocument(peerId: PeerId.generate())
-          ..importChanges(baseChanges);
-        final asset = _asset(replica);
-        for (final index in order) {
-          asset.value;
-          replica.importChanges(batches[index]);
-        }
-        expected ??= asset.value;
-        expect(asset.value, expected, reason: 'order $order');
-      }
-    });
-
-    test('a change from the past is replayed into place', () {
-      final a = CRDTDocument(peerId: PeerId.parse(_peerA));
-      final b = CRDTDocument(peerId: PeerId.parse(_peerB));
-      final assetA = _asset(a)..dispatch(const MeasureAdded('from a'));
-      final assetB = _asset(b);
-      // B writes after A, so A's change sorts before what B already folded.
-      b.prepareMutation();
-      assetB.dispatch(const MeasureAdded('from b'));
-      expect(assetB.value.measures, ['from b']);
-
-      _sync(a, b);
-      _sync(b, a);
-
-      expect(assetB.value.measures, ['from a', 'from b']);
-      expect(assetA.value, assetB.value);
-    });
-
-    test('a snapshot keeps the note ids the later events name', () {
-      final source = CRDTDocument();
-      final asset = _asset(source)..dispatch(const NoteAdded('note'));
-      final note = asset.value.notes.single.id;
-
-      source.takeSnapshot();
-      asset.dispatch(NoteUpdated(note, 'edited'));
-
-      expect(asset.value.notes.single, Note(note, 'edited'));
-      final restored = CRDTDocument()
-        ..import(
-          snapshot: source.snapshot,
-          changes: source.exportChanges(),
-        );
-      expect(_asset(restored).value, asset.value);
     });
 
     test('a nested aggregate resolves to its state', () {
@@ -408,23 +328,6 @@ void main() {
       expect(asset.value, after);
     });
 
-    test('redo of a removal brings the note back with its own id', () {
-      final doc = CRDTDocument();
-      final asset = _asset(doc)..dispatch(const NoteAdded('note'));
-      final note = asset.value.notes.single;
-      final undo = CRDTUndoManager(doc, captureTimeout: Duration.zero)
-        ..track(asset);
-
-      asset.dispatch(NoteRemoved(note.id));
-      undo.undo();
-
-      expect(asset.value.notes, [note]);
-      // The note came back under its id, so an update written before the
-      // removal still finds it.
-      asset.dispatch(NoteUpdated(note.id, 'edited'));
-      expect(asset.value.noteTexts, ['edited']);
-    });
-
     test('an event with no inverse records no step', () {
       final doc = CRDTDocument();
       final asset = _asset(doc);
@@ -459,29 +362,6 @@ void main() {
         const [Renamed('P-101'), MeasureAdded('5 bar')],
       );
       expect(asset.applyDelta(const Asset(), delta), asset.value);
-    });
-
-    test('a remote change from the past asks for a fresh read', () async {
-      final a = CRDTDocument(peerId: PeerId.parse(_peerA));
-      final b = CRDTDocument(peerId: PeerId.parse(_peerB));
-      _asset(a).dispatch(const MeasureAdded('from a'));
-      b.prepareMutation();
-      final assetB = _asset(b)
-        ..dispatch(const MeasureAdded('from b'))
-        ..value;
-      final updates = <HandlerUpdate<AggregateDelta<Asset, AssetEvent>>>[];
-      final subscription = assetB.watch().listen(updates.add);
-      await Future<void>.delayed(Duration.zero);
-
-      _sync(a, b);
-      await Future<void>.delayed(Duration.zero);
-      await subscription.cancel();
-
-      expect(
-        updates.last,
-        isA<HandlerReset<AggregateDelta<Asset, AssetEvent>>>()
-            .having((r) => r.cause, 'cause', ResetCause.cacheDropped),
-      );
     });
   });
 }

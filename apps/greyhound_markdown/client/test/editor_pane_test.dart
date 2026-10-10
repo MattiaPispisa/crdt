@@ -35,7 +35,7 @@ RenderEditable _editableUnder(RenderObject root) {
   return found!;
 }
 
-/// The editor as [EditorScreen] mounts it: under the document and under the
+/// The editor as `EditorScreen` mounts it: under the document and under the
 /// settings the two view options come from.
 Widget _app({
   required CRDTDocument document,
@@ -58,7 +58,7 @@ Widget _app({
   );
 }
 
-/// A document plus an awareness service wired like [EditorScreen] does.
+/// A document plus an awareness service wired like `EditorScreen` does.
 ///
 /// The (never connected) relay client is what attaches the awareness plugin;
 /// without it every cursor publication throws, since the plugin reads its
@@ -169,7 +169,7 @@ void main() {
     (TargetPlatform.windows, LogicalKeyboardKey.controlLeft),
     (TargetPlatform.macOS, LogicalKeyboardKey.metaLeft),
   ]) {
-    testWidgets('the undo chord reaches the document, not the field\'s own '
+    testWidgets("the undo chord reaches the document, not the field's own "
         'history (${platform.name})', (tester) async {
       final room = _room();
       final text =

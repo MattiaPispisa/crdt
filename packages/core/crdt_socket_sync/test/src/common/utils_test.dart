@@ -33,7 +33,7 @@ void main() {
   group('tryCatchIgnore', () {
     test('runs the function on the happy path', () async {
       var ran = false;
-      await tryCatchIgnore(() async {
+      await tryCatchIgnore(() {
         ran = true;
       });
       expect(ran, isTrue);
@@ -45,7 +45,7 @@ void main() {
         completes,
       );
       await expectLater(
-        tryCatchIgnore(() async => throw Exception('async')),
+        tryCatchIgnore(() => Future<void>.error(Exception('async'))),
         completes,
       );
     });

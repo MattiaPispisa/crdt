@@ -46,6 +46,11 @@ class Asset {
   /// The texts of [notes], in order.
   List<String> get noteTexts => [for (final note in notes) note.text];
 
+  /// What this asset holds, without the note ids: two peers that wrote the
+  /// same edits agree on it even though their ids differ.
+  String get content => '$displayName|${noteTexts.join(',')}|'
+      '${measures.join(',')}';
+
   /// A copy with the given fields replaced.
   Asset copyWith({
     String? displayName,
@@ -428,32 +433,27 @@ class _Reader {
   }
 }
 
-/// Writes one random event to [asset].
+/// Writes one random event to [asset], named after [token].
 ///
-/// With [undoable] on, every event it writes has an inverse, so each call is
-/// one undo step.
+/// Every event it writes changes the value and has an inverse, as the
+/// conformance suite asks.
 void randomAssetEdit(
   CRDTAggregateHandler<Asset, AssetEvent> asset,
   Random random,
-  int round, {
-  bool undoable = false,
-}) {
+  String token,
+) {
   final notes = asset.value.notes;
   EventId pick() => notes[random.nextInt(notes.length)].id;
-  switch (notes.isEmpty ? random.nextInt(2) : random.nextInt(5)) {
+  switch (notes.isEmpty ? random.nextInt(2) : random.nextInt(4)) {
     case 0:
-      asset.dispatch(Renamed('name $round'));
+      asset.dispatch(Renamed('name $token'));
     case 1:
       asset.dispatch(
-        NoteAdded('note $round', after: notes.isEmpty ? null : pick()),
+        NoteAdded('note $token', after: notes.isEmpty ? null : pick()),
       );
     case 2:
-      asset.dispatch(NoteUpdated(pick(), 'edit $round'));
-    case 3:
-      asset.dispatch(NoteRemoved(pick()));
+      asset.dispatch(NoteUpdated(pick(), 'edit $token'));
     default:
-      asset.dispatch(
-        undoable ? Renamed('again $round') : MeasureAdded('$round bar'),
-      );
+      asset.dispatch(NoteRemoved(pick()));
   }
 }

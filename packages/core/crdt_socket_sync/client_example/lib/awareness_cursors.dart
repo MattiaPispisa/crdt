@@ -14,9 +14,9 @@ import 'package:shared_examples_infrastructure/shared_examples_infrastructure.da
 class AwarenessCursors extends StatelessWidget {
   /// Creates the cursor overlay for [session].
   const AwarenessCursors({
-    super.key,
     required this.session,
     required this.child,
+    super.key,
   });
 
   /// The socket session whose awareness plugin drives the cursors.

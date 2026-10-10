@@ -292,7 +292,7 @@ class CRDTUndoManager {
     _undoStack.clear();
     _redoStack.clear();
     _open = null;
-    _changes?.close();
+    unawaited(_changes?.close());
     _changes = null;
   }
 

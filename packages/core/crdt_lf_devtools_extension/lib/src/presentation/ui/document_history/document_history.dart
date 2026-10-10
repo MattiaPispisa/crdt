@@ -82,7 +82,6 @@ class _CursorControls extends StatelessWidget {
           if (length > 0)
             Slider(
               value: cursor.toDouble(),
-              min: 0,
               max: length.toDouble(),
               divisions: length == 0 ? null : length,
               label: '$cursor',

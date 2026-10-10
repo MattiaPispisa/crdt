@@ -53,8 +53,11 @@ class _EditorScreenState extends State<EditorScreen> {
           IconButton(
             tooltip: context.l10n.copyRoomId,
             icon: const Icon(Icons.copy),
-            onPressed: () {
-              Clipboard.setData(ClipboardData(text: widget.roomId));
+            onPressed: () async {
+              await Clipboard.setData(ClipboardData(text: widget.roomId));
+              if (!context.mounted) {
+                return;
+              }
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(content: Text(context.l10n.roomIdCopied)),
               );

@@ -87,7 +87,7 @@ void main() {
       expect(documentStorage.snapshots, isA<CRDTSqliteSnapshotStorage>());
     });
 
-    test('runInTransaction rolls back partial work on error', () async {
+    test('runInTransaction rolls back partial work on error', () {
       final changes = storage.changeStorageForDocument('doc-rollback');
 
       expect(
@@ -211,7 +211,7 @@ void main() {
       expect(result, 'done');
     });
 
-    test('memory() works without a file', () async {
+    test('memory() works without a file', () {
       final memory = CRDTSqlite.memory();
       final changes = memory.changeStorageForDocument('doc')
         ..saveChange(makeChange(1, 1));
@@ -220,7 +220,7 @@ void main() {
       memory.close();
     });
 
-    test('fromDatabase wraps an existing connection', () async {
+    test('fromDatabase wraps an existing connection', () {
       final memory = CRDTSqlite.memory();
       final wrapped = CRDTSqlite.fromDatabase(memory.database);
 
@@ -236,8 +236,8 @@ void main() {
       final b = storage.storageForDocument('doc-b');
       final id = OperationId(PeerId.generate(), HybridLogicalClock(l: 5, c: 1));
 
-      a.changes.saveChange(makeChange(1, 1));
-      a.snapshots.saveSnapshot(
+      await a.changes.saveChange(makeChange(1, 1));
+      await a.snapshots.saveSnapshot(
         Snapshot(
           id: 's-del',
           versionVector: VersionVector({id.peerId: id.hlc}),
@@ -246,7 +246,7 @@ void main() {
           },
         ),
       );
-      b.changes.saveChange(makeChange(2, 1));
+      await b.changes.saveChange(makeChange(2, 1));
 
       storage.deleteDocument('doc-a');
 
@@ -282,7 +282,7 @@ CREATE TABLE $changesTable (
     }
 
     test('a database written by version 1 keeps its rows and can be filtered',
-        () async {
+        () {
       // Version 1 had no author and no clock column, and no `user_version`
       // either. The upgrade adds the columns and fills them from the bytes
       // that are already on disk, or the bounds would answer on zeros.
@@ -316,7 +316,7 @@ CREATE TABLE $changesTable (
       upgraded.close();
     });
 
-    test('the tables version 1 never had are created', () async {
+    test('the tables version 1 never had are created', () {
       writeSchemaOne([]);
 
       final upgraded = CRDTSqlite.open(dbPath);
@@ -328,8 +328,7 @@ CREATE TABLE $changesTable (
       upgraded.close();
     });
 
-    test('a change whose bytes this build cannot read still migrates',
-        () async {
+    test('a change whose bytes this build cannot read still migrates', () {
       // The split reads `change_id`, not the blob. A row this build could not
       // decode would once have stopped the upgrade; now it moves across and
       // fails later, when someone actually asks for it.
@@ -369,7 +368,7 @@ CREATE TABLE $changesTable (
 
     test(
         'an upgrade that cannot read a change id leaves the database as it '
-        'was', () async {
+        'was', () {
       // A name the split cannot parse stops the upgrade. Half the rows moved
       // and half left behind is worse than refusing to open.
       sq.sqlite3.open(dbPath)
@@ -402,7 +401,7 @@ CREATE TABLE $changesTable (
       );
     });
 
-    test('opening twice does not upgrade twice', () async {
+    test('opening twice does not upgrade twice', () {
       final author = PeerId.generate();
       final change = Change.fromPayloadBytes(
         id: OperationId(author, HybridLogicalClock(l: 1, c: 1)),

@@ -1,7 +1,25 @@
 import 'package:crdt_lf/crdt_lf.dart';
 import 'package:test/test.dart';
 
+import '../conformance/handler_conformance.dart';
+
 void main() {
+  runHandlerConformanceTests(
+    spec: CRDTListHandler.spec<String>('CRDTListHandler<String>'),
+    read: (list) => List.of(list.value),
+    edit: (list, random, token) {
+      final length = list.length;
+      switch (length == 0 ? 0 : random.nextInt(3)) {
+        case 0:
+          list.insert(random.nextInt(length + 1), token);
+        case 1:
+          list.delete(random.nextInt(length), random.nextInt(3) + 1);
+        case _:
+          list.update(random.nextInt(length), token);
+      }
+    },
+  );
+
   group('CRDTListHandler', () {
     test('should handle basic operations', () {
       final doc = CRDTDocument(
@@ -230,37 +248,6 @@ void main() {
       expect(finalState.contains('Dart'), isTrue);
     });
 
-    test('should handle concurrent insertions and deletions', () {
-      final doc1 = CRDTDocument(
-        peerId: PeerId.parse('45ee6b65-b393-40b7-9755-8b66dc7d0518'),
-      );
-      final handler1 = CRDTListHandler<String>(
-        doc1,
-        'list1',
-        handlerType: 'CRDTListHandler<String>',
-      );
-
-      var counter = 0;
-
-      while (counter < 30) {
-        counter++;
-
-        final value = 'Item $counter';
-        handler1.insert(handler1.length, value);
-
-        if (counter % 5 == 0 && handler1.length > 3) {
-          handler1.delete(0, 1);
-        }
-
-        if (counter % 10 == 0) {
-          doc1.takeSnapshot();
-        }
-      }
-
-      final items = List.generate(24, (index) => 'Item ${index + 7}');
-      expect(handler1.value, items);
-    });
-
     test('toString returns correct string representation for empty list', () {
       final doc = CRDTDocument(
         peerId: PeerId.parse('37f1ec87-6ea5-430b-a627-a6b92b56a02d'),
@@ -287,65 +274,6 @@ void main() {
         ..insert(0, 'Hello')
         ..insert(1, 'World');
       expect(handler.toString(), equals('CRDTList(list1, [Hello, World])'));
-    });
-
-    test('should use snapshot correctly', () {
-      final doc1 = CRDTDocument(
-        peerId: PeerId.parse('45ee6b65-b393-40b7-9755-8b66dc7d0518'),
-      );
-      final handler1 = CRDTListHandler<String>(
-        doc1,
-        'list1',
-        handlerType: 'CRDTListHandler<String>',
-      );
-
-      final doc2 = CRDTDocument(
-        peerId: PeerId.parse('a90dfced-cbf0-4a49-9c64-f5b7b62fdc18'),
-      );
-      final handler2 = CRDTListHandler<String>(
-        doc2,
-        'list1',
-        handlerType: 'CRDTListHandler<String>',
-      );
-
-      // Insert numbers
-      handler1
-        ..insert(0, 'Hello')
-        ..insert(1, 'World')
-        ..update(1, 'World All!');
-      handler2.insert(0, 'Dart!');
-
-      final changes1 = doc1.exportChanges();
-
-      expect(
-        doc1.shouldApplySnapshot(doc2.takeSnapshot()),
-        isTrue,
-      );
-
-      // doc1 snapshot is older
-      expect(
-        doc2.shouldApplySnapshot(doc1.takeSnapshot()),
-        isFalse,
-      );
-
-      expect(
-        doc2.importChanges(changes1),
-        equals(3),
-      );
-
-      expect(
-        doc1.shouldApplySnapshot(doc2.takeSnapshot()),
-        isTrue,
-      );
-      expect(
-        doc2.shouldApplySnapshot(doc1.takeSnapshot()),
-        isFalse,
-      );
-
-      expect(doc1.importSnapshot(doc2.takeSnapshot()), isTrue);
-      doc1.importChanges(doc2.exportChanges());
-
-      expect(handler2.value, handler1.value);
     });
 
     group('compound', () {
@@ -444,38 +372,6 @@ void main() {
 
         expect(handler.value, ['x', 'y']);
         expect(doc.exportChanges().length, before + 2);
-      });
-
-      test('compacted operations replay identically on a remote peer', () {
-        final doc1 = CRDTDocument(
-          peerId: PeerId.parse('45ee6b65-b393-40b7-9755-8b66dc7d0518'),
-        );
-        final handler1 = CRDTListHandler<String>(
-          doc1,
-          'list1',
-          handlerType: 'CRDTListHandler<String>',
-        )
-          ..insert(0, 'a')
-          ..insert(1, 'b')
-          ..insert(2, 'c');
-
-        final doc2 = CRDTDocument(
-          peerId: PeerId.parse('a90dfced-cbf0-4a49-9c64-f5b7b62fdc18'),
-        );
-        final handler2 = CRDTListHandler<String>(
-          doc2,
-          'list1',
-          handlerType: 'CRDTListHandler<String>',
-        );
-
-        doc1.runInTransaction(() {
-          handler1
-            ..delete(1, 1)
-            ..update(1, 'C');
-        });
-
-        doc2.importChanges(doc1.exportChanges());
-        expect(handler2.value, handler1.value);
       });
     });
   });

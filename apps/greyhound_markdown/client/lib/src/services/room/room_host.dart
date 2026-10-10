@@ -148,7 +148,7 @@ mixin RoomHost<T extends StatefulWidget> on State<T> {
 
   @override
   void dispose() {
-    _statusSubscription?.cancel();
+    unawaited(_statusSubscription?.cancel());
     _status?.dispose();
     _room?.undo.dispose();
     _awareness?.dispose();

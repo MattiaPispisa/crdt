@@ -4,6 +4,10 @@ packages:
   - packages/**
   - apps/**
 
+# Only yaml files: nothing to format, analyze or test.
+ignore:
+  - packages/_internal/ws_lint
+
 repository: https://github.com/MattiaPispisa/crdt
 
 sdkPath: .fvm/flutter_sdk

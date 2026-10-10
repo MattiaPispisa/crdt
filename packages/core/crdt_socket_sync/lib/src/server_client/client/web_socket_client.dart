@@ -429,7 +429,7 @@ class WebSocketClient extends CRDTSocketClient {
       updateConnectionStatus(ConnectionStatus.error);
     }
     if (attemptReconnect && !isUnsupported) {
-      _attemptReconnect();
+      unawaited(_attemptReconnect());
     }
   }
 
@@ -647,7 +647,7 @@ class WebSocketClient extends CRDTSocketClient {
     // The one code this mode answers by itself: a resync can close a gap, and
     // the connection stays up.
     if (message.code == Protocol.errorOutOfSync) {
-      requestSync();
+      unawaited(requestSync());
       return;
     }
 
@@ -656,14 +656,14 @@ class WebSocketClient extends CRDTSocketClient {
 
   @override
   void dispose() {
-    disconnect();
+    unawaited(disconnect());
 
     for (final plugin in plugins) {
       plugin.dispose();
     }
 
     closeClientStreams();
-    _messageController.close();
+    unawaited(_messageController.close());
     _syncManager.dispose();
   }
 }

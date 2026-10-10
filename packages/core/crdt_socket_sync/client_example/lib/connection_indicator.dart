@@ -1,10 +1,11 @@
 import 'package:crdt_socket_sync/client.dart';
 import 'package:flutter/material.dart';
 
-/// App-bar indicator that reflects the live [CRDTSocketClient.connectionStatus].
+/// App-bar indicator that reflects the live
+/// [CRDTSocketClient.connectionStatus].
 class ConnectionIndicator extends StatelessWidget {
   /// Creates a connection indicator for [client].
-  const ConnectionIndicator({super.key, required this.client});
+  const ConnectionIndicator({required this.client, super.key});
 
   /// The client whose connection status is shown.
   final CRDTSocketClient client;
@@ -75,7 +76,7 @@ class ConnectionIndicator extends StatelessWidget {
               canRetry
                   ? '${visual.label} — tap to reconnect'
                   : [visual.label, if (reason != null) reason].join(': '),
-          onPressed: canRetry ? () => client.connect() : null,
+          onPressed: canRetry ? client.connect : null,
         );
       },
     );

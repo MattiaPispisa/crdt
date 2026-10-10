@@ -1,10 +1,10 @@
-import 'package:flutter/material.dart';
 import 'package:crdt_socket_sync_client_example/_logger.dart';
 import 'package:crdt_socket_sync_client_example/awareness_cursors.dart';
 import 'package:crdt_socket_sync_client_example/connection_indicator.dart';
 import 'package:crdt_socket_sync_client_example/gzip_compression.dart';
 import 'package:crdt_socket_sync_client_example/socket_sync_session.dart';
 import 'package:crdt_socket_sync_client_example/user/_state.dart';
+import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_examples_infrastructure/shared_examples_infrastructure.dart';
 
@@ -18,17 +18,17 @@ const _pubDevUrl = 'https://pub.dev/packages/crdt_socket_sync';
 /// keeps working against relay/servers that don't compress.
 const _useCompression = bool.fromEnvironment('USE_COMPRESSION');
 
-/// Signature of the shared example screen builders.
-typedef _ExampleScreen =
-    Widget Function({
-      required SessionsFactory sessionsFactory,
-      AppBarActionsBuilder? appBarActionsBuilder,
-      PaneWrapper? paneWrapper,
-    });
-
 /// Wraps a shared example [screen] with a single real socket session pointed at
 /// the document [documentId] on the server URL stored in [UserState].
-WidgetBuilder _socket(_ExampleScreen screen, String documentId) {
+WidgetBuilder _socket(
+  Widget Function({
+    required SessionsFactory sessionsFactory,
+    AppBarActionsBuilder? appBarActionsBuilder,
+    PaneWrapper? paneWrapper,
+  })
+  screen,
+  String documentId,
+) {
   return (context) {
     final user = context.read<UserState>();
     return screen(
@@ -40,6 +40,8 @@ WidgetBuilder _socket(_ExampleScreen screen, String documentId) {
               author: user.userId,
               label: 'This device',
               metadata: {'name': user.username},
+              // The analyzer reads USE_COMPRESSION without its define.
+              // ignore: avoid_redundant_argument_values
               compressor: _useCompression ? const GzipCompression() : null,
               logger: context.loggerInstance('socket_sync'),
             ),

@@ -20,8 +20,8 @@ import 'package:shared_examples_infrastructure/shared/text_cursor_presence.dart'
 class CrdtTextField extends StatelessWidget {
   /// Creates a collaborative text field over [handler].
   const CrdtTextField({
-    super.key,
     required this.handler,
+    super.key,
     this.enabled = true,
     this.hintText,
     this.style,

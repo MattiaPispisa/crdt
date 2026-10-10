@@ -94,6 +94,8 @@ class DocumentSessionHost extends SessionHostServer<DocumentClientSession> {
 
   @protected
   @override
+  // `async` lets one switch return both void and Future handlers.
+  // ignore: unnecessary_async
   FutureOr<void> handleSessionEvent(SessionEvent event) async {
     if (event is SyncSessionEvent) {
       switch (event.type) {
