@@ -100,10 +100,11 @@ packages:
   crdt_lf:
     dependency: "direct main"
     description:
-      path: "../crdt_lf"
-      relative: true
-    source: path
-    version: "5.1.2"
+      name: crdt_lf
+      sha256: "43669b0163319bbad4ada0049273b9c5402614054857343311a0de73be957010"
+      url: "https://pub.dev"
+    source: hosted
+    version: "5.1.1"
   crypto:
     dependency: transitive
     description:
@@ -164,10 +165,10 @@ packages:
     dependency: "direct main"
     description:
       name: equatable
-      sha256: "3bce007a596ff8b3119c45d68aaef631272537c03d30e5d4534dd24bf4c5eaa2"
+      sha256: ea36e500cbf0ec18361deabca755434f73e42fe53c5130021c7e2d6b5ebe1702
       url: "https://pub.dev"
     source: hosted
-    version: "2.1.0"
+    version: "3.0.0"
   extension_discovery:
     dependency: transitive
     description:
@@ -250,9 +251,10 @@ packages:
   hlc_dart:
     dependency: "direct overridden"
     description:
-      path: "../hlc"
-      relative: true
-    source: path
+      name: hlc_dart
+      sha256: b6e798b4fe648fa1a054a9541238e28ba6fe2e6fe28d7d7a2d13ca893187a127
+      url: "https://pub.dev"
+    source: hosted
     version: "1.2.0"
   http:
     dependency: transitive
