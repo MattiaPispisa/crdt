@@ -6,7 +6,7 @@ import 'package:crdt_lf_hive/crdt_lf_hive.dart';
 import 'package:crdt_socket_sync/web_socket_server.dart';
 import 'package:crdt_socket_sync_example/src/example_ids.dart';
 import 'package:crdt_socket_sync_example/src/registry.dart';
-import 'package:en_logger/en_logger.dart';
+import 'package:en_logger/en_logger.dart' as l;
 import 'package:hive/hive.dart';
 
 const _kDefaultDbLocation = './db';
@@ -27,23 +27,24 @@ Future<void> run({
   bool verbose = true,
 }) async {
   // setup logger
-  final logger = EnLogger(defaultPrefixFormat: const PrefixFormat.snakeSquare())
-    ..addHandler(
-      PrinterHandler.custom(
-        logCallback: (
-          String message, {
-          DateTime? time,
-          int? sequenceNumber,
-          int level = 0,
-          String name = '',
-          Zone? zone,
-          Object? error,
-          StackTrace? stackTrace,
-        }) {
-          stdout.writeln(message);
-        },
-      ),
-    );
+  final logger = l.EnLogger(
+    defaultPrefixFormat: const l.PrefixFormat.snakeSquare(),
+  )..addHandler(
+    l.DevLogHandler.custom(
+      logCallback: (
+        String message, {
+        DateTime? time,
+        int? sequenceNumber,
+        int level = 0,
+        String name = '',
+        Zone? zone,
+        Object? error,
+        StackTrace? stackTrace,
+      }) {
+        stdout.writeln(message);
+      },
+    ),
+  );
 
   // db initialization
   Hive.init(_kDefaultDbLocation);
@@ -132,7 +133,7 @@ Future<void> _setupExampleDocuments() async {
     ..handler(CRDTMovableListRefHandler.spec, ExampleHandlerIds.document);
 }
 
-void _setupSigintHandler({required EnLogger logger}) {
+void _setupSigintHandler({required l.EnLogger logger}) {
   ProcessSignal.sigint.watch().listen((signal) async {
     logger.info('\n⏹️  Received SIGINT, shutting down gracefully...');
     await _server.stop();
@@ -144,7 +145,7 @@ void _setupSigintHandler({required EnLogger logger}) {
 }
 
 Future<void> _startServer({
-  required EnLogger logger,
+  required l.EnLogger logger,
   required bool verbose,
 }) async {
   try {
