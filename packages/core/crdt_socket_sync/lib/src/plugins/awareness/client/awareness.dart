@@ -162,9 +162,11 @@ class ClientAwarenessPlugin extends ClientSyncPlugin {
 
   /// Request the state of the awareness from the server
   void requestState(String documentId) {
-    client.sendMessage(
-      AwarenessQueryMessage(
-        documentId: documentId,
+    unawaited(
+      client.sendMessage(
+        AwarenessQueryMessage(
+          documentId: documentId,
+        ),
       ),
     );
   }
@@ -190,7 +192,7 @@ class ClientAwarenessPlugin extends ClientSyncPlugin {
   @override
   void dispose() {
     _throttler.dispose();
-    _awarenessController.close();
+    unawaited(_awarenessController.close());
   }
 
   void _updateController(DocumentAwareness awareness) {

@@ -26,21 +26,21 @@ class Panel {
 /// widgets — both injected so each app can brand the bar (e.g. a network
 /// settings button vs a connection indicator).
 abstract class AppLayout extends StatelessWidget {
-  const AppLayout._({
-    super.key,
-    required this.title,
-    required this.panels,
-    required this.actions,
-  });
-
   /// Builds the layout that fits the current screen width: panels side by side
   /// on wide screens, swipeable tabs on phones/tablets.
   const factory AppLayout({
-    Key? key,
     required String title,
     required List<Panel> panels,
+    Key? key,
     List<Widget> actions,
   }) = _ResponsiveAppLayout;
+
+  const AppLayout._({
+    required this.title,
+    required this.panels,
+    required this.actions,
+    super.key,
+  });
 
   /// Below this width (logical px) the panels are shown as tabs instead of
   /// side by side.
@@ -92,9 +92,9 @@ abstract class AppLayout extends StatelessWidget {
 /// reads).
 class _ResponsiveAppLayout extends AppLayout {
   const _ResponsiveAppLayout({
-    super.key,
     required super.title,
     required super.panels,
+    super.key,
     super.actions = const [],
   }) : super._();
 

@@ -1,10 +1,12 @@
+import 'dart:async';
+
 import 'dart:math';
 
 import 'package:crdt_lf/crdt_lf.dart';
-import 'package:en_logger/en_logger.dart';
-import 'package:flutter/material.dart';
 import 'package:crdt_socket_sync_client_example/_logger.dart';
 import 'package:crdt_socket_sync_client_example/_persistence.dart';
+import 'package:en_logger/en_logger.dart';
+import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -13,20 +15,6 @@ const _kSurnameKey = 'surname';
 const _kUrlKey = 'url';
 
 class UserState extends ChangeNotifier {
-  UserState._({
-    required PeerId userId,
-    required String username,
-    required String surname,
-    required String url,
-    required EnLogger logger,
-    required SharedPreferences preferences,
-  }) : _surname = surname,
-       _username = username,
-       _userId = userId,
-       _url = url,
-       _logger = logger,
-       _preferences = preferences;
-
   factory UserState({
     required EnLogger logger,
     required SharedPreferences preferences,
@@ -46,6 +34,19 @@ class UserState extends ChangeNotifier {
       preferences: preferences,
     );
   }
+  UserState._({
+    required PeerId userId,
+    required String username,
+    required String surname,
+    required String url,
+    required EnLogger logger,
+    required SharedPreferences preferences,
+  }) : _surname = surname,
+       _username = username,
+       _userId = userId,
+       _url = url,
+       _logger = logger,
+       _preferences = preferences;
 
   String _username;
   String _surname;
@@ -62,27 +63,27 @@ class UserState extends ChangeNotifier {
   void setUsername(String username) {
     _username = username;
     _logger.info('Username set to $username');
-    _preferences.setString(_kUsernameKey, username);
+    unawaited(_preferences.setString(_kUsernameKey, username));
     notifyListeners();
   }
 
   void setSurname(String surname) {
     _surname = surname;
     _logger.info('Surname set to $surname');
-    _preferences.setString(_kSurnameKey, surname);
+    unawaited(_preferences.setString(_kSurnameKey, surname));
     notifyListeners();
   }
 
   void setUrl(String url) {
     _url = url;
     _logger.info('Url set to $url');
-    _preferences.setString(_kUrlKey, url);
+    unawaited(_preferences.setString(_kUrlKey, url));
     notifyListeners();
   }
 }
 
 class UserProvider extends StatelessWidget {
-  const UserProvider({super.key, required this.url, required this.child});
+  const UserProvider({required this.url, required this.child, super.key});
 
   final String url;
   final Widget child;

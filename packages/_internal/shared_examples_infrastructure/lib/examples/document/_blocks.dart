@@ -1,12 +1,11 @@
 import 'package:crdt_lf/crdt_lf.dart';
 import 'package:crdt_lf_flutter/crdt_lf_flutter.dart' show CrdtProvider;
+import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import 'package:shared_examples_infrastructure/examples/document/_state.dart';
 import 'package:shared_examples_infrastructure/shared/add_item_dialog.dart';
 import 'package:shared_examples_infrastructure/shared/crdt_text_field.dart';
 import 'package:shared_examples_infrastructure/shared/example_sync_session.dart';
-import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
-
-import '_state.dart';
 
 /// The block kinds available in the document example.
 ///
@@ -51,9 +50,9 @@ abstract class BlockSpec {
   Widget buildBody(
     BuildContext context,
     DocumentExampleState state,
-    CRDTMapRefHandler block,
-    bool interactive,
-  );
+    CRDTMapRefHandler block, {
+    required bool interactive,
+  });
 }
 
 /// A paragraph of collaborative text.
@@ -77,9 +76,9 @@ class TextBlockSpec extends BlockSpec {
   Widget buildBody(
     BuildContext context,
     DocumentExampleState state,
-    CRDTMapRefHandler block,
-    bool interactive,
-  ) {
+    CRDTMapRefHandler block, {
+    required bool interactive,
+  }) {
     final text = state.blockContent(block) as CRDTFugueTextHandler?;
     return CrdtTextField(
       key: ValueKey('text-${block.id}'),
@@ -113,9 +112,9 @@ class TodoBlockSpec extends BlockSpec {
   Widget buildBody(
     BuildContext context,
     DocumentExampleState state,
-    CRDTMapRefHandler block,
-    bool interactive,
-  ) {
+    CRDTMapRefHandler block, {
+    required bool interactive,
+  }) {
     final list = state.blockContent(block) as CRDTMovableListRefHandler?;
     final todos =
         list == null ? const <CRDTMapRefHandler>[] : state.todosOf(list);
@@ -218,11 +217,11 @@ class _TodoBlockBody extends StatelessWidget {
 /// subtree, they travel with it into the overlay.
 class _ReorderItemScope extends StatelessWidget {
   const _ReorderItemScope({
-    super.key,
     required this.document,
     required this.session,
     required this.state,
     required this.child,
+    super.key,
   });
 
   final CRDTDocument document;
@@ -247,11 +246,11 @@ class _ReorderItemScope extends StatelessWidget {
 
 class _TodoRow extends StatelessWidget {
   const _TodoRow({
-    super.key,
     required this.item,
     required this.index,
     required this.list,
     required this.interactive,
+    super.key,
   });
 
   final CRDTMapRefHandler item;
@@ -320,7 +319,6 @@ Future<void> promptText(
 }) {
   return showDialog<void>(
     context: context,
-    barrierDismissible: true,
     builder: (_) => AddItemDialog(title: title, hint: hint, onAdd: onAdd),
   );
 }

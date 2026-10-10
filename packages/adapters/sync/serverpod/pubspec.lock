@@ -127,7 +127,7 @@ packages:
       path: "../../../core/crdt_lf"
       relative: true
     source: path
-    version: "5.1.1"
+    version: "5.1.2"
   crdt_lf_persistence:
     dependency: "direct overridden"
     description:
@@ -141,7 +141,7 @@ packages:
       path: "../../../core/crdt_socket_sync"
       relative: true
     source: path
-    version: "0.10.0"
+    version: "0.10.1"
   crypto:
     dependency: transitive
     description:

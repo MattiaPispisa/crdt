@@ -1,10 +1,6 @@
 part of 'vm_service_cubit.dart';
 
 class VmServiceState extends Equatable {
-  final bool loading;
-  final String? error;
-  final VmService? service;
-
   const VmServiceState({
     required this.loading,
     required this.error,
@@ -14,6 +10,9 @@ class VmServiceState extends Equatable {
   factory VmServiceState.initial() {
     return const VmServiceState(loading: false, error: null, service: null);
   }
+  final bool loading;
+  final String? error;
+  final VmService? service;
 
   VmServiceState copyWith({bool? loading, String? error, VmService? service}) {
     return VmServiceState(

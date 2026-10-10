@@ -42,7 +42,7 @@ class DocumentChangesWidget extends StatelessWidget {
 }
 
 class _SelectedDocumentTabs extends StatelessWidget {
-  const _SelectedDocumentTabs({super.key, required this.document});
+  const _SelectedDocumentTabs({required this.document, super.key});
 
   final TrackedDocument document;
 

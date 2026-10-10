@@ -22,10 +22,10 @@ class PackageVersion {
 class ExamplesHome extends StatelessWidget {
   /// Creates the examples landing page.
   const ExamplesHome({
-    super.key,
     required this.title,
     required this.logo,
     required this.examples,
+    super.key,
     this.versions = const [],
     this.actions = const [],
   });

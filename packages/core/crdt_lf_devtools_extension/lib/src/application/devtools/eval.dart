@@ -1,6 +1,6 @@
 import 'package:devtools_app_shared/service.dart';
-import 'package:vm_service/vm_service.dart';
 import 'package:devtools_extensions/devtools_extensions.dart' as devtools;
+import 'package:vm_service/vm_service.dart';
 
 /// Helpers around [EvalOnDartLibrary] for the CRDT LF devtools extension.
 ///

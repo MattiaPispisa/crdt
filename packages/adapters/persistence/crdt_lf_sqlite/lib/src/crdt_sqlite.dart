@@ -124,6 +124,8 @@ class CRDTSqlite implements CRDTStorageBackend {
   /// itself.
   @override
   void deleteDocument(String documentId) {
+    // A synchronous body: the result is never a Future.
+    // ignore: discarded_futures
     runInTransaction(database, () {
       database
         ..execute(

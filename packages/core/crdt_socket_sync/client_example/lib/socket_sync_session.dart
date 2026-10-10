@@ -2,18 +2,18 @@ import 'dart:async';
 
 import 'package:crdt_lf/crdt_lf.dart';
 import 'package:crdt_socket_sync/web_socket_client.dart';
-import 'package:en_logger/en_logger.dart';
 import 'package:crdt_socket_sync_client_example/awareness_text_presence.dart';
+import 'package:en_logger/en_logger.dart';
 import 'package:hlc_dart/hlc_dart.dart';
 import 'package:shared_examples_infrastructure/shared_examples_infrastructure.dart';
 
 /// An [ExampleSyncSession] backed by a real [WebSocketClient].
 ///
-/// Creates a [CRDTDocument] for the given `documentId` and `author`, hands it to
-/// a client pointed at `url`, and connects. The client owns the local ⇄ remote
-/// sync; this session just exposes the [document] (for the shared example UI)
-/// and the [client] (for the connection indicator), and tears both down on
-/// [dispose].
+/// Creates a [CRDTDocument] for the given `documentId` and `author`, hands it
+/// to a client pointed at `url`, and connects. The client owns the
+/// local ⇄ remote sync. This session exposes the [document] (for the shared
+/// example UI) and the [client] (for the connection indicator), and tears
+/// both down on [dispose].
 ///
 /// The socket example uses **one** session per screen: this app instance is a
 /// single real peer. Run several instances to collaborate.

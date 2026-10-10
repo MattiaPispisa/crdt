@@ -1,3 +1,16 @@
+## [0.10.1](https://github.com/MattiaPispisa/crdt/tree/crdt_socket_sync-v0.10.1/packages/core/crdt_socket_sync)
+
+**Date:** --
+
+[compare to previous release](https://github.com/MattiaPispisa/crdt/compare/crdt_socket_sync-v0.10.0...crdt_socket_sync-v0.10.1)
+
+### Fixed
+
+- `dispose` handles its async work better: the futures it does not wait for
+  (closing streams, cancelling subscriptions) are now in `unawaited`, like the
+  calls that run in the background (reconnect, sync requests, awareness
+  messages). No change in behavior.
+
 ## [0.10.0](https://github.com/MattiaPispisa/crdt/tree/crdt_socket_sync-v0.10.0/packages/core/crdt_socket_sync)
 
 **Date:** 2026-10-04

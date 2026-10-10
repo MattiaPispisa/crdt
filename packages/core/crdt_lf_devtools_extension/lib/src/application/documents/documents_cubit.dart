@@ -22,7 +22,7 @@ class DocumentsCubitArgs {
 /// (event `crdt_lf:documents:created`) or when [load] is invoked manually.
 class DocumentsCubit extends Cubit<DocumentsState> {
   DocumentsCubit(this.args) : super(DocumentsState.initial()) {
-    load();
+    unawaited(load());
     _setupEventSubscription();
   }
 
@@ -33,14 +33,14 @@ class DocumentsCubit extends Cubit<DocumentsState> {
   void _setupEventSubscription() {
     _eventStreamSubscription = args.service.onExtensionEvent.listen((event) {
       if (event.isDocumentCreatedEvent) {
-        load();
+        unawaited(load());
       } else if (event.isDocumentChangedEvent) {
         // If the event references a document not yet in our list, the
         // `crdt_lf:documents:created` event was missed (e.g. the extension
         // connected after the document was created). Reload to pick it up.
         final docs = state.documents;
         if (docs != null && !docs.any((d) => d.id == event.documentId)) {
-          load();
+          unawaited(load());
         }
       }
     });
@@ -51,7 +51,7 @@ class DocumentsCubit extends Cubit<DocumentsState> {
       return;
     }
 
-    emit(state.copyWith(loading: true, error: null));
+    emit(state.copyWith(loading: true));
 
     try {
       _alive?.dispose();
@@ -65,7 +65,7 @@ class DocumentsCubit extends Cubit<DocumentsState> {
               .toList();
 
       // Preserve selection across reloads when possible.
-      TrackedDocument? selected = state.selectedDocument;
+      var selected = state.selectedDocument;
       if (selected != null) {
         selected = list.cast<TrackedDocument?>().firstWhere(
           (d) => d?.id == selected!.id,
@@ -120,7 +120,7 @@ class DocumentsCubit extends Cubit<DocumentsState> {
   @override
   Future<void> close() {
     _alive?.dispose();
-    _eventStreamSubscription?.cancel();
+    unawaited(_eventStreamSubscription?.cancel());
     return super.close();
   }
 }

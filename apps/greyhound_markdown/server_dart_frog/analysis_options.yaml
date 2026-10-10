@@ -1,4 +1,4 @@
-include: package:ws_lint/dart.yaml
+include: package:ws_lint/dart_example.yaml
 
 linter:
   rules:

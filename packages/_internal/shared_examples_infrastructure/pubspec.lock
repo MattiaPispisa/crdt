@@ -95,14 +95,14 @@ packages:
       path: "../../core/crdt_lf"
       relative: true
     source: path
-    version: "5.1.1"
+    version: "5.1.2"
   crdt_lf_flutter:
     dependency: "direct main"
     description:
       path: "../../core/crdt_lf_flutter"
       relative: true
     source: path
-    version: "0.5.2"
+    version: "0.5.3"
   crypto:
     dependency: transitive
     description:

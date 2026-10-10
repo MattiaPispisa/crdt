@@ -1,14 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:package_info_plus/package_info_plus.dart';
-import 'package:url_launcher/url_launcher.dart';
-
 import 'package:greyhound_markdown_client/src/application/application.dart';
 import 'package:greyhound_markdown_client/src/config.dart';
 import 'package:greyhound_markdown_client/src/l10n/l10n_extension.dart';
 import 'package:greyhound_markdown_client/src/l10n/labels.dart';
 import 'package:greyhound_markdown_client/src/routing/app_navigation.dart';
 import 'package:greyhound_markdown_client/src/widgets/credit_line.dart';
+import 'package:package_info_plus/package_info_plus.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 /// Formats a bundle version as `v<version>` plus the build number when the
 /// platform provides one (empty on web / when no `+build` is set).

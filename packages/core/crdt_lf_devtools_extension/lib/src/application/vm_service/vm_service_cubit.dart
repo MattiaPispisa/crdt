@@ -24,7 +24,7 @@ class VmServiceCubit extends Cubit<VmServiceState> {
 
     if (connectedState.connected) {
       return emit(
-        state.copyWith(loading: false, service: serviceManager.service!),
+        state.copyWith(loading: false, service: serviceManager.service),
       );
     }
 

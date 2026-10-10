@@ -2,11 +2,10 @@ import 'package:crdt_lf/crdt_lf.dart';
 import 'package:crdt_lf_flutter/crdt_lf_flutter.dart' show CrdtHandlerBuilder;
 import 'package:flutter/material.dart';
 import 'package:shared_examples_infrastructure/examples/ids.dart';
+import 'package:shared_examples_infrastructure/examples/sortable_todo_list/_sortable_todo_item.dart';
+import 'package:shared_examples_infrastructure/examples/sortable_todo_list/_state.dart';
 import 'package:shared_examples_infrastructure/shared/document_pane.dart';
 import 'package:shared_examples_infrastructure/shared/example_scaffold.dart';
-
-import '_sortable_todo_item.dart';
-import '_state.dart';
 
 /// Builds the Sortable Todo List example screen (backed by
 /// `CRDTFugueMovableListHandler`) from the given [sessionsFactory].

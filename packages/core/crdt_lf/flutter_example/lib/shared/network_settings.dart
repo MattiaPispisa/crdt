@@ -1,8 +1,11 @@
+import 'dart:async';
+
 import 'package:crdt_lf_flutter_example/shared/network.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-/// A compact network status with a button that opens the [_NetworkSettingsDialog].
+/// A compact network status with a button that opens the
+/// [_NetworkSettingsDialog].
 ///
 /// Shows the sync state and the number of queued offline events, and lets the
 /// user tune the simulated connection (sync on/off, random delay and its
@@ -36,9 +39,11 @@ class NetworkSettings extends StatelessWidget {
   }
 
   void _openSettings(BuildContext context, Network network) {
-    showDialog<void>(
-      context: context,
-      builder: (_) => _NetworkSettingsDialog(network: network),
+    unawaited(
+      showDialog<void>(
+        context: context,
+        builder: (_) => _NetworkSettingsDialog(network: network),
+      ),
     );
   }
 }

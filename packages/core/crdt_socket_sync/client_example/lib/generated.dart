@@ -1,6 +1,6 @@
 // GENERATED CODE - DO NOT MODIFY BY HAND
 // ignore_for_file: constant_identifier_names, non_constant_identifier_names
 
-String crdt_socket_sync_version = '0.10.0';
-String crdt_lf_version = '5.1.1';
-String crdt_lf_flutter_version = '0.5.2';
+String crdt_socket_sync_version = '0.10.1';
+String crdt_lf_version = '5.1.2';
+String crdt_lf_flutter_version = '0.5.3';

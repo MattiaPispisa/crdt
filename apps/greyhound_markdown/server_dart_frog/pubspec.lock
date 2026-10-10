@@ -79,7 +79,7 @@ packages:
       path: "../../../packages/core/crdt_lf"
       relative: true
     source: path
-    version: "5.1.1"
+    version: "5.1.2"
   crdt_lf_persistence:
     dependency: "direct overridden"
     description:
@@ -93,7 +93,7 @@ packages:
       path: "../../../packages/core/crdt_socket_sync"
       relative: true
     source: path
-    version: "0.10.0"
+    version: "0.10.1"
   crdt_socket_sync_dart_frog:
     dependency: "direct main"
     description:

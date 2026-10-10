@@ -652,7 +652,7 @@ class _PresenceCardState extends State<_PresenceCard> {
   @override
   void dispose() {
     _timer?.cancel();
-    _positions.close();
+    unawaited(_positions.close());
     super.dispose();
   }
 
