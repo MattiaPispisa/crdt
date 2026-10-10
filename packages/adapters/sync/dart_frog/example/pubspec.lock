@@ -76,37 +76,42 @@ packages:
   crdt_lf:
     dependency: "direct overridden"
     description:
-      path: "../../../../core/crdt_lf"
-      relative: true
-    source: path
+      name: crdt_lf
+      sha256: "43669b0163319bbad4ada0049273b9c5402614054857343311a0de73be957010"
+      url: "https://pub.dev"
+    source: hosted
     version: "5.1.1"
   crdt_lf_hive:
     dependency: "direct main"
     description:
-      path: "../../../persistence/crdt_lf_hive"
-      relative: true
-    source: path
+      name: crdt_lf_hive
+      sha256: cb8f8fd6cd45375f8bab9e3339ca00b03090f480523a4e8331e57114e97fd21f
+      url: "https://pub.dev"
+    source: hosted
     version: "0.5.2"
   crdt_lf_persistence:
     dependency: "direct overridden"
     description:
-      path: "../../../../core/crdt_lf_persistence"
-      relative: true
-    source: path
+      name: crdt_lf_persistence
+      sha256: d60691b2dbb8d704d758cb2561e65289412a1f1c1dc3b1388e264fc94ca31106
+      url: "https://pub.dev"
+    source: hosted
     version: "0.2.0"
   crdt_socket_sync:
     dependency: "direct main"
     description:
-      path: "../../../../core/crdt_socket_sync"
-      relative: true
-    source: path
+      name: crdt_socket_sync
+      sha256: b0bd69f2ac98ca524aaff975e0e91760e0913d40c8d6705a6163e0c9fe94ef47
+      url: "https://pub.dev"
+    source: hosted
     version: "0.10.0"
   crdt_socket_sync_dart_frog:
     dependency: "direct main"
     description:
-      path: ".."
-      relative: true
-    source: path
+      name: crdt_socket_sync_dart_frog
+      sha256: "8a4c4e96c5ed8a97ccc3e9a045fea07ab67aacbe57b3f1d354912bf6dc261512"
+      url: "https://pub.dev"
+    source: hosted
     version: "0.1.0+1"
   crypto:
     dependency: transitive
@@ -167,9 +172,10 @@ packages:
   hlc_dart:
     dependency: "direct overridden"
     description:
-      path: "../../../../core/hlc"
-      relative: true
-    source: path
+      name: hlc_dart
+      sha256: b6e798b4fe648fa1a054a9541238e28ba6fe2e6fe28d7d7a2d13ca893187a127
+      url: "https://pub.dev"
+    source: hosted
     version: "1.2.0"
   hotreloader:
     dependency: transitive
@@ -215,10 +221,10 @@ packages:
     dependency: "direct dev"
     description:
       name: lints
-      sha256: c35bb79562d980e9a453fc715854e1ed39e24e7d0297a880ef54e17f9874a9d7
+      sha256: "12f842a479589fea194fe5c5a3095abc7be0c1f2ddfa9a0e76aed1dbd26a87df"
       url: "https://pub.dev"
     source: hosted
-    version: "5.1.1"
+    version: "6.1.0"
   logging:
     dependency: transitive
     description:
