@@ -11,14 +11,14 @@ import 'package:crdt_lf/crdt_lf.dart';
 /// deterministic.
 ///
 /// ```dart
-/// class AssetAggregate extends AggregateDefinition<Asset, AssetEvent> {
+/// final class AssetAggregate extends AggregateDefinition<Asset, AssetEvent> {
 ///   const AssetAggregate();
 ///
 ///   @override
 ///   String get handlerType => 'asset';
 ///
 ///   @override
-///   Asset initial() => const Asset();
+///   Asset initial(String id) => Asset(id: id);
 ///
 ///   @override
 ///   Asset reduce(Asset state, AssetEvent event, EventContext context) =>
@@ -34,7 +34,7 @@ import 'package:crdt_lf/crdt_lf.dart';
 ///   ValueCodec<Asset> get stateCodec => const AssetCodec();
 /// }
 /// ```
-abstract class AggregateDefinition<S extends Object, E> {
+abstract base class AggregateDefinition<S extends Object, E> {
   /// Const constructor for subclasses.
   const AggregateDefinition();
 
@@ -42,14 +42,14 @@ abstract class AggregateDefinition<S extends Object, E> {
   static const int maxVersion = OperationType.maxKind - firstEventKind + 1;
 
   /// The operation kind the events of version 1 travel under. Version `v`
-  /// travels under `firstEventKind + v - 1`.
-  static const int firstEventKind = 4;
+  /// travels under `firstEventKind + v - 1`; the kinds below are reserved.
+  static const int firstEventKind = 16;
 
   /// {@macro handler_type_tag}
   String get handlerType;
 
-  /// The state of an aggregate no event has touched yet.
-  S initial();
+  /// The state of the aggregate [id] before any event touches it.
+  S initial(String id);
 
   /// The state [state] becomes once [event] is applied.
   ///
@@ -64,6 +64,11 @@ abstract class AggregateDefinition<S extends Object, E> {
   ///
   /// Return a new state rather than changing [state]: the handler hands
   /// [state] out as its value, and deltas keep both ends.
+  ///
+  /// Throw to refuse [event]. [CRDTAggregateHandler.dispatchAll] then throws
+  /// the same error and writes nothing. A change holding an event that throws
+  /// is skipped whole, on every peer: this is how an event that a concurrent
+  /// one made invalid is dropped.
   S reduce(S state, E event, EventContext context);
 
   /// Encodes and decodes the events of the current [version].
@@ -85,25 +90,20 @@ abstract class AggregateDefinition<S extends Object, E> {
   /// meaning, and add a migration from the previous version.
   int get version => 1;
 
-  /// The oldest version this build still reads; defaults to [version].
+  /// The steps that bring older data up to [version], one step per version.
   ///
-  /// Data in an older version is refused. Raise it only once no peer and no
-  /// stored document holds events or snapshots of that version any more —
-  /// for example after every replica took a snapshot that pruned them.
-  int get minReadableVersion => version;
-
-  /// The steps that bring data from [minReadableVersion] up to [version],
-  /// one step per version.
+  /// This build reads every version an unbroken chain of steps leads up from;
+  /// data in an older version is refused. Drop the steps below a version once
+  /// no peer and no stored document holds data in it any more.
   ///
-  /// A step for every version in between is required:
-  /// [CRDTAggregateHandler.spec] throws an [ArgumentError] on a gap or on two
-  /// steps from the same version.
+  /// [CRDTAggregateHandler.spec] throws an [ArgumentError] on two steps from
+  /// one version, or on a step that does not lead up to [version].
   List<AggregateMigration> get migrations => const [];
 }
 
 /// An [AggregateDefinition] whose events can be undone with
 /// [CRDTUndoManager].
-abstract class InvertibleAggregateDefinition<S extends Object, E>
+abstract base class InvertibleAggregateDefinition<S extends Object, E>
     extends AggregateDefinition<S, E> {
   /// Const constructor for subclasses.
   const InvertibleAggregateDefinition();
@@ -124,19 +124,20 @@ abstract class InvertibleAggregateDefinition<S extends Object, E>
 /// A step runs every time data of version [from] is read: the history keeps
 /// the bytes each peer wrote, so it is never rewritten. A step is therefore
 /// pure and deterministic, and once released it never changes.
-abstract class AggregateMigration {
+abstract base class AggregateMigration {
   /// Const constructor for subclasses.
   const AggregateMigration();
 
   /// The version this step reads.
   int get from;
 
-  /// [event], written in version [from], rewritten in the next version.
+  /// The events that [event], written in version [from], becomes in the next
+  /// version: an empty list drops it, several events split it.
   ///
-  /// One event in, one event out: the [EventId] of an event is its place in
-  /// its change, so dropping or splitting one would move the ids of the
-  /// events after it.
-  Uint8List upEvent(Uint8List event);
+  /// The first one keeps the [EventId] of [event]; each other one gets an
+  /// [EventId.part] of its own. No id ever moves, so the entities an older
+  /// version created keep their identity.
+  List<Uint8List> upEvent(Uint8List event);
 
   /// [state], a snapshot state written in version [from], rewritten in the
   /// next version.

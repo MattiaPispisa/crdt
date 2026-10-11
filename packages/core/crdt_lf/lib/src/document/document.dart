@@ -177,6 +177,10 @@ abstract class BaseCRDTDocument {
   /// The registered snapshot providers
   Map<String, Handler<dynamic>> get _handlers;
 
+  /// The operations of the handler [handlerId] registered in the open
+  /// transaction, which no change carries yet.
+  List<Operation> _uncommittedOperations(String handlerId) => const [];
+
   /// What a cached handler state is pinned to.
   ///
   /// Moves on the paths that make every cached state stale at once. A change
@@ -1139,21 +1143,20 @@ class CRDTDocument extends BaseCRDTDocument {
         _transactionManager.begin();
       }
 
-      _transactionManager.handleOperation(operation);
-
-      if (handler != null) {
-        try {
-          // Before the fold, so a [CRDTUndoManager] reads the state the
-          // operation is about to move, and after the stamp, so the inverse
-          // can name it.
+      try {
+        // Before the operation joins the transaction and before the fold, so
+        // a [CRDTUndoManager] reads the state the operation is about to move,
+        // and after the stamp, so the inverse can name it.
+        if (handler != null) {
           _captureForUndo(handler, operation);
-        } finally {
-          // The commit below is in a `finally` too, so the operation reaches
-          // the change store whatever happens above. The fold has to happen
-          // for the same reason: a handler that skipped it would hold a state
-          // its own history does not describe, for good.
-          handler._internalIncrementCachedState(operation: operation);
         }
+      } finally {
+        // The commit below is in a `finally` too, so the operation reaches
+        // the change store whatever happens above. The fold has to happen
+        // for the same reason: a handler that skipped it would hold a state
+        // its own history does not describe, for good.
+        _transactionManager.handleOperation(operation);
+        handler?._internalIncrementCachedState(operation: operation);
       }
     } finally {
       if (openedImplicitTransaction) {
@@ -1629,6 +1632,12 @@ class CRDTDocument extends BaseCRDTDocument {
       fromVersionVector: fromVersionVector,
     );
   }
+
+  @override
+  List<Operation> _uncommittedOperations(String handlerId) => [
+        for (final operation in _transactionManager.pendingOperations)
+          if (operation.id == handlerId) operation,
+      ];
 
   @override
   int changeCountForHandler(String handlerId) {

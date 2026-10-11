@@ -7,7 +7,8 @@
 ### Added
 
 - `CRDTAggregateHandler`: one aggregate built from domain events replayed in `(HLC, author)`
-  order, with atomic `dispatchAll`, stable `EventId`s, deltas, undo and versioned migrations.
+  order, with atomic `dispatchAll`, events `reduce` can refuse, stable `EventId`s, deltas, undo
+  and versioned migrations.
 
 ### Changed
 
@@ -16,6 +17,9 @@
 
 ### Fixed
 
+- Reading a handler inside a transaction now includes the writes made earlier in the same
+  transaction. Before, the read could miss them, and the handler kept that wrong value even
+  after the commit.
 - `CRDTTextHandler`: a transaction that inserts before an earlier insert of the same transaction
   no longer moves it; the compacted change replays to the text the peer sees.
   [188](https://github.com/MattiaPispisa/crdt/issues/188)

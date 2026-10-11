@@ -1301,14 +1301,14 @@ through domain operations: create it, add a note, update a note. Write those
 operations as **events**, and say once how each event moves the state:
 
 ```dart
-class AssetAggregate extends AggregateDefinition<Asset, AssetEvent> {
+final class AssetAggregate extends AggregateDefinition<Asset, AssetEvent> {
   const AssetAggregate();
 
   @override
   String get handlerType => 'asset';
 
   @override
-  Asset initial() => const Asset();
+  Asset initial(String id) => Asset(id: id);
 
   @override
   Asset reduce(Asset state, AssetEvent event, EventContext context) =>
@@ -1330,7 +1330,8 @@ final asset = doc.handler(
   CRDTAggregateHandler.spec(const AssetAggregate()),
   'asset-42',
 );
-asset.dispatchAll([const Renamed('P-101'), const NoteAdded('Installed')]);
+asset.dispatch(const Renamed('P-101'));
+final noteId = asset.dispatch(const NoteAdded('Installed'));
 asset.dispatch(NoteUpdated(noteId, 'Serviced'));
 print(asset.value.displayName); // P-101
 ```
@@ -1346,7 +1347,7 @@ state. What you get, compared with models A and B:
   receives all of them or none.
 - **Stable identities.** `EventContext.id` is the same on every peer, so an
   entity an event creates can keep it, and later events name that entity instead
-  of a position that a concurrent insert may shift.
+  of a position that a concurrent insert may shift. `dispatch` returns that id.
 
 The rules of `reduce` are what keeps peers equal:
 
@@ -1358,6 +1359,9 @@ The rules of `reduce` are what keeps peers equal:
   hands it out as its `value`.
 - **An event on a missing target does nothing.** An update of a note another
   peer removed finds nothing, and that is the merged result.
+- **Throw to refuse an event.** `dispatch` then throws the same error and writes
+  nothing. A change whose event throws is skipped whole on every peer, so a
+  batch a concurrent event made invalid leaves no trace.
 
 What it does not do: merge two concurrent edits of the same field. The event
 later in the replay order wins, the whole field at once. For text that peers
@@ -1374,25 +1378,22 @@ meaning in `reduce`, raise `version` and add one `AggregateMigration` from the
 previous version:
 
 ```dart
-class AssetV1ToV2 extends AggregateMigration {
+final class AssetV1ToV2 extends AggregateMigration {
   const AssetV1ToV2();
 
   @override
   int get from => 1;
 
   @override
-  Uint8List upEvent(Uint8List event) => /* v1 event bytes → v2 */;
+  List<Uint8List> upEvent(Uint8List event) => /* v1 event → v2 events */;
 
   @override
   Uint8List upState(Uint8List state) => /* v1 state bytes → v2 */;
 }
 
-class AssetAggregate extends AggregateDefinition<Asset, AssetEvent> {
+final class AssetAggregate extends AggregateDefinition<Asset, AssetEvent> {
   @override
   int get version => 2;
-
-  @override
-  int get minReadableVersion => 1;
 
   @override
   List<AggregateMigration> get migrations => const [AssetV1ToV2()];
@@ -1404,8 +1405,9 @@ The history keeps the bytes each peer wrote, so a migration never rewrites it:
 it runs every time old data is read. Three rules follow:
 
 1. **Pure and deterministic**, like `reduce`.
-2. **One event in, one event out.** An event id is its place in its change, so
-   dropping or splitting an event would move the ids of the events after it.
+2. **Ids never move.** `upEvent` may drop an event or split it in several: the
+   first event keeps the id of the one it came from, and each other one gets an
+   `EventId.part` of its own.
 3. **`upState` agrees with `upEvent`.** The upgraded snapshot has to equal the
    state the upgraded events replay to, or a peer that starts from a snapshot
    diverges from one that replays the history. Keep the bytes an old build wrote
@@ -1414,9 +1416,9 @@ it runs every time old data is read. Three rules follow:
 Every version travels under its own operation kind and snapshot blob version,
 so a build that meets a newer version refuses it, and the capability check of a
 sync layer reports the mismatch before that. Peers have to upgrade before they
-write in a new version. A snapshot is always written in the current version:
-once every replica took one that pruned the old events, raise
-`minReadableVersion` and drop the migrations below it.
+write in a new version. A build reads every version its migrations lead up
+from. A snapshot is always written in the current version: once every replica
+took one that pruned the old events, drop the migrations below it.
 
 ##### A quick decision guide
 

@@ -13,14 +13,14 @@ class _Tally {
   final String last;
 }
 
-class _TallyAggregate extends AggregateDefinition<_Tally, String> {
+final class _TallyAggregate extends AggregateDefinition<_Tally, String> {
   const _TallyAggregate();
 
   @override
   String get handlerType => 'bench.tally';
 
   @override
-  _Tally initial() => const _Tally(0, '');
+  _Tally initial(String id) => const _Tally(0, '');
 
   @override
   _Tally reduce(_Tally state, String event, EventContext context) =>

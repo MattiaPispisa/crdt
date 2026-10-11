@@ -121,8 +121,8 @@ class RemoteApplyHandlerCountBenchmark extends HandlerCountBenchmark {
   @override
   void setup() {
     _source = CRDTDocument();
-    _sourceHandler =
-        CRDTRegisterHandler<int>(_source, 'h0', handlerType: _kind)..set(0);
+    _sourceHandler = CRDTRegisterHandler<int>(_source, 'h0', handlerType: _kind)
+      ..set(0);
     buildTarget(imported: _source.exportChanges());
   }
 

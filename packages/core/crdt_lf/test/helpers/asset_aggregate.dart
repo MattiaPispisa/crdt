@@ -211,7 +211,8 @@ final class MeasureAdded extends AssetEvent {
 }
 
 /// The [Asset] aggregate, undoable.
-class AssetAggregate extends InvertibleAggregateDefinition<Asset, AssetEvent> {
+final class AssetAggregate
+    extends InvertibleAggregateDefinition<Asset, AssetEvent> {
   /// Creates the definition.
   const AssetAggregate();
 
@@ -219,7 +220,7 @@ class AssetAggregate extends InvertibleAggregateDefinition<Asset, AssetEvent> {
   String get handlerType => 'test.asset';
 
   @override
-  Asset initial() => const Asset();
+  Asset initial(String id) => const Asset();
 
   @override
   Asset reduce(Asset state, AssetEvent event, EventContext context) {

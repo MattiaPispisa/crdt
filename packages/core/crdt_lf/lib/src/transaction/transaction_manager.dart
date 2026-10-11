@@ -78,6 +78,11 @@ class TransactionManager {
   /// Whether a transaction is currently active.
   bool get isInTransaction => _depth > 0;
 
+  /// The operations the open transaction holds, in the order they were
+  /// handled. Empty when no transaction is open.
+  List<Operation> get pendingOperations =>
+      isInTransaction ? List.unmodifiable(_pendingOperations) : const [];
+
   /// Begins a new transaction (supports nesting).
   void begin() {
     _depth++;

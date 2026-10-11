@@ -59,14 +59,21 @@ void main() {
 
     test('an event knows the id of the change and its place in it', () {
       final doc = CRDTDocument();
-      final asset = _asset(doc)
-        ..dispatchAll(const [NoteAdded('first'), NoteAdded('second')]);
+      final asset = _asset(doc);
+      final ids =
+          asset.dispatchAll(const [NoteAdded('first'), NoteAdded('second')]);
       final change = doc.exportChanges().single;
 
-      expect(
-        asset.value.notes.map((note) => note.id),
-        [EventId(change.id, 1), EventId(change.id, 0)],
-      );
+      expect(ids, [EventId(change.id, 0), EventId(change.id, 1)]);
+      expect(asset.value.notes.map((note) => note.id), ids.reversed);
+      expect(asset.dispatch(const Renamed('next')).stamp, isNot(change.id));
+    });
+
+    test('the initial state knows the id of the aggregate', () {
+      final labels = CRDTDocument()
+          .handler(CRDTAggregateHandler.spec(const _Labels()), 'labels-1');
+
+      expect(labels.value, {'aggregate': 'labels-1'});
     });
 
     test('an update names the note, not its position', () {
@@ -129,17 +136,50 @@ void main() {
     });
   });
 
+  group('refused events', () {
+    CRDTAggregateHandler<List<String>, String> tags(BaseCRDTDocument doc) =>
+        doc.handler(CRDTAggregateHandler.spec(const _Tags()), 'tags');
+
+    test('a batch the reducer refuses throws and writes nothing', () {
+      final doc = CRDTDocument();
+      final handler = tags(doc)..dispatch('red');
+
+      expect(
+        () => handler.dispatchAll(const ['blue', 'red']),
+        throwsStateError,
+      );
+      expect(doc.exportChanges(), hasLength(1));
+      expect(handler.value, ['red']);
+    });
+
+    test('a batch a concurrent event refuses is skipped whole everywhere', () {
+      final a = CRDTDocument(peerId: PeerId.parse(_peerA));
+      final b = CRDTDocument(peerId: PeerId.parse(_peerB));
+      final tagsA = tags(a)..dispatch('red');
+      final tagsB = tags(b)..dispatchAll(const ['blue', 'red']);
+      _sync(a, b);
+      _sync(b, a);
+
+      final first = a.exportChanges().sorted().first.author;
+      final expected = first == a.peerId ? ['red'] : ['blue', 'red'];
+      expect(tagsA.value, expected);
+      expect(tagsB.value, expected);
+      final restored = CRDTDocument()..importSnapshot(a.takeSnapshot());
+      expect(tags(restored).value, expected);
+    });
+  });
+
   group('spec', () {
     test('declares one kind per readable version, and the blob range', () {
       final spec = CRDTAggregateHandler.spec(
-        const _Tags(version: 3, min: 2, migrations: [_TagsV2ToV3()]),
+        const _Tags(version: 3, migrations: [_TagsV2ToV3()]),
       );
 
       expect(spec.type, 'test.tags');
       expect(
         spec.formats,
         const HandlerFormats(
-          operationKinds: {5, 6},
+          operationKinds: {17, 18},
           blobVersions: BlobVersionRange(2, 3),
         ),
       );
@@ -147,20 +187,22 @@ void main() {
 
     test('refuses a version outside 1..maxVersion', () {
       expect(
-        () => CRDTAggregateHandler.spec(const _Tags(version: 0, min: 0)),
+        () => CRDTAggregateHandler.spec(const _Tags(version: 0)),
         throwsArgumentError,
       );
       expect(
         () => CRDTAggregateHandler.spec(
-          const _Tags(version: AggregateDefinition.maxVersion + 1, min: 1),
+          const _Tags(version: AggregateDefinition.maxVersion + 1),
         ),
         throwsArgumentError,
       );
     });
 
-    test('refuses a readable version past the current one', () {
+    test('refuses a migration past the current version', () {
       expect(
-        () => CRDTAggregateHandler.spec(const _Tags(min: 2)),
+        () => CRDTAggregateHandler.spec(
+          const _Tags(version: 2, migrations: [_TagsV1ToV2(), _TagsV2ToV3()]),
+        ),
         throwsArgumentError,
       );
     });
@@ -168,7 +210,7 @@ void main() {
     test('refuses a gap in the migrations', () {
       expect(
         () => CRDTAggregateHandler.spec(
-          const _Tags(version: 3, min: 1, migrations: [_TagsV1ToV2()]),
+          const _Tags(version: 3, migrations: [_TagsV1ToV2()]),
         ),
         throwsArgumentError,
       );
@@ -242,6 +284,36 @@ void main() {
       expect(tags(fromHistory, _Tags.current).value, ['#a', '#b', '#c']);
     });
 
+    test('a migration splits or drops an event, and ids never move', () {
+      final v1 = CRDTDocument();
+      CRDTAggregateHandler<Map<String, Object>, String> labels(
+        BaseCRDTDocument doc,
+        int version,
+      ) =>
+          doc.handler(CRDTAggregateHandler.spec(_Labels(version)), 'labels');
+      labels(v1, 1).dispatchAll(const ['x*w+y', '', 'z']);
+      final stamp = v1.exportChanges().single.id;
+      EventId id(int index, [int part = 0]) =>
+          EventId(stamp, index, part: part);
+
+      final v2 = CRDTDocument()..importChanges(v1.exportChanges());
+      final v3 = CRDTDocument()..importChanges(v1.exportChanges());
+
+      expect(labels(v2, 2).value, {
+        'aggregate': 'labels',
+        'x*w': id(0),
+        'y': id(0, 1),
+        'z': id(2),
+      });
+      expect(labels(v3, 3).value, {
+        'aggregate': 'labels',
+        'x': id(0),
+        'w': id(0, 2),
+        'y': id(0, 1),
+        'z': id(2),
+      });
+    });
+
     test('new events are written in the current version', () {
       final v1 = CRDTDocument();
       tags(v1, const _Tags()).dispatch('Old');
@@ -253,7 +325,7 @@ void main() {
             .describeDataRequirements()
             .byHandlerType['test.tags']
             ?.operationKinds,
-        {4, 6},
+        {16, 18},
       );
       expect(tags(v3, _Tags.current).value, ['#old', '#new']);
     });
@@ -289,7 +361,7 @@ void main() {
       expect(
         () => tags(
           v3,
-          const _Tags(version: 3, min: 2, migrations: [_TagsV2ToV3()]),
+          const _Tags(version: 3, migrations: [_TagsV2ToV3()]),
         ).value,
         throwsA(isA<UnknownOperationKindException>()),
       );
@@ -371,23 +443,16 @@ void main() {
 /// - v1: an event is the tag in UTF-8; the state is the tags joined by `\n`.
 /// - v2: an event is `[0][tag]` (`0` = add); the state is a JSON list.
 /// - v3: tags are lower case and start with `#`.
-class _Tags extends AggregateDefinition<List<String>, String> {
-  const _Tags({this.version = 1, int? min, this.migrations = const []})
-      : _min = min;
+final class _Tags extends AggregateDefinition<List<String>, String> {
+  const _Tags({this.version = 1, this.migrations = const []});
 
   static const current = _Tags(
     version: 3,
-    min: 1,
     migrations: [_TagsV1ToV2(), _TagsV2ToV3()],
   );
 
   @override
   final int version;
-
-  final int? _min;
-
-  @override
-  int get minReadableVersion => _min ?? version;
 
   @override
   final List<AggregateMigration> migrations;
@@ -396,11 +461,15 @@ class _Tags extends AggregateDefinition<List<String>, String> {
   String get handlerType => 'test.tags';
 
   @override
-  List<String> initial() => const [];
+  List<String> initial(String id) => const [];
 
   @override
-  List<String> reduce(List<String> state, String event, EventContext context) =>
-      [...state, event];
+  List<String> reduce(List<String> state, String event, EventContext context) {
+    if (state.contains(event)) {
+      throw StateError('The tag $event is already there.');
+    }
+    return [...state, event];
+  }
 
   @override
   ValueCodec<String> get eventCodec =>
@@ -461,21 +530,23 @@ class _JsonListCodec implements ValueCodec<List<String>> {
       (jsonDecode(utf8.decode(bytes)) as List<dynamic>).cast<String>();
 }
 
-class _TagsV1ToV2 extends AggregateMigration {
+final class _TagsV1ToV2 extends AggregateMigration {
   const _TagsV1ToV2();
 
   @override
   int get from => 1;
 
   @override
-  Uint8List upEvent(Uint8List event) => Uint8List.fromList([0, ...event]);
+  List<Uint8List> upEvent(Uint8List event) => [
+        Uint8List.fromList([0, ...event]),
+      ];
 
   @override
   Uint8List upState(Uint8List state) =>
       const _JsonListCodec().encode(const _V1StateCodec().decode(state));
 }
 
-class _TagsV2ToV3 extends AggregateMigration {
+final class _TagsV2ToV3 extends AggregateMigration {
   const _TagsV2ToV3();
 
   @override
@@ -484,11 +555,71 @@ class _TagsV2ToV3 extends AggregateMigration {
   static String _tag(String tag) => '#${tag.toLowerCase()}';
 
   @override
-  Uint8List upEvent(Uint8List event) =>
-      const _V2EventCodec().encode(_tag(const _V2EventCodec().decode(event)));
+  List<Uint8List> upEvent(Uint8List event) => [
+        const _V2EventCodec().encode(_tag(const _V2EventCodec().decode(event))),
+      ];
 
   @override
   Uint8List upState(Uint8List state) => const _JsonListCodec().encode([
         for (final tag in const _JsonListCodec().decode(state)) _tag(tag),
       ]);
+}
+
+/// Keeps, under each label, the id of the event that wrote it.
+///
+/// - v1: an event is a label in UTF-8.
+/// - v2: `+` splits a v1 event in several; an empty one is dropped.
+/// - v3: `*` splits a v2 event in several.
+final class _Labels extends AggregateDefinition<Map<String, Object>, String> {
+  const _Labels([this.version = 1]);
+
+  @override
+  final int version;
+
+  @override
+  String get handlerType => 'test.labels';
+
+  @override
+  Map<String, Object> initial(String id) => {'aggregate': id};
+
+  @override
+  Map<String, Object> reduce(
+    Map<String, Object> state,
+    String event,
+    EventContext context,
+  ) =>
+      {...state, event: context.id};
+
+  @override
+  List<AggregateMigration> get migrations => const [
+        _SplitLabels(1, '+'),
+        _SplitLabels(2, '*'),
+      ].sublist(0, version - 1);
+
+  @override
+  ValueCodec<String> get eventCodec => const _V1EventCodec();
+
+  @override
+  ValueCodec<Map<String, Object>> get stateCodec => throw UnimplementedError();
+}
+
+final class _SplitLabels extends AggregateMigration {
+  const _SplitLabels(this.from, this.separator);
+
+  @override
+  final int from;
+
+  final String separator;
+
+  @override
+  List<Uint8List> upEvent(Uint8List event) {
+    final label = utf8.decode(event);
+    return [
+      if (label.isNotEmpty)
+        for (final part in label.split(separator)) utf8.encode(part),
+    ];
+  }
+
+  @override
+  Uint8List upState(Uint8List state) => state;
 }

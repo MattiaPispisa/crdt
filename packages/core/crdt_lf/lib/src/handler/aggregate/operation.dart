@@ -7,8 +7,10 @@ class _AggregateEventsOperation<S extends Object, E> extends Operation {
     required super.type,
     required ValueCodec<E> eventCodec,
     Uint8List? body,
+    List<({int index, int part})>? places,
   })  : _eventCodec = eventCodec,
-        _body = body;
+        _body = body,
+        _places = places;
 
   factory _AggregateEventsOperation.fromHandler(
     CRDTAggregateHandler<S, E> handler, {
@@ -28,9 +30,11 @@ class _AggregateEventsOperation<S extends Object, E> extends Operation {
     required int version,
   }) {
     final codec = handler._definition.eventCodec;
-    final count = UVarint.read(body, offset: 0);
+    final layout = CRDTAggregateHandler._readLayout(body, 0);
+    final count = UVarint.read(body, offset: layout.nextOffset);
     var offset = count.nextOffset;
     final events = <E>[];
+    final places = <({int index, int part})>[];
     for (var i = 0; i < count.value; i++) {
       final record = UVarint.readBytes(
         body,
@@ -38,7 +42,10 @@ class _AggregateEventsOperation<S extends Object, E> extends Operation {
         what: 'aggregate event',
       );
       offset = record.nextOffset;
-      events.add(codec.decode(handler._upcastEvent(record.value, version)));
+      for (final event in handler._upcastEvent(record.value, version)) {
+        events.add(codec.decode(event.bytes));
+        places.add((index: i, part: event.part));
+      }
     }
     if (offset != body.length) {
       throw const FormatException('Trailing bytes after aggregate events');
@@ -49,6 +56,7 @@ class _AggregateEventsOperation<S extends Object, E> extends Operation {
       events: List.unmodifiable(events),
       eventCodec: codec,
       body: body,
+      places: List.unmodifiable(places),
     );
   }
 
@@ -60,6 +68,17 @@ class _AggregateEventsOperation<S extends Object, E> extends Operation {
   // version, which `_eventCodec` cannot write back.
   final Uint8List? _body;
 
+  // Where each event of [events] was written; `null` when [events] is what
+  // was written, one event per place.
+  final List<({int index, int part})>? _places;
+
+  EventId eventId(int i) {
+    final place = _places?[i];
+    return place == null
+        ? EventId(stamp!, i)
+        : EventId(stamp!, place.index, part: place.part);
+  }
+
   @override
   Uint8List toBodyBytes() {
     final body = _body;
@@ -67,6 +86,7 @@ class _AggregateEventsOperation<S extends Object, E> extends Operation {
       return body;
     }
     final out = BytesBuilder(copy: false);
+    UVarint.write(CRDTAggregateHandler._layout, out);
     UVarint.write(events.length, out);
     for (final event in events) {
       UVarint.writeBytes(_eventCodec.encode(event), out);

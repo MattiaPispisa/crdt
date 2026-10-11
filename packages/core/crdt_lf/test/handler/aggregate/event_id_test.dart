@@ -6,20 +6,23 @@ import 'package:test/test.dart';
 
 final _author = PeerId.parse('00000000-0000-4000-8000-00000000000a');
 
-EventId _id(int l, int index) =>
-    EventId(OperationId(_author, HybridLogicalClock(l: l, c: 0)), index);
+EventId _id(int l, int index, [int part = 0]) => EventId(
+      OperationId(_author, HybridLogicalClock(l: l, c: 0)),
+      index,
+      part: part,
+    );
 
 void main() {
   group('EventId', () {
     test('survives a round trip through bytes', () {
-      final id = _id(7, 300);
+      final id = _id(7, 300, 2);
 
       expect(EventId.fromBytes(id.toBytes()), id);
     });
 
     test('reads one id after another from a larger buffer', () {
       final first = _id(1, 0);
-      final second = _id(2, 5);
+      final second = _id(2, 5, 1);
       final out = BytesBuilder(copy: false);
       first.writeTo(out);
       second.writeTo(out);
@@ -46,10 +49,10 @@ void main() {
       );
     });
 
-    test('orders by stamp, then by place in the batch', () {
-      final ids = [_id(2, 0), _id(1, 1), _id(1, 0)]..sort();
+    test('orders by stamp, then by place in the batch, then by part', () {
+      final ids = [_id(2, 0), _id(1, 1), _id(1, 0, 1), _id(1, 0)]..sort();
 
-      expect(ids, [_id(1, 0), _id(1, 1), _id(2, 0)]);
+      expect(ids, [_id(1, 0), _id(1, 0, 1), _id(1, 1), _id(2, 0)]);
     });
 
     test('names the peer that wrote it', () {
