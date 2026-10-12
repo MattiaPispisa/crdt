@@ -602,7 +602,10 @@ class CRDTDocument extends BaseCRDTDocument {
         _updatesController = StreamController<void>.broadcast(),
         _handlers = {},
         _deletedIds = {},
-        _sweptChangeCounts = {} {
+        _sweptChangeCounts = {},
+        _refHolders = {},
+        _indexedRefs = {},
+        _staleContainers = {} {
     _transactionManager = TransactionManager(
       flushWork: _transactionFlushWork,
       onFlushed: _onTransactionFlushed,
@@ -634,6 +637,20 @@ class CRDTDocument extends BaseCRDTDocument {
   /// The change count of each deleted handler as [_deleteLateChildren] last
   /// read it, since the last prune.
   final Map<String, int> _sweptChangeCounts;
+
+  /// The open containers that referenced each child id when last indexed.
+  ///
+  /// May name a container that has since dropped the reference: the only cost
+  /// is one extra revision bump.
+  final Map<String, Set<String>> _refHolders;
+
+  /// The child ids of each indexed container; the inverse of [_refHolders].
+  final Map<String, Set<String>> _indexedRefs;
+
+  /// The open containers whose references may have changed since they were
+  /// last indexed. A delete reads only these, so its cost follows the edits
+  /// since the last delete, not the number of open handlers.
+  final Set<String> _staleContainers;
 
   /// The revision of the deletions registry that [_syncDeletions] last read.
   int _syncedDeletionsRevision = 0;
@@ -844,6 +861,61 @@ class CRDTDocument extends BaseCRDTDocument {
         .handlerType;
   }
 
+  @override
+  void _registerHandler(Handler<dynamic> handler) {
+    super._registerHandler(handler);
+    if (handler is ContainerHandler) {
+      _staleContainers.add(handler.id);
+    }
+  }
+
+  @override
+  Handler<dynamic>? _unregisterHandler(String id) {
+    _staleContainers.remove(id);
+    _dropIndexedRefs(id);
+    return super._unregisterHandler(id);
+  }
+
+  /// Moves the [revisionForHandler] of [id] after a change to its state.
+  void _bumpRevision(String id) {
+    _handlerRevisions.update(id, (r) => r + 1, ifAbsent: () => 1);
+    if (_handlers[id] is ContainerHandler) {
+      _staleContainers.add(id);
+    }
+  }
+
+  void _reindexStaleContainers() {
+    final stale = _staleContainers.toList();
+    _staleContainers.clear();
+    for (final id in stale) {
+      _dropIndexedRefs(id);
+      if (_handlers[id] case final ContainerHandler container) {
+        final children = {for (final ref in container.childRefs()) ref.id};
+        _indexedRefs[id] = children;
+        for (final child in children) {
+          (_refHolders[child] ??= {}).add(id);
+        }
+      }
+    }
+  }
+
+  void _dropIndexedRefs(String containerId) {
+    final children = _indexedRefs.remove(containerId);
+    if (children == null) {
+      return;
+    }
+    for (final child in children) {
+      final holders = _refHolders[child];
+      if (holders == null) {
+        continue;
+      }
+      holders.remove(containerId);
+      if (holders.isEmpty) {
+        _refHolders.remove(child);
+      }
+    }
+  }
+
   /// Marks [ids] deleted and closes the handlers open under them.
   ///
   /// Moves the [revisionForHandler] of each of them, and of the containers
@@ -856,15 +928,12 @@ class CRDTDocument extends BaseCRDTDocument {
     if (closed.isEmpty) {
       return;
     }
-    // Before the ids are marked: a container no longer lists a deleted child.
-    for (final handler in _handlers.values) {
-      if (handler is ContainerHandler &&
-          !closed.contains(handler.id) &&
-          (handler as ContainerHandler)
-              .childRefs()
-              .any((ref) => closed.contains(ref.id))) {
-        _handlerRevisions.update(handler.id, (r) => r + 1, ifAbsent: () => 1);
-      }
+    _reindexStaleContainers();
+    final holders = {
+      for (final id in closed) ...?_refHolders.remove(id),
+    }..removeAll(closed);
+    for (final holder in holders) {
+      _handlerRevisions.update(holder, (r) => r + 1, ifAbsent: () => 1);
     }
     for (final id in closed) {
       _deletedIds.add(id);
@@ -1256,7 +1325,7 @@ class CRDTDocument extends BaseCRDTDocument {
 
       // [operation.id] is the handler id: the revision bump costs a map
       // update, no envelope decode (see [_refreshHandlerCache]).
-      _handlerRevisions.update(operation.id, (r) => r + 1, ifAbsent: () => 1);
+      _bumpRevision(operation.id);
 
       final target = _handlers[operation.id];
       if (applied) {
@@ -1365,7 +1434,7 @@ class CRDTDocument extends BaseCRDTDocument {
   /// invalidation when the handler cannot take them. An empty [pending] means
   /// touched, but to be invalidated outright.
   void _refreshHandlerCache(Handler<dynamic> handler, List<Change> pending) {
-    _handlerRevisions.update(handler.id, (r) => r + 1, ifAbsent: () => 1);
+    _bumpRevision(handler.id);
     if (!handler._queueRemoteChanges(pending)) {
       handler.invalidateCache();
       return;
@@ -2049,7 +2118,7 @@ class CRDTDocument extends BaseCRDTDocument {
       if (SnapshotRecords.reservedKeys.contains(handlerId)) {
         continue;
       }
-      _handlerRevisions.update(handlerId, (r) => r + 1, ifAbsent: () => 1);
+      _bumpRevision(handlerId);
     }
   }
 
@@ -2387,5 +2456,8 @@ class CRDTDocument extends BaseCRDTDocument {
     }
     _undoManagers = null;
     super.dispose();
+    _refHolders.clear();
+    _indexedRefs.clear();
+    _staleContainers.clear();
   }
 }

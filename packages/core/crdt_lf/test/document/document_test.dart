@@ -1688,6 +1688,22 @@ void main() {
       expect(doc.revisionForHandler(root.id), rootRevision);
     });
 
+    test('a delete reads only the containers changed since the last one', () {
+      final untouched = _CountingMapRefHandler(doc, 'untouched')
+        ..setRef('title', title);
+      final edited = _CountingMapRefHandler(doc, 'edited')
+        ..child('kept', CRDTFugueTextHandler.spec);
+      doc.deleteHandler(CRDTFugueTextHandler(doc, doc.newHandlerId()));
+      final reads = untouched.childRefsReads;
+      final added = edited.child('added', CRDTFugueTextHandler.spec);
+      final revision = doc.revisionForHandler(edited.id);
+
+      doc.deleteHandler(added);
+
+      expect(untouched.childRefsReads, reads);
+      expect(doc.revisionForHandler(edited.id), greaterThan(revision));
+    });
+
     test('a child shared by two parents is deleted for both', () {
       final other = CRDTMapRefHandler(doc, 'other')..setRef('title', title);
 
@@ -1996,5 +2012,17 @@ final class _ThrowingInvertMapHandler extends CRDTMapHandler<String> {
       throw StateError('cannot invert');
     }
     return super.invert(operation);
+  }
+}
+
+final class _CountingMapRefHandler extends CRDTMapRefHandler {
+  _CountingMapRefHandler(super.doc, super.id);
+
+  int childRefsReads = 0;
+
+  @override
+  Iterable<HandlerRef> childRefs() {
+    childRefsReads++;
+    return super.childRefs();
   }
 }
