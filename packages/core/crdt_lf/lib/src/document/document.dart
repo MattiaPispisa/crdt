@@ -27,6 +27,9 @@ part 'undo_manager.dart';
 
 /// Defines the foundational contract for a CRDT document.
 ///
+/// The id, and the kind, of the handler that records the deleted handlers.
+const String _deletedHandlersKey = 'crdt_lf/deleted-handlers';
+
 /// This abstract class serves as the common interfaces between
 /// the live [CRDTDocument] and the static read-only document.
 abstract class BaseCRDTDocument {
@@ -159,7 +162,8 @@ abstract class BaseCRDTDocument {
   /// It increases (at least once per [CRDTDocument.updates] event) every time
   /// the observable state of the handler **may have changed**:
   /// changes targeting it are applied (local or imported),
-  /// or a snapshot carrying its state is imported/merged.
+  /// a snapshot carrying its state is imported/merged,
+  /// or it or a handler it references is deleted.
   ///
   /// **It never decreases** — in particular, history pruning
   /// does not affect it — so two equal readings guarantee the handler state
@@ -187,6 +191,12 @@ abstract class BaseCRDTDocument {
     // reach this method by name.
     _ensureNotDisposed('Handler constructor');
 
+    if (isDeleted(handler.id) && !_buildsDeleted) {
+      throw HandlerDeletedException(handler.id);
+    }
+    if (handler.id == _deletedHandlersKey && !_openingDeletions) {
+      throw _reservedIdError(handler.id);
+    }
     if (_handlers.containsKey(handler.id)) {
       throw HandlerAlreadyRegisteredException(
         'Handler with ID ${handler.id} already registered',
@@ -211,6 +221,40 @@ abstract class BaseCRDTDocument {
     // `putIfAbsent`: an explicit [register] made earlier wins.
     _specs.putIfAbsent(spec.type, () => spec);
   }
+
+  /// Whether the document itself is opening the deletions registry, the only
+  /// handler allowed under the reserved id.
+  bool _openingDeletions = false;
+
+  /// Whether the document is building a deleted handler to read it.
+  bool _readingDeleted = false;
+
+  /// Whether a handler may be built under a deleted id, to be read.
+  bool get _buildsDeleted => _readingDeleted;
+
+  CRDTORSetHandler<String>? get _deletions =>
+      _handlers[_deletedHandlersKey] as CRDTORSetHandler<String>?;
+
+  /// Opens the deletions registry on first use, so a document that deletes
+  /// nothing keeps the snapshots and capabilities it had before.
+  CRDTORSetHandler<String> _openDeletions() {
+    final open = _deletions;
+    if (open != null) {
+      return open;
+    }
+    _openingDeletions = true;
+    try {
+      return CRDTDocument._deletionsSpec.create(this, _deletedHandlersKey);
+    } finally {
+      _openingDeletions = false;
+    }
+  }
+
+  ArgumentError _reservedIdError(String id) => ArgumentError.value(
+        id,
+        'id',
+        'Reserved for the deleted handlers of the document',
+      );
 
   /// How to rebuild a handler of a kind, keyed by [HandlerSpec.type].
   final Map<String, HandlerSpec<Handler<dynamic>>> _specs = {};
@@ -250,8 +294,13 @@ abstract class BaseCRDTDocument {
   /// ```
   ///
   /// Throws [HandlerAlreadyRegisteredException] when [id] is taken by a handler
-  /// of another kind.
+  /// of another kind, and [HandlerDeletedException] when [id] was deleted.
+  /// Throws an [ArgumentError] for `crdt_lf/deleted-handlers`, the id the
+  /// document keeps its deletes under.
   T handler<T extends Handler<dynamic>>(HandlerSpec<T> spec, String id) {
+    if (id == _deletedHandlersKey) {
+      throw _reservedIdError(id);
+    }
     final existing = _handlers[id];
     if (existing != null) {
       if (existing is T && existing.handlerType == spec.type) {
@@ -269,14 +318,64 @@ abstract class BaseCRDTDocument {
   ///
   /// Returns the already-registered handler with `ref.id`, or instantiates it
   /// via the [HandlerSpec] registered for `ref.type` (the constructor
-  /// self-registers it). Returns `null` when nothing is registered for it.
+  /// self-registers it). Returns `null` when nothing is registered for it, or
+  /// when the handler was deleted.
   Handler<dynamic>? resolveHandler(HandlerRef ref) {
+    if (isDeleted(ref.id) || ref.id == _deletedHandlersKey) {
+      return null;
+    }
     final existing = _handlers[ref.id];
     if (existing != null) {
       return existing;
     }
     return _specs[ref.type]?.create(this, ref.id);
   }
+
+  /// Whether the handler with [handlerId] was deleted with [deleteHandler],
+  /// on this peer or on a peer whose changes this document holds.
+  bool isDeleted(String handlerId) => false;
+
+  /// Deletes [handler], and every handler reachable from it through
+  /// references, for every peer.
+  ///
+  /// {@template delete_handler}
+  /// A delete is final and wins over any concurrent edit of the deleted
+  /// handlers. Once deleted, a handler is closed: it leaves the registry, its
+  /// `watch` stream ends, and a write to it throws
+  /// [HandlerDeletedException]. Opening or building one under the same id
+  /// throws too, and [resolveHandler] returns `null`.
+  ///
+  /// The next [CRDTDocument.takeSnapshot] leaves its state out, so a prune
+  /// frees its data. A [CRDTUndoManager] cannot bring it back.
+  ///
+  /// A child that another container also references is deleted for that
+  /// container too. A child added to a container while another peer deletes
+  /// it is deleted as well, once a peer that can build the container holds
+  /// both changes.
+  /// {@endtemplate}
+  ///
+  /// Deleting a handler that is already deleted does nothing.
+  ///
+  /// Throws an [ArgumentError] when [handler] belongs to another document.
+  void deleteHandler(Handler<dynamic> handler);
+
+  /// Deletes the handler [ref] points at, and every handler reachable from
+  /// it, for every peer.
+  ///
+  /// {@macro delete_handler}
+  ///
+  /// Works when this peer cannot build the handler, as only the id is needed.
+  /// Its children are then deleted by the first peer that can build it.
+  ///
+  /// Deleting a handler that is already deleted does nothing. Throws an
+  /// [ArgumentError] for the id the document keeps its deletes under.
+  void deleteHandlerRef(HandlerRef ref);
+
+  /// Runs [action] as one transaction: its operations reach the other peers
+  /// together.
+  ///
+  /// See [CRDTDocument.runInTransaction].
+  T runInTransaction<T>(T Function() action, {Object? origin});
 
   /// If [_isDisposed] is `true`, throws [DocumentDisposedException]
   /// with the given [methodInvoke].
@@ -438,7 +537,9 @@ class CRDTDocument extends BaseCRDTDocument {
         _clock = initialClock ?? HybridLogicalClock.initialize(),
         _eventsController = StreamController<CRDTDocumentEvent>.broadcast(),
         _updatesController = StreamController<void>.broadcast(),
-        _handlers = {} {
+        _handlers = {},
+        _deletedIds = {},
+        _sweptChangeCounts = {} {
     _transactionManager = TransactionManager(
       flushWork: _transactionFlushWork,
       onFlushed: _onTransactionFlushed,
@@ -463,6 +564,254 @@ class CRDTDocument extends BaseCRDTDocument {
 
   /// Per-handler monotonic revisions. See [revisionForHandler].
   final Map<String, int> _handlerRevisions = {};
+
+  /// The ids of the deleted handlers, as of the last [_syncDeletions].
+  final Set<String> _deletedIds;
+
+  /// The change count of each deleted handler as [_deleteLateChildren] last
+  /// read it, since the last prune.
+  final Map<String, int> _sweptChangeCounts;
+
+  /// The revision of the deletions registry that [_syncDeletions] last read.
+  int _syncedDeletionsRevision = 0;
+
+  /// The deletions registry is an OR-set nothing ever removes from, so a
+  /// delete is final on every peer.
+  static final HandlerSpec<CRDTORSetHandler<String>> _deletionsSpec =
+      CRDTORSetHandler.spec<String>(_deletedHandlersKey);
+
+  /// The kinds every document of this build reads, whatever its handlers.
+  ///
+  /// [describeBuildCapabilities] always names them. Add them to capabilities
+  /// written by hand.
+  static final DocumentCapabilities builtInCapabilities = DocumentCapabilities({
+    _deletionsSpec.type: _deletionsSpec.formats,
+  });
+
+  /// The envelope prefix of a deletions change: spots the first one without a
+  /// decode on the apply path.
+  static final Uint8List _deletionsPrefix = () {
+    final out = BytesBuilder(copy: false);
+    OperationEnvelopeCodec.writeEnvelopePrefix(
+      out,
+      _deletedHandlersKey,
+      _deletedHandlersKey,
+    );
+    return out.toBytes();
+  }();
+
+  @override
+  bool isDeleted(String handlerId) => _deletedIds.contains(handlerId);
+
+  @override
+  void deleteHandler(Handler<dynamic> handler) {
+    _ensureNotDisposed('deleteHandler');
+    if (!identical(handler.doc, this)) {
+      throw ArgumentError.value(
+        handler.id,
+        'handler',
+        'Belongs to another document',
+      );
+    }
+    _deleteSubtrees([HandlerRef.of(handler)]);
+  }
+
+  @override
+  void deleteHandlerRef(HandlerRef ref) {
+    _ensureNotDisposed('deleteHandlerRef');
+    if (ref.id == _deletedHandlersKey) {
+      throw _reservedIdError(ref.id);
+    }
+    _deleteSubtrees([ref]);
+  }
+
+  /// Deletes [roots] and every handler reachable from them.
+  void _deleteSubtrees(Iterable<HandlerRef> roots) {
+    final ids = _subtreeIds(roots)..removeWhere(isDeleted);
+    if (ids.isEmpty) {
+      return;
+    }
+    _recordDeletions(ids);
+    // Closed here and not by [_syncDeletions]: inside an outer transaction the
+    // registry does not read its own adds until the commit.
+    _closeDeleted(ids);
+  }
+
+  /// Adds [ids] to the deletions registry, in one transaction.
+  void _recordDeletions(Iterable<String> ids) {
+    runInTransaction(() {
+      final registry = _openDeletions();
+      for (final id in ids) {
+        registry.add(id);
+      }
+    });
+  }
+
+  /// The ids of [roots] and of every handler reachable from them.
+  Set<String> _subtreeIds(Iterable<HandlerRef> roots) {
+    final ids = {for (final root in roots) root.id};
+    final queue = Queue<HandlerRef>.of(roots);
+    while (queue.isNotEmpty) {
+      final handler = resolveHandler(queue.removeFirst());
+      if (handler == null || handler is! ContainerHandler) {
+        continue;
+      }
+      for (final ref in (handler as ContainerHandler).childRefs()) {
+        if (ids.add(ref.id)) {
+          queue.add(ref);
+        }
+      }
+    }
+    return ids;
+  }
+
+  static bool _isDeletionsChange(Change change) {
+    final payload = change.payloadBytes();
+    return payload.length > _deletionsPrefix.length &&
+        startsWithBytes(payload, _deletionsPrefix);
+  }
+
+  /// Closes the handlers the deletions registry names and this document has
+  /// not closed yet, with the children they hold here.
+  ///
+  /// A child added to a container concurrently with its delete is out of the
+  /// subtree the deleting peer recorded. The peer that sees both records it,
+  /// so the delete reaches it on every peer.
+  void _syncDeletions() {
+    final registry = _deletions;
+    if (registry == null) {
+      return;
+    }
+    final revision = revisionForHandler(_deletedHandlersKey);
+    if (revision == _syncedDeletionsRevision) {
+      return;
+    }
+    _syncedDeletionsRevision = revision;
+
+    final recorded = registry.value;
+    final roots = <HandlerRef>[];
+    final reached = <String>{};
+    Map<String, String>? manifest;
+    for (final id in recorded) {
+      if (_deletedIds.contains(id)) {
+        continue;
+      }
+      // Read before [_closeDeleted]: a deleted handler no longer resolves.
+      final type = _handlers[id]?.handlerType ??
+          _typeOf(id, manifest ??= _snapshotManifest());
+      if (type == null) {
+        reached.add(id);
+      } else {
+        roots.add(HandlerRef(id, type));
+      }
+    }
+    reached.addAll(_subtreeIds(roots));
+    final unrecorded = reached.difference(recorded);
+    _closeDeleted(reached);
+    if (unrecorded.isNotEmpty) {
+      // Through the outbox: this runs while the document applies changes, and
+      // a write from here would re-enter the commit in progress.
+      _enqueueDeltaEvent(() {
+        if (!_isDisposed) {
+          _recordDeletions(unrecorded.difference(registry.value));
+        }
+      });
+    }
+  }
+
+  /// Deletes the children a deleted container gained after its delete.
+  ///
+  /// An edit concurrent with the delete may reach this peer after it, and add
+  /// a child [_syncDeletions] never saw. Read before a snapshot drops the
+  /// changes that name it.
+  void _deleteLateChildren() {
+    final children = <HandlerRef>[];
+    Map<String, String>? manifest;
+    for (final id in _deletedIds) {
+      final count = changeCountForHandler(id);
+      if (count == 0 || _sweptChangeCounts[id] == count) {
+        continue;
+      }
+      _sweptChangeCounts[id] = count;
+      final type = _typeOf(id, manifest ??= _snapshotManifest());
+      if (type != null) {
+        children.addAll(_childRefsOfDeleted(id, type));
+      }
+    }
+    if (children.isNotEmpty) {
+      _deleteSubtrees(children);
+    }
+  }
+
+  /// The children the deleted container with [id] references, or none when
+  /// this document cannot build a [type].
+  List<HandlerRef> _childRefsOfDeleted(String id, String type) {
+    final spec = _specs[type];
+    if (spec == null) {
+      return const [];
+    }
+    final Handler<dynamic> handler;
+    _readingDeleted = true;
+    try {
+      handler = spec.create(this, id);
+    } finally {
+      _readingDeleted = false;
+    }
+    try {
+      return handler is ContainerHandler
+          ? (handler as ContainerHandler).childRefs().toList()
+          : const [];
+    } finally {
+      _handlers.remove(id);
+    }
+  }
+
+  /// The kind of the handler with [id], read from the snapshot [manifest] or
+  /// from its changes, or `null` when this document holds neither.
+  String? _typeOf(String id, Map<String, String> manifest) {
+    final type = manifest[id];
+    if (type != null) {
+      return type;
+    }
+    final changes = changesForHandler(id);
+    if (changes.isEmpty) {
+      return null;
+    }
+    return OperationEnvelopeCodec.decode(changes.first.payloadBytes())
+        .handlerType;
+  }
+
+  /// Marks [ids] deleted and closes the handlers open under them.
+  ///
+  /// Moves the [revisionForHandler] of each of them, and of the containers
+  /// open here that reference one of them: they all read differently now.
+  void _closeDeleted(Iterable<String> ids) {
+    final closed = {
+      for (final id in ids)
+        if (!_deletedIds.contains(id)) id,
+    };
+    if (closed.isEmpty) {
+      return;
+    }
+    // Before the ids are marked: a container no longer lists a deleted child.
+    for (final handler in _handlers.values) {
+      if (handler is ContainerHandler &&
+          !closed.contains(handler.id) &&
+          (handler as ContainerHandler)
+              .childRefs()
+              .any((ref) => closed.contains(ref.id))) {
+        _handlerRevisions.update(handler.id, (r) => r + 1, ifAbsent: () => 1);
+      }
+    }
+    for (final id in closed) {
+      _deletedIds.add(id);
+      _handlers.remove(id)?._closeDeltas();
+      _handlerRevisions.update(id, (r) => r + 1, ifAbsent: () => 1);
+    }
+    for (final manager in _undoManagers ?? const <CRDTUndoManager>[]) {
+      manager._forget(closed);
+    }
+  }
 
   @override
   Object? _deltaOrigin;
@@ -573,8 +922,9 @@ class CRDTDocument extends BaseCRDTDocument {
   /// All handlers currently registered on this document, keyed by their id.
   ///
   /// Intended for read-only introspection (devtools, debugging). Do not mutate.
-  Map<String, Handler<dynamic>> get registeredHandlers =>
-      Map.unmodifiable(_handlers);
+  Map<String, Handler<dynamic>> get registeredHandlers => Map.unmodifiable(
+        Map.of(_handlers)..remove(_deletedHandlersKey),
+      );
 
   /// Rebuilds every handler reachable from the data this document holds.
   ///
@@ -597,7 +947,7 @@ class CRDTDocument extends BaseCRDTDocument {
     discovered.addAll(_snapshotManifest());
 
     for (final entry in discovered.entries) {
-      if (!_handlers.containsKey(entry.key)) {
+      if (!_handlers.containsKey(entry.key) && !isDeleted(entry.key)) {
         _specs[entry.value]?.create(this, entry.key);
       }
     }
@@ -636,8 +986,8 @@ class CRDTDocument extends BaseCRDTDocument {
 
   /// What this build can read, by handler kind.
   ///
-  /// Names the kinds this document has a handler of, plus those passed to
-  /// [register]. Builds nothing.
+  /// Names the kinds this document has a handler of, those passed to
+  /// [register] and the [builtInCapabilities]. Builds nothing.
   ///
   /// A kind is absent when nothing opened or declared it, which is why a
   /// description read off a document is sent as incomplete: silence means "not
@@ -650,6 +1000,7 @@ class CRDTDocument extends BaseCRDTDocument {
     // Only [_specs]: a handler declares its kind as it registers, so every kind
     // this document has open is already a key here.
     return DocumentCapabilities({
+      ...builtInCapabilities.byHandlerType,
       for (final spec in _specs.values) spec.type: spec.formats,
     });
   }
@@ -666,7 +1017,11 @@ class CRDTDocument extends BaseCRDTDocument {
       }
     }
     return _handlers.values
-        .where((handler) => !referenced.contains(handler.id))
+        .where(
+          (handler) =>
+              !referenced.contains(handler.id) &&
+              handler.id != _deletedHandlersKey,
+        )
         .toList();
   }
 
@@ -863,6 +1218,8 @@ class CRDTDocument extends BaseCRDTDocument {
       }
     }
 
+    _syncDeletions();
+
     // In order, so a consumer reading the stream sees the moves in the order
     // they happened. A transaction that takes changes in before it writes its
     // own reports the ingest first, and the changes it wrote name the ingested
@@ -916,6 +1273,7 @@ class CRDTDocument extends BaseCRDTDocument {
     _refreshHandlerCaches(
       (handler) => handler._isAffectedByChange(change) ? pending : null,
     );
+    _syncDeletions();
   }
 
   /// Batch version of [_foldOrDropCachesForChange] for a set of applied
@@ -950,6 +1308,7 @@ class CRDTDocument extends BaseCRDTDocument {
       }
     }
     _refreshHandlerCaches((handler) => affected[handler.id]);
+    _syncDeletions();
   }
 
   /// Refreshes every registered handler's cache after external change(s).
@@ -1103,6 +1462,9 @@ class CRDTDocument extends BaseCRDTDocument {
     _ensureNotDisposed('registerOperation');
 
     final handler = _handlers[operation.id];
+    if (handler == null && isDeleted(operation.id)) {
+      throw HandlerDeletedException(operation.id);
+    }
 
     // This is the only place that mints an operation id. At commit, the
     // `Change` reuses this id instead of minting a fresh one.
@@ -1172,6 +1534,10 @@ class CRDTDocument extends BaseCRDTDocument {
 
     // Add the change to the store
     _changeStore.addChange(change);
+    if (!_handlers.containsKey(_deletedHandlersKey) &&
+        _isDeletionsChange(change)) {
+      _openDeletions();
+    }
     if (_dataRequirements.isStarted) {
       // Here, and not on a cursor over the store: this is the one point every
       // change passes exactly once, whatever order it arrived in.
@@ -1224,6 +1590,9 @@ class CRDTDocument extends BaseCRDTDocument {
   /// Returns a [Snapshot] representing the document's
   /// state at the current version.
   ///
+  /// A child added to a deleted container by an edit concurrent with the delete
+  /// is deleted first, which writes a change (see [deleteHandler]).
+  ///
   /// ### Pruning history
   /// If [pruneHistory] is `true` (default),
   /// [Change]s that are causally included in this version are removed from the
@@ -1273,6 +1642,7 @@ class CRDTDocument extends BaseCRDTDocument {
   }
 
   Snapshot _takeSnapshot(bool pruneHistory) {
+    _deleteLateChildren();
     // Make sure every reachable nested handler is instantiated before
     // snapshotting, otherwise children never resolved on this peer would be
     // missing from the snapshot and lost on prune.
@@ -1402,6 +1772,7 @@ class CRDTDocument extends BaseCRDTDocument {
       _bumpRevisionsForSnapshot(snapshot);
 
       _invalidateHandlers(ResetCause.snapshotImport);
+      _syncSnapshotDeletions(snapshot);
       _emitUpdate();
       return true;
     }
@@ -1465,6 +1836,7 @@ class CRDTDocument extends BaseCRDTDocument {
       _prune(_lastSnapshot!.versionVector);
     }
     _invalidateHandlers(ResetCause.snapshotMerge);
+    _syncSnapshotDeletions(snapshot);
     _emitUpdate();
   }
 
@@ -1624,6 +1996,15 @@ class CRDTDocument extends BaseCRDTDocument {
   @override
   int revisionForHandler(String handlerId) => _handlerRevisions[handlerId] ?? 0;
 
+  /// Opens the deletions registry when [snapshot] carries one, then closes
+  /// what it names.
+  void _syncSnapshotDeletions(Snapshot snapshot) {
+    if (snapshot.data.containsKey(_deletedHandlersKey)) {
+      _openDeletions();
+    }
+    _syncDeletions();
+  }
+
   /// Bumps the revision of every handler whose state is carried by [snapshot].
   void _bumpRevisionsForSnapshot(Snapshot snapshot) {
     for (final handlerId in snapshot.data.keys) {
@@ -1719,6 +2100,9 @@ class CRDTDocument extends BaseCRDTDocument {
 
   /// Prunes the DAG and the change store up to the given version.
   void _prune(VersionVector version) {
+    // Between two prunes the changes of a handler only grow, so an unchanged
+    // count means nothing new to read.
+    _sweptChangeCounts.clear();
     _dag.prune(version);
     _changeStore.prune(
       version,
@@ -1883,6 +2267,7 @@ class CRDTDocument extends BaseCRDTDocument {
   /// writes with, so it can skip its own echo; a [HandlerReset] carries none.
   /// A nested call that names none keeps the origin of the outer one.
   /// {@endtemplate}
+  @override
   T runInTransaction<T>(T Function() action, {Object? origin}) {
     _ensureNotDisposed('runInTransaction');
 

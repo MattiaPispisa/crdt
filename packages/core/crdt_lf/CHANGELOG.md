@@ -1,3 +1,16 @@
+## [5.2.0](https://github.com/MattiaPispisa/crdt/tree/crdt_lf-v5.2.0/packages/core/crdt_lf)
+
+**Date:** --
+
+[compare to previous release](https://github.com/MattiaPispisa/crdt/compare/crdt_lf-v5.1.2...crdt_lf-v5.2.0)
+
+### Added
+
+- `CRDTORMapRefHandler` and `CRDTORSetRefHandler`: containers of references with OR semantics.
+- `CRDTDocument.deleteHandler` / `deleteHandlerRef` and `removeChild` / `removeChildAt` on every
+  container: delete a handler and its subtree for every peer; the next snapshot drops their data.
+  Every build reads the deletes: see `CRDTDocument.builtInCapabilities`.
+
 ## [5.1.2](https://github.com/MattiaPispisa/crdt/tree/crdt_lf-v5.1.2/packages/core/crdt_lf)
 
 **Date:** 2026-10-10

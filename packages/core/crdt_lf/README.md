@@ -52,6 +52,7 @@
       - [Working with Complex Types](#working-with-complex-types)
       - [Nested Structures (Containers and References)](#nested-structures-containers-and-references)
         - [Naming a generic handler](#naming-a-generic-handler)
+        - [Deleting a nested handler](#deleting-a-nested-handler)
       - [Choosing How to Model Your Data](#choosing-how-to-model-your-data)
         - [Worked example: a TODO list](#worked-example-a-todo-list)
         - [A quick decision guide](#a-quick-decision-guide)
@@ -730,6 +731,9 @@ document.runInTransaction(() => text.insert(0, 'hi'), origin: myEditor);
   reaches neither.
 - **The contents of a nested handler.** Undoing a write that stored a
   `HandlerRef` removes the reference; the data it pointed at stays.
+- **A deleted handler.** A delete is final. Undoing a `removeChild` puts the
+  reference back, and `resolved` leaves it out. The steps of a deleted handler
+  leave both stacks.
 
 An element that comes back is a **new** element: a CRDT never resurrects what it
 removed, so undoing a delete writes the values again under fresh ids. Undoing
@@ -783,6 +787,8 @@ Container handlers, used to model nested structures (see [Nested Structures](#ne
 - `CRDTMapRefHandler`: a map whose values are references to other handlers.
 - `CRDTListRefHandler`: an ordered (Fugue) list of references to other handlers.
 - `CRDTMovableListRefHandler`: a movable ordered list of references to other handlers.
+- `CRDTORMapRefHandler`: a map of references with the Observed-Removed (OR) algorithm.
+- `CRDTORSetRefHandler`: a set of references with the Observed-Removed (OR) algorithm.
 
 ```dart
 final doc = CRDTDocument(
@@ -1080,10 +1086,12 @@ instead of raw data:
 - `CRDTMapRefHandler` — keyed references (`setRef(key, handler)` / `getRef(key)`).
 - `CRDTListRefHandler` — ordered references using Fugue (`insertRef(index, handler)` / `getRefAt(index)`).
 - `CRDTMovableListRefHandler` — movable ordered references (adds `move(from, to)`), ideal for reordering with stable identity (slides, z-index, sortable lists…).
+- `CRDTORMapRefHandler` — keyed references with OR semantics (`putRef(key, handler)` / `getRef(key)`): a write concurrent with a remove of the same key wins.
+- `CRDTORSetRefHandler` — an unordered set of references with OR semantics (`addRef(handler)` / `children`), read back sorted by handler id.
 
 Each container exposes both views:
 
-- the inherited `value` getter returns the **raw references** (`Map<String, HandlerRef>` / `List<HandlerRef>`);
+- the inherited `value` getter returns the **raw references** (`Map<String, HandlerRef>` / `List<HandlerRef>` / `Set<HandlerRef>`);
 - the `resolved` getter returns the **fully resolved subtree** as plain Dart values, resolving every reference recursively (with cycle protection).
 
 Children are resolved **lazily** through the document registry, so the state is
@@ -1227,6 +1235,40 @@ to rebuild every reachable handler from the manifest and the references.
 A complete, interactive example is available in the Flutter example app under
 the **Document** entry (sortable chapters → paragraphs → collaborative text and
 sortable item lists).
+
+##### Deleting a nested handler
+
+Removing a reference leaves the child in the document: its changes, and its
+state in every snapshot. To delete the child for every peer, remove it with
+`removeChild` (`removeChildAt` on the lists), or call `doc.deleteHandler`:
+
+```dart
+chapters.removeChildAt(0);       // the reference, and the chapter
+root.removeChild('draft');       // the same on a map
+doc.deleteHandler(chapter);      // the chapter alone, any reference stays
+doc.deleteHandlerRef(ref);       // by reference, without building it
+```
+
+- **The subtree goes too.** Every handler reachable from the deleted one is
+  deleted. A child that another container also references is deleted for that
+  container too. A child added to the container on another peer, at the same
+  time as the delete, is deleted as well.
+- **A peer that cannot build a child still deletes it.** `removeChild` and
+  `deleteHandlerRef` need only its id, so a server that registers no kinds can
+  delete it too. The children of that child are deleted by the first peer
+  that can build it.
+- **A delete wins.** An edit made at the same time on another peer is ignored.
+- **A delete is final.** The handler is closed: its `watch` stream ends, and a
+  write, `doc.handler` or a constructor on its id throws
+  `HandlerDeletedException`. A reference to it resolves to `null` and
+  `resolved` leaves it out. `child(key, spec)` makes a new child in its place.
+- **The data goes at the next snapshot.** `takeSnapshot` leaves the deleted
+  handlers out, so a prune removes their changes.
+
+The deletes travel as the operations of an internal handler, with the
+reserved id `crdt_lf/deleted-handlers`. A peer on crdt_lf before 5.2.0 sees an
+unknown kind (see `describeDataRequirements`) and keeps showing the deleted
+data.
 
 #### Choosing How to Model Your Data
 

@@ -46,6 +46,24 @@ class _CRDTStaticProxyDocument extends BaseCRDTDocument {
   @override
   final Map<String, Handler<dynamic>> _handlers;
 
+  /// A view reads every handler, deleted at the cursor or not.
+  @override
+  bool get _buildsDeleted => true;
+
+  /// Whether the frozen history holds a delete at all.
+  late final bool _holdsDeletions =
+      (_lastSnapshot?.data.containsKey(_deletedHandlersKey) ?? false) ||
+          _frozenChanges.any(CRDTDocument._isDeletionsChange);
+
+  /// Whether the handler with [handlerId] is deleted at the cursor.
+  @override
+  bool isDeleted(String handlerId) {
+    if (!_holdsDeletions || handlerId == _deletedHandlersKey) {
+      return false;
+    }
+    return _openDeletions().value.contains(handlerId);
+  }
+
   @override
   void registerOperation(Operation operation) {
     throw const ReadOnlyDocumentException('registerOperation');
@@ -54,6 +72,21 @@ class _CRDTStaticProxyDocument extends BaseCRDTDocument {
   @override
   void prepareMutation() {
     throw const ReadOnlyDocumentException('prepareMutation');
+  }
+
+  @override
+  void deleteHandler(Handler<dynamic> handler) {
+    throw const ReadOnlyDocumentException('deleteHandler');
+  }
+
+  @override
+  void deleteHandlerRef(HandlerRef ref) {
+    throw const ReadOnlyDocumentException('deleteHandlerRef');
+  }
+
+  @override
+  T runInTransaction<T>(T Function() action, {Object? origin}) {
+    throw const ReadOnlyDocumentException('runInTransaction');
   }
 
   @override

@@ -1,3 +1,14 @@
+## [0.6.0](https://github.com/MattiaPispisa/crdt/tree/crdt_lf_flutter-v0.6.0/packages/core/crdt_lf_flutter)
+
+**Date:** --
+
+[compare to previous release](https://github.com/MattiaPispisa/crdt/compare/crdt_lf_flutter-v0.5.3...crdt_lf_flutter-v0.6.0)
+
+### Added
+
+- A widget bound to a deleted handler (`crdt_lf` 5.2.0) shows its new `deletedBuilder`, or an
+  empty box, instead of throwing; listeners stop calling back. Needs `crdt_lf` 5.2.0.
+
 ## [0.5.3](https://github.com/MattiaPispisa/crdt/tree/crdt_lf_flutter-v0.5.3/packages/core/crdt_lf_flutter)
 
 **Date:** 2026-10-10

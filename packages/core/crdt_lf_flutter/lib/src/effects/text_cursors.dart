@@ -121,7 +121,8 @@ Rect resolveTextCursorLabelRect({
 /// Requires an [Overlay] ancestor (`MaterialApp`/[WidgetsApp] provide one).
 ///
 /// Requires a `CRDTFugueTextHandler` under [id]: only Fugue handlers carry
-/// the element identity that anchors are made of.
+/// the element identity that anchors are made of. Paints nothing once that
+/// handler is deleted.
 ///
 /// ## Example
 /// ```dart
@@ -286,7 +287,7 @@ class _CrdtTextCursorsOverlayState extends State<CrdtTextCursorsOverlay>
   /// repaints the carets without touching the document.
   void _resolve(Size size) {
     final editable = _findEditable();
-    if (editable == null) {
+    if (editable == null || _document!.isDeleted(widget.id)) {
       _resolved = const [];
       return;
     }
@@ -404,7 +405,9 @@ class _CrdtTextCursorsOverlayState extends State<CrdtTextCursorsOverlay>
     unawaited(_subscription?.cancel());
     _document = document;
     _lastRevision = document.revisionForHandler(widget.id);
-    _handler(); // fail fast on a wrong handler type
+    if (!document.isDeleted(widget.id)) {
+      _handler(); // fail fast on a wrong handler type
+    }
     _subscription = document.updates.listen((_) {
       final revision = document.revisionForHandler(widget.id);
       if (revision == _lastRevision) {

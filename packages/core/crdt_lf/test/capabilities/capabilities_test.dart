@@ -10,7 +10,7 @@ import '../helpers/pn_counter_handler.dart';
 /// them agree. This is where they are compared, against the kind each class
 /// names.
 ///
-/// It matters most for the three ref containers: their declaration is a
+/// It matters most for the five ref containers: their declaration is a
 /// **copy** of the handler they extend, and this table keeps the copy honest.
 final _handlers = <(
   HandlerSpec<Handler<dynamic>>,
@@ -56,6 +56,8 @@ final _handlers = <(
     CRDTMovableListRefHandler.spec,
     (doc) => CRDTMovableListRefHandler(doc, 'movable_ref'),
   ),
+  (CRDTORMapRefHandler.spec, (doc) => CRDTORMapRefHandler(doc, 'or_map_ref')),
+  (CRDTORSetRefHandler.spec, (doc) => CRDTORSetRefHandler(doc, 'or_set_ref')),
 ];
 
 void main() {

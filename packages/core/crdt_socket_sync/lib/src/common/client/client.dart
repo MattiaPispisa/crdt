@@ -56,8 +56,19 @@ abstract class CRDTSocketClient {
   ///
   /// Either way, a kind that **is** named is checked in full: a missing
   /// operation kind, or a snapshot blob of another layout, refuses the client.
-  DocumentCapabilities get capabilities =>
-      _declaredCapabilities ?? document.describeBuildCapabilities();
+  ///
+  /// One passed at construction also names
+  /// [CRDTDocument.builtInCapabilities], which every build reads.
+  DocumentCapabilities get capabilities {
+    final declared = _declaredCapabilities;
+    if (declared == null) {
+      return document.describeBuildCapabilities();
+    }
+    return DocumentCapabilities({
+      ...CRDTDocument.builtInCapabilities.byHandlerType,
+      ...declared.byHandlerType,
+    });
+  }
 
   /// [capabilities] as the peer states them, or `null` when they claim nothing.
   ///
