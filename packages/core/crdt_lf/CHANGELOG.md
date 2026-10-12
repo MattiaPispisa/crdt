@@ -7,8 +7,9 @@
 ### Added
 
 - `CRDTORMapRefHandler` and `CRDTORSetRefHandler`: containers of references with OR semantics.
-- `CRDTDocument.deleteHandler` and `removeChild` / `removeChildAt` on every container: delete a
-  handler and its subtree for every peer; the next snapshot drops their data.
+- `CRDTDocument.deleteHandler` / `deleteHandlerRef` and `removeChild` / `removeChildAt` on every
+  container: delete a handler and its subtree for every peer; the next snapshot drops their data.
+  Every build reads the deletes: see `CRDTDocument.builtInCapabilities`.
 
 ### Fixed
 

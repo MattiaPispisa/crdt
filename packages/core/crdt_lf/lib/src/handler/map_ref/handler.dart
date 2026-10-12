@@ -108,12 +108,13 @@ base class CRDTMapRefHandler extends CRDTMapHandler<HandlerRef>
   ///
   /// Does nothing when [key] is absent.
   void removeChild(String key) {
-    final child = getRef(key);
+    final ref = value[key];
+    if (ref == null) {
+      return;
+    }
     doc.runInTransaction(() {
       delete(key);
-      if (child != null) {
-        doc.deleteHandler(child);
-      }
+      doc.deleteHandlerRef(ref);
     });
   }
 

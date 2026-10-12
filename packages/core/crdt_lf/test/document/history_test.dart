@@ -64,6 +64,12 @@ void main() {
         throwsA(isA<ReadOnlyDocumentException>()),
       );
       expect(
+        () => viewListHandler.doc.deleteHandlerRef(
+          HandlerRef.of(viewListHandler),
+        ),
+        throwsA(isA<ReadOnlyDocumentException>()),
+      );
+      expect(
         () => viewListHandler.doc.runInTransaction(() {}),
         throwsA(isA<ReadOnlyDocumentException>()),
       );
@@ -368,6 +374,31 @@ void main() {
       await Future<void>.delayed(Duration.zero);
 
       expect(done, isTrue);
+    });
+
+    test('a handler reads as deleted from the change that deleted it', () {
+      final root = CRDTMapRefHandler(document, 'root');
+      final title = root.child('title', CRDTFugueTextHandler.spec)
+        ..insert(0, 'Hi');
+      document.deleteHandler(title);
+
+      final historySession = document.toTimeTravel();
+      final viewRoot =
+          historySession.getHandler<CRDTMapRefHandler, Map<String, HandlerRef>>(
+        (doc) => CRDTMapRefHandler(doc, 'root'),
+      );
+      final viewTitle =
+          historySession.getHandler<CRDTFugueTextHandler, FugueTextState>(
+        (doc) => CRDTFugueTextHandler(doc, title.id),
+      );
+
+      expect(viewRoot.resolved, isEmpty);
+      expect(viewTitle.isDeleted, isTrue);
+
+      historySession.previous();
+
+      expect(viewRoot.resolved, {'title': 'Hi'});
+      expect(viewTitle.isDeleted, isFalse);
     });
   });
 }

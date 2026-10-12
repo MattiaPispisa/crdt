@@ -3,4 +3,4 @@
 
 String crdt_socket_sync_version = '0.10.1';
 String crdt_lf_version = '5.2.0';
-String crdt_lf_flutter_version = '0.5.3';
+String crdt_lf_flutter_version = '0.6.0';

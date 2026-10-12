@@ -103,12 +103,13 @@ void main() {
     test('removeChild removes the key and deletes the child', () {
       final title = root.child('title', CRDTFugueTextHandler.spec);
 
-      root
-        ..removeChild('title')
-        ..removeChild('missing');
+      root.removeChild('title');
+      final changes = doc.exportChanges().length;
+      root.removeChild('missing');
 
       expect(root.value, isEmpty);
       expect(title.isDeleted, isTrue);
+      expect(doc.exportChanges(), hasLength(changes));
     });
 
     test('two peers converge on a nested structure', () {

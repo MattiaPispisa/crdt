@@ -1,4 +1,5 @@
 import 'package:crdt_lf/crdt_lf.dart';
+import 'package:crdt_lf_flutter/src/common/_crdt_guards.dart';
 import 'package:crdt_lf_flutter/src/effects/text_delta.dart';
 import 'package:crdt_lf_flutter/src/provider/_handler_delta_subscription.dart';
 import 'package:crdt_lf_flutter/src/provider/crdt_helper.dart';
@@ -57,6 +58,7 @@ class CrdtTextFieldBuilder extends StatefulWidget {
     required this.id,
     required this.builder,
     this.onSelectionAnchorsChanged,
+    this.deletedBuilder,
     super.key,
   });
 
@@ -86,6 +88,11 @@ class CrdtTextFieldBuilder extends StatefulWidget {
   /// identity).
   final void Function(FugueElementID? base, FugueElementID? extent)?
       onSelectionAnchorsChanged;
+
+  /// {@macro crdt_deleted_builder}
+  ///
+  /// The published anchors are withdrawn with `null`s.
+  final WidgetBuilder? deletedBuilder;
 
   @override
   State<CrdtTextFieldBuilder> createState() => _CrdtTextFieldBuilderState();
@@ -181,6 +188,17 @@ class _CrdtTextFieldBuilderState extends State<CrdtTextFieldBuilder> {
   @override
   Widget build(BuildContext context) {
     final document = _document = context.crdtDocument;
+    // Rebuilds only when this flips, so the field still builds once.
+    if (context.selectCrdtDocument((doc) => doc.isDeleted(widget.id))) {
+      _delta.cancel();
+      // Not here: the callback is the user's, and this is a build.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          _invalidateSelectionAnchors();
+        }
+      });
+      return buildDeleted(context, widget.deletedBuilder);
+    }
     // Covers a new document and a new id alike, which is why there is no
     // `didUpdateWidget`: `build` always runs after one.
     final seed = _delta.syncTo(
@@ -351,6 +369,10 @@ class _CrdtTextFieldBuilderState extends State<CrdtTextFieldBuilder> {
 
   /// Local edits: push the delta of the gesture into the handler.
   void _onControllerChanged() {
+    if (_document.isDeleted(widget.id)) {
+      // Until the next frame swaps the field out, an edit has nowhere to go.
+      return;
+    }
     final value = _controller!.value;
     if (value.text == _lastCommittedText) {
       // Selection-only change, or a canceled composition.

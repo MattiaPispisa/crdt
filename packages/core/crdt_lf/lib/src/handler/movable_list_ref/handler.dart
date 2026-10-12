@@ -101,12 +101,9 @@ base class CRDTMovableListRefHandler
     if (index < 0 || index >= refs.length) {
       throw RangeError.index(index, refs, 'index');
     }
-    final child = doc.resolveHandler(refs[index]);
     doc.runInTransaction(() {
       delete(index);
-      if (child != null) {
-        doc.deleteHandler(child);
-      }
+      doc.deleteHandlerRef(refs[index]);
     });
   }
 

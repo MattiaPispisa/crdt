@@ -1246,11 +1246,17 @@ state in every snapshot. To delete the child for every peer, remove it with
 chapters.removeChildAt(0);       // the reference, and the chapter
 root.removeChild('draft');       // the same on a map
 doc.deleteHandler(chapter);      // the chapter alone, any reference stays
+doc.deleteHandlerRef(ref);       // by reference, without building it
 ```
 
 - **The subtree goes too.** Every handler reachable from the deleted one is
   deleted. A child that another container also references is deleted for that
-  container too.
+  container too. A child added to the container on another peer, at the same
+  time as the delete, is deleted as well.
+- **A peer that cannot build a child still deletes it.** `removeChild` and
+  `deleteHandlerRef` need only its id, so a server that registers no kinds can
+  delete it too. The children of that child are deleted by the first peer
+  that can build it.
 - **A delete wins.** An edit made at the same time on another peer is ignored.
 - **A delete is final.** The handler is closed: its `watch` stream ends, and a
   write, `doc.handler` or a constructor on its id throws

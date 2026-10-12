@@ -166,6 +166,24 @@ CrdtHandlerListener<CRDTListHandler<String>>(
 );
 ```
 
+#### Deleted handlers
+
+A handler deleted with `doc.deleteHandler` (on any peer) is not an error. A
+widget bound to it shows its `deletedBuilder`, or an empty box when there is
+none; a listener stops calling back. This holds for `CrdtHandlerBuilder`,
+`CrdtHandlerSelector`, `CrdtHandlerDeltaBuilder` and `CrdtTextFieldBuilder`.
+
+```dart
+CrdtHandlerBuilder<CRDTFugueTextHandler>(
+  id: chapterId,
+  builder: (context, handler) => Text(handler.value),
+  deletedBuilder: (context) => const Text('This chapter was deleted'),
+);
+```
+
+An id that was never registered still throws a `FlutterError`: that one is a
+wiring mistake.
+
 ### What changed, not just that it changed
 
 Start with `CrdtHandlerBuilder`: it hands you the handler, you read
@@ -243,6 +261,8 @@ once:
 ```dart
 context.crdtHandler<CRDTListHandler<String>>('todos').insert(0, 'new');
 ```
+
+It throws a `HandlerDeletedException` for a deleted handler.
 
 ### Collaborative text
 

@@ -28,6 +28,9 @@ typedef CrdtHandlerListenerCallback<H extends Handler<dynamic>> = void Function(
   H handler,
 );
 
+/// What [CrdtHandlerSelector] selects for a deleted handler.
+const Object _deleted = Object();
+
 /// A per-handler "did it change" signature that consume the handler's
 /// [CRDTDocument.revisionForHandler].
 ///
@@ -92,6 +95,7 @@ class CrdtHandlerBuilder<H extends Handler<dynamic>> extends StatelessWidget {
     required this.id,
     required this.builder,
     this.nested = false,
+    this.deletedBuilder,
     super.key,
   });
 
@@ -104,11 +108,21 @@ class CrdtHandlerBuilder<H extends Handler<dynamic>> extends StatelessWidget {
   /// Called with the resolved handler whenever it changes.
   final CrdtHandlerWidgetBuilder<H> builder;
 
+  /// {@template crdt_deleted_builder}
+  /// Builds what shows once the handler is deleted (see
+  /// [CRDTDocument.deleteHandler]); an empty box when `null`.
+  /// {@endtemplate}
+  final WidgetBuilder? deletedBuilder;
+
   @override
   Widget build(BuildContext context) {
     assertHandlerGenericIsSet<H>('CrdtHandlerBuilder');
     context.selectCrdtDocument((doc) => _signatureOf(doc, id, nested: nested));
-    return builder(context, context.crdtHandler<H>(id));
+    final document = context.crdtDocument;
+    if (document.isDeleted(id)) {
+      return buildDeleted(context, deletedBuilder);
+    }
+    return builder(context, resolveCrdtHandler<H>(document, id));
   }
 }
 
@@ -135,6 +149,7 @@ class CrdtHandlerSelector<H extends Handler<dynamic>, R>
     required this.id,
     required this.selector,
     required this.builder,
+    this.deletedBuilder,
     super.key,
   });
 
@@ -147,13 +162,21 @@ class CrdtHandlerSelector<H extends Handler<dynamic>, R>
   /// Called with the current selected value.
   final CrdtHandlerSelectorWidgetBuilder<R> builder;
 
+  /// {@macro crdt_deleted_builder}
+  final WidgetBuilder? deletedBuilder;
+
   @override
   Widget build(BuildContext context) {
     assertHandlerGenericIsSet<H>('CrdtHandlerSelector');
-    final value = context.selectCrdtDocument(
-      (document) => selector(context, resolveCrdtHandler<H>(document, id)),
+    final value = context.selectCrdtDocument<Object?>(
+      (document) => document.isDeleted(id)
+          ? _deleted
+          : selector(context, resolveCrdtHandler<H>(document, id)),
     );
-    return builder(context, value);
+    if (identical(value, _deleted)) {
+      return buildDeleted(context, deletedBuilder);
+    }
+    return builder(context, value as R);
   }
 }
 
@@ -162,7 +185,8 @@ class CrdtHandlerSelector<H extends Handler<dynamic>, R>
 /// or (when [nested]) a descendant change.
 ///
 /// Use it for navigation, snackbar, etc.
-/// **It renders [child] unchanged.**
+/// **It renders [child] unchanged.** [listener] is not called once the handler
+/// is deleted.
 class CrdtHandlerListener<H extends Handler<dynamic>> extends StatefulWidget {
   /// Creates a listener that fires [listener] on each handler change.
   const CrdtHandlerListener({
@@ -209,6 +233,9 @@ class _CrdtHandlerListenerState<H extends Handler<dynamic>>
       _lastSignature = signature;
     } else if (_lastSignature != signature) {
       _lastSignature = signature;
+      if (document.isDeleted(widget.id)) {
+        return widget.child ?? const SizedBox.shrink();
+      }
       final handler = resolveCrdtHandler<H>(document, widget.id);
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) {

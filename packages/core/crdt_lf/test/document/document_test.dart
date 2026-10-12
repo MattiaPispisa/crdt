@@ -1673,6 +1673,21 @@ void main() {
       expect(doc.exportChanges().length, changes + 1);
     });
 
+    test('a delete moves its revision and those of its containers', () {
+      final rootRevision = doc.revisionForHandler(root.id);
+      final chaptersRevision = doc.revisionForHandler(chapters.id);
+      final titleRevision = doc.revisionForHandler(title.id);
+
+      doc.deleteHandler(title);
+
+      expect(doc.revisionForHandler(title.id), greaterThan(titleRevision));
+      expect(
+        doc.revisionForHandler(chapters.id),
+        greaterThan(chaptersRevision),
+      );
+      expect(doc.revisionForHandler(root.id), rootRevision);
+    });
+
     test('a child shared by two parents is deleted for both', () {
       final other = CRDTMapRefHandler(doc, 'other')..setRef('title', title);
 
@@ -1711,6 +1726,10 @@ void main() {
         throwsA(isA<ArgumentError>()),
       );
       expect(doc.resolveHandler(const HandlerRef(reserved, reserved)), isNull);
+      expect(
+        () => doc.deleteHandlerRef(const HandlerRef(reserved, reserved)),
+        throwsA(isA<ArgumentError>()),
+      );
       final stranger = CRDTFugueTextHandler(CRDTDocument(), 'stranger');
       expect(
         () => doc.deleteHandler(stranger),
@@ -1722,9 +1741,21 @@ void main() {
       final snapshot = doc.takeSnapshot();
 
       expect(snapshot.data.containsKey('crdt_lf/deleted-handlers'), isFalse);
+    });
+
+    test('every document says it reads the deletes', () {
+      const registry = 'crdt_lf/deleted-handlers';
+      doc.deleteHandler(title);
+      final needed = doc.describeDataRequirements()[registry]!;
+      final reads = CRDTDocument().describeBuildCapabilities();
+
       expect(
-        doc.describeBuildCapabilities()['crdt_lf/deleted-handlers'],
-        isNull,
+        reads.byHandlerType,
+        CRDTDocument.builtInCapabilities.byHandlerType,
+      );
+      expect(
+        reads[registry]!.operationKinds,
+        containsAll(needed.operationKinds),
       );
     });
 
@@ -1746,6 +1777,81 @@ void main() {
       expect(peerTitle.isDeleted, isTrue);
       expect(peerRoot.resolved, isEmpty);
       await done;
+    });
+
+    test('removeChild deletes a child whose kind this peer cannot build', () {
+      final server = CRDTDocument(peerId: PeerId.generate())
+        ..importChanges(doc.exportChanges());
+
+      server.handler(CRDTMapRefHandler.spec, 'root').removeChild('chapters');
+      // The server cannot read the list, so it cannot reach its children.
+      expect(server.isDeleted(title.id), isFalse);
+
+      doc.importChanges(server.exportChanges());
+      server.importChanges(doc.exportChanges());
+
+      expect(chapters.isDeleted, isTrue);
+      expect(root.resolved, isEmpty);
+      // This peer reads the list, and deletes its children for everyone.
+      expect(title.isDeleted, isTrue);
+      expect(server.isDeleted(title.id), isTrue);
+    });
+
+    test('a child added concurrently to a deleted container is deleted', () {
+      final peer = CRDTDocument(peerId: PeerId.generate())
+        ..importChanges(doc.exportChanges());
+      final added = peer
+          .handler(CRDTListRefHandler.spec, chapters.id)
+          .insertChild(1, CRDTFugueTextHandler.spec)
+        ..insert(0, 'Outro');
+
+      root.removeChild('chapters');
+      doc.importChanges(peer.exportChanges());
+      peer.importChanges(doc.exportChanges());
+      doc.importChanges(peer.exportChanges());
+
+      for (final document in [doc, peer]) {
+        expect(document.isDeleted(added.id), isTrue);
+        expect(document.roots().map((h) => h.id), isNot(contains(added.id)));
+        expect(document.takeSnapshot().data.containsKey(added.id), isFalse);
+      }
+    });
+
+    test('a snapshot deletes a child that reached a deleted container late',
+        () {
+      final peer = CRDTDocument(peerId: PeerId.generate())
+        ..importChanges(doc.exportChanges());
+      final added = peer
+          .handler(CRDTListRefHandler.spec, chapters.id)
+          .insertChild(1, CRDTFugueTextHandler.spec);
+
+      root.removeChild('chapters');
+      doc
+        ..takeSnapshot()
+        ..importChanges(peer.exportChanges());
+      expect(doc.isDeleted(added.id), isFalse);
+
+      final snapshot = doc.takeSnapshot(pruneHistory: false);
+
+      expect(doc.isDeleted(added.id), isTrue);
+      expect(snapshot.data.containsKey(added.id), isFalse);
+      peer.importChanges(doc.exportChanges());
+      expect(added.isDeleted, isTrue);
+    });
+
+    test('a child added concurrently is deleted through a snapshot', () {
+      final peer = CRDTDocument(peerId: PeerId.generate())
+        ..importChanges(doc.exportChanges());
+      final added = peer
+          .handler(CRDTListRefHandler.spec, chapters.id)
+          .insertChild(1, CRDTFugueTextHandler.spec);
+
+      root.removeChild('chapters');
+      peer.import(snapshot: doc.takeSnapshot(), merge: true);
+
+      expect(added.isDeleted, isTrue);
+      doc.importChanges(peer.exportChanges());
+      expect(doc.isDeleted(added.id), isTrue);
     });
 
     test('a peer with no handler open learns the deletes it imports', () {

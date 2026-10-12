@@ -6,6 +6,8 @@
 
 ### Fixed
 
+- Capabilities passed to the client also name `CRDTDocument.builtInCapabilities`, so a server
+  holding deleted handlers (crdt_lf 5.2.0) does not refuse a client that states its build in full.
 - `dispose` handles its async work better: the futures it does not wait for
   (closing streams, cancelling subscriptions) are now in `unawaited`, like the
   calls that run in the background (reconnect, sync requests, awareness

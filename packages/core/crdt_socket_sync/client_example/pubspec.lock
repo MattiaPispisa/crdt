@@ -110,7 +110,7 @@ packages:
       path: "../../crdt_lf_flutter"
       relative: true
     source: path
-    version: "0.5.3"
+    version: "0.6.0"
   crdt_lf_persistence:
     dependency: "direct overridden"
     description:

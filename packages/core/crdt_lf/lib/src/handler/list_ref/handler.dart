@@ -104,9 +104,10 @@ base class CRDTListRefHandler extends CRDTFugueListHandler<HandlerRef>
   /// one transaction.
   ///
   /// {@template remove_child}
-  /// The child is deleted with [BaseCRDTDocument.deleteHandler], subtree
-  /// included, for every peer. An undo puts the reference back, and the
-  /// reference stays out of `resolved`: a delete is final.
+  /// The child is deleted with [BaseCRDTDocument.deleteHandlerRef], subtree
+  /// included, for every peer, also when this peer cannot build it. An undo
+  /// puts the reference back, and the reference stays out of `resolved`: a
+  /// delete is final.
   /// {@endtemplate}
   ///
   /// Throws a [RangeError] when [index] is out of range.
@@ -115,12 +116,9 @@ base class CRDTListRefHandler extends CRDTFugueListHandler<HandlerRef>
     if (index < 0 || index >= refs.length) {
       throw RangeError.index(index, refs, 'index');
     }
-    final child = doc.resolveHandler(refs[index]);
     doc.runInTransaction(() {
       delete(index, 1);
-      if (child != null) {
-        doc.deleteHandler(child);
-      }
+      doc.deleteHandlerRef(refs[index]);
     });
   }
 

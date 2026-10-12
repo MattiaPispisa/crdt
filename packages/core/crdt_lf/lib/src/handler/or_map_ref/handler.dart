@@ -94,12 +94,13 @@ base class CRDTORMapRefHandler extends CRDTORMapHandler<String, HandlerRef>
   ///
   /// Does nothing when [key] is absent.
   void removeChild(String key) {
-    final child = getRef(key);
+    final ref = value[key];
+    if (ref == null) {
+      return;
+    }
     doc.runInTransaction(() {
       remove(key);
-      if (child != null) {
-        doc.deleteHandler(child);
-      }
+      doc.deleteHandlerRef(ref);
     });
   }
 
