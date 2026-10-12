@@ -73,9 +73,6 @@ base mixin DocumentConsumer {
 ///   stale (a snapshot import or merge, a prune). The host recomputes the
 ///   state from scratch and pushes it back via [updateCachedState].
 ///
-/// A change to another handler leaves this cache alone, so the cost of an edit
-/// does not grow with the number of handlers on the document.
-///
 /// [T] is the host's own internal representation. It has no required
 /// relationship with `handler.value` or [SnapshotProvider.getSnapshotState]
 /// — pick whatever shape makes recomputation cheap.
