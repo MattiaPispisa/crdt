@@ -64,4 +64,46 @@ void main() {
       expect(markdown, isEmpty);
     });
   });
+
+  group('replaceResultSections', () {
+    BenchmarkResult result(String sourceFile, String name) => BenchmarkResult(
+          name: name,
+          sourceFile: sourceFile,
+          microseconds: 2,
+          milliseconds: 0.002,
+          seconds: 0.000002,
+        );
+
+    test('replaces the run files and keeps the others, sorted', () {
+      final existing = renderResultsMarkdown({
+        'b_benchmark.dart': [result('b_benchmark.dart', 'old B')],
+        'c_benchmark.dart': [result('c_benchmark.dart', 'C')],
+      });
+
+      final merged = replaceResultSections(existing, {
+        'b_benchmark.dart': [result('b_benchmark.dart', 'new B')],
+        'a_benchmark.dart': [result('a_benchmark.dart', 'A')],
+      });
+
+      expect(
+        merged,
+        renderResultsMarkdown({
+          'a_benchmark.dart': [result('a_benchmark.dart', 'A')],
+          'b_benchmark.dart': [result('b_benchmark.dart', 'new B')],
+          'c_benchmark.dart': [result('c_benchmark.dart', 'C')],
+        }),
+      );
+    });
+
+    test('keeps the old section of a file that produced no results', () {
+      final existing = renderResultsMarkdown({
+        'a_benchmark.dart': [result('a_benchmark.dart', 'A')],
+      });
+
+      expect(
+        replaceResultSections(existing, {'a_benchmark.dart': []}),
+        existing,
+      );
+    });
+  });
 }

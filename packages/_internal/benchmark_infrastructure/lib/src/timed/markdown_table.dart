@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:benchmark_infrastructure/src/timed/benchmark_result.dart';
 
 /// Renders [resultsBySourceFile] as GitHub-Flavored Markdown.
@@ -36,4 +38,28 @@ String renderResultsMarkdown(
   });
 
   return buffer.toString();
+}
+
+/// Replaces, in [existing], the subsections of the source files in
+/// [resultsBySourceFile], and keeps every other subsection as it is.
+///
+/// Subsections come out sorted by source file, as a full run writes them.
+String replaceResultSections(
+  String existing,
+  Map<String, List<BenchmarkResult>> resultsBySourceFile,
+) {
+  final sections = <String, String>{
+    for (final chunk in existing.split(RegExp('^(?=### )', multiLine: true)))
+      if (chunk.startsWith('### '))
+        const LineSplitter().convert(chunk).first.substring(4).trim(): chunk,
+  };
+
+  resultsBySourceFile.forEach((sourceFile, results) {
+    if (results.isNotEmpty) {
+      sections[sourceFile] = renderResultsMarkdown({sourceFile: results});
+    }
+  });
+
+  final sorted = sections.keys.toList()..sort();
+  return [for (final sourceFile in sorted) sections[sourceFile]].join();
 }
