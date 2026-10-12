@@ -1,5 +1,6 @@
-import 'package:benchmark_infrastructure/benchmark_infrastructure.dart';
 import 'package:crdt_lf/crdt_lf.dart';
+
+import '../common/prepared_cycle_benchmark.dart';
 
 const _kind = 'bench.register';
 
@@ -8,17 +9,12 @@ const _kind = 'bench.register';
 /// The edit touches one handler. What it costs should not depend on how many
 /// other handlers the document holds: that is what a document with thousands
 /// of aggregates needs.
-abstract class HandlerCountBenchmark extends TimedBenchmarkBase {
+abstract class HandlerCountBenchmark extends PreparedCycleBenchmark {
   /// Creates the benchmark reported under `name`.
-  HandlerCountBenchmark(super.name, this.handlerCount)
-      : super(runsPerMeasure: 1);
+  HandlerCountBenchmark(super.name, this.handlerCount);
 
   /// How many handlers the measured document holds.
   final int handlerCount;
-
-  static const _warmup = Duration(milliseconds: 400);
-  static const _measuredCycles = 200;
-  static const _batches = 5;
 
   /// The document whose cost is measured.
   late CRDTDocument target;
@@ -44,48 +40,6 @@ abstract class HandlerCountBenchmark extends TimedBenchmarkBase {
     for (final handler in targetHandlers) {
       handler.value;
     }
-  }
-
-  /// Untimed work before the [round]-th timed cycle.
-  void prepare(int round) {}
-
-  /// The timed work of the [round]-th cycle.
-  void cycle(int round);
-
-  @override
-  void run() {}
-
-  @override
-  double measure() {
-    setup();
-    var round = 0;
-
-    final warmup = Stopwatch()..start();
-    while (warmup.elapsed < _warmup) {
-      prepare(round);
-      cycle(round);
-      round++;
-    }
-
-    var best = double.infinity;
-    for (var batch = 0; batch < _batches; batch++) {
-      setup();
-      final stopwatch = Stopwatch();
-      for (var i = 0; i < _measuredCycles; i++) {
-        prepare(round);
-        stopwatch.start();
-        cycle(round);
-        stopwatch.stop();
-        round++;
-      }
-      final perCycle = stopwatch.elapsedMicroseconds / _measuredCycles;
-      if (perCycle < best) {
-        best = perCycle;
-      }
-    }
-
-    teardown();
-    return best;
   }
 }
 
