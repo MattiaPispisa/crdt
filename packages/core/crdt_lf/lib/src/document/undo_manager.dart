@@ -113,9 +113,8 @@ class CRDTUndoManager {
       // nothing, and say nothing about why.
       throw ArgumentError.value(stackLimit, 'stackLimit', 'must be at least 1');
     }
-    document
-      .._ensureNotDisposed('CRDTUndoManager')
-      .._registerUndoManager(this);
+    document._ensureNotDisposed('CRDTUndoManager');
+    document._undo.add(this);
   }
 
   final CRDTDocument _document;
@@ -202,7 +201,7 @@ class CRDTUndoManager {
         'element identity to anchor an inverse to.',
       );
     }
-    for (final other in _document._undoManagers ?? const <CRDTUndoManager>[]) {
+    for (final other in _document._undo.managers) {
       if (!identical(other, this) && other._tracked.contains(handler.id)) {
         throw StateError(
           "'${handler.id}' is already tracked by another CRDTUndoManager. A "
@@ -313,7 +312,7 @@ class CRDTUndoManager {
       return;
     }
     _isDisposed = true;
-    _document._unregisterUndoManager(this);
+    _document._undo.remove(this);
     _tracked.clear();
     _undoStack.clear();
     _redoStack.clear();
@@ -408,7 +407,7 @@ class CRDTUndoManager {
           // Inside a group the order is the handler's, and it is kept.
           for (final group in entry.groups.reversed) {
             for (final operation in group) {
-              final handler = _document._handlers[operation.id];
+              final handler = _document._registry[operation.id];
               // A tracked handler registers itself and the registry is only
               // emptied on dispose, so an inverse always finds its handler.
               // Writing one without [Handler.prepareInverse] would ignore the

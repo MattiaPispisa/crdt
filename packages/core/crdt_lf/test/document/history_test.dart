@@ -340,6 +340,30 @@ void main() {
       expect(viewDocument.revisionForHandler('list'), 3);
     });
 
+    test('the version follows the cursor', () {
+      listHandler
+        ..insert(0, 'Hello')
+        ..insert(1, 'World');
+      final first = document.exportChanges().sorted().first;
+
+      final historySession = document.toTimeTravel();
+      final viewDocument = historySession
+          .getHandler<CRDTListHandler<String>, List<String>>(
+            (doc) => CRDTListHandler<String>(
+              doc,
+              'list',
+              handlerType: 'CRDTListHandler<String>',
+            ),
+          )
+          .doc;
+
+      expect(viewDocument.version, document.version);
+      historySession.jump(1);
+      expect(viewDocument.version, {first.id});
+      historySession.jump(0);
+      expect(viewDocument.version, isEmpty);
+    });
+
     test('should dispose the history session', () {
       listHandler
         ..insert(0, 'Hello')

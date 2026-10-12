@@ -296,9 +296,9 @@ final class _DeltaHub<D extends ComposableDelta<D>> extends _DeltaHubBase
       return;
     }
     // Published now, handed out once the document is settled (see
-    // `_deltaOutbox`). The sequence number is already spent, so `deltaSeq` is
+    // `EventOutbox`). The sequence number is already spent, so `deltaSeq` is
     // truthful even before this event lands.
-    _document._enqueueDeltaEvent(() {
+    _document._outbox.add(() {
       if (!controller.isClosed) {
         controller.add(update);
       }

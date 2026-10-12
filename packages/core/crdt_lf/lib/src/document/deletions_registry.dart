@@ -1,5 +1,8 @@
 part of 'document.dart';
 
+/// The id, and the kind, of the handler that records the deleted handlers.
+const String _deletedHandlersKey = 'crdt_lf/deleted-handlers';
+
 /// The ids of the deleted handlers, under the reserved id.
 ///
 /// Its snapshot blob is the tagless OR-set layout (version 1): the tags only
@@ -25,6 +28,24 @@ final class _DeletionsRegistry extends CRDTORSetHandler<String> {
       blobVersions: BlobVersionRange.single(_blobVersion),
     ),
   );
+
+  /// The envelope prefix of a deletions change: spots one without a decode on
+  /// the apply path.
+  static final Uint8List _prefix = () {
+    final out = BytesBuilder(copy: false);
+    OperationEnvelopeCodec.writeEnvelopePrefix(
+      out,
+      _deletedHandlersKey,
+      _deletedHandlersKey,
+    );
+    return out.toBytes();
+  }();
+
+  /// Whether [change] is an operation of the deletions registry.
+  static bool isDeletionsChange(Change change) {
+    final payload = change.payloadBytes();
+    return payload.length > _prefix.length && startsWithBytes(payload, _prefix);
+  }
 
   @override
   int get snapshotBlobVersion => _blobVersion;

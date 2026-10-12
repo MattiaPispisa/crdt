@@ -82,7 +82,7 @@ base mixin CacheableStateProvider<T> on DocumentConsumer {
   @override
   String get id;
 
-  /// The `_document._cacheEpoch` the cached state is pinned to (`null` when no
+  /// The `_document._cache.epoch` the cached state is pinned to (`null` when no
   /// state is cached). The cache is valid only while the two are equal.
   int? _cachedEpoch;
 
@@ -198,7 +198,7 @@ base mixin CacheableStateProvider<T> on DocumentConsumer {
     }
 
     // The raw fields, not [cachedState]: the getter would drain the queue.
-    if (_cachedState == null || _cachedEpoch != _document._cacheEpoch) {
+    if (_cachedState == null || _cachedEpoch != _document._cache.epoch) {
       return false;
     }
 
@@ -295,7 +295,7 @@ base mixin CacheableStateProvider<T> on DocumentConsumer {
   /// drops it. Call this after a full recompute.
   void updateCachedState(T newState) {
     _cachedState = newState;
-    _cachedEpoch = _document._cacheEpoch;
+    _cachedEpoch = _document._cache.epoch;
   }
 
   /// Framework hook: tries to advance the cache by a single [operation],
@@ -390,7 +390,7 @@ base mixin CacheableStateProvider<T> on DocumentConsumer {
   T? get cachedState {
     _drainPendingRemoteChanges();
 
-    if (_cachedState != null && _cachedEpoch == _document._cacheEpoch) {
+    if (_cachedState != null && _cachedEpoch == _document._cache.epoch) {
       return _cachedState;
     }
 
@@ -436,7 +436,7 @@ extension _HandlerHelper on Handler<dynamic> {
   /// [varint(typeLen)][type UTF-8][varint(idLen)][id UTF-8].
   ///
   /// Computed once and cached. Compared byte-by-byte against a change payload
-  /// in [BaseCRDTDocument._handlerForPayload] to avoid UTF-8 decode + String
+  /// in [_HandlerRegistry.forPayload] to avoid UTF-8 decode + String
   /// allocation on every change application.
   Uint8List get _envelopePrefix {
     return _prefixCache[this] ??= _buildPrefix();

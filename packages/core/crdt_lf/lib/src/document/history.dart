@@ -9,15 +9,15 @@ class _CRDTStaticProxyDocument extends BaseCRDTDocument {
     required List<Set<OperationId>> historyVersions,
     required int visibleCount,
     required Snapshot? lastSnapshot,
-    required Map<String, Handler<dynamic>> handlers,
   })  : _documentId = documentId,
         _hlc = hlc,
         _peerId = peerId,
         _frozenChanges = frozenChanges,
         _historyVersions = historyVersions,
         _visibleCount = visibleCount,
-        _lastSnapshot = lastSnapshot,
-        _handlers = handlers;
+        _lastSnapshot = lastSnapshot {
+    _deletions = _ViewDeletions(this);
+  }
 
   final String _documentId;
 
@@ -44,25 +44,7 @@ class _CRDTStaticProxyDocument extends BaseCRDTDocument {
   final Snapshot? _lastSnapshot;
 
   @override
-  final Map<String, Handler<dynamic>> _handlers;
-
-  /// A view reads every handler, deleted at the cursor or not.
-  @override
-  bool get _buildsDeleted => true;
-
-  /// Whether the frozen history holds a delete at all.
-  late final bool _holdsDeletions =
-      (_lastSnapshot?.data.containsKey(_deletedHandlersKey) ?? false) ||
-          _frozenChanges.any(CRDTDocument._isDeletionsChange);
-
-  /// Whether the handler with [handlerId] is deleted at the cursor.
-  @override
-  bool isDeleted(String handlerId) {
-    if (!_holdsDeletions || handlerId == _deletedHandlersKey) {
-      return false;
-    }
-    return _openDeletions().value.contains(handlerId);
-  }
+  late final _ViewDeletions _deletions;
 
   @override
   void registerOperation(Operation operation) {
@@ -206,11 +188,10 @@ class HistorySession {
       historyVersions: historyVersions,
       visibleCount: cursor,
       lastSnapshot: document._lastSnapshot,
-      handlers: {},
     );
     // Carry over the registered types so nested handlers resolved through the
     // read-only session can be reconstructed against the historical changes.
-    proxy._specs.addAll(document._specs);
+    proxy._registry.specs.addAll(document._registry.specs);
 
     return HistorySession._(
       cursor: cursor,
@@ -282,7 +263,7 @@ class HistorySession {
     _cursor = cursor;
     _document
       .._visibleCount = _cursor
-      .._cacheEpoch += 1;
+      .._cache.markAllStale();
     _cursorController.add(_cursor);
   }
 

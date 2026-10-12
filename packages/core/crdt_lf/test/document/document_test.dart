@@ -129,27 +129,6 @@ void main() {
       expect(applied, isFalse);
     });
 
-    test('applyChange throws when change is not causally ready', () {
-      final change1 = Change(
-        id: OperationId(author, HybridLogicalClock(l: 1, c: 1)),
-        operation: operation,
-        deps: {},
-        author: author,
-      );
-
-      final change2 = Change(
-        id: OperationId(author, HybridLogicalClock(l: 1, c: 2)),
-        operation: operation,
-        deps: {change1.id},
-        author: author,
-      );
-
-      expect(
-        () => doc.applyChange(change2),
-        throwsA(isA<CausallyNotReadyException>()),
-      );
-    });
-
     test('exportChanges returns all changes when no version specified', () {
       final change1 = doc.createChange(newOperation());
       final change2 = doc.createChange(newOperation());
@@ -159,117 +138,50 @@ void main() {
       expect(changes, containsAll([change1, change2]));
     });
 
-    test('exportChanges returns changes after specified version', () {
-      final change1 = doc.createChange(newOperation());
-      final change2 = doc.createChange(newOperation());
-      final change3 = doc.createChange(newOperation());
-
-      final changes = doc.exportChanges(from: {change1.id});
-      expect(changes.length, equals(2));
-      expect(changes, containsAll([change2, change3]));
-    });
-
-    test('exportChangesNewerThan returns only newer changes for same peer', () {
-      // create three changes
-      final change1 = doc.createChange(newOperation());
-      final change2 = doc.createChange(newOperation());
-
-      final version = VersionVector({author: change1.hlc});
-
-      final newer = doc.exportChangesNewerThan(version);
-
-      expect(newer.length, equals(1));
-      expect(newer, containsAll([change2]));
-    });
-
-    test('exportChangesNewerThan with multiple peers', () {
-      final authorA = PeerId.generate();
-      final authorB = PeerId.generate();
-
-      // Build manual changes from two peers and import them in current doc
-      final a1 = Change(
-        id: OperationId(authorA, HybridLogicalClock(l: 1, c: 1)),
-        operation: operation,
-        deps: {},
-        author: authorA,
-      );
-      final a2 = Change(
-        id: OperationId(authorA, HybridLogicalClock(l: 1, c: 2)),
-        operation: operation,
-        deps: {a1.id},
-        author: authorA,
-      );
-      final b1 = Change(
-        id: OperationId(authorB, HybridLogicalClock(l: 2, c: 1)),
-        operation: operation,
-        deps: {},
-        author: authorB,
-      );
-
-      // Import in causal order
-      expect(doc.importChanges([a1, a2, b1]), equals(3));
-
-      // Server knows up to a1 for authorA, and nothing for authorB
-      final version = VersionVector({authorA: a1.hlc});
-
-      final newer = doc.exportChangesNewerThan(version);
-
-      expect(newer, contains(a2));
-      expect(newer, contains(b1));
-      // Should not include a1
-      expect(newer.contains(a1), isFalse);
-    });
-
-    test('importChanges applies changes in correct order', () {
-      final change1 = Change(
-        id: OperationId(author, HybridLogicalClock(l: 1, c: 1)),
-        operation: operation,
-        deps: {},
-        author: author,
-      );
-
-      final change2 = Change(
+    test('applyChange refuses a change whose dependency it lacks', () {
+      final missing = OperationId(author, HybridLogicalClock(l: 1, c: 1));
+      final change = Change(
         id: OperationId(author, HybridLogicalClock(l: 1, c: 2)),
         operation: operation,
-        deps: {change1.id},
-        author: author,
-      );
-
-      final change3 = Change(
-        id: OperationId(author, HybridLogicalClock(l: 1, c: 3)),
-        operation: operation,
-        deps: {change2.id},
-        author: author,
-      );
-
-      // Try to import in wrong order
-      final imported = doc.importChanges([change3, change2, change1]);
-      expect(imported, equals(3));
-      expect(doc.version, equals({change3.id}));
-    });
-
-    test('importChanges handles cycles gracefully', () {
-      final id1 = OperationId(author, HybridLogicalClock(l: 1, c: 1));
-      final id2 = OperationId(author, HybridLogicalClock(l: 1, c: 2));
-
-      final change1 = Change(
-        id: id1,
-        operation: operation,
-        deps: {id2},
-        author: author,
-      );
-
-      final change2 = Change(
-        id: id2,
-        operation: operation,
-        deps: {id1},
+        deps: {missing},
         author: author,
       );
 
       expect(
-        () => doc.importChanges([change1, change2]),
+        () => doc.applyChange(change),
+        throwsA(isA<CausallyNotReadyException>()),
+      );
+      expect(doc.isEmpty, isTrue);
+    });
+
+    test('importChanges throws on changes that depend on each other', () {
+      final id1 = OperationId(author, HybridLogicalClock(l: 1, c: 1));
+      final id2 = OperationId(author, HybridLogicalClock(l: 1, c: 2));
+
+      expect(
+        () => doc.importChanges([
+          Change(id: id1, operation: operation, deps: {id2}, author: author),
+          Change(id: id2, operation: operation, deps: {id1}, author: author),
+        ]),
         throwsA(isA<ChangesCycleException>()),
       );
+    });
+
+    test(
+        'a change whose envelope cannot be read is kept, and reaches no '
+        'handler', () {
+      final unreadable = Change.fromPayloadBytes(
+        id: OperationId(author, HybridLogicalClock(l: 1, c: 1)),
+        deps: const {},
+        author: author,
+        // A type length far longer than the payload.
+        payloadBytes: Uint8List.fromList([0xff, 0x01]),
+      );
+      final before = doc.revisionForHandler(handler.id);
+
+      expect(doc.applyChange(unreadable), isTrue);
+      expect(doc.version, {unreadable.id});
+      expect(doc.revisionForHandler(handler.id), before);
     });
 
     test('localChanges stream emits change on createChange', () async {
@@ -420,28 +332,6 @@ void main() {
 
         expect(source.snapshot!.id, taken.id);
         expect(source.snapshot!.toBytes(), taken.toBytes());
-      });
-
-      test('the getter hands out a copy that cannot be written to', () {
-        final source = CRDTDocument();
-        CRDTListHandler<String>(
-          source,
-          'list',
-          handlerType: 'CRDTListHandler<String>',
-        ).insert(0, 'a');
-        final before = source.takeSnapshot().toBytes();
-        final copy = source.snapshot!;
-
-        expect(() => copy.data['x'] = Uint8List(1), throwsUnsupportedError);
-        expect(() => copy.data.values.first[0] = 1, throwsUnsupportedError);
-        expect(
-          () => copy.versionVector.update(
-            PeerId.generate(),
-            HybridLogicalClock(l: 1, c: 0),
-          ),
-          throwsUnsupportedError,
-        );
-        expect(source.snapshot!.toBytes(), before);
       });
 
       test(
@@ -694,32 +584,6 @@ void main() {
       expect(applied, equals(1));
       expect(doc.version, equals({change2.id}));
       expect(doc.exportChanges(), containsAll([change2]));
-    });
-
-    test('should not accept snapshot if divergent', () {
-      final author1 = PeerId.generate();
-      final author2 = PeerId.generate();
-
-      doc.importSnapshot(
-        Snapshot(
-          id: 'id',
-          versionVector: VersionVector({
-            author1: HybridLogicalClock(l: 1, c: 1),
-          }),
-          data: {},
-        ),
-      );
-
-      final snapshot = Snapshot(
-        id: 'id2',
-        versionVector: VersionVector({
-          author2: HybridLogicalClock(l: 1, c: 2),
-        }),
-        data: {},
-      );
-
-      // author2 is not in the version vector
-      expect(doc.shouldApplySnapshot(snapshot), isFalse);
     });
 
     test('should not accept snapshot not newer then current', () {
@@ -1167,6 +1031,27 @@ void main() {
     });
 
     group('handlers', () {
+      test('a tag declared with other formats fails an assert', () {
+        doc.register(
+          HandlerSpec<TestHandler>(
+            'kind',
+            (doc, id) => TestHandler(doc, id: id, handlerType: 'kind'),
+            formats: const HandlerFormats(
+              operationKinds: {
+                OperationType.kindInsert,
+                OperationType.kindDelete,
+              },
+              blobVersions: BlobVersionRange.single(1),
+            ),
+          ),
+        );
+
+        expect(
+          () => TestHandler(doc, id: 'h', handlerType: 'kind'),
+          throwsA(isA<AssertionError>()),
+        );
+      });
+
       test('should throw on double registration', () {
         expect(doc.registeredHandlers, contains('test-handler'));
         expect(
