@@ -39,7 +39,7 @@ jobs:
               - 'pubspec.lock'
               - 'melos.yaml'
               - 'scripts/**'
-              - 'packages/_internal/shared_examples_infrastructure/**'
+              - 'packages/_internal/factory_example/**'
             hlc:
               - 'packages/core/hlc/**'
             crdt_lf:

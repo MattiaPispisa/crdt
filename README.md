@@ -117,7 +117,7 @@ workspace/
 │   │       └── serverpod/
 │   └── _internal/ # private, unpublished packages
 │       ├── benchmark_infrastructure/
-│       └── shared_examples_infrastructure/
+│       └── factory_example/
 ├── apps/ # contains the applications built on top of the packages
 │   └── greyhound_markdown/
 │       ├── client/

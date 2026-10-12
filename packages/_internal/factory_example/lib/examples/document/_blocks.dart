@@ -1,0 +1,324 @@
+import 'package:crdt_lf/crdt_lf.dart';
+import 'package:crdt_lf_flutter/crdt_lf_flutter.dart' show CrdtProvider;
+import 'package:factory_example/examples/document/_state.dart';
+import 'package:factory_example/shared/add_item_dialog.dart';
+import 'package:factory_example/shared/crdt_text_field.dart';
+import 'package:factory_example/shared/text_cursor_presence.dart';
+import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+
+/// The block kinds available in the document example.
+///
+/// This is the extensibility point of the example: to support a new block kind
+/// (a heading, an image, …) add another [BlockSpec] to this list. Nothing else
+/// needs to change — the "Add block" menu, the renderer and the CRDT model all
+/// derive from these specs, factory-style.
+const List<BlockSpec> documentBlockSpecs = [TextBlockSpec(), TodoBlockSpec()];
+
+/// Lookup of [BlockSpec] by its [BlockSpec.kind], used when rendering a block.
+final Map<String, BlockSpec> blockSpecByKind = {
+  for (final spec in documentBlockSpecs) spec.kind: spec,
+};
+
+/// Describes one kind of document block: how to create its CRDT content and
+/// how to render it.
+///
+/// Each block is stored as a `CRDTMapRefHandler` holding a single entry whose
+/// key is [kind]; the value is the block's content handler returned by
+/// [createContent]. Because the content handler can itself be a container, this
+/// convention scales to richer block kinds without changing the model.
+abstract class BlockSpec {
+  /// Const constructor for subclasses.
+  const BlockSpec();
+
+  /// The block kind; also used as the (single) block map key.
+  String get kind;
+
+  /// Human label shown in the "Add block" menu.
+  String get label;
+
+  /// Icon shown in the "Add block" menu and the block header.
+  IconData get icon;
+
+  /// Creates the content handler(s) for a new block on the live document.
+  Handler<dynamic> createContent(DocumentExampleState state);
+
+  /// Renders the block body.
+  ///
+  /// Reads go through [state]'s view handler; writes (only when [interactive])
+  /// target the live document.
+  Widget buildBody(
+    BuildContext context,
+    DocumentExampleState state,
+    CRDTMapRefHandler block, {
+    required bool interactive,
+  });
+}
+
+/// A paragraph of collaborative text.
+class TextBlockSpec extends BlockSpec {
+  /// Creates the text block spec.
+  const TextBlockSpec();
+
+  @override
+  String get kind => 'text';
+
+  @override
+  String get label => 'Text';
+
+  @override
+  IconData get icon => Icons.notes;
+
+  @override
+  Handler<dynamic> createContent(DocumentExampleState state) => state.newText();
+
+  @override
+  Widget buildBody(
+    BuildContext context,
+    DocumentExampleState state,
+    CRDTMapRefHandler block, {
+    required bool interactive,
+  }) {
+    final text = state.blockContent(block) as CRDTFugueTextHandler?;
+    return CrdtTextField(
+      key: ValueKey('text-${block.id}'),
+      handler: text,
+      enabled: interactive,
+      hintText: 'Write something…',
+      maxLines: null,
+    );
+  }
+}
+
+/// A sortable todo list: each item has collaborative text and a `done` flag.
+class TodoBlockSpec extends BlockSpec {
+  /// Creates the todo block spec.
+  const TodoBlockSpec();
+
+  @override
+  String get kind => 'todo';
+
+  @override
+  String get label => 'Todo list';
+
+  @override
+  IconData get icon => Icons.checklist;
+
+  @override
+  Handler<dynamic> createContent(DocumentExampleState state) =>
+      state.newRefList();
+
+  @override
+  Widget buildBody(
+    BuildContext context,
+    DocumentExampleState state,
+    CRDTMapRefHandler block, {
+    required bool interactive,
+  }) {
+    final list = state.blockContent(block) as CRDTMovableListRefHandler?;
+    final todos =
+        list == null ? const <CRDTMapRefHandler>[] : state.todosOf(list);
+    return _TodoBlockBody(list: list, todos: todos, interactive: interactive);
+  }
+}
+
+class _TodoBlockBody extends StatelessWidget {
+  const _TodoBlockBody({
+    required this.list,
+    required this.todos,
+    required this.interactive,
+  });
+
+  final CRDTMovableListRefHandler? list;
+  final List<CRDTMapRefHandler> todos;
+  final bool interactive;
+
+  @override
+  Widget build(BuildContext context) {
+    final state = context.read<DocumentExampleState>();
+    // Captured here (where the pane's providers are in scope) so each row can
+    // re-expose them: ReorderableListView lifts the dragged row into the app
+    // overlay, which is rooted above these providers.
+    final document = CrdtProvider.of(context);
+    final presence = context.read<TextCursorPresence?>();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (todos.isEmpty)
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 4, horizontal: 8),
+            child: Text('No todos', style: TextStyle(color: Colors.grey)),
+          )
+        // While time traveling (or with no live list) the list is read-only.
+        else if (!interactive || list == null)
+          Column(
+            children: [
+              for (var i = 0; i < todos.length; i++)
+                _TodoRow(
+                  key: ValueKey('todo-ro-${todos[i].id}'),
+                  item: todos[i],
+                  index: i,
+                  list: list,
+                  interactive: false,
+                ),
+            ],
+          )
+        else
+          ReorderableListView.builder(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            buildDefaultDragHandles: false,
+            itemCount: todos.length,
+            onReorderItem:
+                (oldIndex, newIndex) =>
+                    state.reorderTodos(list!, oldIndex, newIndex),
+            itemBuilder:
+                (context, i) => _ReorderItemScope(
+                  key: ValueKey('todo-${todos[i].id}'),
+                  document: document,
+                  presence: presence,
+                  state: state,
+                  child: _TodoRow(
+                    item: todos[i],
+                    index: i,
+                    list: list,
+                    interactive: true,
+                  ),
+                ),
+          ),
+        if (interactive && list != null)
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton.icon(
+              icon: const Icon(Icons.add),
+              label: const Text('Add todo'),
+              onPressed:
+                  () => promptText(
+                    context,
+                    title: 'Add todo',
+                    hint: 'Todo text',
+                    onAdd: (text) => state.addTodo(list!, text),
+                  ),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+/// Re-exposes the pane's providers to a reorderable item's subtree.
+///
+/// While dragging, [ReorderableListView] re-hosts the item widget in the app
+/// [Overlay], which sits above the pane's `CrdtProvider` / presence / controller
+/// providers. Without re-providing them here the dragged row's
+/// [CrdtTextField] would throw `ProviderNotFoundException` for
+/// `Provider<CRDTDocument>`. Because these providers live inside the item's own
+/// subtree, they travel with it into the overlay.
+class _ReorderItemScope extends StatelessWidget {
+  const _ReorderItemScope({
+    required this.document,
+    required this.presence,
+    required this.state,
+    required this.child,
+    super.key,
+  });
+
+  final CRDTDocument document;
+  final TextCursorPresence? presence;
+  final DocumentExampleState state;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return CrdtProvider.value(
+      value: document,
+      child: Provider<TextCursorPresence?>.value(
+        value: presence,
+        child: ChangeNotifierProvider<DocumentExampleState>.value(
+          value: state,
+          child: child,
+        ),
+      ),
+    );
+  }
+}
+
+class _TodoRow extends StatelessWidget {
+  const _TodoRow({
+    required this.item,
+    required this.index,
+    required this.list,
+    required this.interactive,
+    super.key,
+  });
+
+  final CRDTMapRefHandler item;
+  final int index;
+  final CRDTMovableListRefHandler? list;
+  final bool interactive;
+
+  @override
+  Widget build(BuildContext context) {
+    final state = context.read<DocumentExampleState>();
+    final text = state.todoText(item);
+    final done = state.todoDone(item);
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 2),
+      child: Row(
+        children: [
+          Checkbox(
+            value: done,
+            onChanged: interactive ? (_) => state.toggleTodo(item) : null,
+          ),
+          Expanded(
+            child: CrdtTextField(
+              key: ValueKey('todo-field-${item.id}'),
+              handler: text,
+              enabled: interactive,
+              hintText: 'Todo',
+              style:
+                  done
+                      ? const TextStyle(
+                        decoration: TextDecoration.lineThrough,
+                        color: Colors.grey,
+                      )
+                      : null,
+            ),
+          ),
+          if (interactive && list != null) ...[
+            IconButton(
+              icon: const Icon(Icons.delete_outline),
+              tooltip: 'Delete todo',
+              visualDensity: VisualDensity.compact,
+              onPressed: () => state.removeTodo(list!, index),
+            ),
+            ReorderableDragStartListener(
+              index: index,
+              child: const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 4),
+                child: Icon(Icons.drag_handle),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+/// Shows a one-line text dialog and reports the entered text via [onAdd].
+///
+/// Shared by the document example to add chapters, paragraphs and todos.
+Future<void> promptText(
+  BuildContext context, {
+  required String title,
+  required String hint,
+  required void Function(String text) onAdd,
+}) {
+  return showDialog<void>(
+    context: context,
+    builder: (_) => AddItemDialog(title: title, hint: hint, onAdd: onAdd),
+  );
+}

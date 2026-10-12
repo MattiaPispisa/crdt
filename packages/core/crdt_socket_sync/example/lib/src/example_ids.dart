@@ -2,7 +2,7 @@
 /// example clients.
 ///
 /// This is a Dart-only mirror of
-/// `shared_examples_infrastructure/lib/examples/ids.dart`. The demo server is a
+/// `factory_example/lib/examples/ids.dart`. The demo server is a
 /// pure-Dart package and cannot depend on that (Flutter) package, so the two
 /// declare matching constants — keep them in sync.
 library;

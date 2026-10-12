@@ -106,7 +106,7 @@ Future<void> _setupDocument() async {
 /// each with its root handler, so the Flutter example clients can connect.
 ///
 /// Keep the ids/handler ids in sync with
-/// shared_examples_infrastructure/lib/examples/ids.dart.
+/// factory_example/lib/examples/ids.dart.
 Future<void> _setupExampleDocuments() async {
   Future<CRDTDocument> ensure(String documentId) async {
     if (!await _registry.hasDocument(documentId)) {

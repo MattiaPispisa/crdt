@@ -1,0 +1,82 @@
+import 'package:crdt_lf/crdt_lf.dart';
+import 'package:crdt_lf_flutter/crdt_lf_flutter.dart' show CrdtHandlerBuilder;
+import 'package:factory_example/examples/ids.dart';
+import 'package:factory_example/examples/sortable_todo_list/_sortable_todo_item.dart';
+import 'package:factory_example/examples/sortable_todo_list/_state.dart';
+import 'package:factory_example/shared/document_pane.dart';
+import 'package:factory_example/shared/example_scaffold.dart';
+import 'package:flutter/material.dart';
+
+/// The Sortable Todo List example, backed by
+/// `CRDTFugueMovableListHandler`.
+final sortableTodoListScreen = ExampleScreen<SortableDocumentState>(
+  name: 'Sortable Todo List',
+  description:
+      'A reorderable todo list backed by '
+      'CRDTFugueMovableListHandler. Drag to reorder; concurrent moves of the '
+      'same item converge without duplicating it.',
+  path: '/sortable-todo-list',
+  documentId: ExampleDocumentIds.sortableTodoList,
+  createState: SortableDocumentState.new,
+  buildPane:
+      (context, state) => DocumentPane(
+        state: state,
+        onAdd: state.addTodo,
+        body: _SortableListView(state: state),
+      ),
+);
+
+class _SortableListView extends StatelessWidget {
+  const _SortableListView({required this.state});
+
+  final SortableDocumentState state;
+
+  @override
+  Widget build(BuildContext context) {
+    // Rebuild only when the sortable-list handler changes (local or remote);
+    // reads still go through `state` so the time-travel view stays correct.
+    return CrdtHandlerBuilder<CRDTFugueMovableListHandler<EncodedTodoListType>>(
+      id: ExampleHandlerIds.sortableTodoList,
+      builder: (context, _) => _buildList(context),
+    );
+  }
+
+  Widget _buildList(BuildContext context) {
+    final todos = state.todos;
+    if (todos.isEmpty) {
+      return const Center(
+        child: Text('No todos yet. Add one using the button below!'),
+      );
+    }
+
+    // While time traveling the list is read-only: render a plain list so the
+    // history view cannot be reordered.
+    if (state.isTimeTraveling) {
+      return ListView.builder(
+        itemCount: todos.length,
+        itemBuilder:
+            (context, index) => SortableTodoItem(
+              key: ValueKey('history-$index'),
+              todo: todos[index],
+              index: index,
+              interactive: false,
+            ),
+      );
+    }
+
+    return ReorderableListView.builder(
+      itemCount: todos.length,
+      // We provide our own drag handle (ReorderableDragStartListener in
+      // SortableTodoItem), so disable the automatic ones to avoid two handles.
+      buildDefaultDragHandles: false,
+      onReorderItem: state.reorder,
+      itemBuilder:
+          (context, index) => SortableTodoItem(
+            key: ValueKey(index),
+            todo: todos[index],
+            index: index,
+            interactive: true,
+          ),
+    );
+  }
+}

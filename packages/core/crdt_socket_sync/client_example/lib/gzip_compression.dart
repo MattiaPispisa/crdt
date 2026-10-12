@@ -5,7 +5,7 @@ import 'package:crdt_socket_sync/web_socket_client.dart';
 ///
 /// Compression is **symmetric**: the client may only inject [GzipCompression]
 /// when the server it connects to compresses too, otherwise it cannot decode
-/// incoming messages. See `examples.dart` (`USE_COMPRESSION`) for the toggle.
+/// incoming messages. See `main.dart` (`USE_COMPRESSION`) for the toggle.
 class GzipCompression implements Compressor {
   /// Creates a gzip compressor.
   const GzipCompression();
