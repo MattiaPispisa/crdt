@@ -1097,7 +1097,7 @@ instead of raw data:
 Each container exposes both views:
 
 - the inherited `value` getter returns the **raw references** (`Map<String, HandlerRef>` / `List<HandlerRef>` / `Set<HandlerRef>`);
-- the `resolved` getter returns the **fully resolved subtree** as plain Dart values, resolving every reference recursively (with cycle protection).
+- the `resolved` getter returns the **fully resolved subtree**, resolving every reference recursively (with cycle protection). A leaf handler resolves to its `value` as is (a `Set`, a custom type, an aggregate state), so the result is JSON-safe only when every leaf value is.
 
 Children are resolved **lazily** through the document registry, so the state is
 computed only when read.
@@ -1120,7 +1120,7 @@ final chapters = root.child('chapters', CRDTListRefHandler.spec);
 final chapter = chapters.insertChild(0, CRDTMapRefHandler.spec);
 chapter.child('title', CRDTFugueTextHandler.spec).insert(0, 'Intro');
 
-// Read the whole tree resolved to plain Dart values.
+// Read the whole tree, every reference resolved.
 print(root.resolved); // {chapters: [{title: Intro}]}
 ```
 
@@ -1269,6 +1269,9 @@ doc.deleteHandlerRef(ref);       // by reference, without building it
   `resolved` leaves it out. `child(key, spec)` makes a new child in its place.
 - **The data goes at the next snapshot.** `takeSnapshot` leaves the deleted
   handlers out, so a prune removes their changes.
+- **The id stays.** The document keeps every deleted id for good, so a late
+  edit cannot bring the handler back. Each delete adds its id, plus a few
+  bytes, to every snapshot, and this list never shrinks.
 
 The deletes travel as the operations of an internal handler, with the
 reserved id `crdt_lf/deleted-handlers`. A peer on crdt_lf before 5.2.0 sees an

@@ -1915,6 +1915,13 @@ void main() {
       expect(snapshot.data.containsKey(chapters.id), isFalse);
       expect(snapshot.data.containsKey(title.id), isFalse);
       expect(doc.changeCountForHandler(title.id), 0);
+      // The tagless OR-set layout: a delete is never removed, so it needs none.
+      expect(
+        doc
+            .describeDataRequirements()['crdt_lf/deleted-handlers']!
+            .blobVersions,
+        const BlobVersionRange.single(1),
+      );
 
       final peer = CRDTDocument(peerId: PeerId.generate())
         ..importSnapshot(snapshot);

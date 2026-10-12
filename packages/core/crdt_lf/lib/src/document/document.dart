@@ -18,6 +18,7 @@ import 'package:hlc_dart/hlc_dart.dart';
 // private. See the "Extension points" section of its documentation for the
 // members a custom handler is meant to override.
 part '../handler/handler.dart';
+part 'deletions_registry.dart';
 part 'delta_provider.dart';
 part 'history.dart';
 // The mixins a consumer of the document is built from, and the read-only
@@ -408,7 +409,8 @@ abstract class BaseCRDTDocument {
   /// throws too, and [resolveHandler] returns `null`.
   ///
   /// The next [CRDTDocument.takeSnapshot] leaves its state out, so a prune
-  /// frees its data. A [CRDTUndoManager] cannot bring it back.
+  /// frees its data. A [CRDTUndoManager] cannot bring it back. Its id stays:
+  /// every snapshot carries it, plus a few bytes, for good.
   ///
   /// A child that another container also references is deleted for that
   /// container too. A child added to a container while another peer deletes
@@ -657,8 +659,8 @@ class CRDTDocument extends BaseCRDTDocument {
 
   /// The deletions registry is an OR-set nothing ever removes from, so a
   /// delete is final on every peer.
-  static final HandlerSpec<CRDTORSetHandler<String>> _deletionsSpec =
-      CRDTORSetHandler.spec<String>(_deletedHandlersKey);
+  static final HandlerSpec<_DeletionsRegistry> _deletionsSpec =
+      _DeletionsRegistry.spec;
 
   /// The kinds every document of this build reads, whatever its handlers.
   ///
