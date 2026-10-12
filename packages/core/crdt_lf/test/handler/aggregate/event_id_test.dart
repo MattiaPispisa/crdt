@@ -55,6 +55,19 @@ void main() {
       expect(ids, [_id(1, 0), _id(1, 0, 1), _id(1, 1), _id(2, 0)]);
     });
 
+    test('ids and contexts are equal by value', () {
+      expect(_id(1, 0, 1), _id(1, 0, 1));
+      expect(_id(1, 0, 1).hashCode, _id(1, 0, 1).hashCode);
+      expect(_id(1, 0, 1), isNot(_id(1, 0)));
+      expect(EventContext(_id(1, 2)), EventContext(_id(1, 2)));
+      expect(
+        EventContext(_id(1, 2)).hashCode,
+        EventContext(_id(1, 2)).hashCode,
+      );
+      expect(_id(1, 2, 3).toString(), endsWith('#2.3)'));
+      expect(EventContext(_id(1, 2)).toString(), startsWith('EventContext('));
+    });
+
     test('names the peer that wrote it', () {
       expect(_id(1, 0).author, _author);
       expect(EventContext(_id(1, 0)).author, _author);

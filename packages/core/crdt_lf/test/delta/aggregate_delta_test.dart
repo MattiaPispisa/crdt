@@ -66,6 +66,22 @@ void main() {
         AggregateEvent('a', _context(0)),
         isNot(AggregateEvent('a', _context(1))),
       );
+      expect(
+        AggregateEvent('a', _context(0)).hashCode,
+        AggregateEvent('a', _context(0)).hashCode,
+      );
     });
+  });
+
+  test('an event and a delta describe themselves', () {
+    final event = AggregateEvent('rename', _context(0));
+    final delta = AggregateDelta<String, String>(
+      previous: 'old',
+      current: 'new',
+      events: [event],
+    );
+
+    expect(event.toString(), contains('rename'));
+    expect(delta.toString(), 'AggregateDelta(old -> new, 1 events)');
   });
 }

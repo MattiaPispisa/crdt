@@ -34,6 +34,15 @@ void main() {
       expect(asset.value, const Asset());
     });
 
+    test('names its definition, and describes itself and its events', () {
+      final asset = _asset(CRDTDocument())
+        ..dispatchAll(const [Renamed('P-101'), NoteAdded('Installed')]);
+
+      expect(asset.definition, const AssetAggregate());
+      expect(asset.toString(), contains(asset.id));
+      expect(asset.operations().single.toPayload()['events'], hasLength(2));
+    });
+
     test('dispatchAll writes the events in one change', () {
       final doc = CRDTDocument();
       _asset(doc).dispatchAll(const [
@@ -350,6 +359,30 @@ void main() {
       final v1 = CRDTDocument()..importSnapshot(v3.snapshot!);
 
       expect(() => tags(v1, const _Tags()).value, throwsFormatException);
+    });
+
+    test('a snapshot in an unknown layout is refused', () {
+      final source = CRDTDocument();
+      final asset = _asset(source)..dispatch(const Renamed('P-101'));
+      final taken = source.takeSnapshot();
+      // The byte after the one-byte blob header is the layout.
+      final blob = Uint8List.fromList(taken.data[asset.id]!)..[1] = 1;
+      final reader = CRDTDocument()
+        ..importSnapshot(
+          Snapshot(
+            id: taken.id,
+            versionVector: taken.versionVector,
+            data: {...taken.data, asset.id: blob},
+          ),
+        );
+
+      expect(
+        () => _asset(reader).value,
+        throwsA(
+          isA<FormatException>()
+              .having((e) => e.message, 'message', contains('layout')),
+        ),
+      );
     });
 
     test('a build refuses events below its readable version', () {

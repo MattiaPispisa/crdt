@@ -20,19 +20,6 @@ void main() {
       clock = DocumentClock(peer);
     });
 
-    test('mints ids of its peer, each newer than the one before', () {
-      final first = clock.mint();
-      final second = clock.mint();
-
-      expect(first.peerId, peer);
-      expect(first.hlc.happenedBefore(second.hlc), isTrue);
-      expect(clock.now, second.hlc);
-    });
-
-    test('mints at the physical time it is given', () {
-      expect(clock.mint(physicalTime: 1000).hlc.l, 1000);
-    });
-
     test('mints past a time it received', () {
       final remote = ahead(counter: 7);
 

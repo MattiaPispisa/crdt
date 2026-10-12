@@ -210,18 +210,15 @@ void main() {
       doc.createChange(newOperation());
     });
 
-    test('localChanges stream is closed on dispose', () async {
-      // Expect the stream to be done (closed)
-      final expectation = expectLater(
-        doc.localChanges,
-        emitsDone,
-      );
+    test('localChanges and updates close on dispose', () async {
+      final closed = Future.wait([
+        expectLater(doc.localChanges, emitsDone),
+        expectLater(doc.updates, emitsDone),
+      ]);
 
-      // Dispose the document
       doc.dispose();
 
-      // Wait for the stream to close
-      await expectation;
+      await closed;
     });
 
     group('updates stream', () {
