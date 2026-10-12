@@ -10,6 +10,20 @@
 - `CRDTDocument.deleteHandler` / `deleteHandlerRef` and `removeChild` / `removeChildAt` on every
   container: delete a handler and its subtree for every peer; the next snapshot drops their data.
   Every build reads the deletes: see `CRDTDocument.builtInCapabilities`.
+- `CRDTAggregateHandler`: one aggregate built from domain events replayed in `(HLC, author)`
+  order, with atomic `dispatchAll`, events `reduce` can refuse, stable `EventId`s, deltas, undo
+  and versioned migrations.
+
+### Changed
+
+- The cost of applying a change no longer grows with the number of handlers on the document;
+  a batch import routes each change by handler type and id, as the single-change path does.
+
+### Fixed
+
+- Reading a handler inside a transaction now includes the writes made earlier in the same
+  transaction. Before, the read could miss them, and the handler kept that wrong value even
+  after the commit.
 
 ## [5.1.2](https://github.com/MattiaPispisa/crdt/tree/crdt_lf-v5.1.2/packages/core/crdt_lf)
 

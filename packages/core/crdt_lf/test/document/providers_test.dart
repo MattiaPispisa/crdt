@@ -326,8 +326,8 @@ void main() {
     });
 
     test('a change for another handler type is skipped by both paths', () {
-      // The batch import groups changes by handler id alone, so a change can
-      // reach a handler that is not the one that wrote it.
+      // Same id, another type: the change belongs to a handler this document
+      // does not hold.
       final other = CRDTDocument(peerId: PeerId.generate());
       final otherText = _ForeignTypeFugueText(other, 'fugue');
       // Warm the cache: a handler with nothing cached has nothing to advance.
@@ -335,9 +335,11 @@ void main() {
 
       other.importChanges(source.exportChanges());
 
-      expect(otherText.cachedState, isNull, reason: 'the queue gave up');
+      expect(otherText.cachedState, isNotNull, reason: 'routed by type too');
+      expect(other.revisionForHandler('fugue'), 0);
       // The recompute reads the change through the same path, so it skips it
       // too: folding and replaying still agree.
+      otherText.invalidateCache();
       expect(otherText.value, '');
     });
 

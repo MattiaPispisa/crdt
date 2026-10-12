@@ -141,7 +141,7 @@ packages:
       path: "../../../../core/crdt_socket_sync"
       relative: true
     source: path
-    version: "0.10.1"
+    version: "0.10.2"
   crdt_socket_sync_serverpod:
     dependency: "direct main"
     description:

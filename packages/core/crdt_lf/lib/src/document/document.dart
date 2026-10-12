@@ -10,6 +10,7 @@ import 'package:crdt_lf/src/snapshot/blob_version.dart';
 import 'package:crdt_lf/src/snapshot/records.dart';
 import 'package:crdt_lf/src/transaction/transaction_manager.dart';
 import 'package:crdt_lf/src/utils/bytes.dart';
+import 'package:crdt_lf/src/utils/fnv1a.dart';
 import 'package:crdt_lf/src/utils/uuid.dart';
 import 'package:hlc_dart/hlc_dart.dart';
 
@@ -180,6 +181,51 @@ abstract class BaseCRDTDocument {
   /// The registered snapshot providers
   Map<String, Handler<dynamic>> get _handlers;
 
+  /// The operations of the handler [handlerId] registered in the open
+  /// transaction, which no change carries yet.
+  List<Operation> _uncommittedOperations(String handlerId) => const [];
+
+  /// What a cached handler state is pinned to.
+  ///
+  /// Moves on the paths that make every cached state stale at once. A change
+  /// leaves it alone: it reaches the one handler it targets, and the others
+  /// have nothing to catch up on.
+  int _cacheEpoch = 0;
+
+  /// [_handlers] keyed by the hash of their envelope prefix.
+  final Map<int, List<Handler<dynamic>>> _handlersByPrefix = {};
+
+  /// The handler [payload] is addressed to, or `null` when none is open.
+  ///
+  /// Reads the two lengths of the envelope prefix and compares bytes, so the
+  /// apply path still decodes nothing.
+  Handler<dynamic>? _handlerForPayload(Uint8List payload) {
+    final int end;
+    try {
+      final type = UVarint.read(payload, offset: 0);
+      final id = UVarint.read(payload, offset: type.nextOffset + type.value);
+      end = id.nextOffset + id.value;
+    } on FormatException {
+      return null;
+    }
+    // +1 for the kind byte that follows the prefix.
+    if (end + 1 > payload.length) {
+      return null;
+    }
+
+    final candidates = _handlersByPrefix[fnv1a32(payload, end: end)];
+    if (candidates == null) {
+      return null;
+    }
+    for (final candidate in candidates) {
+      final prefix = candidate._envelopePrefix;
+      if (prefix.length == end && startsWithBytes(payload, prefix)) {
+        return candidate;
+      }
+    }
+    return null;
+  }
+
   /// Adds [handler] to [_handlers] under its own id.
   ///
   /// Called by the [Handler] constructor, so a handler is on its document from
@@ -204,6 +250,7 @@ abstract class BaseCRDTDocument {
     }
     _handlers[handler.id] = handler;
     handler._document = this;
+    (_handlersByPrefix[fnv1a32(handler._envelopePrefix)] ??= []).add(handler);
 
     final spec = handler._instanceSpec;
     assert(
@@ -220,6 +267,21 @@ abstract class BaseCRDTDocument {
 
     // `putIfAbsent`: an explicit [register] made earlier wins.
     _specs.putIfAbsent(spec.type, () => spec);
+  }
+
+  /// Removes the handler with [id] from [_handlers] and from
+  /// [_handlersByPrefix], and returns it.
+  Handler<dynamic>? _unregisterHandler(String id) {
+    final handler = _handlers.remove(id);
+    if (handler == null) {
+      return null;
+    }
+    final key = fnv1a32(handler._envelopePrefix);
+    final candidates = _handlersByPrefix[key]!..remove(handler);
+    if (candidates.isEmpty) {
+      _handlersByPrefix.remove(key);
+    }
+    return handler;
   }
 
   /// Whether the document itself is opening the deletions registry, the only
@@ -399,6 +461,7 @@ abstract class BaseCRDTDocument {
       handler._closeDeltas();
     }
     _handlers.clear();
+    _handlersByPrefix.clear();
   }
 }
 
@@ -762,7 +825,7 @@ class CRDTDocument extends BaseCRDTDocument {
           ? (handler as ContainerHandler).childRefs().toList()
           : const [];
     } finally {
-      _handlers.remove(id);
+      _unregisterHandler(id);
     }
   }
 
@@ -805,7 +868,7 @@ class CRDTDocument extends BaseCRDTDocument {
     }
     for (final id in closed) {
       _deletedIds.add(id);
-      _handlers.remove(id)?._closeDeltas();
+      _unregisterHandler(id)?._closeDeltas();
       _handlerRevisions.update(id, (r) => r + 1, ifAbsent: () => 1);
     }
     for (final manager in _undoManagers ?? const <CRDTUndoManager>[]) {
@@ -1180,22 +1243,19 @@ class CRDTDocument extends BaseCRDTDocument {
       handlers: _handlers,
     ).compact();
 
-    final handlersAffectedFromErrors = <String>{};
     // The changes the compacted operations become. They belong at the end of
     // the batches this transaction collected: they only exist now, at the
     // commit, while every batch already queued happened before it.
     final appliedChanges = <Change>[];
 
-    // if generated operations are applied correctly the handlers
-    // cached state can be preserved.
-    // Otherwise if there is at least one operation not applied correctly
-    // the handlers cached state is invalidated.
+    // An operation that fails to apply drops its own handler's cache, and only
+    // that one.
     for (final operation in compacted) {
       final change = _changeFromOp(operation);
       final applied = _internalApplyChange(change);
 
       // [operation.id] is the handler id: the revision bump costs a map
-      // update, no envelope decode (see [_refreshHandlerCaches]).
+      // update, no envelope decode (see [_refreshHandlerCache]).
       _handlerRevisions.update(operation.id, (r) => r + 1, ifAbsent: () => 1);
 
       final target = _handlers[operation.id];
@@ -1207,14 +1267,8 @@ class CRDTDocument extends BaseCRDTDocument {
         target
           ?.._noteReplayBoundary(change)
           .._publishBufferedUpTo(change);
-        for (final handler in _handlers.values) {
-          if (!handlersAffectedFromErrors.contains(handler.id)) {
-            handler._updateCachedVersion();
-          }
-        }
       } else {
         target?._invalidate(ResetCause.applyFailed);
-        handlersAffectedFromErrors.add(operation.id);
       }
     }
 
@@ -1262,93 +1316,72 @@ class CRDTDocument extends BaseCRDTDocument {
   /// it registers it, long before the change exists, so its commit only has to
   /// report the replay boundary (see [_transactionFlushWork]).
   ///
-  /// Such a change can sort before what a handler already holds, so an affected
+  /// Such a change can sort before what its handler already holds, so the
   /// handler either queues it (see
-  /// [CacheableStateProvider._queueRemoteChanges]) or drops its cache; the
-  /// others have their version updated.
+  /// [CacheableStateProvider._queueRemoteChanges]) or drops its cache.
   void _foldOrDropCachesForChange(Change change) {
-    // One list for the whole pass: [_queueRemoteChanges] copies out of it, so
-    // every affected handler can share it.
-    final pending = <Change>[change];
-    _refreshHandlerCaches(
-      (handler) => handler._isAffectedByChange(change) ? pending : null,
-    );
+    final handler = _handlerForPayload(change.payloadBytes());
+    if (handler != null) {
+      _refreshHandlerCache(handler, [change]);
+    }
     _syncDeletions();
   }
 
   /// Batch version of [_foldOrDropCachesForChange] for a set of applied
   /// [changes].
   ///
-  /// Groups the batch by handler id once (O(changes)), then refreshes the
-  /// caches in a single pass (O(handlers)). This avoids the
-  /// O(handlers × changes) cost of invoking the per-change variant in a loop.
+  /// Groups the batch by handler once, then refreshes only the handlers it
+  /// targets: the cost follows the batch, not the number of handlers.
   void _foldOrDropCachesForChanges(List<Change> changes) {
     if (_handlers.isEmpty) {
       return;
     }
-    final affected = <String, List<Change>>{};
+    final affected = <Handler<dynamic>, List<Change>>{};
     for (final change in changes) {
-      try {
-        final handlerId =
-            OperationEnvelopeCodec.decode(change.payloadBytes()).handlerId;
-        final pending = affected[handlerId];
-        if (pending == null) {
-          affected[handlerId] = <Change>[change];
-        } else if (pending.isNotEmpty) {
-          pending.add(change);
-          if (pending.length >
-              CacheableStateProvider._maxPendingRemoteChanges) {
-            // Too many to queue: mark the handler for invalidation and stop
-            // holding on to its changes.
-            affected[handlerId] = const <Change>[];
-          }
+      final handler = _handlerForPayload(change.payloadBytes());
+      if (handler == null) {
+        continue;
+      }
+      final pending = affected[handler];
+      if (pending == null) {
+        affected[handler] = <Change>[change];
+      } else if (pending.isNotEmpty) {
+        pending.add(change);
+        if (pending.length > CacheableStateProvider._maxPendingRemoteChanges) {
+          // Too many to queue: mark the handler for invalidation and stop
+          // holding on to its changes.
+          affected[handler] = const <Change>[];
         }
-      } catch (_) {
-        // Ignore changes whose envelope cannot be decoded.
       }
     }
-    _refreshHandlerCaches((handler) => affected[handler.id]);
+    affected.forEach(_refreshHandlerCache);
     _syncDeletions();
   }
 
-  /// Refreshes every registered handler's cache after external change(s).
+  /// Refreshes the cache of [handler] after external [pending] changes that
+  /// target it.
   ///
-  /// [changesFor] answers, per handler:
-  /// - `null` — untouched: its cached version is advanced to the document's
-  ///   new version;
-  /// - a non-empty list — the changes that target it: [revisionForHandler] is
-  ///   bumped and the changes are queued, falling back to invalidation when
-  ///   the handler cannot take them;
-  /// - an empty list — touched, but to be invalidated outright.
-  void _refreshHandlerCaches(
-    List<Change>? Function(Handler<dynamic> handler) changesFor,
-  ) {
-    for (final handler in _handlers.values) {
-      final pending = changesFor(handler);
-      if (pending == null) {
-        handler._updateCachedVersion();
-        continue;
-      }
+  /// [revisionForHandler] is bumped and the changes are queued, falling back to
+  /// invalidation when the handler cannot take them. An empty [pending] means
+  /// touched, but to be invalidated outright.
+  void _refreshHandlerCache(Handler<dynamic> handler, List<Change> pending) {
+    _handlerRevisions.update(handler.id, (r) => r + 1, ifAbsent: () => 1);
+    if (!handler._queueRemoteChanges(pending)) {
+      handler.invalidateCache();
+      return;
+    }
 
-      _handlerRevisions.update(handler.id, (r) => r + 1, ifAbsent: () => 1);
-      if (!handler._queueRemoteChanges(pending)) {
-        handler.invalidateCache();
-        continue;
-      }
-
-      // A watched handler cannot leave the queue waiting for a read that may
-      // never come, so it folds now and publishes one event per change.
-      if (handler.hasDeltaListeners) {
-        try {
-          handler._drainPendingRemoteChanges(withDeltas: true);
-        } catch (_) {
-          // The drain has already dropped this handler's cache and told its
-          // subscribers why. Letting the throw out would end this loop, and
-          // every handler after it would keep a version the document has
-          // already moved past. One handler's bad operation is not a reason to
-          // leave the others behind — and reading this one still recomputes,
-          // and still throws, exactly as it does when nobody is watching.
-        }
+    // A watched handler cannot leave the queue waiting for a read that may
+    // never come, so it folds now and publishes one event per change.
+    if (handler.hasDeltaListeners) {
+      try {
+        handler._drainPendingRemoteChanges(withDeltas: true);
+      } catch (_) {
+        // The drain has already dropped this handler's cache and told its
+        // subscribers why. Letting the throw out would leave the other handlers
+        // of a batch with their changes neither queued nor dropped — and
+        // reading this one still recomputes, and still throws, exactly as it
+        // does when nobody is watching.
       }
     }
   }
@@ -1487,21 +1520,20 @@ class CRDTDocument extends BaseCRDTDocument {
         _transactionManager.begin();
       }
 
-      _transactionManager.handleOperation(operation);
-
-      if (handler != null) {
-        try {
-          // Before the fold, so a [CRDTUndoManager] reads the state the
-          // operation is about to move, and after the stamp, so the inverse
-          // can name it.
+      try {
+        // Before the operation joins the transaction and before the fold, so
+        // a [CRDTUndoManager] reads the state the operation is about to move,
+        // and after the stamp, so the inverse can name it.
+        if (handler != null) {
           _captureForUndo(handler, operation);
-        } finally {
-          // The commit below is in a `finally` too, so the operation reaches
-          // the change store whatever happens above. The fold has to happen
-          // for the same reason: a handler that skipped it would hold a state
-          // its own history does not describe, for good.
-          handler._internalIncrementCachedState(operation: operation);
         }
+      } finally {
+        // The commit below is in a `finally` too, so the operation reaches
+        // the change store whatever happens above. The fold has to happen
+        // for the same reason: a handler that skipped it would hold a state
+        // its own history does not describe, for good.
+        _transactionManager.handleOperation(operation);
+        handler?._internalIncrementCachedState(operation: operation);
       }
     } finally {
       if (openedImplicitTransaction) {
@@ -1989,6 +2021,12 @@ class CRDTDocument extends BaseCRDTDocument {
   }
 
   @override
+  List<Operation> _uncommittedOperations(String handlerId) => [
+        for (final operation in _transactionManager.pendingOperations)
+          if (operation.id == handlerId) operation,
+      ];
+
+  @override
   int changeCountForHandler(String handlerId) {
     return _changeStore.changeCountForHandler(handlerId);
   }
@@ -2103,7 +2141,13 @@ class CRDTDocument extends BaseCRDTDocument {
     // Between two prunes the changes of a handler only grow, so an unchanged
     // count means nothing new to read.
     _sweptChangeCounts.clear();
+    final before = _dag.frontiers;
     _dag.prune(version);
+    // New frontiers: the caches were built on a history this document no
+    // longer holds, so the next read rebuilds them from the snapshot.
+    if (!setEquals(before, _dag.frontiers)) {
+      _cacheEpoch++;
+    }
     _changeStore.prune(
       version,
       onPruned: _eventsController.hasListener

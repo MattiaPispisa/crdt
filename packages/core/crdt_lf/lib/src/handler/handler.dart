@@ -247,7 +247,8 @@ abstract base class Handler<T>
 
   /// Returns the [Operation]s required by this consumer to compute its state.
   ///
-  /// The [Operation]s are returned in the order they were applied.
+  /// The [Operation]s are returned in the order they were applied, the ones
+  /// of the open transaction included.
   List<Operation> operations() {
     final changes = doc
         .changesForHandler(
@@ -268,6 +269,15 @@ abstract base class Handler<T>
       }
     }
 
-    return operations;
+    final uncommitted = doc._uncommittedOperations(id);
+    if (uncommitted.isEmpty) {
+      return operations;
+    }
+    // Their changes are only created at the commit, so the boundary is not
+    // known until then.
+    _replayBoundaryMatchesState = false;
+    return operations
+      ..addAll(uncommitted)
+      ..sort((a, b) => a.stamp!.compareTo(b.stamp!));
   }
 }

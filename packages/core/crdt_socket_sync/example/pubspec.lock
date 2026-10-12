@@ -108,7 +108,7 @@ packages:
       path: ".."
       relative: true
     source: path
-    version: "0.10.1"
+    version: "0.10.2"
   crypto:
     dependency: transitive
     description:

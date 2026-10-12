@@ -22,6 +22,7 @@ void main() {
   register('reports no change', _ReportsNoChange.new);
   register('cannot undo', _CannotUndo.new);
   register('snapshots what it last read', _SnapshotsLastRead.new);
+  register('replays only committed changes', _ReplaysCommitted.new);
 
   runHandlerConformanceTests(
     spec: _spec(
@@ -203,6 +204,23 @@ final class _SnapshotsLastRead extends _Register {
     final out = snapshotHeader()..addByte(1);
     UVarint.writeBytes(const JsonValueCodec<String>().encode(lastRead), out);
     return out.toBytes();
+  }
+}
+
+/// Replays the committed history only, without the operations of the open
+/// transaction.
+final class _ReplaysCommitted extends _Register {
+  _ReplaysCommitted(super.doc, super.id, super.type);
+
+  @override
+  List<Operation> operations() {
+    final committed = {
+      for (final change in doc.changesForHandler(id)) change.id,
+    };
+    return [
+      for (final operation in super.operations())
+        if (committed.contains(operation.stamp)) operation,
+    ];
   }
 }
 
