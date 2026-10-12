@@ -50,6 +50,9 @@ const _mustFail = <String, List<String>>{
   'reissues spent ids': [
     'edits after a reload from the history converge with another peer',
   ],
+  'replays only committed changes': [
+    'a recompute inside a transaction sees the edits before it',
+  ],
   'forgets pruned ids': [
     'edits after a reload converge with a full-history peer',
   ],

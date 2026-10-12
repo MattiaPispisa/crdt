@@ -1,11 +1,25 @@
-## [5.1.2](https://github.com/MattiaPispisa/crdt/tree/crdt_lf-v5.1.2/packages/core/crdt_lf)
+## [5.2.0](https://github.com/MattiaPispisa/crdt/tree/crdt_lf-v5.2.0/packages/core/crdt_lf)
 
 **Date:** 2026-10-10
 
-[compare to previous release](https://github.com/MattiaPispisa/crdt/compare/crdt_lf-v5.1.1...crdt_lf-v5.1.2)
+[compare to previous release](https://github.com/MattiaPispisa/crdt/compare/crdt_lf-v5.1.1...crdt_lf-v5.2.0)
+
+### Added
+
+- `CRDTAggregateHandler`: one aggregate built from domain events replayed in `(HLC, author)`
+  order, with atomic `dispatchAll`, events `reduce` can refuse, stable `EventId`s, deltas, undo
+  and versioned migrations.
+
+### Changed
+
+- The cost of applying a change no longer grows with the number of handlers on the document;
+  a batch import routes each change by handler type and id, as the single-change path does.
 
 ### Fixed
 
+- Reading a handler inside a transaction now includes the writes made earlier in the same
+  transaction. Before, the read could miss them, and the handler kept that wrong value even
+  after the commit.
 - `CRDTTextHandler`: a transaction that inserts before an earlier insert of the same transaction
   no longer moves it; the compacted change replays to the text the peer sees.
   [188](https://github.com/MattiaPispisa/crdt/issues/188)

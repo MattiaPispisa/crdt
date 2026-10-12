@@ -1604,6 +1604,38 @@ void main() {
       });
     });
   });
+  group('handler caches', () {
+    test('an untouched handler keeps its cache while others change', () {
+      final source = CRDTDocument(peerId: PeerId.generate());
+      final doc = CRDTDocument(peerId: PeerId.generate());
+      final untouched = CRDTMapHandler<int>(doc, 'untouched', handlerType: 'm')
+        ..set('k', 1);
+      final local = CRDTMapHandler<int>(doc, 'local', handlerType: 'm');
+      final remote = CRDTMapHandler<int>(source, 'remote', handlerType: 'm');
+      final cached = untouched.value;
+
+      for (var i = 0; i < 1000; i++) {
+        local.set('k', i);
+        remote.set('k', i);
+        doc.applyChange(source.exportChanges().last);
+      }
+      doc.importChanges(source.exportChanges());
+
+      expect(identical(untouched.cachedState, cached), isTrue);
+    });
+
+    test('a prune that moves the frontiers drops every cache', () {
+      final doc = CRDTDocument(peerId: PeerId.generate());
+      final map = CRDTMapHandler<int>(doc, 'map', handlerType: 'm')
+        ..set('k', 1);
+      expect(map.value, {'k': 1});
+
+      doc.takeSnapshot();
+
+      expect(map.cachedState, isNull);
+      expect(map.value, {'k': 1});
+    });
+  });
 }
 
 /// A map handler whose [invert] fails on demand, to show what the document
