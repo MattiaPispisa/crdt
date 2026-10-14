@@ -92,38 +92,43 @@ packages:
   crdt_lf:
     dependency: "direct main"
     description:
-      path: "../../../packages/core/crdt_lf"
-      relative: true
-    source: path
-    version: "5.1.2"
+      name: crdt_lf
+      sha256: "43669b0163319bbad4ada0049273b9c5402614054857343311a0de73be957010"
+      url: "https://pub.dev"
+    source: hosted
+    version: "5.1.1"
   crdt_lf_flutter:
     dependency: "direct main"
     description:
-      path: "../../../packages/core/crdt_lf_flutter"
-      relative: true
-    source: path
-    version: "0.5.3"
+      name: crdt_lf_flutter
+      sha256: "791c950cf490ecdad299d810cdc9a853ec3bfd364d892b89809ede43387d43ba"
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.5.2"
   crdt_lf_hive:
     dependency: "direct main"
     description:
-      path: "../../../packages/adapters/persistence/crdt_lf_hive"
-      relative: true
-    source: path
+      name: crdt_lf_hive
+      sha256: cb8f8fd6cd45375f8bab9e3339ca00b03090f480523a4e8331e57114e97fd21f
+      url: "https://pub.dev"
+    source: hosted
     version: "0.5.2"
   crdt_lf_persistence:
     dependency: "direct overridden"
     description:
-      path: "../../../packages/core/crdt_lf_persistence"
-      relative: true
-    source: path
+      name: crdt_lf_persistence
+      sha256: d60691b2dbb8d704d758cb2561e65289412a1f1c1dc3b1388e264fc94ca31106
+      url: "https://pub.dev"
+    source: hosted
     version: "0.2.0"
   crdt_socket_sync:
     dependency: "direct main"
     description:
-      path: "../../../packages/core/crdt_socket_sync"
-      relative: true
-    source: path
-    version: "0.10.1"
+      name: crdt_socket_sync
+      sha256: b0bd69f2ac98ca524aaff975e0e91760e0913d40c8d6705a6163e0c9fe94ef47
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.10.0"
   crypto:
     dependency: transitive
     description:
@@ -172,6 +177,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "2.2.0"
+  ffi_leak_tracker:
+    dependency: transitive
+    description:
+      name: ffi_leak_tracker
+      sha256: "4093d4ef9ca06ffe2786e73bfb25e22aa92112b9bb4ec941f11e3e6b61489a97"
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.1.2"
   flutter:
     dependency: "direct main"
     description: flutter
@@ -267,9 +280,10 @@ packages:
   hlc_dart:
     dependency: "direct overridden"
     description:
-      path: "../../../packages/core/hlc"
-      relative: true
-    source: path
+      name: hlc_dart
+      sha256: b6e798b4fe648fa1a054a9541238e28ba6fe2e6fe28d7d7a2d13ca893187a127
+      url: "https://pub.dev"
+    source: hosted
     version: "1.2.0"
   hooks:
     dependency: transitive
@@ -467,18 +481,18 @@ packages:
     dependency: "direct main"
     description:
       name: package_info_plus
-      sha256: "16eee997588c60225bda0488b6dcfac69280a6b7a3cf02c741895dd370a02968"
+      sha256: "73ef2cd5c11a7548f9b7f6fc2a4f6113de2e64aa2a70de63feede95548822908"
       url: "https://pub.dev"
     source: hosted
-    version: "8.3.1"
+    version: "10.2.2"
   package_info_plus_platform_interface:
     dependency: transitive
     description:
       name: package_info_plus_platform_interface
-      sha256: "202a487f08836a592a6bd4f901ac69b3a8f146af552bbd14407b6b41e1c3f086"
+      sha256: db762cb2f4f25ee60fb6359773861b0f199e00b90d237bd85a76a1e806b46ef4
       url: "https://pub.dev"
     source: hosted
-    version: "3.2.1"
+    version: "4.1.0"
   path:
     dependency: transitive
     description:
@@ -792,10 +806,10 @@ packages:
     dependency: transitive
     description:
       name: win32
-      sha256: d7cb55e04cd34096cd3a79b3330245f54cb96a370a1c27adb3c84b917de8b08e
+      sha256: a0b93865d5644f11cf6a8c3f6db909f1ec168958b5805f6cc684adea957cd63d
       url: "https://pub.dev"
     source: hosted
-    version: "5.15.0"
+    version: "6.4.0"
   ws_lint:
     dependency: "direct dev"
     description:
