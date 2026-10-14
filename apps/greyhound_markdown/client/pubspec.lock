@@ -92,38 +92,43 @@ packages:
   crdt_lf:
     dependency: "direct main"
     description:
-      path: "../../../packages/core/crdt_lf"
-      relative: true
-    source: path
-    version: "5.1.2"
+      name: crdt_lf
+      sha256: "43669b0163319bbad4ada0049273b9c5402614054857343311a0de73be957010"
+      url: "https://pub.dev"
+    source: hosted
+    version: "5.1.1"
   crdt_lf_flutter:
     dependency: "direct main"
     description:
-      path: "../../../packages/core/crdt_lf_flutter"
-      relative: true
-    source: path
-    version: "0.5.3"
+      name: crdt_lf_flutter
+      sha256: "791c950cf490ecdad299d810cdc9a853ec3bfd364d892b89809ede43387d43ba"
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.5.2"
   crdt_lf_hive:
     dependency: "direct main"
     description:
-      path: "../../../packages/adapters/persistence/crdt_lf_hive"
-      relative: true
-    source: path
+      name: crdt_lf_hive
+      sha256: cb8f8fd6cd45375f8bab9e3339ca00b03090f480523a4e8331e57114e97fd21f
+      url: "https://pub.dev"
+    source: hosted
     version: "0.5.2"
   crdt_lf_persistence:
     dependency: "direct overridden"
     description:
-      path: "../../../packages/core/crdt_lf_persistence"
-      relative: true
-    source: path
+      name: crdt_lf_persistence
+      sha256: d60691b2dbb8d704d758cb2561e65289412a1f1c1dc3b1388e264fc94ca31106
+      url: "https://pub.dev"
+    source: hosted
     version: "0.2.0"
   crdt_socket_sync:
     dependency: "direct main"
     description:
-      path: "../../../packages/core/crdt_socket_sync"
-      relative: true
-    source: path
-    version: "0.10.1"
+      name: crdt_socket_sync
+      sha256: b0bd69f2ac98ca524aaff975e0e91760e0913d40c8d6705a6163e0c9fe94ef47
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.10.0"
   crypto:
     dependency: transitive
     description:
@@ -152,10 +157,10 @@ packages:
     dependency: "direct main"
     description:
       name: equatable
-      sha256: "3bce007a596ff8b3119c45d68aaef631272537c03d30e5d4534dd24bf4c5eaa2"
+      sha256: ea36e500cbf0ec18361deabca755434f73e42fe53c5130021c7e2d6b5ebe1702
       url: "https://pub.dev"
     source: hosted
-    version: "2.1.0"
+    version: "3.0.0"
   fake_async:
     dependency: transitive
     description:
@@ -267,9 +272,10 @@ packages:
   hlc_dart:
     dependency: "direct overridden"
     description:
-      path: "../../../packages/core/hlc"
-      relative: true
-    source: path
+      name: hlc_dart
+      sha256: b6e798b4fe648fa1a054a9541238e28ba6fe2e6fe28d7d7a2d13ca893187a127
+      url: "https://pub.dev"
+    source: hosted
     version: "1.2.0"
   hooks:
     dependency: transitive
