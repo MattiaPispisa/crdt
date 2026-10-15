@@ -1,6 +1,5 @@
 import 'package:crdt_lf/crdt_lf.dart';
 import 'package:crdt_lf/src/snapshot/records.dart';
-import 'package:crdt_lf/src/utils/bytes.dart';
 
 /// The snapshot a document's history is replayed on, and the rules for
 /// replacing it.
@@ -23,7 +22,8 @@ class SnapshotState {
   /// returns it.
   ///
   /// Throws a [ConcurrentSnapshotException], and holds what it held, when
-  /// both hold a handler with different bytes at concurrent versions.
+  /// [SnapshotRecords.concurrentSource] keeps no state for a handler both
+  /// hold. The deletes of both sides always merge.
   Snapshot merge(Snapshot incoming) {
     final held = current;
     if (held == null) {
@@ -39,8 +39,8 @@ class SnapshotState {
   }
 
   /// Whether merging the two would drop a handler's state: at concurrent
-  /// versions, both hold it as different blobs, or as unfolded changes neither
-  /// side holds all of.
+  /// versions, both hold it as different blobs, or as changes this build
+  /// cannot read.
   static bool _mergeLosesState(Snapshot a, Snapshot b) {
     if (a.versionVector.isStrictlyNewerOrEqualThan(b.versionVector) ||
         b.versionVector.isStrictlyNewerOrEqualThan(a.versionVector)) {
@@ -53,14 +53,15 @@ class SnapshotState {
     for (final id in shared) {
       final blobA = a.data[id];
       final blobB = b.data[id];
-      final sameBlob = blobA == null || blobB == null
-          ? blobA == blobB
-          : bytesEqual(blobA, blobB);
-      // On one blob, the side with more unfolded changes holds the other.
-      final ordered =
-          SnapshotRecords.entryHoldsAll(entriesA[id], entriesB[id]) ||
-              SnapshotRecords.entryHoldsAll(entriesB[id], entriesA[id]);
-      if (!sameBlob || !ordered) {
+      if (id == SnapshotRecords.deletedHandlersKey &&
+          blobA != null &&
+          blobB != null &&
+          entriesA[id] == null &&
+          entriesB[id] == null &&
+          SnapshotRecords.unionDeletions(blobA, blobB) != null) {
+        continue;
+      }
+      if (SnapshotRecords.concurrentSource(a, b, id) == null) {
         return true;
       }
     }

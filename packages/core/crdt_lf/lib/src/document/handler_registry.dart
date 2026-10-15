@@ -30,6 +30,16 @@ final class _HandlerRegistry {
   /// A read-only view of the open handlers, keyed by id.
   Map<String, Handler<dynamic>> get view => UnmodifiableMapView(_byId);
 
+  /// The open handlers a caller of the document sees: all but the deletions
+  /// registry. The same map until the open handlers change.
+  Map<String, Handler<dynamic>> get publicView =>
+      _publicView ??= Map.unmodifiable({
+        for (final MapEntry(:key, :value) in _byId.entries)
+          if (!_HandlerDeletions.isReserved(key)) key: value,
+      });
+
+  Map<String, Handler<dynamic>>? _publicView;
+
   /// Opens [handler], and declares its kind when none is declared yet.
   ///
   /// Throws [HandlerAlreadyRegisteredException] when its id is open.
@@ -40,6 +50,7 @@ final class _HandlerRegistry {
       );
     }
     _byId[handler.id] = handler;
+    _publicView = null;
     (_byPrefix[fnv1a32(handler._envelopePrefix)] ??= []).add(handler);
 
     final spec = handler._instanceSpec;
@@ -63,6 +74,7 @@ final class _HandlerRegistry {
     if (handler == null) {
       return null;
     }
+    _publicView = null;
     final key = fnv1a32(handler._envelopePrefix);
     final candidates = _byPrefix[key]!..remove(handler);
     if (candidates.isEmpty) {
@@ -73,6 +85,7 @@ final class _HandlerRegistry {
 
   void clear() {
     _byId.clear();
+    _publicView = null;
     _byPrefix.clear();
   }
 
@@ -166,19 +179,18 @@ final class _HandlerRegistry {
     materializeReachable(document);
   }
 
-  /// The open handlers no open container references.
+  /// The handlers of [publicView] no open container references.
   List<Handler<dynamic>> roots() {
     final referenced = <String>{};
-    for (final handler in _byId.values) {
+    final open = publicView.values;
+    for (final handler in open) {
       if (handler is ContainerHandler) {
         for (final ref in (handler as ContainerHandler).childRefs()) {
           referenced.add(ref.id);
         }
       }
     }
-    return _byId.values
-        .where((handler) => !referenced.contains(handler.id))
-        .toList();
+    return open.where((handler) => !referenced.contains(handler.id)).toList();
   }
 
   /// Builds on [document] every handler reachable from the open containers,

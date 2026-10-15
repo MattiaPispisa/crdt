@@ -1,7 +1,6 @@
 part of 'document.dart';
 
-/// The id, and the kind, of the handler that records the deleted handlers.
-const String _deletedHandlersKey = 'crdt_lf/deleted-handlers';
+const String _deletedHandlersKey = SnapshotRecords.deletedHandlersKey;
 
 /// The ids of the deleted handlers, under the reserved id.
 ///
@@ -18,7 +17,7 @@ final class _DeletionsRegistry extends CRDTORSetHandler<String> {
 
   static const ValueCodec<String> _codec = JsonValueCodec<String>();
 
-  static const int _blobVersion = 1;
+  static const int _blobVersion = SnapshotRecords.deletionsVersion;
 
   static final HandlerSpec<_DeletionsRegistry> spec = HandlerSpec(
     _deletedHandlersKey,

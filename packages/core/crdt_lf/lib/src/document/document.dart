@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:collection';
+import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:crdt_lf/crdt_lf.dart';
@@ -591,10 +592,7 @@ class CRDTDocument extends BaseCRDTDocument {
   /// All handlers currently registered on this document, keyed by their id.
   ///
   /// Intended for read-only introspection (devtools, debugging). Do not mutate.
-  Map<String, Handler<dynamic>> get registeredHandlers => Map.unmodifiable(
-        Map<String, Handler<dynamic>>.of(_registry.view)
-          ..removeWhere((id, _) => _HandlerDeletions.isReserved(id)),
-      );
+  Map<String, Handler<dynamic>> get registeredHandlers => _registry.publicView;
 
   /// Rebuilds every handler reachable from the data this document holds.
   ///
@@ -668,9 +666,7 @@ class CRDTDocument extends BaseCRDTDocument {
 
   /// The handlers that are not referenced by any other container handler,
   /// i.e. the entry points of the nested tree.
-  Iterable<Handler<dynamic>> roots() => _registry
-      .roots()
-      .where((handler) => !_HandlerDeletions.isReserved(handler.id));
+  Iterable<Handler<dynamic>> roots() => _registry.roots();
 
   late final DocumentEvents _documentEvents;
 
@@ -1166,6 +1162,11 @@ class CRDTDocument extends BaseCRDTDocument {
   /// [snapshot] is applied only if it is newer than the document snapshot.
   /// Use [shouldApplySnapshot] to check if the snapshot should be applied.
   ///
+  /// {@template unreadable_snapshot}
+  /// Throws a [FormatException], and leaves the document as it was, when
+  /// [snapshot] carries changes in a layout this build cannot read.
+  /// {@endtemplate}
+  ///
   /// Use [pruneHistory] to prune the history and reduce memory usage.
   ///
   /// {@macro pruning_strategy}
@@ -1187,6 +1188,8 @@ class CRDTDocument extends BaseCRDTDocument {
 
   bool _importSnapshot(Snapshot snapshot, bool pruneHistory) {
     if (shouldApplySnapshot(snapshot)) {
+      // First: a record this build cannot read throws before anything moves.
+      SnapshotRecords.unfoldedEntriesOf(snapshot);
       // Before the prune, which is about to take away the changes this
       // snapshot stands for.
       _dataRequirements.readRecord(snapshot);
@@ -1221,7 +1224,10 @@ class CRDTDocument extends BaseCRDTDocument {
   ///
   /// It succeeds even when [snapshot] is older than the current one. Throws a
   /// [ConcurrentSnapshotException], and leaves the document as it was, when
-  /// both hold a handler at concurrent versions.
+  /// both hold one handler as two different blobs at concurrent versions.
+  /// Changes a snapshot carries for a handler always merge.
+  ///
+  /// {@macro unreadable_snapshot}
   ///
   /// Use [pruneHistory] to prune the history and reduce memory usage.
   ///
@@ -1240,6 +1246,8 @@ class CRDTDocument extends BaseCRDTDocument {
   }
 
   void _mergeSnapshot(Snapshot snapshot, bool pruneHistory) {
+    // First: a record this build cannot read throws before anything moves.
+    SnapshotRecords.unfoldedEntriesOf(snapshot);
     final merged = _snapshots.merge(snapshot);
     _dataRequirements.readRecord(snapshot);
     _clock.advancePast(snapshot.versionVector);

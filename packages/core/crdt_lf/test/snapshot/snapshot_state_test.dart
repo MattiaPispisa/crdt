@@ -29,6 +29,29 @@ void main() {
     }) =>
         Snapshot(id: id, versionVector: VersionVector(version), data: data);
 
+    test('a deletions registry it cannot read refuses a concurrent merge', () {
+      const registry = 'crdt_lf/deleted-handlers';
+      state.current = snapshot(
+        'held',
+        {a: at(1)},
+        data: {
+          registry: Uint8List.fromList([1, 1, 3, ..._b('"x"')]),
+        },
+      );
+      final incoming = snapshot(
+        'incoming',
+        {b: at(1)},
+        data: {
+          registry: Uint8List.fromList([2, 0]),
+        },
+      );
+
+      expect(
+        () => state.merge(incoming),
+        throwsA(isA<ConcurrentSnapshotException>()),
+      );
+    });
+
     test('readOnlyCopy hands out a copy that cannot be written to', () {
       expect(state.readOnlyCopy(), isNull);
       state.current = snapshot('held', {a: at(1)}, data: {'x': _b('1')});

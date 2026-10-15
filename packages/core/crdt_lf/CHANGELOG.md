@@ -6,12 +6,12 @@
 
 ### Added
 
-- `CRDTDocument.deleteHandler` / `deleteHandlerRef` and `removeChild` / `removeChildAt` on every
-  container delete a handler and its subtree for every peer; the next snapshot drops their data.
-  New OR containers: `CRDTORMapRefHandler` and `CRDTORSetRefHandler`. [143](https://github.com/MattiaPispisa/crdt/issues/143)
-- `CRDTAggregateHandler`: one aggregate built from domain events replayed in `(HLC, author)`
-  order, with atomic `dispatchAll`, events `reduce` can refuse, stable `EventId`s, deltas, undo
-  and versioned migrations. [192](https://github.com/MattiaPispisa/crdt/issues/192)
+- `CRDTDocument.deleteHandler` / `deleteHandlerRef`, and `removeChild` / `removeChildAt` on every
+  container: delete a handler and its subtree for every peer. [143](https://github.com/MattiaPispisa/crdt/issues/143)
+- `CRDTORMapRefHandler` and `CRDTORSetRefHandler`: containers of references with OR semantics.
+  [143](https://github.com/MattiaPispisa/crdt/issues/143)
+- `CRDTAggregateHandler`: an aggregate built from domain events in `(HLC, author)` order, with
+  atomic `dispatchAll`, events it can refuse, stable `EventId`s, undo and migrations. [192](https://github.com/MattiaPispisa/crdt/issues/192)
 - `ChangeStore.handlerIds`: the ids of the handlers with at least one change in the store.
   [194](https://github.com/MattiaPispisa/crdt/issues/194)
 

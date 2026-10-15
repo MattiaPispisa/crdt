@@ -106,8 +106,7 @@ base class CRDTListRefHandler extends CRDTFugueListHandler<HandlerRef>
   /// {@template remove_child}
   /// The child is deleted with [BaseCRDTDocument.deleteHandlerRef], subtree
   /// included, for every peer, also when this peer cannot build it. An undo
-  /// puts the reference back, and the reference stays out of `resolved`: a
-  /// delete is final.
+  /// puts the reference back, and it resolves to nothing: a delete is final.
   /// {@endtemplate}
   ///
   /// Throws a [RangeError] when [index] is out of range.
@@ -129,7 +128,7 @@ base class CRDTListRefHandler extends CRDTFugueListHandler<HandlerRef>
   @override
   Object? toNested(Set<String> visiting) {
     return [
-      for (final ref in childRefs()) resolveNestedRef(doc, ref, visiting),
+      for (final ref in value) resolveNestedRef(doc, ref, visiting),
     ];
   }
 
@@ -138,8 +137,9 @@ base class CRDTListRefHandler extends CRDTFugueListHandler<HandlerRef>
   /// {@template ref_resolved}
   /// Each reference is replaced by the resolved value of the child handler,
   /// recursively; a leaf handler resolves to its `value`. A reference that
-  /// closes a cycle resolves to `null`, and a reference to a deleted handler
-  /// is left out.
+  /// closes a cycle resolves to `null`. A reference to a deleted handler
+  /// resolves to `null` in a list, which keeps its positions, and is left out
+  /// of a map or a set.
   /// {@endtemplate}
   List<Object?> get resolved {
     final result = toNested(<String>{});

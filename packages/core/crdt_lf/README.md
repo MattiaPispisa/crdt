@@ -734,7 +734,7 @@ document.runInTransaction(() => text.insert(0, 'hi'), origin: myEditor);
 - **The contents of a nested handler.** Undoing a write that stored a
   `HandlerRef` removes the reference; the data it pointed at stays.
 - **A deleted handler.** A delete is final. Undoing a `removeChild` puts the
-  reference back, and `resolved` leaves it out. The steps of a deleted handler
+  reference back, and it resolves to nothing. The steps of a deleted handler
   leave both stacks.
 
 An element that comes back is a **new** element: a CRDT never resurrects what it
@@ -1272,8 +1272,10 @@ doc.deleteHandlerRef(ref);       // by reference, without building it
 - **A delete wins.** An edit made at the same time on another peer is ignored.
 - **A delete is final.** The handler is closed: its `watch` stream ends, and a
   write, `doc.handler` or a constructor on its id throws
-  `HandlerDeletedException`. A reference to it resolves to `null` and
-  `resolved` leaves it out. `child(key, spec)` makes a new child in its place.
+  `HandlerDeletedException`. A reference to it resolves to `null`: `resolved`
+  keeps a `null` in a list, so positions stay the ones `removeChildAt` counts,
+  and leaves the key out of a map. `child(key, spec)` makes a new child in its
+  place.
 - **The data goes at the next snapshot.** `takeSnapshot` leaves the deleted
   handlers out, so a prune removes their changes.
 - **The id stays.** The document keeps every deleted id for good, so a late

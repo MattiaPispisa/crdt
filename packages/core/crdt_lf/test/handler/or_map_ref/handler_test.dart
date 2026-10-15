@@ -78,5 +78,41 @@ void main() {
       expect(root.resolved, isEmpty);
       expect(title.isDeleted, isTrue);
     });
+
+    group('two children put concurrently under one key', () {
+      late CRDTFugueTextHandler mine;
+      late CRDTFugueTextHandler theirs;
+
+      setUp(() {
+        final peer = CRDTDocument(peerId: PeerId.generate())
+          ..importChanges(doc.exportChanges());
+        theirs = peer
+            .handler(CRDTORMapRefHandler.spec, root.id)
+            .child('k', CRDTFugueTextHandler.spec);
+        mine = root.child('k', CRDTFugueTextHandler.spec);
+        doc.importChanges(peer.exportChanges());
+      });
+
+      test('are both children, so neither is a root', () {
+        doc.handler(CRDTFugueTextHandler.spec, theirs.id);
+
+        expect(root.childRefs().map((ref) => ref.id), {mine.id, theirs.id});
+        expect(doc.roots(), [root]);
+      });
+
+      test('are both deleted with their container', () {
+        doc.deleteHandler(root);
+
+        expect(doc.isDeleted(mine.id), isTrue);
+        expect(doc.isDeleted(theirs.id), isTrue);
+      });
+
+      test('are both deleted by removeChild', () {
+        root.removeChild('k');
+
+        expect(doc.isDeleted(mine.id), isTrue);
+        expect(doc.isDeleted(theirs.id), isTrue);
+      });
+    });
   });
 }

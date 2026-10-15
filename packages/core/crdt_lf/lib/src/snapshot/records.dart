@@ -54,6 +54,49 @@ class SnapshotRecords {
     blobVersions: BlobVersionRange.single(unfoldedVersion),
   );
 
+  /// The id, and the kind, of the handler that records the deleted handlers.
+  static const String deletedHandlersKey = 'crdt_lf/deleted-handlers';
+
+  /// The version of the deletions registry blob this build writes and reads.
+  static const int deletionsVersion = 1;
+
+  /// The deletions registry blob holding the deletes of both [a] and [b];
+  /// `null` when either is a layout this build cannot read.
+  static Uint8List? unionDeletions(Uint8List a, Uint8List b) {
+    final Map<String, Uint8List> ids;
+    try {
+      ids = {..._readDeletions(a), ..._readDeletions(b)};
+    } catch (_) {
+      return null;
+    }
+    final keys = ids.keys.toList()..sort();
+    final out = BytesBuilder(copy: false)..addByte(deletionsVersion);
+    UVarint.write(keys.length, out);
+    for (final key in keys) {
+      UVarint.writeBytes(ids[key]!, out);
+    }
+    return out.toBytes();
+  }
+
+  static Map<String, Uint8List> _readDeletions(Uint8List blob) {
+    if (blob.isEmpty || blob[0] != deletionsVersion) {
+      throw const FormatException('Unknown deletions registry layout');
+    }
+    final count = UVarint.read(blob, offset: 1);
+    var offset = count.nextOffset;
+    final ids = <String, Uint8List>{};
+    for (var i = 0; i < count.value; i += 1) {
+      final record = UVarint.readBytes(
+        blob,
+        offset: offset,
+        what: 'deleted handler id',
+      );
+      offset = record.nextOffset;
+      ids[String.fromCharCodes(record.value)] = record.value;
+    }
+    return ids;
+  }
+
   /// The keys that hold document metadata rather than a handler's state, so
   /// nothing reads them as a handler id.
   static const Set<String> reservedKeys = {
@@ -107,26 +150,50 @@ class SnapshotRecords {
     ];
   }
 
-  /// Whether the unfolded entry [entry] holds every change of [other].
-  ///
-  /// Two equal entries hold each other. An entry that cannot be read holds
-  /// only an equal one.
-  static bool entryHoldsAll(Uint8List? entry, Uint8List? other) {
-    if (other == null) {
-      return true;
+  /// What a merge of the concurrent snapshots [a] and [b] keeps for the
+  /// handler [id]: the side whose blob it keeps, and the unfolded entry that
+  /// goes on top of that blob. `null` when no merge keeps both states: two
+  /// different blobs, or an entry this build cannot read.
+  static ({Snapshot source, Uint8List? entry})? concurrentSource(
+    Snapshot a,
+    Snapshot b,
+    String id,
+  ) {
+    final blobA = a.data[id];
+    final blobB = b.data[id];
+    if (blobA != null && blobB != null && !bytesEqual(blobA, blobB)) {
+      return null;
     }
-    if (entry == null) {
-      return false;
-    }
-    if (bytesEqual(entry, other)) {
-      return true;
-    }
+    final source = blobA == null && blobB != null ? b : a;
+    final other = identical(source, a) ? b : a;
+    final entry = unfoldedEntriesOf(source)[id];
+    final List<Change> held;
+    final List<Change> offered;
     try {
-      final ids = {for (final change in decodeUnfoldedEntry(entry)) change.id};
-      return decodeUnfoldedEntry(other).every((c) => ids.contains(c.id));
+      offered = unfoldedChangesFor(other, id) ?? const [];
+      held = unfoldedChangesFor(source, id) ?? const [];
     } on FormatException {
-      return false;
+      return null;
     }
+    final heldIds = {for (final change in held) change.id};
+    final hasBlob = source.data[id] != null;
+    // The source's blob already folds every change its version has seen.
+    final missing = [
+      for (final change in offered)
+        if (!heldIds.contains(change.id) &&
+            !(hasBlob && _sees(source.versionVector, change)))
+          change,
+    ];
+    if (missing.isEmpty) {
+      return (source: source, entry: entry);
+    }
+    final changes = [...held, ...missing]..sort((x, y) => x.id.compareTo(y.id));
+    return (source: source, entry: encodeUnfoldedEntry(changes));
+  }
+
+  static bool _sees(VersionVector version, Change change) {
+    final clock = version[change.id.peerId];
+    return clock != null && change.hlc <= clock;
   }
 
   /// The ids of the handlers [snapshot] holds state for: a blob, unfolded
@@ -373,23 +440,33 @@ class SnapshotRecords {
     // A handler's blob and its unfolded changes come from the same side: the
     // changes apply on top of that blob and of no other.
     for (final id in {...idsA, ...idsB}) {
+      final shared = idsA.contains(id) && idsB.contains(id);
+      final kept = concurrent && shared ? concurrentSource(a, b, id) : null;
       final Snapshot source;
       if (!idsB.contains(id)) {
         source = a;
       } else if (!idsA.contains(id)) {
         source = b;
-      } else if (concurrent) {
-        source = entryHoldsAll(entriesB[id], entriesA[id]) ? b : a;
+      } else if (kept != null) {
+        source = kept.source;
       } else {
         source = winner;
       }
-      final blob = source.data[id];
+      final blobA = a.data[id];
+      final blobB = b.data[id];
+      final blob = concurrent &&
+              id == deletedHandlersKey &&
+              blobA != null &&
+              blobB != null
+          ? unionDeletions(blobA, blobB) ?? source.data[id]
+          : source.data[id];
       if (blob == null) {
         data.remove(id);
       } else {
         data[id] = blob;
       }
-      final entry = identical(source, a) ? entriesA[id] : entriesB[id];
+      final entry =
+          kept?.entry ?? (identical(source, a) ? entriesA[id] : entriesB[id]);
       if (entry != null) {
         entries[id] = entry;
       }

@@ -77,7 +77,9 @@ abstract class _HandlerDeletions<D extends BaseCRDTDocument> {
 final class _LiveDeletions extends _HandlerDeletions<CRDTDocument> {
   _LiveDeletions(super._document)
       : _deletedIds = {},
-        _sweptChangeCounts = {};
+        _sweptChangeCounts = {},
+        _lateTargets = {},
+        _deletedIdBytes = {};
 
   /// The ids of the deleted handlers, as of the last [sync].
   final Set<String> _deletedIds;
@@ -85,6 +87,12 @@ final class _LiveDeletions extends _HandlerDeletions<CRDTDocument> {
   /// The change count of each deleted handler as [deleteLateChildren] last
   /// read it, since the last prune.
   final Map<String, int> _sweptChangeCounts;
+
+  /// The deleted handlers a change reached since the last [sync].
+  final Set<String> _lateTargets;
+
+  /// The UTF-8 of each id in [_deletedIds], by its hash.
+  final Map<int, List<({Uint8List bytes, String id})>> _deletedIdBytes;
 
   /// The revision of the deletions registry that [sync] last read.
   int _syncedRevision = 0;
@@ -113,9 +121,47 @@ final class _LiveDeletions extends _HandlerDeletions<CRDTDocument> {
   /// Opens the deletions registry when [change], just applied, is the first
   /// delete this document sees.
   void noteApplied(Change change) {
-    if (registry == null && _DeletionsRegistry.isDeletionsChange(change)) {
-      openRegistry();
+    if (registry == null) {
+      if (_DeletionsRegistry.isDeletionsChange(change)) {
+        openRegistry();
+      }
+      return;
     }
+    if (_deletedIds.isEmpty) {
+      return;
+    }
+    final target = _deletedTargetOf(change.payloadBytes());
+    if (target != null) {
+      _lateTargets.add(target);
+    }
+  }
+
+  /// The deleted handler [payload] is addressed to; `null` for any other.
+  ///
+  /// Compares bytes, so the apply path stays free of envelope decodes.
+  String? _deletedTargetOf(Uint8List payload) {
+    final int start;
+    final int end;
+    try {
+      final type = UVarint.read(payload, offset: 0);
+      final id = UVarint.read(payload, offset: type.nextOffset + type.value);
+      start = id.nextOffset;
+      end = start + id.value;
+    } on FormatException {
+      return null;
+    }
+    if (end > payload.length) {
+      return null;
+    }
+    final candidates =
+        _deletedIdBytes[fnv1a32(payload, start: start, end: end)];
+    for (final candidate in candidates ?? const <Never>[]) {
+      if (candidate.bytes.length == end - start &&
+          bytesEqualAt(payload, start, candidate.bytes)) {
+        return candidate.id;
+      }
+    }
+    return null;
   }
 
   /// Forgets what [deleteLateChildren] read: a prune can lower a change count.
@@ -160,6 +206,7 @@ final class _LiveDeletions extends _HandlerDeletions<CRDTDocument> {
     if (registry == null) {
       return;
     }
+    _deleteChildrenOfLateTargets(registry);
     final revision = _document.revisionForHandler(_deletedHandlersKey);
     if (revision == _syncedRevision) {
       return;
@@ -184,7 +231,34 @@ final class _LiveDeletions extends _HandlerDeletions<CRDTDocument> {
       }
     }
     reached.addAll(_subtreeIds(roots));
-    final unrecorded = reached.difference(recorded);
+    _closeAndRecord(registry, reached);
+  }
+
+  /// Deletes the children the late changes in [_lateTargets] added.
+  void _deleteChildrenOfLateTargets(CRDTORSetHandler<String> registry) {
+    if (_lateTargets.isEmpty) {
+      return;
+    }
+    final targets = _lateTargets.toList();
+    _lateTargets.clear();
+    final children = <HandlerRef>[];
+    final manifest = _manifest();
+    for (final id in targets) {
+      _sweptChangeCounts[id] = _document.changeCountForHandler(id);
+      final type = _typeOf(id, manifest);
+      if (type != null) {
+        children.addAll(_childRefsOfDeleted(id, type));
+      }
+    }
+    _closeAndRecord(
+      registry,
+      _subtreeIds(children)..removeWhere(_deletedIds.contains),
+    );
+  }
+
+  /// Closes [reached] now, and adds to [registry] those it does not name yet.
+  void _closeAndRecord(CRDTORSetHandler<String> registry, Set<String> reached) {
+    final unrecorded = reached.difference(registry.value);
     _close(reached);
     if (unrecorded.isNotEmpty) {
       // Through the outbox: this runs while the document applies changes, and
@@ -233,7 +307,7 @@ final class _LiveDeletions extends _HandlerDeletions<CRDTDocument> {
       _HandlerRegistry.manifestOf(_document._lastSnapshot);
 
   /// The children the deleted container with [id] references, or none when
-  /// the document cannot build a [type].
+  /// the document cannot build a [type] or read its changes.
   List<HandlerRef> _childRefsOfDeleted(String id, String type) {
     _readingDeleted = true;
     try {
@@ -245,6 +319,9 @@ final class _LiveDeletions extends _HandlerDeletions<CRDTDocument> {
                 : const <HandlerRef>[],
           ) ??
           const [];
+    } on Exception {
+      // A change of a newer build, say: its children stay out of reach here.
+      return const [];
     } finally {
       _readingDeleted = false;
     }
@@ -271,6 +348,8 @@ final class _LiveDeletions extends _HandlerDeletions<CRDTDocument> {
     _document._cache.bumpDeleted(closed);
     for (final id in closed) {
       _deletedIds.add(id);
+      final bytes = utf8.encode(id);
+      (_deletedIdBytes[fnv1a32(bytes)] ??= []).add((bytes: bytes, id: id));
       _document._unregisterHandler(id)?._closeDeltas();
     }
     _document._undo.forget(closed);

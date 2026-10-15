@@ -114,7 +114,7 @@ base class CRDTMovableListRefHandler
   @override
   Object? toNested(Set<String> visiting) {
     return [
-      for (final ref in childRefs()) resolveNestedRef(doc, ref, visiting),
+      for (final ref in value) resolveNestedRef(doc, ref, visiting),
     ];
   }
 

@@ -670,3 +670,23 @@ class ORMapEntry<V> {
   @override
   int get hashCode => _hashCode;
 }
+
+/// Every value [map] holds, the losers of concurrent puts included.
+Iterable<V> orMapHeldValues<K, V>(CRDTORMapHandler<K, V> map) {
+  final state = map._cachedOrComputedState();
+  return <V>{
+    ...state._snapshotOnly.values,
+    for (final entries in state._live.values)
+      for (final entry in entries) entry.value,
+  };
+}
+
+/// Every value [map] holds under [key], the losers of concurrent puts
+/// included.
+Iterable<V> orMapHeldValuesOf<K, V>(CRDTORMapHandler<K, V> map, K key) {
+  final state = map._cachedOrComputedState();
+  return <V>{
+    if (state._snapshotOnly.containsKey(key)) state._snapshotOnly[key] as V,
+    for (final entry in state._live[key] ?? const <Never>{}) entry.value,
+  };
+}

@@ -1,4 +1,6 @@
 import 'package:crdt_lf/crdt_lf.dart';
+import 'package:crdt_lf/src/handler/or_map/handler.dart'
+    show orMapHeldValues, orMapHeldValuesOf;
 
 /// # CRDT OR-Map of references
 ///
@@ -88,25 +90,27 @@ base class CRDTORMapRefHandler extends CRDTORMapHandler<String, HandlerRef>
   T? getRefAs<T extends Handler<dynamic>>(String key) =>
       typedRef<T>(getRef(key));
 
-  /// Removes [key] and deletes the child it references, in one transaction.
+  /// Removes [key] and deletes the children it references, in one
+  /// transaction: the child read at [key], and those of concurrent puts that
+  /// lost to it.
   ///
   /// {@macro remove_child}
   ///
   /// Does nothing when [key] is absent.
   void removeChild(String key) {
-    final ref = value[key];
-    if (ref == null) {
+    final refs = orMapHeldValuesOf(this, key).toList();
+    if (refs.isEmpty) {
       return;
     }
     doc.runInTransaction(() {
       remove(key);
-      doc.deleteHandlerRef(ref);
+      refs.forEach(doc.deleteHandlerRef);
     });
   }
 
   @override
   Iterable<HandlerRef> childRefs() =>
-      value.values.where((ref) => !doc.isDeleted(ref.id));
+      orMapHeldValues(this).where((ref) => !doc.isDeleted(ref.id));
 
   @override
   Object? toNested(Set<String> visiting) {

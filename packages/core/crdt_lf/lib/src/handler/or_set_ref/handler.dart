@@ -100,8 +100,20 @@ base class CRDTORSetRefHandler extends CRDTORSetHandler<HandlerRef>
 
   @override
   Iterable<HandlerRef> childRefs() =>
-      value.where((ref) => !doc.isDeleted(ref.id)).toList()
-        ..sort((a, b) => a.id.compareTo(b.id));
+      _sortedRefs().where((ref) => !doc.isDeleted(ref.id));
+
+  /// [value] sorted by id; sorted again only after [value] changes.
+  List<HandlerRef> _sortedRefs() {
+    final refs = value;
+    if (!identical(refs, _sortedFrom)) {
+      _sorted = refs.toList()..sort((a, b) => a.id.compareTo(b.id));
+      _sortedFrom = refs;
+    }
+    return _sorted;
+  }
+
+  Set<HandlerRef>? _sortedFrom;
+  late List<HandlerRef> _sorted;
 
   @override
   Object? toNested(Set<String> visiting) {

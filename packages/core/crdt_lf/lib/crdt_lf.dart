@@ -28,7 +28,8 @@ export 'src/handler/list_ref/handler.dart';
 export 'src/handler/map/handler.dart';
 export 'src/handler/map_ref/handler.dart';
 export 'src/handler/movable_list_ref/handler.dart';
-export 'src/handler/or_map/handler.dart';
+export 'src/handler/or_map/handler.dart'
+    hide orMapHeldValues, orMapHeldValuesOf;
 export 'src/handler/or_map_ref/handler.dart';
 export 'src/handler/or_set/handler.dart';
 export 'src/handler/or_set_ref/handler.dart';
