@@ -6,8 +6,8 @@
 
 ### Added
 
-- A widget bound to a deleted handler (`crdt_lf` 5.2.0) shows its new `deletedBuilder`, or an
-  empty box, instead of throwing; listeners stop calling back. Needs `crdt_lf` 5.2.0.
+- A widget bound to a deleted handler shows its new `deletedBuilder`, or an empty box, instead of
+  throwing; listeners stop calling back. Needs `crdt_lf` 5.2.0. [143](https://github.com/MattiaPispisa/crdt/issues/143)
 
 ## [0.5.3](https://github.com/MattiaPispisa/crdt/tree/crdt_lf_flutter-v0.5.3/packages/core/crdt_lf_flutter)
 

@@ -6,27 +6,30 @@
 
 ### Added
 
-- `CRDTORMapRefHandler` and `CRDTORSetRefHandler`: containers of references with OR semantics.
 - `CRDTDocument.deleteHandler` / `deleteHandlerRef` and `removeChild` / `removeChildAt` on every
-  container: delete a handler and its subtree for every peer; the next snapshot drops their data.
-  Every build reads the deletes: see `CRDTDocument.builtInCapabilities`.
+  container delete a handler and its subtree for every peer; the next snapshot drops their data.
+  New OR containers: `CRDTORMapRefHandler` and `CRDTORSetRefHandler`. [143](https://github.com/MattiaPispisa/crdt/issues/143)
 - `CRDTAggregateHandler`: one aggregate built from domain events replayed in `(HLC, author)`
   order, with atomic `dispatchAll`, events `reduce` can refuse, stable `EventId`s, deltas, undo
-  and versioned migrations.
+  and versioned migrations. [192](https://github.com/MattiaPispisa/crdt/issues/192)
 - `ChangeStore.handlerIds`: the ids of the handlers with at least one change in the store.
+  [194](https://github.com/MattiaPispisa/crdt/issues/194)
 
 ### Changed
 
 - The cost of applying a change no longer grows with the number of handlers on the document;
   a batch import routes each change by handler type and id, as the single-change path does.
+  [192](https://github.com/MattiaPispisa/crdt/issues/192)
+- `CRDTDocument` is split into internal components with one job each. No public API or wire
+  change. [195](https://github.com/MattiaPispisa/crdt/issues/195)
 - **Breaking for code that edits `value`**: the `value` of the list, map and set handlers is
-  unmodifiable, and a new object only after a change. Copy it to edit it.
+  unmodifiable, and a new object only after a change. Copy it to edit it. [194](https://github.com/MattiaPispisa/crdt/issues/194)
 
 ### Fixed
 
 - Reading a handler inside a transaction now includes the writes made earlier in the same
   transaction. Before, the read could miss them, and the handler kept that wrong value even
-  after the commit.
+  after the commit. [193](https://github.com/MattiaPispisa/crdt/issues/193)
 - `takeSnapshot` keeps the state of every handler the document holds data for, open or not;
   before, a prune lost the others for good. [194](https://github.com/MattiaPispisa/crdt/issues/194)
 

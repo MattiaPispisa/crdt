@@ -7,7 +7,8 @@
 ### Fixed
 
 - Capabilities passed to the client also name `CRDTDocument.builtInCapabilities`, so a server
-  holding deleted handlers (crdt_lf 5.2.0) does not refuse a client that states its build in full.
+  holding deleted handlers does not refuse a client that states its build in full. Needs
+  `crdt_lf` 5.2.0. [143](https://github.com/MattiaPispisa/crdt/issues/143)
 
 ## [0.10.1](https://github.com/MattiaPispisa/crdt/tree/crdt_socket_sync-v0.10.1/packages/core/crdt_socket_sync)
 
