@@ -1,3 +1,4 @@
+import 'dart:collection';
 import 'dart:typed_data';
 import 'package:crdt_lf/crdt_lf.dart';
 
@@ -124,24 +125,38 @@ base class CRDTListHandler<T> extends Handler<List<T>>
     doc.registerOperation(operation);
   }
 
-  /// Gets the current state of the list
+  /// The current list.
   ///
-  /// The returned list is the handler's internal state:
-  /// treat it as read-only. `readSynced()` hands back a copy instead, so a
-  /// consumer that keeps a projection can hold what it is given.
+  /// {@macro collection_value}
+  ///
+  /// {@macro live_value}
   @override
   List<T> get value {
-    // Check if the cached state is still valid
-    if (cachedState != null) {
-      return cachedState!;
+    final state = _state;
+    if (!identical(state, _handedOutFrom) || _handedOutAt != _mutations) {
+      _handedOut = UnmodifiableListView(state);
+      _handedOutFrom = state;
+      _handedOutAt = _mutations;
     }
+    return _handedOut;
+  }
 
-    // Compute the state from scratch
+  /// The value handed out, and the state and mutation count it was built at.
+  late List<T> _handedOut;
+  List<T>? _handedOutFrom;
+  int _handedOutAt = -1;
+
+  /// Moves on every in-place change of the cached state.
+  int _mutations = 0;
+
+  /// The cached state, computed when there is none.
+  List<T> get _state {
+    final cached = cachedState;
+    if (cached != null) {
+      return cached;
+    }
     final state = _computeState();
-
-    // Cache the state
     updateCachedState(state);
-
     return state;
   }
 
@@ -198,7 +213,7 @@ base class CRDTListHandler<T> extends Handler<List<T>>
   @override
   Uint8List getSnapshotState() {
     final out = snapshotHeader();
-    final items = value;
+    final items = _state;
     UVarint.write(items.length, out);
     for (final item in items) {
       UVarint.writeBytes(_valueCodec.encode(item), out);
@@ -207,10 +222,10 @@ base class CRDTListHandler<T> extends Handler<List<T>>
   }
 
   /// Gets the length of the list
-  int get length => value.length;
+  int get length => _state.length;
 
   /// Gets the element at the specified index
-  T operator [](int index) => value[index];
+  T operator [](int index) => _state[index];
 
   /// Computes the current state of the list from the document's changes
   List<T> _computeState() {
@@ -364,6 +379,7 @@ base class CRDTListHandler<T> extends Handler<List<T>>
   }) {
     // Mutate the cached state in place instead of copying it on
     // every operation.
+    _mutations++;
     try {
       _applyOperationToList(state, operation, sink: sink);
       return state;

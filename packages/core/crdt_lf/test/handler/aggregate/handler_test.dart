@@ -351,6 +351,23 @@ void main() {
       );
     });
 
+    test('an older build carries events of a newer version in its snapshot',
+        () {
+      final v3 = CRDTDocument();
+      tags(v3, _Tags.current).dispatch('#new');
+      final v1 = CRDTDocument()
+        ..register(CRDTAggregateHandler.spec(const _Tags()))
+        ..importChanges(v3.exportChanges());
+
+      final snapshot = v1.takeSnapshot();
+
+      final reader = CRDTDocument()..importSnapshot(snapshot);
+      expect(
+        tags(reader, _Tags.current).value,
+        tags(v3, _Tags.current).value,
+      );
+    });
+
     test('an older build refuses a snapshot of a newer version', () {
       final v3 = CRDTDocument();
       tags(v3, _Tags.current).dispatch('#new');

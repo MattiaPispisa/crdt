@@ -32,6 +32,7 @@ part 'history.dart';
 // The mixins a consumer of the document is built from, and the read-only
 // document a [HistorySession] walks through.
 part 'providers.dart';
+part 'snapshot_writer.dart';
 // Undo, which is written as new inverse operations rather than as a removal.
 part 'undo_manager.dart';
 part 'undo_hub.dart';
@@ -453,6 +454,7 @@ class CRDTDocument extends BaseCRDTDocument {
   /// written by hand.
   static final DocumentCapabilities builtInCapabilities = DocumentCapabilities({
     _DeletionsRegistry.spec.type: _DeletionsRegistry.spec.formats,
+    SnapshotRecords.unfoldedKey: SnapshotRecords.unfoldedFormats,
   });
 
   @override
@@ -485,6 +487,42 @@ class CRDTDocument extends BaseCRDTDocument {
   Handler<dynamic>? _unregisterHandler(String id) {
     _cache.forget(id);
     return super._unregisterHandler(id);
+  }
+
+  /// The unfolded changes the snapshot carries for [handlerId]; none when they
+  /// cannot be read.
+  List<Change> _readableUnfoldedChanges(String handlerId) {
+    try {
+      return SnapshotRecords.unfoldedChangesFor(_lastSnapshot, handlerId) ??
+          const [];
+    } on FormatException {
+      return const [];
+    }
+  }
+
+  /// What [read] returns off the handler [id] of kind [type], built for the
+  /// time of the call; `null` when no spec of [type] is registered.
+  ///
+  /// For an id no handler is open under. The handler is closed again
+  /// afterwards, whatever [read] does.
+  T? _readClosed<T>(
+    String id,
+    String type,
+    T Function(Handler<dynamic> handler) read,
+  ) {
+    assert(_registry[id] == null, 'Handler $id is open');
+    final spec = _registry.specs[type];
+    if (spec == null) {
+      return null;
+    }
+    try {
+      return read(spec.create(this, id));
+    } finally {
+      // A constructor that threw may have opened nothing.
+      if (_registry[id] != null) {
+        _unregisterHandler(id);
+      }
+    }
   }
 
   @override
@@ -569,7 +607,11 @@ class CRDTDocument extends BaseCRDTDocument {
 
     _registry.reconstruct(
       this,
-      changes: exportChanges(),
+      changes: [
+        ...exportChanges(),
+        for (final id in SnapshotRecords.unfoldedEntriesOf(_lastSnapshot).keys)
+          ..._readableUnfoldedChanges(id),
+      ],
       manifest: _HandlerRegistry.manifestOf(_lastSnapshot),
     );
   }
@@ -984,6 +1026,14 @@ class CRDTDocument extends BaseCRDTDocument {
   /// Returns a [Snapshot] representing the document's
   /// state at the current version.
   ///
+  /// It holds the state of every handler the document holds data for, open or
+  /// not. A closed handler of a kind this document knows is built for the time
+  /// of the snapshot. The changes of a kind it does not know ride inside the
+  /// snapshot, so the prune that follows loses nothing another peer can read.
+  ///
+  /// Throws a [FormatException] when a handler got new changes on top of
+  /// carried changes this build cannot read.
+  ///
   /// A child added to a deleted container by an edit concurrent with the delete
   /// is deleted first, which writes a change (see [deleteHandler]).
   ///
@@ -1042,24 +1092,24 @@ class CRDTDocument extends BaseCRDTDocument {
     // missing from the snapshot and lost on prune.
     _registry.materializeReachable(this);
 
-    final state = <String, Uint8List>{};
-    var hasContainers = false;
-    for (final provider in _registry.values) {
-      state[provider.id] = provider.getSnapshotState();
-      if (provider is ContainerHandler) {
-        hasContainers = true;
-      }
-    }
-    // The manifest is what rebuilds a nested tree, and a flat document has
-    // none to rebuild.
-    if (hasContainers) {
-      state[SnapshotRecords.manifestKey] =
-          SnapshotRecords.encodeManifest(_registry.manifest());
-    }
+    final draft = _SnapshotWriter(this).write();
+    final state = draft.data;
     _trackDataRequirements();
-    // A snapshot rewrites every blob, so an older version folded in from a
-    // peer is no longer in the data and must not be reported.
-    _dataRequirements.replaceBlobVersions(_registry.values);
+    // The blobs this snapshot rewrote replace the versions folded in before;
+    // a copied blob keeps the version it was written in. One of unknown type
+    // keeps them all, but for the unfolded record, which is rewritten below.
+    _dataRequirements.replaceBlobVersions(
+      draft.written,
+      keeps: (type) =>
+          draft.copiedTypes.contains(type) ||
+          (draft.copiedUntyped && type != SnapshotRecords.unfoldedKey),
+    );
+    if (state.containsKey(SnapshotRecords.unfoldedKey)) {
+      _dataRequirements.include(
+        SnapshotRecords.unfoldedKey,
+        SnapshotRecords.unfoldedFormats,
+      );
+    }
     state[SnapshotRecords.capabilitiesKey] =
         SnapshotRecords.encodeRequirements(_dataRequirements.describe());
 

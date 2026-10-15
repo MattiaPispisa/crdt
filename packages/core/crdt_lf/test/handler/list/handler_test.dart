@@ -1,6 +1,7 @@
 import 'package:crdt_lf/crdt_lf.dart';
 import 'package:test/test.dart';
 
+import '../../helpers/frozen_value.dart';
 import '../conformance/handler_conformance.dart';
 
 void main() {
@@ -21,6 +22,19 @@ void main() {
   );
 
   group('CRDTListHandler', () {
+    test('value is unmodifiable and shows the current state', () {
+      final doc = CRDTDocument();
+      final list = CRDTListHandler<int>(doc, 'frozen', handlerType: 'frozen')
+        ..insert(0, 1);
+
+      expectFrozenValue<List<int>>(
+        read: () => list.value,
+        edit: (value) => value.add(2),
+        write: () => list.insert(0, 3),
+        fixed: false,
+      );
+    });
+
     test('should handle basic operations', () {
       final doc = CRDTDocument(
         peerId: PeerId.parse('37f1ec87-6ea5-430b-a627-a6b92b56a02d'),

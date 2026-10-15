@@ -1,3 +1,4 @@
+import 'dart:collection';
 import 'dart:typed_data';
 
 import 'package:crdt_lf/crdt_lf.dart';
@@ -110,10 +111,11 @@ base class CRDTORSetHandler<T> extends Handler<ORSetState<T>>
     doc.registerOperation(operation);
   }
 
-  /// Returns the current set value computed from changes and snapshot.
+  /// The current set.
   ///
-  /// Every read builds a fresh set, so the caller owns what it gets back and
-  /// can keep it.
+  /// {@macro collection_value}
+  ///
+  /// {@macro fixed_value}
   @override
   Set<T> get value {
     return _cachedOrComputedState()._state;
@@ -130,7 +132,11 @@ base class CRDTORSetHandler<T> extends Handler<ORSetState<T>>
   }
 
   /// Returns whether the set contains [value].
-  bool contains(T element) => value.contains(element);
+  bool contains(T element) {
+    final state = _cachedOrComputedState();
+    return state._live.containsKey(element) ||
+        state._snapshotOnly.contains(element);
+  }
 
   /// {@macro generic_handler_spec}
   static HandlerSpec<CRDTORSetHandler<T>> spec<T>(
@@ -275,6 +281,7 @@ base class CRDTORSetHandler<T> extends Handler<ORSetState<T>>
     required ORSetState<T> state,
     required Operation operation,
   }) {
+    state._frozen = null;
     if (operation is _ORSetAddOperation<T>) {
       _tagStateAdd(
         state: state,
@@ -494,6 +501,10 @@ class ORSetState<T> {
   /// The tombstones
   final Set<OperationId> _tombstones;
 
+  /// The value handed out, built once per state; dropped by every change.
+  Set<T>? _frozen;
+
   /// The state of the OR-Set
-  Set<T> get _state => <T>{..._live.keys, ..._snapshotOnly};
+  Set<T> get _state =>
+      _frozen ??= UnmodifiableSetView(<T>{..._live.keys, ..._snapshotOnly});
 }

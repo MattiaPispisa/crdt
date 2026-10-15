@@ -235,40 +235,29 @@ final class _LiveDeletions extends _HandlerDeletions<CRDTDocument> {
   /// The children the deleted container with [id] references, or none when
   /// the document cannot build a [type].
   List<HandlerRef> _childRefsOfDeleted(String id, String type) {
-    final spec = _document._registry.specs[type];
-    if (spec == null) {
-      return const [];
-    }
-    final Handler<dynamic> handler;
     _readingDeleted = true;
     try {
-      handler = spec.create(_document, id);
+      return _document._readClosed(
+            id,
+            type,
+            (handler) => handler is ContainerHandler
+                ? (handler as ContainerHandler).childRefs().toList()
+                : const <HandlerRef>[],
+          ) ??
+          const [];
     } finally {
       _readingDeleted = false;
-    }
-    try {
-      return handler is ContainerHandler
-          ? (handler as ContainerHandler).childRefs().toList()
-          : const [];
-    } finally {
-      _document._unregisterHandler(id);
     }
   }
 
   /// The kind of the handler with [id], read from the snapshot [manifest] or
   /// from its changes, or `null` when the document holds neither.
-  String? _typeOf(String id, Map<String, String> manifest) {
-    final type = manifest[id];
-    if (type != null) {
-      return type;
-    }
-    final changes = _document.changesForHandler(id);
-    if (changes.isEmpty) {
-      return null;
-    }
-    return OperationEnvelopeCodec.decode(changes.first.payloadBytes())
-        .handlerType;
-  }
+  String? _typeOf(String id, Map<String, String> manifest) =>
+      manifest[id] ??
+      _HandlerRegistry.typeIn([
+        ..._document.changesForHandler(id),
+        ..._document._readableUnfoldedChanges(id),
+      ]);
 
   /// Marks [ids] deleted and closes the handlers open under them.
   void _close(Iterable<String> ids) {

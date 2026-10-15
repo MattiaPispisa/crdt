@@ -13,17 +13,22 @@
 - `CRDTAggregateHandler`: one aggregate built from domain events replayed in `(HLC, author)`
   order, with atomic `dispatchAll`, events `reduce` can refuse, stable `EventId`s, deltas, undo
   and versioned migrations.
+- `ChangeStore.handlerIds`: the ids of the handlers with at least one change in the store.
 
 ### Changed
 
 - The cost of applying a change no longer grows with the number of handlers on the document;
   a batch import routes each change by handler type and id, as the single-change path does.
+- **Breaking for code that edits `value`**: the `value` of the list, map and set handlers is
+  unmodifiable, and a new object only after a change. Copy it to edit it.
 
 ### Fixed
 
 - Reading a handler inside a transaction now includes the writes made earlier in the same
   transaction. Before, the read could miss them, and the handler kept that wrong value even
   after the commit.
+- `takeSnapshot` keeps the state of every handler the document holds data for, open or not;
+  before, a prune lost the others for good. [194](https://github.com/MattiaPispisa/crdt/issues/194)
 
 ## [5.1.2](https://github.com/MattiaPispisa/crdt/tree/crdt_lf-v5.1.2/packages/core/crdt_lf)
 

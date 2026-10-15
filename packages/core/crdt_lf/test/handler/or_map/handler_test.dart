@@ -4,6 +4,7 @@ import 'package:crdt_lf/crdt_lf.dart';
 import 'package:hlc_dart/hlc_dart.dart';
 import 'package:test/test.dart';
 
+import '../../helpers/frozen_value.dart';
 import '../conformance/handler_conformance.dart';
 
 void main() {
@@ -23,6 +24,21 @@ void main() {
   );
 
   group('CRDTORMapHandler', () {
+    test('value is frozen until the next change', () {
+      final doc = CRDTDocument();
+      final map = CRDTORMapHandler<String, int>(
+        doc,
+        'frozen',
+        handlerType: 'frozen',
+      )..put('a', 1);
+
+      expectFrozenValue<Map<String, int>>(
+        read: () => map.value,
+        edit: (value) => value['b'] = 2,
+        write: () => map.put('c', 3),
+      );
+    });
+
     test('should handle basic put/remove', () {
       final doc = CRDTDocument(
         peerId: PeerId.parse('37f1ec87-6ea5-430b-a627-a6b92b56a02d'),

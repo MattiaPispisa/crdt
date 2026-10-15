@@ -205,10 +205,18 @@ final class _HandlerRegistry {
     }
   }
 
-  /// The `{id: type}` manifest of the open handlers.
-  Map<String, String> manifest() => {
-        for (final handler in _byId.values) handler.id: handler.handlerType,
-      };
+  /// The handler type the first readable envelope among [changes] names;
+  /// `null` when none can be read.
+  static String? typeIn(Iterable<Change> changes) {
+    for (final change in changes) {
+      try {
+        return OperationEnvelopeCodec.decode(change.payloadBytes()).handlerType;
+      } catch (_) {
+        // A change whose envelope cannot be read names no type.
+      }
+    }
+    return null;
+  }
 
   /// The `{id: type}` manifest [snapshot] carries; empty when there is no
   /// snapshot or it predates the manifest.

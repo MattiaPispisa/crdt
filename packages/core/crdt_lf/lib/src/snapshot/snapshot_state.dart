@@ -38,19 +38,29 @@ class SnapshotState {
     return current = SnapshotRecords.mergeKeepingRecords(held, incoming);
   }
 
-  /// Whether merging the two would drop a handler's state: both hold it, with
-  /// different bytes, at concurrent versions.
+  /// Whether merging the two would drop a handler's state: at concurrent
+  /// versions, both hold it as different blobs, or as unfolded changes neither
+  /// side holds all of.
   static bool _mergeLosesState(Snapshot a, Snapshot b) {
     if (a.versionVector.isStrictlyNewerOrEqualThan(b.versionVector) ||
         b.versionVector.isStrictlyNewerOrEqualThan(a.versionVector)) {
       return false;
     }
-    for (final MapEntry(key: handlerId, value: blob) in a.data.entries) {
-      if (SnapshotRecords.reservedKeys.contains(handlerId)) {
-        continue;
-      }
-      final other = b.data[handlerId];
-      if (other != null && !bytesEqual(blob, other)) {
+    final entriesA = SnapshotRecords.unfoldedEntriesOf(a);
+    final entriesB = SnapshotRecords.unfoldedEntriesOf(b);
+    final shared = SnapshotRecords.handlerIdsOf(a)
+        .intersection(SnapshotRecords.handlerIdsOf(b));
+    for (final id in shared) {
+      final blobA = a.data[id];
+      final blobB = b.data[id];
+      final sameBlob = blobA == null || blobB == null
+          ? blobA == blobB
+          : bytesEqual(blobA, blobB);
+      // On one blob, the side with more unfolded changes holds the other.
+      final ordered =
+          SnapshotRecords.entryHoldsAll(entriesA[id], entriesB[id]) ||
+              SnapshotRecords.entryHoldsAll(entriesB[id], entriesA[id]);
+      if (!sameBlob || !ordered) {
         return true;
       }
     }

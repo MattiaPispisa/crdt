@@ -119,6 +119,12 @@ class ChangeStore {
     return _handlerIndex.countForHandler(handlerId, _changes.values);
   }
 
+  /// The ids of the handlers with at least one change in this store.
+  ///
+  /// Backed by the same secondary index as [changesForHandler]: the first
+  /// call after a prune reads every change once.
+  Iterable<String> get handlerIds => _handlerIndex.handlerIds(_changes.values);
+
   /// Imports [Change]s from another [ChangeStore]
   ///
   /// Returns the number of [Change]s that were added.
@@ -351,6 +357,13 @@ class _HandlerIndex {
     }
     return list.newerThan(versionVector).toList();
   }
+
+  /// The ids of the handlers with at least one change.
+  ///
+  /// [source] is the store's current set of changes, used to (re)build the
+  /// index when it is not available.
+  Iterable<String> handlerIds(Iterable<Change> source) =>
+      (_byHandler ??= _build(source)).keys;
 
   /// Returns the number of changes for [handlerId] in O(1) (once the index is
   /// built), without allocating a list.

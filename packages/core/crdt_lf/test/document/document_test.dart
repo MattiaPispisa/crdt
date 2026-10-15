@@ -1,6 +1,7 @@
 import 'dart:typed_data';
 
 import 'package:crdt_lf/crdt_lf.dart';
+import 'package:crdt_lf/src/snapshot/records.dart';
 import 'package:hlc_dart/hlc_dart.dart';
 import 'package:test/test.dart';
 
@@ -1487,6 +1488,264 @@ void main() {
     });
   });
 
+  group('takeSnapshot of handlers this document has not opened', () {
+    final listSpec = CRDTListHandler.spec<String>('list');
+    late CRDTDocument writer;
+    late CRDTListHandler<String> list;
+
+    setUp(() {
+      writer = CRDTDocument(peerId: PeerId.generate());
+      list = writer.handler(listSpec, 'list')..insert(0, 'a');
+    });
+
+    List<String> readOn(CRDTDocument document) =>
+        document.handler(listSpec, 'list').value;
+
+    test('a document that opens no handler keeps their changes in it', () {
+      final server = CRDTDocument()..importChanges(writer.exportChanges());
+
+      final snapshot = server.takeSnapshot();
+
+      expect(server.exportChanges(), isEmpty);
+      expect(readOn(CRDTDocument()..importSnapshot(snapshot)), ['a']);
+    });
+
+    test('an imported blob survives the next snapshot', () {
+      final relay = CRDTDocument()..importSnapshot(writer.takeSnapshot());
+
+      final snapshot = relay.takeSnapshot();
+
+      expect(snapshot.data.keys, contains('list'));
+      expect(readOn(CRDTDocument()..importSnapshot(snapshot)), ['a']);
+    });
+
+    test('a closed handler of a kind it knows is folded into a blob', () {
+      final peer = CRDTDocument()
+        ..register(listSpec)
+        ..importSnapshot(writer.takeSnapshot(pruneHistory: false));
+      list.insert(1, 'b');
+      peer.importChanges(writer.exportChanges());
+
+      final snapshot = peer.takeSnapshot();
+
+      expect(snapshot.data, isNot(contains(SnapshotRecords.unfoldedKey)));
+      expect(peer.registeredHandlers, isEmpty);
+      expect(readOn(CRDTDocument()..importSnapshot(snapshot)), ['a', 'b']);
+    });
+
+    test('changes it cannot fold ride on, until a peer that can folds them',
+        () {
+      final relay = CRDTDocument()
+        ..importSnapshot(writer.takeSnapshot(pruneHistory: false));
+      list.insert(1, 'b');
+      relay
+        ..importChanges(writer.exportChanges())
+        ..takeSnapshot();
+      list.insert(2, 'c');
+      relay.importChanges(writer.exportChanges());
+
+      final carried = relay.takeSnapshot();
+      final folder = CRDTDocument()
+        ..register(listSpec)
+        ..importSnapshot(carried);
+      final folded = folder.takeSnapshot();
+
+      expect(readOn(CRDTDocument()..importSnapshot(carried)), list.value);
+      expect(folded.data, isNot(contains(SnapshotRecords.unfoldedKey)));
+      expect(readOn(CRDTDocument()..importSnapshot(folded)), list.value);
+    });
+
+    test('a handler that arrives between two snapshots is in the second', () {
+      final server = CRDTDocument()
+        ..importChanges(writer.exportChanges())
+        ..takeSnapshot(pruneHistory: false);
+      final otherSpec = CRDTListHandler.spec<String>('o');
+      writer.handler(otherSpec, 'o').insert(0, 'z');
+      server.importChanges(writer.exportChanges());
+
+      final reader = CRDTDocument()..importSnapshot(server.takeSnapshot());
+
+      expect(readOn(reader), ['a']);
+      expect(reader.handler(otherSpec, 'o').value, ['z']);
+    });
+
+    test('a handler known only from carried changes moves its revision', () {
+      final server = CRDTDocument()..importChanges(writer.exportChanges());
+      final reader = CRDTDocument();
+      final before = reader.revisionForHandler('list');
+
+      reader.importSnapshot(server.takeSnapshot());
+
+      expect(reader.revisionForHandler('list'), greaterThan(before));
+    });
+
+    test('a merge keeps the blob and the carried changes of one side', () {
+      final withBlob = CRDTDocument()
+        ..importSnapshot(writer.takeSnapshot(pruneHistory: false));
+      list.insert(1, 'b');
+      final server = CRDTDocument()..importChanges(writer.exportChanges());
+
+      withBlob.mergeSnapshot(server.takeSnapshot());
+
+      expect(readOn(withBlob), ['a', 'b']);
+    });
+
+    test('concurrent snapshots carrying different handlers merge whole', () {
+      final otherSpec = CRDTListHandler.spec<String>('other');
+      final otherWriter = CRDTDocument(peerId: PeerId.generate());
+      otherWriter.handler(otherSpec, 'other').insert(0, 'z');
+      final right = CRDTDocument()..importChanges(otherWriter.exportChanges());
+      final left = CRDTDocument()
+        ..importChanges(writer.exportChanges())
+        ..takeSnapshot()
+        ..mergeSnapshot(right.takeSnapshot());
+
+      expect(readOn(left), ['a']);
+      expect(left.handler(otherSpec, 'other').value, ['z']);
+    });
+
+    test('reconstruct opens a handler known only from carried changes', () {
+      final server = CRDTDocument()..importChanges(writer.exportChanges());
+      final reader = CRDTDocument()
+        ..register(listSpec)
+        ..importSnapshot(server.takeSnapshot())
+        ..reconstruct();
+
+      expect(reader.registeredHandlers.keys, ['list']);
+    });
+
+    test('an imported snapshot without the handler leaves it nothing to lose',
+        () {
+      final server = CRDTDocument()
+        ..importChanges(writer.exportChanges())
+        ..takeSnapshot(pruneHistory: false);
+      final taken = writer.takeSnapshot(pruneHistory: false);
+      // A snapshot that covers the changes of `list` and holds nothing for it,
+      // as a build from before this fix writes.
+      server.importSnapshot(
+        Snapshot(
+          id: 'without-list',
+          versionVector: taken.versionVector,
+          data: {
+            for (final entry in taken.data.entries)
+              if (entry.key != 'list') entry.key: entry.value,
+          },
+        ),
+        pruneHistory: false,
+      );
+
+      final snapshot = server.takeSnapshot();
+
+      expect(readOn(CRDTDocument()..importSnapshot(snapshot)), ['a']);
+    });
+
+    test('concurrent snapshots on one blob keep the wider carried changes', () {
+      final base = writer.takeSnapshot(pruneHistory: false);
+      final relay = CRDTDocument()..importSnapshot(base, pruneHistory: false);
+      list.insert(1, 'b');
+      relay.importChanges(writer.exportChanges());
+      final client = CRDTDocument(peerId: PeerId.generate())
+        ..importSnapshot(base, pruneHistory: false);
+      final notes = CRDTListHandler.spec<String>('notes');
+      client.handler(notes, 'notes').insert(0, 'n');
+
+      relay
+        ..takeSnapshot()
+        ..mergeSnapshot(client.takeSnapshot());
+
+      expect(readOn(relay), ['a', 'b']);
+      expect(relay.handler(notes, 'notes').value, ['n']);
+    });
+
+    group('an unfolded entry this build cannot read', () {
+      final otherSpec = CRDTListHandler.spec<String>('other');
+      late Snapshot unreadable;
+
+      setUp(() {
+        writer.handler(otherSpec, 'other').insert(0, 'z');
+        final carried = (CRDTDocument()..importChanges(writer.exportChanges()))
+            .takeSnapshot();
+        // As a newer build would write it: an entry version this one lacks.
+        unreadable = Snapshot(
+          id: 'newer-entry',
+          versionVector: carried.versionVector,
+          data: {
+            ...carried.data,
+            SnapshotRecords.unfoldedKey: SnapshotRecords.encodeUnfolded({
+              ...SnapshotRecords.unfoldedEntriesOf(carried),
+              'other': Uint8List.fromList([99]),
+            }),
+          },
+        );
+      });
+
+      test('fails the reads of its own handler only', () {
+        final reader = CRDTDocument()..importSnapshot(unreadable);
+
+        expect(readOn(reader), ['a']);
+        expect(
+          () => reader.handler(otherSpec, 'other').value,
+          throwsFormatException,
+        );
+        expect(reader.revisionForHandler('other'), greaterThan(0));
+        expect(reader.reconstruct, returnsNormally);
+      });
+
+      test('cannot be compared, so a concurrent merge refuses it', () {
+        final otherWriter = CRDTDocument(peerId: PeerId.generate());
+        otherWriter.handler(otherSpec, 'other').insert(0, 'w');
+        final right = (CRDTDocument()
+              ..importChanges(otherWriter.exportChanges()))
+            .takeSnapshot();
+        final left = CRDTDocument()..importSnapshot(unreadable);
+
+        expect(
+          () => left.mergeSnapshot(right),
+          throwsA(isA<ConcurrentSnapshotException>()),
+        );
+      });
+
+      test('rides on as it is when nothing new reached its handler', () {
+        final relay = CRDTDocument()..importSnapshot(unreadable);
+
+        final snapshot = relay.takeSnapshot();
+
+        expect(
+          SnapshotRecords.unfoldedEntriesOf(snapshot)['other'],
+          [99],
+        );
+      });
+
+      test('fails takeSnapshot once its handler gets new changes', () {
+        final relay = CRDTDocument()..importSnapshot(unreadable);
+        writer.handler(otherSpec, 'other').insert(1, 'y');
+        relay.importChanges(writer.exportChanges());
+
+        expect(
+          relay.takeSnapshot,
+          throwsA(
+            isA<FormatException>()
+                .having((e) => e.message, 'message', contains('other')),
+          ),
+        );
+      });
+    });
+
+    test('a merge refuses concurrent carried changes of one handler', () {
+      final left = CRDTDocument()..importChanges(writer.exportChanges());
+      final otherWriter = CRDTDocument(peerId: PeerId.generate());
+      otherWriter.handler(listSpec, 'list').insert(0, 'z');
+      final right = CRDTDocument()..importChanges(otherWriter.exportChanges());
+
+      expect(
+        () => left
+          ..takeSnapshot()
+          ..mergeSnapshot(right.takeSnapshot()),
+        throwsA(isA<ConcurrentSnapshotException>()),
+      );
+    });
+  });
+
   group('CRDTDocument.deleteHandler', () {
     late CRDTDocument doc;
     late CRDTMapRefHandler root;
@@ -1855,7 +2114,8 @@ void main() {
         ..set('k', 1);
       final local = CRDTMapHandler<int>(doc, 'local', handlerType: 'm');
       final remote = CRDTMapHandler<int>(source, 'remote', handlerType: 'm');
-      final cached = untouched.value;
+      untouched.value;
+      final cached = untouched.cachedState;
 
       for (var i = 0; i < 1000; i++) {
         local.set('k', i);

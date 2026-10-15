@@ -165,4 +165,7 @@ class ChangeLog {
   /// How many changes the handler [handlerId] has in the log.
   int changeCountForHandler(String handlerId) =>
       _store.changeCountForHandler(handlerId);
+
+  /// The ids of the handlers with at least one change in the log.
+  Iterable<String> get handlerIds => _store.handlerIds;
 }

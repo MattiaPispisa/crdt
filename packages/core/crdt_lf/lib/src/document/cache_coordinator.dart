@@ -58,12 +58,7 @@ final class _CacheCoordinator {
 
   /// Moves the revision of every handler whose state [snapshot] carries.
   void bumpForSnapshot(Snapshot snapshot) {
-    for (final handlerId in snapshot.data.keys) {
-      if (SnapshotRecords.reservedKeys.contains(handlerId)) {
-        continue;
-      }
-      bumpState(handlerId);
-    }
+    SnapshotRecords.handlerIdsOf(snapshot).forEach(bumpState);
   }
 
   /// Moves the revision of each of [closed], and of the open containers that

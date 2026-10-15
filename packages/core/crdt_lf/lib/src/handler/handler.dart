@@ -247,15 +247,14 @@ abstract base class Handler<T>
 
   /// Returns the [Operation]s required by this consumer to compute its state.
   ///
-  /// The [Operation]s are returned in the order they were applied, the ones
-  /// of the open transaction included.
+  /// The [Operation]s on top of the snapshot blob, in the order they were
+  /// applied: the ones the snapshot carries for this handler, the ones after
+  /// it, and the ones of the open transaction.
   List<Operation> operations() {
-    final changes = doc
-        .changesForHandler(
-          id,
-          fromVersionVector: _snapshotVersionVector(),
-        )
-        .sorted(inplace: true);
+    final changes = [
+      ...?SnapshotRecords.unfoldedChangesFor(doc._lastSnapshot, id),
+      ...doc.changesForHandler(id, fromVersionVector: _snapshotVersionVector()),
+    ].sorted(inplace: true);
 
     // The list is sorted, so its last entry is the newest change the caller is
     // about to fold in. See [CacheableStateProvider._noteReplayBoundary].

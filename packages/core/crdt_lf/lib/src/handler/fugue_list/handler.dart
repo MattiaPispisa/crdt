@@ -1,3 +1,4 @@
+import 'dart:collection';
 import 'dart:typed_data';
 
 import 'package:crdt_lf/crdt_lf.dart';
@@ -271,9 +272,6 @@ base class CRDTFugueListHandler<T>
   @override
   List<T> applyDelta(List<T> base, SequenceDelta<T> delta) => delta.apply(base);
 
-  @override
-  List<T> copyValue(List<T> value) => List<T>.of(value);
-
   /// Returns a string representation of this handler
   @override
   String toString() {
@@ -292,5 +290,6 @@ class FugueListState<T> extends FugueState<T, List<T>> {
     return FugueListState._(FugueTree<T>.empty());
   }
 
-  static List<T> _collect<T>(FugueTree<T> tree) => tree.values();
+  static List<T> _collect<T>(FugueTree<T> tree) =>
+      UnmodifiableListView(tree.values());
 }

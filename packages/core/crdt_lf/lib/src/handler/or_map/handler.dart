@@ -1,3 +1,4 @@
+import 'dart:collection';
 import 'dart:typed_data';
 
 import 'package:crdt_lf/crdt_lf.dart';
@@ -124,10 +125,11 @@ base class CRDTORMapHandler<K, V> extends Handler<ORMapState<K, V>>
     doc.registerOperation(operation);
   }
 
-  /// Returns the current map value computed from changes and snapshot.
+  /// The current map.
   ///
-  /// Every read builds a fresh map, so the caller owns what it gets back and
-  /// can keep it.
+  /// {@macro collection_value}
+  ///
+  /// {@macro fixed_value}
   @override
   Map<K, V> get value {
     return _cachedOrComputedState()._state;
@@ -287,6 +289,7 @@ base class CRDTORMapHandler<K, V> extends Handler<ORMapState<K, V>>
     required ORMapState<K, V> state,
     required Operation operation,
   }) {
+    state._frozen = null;
     if (operation is _ORMapPutOperation<K, V>) {
       _tagStatePut(
         state: state,
@@ -604,10 +607,15 @@ class ORMapState<K, V> {
   /// The tombstones
   final Set<OperationId> _tombstones;
 
+  /// The value handed out, built once per state; dropped by every change.
+  Map<K, V>? _frozen;
+
   /// The state of the OR-Map.
   /// For each key with live entries, we pick the entry with the
   /// highest tag (by HLC, then PeerId) for deterministic conflict resolution.
-  Map<K, V> get _state {
+  Map<K, V> get _state => _frozen ??= UnmodifiableMapView(_resolve());
+
+  Map<K, V> _resolve() {
     final result = <K, V>{}
       // Add snapshot-only entries
       ..addAll(_snapshotOnly);

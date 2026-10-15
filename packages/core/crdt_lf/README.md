@@ -795,6 +795,13 @@ Container handlers, used to model nested structures (see [Nested Structures](#ne
 - `CRDTORMapRefHandler`: a map of references with the Observed-Removed (OR) algorithm.
 - `CRDTORSetRefHandler`: a set of references with the Observed-Removed (OR) algorithm.
 
+**Reading a collection.** The `value` of a list, map or set handler is
+unmodifiable, and stays the same object until the next change: two reads are
+equal when they are `identical`. Copy it to edit it (`List.of`, `Map.of`,
+`toSet()`). The `value` of `CRDTMapHandler` and `CRDTListHandler` shows the
+current state, so a value read before a change shows the change too: copy it to
+keep what it holds. The others keep what they held.
+
 ```dart
 final doc = CRDTDocument(
   documentId: 'todo-list-123',
@@ -1546,6 +1553,26 @@ A structure that manages the frontiers (latest operations) of the CRDT.
 ### Snapshot
 A snapshot of the CRDT state, including the version vector and the data.
 `document.snapshot` reads the one the document holds, as a read-only copy.
+
+`takeSnapshot` keeps the state of **every** handler the document holds data
+for, open or not, so a prune never loses what another peer can still read:
+
+- an open handler writes its blob;
+- a closed handler of a kind the document knows (see `register`) is built for
+  the time of the snapshot and writes its blob;
+- a handler with no change since the last snapshot keeps the blob it had;
+- a handler of a kind the document does not know keeps its blob, and the
+  changes it got since ride inside the snapshot. The first peer that knows the
+  kind folds them into a new blob when it takes its own snapshot.
+
+A server or a relay that opens no handler can therefore take snapshots and
+prune its history. A snapshot that carries changes needs `crdt_lf` 5.2.0 or
+later to be read: see `CRDTDocument.builtInCapabilities`.
+
+Carried changes are kept per handler. If a newer build wrote them in a form
+this one cannot read, only that handler fails to read; the snapshot passes
+them on unchanged. Once that handler gets new changes, `takeSnapshot` throws a
+`FormatException` instead of losing them.
 
 ### Binary representation
 

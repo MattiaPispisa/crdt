@@ -1,4 +1,7 @@
+import 'dart:typed_data';
+
 import 'package:crdt_lf/crdt_lf.dart';
+import 'package:crdt_lf/src/snapshot/records.dart';
 import 'package:test/test.dart';
 
 import '../helpers/pn_counter_handler.dart';
@@ -143,6 +146,95 @@ void main() {
       expect(
         reloaded.describeDataRequirements()['PNCounterHandler']?.operationKinds,
         {PNCounterHandler.incrementKind},
+      );
+      // The relay copied the blobs it could not rewrite, with their version.
+      expect(
+        reloaded
+            .describeDataRequirements()['CRDTFugueTextHandler']
+            ?.blobVersions,
+        isNotNull,
+      );
+    });
+
+    test('a copied blob keeps its version next to a fresh one of its type', () {
+      // A peer on another build wrote `b` in blob version 1 of the OR-set.
+      final relay = CRDTDocument(peerId: PeerId.generate())
+        ..importSnapshot(
+          Snapshot(
+            id: 'older-build',
+            versionVector: VersionVector({}),
+            data: {
+              'b': Uint8List.fromList([1, 0]),
+              SnapshotRecords.manifestKey:
+                  SnapshotRecords.encodeManifest({'b': 'set'}),
+              SnapshotRecords.capabilitiesKey:
+                  SnapshotRecords.encodeRequirements(
+                DocumentRequirements({
+                  'set': const HandlerFormats(
+                    operationKinds: {},
+                    blobVersions: BlobVersionRange.single(1),
+                  ),
+                }),
+              ),
+            },
+          ),
+        );
+      relay.handler(CRDTORSetHandler.spec<String>('set'), 'a').add('x');
+
+      relay.takeSnapshot();
+
+      expect(
+        relay.describeDataRequirements()['set']?.blobVersions,
+        const BlobVersionRange(1, 2),
+      );
+    });
+
+    test('the record is no longer needed once folded, blobs copied or not', () {
+      final writer = _documentWithChanges();
+      final server = CRDTDocument(peerId: PeerId.generate())
+        ..importSnapshot(writer.takeSnapshot());
+      writer
+          .handler(PNCounterHandler.spec('PNCounterHandler'), 'counter')
+          .increment();
+      server.importChanges(writer.exportChanges());
+      final carried = server.takeSnapshot();
+
+      // It folds the counter and copies the text blob it cannot read.
+      final folder = CRDTDocument(peerId: PeerId.generate())
+        ..register(PNCounterHandler.spec('PNCounterHandler'))
+        ..importSnapshot(carried)
+        ..takeSnapshot();
+
+      expect(carried.data, contains(SnapshotRecords.unfoldedKey));
+      expect(
+        folder.describeDataRequirements()[SnapshotRecords.unfoldedKey],
+        isNull,
+      );
+    });
+
+    test('a snapshot carrying unfolded changes needs the record to be read',
+        () {
+      final server = CRDTDocument(peerId: PeerId.generate())
+        ..importChanges(_documentWithChanges().exportChanges());
+
+      final carried = server.takeSnapshot();
+      final folder = CRDTDocument(peerId: PeerId.generate())
+        ..register(CRDTFugueTextHandler.spec)
+        ..register(PNCounterHandler.spec('PNCounterHandler'))
+        ..importSnapshot(carried)
+        ..takeSnapshot();
+
+      expect(
+        server.describeDataRequirements()[SnapshotRecords.unfoldedKey],
+        SnapshotRecords.unfoldedFormats,
+      );
+      expect(
+        CRDTDocument().describeBuildCapabilities()[SnapshotRecords.unfoldedKey],
+        SnapshotRecords.unfoldedFormats,
+      );
+      expect(
+        folder.describeDataRequirements()[SnapshotRecords.unfoldedKey],
+        isNull,
       );
     });
 

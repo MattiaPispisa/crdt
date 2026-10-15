@@ -400,6 +400,22 @@ void main() {
       expect(done, isTrue);
     });
 
+    test('a view reads the changes its snapshot carries', () {
+      final listSpec = CRDTListHandler.spec<String>('carried');
+      final writer = CRDTDocument();
+      writer.handler(listSpec, 'carried').insert(0, 'a');
+      final server = CRDTDocument()..importChanges(writer.exportChanges());
+      final reader = CRDTDocument()..importSnapshot(server.takeSnapshot());
+
+      final view = reader
+          .toTimeTravel()
+          .getHandler<CRDTListHandler<String>, List<String>>(
+            (doc) => doc.handler(listSpec, 'carried'),
+          );
+
+      expect(view.value, ['a']);
+    });
+
     test('a handler reads as deleted from the change that deleted it', () {
       final root = CRDTMapRefHandler(document, 'root');
       final title = root.child('title', CRDTFugueTextHandler.spec)

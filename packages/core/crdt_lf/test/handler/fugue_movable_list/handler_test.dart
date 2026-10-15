@@ -1,6 +1,7 @@
 import 'package:crdt_lf/crdt_lf.dart';
 import 'package:test/test.dart';
 
+import '../../helpers/frozen_value.dart';
 import '../conformance/handler_conformance.dart';
 
 void main() {
@@ -27,6 +28,21 @@ void main() {
   );
 
   group('CRDTFugueMovableListHandler', () {
+    test('value is frozen until the next change', () {
+      final doc = CRDTDocument();
+      final list = CRDTFugueMovableListHandler<int>(
+        doc,
+        'frozen',
+        handlerType: 'frozen',
+      )..insert(0, 1);
+
+      expectFrozenValue<List<int>>(
+        read: () => list.value,
+        edit: (value) => value.add(2),
+        write: () => list.insert(0, 3),
+      );
+    });
+
     test('basic insert / update / delete', () {
       final doc = CRDTDocument(
         peerId: PeerId.parse('37f1ec87-6ea5-430b-a627-a6b92b56a02d'),
