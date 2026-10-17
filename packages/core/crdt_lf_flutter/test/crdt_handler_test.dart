@@ -146,6 +146,57 @@ void main() {
     });
   });
 
+  group('CrdtHandlerBuilder (deleted)', () {
+    testWidgets('shows deletedBuilder once a peer deletes its handler',
+        (tester) async {
+      final doc = CRDTDocument(peerId: PeerId.generate());
+      CRDTFugueTextHandler(doc, 'a').insert(0, 'hello');
+      await tester.pumpWidget(
+        CrdtProvider.value(
+          value: doc,
+          child: MaterialApp(
+            home: CrdtHandlerBuilder<CRDTFugueTextHandler>(
+              id: 'a',
+              builder: (context, handler) => Text(handler.value),
+              deletedBuilder: (context) => const Text('gone'),
+            ),
+          ),
+        ),
+      );
+      expect(find.text('hello'), findsOneWidget);
+
+      final remote = CRDTDocument(peerId: PeerId.generate())
+        ..importChanges(doc.exportChanges());
+      remote.deleteHandler(remote.handler(CRDTFugueTextHandler.spec, 'a'));
+      doc.importChanges(remote.exportChanges());
+      await tester.pump();
+
+      expect(find.text('gone'), findsOneWidget);
+    });
+
+    testWidgets('crdtHandler tells a deleted handler from a missing one',
+        (tester) async {
+      final doc = CRDTDocument(peerId: PeerId.generate());
+      doc.deleteHandler(CRDTFugueTextHandler(doc, 'a'));
+      await tester.pumpWidget(
+        CrdtProvider.value(
+          value: doc,
+          child: const MaterialApp(home: SizedBox.shrink()),
+        ),
+      );
+      final context = tester.element(find.byType(SizedBox));
+
+      expect(
+        () => context.crdtHandler<CRDTFugueTextHandler>('a'),
+        throwsA(isA<HandlerDeletedException>()),
+      );
+      expect(
+        () => context.crdtHandler<CRDTFugueTextHandler>('missing'),
+        throwsA(isA<FlutterError>()),
+      );
+    });
+  });
+
   group('CrdtHandlerBuilder (nested)', () {
     testWidgets('rebuilds when a descendant handler changes', (tester) async {
       final doc = CRDTDocument(peerId: PeerId.generate());
@@ -243,6 +294,30 @@ void main() {
       await tester.pumpAndSettle();
       expect(builds, 2);
     });
+
+    testWidgets('shows an empty box once its handler is deleted',
+        (tester) async {
+      final doc = CRDTDocument(peerId: PeerId.generate());
+      final a = CRDTFugueTextHandler(doc, 'a')..insert(0, 'hello');
+      await tester.pumpWidget(
+        CrdtProvider.value(
+          value: doc,
+          child: MaterialApp(
+            home: CrdtHandlerSelector<CRDTFugueTextHandler, String>(
+              id: 'a',
+              selector: (context, handler) => handler.value,
+              builder: (context, value) => Text(value),
+            ),
+          ),
+        ),
+      );
+
+      doc.deleteHandler(a);
+      await tester.pump();
+
+      expect(find.text('hello'), findsNothing);
+      expect(tester.takeException(), isNull);
+    });
   });
 
   group('CrdtHandlerListener', () {
@@ -281,6 +356,31 @@ void main() {
       b.insert(0, 'y');
       await tester.pumpAndSettle();
       expect(fires, 1);
+    });
+
+    testWidgets('does not fire once its handler is deleted', (tester) async {
+      final doc = CRDTDocument(peerId: PeerId.generate());
+      final a = CRDTFugueTextHandler(doc, 'a');
+
+      var fires = 0;
+      await tester.pumpWidget(
+        CrdtProvider.value(
+          value: doc,
+          child: MaterialApp(
+            home: CrdtHandlerListener<CRDTFugueTextHandler>(
+              id: 'a',
+              listener: (context, handler) => fires++,
+              child: const Text('child'),
+            ),
+          ),
+        ),
+      );
+
+      doc.deleteHandler(a);
+      await tester.pumpAndSettle();
+
+      expect(fires, 0);
+      expect(find.text('child'), findsOneWidget);
     });
   });
 }

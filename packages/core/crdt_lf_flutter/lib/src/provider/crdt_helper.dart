@@ -21,21 +21,25 @@ extension CrdtContextHelper on BuildContext {
   /// for **imperative** use (actions like insert/delete/change) — it does not
   /// rebuild the caller.
   ///
-  /// Throws a [FlutterError] if no handler is registered for [id] or it is not
-  /// an [H].
+  /// Throws a [HandlerDeletedException] if the handler was deleted, and a
+  /// [FlutterError] if no handler is registered for [id] or it is not an [H].
   H crdtHandler<H extends Handler<dynamic>>(String id) =>
       resolveCrdtHandler<H>(crdtDocument, id);
 }
 
 /// Returns the handler registered under [id] on [document], cast to [H].
 ///
-/// Throws a [FlutterError] if the handler is missing or has a different type —
-/// surfacing a wiring mistake instead of a late `null`/cast error.
+/// Throws a [HandlerDeletedException] if the handler was deleted. Throws a
+/// [FlutterError] if it is missing or has a different type — surfacing a
+/// wiring mistake instead of a late `null`/cast error.
 H resolveCrdtHandler<H extends Handler<dynamic>>(
   CRDTDocument document,
   String id,
 ) {
   final handler = document.registeredHandlers[id];
+  if (handler == null && document.isDeleted(id)) {
+    throw HandlerDeletedException(id);
+  }
   if (handler == null) {
     throw FlutterError(
       'No CRDT handler is registered for id "$id".\n'

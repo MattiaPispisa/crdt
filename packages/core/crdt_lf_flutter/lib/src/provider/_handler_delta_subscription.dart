@@ -91,7 +91,7 @@ class HandlerDeltaSubscription<V, D extends ComposableDelta<D>> {
   int _synced = -1;
 
   /// The handler being followed, resolved once per attachment: a handler id is
-  /// registered at most once and never removed.
+  /// registered at most once.
   DeltaProvider<V, D> get provider => _provider;
 
   /// The last point of the stream this consumer accounts for.

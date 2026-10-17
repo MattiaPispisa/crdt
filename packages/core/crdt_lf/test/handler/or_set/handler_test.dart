@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import 'package:crdt_lf/crdt_lf.dart';
 import 'package:test/test.dart';
 
+import '../../helpers/frozen_value.dart';
 import '../conformance/handler_conformance.dart';
 
 void main() {
@@ -20,6 +21,18 @@ void main() {
   );
 
   group('CRDTORSetHandler', () {
+    test('value is frozen until the next change', () {
+      final doc = CRDTDocument();
+      final set = CRDTORSetHandler<int>(doc, 'frozen', handlerType: 'frozen')
+        ..add(1);
+
+      expectFrozenValue<Set<int>>(
+        read: () => set.value,
+        edit: (value) => value.add(2),
+        write: () => set.add(3),
+      );
+    });
+
     test('should handle basic add/remove', () {
       final doc = CRDTDocument(
         peerId: PeerId.parse('37f1ec87-6ea5-430b-a627-a6b92b56a02d'),

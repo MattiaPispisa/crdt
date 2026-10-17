@@ -59,6 +59,20 @@ void main() {
         viewListHandler.doc.prepareMutation,
         throwsA(isA<ReadOnlyDocumentException>()),
       );
+      expect(
+        () => viewListHandler.doc.deleteHandler(viewListHandler),
+        throwsA(isA<ReadOnlyDocumentException>()),
+      );
+      expect(
+        () => viewListHandler.doc.deleteHandlerRef(
+          HandlerRef.of(viewListHandler),
+        ),
+        throwsA(isA<ReadOnlyDocumentException>()),
+      );
+      expect(
+        () => viewListHandler.doc.runInTransaction(() {}),
+        throwsA(isA<ReadOnlyDocumentException>()),
+      );
     });
 
     test(
@@ -326,6 +340,30 @@ void main() {
       expect(viewDocument.revisionForHandler('list'), 3);
     });
 
+    test('the version follows the cursor', () {
+      listHandler
+        ..insert(0, 'Hello')
+        ..insert(1, 'World');
+      final first = document.exportChanges().sorted().first;
+
+      final historySession = document.toTimeTravel();
+      final viewDocument = historySession
+          .getHandler<CRDTListHandler<String>, List<String>>(
+            (doc) => CRDTListHandler<String>(
+              doc,
+              'list',
+              handlerType: 'CRDTListHandler<String>',
+            ),
+          )
+          .doc;
+
+      expect(viewDocument.version, document.version);
+      historySession.jump(1);
+      expect(viewDocument.version, {first.id});
+      historySession.jump(0);
+      expect(viewDocument.version, isEmpty);
+    });
+
     test('should dispose the history session', () {
       listHandler
         ..insert(0, 'Hello')
@@ -360,6 +398,47 @@ void main() {
       await Future<void>.delayed(Duration.zero);
 
       expect(done, isTrue);
+    });
+
+    test('a view reads the changes its snapshot carries', () {
+      final listSpec = CRDTListHandler.spec<String>('carried');
+      final writer = CRDTDocument();
+      writer.handler(listSpec, 'carried').insert(0, 'a');
+      final server = CRDTDocument()..importChanges(writer.exportChanges());
+      final reader = CRDTDocument()..importSnapshot(server.takeSnapshot());
+
+      final view = reader
+          .toTimeTravel()
+          .getHandler<CRDTListHandler<String>, List<String>>(
+            (doc) => doc.handler(listSpec, 'carried'),
+          );
+
+      expect(view.value, ['a']);
+    });
+
+    test('a handler reads as deleted from the change that deleted it', () {
+      final root = CRDTMapRefHandler(document, 'root');
+      final title = root.child('title', CRDTFugueTextHandler.spec)
+        ..insert(0, 'Hi');
+      document.deleteHandler(title);
+
+      final historySession = document.toTimeTravel();
+      final viewRoot =
+          historySession.getHandler<CRDTMapRefHandler, Map<String, HandlerRef>>(
+        (doc) => CRDTMapRefHandler(doc, 'root'),
+      );
+      final viewTitle =
+          historySession.getHandler<CRDTFugueTextHandler, FugueTextState>(
+        (doc) => CRDTFugueTextHandler(doc, title.id),
+      );
+
+      expect(viewRoot.resolved, isEmpty);
+      expect(viewTitle.isDeleted, isTrue);
+
+      historySession.previous();
+
+      expect(viewRoot.resolved, {'title': 'Hi'});
+      expect(viewTitle.isDeleted, isFalse);
     });
   });
 }

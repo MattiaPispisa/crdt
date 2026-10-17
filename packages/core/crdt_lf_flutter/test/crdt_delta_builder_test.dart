@@ -186,5 +186,36 @@ void main() {
       expect(seen, hasLength(1));
       expect(find.text('a'), findsOneWidget);
     });
+
+    testWidgets('shows deletedBuilder once a peer deletes its handler',
+        (tester) async {
+      CRDTListHandler<String>(
+        doc,
+        'todos',
+        handlerType: 'CRDTListHandler<String>',
+      ).insert(0, 'a');
+      await tester.pumpWidget(
+        CrdtProvider.value(
+          value: doc,
+          child: MaterialApp(
+            home: CrdtHandlerDeltaBuilder<List<String>, SequenceDelta<String>>(
+              id: 'todos',
+              builder: (context, todos) => Text(todos.join(',')),
+              deletedBuilder: (context) => const Text('gone'),
+            ),
+          ),
+        ),
+      );
+
+      final remote = CRDTDocument(peerId: PeerId.generate())
+        ..importChanges(doc.exportChanges())
+        ..deleteHandlerRef(
+          const HandlerRef('todos', 'CRDTListHandler<String>'),
+        );
+      doc.importChanges(remote.exportChanges());
+      await tester.pump();
+
+      expect(find.text('gone'), findsOneWidget);
+    });
   });
 }

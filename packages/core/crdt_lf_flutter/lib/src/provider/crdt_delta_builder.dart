@@ -1,4 +1,5 @@
 import 'package:crdt_lf/crdt_lf.dart';
+import 'package:crdt_lf_flutter/src/common/_crdt_guards.dart';
 import 'package:crdt_lf_flutter/src/provider/_handler_delta_subscription.dart';
 import 'package:crdt_lf_flutter/src/provider/crdt_delta_listener.dart';
 import 'package:crdt_lf_flutter/src/provider/crdt_handler.dart';
@@ -46,6 +47,7 @@ class CrdtHandlerDeltaBuilder<V, D extends ComposableDelta<D>>
   const CrdtHandlerDeltaBuilder({
     required this.id,
     required this.builder,
+    this.deletedBuilder,
     super.key,
   });
 
@@ -54,6 +56,9 @@ class CrdtHandlerDeltaBuilder<V, D extends ComposableDelta<D>>
 
   /// Called with the current value, once per change.
   final CrdtDeltaWidgetBuilder<V> builder;
+
+  /// {@macro crdt_deleted_builder}
+  final WidgetBuilder? deletedBuilder;
 
   @override
   State<CrdtHandlerDeltaBuilder<V, D>> createState() =>
@@ -90,9 +95,14 @@ class _CrdtHandlerDeltaBuilderState<V, D extends ComposableDelta<D>>
 
   @override
   Widget build(BuildContext context) {
+    final document = context.crdtDocument;
+    if (context.selectCrdtDocument((doc) => doc.isDeleted(widget.id))) {
+      _subscription.cancel();
+      return buildDeleted(context, widget.deletedBuilder);
+    }
     // Covers a new document and a new id alike, so there is no
     // `didUpdateWidget`: `build` always runs after one.
-    final seed = _subscription.syncTo(context.crdtDocument, widget.id);
+    final seed = _subscription.syncTo(document, widget.id);
     if (seed != null) {
       // Plain assignment: this is already a build.
       _value = seed.value;

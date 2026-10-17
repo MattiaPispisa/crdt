@@ -1,3 +1,4 @@
+import 'dart:collection';
 import 'dart:typed_data';
 
 import 'package:crdt_lf/crdt_lf.dart';
@@ -121,7 +122,11 @@ base class CRDTFugueMovableListHandler<T>
   @override
   bool get stateIsOrderIndependent => true;
 
-  /// Returns the current list value.
+  /// The current list.
+  ///
+  /// {@macro collection_value}
+  ///
+  /// {@macro fixed_value}
   @override
   List<T> get value => cachedOrComputedState().value;
 
@@ -839,9 +844,6 @@ base class CRDTFugueMovableListHandler<T>
   List<T> applyDelta(List<T> base, SequenceDelta<T> delta) => delta.apply(base);
 
   @override
-  List<T> copyValue(List<T> value) => List<T>.of(value);
-
-  @override
   String toString() {
     return 'CRDTFugueMovableList($id, $value)';
   }
@@ -921,7 +923,7 @@ class FugueMovableListState<T> {
       positions.add(node.id);
       identities.add(identity);
     }
-    _cachedValues = values;
+    _cachedValues = UnmodifiableListView(values);
     _cachedVisiblePositions = positions;
     _cachedIdentities = identities;
   }

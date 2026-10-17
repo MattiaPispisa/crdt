@@ -90,23 +90,32 @@ base class CRDTMovableListRefHandler
   T? getRefAtAs<T extends Handler<dynamic>>(int index) =>
       typedRef<T>(getRefAt(index));
 
+  /// Removes the element at [index] and deletes the child it references, in
+  /// one transaction.
+  ///
+  /// {@macro remove_child}
+  ///
+  /// Throws a [RangeError] when [index] is out of range.
+  void removeChildAt(int index) {
+    final refs = value;
+    if (index < 0 || index >= refs.length) {
+      throw RangeError.index(index, refs, 'index');
+    }
+    doc.runInTransaction(() {
+      delete(index);
+      doc.deleteHandlerRef(refs[index]);
+    });
+  }
+
   @override
-  Iterable<HandlerRef> childRefs() => value;
+  Iterable<HandlerRef> childRefs() =>
+      value.where((ref) => !doc.isDeleted(ref.id));
 
   @override
   Object? toNested(Set<String> visiting) {
-    final out = <Object?>[];
-    for (final ref in value) {
-      if (visiting.contains(ref.id)) {
-        out.add(null);
-        continue;
-      }
-      final child = doc.resolveHandler(ref);
-      out.add(
-        child == null ? null : nestedValueOf(child, {...visiting, ref.id}),
-      );
-    }
-    return out;
+    return [
+      for (final ref in value) resolveNestedRef(doc, ref, visiting),
+    ];
   }
 
   /// The fully resolved subtree rooted at this list, as a `List<Object?>`.

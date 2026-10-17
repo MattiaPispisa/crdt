@@ -9,15 +9,15 @@ class _CRDTStaticProxyDocument extends BaseCRDTDocument {
     required List<Set<OperationId>> historyVersions,
     required int visibleCount,
     required Snapshot? lastSnapshot,
-    required Map<String, Handler<dynamic>> handlers,
   })  : _documentId = documentId,
         _hlc = hlc,
         _peerId = peerId,
         _frozenChanges = frozenChanges,
         _historyVersions = historyVersions,
         _visibleCount = visibleCount,
-        _lastSnapshot = lastSnapshot,
-        _handlers = handlers;
+        _lastSnapshot = lastSnapshot {
+    _deletions = _ViewDeletions(this);
+  }
 
   final String _documentId;
 
@@ -44,7 +44,7 @@ class _CRDTStaticProxyDocument extends BaseCRDTDocument {
   final Snapshot? _lastSnapshot;
 
   @override
-  final Map<String, Handler<dynamic>> _handlers;
+  late final _ViewDeletions _deletions;
 
   @override
   void registerOperation(Operation operation) {
@@ -54,6 +54,21 @@ class _CRDTStaticProxyDocument extends BaseCRDTDocument {
   @override
   void prepareMutation() {
     throw const ReadOnlyDocumentException('prepareMutation');
+  }
+
+  @override
+  void deleteHandler(Handler<dynamic> handler) {
+    throw const ReadOnlyDocumentException('deleteHandler');
+  }
+
+  @override
+  void deleteHandlerRef(HandlerRef ref) {
+    throw const ReadOnlyDocumentException('deleteHandlerRef');
+  }
+
+  @override
+  T runInTransaction<T>(T Function() action, {Object? origin}) {
+    throw const ReadOnlyDocumentException('runInTransaction');
   }
 
   @override
@@ -173,11 +188,10 @@ class HistorySession {
       historyVersions: historyVersions,
       visibleCount: cursor,
       lastSnapshot: document._lastSnapshot,
-      handlers: {},
     );
     // Carry over the registered types so nested handlers resolved through the
     // read-only session can be reconstructed against the historical changes.
-    proxy._specs.addAll(document._specs);
+    proxy._registry.specs.addAll(document._registry.specs);
 
     return HistorySession._(
       cursor: cursor,
@@ -247,7 +261,9 @@ class HistorySession {
     }
 
     _cursor = cursor;
-    _document._visibleCount = _cursor;
+    _document
+      .._visibleCount = _cursor
+      .._cache.markAllStale();
     _cursorController.add(_cursor);
   }
 

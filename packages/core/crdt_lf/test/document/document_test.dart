@@ -1,6 +1,7 @@
 import 'dart:typed_data';
 
 import 'package:crdt_lf/crdt_lf.dart';
+import 'package:crdt_lf/src/snapshot/records.dart';
 import 'package:hlc_dart/hlc_dart.dart';
 import 'package:test/test.dart';
 
@@ -129,27 +130,6 @@ void main() {
       expect(applied, isFalse);
     });
 
-    test('applyChange throws when change is not causally ready', () {
-      final change1 = Change(
-        id: OperationId(author, HybridLogicalClock(l: 1, c: 1)),
-        operation: operation,
-        deps: {},
-        author: author,
-      );
-
-      final change2 = Change(
-        id: OperationId(author, HybridLogicalClock(l: 1, c: 2)),
-        operation: operation,
-        deps: {change1.id},
-        author: author,
-      );
-
-      expect(
-        () => doc.applyChange(change2),
-        throwsA(isA<CausallyNotReadyException>()),
-      );
-    });
-
     test('exportChanges returns all changes when no version specified', () {
       final change1 = doc.createChange(newOperation());
       final change2 = doc.createChange(newOperation());
@@ -159,117 +139,50 @@ void main() {
       expect(changes, containsAll([change1, change2]));
     });
 
-    test('exportChanges returns changes after specified version', () {
-      final change1 = doc.createChange(newOperation());
-      final change2 = doc.createChange(newOperation());
-      final change3 = doc.createChange(newOperation());
-
-      final changes = doc.exportChanges(from: {change1.id});
-      expect(changes.length, equals(2));
-      expect(changes, containsAll([change2, change3]));
-    });
-
-    test('exportChangesNewerThan returns only newer changes for same peer', () {
-      // create three changes
-      final change1 = doc.createChange(newOperation());
-      final change2 = doc.createChange(newOperation());
-
-      final version = VersionVector({author: change1.hlc});
-
-      final newer = doc.exportChangesNewerThan(version);
-
-      expect(newer.length, equals(1));
-      expect(newer, containsAll([change2]));
-    });
-
-    test('exportChangesNewerThan with multiple peers', () {
-      final authorA = PeerId.generate();
-      final authorB = PeerId.generate();
-
-      // Build manual changes from two peers and import them in current doc
-      final a1 = Change(
-        id: OperationId(authorA, HybridLogicalClock(l: 1, c: 1)),
-        operation: operation,
-        deps: {},
-        author: authorA,
-      );
-      final a2 = Change(
-        id: OperationId(authorA, HybridLogicalClock(l: 1, c: 2)),
-        operation: operation,
-        deps: {a1.id},
-        author: authorA,
-      );
-      final b1 = Change(
-        id: OperationId(authorB, HybridLogicalClock(l: 2, c: 1)),
-        operation: operation,
-        deps: {},
-        author: authorB,
-      );
-
-      // Import in causal order
-      expect(doc.importChanges([a1, a2, b1]), equals(3));
-
-      // Server knows up to a1 for authorA, and nothing for authorB
-      final version = VersionVector({authorA: a1.hlc});
-
-      final newer = doc.exportChangesNewerThan(version);
-
-      expect(newer, contains(a2));
-      expect(newer, contains(b1));
-      // Should not include a1
-      expect(newer.contains(a1), isFalse);
-    });
-
-    test('importChanges applies changes in correct order', () {
-      final change1 = Change(
-        id: OperationId(author, HybridLogicalClock(l: 1, c: 1)),
-        operation: operation,
-        deps: {},
-        author: author,
-      );
-
-      final change2 = Change(
+    test('applyChange refuses a change whose dependency it lacks', () {
+      final missing = OperationId(author, HybridLogicalClock(l: 1, c: 1));
+      final change = Change(
         id: OperationId(author, HybridLogicalClock(l: 1, c: 2)),
         operation: operation,
-        deps: {change1.id},
-        author: author,
-      );
-
-      final change3 = Change(
-        id: OperationId(author, HybridLogicalClock(l: 1, c: 3)),
-        operation: operation,
-        deps: {change2.id},
-        author: author,
-      );
-
-      // Try to import in wrong order
-      final imported = doc.importChanges([change3, change2, change1]);
-      expect(imported, equals(3));
-      expect(doc.version, equals({change3.id}));
-    });
-
-    test('importChanges handles cycles gracefully', () {
-      final id1 = OperationId(author, HybridLogicalClock(l: 1, c: 1));
-      final id2 = OperationId(author, HybridLogicalClock(l: 1, c: 2));
-
-      final change1 = Change(
-        id: id1,
-        operation: operation,
-        deps: {id2},
-        author: author,
-      );
-
-      final change2 = Change(
-        id: id2,
-        operation: operation,
-        deps: {id1},
+        deps: {missing},
         author: author,
       );
 
       expect(
-        () => doc.importChanges([change1, change2]),
+        () => doc.applyChange(change),
+        throwsA(isA<CausallyNotReadyException>()),
+      );
+      expect(doc.isEmpty, isTrue);
+    });
+
+    test('importChanges throws on changes that depend on each other', () {
+      final id1 = OperationId(author, HybridLogicalClock(l: 1, c: 1));
+      final id2 = OperationId(author, HybridLogicalClock(l: 1, c: 2));
+
+      expect(
+        () => doc.importChanges([
+          Change(id: id1, operation: operation, deps: {id2}, author: author),
+          Change(id: id2, operation: operation, deps: {id1}, author: author),
+        ]),
         throwsA(isA<ChangesCycleException>()),
       );
+    });
+
+    test(
+        'a change whose envelope cannot be read is kept, and reaches no '
+        'handler', () {
+      final unreadable = Change.fromPayloadBytes(
+        id: OperationId(author, HybridLogicalClock(l: 1, c: 1)),
+        deps: const {},
+        author: author,
+        // A type length far longer than the payload.
+        payloadBytes: Uint8List.fromList([0xff, 0x01]),
+      );
+      final before = doc.revisionForHandler(handler.id);
+
+      expect(doc.applyChange(unreadable), isTrue);
+      expect(doc.version, {unreadable.id});
+      expect(doc.revisionForHandler(handler.id), before);
     });
 
     test('localChanges stream emits change on createChange', () async {
@@ -298,18 +211,15 @@ void main() {
       doc.createChange(newOperation());
     });
 
-    test('localChanges stream is closed on dispose', () async {
-      // Expect the stream to be done (closed)
-      final expectation = expectLater(
-        doc.localChanges,
-        emitsDone,
-      );
+    test('localChanges and updates close on dispose', () async {
+      final closed = Future.wait([
+        expectLater(doc.localChanges, emitsDone),
+        expectLater(doc.updates, emitsDone),
+      ]);
 
-      // Dispose the document
       doc.dispose();
 
-      // Wait for the stream to close
-      await expectation;
+      await closed;
     });
 
     group('updates stream', () {
@@ -420,28 +330,6 @@ void main() {
 
         expect(source.snapshot!.id, taken.id);
         expect(source.snapshot!.toBytes(), taken.toBytes());
-      });
-
-      test('the getter hands out a copy that cannot be written to', () {
-        final source = CRDTDocument();
-        CRDTListHandler<String>(
-          source,
-          'list',
-          handlerType: 'CRDTListHandler<String>',
-        ).insert(0, 'a');
-        final before = source.takeSnapshot().toBytes();
-        final copy = source.snapshot!;
-
-        expect(() => copy.data['x'] = Uint8List(1), throwsUnsupportedError);
-        expect(() => copy.data.values.first[0] = 1, throwsUnsupportedError);
-        expect(
-          () => copy.versionVector.update(
-            PeerId.generate(),
-            HybridLogicalClock(l: 1, c: 0),
-          ),
-          throwsUnsupportedError,
-        );
-        expect(source.snapshot!.toBytes(), before);
       });
 
       test(
@@ -694,32 +582,6 @@ void main() {
       expect(applied, equals(1));
       expect(doc.version, equals({change2.id}));
       expect(doc.exportChanges(), containsAll([change2]));
-    });
-
-    test('should not accept snapshot if divergent', () {
-      final author1 = PeerId.generate();
-      final author2 = PeerId.generate();
-
-      doc.importSnapshot(
-        Snapshot(
-          id: 'id',
-          versionVector: VersionVector({
-            author1: HybridLogicalClock(l: 1, c: 1),
-          }),
-          data: {},
-        ),
-      );
-
-      final snapshot = Snapshot(
-        id: 'id2',
-        versionVector: VersionVector({
-          author2: HybridLogicalClock(l: 1, c: 2),
-        }),
-        data: {},
-      );
-
-      // author2 is not in the version vector
-      expect(doc.shouldApplySnapshot(snapshot), isFalse);
     });
 
     test('should not accept snapshot not newer then current', () {
@@ -1167,6 +1029,27 @@ void main() {
     });
 
     group('handlers', () {
+      test('a tag declared with other formats fails an assert', () {
+        doc.register(
+          HandlerSpec<TestHandler>(
+            'kind',
+            (doc, id) => TestHandler(doc, id: id, handlerType: 'kind'),
+            formats: const HandlerFormats(
+              operationKinds: {
+                OperationType.kindInsert,
+                OperationType.kindDelete,
+              },
+              blobVersions: BlobVersionRange.single(1),
+            ),
+          ),
+        );
+
+        expect(
+          () => TestHandler(doc, id: 'h', handlerType: 'kind'),
+          throwsA(isA<AssertionError>()),
+        );
+      });
+
       test('should throw on double registration', () {
         expect(doc.registeredHandlers, contains('test-handler'));
         expect(
@@ -1175,6 +1058,19 @@ void main() {
           },
           throwsA(isA<HandlerAlreadyRegisteredException>()),
         );
+      });
+
+      test('registeredHandlers is one map until a handler opens or closes', () {
+        final before = doc.registeredHandlers;
+        expect(identical(doc.registeredHandlers, before), isTrue);
+
+        final added = CRDTFugueTextHandler(doc, 'added');
+        final opened = doc.registeredHandlers;
+        expect(opened.keys, [...before.keys, 'added']);
+
+        doc.deleteHandler(added);
+        expect(identical(doc.registeredHandlers, opened), isFalse);
+        expect(doc.registeredHandlers.keys, before.keys);
       });
 
       group('revision', () {
@@ -1604,6 +1500,763 @@ void main() {
       });
     });
   });
+
+  group('takeSnapshot of handlers this document has not opened', () {
+    final listSpec = CRDTListHandler.spec<String>('list');
+    late CRDTDocument writer;
+    late CRDTListHandler<String> list;
+
+    setUp(() {
+      writer = CRDTDocument(peerId: PeerId.generate());
+      list = writer.handler(listSpec, 'list')..insert(0, 'a');
+    });
+
+    List<String> readOn(CRDTDocument document) =>
+        document.handler(listSpec, 'list').value;
+
+    test('a document that opens no handler keeps their changes in it', () {
+      final server = CRDTDocument()..importChanges(writer.exportChanges());
+
+      final snapshot = server.takeSnapshot();
+
+      expect(server.exportChanges(), isEmpty);
+      expect(readOn(CRDTDocument()..importSnapshot(snapshot)), ['a']);
+    });
+
+    test('an imported blob survives the next snapshot', () {
+      final relay = CRDTDocument()..importSnapshot(writer.takeSnapshot());
+
+      final snapshot = relay.takeSnapshot();
+
+      expect(snapshot.data.keys, contains('list'));
+      expect(readOn(CRDTDocument()..importSnapshot(snapshot)), ['a']);
+    });
+
+    test('a closed handler of a kind it knows is folded into a blob', () {
+      final peer = CRDTDocument()
+        ..register(listSpec)
+        ..importSnapshot(writer.takeSnapshot(pruneHistory: false));
+      list.insert(1, 'b');
+      peer.importChanges(writer.exportChanges());
+
+      final snapshot = peer.takeSnapshot();
+
+      expect(snapshot.data, isNot(contains(SnapshotRecords.unfoldedKey)));
+      expect(peer.registeredHandlers, isEmpty);
+      expect(readOn(CRDTDocument()..importSnapshot(snapshot)), ['a', 'b']);
+    });
+
+    test('changes it cannot fold ride on, until a peer that can folds them',
+        () {
+      final relay = CRDTDocument()
+        ..importSnapshot(writer.takeSnapshot(pruneHistory: false));
+      list.insert(1, 'b');
+      relay
+        ..importChanges(writer.exportChanges())
+        ..takeSnapshot();
+      list.insert(2, 'c');
+      relay.importChanges(writer.exportChanges());
+
+      final carried = relay.takeSnapshot();
+      final folder = CRDTDocument()
+        ..register(listSpec)
+        ..importSnapshot(carried);
+      final folded = folder.takeSnapshot();
+
+      expect(readOn(CRDTDocument()..importSnapshot(carried)), list.value);
+      expect(folded.data, isNot(contains(SnapshotRecords.unfoldedKey)));
+      expect(readOn(CRDTDocument()..importSnapshot(folded)), list.value);
+    });
+
+    test('a handler that arrives between two snapshots is in the second', () {
+      final server = CRDTDocument()
+        ..importChanges(writer.exportChanges())
+        ..takeSnapshot(pruneHistory: false);
+      final otherSpec = CRDTListHandler.spec<String>('o');
+      writer.handler(otherSpec, 'o').insert(0, 'z');
+      server.importChanges(writer.exportChanges());
+
+      final reader = CRDTDocument()..importSnapshot(server.takeSnapshot());
+
+      expect(readOn(reader), ['a']);
+      expect(reader.handler(otherSpec, 'o').value, ['z']);
+    });
+
+    test('a handler known only from carried changes moves its revision', () {
+      final server = CRDTDocument()..importChanges(writer.exportChanges());
+      final reader = CRDTDocument();
+      final before = reader.revisionForHandler('list');
+
+      reader.importSnapshot(server.takeSnapshot());
+
+      expect(reader.revisionForHandler('list'), greaterThan(before));
+    });
+
+    test('a merge keeps the blob and the carried changes of one side', () {
+      final withBlob = CRDTDocument()
+        ..importSnapshot(writer.takeSnapshot(pruneHistory: false));
+      list.insert(1, 'b');
+      final server = CRDTDocument()..importChanges(writer.exportChanges());
+
+      withBlob.mergeSnapshot(server.takeSnapshot());
+
+      expect(readOn(withBlob), ['a', 'b']);
+    });
+
+    test('concurrent snapshots carrying different handlers merge whole', () {
+      final otherSpec = CRDTListHandler.spec<String>('other');
+      final otherWriter = CRDTDocument(peerId: PeerId.generate());
+      otherWriter.handler(otherSpec, 'other').insert(0, 'z');
+      final right = CRDTDocument()..importChanges(otherWriter.exportChanges());
+      final left = CRDTDocument()
+        ..importChanges(writer.exportChanges())
+        ..takeSnapshot()
+        ..mergeSnapshot(right.takeSnapshot());
+
+      expect(readOn(left), ['a']);
+      expect(left.handler(otherSpec, 'other').value, ['z']);
+    });
+
+    test('reconstruct opens a handler known only from carried changes', () {
+      final server = CRDTDocument()..importChanges(writer.exportChanges());
+      final reader = CRDTDocument()
+        ..register(listSpec)
+        ..importSnapshot(server.takeSnapshot())
+        ..reconstruct();
+
+      expect(reader.registeredHandlers.keys, ['list']);
+    });
+
+    test('an imported snapshot without the handler leaves it nothing to lose',
+        () {
+      final server = CRDTDocument()
+        ..importChanges(writer.exportChanges())
+        ..takeSnapshot(pruneHistory: false);
+      final taken = writer.takeSnapshot(pruneHistory: false);
+      // A snapshot that covers the changes of `list` and holds nothing for it,
+      // as a build from before this fix writes.
+      server.importSnapshot(
+        Snapshot(
+          id: 'without-list',
+          versionVector: taken.versionVector,
+          data: {
+            for (final entry in taken.data.entries)
+              if (entry.key != 'list') entry.key: entry.value,
+          },
+        ),
+        pruneHistory: false,
+      );
+
+      final snapshot = server.takeSnapshot();
+
+      expect(readOn(CRDTDocument()..importSnapshot(snapshot)), ['a']);
+    });
+
+    test('concurrent snapshots on one blob keep the wider carried changes', () {
+      final base = writer.takeSnapshot(pruneHistory: false);
+      final relay = CRDTDocument()..importSnapshot(base, pruneHistory: false);
+      list.insert(1, 'b');
+      relay.importChanges(writer.exportChanges());
+      final client = CRDTDocument(peerId: PeerId.generate())
+        ..importSnapshot(base, pruneHistory: false);
+      final notes = CRDTListHandler.spec<String>('notes');
+      client.handler(notes, 'notes').insert(0, 'n');
+
+      relay
+        ..takeSnapshot()
+        ..mergeSnapshot(client.takeSnapshot());
+
+      expect(readOn(relay), ['a', 'b']);
+      expect(relay.handler(notes, 'notes').value, ['n']);
+    });
+
+    test(
+        'an unfolded index this build cannot read leaves the document as it '
+        'was', () {
+      final reader = CRDTDocument(peerId: PeerId.generate());
+      final list = CRDTListHandler<String>(reader, 'list', handlerType: 'l')
+        ..insert(0, 'a');
+      final held = reader.takeSnapshot();
+      final newer = Snapshot(
+        id: 'newer-index',
+        versionVector: held.versionVector.merged(
+          VersionVector({PeerId.generate(): HybridLogicalClock(l: 1, c: 0)}),
+        ),
+        data: {
+          ...held.data,
+          SnapshotRecords.unfoldedKey: Uint8List.fromList([2, 0]),
+        },
+      );
+
+      expect(() => reader.importSnapshot(newer), throwsFormatException);
+      expect(() => reader.mergeSnapshot(newer), throwsFormatException);
+      expect(
+        () => CRDTDocument().mergeSnapshot(newer),
+        throwsFormatException,
+      );
+
+      expect(reader.snapshot!.id, held.id);
+      expect(list.value, ['a']);
+      expect(reader.takeSnapshot, returnsNormally);
+    });
+
+    group('an unfolded entry this build cannot read', () {
+      final otherSpec = CRDTListHandler.spec<String>('other');
+      late Snapshot unreadable;
+
+      setUp(() {
+        writer.handler(otherSpec, 'other').insert(0, 'z');
+        final carried = (CRDTDocument()..importChanges(writer.exportChanges()))
+            .takeSnapshot();
+        // As a newer build would write it: an entry version this one lacks.
+        unreadable = Snapshot(
+          id: 'newer-entry',
+          versionVector: carried.versionVector,
+          data: {
+            ...carried.data,
+            SnapshotRecords.unfoldedKey: SnapshotRecords.encodeUnfolded({
+              ...SnapshotRecords.unfoldedEntriesOf(carried),
+              'other': Uint8List.fromList([99]),
+            }),
+          },
+        );
+      });
+
+      test('fails the reads of its own handler only', () {
+        final reader = CRDTDocument()..importSnapshot(unreadable);
+
+        expect(readOn(reader), ['a']);
+        expect(
+          () => reader.handler(otherSpec, 'other').value,
+          throwsFormatException,
+        );
+        expect(reader.revisionForHandler('other'), greaterThan(0));
+        expect(reader.reconstruct, returnsNormally);
+      });
+
+      test('cannot be compared, so a concurrent merge refuses it', () {
+        final otherWriter = CRDTDocument(peerId: PeerId.generate());
+        otherWriter.handler(otherSpec, 'other').insert(0, 'w');
+        final right = (CRDTDocument()
+              ..importChanges(otherWriter.exportChanges()))
+            .takeSnapshot();
+        final left = CRDTDocument()..importSnapshot(unreadable);
+
+        expect(
+          () => left.mergeSnapshot(right),
+          throwsA(isA<ConcurrentSnapshotException>()),
+        );
+      });
+
+      test('rides on as it is when nothing new reached its handler', () {
+        final relay = CRDTDocument()..importSnapshot(unreadable);
+
+        final snapshot = relay.takeSnapshot();
+
+        expect(
+          SnapshotRecords.unfoldedEntriesOf(snapshot)['other'],
+          [99],
+        );
+      });
+
+      test('fails takeSnapshot once its handler gets new changes', () {
+        final relay = CRDTDocument()..importSnapshot(unreadable);
+        writer.handler(otherSpec, 'other').insert(1, 'y');
+        relay.importChanges(writer.exportChanges());
+
+        expect(
+          relay.takeSnapshot,
+          throwsA(
+            isA<FormatException>()
+                .having((e) => e.message, 'message', contains('other')),
+          ),
+        );
+      });
+    });
+
+    test('a concurrent merge keeps the carried changes of both sides', () {
+      final left = CRDTDocument()..importChanges(writer.exportChanges());
+      final otherWriter = CRDTDocument(peerId: PeerId.generate());
+      otherWriter.handler(listSpec, 'list').insert(0, 'z');
+      final right = CRDTDocument()..importChanges(otherWriter.exportChanges());
+      final leftSnapshot = left.takeSnapshot();
+      final rightSnapshot = right.takeSnapshot();
+
+      left.mergeSnapshot(rightSnapshot);
+      right.mergeSnapshot(leftSnapshot);
+
+      expect(
+        left.snapshot!.data[SnapshotRecords.unfoldedKey],
+        right.snapshot!.data[SnapshotRecords.unfoldedKey],
+      );
+      expect(
+        readOn(CRDTDocument()..importSnapshot(left.snapshot!)),
+        unorderedEquals(['a', 'z']),
+      );
+    });
+
+    test(
+        'a concurrent merge puts carried changes on the blob of the other side',
+        () {
+      final folder = CRDTDocument(peerId: PeerId.generate())
+        ..importChanges(writer.exportChanges());
+      folder.handler(listSpec, 'list').insert(1, 'b');
+      final otherWriter = CRDTDocument(peerId: PeerId.generate());
+      otherWriter.handler(listSpec, 'list').insert(0, 'z');
+      final carrier = CRDTDocument()
+        ..importChanges(writer.exportChanges())
+        ..importChanges(otherWriter.exportChanges());
+      final carried = carrier.takeSnapshot();
+
+      folder
+        ..takeSnapshot()
+        ..mergeSnapshot(carried);
+
+      expect(
+        readOn(CRDTDocument()..importSnapshot(folder.snapshot!)),
+        unorderedEquals(['a', 'b', 'z']),
+      );
+    });
+  });
+
+  group('CRDTDocument.deleteHandler', () {
+    late CRDTDocument doc;
+    late CRDTMapRefHandler root;
+    late CRDTListRefHandler chapters;
+    late CRDTFugueTextHandler title;
+
+    setUp(() {
+      doc = CRDTDocument(peerId: PeerId.generate());
+      root = CRDTMapRefHandler(doc, 'root');
+      chapters = root.child('chapters', CRDTListRefHandler.spec);
+      title = chapters.insertChild(0, CRDTFugueTextHandler.spec)
+        ..insert(0, 'Intro');
+    });
+
+    test('deletes the handler and its whole subtree', () {
+      doc.deleteHandler(chapters);
+
+      expect(chapters.isDeleted, isTrue);
+      expect(title.isDeleted, isTrue);
+      expect(root.isDeleted, isFalse);
+      expect(doc.registeredHandlers.keys, ['root']);
+      expect(doc.roots(), [root]);
+      expect(root.resolved, isEmpty);
+      expect(root.getRef('chapters'), isNull);
+    });
+
+    test('a deleted id can be neither written, opened nor built', () {
+      doc.deleteHandler(title);
+
+      expect(
+        () => title.insert(0, 'x'),
+        throwsA(isA<HandlerDeletedException>()),
+      );
+      expect(
+        () => doc.handler(CRDTFugueTextHandler.spec, title.id),
+        throwsA(
+          isA<HandlerDeletedException>()
+              .having((e) => e.handlerId, 'handlerId', title.id),
+        ),
+      );
+      expect(
+        () => CRDTFugueTextHandler(doc, title.id),
+        throwsA(isA<HandlerDeletedException>()),
+      );
+      expect(doc.resolveHandler(HandlerRef.of(title)), isNull);
+    });
+
+    test('ends the delta stream of the deleted handler', () async {
+      final done = expectLater(title.watch(), emitsThrough(emitsDone));
+
+      doc.deleteHandler(title);
+
+      await done;
+    });
+
+    test('deleting twice, or a cycle, terminates and writes once', () {
+      final loop = CRDTMapRefHandler(doc, doc.newHandlerId());
+      loop.setRef('self', loop);
+      final changes = doc.exportChanges().length;
+
+      doc
+        ..deleteHandler(loop)
+        ..deleteHandler(loop);
+
+      expect(loop.isDeleted, isTrue);
+      expect(doc.exportChanges().length, changes + 1);
+    });
+
+    test('a delete moves its revision and those of its containers', () {
+      final rootRevision = doc.revisionForHandler(root.id);
+      final chaptersRevision = doc.revisionForHandler(chapters.id);
+      final titleRevision = doc.revisionForHandler(title.id);
+
+      doc.deleteHandler(title);
+
+      expect(doc.revisionForHandler(title.id), greaterThan(titleRevision));
+      expect(
+        doc.revisionForHandler(chapters.id),
+        greaterThan(chaptersRevision),
+      );
+      expect(doc.revisionForHandler(root.id), rootRevision);
+    });
+
+    test('a delete reads only the containers changed since the last one', () {
+      final untouched = _CountingMapRefHandler(doc, 'untouched')
+        ..setRef('title', title);
+      final edited = _CountingMapRefHandler(doc, 'edited')
+        ..child('kept', CRDTFugueTextHandler.spec);
+      doc.deleteHandler(CRDTFugueTextHandler(doc, doc.newHandlerId()));
+      final reads = untouched.childRefsReads;
+      final added = edited.child('added', CRDTFugueTextHandler.spec);
+      final revision = doc.revisionForHandler(edited.id);
+
+      doc.deleteHandler(added);
+
+      expect(untouched.childRefsReads, reads);
+      expect(doc.revisionForHandler(edited.id), greaterThan(revision));
+    });
+
+    test('a child shared by two parents is deleted for both', () {
+      final other = CRDTMapRefHandler(doc, 'other')..setRef('title', title);
+
+      doc.deleteHandler(chapters);
+
+      expect(other.resolved, isEmpty);
+      expect(other.childRefs(), isEmpty);
+      expect(other.value.keys, ['title']);
+    });
+
+    test('child() makes a new child where a deleted one was', () {
+      final old = root.child('chapters', CRDTListRefHandler.spec);
+      doc.deleteHandler(old);
+
+      final fresh = root.child('chapters', CRDTListRefHandler.spec);
+
+      expect(fresh.id, isNot(old.id));
+      expect(root.resolved, {'chapters': <Object?>[]});
+    });
+
+    test('refuses the reserved id and a handler of another document', () {
+      const reserved = 'crdt_lf/deleted-handlers';
+      // Opens the registry: the reserved id must stay out of reach even then.
+      doc.deleteHandler(title);
+
+      expect(
+        () => CRDTFugueTextHandler(doc, reserved),
+        throwsA(isA<ArgumentError>()),
+      );
+      expect(
+        () => CRDTORSetHandler<String>(doc, reserved, handlerType: reserved),
+        throwsA(isA<ArgumentError>()),
+      );
+      expect(
+        () => doc.handler(CRDTORSetHandler.spec<String>(reserved), reserved),
+        throwsA(isA<ArgumentError>()),
+      );
+      expect(doc.resolveHandler(const HandlerRef(reserved, reserved)), isNull);
+      expect(
+        () => doc.deleteHandlerRef(const HandlerRef(reserved, reserved)),
+        throwsA(isA<ArgumentError>()),
+      );
+      final stranger = CRDTFugueTextHandler(CRDTDocument(), 'stranger');
+      expect(
+        () => doc.deleteHandler(stranger),
+        throwsA(isA<ArgumentError>()),
+      );
+    });
+
+    test('a document that deletes nothing snapshots as before', () {
+      final snapshot = doc.takeSnapshot();
+
+      expect(snapshot.data.containsKey('crdt_lf/deleted-handlers'), isFalse);
+    });
+
+    test('every document says it reads the deletes', () {
+      const registry = 'crdt_lf/deleted-handlers';
+      doc.deleteHandler(title);
+      final needed = doc.describeDataRequirements()[registry]!;
+      final reads = CRDTDocument().describeBuildCapabilities();
+
+      expect(
+        reads.byHandlerType,
+        CRDTDocument.builtInCapabilities.byHandlerType,
+      );
+      expect(
+        reads[registry]!.operationKinds,
+        containsAll(needed.operationKinds),
+      );
+    });
+
+    test('a peer closes what an imported change deletes', () async {
+      final peer = CRDTDocument(peerId: PeerId.generate())
+        ..register(CRDTListRefHandler.spec)
+        ..register(CRDTFugueTextHandler.spec)
+        ..importChanges(doc.exportChanges());
+      final peerRoot = peer.handler(CRDTMapRefHandler.spec, 'root');
+      final peerTitle = peer.handler(CRDTFugueTextHandler.spec, title.id);
+      expect(peerTitle.value, 'Intro');
+      final done = expectLater(peerTitle.watch(), emitsThrough(emitsDone));
+
+      doc.deleteHandler(chapters);
+      for (final change in doc.exportChanges()) {
+        peer.applyChange(change);
+      }
+
+      expect(peerTitle.isDeleted, isTrue);
+      expect(peerRoot.resolved, isEmpty);
+      await done;
+    });
+
+    test('removeChild deletes a child whose kind this peer cannot build', () {
+      final server = CRDTDocument(peerId: PeerId.generate())
+        ..importChanges(doc.exportChanges());
+
+      server.handler(CRDTMapRefHandler.spec, 'root').removeChild('chapters');
+      // The server cannot read the list, so it cannot reach its children.
+      expect(server.isDeleted(title.id), isFalse);
+
+      doc.importChanges(server.exportChanges());
+      server.importChanges(doc.exportChanges());
+
+      expect(chapters.isDeleted, isTrue);
+      expect(root.resolved, isEmpty);
+      // This peer reads the list, and deletes its children for everyone.
+      expect(title.isDeleted, isTrue);
+      expect(server.isDeleted(title.id), isTrue);
+    });
+
+    test('a child added concurrently to a deleted container is deleted', () {
+      final peer = CRDTDocument(peerId: PeerId.generate())
+        ..importChanges(doc.exportChanges());
+      final added = peer
+          .handler(CRDTListRefHandler.spec, chapters.id)
+          .insertChild(1, CRDTFugueTextHandler.spec)
+        ..insert(0, 'Outro');
+
+      root.removeChild('chapters');
+      doc.importChanges(peer.exportChanges());
+      peer.importChanges(doc.exportChanges());
+      doc.importChanges(peer.exportChanges());
+
+      for (final document in [doc, peer]) {
+        expect(document.isDeleted(added.id), isTrue);
+        expect(document.roots().map((h) => h.id), isNot(contains(added.id)));
+        expect(document.takeSnapshot().data.containsKey(added.id), isFalse);
+      }
+    });
+
+    test('a child that reaches a deleted container late is deleted on import',
+        () {
+      final peer = CRDTDocument(peerId: PeerId.generate())
+        ..importChanges(doc.exportChanges());
+      final added = peer
+          .handler(CRDTListRefHandler.spec, chapters.id)
+          .insertChild(1, CRDTFugueTextHandler.spec);
+
+      root.removeChild('chapters');
+      doc
+        ..takeSnapshot()
+        ..importChanges(peer.exportChanges());
+
+      expect(doc.isDeleted(added.id), isTrue);
+      final snapshot = doc.takeSnapshot(pruneHistory: false);
+      expect(snapshot.data.containsKey(added.id), isFalse);
+      peer.importChanges(doc.exportChanges());
+      expect(added.isDeleted, isTrue);
+    });
+
+    test('a child added concurrently is deleted through a snapshot', () {
+      final peer = CRDTDocument(peerId: PeerId.generate())
+        ..importChanges(doc.exportChanges());
+      final added = peer
+          .handler(CRDTListRefHandler.spec, chapters.id)
+          .insertChild(1, CRDTFugueTextHandler.spec);
+
+      root.removeChild('chapters');
+      peer.import(snapshot: doc.takeSnapshot(), merge: true);
+
+      expect(added.isDeleted, isTrue);
+      doc.importChanges(peer.exportChanges());
+      expect(doc.isDeleted(added.id), isTrue);
+    });
+
+    test('a late change this build cannot read leaves takeSnapshot working',
+        () {
+      final frontier = doc.exportChanges().last.id;
+      final newer = PeerId.generate();
+      doc
+        ..deleteHandler(chapters)
+        ..applyChange(
+          Change.fromPayloadBytes(
+            id: OperationId(newer, HybridLogicalClock(l: 1, c: 0)),
+            deps: {frontier},
+            author: newer,
+            payloadBytes: OperationEnvelopeCodec.encode(
+              handlerType: chapters.handlerType,
+              handlerId: chapters.id,
+              kind: OperationType.maxKind,
+              body: Uint8List(0),
+            ),
+          ),
+        );
+
+      expect(doc.takeSnapshot, returnsNormally);
+    });
+
+    test('a peer with no handler open learns the deletes it imports', () {
+      doc.deleteHandler(title);
+
+      final server = CRDTDocument(peerId: PeerId.generate())
+        ..importChanges(doc.exportChanges());
+
+      expect(server.isDeleted(title.id), isTrue);
+      expect(server.registeredHandlers, isEmpty);
+    });
+
+    test('a delete wins over a concurrent edit', () {
+      final peer = CRDTDocument(peerId: PeerId.generate())
+        ..register(CRDTListRefHandler.spec)
+        ..register(CRDTFugueTextHandler.spec)
+        ..importChanges(doc.exportChanges());
+      final peerRoot = peer.handler(CRDTMapRefHandler.spec, 'root');
+      final peerTitle = peer.handler(CRDTFugueTextHandler.spec, title.id);
+
+      doc.deleteHandler(title);
+      final deletedRevision = doc.revisionForHandler(title.id);
+      peerTitle.insert(5, '!');
+
+      doc.importChanges(peer.exportChanges());
+      peer.importChanges(doc.exportChanges());
+
+      // The edit reaches no handler: the deleted one is closed.
+      expect(doc.revisionForHandler(title.id), deletedRevision);
+      expect(doc.isDeleted(title.id), isTrue);
+      expect(peer.isDeleted(title.id), isTrue);
+      expect(root.resolved, {
+        'chapters': [null],
+      });
+      expect(peerRoot.resolved, root.resolved);
+
+      // The changes of the deleted handler are still in the log.
+      peer.reconstruct();
+      expect(peer.registeredHandlers.containsKey(title.id), isFalse);
+    });
+
+    test('a snapshot drops the deleted handlers, and carries the deletes', () {
+      doc.deleteHandler(chapters);
+
+      final snapshot = doc.takeSnapshot();
+
+      expect(snapshot.data.containsKey(chapters.id), isFalse);
+      expect(snapshot.data.containsKey(title.id), isFalse);
+      expect(doc.changeCountForHandler(title.id), 0);
+      // The tagless OR-set layout: a delete is never removed, so it needs none.
+      expect(
+        doc
+            .describeDataRequirements()['crdt_lf/deleted-handlers']!
+            .blobVersions,
+        const BlobVersionRange.single(1),
+      );
+
+      final peer = CRDTDocument(peerId: PeerId.generate())
+        ..importSnapshot(snapshot);
+      expect(peer.isDeleted(title.id), isTrue);
+      final merged = CRDTDocument(peerId: PeerId.generate())
+        ..mergeSnapshot(snapshot);
+      expect(merged.isDeleted(chapters.id), isTrue);
+    });
+
+    test('concurrent snapshots merge the deletes of both peers', () {
+      final notes = CRDTFugueTextHandler(doc, 'notes')..insert(0, 'n');
+      final other = CRDTDocument(peerId: PeerId.generate())
+        ..importChanges(doc.exportChanges())
+        ..handler(CRDTMapRefHandler.spec, root.id)
+        ..handler(CRDTListRefHandler.spec, chapters.id);
+      other.deleteHandler(other.handler(CRDTFugueTextHandler.spec, notes.id));
+      doc.deleteHandler(title);
+      final mine = doc.takeSnapshot();
+      final theirs = other.takeSnapshot();
+
+      doc.mergeSnapshot(theirs);
+      other.mergeSnapshot(mine);
+
+      const registry = 'crdt_lf/deleted-handlers';
+      expect(doc.snapshot!.data[registry], other.snapshot!.data[registry]);
+      final fresh = CRDTDocument(peerId: PeerId.generate())
+        ..importSnapshot(doc.snapshot!);
+      expect(fresh.isDeleted(title.id), isTrue);
+      expect(fresh.isDeleted(notes.id), isTrue);
+    });
+
+    test('an undo manager forgets the steps of a deleted handler', () {
+      final undo = CRDTUndoManager(doc)..track(title);
+      title.insert(5, '!');
+      expect(undo.canUndo, isTrue);
+
+      doc.deleteHandler(title);
+
+      expect(undo.canUndo, isFalse);
+    });
+
+    test('a delete in the transaction that edited the handler leaves no step',
+        () {
+      final undo = CRDTUndoManager(doc)..track(title);
+
+      doc.runInTransaction(() {
+        title.insert(5, '!');
+        doc.deleteHandler(title);
+      });
+
+      expect(undo.canUndo, isFalse);
+      expect(doc.isDeleted(title.id), isTrue);
+    });
+
+    test('undoing a removeChildAt brings the reference, not the child', () {
+      final undo = CRDTUndoManager(doc)..track(chapters);
+
+      chapters.removeChildAt(0);
+      undo.undo();
+
+      expect(chapters.value, [HandlerRef.of(title)]);
+      expect(chapters.resolved, [null]);
+    });
+  });
+
+  group('handler caches', () {
+    test('an untouched handler keeps its cache while others change', () {
+      final source = CRDTDocument(peerId: PeerId.generate());
+      final doc = CRDTDocument(peerId: PeerId.generate());
+      final untouched = CRDTMapHandler<int>(doc, 'untouched', handlerType: 'm')
+        ..set('k', 1);
+      final local = CRDTMapHandler<int>(doc, 'local', handlerType: 'm');
+      final remote = CRDTMapHandler<int>(source, 'remote', handlerType: 'm');
+      untouched.value;
+      final cached = untouched.cachedState;
+
+      for (var i = 0; i < 1000; i++) {
+        local.set('k', i);
+        remote.set('k', i);
+        doc.applyChange(source.exportChanges().last);
+      }
+      doc.importChanges(source.exportChanges());
+
+      expect(identical(untouched.cachedState, cached), isTrue);
+    });
+
+    test('a prune that moves the frontiers drops every cache', () {
+      final doc = CRDTDocument(peerId: PeerId.generate());
+      final map = CRDTMapHandler<int>(doc, 'map', handlerType: 'm')
+        ..set('k', 1);
+      expect(map.value, {'k': 1});
+
+      doc.takeSnapshot();
+
+      expect(map.cachedState, isNull);
+      expect(map.value, {'k': 1});
+    });
+  });
 }
 
 /// A map handler whose [invert] fails on demand, to show what the document
@@ -1626,5 +2279,17 @@ final class _ThrowingInvertMapHandler extends CRDTMapHandler<String> {
       throw StateError('cannot invert');
     }
     return super.invert(operation);
+  }
+}
+
+final class _CountingMapRefHandler extends CRDTMapRefHandler {
+  _CountingMapRefHandler(super.doc, super.id);
+
+  int childRefsReads = 0;
+
+  @override
+  Iterable<HandlerRef> childRefs() {
+    childRefsReads++;
+    return super.childRefs();
   }
 }

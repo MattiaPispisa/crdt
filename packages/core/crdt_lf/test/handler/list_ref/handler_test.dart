@@ -70,6 +70,29 @@ void main() {
       ]);
       expect(list.toString(), contains('CRDTListRefHandler'));
     });
+
+    test('removeChildAt removes the element and deletes the child', () {
+      final child = list.insertChild(0, CRDTFugueTextHandler.spec);
+
+      list.removeChildAt(0);
+
+      expect(list.value, isEmpty);
+      expect(child.isDeleted, isTrue);
+      expect(() => list.removeChildAt(0), throwsRangeError);
+    });
+
+    test('resolved keeps the positions removeChildAt counts', () {
+      final a = list.insertChild(0, CRDTFugueTextHandler.spec)..insert(0, 'a');
+      final b = list.insertChild(1, CRDTFugueTextHandler.spec);
+      final c = list.insertChild(2, CRDTFugueTextHandler.spec)..insert(0, 'c');
+      doc.deleteHandler(b);
+
+      expect(list.resolved, ['a', null, 'c']);
+      list.removeChildAt(2);
+
+      expect(c.isDeleted, isTrue);
+      expect(a.isDeleted, isFalse);
+    });
   });
 
   group('CRDTListRefHandler.insertChild', () {

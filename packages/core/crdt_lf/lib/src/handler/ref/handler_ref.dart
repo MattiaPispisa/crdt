@@ -77,8 +77,8 @@ abstract class ContainerHandler {
   /// materialization and root discovery).
   Iterable<HandlerRef> childRefs();
 
-  /// Resolves this handler's subtree to plain Dart values, replacing each
-  /// reference with the resolved value of the child handler.
+  /// Resolves this handler's subtree, replacing each reference with the
+  /// resolved value of the child handler (see [nestedValueOf]).
   ///
   /// [visiting] carries the set of handler ids already on the current
   /// resolution path; a reference whose id is already in [visiting] is a cycle
@@ -102,8 +102,29 @@ T? typedRef<T extends Handler<dynamic>>(Handler<dynamic>? reference) {
   return reference is T ? reference : null;
 }
 
-/// Resolves [handler] to a plain value: recurses through [ContainerHandler]s
-/// and reads `value` from the built-in leaf handlers (text, list, map, ...).
+/// Resolves [ref] to a nested value through [doc], with [nestedValueOf].
+///
+/// [visiting] is the set of handler ids on the current resolution path, as in
+/// [ContainerHandler.toNested]. Returns `null` for a reference that closes a
+/// cycle, or that [BaseCRDTDocument.resolveHandler] cannot resolve.
+Object? resolveNestedRef(
+  BaseCRDTDocument doc,
+  HandlerRef ref,
+  Set<String> visiting,
+) {
+  if (visiting.contains(ref.id)) {
+    return null;
+  }
+  final child = doc.resolveHandler(ref);
+  return child == null ? null : nestedValueOf(child, {...visiting, ref.id});
+}
+
+/// Resolves [handler] to a nested value: recurses through
+/// [ContainerHandler]s and returns the `value` of a built-in leaf handler
+/// (text, list, map, aggregate, ...) as is.
+///
+/// A leaf value keeps its own type: a `Set`, a custom `T`, an aggregate
+/// state. The result is JSON-safe only when every leaf value is.
 ///
 /// Container handlers are checked first, so a container that also extends a
 /// leaf handler (e.g. [CRDTMapRefHandler] over [CRDTMapHandler]) resolves
@@ -138,6 +159,9 @@ Object? nestedValueOf(Handler<dynamic> handler, Set<String> visiting) {
     return handler.value;
   }
   if (handler is CRDTORMapHandler<dynamic, dynamic>) {
+    return handler.value;
+  }
+  if (handler is CRDTAggregateHandler<Object, dynamic>) {
     return handler.value;
   }
   return null;

@@ -288,5 +288,26 @@ void main() {
         expect(store.changeCountForHandler(handler.id), equals(1));
       });
     });
+
+    test('handlerIds names every handler with a change, as changes come and go',
+        () {
+      final other = TestHandler(handler.doc, id: 'other');
+      final otherChange = Change(
+        id: OperationId(author, HybridLogicalClock(l: 1, c: 4)),
+        operation: TestOperation.fromHandler(other),
+        deps: {change3.id},
+        author: author,
+      );
+      expect(store.handlerIds, isEmpty);
+
+      store.addChange(change1);
+      expect(store.handlerIds, [handler.id]);
+
+      store.addChange(otherChange);
+      expect(store.handlerIds, unorderedEquals([handler.id, 'other']));
+
+      store.prune(VersionVector({author: change1.hlc}));
+      expect(store.handlerIds, ['other']);
+    });
   });
 }

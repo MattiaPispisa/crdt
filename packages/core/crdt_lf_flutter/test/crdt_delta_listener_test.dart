@@ -285,5 +285,24 @@ void main() {
       expect(seen, hasLength(1));
       expect(list.value, ['mine', 'theirs']);
     });
+
+    testWidgets('renders its child over a handler already deleted',
+        (tester) async {
+      doc.deleteHandler(
+        CRDTListHandler<String>(
+          doc,
+          'todos',
+          handlerType: 'CRDTListHandler<String>',
+        ),
+      );
+      var builds = 0;
+
+      await tester.pumpWidget(
+        host(projection: [], resets: [], onBuild: () => builds++),
+      );
+
+      expect(builds, 1);
+      expect(tester.takeException(), isNull);
+    });
   });
 }

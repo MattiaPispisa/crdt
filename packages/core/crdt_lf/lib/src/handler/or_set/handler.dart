@@ -1,3 +1,4 @@
+import 'dart:collection';
 import 'dart:typed_data';
 
 import 'package:crdt_lf/crdt_lf.dart';
@@ -41,7 +42,7 @@ base class CRDTORSetHandler<T> extends Handler<ORSetState<T>>
     String id, {
     required String handlerType,
     ValueCodec<T>? valueCodec,
-  }) : this._fromSpec(
+  }) : this.fromSpec(
           doc,
           id,
           spec: spec<T>(handlerType, valueCodec: valueCodec),
@@ -50,9 +51,13 @@ base class CRDTORSetHandler<T> extends Handler<ORSetState<T>>
 
   /// Builds one of a kind stated in full, instead of named by a tag.
   ///
-  /// Private: the unnamed constructor is the way in, and it makes the spec from
-  /// the tag. Nothing outside this file builds one of these another way.
-  CRDTORSetHandler._fromSpec(
+  /// The hook for a subclass that is **its own kind** — a container built on
+  /// this handler, say. It passes its own spec up rather than letting this
+  /// class make one from a tag, which would name this class and leave a peer
+  /// rebuilding the reference with the wrong one.
+  ///
+  /// A plain use wants the unnamed constructor: it makes the spec for you.
+  CRDTORSetHandler.fromSpec(
     super.doc,
     this._id, {
     required super.spec,
@@ -106,10 +111,11 @@ base class CRDTORSetHandler<T> extends Handler<ORSetState<T>>
     doc.registerOperation(operation);
   }
 
-  /// Returns the current set value computed from changes and snapshot.
+  /// The current set.
   ///
-  /// Every read builds a fresh set, so the caller owns what it gets back and
-  /// can keep it.
+  /// {@macro collection_value}
+  ///
+  /// {@macro fixed_value}
   @override
   Set<T> get value {
     return _cachedOrComputedState()._state;
@@ -126,7 +132,11 @@ base class CRDTORSetHandler<T> extends Handler<ORSetState<T>>
   }
 
   /// Returns whether the set contains [value].
-  bool contains(T element) => value.contains(element);
+  bool contains(T element) {
+    final state = _cachedOrComputedState();
+    return state._live.containsKey(element) ||
+        state._snapshotOnly.contains(element);
+  }
 
   /// {@macro generic_handler_spec}
   static HandlerSpec<CRDTORSetHandler<T>> spec<T>(
@@ -271,6 +281,7 @@ base class CRDTORSetHandler<T> extends Handler<ORSetState<T>>
     required ORSetState<T> state,
     required Operation operation,
   }) {
+    state._frozen = null;
     if (operation is _ORSetAddOperation<T>) {
       _tagStateAdd(
         state: state,
@@ -490,6 +501,10 @@ class ORSetState<T> {
   /// The tombstones
   final Set<OperationId> _tombstones;
 
+  /// The value handed out, built once per state; dropped by every change.
+  Set<T>? _frozen;
+
   /// The state of the OR-Set
-  Set<T> get _state => <T>{..._live.keys, ..._snapshotOnly};
+  Set<T> get _state =>
+      _frozen ??= UnmodifiableSetView(<T>{..._live.keys, ..._snapshotOnly});
 }

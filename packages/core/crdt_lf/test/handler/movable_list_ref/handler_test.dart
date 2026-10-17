@@ -102,5 +102,31 @@ void main() {
       expect(slidesA.resolved.length, 2);
       expect(slidesA.resolved, ['one-edited', 'zero']);
     });
+
+    test('removeChildAt removes the element and deletes the child', () {
+      final child = CRDTFugueTextHandler(doc, doc.newHandlerId());
+      slides
+        ..insertRef(0, child)
+        ..removeChildAt(0);
+
+      expect(slides.value, isEmpty);
+      expect(child.isDeleted, isTrue);
+      expect(() => slides.removeChildAt(-1), throwsRangeError);
+    });
+
+    test('resolved keeps the positions removeChildAt counts', () {
+      final a = slides.insertChild(0, CRDTFugueTextHandler.spec)
+        ..insert(0, 'a');
+      final b = slides.insertChild(1, CRDTFugueTextHandler.spec);
+      final c = slides.insertChild(2, CRDTFugueTextHandler.spec)
+        ..insert(0, 'c');
+      doc.deleteHandler(b);
+
+      expect(slides.resolved, ['a', null, 'c']);
+      slides.removeChildAt(2);
+
+      expect(c.isDeleted, isTrue);
+      expect(a.isDeleted, isFalse);
+    });
   });
 }
