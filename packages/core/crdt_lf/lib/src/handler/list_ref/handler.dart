@@ -9,8 +9,11 @@ import 'package:crdt_lf/src/handler/fugue/fugue_snapshot.dart';
 /// insertions in the same region do not interleave); each element is a
 /// reference to a child handler.
 ///
-/// The inherited [value] getter returns the raw `List<HandlerRef>`; [resolved]
-/// returns the fully resolved subtree (`List<Object?>`).
+/// The inherited [value] getter returns the raw `List<HandlerRef>`, a dead
+/// ref (its target deleted) included; [resolved] keeps that same raw
+/// position.
+///
+/// {@macro ref_live_index}
 ///
 /// ## Example
 /// ```dart
@@ -33,7 +36,13 @@ base class CRDTListRefHandler extends CRDTFugueListHandler<HandlerRef>
           valueCodec: const HandlerRefCodec(),
         );
 
-  /// Inserts a reference to [handler] at position [index].
+  /// Inserts a reference to [handler] at live position [index].
+  ///
+  /// {@template ref_live_index}
+  /// Indexes count only the live refs (one whose target is deleted is
+  /// skipped), the same way a Fugue list already counts only its visible
+  /// positions. `index` at or past the live count appends.
+  /// {@endtemplate}
   ///
   /// {@template handlers_in_ref}
   /// Only a reference (`id` + type) to [handler] is stored, not the handler
@@ -43,22 +52,32 @@ base class CRDTListRefHandler extends CRDTFugueListHandler<HandlerRef>
   /// handler from another document would neither resolve nor sync.
   /// {@endtemplate}
   void insertRef(int index, Handler<dynamic> handler) {
-    insert(index, HandlerRef.of(handler));
+    insert(rawIndexOfLive(doc, value, index), HandlerRef.of(handler));
   }
 
-  /// Returns the handler referenced at [index], or `null` if out of range.
+  /// Returns the handler referenced at live [index], or `null` if out of
+  /// range.
+  ///
+  /// {@macro ref_live_index}
   ///
   /// {@template ref_get_resolution}
   /// The handler is resolved — and built if needed — through the document; it
   /// is `null` when the document knows no kind under the reference's type.
   /// {@endtemplate}
   Handler<dynamic>? getRefAt(int index) {
-    final refs = value;
-    if (index < 0 || index >= refs.length) {
+    final live = liveRefs(doc, value);
+    if (index < 0 || index >= live.length) {
       return null;
     }
-    return doc.resolveHandler(refs[index]);
+    return doc.resolveHandler(live[index]);
   }
+
+  /// The referenced handlers, in order.
+  ///
+  /// {@macro ref_get_resolution}
+  ///
+  /// A reference that resolves to `null` is left out.
+  Iterable<Handler<dynamic>> get children => resolvedChildrenOf(doc, this);
 
   /// What this build reads for this handler type.
   static const HandlerFormats _formats = HandlerFormats(
@@ -80,7 +99,10 @@ base class CRDTListRefHandler extends CRDTFugueListHandler<HandlerRef>
     formats: _formats,
   );
 
-  /// Inserts a child of the kind [spec] names at [index], and returns it.
+  /// Inserts a child of the kind [spec] names at live [index], and returns
+  /// it.
+  ///
+  /// {@macro ref_live_index}
   ///
   /// Always a new child; use [getRefAtAs] to read one back.
   ///
@@ -100,8 +122,10 @@ base class CRDTListRefHandler extends CRDTFugueListHandler<HandlerRef>
   T? getRefAtAs<T extends Handler<dynamic>>(int index) =>
       typedRef<T>(getRefAt(index));
 
-  /// Removes the element at [index] and deletes the child it references, in
-  /// one transaction.
+  /// Removes the element at live [index] and deletes the child it
+  /// references, in one transaction.
+  ///
+  /// {@macro ref_live_index}
   ///
   /// {@template remove_child}
   /// The child is deleted with [BaseCRDTDocument.deleteHandlerRef], subtree
@@ -112,18 +136,19 @@ base class CRDTListRefHandler extends CRDTFugueListHandler<HandlerRef>
   /// Throws a [RangeError] when [index] is out of range.
   void removeChildAt(int index) {
     final refs = value;
-    if (index < 0 || index >= refs.length) {
-      throw RangeError.index(index, refs, 'index');
+    final live = liveRefs(doc, refs);
+    if (index < 0 || index >= live.length) {
+      throw RangeError.index(index, live, 'index');
     }
+    final raw = rawIndexOfLive(doc, refs, index);
     doc.runInTransaction(() {
-      delete(index, 1);
-      doc.deleteHandlerRef(refs[index]);
+      delete(raw, 1);
+      doc.deleteHandlerRef(refs[raw]);
     });
   }
 
   @override
-  Iterable<HandlerRef> childRefs() =>
-      value.where((ref) => !doc.isDeleted(ref.id));
+  Iterable<HandlerRef> childRefs() => liveRefs(doc, value);
 
   @override
   Object? toNested(Set<String> visiting) {

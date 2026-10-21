@@ -71,7 +71,8 @@ class DocumentExampleState extends ExampleDocument<CRDTMovableListRefHandler> {
   // --- Reads (from the current view: live document or time-travel) ---
 
   /// The chapters of the document in order.
-  List<CRDTMapRefHandler> get chapters => _resolveMapList(handler);
+  List<CRDTMapRefHandler> get chapters =>
+      handler.children.whereType<CRDTMapRefHandler>().toList();
 
   /// The title text handler of [chapter], or `null` if not set yet.
   CRDTFugueTextHandler? chapterTitle(CRDTMapRefHandler chapter) =>
@@ -80,7 +81,9 @@ class DocumentExampleState extends ExampleDocument<CRDTMovableListRefHandler> {
   /// The paragraphs of [chapter] in order.
   List<CRDTMapRefHandler> paragraphsOf(CRDTMapRefHandler chapter) {
     final list = chapter.getRefAs<CRDTMovableListRefHandler>(_kParagraphsKey);
-    return list == null ? const [] : _resolveMapList(list);
+    return list == null
+        ? const []
+        : list.children.whereType<CRDTMapRefHandler>().toList();
   }
 
   /// The body text handler of [paragraph], or `null` if not set yet.
@@ -90,7 +93,9 @@ class DocumentExampleState extends ExampleDocument<CRDTMovableListRefHandler> {
   /// The blocks of [paragraph] in order.
   List<CRDTMapRefHandler> blocksOf(CRDTMapRefHandler paragraph) {
     final list = paragraph.getRefAs<CRDTMovableListRefHandler>(_kBlocksKey);
-    return list == null ? const [] : _resolveMapList(list);
+    return list == null
+        ? const []
+        : list.children.whereType<CRDTMapRefHandler>().toList();
   }
 
   /// The kind of [block] (the single key of the block map), or `null`.
@@ -107,7 +112,7 @@ class DocumentExampleState extends ExampleDocument<CRDTMovableListRefHandler> {
 
   /// The todo items of [todoList] in order.
   List<CRDTMapRefHandler> todosOf(CRDTMovableListRefHandler todoList) =>
-      _resolveMapList(todoList);
+      todoList.children.whereType<CRDTMapRefHandler>().toList();
 
   /// The text handler of a todo [item], or `null`.
   CRDTFugueTextHandler? todoText(CRDTMapRefHandler item) =>
@@ -119,35 +124,11 @@ class DocumentExampleState extends ExampleDocument<CRDTMovableListRefHandler> {
     return done?.value ?? false;
   }
 
-  List<CRDTMapRefHandler> _resolveMapList(CRDTMovableListRefHandler list) {
-    return [
-      for (var i = 0; i < list.value.length; i++)
-        if (list.getRefAtAs<CRDTMapRefHandler>(i) case final node?) node,
-    ];
-  }
-
-  /// The position in [list] of the [index]-th node [_resolveMapList] returns.
-  ///
-  /// The list also holds references that resolve to nothing, such as a
-  /// deleted node, so the two indexes can differ.
-  int _positionOf(CRDTMovableListRefHandler list, int index) {
-    var shown = 0;
-    for (var i = 0; i < list.value.length; i++) {
-      if (list.getRefAtAs<CRDTMapRefHandler>(i) != null) {
-        if (shown == index) {
-          return i;
-        }
-        shown++;
-      }
-    }
-    return list.value.length - 1;
-  }
-
   void _move(CRDTMovableListRefHandler list, int from, int to) =>
-      list.move(_positionOf(list, from), _positionOf(list, to));
+      list.move(from, to);
 
   void _remove(CRDTMovableListRefHandler list, int index) =>
-      list.removeChildAt(_positionOf(list, index));
+      list.removeChildAt(index);
 
   // --- Writes (always target the live document) ---
 
@@ -157,7 +138,7 @@ class DocumentExampleState extends ExampleDocument<CRDTMovableListRefHandler> {
         CRDTMapRefHandler(document, _newId())
           ..setRef(_kTitleKey, _newText(title))
           ..setRef(_kParagraphsKey, newRefList());
-    liveHandler.insertRef(liveHandler.value.length, chapter);
+    liveHandler.insertRef(liveHandler.children.length, chapter);
   }
 
   /// Moves a chapter from [from] to [to].
@@ -172,7 +153,7 @@ class DocumentExampleState extends ExampleDocument<CRDTMovableListRefHandler> {
         CRDTMapRefHandler(document, _newId())
           ..setRef(_kTextKey, _newText(text))
           ..setRef(_kBlocksKey, newRefList());
-    paragraphs.insertRef(paragraphs.value.length, paragraph);
+    paragraphs.insertRef(paragraphs.children.length, paragraph);
   }
 
   /// Moves a paragraph inside [paragraphs] from [from] to [to].
@@ -195,7 +176,7 @@ class DocumentExampleState extends ExampleDocument<CRDTMovableListRefHandler> {
     final content = spec.createContent(this);
     final block = CRDTMapRefHandler(document, _newId())
       ..setRef(spec.kind, content);
-    blocks.insertRef(blocks.value.length, block);
+    blocks.insertRef(blocks.children.length, block);
   }
 
   /// Moves a block inside [blocks] from [from] to [to].
@@ -213,7 +194,7 @@ class DocumentExampleState extends ExampleDocument<CRDTMovableListRefHandler> {
         CRDTMapRefHandler(document, _newId())
           ..setRef(_kTextKey, _newText(text))
           ..setRef(_kDoneKey, _newDoneFlag(value: false));
-    todoList.insertRef(todoList.value.length, item);
+    todoList.insertRef(todoList.children.length, item);
   }
 
   /// Toggles the done flag of a todo [item].

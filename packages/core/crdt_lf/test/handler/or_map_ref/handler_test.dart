@@ -79,6 +79,14 @@ void main() {
       expect(title.isDeleted, isTrue);
     });
 
+    test('children lists the live handlers, a dead one left out', () {
+      final title = root.child('title', CRDTFugueTextHandler.spec);
+      final body = root.child('body', CRDTFugueTextHandler.spec);
+      doc.deleteHandler(body);
+
+      expect(root.children, [title]);
+    });
+
     group('two children put concurrently under one key', () {
       late CRDTFugueTextHandler mine;
       late CRDTFugueTextHandler theirs;

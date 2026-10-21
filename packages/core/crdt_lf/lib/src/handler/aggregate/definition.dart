@@ -11,27 +11,28 @@ import 'package:crdt_lf/crdt_lf.dart';
 /// deterministic.
 ///
 /// ```dart
-/// final class AssetAggregate extends AggregateDefinition<Asset, AssetEvent> {
-///   const AssetAggregate();
+/// final class CarAggregate extends AggregateDefinition<Car, CarEvent> {
+///   const CarAggregate();
 ///
 ///   @override
-///   String get handlerType => 'asset';
+///   String get handlerType => 'car';
 ///
 ///   @override
-///   Asset initial(String id) => Asset(id: id);
+///   Car initial(String id) => Car(licensePlate: id);
 ///
 ///   @override
-///   Asset reduce(Asset state, AssetEvent event, EventContext context) =>
+///   Car reduce(Car state, CarEvent event, EventContext context) =>
 ///       switch (event) {
-///         Renamed(:final name) => state.copyWith(displayName: name),
-///         NoteAdded(:final text) => state.addNote(Note(context.id, text)),
+///         OwnerChanged(:final owner) => state.copyWith(owner: owner),
+///         MaintenanceLogged(:final note) =>
+///           state.copyWith(lastMaintenance: note),
 ///       };
 ///
 ///   @override
-///   ValueCodec<AssetEvent> get eventCodec => const AssetEventCodec();
+///   ValueCodec<CarEvent> get eventCodec => const CarEventCodec();
 ///
 ///   @override
-///   ValueCodec<Asset> get stateCodec => const AssetCodec();
+///   ValueCodec<Car> get stateCodec => const CarCodec();
 /// }
 /// ```
 abstract base class AggregateDefinition<S extends Object, E> {

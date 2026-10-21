@@ -4,28 +4,24 @@ import 'package:benchmark_infrastructure/benchmark_infrastructure.dart';
 import 'package:test/test.dart';
 
 void main() {
-  group('parseIncludeArgument', () {
-    test('is null without arguments', () {
-      expect(parseIncludeArgument([]), isNull);
+  group('parseArguments', () {
+    test('include is null without arguments', () {
+      expect(parseArguments([]).include, isNull);
     });
 
-    test('reads names with or without the file suffix', () {
+    test('stems names and de-duplicates them', () {
       expect(
-        parseIncludeArgument([
+        parseArguments([
           '--include=delete_handler, dag_benchmark.dart',
-          '--include=apply_changes_benchmark',
-        ]),
+          '--include=apply_changes_benchmark,dag',
+        ]).include,
         {'delete_handler', 'dag', 'apply_changes'},
       );
     });
 
-    test('refuses another argument and an empty list', () {
+    test('refuses an empty list', () {
       expect(
-        () => parseIncludeArgument(['--all']),
-        throwsFormatException,
-      );
-      expect(
-        () => parseIncludeArgument(['--include=']),
+        () => parseArguments(['--include=']),
         throwsFormatException,
       );
     });

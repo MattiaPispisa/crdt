@@ -112,6 +112,14 @@ void main() {
       expect(doc.exportChanges(), hasLength(changes));
     });
 
+    test('children lists the live handlers, a dead one left out', () {
+      final title = root.child('title', CRDTFugueTextHandler.spec);
+      final body = root.child('body', CRDTFugueTextHandler.spec);
+      doc.deleteHandler(body);
+
+      expect(root.children, [title]);
+    });
+
     test('two peers converge on a nested structure', () {
       final docA = CRDTDocument();
       final titleA = CRDTFugueTextHandler(docA, 'title')..insert(0, 'Hello');

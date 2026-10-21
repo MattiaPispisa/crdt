@@ -20,8 +20,7 @@
 - The cost of applying a change no longer grows with the number of handlers on the document;
   a batch import routes each change by handler type and id, as the single-change path does.
   [192](https://github.com/MattiaPispisa/crdt/issues/192)
-- `CRDTDocument` is split into internal components with one job each. No public API or wire
-  change. [195](https://github.com/MattiaPispisa/crdt/issues/195)
+- chore: `CRDTDocument` is split into internal components with one job each. [195](https://github.com/MattiaPispisa/crdt/issues/195)
 - **Breaking for code that edits `value`**: the `value` of the list, map and set handlers is
   unmodifiable, and a new object only after a change. Copy it to edit it. [194](https://github.com/MattiaPispisa/crdt/issues/194)
 

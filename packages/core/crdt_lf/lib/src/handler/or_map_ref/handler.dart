@@ -109,8 +109,14 @@ base class CRDTORMapRefHandler extends CRDTORMapHandler<String, HandlerRef>
   }
 
   @override
-  Iterable<HandlerRef> childRefs() =>
-      orMapHeldValues(this).where((ref) => !doc.isDeleted(ref.id));
+  Iterable<HandlerRef> childRefs() => liveRefs(doc, orMapHeldValues(this));
+
+  /// The referenced handlers, in no particular order.
+  ///
+  /// {@macro ref_get_resolution}
+  ///
+  /// A reference that resolves to `null` is left out.
+  Iterable<Handler<dynamic>> get children => resolvedChildrenOf(doc, this);
 
   @override
   Object? toNested(Set<String> visiting) {

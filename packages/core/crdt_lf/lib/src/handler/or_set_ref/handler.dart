@@ -89,18 +89,10 @@ base class CRDTORSetRefHandler extends CRDTORSetHandler<HandlerRef>
   /// {@macro ref_get_resolution}
   ///
   /// A reference that resolves to `null` is left out.
-  Iterable<Handler<dynamic>> get children sync* {
-    for (final ref in childRefs()) {
-      final child = doc.resolveHandler(ref);
-      if (child != null) {
-        yield child;
-      }
-    }
-  }
+  Iterable<Handler<dynamic>> get children => resolvedChildrenOf(doc, this);
 
   @override
-  Iterable<HandlerRef> childRefs() =>
-      _sortedRefs().where((ref) => !doc.isDeleted(ref.id));
+  Iterable<HandlerRef> childRefs() => liveRefs(doc, _sortedRefs());
 
   /// [value] sorted by id; sorted again only after [value] changes.
   List<HandlerRef> _sortedRefs() {

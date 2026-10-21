@@ -81,17 +81,40 @@ void main() {
       expect(() => list.removeChildAt(0), throwsRangeError);
     });
 
-    test('resolved keeps the positions removeChildAt counts', () {
+    test("resolved keeps a dead ref's position; removeChildAt does not", () {
       final a = list.insertChild(0, CRDTFugueTextHandler.spec)..insert(0, 'a');
       final b = list.insertChild(1, CRDTFugueTextHandler.spec);
       final c = list.insertChild(2, CRDTFugueTextHandler.spec)..insert(0, 'c');
       doc.deleteHandler(b);
 
       expect(list.resolved, ['a', null, 'c']);
-      list.removeChildAt(2);
+      expect(list.children, [a, c]);
+
+      // Index 1 is live-index-based: it skips the dead ref to b and reaches
+      // c, not the raw slot 1 that resolved still shows as null.
+      list.removeChildAt(1);
 
       expect(c.isDeleted, isTrue);
       expect(a.isDeleted, isFalse);
+    });
+
+    test('getRefAt, insertRef and removeChildAt skip dead refs', () {
+      final a = list.insertChild(0, CRDTFugueTextHandler.spec);
+      final b = list.insertChild(1, CRDTFugueTextHandler.spec);
+      final c = list.insertChild(2, CRDTFugueTextHandler.spec);
+      doc.deleteHandler(b);
+
+      expect(list.getRefAt(0), same(a));
+      expect(list.getRefAt(1), same(c));
+      expect(list.getRefAt(2), isNull);
+
+      final d = CRDTFugueTextHandler(doc, doc.newHandlerId());
+      list.insertRef(2, d);
+      expect(list.children, [a, c, d]);
+
+      list.removeChildAt(0);
+      expect(list.children, [c, d]);
+      expect(a.isDeleted, isTrue);
     });
   });
 

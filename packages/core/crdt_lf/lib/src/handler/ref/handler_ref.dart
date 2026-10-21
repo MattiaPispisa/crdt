@@ -166,3 +166,44 @@ Object? nestedValueOf(Handler<dynamic> handler, Set<String> visiting) {
   }
   return null;
 }
+
+/// The subset of [refs] whose target is not deleted, in the same order.
+List<HandlerRef> liveRefs(BaseCRDTDocument doc, Iterable<HandlerRef> refs) =>
+    refs.where((ref) => !doc.isDeleted(ref.id)).toList(growable: false);
+
+/// The position in [refs] of the [liveIndex]-th ref whose target is not
+/// deleted.
+///
+/// `refs` keeps a deleted ref's slot (a CRDT list never compacts), so a
+/// position among only the live refs ("live index") can differ from its raw
+/// position in `refs`. A `liveIndex` at or past the live count maps to
+/// `refs.length`, the append boundary; one at or below zero maps to `0`.
+int rawIndexOfLive(
+  BaseCRDTDocument doc,
+  List<HandlerRef> refs,
+  int liveIndex,
+) {
+  if (liveIndex <= 0) {
+    return 0;
+  }
+  var seen = 0;
+  for (var i = 0; i < refs.length; i++) {
+    if (!doc.isDeleted(refs[i].id)) {
+      if (seen == liveIndex) {
+        return i;
+      }
+      seen++;
+    }
+  }
+  return refs.length;
+}
+
+/// Resolves every live reference [handler] holds, in the order
+/// [ContainerHandler.childRefs] gives them.
+///
+/// Backs every ref-container's `children` getter.
+Iterable<Handler<dynamic>> resolvedChildrenOf(
+  BaseCRDTDocument doc,
+  ContainerHandler handler,
+) =>
+    handler.childRefs().map(doc.resolveHandler).whereType<Handler<dynamic>>();

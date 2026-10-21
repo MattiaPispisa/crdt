@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:args/args.dart';
 import 'package:benchmark_infrastructure/src/timed/benchmark_result.dart';
 import 'package:benchmark_infrastructure/src/timed/markdown_table.dart';
 
@@ -110,37 +111,39 @@ Future<void> runTimedBenchmarks({
   stdout.writeln('Benchmarks finished. Results are in ${resultsFile.path}');
 }
 
-/// Reads `--include=<name>[,<name>...]` from [arguments]; `null` when it is
-/// absent, which means every benchmark.
+/// The command-line arguments of the runner executables.
+class RunnerArguments {
+  /// Creates the arguments, with [include] defaulting to every benchmark.
+  const RunnerArguments({this.include});
+
+  /// The benchmark names to run, stemmed and de-duplicated; `null` means
+  /// every benchmark.
+  final Set<String>? include;
+}
+
+final ArgParser _parser = ArgParser()..addMultiOption('include');
+
+/// Reads `--include=<name>[,<name>...]` from [arguments].
 ///
 /// A name is a benchmark file with or without its `_benchmark.dart` suffix:
 /// `delete_handler` and `delete_handler_benchmark.dart` are the same.
 ///
 /// Throws a [FormatException] for any other argument and for an empty list.
-Set<String>? parseIncludeArgument(List<String> arguments) {
-  const flag = '--include=';
-  Set<String>? include;
-  for (final argument in arguments) {
-    if (!argument.startsWith(flag)) {
-      throw FormatException('Unknown argument: $argument');
-    }
-    final names = argument
-        .substring(flag.length)
-        .split(',')
-        .map((name) => name.trim())
-        .where((name) => name.isNotEmpty)
-        .map(_stem);
-    (include ??= {}).addAll(names);
+RunnerArguments parseArguments(List<String> arguments) {
+  final names = _parser.parse(arguments)['include'] as List<String>;
+  if (names.isEmpty) {
+    return const RunnerArguments();
   }
-  if (include != null && include.isEmpty) {
+  final include = names.map((name) => name.trim()).map(_stem).toSet();
+  if (include.isEmpty || include.contains('')) {
     throw const FormatException('--include names no benchmark');
   }
-  return include;
+  return RunnerArguments(include: include);
 }
 
 /// The usage line of the runner executables.
-const String runnerUsage =
-    'Usage: run_benchmarks [--include=<name>[,<name>...]]';
+String get runnerUsage =>
+    'Usage: run_benchmarks [--include=<name>[,<name>...]]\n${_parser.usage}';
 
 String _stem(String path) {
   var name = path.split(RegExp(r'[/\\]')).last;

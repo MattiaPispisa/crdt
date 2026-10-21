@@ -3,9 +3,9 @@ import 'dart:io';
 import 'package:benchmark_infrastructure/benchmark_infrastructure.dart';
 
 Future<void> main(List<String> arguments) async {
-  final Set<String>? include;
+  final RunnerArguments parsed;
   try {
-    include = parseIncludeArgument(arguments);
+    parsed = parseArguments(arguments);
   } on FormatException catch (error) {
     stderr
       ..writeln(error.message)
@@ -13,5 +13,8 @@ Future<void> main(List<String> arguments) async {
     exitCode = 64;
     return;
   }
-  await runTimedBenchmarks(packageRoot: Directory.current, include: include);
+  await runTimedBenchmarks(
+    packageRoot: Directory.current,
+    include: parsed.include,
+  );
 }

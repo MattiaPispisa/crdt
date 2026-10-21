@@ -13,8 +13,8 @@ typedef _Versions = ({int oldest, Map<int, AggregateMigration> steps});
 /// built from the events written on it. Its [AggregateDefinition] says what
 /// the events are and how each one moves the state.
 ///
-/// One handler holds one aggregate: the asset `asset-42` is the handler
-/// `asset-42`. Many aggregates of one kind share one definition and one tag.
+/// One handler holds one aggregate: the car `AB123CD` is the handler
+/// `AB123CD`. Many aggregates of one kind share one definition and one tag.
 ///
 /// ## Convergence
 /// The state is the events of every peer applied in the replay order,
@@ -40,12 +40,15 @@ typedef _Versions = ({int oldest, Map<int, AggregateMigration> steps});
 ///
 /// ## Example
 /// ```dart
-/// final asset = doc.handler(
-///   CRDTAggregateHandler.spec(const AssetAggregate()),
-///   'asset-42',
+/// final car = doc.handler(
+///   CRDTAggregateHandler.spec(const CarAggregate()),
+///   'AB123CD',
 /// );
-/// asset.dispatchAll([const Renamed('P-101'), const NoteAdded('Installed')]);
-/// print(asset.value.displayName); // P-101
+/// car.dispatchAll([
+///   const OwnerChanged('Alice'),
+///   const MaintenanceLogged('Oil change'),
+/// ]);
+/// print(car.value.owner); // Alice
 /// ```
 base class CRDTAggregateHandler<S extends Object, E> extends Handler<S>
     with DeltaProvider<S, AggregateDelta<S, E>> {

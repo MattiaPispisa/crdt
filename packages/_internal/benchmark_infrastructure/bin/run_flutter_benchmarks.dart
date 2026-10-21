@@ -8,9 +8,9 @@ import 'package:benchmark_infrastructure/benchmark_infrastructure.dart';
 /// runs under `flutter test` rather than as a plain script. That runner prints
 /// progress of its own, which is why the unparsed-line echo is off.
 Future<void> main(List<String> arguments) async {
-  final Set<String>? include;
+  final RunnerArguments parsed;
   try {
-    include = parseIncludeArgument(arguments);
+    parsed = parseArguments(arguments);
   } on FormatException catch (error) {
     stderr
       ..writeln(error.message)
@@ -22,6 +22,6 @@ Future<void> main(List<String> arguments) async {
     packageRoot: Directory.current,
     command: ['flutter', 'test'],
     reportUnparsedOutput: false,
-    include: include,
+    include: parsed.include,
   );
 }

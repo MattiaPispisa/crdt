@@ -1025,7 +1025,13 @@ class CRDTDocument extends BaseCRDTDocument {
   /// It holds the state of every handler the document holds data for, open or
   /// not. A closed handler of a kind this document knows is built for the time
   /// of the snapshot. The changes of a kind it does not know ride inside the
-  /// snapshot, so the prune that follows loses nothing another peer can read.
+  /// reserved `crdt_lf/unfolded-changes` entry, so the prune that follows
+  /// loses nothing another peer can read. The deletions registry
+  /// (`crdt_lf/deleted-handlers`) is a handler like any other and follows the
+  /// same rules; two more reserved entries, `crdt_lf/handler-manifest` (the
+  /// type of every handler the snapshot names) and `crdt_lf/capabilities`
+  /// (the operation kinds and blob versions this build read or wrote), round
+  /// out what [Snapshot.data] can hold.
   ///
   /// Throws a [FormatException] when a handler got new changes on top of
   /// carried changes this build cannot read.
