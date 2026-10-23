@@ -98,6 +98,18 @@ does the same for just that package: it discovers every
 `dart run` subprocess (a fresh VM per file), and writes the aggregated
 results as a Markdown table to `benchmarks/results.md`.
 
+To run only some files, name them with `--include` (with or without the
+`_benchmark.dart` suffix). The same flag works on `run_flutter_benchmarks`:
+
+```sh
+dart run benchmark_infrastructure:run_benchmarks --include=delete_handler,dag
+```
+
+A partial run rewrites only the sections of the files it ran. The other
+sections of `benchmarks/results.md` stay as they were, so the file stays
+complete and comparable. An unknown name stops the run before anything starts,
+and the runner lists the names it knows.
+
 The runner talks to each subprocess over stdout: `CustomEmitter` prints one
 line per result, tagged with the `benchmarkResultMarker` prefix and a JSON
 payload (`{"name": ..., "microseconds": ...}`). `BenchmarkResult.tryParse`

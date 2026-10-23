@@ -113,9 +113,8 @@ class CRDTUndoManager {
       // nothing, and say nothing about why.
       throw ArgumentError.value(stackLimit, 'stackLimit', 'must be at least 1');
     }
-    document
-      .._ensureNotDisposed('CRDTUndoManager')
-      .._registerUndoManager(this);
+    document._ensureNotDisposed('CRDTUndoManager');
+    document._undo.add(this);
   }
 
   final CRDTDocument _document;
@@ -202,7 +201,7 @@ class CRDTUndoManager {
         'element identity to anchor an inverse to.',
       );
     }
-    for (final other in _document._undoManagers ?? const <CRDTUndoManager>[]) {
+    for (final other in _document._undo.managers) {
       if (!identical(other, this) && other._tracked.contains(handler.id)) {
         throw StateError(
           "'${handler.id}' is already tracked by another CRDTUndoManager. A "
@@ -268,6 +267,32 @@ class CRDTUndoManager {
     _barrier = true;
   }
 
+  /// Drops the inverses written for the handlers in [handlerIds], and the steps
+  /// left with nothing to write.
+  void _forget(Set<String> handlerIds) {
+    _tracked.removeAll(handlerIds);
+
+    bool forgetIn(_UndoEntry entry) {
+      for (final group in entry.groups) {
+        group.removeWhere((operation) => handlerIds.contains(operation.id));
+      }
+      entry.groups.removeWhere((group) => group.isEmpty);
+      return entry.groups.isEmpty;
+    }
+
+    final canUndoBefore = canUndo;
+    final canRedoBefore = canRedo;
+    _undoStack.removeWhere(forgetIn);
+    _redoStack.removeWhere(forgetIn);
+    final open = _open;
+    if (open != null && forgetIn(open)) {
+      _open = null;
+    }
+    if (canUndo != canUndoBefore || canRedo != canRedoBefore) {
+      _emitChange();
+    }
+  }
+
   /// Drops both stacks.
   void clear() {
     if (_undoStack.isEmpty && _redoStack.isEmpty && _open == null) {
@@ -287,7 +312,7 @@ class CRDTUndoManager {
       return;
     }
     _isDisposed = true;
-    _document._unregisterUndoManager(this);
+    _document._undo.remove(this);
     _tracked.clear();
     _undoStack.clear();
     _redoStack.clear();
@@ -382,7 +407,7 @@ class CRDTUndoManager {
           // Inside a group the order is the handler's, and it is kept.
           for (final group in entry.groups.reversed) {
             for (final operation in group) {
-              final handler = _document._handlers[operation.id];
+              final handler = _document._registry[operation.id];
               // A tracked handler registers itself and the registry is only
               // emptied on dispose, so an inverse always finds its handler.
               // Writing one without [Handler.prepareInverse] would ignore the

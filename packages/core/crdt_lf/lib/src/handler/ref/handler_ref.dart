@@ -77,8 +77,8 @@ abstract class ContainerHandler {
   /// materialization and root discovery).
   Iterable<HandlerRef> childRefs();
 
-  /// Resolves this handler's subtree to plain Dart values, replacing each
-  /// reference with the resolved value of the child handler.
+  /// Resolves this handler's subtree, replacing each reference with the
+  /// resolved value of the child handler (see [nestedValueOf]).
   ///
   /// [visiting] carries the set of handler ids already on the current
   /// resolution path; a reference whose id is already in [visiting] is a cycle
@@ -102,8 +102,29 @@ T? typedRef<T extends Handler<dynamic>>(Handler<dynamic>? reference) {
   return reference is T ? reference : null;
 }
 
-/// Resolves [handler] to a plain value: recurses through [ContainerHandler]s
-/// and reads `value` from the built-in leaf handlers (text, list, map, ...).
+/// Resolves [ref] to a nested value through [doc], with [nestedValueOf].
+///
+/// [visiting] is the set of handler ids on the current resolution path, as in
+/// [ContainerHandler.toNested]. Returns `null` for a reference that closes a
+/// cycle, or that [BaseCRDTDocument.resolveHandler] cannot resolve.
+Object? resolveNestedRef(
+  BaseCRDTDocument doc,
+  HandlerRef ref,
+  Set<String> visiting,
+) {
+  if (visiting.contains(ref.id)) {
+    return null;
+  }
+  final child = doc.resolveHandler(ref);
+  return child == null ? null : nestedValueOf(child, {...visiting, ref.id});
+}
+
+/// Resolves [handler] to a nested value: recurses through
+/// [ContainerHandler]s and returns the `value` of a built-in leaf handler
+/// (text, list, map, aggregate, ...) as is.
+///
+/// A leaf value keeps its own type: a `Set`, a custom `T`, an aggregate
+/// state. The result is JSON-safe only when every leaf value is.
 ///
 /// Container handlers are checked first, so a container that also extends a
 /// leaf handler (e.g. [CRDTMapRefHandler] over [CRDTMapHandler]) resolves
@@ -140,5 +161,49 @@ Object? nestedValueOf(Handler<dynamic> handler, Set<String> visiting) {
   if (handler is CRDTORMapHandler<dynamic, dynamic>) {
     return handler.value;
   }
+  if (handler is CRDTAggregateHandler<Object, dynamic>) {
+    return handler.value;
+  }
   return null;
 }
+
+/// The subset of [refs] whose target is not deleted, in the same order.
+List<HandlerRef> liveRefs(BaseCRDTDocument doc, Iterable<HandlerRef> refs) =>
+    refs.where((ref) => !doc.isDeleted(ref.id)).toList(growable: false);
+
+/// The position in [refs] of the [liveIndex]-th ref whose target is not
+/// deleted.
+///
+/// `refs` keeps a deleted ref's slot (a CRDT list never compacts), so a
+/// position among only the live refs ("live index") can differ from its raw
+/// position in `refs`. A `liveIndex` at or past the live count maps to
+/// `refs.length`, the append boundary; one at or below zero maps to `0`.
+int rawIndexOfLive(
+  BaseCRDTDocument doc,
+  List<HandlerRef> refs,
+  int liveIndex,
+) {
+  if (liveIndex <= 0) {
+    return 0;
+  }
+  var seen = 0;
+  for (var i = 0; i < refs.length; i++) {
+    if (!doc.isDeleted(refs[i].id)) {
+      if (seen == liveIndex) {
+        return i;
+      }
+      seen++;
+    }
+  }
+  return refs.length;
+}
+
+/// Resolves every live reference [handler] holds, in the order
+/// [ContainerHandler.childRefs] gives them.
+///
+/// Backs every ref-container's `children` getter.
+Iterable<Handler<dynamic>> resolvedChildrenOf(
+  BaseCRDTDocument doc,
+  ContainerHandler handler,
+) =>
+    handler.childRefs().map(doc.resolveHandler).whereType<Handler<dynamic>>();

@@ -75,11 +75,10 @@ base mixin DeltaProvider<V, D extends ComposableDelta<D>> on DocumentConsumer {
 
   /// A copy of [value] that the caller owns; [readSynced] goes through it.
   ///
-  /// A handler folds a change into its cached state **in place**. A consumer
-  /// holding that state itself would find the change already in its base and
-  /// then apply the delta on top of it — twice. Override it whenever [value]
-  /// exposes the cached state; a handler that builds a fresh value on every
-  /// read can keep this default.
+  /// A consumer that holds a value which later changes in place would find a
+  /// change already in its base, then apply the delta on top of it — twice.
+  /// Override it when [value] can change after it is read; a handler whose
+  /// value stays as it was read can keep this default.
   V copyValue(V value) => value;
 }
 
@@ -296,9 +295,9 @@ final class _DeltaHub<D extends ComposableDelta<D>> extends _DeltaHubBase
       return;
     }
     // Published now, handed out once the document is settled (see
-    // `_deltaOutbox`). The sequence number is already spent, so `deltaSeq` is
+    // `EventOutbox`). The sequence number is already spent, so `deltaSeq` is
     // truthful even before this event lands.
-    _document._enqueueDeltaEvent(() {
+    _document._outbox.add(() {
       if (!controller.isClosed) {
         controller.add(update);
       }

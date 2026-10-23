@@ -25,7 +25,8 @@ typedef CrdtDeltaResetCallback<V> = void Function(
 /// projection you already hold — an `AnimatedList`, a controller, a log —
 /// without reading the whole value again.
 ///
-/// It renders [child] unchanged and **never rebuilds the subtree**.
+/// It renders [child] unchanged and **never rebuilds the subtree**. Nothing is
+/// reported once the handler is deleted.
 ///
 /// ## The reset, handled for you
 ///
@@ -130,9 +131,14 @@ class _CrdtHandlerDeltaListenerState<V, D extends ComposableDelta<D>>
 
   @override
   Widget build(BuildContext context) {
-    // Covers a new document and a new id alike, which is why there is no
-    // `didUpdateWidget`: `build` always runs after one.
-    _subscription.syncTo(context.crdtDocument, widget.id);
+    final document = context.crdtDocument;
+    if (document.isDeleted(widget.id)) {
+      _subscription.cancel();
+    } else {
+      // Covers a new document and a new id alike, which is why there is no
+      // `didUpdateWidget`: `build` always runs after one.
+      _subscription.syncTo(document, widget.id);
+    }
     return widget.child ?? const SizedBox.shrink();
   }
 

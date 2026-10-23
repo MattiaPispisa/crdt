@@ -5,12 +5,15 @@ import 'package:crdt_lf/src/handler/fugue/fugue_snapshot.dart';
 ///
 /// An ordered container that stores [HandlerRef]s to other handlers instead of
 /// raw values, enabling **nested CRDTs** while keeping the document storage
-/// flat. It reuses the Fugue algorithm of [CRDTFugueListHandler] (so concurrent
-/// insertions in the same region do not interleave); each element is a
-/// reference to a child handler.
+/// flat; each element is a reference to a child handler.
 ///
-/// The inherited [value] getter returns the raw `List<HandlerRef>`; [resolved]
-/// returns the fully resolved subtree (`List<Object?>`).
+/// {@macro crdt_fugue_list_handler_algorithm}
+///
+/// The inherited [value] getter returns the raw `List<HandlerRef>`, a dead
+/// ref (its target deleted) included; [resolved] keeps that same raw
+/// position.
+///
+/// {@macro ref_live_index}
 ///
 /// ## Example
 /// ```dart
@@ -33,7 +36,13 @@ base class CRDTListRefHandler extends CRDTFugueListHandler<HandlerRef>
           valueCodec: const HandlerRefCodec(),
         );
 
-  /// Inserts a reference to [handler] at position [index].
+  /// Inserts a reference to [handler] at live position [index].
+  ///
+  /// {@template ref_live_index}
+  /// Indexes count only the live refs (one whose target is deleted is
+  /// skipped), the same way a Fugue list already counts only its visible
+  /// positions. `index` at or past the live count appends.
+  /// {@endtemplate}
   ///
   /// {@template handlers_in_ref}
   /// Only a reference (`id` + type) to [handler] is stored, not the handler
@@ -43,22 +52,32 @@ base class CRDTListRefHandler extends CRDTFugueListHandler<HandlerRef>
   /// handler from another document would neither resolve nor sync.
   /// {@endtemplate}
   void insertRef(int index, Handler<dynamic> handler) {
-    insert(index, HandlerRef.of(handler));
+    insert(rawIndexOfLive(doc, value, index), HandlerRef.of(handler));
   }
 
-  /// Returns the handler referenced at [index], or `null` if out of range.
+  /// Returns the handler referenced at live [index], or `null` if out of
+  /// range.
+  ///
+  /// {@macro ref_live_index}
   ///
   /// {@template ref_get_resolution}
   /// The handler is resolved — and built if needed — through the document; it
   /// is `null` when the document knows no kind under the reference's type.
   /// {@endtemplate}
   Handler<dynamic>? getRefAt(int index) {
-    final refs = value;
-    if (index < 0 || index >= refs.length) {
+    final live = liveRefs(doc, value);
+    if (index < 0 || index >= live.length) {
       return null;
     }
-    return doc.resolveHandler(refs[index]);
+    return doc.resolveHandler(live[index]);
   }
+
+  /// The referenced handlers, in order.
+  ///
+  /// {@macro ref_get_resolution}
+  ///
+  /// A reference that resolves to `null` is left out.
+  Iterable<Handler<dynamic>> get children => resolvedChildrenOf(doc, this);
 
   /// What this build reads for this handler type.
   static const HandlerFormats _formats = HandlerFormats(
@@ -80,7 +99,10 @@ base class CRDTListRefHandler extends CRDTFugueListHandler<HandlerRef>
     formats: _formats,
   );
 
-  /// Inserts a child of the kind [spec] names at [index], and returns it.
+  /// Inserts a child of the kind [spec] names at live [index], and returns
+  /// it.
+  ///
+  /// {@macro ref_live_index}
   ///
   /// Always a new child; use [getRefAtAs] to read one back.
   ///
@@ -100,23 +122,39 @@ base class CRDTListRefHandler extends CRDTFugueListHandler<HandlerRef>
   T? getRefAtAs<T extends Handler<dynamic>>(int index) =>
       typedRef<T>(getRefAt(index));
 
+  /// Removes the element at live [index] and deletes the child it
+  /// references, in one transaction.
+  ///
+  /// {@macro ref_live_index}
+  ///
+  /// {@template remove_child}
+  /// The child is deleted with [BaseCRDTDocument.deleteHandlerRef], subtree
+  /// included, for every peer, also when this peer cannot build it. An undo
+  /// puts the reference back, and it resolves to nothing: a delete is final.
+  /// {@endtemplate}
+  ///
+  /// Throws a [RangeError] when [index] is out of range.
+  void removeChildAt(int index) {
+    final refs = value;
+    final live = liveRefs(doc, refs);
+    if (index < 0 || index >= live.length) {
+      throw RangeError.index(index, live, 'index');
+    }
+    final raw = rawIndexOfLive(doc, refs, index);
+    doc.runInTransaction(() {
+      delete(raw, 1);
+      doc.deleteHandlerRef(refs[raw]);
+    });
+  }
+
   @override
-  Iterable<HandlerRef> childRefs() => value;
+  Iterable<HandlerRef> childRefs() => liveRefs(doc, value);
 
   @override
   Object? toNested(Set<String> visiting) {
-    final out = <Object?>[];
-    for (final ref in value) {
-      if (visiting.contains(ref.id)) {
-        out.add(null);
-        continue;
-      }
-      final child = doc.resolveHandler(ref);
-      out.add(
-        child == null ? null : nestedValueOf(child, {...visiting, ref.id}),
-      );
-    }
-    return out;
+    return [
+      for (final ref in value) resolveNestedRef(doc, ref, visiting),
+    ];
   }
 
   /// The fully resolved subtree rooted at this list, as a `List<Object?>`.
@@ -124,7 +162,9 @@ base class CRDTListRefHandler extends CRDTFugueListHandler<HandlerRef>
   /// {@template ref_resolved}
   /// Each reference is replaced by the resolved value of the child handler,
   /// recursively; a leaf handler resolves to its `value`. A reference that
-  /// closes a cycle resolves to `null`.
+  /// closes a cycle resolves to `null`. A reference to a deleted handler
+  /// resolves to `null` in a list, which keeps its positions, and is left out
+  /// of a map or a set.
   /// {@endtemplate}
   List<Object?> get resolved {
     final result = toNested(<String>{});

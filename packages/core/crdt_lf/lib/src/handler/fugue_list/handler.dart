@@ -1,3 +1,4 @@
+import 'dart:collection';
 import 'dart:typed_data';
 
 import 'package:crdt_lf/crdt_lf.dart';
@@ -11,15 +12,22 @@ part 'operation.dart';
 /// # CRDT List with Fugue implementation
 ///
 /// ## Description
-/// A CRDTFugueList is a list data structure that uses the Fugue algorithm
-/// ([The Art of the Fugue: Minimizing Interleaving in Collaborative Text
-/// Editing](https://arxiv.org/abs/2305.00583)) to minimize interleaving.
+/// A CRDTFugueList is a list data structure that minimizes interleaving.
 ///
 /// It is the list counterpart of [CRDTFugueTextHandler]: same conflict
 /// resolution, but it stores arbitrary values `T` instead of characters.
 /// Compared to [CRDTListHandler] (which orders concurrent edits using the
 /// HLC only), Fugue minimizes interleaving when two peers edit the same
 /// region concurrently.
+///
+/// {@template crdt_fugue_list_handler_algorithm}
+/// ## Algorithm
+/// Uses the Fugue algorithm
+/// ([The Art of the Fugue: Minimizing Interleaving in Collaborative Text
+/// Editing](https://arxiv.org/abs/2305.00583)) to minimize interleaving: when
+/// two peers insert elements in the same region concurrently, the elements
+/// from each peer stay together instead of alternating.
+/// {@endtemplate}
 ///
 /// ## Note on `T`
 /// The Fugue tree uses a `null` value to mark a deleted element, so `T`
@@ -55,14 +63,7 @@ base class CRDTFugueListHandler<T>
           valueCodec: valueCodec,
         );
 
-  /// Builds one of a kind stated in full, instead of named by a tag.
-  ///
-  /// The hook for a subclass that is **its own kind** — a container built on
-  /// this handler, say. It passes its own spec up rather than letting this
-  /// class make one from a tag, which would name this class and leave a peer
-  /// rebuilding the reference with the wrong one.
-  ///
-  /// A plain use wants the unnamed constructor: it makes the spec for you.
+  /// {@macro handler_from_spec}
   CRDTFugueListHandler.fromSpec(
     super.doc,
     super.id, {
@@ -271,9 +272,6 @@ base class CRDTFugueListHandler<T>
   @override
   List<T> applyDelta(List<T> base, SequenceDelta<T> delta) => delta.apply(base);
 
-  @override
-  List<T> copyValue(List<T> value) => List<T>.of(value);
-
   /// Returns a string representation of this handler
   @override
   String toString() {
@@ -292,5 +290,6 @@ class FugueListState<T> extends FugueState<T, List<T>> {
     return FugueListState._(FugueTree<T>.empty());
   }
 
-  static List<T> _collect<T>(FugueTree<T> tree) => tree.values();
+  static List<T> _collect<T>(FugueTree<T> tree) =>
+      UnmodifiableListView(tree.values());
 }

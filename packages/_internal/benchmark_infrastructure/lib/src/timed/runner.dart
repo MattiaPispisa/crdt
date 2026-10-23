@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:args/args.dart';
 import 'package:benchmark_infrastructure/src/timed/benchmark_result.dart';
 import 'package:benchmark_infrastructure/src/timed/markdown_table.dart';
 
@@ -24,6 +25,7 @@ Future<void> runTimedBenchmarks({
   required Directory packageRoot,
   List<String> command = const ['dart', 'run'],
   bool reportUnparsedOutput = true,
+  Set<String>? include,
 }) async {
   final benchmarksDir =
       Directory('${packageRoot.path}/benchmarks/src/benchmarks');
@@ -41,6 +43,19 @@ Future<void> runTimedBenchmarks({
       .where((file) => file.path.endsWith('_benchmark.dart'))
       .toList()
     ..sort((a, b) => a.path.compareTo(b.path));
+
+  if (include != null) {
+    final available = {for (final file in files) _stem(file.path)};
+    final unknown = include.difference(available);
+    if (unknown.isNotEmpty) {
+      stderr
+        ..writeln('Unknown benchmarks: ${unknown.join(', ')}')
+        ..writeln('Available: ${(available.toList()..sort()).join(', ')}');
+      exitCode = 64;
+      return;
+    }
+    files.retainWhere((file) => include.contains(_stem(file.path)));
+  }
 
   final resultsBySourceFile = <String, List<BenchmarkResult>>{};
 
@@ -81,8 +96,61 @@ Future<void> runTimedBenchmarks({
     stdout.writeln('  - ✅ Finished $sourceFile');
   }
 
-  final resultsFile = File('${packageRoot.path}/benchmarks/results.md')
-    ..writeAsStringSync(renderResultsMarkdown(resultsBySourceFile));
+  final resultsFile = File('${packageRoot.path}/benchmarks/results.md');
+  if (include != null && resultsFile.existsSync()) {
+    resultsFile.writeAsStringSync(
+      replaceResultSections(
+        resultsFile.readAsStringSync(),
+        resultsBySourceFile,
+      ),
+    );
+  } else {
+    resultsFile.writeAsStringSync(renderResultsMarkdown(resultsBySourceFile));
+  }
 
   stdout.writeln('Benchmarks finished. Results are in ${resultsFile.path}');
+}
+
+/// The command-line arguments of the runner executables.
+class RunnerArguments {
+  /// Creates the arguments, with [include] defaulting to every benchmark.
+  const RunnerArguments({this.include});
+
+  /// The benchmark names to run, stemmed and de-duplicated; `null` means
+  /// every benchmark.
+  final Set<String>? include;
+}
+
+final ArgParser _parser = ArgParser()..addMultiOption('include');
+
+/// Reads `--include=<name>[,<name>...]` from [arguments].
+///
+/// A name is a benchmark file with or without its `_benchmark.dart` suffix:
+/// `delete_handler` and `delete_handler_benchmark.dart` are the same.
+///
+/// Throws a [FormatException] for any other argument and for an empty list.
+RunnerArguments parseArguments(List<String> arguments) {
+  final names = _parser.parse(arguments)['include'] as List<String>;
+  if (names.isEmpty) {
+    return const RunnerArguments();
+  }
+  final include = names.map((name) => name.trim()).map(_stem).toSet();
+  if (include.isEmpty || include.contains('')) {
+    throw const FormatException('--include names no benchmark');
+  }
+  return RunnerArguments(include: include);
+}
+
+/// The usage line of the runner executables.
+String get runnerUsage =>
+    'Usage: run_benchmarks [--include=<name>[,<name>...]]\n${_parser.usage}';
+
+String _stem(String path) {
+  var name = path.split(RegExp(r'[/\\]')).last;
+  for (final suffix in ['.dart', '_benchmark']) {
+    if (name.endsWith(suffix)) {
+      name = name.substring(0, name.length - suffix.length);
+    }
+  }
+  return name;
 }

@@ -6,9 +6,11 @@ import 'package:crypto/crypto.dart';
 
 /// Represents a snapshot of a CRDTDocument's state at a specific version.
 ///
-/// Each entry in [data] is the opaque binary representation of one consumer's
-/// (handler's) projected state. The handler is responsible for encoding and
-/// decoding its own state — `crdt_lf` only treats each entry as a `Uint8List`.
+/// Most entries in [data] are the opaque binary state of one handler, keyed
+/// by its id: the handler is responsible for encoding and decoding it,
+/// `crdt_lf` only treats the entry as a `Uint8List`. A handful of entries,
+/// keyed by a reserved `crdt_lf/`-prefixed name instead of a handler id,
+/// describe the document as a whole — see [CRDTDocument.takeSnapshot].
 class Snapshot {
   /// Creates a [Snapshot].
   Snapshot({
@@ -112,10 +114,13 @@ class Snapshot {
   /// The version vector of the snapshot.
   final VersionVector versionVector;
 
-  /// The actual data representing the snapshot state, keyed by handler id.
+  /// The snapshot state.
   ///
-  /// Each value is the opaque binary blob the corresponding handler produced
-  /// via its `getSnapshotState()`.
+  /// Most entries are keyed by a handler id, and their value is the opaque
+  /// binary blob that handler produced via its `getSnapshotState()`. A
+  /// handful of reserved entries, keyed by a `crdt_lf/`-prefixed name instead
+  /// of a handler id, describe the document as a whole: see
+  /// [CRDTDocument.takeSnapshot].
   final Map<String, Uint8List> data;
 
   /// Merges two [Snapshot]s.

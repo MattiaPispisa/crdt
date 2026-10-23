@@ -25,6 +25,17 @@
 | DAG addNode chain of 1000 | 182.6288 | 0.1826 | 0.000183 |
 | DAG getAncestors chain of 200 | 7.4550 | 0.0075 | 0.000007 |
 
+### delete_handler_benchmark.dart
+
+| Benchmark | RunTime (us) | RunTime (ms) | RunTime (s) |
+| --- | --- | --- | --- |
+| Remote delete with 100 open containers | 6.9750 | 0.0070 | 0.000007 |
+| Remote delete with 1000 open containers | 5.7300 | 0.0057 | 0.000006 |
+| Remote delete with 10000 open containers | 5.1350 | 0.0051 | 0.000005 |
+| Remote delete after 100 deletes | 7.6900 | 0.0077 | 0.000008 |
+| Remote delete after 1000 deletes | 36.3350 | 0.0363 | 0.000036 |
+| Remote delete after 10000 deletes | 327.5300 | 0.3275 | 0.000328 |
+
 ### delta_emission_benchmark.dart
 
 | Benchmark | RunTime (us) | RunTime (ms) | RunTime (s) |

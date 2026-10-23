@@ -437,8 +437,8 @@ void main() {
         // in, and the test's own zone would fail on it.
         await runZonedGuarded(
           () async {
-            // A synchronous controller, so a delta throws inside the outbox
-            // flush. The reset `watch` opens with is let through: it arrives on
+            // The stream catches the listener's error and hands it to this
+            // zone. The reset `watch` opens with is let through: it arrives on
             // a microtask of its own, nowhere near the flush.
             text.watch().listen((update) {
               if (update is HandlerDelta) {

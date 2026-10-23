@@ -171,6 +171,13 @@ abstract base class FugueSequenceHandler<T, V, S extends FugueState<T, V>>
   }
 
   /// The current value, computed from changes and snapshot.
+  ///
+  /// A list value is unmodifiable, and the same object until the next change,
+  /// which hands out a new one. Copy it to edit it.
+  ///
+  /// {@template fixed_value}
+  /// A value read before a change keeps what it held.
+  /// {@endtemplate}
   V get value => cachedOrComputedState()._value;
 
   /// The number of live elements, in `O(1)`.

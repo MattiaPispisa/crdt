@@ -1,3 +1,4 @@
+import 'dart:collection';
 import 'dart:typed_data';
 
 import 'package:crdt_lf/crdt_lf.dart';
@@ -10,6 +11,7 @@ part 'operation.dart';
 /// A CRDTORMap is a map data structure that uses
 /// the Observed-Removed Map (OR-Map) algorithm to resolve conflicts.
 ///
+/// {@template crdt_or_map_handler_algorithm}
 /// ## Algorithm
 /// Adding or updating a key-value pair produces a unique tag for the pair.
 /// Removing a key consists in tomb-stoning all tags for that key.
@@ -17,6 +19,7 @@ part 'operation.dart';
 ///
 /// More detail about OR-Set (the foundation) can be found in
 /// [this paper](https://inria.hal.science/inria-00555588/en/)
+/// {@endtemplate}
 ///
 /// ## Example
 /// ```dart
@@ -45,7 +48,7 @@ base class CRDTORMapHandler<K, V> extends Handler<ORMapState<K, V>>
     required String handlerType,
     ValueCodec<K>? keyCodec,
     ValueCodec<V>? valueCodec,
-  }) : this._fromSpec(
+  }) : this.fromSpec(
           doc,
           id,
           spec: spec<K, V>(
@@ -57,11 +60,8 @@ base class CRDTORMapHandler<K, V> extends Handler<ORMapState<K, V>>
           valueCodec: valueCodec,
         );
 
-  /// Builds one of a kind stated in full, instead of named by a tag.
-  ///
-  /// Private: the unnamed constructor is the way in, and it makes the spec from
-  /// the tag. Nothing outside this file builds one of these another way.
-  CRDTORMapHandler._fromSpec(
+  /// {@macro handler_from_spec}
+  CRDTORMapHandler.fromSpec(
     super.doc,
     this._id, {
     required super.spec,
@@ -120,10 +120,11 @@ base class CRDTORMapHandler<K, V> extends Handler<ORMapState<K, V>>
     doc.registerOperation(operation);
   }
 
-  /// Returns the current map value computed from changes and snapshot.
+  /// The current map.
   ///
-  /// Every read builds a fresh map, so the caller owns what it gets back and
-  /// can keep it.
+  /// {@macro collection_value}
+  ///
+  /// {@macro fixed_value}
   @override
   Map<K, V> get value {
     return _cachedOrComputedState()._state;
@@ -283,6 +284,7 @@ base class CRDTORMapHandler<K, V> extends Handler<ORMapState<K, V>>
     required ORMapState<K, V> state,
     required Operation operation,
   }) {
+    state._frozen = null;
     if (operation is _ORMapPutOperation<K, V>) {
       _tagStatePut(
         state: state,
@@ -600,10 +602,15 @@ class ORMapState<K, V> {
   /// The tombstones
   final Set<OperationId> _tombstones;
 
+  /// The value handed out, built once per state; dropped by every change.
+  Map<K, V>? _frozen;
+
   /// The state of the OR-Map.
   /// For each key with live entries, we pick the entry with the
   /// highest tag (by HLC, then PeerId) for deterministic conflict resolution.
-  Map<K, V> get _state {
+  Map<K, V> get _state => _frozen ??= UnmodifiableMapView(_resolve());
+
+  Map<K, V> _resolve() {
     final result = <K, V>{}
       // Add snapshot-only entries
       ..addAll(_snapshotOnly);
@@ -657,4 +664,24 @@ class ORMapEntry<V> {
 
   @override
   int get hashCode => _hashCode;
+}
+
+/// Every value [map] holds, the losers of concurrent puts included.
+Iterable<V> orMapHeldValues<K, V>(CRDTORMapHandler<K, V> map) {
+  final state = map._cachedOrComputedState();
+  return <V>{
+    ...state._snapshotOnly.values,
+    for (final entries in state._live.values)
+      for (final entry in entries) entry.value,
+  };
+}
+
+/// Every value [map] holds under [key], the losers of concurrent puts
+/// included.
+Iterable<V> orMapHeldValuesOf<K, V>(CRDTORMapHandler<K, V> map, K key) {
+  final state = map._cachedOrComputedState();
+  return <V>{
+    if (state._snapshotOnly.containsKey(key)) state._snapshotOnly[key] as V,
+    for (final entry in state._live[key] ?? const <Never>{}) entry.value,
+  };
 }

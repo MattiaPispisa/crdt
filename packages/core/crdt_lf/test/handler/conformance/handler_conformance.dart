@@ -345,6 +345,29 @@ void runHandlerConformanceTests<H extends Handler<dynamic>, V>({
         remote.importChanges(source.exportChanges());
         expect(read(handler), expected, reason: 'a remote peer');
       });
+
+      test('a recompute inside a transaction sees the edits before it', () {
+        final stepByStep = open(document());
+        final random = Random(seed);
+        final expected = <V>[];
+        for (var step = 0; step < steps ~/ 4; step++) {
+          edit(stepByStep, random, 's$step');
+          expected.add(read(stepByStep));
+        }
+
+        final doc = document(1);
+        final handler = open(doc);
+        final replay = Random(seed);
+        doc.runInTransaction(() {
+          for (var step = 0; step < expected.length; step++) {
+            edit(handler, replay, 's$step');
+            handler.invalidateCache();
+            expect(read(handler), expected[step], reason: 'step $step');
+          }
+        });
+
+        expect(read(handler), expected.last, reason: 'after the commit');
+      });
     });
 
     group('time travel', () {

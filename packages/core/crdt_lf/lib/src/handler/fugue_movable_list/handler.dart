@@ -1,3 +1,4 @@
+import 'dart:collection';
 import 'dart:typed_data';
 
 import 'package:crdt_lf/crdt_lf.dart';
@@ -16,12 +17,15 @@ part 'operation.dart';
 /// `move` operation that preserves the identity of the moved element across
 /// concurrent reorderings (see Kleppmann, [Moving Elements in List CRDTs](https://martin.kleppmann.com/2020/04/27/papoc-list-move.html)).
 ///
+/// {@template crdt_fugue_movable_list_handler_algorithm}
+/// ## Algorithm
 /// Conflict resolution combines:
 /// - the Fugue algorithm ([The Art of the Fugue: Minimizing Interleaving in Collaborative Text Editing](https://arxiv.org/abs/2305.00583)) to minimize interleaving;
 /// - a **last-writer-wins register** on [OperationId] for the value and
 ///   for the "current position" of each element. Concurrent moves of the same
 ///   element converge to a single winning destination instead of duplicating
 ///   the element, and so do concurrent updates of its value.
+/// {@endtemplate}
 ///
 /// ## Identities and positions
 /// Every element has a stable [FugueElementID] **identity** assigned at
@@ -66,14 +70,7 @@ base class CRDTFugueMovableListHandler<T>
           valueCodec: valueCodec,
         );
 
-  /// Builds one of a kind stated in full, instead of named by a tag.
-  ///
-  /// The hook for a subclass that is **its own kind** — a container built on
-  /// this handler, say. It passes its own spec up rather than letting this
-  /// class make one from a tag, which would name this class and leave a peer
-  /// rebuilding the reference with the wrong one.
-  ///
-  /// A plain use wants the unnamed constructor: it makes the spec for you.
+  /// {@macro handler_from_spec}
   CRDTFugueMovableListHandler.fromSpec(
     super.doc,
     String id, {
@@ -121,7 +118,11 @@ base class CRDTFugueMovableListHandler<T>
   @override
   bool get stateIsOrderIndependent => true;
 
-  /// Returns the current list value.
+  /// The current list.
+  ///
+  /// {@macro collection_value}
+  ///
+  /// {@macro fixed_value}
   @override
   List<T> get value => cachedOrComputedState().value;
 
@@ -839,9 +840,6 @@ base class CRDTFugueMovableListHandler<T>
   List<T> applyDelta(List<T> base, SequenceDelta<T> delta) => delta.apply(base);
 
   @override
-  List<T> copyValue(List<T> value) => List<T>.of(value);
-
-  @override
   String toString() {
     return 'CRDTFugueMovableList($id, $value)';
   }
@@ -921,7 +919,7 @@ class FugueMovableListState<T> {
       positions.add(node.id);
       identities.add(identity);
     }
-    _cachedValues = values;
+    _cachedValues = UnmodifiableListView(values);
     _cachedVisiblePositions = positions;
     _cachedIdentities = identities;
   }

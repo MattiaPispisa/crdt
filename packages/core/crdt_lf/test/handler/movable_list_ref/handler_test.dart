@@ -102,5 +102,53 @@ void main() {
       expect(slidesA.resolved.length, 2);
       expect(slidesA.resolved, ['one-edited', 'zero']);
     });
+
+    test('removeChildAt removes the element and deletes the child', () {
+      final child = CRDTFugueTextHandler(doc, doc.newHandlerId());
+      slides
+        ..insertRef(0, child)
+        ..removeChildAt(0);
+
+      expect(slides.value, isEmpty);
+      expect(child.isDeleted, isTrue);
+      expect(() => slides.removeChildAt(-1), throwsRangeError);
+    });
+
+    test("resolved keeps a dead ref's position; removeChildAt does not", () {
+      final a = slides.insertChild(0, CRDTFugueTextHandler.spec)
+        ..insert(0, 'a');
+      final b = slides.insertChild(1, CRDTFugueTextHandler.spec);
+      final c = slides.insertChild(2, CRDTFugueTextHandler.spec)
+        ..insert(0, 'c');
+      doc.deleteHandler(b);
+
+      expect(slides.resolved, ['a', null, 'c']);
+      expect(slides.children, [a, c]);
+
+      // Index 1 is live-index-based: it skips the dead ref to b and reaches
+      // c, not the raw slot 1 that resolved still shows as null.
+      slides.removeChildAt(1);
+
+      expect(c.isDeleted, isTrue);
+      expect(a.isDeleted, isFalse);
+    });
+
+    test('getRefAt, move and removeChildAt skip dead refs', () {
+      final a = slides.insertChild(0, CRDTFugueTextHandler.spec);
+      final b = slides.insertChild(1, CRDTFugueTextHandler.spec);
+      final c = slides.insertChild(2, CRDTFugueTextHandler.spec);
+      doc.deleteHandler(b);
+
+      expect(slides.getRefAt(0), same(a));
+      expect(slides.getRefAt(1), same(c));
+      expect(slides.getRefAt(2), isNull);
+
+      slides.move(1, 0);
+      expect(slides.children, [c, a]);
+
+      slides.removeChildAt(1);
+      expect(slides.children, [c]);
+      expect(a.isDeleted, isTrue);
+    });
   });
 }

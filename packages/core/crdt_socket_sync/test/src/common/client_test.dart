@@ -29,11 +29,14 @@ void main() {
       );
     });
 
-    test('a build with nothing set up claims nothing', () {
+    test('a build with nothing set up claims the built-in kinds alone', () {
       // The footgun this parameter exists for: a document reports what it has
       // been set up for, and an app usually opens its handlers after connect().
       // That is why a derived description travels as incomplete.
-      expect(_client().capabilities.handlerTypes, isEmpty);
+      expect(
+        _client().capabilities.byHandlerType,
+        CRDTDocument.builtInCapabilities.byHandlerType,
+      );
     });
 
     test('the declaration wins, whatever the document has open', () {
@@ -46,7 +49,34 @@ void main() {
         ),
       });
 
-      expect(_client(capabilities: declared).capabilities, declared);
+      expect(
+        _client(capabilities: declared).capabilities.byHandlerType,
+        {
+          ...CRDTDocument.builtInCapabilities.byHandlerType,
+          ...declared.byHandlerType,
+        },
+      );
+    });
+    test('a declared build reads the deletes of any document', () {
+      final document = CRDTDocument();
+      CRDTMapRefHandler(document, 'root')
+        ..child('title', CRDTFugueTextHandler.spec).insert(0, 'Hi')
+        ..removeChild('title');
+      final client = _client(
+        capabilities: DocumentCapabilities({
+          for (final spec in [
+            CRDTMapRefHandler.spec,
+            CRDTFugueTextHandler.spec,
+          ])
+            spec.type: spec.formats,
+        }),
+      );
+
+      expect(
+        client.statedCapabilities!
+            .missingFrom(document.describeDataRequirements()),
+        isEmpty,
+      );
     });
   });
 

@@ -28,7 +28,10 @@
   - [Design](#design)
     - [Operation based](#operation-based)
     - [Transaction](#transaction)
-    - [State cache](#state-cache)
+    - [Reactivity](#reactivity)
+      - [revision](#revision)
+      - [document](#document)
+      - [events](#events)
     - [Handler deltas](#handler-deltas)
       - [Where a delta comes from](#where-a-delta-comes-from)
       - [Deltas, or the value?](#deltas-or-the-value)
@@ -41,6 +44,7 @@
       - [What is recorded](#what-is-recorded)
       - [What it does not undo](#what-it-does-not-undo)
       - [Which handlers](#which-handlers)
+    - [State cache](#state-cache)
   - [Architecture](#architecture)
     - [CRDTDocument](#crdtdocument)
       - [Identity](#identity)
@@ -52,11 +56,15 @@
       - [Working with Complex Types](#working-with-complex-types)
       - [Nested Structures (Containers and References)](#nested-structures-containers-and-references)
         - [Naming a generic handler](#naming-a-generic-handler)
+        - [Deleting a nested handler](#deleting-a-nested-handler)
       - [Choosing How to Model Your Data](#choosing-how-to-model-your-data)
         - [Worked example: a TODO list](#worked-example-a-todo-list)
+        - [Aggregates built from events](#aggregates-built-from-events)
+          - [Versions and migrations](#versions-and-migrations)
         - [A quick decision guide](#a-quick-decision-guide)
         - [Picking a leaf handler](#picking-a-leaf-handler)
-    - [Transaction](#transaction-1)
+  - [Core data structures](#core-data-structures)
+    - [Mixing explicit operations in a transaction](#mixing-explicit-operations-in-a-transaction)
     - [DAG](#dag)
     - [Change](#change)
     - [Frontiers](#frontiers)
@@ -355,13 +363,25 @@ melos run benchmark_dart
 ### Operation based
 
 The synchronization mechanism is operation-based (CmRDT). Each document manages synchronization by propagating **only the operations**. Locally, each handler (list, text, etc.) applies these operations to resolve its state. It's possible to create snapshots to establish an initial state on which operations are resolved. This is useful to prevent the memory requirements of the system from growing indefinitely. 
-Operation resolution is handled by each individual handler. This design allows each handler to implement its own operation resolution logic according to its specific requirements. The library includes simple implementations like `CRDTList`, where interleaving is managed solely through HLC timestamps, as well as more sophisticated systems like `OR-Sets` and `Fugue Text`. Each handler provides documentation that describes its approach to operation resolution.
+Operation resolution is handled by each individual handler. This design allows each handler to implement its own operation resolution logic according to its specific requirements. The library includes simple implementations like `CRDTList`, where interleaving is managed solely through HLC timestamps, as well as more sophisticated systems like `OR-Sets` and `Fugue Text`. Each handler provides documentation that describes its approach to operation resolution — see [Handlers](#handlers).
 
 ### Transaction
 
 Each operation created by an handler is registered in the document. The document manages operations through a transaction system. A transaction is considered an atomic operation, and notifications to subscribers are sent only when the transaction is completed. If not explicitly declared, each operation is registered in an implicit transaction.
 
 An explicit transaction creates an environment where operations are grouped together and applied atomically. At the end of the transaction, contiguous operations can be compacted into fewer operations through compound algorithms to reduce the number of changes created.
+
+```dart
+// implicit transaction: one operation, subscribers are notified right away
+listHandler.insert(0, 'item1');
+
+// explicit transaction: every operation inside the callback is grouped, and
+// subscribers are notified once, after the callback returns
+doc.runInTransaction(() {
+  listHandler.insert(0, 'item1');
+  listHandler.insert(1, 'item2');
+});
+```
 
 ```mermaid
 graph TD
@@ -389,64 +409,79 @@ graph TD
 
 > 📖 Diagrams render best in the [live documentation](https://mattiapispisa.it/crdt/docs/documentation/packages/crdt_lf).
 
-### State cache
+### Reactivity
 
-A handler answers a read from a cached state. Without that cache every read
-would replay the whole history of the handler, so the cost of an edit would grow
-with the age of the document. An edit therefore tries to **advance** the cached
-state instead of dropping it.
+Three signals tell a consumer something moved, each at a different grain. None
+of them replays history to answer, so polling any of them is cheap.
 
-A local edit always can: the operation is folded in the moment it is registered.
-A remote change is harder, because it arrives in the order the network delivers
-it, while a replay walks the history sorted by `(HLC, author)`. It can still be
-folded in when one of two things is true:
+#### revision
 
-- the handler's state is the **same whatever the order** causally ready
-  operations are applied in — it declares this with `stateIsOrderIndependent`.
-  The Fugue sequence handlers (they address elements by id) and the OR handlers
-  (they pick winners by tag) do;
-- or the change is the **newest one so far**, so folding it on top is the same
-  as replaying with it at the end. This holds for every handler, and covers the
-  common case of one peer writing at a time.
+`document.revisionForHandler(handlerId)` is a per-handler, monotonically
+increasing `int`. It moves every time the observable state of that handler
+**may have changed**: a local or imported change targets it, a snapshot
+carrying its state is imported or merged, or it — or a handler it
+references — is deleted.
 
-Otherwise the cached state is dropped and the next read replays the history.
-That is always correct — it is the slow path, never a wrong one.
+It never decreases, pruning included, so two equal readings guarantee the
+handler's state did not change in between. **This is the signal a reactive
+binding should watch**. Deleting a handler that a container references bumps the
+container's revision (its *resolved* view now reads differently) without
+touching its cached raw value — the container still holds the same
+`HandlerRef`s it always did, only one of them no longer resolves to anything.
 
-```mermaid
-graph TD
-    A[Insert] --> B{Local or Remote?}
+#### document
 
-    B -->|Local| C[Fold Operation into Cached State]
-    C --> D[Value Ready]
-    C -->|Cannot Apply| I[Drop Cached State]
+`document.updates` is a `Stream<void>`: one coarse "something changed, read
+again" signal, with no detail on what changed or where. It fires after every
+change this document applies — local or imported, inside a transaction only
+once, at the commit — and after every snapshot import or merge.
 
-    B -->|Remote| E{Handler Affected?}
-    E -->|No| D
-    E -->|Yes| F{State Order-Independent?}
+This is the pair `crdt_lf_flutter` builds its reactivity on: `updates` says
+*when to check*, `revisionForHandler` says *what actually moved*. A widget
+compares the two revisions instead of re-reading and diffing the value on
+every tick:
 
-    F -->|Yes| G[Queue Change]
-    F -->|No| H{Newest Change So Far?}
-    H -->|Yes| G
-    H -->|No| I
+```dart
+int _lastRevision = -1;
 
-    G -->|On Read| J[Fold Queued Changes]
-    I -->|On Read| K[Replay History]
-
-    J --> D
-    K --> D
+document.updates.listen((_) {
+  final revision = document.revisionForHandler(handler.id);
+  if (revision == _lastRevision) {
+    return; // woken up, but this handler did not change
+  }
+  _lastRevision = revision;
+  rebuild();
+});
 ```
 
-> 📖 Diagrams render best in the [live documentation](https://mattiapispisa.it/crdt/docs/documentation/packages/crdt_lf).
+#### events
 
-Queued changes are folded in on the next read, not on arrival: applying them
-right away would mean decoding every incoming operation, which the apply path
-avoids on purpose. A read never sees a stale value — reading is what drains the
-queue.
+`document.events` is a `Stream<CRDTDocumentEvent>`: a typed stream for a
+consumer that needs more than `updates` throws away — `DocumentSnapshotUpdated`,
+`DocumentHistoryPruned`, and the other `CRDTDocumentEvent` subclasses say
+*what* happened, not just that something did.
 
-Set `useIncrementalCacheUpdate = false` on a handler to turn every incremental
-path off and always replay. A custom handler that resolves conflicts by replay
-order must leave `stateIsOrderIndependent` at its default `false`, otherwise two
-peers that receive the same changes in a different order diverge.
+For what changed *inside* one handler's own value, in that handler's own
+coordinates, see [Handler deltas](#handler-deltas) below: `watch()` publishes
+one event per change instead of asking you to re-read `revisionForHandler`
+and diff the value yourself.
+
+This is also how `crdt_lf_persistence` keeps a document on disk: it listens
+once on `events` and writes down exactly what each variant says happened,
+without reading any handler.
+
+```dart
+document.events.listen((event) {
+  switch (event) {
+    case DocumentChangesApplied():
+      storage.appendChanges(event.changes); // batched, then flushed
+    case DocumentSnapshotUpdated():
+      storage.writeSnapshot(event.snapshot);
+    case DocumentHistoryPruned():
+      storage.recordPrune(event.removed, event.rewritten);
+  }
+});
+```
 
 ### Handler deltas
 
@@ -551,8 +586,9 @@ watches, the whole feature is one `null` check on the apply path.
 
 #### Deltas, or the value?
 
-Start with `handler.value`. It is cache-backed, an edit advances the cache
-instead of replaying, and for most reads it is already the right answer.
+Start with `handler.value`. It is cache-backed (see [State cache](#state-cache)
+for how), an edit advances the cache instead of replaying, and for most reads
+it is already the right answer.
 
 Reach for deltas when the projection you keep costs more to rebuild than the
 edit costs to apply:
@@ -730,6 +766,9 @@ document.runInTransaction(() => text.insert(0, 'hi'), origin: myEditor);
   reaches neither.
 - **The contents of a nested handler.** Undoing a write that stored a
   `HandlerRef` removes the reference; the data it pointed at stays.
+- **A deleted handler.** A delete is final. Undoing a `removeChild` puts the
+  reference back, and it resolves to nothing. The steps of a deleted handler
+  leave both stacks.
 
 An element that comes back is a **new** element: a CRDT never resurrects what it
 removed, so undoing a delete writes the values again under fresh ids. Undoing
@@ -746,11 +785,72 @@ refuses a handler another manager already holds.
 
 `CRDTFugueTextHandler`, `CRDTFugueListHandler`, `CRDTFugueMovableListHandler`,
 `CRDTMapHandler`, `CRDTORMapHandler`, `CRDTORSetHandler`,
-`CRDTRegisterHandler` and the reference handlers built on them.
+`CRDTRegisterHandler` and the reference handlers built on them, and
+`CRDTAggregateHandler` when its definition is an
+`InvertibleAggregateDefinition`.
 
 `CRDTTextHandler` and `CRDTListHandler` are indexed by position alone. They have
 no element identity to anchor an inverse to, so `Handler.invertible` is `false`
 for them and `track` refuses them.
+
+### State cache
+
+A handler answers a read from a cached state. Without that cache every read
+would replay the whole history of the handler, so the cost of an edit would grow
+with the age of the document. An edit therefore tries to **advance** the cached
+state instead of dropping it.
+
+A local edit always can: the operation is folded in the moment it is registered.
+A remote change is harder, because it arrives in the order the network delivers
+it, while a replay walks the history sorted by `(HLC, author)`. It can still be
+folded in when one of two things is true:
+
+- the handler's state is the **same whatever the order** causally ready
+  operations are applied in — it declares this with `stateIsOrderIndependent`.
+  The Fugue sequence handlers (they address elements by id) and the OR handlers
+  (they pick winners by tag) do;
+- or the change is the **newest one so far**, so folding it on top is the same
+  as replaying with it at the end. This holds for every handler, and covers the
+  common case of one peer writing at a time.
+
+Otherwise the cached state is dropped and the next read replays the history.
+That is always correct — it is the slow path, never a wrong one.
+
+```mermaid
+graph TD
+    A[Insert] --> B{Local or Remote?}
+
+    B -->|Local| C[Fold Operation into Cached State]
+    C --> D[Value Ready]
+    C -->|Cannot Apply| I[Drop Cached State]
+
+    B -->|Remote| E{Handler Affected?}
+    E -->|No| D
+    E -->|Yes| F{State Order-Independent?}
+
+    F -->|Yes| G[Queue Change]
+    F -->|No| H{Newest Change So Far?}
+    H -->|Yes| G
+    H -->|No| I
+
+    G -->|On Read| J[Fold Queued Changes]
+    I -->|On Read| K[Replay History]
+
+    J --> D
+    K --> D
+```
+
+> 📖 Diagrams render best in the [live documentation](https://mattiapispisa.it/crdt/docs/documentation/packages/crdt_lf).
+
+Queued changes are folded in on the next read, not on arrival: applying them
+right away would mean decoding every incoming operation, which the apply path
+avoids on purpose. A read never sees a stale value — reading is what drains the
+queue.
+
+Set `useIncrementalCacheUpdate = false` on a handler to turn every incremental
+path off and always replay. A custom handler that resolves conflicts by replay
+order must leave `stateIsOrderIndependent` at its default `false`, otherwise two
+peers that receive the same changes in a different order diverge.
 
 ## Architecture
 
@@ -777,12 +877,22 @@ Handlers are the core components of the library. They manage the state of a spec
 - `CRDTRegisterHandler`: Holds a single value with last-writer-wins (the scalar counterpart of the collections — a flag, a number, a non-collaborative string).
 - `CRDTORSetHandler`: Handles set editing with the Observed-Removed (OR) algorithm.
 - `CRDTORMapHandler`: Handles map editing with the Observed-Removed (OR) algorithm.
+- `CRDTAggregateHandler`: Holds one aggregate — an object with several fields — built from the events written on it (see [Aggregates built from events](#aggregates-built-from-events)).
 
 Container handlers, used to model nested structures (see [Nested Structures](#nested-structures-containers-and-references)):
 
 - `CRDTMapRefHandler`: a map whose values are references to other handlers.
 - `CRDTListRefHandler`: an ordered (Fugue) list of references to other handlers.
 - `CRDTMovableListRefHandler`: a movable ordered list of references to other handlers.
+- `CRDTORMapRefHandler`: a map of references with the Observed-Removed (OR) algorithm.
+- `CRDTORSetRefHandler`: a set of references with the Observed-Removed (OR) algorithm.
+
+**Reading a collection.** The `value` of a list, map or set handler is
+unmodifiable, and stays the same object until the next change: two reads are
+equal when they are `identical`. Copy it to edit it (`List.of`, `Map.of`,
+`toSet()`). The `value` of `CRDTMapHandler` and `CRDTListHandler` shows the
+current state, so a value read before a change shows the change too: copy it to
+keep what it holds. The others keep what they held.
 
 ```dart
 final doc = CRDTDocument(
@@ -1080,11 +1190,13 @@ instead of raw data:
 - `CRDTMapRefHandler` — keyed references (`setRef(key, handler)` / `getRef(key)`).
 - `CRDTListRefHandler` — ordered references using Fugue (`insertRef(index, handler)` / `getRefAt(index)`).
 - `CRDTMovableListRefHandler` — movable ordered references (adds `move(from, to)`), ideal for reordering with stable identity (slides, z-index, sortable lists…).
+- `CRDTORMapRefHandler` — keyed references with OR semantics (`putRef(key, handler)` / `getRef(key)`): a write concurrent with a remove of the same key wins.
+- `CRDTORSetRefHandler` — an unordered set of references with OR semantics (`addRef(handler)` / `children`), read back sorted by handler id.
 
 Each container exposes both views:
 
-- the inherited `value` getter returns the **raw references** (`Map<String, HandlerRef>` / `List<HandlerRef>`);
-- the `resolved` getter returns the **fully resolved subtree** as plain Dart values, resolving every reference recursively (with cycle protection).
+- the inherited `value` getter returns the **raw references** (`Map<String, HandlerRef>` / `List<HandlerRef>` / `Set<HandlerRef>`);
+- the `resolved` getter returns the **fully resolved subtree**, resolving every reference recursively (with cycle protection). A leaf handler resolves to its `value` as is (a `Set`, a custom type, an aggregate state), so the result is JSON-safe only when every leaf value is.
 
 Children are resolved **lazily** through the document registry, so the state is
 computed only when read.
@@ -1107,7 +1219,7 @@ final chapters = root.child('chapters', CRDTListRefHandler.spec);
 final chapter = chapters.insertChild(0, CRDTMapRefHandler.spec);
 chapter.child('title', CRDTFugueTextHandler.spec).insert(0, 'Intro');
 
-// Read the whole tree resolved to plain Dart values.
+// Read the whole tree, every reference resolved.
 print(root.resolved); // {chapters: [{title: Intro}]}
 ```
 
@@ -1228,6 +1340,45 @@ A complete, interactive example is available in the Flutter example app under
 the **Document** entry (sortable chapters → paragraphs → collaborative text and
 sortable item lists).
 
+##### Deleting a nested handler
+
+Removing a reference leaves the child in the document: its changes, and its
+state in every snapshot. To delete the child for every peer, remove it with
+`removeChild` (`removeChildAt` on the lists), or call `doc.deleteHandler`:
+
+```dart
+chapters.removeChildAt(0);       // the reference, and the chapter
+root.removeChild('draft');       // the same on a map
+doc.deleteHandler(chapter);      // the chapter alone, any reference stays
+doc.deleteHandlerRef(ref);       // by reference, without building it
+```
+
+- **The subtree goes too.** Every handler reachable from the deleted one is
+  deleted. A child that another container also references is deleted for that
+  container too. A child added to the container on another peer, at the same
+  time as the delete, is deleted as well.
+- **A peer that cannot build a child still deletes it.** `removeChild` and
+  `deleteHandlerRef` need only its id, so a server that registers no kinds can
+  delete it too. The children of that child are deleted by the first peer
+  that can build it.
+- **A delete wins.** An edit made at the same time on another peer is ignored.
+- **A delete is final.** The handler is closed: its `watch` stream ends, and a
+  write, `doc.handler` or a constructor on its id throws
+  `HandlerDeletedException`. A reference to it resolves to `null`: `resolved`
+  keeps a `null` in a list, so positions stay the ones `removeChildAt` counts,
+  and leaves the key out of a map. `child(key, spec)` makes a new child in its
+  place.
+- **The data goes at the next snapshot.** `takeSnapshot` leaves the deleted
+  handlers out, so a prune removes their changes.
+- **The id stays.** The document keeps every deleted id for good, so a late
+  edit cannot bring the handler back. Each delete adds its id, plus a few
+  bytes, to every snapshot, and this list never shrinks.
+
+The deletes travel as the operations of an internal handler, with the
+reserved id `crdt_lf/deleted-handlers`. A peer on crdt_lf before 5.2.0 sees an
+unknown kind (see `describeDataRequirements`) and keeps showing the deleted
+data.
+
 #### Choosing How to Model Your Data
 
 There is rarely a single "right" model — it depends on **how far down you want
@@ -1289,6 +1440,136 @@ item.child('done', doneKind).set(false);
 - A **movable** list keeps each item's identity across concurrent reorders (no
   duplicates). Costs more handlers and setup.
 
+##### Aggregates built from events
+
+Model C. A `Car` has an owner, a license plate set once at registration and
+never changed, and its most recent maintenance record. The app changes it
+through domain operations: register it, change the owner, log a service.
+Write those operations as **events**, and say once how each event moves the
+state:
+
+```dart
+final class CarAggregate extends AggregateDefinition<Car, CarEvent> {
+  const CarAggregate();
+
+  @override
+  String get handlerType => 'car';
+
+  // The license plate is the aggregate's id: no event ever changes it.
+  @override
+  Car initial(String id) => Car(licensePlate: id);
+
+  @override
+  Car reduce(Car state, CarEvent event, EventContext context) =>
+      switch (event) {
+        OwnerChanged(:final owner) => state.copyWith(owner: owner),
+        MaintenanceLogged(:final note) =>
+          state.copyWith(lastMaintenance: note),
+      };
+
+  @override
+  ValueCodec<CarEvent> get eventCodec => const CarEventCodec();
+
+  @override
+  ValueCodec<Car> get stateCodec => const CarCodec();
+}
+
+final car = doc.handler(
+  CRDTAggregateHandler.spec(const CarAggregate()),
+  'AB123CD',
+);
+car.dispatch(const OwnerChanged('Alice'));
+car.dispatch(const MaintenanceLogged('Oil change'));
+print(car.value.owner); // Alice
+```
+
+`CRDTAggregateHandler` replays the events of every peer in the replay order,
+`(HLC, author)`, through `reduce`. Peers that hold the same events hold the same
+state. What you get, compared with models A and B:
+
+- **One handler per aggregate**, with a typed `value`, one `watch()` stream and
+  one `CRDTUndoManager.track` (give the definition an `invert` by extending
+  `InvertibleAggregateDefinition`).
+- **Atomic writes.** `dispatchAll` puts its events in one change: a peer
+  receives all of them or none.
+- **Stable identities.** `EventContext.id` is the same on every peer, so an
+  entity an event creates can keep it, and later events name that entity instead
+  of a position that a concurrent insert may shift. `dispatch` returns that id.
+
+The rules of `reduce` are what keeps peers equal:
+
+- **Pure and deterministic.** No clock, no randomness, no iteration over an
+  unordered set. Take the author and the event id from `EventContext`.
+- **Identities, never positions.** When an event creates or targets part of
+  the state (an item in a list, say), address it by the id `EventContext`
+  gives, never by where it sits: a concurrent insert can shift a position but
+  never an id.
+- **A new state for every event.** The handler keeps the state it returns and
+  hands it out as its `value`.
+- **An event on a missing target does nothing.** An event addressed to an
+  entity another peer already removed finds nothing, and that is the merged
+  result.
+- **Throw to refuse an event.** `dispatch` then throws the same error and writes
+  nothing. A change whose event throws is skipped whole on every peer, so a
+  batch a concurrent event made invalid leaves no trace.
+
+What it does not do: merge two concurrent edits of the same field. The event
+later in the replay order wins, the whole field at once. For text that peers
+type together, keep a `CRDTFugueTextHandler` beside the aggregate. An event that
+arrives older than the newest one already applied makes the next read replay
+the aggregate's history since the last snapshot, so keep one aggregate small and
+take snapshots.
+
+###### Versions and migrations
+
+Events and the snapshot state are written in the definition's `version`. When
+the bytes of `eventCodec` or `stateCodec` change, or an event takes a new
+meaning in `reduce`, raise `version` and add one `AggregateMigration` from the
+previous version:
+
+```dart
+final class CarV1ToV2 extends AggregateMigration {
+  const CarV1ToV2();
+
+  @override
+  int get from => 1;
+
+  @override
+  List<Uint8List> upEvent(Uint8List event) => /* v1 event → v2 events */;
+
+  @override
+  Uint8List upState(Uint8List state) => /* v1 state bytes → v2 */;
+}
+
+final class CarAggregate extends AggregateDefinition<Car, CarEvent> {
+  @override
+  int get version => 2;
+
+  @override
+  List<AggregateMigration> get migrations => const [CarV1ToV2()];
+  // ...
+}
+```
+
+The history keeps the bytes each peer wrote, so a migration never rewrites it:
+it runs every time old data is read. Three rules follow:
+
+1. **Pure and deterministic**, like `reduce`.
+2. **Ids never move.** `upEvent` may drop an event or split it in several: the
+   first event keeps the id of the one it came from, and each other one gets an
+   `EventId.part` of its own.
+3. **`upState` agrees with `upEvent`.** The upgraded snapshot has to equal the
+   state the upgraded events replay to, or a peer that starts from a snapshot
+   diverges from one that replays the history. Keep the bytes an old build wrote
+   as test fixtures and check both paths.
+
+Every version travels under its own operation kind and snapshot blob version,
+so a build that meets a newer version refuses it, and the capability check of a
+sync layer reports the mismatch before that. Peers have to upgrade before they
+write in a new version. A build reads every version its migrations lead up
+from. A snapshot is always written in the current version: once every replica
+took one that pruned the old events, drop the migrations below it.
+
 ##### A quick decision guide
 
 | Question                                                      | Lean towards                                                |
@@ -1298,6 +1579,7 @@ item.child('done', doneKind).set(false);
 | Item is atomic / co-editing is rare?                          | Flat value + LWW — model A                                  |
 | Need drag-to-reorder without duplicating on concurrent moves? | `CRDTMovableListRefHandler` / `CRDTFugueMovableListHandler` |
 | Order matters and peers insert at the same spot?              | A Fugue list (less interleaving)                            |
+| An object changed by domain events, as one unit?              | `CRDTAggregateHandler` — model C                            |
 
 ##### Picking a leaf handler
 
@@ -1327,7 +1609,13 @@ item.child('done', doneKind).set(false);
   `CRDTMovableListRefHandler`**: use these when the values are themselves
   sub-documents (model B) rather than raw data.
 
-### Transaction
+## Core data structures
+
+What `CRDTDocument` and the handlers are built from: the causal graph a
+document replays, the unit it replays, and the compact state it can replay
+from instead.
+
+### Mixing explicit operations in a transaction
 
 To manage operations in a transaction, use the `runInTransaction` method of the document.
 
@@ -1369,23 +1657,65 @@ A structure that manages the frontiers (latest operations) of the CRDT.
 ### Snapshot
 A snapshot of the CRDT state, including the version vector and the data.
 `document.snapshot` reads the one the document holds, as a read-only copy.
+`Snapshot.data` is a `Map<String, Uint8List>` with one blob per entry. Two
+kinds of entry live in it: one handler's own state, keyed by its id, and a
+handful of reserved entries, keyed by a `crdt_lf/`-prefixed name, that
+describe the document as a whole rather than one handler.
+
+**One handler's state, keyed by its id.** `takeSnapshot` keeps the state of
+**every** handler the document holds data for, open or not, so a prune never
+loses what another peer can still read:
+
+- an open handler writes its blob;
+- a closed handler of a kind the document knows (see `register`) is built for
+  the time of the snapshot and writes its blob;
+- a handler with no change since the last snapshot keeps the blob it had;
+- a handler of a kind the document does not know keeps its blob, and the
+  changes it got since ride inside the reserved unfolded-changes entry (see
+  below). The first peer that knows the kind folds them into a new blob when
+  it takes its own snapshot.
+
+A server or a relay that opens no handler can therefore take snapshots and
+prune its history.
+
+The **deletions registry**, under the reserved `crdt_lf/deleted-handlers` id,
+is one such entry: an OR-set of every id `deleteHandler` / `deleteHandlerRef`
+ever deleted, on this peer or on a peer whose changes this document holds. It
+is a handler like any other, so it follows the same four rules above and needs
+no special case. A document that never deletes a handler never opens it: a
+snapshot without this entry is a document that has never seen a delete.
+
+**Reserved whole-document entries**, each keyed by its own `crdt_lf/`-prefixed
+name rather than a handler id:
+
+- `crdt_lf/handler-manifest` — `{handlerId: handlerType}` for every handler the
+  snapshot names. The history a closed handler is rebuilt from is pruned once
+  it has a blob, so after that the manifest is the only record left that says
+  what type its id is — needed to resolve a reference to it, or to read its
+  changes back for a later snapshot.
+- `crdt_lf/capabilities` — `{handlerType: (operation kinds, blob versions)}`
+  this build read or wrote into the snapshot. Without it, a peer that reloads
+  a pruned document has no changes left to infer requirements from, and would
+  report that it needs nothing. See `CRDTDocument.builtInCapabilities`.
+- `crdt_lf/unfolded-changes` — the changes of a handler of an unknown kind,
+  one entry per handler, that no blob could take in. A snapshot that carries
+  one needs `crdt_lf` 5.2.0 or later to be read. Carried changes are kept per
+  handler: if a newer build wrote them in a form this one cannot read, only
+  that handler fails to read, and the snapshot passes them on unchanged. Once
+  that handler gets new changes, `takeSnapshot` throws a `FormatException`
+  instead of losing them.
 
 ### Binary representation
 
-Every core CRDT type exposes a compact, self-describing binary representation.
-This is the canonical wire format used by `crdt_lf_hive` for persistence and by
-`crdt_socket_sync` for transport — but it is also a public API you can use
-directly to build your own storage or sync layer.
-
-| Type                 | Methods                                                              | Size                                                                                 |
-|----------------------|----------------------------------------------------------------------|--------------------------------------------------------------------------------------|
-| `PeerId`             | `toUint8List()` / `fromUint8List()`                                  | 16 B                                                                                 |
-| `HybridLogicalClock` | `toUint8List()` / `fromUint8List()`                                  | 8 B                                                                                  |
-| `OperationId`        | `toUint8List()` / `fromUint8List()`                                  | 24 B (peer + hlc)                                                                    |
-| `FugueElementID`     | `toBytes()` / `fromBytes()` (also `readFromBytes` for chained reads) | variable                                                                             |
-| `VersionVector`      | `toBytes()` / `fromBytes()`                                          | variable                                                                             |
-| `Change`             | `toBytes()` / `fromBytes()`                                          | variable, schema-versioned                                                           |
-| `Snapshot`           | `toBytes()` / `fromBytes()`                                          | variable; `data` is a `Map<String, Uint8List>` framed with a length prefix per entry |
+Every core CRDT type — `PeerId`, `HybridLogicalClock`, `OperationId`,
+`FugueElementID`, `VersionVector`, `Change`, `Snapshot` — exposes a compact,
+self-describing binary representation through a `toBytes()`/`toUint8List()`
+and a matching `fromBytes()`/`fromUint8List()`. This is the canonical wire
+format used by `crdt_lf_hive` for persistence and by `crdt_socket_sync` for
+transport — but it is also a public API you can use directly to build your
+own storage or sync layer. Each type's own dartdoc, on its `toBytes()` /
+`fromBytes()`, documents its byte layout and size: see that type's API
+reference rather than a table here, which would only drift out of sync.
 
 Operation payloads inside a `Change` are produced by the handler's
 `ValueCodec<T>`. Each entry of `Snapshot.data` is produced by the handler's

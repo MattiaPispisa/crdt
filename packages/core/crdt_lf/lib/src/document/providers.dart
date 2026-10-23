@@ -68,10 +68,10 @@ base mixin DocumentConsumer {
 ///   instead of dropping the cache. Allowed when the change is newer than
 ///   everything already folded in, or when the host declares
 ///   [stateIsOrderIndependent].
-/// - **full recompute**: [cachedState] returns `null` whenever the cached
-///   version no longer matches the document's current version (e.g. after
-///   import, snapshot merge or prune). The host recomputes the state from
-///   scratch and pushes it back via [updateCachedState].
+/// - **full recompute**: [cachedState] returns `null` once the cache was
+///   dropped, or once the document moved in a way that leaves every cache
+///   stale (a snapshot import or merge, a prune). The host recomputes the
+///   state from scratch and pushes it back via [updateCachedState].
 ///
 /// [T] is the host's own internal representation. It has no required
 /// relationship with `handler.value` or [SnapshotProvider.getSnapshotState]
@@ -82,10 +82,9 @@ base mixin CacheableStateProvider<T> on DocumentConsumer {
   @override
   String get id;
 
-  /// Document version the cached state is pinned to (`null` when no
-  /// state is cached). The cache is valid only while this set equals
-  /// `_document.version`.
-  Set<OperationId>? _cachedVersion;
+  /// The `_document._cache.epoch` the cached state is pinned to (`null` when no
+  /// state is cached). The cache is valid only while the two are equal.
+  int? _cachedEpoch;
 
   /// The most recently cached state, or `null` if no state is cached.
   T? _cachedState;
@@ -198,10 +197,8 @@ base mixin CacheableStateProvider<T> on DocumentConsumer {
       return false;
     }
 
-    // The raw field, not [cachedState]: this runs after the document version
-    // has already moved past these changes, so the getter would always say
-    // `null`.
-    if (_cachedState == null) {
+    // The raw fields, not [cachedState]: the getter would drain the queue.
+    if (_cachedState == null || _cachedEpoch != _document._cache.epoch) {
       return false;
     }
 
@@ -222,7 +219,6 @@ base mixin CacheableStateProvider<T> on DocumentConsumer {
         }
       }
     }
-    _updateCachedVersion();
     return true;
   }
 
@@ -284,8 +280,8 @@ base mixin CacheableStateProvider<T> on DocumentConsumer {
       rethrow;
     }
 
-    // The pinned version already covers these changes (see
-    // [_queueRemoteChanges]), so only the state itself has to be stored.
+    // The pin still holds (see [_queueRemoteChanges]), so only the state itself
+    // has to be stored.
     _cachedState = state;
 
     // A read reached the queue before the eager drain did. The state is right;
@@ -295,16 +291,11 @@ base mixin CacheableStateProvider<T> on DocumentConsumer {
     }
   }
 
-  /// Pins the cached version to the document's current version.
-  void _updateCachedVersion() {
-    _cachedVersion = Set.from(_document.version);
-  }
-
-  /// Replaces the cached state with [newState] and pins it to the current
-  /// document version. Call this after a full recompute.
+  /// Replaces the cached state with [newState], valid until the document next
+  /// drops it. Call this after a full recompute.
   void updateCachedState(T newState) {
     _cachedState = newState;
-    _updateCachedVersion();
+    _cachedEpoch = _document._cache.epoch;
   }
 
   /// Framework hook: tries to advance the cache by a single [operation],
@@ -383,7 +374,7 @@ base mixin CacheableStateProvider<T> on DocumentConsumer {
   /// Drops the cached state and tells any watcher why.
   void _invalidate(ResetCause cause) {
     _cachedState = null;
-    _cachedVersion = null;
+    _cachedEpoch = null;
     _pendingRemoteChanges = null;
     _replayBoundary = null;
     _replayBoundaryMatchesState = false;
@@ -399,7 +390,7 @@ base mixin CacheableStateProvider<T> on DocumentConsumer {
   T? get cachedState {
     _drainPendingRemoteChanges();
 
-    if (_cachedState != null && setEquals(_cachedVersion, _document.version)) {
+    if (_cachedState != null && _cachedEpoch == _document._cache.epoch) {
       return _cachedState;
     }
 
@@ -445,8 +436,8 @@ extension _HandlerHelper on Handler<dynamic> {
   /// [varint(typeLen)][type UTF-8][varint(idLen)][id UTF-8].
   ///
   /// Computed once and cached. Compared byte-by-byte against a change payload
-  /// in [_isAffectedByChange] to avoid UTF-8 decode + String allocation on
-  /// every change application.
+  /// in [_HandlerRegistry.forPayload] to avoid UTF-8 decode + String
+  /// allocation on every change application.
   Uint8List get _envelopePrefix {
     return _prefixCache[this] ??= _buildPrefix();
   }
@@ -455,14 +446,6 @@ extension _HandlerHelper on Handler<dynamic> {
     final out = BytesBuilder(copy: false);
     OperationEnvelopeCodec.writeEnvelopePrefix(out, handlerType, id);
     return out.toBytes();
-  }
-
-  bool _isAffectedByChange(Change change) {
-    final payload = change.payloadBytes();
-    final prefix = _envelopePrefix;
-    // +1 for the kind byte that follows the prefix.
-    if (payload.length < prefix.length + 1) return false;
-    return startsWithBytes(payload, prefix);
   }
 }
 

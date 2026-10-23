@@ -1,0 +1,381 @@
+part of 'document.dart';
+
+/// The deleted handlers of a document, and the rules a handler id follows
+/// because of them.
+///
+/// The deletes live in the deletions registry, a handler under the reserved
+/// id [_deletedHandlersKey] that only the document may open.
+abstract class _HandlerDeletions<D extends BaseCRDTDocument> {
+  _HandlerDeletions(this._document);
+
+  final D _document;
+
+  /// Whether this is opening the registry, the one handler allowed under the
+  /// reserved id.
+  bool _openingRegistry = false;
+
+  /// Whether the handler with [handlerId] is deleted.
+  bool isDeleted(String handlerId);
+
+  /// Whether a handler may be built under a deleted id, to be read.
+  bool get buildsDeleted;
+
+  /// The deletions registry; `null` until it opens.
+  CRDTORSetHandler<String>? get registry =>
+      _document._registry[_deletedHandlersKey] as CRDTORSetHandler<String>?;
+
+  /// The deletions registry, opened on first use, so a document that deletes
+  /// nothing keeps the snapshots and capabilities it had before.
+  CRDTORSetHandler<String> openRegistry() {
+    final open = registry;
+    if (open != null) {
+      return open;
+    }
+    _openingRegistry = true;
+    try {
+      return _DeletionsRegistry.spec.create(_document, _deletedHandlersKey);
+    } finally {
+      _openingRegistry = false;
+    }
+  }
+
+  /// Throws when [handler] may not open: its id is deleted, or reserved.
+  void checkOpening(Handler<dynamic> handler) {
+    if (isDeleted(handler.id) && !buildsDeleted) {
+      throw HandlerDeletedException(handler.id);
+    }
+    if (isReserved(handler.id) && !_openingRegistry) {
+      throw reservedIdError(handler.id);
+    }
+  }
+
+  /// Whether a reference to [handlerId] resolves to nothing: the handler is
+  /// deleted, or the id is reserved.
+  bool hides(String handlerId) => isDeleted(handlerId) || isReserved(handlerId);
+
+  static bool isReserved(String handlerId) => handlerId == _deletedHandlersKey;
+
+  /// Throws for the reserved id.
+  static void checkNotReserved(String handlerId) {
+    if (isReserved(handlerId)) {
+      throw reservedIdError(handlerId);
+    }
+  }
+
+  static ArgumentError reservedIdError(String id) => ArgumentError.value(
+        id,
+        'id',
+        'Reserved for the deleted handlers of the document',
+      );
+}
+
+/// The deletes of a live document, and how a delete reaches every peer.
+///
+/// A delete is an add to the deletions registry. This class records them,
+/// closes the deleted handlers with their subtree, and deletes the children a
+/// concurrent edit added to a deleted container.
+final class _LiveDeletions extends _HandlerDeletions<CRDTDocument> {
+  _LiveDeletions(super._document)
+      : _deletedIds = {},
+        _sweptChangeCounts = {},
+        _lateTargets = {},
+        _deletedIdBytes = {};
+
+  /// The ids of the deleted handlers, as of the last [sync].
+  final Set<String> _deletedIds;
+
+  /// The change count of each deleted handler as [deleteLateChildren] last
+  /// read it, since the last prune.
+  final Map<String, int> _sweptChangeCounts;
+
+  /// The deleted handlers a change reached since the last [sync].
+  final Set<String> _lateTargets;
+
+  /// The UTF-8 of each id in [_deletedIds], by its hash.
+  final Map<int, List<({Uint8List bytes, String id})>> _deletedIdBytes;
+
+  /// The revision of the deletions registry that [sync] last read.
+  int _syncedRevision = 0;
+
+  /// Whether this is building a deleted handler to read it.
+  bool _readingDeleted = false;
+
+  @override
+  bool isDeleted(String handlerId) => _deletedIds.contains(handlerId);
+
+  @override
+  bool get buildsDeleted => _readingDeleted;
+
+  /// Deletes [roots] and every handler reachable from them.
+  void delete(Iterable<HandlerRef> roots) {
+    final ids = _subtreeIds(roots)..removeWhere(isDeleted);
+    if (ids.isEmpty) {
+      return;
+    }
+    _record(ids);
+    // Closed here and not by [sync]: inside an outer transaction the registry
+    // does not read its own adds until the commit.
+    _close(ids);
+  }
+
+  /// Opens the deletions registry when [change], just applied, is the first
+  /// delete this document sees.
+  void noteApplied(Change change) {
+    if (registry == null) {
+      if (_DeletionsRegistry.isDeletionsChange(change)) {
+        openRegistry();
+      }
+      return;
+    }
+    if (_deletedIds.isEmpty) {
+      return;
+    }
+    final target = _deletedTargetOf(change.payloadBytes());
+    if (target != null) {
+      _lateTargets.add(target);
+    }
+  }
+
+  /// The deleted handler [payload] is addressed to; `null` for any other.
+  ///
+  /// Compares bytes, so the apply path stays free of envelope decodes.
+  String? _deletedTargetOf(Uint8List payload) {
+    final int start;
+    final int end;
+    try {
+      final type = UVarint.read(payload, offset: 0);
+      final id = UVarint.read(payload, offset: type.nextOffset + type.value);
+      start = id.nextOffset;
+      end = start + id.value;
+    } on FormatException {
+      return null;
+    }
+    if (end > payload.length) {
+      return null;
+    }
+    final candidates =
+        _deletedIdBytes[fnv1a32(payload, start: start, end: end)];
+    for (final candidate in candidates ?? const <Never>[]) {
+      if (candidate.bytes.length == end - start &&
+          bytesEqualAt(payload, start, candidate.bytes)) {
+        return candidate.id;
+      }
+    }
+    return null;
+  }
+
+  /// Forgets what [deleteLateChildren] read: a prune can lower a change count.
+  void notePrune() => _sweptChangeCounts.clear();
+
+  /// Adds [ids] to the deletions registry, in one transaction.
+  void _record(Iterable<String> ids) {
+    _document.runInTransaction(() {
+      final registry = openRegistry();
+      for (final id in ids) {
+        registry.add(id);
+      }
+    });
+  }
+
+  /// The ids of [roots] and of every handler reachable from them.
+  Set<String> _subtreeIds(Iterable<HandlerRef> roots) {
+    final ids = {for (final root in roots) root.id};
+    final queue = Queue<HandlerRef>.of(roots);
+    while (queue.isNotEmpty) {
+      final handler = _document.resolveHandler(queue.removeFirst());
+      if (handler == null || handler is! ContainerHandler) {
+        continue;
+      }
+      for (final ref in (handler as ContainerHandler).childRefs()) {
+        if (ids.add(ref.id)) {
+          queue.add(ref);
+        }
+      }
+    }
+    return ids;
+  }
+
+  /// Closes the handlers the deletions registry names and this document has
+  /// not closed yet, with the children they hold here.
+  ///
+  /// A child added to a container concurrently with its delete is out of the
+  /// subtree the deleting peer recorded. The peer that sees both records it,
+  /// so the delete reaches it on every peer.
+  void sync() {
+    final registry = this.registry;
+    if (registry == null) {
+      return;
+    }
+    _deleteChildrenOfLateTargets(registry);
+    final revision = _document.revisionForHandler(_deletedHandlersKey);
+    if (revision == _syncedRevision) {
+      return;
+    }
+    _syncedRevision = revision;
+
+    final recorded = registry.value;
+    final roots = <HandlerRef>[];
+    final reached = <String>{};
+    Map<String, String>? manifest;
+    for (final id in recorded) {
+      if (_deletedIds.contains(id)) {
+        continue;
+      }
+      // Read before [_close]: a deleted handler no longer resolves.
+      final type = _document._registry[id]?.handlerType ??
+          _typeOf(id, manifest ??= _manifest());
+      if (type == null) {
+        reached.add(id);
+      } else {
+        roots.add(HandlerRef(id, type));
+      }
+    }
+    reached.addAll(_subtreeIds(roots));
+    _closeAndRecord(registry, reached);
+  }
+
+  /// Deletes the children the late changes in [_lateTargets] added.
+  void _deleteChildrenOfLateTargets(CRDTORSetHandler<String> registry) {
+    if (_lateTargets.isEmpty) {
+      return;
+    }
+    final targets = _lateTargets.toList();
+    _lateTargets.clear();
+    final children = <HandlerRef>[];
+    final manifest = _manifest();
+    for (final id in targets) {
+      _sweptChangeCounts[id] = _document.changeCountForHandler(id);
+      final type = _typeOf(id, manifest);
+      if (type != null) {
+        children.addAll(_childRefsOfDeleted(id, type));
+      }
+    }
+    _closeAndRecord(
+      registry,
+      _subtreeIds(children)..removeWhere(_deletedIds.contains),
+    );
+  }
+
+  /// Closes [reached] now, and adds to [registry] those it does not name yet.
+  void _closeAndRecord(CRDTORSetHandler<String> registry, Set<String> reached) {
+    final unrecorded = reached.difference(registry.value);
+    _close(reached);
+    if (unrecorded.isNotEmpty) {
+      // Through the outbox: this runs while the document applies changes, and
+      // a write from here would re-enter the commit in progress.
+      _document._outbox.add(() {
+        if (!_document._isDisposed) {
+          _record(unrecorded.difference(registry.value));
+        }
+      });
+    }
+  }
+
+  /// Opens the deletions registry when [snapshot] carries one, then [sync]s.
+  void syncSnapshot(Snapshot snapshot) {
+    if (snapshot.data.containsKey(_deletedHandlersKey)) {
+      openRegistry();
+    }
+    sync();
+  }
+
+  /// Deletes the children a deleted container gained after its delete.
+  ///
+  /// An edit concurrent with the delete may reach this peer after it, and add
+  /// a child [sync] never saw. Run it before a snapshot drops the changes that
+  /// name it.
+  void deleteLateChildren() {
+    final children = <HandlerRef>[];
+    Map<String, String>? manifest;
+    for (final id in _deletedIds) {
+      final count = _document.changeCountForHandler(id);
+      if (count == 0 || _sweptChangeCounts[id] == count) {
+        continue;
+      }
+      _sweptChangeCounts[id] = count;
+      final type = _typeOf(id, manifest ??= _manifest());
+      if (type != null) {
+        children.addAll(_childRefsOfDeleted(id, type));
+      }
+    }
+    if (children.isNotEmpty) {
+      delete(children);
+    }
+  }
+
+  Map<String, String> _manifest() =>
+      _HandlerRegistry.manifestOf(_document._lastSnapshot);
+
+  /// The children the deleted container with [id] references, or none when
+  /// the document cannot build a [type] or read its changes.
+  List<HandlerRef> _childRefsOfDeleted(String id, String type) {
+    _readingDeleted = true;
+    try {
+      return _document._readClosed(
+            id,
+            type,
+            (handler) => handler is ContainerHandler
+                ? (handler as ContainerHandler).childRefs().toList()
+                : const <HandlerRef>[],
+          ) ??
+          const [];
+    } on Exception {
+      // A change of a newer build, say: its children stay out of reach here.
+      return const [];
+    } finally {
+      _readingDeleted = false;
+    }
+  }
+
+  /// The kind of the handler with [id], read from the snapshot [manifest] or
+  /// from its changes, or `null` when the document holds neither.
+  String? _typeOf(String id, Map<String, String> manifest) =>
+      manifest[id] ??
+      _HandlerRegistry.typeIn([
+        ..._document.changesForHandler(id),
+        ..._document._readableUnfoldedChanges(id),
+      ]);
+
+  /// Marks [ids] deleted and closes the handlers open under them.
+  void _close(Iterable<String> ids) {
+    final closed = {
+      for (final id in ids)
+        if (!_deletedIds.contains(id)) id,
+    };
+    if (closed.isEmpty) {
+      return;
+    }
+    _document._cache.bumpDeleted(closed);
+    for (final id in closed) {
+      _deletedIds.add(id);
+      final bytes = utf8.encode(id);
+      (_deletedIdBytes[fnv1a32(bytes)] ??= []).add((bytes: bytes, id: id));
+      _document._unregisterHandler(id)?._closeDeltas();
+    }
+    _document._undo.forget(closed);
+  }
+}
+
+/// The deletes of a history view, read at its cursor.
+final class _ViewDeletions extends _HandlerDeletions<_CRDTStaticProxyDocument> {
+  _ViewDeletions(super._document);
+
+  /// Whether the frozen history holds a delete at all.
+  late final bool _holdsDeletions =
+      (_document._lastSnapshot?.data.containsKey(_deletedHandlersKey) ??
+              false) ||
+          _document._frozenChanges.any(_DeletionsRegistry.isDeletionsChange);
+
+  /// Whether the handler with [handlerId] is deleted at the cursor.
+  @override
+  bool isDeleted(String handlerId) {
+    if (!_holdsDeletions || _HandlerDeletions.isReserved(handlerId)) {
+      return false;
+    }
+    return openRegistry().value.contains(handlerId);
+  }
+
+  /// A view reads every handler, deleted at the cursor or not.
+  @override
+  bool get buildsDeleted => true;
+}

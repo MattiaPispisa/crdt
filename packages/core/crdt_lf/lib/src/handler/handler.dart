@@ -111,6 +111,9 @@ abstract base class Handler<T>
   /// matching handler and nested handlers can be reconstructed remotely.
   String get handlerType => _instanceSpec.type;
 
+  /// Whether this handler was deleted; see [BaseCRDTDocument.deleteHandler].
+  bool get isDeleted => doc.isDeleted(id);
+
   /// Cached insert type instance for this handler, used in operations.
   ///
   /// Override it to declare the kind stamped, when concurrent inserts have to
@@ -244,14 +247,14 @@ abstract base class Handler<T>
 
   /// Returns the [Operation]s required by this consumer to compute its state.
   ///
-  /// The [Operation]s are returned in the order they were applied.
+  /// The [Operation]s on top of the snapshot blob, in the order they were
+  /// applied: the ones the snapshot carries for this handler, the ones after
+  /// it, and the ones of the open transaction.
   List<Operation> operations() {
-    final changes = doc
-        .changesForHandler(
-          id,
-          fromVersionVector: _snapshotVersionVector(),
-        )
-        .sorted(inplace: true);
+    final changes = [
+      ...?SnapshotRecords.unfoldedChangesFor(doc._lastSnapshot, id),
+      ...doc.changesForHandler(id, fromVersionVector: _snapshotVersionVector()),
+    ].sorted(inplace: true);
 
     // The list is sorted, so its last entry is the newest change the caller is
     // about to fold in. See [CacheableStateProvider._noteReplayBoundary].
@@ -265,6 +268,15 @@ abstract base class Handler<T>
       }
     }
 
-    return operations;
+    final uncommitted = doc._uncommittedOperations(id);
+    if (uncommitted.isEmpty) {
+      return operations;
+    }
+    // Their changes are only created at the commit, so the boundary is not
+    // known until then.
+    _replayBoundaryMatchesState = false;
+    return operations
+      ..addAll(uncommitted)
+      ..sort((a, b) => a.stamp!.compareTo(b.stamp!));
   }
 }

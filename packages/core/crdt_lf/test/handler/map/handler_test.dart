@@ -1,6 +1,7 @@
 import 'package:crdt_lf/crdt_lf.dart';
 import 'package:test/test.dart';
 
+import '../../helpers/frozen_value.dart';
 import '../conformance/handler_conformance.dart';
 
 void main() {
@@ -21,6 +22,19 @@ void main() {
   );
 
   group('CRDTMapHandler', () {
+    test('value is unmodifiable and shows the current state', () {
+      final doc = CRDTDocument();
+      final map = CRDTMapHandler<int>(doc, 'frozen', handlerType: 'frozen')
+        ..set('a', 1);
+
+      expectFrozenValue<Map<String, int>>(
+        read: () => map.value,
+        edit: (value) => value['b'] = 2,
+        write: () => map.set('c', 3),
+        fixed: false,
+      );
+    });
+
     test('should handle basic operations', () {
       final doc = CRDTDocument(
         peerId: PeerId.parse('37f1ec87-6ea5-430b-a627-a6b92b56a02d'),

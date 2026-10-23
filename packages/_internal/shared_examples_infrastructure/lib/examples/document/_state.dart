@@ -71,7 +71,8 @@ class DocumentExampleState extends ExampleDocument<CRDTMovableListRefHandler> {
   // --- Reads (from the current view: live document or time-travel) ---
 
   /// The chapters of the document in order.
-  List<CRDTMapRefHandler> get chapters => _resolveMapList(handler);
+  List<CRDTMapRefHandler> get chapters =>
+      handler.children.whereType<CRDTMapRefHandler>().toList();
 
   /// The title text handler of [chapter], or `null` if not set yet.
   CRDTFugueTextHandler? chapterTitle(CRDTMapRefHandler chapter) =>
@@ -80,7 +81,9 @@ class DocumentExampleState extends ExampleDocument<CRDTMovableListRefHandler> {
   /// The paragraphs of [chapter] in order.
   List<CRDTMapRefHandler> paragraphsOf(CRDTMapRefHandler chapter) {
     final list = chapter.getRefAs<CRDTMovableListRefHandler>(_kParagraphsKey);
-    return list == null ? const [] : _resolveMapList(list);
+    return list == null
+        ? const []
+        : list.children.whereType<CRDTMapRefHandler>().toList();
   }
 
   /// The body text handler of [paragraph], or `null` if not set yet.
@@ -90,7 +93,9 @@ class DocumentExampleState extends ExampleDocument<CRDTMovableListRefHandler> {
   /// The blocks of [paragraph] in order.
   List<CRDTMapRefHandler> blocksOf(CRDTMapRefHandler paragraph) {
     final list = paragraph.getRefAs<CRDTMovableListRefHandler>(_kBlocksKey);
-    return list == null ? const [] : _resolveMapList(list);
+    return list == null
+        ? const []
+        : list.children.whereType<CRDTMapRefHandler>().toList();
   }
 
   /// The kind of [block] (the single key of the block map), or `null`.
@@ -107,7 +112,7 @@ class DocumentExampleState extends ExampleDocument<CRDTMovableListRefHandler> {
 
   /// The todo items of [todoList] in order.
   List<CRDTMapRefHandler> todosOf(CRDTMovableListRefHandler todoList) =>
-      _resolveMapList(todoList);
+      todoList.children.whereType<CRDTMapRefHandler>().toList();
 
   /// The text handler of a todo [item], or `null`.
   CRDTFugueTextHandler? todoText(CRDTMapRefHandler item) =>
@@ -119,12 +124,11 @@ class DocumentExampleState extends ExampleDocument<CRDTMovableListRefHandler> {
     return done?.value ?? false;
   }
 
-  List<CRDTMapRefHandler> _resolveMapList(CRDTMovableListRefHandler list) {
-    return [
-      for (var i = 0; i < list.value.length; i++)
-        if (list.getRefAtAs<CRDTMapRefHandler>(i) case final node?) node,
-    ];
-  }
+  void _move(CRDTMovableListRefHandler list, int from, int to) =>
+      list.move(from, to);
+
+  void _remove(CRDTMovableListRefHandler list, int index) =>
+      list.removeChildAt(index);
 
   // --- Writes (always target the live document) ---
 
@@ -134,14 +138,14 @@ class DocumentExampleState extends ExampleDocument<CRDTMovableListRefHandler> {
         CRDTMapRefHandler(document, _newId())
           ..setRef(_kTitleKey, _newText(title))
           ..setRef(_kParagraphsKey, newRefList());
-    liveHandler.insertRef(liveHandler.value.length, chapter);
+    liveHandler.insertRef(liveHandler.children.length, chapter);
   }
 
   /// Moves a chapter from [from] to [to].
-  void reorderChapters(int from, int to) => liveHandler.move(from, to);
+  void reorderChapters(int from, int to) => _move(liveHandler, from, to);
 
-  /// Removes the chapter at [index].
-  void removeChapter(int index) => liveHandler.delete(index);
+  /// Removes the chapter at [index] and deletes it, with what it holds.
+  void removeChapter(int index) => _remove(liveHandler, index);
 
   /// Appends a new paragraph (with [text]) to [paragraphs].
   void addParagraph(CRDTMovableListRefHandler paragraphs, String text) {
@@ -149,7 +153,7 @@ class DocumentExampleState extends ExampleDocument<CRDTMovableListRefHandler> {
         CRDTMapRefHandler(document, _newId())
           ..setRef(_kTextKey, _newText(text))
           ..setRef(_kBlocksKey, newRefList());
-    paragraphs.insertRef(paragraphs.value.length, paragraph);
+    paragraphs.insertRef(paragraphs.children.length, paragraph);
   }
 
   /// Moves a paragraph inside [paragraphs] from [from] to [to].
@@ -158,12 +162,13 @@ class DocumentExampleState extends ExampleDocument<CRDTMovableListRefHandler> {
     int from,
     int to,
   ) {
-    paragraphs.move(from, to);
+    _move(paragraphs, from, to);
   }
 
-  /// Removes the paragraph at [index] from [paragraphs].
+  /// Removes the paragraph at [index] from [paragraphs] and deletes it, with
+  /// what it holds.
   void removeParagraph(CRDTMovableListRefHandler paragraphs, int index) {
-    paragraphs.delete(index);
+    _remove(paragraphs, index);
   }
 
   /// Appends a new block of the given [spec] kind to [blocks].
@@ -171,16 +176,17 @@ class DocumentExampleState extends ExampleDocument<CRDTMovableListRefHandler> {
     final content = spec.createContent(this);
     final block = CRDTMapRefHandler(document, _newId())
       ..setRef(spec.kind, content);
-    blocks.insertRef(blocks.value.length, block);
+    blocks.insertRef(blocks.children.length, block);
   }
 
   /// Moves a block inside [blocks] from [from] to [to].
   void reorderBlocks(CRDTMovableListRefHandler blocks, int from, int to) =>
-      blocks.move(from, to);
+      _move(blocks, from, to);
 
-  /// Removes the block at [index] from [blocks].
+  /// Removes the block at [index] from [blocks] and deletes it, with what it
+  /// holds.
   void removeBlock(CRDTMovableListRefHandler blocks, int index) =>
-      blocks.delete(index);
+      _remove(blocks, index);
 
   /// Appends a new todo (with [text]) to [todoList].
   void addTodo(CRDTMovableListRefHandler todoList, String text) {
@@ -188,7 +194,7 @@ class DocumentExampleState extends ExampleDocument<CRDTMovableListRefHandler> {
         CRDTMapRefHandler(document, _newId())
           ..setRef(_kTextKey, _newText(text))
           ..setRef(_kDoneKey, _newDoneFlag(value: false));
-    todoList.insertRef(todoList.value.length, item);
+    todoList.insertRef(todoList.children.length, item);
   }
 
   /// Toggles the done flag of a todo [item].
@@ -202,11 +208,12 @@ class DocumentExampleState extends ExampleDocument<CRDTMovableListRefHandler> {
 
   /// Moves a todo inside [todoList] from [from] to [to].
   void reorderTodos(CRDTMovableListRefHandler todoList, int from, int to) =>
-      todoList.move(from, to);
+      _move(todoList, from, to);
 
-  /// Removes the todo at [index] from [todoList].
+  /// Removes the todo at [index] from [todoList] and deletes it, with what it
+  /// holds.
   void removeTodo(CRDTMovableListRefHandler todoList, int index) =>
-      todoList.delete(index);
+      _remove(todoList, index);
 
   // --- Live accessors for mutation (resolve handlers on the live document) ---
 

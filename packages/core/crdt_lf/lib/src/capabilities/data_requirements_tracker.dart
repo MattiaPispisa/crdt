@@ -139,12 +139,26 @@ class DataRequirementsTracker {
   /// Keeping an older one — merged in from a peer on another build — would
   /// refuse that peer over a version the document no longer serves.
   ///
+  /// A type [keeps] answers `true` for keeps its known versions, widened by
+  /// what [handlers] write: the snapshot copied blobs of it that it did not
+  /// rewrite.
+  ///
   /// Kinds work the other way: a change is immutable, so what the history held
-  /// it still needs.
-  void replaceBlobVersions(Iterable<Handler<dynamic>> handlers) {
+  /// it still needs. A type left with neither kinds nor versions is dropped.
+  void replaceBlobVersions(
+    Iterable<Handler<dynamic>> handlers, {
+    bool Function(String type)? keeps,
+  }) {
     // `toList` first: writing a key back while iterating the live entries
     // throws `ConcurrentModificationError`.
     for (final entry in _byType.entries.toList()) {
+      if (keeps?.call(entry.key) ?? false) {
+        continue;
+      }
+      if (entry.value.operationKinds.isEmpty) {
+        _byType.remove(entry.key);
+        continue;
+      }
       _byType[entry.key] = HandlerFormats(
         operationKinds: entry.value.operationKinds,
       );
@@ -161,6 +175,11 @@ class DataRequirementsTracker {
         ),
       );
     }
+  }
+
+  /// Adds [formats] to what the data needs for [type].
+  void include(String type, HandlerFormats formats) {
+    HandlerFormats.mergeInto(_byType, type, formats);
   }
 
   /// What the data asks for, as it stands.

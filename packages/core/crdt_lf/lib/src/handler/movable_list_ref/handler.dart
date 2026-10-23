@@ -3,12 +3,17 @@ import 'package:crdt_lf/crdt_lf.dart';
 /// # CRDT movable ordered list of references
 ///
 /// An ordered container of [HandlerRef]s that also supports an explicit
-/// [move] operation preserving element identity across concurrent reorderings
-/// (reusing [CRDTFugueMovableListHandler]). Ideal for things like reordering
-/// slides or changing z-index while elements keep their identity.
+/// [move] operation preserving element identity across concurrent
+/// reorderings. Ideal for things like reordering slides or changing z-index
+/// while elements keep their identity.
 ///
-/// The inherited [value] getter returns the raw `List<HandlerRef>`; [resolved]
-/// returns the fully resolved subtree (`List<Object?>`).
+/// {@macro crdt_fugue_movable_list_handler_algorithm}
+///
+/// The inherited [value] getter returns the raw `List<HandlerRef>`, a dead
+/// ref (its target deleted) included; [resolved] keeps that same raw
+/// position.
+///
+/// {@macro ref_live_index}
 ///
 /// ## Example
 /// ```dart
@@ -31,22 +36,56 @@ base class CRDTMovableListRefHandler
           valueCodec: const HandlerRefCodec(),
         );
 
-  /// Inserts a reference to [handler] at position [index].
+  /// Inserts a reference to [handler] at live position [index].
+  ///
+  /// {@macro ref_live_index}
   ///
   /// {@macro handlers_in_ref}
   void insertRef(int index, Handler<dynamic> handler) {
-    insert(index, HandlerRef.of(handler));
+    insert(rawIndexOfLive(doc, value, index), HandlerRef.of(handler));
   }
 
-  /// Returns the handler referenced at [index], or `null` if out of range.
+  /// Returns the handler referenced at live [index], or `null` if out of
+  /// range.
+  ///
+  /// {@macro ref_live_index}
   ///
   /// {@macro ref_get_resolution}
   Handler<dynamic>? getRefAt(int index) {
-    final refs = value;
-    if (index < 0 || index >= refs.length) {
+    final live = liveRefs(doc, value);
+    if (index < 0 || index >= live.length) {
       return null;
     }
-    return doc.resolveHandler(refs[index]);
+    return doc.resolveHandler(live[index]);
+  }
+
+  /// The referenced handlers, in order.
+  ///
+  /// {@macro ref_get_resolution}
+  ///
+  /// A reference that resolves to `null` is left out.
+  Iterable<Handler<dynamic>> get children => resolvedChildrenOf(doc, this);
+
+  /// Moves the element currently at live position [from] so that, after the
+  /// move, it appears at live position [to].
+  ///
+  /// {@macro ref_live_index}
+  ///
+  /// Negative `from`, `from` out of range or `from == to` is a no-op.
+  @override
+  void move(int from, int to) {
+    if (from == to) {
+      return;
+    }
+    final refs = value;
+    final live = liveRefs(doc, refs);
+    if (from < 0 || from >= live.length) {
+      return;
+    }
+    super.move(
+      rawIndexOfLive(doc, refs, from),
+      rawIndexOfLive(doc, refs, to),
+    );
   }
 
   /// What this build reads for this handler type.
@@ -70,7 +109,10 @@ base class CRDTMovableListRefHandler
     formats: _formats,
   );
 
-  /// Inserts a child of the kind [spec] names at [index], and returns it.
+  /// Inserts a child of the kind [spec] names at live [index], and returns
+  /// it.
+  ///
+  /// {@macro ref_live_index}
   ///
   /// Always a new child; use [getRefAtAs] to read one back.
   ///
@@ -90,23 +132,35 @@ base class CRDTMovableListRefHandler
   T? getRefAtAs<T extends Handler<dynamic>>(int index) =>
       typedRef<T>(getRefAt(index));
 
+  /// Removes the element at live [index] and deletes the child it
+  /// references, in one transaction.
+  ///
+  /// {@macro ref_live_index}
+  ///
+  /// {@macro remove_child}
+  ///
+  /// Throws a [RangeError] when [index] is out of range.
+  void removeChildAt(int index) {
+    final refs = value;
+    final live = liveRefs(doc, refs);
+    if (index < 0 || index >= live.length) {
+      throw RangeError.index(index, live, 'index');
+    }
+    final raw = rawIndexOfLive(doc, refs, index);
+    doc.runInTransaction(() {
+      delete(raw);
+      doc.deleteHandlerRef(refs[raw]);
+    });
+  }
+
   @override
-  Iterable<HandlerRef> childRefs() => value;
+  Iterable<HandlerRef> childRefs() => liveRefs(doc, value);
 
   @override
   Object? toNested(Set<String> visiting) {
-    final out = <Object?>[];
-    for (final ref in value) {
-      if (visiting.contains(ref.id)) {
-        out.add(null);
-        continue;
-      }
-      final child = doc.resolveHandler(ref);
-      out.add(
-        child == null ? null : nestedValueOf(child, {...visiting, ref.id}),
-      );
-    }
-    return out;
+    return [
+      for (final ref in value) resolveNestedRef(doc, ref, visiting),
+    ];
   }
 
   /// The fully resolved subtree rooted at this list, as a `List<Object?>`.

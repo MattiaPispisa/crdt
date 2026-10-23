@@ -1,3 +1,15 @@
+## [0.10.2](https://github.com/MattiaPispisa/crdt/tree/crdt_socket_sync-v0.10.2/packages/core/crdt_socket_sync)
+
+**Date:** --
+
+[compare to previous release](https://github.com/MattiaPispisa/crdt/compare/crdt_socket_sync-v0.10.1...crdt_socket_sync-v0.10.2)
+
+### Fixed
+
+- Capabilities passed to the client also name `CRDTDocument.builtInCapabilities`, so a server
+  holding deleted handlers does not refuse a client that states its build in full. Needs
+  `crdt_lf` 5.2.0. [143](https://github.com/MattiaPispisa/crdt/issues/143)
+
 ## [0.10.1](https://github.com/MattiaPispisa/crdt/tree/crdt_socket_sync-v0.10.1/packages/core/crdt_socket_sync)
 
 **Date:** 2026-10-10

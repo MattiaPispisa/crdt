@@ -323,6 +323,38 @@ void main() {
       await tester.pumpWidget(host(const []));
       expect(tester.takeException(), isA<FlutterError>());
     });
+
+    testWidgets('draws nothing once its handler is deleted', (tester) async {
+      final note = CRDTFugueTextHandler(doc, 'note')..insert(0, 'hello');
+      final cursor = CrdtTextCursor(
+        id: 'peer-b',
+        color: const Color(0xFF0000AA),
+        base: note.stablePositionAt(2),
+      );
+      await tester.pumpWidget(
+        CrdtProvider.value(
+          value: doc,
+          child: MaterialApp(
+            home: Scaffold(
+              body: CrdtTextCursorsOverlay(
+                id: 'note',
+                cursors: [cursor],
+                child: TextField(
+                  controller: TextEditingController(text: 'hello'),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      expect(overlayPaint(), paints..rect());
+
+      doc.deleteHandler(note);
+      await tester.pump();
+
+      expect(overlayPaint(), isNot(paints..rect()));
+      expect(tester.takeException(), isNull);
+    });
   });
 
   group('resolveTextCursorLabelRect', () {
@@ -460,6 +492,46 @@ void main() {
       await tester.pump();
       expect(publishedA.last, (null, null));
       expect(publishedB.last.$1, isNotNull);
+    });
+
+    testWidgets('withdraws the anchors and swaps the field out on a delete',
+        (tester) async {
+      final doc = CRDTDocument(peerId: PeerId.generate());
+      final note = CRDTFugueTextHandler(doc, 'note')..insert(0, 'hello');
+      final published = <(FugueElementID?, FugueElementID?)>[];
+      await tester.pumpWidget(
+        CrdtProvider.value(
+          value: doc,
+          child: MaterialApp(
+            home: Scaffold(
+              body: CrdtTextFieldBuilder(
+                id: 'note',
+                onSelectionAnchorsChanged: (base, extent) =>
+                    published.add((base, extent)),
+                builder: (context, controller) =>
+                    TextField(controller: controller),
+                deletedBuilder: (context) => const Text('gone'),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.tap(find.byType(TextField));
+      await tester.pump();
+      final controller = tester
+          .widget<TextField>(find.byType(TextField))
+          .controller!
+        ..selection = const TextSelection.collapsed(offset: 3);
+      await tester.pump();
+
+      doc.deleteHandler(note);
+      // Before the frame that swaps the field out: the edit goes nowhere.
+      controller.text = 'hello!';
+      await tester.pump();
+
+      expect(published.last, (null, null));
+      expect(find.text('gone'), findsOneWidget);
+      expect(tester.takeException(), isNull);
     });
   });
 }

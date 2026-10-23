@@ -1,3 +1,4 @@
+import 'dart:collection';
 import 'dart:typed_data';
 
 import 'package:crdt_lf/crdt_lf.dart';
@@ -11,9 +12,11 @@ part 'operation.dart';
 /// for conflict-free collaboration.
 /// It provides methods for setting, deleting, and accessing key-value pairs.
 ///
+/// {@template crdt_map_handler_algorithm}
 /// ## Algorithm
 /// Process operations in clock order.
 /// Interleaving is handled just using the HLC.
+/// {@endtemplate}
 ///
 /// ## Example
 /// ```dart
@@ -46,14 +49,12 @@ base class CRDTMapHandler<T> extends Handler<Map<String, T>>
           valueCodec: valueCodec,
         );
 
-  /// Builds one of a kind stated in full, instead of named by a tag.
+  /// {@template handler_from_spec}
+  /// Builds this handler from [spec].
   ///
-  /// The hook for a subclass that is **its own kind** — a container built on
-  /// this handler, say. It passes its own spec up rather than letting this
-  /// class make one from a tag, which would name this class and leave a peer
-  /// rebuilding the reference with the wrong one.
-  ///
-  /// A plain use wants the unnamed constructor: it makes the spec for you.
+  /// Override it in a subclass that is its own kind, to pass that kind's
+  /// spec up. Plain code builds a handler with the unnamed constructor.
+  /// {@endtemplate}
   CRDTMapHandler.fromSpec(
     super.doc,
     this._id, {
@@ -112,24 +113,45 @@ base class CRDTMapHandler<T> extends Handler<Map<String, T>>
     doc.registerOperation(operation);
   }
 
-  /// Gets the current state of the map
+  /// The current map.
   ///
-  /// The returned map is the handler's internal state:
-  /// treat it as read-only. `readSynced()` hands back a copy instead, so a
-  /// consumer that keeps a projection can hold what it is given.
+  /// {@template collection_value}
+  /// Unmodifiable, and the same object until the next change, which hands out
+  /// a new one: two reads are equal when they are `identical`. Copy it to edit
+  /// it.
+  /// {@endtemplate}
+  ///
+  /// {@template live_value}
+  /// It shows the current state, in `O(1)`: a value read before a change shows
+  /// the change too. Copy it to keep what it holds.
+  /// {@endtemplate}
   @override
   Map<String, T> get value {
-    // Check if the cached state is still valid
-    if (cachedState != null) {
-      return cachedState!;
+    final state = _state;
+    if (!identical(state, _handedOutFrom) || _handedOutAt != _mutations) {
+      _handedOut = UnmodifiableMapView(state);
+      _handedOutFrom = state;
+      _handedOutAt = _mutations;
     }
+    return _handedOut;
+  }
 
-    // Compute the state from scratch
+  /// The value handed out, and the state and mutation count it was built at.
+  late Map<String, T> _handedOut;
+  Map<String, T>? _handedOutFrom;
+  int _handedOutAt = -1;
+
+  /// Moves on every in-place change of the cached state.
+  int _mutations = 0;
+
+  /// The cached state, computed when there is none.
+  Map<String, T> get _state {
+    final cached = cachedState;
+    if (cached != null) {
+      return cached;
+    }
     final state = _computeState();
-
-    // Cache the state
     updateCachedState(state);
-
     return state;
   }
 
@@ -172,7 +194,7 @@ base class CRDTMapHandler<T> extends Handler<Map<String, T>>
   @override
   Uint8List getSnapshotState() {
     final out = snapshotHeader();
-    final entries = value;
+    final entries = _state;
     UVarint.write(entries.length, out);
     for (final entry in entries.entries) {
       UVarint.writeString(entry.key, out);
@@ -302,7 +324,7 @@ base class CRDTMapHandler<T> extends Handler<Map<String, T>>
 
     // `containsKey` and not a null check: for a map of a nullable type a key
     // holding `null` is still a key, and putting it back is still a move.
-    final state = value;
+    final state = _state;
     if (!state.containsKey(key)) {
       // The key is not there yet. Only `set` can have put it there, and
       // removing it again is what undoes that.
@@ -401,6 +423,7 @@ base class CRDTMapHandler<T> extends Handler<Map<String, T>>
   }) {
     // Mutate the cached state in place instead of copying it on
     // every operation.
+    _mutations++;
     try {
       _applyOperationToMap(state, operation, sink: sink);
       return state;

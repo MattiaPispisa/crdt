@@ -4,8 +4,9 @@ import 'package:crdt_lf/crdt_lf.dart';
 ///
 /// A keyed container that stores [HandlerRef]s to other handlers instead of
 /// raw values, enabling **nested CRDTs** while keeping the document storage
-/// flat. Conflict resolution is the same last-writer-wins (by HLC) of
-/// [CRDTMapHandler]; here the value of each key is a reference.
+/// flat; the value of each key is a reference.
+///
+/// {@macro crdt_map_handler_algorithm}
 ///
 /// The inherited [value] getter returns the raw `Map<String, HandlerRef>`;
 /// [resolved] returns the fully resolved subtree (`Map<String, Object?>`).
@@ -58,8 +59,9 @@ base class CRDTMapRefHandler extends CRDTMapHandler<HandlerRef>
     set(key, HandlerRef.of(handler));
   }
 
+  /// {@template ref_child}
   /// The child at [key], of the kind [spec] names, created when [key] holds
-  /// nothing yet.
+  /// nothing yet or a deleted child.
   ///
   /// Safe to call again: the second call hands back the child the first wrote.
   ///
@@ -69,9 +71,10 @@ base class CRDTMapRefHandler extends CRDTMapHandler<HandlerRef>
   ///
   /// Throws [HandlerAlreadyRegisteredException] when [key] holds a child of
   /// another kind, even one this peer has never opened.
+  /// {@endtemplate}
   T child<T extends Handler<dynamic>>(String key, HandlerSpec<T> spec) {
     final ref = value[key];
-    if (ref != null) {
+    if (ref != null && !doc.isDeleted(ref.id)) {
       if (ref.type != spec.type) {
         throw HandlerAlreadyRegisteredException(
           'Key $key holds a ${ref.type}, not a ${spec.type}',
@@ -100,23 +103,39 @@ base class CRDTMapRefHandler extends CRDTMapHandler<HandlerRef>
   T? getRefAs<T extends Handler<dynamic>>(String key) =>
       typedRef<T>(getRef(key));
 
+  /// Removes [key] and deletes the child it references, in one transaction.
+  ///
+  /// {@macro remove_child}
+  ///
+  /// Does nothing when [key] is absent.
+  void removeChild(String key) {
+    final ref = value[key];
+    if (ref == null) {
+      return;
+    }
+    doc.runInTransaction(() {
+      delete(key);
+      doc.deleteHandlerRef(ref);
+    });
+  }
+
   @override
-  Iterable<HandlerRef> childRefs() => value.values;
+  Iterable<HandlerRef> childRefs() => liveRefs(doc, value.values);
+
+  /// The referenced handlers, in no particular order.
+  ///
+  /// {@macro ref_get_resolution}
+  ///
+  /// A reference that resolves to `null` is left out.
+  Iterable<Handler<dynamic>> get children => resolvedChildrenOf(doc, this);
 
   @override
   Object? toNested(Set<String> visiting) {
-    final out = <String, Object?>{};
-    for (final entry in value.entries) {
-      final ref = entry.value;
-      if (visiting.contains(ref.id)) {
-        out[entry.key] = null;
-        continue;
-      }
-      final child = doc.resolveHandler(ref);
-      out[entry.key] =
-          child == null ? null : nestedValueOf(child, {...visiting, ref.id});
-    }
-    return out;
+    return {
+      for (final entry in value.entries)
+        if (!doc.isDeleted(entry.value.id))
+          entry.key: resolveNestedRef(doc, entry.value, visiting),
+    };
   }
 
   /// The fully resolved subtree, as a `Map<String, Object?>`.
