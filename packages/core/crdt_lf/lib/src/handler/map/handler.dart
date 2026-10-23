@@ -47,14 +47,12 @@ base class CRDTMapHandler<T> extends Handler<Map<String, T>>
           valueCodec: valueCodec,
         );
 
-  /// Builds one of a kind stated in full, instead of named by a tag.
+  /// {@template handler_from_spec}
+  /// Builds this handler from [spec].
   ///
-  /// The hook for a subclass that is **its own kind** — a container built on
-  /// this handler, say. It passes its own spec up rather than letting this
-  /// class make one from a tag, which would name this class and leave a peer
-  /// rebuilding the reference with the wrong one.
-  ///
-  /// A plain use wants the unnamed constructor: it makes the spec for you.
+  /// Override it in a subclass that is its own kind, to pass that kind's
+  /// spec up. Plain code builds a handler with the unnamed constructor.
+  /// {@endtemplate}
   CRDTMapHandler.fromSpec(
     super.doc,
     this._id, {

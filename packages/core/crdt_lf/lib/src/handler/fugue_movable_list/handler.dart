@@ -67,14 +67,7 @@ base class CRDTFugueMovableListHandler<T>
           valueCodec: valueCodec,
         );
 
-  /// Builds one of a kind stated in full, instead of named by a tag.
-  ///
-  /// The hook for a subclass that is **its own kind** — a container built on
-  /// this handler, say. It passes its own spec up rather than letting this
-  /// class make one from a tag, which would name this class and leave a peer
-  /// rebuilding the reference with the wrong one.
-  ///
-  /// A plain use wants the unnamed constructor: it makes the spec for you.
+  /// {@macro handler_from_spec}
   CRDTFugueMovableListHandler.fromSpec(
     super.doc,
     String id, {
