@@ -4,8 +4,9 @@ import 'package:crdt_lf/crdt_lf.dart';
 ///
 /// A keyed container that stores [HandlerRef]s to other handlers instead of
 /// raw values, enabling **nested CRDTs** while keeping the document storage
-/// flat. Conflict resolution is the same last-writer-wins (by HLC) of
-/// [CRDTMapHandler]; here the value of each key is a reference.
+/// flat; the value of each key is a reference.
+///
+/// {@macro crdt_map_handler_algorithm}
 ///
 /// The inherited [value] getter returns the raw `Map<String, HandlerRef>`;
 /// [resolved] returns the fully resolved subtree (`Map<String, Object?>`).

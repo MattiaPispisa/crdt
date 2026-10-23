@@ -12,9 +12,11 @@ part 'operation.dart';
 /// for conflict-free collaboration.
 /// It provides methods for setting, deleting, and accessing key-value pairs.
 ///
+/// {@template crdt_map_handler_algorithm}
 /// ## Algorithm
 /// Process operations in clock order.
 /// Interleaving is handled just using the HLC.
+/// {@endtemplate}
 ///
 /// ## Example
 /// ```dart

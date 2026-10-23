@@ -12,15 +12,22 @@ part 'operation.dart';
 /// # CRDT List with Fugue implementation
 ///
 /// ## Description
-/// A CRDTFugueList is a list data structure that uses the Fugue algorithm
-/// ([The Art of the Fugue: Minimizing Interleaving in Collaborative Text
-/// Editing](https://arxiv.org/abs/2305.00583)) to minimize interleaving.
+/// A CRDTFugueList is a list data structure that minimizes interleaving.
 ///
 /// It is the list counterpart of [CRDTFugueTextHandler]: same conflict
 /// resolution, but it stores arbitrary values `T` instead of characters.
 /// Compared to [CRDTListHandler] (which orders concurrent edits using the
 /// HLC only), Fugue minimizes interleaving when two peers edit the same
 /// region concurrently.
+///
+/// {@template crdt_fugue_list_handler_algorithm}
+/// ## Algorithm
+/// Uses the Fugue algorithm
+/// ([The Art of the Fugue: Minimizing Interleaving in Collaborative Text
+/// Editing](https://arxiv.org/abs/2305.00583)) to minimize interleaving: when
+/// two peers insert elements in the same region concurrently, the elements
+/// from each peer stay together instead of alternating.
+/// {@endtemplate}
 ///
 /// ## Note on `T`
 /// The Fugue tree uses a `null` value to mark a deleted element, so `T`

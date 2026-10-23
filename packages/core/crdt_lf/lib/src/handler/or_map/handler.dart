@@ -11,6 +11,7 @@ part 'operation.dart';
 /// A CRDTORMap is a map data structure that uses
 /// the Observed-Removed Map (OR-Map) algorithm to resolve conflicts.
 ///
+/// {@template crdt_or_map_handler_algorithm}
 /// ## Algorithm
 /// Adding or updating a key-value pair produces a unique tag for the pair.
 /// Removing a key consists in tomb-stoning all tags for that key.
@@ -18,6 +19,7 @@ part 'operation.dart';
 ///
 /// More detail about OR-Set (the foundation) can be found in
 /// [this paper](https://inria.hal.science/inria-00555588/en/)
+/// {@endtemplate}
 ///
 /// ## Example
 /// ```dart

@@ -3,9 +3,9 @@ import 'package:crdt_lf/crdt_lf.dart';
 /// # CRDT OR-Set of references
 ///
 /// An unordered container of [HandlerRef]s to other handlers, for **nested
-/// CRDTs** over the flat document storage. Conflicts resolve as in
-/// [CRDTORSetHandler]: an add concurrent with a remove of the same reference
-/// wins.
+/// CRDTs** over the flat document storage.
+///
+/// {@macro crdt_or_set_handler_algorithm}
 ///
 /// The inherited `value` getter returns the raw `Set<HandlerRef>`; [children]
 /// and [resolved] list the children sorted by handler id, so every peer reads

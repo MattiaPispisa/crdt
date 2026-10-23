@@ -11,12 +11,14 @@ part 'operation.dart';
 /// A CRDTORSet is a set data structure that uses
 /// the Observed-Removed Set (OR-Set) algorithm to resolve conflicts.
 ///
+/// {@template crdt_or_set_handler_algorithm}
 /// ## Algorithm
 /// Adding a value to the set produces a unique tag for the value.
 /// Removing a value consists in tomb-stoning the tags for the value.
 /// A value is considered present iff it has at least one tag not tomb-stoned.
 ///
 /// More detail about OR-Set can be found in [this paper](https://inria.hal.science/inria-00555588/en/)
+/// {@endtemplate}
 ///
 /// ## Example
 /// ```dart

@@ -5,9 +5,9 @@ import 'package:crdt_lf/src/handler/fugue/fugue_snapshot.dart';
 ///
 /// An ordered container that stores [HandlerRef]s to other handlers instead of
 /// raw values, enabling **nested CRDTs** while keeping the document storage
-/// flat. It reuses the Fugue algorithm of [CRDTFugueListHandler] (so concurrent
-/// insertions in the same region do not interleave); each element is a
-/// reference to a child handler.
+/// flat; each element is a reference to a child handler.
+///
+/// {@macro crdt_fugue_list_handler_algorithm}
 ///
 /// The inherited [value] getter returns the raw `List<HandlerRef>`, a dead
 /// ref (its target deleted) included; [resolved] keeps that same raw

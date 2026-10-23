@@ -17,12 +17,15 @@ part 'operation.dart';
 /// `move` operation that preserves the identity of the moved element across
 /// concurrent reorderings (see Kleppmann, [Moving Elements in List CRDTs](https://martin.kleppmann.com/2020/04/27/papoc-list-move.html)).
 ///
+/// {@template crdt_fugue_movable_list_handler_algorithm}
+/// ## Algorithm
 /// Conflict resolution combines:
 /// - the Fugue algorithm ([The Art of the Fugue: Minimizing Interleaving in Collaborative Text Editing](https://arxiv.org/abs/2305.00583)) to minimize interleaving;
 /// - a **last-writer-wins register** on [OperationId] for the value and
 ///   for the "current position" of each element. Concurrent moves of the same
 ///   element converge to a single winning destination instead of duplicating
 ///   the element, and so do concurrent updates of its value.
+/// {@endtemplate}
 ///
 /// ## Identities and positions
 /// Every element has a stable [FugueElementID] **identity** assigned at

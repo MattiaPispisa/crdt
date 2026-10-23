@@ -5,10 +5,9 @@ import 'package:crdt_lf/src/handler/or_map/handler.dart'
 /// # CRDT OR-Map of references
 ///
 /// A keyed container of [HandlerRef]s to other handlers, for **nested CRDTs**
-/// over the flat document storage. Conflicts resolve as in [CRDTORMapHandler]:
-/// a `put` concurrent with a `remove` of the same key wins, and two concurrent
-/// `put`s keep the one with the higher stamp. [CRDTMapRefHandler] resolves
-/// all three cases by last-writer-wins instead.
+/// over the flat document storage.
+///
+/// {@macro crdt_or_map_handler_algorithm}
 ///
 /// The inherited `value` getter returns the raw `Map<String, HandlerRef>`;
 /// [resolved] returns the fully resolved subtree (`Map<String, Object?>`).

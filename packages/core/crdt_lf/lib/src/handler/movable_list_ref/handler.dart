@@ -3,9 +3,11 @@ import 'package:crdt_lf/crdt_lf.dart';
 /// # CRDT movable ordered list of references
 ///
 /// An ordered container of [HandlerRef]s that also supports an explicit
-/// [move] operation preserving element identity across concurrent reorderings
-/// (reusing [CRDTFugueMovableListHandler]). Ideal for things like reordering
-/// slides or changing z-index while elements keep their identity.
+/// [move] operation preserving element identity across concurrent
+/// reorderings. Ideal for things like reordering slides or changing z-index
+/// while elements keep their identity.
+///
+/// {@macro crdt_fugue_movable_list_handler_algorithm}
 ///
 /// The inherited [value] getter returns the raw `List<HandlerRef>`, a dead
 /// ref (its target deleted) included; [resolved] keeps that same raw
