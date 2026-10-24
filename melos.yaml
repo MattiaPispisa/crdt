@@ -113,3 +113,17 @@ scripts:
     run: dart format --line-length 80 --set-exit-if-changed lib test
     exec:
       concurrency: 1
+
+  add_license:
+    name: Add License
+    description: Stamp the SPDX license header on every .dart file
+    run: dart run $MELOS_ROOT_PATH/packages/_internal/add_license/bin/add_license.dart
+    exec:
+      concurrency: 1
+
+  add_license_check:
+    name: Add License (check)
+    description: Check that every .dart file has the SPDX license header
+    run: dart run $MELOS_ROOT_PATH/packages/_internal/add_license/bin/add_license.dart --check
+    exec:
+      concurrency: 1

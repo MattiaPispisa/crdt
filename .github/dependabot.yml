@@ -38,6 +38,7 @@ updates:
       - "/packages/adapters/sync/serverpod"
       - "/packages/adapters/sync/serverpod/example"
       - "/packages/adapters/sync/serverpod/relay_example"
+      - "/packages/_internal/add_license"
       - "/packages/_internal/benchmark_infrastructure"
       - "/packages/_internal/persistence_conformance"
       - "/packages/_internal/shared_examples_infrastructure"
