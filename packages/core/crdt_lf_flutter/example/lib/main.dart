@@ -94,6 +94,7 @@ class HomePage extends StatelessWidget {
             _CounterCard(),
             _ListenerCard(),
             _TodosCard(),
+            _HistoryCard(),
             _DeltaCard(),
             _DeltaBuilderCard(),
             _SettingsCard(),
@@ -120,7 +121,8 @@ class _Legend extends StatelessWidget {
           'Each ⟳ badge counts how many times that region rebuilt. Edit one '
           'handler and notice only the widgets that observe it light up — that '
           'is the point of CrdtSelector / CrdtHandlerBuilder. The Listener '
-          'card fires side effects without rebuilding, and the Note card '
+          'card fires side effects without rebuilding, the History card '
+          'draws the Todos widget on a frozen snapshot, and the Note card '
           'binds a TextField to a text handler — including changes imported '
           'from a remote peer and a collaborator cursor drawn over the field.',
         ),
@@ -386,34 +388,122 @@ class _TodosCard extends StatelessWidget {
                 ),
           ),
           const SizedBox(height: 8),
-          CrdtHandlerBuilder<CRDTListHandler<String>>(
-            id: _todosId,
-            builder: (context, handler) {
-              final todos = handler.value;
-              return _RebuildBadge(
-                label: 'todos-list',
-                child:
-                    todos.isEmpty
-                        ? const Text('No todos yet')
-                        : Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            for (var i = 0; i < todos.length; i++)
-                              ListTile(
-                                dense: true,
-                                // Neutral icon — todos aren't checkable.
-                                leading: CircleAvatar(
-                                  radius: 12,
-                                  child: Text('${i + 1}'),
-                                ),
-                                title: Text(todos[i]),
-                              ),
-                          ],
-                        ),
-              );
-            },
-          ),
+          const _TodoList(label: 'todos-list'),
         ],
+      ),
+    );
+  }
+}
+
+/// The todos list. It reads the ambient document, so the same widget draws the
+/// live one and, inside a `CrdtHistoryScope`, the frozen one.
+class _TodoList extends StatelessWidget {
+  const _TodoList({required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return CrdtHandlerBuilder<CRDTListHandler<String>>(
+      id: _todosId,
+      builder: (context, handler) {
+        final todos = handler.value;
+        return _RebuildBadge(
+          label: label,
+          child:
+              todos.isEmpty
+                  ? const Text('No todos yet')
+                  : Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      for (var i = 0; i < todos.length; i++)
+                        ListTile(
+                          dense: true,
+                          // Neutral icon — todos aren't checkable.
+                          leading: CircleAvatar(
+                            radius: 12,
+                            child: Text('${i + 1}'),
+                          ),
+                          title: Text(todos[i]),
+                        ),
+                    ],
+                  ),
+        );
+      },
+    );
+  }
+}
+
+/// The same `_TodoList`, frozen: a `CrdtHistoryScope` holds a snapshot of the
+/// document and the buttons move its cursor. "Snapshot" takes a new one.
+class _HistoryCard extends StatefulWidget {
+  const _HistoryCard();
+
+  @override
+  State<_HistoryCard> createState() => _HistoryCardState();
+}
+
+class _HistoryCardState extends State<_HistoryCard> {
+  int _snapshots = 0;
+
+  @override
+  Widget build(BuildContext context) {
+    return _DemoCard(
+      title: 'History — the same widgets, frozen',
+      description:
+          'The list below is the Todos widget inside a CrdtHistoryScope. '
+          'Moving the cursor rebuilds it; live edits do not reach it until '
+          'you take a new snapshot.',
+      actions: [
+        FilledButton.tonalIcon(
+          onPressed: () => setState(() => _snapshots++),
+          icon: const Icon(Icons.camera_alt),
+          label: const Text('Snapshot'),
+        ),
+      ],
+      child: CrdtHistoryScope(
+        key: ValueKey<int>(_snapshots),
+        builder:
+            (context, session) => Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(
+                  'cursor: ${session.cursor}/${session.length}',
+                  style: _valueStyle(context),
+                ),
+                const SizedBox(height: 8),
+                const _TodoList(label: 'history-list'),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    FilledButton.tonal(
+                      onPressed:
+                          session.canPrevious
+                              ? () => session.jump(0)
+                              : null,
+                      child: const Text('Rewind'),
+                    ),
+                    FilledButton.tonal(
+                      onPressed: session.canPrevious ? session.previous : null,
+                      child: const Text('Step back'),
+                    ),
+                    FilledButton.tonal(
+                      onPressed: session.canNext ? session.next : null,
+                      child: const Text('Step forward'),
+                    ),
+                    FilledButton.tonal(
+                      onPressed:
+                          session.canNext
+                              ? () => session.jump(session.length)
+                              : null,
+                      child: const Text('Latest'),
+                    ),
+                  ],
+                ),
+              ],
+            ),
       ),
     );
   }

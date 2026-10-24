@@ -1,3 +1,15 @@
+## [0.7.0](https://github.com/MattiaPispisa/crdt/tree/crdt_lf_flutter-v0.7.0/packages/core/crdt_lf_flutter)
+
+**Date:** --
+
+[compare to previous release](https://github.com/MattiaPispisa/crdt/compare/crdt_lf_flutter-v0.6.0...crdt_lf_flutter-v0.7.0)
+
+### Added
+
+- `CrdtHistoryScope` draws the document frozen at a history cursor with the same handler widgets
+  (`CrdtHandlerBuilder`, `CrdtHandlerSelector`, `CrdtHandlerListener`). Needs `crdt_lf` 5.3.0.
+  [112](https://github.com/MattiaPispisa/crdt/issues/112)
+
 ## [0.6.0](https://github.com/MattiaPispisa/crdt/tree/crdt_lf_flutter-v0.6.0/packages/core/crdt_lf_flutter)
 
 **Date:** 2026-10-23

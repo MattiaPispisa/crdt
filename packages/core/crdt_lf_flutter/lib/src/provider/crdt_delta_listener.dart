@@ -2,9 +2,9 @@
 // SPDX-License-Identifier: MIT
 
 import 'package:crdt_lf/crdt_lf.dart';
+import 'package:crdt_lf_flutter/src/provider/_crdt_view.dart';
 import 'package:crdt_lf_flutter/src/provider/_handler_delta_subscription.dart';
 import 'package:crdt_lf_flutter/src/provider/crdt_handler.dart';
-import 'package:crdt_lf_flutter/src/provider/crdt_helper.dart';
 import 'package:flutter/widgets.dart';
 
 /// Called with what one change did to the handler.
@@ -134,7 +134,7 @@ class _CrdtHandlerDeltaListenerState<V, D extends ComposableDelta<D>>
 
   @override
   Widget build(BuildContext context) {
-    final document = context.crdtDocument;
+    final document = context.crdtView;
     if (document.isDeleted(widget.id)) {
       _subscription.cancel();
     } else {

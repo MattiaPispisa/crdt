@@ -3,10 +3,10 @@
 
 import 'package:crdt_lf/crdt_lf.dart';
 import 'package:crdt_lf_flutter/src/common/_crdt_guards.dart';
+import 'package:crdt_lf_flutter/src/provider/_crdt_view.dart';
 import 'package:crdt_lf_flutter/src/provider/_handler_delta_subscription.dart';
 import 'package:crdt_lf_flutter/src/provider/crdt_delta_listener.dart';
 import 'package:crdt_lf_flutter/src/provider/crdt_handler.dart';
-import 'package:crdt_lf_flutter/src/provider/crdt_helper.dart';
 import 'package:flutter/widgets.dart';
 
 /// Called with the current value of the handler.
@@ -98,8 +98,8 @@ class _CrdtHandlerDeltaBuilderState<V, D extends ComposableDelta<D>>
 
   @override
   Widget build(BuildContext context) {
-    final document = context.crdtDocument;
-    if (context.selectCrdtDocument((doc) => doc.isDeleted(widget.id))) {
+    final document = context.crdtView;
+    if (context.selectCrdtView((doc) => doc.isDeleted(widget.id))) {
       _subscription.cancel();
       return buildDeleted(context, widget.deletedBuilder);
     }

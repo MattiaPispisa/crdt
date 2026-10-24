@@ -12,13 +12,15 @@ class _CRDTStaticProxyDocument extends BaseCRDTDocument {
     required List<Set<OperationId>> historyVersions,
     required int visibleCount,
     required Snapshot? lastSnapshot,
+    required Map<String, String> openTypes,
   })  : _documentId = documentId,
         _hlc = hlc,
         _peerId = peerId,
         _frozenChanges = frozenChanges,
         _historyVersions = historyVersions,
         _visibleCount = visibleCount,
-        _lastSnapshot = lastSnapshot {
+        _lastSnapshot = lastSnapshot,
+        _openTypes = openTypes {
     _deletions = _ViewDeletions(this);
   }
 
@@ -31,6 +33,10 @@ class _CRDTStaticProxyDocument extends BaseCRDTDocument {
   final List<Change> _frozenChanges;
 
   final List<Set<OperationId>> _historyVersions;
+
+  /// The kinds of the handlers open on the live document when the view was
+  /// taken, including those with no change yet.
+  final Map<String, String> _openTypes;
 
   int _visibleCount;
 
@@ -120,10 +126,37 @@ class _CRDTStaticProxyDocument extends BaseCRDTDocument {
     return changesForHandler(handlerId).length;
   }
 
-  // The frozen view never imports snapshots, so the visible change count
-  // (which follows the time-travel cursor) is a complete revision signal.
+  // Every jump makes all cached states stale, so the epoch moves exactly when
+  // any handler may read differently. O(1), unlike counting the changes.
   @override
-  int revisionForHandler(String handlerId) => changeCountForHandler(handlerId);
+  int revisionForHandler(String handlerId) => _cache.epoch;
+
+  // No delta describes a jump, so watchers are told to read the value again.
+  void _announceJump() {
+    for (final handler in _registry.values) {
+      handler._emitReset(ResetCause.cacheDropped);
+    }
+    _outbox.flush();
+  }
+
+  /// The kind of every handler the frozen history names, at any cursor.
+  late final Map<String, String> _types = {
+    ..._openTypes,
+    ..._HandlerRegistry.typesOf(
+      _frozenChanges,
+      _HandlerRegistry.manifestOf(_lastSnapshot),
+    ),
+  };
+
+  @override
+  Handler<dynamic>? handlerById(String id) {
+    final open = super.handlerById(id);
+    if (open != null || _HandlerDeletions.isReserved(id)) {
+      return open;
+    }
+    final type = _types[id];
+    return type == null ? null : _registry.specs[type]?.create(this, id);
+  }
 }
 
 /// {@template history_session}
@@ -191,6 +224,10 @@ class HistorySession {
       historyVersions: historyVersions,
       visibleCount: cursor,
       lastSnapshot: document._lastSnapshot,
+      openTypes: {
+        for (final handler in document._registry.publicView.values)
+          handler.id: handler.handlerType,
+      },
     );
     // Carry over the registered types so nested handlers resolved through the
     // read-only session can be reconstructed against the historical changes.
@@ -209,6 +246,9 @@ class HistorySession {
 
   /// The total number of changes available in this history session.
   final int length;
+
+  /// The read-only document this session moves through its history.
+  BaseCRDTDocument get document => _document;
 
   /// The stream of cursor position updates.
   ///
@@ -266,7 +306,8 @@ class HistorySession {
     _cursor = cursor;
     _document
       .._visibleCount = _cursor
-      .._cache.markAllStale();
+      .._cache.markAllStale()
+      .._announceJump();
     _cursorController.add(_cursor);
   }
 

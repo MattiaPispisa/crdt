@@ -162,18 +162,7 @@ final class _HandlerRegistry {
     required Iterable<Change> changes,
     required Map<String, String> manifest,
   }) {
-    final discovered = <String, String>{};
-    for (final change in changes) {
-      try {
-        final env = OperationEnvelopeCodec.decode(change.payloadBytes());
-        discovered[env.handlerId] = env.handlerType;
-      } catch (_) {
-        // Ignore changes whose envelope cannot be decoded.
-      }
-    }
-    discovered.addAll(manifest);
-
-    for (final entry in discovered.entries) {
+    for (final entry in typesOf(changes, manifest).entries) {
       if (!_byId.containsKey(entry.key) && !document.isDeleted(entry.key)) {
         specs[entry.value]?.create(document, entry.key);
       }
@@ -218,6 +207,23 @@ final class _HandlerRegistry {
         }
       }
     }
+  }
+
+  /// The `{id: type}` of every handler [changes] or [manifest] name.
+  static Map<String, String> typesOf(
+    Iterable<Change> changes,
+    Map<String, String> manifest,
+  ) {
+    final types = <String, String>{};
+    for (final change in changes) {
+      try {
+        final env = OperationEnvelopeCodec.decode(change.payloadBytes());
+        types[env.handlerId] = env.handlerType;
+      } catch (_) {
+        // Ignore changes whose envelope cannot be decoded.
+      }
+    }
+    return types..addAll(manifest);
   }
 
   /// The handler type the first readable envelope among [changes] names;

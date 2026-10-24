@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 import 'package:crdt_lf/crdt_lf.dart';
+import 'package:crdt_lf_flutter/src/provider/_crdt_view.dart';
 import 'package:crdt_lf_flutter/src/provider/crdt_handler.dart';
 import 'package:crdt_lf_flutter/src/provider/crdt_helper.dart';
 import 'package:flutter/widgets.dart';
@@ -51,6 +52,7 @@ class CrdtBuilder extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    context.liveDocument('CrdtBuilder');
     return builder(context, context.watchCrdtDocument());
   }
 }
@@ -93,6 +95,7 @@ class CrdtSelector<R> extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    context.liveDocument('CrdtSelector');
     final value = context.select<CRDTDocument, R>(
       (document) => selector(context, document),
     );

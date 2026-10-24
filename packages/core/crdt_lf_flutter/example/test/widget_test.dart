@@ -39,6 +39,7 @@ void main() {
       'listener-child',
       'todos-count',
       'todos-list',
+      'history-list',
       'delta-child',
       'delta-builder',
       'settings-flat',
@@ -177,6 +178,31 @@ void main() {
     await tester.tap(find.widgetWithText(FilledButton, 'Stop presence'));
     await tester.pump();
     expect(find.text('Bob'), findsNothing);
+
+    // 10. History: the same todo list, frozen. Before a snapshot it only holds
+    //     the empty document; "Snapshot" freezes the current todos.
+    expect(find.text('No todos yet'), findsOneWidget);
+    await tapButton(tester, 'Snapshot');
+    expect(find.text('Todo #1 ✎'), findsNWidgets(2));
+
+    // Rewinding rebuilds only the frozen list: the live one keeps its items.
+    before = snapshot();
+    await tapButton(tester, 'Rewind');
+    expect(rebuilds(tester, 'history-list'), greaterThan(before['history-list']!));
+    expect(rebuilds(tester, 'todos-list'), before['todos-list']);
+    expect(find.text('No todos yet'), findsOneWidget);
+    expect(find.text('Todo #1 ✎'), findsOneWidget);
+
+    // The cursor is back at the end.
+    await tapButton(tester, 'Latest');
+    expect(find.text('Todo #1 ✎'), findsNWidgets(2));
+
+    // A live edit reaches the live list but not the frozen one.
+    before = snapshot();
+    await tapButton(tester, 'Add');
+    expect(rebuilds(tester, 'todos-list'), before['todos-list']! + 1);
+    expect(rebuilds(tester, 'history-list'), before['history-list']);
+    expect(find.text('Todo #2'), findsOneWidget);
 
     // Flush the SnackBar auto-dismiss timer so the test ends cleanly.
     await tester.pump(const Duration(seconds: 5));

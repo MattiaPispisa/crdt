@@ -4,6 +4,7 @@
 import 'package:crdt_lf/crdt_lf.dart';
 import 'package:crdt_lf_flutter/src/common/_crdt_guards.dart';
 import 'package:crdt_lf_flutter/src/effects/text_delta.dart';
+import 'package:crdt_lf_flutter/src/provider/_crdt_view.dart';
 import 'package:crdt_lf_flutter/src/provider/_handler_delta_subscription.dart';
 import 'package:crdt_lf_flutter/src/provider/crdt_helper.dart';
 import 'package:flutter/widgets.dart';
@@ -190,7 +191,7 @@ class _CrdtTextFieldBuilderState extends State<CrdtTextFieldBuilder> {
 
   @override
   Widget build(BuildContext context) {
-    final document = _document = context.crdtDocument;
+    final document = _document = context.liveDocument('CrdtTextFieldBuilder');
     // Rebuilds only when this flips, so the field still builds once.
     if (context.selectCrdtDocument((doc) => doc.isDeleted(widget.id))) {
       _delta.cancel();
@@ -245,7 +246,7 @@ class _CrdtTextFieldBuilderState extends State<CrdtTextFieldBuilder> {
   }
 
   DeltaProvider<String, SequenceDelta<String>> _deltaProviderOf(
-    CRDTDocument document,
+    BaseCRDTDocument document,
     String id,
   ) {
     // Both text handlers publish this shape; [_handlerOf] refuses anything
@@ -256,8 +257,8 @@ class _CrdtTextFieldBuilderState extends State<CrdtTextFieldBuilder> {
 
   Handler<dynamic> _handler() => _handlerOf(_document, widget.id);
 
-  Handler<dynamic> _handlerOf(CRDTDocument document, String id) {
-    final handler = document.registeredHandlers[id];
+  Handler<dynamic> _handlerOf(BaseCRDTDocument document, String id) {
+    final handler = document.handlerById(id);
     if (handler is CRDTTextHandler || handler is CRDTFugueTextHandler) {
       return handler!;
     }
