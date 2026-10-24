@@ -1,3 +1,6 @@
+// Copyright 2025 Mattia Pispisa
+// SPDX-License-Identifier: MIT
+
 /// Example document/handler ids the demo server shares with the Flutter
 /// example clients.
 ///

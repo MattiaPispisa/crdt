@@ -1,3 +1,6 @@
+// Copyright 2025 Mattia Pispisa
+// SPDX-License-Identifier: MIT
+
 import 'package:crdt_socket_sync_client_example/_logger.dart';
 import 'package:crdt_socket_sync_client_example/_persistence.dart';
 import 'package:crdt_socket_sync_client_example/routing.dart';

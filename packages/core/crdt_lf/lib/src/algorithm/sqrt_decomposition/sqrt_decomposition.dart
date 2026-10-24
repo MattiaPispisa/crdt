@@ -1,3 +1,6 @@
+// Copyright 2025 Mattia Pispisa
+// SPDX-License-Identifier: MIT
+
 import 'dart:math' as math;
 
 /// The exclusive upper bound on a run length, set by how the two counts are

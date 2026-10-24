@@ -1,3 +1,6 @@
+// Copyright 2025 Mattia Pispisa
+// SPDX-License-Identifier: MIT
+
 /// Relay client library for CRDT Socket Sync.
 ///
 /// A relay client syncs a document through a relay server that never

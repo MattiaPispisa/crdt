@@ -1,3 +1,6 @@
+// Copyright 2025 Mattia Pispisa
+// SPDX-License-Identifier: MIT
+
 // The example prints its result, and it is not a library entry point.
 // ignore_for_file: avoid_print
 

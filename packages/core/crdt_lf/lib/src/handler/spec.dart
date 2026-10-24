@@ -1,3 +1,6 @@
+// Copyright 2025 Mattia Pispisa
+// SPDX-License-Identifier: MIT
+
 import 'package:crdt_lf/crdt_lf.dart';
 
 /// Builds the handler [id] on [doc].

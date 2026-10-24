@@ -1,3 +1,6 @@
+// Copyright 2025 Mattia Pispisa
+// SPDX-License-Identifier: MIT
+
 import 'package:flutter/material.dart';
 
 /// A small dialog that collects a single line of text and reports it via

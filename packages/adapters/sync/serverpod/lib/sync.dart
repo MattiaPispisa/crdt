@@ -1,3 +1,6 @@
+// Copyright 2025 Mattia Pispisa
+// SPDX-License-Identifier: MIT
+
 /// Server–client mode of `crdt_socket_sync` on a Serverpod web server.
 ///
 /// The HTTP server stays Serverpod's; each upgraded socket is handed to a

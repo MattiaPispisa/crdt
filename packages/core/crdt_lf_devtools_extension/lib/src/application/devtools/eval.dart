@@ -1,3 +1,6 @@
+// Copyright 2025 Mattia Pispisa
+// SPDX-License-Identifier: MIT
+
 import 'package:devtools_app_shared/service.dart';
 import 'package:devtools_extensions/devtools_extensions.dart' as devtools;
 import 'package:vm_service/vm_service.dart';

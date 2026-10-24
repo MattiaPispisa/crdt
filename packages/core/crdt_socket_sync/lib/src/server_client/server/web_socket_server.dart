@@ -1,3 +1,6 @@
+// Copyright 2025 Mattia Pispisa
+// SPDX-License-Identifier: MIT
+
 import 'dart:io';
 
 import 'package:crdt_socket_sync/src/common/server/web_socket/io_host.dart';

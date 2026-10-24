@@ -1,3 +1,6 @@
+// Copyright 2025 Mattia Pispisa
+// SPDX-License-Identifier: MIT
+
 export 'src/algorithm/fugue/element_id.dart';
 export 'src/algorithm/meyers_diff/meyers_diff.dart';
 export 'src/algorithm/meyers_diff/ops.dart';

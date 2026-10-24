@@ -1,3 +1,6 @@
+// Copyright 2025 Mattia Pispisa
+// SPDX-License-Identifier: MIT
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_examples_infrastructure/examples/todo_list/_state.dart';

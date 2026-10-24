@@ -1,3 +1,6 @@
+// Copyright 2025 Mattia Pispisa
+// SPDX-License-Identifier: MIT
+
 import 'package:crdt_socket_sync/src/relay/client/seq_tracker.dart';
 import 'package:test/test.dart';
 

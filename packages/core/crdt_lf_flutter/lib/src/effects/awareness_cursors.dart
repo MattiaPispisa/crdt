@@ -1,3 +1,6 @@
+// Copyright 2025 Mattia Pispisa
+// SPDX-License-Identifier: MIT
+
 import 'package:crdt_lf_flutter/src/effects/text_cursors.dart';
 import 'package:flutter/widgets.dart';
 

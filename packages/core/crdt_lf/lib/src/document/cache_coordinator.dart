@@ -1,3 +1,6 @@
+// Copyright 2025 Mattia Pispisa
+// SPDX-License-Identifier: MIT
+
 part of 'document.dart';
 
 /// Keeps the cached state of the open handlers in step with the document,

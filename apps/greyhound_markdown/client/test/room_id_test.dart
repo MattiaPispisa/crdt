@@ -1,3 +1,6 @@
+// Copyright 2025 Mattia Pispisa
+// SPDX-License-Identifier: MIT
+
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:greyhound_markdown_client/src/application/application.dart';

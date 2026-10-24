@@ -1,3 +1,6 @@
+// Copyright 2025 Mattia Pispisa
+// SPDX-License-Identifier: MIT
+
 /// Handlers that break one part of the contract each.
 ///
 /// **These tests are meant to fail.** The file has no `_test` suffix, so

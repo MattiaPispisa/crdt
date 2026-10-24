@@ -1,3 +1,6 @@
+// Copyright 2025 Mattia Pispisa
+// SPDX-License-Identifier: MIT
+
 export './awareness/client/client.dart';
 export './awareness/common/common.dart';
 export './client/client.dart';

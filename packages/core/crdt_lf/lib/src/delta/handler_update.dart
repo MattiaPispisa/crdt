@@ -1,3 +1,6 @@
+// Copyright 2025 Mattia Pispisa
+// SPDX-License-Identifier: MIT
+
 import 'package:crdt_lf/src/operation/id.dart';
 import 'package:crdt_lf/src/peer_id.dart';
 

@@ -1,3 +1,6 @@
+// Copyright 2025 Mattia Pispisa
+// SPDX-License-Identifier: MIT
+
 import 'package:serverpod/serverpod.dart';
 
 // A real project passes its generated `Protocol()` and `Endpoints()` instead.

@@ -1,3 +1,6 @@
+// Copyright 2025 Mattia Pispisa
+// SPDX-License-Identifier: MIT
+
 import 'package:greyhound_markdown_client/src/config.dart';
 import 'package:markdown/markdown.dart' as md;
 

@@ -1,3 +1,6 @@
+// Copyright 2025 Mattia Pispisa
+// SPDX-License-Identifier: MIT
+
 /// Conversions between UTF-16 code unit and runes.
 class RuneOffsets {
   /// Number of runes in [text].

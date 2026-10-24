@@ -1,3 +1,6 @@
+// Copyright 2025 Mattia Pispisa
+// SPDX-License-Identifier: MIT
+
 /// Flutter reactivity for [crdt_lf package](https://pub.dev/packages/crdt_lf).
 ///
 /// Widgets that make it easier to use crdt_lf within Flutter systems.

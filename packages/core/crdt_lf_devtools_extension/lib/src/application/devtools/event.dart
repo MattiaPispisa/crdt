@@ -1,3 +1,6 @@
+// Copyright 2025 Mattia Pispisa
+// SPDX-License-Identifier: MIT
+
 import 'package:vm_service/vm_service.dart';
 
 /// Extension on [Event] to check if it is a CRDT LF event

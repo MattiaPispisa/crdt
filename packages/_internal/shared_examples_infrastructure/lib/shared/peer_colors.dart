@@ -1,3 +1,6 @@
+// Copyright 2025 Mattia Pispisa
+// SPDX-License-Identifier: MIT
+
 import 'dart:ui';
 
 /// Deterministic vibrant color from a peer id.

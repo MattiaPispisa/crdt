@@ -1,3 +1,6 @@
+// Copyright 2025 Mattia Pispisa
+// SPDX-License-Identifier: MIT
+
 import 'dart:async';
 import 'dart:collection'; // Import for Queue
 import 'dart:math';

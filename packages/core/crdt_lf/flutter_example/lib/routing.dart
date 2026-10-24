@@ -1,3 +1,6 @@
+// Copyright 2025 Mattia Pispisa
+// SPDX-License-Identifier: MIT
+
 import 'package:crdt_lf_flutter_example/examples.dart';
 import 'package:crdt_lf_flutter_example/generated.dart';
 import 'package:flutter/material.dart';

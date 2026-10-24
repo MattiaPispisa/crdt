@@ -1,3 +1,6 @@
+// Copyright 2025 Mattia Pispisa
+// SPDX-License-Identifier: MIT
+
 import 'package:crdt_lf/crdt_lf.dart';
 
 /// One move of the durable state of a [CRDTDocument]: the changes it holds and

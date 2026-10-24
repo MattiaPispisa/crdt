@@ -1,3 +1,6 @@
+// Copyright 2025 Mattia Pispisa
+// SPDX-License-Identifier: MIT
+
 import 'package:crdt_socket_sync/src/plugins/awareness/client/throttle.dart';
 import 'package:fake_async/fake_async.dart';
 import 'package:test/test.dart';

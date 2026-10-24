@@ -1,3 +1,6 @@
+// Copyright 2025 Mattia Pispisa
+// SPDX-License-Identifier: MIT
+
 part of 'document.dart';
 
 /// Publishes what a handler's observable state did, one event per [Change].

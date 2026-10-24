@@ -1,3 +1,6 @@
+// Copyright 2025 Mattia Pispisa
+// SPDX-License-Identifier: MIT
+
 import 'package:bloc/bloc.dart';
 import 'package:devtools_extensions/devtools_extensions.dart';
 import 'package:equatable/equatable.dart';

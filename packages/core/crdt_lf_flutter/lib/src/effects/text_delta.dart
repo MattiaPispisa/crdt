@@ -1,3 +1,6 @@
+// Copyright 2025 Mattia Pispisa
+// SPDX-License-Identifier: MIT
+
 import 'package:flutter/foundation.dart';
 
 /// A single contiguous text edit: at [index], [deleted] code units are

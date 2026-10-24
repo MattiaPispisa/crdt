@@ -1,3 +1,6 @@
+// Copyright 2025 Mattia Pispisa
+// SPDX-License-Identifier: MIT
+
 part of 'handler.dart';
 
 /// Batch insert operation for the Fugue list

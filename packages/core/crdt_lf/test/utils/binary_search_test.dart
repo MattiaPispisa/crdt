@@ -1,3 +1,6 @@
+// Copyright 2025 Mattia Pispisa
+// SPDX-License-Identifier: MIT
+
 import 'package:crdt_lf/src/utils/binary_search.dart';
 import 'package:test/test.dart';
 

@@ -1,3 +1,6 @@
+// Copyright 2025 Mattia Pispisa
+// SPDX-License-Identifier: MIT
+
 import 'package:flutter/widgets.dart';
 import 'package:go_router/go_router.dart';
 

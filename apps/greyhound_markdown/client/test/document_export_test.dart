@@ -1,3 +1,6 @@
+// Copyright 2025 Mattia Pispisa
+// SPDX-License-Identifier: MIT
+
 import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';

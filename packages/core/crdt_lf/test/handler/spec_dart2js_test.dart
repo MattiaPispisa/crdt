@@ -1,3 +1,6 @@
+// Copyright 2025 Mattia Pispisa
+// SPDX-License-Identifier: MIT
+
 // A file of its own on purpose, next to spec_test.dart. dart2js (Dart 3.13)
 // emitted the builder call of `HandlerSpec.create` twice, but only in a
 // program that builds handlers from a single spec. Keep this file to one spec,

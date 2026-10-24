@@ -1,3 +1,6 @@
+// Copyright 2025 Mattia Pispisa
+// SPDX-License-Identifier: MIT
+
 /// Whether [a] and [b] hold the same bytes.
 ///
 /// `package:collection`'s `ListEquality` does the same job, but it is not a

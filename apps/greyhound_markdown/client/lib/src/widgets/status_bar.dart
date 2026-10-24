@@ -1,3 +1,6 @@
+// Copyright 2025 Mattia Pispisa
+// SPDX-License-Identifier: MIT
+
 import 'package:crdt_socket_sync/web_socket_relay_client.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';

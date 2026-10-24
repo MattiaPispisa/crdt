@@ -1,3 +1,6 @@
+// Copyright 2025 Mattia Pispisa
+// SPDX-License-Identifier: MIT
+
 /// Binary-search helpers for sorted [List]s.
 extension BinarySearchList<E> on List<E> {
   /// The leftmost index in `[start, end)` whose element does not compare

@@ -1,3 +1,6 @@
+// Copyright 2025 Mattia Pispisa
+// SPDX-License-Identifier: MIT
+
 /// Storages that break one clause of the contract each.
 ///
 /// **These tests are meant to fail.** The file has no `_test` suffix, so

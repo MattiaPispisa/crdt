@@ -1,3 +1,6 @@
+// Copyright 2025 Mattia Pispisa
+// SPDX-License-Identifier: MIT
+
 import 'dart:async';
 
 /// Holds the events a document publishes until it is settled, then hands

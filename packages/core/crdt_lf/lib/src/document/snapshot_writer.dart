@@ -1,3 +1,6 @@
+// Copyright 2025 Mattia Pispisa
+// SPDX-License-Identifier: MIT
+
 part of 'document.dart';
 
 /// What a snapshot holds, before its capabilities record: its `data`, the

@@ -1,3 +1,6 @@
+// Copyright 2025 Mattia Pispisa
+// SPDX-License-Identifier: MIT
+
 import 'package:crdt_lf/src/algorithm/fugue/element_id.dart';
 
 /// Represents a node within the logical sequence

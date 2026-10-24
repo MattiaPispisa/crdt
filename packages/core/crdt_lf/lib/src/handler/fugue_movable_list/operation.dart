@@ -1,3 +1,6 @@
+// Copyright 2025 Mattia Pispisa
+// SPDX-License-Identifier: MIT
+
 part of 'handler.dart';
 
 /// Batch insert: introduces a contiguous run of new identities anchored at

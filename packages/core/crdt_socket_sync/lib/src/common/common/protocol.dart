@@ -1,3 +1,6 @@
+// Copyright 2025 Mattia Pispisa
+// SPDX-License-Identifier: MIT
+
 /// Class that handles the communication protocol.
 class Protocol {
   /// The major version of the wire protocol this build speaks.

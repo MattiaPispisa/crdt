@@ -1,3 +1,6 @@
+// Copyright 2025 Mattia Pispisa
+// SPDX-License-Identifier: MIT
+
 part of 'document_changes_cubit.dart';
 
 /// JSON descriptor of a CRDT change as returned by

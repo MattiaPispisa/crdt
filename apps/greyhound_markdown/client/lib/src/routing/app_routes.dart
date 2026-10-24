@@ -1,3 +1,6 @@
+// Copyright 2025 Mattia Pispisa
+// SPDX-License-Identifier: MIT
+
 /// The names of the app routes, for `goNamed` and `pushNamed`.
 ///
 /// Navigate with the `AppNavigation` extension rather than with these names.

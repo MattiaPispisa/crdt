@@ -1,3 +1,6 @@
+// Copyright 2025 Mattia Pispisa
+// SPDX-License-Identifier: MIT
+
 import 'package:test/test.dart';
 
 /// `host_test.dart` is `@TestOn('vm')` (Hive needs a directory), and a Chrome

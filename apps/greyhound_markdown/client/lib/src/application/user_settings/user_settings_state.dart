@@ -1,3 +1,6 @@
+// Copyright 2025 Mattia Pispisa
+// SPDX-License-Identifier: MIT
+
 part of 'user_settings_cubit.dart';
 
 /// A room this device has opened, and when it last did.

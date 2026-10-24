@@ -1,3 +1,6 @@
+// Copyright 2025 Mattia Pispisa
+// SPDX-License-Identifier: MIT
+
 /// The storage contract behind the `crdt_lf` persistence adapters, and the
 /// consumer that keeps a [CRDTDocument] on disk as it changes.
 ///

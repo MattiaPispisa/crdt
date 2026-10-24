@@ -1,3 +1,6 @@
+// Copyright 2025 Mattia Pispisa
+// SPDX-License-Identifier: MIT
+
 /// Exception thrown when a clock drift is detected.
 ///
 /// This exception is thrown when the clock of a node is detected to be

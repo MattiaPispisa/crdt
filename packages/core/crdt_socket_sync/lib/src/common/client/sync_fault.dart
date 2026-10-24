@@ -1,3 +1,6 @@
+// Copyright 2025 Mattia Pispisa
+// SPDX-License-Identifier: MIT
+
 /// Something the client could not do with what the server sent.
 ///
 /// It is not a refusal of the build (`SyncIncompatibility`) and not a

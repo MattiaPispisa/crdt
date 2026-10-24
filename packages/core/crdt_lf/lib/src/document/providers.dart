@@ -1,3 +1,6 @@
+// Copyright 2025 Mattia Pispisa
+// SPDX-License-Identifier: MIT
+
 part of 'document.dart';
 
 /// A consumer that can consume a CRDTDocument

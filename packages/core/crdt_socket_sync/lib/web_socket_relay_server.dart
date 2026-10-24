@@ -1,3 +1,6 @@
+// Copyright 2025 Mattia Pispisa
+// SPDX-License-Identifier: MIT
+
 /// WebSocket relay server library for CRDT Socket Sync.
 library;
 

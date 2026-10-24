@@ -1,3 +1,6 @@
+// Copyright 2025 Mattia Pispisa
+// SPDX-License-Identifier: MIT
+
 // ignore_for_file: avoid_redundant_argument_values - explicit test setup
 @TestOn('vm')
 library;
