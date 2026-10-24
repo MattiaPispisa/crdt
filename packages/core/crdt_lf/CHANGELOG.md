@@ -1,3 +1,21 @@
+## [5.3.0](https://github.com/MattiaPispisa/crdt/tree/crdt_lf-v5.3.0/packages/core/crdt_lf)
+
+**Date:** --
+
+[compare to previous release](https://github.com/MattiaPispisa/crdt/compare/crdt_lf-v5.2.1...crdt_lf-v5.3.0)
+
+### Added
+
+- `BaseCRDTDocument.handlerById` reads a handler by id. The
+  view opens the handler on first read. `HistorySession.document` returns the view.
+  [112](https://github.com/MattiaPispisa/crdt/issues/112)
+
+### Changed
+
+- `revisionForHandler` of a `HistorySession` view is O(1) and moves on every cursor jump. It was
+  the change count of the handler. The live `CRDTDocument` is unchanged.
+  [112](https://github.com/MattiaPispisa/crdt/issues/112)
+
 ## [5.2.1](https://github.com/MattiaPispisa/crdt/tree/crdt_lf-v5.2.1/packages/core/crdt_lf)
 
 **Date:** --

@@ -96,6 +96,90 @@ void main() {
       );
     });
 
+    testWidgets('a delta builder shows the value at the cursor', (tester) async {
+      final doc = CRDTDocument(peerId: PeerId.generate());
+      final todos = CRDTListHandler<String>(
+        doc,
+        'todos',
+        handlerType: 'CRDTListHandler<String>',
+      )
+        ..insert(0, 'a')
+        ..insert(1, 'b');
+
+      late HistorySession session;
+      await tester.pumpWidget(
+        CrdtProvider.value(
+          value: doc,
+          child: CrdtHistoryScope(
+            builder: (context, s) {
+              session = s;
+              return CrdtHandlerDeltaBuilder<List<String>,
+                  SequenceDelta<String>>(
+                id: 'todos',
+                builder: (context, value) => Text(
+                  'past:${value.join(',')}',
+                  textDirection: TextDirection.ltr,
+                ),
+              );
+            },
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('past:a,b'), findsOneWidget);
+
+      session.previous();
+      await tester.pumpAndSettle();
+      expect(find.text('past:a'), findsOneWidget);
+
+      // The live document moves on; the view does not.
+      todos.insert(2, 'c');
+      await tester.pumpAndSettle();
+      expect(find.text('past:a'), findsOneWidget);
+
+      session.jump(0);
+      await tester.pumpAndSettle();
+      expect(find.text('past:'), findsOneWidget);
+    });
+
+    testWidgets('the widgets that need the live document refuse the scope',
+        (tester) async {
+      final doc = CRDTDocument(peerId: PeerId.generate());
+      final inScope = <Widget>[
+        CrdtBuilder(builder: (context, document) => const SizedBox()),
+        CrdtSelector<int>(
+          selector: (context, document) => 0,
+          builder: (context, value) => const SizedBox(),
+        ),
+        CrdtTextFieldBuilder(
+          id: 'note',
+          builder: (context, controller) => const SizedBox(),
+        ),
+        const CrdtTextCursorsOverlay(
+          id: 'note',
+          cursors: [],
+          child: SizedBox(),
+        ),
+      ];
+
+      for (final widget in inScope) {
+        await tester.pumpWidget(
+          CrdtProvider.value(
+            value: doc,
+            child: CrdtHistoryScope(builder: (context, _) => widget),
+          ),
+        );
+        expect(
+          tester.takeException(),
+          isA<FlutterError>().having(
+            (e) => e.message,
+            'message',
+            contains('cannot be used inside a CrdtHistoryScope'),
+          ),
+        );
+      }
+    });
+
     testWidgets('disposes the session with the widget', (tester) async {
       final doc = CRDTDocument(peerId: PeerId.generate());
       CRDTListHandler<String>(

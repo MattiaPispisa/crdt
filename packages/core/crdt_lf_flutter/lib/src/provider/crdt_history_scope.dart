@@ -14,8 +14,8 @@ typedef CrdtHistoryWidgetBuilder = Widget Function(
 
 /// Shows the ambient document frozen at a point of its history.
 ///
-/// The handler widgets below ([CrdtHandlerBuilder], [CrdtHandlerSelector],
-/// [CrdtHandlerListener]) read the frozen view instead of the live document,
+/// The handler widgets below (`CrdtHandlerBuilder`, `CrdtHandlerSelector`,
+/// `CrdtHandlerListener`) read the frozen view instead of the live document,
 /// so the same widgets draw both.
 class CrdtHistoryScope extends StatefulWidget {
   /// Creates a scope over a snapshot of the ambient document.

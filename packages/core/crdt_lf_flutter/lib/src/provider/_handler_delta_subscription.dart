@@ -9,18 +9,18 @@ import 'package:flutter/widgets.dart';
 /// Finds the handler registered under [id] and checks it publishes the shape
 /// the caller asked for.
 typedef DeltaProviderResolver<V, D extends ComposableDelta<D>>
-    = DeltaProvider<V, D> Function(CRDTDocument document, String id);
+    = DeltaProvider<V, D> Function(BaseCRDTDocument document, String id);
 
 /// The resolver every widget uses unless it can say something more precise.
 ///
 /// [widgetName] appears in the error, so the reader is told which widget could
 /// not find what it needed.
 DeltaProvider<V, D> resolveDeltaProvider<V, D extends ComposableDelta<D>>(
-  CRDTDocument document,
+  BaseCRDTDocument document,
   String id,
   String widgetName,
 ) {
-  final handler = document.registeredHandlers[id];
+  final handler = document.handlerById(id);
   if (handler != null && handler is DeltaProvider<V, D>) {
     // `Handler` is a base class and `DeltaProvider` a base mixin, so the
     // analyzer will not promote across them. The check above is the proof.
@@ -82,7 +82,7 @@ class HandlerDeltaSubscription<V, D extends ComposableDelta<D>> {
 
   /// The document and handler id this is attached to, or `null` before the
   /// first attach.
-  (CRDTDocument, String)? _target;
+  (BaseCRDTDocument, String)? _target;
 
   /// Set by the first [syncTo]; reading it before then is a mistake the
   /// `late` reports plainly.
@@ -115,7 +115,7 @@ class HandlerDeltaSubscription<V, D extends ComposableDelta<D>> {
   /// [onBeforeAttach] runs after the old subscription is dropped and before the
   /// new handler is touched, for state tied to the old one.
   DeltaSyncPoint<V>? syncTo(
-    CRDTDocument document,
+    BaseCRDTDocument document,
     String id, {
     VoidCallback? onBeforeAttach,
   }) {
