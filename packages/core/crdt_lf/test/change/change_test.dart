@@ -160,8 +160,25 @@ void main() {
       expect(decoded.deps, equals(change.deps));
       expect(decoded.author, equals(change.author));
       expect(decoded.payloadBytes(), equals(change.payloadBytes()));
-      // Read straight out of the metadata, without decoding the ids.
+      // Read without decoding the ids.
       expect(decoded.depsCount, equals(3));
+    });
+
+    test('deprecated meta still describes the layout', () {
+      final change = Change(
+        id: id,
+        operation: operation,
+        deps: deps,
+        author: author,
+      );
+
+      // The test is about the deprecated getter itself.
+      // ignore: deprecated_member_use_from_same_package
+      final meta = change.meta;
+      expect(meta[0], equals(Change.schemaVersion));
+      expect(meta[1], equals(1));
+      expect(meta[2], equals(OperationId.byteLength * 2));
+      expect(meta[3], equals(change.payloadBytes().length));
     });
 
     test('fromBytes rejects an unknown schema version', () {

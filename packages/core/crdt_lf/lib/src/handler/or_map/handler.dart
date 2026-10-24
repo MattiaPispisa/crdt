@@ -5,6 +5,7 @@ import 'dart:collection';
 import 'dart:typed_data';
 
 import 'package:crdt_lf/crdt_lf.dart';
+import 'package:crdt_lf/src/utils/compact_set.dart';
 
 part 'operation.dart';
 
@@ -113,12 +114,12 @@ base class CRDTORMapHandler<K, V> extends Handler<ORMapState<K, V>>
   /// Removes [key] from the map by tomb-stoning all observed tags for that key.
   void remove(K key) {
     final state = _cachedOrComputedState();
-    final allTagsForKey = state._allTagsForKey(key);
+    final liveTagsForKey = state._liveTagsForKey(key);
 
     final operation = _ORMapRemoveOperation<K, V>.fromHandler(
       this,
       key: key,
-      tags: allTagsForKey,
+      tags: liveTagsForKey,
     );
     doc.registerOperation(operation);
   }
@@ -244,8 +245,7 @@ base class CRDTORMapHandler<K, V> extends Handler<ORMapState<K, V>>
           value: _valueCodec.decode(readBytes('OR-map snapshot value')),
           tag: tag,
         );
-        state._live.putIfAbsent(key, () => <ORMapEntry<V>>{}).add(entry);
-        state._all.putIfAbsent(key, () => <ORMapEntry<V>>{}).add(entry);
+        state._live.putIfAbsent(key, CompactSet<ORMapEntry<V>>.new).add(entry);
       }
     }
 
@@ -262,7 +262,6 @@ base class CRDTORMapHandler<K, V> extends Handler<ORMapState<K, V>>
   ORMapState<K, V> _computeState() {
     final state = ORMapState<K, V>._(
       live: <K, Set<ORMapEntry<V>>>{},
-      all: <K, Set<ORMapEntry<V>>>{},
       snapshotOnly: <K, V>{},
       tombstones: <OperationId>{},
     );
@@ -313,12 +312,9 @@ base class CRDTORMapHandler<K, V> extends Handler<ORMapState<K, V>>
 
     final entry = ORMapEntry<V>(value: value, tag: tag);
 
-    // Register entry in all (seen)
-    state._all.putIfAbsent(key, () => <ORMapEntry<V>>{}).add(entry);
-
     // Add to live if not tomb-stoned yet
     if (!state._tombstones.contains(tag)) {
-      state._live.putIfAbsent(key, () => <ORMapEntry<V>>{}).add(entry);
+      state._live.putIfAbsent(key, CompactSet<ORMapEntry<V>>.new).add(entry);
     }
 
     // A concrete put overrides snapshot-only presence for this key
@@ -567,8 +563,6 @@ base class CRDTORMapHandler<K, V> extends Handler<ORMapState<K, V>>
 class ORMapState<K, V> {
   /// - [_live]: current non-tomb-stoned entries (value, tag) per key
   /// (key is present if it has at least one live entry)
-  /// - [_all]: all entries ever observed per key
-  /// (useful for computing default removals)
   /// - [_snapshotOnly]: key-value pairs seeded from snapshot
   /// without any concrete put tags yet
   /// - [_tombstones]: set of tomb-stoned tags observed
@@ -576,28 +570,23 @@ class ORMapState<K, V> {
   /// - [_state]: the current state of the OR-Map
   ORMapState._({
     required Map<K, Set<ORMapEntry<V>>> live,
-    required Map<K, Set<ORMapEntry<V>>> all,
     required Map<K, V> snapshotOnly,
     required Set<OperationId> tombstones,
   })  : _tombstones = tombstones,
         _snapshotOnly = snapshotOnly,
-        _all = all,
         _live = live;
 
-  /// Returns all tags for a given key (across all entries)
-  Set<OperationId> _allTagsForKey(K key) {
-    final allForKey = _all[key];
-    if (allForKey == null) {
+  /// Returns the live tags for a given key (across all its live entries)
+  Set<OperationId> _liveTagsForKey(K key) {
+    final liveForKey = _live[key];
+    if (liveForKey == null) {
       return <OperationId>{};
     }
-    return allForKey.map((entry) => entry.tag).toSet();
+    return liveForKey.map((entry) => entry.tag).toSet();
   }
 
   /// The live entries per key
   final Map<K, Set<ORMapEntry<V>>> _live;
-
-  /// All entries per key
-  final Map<K, Set<ORMapEntry<V>>> _all;
 
   /// Snapshot-only key-value pairs
   final Map<K, V> _snapshotOnly;

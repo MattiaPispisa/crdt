@@ -44,6 +44,16 @@ void main() {
       expect(node.children, isEmpty);
     });
 
+    test('hasParent and hasChild look through several ids', () {
+      final node = DAGNode(id, parents: {parentId1, parentId2})
+        ..addChild(childId1)
+        ..addChild(childId2);
+      expect(node.hasParent(parentId2), isTrue);
+      expect(node.hasParent(childId1), isFalse);
+      expect(node.hasChild(childId2), isTrue);
+      expect(node.hasChild(parentId1), isFalse);
+    });
+
     test('addParent adds a parent', () {
       final node = DAGNode(id)..addParent(parentId1);
       expect(node.hasParent(parentId1), isTrue);

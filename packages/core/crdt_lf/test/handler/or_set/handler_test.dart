@@ -203,6 +203,42 @@ void main() {
       );
     });
 
+    test('removing a value twice leaves a legacy value next to it alone', () {
+      final source = CRDTDocument();
+      CRDTORSetHandler<String>(
+        source,
+        'set',
+        handlerType: 'CRDTORSetHandler<String>',
+      ).add('x');
+      final snapshot = _tagless(source.takeSnapshot(), 'set', {'a', 'b'});
+
+      CRDTORSetHandler<String> open(CRDTDocument doc) {
+        final set = CRDTORSetHandler<String>(
+          doc,
+          'set',
+          handlerType: 'CRDTORSetHandler<String>',
+        );
+        doc.importSnapshot(snapshot);
+        return set;
+      }
+
+      final writerDoc = CRDTDocument();
+      final writer = open(writerDoc);
+      final readerDoc = CRDTDocument();
+      final reader = open(readerDoc);
+
+      // The add gives 'a' a tag, the first remove takes the tag away, and the
+      // second one has no live tag left to name.
+      writer
+        ..add('a')
+        ..remove('a')
+        ..remove('a');
+      readerDoc.importChanges(writerDoc.exportChanges());
+
+      expect(writer.value, {'b'});
+      expect(reader.value, {'b'});
+    });
+
     group('invert', () {
       test('an undo takes back one tag, not the value another peer added', () {
         final a = CRDTDocument(
