@@ -1,6 +1,3 @@
-// Copyright 2025 Mattia Pispisa
-// SPDX-License-Identifier: MIT
-
 // ignore: unused_import
 import 'package:intl/intl.dart' as intl;
 import 'app_l10n.dart';

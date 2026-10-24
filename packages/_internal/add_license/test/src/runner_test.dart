@@ -53,6 +53,7 @@ void main() {
       writeDart('.dart_tool/x.dart', '');
       writeDart('build/x.dart', '');
       writeDart('.dart_frog/x.dart', '');
+      writeDart('lib/l10n/gen/app_l10n.dart', '');
       writeDart('lib/a.dart', '');
 
       expect(dartFilesOf(root).map((f) => f.path), [
