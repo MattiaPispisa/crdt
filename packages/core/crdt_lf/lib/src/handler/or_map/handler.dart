@@ -5,6 +5,7 @@ import 'dart:collection';
 import 'dart:typed_data';
 
 import 'package:crdt_lf/crdt_lf.dart';
+import 'package:crdt_lf/src/utils/compact_set.dart';
 
 part 'operation.dart';
 
@@ -244,7 +245,7 @@ base class CRDTORMapHandler<K, V> extends Handler<ORMapState<K, V>>
           value: _valueCodec.decode(readBytes('OR-map snapshot value')),
           tag: tag,
         );
-        state._live.putIfAbsent(key, () => <ORMapEntry<V>>{}).add(entry);
+        state._live.putIfAbsent(key, CompactSet<ORMapEntry<V>>.new).add(entry);
       }
     }
 
@@ -313,7 +314,7 @@ base class CRDTORMapHandler<K, V> extends Handler<ORMapState<K, V>>
 
     // Add to live if not tomb-stoned yet
     if (!state._tombstones.contains(tag)) {
-      state._live.putIfAbsent(key, () => <ORMapEntry<V>>{}).add(entry);
+      state._live.putIfAbsent(key, CompactSet<ORMapEntry<V>>.new).add(entry);
     }
 
     // A concrete put overrides snapshot-only presence for this key

@@ -5,6 +5,7 @@ import 'dart:collection';
 import 'dart:typed_data';
 
 import 'package:crdt_lf/crdt_lf.dart';
+import 'package:crdt_lf/src/utils/compact_set.dart';
 
 part 'operation.dart';
 
@@ -219,7 +220,7 @@ base class CRDTORSetHandler<T> extends Handler<ORSetState<T>>
         final item = readItem();
         final tag = OperationId.readFromBytes(snapshot, offset: offset);
         offset += OperationId.byteLength;
-        state._live.putIfAbsent(item, () => <OperationId>{}).add(tag);
+        state._live.putIfAbsent(item, CompactSet<OperationId>.new).add(tag);
       }
     }
 
@@ -302,7 +303,9 @@ base class CRDTORSetHandler<T> extends Handler<ORSetState<T>>
     // document mints one locally and the decode refuses a change without one.
     final tag = operation.stamp!;
     if (!state._tombstones.contains(tag)) {
-      state._live.putIfAbsent(operation.value, () => <OperationId>{}).add(tag);
+      state._live
+          .putIfAbsent(operation.value, CompactSet<OperationId>.new)
+          .add(tag);
     }
     // A concrete add overrides snapshot-only presence for this value.
     state._snapshotOnly.remove(operation.value);
