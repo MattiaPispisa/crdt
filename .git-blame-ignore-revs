@@ -1,0 +1,5 @@
+# Mechanical commits, ignored by `git blame --ignore-revs-file=.git-blame-ignore-revs`.
+# GitHub's web UI reads this file automatically.
+
+# Add SPDX license headers across the workspace
+9d331008ce1e9fae709f5813e28a7cd00ffb264b
