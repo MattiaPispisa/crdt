@@ -26,15 +26,21 @@ class LicenseInfo {
   final String year;
 }
 
-/// Reads and parses the `LICENSE` file of [packageRoot].
+/// Reads and parses the `LICENSE` file that applies to [packageRoot].
 ///
-/// Throws a [FormatException] when the file is missing, its family is not
-/// one of [SpdxLicenseFamily], or it has no `Copyright <year> <holder>`
+/// A package with no `LICENSE` of its own — an `example/` or
+/// `relay_example/` nested under a package that has one — inherits the
+/// nearest ancestor directory's `LICENSE` instead, found by [_findLicense].
+///
+/// Throws a [FormatException] when no ancestor has a `LICENSE`, its family
+/// is not one of [SpdxLicenseFamily], or it has no `Copyright year holder`
 /// line to read the header's year and holder from.
 LicenseInfo readLicenseInfo(Directory packageRoot) {
-  final file = File(path.join(packageRoot.path, 'LICENSE'));
-  if (!file.existsSync()) {
-    throw FormatException('No LICENSE file in ${packageRoot.path}');
+  final file = _findLicense(packageRoot);
+  if (file == null) {
+    throw FormatException(
+      'No LICENSE file in ${packageRoot.path} or any ancestor directory',
+    );
   }
 
   final text = file.readAsStringSync();
@@ -56,6 +62,25 @@ LicenseInfo readLicenseInfo(Directory packageRoot) {
     holder: _stripTrailer(match.group(2)!),
     year: match.group(1)!,
   );
+}
+
+/// The `LICENSE` of [dir], or of the nearest ancestor that has one.
+///
+/// Returns `null` once it climbs past the filesystem root without finding
+/// one.
+File? _findLicense(Directory dir) {
+  var current = dir;
+  while (true) {
+    final candidate = File(path.join(current.path, 'LICENSE'));
+    if (candidate.existsSync()) {
+      return candidate;
+    }
+    final parent = current.parent;
+    if (parent.path == current.path) {
+      return null;
+    }
+    current = parent;
+  }
 }
 
 final _copyrightLine =

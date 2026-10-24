@@ -7,7 +7,9 @@ SPDX license header on every `.dart` file of the workspace.
 
 For a package root, it:
 
-1. Reads the package's own `LICENSE` file.
+1. Reads the package's own `LICENSE` file, or, if it has none — an
+   `example/` or `relay_example/` nested under a package that has one —
+   the nearest ancestor directory's `LICENSE`.
 2. Works out the license family (`Apache-2.0`, `BSD-3-Clause`, `MIT`,
    `MPL-2.0`) and the copyright holder and year from it.
 3. Walks every `.dart` file under the root — skipping `.dart_tool`,

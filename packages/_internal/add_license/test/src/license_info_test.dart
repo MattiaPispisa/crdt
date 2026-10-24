@@ -64,4 +64,29 @@ void main() {
 
     expect(readLicenseInfo(packageRoot).holder, 'Mattia Pispisa');
   });
+
+  test('inherits the nearest ancestor LICENSE when there is none locally', () {
+    writeLicense('MIT License\n\nCopyright (c) 2025 Mattia Pispisa\n');
+    final example = Directory(path.join(packageRoot.path, 'example'))
+      ..createSync();
+
+    final info = readLicenseInfo(example);
+
+    expect(info.family, SpdxLicenseFamily.mit);
+    expect(info.holder, 'Mattia Pispisa');
+  });
+
+  test('a local LICENSE wins over an ancestor one', () {
+    writeLicense('MIT License\n\nCopyright (c) 2025 Mattia Pispisa\n');
+    final example = Directory(path.join(packageRoot.path, 'example'))
+      ..createSync();
+    File(path.join(example.path, 'LICENSE')).writeAsStringSync(
+      'Apache License\n\nCopyright 2025 Someone Else\n',
+    );
+
+    final info = readLicenseInfo(example);
+
+    expect(info.family, SpdxLicenseFamily.apache2);
+    expect(info.holder, 'Someone Else');
+  });
 }
