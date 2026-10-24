@@ -17,70 +17,145 @@ class DAGNode {
   DAGNode(
     this.id, {
     Set<OperationId>? parents,
-  })  : parents = parents != null ? Set.from(parents) : {},
-        children = {};
+  }) {
+    if (parents != null) {
+      parents.forEach(addParent);
+    }
+  }
 
   /// The [OperationId] of this node
   final OperationId id;
 
-  /// The [OperationId]s of the parent nodes (dependencies)
-  final Set<OperationId> parents;
+  // Each side holds `null`, one id, or a list of ids
+  Object? _parents;
+  Object? _children;
 
-  /// The [OperationId]s of the child nodes
-  final Set<OperationId> children;
+  /// The [OperationId]s of the parent nodes (dependencies).
+  ///
+  /// A new set on every call: iterate [parentIds] instead.
+  Set<OperationId> get parents => _parentIds.toSet();
+
+  /// The [OperationId]s of the child nodes.
+  ///
+  /// A new set on every call: iterate [childIds] instead.
+  Set<OperationId> get children => _childIds.toSet();
+
+  /// The [OperationId]s of the parent nodes, without copying.
+  Iterable<OperationId> get parentIds => _parentIds;
+
+  /// The [OperationId]s of the child nodes, without copying.
+  Iterable<OperationId> get childIds => _childIds;
+
+  Iterable<OperationId> get _parentIds => _iterate(_parents);
+
+  Iterable<OperationId> get _childIds => _iterate(_children);
+
+  static Iterable<OperationId> _iterate(Object? side) {
+    if (side == null) {
+      return const <OperationId>[];
+    }
+    if (side is OperationId) {
+      return [side];
+    }
+    return side as List<OperationId>;
+  }
+
+  static Object? _add(Object? side, OperationId id) {
+    if (side == null) {
+      return id;
+    }
+    if (side is OperationId) {
+      return side == id ? side : <OperationId>[side, id];
+    }
+    final list = side as List<OperationId>;
+    if (!list.contains(id)) {
+      list.add(id);
+    }
+    return list;
+  }
+
+  static Object? _remove(Object? side, OperationId id) {
+    if (side == null) {
+      return null;
+    }
+    if (side is OperationId) {
+      return side == id ? null : side;
+    }
+    final list = side as List<OperationId>..remove(id);
+    if (list.length == 1) {
+      return list.first;
+    }
+    return list.isEmpty ? null : list;
+  }
+
+  static int _length(Object? side) {
+    if (side == null) {
+      return 0;
+    }
+    return side is OperationId ? 1 : (side as List<OperationId>).length;
+  }
+
+  static bool _contains(Object? side, OperationId id) {
+    if (side == null) {
+      return false;
+    }
+    return side is OperationId
+        ? side == id
+        : (side as List<OperationId>).contains(id);
+  }
 
   /// Adds a parent to this node
   void addParent(OperationId parentId) {
-    parents.add(parentId);
+    _parents = _add(_parents, parentId);
   }
 
   /// Removes a parent from this node
   void removeParent(OperationId parentId) {
-    parents.remove(parentId);
+    _parents = _remove(_parents, parentId);
   }
 
   /// Removes all parents from this node
   void removeParents() {
-    parents.clear();
+    _parents = null;
   }
 
   /// Adds a child to this node
   void addChild(OperationId childId) {
-    children.add(childId);
+    _children = _add(_children, childId);
   }
 
   /// Removes a child from this node
   void removeChild(OperationId childId) {
-    children.remove(childId);
+    _children = _remove(_children, childId);
   }
 
   /// Checks if this node has the given parent
   bool hasParent(OperationId parentId) {
-    return parents.contains(parentId);
+    return _contains(_parents, parentId);
   }
 
   /// Checks if this node has the given child
   bool hasChild(OperationId childId) {
-    return children.contains(childId);
+    return _contains(_children, childId);
   }
 
   /// Gets the number of parents
-  int get parentCount => parents.length;
+  int get parentCount => _length(_parents);
 
   /// Gets the number of children
-  int get childCount => children.length;
+  int get childCount => _length(_children);
 
   /// Checks if this node is a root node (has no parents)
-  bool get isRoot => parents.isEmpty;
+  bool get isRoot => _parents == null;
 
   /// Checks if this node is a leaf node (has no children)
-  bool get isLeaf => children.isEmpty;
+  bool get isLeaf => _children == null;
 
   /// Returns a string representation of this node
   @override
   String toString() {
-    final parentsStr = parents.map((p) => p.toString()).join(', ');
-    final childrenStr = children.map((c) => c.toString()).join(', ');
+    final parentsStr = parentIds.map((p) => p.toString()).join(', ');
+    final childrenStr = childIds.map((c) => c.toString()).join(', ');
     return 'DAGNode(id: $id, parents: [$parentsStr], children: [$childrenStr])';
   }
 

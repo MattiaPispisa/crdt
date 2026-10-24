@@ -124,10 +124,10 @@ class DAG {
   /// then the nodes are removed from the [DAG].
   void _removeNodes(List<OperationId> operations) {
     for (final id in operations) {
-      for (final parent in _nodes[id]!.parents) {
+      for (final parent in _nodes[id]!.parentIds) {
         _nodes[parent]?.removeChild(id);
       }
-      for (final child in _nodes[id]!.children) {
+      for (final child in _nodes[id]!.childIds) {
         _nodes[child]?.removeParent(id);
       }
       _nodes.remove(id);
@@ -209,7 +209,7 @@ class DAG {
         continue;
       }
 
-      for (final parentId in _nodes[nodeId]!.parents) {
+      for (final parentId in _nodes[nodeId]!.parentIds) {
         if (!ancestors.contains(parentId)) {
           stack.add(parentId);
         }
@@ -243,7 +243,7 @@ class DAG {
     // lowest iff none of its children is itself a common ancestor.
     final lca = <OperationId>{};
     for (final id in commonAncestors) {
-      final children = _nodes[id]!.children;
+      final children = _nodes[id]!.childIds;
       final isLowest = !children.any(commonAncestors.contains);
 
       if (isLowest) {
@@ -270,7 +270,7 @@ class DAG {
         _nodes[id] = newNode;
         _versionVector.update(id.peerId, id.hlc);
         // Connect the node to its parents
-        for (final parentId in node.parents) {
+        for (final parentId in node.parentIds) {
           if (_nodes.containsKey(parentId)) {
             newNode.addParent(parentId);
             _nodes[parentId]!.addChild(id);

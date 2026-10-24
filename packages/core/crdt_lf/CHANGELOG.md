@@ -1,3 +1,14 @@
+## [5.2.1](https://github.com/MattiaPispisa/crdt/tree/crdt_lf-v5.2.1/packages/core/crdt_lf)
+
+**Date:** --
+
+[compare to previous release](https://github.com/MattiaPispisa/crdt/compare/crdt_lf-v5.2.0...crdt_lf-v5.2.1)
+
+### Changed
+
+- A change in the log costs about half the memory (1090 → 434 bytes per change for a linear history):
+  `Change.deps` is no longer kept, and a `DAGNode` holds its parents and children without a hash set each.
+
 ## [5.2.0](https://github.com/MattiaPispisa/crdt/tree/crdt_lf-v5.2.0/packages/core/crdt_lf)
 
 **Date:** 2026-10-23

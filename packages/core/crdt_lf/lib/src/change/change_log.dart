@@ -37,18 +37,25 @@ class ChangeLog {
       return false;
     }
 
-    final missing = {
-      for (final dep in change.deps)
-        if (!_dag.containsNode(dep)) dep,
-    };
-    if (missing.isNotEmpty && !_coveredBy(missing, snapshotVersion)) {
+    // The parents are read as packed keys and resolved through the store
+    final parents = <OperationId>{};
+    Set<OperationId>? missing;
+    for (final key in change.depsKeys()) {
+      final parent = _store.getChangeByKey(key);
+      if (parent != null) {
+        parents.add(parent.id);
+      } else {
+        (missing ??= <OperationId>{}).add(key.toOperationId());
+      }
+    }
+    if (missing != null && !_coveredBy(missing, snapshotVersion)) {
       throw CausallyNotReadyException(
         'Change is not causally ready: ${change.id}',
       );
     }
 
     _store.addChange(change);
-    _dag.addNode(change.id, change.deps.where(_dag.containsNode).toSet());
+    _dag.addNode(change.id, parents);
     return true;
   }
 
@@ -79,34 +86,37 @@ class ChangeLog {
       return result;
     }
 
-    final changeMap = <OperationId, Change>{};
-    final graph = <OperationId, Set<OperationId>>{};
-    final inDegree = <OperationId, int>{};
+    final changeMap = <OpIdKey, Change>{};
+    final graph = <OpIdKey, List<OpIdKey>>{};
+    final inDegree = <OpIdKey, int>{};
 
     for (final change in changes) {
-      graph[change.id] = {};
-      inDegree[change.id] = 0;
-      changeMap[change.id] = change;
+      final key = change.key;
+      graph[key] = [];
+      inDegree[key] = 0;
+      changeMap[key] = change;
     }
 
     for (final change in changes) {
-      for (final dep in change.deps) {
-        if (graph.containsKey(dep)) {
-          graph[dep]!.add(change.id);
-          inDegree[change.id] = (inDegree[change.id] ?? 0) + 1;
+      final key = change.key;
+      for (final dep in change.depsKeys()) {
+        final dependents = graph[dep];
+        if (dependents != null) {
+          dependents.add(key);
+          inDegree[key] = inDegree[key]! + 1;
         }
       }
     }
 
-    final queue = ListQueue<OperationId>.of(
-      changes.where((c) => inDegree[c.id] == 0).map((c) => c.id),
+    final queue = ListQueue<OpIdKey>.of(
+      changes.map((c) => c.key).where((key) => inDegree[key] == 0),
     );
 
     while (queue.isNotEmpty) {
-      final id = queue.removeFirst();
-      result.add(changeMap[id]!);
+      final key = queue.removeFirst();
+      result.add(changeMap[key]!);
 
-      for (final dependent in graph[id]!) {
+      for (final dependent in graph[key]!) {
         inDegree[dependent] = inDegree[dependent]! - 1;
         if (inDegree[dependent] == 0) {
           queue.add(dependent);

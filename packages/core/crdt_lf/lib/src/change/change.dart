@@ -183,7 +183,6 @@ class Change {
 
   // Decoded fields are cached lazily to avoid re-parsing on every access.
   late final OperationId _id = OperationId.fromUint8List(bytes);
-  late final Set<OperationId> _deps = _parseDeps();
   late final OpIdKey _key = OpIdKey.view(bytes);
 
   Set<OperationId> _parseDeps() {
@@ -206,8 +205,10 @@ class Change {
   /// The peer that created this change.
   PeerId get author => _id.peerId;
 
-  /// The dependencies of this change (decoded).
-  Set<OperationId> get deps => _deps;
+  /// The dependencies of this change (decoded on every call, not kept).
+  ///
+  /// Hot paths read [depsKeys] instead.
+  Set<OperationId> get deps => _parseDeps();
 
   /// The number of dependencies stored in this change.
   int get depsCount => meta[_metaDepsCount];
