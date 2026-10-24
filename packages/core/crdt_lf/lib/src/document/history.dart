@@ -120,10 +120,26 @@ class _CRDTStaticProxyDocument extends BaseCRDTDocument {
     return changesForHandler(handlerId).length;
   }
 
-  // The frozen view never imports snapshots, so the visible change count
-  // (which follows the time-travel cursor) is a complete revision signal.
+  // Every jump makes all cached states stale, so the epoch moves exactly when
+  // any handler may read differently. O(1), unlike counting the changes.
   @override
-  int revisionForHandler(String handlerId) => changeCountForHandler(handlerId);
+  int revisionForHandler(String handlerId) => _cache.epoch;
+
+  /// The kind of every handler the frozen history names, at any cursor.
+  late final Map<String, String> _types = _HandlerRegistry.typesOf(
+    _frozenChanges,
+    _HandlerRegistry.manifestOf(_lastSnapshot),
+  );
+
+  @override
+  Handler<dynamic>? handlerById(String id) {
+    final open = super.handlerById(id);
+    if (open != null || _HandlerDeletions.isReserved(id)) {
+      return open;
+    }
+    final type = _types[id];
+    return type == null ? null : _registry.specs[type]?.create(this, id);
+  }
 }
 
 /// {@template history_session}
@@ -209,6 +225,9 @@ class HistorySession {
 
   /// The total number of changes available in this history session.
   final int length;
+
+  /// The read-only document this session moves through its history.
+  BaseCRDTDocument get document => _document;
 
   /// The stream of cursor position updates.
   ///
