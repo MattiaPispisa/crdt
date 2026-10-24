@@ -1,3 +1,6 @@
+// Copyright 2025 Mattia Pispisa
+// SPDX-License-Identifier: MIT
+
 // ignore_for_file: missing_whitespace_between_adjacent_strings sql
 
 @TestOn('vm')

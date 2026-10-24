@@ -1,3 +1,6 @@
+// Copyright 2025 Mattia Pispisa
+// SPDX-License-Identifier: MIT
+
 import 'package:test/test.dart';
 
 /// Every other test here is `@TestOn('vm')`: this package serves HTTP, which

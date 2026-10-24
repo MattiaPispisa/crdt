@@ -1,3 +1,6 @@
+// Copyright 2025 Mattia Pispisa
+// SPDX-License-Identifier: MIT
+
 part of 'vm_service_cubit.dart';
 
 class VmServiceState extends Equatable {

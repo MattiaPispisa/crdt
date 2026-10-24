@@ -1,3 +1,6 @@
+// Copyright 2025 Mattia Pispisa
+// SPDX-License-Identifier: MIT
+
 /// A [sqlite3](https://pub.dev/packages/sqlite3) storage implementation for
 /// CRDT (Conflict-free Replicated Data Type) objects.
 ///

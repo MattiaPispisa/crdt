@@ -1,3 +1,6 @@
+// Copyright 2025 Mattia Pispisa
+// SPDX-License-Identifier: MIT
+
 /// Enum representing the server event types
 enum ServerEventType {
   /// The server has been started

@@ -1,3 +1,6 @@
+// Copyright 2025 Mattia Pispisa
+// SPDX-License-Identifier: MIT
+
 import 'package:benchmark_harness/benchmark_harness.dart';
 import 'package:benchmark_infrastructure/src/timed/custom_emitter.dart';
 

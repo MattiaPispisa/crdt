@@ -1,3 +1,6 @@
+// Copyright 2025 Mattia Pispisa
+// SPDX-License-Identifier: MIT
+
 import 'dart:math';
 
 /// The characters a generated room id is drawn from. Lowercase and digits

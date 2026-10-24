@@ -1,3 +1,6 @@
+// Copyright 2025 Mattia Pispisa
+// SPDX-License-Identifier: MIT
+
 /// Shared UI and example logic reused by the crdt_lf and crdt_socket_sync
 /// Flutter example apps.
 library;

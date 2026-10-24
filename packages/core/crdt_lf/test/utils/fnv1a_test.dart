@@ -1,3 +1,6 @@
+// Copyright 2025 Mattia Pispisa
+// SPDX-License-Identifier: MIT
+
 import 'dart:convert';
 
 import 'package:crdt_lf/src/utils/fnv1a.dart';

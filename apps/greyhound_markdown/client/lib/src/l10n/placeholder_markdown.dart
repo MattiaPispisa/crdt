@@ -1,3 +1,6 @@
+// Copyright 2025 Mattia Pispisa
+// SPDX-License-Identifier: MIT
+
 import 'package:flutter/widgets.dart';
 
 /// The welcome document for [locale], falling back to English for a language

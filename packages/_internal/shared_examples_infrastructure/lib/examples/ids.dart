@@ -1,3 +1,6 @@
+// Copyright 2025 Mattia Pispisa
+// SPDX-License-Identifier: MIT
+
 /// Canonical identifiers shared by the example screens.
 ///
 /// [ExampleHandlerIds] are the CRDT handler ids used inside each example's

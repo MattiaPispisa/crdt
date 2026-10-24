@@ -1,3 +1,6 @@
+// Copyright 2025 Mattia Pispisa
+// SPDX-License-Identifier: MIT
+
 import 'dart:io';
 
 /// Returns a real temporary directory path to initialize Hive on the VM,

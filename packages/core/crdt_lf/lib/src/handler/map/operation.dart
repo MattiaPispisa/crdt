@@ -1,3 +1,6 @@
+// Copyright 2025 Mattia Pispisa
+// SPDX-License-Identifier: MIT
+
 part of 'handler.dart';
 
 class _MapInsertOperation<T> extends Operation {

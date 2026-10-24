@@ -1,3 +1,6 @@
+// Copyright 2025 Mattia Pispisa
+// SPDX-License-Identifier: MIT
+
 /// {@template crdt_exception}
 /// Base exception for all CRDT-related errors.
 /// {@endtemplate}

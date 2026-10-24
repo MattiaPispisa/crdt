@@ -1,3 +1,6 @@
+// Copyright 2025 Mattia Pispisa
+// SPDX-License-Identifier: MIT
+
 import 'dart:typed_data';
 
 import 'package:greyhound_markdown_client/src/services/file_saver/file_saver.dart';

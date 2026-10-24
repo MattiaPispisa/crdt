@@ -1,3 +1,6 @@
+// Copyright 2025 Mattia Pispisa
+// SPDX-License-Identifier: MIT
+
 import 'package:crdt_lf_flutter/crdt_lf_flutter.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';

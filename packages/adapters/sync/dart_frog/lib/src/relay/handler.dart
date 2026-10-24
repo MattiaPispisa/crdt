@@ -1,3 +1,6 @@
+// Copyright 2025 Mattia Pispisa
+// SPDX-License-Identifier: MIT
+
 import 'package:crdt_socket_sync/relay_server.dart';
 import 'package:crdt_socket_sync_dart_frog/src/common/web_socket_handler.dart';
 import 'package:dart_frog/dart_frog.dart';

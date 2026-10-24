@@ -1,3 +1,6 @@
+// Copyright 2025 Mattia Pispisa
+// SPDX-License-Identifier: MIT
+
 import 'dart:math';
 
 import 'package:crdt_lf/src/algorithm/sqrt_decomposition/sqrt_decomposition.dart';

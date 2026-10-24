@@ -1,3 +1,6 @@
+// Copyright 2025 Mattia Pispisa
+// SPDX-License-Identifier: MIT
+
 /// Diff operation types.
 enum DiffOp {
   /// Equal means text shared by both sequences.

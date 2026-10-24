@@ -1,3 +1,6 @@
+// Copyright 2025 Mattia Pispisa
+// SPDX-License-Identifier: MIT
+
 /// Marker interface for the type of a [SessionEvent].
 ///
 /// Session event type enums implement it, so [SessionEvent.type] can hold any

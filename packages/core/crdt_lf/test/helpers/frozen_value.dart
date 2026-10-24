@@ -1,3 +1,6 @@
+// Copyright 2025 Mattia Pispisa
+// SPDX-License-Identifier: MIT
+
 import 'package:test/test.dart';
 
 /// Checks the value contract of a collection handler: the value [read]

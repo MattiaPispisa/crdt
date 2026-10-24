@@ -1,3 +1,6 @@
+// Copyright 2025 Mattia Pispisa
+// SPDX-License-Identifier: MIT
+
 // ignore_for_file: avoid_setters_without_getters just for testing
 
 import 'dart:async';

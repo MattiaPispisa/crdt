@@ -240,12 +240,31 @@ jobs:
     secrets:
       CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
 
+  license_check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 📚 Git Checkout
+        uses: actions/checkout@v7
+      - name: 🎯 Setup Dart
+        uses: dart-lang/setup-dart@v1
+      - name: 📦 Install add_license dependencies
+        working-directory: packages/_internal/add_license
+        run: dart pub get
+      - name: 🪪 Check license headers
+        run: |
+          status=0
+          for dir in $(find packages apps -name pubspec.yaml -not -path '*/.dart_tool/*' | xargs -n1 dirname | sort); do
+            dart run packages/_internal/add_license/bin/add_license.dart --check --root "$dir" || status=1
+          done
+          exit $status
+
   ci-success:
     name: CI Success
     runs-on: ubuntu-latest
     if: ${{ always() }}
     needs:
       - changes
+      - license_check
       - hlc
       - crdt_lf
       - crdt_lf_persistence

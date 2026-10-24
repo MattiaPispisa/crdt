@@ -1,3 +1,6 @@
+// Copyright 2025 Mattia Pispisa
+// SPDX-License-Identifier: MIT
+
 /// Relay server library for CRDT Socket Sync.
 ///
 /// A relay server rebroadcasts opaque CRDT change blobs to the other clients

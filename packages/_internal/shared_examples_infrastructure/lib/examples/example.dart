@@ -1,3 +1,6 @@
+// Copyright 2025 Mattia Pispisa
+// SPDX-License-Identifier: MIT
+
 import 'package:flutter/material.dart';
 
 /// Describes a single example: how it is named, what it demonstrates, the

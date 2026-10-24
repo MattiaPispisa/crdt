@@ -1,3 +1,6 @@
+// Copyright 2025 Mattia Pispisa
+// SPDX-License-Identifier: MIT
+
 /// The conformance suite every `crdt_lf_persistence` storage adapter is
 /// checked against, and the in-memory storage the suite checks itself against.
 library;

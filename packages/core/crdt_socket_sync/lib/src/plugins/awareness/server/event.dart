@@ -1,3 +1,6 @@
+// Copyright 2025 Mattia Pispisa
+// SPDX-License-Identifier: MIT
+
 /// server awareness event type
 enum ServerAwarenessEventType {
   /// a client joined

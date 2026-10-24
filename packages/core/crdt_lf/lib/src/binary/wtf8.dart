@@ -1,3 +1,6 @@
+// Copyright 2025 Mattia Pispisa
+// SPDX-License-Identifier: MIT
+
 import 'dart:typed_data';
 
 /// WTF-8 (Wobbly Transformation Format 8-bit) codec.

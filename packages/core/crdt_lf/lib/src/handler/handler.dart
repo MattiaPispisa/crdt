@@ -1,3 +1,6 @@
+// Copyright 2025 Mattia Pispisa
+// SPDX-License-Identifier: MIT
+
 part of '../document/document.dart';
 
 /// A per-kind decoder, keyed by [OperationEnvelope.kind].

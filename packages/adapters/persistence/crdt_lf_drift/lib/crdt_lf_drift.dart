@@ -1,3 +1,6 @@
+// Copyright 2025 Mattia Pispisa
+// SPDX-License-Identifier: MIT
+
 /// A [drift](https://pub.dev/packages/drift) storage implementation for
 /// CRDT (Conflict-free Replicated Data Type) objects.
 ///

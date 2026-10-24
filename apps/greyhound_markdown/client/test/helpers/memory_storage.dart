@@ -1,3 +1,6 @@
+// Copyright 2025 Mattia Pispisa
+// SPDX-License-Identifier: MIT
+
 import 'package:hydrated_bloc/hydrated_bloc.dart';
 
 /// Hydrated storage backed by a plain map.

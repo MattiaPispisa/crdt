@@ -1,3 +1,6 @@
+// Copyright 2025 Mattia Pispisa
+// SPDX-License-Identifier: MIT
+
 import 'dart:math' as math;
 
 import 'package:crdt_lf/src/utils/rune_offsets.dart';

@@ -1,3 +1,6 @@
+// Copyright 2025 Mattia Pispisa
+// SPDX-License-Identifier: MIT
+
 import 'package:crdt_socket_sync/server.dart';
 import 'package:crdt_socket_sync_serverpod/src/common/relic_web_socket_connection.dart';
 import 'package:serverpod/serverpod.dart';

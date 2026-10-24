@@ -1,3 +1,6 @@
+// Copyright 2025 Mattia Pispisa
+// SPDX-License-Identifier: MIT
+
 export 'capabilities.dart';
 export 'codec.dart';
 export 'compressor.dart';

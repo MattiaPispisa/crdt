@@ -1,3 +1,6 @@
+// Copyright 2025 Mattia Pispisa
+// SPDX-License-Identifier: MIT
+
 /// Enum that represents the status of the connection
 enum ConnectionStatus {
   /// The client is connected to the server

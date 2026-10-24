@@ -1,3 +1,6 @@
+// Copyright 2025 Mattia Pispisa
+// SPDX-License-Identifier: MIT
+
 /// A document on this device, restored from local storage and kept in sync,
 /// opened and closed in the order that keeps its data.
 library;

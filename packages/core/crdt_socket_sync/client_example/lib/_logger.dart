@@ -1,3 +1,6 @@
+// Copyright 2025 Mattia Pispisa
+// SPDX-License-Identifier: MIT
+
 import 'package:en_logger/en_logger.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';

@@ -1,3 +1,6 @@
+// Copyright 2025 Mattia Pispisa
+// SPDX-License-Identifier: MIT
+
 /// One persisted opaque change blob of a relay room log.
 class RelayLogEntry {
   /// Constructor

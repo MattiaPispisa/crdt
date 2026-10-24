@@ -1,3 +1,6 @@
+// Copyright 2025 Mattia Pispisa
+// SPDX-License-Identifier: MIT
+
 part of 'document_history_cubit.dart';
 
 class DocumentHistoryState extends Equatable {

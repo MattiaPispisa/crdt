@@ -1,3 +1,6 @@
+// Copyright 2025 Mattia Pispisa
+// SPDX-License-Identifier: MIT
+
 import 'package:crdt_lf_persistence/crdt_lf_persistence.dart';
 import 'package:crdt_socket_sync/src/server_client/server/'
     'persistent_server_registry.dart';

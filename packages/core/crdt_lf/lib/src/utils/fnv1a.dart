@@ -1,3 +1,6 @@
+// Copyright 2025 Mattia Pispisa
+// SPDX-License-Identifier: MIT
+
 /// The FNV-1a 32-bit starting value.
 const int fnv1a32Offset = 0x811C9DC5;
 

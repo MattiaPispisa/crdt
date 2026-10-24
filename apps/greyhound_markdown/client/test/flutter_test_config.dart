@@ -1,3 +1,6 @@
+// Copyright 2025 Mattia Pispisa
+// SPDX-License-Identifier: MIT
+
 import 'dart:async';
 
 import 'package:greyhound_markdown_client/src/di/service_locator.dart';

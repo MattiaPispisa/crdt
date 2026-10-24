@@ -1,0 +1,21 @@
+name: add_license
+description: >-
+  Private, unpublished package that applies and checks the SPDX license
+  header on every `.dart` file of the workspace, based on each package's own
+  `LICENSE` file.
+publish_to: "none"
+
+version: 1.0.0
+
+environment:
+  sdk: ">=3.0.0 <4.0.0"
+
+dependencies:
+  args: ^2.4.0
+  en_logger: ^2.1.0
+  path: ^1.9.0
+
+dev_dependencies:
+  test: ^1.24.0
+  ws_lint:
+    path: ../ws_lint

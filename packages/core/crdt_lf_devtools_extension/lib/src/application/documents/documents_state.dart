@@ -1,3 +1,6 @@
+// Copyright 2025 Mattia Pispisa
+// SPDX-License-Identifier: MIT
+
 part of 'documents_cubit.dart';
 
 /// Read-only summary of a CRDT document tracked by devtools.

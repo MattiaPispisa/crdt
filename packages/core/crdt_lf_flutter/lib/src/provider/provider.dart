@@ -1,3 +1,6 @@
+// Copyright 2025 Mattia Pispisa
+// SPDX-License-Identifier: MIT
+
 export 'crdt_builder.dart';
 export 'crdt_delta_builder.dart';
 export 'crdt_delta_listener.dart';

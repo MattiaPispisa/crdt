@@ -1,3 +1,6 @@
+// Copyright 2025 Mattia Pispisa
+// SPDX-License-Identifier: MIT
+
 import 'package:crdt_lf/src/algorithm/fugue/element_id.dart';
 
 /// Which of a Fugue node's two child lists a child hangs in.

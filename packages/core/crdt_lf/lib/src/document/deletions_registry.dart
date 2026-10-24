@@ -1,3 +1,6 @@
+// Copyright 2025 Mattia Pispisa
+// SPDX-License-Identifier: MIT
+
 part of 'document.dart';
 
 const String _deletedHandlersKey = SnapshotRecords.deletedHandlersKey;

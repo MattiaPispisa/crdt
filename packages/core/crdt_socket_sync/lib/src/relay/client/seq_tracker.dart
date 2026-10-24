@@ -1,3 +1,6 @@
+// Copyright 2025 Mattia Pispisa
+// SPDX-License-Identifier: MIT
+
 /// Tracks which prefix of the relay room log this client has imported.
 ///
 /// The relay assigns one sequence number per change blob. The client learns

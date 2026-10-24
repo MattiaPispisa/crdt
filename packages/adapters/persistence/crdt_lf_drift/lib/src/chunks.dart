@@ -1,3 +1,6 @@
+// Copyright 2025 Mattia Pispisa
+// SPDX-License-Identifier: MIT
+
 /// How many ids fit in one `IN (...)`.
 ///
 /// SQLite refuses a statement that binds more variables than

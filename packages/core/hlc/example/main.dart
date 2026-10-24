@@ -1,3 +1,6 @@
+// Copyright 2025 Mattia Pispisa
+// SPDX-License-Identifier: MIT
+
 // ignore_for_file: avoid_print example file
 
 import 'package:hlc_dart/hlc_dart.dart';

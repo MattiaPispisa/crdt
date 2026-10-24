@@ -1,3 +1,6 @@
+// Copyright 2025 Mattia Pispisa
+// SPDX-License-Identifier: MIT
+
 import 'package:crdt_lf_hive/crdt_lf_hive.dart';
 
 /// The changes and snapshots of one document, in two Hive boxes.

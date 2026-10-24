@@ -1,3 +1,6 @@
+// Copyright 2025 Mattia Pispisa
+// SPDX-License-Identifier: MIT
+
 import 'package:flutter/material.dart';
 import 'package:shared_examples_infrastructure/shared/add_item_dialog.dart';
 import 'package:shared_examples_infrastructure/shared/document_controls.dart';
