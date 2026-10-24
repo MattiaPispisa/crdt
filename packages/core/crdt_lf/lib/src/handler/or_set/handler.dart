@@ -99,12 +99,13 @@ base class CRDTORSetHandler<T> extends Handler<ORSetState<T>>
   /// Removes [value] from the set by tomb-stoning observed tags.
   void remove(T value) {
     final state = _cachedOrComputedState();
-    final allTags = state._all[value] ?? <OperationId>{};
+    // A copy: applying the remove empties the live set it would alias.
+    final liveTags = {...?state._live[value]};
 
     final operation = _ORSetRemoveOperation<T>.fromHandler(
       this,
       value: value,
-      tags: allTags,
+      tags: liveTags,
     );
     doc.registerOperation(operation);
   }
@@ -219,7 +220,6 @@ base class CRDTORSetHandler<T> extends Handler<ORSetState<T>>
         final tag = OperationId.readFromBytes(snapshot, offset: offset);
         offset += OperationId.byteLength;
         state._live.putIfAbsent(item, () => <OperationId>{}).add(tag);
-        state._all.putIfAbsent(item, () => <OperationId>{}).add(tag);
       }
     }
 
@@ -234,7 +234,6 @@ base class CRDTORSetHandler<T> extends Handler<ORSetState<T>>
   ORSetState<T> _computeState() {
     final state = ORSetState<T>._(
       live: <T, Set<OperationId>>{},
-      all: <T, Set<OperationId>>{},
       snapshotOnly: <T>{},
       tombstones: <OperationId>{},
     );
@@ -297,13 +296,11 @@ base class CRDTORSetHandler<T> extends Handler<ORSetState<T>>
     required ORSetState<T> state,
     required _ORSetAddOperation<T> operation,
   }) {
-    // Register tag as seen (all),
-    // and as live if not tomb-stoned yet.
+    // Register tag as live if not tomb-stoned yet.
     //
     // The stamp is there for every add: the handler is stamped, so the
     // document mints one locally and the decode refuses a change without one.
     final tag = operation.stamp!;
-    state._all.putIfAbsent(operation.value, () => <OperationId>{}).add(tag);
     if (!state._tombstones.contains(tag)) {
       state._live.putIfAbsent(operation.value, () => <OperationId>{}).add(tag);
     }
@@ -470,8 +467,6 @@ base class CRDTORSetHandler<T> extends Handler<ORSetState<T>>
 class ORSetState<T> {
   /// - [_live]: current non-tomb-stoned tags per value
   /// (value is present if non-empty)
-  /// - [_all]: all tags ever observed per value
-  /// (useful for computing default removals)
   /// - [_snapshotOnly]: values seeded from snapshot
   /// without any concrete add tags yet
   /// - [_tombstones]: set of tomb-stoned tags observed
@@ -479,19 +474,14 @@ class ORSetState<T> {
   /// - [_state]: the current state of the OR-Set
   ORSetState._({
     required Map<T, Set<OperationId>> live,
-    required Map<T, Set<OperationId>> all,
     required Set<T> snapshotOnly,
     required Set<OperationId> tombstones,
   })  : _tombstones = tombstones,
         _snapshotOnly = snapshotOnly,
-        _all = all,
         _live = live;
 
   /// The live tags per value
   final Map<T, Set<OperationId>> _live;
-
-  /// The all tags per value
-  final Map<T, Set<OperationId>> _all;
 
   /// The snapshot-only values
   final Set<T> _snapshotOnly;

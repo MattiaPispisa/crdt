@@ -303,6 +303,46 @@ void main() {
       );
     });
 
+    test('removing a key twice leaves a legacy key next to it alone', () {
+      final source = CRDTDocument();
+      CRDTORMapHandler<String, String>(
+        source,
+        'ormap',
+        handlerType: 'CRDTORMapHandler<String, String>',
+      ).put('x', 'y');
+      final snapshot = _tagless(
+        source.takeSnapshot(),
+        'ormap',
+        {'a': '1', 'b': '2'},
+      );
+
+      CRDTORMapHandler<String, String> open(CRDTDocument doc) {
+        final map = CRDTORMapHandler<String, String>(
+          doc,
+          'ormap',
+          handlerType: 'CRDTORMapHandler<String, String>',
+        );
+        doc.importSnapshot(snapshot);
+        return map;
+      }
+
+      final writerDoc = CRDTDocument();
+      final writer = open(writerDoc);
+      final readerDoc = CRDTDocument();
+      final reader = open(readerDoc);
+
+      // The put gives 'a' a tag, the first remove takes the tag away, and the
+      // second one has no live tag left to name.
+      writer
+        ..put('a', '3')
+        ..remove('a')
+        ..remove('a');
+      readerDoc.importChanges(writerDoc.exportChanges());
+
+      expect(writer.value, {'b': '2'});
+      expect(reader.value, {'b': '2'});
+    });
+
     group('invert', () {
       test('undoes a remove of a key that only a snapshot carries', () {
         final source = CRDTDocument(

@@ -6,8 +6,15 @@
 
 ### Changed
 
-- A change in the log costs about half the memory (1090 → 434 bytes per change for a linear history):
-  `Change.deps` is no longer kept, and a `DAGNode` holds its parents and children without a hash set each.
+- A change in the log costs about a third of the memory (1090 → 386 bytes per change for a linear
+  history): `Change.deps` is no longer kept, `Change` has no `meta` list, and a `DAGNode` holds its
+  parents and children without a hash set each.
+- `CRDTORSetHandler` and `CRDTORMapHandler` no longer keep every tag they ever saw: an OR-set of
+  distinct values takes 31% less memory. A `remove` carries only the tags still live.
+
+### Deprecated
+
+- `Change.meta`: use `Change.depsCount` and `Change.payloadBytes()`.
 
 ## [5.2.0](https://github.com/MattiaPispisa/crdt/tree/crdt_lf-v5.2.0/packages/core/crdt_lf)
 

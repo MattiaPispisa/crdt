@@ -28,25 +28,13 @@ class Change {
   }
 
   Change._({
-    required this.meta,
+    required int depsCount,
     required this.bytes,
-  })  : assert(meta.length == 4, 'meta must have 4 entries'),
+  })  : _depsCount = depsCount,
+        assert(depsCount >= 0, 'depsCount must be non-negative'),
         assert(
-          meta[_metaSchema] == schemaVersion,
-          'unsupported meta schema version',
-        ),
-        assert(meta[_metaDepsCount] >= 0, 'depsCount must be non-negative'),
-        assert(
-          meta[_metaPayloadOffset] >= 0,
-          'payloadOffset must be non-negative',
-        ),
-        assert(
-          meta[_metaPayloadLength] >= 0,
-          'payloadLength must be non-negative',
-        ),
-        assert(
-          meta[_metaPayloadOffset] + meta[_metaPayloadLength] == bytes.length,
-          'payload bounds must match bytes length',
+          bytes.length >= OperationId.byteLength * (1 + depsCount),
+          'bytes must hold the id and the deps',
         );
 
   /// Decodes a [Change] from a self-describing byte buffer produced by
@@ -106,13 +94,7 @@ class Change {
       ..setRange(0, idDepsLen, data, idDepsStart)
       ..setRange(idDepsLen, idDepsLen + payloadLen, data, payloadStart);
 
-    final meta = Int32List(4);
-    meta[_metaSchema] = schemaVersion;
-    meta[_metaDepsCount] = depsCount;
-    meta[_metaPayloadOffset] = idDepsLen;
-    meta[_metaPayloadLength] = payloadLen;
-
-    return Change._(meta: meta, bytes: bytes);
+    return Change._(depsCount: depsCount, bytes: bytes);
   }
 
   /// Creates a new [Change] with the given properties.
@@ -154,14 +136,8 @@ class Change {
       payloadBytes,
     );
 
-    final meta = Int32List(4);
-    meta[_metaSchema] = schemaVersion;
-    meta[_metaDepsCount] = depsCount;
-    meta[_metaPayloadOffset] = payloadOffset;
-    meta[_metaPayloadLength] = payloadBytes.length;
-
     return Change._(
-      meta: meta,
+      depsCount: depsCount,
       bytes: bytes,
     );
   }
@@ -169,14 +145,19 @@ class Change {
   /// Schema version for the current binary layout.
   static const int schemaVersion = 3;
 
-  /// Metadata layout (indices in [meta]).
-  static const int _metaSchema = 0;
-  static const int _metaDepsCount = 1;
-  static const int _metaPayloadOffset = 2;
-  static const int _metaPayloadLength = 3;
+  /// The change metadata: schema version, deps count, payload offset and
+  /// payload length.
+  @Deprecated('Use depsCount and payloadBytes(); a new list on every call.')
+  Int32List get meta => Int32List.fromList([
+        schemaVersion,
+        _depsCount,
+        _payloadOffset,
+        bytes.length - _payloadOffset,
+      ]);
 
-  /// The change metadata (ints only).
-  final Int32List meta;
+  final int _depsCount;
+
+  int get _payloadOffset => OperationId.byteLength * (1 + _depsCount);
 
   /// The change bytes (payload and ids).
   final Uint8List bytes;
@@ -186,7 +167,7 @@ class Change {
   late final OpIdKey _key = OpIdKey.view(bytes);
 
   Set<OperationId> _parseDeps() {
-    final count = meta[_metaDepsCount];
+    final count = _depsCount;
     final result = <OperationId>{};
     var cursor = OperationId.byteLength;
     for (var i = 0; i < count; i += 1) {
@@ -211,11 +192,11 @@ class Change {
   Set<OperationId> get deps => _parseDeps();
 
   /// The number of dependencies stored in this change.
-  int get depsCount => meta[_metaDepsCount];
+  int get depsCount => _depsCount;
 
   /// Returns dependency ids as packed keys, without decoding to [OperationId].
   Iterable<OpIdKey> depsKeys() sync* {
-    final count = meta[_metaDepsCount];
+    final count = _depsCount;
     var cursor = OperationId.byteLength;
     for (var i = 0; i < count; i += 1) {
       yield OpIdKey.view(bytes, offset: cursor);
@@ -231,10 +212,9 @@ class Change {
   /// Layout: see [Change.fromBytes].
   Uint8List toBytes() {
     final out = BytesBuilder(copy: false)..addByte(schemaVersion);
-    final depsCount = meta[_metaDepsCount];
-    UVarint.write(depsCount, out);
+    UVarint.write(_depsCount, out);
     out.add(
-      Uint8List.sublistView(bytes, 0, meta[_metaPayloadOffset]),
+      Uint8List.sublistView(bytes, 0, _payloadOffset),
     );
     UVarint.writeBytes(payloadBytes(), out);
     return out.toBytes();
@@ -242,9 +222,7 @@ class Change {
 
   /// Returns a view of the payload bytes.
   Uint8List payloadBytes() {
-    final off = meta[_metaPayloadOffset];
-    final len = meta[_metaPayloadLength];
-    return Uint8List.sublistView(bytes, off, off + len);
+    return Uint8List.sublistView(bytes, _payloadOffset);
   }
 
   /// Returns a string representation of this change
@@ -266,12 +244,12 @@ class Change {
       return false;
     }
 
-    return bytesEqual(other.meta, meta) && bytesEqual(other.bytes, bytes);
+    return other._depsCount == _depsCount && bytesEqual(other.bytes, bytes);
   }
 
   late final int _hashCode = _computeHashCode();
 
-  int _computeHashCode() => fnv1a32(bytes, seed: fnv1a32(meta));
+  int _computeHashCode() => fnv1a32(bytes, seed: _depsCount);
 
   /// Returns a hash code for this Change.
   @override
