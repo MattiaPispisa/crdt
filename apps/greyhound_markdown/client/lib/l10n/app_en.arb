@@ -297,5 +297,41 @@
   "shortcutImage": "Image",
   "@shortcutImage": {
     "description": "Editor toolbar: wrap the selection in an image."
+  },
+  "historyTitle": "Version history",
+  "@historyTitle": {
+    "description": "Title of the history page, and tooltip of the editor button opening it."
+  },
+  "historyChange": "Change {current} of {total}",
+  "@historyChange": {
+    "description": "History page: the position of the cursor in the list of changes.",
+    "placeholders": {
+      "current": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "historyInitial": "Initial state",
+  "@historyInitial": {
+    "description": "History page: the cursor is before the first change."
+  },
+  "historyYou": "You",
+  "@historyYou": {
+    "description": "History page: the change was made by this device."
+  },
+  "historyPrevious": "Previous change",
+  "@historyPrevious": {
+    "description": "History page: tooltip of the button to the previous change."
+  },
+  "historyNext": "Next change",
+  "@historyNext": {
+    "description": "History page: tooltip of the button to the next change."
+  },
+  "historyEmpty": "No changes yet",
+  "@historyEmpty": {
+    "description": "History page: the document has no change to browse."
   }
 }

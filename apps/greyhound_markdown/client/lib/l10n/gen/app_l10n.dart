@@ -506,6 +506,48 @@ abstract class AppL10n {
   /// In en, this message translates to:
   /// **'Image'**
   String get shortcutImage;
+
+  /// Title of the history page, and tooltip of the editor button opening it.
+  ///
+  /// In en, this message translates to:
+  /// **'Version history'**
+  String get historyTitle;
+
+  /// History page: the position of the cursor in the list of changes.
+  ///
+  /// In en, this message translates to:
+  /// **'Change {current} of {total}'**
+  String historyChange(int current, int total);
+
+  /// History page: the cursor is before the first change.
+  ///
+  /// In en, this message translates to:
+  /// **'Initial state'**
+  String get historyInitial;
+
+  /// History page: the change was made by this device.
+  ///
+  /// In en, this message translates to:
+  /// **'You'**
+  String get historyYou;
+
+  /// History page: tooltip of the button to the previous change.
+  ///
+  /// In en, this message translates to:
+  /// **'Previous change'**
+  String get historyPrevious;
+
+  /// History page: tooltip of the button to the next change.
+  ///
+  /// In en, this message translates to:
+  /// **'Next change'**
+  String get historyNext;
+
+  /// History page: the document has no change to browse.
+  ///
+  /// In en, this message translates to:
+  /// **'No changes yet'**
+  String get historyEmpty;
 }
 
 class _AppL10nDelegate extends LocalizationsDelegate<AppL10n> {
