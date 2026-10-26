@@ -122,7 +122,8 @@ class _Legend extends StatelessWidget {
           'handler and notice only the widgets that observe it light up — that '
           'is the point of CrdtSelector / CrdtHandlerBuilder. The Listener '
           'card fires side effects without rebuilding, the History card '
-          'draws the Todos widget on a frozen snapshot, and the Note card '
+          'opens a page with the document at any point of its history, and '
+          'the Note card '
           'binds a TextField to a text handler — including changes imported '
           'from a remote peer and a collaborator cursor drawn over the field.',
         ),
@@ -198,15 +199,28 @@ class _CounterCard extends StatelessWidget {
           label: const Text('Increment'),
         ),
       ],
-      child: CrdtHandlerSelector<CRDTRegisterHandler<int>, int>(
-        id: _counterId,
-        selector: (context, handler) => handler.value ?? 0,
-        builder:
-            (context, value) => _RebuildBadge(
-              label: 'counter',
-              child: Text('value: $value', style: _valueStyle(context)),
-            ),
-      ),
+      child: const _CounterValue(label: 'counter'),
+    );
+  }
+}
+
+/// The counter value. It reads the ambient document, so the same widget draws
+/// the live one and, inside a `CrdtHistoryScope`, the frozen one.
+class _CounterValue extends StatelessWidget {
+  const _CounterValue({required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return CrdtHandlerSelector<CRDTRegisterHandler<int>, int>(
+      id: _counterId,
+      selector: (context, handler) => handler.value ?? 0,
+      builder:
+          (context, value) => _RebuildBadge(
+            label: label,
+            child: Text('value: $value', style: _valueStyle(context)),
+          ),
     );
   }
 }
@@ -434,76 +448,139 @@ class _TodoList extends StatelessWidget {
   }
 }
 
-/// The same `_TodoList`, frozen: a `CrdtHistoryScope` holds a snapshot of the
-/// document and the buttons move its cursor. "Snapshot" takes a new one.
-class _HistoryCard extends StatefulWidget {
+/// The call to action: opens the version history, like the "Version history"
+/// of a document editor.
+class _HistoryCard extends StatelessWidget {
   const _HistoryCard();
-
-  @override
-  State<_HistoryCard> createState() => _HistoryCardState();
-}
-
-class _HistoryCardState extends State<_HistoryCard> {
-  int _snapshots = 0;
 
   @override
   Widget build(BuildContext context) {
     return _DemoCard(
-      title: 'History — the same widgets, frozen',
+      title: 'History — CrdtHistoryScope',
       description:
-          'The list below is the Todos widget inside a CrdtHistoryScope. '
-          'Moving the cursor rebuilds it; live edits do not reach it until '
-          'you take a new snapshot.',
+          'Opens a page that draws the counter and the todos as they were '
+          'at any point of the document history, with the same widgets as '
+          'the cards above.',
       actions: [
         FilledButton.tonalIcon(
-          onPressed: () => setState(() => _snapshots++),
-          icon: const Icon(Icons.camera_alt),
-          label: const Text('Snapshot'),
+          onPressed: () {
+            final document = context.crdtDocument;
+            Navigator.of(context).push(
+              MaterialPageRoute<void>(
+                // A route is built below the Navigator, outside the provider.
+                builder:
+                    (_) => CrdtProvider.value(
+                      value: document,
+                      child: const _HistoryPage(),
+                    ),
+              ),
+            );
+          },
+          icon: const Icon(Icons.history),
+          label: const Text('Version history'),
         ),
       ],
-      child: CrdtHistoryScope(
-        key: ValueKey<int>(_snapshots),
+      child: const Text('The page takes a snapshot when it opens.'),
+    );
+  }
+}
+
+/// The version history page: a read-only view of the document and the
+/// controls that move its cursor.
+class _HistoryPage extends StatelessWidget {
+  const _HistoryPage();
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      key: const Key('history-page'),
+      appBar: AppBar(title: const Text('Version history')),
+      body: CrdtHistoryScope(
         builder:
             (context, session) => Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Text(
-                  'cursor: ${session.cursor}/${session.length}',
-                  style: _valueStyle(context),
+                const Expanded(
+                  child: SingleChildScrollView(
+                    padding: EdgeInsets.all(12),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        _CounterValue(label: 'history-counter'),
+                        SizedBox(height: 8),
+                        _TodoList(label: 'history-list'),
+                      ],
+                    ),
+                  ),
                 ),
-                const SizedBox(height: 8),
-                const _TodoList(label: 'history-list'),
-                const SizedBox(height: 8),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: [
-                    FilledButton.tonal(
-                      onPressed:
-                          session.canPrevious
-                              ? () => session.jump(0)
-                              : null,
-                      child: const Text('Rewind'),
-                    ),
-                    FilledButton.tonal(
-                      onPressed: session.canPrevious ? session.previous : null,
-                      child: const Text('Step back'),
-                    ),
-                    FilledButton.tonal(
-                      onPressed: session.canNext ? session.next : null,
-                      child: const Text('Step forward'),
-                    ),
-                    FilledButton.tonal(
-                      onPressed:
-                          session.canNext
-                              ? () => session.jump(session.length)
-                              : null,
-                      child: const Text('Latest'),
-                    ),
-                  ],
+                _HistoryControls(session: session),
+              ],
+            ),
+      ),
+    );
+  }
+}
+
+/// Who made the change the cursor stands on, and when.
+String _describeLastChange(HistorySession session) {
+  final changes = session.document.exportChanges();
+  if (changes.isEmpty) {
+    return 'Initial state';
+  }
+  final last = changes.last;
+  final time = last.id.hlc.asDateTime.toLocal().toString().split('.').first;
+  return '${last.author.id.substring(0, 8)} · $time';
+}
+
+/// The cursor of a [HistorySession]: a slider and single steps.
+class _HistoryControls extends StatelessWidget {
+  const _HistoryControls({required this.session});
+
+  final HistorySession session;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      elevation: 4,
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              'change ${session.cursor} of ${session.length}',
+              style: _valueStyle(context),
+            ),
+            Text(
+              _describeLastChange(session),
+              key: const Key('history-change-info'),
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+            if (session.length > 0)
+              Slider(
+                key: const Key('history-slider'),
+                value: session.cursor.toDouble(),
+                max: session.length.toDouble(),
+                divisions: session.length,
+                onChanged: (value) => session.jump(value.round()),
+              ),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                FilledButton.tonalIcon(
+                  onPressed: session.canPrevious ? session.previous : null,
+                  icon: const Icon(Icons.chevron_left),
+                  label: const Text('Step back'),
+                ),
+                const SizedBox(width: 8),
+                FilledButton.tonalIcon(
+                  onPressed: session.canNext ? session.next : null,
+                  icon: const Icon(Icons.chevron_right),
+                  label: const Text('Step forward'),
                 ),
               ],
             ),
+          ],
+        ),
       ),
     );
   }
