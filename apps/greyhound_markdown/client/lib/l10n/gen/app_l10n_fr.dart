@@ -243,4 +243,27 @@ class AppL10nFr extends AppL10n {
 
   @override
   String get shortcutImage => 'Image';
+
+  @override
+  String get historyTitle => 'Historique des versions';
+
+  @override
+  String historyChange(int current, int total) {
+    return 'Modification $current sur $total';
+  }
+
+  @override
+  String get historyInitial => 'État initial';
+
+  @override
+  String get historyYou => 'Vous';
+
+  @override
+  String get historyPrevious => 'Modification précédente';
+
+  @override
+  String get historyNext => 'Modification suivante';
+
+  @override
+  String get historyEmpty => 'Aucune modification';
 }

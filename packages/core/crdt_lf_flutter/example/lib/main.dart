@@ -94,6 +94,7 @@ class HomePage extends StatelessWidget {
             _CounterCard(),
             _ListenerCard(),
             _TodosCard(),
+            _HistoryCard(),
             _DeltaCard(),
             _DeltaBuilderCard(),
             _SettingsCard(),
@@ -120,7 +121,9 @@ class _Legend extends StatelessWidget {
           'Each ⟳ badge counts how many times that region rebuilt. Edit one '
           'handler and notice only the widgets that observe it light up — that '
           'is the point of CrdtSelector / CrdtHandlerBuilder. The Listener '
-          'card fires side effects without rebuilding, and the Note card '
+          'card fires side effects without rebuilding, the History card '
+          'opens a page with the document at any point of its history, and '
+          'the Note card '
           'binds a TextField to a text handler — including changes imported '
           'from a remote peer and a collaborator cursor drawn over the field.',
         ),
@@ -196,15 +199,28 @@ class _CounterCard extends StatelessWidget {
           label: const Text('Increment'),
         ),
       ],
-      child: CrdtHandlerSelector<CRDTRegisterHandler<int>, int>(
-        id: _counterId,
-        selector: (context, handler) => handler.value ?? 0,
-        builder:
-            (context, value) => _RebuildBadge(
-              label: 'counter',
-              child: Text('value: $value', style: _valueStyle(context)),
-            ),
-      ),
+      child: const _CounterValue(label: 'counter'),
+    );
+  }
+}
+
+/// The counter value. It reads the ambient document, so the same widget draws
+/// the live one and, inside a `CrdtHistoryScope`, the frozen one.
+class _CounterValue extends StatelessWidget {
+  const _CounterValue({required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return CrdtHandlerSelector<CRDTRegisterHandler<int>, int>(
+      id: _counterId,
+      selector: (context, handler) => handler.value ?? 0,
+      builder:
+          (context, value) => _RebuildBadge(
+            label: label,
+            child: Text('value: $value', style: _valueStyle(context)),
+          ),
     );
   }
 }
@@ -386,34 +402,182 @@ class _TodosCard extends StatelessWidget {
                 ),
           ),
           const SizedBox(height: 8),
-          CrdtHandlerBuilder<CRDTListHandler<String>>(
-            id: _todosId,
-            builder: (context, handler) {
-              final todos = handler.value;
-              return _RebuildBadge(
-                label: 'todos-list',
-                child:
-                    todos.isEmpty
-                        ? const Text('No todos yet')
-                        : Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            for (var i = 0; i < todos.length; i++)
-                              ListTile(
-                                dense: true,
-                                // Neutral icon — todos aren't checkable.
-                                leading: CircleAvatar(
-                                  radius: 12,
-                                  child: Text('${i + 1}'),
-                                ),
-                                title: Text(todos[i]),
-                              ),
-                          ],
-                        ),
-              );
-            },
-          ),
+          const _TodoList(label: 'todos-list'),
         ],
+      ),
+    );
+  }
+}
+
+/// The todos list. It reads the ambient document, so the same widget draws the
+/// live one and, inside a `CrdtHistoryScope`, the frozen one.
+class _TodoList extends StatelessWidget {
+  const _TodoList({required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return CrdtHandlerBuilder<CRDTListHandler<String>>(
+      id: _todosId,
+      builder: (context, handler) {
+        final todos = handler.value;
+        return _RebuildBadge(
+          label: label,
+          child:
+              todos.isEmpty
+                  ? const Text('No todos yet')
+                  : Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      for (var i = 0; i < todos.length; i++)
+                        ListTile(
+                          dense: true,
+                          // Neutral icon — todos aren't checkable.
+                          leading: CircleAvatar(
+                            radius: 12,
+                            child: Text('${i + 1}'),
+                          ),
+                          title: Text(todos[i]),
+                        ),
+                    ],
+                  ),
+        );
+      },
+    );
+  }
+}
+
+/// The call to action: opens the version history, like the "Version history"
+/// of a document editor.
+class _HistoryCard extends StatelessWidget {
+  const _HistoryCard();
+
+  @override
+  Widget build(BuildContext context) {
+    return _DemoCard(
+      title: 'History — CrdtHistoryScope',
+      description:
+          'Opens a page that draws the counter and the todos as they were '
+          'at any point of the document history, with the same widgets as '
+          'the cards above.',
+      actions: [
+        FilledButton.tonalIcon(
+          onPressed: () {
+            final document = context.crdtDocument;
+            Navigator.of(context).push(
+              MaterialPageRoute<void>(
+                // A route is built below the Navigator, outside the provider.
+                builder:
+                    (_) => CrdtProvider.value(
+                      value: document,
+                      child: const _HistoryPage(),
+                    ),
+              ),
+            );
+          },
+          icon: const Icon(Icons.history),
+          label: const Text('Version history'),
+        ),
+      ],
+      child: const Text('The page takes a snapshot when it opens.'),
+    );
+  }
+}
+
+/// The version history page: a read-only view of the document and the
+/// controls that move its cursor.
+class _HistoryPage extends StatelessWidget {
+  const _HistoryPage();
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      key: const Key('history-page'),
+      appBar: AppBar(title: const Text('Version history')),
+      body: CrdtHistoryScope(
+        child: const Expanded(
+          child: SingleChildScrollView(
+            padding: EdgeInsets.all(12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                _CounterValue(label: 'history-counter'),
+                SizedBox(height: 8),
+                _TodoList(label: 'history-list'),
+              ],
+            ),
+          ),
+        ),
+        builder:
+            (context, session, child) =>
+                Column(children: [child!, _HistoryControls(session: session)]),
+      ),
+    );
+  }
+}
+
+/// Who made the change the cursor stands on, and when.
+String _describeLastChange(HistorySession session) {
+  final changes = session.document.exportChanges();
+  if (changes.isEmpty) {
+    return 'Initial state';
+  }
+  final last = changes.last;
+  final time = last.id.hlc.asDateTime.toLocal().toString().split('.').first;
+  return '${last.author.id.substring(0, 8)} · $time';
+}
+
+/// The cursor of a [HistorySession]: a slider and single steps.
+class _HistoryControls extends StatelessWidget {
+  const _HistoryControls({required this.session});
+
+  final HistorySession session;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      elevation: 4,
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              'change ${session.cursor} of ${session.length}',
+              style: _valueStyle(context),
+            ),
+            Text(
+              _describeLastChange(session),
+              key: const Key('history-change-info'),
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+            if (session.length > 0)
+              Slider(
+                key: const Key('history-slider'),
+                value: session.cursor.toDouble(),
+                max: session.length.toDouble(),
+                divisions: session.length,
+                onChanged: (value) => session.jump(value.round()),
+              ),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                FilledButton.tonalIcon(
+                  onPressed: session.canPrevious ? session.previous : null,
+                  icon: const Icon(Icons.chevron_left),
+                  label: const Text('Step back'),
+                ),
+                const SizedBox(width: 8),
+                FilledButton.tonalIcon(
+                  onPressed: session.canNext ? session.next : null,
+                  icon: const Icon(Icons.chevron_right),
+                  label: const Text('Step forward'),
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }

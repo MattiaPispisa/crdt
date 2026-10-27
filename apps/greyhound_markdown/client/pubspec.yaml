@@ -1,14 +1,14 @@
 name: greyhound_markdown_client
 description: "Real-time collaborative markdown editor built on crdt_lf."
 publish_to: 'none'
-version: 0.13.0
+version: 0.14.0
 
 environment:
   sdk: ^3.11.5
 
 dependencies:
-  crdt_lf: "^5.0.0"
-  crdt_lf_flutter: ^0.5.0
+  crdt_lf: "^5.3.0"
+  crdt_lf_flutter: ^0.7.0
   crdt_lf_hive: ^0.5.0
   crdt_socket_sync: ^0.10.0
   

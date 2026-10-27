@@ -3,6 +3,7 @@
 
 import 'package:crdt_lf/crdt_lf.dart';
 import 'package:crdt_lf_flutter/crdt_lf_flutter.dart';
+import 'package:crdt_lf_flutter/src/provider/_crdt_view.dart';
 import 'package:flutter/widgets.dart';
 
 /// Convenience access to the ambient [CRDTDocument].
@@ -20,14 +21,17 @@ extension CrdtContextHelper on BuildContext {
   R selectCrdtDocument<R>(R Function(CRDTDocument document) selector) =>
       select<CRDTDocument, R>(selector);
 
-  /// Resolves the handler registered under [id] on the ambient document,
-  /// for **imperative** use (actions like insert/delete/change) — it does not
+  /// Resolves the handler registered under [id] on the nearest view, for
+  /// **imperative** use (actions like insert/delete/change) — it does not
   /// rebuild the caller.
+  ///
+  /// Under a `CrdtHistoryScope` the view is the frozen document, so a write
+  /// through the returned handler throws a [ReadOnlyDocumentException].
   ///
   /// Throws a [HandlerDeletedException] if the handler was deleted, and a
   /// [FlutterError] if no handler is registered for [id] or it is not an [H].
   H crdtHandler<H extends Handler<dynamic>>(String id) =>
-      resolveCrdtHandler<H>(crdtDocument, id);
+      resolveCrdtHandler<H>(crdtView, id);
 }
 
 /// Returns the handler registered under [id] on [document], cast to [H].
@@ -36,10 +40,10 @@ extension CrdtContextHelper on BuildContext {
 /// [FlutterError] if it is missing or has a different type — surfacing a
 /// wiring mistake instead of a late `null`/cast error.
 H resolveCrdtHandler<H extends Handler<dynamic>>(
-  CRDTDocument document,
+  BaseCRDTDocument document,
   String id,
 ) {
-  final handler = document.registeredHandlers[id];
+  final handler = document.handlerById(id);
   if (handler == null && document.isDeleted(id)) {
     throw HandlerDeletedException(id);
   }

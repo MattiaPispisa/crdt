@@ -209,6 +209,11 @@ abstract class BaseCRDTDocument {
     return _registry.open(this, spec, id);
   }
 
+  /// The handler open under [id]; `null` when none is.
+  ///
+  /// A history view also opens the handlers its changes name, on first read.
+  Handler<dynamic>? handlerById(String id) => _registry.publicView[id];
+
   /// Resolves [ref] to a handler instance.
   ///
   /// Returns the already-registered handler with `ref.id`, or instantiates it

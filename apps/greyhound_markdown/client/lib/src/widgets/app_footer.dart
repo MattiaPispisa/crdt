@@ -35,9 +35,7 @@ class AppFooter extends StatelessWidget {
               style: linkStyle,
             ),
           InkWell(
-            // Pushed, not gone to: the footer is also under a room, which has
-            // to stay open while Settings is on top.
-            onTap: context.pushSettings,
+            onTap: context.goSettings,
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [

@@ -3,6 +3,7 @@
 
 import 'package:crdt_lf/crdt_lf.dart';
 import 'package:crdt_lf_flutter/src/common/_crdt_guards.dart';
+import 'package:crdt_lf_flutter/src/provider/_crdt_view.dart';
 import 'package:crdt_lf_flutter/src/provider/crdt_builder.dart';
 import 'package:crdt_lf_flutter/src/provider/crdt_helper.dart';
 import 'package:flutter/widgets.dart';
@@ -41,7 +42,7 @@ const Object _deleted = Object();
 /// descendant reachable through [ContainerHandler.childRefs] are folded
 /// into one hash.
 int _signatureOf(
-  CRDTDocument document,
+  BaseCRDTDocument document,
   String id, {
   required bool nested,
 }) {
@@ -58,7 +59,7 @@ int _signatureOf(
     components
       ..add(handlerId)
       ..add(document.revisionForHandler(handlerId));
-    final handler = document.registeredHandlers[handlerId];
+    final handler = document.handlerById(handlerId);
     if (handler == null) {
       return;
     }
@@ -120,8 +121,8 @@ class CrdtHandlerBuilder<H extends Handler<dynamic>> extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     assertHandlerGenericIsSet<H>('CrdtHandlerBuilder');
-    context.selectCrdtDocument((doc) => _signatureOf(doc, id, nested: nested));
-    final document = context.crdtDocument;
+    context.selectCrdtView((doc) => _signatureOf(doc, id, nested: nested));
+    final document = context.crdtView;
     if (document.isDeleted(id)) {
       return buildDeleted(context, deletedBuilder);
     }
@@ -171,7 +172,7 @@ class CrdtHandlerSelector<H extends Handler<dynamic>, R>
   @override
   Widget build(BuildContext context) {
     assertHandlerGenericIsSet<H>('CrdtHandlerSelector');
-    final value = context.selectCrdtDocument<Object?>(
+    final value = context.selectCrdtView<Object?>(
       (document) => document.isDeleted(id)
           ? _deleted
           : selector(context, resolveCrdtHandler<H>(document, id)),
@@ -218,14 +219,14 @@ class CrdtHandlerListener<H extends Handler<dynamic>> extends StatefulWidget {
 
 class _CrdtHandlerListenerState<H extends Handler<dynamic>>
     extends State<CrdtHandlerListener<H>> {
-  CRDTDocument? _document;
+  BaseCRDTDocument? _document;
   int? _lastSignature;
 
   @override
   Widget build(BuildContext context) {
     assertHandlerGenericIsSet<H>('CrdtHandlerListener');
-    final document = context.crdtDocument;
-    final signature = context.selectCrdtDocument(
+    final document = context.crdtView;
+    final signature = context.selectCrdtView(
       (doc) => _signatureOf(doc, widget.id, nested: widget.nested),
     );
 

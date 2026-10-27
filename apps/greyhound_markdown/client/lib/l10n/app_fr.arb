@@ -67,5 +67,12 @@
   "shortcutQuote": "Citation",
   "shortcutBulletList": "Liste à puces",
   "shortcutLink": "Lien",
-  "shortcutImage": "Image"
+  "shortcutImage": "Image",
+  "historyTitle": "Historique des versions",
+  "historyChange": "Modification {current} sur {total}",
+  "historyInitial": "État initial",
+  "historyYou": "Vous",
+  "historyPrevious": "Modification précédente",
+  "historyNext": "Modification suivante",
+  "historyEmpty": "Aucune modification"
 }

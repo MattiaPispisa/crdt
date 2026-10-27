@@ -3,27 +3,29 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 
 import 'package:greyhound_markdown_client/src/l10n/l10n_extension.dart';
+import 'package:greyhound_markdown_client/src/routing/app_navigation.dart';
 import 'package:greyhound_markdown_client/src/services/room/room_session.dart';
 import 'package:greyhound_markdown_client/src/widgets/app_footer.dart';
 import 'package:greyhound_markdown_client/src/widgets/editor_pane.dart';
 import 'package:greyhound_markdown_client/src/widgets/export_menu.dart';
 import 'package:greyhound_markdown_client/src/widgets/preview_pane.dart';
-import 'package:greyhound_markdown_client/src/widgets/room_builder.dart';
 import 'package:greyhound_markdown_client/src/widgets/status_bar.dart';
 
 /// The collaborative room. A segmented control switches between edit, split
 /// (side by side, stacked on narrow screens) and view-only layouts.
 ///
 /// The room itself — document, undo, awareness, sync — belongs to
-/// [RoomBuilder]. This screen only draws it, and the only state it keeps is
-/// which of the three layouts is showing.
+/// `RoomShell`, which holds it for every page of the room. This screen reads
+/// it from the tree and only draws it, and the only state it keeps is which of
+/// the three layouts is showing.
 class EditorScreen extends StatefulWidget {
   /// Creates the editor of the room named by [roomId].
   const EditorScreen({required this.roomId, super.key});
 
-  /// The room to open. It is the document id and the relay room key.
+  /// The room to draw. It is the document id and the relay room key.
   final String roomId;
 
   @override
@@ -37,18 +39,7 @@ class _EditorScreenState extends State<EditorScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return RoomBuilder(
-      roomId: widget.roomId,
-      // The frame of the page, so nothing jumps when the room arrives.
-      loading: (context) => Scaffold(
-        appBar: AppBar(title: Text(context.l10n.roomTitle(widget.roomId))),
-        body: const Center(child: CircularProgressIndicator()),
-      ),
-      builder: _buildRoom,
-    );
-  }
-
-  Widget _buildRoom(BuildContext context, RoomSession room) {
+    final room = context.read<RoomSession>();
     return Scaffold(
       appBar: AppBar(
         title: Text(context.l10n.roomTitle(widget.roomId)),
@@ -65,6 +56,11 @@ class _EditorScreenState extends State<EditorScreen> {
                 SnackBar(content: Text(context.l10n.roomIdCopied)),
               );
             },
+          ),
+          IconButton(
+            tooltip: context.l10n.historyTitle,
+            icon: const Icon(Icons.history),
+            onPressed: () => context.goHistory(widget.roomId),
           ),
           ExportMenu(fallbackName: 'greyhound-${widget.roomId}'),
         ],

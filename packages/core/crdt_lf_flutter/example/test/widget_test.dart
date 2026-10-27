@@ -178,6 +178,41 @@ void main() {
     await tester.pump();
     expect(find.text('Bob'), findsNothing);
 
+    // 10. History: the call to action opens a page that draws the counter and
+    //     the todos with the same widgets, frozen at a snapshot.
+    before = snapshot();
+    await tapButton(tester, 'Version history');
+    Finder inPage(Finder finder) => find.descendant(
+      of: find.byKey(const Key('history-page')),
+      matching: finder,
+    );
+    expect(inPage(find.text('Todo #1 ✎')), findsOneWidget);
+    expect(inPage(find.text('value: 1')), findsOneWidget);
+
+    // The slider moves the cursor: at the start the document is empty.
+    tester.widget<Slider>(find.byKey(const Key('history-slider'))).onChanged!(
+      0,
+    );
+    await tester.pumpAndSettle();
+    expect(inPage(find.text('No todos yet')), findsOneWidget);
+    expect(inPage(find.text('value: 0')), findsOneWidget);
+    expect(find.textContaining('change 0 of'), findsOneWidget);
+
+    String info() =>
+        tester.widget<Text>(find.byKey(const Key('history-change-info'))).data!;
+    expect(info(), 'Initial state');
+
+    await tapButton(tester, 'Step forward');
+    expect(find.textContaining('change 1 of'), findsOneWidget);
+    // The author (short peer id) and the time of the change.
+    expect(info(), matches(RegExp(r'^[0-9a-f]{8} · \d{4}-\d{2}-\d{2} ')));
+
+    // Closing the page leaves the live cards as they were.
+    await tester.pageBack();
+    await tester.pumpAndSettle();
+    expect(rebuilds(tester, 'todos-list'), before['todos-list']);
+    expect(rebuilds(tester, 'counter'), before['counter']);
+
     // Flush the SnackBar auto-dismiss timer so the test ends cleanly.
     await tester.pump(const Duration(seconds: 5));
     await tester.pumpAndSettle();

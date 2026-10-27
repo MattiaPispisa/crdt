@@ -74,5 +74,12 @@
   "shortcutQuote": "Citazione",
   "shortcutBulletList": "Elenco puntato",
   "shortcutLink": "Collegamento",
-  "shortcutImage": "Immagine"
+  "shortcutImage": "Immagine",
+  "historyTitle": "Cronologia delle versioni",
+  "historyChange": "Modifica {current} di {total}",
+  "historyInitial": "Stato iniziale",
+  "historyYou": "Tu",
+  "historyPrevious": "Modifica precedente",
+  "historyNext": "Modifica successiva",
+  "historyEmpty": "Nessuna modifica"
 }

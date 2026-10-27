@@ -328,19 +328,125 @@ void main() {
 
       expect(viewDocument.changeCountForHandler('list'), 3);
       expect(viewDocument.changeCountForHandler('other'), 1);
-      // The frozen view has no snapshot to import, so the visible change count
-      // is the whole revision signal — and it follows the cursor both ways.
-      expect(viewDocument.revisionForHandler('list'), 3);
 
       historySession
         ..previous()
         ..previous();
       expect(viewDocument.changeCountForHandler('list'), 2);
       expect(viewDocument.changeCountForHandler('other'), 0);
-      expect(viewDocument.revisionForHandler('list'), 2);
+    });
 
-      historySession.next();
-      expect(viewDocument.revisionForHandler('list'), 3);
+    test('the revision moves on every jump, in both directions', () {
+      listHandler
+        ..insert(0, 'Hello')
+        ..insert(1, 'World');
+      final historySession = document.toTimeTravel();
+      final viewDocument = historySession
+          .getHandler<CRDTListHandler<String>, List<String>>(
+            (doc) => CRDTListHandler<String>(
+              doc,
+              'list',
+              handlerType: 'CRDTListHandler<String>',
+            ),
+          )
+          .doc;
+
+      var seen = viewDocument.revisionForHandler('list');
+      expect(viewDocument.revisionForHandler('list'), seen);
+
+      for (final move in [historySession.previous, historySession.next]) {
+        move();
+        final revision = viewDocument.revisionForHandler('list');
+        expect(revision, greaterThan(seen));
+        seen = revision;
+      }
+    });
+
+    test('a jump tells the watchers to read the value again', () async {
+      listHandler
+        ..insert(0, 'Hello')
+        ..insert(1, 'World');
+      final historySession = document.toTimeTravel();
+      final view =
+          historySession.getHandler<CRDTListHandler<String>, List<String>>(
+        (doc) => CRDTListHandler<String>(
+          doc,
+          'list',
+          handlerType: 'CRDTListHandler<String>',
+        ),
+      );
+      final causes = <ResetCause>[];
+      final subscription = view.watch().listen((update) {
+        if (update is HandlerReset<SequenceDelta<String>>) {
+          causes.add(update.cause);
+        }
+      });
+      await Future<void>.delayed(Duration.zero);
+
+      historySession.previous();
+      expect(causes, [ResetCause.initial, ResetCause.cacheDropped]);
+      expect(view.readSynced().value, ['Hello']);
+
+      await subscription.cancel();
+    });
+
+    test('handlerById opens the handlers the history names, at any cursor', () {
+      listHandler
+        ..insert(0, 'Hello')
+        ..insert(1, 'World');
+      final historySession = document.toTimeTravel();
+      final viewDocument = historySession
+          .getHandler<CRDTListHandler<String>, List<String>>(
+            (doc) => CRDTListHandler<String>(
+              doc,
+              'list',
+              handlerType: 'CRDTListHandler<String>',
+            ),
+          )
+          .doc;
+
+      historySession.jump(0);
+      final view = viewDocument.handlerById('list')! as CRDTListHandler<String>;
+      expect(view.value, isEmpty);
+      historySession.jump(2);
+      expect(view.value, ['Hello', 'World']);
+
+      expect(viewDocument.handlerById('unknown'), isNull);
+      expect(viewDocument.handlerById('crdt_lf/deleted-handlers'), isNull);
+    });
+
+    test('handlerById builds a handler no one opened on the view', () {
+      CRDTListHandler<String>(
+        document,
+        'other',
+        handlerType: 'CRDTListHandler<String>',
+      ).insert(0, 'Elsewhere');
+      CRDTListHandler<String>(
+        document,
+        'untouched',
+        handlerType: 'CRDTListHandler<String>',
+      );
+      final historySession = document.toTimeTravel();
+      final viewDocument = historySession
+          .getHandler<CRDTListHandler<String>, List<String>>(
+            (doc) => CRDTListHandler<String>(
+              doc,
+              'list',
+              handlerType: 'CRDTListHandler<String>',
+            ),
+          )
+          .doc;
+
+      final other =
+          viewDocument.handlerById('other')! as CRDTListHandler<String>;
+      expect(other.value, ['Elsewhere']);
+      expect(viewDocument.handlerById('other'), same(other));
+      // No change names it, only the live document had it open.
+      expect(
+        (viewDocument.handlerById('untouched')! as CRDTListHandler<String>)
+            .value,
+        isEmpty,
+      );
     });
 
     test('the version follows the cursor', () {

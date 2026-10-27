@@ -5,7 +5,7 @@ import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:crdt_lf/crdt_lf.dart';
-import 'package:crdt_lf_flutter/src/provider/crdt_helper.dart';
+import 'package:crdt_lf_flutter/src/provider/_crdt_view.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/scheduler.dart';
@@ -223,7 +223,7 @@ class _CrdtTextCursorsOverlayState extends State<CrdtTextCursorsOverlay>
 
   @override
   Widget build(BuildContext context) {
-    final document = context.crdtDocument;
+    final document = context.liveDocument('CrdtTextCursorsOverlay');
     if (!identical(document, _document)) {
       _attach(document);
     }
@@ -423,7 +423,7 @@ class _CrdtTextCursorsOverlayState extends State<CrdtTextCursorsOverlay>
   }
 
   CRDTFugueTextHandler _handler() {
-    final handler = _document!.registeredHandlers[widget.id];
+    final handler = _document!.handlerById(widget.id);
     if (handler is CRDTFugueTextHandler) {
       return handler;
     }

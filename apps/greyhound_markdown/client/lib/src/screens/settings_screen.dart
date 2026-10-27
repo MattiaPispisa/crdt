@@ -77,8 +77,7 @@ class SettingsScreen extends StatelessWidget {
               child: OutlinedButton.icon(
                 icon: const Icon(Icons.history),
                 label: Text(l10n.viewChangelog),
-                // Pushed: Settings may be on top of an open room.
-                onPressed: context.pushChangelog,
+                onPressed: context.goChangelog,
               ),
             ),
             const SizedBox(height: 12),

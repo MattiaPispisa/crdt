@@ -1,3 +1,13 @@
+## 0.14.0
+
+**Date:** --
+
+### Added
+
+- **Version history**: a button in the room opens the note as it was after each change. Move
+  through the changes to see who made each one and when. The history is read-only.
+  [112](https://github.com/MattiaPispisa/crdt/issues/112)
+
 ## 0.13.0
 
 **Date:** 2026-10-07
