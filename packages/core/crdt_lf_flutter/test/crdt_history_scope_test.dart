@@ -87,7 +87,8 @@ void main() {
       );
 
       expect(
-        () => inside.crdtHandler<CRDTListHandler<String>>('todos').insert(1, 'x'),
+        () =>
+            inside.crdtHandler<CRDTListHandler<String>>('todos').insert(1, 'x'),
         throwsA(isA<ReadOnlyDocumentException>()),
       );
       expect(
@@ -96,7 +97,8 @@ void main() {
       );
     });
 
-    testWidgets('a delta builder shows the value at the cursor', (tester) async {
+    testWidgets('a delta builder shows the value at the cursor',
+        (tester) async {
       final doc = CRDTDocument(peerId: PeerId.generate());
       final todos = CRDTListHandler<String>(
         doc,

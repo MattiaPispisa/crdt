@@ -367,14 +367,14 @@ void main() {
         ..insert(0, 'Hello')
         ..insert(1, 'World');
       final historySession = document.toTimeTravel();
-      final view = historySession
-          .getHandler<CRDTListHandler<String>, List<String>>(
-            (doc) => CRDTListHandler<String>(
-              doc,
-              'list',
-              handlerType: 'CRDTListHandler<String>',
-            ),
-          );
+      final view =
+          historySession.getHandler<CRDTListHandler<String>, List<String>>(
+        (doc) => CRDTListHandler<String>(
+          doc,
+          'list',
+          handlerType: 'CRDTListHandler<String>',
+        ),
+      );
       final causes = <ResetCause>[];
       final subscription = view.watch().listen((update) {
         if (update is HandlerReset<SequenceDelta<String>>) {
@@ -406,8 +406,7 @@ void main() {
           .doc;
 
       historySession.jump(0);
-      final view =
-          viewDocument.handlerById('list')! as CRDTListHandler<String>;
+      final view = viewDocument.handlerById('list')! as CRDTListHandler<String>;
       expect(view.value, isEmpty);
       historySession.jump(2);
       expect(view.value, ['Hello', 'World']);

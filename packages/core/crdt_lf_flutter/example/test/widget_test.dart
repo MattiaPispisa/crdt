@@ -190,8 +190,9 @@ void main() {
     expect(inPage(find.text('value: 1')), findsOneWidget);
 
     // The slider moves the cursor: at the start the document is empty.
-    tester.widget<Slider>(find.byKey(const Key('history-slider')))
-        .onChanged!(0);
+    tester.widget<Slider>(find.byKey(const Key('history-slider'))).onChanged!(
+      0,
+    );
     await tester.pumpAndSettle();
     expect(inPage(find.text('No todos yet')), findsOneWidget);
     expect(inPage(find.text('value: 0')), findsOneWidget);
