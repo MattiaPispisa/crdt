@@ -496,25 +496,22 @@ class _HistoryPage extends StatelessWidget {
       key: const Key('history-page'),
       appBar: AppBar(title: const Text('Version history')),
       body: CrdtHistoryScope(
-        builder:
-            (context, session) => Column(
+        child: const Expanded(
+          child: SingleChildScrollView(
+            padding: EdgeInsets.all(12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                const Expanded(
-                  child: SingleChildScrollView(
-                    padding: EdgeInsets.all(12),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        _CounterValue(label: 'history-counter'),
-                        SizedBox(height: 8),
-                        _TodoList(label: 'history-list'),
-                      ],
-                    ),
-                  ),
-                ),
-                _HistoryControls(session: session),
+                _CounterValue(label: 'history-counter'),
+                SizedBox(height: 8),
+                _TodoList(label: 'history-list'),
               ],
             ),
+          ),
+        ),
+        builder:
+            (context, session, child) =>
+                Column(children: [child!, _HistoryControls(session: session)]),
       ),
     );
   }

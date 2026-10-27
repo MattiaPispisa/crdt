@@ -10,6 +10,7 @@ import 'package:provider/provider.dart';
 typedef CrdtHistoryWidgetBuilder = Widget Function(
   BuildContext context,
   HistorySession session,
+  Widget? child,
 );
 
 /// Shows the ambient document frozen at a point of its history.
@@ -19,10 +20,14 @@ typedef CrdtHistoryWidgetBuilder = Widget Function(
 /// so the same widgets draw both.
 class CrdtHistoryScope extends StatefulWidget {
   /// Creates a scope over a snapshot of the ambient document.
-  const CrdtHistoryScope({required this.builder, super.key});
+  const CrdtHistoryScope({required this.builder, this.child, super.key});
 
   /// Called on every cursor move with the session that drives the view.
   final CrdtHistoryWidgetBuilder builder;
+
+  /// The subtree that does not depend on the cursor, passed to [builder]
+  /// as is so it is not rebuilt on every move.
+  final Widget? child;
 
   @override
   State<CrdtHistoryScope> createState() => _CrdtHistoryScopeState();
@@ -57,7 +62,7 @@ class _CrdtHistoryScopeState extends State<CrdtHistoryScope> {
       child: Builder(
         builder: (context) {
           context.watch<BaseCRDTDocument>();
-          return widget.builder(context, session);
+          return widget.builder(context, session, widget.child);
         },
       ),
     );

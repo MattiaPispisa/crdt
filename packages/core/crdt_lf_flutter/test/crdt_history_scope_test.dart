@@ -36,7 +36,7 @@ void main() {
             children: [
               _todos('live'),
               CrdtHistoryScope(
-                builder: (context, s) {
+                builder: (context, s, _) {
                   session = s;
                   return _todos('past');
                 },
@@ -64,6 +64,48 @@ void main() {
       expect(find.text('past:'), findsOneWidget);
     });
 
+    testWidgets('child is passed through and not rebuilt on a cursor move',
+        (tester) async {
+      final doc = CRDTDocument(peerId: PeerId.generate());
+      CRDTListHandler<String>(
+        doc,
+        'todos',
+        handlerType: 'CRDTListHandler<String>',
+      )
+        ..insert(0, 'a')
+        ..insert(1, 'b');
+
+      var childBuilds = 0;
+      var builderCalls = 0;
+      late HistorySession session;
+      await tester.pumpWidget(
+        CrdtProvider.value(
+          value: doc,
+          child: Directionality(
+            textDirection: TextDirection.ltr,
+            child: CrdtHistoryScope(
+              child: Builder(
+                builder: (_) {
+                  childBuilds++;
+                  return const SizedBox();
+                },
+              ),
+              builder: (context, s, child) {
+                session = s;
+                builderCalls++;
+                return child!;
+              },
+            ),
+          ),
+        ),
+      );
+      session.previous();
+      await tester.pumpAndSettle();
+
+      expect(builderCalls, 2);
+      expect(childBuilds, 1);
+    });
+
     testWidgets('a write on the view throws, the live tree is not touched',
         (tester) async {
       final doc = CRDTDocument(peerId: PeerId.generate());
@@ -78,7 +120,7 @@ void main() {
         CrdtProvider.value(
           value: doc,
           child: CrdtHistoryScope(
-            builder: (context, _) {
+            builder: (context, _, __) {
               inside = context;
               return const SizedBox();
             },
@@ -113,7 +155,7 @@ void main() {
         CrdtProvider.value(
           value: doc,
           child: CrdtHistoryScope(
-            builder: (context, s) {
+            builder: (context, s, _) {
               session = s;
               return CrdtHandlerDeltaBuilder<List<String>,
                   SequenceDelta<String>>(
@@ -168,7 +210,7 @@ void main() {
         await tester.pumpWidget(
           CrdtProvider.value(
             value: doc,
-            child: CrdtHistoryScope(builder: (context, _) => widget),
+            child: CrdtHistoryScope(builder: (context, _, __) => widget),
           ),
         );
         expect(
@@ -195,7 +237,7 @@ void main() {
         CrdtProvider.value(
           value: doc,
           child: CrdtHistoryScope(
-            builder: (context, s) {
+            builder: (context, s, _) {
               session = s;
               return _todos('past');
             },
