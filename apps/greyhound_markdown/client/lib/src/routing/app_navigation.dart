@@ -6,11 +6,6 @@ import 'package:go_router/go_router.dart';
 
 import 'package:greyhound_markdown_client/src/routing/app_routes.dart';
 
-/// One method per app route.
-///
-/// A `go` method replaces the page stack with the route and the pages above
-/// Home on its path: any room left behind is closed. A `push` method puts the
-/// page on top, so the page below stays open and Back returns to it.
 extension AppNavigation on BuildContext {
   /// Goes to Home.
   void goHome() => goNamed(AppRoute.home);
@@ -21,16 +16,30 @@ extension AppNavigation on BuildContext {
     pathParameters: {AppRoute.roomIdParameter: roomId},
   );
 
-  /// Goes to Settings.
-  void goSettings() => goNamed(AppRoute.settings);
+  /// Goes to the history of the room named [roomId], with its editor below.
+  /// The room stays open.
+  void goHistory(String roomId) => goNamed(
+    AppRoute.history,
+    pathParameters: {AppRoute.roomIdParameter: roomId},
+  );
 
-  /// Goes to the changelog, with Settings below it.
-  void goChangelog() => goNamed(AppRoute.changelog);
+  /// Goes to Settings. From a room it goes to the Settings of that room, and
+  /// the room stays open below.
+  void goSettings() => _goInRoomOr(AppRoute.roomSettings, AppRoute.settings);
 
-  /// Opens Settings on top of the current page; completes when it is popped.
-  Future<void> pushSettings() => pushNamed(AppRoute.settings);
+  /// Goes to the changelog, with Settings below it. From a room it goes to the
+  /// changelog of that room, and the room stays open below.
+  void goChangelog() => _goInRoomOr(AppRoute.roomChangelog, AppRoute.changelog);
 
-  /// Opens the changelog on top of the current page; completes when it is
-  /// popped.
-  Future<void> pushChangelog() => pushNamed(AppRoute.changelog);
+  /// Goes to [inRoom] when a room is open, to [outside] otherwise.
+  void _goInRoomOr(String inRoom, String outside) {
+    final roomId = GoRouter.of(
+      this,
+    ).state.pathParameters[AppRoute.roomIdParameter];
+    if (roomId == null) {
+      goNamed(outside);
+      return;
+    }
+    goNamed(inRoom, pathParameters: {AppRoute.roomIdParameter: roomId});
+  }
 }

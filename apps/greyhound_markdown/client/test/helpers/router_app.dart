@@ -15,19 +15,23 @@ import 'memory_storage.dart';
 /// Pumps the app router at [initialLocation], over settings restored from
 /// [stored], and returns it.
 ///
-/// The room page is a stub that shows its room id: the editor needs a relay
-/// that a test must not reach.
+/// The room pages are stubs that show their room id: opening a room needs a
+/// relay that a test must not reach. The shell around them shows nothing of
+/// its own unless [roomShell] says otherwise.
 Future<GoRouter> pumpRouterApp(
   WidgetTester tester, {
   String initialLocation = '/',
   Map<String, dynamic>? stored,
+  Widget Function(String roomId, Widget child)? roomShell,
 }) async {
   final storage = MemoryStorage(
     stored == null ? null : {'UserSettings': stored},
   );
   final router = createAppRouter(
     initialLocation: initialLocation,
+    roomShell: roomShell ?? (roomId, child) => child,
     roomBuilder: (roomId) => Scaffold(body: Text('room $roomId')),
+    historyBuilder: (roomId) => Scaffold(body: Text('history $roomId')),
   );
   addTearDown(router.dispose);
   await tester.pumpWidget(
@@ -49,6 +53,15 @@ Future<GoRouter> pumpRouterApp(
 
 /// The location [router] shows now.
 String locationOf(GoRouter router) => router.state.uri.toString();
+
+/// The location [router] reports to the platform, the one a browser shows in
+/// its address bar.
+///
+/// It differs from [locationOf] after a `push`, which the address bar ignores.
+String reportedLocationOf(GoRouter router) => router.routeInformationParser
+    .restoreRouteInformation(router.routerDelegate.currentConfiguration)!
+    .uri
+    .toString();
 
 /// A context below [router], to navigate with.
 BuildContext contextOf(GoRouter router) =>

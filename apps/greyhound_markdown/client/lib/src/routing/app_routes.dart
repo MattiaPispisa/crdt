@@ -11,11 +11,21 @@ abstract final class AppRoute {
   /// `/room/:roomId`: the editor of one room.
   static const String room = 'room';
 
+  /// `/room/:roomId/history`: the version history of one room.
+  static const String history = 'history';
+
   /// `/settings`: preferences, links and version.
   static const String settings = 'settings';
 
   /// `/settings/changelog`: the bundled changelog.
   static const String changelog = 'changelog';
+
+  /// `/room/:roomId/settings`: [settings] reached from a room, which stays
+  /// open below it.
+  static const String roomSettings = 'room-settings';
+
+  /// `/room/:roomId/settings/changelog`: [changelog] reached from a room.
+  static const String roomChangelog = 'room-changelog';
 
   /// The path parameter of [room] that holds the room id.
   static const String roomIdParameter = 'roomId';

@@ -28,10 +28,19 @@ const Duration kPreviewDebounce = Duration(milliseconds: 150);
 /// doing them per keystroke drops frames on a long document. This pane
 /// therefore listens to the cheap per-handler revision and only reads and
 /// renders once typing pauses for [kPreviewDebounce].
+///
+/// It draws the document in scope, so inside a `CrdtHistoryScope` it draws the
+/// document at the history cursor.
 class PreviewPane extends StatelessWidget {
   /// Creates a preview bound to the [kHandlerId] handler of the document in
   /// scope.
-  const PreviewPane({super.key});
+  ///
+  /// With [usePlaceholder] off an empty document stays blank, whatever the
+  /// settings say.
+  const PreviewPane({this.usePlaceholder = true, super.key});
+
+  /// Whether an empty document shows the welcome text.
+  final bool usePlaceholder;
 
   @override
   Widget build(BuildContext context) {
@@ -41,8 +50,9 @@ class PreviewPane extends StatelessWidget {
         // `revisionForHandler` does not subscribe. The rebuild already comes
         // from `CrdtHandlerBuilder`; the revision only separates a real edit
         // from an ancestor rebuild.
-        revision: context.crdtDocument.revisionForHandler(kHandlerId),
+        revision: handler.doc.revisionForHandler(kHandlerId),
         readText: () => handler.value,
+        usePlaceholder: usePlaceholder,
       ),
     );
   }
@@ -51,13 +61,20 @@ class PreviewPane extends StatelessWidget {
 /// Renders the markdown returned by [readText], refreshed at most once per
 /// [kPreviewDebounce] and only when [revision] moves.
 class _DebouncedMarkdown extends StatefulWidget {
-  const _DebouncedMarkdown({required this.revision, required this.readText});
+  const _DebouncedMarkdown({
+    required this.revision,
+    required this.readText,
+    required this.usePlaceholder,
+  });
 
   /// The handler revision the current [readText] belongs to.
   final int revision;
 
   /// Reads the current document text. Called on the trailing edge only.
   final String Function() readText;
+
+  /// Whether an empty document shows the welcome text.
+  final bool usePlaceholder;
 
   @override
   State<_DebouncedMarkdown> createState() => _DebouncedMarkdownState();
@@ -99,7 +116,7 @@ class _DebouncedMarkdownState extends State<_DebouncedMarkdown> {
     final showPlaceholder = context.select<UserSettingsCubit, bool>(
       (settings) => settings.state.showPlaceholder,
     );
-    if (_text.isEmpty && !showPlaceholder) {
+    if (_text.isEmpty && !(widget.usePlaceholder && showPlaceholder)) {
       return const SizedBox.shrink();
     }
     return AppMarkdown(

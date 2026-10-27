@@ -30,6 +30,29 @@ void main() {
       expect(locationOf(router), '/room/abc123');
     });
 
+    testWidgets('opens a history link over its room', (tester) async {
+      final router = await pumpRouterApp(
+        tester,
+        initialLocation: '/room/abc123/history',
+      );
+
+      expect(locationOf(router), '/room/abc123/history');
+      expect(find.text('history abc123'), findsOneWidget);
+
+      router.pop();
+      await tester.pumpAndSettle();
+      expect(locationOf(router), '/room/abc123');
+    });
+
+    testWidgets('normalizes the room id of a history link', (tester) async {
+      final router = await pumpRouterApp(
+        tester,
+        initialLocation: '/room/AbC123/history',
+      );
+
+      expect(locationOf(router), '/room/abc123/history');
+    });
+
     testWidgets('sends a link that names no room to Home', (tester) async {
       for (final location in ['/room/ab', '/room/a%20b', '/room/room!']) {
         final router = await pumpRouterApp(tester, initialLocation: location);
