@@ -318,7 +318,7 @@ class _CrdtTextFieldBuilderState extends State<CrdtTextFieldBuilder> {
   /// Only meaningful when the controller text matches the handler text (the
   /// offsets must be valid in the handler's coordinates).
   void _captureSelectionAnchors() {
-    final handler = _document.registeredHandlers[widget.id];
+    final handler = _document.handlerById(widget.id);
     if (handler is! CRDTFugueTextHandler) {
       return;
     }

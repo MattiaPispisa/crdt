@@ -423,7 +423,7 @@ class _CrdtTextCursorsOverlayState extends State<CrdtTextCursorsOverlay>
   }
 
   CRDTFugueTextHandler _handler() {
-    final handler = _document!.registeredHandlers[widget.id];
+    final handler = _document!.handlerById(widget.id);
     if (handler is CRDTFugueTextHandler) {
       return handler;
     }

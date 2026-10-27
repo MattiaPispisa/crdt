@@ -21,9 +21,12 @@ extension CrdtContextHelper on BuildContext {
   R selectCrdtDocument<R>(R Function(CRDTDocument document) selector) =>
       select<CRDTDocument, R>(selector);
 
-  /// Resolves the handler registered under [id] on the ambient document,
-  /// for **imperative** use (actions like insert/delete/change) — it does not
+  /// Resolves the handler registered under [id] on the nearest view, for
+  /// **imperative** use (actions like insert/delete/change) — it does not
   /// rebuild the caller.
+  ///
+  /// Under a `CrdtHistoryScope` the view is the frozen document, so a write
+  /// through the returned handler throws a [ReadOnlyDocumentException].
   ///
   /// Throws a [HandlerDeletedException] if the handler was deleted, and a
   /// [FlutterError] if no handler is registered for [id] or it is not an [H].
