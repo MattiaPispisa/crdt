@@ -30,13 +30,7 @@ class CrdtHistoryScope extends StatefulWidget {
 
 class _CrdtHistoryScopeState extends State<CrdtHistoryScope> {
   HistorySession? _session;
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    // The snapshot is taken once: the cursor is an index into it.
-    _session ??= context.crdtDocument.toTimeTravel();
-  }
+  CRDTDocument? _source;
 
   @override
   void dispose() {
@@ -46,6 +40,14 @@ class _CrdtHistoryScopeState extends State<CrdtHistoryScope> {
 
   @override
   Widget build(BuildContext context) {
+    // Rebuilds only when the provided document is replaced.
+    final document = context.selectCrdtDocument((document) => document);
+    if (!identical(document, _source)) {
+      // The snapshot is taken once per document: the cursor is an index.
+      _session?.dispose();
+      _source = document;
+      _session = document.toTimeTravel();
+    }
     final session = _session!;
     return InheritedProvider<BaseCRDTDocument>.value(
       value: session.document,

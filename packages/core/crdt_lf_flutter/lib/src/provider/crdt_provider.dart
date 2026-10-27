@@ -88,17 +88,12 @@ class CrdtProvider extends SingleChildStatelessWidget {
 
   @override
   Widget buildWithChild(BuildContext context, Widget? child) {
-    final view = InheritedProvider<BaseCRDTDocument>(
-      create: (context) => context.read<CRDTDocument>(),
-      startListening: _startListeningView,
-      child: child,
-    );
     final value = _value;
     if (value != null) {
       return InheritedProvider<CRDTDocument>.value(
         value: value,
         startListening: _startListening,
-        child: view,
+        child: child,
       );
     }
     return InheritedProvider<CRDTDocument>(
@@ -106,20 +101,8 @@ class CrdtProvider extends SingleChildStatelessWidget {
       dispose: (_, document) => document.dispose(),
       startListening: _startListening,
       lazy: lazy,
-      child: view,
+      child: child,
     );
-  }
-
-  /// Same bridge for the handler widgets, which read the document as the
-  /// [BaseCRDTDocument] a `CrdtHistoryScope` can replace.
-  static VoidCallback _startListeningView(
-    InheritedContext<BaseCRDTDocument?> element,
-    BaseCRDTDocument document,
-  ) {
-    final subscription = (document as CRDTDocument)
-        .updates
-        .listen((_) => element.markNeedsNotifyDependents());
-    return subscription.cancel;
   }
 
   /// Bridges [CRDTDocument.updates] to provider so that `context.watch` /
