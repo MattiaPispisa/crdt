@@ -63,6 +63,83 @@ void main() {
     expect(page.text, 'hello world');
   });
 
+  Widget withToolbar(QuillController controller, String id) =>
+      CrdtProvider.value(
+        value: document,
+        child: MaterialApp(
+          home: Column(
+            children: [
+              ListenableBuilder(
+                listenable: controller,
+                builder: (context, _) =>
+                    Text(controller.document.toPlainText().trim()),
+              ),
+              CrdtQuillBinder(
+                id: id,
+                controller: controller,
+                builder: (context) => const SizedBox(),
+              ),
+            ],
+          ),
+        ),
+      );
+
+  testWidgets('a toolbar above the binder sees the first content', (
+    tester,
+  ) async {
+    final controller = QuillController.basic();
+    addTearDown(controller.dispose);
+    await tester.pumpWidget(withToolbar(controller, 'page'));
+    await tester.pump();
+
+    expect(tester.takeException(), isNull);
+    expect(controller.document.toPlainText(), 'hello\n');
+    expect(find.text('hello'), findsOneWidget);
+  });
+
+  testWidgets('a toolbar above the binder follows a new id', (tester) async {
+    CRDTFugueRichTextHandler(document, 'other').insert(0, 'other page');
+    final controller = QuillController.basic();
+    addTearDown(controller.dispose);
+    await tester.pumpWidget(withToolbar(controller, 'page'));
+    await tester.pump();
+    await tester.pumpWidget(withToolbar(controller, 'other'));
+    await tester.pump();
+
+    expect(tester.takeException(), isNull);
+    expect(controller.document.toPlainText(), 'other page\n');
+    expect(find.text('other page'), findsOneWidget);
+
+    controller.replaceText(0, 0, '> ', null);
+    expect(
+      (document.handlerById('other')! as CRDTFugueRichTextHandler).text,
+      '> other page',
+    );
+    expect(page.text, 'hello');
+  });
+
+  testWidgets('a change made before the first content shows is kept once', (
+    tester,
+  ) async {
+    final remote = CRDTDocument(peerId: PeerId.generate());
+    addTearDown(remote.dispose);
+    remote.importChanges(document.exportChanges());
+    CRDTFugueRichTextHandler(remote, 'page').insert(0, '> ');
+    final controller = QuillController.basic();
+    addTearDown(controller.dispose);
+    // Runs after the build and before the binder shows the content.
+    WidgetsBinding.instance.addPostFrameCallback(
+      (_) => document.importChanges(remote.exportChanges()),
+    );
+    await tester.pumpWidget(withToolbar(controller, 'page'));
+
+    expect(tester.takeException(), isNull);
+    expect(controller.document.toPlainText(), '> hello\n');
+
+    controller.replaceText(7, 0, '!', null);
+    expect(page.text, '> hello!');
+  });
+
   testWidgets('stops writing once removed', (tester) async {
     final controller = QuillController.basic();
     addTearDown(controller.dispose);

@@ -161,6 +161,66 @@
 | Movable list remote move from the past + read on 1000 items | 46.1750 | 0.0462 | 0.000046 |
 | Movable list remote move from the past + read on 5000 items | 174.1350 | 0.1741 | 0.000174 |
 
+### rich_text_handler_benchmark.dart
+
+| Benchmark | RunTime (us) | RunTime (ms) | RunTime (s) |
+| --- | --- | --- | --- |
+| Fugue text (baseline) keystroke + length on 30000 chars | 13.5650 | 0.0136 | 0.000014 |
+| Fugue text (baseline) keystroke + value on 30000 chars | 348.4050 | 0.3484 | 0.000348 |
+| Fugue text (baseline) delete + length on 30000 chars | 1.5000 | 0.0015 | 0.000002 |
+| Fugue text (baseline) delete + value on 30000 chars | 298.0100 | 0.2980 | 0.000298 |
+| Rich text keystroke + length on 30000 chars | 9.9350 | 0.0099 | 0.000010 |
+| Rich text keystroke + value on 30000 chars | 364.1250 | 0.3641 | 0.000364 |
+| Rich text delete + length on 30000 chars | 1.6900 | 0.0017 | 0.000002 |
+| Rich text delete + value on 30000 chars | 325.4650 | 0.3255 | 0.000325 |
+| Rich text (marked lines) keystroke + length on 30000 chars | 28.3300 | 0.0283 | 0.000028 |
+| Rich text (marked lines) keystroke + value on 30000 chars | 537.2100 | 0.5372 | 0.000537 |
+| Rich text (marked lines) delete + length on 30000 chars | 13.9550 | 0.0140 | 0.000014 |
+| Rich text (marked lines) delete + value on 30000 chars | 392.7950 | 0.3928 | 0.000393 |
+| Fugue text (baseline) insert 100 lines (watched: false) | 931.1000 | 0.9311 | 0.000931 |
+| Rich text insert 100 lines (watched: false) | 679.8000 | 0.6798 | 0.000680 |
+| Rich text insert 100 lines x 3 attributes (watched: false) | 2171.1000 | 2.1711 | 0.002171 |
+| Fugue text (baseline) insert 100 lines (watched: true) | 678.3000 | 0.6783 | 0.000678 |
+| Rich text insert 100 lines (watched: true) | 678.7000 | 0.6787 | 0.000679 |
+| Rich text insert 100 lines x 3 attributes (watched: true) | 3126.4000 | 3.1264 | 0.003126 |
+| Fugue text (baseline) insert 1000 lines (watched: false) | 9673.5000 | 9.6735 | 0.009673 |
+| Rich text insert 1000 lines (watched: false) | 10282.8000 | 10.2828 | 0.010283 |
+| Rich text insert 1000 lines x 3 attributes (watched: false) | 25169.2000 | 25.1692 | 0.025169 |
+| Fugue text (baseline) insert 1000 lines (watched: true) | 10084.2000 | 10.0842 | 0.010084 |
+| Rich text insert 1000 lines (watched: true) | 10285.0000 | 10.2850 | 0.010285 |
+| Rich text insert 1000 lines x 3 attributes (watched: true) | 71979.9000 | 71.9799 | 0.071980 |
+| Rich text format bold on/off + length on 30000 chars (watched: false) | 5.5800 | 0.0056 | 0.000006 |
+| Rich text format bold on/off + length on 30000 chars (watched: true) | 6.9800 | 0.0070 | 0.000007 |
+| Rich text (marked lines) format bold on/off + length on 30000 chars (watched: false) | 443.7100 | 0.4437 | 0.000444 |
+| Rich text (marked lines) format bold on/off + length on 30000 chars (watched: true) | 649.0200 | 0.6490 | 0.000649 |
+| Fugue text (baseline) import 1000 line inserts + value | 11959.9000 | 11.9599 | 0.011960 |
+| Rich text import 1000 line inserts + value | 11855.4000 | 11.8554 | 0.011855 |
+| Rich text (marked lines) import 1000 line inserts + value | 28666.8000 | 28.6668 | 0.028667 |
+| Fugue text (baseline) remote keystroke + value on 30000 chars | 326.1950 | 0.3262 | 0.000326 |
+| Rich text remote keystroke + value on 30000 chars | 376.0600 | 0.3761 | 0.000376 |
+| Rich text (marked lines) remote keystroke + value on 30000 chars | 498.8000 | 0.4988 | 0.000499 |
+| Rich text remote format bold on/off + value on 30000 chars | 311.0100 | 0.3110 | 0.000311 |
+| Rich text (marked lines) remote format bold on/off + value on 30000 chars | 638.9500 | 0.6390 | 0.000639 |
+| Fugue text (baseline) takeSnapshot of 10000 elements | 1081.7094 | 1.0817 | 0.001082 |
+| Fugue text (baseline) restore of 10000 elements from snapshot | 1105.2542 | 1.1053 | 0.001105 |
+| Rich text (marked lines) takeSnapshot of 10000 elements | 3984.0965 | 3.9841 | 0.003984 |
+| Rich text (marked lines) restore of 10000 elements from snapshot | 6835.2880 | 6.8353 | 0.006835 |
+| Fugue text (baseline) takeSnapshot of 100000 elements | 42781.0000 | 42.7810 | 0.042781 |
+| Fugue text (baseline) restore of 100000 elements from snapshot | 28795.1000 | 28.7951 | 0.028795 |
+| Rich text (marked lines) takeSnapshot of 100000 elements | 114507.4500 | 114.5074 | 0.114507 |
+| Rich text (marked lines) restore of 100000 elements from snapshot | 124206.4000 | 124.2064 | 0.124206 |
+| Rich text undo+redo a bold format on 30000 chars | 38.7500 | 0.0387 | 0.000039 |
+| Rich text (marked lines) undo+redo a bold format on 30000 chars | 526.7500 | 0.5268 | 0.000527 |
+| Fugue text (baseline) undo+redo a 1-char delete on 30000 chars | 4.4000 | 0.0044 | 0.000004 |
+| Rich text undo+redo a 1-char delete on 30000 chars | 6.8000 | 0.0068 | 0.000007 |
+| Rich text (marked lines) undo+redo a 1-char delete on 30000 chars | 21.5000 | 0.0215 | 0.000022 |
+| Fugue text (baseline) undo+redo a 100-char delete on 30000 chars | 65.1500 | 0.0651 | 0.000065 |
+| Rich text undo+redo a 100-char delete on 30000 chars | 66.0000 | 0.0660 | 0.000066 |
+| Rich text (marked lines) undo+redo a 100-char delete on 30000 chars | 208.8500 | 0.2089 | 0.000209 |
+| Fugue text (baseline) undo+redo a 500-char delete on 30000 chars | 390.3000 | 0.3903 | 0.000390 |
+| Rich text undo+redo a 500-char delete on 30000 chars | 471.2000 | 0.4712 | 0.000471 |
+| Rich text (marked lines) undo+redo a 500-char delete on 30000 chars | 2143.3500 | 2.1433 | 0.002143 |
+
 ### scaling_benchmark.dart
 
 | Benchmark | RunTime (us) | RunTime (ms) | RunTime (s) |

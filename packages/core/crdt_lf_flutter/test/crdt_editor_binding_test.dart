@@ -174,6 +174,20 @@ void main() {
       expect(_normal(editor.spans), _normal(text.value));
     });
 
+    test('a push made inside a push writes at once, its echo dropped',
+        () async {
+      final editor = _FakeEditor(doc, text)..binding.attach(doc, 'text');
+      await _pump();
+
+      editor.binding.push(() {
+        editor.binding.push(() => text.insert(0, 'a'));
+        text.insert(1, 'b');
+      });
+
+      expect(text.text, 'ab');
+      expect(editor.remoteDeltas, 0);
+    });
+
     test('pushes nothing while detached or once the handler is deleted', () {
       final editor = _FakeEditor(doc, text);
       var writes = 0;
@@ -282,6 +296,33 @@ void main() {
       sync(remote);
 
       expect(editor.resets, [(ResetCause.deltasMissed, false)]);
+      expect(_normal(editor.spans), _normal(text.value));
+    });
+
+    test('resync reads the current value and skips what it covers', () async {
+      text.insert(0, 'hello');
+      final editor = _FakeEditor(doc, text);
+      editor.binding.resync(ResetCause.initial);
+      expect(editor.resets, isEmpty);
+
+      editor.binding.attach(doc, 'text');
+      await _pump();
+      editor.resets.clear();
+      editor.spans = [];
+
+      final remote = remotePeer();
+      (remote.registeredHandlers['text']! as CRDTFugueRichTextHandler)
+        ..insert(0, 'X')
+        ..insert(0, 'Y');
+      // Mid-burst: the read already holds the delta still to come.
+      editor.onRemote = () {
+        editor
+          ..onRemote = null
+          ..binding.resync(ResetCause.initial);
+      };
+      sync(remote);
+
+      expect(editor.resets, [(ResetCause.initial, false)]);
       expect(_normal(editor.spans), _normal(text.value));
     });
 

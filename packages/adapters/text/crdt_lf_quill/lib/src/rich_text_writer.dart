@@ -18,8 +18,7 @@ void writeRichTextDelta(CRDTFugueRichTextHandler handler, RichTextDelta delta) {
         index += op.count;
       case RichTextInsert():
         final at = min(index, handler.length);
-        handler.insert(at, op.text);
-        _reconcile(handler, at, op.text, op.attributes);
+        _insert(handler, at, op.text, op.attributes);
         index = at + op.length;
       case RichTextDelete():
         final count = min(op.count, handler.length - index);
@@ -55,50 +54,34 @@ void _format(
   }
 }
 
-// The handler gives new text the marks on its left: set what the editor
-// asked for and unset the rest.
-void _reconcile(
+// Inserted inline text grows after its end, so a key that must not grow is
+// formatted on its own.
+void _insert(
   CRDTFugueRichTextHandler handler,
   int at,
   String text,
   Map<String, Object?> attributes,
 ) {
-  final newline = [for (final rune in text.runes) rune == 0x0A];
-  final count = newline.length;
-  final wanted = [
-    for (final isNewline in newline)
-      quillScopedAttributes(attributes, newline: isNewline),
-  ];
-  final current = [
-    for (var i = 0; i < count; i++) handler.attributesAt(at + i),
-  ];
-  final keys = <String>{
-    for (final map in wanted) ...map.keys,
-    for (final map in current) ...map.keys,
-  };
-
-  for (final key in keys) {
-    var i = 0;
-    while (i < count) {
-      final value = wanted[i][key];
-      if (current[i][key] == value) {
-        i++;
-        continue;
-      }
-      if (newline[i]) {
-        handler.format(at + i, 1, key, value, expand: MarkExpand.none);
-        i++;
-        continue;
-      }
-      var end = i + 1;
-      while (end < count &&
-          !newline[end] &&
-          wanted[end][key] == value &&
-          current[end][key] != value) {
-        end++;
-      }
-      handler.format(at + i, end - i, key, value, expand: quillMarkExpand(key));
-      i = end;
+  bool fixed(String key) =>
+      !isQuillBlockKey(key) && quillMarkExpand(key) == MarkExpand.none;
+  handler.insert(
+    at,
+    text,
+    attributes: {
+      for (final entry in attributes.entries)
+        if (!fixed(entry.key)) entry.key: entry.value,
+    },
+    inherit: false,
+  );
+  for (final entry in attributes.entries) {
+    if (fixed(entry.key)) {
+      handler.format(
+        at,
+        RuneOffsets.length(text),
+        entry.key,
+        entry.value,
+        expand: MarkExpand.none,
+      );
     }
   }
 }

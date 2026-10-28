@@ -7,6 +7,9 @@ import 'package:crdt_lf_quill/src/quill_attributes.dart';
 import 'package:crdt_lf_quill/src/quill_converters.dart';
 import 'package:crdt_lf_quill/src/rich_text_writer.dart';
 import 'package:dart_quill_delta/dart_quill_delta.dart';
+import 'package:flutter/foundation.dart';
+import 'package:flutter/scheduler.dart';
+import 'package:flutter/widgets.dart' show WidgetsBinding;
 import 'package:flutter_quill/flutter_quill.dart';
 
 bool debugVerifyCrdtQuillProjection = true;
@@ -18,6 +21,9 @@ class CrdtQuillBinding {
 
   CrdtEditorBinding<List<RichTextSpan>, RichTextDelta>? binding;
 
+  bool _resetPending = false;
+  bool _resetScheduled = false;
+
   QuillController get controller => _controller;
 
   set controller(QuillController value) {
@@ -27,7 +33,7 @@ class CrdtQuillBinding {
     _release();
     _controller = value;
     final binding = this.binding;
-    if (binding != null && binding.isAttached) {
+    if (binding != null && binding.isAttached && !_resetPending) {
       _install(quillDocumentFromSpans(_handler.value));
     }
   }
@@ -43,6 +49,11 @@ class CrdtQuillBinding {
   }
 
   void onReset(List<RichTextSpan> spans, ResetCause cause) {
+    if (_inBuild()) {
+      _deferReset(cause);
+      return;
+    }
+    _resetPending = false;
     final target = quillDocumentFromSpans(spans);
     final document = _document;
     if (document == null) {
@@ -99,6 +110,9 @@ class CrdtQuillBinding {
   }
 
   bool verifyProjection() {
+    if (_resetPending) {
+      return true;
+    }
     final document = _document;
     if (document == null) {
       return false;
@@ -106,17 +120,37 @@ class CrdtQuillBinding {
     final handler = _handler;
     final stored = trailingNewline(document.toDelta()).stored;
     final runes = RuneOffsets.length(document.toPlainText()) - (stored ? 0 : 1);
-    assert(
-      !debugVerifyCrdtQuillProjection ||
-          document.toDelta() == quillDocumentFromSpans(handler.value),
-      'the Quill document drifted from the handler',
-    );
-    return runes == handler.length;
+    if (runes != handler.length) {
+      return false;
+    }
+    return !debugVerifyCrdtQuillProjection ||
+        document.toDelta() == quillDocumentFromSpans(handler.value);
   }
 
   void dispose() {
     _release();
+    _resetPending = false;
     binding = null;
+  }
+
+  // A reset in build would notify the controller's listeners, and one of
+  // them may be a widget built earlier in this frame.
+  void _deferReset(ResetCause cause) {
+    _release();
+    _resetPending = true;
+    if (_resetScheduled) {
+      return;
+    }
+    _resetScheduled = true;
+    SchedulerBinding.instance
+      ..addPostFrameCallback((_) {
+        _resetScheduled = false;
+        if (_resetPending) {
+          // Read now: the handler may have moved since the build.
+          binding?.resync(cause);
+        }
+      })
+      ..ensureVisualUpdate();
   }
 
   void _pushLocal(
@@ -259,4 +293,19 @@ Map<String, dynamic> _blockAttributes(Delta document, int fromEnd) {
     index += length;
   }
   return const {};
+}
+
+bool _inBuild() {
+  if (kDebugMode) {
+    // Plain unit tests run without a binding.
+    if (BindingBase.debugBindingType() == null) {
+      return false;
+    }
+    // The first build of a root widget runs outside a frame.
+    if (WidgetsBinding.instance.buildOwner?.debugBuilding ?? false) {
+      return true;
+    }
+  }
+  return SchedulerBinding.instance.schedulerPhase ==
+      SchedulerPhase.persistentCallbacks;
 }

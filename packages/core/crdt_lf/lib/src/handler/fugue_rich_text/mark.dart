@@ -170,8 +170,6 @@ class _MarkValue {
       case final String v:
         out.addByte(_string);
         UVarint.writeBytes(Wtf8.encode(v), out);
-      default:
-        check(value);
     }
   }
 
@@ -209,11 +207,14 @@ class _MarkValue {
   }
 }
 
-// Layout: count: uvarint, then per mark: stamp, then the mark body.
+// Layout: version byte, count: uvarint, then per mark: stamp, then the mark
+// body.
 class _MarksSection {
+  static const int version = 1;
+
   static Uint8List write(Iterable<_Mark> marks) {
     final sorted = marks.toList()..sort(_Mark.byStamp);
-    final out = BytesBuilder(copy: false);
+    final out = BytesBuilder(copy: false)..addByte(version);
     UVarint.write(sorted.length, out);
     for (final mark in sorted) {
       out.add(mark.stamp.toUint8List());
@@ -231,9 +232,6 @@ class _MarksSection {
   // [blob] is the whole handler blob: the section sits before its 4-byte
   // big-endian length trailer.
   static List<_Mark> read(Uint8List blob) {
-    if (blob.length < 4) {
-      throw const FormatException('Missing rich text marks trailer');
-    }
     final length = ByteData.sublistView(blob, blob.length - 4).getUint32(0);
     final end = blob.length - 4;
     final start = end - length;
@@ -242,7 +240,13 @@ class _MarksSection {
     }
     final bytes = Uint8List.sublistView(blob, start, end);
 
-    final countRec = UVarint.read(bytes, offset: 0);
+    final head = SnapshotBlob.read(
+      bytes,
+      min: version,
+      max: version,
+      name: 'Rich text marks',
+    );
+    final countRec = UVarint.read(bytes, offset: head.offset);
     var cursor = countRec.nextOffset;
     final marks = <_Mark>[];
     for (var i = 0; i < countRec.value; i++) {
@@ -257,6 +261,11 @@ class _MarksSection {
           start: body.start,
           end: body.end,
         ),
+      );
+    }
+    if (cursor != bytes.length) {
+      throw FormatException(
+        'Rich text marks section declares $length bytes but reads $cursor',
       );
     }
     return marks;

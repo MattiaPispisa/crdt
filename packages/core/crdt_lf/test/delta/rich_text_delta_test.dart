@@ -159,6 +159,9 @@ void main() {
       ]);
       expect(a, b);
       expect(a.hashCode, b.hashCode);
+      final span = RichTextSpan('x', {'a': 1, 'b': 2});
+      expect(span, RichTextSpan('x', {'b': 2, 'a': 1}));
+      expect(span.hashCode, RichTextSpan('x', {'b': 2, 'a': 1}).hashCode);
       expect(
         a,
         isNot(

@@ -76,6 +76,13 @@ class CrdtEditorBinding<V, D extends ComposableDelta<D>> {
     _disposed = true;
   }
 
+  void resync(ResetCause cause) {
+    if (_document == null) {
+      return;
+    }
+    _reset(cause);
+  }
+
   void push(void Function() writeToHandler) {
     final document = _document;
     final id = _id;

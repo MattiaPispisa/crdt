@@ -1,7 +1,10 @@
 // Copyright 2025 Mattia Pispisa
 // SPDX-License-Identifier: MIT
 
+import 'dart:typed_data';
+
 import 'package:crdt_lf/crdt_lf.dart';
+import 'package:hlc_dart/hlc_dart.dart';
 import 'package:test/test.dart';
 
 import '../conformance/handler_conformance.dart';
@@ -238,20 +241,20 @@ void main() {
         ..format(0, 3, 'bold', true)
         ..format(3, 3, 'link', 'u', expand: MarkExpand.none)
         ..delete(2, 1)
-        ..delete(3, 1);
+        ..delete(4, 1);
       final restored = CRDTDocument(peerId: peerB)
         ..importSnapshot(source.takeSnapshot());
       final text = open(restored);
 
       expect(_read(text), [
         _s('ab', {'bold': true}),
-        _s('df', {'link': 'u'}),
+        _s('de', {'link': 'u'}),
         _s('g'),
       ]);
       text
         ..insert(4, 'y')
         ..insert(2, 'x');
-      expect(text.text, 'abxdfyg');
+      expect(text.text, 'abxdeyg');
       expect(text.attributesAt(2), {'bold': true});
       expect(text.attributesAt(5), isEmpty);
     });
@@ -328,6 +331,103 @@ void main() {
       }
     });
 
+    test('attributesAt refuses an index outside the text', () {
+      final text = open(CRDTDocument())..insert(0, 'ab');
+      expect(() => text.attributesAt(-1), throwsRangeError);
+      expect(() => text.attributesAt(2), throwsRangeError);
+    });
+
+    test('format clamps its range to the text', () {
+      final doc = CRDTDocument(peerId: peerA);
+      final text = open(doc)..insert(0, '\u{1F600}abc');
+      final changes = doc.exportChanges().length;
+
+      text
+        ..format(-2, 3, 'bold', true)
+        ..format(3, 100, 'italic', true)
+        ..format(2, -1, 'size', 1)
+        ..format(9, 2, 'size', 1);
+
+      expect(_read(text), [
+        _s('\u{1F600}', {'bold': true}),
+        _s('ab'),
+        _s('c', {'italic': true}),
+      ]);
+      expect(doc.exportChanges(), hasLength(changes + 2));
+    });
+
+    test('change edits only what differs, the formats stay', () {
+      final text = open(CRDTDocument(peerId: peerA))
+        ..insert(0, 'hello world')
+        ..format(0, 5, 'bold', true)
+        ..change('hello, word');
+      expect(_read(text), [
+        _s('hello,', {'bold': true}),
+        _s(' word'),
+      ]);
+    });
+
+    test('toString shows the id and the first 20 runes', () {
+      final text = open(CRDTDocument())..insert(0, '\u{1F600}' * 21);
+      expect(
+        text.toString(),
+        'CRDTFugueRichText(rich, "${'\u{1F600}' * 20}...")',
+      );
+      text.delete(2, 19);
+      expect(text.toString(), 'CRDTFugueRichText(rich, "\u{1F600}\u{1F600}")');
+    });
+
+    group('an insert that does not inherit', () {
+      test('gets exactly its attributes', () {
+        final text = open(CRDTDocument(peerId: peerA))
+          ..insert(0, 'ab')
+          ..format(0, 2, 'bold', true)
+          ..format(0, 2, 'size', 2)
+          ..insert(
+            1,
+            'x',
+            attributes: {'size': 2, 'italic': true},
+            inherit: false,
+          );
+        expect(_read(text), [
+          _s('a', {'bold': true, 'size': 2}),
+          _s('x', {'size': 2, 'italic': true}),
+          _s('b', {'bold': true, 'size': 2}),
+        ]);
+      });
+
+      test('writes a mark only where it changes the text', () {
+        final doc = CRDTDocument(peerId: peerA);
+        final text = open(doc)
+          ..insert(0, 'ab')
+          ..format(0, 2, 'bold', true);
+        final changes = doc.exportChanges().length;
+
+        text.insert(0, 'x', inherit: false);
+        expect(doc.exportChanges(), hasLength(changes + 1));
+
+        text.insert(3, 'y', inherit: false);
+        expect(doc.exportChanges(), hasLength(changes + 3));
+        expect(_read(text), [
+          _s('x'),
+          _s('ab', {'bold': true}),
+          _s('y'),
+        ]);
+      });
+    });
+
+    test('text typed before an inserted run stays out of its attributes', () {
+      final text = open(CRDTDocument(peerId: peerA))
+        ..insert(0, 'ab')
+        ..insert(1, 'x', attributes: {'bold': true})
+        ..insert(1, 'y');
+      expect(_read(text), [
+        _s('ay'),
+        _s('x', {'bold': true}),
+        _s('b'),
+      ]);
+    });
+
     test('refuses a value it cannot encode', () {
       final text = open(CRDTDocument())..insert(0, 'ab');
       expect(() => text.format(0, 1, 'k', [1]), throwsArgumentError);
@@ -341,16 +441,88 @@ void main() {
       );
     });
 
-    test('indices count runes', () {
-      final text = open(CRDTDocument())
-        ..insert(0, '\u{1F600}a\u{1F600}b')
-        ..format(1, 2, 'bold', true);
-      expect(_read(text), [
-        _s('\u{1F600}'),
-        _s('a\u{1F600}', {'bold': true}),
-        _s('b'),
-      ]);
-      expect(text.attributesAt(2), {'bold': true});
+    group('decoding refuses a broken mark', () {
+      Matcher refused(String message) => throwsA(
+            isA<FormatException>()
+                .having((e) => e.message, 'message', contains(message)),
+          );
+
+      // Key 'k', then what follows it.
+      const bodies = {
+        'Truncated mark value': [1, 0x6B],
+        'Unknown mark value tag 9': [1, 0x6B, 9],
+        'Truncated mark double': [1, 0x6B, 4, 0, 0],
+        'Truncated rich text anchor': [1, 0x6B, 0],
+        'Unknown rich text anchor side 7': [1, 0x6B, 0, 7],
+      };
+      for (final MapEntry(key: message, value: body) in bodies.entries) {
+        test('an operation: $message', () {
+          final doc = CRDTDocument(peerId: peerA);
+          final text = open(doc)..insert(0, 'ab');
+          doc.applyChange(
+            Change.fromPayloadBytes(
+              id: OperationId(peerC, HybridLogicalClock(l: 100, c: 1)),
+              deps: doc.version,
+              author: peerC,
+              payloadBytes: OperationEnvelopeCodec.encode(
+                handlerType: text.handlerType,
+                handlerId: text.id,
+                kind: 4,
+                stamped: true,
+                body: Uint8List.fromList(body),
+              ),
+            ),
+          );
+          expect(() => text.value, refused(message));
+        });
+      }
+
+      // The blob ends with the marks section, then its length in 4 bytes.
+      Uint8List blob() {
+        final source = CRDTDocument(peerId: peerA);
+        open(source)
+          ..insert(0, 'ab')
+          ..format(0, 1, 'bold', true);
+        return source.takeSnapshot().data['rich']!;
+      }
+
+      int sectionStart(Uint8List blob) =>
+          blob.length -
+          4 -
+          ByteData.sublistView(blob, blob.length - 4).getUint32(0);
+
+      Uint8List withTrailer(List<int> head, int length) => Uint8List.fromList(
+            [
+              ...head,
+              ...(ByteData(4)..setUint32(0, length)).buffer.asUint8List(),
+            ],
+          );
+
+      final blobs = <String, Uint8List Function(Uint8List)>{
+        // Shorter than the trailer: the Fugue section refuses it first.
+        'Fugue': (blob) => blob.sublist(0, 3),
+        'Truncated rich text marks section': (blob) =>
+            withTrailer(blob.sublist(0, blob.length - 4), blob.length),
+        'Rich text marks snapshot version 2 is newer': (blob) =>
+            Uint8List.fromList(blob)..[sectionStart(blob)] = 2,
+        'declares': (blob) => withTrailer(
+              [...blob.sublist(0, blob.length - 4), 0],
+              blob.length - 4 - sectionStart(blob) + 1,
+            ),
+      };
+      for (final MapEntry(key: message, value: corrupt) in blobs.entries) {
+        test('a snapshot: $message', () {
+          final restored = CRDTDocument(peerId: peerB)
+            ..importSnapshot(
+              Snapshot(
+                id: 'broken',
+                versionVector: VersionVector({}),
+                data: {'rich': corrupt(blob())},
+              ),
+            );
+          expect(() => open(restored).value, refused(message));
+        });
+      }
     });
 
     group('block attributes', () {
@@ -465,6 +637,33 @@ void main() {
         expect(rich.attributesAt(2), {'bold': true});
         expect(rich.attributesAt(4), isEmpty);
       });
+
+      test('reads the same past a long run of tombstones', () {
+        final text = open(CRDTDocument(peerId: peerA))
+          ..insert(
+            0,
+            '${'w' * 300}a${'x' * 300}b',
+            attributes: {'italic': true},
+          )
+          ..format(301, 300, 'bold', true, expand: MarkExpand.none);
+        void edit(void Function() step) {
+          text.value;
+          step();
+          final folded = _read(text);
+          text.invalidateCache();
+          expect(_read(text), folded);
+        }
+
+        edit(() => text.delete(301, 300));
+        edit(() => text.delete(0, 300));
+        // After the tombstone the bold ends on, then before the first one.
+        edit(() => text.insert(1, 'y'));
+        edit(() => text.insert(0, 'z'));
+        expect(_read(text), [
+          _s('z'),
+          _s('ayb', {'italic': true}),
+        ]);
+      });
     });
 
     group('undo', () {
@@ -475,36 +674,56 @@ void main() {
         return undo;
       }
 
-      test('a deleted run comes back with the formats it had', () {
+      test('undoing the delete of plain text writes only the text back', () {
         final doc = CRDTDocument(peerId: peerA);
         final text = open(doc)
-          ..insert(0, 'xabcy')
-          ..format(1, 3, 'bold', true, expand: MarkExpand.none)
-          ..format(2, 1, 'link', 'u', expand: MarkExpand.none)
-          ..format(4, 1, 'size', 2, expand: MarkExpand.both);
+          ..insert(0, 'abcd')
+          ..format(0, 1, 'bold', true, expand: MarkExpand.none);
+        final undo = track(doc, text);
+        text.delete(2, 1);
+        final changes = doc.exportChanges().length;
+
+        undo.undo();
+
+        expect(_read(text), [
+          _s('a', {'bold': true}),
+          _s('bcd'),
+        ]);
+        expect(doc.exportChanges(), hasLength(changes + 1));
+      });
+
+      test('a restored run is pinned where its gap gives another value', () {
+        final doc = CRDTDocument(peerId: peerA);
+        final text = open(doc)
+          ..insert(0, 'abc')
+          ..format(0, 3, 'bold', true)
+          ..format(0, 3, 'bold', null)
+          ..format(1, 1, 'bold', true, expand: MarkExpand.none);
         final before = _read(text);
         final undo = track(doc, text);
 
-        text.delete(1, 3);
+        text.delete(1, 1);
         undo.undo();
-        expect(_read(text), before);
 
-        undo.redo();
-        expect(text.text, 'xy');
-        undo.undo();
         expect(_read(text), before);
       });
 
-      test('an insert with attributes leaves no format behind', () {
-        final doc = CRDTDocument(peerId: peerA);
-        final text = open(doc)..insert(0, 'ab');
-        final undo = track(doc, text);
+      test('a format made over a deleted run covers it once undone', () {
+        final a = CRDTDocument(peerId: peerA);
+        final textA = open(a)
+          ..insert(0, 'abc')
+          ..format(0, 3, 'bold', true);
+        final undo = track(a, textA);
+        textA.delete(1, 1);
+        final b = fork(a, peerB);
+        open(b).format(0, 2, 'bold', null);
+        sync(a, b);
 
-        text.insert(1, 'xy', attributes: {'bold': true, 'size': 3});
         undo.undo();
-        text.insert(1, 'z');
 
-        expect(_read(text), [_s('azb')]);
+        expect(_read(textA), [
+          _s('abc'),
+        ]);
       });
     });
 
@@ -555,6 +774,25 @@ void main() {
         );
       });
 
+      test('an update keeps the attributes of what it writes over', () async {
+        final text = open(CRDTDocument(peerId: peerA))
+          ..insert(0, 'abc')
+          ..format(1, 1, 'bold', true, expand: MarkExpand.none);
+        final deltas = await watch(text, () => text.update(1, 'x'));
+        expect(deltas, [
+          RichTextDelta([
+            RichTextRetain(1),
+            RichTextInsert('x', {'bold': true}),
+            const RichTextDelete(1),
+          ]),
+        ]);
+        expect(_read(text), [
+          _s('a'),
+          _s('x', {'bold': true}),
+          _s('c'),
+        ]);
+      });
+
       test('a mark over tombstones moves only the places it changed', () async {
         final text = open(CRDTDocument(peerId: peerA))
           ..insert(0, 'abcd')
@@ -570,6 +808,24 @@ void main() {
             RichTextRetain(1),
             RichTextRetain(1, {'bold': true}),
           ]),
+        ]);
+      });
+
+      test('a mark over no live text moves nothing, and still holds', () async {
+        final a = CRDTDocument(peerId: peerA);
+        final textA = open(a)..insert(0, 'abcd');
+        final b = fork(a, peerB);
+        open(b).format(1, 2, 'bold', true, expand: MarkExpand.both);
+        textA.delete(1, 2);
+
+        final deltas = await watch(textA, () => sync(a, b));
+        expect(deltas, [const RichTextDelta.empty()]);
+
+        textA.insert(1, 'x');
+        expect(_read(textA), [
+          _s('a'),
+          _s('x', {'bold': true}),
+          _s('d'),
         ]);
       });
 

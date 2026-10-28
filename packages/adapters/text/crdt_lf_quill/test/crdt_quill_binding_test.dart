@@ -7,6 +7,8 @@ import 'package:crdt_lf/crdt_lf.dart' hide ChangeSource;
 import 'package:crdt_lf_flutter/crdt_lf_flutter.dart';
 import 'package:crdt_lf_quill/crdt_lf_quill.dart';
 import 'package:crdt_lf_quill/src/crdt_quill_binding.dart';
+import 'package:flutter/widgets.dart'
+    show Builder, Column, ListenableBuilder, SizedBox;
 import 'package:flutter_quill/flutter_quill.dart';
 import 'package:flutter_quill/quill_delta.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -22,7 +24,10 @@ class _Peer {
     quill = CrdtQuillBinding(controller);
     binding = CrdtEditorBinding<List<RichTextSpan>, RichTextDelta>(
       onRemoteDelta: quill.onRemoteDelta,
-      onReset: quill.onReset,
+      onReset: (spans, cause) {
+        resets.add(cause);
+        quill.onReset(spans, cause);
+      },
       verifyProjection: quill.verifyProjection,
     );
     quill.binding = binding;
@@ -34,6 +39,7 @@ class _Peer {
   final QuillController controller = QuillController.basic();
   late final CrdtQuillBinding quill;
   late final CrdtEditorBinding<List<RichTextSpan>, RichTextDelta> binding;
+  final List<ResetCause> resets = [];
 
   Delta get content => controller.document.toDelta();
 
@@ -189,6 +195,21 @@ void main() {
     _expectConverged(a, b);
   });
 
+  test('an editor that drifted only in its attributes is read again', () {
+    a.type(0, 'hello');
+    _sync(a, b);
+    a.controller.document.compose(
+      Delta()..retain(5, {'bold': true}),
+      ChangeSource.silent,
+    );
+
+    b.type(0, '> ');
+    _sync(a, b);
+
+    expect(a.content, quillDocumentFromSpans(a.handler.value));
+    _expectConverged(a, b);
+  });
+
   test('undo takes back only the local text, on both peers', () {
     a.type(0, 'aaa');
     _sync(a, b);
@@ -264,7 +285,39 @@ void main() {
         }
         _sync(a, b);
         _expectConverged(a, b, 'round $round');
+        // A reset would hide a wrong write: it reads the handler back.
+        expect(a.resets, [ResetCause.initial], reason: 'A round $round');
+        expect(b.resets, [ResetCause.initial], reason: 'B round $round');
       }
     });
   }
+
+  testWidgets('a reset put off to the end of the frame leaves a new '
+      'controller alone until then', (tester) async {
+    final other = QuillController.basic();
+    addTearDown(other.dispose);
+    final c = _Peer(PeerId.generate());
+    addTearDown(c.dispose);
+    c.handler.insert(0, 'hi');
+    await tester.pumpWidget(
+      Column(
+        children: [
+          ListenableBuilder(
+            listenable: other,
+            builder: (context, _) => const SizedBox(),
+          ),
+          Builder(
+            builder: (context) {
+              c.binding.resync(ResetCause.initial);
+              c.quill.controller = other;
+              return const SizedBox();
+            },
+          ),
+        ],
+      ),
+    );
+
+    expect(tester.takeException(), isNull);
+    expect(other.document.toPlainText(), 'hi\n');
+  });
 }

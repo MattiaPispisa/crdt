@@ -1,15 +1,11 @@
 // Copyright 2025 Mattia Pispisa
 // SPDX-License-Identifier: MIT
 
-import 'dart:typed_data';
-
 import 'package:crdt_lf/crdt_lf.dart';
 import 'package:crdt_lf/src/algorithm/fugue/tree.dart';
-import 'package:crdt_lf/src/handler/fugue/fugue_sequence_apply.dart';
 import 'package:crdt_lf/src/handler/fugue/fugue_sequence_handler.dart';
 import 'package:crdt_lf/src/handler/fugue/fugue_snapshot.dart';
-
-part 'operation.dart';
+import 'package:crdt_lf/src/handler/fugue/fugue_text_sequence_handler.dart';
 
 /// ## CRDT Text with Fugue implementation
 ///
@@ -35,7 +31,7 @@ part 'operation.dart';
 /// print(text.value); // Prints ["Hello"]
 /// ```
 base class CRDTFugueTextHandler
-    extends FugueSequenceHandler<String, String, FugueTextState>
+    extends FugueTextSequenceHandler<String, FugueTextState>
     with DeltaProvider<String, SequenceDelta<String>> {
   /// Constructor that initializes a new Fugue text handler
   CRDTFugueTextHandler(super.doc, super.id)
@@ -64,85 +60,21 @@ base class CRDTFugueTextHandler
     blobVersions: BlobVersionRange.single(FugueSnapshot.version),
   );
 
-  @override
-  late final OperationDecoders operationDecoders = {
-    OperationType.kindInsert: (body) =>
-        _FugueTextInsertOperation.fromBodyBytes(this, body),
-    OperationType.kindDelete: (body) =>
-        _FugueTextDeleteOperation.fromBodyBytes(this, body),
-    OperationType.kindUpdate: (body) =>
-        _FugueTextUpdateOperation.fromBodyBytes(this, body),
-  };
-
   /// Inserts [text] at position [index], **in runes**
+  @override
   void insert(int index, String text) {
     if (text.isEmpty) {
       return;
     }
 
     final leftOrigin = originBefore(index);
-    final rightOrigin = nodeAfter(leftOrigin);
-
-    // Generate one node per rune
-    final items = <_FugueInsertItem>[];
-    for (final rune in text.runes) {
-      items.add(
-        _FugueInsertItem(
-          id: FugueElementID(doc.peerId, nextCounter()),
-          text: String.fromCharCode(rune),
-        ),
-      );
-    }
-
-    // Emit a single batch change containing the whole chain
     doc.registerOperation(
-      _FugueTextInsertOperation.fromHandler(
+      FugueTextInsertOperation.ofText(
         this,
         leftOrigin: leftOrigin,
-        rightOrigin: rightOrigin,
-        items: items,
+        rightOrigin: nodeAfter(leftOrigin),
+        text: text,
       ),
-    );
-  }
-
-  /// Overwrites the elements starting at [index] with [text], keeping the
-  /// identity of each one.
-  ///
-  /// Two peers updating the same element converge on one of the two values
-  /// instead of keeping both, anchors taken with [stablePositionAt] keep
-  /// resolving, and nothing is added to the tree. An update loses against a
-  /// concurrent deletion of the same element, and stops at the end of the
-  /// text instead of inserting.
-  ///
-  /// [index] and the length of [text] are counted in **runes**, like every
-  /// other positional API of this handler.
-  void update(int index, String text) {
-    if (text.isEmpty) {
-      return;
-    }
-
-    final runes = text.runes.toList();
-    final items = <_FugueUpdateItem>[];
-    for (var i = 0; i < runes.length; i++) {
-      final nodeID = nodeAt(index + i);
-      if (nodeID.isNull) {
-        // Past the end of the text: there is nothing left to overwrite.
-        break;
-      }
-      items.add(
-        _FugueUpdateItem(
-          nodeID: nodeID,
-          text: String.fromCharCode(runes[i]),
-        ),
-      );
-    }
-
-    if (items.isEmpty) {
-      return;
-    }
-
-    doc.registerOperation(
-      _FugueTextUpdateOperation.fromHandler(this, items: items),
     );
   }
 
@@ -169,106 +101,10 @@ base class CRDTFugueTextHandler
   /// });
   /// // Internally generates: delete(' '), insert(' Brave New ')
   /// ```
-  void change(String newText) {
-    final diff = myersDiff(value, newText);
-
-    // Track offset as text length changes during operations
-    var offset = 0;
-
-    for (final segment in diff) {
-      switch (segment.op) {
-        case DiffOp.equal:
-          // Nothing to do, text is already correct
-          break;
-        case DiffOp.insert:
-          // Insert new text at adjusted position
-          insert(segment.oldStart + offset, segment.text);
-          offset += segment.newEnd - segment.newStart;
-        case DiffOp.remove:
-          // Remove text at adjusted position
-          final count = segment.oldEnd - segment.oldStart;
-          delete(segment.oldStart + offset, count);
-          offset -= count;
-      }
-    }
-  }
-
-  /// Gets the length of the text, **in runes**
-  int get length => elementCount;
+  void change(String newText) => applyFugueTextChange(this, value, newText);
 
   @override
   FugueTextState createEmptyState() => FugueTextState.empty();
-
-  @override
-  void applyToTree(
-    FugueTree<String> tree,
-    Operation operation, {
-    DeltaSink<Object?>? sink,
-  }) {
-    if (!applyFugueSequenceOperation<String>(tree, operation, sink: sink)) {
-      sink?.add(const SequenceDelta<String>.empty());
-    }
-  }
-
-  @override
-  Iterable<FugueElementID> producedElementIds(Operation operation) sync* {
-    if (operation is _FugueTextInsertOperation) {
-      for (final item in operation.items) {
-        yield item.id;
-      }
-    }
-  }
-
-  @override
-  Operation buildDeleteOperation(List<FugueElementID> nodeIDs) {
-    return _FugueTextDeleteOperation.fromHandler(
-      this,
-      items: nodeIDs.map((id) => _FugueDeleteItem(nodeID: id)).toList(),
-    );
-  }
-
-  @override
-  Operation buildInsertOperation({
-    required FugueElementID leftOrigin,
-    required FugueElementID rightOrigin,
-    required List<({FugueElementID id, String value})> items,
-  }) {
-    return _FugueTextInsertOperation.fromHandler(
-      this,
-      leftOrigin: leftOrigin,
-      rightOrigin: rightOrigin,
-      items: [
-        for (final item in items)
-          _FugueInsertItem(id: item.id, text: item.value),
-      ],
-    );
-  }
-
-  @override
-  Operation buildUpdateOperation(
-    List<({FugueElementID nodeID, String value})> items,
-  ) {
-    return _FugueTextUpdateOperation.fromHandler(
-      this,
-      items: [
-        for (final item in items)
-          _FugueUpdateItem(nodeID: item.nodeID, text: item.value),
-      ],
-    );
-  }
-
-  /// Writes the run as plain WTF-8, one sequence per element and nothing
-  /// else: an element is one rune, and a rune is one WTF-8 sequence, so the
-  /// blob is self-delimiting and ASCII text costs one byte per character.
-  @override
-  Uint8List encodeRun(List<String> values) {
-    return Wtf8.encodeAll(values);
-  }
-
-  @override
-  List<String> decodeRun(Uint8List blob, int length) {
-    return Wtf8.decodeCodePoints(blob);
-  }
 
   @override
   String applyDelta(String base, SequenceDelta<String> delta) =>

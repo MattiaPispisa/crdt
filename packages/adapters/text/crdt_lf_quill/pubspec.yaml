@@ -19,6 +19,8 @@ dependencies:
   flutter_quill: ^11.6.0
 
 dev_dependencies:
+  benchmark_infrastructure:
+    path: ../../../_internal/benchmark_infrastructure
   flutter_test:
     sdk: flutter
   ws_lint:

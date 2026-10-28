@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 import 'package:crdt_lf/src/delta/handler_update.dart';
+import 'package:crdt_lf/src/utils/attributes.dart';
 import 'package:crdt_lf/src/utils/rune_offsets.dart';
 
 final class RichTextSpan {
@@ -15,7 +16,7 @@ final class RichTextSpan {
   bool operator ==(Object other) =>
       other is RichTextSpan &&
       other.text == text &&
-      _sameAttributes(other.attributes, attributes);
+      sameAttributes(other.attributes, attributes);
 
   @override
   int get hashCode => Object.hash(text, _hashAttributes(attributes));
@@ -49,7 +50,7 @@ final class RichTextRetain extends RichTextOp {
   bool operator ==(Object other) =>
       other is RichTextRetain &&
       other.count == count &&
-      _sameAttributes(other.attributes, attributes);
+      sameAttributes(other.attributes, attributes);
 
   @override
   int get hashCode =>
@@ -78,7 +79,7 @@ final class RichTextInsert extends RichTextOp {
   bool operator ==(Object other) =>
       other is RichTextInsert &&
       other.text == text &&
-      _sameAttributes(other.attributes, attributes);
+      sameAttributes(other.attributes, attributes);
 
   @override
   int get hashCode =>
@@ -154,39 +155,32 @@ final class RichTextDelta implements ComposableDelta<RichTextDelta> {
       final mine = a.take(length);
       final theirs = b.take(length);
 
-      switch (theirs) {
-        case RichTextRetain():
-          switch (mine) {
-            case RichTextRetain():
-              result.add(
-                RichTextRetain(
-                  length,
-                  _composeAttributes(
-                    mine.attributes,
-                    theirs.attributes,
-                    keepNull: true,
-                  ),
-                ),
-              );
-            case RichTextInsert():
-              result.add(
-                RichTextInsert(
-                  mine.text,
-                  _composeAttributes(
-                    mine.attributes,
-                    theirs.attributes,
-                    keepNull: false,
-                  ),
-                ),
-              );
-            case RichTextDelete():
-              break;
-          }
-        case RichTextDelete():
-          if (mine is RichTextRetain) {
-            result.add(theirs);
-          }
-        case RichTextInsert():
+      switch ((mine, theirs)) {
+        case (RichTextRetain(), RichTextRetain()):
+          result.add(
+            RichTextRetain(
+              length,
+              _composeAttributes(
+                mine.attributes,
+                theirs.attributes,
+                keepNull: true,
+              ),
+            ),
+          );
+        case (final RichTextInsert insert, RichTextRetain()):
+          result.add(
+            RichTextInsert(
+              insert.text,
+              _composeAttributes(
+                insert.attributes,
+                theirs.attributes,
+                keepNull: false,
+              ),
+            ),
+          );
+        case (RichTextRetain(), RichTextDelete()):
+          result.add(theirs);
+        case _:
           break;
       }
     }
@@ -234,15 +228,6 @@ final class RichTextDelta implements ComposableDelta<RichTextDelta> {
             return out;
           }
           if (offset <= base + op.count) {
-            var ahead = index + 1;
-            while (ahead < ops.length) {
-              final next = ops[ahead];
-              if (next is! RichTextInsert) {
-                break;
-              }
-              out += next.length;
-              ahead++;
-            }
             return out;
           }
           base += op.count;
@@ -356,7 +341,7 @@ void _push(List<RichTextOp> ops, RichTextOp op) {
   }
   if (last is RichTextRetain &&
       op is RichTextRetain &&
-      _sameAttributes(last.attributes, op.attributes)) {
+      sameAttributes(last.attributes, op.attributes)) {
     ops[ops.length - 1] = RichTextRetain(
       last.count + op.count,
       last.attributes,
@@ -365,7 +350,7 @@ void _push(List<RichTextOp> ops, RichTextOp op) {
   }
   if (last is RichTextInsert &&
       op is RichTextInsert &&
-      _sameAttributes(last.attributes, op.attributes)) {
+      sameAttributes(last.attributes, op.attributes)) {
     ops[ops.length - 1] = RichTextInsert(
       last.text + op.text,
       last.attributes,
@@ -392,21 +377,6 @@ Map<String, Object?> _composeAttributes(
 
 Map<String, Object?> _freeze(Map<String, Object?> attributes) =>
     attributes.isEmpty ? const {} : Map.unmodifiable(attributes);
-
-bool _sameAttributes(Map<String, Object?> a, Map<String, Object?> b) {
-  if (identical(a, b)) {
-    return true;
-  }
-  if (a.length != b.length) {
-    return false;
-  }
-  for (final entry in a.entries) {
-    if (!b.containsKey(entry.key) || b[entry.key] != entry.value) {
-      return false;
-    }
-  }
-  return true;
-}
 
 int _hashAttributes(Map<String, Object?> attributes) => Object.hashAllUnordered(
       attributes.entries.map((entry) => Object.hash(entry.key, entry.value)),
