@@ -9,6 +9,8 @@
 - `BaseCRDTDocument.handlerById` reads a handler by id. The
   view opens the handler on first read. `HistorySession.document` returns the view.
   [112](https://github.com/MattiaPispisa/crdt/issues/112)
+- `CRDTFugueRichTextHandler`: Fugue text with attributes (`format`, expand modes, block attributes on
+  `'\n'`), undo, and Quill-shaped `RichTextDelta` deltas. See [Rich text](README.md#rich-text).
 
 ### Changed
 

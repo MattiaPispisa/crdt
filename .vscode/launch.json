@@ -77,6 +77,13 @@
       "request": "launch",
       "type": "dart",
       "args": []
+    },
+    {
+      "name": "[crdt_lf_quill] example",
+      "cwd": "packages/adapters/text/crdt_lf_quill/example",
+      "request": "launch",
+      "type": "dart",
+      "args": []
     }
   ]
 }

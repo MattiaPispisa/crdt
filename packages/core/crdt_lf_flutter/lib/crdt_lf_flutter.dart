@@ -9,5 +9,6 @@ library;
 export 'package:provider/provider.dart'
     show ProviderNotFoundException, ReadContext, SelectContext, WatchContext;
 
+export 'src/editor/editor.dart';
 export 'src/effects/effects.dart';
 export 'src/provider/provider.dart';

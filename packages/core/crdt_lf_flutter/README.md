@@ -53,6 +53,9 @@ Built on top of [`provider`](https://pub.dev/packages/provider) — so you also 
   side effect and never rebuilds the subtree.
 - **`CrdtTextFieldBuilder`** — a `TextEditingController` bound to a text
   handler, the way collaborative editor bindings work.
+- **`CrdtEditorBinder<V, D>`** / **`CrdtEditorBinding<V, D>`** — the two-way
+  sync loop between one handler and an editor of your choice, for editor
+  adapters.
 - **`CrdtTextCursorsOverlay`** — paints collaborators' carets/selections
   over the text field, anchored by stable positions.
 - **`CrdtAwarenessCursorsOverlay`** — overlays collaborators' mouse-style
@@ -171,7 +174,8 @@ CrdtHandlerListener<CRDTListHandler<String>>(
 A handler deleted with `doc.deleteHandler` (on any peer) is not an error. A
 widget bound to it shows its `deletedBuilder`, or an empty box when there is
 none; a listener stops calling back. This holds for `CrdtHandlerBuilder`,
-`CrdtHandlerSelector`, `CrdtHandlerDeltaBuilder` and `CrdtTextFieldBuilder`.
+`CrdtHandlerSelector`, `CrdtHandlerDeltaBuilder`, `CrdtTextFieldBuilder` and
+`CrdtEditorBinder`.
 
 ```dart
 CrdtHandlerBuilder<CRDTFugueTextHandler>(
@@ -335,6 +339,47 @@ RuneOffsets.runeIndex('a😀b', 3);   // 2 — the rune that starts at code unit
 `utf16Offset` converts a handler rune index into a UTF-16 offset for
 `TextSelection`/`TextPosition`; `runeIndex` converts the other way. Both
 clamp out-of-range input to the ends of the string instead of throwing.
+
+### Editor bindings
+
+`CrdtEditorBinding` keeps an editor and a handler in step. It is the loop
+behind an editor adapter: you give it three callbacks, and it decides when to
+call them. It has no widgets, so you can use it alone; `CrdtEditorBinder` is
+the widget that owns one, attaches it to the handler `id` of the ambient
+document, and builds its `builder` once.
+
+- `onReset(value, cause)` puts the whole handler value in the editor. It runs
+  when the binding attaches, and again when the handler asks for a fresh read.
+- `onRemoteDelta(event)` applies one change to the editor, as a remote edit.
+- `verifyProjection` (optional) answers "do the editor and the handler still
+  agree?". On `false` the binding reads the handler and calls `onReset`.
+
+A local edit goes through `binding.push`. Inside it, write the edit into the
+handler. The binding drops the echo of that write, so the editor never applies
+its own edit twice. A reset that arrives during the write is delivered after
+it.
+
+```dart
+CrdtEditorBinder<List<RichTextSpan>, RichTextDelta>(
+  id: 'page',
+  onReset: (spans, cause) => editor.load(spans),
+  onRemoteDelta: (event) => editor.applyRemote(event.delta),
+  verifyProjection: () => editor.length == page.length,
+  builder: (context, binding) => MyEditor(
+    editor: editor,
+    // Called for the user's edits only, never for the remote ones.
+    onLocalEdit: (index, text) => binding.push(
+      () => context.crdtDocument.runInTransaction(
+        () => page.insert(index, text),
+      ),
+    ),
+  ),
+);
+```
+
+Give `verifyProjection` whenever you can. A watcher that writes back inside
+your write is dropped together with your echo, and this check is what finds
+it.
 
 ### Presence cursors
 

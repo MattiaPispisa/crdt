@@ -16,6 +16,7 @@ const _todosId = 'todos';
 const _settingsId = 'settings';
 const _nicknameKey = 'nickname';
 const _noteId = 'note';
+const _richId = 'rich';
 
 /// Builds the single document shared by the whole app.
 ///
@@ -41,6 +42,7 @@ CRDTDocument _buildDocument() {
   // A fixed id so the "Remote edit" throwaway peer can address the same
   // handler.
   CRDTFugueTextHandler(doc, _noteId).insert(0, 'hello');
+  CRDTFugueRichTextHandler(doc, _richId).insert(0, 'hello');
   return doc;
 }
 
@@ -99,6 +101,7 @@ class HomePage extends StatelessWidget {
             _DeltaBuilderCard(),
             _SettingsCard(),
             _NoteCard(),
+            _EditorCard(),
             _PresenceCard(),
           ],
         ),
@@ -790,6 +793,110 @@ class _NoteCardState extends State<_NoteCard> {
           );
         },
       ),
+    );
+  }
+}
+
+/// A fake in-memory editor bound to a `CRDTFugueRichTextHandler` through
+/// [CrdtEditorBinder]: it keeps its own spans, moved by the deltas, and pushes
+/// its local edits into the handler. Its builder never runs again.
+class _EditorCard extends StatefulWidget {
+  const _EditorCard();
+
+  @override
+  State<_EditorCard> createState() => _EditorCardState();
+}
+
+class _EditorCardState extends State<_EditorCard> {
+  /// The editor's own copy of the content, never read from the handler.
+  final _spans = ValueNotifier<List<RichTextSpan>>(const []);
+
+  @override
+  void dispose() {
+    _spans.dispose();
+    super.dispose();
+  }
+
+  int get _length =>
+      _spans.value.fold(0, (sum, span) => sum + span.text.runes.length);
+
+  void _localEdit(CrdtEditorBinding<List<RichTextSpan>, RichTextDelta> b) {
+    const attributes = {'italic': true};
+    final at = _length;
+    _spans.value = RichTextDelta([
+      RichTextRetain(at),
+      RichTextInsert('!', attributes),
+    ]).apply(_spans.value);
+    final text = context.crdtHandler<CRDTFugueRichTextHandler>(_richId);
+    b.push(() => text.insert(at, '!', attributes: attributes));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return CrdtEditorBinder<List<RichTextSpan>, RichTextDelta>(
+      id: _richId,
+      onRemoteDelta: (event) => _spans.value = event.delta.apply(_spans.value),
+      onReset: (value, cause) => _spans.value = value,
+      verifyProjection:
+          () =>
+              context.crdtHandler<CRDTFugueRichTextHandler>(_richId).length ==
+              _length,
+      builder: (context, binding) {
+        return _DemoCard(
+          title: 'Editor binding — CrdtEditorBinder',
+          description:
+              'A fake editor with its own copy of the rich text. "Remote rich '
+              'edit" imports a bold insert, "Local rich edit" types an italic '
+              '"!" and pushes it. The badge never bumps.',
+          actions: [
+            FilledButton.tonalIcon(
+              onPressed: () {
+                final remote = CRDTDocument(peerId: PeerId.generate());
+                CRDTFugueRichTextHandler(
+                  remote,
+                  _richId,
+                ).insert(0, '[remote] ', attributes: {'bold': true});
+                context.crdtDocument.importChanges(remote.exportChanges());
+              },
+              icon: const Icon(Icons.cloud_download),
+              label: const Text('Remote rich edit'),
+            ),
+            FilledButton.tonalIcon(
+              onPressed: () => _localEdit(binding),
+              icon: const Icon(Icons.keyboard),
+              label: const Text('Local rich edit'),
+            ),
+          ],
+          child: _RebuildBadge(
+            label: 'editor-binder',
+            child: ValueListenableBuilder<List<RichTextSpan>>(
+              valueListenable: _spans,
+              builder:
+                  (context, spans, _) => Text.rich(
+                    key: const Key('editor-text'),
+                    TextSpan(
+                      children: [
+                        for (final span in spans)
+                          TextSpan(
+                            text: span.text,
+                            style: TextStyle(
+                              fontWeight:
+                                  span.attributes['bold'] == true
+                                      ? FontWeight.bold
+                                      : null,
+                              fontStyle:
+                                  span.attributes['italic'] == true
+                                      ? FontStyle.italic
+                                      : null,
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+            ),
+          ),
+        );
+      },
     );
   }
 }

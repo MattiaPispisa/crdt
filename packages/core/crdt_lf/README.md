@@ -783,8 +783,8 @@ refuses a handler another manager already holds.
 
 #### Which handlers
 
-`CRDTFugueTextHandler`, `CRDTFugueListHandler`, `CRDTFugueMovableListHandler`,
-`CRDTMapHandler`, `CRDTORMapHandler`, `CRDTORSetHandler`,
+`CRDTFugueTextHandler`, `CRDTFugueRichTextHandler`, `CRDTFugueListHandler`,
+`CRDTFugueMovableListHandler`, `CRDTMapHandler`, `CRDTORMapHandler`, `CRDTORSetHandler`,
 `CRDTRegisterHandler` and the reference handlers built on them, and
 `CRDTAggregateHandler` when its definition is an
 `InvertibleAggregateDefinition`.
@@ -870,6 +870,7 @@ Handlers are the core components of the library. They manage the state of a spec
 
 - `CRDTTextHandler`: Handles text editing (concurrent edits ordered by HLC).
 - `CRDTFugueTextHandler`: Handles text editing with the Fugue algorithm (minimizes interleaving of concurrent edits).
+- `CRDTFugueRichTextHandler`: Fugue text with formatting: bold, links, headers (see [Rich text](#rich-text)).
 - `CRDTListHandler`: Handles list editing (concurrent edits ordered by HLC).
 - `CRDTFugueListHandler`: Handles ordered list editing with the Fugue algorithm (minimizes interleaving of concurrent edits in the same region).
 - `CRDTFugueMovableListHandler`: Handles ordered list editing with an explicit `move` operation that preserves element identity across concurrent reorderings (no duplicates).
@@ -1084,7 +1085,8 @@ print(votes.value); // 2
 
 #### Text handlers index by rune
 
-`CRDTTextHandler` and `CRDTFugueTextHandler` count positions in **runes**
+`CRDTTextHandler`, `CRDTFugueTextHandler` and `CRDTFugueRichTextHandler` count
+positions in **runes**
 (Unicode code points), not UTF-16 code units. `insert`, `delete`, `update`,
 `length`, and the Fugue handler's `stablePositionAt`/`indexOfStablePosition`
 all agree on this: one element is one rune.
@@ -1093,6 +1095,34 @@ Building a text field on top of this in Flutter? `RenderEditable` counts
 UTF-16 code units, not runes — see [`RuneOffsets` in the crdt_lf_flutter
 docs](https://github.com/MattiaPispisa/crdt/tree/main/packages/core/crdt_lf_flutter/README.md)
 for the conversion.
+
+#### Rich text
+
+`CRDTFugueRichTextHandler` is a Fugue text whose characters carry
+**attributes**: a key and a value (`null`, `bool`, `int`, `double` or
+`String`). Two peers that format the same text converge: for each key, the
+latest format wins.
+
+```dart
+final text = CRDTFugueRichTextHandler(doc, 'note')
+  ..insert(0, 'Hello world', attributes: {'bold': true})
+  ..format(6, 5, 'link', 'https://example.com', expand: MarkExpand.none)
+  ..format(0, 5, 'bold', null); // null removes the key
+print(text.text); // Prints "Hello world"
+print(text.value); // The spans: text runs with their attributes
+print(text.attributesAt(6)); // Prints "{bold: true, link: https://example.com}"
+```
+
+- `value` is the list of `RichTextSpan`s, and `text` is the plain string.
+- `expand` says if text typed at an edge of the formatted range gets the
+  attribute too: `after` (the default, like bold), `before`, `both` or `none`
+  (like a link).
+- A `'\n'` formatted alone holds the attributes of its line (a header, a list
+  item). They never spread to the text typed next to it.
+- `watch()` emits a `RichTextDelta`, in the shape of a
+  [Quill Delta](https://quilljs.com/docs/delta/): `RichTextRetain`,
+  `RichTextInsert` and `RichTextDelete`, with attributes where `null` removes a
+  key. A delta that only formats is a retain with attributes.
 
 #### Working with Complex Types
 

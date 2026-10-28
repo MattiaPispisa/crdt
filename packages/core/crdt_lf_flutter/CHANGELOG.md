@@ -9,6 +9,8 @@
 - `CrdtHistoryScope` draws the document frozen at a history cursor with the same handler widgets
   (`CrdtHandlerBuilder`, `CrdtHandlerSelector`, `CrdtHandlerListener`). Needs `crdt_lf` 5.3.0.
   [112](https://github.com/MattiaPispisa/crdt/issues/112)
+- `CrdtEditorBinding` and its widget `CrdtEditorBinder` run the two-way sync loop between a handler
+  and any editor, for editor adapters. `HandlerDeltaSubscription` is now public.
 
 ## [0.6.0](https://github.com/MattiaPispisa/crdt/tree/crdt_lf_flutter-v0.6.0/packages/core/crdt_lf_flutter)
 

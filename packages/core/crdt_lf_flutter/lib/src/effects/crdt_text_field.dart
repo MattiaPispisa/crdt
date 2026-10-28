@@ -5,8 +5,8 @@ import 'package:crdt_lf/crdt_lf.dart';
 import 'package:crdt_lf_flutter/src/common/_crdt_guards.dart';
 import 'package:crdt_lf_flutter/src/effects/text_delta.dart';
 import 'package:crdt_lf_flutter/src/provider/_crdt_view.dart';
-import 'package:crdt_lf_flutter/src/provider/_handler_delta_subscription.dart';
 import 'package:crdt_lf_flutter/src/provider/crdt_helper.dart';
+import 'package:crdt_lf_flutter/src/provider/handler_delta_subscription.dart';
 import 'package:flutter/widgets.dart';
 
 /// Whether [CrdtTextFieldBuilder] compares its whole text against the handler.

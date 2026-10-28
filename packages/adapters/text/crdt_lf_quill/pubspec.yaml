@@ -1,0 +1,28 @@
+name: crdt_lf_quill
+description: Collaborative rich text for flutter_quill. Binds a QuillController to a crdt_lf rich text handler, so several peers edit the same document.
+homepage: https://mattiapispisa.github.io/
+repository: https://github.com/MattiaPispisa/crdt/tree/main/packages/adapters/text/crdt_lf_quill
+topics: [crdt, local-first, flutter, quill, rich-text]
+
+version: 0.1.0
+
+environment:
+  sdk: ">=3.12.0 <4.0.0"
+  flutter: ">=3.44.0"
+
+dependencies:
+  crdt_lf: ">=5.3.0 <6.0.0"
+  crdt_lf_flutter: ^0.7.0
+  dart_quill_delta: ^10.8.0
+  flutter:
+    sdk: flutter
+  flutter_quill: ^11.6.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  ws_lint:
+    path: ../../../_internal/ws_lint
+
+flutter:
+  uses-material-design: true
