@@ -15,21 +15,82 @@ import 'package:crdt_lf/src/utils/attributes.dart';
 part 'mark.dart';
 part 'operation.dart';
 
+/// Whether text typed at an edge of a formatted range gets the format too.
 enum MarkExpand {
+  /// Neither edge: text typed next to the range stays out, like a link.
   none,
+
+  /// The start: text typed right before the range gets the format.
   before,
+
+  /// The end: text typed right after the range gets the format, like bold.
   after,
+
+  /// Both edges.
   both,
 }
 
+/// ## CRDT rich text with Fugue
+///
+/// ## Description
+/// A Fugue text whose runes carry **attributes**: a key and a value, which is
+/// `null`, `bool`, `int`, `double` or `String`. [format] sets or removes a
+/// key on a range, and [value] reads the text as [RichTextSpan]s. Insert,
+/// delete and update work as in [CRDTFugueTextHandler]. See the README
+/// section "Rich text".
+///
+/// ## Convergence
+/// A format is a mark anchored on the elements at the edges of its range.
+/// On each rune, every key takes the value of the newest mark that covers
+/// it: the highest HLC, then the highest peer id. So concurrent formats of
+/// one key with the same HLC resolve by peer id. Text inserted inside a
+/// range, even concurrently, is covered too.
+///
+/// ## Index space
+/// One element is one **rune** (Unicode code point), in every index and
+/// length. Use [RuneOffsets] to work with code units.
+///
+/// ## Expand modes
+/// [MarkExpand] says if text typed later at an edge of a range gets the
+/// format. Text typed where text was deleted follows the same rule, as if
+/// the deleted text were still there.
+///
+/// ## Block attributes
+/// A single `'\n'` formatted with [MarkExpand.none] holds the attributes of
+/// its line, such as a header. They never spread to the text typed next to
+/// it, and neither does their removal.
+///
+/// ## Snapshots
+/// A snapshot keeps the tombstones and every mark, so ranges and expansion
+/// read the same after a restore. A mark stays in the snapshot for good: the
+/// snapshot grows with each format.
+///
+/// ## Deltas
+/// [watch] emits a [RichTextDelta] per change. The text of an insert comes
+/// with the attributes it has once the change is in. A format emits a retain
+/// with attributes, only where the value moved.
+///
+/// ## Example
+/// ```dart
+/// final doc = CRDTDocument();
+/// final text = CRDTFugueRichTextHandler(doc, 'note')
+///   ..insert(0, 'Hello world\n')
+///   ..format(0, 5, 'bold', true)
+///   ..format(6, 5, 'link', 'https://example.com', expand: MarkExpand.none)
+///   ..format(11, 1, 'header', 1, expand: MarkExpand.none);
+/// print(text.text); // Prints "Hello world\n"
+/// print(text.attributesAt(0)); // Prints "{bold: true}"
+/// ```
 base class CRDTFugueRichTextHandler
     extends FugueTextSequenceHandler<List<RichTextSpan>, RichTextState>
     with DeltaProvider<List<RichTextSpan>, RichTextDelta> {
+  /// Opens the rich text handler `id` of `doc`.
   CRDTFugueRichTextHandler(super.doc, super.id)
       : super(spec: CRDTFugueRichTextHandler.spec);
 
   static const String _handlerType = 'CRDTFugueRichTextHandler';
 
+  /// {@macro builtin_handler_spec}
   static const HandlerSpec<CRDTFugueRichTextHandler> spec = HandlerSpec(
     _handlerType,
     CRDTFugueRichTextHandler.new,
@@ -48,6 +109,7 @@ base class CRDTFugueRichTextHandler
     blobVersions: BlobVersionRange.single(FugueSnapshot.version),
   );
 
+  /// The operation type of a format.
   late final OperationType markType = OperationType.custom(
     this,
     kind: _kindMark,
@@ -61,6 +123,17 @@ base class CRDTFugueRichTextHandler
     _kindMark: (body) => _FugueRichTextMarkOperation.fromBodyBytes(this, body),
   };
 
+  /// Inserts [text] at [index], **in runes**, with [attributes] on top.
+  ///
+  /// With [inherit], [text] also gets the formats around it that expand over
+  /// it. Without, it gets exactly [attributes]. A `null` value removes a key.
+  /// Each `'\n'` of [text] gets [attributes] as block attributes; the other
+  /// runs expand after their end, like [MarkExpand.after].
+  ///
+  /// The text and each key it changes are separate changes, written in one
+  /// transaction. A key that changes nothing writes nothing.
+  ///
+  /// Throws an [ArgumentError] for a value [format] refuses, before it writes.
   @override
   void insert(
     int index,
@@ -176,6 +249,16 @@ base class CRDTFugueRichTextHandler
     marks.forEach(doc.registerOperation);
   }
 
+  /// Sets [key] to [value] on the [length] runes from [index]; a `null`
+  /// [value] removes [key].
+  ///
+  /// The range is clamped to the text. An empty range, or a format that
+  /// changes nothing, writes nothing. [expand] says if text typed later at
+  /// an edge gets [key] too. A removal with [MarkExpand.none] covers the
+  /// edges as well, so text typed there stays without [key].
+  ///
+  /// Throws an [ArgumentError] when [value] is not `null`, `bool`, `int`,
+  /// `double` or `String`, or is an `int` outside ±(2^52 - 1).
   void format(
     int index,
     int length,
@@ -221,6 +304,8 @@ base class CRDTFugueRichTextHandler
       return;
     }
 
+    // An unmark that kept to its range would leave text typed at its edges
+    // under the old mark only.
     final sides = value == null && expand == MarkExpand.none && !block
         ? MarkExpand.both
         : expand;
@@ -256,16 +341,29 @@ base class CRDTFugueRichTextHandler
     );
   }
 
+  /// The attributes of the rune at [index]; unmodifiable.
+  ///
+  /// Throws a [RangeError] when [index] is outside the text.
   Map<String, Object?> attributesAt(int index) {
     RangeError.checkValidIndex(index, this, 'index', length);
     return cachedOrComputedState()._resolved().attributesAt(index);
   }
 
+  /// The text as spans: runs of runes with the same attributes, in order.
+  ///
+  /// The list is unmodifiable, and the same object until the next change.
+  /// {@macro fixed_value} Use [text] for the plain string.
   @override
   List<RichTextSpan> get value => cachedOrComputedState()._spans();
 
+  /// The plain text, without attributes.
   String get text => cachedOrComputedState()._text();
 
+  /// Changes the text to [newText] with the inserts and deletes [myersDiff]
+  /// finds.
+  ///
+  /// The runes that stay keep their attributes. Inserted runes get the
+  /// formats that expand over them, as with [insert].
   void change(String newText) => applyFugueTextChange(this, text, newText);
 
   @override
@@ -306,6 +404,7 @@ base class CRDTFugueRichTextHandler
       return;
     }
 
+    // The resolved runs shift with the text, so they need its delta.
     final shifts = state._resolvedCache != null &&
         (operation is FugueTextInsertOperation ||
             operation is FugueTextDeleteOperation);
@@ -403,8 +502,8 @@ base class CRDTFugueRichTextHandler
     Operation operation, {
     DeltaSink<Object?>? sink,
   }) {
-    // Marks live beside the tree: [applyOperation] and [computeState] fold
-    // them.
+    // A mark resolves against the finished tree, so [computeState] folds the
+    // marks after the replay, and [applyOperation] beside the tree.
     if (operation is _FugueRichTextMarkOperation) {
       _replayedMarks?.add(operation);
       return;
@@ -510,7 +609,8 @@ base class CRDTFugueRichTextHandler
 
   // An undone delete puts its elements back under new ids, outside the
   // anchors of the marks they had: a key is pinned on them again where the
-  // gap they land in would give them another value.
+  // gap they land in would give them another value. Only there, so undoing
+  // the delete of plain text writes the text alone.
   List<Operation> _restoreFormats(
     FugueTextDeleteOperation operation,
     List<Operation> inserts,
@@ -604,6 +704,8 @@ base class CRDTFugueRichTextHandler
     return latest == id ? anchor : _Anchor(anchor.side, latest);
   }
 
+  // The Fugue part first, so the Fugue reader takes the blob as it is. The
+  // length trailer finds the marks from the end.
   @override
   Uint8List getSnapshotState() {
     final fugue = super.getSnapshotState();
@@ -625,9 +727,11 @@ base class CRDTFugueRichTextHandler
   }
 }
 
+/// State of the [CRDTFugueRichTextHandler]: the text and its marks.
 class RichTextState extends FugueState<String, List<RichTextSpan>> {
   RichTextState._(this._tree) : super(_tree, _unprojected);
 
+  /// Creates an empty state.
   factory RichTextState.empty() => RichTextState._(FugueTree<String>.empty());
 
   final FugueTree<String> _tree;
@@ -704,6 +808,7 @@ class RichTextState extends FugueState<String, List<RichTextSpan>> {
     _textCache = null;
     _spansCache = null;
     final resolved = _resolvedCache;
+    // An update keeps every element in place, so the runs stay right.
     if (resolved == null ||
         delta == null ||
         delta.isEmpty ||
@@ -721,8 +826,11 @@ class RichTextState extends FugueState<String, List<RichTextSpan>> {
     }
   }
 
+  // Past this many tombstones, resolving every mark again is the cheaper way.
   int get _walkLimit => 256 + _marks.length;
 
+  // Moves the resolved runs for a plain insert and gives the new runes the
+  // marks around them; `false` when it cannot tell, and the runs are dropped.
   bool _shiftInsert(
     _ResolvedMarks resolved,
     FugueTextInsertOperation operation,

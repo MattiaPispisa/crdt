@@ -669,6 +669,35 @@ void main() {
       expect(controller.text, note.value);
     });
 
+    testWidgets('takes in a write served inside a push that drops the cache',
+        (tester) async {
+      final note = CRDTFugueTextHandler(doc, 'note')
+        ..insert(0, 'hello')
+        ..useIncrementalCacheUpdate = false;
+      var armed = true;
+      final watcher = note.watch().listen((_) {
+        if (armed && note.value == 'helloX') {
+          armed = false;
+          note
+            ..delete(0, 1)
+            ..insert(0, 'H');
+        }
+      });
+      addTearDown(watcher.cancel);
+      await tester.pumpWidget(host());
+      final controller =
+          tester.widget<TextField>(find.byType(TextField)).controller!
+            ..value = const TextEditingValue(
+              text: 'helloX',
+              selection: TextSelection.collapsed(offset: 6),
+            );
+      await tester.pumpAndSettle();
+
+      expect(armed, isFalse);
+      expect(note.value, 'HelloX');
+      expect(controller.text, note.value);
+    });
+
     // More than one seed: one stream of random edits is one sample, and the
     // shapes that break this widget are rare enough that one sample misses
     // them.

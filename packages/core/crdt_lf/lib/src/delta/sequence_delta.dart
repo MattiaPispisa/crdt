@@ -108,8 +108,9 @@ final class SeqMove<T> extends SeqOp<T> {
 /// The shape every editor binding knows: retain, insert, delete, in the
 /// coordinates of the sequence before the delta.
 ///
-/// The text handlers use `SequenceDelta<String>` where one element is one
-/// **rune**, matching the way they index their text.
+/// The plain text handlers use `SequenceDelta<String>` where one element is
+/// one **rune**, matching the way they index their text. The rich text
+/// handler uses `RichTextDelta`.
 final class SequenceDelta<T> implements ComposableDelta<SequenceDelta<T>> {
   /// Creates a delta from [ops].
   SequenceDelta(this.ops)

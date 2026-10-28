@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 import 'package:benchmark_infrastructure/benchmark_infrastructure.dart';
-import 'package:crdt_lf/crdt_lf.dart';
+import 'package:crdt_lf/crdt_lf.dart' hide ChangeSource;
 import 'package:crdt_lf_flutter/crdt_lf_flutter.dart';
 import 'package:crdt_lf_quill/src/crdt_quill_binding.dart';
 import 'package:flutter_quill/flutter_quill.dart';

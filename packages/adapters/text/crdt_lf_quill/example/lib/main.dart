@@ -113,6 +113,9 @@ class _PeerState extends State<_Peer> {
       child: CrdtQuillBinder(
         id: _pageId,
         controller: _controller,
+        onUnsupported: (_) => ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+          const SnackBar(content: Text('Images and videos are not supported')),
+        ),
         builder: (context) => Padding(
           padding: const EdgeInsets.all(8),
           child: Column(

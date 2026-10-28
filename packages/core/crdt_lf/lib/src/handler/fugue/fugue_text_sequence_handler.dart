@@ -8,8 +8,14 @@ import 'package:crdt_lf/src/algorithm/fugue/tree.dart';
 import 'package:crdt_lf/src/handler/fugue/fugue_sequence_apply.dart';
 import 'package:crdt_lf/src/handler/fugue/fugue_sequence_handler.dart';
 
+/// A Fugue sequence of runes: the text part of the Fugue text handlers.
+///
+/// One element is one **rune**, and every index and length counts runes.
+/// The insert, delete and update operations have one wire format for every
+/// subclass: the one [CRDTFugueTextHandler] has always written.
 abstract base class FugueTextSequenceHandler<V, S extends FugueState<String, V>>
     extends FugueSequenceHandler<String, V, S> {
+  /// Creates a text handler bound to `doc` under `id`, of the kind [spec].
   FugueTextSequenceHandler(super.doc, super.id, {required super.spec});
 
   @override
@@ -24,6 +30,7 @@ abstract base class FugueTextSequenceHandler<V, S extends FugueState<String, V>>
         FugueTextUpdateOperation.fromBodyBytes(this, body),
   };
 
+  /// Inserts [text] at [index], **in runes**; an empty [text] is a no-op.
   void insert(int index, String text);
 
   /// Overwrites the elements starting at [index] with [text], keeping the
@@ -139,6 +146,10 @@ abstract base class FugueTextSequenceHandler<V, S extends FugueState<String, V>>
       Wtf8.decodeCodePoints(blob);
 }
 
+/// Turns the text of [handler] from [current] into [newText] with the
+/// inserts and deletes [myersDiff] finds.
+///
+/// [current] must be the text [handler] holds now.
 void applyFugueTextChange(
   FugueTextSequenceHandler<Object?, FugueState<String, Object?>> handler,
   String current,
@@ -146,7 +157,7 @@ void applyFugueTextChange(
 ) {
   final diff = myersDiff(current, newText);
 
-  // Track offset as text length changes during operations
+  // The diff counts in [current]; each edit before shifts the next one.
   var offset = 0;
 
   for (final segment in diff) {
@@ -164,9 +175,10 @@ void applyFugueTextChange(
   }
 }
 
-/// Batch insert operation for the Fugue algorithm
+/// Puts a chain of runes into a Fugue text, between two elements.
 class FugueTextInsertOperation extends Operation
     implements FugueSequenceInsert<String> {
+  /// Creates the insert of [items] between [leftOrigin] and [rightOrigin].
   FugueTextInsertOperation({
     required this.leftOrigin,
     required this.rightOrigin,
@@ -175,6 +187,7 @@ class FugueTextInsertOperation extends Operation
     required super.type,
   });
 
+  /// The insert of [items] into [handler].
   factory FugueTextInsertOperation.fromHandler(
     Handler<dynamic> handler, {
     required FugueElementID leftOrigin,
@@ -285,7 +298,9 @@ class FugueTextInsertOperation extends Operation
   }
 }
 
+/// One rune of a [FugueTextInsertOperation], with its element id.
 class FugueTextInsertItem implements FugueInsertItem<String> {
+  /// Creates the element [id] holding [text].
   FugueTextInsertItem({
     required this.id,
     required this.text,
@@ -294,21 +309,24 @@ class FugueTextInsertItem implements FugueInsertItem<String> {
   @override
   final FugueElementID id;
 
+  /// The rune the element holds.
   final String text;
 
   @override
   String get value => text;
 }
 
-/// Batch delete operation for the Fugue algorithm
+/// Removes elements from a Fugue text; they stay in the tree as tombstones.
 class FugueTextDeleteOperation extends Operation
     implements FugueSequenceDelete {
+  /// Creates the delete of [items].
   FugueTextDeleteOperation({
     required this.items,
     required super.id,
     required super.type,
   });
 
+  /// The delete of [items] from [handler].
   factory FugueTextDeleteOperation.fromHandler(
     Handler<dynamic> handler, {
     required List<FugueTextDeleteItem> items,
@@ -363,7 +381,9 @@ class FugueTextDeleteOperation extends Operation
   }
 }
 
+/// One element a [FugueTextDeleteOperation] removes.
 class FugueTextDeleteItem implements FugueDeleteItem {
+  /// Names the element [nodeID].
   FugueTextDeleteItem({
     required this.nodeID,
   });
@@ -372,15 +392,17 @@ class FugueTextDeleteItem implements FugueDeleteItem {
   final FugueElementID nodeID;
 }
 
-/// Batch update operation for the Fugue algorithm
+/// Overwrites the runes of existing elements of a Fugue text.
 class FugueTextUpdateOperation extends Operation
     implements FugueSequenceUpdate<String> {
+  /// Creates the update of [items].
   FugueTextUpdateOperation({
     required this.items,
     required super.id,
     required super.type,
   });
 
+  /// The update of [items] in [handler].
   factory FugueTextUpdateOperation.fromHandler(
     Handler<dynamic> handler, {
     required List<FugueTextUpdateItem> items,
@@ -447,7 +469,9 @@ class FugueTextUpdateOperation extends Operation
   }
 }
 
+/// One element of a [FugueTextUpdateOperation] and its new rune.
 class FugueTextUpdateItem implements FugueUpdateItem<String> {
+  /// Writes [text] over the element [nodeID].
   FugueTextUpdateItem({
     required this.nodeID,
     required this.text,
@@ -456,6 +480,7 @@ class FugueTextUpdateItem implements FugueUpdateItem<String> {
   @override
   final FugueElementID nodeID;
 
+  /// The rune written over the element.
   final String text;
 
   @override

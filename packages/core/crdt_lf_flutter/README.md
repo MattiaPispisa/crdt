@@ -350,6 +350,8 @@ document, and builds its `builder` once.
 
 - `onReset(value, cause)` puts the whole handler value in the editor. It runs
   when the binding attaches, and again when the handler asks for a fresh read.
+  With `CrdtEditorBinder` the first call runs inside `build`, so it must not
+  call `setState`.
 - `onRemoteDelta(event)` applies one change to the editor, as a remote edit.
 - `verifyProjection` (optional) answers "do the editor and the handler still
   agree?". On `false` the binding reads the handler and calls `onReset`.
@@ -357,7 +359,9 @@ document, and builds its `builder` once.
 A local edit goes through `binding.push`. Inside it, write the edit into the
 handler. The binding drops the echo of that write, so the editor never applies
 its own edit twice. A reset that arrives during the write is delivered after
-it.
+it. When the editor is still behind the handler (`binding.isBehind`, in the
+middle of a burst), the binding reads the handler after the write and calls
+`onReset`.
 
 ```dart
 CrdtEditorBinder<List<RichTextSpan>, RichTextDelta>(
@@ -455,12 +459,13 @@ imports carrying its state. With `nested: true` the ids and revisions of the
 handler and its descendants (`ContainerHandler.childRefs`) are folded into one
 hash, so structural changes (a child added or removed) are detected too.
 
-The delta widgets — `CrdtHandlerDeltaBuilder`, `CrdtHandlerDeltaListener` and
-`CrdtTextFieldBuilder` — work the other way round. They subscribe to the
-handler's own `watch()` stream, which says **what** each change did, and they
-keep a projection instead of re-reading the value. All three share one piece of
-bookkeeping: which handler to follow, where the last read sits in the stream,
-and which events that read already covers. A `HandlerReset` means "the base
+The delta widgets — `CrdtHandlerDeltaBuilder`, `CrdtHandlerDeltaListener`,
+`CrdtTextFieldBuilder` and `CrdtEditorBinder` — work the other way round. They
+subscribe to the handler's own `watch()` stream, which says **what** each
+change did, and they keep a projection instead of re-reading the value. They
+share one piece of bookkeeping, `HandlerDeltaSubscription`: which handler to
+follow, where the last read sits in the stream, and which events that read
+already covers. A `HandlerReset` means "the base
 moved, read it again"; the read comes back with the point of the stream it
 reflects, so no event is ever applied twice.
 

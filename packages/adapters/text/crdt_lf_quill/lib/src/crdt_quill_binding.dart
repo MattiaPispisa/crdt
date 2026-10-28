@@ -1,6 +1,7 @@
 // Copyright 2025 Mattia Pispisa
 // SPDX-License-Identifier: MIT
 
+// Both packages export a `ChangeSource`: this file means Quill's.
 import 'package:crdt_lf/crdt_lf.dart' hide ChangeSource;
 import 'package:crdt_lf_flutter/crdt_lf_flutter.dart';
 import 'package:crdt_lf_quill/src/quill_attributes.dart';
@@ -12,18 +13,46 @@ import 'package:flutter/scheduler.dart';
 import 'package:flutter/widgets.dart' show WidgetsBinding;
 import 'package:flutter_quill/flutter_quill.dart';
 
+/// Whether the projection check compares the whole editor with the handler.
+///
+/// After each local write and remote change, the binder checks the editor
+/// against the handler and reads the handler again on a mismatch. The check
+/// always compares the lengths. When `true` (the default), it also compares
+/// the full content, attributes included. Despite the name, the switch also
+/// works in release builds. The full compare adds time linear in the
+/// document length to every change: set it to `false` to skip it.
 bool debugVerifyCrdtQuillProjection = true;
 
+/// Keeps a `QuillController` in step with a [CRDTFugueRichTextHandler] read
+/// through [binding].
+///
+/// Pass [onReset], [onRemoteDelta] and [verifyProjection] to the editor
+/// binding.
 class CrdtQuillBinding {
-  CrdtQuillBinding(QuillController controller) : _controller = controller;
+  /// Creates a binding that wraps the `onReplaceText` of [controller].
+  CrdtQuillBinding(QuillController controller, {this.onUnsupported})
+    : _controller = controller {
+    _hook();
+  }
 
   QuillController _controller;
 
+  /// Called with the refused data when the controller inserts an embed.
+  void Function(Object? data)? onUnsupported;
+
+  ReplaceTextCallback? _userOnReplaceText;
+
+  /// The editor binding that reads and writes the handler; `null` when the
+  /// binding is not wired yet.
   CrdtEditorBinding<List<RichTextSpan>, RichTextDelta>? binding;
 
   bool _resetPending = false;
   bool _resetScheduled = false;
 
+  /// The bound controller.
+  ///
+  /// A new controller takes the handler content at once, unless a reset is
+  /// pending. The old one keeps its document, unbound.
   QuillController get controller => _controller;
 
   set controller(QuillController value) {
@@ -31,8 +60,11 @@ class CrdtQuillBinding {
       return;
     }
     _release();
+    _unhook();
     _controller = value;
+    _hook();
     final binding = this.binding;
+    // A pending reset installs the document itself, at the end of the frame.
     if (binding != null && binding.isAttached && !_resetPending) {
       _install(quillDocumentFromSpans(_handler.value));
     }
@@ -48,6 +80,11 @@ class CrdtQuillBinding {
         : null;
   }
 
+  /// Shows [spans] in the editor, the whole handler value.
+  ///
+  /// A bound document gets the difference as a silent change, so the
+  /// selection stays. Otherwise the controller gets a new document. During a
+  /// build, the reset is put off to the end of the frame.
   void onReset(List<RichTextSpan> spans, ResetCause cause) {
     if (_inBuild()) {
       _deferReset(cause);
@@ -63,6 +100,8 @@ class CrdtQuillBinding {
     _compose(document.toDelta().diff(target), ChangeSource.silent);
   }
 
+  /// Applies a change from the handler to the editor as
+  /// [ChangeSource.remote].
   void onRemoteDelta(HandlerDelta<RichTextDelta> event) {
     final document = _document;
     if (document == null) {
@@ -109,7 +148,11 @@ class CrdtQuillBinding {
     }
   }
 
+  /// Whether the editor shows the handler value.
+  ///
+  /// See [debugVerifyCrdtQuillProjection] for what is compared.
   bool verifyProjection() {
+    // The editor is stale until the pending reset, which reads the handler.
     if (_resetPending) {
       return true;
     }
@@ -127,8 +170,11 @@ class CrdtQuillBinding {
         document.toDelta() == quillDocumentFromSpans(handler.value);
   }
 
+  /// Stops writing to the handler and gives back the `onReplaceText` of the
+  /// controller.
   void dispose() {
     _release();
+    _unhook();
     _resetPending = false;
     binding = null;
   }
@@ -136,6 +182,8 @@ class CrdtQuillBinding {
   // A reset in build would notify the controller's listeners, and one of
   // them may be a widget built earlier in this frame.
   void _deferReset(ResetCause cause) {
+    // The reset reads the handler again: a delta applied before it would
+    // count twice.
     _release();
     _resetPending = true;
     if (_resetScheduled) {
@@ -153,6 +201,26 @@ class CrdtQuillBinding {
       ..ensureVisualUpdate();
   }
 
+  void _hook() {
+    _userOnReplaceText = _controller.onReplaceText;
+    _controller.onReplaceText = _onReplaceText;
+  }
+
+  void _unhook() {
+    if (_controller.onReplaceText == _onReplaceText) {
+      _controller.onReplaceText = _userOnReplaceText;
+    }
+    _userOnReplaceText = null;
+  }
+
+  bool _onReplaceText(int index, int len, Object? data) {
+    if (_document != null && _hasEmbed(data)) {
+      onUnsupported?.call(data);
+      return false;
+    }
+    return _userOnReplaceText?.call(index, len, data) ?? true;
+  }
+
   void _pushLocal(
     _BoundDocument document,
     Delta change,
@@ -164,7 +232,7 @@ class CrdtQuillBinding {
     if (binding == null || crdt == null) {
       return;
     }
-    final rich = richTextDeltaFromQuill(change, before);
+    final rich = richTextDeltaFromQuill(_withoutEmbeds(change), before);
     binding.push(
       () => crdt.runInTransaction(() {
         final handler = _handler;
@@ -174,6 +242,8 @@ class CrdtQuillBinding {
     );
   }
 
+  // The handler stores Quill's last newline only while one of the newlines
+  // that end the text has a block attribute: add or drop it on a flip.
   void _syncLastNewline(
     _BoundDocument document,
     CRDTFugueRichTextHandler handler, {
@@ -217,6 +287,8 @@ class CrdtQuillBinding {
   }
 }
 
+// Overrides `compose` instead of listening to `changes`: that stream is
+// asynchronous, so a remote delta could arrive on a wrong base.
 class _BoundDocument extends Document {
   _BoundDocument(super.delta, this.owner) : super.fromDelta();
 
@@ -225,8 +297,8 @@ class _BoundDocument extends Document {
   @override
   void compose(Delta delta, ChangeSource changeSource) {
     if (changeSource != ChangeSource.local) {
-      // What `History(userOnly: true)` does: a change from a peer moves the
-      // undo stack and never enters it.
+      // What `History(userOnly: true)` does, by hand: `Document` builds its
+      // own `History`. A peer change moves the undo stack and never enters it.
       final history = this.history;
       final ignored = history.ignoreChange;
       history.ignoreChange = true;
@@ -250,6 +322,25 @@ class _BoundDocument extends Document {
     super.compose(delta, changeSource);
     owner._pushLocal(this, delta, before, storedBefore: storedBefore);
   }
+}
+
+bool _hasEmbed(Object? data) => switch (data) {
+  Embeddable() => true,
+  Delta() => data.toList().any((op) => op.isInsert && op.data is! String),
+  _ => false,
+};
+
+// An embed composed past `onReplaceText` stays in the editor until the
+// projection check reads the handler again. The converters throw on embeds.
+Delta _withoutEmbeds(Delta change) {
+  final ops = change.toList();
+  if (!ops.any((op) => op.isInsert && op.data is! String)) {
+    return change;
+  }
+  return Delta.fromOperations([
+    for (final op in ops)
+      if (!op.isInsert || op.data is String) op,
+  ]);
 }
 
 // Every edit, insert included, is before [anchor]: the stored last newline

@@ -6,17 +6,20 @@
 
 ### Added
 
-- `BaseCRDTDocument.handlerById` reads a handler by id. The
-  view opens the handler on first read. `HistorySession.document` returns the view.
-  [112](https://github.com/MattiaPispisa/crdt/issues/112)
-- `CRDTFugueRichTextHandler`: Fugue text with attributes (`format`, expand modes, block attributes on
-  `'\n'`), undo, and Quill-shaped `RichTextDelta` deltas. See [Rich text](README.md#rich-text).
+- `BaseCRDTDocument.handlerById` reads a handler by id, and `HistorySession.document` returns the
+  history view, which opens a handler on first read. [112](https://github.com/MattiaPispisa/crdt/issues/112)
+- `CRDTFugueRichTextHandler`: Fugue text with attributes, expand modes, block attributes, undo and
+  Quill-shaped `RichTextDelta` deltas. See [Rich text](README.md#rich-text).
 
 ### Changed
 
-- `revisionForHandler` of a `HistorySession` view is O(1) and moves on every cursor jump. It was
-  the change count of the handler. The live `CRDTDocument` is unchanged.
+- `revisionForHandler` of a `HistorySession` view moves on every cursor jump, in O(1).
   [112](https://github.com/MattiaPispisa/crdt/issues/112)
+
+### Fixed
+
+- A listener that writes back while events are handed out no longer takes the `origin` of the
+  call that published them: its write carries the origin it names, or none.
 
 ## [5.2.1](https://github.com/MattiaPispisa/crdt/tree/crdt_lf-v5.2.1/packages/core/crdt_lf)
 

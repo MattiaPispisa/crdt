@@ -21,6 +21,7 @@ lists.
     - [Attributes](#attributes)
     - [The last newline](#the-last-newline)
     - [Undo](#undo)
+    - [Projection check](#projection-check)
   - [Limits](#limits)
   - [Example](#example)
   - [Apps](#apps)
@@ -33,6 +34,11 @@ Register a rich text handler on the document, provide the document with
 and put the binder above the toolbar and the editor:
 
 ```dart
+import 'package:crdt_lf/crdt_lf.dart' hide ChangeSource;
+import 'package:crdt_lf_flutter/crdt_lf_flutter.dart';
+import 'package:crdt_lf_quill/crdt_lf_quill.dart';
+import 'package:flutter_quill/flutter_quill.dart';
+
 final document = CRDTDocument();
 CRDTFugueRichTextHandler(document, 'page');
 final controller = QuillController.basic();
@@ -56,18 +62,25 @@ Edits made in the editor go into the handler. Changes from other peers
 (`applyChange`, `importChanges`) show up in the editor.
 
 Keep every widget that listens to the controller **under** the binder. The
-binder loads the handler into the controller while it builds, and a listener
-above it would be marked dirty during the build.
+binder loads a new controller while it builds, and a listener above it would
+be marked dirty during the build. A read of the handler that arrives during a
+build (the first one, for example) runs at the end of that frame.
 
 `crdt_lf` and `flutter_quill` both export a `ChangeSource`. If you import both
-libraries in one file, hide one of them:
-`import 'package:crdt_lf/crdt_lf.dart' hide ChangeSource;`.
+libraries in one file, hide the `crdt_lf` one, as above: Quill code uses the
+Quill `ChangeSource`.
 
 ## How it works
 
 The binder gives the controller its own `Document`. That document writes every
-local change into the handler while Quill applies it, in one transaction. A
-remote change becomes a Quill delta, applied as `ChangeSource.remote`.
+local change into the handler right after Quill applies it, in one
+transaction. A remote change becomes a Quill delta, applied as
+`ChangeSource.remote`. When the binder reads the whole handler again, it
+applies the difference as `ChangeSource.silent`, so the selection stays.
+
+Do not assign `controller.document` yourself: the new document is unbound.
+Its edits stay out of the handler, and the next read of the handler replaces
+it.
 
 The converters are exported, so you can build your own binding:
 
@@ -120,9 +133,22 @@ The binder keeps changes from other peers out of the controller's undo stack,
 like `History(userOnly: true)`. Undo takes back your own edits only, and the
 undo is sent to the other peers like any other edit.
 
+### Projection check
+
+After each local write and each remote change, the binder checks that the
+editor shows the handler. On a mismatch it reads the handler again. The check
+compares the lengths, and also the full content while
+`debugVerifyCrdtQuillProjection` is `true` (the default). The flag also works
+in release builds. In [`benchmarks/results.md`](./benchmarks/results.md), a
+local keystroke on a 50000-rune document takes 2.17 ms with the length check
+and 3.40 ms with the full check.
+
 ## Limits
 
-- Embeds (images, videos) are not supported yet.
+- Embeds (images, videos) are not supported yet. The binder refuses an embed
+  inserted through the controller and calls `onUnsupported`, so the app can
+  tell the user. An embed composed into the document directly is not written
+  to the handler, and the editor is read again from the handler.
 - Two peers that format the plain last line at the same time both store a
   last `'\n'`, so the document gets one extra line.
 - The editor keeps its own selection, moved by each remote change. Remote

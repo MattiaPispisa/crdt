@@ -6,6 +6,15 @@ import 'dart:math';
 import 'package:crdt_lf/crdt_lf.dart';
 import 'package:crdt_lf_quill/src/quill_attributes.dart';
 
+/// Writes [delta] into [handler].
+///
+/// It writes many operations: run it inside `runInTransaction` to send them
+/// to the other peers together.
+///
+/// Inserted text gets exactly the attributes of its insert, not the ones of
+/// the text on its left. Formats grow as [quillMarkExpand] says, and block
+/// keys mark each newline on its own. A retain or a delete past the end of
+/// [handler] is clamped.
 void writeRichTextDelta(CRDTFugueRichTextHandler handler, RichTextDelta delta) {
   var index = 0;
   for (final op in delta.ops) {
@@ -71,6 +80,8 @@ void _insert(
       for (final entry in attributes.entries)
         if (!fixed(entry.key)) entry.key: entry.value,
     },
+    // Quill sends the exact attributes of the insert: drop what the left
+    // text would lend.
     inherit: false,
   );
   for (final entry in attributes.entries) {

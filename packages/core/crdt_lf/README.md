@@ -1088,8 +1088,9 @@ print(votes.value); // 2
 `CRDTTextHandler`, `CRDTFugueTextHandler` and `CRDTFugueRichTextHandler` count
 positions in **runes**
 (Unicode code points), not UTF-16 code units. `insert`, `delete`, `update`,
-`length`, and the Fugue handler's `stablePositionAt`/`indexOfStablePosition`
-all agree on this: one element is one rune.
+`length`, the rich text handler's `format` and `attributesAt`, and the Fugue
+handlers' `stablePositionAt`/`indexOfStablePosition` all agree on this: one
+element is one rune.
 
 Building a text field on top of this in Flutter? `RenderEditable` counts
 UTF-16 code units, not runes — see [`RuneOffsets` in the crdt_lf_flutter
@@ -1100,8 +1101,9 @@ for the conversion.
 
 `CRDTFugueRichTextHandler` is a Fugue text whose characters carry
 **attributes**: a key and a value (`null`, `bool`, `int`, `double` or
-`String`). Two peers that format the same text converge: for each key, the
-latest format wins.
+`String`; an `int` stays within ±(2^52 - 1)). Two peers that format the same
+text converge: for each key, the newest format wins (highest HLC, then peer
+id).
 
 ```dart
 final text = CRDTFugueRichTextHandler(doc, 'note')
@@ -1114,11 +1116,15 @@ print(text.attributesAt(6)); // Prints "{bold: true, link: https://example.com}"
 ```
 
 - `value` is the list of `RichTextSpan`s, and `text` is the plain string.
+- `insert` takes the formats around the text, plus its own `attributes`. With
+  `inherit: false` the text gets exactly its `attributes`.
 - `expand` says if text typed at an edge of the formatted range gets the
   attribute too: `after` (the default, like bold), `before`, `both` or `none`
-  (like a link).
-- A `'\n'` formatted alone holds the attributes of its line (a header, a list
-  item). They never spread to the text typed next to it.
+  (like a link). Text typed where text was deleted follows the same rule.
+- A `'\n'` formatted alone with `expand: MarkExpand.none` holds the attributes
+  of its line (a header, a list item). So does each `'\n'` that `insert` writes
+  with attributes. They never spread to the text typed next to it.
+- A snapshot keeps every format, so it grows with each `format` call.
 - `watch()` emits a `RichTextDelta`, in the shape of a
   [Quill Delta](https://quilljs.com/docs/delta/): `RichTextRetain`,
   `RichTextInsert` and `RichTextDelete`, with attributes where `null` removes a

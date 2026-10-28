@@ -210,6 +210,54 @@ void main() {
     _expectConverged(a, b);
   });
 
+  test('an embed from the controller is refused, other edits reach the '
+      'callback the app set', () {
+    final seen = <Object?>[];
+    final refused = <Object?>[];
+    bool own(int index, int len, Object? data) {
+      seen.add(data);
+      return true;
+    }
+
+    final controller = QuillController.basic()..onReplaceText = own;
+    addTearDown(controller.dispose);
+    a.quill
+      ..controller = controller
+      ..onUnsupported = refused.add;
+    expect(a.controller.onReplaceText, isNull);
+    a.resets.clear();
+
+    controller
+      ..replaceText(0, 0, 'ab', null)
+      ..replaceText(1, 0, BlockEmbed.image('x.png'), null)
+      ..replaceText(1, 0, Delta()..insert({'video': 'y.mp4'}), null);
+
+    expect(seen, ['ab']);
+    expect(refused, hasLength(2));
+    expect(a.resets, isEmpty);
+    expect(a.handler.text, 'ab');
+    expect(controller.document.toDelta(), Delta()..insert('ab\n'));
+
+    a.quill.dispose();
+    expect(controller.onReplaceText, own);
+  });
+
+  test('an embed composed into the document is dropped, its text kept', () {
+    a.type(0, 'ab');
+    a.controller.document.compose(
+      Delta()
+        ..retain(1)
+        ..insert({'image': 'x.png'})
+        ..insert('c'),
+      ChangeSource.local,
+    );
+
+    expect(a.handler.text, 'acb');
+    expect(a.plain, 'acb\n');
+    _sync(a, b);
+    _expectConverged(a, b);
+  });
+
   test('undo takes back only the local text, on both peers', () {
     a.type(0, 'aaa');
     _sync(a, b);
@@ -228,6 +276,42 @@ void main() {
     _sync(a, b);
 
     expect(a.controller.hasUndo, isFalse);
+  });
+
+  test('a local edit made while a burst is still in flight converges', () {
+    // The length check alone: only the read after the push brings in the
+    // attributes still in flight.
+    debugVerifyCrdtQuillProjection = false;
+    addTearDown(() => debugVerifyCrdtQuillProjection = true);
+    a.type(0, 'hello');
+    _sync(a, b);
+    a
+      ..type(0, 'A')
+      ..format(0, 3, Attribute.bold)
+      ..format(3, 2, const LinkAttribute('https://example.com'));
+
+    var armed = true;
+    void typeInBurst() {
+      if (!armed) {
+        return;
+      }
+      armed = false;
+      b
+        ..type(1, 'z')
+        ..format(0, 2, Attribute.italic);
+    }
+
+    b.controller.addListener(typeInBurst);
+    b.resets.clear();
+    b.document.importChanges(a.document.exportChanges());
+    b.controller.removeListener(typeInBurst);
+
+    expect(armed, isFalse);
+    expect(b.resets, contains(ResetCause.deltasMissed));
+    expect(b.content, quillDocumentFromSpans(b.handler.value));
+    _sync(a, b);
+    _expectConverged(a, b);
+    expect(a.handler.text, contains('z'));
   });
 
   // More than one seed: one stream of random edits is one sample.

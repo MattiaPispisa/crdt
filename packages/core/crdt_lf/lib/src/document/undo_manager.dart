@@ -330,7 +330,7 @@ class CRDTUndoManager {
   /// holds.
   void _capture(Handler<dynamic> handler, Operation operation) {
     final tracked = _tracked.contains(handler.id);
-    final origin = _document._deltaOrigin;
+    final origin = _document._undoOrigin;
 
     if (_mode == _UndoMode.recording) {
       if (!tracked) {

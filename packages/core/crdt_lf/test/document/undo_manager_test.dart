@@ -435,6 +435,40 @@ void main() {
         expect(map.value, {'a': '1', 'b': '2'});
       });
 
+      test('a write-back from the flush keeps the tracked origin', () async {
+        final doc = _doc(_peerA);
+        final text = CRDTFugueTextHandler(doc, 'text');
+        final log = CRDTFugueTextHandler(doc, 'log');
+        final mine = Object();
+        final undo = CRDTUndoManager(
+          doc,
+          trackedOrigins: {mine},
+          captureTimeout: Duration.zero,
+        )
+          ..track(text)
+          ..track(log);
+
+        text.value;
+        var writeBack = false;
+        final subscription = text.watch().listen((_) {
+          if (writeBack) {
+            writeBack = false;
+            log.insert(0, '!');
+          }
+        });
+        await Future<void>.delayed(Duration.zero);
+
+        writeBack = true;
+        doc.runInTransaction(() => text.insert(0, 'hello'), origin: mine);
+        expect(log.value, '!');
+
+        undo.undo();
+        expect(log.value, '', reason: 'the write-back was recorded');
+        expect(text.value, 'hello');
+
+        await subscription.cancel();
+      });
+
       test('records every local write when no origin is given', () {
         final doc = _doc(_peerA);
         final map = CRDTMapHandler<String>(

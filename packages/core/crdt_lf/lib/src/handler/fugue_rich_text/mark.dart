@@ -208,7 +208,8 @@ class _MarkValue {
 }
 
 // Layout: version byte, count: uvarint, then per mark: stamp, then the mark
-// body.
+// body. The version is its own, so the marks can change without the Fugue
+// blob version.
 class _MarksSection {
   static const int version = 1;
 

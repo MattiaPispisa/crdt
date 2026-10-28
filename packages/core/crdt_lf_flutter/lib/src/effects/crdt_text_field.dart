@@ -3,10 +3,10 @@
 
 import 'package:crdt_lf/crdt_lf.dart';
 import 'package:crdt_lf_flutter/src/common/_crdt_guards.dart';
+import 'package:crdt_lf_flutter/src/editor/crdt_editor_binding.dart';
 import 'package:crdt_lf_flutter/src/effects/text_delta.dart';
 import 'package:crdt_lf_flutter/src/provider/_crdt_view.dart';
 import 'package:crdt_lf_flutter/src/provider/crdt_helper.dart';
-import 'package:crdt_lf_flutter/src/provider/handler_delta_subscription.dart';
 import 'package:flutter/widgets.dart';
 
 /// Whether [CrdtTextFieldBuilder] compares its whole text against the handler.
@@ -108,58 +108,30 @@ class _CrdtTextFieldBuilderState extends State<CrdtTextFieldBuilder> {
   /// Set by the first `build`; everything else runs after one.
   late CRDTDocument _document;
 
-  /// The handler's delta stream, and the bookkeeping every consumer of one
-  /// needs: which handler, how far it has got, what it has already taken in.
-  late final HandlerDeltaSubscription<String, SequenceDelta<String>> _delta =
-      HandlerDeltaSubscription<String, SequenceDelta<String>>(
+  /// The handler's delta stream, and the guard around a push (see
+  /// [CrdtEditorBinding.push]).
+  late final CrdtEditorBinding<String, SequenceDelta<String>> _binding =
+      CrdtEditorBinding<String, SequenceDelta<String>>(
     // Not the generic resolver: this widget accepts two named handlers and
     // says so, which is a better error than "the wrong delta shape".
     resolve: _deltaProviderOf,
-    onReset: (point, cause) {
-      if (_pushing) {
-        // Not an echo: the base the deltas describe is gone. It cannot be
-        // dropped, only put off until the push has finished.
-        _resetWhilePushing = true;
+    onReset: (value, cause) {
+      if (_seeding) {
+        _seed(value);
         return;
       }
-      _settle(text: point.value);
+      _settle(text: value);
     },
-    onDelta: (event) {
-      if (_pushing) {
-        return;
-      }
-      _settle(reported: event.delta);
-    },
-    isAlive: () => mounted,
-    // Read while attaching, so the first frame already shows the document
-    // instead of an empty field that fills in a frame later.
-    seed: true,
+    onRemoteDelta: (event) => _settle(reported: event.delta),
+    verifyProjection: _projectionAgrees,
+    // An empty Fugue delta still has to commit a pending composition.
+    skipEmptyDeltas: false,
   );
 
-  /// Whether this widget is writing into the handler right now.
+  /// Whether [_binding] is reading the value while attaching.
   ///
-  /// A write commits synchronously, so everything it publishes comes back
-  /// before the push has written down what it did. Nothing may be folded in
-  /// until then, whoever it came from:
-  ///
-  /// - **our own echo** — already in the controller; folding it in would apply
-  ///   the edit twice;
-  /// - **someone else's delta** — the flush hands our echo to the other
-  ///   watchers, and one that writes back is served in the same pass, so its
-  ///   delta reaches us still inside our `runInTransaction`. Its coordinates
-  ///   are those of a text `_lastCommittedText` does not hold yet.
-  ///
-  /// Both are dropped here and settled afterwards: `markSyncedToPublished`
-  /// accounts for them, and `_verifyProjection` reads once if the second left
-  /// the field behind.
-  ///
-  /// This is why `HandlerDelta.origin` cannot replace the flag — it identifies
-  /// the first case and lets the second through. Nor does it cover the reset,
-  /// which carries no origin.
-  bool _pushing = false;
-
-  /// Whether the handler asked for a read while [_pushing] was set.
-  bool _resetWhilePushing = false;
+  /// That read builds the controller the first time, so it skips [_settle].
+  bool _seeding = false;
 
   /// The handler-side text this widget has last pushed or adopted. Local
   /// deltas are computed against it.
@@ -168,7 +140,7 @@ class _CrdtTextFieldBuilderState extends State<CrdtTextFieldBuilder> {
   /// How many runes [_lastCommittedText] holds.
   ///
   /// Carried by arithmetic — every delta says how many elements it puts in and
-  /// takes out — so [_verifyProjection] can ask the handler whether the two
+  /// takes out — so [_projectionAgrees] can ask the handler whether the two
   /// still agree without counting anything.
   int _lastCommittedRunes = 0;
 
@@ -194,7 +166,7 @@ class _CrdtTextFieldBuilderState extends State<CrdtTextFieldBuilder> {
     final document = _document = context.liveDocument('CrdtTextFieldBuilder');
     // Rebuilds only when this flips, so the field still builds once.
     if (context.selectCrdtDocument((doc) => doc.isDeleted(widget.id))) {
-      _delta.cancel();
+      _binding.detach();
       // Not here: the callback is the user's, and this is a build.
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) {
@@ -205,15 +177,17 @@ class _CrdtTextFieldBuilderState extends State<CrdtTextFieldBuilder> {
     }
     // Covers a new document and a new id alike, which is why there is no
     // `didUpdateWidget`: `build` always runs after one.
-    final seed = _delta.syncTo(
-      document,
-      widget.id,
-      // The anchors belong to the old handler; they must go before anything
-      // reads the new one, because seeding captures them again.
-      onBeforeAttach: _invalidateSelectionAnchors,
-    );
-    if (seed != null) {
-      _seed(seed.value);
+    _seeding = true;
+    try {
+      _binding.attach(
+        document,
+        widget.id,
+        // The anchors belong to the old handler; they must go before anything
+        // reads the new one, because seeding captures them again.
+        onBeforeAttach: _invalidateSelectionAnchors,
+      );
+    } finally {
+      _seeding = false;
     }
     return Focus(
       canRequestFocus: false,
@@ -226,7 +200,7 @@ class _CrdtTextFieldBuilderState extends State<CrdtTextFieldBuilder> {
 
   @override
   void dispose() {
-    _delta.cancel();
+    _binding.dispose();
     _controller?.removeListener(_onControllerChanged);
     _controller?.dispose();
     super.dispose();
@@ -304,12 +278,7 @@ class _CrdtTextFieldBuilderState extends State<CrdtTextFieldBuilder> {
       }
     }
 
-    _pushing = true;
-    try {
-      _document.runInTransaction(run);
-    } finally {
-      _pushing = false;
-    }
+    _document.runInTransaction(run);
     return (deleted: deleted, inserted: inserted);
   }
 
@@ -402,9 +371,9 @@ class _CrdtTextFieldBuilderState extends State<CrdtTextFieldBuilder> {
   /// the events still in flight as accounted for, dropping them.
   void _pushLocalEdits({({String text, int runes})? handlerState}) {
     var known = handlerState;
-    if (_delta.publishedSeq != _delta.synced) {
-      final point = _delta.readSynced();
-      known = (text: point.value, runes: RuneOffsets.length(point.value));
+    if (_binding.isBehind) {
+      final value = _binding.readSynced();
+      known = (text: value, runes: RuneOffsets.length(value));
     }
     final handlerText = known?.text ?? _lastCommittedText;
     final handlerRunes = known?.runes ?? _lastCommittedRunes;
@@ -442,37 +411,24 @@ class _CrdtTextFieldBuilderState extends State<CrdtTextFieldBuilder> {
       );
     }
 
-    final moved = _applyDelta(pushed, handlerText);
+    _binding.push(() {
+      final moved = _applyDelta(pushed, handlerText);
 
-    // We know what we pushed, so the new text is the old one spliced — no need
-    // to project the document again.
-    _lastCommittedText = handlerText.replaceRange(
-      pushed.index,
-      pushed.index + pushed.deleted,
-      pushed.inserted,
-    );
-    _lastCommittedRunes = handlerRunes - moved.deleted + moved.inserted;
-    // Everything before the push is folded in above, and the push published its
-    // own events as it ran. So this covers our echo too.
-    _delta.markSyncedToPublished();
-
-    if (_resetWhilePushing) {
-      _resetWhilePushing = false;
-      // The base moved while we were writing, so the lines above may describe a
-      // document that is gone. The value the reset carried is no good either:
-      // read mid-transaction, it could not see the edit being pushed.
-      final point = _delta.readSynced();
-      _lastCommittedText = point.value;
-      _lastCommittedRunes = RuneOffsets.length(point.value);
-    }
-
-    if (_lastCommittedText != _controller!.text) {
-      // The rebase above merged remote content in: adopt it.
-      _adopt(_lastCommittedText, runes: _lastCommittedRunes);
-    } else {
-      _captureSelectionAnchors();
-    }
-    _verifyProjection();
+      // We know what we pushed, so the new text is the old one spliced — no
+      // need to project the document again.
+      _lastCommittedText = handlerText.replaceRange(
+        pushed.index,
+        pushed.index + pushed.deleted,
+        pushed.inserted,
+      );
+      _lastCommittedRunes = handlerRunes - moved.deleted + moved.inserted;
+      if (_lastCommittedText != _controller!.text) {
+        // The rebase above merged remote content in: adopt it before a
+        // postponed reset compares the two.
+        _adopt(_lastCommittedText, runes: _lastCommittedRunes);
+      }
+    });
+    _captureSelectionAnchors();
   }
 
   /// Folds one reported move into the field.
@@ -502,7 +458,6 @@ class _CrdtTextFieldBuilderState extends State<CrdtTextFieldBuilder> {
     // After a read the delta and the controller's text belong to different
     // bases, so the caret cannot ride on them — [reported] is null there.
     _adopt(merged, runes: runes, reported: reported);
-    _verifyProjection();
   }
 
   /// Runes [delta] puts in, net of the ones it takes out.
@@ -527,34 +482,24 @@ class _CrdtTextFieldBuilderState extends State<CrdtTextFieldBuilder> {
     return net;
   }
 
-  /// Puts the field back in step when its text has drifted from the handler.
+  /// Whether the field's text still agrees with the handler.
   ///
   /// The text is derived and never read back, so a mistake would leave a
   /// document on screen that does not exist until the next reset. This is the
   /// cheapest question that catches it; see
   /// [debugVerifyCrdtTextFieldProjection] for the strict version and the gap it
   /// closes.
-  void _verifyProjection() {
-    if (_delta.synced != _delta.publishedSeq) {
-      // A burst is published at once and delivered one at a time, so the two
-      // are meant to disagree in between. Ask only once they are level.
-      return;
-    }
-
+  bool _projectionAgrees() {
     final handler = _handler();
     final agrees = handler is CRDTFugueTextHandler
         ? handler.length == _lastCommittedRunes
         : (handler as CRDTTextHandler).value == _lastCommittedText;
     assert(
       !debugVerifyCrdtTextFieldProjection ||
-          _delta.provider.value == _lastCommittedText,
+          _binding.provider.value == _lastCommittedText,
       'the text derived from the deltas drifted from the handler',
     );
-    if (agrees) {
-      return;
-    }
-    final point = _delta.readSynced();
-    _adopt(point.value, runes: RuneOffsets.length(point.value));
+    return agrees;
   }
 
   /// Replaces the controller text with [merged], keeping caret and selection

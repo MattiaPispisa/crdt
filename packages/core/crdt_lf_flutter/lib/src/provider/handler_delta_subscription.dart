@@ -11,10 +11,10 @@ import 'package:flutter/widgets.dart';
 typedef DeltaProviderResolver<V, D extends ComposableDelta<D>>
     = DeltaProvider<V, D> Function(BaseCRDTDocument document, String id);
 
-/// The resolver every widget uses unless it can say something more precise.
+/// Returns the handler registered under [id] as a `DeltaProvider<V, D>`.
 ///
-/// [widgetName] appears in the error, so the reader is told which widget could
-/// not find what it needed.
+/// Throws a [FlutterError] that names [widgetName] when [id] holds no handler,
+/// or one that publishes another shape.
 DeltaProvider<V, D> resolveDeltaProvider<V, D extends ComposableDelta<D>>(
   BaseCRDTDocument document,
   String id,
@@ -34,11 +34,11 @@ DeltaProvider<V, D> resolveDeltaProvider<V, D extends ComposableDelta<D>>(
   );
 }
 
-/// Follows one handler's delta stream on behalf of a widget.
+/// Follows one handler's delta stream on behalf of one consumer.
 ///
 /// It owns what every consumer has to get right: which handler to listen to,
 /// where the last read sits in the stream, and which events that read already
-/// covers. The widget keeps only what to do with the value.
+/// covers. The consumer keeps only what to do with the value.
 class HandlerDeltaSubscription<V, D extends ComposableDelta<D>> {
   /// Creates a subscription that is not attached to anything yet.
   HandlerDeltaSubscription({
@@ -102,8 +102,8 @@ class HandlerDeltaSubscription<V, D extends ComposableDelta<D>> {
 
   /// The point the stream has **published**.
   ///
-  /// Delivery is a microtask later, so this can be ahead of [synced] even
-  /// though nothing was missed.
+  /// A batch publishes at once and is delivered one event at a time, so this
+  /// can be ahead of [synced] even though nothing was missed.
   int get publishedSeq => provider.deltaSeq;
 
   /// Attaches to [id] on [document], if that is not already what it follows.

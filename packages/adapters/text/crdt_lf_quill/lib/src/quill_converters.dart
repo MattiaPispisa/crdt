@@ -5,6 +5,16 @@ import 'package:crdt_lf/crdt_lf.dart';
 import 'package:crdt_lf_quill/src/quill_attributes.dart';
 import 'package:dart_quill_delta/dart_quill_delta.dart';
 
+/// The Quill change for [delta], a change of a [CRDTFugueRichTextHandler].
+///
+/// {@template crdt_lf_quill.units}
+/// The handler counts runes and Quill counts UTF-16 code units. [before] is
+/// the Quill plain text the change applies to: the offsets are translated
+/// against it.
+/// {@endtemplate}
+///
+/// Attributes are split by scope (see [quillScopedAttributes]). A `null`
+/// value removes the attribute on a retain and is dropped on an insert.
 Delta quillDeltaFromRichText(RichTextDelta delta, String before) {
   final result = Delta();
   var unit = 0;
@@ -43,6 +53,12 @@ Delta quillDeltaFromRichText(RichTextDelta delta, String before) {
   return result..trim();
 }
 
+/// The [RichTextDelta] for [change], a Quill change.
+///
+/// {@macro crdt_lf_quill.units}
+///
+/// Attributes are split by scope, as in [quillDeltaFromRichText]. Throws an
+/// [UnsupportedError] when [change] inserts an embed.
 RichTextDelta richTextDeltaFromQuill(Delta change, String before) {
   final ops = <RichTextOp>[];
   var unit = 0;
@@ -88,6 +104,11 @@ RichTextDelta richTextDeltaFromQuill(Delta change, String before) {
   return RichTextDelta(ops);
 }
 
+/// The Quill document for [spans], the value of a
+/// [CRDTFugueRichTextHandler].
+///
+/// It ends with Quill's last `'\n'`: added when the handler does not store
+/// it (see the README, "The last newline").
 Delta quillDocumentFromSpans(List<RichTextSpan> spans) {
   final result = Delta();
   for (final span in spans) {
@@ -99,12 +120,19 @@ Delta quillDocumentFromSpans(List<RichTextSpan> spans) {
       result.insert(piece, attributes.isEmpty ? null : attributes);
     });
   }
+  // A plain last line keeps Quill's last newline out of the handler.
   if (!trailingNewline(result).stored) {
     result.insert('\n');
   }
   return result;
 }
 
+/// Whether the handler stores the last newline of [document], a Quill
+/// document, once [skip] code units are dropped from its end.
+///
+/// It is stored when one of the newlines that end the text has a block
+/// attribute. `fromEnd` is the offset of the last such newline, in code
+/// units from the end, after [skip].
 ({bool stored, int fromEnd}) trailingNewline(Delta document, {int skip = 0}) {
   const none = (stored: false, fromEnd: 0);
   final ops = document.toList();

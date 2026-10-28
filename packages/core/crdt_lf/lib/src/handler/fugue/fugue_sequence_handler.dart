@@ -39,7 +39,8 @@ class FugueState<T, V> {
 
 /// Base for Fugue-backed handlers whose state is an **ordered sequence** of
 /// `T` values: a single [FugueTree] plus a pure projection to the public
-/// value `V`. `CRDTFugueTextHandler` and `CRDTFugueListHandler` extend it.
+/// value `V`. The Fugue text handlers, through `FugueTextSequenceHandler`,
+/// and `CRDTFugueListHandler` extend it.
 ///
 /// It owns everything those variants have in common on top of [FugueCache]:
 /// history replay, snapshot framing, the [delete] operation and the

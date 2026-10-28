@@ -5,11 +5,16 @@ import 'package:crdt_lf/src/delta/handler_update.dart';
 import 'package:crdt_lf/src/utils/attributes.dart';
 import 'package:crdt_lf/src/utils/rune_offsets.dart';
 
+/// A run of rich text whose runes all carry the same [attributes].
 final class RichTextSpan {
+  /// Creates a span of [text] with [attributes].
   RichTextSpan(this.text, [Map<String, Object?> attributes = const {}])
       : attributes = _freeze(attributes);
 
+  /// The runes of the span.
   final String text;
+
+  /// The attributes of every rune of [text]; unmodifiable.
   final Map<String, Object?> attributes;
 
   @override
@@ -25,19 +30,31 @@ final class RichTextSpan {
   String toString() => 'RichTextSpan(${_quote(text)}, $attributes)';
 }
 
+/// One step of a [RichTextDelta].
+///
+/// Counts are in **runes**, in the coordinates of the text before the delta.
 sealed class RichTextOp {
+  /// Creates a step.
   const RichTextOp();
 
+  /// How many runes the step covers.
   int get length;
 
+  /// The attributes the step writes; unmodifiable.
   Map<String, Object?> get attributes;
 }
 
+/// Keeps [count] runes and writes [attributes] over them.
+///
+/// A key with a `null` value removes that key. With no attributes the runes
+/// stay as they are.
 final class RichTextRetain extends RichTextOp {
+  /// Keeps [count] runes, formatted with [attributes].
   RichTextRetain(this.count, [Map<String, Object?> attributes = const {}])
       : assert(count >= 0, 'count cannot be negative'),
         attributes = _freeze(attributes);
 
+  /// How many runes to keep.
   final int count;
 
   @override
@@ -62,11 +79,14 @@ final class RichTextRetain extends RichTextOp {
       : 'RichTextRetain($count, $attributes)';
 }
 
+/// Puts [text] with [attributes] into the text at the current point.
 final class RichTextInsert extends RichTextOp {
+  /// Inserts [text] with [attributes].
   RichTextInsert(this.text, [Map<String, Object?> attributes = const {}])
       : length = RuneOffsets.length(text),
         attributes = _freeze(attributes);
 
+  /// The runes to put in.
   final String text;
 
   @override
@@ -91,10 +111,13 @@ final class RichTextInsert extends RichTextOp {
       : 'RichTextInsert(${_quote(text)}, $attributes)';
 }
 
+/// Takes [count] runes out of the text at the current point.
 final class RichTextDelete extends RichTextOp {
+  /// Removes [count] runes.
   const RichTextDelete(this.count)
       : assert(count >= 0, 'count cannot be negative');
 
+  /// How many runes to remove.
   final int count;
 
   @override
@@ -114,19 +137,37 @@ final class RichTextDelete extends RichTextOp {
   String toString() => 'RichTextDelete($count)';
 }
 
+/// How a rich text moved, as steps applied left to right.
+///
+/// The shape of a [Quill Delta](https://quilljs.com/docs/delta/) that edits a
+/// document: retain, insert, delete, counted in **runes**. A delta that only
+/// formats is a run of [RichTextRetain] with attributes.
 final class RichTextDelta implements ComposableDelta<RichTextDelta> {
+  /// Creates a delta from [ops], in normal form.
+  ///
+  /// The normal form drops empty steps and fuses neighbours of one kind with
+  /// the same attributes. An insert next to a delete goes first, and a
+  /// trailing retain without attributes goes. So two deltas with the same
+  /// effect are equal.
   RichTextDelta(Iterable<RichTextOp> ops)
       : ops = List.unmodifiable(_normalize(ops));
 
+  /// The delta that moves nothing.
   const RichTextDelta.empty() : ops = const [];
 
+  /// The steps, applied left to right; unmodifiable.
   final List<RichTextOp> ops;
 
   @override
   bool get isEmpty => ops.isEmpty;
 
+  /// Whether this delta moves something.
   bool get isNotEmpty => ops.isNotEmpty;
 
+  /// {@macro composable_delta_compose}
+  ///
+  /// The attributes of [next] go over these. A `null` value stays a removal
+  /// on a retain, and drops the key from an insert.
   @override
   RichTextDelta compose(RichTextDelta next) {
     final a = _OpCursor(ops);
@@ -180,6 +221,7 @@ final class RichTextDelta implements ComposableDelta<RichTextDelta> {
           );
         case (RichTextRetain(), RichTextDelete()):
           result.add(theirs);
+        // Inserted here and removed by [next]: the two cancel out.
         case _:
           break;
       }
@@ -188,6 +230,10 @@ final class RichTextDelta implements ComposableDelta<RichTextDelta> {
     return RichTextDelta(result);
   }
 
+  /// The spans [base] becomes once this delta is applied.
+  ///
+  /// [base] is left alone. Neighbour spans with the same attributes come out
+  /// as one. The delta must stay within [base]: debug builds assert it.
   List<RichTextSpan> apply(List<RichTextSpan> base) {
     final document = RichTextDelta([
       for (final span in base) RichTextInsert(span.text, span.attributes),
@@ -202,6 +248,10 @@ final class RichTextDelta implements ComposableDelta<RichTextDelta> {
     ];
   }
 
+  /// Where the rune [offset] ends up once this delta is applied.
+  ///
+  /// An offset exactly where text is inserted stays in front of it. One
+  /// inside a removed run lands after what replaces it.
   int mapOffset(int offset) {
     var base = 0;
     var out = 0;
