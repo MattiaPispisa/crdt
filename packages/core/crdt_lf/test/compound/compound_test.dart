@@ -163,6 +163,7 @@ base class _StampedRegister extends Handler<int> {
 
   void set(int value) => doc.registerOperation(write(value));
 
+  @override
   int get value {
     var current = 0;
     for (final operation in operations()) {

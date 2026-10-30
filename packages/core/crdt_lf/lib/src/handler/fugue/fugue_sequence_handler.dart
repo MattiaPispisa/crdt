@@ -181,6 +181,7 @@ abstract base class FugueSequenceHandler<T, V, S extends FugueState<T, V>>
   /// {@template fixed_value}
   /// A value read before a change keeps what it held.
   /// {@endtemplate}
+  @override
   V get value => cachedOrComputedState()._value;
 
   /// The number of live elements, in `O(1)`.
