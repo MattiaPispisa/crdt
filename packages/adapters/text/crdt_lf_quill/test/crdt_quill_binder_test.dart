@@ -140,6 +140,66 @@ void main() {
     expect(page.text, '> hello!');
   });
 
+  testWidgets('a remote change leaves the focus where it is', (tester) async {
+    final bob = CRDTDocument(peerId: PeerId.generate());
+    addTearDown(bob.dispose);
+    bob.importChanges(document.exportChanges());
+    CRDTFugueRichTextHandler(bob, 'page');
+    final aliceController = QuillController.basic();
+    final bobController = QuillController.basic();
+    final aliceFocus = FocusNode();
+    final bobFocus = FocusNode();
+    addTearDown(aliceController.dispose);
+    addTearDown(bobController.dispose);
+    addTearDown(aliceFocus.dispose);
+    addTearDown(bobFocus.dispose);
+
+    Widget editor(
+      CRDTDocument crdt,
+      QuillController controller,
+      FocusNode focus,
+    ) => Expanded(
+      child: CrdtProvider.value(
+        value: crdt,
+        child: CrdtQuillBinder(
+          id: 'page',
+          controller: controller,
+          builder: (context) =>
+              QuillEditor.basic(controller: controller, focusNode: focus),
+        ),
+      ),
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: Column(
+            children: [
+              editor(document, aliceController, aliceFocus),
+              editor(bob, bobController, bobFocus),
+            ],
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(bobController.document.toPlainText(), 'hello\n');
+    expect(aliceFocus.hasFocus, isFalse);
+    expect(bobFocus.hasFocus, isFalse);
+
+    aliceFocus.requestFocus();
+    await tester.pump();
+    aliceController.replaceText(5, 0, '!', null);
+    bob.importChanges(document.exportChanges());
+    // On the web, Alice's own change starts a 500 ms caret timer.
+    await tester.pump(const Duration(milliseconds: 500));
+
+    expect(bobController.document.toPlainText(), 'hello!\n');
+    expect(aliceFocus.hasFocus, isTrue);
+    expect(bobFocus.hasFocus, isFalse);
+  });
+
   testWidgets('stops writing once removed', (tester) async {
     final controller = QuillController.basic();
     addTearDown(controller.dispose);

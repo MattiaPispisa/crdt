@@ -271,7 +271,9 @@ class CrdtQuillBinding {
 
   void _install(Delta content) {
     _release();
-    _controller.document = _BoundDocument(content, this);
+    _withoutFocusRequest(
+      () => _controller.document = _BoundDocument(content, this),
+    );
   }
 
   void _release() {
@@ -283,7 +285,20 @@ class CrdtQuillBinding {
     if (delta.isEmpty) {
       return;
     }
-    _controller.compose(delta, _controller.selection, source);
+    _withoutFocusRequest(
+      () => _controller.compose(delta, _controller.selection, source),
+    );
+  }
+
+  // On the web the editor asks for focus on every controller change. A peer's
+  // change would take the focus from the editor the user types in.
+  void _withoutFocusRequest(void Function() change) {
+    _controller.skipRequestKeyboard = true;
+    try {
+      change();
+    } finally {
+      _controller.skipRequestKeyboard = false;
+    }
   }
 }
 
