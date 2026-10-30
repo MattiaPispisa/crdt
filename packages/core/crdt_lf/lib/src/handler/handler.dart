@@ -69,6 +69,9 @@ abstract base class Handler<T>
   /// when a change carrying it is decoded.
   OperationDecoders get operationDecoders;
 
+  /// The current value of this handler.
+  Object? get value => null;
+
   /// The version of the blob [getSnapshotState] writes.
   ///
   /// Raise it when the layout changes, and write it with [snapshotHeader]: a

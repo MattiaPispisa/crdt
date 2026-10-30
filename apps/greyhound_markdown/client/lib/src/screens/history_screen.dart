@@ -21,9 +21,10 @@ class HistoryScreen extends StatelessWidget {
     return Scaffold(
       appBar: AppBar(title: Text(context.l10n.historyTitle)),
       body: CrdtHistoryScope(
-        builder: (context, session) => Column(
+        child: const PreviewPane(usePlaceholder: false),
+        builder: (context, session, preview) => Column(
           children: [
-            const Expanded(child: PreviewPane(usePlaceholder: false)),
+            Expanded(child: preview!),
             HistoryControls(session: session),
           ],
         ),
