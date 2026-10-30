@@ -70,10 +70,6 @@ abstract base class Handler<T>
   OperationDecoders get operationDecoders;
 
   /// The current value of this handler.
-  ///
-  /// `null` unless the handler overrides it; every built-in handler does.
-  /// [nestedValueOf] reads it, so a custom handler shows up in nested values
-  /// by overriding it.
   Object? get value => null;
 
   /// The version of the blob [getSnapshotState] writes.
