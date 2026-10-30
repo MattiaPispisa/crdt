@@ -161,6 +161,7 @@ final class _MarkerHandler extends Handler<int> {
     );
   }
 
+  @override
   int get value {
     var current = 0;
     for (final operation in operations()) {

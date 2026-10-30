@@ -82,6 +82,7 @@ final class PNCounterHandler extends Handler<int> {
   void decrement([int by = 1]) => increment(-by);
 
   /// The sum of every delta this document has seen.
+  @override
   int get value {
     final cached = cachedState;
     if (cached != null) {

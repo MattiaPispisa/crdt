@@ -123,51 +123,21 @@ Object? resolveNestedRef(
 }
 
 /// Resolves [handler] to a nested value: recurses through
-/// [ContainerHandler]s and returns the `value` of a built-in leaf handler
-/// (text, list, map, aggregate, ...) as is.
+/// [ContainerHandler]s and returns the [Handler.value] of any other handler
+/// as is.
 ///
 /// A leaf value keeps its own type: a `Set`, a custom `T`, an aggregate
 /// state. The result is JSON-safe only when every leaf value is.
 ///
 /// Container handlers are checked first, so a container that also extends a
 /// leaf handler (e.g. [CRDTMapRefHandler] over [CRDTMapHandler]) resolves
-/// through [ContainerHandler.toNested], not as a leaf. Returns `null` for an
-/// unrecognized handler type.
+/// through [ContainerHandler.toNested], not as a leaf. A handler that does
+/// not override [Handler.value] resolves to `null`.
 Object? nestedValueOf(Handler<dynamic> handler, Set<String> visiting) {
   if (handler is ContainerHandler) {
     return (handler as ContainerHandler).toNested(visiting);
   }
-  if (handler is CRDTRegisterHandler<dynamic>) {
-    return handler.value;
-  }
-  if (handler is CRDTTextHandler) {
-    return handler.value;
-  }
-  if (handler is CRDTFugueTextHandler) {
-    return handler.value;
-  }
-  if (handler is CRDTListHandler<dynamic>) {
-    return handler.value;
-  }
-  if (handler is CRDTFugueListHandler<dynamic>) {
-    return handler.value;
-  }
-  if (handler is CRDTFugueMovableListHandler<dynamic>) {
-    return handler.value;
-  }
-  if (handler is CRDTMapHandler<dynamic>) {
-    return handler.value;
-  }
-  if (handler is CRDTORSetHandler<dynamic>) {
-    return handler.value;
-  }
-  if (handler is CRDTORMapHandler<dynamic, dynamic>) {
-    return handler.value;
-  }
-  if (handler is CRDTAggregateHandler<Object, dynamic>) {
-    return handler.value;
-  }
-  return null;
+  return handler.value;
 }
 
 /// The subset of [refs] whose target is not deleted, in the same order.

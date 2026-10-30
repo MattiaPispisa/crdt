@@ -5,6 +5,7 @@ import 'package:crdt_lf/crdt_lf.dart';
 import 'package:test/test.dart';
 
 import '../../helpers/handler.dart';
+import '../../helpers/pn_counter_handler.dart';
 
 void main() {
   group('HandlerRef', () {
@@ -26,6 +27,16 @@ void main() {
   });
 
   group('nestedValueOf', () {
+    test('resolves a custom handler through its value', () {
+      final doc = CRDTDocument();
+      final root = CRDTMapRefHandler(doc, 'root');
+      final counter = PNCounterHandler(doc, doc.newHandlerId())..increment(3);
+
+      root.setRef('counter', counter);
+
+      expect(root.resolved, {'counter': 3});
+    });
+
     test('resolves every built-in leaf handler type', () {
       final doc = CRDTDocument();
       final root = CRDTMapRefHandler(doc, 'root');

@@ -193,6 +193,7 @@ final class _MigratingHandler extends Handler<String> {
   }
 
   /// The text the last snapshot carries, whichever layout wrote it.
+  @override
   String get value {
     final blob = lastSnapshot();
     if (blob == null || blob.isEmpty) {
