@@ -69,6 +69,8 @@ void main() {
       )..put('k', 'v');
       final fugueText = CRDTFugueTextHandler(doc, doc.newHandlerId())
         ..insert(0, 'ft');
+      final richText = CRDTFugueRichTextHandler(doc, doc.newHandlerId())
+        ..insert(0, 'rt', attributes: {'bold': true});
       final map = CRDTMapHandler<String>(
         doc,
         doc.newHandlerId(),
@@ -83,6 +85,7 @@ void main() {
         ..setRef('orSet', orSet)
         ..setRef('orMap', orMap)
         ..setRef('fugueText', fugueText)
+        ..setRef('richText', richText)
         ..setRef('map', map);
 
       expect(root.resolved, {
@@ -93,6 +96,9 @@ void main() {
         'orSet': {'x'},
         'orMap': {'k': 'v'},
         'fugueText': 'ft',
+        'richText': [
+          RichTextSpan('rt', {'bold': true}),
+        ],
         'map': {'m': 'w'},
       });
     });

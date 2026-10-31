@@ -10,7 +10,7 @@
   (`CrdtHandlerBuilder`, `CrdtHandlerSelector`, `CrdtHandlerListener`). Needs `crdt_lf` 5.3.0.
   [112](https://github.com/MattiaPispisa/crdt/issues/112)
 - `CrdtEditorBinding` and its widget `CrdtEditorBinder` run the two-way sync loop between a handler
-  and any editor, for editor adapters.
+  and any editor, for editor adapters. [209](https://github.com/MattiaPispisa/crdt/issues/209)
 - `HandlerDeltaSubscription`, `DeltaProviderResolver` and `resolveDeltaProvider` are public, to
   follow a handler's delta stream from your own code.
 

@@ -6,6 +6,7 @@
 
 - `CrdtQuillBinder` binds a flutter_quill `QuillController` to a `CRDTFugueRichTextHandler`.
   Needs `crdt_lf` 5.3.0 and `crdt_lf_flutter` 0.7.0.
+  [209](https://github.com/MattiaPispisa/crdt/issues/209)
 - Exported converters between Quill deltas and `RichTextDelta`, to build your own binding.
 - Peer changes stay out of the controller's undo stack, like `History(userOnly: true)`.
 - The binder refuses embeds (images, videos) and reports them through `onUnsupported`.
