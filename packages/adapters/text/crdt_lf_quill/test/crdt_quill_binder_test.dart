@@ -4,11 +4,16 @@
 import 'package:crdt_lf/crdt_lf.dart' hide ChangeSource;
 import 'package:crdt_lf_flutter/crdt_lf_flutter.dart';
 import 'package:crdt_lf_quill/crdt_lf_quill.dart';
+import 'package:editor_conformance/editor_conformance.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_quill/flutter_quill.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'helpers/quill_harness.dart';
+
 void main() {
+  runEditorConformanceTests('CrdtQuillBinder', QuillHarness.new);
+
   late CRDTDocument document;
   late CRDTFugueRichTextHandler page;
 

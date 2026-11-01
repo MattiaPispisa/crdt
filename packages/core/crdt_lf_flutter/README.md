@@ -30,6 +30,7 @@ Built on top of [`provider`](https://pub.dev/packages/provider) — so you also 
     - [Imperative access](#imperative-access)
     - [Collaborative text](#collaborative-text)
       - [Remote text cursors](#remote-text-cursors)
+      - [Rich text](#rich-text)
       - [Rune ↔ UTF-16 offsets](#rune--utf-16-offsets)
     - [Presence cursors](#presence-cursors)
   - [Benchmarks](#benchmarks)
@@ -53,6 +54,8 @@ Built on top of [`provider`](https://pub.dev/packages/provider) — so you also 
   side effect and never rebuilds the subtree.
 - **`CrdtTextFieldBuilder`** — a `TextEditingController` bound to a text
   handler, the way collaborative editor bindings work.
+- **`CrdtRichTextFieldBuilder`** — a `TextEditingController` that paints
+  inline formats, bound to a `CRDTFugueRichTextHandler`.
 - **`CrdtEditorBinder<V, D>`** / **`CrdtEditorBinding<V, D>`** — the two-way
   sync loop between one handler and an editor of your choice, for editor
   adapters.
@@ -317,6 +320,49 @@ CrdtTextFieldBuilder(
   ),
 );
 ```
+
+#### Rich text
+
+`CrdtRichTextFieldBuilder` is the same field for a `CRDTFugueRichTextHandler`.
+It hands you a `CrdtRichTextEditingController` that paints the formats of the
+handler. Formats are written through the controller:
+
+```dart
+CrdtRichTextFieldBuilder(
+  id: 'note',
+  builder: (context, controller) => Column(
+    children: [
+      IconButton(
+        icon: const Icon(Icons.format_bold),
+        onPressed: () => controller.toggle('bold'),
+      ),
+      TextField(
+        controller: controller,
+        maxLines: null,
+        strutStyle: StrutStyle.disabled, // lines grow with the font size
+      ),
+    ],
+  ),
+);
+```
+
+- `controller.format(key, value)` formats the selection. At a collapsed caret
+  it styles the text typed next, and the style ends when the caret moves.
+- `controller.attributeAtSelection(key)` tells a toolbar what to highlight.
+- `styleOf` maps attributes to a `TextStyle`; the default reads `bold`,
+  `italic`, `underline`, `strike`, `link`, `color` (`'#rrggbb'`) and `size`.
+- `undoManager` routes Ctrl+Z (Cmd+Z on Apple platforms), the redo shortcuts,
+  `controller.undo()` and `controller.redo()` through a `CRDTUndoManager`.
+  Flutter's own undo knows the text but not the formats. Create the manager
+  with `trackedOrigins: {crdtRichTextFieldOrigin}` and track the handler.
+  `controller.canUndo` and `canRedo` follow the manager.
+- `CrdtTextCursorsOverlay` and `onSelectionAnchorsChanged` work as above.
+
+Paste inserts the plain text of the clipboard. The text takes the format where
+it lands, and the formats of the clipboard are dropped.
+
+The field paints inline formats only. Block attributes (headings, lists),
+embeds and images need an editor: see `crdt_lf_quill`.
 
 #### Rune ↔ UTF-16 offsets
 

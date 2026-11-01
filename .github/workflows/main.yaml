@@ -22,6 +22,7 @@ jobs:
       crdt_lf_persistence: ${{ steps.filter.outputs.crdt_lf_persistence }}
       persistence_conformance: ${{ steps.filter.outputs.persistence_conformance }}
       crdt_socket_sync: ${{ steps.filter.outputs.crdt_socket_sync }}
+      editor_conformance: ${{ steps.filter.outputs.editor_conformance }}
       crdt_lf_flutter: ${{ steps.filter.outputs.crdt_lf_flutter }}
       crdt_lf_quill: ${{ steps.filter.outputs.crdt_lf_quill }}
       crdt_socket_sync_dart_frog: ${{ steps.filter.outputs.crdt_socket_sync_dart_frog }}
@@ -57,6 +58,8 @@ jobs:
               - 'packages/adapters/persistence/crdt_lf_drift/**'
             crdt_socket_sync:
               - 'packages/core/crdt_socket_sync/**'
+            editor_conformance:
+              - 'packages/_internal/editor_conformance/**'
             crdt_lf_flutter:
               - 'packages/core/crdt_lf_flutter/**'
             crdt_lf_quill:
@@ -234,6 +237,7 @@ jobs:
       ${{ needs.changes.outputs.global == 'true'
        || needs.changes.outputs.hlc == 'true'
        || needs.changes.outputs.crdt_lf == 'true'
+       || needs.changes.outputs.editor_conformance == 'true'
        || needs.changes.outputs.crdt_lf_flutter == 'true' }}
     uses: ./.github/workflows/flutter_package.yaml
     with:
@@ -250,6 +254,7 @@ jobs:
        || needs.changes.outputs.hlc == 'true'
        || needs.changes.outputs.crdt_lf == 'true'
        || needs.changes.outputs.crdt_lf_flutter == 'true'
+       || needs.changes.outputs.editor_conformance == 'true'
        || needs.changes.outputs.crdt_lf_quill == 'true' }}
     uses: ./.github/workflows/flutter_package.yaml
     with:

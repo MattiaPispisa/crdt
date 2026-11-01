@@ -13,6 +13,11 @@
   and any editor, for editor adapters. [209](https://github.com/MattiaPispisa/crdt/issues/209)
 - `HandlerDeltaSubscription`, `DeltaProviderResolver` and `resolveDeltaProvider` are public, to
   follow a handler's delta stream from your own code.
+- `CrdtRichTextFieldBuilder` binds a `CrdtRichTextEditingController` that paints inline formats to a
+  `CRDTFugueRichTextHandler`. Needs `crdt_lf` 5.3.0. [209](https://github.com/MattiaPispisa/crdt/issues/209)
+- `CrdtRichTextFieldBuilder.undoManager` routes undo and redo (shortcuts and the controller) through a
+  `CRDTUndoManager`; `crdtRichTextFieldOrigin` tags the field's writes.
+- `CrdtTextCursorsOverlay` accepts a `CRDTFugueRichTextHandler`.
 
 ## [0.6.0](https://github.com/MattiaPispisa/crdt/tree/crdt_lf_flutter-v0.6.0/packages/core/crdt_lf_flutter)
 

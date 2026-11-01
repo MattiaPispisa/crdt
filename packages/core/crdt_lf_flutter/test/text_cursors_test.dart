@@ -316,6 +316,41 @@ void main() {
       expect(overlayPaint(), isNot(paints..rect()));
     });
 
+    testWidgets('draws a caret over a rich text field', (tester) async {
+      final page = CRDTFugueRichTextHandler(doc, 'note')
+        ..insert(0, 'hello world');
+      const color = Color(0xFFAA0000);
+      await tester.pumpWidget(
+        CrdtProvider.value(
+          value: doc,
+          child: MaterialApp(
+            home: Scaffold(
+              body: CrdtRichTextFieldBuilder(
+                id: 'note',
+                builder: (context, controller) => CrdtTextCursorsOverlay(
+                  id: 'note',
+                  motionDuration: Duration.zero,
+                  cursors: [
+                    CrdtTextCursor(
+                      id: 'peer-b',
+                      color: color,
+                      base: page.stablePositionAt(5),
+                    ),
+                  ],
+                  child: TextField(controller: controller),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+
+      expect(
+        overlayPaint(),
+        paints..rect(rect: expectedCaret(tester, 5), color: color),
+      );
+    });
+
     testWidgets('throws a FlutterError for a non-Fugue handler',
         (tester) async {
       CRDTListHandler<String>(

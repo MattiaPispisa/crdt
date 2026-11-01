@@ -1,3 +1,19 @@
+### rich_text_field_benchmark.dart
+
+| Benchmark | RunTime (us) | RunTime (ms) | RunTime (s) |
+| --- | --- | --- | --- |
+| Rich text: one keystroke at the end, 1000 chars | 59.5400 | 0.0595 | 0.000060 |
+| Rich text: one keystroke at the end, 10000 chars | 93.4000 | 0.0934 | 0.000093 |
+| Rich text: one keystroke at the end, 50000 chars | 295.7200 | 0.2957 | 0.000296 |
+| Rich text: one keystroke in the middle, 10000 chars | 79.5300 | 0.0795 | 0.000080 |
+| Rich text: bold a 50-char selection, 10000 chars | 121.3600 | 0.1214 | 0.000121 |
+| Rich text: bold a 50-char selection, 50000 chars | 877.8300 | 0.8778 | 0.000878 |
+| Rich text: adopt one remote keystroke, 10000 chars | 63.2700 | 0.0633 | 0.000063 |
+| Rich text: adopt one remote format, 10000 chars | 50.5500 | 0.0505 | 0.000051 |
+| Rich text: adopt one remote keystroke, 50000 chars | 152.1900 | 0.1522 | 0.000152 |
+| Rich text: adopt one remote format, 50000 chars | 117.0200 | 0.1170 | 0.000117 |
+| Rich text: type, undo and redo one char, 10000 chars | 405.1800 | 0.4052 | 0.000405 |
+
 ### text_field_benchmark.dart
 
 | Benchmark | RunTime (us) | RunTime (ms) | RunTime (s) |

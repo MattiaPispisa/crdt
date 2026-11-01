@@ -16,6 +16,8 @@ dependencies:
   provider: ^6.0.0
 
 dev_dependencies:
+  editor_conformance:
+    path: ../../_internal/editor_conformance
   benchmark_infrastructure:
     path: ../../_internal/benchmark_infrastructure
   flutter_test:

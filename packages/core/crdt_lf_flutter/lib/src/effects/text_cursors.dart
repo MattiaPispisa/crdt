@@ -123,7 +123,8 @@ Rect resolveTextCursorLabelRect({
 /// border, the next card — can never cover a caret or its name tag.
 /// Requires an [Overlay] ancestor (`MaterialApp`/[WidgetsApp] provide one).
 ///
-/// Requires a `CRDTFugueTextHandler` under [id]: only Fugue handlers carry
+/// Requires a `CRDTFugueTextHandler` or `CRDTFugueRichTextHandler` under
+/// [id]: only Fugue handlers carry
 /// the element identity that anchors are made of. Paints nothing once that
 /// handler is deleted.
 ///
@@ -153,7 +154,7 @@ class CrdtTextCursorsOverlay extends StatefulWidget {
   });
 
   /// The id of the text handler the cursors refer to.
-  /// **must be a [CRDTFugueTextHandler]**
+  /// **must be a [CRDTFugueTextHandler] or a [CRDTFugueRichTextHandler]**
   final String id;
 
   /// The text cursors to draw.
@@ -294,7 +295,7 @@ class _CrdtTextCursorsOverlayState extends State<CrdtTextCursorsOverlay>
       _resolved = const [];
       return;
     }
-    final handler = _handler();
+    final indexOf = _handler();
     // The text the field is painting, not the handler's — which would project
     // the whole document again on every resolve. It is the same text (the
     // field is bound to this handler) and it is the one the metrics below are
@@ -308,10 +309,9 @@ class _CrdtTextCursorsOverlayState extends State<CrdtTextCursorsOverlay>
     var gliding = false;
 
     for (final cursor in widget.cursors) {
-      final base = handler.indexOfStablePosition(cursor.base);
-      final extent = cursor.extent == cursor.base
-          ? base
-          : handler.indexOfStablePosition(cursor.extent);
+      final base = indexOf(cursor.base);
+      final extent =
+          cursor.extent == cursor.base ? base : indexOf(cursor.extent);
       if (extent == null) {
         // The anchored element is not known yet: hide until it arrives.
         continue;
@@ -422,13 +422,17 @@ class _CrdtTextCursorsOverlayState extends State<CrdtTextCursorsOverlay>
     });
   }
 
-  CRDTFugueTextHandler _handler() {
+  int? Function(FugueElementID position) _handler() {
     final handler = _document!.handlerById(widget.id);
     if (handler is CRDTFugueTextHandler) {
-      return handler;
+      return handler.indexOfStablePosition;
+    }
+    if (handler is CRDTFugueRichTextHandler) {
+      return handler.indexOfStablePosition;
     }
     throw FlutterError(
-      'CrdtTextCursorsOverlay expected a CRDTFugueTextHandler registered '
+      'CrdtTextCursorsOverlay expected a CRDTFugueTextHandler or '
+      'CRDTFugueRichTextHandler registered '
       'under id "${widget.id}" (stable cursor anchors need Fugue element '
       'identity), but found ${handler ?? 'none'}.',
     );
