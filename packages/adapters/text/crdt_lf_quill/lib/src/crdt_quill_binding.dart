@@ -12,6 +12,9 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/widgets.dart' show WidgetsBinding;
 import 'package:flutter_quill/flutter_quill.dart';
+// `HistoryChanged`, the return type of `Document.undo`, is not exported.
+// ignore: implementation_imports
+import 'package:flutter_quill/src/document/structs/history_changed.dart';
 
 /// Whether the projection check compares the whole editor with the handler.
 ///
@@ -23,6 +26,12 @@ import 'package:flutter_quill/flutter_quill.dart';
 /// document length to every change: set it to `false` to skip it.
 bool debugVerifyCrdtQuillProjection = true;
 
+/// The origin of every write the Quill binding makes to the handler.
+///
+/// Pass it in `trackedOrigins` to make a `CRDTUndoManager` record the edits
+/// made in the editor and nothing else.
+const Object crdtQuillOrigin = Object();
+
 /// Keeps a `QuillController` in step with a [CRDTFugueRichTextHandler] read
 /// through [binding].
 ///
@@ -30,8 +39,12 @@ bool debugVerifyCrdtQuillProjection = true;
 /// binding.
 class CrdtQuillBinding {
   /// Creates a binding that wraps the `onReplaceText` of [controller].
-  CrdtQuillBinding(QuillController controller, {this.onUnsupported})
-    : _controller = controller {
+  CrdtQuillBinding(
+    QuillController controller, {
+    this.onUnsupported,
+    CRDTUndoManager? undoManager,
+  }) : _controller = controller {
+    _undoManager = undoManager;
     _hook();
   }
 
@@ -41,6 +54,16 @@ class CrdtQuillBinding {
   void Function(Object? data)? onUnsupported;
 
   ReplaceTextCallback? _userOnReplaceText;
+
+  /// The manager that undoes and redoes; `null` keeps Quill's own history.
+  CRDTUndoManager? get undoManager => _undoManager;
+
+  set undoManager(CRDTUndoManager? value) {
+    _undoManager = value;
+    _document?.history.ignoreChange = value != null;
+  }
+
+  CRDTUndoManager? _undoManager;
 
   /// The editor binding that reads and writes the handler; `null` when the
   /// binding is not wired yet.
@@ -238,7 +261,7 @@ class CrdtQuillBinding {
         final handler = _handler;
         writeRichTextDelta(handler, rich);
         _syncLastNewline(document, handler, storedBefore: storedBefore);
-      }),
+      }, origin: crdtQuillOrigin),
     );
   }
 
@@ -305,13 +328,69 @@ class CrdtQuillBinding {
 // Overrides `compose` instead of listening to `changes`: that stream is
 // asynchronous, so a remote delta could arrive on a wrong base.
 class _BoundDocument extends Document {
-  _BoundDocument(super.delta, this.owner) : super.fromDelta();
+  _BoundDocument(super.delta, this.owner) : super.fromDelta() {
+    // One stack only: Quill's History records nothing.
+    if (owner?.undoManager != null) {
+      history.ignoreChange = true;
+    }
+  }
 
   CrdtQuillBinding? owner;
+
+  CRDTUndoManager? get _manager => owner?.undoManager;
+
+  // What the undo manager wrote back, as the editor received it.
+  Delta? _replayed;
+
+  @override
+  bool get hasUndo => _manager?.canUndo ?? super.hasUndo;
+
+  @override
+  bool get hasRedo => _manager?.canRedo ?? super.hasRedo;
+
+  @override
+  HistoryChanged undo() {
+    final manager = _manager;
+    if (manager == null) {
+      return super.undo();
+    }
+    return _replay(manager.canUndo, manager.undo);
+  }
+
+  @override
+  HistoryChanged redo() {
+    final manager = _manager;
+    if (manager == null) {
+      return super.redo();
+    }
+    return _replay(manager.canRedo, manager.redo);
+  }
+
+  HistoryChanged _replay(bool can, void Function() step) {
+    if (!can) {
+      return const HistoryChanged(false, 0);
+    }
+    _replayed = Delta();
+    step();
+    final replayed = _replayed!;
+    _replayed = null;
+    // Caret like Quill's History: after the last insert or retain.
+    var len = 0;
+    for (final op in replayed.toList()) {
+      if (op.isInsert || op.isRetain) {
+        len += op.length ?? 0;
+      }
+    }
+    return HistoryChanged(true, len);
+  }
 
   @override
   void compose(Delta delta, ChangeSource changeSource) {
     if (changeSource != ChangeSource.local) {
+      final replayed = _replayed;
+      if (replayed != null) {
+        _replayed = replayed.compose(delta);
+      }
       // What `History(userOnly: true)` does, by hand: `Document` builds its
       // own `History`. A peer change moves the undo stack and never enters it.
       final history = this.history;

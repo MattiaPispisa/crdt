@@ -33,6 +33,7 @@ class CrdtQuillBinder extends StatefulWidget {
     this.builder,
     this.deletedBuilder,
     this.onUnsupported,
+    this.undoManager,
     super.key,
   }) : assert(
          (child == null) != (builder == null),
@@ -63,6 +64,13 @@ class CrdtQuillBinder extends StatefulWidget {
   /// one later removes the refusal.
   final void Function(Object? data)? onUnsupported;
 
+  /// The manager that undoes and redoes; `null` keeps Quill's own history.
+  ///
+  /// Track the handler with it and pass [crdtQuillOrigin] in its
+  /// `trackedOrigins`. Undo then takes back your own edits only, formats
+  /// included, and a peer's concurrent edit survives it.
+  final CRDTUndoManager? undoManager;
+
   @override
   State<CrdtQuillBinder> createState() => _CrdtQuillBinderState();
 }
@@ -71,6 +79,7 @@ class _CrdtQuillBinderState extends State<CrdtQuillBinder> {
   late final CrdtQuillBinding _binding = CrdtQuillBinding(
     widget.controller,
     onUnsupported: widget.onUnsupported,
+    undoManager: widget.undoManager,
   );
 
   @override
@@ -78,7 +87,8 @@ class _CrdtQuillBinderState extends State<CrdtQuillBinder> {
     super.didUpdateWidget(oldWidget);
     _binding
       ..controller = widget.controller
-      ..onUnsupported = widget.onUnsupported;
+      ..onUnsupported = widget.onUnsupported
+      ..undoManager = widget.undoManager;
   }
 
   @override

@@ -133,6 +133,24 @@ The binder keeps changes from other peers out of the controller's undo stack,
 like `History(userOnly: true)`. Undo takes back your own edits only, and the
 undo is sent to the other peers like any other edit.
 
+For a history that understands formats and concurrent edits, pass a
+`CRDTUndoManager` to the binder. The editor then undoes through the manager,
+and the toolbar buttons follow it.
+
+```dart
+final undo = CRDTUndoManager(
+  document,
+  trackedOrigins: {crdtQuillOrigin}, // only the edits made in the editor
+)..track(handler);
+
+CrdtQuillBinder(id: 'page', controller: controller, undoManager: undo, ...);
+```
+
+Typing close in time is one undo step (see `captureTimeout`). Call
+`undo.stopCapturing()` to end a step by hand. The toolbar buttons refresh on
+editor changes only: after `undo.clear()` they keep their state until the next
+change.
+
 ### Projection check
 
 After each local write and each remote change, the binder checks that the

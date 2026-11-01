@@ -19,9 +19,14 @@ final _peerB = PeerId.parse('00000000-0000-4000-8000-00000000000b');
 Future<void> _pump() => Future<void>.delayed(Duration.zero);
 
 class _Peer {
-  _Peer(PeerId peerId) : document = CRDTDocument(peerId: peerId) {
+  _Peer(PeerId peerId, {bool undo = false})
+    : document = CRDTDocument(peerId: peerId) {
     handler = CRDTFugueRichTextHandler(document, 'page');
-    quill = CrdtQuillBinding(controller);
+    if (undo) {
+      manager = CRDTUndoManager(document, trackedOrigins: {crdtQuillOrigin})
+        ..track(handler);
+    }
+    quill = CrdtQuillBinding(controller, undoManager: manager);
     binding = CrdtEditorBinding<List<RichTextSpan>, RichTextDelta>(
       onRemoteDelta: quill.onRemoteDelta,
       onReset: (spans, cause) {
@@ -36,6 +41,7 @@ class _Peer {
 
   final CRDTDocument document;
   late final CRDTFugueRichTextHandler handler;
+  CRDTUndoManager? manager;
   final QuillController controller = QuillController.basic();
   late final CrdtQuillBinding quill;
   late final CrdtEditorBinding<List<RichTextSpan>, RichTextDelta> binding;
@@ -62,6 +68,7 @@ class _Peer {
   void dispose() {
     binding.dispose();
     quill.dispose();
+    manager?.dispose();
     controller.dispose();
     document.dispose();
   }
@@ -403,5 +410,110 @@ void main() {
 
     expect(tester.takeException(), isNull);
     expect(other.document.toPlainText(), 'hi\n');
+  });
+
+  group('with a CRDTUndoManager', () {
+    late _Peer ua;
+    late _Peer ub;
+
+    setUp(() async {
+      ua = _Peer(
+        PeerId.parse('00000000-0000-4000-8000-0000000000c1'),
+        undo: true,
+      );
+      ub = _Peer(
+        PeerId.parse('00000000-0000-4000-8000-0000000000c2'),
+        undo: true,
+      );
+      await _pump();
+    });
+
+    tearDown(() {
+      ua.dispose();
+      ub.dispose();
+    });
+
+    test('undo and redo take back the text and the format', () {
+      ua.type(0, 'hello');
+      ua.manager!.stopCapturing();
+      ua.format(0, 5, Attribute.bold);
+      _sync(ua, ub);
+
+      ua.controller.undo();
+      _sync(ua, ub);
+      expect(ua.content, Delta()..insert('hello\n'));
+      _expectConverged(ua, ub);
+
+      ua.controller.undo();
+      _sync(ua, ub);
+      expect(ua.handler.text, '');
+      _expectConverged(ua, ub);
+
+      ua.controller
+        ..redo()
+        ..redo();
+      _sync(ua, ub);
+      expect(
+        ua.content,
+        Delta()
+          ..insert('hello', {'bold': true})
+          ..insert('\n'),
+      );
+      _expectConverged(ua, ub);
+    });
+
+    test('a peer edit is not undone, and it survives the undo', () {
+      ua.type(0, 'hello world');
+      _sync(ua, ub);
+      ua.manager!.stopCapturing();
+      ua.format(0, 5, Attribute.bold);
+      ub.type(2, 'XX');
+      _sync(ua, ub);
+
+      ua.controller.undo();
+      _sync(ua, ub);
+
+      expect(ua.handler.text, 'heXXllo world');
+      expect(ua.handler.attributesAt(2), isEmpty);
+      _expectConverged(ua, ub);
+      expect(ub.controller.hasUndo, isTrue);
+    });
+
+    test('hasUndo and hasRedo follow the manager', () async {
+      ub.type(0, 'remote');
+      _sync(ua, ub);
+      expect(ua.controller.hasUndo, isFalse);
+
+      ua.type(6, '!');
+      await _pump();
+      expect(ua.controller.hasUndo, isTrue);
+      expect(ua.controller.hasRedo, isFalse);
+      // One stack only: Quill's own history records nothing.
+      expect(ua.controller.document.history.hasUndo, isFalse);
+
+      ua.controller.undo();
+      expect(ua.controller.hasUndo, isFalse);
+      expect(ua.controller.hasRedo, isTrue);
+    });
+
+    test('a manager set later takes over from the Quill history', () async {
+      a.manager = CRDTUndoManager(a.document, trackedOrigins: {crdtQuillOrigin})
+        ..track(a.handler);
+      a.quill.undoManager = a.manager;
+
+      a.type(0, 'hi');
+      await _pump();
+
+      expect(a.controller.document.history.hasUndo, isFalse);
+      expect(a.controller.hasUndo, isTrue);
+    });
+
+    test('only the writes of the editor are recorded', () {
+      ua.handler.insert(0, 'direct');
+      expect(ua.controller.hasUndo, isFalse);
+
+      ua.type(6, '!');
+      expect(ua.controller.hasUndo, isTrue);
+    });
   });
 }
