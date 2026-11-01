@@ -6,6 +6,7 @@ import 'dart:async';
 import 'package:crdt_lf/crdt_lf.dart';
 import 'package:crdt_lf_flutter/src/common/_crdt_guards.dart';
 import 'package:crdt_lf_flutter/src/editor/crdt_editor_binding.dart';
+import 'package:crdt_lf_flutter/src/effects/_text_field_core.dart';
 import 'package:crdt_lf_flutter/src/effects/rich_text_editing_controller.dart';
 import 'package:crdt_lf_flutter/src/effects/text_delta.dart';
 import 'package:crdt_lf_flutter/src/provider/_crdt_view.dart';
@@ -143,11 +144,9 @@ class _CrdtRichTextFieldBuilderState extends State<CrdtRichTextFieldBuilder>
   // Carried by arithmetic, so the projection check needs no count.
   int _committedRunes = 0;
 
-  FugueElementID? _baseAnchor;
-  FugueElementID? _extentAnchor;
-  bool _hasFocus = false;
-  FugueElementID? _publishedBase;
-  FugueElementID? _publishedExtent;
+  late final SelectionAnchors _anchors = SelectionAnchors(
+    (base, extent) => widget.onSelectionAnchorsChanged?.call(base, extent),
+  );
 
   // Where the pending attributes were set; they end when the caret leaves.
   FugueElementID? _pendingAnchor;
@@ -187,7 +186,7 @@ class _CrdtRichTextFieldBuilderState extends State<CrdtRichTextFieldBuilder>
       // Not here: the callback is the user's, and this is a build.
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) {
-          _setAnchors(null, null);
+          _anchors.clear();
         }
       });
       return buildDeleted(context, widget.deletedBuilder);
@@ -197,7 +196,7 @@ class _CrdtRichTextFieldBuilderState extends State<CrdtRichTextFieldBuilder>
       _binding.attach(
         document,
         widget.id,
-        onBeforeAttach: () => _setAnchors(null, null),
+        onBeforeAttach: () => _anchors.clear(),
       );
     } finally {
       _seeding = false;
@@ -209,7 +208,7 @@ class _CrdtRichTextFieldBuilderState extends State<CrdtRichTextFieldBuilder>
       canRequestFocus: false,
       skipTraversal: true,
       includeSemantics: false,
-      onFocusChange: _onFocusChange,
+      onFocusChange: (hasFocus) => _anchors.hasFocus = hasFocus,
       child: _manager == null
           ? child
           : Shortcuts(
@@ -344,18 +343,33 @@ class _CrdtRichTextFieldBuilderState extends State<CrdtRichTextFieldBuilder>
   bool get canRedo => _manager?.canRedo ?? false;
 
   @override
-  void undo() {
-    if (_canStep) {
-      _manager!.undo();
+  void undo() => _step(() => _manager!.undo());
+
+  @override
+  void redo() => _step(() => _manager!.redo());
+
+  // The caret goes after the last change of the step, as Quill's history does.
+  void _step(void Function() run) {
+    if (!_canStep) {
+      return;
+    }
+    _stepEnd = -1;
+    try {
+      run();
+    } finally {
+      final end = _stepEnd;
+      _stepEnd = null;
+      if (end != null && end >= 0 && _c.text == _c.spansText) {
+        _c.selection = TextSelection.collapsed(
+          offset: RuneOffsets.utf16Offset(_c.text, end),
+        );
+      }
     }
   }
 
-  @override
-  void redo() {
-    if (_canStep) {
-      _manager!.redo();
-    }
-  }
+  // Where the last delta of the running step ends, in runes; `null` outside a
+  // step and `-1` before its first delta.
+  int? _stepEnd;
 
   // A step written during a composition would land on text the handler does
   // not hold yet.
@@ -389,7 +403,7 @@ class _CrdtRichTextFieldBuilderState extends State<CrdtRichTextFieldBuilder>
       return;
     }
     if (value.isComposingRangeValid) {
-      _setAnchors(null, null);
+      _anchors.clear();
       return;
     }
     _pushLocalEdits();
@@ -420,21 +434,9 @@ class _CrdtRichTextFieldBuilderState extends State<CrdtRichTextFieldBuilder>
       return;
     }
 
-    var pushed = delta;
-    if (baseText != committedText) {
-      // A remote change landed during a composition: rebase, best effort.
-      final remote = computeTextDelta(committedText, baseText)!;
-      final index = mapOffsetThroughDelta(
-        delta.index,
-        remote,
-      ).clamp(0, baseText.length);
-      final deletable = baseText.length - index;
-      pushed = TextDelta(
-        index: index,
-        deleted: delta.deleted > deletable ? deletable : delta.deleted,
-        inserted: delta.inserted,
-      );
-    }
+    final pushed = baseText == committedText
+        ? delta
+        : rebaseDelta(delta, committedText, baseText);
 
     final index = RuneOffsets.runeIndex(baseText, pushed.index);
     final deleted = pushed.deleted == 0
@@ -547,6 +549,9 @@ class _CrdtRichTextFieldBuilderState extends State<CrdtRichTextFieldBuilder>
   void _settle({List<RichTextSpan>? spans, RichTextDelta? reported}) {
     final base = spans ?? _c.spans;
     final merged = reported == null ? base : reported.apply(base);
+    if (_stepEnd != null && reported != null) {
+      _stepEnd = _endOf(reported);
+    }
     final runes = spans != null
         ? runesOfSpans(spans)
         : _committedRunes + _netRunes(reported);
@@ -558,6 +563,22 @@ class _CrdtRichTextFieldBuilderState extends State<CrdtRichTextFieldBuilder>
       return;
     }
     _adopt(merged, runes: runes, reported: reported);
+  }
+
+  // The rune after the last insert or retain of the delta.
+  static int _endOf(RichTextDelta delta) {
+    var end = 0;
+    for (final op in delta.ops) {
+      switch (op) {
+        case RichTextInsert():
+          end += op.length;
+        case RichTextRetain():
+          end += op.count;
+        case RichTextDelete():
+          break;
+      }
+    }
+    return end;
   }
 
   // Runes the delta puts in, net of the ones it takes out.
@@ -603,51 +624,14 @@ class _CrdtRichTextFieldBuilderState extends State<CrdtRichTextFieldBuilder>
     }
 
     final handler = _handler;
-    TextDelta? diffed;
-    int map(int offset, FugueElementID? anchor) {
-      if (offset < 0) {
-        // No selection: keep it, a caret would publish a phantom cursor.
-        return offset;
-      }
-      if (anchor != null) {
-        final resolved = handler.indexOfStablePosition(anchor);
-        if (resolved != null) {
-          return RuneOffsets.utf16Offset(mergedText, resolved);
-        }
-      }
-      if (reported != null) {
-        final rune = RuneOffsets.runeIndex(old.text, offset);
-        return RuneOffsets.utf16Offset(
-          mergedText,
-          reported.mapOffset(rune),
-        ).clamp(0, mergedText.length);
-      }
-      diffed ??= computeTextDelta(old.text, mergedText)!;
-      return mapOffsetThroughDelta(
-        offset,
-        diffed!,
-      ).clamp(0, mergedText.length);
-    }
-
-    // A composition spans code units that just moved: carry it, or a remote
-    // change throws away what the user is typing.
-    var composing = TextRange.empty;
-    if (old.composing.isValid) {
-      final start = map(old.composing.start, null);
-      final end = map(old.composing.end, null);
-      if (start < end) {
-        composing = TextRange(start: start, end: end);
-      }
-    }
-
     _c.setValueAndSpans(
-      TextEditingValue(
-        text: mergedText,
-        selection: TextSelection(
-          baseOffset: map(old.selection.baseOffset, _baseAnchor),
-          extentOffset: map(old.selection.extentOffset, _extentAnchor),
-        ),
-        composing: composing,
+      adoptedValue(
+        old: old,
+        merged: mergedText,
+        baseAnchor: _anchors.base,
+        extentAnchor: _anchors.extent,
+        resolve: handler.indexOfStablePosition,
+        mapReported: reported?.mapOffset,
       ),
       merged,
     );
@@ -657,54 +641,10 @@ class _CrdtRichTextFieldBuilderState extends State<CrdtRichTextFieldBuilder>
   // ---------------------------------------------------------------- anchors
 
   void _captureAnchors() {
-    final selection = _c.selection;
-    final text = _c.text;
-    if (text != _c.spansText) {
-      _setAnchors(null, null);
+    if (_c.text != _c.spansText) {
+      _anchors.clear();
       return;
     }
-    final handler = _handler;
-    _setAnchors(
-      selection.baseOffset < 0
-          ? null
-          : handler.stablePositionAt(
-              RuneOffsets.runeIndex(text, selection.baseOffset),
-            ),
-      selection.extentOffset < 0
-          ? null
-          : handler.stablePositionAt(
-              RuneOffsets.runeIndex(text, selection.extentOffset),
-            ),
-    );
-  }
-
-  void _setAnchors(FugueElementID? base, FugueElementID? extent) {
-    if (base == _baseAnchor && extent == _extentAnchor) {
-      return;
-    }
-    _baseAnchor = base;
-    _extentAnchor = extent;
-    _publish();
-  }
-
-  void _onFocusChange(bool hasFocus) {
-    if (_hasFocus == hasFocus) {
-      return;
-    }
-    _hasFocus = hasFocus;
-    _publish();
-  }
-
-  // The anchors steer `_adopt` always, but they are the collaborator's cursor
-  // only while the field has focus.
-  void _publish() {
-    final base = _hasFocus ? _baseAnchor : null;
-    final extent = _hasFocus ? _extentAnchor : null;
-    if (base == _publishedBase && extent == _publishedExtent) {
-      return;
-    }
-    _publishedBase = base;
-    _publishedExtent = extent;
-    widget.onSelectionAnchorsChanged?.call(base, extent);
+    _anchors.capture(_c.selection, _c.text, _handler.stablePositionAt);
   }
 }

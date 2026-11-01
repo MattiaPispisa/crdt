@@ -4,6 +4,7 @@
 import 'package:crdt_lf/crdt_lf.dart';
 import 'package:crdt_lf_flutter/src/common/_crdt_guards.dart';
 import 'package:crdt_lf_flutter/src/editor/crdt_editor_binding.dart';
+import 'package:crdt_lf_flutter/src/effects/_text_field_core.dart';
 import 'package:crdt_lf_flutter/src/effects/text_delta.dart';
 import 'package:crdt_lf_flutter/src/provider/_crdt_view.dart';
 import 'package:crdt_lf_flutter/src/provider/crdt_helper.dart';
@@ -145,21 +146,12 @@ class _CrdtTextFieldBuilderState extends State<CrdtTextFieldBuilder> {
   int _lastCommittedRunes = 0;
 
   /// Stable anchors ([CRDTFugueTextHandler.stablePositionAt]) for the current
-  /// selection, captured whenever controller and handler agree. `null` while
+  /// selection, captured whenever controller and handler agree. Empty while
   /// they diverge (a composition is pending) or for a non-Fugue handler —
   /// [_adopt] then places the offsets from the reported delta instead.
-  FugueElementID? _selectionBaseAnchor;
-  FugueElementID? _selectionExtentAnchor;
-
-  /// Whether the field inside [CrdtTextFieldBuilder.builder] has focus.
-  /// Anchors keep being captured regardless (they anchor [_adopt] too), but
-  /// they are only *published* while focused: an unfocused field retains
-  /// its selection, which is not the collaborator's cursor.
-  bool _hasFocus = false;
-
-  /// What was last handed to [CrdtTextFieldBuilder.onSelectionAnchorsChanged].
-  FugueElementID? _publishedBase;
-  FugueElementID? _publishedExtent;
+  late final SelectionAnchors _anchors = SelectionAnchors(
+    (base, extent) => widget.onSelectionAnchorsChanged?.call(base, extent),
+  );
 
   @override
   Widget build(BuildContext context) {
@@ -170,7 +162,7 @@ class _CrdtTextFieldBuilderState extends State<CrdtTextFieldBuilder> {
       // Not here: the callback is the user's, and this is a build.
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) {
-          _invalidateSelectionAnchors();
+          _anchors.clear();
         }
       });
       return buildDeleted(context, widget.deletedBuilder);
@@ -184,7 +176,7 @@ class _CrdtTextFieldBuilderState extends State<CrdtTextFieldBuilder> {
         widget.id,
         // The anchors belong to the old handler; they must go before anything
         // reads the new one, because seeding captures them again.
-        onBeforeAttach: _invalidateSelectionAnchors,
+        onBeforeAttach: _anchors.clear,
       );
     } finally {
       _seeding = false;
@@ -193,7 +185,7 @@ class _CrdtTextFieldBuilderState extends State<CrdtTextFieldBuilder> {
       canRequestFocus: false,
       skipTraversal: true,
       includeSemantics: false,
-      onFocusChange: _onFocusChange,
+      onFocusChange: (hasFocus) => _anchors.hasFocus = hasFocus,
       child: widget.builder(context, _controller!),
     );
   }
@@ -291,53 +283,11 @@ class _CrdtTextFieldBuilderState extends State<CrdtTextFieldBuilder> {
     if (handler is! CRDTFugueTextHandler) {
       return;
     }
-    final selection = _controller!.selection;
-    // Selection offsets are code-unit offsets; the handler anchors by rune.
-    final text = _controller!.text;
-    _setSelectionAnchors(
-      selection.baseOffset < 0
-          ? null
-          : handler.stablePositionAt(
-              RuneOffsets.runeIndex(text, selection.baseOffset),
-            ),
-      selection.extentOffset < 0
-          ? null
-          : handler.stablePositionAt(
-              RuneOffsets.runeIndex(text, selection.extentOffset),
-            ),
+    _anchors.capture(
+      _controller!.selection,
+      _controller!.text,
+      handler.stablePositionAt,
     );
-  }
-
-  void _invalidateSelectionAnchors() {
-    _setSelectionAnchors(null, null);
-  }
-
-  void _setSelectionAnchors(FugueElementID? base, FugueElementID? extent) {
-    if (base == _selectionBaseAnchor && extent == _selectionExtentAnchor) {
-      return;
-    }
-    _selectionBaseAnchor = base;
-    _selectionExtentAnchor = extent;
-    _publishAnchors();
-  }
-
-  void _onFocusChange(bool hasFocus) {
-    if (_hasFocus == hasFocus) {
-      return;
-    }
-    _hasFocus = hasFocus;
-    _publishAnchors();
-  }
-
-  void _publishAnchors() {
-    final base = _hasFocus ? _selectionBaseAnchor : null;
-    final extent = _hasFocus ? _selectionExtentAnchor : null;
-    if (base == _publishedBase && extent == _publishedExtent) {
-      return;
-    }
-    _publishedBase = base;
-    _publishedExtent = extent;
-    widget.onSelectionAnchorsChanged?.call(base, extent);
   }
 
   /// Local edits: push the delta of the gesture into the handler.
@@ -355,7 +305,7 @@ class _CrdtTextFieldBuilderState extends State<CrdtTextFieldBuilder> {
     if (value.isComposingRangeValid) {
       // Mid-composition (IME/autocorrect): commit when composition ends. The
       // anchors go stale with the uncommitted text.
-      _invalidateSelectionAnchors();
+      _anchors.clear();
       return;
     }
     _pushLocalEdits();
@@ -395,21 +345,9 @@ class _CrdtTextFieldBuilderState extends State<CrdtTextFieldBuilder> {
       return;
     }
 
-    var pushed = delta;
-    if (handlerText != _lastCommittedText) {
-      // Rare: a remote change landed while local edits were pending (only
-      // possible during composition). Rebase the local delta onto the merged
-      // text, best-effort, and let the CRDT do the merging.
-      final remote = computeTextDelta(_lastCommittedText, handlerText)!;
-      final index = mapOffsetThroughDelta(delta.index, remote)
-          .clamp(0, handlerText.length);
-      final deletable = handlerText.length - index;
-      pushed = TextDelta(
-        index: index,
-        deleted: delta.deleted > deletable ? deletable : delta.deleted,
-        inserted: delta.inserted,
-      );
-    }
+    final pushed = handlerText == _lastCommittedText
+        ? delta
+        : rebaseDelta(delta, _lastCommittedText, handlerText);
 
     _binding.push(() {
       final moved = _applyDelta(pushed, handlerText);
@@ -503,16 +441,7 @@ class _CrdtTextFieldBuilderState extends State<CrdtTextFieldBuilder> {
   }
 
   /// Replaces the controller text with [merged], keeping caret and selection
-  /// visually anchored.
-  ///
-  /// Three ways to place an offset, best first:
-  ///
-  /// 1. its **stable position**, the identity of the element left of it, which
-  ///    only a Fugue handler carries;
-  /// 2. [reported], the delta the handler published, exact even when the change
-  ///    touched several regions;
-  /// 3. a diff of the two texts, which collapses several regions into one span.
-  ///    Best-effort, and only used when the handler asked for a fresh read.
+  /// visually anchored (see [adoptedValue]).
   void _adopt(
     String merged, {
     required int runes,
@@ -527,48 +456,15 @@ class _CrdtTextFieldBuilderState extends State<CrdtTextFieldBuilder> {
     }
 
     final handler = _handler();
-    TextDelta? diffed;
-    int map(int offset, FugueElementID? anchor) {
-      if (offset < 0) {
-        // No selection (field never touched): keep it that way — turning it
-        // into a caret would publish a phantom cursor on adopt.
-        return offset;
-      }
-      if (anchor != null && handler is CRDTFugueTextHandler) {
-        final resolved = handler.indexOfStablePosition(anchor);
-        if (resolved != null) {
-          // A rune index: back to a code-unit offset for the selection.
-          return RuneOffsets.utf16Offset(merged, resolved);
-        }
-      }
-      if (reported != null) {
-        // The handler counts runes, the field counts code units.
-        final rune = RuneOffsets.runeIndex(old.text, offset);
-        return RuneOffsets.utf16Offset(merged, reported.mapOffset(rune))
-            .clamp(0, merged.length);
-      }
-      diffed ??= computeTextDelta(old.text, merged)!;
-      return mapOffsetThroughDelta(offset, diffed!).clamp(0, merged.length);
-    }
-
-    // A composition in progress spans code units that just moved. Carry it, or
-    // a remote change throws away what the user is typing.
-    var composing = TextRange.empty;
-    if (old.composing.isValid) {
-      final start = map(old.composing.start, null);
-      final end = map(old.composing.end, null);
-      if (start < end) {
-        composing = TextRange(start: start, end: end);
-      }
-    }
-
-    _controller!.value = TextEditingValue(
-      text: merged,
-      selection: TextSelection(
-        baseOffset: map(old.selection.baseOffset, _selectionBaseAnchor),
-        extentOffset: map(old.selection.extentOffset, _selectionExtentAnchor),
-      ),
-      composing: composing,
+    _controller!.value = adoptedValue(
+      old: old,
+      merged: merged,
+      baseAnchor: _anchors.base,
+      extentAnchor: _anchors.extent,
+      resolve: (anchor) => handler is CRDTFugueTextHandler
+          ? handler.indexOfStablePosition(anchor)
+          : null,
+      mapReported: reported?.mapOffset,
     );
     _captureSelectionAnchors();
   }

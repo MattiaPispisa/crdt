@@ -393,6 +393,26 @@ void main() {
       expectInSync('redone');
     });
 
+    testWidgets('redo puts the caret after the restored text', (tester) async {
+      manager.track(CRDTFugueRichTextHandler(doc, 'page'));
+      await tester.pumpWidget(host(undoManager: manager));
+      controller!.value = const TextEditingValue(
+        text: 'hello',
+        selection: TextSelection.collapsed(offset: 5),
+      );
+      controller!
+        ..undo()
+        ..selection = const TextSelection.collapsed(offset: 0)
+        ..redo();
+      await tester.pump();
+      expect(controller!.text, 'hello');
+      expect(controller!.selection, const TextSelection.collapsed(offset: 5));
+
+      controller!.undo();
+      await tester.pump();
+      expect(controller!.selection, const TextSelection.collapsed(offset: 0));
+    });
+
     testWidgets('the keyboard shortcuts undo and redo', (tester) async {
       manager.track(CRDTFugueRichTextHandler(doc, 'page'));
       await tester.pumpWidget(host(undoManager: manager));
