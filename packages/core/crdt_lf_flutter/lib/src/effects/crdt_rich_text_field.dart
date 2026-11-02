@@ -312,14 +312,17 @@ class _CrdtRichTextFieldBuilderState extends State<CrdtRichTextFieldBuilder>
     final length = RuneOffsets.runeIndex(text, selection.end) - start;
     // A format is a step of its own, not part of the typing before it.
     widget.undoManager?.stopCapturing();
-    _binding.push(() {
-      final handler = _handler;
-      _document.runInTransaction(
-        () => handler.format(start, length, key, value, expand: expand),
-        origin: crdtRichTextFieldOrigin,
-      );
-      _c.setValueAndSpans(_c.value, handler.value);
-    });
+    _binding.push(
+      () {
+        final handler = _handler;
+        _document.runInTransaction(
+          () => handler.format(start, length, key, value, expand: expand),
+          origin: crdtRichTextFieldOrigin,
+        );
+        _c.setValueAndSpans(_c.value, handler.value);
+      },
+      isEcho: (dropped) => echoesRichText(dropped, deleted: 0, inserted: 0),
+    );
   }
 
   // ------------------------------------------------------------------ undo
@@ -448,30 +451,37 @@ class _CrdtRichTextFieldBuilderState extends State<CrdtRichTextFieldBuilder>
         ? _c.pendingAttributes
         : const <String, Object?>{};
 
-    _binding.push(() {
-      final handler = _handler;
-      _document.runInTransaction(
-        () {
-          if (deleted > 0) {
-            handler.delete(index, deleted);
-          }
-          _insert(handler, index, pushed.inserted, pending);
-        },
-        origin: crdtRichTextFieldOrigin,
-      );
-      final spans = RichTextDelta([
-        RichTextRetain(index),
-        RichTextDelete(deleted),
-        ..._readInserted(handler, index, pushed.inserted),
-      ]).apply(baseSpans);
-      _committedRunes =
-          baseRunes - deleted + RuneOffsets.length(pushed.inserted);
-      if (joinSpans(spans) != _c.text) {
-        _adopt(spans, runes: _committedRunes);
-      } else {
-        _c.setValueAndSpans(_c.value, spans);
-      }
-    });
+    _binding.push(
+      () {
+        final handler = _handler;
+        _document.runInTransaction(
+          () {
+            if (deleted > 0) {
+              handler.delete(index, deleted);
+            }
+            _insert(handler, index, pushed.inserted, pending);
+          },
+          origin: crdtRichTextFieldOrigin,
+        );
+        final spans = RichTextDelta([
+          RichTextRetain(index),
+          RichTextDelete(deleted),
+          ..._readInserted(handler, index, pushed.inserted),
+        ]).apply(baseSpans);
+        _committedRunes =
+            baseRunes - deleted + RuneOffsets.length(pushed.inserted);
+        if (joinSpans(spans) != _c.text) {
+          _adopt(spans, runes: _committedRunes);
+        } else {
+          _c.setValueAndSpans(_c.value, spans);
+        }
+      },
+      isEcho: (dropped) => echoesRichText(
+        dropped,
+        deleted: deleted,
+        inserted: RuneOffsets.length(pushed.inserted),
+      ),
+    );
     _captureAnchors();
   }
 

@@ -349,23 +349,31 @@ class _CrdtTextFieldBuilderState extends State<CrdtTextFieldBuilder> {
         ? delta
         : rebaseDelta(delta, _lastCommittedText, handlerText);
 
-    _binding.push(() {
-      final moved = _applyDelta(pushed, handlerText);
+    var moved = (deleted: 0, inserted: 0);
+    _binding.push(
+      () {
+        moved = _applyDelta(pushed, handlerText);
 
-      // We know what we pushed, so the new text is the old one spliced — no
-      // need to project the document again.
-      _lastCommittedText = handlerText.replaceRange(
-        pushed.index,
-        pushed.index + pushed.deleted,
-        pushed.inserted,
-      );
-      _lastCommittedRunes = handlerRunes - moved.deleted + moved.inserted;
-      if (_lastCommittedText != _controller!.text) {
-        // The rebase above merged remote content in: adopt it before a
-        // postponed reset compares the two.
-        _adopt(_lastCommittedText, runes: _lastCommittedRunes);
-      }
-    });
+        // We know what we pushed, so the new text is the old one spliced — no
+        // need to project the document again.
+        _lastCommittedText = handlerText.replaceRange(
+          pushed.index,
+          pushed.index + pushed.deleted,
+          pushed.inserted,
+        );
+        _lastCommittedRunes = handlerRunes - moved.deleted + moved.inserted;
+        if (_lastCommittedText != _controller!.text) {
+          // The rebase above merged remote content in: adopt it before a
+          // postponed reset compares the two.
+          _adopt(_lastCommittedText, runes: _lastCommittedRunes);
+        }
+      },
+      isEcho: (dropped) => echoesSequence(
+        dropped,
+        deleted: moved.deleted,
+        inserted: moved.inserted,
+      ),
+    );
     _captureSelectionAnchors();
   }
 

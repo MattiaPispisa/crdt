@@ -215,6 +215,35 @@ void main() {
     expect(paintedStyleAt(tester, 2)?.decoration, isNull);
   });
 
+  testWidgets('takes in a same-length write served inside a push', (
+    tester,
+  ) async {
+    // Release builds have no assert: the field alone must see the write.
+    debugVerifyCrdtRichTextFieldProjection = false;
+    addTearDown(() => debugVerifyCrdtRichTextFieldProjection = true);
+    final page = CRDTFugueRichTextHandler(doc, 'page')..insert(0, 'hello');
+    var armed = true;
+    final watcher = page.watch().listen((_) {
+      if (armed && page.text == 'helloX') {
+        armed = false;
+        page
+          ..delete(0, 1)
+          ..insert(0, 'H');
+      }
+    });
+    addTearDown(watcher.cancel);
+    await tester.pumpWidget(host());
+    controller!.value = const TextEditingValue(
+      text: 'helloX',
+      selection: TextSelection.collapsed(offset: 6),
+    );
+    await tester.pumpAndSettle();
+
+    expect(armed, isFalse);
+    expect(page.text, 'HelloX');
+    expectInSync('after the watcher');
+  });
+
   testWidgets('anchors are published while the field has focus', (
     tester,
   ) async {

@@ -19,6 +19,11 @@
   `CRDTUndoManager`; `crdtRichTextFieldOrigin` tags the field's writes.
 - `CrdtTextCursorsOverlay` accepts a `CRDTFugueRichTextHandler`.
 
+### Fixed
+
+- `CrdtTextFieldBuilder` takes in a change another writer makes inside a push when it keeps the text
+  length, in release builds too.
+
 ## [0.6.0](https://github.com/MattiaPispisa/crdt/tree/crdt_lf_flutter-v0.6.0/packages/core/crdt_lf_flutter)
 
 **Date:** 2026-10-23

@@ -65,6 +65,7 @@ class CrdtEditorBinding<V, D extends ComposableDelta<D>> {
   bool _disposed = false;
 
   bool _pushing = false;
+  List<D>? _dropped;
   ResetCause? _resetWhilePushing;
 
   /// The document of the followed handler; `null` while detached.
@@ -160,9 +161,18 @@ class CrdtEditorBinding<V, D extends ComposableDelta<D>> {
   /// When the editor [isBehind], the binding reads the handler after the
   /// write and calls [onReset] with [ResetCause.deltasMissed].
   ///
+  /// [isEcho] tells whether the deltas dropped during the write are only what
+  /// the write itself made. When it says no, a foreign change was dropped, and
+  /// the binding reads the handler after the write like for a postponed reset.
+  /// This sees a foreign change that keeps the content length, which
+  /// [verifyProjection] cannot.
+  ///
   /// A push inside a push runs the write at once. A no-op while detached or
   /// when the handler is deleted.
-  void push(void Function() writeToHandler) {
+  void push(
+    void Function() writeToHandler, {
+    bool Function(List<D> dropped)? isEcho,
+  }) {
     final document = _document;
     final id = _id;
     if (document == null || id == null || document.isDeleted(id)) {
@@ -179,10 +189,12 @@ class CrdtEditorBinding<V, D extends ComposableDelta<D>> {
 
     // Set before the write: its echo is delivered inside it, synchronously.
     _pushing = true;
+    final dropped = _dropped = isEcho == null ? null : [];
     try {
       writeToHandler();
     } finally {
       _pushing = false;
+      _dropped = null;
     }
     if (_document == null) {
       return;
@@ -193,7 +205,8 @@ class CrdtEditorBinding<V, D extends ComposableDelta<D>> {
 
     final postponed = _resetWhilePushing;
     _resetWhilePushing = null;
-    if (postponed != null || behind) {
+    final foreign = dropped != null && !isEcho!(dropped);
+    if (postponed != null || behind || foreign) {
       // A reset read mid-write cannot see the edit: read again now.
       _reset(postponed ?? ResetCause.deltasMissed);
       return;
@@ -210,6 +223,7 @@ class CrdtEditorBinding<V, D extends ComposableDelta<D>> {
   }
 
   void _onDelta(HandlerDelta<D> event) {
+    _dropped?.add(event.delta);
     if (_pushing || (skipEmptyDeltas && event.delta.isEmpty)) {
       return;
     }

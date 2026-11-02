@@ -140,4 +140,60 @@ void main() {
       expect(value.selection, const TextSelection.collapsed(offset: 3));
     });
   });
+
+  group('echoes', () {
+    SequenceDelta<String> seq(List<SeqOp<String>> ops) =>
+        SequenceDelta<String>(ops);
+
+    test('a sequence write is its own echo', () {
+      final dropped = [
+        seq([const SeqRetain<String>(2), const SeqDelete<String>(1)]),
+        seq([
+          const SeqRetain<String>(2),
+          const SeqInsert<String>(['x', 'y']),
+        ]),
+      ];
+      expect(echoesSequence(dropped, deleted: 1, inserted: 2), isTrue);
+    });
+
+    test('an extra insert, or an extra delete, is foreign', () {
+      final write = seq([
+        const SeqInsert<String>(['x']),
+      ]);
+      final extraInsert = seq([
+        const SeqInsert<String>(['H']),
+      ]);
+      final extraDelete = seq([const SeqDelete<String>(1)]);
+      expect(
+        echoesSequence([write, extraInsert], deleted: 0, inserted: 1),
+        isFalse,
+      );
+      expect(
+        echoesSequence([write, extraDelete], deleted: 0, inserted: 1),
+        isFalse,
+      );
+    });
+
+    test('a rich write is its own echo, whatever its formats', () {
+      final dropped = [
+        RichTextDelta([RichTextRetain(1), RichTextInsert('ab')]),
+        RichTextDelta([
+          RichTextRetain(1),
+          RichTextRetain(2, {'bold': true}),
+        ]),
+      ];
+      expect(echoesRichText(dropped, deleted: 0, inserted: 2), isTrue);
+      expect(
+        echoesRichText(
+          [
+            ...dropped,
+            RichTextDelta([const RichTextDelete(1)]),
+          ],
+          deleted: 0,
+          inserted: 2,
+        ),
+        isFalse,
+      );
+    });
+  });
 }
