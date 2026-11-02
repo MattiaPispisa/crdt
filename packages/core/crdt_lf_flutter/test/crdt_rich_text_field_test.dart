@@ -261,6 +261,25 @@ void main() {
     expect(anchors.last, (null, null));
   });
 
+  testWidgets('anchors are withdrawn while an IME composition is pending', (
+    tester,
+  ) async {
+    CRDTFugueRichTextHandler(doc, 'page').insert(0, 'hello');
+    await tester.pumpWidget(host());
+    await tester.showKeyboard(find.byType(TextField));
+    controller!.selection = const TextSelection.collapsed(offset: 5);
+    await tester.pump();
+    expect(anchors.last.$1, isNotNull);
+
+    controller!.value = const TextEditingValue(
+      text: 'helloあ',
+      selection: TextSelection.collapsed(offset: 6),
+      composing: TextRange(start: 5, end: 6),
+    );
+    await tester.pump();
+    expect(anchors.last, (null, null));
+  });
+
   testWidgets('pasted text takes the format where it lands, not its own', (
     tester,
   ) async {

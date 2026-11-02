@@ -5,8 +5,8 @@ import 'dart:async';
 
 import 'package:crdt_lf/crdt_lf.dart';
 import 'package:crdt_lf_flutter/src/common/_crdt_guards.dart';
-import 'package:crdt_lf_flutter/src/editor/crdt_editor_binding.dart';
 import 'package:crdt_lf_flutter/src/effects/_text_field_core.dart';
+import 'package:crdt_lf_flutter/src/effects/_text_field_engine.dart';
 import 'package:crdt_lf_flutter/src/effects/rich_text_editing_controller.dart';
 import 'package:crdt_lf_flutter/src/effects/text_delta.dart';
 import 'package:crdt_lf_flutter/src/provider/_crdt_view.dart';
@@ -30,8 +30,6 @@ bool debugVerifyCrdtRichTextFieldProjection = true;
 /// Pass it in `trackedOrigins` to make a `CRDTUndoManager` record the edits
 /// made in the field and nothing else.
 const Object crdtRichTextFieldOrigin = Object();
-
-typedef _HandlerState = ({List<RichTextSpan> spans, String text, int runes});
 
 /// Binds a [CrdtRichTextEditingController] to the
 /// [CRDTFugueRichTextHandler] registered under [id].
@@ -116,42 +114,26 @@ class CrdtRichTextFieldBuilder extends StatefulWidget {
 }
 
 class _CrdtRichTextFieldBuilderState extends State<CrdtRichTextFieldBuilder>
-    implements CrdtRichTextEditingDelegate {
-  CrdtRichTextEditingController? _controller;
-
+    implements
+        CrdtRichTextEditingDelegate,
+        TextFieldContent<List<RichTextSpan>, RichTextDelta> {
   late CRDTDocument _document;
 
-  late final CrdtEditorBinding<List<RichTextSpan>, RichTextDelta> _binding =
-      CrdtEditorBinding<List<RichTextSpan>, RichTextDelta>(
-    onReset: (spans, cause) {
-      if (_seeding) {
-        _seed(spans);
-        return;
-      }
-      _settle(spans: spans);
-    },
-    onRemoteDelta: (event) => _settle(reported: event.delta),
-    verifyProjection: _projectionAgrees,
-    // An empty delta still has to commit a pending composition.
-    skipEmptyDeltas: false,
+  late final TextFieldEngine<List<RichTextSpan>, RichTextDelta> _engine =
+      TextFieldEngine<List<RichTextSpan>, RichTextDelta>(
+    this,
+    publish: (base, extent) =>
+        widget.onSelectionAnchorsChanged?.call(base, extent),
   );
-
-  bool _seeding = false;
 
   CRDTUndoManager? _manager;
   StreamSubscription<void>? _managerChanges;
 
-  // Carried by arithmetic, so the projection check needs no count.
-  int _committedRunes = 0;
-
-  late final SelectionAnchors _anchors = SelectionAnchors(
-    (base, extent) => widget.onSelectionAnchorsChanged?.call(base, extent),
-  );
-
   // Where the pending attributes were set; they end when the caret leaves.
   FugueElementID? _pendingAnchor;
 
-  CrdtRichTextEditingController get _c => _controller!;
+  CrdtRichTextEditingController get _c =>
+      _engine.controller as CrdtRichTextEditingController;
 
   // Flutter maps no undo key on the web, where the browser undoes the text.
   static Map<ShortcutActivator, Intent> get _undoShortcuts {
@@ -182,25 +164,16 @@ class _CrdtRichTextFieldBuilderState extends State<CrdtRichTextFieldBuilder>
       'CrdtRichTextFieldBuilder',
     );
     if (context.selectCrdtDocument((doc) => doc.isDeleted(widget.id))) {
-      _binding.detach();
+      _engine.binding.detach();
       // Not here: the callback is the user's, and this is a build.
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) {
-          _anchors.clear();
+          _engine.anchors.clear();
         }
       });
       return buildDeleted(context, widget.deletedBuilder);
     }
-    _seeding = true;
-    try {
-      _binding.attach(
-        document,
-        widget.id,
-        onBeforeAttach: () => _anchors.clear(),
-      );
-    } finally {
-      _seeding = false;
-    }
+    _engine.attach(document, widget.id);
     _c.styleOf = widget.styleOf;
     _followManager(widget.undoManager);
     final child = widget.builder(context, _c);
@@ -208,7 +181,7 @@ class _CrdtRichTextFieldBuilderState extends State<CrdtRichTextFieldBuilder>
       canRequestFocus: false,
       skipTraversal: true,
       includeSemantics: false,
-      onFocusChange: (hasFocus) => _anchors.hasFocus = hasFocus,
+      onFocusChange: (hasFocus) => _engine.anchors.hasFocus = hasFocus,
       child: _manager == null
           ? child
           : Shortcuts(
@@ -231,9 +204,7 @@ class _CrdtRichTextFieldBuilderState extends State<CrdtRichTextFieldBuilder>
   @override
   void dispose() {
     unawaited(_managerChanges?.cancel());
-    _binding.dispose();
-    _controller?.removeListener(_onControllerChanged);
-    _controller?.dispose();
+    _engine.dispose();
     super.dispose();
   }
 
@@ -248,22 +219,12 @@ class _CrdtRichTextFieldBuilderState extends State<CrdtRichTextFieldBuilder>
     );
   }
 
-  void _seed(List<RichTextSpan> spans) {
-    if (_controller == null) {
-      _committedRunes = runesOfSpans(spans);
-      _controller =
-          CrdtRichTextEditingController(spans: spans, styleOf: widget.styleOf)
-            ..delegate = this
-            ..addListener(_onControllerChanged);
-      return;
-    }
-    _adopt(spans, runes: runesOfSpans(spans));
-  }
-
   // ------------------------------------------------------------- formatting
 
   bool get _canFormat =>
-      _c.selection.isValid && _c.text == _c.spansText && !_binding.isBehind;
+      _c.selection.isValid &&
+      _c.text == _c.spansText &&
+      !_engine.binding.isBehind;
 
   @override
   Object? attributeAtSelection(String key) {
@@ -312,14 +273,14 @@ class _CrdtRichTextFieldBuilderState extends State<CrdtRichTextFieldBuilder>
     final length = RuneOffsets.runeIndex(text, selection.end) - start;
     // A format is a step of its own, not part of the typing before it.
     widget.undoManager?.stopCapturing();
-    _binding.push(
+    _engine.binding.push(
       () {
         final handler = _handler;
         _document.runInTransaction(
           () => handler.format(start, length, key, value, expand: expand),
           origin: crdtRichTextFieldOrigin,
         );
-        _c.setValueAndSpans(_c.value, handler.value);
+        _engine.reformat(handler.value);
       },
       isEcho: (dropped) => echoesRichText(dropped, deleted: 0, inserted: 0),
     );
@@ -377,7 +338,7 @@ class _CrdtRichTextFieldBuilderState extends State<CrdtRichTextFieldBuilder>
   // A step written during a composition would land on text the handler does
   // not hold yet.
   bool get _canStep =>
-      _manager != null && _c.text == _c.spansText && !_binding.isBehind;
+      _manager != null && _c.text == _c.spansText && !_engine.binding.isBehind;
 
   bool _pendingStillValid() {
     if (_c.pendingAttributes.isEmpty) {
@@ -391,98 +352,139 @@ class _CrdtRichTextFieldBuilderState extends State<CrdtRichTextFieldBuilder>
     return _handler.stablePositionAt(rune) == _pendingAnchor;
   }
 
-  // ------------------------------------------------------------ local edits
+  // ----------------------------------------------------- TextFieldContent
 
-  void _onControllerChanged() {
-    if (_document.isDeleted(widget.id)) {
-      return;
-    }
-    final value = _c.value;
-    if (value.text == _c.spansText) {
-      if (_c.pendingAttributes.isNotEmpty && !_pendingStillValid()) {
-        _c.pendingAttributes = const {};
+  @override
+  TextEditingController createController(List<RichTextSpan> content) =>
+      CrdtRichTextEditingController(spans: content, styleOf: widget.styleOf)
+        ..delegate = this;
+
+  @override
+  String textOf(List<RichTextSpan> content) => joinSpans(content);
+
+  @override
+  int runesOf(List<RichTextSpan> content) => runesOfSpans(content);
+
+  @override
+  List<RichTextSpan> apply(List<RichTextSpan> base, RichTextDelta delta) =>
+      delta.apply(base);
+
+  // Runes the delta puts in, net of the ones it takes out.
+  @override
+  int netRunes(RichTextDelta delta) {
+    var net = 0;
+    for (final op in delta.ops) {
+      switch (op) {
+        case RichTextInsert():
+          net += op.length;
+        case RichTextDelete():
+          net -= op.count;
+        case RichTextRetain():
+          break;
       }
-      _captureAnchors();
-      return;
     }
-    if (value.isComposingRangeValid) {
-      _anchors.clear();
-      return;
-    }
-    _pushLocalEdits();
+    return net;
   }
 
-  void _pushLocalEdits({_HandlerState? handlerState}) {
-    var known = handlerState;
-    if (_binding.isBehind) {
-      final spans = _binding.readSynced();
-      known = (
-        spans: spans,
-        text: joinSpans(spans),
-        runes: runesOfSpans(spans),
-      );
-    }
-    final committedText = _c.spansText;
-    final baseSpans = known?.spans ?? _c.spans;
-    final baseText = known?.text ?? committedText;
-    final baseRunes = known?.runes ?? _committedRunes;
+  @override
+  int Function(int rune) offsetMapper(RichTextDelta delta) => delta.mapOffset;
 
-    final selection = _c.selection;
-    final caret = selection.isCollapsed ? selection.baseOffset : null;
-    final delta = computeTextDelta(committedText, _c.text, caret: caret);
-    if (delta == null) {
-      if (known != null) {
-        _adopt(baseSpans, runes: baseRunes);
-      }
-      return;
-    }
-
-    final pushed = baseText == committedText
-        ? delta
-        : rebaseDelta(delta, committedText, baseText);
-
-    final index = RuneOffsets.runeIndex(baseText, pushed.index);
-    final deleted = pushed.deleted == 0
-        ? 0
-        : RuneOffsets.runeIndex(baseText, pushed.index + pushed.deleted) -
-            index;
+  @override
+  List<RichTextSpan> write(
+    List<RichTextSpan> base,
+    String baseText,
+    TextDelta pushed,
+    int index,
+    int deleted,
+  ) {
+    final handler = _handler;
     final pending = _c.pendingAttributes.isNotEmpty &&
-            _handler.stablePositionAt(index) == _pendingAnchor
+            handler.stablePositionAt(index) == _pendingAnchor
         ? _c.pendingAttributes
         : const <String, Object?>{};
-
-    _binding.push(
+    _document.runInTransaction(
       () {
-        final handler = _handler;
-        _document.runInTransaction(
-          () {
-            if (deleted > 0) {
-              handler.delete(index, deleted);
-            }
-            _insert(handler, index, pushed.inserted, pending);
-          },
-          origin: crdtRichTextFieldOrigin,
-        );
-        final spans = RichTextDelta([
-          RichTextRetain(index),
-          RichTextDelete(deleted),
-          ..._readInserted(handler, index, pushed.inserted),
-        ]).apply(baseSpans);
-        _committedRunes =
-            baseRunes - deleted + RuneOffsets.length(pushed.inserted);
-        if (joinSpans(spans) != _c.text) {
-          _adopt(spans, runes: _committedRunes);
-        } else {
-          _c.setValueAndSpans(_c.value, spans);
+        if (deleted > 0) {
+          handler.delete(index, deleted);
         }
+        _insert(handler, index, pushed.inserted, pending);
       },
-      isEcho: (dropped) => echoesRichText(
-        dropped,
-        deleted: deleted,
-        inserted: RuneOffsets.length(pushed.inserted),
-      ),
+      origin: crdtRichTextFieldOrigin,
     );
-    _captureAnchors();
+    return RichTextDelta([
+      RichTextRetain(index),
+      RichTextDelete(deleted),
+      ..._readInserted(handler, index, pushed.inserted),
+    ]).apply(base);
+  }
+
+  @override
+  bool echoes(
+    List<RichTextDelta> dropped, {
+    required int deleted,
+    required int inserted,
+  }) =>
+      echoesRichText(dropped, deleted: deleted, inserted: inserted);
+
+  @override
+  void show(TextEditingValue value, List<RichTextSpan> content) {
+    _c.setValueAndSpans(value, content);
+  }
+
+  @override
+  void showFormats(List<RichTextSpan> content) {
+    _c.setValueAndSpans(_c.value, content);
+  }
+
+  @override
+  bool projectionAgrees() {
+    final handler = _handler;
+    assert(
+      !debugVerifyCrdtRichTextFieldProjection ||
+          (handler.text == _c.spansText &&
+              sameRuneAttributes(handler.value, _c.spans)),
+      'the spans derived from the deltas drifted from the handler',
+    );
+    return handler.length == _engine.committedRunes;
+  }
+
+  @override
+  bool get anchored => true;
+
+  @override
+  FugueElementID? anchorAt(int rune) => _handler.stablePositionAt(rune);
+
+  @override
+  int? runeOf(FugueElementID anchor) => _handler.indexOfStablePosition(anchor);
+
+  @override
+  void remoteReported(RichTextDelta delta) {
+    if (_stepEnd != null) {
+      _stepEnd = _endOf(delta);
+    }
+  }
+
+  // The rune after the last insert or retain of the delta.
+  static int _endOf(RichTextDelta delta) {
+    var end = 0;
+    for (final op in delta.ops) {
+      switch (op) {
+        case RichTextInsert():
+          end += op.length;
+        case RichTextRetain():
+          end += op.count;
+        case RichTextDelete():
+          break;
+      }
+    }
+    return end;
+  }
+
+  @override
+  void selectionSettled() {
+    if (_c.pendingAttributes.isNotEmpty && !_pendingStillValid()) {
+      _c.pendingAttributes = const {};
+    }
   }
 
   // A pending style stays off the newlines: the handler reads the attributes
@@ -552,109 +554,5 @@ class _CrdtRichTextFieldBuilderState extends State<CrdtRichTextFieldBuilder>
       out.add(RichTextInsert(buffer.toString(), current));
     }
     return out;
-  }
-
-  // ---------------------------------------------------------- remote edits
-
-  void _settle({List<RichTextSpan>? spans, RichTextDelta? reported}) {
-    final base = spans ?? _c.spans;
-    final merged = reported == null ? base : reported.apply(base);
-    if (_stepEnd != null && reported != null) {
-      _stepEnd = _endOf(reported);
-    }
-    final runes = spans != null
-        ? runesOfSpans(spans)
-        : _committedRunes + _netRunes(reported);
-
-    if (_c.text != _c.spansText) {
-      _pushLocalEdits(
-        handlerState: (spans: merged, text: joinSpans(merged), runes: runes),
-      );
-      return;
-    }
-    _adopt(merged, runes: runes, reported: reported);
-  }
-
-  // The rune after the last insert or retain of the delta.
-  static int _endOf(RichTextDelta delta) {
-    var end = 0;
-    for (final op in delta.ops) {
-      switch (op) {
-        case RichTextInsert():
-          end += op.length;
-        case RichTextRetain():
-          end += op.count;
-        case RichTextDelete():
-          break;
-      }
-    }
-    return end;
-  }
-
-  // Runes the delta puts in, net of the ones it takes out.
-  static int _netRunes(RichTextDelta? delta) {
-    var net = 0;
-    for (final op in delta?.ops ?? const <RichTextOp>[]) {
-      switch (op) {
-        case RichTextInsert():
-          net += op.length;
-        case RichTextDelete():
-          net -= op.count;
-        case RichTextRetain():
-          break;
-      }
-    }
-    return net;
-  }
-
-  bool _projectionAgrees() {
-    final handler = _handler;
-    assert(
-      !debugVerifyCrdtRichTextFieldProjection ||
-          (handler.text == _c.spansText &&
-              sameRuneAttributes(handler.value, _c.spans)),
-      'the spans derived from the deltas drifted from the handler',
-    );
-    return handler.length == _committedRunes;
-  }
-
-  void _adopt(
-    List<RichTextSpan> merged, {
-    required int runes,
-    RichTextDelta? reported,
-  }) {
-    final old = _c.value;
-    final mergedText = joinSpans(merged);
-    _committedRunes = runes;
-    if (old.text == mergedText) {
-      // Formats only: same text and selection, new paint.
-      _c.setValueAndSpans(old, merged);
-      _captureAnchors();
-      return;
-    }
-
-    final handler = _handler;
-    _c.setValueAndSpans(
-      adoptedValue(
-        old: old,
-        merged: mergedText,
-        baseAnchor: _anchors.base,
-        extentAnchor: _anchors.extent,
-        resolve: handler.indexOfStablePosition,
-        mapReported: reported?.mapOffset,
-      ),
-      merged,
-    );
-    _captureAnchors();
-  }
-
-  // ---------------------------------------------------------------- anchors
-
-  void _captureAnchors() {
-    if (_c.text != _c.spansText) {
-      _anchors.clear();
-      return;
-    }
-    _anchors.capture(_c.selection, _c.text, _handler.stablePositionAt);
   }
 }

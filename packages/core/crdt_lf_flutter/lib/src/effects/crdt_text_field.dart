@@ -3,8 +3,8 @@
 
 import 'package:crdt_lf/crdt_lf.dart';
 import 'package:crdt_lf_flutter/src/common/_crdt_guards.dart';
-import 'package:crdt_lf_flutter/src/editor/crdt_editor_binding.dart';
 import 'package:crdt_lf_flutter/src/effects/_text_field_core.dart';
+import 'package:crdt_lf_flutter/src/effects/_text_field_engine.dart';
 import 'package:crdt_lf_flutter/src/effects/text_delta.dart';
 import 'package:crdt_lf_flutter/src/provider/_crdt_view.dart';
 import 'package:crdt_lf_flutter/src/provider/crdt_helper.dart';
@@ -103,54 +103,19 @@ class CrdtTextFieldBuilder extends StatefulWidget {
   State<CrdtTextFieldBuilder> createState() => _CrdtTextFieldBuilderState();
 }
 
-class _CrdtTextFieldBuilderState extends State<CrdtTextFieldBuilder> {
-  TextEditingController? _controller;
-
+class _CrdtTextFieldBuilderState extends State<CrdtTextFieldBuilder>
+    implements TextFieldContent<String, SequenceDelta<String>> {
   /// Set by the first `build`; everything else runs after one.
   late CRDTDocument _document;
 
-  /// The handler's delta stream, and the guard around a push (see
-  /// [CrdtEditorBinding.push]).
-  late final CrdtEditorBinding<String, SequenceDelta<String>> _binding =
-      CrdtEditorBinding<String, SequenceDelta<String>>(
+  late final TextFieldEngine<String, SequenceDelta<String>> _engine =
+      TextFieldEngine<String, SequenceDelta<String>>(
+    this,
+    publish: (base, extent) =>
+        widget.onSelectionAnchorsChanged?.call(base, extent),
     // Not the generic resolver: this widget accepts two named handlers and
     // says so, which is a better error than "the wrong delta shape".
     resolve: _deltaProviderOf,
-    onReset: (value, cause) {
-      if (_seeding) {
-        _seed(value);
-        return;
-      }
-      _settle(text: value);
-    },
-    onRemoteDelta: (event) => _settle(reported: event.delta),
-    verifyProjection: _projectionAgrees,
-    // An empty Fugue delta still has to commit a pending composition.
-    skipEmptyDeltas: false,
-  );
-
-  /// Whether [_binding] is reading the value while attaching.
-  ///
-  /// That read builds the controller the first time, so it skips [_settle].
-  bool _seeding = false;
-
-  /// The handler-side text this widget has last pushed or adopted. Local
-  /// deltas are computed against it.
-  String _lastCommittedText = '';
-
-  /// How many runes [_lastCommittedText] holds.
-  ///
-  /// Carried by arithmetic — every delta says how many elements it puts in and
-  /// takes out — so [_projectionAgrees] can ask the handler whether the two
-  /// still agree without counting anything.
-  int _lastCommittedRunes = 0;
-
-  /// Stable anchors ([CRDTFugueTextHandler.stablePositionAt]) for the current
-  /// selection, captured whenever controller and handler agree. Empty while
-  /// they diverge (a composition is pending) or for a non-Fugue handler —
-  /// [_adopt] then places the offsets from the reported delta instead.
-  late final SelectionAnchors _anchors = SelectionAnchors(
-    (base, extent) => widget.onSelectionAnchorsChanged?.call(base, extent),
   );
 
   @override
@@ -158,57 +123,31 @@ class _CrdtTextFieldBuilderState extends State<CrdtTextFieldBuilder> {
     final document = _document = context.liveDocument('CrdtTextFieldBuilder');
     // Rebuilds only when this flips, so the field still builds once.
     if (context.selectCrdtDocument((doc) => doc.isDeleted(widget.id))) {
-      _binding.detach();
+      _engine.binding.detach();
       // Not here: the callback is the user's, and this is a build.
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) {
-          _anchors.clear();
+          _engine.anchors.clear();
         }
       });
       return buildDeleted(context, widget.deletedBuilder);
     }
     // Covers a new document and a new id alike, which is why there is no
     // `didUpdateWidget`: `build` always runs after one.
-    _seeding = true;
-    try {
-      _binding.attach(
-        document,
-        widget.id,
-        // The anchors belong to the old handler; they must go before anything
-        // reads the new one, because seeding captures them again.
-        onBeforeAttach: _anchors.clear,
-      );
-    } finally {
-      _seeding = false;
-    }
+    _engine.attach(document, widget.id);
     return Focus(
       canRequestFocus: false,
       skipTraversal: true,
       includeSemantics: false,
-      onFocusChange: (hasFocus) => _anchors.hasFocus = hasFocus,
-      child: widget.builder(context, _controller!),
+      onFocusChange: (hasFocus) => _engine.anchors.hasFocus = hasFocus,
+      child: widget.builder(context, _engine.controller),
     );
   }
 
   @override
   void dispose() {
-    _binding.dispose();
-    _controller?.removeListener(_onControllerChanged);
-    _controller?.dispose();
+    _engine.dispose();
     super.dispose();
-  }
-
-  /// Takes in the text read while attaching, building the controller the
-  /// first time and adopting into it afterwards.
-  void _seed(String seeded) {
-    if (_controller == null) {
-      _lastCommittedText = seeded;
-      _lastCommittedRunes = RuneOffsets.length(seeded);
-      _controller = TextEditingController(text: seeded);
-      _controller!.addListener(_onControllerChanged);
-      return;
-    }
-    _adopt(seeded, runes: RuneOffsets.length(seeded));
   }
 
   DeltaProvider<String, SequenceDelta<String>> _deltaProviderOf(
@@ -235,184 +174,23 @@ class _CrdtTextFieldBuilderState extends State<CrdtTextFieldBuilder> {
     );
   }
 
-  /// Pushes [delta] into the handler. Its offsets are code-unit offsets into
-  /// [against], the handler's text as the delta was computed against it.
-  ///
-  /// Returns how many runes the push takes out and puts in, which is what
-  /// keeps [_lastCommittedRunes] right without counting the text again.
-  ({int deleted, int inserted}) _applyDelta(TextDelta delta, String against) {
-    final handler = _handler();
+  @override
+  TextEditingController createController(String content) =>
+      TextEditingController(text: content);
 
-    // [TextDelta] is expressed in code units, the handlers in runes. The
-    // delta's boundaries are snapped to code-point boundaries by
-    // [computeTextDelta], so both ends convert exactly.
-    final index = RuneOffsets.runeIndex(against, delta.index);
-    final deleted = delta.deleted == 0
-        ? 0
-        : RuneOffsets.runeIndex(against, delta.index + delta.deleted) - index;
-    final inserted = RuneOffsets.length(delta.inserted);
+  @override
+  String textOf(String content) => content;
 
-    // One body for both handlers: same `insert` and `delete`, no shared type.
-    void run() {
-      if (deleted > 0) {
-        if (handler is CRDTTextHandler) {
-          handler.delete(index, deleted);
-        } else {
-          (handler as CRDTFugueTextHandler).delete(index, deleted);
-        }
-      }
-      if (delta.inserted.isNotEmpty) {
-        if (handler is CRDTTextHandler) {
-          handler.insert(index, delta.inserted);
-        } else {
-          (handler as CRDTFugueTextHandler).insert(index, delta.inserted);
-        }
-      }
-    }
+  @override
+  int runesOf(String content) => RuneOffsets.length(content);
 
-    _document.runInTransaction(run);
-    return (deleted: deleted, inserted: inserted);
-  }
+  @override
+  String apply(String base, SequenceDelta<String> delta) =>
+      delta.applyToText(base);
 
-  /// Captures the stable anchors of the current selection.
-  ///
-  /// Only meaningful when the controller text matches the handler text (the
-  /// offsets must be valid in the handler's coordinates).
-  void _captureSelectionAnchors() {
-    final handler = _document.handlerById(widget.id);
-    if (handler is! CRDTFugueTextHandler) {
-      return;
-    }
-    _anchors.capture(
-      _controller!.selection,
-      _controller!.text,
-      handler.stablePositionAt,
-    );
-  }
-
-  /// Local edits: push the delta of the gesture into the handler.
-  void _onControllerChanged() {
-    if (_document.isDeleted(widget.id)) {
-      // Until the next frame swaps the field out, an edit has nowhere to go.
-      return;
-    }
-    final value = _controller!.value;
-    if (value.text == _lastCommittedText) {
-      // Selection-only change, or a canceled composition.
-      _captureSelectionAnchors();
-      return;
-    }
-    if (value.isComposingRangeValid) {
-      // Mid-composition (IME/autocorrect): commit when composition ends. The
-      // anchors go stale with the uncommitted text.
-      _anchors.clear();
-      return;
-    }
-    _pushLocalEdits();
-  }
-
-  /// Pushes the gesture the controller is holding into the handler.
-  ///
-  /// [handlerState] is what the handler holds now, when the caller knows it. It
-  /// is believed only while the stream is level: it describes **one** event,
-  /// and a burst is published at once but delivered one at a time, so the
-  /// handler has already folded the rest. When the stream is ahead, one read
-  /// settles it instead — guessing pushes the edit at the wrong index and marks
-  /// the events still in flight as accounted for, dropping them.
-  void _pushLocalEdits({({String text, int runes})? handlerState}) {
-    var known = handlerState;
-    if (_binding.isBehind) {
-      final value = _binding.readSynced();
-      known = (text: value, runes: RuneOffsets.length(value));
-    }
-    final handlerText = known?.text ?? _lastCommittedText;
-    final handlerRunes = known?.runes ?? _lastCommittedRunes;
-
-    final target = _controller!.text;
-
-    // The post-edit caret disambiguates edits inside a run of identical
-    // characters (e.g. a newline typed right before another newline), so the
-    // gesture is recorded where the user actually is, not slid past it.
-    final selection = _controller!.selection;
-    final caret = selection.isCollapsed ? selection.baseOffset : null;
-    final delta = computeTextDelta(_lastCommittedText, target, caret: caret);
-    if (delta == null) {
-      // Nothing of ours to push — both callers rule this out, but whatever the
-      // handler moved still has to be taken in rather than dropped.
-      if (known != null) {
-        _adopt(handlerText, runes: handlerRunes);
-      }
-      return;
-    }
-
-    final pushed = handlerText == _lastCommittedText
-        ? delta
-        : rebaseDelta(delta, _lastCommittedText, handlerText);
-
-    var moved = (deleted: 0, inserted: 0);
-    _binding.push(
-      () {
-        moved = _applyDelta(pushed, handlerText);
-
-        // We know what we pushed, so the new text is the old one spliced — no
-        // need to project the document again.
-        _lastCommittedText = handlerText.replaceRange(
-          pushed.index,
-          pushed.index + pushed.deleted,
-          pushed.inserted,
-        );
-        _lastCommittedRunes = handlerRunes - moved.deleted + moved.inserted;
-        if (_lastCommittedText != _controller!.text) {
-          // The rebase above merged remote content in: adopt it before a
-          // postponed reset compares the two.
-          _adopt(_lastCommittedText, runes: _lastCommittedRunes);
-        }
-      },
-      isEcho: (dropped) => echoesSequence(
-        dropped,
-        deleted: moved.deleted,
-        inserted: moved.inserted,
-      ),
-    );
-    _captureSelectionAnchors();
-  }
-
-  /// Folds one reported move into the field.
-  ///
-  /// [text] is the handler's whole text when it had to be read; [reported] is
-  /// the delta when it did not. Exactly one of them is given.
-  ///
-  /// Done now rather than batched: taking a delta in costs the size of the
-  /// edit, so waiting would only make the field lag behind the CRDT.
-  void _settle({String? text, SequenceDelta<String>? reported}) {
-    final base = text ?? _lastCommittedText;
-    final runes = text != null
-        ? RuneOffsets.length(text)
-        : _lastCommittedRunes + _netRunes(reported);
-    // Worked out from what the handler said it did, so the whole document is
-    // never projected again for an edit of a few characters.
-    final merged = reported == null ? base : reported.applyToText(base);
-
-    if (_controller!.text != _lastCommittedText) {
-      // Uncommitted local edits (a composition in progress): commit them
-      // first. The handler merges them with what just arrived, and the push
-      // adopts the result.
-      _pushLocalEdits(handlerState: (text: merged, runes: runes));
-      return;
-    }
-
-    // After a read the delta and the controller's text belong to different
-    // bases, so the caret cannot ride on them — [reported] is null there.
-    _adopt(merged, runes: runes, reported: reported);
-  }
-
-  /// Runes [delta] puts in, net of the ones it takes out.
-  ///
   /// A move carries its element along, so it changes nothing here.
-  static int _netRunes(SequenceDelta<String>? delta) {
-    if (delta == null) {
-      return 0;
-    }
+  @override
+  int netRunes(SequenceDelta<String> delta) {
     var net = 0;
     for (final op in delta.ops) {
       switch (op) {
@@ -428,6 +206,59 @@ class _CrdtTextFieldBuilderState extends State<CrdtTextFieldBuilder> {
     return net;
   }
 
+  @override
+  int Function(int rune) offsetMapper(SequenceDelta<String> delta) =>
+      delta.mapOffset;
+
+  @override
+  String write(
+    String base,
+    String baseText,
+    TextDelta pushed,
+    int index,
+    int deleted,
+  ) {
+    final handler = _handler();
+    // One body for both handlers: same `insert` and `delete`, no shared type.
+    _document.runInTransaction(() {
+      if (deleted > 0) {
+        if (handler is CRDTTextHandler) {
+          handler.delete(index, deleted);
+        } else {
+          (handler as CRDTFugueTextHandler).delete(index, deleted);
+        }
+      }
+      if (pushed.inserted.isNotEmpty) {
+        if (handler is CRDTTextHandler) {
+          handler.insert(index, pushed.inserted);
+        } else {
+          (handler as CRDTFugueTextHandler).insert(index, pushed.inserted);
+        }
+      }
+    });
+    return baseText.replaceRange(
+      pushed.index,
+      pushed.index + pushed.deleted,
+      pushed.inserted,
+    );
+  }
+
+  @override
+  bool echoes(
+    List<SequenceDelta<String>> dropped, {
+    required int deleted,
+    required int inserted,
+  }) =>
+      echoesSequence(dropped, deleted: deleted, inserted: inserted);
+
+  @override
+  void show(TextEditingValue value, String content) {
+    _engine.controller.value = value;
+  }
+
+  @override
+  void showFormats(String content) {}
+
   /// Whether the field's text still agrees with the handler.
   ///
   /// The text is derived and never read back, so a mistake would leave a
@@ -435,45 +266,43 @@ class _CrdtTextFieldBuilderState extends State<CrdtTextFieldBuilder> {
   /// cheapest question that catches it; see
   /// [debugVerifyCrdtTextFieldProjection] for the strict version and the gap it
   /// closes.
-  bool _projectionAgrees() {
+  @override
+  bool projectionAgrees() {
     final handler = _handler();
+    final text = _engine.committedText;
     final agrees = handler is CRDTFugueTextHandler
-        ? handler.length == _lastCommittedRunes
-        : (handler as CRDTTextHandler).value == _lastCommittedText;
+        ? handler.length == _engine.committedRunes
+        : (handler as CRDTTextHandler).value == text;
     assert(
       !debugVerifyCrdtTextFieldProjection ||
-          _binding.provider.value == _lastCommittedText,
+          _engine.binding.provider.value == text,
       'the text derived from the deltas drifted from the handler',
     );
     return agrees;
   }
 
-  /// Replaces the controller text with [merged], keeping caret and selection
-  /// visually anchored (see [adoptedValue]).
-  void _adopt(
-    String merged, {
-    required int runes,
-    SequenceDelta<String>? reported,
-  }) {
-    final old = _controller!.value;
-    _lastCommittedText = merged;
-    _lastCommittedRunes = runes;
-    if (old.text == merged) {
-      _captureSelectionAnchors();
-      return;
-    }
+  @override
+  bool get anchored => _document.handlerById(widget.id) is CRDTFugueTextHandler;
 
-    final handler = _handler();
-    _controller!.value = adoptedValue(
-      old: old,
-      merged: merged,
-      baseAnchor: _anchors.base,
-      extentAnchor: _anchors.extent,
-      resolve: (anchor) => handler is CRDTFugueTextHandler
-          ? handler.indexOfStablePosition(anchor)
-          : null,
-      mapReported: reported?.mapOffset,
-    );
-    _captureSelectionAnchors();
+  @override
+  FugueElementID? anchorAt(int rune) {
+    final handler = _document.handlerById(widget.id);
+    return handler is CRDTFugueTextHandler
+        ? handler.stablePositionAt(rune)
+        : null;
   }
+
+  @override
+  int? runeOf(FugueElementID anchor) {
+    final handler = _document.handlerById(widget.id);
+    return handler is CRDTFugueTextHandler
+        ? handler.indexOfStablePosition(anchor)
+        : null;
+  }
+
+  @override
+  void selectionSettled() {}
+
+  @override
+  void remoteReported(SequenceDelta<String> delta) {}
 }
