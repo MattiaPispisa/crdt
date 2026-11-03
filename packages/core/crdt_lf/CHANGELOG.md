@@ -1,8 +1,8 @@
 ## [5.3.0](https://github.com/MattiaPispisa/crdt/tree/crdt_lf-v5.3.0/packages/core/crdt_lf)
 
-**Date:** --
+**Date:** 2026-11-03
 
-[compare to previous release](https://github.com/MattiaPispisa/crdt/compare/crdt_lf-v5.2.1...crdt_lf-v5.3.0)
+[compare to previous release](https://github.com/MattiaPispisa/crdt/compare/crdt_lf-v5.2.0...crdt_lf-v5.3.0)
 
 ### Added
 
@@ -16,15 +16,6 @@
 - `revisionForHandler` of a `HistorySession` view is O(1) and moves on every cursor jump. It was
   the change count of the handler. The live `CRDTDocument` is unchanged.
   [112](https://github.com/MattiaPispisa/crdt/issues/112)
-
-## [5.2.1](https://github.com/MattiaPispisa/crdt/tree/crdt_lf-v5.2.1/packages/core/crdt_lf)
-
-**Date:** --
-
-[compare to previous release](https://github.com/MattiaPispisa/crdt/compare/crdt_lf-v5.2.0...crdt_lf-v5.2.1)
-
-### Changed
-
 - A change in the log costs about a third of the memory (1090 → 386 bytes per change for a linear
   history): `Change.deps` is no longer kept, `Change` has no `meta` list, and a `DAGNode` holds its
   parents and children without a hash set each.
