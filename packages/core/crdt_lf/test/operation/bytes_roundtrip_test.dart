@@ -11,6 +11,12 @@ const _textPrefix = <int>[
   4, 116, 101, 120, 116,
 ];
 
+/// `[varint 20]'CRDTFugueTextHandler'[varint 4]'text'`.
+const _fugueTextPrefix = <int>[
+  20, 67, 82, 68, 84, 70, 117, 103, 117, 101, 84, 101, 120, 116, 72, 97, //
+  110, 100, 108, 101, 114, 4, 116, 101, 120, 116,
+];
+
 void main() {
   group('Operation bytes', () {
     // Pinned on purpose, and captured from the encoder before it knew about
@@ -43,6 +49,68 @@ void main() {
       expect(payloads[1], equals([..._textPrefix, 1, 1, 2]));
       // kind 2, index 0, length 1, 'h'
       expect(payloads[2], equals([..._textPrefix, 2, 0, 1, 104]));
+    });
+
+    // Pinned on purpose: these are the bytes a released CRDTFugueTextHandler
+    // writes. The rich-text handler shares this code, and none of its
+    // changes may move a single byte here.
+    test('a CRDTFugueTextHandler operation keeps its bytes', () {
+      final doc = CRDTDocument(
+        peerId: PeerId.parse('45ee6b65-b393-40b7-9755-8b66dc7d0518'),
+      );
+      CRDTFugueTextHandler(doc, 'text')
+        ..insert(0, 'Hi')
+        ..delete(0, 1)
+        ..update(0, 'h');
+
+      final payloads = doc
+          .exportChanges()
+          .sorted()
+          .map((change) => change.payloadBytes().toList())
+          .toList();
+
+      // The peer id, as an element id writes it after its flag byte.
+      const peer = <int>[
+        69, 238, 107, 101, 179, 147, 64, 183, //
+        151, 85, 139, 102, 220, 125, 5, 24,
+      ];
+
+      expect(payloads, hasLength(3));
+      expect(
+        payloads[0],
+        equals([
+          ..._fugueTextPrefix,
+          0, // kind 0 (insert)
+          0, // left origin: null id
+          0, // right origin: null id
+          2, // 2 items
+          1, ...peer, 0, // id: flag, peer, counter 0
+          1, 72, // 1 byte, 'H'
+          1, ...peer, 1, // id: flag, peer, counter 1
+          1, 105, // 1 byte, 'i'
+        ]),
+      );
+      expect(
+        payloads[1],
+        equals([
+          ..._fugueTextPrefix,
+          1, // kind 1 (delete)
+          1, // 1 item
+          1, ...peer, 0, // id: flag, peer, counter 0
+        ]),
+      );
+      // The update is stamped: bit 7 is set on the kind byte, and the stamp
+      // itself costs no bytes (it is the id of the change).
+      expect(
+        payloads[2],
+        equals([
+          ..._fugueTextPrefix,
+          130, // kind 2 (update), stamp flag 0x80
+          1, // 1 item
+          1, ...peer, 1, // id: flag, peer, counter 1
+          1, 104, // 1 byte, 'h'
+        ]),
+      );
     });
 
     // Which kinds declare themselves stamped is a local decision that costs

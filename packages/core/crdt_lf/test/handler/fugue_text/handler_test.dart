@@ -907,6 +907,69 @@ void main() {
       restored.importSnapshot(snapshot);
       expect(restoredText.value, equals(text.value));
     });
+
+    // Pinned on purpose: these are the bytes a released CRDTFugueTextHandler
+    // stores in a snapshot. The rich-text handler shares this code, and none
+    // of its changes may move a single byte here.
+    test('the snapshot blob keeps its bytes', () {
+      // Both clocks start far past the wall clock, so every tick only moves
+      // the counter `c` and the stamp below does not depend on the time. A
+      // literal, not `1 << 47`: on the web a shift is 32-bit.
+      final a = CRDTDocument(
+        peerId: PeerId.parse('45ee6b65-b393-40b7-9755-8b66dc7d0518'),
+        initialClock: HybridLogicalClock(l: 0x800000000000, c: 0),
+      );
+      final b = CRDTDocument(
+        peerId: PeerId.parse('0a1b2c3d-4e5f-4a6b-8c7d-8e9fa0b1c2d3'),
+        initialClock: HybridLogicalClock(l: 0x800000000000, c: 0),
+      );
+      final textA = CRDTFugueTextHandler(a, 'text')..insert(0, 'ab\u{1F600}c');
+      final textB = CRDTFugueTextHandler(b, 'text');
+      b.importChanges(a.exportChanges());
+      textB.insert(4, 'XY');
+      a.importChanges(b.exportChanges());
+      textA
+        ..delete(1, 1)
+        ..update(0, 'A');
+      expect(textA.value, equals('A\u{1F600}cXY'));
+
+      const peerA = <int>[
+        69, 238, 107, 101, 179, 147, 64, 183, //
+        151, 85, 139, 102, 220, 125, 5, 24,
+      ];
+      const peerB = <int>[
+        10, 27, 44, 61, 78, 95, 74, 107, //
+        140, 125, 142, 159, 160, 177, 194, 211,
+      ];
+
+      expect(
+        a.takeSnapshot(pruneHistory: false).data['text'],
+        equals([
+          1, // version
+          2, // 2 runs
+          // Run 1: peer A, counters 0..3.
+          1, ...peerA, 0, // start id: flag, peer, counter 0
+          4, // 4 elements
+          13, // liveness 0b1101: the 2nd element ('b') is deleted
+          // 7 bytes of WTF-8: 'A' (updated), 'b', U+1F600 in 4 bytes, 'c'
+          7, 65, 98, 240, 159, 152, 128, 99,
+          // Run 2: peer B, counters 0..1.
+          1, ...peerB, 0, // start id: flag, peer, counter 0
+          2, // 2 elements
+          3, // liveness 0b11
+          2, 88, 89, // 2 bytes: 'X' 'Y'
+          1, // 1 stamp
+          1, ...peerA, 0, // element: flag, peer, counter 0
+          // stamp: peer, l = 0x800000000000 (6 bytes), c = 7 (2 bytes)
+          ...peerA, 128, 0, 0, 0, 0, 0, 0, 7,
+          0, // empty liveness table
+          2, // floor: 2 peers
+          ...peerA, 3, // peer A spent up to counter 3
+          ...peerB, 1, // peer B spent up to counter 1
+        ]),
+      );
+    });
+
     // The decode path is the same code in all nine handlers, so its contract
     // is asserted once, here. Addressing is no longer part of it: the
     // framework checks the envelope belongs to this handler before looking
