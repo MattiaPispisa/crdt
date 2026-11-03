@@ -136,20 +136,29 @@ class _MarkValue {
     if (value == null || value is bool || value is String) {
       return;
     }
-    if (value is int) {
-      if (value > _maxSafeInt || value < -_maxSafeInt) {
-        throw ArgumentError.value(value, 'value', 'out of the safe int range');
-      }
+    if (_safeInt(value) != null || value is double) {
       return;
     }
-    if (value is double) {
-      return;
+    if (value is int) {
+      throw ArgumentError.value(value, 'value', 'out of the safe int range');
     }
     throw ArgumentError.value(
       value,
       'value',
       'must be null, bool, int, double or String',
     );
+  }
+
+  // dart2js cannot tell 12.0 from 12, so an integral number in the safe range
+  // is an int on every platform, and gets the same bytes everywhere.
+  static int? _safeInt(Object? value) {
+    if (value is! num || !value.isFinite || value != value.truncate()) {
+      return null;
+    }
+    if (value > _maxSafeInt || value < -_maxSafeInt) {
+      return null;
+    }
+    return value.toInt();
   }
 
   static void write(Object? value, BytesBuilder out) {
@@ -160,7 +169,8 @@ class _MarkValue {
         out.addByte(_false);
       case true:
         out.addByte(_true);
-      case final int v:
+      case final num n when _safeInt(n) != null:
+        final v = _safeInt(n)!;
         out.addByte(_int);
         UVarint.write(v >= 0 ? v * 2 : -v * 2 - 1, out);
       case final double v:

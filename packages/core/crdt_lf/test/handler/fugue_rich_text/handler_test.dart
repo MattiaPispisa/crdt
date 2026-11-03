@@ -428,13 +428,33 @@ void main() {
       ]);
     });
 
+    test('a number has the same encoding on the VM and on the web', () {
+      final source = CRDTDocument(peerId: peerA);
+      // dart2js cannot tell 12.0 from 12, so an integral double is an int on
+      // every platform; 1e20 is past the safe int range, so it stays a double.
+      open(source)
+        ..insert(0, 'abc')
+        ..format(0, 1, 'w', 12.0)
+        ..format(1, 1, 'big', 1e20);
+      final remote = CRDTDocument(peerId: peerB)
+        ..importChanges(source.exportChanges());
+      final remoteText = open(remote);
+
+      expect(remoteText.attributesAt(0)['w'], isA<int>());
+      expect(remoteText.attributesAt(0)['w'], 12);
+      expect(remoteText.attributesAt(1)['big'], 1e20);
+    });
+
     test('refuses a value it cannot encode', () {
       final text = open(CRDTDocument())..insert(0, 'ab');
       expect(() => text.format(0, 1, 'k', [1]), throwsArgumentError);
-      expect(
-        () => text.format(0, 1, 'k', 4503599627370496),
-        throwsArgumentError,
-      );
+      // On the web this literal is a double, and a double is accepted.
+      if (!identical(0, 0.0)) {
+        expect(
+          () => text.format(0, 1, 'k', 4503599627370496),
+          throwsArgumentError,
+        );
+      }
       expect(
         () => text.insert(0, 'x', attributes: {'k': const Object()}),
         throwsArgumentError,
@@ -646,6 +666,8 @@ void main() {
             attributes: {'italic': true},
           )
           ..format(301, 300, 'bold', true, expand: MarkExpand.none);
+        // The last x, where the bold ends.
+        final boldEnd = text.stablePositionAt(601);
         void edit(void Function() step) {
           text.value;
           step();
@@ -658,6 +680,8 @@ void main() {
         edit(() => text.delete(0, 300));
         // After the tombstone the bold ends on, then before the first one.
         edit(() => text.insert(1, 'y'));
+        // The run is longer than a plain walk goes: y still lands past it.
+        expect(text.indexOfStablePosition(boldEnd), 1);
         edit(() => text.insert(0, 'z'));
         expect(_read(text), [
           _s('z'),

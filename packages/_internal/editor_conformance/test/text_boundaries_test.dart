@@ -9,7 +9,7 @@ void main() {
 
   test('runeBoundary never points into a surrogate pair', () {
     expect([
-      for (var i = 0; i <= 5; i++) runeBoundary(text, i)
+      for (var i = 0; i <= 5; i++) runeBoundary(text, i),
     ], [
       0,
       1,

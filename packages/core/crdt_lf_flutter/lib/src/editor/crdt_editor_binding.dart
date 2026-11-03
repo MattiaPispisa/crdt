@@ -153,10 +153,10 @@ class CrdtEditorBinding<V, D extends ComposableDelta<D>> {
   /// Put a write of several operations in one `runInTransaction`, so the edit
   /// is one document update. While it runs, every delta of the handler is
   /// dropped: the echo of the write, and also a change another watcher writes
-  /// back from inside it. That change carries the same origin as the echo and
-  /// describes the old editor content, so an origin check cannot tell them
-  /// apart; [verifyProjection] finds it afterwards. A reset that arrives
-  /// meanwhile is delivered after the write.
+  /// back from inside it. While the write runs the binding cannot tell that
+  /// change from the echo: a write needs no origin, so the origin cannot mark
+  /// the echo. [isEcho] and [verifyProjection] find it afterwards. A reset that
+  /// arrives meanwhile is delivered after the write.
   ///
   /// When the editor [isBehind], the binding reads the handler after the
   /// write and calls [onReset] with [ResetCause.deltasMissed].

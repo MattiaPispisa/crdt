@@ -367,6 +367,53 @@ void main() {
     expectInSync('pending');
   });
 
+  testWidgets('reads the format a selection shares, emoji included', (
+    tester,
+  ) async {
+    CRDTFugueRichTextHandler(doc, 'page')
+      ..insert(0, 'a\u{1F600}bcd')
+      ..format(0, 2, 'bold', true)
+      ..format(3, 1, 'bold', true);
+    await tester.pumpWidget(host());
+    Object? boldOver(int start, int end) {
+      controller!.selection = TextSelection(
+        baseOffset: start,
+        extentOffset: end,
+      );
+      return controller!.attributeAtSelection('bold');
+    }
+
+    // In code units: 'a' 0..1 and the emoji 1..3 are bold, 'b' 3..4 is
+    // plain, 'c' 4..5 is bold, 'd' 5..6 is plain.
+    expect(boldOver(0, 3), isTrue);
+    expect(boldOver(1, 3), isTrue);
+    expect(boldOver(4, 5), isTrue);
+    expect(boldOver(0, 5), isNull);
+    expect(boldOver(3, 5), isNull);
+  });
+
+  testWidgets('the style set at a caret keeps its expand mode', (
+    tester,
+  ) async {
+    CRDTFugueRichTextHandler(doc, 'page').insert(0, 'hello');
+    await tester.pumpWidget(host());
+    controller!.selection = const TextSelection.collapsed(offset: 5);
+    controller!.format('link', 'https://a.b', expand: MarkExpand.none);
+    controller!.value = const TextEditingValue(
+      text: 'helloX',
+      selection: TextSelection.collapsed(offset: 6),
+    );
+    await tester.pump();
+    expect(pageOf(doc).attributesAt(5), {'link': 'https://a.b'});
+
+    // Typed after the link, by this peer or another: it must stay plain.
+    pageOf(doc).insert(6, 'Y');
+    await tester.pump();
+
+    expect(pageOf(doc).attributesAt(6), isEmpty);
+    expectInSync('after the link');
+  });
+
   testWidgets('the style ends with the typed text', (tester) async {
     CRDTFugueRichTextHandler(doc, 'page').insert(0, 'hello');
     await tester.pumpWidget(host());
@@ -459,6 +506,20 @@ void main() {
       controller!.undo();
       await tester.pump();
       expect(controller!.selection, const TextSelection.collapsed(offset: 0));
+    });
+
+    testWidgets('a manager passed later keeps the field mounted', (
+      tester,
+    ) async {
+      manager.track(CRDTFugueRichTextHandler(doc, 'page'));
+      await tester.pumpWidget(host());
+      await tester.showKeyboard(find.byType(TextField));
+      final before = tester.state(find.byType(EditableText));
+
+      await tester.pumpWidget(host(undoManager: manager));
+
+      expect(tester.state(find.byType(EditableText)), same(before));
+      expect(FocusManager.instance.primaryFocus?.hasFocus, isTrue);
     });
 
     testWidgets('the keyboard shortcuts undo and redo', (tester) async {

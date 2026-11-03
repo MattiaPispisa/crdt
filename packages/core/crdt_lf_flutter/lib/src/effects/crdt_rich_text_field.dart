@@ -132,6 +132,9 @@ class _CrdtRichTextFieldBuilderState extends State<CrdtRichTextFieldBuilder>
   // Where the pending attributes were set; they end when the caret leaves.
   FugueElementID? _pendingAnchor;
 
+  // The expand mode of each pending key; a key missing here expands after.
+  Map<String, MarkExpand> _pendingExpand = const {};
+
   CrdtRichTextEditingController get _c =>
       _engine.controller as CrdtRichTextEditingController;
 
@@ -182,12 +185,14 @@ class _CrdtRichTextFieldBuilderState extends State<CrdtRichTextFieldBuilder>
       skipTraversal: true,
       includeSemantics: false,
       onFocusChange: (hasFocus) => _engine.anchors.hasFocus = hasFocus,
-      child: _manager == null
-          ? child
-          : Shortcuts(
-              shortcuts: _undoShortcuts,
-              child: Actions(
-                actions: {
+      // Always in the tree, empty without a manager: adding one later must
+      // not remount the user's field and lose its focus.
+      child: Shortcuts(
+        shortcuts: _manager == null ? const {} : _undoShortcuts,
+        child: Actions(
+          actions: _manager == null
+              ? const {}
+              : {
                   UndoTextIntent: CallbackAction<UndoTextIntent>(
                     onInvoke: (_) => undo(),
                   ),
@@ -195,9 +200,9 @@ class _CrdtRichTextFieldBuilderState extends State<CrdtRichTextFieldBuilder>
                     onInvoke: (_) => redo(),
                   ),
                 },
-                child: child,
-              ),
-            ),
+          child: child,
+        ),
+      ),
     );
   }
 
@@ -240,13 +245,24 @@ class _CrdtRichTextFieldBuilderState extends State<CrdtRichTextFieldBuilder>
       final rune = RuneOffsets.runeIndex(text, selection.baseOffset);
       return rune == 0 ? null : _handler.attributesAt(rune - 1)[key];
     }
-    final start = RuneOffsets.runeIndex(text, selection.start);
-    final end = RuneOffsets.runeIndex(text, selection.end);
-    final handler = _handler;
-    final first = handler.attributesAt(start)[key];
-    for (var i = start + 1; i < end; i++) {
-      if (handler.attributesAt(i)[key] != first) {
-        return null;
+    // The spans are the handler's, in code units like the selection: one look
+    // per run instead of one per rune.
+    Object? first;
+    var seen = false;
+    var offset = 0;
+    for (final span in _c.spans) {
+      final end = offset + span.text.length;
+      if (end > selection.start) {
+        final value = span.attributes[key];
+        if (seen && value != first) {
+          return null;
+        }
+        first = value;
+        seen = true;
+      }
+      offset = end;
+      if (offset >= selection.end) {
+        break;
       }
     }
     return first;
@@ -260,9 +276,9 @@ class _CrdtRichTextFieldBuilderState extends State<CrdtRichTextFieldBuilder>
     final selection = _c.selection;
     final text = _c.spansText;
     if (selection.isCollapsed) {
-      final current = _pendingStillValid()
-          ? _c.pendingAttributes
-          : const <String, Object?>{};
+      final valid = _pendingStillValid();
+      final current = valid ? _c.pendingAttributes : const <String, Object?>{};
+      _pendingExpand = {if (valid) ..._pendingExpand, key: expand};
       _pendingAnchor = _handler.stablePositionAt(
         RuneOffsets.runeIndex(text, selection.baseOffset),
       );
@@ -407,7 +423,7 @@ class _CrdtRichTextFieldBuilderState extends State<CrdtRichTextFieldBuilder>
         if (deleted > 0) {
           handler.delete(index, deleted);
         }
-        _insert(handler, index, pushed.inserted, pending);
+        _insert(handler, index, pushed.inserted, pending, _pendingExpand);
       },
       origin: crdtRichTextFieldOrigin,
     );
@@ -494,6 +510,7 @@ class _CrdtRichTextFieldBuilderState extends State<CrdtRichTextFieldBuilder>
     int index,
     String text,
     Map<String, Object?> pending,
+    Map<String, MarkExpand> expands,
   ) {
     if (text.isEmpty) {
       return;
@@ -502,14 +519,25 @@ class _CrdtRichTextFieldBuilderState extends State<CrdtRichTextFieldBuilder>
       handler.insert(index, text);
       return;
     }
+    // `insert` expands its attributes after; another mode needs a format.
+    final after = <String, Object?>{};
+    final others = <String, Object?>{};
+    for (final MapEntry(:key, :value) in pending.entries) {
+      ((expands[key] ?? MarkExpand.after) == MarkExpand.after
+          ? after
+          : others)[key] = value;
+    }
     var at = index;
     for (final part in _splitNewlines(text)) {
-      handler.insert(
-        at,
-        part,
-        attributes: part == '\n' ? const {} : pending,
-      );
-      at += RuneOffsets.length(part);
+      final length = RuneOffsets.length(part);
+      final newline = part == '\n';
+      handler.insert(at, part, attributes: newline ? const {} : after);
+      if (!newline) {
+        for (final MapEntry(:key, :value) in others.entries) {
+          handler.format(at, length, key, value, expand: expands[key]!);
+        }
+      }
+      at += length;
     }
   }
 

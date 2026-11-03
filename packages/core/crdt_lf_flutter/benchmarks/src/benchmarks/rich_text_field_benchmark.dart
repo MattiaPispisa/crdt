@@ -138,6 +138,44 @@ class RichFormatBenchmark extends RichTextFieldBenchmark {
   }
 }
 
+/// A toolbar reading the state of six formats over a selection of the whole
+/// text, as it does on each change of the selection.
+class RichSelectionStateBenchmark extends RichTextFieldBenchmark {
+  /// Creates the benchmark for a document of [size] characters.
+  RichSelectionStateBenchmark(WidgetTester tester, {required this.size})
+      : super(
+          'Rich text: 6 format states of a select-all, $size chars',
+          tester,
+        );
+
+  /// How many characters the document holds to begin with.
+  final int size;
+
+  static const _keys = [
+    'bold',
+    'italic',
+    'underline',
+    'strike',
+    'link',
+    'size',
+  ];
+
+  @override
+  Future<void> setup() async {
+    final document = CRDTDocument();
+    _document(document, size);
+    await mount(document);
+    controller.selection = TextSelection(baseOffset: 0, extentOffset: size);
+  }
+
+  @override
+  Future<void> run() async {
+    for (final key in _keys) {
+      controller.attributeAtSelection(key);
+    }
+  }
+}
+
 /// Taking in someone else's keystroke or format.
 class RichRemoteBenchmark extends RichTextFieldBenchmark {
   /// Creates the benchmark for a document of [size] characters.
@@ -271,6 +309,16 @@ void main() {
     (tester) async {
       for (final size in [10000, 50000]) {
         await RichFormatBenchmark(tester, size: size).report();
+      }
+    },
+    timeout: timeout,
+  );
+
+  testWidgets(
+    'reading the format state',
+    (tester) async {
+      for (final size in [10000, 50000]) {
+        await RichSelectionStateBenchmark(tester, size: size).report();
       }
     },
     timeout: timeout,

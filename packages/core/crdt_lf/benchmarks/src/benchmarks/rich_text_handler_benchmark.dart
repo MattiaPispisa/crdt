@@ -300,6 +300,39 @@ class _FormatBenchmark extends FixedCycleTimedBenchmark {
   }
 }
 
+/// Typing where half the text was deleted, while a link (which does not
+/// expand) is anchored elsewhere: each insert looks at the tombstones at its
+/// place.
+class _KeystrokeAfterDeleteBenchmark extends FixedCycleTimedBenchmark {
+  _KeystrokeAfterDeleteBenchmark()
+      : super(
+          'Rich text keystroke after deleting half of $_kChars chars, '
+          'with a link',
+        );
+
+  late CRDTFugueRichTextHandler _text;
+  int _at = 0;
+
+  @override
+  void setup() {
+    _at = _kChars ~/ 4;
+    final text =
+        _Text(_Shape.richText, CRDTDocument(peerId: PeerId.generate()));
+    _seed(_Shape.richText, text, _kChars);
+    _text = (text.handler as CRDTFugueRichTextHandler)
+      ..format(0, 5, 'link', 'https://a.b', expand: MarkExpand.none)
+      ..delete(_kChars ~/ 4, _kChars ~/ 2);
+  }
+
+  @override
+  void run() {
+    // Forward, as a user types: each rune lands in front of the tombstones.
+    _text
+      ..insert(_at++, 'x')
+      ..length;
+  }
+}
+
 /// Peer B imports all the changes peer A wrote, one insert per line, then
 /// reads the value.
 class _ImportBenchmark extends FixedCycleTimedBenchmark {
@@ -543,6 +576,8 @@ void main() {
       _FormatBenchmark(shape, watched: watched).report();
     }
   }
+
+  _KeystrokeAfterDeleteBenchmark().report();
 
   for (final shape in _Shape.values) {
     _ImportBenchmark(shape).report();

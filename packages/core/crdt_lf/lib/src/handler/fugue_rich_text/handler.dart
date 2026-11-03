@@ -187,9 +187,41 @@ base class CRDTFugueRichTextHandler
     final tree = state._tree;
     var origins = (left, right);
     var node = right;
+    var steps = 0;
     while (!node.isNull && !tree.isLive(node)) {
+      if (++steps > state._walkLimit) {
+        return _originsPastLongGap(state, index, left, right);
+      }
       final next = nodeAfter(node);
       if (anchored.contains(node)) {
+        origins = (node, next);
+      }
+      node = next;
+    }
+    return origins;
+  }
+
+  // The same rule over a long run of tombstones, as when typing where a big
+  // block was deleted: walk only up to the last anchored one, found by its
+  // live index, so typing there does not cost the length of the run.
+  (FugueElementID, FugueElementID) _originsPastLongGap(
+    RichTextState state,
+    int index,
+    FugueElementID left,
+    FugueElementID right,
+  ) {
+    final tree = state._tree;
+    // A tombstone of the run right after [left] has exactly [index] live
+    // elements before it.
+    final inGap = {
+      for (final id in state._afterAnchored)
+        if (!tree.isLive(id) && tree.liveIndexAfter(id) == index) id,
+    };
+    var origins = (left, right);
+    var node = right;
+    while (inGap.isNotEmpty) {
+      final next = nodeAfter(node);
+      if (inGap.remove(node)) {
         origins = (node, next);
       }
       node = next;
