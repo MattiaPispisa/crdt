@@ -48,6 +48,8 @@ Delta quillDeltaFromRichText(RichTextDelta delta, String before) {
         final end = RuneOffsets.skip(before, unit, op.count);
         result.delete(end - unit);
         unit = end;
+      case RichTextInsertEmbed() || RichTextUpdateEmbed():
+        throw UnsupportedError('crdt_lf_quill does not support embeds');
     }
   }
   return result..trim();

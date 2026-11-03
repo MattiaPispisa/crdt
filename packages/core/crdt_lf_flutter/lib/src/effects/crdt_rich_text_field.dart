@@ -391,11 +391,11 @@ class _CrdtRichTextFieldBuilderState extends State<CrdtRichTextFieldBuilder>
     var net = 0;
     for (final op in delta.ops) {
       switch (op) {
-        case RichTextInsert():
+        case RichTextInsert() || RichTextInsertEmbed():
           net += op.length;
         case RichTextDelete():
           net -= op.count;
-        case RichTextRetain():
+        case RichTextRetain() || RichTextUpdateEmbed():
           break;
       }
     }
@@ -485,10 +485,11 @@ class _CrdtRichTextFieldBuilderState extends State<CrdtRichTextFieldBuilder>
     var end = 0;
     for (final op in delta.ops) {
       switch (op) {
-        case RichTextInsert():
+        case RichTextInsert() ||
+              RichTextInsertEmbed() ||
+              RichTextRetain() ||
+              RichTextUpdateEmbed():
           end += op.length;
-        case RichTextRetain():
-          end += op.count;
         case RichTextDelete():
           break;
       }

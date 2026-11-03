@@ -28,6 +28,8 @@ class RichTextState extends FugueState<String, List<RichTextSpan>> {
 
   String? _textCache;
 
+  _EmbedTable _embeds = _EmbedTable();
+
   // The spans need the marks, which the tree alone does not hold.
   static List<RichTextSpan> _unprojected(FugueTree<String> tree) =>
       throw UnsupportedError('read the spans from RichTextState');
@@ -81,6 +83,11 @@ class RichTextState extends FugueState<String, List<RichTextSpan>> {
   }
 
   void _treeChanged(Operation operation, SequenceDelta<String>? delta) {
+    if (operation is _FugueRichTextEmbedOperation) {
+      _embeds.inserted(operation);
+    } else if (operation is FugueTextDeleteOperation) {
+      _embeds.deletedIn(operation);
+    }
     _textCache = null;
     _spansCache = null;
     final resolved = _resolvedCache;
@@ -300,11 +307,103 @@ class RichTextState extends FugueState<String, List<RichTextSpan>> {
       return cached;
     }
     final runes = _tree.values();
-    final result = <RichTextSpan>[
-      for (final run in _resolved().runsIn(0, runes.length))
-        RichTextSpan(runes.sublist(run.start, run.end).join(), run.attributes),
-    ];
+    final runs = _resolved().runsIn(0, runes.length);
+    if (_embeds.live.isEmpty) {
+      return _spansCache = List.unmodifiable(<RichTextSpan>[
+        for (final run in runs)
+          RichTextSpan(
+            runes.sublist(run.start, run.end).join(),
+            run.attributes,
+          ),
+      ]);
+    }
+
+    final embeds = <({int index, Map<String, Object?> data})>[];
+    var index = 0;
+    _tree.forEachLiveNode((id, _) {
+      final embed = _embeds.live[id];
+      if (embed != null) {
+        embeds.add((index: index, data: embed.data));
+      }
+      index++;
+    });
+
+    final result = <RichTextSpan>[];
+    var next = 0;
+    for (final run in runs) {
+      var start = run.start;
+      while (next < embeds.length && embeds[next].index < run.end) {
+        final at = embeds[next].index;
+        if (start < at) {
+          result.add(
+            RichTextSpan(runes.sublist(start, at).join(), run.attributes),
+          );
+        }
+        result.add(RichTextSpan.embed(embeds[next].data, run.attributes));
+        start = at + 1;
+        next++;
+      }
+      if (start < run.end) {
+        result.add(
+          RichTextSpan(runes.sublist(start, run.end).join(), run.attributes),
+        );
+      }
+    }
     return _spansCache = List.unmodifiable(result);
+  }
+}
+
+class _EmbedTable {
+  final Map<FugueElementID, _Embed> live = {};
+
+  final Set<FugueElementID> deleted = {};
+
+  void inserted(_FugueRichTextEmbedOperation operation) {
+    live[operation.element] = _Embed(operation.data, operation.stamp!);
+  }
+
+  void deletedIn(FugueTextDeleteOperation operation) {
+    if (live.isEmpty) {
+      return;
+    }
+    for (final item in operation.items) {
+      if (live.remove(item.nodeID) != null) {
+        deleted.add(item.nodeID);
+      }
+    }
+  }
+
+  bool update(_FugueRichTextEmbedUpdateOperation operation) {
+    final current = live[operation.element];
+    final stamp = operation.stamp!;
+    if (current == null || stamp.compareTo(current.stamp) <= 0) {
+      return false;
+    }
+    live[operation.element] = _Embed(operation.data, stamp);
+    return true;
+  }
+
+  // The update without the items that name an embed, or null when none is
+  // left.
+  FugueTextUpdateOperation? withoutEmbeds(FugueTextUpdateOperation operation) {
+    if (live.isEmpty) {
+      return operation;
+    }
+    final items = [
+      for (final item in operation.items)
+        if (!live.containsKey(item.nodeID)) item,
+    ];
+    if (items.length == operation.items.length) {
+      return operation;
+    }
+    if (items.isEmpty) {
+      return null;
+    }
+    return FugueTextUpdateOperation(
+      items: items,
+      id: operation.id,
+      type: operation.type,
+    )..stamp = operation.stamp;
   }
 }
 

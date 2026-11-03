@@ -438,6 +438,54 @@ class _RemoteFormatBenchmark extends _RemoteBenchmark {
       );
 }
 
+/// A remote delete on a watched document whose resolved runs are cold, then
+/// a read of the length: the delete needs no runs.
+class _RemoteDeleteColdBenchmark extends PreparedCycleBenchmark {
+  _RemoteDeleteColdBenchmark()
+      : super(
+          'Rich text (marked lines) remote delete + length on a cold cache '
+          '(watched)',
+        );
+
+  late Snapshot _snapshot;
+  late List<Change> _delete;
+  late CRDTDocument _target;
+  late _Text _targetText;
+  _Watcher? _watcher;
+
+  @override
+  void setup() {
+    final source = CRDTDocument(peerId: PeerId.generate());
+    final text = _Text(_Shape.richTextMarked, source);
+    _seed(_Shape.richTextMarked, text, _kChars);
+    _snapshot = source.takeSnapshot();
+    final before = source.getVersionVector();
+    text.delete(_kChars ~/ 2, 1);
+    _delete = source.exportChanges(fromVersionVector: before);
+  }
+
+  @override
+  void prepare(int round) {
+    _watcher?.close();
+    _target = CRDTDocument(peerId: PeerId.generate())
+      ..importSnapshot(_snapshot);
+    _targetText = _Text(_Shape.richTextMarked, _target)..length;
+    _watcher = _Watcher(_targetText);
+  }
+
+  @override
+  void cycle(int round) {
+    _target.importChanges(_delete);
+    _targetText.length;
+  }
+
+  @override
+  void teardown() {
+    _watcher?.close();
+    _watcher = null;
+  }
+}
+
 class _SnapshotTakeBenchmark extends TimedBenchmarkBase {
   _SnapshotTakeBenchmark(this.shape, this.elements)
       : super('${shape.label} takeSnapshot of $elements elements');
@@ -604,4 +652,6 @@ void main() {
       _UndoDeleteBenchmark(shape, deleted).report();
     }
   }
+
+  _RemoteDeleteColdBenchmark().report();
 }

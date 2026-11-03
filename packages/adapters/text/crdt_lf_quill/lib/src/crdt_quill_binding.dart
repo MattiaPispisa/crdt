@@ -452,6 +452,8 @@ bool _staysBefore(RichTextDelta delta, int anchor) {
         if (index > anchor) {
           return false;
         }
+      case RichTextInsertEmbed() || RichTextUpdateEmbed():
+        throw UnsupportedError('crdt_lf_quill does not support embeds');
       case RichTextDelete():
         if (index + op.count > anchor) {
           return false;

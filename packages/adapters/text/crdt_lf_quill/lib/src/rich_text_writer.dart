@@ -34,6 +34,8 @@ void writeRichTextDelta(CRDTFugueRichTextHandler handler, RichTextDelta delta) {
         if (count > 0) {
           handler.delete(index, count);
         }
+      case RichTextInsertEmbed() || RichTextUpdateEmbed():
+        throw UnsupportedError('crdt_lf_quill does not support embeds');
     }
   }
 }

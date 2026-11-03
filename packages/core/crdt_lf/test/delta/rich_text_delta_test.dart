@@ -8,6 +8,9 @@ import 'package:test/test.dart';
 
 RichTextDelta _d(List<RichTextOp> ops) => RichTextDelta(ops);
 
+const _image = <String, Object?>{'image': 'a.png'};
+const _video = <String, Object?>{'video': 'b.mp4'};
+
 void main() {
   group('RichTextDelta.apply', () {
     test('inserts, formats and deletes spans by rune', () {
@@ -30,6 +33,20 @@ void main() {
         RichTextSpan('d'),
       ]);
       expect(base.first.text, 'a\u{1F600}b');
+    });
+
+    test('formats, updates and inserts embeds', () {
+      final base = [RichTextSpan('a'), RichTextSpan.embed(_image)];
+      final delta = _d([
+        RichTextRetain(1),
+        RichTextUpdateEmbed(_video, {'width': 2}),
+        RichTextInsertEmbed(_image),
+      ]);
+      expect(delta.apply(base), [
+        RichTextSpan('a'),
+        RichTextSpan.embed(_video, {'width': 2}),
+        RichTextSpan.embed(_image),
+      ]);
     });
   });
 
@@ -75,6 +92,61 @@ void main() {
       );
     });
 
+    group('an embed', () {
+      test('insert then retain merges the attributes', () {
+        expect(
+          _d([
+            RichTextInsertEmbed(_image, {'bold': true}),
+          ]).compose(
+            _d([
+              RichTextRetain(1, {'bold': null, 'width': 1}),
+            ]),
+          ),
+          _d([
+            RichTextInsertEmbed(_image, {'width': 1}),
+          ]),
+        );
+      });
+
+      test('insert then update keeps the insert with the new data', () {
+        expect(
+          _d([
+            RichTextInsertEmbed(_image, {'bold': true}),
+          ]).compose(_d([RichTextUpdateEmbed(_video)])),
+          _d([
+            RichTextInsertEmbed(_video, {'bold': true}),
+          ]),
+        );
+      });
+
+      test('update then update keeps the last', () {
+        expect(
+          _d([RichTextUpdateEmbed(_image)])
+              .compose(_d([RichTextUpdateEmbed(_video)])),
+          _d([RichTextUpdateEmbed(_video)]),
+        );
+      });
+
+      test('insert then delete cancels out', () {
+        expect(
+          _d([RichTextInsertEmbed(_image)])
+              .compose(_d([const RichTextDelete(1)])),
+          const RichTextDelta.empty(),
+        );
+      });
+
+      test('a format then an update keeps both', () {
+        expect(
+          _d([
+            RichTextRetain(1, {'bold': null}),
+          ]).compose(_d([RichTextUpdateEmbed(_video)])),
+          _d([
+            RichTextUpdateEmbed(_video, {'bold': null}),
+          ]),
+        );
+      });
+    });
+
     test('composing equals applying in order, over random deltas', () {
       final random = Random(7);
       const keys = ['bold', 'size'];
@@ -88,13 +160,28 @@ void main() {
         var left = length;
         while (left > 0 || random.nextInt(3) == 0) {
           final count = left == 0 ? 0 : random.nextInt(left) + 1;
-          switch (random.nextInt(3)) {
+          switch (random.nextInt(5)) {
             case 0 when count > 0:
               ops.add(RichTextRetain(count, attributes(nulls: true)));
               left -= count;
             case 1 when count > 0:
               ops.add(RichTextDelete(count));
               left -= count;
+            case 2:
+              ops.add(
+                RichTextInsertEmbed(
+                  {'n': random.nextInt(3)},
+                  attributes(nulls: false),
+                ),
+              );
+            case 3 when count > 0:
+              ops.add(
+                RichTextUpdateEmbed(
+                  {'n': random.nextInt(3)},
+                  attributes(nulls: true),
+                ),
+              );
+              left -= 1;
             default:
               ops.add(RichTextInsert('xy\u{1F600}', attributes(nulls: false)));
           }
@@ -111,6 +198,7 @@ void main() {
       for (var round = 0; round < 200; round++) {
         final base = [
           RichTextSpan('ab', {'bold': 1}),
+          RichTextSpan.embed(_image),
           RichTextSpan('c\u{1F600}d'),
         ];
         final first = randomDelta(lengthOf(base));
@@ -145,6 +233,17 @@ void main() {
       expect(delta.mapOffset(3), 4);
       expect(delta.mapOffset(5), 5);
     });
+
+    test('an embed insert is one rune, an update moves nothing', () {
+      final delta = _d([
+        RichTextRetain(1),
+        RichTextInsertEmbed(_image),
+        RichTextUpdateEmbed(_video),
+      ]);
+      expect(delta.mapOffset(1), 1);
+      expect(delta.mapOffset(2), 3);
+      expect(delta.mapOffset(3), 4);
+    });
   });
 
   group('RichTextDelta value semantics', () {
@@ -162,6 +261,8 @@ void main() {
       final span = RichTextSpan('x', {'a': 1, 'b': 2});
       expect(span, RichTextSpan('x', {'b': 2, 'a': 1}));
       expect(span.hashCode, RichTextSpan('x', {'b': 2, 'a': 1}).hashCode);
+      expect(RichTextSpan.embed(_image), isNot(RichTextSpan.embed(_video)));
+      expect(RichTextSpan.embed(_image), isNot(RichTextSpan('\uFFFC')));
       expect(
         a,
         isNot(
@@ -185,6 +286,20 @@ void main() {
           RichTextRetain(2),
         ]).ops,
         [RichTextRetain(2), RichTextInsert('ab'), const RichTextDelete(1)],
+      );
+      expect(
+        _d([
+          const RichTextDelete(1),
+          RichTextInsertEmbed(_image),
+          RichTextInsertEmbed(_image),
+          RichTextUpdateEmbed(_video),
+        ]).ops,
+        [
+          RichTextInsertEmbed(_image),
+          RichTextInsertEmbed(_image),
+          const RichTextDelete(1),
+          RichTextUpdateEmbed(_video),
+        ],
       );
       expect(_d([RichTextRetain(1)]).isEmpty, isTrue);
       expect(

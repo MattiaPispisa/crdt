@@ -11,9 +11,11 @@ import 'package:crdt_lf/src/handler/fugue/fugue_snapshot.dart';
 import 'package:crdt_lf/src/handler/fugue/fugue_text_sequence_handler.dart';
 import 'package:crdt_lf/src/snapshot/blob_version.dart';
 import 'package:crdt_lf/src/utils/attributes.dart';
+import 'package:crdt_lf/src/utils/embed_data.dart';
 
 part 'anchor_slots.dart';
 part 'delta_builder.dart';
+part 'embed.dart';
 part 'inversion.dart';
 part 'mark.dart';
 part 'operation.dart';
@@ -90,8 +92,16 @@ base class CRDTFugueRichTextHandler
     extends FugueTextSequenceHandler<List<RichTextSpan>, RichTextState>
     with DeltaProvider<List<RichTextSpan>, RichTextDelta> {
   /// Opens the rich text handler `id` of `doc`.
-  CRDTFugueRichTextHandler(super.doc, super.id)
-      : super(spec: CRDTFugueRichTextHandler.spec);
+  CRDTFugueRichTextHandler(
+    super.doc,
+    super.id, {
+    this.maxEmbedBytes = _defaultMaxEmbedBytes,
+  }) : super(spec: CRDTFugueRichTextHandler.spec);
+
+  static const int _defaultMaxEmbedBytes = 256 * 1024;
+
+  /// The most encoded bytes an embed written here can take; `null` for none.
+  int? maxEmbedBytes;
 
   static const String _handlerType = 'CRDTFugueRichTextHandler';
 
@@ -103,6 +113,8 @@ base class CRDTFugueRichTextHandler
   );
 
   static const int _kindMark = 4;
+  static const int _kindEmbed = 5;
+  static const int _kindEmbedUpdate = 6;
 
   static const HandlerFormats _formats = HandlerFormats(
     operationKinds: {
@@ -110,6 +122,8 @@ base class CRDTFugueRichTextHandler
       OperationType.kindDelete,
       OperationType.kindUpdate,
       _kindMark,
+      _kindEmbed,
+      _kindEmbedUpdate,
     },
     blobVersions: BlobVersionRange.single(FugueSnapshot.version),
   );
@@ -122,11 +136,38 @@ base class CRDTFugueRichTextHandler
     stamped: true,
   );
 
+  late final OperationType _embedType = OperationType.custom(
+    this,
+    kind: _kindEmbed,
+    name: 'embed',
+  );
+
+  late final OperationType _embedUpdateType = OperationType.custom(
+    this,
+    kind: _kindEmbedUpdate,
+    name: 'embedUpdate',
+    stamped: true,
+  );
+
   @override
   late final OperationDecoders operationDecoders = {
     ...super.operationDecoders,
     _kindMark: (body) => _FugueRichTextMarkOperation.fromBodyBytes(this, body),
+    _kindEmbed: (body) =>
+        _FugueRichTextEmbedOperation.fromBodyBytes(this, body),
+    _kindEmbedUpdate: (body) =>
+        _FugueRichTextEmbedUpdateOperation.fromBodyBytes(this, body),
   };
+
+  static void _refuseObjectReplacement(String text) {
+    if (text.contains(RichTextSpan.objectReplacement)) {
+      throw ArgumentError.value(
+        text,
+        'text',
+        'holds U+FFFC, which stands for an embed',
+      );
+    }
+  }
 
   /// Inserts [text] at [index], **in runes**, with [attributes] on top.
   ///
@@ -149,6 +190,7 @@ base class CRDTFugueRichTextHandler
     if (text.isEmpty) {
       return;
     }
+    _refuseObjectReplacement(text);
     for (final value in attributes.values) {
       _MarkValue.check(value);
     }
@@ -171,6 +213,74 @@ base class CRDTFugueRichTextHandler
       doc.registerOperation(insert);
       _markInserted(insert.items, attributes, inherit: inherit);
     });
+  }
+
+  /// Inserts the embed [embed] at [index], **in runes**.
+  void insertEmbed(
+    int index,
+    Map<String, Object?> embed, {
+    Map<String, Object?> attributes = const {},
+    bool inherit = true,
+  }) {
+    for (final value in attributes.values) {
+      _MarkValue.check(value);
+    }
+    final prepared = _EmbedValue.prepare(embed, maxEmbedBytes);
+
+    final (leftOrigin, rightOrigin) = _insertOrigins(index);
+    final insert = _FugueRichTextEmbedOperation(
+      id: id,
+      type: _embedType,
+      leftOrigin: leftOrigin,
+      rightOrigin: rightOrigin,
+      element: FugueElementID(doc.peerId, nextCounter()),
+      data: prepared.data,
+      dataBytes: prepared.bytes,
+    );
+
+    if (attributes.isEmpty && inherit) {
+      doc.registerOperation(insert);
+      return;
+    }
+
+    doc.runInTransaction(() {
+      doc.registerOperation(insert);
+      _markInserted(insert.items, attributes, inherit: inherit);
+    });
+  }
+
+  /// Replaces the data of the embed at [index] with [embed].
+  void updateEmbed(int index, Map<String, Object?> embed) {
+    RangeError.checkValidIndex(index, this, 'index', length);
+    final element = nodeAt(index);
+    if (!cachedOrComputedState()._embeds.live.containsKey(element)) {
+      throw ArgumentError.value(index, 'index', 'is not an embed');
+    }
+    final prepared = _EmbedValue.prepare(embed, maxEmbedBytes);
+    doc.registerOperation(
+      _FugueRichTextEmbedUpdateOperation(
+        id: id,
+        type: _embedUpdateType,
+        element: element,
+        data: prepared.data,
+        dataBytes: prepared.bytes,
+      ),
+    );
+  }
+
+  @override
+  void update(int index, String text) {
+    _refuseObjectReplacement(text);
+    final embeds = cachedOrComputedState()._embeds.live;
+    if (embeds.isNotEmpty) {
+      final end = index + RuneOffsets.length(text);
+      for (var i = index < 0 ? 0 : index; i < end && i < length; i++) {
+        if (embeds.containsKey(nodeAt(i))) {
+          throw ArgumentError.value(index, 'index', 'covers an embed at $i');
+        }
+      }
+    }
+    super.update(index, text);
   }
 
   // Peritext's rule: among the tombstones at the insert position, go after the
@@ -258,7 +368,9 @@ base class CRDTFugueRichTextHandler
 
     var runStart = 0;
     for (var i = 0; i <= items.length; i++) {
-      final atBreak = i == items.length || items[i].text == '\n';
+      final atBreak = i == items.length ||
+          items[i].text == '\n' ||
+          items[i].text == RichTextSpan.objectReplacement;
       if (!atBreak) {
         continue;
       }
@@ -401,7 +513,17 @@ base class CRDTFugueRichTextHandler
   ///
   /// The runes that stay keep their attributes. Inserted runes get the
   /// formats that expand over them, as with [insert].
-  void change(String newText) => applyFugueTextChange(this, text, newText);
+  void change(String newText) {
+    final current = text;
+    if (newText.contains(RichTextSpan.objectReplacement)) {
+      for (final segment in myersDiff(current, newText)) {
+        if (segment.op == DiffOp.insert) {
+          _refuseObjectReplacement(segment.text);
+        }
+      }
+    }
+    applyFugueTextChange(this, current, newText);
+  }
 
   @override
   RichTextState createEmptyState() => RichTextState.empty();
@@ -409,15 +531,21 @@ base class CRDTFugueRichTextHandler
   // The marks the replay of [computeState] meets, kept for after the tree.
   List<_FugueRichTextMarkOperation>? _replayedMarks;
 
+  // The embeds the replay of [computeState] meets.
+  _EmbedTable? _replayedEmbeds;
+
   @override
   RichTextState computeState() {
     final replayed = _replayedMarks = [];
+    final embeds = _replayedEmbeds = _EmbedTable();
     final RichTextState state;
     try {
       state = super.computeState();
     } finally {
       _replayedMarks = null;
+      _replayedEmbeds = null;
     }
+    state._embeds = embeds;
     final snapshot = lastSnapshot();
     if (snapshot != null) {
       _MarksSection.read(snapshot).forEach(state._putMark);
@@ -440,20 +568,39 @@ base class CRDTFugueRichTextHandler
       sink.add(_markDelta(state, operation));
       return;
     }
+    if (operation is _FugueRichTextEmbedUpdateOperation) {
+      final won = state._embeds.update(operation);
+      if (won) {
+        state._spansCache = null;
+      }
+      sink?.add(
+        won ? _embedUpdateDelta(state, operation) : const RichTextDelta.empty(),
+      );
+      return;
+    }
+    var applied = operation;
+    if (operation is FugueTextUpdateOperation) {
+      final kept = state._embeds.withoutEmbeds(operation);
+      if (kept == null) {
+        sink?.add(const RichTextDelta.empty());
+        return;
+      }
+      applied = kept;
+    }
 
     // The resolved runs shift with the text, so they need its delta.
     final shifts = state._resolvedCache != null &&
-        (operation is FugueTextInsertOperation ||
-            operation is FugueTextDeleteOperation);
+        (applied is FugueTextInsertOperation ||
+            applied is FugueTextDeleteOperation);
     if (sink == null && !shifts) {
-      super.applyOperation(state, operation);
-      state._treeChanged(operation, null);
+      super.applyOperation(state, applied);
+      state._treeChanged(applied, null);
       return;
     }
     final collected = _SequenceCollector();
-    super.applyOperation(state, operation, sink: collected);
-    state._treeChanged(operation, collected.delta);
-    sink?.add(_richDelta(state, collected.delta));
+    super.applyOperation(state, applied, sink: collected);
+    state._treeChanged(applied, collected.delta);
+    sink?.add(_richDelta(state, applied, collected.delta));
   }
 
   @override
@@ -468,7 +615,28 @@ base class CRDTFugueRichTextHandler
       _replayedMarks?.add(operation);
       return;
     }
-    super.applyToTree(tree, operation, sink: sink);
+    final embeds = _replayedEmbeds;
+    if (embeds == null) {
+      super.applyToTree(tree, operation, sink: sink);
+      return;
+    }
+    switch (operation) {
+      case final _FugueRichTextEmbedUpdateOperation update:
+        embeds.update(update);
+      case final FugueTextUpdateOperation update:
+        final kept = embeds.withoutEmbeds(update);
+        if (kept != null) {
+          super.applyToTree(tree, kept, sink: sink);
+        }
+      case final _FugueRichTextEmbedOperation insert:
+        super.applyToTree(tree, insert, sink: sink);
+        embeds.inserted(insert);
+      case final FugueTextDeleteOperation delete:
+        super.applyToTree(tree, delete, sink: sink);
+        embeds.deletedIn(delete);
+      default:
+        super.applyToTree(tree, operation, sink: sink);
+    }
   }
 
   @override

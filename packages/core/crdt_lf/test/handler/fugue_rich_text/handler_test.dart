@@ -751,6 +751,381 @@ void main() {
       });
     });
 
+    group('embeds', () {
+      const image = <String, Object?>{'image': 'a.png'};
+
+      FugueElementID elementAt(CRDTFugueRichTextHandler text, int index) =>
+          text.stablePositionAt(index + 1);
+
+      // Writes an operation of [kind] the public API would refuse, as peer C.
+      void craft(
+        CRDTDocument doc,
+        CRDTFugueRichTextHandler text,
+        int kind,
+        List<int> body, {
+        bool stamped = false,
+        int clock = 1,
+        int time = 1 << 46,
+      }) =>
+          doc.applyChange(
+            Change.fromPayloadBytes(
+              id: OperationId(peerC, HybridLogicalClock(l: time, c: clock)),
+              deps: doc.version,
+              author: peerC,
+              payloadBytes: OperationEnvelopeCodec.encode(
+                handlerType: text.handlerType,
+                handlerId: text.id,
+                kind: kind,
+                stamped: stamped,
+                body: Uint8List.fromList(body),
+              ),
+            ),
+          );
+
+      test('an embed is one U+FFFC rune and a span of its own', () {
+        final text = open(CRDTDocument(peerId: peerA))
+          ..insert(0, 'ab')
+          ..insertEmbed(1, image)
+          ..insertEmbed(2, {'video': 'b.mp4'})
+          ..format(0, 4, 'bold', true);
+
+        expect(text.text, 'a\uFFFC\uFFFCb');
+        expect(text.length, 4);
+        expect(text.value, [
+          RichTextSpan('a', {'bold': true}),
+          RichTextSpan.embed(image, {'bold': true}),
+          RichTextSpan.embed({'video': 'b.mp4'}, {'bold': true}),
+          RichTextSpan('b', {'bold': true}),
+        ]);
+        expect(text.attributesAt(1), {'bold': true});
+      });
+
+      test('every value type crosses the wire', () {
+        final data = <String, Object?>{
+          'z': null,
+          'f': false,
+          't': true,
+          'neg': -42,
+          'max': 4503599627370495,
+          'w': 12.0,
+          'half': 1.5,
+          'big': 1e20,
+          'str': 'h\u{1F600}llo',
+          'list': [
+            1,
+            [2],
+          ],
+          'map': {
+            'b': 1,
+            'a': {'c': true},
+          },
+          'bytes': Uint8List.fromList([0, 255]),
+        };
+        final source = CRDTDocument(peerId: peerA);
+        open(source).insertEmbed(0, data);
+        final remote = open(
+          CRDTDocument(peerId: peerB)..importChanges(source.exportChanges()),
+        );
+
+        final read = remote.value.single.embed!;
+        expect(read, data);
+        expect(read.keys, data.keys);
+        expect((read['map']! as Map).keys, ['b', 'a']);
+        expect(read['w'], isA<int>());
+        expect(read['big'], 1e20);
+        expect(read['bytes'], isA<Uint8List>());
+      });
+
+      test('keeps a deep copy that cannot change', () {
+        final list = <Object?>[1];
+        final bytes = Uint8List.fromList([1]);
+        final text = open(CRDTDocument())
+          ..insertEmbed(0, {'list': list, 'bytes': bytes});
+        list.add(2);
+        bytes[0] = 9;
+
+        final embed = text.value.single.embed!;
+        expect(embed['list'], [1]);
+        expect(embed['bytes'], [1]);
+        expect(() => (embed['list']! as List).add(3), throwsUnsupportedError);
+        expect(
+          () => (embed['bytes']! as Uint8List)[0] = 2,
+          throwsUnsupportedError,
+        );
+      });
+
+      test('refuses data it cannot encode, before it writes', () {
+        final doc = CRDTDocument();
+        final text = open(doc);
+        Object? nested(int depth) => depth == 0 ? 1 : [nested(depth - 1)];
+        final refused = <Map<String, Object?>>[
+          {'k': double.nan},
+          {'k': double.infinity},
+          {'k': DateTime(2020)},
+          {
+            'k': {1: 'a'},
+          },
+          {'k': nested(16)},
+          if (!identical(0, 0.0)) {'k': 4503599627370496},
+        ];
+        for (final data in refused) {
+          expect(() => text.insertEmbed(0, data), throwsArgumentError);
+        }
+        expect(doc.exportChanges(), isEmpty);
+
+        text.insertEmbed(0, {'k': nested(15)});
+        expect(text.length, 1);
+      });
+
+      group('decoding refuses broken data', () {
+        Matcher refused(String message) => throwsA(
+              isA<FormatException>()
+                  .having((e) => e.message, 'message', contains(message)),
+            );
+
+        // The origins and the element, then the data.
+        List<int> body(List<int> data) => [
+              ...FugueElementID.nullID().toBytes(),
+              ...FugueElementID.nullID().toBytes(),
+              ...FugueElementID(peerC, 0).toBytes(),
+              ...data,
+            ];
+        List<int> lists(int depth) => [
+              7, 1, 1, 0x6B, // {'k': ...}
+              for (var i = 1; i < depth; i++) ...[6, 1],
+              0,
+            ];
+
+        final bodies = {
+          'not a map': [6, 0],
+          'Unknown embed value tag 9': [7, 1, 1, 0x6B, 9],
+          'Truncated embed value': [7, 1, 1, 0x6B],
+          'nested deeper than 16': lists(17),
+        };
+        for (final MapEntry(key: message, value: data) in bodies.entries) {
+          test(message, () {
+            final doc = CRDTDocument(peerId: peerA);
+            final text = open(doc);
+            craft(doc, text, 5, body(data));
+            expect(() => text.value, refused(message));
+          });
+        }
+
+        test('accepts 16 levels', () {
+          final doc = CRDTDocument(peerId: peerA);
+          final text = open(doc);
+          craft(doc, text, 5, body(lists(16)));
+          expect(text.value.single.embed, isNotNull);
+        });
+      });
+
+      test('reads the operation layouts and every value tag', () {
+        final doc = CRDTDocument(peerId: peerA);
+        final text = open(doc);
+        final element = FugueElementID(peerC, 0).toBytes();
+        craft(doc, text, 5, [
+          ...FugueElementID.nullID().toBytes(),
+          ...FugueElementID.nullID().toBytes(),
+          ...element,
+          7, 8, // a map of 8 entries
+          1, 0x6E, 0, // n: null
+          1, 0x66, 1, // f: false
+          1, 0x74, 2, // t: true
+          1, 0x69, 3, 1, // i: -1
+          1, 0x64, 4, 0x3F, 0xE0, 0, 0, 0, 0, 0, 0, // d: 0.5
+          1, 0x73, 5, 1, 0x78, // s: 'x'
+          1, 0x6C, 6, 1, 3, 2, // l: [1]
+          1, 0x62, 8, 1, 7, // b: bytes [7]
+        ]);
+        expect(text.value.single.embed, {
+          'n': null,
+          'f': false,
+          't': true,
+          'i': -1,
+          'd': 0.5,
+          's': 'x',
+          'l': [1],
+          'b': Uint8List.fromList([7]),
+        });
+
+        craft(
+          doc,
+          text,
+          6,
+          [...element, 7, 1, 1, 0x6B, 0],
+          stamped: true,
+          clock: 2,
+        );
+        expect(text.value.single.embed, {'k': null});
+      });
+
+      test('maxEmbedBytes refuses a larger embed, null takes any', () {
+        final doc = CRDTDocument();
+        final text = open(doc);
+        // A map tag, a count, a key length, 'k', a bytes tag, a 3-byte length.
+        Map<String, Object?> sized(int bytes) => {'k': Uint8List(bytes - 8)};
+
+        expect(text.maxEmbedBytes, 256 * 1024);
+        text.insertEmbed(0, sized(256 * 1024));
+        expect(
+          () => text.insertEmbed(0, sized(256 * 1024 + 1)),
+          throwsArgumentError,
+        );
+        expect(
+          () => text.updateEmbed(0, sized(256 * 1024 + 1)),
+          throwsArgumentError,
+        );
+
+        text
+          ..maxEmbedBytes = null
+          ..insertEmbed(0, sized(256 * 1024 + 1));
+        expect(text.length, 2);
+
+        final small = CRDTFugueRichTextHandler(
+          CRDTDocument(),
+          'small',
+          maxEmbedBytes: 8,
+        );
+        // 12 bytes.
+        expect(
+          () => small.insertEmbed(0, {'key': '1234'}),
+          throwsArgumentError,
+        );
+        small.insertEmbed(0, {'k': '1'});
+      });
+
+      test('the newest update wins, in any order of arrival', () {
+        final a = CRDTDocument(peerId: peerA);
+        open(a).insertEmbed(0, image);
+        final b = fork(a, peerB);
+        open(a)
+          ..value
+          ..updateEmbed(0, {'image': 'from a'});
+        expect(open(a).value.single.embed, {'image': 'from a'});
+        open(b).updateEmbed(0, {'image': 'from b'});
+        final bWins = b.exportChanges().last.id.compareTo(
+                  a.exportChanges().last.id,
+                ) >
+            0;
+        sync(a, b);
+        sync(b, a);
+        final replayed = fork(a, peerC);
+
+        for (final doc in [a, b, replayed]) {
+          expect(open(doc).value.single.embed, {
+            'image': bWins ? 'from b' : 'from a',
+          });
+        }
+      });
+
+      test('an update older than its embed changes nothing', () {
+        final doc = CRDTDocument(peerId: peerA);
+        final text = open(doc)..insertEmbed(0, image);
+        craft(
+          doc,
+          text,
+          6,
+          [...elementAt(text, 0).toBytes(), 7, 1, 1, 0x6B, 0],
+          stamped: true,
+          time: 100,
+        );
+
+        expect(text.value.single.embed, image);
+        expect(open(fork(doc, peerB)).value.single.embed, image);
+      });
+
+      test('an update loses against a concurrent delete', () {
+        final a = CRDTDocument(peerId: peerA);
+        open(a).insertEmbed(0, image);
+        final b = fork(a, peerB);
+        open(a).delete(0, 1);
+        open(b).updateEmbed(0, {'image': 'b.png'});
+        sync(a, b);
+        sync(b, a);
+
+        expect(open(a).text, isEmpty);
+        expect(open(b).text, isEmpty);
+      });
+
+      test('a remote rune update over an embed changes nothing', () {
+        final doc = CRDTDocument(peerId: peerA);
+        final text = open(doc)
+          ..insert(0, 'a')
+          ..insertEmbed(1, image);
+        // One item: the embed, and the rune 'x'.
+        craft(
+          doc,
+          text,
+          OperationType.kindUpdate,
+          [1, ...elementAt(text, 1).toBytes(), 1, 0x78],
+          stamped: true,
+        );
+
+        for (final read in [text, open(fork(doc, peerB))]) {
+          expect(read.text, 'a\uFFFC');
+          expect(read.value.last, RichTextSpan.embed(image));
+        }
+      });
+
+      test('a U+FFFC from a crafted insert is a plain rune', () {
+        final doc = CRDTDocument(peerId: peerA);
+        final text = open(doc);
+        craft(doc, text, OperationType.kindInsert, [
+          ...FugueElementID.nullID().toBytes(),
+          ...FugueElementID.nullID().toBytes(),
+          1,
+          ...FugueElementID(peerC, 0).toBytes(),
+          3, 0xEF, 0xBF, 0xBC, // U+FFFC
+        ]);
+        expect(text.value, [RichTextSpan('\uFFFC')]);
+        expect(() => text.updateEmbed(0, image), throwsArgumentError);
+      });
+
+      test('text never holds U+FFFC: the writes refuse it first', () {
+        final doc = CRDTDocument(peerId: peerA);
+        final text = open(doc)
+          ..insert(0, 'ab')
+          ..insertEmbed(1, image);
+        final changes = doc.exportChanges().length;
+
+        expect(() => text.insert(0, '\uFFFC'), throwsArgumentError);
+        expect(() => text.change('xa\uFFFC\uFFFCb'), throwsArgumentError);
+        expect(() => text.update(2, '\uFFFC'), throwsArgumentError);
+        expect(() => text.update(0, 'xy'), throwsArgumentError);
+        expect(() => text.updateEmbed(0, image), throwsArgumentError);
+        expect(() => text.updateEmbed(3, image), throwsRangeError);
+        expect(doc.exportChanges(), hasLength(changes));
+
+        text
+          ..change('a\uFFFCbc')
+          ..update(2, 'x');
+        expect(text.text, 'a\uFFFCxc');
+      });
+
+      test('its attributes stay on the embed alone', () {
+        final text = open(CRDTDocument(peerId: peerA))
+          ..insert(0, 'ab')
+          ..insertEmbed(1, image, attributes: {'width': 10})
+          ..insert(2, 'x')
+          ..insert(1, 'y');
+        expect(_read(text), [
+          _s('ay'),
+          _s('\uFFFC', {'width': 10}),
+          _s('xb'),
+        ]);
+      });
+
+      test('inherits the formats that expand over its place', () {
+        final text = open(CRDTDocument(peerId: peerA))
+          ..insert(0, 'ab')
+          ..format(0, 2, 'bold', true)
+          ..insertEmbed(2, image)
+          ..insertEmbed(3, image, inherit: false);
+        expect(text.attributesAt(2), {'bold': true});
+        expect(text.attributesAt(3), isEmpty);
+      });
+    });
+
     group('deltas', () {
       Future<List<RichTextDelta>> watch(
         CRDTFugueRichTextHandler text,
@@ -851,6 +1226,45 @@ void main() {
           _s('x', {'bold': true}),
           _s('d'),
         ]);
+      });
+
+      test('an embed comes as one op, its update too', () async {
+        const image = <String, Object?>{'image': 'a.png'};
+        final text = open(CRDTDocument(peerId: peerA))
+          ..insert(0, 'ab')
+          ..format(0, 2, 'bold', true);
+        final deltas = await watch(text, () {
+          text
+            ..insertEmbed(2, image, attributes: {'width': 1})
+            ..updateEmbed(2, {'image': 'b.png'})
+            ..delete(2, 1);
+        });
+        expect(deltas, [
+          RichTextDelta([
+            RichTextRetain(2),
+            RichTextInsertEmbed(image, {'bold': true}),
+          ]),
+          RichTextDelta([
+            RichTextRetain(2),
+            RichTextRetain(1, {'width': 1}),
+          ]),
+          RichTextDelta([
+            RichTextRetain(2),
+            RichTextUpdateEmbed({'image': 'b.png'}),
+          ]),
+          RichTextDelta([RichTextRetain(2), const RichTextDelete(1)]),
+        ]);
+      });
+
+      test('an update that loses moves nothing', () async {
+        final a = CRDTDocument(peerId: peerA);
+        final textA = open(a)..insertEmbed(0, {'image': 'a.png'});
+        final b = fork(a, peerB);
+        open(b).updateEmbed(0, {'image': 'b.png'});
+        textA.delete(0, 1);
+
+        final deltas = await watch(textA, () => sync(a, b));
+        expect(deltas, [const RichTextDelta.empty()]);
       });
 
       test('a concurrent mark moves what it changes, maybe nothing', () async {

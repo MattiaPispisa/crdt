@@ -192,11 +192,11 @@ bool echoesRichText(
     _echoes(dropped, deleted, inserted, (delta) sync* {
       for (final op in delta.ops) {
         switch (op) {
-          case RichTextInsert():
+          case RichTextInsert() || RichTextInsertEmbed():
             yield (op.length, 0);
           case RichTextDelete():
             yield (0, op.count);
-          case RichTextRetain():
+          case RichTextRetain() || RichTextUpdateEmbed():
             break;
         }
       }

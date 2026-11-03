@@ -5,11 +5,15 @@ part of 'handler.dart';
 
 // The tree half of the delta, with the attributes the inserted text has
 // once the operation is in.
-RichTextDelta _richDelta(RichTextState state, SequenceDelta<String>? delta) {
+RichTextDelta _richDelta(
+  RichTextState state,
+  Operation operation,
+  SequenceDelta<String>? delta,
+) {
   if (delta == null || delta.isEmpty) {
     return const RichTextDelta.empty();
   }
-  final resolved = state._resolved();
+  _ResolvedMarks? resolved;
   final ops = <RichTextOp>[];
   var out = 0;
   for (final op in delta.ops) {
@@ -21,7 +25,13 @@ RichTextDelta _richDelta(RichTextState state, SequenceDelta<String>? delta) {
         ops.add(RichTextDelete(op.count));
       case SeqInsert<String>():
         final end = out + op.values.length;
-        for (final run in resolved.runsIn(out, end)) {
+        final runs = (resolved ??= state._resolved()).runsIn(out, end);
+        if (operation is _FugueRichTextEmbedOperation) {
+          ops.add(RichTextInsertEmbed(operation.data, runs.single.attributes));
+          out = end;
+          continue;
+        }
+        for (final run in runs) {
           ops.add(
             RichTextInsert(
               op.values.sublist(run.start - out, run.end - out).join(),
@@ -35,6 +45,18 @@ RichTextDelta _richDelta(RichTextState state, SequenceDelta<String>? delta) {
     }
   }
   return RichTextDelta(ops);
+}
+
+// The place of the embed, when the update wins.
+RichTextDelta _embedUpdateDelta(
+  RichTextState state,
+  _FugueRichTextEmbedUpdateOperation operation,
+) {
+  final index = state._tree.liveIndexAfter(operation.element)! - 1;
+  return RichTextDelta([
+    RichTextRetain(index),
+    RichTextUpdateEmbed(operation.data),
+  ]);
 }
 
 // The covered places whose value for the key of the mark moved.

@@ -3,13 +3,26 @@
 
 import 'package:crdt_lf/src/delta/handler_update.dart';
 import 'package:crdt_lf/src/utils/attributes.dart';
+import 'package:crdt_lf/src/utils/embed_data.dart';
 import 'package:crdt_lf/src/utils/rune_offsets.dart';
 
 /// A run of rich text whose runes all carry the same [attributes].
 final class RichTextSpan {
   /// Creates a span of [text] with [attributes].
   RichTextSpan(this.text, [Map<String, Object?> attributes = const {}])
-      : attributes = _freeze(attributes);
+      : attributes = _freeze(attributes),
+        embed = null;
+
+  /// Creates the span of one embed with its [embed] data.
+  RichTextSpan.embed(
+    Map<String, Object?> embed, [
+    Map<String, Object?> attributes = const {},
+  ])  : text = objectReplacement,
+        attributes = _freeze(attributes),
+        embed = freezeEmbed(embed);
+
+  /// The text of an embed span.
+  static const String objectReplacement = '\uFFFC';
 
   /// The runes of the span.
   final String text;
@@ -17,17 +30,24 @@ final class RichTextSpan {
   /// The attributes of every rune of [text]; unmodifiable.
   final Map<String, Object?> attributes;
 
+  /// The data of the embed, or `null` for text; unmodifiable.
+  final Map<String, Object?>? embed;
+
   @override
   bool operator ==(Object other) =>
       other is RichTextSpan &&
       other.text == text &&
-      sameAttributes(other.attributes, attributes);
+      sameAttributes(other.attributes, attributes) &&
+      sameEmbed(other.embed, embed);
 
   @override
-  int get hashCode => Object.hash(text, _hashAttributes(attributes));
+  int get hashCode =>
+      Object.hash(text, _hashAttributes(attributes), hashEmbed(embed));
 
   @override
-  String toString() => 'RichTextSpan(${_quote(text)}, $attributes)';
+  String toString() => embed == null
+      ? 'RichTextSpan(${_quote(text)}, $attributes)'
+      : 'RichTextSpan.embed($embed, $attributes)';
 }
 
 /// One step of a [RichTextDelta].
@@ -111,6 +131,80 @@ final class RichTextInsert extends RichTextOp {
       : 'RichTextInsert(${_quote(text)}, $attributes)';
 }
 
+/// Puts one embed with [attributes] into the text at the current point.
+final class RichTextInsertEmbed extends RichTextOp {
+  /// Inserts the embed [embed] with [attributes].
+  RichTextInsertEmbed(
+    Map<String, Object?> embed, [
+    Map<String, Object?> attributes = const {},
+  ])  : embed = freezeEmbed(embed),
+        attributes = _freeze(attributes);
+
+  /// The data of the embed; unmodifiable.
+  final Map<String, Object?> embed;
+
+  @override
+  final Map<String, Object?> attributes;
+
+  @override
+  int get length => 1;
+
+  @override
+  bool operator ==(Object other) =>
+      other is RichTextInsertEmbed &&
+      sameEmbed(other.embed, embed) &&
+      sameAttributes(other.attributes, attributes);
+
+  @override
+  int get hashCode => Object.hash(
+        RichTextInsertEmbed,
+        hashEmbed(embed),
+        _hashAttributes(attributes),
+      );
+
+  @override
+  String toString() => attributes.isEmpty
+      ? 'RichTextInsertEmbed($embed)'
+      : 'RichTextInsertEmbed($embed, $attributes)';
+}
+
+/// Keeps one embed, replaces its data with [embed] and writes [attributes].
+final class RichTextUpdateEmbed extends RichTextOp {
+  /// Replaces the data of the embed with [embed].
+  RichTextUpdateEmbed(
+    Map<String, Object?> embed, [
+    Map<String, Object?> attributes = const {},
+  ])  : embed = freezeEmbed(embed),
+        attributes = _freeze(attributes);
+
+  /// The new data of the embed; unmodifiable.
+  final Map<String, Object?> embed;
+
+  @override
+  final Map<String, Object?> attributes;
+
+  @override
+  int get length => 1;
+
+  @override
+  bool operator ==(Object other) =>
+      other is RichTextUpdateEmbed &&
+      sameEmbed(other.embed, embed) &&
+      sameAttributes(other.attributes, attributes);
+
+  @override
+  int get hashCode => Object.hash(
+        RichTextUpdateEmbed,
+        hashEmbed(embed),
+        _hashAttributes(attributes),
+      );
+
+  @override
+  String toString() => attributes.isEmpty
+      ? 'RichTextUpdateEmbed($embed)'
+      : 'RichTextUpdateEmbed($embed, $attributes)';
+}
+
 /// Takes [count] runes out of the text at the current point.
 final class RichTextDelete extends RichTextOp {
   /// Removes [count] runes.
@@ -175,7 +269,7 @@ final class RichTextDelta implements ComposableDelta<RichTextDelta> {
     final result = <RichTextOp>[];
 
     while (a.hasNext || b.hasNext) {
-      if (b.hasNext && b.peek is RichTextInsert) {
+      if (b.hasNext && _isInsert(b.peek)) {
         result.add(b.take(b.peekLength));
         continue;
       }
@@ -208,7 +302,8 @@ final class RichTextDelta implements ComposableDelta<RichTextDelta> {
               ),
             ),
           );
-        case (final RichTextInsert insert, RichTextRetain()):
+        case (final RichTextInsert insert, RichTextRetain()) ||
+              (final RichTextInsert insert, RichTextUpdateEmbed()):
           result.add(
             RichTextInsert(
               insert.text,
@@ -219,7 +314,54 @@ final class RichTextDelta implements ComposableDelta<RichTextDelta> {
               ),
             ),
           );
-        case (RichTextRetain(), RichTextDelete()):
+        case (final RichTextInsertEmbed insert, RichTextRetain()):
+          result.add(
+            RichTextInsertEmbed(
+              insert.embed,
+              _composeAttributes(
+                insert.attributes,
+                theirs.attributes,
+                keepNull: false,
+              ),
+            ),
+          );
+        case (RichTextInsertEmbed(), final RichTextUpdateEmbed update):
+          result.add(
+            RichTextInsertEmbed(
+              update.embed,
+              _composeAttributes(
+                mine.attributes,
+                update.attributes,
+                keepNull: false,
+              ),
+            ),
+          );
+        case (final RichTextUpdateEmbed update, RichTextRetain()):
+          result.add(
+            RichTextUpdateEmbed(
+              update.embed,
+              _composeAttributes(
+                update.attributes,
+                theirs.attributes,
+                keepNull: true,
+              ),
+            ),
+          );
+        case (
+            RichTextRetain() || RichTextUpdateEmbed(),
+            final RichTextUpdateEmbed update
+          ):
+          result.add(
+            RichTextUpdateEmbed(
+              update.embed,
+              _composeAttributes(
+                mine.attributes,
+                update.attributes,
+                keepNull: true,
+              ),
+            ),
+          );
+        case (RichTextRetain() || RichTextUpdateEmbed(), RichTextDelete()):
           result.add(theirs);
         // Inserted here and removed by [next]: the two cancel out.
         case _:
@@ -236,15 +378,22 @@ final class RichTextDelta implements ComposableDelta<RichTextDelta> {
   /// as one. The delta must stay within [base]: debug builds assert it.
   List<RichTextSpan> apply(List<RichTextSpan> base) {
     final document = RichTextDelta([
-      for (final span in base) RichTextInsert(span.text, span.attributes),
+      for (final span in base)
+        if (span.embed case final embed?)
+          RichTextInsertEmbed(embed, span.attributes)
+        else
+          RichTextInsert(span.text, span.attributes),
     ]).compose(this);
     assert(
-      document.ops.every((op) => op is RichTextInsert),
+      document.ops.every(_isInsert),
       'the delta reaches past the end of the base spans',
     );
     return [
       for (final op in document.ops)
-        if (op is RichTextInsert) RichTextSpan(op.text, op.attributes),
+        if (op is RichTextInsert)
+          RichTextSpan(op.text, op.attributes)
+        else if (op is RichTextInsertEmbed)
+          RichTextSpan.embed(op.embed, op.attributes),
     ];
   }
 
@@ -260,14 +409,14 @@ final class RichTextDelta implements ComposableDelta<RichTextDelta> {
     while (index < ops.length) {
       final op = ops[index];
       switch (op) {
-        case RichTextRetain():
-          if (offset <= base + op.count) {
+        case RichTextRetain() || RichTextUpdateEmbed():
+          if (offset <= base + op.length) {
             return out + (offset - base);
           }
-          base += op.count;
-          out += op.count;
+          base += op.length;
+          out += op.length;
           index++;
-        case RichTextInsert():
+        case RichTextInsert() || RichTextInsertEmbed():
           if (offset == base) {
             return out;
           }
@@ -342,6 +491,8 @@ final class _OpCursor {
           piece = RichTextInsert(op.text.substring(_unit, end), op.attributes);
           _unit = end;
         }
+      case RichTextInsertEmbed() || RichTextUpdateEmbed():
+        piece = op;
     }
 
     _offset += length;
@@ -383,7 +534,7 @@ void _push(List<RichTextOp> ops, RichTextOp op) {
     return;
   }
   // An insert next to a delete goes first: the two orders mean the same.
-  if (last is RichTextDelete && op is RichTextInsert) {
+  if (last is RichTextDelete && _isInsert(op)) {
     ops.removeLast();
     _push(ops, op);
     ops.add(last);
@@ -409,6 +560,9 @@ void _push(List<RichTextOp> ops, RichTextOp op) {
   }
   ops.add(op);
 }
+
+bool _isInsert(RichTextOp op) =>
+    op is RichTextInsert || op is RichTextInsertEmbed;
 
 Map<String, Object?> _composeAttributes(
   Map<String, Object?> a,
