@@ -356,17 +356,6 @@ void main() {
       expect(doc.exportChanges(), hasLength(changes + 2));
     });
 
-    test('change edits only what differs, the formats stay', () {
-      final text = open(CRDTDocument(peerId: peerA))
-        ..insert(0, 'hello world')
-        ..format(0, 5, 'bold', true)
-        ..change('hello, word');
-      expect(_read(text), [
-        _s('hello,', {'bold': true}),
-        _s(' word'),
-      ]);
-    });
-
     test('toString shows the id and the first 20 runes', () {
       final text = open(CRDTDocument())..insert(0, '\u{1F600}' * 21);
       expect(
@@ -1089,7 +1078,6 @@ void main() {
         final changes = doc.exportChanges().length;
 
         expect(() => text.insert(0, '\uFFFC'), throwsArgumentError);
-        expect(() => text.change('xa\uFFFC\uFFFCb'), throwsArgumentError);
         expect(() => text.update(2, '\uFFFC'), throwsArgumentError);
         expect(() => text.update(0, 'xy'), throwsArgumentError);
         expect(() => text.updateEmbed(0, image), throwsArgumentError);
@@ -1097,7 +1085,7 @@ void main() {
         expect(doc.exportChanges(), hasLength(changes));
 
         text
-          ..change('a\uFFFCbc')
+          ..insert(3, 'c')
           ..update(2, 'x');
         expect(text.text, 'a\uFFFCxc');
       });

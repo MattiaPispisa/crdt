@@ -508,23 +508,6 @@ base class CRDTFugueRichTextHandler
   /// The plain text, without attributes.
   String get text => cachedOrComputedState()._text();
 
-  /// Changes the text to [newText] with the inserts and deletes [myersDiff]
-  /// finds.
-  ///
-  /// The runes that stay keep their attributes. Inserted runes get the
-  /// formats that expand over them, as with [insert].
-  void change(String newText) {
-    final current = text;
-    if (newText.contains(RichTextSpan.objectReplacement)) {
-      for (final segment in myersDiff(current, newText)) {
-        if (segment.op == DiffOp.insert) {
-          _refuseObjectReplacement(segment.text);
-        }
-      }
-    }
-    applyFugueTextChange(this, current, newText);
-  }
-
   @override
   RichTextState createEmptyState() => RichTextState.empty();
 
