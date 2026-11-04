@@ -633,12 +633,96 @@ base class CRDTFugueRichTextHandler
     if (operation is _FugueRichTextMarkOperation) {
       return _invertMark(operation);
     }
+    if (operation is _FugueRichTextEmbedUpdateOperation) {
+      final embed = cachedOrComputedState()._embeds.live[operation.element];
+      return embed == null
+          ? const []
+          : [_embedUpdateOperation(operation.element, embed.data)];
+    }
     final inverses = super.invert(operation);
     if (operation is FugueTextDeleteOperation && inverses.isNotEmpty) {
       return [...inverses, ..._restoreFormats(operation, inverses)];
     }
     return inverses;
   }
+
+  // Cuts the run at each embed: the text between goes back as text, each
+  // embed as an embed with its data. Each piece hangs off the last element
+  // of the one before, as the elements of one insert do.
+  @override
+  List<({Operation insert, List<FugueElementID> was})> buildRestoreInserts({
+    required FugueElementID leftOrigin,
+    required FugueElementID rightOrigin,
+    required List<({FugueElementID id, String value, FugueElementID was})>
+        items,
+  }) {
+    final embeds = cachedOrComputedState()._embeds.live;
+    if (embeds.isEmpty || !items.any((item) => embeds.containsKey(item.was))) {
+      return super.buildRestoreInserts(
+        leftOrigin: leftOrigin,
+        rightOrigin: rightOrigin,
+        items: items,
+      );
+    }
+
+    final pieces = <({Operation insert, List<FugueElementID> was})>[];
+    var left = leftOrigin;
+    var start = 0;
+    void addText(int end) {
+      if (start == end) {
+        return;
+      }
+      final text = items.sublist(start, end);
+      pieces.add(
+        (
+          insert: buildInsertOperation(
+            leftOrigin: left,
+            rightOrigin: rightOrigin,
+            items: [for (final item in text) (id: item.id, value: item.value)],
+          ),
+          was: [for (final item in text) item.was],
+        ),
+      );
+      left = text.last.id;
+    }
+
+    for (var i = 0; i < items.length; i++) {
+      final item = items[i];
+      final embed = embeds[item.was];
+      if (embed == null) {
+        continue;
+      }
+      addText(i);
+      pieces.add(
+        (
+          insert: _FugueRichTextEmbedOperation(
+            id: id,
+            type: _embedType,
+            leftOrigin: left,
+            rightOrigin: rightOrigin,
+            element: item.id,
+            data: embed.data,
+          ),
+          was: [item.was],
+        ),
+      );
+      left = item.id;
+      start = i + 1;
+    }
+    addText(items.length);
+    return pieces;
+  }
+
+  _FugueRichTextEmbedUpdateOperation _embedUpdateOperation(
+    FugueElementID element,
+    Map<String, Object?> data,
+  ) =>
+      _FugueRichTextEmbedUpdateOperation(
+        id: id,
+        type: _embedUpdateType,
+        element: element,
+        data: data,
+      );
 
   _FugueRichTextMarkOperation _markOperation(
     String key,
@@ -656,6 +740,12 @@ base class CRDTFugueRichTextHandler
 
   @override
   Operation prepareInverse(Operation operation) {
+    if (operation is _FugueRichTextEmbedUpdateOperation) {
+      final latest = latestOf(operation.element);
+      return latest == operation.element
+          ? operation
+          : _embedUpdateOperation(latest, operation.data);
+    }
     if (operation is! _FugueRichTextMarkOperation) {
       return super.prepareInverse(operation);
     }

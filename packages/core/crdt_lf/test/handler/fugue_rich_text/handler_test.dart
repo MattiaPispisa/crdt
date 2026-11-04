@@ -75,6 +75,13 @@ void main() {
         from.exportChanges(fromVersionVector: to.getVersionVector()),
       );
 
+  CRDTUndoManager track(CRDTDocument doc, CRDTFugueRichTextHandler text) {
+    final undo = CRDTUndoManager(doc, captureTimeout: Duration.zero)
+      ..track(text);
+    addTearDown(undo.dispose);
+    return undo;
+  }
+
   group('CRDTFugueRichTextHandler', () {
     test('travels under its own handler type', () {
       expect(open(CRDTDocument()).handlerType, 'CRDTFugueRichTextHandler');
@@ -732,13 +739,6 @@ void main() {
     });
 
     group('undo', () {
-      CRDTUndoManager track(CRDTDocument doc, CRDTFugueRichTextHandler text) {
-        final undo = CRDTUndoManager(doc, captureTimeout: Duration.zero)
-          ..track(text);
-        addTearDown(undo.dispose);
-        return undo;
-      }
-
       test('undoing the delete of plain text writes only the text back', () {
         final doc = CRDTDocument(peerId: peerA);
         final text = open(doc)
@@ -1157,7 +1157,7 @@ void main() {
           return false;
         }
 
-        test('keeps the live embeds, and only the id of a deleted one', () {
+        test('keeps the live embeds, and nothing of a deleted one', () {
           final source = CRDTDocument(peerId: peerA);
           final text = open(source)
             ..insert(0, 'ab')
@@ -1241,6 +1241,179 @@ void main() {
               replay(OperationType.kindUpdate, [1, ...element, 1, 0x78]);
           expect(rune.text, '\uFFFC');
           expect(rune.value.single.embed, {'image': 'new.png'});
+        });
+      });
+
+      group('undo', () {
+        test('undo and redo walk back and forth over each step', () {
+          final doc = CRDTDocument(peerId: peerA);
+          final text = open(doc)..insert(0, 'ab');
+          final undo = track(doc, text);
+          final steps = [text.value];
+          void step(void Function() edit) {
+            edit();
+            steps.add(text.value);
+          }
+
+          step(() => text.insertEmbed(1, image, attributes: {'width': 10}));
+          step(() => text.updateEmbed(1, {'image': 'b.png'}));
+          step(() => text.format(0, 3, 'bold', true));
+          step(() => text.delete(1, 1));
+
+          for (var i = steps.length - 2; i >= 0; i--) {
+            undo.undo();
+            expect(text.value, steps[i], reason: 'undo to step $i');
+          }
+          for (var i = 1; i < steps.length; i++) {
+            undo.redo();
+            expect(text.value, steps[i], reason: 'redo to step $i');
+          }
+          undo.undo();
+          expect(text.value, steps[3]);
+          expect(open(fork(doc, peerB)).value, text.value);
+          text.updateEmbed(1, image);
+          expect(
+            text.value[1],
+            RichTextSpan.embed(image, {'bold': true, 'width': 10}),
+          );
+        });
+
+        test('a mixed delete comes back as one chain, beside a peer edit', () {
+          // The same edits with an embed or with a plain rune in the middle:
+          // both give the same ids, so the same tree.
+          ({
+            CRDTFugueRichTextHandler a,
+            CRDTFugueRichTextHandler b,
+            List<(int, FugueElementID, FugueElementID)> pieces,
+            List<FugueElementID> origins,
+          }) run({required bool embed}) {
+            final a = CRDTDocument(peerId: peerA);
+            final textA = open(a)..insert(0, 'abcd');
+            if (embed) {
+              textA.insertEmbed(2, image, attributes: {'width': 10});
+            } else {
+              textA.insert(2, 'Z');
+            }
+            textA.format(0, 5, 'bold', true);
+            final before = textA.value;
+            final oldC = elementAt(textA, 3);
+            final d = elementAt(textA, 4);
+            final undo = track(a, textA);
+            textA.delete(1, 3);
+            final b = fork(a, peerB);
+            final changes = a.exportChanges().length;
+
+            undo.undo();
+            expect(textA.value, before);
+            final pieces = <(int, FugueElementID, FugueElementID)>[];
+            for (final change in a.exportChanges().skip(changes)) {
+              final bytes = change.payloadBytes();
+              final envelope = OperationEnvelopeCodec.decode(bytes);
+              if (envelope.kind == 4) {
+                continue;
+              }
+              final left = FugueElementID.readFromBytes(
+                bytes,
+                offset: envelope.bodyOffset,
+              );
+              final right =
+                  FugueElementID.readFromBytes(bytes, offset: left.nextOffset);
+              pieces.add((envelope.kind, left.value, right.value));
+            }
+            final origins = [
+              oldC,
+              elementAt(textA, 1),
+              elementAt(textA, 2),
+              d,
+            ];
+            open(b).insert(1, 'X');
+            sync(a, b);
+            sync(b, a);
+            return (
+              a: textA,
+              b: open(b),
+              pieces: pieces,
+              origins: origins,
+            );
+          }
+
+          final plain = run(embed: false);
+          final mixed = run(embed: true);
+
+          expect(plain.pieces, hasLength(1));
+          final [oldC, restoredB, restoredEmbed, d] = mixed.origins;
+          expect(mixed.pieces, [
+            (OperationType.kindInsert, oldC, d),
+            (5, restoredB, d),
+            (OperationType.kindInsert, restoredEmbed, d),
+          ]);
+          expect(mixed.a.text.replaceAll('\uFFFC', 'Z'), plain.a.text);
+          expect(mixed.a.text, 'aXb\uFFFCcd');
+          expect(mixed.b.value, mixed.a.value);
+          expect(mixed.a.value, [
+            RichTextSpan('aXb', {'bold': true}),
+            RichTextSpan.embed(image, {'bold': true, 'width': 10}),
+            RichTextSpan('cd', {'bold': true}),
+          ]);
+          expect(
+            (mixed.a.doc as CRDTDocument).takeSnapshot().data['rich'],
+            (mixed.b.doc as CRDTDocument).takeSnapshot().data['rich'],
+          );
+        });
+
+        test('an undone update follows the embed through undo and redo', () {
+          final doc = CRDTDocument(peerId: peerA);
+          final text = open(doc)
+            ..insert(0, 'ab')
+            ..insertEmbed(1, image);
+          final undo = track(doc, text);
+          text
+            ..updateEmbed(1, {'image': 'b.png'})
+            ..delete(0, 3);
+
+          undo
+            ..undo()
+            ..redo()
+            ..undo();
+          expect(text.value, [
+            RichTextSpan('a'),
+            RichTextSpan.embed({'image': 'b.png'}),
+            RichTextSpan('b'),
+          ]);
+          undo.undo();
+          expect(text.value[1], RichTextSpan.embed(image));
+          expect(open(fork(doc, peerB)).value, text.value);
+        });
+
+        test('a delete undone across snapshots puts the embed back', () {
+          final source = CRDTDocument(peerId: peerA);
+          final before = (open(source)
+                ..insert(0, 'ab')
+                ..insertEmbed(1, image, attributes: {'width': 10}))
+              .value;
+          final b = CRDTDocument(peerId: peerB)
+            ..importSnapshot(source.takeSnapshot());
+          final textB = open(b);
+          final undo = track(b, textB);
+          textB.delete(1, 1);
+          final c = CRDTDocument(peerId: peerC)
+            ..importSnapshot(b.takeSnapshot(pruneHistory: false));
+          final textC = open(c);
+          expect(textC.text, 'ab');
+
+          undo.undo();
+          sync(c, b);
+          expect(textB.value, before);
+          expect(textC.value, before);
+
+          undo.redo();
+          sync(c, b);
+          expect(textC.text, 'ab');
+
+          undo.undo();
+          sync(c, b);
+          expect(textB.value, before);
+          expect(textC.value, before);
         });
       });
 

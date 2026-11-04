@@ -356,8 +356,6 @@ class RichTextState extends FugueState<String, List<RichTextSpan>> {
 class _EmbedTable {
   final Map<FugueElementID, _Embed> live = {};
 
-  final Set<FugueElementID> deleted = {};
-
   void inserted(_FugueRichTextEmbedOperation operation) {
     live[operation.element] = _Embed(operation.data, operation.stamp!);
   }
@@ -367,9 +365,7 @@ class _EmbedTable {
       return;
     }
     for (final item in operation.items) {
-      if (live.remove(item.nodeID) != null) {
-        deleted.add(item.nodeID);
-      }
+      live.remove(item.nodeID);
     }
   }
 

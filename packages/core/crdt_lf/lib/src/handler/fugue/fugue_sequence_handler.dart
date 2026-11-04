@@ -319,18 +319,43 @@ abstract base class FugueSequenceHandler<T, V, S extends FugueState<T, V>>
 
     final inverses = <Operation>[];
     for (final run in runs) {
-      final insert = buildInsertOperation(
+      final pieces = buildRestoreInserts(
         leftOrigin: run.leftOrigin,
         rightOrigin: run.rightOrigin,
         items: [
           for (final item in run.items)
-            (id: FugueElementID(doc.peerId, nextCounter()), value: item.value),
+            (
+              id: FugueElementID(doc.peerId, nextCounter()),
+              value: item.value,
+              was: item.was,
+            ),
         ],
       );
-      noteRestores(insert, [for (final item in run.items) item.was]);
-      inverses.add(insert);
+      for (final piece in pieces) {
+        noteRestores(piece.insert, piece.was);
+        inverses.add(piece.insert);
+      }
     }
     return inverses;
+  }
+
+  /// The inserts that put [items] back between [leftOrigin] and
+  /// [rightOrigin], each with the ids it restores.
+  List<({Operation insert, List<FugueElementID> was})> buildRestoreInserts({
+    required FugueElementID leftOrigin,
+    required FugueElementID rightOrigin,
+    required List<({FugueElementID id, T value, FugueElementID was})> items,
+  }) {
+    return [
+      (
+        insert: buildInsertOperation(
+          leftOrigin: leftOrigin,
+          rightOrigin: rightOrigin,
+          items: [for (final item in items) (id: item.id, value: item.value)],
+        ),
+        was: [for (final item in items) item.was],
+      ),
+    ];
   }
 
   @override

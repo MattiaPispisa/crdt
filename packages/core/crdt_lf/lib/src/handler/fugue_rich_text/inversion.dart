@@ -104,6 +104,8 @@ extension _RichTextInversion on CRDTFugueRichTextHandler {
 
     final marks = <Operation>[];
     var cursor = 0;
+    var inherited = const <String, Object?>{};
+    FugueElementID? previous;
     for (final insert in inserts) {
       insert as FugueTextInsertOperation;
       final items = insert.items;
@@ -112,7 +114,11 @@ extension _RichTextInversion on CRDTFugueRichTextHandler {
           resolved.attributesAt(tree.liveIndexAfter(was[cursor + i])! - 1),
       ];
       cursor += items.length;
-      final inherited = state._gapValues(insert.leftOrigin, insert.rightOrigin);
+      // A piece that hangs off the one before lands in the same gap.
+      if (insert.leftOrigin != previous) {
+        inherited = state._gapValues(insert.leftOrigin, insert.rightOrigin);
+      }
+      previous = items.last.id;
       for (final key in state._keys) {
         var runStart = 0;
         for (var i = 1; i <= items.length; i++) {

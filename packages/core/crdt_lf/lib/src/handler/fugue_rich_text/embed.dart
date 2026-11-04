@@ -175,14 +175,14 @@ class _EmbedValue {
   }
 }
 
-// Layout: tag, liveCount: uvarint, then per live embed: id, stamp, data;
-// deletedCount: uvarint, then the deleted ids. Written only when the table
-// has an embed, so a blob without embeds keeps its bytes.
+// Layout: tag, liveCount: uvarint, then per live embed: id, stamp, data.
+// Written only when an embed is live, so a blob without embeds keeps its
+// bytes.
 class _EmbedSection {
   static const int tag = 1;
 
   static void write(_EmbedTable embeds, BytesBuilder out) {
-    if (embeds.live.isEmpty && embeds.deleted.isEmpty) {
+    if (embeds.live.isEmpty) {
       return;
     }
     out.addByte(tag);
@@ -194,11 +194,6 @@ class _EmbedSection {
         ..add(id.toBytes())
         ..add(embed.stamp.toUint8List())
         ..add(_EmbedValue.encode(embed.data));
-    }
-    final deleted = embeds.deleted.toList()..sort((a, b) => a.compareTo(b));
-    UVarint.write(deleted.length, out);
-    for (final id in deleted) {
-      out.add(id.toBytes());
     }
   }
 
@@ -224,13 +219,6 @@ class _EmbedSection {
       );
       embeds.live[id.value] = _Embed(data.data, stamp);
       cursor = data.nextOffset;
-    }
-    final deletedCount = UVarint.read(bytes, offset: cursor);
-    cursor = deletedCount.nextOffset;
-    for (var i = 0; i < deletedCount.value; i++) {
-      final id = FugueElementID.readFromBytes(bytes, offset: cursor);
-      embeds.deleted.add(id.value);
-      cursor = id.nextOffset;
     }
     return (embeds: embeds, nextOffset: cursor);
   }
