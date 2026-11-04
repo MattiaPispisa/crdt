@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 import 'dart:async';
+import 'dart:typed_data';
 
 import 'package:crdt_lf/crdt_lf.dart';
 import 'package:test/test.dart';
@@ -88,6 +89,15 @@ _Projection<String, SequenceDelta<String>> _watchFugueText(
       readSynced: text.readSynced,
       stream: text.watch(),
       applyDelta: (delta, base) => delta.applyToText(base),
+    );
+
+_Projection<List<RichTextSpan>, RichTextDelta> _watchRichText(
+  CRDTFugueRichTextHandler text,
+) =>
+    _Projection<List<RichTextSpan>, RichTextDelta>(
+      readSynced: text.readSynced,
+      stream: text.watch(),
+      applyDelta: (delta, base) => delta.apply(base),
     );
 
 _Projection<Map<String, T>, MapDelta<String, T>> _watchMap<T>(
@@ -537,6 +547,50 @@ void main() {
       await _pump();
 
       expect(projection.value, textB.value);
+
+      await projection.dispose();
+    });
+  });
+
+  group('CRDTFugueRichTextHandler deltas', () {
+    test('embed edits, their undo and redo rebuild the value', () async {
+      final doc = CRDTDocument(peerId: PeerId.parse(_peerIdA));
+      final text = CRDTFugueRichTextHandler(doc, 'rich')..insert(0, 'abcd');
+      final undo = CRDTUndoManager(doc, captureTimeout: Duration.zero)
+        ..track(text);
+      addTearDown(undo.dispose);
+      final projection = _watchRichText(text);
+      await _pump();
+
+      final edits = <void Function()>[
+        () => text.insertEmbed(
+              2,
+              {
+                'image': 'a.png',
+                'bytes': Uint8List.fromList([1, 2]),
+              },
+              attributes: {'width': 10},
+            ),
+        () => text.updateEmbed(2, {
+              'image': 'b.png',
+              'meta': {
+                'tags': ['x', null],
+              },
+            }),
+        () => text.format(1, 3, 'bold', true),
+        () => text.delete(1, 3),
+      ];
+      final steps = [
+        ...edits,
+        for (var i = 0; i < edits.length; i++) undo.undo,
+        for (var i = 0; i < edits.length; i++) undo.redo,
+      ];
+      for (var i = 0; i < steps.length; i++) {
+        steps[i]();
+        await _pump();
+        expect(projection.value, text.value, reason: 'step $i');
+      }
+      expect(projection.resets, 1, reason: 'only the initial read');
 
       await projection.dispose();
     });

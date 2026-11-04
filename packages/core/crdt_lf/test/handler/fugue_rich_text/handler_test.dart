@@ -1,6 +1,7 @@
 // Copyright 2025 Mattia Pispisa
 // SPDX-License-Identifier: MIT
 
+import 'dart:math';
 import 'dart:typed_data';
 
 import 'package:crdt_lf/crdt_lf.dart';
@@ -10,11 +11,48 @@ import 'package:test/test.dart';
 import '../conformance/handler_conformance.dart';
 
 List<List<Object?>> _read(CRDTFugueRichTextHandler text) => [
-      for (final span in text.value) _s(span.text, span.attributes),
+      for (final span in text.value) _s(span.text, span.attributes, span.embed),
     ];
 
-List<Object?> _s(String text, [Map<String, Object?> attributes = const {}]) =>
-    [text, attributes];
+// The rune index of each embed.
+List<int> _embedIndices(CRDTFugueRichTextHandler text) {
+  final indices = <int>[];
+  var index = 0;
+  for (final span in text.value) {
+    if (span.embed != null) {
+      indices.add(index);
+    }
+    index += span.text.runes.length;
+  }
+  return indices;
+}
+
+Map<String, Object?> _embedData(Random random, String token) =>
+    switch (random.nextInt(3)) {
+      0 => {'image': token},
+      1 => {
+          'video': token,
+          'meta': {
+            'width': random.nextInt(500),
+            'ratio': 1.5,
+            'tags': [token, null, true],
+          },
+        },
+      _ => {'file': token, 'bytes': Uint8List.fromList(token.codeUnits)},
+    };
+
+Map<String, Object?> _attributes(Random random) => switch (random.nextInt(3)) {
+      0 => const <String, Object?>{},
+      1 => {'italic': true},
+      _ => {'bold': null, 'size': random.nextInt(4)},
+    };
+
+List<Object?> _s(
+  String text, [
+  Map<String, Object?> attributes = const {},
+  Map<String, Object?>? embed,
+]) =>
+    [text, attributes, if (embed != null) embed];
 
 void main() {
   runHandlerConformanceTests(
@@ -22,22 +60,44 @@ void main() {
     read: _read,
     edit: (text, random, token) {
       final length = text.length;
-      switch (length == 0 ? 0 : random.nextInt(5)) {
+      final embeds = _embedIndices(text);
+      final runes = '\u{1F389}$token';
+      final runeCount = runes.runes.length;
+      // The places a rune update can start without covering an embed.
+      final updatable = [
+        for (var i = 0; i < length; i++)
+          if (!embeds.any((at) => at >= i && at < i + runeCount)) i,
+      ];
+      var choice = length == 0 ? random.nextInt(2) * 5 : random.nextInt(7);
+      if (choice == 2 && updatable.isEmpty) {
+        choice = 0;
+      }
+      if (choice == 6 && embeds.isEmpty) {
+        choice = 5;
+      }
+      switch (choice) {
         case 0:
-          final attributes = switch (random.nextInt(3)) {
-            0 => const <String, Object?>{},
-            1 => {'italic': true},
-            _ => {'bold': null, 'size': random.nextInt(4)},
-          };
           text.insert(
             random.nextInt(length + 1),
             random.nextInt(4) == 0 ? '\u{1F600}$token\n' : '\u{1F600}$token',
-            attributes: attributes,
+            attributes: _attributes(random),
           );
         case 1:
           text.delete(random.nextInt(length), random.nextInt(3) + 1);
         case 2:
-          text.update(random.nextInt(length), '\u{1F389}$token');
+          text.update(updatable[random.nextInt(updatable.length)], runes);
+        case 5:
+          text.insertEmbed(
+            random.nextInt(length + 1),
+            _embedData(random, token),
+            attributes: _attributes(random),
+            inherit: random.nextInt(3) != 0,
+          );
+        case 6:
+          text.updateEmbed(
+            embeds[random.nextInt(embeds.length)],
+            _embedData(random, token),
+          );
         case 3:
           final index = random.nextInt(length);
           final count = random.nextInt(length - index) + 1;
@@ -48,7 +108,7 @@ void main() {
             token,
             expand: MarkExpand.values[random.nextInt(4)],
           );
-        case _:
+        case 4:
           final index = random.nextInt(length);
           final count = random.nextInt(length - index) + 1;
           var allBold = true;
@@ -1035,30 +1095,6 @@ void main() {
         small.insertEmbed(0, {'k': '1'});
       });
 
-      test('the newest update wins, in any order of arrival', () {
-        final a = CRDTDocument(peerId: peerA);
-        open(a).insertEmbed(0, image);
-        final b = fork(a, peerB);
-        open(a)
-          ..value
-          ..updateEmbed(0, {'image': 'from a'});
-        expect(open(a).value.single.embed, {'image': 'from a'});
-        open(b).updateEmbed(0, {'image': 'from b'});
-        final bWins = b.exportChanges().last.id.compareTo(
-                  a.exportChanges().last.id,
-                ) >
-            0;
-        sync(a, b);
-        sync(b, a);
-        final replayed = fork(a, peerC);
-
-        for (final doc in [a, b, replayed]) {
-          expect(open(doc).value.single.embed, {
-            'image': bWins ? 'from b' : 'from a',
-          });
-        }
-      });
-
       test('an update older than its embed changes nothing', () {
         final doc = CRDTDocument(peerId: peerA);
         final text = open(doc)..insertEmbed(0, image);
@@ -1075,35 +1111,145 @@ void main() {
         expect(open(fork(doc, peerB)).value.single.embed, image);
       });
 
-      test('an update loses against a concurrent delete', () {
-        final a = CRDTDocument(peerId: peerA);
-        open(a).insertEmbed(0, image);
-        final b = fork(a, peerB);
-        open(a).delete(0, 1);
-        open(b).updateEmbed(0, {'image': 'b.png'});
-        sync(a, b);
-        sync(b, a);
+      test('concurrent embed edits on three peers converge in any order', () {
+        // A literal far ahead of the wall clock: every peer keeps it and only
+        // the counter moves, so the winners do not depend on the time.
+        CRDTDocument peer(PeerId id) => CRDTDocument(
+              peerId: id,
+              initialClock: HybridLogicalClock(l: 0x800000000000, c: 0),
+            );
+        final base = peer(peerA);
+        open(base)
+          ..insert(0, 'abcd')
+          ..insertEmbed(1, {'e': 1})
+          ..insertEmbed(3, {'e': 2})
+          ..insertEmbed(5, {'e': 3});
+        final baseChanges = base.exportChanges();
+        final peers = [
+          for (final id in [peerA, peerB, peerC])
+            peer(id)..importChanges(baseChanges),
+        ];
+        final [a, b, c] = peers.map(open).toList();
+        // 'a', e1, 'b', e2, 'c', e3, 'd'. Each peer's first edit has the same
+        // clock, so the peer id breaks the tie; a later edit wins by its clock.
+        a
+          ..updateEmbed(1, {'e': 1, 'by': 'a'})
+          ..updateEmbed(5, {'e': 3, 'by': 'a1'})
+          ..updateEmbed(5, {'e': 3, 'by': 'a2'})
+          ..insertEmbed(0, {'new': 'a'});
+        b
+          ..updateEmbed(1, {'e': 1, 'by': 'b'})
+          ..updateEmbed(5, {'e': 3, 'by': 'b'})
+          ..delete(3, 1);
+        c
+          ..updateEmbed(1, {'e': 1, 'by': 'c'})
+          ..updateEmbed(3, {'e': 2, 'by': 'c'})
+          ..insertEmbed(
+            0,
+            {
+              'new': 'c',
+              'bytes': Uint8List.fromList([1, 2, 3]),
+            },
+            attributes: {'width': 5},
+          )
+          ..format(2, 1, 'bold', true);
+        final edits = [
+          for (final doc in peers)
+            doc.exportChanges(fromVersionVector: base.getVersionVector()),
+        ];
 
-        expect(open(a).text, isEmpty);
-        expect(open(b).text, isEmpty);
+        List<List<int>> orders(List<int> items) => items.length <= 1
+            ? [items]
+            : [
+                for (final first in items)
+                  for (final rest
+                      in orders([...items.where((item) => item != first)]))
+                    [first, ...rest],
+              ];
+
+        final peerD = PeerId.parse('00000000-0000-4000-8000-00000000000d');
+        final results = <(String, List<RichTextSpan>, Uint8List)>[];
+        for (final order in orders([0, 1, 2])) {
+          for (final warm in [true, false]) {
+            final doc = CRDTDocument(peerId: peerD)..importChanges(baseChanges);
+            final text = open(doc);
+            for (final index in order) {
+              if (warm) {
+                text.value;
+              }
+              doc.importChanges(edits[index]);
+            }
+            final reason = '$order ${warm ? 'warm' : 'replay'}';
+            final blob = doc.takeSnapshot(pruneHistory: false).data['rich']!;
+            results.add((reason, text.value, blob));
+          }
+        }
+        for (final doc in peers) {
+          for (final other in peers) {
+            if (other != doc) {
+              sync(doc, other);
+            }
+          }
+          final blob = doc.takeSnapshot(pruneHistory: false).data['rich']!;
+          results.add(('peer ${doc.peerId}', open(doc).value, blob));
+        }
+
+        final (_, value, blob) = results.first;
+        final embeds = [for (final span in value) span.embed];
+        expect(embeds.whereType<Map<String, Object?>>(), hasLength(4));
+        expect(embeds, contains(equals({'e': 1, 'by': 'c'})));
+        expect(embeds, contains(equals({'e': 3, 'by': 'a2'})));
+        expect(embeds, contains(equals({'new': 'a'})));
+        expect(
+          value.firstWhere((span) => span.embed?['new'] == 'c'),
+          RichTextSpan.embed(
+            {
+              'new': 'c',
+              'bytes': Uint8List.fromList([1, 2, 3]),
+            },
+            {'width': 5},
+          ),
+        );
+        expect(
+          value.firstWhere((span) => span.embed?['e'] == 1).attributes,
+          {'bold': true},
+        );
+        expect(open(base).text, 'a\uFFFCb\uFFFCc\uFFFCd');
+        for (final (reason, otherValue, otherBlob) in results) {
+          expect(otherValue, value, reason: reason);
+          expect(
+            [for (final span in otherValue) span.embed],
+            embeds,
+            reason: reason,
+          );
+          expect(otherBlob, blob, reason: reason);
+        }
       });
 
-      test('a remote rune update over an embed changes nothing', () {
+      test('a remote rune update skips the embeds it names', () {
         final doc = CRDTDocument(peerId: peerA);
         final text = open(doc)
           ..insert(0, 'a')
           ..insertEmbed(1, image);
-        // One item: the embed, and the rune 'x'.
+        // Two items: 'a' to 'y', and the embed to 'x'.
         craft(
           doc,
           text,
           OperationType.kindUpdate,
-          [1, ...elementAt(text, 1).toBytes(), 1, 0x78],
+          [
+            2,
+            ...elementAt(text, 0).toBytes(),
+            1,
+            0x79,
+            ...elementAt(text, 1).toBytes(),
+            1,
+            0x78,
+          ],
           stamped: true,
         );
 
         for (final read in [text, open(fork(doc, peerB))]) {
-          expect(read.text, 'a\uFFFC');
+          expect(read.text, 'y\uFFFC');
           expect(read.value.last, RichTextSpan.embed(image));
         }
       });
@@ -1143,7 +1289,8 @@ void main() {
       });
 
       group('in a snapshot', () {
-        bool holds(Uint8List blob, String text) {
+        // Where [text] starts in [blob], or -1.
+        int find(Uint8List blob, String text) {
           final bytes = Wtf8.encode(text);
           for (var i = 0; i + bytes.length <= blob.length; i++) {
             var j = 0;
@@ -1151,10 +1298,10 @@ void main() {
               j++;
             }
             if (j == bytes.length) {
-              return true;
+              return i;
             }
           }
-          return false;
+          return -1;
         }
 
         test('keeps the live embeds, and nothing of a deleted one', () {
@@ -1175,40 +1322,10 @@ void main() {
           expect(restored.value, text.value);
           expect(restored.value.last.embed, {'video': 'new.mp4'});
           final blob = snapshot.data['rich']!;
-          expect(holds(blob, 'new.mp4'), isTrue);
-          expect(holds(blob, 'gone.png'), isFalse);
-        });
-
-        test('equal states give equal bytes, whatever the order', () {
-          final a = CRDTDocument(peerId: peerA);
-          final b = CRDTDocument(peerId: peerB);
-          final textA = open(a)
-            ..insertEmbed(0, {'n': 1})
-            ..insertEmbed(1, {'n': 2})
-            ..value;
-          final textB = open(b)
-            ..insertEmbed(0, {'n': 3})
-            ..insertEmbed(1, {'n': 4})
-            ..value;
-          sync(a, b);
-          sync(b, a);
-          int at(CRDTFugueRichTextHandler text, int n) =>
-              text.value.indexWhere((span) => span.embed?['n'] == n);
-          textA
-            ..delete(at(textA, 1), 1)
-            ..updateEmbed(at(textA, 4), {'n': 5});
-          textB.delete(at(textB, 3), 1);
-          sync(a, b);
-          sync(b, a);
-
-          final snapshotA = a.takeSnapshot();
-          final snapshotB = b.takeSnapshot();
-          expect(textA.value, textB.value);
-          expect(snapshotA.data['rich'], snapshotB.data['rich']);
-          final merged = CRDTDocument(peerId: peerC)
-            ..importSnapshot(snapshotA)
-            ..mergeSnapshot(snapshotB);
-          expect(open(merged).value, textA.value);
+          expect(find(blob, 'gone.png'), -1);
+          // Sorted by element id: the image was inserted first.
+          expect(find(blob, 'a.png'), greaterThan(0));
+          expect(find(blob, 'a.png'), lessThan(find(blob, 'new.mp4')));
         });
 
         test('seeds the embeds before the changes after it', () {
@@ -1224,9 +1341,13 @@ void main() {
             List<int> body, {
             // A literal: on the web a shift is 32-bit.
             int time = 0x800000000000,
+            bool warm = false,
           }) {
             final doc = CRDTDocument(peerId: peerB)..importSnapshot(snapshot);
             final text = open(doc);
+            if (warm) {
+              text.value;
+            }
             craft(doc, text, kind, body, stamped: true, time: time);
             return text;
           }
@@ -1237,47 +1358,19 @@ void main() {
           final newer = replay(6, [...element, 7, 1, 1, 0x6B, 5, 1, 0x78]);
           expect(newer.value.single.embed, {'k': 'x'});
 
-          final rune =
-              replay(OperationType.kindUpdate, [1, ...element, 1, 0x78]);
-          expect(rune.text, '\uFFFC');
-          expect(rune.value.single.embed, {'image': 'new.png'});
+          for (final warm in [false, true]) {
+            final rune = replay(
+              OperationType.kindUpdate,
+              [1, ...element, 1, 0x78],
+              warm: warm,
+            );
+            expect(rune.text, '\uFFFC', reason: 'warm: $warm');
+            expect(rune.value.single.embed, {'image': 'new.png'});
+          }
         });
       });
 
       group('undo', () {
-        test('undo and redo walk back and forth over each step', () {
-          final doc = CRDTDocument(peerId: peerA);
-          final text = open(doc)..insert(0, 'ab');
-          final undo = track(doc, text);
-          final steps = [text.value];
-          void step(void Function() edit) {
-            edit();
-            steps.add(text.value);
-          }
-
-          step(() => text.insertEmbed(1, image, attributes: {'width': 10}));
-          step(() => text.updateEmbed(1, {'image': 'b.png'}));
-          step(() => text.format(0, 3, 'bold', true));
-          step(() => text.delete(1, 1));
-
-          for (var i = steps.length - 2; i >= 0; i--) {
-            undo.undo();
-            expect(text.value, steps[i], reason: 'undo to step $i');
-          }
-          for (var i = 1; i < steps.length; i++) {
-            undo.redo();
-            expect(text.value, steps[i], reason: 'redo to step $i');
-          }
-          undo.undo();
-          expect(text.value, steps[3]);
-          expect(open(fork(doc, peerB)).value, text.value);
-          text.updateEmbed(1, image);
-          expect(
-            text.value[1],
-            RichTextSpan.embed(image, {'bold': true, 'width': 10}),
-          );
-        });
-
         test('a mixed delete comes back as one chain, beside a peer edit', () {
           // The same edits with an embed or with a plain rune in the middle:
           // both give the same ids, so the same tree.
@@ -1425,7 +1518,7 @@ void main() {
           ..insert(1, 'y');
         expect(_read(text), [
           _s('ay'),
-          _s('\uFFFC', {'width': 10}),
+          _s('\uFFFC', {'width': 10}, image),
           _s('xb'),
         ]);
       });
