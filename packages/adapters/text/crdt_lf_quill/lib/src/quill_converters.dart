@@ -17,9 +17,10 @@ import 'package:flutter_quill/flutter_quill.dart' show Embeddable;
 /// Attributes are split by scope (see [quillScopedAttributes]). A `null`
 /// value removes the attribute on a retain and is dropped on an insert.
 ///
-/// An embed is a Quill embed insert of the same map. An updated embed is an
-/// insert and a delete; [document], the Quill document [before] comes from,
-/// gives the attributes it keeps.
+/// An embed is a Quill embed insert of the same map, or of the map wrapped
+/// in [crdtQuillEmbedType]. An updated embed is an insert and a delete;
+/// [document], the Quill document [before] comes from, gives the attributes
+/// it keeps.
 Delta quillDeltaFromRichText(
   RichTextDelta delta,
   String before, {
@@ -84,7 +85,8 @@ Delta quillDeltaFromRichText(
 /// {@macro crdt_lf_quill.units}
 ///
 /// Attributes are split by scope, as in [quillDeltaFromRichText]. A Quill
-/// embed is a [RichTextInsertEmbed] of the same map. With [document], the
+/// embed is a [RichTextInsertEmbed] of the same map, or of the map a
+/// [crdtQuillEmbedType] embed wraps. With [document], the
 /// Quill document [before] comes from, an embed that replaces an embed in
 /// the same change is a [RichTextUpdateEmbed].
 RichTextDelta richTextDeltaFromQuill(
@@ -226,8 +228,11 @@ Delta quillDocumentFromSpans(List<RichTextSpan> spans) {
 
 /// The Quill embed type that holds a handler embed whole.
 ///
-/// A handler embed that is not one key, or whose key is this one, goes to
-/// Quill as `{crdtQuillEmbedType: embed}`.
+/// A Quill embed is a map of one key, its type. A handler embed of another
+/// shape, such as `{'image': url, 'alt': 'A cat'}`, or whose only key is this
+/// one, goes to Quill as `{crdtQuillEmbedType: embed}` and comes back as the
+/// same map. To show it, give the editor an `EmbedBuilder` for this key or an
+/// `unknownEmbedBuilder`: without one, `QuillEditor` throws on it.
 const String crdtQuillEmbedType = 'crdt_lf';
 
 /// The Quill embed for [embed], the data of a handler embed.

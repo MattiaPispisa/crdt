@@ -10,5 +10,6 @@
 - Exported converters between Quill deltas and `RichTextDelta`, to build your own binding.
 - Peer changes stay out of the controller's undo stack, like `History(userOnly: true)`.
 - `CrdtQuillBinder.undoManager` routes undo and redo through a `CRDTUndoManager`; `crdtQuillOrigin` tags the editor's writes.
-- The binder refuses embeds (images, videos) and reports them through `onUnsupported`.
+- Quill embeds (images, videos) map to handler embeds and back; `embedTypes` picks the types the editor
+  writes, and a refused one goes to `onUnsupported`. See [Embeds](README.md#embeds).
 - `debugVerifyCrdtQuillProjection` switches the full projection check, in debug and release.

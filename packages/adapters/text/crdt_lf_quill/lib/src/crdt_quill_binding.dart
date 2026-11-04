@@ -58,7 +58,8 @@ class CrdtQuillBinding {
   /// refuses.
   void Function(Object? data)? onUnsupported;
 
-  /// The keys of the Quill embeds written to the handler; `null` takes all.
+  /// The types of the Quill embeds the editor writes to the handler; `null`
+  /// takes all.
   Set<String>? embedTypes;
 
   ReplaceTextCallback? _userOnReplaceText;

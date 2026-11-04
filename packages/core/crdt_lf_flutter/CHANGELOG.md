@@ -18,6 +18,10 @@
 - `CrdtRichTextFieldBuilder.undoManager` routes undo and redo (shortcuts and the controller) through a
   `CRDTUndoManager`; `crdtRichTextFieldOrigin` tags the field's writes.
 - `CrdtTextCursorsOverlay` accepts a `CRDTFugueRichTextHandler`.
+- `CrdtRichTextFieldBuilder` keeps the embeds of the handler intact through edits, undo and remote
+  changes, and strips a typed U+FFFC.
+- `echoesRichText`, `formatsWithin` and `OwnsFormat` tell a rich text editor's own write from another
+  writer's in `CrdtEditorBinding.push`.
 
 ### Fixed
 

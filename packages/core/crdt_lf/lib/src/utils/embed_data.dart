@@ -5,9 +5,13 @@ import 'dart:typed_data';
 
 import 'package:crdt_lf/src/utils/bytes.dart';
 
+// Data is frozen once, then shared by the state, the spans and the deltas:
+// freezing a frozen map again gives it back for free.
 final Expando<bool> _frozen = Expando('frozen embed');
 
 /// A deep, unmodifiable copy of [embed], keys in the same order.
+///
+/// Throws an [ArgumentError] for a nested map key that is not a `String`.
 Map<String, Object?> freezeEmbed(Map<String, Object?> embed) {
   if (_frozen[embed] ?? false) {
     return embed;

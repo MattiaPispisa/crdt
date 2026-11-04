@@ -13,6 +13,7 @@ RichTextDelta _richDelta(
   if (delta == null || delta.isEmpty) {
     return const RichTextDelta.empty();
   }
+  // Resolved at the first insert: a delete-only delta needs no attributes.
   _ResolvedMarks? resolved;
   final ops = <RichTextOp>[];
   var out = 0;

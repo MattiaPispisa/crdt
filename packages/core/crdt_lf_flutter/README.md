@@ -361,8 +361,16 @@ CrdtRichTextFieldBuilder(
 Paste inserts the plain text of the clipboard. The text takes the format where
 it lands, and the formats of the clipboard are dropped.
 
-The field paints inline formats only. Block attributes (headings, lists),
-embeds and images need an editor: see `crdt_lf_quill`.
+The field paints inline formats only. Block attributes (headings, lists) and
+the content of embeds (images, videos) need an editor: see `crdt_lf_quill`.
+
+An embed of the handler shows as its U+FFFC glyph. The field keeps it intact
+through edits around it, deletes, undo and remote changes, its data included.
+A typed or pasted U+FFFC is stripped before the write, since the handler
+refuses it as text. A value set by code with edits on both sides of an embed
+keeps the embed too. One case stays ambiguous: pasting text with U+FFFC over a
+selection that holds an embed may keep the old embed where the new text lines
+up with it.
 
 #### Rune ↔ UTF-16 offsets
 
@@ -430,6 +438,24 @@ CrdtEditorBinder<List<RichTextSpan>, RichTextDelta>(
 Give `verifyProjection` whenever you can. A watcher that writes back inside
 your write is dropped together with your echo, and this check is what finds
 it.
+
+For a rich text editor, pass `isEcho` to `binding.push` too, built with
+`echoesRichText`. It tells your own write apart from a write of someone else
+during the push, even one that keeps the length (a format, an embed update),
+which a length check misses. `formatsWithin` describes the formats your write
+puts on a range:
+
+```dart
+binding.push(
+  () => page.insert(index, text, attributes: style),
+  isEcho: (dropped) => echoesRichText(
+    dropped,
+    deleted: 0,
+    inserted: text.runes.length,
+    ownsFormat: formatsWithin(index, index + text.runes.length, style),
+  ),
+);
+```
 
 ### Presence cursors
 

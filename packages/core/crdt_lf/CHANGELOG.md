@@ -12,6 +12,8 @@
 - `CRDTFugueRichTextHandler`: Fugue text with attributes, expand modes, block attributes, undo and
   Quill-shaped `RichTextDelta` deltas. See [Rich text](README.md#rich-text).
   [209](https://github.com/MattiaPispisa/crdt/issues/209)
+- `CRDTFugueRichTextHandler` embeds: `insertEmbed` and `updateEmbed` put objects (images, videos)
+  with map data in the text, one U+FFFC rune each, with undo and snapshots. See [Embeds](README.md#embeds).
 
 ### Changed
 

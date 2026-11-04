@@ -341,6 +341,12 @@ abstract base class FugueSequenceHandler<T, V, S extends FugueState<T, V>>
 
   /// The inserts that put [items] back between [leftOrigin] and
   /// [rightOrigin], each with the ids it restores.
+  ///
+  /// The undo of a delete calls it once per run of deleted elements. The
+  /// default writes one [buildInsertOperation]. An override may cut the run
+  /// into several inserts: each one after the first must have the last id of
+  /// the one before as its left origin, and the same [rightOrigin], so the
+  /// elements land in their old order.
   List<({Operation insert, List<FugueElementID> was})> buildRestoreInserts({
     required FugueElementID leftOrigin,
     required FugueElementID rightOrigin,

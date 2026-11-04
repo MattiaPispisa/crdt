@@ -1128,7 +1128,40 @@ print(text.attributesAt(6)); // Prints "{bold: true, link: https://example.com}"
 - `watch()` emits a `RichTextDelta`, in the shape of a
   [Quill Delta](https://quilljs.com/docs/delta/): `RichTextRetain`,
   `RichTextInsert` and `RichTextDelete`, with attributes where `null` removes a
-  key. A delta that only formats is a retain with attributes.
+  key. A delta that only formats is a retain with attributes. Embeds come as
+  `RichTextInsertEmbed` and `RichTextUpdateEmbed`.
+
+##### Embeds
+
+An embed is an object in the text, such as an image, a video or a mention. It
+takes one position: the caret moves over it, formats cover it, and it is
+deleted like a character.
+
+```dart
+text
+  ..insertEmbed(5, {'image': 'https://example.com/cat.png', 'alt': 'A cat'})
+  ..updateEmbed(5, {'image': 'https://example.com/dog.png', 'alt': 'A dog'});
+print(text.text); // "Hello￼ world": U+FFFC stands for the embed
+print(text.value[1].embed); // {image: https://example.com/dog.png, alt: A dog}
+```
+
+- The data is a map of `null`, `bool`, `int`, finite `double`, `String`,
+  `Uint8List`, and lists and maps of these, nested at most 16 deep. Put the
+  properties of the object (URL, size, alt text) in the data, and the formats
+  a user applies (bold, link) in `attributes`.
+- `text` holds one U+FFFC (`RichTextSpan.objectReplacement`) per embed, so
+  every rune index of `text` is an index of every positional API. `insert` and
+  `update` refuse a text with U+FFFC: in `text` it is always an embed.
+- Concurrent `updateEmbed`s of one embed resolve like formats: the newest
+  wins. An update loses against a concurrent delete. Undo brings a deleted
+  embed back with its data.
+- `insertEmbed` attributes cover the embed alone. A block embed (a full-width
+  image) is an embed followed by its own `'\n'`, which holds the block
+  attributes.
+- `maxEmbedBytes` (default 256 KiB, `null` for no limit) caps the data this
+  peer writes. Every byte stays in the change log until a snapshot and a
+  prune and goes to every peer: store large media elsewhere and keep a URL or
+  a hash in the embed.
 
 #### Working with Complex Types
 

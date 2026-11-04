@@ -6,7 +6,8 @@ import 'package:crdt_lf/src/utils/attributes.dart';
 import 'package:crdt_lf/src/utils/embed_data.dart';
 import 'package:crdt_lf/src/utils/rune_offsets.dart';
 
-/// A run of rich text whose runes all carry the same [attributes].
+/// A run of rich text whose runes all carry the same [attributes], or one
+/// embed (see [embed]).
 final class RichTextSpan {
   /// Creates a span of [text] with [attributes].
   RichTextSpan(this.text, [Map<String, Object?> attributes = const {}])
@@ -14,6 +15,9 @@ final class RichTextSpan {
         embed = null;
 
   /// Creates the span of one embed with its [embed] data.
+  ///
+  /// Its [text] is [objectReplacement]. An embed span never fuses with a
+  /// neighbour.
   RichTextSpan.embed(
     Map<String, Object?> embed, [
     Map<String, Object?> attributes = const {},
@@ -21,7 +25,7 @@ final class RichTextSpan {
         attributes = _freeze(attributes),
         embed = freezeEmbed(embed);
 
-  /// The text of an embed span.
+  /// U+FFFC, the text of an embed span and of an embed in the plain text.
   static const String objectReplacement = '\uFFFC';
 
   /// The runes of the span.
@@ -235,7 +239,8 @@ final class RichTextDelete extends RichTextOp {
 ///
 /// The shape of a [Quill Delta](https://quilljs.com/docs/delta/) that edits a
 /// document: retain, insert, delete, counted in **runes**. A delta that only
-/// formats is a run of [RichTextRetain] with attributes.
+/// formats is a run of [RichTextRetain] with attributes. An embed is one rune:
+/// [RichTextInsertEmbed] puts one in, [RichTextUpdateEmbed] replaces its data.
 final class RichTextDelta implements ComposableDelta<RichTextDelta> {
   /// Creates a delta from [ops], in normal form.
   ///
@@ -261,7 +266,9 @@ final class RichTextDelta implements ComposableDelta<RichTextDelta> {
   /// {@macro composable_delta_compose}
   ///
   /// The attributes of [next] go over these. A `null` value stays a removal
-  /// on a retain, and drops the key from an insert.
+  /// on a retain, and drops the key from an insert. An update of an inserted
+  /// embed gives the insert with the new data; of two updates, the later
+  /// one stays.
   @override
   RichTextDelta compose(RichTextDelta next) {
     final a = _OpCursor(ops);

@@ -26,9 +26,14 @@ OwnsFormat formatsWithin(int from, int to, Map<String, Object?> attributes) =>
 /// Whether [dropped] holds nothing but a rich text write of [deleted] and
 /// [inserted] runes.
 ///
+/// Made for the `isEcho` of `CrdtEditorBinding.push`. A write of another
+/// writer during the push, even one that keeps the length of the text (a
+/// format, an embed update), gives `false`, so the editor reads the handler
+/// again.
+///
 /// [embedsInserted] and [embedsUpdated] count the embeds the write puts in
 /// and updates. A format is the write's own when [ownsFormat] says so, in the
-/// coordinates of the delta that holds it.
+/// coordinates of the delta that holds it; `null` owns no format.
 bool echoesRichText(
   List<RichTextDelta> dropped, {
   required int deleted,

@@ -89,6 +89,9 @@ The converters are exported, so you can build your own binding:
 - `quillDeltaFromRichText(delta, before)`: a `RichTextDelta` to a Quill change.
 - `quillDocumentFromSpans(spans)`: the handler value as a Quill document.
 
+Pass `document:`, the Quill document `before` comes from, to the two delta
+converters: an embed replaced in one change then maps to an update.
+
 ### Units
 
 Quill counts UTF-16 code units. The handler counts runes, so an emoji is one
@@ -114,6 +117,32 @@ New text in the handler takes the formats on its left. Quill sends the exact
 attributes of each insert, so after an insert `writeRichTextDelta` sets the
 formats Quill asked for and removes the others. When they already match, it
 writes nothing more.
+
+### Embeds
+
+Quill embeds (images, videos, formulas) are embeds of the handler, and back.
+An embed is one position in the handler: see the "Embeds" section of the
+`crdt_lf` README.
+
+- A Quill embed is a map of one key, its type: `{"image": url}` is the same
+  map in the handler. A handler embed of another shape, such as
+  `{"image": url, "alt": "A cat"}` written by another editor, comes to Quill
+  as `{"crdt_lf": map}` (`crdtQuillEmbedType`) and goes back unchanged. To
+  show it, give `QuillEditor` an `EmbedBuilder` for that key or an
+  `unknownEmbedBuilder`: without one, Quill throws on it.
+- An embed replaced by another in one Quill change becomes an update of the
+  same embed in the handler, so a concurrent format on it survives.
+  `replaceText` with an `Embeddable` makes two Quill changes, so it is a
+  delete and an insert.
+- A block embed (a video, a full-width image) keeps its own `'\n'`, which
+  holds the block attributes.
+- `embedTypes` lists the embed types the editor may write; `null` takes all.
+  A refused embed goes to `onUnsupported`, and the rest of the edit, the text
+  of a paste included, is written. Embeds from other peers show whatever their
+  type.
+- Upload and rendering stay with the app. Keep large media outside the
+  document and put a URL in the embed: the handler refuses data above
+  `maxEmbedBytes`.
 
 ### The last newline
 
@@ -163,10 +192,9 @@ and 3.40 ms with the full check.
 
 ## Limits
 
-- Embeds (images, videos) are not supported yet. The binder refuses an embed
-  inserted through the controller and calls `onUnsupported`, so the app can
-  tell the user. An embed composed into the document directly is not written
-  to the handler, and the editor is read again from the handler.
+- Embed data the handler refuses (a `NaN`, nesting deeper than 16, more than
+  `maxEmbedBytes`) throws an `ArgumentError` from the Quill change instead of
+  going to `onUnsupported`, as an attribute value the handler refuses does.
 - Two peers that format the plain last line at the same time both store a
   last `'\n'`, so the document gets one extra line.
 - The editor keeps its own selection, moved by each remote change. Remote

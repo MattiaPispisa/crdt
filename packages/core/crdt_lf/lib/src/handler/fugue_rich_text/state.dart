@@ -308,6 +308,7 @@ class RichTextState extends FugueState<String, List<RichTextSpan>> {
     }
     final runes = _tree.values();
     final runs = _resolved().runsIn(0, runes.length);
+    // Only a text with embeds pays for the walk over the element ids.
     if (_embeds.live.isEmpty) {
       return _spansCache = List.unmodifiable(<RichTextSpan>[
         for (final run in runs)
@@ -360,6 +361,7 @@ class _EmbedTable {
     live[operation.element] = _Embed(operation.data, operation.stamp!);
   }
 
+  // The data leaves with the delete: the undo copies it when it captures.
   void deletedIn(FugueTextDeleteOperation operation) {
     if (live.isEmpty) {
       return;
@@ -380,7 +382,8 @@ class _EmbedTable {
   }
 
   // The update without the items that name an embed, or null when none is
-  // left.
+  // left. A deleted embed needs no check: the tree refuses an update on a
+  // tombstone.
   FugueTextUpdateOperation? withoutEmbeds(FugueTextUpdateOperation operation) {
     if (live.isEmpty) {
       return operation;

@@ -43,8 +43,8 @@ enum MarkExpand {
 /// A Fugue text whose runes carry **attributes**: a key and a value, which is
 /// `null`, `bool`, `int`, `double` or `String`. [format] sets or removes a
 /// key on a range, and [value] reads the text as [RichTextSpan]s. Insert,
-/// delete and update work as in [CRDTFugueTextHandler]. See the README
-/// section "Rich text".
+/// delete and update work as in [CRDTFugueTextHandler]. The text can also
+/// hold **embeds** (see below). See the README section "Rich text".
 ///
 /// ## Convergence
 /// A format is a mark anchored on the elements at the edges of its range.
@@ -67,15 +67,29 @@ enum MarkExpand {
 /// its line, such as a header. They never spread to the text typed next to
 /// it, and neither does their removal.
 ///
+/// ## Embeds
+/// An embed is an object in the text, such as an image: one position, shown
+/// in [text] as [RichTextSpan.objectReplacement] (U+FFFC). Its data is a map
+/// written with [insertEmbed] and replaced with [updateEmbed]. [format],
+/// [delete] and undo work on it as on a rune. Concurrent [updateEmbed]s of
+/// one embed resolve like formats: the newest wins. An update loses against
+/// a concurrent delete. The text never holds U+FFFC otherwise: [insert] and
+/// [update] refuse it.
+///
+/// A block embed, such as a full-width image, is an embed followed by its own
+/// `'\n'`, which holds the block attributes.
+///
 /// ## Snapshots
-/// A snapshot keeps the tombstones and every mark, so ranges and expansion
-/// read the same after a restore. A mark stays in the snapshot for good: the
-/// snapshot grows with each format.
+/// A snapshot keeps the tombstones, every mark and the data of the live
+/// embeds, so ranges and expansion read the same after a restore. A mark
+/// stays in the snapshot for good: the snapshot grows with each format. A
+/// deleted embed leaves its data behind.
 ///
 /// ## Deltas
 /// [watch] emits a [RichTextDelta] per change. The text of an insert comes
 /// with the attributes it has once the change is in. A format emits a retain
-/// with attributes, only where the value moved.
+/// with attributes, only where the value moved. Embeds come as
+/// [RichTextInsertEmbed] and [RichTextUpdateEmbed].
 ///
 /// ## Example
 /// ```dart
@@ -98,9 +112,17 @@ base class CRDTFugueRichTextHandler
     this.maxEmbedBytes = _defaultMaxEmbedBytes,
   }) : super(spec: CRDTFugueRichTextHandler.spec);
 
+  // One change has to fit in the 1 MiB send buffer of crdt_socket_sync with
+  // room to spare.
   static const int _defaultMaxEmbedBytes = 256 * 1024;
 
-  /// The most encoded bytes an embed written here can take; `null` for none.
+  /// The most encoded bytes the data of an embed written here can take;
+  /// `null` for no limit. Defaults to 256 KiB.
+  ///
+  /// A local write policy: embeds from other peers are always read, whatever
+  /// their size. Each byte stays in the change log until a snapshot and a
+  /// prune and goes to every peer, so keep large media outside and store a
+  /// reference, such as a URL.
   int? maxEmbedBytes;
 
   static const String _handlerType = 'CRDTFugueRichTextHandler';
@@ -179,7 +201,8 @@ base class CRDTFugueRichTextHandler
   /// The text and each key it changes are separate changes, written in one
   /// transaction. A key that changes nothing writes nothing.
   ///
-  /// Throws an [ArgumentError] for a value [format] refuses, before it writes.
+  /// Throws an [ArgumentError] for a value [format] refuses, or for a [text]
+  /// that holds U+FFFC, before it writes. Use [insertEmbed] for an embed.
   @override
   void insert(
     int index,
@@ -215,7 +238,27 @@ base class CRDTFugueRichTextHandler
     });
   }
 
-  /// Inserts the embed [embed] at [index], **in runes**.
+  /// Inserts an embed with the data [embed] at [index], **in runes**.
+  ///
+  /// The embed takes one position, shown as U+FFFC in [text]. [embed] maps
+  /// `String` keys to `null`, `bool`, `int` (within ±(2^52 - 1)), a finite
+  /// `double`, `String`, `Uint8List`, `List` or `Map` of these, nested at
+  /// most 16 deep. The handler keeps an unmodifiable copy, in the key order
+  /// given. Put the properties of the object, such as a URL or a width, in
+  /// [embed], and the formats a user applies in [attributes].
+  ///
+  /// [attributes] cover the embed alone, like the block attributes of a
+  /// `'\n'`: they never spread to text typed next to it. With [inherit], the
+  /// embed also gets the formats around it that expand over it, as in
+  /// [insert].
+  ///
+  /// Throws an [ArgumentError] for data out of these rules or above
+  /// [maxEmbedBytes], or for an attribute value [format] refuses, before it
+  /// writes.
+  ///
+  /// ```dart
+  /// text.insertEmbed(5, {'image': 'https://example.com/cat.png', 'w': 320});
+  /// ```
   void insertEmbed(
     int index,
     Map<String, Object?> embed, {
@@ -249,7 +292,15 @@ base class CRDTFugueRichTextHandler
     });
   }
 
-  /// Replaces the data of the embed at [index] with [embed].
+  /// Replaces the data of the embed at [index], **in runes**, with [embed].
+  ///
+  /// [embed] follows the rules of [insertEmbed]. The embed keeps its place
+  /// and its attributes. Among concurrent updates of one embed the newest
+  /// wins, as for formats. An update loses against a concurrent delete.
+  ///
+  /// Throws a [RangeError] for an [index] outside the text, and an
+  /// [ArgumentError] when the rune at [index] is not an embed or the data is
+  /// refused, before it writes.
   void updateEmbed(int index, Map<String, Object?> embed) {
     RangeError.checkValidIndex(index, this, 'index', length);
     final element = nodeAt(index);
@@ -268,6 +319,10 @@ base class CRDTFugueRichTextHandler
     );
   }
 
+  /// Writes [text] over the runes from [index], **in runes**.
+  ///
+  /// Throws an [ArgumentError] when [text] holds U+FFFC or the range covers
+  /// an embed, before it writes. Use [updateEmbed] for an embed.
   @override
   void update(int index, String text) {
     _refuseObjectReplacement(text);
@@ -339,7 +394,8 @@ base class CRDTFugueRichTextHandler
     return origins;
   }
 
-  // Inline runs expand after their end; a '\n' gets block anchors.
+  // Inline runs expand after their end; a '\n' and an embed get block anchors,
+  // so their attributes never spread to text typed next to them.
   void _markInserted(
     List<FugueTextInsertItem> items,
     Map<String, Object?> attributes, {
@@ -520,6 +576,8 @@ base class CRDTFugueRichTextHandler
   @override
   RichTextState computeState() {
     final snapshot = lastSnapshot();
+    // The embeds of the snapshot come before the replay: an update replayed
+    // after it must meet the stamp it competes with.
     final section = snapshot == null ? null : _MarksSection.read(snapshot);
     final replayed = _replayedMarks = [];
     final embeds = _replayedEmbeds = section?.embeds ?? _EmbedTable();
@@ -561,6 +619,8 @@ base class CRDTFugueRichTextHandler
       return;
     }
     var applied = operation;
+    // Only a hand-made remote update names an embed: this build refuses it.
+    // Dropping those items keeps the data and the U+FFFC of the embed.
     if (operation is FugueTextUpdateOperation) {
       final kept = state._embeds.withoutEmbeds(operation);
       if (kept == null) {
@@ -634,6 +694,8 @@ base class CRDTFugueRichTextHandler
       return _invertMark(operation);
     }
     if (operation is _FugueRichTextEmbedUpdateOperation) {
+      // Called before the update applies, so the table still holds the data
+      // it replaces.
       final embed = cachedOrComputedState()._embeds.live[operation.element];
       return embed == null
           ? const []

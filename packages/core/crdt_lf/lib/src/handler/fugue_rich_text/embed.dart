@@ -7,14 +7,21 @@ class _Embed {
   _Embed(this.data, this.stamp);
 
   final Map<String, Object?> data;
+
+  // The write that set [data]: the insert, then each update that won.
   final OperationId stamp;
 }
 
+// Tags 0-5 are the ones of `_MarkValue`; then 6 list (count, values), 7 map
+// (count, then per entry the key as length + WTF-8 and the value), 8 bytes
+// (length, bytes).
 class _EmbedValue {
   static const int _list = 6;
   static const int _map = 7;
   static const int _bytes = 8;
 
+  // Checked on read, so hostile bytes cannot overflow the stack, and on write,
+  // so this peer never writes data the others refuse.
   static const int maxDepth = 16;
 
   // Checks [embed], then gives its frozen copy and its bytes.
@@ -177,7 +184,7 @@ class _EmbedValue {
 
 // Layout: tag, liveCount: uvarint, then per live embed: id, stamp, data.
 // Written only when an embed is live, so a blob without embeds keeps its
-// bytes.
+// bytes. Sorted by id: `mergeSnapshot` needs equal states to give equal bytes.
 class _EmbedSection {
   static const int tag = 1;
 
@@ -224,6 +231,8 @@ class _EmbedSection {
   }
 }
 
+// Kind 5. A text insert of one U+FFFC element, so the Fugue paths for apply,
+// undo and element ids take it as it is. Not stamped: ids are never reused.
 class _FugueRichTextEmbedOperation extends FugueTextInsertOperation {
   _FugueRichTextEmbedOperation({
     required super.leftOrigin,
@@ -278,6 +287,7 @@ class _FugueRichTextEmbedOperation extends FugueTextInsertOperation {
       .toBytes();
 }
 
+// Kind 6, stamped: the newest update of an embed wins.
 class _FugueRichTextEmbedUpdateOperation extends Operation {
   _FugueRichTextEmbedUpdateOperation({
     required this.element,

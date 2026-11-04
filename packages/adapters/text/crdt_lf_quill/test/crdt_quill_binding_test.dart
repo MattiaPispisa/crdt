@@ -787,6 +787,103 @@ void main() {
       _expectConverged(ua, ub);
     });
 
+    test('an image is inserted, restored from a snapshot, updated, deleted '
+        'and undone through Quill, on every peer', () async {
+      const first = 'https://example.com/a.png';
+      const second = 'https://example.com/b.png';
+      final uc = _Peer(PeerId.parse('00000000-0000-4000-8000-0000000000c3'));
+      addTearDown(uc.dispose);
+      await _pump();
+
+      void syncAll() {
+        _sync(ua, ub);
+        _sync(ua, uc);
+        _sync(ub, uc);
+      }
+
+      List<Object?> handlerEmbeds(_Peer p) => [
+        for (final span in p.handler.value)
+          if (span.embed != null) span.embed,
+      ];
+      List<Object?> quillEmbeds(_Peer p) => [
+        for (final op in p.content.toList())
+          if (op.data is Map) op.data,
+      ];
+      void expectImage(List<(String, _Peer)> peers, String? url, String step) {
+        final expected = url == null
+            ? <Object?>[]
+            : [
+                {'image': url},
+              ];
+        final document = quillDocumentFromSpans(peers.first.$2.handler.value);
+        for (final (name, peer) in peers) {
+          expect(handlerEmbeds(peer), expected, reason: '$step: $name handler');
+          expect(quillEmbeds(peer), expected, reason: '$step: $name Quill');
+          expect(peer.content, document, reason: '$step: $name Quill');
+          expect(
+            peer.handler.value,
+            peers.first.$2.handler.value,
+            reason: '$step: $name handler',
+          );
+        }
+      }
+
+      final all = [('A', ua), ('B', ub), ('C', uc)];
+
+      // 1. A inserts the image through its Quill, B shows it.
+      ua.type(0, 'ab');
+      ua.controller.replaceText(ua.at(1), 0, BlockEmbed.image(first), null);
+      ua.manager!.stopCapturing();
+      _sync(ua, ub);
+      expectImage([('A', ua), ('B', ub)], first, 'insert');
+
+      // 2. C starts from a snapshot of A, its history pruned.
+      final snapshot = ua.document.takeSnapshot();
+      expect(ua.document.exportChanges(), isEmpty);
+      expect(uc.document.importSnapshot(snapshot), isTrue);
+      expectImage(all, first, 'snapshot');
+
+      // 3. B updates the image through its Quill: one embed update, the
+      // same element on every peer.
+      final deltas = {for (final (name, _) in all) name: <RichTextDelta>[]};
+      for (final (name, peer) in all) {
+        final watcher = peer.handler.watch().listen((update) {
+          if (update case HandlerDelta(:final delta)) deltas[name]!.add(delta);
+        });
+        addTearDown(watcher.cancel);
+      }
+      await _pump();
+      final embedAt = ub.handler.text.indexOf(RichTextSpan.objectReplacement);
+      final changes = ub.document.exportChanges().length;
+      ub.controller.replaceText(
+        ub.at(embedAt),
+        1,
+        Delta()..insert({'image': second}),
+        null,
+      );
+      expect(ub.document.exportChanges(), hasLength(changes + 1));
+      syncAll();
+      for (final (name, _) in all) {
+        expect(deltas[name], [
+          RichTextDelta([
+            RichTextRetain(embedAt),
+            RichTextUpdateEmbed({'image': second}),
+          ]),
+        ], reason: 'update: $name handler');
+      }
+      expectImage(all, second, 'update');
+
+      // 4. A deletes the image through its Quill, and the manager brings it
+      // back with the data of B's update.
+      ua.delete(embedAt, 1);
+      syncAll();
+      expectImage(all, null, 'delete');
+
+      ua.manager!.undo();
+      syncAll();
+      expectImage(all, second, 'undo');
+    });
+
     test('hasUndo and hasRedo follow the manager', () async {
       ub.type(0, 'remote');
       _sync(ua, ub);

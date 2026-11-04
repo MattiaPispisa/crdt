@@ -19,10 +19,11 @@ import 'package:flutter/widgets.dart';
 /// handler.
 ///
 /// After every step the field asks the handler for its length, which costs
-/// nothing. A drift that keeps the length, in the text or in the formats, is
-/// invisible to that question. While `true`, a debug build also compares the
-/// text and the attributes of every rune, and throws on a mismatch. That
-/// reads the whole value, the cost the field exists to avoid.
+/// nothing. A drift that keeps the length, in the text, the formats or the
+/// embeds, is invisible to that question. While `true`, a debug build also
+/// compares the text, the attributes and the embed of every rune, and throws
+/// on a mismatch. That reads the whole value, the cost the field exists to
+/// avoid.
 bool debugVerifyCrdtRichTextFieldProjection = true;
 
 /// The origin of every write [CrdtRichTextFieldBuilder] makes to the handler.
@@ -44,7 +45,10 @@ const Object crdtRichTextFieldOrigin = Object();
 /// - [CrdtRichTextEditingController.format] formats the selection. At a
 ///   collapsed caret it styles the text typed next.
 /// - The field paints inline formats only. Block attributes (headings,
-///   lists), embeds and images need an editor, see `crdt_lf_quill`.
+///   lists) and the content of embeds need an editor, see `crdt_lf_quill`.
+/// - An embed shows as its U+FFFC glyph and stays intact through edits
+///   around it, deletes, undo and remote changes, its data included. The
+///   field strips a typed or pasted U+FFFC: the handler refuses it as text.
 ///
 /// The field does one pass over the spans for each change, as a plain
 /// `TextField` does for the text.

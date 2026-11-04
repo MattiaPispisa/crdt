@@ -21,7 +21,7 @@ import 'package:flutter_quill/flutter_quill.dart';
 ///
 /// Put the widgets that listen to [controller] (toolbar, editor) under the
 /// binder. A read that arrives during a build runs at the end of the frame.
-/// See the README for units, attributes and the last newline.
+/// See the README for units, attributes, embeds and the last newline.
 ///
 /// Throws a `FlutterError` when [id] is not a rich text handler.
 class CrdtQuillBinder extends StatefulWidget {
@@ -65,7 +65,10 @@ class CrdtQuillBinder extends StatefulWidget {
   /// removes the refusal.
   final void Function(Object? data)? onUnsupported;
 
-  /// The keys of the Quill embeds written to the handler; `null` takes all.
+  /// The types of the Quill embeds the editor writes to the handler; `null`
+  /// takes all.
+  ///
+  /// Embeds from other peers show whatever their type.
   final Set<String>? embedTypes;
 
   /// The manager that undoes and redoes; `null` keeps Quill's own history.
