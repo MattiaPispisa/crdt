@@ -1,8 +1,11 @@
 // Copyright 2025 Mattia Pispisa
 // SPDX-License-Identifier: MIT
 
+import 'dart:typed_data';
+
 import 'package:crdt_lf/crdt_lf.dart';
-import 'package:crdt_lf_quill/crdt_lf_quill.dart';
+import 'package:crdt_lf_quill/src/quill_converters.dart';
+import 'package:flutter_quill/flutter_quill.dart' show Embeddable;
 import 'package:flutter_quill/quill_delta.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -59,6 +62,30 @@ void main() {
 
       expect(delta, Delta()..retain(2, {'bold': null}));
     });
+    test('an updated embed keeps the attributes it has in the document', () {
+      final delta = quillDeltaFromRichText(
+        RichTextDelta([
+          RichTextRetain(1),
+          RichTextUpdateEmbed(
+            {'image': 'b.png'},
+            {'italic': null, 'link': 'x'},
+          ),
+        ]),
+        'a\uFFFC\n',
+        document: Delta()
+          ..insert('a')
+          ..insert({'image': 'a.png'}, {'bold': true, 'italic': true})
+          ..insert('\n'),
+      );
+
+      expect(
+        delta,
+        Delta()
+          ..retain(1)
+          ..insert({'image': 'b.png'}, {'bold': true, 'link': 'x'})
+          ..delete(1),
+      );
+    });
   });
 
   group('richTextDeltaFromQuill', () {
@@ -106,11 +133,32 @@ void main() {
       );
     });
 
-    test('rejects embeds', () {
+    test('an embed that replaces an embed is an update, given the '
+        'document', () {
+      final document = Delta()
+        ..insert('a')
+        ..insert({'image': 'a.png'}, {'bold': true, 'italic': true})
+        ..insert('\n');
+      final change = Delta()
+        ..retain(1)
+        ..insert({'image': 'b.png'}, {'bold': true, 'link': 'x'})
+        ..delete(1);
+
       expect(
-        () => richTextDeltaFromQuill(Delta()..insert({'image': 'a.png'}), '\n'),
-        throwsUnsupportedError,
+        richTextDeltaFromQuill(change, 'a\uFFFC\n', document: document).ops,
+        [
+          RichTextRetain(1),
+          RichTextUpdateEmbed(
+            {'image': 'b.png'},
+            {'link': 'x', 'italic': null},
+          ),
+        ],
       );
+      expect(richTextDeltaFromQuill(change, 'a\uFFFC\n').ops, [
+        RichTextRetain(1),
+        RichTextInsertEmbed({'image': 'b.png'}, {'bold': true, 'link': 'x'}),
+        const RichTextDelete(1),
+      ]);
     });
   });
 
@@ -166,5 +214,30 @@ void main() {
           ..insert('\n'),
       );
     });
+  });
+
+  test('an embed that is not one plain key is wrapped, and unwrapped back', () {
+    final bytes = Uint8List.fromList([1, 2, 3]);
+    final nested = <String, Object?>{
+      'a': [
+        1,
+        {'b': bytes},
+      ],
+    };
+    for (final embed in <Map<String, Object?>>[
+      {},
+      {'image': 'a.png', 'alt': 'a'},
+      {crdtQuillEmbedType: nested},
+      {crdtQuillEmbedType: 'x'},
+    ]) {
+      final quill = quillEmbed(embed);
+      expect(quill, {crdtQuillEmbedType: embed});
+      expect(richTextEmbed(quill), embed);
+      expect(richTextEmbed(Embeddable.fromJson(quill)), embed);
+    }
+    final plain = <String, Object?>{'image': nested};
+    expect(quillEmbed(plain), plain);
+    expect(richTextEmbed(quillEmbed(plain)), plain);
+    expect(richTextEmbed({crdtQuillEmbedType: 'x'}), {crdtQuillEmbedType: 'x'});
   });
 }

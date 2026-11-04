@@ -6,5 +6,9 @@ export 'src/crdt_quill_binding.dart'
     show crdtQuillOrigin, debugVerifyCrdtQuillProjection;
 export 'src/quill_attributes.dart';
 export 'src/quill_converters.dart'
-    show quillDeltaFromRichText, quillDocumentFromSpans, richTextDeltaFromQuill;
+    show
+        crdtQuillEmbedType,
+        quillDeltaFromRichText,
+        quillDocumentFromSpans,
+        richTextDeltaFromQuill;
 export 'src/rich_text_writer.dart';

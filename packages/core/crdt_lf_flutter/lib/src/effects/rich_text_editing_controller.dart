@@ -254,7 +254,7 @@ int runesOfSpans(List<RichTextSpan> spans) {
   return count;
 }
 
-/// Whether two span lists give every rune the same attributes.
+/// Whether two span lists give every rune the same attributes and embed.
 bool sameRuneAttributes(List<RichTextSpan> a, List<RichTextSpan> b) {
   var i = 0;
   var j = 0;
@@ -268,6 +268,9 @@ bool sameRuneAttributes(List<RichTextSpan> a, List<RichTextSpan> b) {
       right = RuneOffsets.length(b[j].text);
     }
     if (!mapEquals(a[i].attributes, b[j].attributes)) {
+      return false;
+    }
+    if ((a[i].embed != null || b[j].embed != null) && a[i] != b[j]) {
       return false;
     }
     final step = left < right ? left : right;

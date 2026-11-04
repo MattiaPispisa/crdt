@@ -41,6 +41,14 @@ class TextHandlerAccess implements ConformanceHandler {
         final CRDTFugueRichTextHandler handler => handler.delete(index, count),
         _ => throw StateError('not a text handler'),
       };
+
+  @override
+  void insertEmbed(int index, Map<String, Object?> embed) =>
+      (raw as CRDTFugueRichTextHandler).insertEmbed(index, embed);
+
+  @override
+  void updateEmbed(int index, Map<String, Object?> embed) =>
+      (raw as CRDTFugueRichTextHandler).updateEmbed(index, embed);
 }
 
 /// The editor suite harness of a field that hands out a
@@ -51,6 +59,7 @@ class ControllerHarness extends EditorHarness {
   ControllerHarness({
     required this.makeHandler,
     required this.buildField,
+    this.supportsEmbeds = false,
   });
 
   /// Registers the handler under test.
@@ -68,6 +77,9 @@ class ControllerHarness extends EditorHarness {
 
   @override
   bool get supportsComposition => true;
+
+  @override
+  final bool supportsEmbeds;
 
   @override
   ConformanceHandler createHandler(CRDTDocument document, String id) =>

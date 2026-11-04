@@ -87,6 +87,7 @@ TextDelta? computeTextDelta(String oldText, String newText, {int? caret}) {
       oldText.codeUnitAt(start) == newText.codeUnitAt(start)) {
     start++;
   }
+  final prefix = start;
 
   // Break the identical-run ambiguity toward the caret: the inserted run must
   // end at [caret], so the kept prefix cannot reach past it. A net insertion
@@ -104,11 +105,26 @@ TextDelta? computeTextDelta(String oldText, String newText, {int? caret}) {
 
   var endOld = oldLength;
   var endNew = newLength;
-  while (endOld > start &&
-      endNew > start &&
-      oldText.codeUnitAt(endOld - 1) == newText.codeUnitAt(endNew - 1)) {
-    endOld--;
-    endNew--;
+  while (true) {
+    while (endOld > start &&
+        endNew > start &&
+        oldText.codeUnitAt(endOld - 1) == newText.codeUnitAt(endNew - 1)) {
+      endOld--;
+      endNew--;
+    }
+    // An embed the fold would carry into the inserted text is kept, not
+    // deleted and typed again.
+    final foldEnd = prefix < endNew ? prefix : endNew;
+    var embed = foldEnd - 1;
+    while (embed >= start && newText.codeUnitAt(embed) != _objectReplacement) {
+      embed--;
+    }
+    if (embed < start) {
+      break;
+    }
+    start = embed + 1;
+    endOld = oldLength;
+    endNew = newLength;
   }
 
   // Never split a surrogate pair: widen the replaced region instead.
@@ -147,6 +163,8 @@ int mapOffsetThroughDelta(int offset, TextDelta delta) {
   }
   return offset + delta.inserted.length - delta.deleted;
 }
+
+const int _objectReplacement = 0xFFFC;
 
 bool _isHighSurrogate(int codeUnit) => codeUnit >= 0xD800 && codeUnit <= 0xDBFF;
 

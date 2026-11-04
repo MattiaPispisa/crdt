@@ -182,26 +182,6 @@ bool echoesSequence(
       }
     });
 
-/// [echoesSequence] for rich text. Formats are not counted: the insert of a
-/// styled run writes marks of its own.
-bool echoesRichText(
-  List<RichTextDelta> dropped, {
-  required int deleted,
-  required int inserted,
-}) =>
-    _echoes(dropped, deleted, inserted, (delta) sync* {
-      for (final op in delta.ops) {
-        switch (op) {
-          case RichTextInsert() || RichTextInsertEmbed():
-            yield (op.length, 0);
-          case RichTextDelete():
-            yield (0, op.count);
-          case RichTextRetain() || RichTextUpdateEmbed():
-            break;
-        }
-      }
-    });
-
 // Each pair is (runes put in, runes taken out).
 bool _echoes<D>(
   List<D> dropped,

@@ -286,6 +286,76 @@ void runEditorConformanceTests(
         expect(editor.editorText, handler.text);
       });
     }
+
+    if (create().supportsEmbeds) {
+      testWidgets('edits around an embed keep it', (tester) async {
+        handler
+          ..insert(0, 'ab')
+          ..insertEmbed(1, {'image': 'a.png'});
+        await mount(tester);
+        expect(editor.editorText, 'a\uFFFCb');
+
+        editor.replaceText(1, 1, 'X');
+        await tester.pump();
+        editor.replaceText(3, 3, 'Y');
+        await tester.pump();
+        expect(handler.text, 'aX\uFFFCYb');
+
+        editor.replaceText(1, 2, '');
+        await tester.pump();
+        expect(handler.text, 'a\uFFFCYb');
+        expect(editor.editorText, handler.text);
+
+        editor.replaceText(1, 2, '');
+        await tester.pump();
+        expect(handler.text, 'aYb');
+        expect(editor.editorText, handler.text);
+      });
+
+      testWidgets('remote embed changes show, caret kept', (tester) async {
+        handler.insert(0, 'hello world');
+        await mount(tester);
+        editor.selection = const TextSelection.collapsed(offset: 5);
+        final peer = remotePeer();
+
+        peer.handler.insertEmbed(0, {'image': 'a.png'});
+        receive(peer.document);
+        await tester.pump();
+        expect(editor.editorText, '\uFFFChello world');
+        expect(editor.selection, const TextSelection.collapsed(offset: 6));
+
+        peer.handler.updateEmbed(0, {'image': 'b.png'});
+        receive(peer.document);
+        await tester.pump();
+        expect(editor.editorText, '\uFFFChello world');
+        expect(editor.selection, const TextSelection.collapsed(offset: 6));
+
+        peer.handler.delete(0, 1);
+        receive(peer.document);
+        await tester.pump();
+        expect(editor.editorText, 'hello world');
+        expect(editor.selection, const TextSelection.collapsed(offset: 5));
+      });
+
+      testWidgets('a typed U+FFFC is not written, the rest is', (
+        tester,
+      ) async {
+        handler.insert(0, 'ab');
+        await mount(tester);
+
+        editor.replaceText(1, 1, 'x\uFFFCy');
+        await tester.pump();
+
+        expect(handler.text, 'axyb');
+        expect(editor.editorText, 'axyb');
+        expect(editor.selection, const TextSelection.collapsed(offset: 3));
+
+        editor.replaceText(0, 0, '\uFFFC');
+        await tester.pump();
+        expect(handler.text, 'axyb');
+        expect(editor.editorText, 'axyb');
+      });
+    }
   });
 }
 

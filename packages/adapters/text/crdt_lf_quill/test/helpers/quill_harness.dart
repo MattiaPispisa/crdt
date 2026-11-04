@@ -28,6 +28,14 @@ class _RichHandler implements ConformanceHandler {
 
   @override
   void delete(int index, int count) => _handler.delete(index, count);
+
+  @override
+  void insertEmbed(int index, Map<String, Object?> embed) =>
+      _handler.insertEmbed(index, embed);
+
+  @override
+  void updateEmbed(int index, Map<String, Object?> embed) =>
+      _handler.updateEmbed(index, embed);
 }
 
 /// The editor suite harness of a `QuillController` bound by
@@ -40,6 +48,9 @@ class QuillHarness extends EditorHarness {
 
   @override
   bool get supportsComposition => false;
+
+  @override
+  bool get supportsEmbeds => true;
 
   @override
   ConformanceHandler createHandler(CRDTDocument document, String id) =>

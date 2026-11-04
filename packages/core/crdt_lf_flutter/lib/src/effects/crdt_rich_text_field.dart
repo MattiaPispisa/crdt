@@ -5,7 +5,7 @@ import 'dart:async';
 
 import 'package:crdt_lf/crdt_lf.dart';
 import 'package:crdt_lf_flutter/src/common/_crdt_guards.dart';
-import 'package:crdt_lf_flutter/src/effects/_text_field_core.dart';
+import 'package:crdt_lf_flutter/src/editor/rich_text_echoes.dart';
 import 'package:crdt_lf_flutter/src/effects/_text_field_engine.dart';
 import 'package:crdt_lf_flutter/src/effects/rich_text_editing_controller.dart';
 import 'package:crdt_lf_flutter/src/effects/text_delta.dart';
@@ -128,6 +128,9 @@ class _CrdtRichTextFieldBuilderState extends State<CrdtRichTextFieldBuilder>
 
   CRDTUndoManager? _manager;
   StreamSubscription<void>? _managerChanges;
+
+  // The formats the running write puts on the text it inserts.
+  OwnsFormat? _writtenFormats;
 
   // Where the pending attributes were set; they end when the caret leaves.
   FugueElementID? _pendingAnchor;
@@ -298,7 +301,12 @@ class _CrdtRichTextFieldBuilderState extends State<CrdtRichTextFieldBuilder>
         );
         _engine.reformat(handler.value);
       },
-      isEcho: (dropped) => echoesRichText(dropped, deleted: 0, inserted: 0),
+      isEcho: (dropped) => echoesRichText(
+        dropped,
+        deleted: 0,
+        inserted: 0,
+        ownsFormat: formatsWithin(start, start + length, {key: value}),
+      ),
     );
   }
 
@@ -414,10 +422,14 @@ class _CrdtRichTextFieldBuilderState extends State<CrdtRichTextFieldBuilder>
     int deleted,
   ) {
     final handler = _handler;
-    final pending = _c.pendingAttributes.isNotEmpty &&
-            handler.stablePositionAt(index) == _pendingAnchor
-        ? _c.pendingAttributes
-        : const <String, Object?>{};
+    final pending = _pendingAt(handler, index);
+    _writtenFormats = pending.isEmpty
+        ? null
+        : formatsWithin(
+            index,
+            index + RuneOffsets.length(pushed.inserted),
+            pending,
+          );
     _document.runInTransaction(
       () {
         if (deleted > 0) {
@@ -435,12 +447,71 @@ class _CrdtRichTextFieldBuilderState extends State<CrdtRichTextFieldBuilder>
   }
 
   @override
+  List<RichTextSpan> writeRegions(
+    List<RichTextSpan> base,
+    String baseText,
+    List<TextRegion> regions,
+  ) {
+    final handler = _handler;
+    _writtenFormats = null;
+    _document.runInTransaction(
+      () {
+        for (final (:pushed, :index, :deleted) in regions) {
+          final pending = _pendingAt(handler, index);
+          if (pending.isNotEmpty) {
+            _writtenFormats = formatsWithin(
+              index,
+              index + RuneOffsets.length(pushed.inserted),
+              pending,
+            );
+          }
+          if (deleted > 0) {
+            handler.delete(index, deleted);
+          }
+          _insert(handler, index, pushed.inserted, pending, _pendingExpand);
+        }
+      },
+      origin: crdtRichTextFieldOrigin,
+    );
+    final ops = <RichTextOp>[];
+    var at = 0;
+    for (final (:pushed, :index, :deleted) in regions) {
+      final inserted = _readInserted(handler, index, pushed.inserted);
+      ops
+        ..add(RichTextRetain(index - at))
+        ..add(RichTextDelete(deleted))
+        ..addAll(inserted);
+      at = index + RuneOffsets.length(pushed.inserted);
+    }
+    return RichTextDelta(ops).apply(base);
+  }
+
+  // The pending attributes, when the caret that set them is at [index].
+  Map<String, Object?> _pendingAt(
+    CRDTFugueRichTextHandler handler,
+    int index,
+  ) =>
+      _c.pendingAttributes.isNotEmpty &&
+              handler.stablePositionAt(index) == _pendingAnchor
+          ? _c.pendingAttributes
+          : const <String, Object?>{};
+
+  @override
   bool echoes(
     List<RichTextDelta> dropped, {
     required int deleted,
     required int inserted,
   }) =>
-      echoesRichText(dropped, deleted: deleted, inserted: inserted);
+      echoesRichText(
+        dropped,
+        deleted: deleted,
+        inserted: inserted,
+        ownsFormat: _writtenFormats,
+      );
+
+  @override
+  String writable(String typed) =>
+      typed.replaceAll(RichTextSpan.objectReplacement, '');
 
   @override
   void show(TextEditingValue value, List<RichTextSpan> content) {

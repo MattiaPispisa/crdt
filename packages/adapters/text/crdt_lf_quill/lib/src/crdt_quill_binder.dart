@@ -33,6 +33,7 @@ class CrdtQuillBinder extends StatefulWidget {
     this.builder,
     this.deletedBuilder,
     this.onUnsupported,
+    this.embedTypes,
     this.undoManager,
     super.key,
   }) : assert(
@@ -57,12 +58,15 @@ class CrdtQuillBinder extends StatefulWidget {
   /// Builds what shows once the handler is deleted; an empty box when `null`.
   final WidgetBuilder? deletedBuilder;
 
-  /// Called with the refused data when [controller] inserts an embed.
+  /// Called with each embed [controller] inserts that [embedTypes] refuses.
   ///
-  /// Embeds are not supported: the edit is dropped. The binder wraps the
-  /// `onReplaceText` that [controller] had when it was bound; assigning a new
-  /// one later removes the refusal.
+  /// The rest of the edit is written. The binder wraps the `onReplaceText`
+  /// that [controller] had when it was bound; assigning a new one later
+  /// removes the refusal.
   final void Function(Object? data)? onUnsupported;
+
+  /// The keys of the Quill embeds written to the handler; `null` takes all.
+  final Set<String>? embedTypes;
 
   /// The manager that undoes and redoes; `null` keeps Quill's own history.
   ///
@@ -79,6 +83,7 @@ class _CrdtQuillBinderState extends State<CrdtQuillBinder> {
   late final CrdtQuillBinding _binding = CrdtQuillBinding(
     widget.controller,
     onUnsupported: widget.onUnsupported,
+    embedTypes: widget.embedTypes,
     undoManager: widget.undoManager,
   );
 
@@ -88,6 +93,7 @@ class _CrdtQuillBinderState extends State<CrdtQuillBinder> {
     _binding
       ..controller = widget.controller
       ..onUnsupported = widget.onUnsupported
+      ..embedTypes = widget.embedTypes
       ..undoManager = widget.undoManager;
   }
 

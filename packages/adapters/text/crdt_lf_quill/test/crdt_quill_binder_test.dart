@@ -205,6 +205,35 @@ void main() {
     expect(bobFocus.hasFocus, isFalse);
   });
 
+  testWidgets('passes the embed types and onUnsupported, and their changes', (
+    tester,
+  ) async {
+    final controller = QuillController.basic();
+    addTearDown(controller.dispose);
+    final refused = <Object?>[];
+    Widget binder(Set<String>? embedTypes) => CrdtProvider.value(
+      value: document,
+      child: CrdtQuillBinder(
+        id: 'page',
+        controller: controller,
+        embedTypes: embedTypes,
+        onUnsupported: refused.add,
+        child: const SizedBox(),
+      ),
+    );
+    await tester.pumpWidget(binder({'image'}));
+
+    final video = BlockEmbed.video('v.mp4');
+    controller.replaceText(0, 0, video, null);
+    expect(refused, [video]);
+    expect(page.text, 'hello');
+
+    await tester.pumpWidget(binder(null));
+    controller.replaceText(5, 0, video, null);
+    expect(refused, [video]);
+    expect(page.text, contains('\uFFFC'));
+  });
+
   testWidgets('stops writing once removed', (tester) async {
     final controller = QuillController.basic();
     addTearDown(controller.dispose);

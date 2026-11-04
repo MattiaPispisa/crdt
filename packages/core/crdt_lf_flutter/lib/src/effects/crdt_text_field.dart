@@ -244,12 +244,30 @@ class _CrdtTextFieldBuilderState extends State<CrdtTextFieldBuilder>
   }
 
   @override
+  String writeRegions(
+    String base,
+    String baseText,
+    List<TextRegion> regions,
+  ) {
+    var text = baseText;
+    _document.runInTransaction(() {
+      for (final (:pushed, :index, :deleted) in regions) {
+        text = write(text, text, pushed, index, deleted);
+      }
+    });
+    return text;
+  }
+
+  @override
   bool echoes(
     List<SequenceDelta<String>> dropped, {
     required int deleted,
     required int inserted,
   }) =>
       echoesSequence(dropped, deleted: deleted, inserted: inserted);
+
+  @override
+  String writable(String typed) => typed;
 
   @override
   void show(TextEditingValue value, String content) {

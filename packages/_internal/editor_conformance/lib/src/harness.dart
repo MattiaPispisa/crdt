@@ -23,6 +23,12 @@ abstract interface class ConformanceHandler {
 
   /// Deletes [count] runes from the rune [index].
   void delete(int index, int count);
+
+  /// Inserts the embed [embed] at the rune [index].
+  void insertEmbed(int index, Map<String, Object?> embed);
+
+  /// Replaces the data of the embed at the rune [index] with [embed].
+  void updateEmbed(int index, Map<String, Object?> embed);
 }
 
 /// What an editor binding gives the suite.
@@ -37,6 +43,11 @@ abstract class EditorHarness {
   ///
   /// When `false`, `ime` is never called.
   bool get supportsComposition;
+
+  /// Whether the editor shows embeds.
+  ///
+  /// When `false`, `insertEmbed` and `updateEmbed` are never called.
+  bool get supportsEmbeds;
 
   /// Creates the text handler [id] on [document].
   ConformanceHandler createHandler(CRDTDocument document, String id);

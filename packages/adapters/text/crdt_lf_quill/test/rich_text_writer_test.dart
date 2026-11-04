@@ -72,6 +72,19 @@ void main() {
     expect(handler.attributesAt(4), {'header': 1});
   });
 
+  test('an update on a rune that is not an embed puts the embed in its '
+      'place', () {
+    write([
+      RichTextRetain(1),
+      RichTextUpdateEmbed({'image': 'a.png'}, {'italic': true}),
+    ]);
+
+    expect(handler.value, [
+      RichTextSpan('a', {'bold': true}),
+      RichTextSpan.embed({'image': 'a.png'}, {'italic': true}),
+    ]);
+  });
+
   test('a delete or a retain past the end is clamped', () {
     write([RichTextRetain(1), const RichTextDelete(5)]);
     write([

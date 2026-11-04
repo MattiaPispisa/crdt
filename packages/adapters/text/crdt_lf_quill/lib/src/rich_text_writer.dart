@@ -34,10 +34,55 @@ void writeRichTextDelta(CRDTFugueRichTextHandler handler, RichTextDelta delta) {
         if (count > 0) {
           handler.delete(index, count);
         }
-      case RichTextInsertEmbed() || RichTextUpdateEmbed():
-        throw UnsupportedError('crdt_lf_quill does not support embeds');
+      case RichTextInsertEmbed():
+        final at = min(index, handler.length);
+        _insertEmbed(handler, at, op.embed, op.attributes);
+        index = at + 1;
+      case RichTextUpdateEmbed():
+        if (index < handler.length) {
+          _updateEmbed(handler, index, op.embed);
+          if (op.attributes.isNotEmpty) {
+            _format(handler, index, index + 1, op.attributes);
+          }
+        }
+        index++;
     }
   }
+}
+
+// An editor behind the handler may point at a rune that is not an embed:
+// the new embed then takes its place.
+void _updateEmbed(
+  CRDTFugueRichTextHandler handler,
+  int index,
+  Map<String, Object?> embed,
+) {
+  final text = handler.text;
+  if (text.codeUnitAt(RuneOffsets.utf16Offset(text, index)) ==
+      RichTextSpan.objectReplacement.codeUnitAt(0)) {
+    handler.updateEmbed(index, embed);
+    return;
+  }
+  _insertEmbed(handler, index, embed, const {});
+  handler.delete(index + 1, 1);
+}
+
+void _insertEmbed(
+  CRDTFugueRichTextHandler handler,
+  int at,
+  Map<String, Object?> embed,
+  Map<String, Object?> attributes,
+) {
+  handler.insertEmbed(
+    at,
+    embed,
+    attributes: {
+      for (final entry in attributes.entries)
+        if (!_fixed(entry.key)) entry.key: entry.value,
+    },
+    inherit: false,
+  );
+  _formatFixed(handler, at, 1, attributes);
 }
 
 void _format(
@@ -73,24 +118,34 @@ void _insert(
   String text,
   Map<String, Object?> attributes,
 ) {
-  bool fixed(String key) =>
-      !isQuillBlockKey(key) && quillMarkExpand(key) == MarkExpand.none;
   handler.insert(
     at,
     text,
     attributes: {
       for (final entry in attributes.entries)
-        if (!fixed(entry.key)) entry.key: entry.value,
+        if (!_fixed(entry.key)) entry.key: entry.value,
     },
     // Quill sends the exact attributes of the insert: drop what the left
     // text would lend.
     inherit: false,
   );
+  _formatFixed(handler, at, RuneOffsets.length(text), attributes);
+}
+
+bool _fixed(String key) =>
+    !isQuillBlockKey(key) && quillMarkExpand(key) == MarkExpand.none;
+
+void _formatFixed(
+  CRDTFugueRichTextHandler handler,
+  int at,
+  int count,
+  Map<String, Object?> attributes,
+) {
   for (final entry in attributes.entries) {
-    if (fixed(entry.key)) {
+    if (_fixed(entry.key)) {
       handler.format(
         at,
-        RuneOffsets.length(text),
+        count,
         entry.key,
         entry.value,
         expand: MarkExpand.none,

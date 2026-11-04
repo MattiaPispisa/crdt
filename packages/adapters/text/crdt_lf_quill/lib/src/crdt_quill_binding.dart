@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 // Both packages export a `ChangeSource`: this file means Quill's.
-import 'package:crdt_lf/crdt_lf.dart' hide ChangeSource;
+import 'package:crdt_lf/crdt_lf.dart' hide ChangeSource, Operation;
 import 'package:crdt_lf_flutter/crdt_lf_flutter.dart';
 import 'package:crdt_lf_quill/src/quill_attributes.dart';
 import 'package:crdt_lf_quill/src/quill_converters.dart';
@@ -10,8 +10,11 @@ import 'package:crdt_lf_quill/src/rich_text_writer.dart';
 import 'package:dart_quill_delta/dart_quill_delta.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/scheduler.dart';
-import 'package:flutter/widgets.dart' show WidgetsBinding;
+import 'package:flutter/widgets.dart' show TextSelection, WidgetsBinding;
 import 'package:flutter_quill/flutter_quill.dart';
+// `History`, the type of `Document.history`, is not exported.
+// ignore: implementation_imports
+import 'package:flutter_quill/src/document/history.dart';
 // `HistoryChanged`, the return type of `Document.undo`, is not exported.
 // ignore: implementation_imports
 import 'package:flutter_quill/src/document/structs/history_changed.dart';
@@ -42,6 +45,7 @@ class CrdtQuillBinding {
   CrdtQuillBinding(
     QuillController controller, {
     this.onUnsupported,
+    this.embedTypes,
     CRDTUndoManager? undoManager,
   }) : _controller = controller {
     _undoManager = undoManager;
@@ -50,8 +54,12 @@ class CrdtQuillBinding {
 
   QuillController _controller;
 
-  /// Called with the refused data when the controller inserts an embed.
+  /// Called with each embed the controller inserts that [embedTypes]
+  /// refuses.
   void Function(Object? data)? onUnsupported;
+
+  /// The keys of the Quill embeds written to the handler; `null` takes all.
+  Set<String>? embedTypes;
 
   ReplaceTextCallback? _userOnReplaceText;
 
@@ -132,16 +140,20 @@ class CrdtQuillBinding {
     }
     final delta = event.delta;
     final before = document.toPlainText();
-    final tail = trailingNewline(document.toDelta());
+    final content = document.toDelta();
+    final tail = trailingNewline(content);
     if (tail.stored) {
       final anchor = RuneOffsets.length(before) - 1 - tail.fromEnd;
       if (_staysBefore(delta, anchor)) {
-        _compose(quillDeltaFromRichText(delta, before), ChangeSource.remote);
+        _compose(
+          quillDeltaFromRichText(delta, before, document: content),
+          ChangeSource.remote,
+        );
         return;
       }
       // The last newline is stored: add one in front of it that takes its
       // attributes, so the delta lands on the shape of a free last line.
-      final last = _blockAttributes(document.toDelta(), 0);
+      final last = _blockAttributes(content, 0);
       _compose(
         Delta()
           ..retain(document.length - 1)
@@ -152,9 +164,19 @@ class CrdtQuillBinding {
           ),
         ChangeSource.remote,
       );
-      _compose(quillDeltaFromRichText(delta, '$before\n'), ChangeSource.remote);
+      _compose(
+        quillDeltaFromRichText(
+          delta,
+          '$before\n',
+          document: document.toDelta(),
+        ),
+        ChangeSource.remote,
+      );
     } else {
-      _compose(quillDeltaFromRichText(delta, before), ChangeSource.remote);
+      _compose(
+        quillDeltaFromRichText(delta, before, document: content),
+        ChangeSource.remote,
+      );
     }
 
     final after = document.toDelta();
@@ -190,7 +212,8 @@ class CrdtQuillBinding {
       return false;
     }
     return !debugVerifyCrdtQuillProjection ||
-        document.toDelta() == quillDocumentFromSpans(handler.value);
+        _unwrapped(document.toDelta()) ==
+            _unwrapped(quillDocumentFromSpans(handler.value));
   }
 
   /// Stops writing to the handler and gives back the `onReplaceText` of the
@@ -236,18 +259,87 @@ class CrdtQuillBinding {
     _userOnReplaceText = null;
   }
 
+  // A refused embed and a typed U+FFFC are taken out, and the rest of the
+  // edit is made again without them.
   bool _onReplaceText(int index, int len, Object? data) {
-    if (_document != null && _hasEmbed(data)) {
-      onUnsupported?.call(data);
-      return false;
+    if (_document != null) {
+      final kept = _accepted(data);
+      if (!identical(kept, data)) {
+        final length = switch (kept) {
+          final String text => text.length,
+          final Delta delta => _insertedLength(delta),
+          _ => 1,
+        };
+        if (len > 0 || length > 0) {
+          _controller
+            ..replaceText(index, len, kept, null)
+            ..updateSelection(
+              TextSelection.collapsed(offset: index + length),
+              ChangeSource.local,
+            );
+        }
+        return false;
+      }
     }
     return _userOnReplaceText?.call(index, len, data) ?? true;
+  }
+
+  Object? _accepted(Object? data) => switch (data) {
+    Embeddable() when !_accepts([data.type]) => _refuse(data, ''),
+    final String text when text.contains(RichTextSpan.objectReplacement) =>
+      text.replaceAll(RichTextSpan.objectReplacement, ''),
+    final Delta delta => _acceptedDelta(delta),
+    _ => data,
+  };
+
+  bool _accepts(Iterable<String> types) {
+    final accepted = embedTypes;
+    return accepted == null || types.every(accepted.contains);
+  }
+
+  Object? _refuse(Object? data, Object? kept) {
+    onUnsupported?.call(data);
+    return kept;
+  }
+
+  Delta _acceptedDelta(Delta delta) {
+    final ops = delta.toList();
+    bool refused(Operation op) {
+      final data = op.data;
+      return op.isInsert &&
+          switch (data) {
+            final String text => text.contains(RichTextSpan.objectReplacement),
+            Embeddable() => !_accepts([data.type]),
+            final Map<dynamic, dynamic> map => !_accepts(map.keys.cast()),
+            _ => false,
+          };
+    }
+
+    if (!ops.any(refused)) {
+      return delta;
+    }
+    final kept = Delta();
+    for (final op in ops) {
+      final data = op.data;
+      if (!refused(op)) {
+        kept.push(op);
+      } else if (data is String) {
+        kept.insert(
+          data.replaceAll(RichTextSpan.objectReplacement, ''),
+          op.attributes,
+        );
+      } else {
+        onUnsupported?.call(data);
+      }
+    }
+    return kept;
   }
 
   void _pushLocal(
     _BoundDocument document,
     Delta change,
-    String before, {
+    String before,
+    Delta content, {
     required bool storedBefore,
   }) {
     final binding = this.binding;
@@ -255,19 +347,32 @@ class CrdtQuillBinding {
     if (binding == null || crdt == null) {
       return;
     }
-    final rich = richTextDeltaFromQuill(_withoutEmbeds(change), before);
+    final rich = richTextDeltaFromQuill(
+      _acceptedDelta(change),
+      before,
+      document: content,
+    );
+    final written = _Written()..add(rich);
     binding.push(
       () => crdt.runInTransaction(() {
         final handler = _handler;
         writeRichTextDelta(handler, rich);
-        _syncLastNewline(document, handler, storedBefore: storedBefore);
+        final last = _syncLastNewline(
+          document,
+          handler,
+          storedBefore: storedBefore,
+        );
+        if (last != null) {
+          written.add(last);
+        }
       }, origin: crdtQuillOrigin),
+      isEcho: written.echoes,
     );
   }
 
   // The handler stores Quill's last newline only while one of the newlines
   // that end the text has a block attribute: add or drop it on a flip.
-  void _syncLastNewline(
+  RichTextDelta? _syncLastNewline(
     _BoundDocument document,
     CRDTFugueRichTextHandler handler, {
     required bool storedBefore,
@@ -275,21 +380,24 @@ class CrdtQuillBinding {
     final content = document.toDelta();
     final storedAfter = trailingNewline(content).stored;
     if (storedAfter == storedBefore) {
-      return;
+      return null;
     }
     if (storedAfter) {
-      writeRichTextDelta(
-        handler,
-        RichTextDelta([
-          RichTextRetain(handler.length),
-          RichTextInsert('\n', _blockAttributes(content, 0)),
-        ]),
-      );
-      return;
+      final write = RichTextDelta([
+        RichTextRetain(handler.length),
+        RichTextInsert('\n', _blockAttributes(content, 0)),
+      ]);
+      writeRichTextDelta(handler, write);
+      return write;
     }
-    if (handler.length > 0) {
-      handler.delete(handler.length - 1, 1);
+    if (handler.length == 0) {
+      return null;
     }
+    handler.delete(handler.length - 1, 1);
+    return RichTextDelta([
+      RichTextRetain(handler.length),
+      const RichTextDelete(1),
+    ]);
   }
 
   void _install(Delta content) {
@@ -308,9 +416,19 @@ class CrdtQuillBinding {
     if (delta.isEmpty) {
       return;
     }
+    // Quill adds a newline after each video it composes: take it out again.
+    final before = _insertsVideo(delta) ? _controller.document.toDelta() : null;
     _withoutFocusRequest(
       () => _controller.compose(delta, _controller.selection, source),
     );
+    if (before != null) {
+      final extra = _controller.document.toDelta().diff(before.compose(delta));
+      if (extra.isNotEmpty) {
+        _withoutFocusRequest(
+          () => _controller.compose(extra, _controller.selection, source),
+        );
+      }
+    }
   }
 
   // On the web the editor asks for focus on every controller change. A peer's
@@ -336,6 +454,11 @@ class _BoundDocument extends Document {
   }
 
   CrdtQuillBinding? owner;
+
+  final _ComposedHistory _history = _ComposedHistory();
+
+  @override
+  _ComposedHistory get history => _history;
 
   CRDTUndoManager? get _manager => owner?.undoManager;
 
@@ -412,30 +535,115 @@ class _BoundDocument extends Document {
       return;
     }
     final before = toPlainText();
-    final storedBefore = trailingNewline(toDelta()).stored;
+    final content = toDelta();
+    final storedBefore = trailingNewline(content).stored;
+    _history.composed = null;
     super.compose(delta, changeSource);
-    owner._pushLocal(this, delta, before, storedBefore: storedBefore);
+    // What Quill composed, newlines it added after a video included.
+    final composed = _history.composed ?? delta;
+    owner._pushLocal(
+      this,
+      composed,
+      before,
+      content,
+      storedBefore: storedBefore,
+    );
   }
 }
 
-bool _hasEmbed(Object? data) => switch (data) {
-  Embeddable() => true,
-  Delta() => data.toList().any((op) => op.isInsert && op.data is! String),
-  _ => false,
-};
+class _ComposedHistory extends History {
+  Delta? composed;
 
-// An embed composed past `onReplaceText` stays in the editor until the
-// projection check reads the handler again. The converters throw on embeds.
-Delta _withoutEmbeds(Delta change) {
-  final ops = change.toList();
-  if (!ops.any((op) => op.isInsert && op.data is! String)) {
-    return change;
+  @override
+  void handleDocChange(DocChange docChange) {
+    composed = docChange.change;
+    super.handleDocChange(docChange);
   }
-  return Delta.fromOperations([
-    for (final op in ops)
-      if (!op.isInsert || op.data is String) op,
-  ]);
 }
+
+// What one push writes, to tell its echo from a foreign change.
+class _Written {
+  int _inserted = 0;
+  int _deleted = 0;
+  int _embedsInserted = 0;
+  int _embedsUpdated = 0;
+  final List<OwnsFormat> _formats = [];
+
+  void add(RichTextDelta delta) {
+    var index = 0;
+    void own(int count, Map<String, Object?> attributes) {
+      if (attributes.isNotEmpty) {
+        _formats.add(formatsWithin(index, index + count, attributes));
+      }
+      index += count;
+    }
+
+    // Inserted content gets exactly its attributes: the write first clears
+    // what it takes from its left, then sets its keys.
+    void put(int count, Map<String, Object?> attributes) {
+      final from = index;
+      final to = index += count;
+      _formats.add(
+        (start, end, written) =>
+            start >= from &&
+            end <= to &&
+            written.entries.every(
+              (entry) =>
+                  entry.value == null || attributes[entry.key] == entry.value,
+            ),
+      );
+    }
+
+    for (final op in delta.ops) {
+      switch (op) {
+        case RichTextRetain():
+          own(op.count, op.attributes);
+        case RichTextInsert():
+          _inserted += op.length;
+          put(op.length, op.attributes);
+        case RichTextInsertEmbed():
+          _embedsInserted++;
+          put(1, op.attributes);
+        case RichTextUpdateEmbed():
+          _embedsUpdated++;
+          own(1, op.attributes);
+        case RichTextDelete():
+          _deleted += op.count;
+      }
+    }
+  }
+
+  bool echoes(List<RichTextDelta> dropped) => echoesRichText(
+    dropped,
+    deleted: _deleted,
+    inserted: _inserted,
+    embedsInserted: _embedsInserted,
+    embedsUpdated: _embedsUpdated,
+    ownsFormat: (from, to, attributes) =>
+        _formats.any((owns) => owns(from, to, attributes)),
+  );
+}
+
+// [document] with each embed as the handler map it stands for.
+Delta _unwrapped(Delta document) => Delta.fromOperations([
+  for (final op in document.toList())
+    if (op.isInsert && op.data is! String)
+      Operation.insert(richTextEmbed(op.data), op.attributes)
+    else
+      op,
+]);
+
+int _insertedLength(Delta delta) => delta
+    .toList()
+    .where((op) => op.isInsert)
+    .fold(0, (sum, op) => sum + (op.length ?? 0));
+
+bool _insertsVideo(Delta delta) => delta.toList().any(
+  (op) =>
+      op.isInsert &&
+      op.data is Map &&
+      (op.data! as Map).containsKey(BlockEmbed.videoType),
+);
 
 // Every edit, insert included, is before [anchor]: the stored last newline
 // keeps its place.
@@ -448,12 +656,15 @@ bool _staysBefore(RichTextDelta delta, int anchor) {
           return false;
         }
         index += op.count;
-      case RichTextInsert():
+      case RichTextInsert() || RichTextInsertEmbed():
         if (index > anchor) {
           return false;
         }
-      case RichTextInsertEmbed() || RichTextUpdateEmbed():
-        throw UnsupportedError('crdt_lf_quill does not support embeds');
+      case RichTextUpdateEmbed():
+        if (index + 1 > anchor) {
+          return false;
+        }
+        index++;
       case RichTextDelete():
         if (index + op.count > anchor) {
           return false;

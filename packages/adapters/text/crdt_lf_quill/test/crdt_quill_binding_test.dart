@@ -2,13 +2,14 @@
 // SPDX-License-Identifier: MIT
 
 import 'dart:math';
+import 'dart:typed_data';
 
 import 'package:crdt_lf/crdt_lf.dart' hide ChangeSource;
 import 'package:crdt_lf_flutter/crdt_lf_flutter.dart';
 import 'package:crdt_lf_quill/crdt_lf_quill.dart';
 import 'package:crdt_lf_quill/src/crdt_quill_binding.dart';
 import 'package:flutter/widgets.dart'
-    show Builder, Column, ListenableBuilder, SizedBox;
+    show Builder, Column, ListenableBuilder, SizedBox, TextSelection;
 import 'package:flutter_quill/flutter_quill.dart';
 import 'package:flutter_quill/quill_delta.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -202,6 +203,38 @@ void main() {
     _expectConverged(a, b);
   });
 
+  test('takes in a write made by a watcher inside a push', () async {
+    debugVerifyCrdtQuillProjection = false;
+    addTearDown(() => debugVerifyCrdtQuillProjection = true);
+    a.type(0, 'hello');
+    a.handler.insertEmbed(0, {'image': 'a.png'});
+    final writes = <void Function()>[
+      () => a.handler.format(1, 2, 'bold', true),
+      () => a.handler.update(2, 'E'),
+      () => a.handler.updateEmbed(0, {'image': 'b.png'}),
+    ];
+    // Listens before the binding, so it writes while the push runs.
+    a.binding.detach();
+    var armed = false;
+    final watcher = a.handler.watch().listen((_) {
+      if (armed) {
+        armed = false;
+        writes.removeAt(0)();
+      }
+    });
+    addTearDown(watcher.cancel);
+    a.binding.attach(a.document, 'page');
+    await _pump();
+
+    // One write per push.
+    while (writes.isNotEmpty) {
+      armed = true;
+      a.type(a.runes - 1, 'X');
+      expect(a.content, quillDocumentFromSpans(a.handler.value));
+    }
+    expect(a.content.first.data, {'image': 'b.png'});
+  });
+
   test('an editor that drifted only in its attributes is read again', () {
     a.type(0, 'hello');
     _sync(a, b);
@@ -217,8 +250,221 @@ void main() {
     _expectConverged(a, b);
   });
 
-  test('an embed from the controller is refused, other edits reach the '
-      'callback the app set', () {
+  test('an inline embed and its data reach the other peer', () {
+    final bytes = Uint8List.fromList([1, 2, 3]);
+    a.type(0, 'ab');
+    a.controller.replaceText(
+      1,
+      0,
+      Embeddable('image', {'url': 'a.png', 'bytes': bytes}),
+      null,
+    );
+    a.format(0, 3, Attribute.bold);
+    _sync(a, b);
+
+    expect(b.handler.text, 'a\uFFFCb');
+    expect(b.handler.value[1].embed, {
+      'image': {'url': 'a.png', 'bytes': bytes},
+    });
+    expect(
+      b.content,
+      Delta()
+        ..insert('a', {'bold': true})
+        ..insert(
+          {
+            'image': {'url': 'a.png', 'bytes': bytes},
+          },
+          {'bold': true},
+        )
+        ..insert('b', {'bold': true})
+        ..insert('\n'),
+    );
+    expect(b.resets, [ResetCause.initial]);
+    _expectConverged(a, b);
+  });
+
+  test('a block embed keeps its newline and its block attributes', () {
+    a
+      ..type(0, 'abc')
+      ..type(1, 'x');
+    a.controller.replaceText(1, 0, BlockEmbed.video('v.mp4'), null);
+    // Quill puts the video on its own line, and adds one more newline.
+    expect(a.plain, 'a\n\uFFFC\n\nxbc\n');
+    a.format(3, 0, Attribute.centerAlignment);
+    _sync(a, b);
+
+    expect(a.handler.text, 'a\n\uFFFC\n\nxbc');
+    expect(a.handler.attributesAt(3), {'align': 'center'});
+    expect(b.content, a.content);
+    expect(a.resets, [ResetCause.initial]);
+    expect(b.resets, [ResetCause.initial]);
+    _expectConverged(a, b);
+  });
+
+  test('an embed replaced in one change is updated, else deleted and '
+      'inserted', () {
+    a.type(0, 'ab');
+    a.controller.replaceText(1, 0, BlockEmbed.image('a.png'), null);
+    _sync(a, b);
+    final deltas = <RichTextDelta>[];
+    a.binding.detach();
+    final watcher = a.handler.watch().listen((update) {
+      if (update case HandlerDelta(:final delta)) {
+        deltas.add(delta);
+      }
+    });
+    addTearDown(watcher.cancel);
+    a.binding.attach(a.document, 'page');
+
+    return _pump().then((_) {
+      a.controller.replaceText(1, 1, Delta()..insert({'image': 'b.png'}), null);
+      expect(deltas, [
+        RichTextDelta([
+          RichTextRetain(1),
+          RichTextUpdateEmbed({'image': 'b.png'}),
+        ]),
+      ]);
+      _sync(a, b);
+      expect(b.content.toList()[1].data, {'image': 'b.png'});
+
+      deltas.clear();
+      a.controller.replaceText(1, 1, BlockEmbed.image('c.png'), null);
+      expect(deltas, [
+        RichTextDelta([
+          RichTextRetain(2),
+          RichTextInsertEmbed({'image': 'c.png'}),
+        ]),
+        RichTextDelta([RichTextRetain(1), const RichTextDelete(1)]),
+      ]);
+      _sync(a, b);
+      expect(b.content.toList()[1].data, {'image': 'c.png'});
+      _expectConverged(a, b);
+    });
+  });
+
+  test('an embed that replaces a letter in one change takes all its '
+      'attributes', () {
+    a
+      ..type(0, 'ab')
+      ..format(0, 2, Attribute.bold);
+    a.controller.document.compose(
+      Delta()
+        ..retain(1)
+        ..insert({'image': 'a.png'}, {'bold': true})
+        ..delete(1),
+      ChangeSource.local,
+    );
+
+    expect(a.handler.value, [
+      RichTextSpan('a', {'bold': true}),
+      RichTextSpan.embed({'image': 'a.png'}, {'bold': true}),
+    ]);
+    expect(a.resets, [ResetCause.initial]);
+  });
+
+  test('an embed that is not one plain key goes through Quill whole', () {
+    final bytes = Uint8List.fromList([1, 2, 3]);
+    final embeds = <Map<String, Object?>>[
+      {
+        'image': 'a.png',
+        'size': {
+          'w': 2,
+          'tags': [1, 'x', bytes],
+        },
+      },
+      {},
+      {
+        crdtQuillEmbedType: {'image': 'b.png'},
+      },
+    ];
+    a.type(0, 'ab');
+    for (final embed in embeds.reversed) {
+      a.handler.insertEmbed(1, embed);
+    }
+    expect(
+      [for (final op in a.content.toList().sublist(1, 4)) op.data],
+      [
+        for (final embed in embeds) {crdtQuillEmbedType: embed},
+      ],
+    );
+
+    // Quill to handler: the same embeds typed in the other editor.
+    b.type(0, 'cd');
+    for (final op in a.content.toList().sublist(1, 4).reversed) {
+      b.controller.replaceText(
+        1,
+        0,
+        Embeddable.fromJson(op.data! as Map<String, dynamic>),
+        null,
+      );
+    }
+    expect(
+      [for (final span in b.handler.value) span.embed],
+      [null, ...embeds, null],
+    );
+
+    _sync(a, b);
+    a.type(0, '>');
+    b.type(0, '<');
+    _sync(a, b);
+    _expectConverged(a, b);
+    expect(a.resets, [ResetCause.initial]);
+    expect(b.resets, [ResetCause.initial]);
+  });
+
+  test('a Quill update of a wrapped embed updates the map it wraps', () {
+    a.handler.insertEmbed(0, {'image': 'a.png', 'alt': 'a'});
+    final deltas = <RichTextDelta>[];
+    a.binding.detach();
+    final watcher = a.handler.watch().listen((update) {
+      if (update case HandlerDelta(:final delta)) {
+        deltas.add(delta);
+      }
+    });
+    addTearDown(watcher.cancel);
+    a.binding.attach(a.document, 'page');
+    a.resets.clear();
+
+    return _pump().then((_) {
+      a.controller.replaceText(
+        0,
+        1,
+        Delta()..insert({
+          crdtQuillEmbedType: {'image': 'b.png', 'alt': 'b'},
+        }),
+        null,
+      );
+      expect(deltas, [
+        RichTextDelta([
+          RichTextUpdateEmbed({'image': 'b.png', 'alt': 'b'}),
+        ]),
+      ]);
+      expect(a.resets, isEmpty);
+      expect(a.content.first.data, {
+        crdtQuillEmbedType: {'image': 'b.png', 'alt': 'b'},
+      });
+    });
+  });
+
+  test('a wrapped single key is kept by the editor, and not read again', () {
+    a.type(0, 'ab');
+    a.controller.replaceText(
+      1,
+      0,
+      const Embeddable(crdtQuillEmbedType, {'image': 'a.png'}),
+      null,
+    );
+    a.type(0, '>');
+
+    expect(a.handler.value[1].embed, {'image': 'a.png'});
+    expect(a.content.toList()[1].data, {
+      crdtQuillEmbedType: {'image': 'a.png'},
+    });
+    expect(a.resets, [ResetCause.initial]);
+  });
+
+  test('a refused embed reaches onUnsupported, the rest of the paste is '
+      'written', () {
     final seen = <Object?>[];
     final refused = <Object?>[];
     bool own(int index, int len, Object? data) {
@@ -230,38 +476,81 @@ void main() {
     addTearDown(controller.dispose);
     a.quill
       ..controller = controller
-      ..onUnsupported = refused.add;
+      ..onUnsupported = refused.add
+      ..embedTypes = {'image'};
     expect(a.controller.onReplaceText, isNull);
     a.resets.clear();
 
+    final video = BlockEmbed.video('v.mp4');
     controller
       ..replaceText(0, 0, 'ab', null)
-      ..replaceText(1, 0, BlockEmbed.image('x.png'), null)
-      ..replaceText(1, 0, Delta()..insert({'video': 'y.mp4'}), null);
+      ..replaceText(1, 0, video, null)
+      ..replaceText(
+        1,
+        0,
+        Delta()
+          ..insert('x')
+          ..insert({'video': 'w.mp4'})
+          ..insert('y\uFFFC')
+          ..insert({'image': 'a.png'}),
+        const TextSelection.collapsed(offset: 6),
+      );
 
-    expect(seen, ['ab']);
-    expect(refused, hasLength(2));
+    expect(refused, [
+      video,
+      {'video': 'w.mp4'},
+    ]);
+    expect(seen, hasLength(2));
     expect(a.resets, isEmpty);
-    expect(a.handler.text, 'ab');
-    expect(controller.document.toDelta(), Delta()..insert('ab\n'));
+    expect(a.handler.text, 'axy\uFFFCb');
+    expect(controller.selection, const TextSelection.collapsed(offset: 4));
+    expect(
+      controller.document.toDelta(),
+      quillDocumentFromSpans(a.handler.value),
+    );
 
     a.quill.dispose();
     expect(controller.onReplaceText, own);
   });
 
-  test('an embed composed into the document is dropped, its text kept', () {
+  test('a refused embed composed into the document is dropped, its text '
+      'kept', () {
+    final refused = <Object?>[];
+    a.quill
+      ..onUnsupported = refused.add
+      ..embedTypes = {'image'};
     a.type(0, 'ab');
     a.controller.document.compose(
       Delta()
         ..retain(1)
-        ..insert({'image': 'x.png'})
-        ..insert('c'),
+        ..insert({'formula': 'x'})
+        ..insert('c\uFFFC'),
       ChangeSource.local,
     );
 
+    expect(refused, [
+      {'formula': 'x'},
+    ]);
     expect(a.handler.text, 'acb');
     expect(a.plain, 'acb\n');
     _sync(a, b);
+    _expectConverged(a, b);
+  });
+
+  test('an editor that drifted only in an embed is read again', () {
+    a.controller.replaceText(0, 0, BlockEmbed.image('a.png'), null);
+    _sync(a, b);
+    a.controller.document.compose(
+      Delta()
+        ..insert({'image': 'b.png'})
+        ..delete(1),
+      ChangeSource.silent,
+    );
+
+    b.type(1, '!');
+    _sync(a, b);
+
+    expect(a.content.first.data, {'image': 'a.png'});
     _expectConverged(a, b);
   });
 
@@ -477,6 +766,25 @@ void main() {
       expect(ua.handler.attributesAt(2), isEmpty);
       _expectConverged(ua, ub);
       expect(ub.controller.hasUndo, isTrue);
+    });
+
+    test('undo brings a deleted embed back with its data', () {
+      ua.type(0, 'ab');
+      ua.controller.replaceText(1, 0, BlockEmbed.image('a.png'), null);
+      ua.manager!.stopCapturing();
+      ua.delete(1, 1);
+      _sync(ua, ub);
+      expect(ub.plain, 'ab\n');
+
+      ua.controller.undo();
+      _sync(ua, ub);
+      expect(ua.content.toList()[1].data, {'image': 'a.png'});
+      _expectConverged(ua, ub);
+
+      ua.controller.redo();
+      _sync(ua, ub);
+      expect(ua.plain, 'ab\n');
+      _expectConverged(ua, ub);
     });
 
     test('hasUndo and hasRedo follow the manager', () async {

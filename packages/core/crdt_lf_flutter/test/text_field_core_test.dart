@@ -141,7 +141,7 @@ void main() {
     });
   });
 
-  group('echoes', () {
+  group('echoesSequence', () {
     SequenceDelta<String> seq(List<SeqOp<String>> ops) =>
         SequenceDelta<String>(ops);
 
@@ -170,28 +170,6 @@ void main() {
       );
       expect(
         echoesSequence([write, extraDelete], deleted: 0, inserted: 1),
-        isFalse,
-      );
-    });
-
-    test('a rich write is its own echo, whatever its formats', () {
-      final dropped = [
-        RichTextDelta([RichTextRetain(1), RichTextInsert('ab')]),
-        RichTextDelta([
-          RichTextRetain(1),
-          RichTextRetain(2, {'bold': true}),
-        ]),
-      ];
-      expect(echoesRichText(dropped, deleted: 0, inserted: 2), isTrue);
-      expect(
-        echoesRichText(
-          [
-            ...dropped,
-            RichTextDelta([const RichTextDelete(1)]),
-          ],
-          deleted: 0,
-          inserted: 2,
-        ),
         isFalse,
       );
     });

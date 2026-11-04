@@ -67,6 +67,19 @@ void main() {
       );
     });
 
+    test('the caret does not carry an embed into the inserted text', () {
+      // The caret sits before the embed while 'X' was typed after it.
+      expect(
+        computeTextDelta('a\uFFFCb', 'a\uFFFCXb', caret: 1),
+        const TextDelta(index: 2, deleted: 0, inserted: 'X'),
+      );
+      // A forward delete of the first of two embeds still takes the first.
+      expect(
+        computeTextDelta('\uFFFC\uFFFC', '\uFFFC', caret: 0),
+        const TextDelta(index: 0, deleted: 1, inserted: ''),
+      );
+    });
+
     test('anchors an ambiguous deletion to the caret', () {
       // Backspace removing the *first* of two 'a's: caret ends at 1.
       expect(

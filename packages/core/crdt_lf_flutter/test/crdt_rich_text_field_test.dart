@@ -18,6 +18,7 @@ void main() {
     'CrdtRichTextFieldBuilder',
     () => ControllerHarness(
       makeHandler: CRDTFugueRichTextHandler.new,
+      supportsEmbeds: true,
       buildField: (id, deletedBuilder, onController) =>
           CrdtRichTextFieldBuilder(
         id: id,
@@ -244,6 +245,116 @@ void main() {
     expectInSync('after the watcher');
   });
 
+  testWidgets('takes in a format written by a watcher inside a push', (
+    tester,
+  ) async {
+    debugVerifyCrdtRichTextFieldProjection = false;
+    addTearDown(() => debugVerifyCrdtRichTextFieldProjection = true);
+    final page = CRDTFugueRichTextHandler(doc, 'page')..insert(0, 'hello');
+    var armed = true;
+    final watcher = page.watch().listen((_) {
+      if (armed && page.text == 'helloX') {
+        armed = false;
+        page.format(0, 2, 'bold', true);
+      }
+    });
+    addTearDown(watcher.cancel);
+    await tester.pumpWidget(host());
+    controller!.value = const TextEditingValue(
+      text: 'helloX',
+      selection: TextSelection.collapsed(offset: 6),
+    );
+    await tester.pumpAndSettle();
+
+    expect(armed, isFalse);
+    expectInSync('after the watcher');
+  });
+
+  testWidgets('takes in an embed update written by a watcher inside a push', (
+    tester,
+  ) async {
+    debugVerifyCrdtRichTextFieldProjection = false;
+    addTearDown(() => debugVerifyCrdtRichTextFieldProjection = true);
+    final page = CRDTFugueRichTextHandler(doc, 'page')
+      ..insert(0, 'hello')
+      ..insertEmbed(0, {'image': 'a.png'});
+    var armed = true;
+    final watcher = page.watch().listen((_) {
+      if (armed && page.text == '\uFFFChelloX') {
+        armed = false;
+        page.updateEmbed(0, {'image': 'b.png'});
+      }
+    });
+    addTearDown(watcher.cancel);
+    await tester.pumpWidget(host());
+    controller!.value = const TextEditingValue(
+      text: '\uFFFChelloX',
+      selection: TextSelection.collapsed(offset: 7),
+    );
+    await tester.pumpAndSettle();
+
+    expect(armed, isFalse);
+    expect(embedsOf(controller!.spans), [
+      {'image': 'b.png'},
+    ]);
+  });
+
+  testWidgets('a styled keystroke and a format are their own echo', (
+    tester,
+  ) async {
+    debugVerifyCrdtRichTextFieldProjection = false;
+    addTearDown(() => debugVerifyCrdtRichTextFieldProjection = true);
+    final page = _CountingPage(doc, 'page')..insert(0, 'hello');
+    await tester.pumpWidget(host());
+    controller!.selection = const TextSelection.collapsed(offset: 5);
+    controller!.format('link', 'https://a.b', expand: MarkExpand.none);
+    controller!.toggle('bold');
+    page.reads = 0;
+
+    controller!.value = const TextEditingValue(
+      text: 'helloX',
+      selection: TextSelection.collapsed(offset: 6),
+    );
+    await tester.pump();
+    expect(page.attributesAt(5), {'bold': true, 'link': 'https://a.b'});
+    expect(page.reads, 0);
+
+    controller!.selection = const TextSelection(baseOffset: 0, extentOffset: 2);
+    controller!.toggle('italic');
+    await tester.pump();
+    // The field reads the formats once, after the write.
+    expect(page.reads, 1);
+    expectInSync('own formats');
+  });
+
+  testWidgets('an embed is painted as U+FFFC and follows remote updates', (
+    tester,
+  ) async {
+    CRDTFugueRichTextHandler(doc, 'page')
+      ..insert(0, 'ab')
+      ..insertEmbed(1, {'image': 'a.png'}, attributes: {'bold': true});
+    await tester.pumpWidget(host());
+    final editable = tester.allRenderObjects.whereType<RenderEditable>().first;
+    expect(editable.text!.toPlainText(), 'a\uFFFCb');
+    expect(paintedStyleAt(tester, 1)?.fontWeight, FontWeight.bold);
+
+    controller!.value = const TextEditingValue(
+      text: 'aX\uFFFCb',
+      selection: TextSelection.collapsed(offset: 2),
+    );
+    await tester.pump();
+    final remote = remotePeer();
+    pageOf(remote).updateEmbed(2, {'image': 'b.png'});
+    syncFrom(remote);
+    await tester.pump();
+
+    expect(embedsOf(controller!.spans), [
+      {'image': 'b.png'},
+    ]);
+    expect(controller!.selection, const TextSelection.collapsed(offset: 2));
+    expectInSync('updated embed');
+  });
+
   testWidgets('anchors are published while the field has focus', (
     tester,
   ) async {
@@ -259,6 +370,197 @@ void main() {
     FocusManager.instance.primaryFocus!.unfocus();
     await tester.pump();
     expect(anchors.last, (null, null));
+  });
+
+  testWidgets('a U+FFFC stripped from a composition keeps it in place', (
+    tester,
+  ) async {
+    CRDTFugueRichTextHandler(doc, 'page').insert(0, 'hello');
+    await tester.pumpWidget(host());
+    await tester.showKeyboard(find.byType(TextField));
+    tester.testTextInput.updateEditingValue(
+      const TextEditingValue(
+        text: 'ha\uFFFCbello',
+        selection: TextSelection.collapsed(offset: 4),
+        composing: TextRange(start: 1, end: 4),
+      ),
+    );
+    await tester.pump();
+    expect(pageOf(doc).text, 'hello');
+
+    // A remote change commits the composition, without the U+FFFC.
+    final remote = remotePeer();
+    pageOf(remote).insert(0, 'Z');
+    syncFrom(remote);
+    await tester.pump();
+
+    expect(pageOf(doc).text, 'Zhabello');
+    expect(controller!.text, 'Zhabello');
+    expect(controller!.selection, const TextSelection.collapsed(offset: 4));
+    expect(controller!.value.composing, const TextRange(start: 2, end: 4));
+  });
+
+  group('a value set with edits on both sides of an embed', () {
+    testWidgets('keeps the embed, and the write is its own echo', (
+      tester,
+    ) async {
+      debugVerifyCrdtRichTextFieldProjection = false;
+      addTearDown(() => debugVerifyCrdtRichTextFieldProjection = true);
+      final page = _CountingPage(doc, 'page')
+        ..insert(0, 'ab')
+        ..insertEmbed(1, {'image': 'a.png'});
+      await tester.pumpWidget(host());
+      controller!.selection = const TextSelection.collapsed(offset: 0);
+      controller!.toggle('bold');
+      page.reads = 0;
+
+      controller!.value = const TextEditingValue(
+        text: 'Xa\uFFFCbY',
+        selection: TextSelection.collapsed(offset: 5),
+      );
+      await tester.pump();
+
+      expect(page.reads, 0);
+      expect(page.text, 'Xa\uFFFCbY');
+      expect(page.attributesAt(0), {'bold': true});
+      expect(page.attributesAt(4), isEmpty);
+      expect(embedsOf(page.value), [
+        {'image': 'a.png'},
+      ]);
+      expect(controller!.selection, const TextSelection.collapsed(offset: 5));
+      expectInSync('embed kept');
+    });
+
+    testWidgets('keeps every embed it does not delete', (tester) async {
+      CRDTFugueRichTextHandler(doc, 'page')
+        ..insert(0, 'abc')
+        ..insertEmbed(2, {'image': 'b.png'})
+        ..insertEmbed(1, {'image': 'a.png'});
+      await tester.pumpWidget(host());
+      expect(controller!.text, 'a\uFFFCb\uFFFCc');
+
+      controller!.value = const TextEditingValue(
+        text: 'Xa\uFFFCbZ\uFFFCcY',
+        selection: TextSelection.collapsed(offset: 8),
+      );
+      await tester.pump();
+      expect(pageOf(doc).text, 'Xa\uFFFCbZ\uFFFCcY');
+      expect(embedsOf(pageOf(doc).value), [
+        {'image': 'a.png'},
+        {'image': 'b.png'},
+      ]);
+
+      controller!.value = const TextEditingValue(
+        text: 'WXab\uFFFCcYV',
+        selection: TextSelection.collapsed(offset: 8),
+      );
+      await tester.pump();
+      expect(pageOf(doc).text, 'WXab\uFFFCcYV');
+      expect(embedsOf(pageOf(doc).value), [
+        {'image': 'b.png'},
+      ]);
+      expectInSync('one embed deleted');
+    });
+
+    testWidgets('strips a pasted U+FFFC', (tester) async {
+      CRDTFugueRichTextHandler(doc, 'page')
+        ..insert(0, 'ab')
+        ..insertEmbed(1, {'image': 'a.png'});
+      await tester.pumpWidget(host());
+
+      controller!.value = const TextEditingValue(
+        text: 'X\uFFFCa\uFFFCbY',
+        selection: TextSelection(baseOffset: 1, extentOffset: 6),
+      );
+      await tester.pump();
+
+      expect(pageOf(doc).text, 'Xa\uFFFCbY');
+      expect(embedsOf(pageOf(doc).value), [
+        {'image': 'a.png'},
+      ]);
+      expect(
+        controller!.selection,
+        const TextSelection(baseOffset: 1, extentOffset: 5),
+      );
+      expectInSync('pasted U+FFFC stripped');
+    });
+
+    testWidgets('keeps the embed when a remote change commits it', (
+      tester,
+    ) async {
+      CRDTFugueRichTextHandler(doc, 'page')
+        ..insert(0, 'ab')
+        ..insertEmbed(1, {'image': 'a.png'});
+      await tester.pumpWidget(host());
+      await tester.showKeyboard(find.byType(TextField));
+      tester.testTextInput.updateEditingValue(
+        const TextEditingValue(
+          text: 'Xa\uFFFCbY',
+          selection: TextSelection.collapsed(offset: 5),
+          composing: TextRange(start: 4, end: 5),
+        ),
+      );
+      await tester.pump();
+
+      final remote = remotePeer();
+      pageOf(remote).insert(1, 'Z');
+      syncFrom(remote);
+      await tester.pump();
+
+      expect(pageOf(doc).text, 'XaZ\uFFFCbY');
+      expect(embedsOf(pageOf(doc).value), [
+        {'image': 'a.png'},
+      ]);
+      expectInSync('composition committed');
+    });
+
+    testWidgets('a replacement with no embed in it stays one region', (
+      tester,
+    ) async {
+      CRDTFugueRichTextHandler(doc, 'page')
+        ..insert(0, 'abc')
+        ..format(1, 1, 'bold', true)
+        ..insertEmbed(3, {'image': 'a.png'});
+      await tester.pumpWidget(host());
+
+      controller!.value = const TextEditingValue(
+        text: 'xbz\uFFFC',
+        selection: TextSelection.collapsed(offset: 3),
+      );
+      await tester.pump();
+
+      expect(pageOf(doc).attributesAt(1), isEmpty);
+      expectInSync('retyped');
+    });
+
+    testWidgets('takes in a write served inside the push', (tester) async {
+      debugVerifyCrdtRichTextFieldProjection = false;
+      addTearDown(() => debugVerifyCrdtRichTextFieldProjection = true);
+      final page = CRDTFugueRichTextHandler(doc, 'page')
+        ..insert(0, 'ab')
+        ..insertEmbed(1, {'image': 'a.png'});
+      var armed = true;
+      final watcher = page.watch().listen((_) {
+        if (armed && page.text == 'Xa\uFFFCbY') {
+          armed = false;
+          page
+            ..delete(1, 1)
+            ..insert(1, 'A');
+        }
+      });
+      addTearDown(watcher.cancel);
+      await tester.pumpWidget(host());
+
+      controller!.value = const TextEditingValue(
+        text: 'Xa\uFFFCbY',
+        selection: TextSelection.collapsed(offset: 5),
+      );
+      await tester.pumpAndSettle();
+
+      expect(armed, isFalse);
+      expect(page.text, 'XA\uFFFCbY');
+      expectInSync('after the watcher');
+    });
   });
 
   testWidgets('anchors are withdrawn while an IME composition is pending', (
@@ -597,6 +899,36 @@ void main() {
       expect(controller!.text, 'peer mine');
     });
 
+    testWidgets('undo brings a deleted embed back with its data', (
+      tester,
+    ) async {
+      final page = CRDTFugueRichTextHandler(doc, 'page')
+        ..insert(0, 'ab')
+        ..insertEmbed(1, {'image': 'a.png'});
+      manager.track(page);
+      await tester.pumpWidget(host(undoManager: manager));
+
+      controller!.value = const TextEditingValue(
+        text: 'ab',
+        selection: TextSelection.collapsed(offset: 1),
+      );
+      await tester.pump();
+      expect(page.text, 'ab');
+
+      controller!.undo();
+      await tester.pump();
+      expect(controller!.text, 'a\uFFFCb');
+      expect(embedsOf(controller!.spans), [
+        {'image': 'a.png'},
+      ]);
+      expectInSync('embed restored');
+
+      controller!.redo();
+      await tester.pump();
+      expect(controller!.text, 'ab');
+      expectInSync('embed deleted again');
+    });
+
     testWidgets("a write that is not the field's is not recorded", (
       tester,
     ) async {
@@ -737,6 +1069,23 @@ void main() {
       }
       expectInSync('seed $seed end');
     });
+  }
+}
+
+List<Map<String, Object?>> embedsOf(List<RichTextSpan> spans) => [
+      for (final span in spans)
+        if (span.embed != null) span.embed!,
+    ];
+
+base class _CountingPage extends CRDTFugueRichTextHandler {
+  _CountingPage(super.doc, super.id);
+
+  int reads = 0;
+
+  @override
+  List<RichTextSpan> get value {
+    reads++;
+    return super.value;
   }
 }
 

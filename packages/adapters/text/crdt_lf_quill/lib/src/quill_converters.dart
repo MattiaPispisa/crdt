@@ -4,6 +4,7 @@
 import 'package:crdt_lf/crdt_lf.dart';
 import 'package:crdt_lf_quill/src/quill_attributes.dart';
 import 'package:dart_quill_delta/dart_quill_delta.dart';
+import 'package:flutter_quill/flutter_quill.dart' show Embeddable;
 
 /// The Quill change for [delta], a change of a [CRDTFugueRichTextHandler].
 ///
@@ -15,7 +16,15 @@ import 'package:dart_quill_delta/dart_quill_delta.dart';
 ///
 /// Attributes are split by scope (see [quillScopedAttributes]). A `null`
 /// value removes the attribute on a retain and is dropped on an insert.
-Delta quillDeltaFromRichText(RichTextDelta delta, String before) {
+///
+/// An embed is a Quill embed insert of the same map. An updated embed is an
+/// insert and a delete; [document], the Quill document [before] comes from,
+/// gives the attributes it keeps.
+Delta quillDeltaFromRichText(
+  RichTextDelta delta,
+  String before, {
+  Delta? document,
+}) {
   final result = Delta();
   var unit = 0;
   for (final op in delta.ops) {
@@ -48,8 +57,23 @@ Delta quillDeltaFromRichText(RichTextDelta delta, String before) {
         final end = RuneOffsets.skip(before, unit, op.count);
         result.delete(end - unit);
         unit = end;
-      case RichTextInsertEmbed() || RichTextUpdateEmbed():
-        throw UnsupportedError('crdt_lf_quill does not support embeds');
+      case RichTextInsertEmbed():
+        final attributes = _withoutNull(
+          quillScopedAttributes(op.attributes, newline: false),
+        );
+        result.insert(
+          quillEmbed(op.embed),
+          attributes.isEmpty ? null : attributes,
+        );
+      case RichTextUpdateEmbed():
+        final attributes = <String, Object?>{
+          if (document != null) ..._attributesAt(document, unit),
+          ...quillScopedAttributes(op.attributes, newline: false),
+        }..removeWhere((_, value) => value == null);
+        result
+          ..insert(quillEmbed(op.embed), attributes.isEmpty ? null : attributes)
+          ..delete(1);
+        unit = RuneOffsets.skip(before, unit, 1);
     }
   }
   return result..trim();
@@ -59,17 +83,49 @@ Delta quillDeltaFromRichText(RichTextDelta delta, String before) {
 ///
 /// {@macro crdt_lf_quill.units}
 ///
-/// Attributes are split by scope, as in [quillDeltaFromRichText]. Throws an
-/// [UnsupportedError] when [change] inserts an embed.
-RichTextDelta richTextDeltaFromQuill(Delta change, String before) {
+/// Attributes are split by scope, as in [quillDeltaFromRichText]. A Quill
+/// embed is a [RichTextInsertEmbed] of the same map. With [document], the
+/// Quill document [before] comes from, an embed that replaces an embed in
+/// the same change is a [RichTextUpdateEmbed].
+RichTextDelta richTextDeltaFromQuill(
+  Delta change,
+  String before, {
+  Delta? document,
+}) {
   final ops = <RichTextOp>[];
+  final quill = change.toList();
   var unit = 0;
-  for (final op in change.toList()) {
-    final length = op.length ?? 0;
+  // Code units of the next delete already taken by an update.
+  var updated = 0;
+  for (var o = 0; o < quill.length; o++) {
+    final op = quill[o];
+    final length = (op.length ?? 0) - updated;
+    updated = 0;
     if (op.isInsert) {
       final data = op.data;
       if (data is! String) {
-        throw UnsupportedError('crdt_lf_quill does not support embeds');
+        final embed = richTextEmbed(data);
+        final attributes = _withoutNull(
+          quillScopedAttributes(op.attributes ?? const {}, newline: false),
+        );
+        final next = o + 1 < quill.length ? quill[o + 1] : null;
+        if (document != null &&
+            next != null &&
+            next.isDelete &&
+            unit < before.length &&
+            before.codeUnitAt(unit) == _objectReplacement) {
+          ops.add(
+            RichTextUpdateEmbed(
+              embed,
+              _changedAttributes(_attributesAt(document, unit), attributes),
+            ),
+          );
+          unit++;
+          updated = 1;
+          continue;
+        }
+        ops.add(RichTextInsertEmbed(embed, attributes));
+        continue;
       }
       final attributes = op.attributes ?? const {};
       _forEachLine(data, (piece, {required newline}) {
@@ -86,7 +142,9 @@ RichTextDelta richTextDeltaFromQuill(Delta change, String before) {
     final covered = before.substring(unit, end);
     unit = end;
     if (op.isDelete) {
-      ops.add(RichTextDelete(RuneOffsets.length(covered)));
+      if (covered.isNotEmpty) {
+        ops.add(RichTextDelete(RuneOffsets.length(covered)));
+      }
       continue;
     }
     final attributes = op.attributes;
@@ -114,6 +172,12 @@ RichTextDelta richTextDeltaFromQuill(Delta change, String before) {
 Delta quillDocumentFromSpans(List<RichTextSpan> spans) {
   final result = Delta();
   for (final span in spans) {
+    final embed = span.embed;
+    if (embed != null) {
+      final attributes = quillScopedAttributes(span.attributes, newline: false);
+      result.insert(quillEmbed(embed), attributes.isEmpty ? null : attributes);
+      continue;
+    }
     _forEachLine(span.text, (piece, {required newline}) {
       final attributes = quillScopedAttributes(
         span.attributes,
@@ -160,7 +224,64 @@ Delta quillDocumentFromSpans(List<RichTextSpan> spans) {
   return none;
 }
 
+/// The Quill embed type that holds a handler embed whole.
+///
+/// A handler embed that is not one key, or whose key is this one, goes to
+/// Quill as `{crdtQuillEmbedType: embed}`.
+const String crdtQuillEmbedType = 'crdt_lf';
+
+/// The Quill embed for [embed], the data of a handler embed.
+///
+/// A map of one key is the same map: Quill reads the key as the embed type.
+/// Any other map is wrapped in [crdtQuillEmbedType].
+Map<String, dynamic> quillEmbed(Map<String, Object?> embed) =>
+    embed.length == 1 && embed.keys.single != crdtQuillEmbedType
+    ? Map<String, dynamic>.of(embed)
+    : {crdtQuillEmbedType: embed};
+
+/// The handler embed for [data], the insert of a Quill embed: an
+/// [Embeddable] or its map.
+///
+/// A [crdtQuillEmbedType] embed gives back the map it wraps.
+Map<String, Object?> richTextEmbed(Object? data) {
+  final map = switch (data) {
+    Embeddable() => {data.type: data.data},
+    Map<dynamic, dynamic>() => data.cast<String, Object?>(),
+    _ => throw ArgumentError.value(data, 'data', 'is not a Quill embed'),
+  };
+  final wrapped = map.length == 1 ? map[crdtQuillEmbedType] : null;
+  if (wrapped is Map<dynamic, dynamic>) {
+    return Map<String, Object?>.of(wrapped.cast<String, Object?>());
+  }
+  return Map<String, Object?>.of(map);
+}
+
 const int _newline = 0x0A;
+const int _objectReplacement = 0xFFFC;
+
+// The inline attributes of the Quill op that holds the code unit [unit].
+Map<String, Object?> _attributesAt(Delta document, int unit) {
+  var index = 0;
+  for (final op in document.toList()) {
+    final length = op.length ?? 0;
+    if (unit < index + length) {
+      return quillScopedAttributes(op.attributes ?? const {}, newline: false);
+    }
+    index += length;
+  }
+  return const {};
+}
+
+// What turns [old] into [now]: changed keys, and removed ones set to `null`.
+Map<String, Object?> _changedAttributes(
+  Map<String, Object?> old,
+  Map<String, Object?> now,
+) => {
+  for (final entry in now.entries)
+    if (old[entry.key] != entry.value) entry.key: entry.value,
+  for (final key in old.keys)
+    if (!now.containsKey(key)) key: null,
+};
 
 bool _hasBlock(Map<String, dynamic>? attributes) =>
     attributes != null &&
