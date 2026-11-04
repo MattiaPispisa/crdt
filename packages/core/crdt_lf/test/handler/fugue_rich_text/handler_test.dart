@@ -259,6 +259,46 @@ void main() {
       expect(text.attributesAt(5), isEmpty);
     });
 
+    // Pinned on purpose: a blob without embeds keeps the bytes it had before
+    // embeds existed.
+    test('a snapshot without embeds keeps its bytes', () {
+      final doc = CRDTDocument(
+        peerId: peerA,
+        initialClock: HybridLogicalClock(l: 0x800000000000, c: 0),
+      );
+      open(doc)
+        ..insert(0, 'ab\ncd')
+        ..format(0, 2, 'bold', true)
+        ..format(2, 1, 'header', 1, expand: MarkExpand.none)
+        ..delete(3, 1);
+
+      expect(
+        doc.takeSnapshot(pruneHistory: false).data['rich'],
+        equals([
+          // The Fugue part.
+          1, 1, 1, 0, 0, 0, 0, 0, 0, 64, 0, 128,
+          0, 0, 0, 0, 0, 0, 10, 0, 5, 23, 5, 97,
+          98, 10, 99, 100, 0, 0, 1, 0, 0, 0, 0, 0,
+          0, 64, 0, 128, 0, 0, 0, 0, 0, 0, 10, 4,
+          // The marks section.
+          1, 2, 0, 0, 0, 0, 0, 0, 64, 0, 128, 0,
+          0, 0, 0, 0, 0, 10, 128, 0, 0, 0, 0, 0,
+          0, 3, 4, 98, 111, 108, 100, 2, 0, 1, 0, 0,
+          0, 0, 0, 0, 64, 0, 128, 0, 0, 0, 0, 0,
+          0, 10, 0, 0, 1, 0, 0, 0, 0, 0, 0, 64,
+          0, 128, 0, 0, 0, 0, 0, 0, 10, 2, 0, 0,
+          0, 0, 0, 0, 64, 0, 128, 0, 0, 0, 0, 0,
+          0, 10, 128, 0, 0, 0, 0, 0, 0, 5, 6, 104,
+          101, 97, 100, 101, 114, 3, 2, 0, 1, 0, 0, 0,
+          0, 0, 0, 64, 0, 128, 0, 0, 0, 0, 0, 0,
+          10, 2, 1, 1, 0, 0, 0, 0, 0, 0, 64, 0,
+          128, 0, 0, 0, 0, 0, 0, 10, 2,
+          // The length of the marks section.
+          0, 0, 0, 141,
+        ]),
+      );
+    });
+
     group('a redundant mark writes nothing', () {
       test('marking what is already marked, or unmarking what is not', () {
         final doc = CRDTDocument(peerId: peerA);
@@ -487,11 +527,14 @@ void main() {
       }
 
       // The blob ends with the marks section, then its length in 4 bytes.
-      Uint8List blob() {
+      Uint8List blob({bool embed = false}) {
         final source = CRDTDocument(peerId: peerA);
-        open(source)
+        final text = open(source)
           ..insert(0, 'ab')
           ..format(0, 1, 'bold', true);
+        if (embed) {
+          text.insertEmbed(1, {'k': 1});
+        }
         return source.takeSnapshot().data['rich']!;
       }
 
@@ -508,16 +551,25 @@ void main() {
           );
 
       final blobs = <String, Uint8List Function(Uint8List)>{
-        // Shorter than the trailer: the Fugue section refuses it first.
-        'Fugue': (blob) => blob.sublist(0, 3),
+        'Fugue snapshot version 2 is newer': (blob) =>
+            Uint8List.fromList(blob)..[0] = 2,
+        // Shorter than the trailer.
+        'Truncated rich text marks': (blob) => blob.sublist(0, 3),
         'Truncated rich text marks section': (blob) =>
             withTrailer(blob.sublist(0, blob.length - 4), blob.length),
         'Rich text marks snapshot version 2 is newer': (blob) =>
             Uint8List.fromList(blob)..[sectionStart(blob)] = 2,
-        'declares': (blob) => withTrailer(
-              [...blob.sublist(0, blob.length - 4), 0],
+        'Unknown rich text embeds tag 2': (blob) => withTrailer(
+              [...blob.sublist(0, blob.length - 4), 2],
               blob.length - 4 - sectionStart(blob) + 1,
             ),
+        'declares': (_) {
+          final embeds = blob(embed: true);
+          return withTrailer(
+            [...embeds.sublist(0, embeds.length - 4), 0],
+            embeds.length - 4 - sectionStart(embeds) + 1,
+          );
+        },
       };
       for (final MapEntry(key: message, value: corrupt) in blobs.entries) {
         test('a snapshot: $message', () {
@@ -754,7 +806,7 @@ void main() {
         List<int> body, {
         bool stamped = false,
         int clock = 1,
-        int time = 1 << 46,
+        int time = 0x400000000000,
       }) =>
           doc.applyChange(
             Change.fromPayloadBytes(
@@ -1088,6 +1140,108 @@ void main() {
           ..insert(3, 'c')
           ..update(2, 'x');
         expect(text.text, 'a\uFFFCxc');
+      });
+
+      group('in a snapshot', () {
+        bool holds(Uint8List blob, String text) {
+          final bytes = Wtf8.encode(text);
+          for (var i = 0; i + bytes.length <= blob.length; i++) {
+            var j = 0;
+            while (j < bytes.length && blob[i + j] == bytes[j]) {
+              j++;
+            }
+            if (j == bytes.length) {
+              return true;
+            }
+          }
+          return false;
+        }
+
+        test('keeps the live embeds, and only the id of a deleted one', () {
+          final source = CRDTDocument(peerId: peerA);
+          final text = open(source)
+            ..insert(0, 'ab')
+            ..insertEmbed(1, image, attributes: {'width': 10})
+            ..insertEmbed(0, {'image': 'gone.png'})
+            ..insertEmbed(4, {'video': 'old.mp4'})
+            ..updateEmbed(4, {'video': 'new.mp4'})
+            ..delete(0, 1);
+          final snapshot = source.takeSnapshot();
+          final restored = open(
+            CRDTDocument(peerId: peerB)..importSnapshot(snapshot),
+          );
+
+          expect(restored.text, 'a\uFFFCb\uFFFC');
+          expect(restored.value, text.value);
+          expect(restored.value.last.embed, {'video': 'new.mp4'});
+          final blob = snapshot.data['rich']!;
+          expect(holds(blob, 'new.mp4'), isTrue);
+          expect(holds(blob, 'gone.png'), isFalse);
+        });
+
+        test('equal states give equal bytes, whatever the order', () {
+          final a = CRDTDocument(peerId: peerA);
+          final b = CRDTDocument(peerId: peerB);
+          final textA = open(a)
+            ..insertEmbed(0, {'n': 1})
+            ..insertEmbed(1, {'n': 2})
+            ..value;
+          final textB = open(b)
+            ..insertEmbed(0, {'n': 3})
+            ..insertEmbed(1, {'n': 4})
+            ..value;
+          sync(a, b);
+          sync(b, a);
+          int at(CRDTFugueRichTextHandler text, int n) =>
+              text.value.indexWhere((span) => span.embed?['n'] == n);
+          textA
+            ..delete(at(textA, 1), 1)
+            ..updateEmbed(at(textA, 4), {'n': 5});
+          textB.delete(at(textB, 3), 1);
+          sync(a, b);
+          sync(b, a);
+
+          final snapshotA = a.takeSnapshot();
+          final snapshotB = b.takeSnapshot();
+          expect(textA.value, textB.value);
+          expect(snapshotA.data['rich'], snapshotB.data['rich']);
+          final merged = CRDTDocument(peerId: peerC)
+            ..importSnapshot(snapshotA)
+            ..mergeSnapshot(snapshotB);
+          expect(open(merged).value, textA.value);
+        });
+
+        test('seeds the embeds before the changes after it', () {
+          final source = CRDTDocument(peerId: peerA);
+          final text = open(source)
+            ..insertEmbed(0, image)
+            ..updateEmbed(0, {'image': 'new.png'});
+          final element = elementAt(text, 0).toBytes();
+          final snapshot = source.takeSnapshot();
+
+          CRDTFugueRichTextHandler replay(
+            int kind,
+            List<int> body, {
+            // A literal: on the web a shift is 32-bit.
+            int time = 0x800000000000,
+          }) {
+            final doc = CRDTDocument(peerId: peerB)..importSnapshot(snapshot);
+            final text = open(doc);
+            craft(doc, text, kind, body, stamped: true, time: time);
+            return text;
+          }
+
+          final older = replay(6, [...element, 7, 1, 1, 0x6B, 0], time: 100);
+          expect(older.value.single.embed, {'image': 'new.png'});
+
+          final newer = replay(6, [...element, 7, 1, 1, 0x6B, 5, 1, 0x78]);
+          expect(newer.value.single.embed, {'k': 'x'});
+
+          final rune =
+              replay(OperationType.kindUpdate, [1, ...element, 1, 0x78]);
+          expect(rune.text, '\uFFFC');
+          expect(rune.value.single.embed, {'image': 'new.png'});
+        });
       });
 
       test('its attributes stay on the embed alone', () {

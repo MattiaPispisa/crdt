@@ -175,6 +175,67 @@ class _EmbedValue {
   }
 }
 
+// Layout: tag, liveCount: uvarint, then per live embed: id, stamp, data;
+// deletedCount: uvarint, then the deleted ids. Written only when the table
+// has an embed, so a blob without embeds keeps its bytes.
+class _EmbedSection {
+  static const int tag = 1;
+
+  static void write(_EmbedTable embeds, BytesBuilder out) {
+    if (embeds.live.isEmpty && embeds.deleted.isEmpty) {
+      return;
+    }
+    out.addByte(tag);
+    final live = embeds.live.keys.toList()..sort((a, b) => a.compareTo(b));
+    UVarint.write(live.length, out);
+    for (final id in live) {
+      final embed = embeds.live[id]!;
+      out
+        ..add(id.toBytes())
+        ..add(embed.stamp.toUint8List())
+        ..add(_EmbedValue.encode(embed.data));
+    }
+    final deleted = embeds.deleted.toList()..sort((a, b) => a.compareTo(b));
+    UVarint.write(deleted.length, out);
+    for (final id in deleted) {
+      out.add(id.toBytes());
+    }
+  }
+
+  static ({_EmbedTable embeds, int nextOffset}) read(
+    Uint8List bytes,
+    int offset,
+  ) {
+    final embeds = _EmbedTable();
+    if (offset == bytes.length) {
+      return (embeds: embeds, nextOffset: offset);
+    }
+    if (bytes[offset] != tag) {
+      throw FormatException('Unknown rich text embeds tag ${bytes[offset]}');
+    }
+    final liveCount = UVarint.read(bytes, offset: offset + 1);
+    var cursor = liveCount.nextOffset;
+    for (var i = 0; i < liveCount.value; i++) {
+      final id = FugueElementID.readFromBytes(bytes, offset: cursor);
+      final stamp = OperationId.readFromBytes(bytes, offset: id.nextOffset);
+      final data = _EmbedValue.readData(
+        bytes,
+        id.nextOffset + OperationId.byteLength,
+      );
+      embeds.live[id.value] = _Embed(data.data, stamp);
+      cursor = data.nextOffset;
+    }
+    final deletedCount = UVarint.read(bytes, offset: cursor);
+    cursor = deletedCount.nextOffset;
+    for (var i = 0; i < deletedCount.value; i++) {
+      final id = FugueElementID.readFromBytes(bytes, offset: cursor);
+      embeds.deleted.add(id.value);
+      cursor = id.nextOffset;
+    }
+    return (embeds: embeds, nextOffset: cursor);
+  }
+}
+
 class _FugueRichTextEmbedOperation extends FugueTextInsertOperation {
   _FugueRichTextEmbedOperation({
     required super.leftOrigin,

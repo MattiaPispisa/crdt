@@ -519,8 +519,10 @@ base class CRDTFugueRichTextHandler
 
   @override
   RichTextState computeState() {
+    final snapshot = lastSnapshot();
+    final section = snapshot == null ? null : _MarksSection.read(snapshot);
     final replayed = _replayedMarks = [];
-    final embeds = _replayedEmbeds = _EmbedTable();
+    final embeds = _replayedEmbeds = section?.embeds ?? _EmbedTable();
     final RichTextState state;
     try {
       state = super.computeState();
@@ -529,10 +531,7 @@ base class CRDTFugueRichTextHandler
       _replayedEmbeds = null;
     }
     state._embeds = embeds;
-    final snapshot = lastSnapshot();
-    if (snapshot != null) {
-      _MarksSection.read(snapshot).forEach(state._putMark);
-    }
+    section?.marks.forEach(state._putMark);
     replayed.forEach(state._addMark);
     return state;
   }
@@ -687,7 +686,8 @@ base class CRDTFugueRichTextHandler
   @override
   Uint8List getSnapshotState() {
     final fugue = super.getSnapshotState();
-    final marks = _MarksSection.write(cachedOrComputedState()._marks.values);
+    final state = cachedOrComputedState();
+    final marks = _MarksSection.write(state._marks.values, state._embeds);
     final trailer = ByteData(4)..setUint32(0, marks.length);
     return (BytesBuilder(copy: false)
           ..add(fugue)

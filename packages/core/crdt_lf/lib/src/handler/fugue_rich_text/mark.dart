@@ -218,12 +218,12 @@ class _MarkValue {
 }
 
 // Layout: version byte, count: uvarint, then per mark: stamp, then the mark
-// body. The version is its own, so the marks can change without the Fugue
-// blob version.
+// body, then the embed section. The version is its own, so the marks can
+// change without the Fugue blob version.
 class _MarksSection {
   static const int version = 1;
 
-  static Uint8List write(Iterable<_Mark> marks) {
+  static Uint8List write(Iterable<_Mark> marks, _EmbedTable embeds) {
     final sorted = marks.toList()..sort(_Mark.byStamp);
     final out = BytesBuilder(copy: false)..addByte(version);
     UVarint.write(sorted.length, out);
@@ -237,14 +237,15 @@ class _MarksSection {
         end: mark.end,
       );
     }
+    _EmbedSection.write(embeds, out);
     return out.toBytes();
   }
 
   // [blob] is the whole handler blob: the section sits before its 4-byte
   // big-endian length trailer.
-  static List<_Mark> read(Uint8List blob) {
-    final length = ByteData.sublistView(blob, blob.length - 4).getUint32(0);
+  static ({List<_Mark> marks, _EmbedTable embeds}) read(Uint8List blob) {
     final end = blob.length - 4;
+    final length = end < 0 ? 0 : ByteData.sublistView(blob, end).getUint32(0);
     final start = end - length;
     if (start < 0) {
       throw const FormatException('Truncated rich text marks section');
@@ -274,11 +275,13 @@ class _MarksSection {
         ),
       );
     }
+    final embeds = _EmbedSection.read(bytes, cursor);
+    cursor = embeds.nextOffset;
     if (cursor != bytes.length) {
       throw FormatException(
         'Rich text marks section declares $length bytes but reads $cursor',
       );
     }
-    return marks;
+    return (marks: marks, embeds: embeds.embeds);
   }
 }
