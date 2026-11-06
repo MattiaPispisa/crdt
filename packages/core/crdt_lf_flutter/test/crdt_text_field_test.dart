@@ -23,9 +23,12 @@ void main() {
           }
           return CRDTTextHandler(document, id);
         },
-        buildField: (id, deletedBuilder, onController) => CrdtTextFieldBuilder(
+        supportsAnchors: fugue,
+        buildField: (id, deletedBuilder, onController, onAnchors) =>
+            CrdtTextFieldBuilder(
           id: id,
           deletedBuilder: deletedBuilder,
+          onSelectionAnchorsChanged: onAnchors,
           builder: (context, controller) {
             onController(controller);
             return TextField(controller: controller);

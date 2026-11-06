@@ -23,6 +23,7 @@ lists.
     - [The last newline](#the-last-newline)
     - [Undo](#undo)
     - [Projection check](#projection-check)
+    - [Remote cursors](#remote-cursors)
   - [Limits](#limits)
   - [Example](#example)
   - [Apps](#apps)
@@ -236,17 +237,54 @@ in release builds. In [`benchmarks/results.md`](./benchmarks/results.md), a
 local keystroke on a 50000-rune document takes 2.17 ms with the length check
 and 3.40 ms with the full check.
 
+### Remote cursors
+
+The binder publishes the local selection, and `CrdtQuillCursorsOverlay` draws
+the other peers' carets and selections over the editor, with the labels and
+the motion of `CrdtTextCursorsOverlay`. Anchors are stable positions: they
+follow any edit, and they belong on a presence channel, such as the awareness
+plugin of `crdt_socket_sync`, never in the document history.
+
+```dart
+CrdtQuillBinder(
+  id: 'page',
+  controller: controller,
+  onSelectionAnchorsChanged: (base, extent) => publishPresence(base, extent),
+  child: CrdtQuillCursorsOverlay(
+    id: 'page',
+    cursors: remoteTextCursors, // List<CrdtTextCursor> from presence
+    child: QuillEditor.basic(
+      controller: controller,
+      focusNode: focusNode, // kept in a State, see below
+      scrollController: scrollController,
+    ),
+  ),
+);
+```
+
+Keep the `FocusNode` and the `ScrollController` of the editor in a `State`.
+Cursors change often and rebuild the editor, and `QuillEditor.basic` makes new
+ones on each build when you pass none: the user would lose the keyboard after
+the first keystrokes.
+
+The callback fires while the focus is inside the binder, and once with `null`s
+when the focus leaves or the handler is deleted. For mouse pointers, wrap the
+editor in `CrdtAwarenessCursorsOverlay`.
+
 ## Limits
 
 - Two peers that format the plain last line at the same time both store a
   last `'\n'`, so the document gets one extra line.
-- The editor keeps its own selection, moved by each remote change. Remote
-  cursors are not drawn.
+- The editor keeps its own selection, moved by each remote change.
+- A remote selection is one caret high: it covers part of a line that holds a
+  tall inline embed.
+- Remote cursors move on document changes. After a layout change alone, such
+  as an image that finishes loading, they stay until the next change.
 
 ## Example
 
 [`example/lib/main.dart`](./example/lib/main.dart) shows two editors with
-toolbars, on two simulated peers of the same document.
+toolbars and each other's cursors, on two simulated peers of the same document.
 
 ## Apps
 

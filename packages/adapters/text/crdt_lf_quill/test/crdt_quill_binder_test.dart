@@ -343,6 +343,122 @@ void main() {
     expect(find.text('hello'), findsOneWidget);
   });
 
+  group('onSelectionAnchorsChanged', () {
+    late List<(FugueElementID?, FugueElementID?)> published;
+    late FocusNode focus;
+
+    void publish(FugueElementID? base, FugueElementID? extent) =>
+        published.add((base, extent));
+
+    Widget focusable(
+      QuillController controller, {
+      Widget child = const SizedBox(),
+      WidgetBuilder? deletedBuilder,
+    }) => CrdtProvider.value(
+      value: document,
+      child: MaterialApp(
+        home: CrdtQuillBinder(
+          id: 'page',
+          controller: controller,
+          onSelectionAnchorsChanged: publish,
+          deletedBuilder: deletedBuilder,
+          child: Focus(focusNode: focus, child: child),
+        ),
+      ),
+    );
+
+    QuillController newController() {
+      final controller = QuillController.basic();
+      addTearDown(controller.dispose);
+      return controller;
+    }
+
+    void select(QuillController controller, int offset) =>
+        controller.updateSelection(
+          TextSelection.collapsed(offset: offset),
+          ChangeSource.local,
+        );
+
+    setUp(() {
+      published = [];
+      focus = FocusNode();
+      addTearDown(focus.dispose);
+    });
+
+    testWidgets('follow a new controller', (tester) async {
+      final first = newController();
+      final second = newController();
+      await tester.pumpWidget(focusable(first));
+      focus.requestFocus();
+      await tester.pump();
+
+      await tester.pumpWidget(focusable(second));
+      await tester.pump();
+
+      select(second, 3);
+      expect(published.last.$2, page.stablePositionAt(3));
+    });
+
+    testWidgets('wait for a pending reset', (tester) async {
+      final controller = newController();
+      var seeds = false;
+      late StateSetter rebuild;
+      await tester.pumpWidget(
+        focusable(
+          controller,
+          child: StatefulBuilder(
+            builder: (context, setState) {
+              rebuild = setState;
+              return seeds
+                  ? _OnInit(() {
+                      // Runs before the reset the insert schedules.
+                      WidgetsBinding.instance.addPostFrameCallback(
+                        (_) => select(controller, 2),
+                      );
+                      page.insert(0, 'seed ');
+                    })
+                  : const SizedBox();
+            },
+          ),
+        ),
+      );
+      focus.requestFocus();
+      await tester.pump();
+      published.clear();
+
+      rebuild(() => seeds = true);
+      await tester.pump();
+      await tester.pump();
+
+      // Offset 2 of `hello`, after the reset the 7 of `seed hello`.
+      expect(controller.selection.extentOffset, 7);
+      expect(published.map((anchors) => anchors.$2), [
+        page.stablePositionAt(7),
+      ]);
+    });
+
+    testWidgets('are withdrawn when the handler is deleted', (tester) async {
+      final controller = newController();
+      await tester.pumpWidget(
+        focusable(controller, deletedBuilder: (context) => const Text('gone')),
+      );
+      await tester.pump();
+      focus.requestFocus();
+      await tester.pump();
+      select(controller, 2);
+      expect(published.last.$2, isNotNull);
+
+      document.deleteHandler(page);
+      // Before the frame that swaps the editor out.
+      select(controller, 3);
+      await tester.pump();
+
+      expect(find.text('gone'), findsOneWidget);
+      expect(published.last, (null, null));
+      expect(tester.takeException(), isNull);
+    });
+  });
+
   testWidgets('stops writing once removed', (tester) async {
     final controller = QuillController.basic();
     addTearDown(controller.dispose);

@@ -41,6 +41,7 @@ class CrdtQuillBinding {
     this.onUnsupported,
     this.embedTypes,
     this._undoManager,
+    this.onSelectionAnchorsChanged,
   }) : _controller = controller;
 
   QuillController _controller;
@@ -54,6 +55,14 @@ class CrdtQuillBinding {
   /// The types of the Quill embeds the editor writes to the handler; `null`
   /// takes all.
   Set<String>? embedTypes;
+
+  /// Called with the anchors the editor publishes; see [hasFocus].
+  void Function(FugueElementID? base, FugueElementID? extent)?
+  onSelectionAnchorsChanged;
+
+  late final SelectionAnchors _anchors = SelectionAnchors(
+    (base, extent) => onSelectionAnchorsChanged?.call(base, extent),
+  );
 
   ReplaceTextCallback? _userOnReplaceText;
 
@@ -204,6 +213,20 @@ class CrdtQuillBinding {
     }
   }
 
+  /// Whether the editor has focus: the anchors are published only then, and
+  /// `null`s once when it leaves.
+  bool get hasFocus => _anchors.hasFocus;
+
+  set hasFocus(bool value) {
+    if (value) {
+      _captureAnchors();
+    }
+    _anchors.hasFocus = value;
+  }
+
+  /// Withdraws the anchors, for a handler that is gone.
+  void clearAnchors() => _anchors.clear();
+
   /// Whether the editor shows the handler value.
   ///
   /// See [debugVerifyCrdtQuillProjection] for what is compared.
@@ -261,13 +284,17 @@ class CrdtQuillBinding {
       ..ensureVisualUpdate();
   }
 
-  /// Wraps the `onReplaceText` of the controller, until [dispose].
+  /// Wraps the `onReplaceText` of the controller and follows its selection,
+  /// until [dispose].
   void bind() {
     _userOnReplaceText = _controller.onReplaceText;
-    _controller.onReplaceText = _onReplaceText;
+    _controller
+      ..onReplaceText = _onReplaceText
+      ..addListener(_captureAnchors);
   }
 
   void _unhook() {
+    _controller.removeListener(_captureAnchors);
     if (_controller.onReplaceText == _onReplaceText) {
       _controller.onReplaceText = _userOnReplaceText;
     }
@@ -510,6 +537,26 @@ class CrdtQuillBinding {
       RichTextRetain(handler.length),
       const RichTextDelete(1),
     ]);
+  }
+
+  // Only when the editor and the handler agree: an offset of a stale editor
+  // names the wrong element.
+  void _captureAnchors() {
+    final binding = this.binding;
+    final document = _document;
+    if (onSelectionAnchorsChanged == null ||
+        binding == null ||
+        document == null ||
+        _resetPending ||
+        !binding.isAttached ||
+        binding.isBehind) {
+      return;
+    }
+    _anchors.capture(
+      _controller.selection,
+      document.toPlainText(),
+      _handler.stablePositionAt,
+    );
   }
 
   void _install(Delta content) {

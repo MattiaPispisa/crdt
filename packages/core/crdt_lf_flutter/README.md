@@ -321,6 +321,9 @@ CrdtTextFieldBuilder(
 );
 ```
 
+For another editor, pass `targetOf` to adapt its render object as a
+`CrdtTextCursorsTarget`, and publish its selection with `SelectionAnchors`.
+
 #### Rich text
 
 `CrdtRichTextFieldBuilder` is the same field for a `CRDTFugueRichTextHandler`.

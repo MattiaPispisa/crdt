@@ -36,6 +36,14 @@ class _RichHandler implements ConformanceHandler {
   @override
   void updateEmbed(int index, Map<String, Object?> embed) =>
       _handler.updateEmbed(index, embed);
+
+  @override
+  FugueElementID stablePositionAt(int index) =>
+      _handler.stablePositionAt(index);
+
+  @override
+  int? indexOfStablePosition(FugueElementID position) =>
+      _handler.indexOfStablePosition(position);
 }
 
 /// The editor suite harness of a `QuillController` bound by
@@ -45,12 +53,16 @@ class _RichHandler implements ConformanceHandler {
 /// platform input inside its own widgets, so the harness has no IME.
 class QuillHarness extends EditorHarness {
   final QuillController _controller = QuillController.basic();
+  final FocusNode _focus = FocusNode();
 
   @override
   bool get supportsComposition => false;
 
   @override
   bool get supportsEmbeds => true;
+
+  @override
+  bool get supportsAnchors => true;
 
   @override
   ConformanceHandler createHandler(CRDTDocument document, String id) =>
@@ -62,6 +74,7 @@ class QuillHarness extends EditorHarness {
     String id, {
     VoidCallback? onBuild,
     WidgetBuilder? deletedBuilder,
+    SelectionAnchorsListener? onSelectionAnchorsChanged,
   }) {
     return CrdtProvider.value(
       value: document,
@@ -69,9 +82,10 @@ class QuillHarness extends EditorHarness {
         id: id,
         controller: _controller,
         deletedBuilder: deletedBuilder,
+        onSelectionAnchorsChanged: onSelectionAnchorsChanged,
         builder: (context) {
           onBuild?.call();
-          return const SizedBox();
+          return Focus(focusNode: _focus, child: const SizedBox());
         },
       ),
     );
@@ -99,6 +113,12 @@ class QuillHarness extends EditorHarness {
       text,
       TextSelection.collapsed(offset: start + text.length),
     );
+  }
+
+  @override
+  Future<void> focus(WidgetTester tester) async {
+    _focus.requestFocus();
+    await tester.pump();
   }
 
   @override

@@ -35,6 +35,7 @@ class CrdtQuillBinder extends StatefulWidget {
     this.onUnsupported,
     this.embedTypes,
     this.undoManager,
+    this.onSelectionAnchorsChanged,
     super.key,
   }) : assert(
          (child == null) != (builder == null),
@@ -84,6 +85,15 @@ class CrdtQuillBinder extends StatefulWidget {
   /// included, and a peer's concurrent edit survives it.
   final CRDTUndoManager? undoManager;
 
+  /// Called when the stable anchors of the selection change, while focus is
+  /// inside the subtree.
+  ///
+  /// It fires once with `null`s when the focus leaves or the handler is
+  /// deleted. Publish the anchors to the other peers and draw them with
+  /// `CrdtQuillCursorsOverlay`.
+  final void Function(FugueElementID? base, FugueElementID? extent)?
+  onSelectionAnchorsChanged;
+
   @override
   State<CrdtQuillBinder> createState() => _CrdtQuillBinderState();
 }
@@ -99,6 +109,7 @@ class _CrdtQuillBinderState extends State<CrdtQuillBinder> {
       onUnsupported: widget.onUnsupported,
       embedTypes: widget.embedTypes,
       undoManager: widget.undoManager,
+      onSelectionAnchorsChanged: widget.onSelectionAnchorsChanged,
     )..bind();
   }
 
@@ -109,7 +120,8 @@ class _CrdtQuillBinderState extends State<CrdtQuillBinder> {
       ..controller = widget.controller
       ..onUnsupported = widget.onUnsupported
       ..embedTypes = widget.embedTypes
-      ..undoManager = widget.undoManager;
+      ..undoManager = widget.undoManager
+      ..onSelectionAnchorsChanged = widget.onSelectionAnchorsChanged;
   }
 
   @override
@@ -125,11 +137,27 @@ class _CrdtQuillBinderState extends State<CrdtQuillBinder> {
       onRemoteDelta: _binding.onRemoteDelta,
       onReset: _binding.onReset,
       verifyProjection: _binding.verifyProjection,
-      deletedBuilder: widget.deletedBuilder,
+      deletedBuilder: _buildDeleted,
       builder: (context, binding) {
         _binding.binding = binding;
-        return widget.child ?? widget.builder!(context);
+        return Focus(
+          canRequestFocus: false,
+          skipTraversal: true,
+          includeSemantics: false,
+          onFocusChange: (hasFocus) => _binding.hasFocus = hasFocus,
+          child: widget.child ?? widget.builder!(context),
+        );
       },
     );
+  }
+
+  Widget _buildDeleted(BuildContext context) {
+    // Not here: the callback is the user's, and this is a build.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        _binding.clearAnchors();
+      }
+    });
+    return widget.deletedBuilder?.call(context) ?? const SizedBox.shrink();
   }
 }

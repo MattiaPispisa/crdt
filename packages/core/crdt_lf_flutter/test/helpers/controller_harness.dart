@@ -49,6 +49,23 @@ class TextHandlerAccess implements ConformanceHandler {
   @override
   void updateEmbed(int index, Map<String, Object?> embed) =>
       (raw as CRDTFugueRichTextHandler).updateEmbed(index, embed);
+
+  @override
+  FugueElementID stablePositionAt(int index) => switch (raw) {
+        final CRDTFugueTextHandler handler => handler.stablePositionAt(index),
+        final CRDTFugueRichTextHandler handler =>
+          handler.stablePositionAt(index),
+        _ => throw StateError('not a Fugue handler'),
+      };
+
+  @override
+  int? indexOfStablePosition(FugueElementID position) => switch (raw) {
+        final CRDTFugueTextHandler handler =>
+          handler.indexOfStablePosition(position),
+        final CRDTFugueRichTextHandler handler =>
+          handler.indexOfStablePosition(position),
+        _ => throw StateError('not a Fugue handler'),
+      };
 }
 
 /// The editor suite harness of a field that hands out a
@@ -60,17 +77,19 @@ class ControllerHarness extends EditorHarness {
     required this.makeHandler,
     required this.buildField,
     this.supportsEmbeds = false,
+    this.supportsAnchors = true,
   });
 
   /// Registers the handler under test.
   final Handler<dynamic> Function(CRDTDocument document, String id) makeHandler;
 
   /// Builds the field; it must call `onController` with its controller each
-  /// time it builds.
+  /// time it builds, and publish its anchors to `onAnchors`.
   final Widget Function(
     String id,
     WidgetBuilder? deletedBuilder,
     void Function(TextEditingController controller) onController,
+    SelectionAnchorsListener? onAnchors,
   ) buildField;
 
   late TextEditingController _controller;
@@ -82,6 +101,9 @@ class ControllerHarness extends EditorHarness {
   final bool supportsEmbeds;
 
   @override
+  final bool supportsAnchors;
+
+  @override
   ConformanceHandler createHandler(CRDTDocument document, String id) =>
       TextHandlerAccess(makeHandler(document, id));
 
@@ -91,13 +113,19 @@ class ControllerHarness extends EditorHarness {
     String id, {
     VoidCallback? onBuild,
     WidgetBuilder? deletedBuilder,
+    SelectionAnchorsListener? onSelectionAnchorsChanged,
   }) {
     return CrdtProvider.value(
       value: document,
-      child: buildField(id, deletedBuilder, (controller) {
-        _controller = controller;
-        onBuild?.call();
-      }),
+      child: buildField(
+        id,
+        deletedBuilder,
+        (controller) {
+          _controller = controller;
+          onBuild?.call();
+        },
+        onSelectionAnchorsChanged,
+      ),
     );
   }
 
@@ -117,6 +145,10 @@ class ControllerHarness extends EditorHarness {
       selection: TextSelection.collapsed(offset: start + text.length),
     );
   }
+
+  @override
+  Future<void> focus(WidgetTester tester) =>
+      tester.showKeyboard(find.byType(TextField));
 
   @override
   Future<void> ime(WidgetTester tester, TextEditingValue value) async {

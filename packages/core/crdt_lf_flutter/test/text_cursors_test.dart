@@ -351,6 +351,75 @@ void main() {
       );
     });
 
+    testWidgets('paints over the target its finder returns, found once',
+        (tester) async {
+      final note = CRDTFugueTextHandler(doc, 'note')..insert(0, 'a😀bcd');
+      const color = Color(0xFFAA0000);
+      final cursor = CrdtTextCursor(
+        id: 'peer-b',
+        color: color,
+        base: note.stablePositionAt(2),
+        extent: note.stablePositionAt(3),
+      );
+      var searches = 0;
+      CrdtTextCursorsTarget? finder(RenderObject node) {
+        searches++;
+        return node is RenderConstrainedBox
+            ? _FakeTarget(node, () => note.value)
+            : null;
+      }
+
+      Widget target(CrdtTextCursorsTarget? Function(RenderObject) targetOf) {
+        return CrdtProvider.value(
+          value: doc,
+          child: MaterialApp(
+            home: Align(
+              alignment: Alignment.topLeft,
+              child: CrdtTextCursorsOverlay(
+                id: 'note',
+                cursors: [cursor],
+                motionDuration: Duration.zero,
+                targetOf: targetOf,
+                child: const Padding(
+                  padding: EdgeInsets.all(10),
+                  child: SizedBox(width: 200, height: 40),
+                ),
+              ),
+            ),
+          ),
+        );
+      }
+
+      await tester.pumpWidget(target(finder));
+
+      // Code units 3 to 4, shifted by the padding.
+      expect(
+        overlayPaint(),
+        paints
+          ..rect(rect: const Rect.fromLTWH(40, 10, 10, 20))
+          ..rect(rect: const Rect.fromLTWH(50, 10, 2, 20), color: color),
+      );
+
+      final found = searches;
+      note.insert(0, 'XY');
+      await tester.pump();
+      expect(searches, found);
+
+      await tester.pumpWidget(
+        target(
+          (node) => node is RenderConstrainedBox
+              ? _FakeTarget(node, () => note.value, width: 20)
+              : null,
+        ),
+      );
+      expect(
+        overlayPaint(),
+        paints
+          ..rect()
+          ..rect(rect: const Rect.fromLTWH(130, 10, 2, 20), color: color),
+      );
+    });
+
     testWidgets('throws a FlutterError for a non-Fugue handler',
         (tester) async {
       CRDTListHandler<String>(
@@ -612,6 +681,41 @@ void main() {
       expect(tester.takeException(), isNull);
     });
   });
+}
+
+/// A row of [width] wide cells, one per code unit of [text].
+class _FakeTarget implements CrdtTextCursorsTarget {
+  _FakeTarget(this._box, this._text, {this.width = 10});
+
+  final RenderBox _box;
+  final String Function() _text;
+  final double width;
+
+  @override
+  bool get attached => _box.attached;
+
+  @override
+  String get text => _text();
+
+  @override
+  Offset get scroll => Offset.zero;
+
+  @override
+  Rect caretRect(int offset) => Rect.fromLTWH(offset * width, 0, 2, 20);
+
+  @override
+  List<Rect> selectionRects(TextSelection range) => [
+        Rect.fromLTWH(
+          range.start * width,
+          0,
+          (range.end - range.start) * width,
+          20,
+        ),
+      ];
+
+  @override
+  Matrix4 getTransformTo(RenderObject ancestor) =>
+      _box.getTransformTo(ancestor);
 }
 
 /// A Fugue text handler that counts how often its whole value is projected.

@@ -18,3 +18,5 @@
   than Quill's, through the builder of their `type` or a fallback.
 - `crdtQuillUnknownEmbedBuilder` shows any embed without a builder, so a peer's embed never breaks the editor.
 - `debugVerifyCrdtQuillProjection` switches the full projection check, in debug and release.
+- `CrdtQuillBinder.onSelectionAnchorsChanged` publishes the local selection, and `CrdtQuillCursorsOverlay`
+  draws the other peers' carets and selections. See [Remote cursors](README.md#remote-cursors).

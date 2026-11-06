@@ -45,6 +45,10 @@ class _TwoPeersState extends State<TwoPeers> {
   final _bob = CRDTDocument(peerId: PeerId.generate());
   late final List<StreamSubscription<Change>> _links;
 
+  // What a presence channel would carry: each peer's cursor, for the other.
+  CrdtTextCursor? _aliceCursor;
+  CrdtTextCursor? _bobCursor;
+
   @override
   void initState() {
     super.initState();
@@ -66,6 +70,24 @@ class _TwoPeersState extends State<TwoPeers> {
     super.dispose();
   }
 
+  CrdtTextCursor? _cursor(
+    String label,
+    Color color,
+    FugueElementID? base,
+    FugueElementID? extent,
+  ) {
+    if (base == null || extent == null) {
+      return null;
+    }
+    return CrdtTextCursor(
+      id: label,
+      color: color,
+      label: label,
+      base: base,
+      extent: extent,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -73,11 +95,31 @@ class _TwoPeersState extends State<TwoPeers> {
       body: Row(
         children: [
           Expanded(
-            child: _Peer(label: 'Alice', document: _alice),
+            child: _Peer(
+              label: 'Alice',
+              document: _alice,
+              remoteCursor: _bobCursor,
+              onAnchors: (base, extent) => setState(
+                () =>
+                    _aliceCursor = _cursor('Alice', Colors.teal, base, extent),
+              ),
+            ),
           ),
           const VerticalDivider(width: 1),
           Expanded(
-            child: _Peer(label: 'Bob', document: _bob),
+            child: _Peer(
+              label: 'Bob',
+              document: _bob,
+              remoteCursor: _aliceCursor,
+              onAnchors: (base, extent) => setState(
+                () => _bobCursor = _cursor(
+                  'Bob',
+                  Colors.deepOrange,
+                  base,
+                  extent,
+                ),
+              ),
+            ),
           ),
         ],
       ),
@@ -86,10 +128,17 @@ class _TwoPeersState extends State<TwoPeers> {
 }
 
 class _Peer extends StatefulWidget {
-  const _Peer({required this.label, required this.document});
+  const _Peer({
+    required this.label,
+    required this.document,
+    required this.remoteCursor,
+    required this.onAnchors,
+  });
 
   final String label;
   final CRDTDocument document;
+  final CrdtTextCursor? remoteCursor;
+  final void Function(FugueElementID? base, FugueElementID? extent) onAnchors;
 
   @override
   State<_Peer> createState() => _PeerState();
@@ -98,9 +147,16 @@ class _Peer extends StatefulWidget {
 class _PeerState extends State<_Peer> {
   final _controller = QuillController.basic();
 
+  // Kept here because cursors rebuild the editor: `QuillEditor.basic` would
+  // make a new focus node on each build and drop the keyboard.
+  final _focusNode = FocusNode();
+  final _scrollController = ScrollController();
+
   @override
   void dispose() {
     _controller.dispose();
+    _focusNode.dispose();
+    _scrollController.dispose();
     super.dispose();
   }
 
@@ -111,6 +167,7 @@ class _PeerState extends State<_Peer> {
       child: CrdtQuillBinder(
         id: _pageId,
         controller: _controller,
+        onSelectionAnchorsChanged: widget.onAnchors,
         onUnsupported: (_) => ScaffoldMessenger.maybeOf(context)?.showSnackBar(
           const SnackBar(content: Text('Part of the edit was not written')),
         ),
@@ -129,11 +186,17 @@ class _PeerState extends State<_Peer> {
               ),
               const Divider(),
               Expanded(
-                child: QuillEditor.basic(
-                  controller: _controller,
-                  config: QuillEditorConfig(
-                    placeholder: '${widget.label} writes here',
-                    unknownEmbedBuilder: crdtQuillUnknownEmbedBuilder(),
+                child: CrdtQuillCursorsOverlay(
+                  id: _pageId,
+                  cursors: [?widget.remoteCursor],
+                  child: QuillEditor.basic(
+                    controller: _controller,
+                    focusNode: _focusNode,
+                    scrollController: _scrollController,
+                    config: QuillEditorConfig(
+                      placeholder: '${widget.label} writes here',
+                      unknownEmbedBuilder: crdtQuillUnknownEmbedBuilder(),
+                    ),
                   ),
                 ),
               ),

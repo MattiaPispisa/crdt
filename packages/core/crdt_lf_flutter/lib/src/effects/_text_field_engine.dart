@@ -3,6 +3,7 @@
 
 import 'package:crdt_lf/crdt_lf.dart';
 import 'package:crdt_lf_flutter/src/editor/crdt_editor_binding.dart';
+import 'package:crdt_lf_flutter/src/editor/selection_anchors.dart';
 import 'package:crdt_lf_flutter/src/effects/_text_field_core.dart';
 import 'package:crdt_lf_flutter/src/effects/text_delta.dart';
 import 'package:crdt_lf_flutter/src/provider/handler_delta_subscription.dart';

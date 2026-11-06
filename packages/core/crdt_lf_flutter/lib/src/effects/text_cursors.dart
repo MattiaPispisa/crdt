@@ -103,9 +103,35 @@ Rect resolveTextCursorLabelRect({
   return Rect.fromLTWH(left, top, labelSize.width, labelSize.height);
 }
 
+/// The text editor that [CrdtTextCursorsOverlay] paints over.
+///
+/// Offsets count UTF-16 code units of [text], up to its length. Rects are in
+/// the coordinates of the editor's render object.
+abstract interface class CrdtTextCursorsTarget {
+  /// Whether the editor's render object is in the tree.
+  bool get attached;
+
+  /// The text the editor shows.
+  String get text;
+
+  /// The offset the editor's scroll adds to its rects; [Offset.zero] when
+  /// [getTransformTo] carries the scroll.
+  Offset get scroll;
+
+  /// The rect of a caret at [offset].
+  Rect caretRect(int offset);
+
+  /// The rects that cover [range], one per visual line.
+  List<Rect> selectionRects(TextSelection range);
+
+  /// The transform from the editor's coordinates to those of [ancestor].
+  Matrix4 getTransformTo(RenderObject ancestor);
+}
+
 /// {@template crdt_text_cursors_overlay}
 /// Paints the carets and selections of remote collaborators over [child]
 /// (the subtree containing the `TextField` bound to the same handler [id]).
+/// [targetOf] picks another editor.
 ///
 /// Each [CrdtTextCursor] is anchored by stable positions
 /// (`stablePositionAt`), so an anchor received once stays correct forever.
@@ -149,9 +175,13 @@ class CrdtTextCursorsOverlay extends StatefulWidget {
     required this.cursors,
     required this.child,
     this.labelPlacement = CrdtTextCursorLabelPlacement.auto,
-    this.motionDuration = const Duration(milliseconds: 120),
+    this.motionDuration = defaultMotionDuration,
+    this.targetOf = _editableTarget,
     super.key,
   });
+
+  /// The default of [motionDuration].
+  static const defaultMotionDuration = Duration(milliseconds: 120);
 
   /// The id of the text handler the cursors refer to.
   /// **must be a [CRDTFugueTextHandler] or a [CRDTFugueRichTextHandler]**
@@ -178,7 +208,14 @@ class CrdtTextCursorsOverlay extends StatefulWidget {
   /// Defaults to 120ms; [Duration.zero] paints every move instantly.
   final Duration motionDuration;
 
-  /// The subtree containing the text field to draw over.
+  /// The editor that a render object under [child] stands for; `null` when
+  /// it is not an editor.
+  ///
+  /// The first match depth first wins, and it is kept while attached. Defaults
+  /// to the `RenderEditable` of a `TextField`.
+  final CrdtTextCursorsTarget? Function(RenderObject node) targetOf;
+
+  /// The subtree containing the editor to draw over.
   final Widget child;
 
   @override
@@ -209,9 +246,9 @@ class _CrdtTextCursorsOverlayState extends State<CrdtTextCursorsOverlay>
   final _link = LayerLink();
   final _portal = OverlayPortalController();
 
-  /// Cached [RenderEditable] found under this widget; re-resolved when the
-  /// child subtree changes.
-  RenderEditable? _editable;
+  /// Cached target found under this widget; re-resolved when the child
+  /// subtree changes.
+  CrdtTextCursorsTarget? _target;
 
   @override
   void initState() {
@@ -258,12 +295,17 @@ class _CrdtTextCursorsOverlayState extends State<CrdtTextCursorsOverlay>
   @override
   void didUpdateWidget(CrdtTextCursorsOverlay oldWidget) {
     super.didUpdateWidget(oldWidget);
+    final newTarget = oldWidget.targetOf != widget.targetOf;
+    if (newTarget) {
+      _target = null;
+    }
     if (oldWidget.id != widget.id) {
       // A different handler: re-subscribe, or the anchors would keep being
       // resolved against the one this started with.
       _attach(_document!);
       _invalidate();
-    } else if (!listEquals(oldWidget.cursors, widget.cursors) ||
+    } else if (newTarget ||
+        !listEquals(oldWidget.cursors, widget.cursors) ||
         oldWidget.motionDuration != widget.motionDuration) {
       _invalidate();
     } else if (oldWidget.labelPlacement != widget.labelPlacement) {
@@ -290,8 +332,8 @@ class _CrdtTextCursorsOverlayState extends State<CrdtTextCursorsOverlay>
   /// Only invalidations get here — a frame that merely advances a glide
   /// repaints the carets without touching the document.
   void _resolve(Size size) {
-    final editable = _findEditable();
-    if (editable == null || _document!.isDeleted(widget.id)) {
+    final target = _findTarget();
+    if (target == null || _document!.isDeleted(widget.id)) {
       _resolved = const [];
       return;
     }
@@ -301,8 +343,8 @@ class _CrdtTextCursorsOverlayState extends State<CrdtTextCursorsOverlay>
     // field is bound to this handler) and it is the one the metrics below are
     // computed from, so it is the right string to count offsets in. The
     // painter caches it and drops the cache when the text changes.
-    final text = editable.plainText;
-    final scroll = _editableScroll(editable);
+    final text = target.text;
+    final scroll = target.scroll;
     final animate = widget.motionDuration > Duration.zero;
     final resolved = <_ResolvedCursor>[];
     final live = <Object>{};
@@ -317,7 +359,7 @@ class _CrdtTextCursorsOverlayState extends State<CrdtTextCursorsOverlay>
         continue;
       }
 
-      // Handler indices count runes; RenderEditable indexes UTF-16 code
+      // Handler indices count runes; the editor indexes UTF-16 code
       // units, so an emoji ahead of the cursor would otherwise shift it.
       final extentOffset = RuneOffsets.utf16Offset(text, extent);
       final baseOffset =
@@ -329,22 +371,20 @@ class _CrdtTextCursorsOverlayState extends State<CrdtTextCursorsOverlay>
           baseOffset: math.min(baseOffset, extentOffset),
           extentOffset: math.max(baseOffset, extentOffset),
         );
-        for (final box in editable.getBoxesForSelection(range)) {
-          selection.add(box.toRect().shift(-scroll));
+        for (final rect in target.selectionRects(range)) {
+          selection.add(rect.shift(-scroll));
         }
       }
 
-      final target = editable
-          .getLocalRectForCaret(TextPosition(offset: extentOffset))
-          .shift(-scroll);
+      final caret = target.caretRect(extentOffset).shift(-scroll);
       live.add(cursor.id);
       final motion = _motions[cursor.id];
       if (motion == null) {
         // First sight (or a cursor back from an unknown anchor): appear
         // where it belongs instead of flying in from a stale position.
-        _motions[cursor.id] = _CaretMotion(target);
+        _motions[cursor.id] = _CaretMotion(caret);
       } else {
-        gliding |= motion.retarget(target, animate: animate, width: size.width);
+        gliding |= motion.retarget(caret, animate: animate, width: size.width);
       }
       resolved.add(_ResolvedCursor(cursor, _motions[cursor.id]!, selection));
     }
@@ -438,19 +478,19 @@ class _CrdtTextCursorsOverlayState extends State<CrdtTextCursorsOverlay>
     );
   }
 
-  /// The [RenderEditable] of the text field inside
-  /// [CrdtTextCursorsOverlay.child].
-  RenderEditable? _findEditable() {
-    if (_editable != null && _editable!.attached) {
-      return _editable;
+  /// The target inside [CrdtTextCursorsOverlay.child].
+  CrdtTextCursorsTarget? _findTarget() {
+    if (_target != null && _target!.attached) {
+      return _target;
     }
-    _editable = null;
+    _target = null;
     void visit(RenderObject node) {
-      if (_editable != null) {
+      if (_target != null) {
         return;
       }
-      if (node is RenderEditable) {
-        _editable = node;
+      final target = widget.targetOf(node);
+      if (target != null) {
+        _target = target;
         return;
       }
       node.visitChildren(visit);
@@ -458,7 +498,7 @@ class _CrdtTextCursorsOverlayState extends State<CrdtTextCursorsOverlay>
 
     final root = context.findRenderObject();
     root?.visitChildren(visit);
-    return _editable;
+    return _target;
   }
 }
 
@@ -466,17 +506,47 @@ class _RepaintNotifier extends ChangeNotifier {
   void bump() => notifyListeners();
 }
 
-/// The field's own scroll, as [RenderEditable] bakes it into every rect it
-/// hands out: a horizontal viewport on a single line, vertical otherwise.
-///
-/// Taking it out gives the text's own coordinates, where a caret only moves
-/// when it moves through the text.
-Offset _editableScroll(RenderEditable editable) {
-  if (!editable.offset.hasPixels) {
-    return Offset.zero;
+CrdtTextCursorsTarget? _editableTarget(RenderObject node) =>
+    node is RenderEditable ? _EditableTarget(node) : null;
+
+/// A [RenderEditable] as a [CrdtTextCursorsTarget].
+class _EditableTarget implements CrdtTextCursorsTarget {
+  const _EditableTarget(this._editable);
+
+  final RenderEditable _editable;
+
+  @override
+  bool get attached => _editable.attached;
+
+  @override
+  String get text => _editable.plainText;
+
+  /// The field's own scroll, as [RenderEditable] bakes it into every rect it
+  /// hands out: a horizontal viewport on a single line, vertical otherwise.
+  ///
+  /// Taking it out gives the text's own coordinates, where a caret only moves
+  /// when it moves through the text.
+  @override
+  Offset get scroll {
+    if (!_editable.offset.hasPixels) {
+      return Offset.zero;
+    }
+    final pixels = _editable.offset.pixels;
+    return _editable.maxLines == 1 ? Offset(-pixels, 0) : Offset(0, -pixels);
   }
-  final pixels = editable.offset.pixels;
-  return editable.maxLines == 1 ? Offset(-pixels, 0) : Offset(0, -pixels);
+
+  @override
+  Rect caretRect(int offset) =>
+      _editable.getLocalRectForCaret(TextPosition(offset: offset));
+
+  @override
+  List<Rect> selectionRects(TextSelection range) => [
+        for (final box in _editable.getBoxesForSelection(range)) box.toRect(),
+      ];
+
+  @override
+  Matrix4 getTransformTo(RenderObject ancestor) =>
+      _editable.getTransformTo(ancestor);
 }
 
 /// Calls [onResolve] as it starts painting the field, with the size it was
@@ -597,8 +667,8 @@ class _TextCursorsPainter extends CustomPainter {
   /// frames that merely carry a caret along cost a repaint and no more.
   @override
   void paint(Canvas canvas, Size size) {
-    final editable = _state._editable;
-    if (editable == null || !editable.attached) {
+    final target = _state._target;
+    if (target == null || !target.attached) {
       return;
     }
     // The paint surface lives in the app Overlay, anchored to the widget's
@@ -609,8 +679,8 @@ class _TextCursorsPainter extends CustomPainter {
       return;
     }
     final fieldSize = overlayBox.size;
-    final transform = editable.getTransformTo(overlayBox);
-    final scroll = _editableScroll(editable);
+    final transform = target.getTransformTo(overlayBox);
+    final scroll = target.scroll;
     final bounds = Offset.zero & fieldSize;
     final labels = <(CrdtTextCursor, Rect)>[];
 

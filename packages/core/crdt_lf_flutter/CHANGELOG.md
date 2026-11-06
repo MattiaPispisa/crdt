@@ -22,6 +22,8 @@
   changes, and strips a typed U+FFFC.
 - `echoesRichText`, `formatsWithin` and `OwnsFormat` tell a rich text editor's own write from another
   writer's in `CrdtEditorBinding.push`.
+- `CrdtTextCursorsOverlay.targetOf` and `CrdtTextCursorsTarget` paint the cursors over another editor.
+- `SelectionAnchors` is public, to publish the selection of your own editor binding.
 
 ### Fixed
 

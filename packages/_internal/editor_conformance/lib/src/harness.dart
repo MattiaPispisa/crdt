@@ -5,6 +5,12 @@ import 'package:crdt_lf/crdt_lf.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+/// Receives the stable anchors of the selection an editor publishes.
+typedef SelectionAnchorsListener = void Function(
+  FugueElementID? base,
+  FugueElementID? extent,
+);
+
 /// A text handler seen by the suite, whatever its type.
 ///
 /// Indexes count runes, like the handlers do.
@@ -29,6 +35,16 @@ abstract interface class ConformanceHandler {
 
   /// Replaces the data of the embed at the rune [index] with [embed].
   void updateEmbed(int index, Map<String, Object?> embed);
+
+  /// The anchor of a caret at the rune [index].
+  ///
+  /// Only called when `EditorHarness.supportsAnchors` is `true`.
+  FugueElementID stablePositionAt(int index);
+
+  /// The rune index [position] resolves to.
+  ///
+  /// Only called when `EditorHarness.supportsAnchors` is `true`.
+  int? indexOfStablePosition(FugueElementID position);
 }
 
 /// What an editor binding gives the suite.
@@ -49,6 +65,11 @@ abstract class EditorHarness {
   /// When `false`, `insertEmbed` and `updateEmbed` are never called.
   bool get supportsEmbeds;
 
+  /// Whether the editor publishes the stable anchors of its selection.
+  ///
+  /// When `false`, `focus` is never called.
+  bool get supportsAnchors;
+
   /// Creates the text handler [id] on [document].
   ConformanceHandler createHandler(CRDTDocument document, String id);
 
@@ -56,11 +77,13 @@ abstract class EditorHarness {
   ///
   /// [onBuild] runs each time the editor widget is built.
   /// [deletedBuilder] shows once the handler is deleted.
+  /// [onSelectionAnchorsChanged] receives the anchors the editor publishes.
   Widget build(
     CRDTDocument document,
     String id, {
     VoidCallback? onBuild,
     WidgetBuilder? deletedBuilder,
+    SelectionAnchorsListener? onSelectionAnchorsChanged,
   });
 
   /// The plain text the user sees.
@@ -73,6 +96,9 @@ abstract class EditorHarness {
   /// Replaces `[start, end)` of [editorText] with [text], the way a keystroke
   /// or a paste does, with the caret after the new text.
   void replaceText(int start, int end, String text);
+
+  /// Gives the editor the focus.
+  Future<void> focus(WidgetTester tester);
 
   /// Hands [value] to the editor the way the platform keyboard does.
   Future<void> ime(WidgetTester tester, TextEditingValue value);

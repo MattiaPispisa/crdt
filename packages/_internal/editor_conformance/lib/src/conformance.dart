@@ -37,6 +37,7 @@ void runEditorConformanceTests(
       WidgetTester tester, {
       VoidCallback? onBuild,
       WidgetBuilder? deletedBuilder,
+      SelectionAnchorsListener? onSelectionAnchorsChanged,
     }) =>
         tester.pumpWidget(
           MaterialApp(
@@ -46,6 +47,7 @@ void runEditorConformanceTests(
                 _id,
                 onBuild: onBuild,
                 deletedBuilder: deletedBuilder,
+                onSelectionAnchorsChanged: onSelectionAnchorsChanged,
               ),
             ),
           ),
@@ -273,6 +275,123 @@ void runEditorConformanceTests(
         );
       }
     });
+
+    if (create().supportsAnchors) {
+      group('selection anchors', () {
+        final published = <(FugueElementID?, FugueElementID?)>[];
+
+        setUp(published.clear);
+
+        Future<void> mountFocused(WidgetTester tester) async {
+          await mount(
+            tester,
+            onSelectionAnchorsChanged: (base, extent) =>
+                published.add((base, extent)),
+          );
+          await editor.focus(tester);
+        }
+
+        testWidgets('a selection publishes its anchors, in runes', (
+          tester,
+        ) async {
+          handler.insert(0, 'a😀bc');
+          await mountFocused(tester);
+
+          editor.selection = const TextSelection(
+            baseOffset: 1,
+            extentOffset: 4,
+          );
+          await tester.pump();
+
+          expect(
+            published.last,
+            (
+              handler.stablePositionAt(1),
+              handler.stablePositionAt(3),
+            ),
+          );
+        });
+
+        testWidgets('a local edit moves the anchors', (tester) async {
+          await mountFocused(tester);
+
+          editor.replaceText(0, 0, 'a😀b');
+          await tester.pump();
+
+          expect(published.last.$2, handler.stablePositionAt(3));
+        });
+
+        testWidgets('nothing is published without the focus', (tester) async {
+          handler.insert(0, 'hello');
+          await mount(
+            tester,
+            onSelectionAnchorsChanged: (base, extent) =>
+                published.add((base, extent)),
+          );
+
+          editor.selection = const TextSelection.collapsed(offset: 2);
+          await tester.pump();
+
+          expect(published, isEmpty);
+        });
+
+        testWidgets('a blur withdraws the anchors, once', (tester) async {
+          handler.insert(0, 'hello');
+          await mountFocused(tester);
+          editor.selection = const TextSelection.collapsed(offset: 2);
+          await tester.pump();
+          expect(published.last.$2, isNotNull);
+
+          tester.binding.focusManager.primaryFocus?.unfocus();
+          await tester.pump();
+          final withdrawn = published.length;
+          editor.selection = const TextSelection.collapsed(offset: 3);
+          await tester.pump();
+
+          expect(published.last, (null, null));
+          expect(published, hasLength(withdrawn));
+        });
+
+        testWidgets('an anchor survives a remote insert before it', (
+          tester,
+        ) async {
+          handler.insert(0, 'hello');
+          await mountFocused(tester);
+          editor.selection = const TextSelection.collapsed(offset: 5);
+          await tester.pump();
+          final extent = published.last.$2!;
+
+          final peer = remotePeer();
+          peer.handler.insert(0, 'XXX ');
+          receive(peer.document);
+          await tester.pump();
+
+          expect(published.last.$2, extent);
+          expect(handler.indexOfStablePosition(extent), 9);
+        });
+
+        testWidgets('a batch of remote changes publishes no stale anchor', (
+          tester,
+        ) async {
+          handler.insert(0, 'abc');
+          await mountFocused(tester);
+          editor.selection = const TextSelection.collapsed(offset: 3);
+          await tester.pump();
+          final before = published.length;
+
+          final peer = remotePeer();
+          peer.handler
+            ..insert(0, 'X')
+            ..insert(0, 'Y')
+            ..insert(0, 'Z');
+          receive(peer.document);
+          await tester.pump();
+
+          // The caret stays after the same element all along.
+          expect(published, hasLength(before));
+        });
+      });
+    }
 
     if (create().supportsComposition) {
       testWidgets('nothing is committed while a composition is active', (
