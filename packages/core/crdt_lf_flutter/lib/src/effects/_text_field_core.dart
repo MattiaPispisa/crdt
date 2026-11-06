@@ -1,6 +1,8 @@
 // Copyright 2025 Mattia Pispisa
 // SPDX-License-Identifier: MIT
 
+import 'dart:math';
+
 import 'package:crdt_lf/crdt_lf.dart';
 import 'package:crdt_lf_flutter/src/effects/text_delta.dart';
 import 'package:flutter/widgets.dart';
@@ -81,17 +83,38 @@ class SelectionAnchors {
 /// [delta], computed against [committed], moved onto [current].
 ///
 /// A remote change that landed while local edits were pending (only during a
-/// composition) shifted the text. Best effort: the CRDT does the merging.
-TextDelta rebaseDelta(TextDelta delta, String committed, String current) {
+/// composition) shifted the text. What it put inside the deleted range stays,
+/// so the range can come back in two regions, as offsets into [current]. Best
+/// effort: the CRDT does the merging.
+List<TextDelta> rebaseDelta(
+  TextDelta delta,
+  String committed,
+  String current,
+) {
   final remote = computeTextDelta(committed, current)!;
+  final end = delta.index + delta.deleted;
+  final remoteEnd = remote.index + remote.deleted;
+  final rightAt = max(delta.index, remoteEnd);
+  final rightStart = rightAt + remote.inserted.length - remote.deleted;
+
+  final left = min(end, remote.index) - delta.index;
+  final right = end - rightAt;
+  final inserted = delta.inserted;
+  if (left > 0 && right > 0) {
+    return [
+      TextDelta(index: delta.index, deleted: left, inserted: inserted),
+      TextDelta(index: rightStart, deleted: right, inserted: ''),
+    ];
+  }
+  if (left > 0) {
+    return [TextDelta(index: delta.index, deleted: left, inserted: inserted)];
+  }
+  if (right > 0) {
+    return [TextDelta(index: rightStart, deleted: right, inserted: inserted)];
+  }
   final index =
       mapOffsetThroughDelta(delta.index, remote).clamp(0, current.length);
-  final deletable = current.length - index;
-  return TextDelta(
-    index: index,
-    deleted: delta.deleted > deletable ? deletable : delta.deleted,
-    inserted: delta.inserted,
-  );
+  return [TextDelta(index: index, deleted: 0, inserted: inserted)];
 }
 
 /// The value of a field after its text became [merged], with the caret and the
@@ -167,34 +190,20 @@ bool echoesSequence(
   List<SequenceDelta<String>> dropped, {
   required int deleted,
   required int inserted,
-}) =>
-    _echoes(dropped, deleted, inserted, (delta) sync* {
-      for (final op in delta.ops) {
-        switch (op) {
-          case SeqInsert<String>():
-            yield (op.values.length, 0);
-          case SeqDelete<String>():
-            yield (0, op.count);
-          case SeqRetain<String>():
-          case SeqMove<String>():
-            break;
-        }
-      }
-    });
-
-// Each pair is (runes put in, runes taken out).
-bool _echoes<D>(
-  List<D> dropped,
-  int deleted,
-  int inserted,
-  Iterable<(int, int)> Function(D delta) counts,
-) {
+}) {
   var totalIn = 0;
   var totalOut = 0;
   for (final delta in dropped) {
-    for (final (put, took) in counts(delta)) {
-      totalIn += put;
-      totalOut += took;
+    for (final op in delta.ops) {
+      switch (op) {
+        case SeqInsert<String>():
+          totalIn += op.values.length;
+        case SeqDelete<String>():
+          totalOut += op.count;
+        case SeqRetain<String>():
+        case SeqMove<String>():
+          break;
+      }
     }
   }
   return totalIn == inserted && totalOut == deleted;

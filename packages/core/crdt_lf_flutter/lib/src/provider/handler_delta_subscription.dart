@@ -127,10 +127,13 @@ class HandlerDeltaSubscription<V, D extends ComposableDelta<D>> {
     }
 
     unawaited(_subscription?.cancel());
-    _target = (document, id);
+    // Follows nothing until `resolve` succeeds: a failed attach must not take
+    // the early exit above on the next call.
+    _target = null;
     onBeforeAttach?.call();
 
     final target = _provider = resolve(document, id);
+    _target = (document, id);
     _synced = -1;
 
     final point = seed ? readSynced() : null;

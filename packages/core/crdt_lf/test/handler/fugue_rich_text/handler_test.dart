@@ -1360,6 +1360,25 @@ void main() {
         small.insertEmbed(0, {'k': '1'});
       });
 
+      test('checkAttribute refuses what format refuses, and writes nothing',
+          () {
+        final doc = CRDTDocument();
+        final text = CRDTFugueRichTextHandler(doc, 'small');
+
+        for (final value in <Object?>[
+          const [1],
+          double.nan,
+          1 << 53,
+        ]) {
+          expect(() => text.checkAttribute(value), throwsArgumentError);
+          expect(() => text.format(0, 0, 'k', value), throwsArgumentError);
+        }
+        text
+          ..checkAttribute(null)
+          ..checkAttribute(true);
+        expect(doc.exportChanges(), isEmpty);
+      });
+
       test('checkEmbed refuses what insertEmbed refuses, and writes nothing',
           () {
         final doc = CRDTDocument();

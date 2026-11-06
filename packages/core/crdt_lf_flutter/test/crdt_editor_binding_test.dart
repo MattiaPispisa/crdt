@@ -343,6 +343,82 @@ void main() {
       expect(_normal(editor.spans), _normal(other.value));
     });
 
+    group('a push inside an open transaction', () {
+      test('drops its echo when the transaction flushes', () async {
+        text.insert(0, 'hello');
+        final editor = _FakeEditor(doc, text)..binding.attach(doc, 'text');
+        await _pump();
+        editor.resets.clear();
+
+        doc.runInTransaction(() => editor.insert(5, '!'));
+
+        expect(editor.remoteDeltas, 0);
+        expect(editor.resets, isEmpty);
+        expect(_normal(editor.spans), _normal(text.value));
+      });
+
+      test('moves the editor again after the flush', () async {
+        text.insert(0, 'hello');
+        final editor = _FakeEditor(doc, text)..binding.attach(doc, 'text');
+        await _pump();
+
+        doc.runInTransaction(() => editor.insert(5, '!'));
+        text.insert(0, 'more ');
+
+        expect(editor.remoteDeltas, 1);
+        expect(_normal(editor.spans), _normal(text.value));
+      });
+
+      test('reads the handler for a write of another writer in it', () async {
+        text.insert(0, 'hello');
+        final editor = _FakeEditor(doc, text)..binding.attach(doc, 'text');
+        await _pump();
+        editor.resets.clear();
+
+        doc.runInTransaction(() {
+          editor.binding.push(
+            () => text.insert(5, '!'),
+            isEcho: (dropped) => dropped.length == 1,
+          );
+          editor.spans = text.value;
+          text.insert(0, 'other ');
+        });
+
+        expect(editor.resets, [(ResetCause.deltasMissed, false)]);
+        expect(_normal(editor.spans), _normal(text.value));
+      });
+
+      test('that writes nothing keeps the next delta', () async {
+        text.insert(0, 'hello');
+        final editor = _FakeEditor(doc, text)..binding.attach(doc, 'text');
+        await _pump();
+
+        doc.runInTransaction(() => editor.binding.push(() {}));
+        await _pump();
+        text.insert(0, 'more ');
+
+        expect(editor.remoteDeltas, 1);
+        expect(_normal(editor.spans), _normal(text.value));
+      });
+
+      test('ends with a new attach', () async {
+        text.insert(0, 'hello');
+        final editor = _FakeEditor(doc, text)..binding.attach(doc, 'text');
+        await _pump();
+
+        doc.runInTransaction(() {
+          editor.binding.push(() => text.insert(5, '!'), isEcho: (_) => false);
+          editor.binding.detach();
+        });
+        editor.binding.attach(doc, 'text');
+        editor.resets.clear();
+        await _pump();
+
+        expect(editor.resets, isEmpty);
+        expect(_normal(editor.spans), _normal(text.value));
+      });
+    });
+
     // More than one seed: one stream of random edits is one sample.
     for (final seed in [7, 13, 29, 101, 997]) {
       test('tracks a random stream of edits against the handler (seed $seed)',

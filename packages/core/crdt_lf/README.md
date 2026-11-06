@@ -1103,7 +1103,8 @@ for the conversion.
 **attributes**: a key and a value (`null`, `bool`, `int`, finite `double` or
 `String`; an `int` stays within ±(2^52 - 1)). Two peers that format the same
 text converge: for each key, the newest format wins (highest HLC, then peer
-id).
+id). `checkAttribute` throws what `format` would throw for a value, and writes
+nothing.
 
 ```dart
 final text = CRDTFugueRichTextHandler(doc, 'note')

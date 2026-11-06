@@ -72,6 +72,33 @@ void main() {
       expect(spans, b.value);
     });
 
+    testWidgets('attaches on the build after a failed attach', (tester) async {
+      await tester.pumpWidget(host());
+      expect(tester.takeException(), isFlutterError);
+
+      final a = CRDTFugueRichTextHandler(doc, 'a')..insert(0, 'hello');
+      await tester.pumpWidget(host());
+      await tester.pump();
+      a.insert(5, '!');
+
+      expect(spans, [RichTextSpan('hello!')]);
+    });
+
+    testWidgets('comes back to its handler after a failed move', (
+      tester,
+    ) async {
+      final a = CRDTFugueRichTextHandler(doc, 'a')..insert(0, 'hello');
+      await tester.pumpWidget(host());
+      await tester.pumpWidget(host(id: 'missing'));
+      expect(tester.takeException(), isFlutterError);
+
+      await tester.pumpWidget(host());
+      await tester.pump();
+      a.insert(5, '!');
+
+      expect(spans, [RichTextSpan('hello!')]);
+    });
+
     testWidgets('shows deletedBuilder once the handler is deleted',
         (tester) async {
       final a = CRDTFugueRichTextHandler(doc, 'a')..insert(0, 'hello');

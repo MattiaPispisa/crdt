@@ -37,12 +37,6 @@ abstract interface class TextFieldContent<C, D extends ComposableDelta<D>> {
   /// are the same edit in runes. Returns the content once the edit is in.
   C write(C base, String baseText, TextDelta pushed, int index, int deleted);
 
-  /// Writes [regions] into the handler in one transaction, inside the push.
-  ///
-  /// Each region holds offsets into the text the regions before it left.
-  /// Returns the content once the edits are in.
-  C writeRegions(C base, String baseText, List<TextRegion> regions);
-
   /// Whether [dropped] holds nothing but the write of [deleted] and
   /// [inserted] runes.
   bool echoes(
@@ -79,6 +73,16 @@ abstract interface class TextFieldContent<C, D extends ComposableDelta<D>> {
   void remoteReported(D delta);
 }
 
+/// What a [TextFieldContent] adds when U+FFFC stands for an embed: the engine
+/// then keeps the embeds a value rewrites.
+abstract interface class EmbedFieldContent<C> {
+  /// Writes [regions] into the handler in one transaction, inside the push.
+  ///
+  /// Each region holds offsets into the text the regions before it left.
+  /// Returns the content once the edits are in.
+  C writeRegions(C base, String baseText, List<TextRegion> regions);
+}
+
 /// What the handler holds, as far as the engine knows it.
 typedef _Known<C> = ({C content, String text, int runes});
 
@@ -104,7 +108,10 @@ class TextFieldEngine<C, D extends ComposableDelta<D>> {
     required void Function(FugueElementID? base, FugueElementID? extent)
         publish,
     DeltaProviderResolver<C, D>? resolve,
-  }) : anchors = SelectionAnchors(publish) {
+  })  : _embeds = _content is EmbedFieldContent<C>
+            ? _content as EmbedFieldContent<C>
+            : null,
+        anchors = SelectionAnchors(publish) {
     binding = CrdtEditorBinding<C, D>(
       resolve: resolve,
       onReset: (value, cause) {
@@ -123,8 +130,7 @@ class TextFieldEngine<C, D extends ComposableDelta<D>> {
 
   final TextFieldContent<C, D> _content;
 
-  // Whether the field writes no U+FFFC: there it stands for an embed.
-  late final bool _keepsEmbeds = _content.writable(_embed).isEmpty;
+  final EmbedFieldContent<C>? _embeds;
 
   /// The handler's delta stream, and the guard around a push.
   late final CrdtEditorBinding<C, D> binding;
@@ -141,6 +147,10 @@ class TextFieldEngine<C, D extends ComposableDelta<D>> {
   ///
   /// That read builds the controller the first time, so it skips [_settle].
   bool _seeding = false;
+
+  // Whether [anchors] hold the selection of the content in place. A keystroke
+  // asks for them several times, and each capture costs tree lookups.
+  bool _anchorsCurrent = false;
 
   late C _committed;
   String _committedText = '';
@@ -163,8 +173,12 @@ class TextFieldEngine<C, D extends ComposableDelta<D>> {
   /// Follows the handler [id] of [document].
   ///
   /// Covers a new document and a new id alike. The first call builds the
-  /// controller.
-  void attach(CRDTDocument document, String id) {
+  /// controller. [onBeforeAttach] runs as `CrdtEditorBinding.attach` says.
+  void attach(
+    CRDTDocument document,
+    String id, {
+    VoidCallback? onBeforeAttach,
+  }) {
     _seeding = true;
     try {
       binding.attach(
@@ -172,7 +186,10 @@ class TextFieldEngine<C, D extends ComposableDelta<D>> {
         id,
         // The anchors belong to the old handler; they must go before anything
         // reads the new one, because seeding captures them again.
-        onBeforeAttach: anchors.clear,
+        onBeforeAttach: () {
+          anchors.clear();
+          onBeforeAttach?.call();
+        },
       );
     } finally {
       _seeding = false;
@@ -202,6 +219,7 @@ class TextFieldEngine<C, D extends ComposableDelta<D>> {
   }
 
   void _commit(C content, String text, int runes) {
+    _anchorsCurrent = false;
     _committed = content;
     _committedText = text;
     committedRunes = runes;
@@ -216,14 +234,22 @@ class TextFieldEngine<C, D extends ComposableDelta<D>> {
   /// Anchors the current selection. Call it when the controller and the
   /// handler agree.
   void captureAnchors() {
-    if (!_content.anchored) {
+    if (_anchorsCurrent) {
       return;
     }
+    // Mid-burst the controller is behind the handler: its offsets would name
+    // the wrong elements.
+    if (!_content.anchored || binding.isBehind) {
+      return;
+    }
+    // Before the capture: a listener of the anchors may move the selection.
+    _anchorsCurrent = true;
     anchors.capture(controller.selection, controller.text, _content.anchorAt);
   }
 
   // Local edits: push the delta of the gesture into the handler.
   void _onControllerChanged() {
+    _anchorsCurrent = false;
     if (_dropping) {
       return;
     }
@@ -277,7 +303,7 @@ class TextFieldEngine<C, D extends ComposableDelta<D>> {
     final caret = selection.isCollapsed ? selection.baseOffset : null;
     final computed =
         computeTextDelta(_committedText, controller.text, caret: caret);
-    if (_keepsEmbeds && _rewritesEmbed(computed)) {
+    if (_embeds != null && _rewritesEmbed(computed)) {
       _pushRegions(computed!, baseContent, baseText, baseRunes);
       return;
     }
@@ -294,9 +320,15 @@ class TextFieldEngine<C, D extends ComposableDelta<D>> {
 
     // A remote change landed while local edits were pending (only possible
     // during a composition): rebase onto the merged text.
-    final pushed = baseText == _committedText
-        ? delta
-        : rebaseDelta(delta, _committedText, baseText);
+    var pushed = delta;
+    if (baseText != _committedText) {
+      final rebased = rebaseDelta(delta, _committedText, baseText);
+      if (rebased.length > 1) {
+        _writeRegions(rebased, baseContent, baseText, baseRunes);
+        return;
+      }
+      pushed = rebased.single;
+    }
 
     // [TextDelta] is expressed in code units, the handlers in runes. The
     // delta's boundaries are snapped to code-point boundaries by
@@ -435,20 +467,37 @@ class TextFieldEngine<C, D extends ComposableDelta<D>> {
       });
     }
 
-    // Each region moves by the ones before it, and onto a merged base.
+    _writeRegions(
+      baseText == _committedText
+          ? regions
+          : [
+              for (final region in regions)
+                ...rebaseDelta(region, _committedText, baseText),
+            ],
+      baseContent,
+      baseText,
+      baseRunes,
+    );
+  }
+
+  // Pushes `regions`, offsets into `baseText`, as one write.
+  void _writeRegions(
+    List<TextDelta> regions,
+    C baseContent,
+    String baseText,
+    int baseRunes,
+  ) {
+    // Each region moves by the ones before it.
     var text = baseText;
     var shift = 0;
     var deletedRunes = 0;
     var insertedRunes = 0;
     final written = <TextRegion>[];
     for (final region in regions) {
-      final rebased = baseText == _committedText
-          ? region
-          : rebaseDelta(region, _committedText, baseText);
-      final at = (rebased.index + shift).clamp(0, text.length);
-      final cut = rebased.deleted.clamp(0, text.length - at);
+      final at = (region.index + shift).clamp(0, text.length);
+      final cut = region.deleted.clamp(0, text.length - at);
       final pushed =
-          TextDelta(index: at, deleted: cut, inserted: rebased.inserted);
+          TextDelta(index: at, deleted: cut, inserted: region.inserted);
       final index = RuneOffsets.runeIndex(text, at);
       final runes =
           cut == 0 ? 0 : RuneOffsets.runeIndex(text, at + cut) - index;
@@ -461,7 +510,10 @@ class TextFieldEngine<C, D extends ComposableDelta<D>> {
 
     binding.push(
       () {
-        final content = _content.writeRegions(baseContent, baseText, written);
+        final embeds = _embeds;
+        final content = embeds == null
+            ? _writeEach(baseContent, baseText, written)
+            : embeds.writeRegions(baseContent, baseText, written);
         _adopt(content, text, baseRunes - deletedRunes + insertedRunes);
       },
       isEcho: (dropped) => _content.echoes(
@@ -471,6 +523,19 @@ class TextFieldEngine<C, D extends ComposableDelta<D>> {
       ),
     );
     captureAnchors();
+  }
+
+  // Writes `regions` one by one, as one document update.
+  C _writeEach(C base, String baseText, List<TextRegion> regions) {
+    var content = base;
+    var text = baseText;
+    binding.document!.runInTransaction(() {
+      for (final (:pushed, :index, :deleted) in regions) {
+        content = _content.write(content, text, pushed, index, deleted);
+        text = _content.textOf(content);
+      }
+    });
+    return content;
   }
 
   // [delta] without the runes the field does not write, which also leave the
@@ -568,6 +633,7 @@ class TextFieldEngine<C, D extends ComposableDelta<D>> {
     if (old.text == mergedText) {
       // Same text: the content may still have new formats.
       _content.showFormats(merged);
+      captureAnchors();
       return;
     }
 

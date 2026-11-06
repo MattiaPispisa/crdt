@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 import 'package:crdt_lf/crdt_lf.dart';
-import 'package:crdt_lf_flutter/crdt_lf_flutter.dart';
+import 'package:crdt_lf_flutter/src/effects/crdt_rich_text_field.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {

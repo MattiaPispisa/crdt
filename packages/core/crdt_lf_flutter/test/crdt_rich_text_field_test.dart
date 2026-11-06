@@ -5,6 +5,8 @@ import 'dart:math';
 
 import 'package:crdt_lf/crdt_lf.dart';
 import 'package:crdt_lf_flutter/crdt_lf_flutter.dart';
+import 'package:crdt_lf_flutter/src/effects/crdt_rich_text_field.dart'
+    show sameRuneAttributes;
 import 'package:editor_conformance/editor_conformance.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
@@ -44,6 +46,7 @@ void main() {
   });
 
   Widget host({
+    String id = 'page',
     CRDTUndoManager? undoManager,
   }) {
     return CrdtProvider.value(
@@ -51,7 +54,7 @@ void main() {
       child: MaterialApp(
         home: Scaffold(
           body: CrdtRichTextFieldBuilder(
-            id: 'page',
+            id: id,
             undoManager: undoManager,
             onSelectionAnchorsChanged: (base, extent) =>
                 anchors.add((base, extent)),
@@ -563,6 +566,172 @@ void main() {
     });
   });
 
+  testWidgets('a delete served inside a push leaves the field on the handler', (
+    tester,
+  ) async {
+    debugVerifyCrdtRichTextFieldProjection = false;
+    addTearDown(() => debugVerifyCrdtRichTextFieldProjection = true);
+    final page = CRDTFugueRichTextHandler(doc, 'page')..insert(0, 'hello');
+    var armed = true;
+    final watcher = page.watch().listen((_) {
+      if (armed && page.text == 'helloX') {
+        armed = false;
+        page.delete(5, 1);
+      }
+    });
+    addTearDown(watcher.cancel);
+    await tester.pumpWidget(host());
+
+    controller!.value = const TextEditingValue(
+      text: 'helloX',
+      selection: TextSelection.collapsed(offset: 6),
+    );
+    await tester.pumpAndSettle();
+
+    expect(tester.takeException(), isNull);
+    expect(armed, isFalse);
+    expect(page.text, 'hello');
+    expectInSync('after the delete');
+  });
+
+  testWidgets('a delete served inside a two-region push too', (tester) async {
+    debugVerifyCrdtRichTextFieldProjection = false;
+    addTearDown(() => debugVerifyCrdtRichTextFieldProjection = true);
+    final page = CRDTFugueRichTextHandler(doc, 'page')
+      ..insert(0, 'ab')
+      ..insertEmbed(1, {'image': 'a.png'});
+    var armed = true;
+    final watcher = page.watch().listen((_) {
+      if (armed && page.text == 'Xa\uFFFCbY') {
+        armed = false;
+        page.delete(4, 1);
+      }
+    });
+    addTearDown(watcher.cancel);
+    await tester.pumpWidget(host());
+
+    controller!.value = const TextEditingValue(
+      text: 'Xa\uFFFCbY',
+      selection: TextSelection.collapsed(offset: 5),
+    );
+    await tester.pumpAndSettle();
+
+    expect(tester.takeException(), isNull);
+    expect(page.text, 'Xa\uFFFCb');
+    expectInSync('after the delete');
+  });
+
+  group('a composition commits over a remote embed in its range', () {
+    // Pinned: the embed has to survive the commit on both sides.
+    final local = PeerId.parse('00000000-0000-4000-8000-00000000000a');
+    final peer = PeerId.parse('00000000-0000-4000-8000-00000000000b');
+
+    Future<void> commitOver(
+      WidgetTester tester, {
+      required int at,
+      required String expected,
+    }) async {
+      doc = CRDTDocument(peerId: local);
+      final page = CRDTFugueRichTextHandler(doc, 'page')..insert(0, 'teh');
+      await tester.pumpWidget(host());
+      await tester.showKeyboard(find.byType(TextField));
+      tester.testTextInput.updateEditingValue(
+        const TextEditingValue(
+          text: 'the',
+          selection: TextSelection.collapsed(offset: 3),
+          composing: TextRange(start: 0, end: 3),
+        ),
+      );
+      await tester.pump();
+
+      final remote = CRDTDocument(peerId: peer);
+      final remotePage = CRDTFugueRichTextHandler(remote, 'page');
+      remote.importChanges(doc.exportChanges());
+      remotePage.insertEmbed(at, {'image': 'a.png'});
+      syncFrom(remote);
+      await tester.pump();
+
+      remote.importChanges(
+        doc.exportChanges(fromVersionVector: remote.getVersionVector()),
+      );
+      expect(page.text, expected);
+      expect(remotePage.text, expected);
+      expect(embedsOf(page.value), [
+        {'image': 'a.png'},
+      ]);
+      expectInSync('committed');
+    }
+
+    testWidgets('at its start', (tester) async {
+      await commitOver(tester, at: 1, expected: 't\uFFFChe');
+    });
+
+    testWidgets('inside it', (tester) async {
+      await commitOver(tester, at: 2, expected: 'the\uFFFC');
+    });
+  });
+
+  testWidgets('a value the handler refuses throws at format', (tester) async {
+    CRDTFugueRichTextHandler(doc, 'page').insert(0, 'hlo');
+    await tester.pumpWidget(host());
+    controller!.selection = const TextSelection.collapsed(offset: 1);
+
+    expect(() => controller!.format('w', const [1]), throwsArgumentError);
+    expect(controller!.pendingAttributes, isEmpty);
+
+    controller!.value = const TextEditingValue(
+      text: 'hXlo',
+      selection: TextSelection.collapsed(offset: 2),
+    );
+    await tester.pump();
+
+    expect(pageOf(doc).text, 'hXlo');
+    expectInSync('typed');
+  });
+
+  testWidgets('the style set at a caret stays behind on a change of handler', (
+    tester,
+  ) async {
+    CRDTFugueRichTextHandler(doc, 'page').insert(0, 'hello');
+    final other = CRDTFugueRichTextHandler(doc, 'other')..insert(0, 'world');
+    await tester.pumpWidget(host());
+    controller!.selection = const TextSelection.collapsed(offset: 0);
+    controller!.format('bold', true);
+
+    await tester.pumpWidget(host(id: 'other'));
+    expect(controller!.pendingAttributes, isEmpty);
+
+    controller!.value = const TextEditingValue(
+      text: 'Qworld',
+      selection: TextSelection.collapsed(offset: 1),
+    );
+    await tester.pump();
+
+    expect(other.value, [RichTextSpan('Qworld')]);
+  });
+
+  testWidgets('the attributes of the caret are read-only', (tester) async {
+    CRDTFugueRichTextHandler(doc, 'page');
+    await tester.pumpWidget(host());
+
+    expect(
+      () => (controller! as dynamic).pendingAttributes = {'bold': true},
+      throwsNoSuchMethodError,
+    );
+  });
+
+  testWidgets('a wrong handler is refused in the name of the field', (
+    tester,
+  ) async {
+    CRDTFugueTextHandler(doc, 'page');
+    await tester.pumpWidget(host());
+
+    expect(
+      tester.takeException().toString(),
+      contains('CrdtRichTextFieldBuilder'),
+    );
+  });
+
   testWidgets('anchors are withdrawn while an IME composition is pending', (
     tester,
   ) async {
@@ -788,6 +957,53 @@ void main() {
         RichTextSpan('hello', {'bold': true}),
       ]);
       expectInSync('redone');
+    });
+
+    testWidgets('an undo that changes nothing leaves the caret', (
+      tester,
+    ) async {
+      manager.track(CRDTFugueRichTextHandler(doc, 'page'));
+      pageOf(doc).insert(0, 'hello world');
+      await tester.pumpWidget(host(undoManager: manager));
+      controller!.value = const TextEditingValue(
+        text: 'hello world!!',
+        selection: TextSelection.collapsed(offset: 13),
+      );
+      await tester.pump();
+
+      final remote = remotePeer();
+      pageOf(remote).delete(11, 2);
+      syncFrom(remote);
+      await tester.pump();
+      controller!.selection = const TextSelection.collapsed(offset: 8);
+
+      controller!.undo();
+      await tester.pump();
+
+      expect(controller!.text, 'hello world');
+      expect(controller!.selection, const TextSelection.collapsed(offset: 8));
+    });
+
+    testWidgets('typing after a format is a step of its own', (tester) async {
+      manager.track(CRDTFugueRichTextHandler(doc, 'page'));
+      pageOf(doc).insert(0, 'hello');
+      await tester.pumpWidget(host(undoManager: manager));
+      controller!
+        ..selection = const TextSelection(baseOffset: 0, extentOffset: 5)
+        ..toggle('bold');
+      controller!.value = const TextEditingValue(
+        text: 'hello!',
+        selection: TextSelection.collapsed(offset: 6),
+      );
+      await tester.pump();
+
+      controller!.undo();
+      await tester.pump();
+
+      expect(pageOf(doc).value, [
+        RichTextSpan('hello', {'bold': true}),
+      ]);
+      expectInSync('typing undone');
     });
 
     testWidgets('redo puts the caret after the restored text', (tester) async {

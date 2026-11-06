@@ -27,6 +27,9 @@
 
 - `CrdtTextFieldBuilder` takes in a change another writer makes inside a push when it keeps the text
   length, in release builds too.
+- `CrdtTextFieldBuilder` keeps the caret through a batch of remote changes.
+- `CrdtTextFieldBuilder` keeps a remote insert that lands in the range of a composition when the
+  composition commits.
 
 ## [0.6.0](https://github.com/MattiaPispisa/crdt/tree/crdt_lf_flutter-v0.6.0/packages/core/crdt_lf_flutter)
 

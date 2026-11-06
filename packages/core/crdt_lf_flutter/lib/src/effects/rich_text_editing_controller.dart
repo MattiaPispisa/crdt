@@ -1,13 +1,12 @@
 // Copyright 2025 Mattia Pispisa
 // SPDX-License-Identifier: MIT
 
-import 'package:crdt_lf/crdt_lf.dart';
-import 'package:crdt_lf_flutter/src/effects/text_delta.dart';
-import 'package:flutter/foundation.dart';
-import 'package:flutter/widgets.dart';
+part of 'crdt_rich_text_field.dart';
 
 /// Maps the attributes of a run to the style it is painted with.
 typedef RichAttributeStyle = TextStyle Function(Map<String, Object?> map);
+
+final RegExp _hexColor = RegExp(r'^#[0-9a-fA-F]{6}$');
 
 /// The default [RichAttributeStyle].
 ///
@@ -30,7 +29,7 @@ TextStyle defaultRichAttributeStyle(Map<String, Object?> attributes) {
         decorations.isEmpty ? null : TextDecoration.combine(decorations),
     color: link != null
         ? const Color(0xFF1565C0)
-        : color is String && RegExp(r'^#[0-9a-fA-F]{6}$').hasMatch(color)
+        : color is String && _hexColor.hasMatch(color)
             ? Color(0xFF000000 | int.parse(color.substring(1), radix: 16))
             : null,
     fontSize: size is num ? size.toDouble() : null,
@@ -43,13 +42,12 @@ TextStyle defaultRichAttributeStyle(Map<String, Object?> attributes) {
 /// string, so selection and composing work as in a plain field. Formats go
 /// through [format] and [toggle], which write to the handler.
 class CrdtRichTextEditingController extends TextEditingController {
-  /// Creates a controller that shows [spans].
-  CrdtRichTextEditingController({
-    List<RichTextSpan> spans = const [],
-    this.styleOf = defaultRichAttributeStyle,
+  CrdtRichTextEditingController._({
+    required List<RichTextSpan> spans,
+    required this.styleOf,
   })  : _spans = spans,
-        _spansText = joinSpans(spans),
-        super(text: joinSpans(spans));
+        _spansText = _joinSpans(spans),
+        super(text: _joinSpans(spans));
 
   List<RichTextSpan> _spans;
   String _spansText;
@@ -59,8 +57,8 @@ class CrdtRichTextEditingController extends TextEditingController {
 
   Map<String, Object?> _pending = const {};
 
-  /// The field that owns the controller; formats and undo go through it.
-  CrdtRichTextEditingDelegate? delegate;
+  // The field that owns the controller; formats and undo go through it.
+  _CrdtRichTextEditingDelegate? _delegate;
 
   /// The committed spans, those the handler holds.
   List<RichTextSpan> get spans => _spans;
@@ -73,7 +71,7 @@ class CrdtRichTextEditingController extends TextEditingController {
   /// Empty when the caret has no style of its own.
   Map<String, Object?> get pendingAttributes => _pending;
 
-  set pendingAttributes(Map<String, Object?> value) {
+  void _setPending(Map<String, Object?> value) {
     if (mapEquals(_pending, value)) {
       return;
     }
@@ -86,18 +84,21 @@ class CrdtRichTextEditingController extends TextEditingController {
   /// At a collapsed caret it styles the text typed next instead. A
   /// [MarkExpand] decides whether text typed at the edges of the range joins
   /// it. Does nothing while an IME composition is pending.
+  ///
+  /// Throws an [ArgumentError] for a value
+  /// [CRDTFugueRichTextHandler.format] refuses.
   void format(
     String key,
     Object? value, {
     MarkExpand expand = MarkExpand.after,
   }) =>
-      delegate?.format(key, value, expand);
+      _delegate?.format(key, value, expand);
 
   /// The value of [key] shared by the whole selection, or at the caret.
   ///
   /// `null` when the selection mixes values, or the field has no selection.
   Object? attributeAtSelection(String key) =>
-      delegate?.attributeAtSelection(key);
+      _delegate?.attributeAtSelection(key);
 
   /// Turns the boolean [key] on, or off when the selection already has it.
   void toggle(String key) {
@@ -105,26 +106,24 @@ class CrdtRichTextEditingController extends TextEditingController {
   }
 
   /// Whether [undo] would take back a step.
-  bool get canUndo => delegate?.canUndo ?? false;
+  bool get canUndo => _delegate?.canUndo ?? false;
 
   /// Whether [redo] would restore a step.
-  bool get canRedo => delegate?.canRedo ?? false;
+  bool get canRedo => _delegate?.canRedo ?? false;
 
   /// Takes back your last edit through the `CRDTUndoManager` of the field.
   ///
   /// Does nothing without a manager, or while an IME composition is pending.
-  void undo() => delegate?.undo();
+  void undo() => _delegate?.undo();
 
   /// Restores the edit [undo] took back.
-  void redo() => delegate?.redo();
+  void redo() => _delegate?.redo();
 
-  /// Replaces the spans and the value with one notification.
-  ///
-  /// [newValue] must hold the plain text of [spans], except while a
-  /// composition is pending.
-  void setValueAndSpans(TextEditingValue newValue, List<RichTextSpan> spans) {
+  // Replaces the spans and the value with one notification. [newValue] must
+  // hold the plain text of [spans], except while a composition is pending.
+  void _setValueAndSpans(TextEditingValue newValue, List<RichTextSpan> spans) {
     _spans = spans;
-    _spansText = joinSpans(spans);
+    _spansText = _joinSpans(spans);
     if (newValue == value) {
       notifyListeners();
     } else {
@@ -132,11 +131,9 @@ class CrdtRichTextEditingController extends TextEditingController {
     }
   }
 
-  /// The spans of the current [text]: [spans], plus the uncommitted run.
-  ///
-  /// The uncommitted run takes the attributes of the rune before it, with
-  /// [pendingAttributes] on top.
-  List<RichTextSpan> get displaySpans {
+  // The spans of the current [text]: [spans], plus the uncommitted run, which
+  // takes the attributes of the rune before it, with the pending ones on top.
+  List<RichTextSpan> get _displaySpans {
     final current = text;
     if (current == _spansText) {
       return _spans;
@@ -184,7 +181,7 @@ class CrdtRichTextEditingController extends TextEditingController {
         : TextRange.empty;
     final children = <InlineSpan>[];
     var offset = 0;
-    for (final span in displaySpans) {
+    for (final span in _displaySpans) {
       final runStyle = styleOf(span.attributes);
       final end = offset + span.text.length;
       if (composing.isValid &&
@@ -221,7 +218,7 @@ class CrdtRichTextEditingController extends TextEditingController {
 }
 
 /// What a [CrdtRichTextEditingController] asks of the field that owns it.
-abstract interface class CrdtRichTextEditingDelegate {
+abstract interface class _CrdtRichTextEditingDelegate {
   /// Formats the selection; see [CrdtRichTextEditingController.format].
   void format(String key, Object? value, MarkExpand expand);
 
@@ -241,12 +238,12 @@ abstract interface class CrdtRichTextEditingDelegate {
   void redo();
 }
 
-/// The plain text of [spans].
-String joinSpans(List<RichTextSpan> spans) =>
+// The plain text of [spans].
+String _joinSpans(List<RichTextSpan> spans) =>
     spans.length == 1 ? spans.first.text : spans.map((s) => s.text).join();
 
-/// How many runes [spans] hold.
-int runesOfSpans(List<RichTextSpan> spans) {
+// How many runes [spans] hold.
+int _runesOfSpans(List<RichTextSpan> spans) {
   var count = 0;
   for (final span in spans) {
     count += RuneOffsets.length(span.text);

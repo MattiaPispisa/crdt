@@ -1,6 +1,8 @@
 // Copyright 2025 Mattia Pispisa
 // SPDX-License-Identifier: MIT
 
+import 'dart:async';
+
 import 'package:crdt_lf/crdt_lf.dart';
 import 'package:crdt_lf_flutter/src/provider/handler_delta_subscription.dart';
 
@@ -68,6 +70,9 @@ class CrdtEditorBinding<V, D extends ComposableDelta<D>> {
   List<D>? _dropped;
   ResetCause? _resetWhilePushing;
 
+  // Ends a push whose echo waits for the flush of an outer transaction.
+  void Function()? _finishPush;
+
   /// The document of the followed handler; `null` while detached.
   CRDTDocument? get document => _document;
 
@@ -113,6 +118,7 @@ class CrdtEditorBinding<V, D extends ComposableDelta<D>> {
       id,
       onBeforeAttach: () {
         _resetWhilePushing = null;
+        _endPush();
         onBeforeAttach?.call();
       },
     );
@@ -167,6 +173,12 @@ class CrdtEditorBinding<V, D extends ComposableDelta<D>> {
   /// This sees a foreign change that keeps the content length, which
   /// [verifyProjection] cannot.
   ///
+  /// In an open `runInTransaction`, the echo goes out when that transaction
+  /// flushes: the deltas are dropped until then, and the checks above run
+  /// then. A push made while the document delivers events has its echo
+  /// delivered after the listener returns, so [isEcho] sees none of it and the
+  /// binding reads the handler. The editor stays right, at the cost of a read.
+  ///
   /// A push inside a push runs the write at once. A no-op while detached or
   /// when the handler is deleted.
   void push(
@@ -187,36 +199,70 @@ class CrdtEditorBinding<V, D extends ComposableDelta<D>> {
     // editor misses events the handler holds: marking synced would drop them.
     final behind = isBehind;
 
-    // Set before the write: its echo is delivered inside it, synchronously.
+    // Set before the write: a flush it makes delivers its echo inside it.
     _pushing = true;
     final dropped = _dropped = isEcho == null ? null : [];
+
+    void finish() {
+      _endPush();
+      if (_document == null) {
+        return;
+      }
+      // After the write: the editor holds its own edit, and the deltas dropped
+      // during it are counted as received.
+      _subscription.markSyncedToPublished();
+
+      final postponed = _resetWhilePushing;
+      _resetWhilePushing = null;
+      final foreign = dropped != null && !isEcho!(dropped);
+      if (postponed != null || behind || foreign) {
+        // A reset read mid-write cannot see the edit: read again now.
+        _reset(postponed ?? ResetCause.deltasMissed);
+        return;
+      }
+      _verify();
+    }
+
+    var written = false;
     try {
       writeToHandler();
+      written = true;
     } finally {
-      _pushing = false;
-      _dropped = null;
+      if (!written) {
+        _endPush();
+      }
     }
-    if (_document == null) {
+    if (_document == null || !document.isInTransaction) {
+      finish();
       return;
     }
-    // After the write: the editor holds its own edit, and the deltas dropped
-    // during it are counted as received.
-    _subscription.markSyncedToPublished();
+    _finishPush = finish;
+    // The transaction body is synchronous, so this runs after its flush. No
+    // delta ends a push that published nothing.
+    scheduleMicrotask(() {
+      if (identical(_finishPush, finish)) {
+        finish();
+      }
+    });
+  }
 
-    final postponed = _resetWhilePushing;
-    _resetWhilePushing = null;
-    final foreign = dropped != null && !isEcho!(dropped);
-    if (postponed != null || behind || foreign) {
-      // A reset read mid-write cannot see the edit: read again now.
-      _reset(postponed ?? ResetCause.deltasMissed);
-      return;
+  void _endPush() {
+    _pushing = false;
+    _dropped = null;
+    _finishPush = null;
+  }
+
+  void _finishPushIfFlushed() {
+    final finish = _finishPush;
+    if (finish != null && !isBehind && !_document!.isInTransaction) {
+      finish();
     }
-    _verify();
   }
 
   void _onReset(DeltaSyncPoint<V> point, ResetCause cause) {
     if (_pushing) {
       _resetWhilePushing = cause;
+      _finishPushIfFlushed();
       return;
     }
     onReset(point.value, cause);
@@ -224,7 +270,11 @@ class CrdtEditorBinding<V, D extends ComposableDelta<D>> {
 
   void _onDelta(HandlerDelta<D> event) {
     _dropped?.add(event.delta);
-    if (_pushing || (skipEmptyDeltas && event.delta.isEmpty)) {
+    if (_pushing) {
+      _finishPushIfFlushed();
+      return;
+    }
+    if (skipEmptyDeltas && event.delta.isEmpty) {
       return;
     }
     onRemoteDelta(event);

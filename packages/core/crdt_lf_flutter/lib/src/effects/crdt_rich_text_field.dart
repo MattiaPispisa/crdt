@@ -7,13 +7,15 @@ import 'package:crdt_lf/crdt_lf.dart';
 import 'package:crdt_lf_flutter/src/common/_crdt_guards.dart';
 import 'package:crdt_lf_flutter/src/editor/rich_text_echoes.dart';
 import 'package:crdt_lf_flutter/src/effects/_text_field_engine.dart';
-import 'package:crdt_lf_flutter/src/effects/rich_text_editing_controller.dart';
 import 'package:crdt_lf_flutter/src/effects/text_delta.dart';
 import 'package:crdt_lf_flutter/src/provider/_crdt_view.dart';
 import 'package:crdt_lf_flutter/src/provider/crdt_helper.dart';
+import 'package:crdt_lf_flutter/src/provider/handler_delta_subscription.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
+
+part 'rich_text_editing_controller.dart';
 
 /// Whether [CrdtRichTextFieldBuilder] compares its whole content against the
 /// handler.
@@ -119,8 +121,9 @@ class CrdtRichTextFieldBuilder extends StatefulWidget {
 
 class _CrdtRichTextFieldBuilderState extends State<CrdtRichTextFieldBuilder>
     implements
-        CrdtRichTextEditingDelegate,
-        TextFieldContent<List<RichTextSpan>, RichTextDelta> {
+        _CrdtRichTextEditingDelegate,
+        TextFieldContent<List<RichTextSpan>, RichTextDelta>,
+        EmbedFieldContent<List<RichTextSpan>> {
   late CRDTDocument _document;
 
   late final TextFieldEngine<List<RichTextSpan>, RichTextDelta> _engine =
@@ -128,7 +131,15 @@ class _CrdtRichTextFieldBuilderState extends State<CrdtRichTextFieldBuilder>
     this,
     publish: (base, extent) =>
         widget.onSelectionAnchorsChanged?.call(base, extent),
+    resolve: (document, id) =>
+        resolveDeltaProvider<List<RichTextSpan>, RichTextDelta>(
+      document,
+      id,
+      'CrdtRichTextFieldBuilder',
+    ),
   );
+
+  CrdtRichTextEditingController? _controller;
 
   CRDTUndoManager? _manager;
   StreamSubscription<void>? _managerChanges;
@@ -142,8 +153,7 @@ class _CrdtRichTextFieldBuilderState extends State<CrdtRichTextFieldBuilder>
   // The expand mode of each pending key; a key missing here expands after.
   Map<String, MarkExpand> _pendingExpand = const {};
 
-  CrdtRichTextEditingController get _c =>
-      _engine.controller as CrdtRichTextEditingController;
+  CrdtRichTextEditingController get _c => _controller!;
 
   // Flutter maps no undo key on the web, where the browser undoes the text.
   static Map<ShortcutActivator, Intent> get _undoShortcuts {
@@ -183,7 +193,7 @@ class _CrdtRichTextFieldBuilderState extends State<CrdtRichTextFieldBuilder>
       });
       return buildDeleted(context, widget.deletedBuilder);
     }
-    _engine.attach(document, widget.id);
+    _engine.attach(document, widget.id, onBeforeAttach: _dropPending);
     _c.styleOf = widget.styleOf;
     _followManager(widget.undoManager);
     final child = widget.builder(context, _c);
@@ -283,18 +293,19 @@ class _CrdtRichTextFieldBuilderState extends State<CrdtRichTextFieldBuilder>
     final selection = _c.selection;
     final text = _c.spansText;
     if (selection.isCollapsed) {
+      _handler.checkAttribute(value);
       final valid = _pendingStillValid();
       final current = valid ? _c.pendingAttributes : const <String, Object?>{};
       _pendingExpand = {if (valid) ..._pendingExpand, key: expand};
       _pendingAnchor = _handler.stablePositionAt(
         RuneOffsets.runeIndex(text, selection.baseOffset),
       );
-      _c.pendingAttributes = {...current, key: value};
+      _c._setPending({...current, key: value});
       return;
     }
     final start = RuneOffsets.runeIndex(text, selection.start);
     final length = RuneOffsets.runeIndex(text, selection.end) - start;
-    // A format is a step of its own, not part of the typing before it.
+    // A format is a step of its own, apart from the typing around it.
     widget.undoManager?.stopCapturing();
     _engine.binding.push(
       () {
@@ -312,6 +323,7 @@ class _CrdtRichTextFieldBuilderState extends State<CrdtRichTextFieldBuilder>
         ownsFormat: formatsWithin(start, start + length, {key: value}),
       ),
     );
+    widget.undoManager?.stopCapturing();
   }
 
   // ------------------------------------------------------------------ undo
@@ -324,7 +336,7 @@ class _CrdtRichTextFieldBuilderState extends State<CrdtRichTextFieldBuilder>
     _manager = manager;
     // The buttons of a toolbar listen to the controller.
     _managerChanges = manager?.changes.listen(
-      (_) => _c.setValueAndSpans(_c.value, _c.spans),
+      (_) => _c._setValueAndSpans(_c.value, _c.spans),
     );
   }
 
@@ -368,6 +380,12 @@ class _CrdtRichTextFieldBuilderState extends State<CrdtRichTextFieldBuilder>
   bool get _canStep =>
       _manager != null && _c.text == _c.spansText && !_engine.binding.isBehind;
 
+  void _dropPending() {
+    _controller?._pending = const {};
+    _pendingExpand = const {};
+    _pendingAnchor = null;
+  }
+
   bool _pendingStillValid() {
     if (_c.pendingAttributes.isEmpty) {
       return false;
@@ -384,14 +402,16 @@ class _CrdtRichTextFieldBuilderState extends State<CrdtRichTextFieldBuilder>
 
   @override
   TextEditingController createController(List<RichTextSpan> content) =>
-      CrdtRichTextEditingController(spans: content, styleOf: widget.styleOf)
-        ..delegate = this;
+      _controller = CrdtRichTextEditingController._(
+        spans: content,
+        styleOf: widget.styleOf,
+      ).._delegate = this;
 
   @override
-  String textOf(List<RichTextSpan> content) => joinSpans(content);
+  String textOf(List<RichTextSpan> content) => _joinSpans(content);
 
   @override
-  int runesOf(List<RichTextSpan> content) => runesOfSpans(content);
+  int runesOf(List<RichTextSpan> content) => _runesOfSpans(content);
 
   @override
   List<RichTextSpan> apply(List<RichTextSpan> base, RichTextDelta delta) =>
@@ -434,19 +454,21 @@ class _CrdtRichTextFieldBuilderState extends State<CrdtRichTextFieldBuilder>
             index + RuneOffsets.length(pushed.inserted),
             pending,
           );
-    _document.runInTransaction(
+    // Read in the body: the flush runs listeners, which may change the text.
+    final inserted = _document.runInTransaction(
       () {
         if (deleted > 0) {
           handler.delete(index, deleted);
         }
         _insert(handler, index, pushed.inserted, pending, _pendingExpand);
+        return _readInserted(handler, index, pushed.inserted);
       },
       origin: crdtRichTextFieldOrigin,
     );
     return RichTextDelta([
       RichTextRetain(index),
       RichTextDelete(deleted),
-      ..._readInserted(handler, index, pushed.inserted),
+      ...inserted,
     ]).apply(base);
   }
 
@@ -458,6 +480,8 @@ class _CrdtRichTextFieldBuilderState extends State<CrdtRichTextFieldBuilder>
   ) {
     final handler = _handler;
     _writtenFormats = null;
+    final ops = <RichTextOp>[];
+    var at = 0;
     _document.runInTransaction(
       () {
         for (final (:pushed, :index, :deleted) in regions) {
@@ -473,20 +497,15 @@ class _CrdtRichTextFieldBuilderState extends State<CrdtRichTextFieldBuilder>
             handler.delete(index, deleted);
           }
           _insert(handler, index, pushed.inserted, pending, _pendingExpand);
+          ops
+            ..add(RichTextRetain(index - at))
+            ..add(RichTextDelete(deleted))
+            ..addAll(_readInserted(handler, index, pushed.inserted));
+          at = index + RuneOffsets.length(pushed.inserted);
         }
       },
       origin: crdtRichTextFieldOrigin,
     );
-    final ops = <RichTextOp>[];
-    var at = 0;
-    for (final (:pushed, :index, :deleted) in regions) {
-      final inserted = _readInserted(handler, index, pushed.inserted);
-      ops
-        ..add(RichTextRetain(index - at))
-        ..add(RichTextDelete(deleted))
-        ..addAll(inserted);
-      at = index + RuneOffsets.length(pushed.inserted);
-    }
     return RichTextDelta(ops).apply(base);
   }
 
@@ -519,12 +538,12 @@ class _CrdtRichTextFieldBuilderState extends State<CrdtRichTextFieldBuilder>
 
   @override
   void show(TextEditingValue value, List<RichTextSpan> content) {
-    _c.setValueAndSpans(value, content);
+    _c._setValueAndSpans(value, content);
   }
 
   @override
   void showFormats(List<RichTextSpan> content) {
-    _c.setValueAndSpans(_c.value, content);
+    _c._setValueAndSpans(_c.value, content);
   }
 
   @override
@@ -550,7 +569,7 @@ class _CrdtRichTextFieldBuilderState extends State<CrdtRichTextFieldBuilder>
 
   @override
   void remoteReported(RichTextDelta delta) {
-    if (_stepEnd != null) {
+    if (_stepEnd != null && delta.isNotEmpty) {
       _stepEnd = _endOf(delta);
     }
   }
@@ -575,12 +594,14 @@ class _CrdtRichTextFieldBuilderState extends State<CrdtRichTextFieldBuilder>
   @override
   void selectionSettled() {
     if (_c.pendingAttributes.isNotEmpty && !_pendingStillValid()) {
-      _c.pendingAttributes = const {};
+      _c._setPending(const {});
     }
   }
 
-  // A pending style stays off the newlines: the handler reads the attributes
-  // of a '\n' as block attributes.
+  // A pending key is not written on a '\n': there it would be a block
+  // attribute. The run before can still expand over the '\n', which shows
+  // nothing, as an inline key on a '\n' is ignored; `inherit: false` would
+  // write a removal mark for each newline instead.
   static void _insert(
     CRDTFugueRichTextHandler handler,
     int index,

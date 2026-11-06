@@ -10,7 +10,8 @@
   history view, which opens a handler on first read. [112](https://github.com/MattiaPispisa/crdt/issues/112)
 - `Handler.value`: a custom handler that overrides it appears in nested values (`resolved`, `toNested`).
 - `CRDTFugueRichTextHandler`: Fugue text with attributes, expand modes, block attributes, undo and
-  Quill-shaped `RichTextDelta` deltas. See [Rich text](README.md#rich-text).
+  Quill-shaped `RichTextDelta` deltas; `checkAttribute` tests a value without writing. See
+  [Rich text](README.md#rich-text).
   [209](https://github.com/MattiaPispisa/crdt/issues/209)
 - `CRDTFugueRichTextHandler` embeds: `insertEmbed` and `updateEmbed` put objects (images, videos)
   with map data in the text, one U+FFFC rune each, with undo and snapshots; `checkEmbed` tests data

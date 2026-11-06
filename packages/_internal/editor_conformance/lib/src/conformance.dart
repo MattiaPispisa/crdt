@@ -148,6 +148,45 @@ void runEditorConformanceTests(
       expect(editor.selection, const TextSelection.collapsed(offset: 6));
     });
 
+    testWidgets('a batch of remote changes keeps the caret at the end', (
+      tester,
+    ) async {
+      handler.insert(0, 'abc');
+      await mount(tester);
+      editor.selection = const TextSelection.collapsed(offset: 3);
+
+      final peer = remotePeer();
+      peer.handler
+        ..insert(0, 'X')
+        ..insert(0, 'Y')
+        ..insert(0, 'Z');
+      receive(peer.document);
+      await tester.pump();
+
+      expect(editor.editorText, 'ZYXabc');
+      expect(editor.selection, const TextSelection.collapsed(offset: 6));
+    });
+
+    testWidgets('a remote replacement keeps the caret at the end', (
+      tester,
+    ) async {
+      handler.insert(0, 'hello world');
+      await mount(tester);
+      editor.selection = const TextSelection.collapsed(offset: 11);
+
+      final peer = remotePeer();
+      peer.document.runInTransaction(() {
+        peer.handler
+          ..delete(0, 5)
+          ..insert(0, 'HEY');
+      });
+      receive(peer.document);
+      await tester.pump();
+
+      expect(editor.editorText, 'HEY world');
+      expect(editor.selection, const TextSelection.collapsed(offset: 9));
+    });
+
     testWidgets('a remote deletion shows', (tester) async {
       handler.insert(0, 'hello world');
       await mount(tester);

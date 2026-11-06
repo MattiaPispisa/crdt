@@ -67,7 +67,73 @@ void main() {
         'abc',
         'ZZabc',
       );
-      expect(pushed.index, 5);
+      expect(pushed.single.index, 5);
+    });
+
+    test('leaves an insert at the start of the range out of the delete', () {
+      expect(
+        rebaseDelta(
+          const TextDelta(index: 1, deleted: 2, inserted: 'he'),
+          'teh',
+          'tXeh',
+        ),
+        [const TextDelta(index: 2, deleted: 2, inserted: 'he')],
+      );
+    });
+
+    test('leaves an insert at the end of the range out of the delete', () {
+      expect(
+        rebaseDelta(
+          const TextDelta(index: 1, deleted: 2, inserted: 'he'),
+          'teh',
+          'tehX',
+        ),
+        [const TextDelta(index: 1, deleted: 2, inserted: 'he')],
+      );
+    });
+
+    test('splits the delete around an insert inside the range', () {
+      expect(
+        rebaseDelta(
+          const TextDelta(index: 1, deleted: 2, inserted: 'he'),
+          'teh',
+          'teXXh',
+        ),
+        [
+          const TextDelta(index: 1, deleted: 1, inserted: 'he'),
+          const TextDelta(index: 4, deleted: 1, inserted: ''),
+        ],
+      );
+    });
+
+    test('moves the whole range past an edit before it', () {
+      expect(
+        rebaseDelta(
+          const TextDelta(index: 3, deleted: 1, inserted: 'x'),
+          'abcd',
+          'Zabcd',
+        ),
+        [const TextDelta(index: 4, deleted: 1, inserted: 'x')],
+      );
+    });
+
+    test('deletes only what a remote deletion left of the range', () {
+      expect(
+        rebaseDelta(
+          const TextDelta(index: 1, deleted: 3, inserted: 'x'),
+          'abcdef',
+          'abef',
+        ),
+        [const TextDelta(index: 1, deleted: 1, inserted: 'x')],
+      );
+      expect(
+        rebaseDelta(
+          const TextDelta(index: 2, deleted: 3, inserted: 'x'),
+          'abcdef',
+          'adef',
+        ),
+        [const TextDelta(index: 1, deleted: 2, inserted: 'x')],
+      );
     });
 
     test('clamps to the merged text', () {
@@ -76,8 +142,8 @@ void main() {
         'abc',
         'a',
       );
-      expect(pushed.index, 1);
-      expect(pushed.deleted, 0);
+      expect(pushed.single.index, 1);
+      expect(pushed.single.deleted, 0);
     });
   });
 

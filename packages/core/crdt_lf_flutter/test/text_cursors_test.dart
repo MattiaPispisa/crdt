@@ -449,6 +449,46 @@ void main() {
   });
 
   group('CrdtTextFieldBuilder.onSelectionAnchorsChanged', () {
+    testWidgets('follow a rewrite that keeps the text of a push', (
+      tester,
+    ) async {
+      final doc = CRDTDocument(peerId: PeerId.generate());
+      final note = CRDTFugueTextHandler(doc, 'note')..insert(0, 'ab');
+      FugueElementID? published;
+      await tester.pumpWidget(
+        CrdtProvider.value(
+          value: doc,
+          child: MaterialApp(
+            home: Scaffold(
+              body: CrdtTextFieldBuilder(
+                id: 'note',
+                onSelectionAnchorsChanged: (_, extent) => published = extent,
+                builder: (context, controller) =>
+                    TextField(controller: controller),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.showKeyboard(find.byType(TextField));
+      final controller =
+          tester.widget<TextField>(find.byType(TextField)).controller!;
+
+      doc.runInTransaction(() {
+        controller.value = const TextEditingValue(
+          text: 'abx',
+          selection: TextSelection.collapsed(offset: 3),
+        );
+        note
+          ..delete(2, 1)
+          ..insert(2, 'x');
+      });
+      await tester.pump();
+
+      expect(controller.text, 'abx');
+      expect(published, note.stablePositionAt(3));
+    });
+
     testWidgets('publishes the anchors of the local selection', (tester) async {
       final doc = CRDTDocument(peerId: PeerId.generate());
       final note = CRDTFugueTextHandler(doc, 'note')..insert(0, 'hello');

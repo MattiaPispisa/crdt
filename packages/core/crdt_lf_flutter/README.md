@@ -412,8 +412,8 @@ document, and builds its `builder` once.
 
 A local edit goes through `binding.push`. Inside it, write the edit into the
 handler. The binding drops the echo of that write, so the editor never applies
-its own edit twice. A reset that arrives during the write is delivered after
-it. When the editor is still behind the handler (`binding.isBehind`, in the
+its own edit twice, also when an outer transaction delays the echo. A reset that
+arrives during the write is delivered after it. When the editor is still behind the handler (`binding.isBehind`, in the
 middle of a burst), the binding reads the handler after the write and calls
 `onReset`.
 

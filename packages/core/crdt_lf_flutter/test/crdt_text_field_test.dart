@@ -509,6 +509,103 @@ void main() {
       expect(controller.text, note.value);
     });
 
+    testWidgets('keeps the caret on a write served inside a push', (
+      tester,
+    ) async {
+      debugVerifyCrdtTextFieldProjection = false;
+      addTearDown(() => debugVerifyCrdtTextFieldProjection = true);
+      final note = CRDTFugueTextHandler(doc, 'note')..insert(0, 'ab');
+      var armed = true;
+      final watcher = note.watch().listen((_) {
+        if (armed && note.value == 'abx') {
+          armed = false;
+          note.insert(3, '!');
+        }
+      });
+      addTearDown(watcher.cancel);
+      await tester.pumpWidget(host());
+      final controller =
+          tester.widget<TextField>(find.byType(TextField)).controller!
+            ..selection = const TextSelection.collapsed(offset: 2)
+            ..value = const TextEditingValue(
+              text: 'abx',
+              selection: TextSelection.collapsed(offset: 3),
+            );
+      await tester.pumpAndSettle();
+
+      expect(armed, isFalse);
+      expect(controller.text, 'abx!');
+      expect(controller.selection, const TextSelection.collapsed(offset: 3));
+    });
+
+    group('a composition commits over a remote insert in its range', () {
+      // Pinned: the peer's text has to survive the commit on both sides.
+      final local = PeerId.parse('00000000-0000-4000-8000-00000000000a');
+      final peer = PeerId.parse('00000000-0000-4000-8000-00000000000b');
+
+      for (final fugue in [true, false]) {
+        Handler<dynamic> open(CRDTDocument document) {
+          if (fugue) {
+            return CRDTFugueTextHandler(document, 'note');
+          }
+          return CRDTTextHandler(document, 'note');
+        }
+
+        void insert(Handler<dynamic> handler, int index, String text) =>
+            handler is CRDTFugueTextHandler
+                ? handler.insert(index, text)
+                : (handler as CRDTTextHandler).insert(index, text);
+
+        Future<void> commitOver(
+          WidgetTester tester, {
+          required int at,
+          required String expected,
+        }) async {
+          doc = CRDTDocument(peerId: local);
+          insert(open(doc), 0, 'teh');
+          await tester.pumpWidget(host());
+          await tester.showKeyboard(find.byType(TextField));
+          tester.testTextInput.updateEditingValue(
+            const TextEditingValue(
+              text: 'the',
+              selection: TextSelection.collapsed(offset: 3),
+              composing: TextRange(start: 0, end: 3),
+            ),
+          );
+          await tester.pump();
+
+          final remote = CRDTDocument(peerId: peer);
+          final remoteNote = open(remote);
+          remote.importChanges(doc.exportChanges());
+          insert(remoteNote, at, 'REMOTE');
+          doc.importChanges(
+            remote.exportChanges(fromVersionVector: doc.getVersionVector()),
+          );
+          await tester.pump();
+
+          remote.importChanges(
+            doc.exportChanges(fromVersionVector: remote.getVersionVector()),
+          );
+          expect(remoteNote.value, expected);
+          expect(doc.handlerById('note')!.value, expected);
+          expect(
+            tester.widget<TextField>(find.byType(TextField)).controller!.text,
+            expected,
+          );
+        }
+
+        final kind = fugue ? 'Fugue' : 'index';
+
+        testWidgets('at its start, on $kind text', (tester) async {
+          await commitOver(tester, at: 1, expected: 'tREMOTEhe');
+        });
+
+        testWidgets('inside it, on $kind text', (tester) async {
+          await commitOver(tester, at: 2, expected: 'theREMOTE');
+        });
+      }
+    });
+
     // More than one seed: one stream of random edits is one sample, and the
     // shapes that break this widget are rare enough that one sample misses
     // them.

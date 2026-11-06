@@ -314,6 +314,14 @@ base class CRDTFugueRichTextHandler
     _EmbedValue.prepare(embed, maxEmbedBytes);
   }
 
+  /// Throws the [ArgumentError] that [format] throws for [value], and writes
+  /// nothing.
+  ///
+  /// An editor can refuse a value before it keeps it for the text typed next.
+  void checkAttribute(Object? value) {
+    _MarkValue.check(value);
+  }
+
   /// Replaces the data of the embed at [index], **in runes**, with [embed].
   ///
   /// [embed] follows the rules of [insertEmbed]. The embed keeps its place
