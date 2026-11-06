@@ -24,14 +24,14 @@ class _EmbedValue {
   // so this peer never writes data the others refuse.
   static const int maxDepth = 16;
 
-  // Checks [embed], then gives its frozen copy and its bytes.
+  // Checks [embed], then gives its bytes and the frozen data they decode to,
+  // which is what the peers read.
   static ({Map<String, Object?> data, Uint8List bytes}) prepare(
     Map<String, Object?> embed,
     int? maxBytes,
   ) {
     _check(embed, 0);
-    final data = freezeEmbed(embed);
-    final bytes = encode(data);
+    final bytes = encode(freezeEmbed(embed));
     if (maxBytes != null && bytes.length > maxBytes) {
       throw ArgumentError.value(
         embed,
@@ -39,7 +39,7 @@ class _EmbedValue {
         'takes ${bytes.length} bytes, more than maxEmbedBytes ($maxBytes)',
       );
     }
-    return (data: data, bytes: bytes);
+    return (data: readData(bytes, 0).data, bytes: bytes);
   }
 
   static void _check(Object? value, int depth) {

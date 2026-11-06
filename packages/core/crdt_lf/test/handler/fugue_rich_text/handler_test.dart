@@ -528,17 +528,33 @@ void main() {
       final source = CRDTDocument(peerId: peerA);
       // dart2js cannot tell 12.0 from 12, so an integral double is an int on
       // every platform; 1e20 is past the safe int range, so it stays a double.
-      open(source)
-        ..insert(0, 'abc')
+      final text = open(source)
+        ..insert(0, 'abc', attributes: {'h': 3.0})
         ..format(0, 1, 'w', 12.0)
         ..format(1, 1, 'big', 1e20);
       final remote = CRDTDocument(peerId: peerB)
         ..importChanges(source.exportChanges());
-      final remoteText = open(remote);
 
-      expect(remoteText.attributesAt(0)['w'], isA<int>());
-      expect(remoteText.attributesAt(0)['w'], 12);
-      expect(remoteText.attributesAt(1)['big'], 1e20);
+      for (final read in [text, open(remote)]) {
+        expect(read.attributesAt(0)['w'], isA<int>());
+        expect(read.attributesAt(0)['w'], 12);
+        expect(read.attributesAt(0)['h'], isA<int>());
+        expect(read.attributesAt(1)['big'], 1e20);
+      }
+    });
+
+    test('an int at the limit of the safe range survives a snapshot', () {
+      const limit = 4503599627370495;
+      final source = CRDTDocument(peerId: peerA);
+      open(source)
+        ..insert(0, 'ab')
+        ..format(0, 1, 'k', limit)
+        ..format(1, 1, 'k', -limit);
+      final restored = CRDTDocument(peerId: peerB)
+        ..importSnapshot(source.takeSnapshot());
+
+      expect(open(restored).attributesAt(0)['k'], limit);
+      expect(open(restored).attributesAt(1)['k'], -limit);
     });
 
     test('refuses a value it cannot encode', () {
@@ -557,6 +573,25 @@ void main() {
       );
     });
 
+    test('refuses a double that is not finite, before it writes', () {
+      final doc = CRDTDocument();
+      final text = open(doc)..insert(0, 'ab');
+      final changes = doc.exportChanges().length;
+
+      for (final value in [
+        double.nan,
+        double.infinity,
+        double.negativeInfinity,
+      ]) {
+        expect(() => text.format(0, 2, 'k', value), throwsArgumentError);
+        expect(
+          () => text.insert(0, 'x', attributes: {'k': value}),
+          throwsArgumentError,
+        );
+      }
+      expect(doc.exportChanges(), hasLength(changes));
+    });
+
     group('decoding refuses a broken mark', () {
       Matcher refused(String message) => throwsA(
             isA<FormatException>()
@@ -568,6 +603,15 @@ void main() {
         'Truncated mark value': [1, 0x6B],
         'Unknown mark value tag 9': [1, 0x6B, 9],
         'Truncated mark double': [1, 0x6B, 4, 0, 0],
+        // Zigzag 2^54.
+        'Mark int out of the safe range': [
+          ...[1, 0x6B, 3, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x20],
+          ...[2, 2],
+        ],
+        'Mark double is not finite': [
+          ...[1, 0x6B, 4, 0x7F, 0xF8, 0, 0, 0, 0, 0, 0],
+          ...[2, 2],
+        ],
         'Truncated rich text anchor': [1, 0x6B, 0],
         'Unknown rich text anchor side 7': [1, 0x6B, 0, 7],
       };
@@ -671,6 +715,16 @@ void main() {
         text.insert(3, 'z', attributes: {'header': 1});
         expect(text.attributesAt(3), {'header': 1});
         expect(text.attributesAt(2), isEmpty, reason: 'the unmark kept out');
+      });
+
+      test('a key removed from an embed alone stays off its neighbours', () {
+        final text = open(CRDTDocument(peerId: peerA))
+          ..insert(0, 'ab', attributes: {'bold': true})
+          ..insertEmbed(2, {'image': 'a.png'})
+          ..format(2, 1, 'bold', null, expand: MarkExpand.none)
+          ..insert(2, 'c');
+        expect(text.attributesAt(2), {'bold': true});
+        expect(text.attributesAt(3), isEmpty);
       });
 
       test('an insert anchors its newlines as blocks', () {
@@ -850,6 +904,182 @@ void main() {
           _s('abc'),
         ]);
       });
+
+      group('of a format, over the other marks of its key', () {
+        /// Undoes and redoes a format of a value the key never held, so the
+        /// format always writes, on a [text] nobody else is writing to.
+        void formatAndTakeBack(
+          CRDTFugueRichTextHandler text,
+          CRDTUndoManager undo,
+          int index,
+          int count,
+          Object value, {
+          MarkExpand expand = MarkExpand.after,
+        }) {
+          final before = _read(text);
+          text.format(index, count, 'k', value, expand: expand);
+          final after = _read(text);
+          undo.undo();
+          expect(_read(text), before);
+          undo.redo();
+          expect(_read(text), after);
+        }
+
+        // Peers and seeds are pinned: the merged text depends on both.
+        for (final seed in [1, 2, 3, 4, 5, 6, 7, 8]) {
+          test('matches a scan of every mark, seed $seed', () {
+            final random = Random(seed);
+            final a = CRDTDocument(peerId: peerA);
+            final textA = open(a)..insert(0, 'abcdefgh' * 30);
+            final b = fork(a, peerB);
+            final textB = open(b);
+            final undoA = track(a, textA);
+            final undoB = track(b, textB);
+            var token = 0;
+
+            for (var step = 0; step < 300; step++) {
+              final onA = random.nextBool();
+              final text = onA ? textA : textB;
+              final length = text.length;
+              final index = random.nextInt(length);
+              final expand =
+                  MarkExpand.values[random.nextInt(MarkExpand.values.length)];
+              final short = random.nextInt(8) + 1;
+              final count = random.nextInt(4) == 0 ? length - index : short;
+              token++;
+              switch (random.nextInt(10)) {
+                case 0:
+                  text.insert(index, 'xy', attributes: {'k': token});
+                case 1:
+                  text.insert(index, 'z\nz');
+                case 2:
+                  text.delete(index, short);
+                case 3:
+                  sync(a, b);
+                  sync(b, a);
+                case 4:
+                  (onA ? undoA : undoB).undo();
+                case 5:
+                  (onA ? undoA : undoB).redo();
+                case 6:
+                  text.format(index, count, 'other', token, expand: expand);
+                default:
+                  formatAndTakeBack(
+                    text,
+                    onA ? undoA : undoB,
+                    index,
+                    count,
+                    token,
+                    expand: expand,
+                  );
+              }
+            }
+
+            sync(a, b);
+            sync(b, a);
+            expect(_read(textA), _read(textB));
+          });
+        }
+
+        test('a key with a single mark', () {
+          final doc = CRDTDocument(peerId: peerA);
+          final text = open(doc)
+            ..insert(0, 'abcdef')
+            ..format(1, 2, 'k', 1);
+          final undo = track(doc, text);
+
+          formatAndTakeBack(text, undo, 2, 3, 2);
+          formatAndTakeBack(text, undo, 4, 1, 3);
+        });
+
+        test('a mark over the whole text', () {
+          final doc = CRDTDocument(peerId: peerA);
+          final text = open(doc)
+            ..insert(0, 'abcdef')
+            ..format(0, 6, 'k', 1, expand: MarkExpand.both);
+          final undo = track(doc, text);
+
+          formatAndTakeBack(text, undo, 2, 2, 2);
+          formatAndTakeBack(text, undo, 0, 6, 3, expand: MarkExpand.both);
+        });
+
+        test('marks anchored on tombstones', () {
+          final doc = CRDTDocument(peerId: peerA);
+          final text = open(doc)
+            ..insert(0, 'abcdefgh')
+            ..format(2, 2, 'k', 1, expand: MarkExpand.none)
+            ..format(4, 2, 'k', 2, expand: MarkExpand.none)
+            ..delete(2, 4);
+          final undo = track(doc, text);
+
+          formatAndTakeBack(text, undo, 0, 4, 3);
+          text.insert(2, 'x');
+          formatAndTakeBack(text, undo, 1, 2, 4);
+        });
+
+        test('marks added after the first undo, past a block split', () {
+          final doc = CRDTDocument(peerId: peerA);
+          final text = open(doc)
+            ..insert(0, 'ab' * 100)
+            ..format(100, 1, 'k', 0);
+          final undo = track(doc, text);
+          formatAndTakeBack(text, undo, 100, 1, 1);
+
+          // A long mark first, then short ones in front of its end.
+          text.format(2, 150, 'k', 2, expand: MarkExpand.none);
+          for (var i = 3; i < 90; i += 2) {
+            text.format(i, 1, 'k', i, expand: MarkExpand.none);
+          }
+
+          formatAndTakeBack(text, undo, 140, 2, 3);
+          formatAndTakeBack(text, undo, 0, 200, 4);
+        });
+
+        test('after a snapshot restore', () {
+          final source = CRDTDocument(peerId: peerA);
+          open(source)
+            ..insert(0, 'abcdef')
+            ..format(0, 3, 'k', 1)
+            ..format(2, 3, 'k', 2)
+            ..delete(1, 1);
+          final doc = CRDTDocument(peerId: peerB)
+            ..importSnapshot(source.takeSnapshot());
+          final text = open(doc);
+          final undo = track(doc, text);
+
+          formatAndTakeBack(text, undo, 1, 3, 3);
+        });
+
+        test('a mark waits for the element it is anchored on', () {
+          final doc = CRDTDocument(peerId: peerA);
+          final text = open(doc)..insert(0, 'abcd');
+          final undo = track(doc, text);
+
+          // Element ids come from the peer and a counter, so both runs of
+          // `peerB` name the same elements. The insert lands last, folded
+          // into the state that already holds the mark.
+          final early = CRDTDocument(peerId: peerB);
+          final earlyText = open(early)..insert(0, 'xyz');
+          final version = early.getVersionVector();
+          earlyText.format(0, 2, 'k', 1, expand: MarkExpand.none);
+          final format = early.exportChanges(fromVersionVector: version).single;
+          doc.applyChange(
+            Change.fromPayloadBytes(
+              id: format.id,
+              deps: doc.version,
+              author: format.author,
+              payloadBytes: format.payloadBytes(),
+            ),
+          );
+          formatAndTakeBack(text, undo, 0, 2, 2);
+
+          final late = CRDTDocument(peerId: peerB);
+          open(late).insert(0, 'xyz');
+          late.exportChanges().forEach(doc.applyChange);
+          expect(text.length, 7);
+          formatAndTakeBack(text, undo, 0, text.length, 3);
+        });
+      });
     });
 
     group('embeds', () {
@@ -955,6 +1185,33 @@ void main() {
         );
       });
 
+      test('holds the numbers its peers read, keys in the order given', () {
+        final doc = CRDTDocument(peerId: peerA);
+        final text = open(doc)
+          ..insertEmbed(0, {
+            'z': 12.0,
+            'a': {
+              'list': [1.0, 1.5],
+            },
+          });
+        final peer = CRDTDocument(peerId: peerB)
+          ..importChanges(doc.exportChanges());
+
+        for (final embed in [
+          text.value.single.embed!,
+          open(peer).value.single.embed!,
+        ]) {
+          expect(embed.keys, ['z', 'a']);
+          expect(embed['z'], isA<int>());
+          final list = (embed['a']! as Map)['list']! as List<Object?>;
+          expect(list.first, isA<int>());
+          expect(list.last, 1.5);
+        }
+
+        text.updateEmbed(0, {'w': 3.0});
+        expect(text.value.single.embed!['w'], isA<int>());
+      });
+
       test('refuses data it cannot encode, before it writes', () {
         final doc = CRDTDocument();
         final text = open(doc);
@@ -1002,6 +1259,14 @@ void main() {
           'Unknown embed value tag 9': [7, 1, 1, 0x6B, 9],
           'Truncated embed value': [7, 1, 1, 0x6B],
           'nested deeper than 16': lists(17),
+          // Zigzag 2^54.
+          'Mark int out of the safe range': [
+            ...[7, 1, 1, 0x6B, 3],
+            ...[0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x20],
+          ],
+          'Mark double is not finite': [
+            ...[7, 1, 1, 0x6B, 4, 0x7F, 0xF0, 0, 0, 0, 0, 0, 0],
+          ],
         };
         for (final MapEntry(key: message, value: data) in bodies.entries) {
           test(message, () {
@@ -1304,6 +1569,28 @@ void main() {
           ..insert(3, 'c')
           ..update(2, 'x');
         expect(text.text, 'a\uFFFCxc');
+      });
+
+      test('an index outside the text throws, before it writes', () {
+        final doc = CRDTDocument(peerId: peerA);
+        final text = open(doc)..insert(0, 'abc');
+        final changes = doc.exportChanges().length;
+
+        for (final index in [-1, 4]) {
+          expect(() => text.insert(index, 'X'), throwsRangeError);
+          expect(() => text.insert(index, ''), throwsRangeError);
+          expect(() => text.insertEmbed(index, image), throwsRangeError);
+          expect(() => text.update(index, 'X'), throwsRangeError);
+        }
+        expect(doc.exportChanges(), hasLength(changes));
+        expect(text.text, 'abc');
+
+        text
+          ..update(3, 'X')
+          ..insert(3, 'd')
+          ..update(3, 'XY')
+          ..insertEmbed(4, image);
+        expect(text.text, 'abcX\uFFFC');
       });
 
       group('in a snapshot', () {

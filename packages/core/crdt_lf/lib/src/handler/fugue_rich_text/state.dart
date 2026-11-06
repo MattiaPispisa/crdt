@@ -22,6 +22,8 @@ class RichTextState extends FugueState<String, List<RichTextSpan>> {
 
   final List<_Mark> _textAnchored = [];
 
+  _MarkIndex? _markIndex;
+
   _ResolvedMarks? _resolvedCache;
 
   List<RichTextSpan>? _spansCache;
@@ -54,6 +56,7 @@ class RichTextState extends FugueState<String, List<RichTextSpan>> {
   void _putMark(_Mark mark) {
     _marks[mark.stamp] = mark;
     _keys.add(mark.key);
+    _markIndex?.add(mark);
     for (final anchor in [mark.start, mark.end]) {
       if (anchor.side == _Anchor.after) {
         _afterAnchored.add(anchor.id!);
@@ -298,6 +301,9 @@ class RichTextState extends FugueState<String, List<RichTextSpan>> {
 
   _ResolvedMarks _resolved() =>
       _resolvedCache ??= _ResolvedMarks.resolve(_tree, _marks.values);
+
+  // Built on first use: only an undo reads it.
+  _MarkIndex _indexed() => _markIndex ??= _MarkIndex(_marks.values);
 
   String _text() => _textCache ??= _tree.values().join();
 

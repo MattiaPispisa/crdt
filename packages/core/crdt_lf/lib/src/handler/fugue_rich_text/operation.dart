@@ -24,7 +24,7 @@ class _FugueRichTextMarkOperation extends Operation {
       id: handler.id,
       type: handler.markType,
       key: key,
-      value: value,
+      value: _MarkValue.normalized(value),
       start: start,
       end: end,
     );

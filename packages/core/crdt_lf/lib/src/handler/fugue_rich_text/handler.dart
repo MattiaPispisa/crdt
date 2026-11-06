@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 import 'dart:collection';
+import 'dart:math';
 import 'dart:typed_data';
 
 import 'package:crdt_lf/crdt_lf.dart';
@@ -11,6 +12,7 @@ import 'package:crdt_lf/src/handler/fugue/fugue_snapshot.dart';
 import 'package:crdt_lf/src/handler/fugue/fugue_text_sequence_handler.dart';
 import 'package:crdt_lf/src/snapshot/blob_version.dart';
 import 'package:crdt_lf/src/utils/attributes.dart';
+import 'package:crdt_lf/src/utils/binary_search.dart';
 import 'package:crdt_lf/src/utils/embed_data.dart';
 
 part 'anchor_slots.dart';
@@ -18,6 +20,7 @@ part 'delta_builder.dart';
 part 'embed.dart';
 part 'inversion.dart';
 part 'mark.dart';
+part 'mark_index.dart';
 part 'operation.dart';
 part 'resolved_marks.dart';
 part 'state.dart';
@@ -41,10 +44,10 @@ enum MarkExpand {
 ///
 /// ## Description
 /// A Fugue text whose runes carry **attributes**: a key and a value, which is
-/// `null`, `bool`, `int`, `double` or `String`. [format] sets or removes a
-/// key on a range, and [value] reads the text as [RichTextSpan]s. Insert,
-/// delete and update work as in [CRDTFugueTextHandler]. The text can also
-/// hold **embeds** (see below). See the README section "Rich text".
+/// `null`, `bool`, `int`, a finite `double` or `String`. [format] sets or
+/// removes a key on a range, and [value] reads the text as [RichTextSpan]s.
+/// Insert, delete and update work as in [CRDTFugueTextHandler]. The text can
+/// also hold **embeds** (see below). See the README section "Rich text".
 ///
 /// ## Convergence
 /// A format is a mark anchored on the elements at the edges of its range.
@@ -65,7 +68,7 @@ enum MarkExpand {
 /// ## Block attributes
 /// A single `'\n'` formatted with [MarkExpand.none] holds the attributes of
 /// its line, such as a header. They never spread to the text typed next to
-/// it, and neither does their removal.
+/// it, and neither does their removal. The same goes for a single embed.
 ///
 /// ## Embeds
 /// An embed is an object in the text, such as an image: one position, shown
@@ -201,8 +204,9 @@ base class CRDTFugueRichTextHandler
   /// The text and each key it changes are separate changes, written in one
   /// transaction. A key that changes nothing writes nothing.
   ///
-  /// Throws an [ArgumentError] for a value [format] refuses, or for a [text]
-  /// that holds U+FFFC, before it writes. Use [insertEmbed] for an embed.
+  /// Throws a [RangeError] for an [index] outside `0..length`, and an
+  /// [ArgumentError] for a value [format] refuses or for a [text] that holds
+  /// U+FFFC, before it writes. Use [insertEmbed] for an embed.
   @override
   void insert(
     int index,
@@ -210,22 +214,39 @@ base class CRDTFugueRichTextHandler
     Map<String, Object?> attributes = const {},
     bool inherit = true,
   }) {
+    RangeError.checkValueInInterval(index, 0, length, 'index');
     if (text.isEmpty) {
       return;
     }
     _refuseObjectReplacement(text);
+    _insertWith(
+      index,
+      attributes,
+      inherit: inherit,
+      build: (leftOrigin, rightOrigin) => FugueTextInsertOperation.ofText(
+        this,
+        leftOrigin: leftOrigin,
+        rightOrigin: rightOrigin,
+        text: text,
+      ),
+    );
+  }
+
+  void _insertWith(
+    int index,
+    Map<String, Object?> attributes, {
+    required bool inherit,
+    required FugueTextInsertOperation Function(
+      FugueElementID leftOrigin,
+      FugueElementID rightOrigin,
+    ) build,
+  }) {
     for (final value in attributes.values) {
       _MarkValue.check(value);
     }
 
     final (leftOrigin, rightOrigin) = _insertOrigins(index);
-
-    final insert = FugueTextInsertOperation.ofText(
-      this,
-      leftOrigin: leftOrigin,
-      rightOrigin: rightOrigin,
-      text: text,
-    );
+    final insert = build(leftOrigin, rightOrigin);
 
     if (attributes.isEmpty && inherit) {
       doc.registerOperation(insert);
@@ -244,17 +265,18 @@ base class CRDTFugueRichTextHandler
   /// `String` keys to `null`, `bool`, `int` (within ±(2^52 - 1)), a finite
   /// `double`, `String`, `Uint8List`, `List` or `Map` of these, nested at
   /// most 16 deep. The handler keeps an unmodifiable copy, in the key order
-  /// given. Put the properties of the object, such as a URL or a width, in
-  /// [embed], and the formats a user applies in [attributes].
+  /// given, where an integral `double` within that range is an `int`, as the
+  /// other peers read it. Put the properties of the object, such as a URL or
+  /// a width, in [embed], and the formats a user applies in [attributes].
   ///
   /// [attributes] cover the embed alone, like the block attributes of a
   /// `'\n'`: they never spread to text typed next to it. With [inherit], the
   /// embed also gets the formats around it that expand over it, as in
   /// [insert].
   ///
-  /// Throws an [ArgumentError] for data out of these rules or above
-  /// [maxEmbedBytes], or for an attribute value [format] refuses, before it
-  /// writes.
+  /// Throws a [RangeError] for an [index] outside `0..length`, and an
+  /// [ArgumentError] for data out of these rules or above [maxEmbedBytes] or
+  /// for an attribute value [format] refuses, before it writes.
   ///
   /// ```dart
   /// text.insertEmbed(5, {'image': 'https://example.com/cat.png', 'w': 320});
@@ -265,31 +287,22 @@ base class CRDTFugueRichTextHandler
     Map<String, Object?> attributes = const {},
     bool inherit = true,
   }) {
-    for (final value in attributes.values) {
-      _MarkValue.check(value);
-    }
+    RangeError.checkValueInInterval(index, 0, length, 'index');
     final prepared = _EmbedValue.prepare(embed, maxEmbedBytes);
-
-    final (leftOrigin, rightOrigin) = _insertOrigins(index);
-    final insert = _FugueRichTextEmbedOperation(
-      id: id,
-      type: _embedType,
-      leftOrigin: leftOrigin,
-      rightOrigin: rightOrigin,
-      element: FugueElementID(doc.peerId, nextCounter()),
-      data: prepared.data,
-      dataBytes: prepared.bytes,
+    _insertWith(
+      index,
+      attributes,
+      inherit: inherit,
+      build: (leftOrigin, rightOrigin) => _FugueRichTextEmbedOperation(
+        id: id,
+        type: _embedType,
+        leftOrigin: leftOrigin,
+        rightOrigin: rightOrigin,
+        element: FugueElementID(doc.peerId, nextCounter()),
+        data: prepared.data,
+        dataBytes: prepared.bytes,
+      ),
     );
-
-    if (attributes.isEmpty && inherit) {
-      doc.registerOperation(insert);
-      return;
-    }
-
-    doc.runInTransaction(() {
-      doc.registerOperation(insert);
-      _markInserted(insert.items, attributes, inherit: inherit);
-    });
   }
 
   /// Throws the [ArgumentError] that [insertEmbed] throws for the data
@@ -328,17 +341,20 @@ base class CRDTFugueRichTextHandler
     );
   }
 
-  /// Writes [text] over the runes from [index], **in runes**.
+  /// Writes [text] over the runes from [index], **in runes**. A [text] that
+  /// runs past the end is cut.
   ///
-  /// Throws an [ArgumentError] when [text] holds U+FFFC or the range covers
-  /// an embed, before it writes. Use [updateEmbed] for an embed.
+  /// Throws a [RangeError] for an [index] outside `0..length`, and an
+  /// [ArgumentError] when [text] holds U+FFFC or the range covers an embed,
+  /// before it writes. Use [updateEmbed] for an embed.
   @override
   void update(int index, String text) {
+    RangeError.checkValueInInterval(index, 0, length, 'index');
     _refuseObjectReplacement(text);
     final embeds = cachedOrComputedState()._embeds.live;
     if (embeds.isNotEmpty) {
       final end = index + RuneOffsets.length(text);
-      for (var i = index < 0 ? 0 : index; i < end && i < length; i++) {
+      for (var i = index; i < end && i < length; i++) {
         if (embeds.containsKey(nodeAt(i))) {
           throw ArgumentError.value(index, 'index', 'covers an embed at $i');
         }
@@ -469,10 +485,13 @@ base class CRDTFugueRichTextHandler
   /// The range is clamped to the text. An empty range, or a format that
   /// changes nothing, writes nothing. [expand] says if text typed later at
   /// an edge gets [key] too. A removal with [MarkExpand.none] covers the
-  /// edges as well, so text typed there stays without [key].
+  /// edges as well, so text typed there stays without [key], except on a
+  /// single `'\n'` or embed, where it keeps to that rune.
   ///
-  /// Throws an [ArgumentError] when [value] is not `null`, `bool`, `int`,
-  /// `double` or `String`, or is an `int` outside ±(2^52 - 1).
+  /// An integral `double` within ±(2^52 - 1) is written as an `int`.
+  ///
+  /// Throws an [ArgumentError] when [value] is not `null`, `bool`, `int`, a
+  /// finite `double` or `String`, or is an `int` outside ±(2^52 - 1).
   void format(
     int index,
     int length,
@@ -489,9 +508,11 @@ base class CRDTFugueRichTextHandler
 
     final first = nodeAt(from);
     final last = nodeAt(to - 1);
+    final state = cachedOrComputedState();
     final block = expand == MarkExpand.none &&
         to - from == 1 &&
-        cachedOrComputedState()._tree.valueOf(first) == '\n';
+        (state._tree.valueOf(first) == '\n' ||
+            state._embeds.live.containsKey(first));
     _markIds(
       first: first,
       last: last,
@@ -743,18 +764,14 @@ base class CRDTFugueRichTextHandler
       if (start == end) {
         return;
       }
-      final text = items.sublist(start, end);
-      pieces.add(
-        (
-          insert: buildInsertOperation(
-            leftOrigin: left,
-            rightOrigin: rightOrigin,
-            items: [for (final item in text) (id: item.id, value: item.value)],
-          ),
-          was: [for (final item in text) item.was],
+      pieces.addAll(
+        super.buildRestoreInserts(
+          leftOrigin: left,
+          rightOrigin: rightOrigin,
+          items: items.sublist(start, end),
         ),
       );
-      left = text.last.id;
+      left = items[end - 1].id;
     }
 
     for (var i = 0; i < items.length; i++) {

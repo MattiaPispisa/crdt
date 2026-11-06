@@ -578,6 +578,18 @@ class _UndoFormatBenchmark extends _UndoRedoBenchmark {
       .format(_kChars ~/ 4, _kChars ~/ 2, 'bold', true);
 }
 
+/// A format on a few runes, of a key every line of the document holds.
+class _UndoSmallFormatBenchmark extends _UndoRedoBenchmark {
+  _UndoSmallFormatBenchmark() : super(_Shape.richTextMarked, _name);
+
+  static const _runes = 5;
+  static const _name = 'a $_runes-char color format';
+
+  @override
+  void step(_Text text) => (text.handler as CRDTFugueRichTextHandler)
+      .format(_kChars ~/ 2, _runes, 'color', '#00ff00');
+}
+
 class _UndoDeleteBenchmark extends _UndoRedoBenchmark {
   _UndoDeleteBenchmark(_Shape shape, this.deleted)
       : super(shape, 'a $deleted-char delete');
@@ -647,6 +659,7 @@ void main() {
   for (final shape in [_Shape.richText, _Shape.richTextMarked]) {
     _UndoFormatBenchmark(shape).report();
   }
+  _UndoSmallFormatBenchmark().report();
   for (final deleted in [1, 100, 500]) {
     for (final shape in _Shape.values) {
       _UndoDeleteBenchmark(shape, deleted).report();

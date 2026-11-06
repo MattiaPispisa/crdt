@@ -194,6 +194,8 @@ void main() {
       for (final call in calls) {
         expect(call, throwsArgumentError);
       }
+      expect(() => text.insertImage(3, cat), throwsRangeError);
+      expect(() => text.insertVideo(3, clip), throwsRangeError);
       expect(doc.changeCountForHandler(text.id), changes);
       expect(text.text, 'ab');
     });

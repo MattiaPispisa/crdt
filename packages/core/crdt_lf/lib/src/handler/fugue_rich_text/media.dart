@@ -361,9 +361,9 @@ extension RichTextMediaInsert on CRDTFugueRichTextHandler {
   /// own `'\n'` right after it, which holds [attributes] as block attributes
   /// (such as `{'align': 'center'}`): one transaction, so one undo step.
   ///
-  /// Throws an [ArgumentError] before it writes, for the fields as the
-  /// constructor does, or for a [displayWidth] that is not finite and above
-  /// 0.
+  /// Throws before it writes: a [RangeError] for an [index] outside
+  /// `0..length`, and an [ArgumentError] for the fields as the constructor
+  /// does, or for a [displayWidth] that is not finite and above 0.
   /// {@endtemplate}
   ///
   /// ```dart
@@ -470,8 +470,8 @@ extension RichTextMediaInsert on CRDTFugueRichTextHandler {
       return;
     }
 
-    // The '\n' goes first: it checks [attributes] before anything is written,
-    // and the embed checked here then cannot throw.
+    // The '\n' goes first: it checks the index and [attributes] before anything
+    // is written, and the embed checked here then cannot throw.
     checkEmbed(embed);
     doc.runInTransaction(() {
       insert(index, '\n', attributes: attributes, inherit: inherit);
@@ -551,16 +551,15 @@ final class _Reader {
     return null;
   }
 
-  // The largest int embed data holds.
-  static const int _maxInt = 4503599627370495;
-
   // On the web 12.0 is an int: a size is checked by value.
   int? size(String key) {
     if (!_embed.containsKey(key)) {
       return null;
     }
     final value = _embed[key];
-    if (value is num && value.abs() <= _maxInt && value == value.truncate()) {
+    if (value is num &&
+        value.abs() <= maxEmbedInt &&
+        value == value.truncate()) {
       return value.toInt();
     }
     valid = false;

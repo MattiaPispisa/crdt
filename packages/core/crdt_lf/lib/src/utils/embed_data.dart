@@ -5,6 +5,12 @@ import 'dart:typed_data';
 
 import 'package:crdt_lf/src/utils/bytes.dart';
 
+/// The largest magnitude of an `int` in a mark value or in embed data.
+///
+/// Zigzag doubles the magnitude, and the result must stay a safe JavaScript
+/// integer (2^53 - 1) so every platform reads the same int.
+const int maxEmbedInt = 4503599627370495;
+
 // Data is frozen once, then shared by the state, the spans and the deltas:
 // freezing a frozen map again gives it back for free.
 final Expando<bool> _frozen = Expando('frozen embed');

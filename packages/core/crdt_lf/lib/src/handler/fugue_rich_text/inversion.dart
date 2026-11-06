@@ -8,7 +8,8 @@ extension _RichTextInversion on CRDTFugueRichTextHandler {
   // mark covers, tombstones included.
   List<Operation> _invertMark(_FugueRichTextMarkOperation operation) {
     final state = cachedOrComputedState();
-    final at = _AnchorSlots(state._tree).at;
+    final slots = _AnchorSlots(state._tree);
+    final at = slots.at;
     const compare = _AnchorSlots.compare;
 
     final from = at(operation.start, start: true);
@@ -20,18 +21,17 @@ extension _RichTextInversion on CRDTFugueRichTextHandler {
     final anchors = <_Slot, _Anchor>{from: operation.start, to: operation.end};
     final opens = <_Slot, List<_Mark>>{};
     final closes = <_Slot, List<_Mark>>{};
-    for (final mark in state._marks.values) {
-      if (mark.key != operation.key) {
-        continue;
-      }
-      final start = at(mark.start, start: true);
-      final end = at(mark.end, start: false);
-      if (start == null || end == null || compare(start, end) >= 0) {
-        continue;
-      }
-      if (compare(end, from) <= 0 || compare(start, to) >= 0) {
-        continue;
-      }
+    final overlapping = state._indexed().overlapping(
+          operation.key,
+          slots,
+          from: from,
+          to: to,
+        );
+    assert(
+      _agreesWithScan(state, operation.key, slots, from, to, overlapping),
+      'the mark index lost track of the marks of ${operation.key}',
+    );
+    for (final (:mark, :start, :end) in overlapping) {
       (opens[compare(start, from) < 0 ? from : start] ??= []).add(mark);
       (closes[compare(end, to) > 0 ? to : end] ??= []).add(mark);
       if (compare(start, from) > 0) {
@@ -79,6 +79,32 @@ extension _RichTextInversion on CRDTFugueRichTextHandler {
       ),
     );
     return inverses;
+  }
+
+  bool _agreesWithScan(
+    RichTextState state,
+    String key,
+    _AnchorSlots slots,
+    _Slot from,
+    _Slot to,
+    List<_PlacedMark> found,
+  ) {
+    const compare = _AnchorSlots.compare;
+    final scanned = <_Mark>{};
+    for (final mark in state._marks.values) {
+      final start = slots.at(mark.start, start: true);
+      final end = slots.at(mark.end, start: false);
+      if (mark.key == key &&
+          start != null &&
+          end != null &&
+          compare(start, end) < 0 &&
+          compare(end, from) > 0 &&
+          compare(start, to) < 0) {
+        scanned.add(mark);
+      }
+    }
+    return found.length == scanned.length &&
+        found.every((placed) => scanned.contains(placed.mark));
   }
 
   // An undone delete puts its elements back under new ids, outside the

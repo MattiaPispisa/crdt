@@ -128,19 +128,18 @@ class _MarkValue {
   static const int _double = 4;
   static const int _string = 5;
 
-  // Zigzag doubles the magnitude, and the result must stay a safe JavaScript
-  // integer (2^53 - 1) so every platform reads the same int.
-  static const int _maxSafeInt = 4503599627370495;
-
   static void check(Object? value) {
     if (value == null || value is bool || value is String) {
       return;
     }
-    if (_safeInt(value) != null || value is double) {
+    if (_safeInt(value) != null || (value is double && value.isFinite)) {
       return;
     }
     if (value is int) {
       throw ArgumentError.value(value, 'value', 'out of the safe int range');
+    }
+    if (value is double) {
+      throw ArgumentError.value(value, 'value', 'must be a finite double');
     }
     throw ArgumentError.value(
       value,
@@ -149,13 +148,16 @@ class _MarkValue {
     );
   }
 
+  // [value] as the peers decode it.
+  static Object? normalized(Object? value) => _safeInt(value) ?? value;
+
   // dart2js cannot tell 12.0 from 12, so an integral number in the safe range
   // is an int on every platform, and gets the same bytes everywhere.
   static int? _safeInt(Object? value) {
     if (value is! num || !value.isFinite || value != value.truncate()) {
       return null;
     }
-    if (value > _maxSafeInt || value < -_maxSafeInt) {
+    if (value > maxEmbedInt || value < -maxEmbedInt) {
       return null;
     }
     return value.toInt();
@@ -180,6 +182,8 @@ class _MarkValue {
       case final String v:
         out.addByte(_string);
         UVarint.writeBytes(Wtf8.encode(v), out);
+      default:
+        throw ArgumentError.value(value, 'value', 'has no mark encoding');
     }
   }
 
@@ -199,6 +203,9 @@ class _MarkValue {
       case _int:
         final rec = UVarint.read(bytes, offset: cursor);
         final z = rec.value;
+        if (z < 0 || z > 2 * maxEmbedInt) {
+          throw const FormatException('Mark int out of the safe range');
+        }
         final v = z.isEven ? z ~/ 2 : -((z + 1) ~/ 2);
         return (value: v, nextOffset: rec.nextOffset);
       case _double:
@@ -206,6 +213,9 @@ class _MarkValue {
           throw const FormatException('Truncated mark double');
         }
         final v = ByteData.sublistView(bytes, cursor, cursor + 8).getFloat64(0);
+        if (!v.isFinite) {
+          throw const FormatException('Mark double is not finite');
+        }
         return (value: v, nextOffset: cursor + 8);
       case _string:
         final rec =
@@ -221,6 +231,8 @@ class _MarkValue {
 // body, then the embed section. The version is its own, so the marks can
 // change without the Fugue blob version.
 class _MarksSection {
+  // `HandlerFormats.blobVersions` sees only the Fugue version, so a peer that
+  // gets a newer section fails at its first read, not at the format gate.
   static const int version = 1;
 
   static Uint8List write(Iterable<_Mark> marks, _EmbedTable embeds) {

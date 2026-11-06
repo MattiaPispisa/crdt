@@ -1100,7 +1100,7 @@ for the conversion.
 #### Rich text
 
 `CRDTFugueRichTextHandler` is a Fugue text whose characters carry
-**attributes**: a key and a value (`null`, `bool`, `int`, `double` or
+**attributes**: a key and a value (`null`, `bool`, `int`, finite `double` or
 `String`; an `int` stays within ±(2^52 - 1)). Two peers that format the same
 text converge: for each key, the newest format wins (highest HLC, then peer
 id).
