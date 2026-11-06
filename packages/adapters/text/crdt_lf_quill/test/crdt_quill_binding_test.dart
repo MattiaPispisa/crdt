@@ -207,11 +207,11 @@ void main() {
     debugVerifyCrdtQuillProjection = false;
     addTearDown(() => debugVerifyCrdtQuillProjection = true);
     a.type(0, 'hello');
-    a.handler.insertEmbed(0, {'image': 'a.png'});
+    a.handler.insertEmbed(0, {'type': 'image', 'src': 'a.png'});
     final writes = <void Function()>[
       () => a.handler.format(1, 2, 'bold', true),
       () => a.handler.update(2, 'E'),
-      () => a.handler.updateEmbed(0, {'image': 'b.png'}),
+      () => a.handler.updateEmbed(0, {'type': 'image', 'src': 'b.png'}),
     ];
     // Listens before the binding, so it writes while the push runs.
     a.binding.detach();
@@ -321,7 +321,7 @@ void main() {
       expect(deltas, [
         RichTextDelta([
           RichTextRetain(1),
-          RichTextUpdateEmbed({'image': 'b.png'}),
+          RichTextUpdateEmbed({'type': 'image', 'src': 'b.png'}),
         ]),
       ]);
       _sync(a, b);
@@ -332,7 +332,7 @@ void main() {
       expect(deltas, [
         RichTextDelta([
           RichTextRetain(2),
-          RichTextInsertEmbed({'image': 'c.png'}),
+          RichTextInsertEmbed({'type': 'image', 'src': 'c.png'}),
         ]),
         RichTextDelta([RichTextRetain(1), const RichTextDelete(1)]),
       ]);
@@ -357,7 +357,7 @@ void main() {
 
     expect(a.handler.value, [
       RichTextSpan('a', {'bold': true}),
-      RichTextSpan.embed({'image': 'a.png'}, {'bold': true}),
+      RichTextSpan.embed({'type': 'image', 'src': 'a.png'}, {'bold': true}),
     ]);
     expect(a.resets, [ResetCause.initial]);
   });
@@ -537,6 +537,140 @@ void main() {
     _expectConverged(a, b);
   });
 
+  group('embed data the handler refuses reaches onUnsupported', () {
+    Object? nested(int depth) => depth == 0 ? 1 : [nested(depth - 1)];
+    final cases = <String, Map<String, Object?>>{
+      'above maxEmbedBytes': {'image': 'x' * 32},
+      'nested too deep': {'image': nested(16)},
+    };
+
+    for (final MapEntry(key: name, value: embed) in cases.entries) {
+      test('$name: the text of a paste is written', () {
+        final refused = <Object?>[];
+        a.quill.onUnsupported = refused.add;
+        a.handler.maxEmbedBytes = 16;
+        a.type(0, 'ab');
+        a.controller.replaceText(
+          1,
+          0,
+          Delta()
+            ..insert('x')
+            ..insert(embed)
+            ..insert('y'),
+          null,
+        );
+
+        expect(refused, [embed]);
+        expect(a.handler.text, 'axyb');
+        expect(a.plain, 'axyb\n');
+        expect(
+          a.controller.selection,
+          const TextSelection.collapsed(offset: 3),
+        );
+
+        final key = embed.keys.single;
+        final embeddable = Embeddable(key, embed[key]);
+        a.controller.replaceText(1, 0, embeddable, null);
+        expect(refused, [embed, embeddable]);
+        expect(a.handler.text, 'axyb');
+        expect(a.resets, [ResetCause.initial]);
+      });
+    }
+
+    for (final (cause, type, value) in [
+      ('embedTypes', 'formula', 'x' as Object),
+      ('checkEmbed', 'image', 'x' * 64),
+    ]) {
+      group('$cause: an embed replaced by refused data stays', () {
+        final image = {'type': 'image', 'src': 'a.png'};
+        late List<Object?> refused;
+
+        setUp(() {
+          refused = [];
+          a.quill
+            ..onUnsupported = refused.add
+            ..embedTypes = {'image'};
+          a.handler.maxEmbedBytes = 32;
+          a.type(0, 'ab');
+          a.controller
+            ..replaceText(1, 0, BlockEmbed.image('a.png'), null)
+            ..updateSelection(
+              const TextSelection.collapsed(offset: 3),
+              ChangeSource.local,
+            );
+        });
+
+        void expectKept(String text) {
+          expect(a.handler.text, text);
+          expect(
+            [
+              for (final span in a.handler.value)
+                if (span.embed != null) span.embed,
+            ],
+            [image],
+          );
+          expect(a.content, quillDocumentFromSpans(a.handler.value));
+        }
+
+        test('in one change', () {
+          a.controller.replaceText(1, 1, Delta()..insert({type: value}), null);
+          expect(refused, [
+            {type: value},
+          ]);
+          expectKept('a\uFFFCb');
+          // Nothing is written: the caret stays.
+          expect(
+            a.controller.selection,
+            const TextSelection.collapsed(offset: 3),
+          );
+          expect(a.resets, [ResetCause.initial]);
+        });
+
+        test('as an Embeddable', () {
+          final embeddable = Embeddable(type, value);
+          a.controller.replaceText(1, 1, embeddable, null);
+          expect(refused, [embeddable]);
+          expectKept('a\uFFFCb');
+          expect(
+            a.controller.selection,
+            const TextSelection.collapsed(offset: 3),
+          );
+        });
+
+        test('and the rest of the change is written', () {
+          a.controller.replaceText(
+            1,
+            2,
+            Delta()
+              ..insert('x')
+              ..insert({type: value}),
+            null,
+          );
+          expect(refused, hasLength(1));
+          expectKept('ax\uFFFC');
+          // After the written text, before the kept embed.
+          expect(
+            a.controller.selection,
+            const TextSelection.collapsed(offset: 2),
+          );
+          expect(a.resets, [ResetCause.initial]);
+        });
+
+        test('when composed into the document', () {
+          a.controller.document.compose(
+            Delta()
+              ..retain(1)
+              ..insert({type: value})
+              ..delete(1),
+            ChangeSource.local,
+          );
+          expect(refused, hasLength(1));
+          expectKept('a\uFFFCb');
+        });
+      });
+    }
+  });
+
   test('an editor that drifted only in an embed is read again', () {
     a.controller.replaceText(0, 0, BlockEmbed.image('a.png'), null);
     _sync(a, b);
@@ -701,6 +835,119 @@ void main() {
     expect(other.document.toPlainText(), 'hi\n');
   });
 
+  group('media', () {
+    final src = Uri.parse('https://example.com/cat.png');
+
+    test('an image with every field reaches another peer and a snapshot '
+        'whole', () async {
+      a.type(0, 'ab');
+      a.handler.insertImage(
+        1,
+        src,
+        alt: 'A cat',
+        width: 640,
+        height: 480,
+        mime: 'image/png',
+        displayWidth: 320,
+      );
+      _sync(a, b);
+      final c = _Peer(PeerId.parse('00000000-0000-4000-8000-0000000000c3'));
+      addTearDown(c.dispose);
+      await _pump();
+      expect(c.document.importSnapshot(a.document.takeSnapshot()), isTrue);
+
+      final image = a.handler.value[1].image!;
+      for (final (name, peer) in [('B', b), ('C', c)]) {
+        final span = peer.handler.value[1];
+        expect(span.image, image, reason: name);
+        expect(span.displayWidth, 320, reason: name);
+        final op = peer.content.toList()[1];
+        expect(op.data, {crdtQuillEmbedType: image.toEmbed()}, reason: name);
+        expect(op.attributes, {'style': 'width: 320'}, reason: name);
+        expect(peer.quill.verifyProjection(), isTrue, reason: name);
+      }
+      expect(a.resets, [ResetCause.initial]);
+      expect(b.resets, [ResetCause.initial]);
+    });
+
+    test('a Quill resize is the display width, and the rest of its style '
+        'reaches the other Quill unchanged', () {
+      a.type(0, 'ab');
+      a.controller.replaceText(1, 0, BlockEmbed.image('$src'), null);
+      _sync(a, b);
+      expect(b.content.toList()[1].data, {'image': '$src'});
+      // As the image menu of flutter_quill_extensions writes it.
+      a.controller.formatText(
+        1,
+        1,
+        const StyleAttribute(
+          'width: 300.0; height: 200.0; alignment: topLeft; ',
+        ),
+      );
+      _sync(a, b);
+
+      final span = a.handler.value[1];
+      expect(span.image?.src, src);
+      expect(span.displayWidth, 300);
+      expect(b.handler.value, a.handler.value);
+      expect(b.content.toList()[1].attributes, {
+        'style': 'width: 300; height: 200.0; alignment: topLeft',
+      });
+
+      // A width from the handler keeps the rest of the style Quill wrote.
+      b.handler.format(1, 1, richTextDisplayWidthKey, 150);
+      _sync(a, b);
+      expect(a.content.toList()[1].attributes, {
+        'style': 'width: 150; height: 200.0; alignment: topLeft',
+      });
+      expect(a.resets, [ResetCause.initial]);
+      expect(b.resets, [ResetCause.initial]);
+    });
+
+    test('a block image keeps its alignment on its newline', () {
+      a.handler.insertImage(
+        0,
+        src,
+        block: true,
+        attributes: {'align': 'center'},
+      );
+      _sync(a, b);
+
+      expect(
+        b.content,
+        Delta()
+          ..insert({'image': '$src'})
+          ..insert('\n', {'align': 'center'}),
+      );
+      expect(b.resets, [ResetCause.initial]);
+      _expectConverged(a, b);
+    });
+
+    test('embedTypes checks the type of a wrapped embed', () {
+      final refused = <Object?>[];
+      a.quill
+        ..onUnsupported = refused.add
+        ..embedTypes = {'image'};
+      final image = {
+        crdtQuillEmbedType: {'type': 'image', 'src': 'a.png', 'alt': 'a'},
+      };
+      final video = {
+        crdtQuillEmbedType: {'type': 'video', 'src': 'v.mp4', 'title': 'v'},
+      };
+      a.controller.replaceText(
+        0,
+        0,
+        Delta()
+          ..insert(image)
+          ..insert(video),
+        null,
+      );
+
+      expect(refused, [video]);
+      expect(a.handler.value.single.image?.alt, 'a');
+    });
+  });
+
   group('with a CRDTUndoManager', () {
     late _Peer ua;
     late _Peer ub;
@@ -731,6 +978,8 @@ void main() {
       ua.controller.undo();
       _sync(ua, ub);
       expect(ua.content, Delta()..insert('hello\n'));
+      // The caret goes after the last insert or retain, as in Quill.
+      expect(ua.controller.selection, const TextSelection.collapsed(offset: 5));
       _expectConverged(ua, ub);
 
       ua.controller.undo();
@@ -738,10 +987,12 @@ void main() {
       expect(ua.handler.text, '');
       _expectConverged(ua, ub);
 
+      expect(ua.controller.selection, const TextSelection.collapsed(offset: 0));
       ua.controller
         ..redo()
         ..redo();
       _sync(ua, ub);
+      expect(ua.controller.selection, const TextSelection.collapsed(offset: 5));
       expect(
         ua.content,
         Delta()
@@ -813,12 +1064,14 @@ void main() {
         final expected = url == null
             ? <Object?>[]
             : [
-                {'image': url},
+                {'type': 'image', 'src': url},
               ];
         final document = quillDocumentFromSpans(peers.first.$2.handler.value);
         for (final (name, peer) in peers) {
           expect(handlerEmbeds(peer), expected, reason: '$step: $name handler');
-          expect(quillEmbeds(peer), expected, reason: '$step: $name Quill');
+          expect(quillEmbeds(peer), [
+            if (url != null) {'image': url},
+          ], reason: '$step: $name Quill');
           expect(peer.content, document, reason: '$step: $name Quill');
           expect(
             peer.handler.value,
@@ -867,7 +1120,7 @@ void main() {
         expect(deltas[name], [
           RichTextDelta([
             RichTextRetain(embedAt),
-            RichTextUpdateEmbed({'image': second}),
+            RichTextUpdateEmbed({'type': 'image', 'src': second}),
           ]),
         ], reason: 'update: $name handler');
       }
@@ -911,6 +1164,20 @@ void main() {
 
       expect(a.controller.document.history.hasUndo, isFalse);
       expect(a.controller.hasUndo, isTrue);
+    });
+
+    test('a Quill step from before a manager set later is not undone', () {
+      a.type(0, 'ab');
+      a.quill.undoManager = a.manager = CRDTUndoManager(
+        a.document,
+        trackedOrigins: {crdtQuillOrigin},
+      )..track(a.handler);
+      a.type(2, 'cd');
+
+      a.controller.undo();
+      expect(a.handler.text, 'ab');
+      a.controller.undo();
+      expect(a.handler.text, 'ab');
     });
 
     test('only the writes of the editor are recorded', () {

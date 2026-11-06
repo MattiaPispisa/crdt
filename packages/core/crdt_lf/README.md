@@ -1139,16 +1139,17 @@ deleted like a character.
 
 ```dart
 text
-  ..insertEmbed(5, {'image': 'https://example.com/cat.png', 'alt': 'A cat'})
-  ..updateEmbed(5, {'image': 'https://example.com/dog.png', 'alt': 'A dog'});
+  ..insertEmbed(5, {'type': 'mention', 'user': 'ada'})
+  ..updateEmbed(5, {'type': 'mention', 'user': 'grace'});
 print(text.text); // "Hello￼ world": U+FFFC stands for the embed
-print(text.value[1].embed); // {image: https://example.com/dog.png, alt: A dog}
+print(text.value[1].embed); // {type: mention, user: grace}
 ```
 
 - The data is a map of `null`, `bool`, `int`, finite `double`, `String`,
-  `Uint8List`, and lists and maps of these, nested at most 16 deep. Put the
-  properties of the object (URL, size, alt text) in the data, and the formats
-  a user applies (bold, link) in `attributes`.
+  `Uint8List`, and lists and maps of these, nested at most 16 deep. Name its
+  kind in a `type` key (`richTextEmbedTypeKey`), so readers can tell kinds
+  apart. Put the facts of the object (address, size, alt text) in the data,
+  and what a user changes later (bold, link, displayed size) in marks.
 - `text` holds one U+FFFC (`RichTextSpan.objectReplacement`) per embed, so
   every rune index of `text` is an index of every positional API. `insert` and
   `update` refuse a text with U+FFFC: in `text` it is always an embed.
@@ -1161,7 +1162,48 @@ print(text.value[1].embed); // {image: https://example.com/dog.png, alt: A dog}
 - `maxEmbedBytes` (default 256 KiB, `null` for no limit) caps the data this
   peer writes. Every byte stays in the change log until a snapshot and a
   prune and goes to every peer: store large media elsewhere and keep a URL or
-  a hash in the embed.
+  a hash in the embed. `checkEmbed` throws what `insertEmbed` would throw for
+  some data, and writes nothing.
+
+###### Images and videos
+
+`insertImage` and `insertVideo` write embeds of a fixed schema that every
+adapter reads the same way. The file stays outside the document: `src` is a
+URL or an address your app resolves (such as `sha256:…`), and a `data:` URI is
+refused.
+
+```dart
+text.insertImage(
+  0,
+  Uri.parse('https://example.com/cat.png'),
+  alt: 'A cat', // '' for a decorative image
+  width: 1200, // intrinsic size: the space is kept before the file loads
+  height: 800,
+  displayWidth: 320, // a mark: what the user resized it to
+);
+text.insertVideo(1, Uri.parse('https://example.com/a.mp4'),
+    poster: Uri.parse('https://example.com/a.jpg'),
+    attributes: {'align': 'center'}); // a video is a block by default
+
+final image = text.value.first.image; // RichTextImage?, null for other kinds
+print(image?.alt); // Prints "A cat"
+print(text.value.first.displayWidth); // Prints "320"
+```
+
+| Kind | Data (`type` + fields) | Marks |
+| --- | --- | --- |
+| `image` | `src`, `alt`, `title`, `width`, `height` (intrinsic px, both or none), `mime` | `displayWidth` |
+| `video` | `src`, `poster`, `title`, `width`, `height`, `mime` | `displayWidth` |
+
+- An image is inline by default and a video a block: the embed and its own
+  `'\n'`, written as one undo step, with `attributes` (such as `align`) on the
+  `'\n'`.
+- `RichTextImage.fromEmbed` / `RichTextVideo.fromEmbed` read data strictly: a
+  field of the wrong type gives `null`. In the data, a field that is not given
+  has no key. Keys they do not know survive `copyWith`, so change an image
+  with `text.updateEmbed(i, image.copyWith(alt: 'A dog').toEmbed())`.
+- For other kinds, such as a YouTube link, insert your own `type` with
+  `insertEmbed`.
 
 #### Working with Complex Types
 

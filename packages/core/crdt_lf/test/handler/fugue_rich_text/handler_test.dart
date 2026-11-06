@@ -1095,6 +1095,24 @@ void main() {
         small.insertEmbed(0, {'k': '1'});
       });
 
+      test('checkEmbed refuses what insertEmbed refuses, and writes nothing',
+          () {
+        final doc = CRDTDocument();
+        final text = CRDTFugueRichTextHandler(doc, 'small', maxEmbedBytes: 8);
+        Object? nested(int depth) => depth == 0 ? 1 : [nested(depth - 1)];
+
+        for (final data in <Map<String, Object?>>[
+          {'k': double.nan},
+          {'k': nested(16)},
+          {'key': '1234'},
+        ]) {
+          expect(() => text.checkEmbed(data), throwsArgumentError);
+          expect(() => text.insertEmbed(0, data), throwsArgumentError);
+        }
+        text.checkEmbed({'k': '1'});
+        expect(doc.exportChanges(), isEmpty);
+      });
+
       test('an update older than its embed changes nothing', () {
         final doc = CRDTDocument(peerId: peerA);
         final text = open(doc)..insertEmbed(0, image);

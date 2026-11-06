@@ -13,7 +13,10 @@
   Quill-shaped `RichTextDelta` deltas. See [Rich text](README.md#rich-text).
   [209](https://github.com/MattiaPispisa/crdt/issues/209)
 - `CRDTFugueRichTextHandler` embeds: `insertEmbed` and `updateEmbed` put objects (images, videos)
-  with map data in the text, one U+FFFC rune each, with undo and snapshots. See [Embeds](README.md#embeds).
+  with map data in the text, one U+FFFC rune each, with undo and snapshots; `checkEmbed` tests data
+  without writing. See [Embeds](README.md#embeds).
+- `insertImage` and `insertVideo` write image and video embeds of a fixed schema, read back with
+  `span.image` / `span.video` (`RichTextImage`, `RichTextVideo`). See [Images and videos](README.md#images-and-videos).
 
 ### Changed
 

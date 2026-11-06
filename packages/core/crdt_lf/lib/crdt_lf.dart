@@ -27,6 +27,7 @@ export 'src/handler/aggregate/handler.dart';
 export 'src/handler/fugue_list/handler.dart';
 export 'src/handler/fugue_movable_list/handler.dart';
 export 'src/handler/fugue_rich_text/handler.dart';
+export 'src/handler/fugue_rich_text/media.dart';
 export 'src/handler/fugue_text/handler.dart';
 export 'src/handler/list/handler.dart';
 export 'src/handler/list_ref/handler.dart';

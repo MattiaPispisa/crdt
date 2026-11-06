@@ -292,6 +292,15 @@ base class CRDTFugueRichTextHandler
     });
   }
 
+  /// Throws the [ArgumentError] that [insertEmbed] throws for the data
+  /// [embed], and writes nothing.
+  ///
+  /// An editor can drop a refused embed this way and write the rest of an
+  /// edit.
+  void checkEmbed(Map<String, Object?> embed) {
+    _EmbedValue.prepare(embed, maxEmbedBytes);
+  }
+
   /// Replaces the data of the embed at [index], **in runes**, with [embed].
   ///
   /// [embed] follows the rules of [insertEmbed]. The embed keeps its place

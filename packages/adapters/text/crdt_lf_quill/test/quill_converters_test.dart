@@ -67,7 +67,7 @@ void main() {
         RichTextDelta([
           RichTextRetain(1),
           RichTextUpdateEmbed(
-            {'image': 'b.png'},
+            {'type': 'image', 'src': 'b.png'},
             {'italic': null, 'link': 'x'},
           ),
         ]),
@@ -149,14 +149,17 @@ void main() {
         [
           RichTextRetain(1),
           RichTextUpdateEmbed(
-            {'image': 'b.png'},
+            {'type': 'image', 'src': 'b.png'},
             {'link': 'x', 'italic': null},
           ),
         ],
       );
       expect(richTextDeltaFromQuill(change, 'a\uFFFC\n').ops, [
         RichTextRetain(1),
-        RichTextInsertEmbed({'image': 'b.png'}, {'bold': true, 'link': 'x'}),
+        RichTextInsertEmbed(
+          {'type': 'image', 'src': 'b.png'},
+          {'bold': true, 'link': 'x'},
+        ),
         const RichTextDelete(1),
       ]);
     });
@@ -239,5 +242,75 @@ void main() {
     expect(quillEmbed(plain), plain);
     expect(richTextEmbed(quillEmbed(plain)), plain);
     expect(richTextEmbed({crdtQuillEmbedType: 'x'}), {crdtQuillEmbedType: 'x'});
+  });
+
+  test('a typed image or video of type and src only is a native Quill '
+      'embed, any other is wrapped', () {
+    for (final type in ['image', 'video']) {
+      final typed = <String, Object?>{'type': type, 'src': 'a'};
+      expect(quillEmbed(typed), {type: 'a'});
+      expect(richTextEmbed({type: 'a'}), typed);
+      expect(richTextEmbed(Embeddable(type, 'a')), typed);
+      for (final embed in <Map<String, Object?>>[
+        {...typed, 'title': 't'},
+        // A plain one would come back typed.
+        {type: 'a'},
+      ]) {
+        expect(quillEmbed(embed), {crdtQuillEmbedType: embed});
+        expect(richTextEmbed(quillEmbed(embed)), embed);
+      }
+    }
+  });
+
+  group('display width', () {
+    test('is the px width of the Quill style, whose rest stays a style', () {
+      expect(
+        richTextAttributes({
+          'bold': true,
+          'style': 'width: 300.0; height: 200.0; alignment: topLeft; ',
+        }),
+        {
+          'bold': true,
+          'style': 'height: 200.0; alignment: topLeft',
+          richTextDisplayWidthKey: 300,
+        },
+      );
+      expect(richTextAttributes({'width': '120px'}), {
+        richTextDisplayWidthKey: 120,
+      });
+      expect(richTextAttributes({'style': 'width: 50%', 'width': '50%'}), {
+        'style': 'width: 50%',
+        'width': '50%',
+        richTextDisplayWidthKey: null,
+      });
+      expect(
+        quillAttributes({
+          richTextDisplayWidthKey: 12.5,
+          'style': 'height: 200.0; alignment: topLeft',
+        }),
+        {'style': 'width: 12.5; height: 200.0; alignment: topLeft'},
+      );
+    });
+
+    test('a change of the width keeps the rest of the style in the '
+        'document', () {
+      final document = Delta()
+        ..insert({'image': 'a.png'}, {'style': 'width: 9; height: 5'})
+        ..insert({'image': 'b.png'})
+        ..insert('\n');
+
+      expect(
+        quillDeltaFromRichText(
+          RichTextDelta([
+            RichTextRetain(2, {richTextDisplayWidthKey: 300}),
+          ]),
+          '\uFFFC\uFFFC\n',
+          document: document,
+        ),
+        Delta()
+          ..retain(1, {'style': 'width: 300; height: 5'})
+          ..retain(1, {'style': 'width: 300'}),
+      );
+    });
   });
 }

@@ -58,7 +58,8 @@ class CrdtQuillBinder extends StatefulWidget {
   /// Builds what shows once the handler is deleted; an empty box when `null`.
   final WidgetBuilder? deletedBuilder;
 
-  /// Called with each embed [controller] inserts that [embedTypes] refuses.
+  /// Called with each embed [controller] inserts that [embedTypes] or the
+  /// handler refuses (see [CRDTFugueRichTextHandler.checkEmbed]).
   ///
   /// The rest of the edit is written. The binder wraps the `onReplaceText`
   /// that [controller] had when it was bound; assigning a new one later

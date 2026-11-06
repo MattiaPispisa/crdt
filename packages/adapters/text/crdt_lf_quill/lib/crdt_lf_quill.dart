@@ -11,4 +11,5 @@ export 'src/quill_converters.dart'
         quillDeltaFromRichText,
         quillDocumentFromSpans,
         richTextDeltaFromQuill;
+export 'src/quill_embed_builders.dart';
 export 'src/rich_text_writer.dart';

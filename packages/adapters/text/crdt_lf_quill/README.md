@@ -124,25 +124,41 @@ Quill embeds (images, videos, formulas) are embeds of the handler, and back.
 An embed is one position in the handler: see the "Embeds" section of the
 `crdt_lf` README.
 
-- A Quill embed is a map of one key, its type: `{"image": url}` is the same
-  map in the handler. A handler embed of another shape, such as
-  `{"image": url, "alt": "A cat"}` written by another editor, comes to Quill
-  as `{"crdt_lf": map}` (`crdtQuillEmbedType`) and goes back unchanged. To
-  show it, give `QuillEditor` an `EmbedBuilder` for that key or an
-  `unknownEmbedBuilder`: without one, Quill throws on it.
+- Images and videos of `crdt_lf` (`insertImage`, `insertVideo`) and native
+  Quill images and videos are the same thing. A Quill `{"image": url}` comes
+  to the handler as `{"type": "image", "src": url}`, so `span.image` reads it.
+  An image with only `src` goes back to Quill native; one with more fields
+  (`alt`, `width`, …) comes as `{"crdt_lf": map}` (`crdtQuillEmbedType`), so
+  no field is lost when Quill writes it back.
+- The displayed width (`displayWidth` in the handler) is the `width` of the
+  Quill `style` that the image resize writes and the image builders read. The
+  rest of that `style` (height, alignment) is kept as Quill wrote it.
+- Any other handler embed that is not a map of one key comes as
+  `{"crdt_lf": map}` too. To show these, pass your builders through
+  `crdtQuillEmbedBuilders`: the builder of the embed's `type` (or of the first
+  key of the map that has one) shows it, else a small box (`fallback`). That
+  builder gets one value and the style, not the other fields, and draws
+  inline.
+
+  ```dart
+  QuillEditorConfig(embedBuilders: crdtQuillEmbedBuilders([...myBuilders]))
+  ```
 - An embed replaced by another in one Quill change becomes an update of the
   same embed in the handler, so a concurrent format on it survives.
   `replaceText` with an `Embeddable` makes two Quill changes, so it is a
   delete and an insert.
 - A block embed (a video, a full-width image) keeps its own `'\n'`, which
   holds the block attributes.
-- `embedTypes` lists the embed types the editor may write; `null` takes all.
-  A refused embed goes to `onUnsupported`, and the rest of the edit, the text
-  of a paste included, is written. Embeds from other peers show whatever their
-  type.
+- `embedTypes` lists the embed types the editor may write (`image`, `video`,
+  a custom `type`); `null` takes all. Embeds from other peers show whatever
+  their type.
+- An embed of a type out of `embedTypes`, or with data the handler refuses
+  (above `maxEmbedBytes`, nested too deep, a `NaN`), goes to `onUnsupported`.
+  The rest of the edit, the text of a paste included, is written, and an
+  embed it would replace stays. Each embed inserted in the editor is checked
+  this way before it is written.
 - Upload and rendering stay with the app. Keep large media outside the
-  document and put a URL in the embed: the handler refuses data above
-  `maxEmbedBytes`.
+  document and put a URL in the embed.
 
 ### The last newline
 
@@ -192,9 +208,6 @@ and 3.40 ms with the full check.
 
 ## Limits
 
-- Embed data the handler refuses (a `NaN`, nesting deeper than 16, more than
-  `maxEmbedBytes`) throws an `ArgumentError` from the Quill change instead of
-  going to `onUnsupported`, as an attribute value the handler refuses does.
 - Two peers that format the plain last line at the same time both store a
   last `'\n'`, so the document gets one extra line.
 - The editor keeps its own selection, moved by each remote change. Remote

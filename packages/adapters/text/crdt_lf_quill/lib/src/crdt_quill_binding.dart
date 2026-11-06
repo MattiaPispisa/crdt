@@ -12,12 +12,6 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/widgets.dart' show TextSelection, WidgetsBinding;
 import 'package:flutter_quill/flutter_quill.dart';
-// `History`, the type of `Document.history`, is not exported.
-// ignore: implementation_imports
-import 'package:flutter_quill/src/document/history.dart';
-// `HistoryChanged`, the return type of `Document.undo`, is not exported.
-// ignore: implementation_imports
-import 'package:flutter_quill/src/document/structs/history_changed.dart';
 
 /// Whether the projection check compares the whole editor with the handler.
 ///
@@ -54,8 +48,8 @@ class CrdtQuillBinding {
 
   QuillController _controller;
 
-  /// Called with each embed the controller inserts that [embedTypes]
-  /// refuses.
+  /// Called with each embed the controller inserts that [embedTypes] or the
+  /// handler refuses (see [CRDTFugueRichTextHandler.checkEmbed]).
   void Function(Object? data)? onUnsupported;
 
   /// The types of the Quill embeds the editor writes to the handler; `null`
@@ -213,8 +207,8 @@ class CrdtQuillBinding {
       return false;
     }
     return !debugVerifyCrdtQuillProjection ||
-        _unwrapped(document.toDelta()) ==
-            _unwrapped(quillDocumentFromSpans(handler.value));
+        _normalized(document.toDelta()) ==
+            _normalized(quillDocumentFromSpans(handler.value));
   }
 
   /// Stops writing to the handler and gives back the `onReplaceText` of the
@@ -261,19 +255,28 @@ class CrdtQuillBinding {
   }
 
   // A refused embed and a typed U+FFFC are taken out, and the rest of the
-  // edit is made again without them.
+  // edit is made again without them. A refused embed never deletes the embed
+  // it replaces.
   bool _onReplaceText(int index, int len, Object? data) {
     if (_document != null) {
       final kept = _accepted(data);
       if (!identical(kept, data)) {
+        final keepsEmbed =
+            len > 0 && _replacesWithRefused(data) && _embedAt(index);
+        final deleted = keepsEmbed ? len - 1 : len;
         final length = switch (kept) {
           final String text => text.length,
           final Delta delta => _insertedLength(delta),
           _ => 1,
         };
-        if (len > 0 || length > 0) {
+        if (deleted > 0 || length > 0) {
           _controller
-            ..replaceText(index, len, kept, null)
+            ..replaceText(
+              index,
+              keepsEmbed ? 0 : len,
+              keepsEmbed ? _keepingNext(kept, deleted) : kept,
+              null,
+            )
             ..updateSelection(
               TextSelection.collapsed(offset: index + length),
               ChangeSource.local,
@@ -286,16 +289,78 @@ class CrdtQuillBinding {
   }
 
   Object? _accepted(Object? data) => switch (data) {
-    Embeddable() when !_accepts([data.type]) => _refuse(data, ''),
+    Embeddable() when _refusedEmbed(data) => _refuse(data, ''),
     final String text when text.contains(RichTextSpan.objectReplacement) =>
       text.replaceAll(RichTextSpan.objectReplacement, ''),
     final Delta delta => _acceptedDelta(delta),
     _ => data,
   };
 
+  // Whether [data], refused in part, ends with a refused embed: Quill would
+  // put it in place of the first deleted position.
+  bool _replacesWithRefused(Object? data) => switch (data) {
+    Embeddable() => true,
+    final Delta delta =>
+      delta.isNotEmpty && delta.last.data is! String && _refused(delta.last),
+    _ => false,
+  };
+
+  bool _embedAt(int index) {
+    final plain = _controller.document.toPlainText();
+    return index < plain.length &&
+        plain.codeUnitAt(index) == _objectReplacementUnit;
+  }
+
+  // [kept] inserted before the next position, which stays, and [deleted]
+  // positions after it removed.
+  Delta _keepingNext(Object? kept, int deleted) {
+    final change = switch (kept) {
+      final Delta delta => delta,
+      final String text when text.isNotEmpty => Delta()..insert(text),
+      _ => Delta(),
+    }..retain(1);
+    if (deleted > 0) {
+      change.delete(deleted);
+    }
+    return change;
+  }
+
   bool _accepts(Iterable<String> types) {
     final accepted = embedTypes;
     return accepted == null || types.every(accepted.contains);
+  }
+
+  bool _refusedEmbed(Object data) => switch (data) {
+    Embeddable() =>
+      !_accepts(_embedTypes({data.type: data.data})) || !_fits(data),
+    final Map<dynamic, dynamic> map =>
+      !_accepts(_embedTypes(map)) || !_fits(map),
+    _ => false,
+  };
+
+  bool _refused(Operation op) {
+    final data = op.data;
+    return op.isInsert &&
+        switch (data) {
+          final String text => text.contains(RichTextSpan.objectReplacement),
+          _ => data != null && _refusedEmbed(data),
+        };
+  }
+
+  // Whether the handler takes the data of the Quill embed [data].
+  bool _fits(Object data) {
+    final binding = this.binding;
+    if (binding == null || !binding.isAttached) {
+      return true;
+    }
+    try {
+      _handler.checkEmbed(richTextEmbed(data));
+      return true;
+      // The handler refuses data with an ArgumentError.
+      // ignore: avoid_catching_errors
+    } on ArgumentError {
+      return false;
+    }
   }
 
   Object? _refuse(Object? data, Object? kept) {
@@ -303,27 +368,37 @@ class CrdtQuillBinding {
     return kept;
   }
 
-  Delta _acceptedDelta(Delta delta) {
+  // [delta] without its refused embeds. With [before], the plain text
+  // [delta] applies to, a refused embed followed by a delete keeps the embed
+  // the delete starts on.
+  Delta _acceptedDelta(Delta delta, {String? before}) {
     final ops = delta.toList();
-    bool refused(Operation op) {
-      final data = op.data;
-      return op.isInsert &&
-          switch (data) {
-            final String text => text.contains(RichTextSpan.objectReplacement),
-            Embeddable() => !_accepts([data.type]),
-            final Map<dynamic, dynamic> map => !_accepts(map.keys.cast()),
-            _ => false,
-          };
-    }
-
-    if (!ops.any(refused)) {
+    final refused = [for (final op in ops) _refused(op)];
+    if (!refused.contains(true)) {
       return delta;
     }
     final kept = Delta();
-    for (final op in ops) {
+    var unit = 0;
+    var keepsEmbed = false;
+    for (var o = 0; o < ops.length; o++) {
+      final op = ops[o];
       final data = op.data;
-      if (!refused(op)) {
+      final length = op.length ?? 0;
+      if (keepsEmbed && op.isDelete) {
+        kept.retain(1);
+        if (length > 1) {
+          kept.delete(length - 1);
+        }
+        unit += length;
+        keepsEmbed = false;
+        continue;
+      }
+      keepsEmbed = false;
+      if (!refused[o]) {
         kept.push(op);
+        if (!op.isInsert) {
+          unit += length;
+        }
       } else if (data is String) {
         kept.insert(
           data.replaceAll(RichTextSpan.objectReplacement, ''),
@@ -331,6 +406,10 @@ class CrdtQuillBinding {
         );
       } else {
         onUnsupported?.call(data);
+        keepsEmbed =
+            before != null &&
+            unit < before.length &&
+            before.codeUnitAt(unit) == _objectReplacementUnit;
       }
     }
     return kept;
@@ -349,7 +428,7 @@ class CrdtQuillBinding {
       return;
     }
     final rich = richTextDeltaFromQuill(
-      _acceptedDelta(change),
+      _acceptedDelta(change, before: before),
       before,
       document: content,
     );
@@ -456,11 +535,6 @@ class _BoundDocument extends Document {
 
   CrdtQuillBinding? owner;
 
-  final _ComposedHistory _history = _ComposedHistory();
-
-  @override
-  _ComposedHistory get history => _history;
-
   CRDTUndoManager? get _manager => owner?.undoManager;
 
   // What the undo manager wrote back, as the editor received it.
@@ -472,27 +546,36 @@ class _BoundDocument extends Document {
   @override
   bool get hasRedo => _manager?.canRedo ?? super.hasRedo;
 
+  // With a manager, the step moves the caret itself, and Quill's empty
+  // history gives the "no change" result.
   @override
-  HistoryChanged undo() {
+  // The inherited return type is not exported.
+  // ignore: always_declare_return_types, type_annotate_public_apis
+  undo() {
     final manager = _manager;
-    if (manager == null) {
-      return super.undo();
+    if (manager != null) {
+      _replay(manager.canUndo, manager.undo);
+      history.clear();
     }
-    return _replay(manager.canUndo, manager.undo);
+    return super.undo();
   }
 
   @override
-  HistoryChanged redo() {
+  // The inherited return type is not exported.
+  // ignore: always_declare_return_types, type_annotate_public_apis
+  redo() {
     final manager = _manager;
-    if (manager == null) {
-      return super.redo();
+    if (manager != null) {
+      _replay(manager.canRedo, manager.redo);
+      history.clear();
     }
-    return _replay(manager.canRedo, manager.redo);
+    return super.redo();
   }
 
-  HistoryChanged _replay(bool can, void Function() step) {
-    if (!can) {
-      return const HistoryChanged(false, 0);
+  void _replay(bool can, void Function() step) {
+    final controller = owner?.controller;
+    if (!can || controller == null) {
+      return;
     }
     _replayed = Delta();
     step();
@@ -505,7 +588,10 @@ class _BoundDocument extends Document {
         len += op.length ?? 0;
       }
     }
-    return HistoryChanged(true, len);
+    controller.updateSelection(
+      TextSelection.collapsed(offset: len),
+      ChangeSource.local,
+    );
   }
 
   @override
@@ -538,10 +624,11 @@ class _BoundDocument extends Document {
     final before = toPlainText();
     final content = toDelta();
     final storedBefore = trailingNewline(content).stored;
-    _history.composed = null;
     super.compose(delta, changeSource);
-    // What Quill composed, newlines it added after a video included.
-    final composed = _history.composed ?? delta;
+    // Quill adds a newline after each video it composes: write it too.
+    final composed = _insertsVideo(delta)
+        ? delta.compose(content.compose(delta).diff(toDelta()))
+        : delta;
     owner._pushLocal(
       this,
       composed,
@@ -549,16 +636,6 @@ class _BoundDocument extends Document {
       content,
       storedBefore: storedBefore,
     );
-  }
-}
-
-class _ComposedHistory extends History {
-  Delta? composed;
-
-  @override
-  void handleDocChange(DocChange docChange) {
-    composed = docChange.change;
-    super.handleDocChange(docChange);
   }
 }
 
@@ -625,19 +702,45 @@ class _Written {
   );
 }
 
-// [document] with each embed as the handler map it stands for.
-Delta _unwrapped(Delta document) => Delta.fromOperations([
-  for (final op in document.toList())
-    if (op.isInsert && op.data is! String)
-      Operation.insert(richTextEmbed(op.data), op.attributes)
-    else
-      op,
-]);
+// [document] with each embed and attributes as the handler data they stand
+// for.
+Delta _normalized(Delta document) {
+  final result = Delta();
+  for (final op in document.toList()) {
+    final data = op.data;
+    result.insert(
+      data is String ? data : richTextEmbed(data),
+      _handlerAttributes(op.attributes),
+    );
+  }
+  return result;
+}
+
+Map<String, dynamic>? _handlerAttributes(Map<String, dynamic>? attributes) {
+  if (attributes == null) {
+    return null;
+  }
+  final result = {
+    for (final entry in richTextAttributes(attributes).entries)
+      if (entry.value != null) entry.key: entry.value,
+  };
+  return result.isEmpty ? null : result;
+}
+
+// The types of the Quill embed [map]: its key, or the type of the map a
+// wrapped embed holds.
+Iterable<String> _embedTypes(Map<dynamic, dynamic> map) {
+  final wrapped = map.length == 1 ? map[crdtQuillEmbedType] : null;
+  final type = wrapped is Map ? wrapped[richTextEmbedTypeKey] : null;
+  return type is String ? [type] : map.keys.map((key) => '$key');
+}
 
 int _insertedLength(Delta delta) => delta
     .toList()
     .where((op) => op.isInsert)
     .fold(0, (sum, op) => sum + (op.length ?? 0));
+
+const int _objectReplacementUnit = 0xFFFC;
 
 bool _insertsVideo(Delta delta) => delta.toList().any(
   (op) =>
