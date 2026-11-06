@@ -27,11 +27,15 @@ typedef CrdtQuillEmbedFallback =
 ///
 /// Without such a builder, [fallback] builds it; by default a small box.
 ///
+/// Pair it with [crdtQuillUnknownEmbedBuilder]: a peer can write an embed of
+/// any type, and an editor with no builder for it throws in its build.
+///
 /// ```dart
 /// QuillEditor.basic(
 ///   controller: controller,
 ///   config: QuillEditorConfig(
 ///     embedBuilders: crdtQuillEmbedBuilders([MyImageEmbedBuilder()]),
+///     unknownEmbedBuilder: crdtQuillUnknownEmbedBuilder(),
 ///   ),
 /// );
 /// ```
@@ -41,6 +45,42 @@ List<EmbedBuilder> crdtQuillEmbedBuilders(
 }) {
   final list = List<EmbedBuilder>.of(builders);
   return [...list, _WrappedEmbedBuilder(list, fallback ?? _defaultFallback)];
+}
+
+/// A builder for `QuillEditorConfig.unknownEmbedBuilder` that shows every
+/// embed no other builder takes.
+///
+/// [fallback] builds it, as in [crdtQuillEmbedBuilders]. Alone, it is enough
+/// for an editor that a peer's embed can never break:
+///
+/// ```dart
+/// QuillEditorConfig(unknownEmbedBuilder: crdtQuillUnknownEmbedBuilder())
+/// ```
+EmbedBuilder crdtQuillUnknownEmbedBuilder({CrdtQuillEmbedFallback? fallback}) =>
+    _UnknownEmbedBuilder(fallback ?? _defaultFallback);
+
+class _UnknownEmbedBuilder extends EmbedBuilder {
+  _UnknownEmbedBuilder(this._fallback);
+
+  final CrdtQuillEmbedFallback _fallback;
+
+  @override
+  String get key => 'crdt_lf_unknown';
+
+  // Inline fits both an inline and a block delegate.
+  @override
+  bool get expanded => false;
+
+  @override
+  Widget build(BuildContext context, EmbedContext embedContext) {
+    final embed = embedContext.node.value;
+    return _fallback(
+      context,
+      embed.type == crdtQuillEmbedType
+          ? _wrapped(embed)
+          : richTextEmbed({embed.type: embed.data}),
+    );
+  }
 }
 
 class _WrappedEmbedBuilder extends EmbedBuilder {
@@ -82,7 +122,7 @@ class _WrappedEmbedBuilder extends EmbedBuilder {
     final wrapped = _wrapped(node.value);
     final type = wrapped[richTextEmbedTypeKey];
     if (type is String) {
-      final src = wrapped['src'];
+      final src = wrapped[embedSrcKey];
       return src is String ? _delegate(node, type, src) : null;
     }
     for (final MapEntry(:key, :value) in wrapped.entries) {

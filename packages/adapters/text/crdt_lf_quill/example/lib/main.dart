@@ -108,13 +108,11 @@ class _PeerState extends State<_Peer> {
   Widget build(BuildContext context) {
     return CrdtProvider.value(
       value: widget.document,
-      // The toolbar and the editor listen to the controller: keep them under
-      // the binder.
       child: CrdtQuillBinder(
         id: _pageId,
         controller: _controller,
         onUnsupported: (_) => ScaffoldMessenger.maybeOf(context)?.showSnackBar(
-          const SnackBar(content: Text('Images and videos are not supported')),
+          const SnackBar(content: Text('Part of the edit was not written')),
         ),
         builder: (context) => Padding(
           padding: const EdgeInsets.all(8),
@@ -135,6 +133,7 @@ class _PeerState extends State<_Peer> {
                   controller: _controller,
                   config: QuillEditorConfig(
                     placeholder: '${widget.label} writes here',
+                    unknownEmbedBuilder: crdtQuillUnknownEmbedBuilder(),
                   ),
                 ),
               ),

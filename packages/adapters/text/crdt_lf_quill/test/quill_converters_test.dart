@@ -163,6 +163,106 @@ void main() {
         const RichTextDelete(1),
       ]);
     });
+
+    group('over a surrogate pair', () {
+      const before = 'x😀y\n';
+
+      test('a plain retain stops before the pair', () {
+        expect(
+          richTextDeltaFromQuill(
+            Delta()
+              ..retain(2)
+              ..insert('z'),
+            before,
+          ),
+          RichTextDelta([RichTextRetain(1), RichTextInsert('z')]),
+        );
+      });
+
+      for (final (name, change) in [
+        (
+          'the low half',
+          Delta()
+            ..retain(2)
+            ..delete(1),
+        ),
+        (
+          'the high half',
+          Delta()
+            ..retain(1)
+            ..delete(1),
+        ),
+      ]) {
+        test('a delete of $name takes the rune, and leaves the next', () {
+          expect(
+            richTextDeltaFromQuill(change, before),
+            RichTextDelta([RichTextRetain(1), const RichTextDelete(1)]),
+          );
+        });
+      }
+
+      test('what follows a split keeps its place', () {
+        expect(
+          richTextDeltaFromQuill(
+            Delta()
+              ..retain(1)
+              ..delete(1)
+              ..retain(1)
+              ..retain(1, {'bold': true}),
+            before,
+          ),
+          RichTextDelta([
+            RichTextRetain(1),
+            const RichTextDelete(1),
+            RichTextRetain(1, {'bold': true}),
+          ]),
+        );
+      });
+
+      test('a format of one half takes the rune', () {
+        expect(
+          richTextDeltaFromQuill(
+            Delta()
+              ..retain(1)
+              ..retain(1, {'bold': true}),
+            before,
+          ),
+          RichTextDelta([
+            RichTextRetain(1),
+            RichTextRetain(1, {'bold': true}),
+          ]),
+        );
+      });
+
+      test('an embed inside a pair is no update of the embed next to it', () {
+        expect(
+          richTextDeltaFromQuill(
+            Delta()
+              ..retain(1, {'bold': true})
+              ..insert({'image': 'a.png'})
+              ..delete(1),
+            '😀\uFFFC\n',
+            document: Delta()
+              ..insert('😀')
+              ..insert({'image': 'b.png'})
+              ..insert('\n'),
+          ).ops.whereType<RichTextUpdateEmbed>(),
+          isEmpty,
+        );
+      });
+
+      test('a lone half counts as one rune', () {
+        expect(
+          richTextDeltaFromQuill(
+            Delta()
+              ..retain(2)
+              ..delete(1),
+            'a\uD83Db\n',
+          ),
+          RichTextDelta([RichTextRetain(2), const RichTextDelete(1)]),
+        );
+      });
+    });
   });
 
   group('quillDocumentFromSpans', () {
@@ -260,6 +360,14 @@ void main() {
         expect(richTextEmbed(quillEmbed(embed)), embed);
       }
     }
+  });
+
+  test('an embed with a key that is not a String is an ArgumentError', () {
+    expect(() => richTextEmbed({1: 2}), throwsArgumentError);
+    expect(
+      () => richTextEmbed(const Embeddable(crdtQuillEmbedType, {1: 2})),
+      throwsArgumentError,
+    );
   });
 
   group('display width', () {

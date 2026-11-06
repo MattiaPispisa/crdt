@@ -11,6 +11,26 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'helpers/quill_harness.dart';
 
+class _OnInit extends StatefulWidget {
+  const _OnInit(this.onInit);
+
+  final VoidCallback onInit;
+
+  @override
+  State<_OnInit> createState() => _OnInitState();
+}
+
+class _OnInitState extends State<_OnInit> {
+  @override
+  void initState() {
+    super.initState();
+    widget.onInit();
+  }
+
+  @override
+  Widget build(BuildContext context) => const SizedBox();
+}
+
 void main() {
   runEditorConformanceTests('CrdtQuillBinder', QuillHarness.new);
 
@@ -232,6 +252,95 @@ void main() {
     controller.replaceText(5, 0, video, null);
     expect(refused, [video]);
     expect(page.text, contains('\uFFFC'));
+  });
+
+  // A rebuild from the root would hide the error: Flutter takes a change in
+  // a build for fine under the widget that is being rebuilt.
+  testWidgets('a handler write in a build reaches a listener of the controller '
+      'after the frame', (tester) async {
+    final controller = QuillController.basic();
+    addTearDown(controller.dispose);
+    var seeds = false;
+    late StateSetter rebuild;
+    await tester.pumpWidget(
+      CrdtProvider.value(
+        value: document,
+        child: MaterialApp(
+          home: CrdtQuillBinder(
+            id: 'page',
+            controller: controller,
+            builder: (context) => Column(
+              children: [
+                ListenableBuilder(
+                  listenable: controller,
+                  builder: (context, _) =>
+                      Text(controller.document.toPlainText().trim()),
+                ),
+                StatefulBuilder(
+                  builder: (context, setState) {
+                    rebuild = setState;
+                    return seeds
+                        ? _OnInit(() => page.insert(0, 'seed '))
+                        : const SizedBox();
+                  },
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    rebuild(() => seeds = true);
+    await tester.pump();
+    await tester.pump();
+
+    expect(tester.takeException(), isNull);
+    expect(find.text('seed hello'), findsOneWidget);
+  });
+
+  testWidgets('a new controller is loaded after the frame', (tester) async {
+    final first = QuillController.basic();
+    final second = QuillController.basic();
+    addTearDown(first.dispose);
+    addTearDown(second.dispose);
+    var current = first;
+    late StateSetter rebuild;
+    await tester.pumpWidget(
+      CrdtProvider.value(
+        value: document,
+        child: MaterialApp(
+          home: Column(
+            children: [
+              ListenableBuilder(
+                listenable: second,
+                builder: (context, _) =>
+                    Text(second.document.toPlainText().trim()),
+              ),
+              StatefulBuilder(
+                builder: (context, setState) {
+                  rebuild = setState;
+                  return CrdtQuillBinder(
+                    id: 'page',
+                    controller: current,
+                    builder: (context) => const SizedBox(),
+                  );
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    rebuild(() => current = second);
+    await tester.pump();
+    await tester.pump();
+
+    expect(tester.takeException(), isNull);
+    expect(find.text('hello'), findsOneWidget);
   });
 
   testWidgets('stops writing once removed', (tester) async {

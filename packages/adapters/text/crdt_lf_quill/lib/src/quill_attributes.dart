@@ -11,10 +11,14 @@ bool isQuillBlockKey(String key) => Attribute.blockKeys.contains(key);
 
 /// How a format with [key] grows when text is typed at its edge.
 ///
-/// Block keys and `link` never grow ([MarkExpand.none]). Every other key
-/// grows after its end ([MarkExpand.after]).
+/// Block keys, `link` and the size of an embed (`style`, `displayWidth`)
+/// never grow ([MarkExpand.none]). Every other key grows after its end
+/// ([MarkExpand.after]).
 MarkExpand quillMarkExpand(String key) {
-  if (isQuillBlockKey(key) || key == Attribute.link.key) {
+  if (isQuillBlockKey(key) ||
+      key == Attribute.link.key ||
+      key == Attribute.style.key ||
+      key == richTextDisplayWidthKey) {
     return MarkExpand.none;
   }
   return MarkExpand.after;

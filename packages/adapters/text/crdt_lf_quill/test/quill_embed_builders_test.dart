@@ -1,6 +1,8 @@
 // Copyright 2025 Mattia Pispisa
 // SPDX-License-Identifier: MIT
 
+import 'package:crdt_lf/crdt_lf.dart' hide ChangeSource;
+import 'package:crdt_lf_flutter/crdt_lf_flutter.dart';
 import 'package:crdt_lf_quill/crdt_lf_quill.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_quill/flutter_quill.dart';
@@ -148,5 +150,107 @@ void main() {
         reason: '$embed',
       );
     }
+  });
+
+  group('crdtQuillUnknownEmbedBuilder', () {
+    late CRDTDocument document;
+    late CRDTFugueRichTextHandler page;
+
+    setUp(() {
+      document = CRDTDocument(peerId: PeerId.generate());
+      page = CRDTFugueRichTextHandler(document, 'page')..insert(0, 'ab');
+    });
+
+    tearDown(() => document.dispose());
+
+    Widget editor(QuillController controller, QuillEditorConfig config) =>
+        CrdtProvider.value(
+          value: document,
+          child: MaterialApp(
+            home: Scaffold(
+              body: CrdtQuillBinder(
+                id: 'page',
+                controller: controller,
+                builder: (context) =>
+                    QuillEditor.basic(controller: controller, config: config),
+              ),
+            ),
+          ),
+        );
+
+    testWidgets('alone, it shows a peer embed of any type with the fallback', (
+      tester,
+    ) async {
+      final controller = QuillController.basic();
+      addTearDown(controller.dispose);
+      final seen = <Map<String, Object?>>[];
+      await tester.pumpWidget(
+        editor(
+          controller,
+          QuillEditorConfig(
+            unknownEmbedBuilder: crdtQuillUnknownEmbedBuilder(
+              fallback: (context, embed) {
+                seen.add(embed);
+                return const Text('fallback');
+              },
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      page
+        ..insertEmbed(2, {'type': 'image', 'src': 'a.png'})
+        ..insertEmbed(3, {'mention': 'bob'})
+        ..insertEmbed(4, {
+          'mention': {'id': 1},
+        })
+        ..insertEmbed(5, {'alt': 'a', 'type': 'image', 'src': 'b.png'});
+      await tester.pump();
+
+      expect(tester.takeException(), isNull);
+      expect(find.text('fallback', findRichText: true), findsNWidgets(4));
+      expect(seen, [
+        {'type': 'image', 'src': 'a.png'},
+        {'mention': 'bob'},
+        {
+          'mention': {'id': 1},
+        },
+        {'alt': 'a', 'type': 'image', 'src': 'b.png'},
+      ]);
+    });
+
+    testWidgets('with the wrapping builders, it draws the default fallback', (
+      tester,
+    ) async {
+      final controller = QuillController.basic();
+      addTearDown(controller.dispose);
+      await tester.pumpWidget(
+        editor(
+          controller,
+          QuillEditorConfig(
+            embedBuilders: crdtQuillEmbedBuilders(const []),
+            unknownEmbedBuilder: crdtQuillUnknownEmbedBuilder(),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      page
+        ..insertEmbed(2, {'type': 'image', 'src': 'a.png'})
+        ..insertEmbed(3, {'mention': 'bob'});
+      await tester.pump();
+
+      expect(tester.takeException(), isNull);
+      expect(
+        find.descendant(
+          of: find.byType(QuillEditor),
+          matching: find.byWidgetPredicate(
+            (widget) => widget is Container && widget.decoration != null,
+          ),
+        ),
+        findsNWidgets(2),
+      );
+    });
   });
 }

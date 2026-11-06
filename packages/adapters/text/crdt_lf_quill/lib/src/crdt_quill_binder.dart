@@ -19,9 +19,9 @@ import 'package:flutter_quill/flutter_quill.dart';
 /// stay out of the handler, and the next read of the handler replaces it.
 /// Peer changes stay out of the undo stack, like `History(userOnly: true)`.
 ///
-/// Put the widgets that listen to [controller] (toolbar, editor) under the
-/// binder. A read that arrives during a build runs at the end of the frame.
-/// See the README for units, attributes, embeds and the last newline.
+/// A change that arrives during a build reaches [controller] at the end of
+/// the frame. See the README for units, attributes, embeds and the last
+/// newline.
 ///
 /// Throws a `FlutterError` when [id] is not a rich text handler.
 class CrdtQuillBinder extends StatefulWidget {
@@ -59,9 +59,12 @@ class CrdtQuillBinder extends StatefulWidget {
   final WidgetBuilder? deletedBuilder;
 
   /// Called with each embed [controller] inserts that [embedTypes] or the
-  /// handler refuses (see [CRDTFugueRichTextHandler.checkEmbed]).
+  /// handler refuses (see [CRDTFugueRichTextHandler.checkEmbed]), and with
+  /// `{key: value}` for each attribute value the handler refuses (see
+  /// [CRDTFugueRichTextHandler.checkAttribute]).
   ///
-  /// The rest of the edit is written. The binder wraps the `onReplaceText`
+  /// The rest of the edit is written, and a refused embed never deletes an
+  /// embed (see the README, "Embeds"). The binder wraps the `onReplaceText`
   /// that [controller] had when it was bound; assigning a new one later
   /// removes the refusal.
   final void Function(Object? data)? onUnsupported;
@@ -69,10 +72,12 @@ class CrdtQuillBinder extends StatefulWidget {
   /// The types of the Quill embeds the editor writes to the handler; `null`
   /// takes all.
   ///
-  /// Embeds from other peers show whatever their type.
+  /// A peer can still write any type: use `crdtQuillUnknownEmbedBuilder` so
+  /// the editor can show it.
   final Set<String>? embedTypes;
 
   /// The manager that undoes and redoes; `null` keeps Quill's own history.
+  /// A new manager drops the steps of that history.
   ///
   /// Track the handler with it and pass [crdtQuillOrigin] in its
   /// `trackedOrigins`. Undo then takes back your own edits only, formats
@@ -84,12 +89,18 @@ class CrdtQuillBinder extends StatefulWidget {
 }
 
 class _CrdtQuillBinderState extends State<CrdtQuillBinder> {
-  late final CrdtQuillBinding _binding = CrdtQuillBinding(
-    widget.controller,
-    onUnsupported: widget.onUnsupported,
-    embedTypes: widget.embedTypes,
-    undoManager: widget.undoManager,
-  );
+  late final CrdtQuillBinding _binding;
+
+  @override
+  void initState() {
+    super.initState();
+    _binding = CrdtQuillBinding(
+      widget.controller,
+      onUnsupported: widget.onUnsupported,
+      embedTypes: widget.embedTypes,
+      undoManager: widget.undoManager,
+    )..bind();
+  }
 
   @override
   void didUpdateWidget(CrdtQuillBinder oldWidget) {

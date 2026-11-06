@@ -103,6 +103,9 @@ Delta quillDeltaFromRichText(
 ///
 /// {@macro crdt_lf_quill.units}
 ///
+/// An offset inside a surrogate pair moves to a rune boundary: a plain retain
+/// stops before the pair, and a delete or a format takes the whole rune.
+///
 /// Attributes are split by scope, as in [quillDeltaFromRichText]. A Quill
 /// embed is a [RichTextInsertEmbed] (see [crdtQuillEmbedType] for the
 /// shapes), and a px width of the Quill `style` is the `displayWidth` mark.
@@ -116,6 +119,8 @@ RichTextDelta richTextDeltaFromQuill(
 }) {
   final ops = <RichTextOp>[];
   final quill = change.toList();
+  // [at] is the offset in Quill, [unit] the rune boundary reached in [before].
+  var at = 0;
   var unit = 0;
   // Code units of the next delete already taken by an update.
   var updated = 0;
@@ -136,17 +141,17 @@ RichTextDelta richTextDeltaFromQuill(
         if (document != null &&
             next != null &&
             next.isDelete &&
-            unit < before.length &&
-            before.codeUnitAt(unit) == _objectReplacement) {
+            isEmbedAt(before, at)) {
           ops.add(
             RichTextUpdateEmbed(
               embed,
               _changedAttributes(
-                _withoutNull(richTextAttributes(_attributesAt(document, unit))),
+                _withoutNull(richTextAttributes(_attributesAt(document, at))),
                 attributes,
               ),
             ),
           );
+          at++;
           unit++;
           updated = 1;
           continue;
@@ -169,17 +174,23 @@ RichTextDelta richTextDeltaFromQuill(
       });
       continue;
     }
-    final end = unit + length > before.length ? before.length : unit + length;
+    at += length;
+    final attributes = op.attributes;
+    final plain = attributes == null || attributes.isEmpty;
+    var end = at > before.length ? before.length : at;
+    if (splitsSurrogatePair(before, end)) {
+      end += plain && !op.isDelete ? -1 : 1;
+    }
     final covered = before.substring(unit, end);
     unit = end;
-    if (op.isDelete) {
-      if (covered.isNotEmpty) {
-        ops.add(RichTextDelete(RuneOffsets.length(covered)));
-      }
+    if (covered.isEmpty) {
       continue;
     }
-    final attributes = op.attributes;
-    if (attributes == null || attributes.isEmpty) {
+    if (op.isDelete) {
+      ops.add(RichTextDelete(RuneOffsets.length(covered)));
+      continue;
+    }
+    if (plain) {
       ops.add(RichTextRetain(RuneOffsets.length(covered)));
       continue;
     }
@@ -260,6 +271,27 @@ Delta quillDocumentFromSpans(List<RichTextSpan> spans) {
   return none;
 }
 
+/// Whether the code unit offset [at] falls inside a surrogate pair of [text].
+bool splitsSurrogatePair(String text, int at) =>
+    at > 0 &&
+    at < text.length &&
+    isHighSurrogate(text.codeUnitAt(at - 1)) &&
+    isLowSurrogate(text.codeUnitAt(at));
+
+/// Whether [unit] is the high half of a surrogate pair.
+bool isHighSurrogate(int unit) => unit & 0xFC00 == 0xD800;
+
+/// Whether [unit] is the low half of a surrogate pair.
+bool isLowSurrogate(int unit) => unit & 0xFC00 == 0xDC00;
+
+/// Whether an embed sits at the code unit offset [at] of [plain], the plain
+/// text of a Quill document.
+bool isEmbedAt(String plain, int at) =>
+    at < plain.length && plain.startsWith(RichTextSpan.objectReplacement, at);
+
+/// The key of the source of an image or a video in a handler embed.
+const String embedSrcKey = 'src';
+
 /// The Quill embed type that holds a handler embed whole.
 ///
 /// A Quill embed is a map of one key, its type. A `crdt_lf` image or video
@@ -267,7 +299,8 @@ Delta quillDocumentFromSpans(List<RichTextSpan> spans) {
 /// `{'video': src}`, and a native one comes back typed. Any other handler
 /// embed, such as an image with an `alt`, goes to Quill as
 /// `{crdtQuillEmbedType: embed}` and comes back as the same map.
-/// `crdtQuillEmbedBuilders` gives the editor a builder for it.
+/// `crdtQuillEmbedBuilders` gives the editor a builder for it, and
+/// `crdtQuillUnknownEmbedBuilder` one for any other type.
 const String crdtQuillEmbedType = 'crdt_lf';
 
 /// The Quill embed for [embed], the data of a handler embed.
@@ -275,7 +308,7 @@ const String crdtQuillEmbedType = 'crdt_lf';
 /// The shapes are the ones of [crdtQuillEmbedType].
 Map<String, dynamic> quillEmbed(Map<String, Object?> embed) {
   final type = embed[richTextEmbedTypeKey];
-  final src = embed[_srcKey];
+  final src = embed[embedSrcKey];
   if (embed.length == 2 && _quillMedia.contains(type) && src is String) {
     return {type! as String: src};
   }
@@ -292,20 +325,22 @@ Map<String, dynamic> quillEmbed(Map<String, Object?> embed) {
 /// The handler embed for [data], the insert of a Quill embed: an
 /// [Embeddable] or its map.
 ///
-/// A [crdtQuillEmbedType] embed gives back the map it wraps.
+/// A [crdtQuillEmbedType] embed gives back the map it wraps. Throws an
+/// [ArgumentError] when [data] is neither, or a map has a key that is not a
+/// `String`.
 Map<String, Object?> richTextEmbed(Object? data) {
   final map = switch (data) {
     Embeddable() => {data.type: data.data},
-    Map<dynamic, dynamic>() => data.cast<String, Object?>(),
+    Map<dynamic, dynamic>() => _stringKeyed(data),
     _ => throw ArgumentError.value(data, 'data', 'is not a Quill embed'),
   };
   if (map.length == 1) {
     final MapEntry(:key, :value) = map.entries.single;
     if (key == crdtQuillEmbedType && value is Map<dynamic, dynamic>) {
-      return Map<String, Object?>.of(value.cast<String, Object?>());
+      return _stringKeyed(value);
     }
     if (_isQuillMedia(key, value)) {
-      return {richTextEmbedTypeKey: key, _srcKey: value};
+      return {richTextEmbedTypeKey: key, embedSrcKey: value};
     }
   }
   return Map<String, Object?>.of(map);
@@ -356,7 +391,13 @@ Map<String, Object?> quillAttributes(
   };
 }
 
-const String _srcKey = 'src';
+Map<String, Object?> _stringKeyed(Map<dynamic, dynamic> map) {
+  if (map.keys.any((key) => key is! String)) {
+    throw ArgumentError.value(map, 'data', 'has a key that is not a String');
+  }
+  return Map<String, Object?>.of(map.cast<String, Object?>());
+}
+
 final String _styleKey = Attribute.style.key;
 final String _widthKey = Attribute.width.key;
 const Set<Object?> _quillMedia = {RichTextImage.type, RichTextVideo.type};
@@ -470,7 +511,6 @@ void _forEachRun(
 }
 
 const int _newline = 0x0A;
-const int _objectReplacement = 0xFFFC;
 
 // The inline attributes of the Quill op that holds the code unit [unit].
 Map<String, Object?> _attributesAt(Delta document, int unit) {

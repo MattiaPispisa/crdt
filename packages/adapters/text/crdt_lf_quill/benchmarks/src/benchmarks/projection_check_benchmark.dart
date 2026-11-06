@@ -37,7 +37,7 @@ class Editor {
   Editor(int size, Check check) {
     handler = CRDTFugueRichTextHandler(document, 'page');
     _fill(handler, size);
-    quill = CrdtQuillBinding(controller);
+    quill = CrdtQuillBinding(controller)..bind();
     binding = CrdtEditorBinding<List<RichTextSpan>, RichTextDelta>(
       onRemoteDelta: quill.onRemoteDelta,
       onReset: quill.onReset,

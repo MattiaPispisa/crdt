@@ -58,8 +58,10 @@ void _updateEmbed(
   Map<String, Object?> embed,
 ) {
   final text = handler.text;
-  if (text.codeUnitAt(RuneOffsets.utf16Offset(text, index)) ==
-      RichTextSpan.objectReplacement.codeUnitAt(0)) {
+  if (text.startsWith(
+    RichTextSpan.objectReplacement,
+    RuneOffsets.utf16Offset(text, index),
+  )) {
     handler.updateEmbed(index, embed);
     return;
   }
@@ -78,7 +80,7 @@ void _insertEmbed(
     embed,
     attributes: {
       for (final entry in attributes.entries)
-        if (!_fixed(entry.key)) entry.key: entry.value,
+        if (!isFormattedAfterInsert(entry.key)) entry.key: entry.value,
     },
     inherit: false,
   );
@@ -123,7 +125,7 @@ void _insert(
     text,
     attributes: {
       for (final entry in attributes.entries)
-        if (!_fixed(entry.key)) entry.key: entry.value,
+        if (!isFormattedAfterInsert(entry.key)) entry.key: entry.value,
     },
     // Quill sends the exact attributes of the insert: drop what the left
     // text would lend.
@@ -132,7 +134,9 @@ void _insert(
   _formatFixed(handler, at, RuneOffsets.length(text), attributes);
 }
 
-bool _fixed(String key) =>
+/// Whether [writeRichTextDelta] formats the inline key [key] after the insert
+/// instead of with it.
+bool isFormattedAfterInsert(String key) =>
     !isQuillBlockKey(key) && quillMarkExpand(key) == MarkExpand.none;
 
 void _formatFixed(
@@ -142,7 +146,7 @@ void _formatFixed(
   Map<String, Object?> attributes,
 ) {
   for (final entry in attributes.entries) {
-    if (_fixed(entry.key)) {
+    if (isFormattedAfterInsert(entry.key)) {
       handler.format(
         at,
         count,

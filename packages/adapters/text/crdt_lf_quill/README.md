@@ -19,6 +19,7 @@ lists.
   - [How it works](#how-it-works)
     - [Units](#units)
     - [Attributes](#attributes)
+    - [Embeds](#embeds)
     - [The last newline](#the-last-newline)
     - [Undo](#undo)
     - [Projection check](#projection-check)
@@ -51,7 +52,15 @@ CrdtProvider.value(
     builder: (context) => Column(
       children: [
         QuillSimpleToolbar(controller: controller),
-        Expanded(child: QuillEditor.basic(controller: controller)),
+        Expanded(
+          child: QuillEditor.basic(
+            controller: controller,
+            // A peer's embed of a type without a builder shows a small box.
+            config: QuillEditorConfig(
+              unknownEmbedBuilder: crdtQuillUnknownEmbedBuilder(),
+            ),
+          ),
+        ),
       ],
     ),
   ),
@@ -61,10 +70,13 @@ CrdtProvider.value(
 Edits made in the editor go into the handler. Changes from other peers
 (`applyChange`, `importChanges`) show up in the editor.
 
-Keep every widget that listens to the controller **under** the binder. The
-binder loads a new controller while it builds, and a listener above it would
-be marked dirty during the build. A read of the handler that arrives during a
-build (the first one, for example) runs at the end of that frame.
+Without `crdtQuillUnknownEmbedBuilder`, `QuillEditor` throws in its build as
+soon as a peer writes an embed it has no builder for, and the base editor has
+no builder for images or videos.
+
+A change that arrives during a build (the first read of the handler, a new
+controller, a write made in `initState`) reaches the editor at the end of that
+frame, so a widget that listens to the controller can sit anywhere.
 
 `crdt_lf` and `flutter_quill` both export a `ChangeSource`. If you import both
 libraries in one file, hide the `crdt_lf` one, as above: Quill code uses the
@@ -98,6 +110,10 @@ Quill counts UTF-16 code units. The handler counts runes, so an emoji is one
 place in the handler and two in Quill. The converters translate the offsets
 against `before`, the plain text the change applies to.
 
+An edit always lands on whole runes. A replace that starts or ends inside a
+surrogate pair takes the whole emoji, and an insert inside a pair goes before
+it. A lone half surrogate stays one place in the handler.
+
 ### Attributes
 
 Block keys (`header`, `list`, `blockquote`, `code-block`, `indent`, `align`,
@@ -111,6 +127,7 @@ removes the attribute.
 | --- | --- |
 | Block keys | never (`MarkExpand.none`) |
 | `link` | never (`MarkExpand.none`) |
+| `style`, `displayWidth` (the size of an embed) | never (`MarkExpand.none`) |
 | Any other key (`bold`, `italic`, `color`, ...) | after its end (`MarkExpand.after`) |
 
 New text in the handler takes the formats on its left. Quill sends the exact
@@ -139,9 +156,15 @@ An embed is one position in the handler: see the "Embeds" section of the
   key of the map that has one) shows it, else a small box (`fallback`). That
   builder gets one value and the style, not the other fields, and draws
   inline.
+- `crdtQuillUnknownEmbedBuilder` shows every other embed with the same
+  `fallback`. Without it, an embed with no builder makes `QuillEditor` throw
+  in its build.
 
   ```dart
-  QuillEditorConfig(embedBuilders: crdtQuillEmbedBuilders([...myBuilders]))
+  QuillEditorConfig(
+    embedBuilders: crdtQuillEmbedBuilders([...myBuilders]),
+    unknownEmbedBuilder: crdtQuillUnknownEmbedBuilder(),
+  )
   ```
 - An embed replaced by another in one Quill change becomes an update of the
   same embed in the handler, so a concurrent format on it survives.
@@ -150,13 +173,19 @@ An embed is one position in the handler: see the "Embeds" section of the
 - A block embed (a video, a full-width image) keeps its own `'\n'`, which
   holds the block attributes.
 - `embedTypes` lists the embed types the editor may write (`image`, `video`,
-  a custom `type`); `null` takes all. Embeds from other peers show whatever
-  their type.
+  a custom `type`); `null` takes all. It filters this editor only: a peer can
+  still write any type, so keep `crdtQuillUnknownEmbedBuilder` in place.
 - An embed of a type out of `embedTypes`, or with data the handler refuses
   (above `maxEmbedBytes`, nested too deep, a `NaN`), goes to `onUnsupported`.
-  The rest of the edit, the text of a paste included, is written, and an
-  embed it would replace stays. Each embed inserted in the editor is checked
-  this way before it is written.
+  Each embed inserted in the editor is checked this way before it is written.
+  A refusal deletes no embed:
+  - When nothing else is written, the whole replace is dropped: the selection
+    stays, its text included, and the caret does not move.
+  - When something else is written, such as the text of a paste, the selected
+    text goes and the embeds of the selection stay.
+- An attribute value the handler refuses (a list, a `NaN`) goes to
+  `onUnsupported` as `{key: value}`. The attribute is dropped, and the rest of
+  the edit is written.
 - Upload and rendering stay with the app. Keep large media outside the
   document and put a URL in the embed.
 
@@ -180,7 +209,8 @@ undo is sent to the other peers like any other edit.
 
 For a history that understands formats and concurrent edits, pass a
 `CRDTUndoManager` to the binder. The editor then undoes through the manager,
-and the toolbar buttons follow it.
+and the toolbar buttons follow it. A new manager, or none, drops the steps of
+Quill's history.
 
 ```dart
 final undo = CRDTUndoManager(

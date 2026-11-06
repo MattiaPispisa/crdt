@@ -9,7 +9,13 @@ import 'package:crdt_lf_flutter/crdt_lf_flutter.dart';
 import 'package:crdt_lf_quill/crdt_lf_quill.dart';
 import 'package:crdt_lf_quill/src/crdt_quill_binding.dart';
 import 'package:flutter/widgets.dart'
-    show Builder, Column, ListenableBuilder, SizedBox, TextSelection;
+    show
+        Builder,
+        Column,
+        ListenableBuilder,
+        SizedBox,
+        TextSelection,
+        WidgetsBinding;
 import 'package:flutter_quill/flutter_quill.dart';
 import 'package:flutter_quill/quill_delta.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -27,7 +33,7 @@ class _Peer {
       manager = CRDTUndoManager(document, trackedOrigins: {crdtQuillOrigin})
         ..track(handler);
     }
-    quill = CrdtQuillBinding(controller, undoManager: manager);
+    quill = CrdtQuillBinding(controller, undoManager: manager)..bind();
     binding = CrdtEditorBinding<List<RichTextSpan>, RichTextDelta>(
       onRemoteDelta: quill.onRemoteDelta,
       onReset: (spans, cause) {
@@ -639,19 +645,19 @@ void main() {
 
         test('and the rest of the change is written', () {
           a.controller.replaceText(
-            1,
-            2,
+            0,
+            3,
             Delta()
-              ..insert('x')
-              ..insert({type: value}),
+              ..insert({type: value})
+              ..insert('x'),
             null,
           );
           expect(refused, hasLength(1));
-          expectKept('ax\uFFFC');
+          expectKept('x\uFFFC');
           // After the written text, before the kept embed.
           expect(
             a.controller.selection,
-            const TextSelection.collapsed(offset: 2),
+            const TextSelection.collapsed(offset: 1),
           );
           expect(a.resets, [ResetCause.initial]);
         });
@@ -948,6 +954,490 @@ void main() {
     });
   });
 
+  void select(_Peer peer, int offset) => peer.controller.updateSelection(
+    TextSelection.collapsed(offset: offset),
+    ChangeSource.local,
+  );
+
+  group('a change that splits a surrogate pair', () {
+    setUp(() {
+      debugVerifyCrdtQuillProjection = false;
+      addTearDown(() => debugVerifyCrdtQuillProjection = true);
+    });
+
+    void expectShown(String text) {
+      expect(a.handler.text, text);
+      expect(a.plain, '$text\n');
+      _sync(a, b);
+      _expectConverged(a, b);
+    }
+
+    test('a replaced low half is the whole emoji, as the diff of the input '
+        'gives it', () {
+      a.type(0, '😀');
+      a.controller.replaceText(1, 1, '\uDE01', null);
+
+      expectShown('😁');
+      expect(a.resets, [ResetCause.initial]);
+      expect(a.controller.selection, const TextSelection.collapsed(offset: 2));
+    });
+
+    test('a replaced high half is the whole emoji', () {
+      a.type(0, '😀');
+      a.controller.replaceText(0, 1, '\uD83C', null);
+
+      expectShown('\u{1F200}');
+      expect(a.resets, [ResetCause.initial]);
+    });
+
+    test('text over one half replaces the whole emoji', () {
+      a.type(0, 'x😀y');
+      a.controller.replaceText(2, 1, 'z', null);
+      expectShown('xzy');
+
+      a.type(1, '😀');
+      a.controller.replaceText(2, 1, 'w', null);
+      expectShown('xwzy');
+      expect(a.controller.selection, const TextSelection.collapsed(offset: 2));
+    });
+
+    test('a deleted half deletes the emoji and nothing else', () {
+      a.type(0, 'x😀y');
+      a.controller.replaceText(2, 1, '', null);
+      expectShown('xy');
+      expect(a.controller.selection, const TextSelection.collapsed(offset: 1));
+
+      a.type(1, '😀');
+      a.controller.replaceText(1, 1, '', null);
+      expectShown('xy');
+    });
+
+    test('an insert inside a pair goes before the emoji', () {
+      a.type(0, '😀');
+      a.controller.replaceText(1, 0, 'z', null);
+
+      expectShown('z😀');
+      expect(a.controller.selection, const TextSelection.collapsed(offset: 1));
+    });
+
+    test('a Quill rule that deletes half an emoji deletes the emoji', () {
+      a.type(0, '😀');
+      a.controller.replaceText(2, 0, BlockEmbed.image('a.png'), null);
+      a.type(2, '😀a');
+      a.controller.replaceText(6, 0, BlockEmbed.image('b.png'), null);
+      a.controller.replaceText(3, 2, '', null);
+
+      expectShown('😀￼a￼');
+    });
+
+    test('a half composed away deletes the emoji', () {
+      a.type(0, 'x😀y');
+      a.controller.document.compose(
+        Delta()
+          ..retain(2)
+          ..delete(1),
+        ChangeSource.local,
+      );
+
+      expectShown('xy');
+    });
+
+    test('a lone half stays in the handler', () {
+      a.type(0, 'ab');
+      a.controller.replaceText(1, 0, '\uD83D', null);
+      a.controller.replaceText(2, 0, 'c', null);
+
+      expect(a.handler.length, 4);
+      expect(a.handler.text, 'a\uD83Dcb');
+      expect(a.plain, 'a\uD83Dcb\n');
+      expect(a.resets, [ResetCause.initial]);
+    });
+  });
+
+  group('a video from a peer', () {
+    final video = Uri.parse('https://example.com/v.mp4');
+
+    test('moves the Quill undo stack by one position', () {
+      a.type(0, 'abcdef');
+      a.controller.document.history.lastRecorded = 0;
+      a.type(6, 'X');
+      _sync(a, b);
+      b.handler.insertVideo(2, video, block: false);
+      _sync(a, b);
+
+      a.controller.undo();
+
+      expect(a.plain, 'ab￼cdef\n');
+      _sync(a, b);
+      _expectConverged(a, b);
+    });
+
+    test('moves the caret by the positions it takes', () {
+      a.type(0, 'abcdef');
+      _sync(a, b);
+      select(a, 5);
+
+      b.handler.insertVideo(2, video, block: false);
+      _sync(a, b);
+      expect(a.controller.selection, const TextSelection.collapsed(offset: 6));
+
+      b.handler.insertVideo(2, video);
+      _sync(a, b);
+      expect(a.controller.selection, const TextSelection.collapsed(offset: 8));
+      _expectConverged(a, b);
+    });
+  });
+
+  group('a refusal deletes nothing', () {
+    final refusedEmbed = Delta()..insert({'nope': 'x'});
+    late List<Object?> refused;
+
+    setUp(() {
+      refused = [];
+      a.quill
+        ..onUnsupported = refused.add
+        ..embedTypes = {'image'};
+    });
+
+    void fill(String text) {
+      for (var i = text.length - 1; i >= 0; i--) {
+        if (text[i] == '#') {
+          a.controller.replaceText(0, 0, BlockEmbed.image('$i.png'), null);
+        } else {
+          a.controller.replaceText(0, 0, text[i], null);
+        }
+      }
+    }
+
+    String shown() => a.plain.replaceAll('￼', '#');
+
+    for (final (name, data) in [
+      ('an Embeddable', const Embeddable('nope', 'x') as Object),
+      ('a delta', refusedEmbed),
+    ]) {
+      test('$name alone over text and embeds drops the whole replace', () {
+        fill('a##b');
+        select(a, 3);
+        a.controller.replaceText(0, 2, data, null);
+
+        expect(refused, hasLength(1));
+        expect(shown(), 'a##b\n');
+        expect(a.handler.length, 4);
+        expect(
+          a.controller.selection,
+          const TextSelection.collapsed(offset: 3),
+        );
+      });
+    }
+
+    test('text over embeds keeps every embed', () {
+      fill('a##b');
+      a.controller.replaceText(
+        0,
+        4,
+        Delta()
+          ..insert({'nope': 'x'})
+          ..insert('t'),
+        null,
+      );
+
+      expect(shown(), 't##\n');
+      expect(a.handler.length, 3);
+      expect(a.controller.selection, const TextSelection.collapsed(offset: 1));
+      expect(a.resets, [ResetCause.initial]);
+    });
+
+    test('a refused embed before the written text keeps the embed', () {
+      fill('#');
+      a.controller.replaceText(
+        0,
+        1,
+        Delta()
+          ..insert({'nope': 'x'})
+          ..insert('t'),
+        null,
+      );
+
+      expect(shown(), 't#\n');
+    });
+
+    test('an accepted embed counts as written', () {
+      fill('ab');
+      a.controller.replaceText(
+        0,
+        2,
+        Delta()
+          ..insert({'nope': 'x'})
+          ..insert({'image': 'c.png'}),
+        null,
+      );
+      expect(shown(), '#\n');
+
+      fill('de');
+      a.controller.document.compose(
+        Delta()
+          ..insert({'nope': 'y'})
+          ..insert({'image': 'f.png'})
+          ..delete(2),
+        ChangeSource.local,
+      );
+      expect(shown(), '##\n');
+      expect(a.handler.length, 2);
+    });
+
+    test('composed into the document, in the release build too', () {
+      debugVerifyCrdtQuillProjection = false;
+      addTearDown(() => debugVerifyCrdtQuillProjection = true);
+      fill('a#b#c');
+      a.controller.document.compose(
+        Delta()
+          ..insert({'nope': 'x'})
+          ..delete(2)
+          ..retain(1)
+          ..insert('t')
+          ..insert({'nope': 'y'})
+          ..delete(2),
+        ChangeSource.local,
+      );
+
+      expect(refused, hasLength(2));
+      expect(a.handler.text, 'a￼bt￼');
+      expect(shown(), 'a#bt#\n');
+    });
+  });
+
+  for (final (key, value) in [
+    ('bold', true as Object),
+    ('link', 'https://a.example'),
+  ]) {
+    test('a clear of $key, which the insert sets, is foreign', () async {
+      debugVerifyCrdtQuillProjection = false;
+      addTearDown(() => debugVerifyCrdtQuillProjection = true);
+      a.binding.detach();
+      var armed = false;
+      final watcher = a.handler.watch().listen((_) {
+        if (armed) {
+          armed = false;
+          a.handler.format(0, 1, key, null, expand: MarkExpand.none);
+        }
+      });
+      addTearDown(watcher.cancel);
+      a.binding.attach(a.document, 'page');
+      await _pump();
+
+      armed = true;
+      a.controller.replaceText(0, 0, Delta()..insert('x', {key: value}), null);
+
+      expect(a.handler.attributesAt(0), isEmpty);
+      expect(a.content, quillDocumentFromSpans(a.handler.value));
+    });
+  }
+
+  test('text with its own link inside another link is read as an echo', () {
+    a
+      ..type(0, 'ab')
+      ..format(0, 2, const LinkAttribute('https://a.example'));
+    a.controller.replaceText(
+      1,
+      0,
+      Delta()..insert('x', {'link': 'https://b.example'}),
+      null,
+    );
+
+    expect(a.resets, [ResetCause.initial]);
+    expect(a.content, quillDocumentFromSpans(a.handler.value));
+  });
+
+  test(
+    'a manager set and removed later leaves no step of the Quill history',
+    () {
+      a.type(0, 'abcdef');
+      a.quill.undoManager = a.manager = CRDTUndoManager(
+        a.document,
+        trackedOrigins: {crdtQuillOrigin},
+      )..track(a.handler);
+      a.delete(0, 6);
+      a.quill.undoManager = null;
+
+      expect(a.controller.hasUndo, isFalse);
+      a.controller.undo();
+      expect(a.handler.text, '');
+    },
+  );
+
+  test('setting the same manager keeps the Quill history', () {
+    a.type(0, 'ab');
+    a.quill.undoManager = null;
+
+    expect(a.controller.hasUndo, isTrue);
+  });
+
+  test('an attribute value the handler refuses reaches onUnsupported, the '
+      'rest is written', () {
+    final refused = <Object?>[];
+    a.quill.onUnsupported = refused.add;
+    a.type(0, 'ab');
+    a.controller.replaceText(
+      2,
+      0,
+      Delta()
+        ..insert('c', {
+          'x': [1],
+          'bold': true,
+        })
+        ..insert('d'),
+      null,
+    );
+
+    expect(refused, [
+      {
+        'x': [1],
+      },
+    ]);
+    expect(a.handler.text, 'abcd');
+    expect(a.handler.attributesAt(2), {'bold': true});
+    expect(a.content, quillDocumentFromSpans(a.handler.value));
+    expect(a.controller.selection, const TextSelection.collapsed(offset: 4));
+    expect(a.resets, [ResetCause.initial]);
+  });
+
+  test('an attribute value composed into the document is taken out of the '
+      'editor', () {
+    debugVerifyCrdtQuillProjection = false;
+    addTearDown(() => debugVerifyCrdtQuillProjection = true);
+    final refused = <Object?>[];
+    a.quill.onUnsupported = refused.add;
+    a.type(0, 'ab');
+    a.controller.document.compose(
+      Delta()..retain(1, {
+        'x': [1],
+      }),
+      ChangeSource.local,
+    );
+
+    expect(refused, hasLength(1));
+    expect(a.handler.attributesAt(0), isEmpty);
+    expect(a.content, Delta()..insert('ab\n'));
+  });
+
+  test('a resize stays off the text a peer types next to the image', () {
+    a.type(0, 'ab');
+    a.controller.replaceText(1, 0, BlockEmbed.image('a.png'), null);
+    _sync(a, b);
+
+    a.controller.formatText(1, 1, const StyleAttribute('width: 300'));
+    b.type(2, 'x');
+    _sync(a, b);
+
+    expect(a.handler.attributesAt(2), isEmpty);
+    _expectConverged(a, b);
+  });
+
+  test('an embed with a key that is not a String reaches onUnsupported', () {
+    final refused = <Object?>[];
+    a.quill.onUnsupported = refused.add;
+    const embed = Embeddable(crdtQuillEmbedType, {1: 2});
+    a.controller.replaceText(0, 0, embed, null);
+
+    expect(refused, [embed]);
+    expect(a.handler.text, '');
+  });
+
+  testWidgets('a reset in a build keeps the document, its selection and its '
+      'undo stack', (tester) async {
+    final c = _Peer(PeerId.parse('00000000-0000-4000-8000-0000000000d1'));
+    addTearDown(c.dispose);
+    c.type(0, 'hello');
+    select(c, 3);
+    // Never pushed: the reset has something to take back.
+    final document = c.controller.document
+      ..compose(
+        Delta()
+          ..retain(5)
+          ..insert('!'),
+        ChangeSource.silent,
+      );
+
+    await tester.pumpWidget(
+      Builder(
+        builder: (context) {
+          c.binding.resync(ResetCause.deltasMissed);
+          return const SizedBox();
+        },
+      ),
+    );
+
+    expect(c.controller.document, same(document));
+    expect(c.plain, 'hello\n');
+    expect(c.controller.selection, const TextSelection.collapsed(offset: 3));
+    expect(c.controller.hasUndo, isTrue);
+  });
+
+  testWidgets(
+    'a reset for another handler, in a build, starts a new document',
+    (tester) async {
+      final c = _Peer(PeerId.parse('00000000-0000-4000-8000-0000000000d4'));
+      addTearDown(c.dispose);
+      c.type(0, 'hello');
+      select(c, 3);
+
+      await tester.pumpWidget(
+        Builder(
+          builder: (context) {
+            c.binding.resync(ResetCause.initial);
+            return const SizedBox();
+          },
+        ),
+      );
+
+      expect(c.plain, 'hello\n');
+      expect(c.controller.selection, const TextSelection.collapsed(offset: 0));
+      expect(c.controller.hasUndo, isFalse);
+    },
+  );
+
+  testWidgets('an edit made while a reset waits for the end of the frame is '
+      'written', (tester) async {
+    final c = _Peer(PeerId.parse('00000000-0000-4000-8000-0000000000d2'));
+    addTearDown(c.dispose);
+    c.type(0, 'hello');
+
+    await tester.pumpWidget(
+      Builder(
+        builder: (context) {
+          WidgetsBinding.instance.addPostFrameCallback((_) => c.type(5, '!'));
+          c.binding.resync(ResetCause.deltasMissed);
+          return const SizedBox();
+        },
+      ),
+    );
+
+    expect(c.handler.text, 'hello!');
+    expect(c.plain, 'hello!\n');
+  });
+
+  testWidgets('deltas that arrive while a reset waits for the end of the '
+      'frame are left to it', (tester) async {
+    final c = _Peer(PeerId.parse('00000000-0000-4000-8000-0000000000d3'));
+    addTearDown(c.dispose);
+    c.type(0, 'hello');
+
+    await tester.pumpWidget(
+      Builder(
+        builder: (context) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            c.handler.insert(c.handler.length, ' world');
+          });
+          c.handler.insert(0, 'oh, ');
+          return const SizedBox();
+        },
+      ),
+    );
+
+    expect(tester.takeException(), isNull);
+    expect(c.plain, 'oh, hello world\n');
+  });
+
   group('with a CRDTUndoManager', () {
     late _Peer ua;
     late _Peer ub;
@@ -1178,6 +1668,28 @@ void main() {
       expect(a.handler.text, 'ab');
       a.controller.undo();
       expect(a.handler.text, 'ab');
+    });
+
+    test('an undo that changes nothing leaves the caret', () {
+      ua.type(0, 'abcdef');
+      ua.manager!.stopCapturing();
+      ua.type(0, 'ZZ');
+      _sync(ua, ub);
+      ub.delete(0, 2);
+      _sync(ua, ub);
+      select(ua, 4);
+
+      ua.controller.undo();
+
+      expect(ua.handler.text, 'abcdef');
+      expect(ua.controller.selection, const TextSelection.collapsed(offset: 4));
+    });
+
+    test('once disposed, the controller records its undo again', () {
+      ua.quill.dispose();
+      ua.type(0, 'x');
+
+      expect(ua.controller.document.history.hasUndo, isTrue);
     });
 
     test('only the writes of the editor are recorded', () {
