@@ -6,7 +6,6 @@ import 'package:crdt_lf/crdt_lf.dart' hide ChangeSource, Operation;
 import 'package:crdt_lf_flutter/crdt_lf_flutter.dart';
 import 'package:crdt_lf_quill/src/quill_attributes.dart';
 import 'package:crdt_lf_quill/src/quill_converters.dart';
-import 'package:crdt_lf_quill/src/rich_text_writer.dart';
 import 'package:dart_quill_delta/dart_quill_delta.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/scheduler.dart';
@@ -15,12 +14,11 @@ import 'package:flutter_quill/flutter_quill.dart';
 
 /// Whether the projection check compares the whole editor with the handler.
 ///
-/// After each local write and remote change, the binder checks the editor
-/// against the handler and reads the handler again on a mismatch. The check
-/// always compares the lengths. When `true` (the default), it also compares
-/// the full content, attributes included. Despite the name, the switch also
-/// works in release builds. The full compare adds time linear in the
-/// document length to every change: set it to `false` to skip it.
+/// After each local write and remote change, the binder compares the lengths
+/// of the editor and the handler and reads the handler again on a mismatch.
+/// A drift that keeps the length is invisible to that. While `true`, a debug
+/// build also compares the full content, attributes included, and throws on a
+/// mismatch. That costs time linear in the document length on every change.
 bool debugVerifyCrdtQuillProjection = true;
 
 /// The origin of every write the Quill binding makes to the handler.
@@ -56,11 +54,12 @@ class CrdtQuillBinding {
   /// takes all.
   Set<String>? embedTypes;
 
-  /// Called with the anchors the editor publishes; see [hasFocus].
+  /// Called with the anchors the editor publishes.
   void Function(FugueElementID? base, FugueElementID? extent)?
   onSelectionAnchorsChanged;
 
-  late final SelectionAnchors _anchors = SelectionAnchors(
+  /// The stable anchors of the selection.
+  late final SelectionAnchors anchors = SelectionAnchors(
     (base, extent) => onSelectionAnchorsChanged?.call(base, extent),
   );
 
@@ -213,20 +212,6 @@ class CrdtQuillBinding {
     }
   }
 
-  /// Whether the editor has focus: the anchors are published only then, and
-  /// `null`s once when it leaves.
-  bool get hasFocus => _anchors.hasFocus;
-
-  set hasFocus(bool value) {
-    if (value) {
-      _captureAnchors();
-    }
-    _anchors.hasFocus = value;
-  }
-
-  /// Withdraws the anchors, for a handler that is gone.
-  void clearAnchors() => _anchors.clear();
-
   /// Whether the editor shows the handler value.
   ///
   /// See [debugVerifyCrdtQuillProjection] for what is compared.
@@ -246,9 +231,13 @@ class CrdtQuillBinding {
     if (runes != handler.length) {
       return false;
     }
-    return !debugVerifyCrdtQuillProjection ||
-        _normalized(content) ==
-            _normalized(quillDocumentFromSpans(handler.value));
+    assert(
+      !debugVerifyCrdtQuillProjection ||
+          _normalized(content) ==
+              _normalized(quillDocumentFromSpans(handler.value)),
+      'the editor drifted from the handler',
+    );
+    return true;
   }
 
   /// Stops writing to the handler and gives back the `onReplaceText` of the
@@ -290,11 +279,11 @@ class CrdtQuillBinding {
     _userOnReplaceText = _controller.onReplaceText;
     _controller
       ..onReplaceText = _onReplaceText
-      ..addListener(_captureAnchors);
+      ..addListener(captureAnchors);
   }
 
   void _unhook() {
-    _controller.removeListener(_captureAnchors);
+    _controller.removeListener(captureAnchors);
     if (_controller.onReplaceText == _onReplaceText) {
       _controller.onReplaceText = _userOnReplaceText;
     }
@@ -490,11 +479,11 @@ class CrdtQuillBinding {
     }
     final accepted = _acceptedDelta(change, before: before);
     final rich = richTextDeltaFromQuill(accepted, before, document: content);
-    final written = _Written()..add(rich);
+    final written = RichTextEcho(quillRichTextWriter)..add(rich);
     binding.push(
       () => crdt.runInTransaction(() {
         final handler = _handler;
-        writeRichTextDelta(handler, rich);
+        quillRichTextWriter.write(handler, rich);
         final last = _syncLastNewline(
           document,
           handler,
@@ -506,6 +495,7 @@ class CrdtQuillBinding {
       }, origin: crdtQuillOrigin),
       // The editor already shows what was refused: read the handler back.
       isEcho: identical(accepted, change) ? written.echoes : (_) => false,
+      ownStep: _isFormat(change) ? undoManager : null,
     );
   }
 
@@ -526,7 +516,7 @@ class CrdtQuillBinding {
         RichTextRetain(handler.length),
         RichTextInsert('\n', _blockAttributes(content, 0)),
       ]);
-      writeRichTextDelta(handler, write);
+      quillRichTextWriter.write(handler, write);
       return write;
     }
     if (handler.length == 0) {
@@ -539,9 +529,11 @@ class CrdtQuillBinding {
     ]);
   }
 
-  // Only when the editor and the handler agree: an offset of a stale editor
-  // names the wrong element.
-  void _captureAnchors() {
+  /// Anchors the selection of the controller.
+  ///
+  /// Only when the editor and the handler agree: an offset of a stale editor
+  /// names the wrong element.
+  void captureAnchors() {
     final binding = this.binding;
     final document = _document;
     if (onSelectionAnchorsChanged == null ||
@@ -552,7 +544,7 @@ class CrdtQuillBinding {
         binding.isBehind) {
       return;
     }
-    _anchors.capture(
+    anchors.capture(
       _controller.selection,
       document.toPlainText(),
       _handler.stablePositionAt,
@@ -728,76 +720,6 @@ class _BoundDocument extends Document {
   }
 }
 
-// What one push writes, to tell its echo from a foreign change.
-class _Written {
-  int _inserted = 0;
-  int _deleted = 0;
-  int _embedsInserted = 0;
-  int _embedsUpdated = 0;
-  final List<OwnsFormat> _formats = [];
-
-  void add(RichTextDelta delta) {
-    var index = 0;
-    void own(int count, Map<String, Object?> attributes) {
-      if (attributes.isNotEmpty) {
-        _formats.add(formatsWithin(index, index + count, attributes));
-      }
-      index += count;
-    }
-
-    // The write clears what the insert takes from its left. A key formatted
-    // after the insert goes `null` first; once set, a `null` is foreign.
-    void put(int count, Map<String, Object?> attributes) {
-      final from = index;
-      final to = index += count;
-      final unset = attributes.keys.where(isFormattedAfterInsert).toSet();
-      _formats.add((start, end, written) {
-        if (start < from || end > to) {
-          return false;
-        }
-        return written.entries.every((entry) {
-          final key = entry.key;
-          final clear = entry.value == null;
-          final own =
-              attributes[key] == entry.value || clear && unset.contains(key);
-          if (!clear) {
-            unset.remove(key);
-          }
-          return own;
-        });
-      });
-    }
-
-    for (final op in delta.ops) {
-      switch (op) {
-        case RichTextRetain():
-          own(op.count, op.attributes);
-        case RichTextInsert():
-          _inserted += op.length;
-          put(op.length, op.attributes);
-        case RichTextInsertEmbed():
-          _embedsInserted++;
-          put(1, op.attributes);
-        case RichTextUpdateEmbed():
-          _embedsUpdated++;
-          own(1, op.attributes);
-        case RichTextDelete():
-          _deleted += op.count;
-      }
-    }
-  }
-
-  bool echoes(List<RichTextDelta> dropped) => echoesRichText(
-    dropped,
-    deleted: _deleted,
-    inserted: _inserted,
-    embedsInserted: _embedsInserted,
-    embedsUpdated: _embedsUpdated,
-    ownsFormat: (from, to, attributes) =>
-        _formats.any((owns) => owns(from, to, attributes)),
-  );
-}
-
 // [document] with each embed and attributes as the handler data they stand
 // for.
 Delta _normalized(Delta document) {
@@ -845,8 +767,8 @@ int _insertedLength(Delta delta) => delta
   Object? data,
 ) {
   final end = index + len;
-  final splitsStart = splitsSurrogatePair(plain, index);
-  final splitsEnd = splitsSurrogatePair(plain, end);
+  final splitsStart = RuneOffsets.splitsPair(plain, index);
+  final splitsEnd = RuneOffsets.splitsPair(plain, end);
   if (!splitsStart && !splitsEnd) {
     return (index, len, data);
   }
@@ -855,12 +777,12 @@ int _insertedLength(Delta delta) => delta
   }
   var joined = data;
   if (joined is String && splitsStart && joined.isNotEmpty) {
-    if (isLowSurrogate(joined.codeUnitAt(0))) {
+    if (RuneOffsets.isLowSurrogate(joined.codeUnitAt(0))) {
       joined = '${plain[index - 1]}$joined';
     }
   }
   if (joined is String && splitsEnd && joined.isNotEmpty) {
-    if (isHighSurrogate(joined.codeUnitAt(joined.length - 1))) {
+    if (RuneOffsets.isHighSurrogate(joined.codeUnitAt(joined.length - 1))) {
       joined = '$joined${plain[end]}';
     }
   }
@@ -880,6 +802,12 @@ extension on Delta {
     }
     return this;
   }
+}
+
+bool _isFormat(Delta delta) {
+  final ops = delta.toList();
+  return ops.every((op) => op.isRetain) &&
+      ops.any((op) => op.attributes != null);
 }
 
 bool _insertsVideo(Delta delta) => delta.toList().any(

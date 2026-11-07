@@ -98,7 +98,7 @@ it.
 The converters are exported, so you can build your own binding:
 
 - `richTextDeltaFromQuill(change, before)`: a Quill change to a `RichTextDelta`.
-- `writeRichTextDelta(handler, delta)`: writes a `RichTextDelta` into the handler.
+- `quillRichTextWriter.write(handler, delta)`: writes a `RichTextDelta` into the handler.
 - `quillDeltaFromRichText(delta, before)`: a `RichTextDelta` to a Quill change.
 - `quillDocumentFromSpans(spans)`: the handler value as a Quill document.
 
@@ -132,7 +132,7 @@ removes the attribute.
 | Any other key (`bold`, `italic`, `color`, ...) | after its end (`MarkExpand.after`) |
 
 New text in the handler takes the formats on its left. Quill sends the exact
-attributes of each insert, so after an insert `writeRichTextDelta` sets the
+attributes of each insert, so after an insert `quillRichTextWriter` sets the
 formats Quill asked for and removes the others. When they already match, it
 writes nothing more.
 
@@ -229,13 +229,13 @@ change.
 
 ### Projection check
 
-After each local write and each remote change, the binder checks that the
-editor shows the handler. On a mismatch it reads the handler again. The check
-compares the lengths, and also the full content while
-`debugVerifyCrdtQuillProjection` is `true` (the default). The flag also works
-in release builds. In [`benchmarks/results.md`](./benchmarks/results.md), a
-local keystroke on a 50000-rune document takes 2.17 ms with the length check
-and 3.40 ms with the full check.
+After each local write and each remote change, the binder compares the lengths
+of the editor and the handler, and reads the handler again on a mismatch. A
+debug build also compares the full content and throws on a mismatch, while
+`debugVerifyCrdtQuillProjection` is `true` (the default). In
+[`benchmarks/results.md`](./benchmarks/results.md), a local keystroke on a
+50000-rune document takes 2.17 ms with the length check and 3.40 ms with the
+full check.
 
 ### Remote cursors
 

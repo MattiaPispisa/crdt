@@ -3,6 +3,7 @@
 
 import 'package:crdt_lf/crdt_lf.dart';
 import 'package:crdt_lf_flutter/src/common/_crdt_guards.dart';
+import 'package:crdt_lf_flutter/src/editor/selection_anchors.dart';
 import 'package:crdt_lf_flutter/src/effects/_text_field_core.dart';
 import 'package:crdt_lf_flutter/src/effects/_text_field_engine.dart';
 import 'package:crdt_lf_flutter/src/effects/text_delta.dart';
@@ -124,22 +125,14 @@ class _CrdtTextFieldBuilderState extends State<CrdtTextFieldBuilder>
     // Rebuilds only when this flips, so the field still builds once.
     if (context.selectCrdtDocument((doc) => doc.isDeleted(widget.id))) {
       _engine.binding.detach();
-      // Not here: the callback is the user's, and this is a build.
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) {
-          _engine.anchors.clear();
-        }
-      });
+      _engine.anchors.clearAfterFrame(mounted: () => mounted);
       return buildDeleted(context, widget.deletedBuilder);
     }
     // Covers a new document and a new id alike, which is why there is no
     // `didUpdateWidget`: `build` always runs after one.
     _engine.attach(document, widget.id);
-    return Focus(
-      canRequestFocus: false,
-      skipTraversal: true,
-      includeSemantics: false,
-      onFocusChange: (hasFocus) => _engine.anchors.hasFocus = hasFocus,
+    return SelectionAnchorsFocus(
+      anchors: _engine.anchors,
       child: widget.builder(context, _engine.controller),
     );
   }

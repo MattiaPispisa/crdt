@@ -24,6 +24,11 @@
   writer's in `CrdtEditorBinding.push`.
 - `CrdtTextCursorsOverlay.targetOf` and `CrdtTextCursorsTarget` paint the cursors over another editor.
 - `SelectionAnchors` is public, to publish the selection of your own editor binding.
+- `RichTextWriter` writes a `RichTextDelta` into a rich text handler with the key policy of an editor,
+  and `RichTextEcho` tells its echo from another writer's in `CrdtEditorBinding.push`.
+- `CrdtEditorBinding.push` takes `ownStep`, so a format is an undo step of its own.
+- `CrdtEditorBinder` takes `anchors` and `onFocusChange`, and `SelectionAnchorsFocus` feeds the focus
+  to the anchors of an editor.
 
 ### Fixed
 

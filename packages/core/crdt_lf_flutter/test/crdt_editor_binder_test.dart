@@ -110,5 +110,48 @@ void main() {
       expect(find.text('deleted'), findsOneWidget);
       expect(binding.isAttached, isFalse);
     });
+
+    testWidgets('gives its anchors the focus, and clears them on a move',
+        (tester) async {
+      final a = CRDTFugueRichTextHandler(doc, 'a')..insert(0, 'hello');
+      CRDTFugueRichTextHandler(doc, 'b').insert(0, 'world');
+      final published = <FugueElementID?>[];
+      final anchors = SelectionAnchors((base, _) => published.add(base));
+      final focusChanges = <bool>[];
+      final focus = FocusNode();
+      addTearDown(focus.dispose);
+      Widget editor(String id) => CrdtProvider.value(
+            value: doc,
+            child: MaterialApp(
+              home: CrdtEditorBinder<List<RichTextSpan>, RichTextDelta>(
+                id: id,
+                onRemoteDelta: (_) {},
+                onReset: (_, __) {},
+                anchors: anchors,
+                onFocusChange: focusChanges.add,
+                builder: (context, _) => Focus(
+                  focusNode: focus,
+                  child: const SizedBox(),
+                ),
+              ),
+            ),
+          );
+      await tester.pumpWidget(editor('a'));
+      anchors.update(a.stablePositionAt(1), a.stablePositionAt(1));
+
+      focus.requestFocus();
+      await tester.pump();
+      expect(focusChanges, [true]);
+      expect(published, [a.stablePositionAt(1)]);
+
+      await tester.pumpWidget(editor('b'));
+      expect(published.last, isNull);
+
+      anchors.update(a.stablePositionAt(2), a.stablePositionAt(2));
+      doc.deleteHandler(doc.handlerById('b')!);
+      await tester.pump();
+      await tester.pump();
+      expect(published.last, isNull);
+    });
   });
 }

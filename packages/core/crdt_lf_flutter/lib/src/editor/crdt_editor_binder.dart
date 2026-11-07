@@ -4,6 +4,7 @@
 import 'package:crdt_lf/crdt_lf.dart';
 import 'package:crdt_lf_flutter/src/common/_crdt_guards.dart';
 import 'package:crdt_lf_flutter/src/editor/crdt_editor_binding.dart';
+import 'package:crdt_lf_flutter/src/editor/selection_anchors.dart';
 import 'package:crdt_lf_flutter/src/provider/_crdt_view.dart';
 import 'package:crdt_lf_flutter/src/provider/crdt_helper.dart';
 import 'package:crdt_lf_flutter/src/provider/handler_delta_subscription.dart';
@@ -41,6 +42,9 @@ class CrdtEditorBinder<V, D extends ComposableDelta<D>> extends StatefulWidget {
     required this.builder,
     this.verifyProjection,
     this.deletedBuilder,
+    this.onBeforeAttach,
+    this.anchors,
+    this.onFocusChange,
     super.key,
   });
 
@@ -71,6 +75,18 @@ class CrdtEditorBinder<V, D extends ComposableDelta<D>> extends StatefulWidget {
   /// The binding stops following the handler.
   final WidgetBuilder? deletedBuilder;
 
+  /// See `onBeforeAttach` of [CrdtEditorBinding.attach].
+  final VoidCallback? onBeforeAttach;
+
+  /// The anchors of the selection of the editor, if it has any.
+  ///
+  /// They hear of the focus inside the subtree, and are cleared when the
+  /// binder follows another handler or the handler is deleted.
+  final SelectionAnchors? anchors;
+
+  /// See [SelectionAnchorsFocus.onFocusChange]; needs [anchors].
+  final ValueChanged<bool>? onFocusChange;
+
   @override
   State<CrdtEditorBinder<V, D>> createState() => _CrdtEditorBinderState<V, D>();
 }
@@ -91,12 +107,28 @@ class _CrdtEditorBinderState<V, D extends ComposableDelta<D>>
     final document = context.liveDocument('CrdtEditorBinder');
     if (context.selectCrdtDocument((doc) => doc.isDeleted(widget.id))) {
       _binding.detach();
+      widget.anchors?.clearAfterFrame(mounted: () => mounted);
       return buildDeleted(context, widget.deletedBuilder);
     }
     // In build, like the other delta widgets: it covers a new document and a
     // new id, so there is no `didUpdateWidget`.
-    _binding.attach(document, widget.id);
-    return widget.builder(context, _binding);
+    _binding.attach(
+      document,
+      widget.id,
+      onBeforeAttach: () {
+        widget.anchors?.clear();
+        widget.onBeforeAttach?.call();
+      },
+    );
+    final child = widget.builder(context, _binding);
+    final anchors = widget.anchors;
+    return anchors == null
+        ? child
+        : SelectionAnchorsFocus(
+            anchors: anchors,
+            onFocusChange: widget.onFocusChange,
+            child: child,
+          );
   }
 
   @override

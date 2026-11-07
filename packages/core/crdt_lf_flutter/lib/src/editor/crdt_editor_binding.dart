@@ -179,11 +179,15 @@ class CrdtEditorBinding<V, D extends ComposableDelta<D>> {
   /// delivered after the listener returns, so [isEcho] sees none of it and the
   /// binding reads the handler. The editor stays right, at the cost of a read.
   ///
+  /// [ownStep] makes the write an undo step of its own on that manager, apart
+  /// from the typing around it. Pass it for a format.
+  ///
   /// A push inside a push runs the write at once. A no-op while detached or
   /// when the handler is deleted.
   void push(
     void Function() writeToHandler, {
     bool Function(List<D> dropped)? isEcho,
+    CRDTUndoManager? ownStep,
   }) {
     final document = _document;
     final id = _id;
@@ -224,6 +228,7 @@ class CrdtEditorBinding<V, D extends ComposableDelta<D>> {
     }
 
     var written = false;
+    ownStep?.stopCapturing();
     try {
       writeToHandler();
       written = true;
@@ -232,6 +237,7 @@ class CrdtEditorBinding<V, D extends ComposableDelta<D>> {
         _endPush();
       }
     }
+    ownStep?.stopCapturing();
     if (_document == null || !document.isInTransaction) {
       finish();
       return;

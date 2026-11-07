@@ -21,11 +21,13 @@ void main() {
     () => ControllerHarness(
       makeHandler: CRDTFugueRichTextHandler.new,
       supportsEmbeds: true,
-      buildField: (id, deletedBuilder, onController, onAnchors) =>
+      origin: crdtRichTextFieldOrigin,
+      buildField: (id, deletedBuilder, onController, onAnchors, undo) =>
           CrdtRichTextFieldBuilder(
         id: id,
         deletedBuilder: deletedBuilder,
         onSelectionAnchorsChanged: onAnchors,
+        undoManager: undo,
         builder: (context, controller) {
           onController(controller);
           return TextField(controller: controller, maxLines: null);
@@ -218,89 +220,6 @@ void main() {
     expect(paintedStyleAt(tester, 5)!.fontWeight, FontWeight.bold);
     expect(paintedStyleAt(tester, 5)!.decoration, TextDecoration.underline);
     expect(paintedStyleAt(tester, 2)?.decoration, isNull);
-  });
-
-  testWidgets('takes in a same-length write served inside a push', (
-    tester,
-  ) async {
-    // Release builds have no assert: the field alone must see the write.
-    debugVerifyCrdtRichTextFieldProjection = false;
-    addTearDown(() => debugVerifyCrdtRichTextFieldProjection = true);
-    final page = CRDTFugueRichTextHandler(doc, 'page')..insert(0, 'hello');
-    var armed = true;
-    final watcher = page.watch().listen((_) {
-      if (armed && page.text == 'helloX') {
-        armed = false;
-        page
-          ..delete(0, 1)
-          ..insert(0, 'H');
-      }
-    });
-    addTearDown(watcher.cancel);
-    await tester.pumpWidget(host());
-    controller!.value = const TextEditingValue(
-      text: 'helloX',
-      selection: TextSelection.collapsed(offset: 6),
-    );
-    await tester.pumpAndSettle();
-
-    expect(armed, isFalse);
-    expect(page.text, 'HelloX');
-    expectInSync('after the watcher');
-  });
-
-  testWidgets('takes in a format written by a watcher inside a push', (
-    tester,
-  ) async {
-    debugVerifyCrdtRichTextFieldProjection = false;
-    addTearDown(() => debugVerifyCrdtRichTextFieldProjection = true);
-    final page = CRDTFugueRichTextHandler(doc, 'page')..insert(0, 'hello');
-    var armed = true;
-    final watcher = page.watch().listen((_) {
-      if (armed && page.text == 'helloX') {
-        armed = false;
-        page.format(0, 2, 'bold', true);
-      }
-    });
-    addTearDown(watcher.cancel);
-    await tester.pumpWidget(host());
-    controller!.value = const TextEditingValue(
-      text: 'helloX',
-      selection: TextSelection.collapsed(offset: 6),
-    );
-    await tester.pumpAndSettle();
-
-    expect(armed, isFalse);
-    expectInSync('after the watcher');
-  });
-
-  testWidgets('takes in an embed update written by a watcher inside a push', (
-    tester,
-  ) async {
-    debugVerifyCrdtRichTextFieldProjection = false;
-    addTearDown(() => debugVerifyCrdtRichTextFieldProjection = true);
-    final page = CRDTFugueRichTextHandler(doc, 'page')
-      ..insert(0, 'hello')
-      ..insertEmbed(0, {'image': 'a.png'});
-    var armed = true;
-    final watcher = page.watch().listen((_) {
-      if (armed && page.text == '\uFFFChelloX') {
-        armed = false;
-        page.updateEmbed(0, {'image': 'b.png'});
-      }
-    });
-    addTearDown(watcher.cancel);
-    await tester.pumpWidget(host());
-    controller!.value = const TextEditingValue(
-      text: '\uFFFChelloX',
-      selection: TextSelection.collapsed(offset: 7),
-    );
-    await tester.pumpAndSettle();
-
-    expect(armed, isFalse);
-    expect(embedsOf(controller!.spans), [
-      {'image': 'b.png'},
-    ]);
   });
 
   testWidgets('a styled keystroke and a format are their own echo', (
@@ -622,56 +541,6 @@ void main() {
     expectInSync('after the delete');
   });
 
-  group('a composition commits over a remote embed in its range', () {
-    // Pinned: the embed has to survive the commit on both sides.
-    final local = PeerId.parse('00000000-0000-4000-8000-00000000000a');
-    final peer = PeerId.parse('00000000-0000-4000-8000-00000000000b');
-
-    Future<void> commitOver(
-      WidgetTester tester, {
-      required int at,
-      required String expected,
-    }) async {
-      doc = CRDTDocument(peerId: local);
-      final page = CRDTFugueRichTextHandler(doc, 'page')..insert(0, 'teh');
-      await tester.pumpWidget(host());
-      await tester.showKeyboard(find.byType(TextField));
-      tester.testTextInput.updateEditingValue(
-        const TextEditingValue(
-          text: 'the',
-          selection: TextSelection.collapsed(offset: 3),
-          composing: TextRange(start: 0, end: 3),
-        ),
-      );
-      await tester.pump();
-
-      final remote = CRDTDocument(peerId: peer);
-      final remotePage = CRDTFugueRichTextHandler(remote, 'page');
-      remote.importChanges(doc.exportChanges());
-      remotePage.insertEmbed(at, {'image': 'a.png'});
-      syncFrom(remote);
-      await tester.pump();
-
-      remote.importChanges(
-        doc.exportChanges(fromVersionVector: remote.getVersionVector()),
-      );
-      expect(page.text, expected);
-      expect(remotePage.text, expected);
-      expect(embedsOf(page.value), [
-        {'image': 'a.png'},
-      ]);
-      expectInSync('committed');
-    }
-
-    testWidgets('at its start', (tester) async {
-      await commitOver(tester, at: 1, expected: 't\uFFFChe');
-    });
-
-    testWidgets('inside it', (tester) async {
-      await commitOver(tester, at: 2, expected: 'the\uFFFC');
-    });
-  });
-
   testWidgets('a value the handler refuses throws at format', (tester) async {
     CRDTFugueRichTextHandler(doc, 'page').insert(0, 'hlo');
     await tester.pumpWidget(host());
@@ -731,25 +600,6 @@ void main() {
       tester.takeException().toString(),
       contains('CrdtRichTextFieldBuilder'),
     );
-  });
-
-  testWidgets('anchors are withdrawn while an IME composition is pending', (
-    tester,
-  ) async {
-    CRDTFugueRichTextHandler(doc, 'page').insert(0, 'hello');
-    await tester.pumpWidget(host());
-    await tester.showKeyboard(find.byType(TextField));
-    controller!.selection = const TextSelection.collapsed(offset: 5);
-    await tester.pump();
-    expect(anchors.last.$1, isNotNull);
-
-    controller!.value = const TextEditingValue(
-      text: 'helloあ',
-      selection: TextSelection.collapsed(offset: 6),
-      composing: TextRange(start: 5, end: 6),
-    );
-    await tester.pump();
-    expect(anchors.last, (null, null));
   });
 
   testWidgets('pasted text takes the format where it lands, not its own', (
@@ -925,108 +775,6 @@ void main() {
 
     tearDown(() => manager.dispose());
 
-    testWidgets('undo and redo take back the text and the format', (
-      tester,
-    ) async {
-      manager.track(CRDTFugueRichTextHandler(doc, 'page'));
-      await tester.pumpWidget(host(undoManager: manager));
-      expect(controller!.canUndo, isFalse);
-
-      controller!.value = const TextEditingValue(
-        text: 'hello',
-        selection: TextSelection(baseOffset: 0, extentOffset: 5),
-      );
-      controller!.toggle('bold');
-      expect(controller!.canUndo, isTrue);
-
-      controller!.undo();
-      await tester.pump();
-      expect(pageOf(doc).value, [RichTextSpan('hello')]);
-      expectInSync('format undone');
-      expect(controller!.canRedo, isTrue);
-
-      controller!.undo();
-      await tester.pump();
-      expect(controller!.text, '');
-      expect(controller!.canUndo, isFalse);
-
-      controller!
-        ..redo()
-        ..redo();
-      await tester.pump();
-      expect(pageOf(doc).value, [
-        RichTextSpan('hello', {'bold': true}),
-      ]);
-      expectInSync('redone');
-    });
-
-    testWidgets('an undo that changes nothing leaves the caret', (
-      tester,
-    ) async {
-      manager.track(CRDTFugueRichTextHandler(doc, 'page'));
-      pageOf(doc).insert(0, 'hello world');
-      await tester.pumpWidget(host(undoManager: manager));
-      controller!.value = const TextEditingValue(
-        text: 'hello world!!',
-        selection: TextSelection.collapsed(offset: 13),
-      );
-      await tester.pump();
-
-      final remote = remotePeer();
-      pageOf(remote).delete(11, 2);
-      syncFrom(remote);
-      await tester.pump();
-      controller!.selection = const TextSelection.collapsed(offset: 8);
-
-      controller!.undo();
-      await tester.pump();
-
-      expect(controller!.text, 'hello world');
-      expect(controller!.selection, const TextSelection.collapsed(offset: 8));
-    });
-
-    testWidgets('typing after a format is a step of its own', (tester) async {
-      manager.track(CRDTFugueRichTextHandler(doc, 'page'));
-      pageOf(doc).insert(0, 'hello');
-      await tester.pumpWidget(host(undoManager: manager));
-      controller!
-        ..selection = const TextSelection(baseOffset: 0, extentOffset: 5)
-        ..toggle('bold');
-      controller!.value = const TextEditingValue(
-        text: 'hello!',
-        selection: TextSelection.collapsed(offset: 6),
-      );
-      await tester.pump();
-
-      controller!.undo();
-      await tester.pump();
-
-      expect(pageOf(doc).value, [
-        RichTextSpan('hello', {'bold': true}),
-      ]);
-      expectInSync('typing undone');
-    });
-
-    testWidgets('redo puts the caret after the restored text', (tester) async {
-      manager.track(CRDTFugueRichTextHandler(doc, 'page'));
-      await tester.pumpWidget(host(undoManager: manager));
-      controller!.value = const TextEditingValue(
-        text: 'hello',
-        selection: TextSelection.collapsed(offset: 5),
-      );
-      controller!
-        ..undo()
-        ..selection = const TextSelection.collapsed(offset: 0)
-        ..redo();
-      await tester.pump();
-      expect(controller!.text, 'hello');
-      expect(controller!.selection, const TextSelection.collapsed(offset: 5));
-
-      controller!.undo();
-      await tester.pump();
-      expect(controller!.selection, const TextSelection.collapsed(offset: 0));
-    });
-
     testWidgets('a manager passed later keeps the field mounted', (
       tester,
     ) async {
@@ -1115,49 +863,6 @@ void main() {
       expect(notified, greaterThan(before));
       expect(controller!.text, 'peer mine');
     });
-
-    testWidgets('undo brings a deleted embed back with its data', (
-      tester,
-    ) async {
-      final page = CRDTFugueRichTextHandler(doc, 'page')
-        ..insert(0, 'ab')
-        ..insertEmbed(1, {'image': 'a.png'});
-      manager.track(page);
-      await tester.pumpWidget(host(undoManager: manager));
-
-      controller!.value = const TextEditingValue(
-        text: 'ab',
-        selection: TextSelection.collapsed(offset: 1),
-      );
-      await tester.pump();
-      expect(page.text, 'ab');
-
-      controller!.undo();
-      await tester.pump();
-      expect(controller!.text, 'a\uFFFCb');
-      expect(embedsOf(controller!.spans), [
-        {'image': 'a.png'},
-      ]);
-      expectInSync('embed restored');
-
-      controller!.redo();
-      await tester.pump();
-      expect(controller!.text, 'ab');
-      expectInSync('embed deleted again');
-    });
-
-    testWidgets("a write that is not the field's is not recorded", (
-      tester,
-    ) async {
-      final page = CRDTFugueRichTextHandler(doc, 'page');
-      manager.track(page);
-      await tester.pumpWidget(host(undoManager: manager));
-
-      page.insert(0, 'direct');
-      await tester.pump();
-
-      expect(controller!.canUndo, isFalse);
-    });
   });
 
   for (final seed in [7, 13, 29, 101, 997]) {
@@ -1179,7 +884,7 @@ void main() {
             if (composing) {
               break;
             }
-            final at = _runeBoundary(text, random.nextInt(text.length + 1));
+            final at = RuneOffsets.snap(text, random.nextInt(text.length + 1));
             if (random.nextInt(4) == 0) {
               c
                 ..selection = TextSelection.collapsed(offset: at)
@@ -1196,9 +901,9 @@ void main() {
             if (composing || text.isEmpty) {
               break;
             }
-            final at = _runeBoundary(text, random.nextInt(text.length));
+            final at = RuneOffsets.snap(text, random.nextInt(text.length));
             c.value = TextEditingValue(
-              text: text.replaceRange(at, _nextRune(text, at), ''),
+              text: text.replaceRange(at, RuneOffsets.skip(text, at, 1), ''),
               selection: TextSelection.collapsed(offset: at),
             );
           case 3:
@@ -1257,9 +962,9 @@ void main() {
             if (composing || text.isEmpty) {
               break;
             }
-            final a = _runeBoundary(text, random.nextInt(text.length));
+            final a = RuneOffsets.snap(text, random.nextInt(text.length));
             final b =
-                _runeBoundary(text, a + 1 + random.nextInt(text.length - a));
+                RuneOffsets.snap(text, a + 1 + random.nextInt(text.length - a));
             if (b <= a) {
               break;
             }
@@ -1304,19 +1009,4 @@ base class _CountingPage extends CRDTFugueRichTextHandler {
     reads++;
     return super.value;
   }
-}
-
-int _runeBoundary(String text, int offset) {
-  if (offset <= 0 || offset >= text.length) {
-    return offset.clamp(0, text.length);
-  }
-  final unit = text.codeUnitAt(offset);
-  return (unit >= 0xDC00 && unit <= 0xDFFF) ? offset - 1 : offset;
-}
-
-int _nextRune(String text, int at) {
-  final unit = text.codeUnitAt(at);
-  return (unit >= 0xD800 && unit <= 0xDBFF && at + 1 < text.length)
-      ? at + 2
-      : at + 1;
 }

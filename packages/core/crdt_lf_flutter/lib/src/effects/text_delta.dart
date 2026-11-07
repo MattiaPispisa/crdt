@@ -1,6 +1,7 @@
 // Copyright 2025 Mattia Pispisa
 // SPDX-License-Identifier: MIT
 
+import 'package:crdt_lf/crdt_lf.dart' show RuneOffsets;
 import 'package:flutter/foundation.dart';
 
 /// A single contiguous text edit: at [index], [deleted] code units are
@@ -128,10 +129,11 @@ TextDelta? computeTextDelta(String oldText, String newText, {int? caret}) {
   }
 
   // Never split a surrogate pair: widen the replaced region instead.
-  if (start > 0 && _isHighSurrogate(oldText.codeUnitAt(start - 1))) {
+  if (start > 0 && RuneOffsets.isHighSurrogate(oldText.codeUnitAt(start - 1))) {
     start--;
   }
-  if (endOld < oldLength && _isLowSurrogate(oldText.codeUnitAt(endOld))) {
+  if (endOld < oldLength &&
+      RuneOffsets.isLowSurrogate(oldText.codeUnitAt(endOld))) {
     endOld++;
     endNew++;
   }
@@ -165,7 +167,3 @@ int mapOffsetThroughDelta(int offset, TextDelta delta) {
 }
 
 const int _objectReplacement = 0xFFFC;
-
-bool _isHighSurrogate(int codeUnit) => codeUnit >= 0xD800 && codeUnit <= 0xDBFF;
-
-bool _isLowSurrogate(int codeUnit) => codeUnit >= 0xDC00 && codeUnit <= 0xDFFF;

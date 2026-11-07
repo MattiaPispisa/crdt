@@ -18,6 +18,8 @@
   without writing. See [Embeds](README.md#embeds).
 - `insertImage` and `insertVideo` write image and video embeds of a fixed schema, read back with
   `span.image` / `span.video` (`RichTextImage`, `RichTextVideo`). See [Images and videos](README.md#images-and-videos).
+- `RuneOffsets.isHighSurrogate`, `isLowSurrogate`, `splitsPair` and `snap` keep a code-unit offset
+  on whole runes; `RichTextDelta.changeEnd` is the rune after its last insert or retain.
 
 ### Changed
 

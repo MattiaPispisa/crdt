@@ -7,7 +7,8 @@
 - `CrdtQuillBinder` binds a flutter_quill `QuillController` to a `CRDTFugueRichTextHandler`.
   Needs `crdt_lf` 5.3.0 and `crdt_lf_flutter` 0.7.0.
   [209](https://github.com/MattiaPispisa/crdt/issues/209)
-- Exported converters between Quill deltas and `RichTextDelta`, to build your own binding.
+- Exported converters between Quill deltas and `RichTextDelta`, and `quillRichTextWriter`, to build your
+  own binding.
 - Peer changes stay out of the controller's undo stack, like `History(userOnly: true)`.
 - `CrdtQuillBinder.undoManager` routes undo and redo through a `CRDTUndoManager`; `crdtQuillOrigin` tags the editor's writes.
 - Quill embeds map to handler embeds and back: Quill images and videos are the `crdt_lf` ones
@@ -17,6 +18,6 @@
 - `crdtQuillEmbedBuilders` adds to the app's embed builders one that shows handler embeds of another shape
   than Quill's, through the builder of their `type` or a fallback.
 - `crdtQuillUnknownEmbedBuilder` shows any embed without a builder, so a peer's embed never breaks the editor.
-- `debugVerifyCrdtQuillProjection` switches the full projection check, in debug and release.
+- `debugVerifyCrdtQuillProjection` switches the full projection check of debug builds.
 - `CrdtQuillBinder.onSelectionAnchorsChanged` publishes the local selection, and `CrdtQuillCursorsOverlay`
   draws the other peers' carets and selections. See [Remote cursors](README.md#remote-cursors).

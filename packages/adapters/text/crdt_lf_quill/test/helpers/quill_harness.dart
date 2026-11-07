@@ -9,43 +9,6 @@ import 'package:flutter/widgets.dart';
 import 'package:flutter_quill/flutter_quill.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-class _RichHandler implements ConformanceHandler {
-  _RichHandler(this._handler);
-
-  final CRDTFugueRichTextHandler _handler;
-
-  @override
-  Handler<dynamic> get raw => _handler;
-
-  @override
-  String get text => _handler.text;
-
-  @override
-  int get length => _handler.length;
-
-  @override
-  void insert(int index, String text) => _handler.insert(index, text);
-
-  @override
-  void delete(int index, int count) => _handler.delete(index, count);
-
-  @override
-  void insertEmbed(int index, Map<String, Object?> embed) =>
-      _handler.insertEmbed(index, embed);
-
-  @override
-  void updateEmbed(int index, Map<String, Object?> embed) =>
-      _handler.updateEmbed(index, embed);
-
-  @override
-  FugueElementID stablePositionAt(int index) =>
-      _handler.stablePositionAt(index);
-
-  @override
-  int? indexOfStablePosition(FugueElementID position) =>
-      _handler.indexOfStablePosition(position);
-}
-
 /// The editor suite harness of a `QuillController` bound by
 /// `CrdtQuillBinder`.
 ///
@@ -65,8 +28,17 @@ class QuillHarness extends EditorHarness {
   bool get supportsAnchors => true;
 
   @override
+  bool get supportsUndo => true;
+
+  @override
+  bool get supportsFormat => true;
+
+  @override
+  Object get origin => crdtQuillOrigin;
+
+  @override
   ConformanceHandler createHandler(CRDTDocument document, String id) =>
-      _RichHandler(CRDTFugueRichTextHandler(document, id));
+      RichTextHandlerAccess(CRDTFugueRichTextHandler(document, id));
 
   @override
   Widget build(
@@ -75,6 +47,7 @@ class QuillHarness extends EditorHarness {
     VoidCallback? onBuild,
     WidgetBuilder? deletedBuilder,
     SelectionAnchorsListener? onSelectionAnchorsChanged,
+    CRDTUndoManager? undoManager,
   }) {
     return CrdtProvider.value(
       value: document,
@@ -83,6 +56,7 @@ class QuillHarness extends EditorHarness {
         controller: _controller,
         deletedBuilder: deletedBuilder,
         onSelectionAnchorsChanged: onSelectionAnchorsChanged,
+        undoManager: undoManager,
         builder: (context) {
           onBuild?.call();
           return Focus(focusNode: _focus, child: const SizedBox());
@@ -114,6 +88,16 @@ class QuillHarness extends EditorHarness {
       TextSelection.collapsed(offset: start + text.length),
     );
   }
+
+  @override
+  void format(int start, int end, String key, Object? value) => _controller
+      .formatText(start, end - start, Attribute.fromKeyValue(key, value));
+
+  @override
+  void undo() => _controller.undo();
+
+  @override
+  void redo() => _controller.redo();
 
   @override
   Future<void> focus(WidgetTester tester) async {

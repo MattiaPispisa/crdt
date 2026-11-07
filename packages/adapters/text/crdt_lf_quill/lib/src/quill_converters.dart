@@ -178,7 +178,7 @@ RichTextDelta richTextDeltaFromQuill(
     final attributes = op.attributes;
     final plain = attributes == null || attributes.isEmpty;
     var end = at > before.length ? before.length : at;
-    if (splitsSurrogatePair(before, end)) {
+    if (RuneOffsets.splitsPair(before, end)) {
       end += plain && !op.isDelete ? -1 : 1;
     }
     final covered = before.substring(unit, end);
@@ -270,19 +270,6 @@ Delta quillDocumentFromSpans(List<RichTextSpan> spans) {
   }
   return none;
 }
-
-/// Whether the code unit offset [at] falls inside a surrogate pair of [text].
-bool splitsSurrogatePair(String text, int at) =>
-    at > 0 &&
-    at < text.length &&
-    isHighSurrogate(text.codeUnitAt(at - 1)) &&
-    isLowSurrogate(text.codeUnitAt(at));
-
-/// Whether [unit] is the high half of a surrogate pair.
-bool isHighSurrogate(int unit) => unit & 0xFC00 == 0xD800;
-
-/// Whether [unit] is the low half of a surrogate pair.
-bool isLowSurrogate(int unit) => unit & 0xFC00 == 0xDC00;
 
 /// Whether an embed sits at the code unit offset [at] of [plain], the plain
 /// text of a Quill document.

@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 import 'package:crdt_lf/crdt_lf.dart' hide ChangeSource;
+import 'package:crdt_lf_flutter/crdt_lf_flutter.dart';
 import 'package:flutter_quill/flutter_quill.dart';
 
 /// Whether [key] is a Quill block attribute, such as `header` or `list`.
@@ -23,6 +24,12 @@ MarkExpand quillMarkExpand(String key) {
   }
   return MarkExpand.after;
 }
+
+/// The writer with the key policy of Quill.
+const quillRichTextWriter = RichTextWriter(
+  expandOf: quillMarkExpand,
+  isBlockKey: isQuillBlockKey,
+);
 
 /// The entries of [attributes] that fit a `'\n'` when [newline] is `true`,
 /// else the ones that fit text.

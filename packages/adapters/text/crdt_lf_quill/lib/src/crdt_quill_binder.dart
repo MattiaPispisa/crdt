@@ -137,27 +137,17 @@ class _CrdtQuillBinderState extends State<CrdtQuillBinder> {
       onRemoteDelta: _binding.onRemoteDelta,
       onReset: _binding.onReset,
       verifyProjection: _binding.verifyProjection,
-      deletedBuilder: _buildDeleted,
+      deletedBuilder: widget.deletedBuilder,
+      anchors: _binding.anchors,
+      onFocusChange: (hasFocus) {
+        if (hasFocus) {
+          _binding.captureAnchors();
+        }
+      },
       builder: (context, binding) {
         _binding.binding = binding;
-        return Focus(
-          canRequestFocus: false,
-          skipTraversal: true,
-          includeSemantics: false,
-          onFocusChange: (hasFocus) => _binding.hasFocus = hasFocus,
-          child: widget.child ?? widget.builder!(context),
-        );
+        return widget.child ?? widget.builder!(context);
       },
     );
-  }
-
-  Widget _buildDeleted(BuildContext context) {
-    // Not here: the callback is the user's, and this is a build.
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) {
-        _binding.clearAnchors();
-      }
-    });
-    return widget.deletedBuilder?.call(context) ?? const SizedBox.shrink();
   }
 }

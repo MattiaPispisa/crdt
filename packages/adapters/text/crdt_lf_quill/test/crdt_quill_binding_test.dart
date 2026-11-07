@@ -209,51 +209,17 @@ void main() {
     _expectConverged(a, b);
   });
 
-  test('takes in a write made by a watcher inside a push', () async {
-    debugVerifyCrdtQuillProjection = false;
-    addTearDown(() => debugVerifyCrdtQuillProjection = true);
+  test('a drift that keeps the length fails the full check only', () {
     a.type(0, 'hello');
-    a.handler.insertEmbed(0, {'type': 'image', 'src': 'a.png'});
-    final writes = <void Function()>[
-      () => a.handler.format(1, 2, 'bold', true),
-      () => a.handler.update(2, 'E'),
-      () => a.handler.updateEmbed(0, {'type': 'image', 'src': 'b.png'}),
-    ];
-    // Listens before the binding, so it writes while the push runs.
-    a.binding.detach();
-    var armed = false;
-    final watcher = a.handler.watch().listen((_) {
-      if (armed) {
-        armed = false;
-        writes.removeAt(0)();
-      }
-    });
-    addTearDown(watcher.cancel);
-    a.binding.attach(a.document, 'page');
-    await _pump();
-
-    // One write per push.
-    while (writes.isNotEmpty) {
-      armed = true;
-      a.type(a.runes - 1, 'X');
-      expect(a.content, quillDocumentFromSpans(a.handler.value));
-    }
-    expect(a.content.first.data, {'image': 'b.png'});
-  });
-
-  test('an editor that drifted only in its attributes is read again', () {
-    a.type(0, 'hello');
-    _sync(a, b);
     a.controller.document.compose(
       Delta()..retain(5, {'bold': true}),
       ChangeSource.silent,
     );
 
-    b.type(0, '> ');
-    _sync(a, b);
-
-    expect(a.content, quillDocumentFromSpans(a.handler.value));
-    _expectConverged(a, b);
+    expect(a.quill.verifyProjection, throwsAssertionError);
+    debugVerifyCrdtQuillProjection = false;
+    addTearDown(() => debugVerifyCrdtQuillProjection = true);
+    expect(a.quill.verifyProjection(), isTrue);
   });
 
   test('an inline embed and its data reach the other peer', () {
@@ -675,23 +641,6 @@ void main() {
         });
       });
     }
-  });
-
-  test('an editor that drifted only in an embed is read again', () {
-    a.controller.replaceText(0, 0, BlockEmbed.image('a.png'), null);
-    _sync(a, b);
-    a.controller.document.compose(
-      Delta()
-        ..insert({'image': 'b.png'})
-        ..delete(1),
-      ChangeSource.silent,
-    );
-
-    b.type(1, '!');
-    _sync(a, b);
-
-    expect(a.content.first.data, {'image': 'a.png'});
-    _expectConverged(a, b);
   });
 
   test('undo takes back only the local text, on both peers', () {
@@ -1459,75 +1408,6 @@ void main() {
       ub.dispose();
     });
 
-    test('undo and redo take back the text and the format', () {
-      ua.type(0, 'hello');
-      ua.manager!.stopCapturing();
-      ua.format(0, 5, Attribute.bold);
-      _sync(ua, ub);
-
-      ua.controller.undo();
-      _sync(ua, ub);
-      expect(ua.content, Delta()..insert('hello\n'));
-      // The caret goes after the last insert or retain, as in Quill.
-      expect(ua.controller.selection, const TextSelection.collapsed(offset: 5));
-      _expectConverged(ua, ub);
-
-      ua.controller.undo();
-      _sync(ua, ub);
-      expect(ua.handler.text, '');
-      _expectConverged(ua, ub);
-
-      expect(ua.controller.selection, const TextSelection.collapsed(offset: 0));
-      ua.controller
-        ..redo()
-        ..redo();
-      _sync(ua, ub);
-      expect(ua.controller.selection, const TextSelection.collapsed(offset: 5));
-      expect(
-        ua.content,
-        Delta()
-          ..insert('hello', {'bold': true})
-          ..insert('\n'),
-      );
-      _expectConverged(ua, ub);
-    });
-
-    test('a peer edit is not undone, and it survives the undo', () {
-      ua.type(0, 'hello world');
-      _sync(ua, ub);
-      ua.manager!.stopCapturing();
-      ua.format(0, 5, Attribute.bold);
-      ub.type(2, 'XX');
-      _sync(ua, ub);
-
-      ua.controller.undo();
-      _sync(ua, ub);
-
-      expect(ua.handler.text, 'heXXllo world');
-      expect(ua.handler.attributesAt(2), isEmpty);
-      _expectConverged(ua, ub);
-      expect(ub.controller.hasUndo, isTrue);
-    });
-
-    test('undo brings a deleted embed back with its data', () {
-      ua.type(0, 'ab');
-      ua.controller.replaceText(1, 0, BlockEmbed.image('a.png'), null);
-      ua.manager!.stopCapturing();
-      ua.delete(1, 1);
-      _sync(ua, ub);
-      expect(ub.plain, 'ab\n');
-
-      ua.controller.undo();
-      _sync(ua, ub);
-      expect(ua.content.toList()[1].data, {'image': 'a.png'});
-      _expectConverged(ua, ub);
-
-      ua.controller.redo();
-      _sync(ua, ub);
-      expect(ua.plain, 'ab\n');
-      _expectConverged(ua, ub);
-    });
-
     test('an image is inserted, restored from a snapshot, updated, deleted '
         'and undone through Quill, on every peer', () async {
       const first = 'https://example.com/a.png';
@@ -1670,34 +1550,11 @@ void main() {
       expect(a.handler.text, 'ab');
     });
 
-    test('an undo that changes nothing leaves the caret', () {
-      ua.type(0, 'abcdef');
-      ua.manager!.stopCapturing();
-      ua.type(0, 'ZZ');
-      _sync(ua, ub);
-      ub.delete(0, 2);
-      _sync(ua, ub);
-      select(ua, 4);
-
-      ua.controller.undo();
-
-      expect(ua.handler.text, 'abcdef');
-      expect(ua.controller.selection, const TextSelection.collapsed(offset: 4));
-    });
-
     test('once disposed, the controller records its undo again', () {
       ua.quill.dispose();
       ua.type(0, 'x');
 
       expect(ua.controller.document.history.hasUndo, isTrue);
-    });
-
-    test('only the writes of the editor are recorded', () {
-      ua.handler.insert(0, 'direct');
-      expect(ua.controller.hasUndo, isFalse);
-
-      ua.type(6, '!');
-      expect(ua.controller.hasUndo, isTrue);
     });
   });
 }

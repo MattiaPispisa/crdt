@@ -6,6 +6,8 @@ import 'dart:async';
 import 'package:crdt_lf/crdt_lf.dart';
 import 'package:crdt_lf_flutter/src/common/_crdt_guards.dart';
 import 'package:crdt_lf_flutter/src/editor/rich_text_echoes.dart';
+import 'package:crdt_lf_flutter/src/editor/rich_text_writer.dart';
+import 'package:crdt_lf_flutter/src/editor/selection_anchors.dart';
 import 'package:crdt_lf_flutter/src/effects/_text_field_engine.dart';
 import 'package:crdt_lf_flutter/src/effects/text_delta.dart';
 import 'package:crdt_lf_flutter/src/provider/_crdt_view.dart';
@@ -144,14 +146,18 @@ class _CrdtRichTextFieldBuilderState extends State<CrdtRichTextFieldBuilder>
   CRDTUndoManager? _manager;
   StreamSubscription<void>? _managerChanges;
 
-  // The formats the running write puts on the text it inserts.
-  OwnsFormat? _writtenFormats;
+  // What the running write puts on the text it inserts.
+  RichTextEcho? _written;
 
   // Where the pending attributes were set; they end when the caret leaves.
   FugueElementID? _pendingAnchor;
 
   // The expand mode of each pending key; a key missing here expands after.
   Map<String, MarkExpand> _pendingExpand = const {};
+
+  late final RichTextWriter _writer = RichTextWriter(
+    expandOf: (key) => _pendingExpand[key] ?? MarkExpand.after,
+  );
 
   CrdtRichTextEditingController get _c => _controller!;
 
@@ -185,23 +191,15 @@ class _CrdtRichTextFieldBuilderState extends State<CrdtRichTextFieldBuilder>
     );
     if (context.selectCrdtDocument((doc) => doc.isDeleted(widget.id))) {
       _engine.binding.detach();
-      // Not here: the callback is the user's, and this is a build.
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) {
-          _engine.anchors.clear();
-        }
-      });
+      _engine.anchors.clearAfterFrame(mounted: () => mounted);
       return buildDeleted(context, widget.deletedBuilder);
     }
     _engine.attach(document, widget.id, onBeforeAttach: _dropPending);
     _c.styleOf = widget.styleOf;
     _followManager(widget.undoManager);
     final child = widget.builder(context, _c);
-    return Focus(
-      canRequestFocus: false,
-      skipTraversal: true,
-      includeSemantics: false,
-      onFocusChange: (hasFocus) => _engine.anchors.hasFocus = hasFocus,
+    return SelectionAnchorsFocus(
+      anchors: _engine.anchors,
       // Always in the tree, empty without a manager: adding one later must
       // not remount the user's field and lose its focus.
       child: Shortcuts(
@@ -305,8 +303,6 @@ class _CrdtRichTextFieldBuilderState extends State<CrdtRichTextFieldBuilder>
     }
     final start = RuneOffsets.runeIndex(text, selection.start);
     final length = RuneOffsets.runeIndex(text, selection.end) - start;
-    // A format is a step of its own, apart from the typing around it.
-    widget.undoManager?.stopCapturing();
     _engine.binding.push(
       () {
         final handler = _handler;
@@ -322,8 +318,8 @@ class _CrdtRichTextFieldBuilderState extends State<CrdtRichTextFieldBuilder>
         inserted: 0,
         ownsFormat: formatsWithin(start, start + length, {key: value}),
       ),
+      ownStep: widget.undoManager,
     );
-    widget.undoManager?.stopCapturing();
   }
 
   // ------------------------------------------------------------------ undo
@@ -446,30 +442,12 @@ class _CrdtRichTextFieldBuilderState extends State<CrdtRichTextFieldBuilder>
     int deleted,
   ) {
     final handler = _handler;
-    final pending = _pendingAt(handler, index);
-    _writtenFormats = pending.isEmpty
-        ? null
-        : formatsWithin(
-            index,
-            index + RuneOffsets.length(pushed.inserted),
-            pending,
-          );
-    // Read in the body: the flush runs listeners, which may change the text.
-    final inserted = _document.runInTransaction(
-      () {
-        if (deleted > 0) {
-          handler.delete(index, deleted);
-        }
-        _insert(handler, index, pushed.inserted, pending, _pendingExpand);
-        return _readInserted(handler, index, pushed.inserted);
-      },
+    final written = _written = RichTextEcho(_writer);
+    final ops = _document.runInTransaction(
+      () => _writeRegion(handler, written, pushed.inserted, index, deleted, 0),
       origin: crdtRichTextFieldOrigin,
     );
-    return RichTextDelta([
-      RichTextRetain(index),
-      RichTextDelete(deleted),
-      ...inserted,
-    ]).apply(base);
+    return RichTextDelta(ops).apply(base);
   }
 
   @override
@@ -479,34 +457,46 @@ class _CrdtRichTextFieldBuilderState extends State<CrdtRichTextFieldBuilder>
     List<TextRegion> regions,
   ) {
     final handler = _handler;
-    _writtenFormats = null;
+    final written = _written = RichTextEcho(_writer);
     final ops = <RichTextOp>[];
     var at = 0;
     _document.runInTransaction(
       () {
         for (final (:pushed, :index, :deleted) in regions) {
-          final pending = _pendingAt(handler, index);
-          if (pending.isNotEmpty) {
-            _writtenFormats = formatsWithin(
-              index,
-              index + RuneOffsets.length(pushed.inserted),
-              pending,
-            );
-          }
-          if (deleted > 0) {
-            handler.delete(index, deleted);
-          }
-          _insert(handler, index, pushed.inserted, pending, _pendingExpand);
-          ops
-            ..add(RichTextRetain(index - at))
-            ..add(RichTextDelete(deleted))
-            ..addAll(_readInserted(handler, index, pushed.inserted));
-          at = index + RuneOffsets.length(pushed.inserted);
+          final text = pushed.inserted;
+          ops.addAll(_writeRegion(handler, written, text, index, deleted, at));
+          at = index + RuneOffsets.length(text);
         }
       },
       origin: crdtRichTextFieldOrigin,
     );
     return RichTextDelta(ops).apply(base);
+  }
+
+  // Writes one edit and returns its ops, retained from the rune [from]. Read
+  // in the transaction: the flush runs listeners, which may change the text.
+  List<RichTextOp> _writeRegion(
+    CRDTFugueRichTextHandler handler,
+    RichTextEcho written,
+    String text,
+    int index,
+    int deleted,
+    int from,
+  ) {
+    final pending = _pendingAt(handler, index);
+    if (pending.isNotEmpty) {
+      written.add(
+        RichTextDelta([RichTextRetain(index), RichTextInsert(text, pending)]),
+      );
+    }
+    if (deleted > 0) {
+      handler.delete(index, deleted);
+    }
+    return [
+      RichTextRetain(index - from),
+      RichTextDelete(deleted),
+      ..._writer.insertTyped(handler, index, text, pending),
+    ];
   }
 
   // The pending attributes, when the caret that set them is at [index].
@@ -529,7 +519,7 @@ class _CrdtRichTextFieldBuilderState extends State<CrdtRichTextFieldBuilder>
         dropped,
         deleted: deleted,
         inserted: inserted,
-        ownsFormat: _writtenFormats,
+        ownsFormat: _written?.ownsFormat,
       );
 
   @override
@@ -570,25 +560,8 @@ class _CrdtRichTextFieldBuilderState extends State<CrdtRichTextFieldBuilder>
   @override
   void remoteReported(RichTextDelta delta) {
     if (_stepEnd != null && delta.isNotEmpty) {
-      _stepEnd = _endOf(delta);
+      _stepEnd = delta.changeEnd;
     }
-  }
-
-  // The rune after the last insert or retain of the delta.
-  static int _endOf(RichTextDelta delta) {
-    var end = 0;
-    for (final op in delta.ops) {
-      switch (op) {
-        case RichTextInsert() ||
-              RichTextInsertEmbed() ||
-              RichTextRetain() ||
-              RichTextUpdateEmbed():
-          end += op.length;
-        case RichTextDelete():
-          break;
-      }
-    }
-    return end;
   }
 
   @override
@@ -596,88 +569,5 @@ class _CrdtRichTextFieldBuilderState extends State<CrdtRichTextFieldBuilder>
     if (_c.pendingAttributes.isNotEmpty && !_pendingStillValid()) {
       _c._setPending(const {});
     }
-  }
-
-  // A pending key is not written on a '\n': there it would be a block
-  // attribute. The run before can still expand over the '\n', which shows
-  // nothing, as an inline key on a '\n' is ignored; `inherit: false` would
-  // write a removal mark for each newline instead.
-  static void _insert(
-    CRDTFugueRichTextHandler handler,
-    int index,
-    String text,
-    Map<String, Object?> pending,
-    Map<String, MarkExpand> expands,
-  ) {
-    if (text.isEmpty) {
-      return;
-    }
-    if (pending.isEmpty) {
-      handler.insert(index, text);
-      return;
-    }
-    // `insert` expands its attributes after; another mode needs a format.
-    final after = <String, Object?>{};
-    final others = <String, Object?>{};
-    for (final MapEntry(:key, :value) in pending.entries) {
-      ((expands[key] ?? MarkExpand.after) == MarkExpand.after
-          ? after
-          : others)[key] = value;
-    }
-    var at = index;
-    for (final part in _splitNewlines(text)) {
-      final length = RuneOffsets.length(part);
-      final newline = part == '\n';
-      handler.insert(at, part, attributes: newline ? const {} : after);
-      if (!newline) {
-        for (final MapEntry(:key, :value) in others.entries) {
-          handler.format(at, length, key, value, expand: expands[key]!);
-        }
-      }
-      at += length;
-    }
-  }
-
-  static Iterable<String> _splitNewlines(String text) sync* {
-    final buffer = StringBuffer();
-    for (final rune in text.runes) {
-      if (rune == 0x0A) {
-        if (buffer.isNotEmpty) {
-          yield buffer.toString();
-          buffer.clear();
-        }
-        yield '\n';
-      } else {
-        buffer.writeCharCode(rune);
-      }
-    }
-    if (buffer.isNotEmpty) {
-      yield buffer.toString();
-    }
-  }
-
-  // The inserted runes with the attributes the handler gave them.
-  static List<RichTextInsert> _readInserted(
-    CRDTFugueRichTextHandler handler,
-    int index,
-    String text,
-  ) {
-    final out = <RichTextInsert>[];
-    final buffer = StringBuffer();
-    Map<String, Object?>? current;
-    var rune = index;
-    for (final codePoint in text.runes) {
-      final attributes = handler.attributesAt(rune++);
-      if (current != null && !mapEquals(current, attributes)) {
-        out.add(RichTextInsert(buffer.toString(), current));
-        buffer.clear();
-      }
-      current = attributes;
-      buffer.writeCharCode(codePoint);
-    }
-    if (current != null) {
-      out.add(RichTextInsert(buffer.toString(), current));
-    }
-    return out;
   }
 }

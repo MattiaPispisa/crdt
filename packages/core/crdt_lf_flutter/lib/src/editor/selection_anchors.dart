@@ -40,6 +40,16 @@ class SelectionAnchors {
   /// Drops the anchors.
   void clear() => update(null, null);
 
+  /// Drops the anchors at the end of the frame, for a build that finds the
+  /// handler gone: `publish` may not run in a build.
+  void clearAfterFrame({required bool Function() mounted}) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted()) {
+        clear();
+      }
+    });
+  }
+
   /// Anchors [selection], in UTF-16 code units of [text]; [positionAt] gives
   /// the anchor of a rune index.
   ///
@@ -76,4 +86,37 @@ class SelectionAnchors {
     _publishedExtent = extent;
     _publish(base, extent);
   }
+}
+
+/// Tells [anchors] whether the focus is inside [child], and asks for no focus
+/// of its own.
+class SelectionAnchorsFocus extends StatelessWidget {
+  /// Creates a focus scope around [child].
+  const SelectionAnchorsFocus({
+    required this.anchors,
+    required this.child,
+    this.onFocusChange,
+    super.key,
+  });
+
+  /// The anchors to tell.
+  final SelectionAnchors anchors;
+
+  /// Called before [anchors] hear of a change, to capture the selection.
+  final ValueChanged<bool>? onFocusChange;
+
+  /// The editor.
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) => Focus(
+        canRequestFocus: false,
+        skipTraversal: true,
+        includeSemantics: false,
+        onFocusChange: (hasFocus) {
+          onFocusChange?.call(hasFocus);
+          anchors.hasFocus = hasFocus;
+        },
+        child: child,
+      );
 }

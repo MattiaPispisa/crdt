@@ -7,3 +7,4 @@ library;
 
 export 'src/conformance.dart';
 export 'src/harness.dart';
+export 'src/rich_text_handler_access.dart';

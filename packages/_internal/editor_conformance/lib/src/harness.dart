@@ -36,6 +36,24 @@ abstract interface class ConformanceHandler {
   /// Replaces the data of the embed at the rune [index] with [embed].
   void updateEmbed(int index, Map<String, Object?> embed);
 
+  /// The data of the embed at the rune [index]; `null` for text.
+  ///
+  /// Only called when `EditorHarness.supportsEmbeds` is `true`.
+  Map<String, Object?>? embedAt(int index);
+
+  /// Sets [key] to [value] on [count] runes from the rune [index].
+  ///
+  /// Only called when `EditorHarness.supportsFormat` is `true`.
+  void format(int index, int count, String key, Object? value);
+
+  /// The attributes of the rune [index].
+  ///
+  /// Only called when `EditorHarness.supportsFormat` is `true`.
+  Map<String, Object?> attributesAt(int index);
+
+  /// The changes of the handler, as they are published.
+  Stream<Object?> watch();
+
   /// The anchor of a caret at the rune [index].
   ///
   /// Only called when `EditorHarness.supportsAnchors` is `true`.
@@ -70,6 +88,22 @@ abstract class EditorHarness {
   /// When `false`, `focus` is never called.
   bool get supportsAnchors;
 
+  /// Whether the editor undoes through a [CRDTUndoManager].
+  ///
+  /// When `false`, `build` gets no manager and `undo` is never called.
+  bool get supportsUndo;
+
+  /// Whether the editor formats a range.
+  ///
+  /// When `false`, `format` is never called.
+  bool get supportsFormat;
+
+  /// The origin of the writes of the editor, the one a [CRDTUndoManager]
+  /// tracks.
+  ///
+  /// Only read when [supportsUndo] is `true`.
+  Object get origin;
+
   /// Creates the text handler [id] on [document].
   ConformanceHandler createHandler(CRDTDocument document, String id);
 
@@ -78,12 +112,14 @@ abstract class EditorHarness {
   /// [onBuild] runs each time the editor widget is built.
   /// [deletedBuilder] shows once the handler is deleted.
   /// [onSelectionAnchorsChanged] receives the anchors the editor publishes.
+  /// [undoManager] undoes and redoes for the editor.
   Widget build(
     CRDTDocument document,
     String id, {
     VoidCallback? onBuild,
     WidgetBuilder? deletedBuilder,
     SelectionAnchorsListener? onSelectionAnchorsChanged,
+    CRDTUndoManager? undoManager,
   });
 
   /// The plain text the user sees.
@@ -96,6 +132,16 @@ abstract class EditorHarness {
   /// Replaces `[start, end)` of [editorText] with [text], the way a keystroke
   /// or a paste does, with the caret after the new text.
   void replaceText(int start, int end, String text);
+
+  /// Sets [key] to [value] on `[start, end)` of [editorText], the way a
+  /// toolbar button does.
+  void format(int start, int end, String key, Object? value);
+
+  /// Undoes the last step, the way the editor's undo key does.
+  void undo();
+
+  /// Redoes the last undone step.
+  void redo();
 
   /// Gives the editor the focus.
   Future<void> focus(WidgetTester tester);

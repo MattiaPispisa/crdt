@@ -150,10 +150,16 @@ class RichTextState extends FugueState<String, List<RichTextSpan>> {
     }
     final block = walk.length;
     walk.add(node);
+    // Typing where a big block was deleted: past the limit, skip the run.
+    var seen = true;
     node = _tree.findNextNode(items.last.id);
     while (!node.isNull && !_tree.isLive(node)) {
       if (walk.length > _walkLimit) {
-        return false;
+        seen = false;
+        node = at == resolved.length
+            ? FugueElementID.nullID()
+            : _tree.findNodeAtPosition(at + items.length);
+        break;
       }
       walk.add(node);
       node = _tree.findNextNode(node);
@@ -172,6 +178,7 @@ class RichTextState extends FugueState<String, List<RichTextSpan>> {
       leftIndex: at - 1,
       left: at > 0 ? resolved.winnersAt(at - 1) : null,
       right: node.isNull ? null : resolved.winnersAt(at),
+      seenAfter: seen,
     );
     resolved.insert(at, items.length, winners);
     return true;
@@ -210,6 +217,9 @@ class RichTextState extends FugueState<String, List<RichTextSpan>> {
   // them either covers a live neighbour, where [left] or [right] holds the
   // newest one, or has an anchor in [walk]. A key neither neighbour tells is
   // read from all its marks.
+  //
+  // Without the tombstones after [high] ([seenAfter] `false`), an older mark
+  // that ends there hides behind the winner of [left]: read it from all.
   Map<String, _Mark> _winnersAround(
     List<FugueElementID> walk, {
     required int low,
@@ -217,6 +227,7 @@ class RichTextState extends FugueState<String, List<RichTextSpan>> {
     required int leftIndex,
     required Map<String, _Mark>? left,
     required Map<String, _Mark>? right,
+    bool seenAfter = true,
   }) {
     final ordinals = <FugueElementID, int>{
       for (var i = 0; i < walk.length; i++) walk[i]: i,
@@ -271,7 +282,7 @@ class RichTextState extends FugueState<String, List<RichTextSpan>> {
       final _Mark? side;
       if (before == null || covers(before)) {
         side = before;
-      } else if (after == null || covers(after)) {
+      } else if (seenAfter && (after == null || covers(after))) {
         side = after;
       } else {
         unknown.add(key);

@@ -96,4 +96,56 @@ void main() {
       );
     });
   });
+
+  group('RichTextEcho', () {
+    const writer = RichTextWriter(expandOf: _expandOf);
+
+    test('takes the write it recorded, and nothing else', () {
+      final write = [
+        RichTextDelta([
+          RichTextRetain(1),
+          const RichTextDelete(1),
+          RichTextInsert('ab'),
+          RichTextInsertEmbed(const {'type': 'image'}),
+        ]),
+        RichTextDelta([
+          RichTextUpdateEmbed(const {'type': 'video'}, const {'bold': true}),
+          RichTextRetain(2, const {'bold': true}),
+        ]),
+      ];
+      final echo = RichTextEcho(writer);
+      write.forEach(echo.add);
+
+      expect(echo.echoes(write), isTrue);
+      expect(echo.echoes(write.sublist(1)), isFalse);
+      expect(
+        echo.echoes([
+          ...write,
+          RichTextDelta([
+            RichTextRetain(3, const {'italic': true}),
+          ]),
+        ]),
+        isFalse,
+      );
+    });
+
+    test('a key formatted after the insert may be cleared first, only', () {
+      final echo = RichTextEcho(writer)
+        ..add(
+          RichTextDelta([
+            RichTextInsert('ab', const {'link': 'x', 'bold': true}),
+          ]),
+        );
+
+      expect(echo.ownsFormat(0, 2, const {'bold': true}), isTrue);
+      expect(echo.ownsFormat(0, 2, const {'bold': null}), isFalse);
+      expect(echo.ownsFormat(0, 2, const {'link': null}), isTrue);
+      expect(echo.ownsFormat(0, 2, const {'link': 'x'}), isTrue);
+      expect(echo.ownsFormat(0, 2, const {'link': null}), isFalse);
+      expect(echo.ownsFormat(0, 3, const {'link': 'x'}), isFalse);
+    });
+  });
 }
+
+MarkExpand _expandOf(String key) =>
+    key == 'link' ? MarkExpand.none : MarkExpand.after;

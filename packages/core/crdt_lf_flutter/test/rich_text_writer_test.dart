@@ -2,16 +2,23 @@
 // SPDX-License-Identifier: MIT
 
 import 'package:crdt_lf/crdt_lf.dart';
-import 'package:crdt_lf_quill/crdt_lf_quill.dart';
+import 'package:crdt_lf_flutter/crdt_lf_flutter.dart';
 import 'package:flutter_test/flutter_test.dart';
+
+const _writer = RichTextWriter(expandOf: _expandOf, isBlockKey: _isBlockKey);
+
+bool _isBlockKey(String key) => key == 'header';
+
+MarkExpand _expandOf(String key) =>
+    const {'link', 'header'}.contains(key) ? MarkExpand.none : MarkExpand.after;
 
 void main() {
   late CRDTDocument document;
   late CRDTFugueRichTextHandler handler;
 
   void write(List<RichTextOp> ops) => document.runInTransaction(
-    () => writeRichTextDelta(handler, RichTextDelta(ops)),
-  );
+        () => _writer.write(handler, RichTextDelta(ops)),
+      );
 
   setUp(() {
     document = CRDTDocument(peerId: PeerId.generate());
@@ -72,7 +79,8 @@ void main() {
     expect(handler.attributesAt(4), {'header': 1});
   });
 
-  test('an update on a rune that is not an embed puts the embed in its '
+  test(
+      'an update on a rune that is not an embed puts the embed in its '
       'place', () {
     write([
       RichTextRetain(1),
@@ -83,6 +91,54 @@ void main() {
       RichTextSpan('a', {'bold': true}),
       RichTextSpan.embed({'image': 'a.png'}, {'italic': true}),
     ]);
+  });
+
+  test('an embed takes exactly its attributes, and an update keeps it', () {
+    write([
+      RichTextRetain(2),
+      RichTextInsertEmbed({'image': 'a.png'}, {'link': 'x'}),
+    ]);
+    write([
+      RichTextRetain(2),
+      RichTextUpdateEmbed({'image': 'b.png'}),
+    ]);
+
+    expect(handler.value, [
+      RichTextSpan('ab', {'bold': true}),
+      RichTextSpan.embed({'image': 'b.png'}, {'link': 'x'}),
+    ]);
+  });
+
+  test('a block key on a retain marks each newline on its own', () {
+    write([RichTextRetain(2), RichTextInsert('\n\n')]);
+    write([
+      RichTextRetain(2),
+      RichTextRetain(2, {'header': 1}),
+    ]);
+    handler.insert(3, 'x');
+
+    expect(handler.attributesAt(2)['header'], 1);
+    expect(handler.attributesAt(3), isNot(contains('header')));
+    expect(handler.attributesAt(4)['header'], 1);
+  });
+
+  test('typed text takes its left, and the asked attributes but on newlines',
+      () {
+    final inserted =
+        _writer.insertTyped(handler, 2, 'c\nd', {'italic': true, 'link': 'x'});
+
+    expect(inserted.map((op) => op.text).join(), 'c\nd');
+    for (final index in [2, 4]) {
+      expect(handler.attributesAt(index), {
+        'bold': true,
+        'italic': true,
+        'link': 'x',
+      });
+    }
+    expect(handler.attributesAt(3), isNot(contains('link')));
+    handler.insert(5, 'e');
+    expect(handler.attributesAt(5), {'bold': true, 'italic': true});
+    expect(_writer.insertTyped(handler, 0, '', {'italic': true}), isEmpty);
   });
 
   test('a delete or a retain past the end is clamped', () {

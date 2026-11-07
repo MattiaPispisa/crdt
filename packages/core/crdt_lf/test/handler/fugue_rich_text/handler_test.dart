@@ -850,6 +850,24 @@ void main() {
           _s('ayb', {'italic': true}),
         ]);
       });
+
+      test('typing before a long run of tombstones keeps an older mark', () {
+        final text = open(CRDTDocument(peerId: peerA))
+          ..insert(0, 'x' * 1001)
+          // Ends before the last x, past the run once it is deleted.
+          ..format(0, 1000, 'bold', 1)
+          // Newer, and it ends before the typed text.
+          ..format(0, 10, 'bold', 2, expand: MarkExpand.none)
+          ..delete(10, 991)
+          // Read, so the insert folds into the resolved marks.
+          ..value
+          ..insert(10, 'y');
+        final folded = _read(text);
+        text.invalidateCache();
+
+        expect(_read(text), folded);
+        expect(text.attributesAt(10), {'bold': 1});
+      });
     });
 
     group('undo', () {

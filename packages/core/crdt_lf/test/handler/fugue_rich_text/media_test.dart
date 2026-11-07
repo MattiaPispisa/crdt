@@ -42,6 +42,23 @@ void main() {
         image.copyWith(alt: 'A cat on a mat').toEmbed(),
         {...data, 'alt': 'A cat on a mat'},
       );
+      final moved = image.copyWith(
+        src: cat,
+        title: 'B',
+        width: 1,
+        height: 2,
+        mime: 'image/gif',
+      );
+      expect(moved.toEmbed(), {
+        ...data,
+        'src': '$cat',
+        'title': 'B',
+        'width': 1,
+        'height': 2,
+        'mime': 'image/gif',
+      });
+      expect(moved.hashCode, RichTextImage.fromEmbed(moved.toEmbed()).hashCode);
+      expect('$moved', 'RichTextImage(${moved.toEmbed()})');
       expect(
         RichTextImage.fromEmbed({'type': 'image', 'src': 'cat.png'}),
         RichTextImage(src: Uri.parse('cat.png')),
@@ -110,6 +127,24 @@ void main() {
         video.copyWith(title: 'B').toEmbed(),
         {...data, 'title': 'B'},
       );
+      final moved = video.copyWith(
+        src: clip,
+        poster: cat,
+        width: 1,
+        height: 2,
+        mime: 'video/webm',
+      );
+      expect(moved.toEmbed(), {
+        ...data,
+        'src': '$clip',
+        'poster': '$cat',
+        'width': 1,
+        'height': 2,
+        'mime': 'video/webm',
+      });
+      expect(moved, RichTextVideo.fromEmbed(moved.toEmbed()));
+      expect(moved.hashCode, RichTextVideo.fromEmbed(moved.toEmbed()).hashCode);
+      expect('$moved', 'RichTextVideo(${moved.toEmbed()})');
     });
 
     test('fromEmbed returns null for data that is not a valid video', () {

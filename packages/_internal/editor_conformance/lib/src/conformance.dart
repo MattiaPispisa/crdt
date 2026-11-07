@@ -5,7 +5,6 @@ import 'dart:math';
 
 import 'package:crdt_lf/crdt_lf.dart';
 import 'package:editor_conformance/src/harness.dart';
-import 'package:editor_conformance/src/text_boundaries.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -38,6 +37,7 @@ void runEditorConformanceTests(
       VoidCallback? onBuild,
       WidgetBuilder? deletedBuilder,
       SelectionAnchorsListener? onSelectionAnchorsChanged,
+      CRDTUndoManager? undoManager,
     }) =>
         tester.pumpWidget(
           MaterialApp(
@@ -48,6 +48,7 @@ void runEditorConformanceTests(
                 onBuild: onBuild,
                 deletedBuilder: deletedBuilder,
                 onSelectionAnchorsChanged: onSelectionAnchorsChanged,
+                undoManager: undoManager,
               ),
             ),
           ),
@@ -514,6 +515,292 @@ void runEditorConformanceTests(
         expect(editor.editorText, 'axyb');
       });
     }
+
+    group('a write another watcher makes inside a push', () {
+      // Same length as the edit: only the echo check can see it.
+      final writes = <String, void Function()>{
+        'text': () => handler
+          ..delete(0, 1)
+          ..insert(0, 'H'),
+        if (create().supportsFormat)
+          'format': () => handler.format(0, 2, 'bold', true),
+        if (create().supportsEmbeds)
+          'embed update': () => handler.updateEmbed(5, {'image': 'b.png'}),
+      };
+      for (final MapEntry(key: kind, value: write) in writes.entries) {
+        testWidgets('is taken in: $kind', (tester) async {
+          handler.insert(0, 'hello');
+          if (kind == 'embed update') {
+            handler.insertEmbed(5, {'image': 'a.png'});
+          }
+          var armed = true;
+          final watcher = handler.watch().listen((_) {
+            if (armed && handler.text.endsWith('X')) {
+              armed = false;
+              write();
+            }
+          });
+          addTearDown(watcher.cancel);
+          await mount(tester);
+
+          final end = editor.editorText.length;
+          editor.replaceText(end, end, 'X');
+          await tester.pumpAndSettle();
+
+          expect(armed, isFalse);
+          expect(editor.editorText, handler.text);
+          if (kind == 'embed update') {
+            expect(handler.embedAt(5), {'image': 'b.png'});
+          }
+          final peer = remotePeer();
+          peer.handler.insert(0, '>');
+          receive(peer.document);
+          await tester.pump();
+          expect(editor.editorText, handler.text);
+        });
+      }
+    });
+
+    if (create().supportsComposition) {
+      group('a composition commits over a remote change in its range', () {
+        // Pinned: what the peer wrote has to survive the commit on both
+        // sides.
+        final local = PeerId.parse('00000000-0000-4000-8000-00000000000a');
+        final peerId = PeerId.parse('00000000-0000-4000-8000-00000000000b');
+
+        Future<void> commitOver(
+          WidgetTester tester, {
+          required void Function(ConformanceHandler handler) write,
+          required String expected,
+        }) async {
+          document = CRDTDocument(peerId: local);
+          handler = editor.createHandler(document, _id)..insert(0, 'teh');
+          await mount(tester);
+          await editor.ime(
+            tester,
+            const TextEditingValue(
+              text: 'the',
+              selection: TextSelection.collapsed(offset: 3),
+              composing: TextRange(start: 0, end: 3),
+            ),
+          );
+
+          final remote = CRDTDocument(peerId: peerId);
+          final remoteHandler = editor.createHandler(remote, _id);
+          remote.importChanges(document.exportChanges());
+          write(remoteHandler);
+          receive(remote);
+          await tester.pump();
+
+          remote.importChanges(
+            document.exportChanges(
+              fromVersionVector: remote.getVersionVector(),
+            ),
+          );
+          expect(handler.text, expected);
+          expect(remoteHandler.text, expected);
+          expect(editor.editorText, expected);
+        }
+
+        testWidgets('an insert at its start', (tester) async {
+          await commitOver(
+            tester,
+            write: (peer) => peer.insert(1, 'REMOTE'),
+            expected: 'tREMOTEhe',
+          );
+        });
+
+        testWidgets('an insert inside it', (tester) async {
+          await commitOver(
+            tester,
+            write: (peer) => peer.insert(2, 'REMOTE'),
+            expected: 'theREMOTE',
+          );
+        });
+
+        if (create().supportsEmbeds) {
+          testWidgets('an embed at its start', (tester) async {
+            await commitOver(
+              tester,
+              write: (peer) => peer.insertEmbed(1, {'image': 'a.png'}),
+              expected: 't￼he',
+            );
+            expect(handler.embedAt(1), {'image': 'a.png'});
+          });
+
+          testWidgets('an embed inside it', (tester) async {
+            await commitOver(
+              tester,
+              write: (peer) => peer.insertEmbed(2, {'image': 'a.png'}),
+              expected: 'the￼',
+            );
+            expect(handler.embedAt(3), {'image': 'a.png'});
+          });
+        }
+      });
+
+      if (create().supportsAnchors) {
+        testWidgets('anchors are withdrawn while a composition is pending', (
+          tester,
+        ) async {
+          final published = <FugueElementID?>[];
+          handler.insert(0, 'hello');
+          await mount(
+            tester,
+            onSelectionAnchorsChanged: (base, extent) => published.add(base),
+          );
+          await editor.focus(tester);
+          editor.selection = const TextSelection.collapsed(offset: 5);
+          await tester.pump();
+          expect(published.last, isNotNull);
+
+          await editor.ime(
+            tester,
+            const TextEditingValue(
+              text: 'helloあ',
+              selection: TextSelection.collapsed(offset: 6),
+              composing: TextRange(start: 5, end: 6),
+            ),
+          );
+          expect(published.last, isNull);
+        });
+      }
+    }
+
+    if (create().supportsUndo) {
+      group('with a CRDTUndoManager', () {
+        late CRDTUndoManager manager;
+
+        setUp(() {
+          manager = CRDTUndoManager(document, trackedOrigins: {editor.origin})
+            ..track(handler.raw);
+        });
+
+        tearDown(() => manager.dispose());
+
+        testWidgets('undo and redo take back a local edit, caret after it', (
+          tester,
+        ) async {
+          await mount(tester, undoManager: manager);
+          editor.replaceText(0, 0, 'hello');
+          await tester.pump();
+
+          editor.undo();
+          await tester.pump();
+          expect(handler.text, '');
+          expect(editor.editorText, '');
+
+          editor.redo();
+          await tester.pump();
+          expect(handler.text, 'hello');
+          expect(editor.editorText, 'hello');
+          expect(editor.selection, const TextSelection.collapsed(offset: 5));
+        });
+
+        testWidgets('only the writes of the editor are recorded', (
+          tester,
+        ) async {
+          await mount(tester, undoManager: manager);
+
+          handler.insert(0, 'direct');
+          await tester.pump();
+          expect(manager.canUndo, isFalse);
+
+          editor.replaceText(6, 6, '!');
+          await tester.pump();
+          expect(manager.canUndo, isTrue);
+        });
+
+        testWidgets('a peer edit is not undone, and it survives the undo', (
+          tester,
+        ) async {
+          handler.insert(0, 'world');
+          await mount(tester, undoManager: manager);
+          editor.replaceText(0, 0, 'hello ');
+          await tester.pump();
+
+          final peer = remotePeer();
+          peer.handler.insert(11, '!');
+          receive(peer.document);
+          await tester.pump();
+
+          editor.undo();
+          await tester.pump();
+          expect(handler.text, 'world!');
+          expect(editor.editorText, 'world!');
+        });
+
+        testWidgets('an undo that changes nothing leaves the caret', (
+          tester,
+        ) async {
+          handler.insert(0, 'abcdef');
+          await mount(tester, undoManager: manager);
+          editor.replaceText(0, 0, 'ZZ');
+          await tester.pump();
+
+          final peer = remotePeer();
+          peer.handler.delete(0, 2);
+          receive(peer.document);
+          await tester.pump();
+          editor
+            ..selection = const TextSelection.collapsed(offset: 4)
+            ..undo();
+          await tester.pump();
+          expect(handler.text, 'abcdef');
+          expect(editor.selection, const TextSelection.collapsed(offset: 4));
+        });
+
+        if (create().supportsEmbeds) {
+          testWidgets('undo brings a deleted embed back with its data', (
+            tester,
+          ) async {
+            handler
+              ..insert(0, 'ab')
+              ..insertEmbed(1, {'image': 'a.png'});
+            await mount(tester, undoManager: manager);
+            editor.replaceText(1, 2, '');
+            await tester.pump();
+            expect(handler.text, 'ab');
+
+            editor.undo();
+            await tester.pump();
+            expect(editor.editorText, 'a￼b');
+            expect(handler.embedAt(1), {'image': 'a.png'});
+
+            editor.redo();
+            await tester.pump();
+            expect(editor.editorText, 'ab');
+          });
+        }
+
+        if (create().supportsFormat) {
+          testWidgets('a format is a step of its own, apart from the typing', (
+            tester,
+          ) async {
+            await mount(tester, undoManager: manager);
+            editor
+              ..replaceText(0, 0, 'abc')
+              ..format(0, 3, 'bold', true)
+              ..replaceText(3, 3, 'd');
+            await tester.pump();
+
+            editor.undo();
+            await tester.pump();
+            expect(handler.text, 'abc');
+            expect(handler.attributesAt(0), {'bold': true});
+
+            editor.undo();
+            await tester.pump();
+            expect(handler.text, 'abc');
+            expect(handler.attributesAt(0), isEmpty);
+
+            editor.undo();
+            await tester.pump();
+            expect(handler.text, '');
+          });
+        }
+      });
+    }
   });
 }
 
@@ -544,7 +831,7 @@ Future<void> _randomStream(
         if (composing) {
           break;
         }
-        final at = runeBoundary(text, random.nextInt(text.length + 1));
+        final at = RuneOffsets.snap(text, random.nextInt(text.length + 1));
         harness.replaceText(
           at,
           at,
@@ -556,8 +843,8 @@ Future<void> _randomStream(
         if (composing || text.isEmpty) {
           break;
         }
-        final at = runeBoundary(text, random.nextInt(text.length));
-        harness.replaceText(at, nextRune(text, at), '');
+        final at = RuneOffsets.snap(text, random.nextInt(text.length));
+        harness.replaceText(at, RuneOffsets.skip(text, at, 1), '');
       case 3 || 4:
         remote.importChanges(
           document.exportChanges(fromVersionVector: remote.getVersionVector()),

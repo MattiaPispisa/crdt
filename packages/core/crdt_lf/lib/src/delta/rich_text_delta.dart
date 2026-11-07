@@ -404,6 +404,18 @@ final class RichTextDelta implements ComposableDelta<RichTextDelta> {
     ];
   }
 
+  /// The rune, in the new text, after the last insert or retain of this
+  /// delta.
+  int get changeEnd {
+    var end = 0;
+    for (final op in ops) {
+      if (op is! RichTextDelete) {
+        end += op.length;
+      }
+    }
+    return end;
+  }
+
   /// Where the rune [offset] ends up once this delta is applied.
   ///
   /// An offset exactly where text is inserted stays in front of it. One
@@ -586,8 +598,20 @@ Map<String, Object?> _composeAttributes(
   return result;
 }
 
-Map<String, Object?> _freeze(Map<String, Object?> attributes) =>
-    attributes.isEmpty ? const {} : Map.unmodifiable(attributes);
+// Attributes are frozen once, then shared by the spans and the deltas.
+final Expando<bool> _frozenAttributes = Expando('frozen attributes');
+
+Map<String, Object?> _freeze(Map<String, Object?> attributes) {
+  if (attributes.isEmpty) {
+    return const {};
+  }
+  if (_frozenAttributes[attributes] ?? false) {
+    return attributes;
+  }
+  final copy = Map<String, Object?>.unmodifiable(attributes);
+  _frozenAttributes[copy] = true;
+  return copy;
+}
 
 int _hashAttributes(Map<String, Object?> attributes) => Object.hashAllUnordered(
       attributes.entries.map((entry) => Object.hash(entry.key, entry.value)),

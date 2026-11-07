@@ -460,6 +460,29 @@ binding.push(
 );
 ```
 
+A rich text editor that hands out `RichTextDelta`s writes them with a
+`RichTextWriter`, built with the key policy of the editor: how each key grows
+(`expandOf`) and which keys mark a line (`isBlockKey`). A `RichTextEcho`
+records the same deltas and is the `isEcho` of the push. Pass the undo manager
+as `ownStep` when the push is a format, so undo takes it back on its own:
+
+```dart
+const writer = RichTextWriter(expandOf: myExpandOf, isBlockKey: myBlockKey);
+
+final echo = RichTextEcho(writer)..add(delta);
+binding.push(
+  () => context.crdtDocument.runInTransaction(
+    () => writer.write(page, delta),
+  ),
+  isEcho: echo.echoes,
+  ownStep: isFormat ? undoManager : null,
+);
+```
+
+Give `CrdtEditorBinder` the `SelectionAnchors` of the editor as `anchors`: the
+binder tells them when the focus enters or leaves the editor, and clears them
+when it follows another handler or the handler is deleted.
+
 ### Presence cursors
 
 `CrdtAwarenessCursorsOverlay` draws collaborators' **mouse pointers** (arrow

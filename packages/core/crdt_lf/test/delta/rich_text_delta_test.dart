@@ -246,7 +246,29 @@ void main() {
     });
   });
 
+  test('RichTextDelta.changeEnd skips what is deleted', () {
+    final delta = RichTextDelta([
+      RichTextRetain(2),
+      const RichTextDelete(3),
+      RichTextInsert('ab'),
+      RichTextInsertEmbed(const {'type': 'image'}),
+    ]);
+
+    expect(delta.changeEnd, 5);
+  });
+
   group('RichTextDelta value semantics', () {
+    test('attributes are copied once, then shared', () {
+      final attributes = {'bold': true};
+      final span = RichTextSpan('ab', attributes);
+      attributes['italic'] = true;
+
+      expect(span.attributes, {'bold': true});
+      final applied =
+          _d([RichTextRetain(1), RichTextInsert('x')]).apply([span]);
+      expect(identical(applied.last.attributes, span.attributes), isTrue);
+    });
+
     test('equal ops make equal deltas, whatever the key order', () {
       final a = _d([
         RichTextRetain(1, {'a': 1, 'b': 2}),
@@ -262,6 +284,24 @@ void main() {
       expect(span, RichTextSpan('x', {'b': 2, 'a': 1}));
       expect(span.hashCode, RichTextSpan('x', {'b': 2, 'a': 1}).hashCode);
       expect(RichTextSpan.embed(_image), isNot(RichTextSpan.embed(_video)));
+      for (final (op, same, other) in [
+        (
+          RichTextInsertEmbed(_image, {'a': 1}),
+          RichTextInsertEmbed({..._image}, {'a': 1}),
+          RichTextInsertEmbed(_video, {'a': 1}),
+        ),
+        (
+          RichTextUpdateEmbed(_image, {'a': 1}),
+          RichTextUpdateEmbed({..._image}, {'a': 1}),
+          RichTextUpdateEmbed(_image),
+        ),
+        (const RichTextDelete(2), const RichTextDelete(2), RichTextRetain(2)),
+      ]) {
+        expect(op, same);
+        expect(op.hashCode, same.hashCode);
+        expect(op, isNot(other));
+      }
+      expect(const RichTextDelete(2).attributes, isEmpty);
       expect(RichTextSpan.embed(_image), isNot(RichTextSpan('\uFFFC')));
       expect(
         a,
@@ -323,6 +363,10 @@ void main() {
       expect(
         RichTextSpan('a', {'k': 1}).toString(),
         'RichTextSpan("a", {k: 1})',
+      );
+      expect(
+        RichTextSpan.embed(_image).toString(),
+        'RichTextSpan.embed({image: a.png}, {})',
       );
     });
   });

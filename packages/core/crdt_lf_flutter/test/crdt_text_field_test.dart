@@ -24,7 +24,7 @@ void main() {
           return CRDTTextHandler(document, id);
         },
         supportsAnchors: fugue,
-        buildField: (id, deletedBuilder, onController, onAnchors) =>
+        buildField: (id, deletedBuilder, onController, onAnchors, _) =>
             CrdtTextFieldBuilder(
           id: id,
           deletedBuilder: deletedBuilder,
@@ -481,37 +481,6 @@ void main() {
       expect(controller.text, note.value);
     });
 
-    testWidgets('takes in a same-length write served inside a push', (
-      tester,
-    ) async {
-      // Release builds have no assert: the field alone must see the write.
-      debugVerifyCrdtTextFieldProjection = false;
-      addTearDown(() => debugVerifyCrdtTextFieldProjection = true);
-      final note = CRDTFugueTextHandler(doc, 'note')..insert(0, 'hello');
-      var armed = true;
-      final watcher = note.watch().listen((_) {
-        if (armed && note.value == 'helloX') {
-          armed = false;
-          note
-            ..delete(0, 1)
-            ..insert(0, 'H');
-        }
-      });
-      addTearDown(watcher.cancel);
-      await tester.pumpWidget(host());
-      final controller =
-          tester.widget<TextField>(find.byType(TextField)).controller!
-            ..value = const TextEditingValue(
-              text: 'helloX',
-              selection: TextSelection.collapsed(offset: 6),
-            );
-      await tester.pumpAndSettle();
-
-      expect(armed, isFalse);
-      expect(note.value, 'HelloX');
-      expect(controller.text, note.value);
-    });
-
     testWidgets('keeps the caret on a write served inside a push', (
       tester,
     ) async {
@@ -539,74 +508,6 @@ void main() {
       expect(armed, isFalse);
       expect(controller.text, 'abx!');
       expect(controller.selection, const TextSelection.collapsed(offset: 3));
-    });
-
-    group('a composition commits over a remote insert in its range', () {
-      // Pinned: the peer's text has to survive the commit on both sides.
-      final local = PeerId.parse('00000000-0000-4000-8000-00000000000a');
-      final peer = PeerId.parse('00000000-0000-4000-8000-00000000000b');
-
-      for (final fugue in [true, false]) {
-        Handler<dynamic> open(CRDTDocument document) {
-          if (fugue) {
-            return CRDTFugueTextHandler(document, 'note');
-          }
-          return CRDTTextHandler(document, 'note');
-        }
-
-        void insert(Handler<dynamic> handler, int index, String text) =>
-            handler is CRDTFugueTextHandler
-                ? handler.insert(index, text)
-                : (handler as CRDTTextHandler).insert(index, text);
-
-        Future<void> commitOver(
-          WidgetTester tester, {
-          required int at,
-          required String expected,
-        }) async {
-          doc = CRDTDocument(peerId: local);
-          insert(open(doc), 0, 'teh');
-          await tester.pumpWidget(host());
-          await tester.showKeyboard(find.byType(TextField));
-          tester.testTextInput.updateEditingValue(
-            const TextEditingValue(
-              text: 'the',
-              selection: TextSelection.collapsed(offset: 3),
-              composing: TextRange(start: 0, end: 3),
-            ),
-          );
-          await tester.pump();
-
-          final remote = CRDTDocument(peerId: peer);
-          final remoteNote = open(remote);
-          remote.importChanges(doc.exportChanges());
-          insert(remoteNote, at, 'REMOTE');
-          doc.importChanges(
-            remote.exportChanges(fromVersionVector: doc.getVersionVector()),
-          );
-          await tester.pump();
-
-          remote.importChanges(
-            doc.exportChanges(fromVersionVector: remote.getVersionVector()),
-          );
-          expect(remoteNote.value, expected);
-          expect(doc.handlerById('note')!.value, expected);
-          expect(
-            tester.widget<TextField>(find.byType(TextField)).controller!.text,
-            expected,
-          );
-        }
-
-        final kind = fugue ? 'Fugue' : 'index';
-
-        testWidgets('at its start, on $kind text', (tester) async {
-          await commitOver(tester, at: 1, expected: 'tREMOTEhe');
-        });
-
-        testWidgets('inside it, on $kind text', (tester) async {
-          await commitOver(tester, at: 2, expected: 'theREMOTE');
-        });
-      }
     });
 
     // More than one seed: one stream of random edits is one sample, and the
@@ -649,7 +550,8 @@ void main() {
               if (composing) {
                 break;
               }
-              final at = _runeBoundary(text, random.nextInt(text.length + 1));
+              final at =
+                  RuneOffsets.snap(text, random.nextInt(text.length + 1));
               // An emoji now and then: the handlers index by rune, the field by
               // code unit, and that seam has been wrong before.
               final typed = random.nextInt(8) == 0
@@ -663,11 +565,9 @@ void main() {
               if (composing || text.isEmpty) {
                 break;
               }
-              final at = _runeBoundary(text, random.nextInt(text.length));
+              final at = RuneOffsets.snap(text, random.nextInt(text.length));
               // Whole rune: no editor ever deletes half a surrogate pair.
-              final end = _runeBoundary(text, at + 1) == at
-                  ? at + 2
-                  : _nextRune(text, at);
+              final end = RuneOffsets.skip(text, at, 1);
               controller.value = TextEditingValue(
                 text: text.replaceRange(at, end, ''),
                 selection: TextSelection.collapsed(offset: at),
@@ -784,23 +684,6 @@ final class _CountingFugueTextHandler extends CRDTFugueTextHandler {
     reads++;
     return super.value;
   }
-}
-
-/// The start of the rune that [offset] falls in.
-int _runeBoundary(String text, int offset) {
-  if (offset <= 0 || offset >= text.length) {
-    return offset.clamp(0, text.length);
-  }
-  final unit = text.codeUnitAt(offset);
-  return (unit >= 0xDC00 && unit <= 0xDFFF) ? offset - 1 : offset;
-}
-
-/// The end of the rune that starts at [at].
-int _nextRune(String text, int at) {
-  final unit = text.codeUnitAt(at);
-  return (unit >= 0xD800 && unit <= 0xDBFF && at + 1 < text.length)
-      ? at + 2
-      : at + 1;
 }
 
 /// Rewrites a delta into the one a broken handler would report.
