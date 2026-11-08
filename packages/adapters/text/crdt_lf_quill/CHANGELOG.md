@@ -5,7 +5,7 @@
 ### Added
 
 - `CrdtQuillBinder` binds a flutter_quill `QuillController` to a `CRDTFugueRichTextHandler`.
-  Needs `crdt_lf` 5.3.0 and `crdt_lf_flutter` 0.7.0.
+  Needs `crdt_lf` 5.4.0 and `crdt_lf_flutter` 0.8.0.
   [209](https://github.com/MattiaPispisa/crdt/issues/209)
 - Exported converters between Quill deltas and `RichTextDelta`, and `quillRichTextWriter`, to build your
   own binding.
