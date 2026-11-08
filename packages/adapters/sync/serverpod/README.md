@@ -57,6 +57,18 @@ Clients connect with `WebSocketRelayClient`, pointed at the web server's `/relay
   (server–client, Hive) and
   [`relay_example/`](https://github.com/MattiaPispisa/crdt/tree/main/packages/adapters/sync/serverpod/relay_example)
 
+## Roadmap
+
+<div align="center">
+
+[![Roadmap: done, in progress, to do][roadmap_badge]][roadmap_link]
+
+</div>
+
+🗺️ The [project board](https://github.com/users/MattiaPispisa/projects/1) shows what is done, what is in progress and
+what comes next, for this package and the rest of the workspace. Missing something?
+[Open an issue](https://github.com/MattiaPispisa/crdt/issues/new/choose): requests go on the board too.
+
 ## Apps
 
 - [greyhound_markdown](https://github.com/MattiaPispisa/crdt/tree/main/apps/greyhound_markdown) — Real-time collaborative markdown editor built on crdt_lf
@@ -89,3 +101,5 @@ Other bricks of the crdt "system" are:
 [pub_publisher_link]: https://pub.dev/packages?q=publisher%3Amattiapispisa.it
 [docs_badge]: https://img.shields.io/badge/%F0%9F%93%96%20Read%20the%20full%20documentation-mattiapispisa.it%2Fcrdt-d04848?style=for-the-badge
 [docs_link]: https://mattiapispisa.it/crdt/docs/connectors/sync/server-frameworks
+[roadmap_badge]: https://img.shields.io/badge/%F0%9F%97%BA%EF%B8%8F%20Roadmap-done%20%C2%B7%20in%20progress%20%C2%B7%20to%20do-d04848?style=for-the-badge
+[roadmap_link]: https://github.com/users/MattiaPispisa/projects/1

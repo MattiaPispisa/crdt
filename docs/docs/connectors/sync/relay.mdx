@@ -13,6 +13,11 @@ change blobs per room, and never interprets CRDT data. All the merging happens
 on the clients. The room is identified by the document id, and one relay
 server hosts many rooms.
 
+This group has two pages: this one and the
+[relay protocol](./relay-protocol.mdx). Plugins, connection, compatibility and
+the framework adapters work the same in the server–client mode: see
+[What both modes share](./both-modes.mdx).
+
 Pick it for a backend with **no `crdt_lf` on it**: cheap rooms that scale out,
 and a server that is easy to port to other runtimes, including serverless.
 [Greyhound Markdown](https://mattiapispisa.it/crdt/greyhound_markdown/) runs on

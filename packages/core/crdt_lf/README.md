@@ -98,6 +98,7 @@ void main() {
 
 ## Documentation
 
+- [The document](https://mattiapispisa.it/crdt/docs/document): what it holds, and a map of its API
 - [Which handler do you need?](https://mattiapispisa.it/crdt/docs/use-cases): text, rich text, lists,
   maps and sets, nested data, aggregates, undo, history, …
 - [Open a replica](https://mattiapispisa.it/crdt/docs/connectors/replica): document, storage and sync in one call
@@ -111,6 +112,18 @@ void main() {
 Bug reports, ideas and pull requests are welcome: read the
 [contributing guide](https://mattiapispisa.it/crdt/docs/contributing) and the
 [roadmap](https://github.com/users/MattiaPispisa/projects/1).
+
+## Roadmap
+
+<div align="center">
+
+[![Roadmap: done, in progress, to do][roadmap_badge]][roadmap_link]
+
+</div>
+
+🗺️ The [project board](https://github.com/users/MattiaPispisa/projects/1) shows what is done, what is in progress and
+what comes next, for this package and the rest of the workspace. Missing something?
+[Open an issue](https://github.com/MattiaPispisa/crdt/issues/new/choose): requests go on the board too.
 
 ## Apps
 
@@ -144,3 +157,5 @@ Other bricks of the crdt "system" are:
 [pub_likes]: https://img.shields.io/pub/likes/crdt_lf
 [docs_badge]: https://img.shields.io/badge/%F0%9F%93%96%20Read%20the%20full%20documentation-mattiapispisa.it%2Fcrdt-d04848?style=for-the-badge
 [docs_link]: https://mattiapispisa.it/crdt/docs/getting-started
+[roadmap_badge]: https://img.shields.io/badge/%F0%9F%97%BA%EF%B8%8F%20Roadmap-done%20%C2%B7%20in%20progress%20%C2%B7%20to%20do-d04848?style=for-the-badge
+[roadmap_link]: https://github.com/users/MattiaPispisa/projects/1

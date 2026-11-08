@@ -29,7 +29,7 @@ final class PNCounterHandler extends Handler<int> { … }
 
 Its constructor passes a **`HandlerSpec`** to `super`. The spec names the kind on
 the wire and tells the document how to build one: what a peer that receives a
-reference needs.
+reference needs (see [Handler specs](./handler-specs.mdx)).
 
 ```dart
 final class PNCounterHandler extends Handler<int> {

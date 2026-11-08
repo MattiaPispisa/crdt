@@ -12,10 +12,15 @@ In this mode the server owns the documents, through a
 version vectors, applies incoming changes, broadcasts them to the other clients,
 and takes snapshots to prune the history every client has confirmed.
 
+This group has two pages: this one and the
+[server registry](./server-registry.mdx). Plugins, connection, compatibility
+and the framework adapters work the same in the relay mode: see
+[What both modes share](./both-modes.mdx).
+
 ## Quick start
 
 This is the standalone `dart:io` server. In a Dart Frog or Serverpod backend,
-use the [framework adapter](./server-frameworks.mdx) instead: the client is the
+use the [framework adapter](./server-frameworks.mdx#serverclient-mode) instead: the client is the
 same.
 
 ### Server

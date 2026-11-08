@@ -248,6 +248,69 @@ function Demo() {
   );
 }
 
+const roadmapColumns = [
+  {
+    title: "To do",
+    status: styles.statusTodo,
+    description: "Ideas and requests, waiting for their turn.",
+  },
+  {
+    title: "In progress",
+    status: styles.statusDoing,
+    description: "What is being built right now.",
+  },
+  {
+    title: "Done",
+    status: styles.statusDone,
+    description: "Shipped, and released on pub.dev.",
+  },
+];
+
+function Roadmap() {
+  const { siteConfig } = useDocusaurusContext();
+  const projectUrl = siteConfig.customFields?.projectUrl as string;
+  return (
+    <section className={clsx(styles.section, styles.sectionAlt)}>
+      <div className={clsx("container", styles.roadmap)}>
+        <div className={styles.roadmapText}>
+          <span className={styles.roadmapIcon} aria-hidden>
+            🗺️
+          </span>
+          <Heading as="h2">Roadmap</Heading>
+          <p>
+            Where the project is going. The board shows what is done, what is
+            in progress and what comes next, for every package. Missing
+            something? Ask for it in an issue: requests go on the board too.
+          </p>
+          <div className={styles.heroButtons}>
+            <Link className="button button--primary" href={projectUrl}>
+              Open the roadmap
+            </Link>
+            <Link
+              className="button button--secondary"
+              href="https://github.com/MattiaPispisa/crdt/issues/new/choose"
+            >
+              Propose a feature
+            </Link>
+          </div>
+        </div>
+        <Link className={styles.board} href={projectUrl} aria-label="Roadmap board">
+          {roadmapColumns.map((column) => (
+            <div key={column.title} className={styles.boardColumn}>
+              <span className={styles.boardTitle}>
+                <span className={clsx(styles.status, column.status)} />
+                {column.title}
+              </span>
+              <span className={styles.boardCard}>{column.description}</span>
+              <span className={clsx(styles.boardCard, styles.boardCardGhost)} />
+            </div>
+          ))}
+        </Link>
+      </div>
+    </section>
+  );
+}
+
 export default function Home(): ReactNode {
   const { siteConfig } = useDocusaurusContext();
   return (
@@ -280,12 +343,10 @@ export default function Home(): ReactNode {
             <CardGrid cards={connectors} columns={3} />
             <p className={styles.more}>
               <Link to="/docs/packages">All packages →</Link>
-              <Link href={siteConfig.customFields?.projectUrl as string}>
-                Roadmap →
-              </Link>
             </p>
           </div>
         </section>
+        <Roadmap />
       </main>
     </Layout>
   );

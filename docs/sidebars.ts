@@ -25,6 +25,11 @@ const sidebars: SidebarsConfig = {
   docs: [
     'introduction',
     'getting-started',
+    section('The document', 'document/index', [
+      'document/handlers',
+      'document/changes',
+      'document/snapshots-history',
+    ]),
     section(
       'Use cases',
       'use-cases/index',
@@ -61,16 +66,20 @@ const sidebars: SidebarsConfig = {
           ]),
         ]),
         section('Sync', 'connectors/sync/index', [
-          'connectors/sync/server-frameworks',
-          'connectors/sync/server-client',
-          'connectors/sync/server-registry',
-          'connectors/sync/relay',
-          'connectors/sync/relay-protocol',
-          'connectors/sync/plugins',
-          'connectors/sync/connection',
-          'connectors/sync/compatibility',
-          'connectors/sync/compression',
-          'connectors/sync/custom-transport',
+          section('Server–client mode', 'connectors/sync/server-client', [
+            'connectors/sync/server-registry',
+          ]),
+          section('Relay mode', 'connectors/sync/relay', [
+            'connectors/sync/relay-protocol',
+          ]),
+          section('Both modes', 'connectors/sync/both-modes', [
+            'connectors/sync/server-frameworks',
+            'connectors/sync/plugins',
+            'connectors/sync/connection',
+            'connectors/sync/compatibility',
+            'connectors/sync/compression',
+            'connectors/sync/custom-transport',
+          ]),
         ]),
       ],
       {collapsed: false},
@@ -85,6 +94,7 @@ const sidebars: SidebarsConfig = {
       'deep-dive/snapshots',
       'deep-dive/binary-format',
       'deep-dive/text-positions',
+      'deep-dive/handler-specs',
       'deep-dive/custom-handlers',
       'deep-dive/flutter-internals',
       'deep-dive/editor-binding',

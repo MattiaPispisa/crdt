@@ -11,13 +11,13 @@
 - [CRDT](#crdt)
   - [Apps](#apps)
   - [Packages](#packages)
-  - [Roadmap](#roadmap)
   - [Workspace structure](#workspace-structure)
     - [Melos](#melos)
     - [Setup](#setup)
     - [Organization](#organization)
     - [VS Code](#vs-code)
   - [Contributing](#contributing)
+  - [Roadmap](#roadmap)
 
 
 <div align="center">
@@ -48,9 +48,6 @@
 - [crdt_socket_sync_dart_frog](./packages/adapters/sync/dart_frog/README.md)
 - [crdt_socket_sync_serverpod](./packages/adapters/sync/serverpod/README.md)
 - [crdt_lf_quill](./packages/adapters/text/crdt_lf_quill/README.md)
-
-## [Roadmap](https://github.com/users/MattiaPispisa/projects/1)
-A roadmap is available in the [project](https://github.com/users/MattiaPispisa/projects/1) page. The roadmap provides a high-level overview of the project's goals and the current status of the project.
 
 ## Workspace structure
 This repository is a workspace that contains multiple packages and apps.
@@ -159,8 +156,22 @@ The whole flow (roadmap, issues, pull requests, AI-assisted work) is described
 in [CONTRIBUTING.md](./CONTRIBUTING.md). Please read it before opening an issue
 or a pull request.
 
+## Roadmap
+
+<div align="center">
+
+[![Roadmap: done, in progress, to do][roadmap_badge]][roadmap_link]
+
+</div>
+
+🗺️ The [project board](https://github.com/users/MattiaPispisa/projects/1) shows what is done, what is in progress and
+what comes next, for every package and app. Missing something?
+[Open an issue](https://github.com/MattiaPispisa/crdt/issues/new/choose): requests go on the board too.
+
 [docs_badge]: https://img.shields.io/badge/%F0%9F%93%96%20Read%20the%20full%20documentation-mattiapispisa.it%2Fcrdt-d04848?style=for-the-badge
 [docs_link]: https://mattiapispisa.it/crdt/docs/introduction
 [repo_size]: https://img.shields.io/github/languages/code-size/MattiaPispisa/crdt
 [github_starts]: https://img.shields.io/github/stars/MattiaPispisa/crdt?style=flat&logo=github&color=red
 [melos_badge]: https://img.shields.io/badge/maintained%20with-melos-f700ff.svg?style=flat
+[roadmap_badge]: https://img.shields.io/badge/%F0%9F%97%BA%EF%B8%8F%20Roadmap-done%20%C2%B7%20in%20progress%20%C2%B7%20to%20do-d04848?style=for-the-badge
+[roadmap_link]: https://github.com/users/MattiaPispisa/projects/1

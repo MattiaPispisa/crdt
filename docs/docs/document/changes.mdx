@@ -1,0 +1,102 @@
+---
+title: Changes and sync
+description: Group edits into transactions, read where the document is, and exchange changes with other peers.
+---
+
+import NextSteps from '@site/src/components/NextSteps';
+
+# Changes and sync
+
+Every edit of a handler becomes an **operation**. The document turns the
+operations into **changes**, adds them to its change graph and hands them out.
+A change is what travels to the other peers.
+
+## Transactions
+
+Outside a transaction, each write is a change of its own. Inside
+`runInTransaction`, the writes are one unit: they become changes together,
+watchers hear about them once, and they reach the other peers together.
+
+```dart
+doc.runInTransaction(() {
+  title.change('Shopping');
+  items.insert(0, 'milk');
+  items.insert(1, 'eggs');
+}); // one update for the listeners, one undo step
+```
+
+| Member | What it does |
+| --- | --- |
+| `runInTransaction(action, origin:)` | runs `action` as one transaction and returns its result. Nested calls join the outer one |
+| `isInTransaction` | `true` while a transaction is open |
+| `origin` | a tag of yours, reported on the deltas the writes produce, so a listener can skip its own echo |
+
+At the end, consecutive operations can be merged into fewer changes: typing a
+word inside one transaction can produce one change, not one per letter. How and when: see
+[Transactions](../deep-dive/transactions.mdx).
+
+## Where the document is
+
+| Member | What it says |
+| --- | --- |
+| `version` | the **frontiers**: the latest changes, the ones nothing depends on yet |
+| `getVersionVector()` | for each peer, the newest of its changes this document holds |
+| `revisionForHandler(id)` | a number that grows when the handler may read differently. Cheap: the signal to rebuild a view on |
+| `exportChanges().length`, `changeCountForHandler(id)` | how many changes the document, or one handler, holds |
+
+A sync layer sends its version vector to ask a peer for the changes it is
+missing.
+
+## Exchanging changes
+
+```dart
+// Everything, or only what a peer is missing.
+final all = alice.exportChanges();
+final missing = alice.exportChangesNewerThan(bob.getVersionVector());
+
+bob.importChanges(missing); // returns how many were applied
+```
+
+| Member | What it does |
+| --- | --- |
+| `exportChanges({from, fromVersionVector})` | the changes this document holds; with a bound, only the newer ones |
+| `exportChangesNewerThan(versionVector)` | the changes a peer at that version vector is missing |
+| `changesForHandler(id)` | the changes of one handler |
+| `importChanges(changes, origin:)` | applies the changes it can, in causal order; returns the count |
+| `applyChange(change, origin:)` | applies one change; `false` when the document already has it. Throws `CausallyNotReadyException` when what it depends on is missing |
+| `import(snapshot:, changes:, merge:)` | a snapshot and the changes after it, in one call |
+| `binaryExportChanges()`, `binaryImportChanges(bytes)` | the same, as one compact binary blob |
+| `localChanges` | a stream of the changes this peer writes: what a transport sends |
+
+- **Importing is idempotent.** A change the document already holds is skipped,
+  so sending too much is harmless.
+- **The order does not matter.** A change whose dependencies are missing is
+  skipped, and can be imported again once they arrive.
+- **You rarely call these yourself.** A [sync client](../connectors/sync/index.mdx)
+  and a [persistence adapter](../connectors/persistence/index.mdx) do it for
+  you. Use them for a transport of your own, or in tests.
+
+The model behind it (operations, the DAG, frontiers, identity) is in
+[Documents and changes](../deep-dive/documents-and-changes.mdx). The bytes are
+in [Binary format](../deep-dive/binary-format.mdx).
+
+:::note[For handler authors]
+`registerOperation`, `createChange` and `prepareMutation` are how a handler
+writes into the document. Your app code goes through the handlers instead. See
+[Custom handlers](../deep-dive/custom-handlers.mdx).
+:::
+
+<NextSteps
+  items={[
+    {
+      title: 'Snapshots and history',
+      to: '/docs/document/snapshots-history',
+      description: 'Keep the change graph small.',
+    },
+    {
+      title: 'Transactions',
+      to: '/docs/deep-dive/transactions',
+      description: 'How operations become changes.',
+    },
+  ]}
+/>

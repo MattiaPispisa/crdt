@@ -168,6 +168,11 @@ const config: Config = {
           label: 'Docs',
         },
         {
+          to: '/docs/document',
+          position: 'left',
+          label: 'Document',
+        },
+        {
           to: '/docs/use-cases',
           position: 'left',
           label: 'Use cases',
@@ -181,6 +186,11 @@ const config: Config = {
           to: '/docs/deep-dive',
           position: 'left',
           label: 'Deep dive',
+        },
+        {
+          to: '/docs/benchmarks',
+          position: 'left',
+          label: 'Benchmarks',
         },
         {
           label: 'Live demos',
@@ -205,8 +215,10 @@ const config: Config = {
           items: [
             { label: 'Introduction', to: '/docs/introduction' },
             { label: 'Getting started', to: '/docs/getting-started' },
+            { label: 'The document', to: '/docs/document' },
             { label: 'Use cases', to: '/docs/use-cases' },
             { label: 'Deep dive', to: '/docs/deep-dive' },
+            { label: 'Benchmarks', to: '/docs/benchmarks' },
           ],
         },
         {

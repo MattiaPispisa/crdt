@@ -51,17 +51,7 @@ difference is **where the CRDT logic lives**:
 | **Pick it when** | one authoritative backend should understand the documents | you want a cheap, CRDT-agnostic backend, easy to port and to scale |
 
 Everything else (delivery guarantees, reconnect policy, initial sync) follows
-from that choice. The wire format, the type codes and the plugin system are
-shared.
-
-:::info[Greyhound Markdown uses the relay mode]
-[Greyhound Markdown](https://mattiapispisa.it/crdt/greyhound_markdown/) syncs
-through a relay, both live and on your machine. The live app talks to a
-Cloudflare Worker written in TypeScript. Locally, the same client talks to a
-Dart Frog or Serverpod relay from the repository. See
-[Greyhound Markdown on a relay](./relay.mdx#greyhound-markdown-on-a-relay) for
-the code and the commands to run it.
-:::
+from that choice.
 
 ```mermaid
 graph TB
@@ -80,12 +70,59 @@ graph TB
   alt="Several Flutter clients synced through one server"
 />
 
+## How this section is organized
+
+Pick a mode with the table above, then read **its** group and the shared one.
+You can skip the group of the other mode.
+
+### Server–client mode
+
+A server that holds the documents and merges the changes.
+
+- [Server–client mode](./server-client.mdx): quick start, how the handshake and
+  the pruning work, the server events.
+- [Server registry](./server-registry.mdx): where the server keeps its
+  documents, in memory or on disk with any storage adapter.
+- Examples: a persistent
+  [server](https://github.com/MattiaPispisa/crdt/tree/main/packages/core/crdt_socket_sync/example)
+  with the awareness plugin, and its
+  [Flutter client](https://github.com/MattiaPispisa/crdt/tree/main/packages/core/crdt_socket_sync/client_example),
+  with the same screens as the [Flutter examples](pathname:///examples/). The
+  repository has VS Code launch settings to run both.
+
+### Relay mode
+
+A server that stores and forwards opaque blobs. The clients do all the merging.
+
+- [Relay mode](./relay.mdx): quick start, join and push, log compaction, and
+  how Greyhound Markdown uses it.
+- [Relay protocol](./relay-protocol.mdx): the JSON contract, to write a relay
+  on any runtime.
+- Example: [Greyhound Markdown](https://mattiapispisa.it/crdt/greyhound_markdown/)
+  syncs through a relay, live and on your machine. The live app talks to a
+  Cloudflare Worker written in TypeScript. Locally, the same client talks to a
+  Dart Frog or Serverpod relay from the repository: see
+  [Greyhound Markdown on a relay](./relay.mdx#greyhound-markdown-on-a-relay).
+
+### Both modes
+
+[What both modes share](./both-modes.mdx) lists the pages that apply to either
+mode:
+
+- [Server frameworks](./server-frameworks.mdx): Dart Frog and Serverpod, one
+  section per mode.
+- [Plugins and awareness](./plugins.mdx), [connection and errors](./connection.mdx),
+  [versions and compatibility](./compatibility.mdx),
+  [compression](./compression.mdx) and [custom transport](./custom-transport.mdx).
+- [Open a replica](../replica.mdx): the client side of an app, with either
+  client.
+
 ## Imports
 
 One library per side and per mode:
 
 ```dart
-// CRDTReplica: the document, its local storage and its client, in order
+// Both modes. CRDTReplica: the document, its local storage and its client
 import 'package:crdt_socket_sync/replica.dart';
 
 // Server–client mode
@@ -101,29 +138,11 @@ import 'package:crdt_socket_sync/relay_server.dart'; // RelayStore, RelaySession
 import 'package:crdt_socket_sync/web_socket_relay_server.dart'; // WebSocket relay server (dart:io)
 ```
 
-## Examples
-
-- [`example/`](https://github.com/MattiaPispisa/crdt/tree/main/packages/core/crdt_socket_sync/example):
-  a persistent (Hive-backed) WebSocket **server** for the server–client mode,
-  with the awareness plugin.
-- [`client_example/`](https://github.com/MattiaPispisa/crdt/tree/main/packages/core/crdt_socket_sync/client_example):
-  the **Flutter client** for it, with the same screens as the
-  [Flutter examples](pathname:///examples/), live over the real backend. The
-  repository has VS Code launch settings to run both.
-- [Greyhound Markdown](https://github.com/MattiaPispisa/crdt/tree/main/apps/greyhound_markdown):
-  a full **relay** app ([live](https://mattiapispisa.it/crdt/greyhound_markdown/)),
-  with a Cloudflare Worker relay and local Dart Frog and Serverpod relays (see
-  [how it is wired](./relay.mdx#greyhound-markdown-on-a-relay)).
-- Runnable Dart Frog and Serverpod servers, one per mode: see
-  [Server frameworks](./server-frameworks.mdx#examples).
+Runnable Dart Frog and Serverpod servers, one per mode, are listed in
+[Server frameworks](./server-frameworks.mdx#examples).
 
 <NextSteps
   items={[
-    {
-      title: 'Server frameworks',
-      to: '/docs/connectors/sync/server-frameworks',
-      description: 'Dart Frog and Serverpod.',
-    },
     {
       title: 'Server–client mode',
       to: '/docs/connectors/sync/server-client',
@@ -133,6 +152,11 @@ import 'package:crdt_socket_sync/web_socket_relay_server.dart'; // WebSocket rel
       title: 'Relay mode',
       to: '/docs/connectors/sync/relay',
       description: 'A server that only stores and forwards.',
+    },
+    {
+      title: 'Both modes',
+      to: '/docs/connectors/sync/both-modes',
+      description: 'Frameworks, plugins, connection, compatibility.',
     },
   ]}
 />

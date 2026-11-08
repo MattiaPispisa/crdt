@@ -64,7 +64,33 @@
 
 .navbar {
   border-bottom: 1px solid var(--ifm-color-emphasis-200);
-  backdrop-filter: saturate(180%) blur(8px);
+}
+
+.navbar__item {
+  white-space: nowrap;
+}
+
+/* Between the hamburger breakpoint and a wide screen, the links fit on one
+   row only without the site title and with tighter padding. */
+@media (min-width: 997px) and (max-width: 1240px) {
+  .navbar__title {
+    display: none;
+  }
+
+  .navbar__item {
+    padding: var(--ifm-navbar-item-padding-vertical) 0.5rem;
+  }
+}
+
+@media (min-width: 997px) and (max-width: 1100px) {
+  .navbar__item {
+    padding: var(--ifm-navbar-item-padding-vertical) 0.35rem;
+    font-size: 0.92rem;
+  }
+
+  .navbar__brand {
+    flex-shrink: 0;
+  }
 }
 
 .markdown h1:first-child {

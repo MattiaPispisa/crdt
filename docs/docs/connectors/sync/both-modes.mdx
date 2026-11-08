@@ -1,0 +1,51 @@
+---
+title: What both modes share
+description: The pages that apply to the server–client and the relay mode alike — frameworks, plugins, connection, compatibility, compression, transport.
+---
+
+import NextSteps from '@site/src/components/NextSteps';
+
+# What both modes share
+
+The [server–client](./server-client.mdx) and the [relay](./relay.mdx) mode
+store and merge in different places, but most of the package is the same for
+both. The pages of this group apply whatever mode you picked.
+
+| Page | What it covers | Notes per mode |
+| --- | --- | --- |
+| [Server frameworks](./server-frameworks.mdx) | serve the sync from Dart Frog or Serverpod: routes, authentication, lifecycle | one section per mode: [server–client](./server-frameworks.mdx#serverclient-mode), [relay](./server-frameworks.mdx#relay-mode) |
+| [Plugins and awareness](./plugins.mdx) | extend the client and the server; presence and remote cursors | a relay rebroadcasts awareness and stores none of it |
+| [Connection and errors](./connection.mdx) | connection status, reconnection, liveness, the data that did not make it in | the relay client retries forever, with backoff |
+| [Versions and compatibility](./compatibility.mdx) | the handshake, what it refuses, the wire format | a relay checks the protocol version only |
+| [Compression](./compression.mdx) | plug a compressor into the clients and the servers | a relay in another language must decode it too |
+| [Custom transport](./custom-transport.mdx) | the protocol on a transport you do not own, or one the host binds | `DocumentSessionHost` or `RelaySessionHost` |
+
+Also shared:
+
+- **The client side of an app.** [`CRDTReplica`](../replica.mdx) opens the
+  document, its storage and its client in the right order, with a
+  `WebSocketClient` or a `WebSocketRelayClient`.
+- **The wire format and the plugin system.** Each mode has its own range of
+  message type codes (see [Wire format](./compatibility.mdx#wire-format)).
+- **The offline rule.** Open the document from its storage **before** you
+  connect, and the client sends whatever the server is missing.
+
+<NextSteps
+  items={[
+    {
+      title: 'Server frameworks',
+      to: '/docs/connectors/sync/server-frameworks',
+      description: 'Dart Frog and Serverpod, both modes.',
+    },
+    {
+      title: 'Plugins and awareness',
+      to: '/docs/connectors/sync/plugins',
+      description: 'Presence for remote cursors.',
+    },
+    {
+      title: 'Connection and errors',
+      to: '/docs/connectors/sync/connection',
+      description: 'Status, reconnection, faults.',
+    },
+  ]}
+/>
