@@ -21,6 +21,7 @@ class QuillExampleApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return const MaterialApp(
       title: 'crdt_lf_quill',
+      debugShowCheckedModeBanner: false,
       localizationsDelegates: [
         GlobalMaterialLocalizations.delegate,
         GlobalWidgetsLocalizations.delegate,
@@ -180,9 +181,17 @@ class _PeerState extends State<_Peer> {
                 widget.label,
                 style: Theme.of(context).textTheme.titleMedium,
               ),
-              QuillSimpleToolbar(
-                controller: _controller,
-                config: const QuillSimpleToolbarConfig(multiRowsDisplay: false),
+              // The binder installs its own document, and the undo and redo
+              // buttons only listen to the document they were built with.
+              ListenableBuilder(
+                listenable: _controller,
+                builder: (context, _) => QuillSimpleToolbar(
+                  key: ObjectKey(_controller.document),
+                  controller: _controller,
+                  config: const QuillSimpleToolbarConfig(
+                    multiRowsDisplay: false,
+                  ),
+                ),
               ),
               const Divider(),
               Expanded(

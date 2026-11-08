@@ -15,6 +15,7 @@ so several peers can edit the same document, with bold, links, headings and
 lists.
 
 - [CRDT LF Quill](#crdt-lf-quill)
+  - [Example](#example)
   - [Usage](#usage)
   - [How it works](#how-it-works)
     - [Units](#units)
@@ -25,9 +26,17 @@ lists.
     - [Projection check](#projection-check)
     - [Remote cursors](#remote-cursors)
   - [Limits](#limits)
-  - [Example](#example)
   - [Apps](#apps)
   - [Packages](#packages)
+
+## Example
+
+[`example/lib/main.dart`](./example/lib/main.dart) shows two editors with
+toolbars and each other's cursors, on two simulated peers of the same document.
+
+<div align="center">
+  <img width="500" alt="crdt_lf_quill_example" src="https://raw.githubusercontent.com/MattiaPispisa/crdt/main/assets/demos/crdt_lf_quill_example.gif">
+</div>
 
 ## Usage
 
@@ -52,7 +61,14 @@ CrdtProvider.value(
     controller: controller,
     builder: (context) => Column(
       children: [
-        QuillSimpleToolbar(controller: controller),
+        // Rebuilt for each new document: see below.
+        ListenableBuilder(
+          listenable: controller,
+          builder: (context, _) => QuillSimpleToolbar(
+            key: ObjectKey(controller.document),
+            controller: controller,
+          ),
+        ),
         Expanded(
           child: QuillEditor.basic(
             controller: controller,
@@ -78,6 +94,12 @@ no builder for images or videos.
 A change that arrives during a build (the first read of the handler, a new
 controller, a write made in `initState`) reaches the editor at the end of that
 frame, so a widget that listens to the controller can sit anywhere.
+
+The binder gives the controller a new `Document` when it reads a handler. A
+widget that listens to `controller.changes` keeps the stream of the document
+it was built with, and the undo and redo buttons of `QuillSimpleToolbar` do
+so: key the toolbar on `controller.document` and rebuild it with the
+controller, as above.
 
 `crdt_lf` and `flutter_quill` both export a `ChangeSource`. If you import both
 libraries in one file, hide the `crdt_lf` one, as above: Quill code uses the
@@ -280,11 +302,6 @@ editor in `CrdtAwarenessCursorsOverlay`.
   tall inline embed.
 - Remote cursors move on document changes. After a layout change alone, such
   as an image that finishes loading, they stay until the next change.
-
-## Example
-
-[`example/lib/main.dart`](./example/lib/main.dart) shows two editors with
-toolbars and each other's cursors, on two simulated peers of the same document.
 
 ## Apps
 
