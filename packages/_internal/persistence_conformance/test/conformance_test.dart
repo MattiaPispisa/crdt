@@ -56,6 +56,12 @@ const _mustFail = <String, List<String>>{
   'hands one storage to every document': [
     'the storage of a document is scoped to that document',
   ],
+  'stops working for everyone on close': [
+    'closing one storage leaves another of the same document usable',
+  ],
+  'closes the store of every backend': [
+    'closing one backend leaves another one usable',
+  ],
 };
 
 void main() {
