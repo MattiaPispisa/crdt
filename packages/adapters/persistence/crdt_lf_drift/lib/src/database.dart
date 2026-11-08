@@ -33,8 +33,8 @@ class Changes extends Table {
   /// The logical time of the change (`change.hlc.l`).
   ///
   /// The clock is two columns because `l` is 48 bits and `c` is 16: together
-  /// they pass the 53 bits an integer keeps exactly in JavaScript, and this
-  /// adapter runs on the web.
+  /// they pass the 53 bits an integer keeps exactly in JavaScript, where this
+  /// adapter runs through `CRDTDrift.fromDatabase`.
   IntColumn get hlcL => integer()();
 
   /// The counter of the change (`change.hlc.c`).

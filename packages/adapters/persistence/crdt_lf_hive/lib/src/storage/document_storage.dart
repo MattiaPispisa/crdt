@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 import 'package:crdt_lf_hive/crdt_lf_hive.dart';
+import 'package:crdt_lf_hive/src/box_references.dart';
 
 /// The changes and snapshots of one document, in two Hive boxes.
 ///
@@ -20,14 +21,21 @@ class CRDTHiveDocumentStorage extends CRDTDocumentStorage {
   final CRDTHiveChangeStorage _changes;
   final CRDTHiveSnapshotStorage _snapshots;
 
+  // A second close must not give back a reference another storage holds.
+  bool _closed = false;
+
   /// Closes the two boxes of this document, and only those.
   ///
-  /// [CRDTHive.closeAllBoxes] closes every Hive box the app has open, this
-  /// one's included — an app that opens one document after another needs this
-  /// instead, or it keeps every box it ever opened.
+  /// A box stays open while another storage of the same document still uses
+  /// it, so two screens can hold one document. An app that opens one document
+  /// after another needs this, or it keeps every box it ever opened.
   @override
   Future<void> close() async {
-    await _changes.box.close();
-    await _snapshots.box.close();
+    if (_closed) {
+      return;
+    }
+    _closed = true;
+    await BoxReferences.release(_changes.box);
+    await BoxReferences.release(_snapshots.box);
   }
 }
