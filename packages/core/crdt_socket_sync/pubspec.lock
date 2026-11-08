@@ -94,7 +94,7 @@ packages:
       path: "../crdt_lf_persistence"
       relative: true
     source: path
-    version: "0.2.0"
+    version: "0.2.1"
   crypto:
     dependency: transitive
     description:
