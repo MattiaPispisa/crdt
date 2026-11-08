@@ -103,16 +103,14 @@ final class SeqMove<T> extends SeqOp<T> {
   String toString() => 'SeqMove($from -> $to)';
 }
 
-/// How a sequence handler's value moved, as steps applied left to right.
+/// A change to a sequence, as a list of [SeqOp] steps run left to right.
 ///
-/// The shape every editor binding knows: retain, insert, delete, in the
-/// coordinates of the sequence before the delta.
-///
-/// The plain text handlers use `SequenceDelta<String>` where one element is
-/// one **rune**, matching the way they index their text. The rich text
-/// handler uses `RichTextDelta`.
+/// [apply] replays it on a list, [compose] chains it with the delta that
+/// follows, and [mapOffset] carries a position across it.
 final class SequenceDelta<T> implements ComposableDelta<SequenceDelta<T>> {
   /// Creates a delta from [ops].
+  ///
+  /// [ops] holding a [SeqMove] must hold only that step.
   SequenceDelta(this.ops)
       : assert(
           ops.every((op) => op is! SeqMove<T>) ||

@@ -10,14 +10,11 @@ import 'package:crdt_lf/src/handler/fugue/fugue_restore_runs.dart';
 import 'package:crdt_lf/src/handler/fugue/fugue_sequence_apply.dart';
 import 'package:crdt_lf/src/handler/fugue/fugue_snapshot.dart';
 
-/// Lazily-resolved state shared by Fugue-based ordered-sequence handlers.
+/// The state of a [FugueSequenceHandler]: a [FugueTree] of `T` and the
+/// public value `V` projected from it.
 ///
-/// Wraps a [FugueTree] (the source of truth) and memoizes the public value,
-/// so that a batch of mutations resolves it at most once, on the next read.
-///
-/// `T` is the element type stored in the tree, `V` is the public value type
-/// (`String` for text, `List<T>` for a list). The projection from the tree to
-/// the public value is provided at construction time.
+/// The value is resolved on the first read after a change, so a batch of
+/// changes resolves it once.
 class FugueState<T, V> {
   /// Creates a state over `tree`, projecting the public value with `project`.
   FugueState(this._tree, this._project);
@@ -37,32 +34,19 @@ class FugueState<T, V> {
   }
 }
 
-/// Base for Fugue-backed handlers whose state is an **ordered sequence** of
-/// `T` values: a single [FugueTree] plus a pure projection to the public
-/// value `V`. The Fugue text handlers, through `FugueTextSequenceHandler`,
-/// and `CRDTFugueListHandler` extend it.
+/// Base for a handler whose state is an **ordered sequence** of `T`, held in
+/// a [FugueTree] and projected to a public value `V`.
 ///
-/// It owns everything those variants have in common on top of [FugueCache]:
-/// history replay, snapshot framing, the [delete] operation and the
-/// tree-navigation helpers used to build inserts and updates. The counter and
-/// the cache lifecycle come from [FugueCache].
+/// It provides history replay, snapshots, undo, [delete], stable positions
+/// and the index lookups that place inserts and updates. A subclass supplies
+/// the state `S` and the operation encoding: the abstract members.
 ///
-/// Subclasses provide the element type `T`, the public value type `V` and the
-/// concrete state type `S`, plus the extension points that depend on the
-/// concrete operation encoding (see the methods grouped under
-/// "Extension points").
-///
-/// ## When NOT to use this
-/// This base assumes the visible order equals the live-node traversal order of
-/// the tree (so `findNodeAtPosition` maps a visible index to a node). A handler
-/// whose visible order is decoupled from the tree — e.g. a movable list, where
-/// an element's position is the result of its latest move — must not extend it;
-/// it should mix in [FugueCache] directly and own its own navigation.
+/// ## Indexes
+/// An index counts the live elements in tree order. A handler whose visible
+/// order differs from the tree order cannot extend this class.
 ///
 /// ## Note on `T`
-/// `T` must be non-nullable. The Fugue tree keeps `null` for the root, the
-/// one node that stands for no element, and a stored `null` would look the
-/// same.
+/// `T` must be non-nullable: the tree keeps `null` for its root.
 abstract base class FugueSequenceHandler<T, V, S extends FugueState<T, V>>
     extends Handler<S> with FugueCache<S>, RebuiltIdentities<FugueElementID> {
   /// Creates a Fugue sequence handler bound to [doc] with the given [id].
@@ -176,8 +160,8 @@ abstract base class FugueSequenceHandler<T, V, S extends FugueState<T, V>>
 
   /// The current value, computed from changes and snapshot.
   ///
-  /// A list value is unmodifiable, and the same object until the next change,
-  /// which hands out a new one. Copy it to edit it.
+  /// The same object until the next change, which hands out a new one. A
+  /// collection value is unmodifiable: copy it to edit it.
   ///
   /// {@template fixed_value}
   /// A value read before a change keeps what it held.
@@ -399,14 +383,12 @@ abstract base class FugueSequenceHandler<T, V, S extends FugueState<T, V>>
     return operation;
   }
 
-  /// The version [FugueSnapshot] writes and reads, shared by every handler
-  /// built on the Fugue tree.
+  /// The version [FugueSnapshot] writes and reads.
   @override
   int get snapshotBlobVersion => FugueSnapshot.version;
 
-  /// The same version: [FugueSnapshot.read] accepts exactly one layout, so a
-  /// subclass cannot widen this without teaching that reader first. Left
-  /// pinned so the range this build advertises is one it can actually serve.
+  /// Equal to [snapshotBlobVersion]: [FugueSnapshot.read] accepts exactly one
+  /// layout.
   @override
   int get minReadableSnapshotBlobVersion => FugueSnapshot.version;
 
