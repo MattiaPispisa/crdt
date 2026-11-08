@@ -8,11 +8,10 @@ import 'package:crdt_lf/src/algorithm/fugue/tree.dart';
 import 'package:crdt_lf/src/handler/fugue/fugue_sequence_apply.dart';
 import 'package:crdt_lf/src/handler/fugue/fugue_sequence_handler.dart';
 
-/// A Fugue sequence of runes: the text part of the Fugue text handlers.
+/// Base for a Fugue sequence of runes, with its insert, delete and update
+/// operations.
 ///
 /// One element is one **rune**, and every index and length counts runes.
-/// The insert, delete and update operations have one wire format for every
-/// subclass: the one [CRDTFugueTextHandler] has always written.
 abstract base class FugueTextSequenceHandler<V, S extends FugueState<String, V>>
     extends FugueSequenceHandler<String, V, S> {
   /// Creates a text handler bound to `doc` under `id`, of the kind [spec].
@@ -74,7 +73,7 @@ abstract base class FugueTextSequenceHandler<V, S extends FugueState<String, V>>
     );
   }
 
-  /// Gets the length of the text, **in runes**
+  /// The length of the text, **in runes**.
   int get length => elementCount;
 
   @override

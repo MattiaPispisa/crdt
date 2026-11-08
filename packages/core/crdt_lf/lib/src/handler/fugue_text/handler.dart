@@ -23,6 +23,10 @@ import 'package:crdt_lf/src/handler/fugue/fugue_text_sequence_handler.dart';
 /// One element is one **rune** (Unicode code point).
 /// Use [RuneOffsets] to work with code unit.
 ///
+/// ## Wire format
+/// The insert, delete and update operations keep the bytes of earlier
+/// versions: peers on older releases read them.
+///
 /// ## Example
 /// ```dart
 /// final doc = CRDTDocument();

@@ -1129,10 +1129,8 @@ print(text.attributesAt(6)); // Prints "{bold: true, link: https://example.com}"
   of its line (a header, a list item). So does each `'\n'` that `insert` writes
   with attributes. They never spread to the text typed next to it.
 - A snapshot keeps every format, so it grows with each `format` call.
-- `watch()` emits a `RichTextDelta`, in the shape of a
-  [Quill Delta](https://quilljs.com/docs/delta/): `RichTextRetain`,
-  `RichTextInsert` and `RichTextDelete`, with attributes where `null` removes a
-  key. A delta that only formats is a retain with attributes. Embeds come as
+- `watch()` emits a `RichTextDelta`: `RichTextRetain`, `RichTextInsert` and
+  `RichTextDelete`, with attributes where `null` removes a key. A delta that only formats is a retain with attributes. Embeds come as
   `RichTextInsertEmbed` and `RichTextUpdateEmbed`.
 
 ##### Embeds

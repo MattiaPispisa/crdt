@@ -33,7 +33,7 @@ final class RichTextImage {
   /// Creates an image.
   ///
   /// Throws an [ArgumentError] for an empty [src], a `data:` URI, or a
-  /// [width] and [height] that are not both set above 0.
+  /// [width] or [height] set without the other or not above 0.
   factory RichTextImage({
     required Uri src,
     String? alt,
@@ -194,7 +194,7 @@ final class RichTextVideo {
   /// Creates a video.
   ///
   /// Throws an [ArgumentError] for an empty [src] or [poster], a `data:` URI,
-  /// or a [width] and [height] that are not both set above 0.
+  /// or a [width] or [height] set without the other or not above 0.
   factory RichTextVideo({
     required Uri src,
     Uri? poster,

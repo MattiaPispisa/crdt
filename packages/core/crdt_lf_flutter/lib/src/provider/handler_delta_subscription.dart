@@ -50,8 +50,7 @@ class HandlerDeltaSubscription<V, D extends ComposableDelta<D>> {
     this.origin,
   });
 
-  /// How to find the provider. A widget that can give a better error than
-  /// [resolveDeltaProvider] passes its own.
+  /// How to find the provider, such as [resolveDeltaProvider].
   final DeltaProviderResolver<V, D> resolve;
 
   /// Called with a value that was just read, and why it had to be read.
@@ -76,8 +75,8 @@ class HandlerDeltaSubscription<V, D extends ComposableDelta<D>> {
   /// Whether [syncTo] reads the value as it attaches, so the first frame shows
   /// the document instead of an empty one.
   ///
-  /// A widget that hands the value to a **user** callback leaves it off:
-  /// [syncTo] runs inside `build`, and that callback may call `setState`.
+  /// Leave it off when [onReset] runs code that may call `setState`: [syncTo]
+  /// runs inside `build`.
   final bool seed;
 
   /// The document and handler id this is attached to, or `null` before the
@@ -145,10 +144,8 @@ class HandlerDeltaSubscription<V, D extends ComposableDelta<D>> {
     return point;
   }
 
-  /// Reads the value and moves [synced] to the point it reflects.
-  ///
-  /// One step: two would let an event land in between and be applied on top of
-  /// a value that already holds it.
+  /// Reads the value and moves [synced] to the point it reflects, in one step:
+  /// no event is applied on top of a value that already holds it.
   DeltaSyncPoint<V> readSynced() {
     final point = provider.readSynced();
     _synced = point.seq;
@@ -159,8 +156,8 @@ class HandlerDeltaSubscription<V, D extends ComposableDelta<D>> {
   /// consumer that moved its own copy by hand.
   void markSyncedToPublished() => _synced = provider.deltaSeq;
 
-  /// Stops listening. The target goes with it, so a later [syncTo] to the same
-  /// handler attaches again instead of taking the early exit and going quiet.
+  /// Stops listening; a later [syncTo] attaches again, to the same handler
+  /// too.
   void cancel() {
     unawaited(_subscription?.cancel());
     _subscription = null;

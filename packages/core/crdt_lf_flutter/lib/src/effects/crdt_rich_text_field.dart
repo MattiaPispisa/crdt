@@ -39,23 +39,21 @@ const Object crdtRichTextFieldOrigin = Object();
 /// Binds a [CrdtRichTextEditingController] to the
 /// [CRDTFugueRichTextHandler] registered under [id].
 ///
-/// It works like `CrdtTextFieldBuilder`: local edits are pushed as the delta
-/// of each gesture, an IME composition is committed when it ends, remote
-/// changes are adopted in place with the caret kept, and the subtree never
-/// rebuilds. On top of that:
+/// Local edits are pushed as the delta of each gesture, and an IME
+/// composition is committed when it ends. Remote changes are taken in place,
+/// with the caret kept. The subtree never rebuilds.
 ///
 /// - Text typed next to a formatted range takes the format when the range
 ///   expands there (see [MarkExpand]).
 /// - [CrdtRichTextEditingController.format] formats the selection. At a
 ///   collapsed caret it styles the text typed next.
-/// - The field paints inline formats only. Block attributes (headings,
-///   lists) and the content of embeds need an editor, see `crdt_lf_quill`.
+/// - The field paints inline formats only, not block attributes (headings,
+///   lists) or the content of embeds.
 /// - An embed shows as its U+FFFC glyph and stays intact through edits
 ///   around it, deletes, undo and remote changes, its data included. The
 ///   field strips a typed or pasted U+FFFC: the handler refuses it as text.
 ///
-/// The field does one pass over the spans for each change, as a plain
-/// `TextField` does for the text.
+/// Each change costs one pass over the spans.
 ///
 /// ## Example
 /// ```dart

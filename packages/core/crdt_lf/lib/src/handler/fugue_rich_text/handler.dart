@@ -310,17 +310,12 @@ base class CRDTFugueRichTextHandler
 
   /// Throws the [ArgumentError] that [insertEmbed] throws for the data
   /// [embed], and writes nothing.
-  ///
-  /// An editor can drop a refused embed this way and write the rest of an
-  /// edit.
   void checkEmbed(Map<String, Object?> embed) {
     _EmbedValue.prepare(embed, maxEmbedBytes);
   }
 
   /// Throws the [ArgumentError] that [format] throws for [value], and writes
   /// nothing.
-  ///
-  /// An editor can refuse a value before it keeps it for the text typed next.
   void checkAttribute(Object? value) {
     _MarkValue.check(value);
   }

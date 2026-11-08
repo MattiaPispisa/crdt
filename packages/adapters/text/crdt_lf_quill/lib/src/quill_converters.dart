@@ -19,9 +19,8 @@ import 'package:flutter_quill/flutter_quill.dart' show Attribute, Embeddable;
 ///
 /// An embed is a Quill embed insert (see [crdtQuillEmbedType] for the
 /// shapes), and the `displayWidth` mark is the `width` of the Quill `style`.
-/// An updated embed is an insert and a delete;
-/// [document], the Quill document [before] comes from, gives the attributes
-/// it keeps.
+/// An updated embed is an insert and a delete; [document], the Quill document
+/// [before] comes from, gives the attributes it keeps.
 Delta quillDeltaFromRichText(
   RichTextDelta delta,
   String before, {
@@ -109,9 +108,8 @@ Delta quillDeltaFromRichText(
 /// Attributes are split by scope, as in [quillDeltaFromRichText]. A Quill
 /// embed is a [RichTextInsertEmbed] (see [crdtQuillEmbedType] for the
 /// shapes), and a px width of the Quill `style` is the `displayWidth` mark.
-/// With [document], the
-/// Quill document [before] comes from, an embed that replaces an embed in
-/// the same change is a [RichTextUpdateEmbed].
+/// With [document], the Quill document [before] comes from, an embed that
+/// replaces an embed in the same change is a [RichTextUpdateEmbed].
 RichTextDelta richTextDeltaFromQuill(
   Delta change,
   String before, {

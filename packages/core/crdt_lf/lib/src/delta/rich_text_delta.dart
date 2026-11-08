@@ -237,8 +237,7 @@ final class RichTextDelete extends RichTextOp {
 
 /// How a rich text moved, as steps applied left to right.
 ///
-/// The shape of a [Quill Delta](https://quilljs.com/docs/delta/) that edits a
-/// document: retain, insert, delete, counted in **runes**. A delta that only
+/// Retain, insert and delete steps, counted in **runes**. A delta that only
 /// formats is a run of [RichTextRetain] with attributes. An embed is one rune:
 /// [RichTextInsertEmbed] puts one in, [RichTextUpdateEmbed] replaces its data.
 final class RichTextDelta implements ComposableDelta<RichTextDelta> {
