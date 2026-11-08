@@ -44,6 +44,9 @@ flags:
   crdt_lf_sqlite:
     paths: [packages/adapters/persistence/crdt_lf_sqlite]
     carryforward: true
+  crdt_lf_quill:
+    paths: [packages/adapters/text/crdt_lf_quill]
+    carryforward: true
 
 ignore:
   - "**/*.g.dart"

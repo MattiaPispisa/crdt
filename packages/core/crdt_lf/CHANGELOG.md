@@ -1,3 +1,21 @@
+## [5.4.0](https://github.com/MattiaPispisa/crdt/tree/crdt_lf-v5.4.0/packages/core/crdt_lf)
+
+**Date:** --
+
+[compare to previous release](https://github.com/MattiaPispisa/crdt/compare/crdt_lf-v5.3.0...crdt_lf-v5.4.0)
+
+### Added
+
+- `CRDTFugueRichTextHandler`: rich text, a Fugue text with [Peritext](https://doi.org/10.1145/3555644)
+  marks and embeds. See [Rich text](README.md#rich-text). [209](https://github.com/MattiaPispisa/crdt/issues/209)
+- `RuneOffsets.isHighSurrogate`, `isLowSurrogate`, `splitsPair` and `snap` keep a code-unit offset
+  on whole runes.
+
+### Fixed
+
+- A listener that writes back while events are handed out no longer takes the `origin` of the
+  call that published them: its write carries the origin it names, or none.
+
 ## [5.3.0](https://github.com/MattiaPispisa/crdt/tree/crdt_lf-v5.3.0/packages/core/crdt_lf)
 
 **Date:** 2026-11-03

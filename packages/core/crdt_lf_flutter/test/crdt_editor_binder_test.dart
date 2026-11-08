@@ -1,0 +1,157 @@
+// Copyright 2025 Mattia Pispisa
+// SPDX-License-Identifier: MIT
+
+import 'package:crdt_lf/crdt_lf.dart';
+import 'package:crdt_lf_flutter/crdt_lf_flutter.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_test/flutter_test.dart';
+
+void main() {
+  group('CrdtEditorBinder', () {
+    late CRDTDocument doc;
+    late List<RichTextSpan> spans;
+    late CrdtEditorBinding<List<RichTextSpan>, RichTextDelta> binding;
+    var builds = 0;
+    var checks = 0;
+
+    Widget host({String id = 'a'}) {
+      return CrdtProvider.value(
+        value: doc,
+        child: MaterialApp(
+          home: CrdtEditorBinder<List<RichTextSpan>, RichTextDelta>(
+            id: id,
+            onRemoteDelta: (event) => spans = event.delta.apply(spans),
+            onReset: (value, cause) => spans = value,
+            verifyProjection: () {
+              checks++;
+              return true;
+            },
+            deletedBuilder: (context) => const Text('deleted'),
+            builder: (context, value) {
+              builds++;
+              binding = value;
+              return const SizedBox();
+            },
+          ),
+        ),
+      );
+    }
+
+    setUp(() {
+      doc = CRDTDocument(peerId: PeerId.generate());
+      spans = [];
+      builds = 0;
+      checks = 0;
+    });
+
+    testWidgets('builds once while the handler moves both ways',
+        (tester) async {
+      final a = CRDTFugueRichTextHandler(doc, 'a')..insert(0, 'hello');
+      await tester.pumpWidget(host());
+      expect(spans, a.value);
+
+      a.insert(5, ' world', attributes: {'bold': true});
+      spans =
+          RichTextDelta([RichTextRetain(0), RichTextInsert('> ')]).apply(spans);
+      binding.push(() => a.insert(0, '> '));
+      await tester.pump();
+
+      expect(spans, a.value);
+      expect(checks, greaterThan(0));
+      expect(builds, 1);
+    });
+
+    testWidgets('follows the handler when the id changes', (tester) async {
+      CRDTFugueRichTextHandler(doc, 'a').insert(0, 'first');
+      final b = CRDTFugueRichTextHandler(doc, 'b')..insert(0, 'second');
+      await tester.pumpWidget(host());
+      await tester.pumpWidget(host(id: 'b'));
+      expect(spans, b.value);
+
+      b.insert(0, 'the ');
+      expect(spans, b.value);
+    });
+
+    testWidgets('attaches on the build after a failed attach', (tester) async {
+      await tester.pumpWidget(host());
+      expect(tester.takeException(), isFlutterError);
+
+      final a = CRDTFugueRichTextHandler(doc, 'a')..insert(0, 'hello');
+      await tester.pumpWidget(host());
+      await tester.pump();
+      a.insert(5, '!');
+
+      expect(spans, [RichTextSpan('hello!')]);
+    });
+
+    testWidgets('comes back to its handler after a failed move', (
+      tester,
+    ) async {
+      final a = CRDTFugueRichTextHandler(doc, 'a')..insert(0, 'hello');
+      await tester.pumpWidget(host());
+      await tester.pumpWidget(host(id: 'missing'));
+      expect(tester.takeException(), isFlutterError);
+
+      await tester.pumpWidget(host());
+      await tester.pump();
+      a.insert(5, '!');
+
+      expect(spans, [RichTextSpan('hello!')]);
+    });
+
+    testWidgets('shows deletedBuilder once the handler is deleted',
+        (tester) async {
+      final a = CRDTFugueRichTextHandler(doc, 'a')..insert(0, 'hello');
+      await tester.pumpWidget(host());
+
+      doc.deleteHandler(a);
+      await tester.pump();
+
+      expect(find.text('deleted'), findsOneWidget);
+      expect(binding.isAttached, isFalse);
+    });
+
+    testWidgets('gives its anchors the focus, and clears them on a move',
+        (tester) async {
+      final a = CRDTFugueRichTextHandler(doc, 'a')..insert(0, 'hello');
+      CRDTFugueRichTextHandler(doc, 'b').insert(0, 'world');
+      final published = <FugueElementID?>[];
+      final anchors = SelectionAnchors((base, _) => published.add(base));
+      final focusChanges = <bool>[];
+      final focus = FocusNode();
+      addTearDown(focus.dispose);
+      Widget editor(String id) => CrdtProvider.value(
+            value: doc,
+            child: MaterialApp(
+              home: CrdtEditorBinder<List<RichTextSpan>, RichTextDelta>(
+                id: id,
+                onRemoteDelta: (_) {},
+                onReset: (_, __) {},
+                anchors: anchors,
+                onFocusChange: focusChanges.add,
+                builder: (context, _) => Focus(
+                  focusNode: focus,
+                  child: const SizedBox(),
+                ),
+              ),
+            ),
+          );
+      await tester.pumpWidget(editor('a'));
+      anchors.update(a.stablePositionAt(1), a.stablePositionAt(1));
+
+      focus.requestFocus();
+      await tester.pump();
+      expect(focusChanges, [true]);
+      expect(published, [a.stablePositionAt(1)]);
+
+      await tester.pumpWidget(editor('b'));
+      expect(published.last, isNull);
+
+      anchors.update(a.stablePositionAt(2), a.stablePositionAt(2));
+      doc.deleteHandler(doc.handlerById('b')!);
+      await tester.pump();
+      await tester.pump();
+      expect(published.last, isNull);
+    });
+  });
+}

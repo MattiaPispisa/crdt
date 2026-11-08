@@ -4,18 +4,20 @@ homepage: https://mattiapispisa.github.io/
 repository: https://github.com/MattiaPispisa/crdt/tree/main/packages/core/crdt_lf_flutter
 topics: [crdt, local-first, flutter, reactive]
 
-version: 0.7.0
+version: 0.8.0
 
 environment:
   sdk: ">=3.3.0 <4.0.0"
 
 dependencies:
-  crdt_lf: ">=5.3.0 <6.0.0"
+  crdt_lf: ">=5.4.0 <6.0.0"
   flutter:
     sdk: flutter
   provider: ^6.0.0
 
 dev_dependencies:
+  editor_conformance:
+    path: ../../_internal/editor_conformance
   benchmark_infrastructure:
     path: ../../_internal/benchmark_infrastructure
   flutter_test:

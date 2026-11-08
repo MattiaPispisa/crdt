@@ -22,7 +22,9 @@ jobs:
       crdt_lf_persistence: ${{ steps.filter.outputs.crdt_lf_persistence }}
       persistence_conformance: ${{ steps.filter.outputs.persistence_conformance }}
       crdt_socket_sync: ${{ steps.filter.outputs.crdt_socket_sync }}
+      editor_conformance: ${{ steps.filter.outputs.editor_conformance }}
       crdt_lf_flutter: ${{ steps.filter.outputs.crdt_lf_flutter }}
+      crdt_lf_quill: ${{ steps.filter.outputs.crdt_lf_quill }}
       crdt_socket_sync_dart_frog: ${{ steps.filter.outputs.crdt_socket_sync_dart_frog }}
       crdt_socket_sync_serverpod: ${{ steps.filter.outputs.crdt_socket_sync_serverpod }}
     steps:
@@ -56,8 +58,12 @@ jobs:
               - 'packages/adapters/persistence/crdt_lf_drift/**'
             crdt_socket_sync:
               - 'packages/core/crdt_socket_sync/**'
+            editor_conformance:
+              - 'packages/_internal/editor_conformance/**'
             crdt_lf_flutter:
               - 'packages/core/crdt_lf_flutter/**'
+            crdt_lf_quill:
+              - 'packages/adapters/text/crdt_lf_quill/**'
             crdt_socket_sync_dart_frog:
               - 'packages/adapters/sync/dart_frog/**'
             crdt_socket_sync_serverpod:
@@ -231,12 +237,30 @@ jobs:
       ${{ needs.changes.outputs.global == 'true'
        || needs.changes.outputs.hlc == 'true'
        || needs.changes.outputs.crdt_lf == 'true'
+       || needs.changes.outputs.editor_conformance == 'true'
        || needs.changes.outputs.crdt_lf_flutter == 'true' }}
     uses: ./.github/workflows/flutter_package.yaml
     with:
       working_directory: ./packages/core/crdt_lf_flutter
       min_coverage: 80
       package_name: crdt_lf_flutter
+    secrets:
+      CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+
+  crdt_lf_quill:
+    needs: changes
+    if: >-
+      ${{ needs.changes.outputs.global == 'true'
+       || needs.changes.outputs.hlc == 'true'
+       || needs.changes.outputs.crdt_lf == 'true'
+       || needs.changes.outputs.crdt_lf_flutter == 'true'
+       || needs.changes.outputs.editor_conformance == 'true'
+       || needs.changes.outputs.crdt_lf_quill == 'true' }}
+    uses: ./.github/workflows/flutter_package.yaml
+    with:
+      working_directory: ./packages/adapters/text/crdt_lf_quill
+      min_coverage: 90
+      package_name: crdt_lf_quill
     secrets:
       CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
 
@@ -276,6 +300,7 @@ jobs:
       - crdt_socket_sync_dart_frog
       - crdt_socket_sync_serverpod
       - crdt_lf_flutter
+      - crdt_lf_quill
     steps:
       - name: Verify no job failed
         run: |

@@ -1,0 +1,30 @@
+name: crdt_lf_quill_example
+description: "Example app for crdt_lf_quill: two flutter_quill editors on two simulated peers of the same document."
+publish_to: "none"
+
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.12.0
+
+dependencies:
+  crdt_lf:
+    path: ../../../../core/crdt_lf
+  crdt_lf_flutter:
+    path: ../../../../core/crdt_lf_flutter
+  crdt_lf_quill:
+    path: ../
+  flutter:
+    sdk: flutter
+  flutter_localizations:
+    sdk: flutter
+  flutter_quill: ^11.6.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  ws_lint:
+    path: ../../../../_internal/ws_lint
+
+flutter:
+  uses-material-design: true

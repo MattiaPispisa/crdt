@@ -53,6 +53,22 @@ void main() {
       FugueSnapshot.read<String>(bytes, decodeRun: _decodeRun);
 
   group('FugueSnapshot', () {
+    test('read ignores the bytes after the element id floor', () {
+      final tree = FugueTree<String>.empty();
+      _append(tree, peerA, 0, 'abc');
+      tree.delete(FugueElementID(peerA, 1));
+      final bytes = write(tree, {peerA: 2});
+      final extended = Uint8List.fromList([...bytes, 9, 8, 7, 0, 0, 0, 3]);
+
+      final plain = read(bytes);
+      final data = read(extended);
+
+      expect(data.nodes.map((n) => n.id), plain.nodes.map((n) => n.id));
+      expect(data.nodes.map((n) => n.value), plain.nodes.map((n) => n.value));
+      expect(data.live, plain.live);
+      expect(data.floor, plain.floor);
+    });
+
     test('round-trips nodes, stamps and floor through a restored tree', () {
       final tree = FugueTree<String>.empty();
       _append(tree, peerA, 0, 'abc');

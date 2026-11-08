@@ -12,9 +12,11 @@ abstract interface class ComposableDelta<D> {
   /// Whether this delta moves nothing.
   bool get isEmpty;
 
+  /// {@template composable_delta_compose}
   /// The delta that has the same effect as this one followed by [next].
   ///
   /// [next] is read in the coordinates of the state **after** this delta.
+  /// {@endtemplate}
   D compose(D next);
 }
 

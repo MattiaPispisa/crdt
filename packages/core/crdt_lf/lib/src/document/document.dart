@@ -542,9 +542,8 @@ class CRDTDocument extends BaseCRDTDocument {
   /// Set for the whole call, not the apply alone: a local delta is collected
   /// while the operation runs and published at the commit that ends it.
   ///
-  /// A nested call that names none keeps the outer origin. Restoring rather
-  /// than clearing lets a listener write back from inside a flush without
-  /// taking the origin of the work it interrupted.
+  /// A nested call that names none keeps the outer origin. A listener served
+  /// by [_flushOutbox] is not nested: its write-back starts with none.
   T _withDeltaOrigin<T>(Object? origin, T Function() body) {
     final previous = _deltaOrigin;
     _deltaOrigin = origin ?? previous;
@@ -555,6 +554,26 @@ class CRDTDocument extends BaseCRDTDocument {
     }
   }
 
+  // A listener's write-back is no echo of the work it reacts to, yet undo
+  // records it under that work's origin.
+  void _flushOutbox() {
+    final previous = _deltaOrigin;
+    final previousFlushed = _flushedOrigin;
+    _flushedOrigin = previous ?? previousFlushed;
+    _deltaOrigin = null;
+    try {
+      _outbox.flush();
+    } finally {
+      _deltaOrigin = previous;
+      _flushedOrigin = previousFlushed;
+    }
+  }
+
+  /// The origin of the work whose events [_flushOutbox] is handing out.
+  Object? _flushedOrigin;
+
+  Object? get _undoOrigin => _deltaOrigin ?? _flushedOrigin;
+
   final _UndoHub _undo;
 
   /// Closes the undo steps a committed transaction filled, then hands out the
@@ -564,7 +583,7 @@ class CRDTDocument extends BaseCRDTDocument {
   /// [CRDTUndoManager.canUndo].
   void _onTransactionFlushed() {
     _undo.closeEntries();
-    _outbox.flush();
+    _flushOutbox();
   }
 
   @override
@@ -1599,7 +1618,7 @@ class CRDTDocument extends BaseCRDTDocument {
       return;
     }
 
-    _outbox.flush();
+    _flushOutbox();
     _documentEvents.close();
     _undo.dispose();
     super.dispose();

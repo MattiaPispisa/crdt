@@ -4,9 +4,9 @@
 import 'package:crdt_lf/crdt_lf.dart';
 import 'package:crdt_lf_flutter/src/common/_crdt_guards.dart';
 import 'package:crdt_lf_flutter/src/provider/_crdt_view.dart';
-import 'package:crdt_lf_flutter/src/provider/_handler_delta_subscription.dart';
 import 'package:crdt_lf_flutter/src/provider/crdt_delta_listener.dart';
 import 'package:crdt_lf_flutter/src/provider/crdt_handler.dart';
+import 'package:crdt_lf_flutter/src/provider/handler_delta_subscription.dart';
 import 'package:flutter/widgets.dart';
 
 /// Called with the current value of the handler.

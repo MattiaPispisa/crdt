@@ -492,5 +492,26 @@ void main() {
       expect(watcher.events.last.origin, isNull);
       await watcher.stop();
     });
+
+    test('a watcher that writes back does not take the outer origin', () async {
+      final doc = CRDTDocument();
+      final text = CRDTTextHandler(doc, 'text');
+      final other = CRDTTextHandler(doc, 'other');
+      final watcher = watchDeltas(other);
+      text.value;
+      final subscription = text.watch().listen((update) {
+        if (update is HandlerDelta && other.value.isEmpty) {
+          other.insert(0, 'x');
+        }
+      });
+      await _pump();
+
+      doc.runInTransaction(() => text.insert(0, 'a'), origin: Object());
+      await _pump();
+
+      expect(watcher.events.single.origin, isNull);
+      await watcher.stop();
+      await subscription.cancel();
+    });
   });
 }

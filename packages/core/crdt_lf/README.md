@@ -91,6 +91,7 @@ This library provides solutions for:
 
 Supporting: 
 - Fugue Algorithm for Text Editing to minimize interleaving.
+- Peritext for rich text: formatting and embeds on Fugue text.
 - Observed-Removed (OR) for conflict resolution.
 - Movable lists that preserve element identity across concurrent reorderings.
 - Nested CRDTs via a flat storage of references (model documents, canvases, trees…).
@@ -783,8 +784,8 @@ refuses a handler another manager already holds.
 
 #### Which handlers
 
-`CRDTFugueTextHandler`, `CRDTFugueListHandler`, `CRDTFugueMovableListHandler`,
-`CRDTMapHandler`, `CRDTORMapHandler`, `CRDTORSetHandler`,
+`CRDTFugueTextHandler`, `CRDTFugueRichTextHandler`, `CRDTFugueListHandler`,
+`CRDTFugueMovableListHandler`, `CRDTMapHandler`, `CRDTORMapHandler`, `CRDTORSetHandler`,
 `CRDTRegisterHandler` and the reference handlers built on them, and
 `CRDTAggregateHandler` when its definition is an
 `InvertibleAggregateDefinition`.
@@ -870,6 +871,7 @@ Handlers are the core components of the library. They manage the state of a spec
 
 - `CRDTTextHandler`: Handles text editing (concurrent edits ordered by HLC).
 - `CRDTFugueTextHandler`: Handles text editing with the Fugue algorithm (minimizes interleaving of concurrent edits).
+- `CRDTFugueRichTextHandler`: Fugue text with formatting: bold, links, headers (see [Rich text](#rich-text)).
 - `CRDTListHandler`: Handles list editing (concurrent edits ordered by HLC).
 - `CRDTFugueListHandler`: Handles ordered list editing with the Fugue algorithm (minimizes interleaving of concurrent edits in the same region).
 - `CRDTFugueMovableListHandler`: Handles ordered list editing with an explicit `move` operation that preserves element identity across concurrent reorderings (no duplicates).
@@ -1084,15 +1086,126 @@ print(votes.value); // 2
 
 #### Text handlers index by rune
 
-`CRDTTextHandler` and `CRDTFugueTextHandler` count positions in **runes**
+`CRDTTextHandler`, `CRDTFugueTextHandler` and `CRDTFugueRichTextHandler` count
+positions in **runes**
 (Unicode code points), not UTF-16 code units. `insert`, `delete`, `update`,
-`length`, and the Fugue handler's `stablePositionAt`/`indexOfStablePosition`
-all agree on this: one element is one rune.
+`length`, the rich text handler's `format` and `attributesAt`, and the Fugue
+handlers' `stablePositionAt`/`indexOfStablePosition` all agree on this: one
+element is one rune.
 
 Building a text field on top of this in Flutter? `RenderEditable` counts
 UTF-16 code units, not runes — see [`RuneOffsets` in the crdt_lf_flutter
 docs](https://github.com/MattiaPispisa/crdt/tree/main/packages/core/crdt_lf_flutter/README.md)
 for the conversion.
+
+#### Rich text
+
+`CRDTFugueRichTextHandler` is a Fugue text whose characters carry
+**attributes**: a key and a value (`null`, `bool`, `int`, finite `double` or
+`String`; an `int` stays within ±(2^52 - 1)). Two peers that format the same
+text converge: for each key, the newest format wins (highest HLC, then peer
+id). Formats follow
+[Peritext: A CRDT for Collaborative Rich Text Editing](https://doi.org/10.1145/3555644).
+`checkAttribute` throws what `format` would throw for a value, and writes
+nothing.
+
+```dart
+final text = CRDTFugueRichTextHandler(doc, 'note')
+  ..insert(0, 'Hello world', attributes: {'bold': true})
+  ..format(6, 5, 'link', 'https://example.com', expand: MarkExpand.none)
+  ..format(0, 5, 'bold', null); // null removes the key
+print(text.text); // Prints "Hello world"
+print(text.value); // The spans: text runs with their attributes
+print(text.attributesAt(6)); // Prints "{bold: true, link: https://example.com}"
+```
+
+- `value` is the list of `RichTextSpan`s, and `text` is the plain string.
+- `insert` takes the formats around the text, plus its own `attributes`. With
+  `inherit: false` the text gets exactly its `attributes`.
+- `expand` says if text typed at an edge of the formatted range gets the
+  attribute too: `after` (the default, like bold), `before`, `both` or `none`
+  (like a link). Text typed where text was deleted follows the same rule.
+- A `'\n'` formatted alone with `expand: MarkExpand.none` holds the attributes
+  of its line (a header, a list item). So does each `'\n'` that `insert` writes
+  with attributes. They never spread to the text typed next to it.
+- A snapshot keeps every format, so it grows with each `format` call.
+- `watch()` emits a `RichTextDelta`: `RichTextRetain`, `RichTextInsert` and
+  `RichTextDelete`, with attributes where `null` removes a key. A delta that only formats is a retain with attributes. Embeds come as
+  `RichTextInsertEmbed` and `RichTextUpdateEmbed`.
+
+##### Embeds
+
+An embed is an object in the text, such as an image, a video or a mention. It
+takes one position: the caret moves over it, formats cover it, and it is
+deleted like a character.
+
+```dart
+text
+  ..insertEmbed(5, {'type': 'mention', 'user': 'ada'})
+  ..updateEmbed(5, {'type': 'mention', 'user': 'grace'});
+print(text.text); // "Hello￼ world": U+FFFC stands for the embed
+print(text.value[1].embed); // {type: mention, user: grace}
+```
+
+- The data is a map of `null`, `bool`, `int`, finite `double`, `String`,
+  `Uint8List`, and lists and maps of these, nested at most 16 deep. Name its
+  kind in a `type` key (`richTextEmbedTypeKey`), so readers can tell kinds
+  apart. Put the facts of the object (address, size, alt text) in the data,
+  and what a user changes later (bold, link, displayed size) in marks.
+- `text` holds one U+FFFC (`RichTextSpan.objectReplacement`) per embed, so
+  every rune index of `text` is an index of every positional API. `insert` and
+  `update` refuse a text with U+FFFC: in `text` it is always an embed.
+- Concurrent `updateEmbed`s of one embed resolve like formats: the newest
+  wins. An update loses against a concurrent delete. Undo brings a deleted
+  embed back with its data.
+- `insertEmbed` attributes cover the embed alone. A block embed (a full-width
+  image) is an embed followed by its own `'\n'`, which holds the block
+  attributes.
+- `maxEmbedBytes` (default 256 KiB, `null` for no limit) caps the data this
+  peer writes. Every byte stays in the change log until a snapshot and a
+  prune and goes to every peer: store large media elsewhere and keep a URL or
+  a hash in the embed. `checkEmbed` throws what `insertEmbed` would throw for
+  some data, and writes nothing.
+
+###### Images and videos
+
+`insertImage` and `insertVideo` write embeds of a fixed schema that every
+adapter reads the same way. The file stays outside the document: `src` is a
+URL or an address your app resolves (such as `sha256:…`), and a `data:` URI is
+refused.
+
+```dart
+text.insertImage(
+  0,
+  Uri.parse('https://example.com/cat.png'),
+  alt: 'A cat', // '' for a decorative image
+  width: 1200, // intrinsic size: the space is kept before the file loads
+  height: 800,
+  displayWidth: 320, // a mark: what the user resized it to
+);
+text.insertVideo(1, Uri.parse('https://example.com/a.mp4'),
+    poster: Uri.parse('https://example.com/a.jpg'),
+    attributes: {'align': 'center'}); // a video is a block by default
+
+final image = text.value.first.image; // RichTextImage?, null for other kinds
+print(image?.alt); // Prints "A cat"
+print(text.value.first.displayWidth); // Prints "320"
+```
+
+| Kind | Data (`type` + fields) | Marks |
+| --- | --- | --- |
+| `image` | `src`, `alt`, `title`, `width`, `height` (intrinsic px, both or none), `mime` | `displayWidth` |
+| `video` | `src`, `poster`, `title`, `width`, `height`, `mime` | `displayWidth` |
+
+- An image is inline by default and a video a block: the embed and its own
+  `'\n'`, written as one undo step, with `attributes` (such as `align`) on the
+  `'\n'`.
+- `RichTextImage.fromEmbed` / `RichTextVideo.fromEmbed` read data strictly: a
+  field of the wrong type gives `null`. In the data, a field that is not given
+  has no key. Keys they do not know survive `copyWith`, so change an image
+  with `text.updateEmbed(i, image.copyWith(alt: 'A dog').toEmbed())`.
+- For other kinds, such as a YouTube link, insert your own `type` with
+  `insertEmbed`.
 
 #### Working with Complex Types
 
@@ -1763,6 +1876,7 @@ Feel free to:
 ## Acknowledgments
 
 - [Fugue Algorithm](https://arxiv.org/abs/2305.00583)
+- [Peritext: A CRDT for Collaborative Rich Text Editing](https://doi.org/10.1145/3555644)
 - [Hybrid Logical Clock](https://cse.buffalo.edu/tech-reports/2014-04.pdf)
 - [A comprehensive study of Convergent and Commutative Replicated Data Types](https://inria.hal.science/inria-00555588/en/)
 - [An O(ND) Difference Algorithm and its Variations (Myers diff algorithm)](https://link.springer.com/article/10.1007/BF01840446)

@@ -11,10 +11,10 @@ import 'package:flutter/widgets.dart';
 typedef DeltaProviderResolver<V, D extends ComposableDelta<D>>
     = DeltaProvider<V, D> Function(BaseCRDTDocument document, String id);
 
-/// The resolver every widget uses unless it can say something more precise.
+/// Returns the handler registered under [id] as a `DeltaProvider<V, D>`.
 ///
-/// [widgetName] appears in the error, so the reader is told which widget could
-/// not find what it needed.
+/// Throws a [FlutterError] that names [widgetName] when [id] holds no handler,
+/// or one that publishes another shape.
 DeltaProvider<V, D> resolveDeltaProvider<V, D extends ComposableDelta<D>>(
   BaseCRDTDocument document,
   String id,
@@ -34,11 +34,11 @@ DeltaProvider<V, D> resolveDeltaProvider<V, D extends ComposableDelta<D>>(
   );
 }
 
-/// Follows one handler's delta stream on behalf of a widget.
+/// Follows one handler's delta stream on behalf of one consumer.
 ///
 /// It owns what every consumer has to get right: which handler to listen to,
 /// where the last read sits in the stream, and which events that read already
-/// covers. The widget keeps only what to do with the value.
+/// covers. The consumer keeps only what to do with the value.
 class HandlerDeltaSubscription<V, D extends ComposableDelta<D>> {
   /// Creates a subscription that is not attached to anything yet.
   HandlerDeltaSubscription({
@@ -50,8 +50,7 @@ class HandlerDeltaSubscription<V, D extends ComposableDelta<D>> {
     this.origin,
   });
 
-  /// How to find the provider. A widget that can give a better error than
-  /// [resolveDeltaProvider] passes its own.
+  /// How to find the provider, such as [resolveDeltaProvider].
   final DeltaProviderResolver<V, D> resolve;
 
   /// Called with a value that was just read, and why it had to be read.
@@ -76,8 +75,8 @@ class HandlerDeltaSubscription<V, D extends ComposableDelta<D>> {
   /// Whether [syncTo] reads the value as it attaches, so the first frame shows
   /// the document instead of an empty one.
   ///
-  /// A widget that hands the value to a **user** callback leaves it off:
-  /// [syncTo] runs inside `build`, and that callback may call `setState`.
+  /// Leave it off when [onReset] runs code that may call `setState`: [syncTo]
+  /// runs inside `build`.
   final bool seed;
 
   /// The document and handler id this is attached to, or `null` before the
@@ -102,8 +101,8 @@ class HandlerDeltaSubscription<V, D extends ComposableDelta<D>> {
 
   /// The point the stream has **published**.
   ///
-  /// Delivery is a microtask later, so this can be ahead of [synced] even
-  /// though nothing was missed.
+  /// A batch publishes at once and is delivered one event at a time, so this
+  /// can be ahead of [synced] even though nothing was missed.
   int get publishedSeq => provider.deltaSeq;
 
   /// Attaches to [id] on [document], if that is not already what it follows.
@@ -127,10 +126,13 @@ class HandlerDeltaSubscription<V, D extends ComposableDelta<D>> {
     }
 
     unawaited(_subscription?.cancel());
-    _target = (document, id);
+    // Follows nothing until `resolve` succeeds: a failed attach must not take
+    // the early exit above on the next call.
+    _target = null;
     onBeforeAttach?.call();
 
     final target = _provider = resolve(document, id);
+    _target = (document, id);
     _synced = -1;
 
     final point = seed ? readSynced() : null;
@@ -142,10 +144,8 @@ class HandlerDeltaSubscription<V, D extends ComposableDelta<D>> {
     return point;
   }
 
-  /// Reads the value and moves [synced] to the point it reflects.
-  ///
-  /// One step: two would let an event land in between and be applied on top of
-  /// a value that already holds it.
+  /// Reads the value and moves [synced] to the point it reflects, in one step:
+  /// no event is applied on top of a value that already holds it.
   DeltaSyncPoint<V> readSynced() {
     final point = provider.readSynced();
     _synced = point.seq;
@@ -156,8 +156,8 @@ class HandlerDeltaSubscription<V, D extends ComposableDelta<D>> {
   /// consumer that moved its own copy by hand.
   void markSyncedToPublished() => _synced = provider.deltaSeq;
 
-  /// Stops listening. The target goes with it, so a later [syncTo] to the same
-  /// handler attaches again instead of taking the early exit and going quiet.
+  /// Stops listening; a later [syncTo] attaches again, to the same handler
+  /// too.
   void cancel() {
     unawaited(_subscription?.cancel());
     _subscription = null;

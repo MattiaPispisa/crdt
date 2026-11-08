@@ -30,6 +30,7 @@ Built on top of [`provider`](https://pub.dev/packages/provider) — so you also 
     - [Imperative access](#imperative-access)
     - [Collaborative text](#collaborative-text)
       - [Remote text cursors](#remote-text-cursors)
+      - [Rich text](#rich-text)
       - [Rune ↔ UTF-16 offsets](#rune--utf-16-offsets)
     - [Presence cursors](#presence-cursors)
   - [Benchmarks](#benchmarks)
@@ -53,6 +54,11 @@ Built on top of [`provider`](https://pub.dev/packages/provider) — so you also 
   side effect and never rebuilds the subtree.
 - **`CrdtTextFieldBuilder`** — a `TextEditingController` bound to a text
   handler, the way collaborative editor bindings work.
+- **`CrdtRichTextFieldBuilder`** — a `TextEditingController` that paints
+  inline formats, bound to a `CRDTFugueRichTextHandler`.
+- **`CrdtEditorBinder<V, D>`** / **`CrdtEditorBinding<V, D>`** — the two-way
+  sync loop between one handler and an editor of your choice, for editor
+  adapters.
 - **`CrdtTextCursorsOverlay`** — paints collaborators' carets/selections
   over the text field, anchored by stable positions.
 - **`CrdtAwarenessCursorsOverlay`** — overlays collaborators' mouse-style
@@ -171,7 +177,8 @@ CrdtHandlerListener<CRDTListHandler<String>>(
 A handler deleted with `doc.deleteHandler` (on any peer) is not an error. A
 widget bound to it shows its `deletedBuilder`, or an empty box when there is
 none; a listener stops calling back. This holds for `CrdtHandlerBuilder`,
-`CrdtHandlerSelector`, `CrdtHandlerDeltaBuilder` and `CrdtTextFieldBuilder`.
+`CrdtHandlerSelector`, `CrdtHandlerDeltaBuilder`, `CrdtTextFieldBuilder` and
+`CrdtEditorBinder`.
 
 ```dart
 CrdtHandlerBuilder<CRDTFugueTextHandler>(
@@ -314,6 +321,60 @@ CrdtTextFieldBuilder(
 );
 ```
 
+For another editor, pass `targetOf` to adapt its render object as a
+`CrdtTextCursorsTarget`, and publish its selection with `SelectionAnchors`.
+
+#### Rich text
+
+`CrdtRichTextFieldBuilder` is the same field for a `CRDTFugueRichTextHandler`.
+It hands you a `CrdtRichTextEditingController` that paints the formats of the
+handler. Formats are written through the controller:
+
+```dart
+CrdtRichTextFieldBuilder(
+  id: 'note',
+  builder: (context, controller) => Column(
+    children: [
+      IconButton(
+        icon: const Icon(Icons.format_bold),
+        onPressed: () => controller.toggle('bold'),
+      ),
+      TextField(
+        controller: controller,
+        maxLines: null,
+        strutStyle: StrutStyle.disabled, // lines grow with the font size
+      ),
+    ],
+  ),
+);
+```
+
+- `controller.format(key, value)` formats the selection. At a collapsed caret
+  it styles the text typed next, and the style ends when the caret moves.
+- `controller.attributeAtSelection(key)` tells a toolbar what to highlight.
+- `styleOf` maps attributes to a `TextStyle`; the default reads `bold`,
+  `italic`, `underline`, `strike`, `link`, `color` (`'#rrggbb'`) and `size`.
+- `undoManager` routes Ctrl+Z (Cmd+Z on Apple platforms), the redo shortcuts,
+  `controller.undo()` and `controller.redo()` through a `CRDTUndoManager`.
+  Flutter's own undo knows the text but not the formats. Create the manager
+  with `trackedOrigins: {crdtRichTextFieldOrigin}` and track the handler.
+  `controller.canUndo` and `canRedo` follow the manager.
+- `CrdtTextCursorsOverlay` and `onSelectionAnchorsChanged` work as above.
+
+Paste inserts the plain text of the clipboard. The text takes the format where
+it lands, and the formats of the clipboard are dropped.
+
+The field paints inline formats only. Block attributes (headings, lists) and
+the content of embeds (images, videos) need an editor: see `crdt_lf_quill`.
+
+An embed of the handler shows as its U+FFFC glyph. The field keeps it intact
+through edits around it, deletes, undo and remote changes, its data included.
+A typed or pasted U+FFFC is stripped before the write, since the handler
+refuses it as text. A value set by code with edits on both sides of an embed
+keeps the embed too. One case stays ambiguous: pasting text with U+FFFC over a
+selection that holds an embed may keep the old embed where the new text lines
+up with it.
+
 #### Rune ↔ UTF-16 offsets
 
 `crdt_lf`'s handler API is rune-indexed everywhere. Flutter's `RenderEditable`, `TextSelection` and
@@ -335,6 +396,92 @@ RuneOffsets.runeIndex('a😀b', 3);   // 2 — the rune that starts at code unit
 `utf16Offset` converts a handler rune index into a UTF-16 offset for
 `TextSelection`/`TextPosition`; `runeIndex` converts the other way. Both
 clamp out-of-range input to the ends of the string instead of throwing.
+
+### Editor bindings
+
+`CrdtEditorBinding` keeps an editor and a handler in step. It is the loop
+behind an editor adapter: you give it three callbacks, and it decides when to
+call them. It has no widgets, so you can use it alone; `CrdtEditorBinder` is
+the widget that owns one, attaches it to the handler `id` of the ambient
+document, and builds its `builder` once.
+
+- `onReset(value, cause)` puts the whole handler value in the editor. It runs
+  when the binding attaches, and again when the handler asks for a fresh read.
+  With `CrdtEditorBinder` the first call runs inside `build`, so it must not
+  call `setState`.
+- `onRemoteDelta(event)` applies one change to the editor, as a remote edit.
+- `verifyProjection` (optional) answers "do the editor and the handler still
+  agree?". On `false` the binding reads the handler and calls `onReset`.
+
+A local edit goes through `binding.push`. Inside it, write the edit into the
+handler. The binding drops the echo of that write, so the editor never applies
+its own edit twice, also when an outer transaction delays the echo. A reset that
+arrives during the write is delivered after it. When the editor is still behind the handler (`binding.isBehind`, in the
+middle of a burst), the binding reads the handler after the write and calls
+`onReset`.
+
+```dart
+CrdtEditorBinder<List<RichTextSpan>, RichTextDelta>(
+  id: 'page',
+  onReset: (spans, cause) => editor.load(spans),
+  onRemoteDelta: (event) => editor.applyRemote(event.delta),
+  verifyProjection: () => editor.length == page.length,
+  builder: (context, binding) => MyEditor(
+    editor: editor,
+    // Called for the user's edits only, never for the remote ones.
+    onLocalEdit: (index, text) => binding.push(
+      () => context.crdtDocument.runInTransaction(
+        () => page.insert(index, text),
+      ),
+    ),
+  ),
+);
+```
+
+Give `verifyProjection` whenever you can. A watcher that writes back inside
+your write is dropped together with your echo, and this check is what finds
+it.
+
+For a rich text editor, pass `isEcho` to `binding.push` too, built with
+`echoesRichText`. It tells your own write apart from a write of someone else
+during the push, even one that keeps the length (a format, an embed update),
+which a length check misses. `formatsWithin` describes the formats your write
+puts on a range:
+
+```dart
+binding.push(
+  () => page.insert(index, text, attributes: style),
+  isEcho: (dropped) => echoesRichText(
+    dropped,
+    deleted: 0,
+    inserted: text.runes.length,
+    ownsFormat: formatsWithin(index, index + text.runes.length, style),
+  ),
+);
+```
+
+A rich text editor that hands out `RichTextDelta`s writes them with a
+`RichTextWriter`, built with the key policy of the editor: how each key grows
+(`expandOf`) and which keys mark a line (`isBlockKey`). A `RichTextEcho`
+records the same deltas and is the `isEcho` of the push. Pass the undo manager
+as `ownStep` when the push is a format, so undo takes it back on its own:
+
+```dart
+const writer = RichTextWriter(expandOf: myExpandOf, isBlockKey: myBlockKey);
+
+final echo = RichTextEcho(writer)..add(delta);
+binding.push(
+  () => context.crdtDocument.runInTransaction(
+    () => writer.write(page, delta),
+  ),
+  isEcho: echo.echoes,
+  ownStep: isFormat ? undoManager : null,
+);
+```
+
+Give `CrdtEditorBinder` the `SelectionAnchors` of the editor as `anchors`: the
+binder tells them when the focus enters or leaves the editor, and clears them
+when it follows another handler or the handler is deleted.
 
 ### Presence cursors
 
@@ -410,12 +557,13 @@ imports carrying its state. With `nested: true` the ids and revisions of the
 handler and its descendants (`ContainerHandler.childRefs`) are folded into one
 hash, so structural changes (a child added or removed) are detected too.
 
-The delta widgets — `CrdtHandlerDeltaBuilder`, `CrdtHandlerDeltaListener` and
-`CrdtTextFieldBuilder` — work the other way round. They subscribe to the
-handler's own `watch()` stream, which says **what** each change did, and they
-keep a projection instead of re-reading the value. All three share one piece of
-bookkeeping: which handler to follow, where the last read sits in the stream,
-and which events that read already covers. A `HandlerReset` means "the base
+The delta widgets — `CrdtHandlerDeltaBuilder`, `CrdtHandlerDeltaListener`,
+`CrdtTextFieldBuilder` and `CrdtEditorBinder` — work the other way round. They
+subscribe to the handler's own `watch()` stream, which says **what** each
+change did, and they keep a projection instead of re-reading the value. They
+share one piece of bookkeeping, `HandlerDeltaSubscription`: which handler to
+follow, where the last read sits in the stream, and which events that read
+already covers. A `HandlerReset` means "the base
 moved, read it again"; the read comes back with the point of the stream it
 reflects, so no event is ever applied twice.
 

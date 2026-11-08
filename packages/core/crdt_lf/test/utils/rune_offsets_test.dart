@@ -27,6 +27,25 @@ void main() {
       });
     });
 
+    group('surrogates', () {
+      test('splitsPair is true only between the halves of a pair', () {
+        expect(
+          [for (var i = 0; i <= emoji.length; i++) i]
+              .where((at) => RuneOffsets.splitsPair(emoji, at)),
+          [2],
+        );
+        expect(RuneOffsets.splitsPair('$loneHigh$loneHigh', 1), isFalse);
+      });
+
+      test('snap never points into a pair and clamps to the text', () {
+        expect(RuneOffsets.snap(emoji, 1), 1);
+        expect(RuneOffsets.snap(emoji, 2), 1);
+        expect(RuneOffsets.snap(emoji, 3), 3);
+        expect(RuneOffsets.snap(emoji, -1), 0);
+        expect(RuneOffsets.snap(emoji, 99), emoji.length);
+      });
+    });
+
     group('utf16Offset', () {
       test('maps each rune boundary to its code-unit offset', () {
         expect(RuneOffsets.utf16Offset(emoji, 0), 0);

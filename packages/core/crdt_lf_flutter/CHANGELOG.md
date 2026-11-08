@@ -1,3 +1,23 @@
+## [0.8.0](https://github.com/MattiaPispisa/crdt/tree/crdt_lf_flutter-v0.8.0/packages/core/crdt_lf_flutter)
+
+**Date:** --
+
+[compare to previous release](https://github.com/MattiaPispisa/crdt/compare/crdt_lf_flutter-v0.7.0...crdt_lf_flutter-v0.8.0)
+
+### Added
+
+- `CrdtRichTextFieldBuilder`: a rich text field bound to a `CRDTFugueRichTextHandler`, with formats,
+  embeds and undo; `CrdtTextCursorsOverlay` draws its remote cursors. Needs `crdt_lf` 5.4.0. See
+  [Rich text](README.md#rich-text). [209](https://github.com/MattiaPispisa/crdt/issues/209)
+- `CrdtEditorBinding` and `CrdtEditorBinder`: the two-way sync loop between a handler and any editor,
+  with what an editor adapter needs around it (deltas, echoes, selection, cursors). See
+  [Editor bindings](README.md#editor-bindings). [209](https://github.com/MattiaPispisa/crdt/issues/209)
+
+### Fixed
+
+- `CrdtTextFieldBuilder` keeps remote changes and the caret through a push, a batch of remote changes
+  and a composition.
+
 ## [0.7.0](https://github.com/MattiaPispisa/crdt/tree/crdt_lf_flutter-v0.7.0/packages/core/crdt_lf_flutter)
 
 **Date:** 2026-11-03

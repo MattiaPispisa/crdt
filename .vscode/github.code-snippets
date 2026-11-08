@@ -42,6 +42,7 @@
       "- [crdt_lf](https://pub.dev/packages/crdt_lf)",
       "- [crdt_socket_sync](https://pub.dev/packages/crdt_socket_sync)",
       "- [crdt_lf_flutter](https://pub.dev/packages/crdt_lf_flutter)",
+      "- [crdt_lf_quill](https://pub.dev/packages/crdt_lf_quill)",
       "- [hlc_dart](https://pub.dev/packages/hlc_dart)",
       "- [crdt_lf_persistence](https://pub.dev/packages/crdt_lf_persistence)",
       "- [crdt_lf_hive](https://pub.dev/packages/crdt_lf_hive)",

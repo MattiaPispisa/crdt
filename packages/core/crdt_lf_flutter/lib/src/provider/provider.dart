@@ -8,3 +8,4 @@ export 'crdt_handler.dart';
 export 'crdt_helper.dart';
 export 'crdt_history_scope.dart';
 export 'crdt_provider.dart';
+export 'handler_delta_subscription.dart';

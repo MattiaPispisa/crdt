@@ -86,16 +86,39 @@ class RuneOffsets {
     return offset;
   }
 
+  /// Whether [unit] is the high half of a surrogate pair.
+  static bool isHighSurrogate(int unit) => unit & 0xFC00 == 0xD800;
+
+  /// Whether [unit] is the low half of a surrogate pair.
+  static bool isLowSurrogate(int unit) => unit & 0xFC00 == 0xDC00;
+
+  /// Whether the code-unit offset [at] falls inside a surrogate pair of
+  /// [text].
+  static bool splitsPair(String text, int at) =>
+      at > 0 &&
+      at < text.length &&
+      isHighSurrogate(text.codeUnitAt(at - 1)) &&
+      isLowSurrogate(text.codeUnitAt(at));
+
+  /// [offset] clamped to [text] and moved back to the start of the surrogate
+  /// pair it points into.
+  ///
+  /// ```dart
+  /// print(RuneOffsets.snap('a😀b', 2)); // Prints 1 (inside the emoji)
+  /// ```
+  static int snap(String text, int offset) {
+    final clamped = offset.clamp(0, text.length);
+    return splitsPair(text, clamped) ? clamped - 1 : clamped;
+  }
+
   /// Code units spanned by the rune starting at [offset]: 2 for a well-formed
   /// surrogate pair, 1 otherwise (including an unpaired surrogate).
   static int _runeWidthAt(String text, int offset, int length) {
     final unit = text.codeUnitAt(offset);
-    if (unit >= 0xD800 && unit <= 0xDBFF && offset + 1 < length) {
-      final next = text.codeUnitAt(offset + 1);
-      if (next >= 0xDC00 && next <= 0xDFFF) {
-        return 2;
-      }
-    }
-    return 1;
+    return isHighSurrogate(unit) &&
+            offset + 1 < length &&
+            isLowSurrogate(text.codeUnitAt(offset + 1))
+        ? 2
+        : 1;
   }
 }

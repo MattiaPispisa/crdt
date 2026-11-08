@@ -6,10 +6,38 @@ import 'dart:math';
 import 'package:crdt_lf/crdt_lf.dart';
 import 'package:crdt_lf/src/algorithm/fugue/tree.dart';
 import 'package:crdt_lf_flutter/crdt_lf_flutter.dart';
+import 'package:editor_conformance/editor_conformance.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'helpers/controller_harness.dart';
+
 void main() {
+  for (final fugue in [true, false]) {
+    runEditorConformanceTests(
+      'CrdtTextFieldBuilder on ${fugue ? 'Fugue' : 'index'} text',
+      () => ControllerHarness(
+        makeHandler: (document, id) {
+          if (fugue) {
+            return CRDTFugueTextHandler(document, id);
+          }
+          return CRDTTextHandler(document, id);
+        },
+        supportsAnchors: fugue,
+        buildField: (id, deletedBuilder, onController, onAnchors, _) =>
+            CrdtTextFieldBuilder(
+          id: id,
+          deletedBuilder: deletedBuilder,
+          onSelectionAnchorsChanged: onAnchors,
+          builder: (context, controller) {
+            onController(controller);
+            return TextField(controller: controller);
+          },
+        ),
+      ),
+    );
+  }
+
   group('CrdtTextFieldBuilder', () {
     late CRDTDocument doc;
     var builds = 0;
@@ -44,137 +72,6 @@ void main() {
       remote.importChanges(doc.exportChanges());
       return remote;
     }
-
-    testWidgets('pushes local edits into the handler as they happen',
-        (tester) async {
-      final note = CRDTFugueTextHandler(doc, 'note');
-      await tester.pumpWidget(host());
-
-      await tester.enterText(find.byType(TextField), 'hello');
-      expect(note.value, 'hello');
-
-      // Edit in the middle: the delta targets the gesture, not the whole text.
-      await tester.enterText(find.byType(TextField), 'heXYllo');
-      expect(note.value, 'heXYllo');
-    });
-
-    testWidgets(
-        'adopts a remote change in place, mapping the caret through it '
-        '— without rebuilding', (tester) async {
-      CRDTFugueTextHandler(doc, 'note').insert(0, 'hello world');
-      await tester.pumpWidget(host());
-      expect(builds, 1);
-
-      // Focus and put the caret after "hello".
-      await tester.tap(find.byType(TextField));
-      await tester.pump();
-      final controller = tester
-          .widget<TextField>(find.byType(TextField))
-          .controller!
-        ..selection = const TextSelection.collapsed(offset: 5);
-
-      // A remote peer prepends text.
-      final remote = remotePeer();
-      (remote.registeredHandlers['note']! as CRDTFugueTextHandler)
-          .insert(0, 'XXX ');
-      doc.importChanges(remote.exportChanges());
-      await tester.pump();
-
-      expect(controller.text, 'XXX hello world');
-      // The caret is still after "hello": shifted by the remote insertion.
-      expect(controller.selection.baseOffset, 9);
-      // The subtree never rebuilt: the controller was updated in place.
-      expect(builds, 1);
-    });
-
-    testWidgets(
-        'keeps the caret anchored across a multi-region remote edit '
-        '(stable positions, where a text delta alone would misplace it)',
-        (tester) async {
-      CRDTFugueTextHandler(doc, 'note').insert(0, 'hello world');
-      await tester.pumpWidget(host());
-      await tester.tap(find.byType(TextField));
-      await tester.pump();
-      final controller = tester
-          .widget<TextField>(find.byType(TextField))
-          .controller!
-        ..selection = const TextSelection.collapsed(offset: 5);
-
-      // One remote change touching BOTH ends: the single contiguous delta
-      // spans the caret, so pure delta mapping would snap it to the end.
-      final remote = remotePeer();
-      (remote.registeredHandlers['note']! as CRDTFugueTextHandler)
-        ..insert(0, 'A')
-        ..insert(12, 'B');
-      doc.importChanges(remote.exportChanges());
-      await tester.pump();
-
-      expect(controller.text, 'Ahello worldB');
-      // Still right after "hello": the anchor follows the element identity.
-      expect(controller.selection.baseOffset, 6);
-    });
-
-    testWidgets('defers commits while an IME composition is active',
-        (tester) async {
-      final note = CRDTFugueTextHandler(doc, 'note');
-      await tester.pumpWidget(host());
-      await tester.showKeyboard(find.byType(TextField));
-
-      // Composing (e.g. CJK input): nothing is committed yet.
-      tester.testTextInput.updateEditingValue(
-        const TextEditingValue(
-          text: 'nihao',
-          selection: TextSelection.collapsed(offset: 5),
-          composing: TextRange(start: 0, end: 5),
-        ),
-      );
-      await tester.pump();
-      expect(note.value, '');
-
-      // Composition ends: the accumulated delta is committed once.
-      tester.testTextInput.updateEditingValue(
-        const TextEditingValue(
-          text: '你好',
-          selection: TextSelection.collapsed(offset: 2),
-        ),
-      );
-      await tester.pump();
-      expect(note.value, '你好');
-    });
-
-    testWidgets(
-        'merges a remote change arriving while a composition is pending',
-        (tester) async {
-      final note = CRDTFugueTextHandler(doc, 'note')..insert(0, 'hello');
-      await tester.pumpWidget(host());
-      await tester.showKeyboard(find.byType(TextField));
-
-      final remote = remotePeer();
-
-      // Local composition in progress (uncommitted)...
-      tester.testTextInput.updateEditingValue(
-        const TextEditingValue(
-          text: 'helloX',
-          selection: TextSelection.collapsed(offset: 6),
-          composing: TextRange(start: 5, end: 6),
-        ),
-      );
-      await tester.pump();
-      expect(note.value, 'hello');
-
-      // ...while a remote edit lands: the pending text is committed and
-      // merged instead of being lost.
-      (remote.registeredHandlers['note']! as CRDTFugueTextHandler)
-          .insert(0, 'A ');
-      doc.importChanges(remote.exportChanges());
-      await tester.pumpAndSettle();
-
-      expect(note.value, contains('A '));
-      expect(note.value, contains('X'));
-      final controller =
-          tester.widget<TextField>(find.byType(TextField)).controller!;
-      expect(controller.text, note.value);
-    });
 
     testWidgets(
         'merges a burst of remote changes arriving while a composition is '
@@ -251,94 +148,6 @@ void main() {
 
       expect(controller.text, '```dart\nhi\n```');
       expect(note.value, '```dart\nhi\n```');
-    });
-
-    testWidgets(
-        'backspacing an emoji removes it whole (code-unit field offsets '
-        'against rune handler indices)', (tester) async {
-      final note = CRDTFugueTextHandler(doc, 'note');
-      await tester.pumpWidget(host());
-      final controller =
-          tester.widget<TextField>(find.byType(TextField)).controller!;
-
-      await tester.enterText(find.byType(TextField), 'a😀b');
-      expect(note.value, 'a😀b');
-      // One rune per element: the emoji is a single handler position even
-      // though the field counts it as two code units.
-      expect(note.length, 3);
-      expect(controller.text.length, 4);
-
-      // Backspace with the caret right after the emoji. Flutter deletes the
-      // whole cluster, so the field hands us a two-code-unit deletion.
-      controller.value = const TextEditingValue(
-        text: 'ab',
-        selection: TextSelection.collapsed(offset: 1),
-      );
-      await tester.pump();
-
-      expect(note.value, 'ab');
-      expect(controller.text, 'ab');
-    });
-
-    testWidgets('anchors the caret correctly past an emoji', (tester) async {
-      CRDTFugueTextHandler(doc, 'note').insert(0, 'a😀b');
-      await tester.pumpWidget(host());
-      final controller =
-          tester.widget<TextField>(find.byType(TextField)).controller!
-            // Caret at code-unit offset 3 — after the emoji, i.e. rune 2.
-            ..selection = const TextSelection.collapsed(offset: 3);
-      await tester.pump();
-
-      // A remote insertion before the caret must shift it by the inserted
-      // code units, not by the inserted runes.
-      final remote = remotePeer();
-      (remote.registeredHandlers['note']! as CRDTFugueTextHandler)
-          .insert(0, '🎉');
-      doc.importChanges(remote.exportChanges());
-      await tester.pump();
-
-      expect(controller.text, '🎉a😀b');
-      expect(controller.selection.baseOffset, 5);
-    });
-
-    testWidgets(
-        'places the caret exactly across a multi-region remote edit on a '
-        'CRDTTextHandler, which has no stable positions', (tester) async {
-      // The Fugue test above is rescued by element identity. This handler has
-      // none, so the caret rides on what the handler reported it did. A diff
-      // of the two texts would collapse both regions into one span covering
-      // the caret and snap it to the end.
-      final note = CRDTTextHandler(doc, 'note')..insert(0, 'hello ');
-      await tester.pumpWidget(host());
-      await tester.tap(find.byType(TextField));
-      await tester.pump();
-      final controller =
-          tester.widget<TextField>(find.byType(TextField)).controller!;
-
-      // Typed through the field, so both arms of the push reach this handler
-      // and not only the Fugue one.
-      await tester.enterText(find.byType(TextField), 'hello brave world');
-      expect(note.value, 'hello brave world');
-      await tester.enterText(find.byType(TextField), 'hello world');
-      expect(note.value, 'hello world');
-
-      controller.selection = const TextSelection.collapsed(offset: 5);
-
-      final remote = CRDTDocument(peerId: PeerId.generate());
-      final remoteNote = CRDTTextHandler(remote, 'note');
-      remote.importChanges(doc.exportChanges());
-      remoteNote
-        ..insert(0, 'A')
-        ..insert(12, 'B');
-      doc.importChanges(
-        remote.exportChanges(fromVersionVector: doc.getVersionVector()),
-      );
-      await tester.pump();
-
-      expect(controller.text, 'Ahello worldB');
-      // Still right after "hello", shifted by the one character inserted
-      // before it — not dragged to the end.
-      expect(controller.selection.baseOffset, 6);
     });
 
     testWidgets('takes in a batch of changes one at a time', (tester) async {
@@ -529,32 +338,6 @@ void main() {
       );
     });
 
-    testWidgets('adopts a remote deletion', (tester) async {
-      // The mirror of the insert cases above: text going away has to move the
-      // field's copy the same way, and the caret with it.
-      final note = CRDTFugueTextHandler(doc, 'note')..insert(0, 'hello world');
-      await tester.pumpWidget(host());
-      await tester.tap(find.byType(TextField));
-      await tester.pump();
-      final controller = tester
-          .widget<TextField>(find.byType(TextField))
-          .controller!
-        ..selection = const TextSelection.collapsed(offset: 11);
-
-      final remote = remotePeer();
-      (remote.registeredHandlers['note']! as CRDTFugueTextHandler)
-          .delete(0, 6); // "hello "
-      doc.importChanges(
-        remote.exportChanges(fromVersionVector: doc.getVersionVector()),
-      );
-      await tester.pump();
-
-      expect(controller.text, 'world');
-      expect(note.value, 'world');
-      // The caret was at the end and stays there, six characters earlier.
-      expect(controller.selection.baseOffset, 5);
-    });
-
     testWidgets('reads the value again when the handler asks for a reset',
         (tester) async {
       // A snapshot replaces the base the deltas were describing, so no delta
@@ -669,6 +452,64 @@ void main() {
       expect(controller.text, note.value);
     });
 
+    testWidgets('takes in a write served inside a push that drops the cache',
+        (tester) async {
+      final note = CRDTFugueTextHandler(doc, 'note')
+        ..insert(0, 'hello')
+        ..useIncrementalCacheUpdate = false;
+      var armed = true;
+      final watcher = note.watch().listen((_) {
+        if (armed && note.value == 'helloX') {
+          armed = false;
+          note
+            ..delete(0, 1)
+            ..insert(0, 'H');
+        }
+      });
+      addTearDown(watcher.cancel);
+      await tester.pumpWidget(host());
+      final controller =
+          tester.widget<TextField>(find.byType(TextField)).controller!
+            ..value = const TextEditingValue(
+              text: 'helloX',
+              selection: TextSelection.collapsed(offset: 6),
+            );
+      await tester.pumpAndSettle();
+
+      expect(armed, isFalse);
+      expect(note.value, 'HelloX');
+      expect(controller.text, note.value);
+    });
+
+    testWidgets('keeps the caret on a write served inside a push', (
+      tester,
+    ) async {
+      debugVerifyCrdtTextFieldProjection = false;
+      addTearDown(() => debugVerifyCrdtTextFieldProjection = true);
+      final note = CRDTFugueTextHandler(doc, 'note')..insert(0, 'ab');
+      var armed = true;
+      final watcher = note.watch().listen((_) {
+        if (armed && note.value == 'abx') {
+          armed = false;
+          note.insert(3, '!');
+        }
+      });
+      addTearDown(watcher.cancel);
+      await tester.pumpWidget(host());
+      final controller =
+          tester.widget<TextField>(find.byType(TextField)).controller!
+            ..selection = const TextSelection.collapsed(offset: 2)
+            ..value = const TextEditingValue(
+              text: 'abx',
+              selection: TextSelection.collapsed(offset: 3),
+            );
+      await tester.pumpAndSettle();
+
+      expect(armed, isFalse);
+      expect(controller.text, 'abx!');
+      expect(controller.selection, const TextSelection.collapsed(offset: 3));
+    });
+
     // More than one seed: one stream of random edits is one sample, and the
     // shapes that break this widget are rare enough that one sample misses
     // them.
@@ -709,7 +550,8 @@ void main() {
               if (composing) {
                 break;
               }
-              final at = _runeBoundary(text, random.nextInt(text.length + 1));
+              final at =
+                  RuneOffsets.snap(text, random.nextInt(text.length + 1));
               // An emoji now and then: the handlers index by rune, the field by
               // code unit, and that seam has been wrong before.
               final typed = random.nextInt(8) == 0
@@ -723,11 +565,9 @@ void main() {
               if (composing || text.isEmpty) {
                 break;
               }
-              final at = _runeBoundary(text, random.nextInt(text.length));
+              final at = RuneOffsets.snap(text, random.nextInt(text.length));
               // Whole rune: no editor ever deletes half a surrogate pair.
-              final end = _runeBoundary(text, at + 1) == at
-                  ? at + 2
-                  : _nextRune(text, at);
+              final end = RuneOffsets.skip(text, at, 1);
               controller.value = TextEditingValue(
                 text: text.replaceRange(at, end, ''),
                 selection: TextSelection.collapsed(offset: at),
@@ -844,23 +684,6 @@ final class _CountingFugueTextHandler extends CRDTFugueTextHandler {
     reads++;
     return super.value;
   }
-}
-
-/// The start of the rune that [offset] falls in.
-int _runeBoundary(String text, int offset) {
-  if (offset <= 0 || offset >= text.length) {
-    return offset.clamp(0, text.length);
-  }
-  final unit = text.codeUnitAt(offset);
-  return (unit >= 0xDC00 && unit <= 0xDFFF) ? offset - 1 : offset;
-}
-
-/// The end of the rune that starts at [at].
-int _nextRune(String text, int at) {
-  final unit = text.codeUnitAt(at);
-  return (unit >= 0xD800 && unit <= 0xDBFF && at + 1 < text.length)
-      ? at + 2
-      : at + 1;
 }
 
 /// Rewrites a delta into the one a broken handler would report.

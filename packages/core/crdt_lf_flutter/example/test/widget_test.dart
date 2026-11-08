@@ -44,6 +44,7 @@ void main() {
       'settings-flat',
       'settings-nested',
       'note-text',
+      'editor-binder',
       'presence',
     ];
     Map<String, int> snapshot() => {
@@ -156,6 +157,22 @@ void main() {
     await tapButton(tester, 'Toggle cursor');
     expect(rebuilds(tester, 'note-text'), before['note-text']);
     expect(tester.takeException(), isNull);
+
+    // 8b. The editor binder: a remote edit and a local one both reach the
+    //     fake editor's own copy, and its builder never runs again.
+    String editorText() =>
+        tester
+            .widget<Text>(find.byKey(const Key('editor-text')))
+            .textSpan!
+            .toPlainText();
+    before = snapshot();
+    await tapButton(tester, 'Remote rich edit');
+    await tapButton(tester, 'Local rich edit');
+    expect(editorText(), contains('[remote] '));
+    expect(editorText(), contains('hello'));
+    expect(editorText(), endsWith('!'));
+    expect(rebuilds(tester, 'editor-binder'), before['editor-binder']);
+    expect(rebuilds(tester, 'note-text'), before['note-text']);
 
     // 9. Presence overlay: a fake peer 'Bob' whose pointer is driven by a
     //    stream + timer. Starting it moves the cursor across the pane WITHOUT
