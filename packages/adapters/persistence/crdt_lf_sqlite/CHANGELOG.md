@@ -1,3 +1,10 @@
+## [0.3.3+1](https://github.com/MattiaPispisa/crdt/tree/crdt_lf_sqlite-v0.3.3+1/packages/adapters/persistence/crdt_lf_sqlite)
+
+**Date:** --
+
+- The documentation moved to the [docs site](https://mattiapispisa.it/crdt/docs/connectors/persistence/adapters): the README is now a short
+  entry point. No functional changes since `0.3.3`. [216](https://github.com/MattiaPispisa/crdt/issues/216)
+
 ## [0.3.3](https://github.com/MattiaPispisa/crdt/tree/crdt_lf_sqlite-v0.3.3/packages/adapters/persistence/crdt_lf_sqlite)
 
 **Date:** 2026-10-10

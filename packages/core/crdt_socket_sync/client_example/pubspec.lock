@@ -117,14 +117,14 @@ packages:
       path: "../../crdt_lf_persistence"
       relative: true
     source: path
-    version: "0.2.0"
+    version: "0.2.0+1"
   crdt_socket_sync:
     dependency: "direct main"
     description:
       path: ".."
       relative: true
     source: path
-    version: "0.10.2"
+    version: "0.10.2+1"
   crypto:
     dependency: transitive
     description:
@@ -218,7 +218,7 @@ packages:
       path: "../../hlc"
       relative: true
     source: path
-    version: "1.2.0"
+    version: "1.2.0+1"
   http_multi_server:
     dependency: transitive
     description:

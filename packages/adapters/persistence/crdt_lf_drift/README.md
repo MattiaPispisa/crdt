@@ -8,57 +8,31 @@
 [![License: MIT][license_badge]][license_link]
 [![pub publisher][pub_publisher]][pub_publisher_link]
 
-[![docs_badge]][docs_link]
+A [Drift](https://pub.dev/packages/drift) storage adapter for [`crdt_lf`](https://pub.dev/packages/crdt_lf):
+it keeps your documents on the device, and reads them back on launch. Pick it when your app already uses Drift.
 
-- [CRDT LF Drift](#crdt-lf-drift)
-  - [Features](#features)
-  - [Quick Start](#quick-start)
-    - [1. Open a database](#1-open-a-database)
-    - [2. Document-scoped storage](#2-document-scoped-storage)
-  - [Many documents in one place](#many-documents-in-one-place)
-  - [Keeping a whole document on disk](#keeping-a-whole-document-on-disk)
-  - [Document-Scoped Storage](#document-scoped-storage)
-    - [CRDTDriftChangeStorage](#crdtdriftchangestorage)
-    - [CRDTDriftSnapshotStorage](#crdtdriftsnapshotstorage)
-    - [CRDTDriftPeerIdStorage](#crdtdriftpeeridstorage)
-  - [How Data Is Stored](#how-data-is-stored)
-  - [Examples](#examples)
-  - [Storage Management](#storage-management)
-  - [Roadmap](#roadmap)
-  - [Apps](#apps)
-  - [Packages](#packages)
+<div align="center">
 
-A [drift](https://pub.dev/packages/drift) storage implementation for [CRDT LF](https://pub.dev/packages/crdt_lf) objects, providing efficient persistence for `Change` and `Snapshot` objects with document-scoped organization in a single drift database.
+[![Read the full documentation][docs_badge]][docs_link]
+
+</div>
+
+> **📖 The full persistence guide — which adapter to pick, history, backups, compaction — is on [mattiapispisa.it/crdt](https://mattiapispisa.it/crdt/docs/connectors/persistence).**
 
 ## Features
 
-- **Compact Binary Storage**: `Change` and `Snapshot` are persisted as the self-describing binary blobs produced by `crdt_lf`'s native `toBytes()` / `fromBytes()` methods
-- **Single Database, Many Documents**: one database holds the `changes`, `snapshots` and `peers` tables
-- **Document-Scoped Storage**: utilities that organize data by document ID for better isolation and querying
+- 🗄️ **One database, many documents**: three tables, with schema migrations
+- 🔒 **Real transactions**: a compaction lands all at once or not at all
+- ⏳ **Asynchronous end to end**, like the rest of Drift
+- 🔌 **Your executor**: wrap a `CRDTDriftDatabase` on the `QueryExecutor` you choose
+- 🪪 **Peer identity**: the device writes under the same author on every launch
+- 🧩 **Same contract** as the Hive and SQLite adapters: change backend with one line
 
-## Quick Start
+## Quick start
 
-### 1. Open a database
-
-```dart
-import 'dart:io';
-
-import 'package:crdt_lf_drift/crdt_lf_drift.dart';
-
-Future<void> main() async {
-  // Open (or create) a database file...
-  final storage = CRDTDrift.open(File('./my_app_data.db'));
-
-  // ...or an in-memory database (useful for tests):
-  final memory = CRDTDrift.memory();
-
-  // Your app code here...
-
-  await storage.close();
-}
+```sh
+dart pub add crdt_lf crdt_lf_drift
 ```
-
-### 2. Document-scoped storage
 
 ```dart
 import 'dart:io';
@@ -66,175 +40,28 @@ import 'dart:io';
 import 'package:crdt_lf/crdt_lf.dart';
 import 'package:crdt_lf_drift/crdt_lf_drift.dart';
 
-const documentId = 'my-document-id';
+final backend = CRDTDrift.open(File('note.db'));
 
-final storage = CRDTDrift.open(File('./my_app_data.db'));
+final note = await backend.openDocument('note');
+final text = CRDTFugueTextHandler(note.document, 'body');
 
-// Open storage for a specific document
-final changeStorage = storage.changeStorageForDocument(documentId);
-final snapshotStorage = storage.snapshotStorageForDocument(documentId);
+text.insert(0, 'Hello 🌍');
 
-// Or open both at once
-final documentStorage = storage.storageForDocument(documentId);
-```
-
-## Many documents in one place
-
-`CRDTDrift` is a `CRDTStorageBackend`: it lists the documents it holds, hands out
-the storages of each one, and deletes one whole. Code written against that
-interface runs on any adapter, so an app can change backend without changing
-anything but the line that opens it.
-
-```dart
-final backend = CRDTDrift.open(File('app.db'));
-
-for (final documentId in await backend.documentIds) {
-  final note = await backend.readDocument(documentId);
-  // ...show it in a list
-}
-
-await backend.deleteDocument('doc-123'); // changes, snapshots and identity
+await note.persistence.dispose(); // writes what is still waiting
 await backend.close();
 ```
 
-## Keeping a whole document on disk
+Every change is written down from there on. This package re-exports the whole
+[`crdt_lf_persistence`](https://pub.dev/packages/crdt_lf_persistence) API, so it
+is the only storage package your `pubspec.yaml` needs.
 
-Most apps do not call these methods by hand. `openDocument` reads the document
-back — its stored identity included — and follows it from there:
+## Documentation
 
-```dart
-final note = await backend.openDocument(documentId);
-final text = CRDTFugueTextHandler(note.document, 'body');
-```
-
-Everything written from there on is stored. The backend has the read-only half
-too: `readDocument(id)` for a preview or a list, `documentAt(id, version)` for
-the document as it was, `copyDocumentTo(other, id)` for a backup or a move to
-another adapter.
-
-It comes from [`crdt_lf_persistence`](https://pub.dev/packages/crdt_lf_persistence),
-which this package re-exports. See that README for the offline-first rules.
-
-`storageForDocument` hands back a `CRDTDriftDocumentStorage`, which backs
-`transaction()` with `database.transaction(...)`: a prune drops the covered
-changes and rewrites the survivors, and either all of it lands or none of it
-does.
-
-`close()` on it does nothing on purpose. One database file holds every
-document, so the connection is `CRDTDrift.close()`'s to release.
-
-## Document-Scoped Storage
-
-Data for different documents lives in the same tables and is isolated through the `document_id` column.
-
-drift is asynchronous end to end, so every method here returns a `Future`, and
-`CRDTDocumentPersistence.openSync` does not work on it. Use `open`.
-
-### CRDTDriftChangeStorage
-
-Manages `Change` objects for a specific document:
-
-```dart
-final changeStorage = storage.changeStorageForDocument('doc-123');
-
-// Save individual changes
-await changeStorage.saveChange(change);
-
-// Batch save multiple changes
-await changeStorage.saveChanges([change1, change2, change3]);
-
-// Load all changes for the document
-final changes = await changeStorage.getChanges();
-
-// Or only part of the log, by version vector
-final missing = await changeStorage.getChanges(newerThan: theirVersion);
-final past = await changeStorage.getChanges(upTo: oldVersion);
-
-// Delete changes
-await changeStorage.deleteChange(change);
-await changeStorage.deleteChanges([change1, change2]);
-
-// Storage info
-print('Total changes: ${await changeStorage.count}');
-```
-
-### CRDTDriftSnapshotStorage
-
-Manages `Snapshot` objects for a specific document:
-
-```dart
-final snapshotStorage = storage.snapshotStorageForDocument('doc-123');
-
-// Save snapshots
-await snapshotStorage.saveSnapshot(snapshot);
-await snapshotStorage.saveSnapshots([snapshot1, snapshot2]);
-
-// Retrieve snapshots
-final snapshot = await snapshotStorage.getSnapshot('snapshot-id');
-final allSnapshots = await snapshotStorage.getSnapshots();
-
-// Check existence
-if (await snapshotStorage.containsSnapshot('snapshot-id')) {
-  // Snapshot exists
-}
-```
-
-
-### CRDTDriftPeerIdStorage
-
-Keeps the `PeerId` the document writes under, in the `peers` table. Without it
-`CRDTDocument` mints a new author on every restart, and the version vector
-grows by one peer per session.
-
-Read it **before** building the document — the id has to exist first:
-
-```dart
-final peers = storage.peerIdStorageForDocument('doc-123');
-
-final document = CRDTDocument(
-  documentId: 'doc-123',
-  peerId: await peers.loadOrCreate(),
-);
-```
-
-The `peers` table arrived with schema version 2. A database written by
-version 1 gains it on the next open, and its changes and snapshots stay as
-they are.
-
-## How Data Is Stored
-
-Both `Change` and `Snapshot` are stored as opaque binary blobs using the
-self-describing format provided by `crdt_lf` (`toBytes()` / `fromBytes()`). The
-schema is three tables:
-
-- `changes`, keyed by `(document_id, author, hlc_l, hlc_c)`, with the change
-  itself in a `bytes` blob column.
-- `snapshots`, keyed by `(document_id, snapshot_id)`, same blob column.
-- `peers`, one row per document: the `PeerId` this device writes it under.
-
-A change is named by its author and its clock, not by one text id. An
-`OperationId` **is** a peer and a clock, and kept apart SQL can compare it,
-which is what a version vector asks. The primary key is then already the index
-that comparison wants. The clock takes two columns because `l` is 48 bits and
-`c` is 16: together they stay inside the 53 bits an integer keeps exactly in
-JavaScript.
-
-## Examples
-
-A complete example is available [here](https://github.com/MattiaPispisa/crdt/blob/main/packages/adapters/persistence/crdt_lf_drift/example/main.dart).
-
-## Storage Management
-
-```dart
-// Delete all data for a specific document
-await backend.deleteDocument('doc-123');
-
-// Close the database and release resources
-await storage.close();
-```
-
-## Roadmap
-A roadmap is available in the [project](https://github.com/users/MattiaPispisa/projects/1) page. The roadmap provides a high-level overview of the project's goals and the current status of the project.
+- [Which adapter](https://mattiapispisa.it/crdt/docs/connectors/persistence#which-adapter): Hive, SQLite or Drift
+- [Drift: setup and storage details](https://mattiapispisa.it/crdt/docs/connectors/persistence/adapters)
+- [Working with storage](https://mattiapispisa.it/crdt/docs/connectors/persistence/working-with-storage):
+  history, backups, compaction
+- [Open a replica](https://mattiapispisa.it/crdt/docs/connectors/replica): storage and sync together
 
 ## Apps
 
@@ -266,5 +93,5 @@ Other bricks of the crdt "system" are:
 [ci_link]: https://github.com/MattiaPispisa/crdt/actions/workflows/main.yaml
 [pub_publisher]: https://img.shields.io/pub/publisher/crdt_lf_drift
 [pub_publisher_link]: https://pub.dev/packages?q=publisher%3Amattiapispisa.it
-[docs_badge]: https://img.shields.io/badge/docs-crdt-blue?style=for-the-badge&logo=read-the-docs
-[docs_link]: https://mattiapispisa.it/crdt/
+[docs_badge]: https://img.shields.io/badge/%F0%9F%93%96%20Read%20the%20full%20documentation-mattiapispisa.it%2Fcrdt-d04848?style=for-the-badge
+[docs_link]: https://mattiapispisa.it/crdt/docs/connectors/persistence/adapters

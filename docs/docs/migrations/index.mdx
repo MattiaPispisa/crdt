@@ -1,0 +1,36 @@
+---
+title: Migrations
+sidebar_label: Overview
+description: How to move to a new major version of each package, one page per migration.
+slug: /migrations
+---
+
+# Migrations
+
+The packages are released on their own, but they depend on each other. A
+migration of `crdt_lf` often reaches the packages built on it, so the guides are
+collected here, one page per migration.
+
+| Package | From → to | What changes |
+| --- | --- | --- |
+| `crdt_lf` | [4.x → 5.0](./crdt_lf/v5-0.mdx) | generic handlers name their kind (`handlerType`); kinds are registered with a `HandlerSpec`. The bytes do not change |
+| `crdt_lf` | [3.x → 4.0](./crdt_lf/v4-0.mdx) | a 4.0 peer refuses v3 bytes; text handlers count runes; the change id is the tie-break |
+| `crdt_socket_sync` | [0.8.x → 0.9.0](./crdt_socket_sync/v0-9.mdx) | the version and capability handshake; needs `crdt_lf` 5.0. A 0.8.x peer still connects |
+
+## Upgrading peers
+
+A CRDT document is shared, so an upgrade is about **every peer** that holds it,
+not only your code:
+
+- **Read the bytes note first.** Some majors keep the bytes (5.0), some do not
+  (4.0). When they change, peers have to upgrade together, and stored documents
+  are refused by the new version.
+- **Upgrade the packages together.** Every package that depends on `crdt_lf` has
+  to move to a version that accepts the new major.
+- **Let the handshake protect you.** The sync refuses a client whose build
+  cannot read what a document holds (see
+  [Versions and compatibility](../connectors/sync/compatibility.mdx)). Show the
+  `unsupported` status to the user as "update required".
+
+The full list of changes of each release is in the package's `CHANGELOG.md`, on
+[pub.dev](https://pub.dev/publishers/mattiapispisa.it/packages).

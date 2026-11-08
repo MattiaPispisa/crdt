@@ -1,0 +1,99 @@
+---
+title: Delta widgets
+description: Follow what each change did — for long values, AnimatedList, and projections you keep yourself.
+---
+
+import NextSteps from '@site/src/components/NextSteps';
+
+# Delta widgets
+
+Start with `CrdtHandlerBuilder`: it hands you the handler, you read
+`handler.value`, done. That read is cache-backed (an edit moves the cached state
+forward instead of replaying the history), so for most values it is already
+the right answer, and there is nothing to keep in sync.
+
+The widgets on this page are for when **re-reading is the expensive part**, or
+when the value alone does not tell you enough. They follow the handler's
+[deltas](../../deep-dive/handler-deltas.mdx): what each change did, in your
+coordinates.
+
+| You want | Widget | What the builder gets |
+| --- | --- | --- |
+| the value on screen: the default | `CrdtHandlerBuilder` | the handler; read `handler.value` |
+| the same, without re-reading the value each time | `CrdtHandlerDeltaBuilder` | the value, already moved |
+| to know **where** it changed, or not to rebuild at all | `CrdtHandlerDeltaListener` | the delta of each change |
+
+The two type arguments are the handler's value and its delta:
+`SequenceDelta<T>` for the text and list handlers, `MapDelta<K, V>` for the
+maps, `SetDelta<T>` for the OR-Set, `RegisterDelta<T>` for the register.
+
+## Putting the value on screen
+
+When the value *is* what you render, `CrdtHandlerDeltaBuilder` holds it for you.
+It seeds itself while attaching, so the first frame already shows the document.
+Then it moves the value by the delta of each change:
+
+```dart
+CrdtHandlerDeltaBuilder<List<String>, SequenceDelta<String>>(
+  id: 'todos',
+  builder: (context, todos) => ListView(
+    children: [for (final todo in todos) Text(todo)],
+  ),
+);
+```
+
+It rebuilds once per change, exactly like `CrdtHandlerBuilder`. The difference
+is only what the rebuild costs: the value arrives already moved by the delta,
+instead of being read again from the document. On a long text or a large list
+that is the whole point; on a handful of keys it buys nothing.
+
+## Reacting to each change
+
+`CrdtHandlerDeltaListener` reports **what** moved, one call per change, so you
+can move a projection you already hold forward: drive an `AnimatedList`, replay
+an edit into a controller, append to a log.
+
+```dart
+CrdtHandlerDeltaListener<List<String>, SequenceDelta<String>>(
+  id: 'todos',
+  // Seed here: fires once on subscribe, and again whenever the value has to
+  // be taken fresh (a snapshot import, a dropped cache).
+  onReset: (context, sync, cause) => _items = sync.value,
+  // One call per change, with the retain/insert/delete of that change.
+  onDelta: (context, event) => _items = event.delta.apply(_items),
+  child: const TodoList(),
+);
+```
+
+The widget handles the awkward part of the contract for you. A reset means
+"read it again", and the events that the fresh read already holds must not be
+applied on top of it. The widget performs the read and drops those events, so
+`onDelta` never reports a change twice. The value `sync.value` hands over is
+yours to keep: no copy needed.
+
+Like the other listener, it renders `child` unchanged and never rebuilds the
+subtree.
+
+### If you also write
+
+A listener that moves its own copy by hand **and** writes to the handler gets
+its own write back as a delta. Tag the write with an `origin` and pass the same
+object to the listener's `origin`, and it skips it. See
+[Your own edit comes back](../../deep-dive/handler-deltas.mdx#if-you-write-too-your-own-edit-comes-back).
+`CrdtHandlerDeltaBuilder` has no `origin`, on purpose: it owns the value on
+screen, so skipping your write would hide it.
+
+<NextSteps
+  items={[
+    {
+      title: 'Handler deltas',
+      to: '/docs/deep-dive/handler-deltas',
+      description: 'What a delta is, and where it comes from.',
+    },
+    {
+      title: 'Text fields',
+      to: '/docs/connectors/flutter/text-fields',
+      description: 'A text field built on the same stream.',
+    },
+  ]}
+/>

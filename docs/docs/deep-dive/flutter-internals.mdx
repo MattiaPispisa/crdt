@@ -1,0 +1,60 @@
+---
+title: Flutter internals
+description: How the crdt_lf_flutter widgets decide to rebuild, and how the delta widgets keep a projection.
+---
+
+import NextSteps from '@site/src/components/NextSteps';
+
+# Flutter internals
+
+## Document-level widgets
+
+`crdt_lf` exposes a `CRDTDocument.updates` broadcast stream that fires on any
+local edit, applied remote change or snapshot import (see
+[Reactivity](./reactivity.mdx)). `CrdtProvider` exposes the document through
+`provider` and bridges `updates`, so provider dependents (`context.watch` /
+`context.select`, and the widgets built on them) rebuild on their own.
+
+## Handler-scoped widgets
+
+Handler-scoped widgets rebuild only when a per-handler signal changes: the `O(1)`
+`CRDTDocument.revisionForHandler(id)`, a monotonic revision that grows on every
+applied change that targets the handler (local or imported), and on snapshot
+imports carrying its state.
+
+With `nested: true`, the ids and revisions of the handler and of its
+descendants (`ContainerHandler.childRefs`) are folded into one hash, so
+structural changes (a child added or removed) are detected too.
+
+## Delta widgets
+
+The delta widgets (`CrdtHandlerDeltaBuilder`, `CrdtHandlerDeltaListener`,
+`CrdtTextFieldBuilder` and `CrdtEditorBinder`) work the other way round. They
+subscribe to the handler's own `watch()` stream, which says **what** each change
+did (see [Handler deltas](./handler-deltas.mdx)), and they keep a projection
+instead of reading the value again.
+
+They share one piece of bookkeeping, `HandlerDeltaSubscription`: which handler
+to follow, where the last read sits in the stream, and which events that read
+already covers. A `HandlerReset` means "the base moved, read it again". The read
+comes back with the point of the stream it reflects, so no event is ever applied
+twice.
+
+## The text field checks itself
+
+The text of `CrdtTextFieldBuilder` is **derived**: it is moved by deltas, not
+read from the handler. So after each change it compares its length with the
+handler's (`O(1)` for Fugue), and reads the handler again on a mismatch. In
+debug builds it also compares the whole value, while
+`debugVerifyCrdtTextFieldProjection` is `true`. The Quill binding does the same
+(see [Projection check](../connectors/flutter/editors/quill.mdx#projection-check)).
+
+<NextSteps
+  items={[
+    {
+      title: 'Flutter',
+      to: '/docs/connectors/flutter',
+      description: 'The widgets these internals serve.',
+    },
+  ]}
+/>

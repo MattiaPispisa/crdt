@@ -20,7 +20,15 @@
   - [Contributing](#contributing)
 
 
-[![docs_badge]][docs_link]
+<div align="center">
+
+[![Read the full documentation][docs_badge]][docs_link]
+
+</div>
+
+> **📖 The documentation of every package — use cases, connectors, deep dives,
+> migrations — is on [mattiapispisa.it/crdt](https://mattiapispisa.it/crdt/docs/introduction).**
+> The package READMEs are short entry points.
 
 ## Apps
 
@@ -64,7 +72,7 @@ Every shared command lives in [`melos.yaml`](./melos.yaml) and runs with
 | `test` / `test_flutter` / `test_chrome` | runs the Dart, Flutter and web tests |
 | `benchmark` | runs the benchmarks of every package with a `benchmarks/` folder |
 | `devtools_build` | builds the DevTools extension |
-| `docs_bs` / `docs_build` | bootstraps and builds the documentation site |
+| `docs_bs` / `docs_build` | bootstraps and builds the documentation site (`docs/`) |
 | `update_references` | propagates package/app references into the READMEs |
 
 ### Setup
@@ -125,7 +133,7 @@ workspace/
 │   └── greyhound_markdown/
 │       ├── client/
 │       └── server/
-├── docs/ # the documentation site (Docusaurus, Node.js project)
+├── docs/ # the documentation site (Docusaurus): the full docs of every package
 ├── scripts/ # dart scripts used by the melos commands
 └── assets/ # contains the assets used in the documentation
     └── .../
@@ -151,8 +159,8 @@ The whole flow (roadmap, issues, pull requests, AI-assisted work) is described
 in [CONTRIBUTING.md](./CONTRIBUTING.md). Please read it before opening an issue
 or a pull request.
 
-[docs_badge]: https://img.shields.io/badge/docs-crdt-blue?style=for-the-badge&logo=read-the-docs
-[docs_link]: https://mattiapispisa.it/crdt/
+[docs_badge]: https://img.shields.io/badge/%F0%9F%93%96%20Read%20the%20full%20documentation-mattiapispisa.it%2Fcrdt-d04848?style=for-the-badge
+[docs_link]: https://mattiapispisa.it/crdt/docs/introduction
 [repo_size]: https://img.shields.io/github/languages/code-size/MattiaPispisa/crdt
 [github_starts]: https://img.shields.io/github/stars/MattiaPispisa/crdt?style=flat&logo=github&color=red
 [melos_badge]: https://img.shields.io/badge/maintained%20with-melos-f700ff.svg?style=flat

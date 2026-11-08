@@ -1,0 +1,203 @@
+---
+title: Server–client mode
+description: A server that understands crdt_lf — it validates handshakes, applies changes, broadcasts them and prunes history.
+---
+
+import NextSteps from '@site/src/components/NextSteps';
+
+# Server–client mode
+
+In this mode the server owns the documents, through a
+[server registry](./server-registry.mdx). It validates each handshake with
+version vectors, applies incoming changes, broadcasts them to the other clients,
+and takes snapshots to prune the history every client has confirmed.
+
+## Quick start
+
+This is the standalone `dart:io` server. In a Dart Frog or Serverpod backend,
+use the [framework adapter](./server-frameworks.mdx) instead: the client is the
+same.
+
+### Server
+
+```dart
+import 'dart:io';
+import 'package:crdt_socket_sync/web_socket_server.dart';
+
+void main() async {
+  // Create a server registry to manage documents
+  final registry = InMemoryCRDTServerRegistry();
+
+  // Create and start the WebSocket server
+  final server = WebSocketServer(
+    serverFactory: () => HttpServer.bind('localhost', 8080),
+    serverRegistry: registry,
+  );
+
+  await server.start();
+  print('Server started on localhost:8080');
+
+  // Listen to server events
+  server.serverEvents.listen((event) {
+    print('Server event: ${event.type} - ${event.message}');
+  });
+}
+```
+
+### Client
+
+```dart
+import 'package:crdt_socket_sync/web_socket_client.dart';
+import 'package:crdt_lf/crdt_lf.dart';
+
+void main() async {
+  final document = CRDTDocument(peerId: PeerId.generate());
+
+  final listHandler = CRDTListHandler<String>(
+    document,
+    'shared_list',
+    handlerType: 'shared-list',
+  );
+
+  final client = WebSocketClient(
+    url: 'ws://localhost:8080',
+    document: document,
+    author: document.peerId,
+  );
+
+  client.connectionStatus.listen((status) {
+    print('Connection status: $status');
+  });
+
+  final connected = await client.connect();
+  if (connected) {
+    listHandler.insert(0, 'Hello, World!');
+  }
+}
+```
+
+In an app, open the document through [`CRDTReplica`](../replica.mdx): it
+restores the local copy before it connects.
+
+## How it works
+
+### Connection and handshake
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant C as Client
+    participant S as Server
+
+    Note over C,S: 1. Connection setup
+    C->>S: HTTP GET /sync (Connection: Upgrade)
+    S-->>C: HTTP 101 Switching Protocols
+    Note right of S: WebSocket open
+
+    Note over C,S: 2. Handshake and synchronization
+    C->>S: Handshake message<br/>(author, document info)
+
+    activate S
+    Note right of S: Validates the document and the version.<br/>Must reply within TIMEOUT.
+    S-->>C: Handshake response<br/>(document data)
+    deactivate S
+
+    C->>C: Import data
+
+    alt Client version > server version
+        Note right of C: The client is ahead (local data<br/>missing on the server)
+        C->>S: Push missing data
+        S->>S: Apply data
+    end
+
+    Note over C,S: Connection established
+```
+
+The handshake also checks that the client's build can read what the document
+holds: see [Versions and compatibility](./compatibility.mdx).
+
+### Real-time updates
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant CA as Client A
+    participant S as Server
+    participant CB as Client B (n)
+
+    Note over CA, CB: Standard operation cycle
+
+    CA->>CA: Execute local operation
+    CA->>S: Send change
+
+    activate S
+    S->>S: Apply change
+
+    par Broadcast to others
+        S->>CB: Broadcast change
+    end
+    deactivate S
+
+    CB->>CB: Apply change
+```
+
+### Out-of-sync recovery
+
+When a client receives a change it cannot apply yet (a change it depends on is
+missing), it asks the server for the document again:
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant C as Client
+    participant S as Server
+
+    Note over C, S: Sync issue detected
+
+    C->>S: Request document info
+
+    activate S
+    Note right of S: Same retrieval logic as the handshake
+    S-->>C: Document data response
+    deactivate S
+
+    C->>C: Reconcile document
+    Note right of C: The client is back in sync
+```
+
+## Server events
+
+Monitor what happens on the server:
+
+```dart
+server.serverEvents.listen((event) {
+  switch (event.type) {
+    case ServerEventType.clientConnected:
+      print('Client ${event.data?['clientId']} connected');
+      break;
+    case ServerEventType.clientDisconnected:
+      print('Client ${event.data?['clientId']} disconnected');
+      break;
+    case ServerEventType.clientChangeApplied:
+      print('Change applied from client');
+      break;
+    // clientHandshake, clientDocumentStatusCreated, clientOutOfSync,
+    // messageBroadcasted, messageSent, snapshotCreated, error, ...
+  }
+});
+```
+
+<NextSteps
+  items={[
+    {
+      title: 'Server registry',
+      to: '/docs/connectors/sync/server-registry',
+      description: 'Where the server keeps its documents.',
+    },
+    {
+      title: 'Connection and errors',
+      to: '/docs/connectors/sync/connection',
+      description: 'Status, reconnection, faults.',
+    },
+  ]}
+/>

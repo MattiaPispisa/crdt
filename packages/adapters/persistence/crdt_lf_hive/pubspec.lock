@@ -86,7 +86,7 @@ packages:
       path: "../../../core/crdt_lf_persistence"
       relative: true
     source: path
-    version: "0.2.0"
+    version: "0.2.0+1"
   crypto:
     dependency: transitive
     description:
@@ -141,7 +141,7 @@ packages:
       path: "../../../core/hlc"
       relative: true
     source: path
-    version: "1.2.0"
+    version: "1.2.0+1"
   http_multi_server:
     dependency: transitive
     description:

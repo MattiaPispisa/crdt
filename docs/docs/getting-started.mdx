@@ -1,0 +1,108 @@
+---
+title: Getting started
+description: Install crdt_lf, edit a document, and merge two copies of it.
+---
+
+import Demo from '@site/src/components/Demo';
+import NextSteps from '@site/src/components/NextSteps';
+
+# Getting started
+
+## Install
+
+Add the engine to your package:
+
+```sh
+dart pub add crdt_lf      # or: flutter pub add crdt_lf
+```
+
+`crdt_lf` is pure Dart: it runs on the Dart VM, in Flutter on every platform,
+and on the web.
+
+## Your first document
+
+A `CRDTDocument` holds the data. A **handler** is one value inside it — a text,
+a list, a map — with the operations for that kind of data.
+
+```dart
+import 'package:crdt_lf/crdt_lf.dart';
+
+void main() {
+  final doc = CRDTDocument();
+
+  // A collaborative text, stored under the id 'note'.
+  final text = CRDTFugueTextHandler(doc, 'note');
+
+  text.insert(0, 'Hello');
+  text.delete(0, 2); // deletes "He"
+
+  print(text.value); // llo
+}
+```
+
+Every edit is recorded in the document as a **change**. Changes are what peers
+send to each other.
+
+## Two peers, one result
+
+Each peer has its own document. Here the two documents live in one program; in
+an app they live on two devices, and the changes travel over the network.
+
+```dart
+final alice = CRDTDocument();
+final bob = CRDTDocument();
+
+final aliceText = CRDTFugueTextHandler(alice, 'note');
+final bobText = CRDTFugueTextHandler(bob, 'note');
+
+aliceText.insert(0, 'Hello world');
+bob.importChanges(alice.exportChanges()); // Bob now reads "Hello world"
+
+// Both edit at the same time, with no connection.
+aliceText.insert(0, 'Big ');
+bobText.insert(11, '!');
+
+// They meet again and exchange what the other is missing.
+bob.importChanges(alice.exportChanges());
+alice.importChanges(bob.exportChanges());
+
+print(aliceText.value); // Big Hello world!
+print(bobText.value); // Big Hello world!
+```
+
+Importing the same change twice does nothing, so a peer can send everything it
+has without keeping track of what the other side already saw. In a real app
+[`crdt_socket_sync`](./connectors/sync/index.mdx) does this exchange for you.
+
+## Live examples
+
+- [**Greyhound Markdown**](https://mattiapispisa.it/crdt/greyhound_markdown/):
+  a real-time collaborative markdown editor. Open it on two devices and join the
+  same room.
+- [**Flutter examples**](pathname:///examples/): every handler on two
+  simulated peers, in the browser.
+
+<Demo
+  src="/demos/flutter_document_example.gif"
+  alt="The Flutter examples: two peers edit the same document"
+/>
+
+The source code of the examples:
+[Dart](https://github.com/MattiaPispisa/crdt/tree/main/packages/core/crdt_lf/example/main.dart)
+and
+[Flutter](https://github.com/MattiaPispisa/crdt/tree/main/packages/core/crdt_lf/flutter_example).
+
+<NextSteps
+  items={[
+    {
+      title: 'Which handler do you need?',
+      to: '/docs/use-cases',
+      description: 'Text, rich text, lists, maps, nested data, aggregates.',
+    },
+    {
+      title: 'Open a replica',
+      to: '/docs/connectors/replica',
+      description: 'Storage and sync around a document, in one call.',
+    },
+  ]}
+/>

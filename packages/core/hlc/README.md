@@ -8,99 +8,61 @@
 [![License: MIT][license_badge]][license_link]
 [![pub publisher][pub_publisher]][pub_publisher_link]
 
-[![docs_badge]][docs_link]
-
-- [Hybrid Logical Clock](#hybrid-logical-clock)
-  - [Features](#features)
-  - [Getting Started](#getting-started)
-  - [Usage](#usage)
-    - [Basic Usage](#basic-usage)
-    - [Complete Example](#complete-example)
-  - [Benchmarks](#benchmarks)
-  - [Roadmap](#roadmap)
-  - [Packages](#packages)
-
-
-A hybrid logical clock implementation in Dart based on the paper
+A **hybrid logical clock** (HLC) for Dart: a causal order of events across
+peers, close to physical time, in 64 bits, with no central server. Based on
 [Logical Physical Clocks and Consistent Snapshots in Globally Distributed Databases](https://cse.buffalo.edu/tech-reports/2014-04.pdf).
 
-This library provides a Hybrid Logical Clock (HLC) implementation that combines the benefits of logical clocks and physical clocks:
-- Captures causality like logical clocks (e hb f => l.e < l.f)
-- Maintains closeness to physical time (l.e is close to pt.e)
-- Fits in 64 bits: 48 bits of milliseconds since the Unix epoch, 16 bits of counter
-- Works in peer-to-peer architectures without a central server
+<div align="center">
 
-If `e` happened before `f`, then `e < f`. The reverse does not hold: `e < f` also when `e` and `f` are concurrent, so the order alone cannot detect concurrency.
+[![Read the full documentation][docs_badge]][docs_link]
+
+</div>
+
+> **📖 The full documentation, and how the CRDT engine uses this clock, is on [mattiapispisa.it/crdt](https://mattiapispisa.it/crdt/docs/deep-dive/time-hlc).**
 
 ## Features
 
-- Local event handling
-- Message exchange between peers
-- Total order that respects causality (`compareTo`, `<`, `>`, `max`, `min`)
-- Serialization to/from 64-bit integers (`toInt64` / `fromInt64`)
-- Compact 8-byte big-endian binary representation (`toUint8List` / `fromUint8List`) — usable as a building block inside larger binary frames (e.g. `OperationId` in `crdt_lf`)
-- A full counter moves `l` forward by 1 ms, so the 8-byte form never wraps
-- Zero dependencies
-- Drift detection
-- Mutable and immutable methods for every needed operation
+- 🔗 **Causality**: if `e` happened before `f`, then `e < f`
+- 🕰️ **Close to physical time**: 48 bits of milliseconds, 16 bits of counter
+- 📡 **Peer to peer**: local events and messages between peers, no central server
+- 🔢 **Total order**: `compareTo`, `<`, `>`, `max`, `min`
+- 💾 **Compact**: a 64-bit integer, or 8 big-endian bytes; a full counter never wraps
+- 🧭 **Drift detection**
+- 🪶 **Zero dependencies**
 
-## Getting Started
+## Quick start
 
-Add this to your package's `pubspec.yaml` file:
-
-```yaml
-dependencies:
-  hlc_dart: 
+```sh
+dart pub add hlc_dart
 ```
-
-## Usage
-
-### Basic Usage
 
 ```dart
 import 'package:hlc_dart/hlc_dart.dart';
 
-// Create a new HLC initialized to the current time
 final clock = HybridLogicalClock.now();
 
-// Handle a local event
+// A local event.
 clock.localEvent(DateTime.now().millisecondsSinceEpoch);
 
-// Handle receiving a message from another peer
-final receivedClock = HybridLogicalClock.now();
-clock.receiveEvent(DateTime.now().millisecondsSinceEpoch, receivedClock);
+// A message from another peer.
+final received = HybridLogicalClock.now();
+clock.receiveEvent(DateTime.now().millisecondsSinceEpoch, received);
 
-// Check causality
-print(clock.happenedBefore(receivedClock));
-print(clock.happenedAfter(receivedClock));
-print(clock.isConcurrentWith(receivedClock));
-print(clock >= receivedClock);
-print(clock < receivedClock);
+print(clock.happenedBefore(received));
 
-// Serialize/deserialize as a 64-bit integer
-final serialized = clock.toInt64();
-final deserialized = HybridLogicalClock.fromInt64(serialized);
-
-// Or as a compact 8-byte big-endian buffer (useful when embedding an HLC
-// inside a larger binary frame).
+// 64 bits, or 8 bytes.
+final restored = HybridLogicalClock.fromInt64(clock.toInt64());
 final bytes = clock.toUint8List();
-final fromBytes = HybridLogicalClock.fromUint8List(bytes);
 ```
 
-### [Complete Example](https://github.com/MattiaPispisa/crdt/blob/main/packages/core/hlc/example/main.dart)
+A [complete example](https://github.com/MattiaPispisa/crdt/blob/main/packages/core/hlc/example/main.dart)
+and the [benchmarks](https://github.com/MattiaPispisa/crdt/tree/main/packages/core/hlc/benchmarks/results.md)
+are in the repository.
 
-## Benchmarks
+## Used by
 
-The latest results are [here](https://github.com/MattiaPispisa/crdt/tree/main/packages/core/hlc/benchmarks/results.md).
-
-To run the benchmarks yourself, run from the repository root:
-
-```sh
-melos run benchmark_dart
-```
-
-## Roadmap
-A roadmap is available in the [project](https://github.com/users/MattiaPispisa/projects/1) page. The roadmap provides a high-level overview of the project's goals and the current status of the project.
+[`crdt_lf`](https://pub.dev/packages/crdt_lf) stamps every change with this
+clock: [how it uses it](https://mattiapispisa.it/crdt/docs/deep-dive/time-hlc#how-the-engine-uses-it).
 
 ## Apps
 
@@ -132,5 +94,5 @@ Other bricks of the crdt "system" are:
 [pub_publisher]: https://img.shields.io/pub/publisher/hlc_dart
 [pub_publisher_link]: https://pub.dev/packages?q=publisher%3Amattiapispisa.it
 [pub_likes]: https://img.shields.io/pub/likes/hlc_dart
-[docs_badge]: https://img.shields.io/badge/docs-crdt-blue?style=for-the-badge&logo=read-the-docs
-[docs_link]: https://mattiapispisa.it/crdt/
+[docs_badge]: https://img.shields.io/badge/%F0%9F%93%96%20Read%20the%20full%20documentation-mattiapispisa.it%2Fcrdt-d04848?style=for-the-badge
+[docs_link]: https://mattiapispisa.it/crdt/docs/deep-dive/time-hlc

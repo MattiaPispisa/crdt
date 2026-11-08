@@ -86,14 +86,14 @@ packages:
       path: "../../../core/crdt_lf_persistence"
       relative: true
     source: path
-    version: "0.2.0"
+    version: "0.2.0+1"
   crdt_socket_sync:
     dependency: "direct main"
     description:
       path: "../../../core/crdt_socket_sync"
       relative: true
     source: path
-    version: "0.10.2"
+    version: "0.10.2+1"
   crypto:
     dependency: transitive
     description:
@@ -156,7 +156,7 @@ packages:
       path: "../../../core/hlc"
       relative: true
     source: path
-    version: "1.2.0"
+    version: "1.2.0+1"
   hotreloader:
     dependency: transitive
     description:

@@ -8,72 +8,34 @@
 [![license][license_badge]][license_link]
 [![pub publisher][pub_publisher_badge]][pub_publisher_link]
 
-Flutter reactivity for [`crdt_lf`](https://pub.dev/packages/crdt_lf): rebuild your
-widgets when CRDT state changes — at the **document** level or scoped to a single
-**handler**, with selectors and a collaborative text field.
+**Flutter reactivity for [`crdt_lf`](https://pub.dev/packages/crdt_lf).**
+Rebuild your widgets when the CRDT state changes, for the whole document or for
+one handler, and bind text fields and editors to collaborative text. Built on
+[`provider`](https://pub.dev/packages/provider).
 
-Built on top of [`provider`](https://pub.dev/packages/provider) — so you also get
-`context.read` / `context.watch` / `context.select` for a `CRDTDocument` for free
-(`provider` is re-exported minimally).
+<div align="center">
 
-- [CRDT LF Flutter](#crdt-lf-flutter)
-  - [Features](#features)
-  - [Greyhound Markdown](#greyhound-markdown)
-  - [Example](#example)
-  - [Getting Started](#getting-started)
-  - [Usage](#usage)
-    - [Provide a document](#provide-a-document)
-    - [Document-level rebuilds](#document-level-rebuilds)
-    - [Handler-scoped rebuilds](#handler-scoped-rebuilds)
-    - [What changed, not just that it changed](#what-changed-not-just-that-it-changed)
-      - [Putting the value on screen](#putting-the-value-on-screen)
-    - [Imperative access](#imperative-access)
-    - [Collaborative text](#collaborative-text)
-      - [Remote text cursors](#remote-text-cursors)
-      - [Rich text](#rich-text)
-      - [Rune ↔ UTF-16 offsets](#rune--utf-16-offsets)
-    - [Presence cursors](#presence-cursors)
-  - [Benchmarks](#benchmarks)
-  - [(deep dive) How it works](#deep-dive-how-it-works)
-  - [Apps](#apps)
-  - [Packages](#packages)
+[![Read the full documentation][docs_badge]][docs_link]
+
+</div>
+
+> **📖 The full Flutter guide — widgets, delta widgets, text fields, editors, presence — is on [mattiapispisa.it/crdt](https://mattiapispisa.it/crdt/docs/connectors/flutter).**
 
 ## Features
 
-- **`CrdtProvider`** — provide a `CRDTDocument` to the subtree, created and owned
-  by the provider (`CrdtProvider(create:)`) or caller-owned
-  (`CrdtProvider.value(value:)`). Wraps `provider`'s `InheritedProvider`.
-- **`CrdtBuilder`** / **`CrdtSelector<R>`** — rebuild on every document update, or
-  only when a selected slice changes.
-- **`CrdtHandlerBuilder<H>`** / **`CrdtHandlerSelector<H, R>`** — rebuild only when
-  a **specific handler** changes (optionally including nested handlers).
-- **`CrdtHandlerListener<H>`** — side-effect callback on a handler change.
-- **`CrdtHandlerDeltaBuilder<V, D>`** / **`CrdtHandlerDeltaListener<V, D>`** —
-  follow **what** a handler did, change by change. The builder keeps the value
-  and rebuilds with it already moved; the listener hands you each change as a
-  side effect and never rebuilds the subtree.
-- **`CrdtTextFieldBuilder`** — a `TextEditingController` bound to a text
-  handler, the way collaborative editor bindings work.
-- **`CrdtRichTextFieldBuilder`** — a `TextEditingController` that paints
-  inline formats, bound to a `CRDTFugueRichTextHandler`.
-- **`CrdtEditorBinder<V, D>`** / **`CrdtEditorBinding<V, D>`** — the two-way
-  sync loop between one handler and an editor of your choice, for editor
-  adapters.
-- **`CrdtTextCursorsOverlay`** — paints collaborators' carets/selections
-  over the text field, anchored by stable positions.
-- **`CrdtAwarenessCursorsOverlay`** — overlays collaborators' mouse-style
-  presence cursors (pointer arrow + name bubble) on any pane. Split into a
-  `CrdtAwarenessCursorsBuilder` (positioning + local-pointer handling, you
-  build each marker) and a standalone `CrdtAwarenessCursorMarker` widget,
-  styled through `CrdtAwarenessCursorStyle`.
-- Context helpers: `context.crdtDocument`, `context.watchCrdtDocument()`,
-  `context.selectCrdtDocument(...)`, `context.crdtHandler<H>(id)`.
+- 🌳 **`CrdtProvider`**: provides a `CRDTDocument` to the subtree
+- 🔁 **`CrdtBuilder` / `CrdtSelector`**: rebuild on every document update, or on a slice
+- 🎯 **`CrdtHandlerBuilder` / `Selector` / `Listener`**: rebuild only when one handler changes, nested ones included
+- 🔍 **`CrdtHandlerDeltaBuilder` / `Listener`**: follow **what** each change did, for long lists and `AnimatedList`
+- ✍️ **`CrdtTextFieldBuilder`**: a `TextEditingController` bound to a text handler, IME included, zero rebuilds
+- 🅱️ **`CrdtRichTextFieldBuilder`**: inline formats in a `TextField`, with undo
+- 🧩 **`CrdtEditorBinder`**: the sync loop for any editor (used by [`crdt_lf_quill`](https://pub.dev/packages/crdt_lf_quill))
+- 👥 **`CrdtTextCursorsOverlay` / `CrdtAwarenessCursorsOverlay`**: the other peers' carets and pointers
 
-## Greyhound Markdown
+## See it live
 
-A real-time collaborative markdown editor built with `crdt_lf` and
-`crdt_lf_flutter`. Open it on separate devices, join the same room and edit
-together — no install needed.
+**Greyhound Markdown** is built with `crdt_lf` and `crdt_lf_flutter`. Open it on
+two devices, join the same room and edit together.
 
 <div align="center">
 
@@ -81,491 +43,39 @@ together — no install needed.
 
 </div>
 
-<div align="center">
-  <img width="360" alt="Greyhound Markdown home screen" src="https://raw.githubusercontent.com/MattiaPispisa/crdt/main/assets/images/greyhound_home_screen.png">
-</div>
-
-Source: [apps/greyhound_markdown](https://github.com/MattiaPispisa/crdt/tree/main/apps/greyhound_markdown).
-
-## Example
-
-The [`example/`](https://github.com/MattiaPispisa/crdt/tree/main/packages/core/crdt_lf_flutter/example)
-app demos **every widget in this package on a single screen** — each card wires
-a different handler, and a live `⟳ rebuilt ×N` badge shows exactly which regions
-re-render as you edit, so you can *see* the reactive scoping (and the
-zero-rebuild bindings) at work.
+The [example app](https://github.com/MattiaPispisa/crdt/tree/main/packages/core/crdt_lf_flutter/example)
+shows every widget on one screen, with a `⟳ rebuilt ×N` badge on each region:
 
 <div align="center">
   <img width="500" alt="crdt_lf_flutter_example" src="https://raw.githubusercontent.com/MattiaPispisa/crdt/main/assets/demos/crdt_lf_flutter_example.gif">
 </div>
 
-## Getting Started
-
-```yaml
-dependencies:
-  crdt_lf_flutter: 
-  crdt_lf: 
-```
-
-## Usage
-
-### Provide a document
-
-```dart
-// Owning mode: the provider creates the document lazily and disposes it.
-CrdtProvider(
-  create: (_) => CRDTDocument(),
-  child: const MyApp(),
-);
-
-// Value mode: you own the document lifecycle.
-CrdtProvider.value(value: doc, child: const MyApp());
-```
-
-### Document-level rebuilds
-
-```dart
-// Rebuild on any change.
-CrdtBuilder(
-  builder: (context, document) => Text(textHandler.value),
-);
-
-// Rebuild only when a derived slice changes.
-CrdtSelector<int>(
-  selector: (context, document) => listHandler.value.length,
-  builder: (context, count) => Text('$count todos'),
-);
-```
-
-### Handler-scoped rebuilds
-
-Rebuild only when one handler changes — unrelated handlers don't trigger a
-rebuild. `CrdtHandlerBuilder` hands you the concrete typed handler (the base
-`Handler` exposes no `value`), which is also the right tool for list/map handlers
-whose value is mutated in place (a value `Selector` wouldn't detect the change).
-
-```dart
-CrdtHandlerBuilder<CRDTListHandler<String>>(
-  id: 'todos',
-  builder: (context, handler) => Text('${handler.value.length}'),
-);
-
-// Derived slice from a handler.
-CrdtHandlerSelector<CRDTListHandler<String>, int>(
-  id: 'todos',
-  selector: (context, handler) => handler.value.length,
-  builder: (context, count) => Text('$count'),
-);
-
-// Also rebuild when a nested/descendant handler changes.
-CrdtHandlerBuilder<CRDTMapRefHandler>(
-  id: 'root',
-  nested: true,
-  builder: (context, handler) => ...,
-);
-
-// Side effects only (no rebuild).
-CrdtHandlerListener<CRDTListHandler<String>>(
-  id: 'todos',
-  listener: (context, handler) => showSnackBar(...),
-  child: ...,
-);
-```
-
-#### Deleted handlers
-
-A handler deleted with `doc.deleteHandler` (on any peer) is not an error. A
-widget bound to it shows its `deletedBuilder`, or an empty box when there is
-none; a listener stops calling back. This holds for `CrdtHandlerBuilder`,
-`CrdtHandlerSelector`, `CrdtHandlerDeltaBuilder`, `CrdtTextFieldBuilder` and
-`CrdtEditorBinder`.
-
-```dart
-CrdtHandlerBuilder<CRDTFugueTextHandler>(
-  id: chapterId,
-  builder: (context, handler) => Text(handler.value),
-  deletedBuilder: (context) => const Text('This chapter was deleted'),
-);
-```
-
-An id that was never registered still throws a `FlutterError`: that one is a
-wiring mistake.
-
-### What changed, not just that it changed
-
-Start with `CrdtHandlerBuilder`: it hands you the handler, you read
-`handler.value`, done. That read is cache-backed — an edit advances the cached
-state instead of replaying the history — so for most values it is already the
-right answer, and there is nothing to keep in sync.
-
-The widgets below are for when **re-reading is the expensive part**, or when the
-value alone does not tell you enough. `CrdtHandlerDeltaListener` reports **what**
-moved, one call per change, so you can advance a projection you already hold —
-drive an `AnimatedList`, replay an edit into a controller, append to a log.
-
-```dart
-CrdtHandlerDeltaListener<List<String>, SequenceDelta<String>>(
-  id: 'todos',
-  // Seed here: fires once on subscribe, and again whenever the value has to
-  // be taken fresh (a snapshot import, a dropped cache).
-  onReset: (context, sync, cause) => _items = sync.value,
-  // One call per change, with the retain/insert/delete of that change.
-  onDelta: (context, event) => _items = event.delta.apply(_items),
-  child: const TodoList(),
-);
-```
-
-The two type arguments are the handler's value and its delta:
-`SequenceDelta<T>` for the text and list handlers, `MapDelta<K, V>` for the
-maps, `SetDelta<T>` for the OR-set, `RegisterDelta<T>` for the register.
-
-The widget handles the awkward part of the contract for you: a reset means
-"read it again", and the events the fresh read already holds must not be
-applied on top of it. It performs the read and drops those events, so `onDelta`
-never reports a change twice. The value `sync.value` hands over is yours to
-keep — no copy needed.
-
-Like the other listener, it renders `child` unchanged and never rebuilds the
-subtree.
-
-#### Putting the value on screen
-
-When the value *is* what you render, `CrdtHandlerDeltaBuilder` does the holding
-for you. It seeds itself while attaching, so the first frame already shows the
-document, and then moves the value by the delta of each change:
-
-```dart
-CrdtHandlerDeltaBuilder<List<String>, SequenceDelta<String>>(
-  id: 'todos',
-  builder: (context, todos) => ListView(
-    children: [for (final todo in todos) Text(todo)],
-  ),
-);
-```
-
-It rebuilds once per change, exactly like `CrdtHandlerBuilder`. The difference
-is only what the rebuild costs: the value arrives already moved by the delta,
-instead of being projected again from the document. On a long text or a large
-list that is the whole point; on a handful of keys it buys nothing.
-
-Which one to reach for:
-
-| You want | Widget | What the builder gets |
-|---|---|---|
-| the value on screen — the default | `CrdtHandlerBuilder` | the handler; read `handler.value` |
-| the same, without re-reading the value each time | `CrdtHandlerDeltaBuilder` | the value, already moved |
-| to know **where** it changed, or to not rebuild at all | `CrdtHandlerDeltaListener` | the delta of each change |
-
-All three give you the value one way or another. The first two put it on screen
-and differ only in cost; the third is the one that hands you the change itself,
-and never rebuilds its subtree.
-
-### Imperative access
-
-For actions (insert/delete/change) you don't need reactivity — read the handler
-once:
-
-```dart
-context.crdtHandler<CRDTListHandler<String>>('todos').insert(0, 'new');
-```
-
-It throws a `HandlerDeletedException` for a deleted handler.
-
-### Collaborative text
-
-`CrdtTextFieldBuilder` binds a `TextEditingController` to the text handler
-(`CRDTTextHandler` or `CRDTFugueTextHandler`) registered under `id`, the way
-collaborative editor bindings do:
-
-- **local edits** are pushed into the handler immediately as the precise delta
-  of each editing gesture (prefix/suffix trimming, one transaction per
-  gesture — no full-text diff, no debounce);
-- **IME composition** (CJK input, autocorrect) is respected: nothing is
-  committed while a composing region is active;
-- **remote changes** are adopted into the controller in place, with the caret
-  and selection kept anchored: with a `CRDTFugueTextHandler` through **stable
-  positions** (`stablePositionAt` — anchors tied to element identity, exact
-  even for multi-region remote changes), otherwise mapped through the remote
-  delta;
-- the subtree **never rebuilds** — `builder` runs once and the controller is
-  updated directly.
-
-```dart
-CrdtTextFieldBuilder(
-  id: 'note',
-  builder: (context, controller) => TextField(controller: controller),
-);
-```
-
-The delta primitives are exported too (`TextDelta`, `computeTextDelta`,
-`mapOffsetThroughDelta`) if you need to build a custom binding.
-
-#### Remote text cursors
-
-Publish the local selection with `onSelectionAnchorsChanged` (the anchors are
-serializable — send them over your presence channel, e.g. the awareness
-plugin of `crdt_socket_sync`) and draw collaborators with
-`CrdtTextCursorsOverlay`. Anchors are reported only while the field has
-focus — on blur the callback fires once with `null`s, so with several bound
-fields a peer shows at most one cursor, where they are typing:
-
-```dart
-CrdtTextFieldBuilder(
-  id: 'note',
-  onSelectionAnchorsChanged: (base, extent) => publishPresence(base, extent),
-  builder: (context, controller) => CrdtTextCursorsOverlay(
-    id: 'note',
-    cursors: remoteTextCursors, // List<CrdtTextCursor> from presence
-    child: TextField(controller: controller),
-  ),
-);
-```
-
-For another editor, pass `targetOf` to adapt its render object as a
-`CrdtTextCursorsTarget`, and publish its selection with `SelectionAnchors`.
-
-#### Rich text
-
-`CrdtRichTextFieldBuilder` is the same field for a `CRDTFugueRichTextHandler`.
-It hands you a `CrdtRichTextEditingController` that paints the formats of the
-handler. Formats are written through the controller:
-
-```dart
-CrdtRichTextFieldBuilder(
-  id: 'note',
-  builder: (context, controller) => Column(
-    children: [
-      IconButton(
-        icon: const Icon(Icons.format_bold),
-        onPressed: () => controller.toggle('bold'),
-      ),
-      TextField(
-        controller: controller,
-        maxLines: null,
-        strutStyle: StrutStyle.disabled, // lines grow with the font size
-      ),
-    ],
-  ),
-);
-```
-
-- `controller.format(key, value)` formats the selection. At a collapsed caret
-  it styles the text typed next, and the style ends when the caret moves.
-- `controller.attributeAtSelection(key)` tells a toolbar what to highlight.
-- `styleOf` maps attributes to a `TextStyle`; the default reads `bold`,
-  `italic`, `underline`, `strike`, `link`, `color` (`'#rrggbb'`) and `size`.
-- `undoManager` routes Ctrl+Z (Cmd+Z on Apple platforms), the redo shortcuts,
-  `controller.undo()` and `controller.redo()` through a `CRDTUndoManager`.
-  Flutter's own undo knows the text but not the formats. Create the manager
-  with `trackedOrigins: {crdtRichTextFieldOrigin}` and track the handler.
-  `controller.canUndo` and `canRedo` follow the manager.
-- `CrdtTextCursorsOverlay` and `onSelectionAnchorsChanged` work as above.
-
-Paste inserts the plain text of the clipboard. The text takes the format where
-it lands, and the formats of the clipboard are dropped.
-
-The field paints inline formats only. Block attributes (headings, lists) and
-the content of embeds (images, videos) need an editor: see `crdt_lf_quill`.
-
-An embed of the handler shows as its U+FFFC glyph. The field keeps it intact
-through edits around it, deletes, undo and remote changes, its data included.
-A typed or pasted U+FFFC is stripped before the write, since the handler
-refuses it as text. A value set by code with edits on both sides of an embed
-keeps the embed too. One case stays ambiguous: pasting text with U+FFFC over a
-selection that holds an embed may keep the old embed where the new text lines
-up with it.
-
-#### Rune ↔ UTF-16 offsets
-
-`crdt_lf`'s handler API is rune-indexed everywhere. Flutter's `RenderEditable`, `TextSelection` and
-`TextPosition` are not — they count UTF-16 code units.
-`CrdtTextFieldBuilder` and `CrdtTextCursorsOverlay` already do this
-conversion for you; you only need it yourself when building a custom text
-binding.
-
-The single conversion point is `RuneOffsets`, defined in `crdt_lf` itself
-and reused here as-is — deliberately not reimplemented or wrapped in this
-package:
-
-```dart
-RuneOffsets.utf16Offset('a😀b', 1); // 1 — start of the emoji
-RuneOffsets.utf16Offset('a😀b', 2); // 3 — start of 'b'
-RuneOffsets.runeIndex('a😀b', 3);   // 2 — the rune that starts at code unit 3
-```
-
-`utf16Offset` converts a handler rune index into a UTF-16 offset for
-`TextSelection`/`TextPosition`; `runeIndex` converts the other way. Both
-clamp out-of-range input to the ends of the string instead of throwing.
-
-### Editor bindings
-
-`CrdtEditorBinding` keeps an editor and a handler in step. It is the loop
-behind an editor adapter: you give it three callbacks, and it decides when to
-call them. It has no widgets, so you can use it alone; `CrdtEditorBinder` is
-the widget that owns one, attaches it to the handler `id` of the ambient
-document, and builds its `builder` once.
-
-- `onReset(value, cause)` puts the whole handler value in the editor. It runs
-  when the binding attaches, and again when the handler asks for a fresh read.
-  With `CrdtEditorBinder` the first call runs inside `build`, so it must not
-  call `setState`.
-- `onRemoteDelta(event)` applies one change to the editor, as a remote edit.
-- `verifyProjection` (optional) answers "do the editor and the handler still
-  agree?". On `false` the binding reads the handler and calls `onReset`.
-
-A local edit goes through `binding.push`. Inside it, write the edit into the
-handler. The binding drops the echo of that write, so the editor never applies
-its own edit twice, also when an outer transaction delays the echo. A reset that
-arrives during the write is delivered after it. When the editor is still behind the handler (`binding.isBehind`, in the
-middle of a burst), the binding reads the handler after the write and calls
-`onReset`.
-
-```dart
-CrdtEditorBinder<List<RichTextSpan>, RichTextDelta>(
-  id: 'page',
-  onReset: (spans, cause) => editor.load(spans),
-  onRemoteDelta: (event) => editor.applyRemote(event.delta),
-  verifyProjection: () => editor.length == page.length,
-  builder: (context, binding) => MyEditor(
-    editor: editor,
-    // Called for the user's edits only, never for the remote ones.
-    onLocalEdit: (index, text) => binding.push(
-      () => context.crdtDocument.runInTransaction(
-        () => page.insert(index, text),
-      ),
-    ),
-  ),
-);
-```
-
-Give `verifyProjection` whenever you can. A watcher that writes back inside
-your write is dropped together with your echo, and this check is what finds
-it.
-
-For a rich text editor, pass `isEcho` to `binding.push` too, built with
-`echoesRichText`. It tells your own write apart from a write of someone else
-during the push, even one that keeps the length (a format, an embed update),
-which a length check misses. `formatsWithin` describes the formats your write
-puts on a range:
-
-```dart
-binding.push(
-  () => page.insert(index, text, attributes: style),
-  isEcho: (dropped) => echoesRichText(
-    dropped,
-    deleted: 0,
-    inserted: text.runes.length,
-    ownsFormat: formatsWithin(index, index + text.runes.length, style),
-  ),
-);
-```
-
-A rich text editor that hands out `RichTextDelta`s writes them with a
-`RichTextWriter`, built with the key policy of the editor: how each key grows
-(`expandOf`) and which keys mark a line (`isBlockKey`). A `RichTextEcho`
-records the same deltas and is the `isEcho` of the push. Pass the undo manager
-as `ownStep` when the push is a format, so undo takes it back on its own:
-
-```dart
-const writer = RichTextWriter(expandOf: myExpandOf, isBlockKey: myBlockKey);
-
-final echo = RichTextEcho(writer)..add(delta);
-binding.push(
-  () => context.crdtDocument.runInTransaction(
-    () => writer.write(page, delta),
-  ),
-  isEcho: echo.echoes,
-  ownStep: isFormat ? undoManager : null,
-);
-```
-
-Give `CrdtEditorBinder` the `SelectionAnchors` of the editor as `anchors`: the
-binder tells them when the focus enters or leaves the editor, and clears them
-when it follows another handler or the handler is deleted.
-
-### Presence cursors
-
-`CrdtAwarenessCursorsOverlay` draws collaborators' **mouse pointers** (arrow
-plus name bubble) over any pane — the presence complement of the in-field
-text cursors above. It is transport-agnostic: you map your presence channel
-to `CrdtAwarenessCursor`s (positions normalized into `[0, 1]`, so cursors
-map across window sizes) and publish what `onLocalPointer` reports:
-
-```dart
-CrdtAwarenessCursorsOverlay(
-  cursors: remotePointers, // List<CrdtAwarenessCursor> from presence
-  onLocalPointer: (position, {required hovering}) =>
-      publishPresence(position, hovering),
-  child: pane,
-);
-```
-
-The overlay is composed of three pieces, all exported so you can use exactly
-the layer you need:
-
-- **`CrdtAwarenessCursorsBuilder`** — the transport/layout half: it positions
-  each pointer over the pane and reports the local pointer, but delegates each
-  cursor's look to a `builder` callback. Use it to draw a completely custom
-  marker (an avatar, a badge, …) per cursor.
-- **`CrdtAwarenessCursorMarker`** — the standalone default marker (arrow +
-  name bubble) for one cursor, positioning-agnostic.
-- **`CrdtAwarenessCursorsOverlay`** — the ready-made combination of
-  the two above.
-
-The marker is styled `Container`-style: pass a plain **`color`** for the
-common case, or a full **`CrdtAwarenessCursorStyle`** (the "decoration") — its
-`color` plus the label text style and marker sizes — when you need more
-(passing both is an error). Pass a `style` to `CrdtAwarenessCursorsOverlay` to
-restyle every cursor at once, or set `CrdtAwarenessCursor.style` for a single
-peer; in the overlay the peer's own `color` always wins over the style's, so
-peers keep their identity color:
-
-```dart
-CrdtAwarenessCursorsOverlay(
-  cursors: remotePointers,
-  style: const CrdtAwarenessCursorStyle(
-    pointerSize: 22,
-    labelStyle: TextStyle(fontSize: 12, color: Colors.white),
-  ),
-  child: pane,
-);
-```
-
-## Benchmarks
-
-This package includes a suite of benchmarks to ensure performance and stability.
-You can find the latest results [here](https://github.com/MattiaPispisa/crdt/tree/main/packages/core/crdt_lf_flutter/benchmarks/results.md).
-
-To run the benchmarks yourself, run from the repository root:
+## Quick start
 
 ```sh
-melos run benchmark_flutter
+flutter pub add crdt_lf crdt_lf_flutter
 ```
 
-## (deep dive) How it works
+```dart
+final doc = CRDTDocument();
+CRDTFugueTextHandler(doc, 'note');
 
-`crdt_lf` exposes a `CRDTDocument.updates` broadcast stream that fires on any
-local edit, applied remote change or snapshot import. `CrdtProvider` exposes the
-document through `provider` and bridges `updates` so
-provider dependents (`context.watch` / `context.select`, and the widgets above)
-rebuild automatically.
+CrdtProvider.value(
+  value: doc,
+  child: CrdtTextFieldBuilder(
+    id: 'note',
+    builder: (context, controller) => TextField(controller: controller),
+  ),
+);
+```
 
-Handler-scoped widgets rebuild only when a per-handler signal changes: the O(1)
-`CRDTDocument.revisionForHandler(id)`, a monotonic revision that grows on every
-applied change targeting the handler (local or imported) and on snapshot
-imports carrying its state. With `nested: true` the ids and revisions of the
-handler and its descendants (`ContainerHandler.childRefs`) are folded into one
-hash, so structural changes (a child added or removed) are detected too.
+## Documentation
 
-The delta widgets — `CrdtHandlerDeltaBuilder`, `CrdtHandlerDeltaListener`,
-`CrdtTextFieldBuilder` and `CrdtEditorBinder` — work the other way round. They
-subscribe to the handler's own `watch()` stream, which says **what** each
-change did, and they keep a projection instead of re-reading the value. They
-share one piece of bookkeeping, `HandlerDeltaSubscription`: which handler to
-follow, where the last read sits in the stream, and which events that read
-already covers. A `HandlerReset` means "the base
-moved, read it again"; the read comes back with the point of the stream it
-reflects, so no event is ever applied twice.
+- [Flutter overview](https://mattiapispisa.it/crdt/docs/connectors/flutter): the provider and the rebuild widgets
+- [Delta widgets](https://mattiapispisa.it/crdt/docs/connectors/flutter/delta-widgets)
+- [Text fields](https://mattiapispisa.it/crdt/docs/connectors/flutter/text-fields): remote cursors, rich text
+- [Editors](https://mattiapispisa.it/crdt/docs/connectors/flutter/editors) and [presence](https://mattiapispisa.it/crdt/docs/connectors/flutter/presence)
+- [Benchmarks](https://github.com/MattiaPispisa/crdt/tree/main/packages/core/crdt_lf_flutter/benchmarks/results.md)
 
 ## Apps
 
@@ -597,3 +107,5 @@ Other bricks of the crdt "system" are:
 [pub_publisher_badge]: https://img.shields.io/pub/publisher/crdt_lf_flutter
 [pub_publisher_link]: https://pub.dev/packages?q=publisher%3Amattiapispisa.it
 [pub_likes_badge]: https://img.shields.io/pub/likes/crdt_lf_flutter
+[docs_badge]: https://img.shields.io/badge/%F0%9F%93%96%20Read%20the%20full%20documentation-mattiapispisa.it%2Fcrdt-d04848?style=for-the-badge
+[docs_link]: https://mattiapispisa.it/crdt/docs/connectors/flutter

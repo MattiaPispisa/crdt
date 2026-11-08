@@ -1,0 +1,73 @@
+---
+title: Binary format
+description: How changes and snapshots are written as bytes, and how each layer is versioned.
+---
+
+import NextSteps from '@site/src/components/NextSteps';
+
+# Binary format
+
+Every core CRDT type (`PeerId`, `HybridLogicalClock`, `OperationId`,
+`FugueElementID`, `VersionVector`, `Change`, `Snapshot`) has a compact,
+self-describing binary representation, through `toBytes()` / `toUint8List()`
+and a matching `fromBytes()` / `fromUint8List()`.
+
+This is the canonical format: the persistence adapters store it, and
+`crdt_socket_sync` sends it. It is also a public API you can use directly, to
+build your own storage or sync layer. The byte layout and size of each type are
+documented in the dartdoc of its `toBytes()` / `fromBytes()`, on
+[pub.dev](https://pub.dev/documentation/crdt_lf/latest/): a table here would
+only drift out of sync.
+
+## End to end binary
+
+- **Operation payloads** inside a `Change` are produced by the handler's
+  `ValueCodec<T>` (see [Your own value types](../use-cases/custom-value-types.mdx)).
+- **Each entry of `Snapshot.data`** is produced by the handler's
+  `getSnapshotState()`. The built-in handlers reuse the same `ValueCodec<T>` to
+  encode their items.
+
+So the whole path (operation payload → `Change` → `Snapshot`) is binary. JSON
+appears only as the *default* `ValueCodec<T>`, when you pass none.
+
+## Two levels of versioning
+
+`Snapshot.schemaVersion` (currently `1`, added in `crdt_lf` 4.0.0) covers only
+the **wrapper**: the document id, the version vector, and the framing of the
+per-handler entries.
+
+Inside an entry, the layout belongs to the handler that wrote it, and so does
+its version: **every built-in blob starts with a `version: u8` byte of its
+own**. A handler can change its layout without moving a byte that any other
+handler reads. The reader is strict: a version it does not write is refused
+whole, instead of being parsed as far as it happens to work. Write a version in
+your own handler too: there is nothing to gain from a blob that cannot say what
+it is.
+
+The two Fugue sequence handlers (`CRDTFugueTextHandler`, `CRDTFugueListHandler`)
+show what that room is for. Their blob groups elements into **runs** of
+consecutive ids from the same peer, instead of one entry per element. It also
+carries the deleted elements inside those runs, marked by a bit, so a deletion
+keeps its identity and its place instead of leaving a gap.
+
+## Changes and blob versions on the wire
+
+Each handler kind states the operation kinds it decodes and the snapshot blob
+versions it reads (`HandlerFormats`). That is what the sync handshake compares,
+so a peer that cannot read a document is refused before it breaks: see
+[Versions and compatibility](../connectors/sync/compatibility.mdx).
+
+<NextSteps
+  items={[
+    {
+      title: 'Custom handlers',
+      to: '/docs/deep-dive/custom-handlers',
+      description: 'Declare the formats of your handler.',
+    },
+    {
+      title: 'Migrations',
+      to: '/docs/migrations',
+      description: 'What changed in the format between versions.',
+    },
+  ]}
+/>

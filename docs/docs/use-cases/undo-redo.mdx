@@ -1,0 +1,165 @@
+---
+title: Undo and redo
+description: Take back your own edits, and leave everyone else's work alone.
+---
+
+import NextSteps from '@site/src/components/NextSteps';
+
+# Undo and redo
+
+A change is immutable: it is already in the history, and it may already have
+reached other peers. So an undo never removes a change. It **writes a new
+operation with the opposite effect**, which travels to the other peers like any
+other edit.
+
+```dart
+final document = CRDTDocument();
+final text = CRDTFugueTextHandler(document, 'text');
+final undo = CRDTUndoManager(document)..track(text);
+
+text.insert(0, 'Hello');
+undo.undo(); // ''
+undo.redo(); // 'Hello'
+```
+
+## Driving it from the UI
+
+`track` a handler to record it. Read `canUndo` / `canRedo` to enable your
+buttons, and listen to `changes` to know when to read them again.
+
+```dart
+final undo = CRDTUndoManager(document)
+  ..track(text)
+  ..track(title); // one manager can hold several handlers
+
+final subscription = undo.changes.listen((_) {
+  undoButton.enabled = undo.canUndo;
+  redoButton.enabled = undo.canRedo;
+});
+
+undo.undo(); // does nothing when canUndo is false
+undo.redo();
+
+undo.stopCapturing(); // the next write starts a new step
+undo.untrack(title); // stop recording, keep the steps already taken
+undo.clear(); // drop both stacks
+
+await subscription.cancel();
+undo.dispose(); // disposing the document does this for you
+```
+
+| Option | What it does |
+| --- | --- |
+| `captureTimeout` | how long a step stays open for the next write to join it (500 ms; `Duration.zero` turns merging off) |
+| `stackLimit` | how many steps each stack keeps (100) |
+| `trackedOrigins` | which writes to record (every local one by default) |
+
+In Flutter, the [rich text field](../connectors/flutter/text-fields.mdx#rich-text)
+and the [Quill binding](../connectors/flutter/editors/quill.mdx#undo) take a
+`CRDTUndoManager` and route the keyboard shortcuts through it.
+
+## Your edits only
+
+An inverse names CRDT identities (element ids, keys, tags), never a position.
+That is what makes an undo right with several peers: it takes back exactly what
+this peer did, and leaves everyone else's work alone.
+
+```dart
+// Two peers add the same value, each under a tag of its own.
+final undoA = CRDTUndoManager(docA)..track(setA);
+setA.add('shared');
+setB.add('shared');
+// ...they sync, and both read {'shared'}...
+
+undoA.undo();
+// A's tag is gone, B's is not, so the value stays in the set.
+```
+
+## What is one step
+
+`runInTransaction` is one step, whatever it holds. Outside a transaction each
+write is its own step, and steps written within `captureTimeout` of each other
+(500 ms by default) merge: a burst of typing is one undo, not one per
+character. `Duration.zero` turns the merging off, and `stopCapturing()` ends a
+step by hand, for example when the user moves the caret.
+
+Merging compares the origin and the time, and nothing else. So two writes this
+close together become one step even when they are on **different handlers**.
+Give them different origins, or call `stopCapturing()` between them, to keep
+them apart.
+
+## What is recorded
+
+Only local writes, and only on the handlers you `track`. By default every local
+write counts. Pass `trackedOrigins` to narrow it to the writes you tag (see
+[Tagging a write](../deep-dive/handler-deltas.mdx#tagging-a-write)):
+
+```dart
+final undo = CRDTUndoManager(document, trackedOrigins: {myEditor})..track(text);
+document.runInTransaction(() => text.insert(0, 'hi'), origin: myEditor);
+```
+
+## What it does not undo
+
+- **Remote changes.** Only what this peer writes through `registerOperation` is
+  recorded. An operation handed to `createChange` never reaches the stack.
+- **Snapshots.** `importSnapshot` and `mergeSnapshot` replace the base the
+  state is replayed from, so both stacks are dropped.
+- **Anything older than a prune.** `garbageCollect`, and `takeSnapshot` unless
+  you pass `pruneHistory: false`, leave the state to be read from the snapshot.
+  A snapshot carries less identity than the changes it replaces (an OR-Set or
+  OR-Map element comes back without its tag), so both stacks are dropped there
+  too. Pass `pruneHistory: false` to checkpoint and keep the history.
+- **A register back to empty.** A register has no operation that clears it,
+  and it cannot tell a stored `null` from one that was never written, so an
+  undo reaches neither.
+- **The contents of a nested handler.** Undoing a write that stored a
+  `HandlerRef` removes the reference. The data it pointed at stays.
+- **A deleted handler.** A delete is final. Undoing a `removeChild` puts the
+  reference back, and it resolves to nothing. The steps of a deleted handler
+  leave both stacks.
+
+An element that comes back is a **new** element: a CRDT never brings back what
+it removed, so undoing a delete writes the values again under new ids. Undoing
+the insert that created them still removes them: the handler follows the chain
+(see `RebuiltIdentities`). A deleted run comes back as one block, so text that
+a peer typed inside it while the delete was in flight ends up in front of the
+restored block, not inside it.
+
+`undo()` and `redo()` are transactions of their own, and they throw inside an
+open `runInTransaction`. A handler is recorded by one manager at a time:
+`track` refuses a handler that another manager already holds.
+
+:::tip[Persistence and undo]
+A prune drops the undo stacks. That is why
+[persistence](../connectors/persistence/working-with-storage.mdx#growth) never
+compacts on its own: you choose when.
+:::
+
+## Which handlers
+
+`CRDTFugueTextHandler`, `CRDTFugueRichTextHandler`, `CRDTFugueListHandler`,
+`CRDTFugueMovableListHandler`, `CRDTMapHandler`, `CRDTORMapHandler`,
+`CRDTORSetHandler`, `CRDTRegisterHandler` and the reference handlers built on
+them, and `CRDTAggregateHandler` when its definition is an
+`InvertibleAggregateDefinition`.
+
+`CRDTTextHandler` and `CRDTListHandler` are indexed by position alone. They have
+no element identity to anchor an inverse to, so `Handler.invertible` is `false`
+for them and `track` refuses them. A handler of your own can be undoable too:
+see [Custom handlers](../deep-dive/custom-handlers.mdx#making-a-handler-undoable).
+
+<NextSteps
+  items={[
+    {
+      title: 'Handler deltas',
+      to: '/docs/deep-dive/handler-deltas',
+      description: 'Origins: how a write is tagged.',
+    },
+    {
+      title: 'Text fields',
+      to: '/docs/connectors/flutter/text-fields',
+      description: 'Undo shortcuts in a Flutter field.',
+    },
+  ]}
+/>

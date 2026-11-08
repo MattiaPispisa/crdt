@@ -1,0 +1,112 @@
+---
+title: Snapshots
+description: The compact state a document can start from, what it keeps, and the reserved entries inside it.
+---
+
+import NextSteps from '@site/src/components/NextSteps';
+
+# Snapshots
+
+A **snapshot** is the state of a document at a version, without the history that
+produced it. A document replays its changes **on top of** its snapshot, so a
+snapshot lets the history be **pruned**: the changes it covers can be deleted.
+
+```dart
+// Take a snapshot and prune the history it covers (the default).
+final snapshot = doc.takeSnapshot();
+
+// A checkpoint that keeps the history (and the undo stacks).
+final checkpoint = doc.takeSnapshot(pruneHistory: false);
+
+// On another document:
+other.importSnapshot(snapshot); // replace the base
+other.mergeSnapshot(snapshot); // merge it with what is already there
+```
+
+`document.snapshot` reads the snapshot the document holds, as a read-only copy.
+A snapshot carries its `versionVector`, so peers can tell what it covers.
+
+## What a prune costs
+
+A snapshot keeps a state, not the identities the changes carried. So after a
+prune:
+
+- the [undo](../use-cases/undo-redo.mdx#what-it-does-not-undo) stacks are
+  dropped;
+- a [history view](../connectors/persistence/working-with-storage.mdx#the-document-as-it-was)
+  cannot go back past the snapshot;
+- a peer that is still replaying that history has to be sent the snapshot
+  instead (the sync does it: see
+  [Broadcasting a compaction](../connectors/sync/server-registry.mdx#broadcasting-a-compaction)
+  and [Log compaction](../connectors/sync/relay.mdx#log-compaction)).
+
+`mergeSnapshot` throws a `ConcurrentSnapshotException` when the two sides hold
+snapshots of **concurrent** histories with different bytes for the same handler:
+a snapshot has no history to merge them with.
+
+## What is inside
+
+`Snapshot.data` is a `Map<String, Uint8List>` with one blob per entry. Two kinds
+of entry live in it: one handler's own state, keyed by its id, and a few
+reserved entries, keyed by a `crdt_lf/`-prefixed name, that describe the
+document as a whole.
+
+### One handler's state
+
+`takeSnapshot` keeps the state of **every** handler the document holds data
+for, open or not, so a prune never loses what another peer can still read:
+
+- an open handler writes its blob;
+- a closed handler of a kind the document knows (see `register`) is built for
+  the time of the snapshot, and writes its blob;
+- a handler with no change since the last snapshot keeps the blob it had;
+- a handler of a kind the document does not know keeps its blob, and the
+  changes it got since ride inside the reserved unfolded-changes entry (see
+  below). The first peer that knows the kind folds them into a new blob when it
+  takes its own snapshot.
+
+So a server or a relay that opens no handler can still take snapshots and prune
+its history.
+
+The **deletions registry**, under the reserved `crdt_lf/deleted-handlers` id, is
+one such entry: an OR-Set of every id `deleteHandler` / `deleteHandlerRef` ever
+deleted, on this peer or on a peer whose changes this document holds. It is a
+handler like any other, so it follows the same rules and needs no special case.
+A document that never deletes a handler never opens it: a snapshot without this
+entry is a document that has never seen a delete.
+
+### Reserved whole-document entries
+
+- `crdt_lf/handler-manifest`: `{handlerId: handlerType}` for every handler the
+  snapshot names. The history a closed handler is rebuilt from is pruned once
+  it has a blob, so after that the manifest is the only record left of what
+  type its id is. It is needed to resolve a reference to it, or to read its
+  changes back for a later snapshot (see `doc.reconstruct()` in
+  [Nested data](../use-cases/containers.mdx#the-tree-on-another-peer)).
+- `crdt_lf/capabilities`: `{handlerType: (operation kinds, blob versions)}`
+  that this build read or wrote into the snapshot. Without it, a peer that
+  reloads a pruned document has no changes left to infer requirements from,
+  and would report that it needs nothing (see
+  [Versions and compatibility](../connectors/sync/compatibility.mdx)).
+- `crdt_lf/unfolded-changes`: the changes of a handler of an unknown kind, one
+  entry per handler, that no blob could take in. A snapshot that carries one
+  needs `crdt_lf` 5.2.0 or later to be read. Carried changes are kept per
+  handler: if a newer build wrote them in a form this one cannot read, only that
+  handler fails to read, and the snapshot passes them on unchanged. Once that
+  handler gets new changes, `takeSnapshot` throws a `FormatException` instead
+  of losing them.
+
+<NextSteps
+  items={[
+    {
+      title: 'Binary format',
+      to: '/docs/deep-dive/binary-format',
+      description: 'How a snapshot is written as bytes.',
+    },
+    {
+      title: 'Working with storage',
+      to: '/docs/connectors/persistence/working-with-storage#growth',
+      description: 'When persistence takes snapshots.',
+    },
+  ]}
+/>

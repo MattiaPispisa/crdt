@@ -416,7 +416,7 @@ class CrdtQuillBinding {
   }
 
   // [delta] without what is refused. With [before], the plain text it applies
-  // to, a run of inserts and deletes is one replace: see the README, "Embeds".
+  // to, a run of inserts and deletes is one replace: see "Embeds" in the docs.
   Delta _acceptedDelta(Delta delta, {String? before}) {
     final ops = delta.toList();
     if (!ops.any(_refused)) {

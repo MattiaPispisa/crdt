@@ -1,3 +1,10 @@
+## [0.10.2+1](https://github.com/MattiaPispisa/crdt/tree/crdt_socket_sync-v0.10.2+1/packages/core/crdt_socket_sync)
+
+**Date:** --
+
+- The documentation moved to the [docs site](https://mattiapispisa.it/crdt/docs/connectors/sync): the README is now a short
+  entry point. No functional changes since `0.10.2`. [216](https://github.com/MattiaPispisa/crdt/issues/216)
+
 ## [0.10.2](https://github.com/MattiaPispisa/crdt/tree/crdt_socket_sync-v0.10.2/packages/core/crdt_socket_sync)
 
 **Date:** 2026-10-23

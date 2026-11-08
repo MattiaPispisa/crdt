@@ -1,0 +1,115 @@
+---
+title: Collaborative text
+description: A text that several peers type into at the same time, from the handler to a Flutter text field.
+---
+
+import NextSteps from '@site/src/components/NextSteps';
+
+# Collaborative text
+
+Use `CRDTFugueTextHandler` for any text that peers type into together: notes,
+documents, comments, code. It merges character by character, so two people
+can type in the same paragraph and both keep what they wrote.
+
+## The handler
+
+```dart
+final doc = CRDTDocument();
+final note = CRDTFugueTextHandler(doc, 'note');
+
+note.insert(0, 'Hello world');
+note.delete(0, 6); // "world"
+note.update(0, 'W'); // "World": overwrites in place
+note.change('Hello World'); // the smallest edit from the current text
+
+print(note.value); // Hello World
+print(note.length); // 11
+```
+
+- `insert(index, text)`, `delete(index, count)` and `update(index, text)`
+  take positions in **runes** (Unicode code points), not UTF-16 code units.
+  An emoji is one position. See [Text positions](../deep-dive/text-positions.mdx)
+  before you pass an offset taken from a Flutter `TextField`.
+- `update` overwrites an element **in place**. Two peers that update the same
+  character converge on one of the two values instead of keeping both, and an
+  update loses against a concurrent delete of the same character.
+- `change(newText)` computes the difference from the current text and writes
+  only that. Call it inside `doc.runInTransaction` to write it as one change.
+
+### Why Fugue
+
+The Fugue algorithm keeps the text of two peers **apart** when they type at the
+same spot at the same time. Without it, two sentences typed at the same place
+can come out with their letters mixed, which nobody can read. Fugue keeps each
+run of typing contiguous.
+
+`CRDTTextHandler` is the simpler option: it orders concurrent edits by their
+clock alone. It is cheaper, but concurrent inserts at the same position can
+interleave. Use it for short strings that are rarely edited together. For a
+value that is never edited together at all, a `CRDTRegisterHandler<String>`
+is enough (see [Maps, sets and values](./maps-sets-values.mdx)).
+
+## Carets that survive other people's edits
+
+An index moves as soon as someone else types before it. A **stable position**
+is tied to a character instead, so it keeps pointing at the same place:
+
+```dart
+final anchor = note.stablePositionAt(5); // serializable
+
+// ...other peers insert and delete text before it...
+
+final index = note.indexOfStablePosition(anchor); // where that place is now
+```
+
+If the character was deleted, the position resolves to where it used to be.
+Stable positions are what remote cursors are made of: send them on a presence
+channel (the [awareness plugin](../connectors/sync/plugins.mdx#awareness-plugin)),
+never in the document history.
+
+## In Flutter
+
+[`crdt_lf_flutter`](../connectors/flutter/index.mdx) binds the handler to a
+`TextEditingController`:
+
+```dart
+CrdtProvider.value(
+  value: doc,
+  child: CrdtTextFieldBuilder(
+    id: 'note',
+    builder: (context, controller) => TextField(controller: controller),
+  ),
+);
+```
+
+Local edits go into the handler, remote ones come into the field, and the
+caret stays where the user left it. The field keeps working with IME
+composition (CJK input, autocorrect), and the subtree never rebuilds.
+[Text fields](../connectors/flutter/text-fields.mdx) shows remote cursors and
+the rich text field.
+
+## Share it
+
+Put a sync client on the document and every peer in the same room sees the
+text change as it is typed. [Open a replica](../connectors/replica.mdx) does
+storage and sync in one call.
+
+<NextSteps
+  items={[
+    {
+      title: 'Text fields in Flutter',
+      to: '/docs/connectors/flutter/text-fields',
+      description: 'The controller, remote cursors, rich text.',
+    },
+    {
+      title: 'Open a replica',
+      to: '/docs/connectors/replica',
+      description: 'Keep the text on disk and in sync.',
+    },
+    {
+      title: 'Rich text',
+      to: '/docs/use-cases/rich-text',
+      description: 'Bold, links, headings, images.',
+    },
+  ]}
+/>

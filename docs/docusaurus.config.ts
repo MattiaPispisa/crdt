@@ -15,11 +15,30 @@ const projectUrl = 'https://github.com/users/MattiaPispisa/projects/1';
 // crdt_lf / crdt_lf_flutter, hosted separately (absolute external URL, so it is
 // a plain `href` and is skipped by the broken-link checker).
 const greyhoundUrl = 'https://mattiapispisa.it/crdt/greyhound_markdown/';
+const githubUrl = 'https://github.com/MattiaPispisa/crdt';
+
+// The old site had one page per package README, under this name.
+const legacyPackagePages: Record<string, string> = {
+  crdt_lf: '/docs/getting-started',
+  crdt_lf_flutter: '/docs/connectors/flutter',
+  crdt_lf_quill: '/docs/connectors/flutter/editors/quill',
+  crdt_socket_sync: '/docs/connectors/sync',
+  dart_frog: '/docs/connectors/sync/server-frameworks',
+  serverpod: '/docs/connectors/sync/server-frameworks',
+  crdt_lf_persistence: '/docs/connectors/persistence',
+  crdt_lf_hive: '/docs/connectors/persistence/adapters',
+  crdt_lf_sqlite: '/docs/connectors/persistence/adapters',
+  crdt_lf_drift: '/docs/connectors/persistence/adapters',
+  hlc: '/docs/deep-dive/time-hlc',
+  crdt_lf_devtools_extension: '/docs/deep-dive/devtools',
+};
 
 const config: Config = {
-  title: 'CRDT',
-  tagline: 'Conflict-free Replicated Data Type in Dart 🎯',
-  favicon: undefined,
+  title: 'CRDT in Dart',
+  tagline:
+    'Local-first, collaborative apps in Dart and Flutter. Every peer edits ' +
+    'offline, and every copy converges.',
+  favicon: 'images/logo.png',
 
   customFields: { examplesUrl, projectUrl, greyhoundUrl },
 
@@ -28,12 +47,15 @@ const config: Config = {
     v4: true, // Improve compatibility with the upcoming Docusaurus v4
   },
 
-  // `detect` keeps `.md` files (the copied package READMEs) on CommonMark so
-  // their raw HTML (e.g. `<div>`, `<img>`) renders as on GitHub, while `.mdx`
-  // stays MDX. `mermaid: true` enables ```mermaid code fences.
+  // `detect` keeps `.md` files (the guide copied from GitHub) on CommonMark so
+  // their raw HTML renders as on GitHub, while `.mdx` stays MDX.
+  // `mermaid: true` enables ```mermaid code fences.
   markdown: {
     format: 'detect',
     mermaid: true,
+    hooks: {
+      onBrokenMarkdownLinks: 'throw',
+    },
   },
 
   themes: ['@docusaurus/theme-mermaid'],
@@ -41,6 +63,21 @@ const config: Config = {
   plugins: [
     // offline, client-side search
     'docusaurus-plugin-pagefind',
+    [
+      '@docusaurus/plugin-client-redirects',
+      {
+        // The package READMEs already published on pub.dev link to the old
+        // pages, so every one of them lands on its new home.
+        redirects: [
+          { from: '/docs', to: '/docs/introduction' },
+          { from: '/docs/documentation', to: '/docs/introduction' },
+          ...Object.entries(legacyPackagePages).map(([name, to]) => ({
+            from: `/docs/documentation/packages/${name}`,
+            to,
+          })),
+        ],
+      },
+    ],
   ],
 
   // Set the production url of your site here.
@@ -58,6 +95,7 @@ const config: Config = {
   projectName: 'crdt', // Usually your repo name.
 
   onBrokenLinks: 'throw',
+  onBrokenAnchors: 'throw',
 
   deploymentBranch: 'gh-pages',
 
@@ -93,6 +131,24 @@ const config: Config = {
   ],
 
   themeConfig: {
+    // Mermaid's defaults draw a diagram with the body font size and wide
+    // gaps, so even a short flow fills the page.
+    mermaid: {
+      theme: { light: 'neutral', dark: 'dark' },
+      options: {
+        themeVariables: { fontSize: '13px' },
+        flowchart: { nodeSpacing: 28, rankSpacing: 32, padding: 10 },
+        sequence: {
+          actorMargin: 40,
+          boxMargin: 6,
+          messageMargin: 28,
+          noteMargin: 6,
+          messageFontSize: 13,
+          noteFontSize: 12,
+          actorFontSize: 13,
+        },
+      },
+    },
     // Social card (og:image). Lives in static/images, copied in by docs_bs.
     image: 'images/logo.png',
     colorMode: {
@@ -100,34 +156,42 @@ const config: Config = {
     },
     navbar: {
       title: 'CRDT in Dart',
+      logo: {
+        alt: 'CRDT in Dart',
+        src: 'images/logo.png',
+      },
+      hideOnScroll: true,
       items: [
         {
-          label: "Greyhound Markdown",
-          position: "left",
-          href: greyhoundUrl,
-        },
-        {
-          to: '/docs/documentation',
+          to: '/docs/introduction',
           position: 'left',
-          label: 'Documentation',
+          label: 'Docs',
         },
         {
-          label: "Examples",
-          position: "left",
-          href: examplesUrl,
-        },
-        {
-          to: '/docs/contributing',
+          to: '/docs/use-cases',
           position: 'left',
-          label: 'Contributing',
+          label: 'Use cases',
         },
         {
-          to: '/docs/references',
+          to: '/docs/connectors',
           position: 'left',
-          label: 'References',
+          label: 'Connectors',
         },
         {
-          href: 'https://github.com/MattiaPispisa/crdt',
+          to: '/docs/deep-dive',
+          position: 'left',
+          label: 'Deep dive',
+        },
+        {
+          label: 'Live demos',
+          position: 'right',
+          items: [
+            { label: 'Greyhound Markdown', href: greyhoundUrl },
+            { label: 'Flutter examples', href: examplesUrl },
+          ],
+        },
+        {
+          href: githubUrl,
           label: 'GitHub',
           position: 'right',
         },
@@ -137,42 +201,42 @@ const config: Config = {
       style: 'dark',
       links: [
         {
-          title: 'Docs',
+          title: 'Learn',
           items: [
-            {
-              label: 'Contributing',
-              to: '/docs/contributing',
-            },
-            {
-              label: 'References',
-              to: '/docs/references',
-            },
+            { label: 'Introduction', to: '/docs/introduction' },
+            { label: 'Getting started', to: '/docs/getting-started' },
+            { label: 'Use cases', to: '/docs/use-cases' },
+            { label: 'Deep dive', to: '/docs/deep-dive' },
+          ],
+        },
+        {
+          title: 'Connect',
+          items: [
+            { label: 'Persistence', to: '/docs/connectors/persistence' },
+            { label: 'Flutter', to: '/docs/connectors/flutter' },
+            { label: 'Sync', to: '/docs/connectors/sync' },
+            { label: 'Migrations', to: '/docs/migrations' },
+          ],
+        },
+        {
+          title: 'Project',
+          items: [
+            { label: 'Packages', to: '/docs/packages' },
+            { label: 'Contributing', to: '/docs/contributing' },
+            { label: 'References', to: '/docs/references' },
+            { label: 'Roadmap', href: projectUrl },
           ],
         },
         {
           title: 'Community',
           items: [
-            {
-              label: 'Portfolio',
-              href: 'https://mattiapispisa.it/#about',
-            },
-            {
-              label: 'X',
-              href: 'https://x.com/MattiaPispisa',
-            },
-          ],
-        },
-        {
-          title: 'More',
-          items: [
-            {
-              label: 'GitHub',
-              href: 'https://github.com/MattiaPispisa/crdt',
-            },
+            { label: 'GitHub', href: githubUrl },
+            { label: 'Portfolio', href: 'https://mattiapispisa.it/#about' },
+            { label: 'X', href: 'https://x.com/MattiaPispisa' },
           ],
         },
       ],
-      copyright: `Copyright © ${new Date().getFullYear()} CRDT_LF, Inc.`,
+      copyright: `Copyright © ${new Date().getFullYear()} Mattia Pispisa. Released under the MIT License.`,
     },
     prism: {
       theme: prismThemes.github,

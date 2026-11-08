@@ -13,7 +13,8 @@ import 'package:crdt_socket_sync/src/common/common/utils.dart';
 ///
 /// It opens and closes its parts in the order that keeps the data: the local
 /// copy is restored before the client connects, and the client stops before
-/// the last writes are flushed. See the README, "Opening a replica".
+/// the last writes are flushed. See
+/// [Open a replica](https://mattiapispisa.it/crdt/docs/connectors/replica).
 ///
 /// ```dart
 /// final replica = await CRDTReplica.open(

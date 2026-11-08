@@ -1,0 +1,103 @@
+---
+title: Plugins and awareness
+description: Extend the client and the server with plugins, and share presence with the awareness plugin.
+---
+
+import NextSteps from '@site/src/components/NextSteps';
+
+# Plugins and awareness
+
+A plugin adds behavior to the client, to the server, or to both. Plugins work
+the same way in both [modes](./index.mdx#two-modes).
+
+## Writing a plugin
+
+```dart
+// MyClientPlugin must extend ClientSyncPlugin (not implement it):
+// the base class wires the plugin into the client.
+class MyClientPlugin extends ClientSyncPlugin {
+  @override
+  void onMessage(Message message) {
+    print('message: $message');
+  }
+}
+
+// The same on the server, with ServerSyncPlugin.
+class MyServerPlugin extends ServerSyncPlugin {
+  @override
+  void onMessage(Message message) {
+    print('message: $message');
+  }
+}
+
+final client = WebSocketClient(
+  url: 'ws://localhost:8080',
+  document: document,
+  author: document.peerId,
+  plugins: [MyClientPlugin()],
+);
+
+final server = WebSocketServer(
+  serverFactory: () => HttpServer.bind('localhost', 8080),
+  serverRegistry: registry,
+  plugins: [MyServerPlugin()],
+);
+```
+
+A plugin can send new message types to the clients and the server. To do so,
+it extends the `Message` class and implements `fromJson` to decode its messages.
+Plugin messages use type codes from `100` up (see
+[Wire format](./compatibility.mdx#wire-format)).
+
+The same plugins work on the relay pair (`WebSocketRelayClient` /
+`WebSocketRelayServer`) unchanged: see
+[Plugins on a relay](./relay.mdx#plugins-on-a-relay). A server plugin instance
+belongs to one host: give each host its own.
+
+## Awareness plugin
+
+The awareness plugin shares **presence**: who is in the room, and ephemeral
+state such as their name, their color and where their caret is. It runs on both
+sides: `ClientAwarenessPlugin` on each client, `ServerAwarenessPlugin` on the
+server. Awareness state is never written into the document history, and a
+relay rebroadcasts it without storing it.
+
+```dart
+final server = WebSocketServer(
+  serverFactory: () => HttpServer.bind('localhost', 8080),
+  serverRegistry: registry,
+  plugins: [ServerAwarenessPlugin()],
+);
+
+final client = WebSocketClient(
+  url: 'ws://localhost:8080',
+  document: document,
+  author: document.peerId,
+  plugins: [ClientAwarenessPlugin()],
+);
+```
+
+This is the channel for the Flutter
+[text cursors](../flutter/text-fields.mdx#remote-text-cursors) and
+[mouse pointers](../flutter/presence.mdx): publish the local caret or pointer
+into the awareness state, and map the other peers' states to cursors.
+
+The [server example](https://github.com/MattiaPispisa/crdt/tree/main/packages/core/crdt_socket_sync/example)
+and its Flutter client use it to show the active users (name, surname, a random
+color) and their position in the document. Greyhound Markdown wraps it in an
+`AwarenessService`: see [Open a replica](../replica.mdx#a-complete-app-greyhound-markdown).
+
+<NextSteps
+  items={[
+    {
+      title: 'Text fields',
+      to: '/docs/connectors/flutter/text-fields#remote-text-cursors',
+      description: 'Draw the carets that awareness carries.',
+    },
+    {
+      title: 'Connection and errors',
+      to: '/docs/connectors/sync/connection',
+      description: 'Status, reconnection, faults.',
+    },
+  ]}
+/>

@@ -1,0 +1,333 @@
+---
+title: The adapters
+description: Setup and details of the Hive, SQLite and Drift storage adapters.
+---
+
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+import NextSteps from '@site/src/components/NextSteps';
+
+# The adapters
+
+The three adapters keep the same contract, so most apps only need the line that
+opens the database (see [Which adapter](./index.mdx#which-adapter)). This page
+is for what is specific to each one: setup, what is stored where, and the
+lower-level storages.
+
+## Install and open
+
+<Tabs groupId="adapter">
+<TabItem value="sqlite" label="SQLite" default>
+
+```sh
+dart pub add crdt_lf_sqlite
+```
+
+```dart
+import 'package:crdt_lf_sqlite/crdt_lf_sqlite.dart';
+
+// Open (or create) a database file...
+final backend = CRDTSqlite.open('./my_app_data.db');
+
+// ...or an in-memory database (useful for tests).
+final memory = CRDTSqlite.memory();
+
+// ...or a connection you already manage.
+final shared = CRDTSqlite.fromDatabase(myDatabase);
+
+backend.close();
+```
+
+</TabItem>
+<TabItem value="hive" label="Hive">
+
+```sh
+dart pub add crdt_lf_hive hive
+```
+
+```dart
+import 'package:crdt_lf_hive/crdt_lf_hive.dart';
+import 'package:hive/hive.dart';
+
+Hive.init('./my_app_data');
+
+// Registers the type adapters of Change and Snapshot. Pass changeTypeId /
+// snapshotTypeId when your other Hive adapters already use the default ids.
+CRDTHive.initialize();
+
+final backend = await CRDTHive.open();
+
+await backend.close();
+```
+
+</TabItem>
+<TabItem value="drift" label="Drift">
+
+```sh
+dart pub add crdt_lf_drift
+```
+
+```dart
+import 'dart:io';
+
+import 'package:crdt_lf_drift/crdt_lf_drift.dart';
+
+// Open (or create) a database file...
+final backend = CRDTDrift.open(File('./my_app_data.db'));
+
+// ...or an in-memory database (useful for tests).
+final memory = CRDTDrift.memory();
+
+// ...or a CRDTDriftDatabase on a QueryExecutor of your choice.
+final custom = CRDTDrift.fromDatabase(CRDTDriftDatabase(myExecutor));
+
+await backend.close();
+```
+
+</TabItem>
+</Tabs>
+
+Then `backend.openDocument(id)` and the rest of
+[Persistence](./index.mdx#the-whole-opening-in-one-call) work the same on all
+three.
+
+## How data is stored
+
+<Tabs groupId="adapter">
+<TabItem value="sqlite" label="SQLite" default>
+
+One database file holds every document, in three tables:
+
+```sql
+CREATE TABLE changes (
+  document_id TEXT    NOT NULL,
+  author      TEXT    NOT NULL,
+  hlc_l       INTEGER NOT NULL,
+  hlc_c       INTEGER NOT NULL,
+  bytes       BLOB    NOT NULL,
+  PRIMARY KEY (document_id, author, hlc_l, hlc_c)
+);
+
+CREATE TABLE snapshots (
+  document_id TEXT NOT NULL,
+  snapshot_id TEXT NOT NULL,
+  bytes       BLOB NOT NULL,
+  PRIMARY KEY (document_id, snapshot_id)
+);
+
+CREATE TABLE peers (
+  document_id TEXT NOT NULL,
+  peer_id     TEXT NOT NULL,
+  PRIMARY KEY (document_id)
+);
+```
+
+A change is named by its author and its clock, not by one text id. An
+`OperationId` **is** a peer and a clock, and kept apart SQL can compare it,
+which is what a version vector asks. The primary key is then already the index
+that comparison wants. The clock takes two columns because `l` is 48 bits and
+`c` is 16: together they stay inside the 53 bits an integer keeps exactly in
+JavaScript.
+
+- **Transactions.** `storageForDocument` hands back a
+  `CRDTSqliteDocumentStorage`, which backs `transaction()` with a real SQLite
+  transaction: a prune drops the covered changes and rewrites the survivors,
+  and either all of it lands or none of it does. It is built on savepoints, so
+  a batch that opens a transaction of its own nests inside instead of failing.
+- **Closing.** `close()` on a document storage does nothing on purpose: one
+  database file holds every document, so the connection is
+  `CRDTSqlite.close()`'s to release.
+- **Schema version.** The database carries its schema version in
+  `PRAGMA user_version`, and this build writes version 2. A database written by
+  `0.2.0` is version 1: it has no `peers` table and names a change with a single
+  `change_id` column. The first open rebuilds it inside one savepoint, so half a
+  rebuilt table is never left behind. The split reads the old column and not
+  the stored bytes, so a change whose blob this build cannot decode migrates
+  all the same.
+
+</TabItem>
+<TabItem value="hive" label="Hive">
+
+Each document gets **boxes of its own**:
+
+- changes: `{boxName}_{documentId}` (default `changes_{documentId}`);
+- snapshots: `{boxName}_{documentId}` (default `snapshots_{documentId}`).
+
+Two boxes are **shared**, one per app:
+
+- `peer_ids`: the `PeerId` each document writes under, keyed by document id.
+  A box of its own would cost an open for a single string. The value is text,
+  so no type adapter and no type id are involved.
+- `documents`: the list of document ids the backend holds. Hive cannot list
+  its boxes, so `CRDTHive.open()` keeps this small registry. A document costs
+  one extra row, written the first time it is opened. A document stored before
+  this registry existed is not on the list until it is opened once; its data is
+  untouched either way.
+
+`Change` and `Snapshot` are stored through one `TypeAdapter` each, as the
+binary blob of `toBytes()`.
+
+- **Reads answer at once.** A Hive box holds its entries in memory, so
+  `getChanges`, `getSnapshots`, `count` and `containsSnapshot` are not futures.
+  Writes go through the box journal and stay asynchronous.
+- **No transactions.** Hive has none, so `transaction()` just runs its body.
+  That is still conformant: every step the persistence takes is safe to
+  repeat.
+- **Closing.** `openStorageForDocument` hands back a `CRDTHiveDocumentStorage`.
+  Its `close()` closes the two boxes of that document and nothing else: use it
+  in an app that opens one document after another.
+  `CRDTHive.closeAllBoxes()` closes every Hive box the app has open, yours
+  included.
+- **Custom names.** Every box name can be changed:
+
+  ```dart
+  final backend = await CRDTHive.open(
+    changesBoxName: 'my_changes',
+    snapshotsBoxName: 'my_snapshots',
+  );
+  ```
+
+- **Type ids.** Make sure your own Hive adapters use type ids different from
+  the two of `CRDTHive.initialize()`.
+
+</TabItem>
+<TabItem value="drift" label="Drift">
+
+One database holds every document, in three tables:
+
+- `changes`, keyed by `(document_id, author, hlc_l, hlc_c)`, with the change
+  itself in a `bytes` blob column;
+- `snapshots`, keyed by `(document_id, snapshot_id)`, same blob column;
+- `peers`, one row per document: the `PeerId` this device writes it under.
+
+A change is named by its author and its clock, for the same reason as in the
+SQLite adapter: SQL can compare the two parts, which is what a version vector
+asks.
+
+- **Asynchronous end to end.** Every method returns a `Future`, so
+  `CRDTDocumentPersistence.openSync` does not work on it. Use `open`, or
+  `backend.openDocument`.
+- **Transactions.** `storageForDocument` hands back a
+  `CRDTDriftDocumentStorage`, which backs `transaction()` with
+  `database.transaction(...)`: a prune lands all at once or not at all.
+- **Closing.** `close()` on a document storage does nothing on purpose: the
+  connection is `CRDTDrift.close()`'s to release.
+- **Schema version.** The `peers` table arrived with schema version 2. A
+  database written by version 1 gains it on the next open, and its changes and
+  snapshots stay as they are.
+
+</TabItem>
+</Tabs>
+
+## The lower-level storages
+
+`backend.openDocument` uses three storages per document. You can use them
+directly, for example to read part of the log or to build your own opening.
+
+<Tabs groupId="adapter">
+<TabItem value="sqlite" label="SQLite" default>
+
+Every method answers on the spot: `getChanges()` gives a `List<Change>`,
+`saveChange()` gives `void`.
+
+```dart
+final changes = backend.changeStorageForDocument('doc-123');
+changes.saveChanges([change1, change2]);
+final all = changes.getChanges();
+final missing = changes.getChanges(newerThan: theirVersion);
+print('Total changes: ${changes.count}');
+
+final snapshots = backend.snapshotStorageForDocument('doc-123');
+snapshots.saveSnapshot(snapshot);
+final latest = snapshots.getSnapshots();
+
+final peers = backend.peerIdStorageForDocument('doc-123');
+final document = CRDTDocument(
+  documentId: 'doc-123',
+  peerId: peers.loadOrCreate() as PeerId, // synchronous here
+);
+```
+
+</TabItem>
+<TabItem value="hive" label="Hive">
+
+The storages open their boxes, so they come back as futures. Reads then answer
+at once.
+
+```dart
+final changes = await CRDTHive.openChangeStorageForDocument('doc-123');
+await changes.saveChanges([change1, change2]);
+final all = changes.getChanges();
+final missing = changes.getChanges(newerThan: theirVersion);
+print('Total changes: ${changes.count}');
+
+final snapshots = await CRDTHive.openSnapshotStorageForDocument('doc-123');
+await snapshots.saveSnapshot(snapshot);
+final latest = snapshots.getSnapshots();
+
+final peers = await CRDTHive.openPeerIdStorageForDocument('doc-123');
+final document = CRDTDocument(
+  documentId: 'doc-123',
+  peerId: await peers.loadOrCreate(),
+);
+```
+
+`CRDTHive.openStorageForDocument(id)` opens the change and snapshot storages at
+once. `CRDTHive.deleteBox(name)` deletes one box.
+
+</TabItem>
+<TabItem value="drift" label="Drift">
+
+Every method returns a `Future`.
+
+```dart
+final changes = backend.changeStorageForDocument('doc-123');
+await changes.saveChanges([change1, change2]);
+final all = await changes.getChanges();
+final missing = await changes.getChanges(newerThan: theirVersion);
+print('Total changes: ${await changes.count}');
+
+final snapshots = backend.snapshotStorageForDocument('doc-123');
+await snapshots.saveSnapshot(snapshot);
+final latest = await snapshots.getSnapshots();
+
+final peers = backend.peerIdStorageForDocument('doc-123');
+final document = CRDTDocument(
+  documentId: 'doc-123',
+  peerId: await peers.loadOrCreate(),
+);
+```
+
+</TabItem>
+</Tabs>
+
+`getChanges` takes the two version-vector bounds `newerThan` and `upTo`: see
+[Reading part of the log](./working-with-storage.mdx#reading-part-of-the-log).
+Read the identity **before** building the document, because the id has to exist
+first (see [Peer identity](./how-it-works.mdx#peer-identity)).
+
+## Examples
+
+- [SQLite](https://github.com/MattiaPispisa/crdt/blob/main/packages/adapters/persistence/crdt_lf_sqlite/example/main.dart),
+  [Hive](https://github.com/MattiaPispisa/crdt/blob/main/packages/adapters/persistence/crdt_lf_hive/example/main.dart)
+  (with a custom data type) and
+  [Drift](https://github.com/MattiaPispisa/crdt/blob/main/packages/adapters/persistence/crdt_lf_drift/example/main.dart):
+  one runnable `main.dart` each.
+- A sync [server with a persistent registry](https://github.com/MattiaPispisa/crdt/blob/main/packages/core/crdt_socket_sync/example/lib/main.dart),
+  backed by Hive, with clients that sync through it (see
+  [Server registry](../sync/server-registry.mdx)).
+
+<NextSteps
+  items={[
+    {
+      title: 'Working with storage',
+      to: '/docs/connectors/persistence/working-with-storage',
+      description: 'History, backups, compaction.',
+    },
+    {
+      title: 'Build your own adapter',
+      to: '/docs/connectors/persistence/build-your-own',
+      description: 'The contract, and the conformance suite.',
+    },
+  ]}
+/>

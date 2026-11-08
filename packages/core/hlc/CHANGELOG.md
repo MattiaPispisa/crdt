@@ -1,3 +1,10 @@
+## [1.2.0+1](https://github.com/MattiaPispisa/crdt/tree/hlc_dart-v1.2.0+1/packages/core/hlc)
+
+**Date:** --
+
+- The documentation moved to the [docs site](https://mattiapispisa.it/crdt/docs/deep-dive/time-hlc): the README is now a short
+  entry point. No functional changes since `1.2.0`. [216](https://github.com/MattiaPispisa/crdt/issues/216)
+
 ## [1.2.0](https://github.com/MattiaPispisa/crdt/tree/hlc_dart-v1.2.0/packages/core/hlc)
 
 **Date:** 2026-10-07

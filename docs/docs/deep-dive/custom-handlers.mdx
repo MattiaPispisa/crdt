@@ -1,0 +1,207 @@
+---
+title: Custom handlers
+description: Write a handler of your own — its spec, its operations, its cache, and how to make it undoable.
+---
+
+import NextSteps from '@site/src/components/NextSteps';
+
+# Custom handlers
+
+`Handler<T>` is an abstract class, and a handler you write yourself plugs into
+the same document, transaction system and sync path as the built-in ones.
+
+:::tip[Ask first]
+A new kind of data that others could use too (a counter, a tree, a table) is
+worth an [issue](https://github.com/MattiaPispisa/crdt/issues/new/choose): a
+handler in `crdt_lf` runs the shared handler conformance suite and serves every
+user. A published PN-counter, for example, is tracked by
+[issue #126](https://github.com/MattiaPispisa/crdt/issues/126).
+:::
+
+## The class and its spec
+
+`Handler` is a **`base` class**, so you extend it and cannot implement it, and
+your own handler says `base`, `final` or `sealed` in turn:
+
+```dart
+final class PNCounterHandler extends Handler<int> { … }
+```
+
+Its constructor passes a **`HandlerSpec`** to `super`. The spec names the kind on
+the wire and tells the document how to build one: what a peer that receives a
+reference needs.
+
+```dart
+final class PNCounterHandler extends Handler<int> {
+  PNCounterHandler(super.doc, this.id) : super(spec: PNCounterHandler.spec);
+
+  /// The kind this handler is.
+  static const HandlerSpec<PNCounterHandler> spec = HandlerSpec(
+    'pn-counter',
+    PNCounterHandler.new,
+    formats: HandlerFormats(
+      operationKinds: {OperationType.kindUpdate},
+      blobVersions: BlobVersionRange.single(1),
+    ),
+  );
+
+  @override
+  final String id;
+
+  @override
+  late final OperationDecoders operationDecoders = {
+    OperationType.kindUpdate: PNCounterOperation.fromBytes,
+  };
+  …
+}
+```
+
+The tag has to be a constant of your own. `runtimeType.toString()` cannot do the
+job, because dart2js renames types in a Flutter web release build.
+
+`formats` states the operation kinds the handler decodes and the snapshot blob
+versions it reads. That is what `doc.describeBuildCapabilities()` reports to a
+sync layer (see [Versions and compatibility](../connectors/sync/compatibility.mdx)).
+It has to agree with the handler: the kinds it lists are the keys of
+`operationDecoders`, and the blob versions are `snapshotBlobVersion` and
+`minReadableSnapshotBlobVersion`. An assertion checks it when the handler
+registers, so a declaration cannot drift from what the code decodes.
+
+## What a handler overrides
+
+- `id` and `operationDecoders`, **required**: how the handler is addressed, and
+  how its operations are decoded.
+- `getSnapshotState`, **required**: the state as bytes, seeded back through
+  `lastSnapshot`. Start the blob with a version byte (see
+  [Binary format](./binary-format.mdx#two-levels-of-versioning)).
+- `incrementCachedState`: to move the cached state forward by one operation,
+  instead of replaying the whole history on every read (see
+  [State cache](./state-cache.mdx)).
+- `stateIsOrderIndependent`: only when the state is the same whatever order
+  causally ready operations arrive in.
+- `compound`: to collapse consecutive operations inside a transaction into
+  fewer changes.
+- `invertible` and `invert`: to make the handler undoable (below).
+
+## Operation kinds
+
+The four conventional kinds (`insert`, `delete`, `update`, `move`) are ready to
+use as `insertType`, `deleteType`, `updateType` and `moveType`. A handler that
+needs a fifth meaning declares its own:
+
+```dart
+factory OperationType.custom(
+  Handler<dynamic> handler, {
+  required int kind,
+  required String name,
+  bool stamped = false,
+})
+```
+
+- `kind` is scoped to the **handler type**, not global: two unrelated handlers
+  can both use kind `4` for two unrelated meanings, because the envelope always
+  says first which handler type it addresses. Values `0`-`3` are the
+  conventional kinds; `4` up to `OperationType.maxKind` (`127`) are free. The
+  ceiling is `127` because bit 7 of the kind byte is reserved.
+- `name` labels the kind in `toPayload` and in debug output. Only `kind` is
+  written on the wire.
+
+A change that carries a kind this build does not know for that handler type
+throws `UnknownOperationKindException` instead of being dropped in silence. That
+is why a decoder in `operationDecoders` never returns `null`.
+
+### When to turn `stamped` on
+
+A stamp is a unique, totally ordered mark: the `OperationId` of the change the
+operation travels in. **Every** operation carries one, declared or not: the
+document mints it when the operation is registered, and a remote one reads it
+off the change. So the flag is not about reaching the stamp. **It says that this
+kind's conflict resolution reads it, which is something two peers have to agree
+on.** The built-in handlers use it for two different things:
+
+| Use | Who | What the handler does |
+| --- | --- | --- |
+| Last-writer-wins tie-break | `update` on the Fugue sequence handlers; `insert`/`move`/`update` on the movable list | keeps the **greater** stamp, so every peer picks the same winner instead of whichever change arrived last |
+| Identity tag | `add` on `CRDTORSetHandler`, `put` on `CRDTORMapHandler` | stores the stamp as the tag a later `remove` tombstones; `CRDTORSetHandler` never compares two of them |
+
+A kind with no conflict to resolve and nothing to tag declares nothing. A text
+`insert` is one, because element ids are already unique. A `delete` is another:
+it beats everything, so there is no rule for a peer to disagree with. It still
+reads its own stamp and records it on the tombstone, in case something later
+tries to take an element back.
+
+**A stamped kind cannot be compounded.** `Compound` never folds operations of a
+stamped kind, and asserts in debug if your `compound` returns one for them. A
+compound is a single change and carries a single id, but your handler folded
+each part under its own. On a compound that touches more than one target the two
+disagree, and nothing shows it until a later concurrent write lands between the
+two ids and wins on one peer while it loses on the other. So it is one or the
+other: a kind that reads a stamp, or a kind that folds.
+
+`stamped` is a **local declaration**, not part of the wire format: bit 7 of the
+kind byte carries the writer's declaration, and nothing else. Two builds that
+disagree about it are refused on decode, in both directions. Changing the flag
+on a kind you already shipped is therefore a breaking change.
+
+## Making a handler undoable
+
+`invert` returns the operations that take an operation back, read against the
+state as it is **before** the operation is applied. The document calls it from
+`registerOperation`, after the stamp is minted and before the operation is
+folded in, so `operation.stamp` is readable and the state has not moved yet.
+
+```dart
+@override
+bool get invertible => true;
+
+@override
+List<Operation> invert(Operation operation) {
+  if (operation is! PNCounterIncrementOperation) {
+    return const [];
+  }
+  return [
+    PNCounterIncrementOperation.fromHandler(this, by: -operation.by),
+  ];
+}
+```
+
+- **Name identities, never positions.** An inverse is written much later, after
+  other peers may have edited the same handler.
+- The operations you return are new and unstamped: the document stamps them when
+  they are registered, and an operation is stamped once.
+- Return an empty list when there is nothing to undo. That includes an operation
+  with no visible effect: undoing what changed nothing must change nothing.
+- If your handler can **rebuild** something it removed (a CRDT never brings
+  anything back, so it returns under a new identity), mix in
+  `RebuiltIdentities`, record each step with `noteRebuilt`, and override
+  `prepareInverse` to follow the chain. That is what makes "undo the delete,
+  then undo the insert" end where it started.
+
+## A complete example
+
+A full worked example, a PN-counter with its own `increment` kind, lives in
+[`test/helpers/pn_counter_handler.dart`](https://github.com/MattiaPispisa/crdt/tree/main/packages/core/crdt_lf/test/helpers/pn_counter_handler.dart).
+It is test-only. Using one looks like any built-in handler:
+
+```dart
+final doc = CRDTDocument(peerId: PeerId.generate());
+final votes = PNCounterHandler(doc, 'votes')
+  ..increment(3)
+  ..decrement();
+print(votes.value); // 2
+```
+
+<NextSteps
+  items={[
+    {
+      title: 'State cache',
+      to: '/docs/deep-dive/state-cache',
+      description: 'incrementCachedState, explained.',
+    },
+    {
+      title: 'Binary format',
+      to: '/docs/deep-dive/binary-format',
+      description: 'Versioning your blob.',
+    },
+  ]}
+/>

@@ -1,0 +1,87 @@
+---
+title: Relay protocol
+description: The JSON message contract a relay server implements — enough to write one on any runtime.
+---
+
+import NextSteps from '@site/src/components/NextSteps';
+
+# Relay protocol
+
+A relay server never parses CRDT data, so its side of the protocol is just a
+JSON message contract over a WebSocket. It can be implemented on any runtime,
+including serverless hosts such as Cloudflare Workers with Durable Objects.
+
+The [Greyhound Markdown](https://github.com/MattiaPispisa/crdt/tree/main/apps/greyhound_markdown)
+app is a concrete example: its client uses `WebSocketRelayClient` from
+`crdt_socket_sync`, while its server is a **Cloudflare Worker in TypeScript**
+([`server/`](https://github.com/MattiaPispisa/crdt/tree/main/apps/greyhound_markdown/server),
+run with `wrangler`): a TypeScript reference implementation of the contract
+below.
+
+## Messages
+
+Frames are JSON envelopes typed by an integer `type` code, with `documentId`
+naming the room. CRDT change and snapshot payloads travel as **opaque base64
+strings**. Your server must handle:
+
+| Code | Name | Direction | Fields (beyond `type`, `documentId`) |
+| --- | --- | --- | --- |
+| 20 | hello | C→S | `author` |
+| 21 | welcome | S→C | `sessionId`, `snapshot: string\|null`, `changes: string[]`, `seq`, `logLength`, `compact` |
+| 22 | push | C→S | `changes: string[]` |
+| 23 | ack | S→C | `seq`, `count`, `logLength`, `compact` |
+| 24 | changes | S→others | `changes: string[]`, `seq`, `from: string\|null` |
+| 25 | snapshotUpload | C→S | `snapshot`, `upToSeq` |
+| 26 | stateRequest | C→S | — (reply with a welcome, same `sessionId`) |
+| 5 | ping | C→S | `timestamp` → reply pong (6) `{originalTimestamp, responseTimestamp}` |
+| 7 | error | S→C | `code`, `message` |
+| 100–102 | awareness | C↔S | presence passthrough (store + rebroadcast) |
+
+## What the server does
+
+- Assign a `sessionId` per connection, and return it in the welcome.
+- Append pushed blobs to a log per room, with growing sequence numbers.
+- Put the last assigned `seq` on both the ack and the rebroadcast `changes`:
+  clients rely on it to bound their snapshot uploads.
+- Serve `snapshot + log` on hello and on stateRequest.
+- On `snapshotUpload`, store the snapshot and truncate the log up to `upToSeq`.
+- Drive compaction: set `compact: true` (rate-limited, one client per room)
+  once the log passes your threshold.
+
+See [Relay mode](./relay.mdx) for the flows these messages make.
+
+## Hard requirements
+
+- **Reply to every ping with a pong.** The client treats a missing pong within
+  its ping timeout (default 30 s) as a dead connection, and reconnects.
+- **Send the welcome within the client's handshake timeout** (default 5 s;
+  set it with `WebSocketRelayClient(handshakeTimeout: ...)` for hosts with cold
+  starts).
+
+Also accept **binary** inbound frames: the Dart client sends UTF-8 JSON as binary
+WebSocket frames (decode them as text). Replies may be text frames. With the
+default `NoCompression`, no compression handling is needed. To keep serverless
+costs down, lengthen `pingInterval` / `pingTimeout` on the client, so idle rooms
+are probed less often.
+
+:::note[Keep the copies in step]
+The relay protocol is versioned with the package. A change to it in
+`crdt_socket_sync` has to reach every relay implementation, the TypeScript one
+of Greyhound included. The relay checks the protocol version only: see
+[Versions and compatibility](./compatibility.mdx#what-the-handshake-does-not-cover).
+:::
+
+<NextSteps
+  items={[
+    {
+      title: 'Versions and compatibility',
+      to: '/docs/connectors/sync/compatibility',
+      description: 'The wire format and the type codes.',
+    },
+    {
+      title: 'Compression',
+      to: '/docs/connectors/sync/compression',
+      description: 'If you turn it on, the relay must decode it.',
+    },
+  ]}
+/>

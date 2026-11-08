@@ -180,7 +180,7 @@ packages:
       path: "../../hlc"
       relative: true
     source: path
-    version: "1.2.0"
+    version: "1.2.0+1"
   http_multi_server:
     dependency: transitive
     description:

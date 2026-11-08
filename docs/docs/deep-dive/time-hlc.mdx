@@ -1,0 +1,109 @@
+---
+title: 'Time: the hybrid logical clock'
+sidebar_label: 'Time: the HLC'
+description: How peers order events without a shared clock — the hybrid logical clock of hlc_dart.
+---
+
+import NextSteps from '@site/src/components/NextSteps';
+
+# Time: the hybrid logical clock
+
+Peers that edit offline need to agree on an **order** of events, and they cannot
+trust the wall clock for it: phones drift, users change the time, two edits land
+in the same millisecond. Every change in `crdt_lf` is stamped with a **hybrid
+logical clock** (HLC) from [`hlc_dart`](https://pub.dev/packages/hlc_dart),
+which combines the two kinds of clock:
+
+- like a **logical** clock, it captures causality: if event `e` happened before
+  `f`, then `l.e < l.f`;
+- like a **physical** clock, it stays close to real time: `l.e` is close to the
+  wall-clock time of `e`;
+- it fits in **64 bits**: 48 bits of milliseconds since the Unix epoch, 16 bits
+  of counter;
+- it works peer to peer, with no central server.
+
+It follows the paper
+[Logical Physical Clocks and Consistent Snapshots in Globally Distributed Databases](https://cse.buffalo.edu/tech-reports/2014-04.pdf).
+
+## How the engine uses it
+
+- Each change gets an `OperationId`: the peer id plus the HLC. It is unique,
+  and it gives a **total order** that respects causality.
+- When a handler replays its history, it walks the changes sorted by
+  `(HLC, author)`. Two peers that hold the same changes replay them in the same
+  order, and reach the same state. That order is also what "last writer wins"
+  means in a last-writer-wins handler.
+- When a document imports a change or a snapshot, it moves its own clock past
+  it. That is why a restored document never mints an operation id twice
+  (see [Peer identity](../connectors/persistence/how-it-works.mdx#peer-identity)).
+
+:::note[The order cannot detect concurrency]
+If `e` happened before `f`, then `e < f`. The reverse does not hold: `e < f` also
+when `e` and `f` are concurrent. So the HLC order alone cannot tell whether two
+events are concurrent. The document keeps a causal graph for that (see
+[Documents and changes](./documents-and-changes.mdx)).
+:::
+
+## Using `hlc_dart` on its own
+
+The clock is a package of its own, with zero dependencies, so you can use it
+outside CRDTs too.
+
+```sh
+dart pub add hlc_dart
+```
+
+```dart
+import 'package:hlc_dart/hlc_dart.dart';
+
+// Create a new HLC initialized to the current time
+final clock = HybridLogicalClock.now();
+
+// Handle a local event
+clock.localEvent(DateTime.now().millisecondsSinceEpoch);
+
+// Handle receiving a message from another peer
+final receivedClock = HybridLogicalClock.now();
+clock.receiveEvent(DateTime.now().millisecondsSinceEpoch, receivedClock);
+
+// Compare
+print(clock.happenedBefore(receivedClock));
+print(clock.happenedAfter(receivedClock));
+print(clock.isConcurrentWith(receivedClock));
+print(clock >= receivedClock);
+print(clock < receivedClock);
+
+// Serialize/deserialize as a 64-bit integer
+final serialized = clock.toInt64();
+final deserialized = HybridLogicalClock.fromInt64(serialized);
+
+// Or as a compact 8-byte big-endian buffer (useful when embedding an HLC
+// inside a larger binary frame).
+final bytes = clock.toUint8List();
+final fromBytes = HybridLogicalClock.fromUint8List(bytes);
+```
+
+What it offers:
+
+- local events, and messages exchanged between peers;
+- a total order that respects causality (`compareTo`, `<`, `>`, `max`, `min`);
+- serialization to and from 64-bit integers (`toInt64` / `fromInt64`);
+- a compact 8-byte big-endian form (`toUint8List` / `fromUint8List`), used as a
+  building block of larger binary frames, such as `OperationId` in `crdt_lf`;
+- a full counter moves `l` forward by 1 ms, so the 8-byte form never wraps;
+- drift detection;
+- mutable and immutable methods for every operation.
+
+A [complete example](https://github.com/MattiaPispisa/crdt/blob/main/packages/core/hlc/example/main.dart)
+is in the repository, and so are the
+[benchmarks](https://github.com/MattiaPispisa/crdt/tree/main/packages/core/hlc/benchmarks/results.md).
+
+<NextSteps
+  items={[
+    {
+      title: 'Documents and changes',
+      to: '/docs/deep-dive/documents-and-changes',
+      description: 'What the clock stamps.',
+    },
+  ]}
+/>

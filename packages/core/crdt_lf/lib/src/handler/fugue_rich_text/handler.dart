@@ -47,7 +47,8 @@ enum MarkExpand {
 /// `null`, `bool`, `int`, a finite `double` or `String`. [format] sets or
 /// removes a key on a range, and [value] reads the text as [RichTextSpan]s.
 /// Insert, delete and update work as in [CRDTFugueTextHandler]. The text can
-/// also hold **embeds** (see below). See the README section "Rich text".
+/// also hold **embeds** (see below). See
+/// [Rich text](https://mattiapispisa.it/crdt/docs/use-cases/rich-text).
 ///
 /// Formats follow Peritext
 /// ([Peritext: A CRDT for Collaborative Rich Text Editing](https://doi.org/10.1145/3555644)).

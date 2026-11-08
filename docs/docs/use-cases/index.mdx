@@ -1,0 +1,115 @@
+---
+title: Which handler do you need?
+sidebar_label: Overview
+description: Match the handler to what your users edit, and choose how far down conflicts are resolved.
+slug: /use-cases
+---
+
+import NextSteps from '@site/src/components/NextSteps';
+
+# Which handler do you need?
+
+A document holds **handlers**. Each handler is one value with its own merge
+rules, so the first choice is: what do your users edit?
+
+| Your users edit | Handler | Page |
+| --- | --- | --- |
+| prose, notes, code, together and in real time | `CRDTFugueTextHandler` | [Collaborative text](./collaborative-text.mdx) |
+| text with bold, links, headings, images | `CRDTFugueRichTextHandler` | [Rich text](./rich-text.mdx) |
+| an ordered list: todos, items, blocks | `CRDTFugueListHandler`, `CRDTFugueMovableListHandler` | [Lists](./lists.mdx) |
+| keys and values, a set of tags, one flag | `CRDTORMapHandler`, `CRDTORSetHandler`, `CRDTMapHandler`, `CRDTRegisterHandler` | [Maps, sets and values](./maps-sets-values.mdx) |
+| a tree: chapters → paragraphs, slides → shapes | the container handlers (`CRDTMapRefHandler`, …) | [Nested data](./containers.mdx) |
+| a domain object changed by events | `CRDTAggregateHandler` | [Aggregates](./aggregates.mdx) |
+
+Two pages apply to every handler: [Undo and redo](./undo-redo.mdx), and
+[Your own value types](./custom-value-types.mdx) for storing your classes in a
+list or a map.
+
+## How far down to resolve conflicts
+
+There is rarely a single "right" model. It depends on **how far down you want
+conflicts to be resolved**, and the trade-off is always the same:
+
+- **Coarser (flat values)**: fewer handlers, less memory, simpler code. A
+  concurrent edit is resolved for the whole value, often with
+  last-writer-wins.
+- **Finer (nested handlers)**: concurrent edits merge per field or per
+  character. You pay with more handlers (memory, snapshot size, read cost)
+  and more setup.
+
+**Rule of thumb:** push granularity *down* only where concurrency happens.
+Make a node a nested container when peers edit *different parts of it at the
+same time* and both edits must survive. Keep it a flat value when it is atomic,
+or when last-writer-wins is fine.
+
+## Worked example: a todo list
+
+Each todo has a `text` and a `done` flag. Two reasonable models:
+
+**A — a flat list of values**
+
+```dart
+final todos = CRDTFugueListHandler<Map<String, dynamic>>(
+  doc,
+  'todos',
+  handlerType: 'todo-list',
+);
+todos.insert(0, {'text': 'Buy milk', 'done': false});
+todos.update(0, {'text': 'Buy milk', 'done': true});
+```
+
+- The **list** merges without conflicts: order, concurrent inserts.
+- Each **item is atomic**: an edit replaces the whole value. Two peers that
+  change `text` and `done` of the *same* item at the same time: one `update`
+  wins, the other is lost.
+- Simple, compact, fast. Good when items are small and rarely edited together.
+
+**B — a list of references to one small document per item**
+
+```dart
+// `done` is generic, so its tag is required — written once in its spec.
+final doneKind = CRDTRegisterHandler.spec<bool>('todo.done');
+
+final todos = doc.handler(CRDTMovableListRefHandler.spec, 'todos');
+
+final item = todos.insertChild(0, CRDTMapRefHandler.spec);
+item.child('text', CRDTFugueTextHandler.spec).insert(0, 'Buy milk');
+item.child('done', doneKind).set(false);
+```
+
+- Conflicts are resolved **per field**: one peer edits `text` while another
+  toggles `done` on the same item, and **both survive**.
+- `text` merges character by character. `done` is a small last-writer-wins
+  register.
+- A **movable** list keeps each item's identity when peers reorder at the same
+  time: no duplicates. It costs more handlers and more setup.
+
+A third model, **C**, writes each change as a domain event and folds the events
+into one object: see [Aggregates](./aggregates.mdx).
+
+## A quick decision guide
+
+| Question | Lean towards |
+| --- | --- |
+| Peers edit *different fields of the same item* at the same time? | Nested, per field — model B |
+| Peers edit the *same text* in real time? | A text handler as a child (model B) |
+| The item is atomic, or edited together only rarely? | Flat value + last-writer-wins — model A |
+| Drag-to-reorder, with no duplicates on concurrent moves? | `CRDTMovableListRefHandler` / `CRDTFugueMovableListHandler` |
+| Order matters, and peers insert at the same spot? | A Fugue list (less interleaving) |
+| An object changed by domain events, as one unit? | `CRDTAggregateHandler` — model C |
+| A kind of data none of these covers? | [Write your own handler](../deep-dive/custom-handlers.mdx) |
+
+<NextSteps
+  items={[
+    {
+      title: 'Collaborative text',
+      to: '/docs/use-cases/collaborative-text',
+      description: 'The most common case: a shared text field.',
+    },
+    {
+      title: 'Nested data',
+      to: '/docs/use-cases/containers',
+      description: 'Model B: containers and references.',
+    },
+  ]}
+/>

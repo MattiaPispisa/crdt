@@ -1,0 +1,180 @@
+---
+title: Open a replica
+description: CRDTReplica opens the document, its storage and its sync client together, in the order that keeps the data.
+---
+
+import NextSteps from '@site/src/components/NextSteps';
+
+# Open a replica
+
+A client app needs three things together: the document as this device last
+left it, a storage that keeps writing it down, and a sync client. They have to
+open and close in a set order. `CRDTReplica`, from
+[`crdt_socket_sync`](https://pub.dev/packages/crdt_socket_sync), holds all
+three and keeps that order.
+
+```sh
+dart pub add crdt_lf crdt_socket_sync crdt_lf_sqlite  # or crdt_lf_hive, crdt_lf_drift
+```
+
+```dart
+import 'package:crdt_lf/crdt_lf.dart';
+import 'package:crdt_lf_sqlite/crdt_lf_sqlite.dart';
+import 'package:crdt_socket_sync/replica.dart';
+import 'package:crdt_socket_sync/web_socket_client.dart';
+
+final replica = await CRDTReplica.open(
+  documentId: 'notes',
+  storage: () => CRDTSqlite.open('notes.db'),
+  sync: (document) => WebSocketClient(
+    url: 'ws://localhost:8080',
+    document: document,
+    author: document.peerId,
+  ),
+);
+final text = CRDTFugueTextHandler(replica.document, 'body');
+
+// ...edit
+
+await replica.close();
+```
+
+## What `open` and `close` do
+
+- `open` **restores the document first**, then builds the client on it and
+  starts to connect. It returns without waiting for the network, so the local
+  copy is ready at once. Follow `replica.client!.connectionStatus` for the
+  connection.
+- `close` disposes the client, writes what is still waiting, then closes the
+  document and the storage.
+- Leave `storage` out to keep the document in memory. Leave `sync` out to keep
+  it on this device.
+- For the [relay mode](./sync/relay.mdx), return a `WebSocketRelayClient` from
+  `sync`.
+- Pass `onStorageError` to keep going when the storage cannot be read: the
+  document then starts empty, in memory, and `onDocument` runs again on it.
+  Without it, `open` throws.
+
+:::info[Why the order matters]
+The restored document is what the sync client reconciles against. Restore
+first, connect second, and what you wrote on a plane reaches the others after
+the restart. Connect first, and the client catches up from the server before it
+knows what it already had. Offline, or on a relay that has forgotten the room,
+the local copy is all there is.
+:::
+
+## A complete app: Greyhound Markdown
+
+This is how [Greyhound Markdown](https://mattiapispisa.it/crdt/greyhound_markdown/)
+opens a room: a relay client with the awareness plugin, a Hive storage, a text
+handler and an undo manager. Source:
+[room_host.dart](https://github.com/MattiaPispisa/crdt/blob/main/apps/greyhound_markdown/client/lib/src/services/room/room_host.dart).
+
+```dart
+// 1. Who else is in the room, and where their carets are. `AwarenessService`
+//    is the app's own wrapper over the awareness plugin of crdt_socket_sync.
+final awareness = AwarenessService(
+  name: profile.displayName,
+  color: profile.color,
+);
+
+// 2. The document as this device last left it, and the relay client on it.
+//    The backend keeps the identity too, so the device writes under the same
+//    author on every launch.
+final replica = await CRDTReplica.open(
+  documentId: roomId,
+  storage: CRDTHive.open,
+  sync: (document) => WebSocketRelayClient(
+    url: roomUrl(kServerUrl, roomId),
+    document: document,
+    author: document.peerId,
+    plugins: [awareness.plugin],
+  ),
+);
+
+// 3. The handler, built on the restored document.
+final text = CRDTFugueTextHandler(replica.document, kHandlerId);
+final undo = CRDTUndoManager(replica.document)..track(text);
+```
+
+Closing is one call too. What the app built goes first. Then `close` stops the
+client, writes what is still waiting, and lets the document and the storage go:
+
+```dart
+undo.dispose();
+awareness.dispose();
+await replica.close();
+```
+
+### The editor on top of it
+
+`crdt_lf_flutter` turns the handler into a `TextEditingController` and draws the
+remote carets. `CrdtTextFieldBuilder` owns the controller and keeps it in step
+with the document both ways. `onSelectionAnchorsChanged` reports this user's
+caret to awareness, and `CrdtTextCursorsOverlay` paints everyone else's.
+Source:
+[editor_pane.dart](https://github.com/MattiaPispisa/crdt/blob/main/apps/greyhound_markdown/client/lib/src/widgets/editor_pane.dart).
+
+```dart
+CrdtTextFieldBuilder(
+  id: kHandlerId,
+  // This user's caret, on every selection change.
+  onSelectionAnchorsChanged: awareness.setLocalCursor,
+  builder: (context, controller) =>
+      ValueListenableBuilder<Map<String, PeerState>>(
+    // Everyone else's, as they move.
+    valueListenable: awareness.peers,
+    builder: (context, peers, child) => CrdtTextCursorsOverlay(
+      id: kHandlerId,
+      cursors: [
+        for (final entry in peers.entries)
+          if (entry.value.base != null)
+            CrdtTextCursor(
+              id: entry.key,
+              label: entry.value.name,
+              color: entry.value.color,
+              base: entry.value.base!,
+              extent: entry.value.extent,
+            ),
+      ],
+      child: child!,
+    ),
+    child: TextField(controller: controller, maxLines: null),
+  ),
+)
+```
+
+The document is reached through `CrdtProvider`, so nothing above has to be
+passed down.
+
+## Without a replica
+
+`CRDTReplica` is a convenience. You can open the pieces yourself; keep the same
+order:
+
+```dart
+final backend = CRDTSqlite.open('notes.db');
+final room = await backend.openDocument('notes'); // 1. restore
+
+final client = WebSocketClient(
+  url: 'ws://localhost:8080',
+  document: room.document,
+  author: room.document.peerId,
+);
+await client.connect(); // 2. only now
+```
+
+<NextSteps
+  items={[
+    {
+      title: 'Persistence',
+      to: '/docs/connectors/persistence',
+      description: 'Pick the storage, and what it writes.',
+    },
+    {
+      title: 'Sync',
+      to: '/docs/connectors/sync',
+      description: 'Server–client or relay, and the server frameworks.',
+    },
+  ]}
+/>

@@ -109,8 +109,11 @@ When the solution is agreed in the issue, you can open the pull request:
 - **Link the issue** in the description with `#issue_num`, so the discussion and
   the code stay connected.
 - **Follow the workspace conventions.** The [README][readme] explains the
-  workspace, the organization of the repository, and the melos setup. Each
-  package also has its own README with more detail.
+  workspace, the organization of the repository, and the melos setup.
+- **Update the documentation.** The full documentation lives in the
+  [`docs/`](./docs) site (`docs/docs/`, one page per topic); the package
+  READMEs are short entry points. A change that users can see updates the
+  page that describes it.
 - **Check your work before pushing:**
 
   ```bash

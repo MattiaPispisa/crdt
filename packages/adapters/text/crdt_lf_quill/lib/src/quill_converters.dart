@@ -210,7 +210,8 @@ RichTextDelta richTextDeltaFromQuill(
 /// [CRDTFugueRichTextHandler].
 ///
 /// It ends with Quill's last `'\n'`: added when the handler does not store
-/// it (see the README, "The last newline").
+/// it (see
+/// [The last newline](https://mattiapispisa.it/crdt/docs/connectors/flutter/editors/quill#the-last-newline)).
 Delta quillDocumentFromSpans(List<RichTextSpan> spans) {
   final result = Delta();
   for (final span in spans) {

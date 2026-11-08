@@ -1,0 +1,89 @@
+---
+title: Connection and errors
+description: Connection status, reconnection, liveness, and the data that did not make it into the document.
+---
+
+import NextSteps from '@site/src/components/NextSteps';
+
+# Connection and errors
+
+## Connection status
+
+Both clients expose a `connectionStatus` stream, and recover on their own:
+
+```dart
+client.connectionStatus.listen((status) {
+  switch (status) {
+    case ConnectionStatus.connected:
+      // Normal operation
+      break;
+    case ConnectionStatus.reconnecting:
+      // Automatic reconnection in progress
+      break;
+    case ConnectionStatus.error:
+      // Handle connection errors
+      break;
+    case ConnectionStatus.disconnected:
+      // Clean disconnection
+      break;
+    case ConnectionStatus.unsupported:
+      // The server refused this build. Terminal: ask the user to update.
+      showUpdateRequired(client.incompatibility!.message);
+      break;
+  }
+});
+```
+
+- **Liveness.** It is tracked with ping/pong. A missing pong within the ping
+  timeout is treated as a dead (half-open) connection, and triggers a
+  reconnect.
+- **Reconnection.** The server–client client reconnects on a fixed interval,
+  with a capped number of attempts. The relay client uses exponential backoff
+  with jitter, and retries forever by default.
+- **A failed first connect** enters the same reconnect loop. `disconnect` and
+  `dispose` stop it.
+- **Backpressure.** The server keeps a bounded send queue per connection, and
+  drops a peer that cannot keep up. That peer re-syncs when it reconnects.
+
+`ConnectionStatus.unsupported` is the one status the client never leaves: see
+[Refusals are permanent](./compatibility.mdx#refusals-are-permanent).
+
+## Faults: data that did not make it in
+
+A status is about the connection. **`client.faults` is about one piece of
+data**: a change or a state the client received on a working connection and
+could not fold into the document. For example a blob it cannot read, or a
+document already disposed.
+
+```dart
+client.faults.listen((fault) {
+  log('${fault.reason}: ${fault.error}');
+});
+
+// faults replays nothing, so a late listener reads this instead.
+final missed = client.lastFault;
+```
+
+A fault is reported, never thrown. Applying runs inside the callback that reads
+the socket, where a throw reaches no `catch` and no `onError`, and ends up as an
+uncaught error in the zone.
+
+Nothing is retried and the connection stays up, so an app that cares decides
+for itself whether to re-sync or to tell the user. A causal gap is **not** a
+fault: the client asks the server to serve the document again, which is the one
+failure a re-sync fixes.
+
+<NextSteps
+  items={[
+    {
+      title: 'Versions and compatibility',
+      to: '/docs/connectors/sync/compatibility',
+      description: 'Why a server refuses a client.',
+    },
+    {
+      title: 'Compression',
+      to: '/docs/connectors/sync/compression',
+      description: 'Plug in a compressor.',
+    },
+  ]}
+/>

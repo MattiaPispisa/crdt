@@ -1,3 +1,10 @@
+## [0.2.0+1](https://github.com/MattiaPispisa/crdt/tree/crdt_lf_persistence-v0.2.0+1/packages/core/crdt_lf_persistence)
+
+**Date:** --
+
+- The documentation moved to the [docs site](https://mattiapispisa.it/crdt/docs/connectors/persistence): the README is now a short
+  entry point. No functional changes since `0.2.0`. [216](https://github.com/MattiaPispisa/crdt/issues/216)
+
 ## [0.2.0](https://github.com/MattiaPispisa/crdt/tree/crdt_lf_persistence-v0.2.0/packages/core/crdt_lf_persistence)
 
 **Date:** 2026-10-04

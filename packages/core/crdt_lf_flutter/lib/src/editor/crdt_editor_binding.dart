@@ -11,8 +11,8 @@ import 'package:crdt_lf_flutter/src/provider/handler_delta_subscription.dart';
 /// [V] and [D] are the value and the delta the handler publishes. The editor
 /// holds its own copy of the content: the binding moves it with [onReset] and
 /// [onRemoteDelta], and writes the local edits through [push]. It has no
-/// widget; `CrdtEditorBinder` owns one for a subtree. See the README, "Editor
-/// bindings".
+/// widget; `CrdtEditorBinder` owns one for a subtree. See
+/// [Editors](https://mattiapispisa.it/crdt/docs/connectors/flutter/editors).
 class CrdtEditorBinding<V, D extends ComposableDelta<D>> {
   /// Creates a binding that follows no handler until [attach].
   ///

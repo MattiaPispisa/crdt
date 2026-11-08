@@ -1,0 +1,27 @@
+---
+title: Deep dive
+sidebar_label: Overview
+description: How the engine works inside — time, changes, transactions, reactivity, deltas, snapshots and the binary format.
+slug: /deep-dive
+---
+
+# Deep dive
+
+You do not need these pages to build an app. Read them to understand why the
+system behaves the way it does, to debug it, or to extend it with a handler of
+your own.
+
+| Page | What it explains |
+| --- | --- |
+| [Time: the hybrid logical clock](./time-hlc.mdx) | how every peer orders events without a shared clock |
+| [Documents and changes](./documents-and-changes.mdx) | operations, changes, the DAG, frontiers, identity |
+| [Transactions](./transactions.mdx) | how operations are grouped, compacted and published |
+| [Reactivity](./reactivity.mdx) | the three signals a document gives: revision, updates, events |
+| [Handler deltas](./handler-deltas.mdx) | what a change did to *your* copy, and your own edit coming back |
+| [State cache](./state-cache.mdx) | why reading a handler does not replay the whole history |
+| [Snapshots](./snapshots.mdx) | the compact state a document can start from, and what it keeps |
+| [Binary format](./binary-format.mdx) | how changes and snapshots are written as bytes, and versioned |
+| [Text positions](./text-positions.mdx) | runes, UTF-16, and converting between them |
+| [Custom handlers](./custom-handlers.mdx) | writing a handler of your own |
+| [Flutter internals](./flutter-internals.mdx) | how the widgets decide to rebuild |
+| [Benchmarks](./benchmarks.mdx) · [DevTools](./devtools.mdx) | measuring and inspecting |

@@ -1,0 +1,34 @@
+---
+title: Benchmarks
+description: Where the benchmark results are, and how to run them.
+---
+
+# Benchmarks
+
+The packages that sit on a hot path have a benchmark suite. The results are
+committed next to the code, as the baseline every change is compared to:
+
+| Package | What is measured | Results |
+| --- | --- | --- |
+| `crdt_lf` | every handler, applying changes, snapshots, serialization, undo | [results.md](https://github.com/MattiaPispisa/crdt/tree/main/packages/core/crdt_lf/benchmarks/results.md) |
+| `hlc_dart` | clock operations | [results.md](https://github.com/MattiaPispisa/crdt/tree/main/packages/core/hlc/benchmarks/results.md) |
+| `crdt_lf_flutter` | the text fields | [results.md](https://github.com/MattiaPispisa/crdt/tree/main/packages/core/crdt_lf_flutter/benchmarks/results.md) |
+| `crdt_lf_quill` | the projection check of the binding | [results.md](https://github.com/MattiaPispisa/crdt/tree/main/packages/adapters/text/crdt_lf_quill/benchmarks/results.md) |
+
+To run them yourself, from the repository root:
+
+```sh
+melos run benchmark_dart     # the pure Dart packages
+melos run benchmark_flutter  # the Flutter packages
+```
+
+From one package folder, run only some benchmark files (the name of a file in
+`benchmarks/src/benchmarks/`, without `_benchmark.dart`):
+
+```sh
+dart run benchmark_infrastructure:run_benchmarks --include=apply_changes
+# Flutter packages: run_flutter_benchmarks, same flag
+```
+
+Results move by about ±10% from one run to the next. Compare two runs made on
+the same machine.

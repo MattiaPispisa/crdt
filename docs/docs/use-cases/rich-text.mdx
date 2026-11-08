@@ -1,0 +1,158 @@
+---
+title: Rich text
+description: Collaborative text with formats, embeds, images and videos, then the Flutter field and the editors.
+---
+
+import NextSteps from '@site/src/components/NextSteps';
+
+# Rich text
+
+`CRDTFugueRichTextHandler` is a [Fugue text](./collaborative-text.mdx) whose
+characters carry **attributes**: bold, links, headings, colors. It can also
+hold **embeds**: images, videos, mentions. Two peers that format the same text
+converge: for each key, the newest format wins (highest clock, then peer id).
+Formats follow
+[Peritext: A CRDT for Collaborative Rich Text Editing](https://doi.org/10.1145/3555644).
+
+## Formats
+
+```dart
+final text = CRDTFugueRichTextHandler(doc, 'note')
+  ..insert(0, 'Hello world', attributes: {'bold': true})
+  ..format(6, 5, 'link', 'https://example.com', expand: MarkExpand.none)
+  ..format(0, 5, 'bold', null); // null removes the key
+print(text.text); // Hello world
+print(text.value); // the spans: runs of text with their attributes
+print(text.attributesAt(6)); // {bold: true, link: https://example.com}
+```
+
+- An attribute is a key and a value: `null`, `bool`, `int`, a finite
+  `double` or a `String`. An `int` stays within ±(2^52 - 1).
+  `checkAttribute` throws what `format` would throw for a value, and writes
+  nothing.
+- `value` is the list of `RichTextSpan`s, and `text` is the plain string.
+- `insert` takes the formats around the text, plus its own `attributes`. With
+  `inherit: false` the text gets exactly its `attributes`.
+- `expand` says if text typed at an edge of the formatted range gets the
+  attribute too: `after` (the default, like bold), `before`, `both` or `none`
+  (like a link). Text typed where text was deleted follows the same rule.
+- A snapshot keeps every format, so it grows with each `format` call.
+
+### Line attributes
+
+A `'\n'` formatted alone with `expand: MarkExpand.none` holds the attributes of
+its line: a header, a list item. So does each `'\n'` that `insert` writes with
+attributes. They never spread to the text typed next to it.
+
+## Embeds
+
+An embed is an object in the text, such as an image, a video or a mention. It
+takes one position: the caret moves over it, formats cover it, and it is
+deleted like a character.
+
+```dart
+text
+  ..insertEmbed(5, {'type': 'mention', 'user': 'ada'})
+  ..updateEmbed(5, {'type': 'mention', 'user': 'grace'});
+print(text.text); // "Hello￼ world": U+FFFC stands for the embed
+print(text.value[1].embed); // {type: mention, user: grace}
+```
+
+- The data is a map of `null`, `bool`, `int`, finite `double`, `String`,
+  `Uint8List`, and lists and maps of these, nested at most 16 deep. Name its
+  kind in a `type` key (`richTextEmbedTypeKey`), so readers can tell kinds
+  apart.
+- Put the **facts** of the object (address, size, alt text) in the data, and
+  what a user **changes later** (bold, link, displayed size) in marks.
+- `text` holds one U+FFFC (`RichTextSpan.objectReplacement`) per embed, so
+  every rune index of `text` is an index of every positional API. `insert` and
+  `update` refuse a text with U+FFFC: in `text` it is always an embed.
+- Concurrent `updateEmbed`s of one embed resolve like formats: the newest
+  wins. An update loses against a concurrent delete. Undo brings a deleted
+  embed back with its data.
+- `insertEmbed` attributes cover the embed alone. A **block** embed (a
+  full-width image) is an embed followed by its own `'\n'`, which holds the
+  block attributes.
+
+:::warning[Keep large media out of the document]
+`maxEmbedBytes` (default 256 KiB, `null` for no limit) caps the data this peer
+writes. Every byte stays in the change log until a snapshot and a prune, and
+goes to every peer. Store large media elsewhere and keep a URL or a hash in the
+embed. `checkEmbed` throws what `insertEmbed` would throw for some data, and
+writes nothing.
+:::
+
+### Images and videos
+
+`insertImage` and `insertVideo` write embeds of a fixed schema that every editor
+adapter reads the same way. The file stays outside the document: `src` is a URL
+or an address your app resolves (such as `sha256:…`), and a `data:` URI is
+refused.
+
+```dart
+text.insertImage(
+  0,
+  Uri.parse('https://example.com/cat.png'),
+  alt: 'A cat', // '' for a decorative image
+  width: 1200, // intrinsic size: the space is kept before the file loads
+  height: 800,
+  displayWidth: 320, // a mark: what the user resized it to
+);
+text.insertVideo(1, Uri.parse('https://example.com/a.mp4'),
+    poster: Uri.parse('https://example.com/a.jpg'),
+    attributes: {'align': 'center'}); // a video is a block by default
+
+final image = text.value.first.image; // RichTextImage?, null for other kinds
+print(image?.alt); // A cat
+print(text.value.first.displayWidth); // 320
+```
+
+| Kind | Data (`type` + fields) | Marks |
+| --- | --- | --- |
+| `image` | `src`, `alt`, `title`, `width`, `height` (intrinsic px, both or none), `mime` | `displayWidth` |
+| `video` | `src`, `poster`, `title`, `width`, `height`, `mime` | `displayWidth` |
+
+- An image is inline by default and a video is a block: the embed and its own
+  `'\n'`, written as one undo step, with `attributes` (such as `align`) on the
+  `'\n'`.
+- `RichTextImage.fromEmbed` / `RichTextVideo.fromEmbed` read data strictly: a
+  field of the wrong type gives `null`. In the data, a field that is not given
+  has no key. Keys they do not know survive `copyWith`, so change an image with
+  `text.updateEmbed(i, image.copyWith(alt: 'A dog').toEmbed())`.
+- For other kinds, such as a YouTube link, insert your own `type` with
+  `insertEmbed`.
+
+## Following the changes
+
+`watch()` emits a `RichTextDelta`: `RichTextRetain`, `RichTextInsert` and
+`RichTextDelete`, with attributes where `null` removes a key. A delta that only
+formats is a retain with attributes. Embeds come as `RichTextInsertEmbed` and
+`RichTextUpdateEmbed`. See [Handler deltas](../deep-dive/handler-deltas.mdx).
+
+## In Flutter
+
+Two ways to put it on screen, depending on what your users need:
+
+- **Inline formats only** (bold, italic, links, colors):
+  `CrdtRichTextFieldBuilder` from `crdt_lf_flutter` is a `TextField` that
+  paints them. See [Text fields](../connectors/flutter/text-fields.mdx#rich-text).
+- **A full editor** (headings, lists, images, a toolbar):
+  [`crdt_lf_quill`](../connectors/flutter/editors/quill.mdx) binds a
+  flutter_quill editor to the handler. For another editor, the
+  [editor binding](../connectors/flutter/editors/index.mdx) gives you the
+  sync loop.
+
+<NextSteps
+  items={[
+    {
+      title: 'Rich text field',
+      to: '/docs/connectors/flutter/text-fields#rich-text',
+      description: 'Inline formats in a Flutter TextField.',
+    },
+    {
+      title: 'flutter_quill',
+      to: '/docs/connectors/flutter/editors/quill',
+      description: 'A full editor, with a toolbar and embeds.',
+    },
+  ]}
+/>

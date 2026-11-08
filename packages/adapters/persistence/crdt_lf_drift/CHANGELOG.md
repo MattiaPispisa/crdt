@@ -1,3 +1,10 @@
+## [0.3.2+1](https://github.com/MattiaPispisa/crdt/tree/crdt_lf_drift-v0.3.2+1/packages/adapters/persistence/crdt_lf_drift)
+
+**Date:** --
+
+- The documentation moved to the [docs site](https://mattiapispisa.it/crdt/docs/connectors/persistence/adapters): the README is now a short
+  entry point. No functional changes since `0.3.2`. [216](https://github.com/MattiaPispisa/crdt/issues/216)
+
 ## [0.3.2](https://github.com/MattiaPispisa/crdt/tree/crdt_lf_drift-v0.3.2/packages/adapters/persistence/crdt_lf_drift)
 
 **Date:** 2026-10-04

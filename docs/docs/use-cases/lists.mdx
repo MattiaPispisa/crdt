@@ -1,0 +1,112 @@
+---
+title: Lists
+description: Ordered lists that merge without conflicts, with or without moves.
+---
+
+import NextSteps from '@site/src/components/NextSteps';
+
+# Lists
+
+Three list handlers, from the cheapest to the richest:
+
+| Handler | Concurrent inserts at the same spot | Move | Use it for |
+| --- | --- | --- | --- |
+| `CRDTListHandler` | ordered by clock, may interleave | — | short lists, rarely edited together |
+| `CRDTFugueListHandler` | kept apart (Fugue) | — | ordered content: blocks, steps, messages |
+| `CRDTFugueMovableListHandler` | kept apart (Fugue) | `move(from, to)` | drag-to-reorder: todos, slides, layers |
+
+All three are generic, so they need a **`handlerType`**: a name you choose for
+the kind of list. It travels with every change, so pick it once and keep it
+(see [Naming a generic handler](./containers.mdx#naming-a-generic-handler)).
+
+## An ordered list
+
+```dart
+final steps = CRDTFugueListHandler<String>(
+  doc,
+  'steps',
+  handlerType: 'recipe-steps',
+);
+
+steps.insert(0, 'Boil water');
+steps.insertAll(1, ['Add pasta', 'Wait 10 minutes']);
+steps.update(2, 'Wait 9 minutes');
+steps.delete(0, 1);
+
+print(steps.value); // [Add pasta, Wait 9 minutes]
+```
+
+When two peers insert at the same spot at the same time, Fugue keeps the items
+of each peer together instead of mixing them. `update` overwrites an item in
+place, so two peers updating the same item converge on one of the two values.
+
+Fugue lists also have **stable positions** (`stablePositionAt` /
+`indexOfStablePosition`): an anchor tied to an item, which still points at it
+after other peers insert or delete around it. See
+[Collaborative text](./collaborative-text.mdx#carets-that-survive-other-peoples-edits).
+
+## A list you can reorder
+
+Delete-then-insert is a bad way to move an item: if two peers move the same
+item at the same time, each of them inserts a copy, and the list ends up with
+two. `CRDTFugueMovableListHandler` has a real `move`:
+
+```dart
+final todos = CRDTFugueMovableListHandler<String>(
+  doc,
+  'todos',
+  handlerType: 'todo-list',
+);
+
+todos.insertAll(0, ['Buy milk', 'Call Ada', 'Book flights']);
+todos.move(2, 0); // [Book flights, Buy milk, Call Ada]
+```
+
+An item keeps its identity when it moves, so concurrent moves of the same item
+never duplicate it: one move wins, and every peer picks the same one. The
+algorithm follows
+[Moving Elements in List CRDTs](https://martin.kleppmann.com/2020/04/27/papoc-list-move.html).
+
+## Reading a list
+
+The `value` of a list handler is **unmodifiable**, and it stays the same object
+until the next change: two reads are equal when they are `identical`. Copy it
+to edit it (`List.of`).
+
+The `value` of `CRDTListHandler` shows the current state: a value read before
+a change shows the change too, so copy it to keep what it held. The Fugue lists
+hand out a new object on each change, and an old value keeps what it held.
+
+## Lists of objects
+
+A list can hold your own classes. Give the handler a `ValueCodec`, and treat
+the objects as immutable: see [Your own value types](./custom-value-types.mdx).
+
+When the items themselves are edited by several peers at the same time (one
+changes the title, another ticks the checkbox), a list of values loses one of
+the two edits. Use a list of **references** instead, so each item is a small
+document of its own: `CRDTListRefHandler` and `CRDTMovableListRefHandler`, on
+the [Nested data](./containers.mdx) page.
+
+## In Flutter
+
+`CrdtHandlerBuilder` rebuilds when the list changes. For a long list, or an
+`AnimatedList` that needs to know **where** an item was inserted,
+`CrdtHandlerDeltaListener` hands you each change as a delta. See
+[Flutter](../connectors/flutter/index.mdx) and
+[Delta widgets](../connectors/flutter/delta-widgets.mdx).
+
+<NextSteps
+  items={[
+    {
+      title: 'Nested data',
+      to: '/docs/use-cases/containers',
+      description: 'Lists of items that are edited field by field.',
+    },
+    {
+      title: 'Delta widgets',
+      to: '/docs/connectors/flutter/delta-widgets',
+      description: 'Drive an AnimatedList from the changes.',
+    },
+  ]}
+/>

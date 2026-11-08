@@ -1,0 +1,128 @@
+---
+title: Editors
+sidebar_label: Bind any editor
+description: CrdtEditorBinding — the two-way sync loop between one handler and an editor of your choice.
+slug: /connectors/flutter/editors
+---
+
+import NextSteps from '@site/src/components/NextSteps';
+
+# Editors
+
+A full editor (headings, lists, images, a toolbar) keeps a document model of its
+own. To make it collaborative, that model and the handler have to stay in step
+in both directions. `crdt_lf_flutter` gives the loop that does it, and
+[`crdt_lf_quill`](./quill.mdx) is that loop, ready-made, for flutter_quill.
+
+| Editor | Use |
+| --- | --- |
+| flutter_quill | [`crdt_lf_quill`](./quill.mdx) |
+| a `TextField` with inline formats | [`CrdtRichTextFieldBuilder`](../text-fields.mdx#rich-text) |
+| any other editor | `CrdtEditorBinding`, below |
+
+Missing a binding for a popular editor? Open an
+[issue](https://github.com/MattiaPispisa/crdt/issues/new/choose): a binding in
+this repository runs the shared editor conformance suite, and every user of
+that editor can use it.
+
+## The editor binding
+
+`CrdtEditorBinding` keeps an editor and a handler in step. It is the loop
+behind an editor adapter: you give it three callbacks, and it decides when to
+call them. It has no widgets, so you can use it alone. `CrdtEditorBinder` is the
+widget that owns one, attaches it to the handler `id` of the ambient document,
+and builds its `builder` once.
+
+- `onReset(value, cause)` puts the whole handler value in the editor. It runs
+  when the binding attaches, and again when the handler asks for a fresh read.
+  With `CrdtEditorBinder` the first call runs inside `build`, so it must not
+  call `setState`.
+- `onRemoteDelta(event)` applies one change to the editor, as a remote edit.
+- `verifyProjection` (optional) answers "do the editor and the handler still
+  agree?". On `false` the binding reads the handler and calls `onReset`.
+
+A local edit goes through `binding.push`. Inside it, write the edit into the
+handler. The binding drops the echo of that write, so the editor never applies
+its own edit twice, also when an outer transaction delays the echo. A reset
+that arrives during the write is delivered after it. When the editor is still
+behind the handler (`binding.isBehind`, in the middle of a burst), the binding
+reads the handler after the write and calls `onReset`.
+
+```dart
+CrdtEditorBinder<List<RichTextSpan>, RichTextDelta>(
+  id: 'page',
+  onReset: (spans, cause) => editor.load(spans),
+  onRemoteDelta: (event) => editor.applyRemote(event.delta),
+  verifyProjection: () => editor.length == page.length,
+  builder: (context, binding) => MyEditor(
+    editor: editor,
+    // Called for the user's edits only, never for the remote ones.
+    onLocalEdit: (index, text) => binding.push(
+      () => context.crdtDocument.runInTransaction(
+        () => page.insert(index, text),
+      ),
+    ),
+  ),
+);
+```
+
+Give `verifyProjection` whenever you can. A watcher that writes back inside your
+write is dropped together with your echo, and this check is what finds it.
+
+## Rich text editors
+
+For a rich text editor, pass `isEcho` to `binding.push` too, built with
+`echoesRichText`. It tells your own write apart from someone else's write
+during the push, even one that keeps the length (a format, an embed update),
+which a length check misses. `formatsWithin` describes the formats your write
+puts on a range:
+
+```dart
+binding.push(
+  () => page.insert(index, text, attributes: style),
+  isEcho: (dropped) => echoesRichText(
+    dropped,
+    deleted: 0,
+    inserted: text.runes.length,
+    ownsFormat: formatsWithin(index, index + text.runes.length, style),
+  ),
+);
+```
+
+An editor that hands out `RichTextDelta`s writes them with a `RichTextWriter`,
+built with the key policy of the editor: how each key grows (`expandOf`) and
+which keys mark a line (`isBlockKey`). A `RichTextEcho` records the same deltas
+and is the `isEcho` of the push. Pass the undo manager as `ownStep` when the
+push is a format, so undo takes it back on its own:
+
+```dart
+const writer = RichTextWriter(expandOf: myExpandOf, isBlockKey: myBlockKey);
+
+final echo = RichTextEcho(writer)..add(delta);
+binding.push(
+  () => context.crdtDocument.runInTransaction(
+    () => writer.write(page, delta),
+  ),
+  isEcho: echo.echoes,
+  ownStep: isFormat ? undoManager : null,
+);
+```
+
+Give `CrdtEditorBinder` the `SelectionAnchors` of the editor as `anchors`: the
+binder tells them when the focus enters or leaves the editor, and clears them
+when it follows another handler or the handler is deleted.
+
+<NextSteps
+  items={[
+    {
+      title: 'flutter_quill',
+      to: '/docs/connectors/flutter/editors/quill',
+      description: 'The binding, ready-made.',
+    },
+    {
+      title: 'Handler deltas',
+      to: '/docs/deep-dive/handler-deltas',
+      description: 'Echoes, origins and resets.',
+    },
+  ]}
+/>

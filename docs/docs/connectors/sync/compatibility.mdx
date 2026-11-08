@@ -1,0 +1,203 @@
+---
+title: Versions and compatibility
+description: The version and capability handshake, what it refuses, what it keeps, and the wire format.
+---
+
+import NextSteps from '@site/src/components/NextSteps';
+
+# Versions and compatibility
+
+Peers do not upgrade all at once. A phone may run last month's build while the
+web app runs today's. The handshake makes sure a client whose build **cannot
+read** what the document holds is refused at connect time, not at the first
+broken read.
+
+## What the handshake checks
+
+Two builds can disagree in three ways, and the handshake checks all three
+**before** any document state is served.
+
+**The protocol version.** Each side sends `Protocol.protocolVersion`. A server
+that speaks another one answers
+`ErrorMessage(Protocol.errorUnsupportedProtocolVersion)` and closes the session.
+The client checks the version the server echoes back, which is how it spots an
+**older** server: one that never read the field and let it in anyway.
+
+**The operation kinds, and the snapshot blob version.** An operation kind
+belongs to the handler that defines it, so no single version number describes
+it. What each side can state is a record per handler type, keyed by
+`Handler.handlerType`:
+
+```json
+{
+  "CRDTFugueTextHandler": { "kinds": [0, 1, 2], "blob": { "min": 1, "max": 1 } },
+  "todo-list":            { "kinds": [0, 1, 2], "blob": { "min": 1, "max": 1 } }
+}
+```
+
+`kinds` are what the peer can decode. `blob` is the range of snapshot layouts it
+reads: `min == max` for a build that reads only what it writes, wider for one
+that still reads an older layout and migrates it. A blob is refused whole on
+read, so a disagreement there is as terminal as a missing kind.
+
+The two sides answer **different questions**, and that is what makes the check
+work:
+
+- the client sends what its **build** can read (see below);
+- the server reads what the document's **data** holds
+  (`CRDTDocument.describeDataRequirements()`): from the change envelopes, and
+  from the record every snapshot carries. So it answers even for a document it
+  only stores and forwards with no handler registered, and even after it has
+  compacted and restarted.
+
+If the client cannot read something the data holds, the server answers
+`ErrorMessage(Protocol.errorUnsupportedClient)`, naming the handler type and the
+reason, then closes the session.
+
+## Declare what your build can read
+
+A client states what it can read in one of two ways, and they are checked
+differently.
+
+**By default it is derived** from the document (`describeBuildCapabilities()`),
+which knows the handlers already open and the kinds already registered. An app
+usually opens a handler *after* it connects, so this description is
+**incomplete** by construction, and it is sent as such: a type it does not name
+is passed over.
+
+```dart
+CRDTListHandler<Todo>(document, 'todos', handlerType: 'todo-list');
+await client.connect(); // names that one kind
+CRDTMapHandler<String>(document, 'meta', handlerType: 'meta'); // later: fine
+```
+
+**State it by hand** and it is sent as **complete**: it names every type the
+build reads, so the server also refuses on a type left out. That is the stricter
+check, and the only declaration that can honestly promise it:
+
+```dart
+WebSocketClient(
+  url: url,
+  document: document,
+  author: author,
+  capabilities: DocumentCapabilities({
+    'todo-list': const HandlerFormats(
+      operationKinds: {0, 1, 2},
+      blobVersions: BlobVersionRange.single(1),
+    ),
+  }),
+);
+```
+
+Either way, a type that **is** named is checked in full: a kind it lacks, or a
+snapshot blob written with another layout, refuses the client.
+
+`handlerType` is the key of this whole comparison, so two peers have to spell a
+kind the same way. That is why `crdt_lf` 5.0 makes a generic handler name it
+(see the [5.0 migration](../../migrations/crdt_lf/v5-0.mdx)).
+
+A peer that has to know a kind **before** it opens one (a store-and-forward
+server) declares the spec instead of opening a handler:
+
+```dart
+document.register(CRDTListHandler.spec<Todo>('todo-list'));
+```
+
+## Refusals are permanent
+
+The client latches a refusal: it moves to `ConnectionStatus.unsupported`, fills
+`client.incompatibility`, and stops. It schedules no reconnect, and `connect()`
+gives up at once, because no retry can change the answer.
+
+```dart
+final incompatibility = client.incompatibility;
+if (incompatibility != null) {
+  print(incompatibility.message);
+  print(incompatibility.isMissingOperationKinds); // vs. a version mismatch
+}
+```
+
+## An unknown kind is kept, never dropped
+
+A change whose operation kind this build cannot decode is **stored and forwarded
+whole**. The apply path never decodes the envelope, so the change reaches the
+log, the snapshot and every other peer byte for byte, and a peer that does
+understand it reads it in full. Reading that handler *here* throws
+`UnknownOperationKindException`; nothing is lost or rewritten.
+
+This is the same guarantee protobuf gives with unknown fields, and it is why the
+handshake check is a safety net, not the only defense.
+
+## What the handshake does not cover
+
+- **A relay checks the version only.** It carries CRDT payloads as opaque blobs
+  and never decodes them, so it cannot tell what a client can read.
+- **The other direction.** The check protects a document from a client that
+  cannot read it. It does not protect the clients already connected when a
+  **newer** one writes a kind they never heard of: that data does not exist yet
+  when the two sides compare notes. There the answer stays
+  `UnknownOperationKindException` on read (the change is kept and forwarded
+  intact, see above).
+- **A document restored from a snapshot older than `crdt_lf` 5.0.0.** An older
+  snapshot carries no record of what it holds, so a document that imports one
+  with `pruneHistory: true` reports that it needs nothing and lets every client
+  through. It answers in full again after it takes its own snapshot.
+- **A blob layout the reader can migrate.** Lower
+  `minReadableSnapshotBlobVersion` to keep reading an older layout and upgrade
+  it on the way in; `readSnapshotHeader` hands back the version it found. Only a
+  blob outside the range refuses the peer, as `SnapshotBlobTooNew` (needs a
+  newer build) or `SnapshotBlobTooOld` (a layout this build dropped).
+- **A handler that writes its snapshot blob by hand.** The version means
+  something only when the blob carries it (`Handler.snapshotHeader` /
+  `readSnapshotHeader`). One that writes its state without them still reports
+  `1`, so it opts out of the blob check instead of passing it.
+- **Whether a kind is stamped.** `OperationType.stamped` is a build's own
+  decision, not part of what travels. Two builds that disagree about one kind
+  pass the handshake and meet at read time, with the `FormatException` that
+  `crdt_lf` raises for exactly that (see
+  [Custom handlers](../../deep-dive/custom-handlers.mdx#when-to-turn-stamped-on)).
+
+## Wire format
+
+Messages are JSON envelopes, typed by an integer `type` code. The heavy CRDT
+payloads travel as **base64-encoded binary blobs** produced by `crdt_lf`'s
+[binary format](../../deep-dive/binary-format.mdx):
+
+| Field | Encoding |
+| --- | --- |
+| `Change` | `base64(change.toBytes())` |
+| `Snapshot` | `base64(snapshot.toBytes())` |
+| `VersionVector` | `base64(versionVector.toBytes())` |
+
+On the receiver, the matching `fromBytes` factories rebuild the objects. The
+operation payloads inside a `Change` are already compact binary blobs produced
+by the handler's `ValueCodec<T>`, so the wire payload does not depend on the
+in-memory representation of your value types.
+
+Message type codes follow a convention:
+
+| Codes | Used by |
+| --- | --- |
+| `0-19` | core protocol |
+| `20-39` | relay protocol |
+| `100+` | plugins (the awareness plugin uses `100-102`) |
+
+The base `Message` carries the frames shared by every mode (ping, pong, error).
+The server–client frames live under `SyncMessage` and the relay frames under
+`RelayMessage`. In relay messages the blobs stay opaque strings end to end: only
+relay clients decode them.
+
+<NextSteps
+  items={[
+    {
+      title: 'Migrations',
+      to: '/docs/migrations',
+      description: 'Moving to a new major version.',
+    },
+    {
+      title: 'Binary format',
+      to: '/docs/deep-dive/binary-format',
+      description: 'What a Change and a Snapshot look like in bytes.',
+    },
+  ]}
+/>

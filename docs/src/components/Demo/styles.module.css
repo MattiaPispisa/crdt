@@ -1,0 +1,17 @@
+.demo {
+  margin: 1.5rem 0;
+  text-align: center;
+}
+
+.demo img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 12px;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.12);
+}
+
+.demo figcaption {
+  margin-top: 0.6rem;
+  font-size: 0.9rem;
+  color: var(--ifm-color-emphasis-700);
+}

@@ -8,262 +8,58 @@
 [![License: MIT][license_badge]][license_link]
 [![pub publisher][pub_publisher]][pub_publisher_link]
 
-[![docs_badge]][docs_link]
+A [sqlite3](https://pub.dev/packages/sqlite3) storage adapter for [`crdt_lf`](https://pub.dev/packages/crdt_lf):
+it keeps your documents on the device, and reads them back on launch. Nothing suspends: every call answers on the spot.
 
-- [CRDT LF SQLite](#crdt-lf-sqlite)
-  - [Features](#features)
-  - [Quick Start](#quick-start)
-    - [1. Open a database](#1-open-a-database)
-    - [2. Document-scoped storage](#2-document-scoped-storage)
-  - [Many documents in one place](#many-documents-in-one-place)
-  - [Keeping a whole document on disk](#keeping-a-whole-document-on-disk)
-  - [Document-Scoped Storage](#document-scoped-storage)
-    - [CRDTSqliteChangeStorage](#crdtsqlitechangestorage)
-    - [CRDTSqliteSnapshotStorage](#crdtsqlitesnapshotstorage)
-    - [CRDTSqlitePeerIdStorage](#crdtsqlitepeeridstorage)
-  - [How Data Is Stored](#how-data-is-stored)
-    - [Schema version](#schema-version)
-  - [Examples](#examples)
-  - [Storage Management](#storage-management)
-  - [Roadmap](#roadmap)
-  - [Apps](#apps)
-  - [Packages](#packages)
+<div align="center">
 
-A [sqlite3](https://pub.dev/packages/sqlite3) storage implementation for [CRDT LF](https://pub.dev/packages/crdt_lf) objects, providing efficient persistence for `Change` and `Snapshot` objects with document-scoped organization in a single SQLite database.
+[![Read the full documentation][docs_badge]][docs_link]
+
+</div>
+
+> **📖 The full persistence guide — which adapter to pick, history, backups, compaction — is on [mattiapispisa.it/crdt](https://mattiapispisa.it/crdt/docs/connectors/persistence).**
 
 ## Features
 
-- **Compact Binary Storage**: `Change` and `Snapshot` are persisted as the self-describing binary blobs produced by `crdt_lf`'s native `toBytes()` / `fromBytes()` methods
-- **Single Database, Many Documents**: one database holds the `changes`, `snapshots` and `peers` tables
-- **Document-Scoped Storage**: utilities that organize data by document ID for better isolation and querying
-- **Nothing suspends**: `sqlite3` is synchronous (FFI), and every storage method here says so in its return type. That is also what lets `CRDTDocumentPersistence.openSync` restore a document before it returns
+- ⚡ **Synchronous**: no `await` in the way, and a document is restored before the first frame
+- 🗄️ **One file, many documents**: three tables, inspect them with any SQLite tool
+- 🔒 **Real transactions**: a compaction lands all at once or not at all
+- 📦 **Compact binary**: each change and snapshot as one blob
+- 🪪 **Peer identity**: the device writes under the same author on every launch
+- 🧩 **Same contract** as the Hive and Drift adapters: change backend with one line
 
-## Quick Start
+## Quick start
 
-### 1. Open a database
-
-```dart
-import 'package:crdt_lf_sqlite/crdt_lf_sqlite.dart';
-
-void main() {
-  // Open (or create) a database file...
-  final storage = CRDTSqlite.open('./my_app_data.db');
-
-  // ...or an in-memory database (useful for tests):
-  final memory = CRDTSqlite.memory();
-
-  // Your app code here...
-
-  storage.close();
-}
+```sh
+dart pub add crdt_lf crdt_lf_sqlite
 ```
-
-### 2. Document-scoped storage
 
 ```dart
 import 'package:crdt_lf/crdt_lf.dart';
 import 'package:crdt_lf_sqlite/crdt_lf_sqlite.dart';
 
-const documentId = 'my-document-id';
+final backend = CRDTSqlite.open('note.db');
 
-final storage = CRDTSqlite.open('./my_app_data.db');
+final note = await backend.openDocument('note');
+final text = CRDTFugueTextHandler(note.document, 'body');
 
-// Open storage for a specific document
-final changeStorage = storage.changeStorageForDocument(documentId);
-final snapshotStorage = storage.snapshotStorageForDocument(documentId);
+text.insert(0, 'Hello 🌍');
 
-// Or open both at once
-final documentStorage = storage.storageForDocument(documentId);
-```
-
-## Many documents in one place
-
-`CRDTSqlite` is a `CRDTStorageBackend`: it lists the documents it holds, hands out
-the storages of each one, and deletes one whole. Code written against that
-interface runs on any adapter, so an app can change backend without changing
-anything but the line that opens it.
-
-```dart
-final backend = CRDTSqlite.open('app.db');
-
-for (final documentId in backend.documentIds) {
-  final note = backend.readDocument(documentId);
-  // ...show it in a list
-}
-
-backend.deleteDocument('doc-123'); // changes, snapshots and identity
+await note.persistence.dispose(); // writes what is still waiting
 backend.close();
 ```
 
-## Keeping a whole document on disk
+Every change is written down from there on. This package re-exports the whole
+[`crdt_lf_persistence`](https://pub.dev/packages/crdt_lf_persistence) API, so it
+is the only storage package your `pubspec.yaml` needs.
 
-Most apps do not call these methods by hand. `openDocument` reads the document
-back — its stored identity included — and follows it from there:
+## Documentation
 
-```dart
-final note = await backend.openDocument(documentId);
-final text = CRDTFugueTextHandler(note.document, 'body');
-```
-
-Everything written from there on is stored. The backend has the read-only half
-too: `readDocument(id)` for a preview or a list, `documentAt(id, version)` for
-the document as it was, `copyDocumentTo(other, id)` for a backup or a move to
-another adapter.
-
-It comes from [`crdt_lf_persistence`](https://pub.dev/packages/crdt_lf_persistence),
-which this package re-exports. See that README for the offline-first rules.
-
-`storageForDocument` hands back a `CRDTSqliteDocumentStorage`, which backs
-`transaction()` with a real SQLite transaction: a prune drops the covered
-changes and rewrites the survivors, and either all of it lands or none of it
-does. It is built on savepoints, so a batch that opens a transaction of its own
-nests inside instead of failing.
-
-`close()` on it does nothing on purpose. One database file holds every
-document, so the connection is `CRDTSqlite.close()`'s to release.
-
-## Document-Scoped Storage
-
-Data for different documents lives in the same tables and is isolated through the `document_id` column.
-
-Every method answers on the spot. sqlite3 is synchronous underneath, and the
-return types say so: `getChanges()` gives a `List<Change>`, `saveChange()`
-gives `void`. The shared contract asks only for a `FutureOr`, so the same code
-still runs on drift — but here there is nothing to `await`.
-
-### CRDTSqliteChangeStorage
-
-Manages `Change` objects for a specific document:
-
-```dart
-final changeStorage = storage.changeStorageForDocument('doc-123');
-
-// Save individual changes
-changeStorage.saveChange(change);
-
-// Batch save multiple changes
-changeStorage.saveChanges([change1, change2, change3]);
-
-// Load all changes for the document
-final changes = changeStorage.getChanges();
-
-// Or only part of the log, by version vector
-final missing = changeStorage.getChanges(newerThan: theirVersion);
-final past = changeStorage.getChanges(upTo: oldVersion);
-
-// Delete changes
-changeStorage.deleteChange(change);
-changeStorage.deleteChanges([change1, change2]);
-
-// Storage info
-print('Total changes: ${changeStorage.count}');
-```
-
-### CRDTSqliteSnapshotStorage
-
-Manages `Snapshot` objects for a specific document:
-
-```dart
-final snapshotStorage = storage.snapshotStorageForDocument('doc-123');
-
-// Save snapshots
-snapshotStorage.saveSnapshot(snapshot);
-snapshotStorage.saveSnapshots([snapshot1, snapshot2]);
-
-// Retrieve snapshots
-final snapshot = snapshotStorage.getSnapshot('snapshot-id');
-final allSnapshots = snapshotStorage.getSnapshots();
-
-// Check existence
-if (snapshotStorage.containsSnapshot('snapshot-id')) {
-  // Snapshot exists
-}
-```
-
-### CRDTSqlitePeerIdStorage
-
-Keeps the `PeerId` the document writes under, in the `peers` table. Without it
-`CRDTDocument` mints a new author on every restart, and the version vector
-grows by one peer per session.
-
-Read it **before** building the document — the id has to exist first:
-
-```dart
-final peers = storage.peerIdStorageForDocument('doc-123');
-
-final document = CRDTDocument(
-  documentId: 'doc-123',
-  peerId: peers.loadOrCreate() as PeerId, // synchronous here
-);
-```
-
-## How Data Is Stored
-
-Both `Change` and `Snapshot` are stored as opaque binary blobs using the
-self-describing format provided by `crdt_lf` (`toBytes()` / `fromBytes()`). The
-schema is three tables:
-
-```sql
-CREATE TABLE changes (
-  document_id TEXT    NOT NULL,
-  author      TEXT    NOT NULL,
-  hlc_l       INTEGER NOT NULL,
-  hlc_c       INTEGER NOT NULL,
-  bytes       BLOB    NOT NULL,
-  PRIMARY KEY (document_id, author, hlc_l, hlc_c)
-);
-
-CREATE TABLE snapshots (
-  document_id TEXT NOT NULL,
-  snapshot_id TEXT NOT NULL,
-  bytes       BLOB NOT NULL,
-  PRIMARY KEY (document_id, snapshot_id)
-);
-
-CREATE TABLE peers (
-  document_id TEXT NOT NULL,
-  peer_id     TEXT NOT NULL,
-  PRIMARY KEY (document_id)
-);
-```
-
-A change is named by its author and its clock, not by one text id. An
-`OperationId` **is** a peer and a clock, and kept apart SQL can compare it,
-which is what a version vector asks. The primary key is then already the index
-that comparison wants. The clock takes two columns because `l` is 48 bits and
-`c` is 16: together they stay inside the 53 bits an integer keeps exactly in
-JavaScript.
-
-Snapshots are keyed by `snapshot.id`, and `peers` holds one row per document:
-the `PeerId` this device writes it under.
-
-### Schema version
-
-The database carries its schema version in `PRAGMA user_version`, and this
-build writes version 2. A database written by `0.2.0` is version 1: it has no
-`peers` table and names a change with a single `change_id` column. The first
-open rebuilds it — SQLite cannot change a primary key in place — inside one
-savepoint, so half a rebuilt table is never left behind. The split reads the
-old column and not the stored bytes, so a change whose blob this build cannot
-decode migrates all the same. Every later open sees the version and returns
-without touching the database.
-
-## Examples
-
-A complete example is available [here](https://github.com/MattiaPispisa/crdt/blob/main/packages/adapters/persistence/crdt_lf_sqlite/example/main.dart).
-
-## Storage Management
-
-```dart
-// Delete all data for a specific document
-backend.deleteDocument('doc-123');
-
-// Close the database and release resources
-storage.close();
-```
-
-## Roadmap
-A roadmap is available in the [project](https://github.com/users/MattiaPispisa/projects/1) page. The roadmap provides a high-level overview of the project's goals and the current status of the project.
+- [Which adapter](https://mattiapispisa.it/crdt/docs/connectors/persistence#which-adapter): Hive, SQLite or Drift
+- [SQLite: setup and storage details](https://mattiapispisa.it/crdt/docs/connectors/persistence/adapters)
+- [Working with storage](https://mattiapispisa.it/crdt/docs/connectors/persistence/working-with-storage):
+  history, backups, compaction
+- [Open a replica](https://mattiapispisa.it/crdt/docs/connectors/replica): storage and sync together
 
 ## Apps
 
@@ -295,5 +91,5 @@ Other bricks of the crdt "system" are:
 [ci_link]: https://github.com/MattiaPispisa/crdt/actions/workflows/main.yaml
 [pub_publisher]: https://img.shields.io/pub/publisher/crdt_lf_sqlite
 [pub_publisher_link]: https://pub.dev/packages?q=publisher%3Amattiapispisa.it
-[docs_badge]: https://img.shields.io/badge/docs-crdt-blue?style=for-the-badge&logo=read-the-docs
-[docs_link]: https://mattiapispisa.it/crdt/
+[docs_badge]: https://img.shields.io/badge/%F0%9F%93%96%20Read%20the%20full%20documentation-mattiapispisa.it%2Fcrdt-d04848?style=for-the-badge
+[docs_link]: https://mattiapispisa.it/crdt/docs/connectors/persistence/adapters
