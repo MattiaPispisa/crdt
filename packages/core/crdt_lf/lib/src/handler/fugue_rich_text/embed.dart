@@ -56,7 +56,7 @@ class _EmbedValue {
         for (final value in map.values) {
           _check(value, depth + 1);
         }
-      case final num number when _MarkValue._safeInt(number) != null:
+      case final num number when embedInt(number) != null:
         return;
       case final double number when number.isFinite:
         return;

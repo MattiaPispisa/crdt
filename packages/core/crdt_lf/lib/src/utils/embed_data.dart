@@ -11,6 +11,21 @@ import 'package:crdt_lf/src/utils/bytes.dart';
 /// integer (2^53 - 1) so every platform reads the same int.
 const int maxEmbedInt = 4503599627370495;
 
+/// [value] as an `int` when it is an integral number within ±[maxEmbedInt],
+/// otherwise `null`.
+///
+/// dart2js cannot tell 12.0 from 12, so a number is classified by value and
+/// gets the same bytes on every platform.
+int? embedInt(Object? value) {
+  if (value is! num || !value.isFinite || value != value.truncate()) {
+    return null;
+  }
+  if (value > maxEmbedInt || value < -maxEmbedInt) {
+    return null;
+  }
+  return value.toInt();
+}
+
 // Data is frozen once, then shared by the state, the spans and the deltas:
 // freezing a frozen map again gives it back for free.
 final Expando<bool> _frozen = Expando('frozen embed');

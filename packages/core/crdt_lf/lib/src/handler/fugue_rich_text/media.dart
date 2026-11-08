@@ -551,19 +551,15 @@ final class _Reader {
     return null;
   }
 
-  // On the web 12.0 is an int: a size is checked by value.
   int? size(String key) {
     if (!_embed.containsKey(key)) {
       return null;
     }
-    final value = _embed[key];
-    if (value is num &&
-        value.abs() <= maxEmbedInt &&
-        value == value.truncate()) {
-      return value.toInt();
+    final value = embedInt(_embed[key]);
+    if (value == null) {
+      valid = false;
     }
-    valid = false;
-    return null;
+    return value;
   }
 
   ({Uri uri, String text})? uri(String key) {

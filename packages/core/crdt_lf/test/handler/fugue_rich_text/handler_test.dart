@@ -1386,7 +1386,8 @@ void main() {
         for (final value in <Object?>[
           const [1],
           double.nan,
-          1 << 53,
+          // On the web this literal is a double, and a double is accepted.
+          if (!identical(0, 0.0)) 1 << 53,
         ]) {
           expect(() => text.checkAttribute(value), throwsArgumentError);
           expect(() => text.format(0, 0, 'k', value), throwsArgumentError);
