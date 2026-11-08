@@ -49,6 +49,9 @@ enum MarkExpand {
 /// Insert, delete and update work as in [CRDTFugueTextHandler]. The text can
 /// also hold **embeds** (see below). See the README section "Rich text".
 ///
+/// Formats follow Peritext
+/// ([Peritext: A CRDT for Collaborative Rich Text Editing](https://doi.org/10.1145/3555644)).
+///
 /// ## Convergence
 /// A format is a mark anchored on the elements at the edges of its range.
 /// On each rune, every key takes the value of the newest mark that covers

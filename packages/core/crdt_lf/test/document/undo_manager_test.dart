@@ -435,7 +435,9 @@ void main() {
         expect(map.value, {'a': '1', 'b': '2'});
       });
 
-      test('a write-back from the flush keeps the tracked origin', () async {
+      test(
+          'records a write-back from the flush under the origin '
+          'that caused it', () async {
         final doc = _doc(_peerA);
         final text = CRDTFugueTextHandler(doc, 'text');
         final log = CRDTFugueTextHandler(doc, 'log');

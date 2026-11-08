@@ -6,34 +6,17 @@
 
 ### Added
 
-- `CrdtEditorBinding` and its widget `CrdtEditorBinder` run the two-way sync loop between a handler
-  and any editor, for editor adapters. [209](https://github.com/MattiaPispisa/crdt/issues/209)
-- `HandlerDeltaSubscription`, `DeltaProviderResolver` and `resolveDeltaProvider` are public, to
-  follow a handler's delta stream from your own code.
-- `CrdtRichTextFieldBuilder` binds a `CrdtRichTextEditingController` that paints inline formats to a
-  `CRDTFugueRichTextHandler`. Needs `crdt_lf` 5.4.0. [209](https://github.com/MattiaPispisa/crdt/issues/209)
-- `CrdtRichTextFieldBuilder.undoManager` routes undo and redo (shortcuts and the controller) through a
-  `CRDTUndoManager`; `crdtRichTextFieldOrigin` tags the field's writes.
-- `CrdtTextCursorsOverlay` accepts a `CRDTFugueRichTextHandler`.
-- `CrdtRichTextFieldBuilder` keeps the embeds of the handler intact through edits, undo and remote
-  changes, and strips a typed U+FFFC.
-- `echoesRichText`, `formatsWithin` and `OwnsFormat` tell a rich text editor's own write from another
-  writer's in `CrdtEditorBinding.push`.
-- `CrdtTextCursorsOverlay.targetOf` and `CrdtTextCursorsTarget` paint the cursors over another editor.
-- `SelectionAnchors` is public, to publish the selection of your own editor binding.
-- `RichTextWriter` writes a `RichTextDelta` into a rich text handler with the key policy of an editor,
-  and `RichTextEcho` tells its echo from another writer's in `CrdtEditorBinding.push`.
-- `CrdtEditorBinding.push` takes `ownStep`, so a format is an undo step of its own.
-- `CrdtEditorBinder` takes `anchors` and `onFocusChange`, and `SelectionAnchorsFocus` feeds the focus
-  to the anchors of an editor.
+- `CrdtRichTextFieldBuilder`: a rich text field bound to a `CRDTFugueRichTextHandler`, with formats,
+  embeds and undo; `CrdtTextCursorsOverlay` draws its remote cursors. Needs `crdt_lf` 5.4.0. See
+  [Rich text](README.md#rich-text). [209](https://github.com/MattiaPispisa/crdt/issues/209)
+- `CrdtEditorBinding` and `CrdtEditorBinder`: the two-way sync loop between a handler and any editor,
+  with what an editor adapter needs around it (deltas, echoes, selection, cursors). See
+  [Editor bindings](README.md#editor-bindings). [209](https://github.com/MattiaPispisa/crdt/issues/209)
 
 ### Fixed
 
-- `CrdtTextFieldBuilder` takes in a change another writer makes inside a push when it keeps the text
-  length, in release builds too.
-- `CrdtTextFieldBuilder` keeps the caret through a batch of remote changes.
-- `CrdtTextFieldBuilder` keeps a remote insert that lands in the range of a composition when the
-  composition commits.
+- `CrdtTextFieldBuilder` keeps remote changes and the caret through a push, a batch of remote changes
+  and a composition.
 
 ## [0.7.0](https://github.com/MattiaPispisa/crdt/tree/crdt_lf_flutter-v0.7.0/packages/core/crdt_lf_flutter)
 

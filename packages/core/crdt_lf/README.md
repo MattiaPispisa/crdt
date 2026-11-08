@@ -91,6 +91,7 @@ This library provides solutions for:
 
 Supporting: 
 - Fugue Algorithm for Text Editing to minimize interleaving.
+- Peritext for rich text: formatting and embeds on Fugue text.
 - Observed-Removed (OR) for conflict resolution.
 - Movable lists that preserve element identity across concurrent reorderings.
 - Nested CRDTs via a flat storage of references (model documents, canvases, trees…).
@@ -1103,7 +1104,9 @@ for the conversion.
 **attributes**: a key and a value (`null`, `bool`, `int`, finite `double` or
 `String`; an `int` stays within ±(2^52 - 1)). Two peers that format the same
 text converge: for each key, the newest format wins (highest HLC, then peer
-id). `checkAttribute` throws what `format` would throw for a value, and writes
+id). Formats follow
+[Peritext: A CRDT for Collaborative Rich Text Editing](https://doi.org/10.1145/3555644).
+`checkAttribute` throws what `format` would throw for a value, and writes
 nothing.
 
 ```dart
@@ -1875,6 +1878,7 @@ Feel free to:
 ## Acknowledgments
 
 - [Fugue Algorithm](https://arxiv.org/abs/2305.00583)
+- [Peritext: A CRDT for Collaborative Rich Text Editing](https://doi.org/10.1145/3555644)
 - [Hybrid Logical Clock](https://cse.buffalo.edu/tech-reports/2014-04.pdf)
 - [A comprehensive study of Convergent and Commutative Replicated Data Types](https://inria.hal.science/inria-00555588/en/)
 - [An O(ND) Difference Algorithm and its Variations (Myers diff algorithm)](https://link.springer.com/article/10.1007/BF01840446)
