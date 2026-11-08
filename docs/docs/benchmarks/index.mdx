@@ -1,0 +1,68 @@
+---
+title: Benchmarks
+sidebar_label: Overview
+description: How fast the hot paths are, package by package, and how to measure them yourself.
+slug: /benchmarks
+---
+
+import NextSteps from '@site/src/components/NextSteps';
+
+# Benchmarks
+
+The packages that sit on a hot path have a benchmark suite. Its results are
+committed next to the code, as the baseline that every change is compared to.
+The pages of this section show those results as they are in the repository.
+
+| Package | What is measured | Results |
+| --- | --- | --- |
+| `crdt_lf` | every handler, applying changes, snapshots, serialization, undo, … | [crdt_lf](./crdt_lf.mdx) |
+| `hlc_dart` | clock operations and their encoding | [hlc_dart](./hlc.mdx) |
+| `crdt_lf_flutter` | the text fields: typing, formats, remote edits, undo | [crdt_lf_flutter](./crdt_lf_flutter.mdx) |
+| `crdt_lf_quill` | the projection check of the Quill binding | [crdt_lf_quill](./crdt_lf_quill.mdx) |
+
+## Reading the numbers
+
+- Each row is the time of **one run** of the benchmark, in microseconds,
+  milliseconds and seconds. Lower is better.
+- The name of a row says the size of the input: "on 10000 chars", "x1000".
+  Compare rows of different sizes to see how a cost grows.
+- The numbers come from one developer machine. Read them as an order of
+  magnitude, and to compare rows with each other, not as a promise for your
+  device.
+- Results move by about ±10% from one run to the next. Compare two runs made
+  on the same machine.
+
+## Run them yourself
+
+From the repository root:
+
+```sh
+melos run benchmark_dart     # the pure Dart packages
+melos run benchmark_flutter  # the Flutter packages
+```
+
+From one package folder, run only some benchmark files (the name of a file in
+`benchmarks/src/benchmarks/`, without `_benchmark.dart`):
+
+```sh
+dart run benchmark_infrastructure:run_benchmarks --include=apply_changes
+# Flutter packages: run_flutter_benchmarks, same flag
+```
+
+A run writes `benchmarks/results.md` in the package folder. A partial run
+rewrites only its own sections, so the file stays complete.
+
+<NextSteps
+  items={[
+    {
+      title: 'crdt_lf',
+      to: '/docs/benchmarks/crdt_lf',
+      description: 'Handlers, changes, snapshots.',
+    },
+    {
+      title: 'crdt_lf_flutter',
+      to: '/docs/benchmarks/crdt_lf_flutter',
+      description: 'The text fields.',
+    },
+  ]}
+/>

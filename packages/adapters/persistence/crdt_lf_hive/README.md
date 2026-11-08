@@ -27,6 +27,7 @@ it keeps your documents on the device, and reads them back on launch. It is the 
 - 📦 **Compact binary**: one `TypeAdapter` each for `Change` and `Snapshot`
 - 🪪 **Peer identity**: the device writes under the same author on every launch
 - 🧩 **Same contract** as the SQLite and Drift adapters: change backend with one line
+- ➕ **…and more**: everything else is in the [documentation][docs_link]
 
 ## Quick start
 
@@ -61,10 +62,10 @@ adapter.
 
 ## Documentation
 
-- [Which adapter](https://mattiapispisa.it/crdt/docs/connectors/persistence#which-adapter): Hive, SQLite or Drift
+- [Which adapter](https://mattiapispisa.it/crdt/docs/connectors/persistence#which-adapter): Hive, SQLite, Drift, …
 - [Hive: setup and storage details](https://mattiapispisa.it/crdt/docs/connectors/persistence/adapters)
 - [Working with storage](https://mattiapispisa.it/crdt/docs/connectors/persistence/working-with-storage):
-  history, backups, compaction
+  history, backups, compaction, …
 - [Open a replica](https://mattiapispisa.it/crdt/docs/connectors/replica): storage and sync together
 
 ## Apps

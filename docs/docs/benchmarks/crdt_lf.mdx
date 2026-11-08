@@ -1,0 +1,16 @@
+---
+title: crdt_lf benchmarks
+sidebar_label: crdt_lf
+description: Benchmark results of crdt_lf — handlers, applying changes, snapshots, serialization, undo.
+---
+
+import Results from './_results/crdt_lf.md';
+
+# crdt_lf
+
+The engine: every handler (local writes, remote changes, reads), applying
+changes, the DAG, snapshots, serialization, nested handlers, undo, and how the
+costs grow with the size of the document. One section per benchmark file in
+[`benchmarks/src/benchmarks/`](https://github.com/MattiaPispisa/crdt/tree/main/packages/core/crdt_lf/benchmarks/src/benchmarks).
+
+<Results />

@@ -3,6 +3,7 @@ title: Collaborative text
 description: A text that several peers type into at the same time, from the handler to a Flutter text field.
 ---
 
+import Greyhound from '@site/src/components/Greyhound';
 import NextSteps from '@site/src/components/NextSteps';
 
 # Collaborative text
@@ -93,6 +94,49 @@ the rich text field.
 Put a sync client on the document and every peer in the same room sees the
 text change as it is typed. [Open a replica](../connectors/replica.mdx) does
 storage and sync in one call.
+
+<Greyhound source="client/lib/src/widgets/editor_pane.dart">
+
+The markdown editor of Greyhound is one `CRDTFugueTextHandler` in a
+`CrdtTextFieldBuilder`. The anchors of the local selection go to the awareness
+plugin, and the carets of the other peers come back through
+`CrdtTextCursorsOverlay`:
+
+```dart
+CrdtTextFieldBuilder(
+  id: kHandlerId, // 'content': the same id on every peer
+  onSelectionAnchorsChanged: widget.awareness.setLocalCursor,
+  builder: (context, controller) => Column(
+    children: [
+      EditorToolbar(
+        controller: controller,
+        focusNode: _focusNode,
+        undo: widget.undo,
+      ),
+      Expanded(
+        // Presence repaints rebuild the overlay, never the text field.
+        child: ValueListenableBuilder<Map<String, PeerState>>(
+          valueListenable: widget.awareness.peers,
+          builder: (context, peers, child) => CrdtTextCursorsOverlay(
+            id: kHandlerId,
+            cursors: _toCursors(peers),
+            child: child!,
+          ),
+          child: EditorSurface(
+            controller: controller,
+            focusNode: _focusNode,
+          ),
+        ),
+      ),
+    ],
+  ),
+);
+```
+
+Open the same room in two windows and type in the same line: each peer keeps
+its own run of text, and the carets follow.
+
+</Greyhound>
 
 <NextSteps
   items={[

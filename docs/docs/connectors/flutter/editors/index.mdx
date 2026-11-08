@@ -112,6 +112,10 @@ Give `CrdtEditorBinder` the `SelectionAnchors` of the editor as `anchors`: the
 binder tells them when the focus enters or leaves the editor, and clears them
 when it follows another handler or the handler is deleted.
 
+To write an adapter for a new editor, read
+[Building an editor binding](../../../deep-dive/editor-binding.mdx): the layers
+under the binding, diagrams of a remote change and of a push, and a checklist.
+
 <NextSteps
   items={[
     {
@@ -120,9 +124,9 @@ when it follows another handler or the handler is deleted.
       description: 'The binding, ready-made.',
     },
     {
-      title: 'Handler deltas',
-      to: '/docs/deep-dive/handler-deltas',
-      description: 'Echoes, origins and resets.',
+      title: 'Building an editor binding',
+      to: '/docs/deep-dive/editor-binding',
+      description: 'The layers, and your own adapter.',
     },
   ]}
 />

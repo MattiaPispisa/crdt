@@ -125,6 +125,33 @@ void copyContributing({
   logger?.info('Copied CONTRIBUTING.md');
 }
 
+/// Copies the `benchmarks/results.md` of every package into [to], as
+/// `<package folder>.md`.
+///
+/// The benchmark pages of the site import these files, so they show the
+/// results committed in the repository.
+void copyBenchmarkResults({
+  required io.Directory to,
+  EnLogger? logger,
+}) {
+  if (to.existsSync()) {
+    to.deleteSync(recursive: true);
+  }
+  to.createSync(recursive: true);
+
+  for (final package in packageDirs()) {
+    final results = io.File(
+      path.join(package.path, 'benchmarks', 'results.md'),
+    );
+    if (!results.existsSync()) {
+      continue;
+    }
+    final name = path.basename(package.path);
+    results.copySync(path.join(to.path, '$name.md'));
+    logger?.info('Copied the benchmark results of $name');
+  }
+}
+
 /// Rewrites the repository-relative links (`./README.md`, `./melos.yaml`, ...)
 /// as absolute GitHub URLs, so they still resolve outside the repository.
 ///

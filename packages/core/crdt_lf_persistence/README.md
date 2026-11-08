@@ -27,6 +27,7 @@ persistence adapters, and the code that keeps a document on disk as it changes.
 | [`crdt_lf_hive`](https://pub.dev/packages/crdt_lf_hive) | Hive (NoSQL, runs on the web) |
 | [`crdt_lf_sqlite`](https://pub.dev/packages/crdt_lf_sqlite) | sqlite3 (SQL, synchronous) |
 | [`crdt_lf_drift`](https://pub.dev/packages/crdt_lf_drift) | Drift (SQL, asynchronous) |
+| … | [all the adapters](https://mattiapispisa.it/crdt/docs/connectors/persistence/adapters), or [build your own](https://mattiapispisa.it/crdt/docs/connectors/persistence/build-your-own) |
 
 ## Features
 
@@ -38,6 +39,7 @@ persistence adapters, and the code that keeps a document on disk as it changes.
 - 🕰️ **History**: read a document as it was at a version
 - 📦 **Backup and move**: copy a document to another adapter
 - 🧩 **One contract**: change adapter by changing one line
+- ➕ **…and more**: everything else is in the [documentation][docs_link]
 
 ## Quick start
 
@@ -63,7 +65,7 @@ Run it again and the text is there.
 
 - [Which adapter](https://mattiapispisa.it/crdt/docs/connectors/persistence#which-adapter): SQL or NoSQL, sync or async
 - [Working with storage](https://mattiapispisa.it/crdt/docs/connectors/persistence/working-with-storage):
-  history, backups, compaction
+  history, backups, compaction, …
 - [How it works](https://mattiapispisa.it/crdt/docs/connectors/persistence/how-it-works): batching, retries,
   durability, peer identity
 - [Build your own adapter](https://mattiapispisa.it/crdt/docs/connectors/persistence/build-your-own): the

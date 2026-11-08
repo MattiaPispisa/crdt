@@ -27,6 +27,7 @@ pod you already have.
 - 🛑 **Clean shutdown**: dispose the host in Serverpod's shutdown tasks
 - 💾 **Persistent rooms**: a `PersistentServerRegistry` on Hive, SQLite or Drift
 - 📱 **Plain clients**: `WebSocketClient` / `WebSocketRelayClient`, nothing Serverpod-specific
+- ➕ **…and more**: everything else is in the [documentation][docs_link]
 
 ## Quick start (relay mode)
 

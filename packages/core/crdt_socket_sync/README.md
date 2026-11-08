@@ -29,6 +29,7 @@ that was offline catches up when it reconnects.
 - 🤝 **Version and capability handshake**: an incompatible client is refused at connect time
 - 👥 **Awareness plugin**: presence and remote cursors; write your own plugins too
 - 📦 **Pluggable compression**
+- ➕ **…and more**: everything else is in the [documentation][docs_link]
 
 <div align="center">
   <img width="500" alt="sync_server_multi_client" src="https://raw.githubusercontent.com/MattiaPispisa/crdt/main/assets/demos/sync_server_multi_client.gif">
@@ -86,7 +87,7 @@ await server.start();
 - [Plugins and awareness](https://mattiapispisa.it/crdt/docs/connectors/sync/plugins),
   [connection and errors](https://mattiapispisa.it/crdt/docs/connectors/sync/connection),
   [compatibility](https://mattiapispisa.it/crdt/docs/connectors/sync/compatibility)
-- [Migrations](https://mattiapispisa.it/crdt/docs/migrations): [0.8.x → 0.9.0](https://mattiapispisa.it/crdt/docs/migrations/crdt_socket_sync/v0-9)
+- [Migrations](https://mattiapispisa.it/crdt/docs/migrations): one guide for each major version
 
 ## Examples
 

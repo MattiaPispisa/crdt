@@ -3,6 +3,7 @@ title: Plugins and awareness
 description: Extend the client and the server with plugins, and share presence with the awareness plugin.
 ---
 
+import Greyhound from '@site/src/components/Greyhound';
 import NextSteps from '@site/src/components/NextSteps';
 
 # Plugins and awareness
@@ -84,8 +85,38 @@ into the awareness state, and map the other peers' states to cursors.
 
 The [server example](https://github.com/MattiaPispisa/crdt/tree/main/packages/core/crdt_socket_sync/example)
 and its Flutter client use it to show the active users (name, surname, a random
-color) and their position in the document. Greyhound Markdown wraps it in an
-`AwarenessService`: see [Open a replica](../replica.mdx#a-complete-app-greyhound-markdown).
+color) and their position in the document.
+
+<Greyhound source="client/lib/src/services/awareness/awareness_service.dart">
+
+Greyhound wraps the plugin in an `AwarenessService`. The name and the color go
+in the first state. The caret is merged in as the user moves it, as two Fugue
+anchors, and `cursor: null` takes it away:
+
+```dart
+final plugin = ClientAwarenessPlugin(
+  throttleDuration: const Duration(milliseconds: 75),
+  initialMetadata: PeerState(name: name, color: color).toJson(),
+);
+
+void setLocalCursor(FugueElementID? base, FugueElementID? extent) {
+  plugin.updateLocalState({
+    'cursor': base == null
+        ? null
+        : {
+            'base': base.toJson(),
+            if (extent != null) 'extent': extent.toJson(),
+          },
+  });
+}
+```
+
+The states of the others come from `plugin.awarenessStream`, and become the
+carets that `CrdtTextCursorsOverlay` paints (see
+[Collaborative text](../../use-cases/collaborative-text.mdx)).
+The relay rebroadcasts them, and stores nothing.
+
+</Greyhound>
 
 <NextSteps
   items={[

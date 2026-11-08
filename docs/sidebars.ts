@@ -2,16 +2,33 @@ import type {SidebarsConfig} from '@docusaurus/plugin-content-docs';
 
 // This runs in Node.js - Don't use client-side code here (browser APIs, JSX...)
 
+type SidebarItem = SidebarsConfig[string] extends (infer T)[] ? T : never;
+
+// A section whose label opens its overview page, which is also listed as its
+// first entry: the reader sees that the section has a page of its own.
+function section(
+  label: string,
+  overview: string,
+  items: SidebarItem[],
+  options: {collapsed?: boolean} = {},
+): SidebarItem {
+  return {
+    type: 'category',
+    label,
+    link: {type: 'doc', id: overview},
+    collapsed: options.collapsed,
+    items: [{type: 'doc', id: overview, label: 'Overview'}, ...items],
+  };
+}
+
 const sidebars: SidebarsConfig = {
   docs: [
     'introduction',
     'getting-started',
-    {
-      type: 'category',
-      label: 'Use cases',
-      link: {type: 'doc', id: 'use-cases/index'},
-      collapsed: false,
-      items: [
+    section(
+      'Use cases',
+      'use-cases/index',
+      [
         'use-cases/collaborative-text',
         'use-cases/rich-text',
         'use-cases/lists',
@@ -19,99 +36,78 @@ const sidebars: SidebarsConfig = {
         'use-cases/containers',
         'use-cases/aggregates',
         'use-cases/undo-redo',
+        'use-cases/history',
         'use-cases/custom-value-types',
       ],
-    },
-    {
-      type: 'category',
-      label: 'Connectors',
-      link: {type: 'doc', id: 'connectors/index'},
-      collapsed: false,
-      items: [
+      {collapsed: false},
+    ),
+    section(
+      'Connectors',
+      'connectors/index',
+      [
         'connectors/replica',
-        {
-          type: 'category',
-          label: 'Persistence',
-          link: {type: 'doc', id: 'connectors/persistence/index'},
-          items: [
-            'connectors/persistence/adapters',
-            'connectors/persistence/working-with-storage',
-            'connectors/persistence/how-it-works',
-            'connectors/persistence/build-your-own',
-          ],
-        },
-        {
-          type: 'category',
-          label: 'Flutter',
-          link: {type: 'doc', id: 'connectors/flutter/index'},
-          items: [
-            'connectors/flutter/delta-widgets',
-            'connectors/flutter/text-fields',
-            'connectors/flutter/presence',
-            {
-              type: 'category',
-              label: 'Editors',
-              link: {type: 'doc', id: 'connectors/flutter/editors/index'},
-              items: ['connectors/flutter/editors/quill'],
-            },
-          ],
-        },
-        {
-          type: 'category',
-          label: 'Sync',
-          link: {type: 'doc', id: 'connectors/sync/index'},
-          items: [
-            'connectors/sync/server-frameworks',
-            'connectors/sync/server-client',
-            'connectors/sync/server-registry',
-            'connectors/sync/relay',
-            'connectors/sync/relay-protocol',
-            'connectors/sync/plugins',
-            'connectors/sync/connection',
-            'connectors/sync/compatibility',
-            'connectors/sync/compression',
-            'connectors/sync/custom-transport',
-          ],
-        },
+        section('Persistence', 'connectors/persistence/index', [
+          'connectors/persistence/adapters',
+          'connectors/persistence/working-with-storage',
+          'connectors/persistence/how-it-works',
+          'connectors/persistence/build-your-own',
+        ]),
+        section('Flutter', 'connectors/flutter/index', [
+          'connectors/flutter/delta-widgets',
+          'connectors/flutter/text-fields',
+          'connectors/flutter/presence',
+          section('Editors', 'connectors/flutter/editors/index', [
+            'connectors/flutter/editors/quill',
+          ]),
+        ]),
+        section('Sync', 'connectors/sync/index', [
+          'connectors/sync/server-frameworks',
+          'connectors/sync/server-client',
+          'connectors/sync/server-registry',
+          'connectors/sync/relay',
+          'connectors/sync/relay-protocol',
+          'connectors/sync/plugins',
+          'connectors/sync/connection',
+          'connectors/sync/compatibility',
+          'connectors/sync/compression',
+          'connectors/sync/custom-transport',
+        ]),
       ],
-    },
-    {
-      type: 'category',
-      label: 'Deep dive',
-      link: {type: 'doc', id: 'deep-dive/index'},
-      items: [
-        'deep-dive/time-hlc',
-        'deep-dive/documents-and-changes',
-        'deep-dive/transactions',
-        'deep-dive/reactivity',
-        'deep-dive/handler-deltas',
-        'deep-dive/state-cache',
-        'deep-dive/snapshots',
-        'deep-dive/binary-format',
-        'deep-dive/text-positions',
-        'deep-dive/custom-handlers',
-        'deep-dive/flutter-internals',
-        'deep-dive/benchmarks',
-        'deep-dive/devtools',
-      ],
-    },
-    {
-      type: 'category',
-      label: 'Migrations',
-      link: {type: 'doc', id: 'migrations/index'},
-      items: [
-        {
-          type: 'category',
-          label: 'crdt_lf',
-          items: ['migrations/crdt_lf/v5-0', 'migrations/crdt_lf/v4-0'],
-        },
-        {
-          type: 'category',
-          label: 'crdt_socket_sync',
-          items: ['migrations/crdt_socket_sync/v0-9'],
-        },
-      ],
-    },
+      {collapsed: false},
+    ),
+    section('Deep dive', 'deep-dive/index', [
+      'deep-dive/time-hlc',
+      'deep-dive/documents-and-changes',
+      'deep-dive/transactions',
+      'deep-dive/reactivity',
+      'deep-dive/handler-deltas',
+      'deep-dive/state-cache',
+      'deep-dive/snapshots',
+      'deep-dive/binary-format',
+      'deep-dive/text-positions',
+      'deep-dive/custom-handlers',
+      'deep-dive/flutter-internals',
+      'deep-dive/editor-binding',
+      'deep-dive/devtools',
+    ]),
+    section('Benchmarks', 'benchmarks/index', [
+      'benchmarks/crdt_lf',
+      'benchmarks/hlc',
+      'benchmarks/crdt_lf_flutter',
+      'benchmarks/crdt_lf_quill',
+    ]),
+    section('Migrations', 'migrations/index', [
+      {
+        type: 'category',
+        label: 'crdt_lf',
+        items: ['migrations/crdt_lf/v5-0', 'migrations/crdt_lf/v4-0'],
+      },
+      {
+        type: 'category',
+        label: 'crdt_socket_sync',
+        items: ['migrations/crdt_socket_sync/v0-9'],
+      },
+    ]),
     'packages',
     'contributing',
     'references',

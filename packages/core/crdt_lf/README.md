@@ -32,6 +32,7 @@ copy converges to the same state.
 - 🔍 **Handler deltas**: what each change did to *your* copy, for carets and lists
 - ⏱️ **Hybrid logical clock**: a causal order with no central server
 - 📸 **Snapshots and a compact binary format**: prune the history, store and send bytes
+- ➕ **…and more**: everything else is in the [documentation][docs_link]
 
 ## See it live
 
@@ -91,20 +92,19 @@ void main() {
 
 | You want to | Add |
 | --- | --- |
-| keep the document on the device | [`crdt_lf_hive`](https://pub.dev/packages/crdt_lf_hive), [`crdt_lf_sqlite`](https://pub.dev/packages/crdt_lf_sqlite) or [`crdt_lf_drift`](https://pub.dev/packages/crdt_lf_drift) |
+| keep the document on the device | [`crdt_lf_hive`](https://pub.dev/packages/crdt_lf_hive), [`crdt_lf_sqlite`](https://pub.dev/packages/crdt_lf_sqlite), [`crdt_lf_drift`](https://pub.dev/packages/crdt_lf_drift), … ([all the adapters](https://mattiapispisa.it/crdt/docs/connectors/persistence/adapters)) |
 | sync it with other peers | [`crdt_socket_sync`](https://pub.dev/packages/crdt_socket_sync), served from [Dart Frog](https://pub.dev/packages/crdt_socket_sync_dart_frog) or [Serverpod](https://pub.dev/packages/crdt_socket_sync_serverpod) |
 | show it in Flutter | [`crdt_lf_flutter`](https://pub.dev/packages/crdt_lf_flutter), and [`crdt_lf_quill`](https://pub.dev/packages/crdt_lf_quill) for a rich text editor |
 
 ## Documentation
 
 - [Which handler do you need?](https://mattiapispisa.it/crdt/docs/use-cases): text, rich text, lists,
-  maps and sets, nested data, aggregates, undo
+  maps and sets, nested data, aggregates, undo, history, …
 - [Open a replica](https://mattiapispisa.it/crdt/docs/connectors/replica): document, storage and sync in one call
 - [Deep dive](https://mattiapispisa.it/crdt/docs/deep-dive): transactions, deltas, state cache, snapshots,
-  binary format, custom handlers
-- [Migrations](https://mattiapispisa.it/crdt/docs/migrations): [4.x → 5.0](https://mattiapispisa.it/crdt/docs/migrations/crdt_lf/v5-0),
-  [3.x → 4.0](https://mattiapispisa.it/crdt/docs/migrations/crdt_lf/v4-0)
-- [Benchmarks](https://github.com/MattiaPispisa/crdt/tree/main/packages/core/crdt_lf/benchmarks/results.md)
+  binary format, custom handlers, …
+- [Migrations](https://mattiapispisa.it/crdt/docs/migrations): one guide for each major version
+- [Benchmarks](https://mattiapispisa.it/crdt/docs/benchmarks/crdt_lf)
 
 ## Contributing
 

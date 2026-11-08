@@ -3,6 +3,7 @@ title: Relay mode
 description: A server that only stores and rebroadcasts opaque blobs; all the merging happens on the clients.
 ---
 
+import Greyhound from '@site/src/components/Greyhound';
 import NextSteps from '@site/src/components/NextSteps';
 
 # Relay mode
@@ -15,7 +16,8 @@ server hosts many rooms.
 Pick it for a backend with **no `crdt_lf` on it**: cheap rooms that scale out,
 and a server that is easy to port to other runtimes, including serverless.
 [Greyhound Markdown](https://mattiapispisa.it/crdt/greyhound_markdown/) runs on
-a relay written as a Cloudflare Worker.
+the relay mode, live and locally: see
+[Greyhound Markdown on a relay](#greyhound-markdown-on-a-relay) below.
 
 ## Quick start
 
@@ -232,6 +234,127 @@ the `RelayStore`.
 Because the server never parses CRDT data, the relay side is a JSON message
 contract over a WebSocket, and it can run on any runtime. See
 [Relay protocol](./relay-protocol.mdx).
+
+## Greyhound Markdown on a relay
+
+[Greyhound Markdown](https://mattiapispisa.it/crdt/greyhound_markdown/) uses the
+relay mode, and **only** the relay mode. The client is the same everywhere. The
+relay behind it changes: a Cloudflare Worker for the live app, or a Dart server
+on your machine.
+
+```mermaid
+graph LR
+    subgraph Clients["Flutter web clients"]
+        A["Client A<br/>WebSocketRelayClient<br/>+ Hive"]
+        B["Client B<br/>WebSocketRelayClient<br/>+ Hive"]
+    end
+    subgraph Live["Live app"]
+        W["Cloudflare Worker<br/>+ Durable Object per room<br/>(TypeScript)"]
+    end
+    subgraph Local["Local testing, ws://localhost:8787"]
+        F["Dart Frog<br/>RelaySessionHost"]
+        S["Serverpod<br/>RelaySessionHost"]
+    end
+    A <-->|"relay protocol<br/>/room/#lt;id#gt;"| W
+    B <--> W
+    A -.->|or| F
+    A -.->|or| S
+```
+
+All the merging happens in the browsers. None of the three servers reads the
+CRDT data: they store the blobs of each room and send them to the other
+clients.
+
+<Greyhound source="client/lib/src/services/room/room_host.dart" title="The client">
+
+A room is a [replica](../replica.mdx) with a relay client. The room id is the
+document id **and** the relay room key, so every client of a room uses the
+same one:
+
+```dart
+final replica = await CRDTReplica.open(
+  documentId: roomId,
+  storage: CRDTHive.open,
+  sync: (document) => WebSocketRelayClient(
+    url: roomUrl(kServerUrl, roomId), // <server>/room/<roomId>
+    document: document,
+    author: document.peerId,
+    plugins: [awareness.plugin], // remote carets
+  ),
+);
+```
+
+`kServerUrl` is `ws://localhost:8787` by default. The live build passes the
+Worker address with `--dart-define=GREYHOUND_WS=wss://…`.
+
+</Greyhound>
+
+### Live: a Cloudflare Worker
+
+The live app talks to a
+[Cloudflare Worker](https://github.com/MattiaPispisa/crdt/tree/main/apps/greyhound_markdown/server)
+written in TypeScript, with no Dart and no `crdt_lf` on it. It is a second
+implementation of the [relay protocol](./relay-protocol.mdx):
+
+- one Durable Object per room, found by the room id;
+- its storage holds the room log (one entry per change blob) and the last
+  snapshot, in chunks;
+- past 200 log entries, it sets `compact: true` on an ack or a welcome, and the
+  asked client uploads a snapshot that replaces the start of the log;
+- awareness (who is in the room, their carets) lives on the open sockets, never
+  in storage.
+
+### Locally: Dart Frog or Serverpod
+
+The repository has the same relay in Dart, for local testing: the package's
+`RelaySessionHost` behind the [framework adapters](./server-frameworks.mdx#relay-mode).
+Rooms live in memory, and any origin can connect.
+
+```dart
+// server_dart_frog and server_serverpod: lib/src/host.dart
+final relayHost = RelaySessionHost(
+  store: InMemoryRelayStore(),
+  plugins: [ServerAwarenessPlugin()],
+);
+```
+
+```dart
+// Dart Frog: routes/_middleware.dart and routes/room/[id].dart
+Handler middleware(Handler handler) =>
+    handler.use(crdtRelayHostProvider(relayHost));
+
+Future<Response> onRequest(RequestContext context, String id) async {
+  return crdtRelayWebSocketHandler(context.read<RelaySessionHost>())(context);
+}
+```
+
+```dart
+// Serverpod: bin/main.dart
+pod.webServer.addRoute(
+  CrdtRelayRoute(relayHost, allowAnyOrigin: true),
+  '/room/:id',
+);
+```
+
+Run one server, then two clients, and open the same room in both:
+
+```sh
+cd apps/greyhound_markdown
+
+# one of the three servers, all on ws://localhost:8787
+(cd server && npx wrangler dev)
+(cd server_dart_frog && fvm exec dart_frog dev --port 8787)
+(cd server_serverpod && fvm dart run bin/main.dart)
+
+# two clients
+cd client
+fvm flutter run -d chrome --web-port 5001
+fvm flutter run -d chrome --web-port 5002
+```
+
+The [app README](https://github.com/MattiaPispisa/crdt/tree/main/apps/greyhound_markdown#run-it)
+has the details, and the VS Code launch settings of the repository start each
+server.
 
 <NextSteps
   items={[

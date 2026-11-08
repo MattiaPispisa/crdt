@@ -3,6 +3,7 @@ title: Rich text
 description: Collaborative text with formats, embeds, images and videos, then the Flutter field and the editors.
 ---
 
+import Demo from '@site/src/components/Demo';
 import NextSteps from '@site/src/components/NextSteps';
 
 # Rich text
@@ -141,6 +142,74 @@ Two ways to put it on screen, depending on what your users need:
   flutter_quill editor to the handler. For another editor, the
   [editor binding](../connectors/flutter/editors/index.mdx) gives you the
   sync loop.
+
+### The flutter_quill example
+
+The [example of `crdt_lf_quill`](https://github.com/MattiaPispisa/crdt/blob/main/packages/adapters/text/crdt_lf_quill/example/lib/main.dart)
+puts two peers side by side. Each one is a `CRDTDocument` with the same
+`CRDTFugueRichTextHandler`, and each local change is sent to the other peer,
+as a network would:
+
+<Demo
+  src="/demos/crdt_lf_quill_example.gif"
+  alt="Two flutter_quill editors, Alice and Bob, editing the same rich text"
+/>
+
+```dart
+// Two peers of the same page, linked by hand instead of a sync client.
+final alice = CRDTDocument(peerId: PeerId.generate());
+final bob = CRDTDocument(peerId: PeerId.generate());
+CRDTFugueRichTextHandler(alice, 'page');
+CRDTFugueRichTextHandler(bob, 'page');
+alice.localChanges.listen(bob.applyChange);
+bob.localChanges.listen(alice.applyChange);
+```
+
+Each peer is a Quill toolbar and editor under a `CrdtQuillBinder`. The binder
+reports the local selection, and `CrdtQuillCursorsOverlay` paints the caret of
+the other peer:
+
+```dart
+CrdtProvider.value(
+  value: document, // alice or bob
+  child: CrdtQuillBinder(
+    id: 'page',
+    controller: controller, // a QuillController.basic()
+    onSelectionAnchorsChanged: onAnchors, // to the other peer
+    onUnsupported: (_) => showSnackBar('Part of the edit was not written'),
+    builder: (context) => Column(
+      children: [
+        // The binder installs its own Quill document: key the toolbar on it.
+        ListenableBuilder(
+          listenable: controller,
+          builder: (context, _) => QuillSimpleToolbar(
+            key: ObjectKey(controller.document),
+            controller: controller,
+          ),
+        ),
+        Expanded(
+          child: CrdtQuillCursorsOverlay(
+            id: 'page',
+            cursors: [?remoteCursor],
+            child: QuillEditor.basic(
+              controller: controller,
+              config: QuillEditorConfig(
+                unknownEmbedBuilder: crdtQuillUnknownEmbedBuilder(),
+              ),
+            ),
+          ),
+        ),
+      ],
+    ),
+  ),
+);
+```
+
+Type in one editor and make a word bold in the other: both
+pages converge. In an app, replace the two `listen` calls with a
+[sync client](../connectors/sync/index.mdx). The
+[flutter_quill page](../connectors/flutter/editors/quill.mdx) covers
+attributes, embeds, undo and the limits.
 
 <NextSteps
   items={[

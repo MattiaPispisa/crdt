@@ -3,6 +3,7 @@ title: Reactivity
 description: The three signals a document gives — revision, updates and events — and which one to watch.
 ---
 
+import Greyhound from '@site/src/components/Greyhound';
 import NextSteps from '@site/src/components/NextSteps';
 
 # Reactivity
@@ -32,6 +33,25 @@ Deleting a handler that a container references bumps the container's revision
 (its *resolved* view now reads differently) without touching its cached raw
 value: the container still holds the same `HandlerRef`s, only one of them no
 longer resolves to anything.
+
+<Greyhound source="client/lib/src/widgets/preview_pane.dart">
+
+The markdown preview reads the text and parses it again only when the
+revision moves, and at most once per pause in the typing (150 ms). A rebuild
+from above with the same revision costs nothing:
+
+```dart
+CrdtHandlerBuilder<CRDTFugueTextHandler>(
+  id: kHandlerId,
+  builder: (context, handler) => _DebouncedMarkdown(
+    // Separates a real edit from a rebuild of an ancestor.
+    revision: handler.doc.revisionForHandler(kHandlerId),
+    readText: () => handler.value,
+  ),
+);
+```
+
+</Greyhound>
 
 ## updates
 

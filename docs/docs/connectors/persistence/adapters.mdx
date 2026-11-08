@@ -316,6 +316,11 @@ first (see [Peer identity](./how-it-works.mdx#peer-identity)).
 - A sync [server with a persistent registry](https://github.com/MattiaPispisa/crdt/blob/main/packages/core/crdt_socket_sync/example/lib/main.dart),
   backed by Hive, with clients that sync through it (see
   [Server registry](../sync/server-registry.mdx)).
+- [Greyhound Markdown](https://mattiapispisa.it/crdt/greyhound_markdown/)
+  keeps every room in the browser with `crdt_lf_hive`: `storage: CRDTHive.open`
+  in its [replica](../replica.mdx#a-complete-app-greyhound-markdown). Edit a
+  room offline, reload the page, and the text is still there
+  ([source](https://github.com/MattiaPispisa/crdt/blob/main/apps/greyhound_markdown/client/lib/src/services/room/room_host.dart)).
 
 <NextSteps
   items={[

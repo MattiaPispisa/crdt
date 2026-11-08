@@ -1,0 +1,40 @@
+.greyhound {
+  margin: 2rem 0;
+  border: 1px solid var(--ifm-color-emphasis-300);
+  border-left: 4px solid var(--ifm-color-primary);
+  border-radius: 10px;
+  background: var(--ifm-color-emphasis-100);
+}
+
+.header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem 0.9rem;
+  padding: 0.8rem 1rem;
+  border-bottom: 1px solid var(--ifm-color-emphasis-200);
+}
+
+.logo {
+  border-radius: 8px;
+}
+
+.title {
+  flex: 1;
+  font-weight: 700;
+}
+
+.links {
+  display: flex;
+  gap: 1rem;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.body {
+  padding: 0.9rem 1rem 0.1rem;
+}
+
+.body > :last-child {
+  margin-bottom: 0.9rem;
+}

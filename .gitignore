@@ -166,6 +166,7 @@ yarn-error.log*
 /docs/.cache-loader/
 # Copied by docs_bs
 /docs/docs/contributing.md
+/docs/docs/benchmarks/_results/
 
 # Greyhound markdown relay (Cloudflare Worker)
 /apps/greyhound_markdown/server/.wrangler/

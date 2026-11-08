@@ -29,6 +29,7 @@ so several peers edit the same page, with bold, links, headings and lists.
 - 👥 **Remote cursors**: `CrdtQuillCursorsOverlay`, on stable positions
 - 😀 **Emoji-safe**: offsets converted between Quill's UTF-16 and the handler's runes
 - ✅ **Self-checking**: the binder compares the editor and the handler after every change
+- ➕ **…and more**: everything else is in the [documentation][docs_link]
 
 <div align="center">
   <img width="500" alt="crdt_lf_quill_example" src="https://raw.githubusercontent.com/MattiaPispisa/crdt/main/assets/demos/crdt_lf_quill_example.gif">
@@ -86,7 +87,7 @@ shows two editors on two simulated peers, with each other's cursors.
 - [flutter_quill guide](https://mattiapispisa.it/crdt/docs/connectors/flutter/editors/quill): usage, embeds,
   undo, remote cursors, limits
 - [Rich text](https://mattiapispisa.it/crdt/docs/use-cases/rich-text): the handler under the editor
-- [Benchmarks](https://github.com/MattiaPispisa/crdt/tree/main/packages/adapters/text/crdt_lf_quill/benchmarks/results.md)
+- [Benchmarks](https://mattiapispisa.it/crdt/docs/benchmarks/crdt_lf_quill)
 
 ## Apps
 

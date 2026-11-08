@@ -54,6 +54,15 @@ Everything else (delivery guarantees, reconnect policy, initial sync) follows
 from that choice. The wire format, the type codes and the plugin system are
 shared.
 
+:::info[Greyhound Markdown uses the relay mode]
+[Greyhound Markdown](https://mattiapispisa.it/crdt/greyhound_markdown/) syncs
+through a relay, both live and on your machine. The live app talks to a
+Cloudflare Worker written in TypeScript. Locally, the same client talks to a
+Dart Frog or Serverpod relay from the repository. See
+[Greyhound Markdown on a relay](./relay.mdx#greyhound-markdown-on-a-relay) for
+the code and the commands to run it.
+:::
+
 ```mermaid
 graph TB
     subgraph SC["Server–client"]
@@ -102,8 +111,9 @@ import 'package:crdt_socket_sync/web_socket_relay_server.dart'; // WebSocket rel
   [Flutter examples](pathname:///examples/), live over the real backend. The
   repository has VS Code launch settings to run both.
 - [Greyhound Markdown](https://github.com/MattiaPispisa/crdt/tree/main/apps/greyhound_markdown):
-  a full **relay** app, with a Cloudflare Worker relay and local Dart Frog and
-  Serverpod relays.
+  a full **relay** app ([live](https://mattiapispisa.it/crdt/greyhound_markdown/)),
+  with a Cloudflare Worker relay and local Dart Frog and Serverpod relays (see
+  [how it is wired](./relay.mdx#greyhound-markdown-on-a-relay)).
 - Runnable Dart Frog and Serverpod servers, one per mode: see
   [Server frameworks](./server-frameworks.mdx#examples).
 

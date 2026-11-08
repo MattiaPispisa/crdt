@@ -27,6 +27,7 @@ server you already have.
 - 🔐 **Your authentication**: check the request, then upgrade
 - 💾 **Persistent rooms**: a `PersistentServerRegistry` on Hive, SQLite or Drift
 - 📱 **Plain clients**: `WebSocketClient` / `WebSocketRelayClient`, nothing Dart Frog-specific
+- ➕ **…and more**: everything else is in the [documentation][docs_link]
 
 ## Quick start (relay mode)
 

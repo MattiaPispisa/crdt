@@ -248,7 +248,7 @@ After each local write and each remote change, the binder compares the lengths
 of the editor and the handler, and reads the handler again on a mismatch. A
 debug build also compares the full content and throws on a mismatch, while
 `debugVerifyCrdtQuillProjection` is `true` (the default). In the
-[benchmarks](https://github.com/MattiaPispisa/crdt/tree/main/packages/adapters/text/crdt_lf_quill/benchmarks/results.md),
+[benchmarks](../../../benchmarks/crdt_lf_quill.mdx),
 a local keystroke on a 50000-rune document takes 2.17 ms with the length check
 and 3.40 ms with the full check.
 

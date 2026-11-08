@@ -3,6 +3,7 @@ title: Undo and redo
 description: Take back your own edits, and leave everyone else's work alone.
 ---
 
+import Greyhound from '@site/src/components/Greyhound';
 import NextSteps from '@site/src/components/NextSteps';
 
 # Undo and redo
@@ -148,6 +149,46 @@ them, and `CRDTAggregateHandler` when its definition is an
 no element identity to anchor an inverse to, so `Handler.invertible` is `false`
 for them and `track` refuses them. A handler of your own can be undoable too:
 see [Custom handlers](../deep-dive/custom-handlers.mdx#making-a-handler-undoable).
+
+<Greyhound source="client/lib/src/widgets/markdown_shortcuts.dart">
+
+The room owns the undo manager, not the editor pane, so the history survives
+the layout changes that take the editor out of the tree
+([source](https://github.com/MattiaPispisa/crdt/blob/main/apps/greyhound_markdown/client/lib/src/services/room/room_host.dart)):
+
+```dart
+final text = CRDTFugueTextHandler(replica.document, kHandlerId);
+final undo = CRDTUndoManager(replica.document)..track(text);
+```
+
+The toolbar buttons and the shortcuts call it, and read `canUndo` / `canRedo`
+to grey themselves out:
+
+```dart
+@override
+bool isEnabled(EditorShortcutTarget target) => switch (direction) {
+  _UndoDirection.undo => target.undo.canUndo,
+  _UndoDirection.redo => target.undo.canRedo,
+};
+
+@override
+void run(EditorShortcutTarget target) {
+  switch (direction) {
+    case _UndoDirection.undo:
+      target.undo.undo();
+    case _UndoDirection.redo:
+      target.undo.redo();
+  }
+}
+```
+
+The ⌘Z / Ctrl+Z chords sit in a `CallbackShortcuts` **below**
+`DefaultTextEditingShortcuts`, so they reach the document's undo and not the
+`TextField`'s own. The field's undo would replay a plain text diff, and take
+back what other peers wrote. Try it: type in two windows of the same room,
+then undo in one of them.
+
+</Greyhound>
 
 <NextSteps
   items={[

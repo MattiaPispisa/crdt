@@ -29,6 +29,7 @@ peers, close to physical time, in 64 bits, with no central server. Based on
 - 💾 **Compact**: a 64-bit integer, or 8 big-endian bytes; a full counter never wraps
 - 🧭 **Drift detection**
 - 🪶 **Zero dependencies**
+- ➕ **…and more**: everything else is in the [documentation][docs_link]
 
 ## Quick start
 
@@ -56,8 +57,8 @@ final bytes = clock.toUint8List();
 ```
 
 A [complete example](https://github.com/MattiaPispisa/crdt/blob/main/packages/core/hlc/example/main.dart)
-and the [benchmarks](https://github.com/MattiaPispisa/crdt/tree/main/packages/core/hlc/benchmarks/results.md)
-are in the repository.
+is in the repository, and the [benchmarks](https://mattiapispisa.it/crdt/docs/benchmarks/hlc) are on the
+documentation site.
 
 ## Used by
 

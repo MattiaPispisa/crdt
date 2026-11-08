@@ -31,6 +31,7 @@ one handler, and bind text fields and editors to collaborative text. Built on
 - 🅱️ **`CrdtRichTextFieldBuilder`**: inline formats in a `TextField`, with undo
 - 🧩 **`CrdtEditorBinder`**: the sync loop for any editor (used by [`crdt_lf_quill`](https://pub.dev/packages/crdt_lf_quill))
 - 👥 **`CrdtTextCursorsOverlay` / `CrdtAwarenessCursorsOverlay`**: the other peers' carets and pointers
+- ➕ **…and more**: everything else is in the [documentation][docs_link]
 
 ## See it live
 
@@ -75,7 +76,7 @@ CrdtProvider.value(
 - [Delta widgets](https://mattiapispisa.it/crdt/docs/connectors/flutter/delta-widgets)
 - [Text fields](https://mattiapispisa.it/crdt/docs/connectors/flutter/text-fields): remote cursors, rich text
 - [Editors](https://mattiapispisa.it/crdt/docs/connectors/flutter/editors) and [presence](https://mattiapispisa.it/crdt/docs/connectors/flutter/presence)
-- [Benchmarks](https://github.com/MattiaPispisa/crdt/tree/main/packages/core/crdt_lf_flutter/benchmarks/results.md)
+- [Benchmarks](https://mattiapispisa.it/crdt/docs/benchmarks/crdt_lf_flutter)
 
 ## Apps
 

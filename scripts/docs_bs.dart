@@ -35,6 +35,20 @@ void main(List<String> args) async {
     badExit();
   }
 
+  logger.info('Copy benchmark results');
+  try {
+    copyBenchmarkResults(
+      to: docsDir(subParts: ['docs', 'benchmarks', '_results']),
+      logger: logger,
+    );
+  } catch (error) {
+    logger.error(
+      'Unable to copy the benchmark results',
+      error: error,
+    );
+    badExit();
+  }
+
   logger.info('Install Docs');
 
   try {

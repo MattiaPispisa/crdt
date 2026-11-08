@@ -4,6 +4,7 @@ description: What a CRDT is, what this workspace gives you, and where to start.
 slug: /introduction
 ---
 
+import FeaturedPost from '@site/src/components/FeaturedPost';
 import NextSteps from '@site/src/components/NextSteps';
 
 # Introduction
@@ -12,6 +13,14 @@ import NextSteps from '@site/src/components/NextSteps';
 **local-first, collaborative apps**: notes, documents, boards, lists, editors.
 Each user edits their own copy of the data, even offline. When the copies meet
 again, they merge on their own, and every user sees the same result.
+
+<FeaturedPost
+  eyebrow="New to CRDTs? Start here"
+  title="CRDTs: How to Build Conflict-Free Collaborative Apps"
+  href="https://dev.to/mattia/crdts-how-to-build-conflict-free-collaborative-apps-and-why-i-decided-to-implement-them-in-dart-7"
+  source="dev.to"
+  description="The story behind these packages. The post explains the topic from the ground up: the problem, the intuition, and how the pieces fit together. You can use the packages without it, but it makes the rest of this site easier to read."
+/>
 
 ## The problem
 
@@ -48,13 +57,6 @@ two people in a readable order. A set has to decide what happens when one user
 adds an item and another removes it at the same time. That is why this
 workspace has one **handler** per kind of data: you pick the handler that
 matches what your users edit.
-
-:::tip[New to CRDTs?]
-The post
-[CRDTs: How to Build Conflict-Free Collaborative Apps](https://dev.to/mattia/crdts-how-to-build-conflict-free-collaborative-apps-and-why-i-decided-to-implement-them-in-dart-7)
-introduces the topic from the ground up: the problem, the intuition and how
-the pieces fit together. You do not need it to use the packages, but it helps.
-:::
 
 ## What you get
 

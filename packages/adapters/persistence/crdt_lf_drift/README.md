@@ -27,6 +27,7 @@ it keeps your documents on the device, and reads them back on launch. Pick it wh
 - 🔌 **Your executor**: wrap a `CRDTDriftDatabase` on the `QueryExecutor` you choose
 - 🪪 **Peer identity**: the device writes under the same author on every launch
 - 🧩 **Same contract** as the Hive and SQLite adapters: change backend with one line
+- ➕ **…and more**: everything else is in the [documentation][docs_link]
 
 ## Quick start
 
@@ -57,10 +58,10 @@ is the only storage package your `pubspec.yaml` needs.
 
 ## Documentation
 
-- [Which adapter](https://mattiapispisa.it/crdt/docs/connectors/persistence#which-adapter): Hive, SQLite or Drift
+- [Which adapter](https://mattiapispisa.it/crdt/docs/connectors/persistence#which-adapter): Hive, SQLite, Drift, …
 - [Drift: setup and storage details](https://mattiapispisa.it/crdt/docs/connectors/persistence/adapters)
 - [Working with storage](https://mattiapispisa.it/crdt/docs/connectors/persistence/working-with-storage):
-  history, backups, compaction
+  history, backups, compaction, …
 - [Open a replica](https://mattiapispisa.it/crdt/docs/connectors/replica): storage and sync together
 
 ## Apps
