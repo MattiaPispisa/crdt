@@ -1,0 +1,30 @@
+# A recipe: what the docs site shows for it. Paths are relative to the
+# repository root, so a recipe can show any tested file of the repository.
+id: dart-frog-server
+title: A Dart Frog server with documents on disk
+description: >-
+  A Dart Frog route in server–client mode: the server holds the documents,
+  stores them with Hive, and checks a token before the WebSocket opens.
+platforms: [Dart VM]
+# Shown as the install command: names only, `pub add` picks the versions.
+dependencies: [crdt_lf_hive, crdt_socket_sync, crdt_socket_sync_dart_frog, dart_frog, hive]
+files:
+  - path: packages/adapters/sync/dart_frog/example/lib/src/host.dart
+    label: lib/src/host.dart
+  - path: packages/adapters/sync/dart_frog/example/routes/_middleware.dart
+    label: routes/_middleware.dart
+  - path: packages/adapters/sync/dart_frog/example/routes/sync.dart
+    label: routes/sync.dart
+  - path: packages/adapters/sync/dart_frog/example/main.dart
+    label: main.dart
+test: packages/adapters/sync/dart_frog/example/test/routes/sync_test.dart
+keyPoints:
+  - "The server serves only the documents its registry holds: create them before a client asks."
+  - "`PersistentServerRegistry` keeps the documents on disk, and compacts them on a threshold."
+  - "A route sees the request before the socket opens: check the caller there, and answer 401 before the upgrade."
+  - "Dispose the host on shutdown: that is where the writes still waiting are flushed."
+related:
+  - title: Server frameworks
+    to: /docs/connectors/sync/server-frameworks
+  - title: Server registry
+    to: /docs/connectors/sync/server-registry

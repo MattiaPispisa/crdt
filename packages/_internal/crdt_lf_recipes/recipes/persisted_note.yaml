@@ -1,0 +1,23 @@
+# A recipe: what the docs site shows for it. Paths are relative to the
+# repository root, so a recipe can show any tested file of the repository.
+id: persisted-note
+title: A text note saved on disk
+description: >-
+  A Dart program that keeps one collaborative text in a SQLite file. Every run
+  reads the note back and adds a line.
+platforms: [Dart VM, Flutter native]
+# Shown as the install command: names only, `pub add` picks the versions.
+dependencies: [crdt_lf, crdt_lf_sqlite]
+files:
+  - path: packages/_internal/crdt_lf_recipes/lib/persisted_note/main.dart
+    label: main.dart
+test: packages/_internal/crdt_lf_recipes/test/persisted_note_test.dart
+keyPoints:
+  - "`openDocument` reads the stored note before it returns, and keeps the same author (peer id) on every run."
+  - "Close in this order: the persistence (it writes what is still waiting), the document, the storage, the backend."
+  - "The database of the adapter may need its own setup on some platforms: see the package it builds on."
+related:
+  - title: Persistence
+    to: /docs/connectors/persistence
+  - title: Collaborative text
+    to: /docs/use-cases/collaborative-text

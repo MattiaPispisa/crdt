@@ -37,26 +37,37 @@ peers, close to physical time, in 64 bits, with no central server. Based on
 dart pub add hlc_dart
 ```
 
+<!-- recipe:hybrid-clock/main.dart#imports,clock -->
 ```dart
+import 'dart:io';
+
 import 'package:hlc_dart/hlc_dart.dart';
 
 final clock = HybridLogicalClock.now();
 
-// A local event.
-clock.localEvent(DateTime.now().millisecondsSinceEpoch);
-
-// A message from another peer.
+// Another peer has its own clock: here it lives in the same program.
 final received = HybridLogicalClock.now();
+
+// A local event: an edit, a write, anything this peer does.
+clock.localEvent(DateTime.now().millisecondsSinceEpoch);
+stdout.writeln(clock); // <milliseconds>.<counter>
+
+// A message from the other peer carries its clock.
 clock.receiveEvent(DateTime.now().millisecondsSinceEpoch, received);
 
-print(clock.happenedBefore(received));
+// After the receive, the message comes before this clock.
+final ordered = received.happenedBefore(clock);
+stdout.writeln(ordered); // true
 
-// 64 bits, or 8 bytes.
-final restored = HybridLogicalClock.fromInt64(clock.toInt64());
-final bytes = clock.toUint8List();
+// 64 bits, or 8 big-endian bytes.
+final fromInt = HybridLogicalClock.fromInt64(clock.toInt64());
+final fromBytes = HybridLogicalClock.fromUint8List(clock.toUint8List());
+stdout.writeln(fromInt == clock && fromBytes == clock); // true
 ```
+<!-- /recipe -->
 
-A [complete example](https://github.com/MattiaPispisa/crdt/blob/main/packages/core/hlc/example/main.dart)
+The program is a [recipe](https://mattiapispisa.it/crdt/docs/recipes/hybrid-clock),
+tested in CI. A [complete example](https://github.com/MattiaPispisa/crdt/blob/main/packages/core/hlc/example/main.dart)
 is in the repository, and the [benchmarks](https://mattiapispisa.it/crdt/docs/benchmarks/hlc) are on the
 documentation site.
 

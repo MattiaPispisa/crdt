@@ -2,6 +2,8 @@ import { themes as prismThemes } from 'prism-react-renderer';
 import type { Config } from '@docusaurus/types';
 import type * as Preset from '@docusaurus/preset-classic';
 
+import recipesPlugin from './plugins/recipes';
+
 // This runs in Node.js - Don't use client-side code here (browser APIs, JSX...)
 
 // Single source of truth for the Flutter web examples link. The app is built
@@ -61,6 +63,8 @@ const config: Config = {
   themes: ['@docusaurus/theme-mermaid'],
 
   plugins: [
+    // the recipes of crdt_lf_recipes, read from the repository
+    recipesPlugin,
     // offline, client-side search
     'docusaurus-plugin-pagefind',
     [

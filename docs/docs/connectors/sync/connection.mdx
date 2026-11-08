@@ -4,6 +4,7 @@ description: Connection status, reconnection, liveness, and the data that did no
 ---
 
 import NextSteps from '@site/src/components/NextSteps';
+import RecipeSnippet from '@site/src/components/RecipeSnippet';
 
 # Connection and errors
 
@@ -11,28 +12,10 @@ import NextSteps from '@site/src/components/NextSteps';
 
 Both clients expose a `connectionStatus` stream, and recover on their own:
 
-```dart
-client.connectionStatus.listen((status) {
-  switch (status) {
-    case ConnectionStatus.connected:
-      // Normal operation
-      break;
-    case ConnectionStatus.reconnecting:
-      // Automatic reconnection in progress
-      break;
-    case ConnectionStatus.error:
-      // Handle connection errors
-      break;
-    case ConnectionStatus.disconnected:
-      // Clean disconnection
-      break;
-    case ConnectionStatus.unsupported:
-      // The server refused this build. Terminal: ask the user to update.
-      showUpdateRequired(client.incompatibility!.message);
-      break;
-  }
-});
-```
+<RecipeSnippet id="server-client-sync" file="client.dart" region="status" />
+
+On `unsupported`, `client.incompatibility` says why the server refused this
+build.
 
 - **Liveness.** It is tracked with ping/pong. A missing pong within the ping
   timeout is treated as a dead (half-open) connection, and triggers a

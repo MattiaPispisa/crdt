@@ -27,6 +27,7 @@ jobs:
       crdt_lf_quill: ${{ steps.filter.outputs.crdt_lf_quill }}
       crdt_socket_sync_dart_frog: ${{ steps.filter.outputs.crdt_socket_sync_dart_frog }}
       crdt_socket_sync_serverpod: ${{ steps.filter.outputs.crdt_socket_sync_serverpod }}
+      crdt_lf_recipes: ${{ steps.filter.outputs.crdt_lf_recipes }}
     steps:
       - uses: actions/checkout@v7
       - uses: dorny/paths-filter@v4
@@ -68,6 +69,8 @@ jobs:
               - 'packages/adapters/sync/dart_frog/**'
             crdt_socket_sync_serverpod:
               - 'packages/adapters/sync/serverpod/**'
+            crdt_lf_recipes:
+              - 'packages/_internal/crdt_lf_recipes/**'
 
   hlc:
     needs: changes
@@ -231,6 +234,80 @@ jobs:
     secrets:
       CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
 
+  # The example apps are their own packages: `dart_package.yaml` skips them
+  # (`--no-example`). Their tests start the real server the way the app does.
+  crdt_socket_sync_dart_frog_examples:
+    needs: changes
+    if: >-
+      ${{ needs.changes.outputs.global == 'true'
+       || needs.changes.outputs.hlc == 'true'
+       || needs.changes.outputs.crdt_lf == 'true'
+       || needs.changes.outputs.crdt_lf_persistence == 'true'
+       || needs.changes.outputs.crdt_lf_hive == 'true'
+       || needs.changes.outputs.crdt_socket_sync == 'true'
+       || needs.changes.outputs.crdt_socket_sync_dart_frog == 'true' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - working_directory: packages/adapters/sync/dart_frog/example
+            dart_dirs: lib routes test main.dart
+          - working_directory: packages/adapters/sync/dart_frog/relay_example
+            dart_dirs: lib routes test main.dart
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ${{ matrix.working_directory }}
+    steps:
+      - name: 📚 Git Checkout
+        uses: actions/checkout@v7
+      - name: 🎯 Setup Dart
+        uses: dart-lang/setup-dart@v1
+      - name: 📦 Install Dependencies
+        run: dart pub get
+      - name: ✨ Check Formatting
+        run: dart format --line-length 80 --set-exit-if-changed ${{ matrix.dart_dirs }}
+      - name: 🕵️ Analyze
+        run: dart analyze --fatal-infos --fatal-warnings
+      - name: 🧪 Run Tests
+        run: dart test
+
+  crdt_socket_sync_serverpod_examples:
+    needs: changes
+    if: >-
+      ${{ needs.changes.outputs.global == 'true'
+       || needs.changes.outputs.hlc == 'true'
+       || needs.changes.outputs.crdt_lf == 'true'
+       || needs.changes.outputs.crdt_lf_persistence == 'true'
+       || needs.changes.outputs.crdt_lf_hive == 'true'
+       || needs.changes.outputs.crdt_socket_sync == 'true'
+       || needs.changes.outputs.crdt_socket_sync_serverpod == 'true' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - working_directory: packages/adapters/sync/serverpod/example
+            dart_dirs: bin lib test
+          - working_directory: packages/adapters/sync/serverpod/relay_example
+            dart_dirs: bin lib test
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ${{ matrix.working_directory }}
+    steps:
+      - name: 📚 Git Checkout
+        uses: actions/checkout@v7
+      - name: 🎯 Setup Dart
+        uses: dart-lang/setup-dart@v1
+      - name: 📦 Install Dependencies
+        run: dart pub get
+      - name: ✨ Check Formatting
+        run: dart format --line-length 80 --set-exit-if-changed ${{ matrix.dart_dirs }}
+      - name: 🕵️ Analyze
+        run: dart analyze --fatal-infos --fatal-warnings
+      - name: 🧪 Run Tests
+        run: dart test
+
   crdt_lf_flutter:
     needs: changes
     if: >-
@@ -264,6 +341,41 @@ jobs:
     secrets:
       CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
 
+  crdt_lf_recipes:
+    needs: changes
+    if: >-
+      ${{ needs.changes.outputs.global == 'true'
+       || needs.changes.outputs.hlc == 'true'
+       || needs.changes.outputs.crdt_lf == 'true'
+       || needs.changes.outputs.crdt_lf_persistence == 'true'
+       || needs.changes.outputs.crdt_lf_hive == 'true'
+       || needs.changes.outputs.crdt_lf_sqlite == 'true'
+       || needs.changes.outputs.crdt_socket_sync == 'true'
+       || needs.changes.outputs.crdt_lf_flutter == 'true'
+       || needs.changes.outputs.crdt_lf_quill == 'true'
+       || needs.changes.outputs.crdt_lf_recipes == 'true' }}
+    uses: ./.github/workflows/flutter_package.yaml
+    with:
+      working_directory: ./packages/_internal/crdt_lf_recipes
+      # The recipes are examples: their tests prove they run, not coverage.
+      min_coverage: 0
+      package_name: crdt_lf_recipes
+    secrets:
+      CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+
+  # The README quick starts are written from the recipe regions.
+  recipes_check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 📚 Git Checkout
+        uses: actions/checkout@v7
+      - name: 🎯 Setup Dart
+        uses: dart-lang/setup-dart@v1
+      - name: 📦 Install Dependencies
+        run: dart pub get
+      - name: 🍳 Check the README quick starts
+        run: dart run scripts/recipes_sync.dart --check
+
   license_check:
     runs-on: ubuntu-latest
     steps:
@@ -289,6 +401,7 @@ jobs:
     needs:
       - changes
       - license_check
+      - recipes_check
       - hlc
       - crdt_lf
       - crdt_lf_persistence
@@ -299,8 +412,11 @@ jobs:
       - crdt_socket_sync
       - crdt_socket_sync_dart_frog
       - crdt_socket_sync_serverpod
+      - crdt_socket_sync_dart_frog_examples
+      - crdt_socket_sync_serverpod_examples
       - crdt_lf_flutter
       - crdt_lf_quill
+      - crdt_lf_recipes
     steps:
       - name: Verify no job failed
         run: |

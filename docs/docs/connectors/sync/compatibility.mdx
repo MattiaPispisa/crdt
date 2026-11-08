@@ -37,8 +37,10 @@ it. What each side can state is a record per handler type, keyed by
 
 `kinds` are what the peer can decode. `blob` is the range of snapshot layouts it
 reads: `min == max` for a build that reads only what it writes, wider for one
-that still reads an older layout and migrates it. A blob is refused whole on
-read, so a disagreement there is as terminal as a missing kind.
+that still reads an older layout and migrates it (see
+[The rules of a blob version](../../deep-dive/binary-format.mdx#the-rules-of-a-blob-version)).
+A blob outside the range is refused whole on read, so a disagreement there is
+as terminal as a missing kind.
 
 The two sides answer **different questions**, and that is what makes the check
 work:
@@ -142,19 +144,20 @@ handshake check is a safety net, not the only defense.
   snapshot carries no record of what it holds, so a document that imports one
   with `pruneHistory: true` reports that it needs nothing and lets every client
   through. It answers in full again after it takes its own snapshot.
-- **A blob layout the reader can migrate.** Lower
-  `minReadableSnapshotBlobVersion` to keep reading an older layout and upgrade
-  it on the way in; `readSnapshotHeader` hands back the version it found. Only a
-  blob outside the range refuses the peer, as `SnapshotBlobTooNew` (needs a
-  newer build) or `SnapshotBlobTooOld` (a layout this build dropped).
-- **A handler that writes its snapshot blob by hand.** The version means
-  something only when the blob carries it (`Handler.snapshotHeader` /
-  `readSnapshotHeader`). One that writes its state without them still reports
-  `1`, so it opts out of the blob check instead of passing it.
-- **Whether a kind is stamped.** `OperationType.stamped` is a build's own
-  decision, not part of what travels. Two builds that disagree about one kind
-  pass the handshake and meet at read time, with the `FormatException` that
-  `crdt_lf` raises for exactly that (see
+- **A blob layout the reader can migrate.** A build reads the range
+  `minReadableSnapshotBlobVersion..snapshotBlobVersion` of each handler. Only a
+  blob outside that range refuses the peer, as `SnapshotBlobTooNew` (needs a
+  newer build) or `SnapshotBlobTooOld` (a layout this build dropped). How to
+  change a layout and keep reading the old one is in
+  [The rules of a blob version](../../deep-dive/binary-format.mdx#the-rules-of-a-blob-version).
+- **A handler that writes its snapshot blob without `snapshotHeader()`.** Its
+  blob carries no version, but it still reports the range `1..1`. The check
+  then compares nothing real: such a handler opts out of it.
+- **Whether a kind is stamped.** The handshake does not compare
+  `OperationType.stamped`. It travels in bit 7 of each operation's kind byte,
+  so two builds that disagree about one kind pass the handshake and meet at
+  decode time, with the `FormatException` that `crdt_lf` raises for exactly
+  that (see
   [Custom handlers](../../deep-dive/custom-handlers.mdx#when-to-turn-stamped-on)).
 
 ## Wire format

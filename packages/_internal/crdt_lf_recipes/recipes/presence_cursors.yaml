@@ -1,0 +1,34 @@
+# A recipe: what the docs site shows for it. Paths are relative to the
+# repository root, so a recipe can show any tested file of the repository.
+id: presence-cursors
+title: Remote cursors and presence
+description: >-
+  A relay server that shares who is in each room, and a Flutter note that
+  shows the carets of the other peers, with their name and color, as they
+  type.
+platforms: [Flutter native, Flutter web]
+# Shown as the install command: names only, `pub add` picks the versions.
+dependencies: [crdt_lf, crdt_lf_flutter, crdt_socket_sync]
+files:
+  - path: packages/_internal/crdt_lf_recipes/lib/presence_cursors/server.dart
+    label: server.dart
+  - path: packages/_internal/crdt_lf_recipes/lib/presence_cursors/presence.dart
+    label: presence.dart
+  - path: packages/_internal/crdt_lf_recipes/lib/presence_cursors/note_page.dart
+    label: note_page.dart
+  - path: packages/_internal/crdt_lf_recipes/lib/presence_cursors/main.dart
+    label: main.dart
+test: packages/_internal/crdt_lf_recipes/test/presence_cursors_test.dart
+keyPoints:
+  - "The awareness plugin runs on both sides: `ServerAwarenessPlugin` on the server, `ClientAwarenessPlugin` on each client. Presence never enters the document history."
+  - "Publish the anchors that `onSelectionAnchorsChanged` reports as JSON. They are `null` when the field loses focus, and that takes the caret away."
+  - "The awareness states include this peer: leave out its own session id before you draw."
+  - "`CrdtTextCursorsOverlay` needs a Fugue text handler and an `Overlay` above it (`MaterialApp` gives one)."
+  - "When a peer disconnects, the server removes its state and sends the new states to the others."
+related:
+  - title: Text fields
+    to: /docs/connectors/flutter/text-fields
+  - title: Plugins and awareness
+    to: /docs/connectors/sync/plugins
+  - title: Presence
+    to: /docs/connectors/flutter/presence

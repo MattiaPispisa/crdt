@@ -23,6 +23,12 @@ other.importSnapshot(snapshot); // replace the base
 other.mergeSnapshot(snapshot); // merge it with what is already there
 ```
 
+Importing prunes as well: `importSnapshot`, `mergeSnapshot` and `import` take
+`pruneHistory`, and it is `true` by default. `importSnapshot` applies a snapshot only
+when it is newer than, or equal to, the one the document holds
+(`shouldApplySnapshot`). It returns `false` for an older or concurrent one: use
+`mergeSnapshot` for those.
+
 `document.snapshot` reads the snapshot the document holds, as a read-only copy.
 A snapshot carries its `versionVector`, so peers can tell what it covers.
 

@@ -14,10 +14,25 @@ opens the database (see [Which adapter](./index.mdx#which-adapter)). This page
 is for what is specific to each one: setup, what is stored where, and the
 lower-level storages.
 
+**Each adapter is a bridge to a storage package.** The adapter stores CRDT
+changes and snapshots in that package's database, and nothing else. How to
+install, configure and run the database itself (native libraries, Flutter
+setup, platforms, file locations) is in the documentation of that package:
+
+| Adapter | Built on | Read its docs for |
+| --- | --- | --- |
+| `crdt_lf_sqlite` | [`sqlite3`](https://pub.dev/packages/sqlite3) | the native SQLite library on each platform |
+| `crdt_lf_hive` | [`hive`](https://pub.dev/packages/hive) | `Hive.init` and the storage folder, in Dart and in Flutter |
+| `crdt_lf_drift` | [`drift`](https://pub.dev/packages/drift) | opening a database on each platform (`QueryExecutor`) |
+
 ## Install and open
 
 <Tabs groupId="adapter">
 <TabItem value="sqlite" label="SQLite" default>
+
+`crdt_lf_sqlite` stores the documents in a SQLite database opened with
+[`sqlite3`](https://pub.dev/packages/sqlite3). Set up `sqlite3` for your
+platforms as its documentation explains, then:
 
 ```sh
 dart pub add crdt_lf_sqlite
@@ -41,6 +56,10 @@ backend.close();
 </TabItem>
 <TabItem value="hive" label="Hive">
 
+`crdt_lf_hive` stores the documents in [Hive](https://pub.dev/packages/hive)
+boxes. Initialize Hive (`Hive.init` with a folder; in Flutter, a folder of the
+app) as its documentation explains, then:
+
 ```sh
 dart pub add crdt_lf_hive hive
 ```
@@ -62,6 +81,10 @@ await backend.close();
 
 </TabItem>
 <TabItem value="drift" label="Drift">
+
+`crdt_lf_drift` stores the documents in a [Drift](https://pub.dev/packages/drift)
+database. Choose and open the Drift executor for your platforms as its
+documentation explains, then:
 
 ```sh
 dart pub add crdt_lf_drift

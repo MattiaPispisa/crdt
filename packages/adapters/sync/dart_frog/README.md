@@ -32,25 +32,70 @@ server you already have.
 ## Quick start (relay mode)
 
 ```sh
-dart pub add crdt_socket_sync_dart_frog
+dart pub add crdt_socket_sync crdt_socket_sync_dart_frog
 ```
 
-```dart
-// lib/src/host.dart — built once, shared by every request
-final relayHost = RelaySessionHost(store: InMemoryRelayStore());
+The host, built once and shared by every request:
 
-// routes/_middleware.dart
+<!-- recipe:dart-frog-relay/lib/src/host.dart#host -->
+```dart
+import 'package:crdt_socket_sync/relay_server.dart';
+
+/// The relay host for this process.
+///
+/// Constructed at the top level, so `_middleware.dart` finds it when Dart Frog
+/// builds the handler tree; started by `init()` in `main.dart`. One instance
+/// per process, shared by every request: a host per request would give each
+/// client its own empty room.
+///
+/// The host has no socket of its own — Dart Frog upgrades the requests and
+/// hands them over. The store is in-memory, so a restart loses every room;
+/// there is no durable `RelayStore` in this repository yet, so a real backend
+/// implements one over its database and closes it after `dispose()`.
+final relayHost = RelaySessionHost(store: InMemoryRelayStore());
+```
+<!-- /recipe -->
+
+The middleware puts it in the request context:
+
+<!-- recipe:dart-frog-relay/routes/_middleware.dart#middleware -->
+```dart
+import 'package:crdt_socket_sync_dart_frog/relay.dart';
+import 'package:crdt_socket_sync_dart_frog_relay_example/src/host.dart';
+import 'package:dart_frog/dart_frog.dart';
+
+/// Puts the host in the context, under the type `context.read` matches on.
+///
+/// The host is built once, at the top level of `host.dart`; this only hands
+/// the same instance to every request.
 Handler middleware(Handler handler) {
   return handler.use(crdtRelayHostProvider(relayHost));
 }
+```
+<!-- /recipe -->
 
-// routes/relay.dart
+The route hands the WebSocket to it:
+
+<!-- recipe:dart-frog-relay/routes/relay.dart#route -->
+```dart
+import 'package:crdt_socket_sync_dart_frog/relay.dart';
+import 'package:dart_frog/dart_frog.dart';
+
+/// Relay mode: the server rebroadcasts opaque CRDT blobs to the other clients
+/// of a room and persists them, without ever reading them.
+///
+/// Connect with `WebSocketRelayClient` at `ws://localhost:8080/relay`. The
+/// room is the document id inside the hello frame, not part of this path.
 Future<Response> onRequest(RequestContext context) async {
   return crdtRelayWebSocketHandler(context.read<RelaySessionHost>())(context);
 }
 ```
+<!-- /recipe -->
 
 Clients connect with `WebSocketRelayClient`, pointed at `ws://localhost:8080/relay`.
+Complete backends, tested in CI:
+[relay](https://mattiapispisa.it/crdt/docs/recipes/dart-frog-relay) and
+[server–client, with documents on disk](https://mattiapispisa.it/crdt/docs/recipes/dart-frog-server).
 
 ## Documentation
 

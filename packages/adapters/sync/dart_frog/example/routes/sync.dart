@@ -1,6 +1,7 @@
 // Copyright 2025 Mattia Pispisa
 // SPDX-License-Identifier: MIT
 
+// #docregion route
 import 'dart:io';
 
 import 'package:crdt_socket_sync_dart_frog/sync.dart';
@@ -26,3 +27,4 @@ Future<Response> onRequest(RequestContext context) async {
 
   return crdtSyncWebSocketHandler(context.read<DocumentSessionHost>())(context);
 }
+// #enddocregion route

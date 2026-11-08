@@ -1,0 +1,23 @@
+# A recipe: what the docs site shows for it. Paths are relative to the
+# repository root, so a recipe can show any tested file of the repository.
+id: hybrid-clock
+title: A hybrid logical clock
+description: >-
+  A Dart program that moves a hybrid logical clock through a local event and a
+  message from another peer, compares the two clocks and stores the clock.
+platforms: [Dart VM, Flutter native]
+# Shown as the install command: names only, `pub add` picks the versions.
+dependencies: [hlc_dart]
+files:
+  - path: packages/_internal/crdt_lf_recipes/lib/hybrid_clock/main.dart
+    label: main.dart
+test: packages/_internal/crdt_lf_recipes/test/hybrid_clock_test.dart
+keyPoints:
+  - "Call `localEvent` for what this peer does, and `receiveEvent` for every clock that comes from another peer."
+  - "After `receiveEvent`, the clock is ahead of the message: `received.happenedBefore(clock)` is true."
+  - "`toInt64` needs 64-bit integers, so use it on native platforms. On the web, store the clock with `toUint8List` (8 bytes) or `toString`."
+related:
+  - title: "Time: the hybrid logical clock"
+    to: /docs/deep-dive/time-hlc
+  - title: HLC benchmarks
+    to: /docs/benchmarks/hlc

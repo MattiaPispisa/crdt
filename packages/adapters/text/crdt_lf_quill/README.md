@@ -41,44 +41,93 @@ so several peers edit the same page, with bold, links, headings and lists.
 flutter pub add crdt_lf crdt_lf_flutter crdt_lf_quill flutter_quill
 ```
 
+flutter_quill needs its localizations in the app:
+
+<!-- recipe:quill-editor/main.dart#app -->
 ```dart
-import 'package:crdt_lf/crdt_lf.dart' hide ChangeSource;
-import 'package:crdt_lf_flutter/crdt_lf_flutter.dart';
-import 'package:crdt_lf_quill/crdt_lf_quill.dart';
-import 'package:flutter_quill/flutter_quill.dart';
-
-final document = CRDTDocument();
-CRDTFugueRichTextHandler(document, 'page');
-final controller = QuillController.basic();
-
-CrdtProvider.value(
-  value: document,
-  child: CrdtQuillBinder(
-    id: 'page',
-    controller: controller,
-    builder: (context) => Column(
-      children: [
-        ListenableBuilder(
-          listenable: controller,
-          builder: (context, _) => QuillSimpleToolbar(
-            key: ObjectKey(controller.document),
-            controller: controller,
-          ),
-        ),
-        Expanded(
-          child: QuillEditor.basic(
-            controller: controller,
-            config: QuillEditorConfig(
-              unknownEmbedBuilder: crdtQuillUnknownEmbedBuilder(),
-            ),
-          ),
-        ),
-      ],
-    ),
-  ),
-);
+@override
+Widget build(BuildContext context) {
+  return MaterialApp(
+    title: 'Editor',
+    // flutter_quill reads its texts from here, and throws without them.
+    localizationsDelegates: const [
+      GlobalMaterialLocalizations.delegate,
+      GlobalWidgetsLocalizations.delegate,
+      FlutterQuillLocalizations.delegate,
+    ],
+    home: EditorPage(backend: backend),
+  );
+}
 ```
+<!-- /recipe -->
 
+The page owns the controller, and binds it to a `CRDTFugueRichTextHandler`
+registered as `'page'`:
+
+<!-- recipe:quill-editor/editor_page.dart#state,bind -->
+```dart
+// The State owns these: the binder never disposes them, and a new
+// FocusNode on each build would drop the keyboard.
+final _controller = QuillController.basic();
+final _focusNode = FocusNode();
+final _scrollController = ScrollController();
+
+@override
+Widget build(BuildContext context) {
+  final page = _page;
+  if (page == null) {
+    return const Scaffold(body: Center(child: CircularProgressIndicator()));
+  }
+
+  return Scaffold(
+    appBar: AppBar(title: const Text('Editor')),
+    body: CrdtProvider.value(
+      value: page.document,
+      child: CrdtQuillBinder(
+        id: 'page',
+        controller: _controller,
+        // The editor, its shortcuts and the toolbar buttons undo through it.
+        undoManager: _undo,
+        builder:
+            (context) => Column(
+              children: [
+                // The binder gives the controller a new document: key the
+                // toolbar on it, so its undo and redo buttons follow.
+                ListenableBuilder(
+                  listenable: _controller,
+                  builder:
+                      (context, _) => QuillSimpleToolbar(
+                        key: ObjectKey(_controller.document),
+                        controller: _controller,
+                        config: const QuillSimpleToolbarConfig(
+                          multiRowsDisplay: false,
+                        ),
+                      ),
+                ),
+                const Divider(height: 1),
+                Expanded(
+                  child: QuillEditor.basic(
+                    controller: _controller,
+                    focusNode: _focusNode,
+                    scrollController: _scrollController,
+                    config: QuillEditorConfig(
+                      padding: const EdgeInsets.all(16),
+                      // Shows an embed of another peer that has no builder.
+                      unknownEmbedBuilder: crdtQuillUnknownEmbedBuilder(),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+      ),
+    ),
+  );
+}
+```
+<!-- /recipe -->
+
+The complete editor, saved on the device with undo and tested in CI, is the
+[recipe](https://mattiapispisa.it/crdt/docs/recipes/quill-editor).
 The [example](https://github.com/MattiaPispisa/crdt/tree/main/packages/adapters/text/crdt_lf_quill/example)
 shows two editors on two simulated peers, with each other's cursors.
 

@@ -1,0 +1,29 @@
+# A recipe: what the docs site shows for it. Paths are relative to the
+# repository root, so a recipe can show any tested file of the repository.
+id: relay-rooms
+title: Rooms on demand with a relay
+description: >-
+  A relay server that hosts any number of rooms, with no setup, and a client
+  that joins a room by its document id. The relay stores and rebroadcasts the
+  changes; the clients merge them.
+platforms: [Dart VM, Flutter native]
+# Shown as the install command: names only, `pub add` picks the versions.
+dependencies: [crdt_lf, crdt_socket_sync]
+files:
+  - path: packages/_internal/crdt_lf_recipes/lib/relay_rooms/server.dart
+    label: server.dart
+  - path: packages/_internal/crdt_lf_recipes/lib/relay_rooms/client.dart
+    label: client.dart
+test: packages/_internal/crdt_lf_recipes/test/relay_rooms_test.dart
+keyPoints:
+  - "The document id is the room: there is nothing to register, and the store keeps a room from its first change."
+  - "A client that joins late gets the room's text in the welcome."
+  - "`InMemoryRelayStore` loses every room on restart. A durable `RelayStore` must keep, per room, the log with its seq numbers and the latest snapshot."
+  - "The relay never reads CRDT data. It asks one client for a snapshot (`compact: true`) when the log grows, and the client does it on its own."
+related:
+  - title: Relay mode
+    to: /docs/connectors/sync/relay
+  - title: Relay protocol
+    to: /docs/connectors/sync/relay-protocol
+  - title: Connection and errors
+    to: /docs/connectors/sync/connection

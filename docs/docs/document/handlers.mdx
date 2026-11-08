@@ -32,7 +32,7 @@ final same = doc.handler(CRDTFugueTextHandler.spec, 'note'); // identical(note, 
 | Call | When the id is already open |
 | --- | --- |
 | a constructor | throws `HandlerAlreadyRegisteredException` |
-| `doc.handler(spec, id)` | returns the open handler; throws only when it is open as another kind |
+| `doc.handler(spec, id)` | returns the open handler; throws when it is open as another kind, or deleted (see [Errors](./errors.mdx)) |
 
 A **spec** names a kind: `CRDTFugueTextHandler.spec`, or
 `CRDTListHandler.spec<Todo>('todo-list')` for a generic handler, which needs a

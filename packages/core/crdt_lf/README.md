@@ -62,31 +62,39 @@ Every handler on two simulated peers, in the browser:
 dart pub add crdt_lf
 ```
 
+<!-- recipe:two-peers/main.dart#imports,merge -->
 ```dart
+import 'dart:io';
+
 import 'package:crdt_lf/crdt_lf.dart';
 
-void main() {
-  final alice = CRDTDocument();
-  final bob = CRDTDocument();
+final alice = CRDTDocument();
+final bob = CRDTDocument();
 
-  final aliceText = CRDTFugueTextHandler(alice, 'note');
-  final bobText = CRDTFugueTextHandler(bob, 'note');
+// The same handler id on both peers: it is the same text.
+final aliceText = CRDTFugueTextHandler(alice, 'note');
+final bobText = CRDTFugueTextHandler(bob, 'note');
 
-  aliceText.insert(0, 'Hello world');
-  bob.importChanges(alice.exportChanges());
+aliceText.insert(0, 'Hello world');
+bob.importChanges(alice.exportChanges()); // Bob now reads "Hello world"
 
-  // Both edit at the same time, offline.
-  aliceText.insert(0, 'Big ');
-  bobText.insert(11, '!');
+// Both edit at the same time, with no connection.
+aliceText.insert(0, 'Big ');
+bobText.insert(11, '!');
 
-  // They meet again.
-  bob.importChanges(alice.exportChanges());
-  alice.importChanges(bob.exportChanges());
+// They meet again and exchange what the other is missing.
+bob.importChanges(alice.exportChanges());
+alice.importChanges(bob.exportChanges());
 
-  print(aliceText.value); // Big Hello world!
-  print(bobText.value); // Big Hello world!
-}
+stdout
+  ..writeln(aliceText.value) // Big Hello world!
+  ..writeln(bobText.value); // Big Hello world!
 ```
+<!-- /recipe -->
+
+Two documents in one program stand for two devices: in an app the changes
+travel over the network ([`crdt_socket_sync`](https://pub.dev/packages/crdt_socket_sync)).
+The program is a [recipe](https://mattiapispisa.it/crdt/docs/recipes/two-peers), tested in CI.
 
 ## Connect it
 

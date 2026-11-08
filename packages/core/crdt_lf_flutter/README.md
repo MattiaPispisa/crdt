@@ -57,18 +57,67 @@ shows every widget on one screen, with a `⟳ rebuilt ×N` badge on each region:
 flutter pub add crdt_lf crdt_lf_flutter
 ```
 
-```dart
-final doc = CRDTDocument();
-CRDTFugueTextHandler(doc, 'note');
+Provide the document to the tree:
 
-CrdtProvider.value(
-  value: doc,
-  child: CrdtTextFieldBuilder(
-    id: 'note',
-    builder: (context, controller) => TextField(controller: controller),
-  ),
-);
+<!-- recipe:todo-list/main.dart#provide -->
+```dart
+home: CrdtProvider(
+  // In memory: the provider creates the document and disposes it.
+  create: (_) {
+    final document = CRDTDocument();
+    todosOf(document); // the widgets read the list under 'todos'
+    return document;
+  },
+  child: const TodoPage(),
+),
 ```
+<!-- /recipe -->
+
+Rebuild on one handler, and read it once for an action:
+
+<!-- recipe:todo-list/todo_page.dart#list -->
+```dart
+@override
+Widget build(BuildContext context) {
+  return Scaffold(
+    appBar: AppBar(title: const Text('Todos')),
+    floatingActionButton: FloatingActionButton(
+      tooltip: 'New todo',
+      // An action needs no rebuild: read the handler once.
+      onPressed:
+          () => addTodo(
+            context.crdtHandler<CRDTMovableListRefHandler>('todos'),
+          ),
+      child: const Icon(Icons.add),
+    ),
+    // `nested`: also rebuild when a todo changes, not only the list.
+    body: CrdtHandlerBuilder<CRDTMovableListRefHandler>(
+      id: 'todos',
+      nested: true,
+      builder: (context, todos) {
+        final items = todos.children.whereType<CRDTMapRefHandler>().toList();
+        return ReorderableListView(
+          // `to` is the place after the move, as `move` counts it.
+          onReorderItem: todos.move,
+          children: [
+            for (final (index, todo) in items.indexed)
+              TodoTile(
+                key: ValueKey(todo.id),
+                todo: todo,
+                onDelete: () => todos.removeChildAt(index),
+              ),
+          ],
+        );
+      },
+    ),
+  );
+}
+```
+<!-- /recipe -->
+
+The whole app (`todosOf`, `addTodo`, `TodoTile`), tested in CI, is the
+[todo list recipe](https://mattiapispisa.it/crdt/docs/recipes/todo-list). For a text field, see the
+[note recipe](https://mattiapispisa.it/crdt/docs/recipes/flutter-note).
 
 ## Documentation
 

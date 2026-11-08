@@ -1,0 +1,15 @@
+---
+title: "Remote cursors and presence"
+sidebar_label: "Cursors and presence"
+description: "Show where the other peers are typing: the awareness plugin and the text cursors overlay."
+---
+
+import Recipe from '@site/src/components/Recipe';
+
+# Remote cursors and presence
+
+The awareness plugin shares a small state per peer (a name, a color, a caret)
+that is never stored. The text field draws the carets of the other peers on
+top of the text.
+
+<Recipe id="presence-cursors" />

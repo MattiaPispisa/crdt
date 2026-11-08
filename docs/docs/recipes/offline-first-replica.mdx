@@ -1,0 +1,15 @@
+---
+title: "An offline-first Flutter app: storage and sync in one call"
+sidebar_label: Offline-first app
+description: "A Flutter note that opens from the device at once, then syncs through a relay."
+---
+
+import Recipe from '@site/src/components/Recipe';
+
+# An offline-first Flutter app: storage and sync in one call
+
+`CRDTReplica.open` reads the note from the device, then connects. With no
+network the app still opens and keeps every edit, and sends them when the
+connection comes back.
+
+<Recipe id="offline-first-replica" />

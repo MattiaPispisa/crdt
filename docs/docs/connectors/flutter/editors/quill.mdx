@@ -5,6 +5,7 @@ description: Collaborative rich text in flutter_quill — bold, links, headings,
 
 import Demo from '@site/src/components/Demo';
 import NextSteps from '@site/src/components/NextSteps';
+import RecipeSnippet from '@site/src/components/RecipeSnippet';
 
 # flutter_quill
 
@@ -35,49 +36,16 @@ flutter pub add crdt_lf crdt_lf_flutter crdt_lf_quill flutter_quill
 
 ## Usage
 
+flutter_quill reads its texts from its localizations: add its delegate to the
+app, or the toolbar throws `MissingFlutterQuillLocalizationException`.
+
+<RecipeSnippet id="quill-editor" file="main.dart" region="app" />
+
 Register a rich text handler on the document, provide the document with
 `CrdtProvider` (from [`crdt_lf_flutter`](../index.mdx)), and put the binder
-above the toolbar and the editor:
+above the toolbar and the editor. The `State` owns the controller:
 
-```dart
-import 'package:crdt_lf/crdt_lf.dart' hide ChangeSource;
-import 'package:crdt_lf_flutter/crdt_lf_flutter.dart';
-import 'package:crdt_lf_quill/crdt_lf_quill.dart';
-import 'package:flutter_quill/flutter_quill.dart';
-
-final document = CRDTDocument();
-CRDTFugueRichTextHandler(document, 'page');
-final controller = QuillController.basic();
-
-CrdtProvider.value(
-  value: document,
-  child: CrdtQuillBinder(
-    id: 'page',
-    controller: controller,
-    builder: (context) => Column(
-      children: [
-        // Rebuilt for each new document: see below.
-        ListenableBuilder(
-          listenable: controller,
-          builder: (context, _) => QuillSimpleToolbar(
-            key: ObjectKey(controller.document),
-            controller: controller,
-          ),
-        ),
-        Expanded(
-          child: QuillEditor.basic(
-            controller: controller,
-            // A peer's embed of a type without a builder shows a small box.
-            config: QuillEditorConfig(
-              unknownEmbedBuilder: crdtQuillUnknownEmbedBuilder(),
-            ),
-          ),
-        ),
-      ],
-    ),
-  ),
-);
-```
+<RecipeSnippet id="quill-editor" file="editor_page.dart" region="state,bind" />
 
 Edits made in the editor go into the handler. Changes from other peers show up
 in the editor.
@@ -237,8 +205,9 @@ final undo = CRDTUndoManager(
 CrdtQuillBinder(id: 'page', controller: controller, undoManager: undo, ...);
 ```
 
-Typing close in time is one undo step (see `captureTimeout`). Call
-`undo.stopCapturing()` to end a step by hand. The toolbar buttons refresh on
+Typing close in time is one undo step (see `captureTimeout`). A format (bold,
+a link, a heading) is always a step of its own, so typing a word and making it
+bold takes two undos. Call `undo.stopCapturing()` to end a step by hand. The toolbar buttons refresh on
 editor changes only: after `undo.clear()` they keep their state until the next
 change.
 

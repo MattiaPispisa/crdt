@@ -1,0 +1,27 @@
+# A recipe: what the docs site shows for it. Paths are relative to the
+# repository root, so a recipe can show any tested file of the repository.
+id: serverpod-server
+title: A Serverpod server with documents on disk
+description: >-
+  A Serverpod web route in server–client mode: the server holds the documents,
+  stores them with Hive, and lets in only an authenticated caller.
+platforms: [Dart VM]
+# Shown as the install command: names only, `pub add` picks the versions.
+dependencies: [crdt_lf_hive, crdt_socket_sync, crdt_socket_sync_serverpod, hive, serverpod]
+files:
+  - path: packages/adapters/sync/serverpod/example/bin/main.dart
+    label: bin/main.dart
+  - path: packages/adapters/sync/serverpod/example/lib/src/host.dart
+    label: lib/src/host.dart
+test: packages/adapters/sync/serverpod/example/test/main_test.dart
+keyPoints:
+  - "The server serves only the documents its registry holds: create them before a client asks."
+  - "`PersistentServerRegistry` keeps the documents on disk, and compacts them on a threshold."
+  - "Authenticate in the route, before the upgrade: a refused caller gets 401 and never reaches the protocol."
+  - "A real project passes its own generated `Protocol()` and `Endpoints()` to `Serverpod`."
+  - "A browser client served from another origin is refused (403) unless the route accepts it: see `allowAnyOrigin`."
+related:
+  - title: Server frameworks
+    to: /docs/connectors/sync/server-frameworks
+  - title: Server registry
+    to: /docs/connectors/sync/server-registry

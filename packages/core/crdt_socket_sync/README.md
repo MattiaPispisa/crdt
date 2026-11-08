@@ -38,43 +38,71 @@ that was offline catches up when it reconnects.
 ## Quick start
 
 ```sh
-dart pub add crdt_lf crdt_socket_sync crdt_lf_sqlite
+dart pub add crdt_lf crdt_socket_sync
 ```
 
-```dart
-import 'package:crdt_lf/crdt_lf.dart';
-import 'package:crdt_lf_sqlite/crdt_lf_sqlite.dart';
-import 'package:crdt_socket_sync/replica.dart';
-import 'package:crdt_socket_sync/web_socket_client.dart';
+A relay server, with `dart:io`. Any document id is a room:
 
-final replica = await CRDTReplica.open(
-  documentId: 'notes',
-  storage: () => CRDTSqlite.open('notes.db'),
-  sync: (document) => WebSocketClient(
-    url: 'ws://localhost:8080',
-    document: document,
-    author: document.peerId,
-  ),
-);
-final text = CRDTFugueTextHandler(replica.document, 'body');
-
-// ...edit
-
-await replica.close();
-```
-
-And the server, with `dart:io`:
-
+<!-- recipe:relay-rooms/server.dart#server -->
 ```dart
 import 'dart:io';
-import 'package:crdt_socket_sync/web_socket_server.dart';
 
-final server = WebSocketServer(
-  serverFactory: () => HttpServer.bind('localhost', 8080),
-  serverRegistry: InMemoryCRDTServerRegistry(),
-);
-await server.start();
+import 'package:crdt_socket_sync/web_socket_relay_server.dart';
+
+/// Starts a relay server on [port]. Rooms are created on demand.
+Future<WebSocketRelayServer> startRelay({int port = 8080}) async {
+  // No registration: a client can join any room id.
+  final server = WebSocketRelayServer(
+    serverFactory: () => HttpServer.bind(InternetAddress.anyIPv4, port),
+    // The default store keeps the rooms in memory: a restart loses them.
+    store: InMemoryRelayStore(),
+  );
+  await server.start();
+  return server;
+}
 ```
+<!-- /recipe -->
+
+A Flutter client that opens the note from the device, then syncs it
+(`flutter pub add crdt_lf_hive`):
+
+<!-- recipe:offline-first-replica/open_note.dart#open -->
+```dart
+import 'package:crdt_lf/crdt_lf.dart';
+import 'package:crdt_lf_hive/crdt_lf_hive.dart';
+import 'package:crdt_socket_sync/replica.dart';
+import 'package:crdt_socket_sync/web_socket_relay_client.dart';
+import 'package:flutter/foundation.dart';
+
+/// Opens the note on this device, and syncs it through the relay at [url].
+///
+/// Completes once the local copy is ready, even when the relay is down.
+Future<CRDTReplica> openNote(String url) async {
+  final replica = await CRDTReplica.open(
+    // The relay room: every peer of the note opens the same id.
+    documentId: 'note',
+    storage: CRDTHive.open,
+    sync:
+        (document) => WebSocketRelayClient(
+          url: url,
+          document: document,
+          author: document.peerId,
+        ),
+    // Without it, a storage that cannot be read makes `open` throw. With it,
+    // the note starts empty and in memory.
+    onStorageError: (error, stack) => debugPrint('Storage error: $error'),
+  );
+  CRDTFugueTextHandler(replica.document, 'note');
+  return replica;
+}
+```
+<!-- /recipe -->
+
+Complete setups, tested in CI:
+[relay rooms](https://mattiapispisa.it/crdt/docs/recipes/relay-rooms),
+[a server and its clients](https://mattiapispisa.it/crdt/docs/recipes/server-client-sync)
+(server–client mode), and
+[an offline-first app](https://mattiapispisa.it/crdt/docs/recipes/offline-first-replica).
 
 ## Documentation
 

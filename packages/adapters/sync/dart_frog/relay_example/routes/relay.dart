@@ -1,6 +1,7 @@
 // Copyright 2025 Mattia Pispisa
 // SPDX-License-Identifier: MIT
 
+// #docregion route
 import 'package:crdt_socket_sync_dart_frog/relay.dart';
 import 'package:dart_frog/dart_frog.dart';
 
@@ -12,3 +13,4 @@ import 'package:dart_frog/dart_frog.dart';
 Future<Response> onRequest(RequestContext context) async {
   return crdtRelayWebSocketHandler(context.read<RelaySessionHost>())(context);
 }
+// #enddocregion route

@@ -26,8 +26,8 @@ strings**. Your server must handle:
 
 | Code | Name | Direction | Fields (beyond `type`, `documentId`) |
 | --- | --- | --- | --- |
-| 20 | hello | C→S | `author` |
-| 21 | welcome | S→C | `sessionId`, `snapshot: string\|null`, `changes: string[]`, `seq`, `logLength`, `compact` |
+| 20 | hello | C→S | `author`, `protocolVersion` |
+| 21 | welcome | S→C | `sessionId`, `snapshot: string\|null`, `changes: string[]`, `seq`, `logLength`, `compact`, `protocolVersion` |
 | 22 | push | C→S | `changes: string[]` |
 | 23 | ack | S→C | `seq`, `count`, `logLength`, `compact` |
 | 24 | changes | S→others | `changes: string[]`, `seq`, `from: string\|null` |
@@ -36,6 +36,19 @@ strings**. Your server must handle:
 | 5 | ping | C→S | `timestamp` → reply pong (6) `{originalTimestamp, responseTimestamp}` |
 | 7 | error | S→C | `code`, `message` |
 | 100–102 | awareness | C↔S | presence passthrough (store + rebroadcast) |
+
+## The protocol version
+
+`protocolVersion` is an integer, currently `1`. A frame without it is read as
+`1`, the first version.
+
+- **On hello**, compare the client's `protocolVersion` with yours. When they
+  differ, send an error (7) with the code `UNSUPPORTED_PROTOCOL_VERSION`, then
+  close the connection.
+- **On welcome**, always send your own `protocolVersion`. The client compares
+  it with its own, and stops for good when they differ: its
+  `connectionStatus` becomes `unsupported` (see
+  [Versions and compatibility](./compatibility.mdx)).
 
 ## What the server does
 

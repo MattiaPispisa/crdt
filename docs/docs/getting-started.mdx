@@ -5,6 +5,7 @@ description: Install crdt_lf, edit a document, and merge two copies of it.
 
 import Demo from '@site/src/components/Demo';
 import NextSteps from '@site/src/components/NextSteps';
+import RecipeSnippet from '@site/src/components/RecipeSnippet';
 
 # Getting started
 
@@ -48,27 +49,7 @@ send to each other.
 Each peer has its own document. Here the two documents live in one program; in
 an app they live on two devices, and the changes travel over the network.
 
-```dart
-final alice = CRDTDocument();
-final bob = CRDTDocument();
-
-final aliceText = CRDTFugueTextHandler(alice, 'note');
-final bobText = CRDTFugueTextHandler(bob, 'note');
-
-aliceText.insert(0, 'Hello world');
-bob.importChanges(alice.exportChanges()); // Bob now reads "Hello world"
-
-// Both edit at the same time, with no connection.
-aliceText.insert(0, 'Big ');
-bobText.insert(11, '!');
-
-// They meet again and exchange what the other is missing.
-bob.importChanges(alice.exportChanges());
-alice.importChanges(bob.exportChanges());
-
-print(aliceText.value); // Big Hello world!
-print(bobText.value); // Big Hello world!
-```
+<RecipeSnippet id="two-peers" file="main.dart" region="merge" />
 
 Importing the same change twice does nothing, so a peer can send everything it
 has without keeping track of what the other side already saw. In a real app

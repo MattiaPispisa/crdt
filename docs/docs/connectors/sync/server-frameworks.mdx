@@ -6,6 +6,7 @@ description: Serve the sync from Dart Frog or Serverpod — install, routes, aut
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 import NextSteps from '@site/src/components/NextSteps';
+import RecipeSnippet from '@site/src/components/RecipeSnippet';
 
 # Server frameworks
 
@@ -32,7 +33,7 @@ the sessions and the broadcasting; the endpoint only hands it the sockets (see
 <TabItem value="dart_frog" label="Dart Frog" default>
 
 ```sh
-dart pub add crdt_socket_sync_dart_frog
+dart pub add crdt_socket_sync crdt_socket_sync_dart_frog
 ```
 
 ```dart
@@ -49,7 +50,7 @@ import 'package:crdt_socket_sync_dart_frog/relay.dart';
 <TabItem value="serverpod" label="Serverpod">
 
 ```sh
-dart pub add crdt_socket_sync_serverpod
+dart pub add crdt_socket_sync crdt_socket_sync_serverpod
 ```
 
 ```dart
@@ -68,117 +69,64 @@ import 'package:crdt_socket_sync_serverpod/relay.dart';
 <Tabs groupId="framework">
 <TabItem value="dart_frog" label="Dart Frog" default>
 
-```dart
-// lib/src/host.dart — built once, shared by every request
-import 'package:crdt_socket_sync/relay_server.dart';
+The host, built once and shared by every request:
 
-final relayHost = RelaySessionHost(store: InMemoryRelayStore());
-```
+<RecipeSnippet id="dart-frog-relay" file="lib/src/host.dart" region="host" />
 
-```dart
-// routes/_middleware.dart
-import 'package:crdt_socket_sync_dart_frog/relay.dart';
-import 'package:dart_frog/dart_frog.dart';
+The middleware puts it in the request context, and the route hands it the
+socket:
 
-import '../lib/src/host.dart';
+<RecipeSnippet id="dart-frog-relay" file="routes/_middleware.dart" region="middleware" />
 
-Handler middleware(Handler handler) {
-  return handler.use(crdtRelayHostProvider(relayHost));
-}
-```
-
-```dart
-// routes/relay.dart
-import 'package:crdt_socket_sync_dart_frog/relay.dart';
-import 'package:dart_frog/dart_frog.dart';
-
-Future<Response> onRequest(RequestContext context) async {
-  return crdtRelayWebSocketHandler(context.read<RelaySessionHost>())(context);
-}
-```
+<RecipeSnippet id="dart-frog-relay" file="routes/relay.dart" region="route" />
 
 </TabItem>
 <TabItem value="serverpod" label="Serverpod">
 
-```dart
-import 'package:crdt_socket_sync/relay_server.dart' show InMemoryRelayStore;
-import 'package:crdt_socket_sync_serverpod/relay.dart';
-import 'package:serverpod/serverpod.dart';
+<RecipeSnippet id="serverpod-relay" file="bin/main.dart" region="server" />
 
-import 'src/generated/endpoints.dart';
-import 'src/generated/protocol.dart';
-
-Future<void> main(List<String> args) async {
-  final relayHost = RelaySessionHost(store: InMemoryRelayStore());
-
-  final pod = Serverpod(args, Protocol(), Endpoints());
-  pod.webServer.addRoute(CrdtRelayRoute(relayHost), '/relay');
-
-  await pod.start();
-}
-```
+The route is on the **web server** of Serverpod, so clients connect to the web
+server's port, not to the API server's.
 
 </TabItem>
 </Tabs>
 
 Clients connect with `WebSocketRelayClient`, pointed at
-`ws://localhost:8080/relay`.
+`ws://localhost:8080/relay`. The complete backends are the recipes
+[Dart Frog: relay](../../recipes/dart-frog-relay.mdx) and
+[Serverpod: relay](../../recipes/serverpod-relay.mdx).
 
 ## Server–client mode
+
+The server serves only the documents its registry holds, so the host creates
+them before a client asks. For anything that must survive a restart, use a
+`PersistentServerRegistry` on one of the
+[storage adapters](../persistence/adapters.mdx), as below with Hive: see
+[Server registry](./server-registry.mdx).
 
 <Tabs groupId="framework">
 <TabItem value="dart_frog" label="Dart Frog" default>
 
-```dart
-// lib/src/host.dart
-import 'package:crdt_socket_sync/server.dart';
+<RecipeSnippet id="dart-frog-server" file="lib/src/host.dart" region="host" />
 
-final syncHost = DocumentSessionHost(
-  serverRegistry: InMemoryCRDTServerRegistry(),
-);
-```
+<RecipeSnippet id="dart-frog-server" file="routes/sync.dart" region="route" />
 
-```dart
-// routes/_middleware.dart
-Handler middleware(Handler handler) {
-  return handler.use(crdtSyncHostProvider(syncHost));
-}
-```
-
-```dart
-// routes/sync.dart
-import 'package:crdt_socket_sync_dart_frog/sync.dart';
-import 'package:dart_frog/dart_frog.dart';
-
-Future<Response> onRequest(RequestContext context) async {
-  return crdtSyncWebSocketHandler(context.read<DocumentSessionHost>())(context);
-}
-```
-
-A durable registry is opened asynchronously, so build it in Dart Frog's
+A durable registry is opened asynchronously, so open it in Dart Frog's
 `init()` (see [Lifecycle](#lifecycle)) and keep it in a top-level `late final`.
 
 </TabItem>
 <TabItem value="serverpod" label="Serverpod">
 
-```dart
-import 'package:crdt_socket_sync/server.dart' show InMemoryCRDTServerRegistry;
-import 'package:crdt_socket_sync_serverpod/sync.dart';
+<RecipeSnippet id="serverpod-server" file="lib/src/host.dart" region="host" />
 
-final syncHost = DocumentSessionHost(
-  serverRegistry: InMemoryCRDTServerRegistry(),
-);
-
-pod.webServer.addRoute(CrdtSyncRoute(syncHost), '/sync');
-```
+<RecipeSnippet id="serverpod-server" file="bin/main.dart" region="route" />
 
 </TabItem>
 </Tabs>
 
-For anything that must survive a restart, use a `PersistentServerRegistry` on
-one of the [storage adapters](../persistence/adapters.mdx) instead of the
-in-memory one: see [Server registry](./server-registry.mdx). The examples below
-do, with Hive.
+The complete backends are the recipes
+[Dart Frog: server](../../recipes/dart-frog-server.mdx) and
+[Serverpod: server](../../recipes/serverpod-server.mdx).
 
 ## Authenticating before the upgrade
 

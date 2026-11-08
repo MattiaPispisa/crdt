@@ -1,18 +1,13 @@
 // Copyright 2025 Mattia Pispisa
 // SPDX-License-Identifier: MIT
 
+// #docregion server
 import 'dart:io';
 
 import 'package:crdt_socket_sync_serverpod/relay.dart';
 import 'package:crdt_socket_sync_serverpod_relay_example/src/host.dart';
 import 'package:crdt_socket_sync_serverpod_relay_example/src/server_protocol.dart';
 import 'package:serverpod/serverpod.dart';
-
-/// The port of the web server, which serves `/relay`.
-const _webPort = 8080;
-
-/// The port of the API server. This example has no endpoints on it.
-const _apiPort = 8081;
 
 ServerConfig _serverConfig(int port) {
   return ServerConfig(
@@ -23,8 +18,9 @@ ServerConfig _serverConfig(int port) {
   );
 }
 
-/// Starts the relay host, serves it on `/relay` and disposes it when the pod
-/// shuts down.
+/// Starts the relay host, serves it on `/relay` of the web server at
+/// [webPort] and disposes it when the pod shuts down. The API server, at
+/// [apiPort], has no endpoints in this example.
 ///
 /// Relay mode: the server rebroadcasts opaque CRDT blobs to the other clients
 /// of a room and persists them, without ever reading them. The room is the
@@ -33,16 +29,20 @@ ServerConfig _serverConfig(int port) {
 /// Serverpod handles `SIGINT`/`SIGTERM` itself. Its shutdown tasks run after
 /// the web server has stopped, so no new client arrives while the host closes.
 /// To authenticate, subclass [CrdtRelayRoute] the way `../example` does.
-Future<void> main(List<String> args) async {
-  logRelayEvents(stdout.writeln);
-
+Future<Serverpod> startServer(
+  List<String> args, {
+  int webPort = 8080,
+  int apiPort = 8081,
+}) async {
   final pod = Serverpod(
     args,
+    // Local to this example: a real project passes its own generated
+    // `Protocol()` and `Endpoints()`.
     EmptyProtocol(),
     NoEndpoints(),
     config: ServerpodConfig(
-      apiServer: _serverConfig(_apiPort),
-      webServer: _serverConfig(_webPort),
+      apiServer: _serverConfig(apiPort),
+      webServer: _serverConfig(webPort),
     ),
   );
   pod.webServer.addRoute(CrdtRelayRoute(relayHost), '/relay');
@@ -53,6 +53,13 @@ Future<void> main(List<String> args) async {
 
   await relayHost.start();
   await pod.start();
+  return pod;
+}
+// #enddocregion server
 
-  stdout.writeln('relay ws://localhost:$_webPort/relay');
+Future<void> main(List<String> args) async {
+  logRelayEvents(stdout.writeln);
+  final pod = await startServer(args);
+
+  stdout.writeln('relay ws://localhost:${pod.webServer.port}/relay');
 }

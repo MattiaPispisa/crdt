@@ -43,23 +43,30 @@ persistence adapters, and the code that keeps a document on disk as it changes.
 
 ## Quick start
 
+<!-- recipe:persisted-note/main.dart#imports,open,edit,close -->
 ```dart
+import 'dart:io';
+
 import 'package:crdt_lf/crdt_lf.dart';
 import 'package:crdt_lf_sqlite/crdt_lf_sqlite.dart';
 
 final backend = CRDTSqlite.open('note.db');
 
-// Reads the database into a document, then follows it.
+// Reads the stored note (or starts an empty one), then writes every edit.
 final note = await backend.openDocument('note');
 final text = CRDTFugueTextHandler(note.document, 'body');
 
-text.insert(0, 'Hello 🌍');
+text.insert(text.value.runes.length, 'Hello 🌍\n');
 
 await note.persistence.dispose(); // writes what is still waiting
+note.document.dispose();
+await note.persistence.storage.close();
 backend.close();
 ```
+<!-- /recipe -->
 
-Run it again and the text is there.
+Run it again and the text is there. The complete program, tested in CI, is the
+[recipe](https://mattiapispisa.it/crdt/docs/recipes/persisted-note).
 
 ## Documentation
 

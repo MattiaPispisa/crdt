@@ -1,0 +1,31 @@
+# A recipe: what the docs site shows for it. Paths are relative to the
+# repository root, so a recipe can show any tested file of the repository.
+id: notes-list
+title: "A list of notes: many documents in one app"
+description: >-
+  A Flutter app with a list of notes, one document each, kept on the device by
+  Hive. The list reads each title without following the note, a tap opens the
+  note to edit it, and a swipe deletes it.
+platforms: [Flutter native, Flutter web]
+# Shown as the install command: names only, `pub add` picks the versions.
+dependencies: [crdt_lf, crdt_lf_flutter, crdt_lf_hive, hive, path_provider]
+files:
+  - path: packages/_internal/crdt_lf_recipes/lib/notes_list/main.dart
+    label: main.dart
+  - path: packages/_internal/crdt_lf_recipes/lib/notes_list/notes_page.dart
+    label: notes_page.dart
+  - path: packages/_internal/crdt_lf_recipes/lib/notes_list/note_page.dart
+    label: note_page.dart
+test: packages/_internal/crdt_lf_recipes/test/notes_list_test.dart
+keyPoints:
+  - "Open one backend for the whole app: it holds every note, and `documentIds` lists them."
+  - "One document per note: the document id is the note id."
+  - "`readDocument` builds a read-only copy for the list, and you dispose it after reading. `openDocument` is for the page that edits the note."
+  - "`deleteDocument` removes the changes, the snapshots and the identity of a note. Close the note first if it is open."
+related:
+  - title: Working with storage
+    to: /docs/connectors/persistence/working-with-storage
+  - title: Persistence
+    to: /docs/connectors/persistence
+  - title: Text fields
+    to: /docs/connectors/flutter/text-fields

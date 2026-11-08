@@ -47,6 +47,9 @@ flags:
   crdt_lf_quill:
     paths: [packages/adapters/text/crdt_lf_quill]
     carryforward: true
+  crdt_lf_recipes:
+    paths: [packages/_internal/crdt_lf_recipes]
+    carryforward: true
 
 ignore:
   - "**/*.g.dart"

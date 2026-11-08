@@ -1,0 +1,27 @@
+# A recipe: what the docs site shows for it. Paths are relative to the
+# repository root, so a recipe can show any tested file of the repository.
+id: serverpod-relay
+title: A relay in a Serverpod backend
+description: >-
+  A Serverpod web route that serves a relay: any document id is a room, with
+  no setup. The rooms live in memory.
+platforms: [Dart VM]
+# Shown as the install command: names only, `pub add` picks the versions.
+dependencies: [crdt_socket_sync, crdt_socket_sync_serverpod, serverpod]
+files:
+  - path: packages/adapters/sync/serverpod/relay_example/bin/main.dart
+    label: bin/main.dart
+  - path: packages/adapters/sync/serverpod/relay_example/lib/src/host.dart
+    label: lib/src/host.dart
+test: packages/adapters/sync/serverpod/relay_example/test/main_test.dart
+keyPoints:
+  - "The route lives on the web server of Serverpod, not on its API server: clients connect to the web server's port."
+  - "A real project passes its own generated `Protocol()` and `Endpoints()` to `Serverpod`."
+  - "Dispose the host in a shutdown task, so the pod closes the sessions on its way down."
+  - "Clients connect with `WebSocketRelayClient` to the route's URL."
+  - "A browser client served from another origin is refused (403) unless the route accepts it: see `allowAnyOrigin`."
+related:
+  - title: Server frameworks
+    to: /docs/connectors/sync/server-frameworks
+  - title: Relay mode
+    to: /docs/connectors/sync/relay

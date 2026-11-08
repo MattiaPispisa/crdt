@@ -1,0 +1,78 @@
+---
+title: Errors
+description: What a document throws, when, and what to do about it.
+---
+
+import NextSteps from '@site/src/components/NextSteps';
+
+# Errors
+
+Every exception of `crdt_lf` extends **`CrdtException`**, which carries a
+`message`. Catch `CrdtException` to handle them all, or one subclass to handle
+one case.
+
+```dart
+try {
+  doc.applyChange(change);
+} on CausallyNotReadyException {
+  // The change depends on changes this document does not have yet.
+  pending.add(change);
+} on CrdtException catch (error) {
+  log(error.message);
+}
+```
+
+## Errors you can expect
+
+These come from normal use. Each one says what to fix in the calling code, or
+what to wait for.
+
+| Exception | When | What to do |
+| --- | --- | --- |
+| `CausallyNotReadyException` | `applyChange` gets a change whose dependencies the document does not have | apply the missing changes first, or use `importChanges` (see below) |
+| `HandlerAlreadyRegisteredException` | a handler constructor runs for an id that is already open, or `doc.handler(spec, id)` finds the id open as another kind | open a handler once and keep it, or use `doc.handler`, which returns the open one ([Handlers](./handlers.mdx)) |
+| `HandlerDeletedException` | a write to, or an open of, a handler that was deleted with `deleteHandler`; it carries the `handlerId` | check `doc.isDeleted(id)` before you open the id again |
+| `DocumentDisposedException` | any call on a document after `dispose()` | stop using the document, and the handlers built on it, once it is disposed |
+| `ReadOnlyDocumentException` | a write on the read-only copy that `toTimeTravel()` returns | write on the live document, not on the history copy ([History](../use-cases/history.mdx)) |
+| `ConcurrentSnapshotException` | `mergeSnapshot` (or `import` with `merge: true`) gets a snapshot of a **concurrent** history that holds the same handler with different bytes; it carries `currentId` and `incomingId` | the document is left as it was. Between two concurrent histories, exchange changes rather than snapshots ([Snapshots](../deep-dive/snapshots.mdx)) |
+| `UnknownOperationKindException` | a change for one of your handlers carries an operation kind this build cannot decode: it comes from a newer peer. It carries `handlerType`, `handlerId` and `kind` | update the app. The sync layer can refuse such peers before they send data ([Versions and compatibility](../connectors/sync/compatibility.mdx)) |
+
+**`importChanges` does not throw for a single change.** It sorts the changes,
+applies the ones it can, and skips the others, including the ones that are not
+causally ready. Its return value is the number of changes it applied. That is
+why a peer can send everything it has: what is missing now is applied when the
+changes it depends on arrive.
+
+## Errors that mean corrupted data
+
+These protect the change graph. Changes made by `crdt_lf` never trigger them:
+they mean that the bytes were changed or built by hand.
+
+| Exception | When |
+| --- | --- |
+| `ChangesCycleException` | a batch of changes depends on itself in a cycle |
+| `MissingDependencyException` | a change points to a parent the graph does not have |
+| `DuplicateNodeException` | a node (a change, or a text element) is added twice under the same id |
+
+## Errors that are not `CrdtException`
+
+| Error | When |
+| --- | --- |
+| `ArgumentError` | `doc.handler(spec, 'crdt_lf/deleted-handlers')`: that id is reserved for the delete registry |
+| `FormatException` | bytes that cannot be decoded: a `Change` or `Snapshot` of an unknown format, or a handler blob outside the versions this build reads ([Binary format](../deep-dive/binary-format.mdx#the-rules-of-a-blob-version)) |
+| `ArgumentError`, `UnsupportedError`, `StateError` | `CRDTUndoManager`: a `stackLimit` below 1, a handler that cannot be undone, a handler already tracked by another manager, a handler of another document, or a call inside an open transaction ([Undo and redo](../use-cases/undo-redo.mdx)) |
+
+<NextSteps
+  items={[
+    {
+      title: 'Changes',
+      to: '/docs/document/changes',
+      description: 'Export, import and apply changes.',
+    },
+    {
+      title: 'Handlers',
+      to: '/docs/document/handlers',
+      description: 'Open, rebuild and delete handlers.',
+    },
+  ]}
+/>

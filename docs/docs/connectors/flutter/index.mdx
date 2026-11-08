@@ -104,9 +104,16 @@ CrdtHandlerListener<CRDTListHandler<String>>(
 );
 ```
 
-These widgets compare one number per handler, its **revision**, so a rebuild
-check costs `O(1)` whatever the size of the value. See
-[Flutter internals](../../deep-dive/flutter-internals.mdx).
+What a rebuild check costs:
+
+- `CrdtHandlerBuilder` and `CrdtHandlerListener` compare one number, the
+  handler's **revision**: `O(1)`, whatever the size of the value.
+- With `nested: true` they read the revision of every descendant handler:
+  the cost grows with the number of descendants.
+- `CrdtHandlerSelector` runs your `selector` on every document update and
+  compares the result with `==`: keep the selector cheap.
+
+See [Flutter internals](../../deep-dive/flutter-internals.mdx).
 
 ### Deleted handlers
 

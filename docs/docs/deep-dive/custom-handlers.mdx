@@ -72,8 +72,9 @@ registers, so a declaration cannot drift from what the code decodes.
 - `id` and `operationDecoders`, **required**: how the handler is addressed, and
   how its operations are decoded.
 - `getSnapshotState`, **required**: the state as bytes, seeded back through
-  `lastSnapshot`. Start the blob with a version byte (see
-  [Binary format](./binary-format.mdx#two-levels-of-versioning)).
+  `lastSnapshot`. Start it with `snapshotHeader()` and read it back with
+  `readSnapshotHeader()`, so the blob carries its version (see
+  [The rules of a blob version](./binary-format.mdx#the-rules-of-a-blob-version)).
 - `incrementCachedState`: to move the cached state forward by one operation,
   instead of replaying the whole history on every read (see
   [State cache](./state-cache.mdx)).
@@ -138,10 +139,11 @@ disagree, and nothing shows it until a later concurrent write lands between the
 two ids and wins on one peer while it loses on the other. So it is one or the
 other: a kind that reads a stamp, or a kind that folds.
 
-`stamped` is a **local declaration**, not part of the wire format: bit 7 of the
-kind byte carries the writer's declaration, and nothing else. Two builds that
-disagree about it are refused on decode, in both directions. Changing the flag
-on a kind you already shipped is therefore a breaking change.
+`stamped` travels with every operation: bit 7 of the kind byte carries the
+writer's declaration. The sync handshake does not compare it. Two builds that
+disagree about it meet at decode time, where the operation is refused with a
+`FormatException`, in both directions. Changing the flag on a kind you already
+shipped is therefore a breaking change.
 
 ## Making a handler undoable
 

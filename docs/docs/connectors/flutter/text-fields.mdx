@@ -4,6 +4,7 @@ description: A TextEditingController bound to a text handler, the other peers' c
 ---
 
 import NextSteps from '@site/src/components/NextSteps';
+import RecipeSnippet from '@site/src/components/RecipeSnippet';
 
 # Text fields
 
@@ -45,17 +46,10 @@ other peers with `CrdtTextCursorsOverlay`. The anchors are serializable: send
 them over your presence channel, for example the
 [awareness plugin](../sync/plugins.mdx#awareness-plugin) of `crdt_socket_sync`.
 
-```dart
-CrdtTextFieldBuilder(
-  id: 'note',
-  onSelectionAnchorsChanged: (base, extent) => publishPresence(base, extent),
-  builder: (context, controller) => CrdtTextCursorsOverlay(
-    id: 'note',
-    cursors: remoteTextCursors, // List<CrdtTextCursor> from presence
-    child: TextField(controller: controller),
-  ),
-);
-```
+The builder of the field does not run again when a remote caret moves, so
+listen to the presence inside it:
+
+<RecipeSnippet id="presence-cursors" file="note_page.dart" region="bind" />
 
 Anchors are reported only while the field has focus. On blur the callback fires
 once with `null`s, so with several bound fields a peer shows at most one

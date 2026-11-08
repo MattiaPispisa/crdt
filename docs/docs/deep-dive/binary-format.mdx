@@ -33,19 +33,73 @@ appears only as the *default* `ValueCodec<T>`, when you pass none.
 ## Two levels of versioning
 
 `Snapshot.schemaVersion` (currently `1`, added in `crdt_lf` 4.0.0) covers only
-the **wrapper**: the document id, the version vector, and the framing of the
-per-handler entries.
+the **wrapper**: the snapshot id (derived from the version vector), the version
+vector, and the framing of the per-handler entries. A reader accepts exactly
+this version.
 
 Inside an entry, the layout belongs to the handler that wrote it, and so does
-its version: **every built-in blob starts with a `version: u8` byte of its
-own**. A handler can change its layout without moving a byte that any other
-handler reads. The reader is strict: a version it does not write is refused
-whole, instead of being parsed as far as it happens to work. Write a version in
-your own handler too: there is nothing to gain from a blob that cannot say what
-it is.
+its version. A handler can change its layout without moving a byte that any
+other handler reads.
 
-The two Fugue sequence handlers (`CRDTFugueTextHandler`, `CRDTFugueListHandler`)
-show what that room is for. Their blob groups elements into **runs** of
+### The rules of a blob version
+
+Every built-in handler follows these rules, and a handler of your own should
+too.
+
+1. **The first byte of the blob is its version.** `snapshotHeader()` returns a
+   builder that already holds it; write the state after it.
+2. **`snapshotBlobVersion` is the version this build writes.** It defaults to
+   `1`. Raise it when the layout changes.
+3. **`minReadableSnapshotBlobVersion` is the oldest version this build reads.**
+   It defaults to `snapshotBlobVersion`, so a build reads only what it writes.
+4. **The reader accepts the range** `minReadableSnapshotBlobVersion..snapshotBlobVersion`.
+   `readSnapshotHeader(bytes)` checks the first byte and returns the version
+   and the offset of the state. A version outside the range throws a
+   `FormatException` ("newer than this build reads" or "older than this build
+   reads"). The blob is refused whole: it is never read as far as it happens to
+   parse.
+5. **The handler spec declares the same range.**
+   `HandlerFormats(blobVersions: BlobVersionRange(min, max))` must match the two
+   getters. An assertion checks it when the handler registers.
+
+```dart
+@override
+int get snapshotBlobVersion => 2;
+
+// Still reads the layout of version 1, and upgrades it.
+@override
+int get minReadableSnapshotBlobVersion => 1;
+
+@override
+Uint8List getSnapshotState() {
+  final out = snapshotHeader(); // writes the byte `2`
+  // ... write the state in the layout of version 2
+  return out.toBytes();
+}
+
+MyState _readSnapshot(Uint8List bytes) {
+  final header = readSnapshotHeader(bytes); // throws outside 1..2
+  return switch (header.version) {
+    1 => _readV1(bytes, header.offset),
+    _ => _readV2(bytes, header.offset),
+  };
+}
+```
+
+### Changing a layout
+
+| You want to | Do this | What happens |
+| --- | --- | --- |
+| change the layout and keep reading the old one | raise `snapshotBlobVersion`, keep `minReadableSnapshotBlobVersion`, branch on the version | a build that does not read the new version refuses the new blobs (`SnapshotBlobTooNew` in the sync handshake) until it updates |
+| stop reading an old layout | raise `minReadableSnapshotBlobVersion` | this build refuses data still in the old layout (`SnapshotBlobTooOld` in the sync handshake) |
+
+A blob written without `snapshotHeader()` has no version byte. The handler
+still reports the range `1..1`, so the sync handshake has nothing real to
+compare: such a handler is not protected by the check. Always write the
+header.
+
+The Fugue sequence handlers (`CRDTFugueTextHandler`, `CRDTFugueListHandler`,
+`CRDTFugueRichTextHandler`) show what that room is for. Their blob groups elements into **runs** of
 consecutive ids from the same peer, instead of one entry per element. It also
 carries the deleted elements inside those runs, marked by a bit, so a deletion
 keeps its identity and its place instead of leaving a gap.

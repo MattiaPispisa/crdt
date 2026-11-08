@@ -35,22 +35,30 @@ it keeps your documents on the device, and reads them back on launch. Nothing su
 dart pub add crdt_lf crdt_lf_sqlite
 ```
 
+<!-- recipe:persisted-note/main.dart#imports,open,edit,close -->
 ```dart
+import 'dart:io';
+
 import 'package:crdt_lf/crdt_lf.dart';
 import 'package:crdt_lf_sqlite/crdt_lf_sqlite.dart';
 
 final backend = CRDTSqlite.open('note.db');
 
+// Reads the stored note (or starts an empty one), then writes every edit.
 final note = await backend.openDocument('note');
 final text = CRDTFugueTextHandler(note.document, 'body');
 
-text.insert(0, 'Hello 🌍');
+text.insert(text.value.runes.length, 'Hello 🌍\n');
 
 await note.persistence.dispose(); // writes what is still waiting
+note.document.dispose();
+await note.persistence.storage.close();
 backend.close();
 ```
+<!-- /recipe -->
 
-Every change is written down from there on. This package re-exports the whole
+Every change is written down from there on: the complete program, tested in
+CI, is the [recipe](https://mattiapispisa.it/crdt/docs/recipes/persisted-note). This package re-exports the whole
 [`crdt_lf_persistence`](https://pub.dev/packages/crdt_lf_persistence) API, so it
 is the only storage package your `pubspec.yaml` needs.
 

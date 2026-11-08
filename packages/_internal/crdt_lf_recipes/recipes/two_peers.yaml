@@ -1,0 +1,26 @@
+# A recipe: what the docs site shows for it. Paths are relative to the
+# repository root, so a recipe can show any tested file of the repository.
+id: two-peers
+title: Two peers, one result
+description: >-
+  Two documents edit one text at the same time, with no connection. They
+  exchange their changes and both read the same text.
+platforms: [Dart VM, Flutter native, Flutter web]
+# Shown as the install command: names only, `pub add` picks the versions.
+dependencies: [crdt_lf]
+files:
+  - path: packages/_internal/crdt_lf_recipes/lib/two_peers/main.dart
+    label: main.dart
+test: packages/_internal/crdt_lf_recipes/test/two_peers_test.dart
+keyPoints:
+  - "Peers send changes: `exportChanges` on one side, `importChanges` on the other."
+  - "Importing the same change twice does nothing, so a peer can send everything it has."
+  - "Every peer creates the handler under the same id (`note`): that id is what makes it the same text."
+  - "In an app, `crdt_socket_sync` does this exchange for you."
+related:
+  - title: Getting started
+    to: /docs/getting-started
+  - title: Changes
+    to: /docs/document/changes
+  - title: Sync
+    to: /docs/connectors/sync

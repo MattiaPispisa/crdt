@@ -5,6 +5,7 @@ description: How peers order events without a shared clock — the hybrid logica
 ---
 
 import NextSteps from '@site/src/components/NextSteps';
+import RecipeSnippet from '@site/src/components/RecipeSnippet';
 
 # Time: the hybrid logical clock
 
@@ -53,35 +54,10 @@ outside CRDTs too.
 dart pub add hlc_dart
 ```
 
-```dart
-import 'package:hlc_dart/hlc_dart.dart';
+<RecipeSnippet id="hybrid-clock" file="main.dart" region="imports,clock" />
 
-// Create a new HLC initialized to the current time
-final clock = HybridLogicalClock.now();
-
-// Handle a local event
-clock.localEvent(DateTime.now().millisecondsSinceEpoch);
-
-// Handle receiving a message from another peer
-final receivedClock = HybridLogicalClock.now();
-clock.receiveEvent(DateTime.now().millisecondsSinceEpoch, receivedClock);
-
-// Compare
-print(clock.happenedBefore(receivedClock));
-print(clock.happenedAfter(receivedClock));
-print(clock.isConcurrentWith(receivedClock));
-print(clock >= receivedClock);
-print(clock < receivedClock);
-
-// Serialize/deserialize as a 64-bit integer
-final serialized = clock.toInt64();
-final deserialized = HybridLogicalClock.fromInt64(serialized);
-
-// Or as a compact 8-byte big-endian buffer (useful when embedding an HLC
-// inside a larger binary frame).
-final bytes = clock.toUint8List();
-final fromBytes = HybridLogicalClock.fromUint8List(bytes);
-```
+`isConcurrentWith` only checks that two timestamps are equal: the clock alone
+cannot tell that two events are concurrent (see the note above).
 
 What it offers:
 

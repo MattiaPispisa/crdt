@@ -24,7 +24,12 @@ imports carrying its state.
 
 With `nested: true`, the ids and revisions of the handler and of its
 descendants (`ContainerHandler.childRefs`) are folded into one hash, so
-structural changes (a child added or removed) are detected too.
+structural changes (a child added or removed) are detected too. This check
+visits every descendant, so its cost grows with the tree.
+
+`CrdtHandlerSelector` does not use the revision. It runs its `selector` on every
+document update and rebuilds when the result changes (`==`), so its cost is the
+cost of the selector.
 
 ## Delta widgets
 

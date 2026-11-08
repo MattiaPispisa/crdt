@@ -32,26 +32,24 @@ it keeps your documents on the device, and reads them back on launch. It is the 
 ## Quick start
 
 ```sh
-dart pub add crdt_lf crdt_lf_hive hive
+flutter pub add crdt_lf crdt_lf_hive hive path_provider
 ```
 
+<!-- recipe:flutter-note/main.dart#init -->
 ```dart
-import 'package:crdt_lf/crdt_lf.dart';
-import 'package:crdt_lf_hive/crdt_lf_hive.dart';
-import 'package:hive/hive.dart';
-
-Hive.init('./my_app_data');
+// On the web Hive uses IndexedDB and needs no path.
+if (!kIsWeb) {
+  Hive.init((await getApplicationDocumentsDirectory()).path);
+}
 CRDTHive.initialize();
+// One backend for the whole app: it lives as long as the app does.
 final backend = await CRDTHive.open();
-
-final note = await backend.openDocument('note');
-final text = CRDTFugueTextHandler(note.document, 'body');
-
-text.insert(0, 'Hello 🌍');
-
-await note.persistence.dispose(); // writes what is still waiting
-await backend.close();
 ```
+<!-- /recipe -->
+
+Then `backend.openDocument('note')` reads a document back and follows it. The
+complete app, a text field saved on the device and tested in CI, is the
+[recipe](https://mattiapispisa.it/crdt/docs/recipes/flutter-note).
 
 Every change is written down from there on. This package re-exports the whole
 [`crdt_lf_persistence`](https://pub.dev/packages/crdt_lf_persistence) API, so it
