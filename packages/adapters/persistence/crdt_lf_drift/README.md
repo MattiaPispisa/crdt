@@ -25,6 +25,7 @@ it keeps your documents on the device, and reads them back on launch. Pick it wh
 - 🔒 **Real transactions**: a compaction lands all at once or not at all
 - ⏳ **Asynchronous end to end**, like the rest of Drift
 - 🔌 **Your executor**: wrap a `CRDTDriftDatabase` on the `QueryExecutor` you choose
+- 🌐 **Web**: pass a Drift web database to `CRDTDrift.fromDatabase`
 - 🪪 **Peer identity**: the device writes under the same author on every launch
 - 🧩 **Same contract** as the Hive and SQLite adapters: change backend with one line
 - ➕ **…and more**: everything else is in the [documentation][docs_link]

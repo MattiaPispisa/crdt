@@ -101,7 +101,8 @@ final backend = CRDTDrift.open(File('./my_app_data.db'));
 // ...or an in-memory database (useful for tests).
 final memory = CRDTDrift.memory();
 
-// ...or a CRDTDriftDatabase on a QueryExecutor of your choice.
+// ...or a CRDTDriftDatabase on a QueryExecutor of your choice: on the web,
+// the executor of a Drift web database.
 final custom = CRDTDrift.fromDatabase(CRDTDriftDatabase(myExecutor));
 
 await backend.close();
@@ -183,9 +184,9 @@ Two boxes are **shared**, one per app:
   so no type adapter and no type id are involved.
 - `documents`: the list of document ids the backend holds. Hive cannot list
   its boxes, so `CRDTHive.open()` keeps this small registry. A document costs
-  one extra row, written the first time it is opened. A document stored before
-  this registry existed is not on the list until it is opened once; its data is
-  untouched either way.
+  one extra row, written with its first write (a change, a snapshot or its
+  identity). A document stored before this registry existed is not on the list
+  until it is opened once; its data is untouched either way.
 
 `Change` and `Snapshot` are stored through one `TypeAdapter` each, as the
 binary blob of `toBytes()`.
@@ -196,11 +197,12 @@ binary blob of `toBytes()`.
 - **No transactions.** Hive has none, so `transaction()` just runs its body.
   That is still conformant: every step the persistence takes is safe to
   repeat.
-- **Closing.** `openStorageForDocument` hands back a `CRDTHiveDocumentStorage`.
-  Its `close()` closes the two boxes of that document and nothing else: use it
-  in an app that opens one document after another.
+- **Closing.** A box closes with its last user. `close()` on a
+  `CRDTHiveDocumentStorage` or on a backend leaves open the boxes that another
+  storage or backend still uses, so two replicas, or a list and an editor, can
+  share them. `deleteDocument` closes the boxes of that document for everyone.
   `CRDTHive.closeAllBoxes()` closes every Hive box the app has open, yours
-  included.
+  included: use it when the app shuts down.
 - **Custom names.** Every box name can be changed:
 
   ```dart

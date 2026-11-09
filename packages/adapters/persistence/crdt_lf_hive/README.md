@@ -9,7 +9,7 @@
 [![pub publisher][pub_publisher]][pub_publisher_link]
 
 A [Hive](https://pub.dev/packages/hive) storage adapter for [`crdt_lf`](https://pub.dev/packages/crdt_lf):
-it keeps your documents on the device, and reads them back on launch. It is the adapter that also runs on the **web**.
+it keeps your documents on the device, and reads them back on launch. It runs on the **web** with no setup.
 
 <div align="center">
 
@@ -23,7 +23,8 @@ it keeps your documents on the device, and reads them back on launch. It is the 
 
 - 🌐 **Runs everywhere**: Dart VM, Flutter, and the web
 - ⚡ **Synchronous reads**: a box is in memory, so a document is restored before the first frame
-- 🗂️ **One box per document**, plus a small registry of document ids
+- 🗂️ **Boxes per document**, plus a small registry of document ids
+- 🤝 **Shared boxes**: a box closes with its last user, so two replicas can share them
 - 📦 **Compact binary**: one `TypeAdapter` each for `Change` and `Snapshot`
 - 🪪 **Peer identity**: the device writes under the same author on every launch
 - 🧩 **Same contract** as the SQLite and Drift adapters: change backend with one line

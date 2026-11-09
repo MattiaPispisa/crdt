@@ -15,7 +15,7 @@ test: packages/_internal/crdt_lf_recipes/test/drift_note_test.dart
 keyPoints:
   - "`openDocument` reads the stored note before it returns, and keeps the same author (peer id) on every run."
   - "Close in this order: the persistence (it writes what is still waiting), the document, the storage, the backend. `backend.close()` returns a `Future`: await it."
-  - "`CRDTDrift.open` uses a native database file. On the web, build the database with a web executor and pass it to `CRDTDrift.fromDatabase`: see the Drift documentation."
+  - "`CRDTDrift.open` needs a native database. On the web, open a Drift web database and pass it to `CRDTDrift.fromDatabase`, as the Drift documentation explains."
 related:
   - title: Persistence
     to: /docs/connectors/persistence

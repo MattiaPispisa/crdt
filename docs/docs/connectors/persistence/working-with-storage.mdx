@@ -17,9 +17,10 @@ final note = await backend.readDocument('note-1');
 final title = CRDTFugueTextHandler(note, 'body').value;
 ```
 
-Nothing follows what it hands back: an edit made on it stays in memory. On a
-synchronous backend (Hive, SQLite) it returns without suspending, so the whole
-list is built inside one frame.
+Nothing follows what it hands back: an edit made on it stays in memory. It
+closes the storage it opened before it returns, so reading a long list leaves
+nothing open. On SQLite it returns without suspending, so the whole list is
+built inside one frame.
 
 ## The document as it was
 

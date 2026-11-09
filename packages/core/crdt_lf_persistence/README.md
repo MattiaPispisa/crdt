@@ -24,9 +24,9 @@ persistence adapters, and the code that keeps a document on disk as it changes.
 
 | Adapter | Database |
 | --- | --- |
-| [`crdt_lf_hive`](https://pub.dev/packages/crdt_lf_hive) | Hive (NoSQL, runs on the web) |
+| [`crdt_lf_hive`](https://pub.dev/packages/crdt_lf_hive) | Hive (NoSQL, runs on the web with no setup) |
 | [`crdt_lf_sqlite`](https://pub.dev/packages/crdt_lf_sqlite) | sqlite3 (SQL, synchronous) |
-| [`crdt_lf_drift`](https://pub.dev/packages/crdt_lf_drift) | Drift (SQL, asynchronous) |
+| [`crdt_lf_drift`](https://pub.dev/packages/crdt_lf_drift) | Drift (SQL, asynchronous, web through a web executor) |
 | … | [all the adapters](https://mattiapispisa.it/crdt/docs/connectors/persistence/adapters), or [build your own](https://mattiapispisa.it/crdt/docs/connectors/persistence/build-your-own) |
 
 ## Features

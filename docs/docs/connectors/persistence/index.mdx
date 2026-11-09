@@ -44,12 +44,12 @@ the database under them.
 
 | | Hive | SQLite | Drift |
 | --- | --- | --- | --- |
-| **Model** | NoSQL: one box per document | SQL: one file, three tables | SQL: one database, three tables |
+| **Model** | NoSQL: two boxes per document | SQL: one file, three tables | SQL: one database, three tables |
 | **Reads** | synchronous (the box is in memory) | synchronous (FFI) | asynchronous |
 | **Writes** | asynchronous (box journal) | synchronous | asynchronous |
 | **Transactions** | none | yes (savepoints) | yes (`database.transaction`) |
 | **`openSync`** (restore before the first frame) | ✅ | ✅ | — |
-| **Platforms** | Dart VM, Flutter, **web** | Dart VM, native Flutter | Dart VM, native Flutter |
+| **Platforms** | Dart VM, Flutter, **web** | Dart VM, native Flutter | Dart VM, Flutter, **web** (with a web executor) |
 | **Pick it when** | you need the web, or want no native library | you want SQL with no `await` in the way | your app already uses Drift |
 
 How to read the trade-offs:
@@ -69,9 +69,16 @@ How to read the trade-offs:
   conformant too.
 
 :::note[Web]
-The Hive adapter runs on the web: [Greyhound Markdown](https://mattiapispisa.it/crdt/greyhound_markdown/)
-uses it in the browser. `crdt_lf_drift` opens a native database, and the
-SQLite adapter is tested on the Dart VM only.
+Two adapters run in the browser:
+
+- **Hive**, with no setup: [Greyhound Markdown](https://mattiapispisa.it/crdt/greyhound_markdown/)
+  uses it there.
+- **Drift**, through `CRDTDrift.fromDatabase` and a web executor of Drift
+  (see [the Drift tab](./adapters.mdx#install-and-open)). `CRDTDrift.open` and
+  `CRDTDrift.memory` need a native database, and throw an `UnsupportedError`
+  on the web.
+
+The SQLite adapter runs on the Dart VM and native Flutter only.
 :::
 
 None of them fits? [Build your own adapter](./build-your-own.mdx). Before you
