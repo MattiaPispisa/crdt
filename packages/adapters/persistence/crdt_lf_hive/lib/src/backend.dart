@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 import 'package:crdt_lf_hive/crdt_lf_hive.dart';
+import 'package:crdt_lf_hive/src/box_references.dart';
 import 'package:hive/hive.dart';
 
 /// The [CRDTStorageBackend] of the Hive adapter.
@@ -34,6 +35,12 @@ class CRDTHiveBackend implements CRDTStorageBackend {
 
   final Box<String> _registry;
 
+  // One reference for every identity storage this backend hands out.
+  Future<Box<String>>? _peerIds;
+
+  // A second close must not give back a reference another backend holds.
+  bool _closed = false;
+
   /// The base name of the per-document box holding the changes.
   final String changesBoxName;
 
@@ -60,10 +67,12 @@ class CRDTHiveBackend implements CRDTStorageBackend {
   Future<CRDTHivePeerIdStorage> peerIdStorageForDocument(
     String documentId,
   ) {
-    return CRDTHive.openPeerIdStorageForDocument(
-      documentId,
-      boxName: peerIdsBoxName,
-      onWrite: () => _remember(documentId),
+    return (_peerIds ??= BoxReferences.open<String>(peerIdsBoxName)).then(
+      (box) => CRDTHivePeerIdStorage(
+        box,
+        documentId,
+        onWrite: () => _remember(documentId),
+      ),
     );
   }
 
@@ -78,18 +87,25 @@ class CRDTHiveBackend implements CRDTStorageBackend {
     await _registry.delete(documentId);
   }
 
-  /// Closes the registry box.
+  /// Closes the registry box and the identity box, unless another backend
+  /// still uses them.
   ///
-  /// The per-document boxes are not closed here: they are opened one at a
-  /// time and closed by whoever asked for them, through
-  /// [CRDTDocumentStorage.close]. Use [CRDTHive.closeAllBoxes] to close
-  /// everything Hive has open.
+  /// The storages from [peerIdStorageForDocument] stop working with it. The
+  /// per-document boxes stay open: whoever asked for them closes them,
+  /// through [CRDTDocumentStorage.close]. Use [CRDTHive.closeAllBoxes] to
+  /// close everything Hive has open.
   ///
   /// Closing twice is not an error.
   @override
   Future<void> close() async {
-    if (_registry.isOpen) {
-      await _registry.close();
+    if (_closed) {
+      return;
+    }
+    _closed = true;
+    await BoxReferences.release(_registry);
+    final peerIds = _peerIds;
+    if (peerIds != null) {
+      await BoxReferences.release(await peerIds);
     }
   }
 

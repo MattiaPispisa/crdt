@@ -127,6 +127,14 @@ void main() {
       expect(registered.value, 'ab');
       expect(now.peerId, opened.document.peerId);
     });
+
+    test('closes the storage it opened', () async {
+      final backend = _CountingBackend();
+
+      await backend.documentAt('doc', VersionVector({}));
+
+      expect(backend.closed, backend.opened);
+    });
   });
 
   group('CRDTStorageBackend.readDocument', () {
@@ -150,6 +158,26 @@ void main() {
       expect(registered.value, 'a🌍');
       expect(read.peerId, opened.document.peerId);
     });
+
+    for (final suspends in [false, true]) {
+      test(
+          'closes the storage it opened, after a read that fails too '
+          '(suspends: $suspends)', () async {
+        final backend = _CountingBackend(suspends: suspends);
+        await backend.readDocument('doc');
+
+        final broken = _CountingBackend(suspends: suspends, unreadable: true);
+        await expectLater(
+          Future.sync(() => broken.readDocument('doc')),
+          throwsA(isA<StateError>()),
+        );
+
+        expect(backend.opened, 1);
+        expect(backend.closed, 1);
+        expect(broken.opened, 1);
+        expect(broken.closed, 1);
+      });
+    }
   });
 
   group('CRDTStorageBackend.copyDocumentTo', () {
@@ -175,7 +203,117 @@ void main() {
       final copied = await other.readDocument('doc');
       expect(CRDTFugueTextHandler(copied, 'text').value, 'a🌍');
     });
+
+    test('closes the two storages it opened', () async {
+      final from = _CountingBackend();
+      final to = _CountingBackend();
+
+      await from.copyDocumentTo(to, 'doc');
+
+      expect([from.opened, from.closed, to.opened, to.closed], [1, 1, 1, 1]);
+    });
   });
+}
+
+/// A backend that counts the storages it hands out and the ones closed.
+///
+/// [suspends] makes every change read answer with a [Future], and
+/// [unreadable] makes it throw.
+class _CountingBackend implements CRDTStorageBackend {
+  _CountingBackend({this.suspends = false, this.unreadable = false});
+
+  final bool suspends;
+  final bool unreadable;
+
+  int opened = 0;
+  int closed = 0;
+
+  @override
+  CRDTDocumentStorage storageForDocument(String documentId) {
+    opened++;
+    return _CountingStorage(
+      documentId,
+      _SuspendingChangeStorage(
+        unreadable
+            ? _UnreadableChangeStorage(documentId)
+            : InMemoryChangeStorage(documentId),
+        suspends: suspends,
+      ),
+      onClose: () => closed++,
+    );
+  }
+
+  @override
+  CRDTPeerIdStorage peerIdStorageForDocument(String documentId) =>
+      InMemoryPeerIdStorage(documentId, <String, PeerId>{});
+
+  @override
+  Set<String> get documentIds => <String>{};
+
+  @override
+  void deleteDocument(String documentId) {}
+
+  @override
+  void close() {}
+}
+
+/// A storage that reports its [close], which answers with a [Future].
+class _CountingStorage extends CRDTDocumentStorage {
+  _CountingStorage(
+    String documentId,
+    CRDTChangeStorage changes, {
+    required void Function() onClose,
+  })  : _onClose = onClose,
+        super(
+          changes: changes,
+          snapshots: InMemorySnapshotStorage(documentId),
+        );
+
+  final void Function() _onClose;
+
+  @override
+  Future<void> close() async => _onClose();
+}
+
+/// A change storage whose reads answer with a [Future] when [suspends].
+class _SuspendingChangeStorage implements CRDTChangeStorage {
+  _SuspendingChangeStorage(this._inner, {required this.suspends});
+
+  final InMemoryChangeStorage _inner;
+
+  final bool suspends;
+
+  @override
+  String get documentId => _inner.documentId;
+
+  @override
+  FutureOr<List<Change>> getChanges({
+    VersionVector? newerThan,
+    VersionVector? upTo,
+  }) {
+    if (suspends) {
+      return Future(() => _inner.getChanges(newerThan: newerThan, upTo: upTo));
+    }
+    return _inner.getChanges(newerThan: newerThan, upTo: upTo);
+  }
+
+  @override
+  void saveChange(Change change) => _inner.saveChange(change);
+
+  @override
+  void saveChanges(List<Change> changes) => _inner.saveChanges(changes);
+
+  @override
+  bool deleteChange(Change change) => _inner.deleteChange(change);
+
+  @override
+  int deleteChanges(List<Change> changes) => _inner.deleteChanges(changes);
+
+  @override
+  void clear() => _inner.clear();
+
+  @override
+  int get count => _inner.count;
 }
 
 /// A backend whose documents cannot be read back.

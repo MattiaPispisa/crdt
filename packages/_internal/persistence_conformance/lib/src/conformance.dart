@@ -606,6 +606,17 @@ void runDocumentStorageConformanceTests({
       await storage.close();
     });
 
+    test('closing one storage leaves another of the same document usable',
+        () async {
+      final second = await openStorage(documentId);
+
+      await storage.close();
+      await storage.close();
+
+      await second.changes.saveChanges(fixtures.changes(2));
+      expect(await second.changes.count, 2);
+    });
+
     if (durable) {
       test('what was stored is still there after closing', () async {
         final changes = fixtures.changes(2);
@@ -667,10 +678,13 @@ void runDocumentStorageConformanceTests({
 /// }
 /// ```
 ///
-/// [open] returns a fresh, empty backend. Pass [reopen] as well for a backend
-/// that can be closed and opened again on the same data — it is what checks
-/// that [CRDTStorageBackend.documentIds] survives a restart, and it is skipped
-/// without it.
+/// [open] returns an empty backend at the start of each test. Some tests call
+/// it a second time. When that backend shares the data of the first, the
+/// suite also checks that closing one leaves the other usable.
+///
+/// Pass [reopen] as well for a backend that can be closed and opened again on
+/// the same data — it is what checks that [CRDTStorageBackend.documentIds]
+/// survives a restart, and it is skipped without it.
 void runStorageBackendConformanceTests({
   required String name,
   required FutureOr<CRDTStorageBackend> Function() open,
@@ -805,6 +819,20 @@ void runStorageBackendConformanceTests({
     test('close is not an error the second time', () async {
       await backend.close();
       await backend.close();
+    });
+
+    test('closing one backend leaves another one usable', () async {
+      final peers = await backend.peerIdStorageForDocument('doc-a');
+      final other = await open();
+      await other.peerIdStorageForDocument('doc-a');
+
+      await other.close();
+
+      final identity = PeerId.generate();
+      await peers.savePeerId(identity);
+      await write('doc-a');
+      expect(await backend.documentIds, {'doc-a'});
+      expect(await peers.getPeerId(), identity);
     });
 
     test('a document moves to another backend whole', () async {

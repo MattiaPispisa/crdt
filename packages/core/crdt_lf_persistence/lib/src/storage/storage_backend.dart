@@ -62,6 +62,7 @@ abstract interface class CRDTStorageBackend {
 
   /// Closes the backend and everything it opened.
   ///
-  /// Calling it twice is not an error.
+  /// Another backend over the same data stays usable. Calling it twice is
+  /// not an error.
   FutureOr<void> close();
 }

@@ -34,6 +34,8 @@ class CRDTDocumentStorage {
   /// between documents keeps it open and closes it itself; a backend that
   /// opens something per document — a box, a file — closes that here.
   ///
+  /// Another storage of the same document stays usable after this.
+  ///
   /// The default does nothing. Calling it twice is not an error, and
   /// [CRDTDocumentPersistence.dispose] does not call it: the caller opened the
   /// storage, so the caller closes it.
