@@ -1,107 +1,44 @@
 // Copyright 2025 Mattia Pispisa
 // SPDX-License-Identifier: MIT
 
-// ignore_for_file: avoid_print example file,
-// ignore_for_file: avoid_redundant_argument_values
+// A copy of a recipe, written by `melos run recipes_sync`.
+// Edit the recipe, then run it again:
+// packages/_internal/crdt_lf_recipes/lib/two_peers/main.dart
+
+import 'dart:io';
 
 import 'package:crdt_lf/crdt_lf.dart';
 
-/// The kind of the list in this example. A generic handler names its kind: the
-/// default would carry the type argument, which dart2js minifies away.
-const kList = 'string-list';
+/// Lets two peers edit one text at the same time, and returns what each reads.
+(String, String) mergeTwoPeers() {
+  final alice = CRDTDocument();
+  final bob = CRDTDocument();
+
+  // The same handler id on both peers: it is the same text.
+  final aliceText = CRDTFugueTextHandler(alice, 'note');
+  final bobText = CRDTFugueTextHandler(bob, 'note');
+
+  aliceText.insert(0, 'Hello world');
+  bob.importChanges(alice.exportChanges()); // Bob now reads "Hello world"
+
+  // Both edit at the same time, with no connection.
+  aliceText.insert(0, 'Big ');
+  bobText.insert(11, '!');
+
+  // They meet again and exchange what the other is missing.
+  bob.importChanges(alice.exportChanges());
+  alice.importChanges(bob.exportChanges());
+
+  stdout
+    ..writeln(aliceText.value) // Big Hello world!
+    ..writeln(bobText.value); // Big Hello world!
+
+  final result = (aliceText.value, bobText.value);
+  alice.dispose();
+  bob.dispose();
+  return result;
+}
 
 void main() {
-  // Create two documents (simulating different peers)
-  final doc1 = CRDTDocument(
-    peerId: PeerId.parse('45ee6b65-b393-40b7-9755-8b66dc7d0518'),
-  );
-  final doc2 = CRDTDocument(
-    peerId: PeerId.parse('a90dfced-cbf0-4a49-9c64-f5b7b62fdc18'),
-  );
-
-  // Create text handlers
-  final fugueTextDoc1 = CRDTFugueTextHandler(doc1, 'text');
-  final fugueTextDoc2 = CRDTFugueTextHandler(doc2, 'text');
-
-  // Initial state
-  fugueTextDoc1.insert(0, 'Hello');
-
-  // Sync doc1 to doc2
-  var changesDoc1 = doc1.exportChanges();
-  doc2.importChanges(changesDoc1);
-
-  // Concurrent edits
-  fugueTextDoc1.insert(5, ' World'); // doc1: "Hello World"
-  fugueTextDoc2.insert(5, ' Dart'); // doc2: "Hello Dart"
-
-  // Sync both ways
-  final changes1After = doc1.exportChanges();
-  final changes2After = doc2.exportChanges();
-
-  doc2.importChanges(changes1After);
-  doc1.importChanges(changes2After);
-
-  // Both documents will have the same final state
-  print(fugueTextDoc1.value); // Prints "Hello World Dart" or "Hello Dart World"
-  print(fugueTextDoc2.value); // Prints the same as text1
-
-  // Create list handler
-  final list1 = CRDTListHandler<String>(doc1, 'list', handlerType: kList);
-  final list2 = CRDTListHandler<String>(doc2, 'list', handlerType: kList);
-
-  list1
-    ..insert(0, 'Hello')
-    ..insert(1, 'World')
-    ..insert(2, 'Dart');
-
-  print(list1.value); // Prints ["Hello", "World", "Dart"]
-
-  // sync doc1 to doc2
-  changesDoc1 = doc1.exportChanges();
-  doc2.importChanges(changesDoc1);
-
-  print(list2.value); // Prints ["Hello", "World", "Dart"]
-
-  // history session
-  final historySession = doc1.toTimeTravel();
-  final viewListHandler =
-      historySession.getHandler<CRDTListHandler<String>, List<String>>(
-    (doc) => CRDTListHandler<String>(doc, 'list', handlerType: kList),
-  );
-  print(viewListHandler.value); // Prints ["Hello", "World", "Dart"]
-
-  historySession.previous();
-  print(viewListHandler.value); // Prints ["Hello", "World"]
-
-  // transaction
-  doc1.runInTransaction(() {
-    list1
-      ..insert(3, 'Flutter')
-      ..insert(4, '!');
-  });
-  // insertions are committed at the end
-  print(list1.value); // Prints ["Hello", "World", "Dart", "Flutter", "!"]
-
-  // snapshot
-  // save pruning
-  var snapshotDoc1 = doc1.takeSnapshot(pruneHistory: false);
-  changesDoc1 = doc1.exportChanges();
-  doc2.import(
-    snapshot: snapshotDoc1,
-    changes: changesDoc1,
-    pruneHistory: false,
-  );
-
-  // changes are read starting from the snapshot then changed are applied
-  print(list2.value); // Prints ["Hello", "World", "Dart", "Flutter", "!"]
-  // changes are not pruned
-  print(doc1.exportChanges().length); // Prints 8
-
-  // aggressive pruning
-  snapshotDoc1 = doc1.takeSnapshot(
-    pruneHistory: true,
-  );
-  // changes are pruned
-  doc1.garbageCollect(doc1.getVersionVector());
-  print(doc1.exportChanges().length); // Prints 0
+  mergeTwoPeers();
 }

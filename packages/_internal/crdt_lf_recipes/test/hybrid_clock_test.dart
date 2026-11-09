@@ -7,7 +7,7 @@ import 'package:flutter_test/flutter_test.dart';
 void main() {
   test('a received message comes before the clock, and both forms '
       'read back the same clock', () {
-    final (ordered, fromInt, fromBytes) = runClock();
+    final [ordered, fromInt, fromBytes] = runClock();
     expect(ordered, isTrue);
     expect(fromInt, isTrue);
     expect(fromBytes, isTrue);

@@ -11,8 +11,8 @@ import 'package:hlc_dart/hlc_dart.dart';
 /// Moves a clock through a local event and a received message.
 ///
 /// Returns whether the message comes before the clock, and whether the 64-bit
-/// and the 8-byte forms read back the same clock.
-(bool, bool, bool) runClock() {
+/// and the 8-byte forms read back the same clock, in this order.
+List<bool> runClock() {
   // #docregion clock
   final clock = HybridLogicalClock.now();
 
@@ -36,7 +36,7 @@ import 'package:hlc_dart/hlc_dart.dart';
   stdout.writeln(fromInt == clock && fromBytes == clock); // true
   // #enddocregion clock
 
-  return (ordered, fromInt == clock, fromBytes == clock);
+  return [ordered, fromInt == clock, fromBytes == clock];
 }
 
 void main() {

@@ -29,6 +29,7 @@ const sidebars: SidebarsConfig = {
       'recipes/two-peers',
       'recipes/persisted-note',
       'recipes/drift-note',
+      'recipes/hive-note',
       'recipes/flutter-note',
       'recipes/notes-list',
       'recipes/todo-list',

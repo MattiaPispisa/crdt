@@ -11,6 +11,8 @@ dependencies: [crdt_lf, crdt_lf_drift]
 files:
   - path: packages/_internal/crdt_lf_recipes/lib/drift_note/main.dart
     label: main.dart
+    # The example of the package on pub.dev: a copy written by recipes_sync.
+    copyTo: packages/adapters/persistence/crdt_lf_drift/example/main.dart
 test: packages/_internal/crdt_lf_recipes/test/drift_note_test.dart
 keyPoints:
   - "`openDocument` reads the stored note before it returns, and keeps the same author (peer id) on every run."

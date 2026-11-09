@@ -1,50 +1,35 @@
 // Copyright 2025 Mattia Pispisa
 // SPDX-License-Identifier: MIT
 
-// The example prints its result, and it is not a library entry point.
-// ignore_for_file: avoid_print
+// A copy of a recipe, written by `melos run recipes_sync`.
+// Edit the recipe, then run it again:
+// packages/_internal/crdt_lf_recipes/lib/drift_note/main.dart
 
-import 'dart:io' as io;
+import 'dart:io';
 
 import 'package:crdt_lf/crdt_lf.dart';
 import 'package:crdt_lf_drift/crdt_lf_drift.dart';
 
-/// The kind of the list in this example. A generic handler names its kind: the
-/// default would carry the type argument, which dart2js minifies away.
-const kList = 'string-list';
+/// Adds a line to the note stored in `note.db`, and returns the whole note.
+Future<String> addLine() async {
+  final backend = CRDTDrift.open(File('note.db'));
+
+  // Reads the stored note (or starts an empty one), then writes every edit.
+  final note = await backend.openDocument('note');
+  final text = CRDTFugueTextHandler(note.document, 'body');
+
+  text.insert(text.value.runes.length, 'Hello 🌍\n');
+  final value = text.value;
+
+  await note.persistence.dispose(); // writes what is still waiting
+  note.document.dispose();
+  await note.persistence.storage.close();
+  await backend.close();
+
+  return value;
+}
 
 Future<void> main() async {
-  const itemsToAdd = 3;
-  const documentId = '784ff372-6f0a-4fe9-8e63-19b72fd18c23';
-
-  // Resolve the database next to this script so the example works regardless
-  // of the current working directory.
-  final dbLocation =
-      '${io.File.fromUri(io.Platform.script).parent.path}/crdt_example.db';
-
-  final backend = CRDTDrift.open(io.File(dbLocation));
-
-  // Reads the database into a document and follows it: everything written from
-  // here on is stored without another line of code. The identity comes from
-  // the backend too, so every run is the same author.
-  final note = await backend.openDocument(documentId);
-  final list =
-      CRDTListHandler<String>(note.document, 'list', handlerType: kList);
-
-  print('read back: ${list.value}');
-
-  final length = list.value.length;
-  for (var i = length; i < length + itemsToAdd; i++) {
-    list.insert(i, 'Item $i');
-  }
-
-  // Writes what is still waiting. Without it the process could end before the
-  // delayed write runs.
-  await note.persistence.dispose();
-  note.document.dispose();
-
-  print('now: ${list.value}');
-  print('documents in the database: ${(await backend.documentIds).length}');
-
-  await backend.close();
+  // One more line on every run.
+  stdout.writeln(await addLine());
 }

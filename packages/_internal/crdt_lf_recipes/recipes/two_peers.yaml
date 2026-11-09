@@ -11,6 +11,8 @@ dependencies: [crdt_lf]
 files:
   - path: packages/_internal/crdt_lf_recipes/lib/two_peers/main.dart
     label: main.dart
+    # The example of the package on pub.dev: a copy written by recipes_sync.
+    copyTo: packages/core/crdt_lf/example/main.dart
 test: packages/_internal/crdt_lf_recipes/test/two_peers_test.dart
 keyPoints:
   - "Peers send changes: `exportChanges` on one side, `importChanges` on the other."

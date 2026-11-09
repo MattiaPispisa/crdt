@@ -11,6 +11,15 @@ function dedent(lines: string[]): string {
   return lines.map((line) => line.slice(cut)).join('\n');
 }
 
+// Every run of blank lines cut to one: a removed marker can leave two blank
+// lines next to each other.
+function collapseBlankLines(lines: string[]): string[] {
+  return lines.filter(
+    (line, index) =>
+      line.trim() !== '' || index === 0 || lines[index - 1].trim() !== '',
+  );
+}
+
 function trimBlankLines(lines: string[]): string[] {
   let start = 0;
   let end = lines.length;
@@ -49,7 +58,7 @@ export function readRecipeSource(text: string): {
         if (!body) {
           throw new Error(`Region "${name}" closes but never opened.`);
         }
-        regions[name] = dedent(trimBlankLines(body));
+        regions[name] = dedent(trimBlankLines(collapseBlankLines(body)));
         open.delete(name);
       }
       continue;
@@ -61,5 +70,5 @@ export function readRecipeSource(text: string): {
   if (open.size > 0) {
     throw new Error(`Region "${[...open.keys()][0]}" never closes.`);
   }
-  return { code: trimBlankLines(code).join('\n'), regions };
+  return { code: trimBlankLines(collapseBlankLines(code)).join('\n'), regions };
 }

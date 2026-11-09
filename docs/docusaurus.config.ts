@@ -167,34 +167,40 @@ const config: Config = {
       hideOnScroll: true,
       items: [
         {
+          to: '/docs/recipes',
+          position: 'left',
+          label: 'Recipes',
+          activeBaseRegex: '/docs/recipes',
+        },
+        {
+          label: 'Documentation',
+          position: 'left',
           to: '/docs/introduction',
-          position: 'left',
-          label: 'Docs',
+          // Highlighted on every page of the docs, except recipes and
+          // benchmarks, which have their own entry.
+          activeBaseRegex: '/docs/(?!recipes|benchmarks)',
+          items: [
+            { label: 'Introduction', to: '/docs/introduction' },
+            { label: 'Getting started', to: '/docs/getting-started' },
+            { label: 'The document', to: '/docs/document' },
+            { label: 'Use cases', to: '/docs/use-cases' },
+            { label: 'Connectors', to: '/docs/connectors' },
+            { label: 'Deep dive', to: '/docs/deep-dive' },
+            { label: 'Migrations', to: '/docs/migrations' },
+          ],
         },
         {
-          to: '/docs/document',
-          position: 'left',
-          label: 'Document',
-        },
-        {
-          to: '/docs/use-cases',
-          position: 'left',
-          label: 'Use cases',
-        },
-        {
-          to: '/docs/connectors',
-          position: 'left',
-          label: 'Connectors',
-        },
-        {
-          to: '/docs/deep-dive',
-          position: 'left',
-          label: 'Deep dive',
-        },
-        {
-          to: '/docs/benchmarks',
-          position: 'left',
           label: 'Benchmarks',
+          position: 'left',
+          to: '/docs/benchmarks',
+          activeBaseRegex: '/docs/benchmarks',
+          items: [
+            { label: 'Overview', to: '/docs/benchmarks' },
+            { label: 'hlc_dart', to: '/docs/benchmarks/hlc' },
+            { label: 'crdt_lf', to: '/docs/benchmarks/crdt_lf' },
+            { label: 'crdt_lf_flutter', to: '/docs/benchmarks/crdt_lf_flutter' },
+            { label: 'crdt_lf_quill', to: '/docs/benchmarks/crdt_lf_quill' },
+          ],
         },
         {
           label: 'Live demos',

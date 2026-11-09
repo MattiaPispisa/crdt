@@ -67,8 +67,7 @@ stdout.writeln(fromInt == clock && fromBytes == clock); // true
 <!-- /recipe -->
 
 The program is a [recipe](https://mattiapispisa.it/crdt/docs/recipes/hybrid-clock),
-tested in CI. A [complete example](https://github.com/MattiaPispisa/crdt/blob/main/packages/core/hlc/example/main.dart)
-is in the repository, and the [benchmarks](https://mattiapispisa.it/crdt/docs/benchmarks/hlc) are on the
+tested in CI, and the [benchmarks](https://mattiapispisa.it/crdt/docs/benchmarks/hlc) are on the
 documentation site.
 
 ## Used by
