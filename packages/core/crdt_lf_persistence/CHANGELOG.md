@@ -7,7 +7,7 @@
 ### Fixed
 
 - `readDocument`, `documentAt` and `copyDocumentTo` on a backend close the storages they open,
-  also when the read fails. [#TBD]
+  also when the read fails. [218](https://github.com/MattiaPispisa/crdt/issues/218)
 
 ## [0.2.0](https://github.com/MattiaPispisa/crdt/tree/crdt_lf_persistence-v0.2.0/packages/core/crdt_lf_persistence)
 

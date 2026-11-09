@@ -7,7 +7,7 @@
 ### Fixed
 
 - The library compiles for the web. `CRDTDrift.open` and `CRDTDrift.memory` throw an
-  `UnsupportedError` there: pass a `WasmDatabase` to `CRDTDrift.fromDatabase` instead. [#TBD]
+  `UnsupportedError` there: pass a `WasmDatabase` to `CRDTDrift.fromDatabase` instead. [219](https://github.com/MattiaPispisa/crdt/issues/219)
 
 ## [0.3.2](https://github.com/MattiaPispisa/crdt/tree/crdt_lf_drift-v0.3.2/packages/adapters/persistence/crdt_lf_drift)
 

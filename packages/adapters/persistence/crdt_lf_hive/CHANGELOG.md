@@ -7,7 +7,7 @@
 ### Fixed
 
 - Closing a storage or a backend keeps open the Hive boxes that another storage or backend still
-  uses: a box closes with its last user. [#TBD]
+  uses: a box closes with its last user. [218](https://github.com/MattiaPispisa/crdt/issues/218)
 
 ## [0.5.2](https://github.com/MattiaPispisa/crdt/tree/crdt_lf_hive-v0.5.2/packages/adapters/persistence/crdt_lf_hive)
 
