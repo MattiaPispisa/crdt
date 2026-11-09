@@ -35,10 +35,12 @@ void main() {
     _Suspends.new,
     synchronous: true,
   );
+  document('stops working for everyone on close', _DiesOnClose.new);
 
   backend('lists no document', _ListsNothing.new);
   backend('deletes every document at once', _DeletesEverything.new);
   backend('hands one storage to every document', _OneStorageForAll.new);
+  backend('closes the store of every backend', _ClosesForEveryone.new);
 }
 
 /// Runs the document suite against the storage [build] makes.
@@ -267,6 +269,31 @@ class _SuspendingChangeStorage implements CRDTChangeStorage {
   Future<int> get count async => _inner.count;
 }
 
+class _DiesOnClose extends _BrokenChanges {
+  _DiesOnClose(String documentId)
+      : super(documentId, _DiesOnCloseStorage(documentId));
+
+  @override
+  void close() {
+    (changes as _DiesOnCloseStorage).closed = true;
+  }
+}
+
+/// A change storage that refuses every write once [closed].
+class _DiesOnCloseStorage extends InMemoryChangeStorage {
+  _DiesOnCloseStorage(super.documentId);
+
+  bool closed = false;
+
+  @override
+  void saveChanges(List<Change> changes) {
+    if (closed) {
+      throw StateError('closed');
+    }
+    super.saveChanges(changes);
+  }
+}
+
 class _ListsNothing extends InMemoryStorageBackend {
   @override
   Set<String> get documentIds => <String>{};
@@ -286,4 +313,26 @@ class _OneStorageForAll extends InMemoryStorageBackend {
 
   @override
   InMemoryDocumentStorage storageForDocument(String documentId) => _only;
+}
+
+/// A backend whose [close] closes the one store every instance shares.
+class _ClosesForEveryone extends InMemoryStorageBackend {
+  _ClosesForEveryone() {
+    _closed = false;
+  }
+
+  static bool _closed = false;
+
+  @override
+  InMemoryDocumentStorage storageForDocument(String documentId) {
+    if (_closed) {
+      throw StateError('closed');
+    }
+    return super.storageForDocument(documentId);
+  }
+
+  @override
+  void close() {
+    _closed = true;
+  }
 }

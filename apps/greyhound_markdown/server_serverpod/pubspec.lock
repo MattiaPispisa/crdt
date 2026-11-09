@@ -134,7 +134,7 @@ packages:
       path: "../../../packages/core/crdt_lf_persistence"
       relative: true
     source: path
-    version: "0.2.0+1"
+    version: "0.2.1"
   crdt_socket_sync:
     dependency: "direct main"
     description:

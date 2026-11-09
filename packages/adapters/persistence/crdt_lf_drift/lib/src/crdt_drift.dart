@@ -4,13 +4,13 @@
 import 'dart:io';
 
 import 'package:crdt_lf_drift/src/database.dart';
+import 'package:crdt_lf_drift/src/native_executor.dart';
 import 'package:crdt_lf_drift/src/storage/change_storage.dart';
 import 'package:crdt_lf_drift/src/storage/document_storage.dart';
 import 'package:crdt_lf_drift/src/storage/peer_id_storage.dart';
 import 'package:crdt_lf_drift/src/storage/snapshot_storage.dart';
 import 'package:crdt_lf_persistence/crdt_lf_persistence.dart';
 import 'package:drift/drift.dart';
-import 'package:drift/native.dart';
 
 /// Main utility class for persisting CRDT objects in a drift database.
 ///
@@ -42,21 +42,42 @@ class CRDTDrift implements CRDTStorageBackend {
   CRDTDrift._(this.database);
 
   /// Opens (creating it if necessary) a database backed by [file].
+  ///
+  /// {@template crdt_drift.native_only}
+  /// Needs `dart:ffi`. On the web it throws an [UnsupportedError]: use
+  /// [CRDTDrift.fromDatabase] there.
+  /// {@endtemplate}
   factory CRDTDrift.open(File file) {
-    return CRDTDrift._(CRDTDriftDatabase(NativeDatabase(file)));
+    return CRDTDrift._(CRDTDriftDatabase(fileExecutor(file)));
   }
 
   /// Opens an in-memory database.
   ///
   /// Useful for tests and ephemeral usage.
+  ///
+  /// {@macro crdt_drift.native_only}
   factory CRDTDrift.memory() {
-    return CRDTDrift._(CRDTDriftDatabase(NativeDatabase.memory()));
+    return CRDTDrift._(CRDTDriftDatabase(memoryExecutor()));
   }
 
   /// Wraps an existing [database].
   ///
   /// Use this to share a database you already manage elsewhere, or to plug in
   /// a custom [QueryExecutor].
+  ///
+  /// On the web, pass the executor of a `WasmDatabase` from
+  /// `package:drift/wasm.dart`:
+  ///
+  /// ```dart
+  /// final result = await WasmDatabase.open(
+  ///   databaseName: 'app',
+  ///   sqlite3Uri: Uri.parse('sqlite3.wasm'),
+  ///   driftWorkerUri: Uri.parse('drift_worker.js'),
+  /// );
+  /// final backend = CRDTDrift.fromDatabase(
+  ///   CRDTDriftDatabase(result.resolvedExecutor),
+  /// );
+  /// ```
   factory CRDTDrift.fromDatabase(CRDTDriftDatabase database) {
     return CRDTDrift._(database);
   }

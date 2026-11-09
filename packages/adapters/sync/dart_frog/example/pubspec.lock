@@ -86,14 +86,14 @@ packages:
       path: "../../../persistence/crdt_lf_hive"
       relative: true
     source: path
-    version: "0.5.2+1"
+    version: "0.5.3"
   crdt_lf_persistence:
     dependency: "direct overridden"
     description:
       path: "../../../../core/crdt_lf_persistence"
       relative: true
     source: path
-    version: "0.2.0+1"
+    version: "0.2.1"
   crdt_socket_sync:
     dependency: "direct main"
     description:

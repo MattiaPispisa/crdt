@@ -1,9 +1,18 @@
-## [0.2.0+1](https://github.com/MattiaPispisa/crdt/tree/crdt_lf_persistence-v0.2.0+1/packages/core/crdt_lf_persistence)
+## [0.2.1](https://github.com/MattiaPispisa/crdt/tree/crdt_lf_persistence-v0.2.1/packages/core/crdt_lf_persistence)
 
 **Date:** --
 
+[compare to previous release](https://github.com/MattiaPispisa/crdt/compare/crdt_lf_persistence-v0.2.0...crdt_lf_persistence-v0.2.1)
+
+### Changed
+
 - The documentation moved to the [docs site](https://mattiapispisa.it/crdt/docs/connectors/persistence): the README is now a short
-  entry point. No functional changes since `0.2.0`. [216](https://github.com/MattiaPispisa/crdt/issues/216)
+  entry point. [216](https://github.com/MattiaPispisa/crdt/issues/216)
+
+### Fixed
+
+- `readDocument`, `documentAt` and `copyDocumentTo` on a backend close the storages they open,
+  also when the read fails. [218](https://github.com/MattiaPispisa/crdt/issues/218)
 
 ## [0.2.0](https://github.com/MattiaPispisa/crdt/tree/crdt_lf_persistence-v0.2.0/packages/core/crdt_lf_persistence)
 

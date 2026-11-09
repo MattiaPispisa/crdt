@@ -113,6 +113,7 @@ extension CRDTStorageBackendDocuments on CRDTStorageBackend {
   ///
   /// [CRDTDocumentStorageReading.readDocument] on the storage of [documentId],
   /// which is where the whole of what it does is written down.
+  /// The storage is closed before this returns, also when the read fails.
   ///
   /// ```dart
   /// for (final id in await backend.documentIds) {
@@ -126,7 +127,10 @@ extension CRDTStorageBackendDocuments on CRDTStorageBackend {
     void Function(CRDTDocument document)? onDocument,
   }) {
     return storageForDocument(documentId).chain(
-      (storage) => storage.readDocument(peerId: peerId, onDocument: onDocument),
+      (storage) => _closeAfter(
+        storage,
+        () => storage.readDocument(peerId: peerId, onDocument: onDocument),
+      ),
     );
   }
 
@@ -134,6 +138,7 @@ extension CRDTStorageBackendDocuments on CRDTStorageBackend {
   ///
   /// [CRDTDocumentStorageReading.documentAt] on the storage of [documentId],
   /// which is where the limits of it are written down.
+  /// The storage is closed before this returns, also when the read fails.
   FutureOr<CRDTDocument> documentAt(
     String documentId,
     VersionVector version, {
@@ -141,10 +146,13 @@ extension CRDTStorageBackendDocuments on CRDTStorageBackend {
     void Function(CRDTDocument document)? onDocument,
   }) {
     return storageForDocument(documentId).chain(
-      (storage) => storage.documentAt(
-        version,
-        peerId: peerId,
-        onDocument: onDocument,
+      (storage) => _closeAfter(
+        storage,
+        () => storage.documentAt(
+          version,
+          peerId: peerId,
+          onDocument: onDocument,
+        ),
       ),
     );
   }
@@ -165,14 +173,46 @@ extension CRDTStorageBackendDocuments on CRDTStorageBackend {
   ///
   /// Rows already in [other] with the same ids are replaced, so copying twice
   /// leaves what copying once left.
+  ///
+  /// The two document storages it opens are closed before it returns.
   Future<void> copyDocumentTo(
     CRDTStorageBackend other,
     String documentId,
   ) async {
-    await (await storageForDocument(documentId)).copyTo(
-      await other.storageForDocument(documentId),
-      fromPeerIds: await peerIdStorageForDocument(documentId),
-      toPeerIds: await other.peerIdStorageForDocument(documentId),
-    );
+    final from = await storageForDocument(documentId);
+    try {
+      final to = await other.storageForDocument(documentId);
+      try {
+        await from.copyTo(
+          to,
+          fromPeerIds: await peerIdStorageForDocument(documentId),
+          toPeerIds: await other.peerIdStorageForDocument(documentId),
+        );
+      } finally {
+        await to.close();
+      }
+    } finally {
+      await from.close();
+    }
   }
+}
+
+/// Runs [body], then closes [storage], keeping a synchronous [body]
+/// synchronous.
+FutureOr<T> _closeAfter<T>(
+  CRDTDocumentStorage storage,
+  FutureOr<T> Function() body,
+) {
+  final FutureOr<T> result;
+  try {
+    result = body();
+  } catch (error, stack) {
+    return storage
+        .close()
+        .chain<T>((_) => Error.throwWithStackTrace(error, stack));
+  }
+  if (result is Future<T>) {
+    return result.whenComplete(storage.close);
+  }
+  return storage.close().chain((_) => result);
 }

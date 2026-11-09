@@ -138,6 +138,86 @@ void main() {
       expect(await reopened.changes.count, 0);
       expect(await reopened.snapshots.count, 0);
     });
+
+    test('deleteDocument closes an open document, and the next one is clean',
+        () async {
+      const documentId = 'doc-del-open';
+      final first = await CRDTHive.openStorageForDocument(documentId);
+      await CRDTHive.openStorageForDocument(documentId);
+      final peers = await CRDTHive.openPeerIdStorageForDocument(documentId);
+      await peers.savePeerId(PeerId.generate());
+
+      await CRDTHive.deleteDocument(documentId);
+
+      expect(Hive.isBoxOpen('changes_$documentId'), isFalse);
+      expect(peers.getPeerId(), isNull);
+      expect(peers.box.isOpen, isTrue, reason: 'the identity box is shared');
+
+      final next = await CRDTHive.openStorageForDocument(documentId);
+      await first.close();
+      expect(next.changes.count, 0, reason: 'a stale close releases nothing');
+      await next.close();
+      expect(Hive.isBoxOpen('changes_$documentId'), isFalse);
+    });
+
+    test('a storage opened while its boxes close gets open boxes', () async {
+      final first = await CRDTHive.openStorageForDocument('doc-race');
+
+      final closing = first.close();
+      final second = await CRDTHive.openStorageForDocument('doc-race');
+      await closing;
+
+      expect((second.changes as CRDTHiveChangeStorage).box.isOpen, isTrue);
+    });
+
+    test('a failed open takes no reference', () async {
+      final clash = await Hive.openBox<int>('changes_doc-clash');
+      await expectLater(
+        CRDTHive.openChangeStorageForDocument('doc-clash'),
+        throwsA(isA<HiveError>()),
+      );
+      await clash.close();
+
+      final storage = await CRDTHive.openStorageForDocument('doc-clash');
+      await storage.close();
+
+      expect(Hive.isBoxOpen('changes_doc-clash'), isFalse);
+    });
+
+    test('closeAllBoxes forgets every reference', () async {
+      await CRDTHive.openStorageForDocument('doc-all');
+      await CRDTHive.openStorageForDocument('doc-all');
+
+      await CRDTHive.closeAllBoxes();
+      final storage = await CRDTHive.openStorageForDocument('doc-all');
+      await storage.close();
+
+      expect(Hive.isBoxOpen('changes_doc-all'), isFalse);
+    });
+
+    test('reading or copying a document leaves no box open', () async {
+      final backend = await openBackend();
+      final other = await CRDTHive.open(
+        changesBoxName: 'copies$suffix',
+        snapshotsBoxName: 'copied_snapshots$suffix',
+        peerIdsBoxName: 'peer_ids$suffix',
+        registryBoxName: 'documents$suffix',
+      );
+      final opened = await backend.openDocument(
+        'doc-read',
+        writeDelay: Duration.zero,
+      );
+      await opened.persistence.dispose();
+      await opened.persistence.storage.close();
+
+      await backend.readDocument('doc-read');
+      await backend.documentAt('doc-read', VersionVector({}));
+      await backend.copyDocumentTo(other, 'doc-read');
+
+      for (final prefix in ['changes', 'snapshots', 'copies']) {
+        expect(Hive.isBoxOpen('$prefix${suffix}_doc-read'), isFalse);
+      }
+    });
   });
   group('documentBoxNameFor', () {
     test('leaves an already safe id exactly as it was', () {

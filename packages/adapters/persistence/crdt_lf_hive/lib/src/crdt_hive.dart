@@ -3,6 +3,7 @@
 
 import 'package:crdt_lf/crdt_lf.dart';
 import 'package:crdt_lf_hive/crdt_lf_hive.dart';
+import 'package:crdt_lf_hive/src/box_references.dart';
 import 'package:hive/hive.dart';
 
 /// Main utility class for initializing Hive with CRDT adapters.
@@ -63,13 +64,16 @@ class CRDTHive {
   /// [registryBoxName] is the box the document ids live in — see
   /// [CRDTHiveBackend] for why Hive needs one. The other three name the boxes
   /// of the storages, and mean what they mean on the methods below.
+  ///
+  /// Two backends over the same boxes can live side by side: closing one
+  /// leaves the other usable.
   static Future<CRDTHiveBackend> open({
     String changesBoxName = 'changes',
     String snapshotsBoxName = 'snapshots',
     String peerIdsBoxName = 'peer_ids',
     String registryBoxName = 'documents',
   }) {
-    return Hive.openBox<String>(registryBoxName).then(
+    return BoxReferences.open<String>(registryBoxName).then(
       (registry) => CRDTHiveBackend(
         registry: registry,
         changesBoxName: changesBoxName,
@@ -94,7 +98,7 @@ class CRDTHive {
     Future<void> Function()? onWrite,
   }) {
     final documentBoxName = documentBoxNameFor(boxName, documentId);
-    return Hive.openBox<Change>(documentBoxName).then(
+    return BoxReferences.open<Change>(documentBoxName).then(
       (box) => CRDTHiveChangeStorage(box, documentId, onWrite: onWrite),
     );
   }
@@ -115,7 +119,7 @@ class CRDTHive {
     Future<void> Function()? onWrite,
   }) {
     final documentBoxName = documentBoxNameFor(boxName, documentId);
-    return Hive.openBox<Snapshot>(documentBoxName).then(
+    return BoxReferences.open<Snapshot>(documentBoxName).then(
       (box) => CRDTHiveSnapshotStorage(box, documentId, onWrite: onWrite),
     );
   }
@@ -143,15 +147,15 @@ class CRDTHive {
     String boxName = 'peer_ids',
     Future<void> Function()? onWrite,
   }) {
-    return Hive.openBox<String>(boxName).then(
+    return BoxReferences.open<String>(boxName).then(
       (box) => CRDTHivePeerIdStorage(box, documentId, onWrite: onWrite),
     );
   }
 
   /// Creates both change and snapshot storage for a specific document.
   ///
-  /// Returns a [CRDTHiveDocumentStorage]; its `close()` closes the two boxes
-  /// of this document.
+  /// Returns a [CRDTHiveDocumentStorage]. Opening one document twice is
+  /// safe: see [CRDTHiveDocumentStorage.close].
   ///
   /// [documentId] is the unique identifier for the document.
   ///
@@ -185,11 +189,11 @@ class CRDTHive {
 
   /// Closes every Hive box this app has open, not only the CRDT ones.
   ///
-  /// It is for shutting the app down. An app that opens one document after
-  /// another wants [CRDTHiveDocumentStorage.close] instead, which closes the
-  /// two boxes of that document and leaves the rest alone.
+  /// It is for shutting the app down: every storage and backend opened before
+  /// stops working, whoever holds it. An app that opens one document after
+  /// another wants [CRDTHiveDocumentStorage.close] instead.
   static Future<void> closeAllBoxes() {
-    return Hive.close();
+    return BoxReferences.closeAll();
   }
 
   /// Deletes a box from disk.
@@ -205,14 +209,6 @@ class CRDTHive {
     return Hive.deleteBoxFromDisk(boxName);
   }
 
-  /// Closes [boxName] when it is open, so it can be deleted.
-  static Future<void> _closeForDelete<E>(String boxName) {
-    if (!Hive.isBoxOpen(boxName)) {
-      return Future<void>.value();
-    }
-    return Hive.box<E>(boxName).close();
-  }
-
   /// Deletes all data for a specific document by deleting its dedicated boxes.
   ///
   /// This removes the changes, snapshots and stored identity of the document.
@@ -224,7 +220,8 @@ class CRDTHive {
   ///
   /// The two boxes are closed before they are deleted, so deleting a document
   /// that is open works. It is the normal case: an app deletes the note it
-  /// was just reading.
+  /// was just reading. Every storage still open on the document stops
+  /// working; open it again to start from empty.
   static Future<void> deleteDocument(
     String documentId, {
     String changesBoxName = 'changes',
@@ -238,23 +235,19 @@ class CRDTHive {
 
     // Closed first: the browser will not delete an open IndexedDB database,
     // and Hive deletes without closing. See `deleteBox`.
-    await _closeForDelete<Change>(changesDocumentBoxName);
-    await _closeForDelete<Snapshot>(snapshotsDocumentBoxName);
+    await BoxReferences.closeNow<Change>(changesDocumentBoxName);
+    await BoxReferences.closeNow<Snapshot>(snapshotsDocumentBoxName);
 
     await Future.wait([
       deleteBox(changesDocumentBoxName),
       deleteBox(snapshotsDocumentBoxName),
     ]);
 
-    // Every document shares the identity box, so this one is a key to remove
-    // rather than a box to delete. Closed again when this call opened it: on
-    // the web a box is an IndexedDB connection, and one left open is what
-    // blocks the next delete.
-    final wasOpen = Hive.isBoxOpen(peerIdsBoxName);
-    final peers = await Hive.openBox<String>(peerIdsBoxName);
-    await peers.delete(documentId);
-    if (!wasOpen) {
-      await peers.close();
+    final peers = await BoxReferences.open<String>(peerIdsBoxName);
+    try {
+      await peers.delete(documentId);
+    } finally {
+      await BoxReferences.release(peers);
     }
   }
 }
