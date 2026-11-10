@@ -1,19 +1,22 @@
 // Copyright 2025 Mattia Pispisa
 // SPDX-License-Identifier: MIT
 
+import 'dart:async';
 import 'dart:io';
 
 import 'package:crdt_lf/crdt_lf.dart';
 import 'package:crdt_lf_hive/crdt_lf_hive.dart';
+import 'package:crdt_lf_recipes/offline_first_replica/note_page.dart';
 import 'package:crdt_lf_recipes/offline_first_replica/open_note.dart';
 import 'package:crdt_socket_sync/replica.dart';
 import 'package:crdt_socket_sync/web_socket_relay_client.dart';
 import 'package:crdt_socket_sync/web_socket_relay_server.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hive/hive.dart';
 
-// Plain tests, no testWidgets: a widget test replaces the HTTP client of the
-// process with a mock, and the real sockets below need the real one.
+// A widget test replaces the HTTP client of the process with a mock: the
+// page test puts the real one back for its sockets.
 
 /// Waits until [done] holds.
 Future<void> eventually(bool Function() done) async {
@@ -101,5 +104,49 @@ void main() {
 
     await laptop.close();
     await online.close();
+  });
+  testWidgets('the page edits the note and shows the connection', (
+    tester,
+  ) async {
+    HttpOverrides.global = null;
+
+    /// Pumps until [done] holds, letting the sockets and Hive run in between.
+    Future<void> pumpUntil(bool Function() done) async {
+      for (var i = 0; i < 200 && !done(); i++) {
+        await tester.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 10)),
+        );
+        // Fake time too, for the timers of the client.
+        await tester.pump(const Duration(milliseconds: 50));
+      }
+      expect(done(), isTrue);
+    }
+
+    final laptop = (await tester.runAsync(openPeer))!;
+    await tester.pumpWidget(MaterialApp(home: NotePage(url: url)));
+    await pumpUntil(() => find.text('Online').evaluate().isNotEmpty);
+
+    await tester.enterText(find.byType(TextField), 'Hello');
+    await pumpUntil(() => textOf(laptop) == 'Hello');
+
+    await tester.runAsync(server.stop);
+    await pumpUntil(() => find.text('Online').evaluate().isEmpty);
+    expect(find.byType(TextField), findsOneWidget);
+
+    // The page closes the replica: give the close, and the timers of the
+    // client, the time to end.
+    await tester.pumpWidget(const SizedBox());
+    for (var i = 0; i < 20; i++) {
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 10)),
+      );
+      await tester.pump(const Duration(milliseconds: 300));
+    }
+    // The boxes the page opened in the test zone close here, while it is
+    // still pumped.
+    await tester.runAsync(laptop.close);
+    var closed = false;
+    unawaited(CRDTHive.closeAllBoxes().then((_) => closed = true));
+    await pumpUntil(() => closed);
   });
 }

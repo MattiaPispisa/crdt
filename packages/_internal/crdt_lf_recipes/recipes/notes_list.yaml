@@ -21,7 +21,7 @@ keyPoints:
   - "Open one backend for the whole app: it holds every note, and `documentIds` lists them."
   - "One document per note: the document id is the note id."
   - "`readDocument` builds a read-only copy for the list, and you dispose it after reading. `openDocument` is for the page that edits the note."
-  - "`deleteDocument` removes the changes, the snapshots and the identity of a note. Close the note first if it is open."
+  - "`deleteDocument` removes the changes, the snapshots and the identity of a note. A note just left may still be writing: wait until it is closed, then delete it."
 related:
   - title: Working with storage
     to: /docs/connectors/persistence/working-with-storage

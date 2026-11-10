@@ -68,7 +68,7 @@ void main() {
     await example.host.start();
 
     server = await app.run(_buildHandler(), InternetAddress.loopbackIPv4, 0);
-    url = 'ws://127.0.0.1:${server.port}/sync';
+    url = 'ws://127.0.0.1:${server.port}/sync?token=${sync.exampleToken}';
   });
 
   tearDownAll(() async {
@@ -94,17 +94,21 @@ void main() {
     await _waitForText(alice.client.document, alice.text, 'Hello, world');
   });
 
-  test('a wrong token gets a 401 before the upgrade', () async {
-    final http = HttpClient();
-    addTearDown(http.close);
+  for (final (name, query) in [
+    ('no token', ''),
+    ('a wrong token', '?token=wrong'),
+  ]) {
+    test('$name gets a 401 before the upgrade', () async {
+      final http = HttpClient();
+      addTearDown(http.close);
 
-    final request = await http.getUrl(
-      Uri.parse('http://127.0.0.1:${server.port}/sync'),
-    );
-    request.headers.set(HttpHeaders.authorizationHeader, 'Bearer wrong');
-    final response = await request.close();
-    await response.drain<void>();
+      final request = await http.getUrl(
+        Uri.parse('http://127.0.0.1:${server.port}/sync$query'),
+      );
+      final response = await request.close();
+      await response.drain<void>();
 
-    expect(response.statusCode, HttpStatus.unauthorized);
-  });
+      expect(response.statusCode, HttpStatus.unauthorized);
+    });
+  }
 }

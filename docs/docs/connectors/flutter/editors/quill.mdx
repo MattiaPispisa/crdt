@@ -37,7 +37,8 @@ flutter pub add crdt_lf crdt_lf_flutter crdt_lf_quill flutter_quill
 ## Usage
 
 flutter_quill reads its texts from its localizations: add its delegate to the
-app, or the toolbar throws `MissingFlutterQuillLocalizationException`.
+app, or the toolbar throws `MissingFlutterQuillLocalizationException`. Here
+Hive keeps the page on the device:
 
 <RecipeSnippet id="quill-editor" file="main.dart" region="app" />
 
@@ -45,7 +46,7 @@ Register a rich text handler on the document, provide the document with
 `CrdtProvider` (from [`crdt_lf_flutter`](../index.mdx)), and put the binder
 above the toolbar and the editor. The `State` owns the controller:
 
-<RecipeSnippet id="quill-editor" file="editor_page.dart" region="state,bind" />
+<RecipeSnippet id="quill-editor" file="editor_page.dart" region="state,open,close,bind" />
 
 Edits made in the editor go into the handler. Changes from other peers show up
 in the editor.

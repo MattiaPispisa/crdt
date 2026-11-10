@@ -5,7 +5,7 @@ title: Two peers, one result
 description: >-
   Two documents edit one text at the same time, with no connection. They
   exchange their changes and both read the same text.
-platforms: [Dart VM, Flutter native, Flutter web]
+platforms: [Dart VM, Flutter native]
 # Shown as the install command: names only, `pub add` picks the versions.
 dependencies: [crdt_lf]
 files:

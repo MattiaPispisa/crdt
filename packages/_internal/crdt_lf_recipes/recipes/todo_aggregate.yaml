@@ -1,0 +1,33 @@
+# A recipe: what the docs site shows for it. Paths are relative to the
+# repository root, so a recipe can show any tested file of the repository.
+id: todo-aggregate
+title: "A todo list as an aggregate: events and undo"
+description: >-
+  A Flutter todo list held by one aggregate: the app writes events (added,
+  edited, checked, moved, removed), and a reducer folds them the same way on
+  every peer. Each action can be undone.
+platforms: [Flutter native, Flutter web]
+# Shown as the install command: names only, `pub add` picks the versions.
+dependencies: [crdt_lf, crdt_lf_flutter]
+files:
+  - path: packages/_internal/crdt_lf_recipes/lib/todo_aggregate/todos.dart
+    label: todos.dart
+  - path: packages/_internal/crdt_lf_recipes/lib/todo_aggregate/main.dart
+    label: main.dart
+  - path: packages/_internal/crdt_lf_recipes/lib/todo_aggregate/todo_page.dart
+    label: todo_page.dart
+test: packages/_internal/crdt_lf_recipes/test/todo_aggregate_test.dart
+keyPoints:
+  - "A todo is addressed by the id of the event that added it (`EventContext.id`, returned by `dispatch`), never by its position: a concurrent insert shifts a position, never an id."
+  - "`reduce` is pure, and an event on a todo that is gone does nothing: that is the merged result of a concurrent remove."
+  - "The text is one field of the aggregate: two peers that edit it at the same time keep one of the two texts. For text typed together, use the containers recipe."
+  - "`InvertibleAggregateDefinition.invert` makes each event undoable. An undo of a remove puts the todo back under its own id, so later events still find it."
+  - "The codecs write what travels and what is stored: change their bytes, or the meaning of an event, and raise `version` with a migration."
+  - "The document lives in memory. To keep it on the device, open it from a storage backend: the snapshots it takes keep the replay of a late event short."
+related:
+  - title: Aggregates
+    to: /docs/use-cases/aggregates
+  - title: Undo and redo
+    to: /docs/use-cases/undo-redo
+  - title: "Todo list with containers"
+    to: /docs/recipes/todo-list

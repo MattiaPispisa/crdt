@@ -1,9 +1,9 @@
 // Copyright 2025 Mattia Pispisa
 // SPDX-License-Identifier: MIT
 
-// #docregion imports
 import 'dart:io';
 
+// #docregion imports
 import 'package:crdt_lf/crdt_lf.dart';
 import 'package:crdt_lf_sqlite/crdt_lf_sqlite.dart';
 

@@ -3,6 +3,7 @@
 
 import 'package:crdt_lf/crdt_lf.dart';
 import 'package:crdt_lf_flutter/crdt_lf_flutter.dart';
+import 'package:crdt_lf_recipes/todo_list/main.dart' as app;
 import 'package:crdt_lf_recipes/todo_list/todo_page.dart';
 import 'package:crdt_lf_recipes/todo_list/todos.dart';
 import 'package:flutter/material.dart';
@@ -10,7 +11,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 /// The text of every todo of [document], in order.
 List<String> textsOf(CRDTDocument document) => [
-  for (final todo in todosOf(document).children.cast<CRDTMapRefHandler>())
+  for (final todo in todosOf(document).children.whereType<CRDTMapRefHandler>())
     todo.text.value,
 ];
 
@@ -21,6 +22,15 @@ void exchange(CRDTDocument a, CRDTDocument b) {
 }
 
 void main() {
+  testWidgets('the app provides an empty list to the page', (tester) async {
+    app.main();
+    await tester.pump();
+
+    await tester.tap(find.byType(FloatingActionButton));
+    await tester.pump();
+    expect(find.byType(TodoTile), findsOneWidget);
+  });
+
   group('the page', () {
     late CRDTDocument document;
 
@@ -71,6 +81,23 @@ void main() {
       await tester.pump();
       expect(textsOf(document), ['Bread', 'Milk']);
       expect(find.byType(TextField), findsNWidgets(2));
+    });
+    testWidgets('a child that is not a todo keeps the tile indexes right', (
+      tester,
+    ) async {
+      final todos = todosOf(document);
+      for (final text in ['Milk', 'Eggs']) {
+        addTodo(todos, text: text);
+      }
+      // What a newer peer could write: a child of another kind.
+      todos.insertChild(0, CRDTFugueTextHandler.spec);
+      await pumpPage(tester);
+
+      expect(find.text('Unknown item'), findsOneWidget);
+
+      await tester.tap(find.byTooltip('Delete').first);
+      await tester.pump();
+      expect(textsOf(document), ['Eggs']);
     });
   });
 

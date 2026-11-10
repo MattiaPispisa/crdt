@@ -3,40 +3,45 @@
 
 import 'package:crdt_lf/crdt_lf.dart';
 import 'package:crdt_lf_flutter/crdt_lf_flutter.dart';
+import 'package:crdt_lf_hive/crdt_lf_hive.dart';
+import 'package:crdt_socket_sync/replica.dart';
 import 'package:crdt_socket_sync/web_socket_relay_client.dart';
 import 'package:flutter/painting.dart';
 
-/// A note joined on the relay, with the presence of its peers.
+/// A note on this device, joined on the relay, with the presence of its peers.
 typedef SharedNote =
     ({
-      WebSocketRelayClient client,
+      CRDTReplica replica,
       ClientAwarenessPlugin presence,
       CRDTFugueTextHandler text,
     });
 
 // #docregion join
-/// Joins the note on the relay at [url], as [name] drawn in [color].
-Future<SharedNote> joinNote(
+/// Opens the note on this device and joins it on the relay at [url], as
+/// [name] drawn in [color].
+Future<SharedNote> openNote(
   String url, {
   required String name,
   required Color color,
 }) async {
-  final document = CRDTDocument(documentId: 'note', peerId: PeerId.generate());
-  // The cursors need a Fugue text: its anchors stay valid after any edit.
-  final text = CRDTFugueTextHandler(document, 'note');
-
   // Sent on every connection: who this peer is, before any caret.
   final presence = ClientAwarenessPlugin(
     initialMetadata: {'name': name, 'color': color.toARGB32()},
   );
-  final client = WebSocketRelayClient(
-    url: url,
-    document: document,
-    author: document.peerId,
-    plugins: [presence],
+  final replica = await CRDTReplica.open(
+    documentId: 'note',
+    storage: CRDTHive.open,
+    sync:
+        (document) => WebSocketRelayClient(
+          url: url,
+          document: document,
+          author: document.peerId,
+          plugins: [presence],
+        ),
   );
-  await client.connect();
-  return (client: client, presence: presence, text: text);
+  // The cursors need a Fugue text: its anchors stay valid after any edit.
+  final text = CRDTFugueTextHandler(replica.document, 'note');
+  return (replica: replica, presence: presence, text: text);
 }
 // #enddocregion join
 

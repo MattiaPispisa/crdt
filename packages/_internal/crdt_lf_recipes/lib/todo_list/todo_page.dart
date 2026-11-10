@@ -31,17 +31,24 @@ class TodoPage extends StatelessWidget {
         id: 'todos',
         nested: true,
         builder: (context, todos) {
-          final items = todos.children.whereType<CRDTMapRefHandler>().toList();
           return ReorderableListView(
             // `to` is the place after the move, as `move` counts it.
             onReorderItem: todos.move,
             children: [
-              for (final (index, todo) in items.indexed)
-                TodoTile(
-                  key: ValueKey(todo.id),
-                  todo: todo,
-                  onDelete: () => todos.removeChildAt(index),
-                ),
+              // One tile per reference, so a tile index is the list index.
+              for (final (index, ref) in todos.childRefs().indexed)
+                switch (todos.doc.resolveHandler(ref)) {
+                  final CRDTMapRefHandler todo => TodoTile(
+                    key: ValueKey(ref.id),
+                    todo: todo,
+                    onDelete: () => todos.removeChildAt(index),
+                  ),
+                  // A kind this peer does not know, from a newer peer.
+                  _ => ListTile(
+                    key: ValueKey(ref.id),
+                    title: const Text('Unknown item'),
+                  ),
+                },
             ],
           );
         },

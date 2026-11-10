@@ -25,7 +25,15 @@ class NotesPage extends StatefulWidget {
 }
 
 class _NotesPageState extends State<NotesPage> {
+  // #docregion state
   List<NoteSummary>? _notes;
+
+  // A delete waits for these: a note still closing, and the reads running.
+  final _closing = <String, Future<void>>{};
+  final _loads = <Future<void>>{};
+  // The notes swiped away: the list skips them, even before the delete ends.
+  final _deleted = <String>{};
+  // #enddocregion state
 
   @override
   void initState() {
@@ -35,8 +43,21 @@ class _NotesPageState extends State<NotesPage> {
 
   // #docregion load
   Future<void> _load() async {
+    final load = _readNotes();
+    _loads.add(load);
+    try {
+      await load;
+    } finally {
+      _loads.remove(load);
+    }
+  }
+
+  Future<void> _readNotes() async {
     final notes = <NoteSummary>[];
     for (final id in await widget.backend.documentIds) {
+      if (_deleted.contains(id)) {
+        continue;
+      }
       // A read-only copy: nothing writes it, so dispose it after reading.
       final document = await widget.backend.readDocument(id);
       final body = CRDTFugueTextHandler(document, 'body').value;
@@ -48,7 +69,10 @@ class _NotesPageState extends State<NotesPage> {
     notes.sort((a, b) => a.id.compareTo(b.id));
 
     if (mounted) {
-      setState(() => _notes = notes);
+      // A read that started before a swipe still holds the deleted note.
+      setState(
+        () => _notes = [...notes.where((n) => !_deleted.contains(n.id))],
+      );
     }
   }
   // #enddocregion load
@@ -60,19 +84,31 @@ class _NotesPageState extends State<NotesPage> {
   }
 
   Future<void> _edit(String id) {
+    final closed = Completer<void>();
+    _closing[id] = closed.future;
     return Navigator.of(context).push(
       MaterialPageRoute<void>(
-        // The list reloads once the note is written and closed.
         builder:
-            (context) =>
-                NotePage(backend: widget.backend, id: id, onClosed: _load),
+            (context) => NotePage(
+              backend: widget.backend,
+              id: id,
+              // The list reloads once the note is written and closed.
+              onClosed: () {
+                closed.complete();
+                unawaited(_load());
+              },
+            ),
       ),
     );
   }
 
   Future<void> _delete(String id) async {
+    _deleted.add(id);
     // A dismissed row must leave the list at once.
     setState(() => _notes = [...?_notes?.where((note) => note.id != id)]);
+    // A note just left still writes its last edits: wait until it is closed.
+    await _closing.remove(id);
+    await Future.wait([..._loads]);
     // The changes, the snapshots and the identity of the note.
     await widget.backend.deleteDocument(id);
   }

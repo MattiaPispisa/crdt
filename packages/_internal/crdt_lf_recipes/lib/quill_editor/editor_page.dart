@@ -30,18 +30,18 @@ class _EditorPageState extends State<EditorPage> {
   final _controller = QuillController.basic();
   final _focusNode = FocusNode();
   final _scrollController = ScrollController();
-  // #enddocregion state
 
   PersistentDocument? _page;
   CRDTUndoManager? _undo;
+  // #enddocregion state
 
+  // #docregion open
   @override
   void initState() {
     super.initState();
     unawaited(_open());
   }
 
-  // #docregion open
   Future<void> _open() async {
     final page = await widget.backend.openDocument('page');
     final text = CRDTFugueRichTextHandler(page.document, 'page');

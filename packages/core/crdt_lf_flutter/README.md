@@ -61,15 +61,22 @@ Provide the document to the tree:
 
 <!-- recipe:todo-list/main.dart#provide -->
 ```dart
-home: CrdtProvider(
-  // In memory: the provider creates the document and disposes it.
-  create: (_) {
-    final document = CRDTDocument();
-    todosOf(document); // the widgets read the list under 'todos'
-    return document;
-  },
-  child: const TodoPage(),
-),
+void main() {
+  runApp(
+    MaterialApp(
+      title: 'Todos',
+      home: CrdtProvider(
+        // In memory: the provider creates the document and disposes it.
+        create: (_) {
+          final document = CRDTDocument();
+          todosOf(document); // the widgets read the list under 'todos'
+          return document;
+        },
+        child: const TodoPage(),
+      ),
+    ),
+  );
+}
 ```
 <!-- /recipe -->
 
@@ -95,17 +102,24 @@ Widget build(BuildContext context) {
       id: 'todos',
       nested: true,
       builder: (context, todos) {
-        final items = todos.children.whereType<CRDTMapRefHandler>().toList();
         return ReorderableListView(
           // `to` is the place after the move, as `move` counts it.
           onReorderItem: todos.move,
           children: [
-            for (final (index, todo) in items.indexed)
-              TodoTile(
-                key: ValueKey(todo.id),
-                todo: todo,
-                onDelete: () => todos.removeChildAt(index),
-              ),
+            // One tile per reference, so a tile index is the list index.
+            for (final (index, ref) in todos.childRefs().indexed)
+              switch (todos.doc.resolveHandler(ref)) {
+                final CRDTMapRefHandler todo => TodoTile(
+                  key: ValueKey(ref.id),
+                  todo: todo,
+                  onDelete: () => todos.removeChildAt(index),
+                ),
+                // A kind this peer does not know, from a newer peer.
+                _ => ListTile(
+                  key: ValueKey(ref.id),
+                  title: const Text('Unknown item'),
+                ),
+              },
           ],
         );
       },
@@ -114,6 +128,9 @@ Widget build(BuildContext context) {
 }
 ```
 <!-- /recipe -->
+
+`onReorderItem` is recent in Flutter. On an older Flutter, use `onReorder`
+and lower `to` by one when it is after `from`.
 
 The whole app (`todosOf`, `addTodo`, `TodoTile`), tested in CI, is the
 [todo list recipe](https://mattiapispisa.it/crdt/docs/recipes/todo-list). For a text field, see the

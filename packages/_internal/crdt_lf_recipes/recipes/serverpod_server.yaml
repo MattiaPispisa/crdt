@@ -4,7 +4,8 @@ id: serverpod-server
 title: A Serverpod server with documents on disk
 description: >-
   A Serverpod web route in server–client mode: the server holds the documents,
-  stores them with Hive, and lets in only an authenticated caller.
+  stores them with Hive, and refuses a caller without the token before the
+  WebSocket opens.
 platforms: [Dart VM]
 # Shown as the install command: names only, `pub add` picks the versions.
 dependencies: [crdt_lf_hive, crdt_socket_sync, crdt_socket_sync_serverpod, hive, serverpod]
@@ -18,6 +19,7 @@ keyPoints:
   - "The server serves only the documents its registry holds: create them before a client asks."
   - "`PersistentServerRegistry` keeps the documents on disk, and compacts them on a threshold."
   - "Authenticate in the route, before the upgrade: a refused caller gets 401 and never reaches the protocol."
+  - "The token travels in the query of the URL: `WebSocketClient` sends no headers, and a browser cannot set them on a WebSocket."
   - "A real project passes its own generated `Protocol()` and `Endpoints()` to `Serverpod`."
   - "A browser client served from another origin is refused (403) unless the route accepts it: see `allowAnyOrigin`."
 related:

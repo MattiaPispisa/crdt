@@ -8,11 +8,11 @@ import 'package:flutter/material.dart';
 import 'todo_page.dart';
 import 'todos.dart';
 
+// #docregion provide
 void main() {
   runApp(
     MaterialApp(
       title: 'Todos',
-      // #docregion provide
       home: CrdtProvider(
         // In memory: the provider creates the document and disposes it.
         create: (_) {
@@ -22,7 +22,7 @@ void main() {
         },
         child: const TodoPage(),
       ),
-      // #enddocregion provide
     ),
   );
 }
+// #enddocregion provide

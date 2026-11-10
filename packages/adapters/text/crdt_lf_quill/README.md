@@ -38,39 +38,110 @@ so several peers edit the same page, with bold, links, headings and lists.
 ## Quick start
 
 ```sh
-flutter pub add crdt_lf crdt_lf_flutter crdt_lf_quill flutter_quill
+flutter pub add crdt_lf crdt_lf_flutter crdt_lf_hive crdt_lf_quill flutter_quill hive path_provider
+flutter pub add flutter_localizations --sdk=flutter
 ```
 
-flutter_quill needs its localizations in the app:
+flutter_quill needs its localizations in the app. Hive keeps the page on the
+device:
 
 <!-- recipe:quill-editor/main.dart#app -->
 ```dart
-@override
-Widget build(BuildContext context) {
-  return MaterialApp(
-    title: 'Editor',
-    // flutter_quill reads its texts from here, and throws without them.
-    localizationsDelegates: const [
-      GlobalMaterialLocalizations.delegate,
-      GlobalWidgetsLocalizations.delegate,
-      FlutterQuillLocalizations.delegate,
-    ],
-    home: EditorPage(backend: backend),
-  );
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+
+  // On the web Hive uses IndexedDB and needs no path.
+  if (!kIsWeb) {
+    Hive.init((await getApplicationDocumentsDirectory()).path);
+  }
+  CRDTHive.initialize();
+  final backend = await CRDTHive.open();
+
+  runApp(EditorApp(backend: backend));
+}
+
+/// The app: one rich text page stored in [backend].
+class EditorApp extends StatelessWidget {
+  /// Creates the app of the page stored in [backend].
+  const EditorApp({required this.backend, super.key});
+
+  /// Where the page is stored.
+  final CRDTStorageBackend backend;
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      title: 'Editor',
+      // flutter_quill reads its texts from here, and throws without them.
+      localizationsDelegates: const [
+        GlobalMaterialLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+        FlutterQuillLocalizations.delegate,
+      ],
+      home: EditorPage(backend: backend),
+    );
+  }
 }
 ```
 <!-- /recipe -->
 
-The page owns the controller, and binds it to a `CRDTFugueRichTextHandler`
-registered as `'page'`:
+The page opens the stored page, owns the controller and the undo manager, and
+binds them to a `CRDTFugueRichTextHandler` registered as `'page'`:
 
-<!-- recipe:quill-editor/editor_page.dart#state,bind -->
+<!-- recipe:quill-editor/editor_page.dart#state,open,close,bind -->
 ```dart
 // The State owns these: the binder never disposes them, and a new
 // FocusNode on each build would drop the keyboard.
 final _controller = QuillController.basic();
 final _focusNode = FocusNode();
 final _scrollController = ScrollController();
+
+PersistentDocument? _page;
+CRDTUndoManager? _undo;
+
+@override
+void initState() {
+  super.initState();
+  unawaited(_open());
+}
+
+Future<void> _open() async {
+  final page = await widget.backend.openDocument('page');
+  final text = CRDTFugueRichTextHandler(page.document, 'page');
+  // Records only the edits made in this editor.
+  final undo = CRDTUndoManager(
+    page.document,
+    trackedOrigins: {crdtQuillOrigin},
+  )..track(text);
+
+  if (!mounted) {
+    undo.dispose();
+    return _close(page);
+  }
+  setState(() {
+    _page = page;
+    _undo = undo;
+  });
+}
+
+@override
+void dispose() {
+  _controller.dispose();
+  _focusNode.dispose();
+  _scrollController.dispose();
+  _undo?.dispose();
+  final page = _page;
+  if (page != null) {
+    unawaited(_close(page));
+  }
+  super.dispose();
+}
+
+static Future<void> _close(PersistentDocument page) async {
+  await page.persistence.dispose(); // writes what is still waiting
+  page.document.dispose();
+  await page.persistence.storage.close();
+}
 
 @override
 Widget build(BuildContext context) {

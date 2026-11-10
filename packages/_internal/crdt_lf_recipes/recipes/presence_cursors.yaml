@@ -3,12 +3,12 @@
 id: presence-cursors
 title: Remote cursors and presence
 description: >-
-  A relay server that shares who is in each room, and a Flutter note that
-  shows the carets of the other peers, with their name and color, as they
-  type.
+  A relay server that shares who is in each room, and a Flutter note, kept on
+  the device by Hive, that shows the carets of the other peers, with their
+  name and color, as they type.
 platforms: [Flutter native, Flutter web]
 # Shown as the install command: names only, `pub add` picks the versions.
-dependencies: [crdt_lf, crdt_lf_flutter, crdt_socket_sync]
+dependencies: [crdt_lf, crdt_lf_flutter, crdt_lf_hive, crdt_socket_sync, hive, path_provider]
 files:
   - path: packages/_internal/crdt_lf_recipes/lib/presence_cursors/server.dart
     label: server.dart
@@ -21,6 +21,8 @@ files:
 test: packages/_internal/crdt_lf_recipes/test/presence_cursors_test.dart
 keyPoints:
   - "The awareness plugin runs on both sides: `ServerAwarenessPlugin` on the server, `ClientAwarenessPlugin` on each client. Presence never enters the document history."
+  - "`CRDTReplica.open` restores the note, then connects: give the plugin to the client it builds in `sync`. The page closes the replica."
+  - "Each peer needs its own storage: it keeps the peer id. Two apps on the same storage would write as the same peer."
   - "Publish the anchors that `onSelectionAnchorsChanged` reports as JSON. They are `null` when the field loses focus, and that takes the caret away."
   - "The awareness states include this peer: leave out its own session id before you draw."
   - "`CrdtTextCursorsOverlay` needs a Fugue text handler and an `Overlay` above it (`MaterialApp` gives one)."
@@ -32,3 +34,5 @@ related:
     to: /docs/connectors/sync/plugins
   - title: Presence
     to: /docs/connectors/flutter/presence
+  - title: Open a replica
+    to: /docs/connectors/replica

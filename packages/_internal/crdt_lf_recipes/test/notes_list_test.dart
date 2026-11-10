@@ -105,6 +105,24 @@ void main() {
       tester,
       () => find.text('Ideas for later').evaluate().isNotEmpty,
     );
+
+    // Edit, leave, and swipe the note away while it still closes.
+    await tester.tap(find.text('Ideas for later'));
+    await pumpUntil(tester, () => field.evaluate().isNotEmpty);
+    await tester.enterText(field, 'Ideas, last edit');
+    await tester.pageBack();
+    await tester.pumpAndSettle();
+    await tester.drag(find.text('Ideas for later'), const Offset(-800, 0));
+    await pumpUntil(
+      tester,
+      () => ids.isEmpty,
+      poll: () async {
+        ids = await backend.documentIds;
+      },
+    );
+    // The reload after the close leaves the deleted note out.
+    await pumpUntil(tester, () => find.byType(ListTile).evaluate().isEmpty);
+
     await tester.runAsync(() => tester.pumpWidget(const SizedBox()));
 
     // The pages opened their boxes in the test zone: close them here, while

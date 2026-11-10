@@ -37,8 +37,6 @@ dart pub add crdt_lf crdt_lf_sqlite
 
 <!-- recipe:persisted-note/main.dart#imports,open,edit,close -->
 ```dart
-import 'dart:io';
-
 import 'package:crdt_lf/crdt_lf.dart';
 import 'package:crdt_lf_sqlite/crdt_lf_sqlite.dart';
 

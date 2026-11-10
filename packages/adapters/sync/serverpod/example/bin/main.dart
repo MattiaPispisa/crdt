@@ -10,37 +10,28 @@ import 'package:crdt_socket_sync_serverpod_example/src/host.dart';
 import 'package:crdt_socket_sync_serverpod_example/src/server_protocol.dart';
 import 'package:serverpod/serverpod.dart';
 
+/// The token a client sends. Replace it with a real check.
+const exampleToken = 'example-token';
+
 /// Server–client mode: the server holds the document, validates the changes
 /// and takes aligned snapshots.
 ///
-/// The token check shows the point of doing this in the route: the request is
-/// available *before* the socket exists, so a client that fails it gets an
-/// ordinary 401 and never reaches the protocol. A request without an
-/// `Authorization` header passes too; drop that to make the token required.
+/// Connect with `WebSocketClient` at
+/// `ws://localhost:8080/sync?token=example-token`.
+/// The token travels in the query: `WebSocketClient` sends no headers, and a
+/// browser cannot set them on a WebSocket. A caller without the token gets an
+/// ordinary 401 and never reaches the protocol.
 class ExampleSyncRoute extends CrdtSyncRoute {
   ExampleSyncRoute(super.sessionHost);
 
   @override
   FutureOr<Result> handleCall(Session session, Request request) {
-    final hasToken = request.headers.authorization != null;
-    if (hasToken && !session.isUserSignedIn) {
+    if (request.url.queryParameters['token'] != exampleToken) {
       return Response.unauthorized();
     }
 
     return super.handleCall(session, request);
   }
-}
-
-/// Accepts `Authorization: Bearer example-token`. Replace it with a real
-/// check, or with the handler of `serverpod_auth`.
-///
-/// Serverpod needs a handler for any request that carries the header: without
-/// one, the request fails with a 500 before the route runs.
-Future<AuthenticationInfo?> _authenticate(Session session, String token) async {
-  if (token != 'example-token') {
-    return null;
-  }
-  return AuthenticationInfo('example-user', {}, authId: token);
 }
 
 ServerConfig _serverConfig(int port) {
@@ -72,7 +63,6 @@ Future<Serverpod> startServer(
     // `Protocol()` and `Endpoints()`.
     EmptyProtocol(),
     NoEndpoints(),
-    authenticationHandler: _authenticate,
     config: ServerpodConfig(
       apiServer: _serverConfig(apiPort),
       webServer: _serverConfig(webPort),

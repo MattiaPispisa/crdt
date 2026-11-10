@@ -5,7 +5,7 @@ title: A text note saved with Hive
 description: >-
   A Dart program that keeps one collaborative text in Hive boxes. Every run
   reads the note back and adds a line.
-platforms: [Dart VM, Flutter native, Flutter web]
+platforms: [Dart VM, Flutter native]
 # Shown as the install command: names only, `pub add` picks the versions.
 dependencies: [crdt_lf, crdt_lf_hive, hive]
 files:

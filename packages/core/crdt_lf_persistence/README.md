@@ -45,8 +45,6 @@ persistence adapters, and the code that keeps a document on disk as it changes.
 
 <!-- recipe:persisted-note/main.dart#imports,open,edit,close -->
 ```dart
-import 'dart:io';
-
 import 'package:crdt_lf/crdt_lf.dart';
 import 'package:crdt_lf_sqlite/crdt_lf_sqlite.dart';
 

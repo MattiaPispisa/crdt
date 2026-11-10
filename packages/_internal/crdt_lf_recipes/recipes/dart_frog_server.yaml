@@ -4,7 +4,8 @@ id: dart-frog-server
 title: A Dart Frog server with documents on disk
 description: >-
   A Dart Frog route in server–client mode: the server holds the documents,
-  stores them with Hive, and checks a token before the WebSocket opens.
+  stores them with Hive, and refuses a caller without the token before the
+  WebSocket opens.
 platforms: [Dart VM]
 # Shown as the install command: names only, `pub add` picks the versions.
 dependencies: [crdt_lf_hive, crdt_socket_sync, crdt_socket_sync_dart_frog, dart_frog, hive]
@@ -22,6 +23,7 @@ keyPoints:
   - "The server serves only the documents its registry holds: create them before a client asks."
   - "`PersistentServerRegistry` keeps the documents on disk, and compacts them on a threshold."
   - "A route sees the request before the socket opens: check the caller there, and answer 401 before the upgrade."
+  - "The token travels in the query of the URL: `WebSocketClient` sends no headers, and a browser cannot set them on a WebSocket."
   - "Dispose the host on shutdown: that is where the writes still waiting are flushed."
 related:
   - title: Server frameworks

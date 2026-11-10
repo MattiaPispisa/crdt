@@ -167,12 +167,6 @@ const config: Config = {
       hideOnScroll: true,
       items: [
         {
-          to: '/docs/recipes',
-          position: 'left',
-          label: 'Recipes',
-          activeBaseRegex: '/docs/recipes',
-        },
-        {
           label: 'Documentation',
           position: 'left',
           to: '/docs/introduction',
@@ -188,6 +182,12 @@ const config: Config = {
             { label: 'Deep dive', to: '/docs/deep-dive' },
             { label: 'Migrations', to: '/docs/migrations' },
           ],
+        },
+         {
+          to: '/docs/recipes',
+          position: 'left',
+          label: 'Recipes',
+          activeBaseRegex: '/docs/recipes',
         },
         {
           label: 'Benchmarks',

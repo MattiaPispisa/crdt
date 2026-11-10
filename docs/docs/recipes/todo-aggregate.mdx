@@ -1,0 +1,18 @@
+---
+title: "A todo list as an aggregate: events and undo"
+sidebar_label: "Todo list: aggregate"
+description: "A todo list held by one aggregate: events, a reducer, stable ids and undo."
+---
+
+import Recipe from '@site/src/components/Recipe';
+
+# A todo list as an aggregate: events and undo
+
+The whole list is one handler. The app writes events, and a reducer folds them
+into the list the same way on every peer. A todo keeps the id of the event that
+added it, so two peers that move or remove it at the same time never duplicate
+it. This is model C of
+[Which handler do you need?](../use-cases/index.mdx#worked-example-a-todo-list):
+compare it with the [containers recipe](./todo-list.mdx).
+
+<Recipe id="todo-aggregate" />

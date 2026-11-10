@@ -56,7 +56,7 @@ void main() {
     final example = await ExampleHost.open(dbPath: dbDir.path);
     // Port 0: any free port.
     pod = await app.startServer([], example, webPort: 0, apiPort: 0);
-    url = 'ws://127.0.0.1:${pod.webServer.port}/sync';
+    url = 'ws://127.0.0.1:${pod.webServer.port}/sync?token=${app.exampleToken}';
   });
 
   tearDownAll(() async {
@@ -82,17 +82,21 @@ void main() {
     await _waitForText(alice.client.document, alice.text, 'Hello, world');
   });
 
-  test('a wrong token gets a 401 before the upgrade', () async {
-    final http = HttpClient();
-    addTearDown(http.close);
+  for (final (name, query) in [
+    ('no token', ''),
+    ('a wrong token', '?token=wrong'),
+  ]) {
+    test('$name gets a 401 before the upgrade', () async {
+      final http = HttpClient();
+      addTearDown(http.close);
 
-    final request = await http.getUrl(
-      Uri.parse('http://127.0.0.1:${pod.webServer.port}/sync'),
-    );
-    request.headers.set(HttpHeaders.authorizationHeader, 'Bearer wrong');
-    final response = await request.close();
-    await response.drain<void>();
+      final request = await http.getUrl(
+        Uri.parse('http://127.0.0.1:${pod.webServer.port}/sync$query'),
+      );
+      final response = await request.close();
+      await response.drain<void>();
 
-    expect(response.statusCode, HttpStatus.unauthorized);
-  });
+      expect(response.statusCode, HttpStatus.unauthorized);
+    });
+  }
 }

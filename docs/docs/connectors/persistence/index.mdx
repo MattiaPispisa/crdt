@@ -8,6 +8,7 @@ slug: /connectors/persistence
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 import NextSteps from '@site/src/components/NextSteps';
+import RecipeSnippet from '@site/src/components/RecipeSnippet';
 
 # Persistence
 
@@ -91,67 +92,22 @@ No server to talk to: an adapter, and one call.
 <Tabs groupId="adapter">
 <TabItem value="sqlite" label="SQLite" default>
 
-```dart
-import 'package:crdt_lf/crdt_lf.dart';
-import 'package:crdt_lf_sqlite/crdt_lf_sqlite.dart';
-
-final backend = CRDTSqlite.open('note.db');
-
-// Reads the database into a document, then follows it.
-final note = await backend.openDocument('note');
-final text = CRDTFugueTextHandler(note.document, 'body');
-
-text.insert(0, 'Hello 🌍');
-
-await note.persistence.dispose(); // writes what is still waiting
-backend.close();
-```
+<RecipeSnippet id="persisted-note" file="main.dart" region="imports,open,edit,close" />
 
 </TabItem>
 <TabItem value="hive" label="Hive">
 
-```dart
-import 'package:crdt_lf/crdt_lf.dart';
-import 'package:crdt_lf_hive/crdt_lf_hive.dart';
-import 'package:hive/hive.dart';
-
-Hive.init('./my_app_data'); // the directory Hive writes to
-CRDTHive.initialize(); // registers the adapters for Change and Snapshot
-final backend = await CRDTHive.open();
-
-final note = await backend.openDocument('note');
-final text = CRDTFugueTextHandler(note.document, 'body');
-
-text.insert(0, 'Hello 🌍');
-
-await note.persistence.dispose();
-await backend.close();
-```
+<RecipeSnippet id="hive-note" file="main.dart" region="imports,init,open,edit,close" />
 
 </TabItem>
 <TabItem value="drift" label="Drift">
 
-```dart
-import 'dart:io';
-
-import 'package:crdt_lf/crdt_lf.dart';
-import 'package:crdt_lf_drift/crdt_lf_drift.dart';
-
-final backend = CRDTDrift.open(File('note.db'));
-
-final note = await backend.openDocument('note');
-final text = CRDTFugueTextHandler(note.document, 'body');
-
-text.insert(0, 'Hello 🌍');
-
-await note.persistence.dispose();
-await backend.close();
-```
+<RecipeSnippet id="drift-note" file="main.dart" region="imports,open,edit,close" />
 
 </TabItem>
 </Tabs>
 
-Run it again and the text is there.
+Every run reads the note back and adds a line.
 
 ## The whole opening, in one call
 

@@ -33,6 +33,7 @@ const sidebars: SidebarsConfig = {
       'recipes/flutter-note',
       'recipes/notes-list',
       'recipes/todo-list',
+      'recipes/todo-aggregate',
       'recipes/quill-editor',
       'recipes/server-client-sync',
       'recipes/relay-rooms',

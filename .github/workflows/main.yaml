@@ -350,6 +350,7 @@ jobs:
        || needs.changes.outputs.crdt_lf_persistence == 'true'
        || needs.changes.outputs.crdt_lf_hive == 'true'
        || needs.changes.outputs.crdt_lf_sqlite == 'true'
+       || needs.changes.outputs.crdt_lf_drift == 'true'
        || needs.changes.outputs.crdt_socket_sync == 'true'
        || needs.changes.outputs.crdt_lf_flutter == 'true'
        || needs.changes.outputs.crdt_lf_quill == 'true'
@@ -357,8 +358,9 @@ jobs:
     uses: ./.github/workflows/flutter_package.yaml
     with:
       working_directory: ./packages/_internal/crdt_lf_recipes
-      # The recipes are examples: their tests prove they run, not coverage.
-      min_coverage: 0
+      # The recipe files a test never runs: the `main.dart` that need a
+      # device (path_provider) or a server on a fixed port.
+      min_coverage: 80
       package_name: crdt_lf_recipes
     secrets:
       CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}

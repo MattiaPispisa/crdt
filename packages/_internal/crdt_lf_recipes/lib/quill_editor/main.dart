@@ -11,6 +11,7 @@ import 'package:path_provider/path_provider.dart';
 
 import 'editor_page.dart';
 
+// #docregion app
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
@@ -32,7 +33,6 @@ class EditorApp extends StatelessWidget {
   /// Where the page is stored.
   final CRDTStorageBackend backend;
 
-  // #docregion app
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
@@ -46,5 +46,5 @@ class EditorApp extends StatelessWidget {
       home: EditorPage(backend: backend),
     );
   }
-  // #enddocregion app
 }
+// #enddocregion app

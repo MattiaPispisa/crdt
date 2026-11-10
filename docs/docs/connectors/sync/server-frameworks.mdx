@@ -176,9 +176,10 @@ one: without it, any request that carries the header fails with a `500` before
 </TabItem>
 </Tabs>
 
-:::tip[Browser clients]
-Browsers cannot set headers on a WebSocket. For a browser client, send the key in
-a query parameter or a cookie, and check it yourself before the upgrade.
+:::tip[Clients send no headers]
+`WebSocketClient` sends no headers, and browsers cannot set them on a
+WebSocket. Send the key in a query parameter or a cookie, and check it yourself
+before the upgrade: the server recipes read a `token` query parameter.
 :::
 
 ## Lifecycle
