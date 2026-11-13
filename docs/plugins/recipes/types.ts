@@ -25,4 +25,14 @@ export type Recipe = {
   test: string | null;
   keyPoints: string[];
   related: { title: string; to: string }[];
+  /**
+   * The label of this recipe on a page that shows several variants of one
+   * setup (one per storage adapter, say), or `null` when it has none.
+   */
+  variant: string | null;
+  /**
+   * The id of the recipe whose page shows this one as a variant. Such a
+   * recipe has no page and no gallery card of its own.
+   */
+  variantOf: string | null;
 };

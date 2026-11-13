@@ -1,0 +1,33 @@
+# A recipe: what the docs site shows for it. Paths are relative to the
+# repository root, so a recipe can show any tested file of the repository.
+id: note-history
+title: "The history of a note: see it after each change"
+description: >-
+  A Flutter note with a history page: a slider moves through the changes, the
+  page shows the note as it was after each one, and says who made the change
+  and when. The history is read-only.
+platforms: [Flutter native, Flutter web]
+# Shown as the install command: names only, `pub add` picks the versions.
+dependencies: [crdt_lf, crdt_lf_flutter]
+files:
+  - path: packages/_internal/crdt_lf_recipes/lib/note_history/history_page.dart
+    label: history_page.dart
+  - path: packages/_internal/crdt_lf_recipes/lib/note_history/note_page.dart
+    label: note_page.dart
+  - path: packages/_internal/crdt_lf_recipes/lib/note_history/main.dart
+    label: main.dart
+test: packages/_internal/crdt_lf_recipes/test/note_history_test.dart
+keyPoints:
+  - "`CrdtHistoryScope` takes the history once, when it is built: an edit made later does not reach it. Open the page again to see it."
+  - "Below the scope, a widget that follows one handler reads the past with no change: the preview is a plain `CrdtHandlerBuilder`."
+  - "The view is read-only. A text field below the scope throws: show the text with a widget that only reads."
+  - "A new route is outside the provider of the page that pushes it: pass the document with `CrdtProvider.value`."
+  - "Every change carries its author and its clock: the view exports the changes up to the cursor, and the last one is the change the cursor stands on."
+  - "The history starts at the last snapshot. After a compaction, cursor `0` is that snapshot, not an empty note."
+related:
+  - title: History
+    to: /docs/use-cases/history
+  - title: Snapshots and history
+    to: /docs/document/snapshots-history
+  - title: A text note in Flutter
+    to: /docs/recipes/flutter-note

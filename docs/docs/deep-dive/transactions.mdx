@@ -8,9 +8,12 @@ import NextSteps from '@site/src/components/NextSteps';
 # Transactions
 
 Every operation a handler creates is registered in the document, and the
-document handles operations through **transactions**. A transaction is atomic:
-subscribers are notified only when it completes. An operation written outside an
-explicit transaction gets an **implicit** transaction of its own.
+document handles operations through **transactions**. A transaction groups
+them: subscribers are notified only when it completes. An operation written
+outside an explicit transaction gets an **implicit** transaction of its own.
+
+A transaction has no rollback. When the callback throws, what it wrote before
+the throw is kept and committed.
 
 ```dart
 // implicit transaction: one operation, subscribers are notified right away
@@ -64,7 +67,7 @@ doc.runInTransaction(() {
   listHandler.insert(1, 'item2');
 
   // applied at once
-  doc.createChange(listHandler.insert(0, 'item1'));
+  doc.importChanges(otherDocument.exportChanges());
 
   // applied at once
   doc.importSnapshot(otherDocument.takeSnapshot());

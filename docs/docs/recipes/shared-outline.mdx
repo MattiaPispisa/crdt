@@ -1,0 +1,17 @@
+---
+title: "A shared outline: nested data, saved and synced"
+sidebar_label: "Shared outline"
+description: "A tree of handlers kept on disk and synced through a relay, rebuilt on every device."
+---
+
+import Recipe from '@site/src/components/Recipe';
+
+# A shared outline: nested data, saved and synced
+
+A tree of handlers has two rules that a flat document does not have: every
+peer must know the kinds the tree is made of, and its root needs an id that
+every peer agrees on. This recipe keeps both, with storage and sync around the
+tree. The same tree in a Flutter screen is the
+[todo list recipe](./todo-list.mdx).
+
+<Recipe id="shared-outline" />

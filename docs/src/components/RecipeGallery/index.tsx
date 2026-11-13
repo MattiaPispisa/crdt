@@ -4,7 +4,7 @@ import { useDocsSidebar } from "@docusaurus/plugin-content-docs/client";
 import type { PropSidebarItem } from "@docusaurus/plugin-content-docs";
 
 import { InlineText, Platforms } from "../Recipe";
-import { type Recipe, useRecipes } from "../Recipe/data";
+import { type Recipe, useRecipes, useVariants } from "../Recipe/data";
 import styles from "../Recipe/styles.module.css";
 
 // Every link of the sidebar, in its order.
@@ -28,7 +28,31 @@ function useOrderedRecipes(): Recipe[] {
     );
     return index === -1 ? hrefs.length : index;
   };
-  return [...recipes].sort((a, b) => rank(a) - rank(b));
+  // A variant is a tab on the page of its recipe: it has no card.
+  return recipes
+    .filter((recipe) => recipe.variantOf === null)
+    .sort((a, b) => rank(a) - rank(b));
+}
+
+/** The card of one recipe, with the variants its page shows. */
+function RecipeCard({ recipe }: { recipe: Recipe }): ReactNode {
+  const variants = useVariants(recipe);
+  const packages = [...new Set(variants.flatMap((variant) => variant.packages))];
+  return (
+    <Link to={`/docs/recipes/${recipe.id}`} className={styles.card}>
+      <span className={styles.cardTitle}>🍳 {recipe.title}</span>
+      <span className={styles.cardDescription}>
+        <InlineText text={recipe.description} />
+      </span>
+      <Platforms platforms={recipe.platforms} />
+      {variants.length > 1 && (
+        <span className={styles.cardVariants}>
+          {variants.map((variant) => variant.variant).join(" · ")}
+        </span>
+      )}
+      <span className={styles.cardPackages}>{packages.join(" · ")}</span>
+    </Link>
+  );
 }
 
 /** A card for every recipe, each one linking to its page. */
@@ -36,20 +60,7 @@ export default function RecipeGallery(): ReactNode {
   return (
     <div className={styles.gallery}>
       {useOrderedRecipes().map((recipe) => (
-        <Link
-          key={recipe.id}
-          to={`/docs/recipes/${recipe.id}`}
-          className={styles.card}
-        >
-          <span className={styles.cardTitle}>🍳 {recipe.title}</span>
-          <span className={styles.cardDescription}>
-            <InlineText text={recipe.description} />
-          </span>
-          <Platforms platforms={recipe.platforms} />
-          <span className={styles.cardPackages}>
-            {recipe.packages.join(" · ")}
-          </span>
-        </Link>
+        <RecipeCard key={recipe.id} recipe={recipe} />
       ))}
     </div>
   );

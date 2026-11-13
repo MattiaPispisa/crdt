@@ -17,6 +17,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hive/hive.dart';
 
+import 'helpers.dart' as helpers;
+
 // A widget test replaces the HTTP client of the process with a mock: the
 // page test puts the real one back for its sockets.
 
@@ -154,16 +156,13 @@ void main() {
   ) async {
     HttpOverrides.global = null;
 
-    /// Pumps until [done] holds, letting the sockets and Hive run in between.
-    Future<void> pumpUntil(bool Function() done) async {
-      for (var i = 0; i < 200 && !done(); i++) {
-        await tester.runAsync(
-          () => Future<void>.delayed(const Duration(milliseconds: 10)),
-        );
-        // Fake time too, for the timers of the client.
-        await tester.pump(const Duration(milliseconds: 50));
-      }
-      expect(done(), isTrue);
+    // Fake time too, for the timers of the client.
+    Future<void> pumpUntil(bool Function() done) {
+      return helpers.pumpUntil(
+        tester,
+        done,
+        step: const Duration(milliseconds: 50),
+      );
     }
 
     final bob =

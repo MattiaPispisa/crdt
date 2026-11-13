@@ -97,10 +97,10 @@ Widget build(BuildContext context) {
           ),
       child: const Icon(Icons.add),
     ),
-    // `nested`: also rebuild when a todo changes, not only the list.
+    // Rebuilds when a todo is added, removed or moved. An edit of one item
+    // rebuilds only what follows it in its tile.
     body: CrdtHandlerBuilder<CRDTMovableListRefHandler>(
       id: 'todos',
-      nested: true,
       builder: (context, todos) {
         return ReorderableListView(
           // `to` is the place after the move, as `move` counts it.

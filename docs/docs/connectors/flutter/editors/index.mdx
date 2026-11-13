@@ -31,7 +31,7 @@ that editor can use it.
 behind an editor adapter: you give it three callbacks, and it decides when to
 call them. It has no widgets, so you can use it alone. `CrdtEditorBinder` is the
 widget that owns one, attaches it to the handler `id` of the ambient document,
-and builds its `builder` once.
+and hands it to its `builder`.
 
 - `onReset(value, cause)` puts the whole handler value in the editor. It runs
   when the binding attaches, and again when the handler asks for a fresh read.

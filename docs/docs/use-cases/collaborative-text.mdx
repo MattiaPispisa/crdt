@@ -64,6 +64,8 @@ final index = note.indexOfStablePosition(anchor); // where that place is now
 ```
 
 If the character was deleted, the position resolves to where it used to be.
+The result is `null` for a position this document does not know yet: the
+character it names has not arrived.
 Stable positions are what remote cursors are made of: send them on a presence
 channel (the [awareness plugin](../connectors/sync/plugins.mdx#awareness-plugin)),
 never in the document history.
@@ -87,13 +89,17 @@ Local edits go into the handler, remote ones come into the field, and the
 caret stays where the user left it. The field keeps working with IME
 composition (CJK input, autocorrect), and the subtree never rebuilds.
 [Text fields](../connectors/flutter/text-fields.mdx) shows remote cursors and
-the rich text field.
+the rich text field. The complete app, with the note saved on the device, is
+the [Flutter note recipe](../recipes/flutter-note.mdx).
 
 ## Share it
 
 Put a sync client on the document and every peer in the same room sees the
 text change as it is typed. [Open a replica](../connectors/replica.mdx) does
-storage and sync in one call.
+storage and sync in one call: see the
+[offline-first recipe](../recipes/offline-first-replica.mdx), and the
+[presence recipe](../recipes/presence-cursors.mdx) for the carets of the other
+peers.
 
 <Greyhound source="client/lib/src/widgets/editor_pane.dart">
 

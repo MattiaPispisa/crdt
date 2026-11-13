@@ -22,7 +22,10 @@
 // from its recipe: CI runs it that way.
 //
 // The docs site reads the same regions in `docs/plugins/recipes/source.ts`:
-// the two parsers follow the same rules.
+// the two parsers follow the same rules. Each run also checks that every
+// `<Recipe>` and `<RecipeSnippet>` of a page in `docs/docs` names a recipe, a
+// file and a region that exist: the site build fails on them too, but it runs
+// only on a deploy.
 import 'dart:io' as io;
 
 import 'package:path/path.dart' as path;
@@ -32,11 +35,15 @@ import 'logs.dart';
 import 'process.dart';
 
 const _recipesDir = 'packages/_internal/crdt_lf_recipes/recipes';
+const _pagesDir = 'docs/docs';
 
 final _block = RegExp(
   r'<!-- recipe:([\w-]+)/([^#\s]+)(?:#([\w,-]+))? -->\n.*?<!-- /recipe -->',
   dotAll: true,
 );
+final _snippetTag = RegExp(r'<RecipeSnippet\b([^>]*)>', dotAll: true);
+final _recipeTag = RegExp(r'<Recipe\s+id="([^"]+)"');
+final _attribute = RegExp(r'(\w+)="([^"]*)"');
 final _marker = RegExp(r'^\s*//\s*#(docregion|enddocregion)\s+(\S+)\s*$');
 final _licenseLine = RegExp('^// (Copyright|SPDX-License-Identifier)');
 
@@ -48,6 +55,8 @@ void main(List<String> args) {
     final loaded = _loadRecipes(root);
     final recipes = loaded.files;
     final changed = <String>[];
+
+    _checkPages(root, recipes);
 
     void write(io.File file, String after) {
       final before = file.existsSync() ? file.readAsStringSync() : null;
@@ -148,6 +157,8 @@ class _Recipes {
 _Recipes _loadRecipes(String root) {
   final recipes = <String, Map<String, _Source>>{};
   final copies = <String, String>{};
+  final variants = <String, String>{};
+  final labelled = <String>{};
   final manifests = io.Directory(path.join(root, _recipesDir))
       .listSync()
       .whereType<io.File>()
@@ -182,8 +193,80 @@ _Recipes _loadRecipes(String root) {
       }
     }
     recipes[map['id'] as String] = files;
+    final variantOf = map['variantOf'] as String?;
+    if (variantOf != null) {
+      variants[map['id'] as String] = variantOf;
+    }
+    if (map['variant'] != null) {
+      labelled.add(map['id'] as String);
+    }
+  }
+
+  // A variant is a tab on the page of another recipe: that recipe exists, is
+  // not a variant itself, and both have a label for their tab.
+  for (final variant in variants.entries) {
+    final id = variant.key;
+    final page = variant.value;
+    if (!recipes.containsKey(page)) {
+      throw _RecipeError('Recipe "$id": no recipe "$page" to be a variant of.');
+    }
+    if (variants.containsKey(page)) {
+      throw _RecipeError('Recipe "$id": "$page" is a variant itself.');
+    }
+    for (final recipe in [id, page]) {
+      if (!labelled.contains(recipe)) {
+        throw _RecipeError('Recipe "$recipe": a variant needs a "variant".');
+      }
+    }
   }
   return _Recipes(recipes, copies);
+}
+
+/// Fails when a page of the docs site shows a recipe, a file or a region that
+/// does not exist.
+void _checkPages(String root, Map<String, Map<String, _Source>> recipes) {
+  final problems = <String>[];
+  final pages = io.Directory(path.join(root, _pagesDir))
+      .listSync(recursive: true)
+      .whereType<io.File>()
+      .where((file) => file.path.endsWith('.mdx'));
+
+  for (final page in pages) {
+    final text = page.readAsStringSync();
+    final name = path.relative(page.path, from: root);
+
+    for (final match in _recipeTag.allMatches(text)) {
+      if (!recipes.containsKey(match[1])) {
+        problems.add('$name: no recipe "${match[1]}".');
+      }
+    }
+
+    for (final match in _snippetTag.allMatches(text)) {
+      final attributes = {
+        for (final attribute in _attribute.allMatches(match[1]!))
+          attribute[1]!: attribute[2]!,
+      };
+      final id = attributes['id'];
+      final file = attributes['file'];
+      final source = recipes[id]?[file];
+      if (source == null) {
+        problems.add('$name: no file "$file" in recipe "$id".');
+        continue;
+      }
+      for (final region in attributes['region']?.split(',') ?? <String>[]) {
+        if (!source.regions.containsKey(region.trim())) {
+          problems.add(
+            '$name: recipe "$id", file "$file" has no region '
+            '"${region.trim()}".',
+          );
+        }
+      }
+    }
+  }
+
+  if (problems.isNotEmpty) {
+    throw _RecipeError(problems.join('\n'));
+  }
 }
 
 /// Every README of the repository, outside build and tool folders.

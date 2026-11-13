@@ -23,9 +23,10 @@ coordinates.
 | the same, without re-reading the value each time | `CrdtHandlerDeltaBuilder` | the value, already moved |
 | to know **where** it changed, or not to rebuild at all | `CrdtHandlerDeltaListener` | the delta of each change |
 
-The two type arguments are the handler's value and its delta:
-`SequenceDelta<T>` for the text and list handlers, `MapDelta<K, V>` for the
-maps, `SetDelta<T>` for the OR-Set, `RegisterDelta<T>` for the register.
+The two type arguments are the value of the handler and its delta type, for
+example `List<String>` and `SequenceDelta<String>` for a list of strings. The
+delta types are listed in
+[Handler deltas](../../deep-dive/handler-deltas.mdx#consuming-deltas).
 
 ## Putting the value on screen
 

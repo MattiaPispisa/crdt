@@ -94,6 +94,25 @@
   flex-wrap: nowrap;
 }
 
+/* A recipe with variants: one tab per variant, each with its own files. */
+.variants {
+  padding: 0.6rem 1rem 0;
+  background: var(--ifm-background-color);
+}
+
+.variantMeta {
+  padding: 0.2rem 0 0.2rem;
+}
+
+.variants .files {
+  padding: 0.6rem 0 0;
+}
+
+.variants .keyPoints {
+  padding-left: 0;
+  padding-right: 0;
+}
+
 .keyPoints {
   padding: 0.8rem 1rem 0.1rem;
   border-top: 1px solid var(--ifm-color-emphasis-200);
@@ -175,6 +194,11 @@
   flex: 1;
   font-size: 0.9rem;
   color: var(--ifm-color-emphasis-800);
+}
+
+.cardVariants {
+  font-size: 0.8rem;
+  font-weight: 600;
 }
 
 .cardPackages {

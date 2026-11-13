@@ -10,24 +10,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hive/hive.dart';
 
-/// Pumps until [done] holds, letting the real Hive IO, and [poll], run in
-/// between.
-Future<void> pumpUntil(
-  WidgetTester tester,
-  bool Function() done, {
-  Future<void> Function()? poll,
-}) async {
-  var rounds = 0;
-  do {
-    await tester.runAsync(() async {
-      await Future<void>.delayed(const Duration(milliseconds: 10));
-      await poll?.call();
-    });
-    // Fake time too, so the route transitions end.
-    await tester.pump(const Duration(milliseconds: 50));
-  } while (!done() && ++rounds < 200);
-  expect(done(), isTrue);
-}
+import 'helpers.dart';
+
+// Fake time too, so the route transitions end.
+const _step = Duration(milliseconds: 50);
 
 void main() {
   late Directory directory;
@@ -52,7 +38,7 @@ void main() {
   /// Adds a note that reads [text], and goes back to the list.
   Future<void> addNote(WidgetTester tester, String text) async {
     await tester.tap(find.byType(FloatingActionButton));
-    await pumpUntil(tester, () => field.evaluate().isNotEmpty);
+    await pumpUntil(tester, () => field.evaluate().isNotEmpty, step: _step);
     await tester.enterText(field, text);
 
     await tester.pageBack();
@@ -65,6 +51,7 @@ void main() {
               .descendant(of: list, matching: find.text(title))
               .evaluate()
               .isNotEmpty,
+      step: _step,
     );
   }
 
@@ -72,7 +59,7 @@ void main() {
     await tester.runAsync(
       () => tester.pumpWidget(MaterialApp(home: NotesPage(backend: backend))),
     );
-    await pumpUntil(tester, () => list.evaluate().isNotEmpty);
+    await pumpUntil(tester, () => list.evaluate().isNotEmpty, step: _step);
 
     await addNote(tester, 'Groceries\nmilk, eggs');
     await addNote(tester, 'Ideas\na recipe app');
@@ -81,7 +68,11 @@ void main() {
 
     // Swipe the first note away.
     await tester.drag(find.text('Groceries'), const Offset(-800, 0));
-    await pumpUntil(tester, () => find.text('Groceries').evaluate().isEmpty);
+    await pumpUntil(
+      tester,
+      () => find.text('Groceries').evaluate().isEmpty,
+      step: _step,
+    );
     expect(find.byType(ListTile), findsOneWidget);
     // The delete runs after the row is gone.
     var ids = <String>{};
@@ -91,11 +82,12 @@ void main() {
       poll: () async {
         ids = await backend.documentIds;
       },
+      step: _step,
     );
 
     // The other note opens with its text.
     await tester.tap(find.text('Ideas'));
-    await pumpUntil(tester, () => field.evaluate().isNotEmpty);
+    await pumpUntil(tester, () => field.evaluate().isNotEmpty, step: _step);
     expect(find.text('Ideas\na recipe app'), findsOneWidget);
 
     // A new title proves the note was written, closed and read again.
@@ -104,11 +96,12 @@ void main() {
     await pumpUntil(
       tester,
       () => find.text('Ideas for later').evaluate().isNotEmpty,
+      step: _step,
     );
 
     // Edit, leave, and swipe the note away while it still closes.
     await tester.tap(find.text('Ideas for later'));
-    await pumpUntil(tester, () => field.evaluate().isNotEmpty);
+    await pumpUntil(tester, () => field.evaluate().isNotEmpty, step: _step);
     await tester.enterText(field, 'Ideas, last edit');
     await tester.pageBack();
     await tester.pumpAndSettle();
@@ -119,9 +112,14 @@ void main() {
       poll: () async {
         ids = await backend.documentIds;
       },
+      step: _step,
     );
     // The reload after the close leaves the deleted note out.
-    await pumpUntil(tester, () => find.byType(ListTile).evaluate().isEmpty);
+    await pumpUntil(
+      tester,
+      () => find.byType(ListTile).evaluate().isEmpty,
+      step: _step,
+    );
 
     await tester.runAsync(() => tester.pumpWidget(const SizedBox()));
 
@@ -129,6 +127,6 @@ void main() {
     // it is still pumped, or the close in tearDown waits forever.
     var closed = false;
     unawaited(CRDTHive.closeAllBoxes().then((_) => closed = true));
-    await pumpUntil(tester, () => closed);
+    await pumpUntil(tester, () => closed, step: _step);
   });
 }

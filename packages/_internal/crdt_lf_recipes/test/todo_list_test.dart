@@ -9,17 +9,13 @@ import 'package:crdt_lf_recipes/todo_list/todos.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'helpers.dart';
+
 /// The text of every todo of [document], in order.
 List<String> textsOf(CRDTDocument document) => [
   for (final todo in todosOf(document).children.whereType<CRDTMapRefHandler>())
     todo.text.value,
 ];
-
-/// Sends to each document what the other is missing.
-void exchange(CRDTDocument a, CRDTDocument b) {
-  a.importChanges(b.exportChanges());
-  b.importChanges(a.exportChanges());
-}
 
 void main() {
   testWidgets('the app provides an empty list to the page', (tester) async {
@@ -82,6 +78,30 @@ void main() {
       expect(textsOf(document), ['Bread', 'Milk']);
       expect(find.byType(TextField), findsNWidgets(2));
     });
+    testWidgets('an edit of one todo leaves the list as it was built', (
+      tester,
+    ) async {
+      final todos = todosOf(document);
+      for (final text in ['Milk', 'Eggs']) {
+        addTodo(todos, text: text);
+      }
+      await pumpPage(tester);
+      final list = find.byType(ReorderableListView);
+      final built = tester.widget(list);
+
+      await tester.enterText(find.byType(TextField).first, 'Oat milk');
+      await tester.tap(find.byType(Checkbox).last);
+      await tester.pump();
+
+      expect(textsOf(document), ['Oat milk', 'Eggs']);
+      expect(
+        tester.widgetList<Checkbox>(find.byType(Checkbox)).map((c) => c.value),
+        [false, true],
+      );
+      // The same widget: the builder of the list did not run again.
+      expect(tester.widget(list), same(built));
+    });
+
     testWidgets('a child that is not a todo keeps the tile indexes right', (
       tester,
     ) async {

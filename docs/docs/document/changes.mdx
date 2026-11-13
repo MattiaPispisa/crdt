@@ -14,7 +14,7 @@ A change is what travels to the other peers.
 ## Transactions
 
 Outside a transaction, each write is a change of its own. Inside
-`runInTransaction`, the writes are one unit: they become changes together,
+`runInTransaction`, the writes are grouped: they become changes together,
 watchers hear about them once, and they reach the other peers together.
 
 ```dart
@@ -25,11 +25,13 @@ doc.runInTransaction(() {
 }); // one update for the listeners, one undo step
 ```
 
-| Member | What it does |
-| --- | --- |
-| `runInTransaction(action, origin:)` | runs `action` as one transaction and returns its result. Nested calls join the outer one |
-| `isInTransaction` | `true` while a transaction is open |
-| `origin` | a tag of yours, reported on the deltas the writes produce, so a listener can skip its own echo |
+- `runInTransaction` returns what the callback returns. A nested call joins the
+  outer transaction.
+- Pass `origin` to tag the writes. The deltas they produce report it, so a
+  listener can skip its own echo (see
+  [Tagging a write](../deep-dive/handler-deltas.mdx#tagging-a-write)).
+- There is no rollback: when the callback throws, what it wrote before the
+  throw is kept.
 
 At the end, consecutive operations can be merged into fewer changes: typing a
 word inside one transaction can produce one change, not one per letter. How and when: see
@@ -37,12 +39,12 @@ word inside one transaction can produce one change, not one per letter. How and 
 
 ## Where the document is
 
-| Member | What it says |
-| --- | --- |
-| `version` | the **frontiers**: the latest changes, the ones nothing depends on yet |
-| `getVersionVector()` | for each peer, the newest of its changes this document holds |
-| `revisionForHandler(id)` | a number that grows when the handler may read differently. Cheap: the signal to rebuild a view on |
-| `exportChanges().length`, `changeCountForHandler(id)` | how many changes the document, or one handler, holds |
+- `version` is the **frontiers**: the latest changes, the ones nothing depends
+  on yet.
+- `getVersionVector()` says, for each peer, the newest of its changes this
+  document holds.
+- `revisionForHandler(id)` is a number that grows when the handler may read
+  differently. It is cheap: the signal to rebuild a view on.
 
 A sync layer sends its version vector to ask a peer for the changes it is
 missing.
@@ -57,21 +59,16 @@ final missing = alice.exportChangesNewerThan(bob.getVersionVector());
 bob.importChanges(missing); // returns how many were applied
 ```
 
-| Member | What it does |
-| --- | --- |
-| `exportChanges({from, fromVersionVector})` | the changes this document holds; with a bound, only the newer ones |
-| `exportChangesNewerThan(versionVector)` | the changes a peer at that version vector is missing |
-| `changesForHandler(id)` | the changes of one handler |
-| `importChanges(changes, origin:)` | applies the changes it can, in causal order; returns the count |
-| `applyChange(change, origin:)` | applies one change; `false` when the document already has it. Throws `CausallyNotReadyException` when what it depends on is missing |
-| `import(snapshot:, changes:, merge:)` | a snapshot and the changes after it, in one call |
-| `binaryExportChanges()`, `binaryImportChanges(bytes)` | the same, as one compact binary blob |
-| `localChanges` | a stream of the changes this peer writes: what a transport sends |
-
 - **Importing is idempotent.** A change the document already holds is skipped,
   so sending too much is harmless.
 - **The order does not matter.** A change whose dependencies are missing is
   skipped, and can be imported again once they arrive.
+- **One change at a time is stricter.** `applyChange` throws a
+  `CausallyNotReadyException` when what the change depends on is missing.
+  `importChanges` skips that change instead, and returns how many it applied.
+- **For a transport of your own**, `localChanges` is the stream of the changes
+  this peer writes, and `binaryExportChanges` / `binaryImportChanges` carry
+  them as one compact blob.
 - **You rarely call these yourself.** A [sync client](../connectors/sync/index.mdx)
   and a [persistence adapter](../connectors/persistence/index.mdx) do it for
   you. Use them for a transport of your own, or in tests.

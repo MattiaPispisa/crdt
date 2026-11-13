@@ -21,6 +21,8 @@ type Manifest = {
   test?: string;
   keyPoints?: string[];
   related?: { title: string; to: string }[];
+  variant?: string;
+  variantOf?: string;
 };
 
 // The command that adds the dependencies, wrapped at 80 columns. A recipe
@@ -76,7 +78,33 @@ function loadRecipe(repoRoot: string, manifestPath: string): Recipe {
     test: manifest.test ?? null,
     keyPoints: manifest.keyPoints ?? [],
     related: manifest.related ?? [],
+    variant: manifest.variant ?? null,
+    variantOf: manifest.variantOf ?? null,
   };
+}
+
+// A variant is shown on the page of another recipe, as one of its tabs: both
+// need a label, and the page must be a recipe with a page of its own.
+function checkVariants(recipes: Recipe[]): void {
+  for (const recipe of recipes) {
+    if (recipe.variantOf === null) continue;
+    const main = recipes.find((candidate) => candidate.id === recipe.variantOf);
+    if (!main) {
+      throw new Error(
+        `Recipe ${recipe.id}: no recipe "${recipe.variantOf}" to be a variant of.`,
+      );
+    }
+    if (main.variantOf !== null) {
+      throw new Error(
+        `Recipe ${recipe.id}: "${main.id}" is a variant itself.`,
+      );
+    }
+    for (const labelled of [recipe, main]) {
+      if (labelled.variant === null) {
+        throw new Error(`Recipe ${labelled.id}: a variant needs a "variant" label.`);
+      }
+    }
+  }
 }
 
 export default function recipesPlugin(context: LoadContext): Plugin<Recipe[]> {
@@ -101,11 +129,13 @@ export default function recipesPlugin(context: LoadContext): Plugin<Recipe[]> {
     },
 
     async loadContent() {
-      return fs
+      const recipes = fs
         .readdirSync(manifestsDir)
         .filter((name) => name.endsWith('.yaml'))
         .sort()
         .map((name) => loadRecipe(repoRoot, path.join(manifestsDir, name)));
+      checkVariants(recipes);
+      return recipes;
     },
 
     async contentLoaded({ content, actions }) {

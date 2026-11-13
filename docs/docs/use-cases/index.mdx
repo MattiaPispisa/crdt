@@ -6,6 +6,7 @@ slug: /use-cases
 ---
 
 import NextSteps from '@site/src/components/NextSteps';
+import RecipeSnippet from '@site/src/components/RecipeSnippet';
 
 # Which handler do you need?
 
@@ -67,16 +68,7 @@ todos.update(0, {'text': 'Buy milk', 'done': true});
 
 **B — a list of references to one small document per item**
 
-```dart
-// `done` is generic, so its tag is required — written once in its spec.
-final doneKind = CRDTRegisterHandler.spec<bool>('todo.done');
-
-final todos = doc.handler(CRDTMovableListRefHandler.spec, 'todos');
-
-final item = todos.insertChild(0, CRDTMapRefHandler.spec);
-item.child('text', CRDTFugueTextHandler.spec).insert(0, 'Buy milk');
-item.child('done', doneKind).set(false);
-```
+<RecipeSnippet id="todo-list" file="todos.dart" region="model" />
 
 - Conflicts are resolved **per field**: one peer edits `text` while another
   toggles `done` on the same item, and **both survive**.

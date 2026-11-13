@@ -59,7 +59,7 @@ await backend.close();
 <!-- /recipe -->
 
 Every change is written down from there on: the complete program, tested in
-CI, is the [recipe](https://mattiapispisa.it/crdt/docs/recipes/drift-note). This package re-exports the whole
+CI, is the [recipe](https://mattiapispisa.it/crdt/docs/recipes/persisted-note?variant=drift-note). This package re-exports the whole
 [`crdt_lf_persistence`](https://pub.dev/packages/crdt_lf_persistence) API, so it
 is the only storage package your `pubspec.yaml` needs.
 

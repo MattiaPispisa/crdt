@@ -15,6 +15,7 @@ collected here, one page per migration.
 | --- | --- | --- |
 | `crdt_lf` | [4.x → 5.0](./crdt_lf/v5-0.mdx) | generic handlers name their kind (`handlerType`); kinds are registered with a `HandlerSpec`. The bytes do not change |
 | `crdt_lf` | [3.x → 4.0](./crdt_lf/v4-0.mdx) | a 4.0 peer refuses v3 bytes; text handlers count runes; the change id is the tie-break |
+| `crdt_socket_sync` | [0.9.x → 0.10.0](../connectors/sync/server-registry.mdx#a-registry-of-your-own) | a registry of your own that `implements CRDTServerRegistry` adds the `snapshots` getter (`const Stream.empty()` keeps the old behavior). Needs Dart 3.3 and `crdt_lf_persistence` 0.2.0 |
 | `crdt_socket_sync` | [0.8.x → 0.9.0](./crdt_socket_sync/v0-9.mdx) | the version and capability handshake; needs `crdt_lf` 5.0. A 0.8.x peer still connects |
 
 ## Upgrading peers

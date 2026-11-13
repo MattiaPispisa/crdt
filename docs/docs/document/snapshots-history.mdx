@@ -19,17 +19,18 @@ final checkpoint = doc.takeSnapshot(pruneHistory: false); // keep the history
 other.importSnapshot(snapshot);
 ```
 
-## Snapshots
+## Take, import, merge
 
-| Member | What it does |
-| --- | --- |
-| `takeSnapshot({pruneHistory = true})` | captures the state at the current version. With `pruneHistory`, deletes the changes it covers |
-| `snapshot` | the snapshot the document replays on, as a read-only copy; `null` before the first |
-| `importSnapshot(snapshot, {pruneHistory = true})` | replaces the base with `snapshot` when it is newer or equal; returns `false` when it is older or concurrent. With `pruneHistory`, deletes the local changes it covers |
-| `shouldApplySnapshot(snapshot)` | whether `importSnapshot` would apply it |
-| `mergeSnapshot(snapshot, {pruneHistory = true})` | merges `snapshot` with the current one, also when it is older. Throws `ConcurrentSnapshotException` when the two cannot be merged. With `pruneHistory`, deletes the local changes the merged snapshot covers |
-| `import(snapshot:, changes:, merge:, pruneHistory = true)` | a snapshot plus the changes after it, in one call (`merge: true` uses `mergeSnapshot`). Returns the number of changes applied, or `-1` when `merge` is `false` and `importSnapshot` refuses the snapshot |
-| `garbageCollect(protectUntil)` | prunes the changes the last snapshot covers, up to a version every peer has seen |
+- **Take.** `takeSnapshot()` captures the state at the current version.
+- **Import.** `importSnapshot(snapshot)` replaces the base of the document when
+  the snapshot is newer or equal. It returns `false`, and changes nothing, when
+  the snapshot is older or concurrent.
+- **Merge.** `mergeSnapshot(snapshot)` also takes an older snapshot. It throws
+  a `ConcurrentSnapshotException` when the two cannot be merged.
+- **With the changes after it.** `import(snapshot:, changes:)` takes a snapshot
+  and the changes that follow it, in one call.
+- **Prune later.** `garbageCollect` prunes the changes the last snapshot
+  covers, up to a version every peer has seen.
 
 A snapshot carries its `versionVector`, so peers can tell what it covers.
 

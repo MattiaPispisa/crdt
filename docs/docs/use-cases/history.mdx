@@ -5,6 +5,7 @@ description: Show a document as it was after each change, read-only, from crdt_l
 
 import Greyhound from '@site/src/components/Greyhound';
 import NextSteps from '@site/src/components/NextSteps';
+import RecipeSnippet from '@site/src/components/RecipeSnippet';
 
 # History
 
@@ -81,62 +82,29 @@ snapshots so that it can reach further back (see
 
 `CrdtHistoryScope` from [`crdt_lf_flutter`](../connectors/flutter/index.mdx)
 takes a session of the document in scope, and shows the frozen view to the
-widgets below it. The handler widgets (`CrdtHandlerBuilder`,
-`CrdtHandlerSelector`, `CrdtHandlerListener`, `CrdtHandlerDeltaBuilder`,
-`CrdtHandlerDeltaListener`) read the view instead of the live document. So the
+widgets below it. The widgets that follow one handler, such as
+`CrdtHandlerBuilder`, read the view instead of the live document. So the
 widget that draws the note today can also draw it in the past, with no change.
 
-```dart
-CrdtProvider.value(
-  value: document,
-  child: CrdtHistoryScope(
-    // Built once: it reads the view, and rebuilds by itself on every move.
-    child: const NotePreview(),
-    builder: (context, session, preview) => Column(
-      children: [
-        Expanded(child: preview!),
-        Slider(
-          value: session.cursor.toDouble(),
-          max: session.length.toDouble(),
-          onChanged: (value) => session.jump(value.round()),
-        ),
-      ],
-    ),
-  ),
-);
-
-class NotePreview extends StatelessWidget {
-  const NotePreview({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return CrdtHandlerBuilder<CRDTFugueTextHandler>(
-      id: 'note',
-      builder: (context, note) => Text(note.value),
-    );
-  }
-}
-```
+<RecipeSnippet id="note-history" file="history_page.dart" region="scope,preview" />
 
 - `builder` runs on every move of the cursor, with the session.
 - The scope takes the session once per document, and disposes it with itself.
   Open the screen again to see the edits made after it opened.
-- The widgets that read the live document throw inside the scope:
-  `CrdtBuilder`, `CrdtSelector`, the text fields, `CrdtEditorBinder` and
-  `CrdtTextCursorsOverlay`. They would draw the present inside a view that
-  looks frozen, and a text field there would look editable.
+- The widgets that read or write the live document throw inside the scope:
+  the document-level builders (`CrdtBuilder`), the text fields, the editor
+  binder and the cursor overlays. They would draw the present inside a view
+  that looks frozen, and a text field there would look editable.
 
 ## Who wrote it, and when
 
 Every change carries its author and its clock, so a history screen can say who
 made the change the cursor stands on:
 
-```dart
-final changes = session.document.exportChanges(); // up to the cursor
-final last = changes.last;
-final author = last.author == document.peerId ? 'you' : last.author.id;
-final time = last.id.hlc.asDateTime.toLocal();
-```
+<RecipeSnippet id="note-history" file="history_page.dart" region="describe" />
+
+The view exports the changes up to the cursor, so the last one is the change
+the cursor stands on. At cursor `0` there is none.
 
 <Greyhound source="client/lib/src/screens/history_screen.dart">
 

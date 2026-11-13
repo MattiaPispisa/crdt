@@ -35,12 +35,10 @@ are equal.
 
 Every handler class exposes its spec as `spec`.
 
-| Handlers | Spec | Tag |
+| Handler | Spec | Tag |
 | --- | --- | --- |
-| `CRDTTextHandler`, `CRDTFugueTextHandler`, `CRDTFugueRichTextHandler` | `X.spec` | the class name, fixed |
-| `CRDTMapRefHandler`, `CRDTListRefHandler`, `CRDTMovableListRefHandler`, `CRDTORSetRefHandler`, `CRDTORMapRefHandler` | `X.spec` | the class name, fixed |
-| `CRDTListHandler`, `CRDTFugueListHandler`, `CRDTFugueMovableListHandler`, `CRDTMapHandler`, `CRDTRegisterHandler`, `CRDTORSetHandler` | `X.spec<T>(tag, valueCodec: …)` | yours |
-| `CRDTORMapHandler` | `CRDTORMapHandler.spec<K, V>(tag, keyCodec: …, valueCodec: …)` | yours |
+| not generic: the texts, the reference containers | `X.spec` | the class name, fixed |
+| generic: the lists, the maps, the set, the register | `X.spec<T>(tag, valueCodec: …)` | yours |
 | `CRDTAggregateHandler` | `CRDTAggregateHandler.spec(definition)` | `definition.handlerType` |
 | a handler of your own | the `spec` you write | yours (see [Custom handlers](./custom-handlers.mdx#the-class-and-its-spec)) |
 

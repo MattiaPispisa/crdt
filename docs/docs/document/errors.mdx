@@ -45,22 +45,20 @@ changes it depends on arrive.
 
 ## Errors that mean corrupted data
 
-These protect the change graph. Changes made by `crdt_lf` never trigger them:
-they mean that the bytes were changed or built by hand.
-
-| Exception | When |
-| --- | --- |
-| `ChangesCycleException` | a batch of changes depends on itself in a cycle |
-| `MissingDependencyException` | a change points to a parent the graph does not have |
-| `DuplicateNodeException` | a node (a change, or a text element) is added twice under the same id |
+`ChangesCycleException`, `MissingDependencyException` and
+`DuplicateNodeException` protect the change graph. Changes made by `crdt_lf`
+never trigger them: they mean that the bytes were changed or built by hand.
 
 ## Errors that are not `CrdtException`
 
-| Error | When |
-| --- | --- |
-| `ArgumentError` | `doc.handler(spec, 'crdt_lf/deleted-handlers')`: that id is reserved for the delete registry |
-| `FormatException` | bytes that cannot be decoded: a `Change` or `Snapshot` of an unknown format, or a handler blob outside the versions this build reads ([Binary format](../deep-dive/binary-format.mdx#the-rules-of-a-blob-version)) |
-| `ArgumentError`, `UnsupportedError`, `StateError` | `CRDTUndoManager`: a `stackLimit` below 1, a handler that cannot be undone, a handler already tracked by another manager, a handler of another document, or a call inside an open transaction ([Undo and redo](../use-cases/undo-redo.mdx)) |
+- **`FormatException`**: bytes that cannot be decoded. A `Change` or a
+  `Snapshot` of an unknown format, or a handler blob outside the versions this
+  build reads (see
+  [Binary format](../deep-dive/binary-format.mdx#the-rules-of-a-blob-version)).
+- **`ArgumentError`, `StateError`, `UnsupportedError`**: a call that is wrong
+  whatever the data, as in the rest of Dart. For example a handler opened under
+  the reserved id of the delete registry, or a handler that
+  [`CRDTUndoManager`](../use-cases/undo-redo.mdx) cannot track.
 
 <NextSteps
   items={[

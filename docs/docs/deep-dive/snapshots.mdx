@@ -11,44 +11,19 @@ A **snapshot** is the state of a document at a version, without the history that
 produced it. A document replays its changes **on top of** its snapshot, so a
 snapshot lets the history be **pruned**: the changes it covers can be deleted.
 
-```dart
-// Take a snapshot and prune the history it covers (the default).
-final snapshot = doc.takeSnapshot();
+How to take, import and merge one, and what a prune costs, is in
+[Snapshots and history](../document/snapshots-history.mdx). This page is about
+what a snapshot holds.
 
-// A checkpoint that keeps the history (and the undo stacks).
-final checkpoint = doc.takeSnapshot(pruneHistory: false);
+## Merging two snapshots
 
-// On another document:
-other.importSnapshot(snapshot); // replace the base
-other.mergeSnapshot(snapshot); // merge it with what is already there
-```
-
-Importing prunes as well: `importSnapshot`, `mergeSnapshot` and `import` take
-`pruneHistory`, and it is `true` by default. `importSnapshot` applies a snapshot only
-when it is newer than, or equal to, the one the document holds
-(`shouldApplySnapshot`). It returns `false` for an older or concurrent one: use
-`mergeSnapshot` for those.
-
-`document.snapshot` reads the snapshot the document holds, as a read-only copy.
-A snapshot carries its `versionVector`, so peers can tell what it covers.
-
-## What a prune costs
-
-A snapshot keeps a state, not the identities the changes carried. So after a
-prune:
-
-- the [undo](../use-cases/undo-redo.mdx#what-it-does-not-undo) stacks are
-  dropped;
-- a [history view](../connectors/persistence/working-with-storage.mdx#the-document-as-it-was)
-  cannot go back past the snapshot;
-- a peer that is still replaying that history has to be sent the snapshot
-  instead (the sync does it: see
-  [Broadcasting a compaction](../connectors/sync/server-registry.mdx#broadcasting-a-compaction)
-  and [Log compaction](../connectors/sync/relay.mdx#log-compaction)).
+`importSnapshot` applies a snapshot only when it is newer than, or equal to,
+the one the document holds. `mergeSnapshot` also takes an older one.
 
 `mergeSnapshot` throws a `ConcurrentSnapshotException` when the two sides hold
 snapshots of **concurrent** histories with different bytes for the same handler:
-a snapshot has no history to merge them with.
+a snapshot has no history to merge them with. Between two concurrent histories,
+exchange changes instead.
 
 ## What is inside
 

@@ -21,7 +21,7 @@ keyPoints:
   - "Each todo is a `CRDTMapRefHandler` with a text and a register: a change to one field leaves the other field as it is."
   - "A `CRDTMovableListRefHandler` keeps the identity of a todo when two peers move it at the same time: it is never duplicated."
   - "Register the kinds of the children (`register`), so a peer rebuilds the todos it receives from another peer."
-  - "`CrdtHandlerBuilder` with `nested: true` rebuilds the list when a todo inside it changes."
+  - "The builder of the list follows the list alone: it rebuilds when a todo is added, removed or moved. Each tile follows its own handlers, so an edit of one todo rebuilds nothing else."
   - "The page shows one tile per reference of the list, so a tile index is the index `removeChildAt` and `move` expect."
   - "`ReorderableListView.onReorderItem` is recent in Flutter. On an older Flutter, use `onReorder` and lower `to` by one when it is after `from`."
   - "The document lives in memory. To keep it on the device, open it from a storage backend, as in the flutter-note recipe and on the Persistence page."

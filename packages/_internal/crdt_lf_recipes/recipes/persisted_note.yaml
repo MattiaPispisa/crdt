@@ -3,8 +3,11 @@
 id: persisted-note
 title: A text note saved on disk
 description: >-
-  A Dart program that keeps one collaborative text in a SQLite file. Every run
-  reads the note back and adds a line.
+  A Dart program that keeps one collaborative text in a local database, with
+  the storage adapter you pick. Every run reads the note back and adds a line.
+# The tab of this recipe: its page also shows the recipes that name it in
+# `variantOf`, one tab each.
+variant: SQLite
 platforms: [Dart VM, Flutter native]
 # Shown as the install command: names only, `pub add` picks the versions.
 dependencies: [crdt_lf, crdt_lf_sqlite]
@@ -21,5 +24,9 @@ keyPoints:
 related:
   - title: Persistence
     to: /docs/connectors/persistence
+  - title: Persistence adapters
+    to: /docs/connectors/persistence/adapters
+  - title: Note in Flutter
+    to: /docs/recipes/flutter-note
   - title: Collaborative text
     to: /docs/use-cases/collaborative-text

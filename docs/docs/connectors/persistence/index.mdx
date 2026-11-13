@@ -168,14 +168,12 @@ client catches up from the server before it knows what it already had.
 
 An app has notes, not a note. The backend is the database itself:
 
-```dart
-for (final documentId in await backend.documentIds) {
-  final note = await backend.readDocument(documentId); // reads, never writes
-  // ...show it in a list
-}
+<RecipeSnippet id="notes-list" file="notes_page.dart" region="read" />
 
-await backend.deleteDocument('note-1'); // changes, snapshots and identity
-```
+`readDocument` reads and never writes: use it for a list or a preview, and
+`openDocument` for the note being edited. `backend.deleteDocument(id)` removes
+the changes, the snapshots and the identity of a note. The
+[notes recipe](../../recipes/notes-list.mdx) is the whole app.
 
 `documentIds` lists a document once anything about it is stored, its identity
 included. A note that was created and never typed into is still there, and

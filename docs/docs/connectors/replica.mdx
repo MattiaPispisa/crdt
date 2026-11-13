@@ -4,6 +4,7 @@ description: CRDTReplica opens the document, its storage and its sync client tog
 ---
 
 import NextSteps from '@site/src/components/NextSteps';
+import RecipeSnippet from '@site/src/components/RecipeSnippet';
 
 # Open a replica
 
@@ -13,31 +14,13 @@ open and close in a set order. `CRDTReplica`, from
 [`crdt_socket_sync`](https://pub.dev/packages/crdt_socket_sync), holds all
 three and keeps that order.
 
-```sh
-dart pub add crdt_lf crdt_socket_sync crdt_lf_sqlite  # or crdt_lf_hive, crdt_lf_drift
-```
+<RecipeSnippet id="offline-first-replica" file="open_note.dart" region="open" />
 
-```dart
-import 'package:crdt_lf/crdt_lf.dart';
-import 'package:crdt_lf_sqlite/crdt_lf_sqlite.dart';
-import 'package:crdt_socket_sync/replica.dart';
-import 'package:crdt_socket_sync/web_socket_client.dart';
-
-final replica = await CRDTReplica.open(
-  documentId: 'notes',
-  storage: () => CRDTSqlite.open('notes.db'),
-  sync: (document) => WebSocketClient(
-    url: 'ws://localhost:8080',
-    document: document,
-    author: document.peerId,
-  ),
-);
-final text = CRDTFugueTextHandler(replica.document, 'body');
-
-// ...edit
-
-await replica.close();
-```
+The handlers are built on `replica.document`. When the app is done with it,
+`await replica.close()`. The
+[offline-first recipe](../recipes/offline-first-replica.mdx) is the complete
+Flutter app around this function: the page that opens and closes the replica,
+and the connection status.
 
 ## What `open` and `close` do
 
@@ -49,8 +32,13 @@ await replica.close();
   document and the storage.
 - Leave `storage` out to keep the document in memory. Leave `sync` out to keep
   it on this device.
-- For the [relay mode](./sync/relay.mdx), return a `WebSocketRelayClient` from
-  `sync`.
+- `storage` returns any [storage backend](./persistence/index.mdx):
+  `CRDTHive.open`, `() => CRDTSqlite.open('notes.db')`, a Drift one.
+- `sync` returns the client of your mode: a `WebSocketRelayClient` for the
+  [relay mode](./sync/relay.mdx), a `WebSocketClient` for the
+  [server–client mode](./sync/server-client.mdx).
+- `onDocument` runs on the new document before the restore. Use it for what
+  has to exist first, such as a listener on `events`.
 - Pass `onStorageError` to keep going when the storage cannot be read: the
   document then starts empty, in memory, and `onDocument` runs again on it.
   Without it, `open` throws.
@@ -90,6 +78,8 @@ final replica = await CRDTReplica.open(
     author: document.peerId,
     plugins: [awareness.plugin],
   ),
+  // A device that cannot read its storage still edits the room.
+  onStorageError: reportRoomError,
 );
 
 // 3. The handler, built on the restored document.

@@ -43,13 +43,12 @@ nothing, so every peer can open the same ids at startup.
 
 ## Find a handler
 
-| Member | Returns |
-| --- | --- |
-| `handlerById(id)` | the handler open under `id`, or `null` |
-| `registeredHandlers` | every open handler, by id (read-only, for debugging) |
-| `roots()` | the open handlers no container references: the entry points of a tree |
-| `resolveHandler(ref)` | the handler a `HandlerRef` points at, opened if needed; `null` when the kind is unknown or the handler was deleted |
-| `newHandlerId()` | a random id, for a child handler that a container creates |
+`doc.handlerById(id)` returns the handler open under an id, or `null`.
+
+In a tree of handlers, `doc.roots()` gives the entry points: the open handlers
+that no container references. `doc.resolveHandler(ref)` follows a reference. It
+opens the handler when needed, and returns `null` when the kind is unknown or
+the handler was deleted (see [Nested data](../use-cases/containers.mdx)).
 
 ## Kinds a peer has never opened
 

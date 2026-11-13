@@ -23,8 +23,14 @@ fields, protobuf, JSON bytes.
 ```dart
 class MyData {
   const MyData(this.name, this.count);
+
+  factory MyData.fromJson(Map<String, dynamic> json) =>
+      MyData(json['name'] as String, json['count'] as int);
+
   final String name;
   final int count;
+
+  Map<String, dynamic> toJson() => {'name': name, 'count': count};
 }
 
 class MyDataCodec implements ValueCodec<MyData> {

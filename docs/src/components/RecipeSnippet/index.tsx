@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import Link from "@docusaurus/Link";
 import CodeBlock from "@theme/CodeBlock";
 
-import { blobUrl, recipeFile, useRecipe } from "../Recipe/data";
+import { blobUrl, recipeFile, recipeHref, useRecipe } from "../Recipe/data";
 import styles from "../Recipe/styles.module.css";
 
 /**
@@ -44,7 +44,7 @@ export default function RecipeSnippet({
         {code}
       </CodeBlock>
       <div className={styles.snippetFooter}>
-        <Link to={`/docs/recipes/${recipe.id}`}>
+        <Link to={recipeHref(recipe)}>
           From the recipe “{recipe.title}” →
         </Link>
         <a href={blobUrl(source.path)} target="_blank" rel="noopener noreferrer">

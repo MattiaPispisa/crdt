@@ -333,11 +333,11 @@ first (see [Peer identity](./how-it-works.mdx#peer-identity)).
 
 ## Examples
 
-- [SQLite](https://github.com/MattiaPispisa/crdt/blob/main/packages/adapters/persistence/crdt_lf_sqlite/example/main.dart),
-  [Hive](https://github.com/MattiaPispisa/crdt/blob/main/packages/adapters/persistence/crdt_lf_hive/example/main.dart)
-  (with a custom data type) and
-  [Drift](https://github.com/MattiaPispisa/crdt/blob/main/packages/adapters/persistence/crdt_lf_drift/example/main.dart):
-  one runnable `main.dart` each.
+- The recipe [a text note saved on disk](../../recipes/persisted-note.mdx),
+  with one tab per adapter: one runnable `main.dart` each, which is also the
+  `example/` of its package.
+- In Flutter: [a note](../../recipes/flutter-note.mdx) and
+  [a list of notes](../../recipes/notes-list.mdx), both on Hive.
 - A sync [server with a persistent registry](https://github.com/MattiaPispisa/crdt/blob/main/packages/core/crdt_socket_sync/example/lib/main.dart),
   backed by Hive, with clients that sync through it (see
   [Server registry](../sync/server-registry.mdx)).

@@ -365,7 +365,8 @@ jobs:
     secrets:
       CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
 
-  # The README quick starts are written from the recipe regions.
+  # The README quick starts, the package examples and the snippets of the
+  # docs pages come from the recipe regions.
   recipes_check:
     runs-on: ubuntu-latest
     steps:
@@ -375,7 +376,7 @@ jobs:
         uses: dart-lang/setup-dart@v1
       - name: 📦 Install Dependencies
         run: dart pub get
-      - name: 🍳 Check the README quick starts
+      - name: 🍳 Check the READMEs, the examples and the docs pages
         run: dart run scripts/recipes_sync.dart --check
 
   license_check:

@@ -9,8 +9,31 @@ import 'package:flutter/material.dart';
 
 import 'note_page.dart';
 
+// #docregion read
 /// A note in the list: its document id and its title.
 typedef NoteSummary = ({String id, String title});
+
+/// The notes stored in [backend], without the ones in [except].
+Future<List<NoteSummary>> readNotes(
+  CRDTStorageBackend backend, {
+  Set<String> except = const {},
+}) async {
+  final notes = <NoteSummary>[];
+  for (final id in await backend.documentIds) {
+    if (except.contains(id)) {
+      continue;
+    }
+    // A read-only copy: nothing writes it, so dispose it after reading.
+    final document = await backend.readDocument(id);
+    final body = CRDTFugueTextHandler(document, 'body').value;
+    document.dispose();
+
+    final title = body.split('\n').first.trim();
+    notes.add((id: id, title: title.isEmpty ? 'Empty note' : title));
+  }
+  return notes..sort((a, b) => a.id.compareTo(b.id));
+}
+// #enddocregion read
 
 /// A page that lists the notes stored in [backend].
 class NotesPage extends StatefulWidget {
@@ -53,20 +76,7 @@ class _NotesPageState extends State<NotesPage> {
   }
 
   Future<void> _readNotes() async {
-    final notes = <NoteSummary>[];
-    for (final id in await widget.backend.documentIds) {
-      if (_deleted.contains(id)) {
-        continue;
-      }
-      // A read-only copy: nothing writes it, so dispose it after reading.
-      final document = await widget.backend.readDocument(id);
-      final body = CRDTFugueTextHandler(document, 'body').value;
-      document.dispose();
-
-      final title = body.split('\n').first.trim();
-      notes.add((id: id, title: title.isEmpty ? 'Empty note' : title));
-    }
-    notes.sort((a, b) => a.id.compareTo(b.id));
+    final notes = await readNotes(widget.backend, except: _deleted);
 
     if (mounted) {
       // A read that started before a swipe still holds the deleted note.

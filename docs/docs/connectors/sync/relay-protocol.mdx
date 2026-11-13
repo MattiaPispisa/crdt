@@ -35,7 +35,7 @@ strings**. Your server must handle:
 | 26 | stateRequest | C→S | — (reply with a welcome, same `sessionId`) |
 | 5 | ping | C→S | `timestamp` → reply pong (6) `{originalTimestamp, responseTimestamp}` |
 | 7 | error | S→C | `code`, `message` |
-| 100–102 | awareness | C↔S | presence passthrough (store + rebroadcast) |
+| 100–102 | awareness | C↔S | presence passthrough: keep the states of the open sessions in memory, and rebroadcast |
 
 ## The protocol version
 

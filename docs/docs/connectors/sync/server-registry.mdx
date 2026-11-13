@@ -27,9 +27,9 @@ final registry = PersistentServerRegistry(
 );
 ```
 
-That is the whole setup. `backend` is a `CRDTStorageBackend`: an adapter's
-`CRDTHive.open()`, `CRDTDrift.open()` or `CRDTSqlite.open()`. It holds the
-documents, their snapshots and the identity the server writes them under.
+That is the whole setup. `backend` is a `CRDTStorageBackend`: the one any
+[storage adapter](../persistence/adapters.mdx#install-and-open) opens. It holds
+the documents, their snapshots and the identity the server writes them under.
 
 The registry holds the live documents and routes to them. It never reads or
 writes storage by hand: each document gets a `CRDTDocumentPersistence` (see
@@ -130,7 +130,10 @@ until the disk can bring back the version of the snapshot, so a client never
 gets a state the server could lose. The `snapshots` stream of the registry
 reports them too, for logging or metrics.
 
-The example server puts all of this together:
+The [Dart Frog](../../recipes/dart-frog-server.mdx) and
+[Serverpod](../../recipes/serverpod-server.mdx) recipes are complete servers on
+a `PersistentServerRegistry`. The example server of the package puts all of
+this together too:
 [`registry.dart`](https://github.com/MattiaPispisa/crdt/blob/main/packages/core/crdt_socket_sync/example/lib/src/registry.dart).
 
 ## A registry of your own

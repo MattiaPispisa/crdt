@@ -31,8 +31,12 @@ CrdtTextFieldBuilder(
   [stable positions](../../use-cases/collaborative-text.mdx#carets-that-survive-other-peoples-edits),
   exact even for remote changes in several places. Otherwise they are mapped
   through the remote delta.
-- The subtree **never rebuilds**: `builder` runs once, and the controller is
-  updated directly.
+- A change of the text **never rebuilds** the subtree: the controller is
+  updated directly. `builder` runs again only when the widget above it
+  rebuilds.
+
+The [Flutter note recipe](../../recipes/flutter-note.mdx) is the complete page
+around this field.
 
 The delta primitives are exported too (`TextDelta`, `computeTextDelta`,
 `mapOffsetThroughDelta`) if you build a binding of your own. Flutter counts

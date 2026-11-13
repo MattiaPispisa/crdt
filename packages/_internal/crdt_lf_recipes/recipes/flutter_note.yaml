@@ -18,6 +18,7 @@ keyPoints:
   - "Set up the database of the adapter before you open the backend, as the documentation of the package it builds on explains."
   - "Open one backend for the whole app, and pass it to the pages."
   - "Create the handler on the document that `openDocument` returns, under the id the widgets read."
+  - "`compactAfter` keeps the stored log short. A compaction drops the undo history of a `CRDTUndoManager`: leave it out where that matters, and call `persistence.compact()` at a moment you choose."
   - "`CrdtProvider.value` never disposes the document: the page closes it in `dispose`."
 related:
   - title: Text fields

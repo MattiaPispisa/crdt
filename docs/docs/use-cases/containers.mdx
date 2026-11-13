@@ -60,6 +60,16 @@ print(root.resolved); // {chapters: [{title: Intro}]}
 - Both mint the child's id and attach the reference for you. `setRef`,
   `insertRef` and `getRefAs` are the lower-level calls under them.
 
+:::warning[Give a shared root a fixed id]
+`child(key, spec)` creates the child when the key is empty, under a new random
+id. Two peers that both start empty, each offline, create two children under
+the same key. When they sync, one reference wins, and what the other peer wrote
+under its own child leaves the tree. Open what every peer needs at startup with
+`doc.handler(spec, id)` and an id you choose. The
+[shared outline recipe](../recipes/shared-outline.mdx) does it, with storage
+and sync around the tree.
+:::
+
 Each container has two views:
 
 - `value`: the **raw references** (`Map<String, HandlerRef>`,
@@ -197,6 +207,10 @@ kind and keeps showing the deleted data.
 `CrdtHandlerBuilder` with `nested: true` rebuilds when the container **or any
 of its descendants** changes, and `deletedBuilder` shows what to draw when a
 child is deleted. See [Flutter](../connectors/flutter/index.mdx).
+
+The [todo list recipe](../recipes/todo-list.mdx) is a small tree in a Flutter
+app: a movable list of maps, each with a text and a flag, and a test where two
+peers edit the same todo.
 
 The **Document** entry of the [Flutter examples](pathname:///examples/) is a
 complete, interactive tree: sortable chapters → paragraphs → collaborative text

@@ -9,16 +9,12 @@ import 'package:crdt_lf_recipes/todo_aggregate/todos.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'helpers.dart';
+
 /// The text of every todo of [document], in order.
 List<String> textsOf(CRDTDocument document) => [
   for (final todo in todosOf(document).value.todos) todo.text,
 ];
-
-/// Sends to each document what the other is missing.
-void exchange(CRDTDocument a, CRDTDocument b) {
-  a.importChanges(b.exportChanges());
-  b.importChanges(a.exportChanges());
-}
 
 void main() {
   testWidgets('adds, edits, checks, reorders, deletes and undoes', (

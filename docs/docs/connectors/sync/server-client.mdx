@@ -133,21 +133,15 @@ Monitor what happens on the server:
 
 ```dart
 server.serverEvents.listen((event) {
-  switch (event.type) {
-    case ServerEventType.clientConnected:
-      print('Client ${event.data?['clientId']} connected');
-      break;
-    case ServerEventType.clientDisconnected:
-      print('Client ${event.data?['clientId']} disconnected');
-      break;
-    case ServerEventType.clientChangeApplied:
-      print('Change applied from client');
-      break;
-    // clientHandshake, clientDocumentStatusCreated, clientOutOfSync,
-    // messageBroadcasted, messageSent, snapshotCreated, error, ...
+  if (event.type == ServerEventType.error) {
+    log('Sync error: ${event.message}');
   }
 });
 ```
+
+Every event has a `type`, a `message` and, for some types, `data`. The types
+are the values of `ServerEventType`: a client that connects, a handshake, a
+change applied, a snapshot taken, an error.
 
 <NextSteps
   items={[

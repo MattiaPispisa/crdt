@@ -9,18 +9,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hive/hive.dart';
 
-/// Pumps until [done] holds, letting the real Hive IO run in between.
-Future<void> pumpUntil(WidgetTester tester, bool Function() done) async {
-  var rounds = 0;
-  do {
-    await tester.runAsync(
-      () => Future<void>.delayed(const Duration(milliseconds: 10)),
-    );
-    // A duration, so the timers due now run too.
-    await tester.pump(Duration.zero);
-  } while (!done() && ++rounds < 200);
-  expect(done(), isTrue);
-}
+import 'helpers.dart';
 
 void main() {
   late Directory directory;

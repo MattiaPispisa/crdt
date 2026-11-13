@@ -49,11 +49,14 @@ await subscription.cancel();
 undo.dispose(); // disposing the document does this for you
 ```
 
-| Option | What it does |
-| --- | --- |
-| `captureTimeout` | how long a step stays open for the next write to join it (500 ms; `Duration.zero` turns merging off) |
-| `stackLimit` | how many steps each stack keeps (100) |
-| `trackedOrigins` | which writes to record (every local one by default) |
+- `captureTimeout`: how long a step stays open for the next write to join it.
+  `Duration.zero` turns the merging off.
+- `stackLimit`: how many steps each stack keeps.
+- `trackedOrigins`: which writes to record (every local one by default).
+
+Complete apps with undo buttons: the
+[todo list as an aggregate](../recipes/todo-aggregate.mdx) and the
+[flutter_quill editor](../recipes/quill-editor.mdx).
 
 In Flutter, the [rich text field](../connectors/flutter/text-fields.mdx#rich-text)
 and the [Quill binding](../connectors/flutter/editors/quill.mdx#undo) take a
@@ -80,8 +83,8 @@ undoA.undo();
 
 `runInTransaction` is one step, whatever it holds. Outside a transaction each
 write is its own step, and steps written within `captureTimeout` of each other
-(500 ms by default) merge: a burst of typing is one undo, not one per
-character. `Duration.zero` turns the merging off, and `stopCapturing()` ends a
+(a fraction of a second by default) merge: a burst of typing is one undo, not
+one per character. `Duration.zero` turns the merging off, and `stopCapturing()` ends a
 step by hand, for example when the user moves the caret.
 
 Merging compares the origin and the time, and nothing else. So two writes this
@@ -139,11 +142,9 @@ compacts on its own: you choose when.
 
 ## Which handlers
 
-`CRDTFugueTextHandler`, `CRDTFugueRichTextHandler`, `CRDTFugueListHandler`,
-`CRDTFugueMovableListHandler`, `CRDTMapHandler`, `CRDTORMapHandler`,
-`CRDTORSetHandler`, `CRDTRegisterHandler` and the reference handlers built on
-them, and `CRDTAggregateHandler` when its definition is an
-`InvertibleAggregateDefinition`.
+A handler can be tracked when `handler.invertible` is `true`. That holds for
+every built-in handler whose elements have an identity, and for a
+`CRDTAggregateHandler` whose definition is an `InvertibleAggregateDefinition`.
 
 `CRDTTextHandler` and `CRDTListHandler` are indexed by position alone. They have
 no element identity to anchor an inverse to, so `Handler.invertible` is `false`

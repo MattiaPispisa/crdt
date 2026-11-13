@@ -1,0 +1,35 @@
+# A recipe: what the docs site shows for it. Paths are relative to the
+# repository root, so a recipe can show any tested file of the repository.
+id: shared-outline
+title: "A shared outline: nested data, saved and synced"
+description: >-
+  A Dart program that keeps a tree (chapters, each with a title and a text) in
+  a SQLite file and syncs it through a relay. Another device rebuilds the same
+  tree, and a restart reads it back.
+platforms: [Dart VM, Flutter native]
+# Shown as the install command: names only, `pub add` picks the versions.
+dependencies: [crdt_lf, crdt_lf_sqlite, crdt_socket_sync]
+files:
+  - path: packages/_internal/crdt_lf_recipes/lib/shared_outline/outline.dart
+    label: outline.dart
+  - path: packages/_internal/crdt_lf_recipes/lib/shared_outline/open_outline.dart
+    label: open_outline.dart
+  - path: packages/_internal/crdt_lf_recipes/lib/shared_outline/main.dart
+    label: main.dart
+test: packages/_internal/crdt_lf_recipes/test/shared_outline_test.dart
+keyPoints:
+  - "Declare the kinds of the tree (`register`) in `onDocument`. Without them, a chapter that comes from the storage or from another peer reads as `null`."
+  - "Open the root under a fixed id, with `document.handler`. Two peers that both start empty and call `child(key, …)` each create their own child: one wins, and what the other wrote under its child leaves the tree."
+  - "`insertChild` always adds a new child, so two peers can add chapters at the same time."
+  - "Create a chapter and its texts in one transaction: the other peers get the chapter whole."
+  - "`resolved` reads the whole tree, every reference followed."
+  - "Each device needs its own file: it keeps the peer id of the device."
+related:
+  - title: Nested data
+    to: /docs/use-cases/containers
+  - title: Open a replica
+    to: /docs/connectors/replica
+  - title: Relay mode
+    to: /docs/connectors/sync/relay
+  - title: "Todo list with containers"
+    to: /docs/recipes/todo-list

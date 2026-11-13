@@ -51,8 +51,11 @@ CrdtProvider(
 CrdtProvider.value(value: doc, child: const MyApp());
 ```
 
-With a [replica](../replica.mdx), use the value mode on `replica.document`: the
-replica closes the document.
+With a [replica](../replica.mdx) or a
+[storage backend](../persistence/index.mdx), use the value mode on the document
+they open: they close it. The
+[Flutter note recipe](../../recipes/flutter-note.mdx) shows where a page opens
+and closes it.
 
 ## Rebuild on the whole document
 
@@ -119,9 +122,8 @@ See [Flutter internals](../../deep-dive/flutter-internals.mdx).
 
 A handler deleted with `doc.deleteHandler` (on any peer) is not an error. A
 widget bound to it shows its `deletedBuilder`, or an empty box when there is
-none; a listener stops calling back. This holds for `CrdtHandlerBuilder`,
-`CrdtHandlerSelector`, `CrdtHandlerDeltaBuilder`, `CrdtTextFieldBuilder` and
-`CrdtEditorBinder`.
+none; a listener stops calling back. This holds for every widget that is bound
+to a handler `id`.
 
 ```dart
 CrdtHandlerBuilder<CRDTFugueTextHandler>(
@@ -148,19 +150,19 @@ It throws a `HandlerDeletedException` for a deleted handler.
 The other context helpers: `context.crdtDocument`,
 `context.watchCrdtDocument()` and `context.selectCrdtDocument(...)`.
 
-## All the widgets
+## Beyond rebuilding
 
-| Widget | What it does | Page |
-| --- | --- | --- |
-| `CrdtProvider` | provides a `CRDTDocument` to the subtree | this page |
-| `CrdtBuilder`, `CrdtSelector` | rebuild on every document update, or on a selected slice | this page |
-| `CrdtHandlerBuilder`, `CrdtHandlerSelector`, `CrdtHandlerListener` | rebuild (or call back) when one handler changes | this page |
-| `CrdtHandlerDeltaBuilder`, `CrdtHandlerDeltaListener` | follow **what** each change did | [Delta widgets](./delta-widgets.mdx) |
-| `CrdtTextFieldBuilder`, `CrdtRichTextFieldBuilder` | a `TextEditingController` bound to a text handler | [Text fields](./text-fields.mdx) |
-| `CrdtTextCursorsOverlay` | the other peers' carets and selections in a field | [Text fields](./text-fields.mdx#remote-text-cursors) |
-| `CrdtAwarenessCursorsOverlay` | the other peers' mouse pointers over any pane | [Presence](./presence.mdx) |
-| `CrdtEditorBinder`, `CrdtEditorBinding` | the sync loop between a handler and any editor | [Editors](./editors/index.mdx) |
-| `CrdtHistoryScope` | shows the handler widgets below it as the document was after a past change | [History](../../use-cases/history.mdx#in-flutter) |
+| You want to | Page |
+| --- | --- |
+| know **what** each change did: long lists, `AnimatedList` | [Delta widgets](./delta-widgets.mdx) |
+| a collaborative `TextField`, with the carets of the other peers | [Text fields](./text-fields.mdx) |
+| the mouse pointers of the other peers over a pane | [Presence](./presence.mdx) |
+| a full editor, such as flutter_quill | [Editors](./editors/index.mdx) |
+| show the document as it was after a past change | [History](../../use-cases/history.mdx#in-flutter) |
+
+Complete apps: [a note saved on the device](../../recipes/flutter-note.mdx) and
+[a todo list](../../recipes/todo-list.mdx). Every widget, with its arguments, is
+in the [API reference](https://pub.dev/documentation/crdt_lf_flutter/latest/).
 
 ## Benchmarks
 

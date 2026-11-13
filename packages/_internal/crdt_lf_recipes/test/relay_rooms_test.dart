@@ -8,17 +8,7 @@ import 'package:crdt_socket_sync/web_socket_relay_client.dart';
 import 'package:crdt_socket_sync/web_socket_relay_server.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-/// Waits until [text], in [document], reads [expected].
-Future<void> waitForText(
-  CRDTDocument document,
-  CRDTFugueTextHandler text,
-  String expected,
-) async {
-  if (text.value == expected) return;
-  await document.updates
-      .firstWhere((_) => text.value == expected)
-      .timeout(const Duration(seconds: 5));
-}
+import 'helpers.dart';
 
 void main() {
   late WebSocketRelayServer server;

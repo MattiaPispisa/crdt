@@ -26,10 +26,10 @@ class TodoPage extends StatelessWidget {
             ),
         child: const Icon(Icons.add),
       ),
-      // `nested`: also rebuild when a todo changes, not only the list.
+      // Rebuilds when a todo is added, removed or moved. An edit of one item
+      // rebuilds only what follows it in its tile.
       body: CrdtHandlerBuilder<CRDTMovableListRefHandler>(
         id: 'todos',
-        nested: true,
         builder: (context, todos) {
           return ReorderableListView(
             // `to` is the place after the move, as `move` counts it.
@@ -74,9 +74,15 @@ class TodoTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ListTile(
-      leading: Checkbox(
-        value: todo.done.value ?? false,
-        onChanged: (done) => todo.done.set(done ?? false),
+      // Follows the flag alone: another peer that checks the todo rebuilds
+      // this check box, and nothing else.
+      leading: CrdtHandlerBuilder<CRDTRegisterHandler<bool>>(
+        id: todo.done.id,
+        builder:
+            (context, done) => Checkbox(
+              value: done.value ?? false,
+              onChanged: (value) => done.set(value ?? false),
+            ),
       ),
       title: CrdtTextFieldBuilder(
         id: todo.text.id,

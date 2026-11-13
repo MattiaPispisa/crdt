@@ -31,6 +31,27 @@ export function useRecipe(id: string): Recipe {
   return recipe;
 }
 
+/** The query parameter that selects a variant on a recipe page. */
+export const variantQuery = "variant";
+
+/**
+ * What the page of [recipe] shows as tabs: the recipe, then its variants. A
+ * recipe with no variant gives only itself.
+ */
+export function useVariants(recipe: Recipe): Recipe[] {
+  const variants = useRecipes().filter(
+    (candidate) => candidate.variantOf === recipe.id,
+  );
+  return [recipe, ...variants];
+}
+
+/** The page of [recipe]. A variant opens its tab on the page that shows it. */
+export function recipeHref(recipe: Recipe): string {
+  return recipe.variantOf === null
+    ? `/docs/recipes/${recipe.id}`
+    : `/docs/recipes/${recipe.variantOf}?${variantQuery}=${recipe.id}`;
+}
+
 /** The file of [recipe] whose label or path is [file]. */
 export function recipeFile(recipe: Recipe, file: string): RecipeFile {
   const found = recipe.files.find(

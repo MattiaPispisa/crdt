@@ -32,7 +32,13 @@ class _NotePageState extends State<NotePage> {
   // #docregion open
   Future<void> _open() async {
     // Reads the stored note (or starts an empty one), then writes every edit.
-    final note = await widget.backend.openDocument('note');
+    final note = await widget.backend.openDocument(
+      'note',
+      // Past this many stored changes, a snapshot replaces them.
+      compactAfter: 1000,
+      // Without it, a write that fails is silent.
+      onError: (error, stack) => debugPrint('Storage error: $error'),
+    );
     CRDTFugueTextHandler(note.document, 'note');
 
     if (!mounted) {

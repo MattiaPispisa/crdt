@@ -52,11 +52,11 @@ not half of it.
 
 ## Batching
 
-Writes are batched behind `writeDelay` (250 ms by default). One keystroke is one
-transaction, so writing on every event would put a round-trip to the disk
-between the typist and the next character. The first change starts the wait
-and the next ones join it, so a document edited without a pause is still
-written about every `writeDelay`.
+Writes are batched behind `writeDelay` (a fraction of a second by default). One
+keystroke is one transaction, so writing on every event would put a round-trip
+to the disk between the typist and the next character. The first change starts
+the wait and the next ones join it, so a document edited without a pause is
+still written about every `writeDelay`.
 
 A snapshot is written before the prune that comes with it, and the prune waits
 for it: a failed snapshot write holds its prune back, so the disk never loses
@@ -87,10 +87,16 @@ returns, so a Flutter app builds its first frame from the stored state instead
 of an empty document:
 
 ```dart
-final document = CRDTDocument(documentId: documentId);
+final backend = CRDTSqlite.open('notes.db');
+
+final document = CRDTDocument(
+  documentId: documentId,
+  // The stored identity: SQLite answers at once.
+  peerId: backend.peerIdStorageForDocument(documentId).loadOrCreate() as PeerId,
+);
 final persistence = CRDTDocumentPersistence.openSync(
   document,
-  database.storageForDocument(documentId),
+  backend.storageForDocument(documentId),
 );
 // already full here
 ```
@@ -108,7 +114,7 @@ batch is written again. Saving a change twice replaces it, so a write that half
 landed costs nothing.
 
 You do not have to arrange the retry. A failure arms one, and each failure in a
-row waits longer than the one before it: 250 ms, doubling, up to 30 s. Without
+row waits longer than the one before it, up to a cap. Without
 that, a document that goes quiet right after a failure would keep its changes
 in memory and nowhere else.
 
