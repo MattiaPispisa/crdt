@@ -1,0 +1,28 @@
+---
+title: Recipes
+sidebar_label: Overview
+description: "Complete setups, ready to copy, each one compiled and tested in CI."
+slug: /recipes
+---
+
+import RecipeGallery from '@site/src/components/RecipeGallery';
+
+# Recipes
+
+A recipe is a **complete setup**: every file you need, the command that
+installs the packages, and the few points where people usually get stuck. Copy it, run it, then change it.
+
+The other pages explain one piece at a time. A recipe shows the pieces already
+connected: a document with its storage, a Flutter screen, a server and its
+clients.
+
+The code on these pages is the code of the repository, and a test runs it in
+CI. Most recipes live in the
+[`crdt_lf_recipes`](https://github.com/MattiaPispisa/crdt/tree/main/packages/_internal/crdt_lf_recipes)
+package. The Dart Frog and Serverpod servers are the `example/` and
+`relay_example/` folders of their adapter packages.
+
+<RecipeGallery />
+
+Missing the setup you need?
+[Open an issue](https://github.com/MattiaPispisa/crdt/issues/new/choose).

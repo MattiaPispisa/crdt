@@ -1,0 +1,32 @@
+# A recipe: what the docs site shows for it. Paths are relative to the
+# repository root, so a recipe can show any tested file of the repository.
+id: offline-first-replica
+title: "An offline-first Flutter app: storage and sync in one call"
+description: >-
+  A Flutter note that opens from the device at once, then syncs through a
+  relay server. `CRDTReplica` opens the storage and the client in the right
+  order, and edits made offline reach the other devices later.
+platforms: [Flutter native, Flutter web]
+# Shown as the install command: names only, `pub add` picks the versions.
+dependencies: [crdt_lf, crdt_lf_flutter, crdt_lf_hive, crdt_socket_sync, hive, path_provider]
+files:
+  - path: packages/_internal/crdt_lf_recipes/lib/offline_first_replica/main.dart
+    label: main.dart
+  - path: packages/_internal/crdt_lf_recipes/lib/offline_first_replica/open_note.dart
+    label: open_note.dart
+  - path: packages/_internal/crdt_lf_recipes/lib/offline_first_replica/note_page.dart
+    label: note_page.dart
+test: packages/_internal/crdt_lf_recipes/test/offline_first_replica_test.dart
+keyPoints:
+  - "Every peer opens the same `documentId`."
+  - "A relay creates a room on demand. A server–client server knows only the documents you register on it."
+  - "`CRDTReplica.open` restores the local copy, then connects in the background: it completes with the server down, and the offline edits are sent on the next connection."
+  - "With `onStorageError` the app keeps going when the storage cannot be read: the note starts empty, in memory."
+  - "`replica.close()` stops the sync, writes what is still waiting, and closes the document and the storage."
+related:
+  - title: Open a replica
+    to: /docs/connectors/replica
+  - title: Relay mode
+    to: /docs/connectors/sync/relay
+  - title: Text fields
+    to: /docs/connectors/flutter/text-fields

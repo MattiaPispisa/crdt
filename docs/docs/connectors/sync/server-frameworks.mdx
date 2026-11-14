@@ -1,0 +1,311 @@
+---
+title: Server frameworks
+description: Serve the sync from Dart Frog or Serverpod — install, routes, authentication, lifecycle.
+---
+
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+import NextSteps from '@site/src/components/NextSteps';
+import RecipeSnippet from '@site/src/components/RecipeSnippet';
+
+# Server frameworks
+
+The sync protocol runs inside the backend you already have. An adapter gives
+your framework a ready-made endpoint for each [mode](./index.mdx#two-modes); the
+framework keeps routing, authentication and deployment. Clients connect with the
+plain `WebSocketClient` / `WebSocketRelayClient` of `crdt_socket_sync`.
+
+| | Dart Frog | Serverpod |
+| --- | --- | --- |
+| Package | [`crdt_socket_sync_dart_frog`](https://pub.dev/packages/crdt_socket_sync_dart_frog) | [`crdt_socket_sync_serverpod`](https://pub.dev/packages/crdt_socket_sync_serverpod) |
+| Server–client endpoint | `crdtSyncWebSocketHandler` (+ `crdtSyncHostProvider`) | `CrdtSyncRoute` |
+| Relay endpoint | `crdtRelayWebSocketHandler` (+ `crdtRelayHostProvider`) | `CrdtRelayRoute` |
+| Framework docs | [dart-frog.dev](https://dart-frog.dev) | [docs.serverpod.dev](https://docs.serverpod.dev) |
+
+Each endpoint serves a **session host**: `RelaySessionHost` for the relay,
+`DocumentSessionHost` for the server–client mode. The host keeps the rooms,
+the sessions and the broadcasting; the endpoint only hands it the sockets (see
+[Custom transport](./custom-transport.mdx#a-transport-you-do-not-own)).
+
+## Install
+
+<Tabs groupId="framework">
+<TabItem value="dart_frog" label="Dart Frog" default>
+
+```sh
+dart pub add crdt_socket_sync crdt_socket_sync_dart_frog
+```
+
+```dart
+// Server–client mode: crdtSyncWebSocketHandler, crdtSyncHostProvider,
+// DocumentSessionHost
+import 'package:crdt_socket_sync_dart_frog/sync.dart';
+
+// Relay mode: crdtRelayWebSocketHandler, crdtRelayHostProvider,
+// RelaySessionHost
+import 'package:crdt_socket_sync_dart_frog/relay.dart';
+```
+
+</TabItem>
+<TabItem value="serverpod" label="Serverpod">
+
+```sh
+dart pub add crdt_socket_sync crdt_socket_sync_serverpod
+```
+
+```dart
+// Server–client mode: CrdtSyncRoute, DocumentSessionHost
+import 'package:crdt_socket_sync_serverpod/sync.dart';
+
+// Relay mode: CrdtRelayRoute, RelaySessionHost
+import 'package:crdt_socket_sync_serverpod/relay.dart';
+```
+
+</TabItem>
+</Tabs>
+
+## Relay mode
+
+<Tabs groupId="framework">
+<TabItem value="dart_frog" label="Dart Frog" default>
+
+The host, built once and shared by every request:
+
+<RecipeSnippet id="dart-frog-relay" file="lib/src/host.dart" region="host" />
+
+The middleware puts it in the request context, and the route hands it the
+socket:
+
+<RecipeSnippet id="dart-frog-relay" file="routes/_middleware.dart" region="middleware" />
+
+<RecipeSnippet id="dart-frog-relay" file="routes/relay.dart" region="route" />
+
+</TabItem>
+<TabItem value="serverpod" label="Serverpod">
+
+<RecipeSnippet id="serverpod-relay" file="bin/main.dart" region="server" />
+
+The route is on the **web server** of Serverpod, so clients connect to the web
+server's port, not to the API server's.
+
+</TabItem>
+</Tabs>
+
+Clients connect with `WebSocketRelayClient`, pointed at
+`ws://localhost:8080/relay`. The complete backends are the recipes
+[Dart Frog: relay](../../recipes/dart-frog-relay.mdx) and
+[Serverpod: relay](../../recipes/serverpod-relay.mdx).
+
+## Server–client mode
+
+The server serves only the documents its registry holds, so the host creates
+them before a client asks. For anything that must survive a restart, use a
+`PersistentServerRegistry` on one of the
+[storage adapters](../persistence/adapters.mdx), as below with Hive: see
+[Server registry](./server-registry.mdx).
+
+<Tabs groupId="framework">
+<TabItem value="dart_frog" label="Dart Frog" default>
+
+<RecipeSnippet id="dart-frog-server" file="lib/src/host.dart" region="host" />
+
+<RecipeSnippet id="dart-frog-server" file="routes/sync.dart" region="route" />
+
+A durable registry is opened asynchronously, so open it in Dart Frog's
+`init()` (see [Lifecycle](#lifecycle)) and keep it in a top-level `late final`.
+
+</TabItem>
+<TabItem value="serverpod" label="Serverpod">
+
+<RecipeSnippet id="serverpod-server" file="lib/src/host.dart" region="host" />
+
+<RecipeSnippet id="serverpod-server" file="bin/main.dart" region="route" />
+
+</TabItem>
+</Tabs>
+
+The complete backends are the recipes
+[Dart Frog: server](../../recipes/dart-frog-server.mdx) and
+[Serverpod: server](../../recipes/serverpod-server.mdx).
+
+## Authenticating before the upgrade
+
+Check the request first, and upgrade only when the check passes. A rejected
+client gets a plain `401` and never reaches the protocol.
+
+<Tabs groupId="framework">
+<TabItem value="dart_frog" label="Dart Frog" default>
+
+The handler is a value, so call it only after the check:
+
+```dart
+Future<Response> onRequest(RequestContext context) async {
+  final token = context.request.headers['authorization'];
+  if (!await isAuthorized(token)) {
+    return Response(statusCode: HttpStatus.unauthorized);
+  }
+  return crdtSyncWebSocketHandler(context.read<DocumentSessionHost>())(context);
+}
+```
+
+</TabItem>
+<TabItem value="serverpod" label="Serverpod">
+
+The route upgrades in `handleCall`. Subclass it and refuse first: a `Response`
+is an ordinary HTTP answer, and `super.handleCall` is the upgrade.
+
+```dart
+class AuthSyncRoute extends CrdtSyncRoute {
+  AuthSyncRoute(super.sessionHost);
+
+  @override
+  FutureOr<Result> handleCall(Session session, Request request) {
+    if (!session.isUserSignedIn) {
+      return Response.unauthorized();
+    }
+    return super.handleCall(session, request);
+  }
+}
+```
+
+Serverpod resolves the web route's session from the `Authorization` header,
+through the `authenticationHandler` given to the `Serverpod` constructor. Set
+one: without it, any request that carries the header fails with a `500` before
+`handleCall` runs. A malformed header gets a `400`.
+
+</TabItem>
+</Tabs>
+
+:::tip[Clients send no headers]
+`WebSocketClient` sends no headers, and browsers cannot set them on a
+WebSocket. Send the key in a query parameter or a cookie, and check it yourself
+before the upgrade: the server recipes read a `token` query parameter.
+:::
+
+## Lifecycle
+
+**Build the host once, outside the request.** A host per request would give every
+client its own empty room.
+
+`start()` is optional: a host with no transport of its own starts on its first
+connection. `dispose()` closes the open sessions and, in server–client mode, the
+registry under them. For a durable registry that is where pending writes are
+flushed, so **skipping it loses data**. A `RelayStore` has no close: a durable
+one is yours to close after `dispose()`.
+
+<Tabs groupId="framework">
+<TabItem value="dart_frog" label="Dart Frog" default>
+
+Dart Frog has no shutdown hook, so signals are the place for it. Start the host
+from a [custom init method](https://dart-frog.dev/advanced/custom-init-method/):
+`init()` runs once, before the handler tree is built. The
+[custom entrypoint](https://dart-frog.dev/advanced/custom-entrypoint/) `run()`
+is called again on every hot reload, so a listener registered there would pile
+up.
+
+```dart
+// main.dart
+import 'dart:io';
+
+import 'package:dart_frog/dart_frog.dart';
+
+Future<void> init(InternetAddress ip, int port) async {
+  await relayHost.start();
+
+  for (final signal in [ProcessSignal.sigint, ProcessSignal.sigterm]) {
+    signal.watch().listen((_) async {
+      await relayHost.dispose();
+      exit(0);
+    });
+  }
+}
+```
+
+</TabItem>
+<TabItem value="serverpod" label="Serverpod">
+
+Serverpod handles `SIGINT` and `SIGTERM` by itself, and runs its shutdown tasks
+after the web server has stopped. That is the place to dispose the host:
+
+```dart
+pod.experimental.shutdownTasks.addTask('crdt_sync', syncHost.dispose);
+```
+
+`shutdownTasks` is part of Serverpod's experimental API, which may change
+between minor versions.
+
+</TabItem>
+</Tabs>
+
+## Gotchas
+
+<Tabs groupId="framework">
+<TabItem value="dart_frog" label="Dart Frog" default>
+
+- **`Handler` is ambiguous.** `crdt_lf` exports a CRDT `Handler` and `dart_frog`
+  exports a request `Handler`. In a file that needs both, hide one:
+  `import 'package:crdt_lf/crdt_lf.dart' hide Handler;`.
+
+</TabItem>
+<TabItem value="serverpod" label="Serverpod">
+
+- **The `Session` closes before the socket opens.** Serverpod closes it as soon
+  as `handleCall` returns. Read what you need from it before the upgrade.
+- **An `Authorization` header needs an `authenticationHandler`.** Serverpod's
+  default handler throws, so the request fails with a `500` before the route
+  runs.
+- **Name clashes.** `serverpod` exports Relic's `Handler` and `Message`, which
+  clash with `Handler` from `crdt_lf` and `Message` from `crdt_socket_sync`. In
+  a file that needs both, hide one:
+  `import 'package:serverpod/serverpod.dart' hide Message;`.
+
+</TabItem>
+</Tabs>
+
+For both frameworks:
+
+- **One plugin instance per host.** A `ServerSyncPlugin` binds to the host it is
+  given to, once. Handing the same instance to a second host throws a
+  `LateInitializationError` far from the line that caused it.
+- **A refused connection is closed, not rejected.** Once the response is a
+  `101`, there is no status code left to send. A host that is stopped or
+  disposed closes the socket instead, and the client sees its stream end.
+
+## Examples
+
+Two runnable servers per framework, one per mode:
+
+| | Server–client (`/sync`, Hive, a token check) | Relay (`/relay`, rooms in memory) | Run |
+| --- | --- | --- | --- |
+| Dart Frog | [`example/`](https://github.com/MattiaPispisa/crdt/tree/main/packages/adapters/sync/dart_frog/example) | [`relay_example/`](https://github.com/MattiaPispisa/crdt/tree/main/packages/adapters/sync/dart_frog/relay_example) | `dart_frog dev` |
+| Serverpod | [`example/`](https://github.com/MattiaPispisa/crdt/tree/main/packages/adapters/sync/serverpod/example) | [`relay_example/`](https://github.com/MattiaPispisa/crdt/tree/main/packages/adapters/sync/serverpod/relay_example) | `dart run bin/main.dart` |
+
+The Serverpod examples build the pod without a database and without generated
+code, to stay small: a real project passes its generated `Protocol()` and
+`Endpoints()`.
+
+[Greyhound Markdown](https://github.com/MattiaPispisa/crdt/tree/main/apps/greyhound_markdown)
+also runs locally against a
+[Dart Frog](https://github.com/MattiaPispisa/crdt/tree/main/apps/greyhound_markdown/server_dart_frog)
+or a
+[Serverpod](https://github.com/MattiaPispisa/crdt/tree/main/apps/greyhound_markdown/server_serverpod)
+relay server.
+
+Your framework is not here? Open an
+[issue](https://github.com/MattiaPispisa/crdt/issues/new/choose), or put the
+host on it yourself: see [Custom transport](./custom-transport.mdx).
+
+<NextSteps
+  items={[
+    {
+      title: 'Server–client mode',
+      to: '/docs/connectors/sync/server-client',
+      description: 'How the CRDT-aware server works.',
+    },
+    {
+      title: 'Relay mode',
+      to: '/docs/connectors/sync/relay',
+      description: 'How the relay works.',
+    },
+  ]}
+/>

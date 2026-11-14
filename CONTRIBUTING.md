@@ -109,8 +109,11 @@ When the solution is agreed in the issue, you can open the pull request:
 - **Link the issue** in the description with `#issue_num`, so the discussion and
   the code stay connected.
 - **Follow the workspace conventions.** The [README][readme] explains the
-  workspace, the organization of the repository, and the melos setup. Each
-  package also has its own README with more detail.
+  workspace, the organization of the repository, and the melos setup.
+- **Update the documentation.** The full documentation lives in the
+  [`docs/`](./docs) site (`docs/docs/`, one page per topic); the package
+  READMEs are short entry points. A change that users can see updates the
+  page that describes it.
 - **Check your work before pushing:**
 
   ```bash
@@ -144,8 +147,10 @@ code lowers the percentage, the threshold is not reached and the pull request
 stays red 🔴. The opposite is also true, though — tests that only repeat what is
 already covered add noise, not value.
 
-`melos run format`, `melos run analyze` and the test scripts run the same
-checks locally, so the surprises stay on your machine.
+The CI runs the scripts of `melos.yaml` (`format`, `analyze`, `test`,
+`test_chrome`, `test_flutter`) on the Flutter version that `.fvmrc` pins. The
+same scripts with the same SDK run on your machine, so the surprises stay
+there.
 
 ## 8. AI-assisted contributions
 

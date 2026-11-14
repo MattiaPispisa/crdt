@@ -1,6 +1,7 @@
 // Copyright 2025 Mattia Pispisa
 // SPDX-License-Identifier: MIT
 
+// #docregion middleware
 import 'package:crdt_socket_sync_dart_frog/relay.dart';
 import 'package:crdt_socket_sync_dart_frog_relay_example/src/host.dart';
 import 'package:dart_frog/dart_frog.dart';
@@ -12,3 +13,4 @@ import 'package:dart_frog/dart_frog.dart';
 Handler middleware(Handler handler) {
   return handler.use(crdtRelayHostProvider(relayHost));
 }
+// #enddocregion middleware

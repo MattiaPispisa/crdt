@@ -1,0 +1,185 @@
+---
+title: Flutter
+sidebar_label: Overview
+description: Rebuild Flutter widgets when the document changes — for the whole document, or for one handler.
+slug: /connectors/flutter
+---
+
+import Demo from '@site/src/components/Demo';
+import NextSteps from '@site/src/components/NextSteps';
+
+# Flutter
+
+[`crdt_lf_flutter`](https://pub.dev/packages/crdt_lf_flutter) rebuilds your
+widgets when the CRDT state changes: for the whole **document**, or scoped to
+one **handler**. It also gives collaborative text fields, editor bindings and
+presence cursors.
+
+It is built on [`provider`](https://pub.dev/packages/provider), like
+flutter_bloc. So `context.read` / `context.watch` / `context.select` work for a
+`CRDTDocument` too.
+
+```sh
+flutter pub add crdt_lf crdt_lf_flutter
+```
+
+<Demo
+  src="/demos/crdt_lf_flutter_example.gif"
+  alt="The crdt_lf_flutter example: every widget on one screen, with rebuild counters"
+  caption={
+    <>
+      The{' '}
+      <a href="https://github.com/MattiaPispisa/crdt/tree/main/packages/core/crdt_lf_flutter/example">
+        example app
+      </a>{' '}
+      shows every widget on one screen. A <code>⟳ rebuilt ×N</code> badge shows
+      which parts re-render as you edit.
+    </>
+  }
+/>
+
+## Provide a document
+
+```dart
+// Owning mode: the provider creates the document lazily and disposes it.
+CrdtProvider(
+  create: (_) => CRDTDocument(),
+  child: const MyApp(),
+);
+
+// Value mode: you own the document lifecycle.
+CrdtProvider.value(value: doc, child: const MyApp());
+```
+
+With a [replica](../replica.mdx) or a
+[storage backend](../persistence/index.mdx), use the value mode on the document
+they open: they close it. The
+[Flutter note recipe](../../recipes/flutter-note.mdx) shows where a page opens
+and closes it.
+
+## Rebuild on the whole document
+
+```dart
+// Rebuild on any change.
+CrdtBuilder(
+  builder: (context, document) => Text(textHandler.value),
+);
+
+// Rebuild only when a derived slice changes.
+CrdtSelector<int>(
+  selector: (context, document) => listHandler.value.length,
+  builder: (context, count) => Text('$count todos'),
+);
+```
+
+## Rebuild on one handler
+
+Rebuild only when one handler changes: other handlers do not trigger a rebuild.
+`CrdtHandlerBuilder` hands you the typed handler (the base `Handler` has no
+`value`). It is also the right tool for a list or map whose value is a live
+view: a value `Selector` would not see it change.
+
+```dart
+CrdtHandlerBuilder<CRDTListHandler<String>>(
+  id: 'todos',
+  builder: (context, handler) => Text('${handler.value.length}'),
+);
+
+// A derived slice of one handler.
+CrdtHandlerSelector<CRDTListHandler<String>, int>(
+  id: 'todos',
+  selector: (context, handler) => handler.value.length,
+  builder: (context, count) => Text('$count'),
+);
+
+// Also rebuild when a nested (descendant) handler changes.
+CrdtHandlerBuilder<CRDTMapRefHandler>(
+  id: 'root',
+  nested: true,
+  builder: (context, handler) => ...,
+);
+
+// Side effects only, no rebuild.
+CrdtHandlerListener<CRDTListHandler<String>>(
+  id: 'todos',
+  listener: (context, handler) => showSnackBar(...),
+  child: ...,
+);
+```
+
+What a rebuild check costs:
+
+- `CrdtHandlerBuilder` and `CrdtHandlerListener` compare one number, the
+  handler's **revision**: `O(1)`, whatever the size of the value.
+- With `nested: true` they read the revision of every descendant handler:
+  the cost grows with the number of descendants.
+- `CrdtHandlerSelector` runs your `selector` on every document update and
+  compares the result with `==`: keep the selector cheap.
+
+See [Flutter internals](../../deep-dive/flutter-internals.mdx).
+
+### Deleted handlers
+
+A handler deleted with `doc.deleteHandler` (on any peer) is not an error. A
+widget bound to it shows its `deletedBuilder`, or an empty box when there is
+none; a listener stops calling back. This holds for every widget that is bound
+to a handler `id`.
+
+```dart
+CrdtHandlerBuilder<CRDTFugueTextHandler>(
+  id: chapterId,
+  builder: (context, handler) => Text(handler.value),
+  deletedBuilder: (context) => const Text('This chapter was deleted'),
+);
+```
+
+An id that was never registered still throws a `FlutterError`: that one is a
+wiring mistake.
+
+## Write without rebuilding
+
+For an action (insert, delete, change) you do not need reactivity. Read the
+handler once:
+
+```dart
+context.crdtHandler<CRDTListHandler<String>>('todos').insert(0, 'new');
+```
+
+It throws a `HandlerDeletedException` for a deleted handler.
+
+The other context helpers: `context.crdtDocument`,
+`context.watchCrdtDocument()` and `context.selectCrdtDocument(...)`.
+
+## Beyond rebuilding
+
+| You want to | Page |
+| --- | --- |
+| know **what** each change did: long lists, `AnimatedList` | [Delta widgets](./delta-widgets.mdx) |
+| a collaborative `TextField`, with the carets of the other peers | [Text fields](./text-fields.mdx) |
+| the mouse pointers of the other peers over a pane | [Presence](./presence.mdx) |
+| a full editor, such as flutter_quill | [Editors](./editors/index.mdx) |
+| show the document as it was after a past change | [History](../../use-cases/history.mdx#in-flutter) |
+
+Complete apps: [a note saved on the device](../../recipes/flutter-note.mdx) and
+[a todo list](../../recipes/todo-list.mdx). Every widget, with its arguments, is
+in the [API reference](https://pub.dev/documentation/crdt_lf_flutter/latest/).
+
+## Benchmarks
+
+The package has benchmarks for its text fields: see the
+[crdt_lf_flutter results](../../benchmarks/crdt_lf_flutter.mdx).
+
+<NextSteps
+  items={[
+    {
+      title: 'Text fields',
+      to: '/docs/connectors/flutter/text-fields',
+      description: 'A collaborative TextField, with remote cursors.',
+    },
+    {
+      title: 'Delta widgets',
+      to: '/docs/connectors/flutter/delta-widgets',
+      description: 'For long lists and AnimatedList.',
+    },
+  ]}
+/>

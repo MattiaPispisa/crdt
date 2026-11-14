@@ -7,3 +7,8 @@
 - `CrdtQuillBinder`: binds a flutter_quill `QuillController` to a `CRDTFugueRichTextHandler`, with
   formats, embeds and undo; `CrdtQuillCursorsOverlay` draws the remote cursors. Needs `crdt_lf` 5.4.0
   and `crdt_lf_flutter` 0.8.0. [209](https://github.com/MattiaPispisa/crdt/issues/209)
+
+### Changed
+
+- The documentation moved to the [docs site](https://mattiapispisa.it/crdt/docs/connectors/flutter/editors/quill): the README is now a
+  short entry point. [216](https://github.com/MattiaPispisa/crdt/issues/216)

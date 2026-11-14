@@ -1,0 +1,102 @@
+---
+title: Handlers in a document
+sidebar_label: Handlers
+description: Open, find, rebuild and delete the handlers of a document.
+---
+
+import NextSteps from '@site/src/components/NextSteps';
+
+# Handlers in a document
+
+A document holds its data in **handlers**. A handler has an **id**, unique in
+the document, and a **kind** (text, list, map, …). Peers find the same data
+through the same id, so every peer must open an id with the same kind.
+
+Which handler fits which data is the subject of
+[Use cases](../use-cases/index.mdx). This page is about how the document keeps
+them.
+
+## Open a handler
+
+Two ways, with the same result:
+
+```dart
+// The constructor: opens the handler and registers it on the document.
+final note = CRDTFugueTextHandler(doc, 'note');
+
+// handler(spec, id): returns the handler already open under that id, or
+// opens a new one. Safe to call more than once.
+final same = doc.handler(CRDTFugueTextHandler.spec, 'note'); // identical(note, same)
+```
+
+| Call | When the id is already open |
+| --- | --- |
+| a constructor | throws `HandlerAlreadyRegisteredException` |
+| `doc.handler(spec, id)` | returns the open handler; throws when it is open as another kind, or deleted (see [Errors](./errors.mdx)) |
+
+A **spec** names a kind: `CRDTFugueTextHandler.spec`, or
+`CRDTListHandler.spec<Todo>('todo-list')` for a generic handler, which needs a
+tag of yours. See [Handler specs](../deep-dive/handler-specs.mdx).
+
+A handler you open is empty until changes reach it. Opening one writes
+nothing, so every peer can open the same ids at startup.
+
+## Find a handler
+
+`doc.handlerById(id)` returns the handler open under an id, or `null`.
+
+In a tree of handlers, `doc.roots()` gives the entry points: the open handlers
+that no container references. `doc.resolveHandler(ref)` follows a reference. It
+opens the handler when needed, and returns `null` when the kind is unknown or
+the handler was deleted (see [Nested data](../use-cases/containers.mdx)).
+
+## Kinds a peer has never opened
+
+A peer that receives changes for a handler it never opened can still rebuild
+it, as long as it knows the **kind**. A document knows the kinds of the
+handlers it has opened, plus the ones you declare:
+
+```dart
+doc.register(CRDTMapRefHandler.spec);
+doc.register(CRDTListHandler.spec<Todo>('todo-list'));
+
+doc.reconstruct(); // opens every handler the data names, of a known kind
+```
+
+- `register(spec)` declares a kind without opening a handler. Use it on a peer
+  that only stores and forwards, or that waits for a subtree another peer
+  creates.
+- `reconstruct()` opens every handler of a known kind that the changes and the
+  snapshot name. Reading a tree from a known root, with `child` or `resolved`,
+  works without it (see [Nested data](../use-cases/containers.mdx)).
+
+## Delete a handler
+
+```dart
+doc.deleteHandler(note); // for every peer
+doc.isDeleted('note'); // true
+```
+
+- A delete is **final**, and it wins over any concurrent edit. Every handler
+  reachable from the deleted one, through references, is deleted too.
+- A deleted handler is closed: its `watch()` stream ends, a write throws
+  `HandlerDeletedException`, and opening the id again throws.
+- `deleteHandlerRef(ref)` deletes from a reference, also when this peer cannot
+  build the handler.
+- The next snapshot leaves its state out, so a prune frees its data. Undo
+  cannot bring it back.
+
+<NextSteps
+  items={[
+    {
+      title: 'Handler specs',
+      to: '/docs/deep-dive/handler-specs',
+      description: 'Kinds, tags, and what a peer can rebuild.',
+    },
+    {
+      title: 'Changes and sync',
+      to: '/docs/document/changes',
+      description: 'What a write becomes, and how it travels.',
+    },
+  ]}
+/>

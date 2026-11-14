@@ -30,6 +30,14 @@ scripts:
     name: "Docs build"
     description: "Build the documentation site"
     run: dart run scripts/docs_build.dart
+  recipes_sync:
+    name: "Recipes sync"
+    description: "Write the regions of crdt_lf_recipes into the README quick starts and the package examples"
+    run: dart run scripts/recipes_sync.dart
+  recipes_check:
+    name: "Recipes check"
+    description: "Fail when a README, an example or a docs page differs from its recipe"
+    run: dart run scripts/recipes_sync.dart --check
   update_references:
     name: "Update references"
     description: "Propagate package/app references into READMEs and cut a documentation release"

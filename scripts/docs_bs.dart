@@ -21,21 +21,6 @@ void main(List<String> args) async {
     badExit();
   }
 
-  logger.info('Copy package READMEs');
-  try {
-    copyPackageReadmes(
-      to: docsDir(subParts: ['docs', 'documentation', 'packages']),
-      exclude: isInternalPackage,
-      logger: logger,
-    );
-  } catch (error) {
-    logger.error(
-      'Unable to copy package READMEs',
-      error: error,
-    );
-    badExit();
-  }
-
   logger.info('Copy contributing guide');
   try {
     copyContributing(
@@ -45,6 +30,20 @@ void main(List<String> args) async {
   } catch (error) {
     logger.error(
       'Unable to copy the contributing guide',
+      error: error,
+    );
+    badExit();
+  }
+
+  logger.info('Copy benchmark results');
+  try {
+    copyBenchmarkResults(
+      to: docsDir(subParts: ['docs', 'benchmarks', '_results']),
+      logger: logger,
+    );
+  } catch (error) {
+    logger.error(
+      'Unable to copy the benchmark results',
       error: error,
     );
     badExit();

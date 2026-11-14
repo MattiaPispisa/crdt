@@ -35,6 +35,9 @@ flags:
   persistence_conformance:
     paths: [packages/_internal/persistence_conformance]
     carryforward: true
+  editor_conformance:
+    paths: [packages/_internal/editor_conformance]
+    carryforward: true
   crdt_lf_hive:
     paths: [packages/adapters/persistence/crdt_lf_hive]
     carryforward: true
@@ -46,6 +49,9 @@ flags:
     carryforward: true
   crdt_lf_quill:
     paths: [packages/adapters/text/crdt_lf_quill]
+    carryforward: true
+  crdt_lf_recipes:
+    paths: [packages/_internal/crdt_lf_recipes]
     carryforward: true
 
 ignore:

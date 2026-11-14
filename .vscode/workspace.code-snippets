@@ -12,6 +12,14 @@
       "[![license][license_badge]][license_link]",
       "[![pub publisher][pub_publisher_badge]][pub_publisher_link]",
       "",
+      "<div align=\"center\">",
+      "",
+      "[![Read the full documentation][docs_badge]][docs_link]",
+      "",
+      "</div>",
+      "",
+      "> **📖 The full documentation is on [mattiapispisa.it/crdt](https://mattiapispisa.it/crdt/docs/${3:introduction}).**",
+      "",
       "[license_badge]: https://img.shields.io/badge/license-MIT-blue.svg",
       "[license_link]: https://opensource.org/licenses/MIT",
       "[package_badge]: https://img.shields.io/pub/v/${1:package}.svg",
@@ -24,6 +32,8 @@
       "[pub_publisher_badge]: https://img.shields.io/pub/publisher/${1:package}",
       "[pub_publisher_link]: https://pub.dev/packages?q=publisher%3Amattiapispisa.it",
       "[pub_likes_badge]: https://img.shields.io/pub/likes/${1:package}",
+      "[docs_badge]: https://img.shields.io/badge/%F0%9F%93%96%20Read%20the%20full%20documentation-mattiapispisa.it%2Fcrdt-d04848?style=for-the-badge",
+      "[docs_link]: https://mattiapispisa.it/crdt/docs/${3:introduction}",
     ]
   },
   "Mermaid chart info": {

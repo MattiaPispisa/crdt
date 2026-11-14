@@ -3,16 +3,13 @@ name: Flutter Package CI
 on:
   workflow_call:
     inputs:
+      # The pub name: the melos scripts run on this package only.
       package_name:
         required: true
         type: string
       working_directory:
         required: true
         type: string
-      flutter_channel:
-        required: false
-        type: string
-        default: "stable"
       min_coverage:
         required: false
         type: number
@@ -26,34 +23,39 @@ on:
       CODECOV_TOKEN:
         required: true
 
+# melos.yaml points at `.fvm/flutter_sdk`, which only fvm creates: use the
+# Flutter SDK on the PATH, the version `.fvmrc` names.
+env:
+  MELOS_SDK_PATH: auto
+
 jobs:
   build:
-    defaults:
-      run:
-        working-directory: ${{inputs.working_directory}}
-
     runs-on: ubuntu-latest
+
+    env:
+      MELOS_PACKAGES: ${{inputs.package_name}}
 
     steps:
       - name: 📚 Git Checkout
         uses: actions/checkout@v7
 
       - name: 🐦 Setup Flutter
-        uses: subosito/flutter-action@v2
+        uses: kuhnroyal/flutter-fvm-config-action@v3
         with:
-          channel: ${{inputs.flutter_channel}}
+          setup: true
+          cache: true
 
-      - name: 📦 Install Dependencies
-        run: flutter pub get
+      - name: 📦 Setup melos and install dependencies
+        uses: bluefireteam/melos-action@v3
 
       - name: ✨ Check Formatting
-        run: dart format --line-length 80 --set-exit-if-changed lib test
+        run: melos run format
 
       - name: 🕵️ Analyze
-        run: flutter analyze lib test
+        run: melos run analyze
 
       - name: 🧪 Run Tests
-        run: flutter test --coverage
+        run: melos run test_flutter --no-select -- --coverage
 
       - name: 📊 Check Code Coverage
         uses: VeryGoodOpenSource/very_good_coverage@v3

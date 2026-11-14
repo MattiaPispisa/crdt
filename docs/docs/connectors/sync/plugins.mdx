@@ -1,0 +1,113 @@
+---
+title: Plugins and awareness
+description: Extend the client and the server with plugins, and share presence with the awareness plugin.
+---
+
+import Greyhound from '@site/src/components/Greyhound';
+import NextSteps from '@site/src/components/NextSteps';
+import RecipeSnippet from '@site/src/components/RecipeSnippet';
+
+# Plugins and awareness
+
+A plugin adds behavior to the client, to the server, or to both. Plugins work
+the same way in both [modes](./index.mdx#two-modes).
+
+## Writing a plugin
+
+A plugin **extends** `ClientSyncPlugin` or `ServerSyncPlugin`. Extend, do not
+implement: the base class wires the plugin into its client or server. Pass it in
+the `plugins` list of the client or of the server.
+
+- The host calls the plugin for every message it decodes, and when a
+  connection or a session opens and closes.
+- A plugin that sends messages of its own gives a `messageCodec` for them. Its
+  messages extend `Message` and use type codes from `100` up (see
+  [Wire format](./compatibility.mdx#wire-format)).
+
+The awareness plugin is the reference to copy: its
+[client](https://github.com/MattiaPispisa/crdt/blob/main/packages/core/crdt_socket_sync/lib/src/plugins/awareness/client/awareness.dart)
+and its
+[server](https://github.com/MattiaPispisa/crdt/blob/main/packages/core/crdt_socket_sync/lib/src/plugins/awareness/server/awareness.dart).
+The members to override are in the
+[API reference](https://pub.dev/documentation/crdt_socket_sync/latest/).
+
+The same plugins work on the relay pair (`WebSocketRelayClient` /
+`WebSocketRelayServer`) unchanged: see
+[Plugins on a relay](./relay.mdx#plugins-on-a-relay). A server plugin instance
+belongs to one host: give each host its own.
+
+## Awareness plugin
+
+The awareness plugin shares **presence**: who is in the room, and ephemeral
+state such as their name, their color and where their caret is. It runs on both
+sides: `ClientAwarenessPlugin` on each client, `ServerAwarenessPlugin` on the
+server. Awareness state is never written into the document history, and a
+relay rebroadcasts it without storing it.
+
+On the server, one plugin instance per host:
+
+<RecipeSnippet id="presence-cursors" file="server.dart" region="server" />
+
+On each client, with what the other peers should know about this one:
+
+<RecipeSnippet id="presence-cursors" file="presence.dart" region="join" />
+
+A `WebSocketServer` and a `WebSocketClient` take the same two plugins, in the
+same `plugins` argument.
+
+This is the channel for the Flutter
+[text cursors](../flutter/text-fields.mdx#remote-text-cursors) and
+[mouse pointers](../flutter/presence.mdx): publish the local caret or pointer
+into the awareness state, and map the other peers' states to cursors. The
+[presence recipe](../../recipes/presence-cursors.mdx) does both, from the
+server to the carets on screen.
+
+The [server example](https://github.com/MattiaPispisa/crdt/tree/main/packages/core/crdt_socket_sync/example)
+and its Flutter client use it to show the active users (name, surname, a random
+color) and their position in the document.
+
+<Greyhound source="client/lib/src/services/awareness/awareness_service.dart">
+
+Greyhound wraps the plugin in an `AwarenessService`. The name and the color go
+in the first state. The caret is merged in as the user moves it, as two Fugue
+anchors, and `cursor: null` takes it away:
+
+```dart
+final plugin = ClientAwarenessPlugin(
+  throttleDuration: const Duration(milliseconds: 75),
+  initialMetadata: PeerState(name: name, color: color).toJson(),
+);
+
+void setLocalCursor(FugueElementID? base, FugueElementID? extent) {
+  plugin.updateLocalState({
+    'cursor': base == null
+        ? null
+        : {
+            'base': base.toJson(),
+            if (extent != null) 'extent': extent.toJson(),
+          },
+  });
+}
+```
+
+The states of the others come from `plugin.awarenessStream`, and become the
+carets that `CrdtTextCursorsOverlay` paints (see
+[Collaborative text](../../use-cases/collaborative-text.mdx)).
+The relay rebroadcasts them, and stores nothing.
+
+</Greyhound>
+
+<NextSteps
+  items={[
+    {
+      title: 'Text fields',
+      to: '/docs/connectors/flutter/text-fields#remote-text-cursors',
+      description: 'Draw the carets that awareness carries.',
+    },
+    {
+      title: 'Connection and errors',
+      to: '/docs/connectors/sync/connection',
+      description: 'Status, reconnection, faults.',
+    },
+  ]}
+/>

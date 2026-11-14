@@ -1,56 +1,43 @@
 // Copyright 2025 Mattia Pispisa
 // SPDX-License-Identifier: MIT
 
-// ignore_for_file: avoid_print example file
+// A copy of a recipe, written by `melos run recipes_sync`.
+// Edit the recipe, then run it again:
+// packages/_internal/crdt_lf_recipes/lib/hybrid_clock/main.dart
+
+import 'dart:io';
 
 import 'package:hlc_dart/hlc_dart.dart';
 
+/// Moves a clock through a local event and a received message.
+///
+/// Returns whether the message comes before the clock, and whether the 64-bit
+/// and the 8-byte forms read back the same clock, in this order.
+List<bool> runClock() {
+  final clock = HybridLogicalClock.now();
+
+  // Another peer has its own clock: here it lives in the same program.
+  final received = HybridLogicalClock.now();
+
+  // A local event: an edit, a write, anything this peer does.
+  clock.localEvent(DateTime.now().millisecondsSinceEpoch);
+  stdout.writeln(clock); // <milliseconds>.<counter>
+
+  // A message from the other peer carries its clock.
+  clock.receiveEvent(DateTime.now().millisecondsSinceEpoch, received);
+
+  // After the receive, the message comes before this clock.
+  final ordered = received.happenedBefore(clock);
+  stdout.writeln(ordered); // true
+
+  // 64 bits, or 8 big-endian bytes.
+  final fromInt = HybridLogicalClock.fromInt64(clock.toInt64());
+  final fromBytes = HybridLogicalClock.fromUint8List(clock.toUint8List());
+  stdout.writeln(fromInt == clock && fromBytes == clock); // true
+
+  return [ordered, fromInt == clock, fromBytes == clock];
+}
+
 void main() {
-  // Simulate two peers in a distributed system
-  final peer1Clock = HybridLogicalClock.now();
-  final peer2Clock = HybridLogicalClock.now();
-
-  print('Initial clocks:');
-  print('Peer 1: $peer1Clock');
-  print('Peer 2: $peer2Clock\n');
-
-  // Simulate local events on peer 1
-  print('Peer 1 performs some local events:');
-  peer1Clock.localEvent(DateTime.now().millisecondsSinceEpoch);
-  print('After first event: $peer1Clock');
-  peer1Clock.localEvent(DateTime.now().millisecondsSinceEpoch);
-  print('After second event: $peer1Clock\n');
-
-  // Simulate local events on peer 2
-  print('Peer 2 performs some local events:');
-  peer2Clock.localEvent(DateTime.now().millisecondsSinceEpoch);
-  print('After first event: $peer2Clock');
-  peer2Clock.localEvent(DateTime.now().millisecondsSinceEpoch);
-  print('After second event: $peer2Clock\n');
-
-  // Simulate message exchange between peers
-  print('Peer 1 sends a message to Peer 2:');
-  final peer1ClockCopy = peer1Clock.copy();
-  peer2Clock.receiveEvent(
-    DateTime.now().millisecondsSinceEpoch,
-    peer1ClockCopy,
-  );
-  print('Peer 2 clock after receiving message: $peer2Clock');
-  print('Peer 1 clock remains unchanged: $peer1Clock\n');
-
-  // Demonstrate causality
-  print('Demonstrating causality:');
-  print('Peer 1 clock happened before Peer 2 clock: '
-      '${peer1Clock.happenedBefore(peer2Clock)}');
-  print('Peer 2 clock happened before Peer 1 clock: '
-      '${peer2Clock.happenedBefore(peer1Clock)}');
-  print('Clocks are concurrent: ${peer1Clock.isConcurrentWith(peer2Clock)}\n');
-
-  // Demonstrate serialization
-  print('Demonstrating serialization:');
-  final serialized = peer1Clock.toInt64();
-  print('Serialized Peer 1 clock: $serialized');
-  final deserialized = HybridLogicalClock.fromInt64(serialized);
-  print('Deserialized clock: $deserialized');
-  print('Original and deserialized are equal: ${peer1Clock == deserialized}');
+  runClock();
 }

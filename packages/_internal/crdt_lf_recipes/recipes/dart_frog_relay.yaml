@@ -1,0 +1,30 @@
+# A recipe: what the docs site shows for it. Paths are relative to the
+# repository root, so a recipe can show any tested file of the repository.
+id: dart-frog-relay
+title: A relay in a Dart Frog backend
+description: >-
+  A Dart Frog route that serves a relay: any document id is a room, with no
+  setup. The rooms live in memory.
+platforms: [Dart VM]
+# Shown as the install command: names only, `pub add` picks the versions.
+dependencies: [crdt_socket_sync, crdt_socket_sync_dart_frog, dart_frog]
+files:
+  - path: packages/adapters/sync/dart_frog/relay_example/lib/src/host.dart
+    label: lib/src/host.dart
+  - path: packages/adapters/sync/dart_frog/relay_example/routes/_middleware.dart
+    label: routes/_middleware.dart
+  - path: packages/adapters/sync/dart_frog/relay_example/routes/relay.dart
+    label: routes/relay.dart
+  - path: packages/adapters/sync/dart_frog/relay_example/main.dart
+    label: main.dart
+test: packages/adapters/sync/dart_frog/relay_example/test/routes/relay_test.dart
+keyPoints:
+  - "Build the host once, outside the routes, and share it with every request: a host per request gives each client an empty room."
+  - "The middleware puts the host in the request context; the route upgrades the request and hands it to the host."
+  - "Start the host before serving, and dispose it on shutdown."
+  - "Clients connect with `WebSocketRelayClient` to the route's URL."
+related:
+  - title: Server frameworks
+    to: /docs/connectors/sync/server-frameworks
+  - title: Relay mode
+    to: /docs/connectors/sync/relay

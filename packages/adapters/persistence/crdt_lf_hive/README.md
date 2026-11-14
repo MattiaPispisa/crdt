@@ -8,305 +8,76 @@
 [![License: MIT][license_badge]][license_link]
 [![pub publisher][pub_publisher]][pub_publisher_link]
 
-[![docs_badge]][docs_link]
+A [Hive](https://pub.dev/packages/hive) storage adapter for [`crdt_lf`](https://pub.dev/packages/crdt_lf):
+it keeps your documents on the device, and reads them back on launch. It runs on the **web** with no setup.
 
-- [CRDT LF Hive](#crdt-lf-hive)
-  - [Features](#features)
-  - [Quick Start](#quick-start)
-    - [1. Initialize Hive with CRDT Adapters](#1-initialize-hive-with-crdt-adapters)
-    - [2. Document-scoped storage](#2-document-scoped-storage)
-    - [3. Managing the boxes by hand](#3-managing-the-boxes-by-hand)
-  - [Many documents in one place](#many-documents-in-one-place)
-  - [Keeping a whole document on disk](#keeping-a-whole-document-on-disk)
-  - [Document-Scoped Storage](#document-scoped-storage)
-    - [CRDTHiveChangeStorage](#crdthivechangestorage)
-    - [CRDTHiveSnapshotStorage](#crdthivesnapshotstorage)
-    - [CRDTHivePeerIdStorage](#crdthivepeeridstorage)
-  - [Snapshot Data Serialization](#snapshot-data-serialization)
-  - [Examples](#examples)
-    - [Storage example](#storage-example)
-    - [Server (+ storage) and clients](#server--storage-and-clients)
-  - [Box Naming Convention](#box-naming-convention)
-  - [Storage Management](#storage-management)
-    - [Cleanup Operations](#cleanup-operations)
-    - [Box Customization](#box-customization)
-  - [Important Notes](#important-notes)
-  - [Roadmap](#roadmap)
-  - [Apps](#apps)
-  - [Packages](#packages)
+<div align="center">
 
+[![Read the full documentation][docs_badge]][docs_link]
 
+</div>
 
-A [Hive](https://pub.dev/packages/hive) storage implementation for [CRDT LF](https://pub.dev/packages/crdt_lf) objects, providing efficient persistence for Change and Snapshot objects with document-scoped organization.
+> **📖 The full persistence guide — which adapter to pick, history, backups, compaction — is on [mattiapispisa.it/crdt](https://mattiapispisa.it/crdt/docs/connectors/persistence).**
 
 ## Features
 
-- **Compact Binary Adapters**: A single `TypeAdapter` for `Change` and one for `Snapshot`, each storing the object as the self-describing binary blob produced by `crdt_lf`'s native `toBytes()` / `fromBytes()` methods
-- **Easy Initialization**: One-line setup with `CRDTHive.initialize()`
-- **Document-Scoped Storage**: Optional utilities that organize data by document ID for better isolation and performance
-- **Batch Operations**: Efficient bulk save/load operations for changes and snapshots
+- 🌐 **Runs everywhere**: Dart VM, Flutter, and the web
+- ⚡ **Synchronous reads**: a box is in memory, so a document is restored before the first frame
+- 🗂️ **Boxes per document**, plus a small registry of document ids
+- 🤝 **Shared boxes**: a box closes with its last user, so two replicas can share them
+- 📦 **Compact binary**: one `TypeAdapter` each for `Change` and `Snapshot`
+- 🪪 **Peer identity**: the device writes under the same author on every launch
+- 🧩 **Same contract** as the SQLite and Drift adapters: change backend with one line
+- ➕ **…and more**: everything else is in the [documentation][docs_link]
 
-## Quick Start
+## Quick start
 
-### 1. Initialize Hive with CRDT Adapters
+```sh
+flutter pub add crdt_lf crdt_lf_hive hive path_provider
+```
 
+<!-- recipe:flutter-note/main.dart#init -->
 ```dart
-import 'package:hive/hive.dart';
-import 'package:crdt_lf_hive/crdt_lf_hive.dart';
-
-void main() async {
-  // Initialize Hive
-  Hive.init('./my_app_data');
-  
-  // Register all CRDT adapters
-  CRDTHive.initialize();
-  
-  // Your app code here...
+// On the web Hive uses IndexedDB and needs no path.
+if (!kIsWeb) {
+  Hive.init((await getApplicationDocumentsDirectory()).path);
 }
-```
-
-### 2. Document-scoped storage
-
-```dart
-import 'package:crdt_lf/crdt_lf.dart';
-import 'package:crdt_lf_hive/crdt_lf_hive.dart';
-
-final documentId = 'my-document-id';
-
-// Open storage for a specific document
-final changeStorage = await CRDTHive.openChangeStorageForDocument(documentId);
-final snapshotStorage = await CRDTHive.openSnapshotStorageForDocument(documentId);
-
-// Or open both at once
-final documentStorage = await CRDTHive.openStorageForDocument(documentId);
-```
-
-### 3. Managing the boxes by hand
-
-The low-level path, for an app that wants the boxes and not the storages:
-
-```dart
-import 'package:crdt_lf/crdt_lf.dart';
-import 'package:hive/hive.dart';
-
-// Open boxes manually
-final changeBox = await Hive.openBox<Change>('changes');
-final snapshotBox = await Hive.openBox<Snapshot>('snapshots');
-
-// Store and retrieve changes
-final change = /* your change */;
-await changeBox.put(change.id.toString(), change);
-final retrievedChange = changeBox.get(change.id.toString());
-```
-
-## Many documents in one place
-
-`CRDTHive` is a `CRDTStorageBackend`: it lists the documents it holds, hands out
-the storages of each one, and deletes one whole. Code written against that
-interface runs on any adapter, so an app can change backend without changing
-anything but the line that opens it.
-
-```dart
 CRDTHive.initialize();
+// One backend for the whole app: it lives as long as the app does.
 final backend = await CRDTHive.open();
-
-for (final documentId in await backend.documentIds) {
-  final note = await backend.readDocument(documentId);
-  // ...show it in a list
-}
-
-await backend.deleteDocument('doc-123'); // changes, snapshots and identity
-await backend.close();
 ```
+<!-- /recipe -->
 
-> Hive cannot list its boxes, and this adapter gives every document a box of
-> its own, so `CRDTHive.open()` keeps a small registry box (`documents` by
-> default). A document costs one extra row, written the first time it is
-> opened. A document stored before this registry existed is not on the list
-> until it is opened once — its data is untouched either way.
+Then `backend.openDocument('note')` reads a document back and follows it. The
+complete app, a text field saved on the device and tested in CI, is the
+[recipe](https://mattiapispisa.it/crdt/docs/recipes/flutter-note).
 
-## Keeping a whole document on disk
+Every change is written down from there on. This package re-exports the whole
+[`crdt_lf_persistence`](https://pub.dev/packages/crdt_lf_persistence) API, so it
+is the only storage package your `pubspec.yaml` needs.
 
-Most apps do not call these methods by hand. `openDocument` reads the document
-back — its stored identity included — and follows it from there:
+[Greyhound Markdown](https://mattiapispisa.it/crdt/greyhound_markdown/) keeps its rooms in the browser with this
+adapter.
 
-```dart
-final note = await backend.openDocument(documentId);
-final text = CRDTFugueTextHandler(note.document, 'body');
-```
+## Documentation
 
-Everything written from there on is stored. The backend has the read-only half
-too: `readDocument(id)` for a preview or a list, `documentAt(id, version)` for
-the document as it was, `copyDocumentTo(other, id)` for a backup or a move to
-another adapter.
-
-It comes from [`crdt_lf_persistence`](https://pub.dev/packages/crdt_lf_persistence),
-which this package re-exports. See that README for the offline-first rules.
-
-`openStorageForDocument` hands back a `CRDTHiveDocumentStorage`. Its `close()`
-closes the two boxes of that document and nothing else — the one to reach for
-in an app that opens one document after another, since
-`CRDTHive.closeAllBoxes()` closes every Hive box the app has open, yours
-included.
-
-Hive has no transactions, so `transaction()` just runs its body. That is still
-conformant: every step the persistence takes is safe to repeat.
-
-## Document-Scoped Storage
-
-The library provides optional storage utilities that organize data by document ID. Each document gets its own dedicated Hive boxes, improving isolation and performance.
-
-A Hive box holds its entries in memory, so reads here answer without
-suspending — `getChanges`, `getSnapshots`, `count` and `containsSnapshot` are
-not futures. Writes go through the box journal and stay asynchronous.
-
-### CRDTHiveChangeStorage
-
-Manages `Change` objects for a specific document:
-
-```dart
-final changeStorage = await CRDTHive.openChangeStorageForDocument('doc-123');
-
-// Save individual changes
-await changeStorage.saveChange(change);
-
-// Batch save multiple changes
-await changeStorage.saveChanges([change1, change2, change3]);
-
-// Load all changes for the document
-final changes = changeStorage.getChanges();
-
-// Or only part of the log, by version vector
-final missing = changeStorage.getChanges(newerThan: theirVersion);
-final past = changeStorage.getChanges(upTo: oldVersion);
-
-// Delete changes
-await changeStorage.deleteChange(change);
-await changeStorage.deleteChanges([change1, change2]);
-
-// Storage info
-print('Total changes: ${changeStorage.count}');
-```
-
-### CRDTHiveSnapshotStorage
-
-Manages `Snapshot` objects for a specific document:
-
-```dart
-final snapshotStorage = await CRDTHive.openSnapshotStorageForDocument('doc-123');
-
-// Save snapshots
-await snapshotStorage.saveSnapshot(snapshot);
-await snapshotStorage.saveSnapshots([snapshot1, snapshot2]);
-
-// Retrieve snapshots
-final snapshot = snapshotStorage.getSnapshot('snapshot-id');
-final allSnapshots = snapshotStorage.getSnapshots();
-
-// Check existence
-if (snapshotStorage.containsSnapshot('snapshot-id')) {
-  // Snapshot exists
-}
-```
-
-### CRDTHivePeerIdStorage
-
-Keeps the `PeerId` the document writes under. Without it `CRDTDocument` mints
-a new author on every restart, and the version vector grows by one peer per
-session.
-
-Every document shares one `peer_ids` box, keyed by document id: a box of its
-own would cost an open for a single string. The value is text, so no type
-adapter and no type id are involved.
-
-Read it **before** building the document — the id has to exist first:
-
-```dart
-final peers = await CRDTHive.openPeerIdStorageForDocument('doc-123');
-
-final document = CRDTDocument(
-  documentId: 'doc-123',
-  peerId: await peers.loadOrCreate(),
-);
-```
-
-## Snapshot Data Serialization
-
-`Snapshot` is persisted via `Snapshot.toBytes()` (the same self-describing
-binary format used everywhere else in `crdt_lf`). Each entry of `Snapshot.data`
-is a `Uint8List` produced by the corresponding handler's `getSnapshotState()`;
-`Snapshot` itself only frames each blob with a length prefix.
-
-Custom value types used inside CRDT handlers (e.g. `CRDTListHandler<MyValue>`)
-work out of the box: the per-operation payload is serialized by the
-`ValueCodec<T>` you pass to the handler — and the same codec is reused by the
-handler to encode each item into its snapshot state. The whole pipeline is
-binary end-to-end, with JSON only appearing as the default `ValueCodec<T>`
-when the user does not provide a custom one.
-
-## Examples
-
-### Storage example
-
-A complete example with a custom data type and adapter is available [here](https://github.com/MattiaPispisa/crdt/blob/main/packages/adapters/persistence/crdt_lf_hive/example/main.dart).
-
-### Server (+ storage) and clients
-
-A complete example of a server with a persistent registry of documents and clients that can connect to the server and sync their data is available [here](https://github.com/MattiaPispisa/crdt/blob/main/packages/core/crdt_socket_sync/example/lib/main.dart).
-
-<img width="500" alt="sync_server_multi_client" src="https://raw.githubusercontent.com/MattiaPispisa/crdt/main/assets/demos/sync_server_multi_client.gif">
-
-## Box Naming Convention
-
-When using document-scoped storage, boxes are named using the pattern:
-- Changes: `{boxName}_{documentId}` (default: `changes_{documentId}`)
-- Snapshots: `{boxName}_{documentId}` (default: `snapshots_{documentId}`)
-
-This ensures each document has isolated storage while allowing custom box name prefixes.
-
-Two boxes are **shared**, one per app and not one per document:
-- `peer_ids`: the `PeerId` each document writes under, keyed by document id.
-- `documents`: the list of document ids the backend holds.
-
-## Storage Management
-
-### Cleanup Operations
-
-```dart
-// Close all CRDT-related boxes
-await CRDTHive.closeAllBoxes();
-
-// Delete all data for a specific document
-await backend.deleteDocument('doc-123');
-
-// Delete a specific box
-await CRDTHive.deleteBox('changes_doc-123');
-```
-
-### Box Customization
-
-```dart
-// Custom box names
-final changeStorage = await CRDTHive.openChangeStorageForDocument(
-  'doc-123',
-  boxName: 'my_custom_changes',
-);
-
-final documentStorage = await CRDTHive.openStorageForDocument(
-  'doc-123',
-  changesBoxName: 'custom_changes',
-  snapshotsBoxName: 'custom_snapshots',
-);
-```
-
-## Important Notes
-
-- **Document-scoped storage utilities are optional** - you can manage Hive boxes manually if preferred
-- **Custom box organization** - the provided utilities use a specific box-per-document pattern, but you can implement your own organization strategy
-- **Type ID conflicts** - ensure your custom adapters use unique type IDs
+- [Which adapter](https://mattiapispisa.it/crdt/docs/connectors/persistence#which-adapter): Hive, SQLite, Drift, …
+- [Hive: setup and storage details](https://mattiapispisa.it/crdt/docs/connectors/persistence/adapters)
+- [Working with storage](https://mattiapispisa.it/crdt/docs/connectors/persistence/working-with-storage):
+  history, backups, compaction, …
+- [Open a replica](https://mattiapispisa.it/crdt/docs/connectors/replica): storage and sync together
 
 ## Roadmap
-A roadmap is available in the [project](https://github.com/users/MattiaPispisa/projects/1) page. The roadmap provides a high-level overview of the project's goals and the current status of the project.
+
+<div align="center">
+
+[![Roadmap: done, in progress, to do][roadmap_badge]][roadmap_link]
+
+</div>
+
+🗺️ The [project board](https://github.com/users/MattiaPispisa/projects/1) shows what is done, what is in progress and
+what comes next, for this package and the rest of the workspace. Missing something?
+[Open an issue](https://github.com/MattiaPispisa/crdt/issues/new/choose): requests go on the board too.
 
 ## Apps
 
@@ -338,5 +109,7 @@ Other bricks of the crdt "system" are:
 [ci_link]: https://github.com/MattiaPispisa/crdt/actions/workflows/main.yaml
 [pub_publisher]: https://img.shields.io/pub/publisher/crdt_lf_hive
 [pub_publisher_link]: https://pub.dev/packages?q=publisher%3Amattiapispisa.it
-[docs_badge]: https://img.shields.io/badge/docs-crdt-blue?style=for-the-badge&logo=read-the-docs
-[docs_link]: https://mattiapispisa.it/crdt/
+[docs_badge]: https://img.shields.io/badge/%F0%9F%93%96%20Read%20the%20full%20documentation-mattiapispisa.it%2Fcrdt-d04848?style=for-the-badge
+[docs_link]: https://mattiapispisa.it/crdt/docs/connectors/persistence/adapters
+[roadmap_badge]: https://img.shields.io/badge/%F0%9F%97%BA%EF%B8%8F%20Roadmap-done%20%C2%B7%20in%20progress%20%C2%B7%20to%20do-d04848?style=for-the-badge
+[roadmap_link]: https://github.com/users/MattiaPispisa/projects/1

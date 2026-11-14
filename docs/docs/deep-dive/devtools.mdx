@@ -1,0 +1,19 @@
+---
+title: DevTools
+description: Inspect the documents of a running app in Flutter DevTools.
+---
+
+# DevTools
+
+`crdt_lf` ships a [DevTools extension](https://docs.flutter.dev/tools/devtools/extensions).
+Open Flutter DevTools on a running app that depends on `crdt_lf`, enable the
+`crdt_lf` extension, and its tab lists the documents of the app.
+
+- **(Alpha)** Visualize the changes of a `crdt_lf` document.
+- Documents are tracked automatically in debug and profile builds. A release
+  build tracks nothing.
+
+The extension's source is
+[`crdt_lf_devtools_extension`](https://github.com/MattiaPispisa/crdt/tree/main/packages/core/crdt_lf_devtools_extension).
+It is built into `crdt_lf` with `melos run devtools_build`, and is not published
+as a package of its own.

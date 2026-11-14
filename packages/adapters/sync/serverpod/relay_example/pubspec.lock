@@ -122,7 +122,7 @@ packages:
     source: hosted
     version: "1.15.1"
   crdt_lf:
-    dependency: "direct overridden"
+    dependency: "direct dev"
     description:
       path: "../../../../core/crdt_lf"
       relative: true
@@ -141,14 +141,14 @@ packages:
       path: "../../../../core/crdt_socket_sync"
       relative: true
     source: path
-    version: "0.10.2"
+    version: "0.10.2+1"
   crdt_socket_sync_serverpod:
     dependency: "direct main"
     description:
       path: ".."
       relative: true
     source: path
-    version: "0.1.0"
+    version: "0.1.0+1"
   crypto:
     dependency: transitive
     description:
@@ -219,7 +219,7 @@ packages:
       path: "../../../../core/hlc"
       relative: true
     source: path
-    version: "1.2.0"
+    version: "1.2.0+1"
   hooks:
     dependency: transitive
     description:

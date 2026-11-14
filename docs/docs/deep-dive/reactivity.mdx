@@ -1,0 +1,118 @@
+---
+title: Reactivity
+description: The three signals a document gives — revision, updates and events — and which one to watch.
+---
+
+import Greyhound from '@site/src/components/Greyhound';
+import NextSteps from '@site/src/components/NextSteps';
+
+# Reactivity
+
+Three signals tell a consumer that something moved, each at a different grain.
+None of them replays history to answer, so polling any of them is cheap.
+
+| Signal | Grain | Use it to |
+| --- | --- | --- |
+| `revisionForHandler(id)` | one handler | decide whether a handler changed |
+| `updates` | the document | know **when** to check |
+| `events` | the document, typed | know **what** happened (changes, snapshots, prunes) |
+| `handler.watch()` | inside one handler | know what changed in the value: see [Handler deltas](./handler-deltas.mdx) |
+
+## revision
+
+`document.revisionForHandler(handlerId)` is a per-handler, monotonically
+increasing `int`. It moves every time the observable state of that handler
+**may have changed**: a local or imported change targets it, a snapshot carrying
+its state is imported or merged, or it (or a handler it references) is deleted.
+
+It never decreases, pruning included, so two equal readings guarantee the
+handler's state did not change in between. **This is the signal a reactive
+binding should watch.**
+
+Deleting a handler that a container references bumps the container's revision
+(its *resolved* view now reads differently) without touching its cached raw
+value: the container still holds the same `HandlerRef`s, only one of them no
+longer resolves to anything.
+
+<Greyhound source="client/lib/src/widgets/preview_pane.dart">
+
+The markdown preview reads the text and parses it again only when the
+revision moves, and at most once per pause in the typing (150 ms). A rebuild
+from above with the same revision costs nothing:
+
+```dart
+CrdtHandlerBuilder<CRDTFugueTextHandler>(
+  id: kHandlerId,
+  builder: (context, handler) => _DebouncedMarkdown(
+    // Separates a real edit from a rebuild of an ancestor.
+    revision: handler.doc.revisionForHandler(kHandlerId),
+    readText: () => handler.value,
+  ),
+);
+```
+
+</Greyhound>
+
+## updates
+
+`document.updates` is a `Stream<void>`: one coarse "something changed, read
+again" signal, with no detail on what changed or where. It fires after every
+change this document applies (local or imported; inside a transaction only
+once, at the commit), and after every snapshot import or merge.
+
+This is the pair [`crdt_lf_flutter`](../connectors/flutter/index.mdx) builds its
+reactivity on: `updates` says *when to check*, `revisionForHandler` says *what
+actually moved*. A widget compares two revisions instead of re-reading and
+diffing the value on every tick:
+
+```dart
+int _lastRevision = -1;
+
+document.updates.listen((_) {
+  final revision = document.revisionForHandler(handler.id);
+  if (revision == _lastRevision) {
+    return; // woken up, but this handler did not change
+  }
+  _lastRevision = revision;
+  rebuild();
+});
+```
+
+## events
+
+`document.events` is a `Stream<CRDTDocumentEvent>`: a typed stream for a
+consumer that needs what `updates` throws away. `DocumentChangesApplied`,
+`DocumentSnapshotUpdated`, `DocumentHistoryPruned` and the other
+`CRDTDocumentEvent` subclasses say *what* happened, not just that something did.
+
+This is how [persistence](../connectors/persistence/how-it-works.mdx) keeps a
+document on disk: it listens once on `events`, and writes down exactly what each
+variant says happened, without reading any handler.
+
+```dart
+document.events.listen((event) {
+  switch (event) {
+    case DocumentChangesApplied():
+      storage.appendChanges(event.changes); // batched, then flushed
+    case DocumentSnapshotUpdated():
+      storage.writeSnapshot(event.snapshot);
+    case DocumentHistoryPruned():
+      storage.recordPrune(event.removed, event.rewritten);
+  }
+});
+```
+
+<NextSteps
+  items={[
+    {
+      title: 'Handler deltas',
+      to: '/docs/deep-dive/handler-deltas',
+      description: 'What changed inside one handler.',
+    },
+    {
+      title: 'Flutter internals',
+      to: '/docs/deep-dive/flutter-internals',
+      description: 'The widgets built on these signals.',
+    },
+  ]}
+/>

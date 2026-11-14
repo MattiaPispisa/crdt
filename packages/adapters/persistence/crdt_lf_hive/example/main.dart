@@ -1,49 +1,40 @@
 // Copyright 2025 Mattia Pispisa
 // SPDX-License-Identifier: MIT
 
-// The example prints its result, and it is not a library entry point.
-// ignore_for_file: avoid_print
+// A copy of a recipe, written by `melos run recipes_sync`.
+// Edit the recipe, then run it again:
+// packages/_internal/crdt_lf_recipes/lib/hive_note/main.dart
+
+import 'dart:io';
 
 import 'package:crdt_lf/crdt_lf.dart';
 import 'package:crdt_lf_hive/crdt_lf_hive.dart';
 import 'package:hive/hive.dart';
 
-/// The kind of the list in this example. A generic handler names its kind: the
-/// default would carry the type argument, which dart2js minifies away.
-const kList = 'string-list';
-
-Future<void> main() async {
-  const itemsToAdd = 3;
-  const dbLocation = './example/db';
-  const documentId = '784ff372-6f0a-4fe9-8e63-19b72fd18c23';
-
-  Hive.init(dbLocation);
-  CRDTHive.initialize();
-
+/// Adds a line to the stored note, and returns the whole note.
+Future<String> addLine() async {
   final backend = await CRDTHive.open();
 
-  // Reads the boxes into a document and follows it: everything written from
-  // here on is stored without another line of code. The identity comes from
-  // the backend too, so every run is the same author.
-  final note = await backend.openDocument(documentId);
-  final list =
-      CRDTListHandler<String>(note.document, 'list', handlerType: kList);
+  // Reads the stored note (or starts an empty one), then writes every edit.
+  final note = await backend.openDocument('note');
+  final text = CRDTFugueTextHandler(note.document, 'body');
 
-  print('read back: ${list.value}');
+  text.insert(text.value.runes.length, 'Hello 🌍\n');
+  final value = text.value;
 
-  final length = list.value.length;
-  for (var i = length; i < length + itemsToAdd; i++) {
-    list.insert(i, 'Item $i');
-  }
-
-  // Writes what is still waiting. Without it the process could end before the
-  // delayed write runs.
-  await note.persistence.dispose();
+  await note.persistence.dispose(); // writes what is still waiting
   note.document.dispose();
-
-  print('now: ${list.value}');
-  print('documents in the database: ${(await backend.documentIds).length}');
-
+  await note.persistence.storage.close();
   await backend.close();
-  await CRDTHive.closeAllBoxes();
+
+  return value;
+}
+
+Future<void> main() async {
+  // Once per process, before the first open.
+  Hive.init('note_db');
+  CRDTHive.initialize();
+
+  // One more line on every run.
+  stdout.writeln(await addLine());
 }

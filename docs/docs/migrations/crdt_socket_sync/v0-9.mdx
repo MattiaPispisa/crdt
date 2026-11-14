@@ -1,0 +1,35 @@
+---
+title: crdt_socket_sync 0.8.x → 0.9.0
+description: The version and capability handshake; crdt_lf 5.0 is required. A 0.8.x peer still connects.
+---
+
+# crdt_socket_sync 0.8.x → 0.9.0
+
+**A 0.8.x peer still connects.** Both handshake fields this release adds are
+optional on read: a frame without them is read as protocol version 1 and as a
+peer that states no capabilities, which is what a 0.8.x peer meant. So the two
+sides can be upgraded one at a time.
+
+What changes is the Dart API, and the `crdt_lf` floor: this release needs
+`crdt_lf: ^5.0.0`, so a generic handler names its kind out loud — see the
+[crdt_lf 5.0 migration](../crdt_lf/v5-0.mdx).
+
+```dart
+// 0.8.x
+final list = CRDTListHandler<Todo>(document, 'todos');
+
+// 0.9.0
+final list = CRDTListHandler<Todo>(document, 'todos', handlerType: 'todo-list');
+```
+
+Renamed or removed symbols:
+
+| 0.8.x                                                  | 0.9.0                            | Note                                                                                                                                                                  |
+|--------------------------------------------------------|----------------------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `Protocol.version` (`'1.0.0'`)                         | `Protocol.protocolVersion` (`1`) | An `int`, so a peer can tell an older version from a newer one. `Protocol.firstProtocolVersion` is what a frame without the field is read as.                         |
+| `ConnectionStatus` with four values                    | adds `unsupported`               | An exhaustive `switch` over it needs another case. It is terminal: see [Refusals are permanent](../../connectors/sync/compatibility.mdx#refusals-are-permanent).                                             |
+| a `CRDTSocketClient` subclass owning its status stream | the base class owns it           | `connectionStatus`, `connectionStatusValue` and the handshake gate move up; a transport only calls `updateConnectionStatus`, and the base makes `unsupported` sticky. |
+| `PluginAwareMessageCodec(codecs)` | `PluginAwareMessageCodec(defaultCodec: ..., pluginCodecs: ...)` | Kept apart so a message routes by type: from `MessageTypeValue.firstPluginValue` up it goes to a plugin's codec, which is what makes a plugin's encoder run at all. `fromPlugins` is unchanged. |
+
+Nothing else moves: `WebSocketClient`, `WebSocketRelayClient`, the server
+registries, the plugins and the wire codecs keep their 0.8.x signatures.

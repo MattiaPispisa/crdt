@@ -1,0 +1,25 @@
+# A recipe: what the docs site shows for it. Paths are relative to the
+# repository root, so a recipe can show any tested file of the repository.
+id: hive-note
+title: A text note saved with Hive
+description: >-
+  A Dart program that keeps one collaborative text in Hive boxes. Every run
+  reads the note back and adds a line.
+# A variant: a tab on the page of `persisted-note`, with no page and no
+# gallery card of its own.
+variant: Hive
+variantOf: persisted-note
+platforms: [Dart VM, Flutter native]
+# Shown as the install command: names only, `pub add` picks the versions.
+dependencies: [crdt_lf, crdt_lf_hive, hive]
+files:
+  - path: packages/_internal/crdt_lf_recipes/lib/hive_note/main.dart
+    label: main.dart
+    # The example of the package on pub.dev: a copy written by recipes_sync.
+    copyTo: packages/adapters/persistence/crdt_lf_hive/example/main.dart
+test: packages/_internal/crdt_lf_recipes/test/hive_note_test.dart
+keyPoints:
+  - "Initialize the database of the adapter once per process, before the first open, as the documentation of the package it builds on explains."
+  - "`openDocument` reads the stored note before it returns, and keeps the same author (peer id) on every run."
+  - "Close in this order: the persistence (it writes what is still waiting), the document, the storage, the backend."
+  - "In a Flutter app the page opens and closes the note: see the Flutter note recipe."

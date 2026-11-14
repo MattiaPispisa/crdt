@@ -1,0 +1,132 @@
+---
+title: Build your own adapter
+description: Implement the storage contract on another database, and check it against the conformance suite.
+---
+
+import NextSteps from '@site/src/components/NextSteps';
+
+# Build your own adapter
+
+Everything on the other persistence pages works on any backend that keeps the
+storage contract. If Hive, SQLite and Drift do not fit (another database, a
+remote store, an encrypted file), you can write a fourth adapter.
+
+:::tip[Ask first: everyone could use it]
+Before you write an adapter for your app alone, open an
+[issue](https://github.com/MattiaPispisa/crdt/issues/new/choose) that asks for
+it. An adapter in this repository runs the shared conformance suite in CI, is
+kept up to date with the contract, and serves every other user of the same
+database. If you plan to write it yourself, say so in the issue: see
+[Contributing](../../contributing.md).
+:::
+
+## The document storages
+
+Implement `CRDTChangeStorage` and `CRDTSnapshotStorage`, and hand both back as a
+`CRDTDocumentStorage`. Store `Change.toBytes()` and `Snapshot.toBytes()` as
+opaque blobs, keyed by `Change.id` and `Snapshot.id`. Do not interpret them.
+
+`CRDTDocumentStorage` adds two more members, and both already work:
+
+| Member | Default | Override it when |
+| --- | --- | --- |
+| `close()` | does nothing | the backend opens something **per document** |
+| `transaction(body)` | runs `body` | the backend has transactions |
+
+Leave them alone and the adapter is still correct. `transaction` is what makes
+a prune all-or-nothing: it drops the changes the snapshot covers and rewrites
+the survivors, whose bytes changed. It also writes the snapshot and drops the
+one before it. Without it those steps are separate, and every step is safe to
+repeat anyway.
+
+One rule if you do implement it: **a `body` that returns without suspending must
+be carried through without suspending.** On a backend where one connection
+serves every document, a suspension inside an open transaction lets another
+document write into it, and a rollback then takes that write with it, silently:
+the transaction that lost the write never saw an error.
+
+`close()` releases what belongs to **this document only**. A connection shared
+between documents stays open, and the backend closes that itself.
+
+## The identity storage
+
+`CRDTPeerIdStorage` is separate. Implement it to let a document keep the
+identity it writes under: two methods, and the value is a string
+(`PeerId.toString()` / `PeerId.parse`). It is needed before the document
+exists, so it comes from the backend, not from `CRDTDocumentStorage`.
+
+## The backend
+
+Then implement `CRDTStorageBackend` on your entry point: the class that owns
+the database. Five members, and four of them you already have:
+
+| Member | What it answers |
+| --- | --- |
+| `storageForDocument(id)` | the changes and snapshots of one document |
+| `peerIdStorageForDocument(id)` | the identity of one document |
+| `documentIds` | every document this backend holds |
+| `deleteDocument(id)` | drop all three of them |
+| `close()` | let the database go; twice is not an error |
+
+`documentIds` is the one that needs thought. A backend with a `document_id`
+column answers it with a `UNION` over the three tables. The third one matters,
+because a document that was created and never written to exists only as an
+identity. A backend that cannot ask the question has to write the ids down
+itself, which is what the Hive adapter does.
+
+**Return a plain value wherever the backend can.** Every method is declared
+`FutureOr`, so narrowing the return type to `List<Change>` or `void` is a legal
+override, and it is what lets
+[`openSync`](./how-it-works.mdx#synchronous-backends) work. Use
+`filterByVersion` for the two version-vector bounds of `getChanges`, unless the
+backend can ask its own query language.
+
+## Check it against the conformance suite
+
+The three official adapters run the same suite:
+
+```dart
+import 'package:persistence_conformance/persistence_conformance.dart';
+
+void main() {
+  runDocumentStorageConformanceTests(
+    name: 'MyStorage',
+    open: (documentId) => MyStorage.open(documentId),
+    // Turn these on for what the backend really does.
+    atomicTransactions: true,
+    synchronous: true,
+    openPeerIds: (documentId) => MyPeerIds.open(documentId),
+  );
+
+  runStorageBackendConformanceTests(
+    name: 'MyBackend',
+    open: () => MyBackend.open(path),
+    // Leave this out for a backend that cannot be reopened on the same data.
+    reopen: (_) => MyBackend.open(path),
+  );
+}
+```
+
+`persistence_conformance` is internal and unpublished, so an adapter outside
+this repository cannot depend on it. Read
+[the suite](https://github.com/MattiaPispisa/crdt/tree/main/packages/_internal/persistence_conformance)
+and copy what it checks. One more reason to propose the adapter here.
+
+[`example/main.dart`](https://github.com/MattiaPispisa/crdt/blob/main/packages/core/crdt_lf_persistence/example/main.dart)
+of `crdt_lf_persistence` keeps the whole contract in a map: the shortest version
+of what you are about to write.
+
+<NextSteps
+  items={[
+    {
+      title: 'How it works',
+      to: '/docs/connectors/persistence/how-it-works',
+      description: 'What the persistence asks of your storage.',
+    },
+    {
+      title: 'Binary format',
+      to: '/docs/deep-dive/binary-format',
+      description: 'What the blobs you store contain.',
+    },
+  ]}
+/>

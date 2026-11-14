@@ -1,0 +1,16 @@
+---
+title: Rooms on demand with a relay
+sidebar_label: Relay rooms
+description: "A relay that hosts any room with no setup, and clients that join by id."
+---
+
+import Recipe from '@site/src/components/Recipe';
+
+# Rooms on demand with a relay
+
+A relay never reads the documents: it stores and forwards their changes. So
+any document id is a room, with nothing to register. This is how
+[Greyhound Markdown](https://mattiapispisa.it/crdt/greyhound_markdown/) shares
+its rooms.
+
+<Recipe id="relay-rooms" />

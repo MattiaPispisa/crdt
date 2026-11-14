@@ -4,6 +4,11 @@
 
 [compare to previous release](https://github.com/MattiaPispisa/crdt/compare/crdt_lf_drift-v0.3.2...crdt_lf_drift-v0.3.3)
 
+### Changed
+
+- The documentation moved to the [docs site](https://mattiapispisa.it/crdt/docs/connectors/persistence/adapters): the README is now a short
+  entry point. [216](https://github.com/MattiaPispisa/crdt/issues/216)
+
 ### Fixed
 
 - The library compiles for the web. `CRDTDrift.open` and `CRDTDrift.memory` throw an

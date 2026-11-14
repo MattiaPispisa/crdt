@@ -7,218 +7,116 @@
 [![License: MIT][license_badge]][license_link]
 [![pub publisher][pub_publisher]][pub_publisher_link]
 
-[![docs_badge]][docs_link]
+Serve [`crdt_socket_sync`](https://pub.dev/packages/crdt_socket_sync) sessions
+from a [**Dart Frog**](https://dart-frog.dev) backend: your
+[`crdt_lf`](https://pub.dev/packages/crdt_lf) documents stay in sync through the
+server you already have.
 
-This package is one of the sync adapters for popular Dart server
-frameworks. It keeps the documents of the [`crdt_lf`](https://pub.dev/packages/crdt_lf) library in sync
-through a [Dart Frog](https://pub.dev/packages/dart_frog) backend. New to CRDTs? Start from the
-[`crdt_lf`](https://pub.dev/packages/crdt_lf) documentation.
+<div align="center">
 
-- [CRDT Socket Sync — Dart Frog](#crdt-socket-sync--dart-frog)
-  - [What it does](#what-it-does)
-  - [Installation](#installation)
-  - [Quick start](#quick-start)
-    - [Relay mode](#relay-mode)
-    - [Server–client mode](#serverclient-mode)
-  - [Authenticating before the upgrade](#authenticating-before-the-upgrade)
-  - [Lifecycle](#lifecycle)
-  - [Gotchas](#gotchas)
-  - [Examples](#examples)
-  - [Roadmap](#roadmap)
+[![Read the full documentation][docs_badge]][docs_link]
 
-## What it does
+</div>
 
-[`crdt_socket_sync`](https://pub.dev/packages/crdt_socket_sync) for [Dart Frog](https://pub.dev/packages/dart_frog).
+> **📖 The full guide — both modes, authentication, lifecycle, gotchas — is on [mattiapispisa.it/crdt](https://mattiapispisa.it/crdt/docs/connectors/sync/server-frameworks).**
 
-It gives Dart Frog handlers, ready to return from a route, that serve
-`crdt_socket_sync` sessions: `crdtSyncWebSocketHandler` for the server–client
-mode and `crdtRelayWebSocketHandler` for the relay mode, plus a middleware
-provider for each host. Clients connect with the plain `WebSocketClient` /
-`WebSocketRelayClient` of `crdt_socket_sync`.
+## Features
 
-- How the sync works (modes, protocol, plugins, persistence): the
-  [`crdt_socket_sync`](https://pub.dev/packages/crdt_socket_sync) documentation.
-- Routes, middleware, WebSocket options and server setup: the
-  [Dart Frog documentation](https://dart-frog.dev).
+- 🐸 **Ready-made handlers**: `crdtSyncWebSocketHandler` (server–client) and `crdtRelayWebSocketHandler` (relay)
+- 🧩 **Middleware providers**: one host, built once, shared by every request
+- 🔐 **Your authentication**: check the request, then upgrade
+- 💾 **Persistent rooms**: a `PersistentServerRegistry` on Hive, SQLite or Drift
+- 📱 **Plain clients**: `WebSocketClient` / `WebSocketRelayClient`, nothing Dart Frog-specific
+- ➕ **…and more**: everything else is in the [documentation][docs_link]
 
-## Installation
+## Quick start (relay mode)
 
 ```sh
-dart pub add crdt_socket_sync_dart_frog
+dart pub add crdt_socket_sync crdt_socket_sync_dart_frog
 ```
 
-One library per communication mode, like `crdt_socket_sync` itself:
+The host, built once and shared by every request:
 
+<!-- recipe:dart-frog-relay/lib/src/host.dart#host -->
 ```dart
-// Server–client mode: crdtSyncWebSocketHandler, crdtSyncHostProvider,
-// DocumentSessionHost
-import 'package:crdt_socket_sync_dart_frog/sync.dart';
-
-// Relay mode: crdtRelayWebSocketHandler, crdtRelayHostProvider,
-// RelaySessionHost
-import 'package:crdt_socket_sync_dart_frog/relay.dart';
-```
-
-## Quick start
-
-### Relay mode
-
-```dart
-// lib/src/host.dart — built once, shared by every request
 import 'package:crdt_socket_sync/relay_server.dart';
 
+/// The relay host for this process.
+///
+/// Constructed at the top level, so `_middleware.dart` finds it when Dart Frog
+/// builds the handler tree; started by `init()` in `main.dart`. One instance
+/// per process, shared by every request: a host per request would give each
+/// client its own empty room.
+///
+/// The host has no socket of its own — Dart Frog upgrades the requests and
+/// hands them over. The store is in-memory, so a restart loses every room;
+/// there is no durable `RelayStore` in this repository yet, so a real backend
+/// implements one over its database and closes it after `dispose()`.
 final relayHost = RelaySessionHost(store: InMemoryRelayStore());
 ```
+<!-- /recipe -->
 
+The middleware puts it in the request context:
+
+<!-- recipe:dart-frog-relay/routes/_middleware.dart#middleware -->
 ```dart
-// routes/_middleware.dart
 import 'package:crdt_socket_sync_dart_frog/relay.dart';
+import 'package:crdt_socket_sync_dart_frog_relay_example/src/host.dart';
 import 'package:dart_frog/dart_frog.dart';
 
-import '../lib/src/host.dart';
-
+/// Puts the host in the context, under the type `context.read` matches on.
+///
+/// The host is built once, at the top level of `host.dart`; this only hands
+/// the same instance to every request.
 Handler middleware(Handler handler) {
   return handler.use(crdtRelayHostProvider(relayHost));
 }
 ```
+<!-- /recipe -->
 
+The route hands the WebSocket to it:
+
+<!-- recipe:dart-frog-relay/routes/relay.dart#route -->
 ```dart
-// routes/relay.dart
 import 'package:crdt_socket_sync_dart_frog/relay.dart';
 import 'package:dart_frog/dart_frog.dart';
 
+/// Relay mode: the server rebroadcasts opaque CRDT blobs to the other clients
+/// of a room and persists them, without ever reading them.
+///
+/// Connect with `WebSocketRelayClient` at `ws://localhost:8080/relay`. The
+/// room is the document id inside the hello frame, not part of this path.
 Future<Response> onRequest(RequestContext context) async {
   return crdtRelayWebSocketHandler(context.read<RelaySessionHost>())(context);
 }
 ```
+<!-- /recipe -->
 
-Clients connect with `WebSocketRelayClient` from `crdt_socket_sync`, pointed at
-`ws://localhost:8080/relay`.
+Clients connect with `WebSocketRelayClient`, pointed at `ws://localhost:8080/relay`.
+Complete backends, tested in CI:
+[relay](https://mattiapispisa.it/crdt/docs/recipes/dart-frog-relay) and
+[server–client, with documents on disk](https://mattiapispisa.it/crdt/docs/recipes/dart-frog-server).
 
-### Server–client mode
+## Documentation
 
-```dart
-// lib/src/host.dart
-import 'package:crdt_socket_sync/server.dart';
-
-final syncHost = DocumentSessionHost(
-  serverRegistry: InMemoryCRDTServerRegistry(),
-);
-```
-
-```dart
-// routes/_middleware.dart
-Handler middleware(Handler handler) {
-  return handler.use(crdtSyncHostProvider(syncHost));
-}
-```
-
-```dart
-// routes/sync.dart
-import 'package:crdt_socket_sync_dart_frog/sync.dart';
-import 'package:dart_frog/dart_frog.dart';
-
-Future<Response> onRequest(RequestContext context) async {
-  return crdtSyncWebSocketHandler(context.read<DocumentSessionHost>())(context);
-}
-```
-
-Use a persistent registry (`PersistentServerRegistry` with `crdt_lf_hive`,
-`crdt_lf_sqlite`, `crdt_lf_drift`) for anything that must survive a restart —
-[`example/`](https://github.com/MattiaPispisa/crdt/tree/main/packages/adapters/sync/dart_frog/example) does, with Hive. A registry is opened asynchronously,
-so build it in Dart Frog's `init()` (see [Lifecycle](#lifecycle)) and keep it
-in a top-level `late final`.
-
-## Authenticating before the upgrade
-
-The handler is a value: check the request first, and call the handler only
-when the check passes.
-
-```dart
-Future<Response> onRequest(RequestContext context) async {
-  final token = context.request.headers['authorization'];
-  if (!await isAuthorized(token)) {
-    return Response(statusCode: HttpStatus.unauthorized);
-  }
-  return crdtSyncWebSocketHandler(context.read<DocumentSessionHost>())(context);
-}
-```
-
-A rejected client gets a plain `401` and never reaches the protocol.
-
-## Lifecycle
-
-Build the host once, outside the request. A host per request would give every
-client its own empty room.
-
-`start()` is optional: a host with no transport of its own starts on its first
-connection. Call it explicitly from a
-[custom init method](https://dart-frog.dev/advanced/custom-init-method/)
-when you also want an orderly shutdown — Dart Frog has no shutdown hook, so
-signals are the place for it. `init()` runs once, before the handler tree is
-built; the
-[custom entrypoint](https://dart-frog.dev/advanced/custom-entrypoint/)
-`run()` is called again on every hot reload, so a listener registered there
-would pile up:
-
-```dart
-// main.dart
-import 'dart:io';
-
-import 'package:dart_frog/dart_frog.dart';
-
-Future<void> init(InternetAddress ip, int port) async {
-  await relayHost.start();
-
-  for (final signal in [ProcessSignal.sigint, ProcessSignal.sigterm]) {
-    signal.watch().listen((_) async {
-      await relayHost.dispose();
-      exit(0);
-    });
-  }
-}
-```
-
-`dispose()` closes the open sessions and, in server–client mode, the registry
-under them — for a durable registry that is where pending writes get flushed,
-so skipping it loses data. A `RelayStore` has no close: a durable one is yours
-to close after `dispose()`.
-
-## Gotchas
-
-- **`Handler` is ambiguous.** `crdt_lf` exports a CRDT `Handler` and `dart_frog`
-  exports a request `Handler`. In a file that needs both, hide one:
-  `import 'package:crdt_lf/crdt_lf.dart' hide Handler;`.
-- **One plugin instance per host.** A `ServerSyncPlugin` binds to the host it is
-  given to, once; handing the same instance to a second host throws a
-  `LateInitializationError` far from the line that caused it.
-- **A refused connection is closed, not rejected.** Once the response is a
-  `101`, there is no status code left to send. A host that is stopped or
-  disposed closes the socket instead, which the client sees as its stream
-  ending.
-
-## Examples
-
-Two runnable Dart Frog projects, one per mode, each with a custom `init()`
-that starts the host and a custom entrypoint:
-
-- [`example/`](https://github.com/MattiaPispisa/crdt/tree/main/packages/adapters/sync/dart_frog/example) — server–client mode on `/sync`, documents kept in
-  Hive through `crdt_lf_hive`, a token check in front of the route.
-- [`relay_example/`](https://github.com/MattiaPispisa/crdt/tree/main/packages/adapters/sync/dart_frog/relay_example) — relay mode on `/relay`, rooms kept in
-  memory.
-
-```sh
-cd example   # or relay_example
-dart_frog dev
-```
-
-The [greyhound_markdown](https://github.com/MattiaPispisa/crdt/tree/main/apps/greyhound_markdown) app also runs locally
-against a Dart Frog relay server:
-[`server_dart_frog/`](https://github.com/MattiaPispisa/crdt/tree/main/apps/greyhound_markdown/server_dart_frog).
+- [Server frameworks](https://mattiapispisa.it/crdt/docs/connectors/sync/server-frameworks): both modes,
+  authentication, lifecycle, gotchas
+- [Sync overview](https://mattiapispisa.it/crdt/docs/connectors/sync): server–client or relay?
+- Runnable servers: [`example/`](https://github.com/MattiaPispisa/crdt/tree/main/packages/adapters/sync/dart_frog/example)
+  (server–client, Hive) and
+  [`relay_example/`](https://github.com/MattiaPispisa/crdt/tree/main/packages/adapters/sync/dart_frog/relay_example)
 
 ## Roadmap
 
-A roadmap is available in the [project](https://github.com/users/MattiaPispisa/projects/1) page.
+<div align="center">
+
+[![Roadmap: done, in progress, to do][roadmap_badge]][roadmap_link]
+
+</div>
+
+🗺️ The [project board](https://github.com/users/MattiaPispisa/projects/1) shows what is done, what is in progress and
+what comes next, for this package and the rest of the workspace. Missing something?
+[Open an issue](https://github.com/MattiaPispisa/crdt/issues/new/choose): requests go on the board too.
 
 ## Apps
 
@@ -250,5 +148,7 @@ Other bricks of the crdt "system" are:
 [ci_link]: https://github.com/MattiaPispisa/crdt/actions/workflows/main.yaml
 [pub_publisher]: https://img.shields.io/pub/publisher/crdt_socket_sync_dart_frog
 [pub_publisher_link]: https://pub.dev/packages?q=publisher%3Amattiapispisa.it
-[docs_badge]: https://img.shields.io/badge/docs-crdt-blue?style=for-the-badge&logo=read-the-docs
-[docs_link]: https://mattiapispisa.it/crdt/
+[docs_badge]: https://img.shields.io/badge/%F0%9F%93%96%20Read%20the%20full%20documentation-mattiapispisa.it%2Fcrdt-d04848?style=for-the-badge
+[docs_link]: https://mattiapispisa.it/crdt/docs/connectors/sync/server-frameworks
+[roadmap_badge]: https://img.shields.io/badge/%F0%9F%97%BA%EF%B8%8F%20Roadmap-done%20%C2%B7%20in%20progress%20%C2%B7%20to%20do-d04848?style=for-the-badge
+[roadmap_link]: https://github.com/users/MattiaPispisa/projects/1

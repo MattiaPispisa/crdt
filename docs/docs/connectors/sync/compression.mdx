@@ -1,0 +1,91 @@
+---
+title: Compression
+description: Plug a compressor into the clients and the servers, for example gzip.
+---
+
+import NextSteps from '@site/src/components/NextSteps';
+
+# Compression
+
+`Compressor` is an injectable interface (`compress` / `decompress` over
+`List<int>`), available on both clients and both servers. The default is
+`NoCompression`. The package ships **no** third-party compressor on purpose, so
+you can plug in whatever fits your platform and bandwidth.
+
+:::warning[Compression is symmetric]
+If a server injects a compressor, every client that connects to it must inject
+the **same** compressor. Otherwise the peer cannot decode incoming messages. A
+relay written in another language has to decompress too (see
+[Relay protocol](./relay-protocol.mdx)).
+:::
+
+## A gzip compressor
+
+A cross-platform gzip compressor is a few lines on top of the pure-Dart,
+**synchronous** [`package:archive`](https://pub.dev/packages/archive). It works
+on the Dart VM *and* in Flutter on the web, unlike the `GZipCodec` of
+`dart:io`:
+
+```dart
+import 'package:archive/archive.dart';
+
+class GzipCompression implements Compressor {
+  const GzipCompression();
+
+  @override
+  List<int> compress(List<int> data) => GZipEncoder().encode(data)!;
+
+  @override
+  List<int> decompress(List<int> data) => GZipDecoder().decodeBytes(data);
+}
+```
+
+Inject it on both sides:
+
+```dart
+// Server with compression
+final server = WebSocketServer(
+  serverFactory: () => HttpServer.bind('localhost', 8080),
+  serverRegistry: registry,
+  compressor: const GzipCompression(),
+);
+
+// Client with the matching compressor
+final client = WebSocketClient(
+  url: 'ws://localhost:8080',
+  document: document,
+  author: author,
+  compressor: const GzipCompression(),
+);
+```
+
+## Try it
+
+The full implementation is in
+[`example/lib/src/gzip_compression.dart`](https://github.com/MattiaPispisa/crdt/blob/main/packages/core/crdt_socket_sync/example/lib/src/gzip_compression.dart),
+mirrored in the Flutter client at `client_example/lib/gzip_compression.dart`. To
+try it end to end, start the server with `--compress` and build the client with
+`--dart-define=USE_COMPRESSION=true`:
+
+```bash
+# server (from the example/ directory)
+dart run lib/main.dart --compress
+
+# Flutter client (from the client_example/ directory)
+flutter run --dart-define=USE_COMPRESSION=true
+```
+
+<NextSteps
+  items={[
+    {
+      title: 'Custom transport',
+      to: '/docs/connectors/sync/custom-transport',
+      description: 'Host the protocol on your own transport.',
+    },
+    {
+      title: 'Connection and errors',
+      to: '/docs/connectors/sync/connection',
+      description: 'Status, reconnection, faults.',
+    },
+  ]}
+/>

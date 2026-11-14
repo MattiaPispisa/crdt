@@ -8,10 +8,15 @@
 
 - `CrdtRichTextFieldBuilder`: a rich text field bound to a `CRDTFugueRichTextHandler`, with formats,
   embeds and undo; `CrdtTextCursorsOverlay` draws its remote cursors. Needs `crdt_lf` 5.4.0. See
-  [Rich text](README.md#rich-text). [209](https://github.com/MattiaPispisa/crdt/issues/209)
+  [Rich text](https://mattiapispisa.it/crdt/docs/connectors/flutter/text-fields#rich-text). [209](https://github.com/MattiaPispisa/crdt/issues/209)
 - `CrdtEditorBinding` and `CrdtEditorBinder`: the two-way sync loop between a handler and any editor,
   with what an editor adapter needs around it (deltas, echoes, selection, cursors). See
-  [Editor bindings](README.md#editor-bindings). [209](https://github.com/MattiaPispisa/crdt/issues/209)
+  [Editors](https://mattiapispisa.it/crdt/docs/connectors/flutter/editors). [209](https://github.com/MattiaPispisa/crdt/issues/209)
+
+### Changed
+
+- The documentation moved to the [docs site](https://mattiapispisa.it/crdt/docs/connectors/flutter): the README is now a short
+  entry point. [216](https://github.com/MattiaPispisa/crdt/issues/216)
 
 ### Fixed
 

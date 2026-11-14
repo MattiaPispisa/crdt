@@ -1,0 +1,136 @@
+---
+title: Text fields
+description: A TextEditingController bound to a text handler, the other peers' carets, and inline rich text.
+---
+
+import NextSteps from '@site/src/components/NextSteps';
+import RecipeSnippet from '@site/src/components/RecipeSnippet';
+
+# Text fields
+
+## A collaborative text field
+
+`CrdtTextFieldBuilder` binds a `TextEditingController` to the text handler
+(`CRDTTextHandler` or `CRDTFugueTextHandler`) registered under `id`, the way
+collaborative editor bindings do:
+
+```dart
+CrdtTextFieldBuilder(
+  id: 'note',
+  builder: (context, controller) => TextField(controller: controller),
+);
+```
+
+- **Local edits** go into the handler at once, as the exact delta of each
+  editing gesture: one transaction per gesture, no full-text diff, no
+  debounce.
+- **IME composition** (CJK input, autocorrect) is respected: nothing is written
+  while a composing region is active.
+- **Remote changes** come into the controller in place, and the caret and the
+  selection stay anchored. With a `CRDTFugueTextHandler` they are anchored by
+  [stable positions](../../use-cases/collaborative-text.mdx#carets-that-survive-other-peoples-edits),
+  exact even for remote changes in several places. Otherwise they are mapped
+  through the remote delta.
+- A change of the text **never rebuilds** the subtree: the controller is
+  updated directly. `builder` runs again only when the widget above it
+  rebuilds.
+
+The [Flutter note recipe](../../recipes/flutter-note.mdx) is the complete page
+around this field.
+
+The delta primitives are exported too (`TextDelta`, `computeTextDelta`,
+`mapOffsetThroughDelta`) if you build a binding of your own. Flutter counts
+UTF-16 code units and the handlers count runes: see
+[Text positions](../../deep-dive/text-positions.mdx) for the conversion.
+
+## Remote text cursors
+
+Publish the local selection with `onSelectionAnchorsChanged`, and draw the
+other peers with `CrdtTextCursorsOverlay`. The anchors are serializable: send
+them over your presence channel, for example the
+[awareness plugin](../sync/plugins.mdx#awareness-plugin) of `crdt_socket_sync`.
+
+The builder of the field does not run again when a remote caret moves, so
+listen to the presence inside it:
+
+<RecipeSnippet id="presence-cursors" file="note_page.dart" region="bind" />
+
+Anchors are reported only while the field has focus. On blur the callback fires
+once with `null`s, so with several bound fields a peer shows at most one
+cursor: where they are typing.
+
+For another editor, pass `targetOf` to adapt its render object as a
+`CrdtTextCursorsTarget`, and publish its selection with `SelectionAnchors`.
+
+[Open a replica](../replica.mdx#the-editor-on-top-of-it) shows the complete
+wiring of Greyhound Markdown: awareness, field and overlay.
+
+## Rich text
+
+`CrdtRichTextFieldBuilder` is the same field for a
+[`CRDTFugueRichTextHandler`](../../use-cases/rich-text.mdx). It hands you a
+`CrdtRichTextEditingController` that paints the formats of the handler. Formats
+are written through the controller:
+
+```dart
+CrdtRichTextFieldBuilder(
+  id: 'note',
+  builder: (context, controller) => Column(
+    children: [
+      IconButton(
+        icon: const Icon(Icons.format_bold),
+        onPressed: () => controller.toggle('bold'),
+      ),
+      TextField(
+        controller: controller,
+        maxLines: null,
+        strutStyle: StrutStyle.disabled, // lines grow with the font size
+      ),
+    ],
+  ),
+);
+```
+
+- `controller.format(key, value)` formats the selection. At a collapsed caret it
+  styles the text typed next, and the style ends when the caret moves.
+- `controller.attributeAtSelection(key)` tells a toolbar what to highlight.
+- `styleOf` maps attributes to a `TextStyle`. The default reads `bold`,
+  `italic`, `underline`, `strike`, `link`, `color` (`'#rrggbb'`) and `size`.
+- `undoManager` routes Ctrl+Z (Cmd+Z on Apple platforms), the redo shortcuts,
+  `controller.undo()` and `controller.redo()` through a
+  [`CRDTUndoManager`](../../use-cases/undo-redo.mdx). Flutter's own undo knows
+  the text but not the formats. Create the manager with
+  `trackedOrigins: {crdtRichTextFieldOrigin}` and track the handler.
+  `controller.canUndo` and `canRedo` follow the manager.
+- `CrdtTextCursorsOverlay` and `onSelectionAnchorsChanged` work as above.
+
+Paste inserts the plain text of the clipboard. The text takes the format where
+it lands, and the formats of the clipboard are dropped.
+
+:::info[Inline formats only]
+The field paints inline formats. Block attributes (headings, lists) and the
+content of embeds (images, videos) need an editor: see
+[flutter_quill](./editors/quill.mdx).
+:::
+
+An embed of the handler shows as its U+FFFC glyph. The field keeps it intact
+through edits around it, deletes, undo and remote changes, its data included. A
+typed or pasted U+FFFC is stripped before the write, since the handler refuses
+it as text. A value set by code with edits on both sides of an embed keeps the
+embed too. One case stays ambiguous: pasting text with U+FFFC over a selection
+that holds an embed may keep the old embed where the new text lines up with it.
+
+<NextSteps
+  items={[
+    {
+      title: 'Presence',
+      to: '/docs/connectors/flutter/presence',
+      description: 'The other peers’ mouse pointers.',
+    },
+    {
+      title: 'Editors',
+      to: '/docs/connectors/flutter/editors',
+      description: 'Bind a full editor, such as flutter_quill.',
+    },
+  ]}
+/>

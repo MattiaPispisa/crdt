@@ -1,0 +1,28 @@
+# A recipe: what the docs site shows for it. Paths are relative to the
+# repository root, so a recipe can show any tested file of the repository.
+id: server-client-sync
+title: "A real-time note: a Dart server and its clients"
+description: >-
+  A Dart server that holds one shared note, and a client that edits it. Every
+  client that opens the same document sees the edits of the others live.
+platforms: [Dart VM, Flutter native]
+# Shown as the install command: names only, `pub add` picks the versions.
+dependencies: [crdt_lf, crdt_socket_sync]
+files:
+  - path: packages/_internal/crdt_lf_recipes/lib/server_client_sync/server.dart
+    label: server.dart
+  - path: packages/_internal/crdt_lf_recipes/lib/server_client_sync/client.dart
+    label: client.dart
+test: packages/_internal/crdt_lf_recipes/test/server_client_sync_test.dart
+keyPoints:
+  - "Register the document on the server with `addDocument`: a client of an unknown document gets `DOCUMENT_NOT_FOUND` and the `error` status."
+  - "Every client opens the document with the same `documentId`."
+  - "Local edits sync on their own: the client sends each change, and the server rebroadcasts it to the others."
+  - "`InMemoryCRDTServerRegistry` loses the note on restart. For durable documents, use `PersistentServerRegistry`."
+related:
+  - title: Server–client mode
+    to: /docs/connectors/sync/server-client
+  - title: Server registry
+    to: /docs/connectors/sync/server-registry
+  - title: Connection and errors
+    to: /docs/connectors/sync/connection

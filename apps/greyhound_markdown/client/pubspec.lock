@@ -123,7 +123,7 @@ packages:
       path: "../../../packages/core/crdt_socket_sync"
       relative: true
     source: path
-    version: "0.10.2"
+    version: "0.10.2+1"
   crypto:
     dependency: transitive
     description:
@@ -270,7 +270,7 @@ packages:
       path: "../../../packages/core/hlc"
       relative: true
     source: path
-    version: "1.2.0"
+    version: "1.2.0+1"
   hooks:
     dependency: transitive
     description:

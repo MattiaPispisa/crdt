@@ -1,0 +1,30 @@
+# A recipe: what the docs site shows for it. Paths are relative to the
+# repository root, so a recipe can show any tested file of the repository.
+id: quill-editor
+title: A rich text editor with flutter_quill, saved, with undo
+description: >-
+  A flutter_quill editor and toolbar bound to a collaborative rich text. Hive
+  keeps the page on the device, and undo takes back only your own edits,
+  formats included.
+platforms: [Flutter native, Flutter web]
+# Shown as the install command: names only, `pub add` picks the versions.
+dependencies: [crdt_lf, crdt_lf_flutter, crdt_lf_hive, crdt_lf_quill, flutter_quill, hive, path_provider]
+sdkDependencies: [flutter_localizations]
+files:
+  - path: packages/_internal/crdt_lf_recipes/lib/quill_editor/main.dart
+    label: main.dart
+  - path: packages/_internal/crdt_lf_recipes/lib/quill_editor/editor_page.dart
+    label: editor_page.dart
+test: packages/_internal/crdt_lf_recipes/test/quill_editor_test.dart
+keyPoints:
+  - "Set up the editor package as its own documentation explains (here, the localizations of flutter_quill)."
+  - "Hide the `ChangeSource` of `crdt_lf` when an editor package has a type with the same name."
+  - "The page owns the editor controller and disposes it: the binder never does."
+  - "Pass a `CRDTUndoManager` that tracks `crdtQuillOrigin` as `undoManager`: undo then takes back only the edits of this editor."
+related:
+  - title: flutter_quill
+    to: /docs/connectors/flutter/editors/quill
+  - title: Rich text
+    to: /docs/use-cases/rich-text
+  - title: Undo and redo
+    to: /docs/use-cases/undo-redo

@@ -4,6 +4,11 @@
 
 [compare to previous release](https://github.com/MattiaPispisa/crdt/compare/crdt_lf_hive-v0.5.2...crdt_lf_hive-v0.5.3)
 
+### Changed
+
+- The documentation moved to the [docs site](https://mattiapispisa.it/crdt/docs/connectors/persistence/adapters): the README is now a short
+  entry point. [216](https://github.com/MattiaPispisa/crdt/issues/216)
+
 ### Fixed
 
 - Closing a storage or a backend keeps open the Hive boxes that another storage or backend still

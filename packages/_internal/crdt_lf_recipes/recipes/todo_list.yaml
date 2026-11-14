@@ -1,0 +1,36 @@
+# A recipe: what the docs site shows for it. Paths are relative to the
+# repository root, so a recipe can show any tested file of the repository.
+id: todo-list
+title: "A todo list with containers: merged per field"
+description: >-
+  A Flutter todo list built with container handlers: each todo is a small
+  map of handlers, a collaborative text and a done flag. Two peers can edit the text and check
+  the same todo at the same time, or move it, and both edits are kept.
+platforms: [Flutter native, Flutter web]
+# Shown as the install command: names only, `pub add` picks the versions.
+dependencies: [crdt_lf, crdt_lf_flutter]
+files:
+  - path: packages/_internal/crdt_lf_recipes/lib/todo_list/todos.dart
+    label: todos.dart
+  - path: packages/_internal/crdt_lf_recipes/lib/todo_list/main.dart
+    label: main.dart
+  - path: packages/_internal/crdt_lf_recipes/lib/todo_list/todo_page.dart
+    label: todo_page.dart
+test: packages/_internal/crdt_lf_recipes/test/todo_list_test.dart
+keyPoints:
+  - "Each todo is a `CRDTMapRefHandler` with a text and a register: a change to one field leaves the other field as it is."
+  - "A `CRDTMovableListRefHandler` keeps the identity of a todo when two peers move it at the same time: it is never duplicated."
+  - "Register the kinds of the children (`register`), so a peer rebuilds the todos it receives from another peer."
+  - "The builder of the list follows the list alone: it rebuilds when a todo is added, removed or moved. Each tile follows its own handlers, so an edit of one todo rebuilds nothing else."
+  - "The page shows one tile per reference of the list, so a tile index is the index `removeChildAt` and `move` expect."
+  - "`ReorderableListView.onReorderItem` is recent in Flutter. On an older Flutter, use `onReorder` and lower `to` by one when it is after `from`."
+  - "The document lives in memory. To keep it on the device, open it from a storage backend, as in the flutter-note recipe and on the Persistence page."
+related:
+  - title: Which handler do you need?
+    to: /docs/use-cases
+  - title: Nested data
+    to: /docs/use-cases/containers
+  - title: Persistence
+    to: /docs/connectors/persistence
+  - title: A text note in Flutter
+    to: /docs/recipes/flutter-note

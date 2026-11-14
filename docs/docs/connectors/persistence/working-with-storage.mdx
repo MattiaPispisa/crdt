@@ -1,0 +1,134 @@
+---
+title: Working with storage
+description: Read without writing, look at the past, back up, move to another adapter, and keep the log small.
+---
+
+import NextSteps from '@site/src/components/NextSteps';
+
+# Working with storage
+
+## Reading without writing
+
+Not every document is going to be edited. A list of fifty notes wants fifty
+titles, not fifty `CRDTDocumentPersistence`s that will never write anything.
+
+```dart
+final note = await backend.readDocument('note-1');
+final title = CRDTFugueTextHandler(note, 'body').value;
+```
+
+Nothing follows what it hands back: an edit made on it stays in memory. It
+closes the storage it opened before it returns, so reading a long list leaves
+nothing open. On SQLite it returns without suspending, so the whole list is
+built inside one frame. The [notes recipe](../../recipes/notes-list.mdx) builds
+its list this way.
+
+## The document as it was
+
+`documentAt` is the same with a bound: the document as it stood at a version.
+This is what a history view reads.
+
+```dart
+final before = await backend.documentAt('note-1', lastWeek);
+```
+
+How far back it reaches depends on what the log still holds. A prune deletes the
+changes a snapshot covers, so a compacted document cannot be rebuilt at a
+version older than its snapshot. It says so by throwing, instead of handing back
+a document that is quietly short.
+
+`keepSnapshots` keeps more than the newest snapshot on disk (1 by default,
+`null` for all). Each older one gives back its own version, so a history view
+can reach it after a compaction:
+
+```dart
+await CRDTDocumentPersistence.open(document, storage, keepSnapshots: 5);
+```
+
+## Reading part of the log
+
+`getChanges()` gives the whole log. Two bounds narrow it, and both take a
+`VersionVector`:
+
+| Argument | Keeps | For |
+| --- | --- | --- |
+| `newerThan` | what the vector has **not** seen | catching a peer up |
+| `upTo` | what the vector **has** seen | the document as it was then |
+
+```dart
+// Everything the peer is missing.
+final missing = await storage.changes.getChanges(newerThan: theirVersion);
+
+// The document as it stood at that version.
+final past = await storage.changes.getChanges(upTo: oldVersion);
+```
+
+Both use the same test as `CRDTDocument.exportChangesNewerThan`, so a storage
+and a document never disagree about what a version vector covers. Passing both
+keeps what sits between them.
+
+## Backup, restore, and changing adapter
+
+`copyDocumentTo` moves a whole document to another backend, identity included:
+
+```dart
+await hive.copyDocumentTo(sqlite, 'note-1');
+```
+
+Rows already in the target with the same ids are replaced, so copying twice
+leaves what copying once left. What the target holds and the source does not is
+left alone: clear it first for an exact copy.
+
+To **duplicate** a document into a new one, go through the storages and leave
+the identities out. Two documents writing under one `PeerId` can mint the same
+operation id twice:
+
+```dart
+await (await backend.storageForDocument('note-1'))
+    .copyTo(await backend.storageForDocument('note-1-copy'));
+```
+
+## Growth
+
+Nothing prunes on its own. The change log grows as long as the document is
+edited, and a synced document also stores what every other peer wrote.
+
+`compactAfter` takes a snapshot and prunes once the store holds more than that
+many changes:
+
+```dart
+await CRDTDocumentPersistence.open(document, storage, compactAfter: 1000);
+```
+
+`compact()` does the same on demand: a "save and compact" button, or the moment
+an app goes to the background.
+
+```dart
+await persistence.compact();
+```
+
+:::warning[Compaction drops the undo history]
+A prune drops the stacks of every `CRDTUndoManager` on the document (see
+[Undo and redo](../../use-cases/undo-redo.mdx#what-it-does-not-undo)). That is
+why compaction never happens by default. Turn `compactAfter` on for a document
+that lives a long time. Where undo matters more, leave it off and call
+`compact()` at a moment the user cannot be in the middle of something.
+:::
+
+A snapshot is a document's state without its history: see
+[Snapshots](../../deep-dive/snapshots.mdx).
+
+<NextSteps
+  items={[
+    {
+      title: 'How it works',
+      to: '/docs/connectors/persistence/how-it-works',
+      description: 'Batching, retries, durability.',
+    },
+    {
+      title: 'Snapshots',
+      to: '/docs/deep-dive/snapshots',
+      description: 'What a compaction keeps.',
+    },
+  ]}
+/>

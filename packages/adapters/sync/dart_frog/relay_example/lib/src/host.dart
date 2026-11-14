@@ -1,6 +1,7 @@
 // Copyright 2025 Mattia Pispisa
 // SPDX-License-Identifier: MIT
 
+// #docregion host
 import 'package:crdt_socket_sync/relay_server.dart';
 
 /// The relay host for this process.
@@ -15,6 +16,7 @@ import 'package:crdt_socket_sync/relay_server.dart';
 /// there is no durable `RelayStore` in this repository yet, so a real backend
 /// implements one over its database and closes it after `dispose()`.
 final relayHost = RelaySessionHost(store: InMemoryRelayStore());
+// #enddocregion host
 
 /// Sends every server event to [log], so the console shows what the protocol
 /// is doing. A real backend would use its logger.

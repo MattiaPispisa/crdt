@@ -145,6 +145,8 @@ void main() {
 
       final result = runInTransaction(storage.database, () async {
         await Future<void>.delayed(Duration.zero);
+        // Dropped on purpose, as a batch method does.
+        // ignore: unawaited_futures
         changes.saveChanges([makeChange(1, 1)]);
         return 'done';
       });

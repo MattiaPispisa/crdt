@@ -1,0 +1,221 @@
+---
+title: Server registry
+description: Where a server–client server keeps its documents — in memory, on disk with any storage adapter, or your own.
+---
+
+import NextSteps from '@site/src/components/NextSteps';
+
+# Server registry
+
+A [server–client](./server-client.mdx) server stores its documents through a
+`CRDTServerRegistry`. Two come with the package:
+
+| Registry | Keeps documents | Use it for |
+| --- | --- | --- |
+| `InMemoryCRDTServerRegistry` | in memory: lost on restart | tests, demos |
+| `PersistentServerRegistry` | on disk, through any [storage adapter](../persistence/index.mdx) | production |
+
+Write your own only if neither fits (see [below](#a-registry-of-your-own)).
+
+## A durable registry
+
+```dart
+final registry = PersistentServerRegistry(
+  backend: await CRDTHive.open(),
+  // Snapshot a document once its log passes this many changes.
+  compactAfter: 500,
+);
+```
+
+That is the whole setup. `backend` is a `CRDTStorageBackend`: the one any
+[storage adapter](../persistence/adapters.mdx#install-and-open) opens. It holds
+the documents, their snapshots and the identity the server writes them under.
+
+The registry holds the live documents and routes to them. It never reads or
+writes storage by hand: each document gets a `CRDTDocumentPersistence` (see
+[How persistence works](../persistence/how-it-works.mdx)), which follows the
+document and writes down what moves. So:
+
+- a change applied through `applyChange` is **batched** with the ones around
+  it, instead of costing one write each;
+- a snapshot replaces the one before it, and the prune that follows drops
+  exactly the changes it covered, both inside one transaction where the backend
+  has one;
+- documents open **lazily**, so a document costs nothing until something asks
+  for it.
+
+`writeDelay` is how long a change waits for the ones after it. It leaves a
+window where a change is acknowledged but not yet on disk, and that is safe: a
+client reconciles at the next handshake and sends again whatever the server no
+longer has. Pass `Duration.zero` to make the window as small as it gets.
+
+That window is also why a shutdown has to close the registry: what is still
+waiting has to be written before the process ends. `WebSocketServer.dispose`
+(and `DocumentSessionHost.dispose`) does it for you. Close the registry by hand
+only for a server that owns one without a host around it:
+
+```dart
+await registry.close();
+```
+
+The registry refuses to open anything after that.
+
+## Letting a document go
+
+A document stays in memory once it has been asked for, so a server that never
+lets go holds every room it has ever served.
+
+```dart
+// When the last client of a room disconnects.
+await registry.releaseDocument(roomId);
+```
+
+`releaseDocument` writes what the document is holding, closes it, and leaves
+the id in the catalog: the room is still served, it is just not in memory, and
+the next `getDocument` reads it back from the storage. `removeDocument` is
+different: it drops the room from the catalog, and with the default catalog it
+deletes it.
+
+`idleAfter` does the same on a timer, for a server with no natural place to
+call `releaseDocument`:
+
+```dart
+final registry = PersistentServerRegistry(
+  backend: await CRDTHive.open(),
+  idleAfter: const Duration(minutes: 10),
+);
+```
+
+One rule either way: **the document must not be in use.** Releasing disposes
+it, and a caller still holding what an earlier `getDocument` handed back would
+write into a disposed document. Every session in this package reads again
+through `getDocument`, so releasing between two requests is safe. That is why
+`idleAfter` should be far longer than a request takes.
+
+## The list of documents
+
+`documentIds`, `hasDocument` and `documentCount` come from a
+`ServerDocumentCatalog`. You do not have to write one: the default is
+`BackendDocumentCatalog`, which asks the backend, because a
+`CRDTStorageBackend` already lists the documents it holds. The server keeps no
+second list that can drift from the first, and it finds its documents again
+after a restart with nothing to configure.
+
+:::warning[`removeDocument` deletes]
+With the default catalog, `removeDocument` **deletes** the document: its
+changes, its snapshots and its identity. To get a document out of memory, use
+`releaseDocument`.
+:::
+
+Pass `InMemoryServerDocumentCatalog` for a server that should start empty every
+time and fill up as clients name their documents, or write the three methods
+over a list you already keep:
+
+```dart
+abstract interface class ServerDocumentCatalog {
+  Future<Set<String>> get documentIds;
+  Future<void> add(String documentId);
+  Future<void> remove(String documentId);
+}
+```
+
+## Broadcasting a compaction
+
+A snapshot comes with a prune, so the history it covers leaves the server. A
+client still replaying that history has to be given the snapshot instead.
+There is nothing to wire for it: a `WebSocketServer` or `DocumentSessionHost`
+sends each snapshot a document of its registry takes to the clients of that
+document, once the registry has stored it. `PersistentServerRegistry` waits
+until the disk can bring back the version of the snapshot, so a client never
+gets a state the server could lose. The `snapshots` stream of the registry
+reports them too, for logging or metrics.
+
+The [Dart Frog](../../recipes/dart-frog-server.mdx) and
+[Serverpod](../../recipes/serverpod-server.mdx) recipes are complete servers on
+a `PersistentServerRegistry`. The example server of the package puts all of
+this together too:
+[`registry.dart`](https://github.com/MattiaPispisa/crdt/blob/main/packages/core/crdt_socket_sync/example/lib/src/registry.dart).
+
+## A registry of your own
+
+Mix in `CRDTServerRegistryDocuments`: it applies changes, takes snapshots and
+counts documents. You say where the documents live. A `DocumentSnapshotFeed`
+reports the snapshots your documents take: track each document you open, and
+untrack it when you let it go. If you store snapshots, pass `onSnapshot` to
+`start`: the feed reports a snapshot once the future it returns completes.
+
+```dart
+class CustomServerRegistry
+    with CRDTServerRegistryDocuments
+    implements CRDTServerRegistry {
+  CustomServerRegistry()
+      : _documents = {},
+        _feed = DocumentSnapshotFeed() {
+    _feed.start();
+  }
+
+  final Map<String, CRDTDocument> _documents;
+  final DocumentSnapshotFeed _feed;
+
+  @override
+  Future<void> addDocument(String documentId, {PeerId? author}) async {
+    final document = _documents[documentId] = CRDTDocument(
+      peerId: author ?? PeerId.generate(),
+      documentId: documentId,
+    );
+    _feed.track(documentId, document);
+  }
+
+  @override
+  Future<CRDTDocument?> getDocument(String documentId) async =>
+      _documents[documentId];
+
+  @override
+  Future<bool> hasDocument(String documentId) async =>
+      _documents.containsKey(documentId);
+
+  @override
+  Future<Set<String>> get documentIds async => _documents.keys.toSet();
+
+  @override
+  Stream<ServerSnapshot> get snapshots => _feed.snapshots;
+
+  // ... removeDocument (with _feed.untrack), getLatestSnapshot, and close
+  //     (with _feed.close).
+}
+```
+
+:::danger[Let `CausallyNotReadyException` through]
+`applyChange` **must** let `CausallyNotReadyException` propagate: the server
+relies on it to detect an out-of-sync client and start a re-sync. Swallowing it
+would silently drop the change.
+:::
+
+## The relay is different
+
+The [relay](./relay.mdx) uses none of this. A `RelayStore` keeps opaque blobs
+the relay never decodes, keyed by a sequence number per room. So it is
+deliberately not built on `crdt_lf_persistence`: a relay does not have to be
+written in Dart, let alone know what a CRDT is. On the relay **client** side,
+persistence is the app's own document: open it before `connect()`, and the
+welcome pushes whatever the relay is missing.
+
+<NextSteps
+  items={[
+    {
+      title: 'Relay mode',
+      to: '/docs/connectors/sync/relay',
+      description: 'The CRDT-agnostic alternative.',
+    },
+    {
+      title: 'Persistence',
+      to: '/docs/connectors/persistence',
+      description: 'Pick the backend for the registry.',
+    },
+    {
+      title: 'What both modes share',
+      to: '/docs/connectors/sync/both-modes',
+      description: 'Frameworks, plugins, connection, compatibility.',
+    },
+  ]}
+/>

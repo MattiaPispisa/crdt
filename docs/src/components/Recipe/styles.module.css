@@ -1,0 +1,208 @@
+.recipe {
+  margin: 2rem 0;
+  border: 1px solid var(--ifm-color-emphasis-300);
+  border-left: 4px solid var(--ifm-color-primary);
+  border-radius: 10px;
+  background: var(--ifm-color-emphasis-100);
+  overflow: hidden;
+}
+
+.header {
+  padding: 0.9rem 1rem 0.8rem;
+  border-bottom: 1px solid var(--ifm-color-emphasis-200);
+}
+
+.titleRow {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.icon {
+  font-size: 1.4rem;
+  line-height: 1;
+}
+
+.title {
+  flex: 1;
+  font-size: 1.1rem;
+  font-weight: 700;
+}
+
+.link {
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.description {
+  margin: 0.4rem 0 0.6rem;
+  color: var(--ifm-color-emphasis-800);
+}
+
+.meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 1rem;
+}
+
+.chips {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.chip {
+  padding: 0.1rem 0.55rem;
+  border: 1px solid var(--ifm-color-emphasis-300);
+  border-radius: 999px;
+  background: var(--ifm-background-color);
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+.tested {
+  padding: 0.1rem 0.55rem;
+  border-radius: 999px;
+  background: var(--ifm-color-success-contrast-background);
+  color: var(--ifm-color-success-contrast-foreground);
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.tested:hover {
+  text-decoration: none;
+  filter: brightness(0.95);
+}
+
+.packages {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem 0.9rem;
+  margin-top: 0.6rem;
+  font-family: var(--ifm-font-family-monospace);
+  font-size: 0.82rem;
+}
+
+.files {
+  padding: 0.6rem 1rem 0;
+  background: var(--ifm-background-color);
+}
+
+.files :global(.tabs) {
+  overflow-x: auto;
+  flex-wrap: nowrap;
+}
+
+/* A recipe with variants: one tab per variant, each with its own files. */
+.variants {
+  padding: 0.6rem 1rem 0;
+  background: var(--ifm-background-color);
+}
+
+.variantMeta {
+  padding: 0.2rem 0 0.2rem;
+}
+
+.variants .files {
+  padding: 0.6rem 0 0;
+}
+
+.variants .keyPoints {
+  padding-left: 0;
+  padding-right: 0;
+}
+
+.keyPoints {
+  padding: 0.8rem 1rem 0.1rem;
+  border-top: 1px solid var(--ifm-color-emphasis-200);
+}
+
+.keyPointsTitle {
+  margin-bottom: 0.4rem;
+  font-weight: 700;
+}
+
+.related {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem 1rem;
+  padding: 0.7rem 1rem;
+  border-top: 1px solid var(--ifm-color-emphasis-200);
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.related > span {
+  color: var(--ifm-color-emphasis-700);
+  font-weight: 500;
+}
+
+/* RecipeSnippet: a region of a recipe, inside a page. */
+.snippet {
+  margin-bottom: var(--ifm-leading);
+}
+
+.snippet > div {
+  margin-bottom: 0;
+}
+
+.snippetFooter {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.8rem;
+  padding: 0.25rem 0.2rem 0;
+  font-size: 0.78rem;
+  color: var(--ifm-color-emphasis-700);
+}
+
+/* RecipeGallery: the grid of every recipe. */
+.gallery {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(16rem, 1fr));
+  gap: 1rem;
+  margin: 1.5rem 0 2rem;
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 1rem;
+  border: 1px solid var(--ifm-color-emphasis-300);
+  border-top: 4px solid var(--ifm-color-primary);
+  border-radius: 10px;
+  background: var(--ifm-color-emphasis-100);
+  color: inherit;
+  transition:
+    transform 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.card:hover {
+  color: inherit;
+  text-decoration: none;
+  transform: translateY(-2px);
+  box-shadow: var(--ifm-global-shadow-md);
+}
+
+.cardTitle {
+  font-weight: 700;
+}
+
+.cardDescription {
+  flex: 1;
+  font-size: 0.9rem;
+  color: var(--ifm-color-emphasis-800);
+}
+
+.cardVariants {
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.cardPackages {
+  font-family: var(--ifm-font-family-monospace);
+  font-size: 0.75rem;
+  color: var(--ifm-color-emphasis-700);
+}

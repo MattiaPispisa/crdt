@@ -1,0 +1,218 @@
+---
+title: Persistence
+sidebar_label: Overview
+description: Keep a document on the device — the storage contract, the three adapters, and which one to pick.
+slug: /connectors/persistence
+---
+
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+import NextSteps from '@site/src/components/NextSteps';
+import RecipeSnippet from '@site/src/components/RecipeSnippet';
+
+# Persistence
+
+`crdt_lf` keeps the document in memory. To find it again after a restart, add
+a **storage adapter**. It reads the document back on launch, then follows it
+and writes down every change: you write none of that code.
+
+## The contract and the adapters
+
+Two layers, in two kinds of package:
+
+- [`crdt_lf_persistence`](https://pub.dev/packages/crdt_lf_persistence) holds
+  the **contract** (what a storage must do) and the code that uses it: open a
+  document, follow it, compact it, copy it. It holds no store of its own.
+- An **adapter** implements the contract on a database, and re-exports the
+  whole API. Your `pubspec.yaml` names only the adapter:
+
+| Adapter | Database | Kind |
+| --- | --- | --- |
+| [`crdt_lf_hive`](https://pub.dev/packages/crdt_lf_hive) | [Hive](https://pub.dev/packages/hive) | key-value boxes (NoSQL) |
+| [`crdt_lf_sqlite`](https://pub.dev/packages/crdt_lf_sqlite) | [sqlite3](https://pub.dev/packages/sqlite3) | SQL, synchronous |
+| [`crdt_lf_drift`](https://pub.dev/packages/crdt_lf_drift) | [Drift](https://pub.dev/packages/drift) | SQL, asynchronous |
+
+All three implement the same `CRDTStorageBackend`. Code written against it runs
+on any of them, so you can change adapter by changing one line: the one that
+opens the database. You can even
+[copy a document from one to another](./working-with-storage.mdx#backup-restore-and-changing-adapter).
+
+## Which adapter
+
+Every adapter stores the same thing: each change and each snapshot as an
+opaque binary blob, plus the identity the device writes under. They differ in
+the database under them.
+
+| | Hive | SQLite | Drift |
+| --- | --- | --- | --- |
+| **Model** | NoSQL: two boxes per document | SQL: one file, three tables | SQL: one database, three tables |
+| **Reads** | synchronous (the box is in memory) | synchronous (FFI) | asynchronous |
+| **Writes** | asynchronous (box journal) | synchronous | asynchronous |
+| **Transactions** | none | yes (savepoints) | yes (`database.transaction`) |
+| **`openSync`** (restore before the first frame) | ✅ | ✅ | — |
+| **Platforms** | Dart VM, Flutter, **web** | Dart VM, native Flutter | Dart VM, Flutter, **web** (with a web executor) |
+| **Pick it when** | you need the web, or want no native library | you want SQL with no `await` in the way | your app already uses Drift |
+
+How to read the trade-offs:
+
+- **SQL or NoSQL.** The CRDT data is opaque blobs, so you never query it
+  yourself: the choice is about the rest of your app. If it already has a SQL
+  database, or you want one file you can inspect with any SQLite tool, pick a
+  SQL adapter. If you want the lightest setup, with no native library, pick
+  Hive.
+- **Synchronous or asynchronous.** A synchronous backend lets
+  `CRDTDocumentPersistence.openSync` restore the document **before it
+  returns**, so a Flutter app draws its first frame from the stored state
+  instead of an empty one. With Drift you `await` the restore.
+- **Transactions.** With transactions, a compaction (a snapshot plus the prune
+  that follows it) lands all at once or not at all. Without them the steps are
+  separate. That is still safe, because every step can be repeated: Hive is
+  conformant too.
+
+:::note[Web]
+Two adapters run in the browser:
+
+- **Hive**, with no setup: [Greyhound Markdown](https://mattiapispisa.it/crdt/greyhound_markdown/)
+  uses it there.
+- **Drift**, through `CRDTDrift.fromDatabase` and a web executor of Drift
+  (see [the Drift tab](./adapters.mdx#install-and-open)). `CRDTDrift.open` and
+  `CRDTDrift.memory` need a native database, and throw an `UnsupportedError`
+  on the web.
+
+The SQLite adapter runs on the Dart VM and native Flutter only.
+:::
+
+None of them fits? [Build your own adapter](./build-your-own.mdx). Before you
+do, open an issue: an adapter in this repository serves everyone.
+
+## Local only
+
+No server to talk to: an adapter, and one call.
+
+<Tabs groupId="adapter">
+<TabItem value="sqlite" label="SQLite" default>
+
+<RecipeSnippet id="persisted-note" file="main.dart" region="imports,open,edit,close" />
+
+</TabItem>
+<TabItem value="hive" label="Hive">
+
+<RecipeSnippet id="hive-note" file="main.dart" region="imports,init,open,edit,close" />
+
+</TabItem>
+<TabItem value="drift" label="Drift">
+
+<RecipeSnippet id="drift-note" file="main.dart" region="imports,open,edit,close" />
+
+</TabItem>
+</Tabs>
+
+Every run reads the note back and adds a line.
+
+## The whole opening, in one call
+
+`openDocument` does three things, in the order they have to happen:
+
+1. **Identity.** It reads the `PeerId` this device writes the document under
+   (see [Peer identity](./how-it-works.mdx#peer-identity)).
+2. **Document.** It builds the document with that identity.
+3. **Restore.** It reads the stored changes and snapshots into the document,
+   then follows it.
+
+```dart
+final room = await backend.openDocument('note-1');
+
+room.document; // already full, already the author it was last time
+room.persistence; // dispose this when you are done
+
+final text = CRDTFugueTextHandler(room.document, 'body');
+```
+
+Build the handlers on the document it hands back. A handler reads its state
+from the document whenever it is created, so one made after the restore reads
+exactly what one made before it would have.
+
+| Argument | What it is for |
+| --- | --- |
+| `author` | the identity to use for a document that has none stored yet; it is stored |
+| `onDocument` | runs before the restore, for what has to exist first: a listener on `events`, the kinds of nested handlers |
+| `writeDelay`, `compactAfter`, `keepSnapshots`, `onError` | as on `CRDTDocumentPersistence.open`, see [How it works](./how-it-works.mdx) |
+
+The identity is always kept. A stored id beats `author`: it is what the
+document already wrote under, and writing under a second one would make one
+device look like two peers.
+
+If the restore fails, the document is disposed and the failure is thrown, so
+you never get half a document back.
+
+Use `CRDTDocumentPersistence.open(document, storage)` directly where there is no
+backend: a single `CRDTDocumentStorage` you wrote yourself.
+
+## Offline-first, with sync
+
+Same call, plus one rule: **open the document before you connect.**
+
+```dart
+final room = await backend.openDocument(roomId);
+
+// Only now.
+await client.connect();
+```
+
+The restored document is what the sync client reconciles against, so what you
+wrote on a plane reaches the server after the restart. Connect first, and the
+client catches up from the server before it knows what it already had.
+[`CRDTReplica`](../replica.mdx) does both steps, in this order.
+
+## Many documents
+
+An app has notes, not a note. The backend is the database itself:
+
+<RecipeSnippet id="notes-list" file="notes_page.dart" region="read" />
+
+`readDocument` reads and never writes: use it for a list or a preview, and
+`openDocument` for the note being edited. `backend.deleteDocument(id)` removes
+the changes, the snapshots and the identity of a note. The
+[notes recipe](../../recipes/notes-list.mdx) is the whole app.
+
+`documentIds` lists a document once anything about it is stored, its identity
+included. A note that was created and never typed into is still there, and
+still empty.
+
+## What you can call
+
+Most of the API is **methods on the backend**, so you find them by typing a
+dot:
+
+| You want to | Call |
+| --- | --- |
+| open a document that is going to be edited | `backend.openDocument(id)` |
+| read one without following it (a preview, a list) | `backend.readDocument(id)` |
+| see it as it was at some version | `backend.documentAt(id, version)` |
+| back it up, or move it to another adapter | `backend.copyDocumentTo(other, id)` |
+| stop the log from growing, now | `persistence.compact()` |
+
+The three read-and-copy calls are also on a single `CRDTDocumentStorage`
+(`storage.readDocument()`, `storage.documentAt(version)`,
+`storage.copyTo(other)`), for when that is all you hold. `compact()` lives on
+the `CRDTDocumentPersistence` that follows a document.
+
+<NextSteps
+  items={[
+    {
+      title: 'The adapters',
+      to: '/docs/connectors/persistence/adapters',
+      description: 'Setup and details of Hive, SQLite and Drift.',
+    },
+    {
+      title: 'Working with storage',
+      to: '/docs/connectors/persistence/working-with-storage',
+      description: 'History, backups, compaction.',
+    },
+    {
+      title: 'How it works',
+      to: '/docs/connectors/persistence/how-it-works',
+      description: 'Batching, retries, durability.',
+    },
+  ]}
+/>

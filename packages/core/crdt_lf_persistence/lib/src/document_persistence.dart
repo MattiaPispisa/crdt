@@ -18,7 +18,7 @@ const _maxRetryDelay = Duration(seconds: 30);
 ///
 /// [open] reads the stored document back. Then every change, snapshot and
 /// prune the document reports on [CRDTDocument.events] is written down. See
-/// the README, "How it works".
+/// [How persistence works](https://mattiapispisa.it/crdt/docs/connectors/persistence/how-it-works).
 ///
 /// ```dart
 /// final persistence = await CRDTDocumentPersistence.open(document, storage);

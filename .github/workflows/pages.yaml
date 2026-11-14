@@ -16,6 +16,11 @@ concurrency:
   group: pages
   cancel-in-progress: false
 
+# melos.yaml points at `.fvm/flutter_sdk`, which only fvm creates: use the
+# Flutter SDK on the PATH, the version `.fvmrc` names.
+env:
+  MELOS_SDK_PATH: auto
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -25,14 +30,10 @@ jobs:
 
       # --- Toolchain ---
       - name: 🐦 Setup Flutter
-        uses: subosito/flutter-action@v2
+        uses: kuhnroyal/flutter-fvm-config-action@v3
         with:
-          channel: stable
-
-      # melos.yaml pins `sdkPath: .fvm/flutter_sdk` for local FVM use, which
-      # does not exist on CI. Point melos at the runner's Flutter SDK instead.
-      - name: 🧭 Resolve Flutter SDK path for melos
-        run: echo "MELOS_SDK_PATH=$(dirname "$(dirname "$(which flutter)")")" >> "$GITHUB_ENV"
+          setup: true
+          cache: true
 
       - name: ⚙️ Setup Node.js
         uses: actions/setup-node@v7
@@ -42,12 +43,8 @@ jobs:
           cache-dependency-path: docs/package-lock.json
 
       # --- Workspace bootstrap (Dart/Flutter deps for every package) ---
-      # The root pubspec pins melos as a dev_dependency, so `dart run melos`
-      # uses that exact version instead of a globally activated one.
-      - name: 📦 Bootstrap workspace
-        run: |
-          dart pub get
-          dart run melos bootstrap
+      - name: 📦 Setup melos and bootstrap the workspace
+        uses: bluefireteam/melos-action@v3
 
       # --- Build the Flutter web examples ---
       # base-href must match where the app is served: <baseUrl>/examples/.
@@ -70,7 +67,7 @@ jobs:
         run: dart run scripts/docs_bs.dart --ci
 
       - name: 📖 Build docs
-        run: dart run melos run docs_build
+        run: melos run docs_build
 
       # --- Assemble the static site ---
       # A Pages deployment replaces the entire site, so every deploy must

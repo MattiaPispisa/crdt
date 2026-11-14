@@ -199,7 +199,7 @@ void main() {
       final other = backend.storageForDocument('other');
       final extra = CRDTDocument(documentId: 'other');
       CRDTFugueTextHandler(extra, 'text').insert(0, 'mine');
-      other.changes.saveChanges(extra.exportChanges());
+      await other.changes.saveChanges(extra.exportChanges());
 
       await storage.copyTo(other);
 

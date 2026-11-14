@@ -1,0 +1,63 @@
+---
+title: crdt_lf 4.x → 5.0
+description: Generic handlers name their kind; register, handler and child take a HandlerSpec. The bytes do not change.
+---
+
+# crdt_lf 4.x → 5.0
+
+**The bytes do not change.** Changes and snapshot blobs keep the 4.x layout, so
+a stored document opens as it is and a 4.x peer and a 5.0 peer read the same
+data. What changes is the Dart API: a handler now always says **which kind it
+is**, out loud.
+
+In 4.x a generic handler could leave its kind implicit and fall back on
+`runtimeType.toString()`. That reads `CRDTRegisterHandler<bool>` on the VM, and
+a short renamed symbol in a Flutter web `--release` build, where dart2js
+minifies type names. So two peers on two platforms wrote two different tags for
+the same kind, and a reference from one could not be rebuilt by the other —
+and `dart test -p chrome` does not minify, so nothing caught it.
+
+The tag is therefore explicit:
+
+```dart
+// 4.x — the tag came from the class name
+final done = CRDTRegisterHandler<bool>(doc, 'todo.1.done');
+
+// 5.0 — you name the kind
+final done = CRDTRegisterHandler<bool>(
+  doc,
+  'todo.1.done',
+  handlerType: 'todo.done',
+);
+```
+
+Only the seven **generic** handlers ask for it: `CRDTListHandler`,
+`CRDTMapHandler`, `CRDTRegisterHandler`, `CRDTORSetHandler`, `CRDTORMapHandler`,
+`CRDTFugueListHandler`, `CRDTFugueMovableListHandler`. A non-generic one fixes
+its own tag, so `CRDTTextHandler(doc, 'text')` still compiles.
+
+Pick the tag once and keep it: it travels in every operation envelope and in
+every reference, so every peer has to spell it the same way. It is not the
+handler's id — many ids share one tag. See
+[Naming a generic handler](../../use-cases/containers.mdx#naming-a-generic-handler).
+
+Registration follows the same idea. A kind is now a `HandlerSpec`, which every
+handler class exposes as `spec`, and the three calls that name a kind take one:
+`doc.register(spec)`, `doc.handler(spec, id)` and a container's
+`child(key, spec)` / `insertChild(index, spec)` — see
+[Nested data](../../use-cases/containers.mdx).
+
+Renamed or removed symbols:
+
+| 4.x                                                 | 5.0                                                            | Note                                                                                                                          |
+|-----------------------------------------------------|----------------------------------------------------------------|-------------------------------------------------------------------------------------------------------------------------------|
+| `CRDTListHandler<T>(doc, id)`                       | `CRDTListHandler<T>(doc, id, handlerType: 'todo-list')`        | And the same for the six other generic handlers.                                                                              |
+| `registerFactory(type, factory)`                    | `register(HandlerSpec)`                                        | The spec carries the tag, the builder and the formats together, so the tag is not passed beside a factory that also knows it. |
+| `registerDefaultFactories()`                        | removed                                                        | There is no privileged set of kinds any more. Open a handler of the kind, or `register(CRDTMapRefHandler.spec)`.              |
+| `registerHandler(handler)`                          | removed                                                        | The constructor registers the handler on the document it is given.                                                            |
+| `HandlerFactory`                                    | `HandlerBuilder<T>`                                            | Same shape, `(doc, id) => handler`, with the handler type on the signature.                                                   |
+| a custom handler's `MyHandler(super.doc, this.id);` | `MyHandler(super.doc, this.id) : super(spec: MyHandler.spec);` | A handler cannot exist without naming its kind. See [Custom handlers](../../deep-dive/custom-handlers.mdx).                                      |
+
+A 5.0 snapshot carries one extra reserved `data` entry (`crdt_lf/capabilities`),
+which records what the blobs are written in so a pruned document can still say
+what it holds. A 4.x peer ignores it.

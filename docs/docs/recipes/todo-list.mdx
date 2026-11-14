@@ -1,0 +1,17 @@
+---
+title: "A todo list with containers: merged per field"
+sidebar_label: "Todo list: containers"
+description: "A reorderable todo list where concurrent edits merge per field, with no duplicates."
+---
+
+import Recipe from '@site/src/components/Recipe';
+
+# A todo list with containers: merged per field
+
+Each todo is a small tree: a text and a `done` flag, in a list that peers can
+reorder at the same time. One peer can tick a todo while another edits its
+text, and both edits survive. This is model B of
+[Which handler do you need?](../use-cases/index.mdx#worked-example-a-todo-list).
+The same list as an aggregate is the [aggregate recipe](./todo-aggregate.mdx).
+
+<Recipe id="todo-list" />

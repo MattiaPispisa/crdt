@@ -299,7 +299,7 @@ class DocumentSessionHost extends SessionHostServer<DocumentClientSession> {
   Future<void> handleSessionEventPingReceived(
     SessionEventGeneric event,
   ) async {
-    super.handleSessionEventPingReceived(event);
+    await super.handleSessionEventPingReceived(event);
     // Clients piggy-back their version vector on pings; a ping may complete a
     // fleet-wide alignment and let the server snapshot + prune.
     await maybeTakeAlignedSnapshotForSession(event.sessionId);

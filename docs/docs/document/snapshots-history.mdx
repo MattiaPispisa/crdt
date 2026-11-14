@@ -1,0 +1,79 @@
+---
+title: Snapshots and history
+description: Take and import snapshots, prune the change graph, and read the document as it was.
+---
+
+import NextSteps from '@site/src/components/NextSteps';
+
+# Snapshots and history
+
+A document keeps every change it applied. That history is what lets it merge,
+undo and travel back in time, and it grows with every edit. A **snapshot** is
+the state of every handler at one version: the changes it covers can then be
+**pruned**.
+
+```dart
+final snapshot = doc.takeSnapshot(); // and prune what it covers
+final checkpoint = doc.takeSnapshot(pruneHistory: false); // keep the history
+
+other.importSnapshot(snapshot);
+```
+
+## Take, import, merge
+
+- **Take.** `takeSnapshot()` captures the state at the current version.
+- **Import.** `importSnapshot(snapshot)` replaces the base of the document when
+  the snapshot is newer or equal. It returns `false`, and changes nothing, when
+  the snapshot is older or concurrent.
+- **Merge.** `mergeSnapshot(snapshot)` also takes an older snapshot. It throws
+  a `ConcurrentSnapshotException` when the two cannot be merged.
+- **With the changes after it.** `import(snapshot:, changes:)` takes a snapshot
+  and the changes that follow it, in one call.
+- **Prune later.** `garbageCollect` prunes the changes the last snapshot
+  covers, up to a version every peer has seen.
+
+A snapshot carries its `versionVector`, so peers can tell what it covers.
+
+## What a prune costs
+
+A snapshot keeps the state, not the history. After a prune:
+
+- the [undo](../use-cases/undo-redo.mdx) stacks are dropped;
+- the [history](../use-cases/history.mdx) starts from the snapshot;
+- a peer that has not seen the pruned changes gets the whole snapshot instead
+  of the changes it misses.
+
+**Importing a snapshot prunes too.** `takeSnapshot`, `importSnapshot`,
+`mergeSnapshot` and `import` all prune by default. Pass `pruneHistory: false`
+to keep the local history, for example to keep the undo stacks after a peer
+sends a snapshot.
+
+So prune when the history is no longer needed: `pruneHistory: false` takes a
+checkpoint and keeps everything. The persistence adapters never prune on their
+own (see [Growth](../connectors/persistence/working-with-storage.mdx#growth)),
+and the sync layer chooses the moment for you (see
+[Broadcasting a compaction](../connectors/sync/server-registry.mdx#broadcasting-a-compaction)
+and [Log compaction](../connectors/sync/relay.mdx#log-compaction)).
+
+## The document in the past
+
+`toTimeTravel()` returns a read-only copy of the document with a cursor you move
+through its changes. See [History](../use-cases/history.mdx).
+
+What a snapshot holds, and the rules of a merge, are in
+[Snapshots](../deep-dive/snapshots.mdx).
+
+<NextSteps
+  items={[
+    {
+      title: 'Snapshots',
+      to: '/docs/deep-dive/snapshots',
+      description: 'What is inside, and how a merge works.',
+    },
+    {
+      title: 'History',
+      to: '/docs/use-cases/history',
+      description: 'Read the document as it was.',
+    },
+  ]}
+/>

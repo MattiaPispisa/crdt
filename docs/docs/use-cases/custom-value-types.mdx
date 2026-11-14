@@ -1,0 +1,132 @@
+---
+title: Your own value types
+description: Store your own classes in lists, maps and registers, with a ValueCodec.
+---
+
+import NextSteps from '@site/src/components/NextSteps';
+
+# Your own value types
+
+The list, map, set and register handlers can hold your own classes:
+`CRDTListHandler<MyData>`, `CRDTORMapHandler<String, Todo>`. The value is
+stored **inside the change**, so two things matter: how it becomes bytes, and
+that it does not change after it is written.
+
+## Serialization: a `ValueCodec`
+
+A change is sent over the network and written to disk, so every value needs a
+way to become bytes and back. Pass a `ValueCodec<T>` to the handler: its
+`encode(T) → Uint8List` is stored in the operation, and `decode(Uint8List) → T`
+runs on the receiver. A codec can wrap any binary format: raw fixed-width
+fields, protobuf, JSON bytes.
+
+```dart
+class MyData {
+  const MyData(this.name, this.count);
+
+  factory MyData.fromJson(Map<String, dynamic> json) =>
+      MyData(json['name'] as String, json['count'] as int);
+
+  final String name;
+  final int count;
+
+  Map<String, dynamic> toJson() => {'name': name, 'count': count};
+}
+
+class MyDataCodec implements ValueCodec<MyData> {
+  const MyDataCodec();
+
+  @override
+  Uint8List encode(MyData value) {
+    final nameBytes = utf8.encode(value.name);
+    final out = BytesBuilder(copy: false)
+      ..add(Uint8List(4)..buffer.asByteData().setInt32(0, value.count))
+      ..add(nameBytes);
+    return out.toBytes();
+  }
+
+  @override
+  MyData decode(Uint8List bytes) {
+    final count = ByteData.sublistView(bytes, 0, 4).getInt32(0);
+    final name = utf8.decode(bytes.sublist(4));
+    return MyData(name, count);
+  }
+}
+
+final list = CRDTListHandler<MyData>(
+  doc,
+  'my-data-list',
+  handlerType: 'my-data',
+  valueCodec: const MyDataCodec(),
+);
+```
+
+Without a `valueCodec`, the handler uses `JsonValueCodec<T>`, which wraps
+`json.encode` / `json.decode`. It works for JSON-friendly types: `String`,
+numbers, `bool`, lists and maps of these.
+
+The same codec also writes the handler's state into a **snapshot**, so the whole
+path (operation → change → snapshot) stays binary.
+
+:::warning[The bytes are a contract]
+Every peer, and every stored document, reads the bytes your codec wrote. Change
+the layout and older data no longer decodes. Add a version byte to your format
+from the start, or use an [aggregate](./aggregates.mdx#versions-and-migrations),
+which has versions and migrations built in.
+:::
+
+## Immutability
+
+A change captures the value **at the moment it is written**. If you mutate the
+object afterwards, the change still holds the old state, and the document no
+longer matches your object. Treat your values as **immutable**: to modify one,
+create a new instance and write it.
+
+```dart
+// GOOD: a new instance for each change
+list.insert(0, const MyData('item1', 1));
+list.update(0, const MyData('item1', 2));
+
+// BAD: mutating an object after it was inserted.
+// The CRDT history never sees it.
+```
+
+## Alternative: store raw JSON
+
+If you do not need a binary layout, declare the handler with a JSON-friendly
+type and convert at the edges:
+
+```dart
+final rawList = CRDTListHandler<Map<String, dynamic>>(
+  doc,
+  'my-raw-list',
+  handlerType: 'my-raw',
+);
+
+rawList.insert(0, const MyData('item2', 1).toJson());
+
+final myDataList = rawList.value.map(MyData.fromJson).toList();
+print(myDataList.first.name); // item2
+```
+
+## When the value is edited field by field
+
+A value is atomic: two peers that change two fields of the same value at the
+same time keep one of the two edits. If that happens in your app, split the
+value into a small tree of handlers, one per field: see
+[Nested data](./containers.mdx).
+
+<NextSteps
+  items={[
+    {
+      title: 'Nested data',
+      to: '/docs/use-cases/containers',
+      description: 'One handler per field.',
+    },
+    {
+      title: 'Binary format',
+      to: '/docs/deep-dive/binary-format',
+      description: 'How changes and snapshots are written.',
+    },
+  ]}
+/>

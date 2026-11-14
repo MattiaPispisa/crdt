@@ -1,0 +1,151 @@
+---
+title: History
+description: Show a document as it was after each change, read-only, from crdt_lf to a Flutter screen.
+---
+
+import Greyhound from '@site/src/components/Greyhound';
+import NextSteps from '@site/src/components/NextSteps';
+import RecipeSnippet from '@site/src/components/RecipeSnippet';
+
+# History
+
+A document keeps every change it applied, so it can show itself as it was
+after any of them: "who wrote this paragraph, and when?". A **history
+session** is a read-only copy of the document with a cursor you move through
+its changes.
+
+It is different from [undo](./undo-redo.mdx). Undo writes a new edit that other
+peers receive. A history session writes nothing: it only shows the past.
+
+## Time travel in crdt_lf
+
+`toTimeTravel()` freezes the document as it is now, and puts the cursor at the
+end:
+
+```dart
+final document = CRDTDocument();
+final note = CRDTFugueTextHandler(document, 'note');
+note
+  ..insert(0, 'Hello')
+  ..insert(5, ' world');
+
+final session = document.toTimeTravel();
+final past = session.getHandler((doc) => CRDTFugueTextHandler(doc, 'note'));
+
+print(session.length); // 2: one step per change
+print(past.value); // Hello world
+
+session.previous();
+print(past.value); // Hello
+
+session.jump(0);
+print(past.value); // '': the state before the first change
+
+session.dispose();
+```
+
+- `cursor` is the number of changes the view shows, from `0` to `length`.
+  `next()`, `previous()` and `jump(cursor)` move it. `canNext` and
+  `canPrevious` tell you if a move is possible, so you can enable your buttons.
+- `cursorStream` emits the new cursor after each move.
+- `session.document` is the read-only document. `getHandler` opens a handler
+  on it. `session.document.handlerById(id)` also works: it opens the handlers
+  the changes name, at any cursor.
+- The steps follow the order of the changes' clocks (then of their authors):
+  the same order on every peer.
+- Each handler you opened reads the state at the cursor. Its `watch()` stream
+  gets a reset at every move, so a watcher reads the value again.
+- `dispose()` releases the session and ends the delta streams it gave out.
+
+### Read-only, and frozen
+
+The view refuses every write: `insert`, `runInTransaction`, `deleteHandler`
+throw a `ReadOnlyDocumentException`.
+
+The session is a copy of the history **when you created it**. Edits made later,
+local or remote, do not reach it. Create a new session to see them.
+
+### How far back it goes
+
+A session starts from the last snapshot of the document. After a prune
+(`takeSnapshot`, `garbageCollect`), the changes the snapshot covers are gone,
+so cursor `0` is the snapshot, not an empty document. To keep the whole
+history, take snapshots with `pruneHistory: false` (see
+[Snapshots](../deep-dive/snapshots.mdx)).
+
+With [persistence](../connectors/persistence/index.mdx), `documentAt` reads
+a stored document as it was at a version, and `keepSnapshots` keeps older
+snapshots so that it can reach further back (see
+[The document as it was](../connectors/persistence/working-with-storage.mdx#the-document-as-it-was)).
+
+## In Flutter
+
+`CrdtHistoryScope` from [`crdt_lf_flutter`](../connectors/flutter/index.mdx)
+takes a session of the document in scope, and shows the frozen view to the
+widgets below it. The widgets that follow one handler, such as
+`CrdtHandlerBuilder`, read the view instead of the live document. So the
+widget that draws the note today can also draw it in the past, with no change.
+
+<RecipeSnippet id="note-history" file="history_page.dart" region="scope,preview" />
+
+- `builder` runs on every move of the cursor, with the session.
+- The scope takes the session once per document, and disposes it with itself.
+  Open the screen again to see the edits made after it opened.
+- The widgets that read or write the live document throw inside the scope:
+  the document-level builders (`CrdtBuilder`), the text fields, the editor
+  binder and the cursor overlays. They would draw the present inside a view
+  that looks frozen, and a text field there would look editable.
+
+## Who wrote it, and when
+
+Every change carries its author and its clock, so a history screen can say who
+made the change the cursor stands on:
+
+<RecipeSnippet id="note-history" file="history_page.dart" region="describe" />
+
+The view exports the changes up to the cursor, so the last one is the change
+the cursor stands on. At cursor `0` there is none.
+
+<Greyhound source="client/lib/src/screens/history_screen.dart">
+
+The **history** button of a room opens this screen. It reuses the preview pane
+of the editor inside a `CrdtHistoryScope`, and puts a slider under it:
+
+```dart
+CrdtHistoryScope(
+  child: const PreviewPane(usePlaceholder: false),
+  builder: (context, session, preview) => Column(
+    children: [
+      Expanded(child: preview!),
+      HistoryControls(session: session),
+    ],
+  ),
+);
+```
+
+`HistoryControls`
+([source](https://github.com/MattiaPispisa/crdt/blob/main/apps/greyhound_markdown/client/lib/src/widgets/history_controls.dart))
+shows "change 12 of 40", who made it and when, the previous and next buttons,
+and the slider. Type a few lines in a room, then open the history and move back.
+
+</Greyhound>
+
+<NextSteps
+  items={[
+    {
+      title: 'Undo and redo',
+      to: '/docs/use-cases/undo-redo',
+      description: 'Take back your own edits.',
+    },
+    {
+      title: 'Snapshots',
+      to: '/docs/deep-dive/snapshots',
+      description: 'What a prune keeps, and what it drops.',
+    },
+    {
+      title: 'Flutter',
+      to: '/docs/connectors/flutter',
+      description: 'The handler widgets the scope serves.',
+    },
+  ]}
+/>

@@ -7,9 +7,14 @@
 ### Added
 
 - `CRDTFugueRichTextHandler`: rich text, a Fugue text with [Peritext](https://doi.org/10.1145/3555644)
-  marks and embeds. See [Rich text](README.md#rich-text). [209](https://github.com/MattiaPispisa/crdt/issues/209)
+  marks and embeds. See [Rich text](https://mattiapispisa.it/crdt/docs/use-cases/rich-text). [209](https://github.com/MattiaPispisa/crdt/issues/209)
 - `RuneOffsets.isHighSurrogate`, `isLowSurrogate`, `splitsPair` and `snap` keep a code-unit offset
   on whole runes.
+
+### Changed
+
+- The documentation moved to the [docs site](https://mattiapispisa.it/crdt/docs/getting-started): the README is now a short
+  entry point. [216](https://github.com/MattiaPispisa/crdt/issues/216)
 
 ### Fixed
 

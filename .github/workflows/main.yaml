@@ -6,6 +6,11 @@ on:
     branches:
       - main
 
+# melos.yaml points at `.fvm/flutter_sdk`, which only fvm creates: use the
+# Flutter SDK on the PATH, the version `.fvmrc` names.
+env:
+  MELOS_SDK_PATH: auto
+
 jobs:
 
   changes:
@@ -27,6 +32,7 @@ jobs:
       crdt_lf_quill: ${{ steps.filter.outputs.crdt_lf_quill }}
       crdt_socket_sync_dart_frog: ${{ steps.filter.outputs.crdt_socket_sync_dart_frog }}
       crdt_socket_sync_serverpod: ${{ steps.filter.outputs.crdt_socket_sync_serverpod }}
+      crdt_lf_recipes: ${{ steps.filter.outputs.crdt_lf_recipes }}
     steps:
       - uses: actions/checkout@v7
       - uses: dorny/paths-filter@v4
@@ -35,6 +41,7 @@ jobs:
           filters: |
             global:
               - '.github/workflows/**'
+              - '.fvmrc'
               - 'analysis_options.yaml'
               - 'packages/_internal/ws_lint/**'
               - 'pubspec.yaml'
@@ -68,6 +75,8 @@ jobs:
               - 'packages/adapters/sync/dart_frog/**'
             crdt_socket_sync_serverpod:
               - 'packages/adapters/sync/serverpod/**'
+            crdt_lf_recipes:
+              - 'packages/_internal/crdt_lf_recipes/**'
 
   hlc:
     needs: changes
@@ -231,6 +240,95 @@ jobs:
     secrets:
       CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
 
+  # The example apps are their own packages, with their own jobs. Their tests
+  # start the real server the way the app does.
+  crdt_socket_sync_dart_frog_examples:
+    needs: changes
+    if: >-
+      ${{ needs.changes.outputs.global == 'true'
+       || needs.changes.outputs.hlc == 'true'
+       || needs.changes.outputs.crdt_lf == 'true'
+       || needs.changes.outputs.crdt_lf_persistence == 'true'
+       || needs.changes.outputs.crdt_lf_hive == 'true'
+       || needs.changes.outputs.crdt_socket_sync == 'true'
+       || needs.changes.outputs.crdt_socket_sync_dart_frog == 'true' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        package:
+          - crdt_socket_sync_dart_frog_example
+          - crdt_socket_sync_dart_frog_relay_example
+    runs-on: ubuntu-latest
+    env:
+      MELOS_PACKAGES: ${{ matrix.package }}
+    steps:
+      - name: 📚 Git Checkout
+        uses: actions/checkout@v7
+      - name: 🐦 Setup Flutter
+        uses: kuhnroyal/flutter-fvm-config-action@v3
+        with:
+          setup: true
+          cache: true
+      - name: 📦 Setup melos and install dependencies
+        uses: bluefireteam/melos-action@v3
+      - name: ✨ Check Formatting
+        run: melos run format
+      - name: 🕵️ Analyze
+        run: melos run analyze
+      - name: 🧪 Run Tests
+        run: melos run test --no-select
+
+  crdt_socket_sync_serverpod_examples:
+    needs: changes
+    if: >-
+      ${{ needs.changes.outputs.global == 'true'
+       || needs.changes.outputs.hlc == 'true'
+       || needs.changes.outputs.crdt_lf == 'true'
+       || needs.changes.outputs.crdt_lf_persistence == 'true'
+       || needs.changes.outputs.crdt_lf_hive == 'true'
+       || needs.changes.outputs.crdt_socket_sync == 'true'
+       || needs.changes.outputs.crdt_socket_sync_serverpod == 'true' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        package:
+          - crdt_socket_sync_serverpod_example
+          - crdt_socket_sync_serverpod_relay_example
+    runs-on: ubuntu-latest
+    env:
+      MELOS_PACKAGES: ${{ matrix.package }}
+    steps:
+      - name: 📚 Git Checkout
+        uses: actions/checkout@v7
+      - name: 🐦 Setup Flutter
+        uses: kuhnroyal/flutter-fvm-config-action@v3
+        with:
+          setup: true
+          cache: true
+      - name: 📦 Setup melos and install dependencies
+        uses: bluefireteam/melos-action@v3
+      - name: ✨ Check Formatting
+        run: melos run format
+      - name: 🕵️ Analyze
+        run: melos run analyze
+      - name: 🧪 Run Tests
+        run: melos run test --no-select
+
+  editor_conformance:
+    needs: changes
+    if: >-
+      ${{ needs.changes.outputs.global == 'true'
+       || needs.changes.outputs.hlc == 'true'
+       || needs.changes.outputs.crdt_lf == 'true'
+       || needs.changes.outputs.editor_conformance == 'true' }}
+    uses: ./.github/workflows/flutter_package.yaml
+    with:
+      working_directory: ./packages/_internal/editor_conformance
+      min_coverage: 100
+      package_name: editor_conformance
+    secrets:
+      CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+
   crdt_lf_flutter:
     needs: changes
     if: >-
@@ -264,23 +362,66 @@ jobs:
     secrets:
       CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
 
+  crdt_lf_recipes:
+    needs: changes
+    if: >-
+      ${{ needs.changes.outputs.global == 'true'
+       || needs.changes.outputs.hlc == 'true'
+       || needs.changes.outputs.crdt_lf == 'true'
+       || needs.changes.outputs.crdt_lf_persistence == 'true'
+       || needs.changes.outputs.crdt_lf_hive == 'true'
+       || needs.changes.outputs.crdt_lf_sqlite == 'true'
+       || needs.changes.outputs.crdt_lf_drift == 'true'
+       || needs.changes.outputs.crdt_socket_sync == 'true'
+       || needs.changes.outputs.crdt_lf_flutter == 'true'
+       || needs.changes.outputs.crdt_lf_quill == 'true'
+       || needs.changes.outputs.crdt_lf_recipes == 'true' }}
+    uses: ./.github/workflows/flutter_package.yaml
+    with:
+      working_directory: ./packages/_internal/crdt_lf_recipes
+      # The recipe files a test never runs: the `main.dart` that need a
+      # device (path_provider) or a server on a fixed port.
+      min_coverage: 80
+      package_name: crdt_lf_recipes
+    secrets:
+      CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+
+  # The README quick starts, the package examples and the snippets of the
+  # docs pages come from the recipe regions.
+  recipes_check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 📚 Git Checkout
+        uses: actions/checkout@v7
+      - name: 🐦 Setup Flutter
+        uses: kuhnroyal/flutter-fvm-config-action@v3
+        with:
+          setup: true
+          cache: true
+      # The check reads files only: no package needs its dependencies.
+      - name: 🧰 Setup melos
+        uses: bluefireteam/melos-action@v3
+        with:
+          run-bootstrap: false
+      - name: 🍳 Check the READMEs, the examples and the docs pages
+        run: melos run recipes_check
+
   license_check:
     runs-on: ubuntu-latest
     steps:
       - name: 📚 Git Checkout
         uses: actions/checkout@v7
-      - name: 🎯 Setup Dart
-        uses: dart-lang/setup-dart@v1
-      - name: 📦 Install add_license dependencies
-        working-directory: packages/_internal/add_license
-        run: dart pub get
+      - name: 🐦 Setup Flutter
+        uses: kuhnroyal/flutter-fvm-config-action@v3
+        with:
+          setup: true
+          cache: true
+      - name: 📦 Setup melos and install the add_license dependencies
+        uses: bluefireteam/melos-action@v3
+        env:
+          MELOS_PACKAGES: add_license
       - name: 🪪 Check license headers
-        run: |
-          status=0
-          for dir in $(find packages apps -name pubspec.yaml -not -path '*/.dart_tool/*' | xargs -n1 dirname | sort); do
-            dart run packages/_internal/add_license/bin/add_license.dart --check --root "$dir" || status=1
-          done
-          exit $status
+        run: melos run add_license_check
 
   ci-success:
     name: CI Success
@@ -289,6 +430,7 @@ jobs:
     needs:
       - changes
       - license_check
+      - recipes_check
       - hlc
       - crdt_lf
       - crdt_lf_persistence
@@ -299,8 +441,12 @@ jobs:
       - crdt_socket_sync
       - crdt_socket_sync_dart_frog
       - crdt_socket_sync_serverpod
+      - crdt_socket_sync_dart_frog_examples
+      - crdt_socket_sync_serverpod_examples
+      - editor_conformance
       - crdt_lf_flutter
       - crdt_lf_quill
+      - crdt_lf_recipes
     steps:
       - name: Verify no job failed
         run: |

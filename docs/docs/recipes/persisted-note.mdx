@@ -1,0 +1,16 @@
+---
+title: A text note saved on disk
+sidebar_label: Note on disk
+description: "One collaborative text in a local database (SQLite, Hive or Drift), read back on every run."
+---
+
+import Recipe from '@site/src/components/Recipe';
+
+# A text note saved on disk
+
+The smallest app with storage: a Dart program that keeps one text in a local
+database. Each run reads the note back and adds a line, under the same author.
+Pick the tab of your storage adapter: the program is the same, and only the
+lines that open the database change.
+
+<Recipe id="persisted-note" />

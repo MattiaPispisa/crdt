@@ -1,0 +1,8 @@
+include: package:ws_lint/flutter.yaml
+
+linter:
+  rules:
+    # A recipe is copied into another app: its files import each other by a
+    # relative path, not by the name of this package.
+    always_use_package_imports: false
+    prefer_relative_imports: true

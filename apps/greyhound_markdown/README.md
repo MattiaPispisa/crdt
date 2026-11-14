@@ -46,7 +46,7 @@ Wire protocol: the `crdt_socket_sync` relay protocol (JSON envelopes typed by
 integer codes, CRDT binary blobs as base64). The server (`server/src/`)
 speaks hello/welcome, push/ack, changes, snapshotUpload/compaction, ping/pong
 and awareness (100–102) — see
-[Implementing a relay server](../../packages/core/crdt_socket_sync/README.md#implementing-a-relay-server)
+[Relay protocol](https://mattiapispisa.it/crdt/docs/connectors/sync/relay-protocol)
 for the message contract to keep in sync. The client has no hand-rolled
 protocol: it drives `WebSocketRelayClient` from the package.
 

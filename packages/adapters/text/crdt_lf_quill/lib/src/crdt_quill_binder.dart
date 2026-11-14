@@ -20,8 +20,8 @@ import 'package:flutter_quill/flutter_quill.dart';
 /// Peer changes stay out of the undo stack, like `History(userOnly: true)`.
 ///
 /// A change that arrives during a build reaches [controller] at the end of
-/// the frame. See the README for units, attributes, embeds and the last
-/// newline.
+/// the frame. The [guide](https://mattiapispisa.it/crdt/docs/connectors/flutter/editors/quill)
+/// covers units, attributes, embeds and the last newline.
 ///
 /// Throws a `FlutterError` when [id] is not a rich text handler.
 class CrdtQuillBinder extends StatefulWidget {
@@ -65,7 +65,7 @@ class CrdtQuillBinder extends StatefulWidget {
   /// [CRDTFugueRichTextHandler.checkAttribute]).
   ///
   /// The rest of the edit is written, and a refused embed never deletes an
-  /// embed (see the README, "Embeds"). The binder wraps the `onReplaceText`
+  /// embed (see "Embeds" in the guide). The binder wraps the `onReplaceText`
   /// that [controller] had when it was bound; assigning a new one later
   /// removes the refusal.
   final void Function(Object? data)? onUnsupported;
