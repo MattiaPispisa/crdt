@@ -147,8 +147,10 @@ code lowers the percentage, the threshold is not reached and the pull request
 stays red 🔴. The opposite is also true, though — tests that only repeat what is
 already covered add noise, not value.
 
-`melos run format`, `melos run analyze` and the test scripts run the same
-checks locally, so the surprises stay on your machine.
+The CI runs the scripts of `melos.yaml` (`format`, `analyze`, `test`,
+`test_chrome`, `test_flutter`) on the Flutter version that `.fvmrc` pins. The
+same scripts with the same SDK run on your machine, so the surprises stay
+there.
 
 ## 8. AI-assisted contributions
 

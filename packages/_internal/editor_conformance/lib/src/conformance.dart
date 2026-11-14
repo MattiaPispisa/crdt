@@ -283,12 +283,11 @@ void runEditorConformanceTests(
 
         setUp(published.clear);
 
+        void record(FugueElementID? base, FugueElementID? extent) =>
+            published.add((base, extent));
+
         Future<void> mountFocused(WidgetTester tester) async {
-          await mount(
-            tester,
-            onSelectionAnchorsChanged: (base, extent) =>
-                published.add((base, extent)),
-          );
+          await mount(tester, onSelectionAnchorsChanged: record);
           await editor.focus(tester);
         }
 
@@ -324,11 +323,7 @@ void runEditorConformanceTests(
 
         testWidgets('nothing is published without the focus', (tester) async {
           handler.insert(0, 'hello');
-          await mount(
-            tester,
-            onSelectionAnchorsChanged: (base, extent) =>
-                published.add((base, extent)),
-          );
+          await mount(tester, onSelectionAnchorsChanged: record);
 
           editor.selection = const TextSelection.collapsed(offset: 2);
           await tester.pump();

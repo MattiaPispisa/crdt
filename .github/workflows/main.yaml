@@ -6,6 +6,11 @@ on:
     branches:
       - main
 
+# melos.yaml points at `.fvm/flutter_sdk`, which only fvm creates: use the
+# Flutter SDK on the PATH, the version `.fvmrc` names.
+env:
+  MELOS_SDK_PATH: auto
+
 jobs:
 
   changes:
@@ -36,6 +41,7 @@ jobs:
           filters: |
             global:
               - '.github/workflows/**'
+              - '.fvmrc'
               - 'analysis_options.yaml'
               - 'packages/_internal/ws_lint/**'
               - 'pubspec.yaml'
@@ -234,8 +240,8 @@ jobs:
     secrets:
       CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
 
-  # The example apps are their own packages: `dart_package.yaml` skips them
-  # (`--no-example`). Their tests start the real server the way the app does.
+  # The example apps are their own packages, with their own jobs. Their tests
+  # start the real server the way the app does.
   crdt_socket_sync_dart_frog_examples:
     needs: changes
     if: >-
@@ -249,28 +255,28 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - working_directory: packages/adapters/sync/dart_frog/example
-            dart_dirs: lib routes test main.dart
-          - working_directory: packages/adapters/sync/dart_frog/relay_example
-            dart_dirs: lib routes test main.dart
+        package:
+          - crdt_socket_sync_dart_frog_example
+          - crdt_socket_sync_dart_frog_relay_example
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: ${{ matrix.working_directory }}
+    env:
+      MELOS_PACKAGES: ${{ matrix.package }}
     steps:
       - name: 📚 Git Checkout
         uses: actions/checkout@v7
-      - name: 🎯 Setup Dart
-        uses: dart-lang/setup-dart@v1
-      - name: 📦 Install Dependencies
-        run: dart pub get
+      - name: 🐦 Setup Flutter
+        uses: kuhnroyal/flutter-fvm-config-action@v3
+        with:
+          setup: true
+          cache: true
+      - name: 📦 Setup melos and install dependencies
+        uses: bluefireteam/melos-action@v3
       - name: ✨ Check Formatting
-        run: dart format --line-length 80 --set-exit-if-changed ${{ matrix.dart_dirs }}
+        run: melos run format
       - name: 🕵️ Analyze
-        run: dart analyze --fatal-infos --fatal-warnings
+        run: melos run analyze
       - name: 🧪 Run Tests
-        run: dart test
+        run: melos run test --no-select
 
   crdt_socket_sync_serverpod_examples:
     needs: changes
@@ -285,28 +291,43 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - working_directory: packages/adapters/sync/serverpod/example
-            dart_dirs: bin lib test
-          - working_directory: packages/adapters/sync/serverpod/relay_example
-            dart_dirs: bin lib test
+        package:
+          - crdt_socket_sync_serverpod_example
+          - crdt_socket_sync_serverpod_relay_example
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: ${{ matrix.working_directory }}
+    env:
+      MELOS_PACKAGES: ${{ matrix.package }}
     steps:
       - name: 📚 Git Checkout
         uses: actions/checkout@v7
-      - name: 🎯 Setup Dart
-        uses: dart-lang/setup-dart@v1
-      - name: 📦 Install Dependencies
-        run: dart pub get
+      - name: 🐦 Setup Flutter
+        uses: kuhnroyal/flutter-fvm-config-action@v3
+        with:
+          setup: true
+          cache: true
+      - name: 📦 Setup melos and install dependencies
+        uses: bluefireteam/melos-action@v3
       - name: ✨ Check Formatting
-        run: dart format --line-length 80 --set-exit-if-changed ${{ matrix.dart_dirs }}
+        run: melos run format
       - name: 🕵️ Analyze
-        run: dart analyze --fatal-infos --fatal-warnings
+        run: melos run analyze
       - name: 🧪 Run Tests
-        run: dart test
+        run: melos run test --no-select
+
+  editor_conformance:
+    needs: changes
+    if: >-
+      ${{ needs.changes.outputs.global == 'true'
+       || needs.changes.outputs.hlc == 'true'
+       || needs.changes.outputs.crdt_lf == 'true'
+       || needs.changes.outputs.editor_conformance == 'true' }}
+    uses: ./.github/workflows/flutter_package.yaml
+    with:
+      working_directory: ./packages/_internal/editor_conformance
+      min_coverage: 100
+      package_name: editor_conformance
+    secrets:
+      CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
 
   crdt_lf_flutter:
     needs: changes
@@ -372,30 +393,35 @@ jobs:
     steps:
       - name: 📚 Git Checkout
         uses: actions/checkout@v7
-      - name: 🎯 Setup Dart
-        uses: dart-lang/setup-dart@v1
-      - name: 📦 Install Dependencies
-        run: dart pub get
+      - name: 🐦 Setup Flutter
+        uses: kuhnroyal/flutter-fvm-config-action@v3
+        with:
+          setup: true
+          cache: true
+      # The check reads files only: no package needs its dependencies.
+      - name: 🧰 Setup melos
+        uses: bluefireteam/melos-action@v3
+        with:
+          run-bootstrap: false
       - name: 🍳 Check the READMEs, the examples and the docs pages
-        run: dart run scripts/recipes_sync.dart --check
+        run: melos run recipes_check
 
   license_check:
     runs-on: ubuntu-latest
     steps:
       - name: 📚 Git Checkout
         uses: actions/checkout@v7
-      - name: 🎯 Setup Dart
-        uses: dart-lang/setup-dart@v1
-      - name: 📦 Install add_license dependencies
-        working-directory: packages/_internal/add_license
-        run: dart pub get
+      - name: 🐦 Setup Flutter
+        uses: kuhnroyal/flutter-fvm-config-action@v3
+        with:
+          setup: true
+          cache: true
+      - name: 📦 Setup melos and install the add_license dependencies
+        uses: bluefireteam/melos-action@v3
+        env:
+          MELOS_PACKAGES: add_license
       - name: 🪪 Check license headers
-        run: |
-          status=0
-          for dir in $(find packages apps -name pubspec.yaml -not -path '*/.dart_tool/*' | xargs -n1 dirname | sort); do
-            dart run packages/_internal/add_license/bin/add_license.dart --check --root "$dir" || status=1
-          done
-          exit $status
+        run: melos run add_license_check
 
   ci-success:
     name: CI Success
@@ -417,6 +443,7 @@ jobs:
       - crdt_socket_sync_serverpod
       - crdt_socket_sync_dart_frog_examples
       - crdt_socket_sync_serverpod_examples
+      - editor_conformance
       - crdt_lf_flutter
       - crdt_lf_quill
       - crdt_lf_recipes
