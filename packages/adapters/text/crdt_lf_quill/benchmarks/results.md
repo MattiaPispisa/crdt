@@ -2,22 +2,22 @@
 
 | Benchmark | RunTime (us) | RunTime (ms) | RunTime (s) |
 | --- | --- | --- | --- |
-| Local keystroke, 1000 runes, check off | 65.4400 | 0.0654 | 0.000065 |
-| Local keystroke, 1000 runes, check length | 50.8600 | 0.0509 | 0.000051 |
-| Local keystroke, 1000 runes, check full | 66.9600 | 0.0670 | 0.000067 |
-| Local keystroke, 10000 runes, check off | 327.1600 | 0.3272 | 0.000327 |
-| Local keystroke, 10000 runes, check length | 330.9400 | 0.3309 | 0.000331 |
-| Local keystroke, 10000 runes, check full | 492.5600 | 0.4926 | 0.000493 |
-| Local keystroke, 50000 runes, check off | 2165.2100 | 2.1652 | 0.002165 |
-| Local keystroke, 50000 runes, check length | 2174.4000 | 2.1744 | 0.002174 |
-| Local keystroke, 50000 runes, check full | 3395.6100 | 3.3956 | 0.003396 |
-| Remote insert, 1000 runes, check off | 43.7100 | 0.0437 | 0.000044 |
-| Remote insert, 1000 runes, check length | 44.5100 | 0.0445 | 0.000045 |
-| Remote insert, 1000 runes, check full | 62.2500 | 0.0622 | 0.000062 |
-| Remote insert, 10000 runes, check off | 304.3600 | 0.3044 | 0.000304 |
-| Remote insert, 10000 runes, check length | 308.8900 | 0.3089 | 0.000309 |
-| Remote insert, 10000 runes, check full | 459.1300 | 0.4591 | 0.000459 |
-| Remote insert, 50000 runes, check off | 2073.9500 | 2.0739 | 0.002074 |
-| Remote insert, 50000 runes, check length | 2120.2800 | 2.1203 | 0.002120 |
-| Remote insert, 50000 runes, check full | 3371.7800 | 3.3718 | 0.003372 |
+| Local keystroke, 1000 runes, check off | 58.4000 | 0.0584 | 0.000058 |
+| Local keystroke, 1000 runes, check length | 46.2400 | 0.0462 | 0.000046 |
+| Local keystroke, 1000 runes, check full | 71.7600 | 0.0718 | 0.000072 |
+| Local keystroke, 10000 runes, check off | 242.1600 | 0.2422 | 0.000242 |
+| Local keystroke, 10000 runes, check length | 263.3000 | 0.2633 | 0.000263 |
+| Local keystroke, 10000 runes, check full | 499.7300 | 0.4997 | 0.000500 |
+| Local keystroke, 50000 runes, check off | 1623.0700 | 1.6231 | 0.001623 |
+| Local keystroke, 50000 runes, check length | 1728.8100 | 1.7288 | 0.001729 |
+| Local keystroke, 50000 runes, check full | 3417.4500 | 3.4174 | 0.003417 |
+| Remote insert, 1000 runes, check off | 36.2600 | 0.0363 | 0.000036 |
+| Remote insert, 1000 runes, check length | 38.4600 | 0.0385 | 0.000038 |
+| Remote insert, 1000 runes, check full | 65.7100 | 0.0657 | 0.000066 |
+| Remote insert, 10000 runes, check off | 214.5600 | 0.2146 | 0.000215 |
+| Remote insert, 10000 runes, check length | 234.6600 | 0.2347 | 0.000235 |
+| Remote insert, 10000 runes, check full | 470.4800 | 0.4705 | 0.000470 |
+| Remote insert, 50000 runes, check off | 1503.8500 | 1.5038 | 0.001504 |
+| Remote insert, 50000 runes, check length | 1650.0800 | 1.6501 | 0.001650 |
+| Remote insert, 50000 runes, check full | 3346.1400 | 3.3461 | 0.003346 |
 
