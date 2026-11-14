@@ -1,6 +1,6 @@
 ## [0.1.0+2](https://github.com/MattiaPispisa/crdt/tree/crdt_socket_sync_dart_frog-v0.1.0+2/packages/adapters/sync/dart_frog)
 
-**Date:** --
+**Date:** 2026-11-14
 
 - The documentation moved to the [docs site](https://mattiapispisa.it/crdt/docs/connectors/sync/server-frameworks): the README is now a short
   entry point. No functional changes since `0.1.0+1`. [216](https://github.com/MattiaPispisa/crdt/issues/216)

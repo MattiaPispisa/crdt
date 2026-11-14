@@ -9,6 +9,7 @@ import 'package:greyhound_markdown_client/src/l10n/l10n_extension.dart';
 import 'package:greyhound_markdown_client/src/l10n/labels.dart';
 import 'package:greyhound_markdown_client/src/routing/app_navigation.dart';
 import 'package:greyhound_markdown_client/src/widgets/credit_line.dart';
+import 'package:greyhound_markdown_client/src/widgets/select.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -151,7 +152,7 @@ class _ThemeModeSelector extends StatelessWidget {
 /// Follow the device language, or force one of the languages the app is
 /// translated into.
 ///
-/// A dropdown rather than the [SegmentedButton] the theme mode uses: the list
+/// A [Select] rather than the [SegmentedButton] the theme mode uses: the list
 /// is as long as [AppLanguage.values] and grows with every translation, well
 /// past what a row of segments can hold.
 ///
@@ -171,21 +172,14 @@ class _LanguageSelector extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return BlocBuilder<UserSettingsCubit, UserSettingsState>(
-      builder: (context, settings) => DropdownButton<AppLanguage>(
+      builder: (context, settings) => Select<AppLanguage>(
         value: settings.language,
-        isExpanded: true,
-        items: [
+        tooltip: context.l10n.language,
+        options: [
           for (final language in AppLanguage.values)
-            DropdownMenuItem(
-              value: language,
-              child: Text(_label(context, language)),
-            ),
+            SelectOption(value: language, label: _label(context, language)),
         ],
-        onChanged: (language) {
-          if (language != null) {
-            context.read<UserSettingsCubit>().setLanguage(language);
-          }
-        },
+        onChanged: context.read<UserSettingsCubit>().setLanguage,
       ),
     );
   }

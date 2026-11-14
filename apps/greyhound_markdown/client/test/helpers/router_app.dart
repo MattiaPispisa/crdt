@@ -16,13 +16,16 @@ import 'memory_storage.dart';
 /// [stored], and returns it.
 ///
 /// The room pages are stubs that show their room id: opening a room needs a
-/// relay that a test must not reach. The shell around them shows nothing of
-/// its own unless [roomShell] says otherwise.
+/// relay that a test must not reach. [roomBuilder] and [historyBuilder]
+/// replace those stubs. The shell around them shows nothing of its own unless
+/// [roomShell] says otherwise.
 Future<GoRouter> pumpRouterApp(
   WidgetTester tester, {
   String initialLocation = '/',
   Map<String, dynamic>? stored,
   Widget Function(String roomId, Widget child)? roomShell,
+  Widget Function(String roomId)? roomBuilder,
+  Widget Function(String roomId)? historyBuilder,
 }) async {
   final storage = MemoryStorage(
     stored == null ? null : {'UserSettings': stored},
@@ -30,8 +33,10 @@ Future<GoRouter> pumpRouterApp(
   final router = createAppRouter(
     initialLocation: initialLocation,
     roomShell: roomShell ?? (roomId, child) => child,
-    roomBuilder: (roomId) => Scaffold(body: Text('room $roomId')),
-    historyBuilder: (roomId) => Scaffold(body: Text('history $roomId')),
+    roomBuilder:
+        roomBuilder ?? (roomId) => Scaffold(body: Text('room $roomId')),
+    historyBuilder:
+        historyBuilder ?? (roomId) => Scaffold(body: Text('history $roomId')),
   );
   addTearDown(router.dispose);
   await tester.pumpWidget(

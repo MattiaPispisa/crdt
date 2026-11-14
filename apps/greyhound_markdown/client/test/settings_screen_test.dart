@@ -7,6 +7,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:greyhound_markdown_client/src/application/application.dart';
 import 'package:greyhound_markdown_client/src/screens/settings_screen.dart';
+import 'package:greyhound_markdown_client/src/widgets/select.dart';
 
 import 'helpers/localized_app.dart';
 import 'helpers/memory_storage.dart';
@@ -70,8 +71,8 @@ void main() {
 
     expect(cubit.state.language, AppLanguage.system);
 
-    // The list lives behind a dropdown, so the entry has to be opened first.
-    await tester.tap(find.byType(DropdownButton<AppLanguage>));
+    // The list lives behind a menu, so the menu has to be opened first.
+    await tester.tap(find.byType(Select<AppLanguage>));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Italiano').last);
     await tester.pumpAndSettle();
