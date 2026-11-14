@@ -12,6 +12,7 @@ import 'package:greyhound_markdown_client/src/widgets/app_footer.dart';
 import 'package:greyhound_markdown_client/src/widgets/editor_pane.dart';
 import 'package:greyhound_markdown_client/src/widgets/export_menu.dart';
 import 'package:greyhound_markdown_client/src/widgets/preview_pane.dart';
+import 'package:greyhound_markdown_client/src/widgets/router_back_button.dart';
 import 'package:greyhound_markdown_client/src/widgets/status_bar.dart';
 
 /// The collaborative room. A segmented control switches between edit, split
@@ -42,6 +43,7 @@ class _EditorScreenState extends State<EditorScreen> {
     final room = context.read<RoomSession>();
     return Scaffold(
       appBar: AppBar(
+        leading: const RouterBackButton(),
         title: Text(context.l10n.roomTitle(widget.roomId)),
         actions: [
           IconButton(

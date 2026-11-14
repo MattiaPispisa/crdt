@@ -1,6 +1,7 @@
 // Copyright 2025 Mattia Pispisa
 // SPDX-License-Identifier: MIT
 
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:greyhound_markdown_client/src/screens/changelog_screen.dart';
@@ -74,6 +75,50 @@ void main() {
 
       expect(locationOf(router), '/settings/changelog');
       expect(find.byType(ChangelogScreen), findsOneWidget);
+    });
+
+    testWidgets('gives a back arrow to every page above another page', (
+      tester,
+    ) async {
+      for (final location in [
+        '/settings',
+        '/settings/changelog',
+        '/room/abc123/history',
+        '/room/abc123/settings',
+        '/room/abc123/settings/changelog',
+      ]) {
+        await pumpRouterApp(
+          tester,
+          initialLocation: location,
+          historyBuilder: (_) => Scaffold(appBar: AppBar()),
+        );
+
+        expect(find.byType(BackButton), findsOneWidget, reason: location);
+      }
+    });
+
+    testWidgets('gives no back arrow to the first page of the room shell', (
+      tester,
+    ) async {
+      await pumpRouterApp(
+        tester,
+        initialLocation: '/room/abc123',
+        roomBuilder: (_) => Scaffold(appBar: AppBar()),
+      );
+
+      expect(find.byType(BackButton), findsNothing);
+    });
+
+    testWidgets('gives a back arrow to a page of the room shell itself', (
+      tester,
+    ) async {
+      await pumpRouterApp(
+        tester,
+        initialLocation: '/room/abc123',
+        roomShell: (_, _) => Scaffold(appBar: AppBar()),
+      );
+
+      expect(find.byType(BackButton), findsOneWidget);
     });
   });
 }
