@@ -279,6 +279,13 @@ class _FugueRichTextEmbedOperation extends FugueTextInsertOperation {
   FugueElementID get element => items.single.id;
 
   @override
+  Map<String, dynamic> toPayload() => {
+        ...super.toPayload(),
+        'element': element.toString(),
+        'data': data,
+      };
+
+  @override
   Uint8List toBodyBytes() => (BytesBuilder(copy: false)
         ..add(leftOrigin.toBytes())
         ..add(rightOrigin.toBytes())
@@ -316,6 +323,13 @@ class _FugueRichTextEmbedUpdateOperation extends Operation {
   final Map<String, Object?> data;
 
   Uint8List? _dataBytes;
+
+  @override
+  Map<String, dynamic> toPayload() => {
+        ...super.toPayload(),
+        'element': element.toString(),
+        'data': data,
+      };
 
   @override
   Uint8List toBodyBytes() => (BytesBuilder(copy: false)

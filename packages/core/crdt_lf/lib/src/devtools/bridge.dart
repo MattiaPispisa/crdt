@@ -87,6 +87,12 @@ abstract final class DevToolsBridge {
             maxDepth: _intParam(params, 'maxDepth', 8),
           ),
         };
+      case 'changes':
+        final (tracked, doc) = _resolve(params);
+        return _changes(tracked, doc, params);
+      case 'operation':
+        final (_, doc) = _resolve(params);
+        return _operation(doc, params);
     }
     throw ArgumentError.value(method, 'method', 'Unknown method');
   }
@@ -283,6 +289,91 @@ abstract final class DevToolsBridge {
       throw ArgumentError.value(raw, name, 'Expected a non-negative integer');
     }
     return value;
+  }
+
+  static Uint8List _bytesParam(Map<String, String> params, String name) {
+    final raw = params[name];
+    if (raw == null) {
+      throw ArgumentError.value(raw, name, 'Expected base64 bytes');
+    }
+    try {
+      return base64Decode(raw);
+    } on FormatException {
+      throw ArgumentError.value(raw, name, 'Expected base64 bytes');
+    }
+  }
+
+  static Map<String, Object?> _changes(
+    _Tracked tracked,
+    CRDTDocument doc,
+    Map<String, String> params,
+  ) {
+    final limit = _intParam(params, 'limit', 1000);
+    final VersionVector since;
+    if (params.containsKey('since')) {
+      final bytes = _bytesParam(params, 'since');
+      try {
+        since = VersionVector.fromBytes(bytes);
+      } on FormatException catch (e) {
+        throw ArgumentError.value(params['since'], 'since', e.message);
+      }
+    } else {
+      since = VersionVector({});
+    }
+    final changes = doc._log.exportChangesNewerThan(since)
+      ..sort(compareChangeOrder);
+    final page = changes.length > limit ? changes.sublist(0, limit) : changes;
+    return {
+      'pruneEpoch': tracked.pruneEpoch,
+      'changeCount': doc._log.changeCount,
+      'done': page.length == changes.length,
+      'changes': [for (final change in page) base64Encode(change.toBytes())],
+    };
+  }
+
+  static Map<String, Object?> _operation(
+    CRDTDocument doc,
+    Map<String, String> params,
+  ) {
+    final bytes = _bytesParam(params, 'change');
+    final Change change;
+    try {
+      change = Change.fromBytes(bytes);
+    } on FormatException catch (e) {
+      throw ArgumentError.value(params['change'], 'change', e.message);
+    }
+    final result = <String, Object?>{
+      'changeId': change.id.toString(),
+      'handlerId': null,
+      'handlerType': null,
+      'kind': null,
+      'stamped': null,
+      'open': false,
+      'payload': null,
+      'error': null,
+    };
+    try {
+      final envelope = OperationEnvelopeCodec.decode(change.payloadBytes());
+      result
+        ..['handlerId'] = envelope.handlerId
+        ..['handlerType'] = envelope.handlerType
+        ..['kind'] = envelope.kind
+        ..['stamped'] = envelope.stamped;
+      final handler = doc._registry.publicView[envelope.handlerId];
+      if (handler == null || handler.handlerType != envelope.handlerType) {
+        return result;
+      }
+      result
+        ..['open'] = true
+        ..['payload'] = encodeDevToolsValue(
+          handler._operationFromChange(change)?.toPayload(),
+        );
+      // A broken body can throw any error, and the tool must still show the
+      // change.
+    } on Object catch (e) {
+      result['error'] = '$e';
+    }
+    return result;
   }
 
   static Map<String, Object?> _handlers(CRDTDocument doc) {

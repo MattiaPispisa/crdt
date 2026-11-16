@@ -1,8 +1,12 @@
 // Copyright 2025 Mattia Pispisa
 // SPDX-License-Identifier: MIT
 
+import 'dart:convert';
+import 'dart:typed_data';
+
 import 'package:crdt_lf/crdt_lf.dart';
 import 'package:crdt_lf/src/document/document.dart' show DevToolsBridge;
+import 'package:hlc_dart/hlc_dart.dart';
 import 'package:test/test.dart';
 
 import '../helpers/asset_aggregate.dart';
@@ -343,6 +347,171 @@ void main() {
           throwsArgumentError,
         );
       }
+    });
+
+    List<Change> decode(Map<String, Object?> page) => [
+          for (final raw in page['changes']! as List)
+            Change.fromBytes(base64Decode(raw as String)),
+        ];
+
+    // The highest clock per author: what a caller sends as the next `since`.
+    String sinceOf(List<Change> changes) => base64Encode(
+          VersionVector({
+            for (final change in changes) change.author: change.hlc,
+          }).toBytes(),
+        );
+
+    test('changes pages through the log with limit and since', () {
+      final doc = CRDTDocument();
+      final text = CRDTTextHandler(doc, 'text');
+      for (var i = 0; i < 5; i++) {
+        text.insert(i, 'x');
+      }
+      final id = '${trackedId(doc)}';
+
+      final first = DevToolsBridge.call('changes', {'doc': id, 'limit': '2'});
+      expect(first['done'], isFalse);
+      expect(first['changeCount'], 5);
+      final held = decode(first);
+      expect(held, hasLength(2));
+
+      while (true) {
+        final page = DevToolsBridge.call(
+          'changes',
+          {'doc': id, 'limit': '2', 'since': sinceOf(held)},
+        );
+        held.addAll(decode(page));
+        if (page['done']! as bool) break;
+      }
+      expect(held, doc.exportChanges().sorted());
+    });
+
+    test('changes come in the replay order of two peers', () {
+      final a = CRDTDocument(peerId: PeerId.generate());
+      final b = CRDTDocument(peerId: PeerId.generate());
+      final textA = CRDTTextHandler(a, 'text');
+      final textB = CRDTTextHandler(b, 'text');
+      for (var i = 0; i < 3; i++) {
+        textA.insert(0, 'a');
+        textB.insert(0, 'b');
+      }
+      a.importChanges(b.exportChanges());
+
+      final changes =
+          decode(DevToolsBridge.call('changes', {'doc': '${trackedId(a)}'}));
+      expect(changes, hasLength(6));
+      expect(changes, [...changes]..sort(compareChangeOrder));
+      expect(changes.map((c) => c.author).toSet(), {a.peerId, b.peerId});
+    });
+
+    test('changes drops the pruned changes and moves pruneEpoch', () {
+      final doc = CRDTDocument();
+      CRDTTextHandler(doc, 'text').insert(0, 'a');
+      doc.takeSnapshot();
+
+      final page = DevToolsBridge.call('changes', {'doc': '${trackedId(doc)}'});
+      expect(page, {
+        'pruneEpoch': 1,
+        'changeCount': 0,
+        'done': true,
+        'changes': <String>[],
+      });
+    });
+
+    test('changes and operation check their parameters', () {
+      final doc = CRDTDocument();
+      final id = '${trackedId(doc)}';
+      for (final (method, params) in [
+        ('changes', {'doc': id, 'since': '%'}),
+        (
+          'changes',
+          {
+            'doc': id,
+            'since': base64Encode([1]),
+          }
+        ),
+        ('operation', {'doc': id}),
+        (
+          'operation',
+          {
+            'doc': id,
+            'change': base64Encode([0]),
+          }
+        ),
+      ]) {
+        expect(() => DevToolsBridge.call(method, params), throwsArgumentError);
+      }
+    });
+
+    test('operation decodes a change of an open handler', () {
+      final doc = CRDTDocument();
+      final text = CRDTTextHandler(doc, 'text')..insert(0, 'hi');
+      final change = doc.exportChanges().single;
+
+      final result = DevToolsBridge.call('operation', {
+        'doc': '${trackedId(doc)}',
+        'change': base64Encode(change.toBytes()),
+      });
+      expect(result, {
+        'changeId': change.id.toString(),
+        'handlerId': 'text',
+        'handlerType': text.handlerType,
+        'kind': OperationType.kindInsert,
+        'stamped': false,
+        'open': true,
+        'payload': {
+          r'$t': 'map',
+          'length': 5,
+          'entries': [
+            ['id', 'text'],
+            ['type', text.insertType.toPayload()],
+            ['stamp', change.id.toString()],
+            ['index', 0],
+            ['text', 'hi'],
+          ],
+        },
+        'error': null,
+      });
+    });
+
+    test('operation leaves a change of a closed handler undecoded', () {
+      final source = CRDTDocument();
+      CRDTTextHandler(source, 'text').insert(0, 'hi');
+      final doc = CRDTDocument()..importChanges(source.exportChanges());
+      final change = doc.exportChanges().single;
+
+      final result = DevToolsBridge.call('operation', {
+        'doc': '${trackedId(doc)}',
+        'change': base64Encode(change.toBytes()),
+      });
+      expect(result, containsPair('handlerId', 'text'));
+      expect(result, containsPair('open', false));
+      expect(result, containsPair('payload', null));
+      expect(result, containsPair('error', null));
+    });
+
+    test('operation reports a body it cannot decode', () {
+      final doc = CRDTDocument();
+      final text = CRDTTextHandler(doc, 'text');
+      final change = Change.fromPayloadBytes(
+        id: OperationId(doc.peerId, HybridLogicalClock(l: 1, c: 0)),
+        deps: {},
+        author: doc.peerId,
+        payloadBytes: OperationEnvelopeCodec.encode(
+          handlerType: text.handlerType,
+          handlerId: text.id,
+          kind: OperationType.kindInsert,
+          body: Uint8List.fromList([0xFF]),
+        ),
+      );
+
+      final result = DevToolsBridge.call('operation', {
+        'doc': '${trackedId(doc)}',
+        'change': base64Encode(change.toBytes()),
+      });
+      expect(result, containsPair('handlerId', 'text'));
+      expect(result, containsPair('payload', null));
+      expect(result['error'], isA<String>());
     });
   });
 }
