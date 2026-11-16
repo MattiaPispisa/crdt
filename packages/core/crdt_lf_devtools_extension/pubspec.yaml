@@ -21,15 +21,11 @@ dependencies:
   flutter_bloc: ^9.1.0
   equatable: ^2.0.7
 
-  # presentation
-  graphview: ^1.2.0
-
   # extension for
   crdt_lf: ">=4.0.0 <6.0.0"
 dev_dependencies:
   flutter_test:
     sdk: flutter
-  test:
   ws_lint:
     path: ../../_internal/ws_lint
 

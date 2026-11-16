@@ -2,128 +2,96 @@
 // SPDX-License-Identifier: MIT
 
 import 'dart:async';
-import 'dart:convert';
 
 import 'package:bloc/bloc.dart';
-import 'package:crdt_lf_devtools_extension/src/application/devtools/eval.dart';
-import 'package:crdt_lf_devtools_extension/src/application/devtools/event.dart';
-import 'package:devtools_app_shared/utils.dart';
+import 'package:crdt_lf_devtools_extension/src/bridge/crdt_lf_client.dart';
+import 'package:crdt_lf_devtools_extension/src/bridge/models/models.dart';
+import 'package:crdt_lf_devtools_extension/src/bridge/reload_gate.dart';
 import 'package:equatable/equatable.dart';
-import 'package:vm_service/vm_service.dart';
 
 part 'documents_state.dart';
 
-class DocumentsCubitArgs {
-  const DocumentsCubitArgs({required this.service});
-
-  final VmService service;
-}
-
-/// Cubit loading the list of CRDT documents tracked by the target app.
+/// Lists the documents of the app, and keeps the selection across
+/// reloads.
 ///
-/// Refreshes whenever a new document is registered on the target side
-/// (event `crdt_lf:documents:created`) or when [load] is invoked manually.
+/// It reloads when the protocol becomes available and on the `documents`
+/// and `document` events. A burst of events shares one load, made after
+/// `delay`.
 class DocumentsCubit extends Cubit<DocumentsState> {
-  DocumentsCubit(this.args) : super(DocumentsState.initial()) {
-    unawaited(load());
-    _setupEventSubscription();
+  DocumentsCubit(
+    this._client, {
+    Duration delay = const Duration(milliseconds: 100),
+  }) : super(const DocumentsState()) {
+    _gate = ReloadGate(_load, delay: delay);
+    _events = _client.events.listen(_onEvent);
+    _client.bridge.available.addListener(_onAvailable);
+    _onAvailable();
   }
 
-  final DocumentsCubitArgs args;
-  Disposable? _alive;
-  StreamSubscription<Event>? _eventStreamSubscription;
+  final CrdtLfClient _client;
 
-  void _setupEventSubscription() {
-    _eventStreamSubscription = args.service.onExtensionEvent.listen((event) {
-      if (event.isDocumentCreatedEvent) {
-        unawaited(load());
-      } else if (event.isDocumentChangedEvent) {
-        // If the event references a document not yet in our list, the
-        // `crdt_lf:documents:created` event was missed (e.g. the extension
-        // connected after the document was created). Reload to pick it up.
-        final docs = state.documents;
-        if (docs != null && !docs.any((d) => d.id == event.documentId)) {
-          unawaited(load());
-        }
-      }
-    });
+  late final ReloadGate _gate;
+
+  late final StreamSubscription<CrdtLfEvent> _events;
+
+  void _onEvent(CrdtLfEvent event) {
+    if (event is DocumentsMoved || event is DocumentMoved) unawaited(refresh());
   }
 
-  Future<void> load() async {
-    if (state.loading) {
-      return;
-    }
-
-    emit(state.copyWith(loading: true));
-
-    try {
-      _alive?.dispose();
-      _alive = Disposable();
-
-      final eval = CrdtLfEvalExtension.setup(args.service);
-      final json = await eval.evalDocumentsJson(_alive);
-      final list =
-          (jsonDecode(json) as List<dynamic>)
-              .map((e) => TrackedDocument.fromJson(e as Map<String, dynamic>))
-              .toList();
-
-      // Preserve selection across reloads when possible.
-      var selected = state.selectedDocument;
-      if (selected != null) {
-        selected = list.cast<TrackedDocument?>().firstWhere(
-          (d) => d?.id == selected!.id,
-          orElse: () => null,
-        );
-      }
-
-      emit(
-        DocumentsState(
-          loading: false,
-          documents: list,
-          selectedDocument: selected,
-          error: null,
-        ),
-      );
-    } catch (e) {
-      emit(
-        DocumentsState(
-          loading: false,
-          documents: state.documents,
-          selectedDocument: state.selectedDocument,
-          error: e.toString(),
-        ),
-      );
+  void _onAvailable() {
+    if (_client.bridge.available.value) {
+      unawaited(refresh());
+    } else {
+      emit(const DocumentsState());
     }
   }
 
-  void select(int? id) {
-    if (id == null) {
-      emit(
-        DocumentsState(
-          documents: state.documents,
-          selectedDocument: null,
-          loading: state.loading,
-          error: state.error,
-        ),
-      );
-      return;
-    }
+  /// Asks for a reload.
+  Future<void> refresh() => _gate.request();
 
-    final docs = state.documents;
-    if (docs == null) return;
-    final match = docs.cast<TrackedDocument?>().firstWhere(
-      (d) => d?.id == id,
-      orElse: () => null,
+  /// Selects the document [id]; an unknown id is ignored.
+  void select(int id) {
+    if (state.documents.every((d) => d.id != id)) return;
+    emit(
+      DocumentsState(
+        status: state.status,
+        documents: state.documents,
+        selectedId: id,
+        error: state.error,
+      ),
     );
-    if (match != null) {
-      emit(state.copyWith(selectedDocument: match));
+  }
+
+  Future<void> _load() async {
+    try {
+      final documents = await _client.documents();
+      if (isClosed) return;
+      final kept = documents.any((d) => d.id == state.selectedId);
+      emit(
+        DocumentsState(
+          status: DocumentsStatus.loaded,
+          documents: documents,
+          selectedId: kept ? state.selectedId : documents.firstOrNull?.id,
+        ),
+      );
+    } on Object catch (e) {
+      if (isClosed) return;
+      emit(
+        DocumentsState(
+          status: DocumentsStatus.failure,
+          documents: state.documents,
+          selectedId: state.selectedId,
+          error: '$e',
+        ),
+      );
     }
   }
 
   @override
-  Future<void> close() {
-    _alive?.dispose();
-    unawaited(_eventStreamSubscription?.cancel());
+  Future<void> close() async {
+    _gate.dispose();
+    _client.bridge.available.removeListener(_onAvailable);
+    await _events.cancel();
     return super.close();
   }
 }

@@ -11,7 +11,6 @@ import 'package:crdt_lf/crdt_lf.dart';
 import 'package:crdt_lf/src/capabilities/data_requirements_tracker.dart';
 import 'package:crdt_lf/src/change/change_log.dart';
 import 'package:crdt_lf/src/compound/compound.dart';
-import 'package:crdt_lf/src/devtools/devtools.dart' as devtools;
 import 'package:crdt_lf/src/devtools/value_encoder.dart';
 import 'package:crdt_lf/src/document/document_clock.dart';
 import 'package:crdt_lf/src/document/document_events.dart';
@@ -447,7 +446,6 @@ class CRDTDocument extends BaseCRDTDocument {
       outbox: _outbox,
       transactions: _transactionManager,
     );
-    devtools.handleCreated(this);
     DevToolsBridge._created(this);
   }
 
@@ -1018,7 +1016,6 @@ class CRDTDocument extends BaseCRDTDocument {
       // change passes exactly once, whatever order it arrived in.
       _dataRequirements.fold(change);
     }
-    devtools.postChangedEvent(this);
     DevToolsBridge._changed(this);
 
     // Always advance the clock past the applied change.

@@ -15,11 +15,13 @@ import 'package:flutter/foundation.dart';
 /// A [CrdtLfBridge] on the documents of this isolate, for tests and the
 /// demo.
 ///
-/// It is always [available] and never [paused]. Listening to [events] takes
-/// the single `DevToolsBridge.onEvent` slot until the last listener leaves.
+/// It is always [connected] and [available], and never [paused]. Listening
+/// to [events] takes the single `DevToolsBridge.onEvent` slot until the
+/// last listener leaves.
 class InProcessBridge implements CrdtLfBridge {
   InProcessBridge()
     : _events = StreamController<BridgeEvent>.broadcast(),
+      _connected = ValueNotifier<bool>(true),
       _available = ValueNotifier<bool>(true),
       _paused = ValueNotifier<bool>(false) {
     _events
@@ -28,6 +30,8 @@ class InProcessBridge implements CrdtLfBridge {
   }
 
   final StreamController<BridgeEvent> _events;
+
+  final ValueNotifier<bool> _connected;
 
   final ValueNotifier<bool> _available;
 
@@ -48,6 +52,9 @@ class InProcessBridge implements CrdtLfBridge {
 
   @override
   Stream<BridgeEvent> get events => _events.stream;
+
+  @override
+  ValueListenable<bool> get connected => _connected;
 
   @override
   ValueListenable<bool> get available => _available;
@@ -74,6 +81,7 @@ class InProcessBridge implements CrdtLfBridge {
   void dispose() {
     _cancel();
     unawaited(_events.close());
+    _connected.dispose();
     _available.dispose();
     _paused.dispose();
   }

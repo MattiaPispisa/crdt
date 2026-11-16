@@ -15,6 +15,9 @@ abstract interface class CrdtLfBridge {
   /// The `crdt_lf:devtools:*` events posted by the app.
   Stream<BridgeEvent> get events;
 
+  /// Whether DevTools is connected to an app.
+  ValueListenable<bool> get connected;
+
   /// Whether the app registered the protocol: it does so with its first
   /// document.
   ValueListenable<bool> get available;
