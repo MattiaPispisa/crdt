@@ -4,6 +4,7 @@
 import 'dart:async';
 import 'dart:collection';
 import 'dart:convert';
+import 'dart:developer' as developer;
 import 'dart:typed_data';
 
 import 'package:crdt_lf/crdt_lf.dart';
@@ -26,6 +27,7 @@ import 'package:hlc_dart/hlc_dart.dart';
 // [Handler] shares this library so the hooks the framework calls on it can stay
 // private. See the "Extension points" section of its documentation for the
 // members a custom handler is meant to override.
+part '../devtools/bridge.dart';
 part '../handler/handler.dart';
 part 'cache_coordinator.dart';
 part 'deletions_registry.dart';
@@ -445,6 +447,7 @@ class CRDTDocument extends BaseCRDTDocument {
       transactions: _transactionManager,
     );
     devtools.handleCreated(this);
+    DevToolsBridge._created(this);
   }
 
   final ChangeLog _log;
@@ -490,12 +493,15 @@ class CRDTDocument extends BaseCRDTDocument {
   void _registerHandler(Handler<dynamic> handler) {
     super._registerHandler(handler);
     _cache.track(handler);
+    DevToolsBridge._handlersChanged(this);
   }
 
   @override
   Handler<dynamic>? _unregisterHandler(String id) {
     _cache.forget(id);
-    return super._unregisterHandler(id);
+    final handler = super._unregisterHandler(id);
+    DevToolsBridge._handlersChanged(this);
+    return handler;
   }
 
   /// The unfolded changes the snapshot carries for [handlerId]; none when they
@@ -1012,6 +1018,7 @@ class CRDTDocument extends BaseCRDTDocument {
       _dataRequirements.fold(change);
     }
     devtools.postChangedEvent(this);
+    DevToolsBridge._changed(this);
 
     // Always advance the clock past the applied change.
     _clock.receive(change.hlc);
@@ -1150,6 +1157,7 @@ class CRDTDocument extends BaseCRDTDocument {
     // Before the prune, so a consumer mirroring this document writes the
     // snapshot down before it is told to drop the changes the snapshot covers.
     _snapshots.current = snapshot;
+    DevToolsBridge._snapshotChanged(this);
     _documentEvents.publish(
       DocumentSnapshotUpdated(
         snapshot: snapshot,
@@ -1229,6 +1237,7 @@ class CRDTDocument extends BaseCRDTDocument {
 
       // Before the prune, for the reason written down in [takeSnapshot].
       _snapshots.current = snapshot;
+      DevToolsBridge._snapshotChanged(this);
       _documentEvents.publish(
         DocumentSnapshotUpdated(
           snapshot: snapshot,
@@ -1282,6 +1291,7 @@ class CRDTDocument extends BaseCRDTDocument {
     // First: a record this build cannot read throws before anything moves.
     SnapshotRecords.unfoldedEntriesOf(snapshot);
     final merged = _snapshots.merge(snapshot);
+    DevToolsBridge._snapshotChanged(this);
     _dataRequirements.readRecord(snapshot);
     _clock.advancePast(snapshot.versionVector);
     _cache.bumpForSnapshot(snapshot);
@@ -1506,6 +1516,7 @@ class CRDTDocument extends BaseCRDTDocument {
 
   /// Prunes the DAG and the change store up to the given version.
   void _prune(VersionVector version) {
+    DevToolsBridge._pruned(this);
     _deletions.notePrune();
     final before = _log.frontiers;
     _log.prune(
@@ -1621,6 +1632,7 @@ class CRDTDocument extends BaseCRDTDocument {
     _flushOutbox();
     _documentEvents.close();
     _undo.dispose();
+    DevToolsBridge._disposed(this);
     super.dispose();
     _cache.clear();
   }
