@@ -66,6 +66,27 @@ abstract final class DevToolsBridge {
               entry.key: entry.value.toString(),
           },
         };
+      case 'handlers':
+        final (_, doc) = _resolve(params);
+        return _handlers(doc);
+      case 'handlerValue':
+        final (_, doc) = _resolve(params);
+        final id = params['handler'];
+        final handler = id == null ? null : doc._registry.publicView[id];
+        if (handler == null) {
+          throw ArgumentError.value(id, 'handler', 'Unknown handler');
+        }
+        return {
+          'id': handler.id,
+          'type': handler.handlerType,
+          'revision': doc.revisionForHandler(handler.id),
+          'value': encodeDevToolsValue(
+            handler.value,
+            maxItems: _intParam(params, 'maxItems', 200),
+            maxString: _intParam(params, 'maxString', 10000),
+            maxDepth: _intParam(params, 'maxDepth', 8),
+          ),
+        };
     }
     throw ArgumentError.value(method, 'method', 'Unknown method');
   }
@@ -253,6 +274,81 @@ abstract final class DevToolsBridge {
         'undoManagers': doc._undo.managers.length,
         'recording': tracked.events != null,
       };
+
+  static int _intParam(Map<String, String> params, String name, int fallback) {
+    final raw = params[name];
+    if (raw == null) return fallback;
+    final value = int.tryParse(raw);
+    if (value == null || value < 0) {
+      throw ArgumentError.value(raw, name, 'Expected a non-negative integer');
+    }
+    return value;
+  }
+
+  static Map<String, Object?> _handlers(CRDTDocument doc) {
+    final open = doc._registry.publicView;
+    final deleted = doc._deletions._deletedIds;
+    final snapshot = doc._lastSnapshot;
+    final manifest = _HandlerRegistry.manifestOf(snapshot);
+    final closed = <String>{
+      ...SnapshotRecords.handlerIdsOf(snapshot),
+      ...doc._log.handlerIds,
+    }..removeWhere(
+        (id) =>
+            open.containsKey(id) ||
+            deleted.contains(id) ||
+            SnapshotRecords.reservedKeys.contains(id) ||
+            _HandlerDeletions.isReserved(id),
+      );
+    return {
+      'open': [
+        for (final handler in open.values) _handlerSummary(doc, handler),
+      ],
+      'closed': [
+        for (final id in closed)
+          {
+            'id': id,
+            'type': manifest[id] ??
+                _HandlerRegistry.typeIn(doc.changesForHandler(id)),
+            'changeCount': doc.changeCountForHandler(id),
+          },
+      ],
+      'deleted': [...deleted],
+    };
+  }
+
+  static Map<String, Object?> _handlerSummary(
+    CRDTDocument doc,
+    Handler<dynamic> handler,
+  ) {
+    final id = handler.id;
+    return {
+      'id': id,
+      'type': handler.handlerType,
+      'container': handler is ContainerHandler,
+      // `childRefs` reads the value: the one read `handlers` allows, so
+      // only containers build their cache here.
+      'children': [
+        if (handler is ContainerHandler)
+          for (final ref in (handler as ContainerHandler).childRefs())
+            {'id': ref.id, 'type': ref.type},
+      ],
+      'changeCount': doc.changeCountForHandler(id),
+      'revision': doc.revisionForHandler(id),
+      'cache': handler._cachedState == null
+          ? 'none'
+          : handler._cachedEpoch != doc._cache.epoch
+              ? 'stale'
+              : 'warm',
+      'pendingRemote': handler._pendingRemoteChanges?.length ?? 0,
+      'deltas': handler is DeltaProvider,
+      'watched': handler.hasDeltaListeners,
+      'deltaSeq': handler._deltaHub?.seq ?? 0,
+      'invertible': handler.invertible,
+      'undoTracked': doc._undo.managers.any((m) => m._tracked.contains(id)),
+      'snapshotBytes': handler.lastSnapshot()?.length,
+    };
+  }
 
   static Map<String, Object?> _undo(CRDTUndoManager manager) => {
         'canUndo': manager.canUndo,

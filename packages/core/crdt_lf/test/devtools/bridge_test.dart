@@ -5,6 +5,8 @@ import 'package:crdt_lf/crdt_lf.dart';
 import 'package:crdt_lf/src/document/document.dart' show DevToolsBridge;
 import 'package:test/test.dart';
 
+import '../helpers/asset_aggregate.dart';
+
 void main() {
   group('DevToolsBridge', () {
     late List<(String, Map<String, Object?>)> events;
@@ -172,6 +174,175 @@ void main() {
 
       expect(events, isEmpty);
       expect(documents().single['pruneEpoch'], 1);
+    });
+
+    Map<String, Object?> handlers(CRDTDocument doc) =>
+        DevToolsBridge.call('handlers', {'doc': '${trackedId(doc)}'});
+
+    Map<String, Object?> openHandler(CRDTDocument doc, String id) =>
+        (handlers(doc)['open']! as List)
+            .cast<Map<String, Object?>>()
+            .firstWhere((h) => h['id'] == id);
+
+    Object? valueOf(CRDTDocument doc, String id) => DevToolsBridge.call(
+          'handlerValue',
+          {'doc': '${trackedId(doc)}', 'handler': id},
+        )['value'];
+
+    test('handlers lists a container with its children', () {
+      final doc = CRDTDocument();
+      final text = CRDTTextHandler(doc, 'text')..insert(0, 'a');
+      CRDTMapRefHandler(doc, 'root').setRef('child', text);
+
+      final root = openHandler(doc, 'root');
+      expect(root['container'], isTrue);
+      expect(root['children'], [
+        {'id': 'text', 'type': text.handlerType},
+      ]);
+      expect(root['changeCount'], 1);
+      expect(root['cache'], 'warm');
+
+      final child = openHandler(doc, 'text');
+      expect(child, {
+        'id': 'text',
+        'type': text.handlerType,
+        'container': false,
+        'children': <Object?>[],
+        'changeCount': 1,
+        'revision': doc.revisionForHandler('text'),
+        'cache': child['cache'],
+        'pendingRemote': 0,
+        'deltas': true,
+        'watched': false,
+        'deltaSeq': 0,
+        'invertible': text.invertible,
+        'undoTracked': false,
+        'snapshotBytes': null,
+      });
+    });
+
+    test('handlers moves a deleted handler to deleted', () {
+      final doc = CRDTDocument();
+      final text = CRDTTextHandler(doc, 'text')..insert(0, 'a');
+      doc.deleteHandler(text);
+
+      final result = handlers(doc);
+      expect(result['open'], isEmpty);
+      expect(result['closed'], isEmpty);
+      expect(result['deleted'], ['text']);
+    });
+
+    test('handlers lists a handler with changes and no instance as closed', () {
+      final source = CRDTDocument();
+      final text = CRDTTextHandler(source, 'text')..insert(0, 'a');
+      final doc = CRDTDocument()..importChanges(source.exportChanges());
+
+      expect(handlers(doc)['closed'], [
+        {'id': 'text', 'type': text.handlerType, 'changeCount': 1},
+      ]);
+
+      // A container makes the snapshot carry its handler manifest.
+      CRDTMapRefHandler(source, 'root').setRef('child', text);
+      source.takeSnapshot();
+      final restored = CRDTDocument()..importSnapshot(source.snapshot!);
+      expect(handlers(restored)['closed'], [
+        {'id': 'text', 'type': text.handlerType, 'changeCount': 0},
+        {'id': 'root', 'type': 'CRDTMapRefHandler', 'changeCount': 0},
+      ]);
+    });
+
+    test('the cache is none before a read and warm after', () {
+      final source = CRDTDocument();
+      CRDTTextHandler(source, 'text').insert(0, 'a');
+      final doc = CRDTDocument()..importChanges(source.exportChanges());
+      final text = CRDTTextHandler(doc, 'text');
+
+      expect(openHandler(doc, 'text')['cache'], 'none');
+      expect(openHandler(doc, 'text')['cache'], 'none');
+      expect(text.value, 'a');
+      expect(openHandler(doc, 'text')['cache'], 'warm');
+    });
+
+    test('handlerValue encodes the value of each handler kind', () {
+      final doc = CRDTDocument();
+      CRDTTextHandler(doc, 'text').insert(0, 'ab');
+      CRDTFugueTextHandler(doc, 'fugue-text').insert(0, 'cd');
+      CRDTListHandler<int>(doc, 'list', handlerType: 'list').insert(0, 1);
+      CRDTFugueListHandler<int>(doc, 'fugue-list', handlerType: 'fl')
+          .insert(0, 2);
+      CRDTFugueMovableListHandler<int>(doc, 'movable', handlerType: 'mv')
+          .insert(0, 3);
+      CRDTMapHandler<int>(doc, 'map', handlerType: 'map').set('k', 4);
+      CRDTRegisterHandler<int>(doc, 'register', handlerType: 'register').set(5);
+      CRDTORSetHandler<int>(doc, 'or-set', handlerType: 'or-set').add(6);
+      CRDTORMapHandler<String, int>(doc, 'or-map', handlerType: 'om')
+          .put('k', 7);
+      CRDTFugueRichTextHandler(doc, 'rich').insert(0, 'hi');
+      final asset = doc.handler(
+        CRDTAggregateHandler.spec(const AssetAggregate()),
+        'asset',
+      );
+      CRDTListRefHandler(doc, 'refs').insertRef(0, asset);
+
+      // The kind, the length and the single item of a one-item collection.
+      List<Object?> one(String kind, Object? item) => [kind, 1, item];
+      List<Object?> shape(Object? node) {
+        final map = node! as Map;
+        return [map[r'$t'], map['length'], (map['items'] as List?)?.single];
+      }
+
+      expect(valueOf(doc, 'text'), 'ab');
+      expect(valueOf(doc, 'fugue-text'), 'cd');
+      expect(shape(valueOf(doc, 'list')), one('list', 1));
+      expect(shape(valueOf(doc, 'fugue-list')), one('list', 2));
+      expect(shape(valueOf(doc, 'movable')), one('list', 3));
+      expect((valueOf(doc, 'map')! as Map)['entries'], [
+        ['k', 4],
+      ]);
+      expect(valueOf(doc, 'register'), 5);
+      expect(shape(valueOf(doc, 'or-set')), one('set', 6));
+      expect((valueOf(doc, 'or-map')! as Map)['entries'], [
+        ['k', 7],
+      ]);
+      expect(
+        (shape(valueOf(doc, 'rich'))[2]! as Map)['text'],
+        'hi',
+      );
+      expect((valueOf(doc, 'asset')! as Map)[r'$t'], 'object');
+      expect(
+        shape(valueOf(doc, 'refs')),
+        one('list', {r'$t': 'ref', 'id': 'asset', 'type': asset.handlerType}),
+      );
+    });
+
+    test('handlerValue applies the limits and checks its parameters', () {
+      final doc = CRDTDocument();
+      CRDTTextHandler(doc, 'text').insert(0, 'abcdef');
+      final id = '${trackedId(doc)}';
+
+      final result = DevToolsBridge.call('handlerValue', {
+        'doc': id,
+        'handler': 'text',
+        'maxString': '2',
+      });
+      expect(result, {
+        'id': 'text',
+        'type': doc.handlerById('text')!.handlerType,
+        'revision': doc.revisionForHandler('text'),
+        'value': {r'$t': 'string', 'length': 6, 'head': 'ab'},
+      });
+
+      for (final params in [
+        {'doc': id},
+        {'doc': id, 'handler': 'missing'},
+        {'doc': id, 'handler': 'text', 'maxItems': 'x'},
+        {'doc': id, 'handler': 'text', 'maxDepth': '-1'},
+      ]) {
+        expect(
+          () => DevToolsBridge.call('handlerValue', params),
+          throwsArgumentError,
+        );
+      }
     });
   });
 }

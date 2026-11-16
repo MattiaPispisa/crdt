@@ -12,6 +12,7 @@ import 'package:crdt_lf/src/capabilities/data_requirements_tracker.dart';
 import 'package:crdt_lf/src/change/change_log.dart';
 import 'package:crdt_lf/src/compound/compound.dart';
 import 'package:crdt_lf/src/devtools/devtools.dart' as devtools;
+import 'package:crdt_lf/src/devtools/value_encoder.dart';
 import 'package:crdt_lf/src/document/document_clock.dart';
 import 'package:crdt_lf/src/document/document_events.dart';
 import 'package:crdt_lf/src/document/event_outbox.dart';
