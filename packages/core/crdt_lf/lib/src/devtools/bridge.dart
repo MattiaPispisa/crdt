@@ -17,6 +17,14 @@ abstract final class DevToolsBridge {
 
   static const String _documentEvent = 'crdt_lf:devtools:document';
 
+  static const String _eventEvent = 'crdt_lf:devtools:event';
+
+  static const String _deltaEvent = 'crdt_lf:devtools:delta';
+
+  static const int _maxEventIds = 20;
+
+  static const int _maxDeltaText = 2000;
+
   static const int _protocol = 1;
 
   /// Receives every event the bridge posts, even with no VM service
@@ -108,6 +116,26 @@ abstract final class DevToolsBridge {
       case 'snapshot':
         final (_, doc) = _resolve(params);
         return _snapshot(doc);
+      case 'eventsStart':
+        final (tracked, doc) = _resolve(params);
+        _eventsStart(tracked, doc);
+        return {'recording': true};
+      case 'eventsStop':
+        final (tracked, _) = _resolve(params);
+        tracked.stopEvents();
+        return {'recording': false};
+      case 'watchStart':
+        final (tracked, doc) = _resolve(params);
+        _watchStart(tracked, doc, params);
+        return {'watching': true};
+      case 'watchStop':
+        final (tracked, _) = _resolve(params);
+        final id = params['handler'];
+        if (id == null) {
+          throw ArgumentError.value(id, 'handler', 'Expected a handler id');
+        }
+        tracked.stopWatch(id);
+        return {'watching': false};
     }
     throw ArgumentError.value(method, 'method', 'Unknown method');
   }
@@ -276,6 +304,110 @@ abstract final class DevToolsBridge {
         );
       }
     });
+  }
+
+  static void _eventsStart(_Tracked tracked, CRDTDocument doc) {
+    if (tracked.events != null) return;
+    tracked.events = doc.events.listen((event) {
+      // DevTools can close without a stop call: with no receiver left, the
+      // app must stop paying for the log. The delta watch does the same.
+      if (!_hasReceiver) {
+        tracked.stopEvents();
+        return;
+      }
+      _post(_eventEvent, _event(tracked, event));
+    });
+  }
+
+  static Map<String, Object?> _event(
+    _Tracked tracked,
+    CRDTDocumentEvent event,
+  ) {
+    final (type, changes, origin) = switch (event) {
+      DocumentChangesApplied(:final changes, :final origin) => (
+          'changes',
+          changes,
+          origin
+        ),
+      DocumentSnapshotUpdated(:final origin) => (
+          'snapshot',
+          const <Change>[],
+          origin
+        ),
+      DocumentHistoryPruned(:final removed, :final origin) => (
+          'pruned',
+          removed,
+          origin
+        ),
+    };
+    return {
+      'doc': tracked.id,
+      'n': tracked.eventCount++,
+      'type': type,
+      'source': event is DocumentChangesApplied ? event.source.name : null,
+      'reason': event is DocumentSnapshotUpdated ? event.reason.name : null,
+      'count': changes.length,
+      'ids': [
+        for (final change in changes.take(_maxEventIds)) change.id.toString(),
+      ],
+      'removed': event is DocumentHistoryPruned ? event.removed.length : 0,
+      'rewritten': event is DocumentHistoryPruned ? event.rewritten.length : 0,
+      'snapshotId': event is DocumentSnapshotUpdated ? event.snapshot.id : null,
+      'origin': origin?.runtimeType.toString(),
+    };
+  }
+
+  static void _watchStart(
+    _Tracked tracked,
+    CRDTDocument doc,
+    Map<String, String> params,
+  ) {
+    final id = params['handler'];
+    final handler = id == null ? null : doc._registry.publicView[id];
+    if (id == null || handler == null) {
+      throw ArgumentError.value(id, 'handler', 'Unknown handler');
+    }
+    if (handler is! DeltaProvider) {
+      throw ArgumentError.value(id, 'handler', 'The handler has no deltas');
+    }
+    if (tracked.deltas.containsKey(id)) return;
+    tracked.deltas[id] = (handler as DeltaProvider).watch().listen(
+      (update) {
+        if (!_hasReceiver) {
+          tracked.stopWatch(id);
+          return;
+        }
+        _post(_deltaEvent, _delta(tracked, id, update));
+      },
+      onDone: () => tracked.deltas.remove(id),
+    );
+  }
+
+  static Map<String, Object?> _delta(
+    _Tracked tracked,
+    String handler,
+    HandlerUpdate<Object?> update,
+  ) {
+    final delta = update is HandlerDelta<Object?> ? update : null;
+    final text = delta?.delta.toString();
+    return {
+      'doc': tracked.id,
+      'handler': handler,
+      'seq': update.seq,
+      'type': delta == null ? 'reset' : 'delta',
+      'cause': update is HandlerReset<Object?> ? update.cause.name : null,
+      'changeId': delta?.changeId.toString(),
+      'author': delta?.author.toString(),
+      'local': delta?.local,
+      'origin': delta?.origin?.runtimeType.toString(),
+      'empty': switch (delta?.delta) {
+        final ComposableDelta<Object?> value => value.isEmpty,
+        _ => null,
+      },
+      'delta': text == null || text.length <= _maxDeltaText
+          ? text
+          : text.substring(0, _maxDeltaText),
+    };
   }
 
   static Map<String, Object?> _summary(_Tracked tracked, CRDTDocument doc) => {
@@ -595,7 +727,8 @@ abstract final class DevToolsBridge {
 
 final class _Tracked {
   _Tracked(this.id, CRDTDocument document)
-      : document = WeakReference<CRDTDocument>(document);
+      : document = WeakReference<CRDTDocument>(document),
+        deltas = <String, StreamSubscription<Object?>>{};
 
   final int id;
 
@@ -615,6 +748,10 @@ final class _Tracked {
 
   StreamSubscription<CRDTDocumentEvent>? events;
 
+  int eventCount = 0;
+
+  final Map<String, StreamSubscription<Object?>> deltas;
+
   HistorySession? history;
 
   int? historyId;
@@ -631,9 +768,22 @@ final class _Tracked {
   void close() {
     closed = true;
     clearDirty();
+    stopEvents();
+    for (final subscription in deltas.values) {
+      unawaited(subscription.cancel());
+    }
+    deltas.clear();
+    closeHistory();
+  }
+
+  void stopEvents() {
     unawaited(events?.cancel());
     events = null;
-    closeHistory();
+  }
+
+  void stopWatch(String handler) {
+    final subscription = deltas.remove(handler);
+    if (subscription != null) unawaited(subscription.cancel());
   }
 
   void closeHistory() {

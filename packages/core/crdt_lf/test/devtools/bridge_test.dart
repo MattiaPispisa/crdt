@@ -10,6 +10,7 @@ import 'package:hlc_dart/hlc_dart.dart';
 import 'package:test/test.dart';
 
 import '../helpers/asset_aggregate.dart';
+import '../helpers/pn_counter_handler.dart';
 
 void main() {
   group('DevToolsBridge', () {
@@ -673,6 +674,168 @@ void main() {
       )['snapshot']! as Map<String, Object?>;
       expect(snapshot['unfolded'], {'list': 1});
       expect(snapshot['requirements'], isNull);
+    });
+
+    List<Map<String, Object?>> posted(String kind) => [
+          for (final (k, data) in events)
+            if (k == kind) data,
+        ];
+
+    test('the event log reports writes, imports, snapshots and prunes',
+        () async {
+      final doc = CRDTDocument();
+      final text = CRDTTextHandler(doc, 'text');
+      final id = trackedId(doc);
+      expect(
+        DevToolsBridge.call('eventsStart', {'doc': '$id'}),
+        {'recording': true},
+      );
+      expect(documents().single['recording'], isTrue);
+
+      doc.runInTransaction(
+        () => text
+          ..insert(0, 'a')
+          ..insert(1, 'b')
+          ..insert(2, 'c'),
+        origin: 'editor',
+      );
+      final source = CRDTDocument();
+      CRDTTextHandler(source, 'text').insert(0, 'z');
+      doc.importChanges(source.exportChanges());
+      await pumpEventQueue();
+      final written = doc.exportChanges();
+      final snapshot = doc.takeSnapshot();
+      await pumpEventQueue();
+
+      final logged = posted('crdt_lf:devtools:event');
+      expect(logged.map((e) => e['type']), [
+        'changes',
+        'changes',
+        'snapshot',
+        'pruned',
+      ]);
+      expect(logged.map((e) => e['n']), [0, 1, 2, 3]);
+      expect(logged[0], {
+        'doc': id,
+        'n': 0,
+        'type': 'changes',
+        'source': 'created',
+        'reason': null,
+        'count': logged[0]['count'],
+        'ids': logged[0]['ids'],
+        'removed': 0,
+        'rewritten': 0,
+        'snapshotId': null,
+        'origin': 'editor'.runtimeType.toString(),
+      });
+      expect(logged[1], containsPair('source', 'ingested'));
+      expect(logged[1]['ids'], [source.exportChanges().single.id.toString()]);
+      expect(logged[2], containsPair('reason', 'taken'));
+      expect(logged[2], containsPair('snapshotId', snapshot.id));
+      expect(logged[3], containsPair('removed', written.length));
+      expect(logged[3]['count'], written.length);
+    });
+
+    test('eventsStop stops the event log', () async {
+      final doc = CRDTDocument();
+      final text = CRDTTextHandler(doc, 'text');
+      final id = trackedId(doc);
+      DevToolsBridge.call('eventsStart', {'doc': '$id'});
+      DevToolsBridge.call('eventsStart', {'doc': '$id'});
+      text.insert(0, 'a');
+      await pumpEventQueue();
+      expect(posted('crdt_lf:devtools:event'), hasLength(1));
+
+      expect(
+        DevToolsBridge.call('eventsStop', {'doc': '$id'}),
+        {'recording': false},
+      );
+      text.insert(0, 'b');
+      await pumpEventQueue();
+      expect(posted('crdt_lf:devtools:event'), hasLength(1));
+      expect(documents().single['recording'], isFalse);
+    });
+
+    test('watch posts the reset and the deltas of a handler', () async {
+      final doc = CRDTDocument();
+      final text = CRDTTextHandler(doc, 'text')..insert(0, 'a');
+      expect(text.value, 'a');
+      final id = trackedId(doc);
+      final params = {'doc': '$id', 'handler': 'text'};
+      expect(DevToolsBridge.call('watchStart', params), {'watching': true});
+      DevToolsBridge.call('watchStart', params);
+      await pumpEventQueue();
+      text.insert(1, 'b' * 3000);
+      await pumpEventQueue();
+
+      final deltas = posted('crdt_lf:devtools:delta');
+      expect(deltas, hasLength(2));
+      expect(deltas[0], {
+        'doc': id,
+        'handler': 'text',
+        'seq': deltas[0]['seq'],
+        'type': 'reset',
+        'cause': 'initial',
+        'changeId': null,
+        'author': null,
+        'local': null,
+        'origin': null,
+        'empty': null,
+        'delta': null,
+      });
+      expect(deltas[1], containsPair('type', 'delta'));
+      expect(deltas[1], containsPair('cause', null));
+      expect(
+        deltas[1],
+        containsPair('changeId', doc.version.single.toString()),
+      );
+      expect(deltas[1], containsPair('author', doc.peerId.toString()));
+      expect(deltas[1], containsPair('local', true));
+      expect(deltas[1], containsPair('empty', false));
+      expect(deltas[1]['delta'], hasLength(2000));
+      expect(openHandler(doc, 'text')['watched'], isTrue);
+
+      expect(DevToolsBridge.call('watchStop', params), {'watching': false});
+      text.insert(0, 'c');
+      await pumpEventQueue();
+      expect(posted('crdt_lf:devtools:delta'), hasLength(2));
+      expect(openHandler(doc, 'text')['watched'], isFalse);
+    });
+
+    test('watch checks the handler', () {
+      final doc = CRDTDocument();
+      PNCounterHandler(doc, 'counter');
+      final id = trackedId(doc);
+      for (final params in [
+        {'doc': '$id'},
+        {'doc': '$id', 'handler': 'missing'},
+        {'doc': '$id', 'handler': 'counter'},
+      ]) {
+        expect(
+          () => DevToolsBridge.call('watchStart', params),
+          throwsArgumentError,
+        );
+      }
+      expect(
+        () => DevToolsBridge.call('watchStop', {'doc': '$id'}),
+        throwsArgumentError,
+      );
+    });
+
+    test('the event log and a watch stop when nobody listens', () async {
+      final doc = CRDTDocument();
+      final text = CRDTTextHandler(doc, 'text')..insert(0, 'a');
+      expect(text.value, 'a');
+      final id = trackedId(doc);
+      DevToolsBridge.call('eventsStart', {'doc': '$id'});
+      DevToolsBridge.call('watchStart', {'doc': '$id', 'handler': 'text'});
+      await pumpEventQueue();
+
+      DevToolsBridge.onEvent = null;
+      text.insert(1, 'b');
+      await pumpEventQueue();
+      expect(documents().single['recording'], isFalse);
+      expect(openHandler(doc, 'text')['watched'], isFalse);
     });
   });
 }
