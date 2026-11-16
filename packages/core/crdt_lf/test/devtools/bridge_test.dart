@@ -513,5 +513,166 @@ void main() {
       expect(result, containsPair('payload', null));
       expect(result['error'], isA<String>());
     });
+    Map<String, Object?> historyOpen(CRDTDocument doc) =>
+        DevToolsBridge.call('historyOpen', {'doc': '${trackedId(doc)}'});
+
+    Map<String, Object?> historyState(
+      CRDTDocument doc,
+      Object? session,
+      int cursor,
+    ) =>
+        DevToolsBridge.call('historyState', {
+          'doc': '${trackedId(doc)}',
+          'session': '$session',
+          'cursor': '$cursor',
+          'handler': 'text',
+        });
+
+    test('history shows a handler at the start, middle and end', () {
+      final doc = CRDTDocument();
+      final text = CRDTTextHandler(doc, 'text')
+        ..insert(0, 'a')
+        ..insert(1, 'b')
+        ..insert(2, 'c');
+
+      final open = historyOpen(doc);
+      expect(open['length'], 3);
+      expect(open['handlers'], [
+        {'id': 'text', 'type': text.handlerType},
+      ]);
+      expect(open['versionVector'], documents().single['versionVector']);
+
+      final session = open['session'];
+      expect(historyState(doc, session, 0), {
+        'cursor': 0,
+        'frontiers': <String>[],
+        'value': '',
+      });
+      expect(historyState(doc, session, 2)['value'], 'ab');
+      final end = historyState(doc, session, 3);
+      expect(end['value'], 'abc');
+      expect(end['frontiers'], documents().single['frontiers']);
+      expect(
+        () => historyState(doc, session, 4),
+        throwsA(isA<ArgumentError>()),
+      );
+    });
+
+    test('a second historyOpen or a historyClose ends the session', () {
+      final doc = CRDTDocument();
+      CRDTTextHandler(doc, 'text').insert(0, 'a');
+
+      final first = historyOpen(doc)['session'];
+      final second = historyOpen(doc)['session'];
+      expect(second, isNot(first));
+      expect(
+        () => historyState(doc, first, 0),
+        throwsA(isA<ArgumentError>()),
+      );
+
+      final params = {'doc': '${trackedId(doc)}', 'session': '$second'};
+      expect(DevToolsBridge.call('historyClose', params), isEmpty);
+      expect(
+        () => historyState(doc, second, 0),
+        throwsA(isA<ArgumentError>()),
+      );
+    });
+
+    test('a session keeps its state while the document moves on', () {
+      final doc = CRDTDocument();
+      final text = CRDTTextHandler(doc, 'text')..insert(0, 'ab');
+
+      final session = historyOpen(doc)['session'];
+      text.insert(2, 'c');
+
+      expect(historyState(doc, session, 1)['value'], 'ab');
+    });
+
+    test('snapshot is null before the first snapshot', () {
+      final doc = CRDTDocument();
+      CRDTTextHandler(doc, 'text').insert(0, 'a');
+
+      expect(DevToolsBridge.call('snapshot', {'doc': '${trackedId(doc)}'}), {
+        'snapshot': null,
+        'deleted': <String>[],
+        'liveRequirements': null,
+      });
+    });
+
+    test('snapshot describes the last snapshot', () {
+      final doc = CRDTDocument();
+      final text = CRDTTextHandler(doc, 'text')..insert(0, 'a');
+      final taken = doc.takeSnapshot();
+      doc.describeDataRequirements();
+
+      final result =
+          DevToolsBridge.call('snapshot', {'doc': '${trackedId(doc)}'});
+      final snapshot = result['snapshot']! as Map<String, Object?>;
+      expect(snapshot['id'], taken.id);
+      expect(snapshot['bytes'], taken.toBytes().length);
+      expect(snapshot['versionVector'], documents().single['versionVector']);
+      const capabilities = 'crdt_lf/capabilities';
+      expect(snapshot['entries'], [
+        {
+          'key': 'text',
+          'bytes': taken.data['text']!.length,
+          'reserved': false,
+          'type': null,
+        },
+        {
+          'key': capabilities,
+          'bytes': taken.data[capabilities]!.length,
+          'reserved': true,
+          'type': null,
+        },
+      ]);
+      expect(snapshot['unfolded'], isEmpty);
+      final formats = {text.handlerType: isA<String>()};
+      expect(snapshot['requirements'], formats);
+      expect(result['liveRequirements'], formats);
+    });
+
+    test('snapshot lists a deleted handler', () {
+      final doc = CRDTDocument();
+      final text = CRDTTextHandler(doc, 'text')..insert(0, 'a');
+      doc
+        ..deleteHandler(text)
+        ..takeSnapshot();
+
+      final result =
+          DevToolsBridge.call('snapshot', {'doc': '${trackedId(doc)}'});
+      expect(result['deleted'], ['text']);
+      final entries =
+          (result['snapshot']! as Map<String, Object?>)['entries']! as List;
+      expect(
+        entries.where((e) => (e as Map)['reserved'] == true),
+        isNotEmpty,
+      );
+    });
+    test('snapshot counts unfolded changes and hides a broken record', () {
+      final source = CRDTDocument();
+      CRDTListHandler<int>(source, 'list', handlerType: 'int-list')
+          .insert(0, 1);
+      final doc = CRDTDocument()..importChanges(source.exportChanges());
+      final taken = doc.takeSnapshot();
+      final broken = CRDTDocument()
+        ..importSnapshot(
+          Snapshot(
+            id: taken.id,
+            versionVector: taken.versionVector,
+            data: {
+              ...taken.data,
+              'crdt_lf/capabilities': Uint8List.fromList([0xFF]),
+            },
+          ),
+        );
+
+      final snapshot = DevToolsBridge.call(
+        'snapshot',
+        {'doc': '${trackedId(broken)}'},
+      )['snapshot']! as Map<String, Object?>;
+      expect(snapshot['unfolded'], {'list': 1});
+      expect(snapshot['requirements'], isNull);
+    });
   });
 }

@@ -25,6 +25,8 @@ abstract final class DevToolsBridge {
 
   static int _nextId = 0;
 
+  static int _nextSession = 0;
+
   static final Map<int, _Tracked> _byId = <int, _Tracked>{};
 
   static final Expando<_Tracked> _byDocument = Expando<_Tracked>();
@@ -60,11 +62,8 @@ abstract final class DevToolsBridge {
         return {
           ..._summary(tracked, doc),
           'undo': [for (final manager in doc._undo.managers) _undo(manager)],
-          'capabilities': {
-            for (final entry
-                in doc.describeBuildCapabilities().byHandlerType.entries)
-              entry.key: entry.value.toString(),
-          },
+          'capabilities':
+              _formats(doc.describeBuildCapabilities().byHandlerType),
         };
       case 'handlers':
         final (_, doc) = _resolve(params);
@@ -93,6 +92,22 @@ abstract final class DevToolsBridge {
       case 'operation':
         final (_, doc) = _resolve(params);
         return _operation(doc, params);
+      case 'historyOpen':
+        final (tracked, doc) = _resolve(params);
+        return _historyOpen(tracked, doc);
+      case 'historyState':
+        final (tracked, _) = _resolve(params);
+        return _historyState(tracked, params);
+      case 'historyClose':
+        final (tracked, _) = _resolve(params);
+        // A stale id is a no-op: a newer `historyOpen` already ended it.
+        if (_intParam(params, 'session', -1) == tracked.historyId) {
+          tracked.closeHistory();
+        }
+        return {};
+      case 'snapshot':
+        final (_, doc) = _resolve(params);
+        return _snapshot(doc);
     }
     throw ArgumentError.value(method, 'method', 'Unknown method');
   }
@@ -271,24 +286,149 @@ abstract final class DevToolsBridge {
         'changeCount': doc._log.changeCount,
         'handlerCount': doc._registry.publicView.length,
         'frontiers': [for (final id in doc.version) id.toString()],
-        'versionVector': {
-          for (final entry in doc.getVersionVector().entries)
-            entry.key.toString(): entry.value.toString(),
-        },
+        'versionVector': _versionVector(doc.getVersionVector()),
         'snapshotId': doc._lastSnapshot?.id,
         'pruneEpoch': tracked.pruneEpoch,
         'undoManagers': doc._undo.managers.length,
         'recording': tracked.events != null,
       };
 
-  static int _intParam(Map<String, String> params, String name, int fallback) {
+  static int _intParam(
+    Map<String, String> params,
+    String name, [
+    int? fallback,
+  ]) {
     final raw = params[name];
-    if (raw == null) return fallback;
-    final value = int.tryParse(raw);
+    if (raw == null && fallback != null) return fallback;
+    final value = raw == null ? null : int.tryParse(raw);
     if (value == null || value < 0) {
       throw ArgumentError.value(raw, name, 'Expected a non-negative integer');
     }
     return value;
+  }
+
+  static Map<String, String> _versionVector(VersionVector vector) => {
+        for (final entry in vector.entries)
+          entry.key.toString(): entry.value.toString(),
+      };
+
+  static bool _isReservedKey(String key) =>
+      SnapshotRecords.reservedKeys.contains(key) ||
+      _HandlerDeletions.isReserved(key);
+
+  static Map<String, Object?> _historyOpen(
+    _Tracked tracked,
+    CRDTDocument doc,
+  ) {
+    tracked.closeHistory();
+    final session = doc.toTimeTravel();
+    final id = _nextSession++;
+    tracked
+      ..history = session
+      ..historyId = id;
+    return {
+      'session': id,
+      'length': session.length,
+      'versionVector': _versionVector(doc.getVersionVector()),
+      'handlers': [
+        for (final entry in session._document._types.entries)
+          if (!_isReservedKey(entry.key))
+            {'id': entry.key, 'type': entry.value},
+      ],
+    };
+  }
+
+  static Map<String, Object?> _historyState(
+    _Tracked tracked,
+    Map<String, String> params,
+  ) {
+    final session = tracked.history;
+    final id = _intParam(params, 'session');
+    if (session == null || id != tracked.historyId) {
+      throw ArgumentError.value(params['session'], 'session', 'Not open');
+    }
+    final cursor = _intParam(params, 'cursor');
+    if (cursor > session.length) {
+      throw ArgumentError.value(
+        params['cursor'],
+        'cursor',
+        'Expected at most ${session.length}',
+      );
+    }
+    session.jump(cursor);
+    final handlerId = params['handler'];
+    final handler =
+        handlerId == null ? null : session.document.handlerById(handlerId);
+    return {
+      'cursor': session.cursor,
+      'frontiers': [for (final id in session.document.version) id.toString()],
+      'value': handler == null
+          ? null
+          : encodeDevToolsValue(
+              handler.value,
+              maxItems: _intParam(params, 'maxItems', 200),
+              maxString: _intParam(params, 'maxString', 10000),
+              maxDepth: _intParam(params, 'maxDepth', 8),
+            ),
+    };
+  }
+
+  static Map<String, Object?> _snapshot(CRDTDocument doc) {
+    final snapshot = doc._lastSnapshot;
+    return {
+      'snapshot': snapshot == null ? null : _snapshotSummary(snapshot),
+      'deleted': [...doc._deletions._deletedIds],
+      'liveRequirements': doc._dataRequirements.isStarted
+          ? _formats(doc._dataRequirements.describe().byHandlerType)
+          : null,
+    };
+  }
+
+  static Map<String, Object?> _snapshotSummary(Snapshot snapshot) {
+    final manifest = _orNull(() => _HandlerRegistry.manifestOf(snapshot));
+    final requirements = snapshot.data[SnapshotRecords.capabilitiesKey];
+    return {
+      'id': snapshot.id,
+      'versionVector': _versionVector(snapshot.versionVector),
+      'bytes': snapshot.toBytes().length,
+      'entries': [
+        for (final MapEntry(:key, :value) in snapshot.data.entries)
+          {
+            'key': key,
+            'bytes': value.length,
+            'reserved': _isReservedKey(key),
+            'type': manifest?[key],
+          },
+      ],
+      'unfolded': _orNull(
+        () => {
+          for (final id in SnapshotRecords.unfoldedEntriesOf(snapshot).keys)
+            id: _orNull(
+              () => SnapshotRecords.unfoldedChangesFor(snapshot, id)?.length,
+            ),
+        },
+      ),
+      'requirements': requirements == null
+          ? null
+          : _orNull(
+              () => _formats(
+                SnapshotRecords.decodeRequirements(requirements).byHandlerType,
+              ),
+            ),
+    };
+  }
+
+  static Map<String, String> _formats(Map<String, HandlerFormats> byType) => {
+        for (final entry in byType.entries) entry.key: entry.value.toString(),
+      };
+
+  // A record this build cannot read is shown as unknown, not as a failed call.
+  static T? _orNull<T>(T Function() read) {
+    try {
+      return read();
+    } on FormatException {
+      return null;
+    }
   }
 
   static Uint8List _bytesParam(Map<String, String> params, String name) {
@@ -475,6 +615,10 @@ final class _Tracked {
 
   StreamSubscription<CRDTDocumentEvent>? events;
 
+  HistorySession? history;
+
+  int? historyId;
+
   bool get dirty => changes || handlers || snapshot || pruned;
 
   void clearDirty() {
@@ -489,5 +633,12 @@ final class _Tracked {
     clearDirty();
     unawaited(events?.cancel());
     events = null;
+    closeHistory();
+  }
+
+  void closeHistory() {
+    history?.dispose();
+    history = null;
+    historyId = null;
   }
 }
