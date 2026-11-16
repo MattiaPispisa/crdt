@@ -120,6 +120,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "1.4.0"
+  dart_service_protocol_shared:
+    dependency: transitive
+    description:
+      name: dart_service_protocol_shared
+      sha256: "1737875c176d7e3d87bb3a359182828b542fe20a0b34198b8d31a81af5c7a76d"
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.0.3"
   dds_service_extensions:
     dependency: transitive
     description:
@@ -132,34 +140,34 @@ packages:
     dependency: "direct main"
     description:
       name: devtools_app_shared
-      sha256: "8bbe39d622841b6ba15560fa7f32114ecb3e97aa662839b7572ab3c3c3d0dc4f"
+      sha256: dbfd6f497368d9d187f7f334870d559cfa9a78c10c74f786e42b38cf62398a88
       url: "https://pub.dev"
     source: hosted
-    version: "0.3.1"
+    version: "0.5.1"
   devtools_extensions:
     dependency: "direct main"
     description:
       name: devtools_extensions
-      sha256: "3c16905b957b2b56d145ef7fede4f3091e0e3c5deae776210148a00c874c9a0e"
+      sha256: "01b979a7e72dc02402b08b7d75d24d6b0cb07416b61ef434f43042bec7a5f8fd"
       url: "https://pub.dev"
     source: hosted
-    version: "0.3.1"
+    version: "0.5.1"
   devtools_shared:
     dependency: transitive
     description:
       name: devtools_shared
-      sha256: "659e2d65aa5ef5c3551163811c5c6fa1b973b3df80d8cac6f618035edcdc1096"
+      sha256: "13df2c17d5f21dd7c92d08145386d45e1153364c04e531e994afb0ee7b67554b"
       url: "https://pub.dev"
     source: hosted
-    version: "11.2.1"
+    version: "13.1.0"
   dtd:
     dependency: transitive
     description:
       name: dtd
-      sha256: "14a0360d898ded87c3d99591fc386b8a6ea5d432927bee709b22130cd25b993a"
+      sha256: "09ddb228b3d1478a093556357692a4c203ff4f9d5f8cda05dfdca0ff3fb7c5d3"
       url: "https://pub.dev"
     source: hosted
-    version: "2.5.1"
+    version: "4.0.0"
   equatable:
     dependency: "direct main"
     description:

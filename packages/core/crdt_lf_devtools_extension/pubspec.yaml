@@ -12,9 +12,9 @@ dependencies:
     sdk: flutter
   
   # DevTools
-  devtools_extensions: ^0.3.1
-  devtools_app_shared: ^0.3.1
-  vm_service: 15.0.0
+  devtools_extensions: ^0.5.1
+  devtools_app_shared: ^0.5.1
+  vm_service: ^15.0.0
 
   # state management
   bloc: ^9.0.0

@@ -7,7 +7,7 @@ import 'dart:convert';
 import 'package:bloc/bloc.dart';
 import 'package:crdt_lf_devtools_extension/src/application/devtools/eval.dart';
 import 'package:crdt_lf_devtools_extension/src/application/devtools/event.dart';
-import 'package:devtools_app_shared/service.dart';
+import 'package:devtools_app_shared/utils.dart';
 import 'package:equatable/equatable.dart';
 import 'package:vm_service/vm_service.dart';
 

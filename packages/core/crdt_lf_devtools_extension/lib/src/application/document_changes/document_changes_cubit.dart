@@ -10,7 +10,7 @@ import 'package:crdt_lf/crdt_lf.dart' as crdt_lf;
 import 'package:crdt_lf_devtools_extension/src/application/devtools/eval.dart';
 import 'package:crdt_lf_devtools_extension/src/application/devtools/event.dart';
 import 'package:crdt_lf_devtools_extension/src/application/documents/documents_cubit.dart';
-import 'package:devtools_app_shared/service.dart' as devtools;
+import 'package:devtools_app_shared/utils.dart' as devtools;
 import 'package:equatable/equatable.dart';
 import 'package:vm_service/vm_service.dart' as vm_service;
 

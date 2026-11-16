@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 import 'package:devtools_app_shared/service.dart';
+import 'package:devtools_app_shared/utils.dart';
 import 'package:devtools_extensions/devtools_extensions.dart' as devtools;
 import 'package:vm_service/vm_service.dart';
 
@@ -17,6 +18,10 @@ extension CrdtLfEvalExtension on EvalOnDartLibrary {
       'package:crdt_lf/src/devtools/devtools.dart',
       service,
       serviceManager: devtools.serviceManager,
+      // Needed by the wasm build. dart2wasm (Dart 3.13 and 3.14) writes an
+      // invalid module for this constructor when no caller in the program
+      // passes `isolate`, and `devtools_app_shared` itself never does.
+      isolate: devtools.serviceManager.isolateManager.mainIsolate,
     );
   }
 
