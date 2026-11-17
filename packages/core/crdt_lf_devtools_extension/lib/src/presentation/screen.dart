@@ -10,6 +10,7 @@ import 'package:crdt_lf_devtools_extension/src/bridge/crdt_lf_client.dart';
 import 'package:crdt_lf_devtools_extension/src/presentation/changes/changes_tab.dart';
 import 'package:crdt_lf_devtools_extension/src/presentation/header/document_header.dart';
 import 'package:crdt_lf_devtools_extension/src/presentation/state/state_tab.dart';
+import 'package:crdt_lf_devtools_extension/src/presentation/storage/storage_tab.dart';
 import 'package:crdt_lf_devtools_extension/src/presentation/time_travel/time_travel_tab.dart';
 import 'package:crdt_lf_devtools_extension/src/presentation/widgets/message.dart';
 import 'package:crdt_lf_devtools_extension/src/presentation/widgets/text_copier.dart';
@@ -143,12 +144,12 @@ class _DocumentView extends StatelessWidget {
 
   final DocumentsState state;
 
-  static const List<(String, int)> _tabs = [('Storage', 13), ('Events', 14)];
+  static const List<(String, int)> _tabs = [('Events', 14)];
 
   @override
   Widget build(BuildContext context) {
     return DefaultTabController(
-      length: _tabs.length + 3,
+      length: _tabs.length + 4,
       child: Column(
         children: [
           DocumentHeader(state: state),
@@ -159,6 +160,7 @@ class _DocumentView extends StatelessWidget {
               const Tab(text: 'State'),
               const Tab(text: 'Changes'),
               const Tab(text: 'Time travel'),
+              const Tab(text: 'Storage'),
               for (final (name, _) in _tabs) Tab(text: name),
             ],
           ),
@@ -174,6 +176,10 @@ class _DocumentView extends StatelessWidget {
                   doc: state.selectedId!,
                 ),
                 TimeTravelTab(
+                  key: ValueKey(state.selectedId),
+                  doc: state.selectedId!,
+                ),
+                StorageTab(
                   key: ValueKey(state.selectedId),
                   doc: state.selectedId!,
                 ),
