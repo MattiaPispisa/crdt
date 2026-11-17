@@ -58,7 +58,7 @@ class ChangeDetail extends StatelessWidget {
     final author = change.author.toString();
     final date = DateTime.fromMillisecondsSinceEpoch(hlc.l);
     final dependents = state.index.dependentsOf(change.id);
-    final deps = change.deps.toList()..sort();
+    final deps = entry.deps.toList()..sort();
     final copy = context.read<TextCopier>();
     return SelectionArea(
       child: ListView(

@@ -13,6 +13,7 @@ class MirrorEntry extends Equatable {
   const MirrorEntry({
     required this.change,
     required this.bytes,
+    required this.deps,
     required this.handlerId,
     required this.handlerType,
     required this.kind,
@@ -23,11 +24,13 @@ class MirrorEntry extends Equatable {
   /// when the envelope is not readable.
   factory MirrorEntry.decode(Uint8List bytes) {
     final change = Change.fromBytes(bytes);
+    final deps = List<OperationId>.unmodifiable(change.deps);
     try {
       final envelope = OperationEnvelopeCodec.decode(change.payloadBytes());
       return MirrorEntry(
         change: change,
         bytes: bytes,
+        deps: deps,
         handlerId: envelope.handlerId,
         handlerType: envelope.handlerType,
         kind: envelope.kind,
@@ -37,6 +40,7 @@ class MirrorEntry extends Equatable {
       return MirrorEntry(
         change: change,
         bytes: bytes,
+        deps: deps,
         handlerId: null,
         handlerType: null,
         kind: null,
@@ -48,6 +52,10 @@ class MirrorEntry extends Equatable {
   final Change change;
 
   final Uint8List bytes;
+
+  /// The dependencies of [change]. Read them here: [Change.deps] decodes
+  /// them again on each call.
+  final List<OperationId> deps;
 
   final String? handlerId;
 

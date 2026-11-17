@@ -5,7 +5,7 @@
     "display": "standalone",
     "background_color": "#0175C2",
     "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "description": "Dart DevTools extension for crdt_lf: inspect the documents, handlers, changes and snapshots of the app you debug.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

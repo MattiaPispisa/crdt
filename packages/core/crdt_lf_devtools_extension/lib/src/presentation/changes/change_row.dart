@@ -79,7 +79,13 @@ class ChangeRow extends StatelessWidget {
                 overflow: TextOverflow.ellipsis,
               ),
             ),
-            Flexible(child: PeerChip(change.author.toString(), local: local)),
+            SizedBox(
+              width: 130,
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: PeerChip(change.author.toString(), local: local),
+              ),
+            ),
             const SizedBox(width: denseSpacing),
             Expanded(
               child: Text(
@@ -89,9 +95,18 @@ class ChangeRow extends StatelessWidget {
               ),
             ),
             const SizedBox(width: densePadding),
-            Text(kindLabel(entry.kind), style: theme.subtleTextStyle),
-            const SizedBox(width: densePadding),
-            Text('${entry.byteLength} B', style: theme.subtleTextStyle),
+            SizedBox(
+              width: 60,
+              child: Text(kindLabel(entry.kind), style: theme.subtleTextStyle),
+            ),
+            SizedBox(
+              width: 60,
+              child: Text(
+                '${entry.byteLength} B',
+                style: theme.subtleTextStyle,
+                textAlign: TextAlign.right,
+              ),
+            ),
             const SizedBox(width: densePadding),
           ],
         ),

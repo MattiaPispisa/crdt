@@ -4,6 +4,7 @@
 import 'package:crdt_lf/crdt_lf.dart';
 import 'package:crdt_lf_devtools_extension/src/application/events/event_log_cubit.dart';
 import 'package:crdt_lf_devtools_extension/src/bridge/models/models.dart';
+import 'package:crdt_lf_devtools_extension/src/presentation/widgets/keyboard_list.dart';
 import 'package:crdt_lf_devtools_extension/src/presentation/widgets/message.dart';
 import 'package:devtools_app_shared/ui.dart';
 import 'package:flutter/material.dart';
@@ -60,12 +61,9 @@ class EventsTab extends StatelessWidget {
           child: Text(recordingNote, style: theme.subtleTextStyle),
         ),
         if (state.error case final error?)
-          Padding(
-            padding: const EdgeInsets.all(densePadding),
-            child: SelectableText(
-              'The call failed: $error',
-              style: theme.subtleTextStyle,
-            ),
+          PaneMessage(
+            'The call failed: $error',
+            onRetry: () => cubit.setRecording(recording: !state.recording),
           ),
         const SizedBox(height: densePadding),
         Expanded(
@@ -103,9 +101,15 @@ class _EventList extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final cubit = context.read<EventLogCubit>();
-    return ListView.builder(
-      itemCount: state.events.length,
-      itemExtent: defaultRowHeight,
+    final events = state.events;
+    return KeyboardList(
+      itemCount: events.length,
+      selectedIndex: () {
+        final n = cubit.state.selectedN;
+        final i = events.indexWhere((e) => e.n == n);
+        return i < 0 ? null : i;
+      },
+      onSelect: (i) => cubit.select(events[i].n),
       itemBuilder: (context, i) {
         final event = state.events[i];
         final selected = event.n == state.selectedN;

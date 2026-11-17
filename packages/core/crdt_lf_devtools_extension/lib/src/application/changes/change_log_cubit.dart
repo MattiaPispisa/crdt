@@ -123,7 +123,9 @@ class ChangeLogCubit extends Cubit<ChangeLogState> {
 
   Future<void> _load() async {
     try {
-      await _mirror.sync();
+      await _mirror.sync(
+        onProgress: state.status == LoadStatus.initial ? _onProgress : null,
+      );
       if (isClosed) return;
       final index = ChangeIndex(_mirror.entries);
       final kept = index.byId.containsKey(state.selectedId);
@@ -145,6 +147,11 @@ class ChangeLogCubit extends Cubit<ChangeLogState> {
       if (isClosed) return;
       emit(state._copyWith(status: LoadStatus.failure, error: () => '$e'));
     }
+  }
+
+  void _onProgress(int loaded, int total) {
+    if (isClosed || state.status != LoadStatus.initial) return;
+    emit(state._copyWith(progress: () => (loaded: loaded, total: total)));
   }
 
   static List<MirrorEntry> _visible(

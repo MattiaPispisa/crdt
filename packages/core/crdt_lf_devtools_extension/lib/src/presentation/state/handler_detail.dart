@@ -176,7 +176,11 @@ class _DeltaPane extends StatelessWidget {
           ],
         ),
         const _Note(HandlerDetail.watchNote),
-        if (state.error case final error?) _Note('The call failed: $error'),
+        if (state.error case final error?)
+          PaneMessage(
+            'The call failed: $error',
+            onRetry: () => cubit.setWatching(watching: !state.watching),
+          ),
         if (state.deltas.isNotEmpty)
           SizedBox(
             height: _listHeight,

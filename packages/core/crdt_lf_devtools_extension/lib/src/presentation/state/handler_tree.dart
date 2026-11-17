@@ -5,6 +5,7 @@ import 'package:crdt_lf_devtools_extension/src/application/handlers/handlers_cub
 import 'package:crdt_lf_devtools_extension/src/application/load_status.dart';
 import 'package:crdt_lf_devtools_extension/src/presentation/state/handler_rows.dart';
 import 'package:crdt_lf_devtools_extension/src/presentation/widgets/handler_icon.dart';
+import 'package:crdt_lf_devtools_extension/src/presentation/widgets/keyboard_list.dart';
 import 'package:crdt_lf_devtools_extension/src/presentation/widgets/message.dart';
 import 'package:devtools_app_shared/ui.dart';
 import 'package:flutter/material.dart';
@@ -13,6 +14,12 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 /// The filter field and the handler list of [HandlersCubit].
 class HandlerTree extends StatefulWidget {
   const HandlerTree({super.key});
+
+  /// The text shown when the document has no handler.
+  static const String empty = 'No handler yet.';
+
+  /// The text shown when the filter matches no handler.
+  static const String noMatch = 'No handler matches.';
 
   @override
   State<HandlerTree> createState() => _HandlerTreeState();
@@ -71,16 +78,31 @@ class _HandlerTreeState extends State<HandlerTree> {
                     )
                     : const PaneMessage('Loading handlers…');
               }
+              if (handlers.open.isEmpty &&
+                  handlers.closed.isEmpty &&
+                  handlers.deleted.isEmpty) {
+                return const PaneMessage(HandlerTree.empty);
+              }
               final rows = handlerRows(
                 handlers,
                 filter: _filter.text,
                 closedExpanded: _closedExpanded,
                 deletedExpanded: _deletedExpanded,
               );
-              return ListView.builder(
+              if (rows.every((r) => r is GroupRow && r.count == 0)) {
+                return const PaneMessage(HandlerTree.noMatch);
+              }
+              return KeyboardList(
                 itemCount: rows.length,
-                itemExtent: defaultRowHeight,
                 itemBuilder: (context, i) => _row(context, rows[i], state),
+                selectedIndex: () {
+                  final id = context.read<HandlersCubit>().state.selectedId;
+                  final i = rows.indexWhere((r) => r.id != null && r.id == id);
+                  return i < 0 ? null : i;
+                },
+                canSelect: (i) => rows[i] is! GroupRow,
+                onSelect:
+                    (i) => context.read<HandlersCubit>().select(rows[i].id),
               );
             },
           ),
@@ -142,16 +164,26 @@ class _HandlerTreeState extends State<HandlerTree> {
             SizedBox(width: depth * defaultSpacing),
             Icon(icon, size: defaultIconSize),
             const SizedBox(width: densePadding),
-            Flexible(
-              child: Text(
-                row.id!,
-                style: theme.fixedFontStyle,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-            const SizedBox(width: densePadding),
             Expanded(
-              child: Text(type, style: subtle, overflow: TextOverflow.ellipsis),
+              child: Row(
+                children: [
+                  Flexible(
+                    child: Text(
+                      row.id!,
+                      style: theme.fixedFontStyle,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  const SizedBox(width: densePadding),
+                  Flexible(
+                    child: Text(
+                      type,
+                      style: subtle,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ),
             ),
             if (watched) ...[
               const Icon(Icons.visibility_outlined, size: defaultIconSize),

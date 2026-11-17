@@ -6,6 +6,7 @@ import 'package:crdt_lf_devtools_extension/src/application/changes/row_graph.dar
 import 'package:crdt_lf_devtools_extension/src/application/load_status.dart';
 import 'package:crdt_lf_devtools_extension/src/presentation/changes/change_row.dart';
 import 'package:crdt_lf_devtools_extension/src/presentation/changes/lane_graph_painter.dart';
+import 'package:crdt_lf_devtools_extension/src/presentation/widgets/keyboard_list.dart';
 import 'package:crdt_lf_devtools_extension/src/presentation/widgets/message.dart';
 import 'package:crdt_lf_devtools_extension/src/presentation/widgets/peer_color.dart';
 import 'package:devtools_app_shared/ui.dart';
@@ -72,7 +73,7 @@ class _ChangeLogListState extends State<ChangeLogList> {
 
   Widget _list(BuildContext context, ChangeLogState state) {
     if (state.status == LoadStatus.initial) {
-      return const PaneMessage('Loading changes…');
+      return PaneMessage.loadingChanges(state.progress);
     }
     if (state.status == LoadStatus.failure && state.index.entries.isEmpty) {
       return PaneMessage(
@@ -102,9 +103,16 @@ class _ChangeLogListState extends State<ChangeLogList> {
           peerColor(graph.peers[lane]),
     ];
     final last = rows.length - 1;
-    return ListView.builder(
+    final cubit = context.read<ChangeLogCubit>();
+    return KeyboardList(
       itemCount: count,
-      itemExtent: defaultRowHeight,
+      selectedIndex: () {
+        final id = cubit.state.selectedId;
+        final at = rows.indexWhere((e) => e.change.id == id);
+        return at < 0 ? null : at + offset;
+      },
+      canSelect: (i) => !snapshot || i != snapshotAt,
+      onSelect: (i) => cubit.select(rows[i - offset].change.id),
       itemBuilder: (context, i) {
         if (snapshot && i == snapshotAt) {
           return Center(
@@ -153,45 +161,49 @@ class _Filters extends StatelessWidget {
     final index = state.index;
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: densePadding),
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        child: Row(
-          children: [
-            _dropdown<String>(
-              value: filter.author,
-              all: 'All authors',
-              values: index.authors,
-              label: (a) => a.length > 8 ? a.substring(0, 8) : a,
-              onChanged:
-                  (v) => cubit.setFilter(filter.copyWith(author: () => v)),
-            ),
-            const SizedBox(width: densePadding),
-            _dropdown<String>(
-              value: filter.handler,
-              all: 'All handlers',
-              values: index.handlers,
-              label: (h) => h,
-              onChanged:
-                  (v) => cubit.setFilter(filter.copyWith(handler: () => v)),
-            ),
-            const SizedBox(width: densePadding),
-            _dropdown<int>(
-              value: filter.kind,
-              all: 'All kinds',
-              values: index.kinds,
-              label: kindLabel,
-              onChanged: (v) => cubit.setFilter(filter.copyWith(kind: () => v)),
-            ),
-            const SizedBox(width: densePadding),
-            DevToolsToggleButton(
-              icon: Icons.swap_vert,
-              label: 'Newest first',
-              message: 'Show the newest change first',
-              isSelected: state.newestFirst,
-              onPressed:
-                  () => cubit.setNewestFirst(newestFirst: !state.newestFirst),
-            ),
-          ],
+      child: Align(
+        alignment: Alignment.centerLeft,
+        child: SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: Row(
+            children: [
+              _dropdown<String>(
+                value: filter.author,
+                all: 'All authors',
+                values: index.authors,
+                label: (a) => a.length > 8 ? a.substring(0, 8) : a,
+                onChanged:
+                    (v) => cubit.setFilter(filter.copyWith(author: () => v)),
+              ),
+              const SizedBox(width: densePadding),
+              _dropdown<String>(
+                value: filter.handler,
+                all: 'All handlers',
+                values: index.handlers,
+                label: (h) => h,
+                onChanged:
+                    (v) => cubit.setFilter(filter.copyWith(handler: () => v)),
+              ),
+              const SizedBox(width: densePadding),
+              _dropdown<int>(
+                value: filter.kind,
+                all: 'All kinds',
+                values: index.kinds,
+                label: kindLabel,
+                onChanged:
+                    (v) => cubit.setFilter(filter.copyWith(kind: () => v)),
+              ),
+              const SizedBox(width: densePadding),
+              DevToolsToggleButton(
+                icon: Icons.swap_vert,
+                label: 'Newest first',
+                message: 'Show the newest change first',
+                isSelected: state.newestFirst,
+                onPressed:
+                    () => cubit.setNewestFirst(newestFirst: !state.newestFirst),
+              ),
+            ],
+          ),
         ),
       ),
     );

@@ -93,7 +93,9 @@ class TimeTravelCubit extends Cubit<TimeTravelState> {
 
   Future<void> _open() async {
     try {
-      await _mirror.sync();
+      await _mirror.sync(
+        onProgress: state.session == null ? _onProgress : null,
+      );
       final info = await _client.historyOpen(doc);
       if (isClosed) return await _closeSession(info.session);
       var frozen = _seenBy(info.versionVector);
@@ -124,6 +126,11 @@ class TimeTravelCubit extends Cubit<TimeTravelState> {
       if (isClosed) return;
       emit(state._copyWith(status: LoadStatus.failure, error: () => '$e'));
     }
+  }
+
+  void _onProgress(int loaded, int total) {
+    if (isClosed || state.session != null) return;
+    emit(state._copyWith(progress: () => (loaded: loaded, total: total)));
   }
 
   Future<void> _syncLive() async {

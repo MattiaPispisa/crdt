@@ -59,7 +59,7 @@ class ChangeIndex {
     for (final entry in entries) {
       final change = entry.change;
       byId[change.id] = entry;
-      for (final dep in change.deps) {
+      for (final dep in entry.deps) {
         (dependents[dep] ??= []).add(change.id);
       }
       authors.add(change.author.toString());
@@ -70,7 +70,7 @@ class ChangeIndex {
       for (final entry in entries)
         (
           author: entry.change.author.toString(),
-          depAuthors: [for (final d in entry.change.deps) d.peerId.toString()],
+          depAuthors: [for (final d in entry.deps) d.peerId.toString()],
         ),
     ]);
     return ChangeIndex._(
@@ -135,6 +135,7 @@ class ChangeIndex {
 class ChangeLogState {
   const ChangeLogState({
     this.status = LoadStatus.initial,
+    this.progress,
     this.index = ChangeIndex.empty,
     this.visible = const [],
     this.filter = const ChangeFilter(),
@@ -147,6 +148,9 @@ class ChangeLogState {
   });
 
   final LoadStatus status;
+
+  /// The progress of the first sync; `null` before its first page.
+  final LoadProgress? progress;
 
   final ChangeIndex index;
 
@@ -178,6 +182,7 @@ class ChangeLogState {
 
   ChangeLogState _copyWith({
     LoadStatus? status,
+    LoadProgress? Function()? progress,
     ChangeIndex? index,
     List<MirrorEntry>? visible,
     ChangeFilter? filter,
@@ -189,6 +194,7 @@ class ChangeLogState {
     String? Function()? error,
   }) => ChangeLogState(
     status: status ?? this.status,
+    progress: progress == null ? this.progress : progress(),
     index: index ?? this.index,
     visible: visible ?? this.visible,
     filter: filter ?? this.filter,

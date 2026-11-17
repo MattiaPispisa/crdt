@@ -27,7 +27,7 @@ class _Demo {
     _textOf(b).insert(0, 'B says: ');
     _sync();
 
-    CRDTFugueTextHandler(a, 'fugue-text').insert(0, 'fugue');
+    final fugue = CRDTFugueTextHandler(a, 'fugue-text')..insert(0, 'fugue');
     CRDTListHandler<int>(a, 'list', handlerType: 'int-list')
       ..insert(0, 1)
       ..insert(1, 2);
@@ -61,7 +61,7 @@ class _Demo {
       ..set('k', 1);
     a.deleteHandler(gone);
 
-    CRDTUndoManager(a).track(_textOf(a));
+    CRDTUndoManager(a).track(fugue);
     _sync();
     a.takeSnapshot();
   }
@@ -86,6 +86,17 @@ class _Demo {
     _edits++;
     _textOf(a).insert(0, 'a$_edits ');
     _textOf(b).insert(0, 'b$_edits ');
+    _sync();
+  }
+
+  /// Adds [count] one-character edits, half on each peer, synced every
+  /// 100 edits.
+  void addMany([int count = 10000]) {
+    for (var i = 0; i < count ~/ 2; i++) {
+      _textOf(a).insert(0, 'a');
+      _textOf(b).insert(0, 'b');
+      if (i % 100 == 99) _sync();
+    }
     _sync();
   }
 }
@@ -137,6 +148,12 @@ class _DemoAppState extends State<_DemoApp> {
                     icon: Icons.edit,
                     label: 'Add edits',
                     onPressed: widget.demo.edit,
+                  ),
+                  const SizedBox(width: denseSpacing),
+                  DevToolsButton(
+                    icon: Icons.playlist_add,
+                    label: '10 000 changes',
+                    onPressed: widget.demo.addMany,
                   ),
                 ],
               ),

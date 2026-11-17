@@ -257,7 +257,8 @@ class _Table extends StatelessWidget {
 
   static Widget _cell(Widget child) => Padding(
     padding: const EdgeInsets.only(right: defaultSpacing, bottom: densePadding),
-    child: child,
+    // A table cell is as wide as its column: a label keeps its own width.
+    child: Align(alignment: Alignment.centerLeft, child: child),
   );
 }
 

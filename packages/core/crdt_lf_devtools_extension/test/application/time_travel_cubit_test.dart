@@ -124,4 +124,24 @@ void main() {
       throwsA(isA<BridgeCallException>()),
     );
   });
+
+  test('reports the progress of the first sync', () async {
+    final doc = CRDTDocument(documentId: 'd');
+    final text = CRDTTextHandler(doc, 'text');
+    for (var i = 0; i < 1500; i++) {
+      text.insert(0, 'x');
+    }
+    final id = (await client.documents()).single.id;
+    final cubit = TimeTravelCubit(client, id);
+    addTearDown(cubit.close);
+    final progress = <LoadProgress?>[];
+    await for (final state in cubit.stream) {
+      if (state.session != null) break;
+      progress.add(state.progress);
+    }
+    expect(progress, [
+      (loaded: 1000, total: 1500),
+      (loaded: 1500, total: 1500),
+    ]);
+  });
 }

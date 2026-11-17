@@ -11,6 +11,7 @@ part of 'time_travel_cubit.dart';
 class TimeTravelState {
   const TimeTravelState({
     this.status = LoadStatus.initial,
+    this.progress,
     this.session,
     this.frozen = const [],
     this.cursor = 0,
@@ -23,6 +24,9 @@ class TimeTravelState {
   });
 
   final LoadStatus status;
+
+  /// The progress of the first change sync; `null` before its first page.
+  final LoadProgress? progress;
 
   /// The open session; `null` until the first open ends.
   final HistorySessionInfo? session;
@@ -67,6 +71,7 @@ class TimeTravelState {
 
   TimeTravelState _copyWith({
     LoadStatus? status,
+    LoadProgress? Function()? progress,
     HistorySessionInfo? session,
     List<MirrorEntry>? frozen,
     int? cursor,
@@ -78,6 +83,7 @@ class TimeTravelState {
     String? Function()? error,
   }) => TimeTravelState(
     status: status ?? this.status,
+    progress: progress == null ? this.progress : progress(),
     session: session ?? this.session,
     frozen: frozen ?? this.frozen,
     cursor: cursor ?? this.cursor,

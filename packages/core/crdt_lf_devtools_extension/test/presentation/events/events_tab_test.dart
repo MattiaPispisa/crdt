@@ -92,4 +92,32 @@ void main() {
     doc.dispose();
     await settle(tester);
   });
+
+  testWidgets('a failed Record shows the error and a retry', (tester) async {
+    final bridge = InProcessBridge();
+    addTearDown(bridge.dispose);
+    final client = CrdtLfClient(bridge);
+    // No document has this id, so every call fails.
+    final events = EventLogCubit(client, 999);
+    addTearDown(events.close);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: BlocProvider.value(
+            value: events,
+            child: EventsTab(onChange: (_) {}),
+          ),
+        ),
+      ),
+    );
+    await tester.tap(find.text('Record'));
+    await settle(tester);
+    expect(find.textContaining('The call failed'), findsOneWidget);
+
+    await tester.tap(find.text('Retry'));
+    await settle(tester);
+    expect(find.textContaining('The call failed'), findsOneWidget);
+    expect(events.state.recording, isFalse);
+  });
 }

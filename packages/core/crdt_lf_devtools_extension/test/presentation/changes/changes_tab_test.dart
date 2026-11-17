@@ -7,6 +7,7 @@ import 'package:crdt_lf/crdt_lf.dart';
 // The bridge is hidden from the public barrel on purpose.
 // ignore: implementation_imports
 import 'package:crdt_lf/src/document/document.dart' show DevToolsBridge;
+import 'package:crdt_lf_devtools_extension/src/application/changes/change_log_cubit.dart';
 import 'package:crdt_lf_devtools_extension/src/application/documents/documents_cubit.dart';
 import 'package:crdt_lf_devtools_extension/src/bridge/crdt_lf_client.dart';
 import 'package:crdt_lf_devtools_extension/src/bridge/in_process_bridge.dart';
@@ -17,6 +18,7 @@ import 'package:crdt_lf_devtools_extension/src/presentation/changes/changes_tab.
 import 'package:crdt_lf_devtools_extension/src/presentation/changes/lane_graph_painter.dart';
 import 'package:crdt_lf_devtools_extension/src/presentation/widgets/text_copier.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -121,6 +123,26 @@ void main() {
     await tester.tap(find.text('closed'));
     await settle(tester);
     expect(find.text(ChangeDetail.closedNote), findsOneWidget);
+
+    // The keys skip the snapshot row, in both orders.
+    String? selected() =>
+        tester
+            .element(find.byType(ChangeLogList))
+            .read<ChangeLogCubit>()
+            .state
+            .selected
+            ?.handlerId;
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+    expect(selected(), 'closed');
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowUp);
+    expect(selected(), 'text');
+    await tester.tap(find.text('Newest first'));
+    await settle(tester);
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowUp);
+    expect(selected(), 'closed');
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowUp);
+    expect(selected(), 'closed');
+    await settle(tester);
 
     expect(find.byType(ChangeRow), findsNWidgets(2));
     await tester.enterText(find.byType(TextField), 'zzz');

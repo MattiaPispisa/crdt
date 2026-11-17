@@ -9,6 +9,7 @@ import 'package:crdt_lf_devtools_extension/src/application/time_travel/time_trav
 import 'package:crdt_lf_devtools_extension/src/bridge/crdt_lf_client.dart';
 import 'package:crdt_lf_devtools_extension/src/presentation/changes/change_row.dart';
 import 'package:crdt_lf_devtools_extension/src/presentation/widgets/handler_icon.dart';
+import 'package:crdt_lf_devtools_extension/src/presentation/widgets/keyboard_list.dart';
 import 'package:crdt_lf_devtools_extension/src/presentation/widgets/message.dart';
 import 'package:crdt_lf_devtools_extension/src/presentation/widgets/value_tree.dart';
 import 'package:devtools_app_shared/ui.dart';
@@ -65,7 +66,7 @@ class _TimeTravelTabState extends State<TimeTravelTab> {
                   'The call failed: ${state.error}',
                   onRetry: _travel.reopen,
                 )
-                : const PaneMessage('Opening the history…');
+                : PaneMessage.loadingChanges(state.progress);
           }
           return Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -189,9 +190,15 @@ class _HandlerList extends StatelessWidget {
     final theme = Theme.of(context);
     final handlers = state.session!.handlers;
     if (handlers.isEmpty) return const PaneMessage('No handler.');
-    return ListView.builder(
+    final travel = context.read<TimeTravelCubit>();
+    return KeyboardList(
       itemCount: handlers.length,
-      itemExtent: defaultRowHeight,
+      selectedIndex: () {
+        final id = travel.state.handler;
+        final i = handlers.indexWhere((h) => h.id == id);
+        return i < 0 ? null : i;
+      },
+      onSelect: (i) => travel.select(handlers[i].id),
       itemBuilder: (context, i) {
         final handler = handlers[i];
         final selected = handler.id == state.handler;
