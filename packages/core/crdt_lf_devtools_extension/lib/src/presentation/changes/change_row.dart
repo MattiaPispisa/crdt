@@ -40,6 +40,7 @@ class ChangeRow extends StatelessWidget {
     required this.local,
     required this.selected,
     required this.onTap,
+    this.graph,
     super.key,
   });
 
@@ -51,6 +52,9 @@ class ChangeRow extends StatelessWidget {
   final bool selected;
 
   final VoidCallback onTap;
+
+  /// Drawn at the start of the row; `null` for none.
+  final Widget? graph;
 
   @override
   Widget build(BuildContext context) {
@@ -65,6 +69,7 @@ class ChangeRow extends StatelessWidget {
         onTap: onTap,
         child: Row(
           children: [
+            if (graph case final graph?) graph,
             const SizedBox(width: densePadding),
             SizedBox(
               width: 110,

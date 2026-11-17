@@ -2,9 +2,12 @@
 // SPDX-License-Identifier: MIT
 
 import 'package:crdt_lf_devtools_extension/src/application/changes/change_log_cubit.dart';
+import 'package:crdt_lf_devtools_extension/src/application/changes/row_graph.dart';
 import 'package:crdt_lf_devtools_extension/src/application/load_status.dart';
 import 'package:crdt_lf_devtools_extension/src/presentation/changes/change_row.dart';
+import 'package:crdt_lf_devtools_extension/src/presentation/changes/lane_graph_painter.dart';
 import 'package:crdt_lf_devtools_extension/src/presentation/widgets/message.dart';
+import 'package:crdt_lf_devtools_extension/src/presentation/widgets/peer_color.dart';
 import 'package:devtools_app_shared/ui.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -87,6 +90,18 @@ class _ChangeLogListState extends State<ChangeLogList> {
     final count = rows.length + (snapshot ? 1 : 0);
     final snapshotAt = state.newestFirst ? count - 1 : 0;
     final offset = snapshot && !state.newestFirst ? 1 : 0;
+    final graph = state.index.graph;
+    // A filter hides rows, so the lines would join changes that are not
+    // next to each other.
+    final showGraph = state.filter.isEmpty && graph.laneCount > 0;
+    final colors = [
+      for (var lane = 0; lane < graph.laneCount; lane++)
+        if (graph.sharedLastLane && lane == LaneGraph.maxLanes - 1)
+          Theme.of(context).colorScheme.outline
+        else
+          peerColor(graph.peers[lane]),
+    ];
+    final last = rows.length - 1;
     return ListView.builder(
       itemCount: count,
       itemExtent: defaultRowHeight,
@@ -99,9 +114,24 @@ class _ChangeLogListState extends State<ChangeLogList> {
             ),
           );
         }
-        final entry = rows[i - offset];
+        final at = i - offset;
+        final entry = rows[at];
         final id = entry.change.id;
         return ChangeRow(
+          graph:
+              showGraph
+                  ? CustomPaint(
+                    size: Size(
+                      graph.laneCount * LaneGraphPainter.laneWidth,
+                      defaultRowHeight,
+                    ),
+                    painter: LaneGraphPainter(
+                      row: graph.rows[state.newestFirst ? last - at : at],
+                      colors: colors,
+                      olderAbove: !state.newestFirst,
+                    ),
+                  )
+                  : null,
           entry: entry,
           local: entry.change.author.toString() == widget.localPeer,
           selected: id == state.selectedId,

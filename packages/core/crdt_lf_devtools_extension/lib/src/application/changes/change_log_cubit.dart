@@ -5,6 +5,7 @@ import 'dart:async';
 
 import 'package:bloc/bloc.dart';
 import 'package:crdt_lf/crdt_lf.dart';
+import 'package:crdt_lf_devtools_extension/src/application/changes/row_graph.dart';
 import 'package:crdt_lf_devtools_extension/src/application/load_status.dart';
 import 'package:crdt_lf_devtools_extension/src/bridge/change_mirror.dart';
 import 'package:crdt_lf_devtools_extension/src/bridge/crdt_lf_client.dart';

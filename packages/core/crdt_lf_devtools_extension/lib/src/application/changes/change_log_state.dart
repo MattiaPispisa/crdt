@@ -66,8 +66,16 @@ class ChangeIndex {
       if (entry.handlerId case final id?) handlers.add(id);
       if (entry.kind case final kind?) kinds.add(kind);
     }
+    final graph = LaneGraph([
+      for (final entry in entries)
+        (
+          author: entry.change.author.toString(),
+          depAuthors: [for (final d in entry.change.deps) d.peerId.toString()],
+        ),
+    ]);
     return ChangeIndex._(
       entries,
+      graph,
       byId,
       dependents,
       authors.toList()..sort(),
@@ -78,6 +86,7 @@ class ChangeIndex {
 
   const ChangeIndex._(
     this.entries,
+    this.graph,
     this.byId,
     this._dependents,
     this.authors,
@@ -86,10 +95,21 @@ class ChangeIndex {
   );
 
   /// The index of no change.
-  static const ChangeIndex empty = ChangeIndex._([], {}, {}, [], [], []);
+  static const ChangeIndex empty = ChangeIndex._(
+    [],
+    LaneGraph.empty,
+    {},
+    {},
+    [],
+    [],
+    [],
+  );
 
   /// The changes, in replay order.
   final List<MirrorEntry> entries;
+
+  /// The lane graph of [entries], one row each.
+  final LaneGraph graph;
 
   final Map<OperationId, MirrorEntry> byId;
 

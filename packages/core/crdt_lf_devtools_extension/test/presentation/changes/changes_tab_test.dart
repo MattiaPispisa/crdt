@@ -14,6 +14,7 @@ import 'package:crdt_lf_devtools_extension/src/presentation/changes/change_detai
 import 'package:crdt_lf_devtools_extension/src/presentation/changes/change_log_list.dart';
 import 'package:crdt_lf_devtools_extension/src/presentation/changes/change_row.dart';
 import 'package:crdt_lf_devtools_extension/src/presentation/changes/changes_tab.dart';
+import 'package:crdt_lf_devtools_extension/src/presentation/changes/lane_graph_painter.dart';
 import 'package:crdt_lf_devtools_extension/src/presentation/widgets/text_copier.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -88,6 +89,16 @@ void main() {
     expect(find.text(ChangeDetail.frontierLabel), findsNothing);
     expect(find.text('→ ${changes.last.id}'), findsOneWidget);
 
+    final graph = find.byWidgetPredicate(
+      (w) => w is CustomPaint && w.painter is LaneGraphPainter,
+    );
+    expect(graph, findsNWidgets(2));
+    // Every change id holds an `@`: the rows stay, the graph goes.
+    await tester.enterText(find.byType(TextField), '@');
+    await tester.pump();
+    expect(find.byType(ChangeRow), findsNWidgets(2));
+    expect(graph, findsNothing);
+
     doc.dispose();
     await settle(tester);
     await tester.pumpWidget(const SizedBox());
@@ -97,11 +108,13 @@ void main() {
     final remote = CRDTDocument(documentId: 'd');
     CRDTTextHandler(remote, 'closed').insert(0, 'x');
     final doc = CRDTDocument(documentId: 'd');
-    CRDTTextHandler(doc, 'text').insert(0, 'a');
+    final text = CRDTTextHandler(doc, 'text')..insert(0, 'a');
     doc
       ..takeSnapshot()
       ..importChanges(remote.exportChanges());
     remote.dispose();
+    // Depends on the remote change: its row merges from the remote lane.
+    text.insert(1, 'b');
     await openTab(tester, []);
 
     expect(find.text(ChangeLogList.snapshotRow), findsOneWidget);
@@ -109,7 +122,7 @@ void main() {
     await settle(tester);
     expect(find.text(ChangeDetail.closedNote), findsOneWidget);
 
-    expect(find.byType(ChangeRow), findsOneWidget);
+    expect(find.byType(ChangeRow), findsNWidgets(2));
     await tester.enterText(find.byType(TextField), 'zzz');
     await tester.pump();
     expect(find.byType(ChangeRow), findsNothing);
