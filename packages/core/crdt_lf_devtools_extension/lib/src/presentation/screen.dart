@@ -7,6 +7,7 @@ import 'package:crdt_lf_devtools_extension/src/application/connection/connection
 import 'package:crdt_lf_devtools_extension/src/application/documents/documents_cubit.dart';
 import 'package:crdt_lf_devtools_extension/src/bridge/crdt_lf_bridge.dart';
 import 'package:crdt_lf_devtools_extension/src/bridge/crdt_lf_client.dart';
+import 'package:crdt_lf_devtools_extension/src/presentation/changes/changes_tab.dart';
 import 'package:crdt_lf_devtools_extension/src/presentation/header/document_header.dart';
 import 'package:crdt_lf_devtools_extension/src/presentation/state/state_tab.dart';
 import 'package:crdt_lf_devtools_extension/src/presentation/widgets/message.dart';
@@ -142,7 +143,6 @@ class _DocumentView extends StatelessWidget {
   final DocumentsState state;
 
   static const List<(String, int)> _tabs = [
-    ('Changes', 10),
     ('Time travel', 12),
     ('Storage', 13),
     ('Events', 14),
@@ -151,7 +151,7 @@ class _DocumentView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return DefaultTabController(
-      length: _tabs.length + 1,
+      length: _tabs.length + 2,
       child: Column(
         children: [
           DocumentHeader(state: state),
@@ -160,6 +160,7 @@ class _DocumentView extends StatelessWidget {
             tabAlignment: TabAlignment.start,
             tabs: [
               const Tab(text: 'State'),
+              const Tab(text: 'Changes'),
               for (final (name, _) in _tabs) Tab(text: name),
             ],
           ),
@@ -167,6 +168,10 @@ class _DocumentView extends StatelessWidget {
             child: TabBarView(
               children: [
                 StateTab(
+                  key: ValueKey(state.selectedId),
+                  doc: state.selectedId!,
+                ),
+                ChangesTab(
                   key: ValueKey(state.selectedId),
                   doc: state.selectedId!,
                 ),
