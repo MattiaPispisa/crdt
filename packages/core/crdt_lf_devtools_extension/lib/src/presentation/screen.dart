@@ -8,7 +8,9 @@ import 'package:crdt_lf_devtools_extension/src/application/documents/documents_c
 import 'package:crdt_lf_devtools_extension/src/bridge/crdt_lf_bridge.dart';
 import 'package:crdt_lf_devtools_extension/src/bridge/crdt_lf_client.dart';
 import 'package:crdt_lf_devtools_extension/src/presentation/header/document_header.dart';
+import 'package:crdt_lf_devtools_extension/src/presentation/state/state_tab.dart';
 import 'package:crdt_lf_devtools_extension/src/presentation/widgets/message.dart';
+import 'package:crdt_lf_devtools_extension/src/presentation/widgets/text_copier.dart';
 import 'package:devtools_app_shared/ui.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -18,9 +20,16 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 ///
 /// It owns [bridge] and disposes it.
 class CrdtLfScreen extends StatefulWidget {
-  const CrdtLfScreen({required this.bridge, super.key});
+  const CrdtLfScreen({
+    required this.bridge,
+    this.copier = TextCopier.clipboard,
+    super.key,
+  });
 
   final CrdtLfBridge bridge;
+
+  /// Copies the texts the user asks for.
+  final TextCopier copier;
 
   /// The text shown when DevTools is not connected to an app.
   static const String notConnected = 'Not connected to an app.';
@@ -38,6 +47,8 @@ class CrdtLfScreen extends StatefulWidget {
 }
 
 class _CrdtLfScreenState extends State<CrdtLfScreen> {
+  late final CrdtLfClient _client;
+
   late final ConnectionCubit _connection;
 
   late final DocumentsCubit _documents;
@@ -45,8 +56,9 @@ class _CrdtLfScreenState extends State<CrdtLfScreen> {
   @override
   void initState() {
     super.initState();
+    _client = CrdtLfClient(widget.bridge);
     _connection = ConnectionCubit(widget.bridge);
-    _documents = DocumentsCubit(CrdtLfClient(widget.bridge));
+    _documents = DocumentsCubit(_client);
   }
 
   @override
@@ -61,6 +73,8 @@ class _CrdtLfScreenState extends State<CrdtLfScreen> {
   Widget build(BuildContext context) {
     return MultiBlocProvider(
       providers: [
+        RepositoryProvider.value(value: _client),
+        RepositoryProvider.value(value: widget.copier),
         BlocProvider.value(value: _connection),
         BlocProvider.value(value: _documents),
       ],
@@ -128,7 +142,6 @@ class _DocumentView extends StatelessWidget {
   final DocumentsState state;
 
   static const List<(String, int)> _tabs = [
-    ('State', 9),
     ('Changes', 10),
     ('Time travel', 12),
     ('Storage', 13),
@@ -138,18 +151,25 @@ class _DocumentView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return DefaultTabController(
-      length: _tabs.length,
+      length: _tabs.length + 1,
       child: Column(
         children: [
           DocumentHeader(state: state),
           TabBar(
             isScrollable: true,
             tabAlignment: TabAlignment.start,
-            tabs: [for (final (name, _) in _tabs) Tab(text: name)],
+            tabs: [
+              const Tab(text: 'State'),
+              for (final (name, _) in _tabs) Tab(text: name),
+            ],
           ),
           Expanded(
             child: TabBarView(
               children: [
+                StateTab(
+                  key: ValueKey(state.selectedId),
+                  doc: state.selectedId!,
+                ),
                 for (final (_, step) in _tabs)
                   PaneMessage('Coming in step $step.'),
               ],
