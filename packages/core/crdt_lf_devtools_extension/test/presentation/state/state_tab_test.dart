@@ -76,4 +76,33 @@ void main() {
     await tester.pumpWidget(const SizedBox());
     doc.dispose();
   });
+
+  testWidgets('the delta watch of the selected handler', (tester) async {
+    final doc = CRDTDocument(documentId: 'd');
+    final text = CRDTTextHandler(doc, 'text')..insert(0, 'a');
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(body: CrdtLfScreen(bridge: InProcessBridge())),
+      ),
+    );
+    await settle(tester);
+    await settle(tester);
+    await tester.tap(find.text('text'));
+    await settle(tester);
+    expect(find.text(HandlerDetail.watchNote), findsOneWidget);
+
+    await tester.tap(find.text('Watch deltas'));
+    await settle(tester);
+    expect(find.text('initial'), findsOneWidget);
+
+    text.insert(1, 'b');
+    await settle(tester);
+    expect(find.text('local'), findsOneWidget);
+
+    await tester.pumpWidget(const SizedBox());
+    await settle(tester);
+    expect(text.hasDeltaListeners, isFalse);
+    doc.dispose();
+  });
 }

@@ -3,6 +3,7 @@
 
 import 'dart:async';
 
+import 'package:crdt_lf_devtools_extension/src/application/deltas/delta_watch_cubit.dart';
 import 'package:crdt_lf_devtools_extension/src/application/handlers/handler_value_cubit.dart';
 import 'package:crdt_lf_devtools_extension/src/application/handlers/handlers_cubit.dart';
 import 'package:crdt_lf_devtools_extension/src/bridge/crdt_lf_client.dart';
@@ -28,18 +29,22 @@ class _StateTabState extends State<StateTab> {
 
   late final HandlerValueCubit _value;
 
+  late final DeltaWatchCubit _deltas;
+
   @override
   void initState() {
     super.initState();
     final client = context.read<CrdtLfClient>();
     _handlers = HandlersCubit(client, widget.doc);
     _value = HandlerValueCubit(client, widget.doc);
+    _deltas = DeltaWatchCubit(client, widget.doc);
   }
 
   @override
   void dispose() {
     unawaited(_handlers.close());
     unawaited(_value.close());
+    unawaited(_deltas.close());
     super.dispose();
   }
 
@@ -49,10 +54,15 @@ class _StateTabState extends State<StateTab> {
       providers: [
         BlocProvider.value(value: _handlers),
         BlocProvider.value(value: _value),
+        BlocProvider.value(value: _deltas),
       ],
       child: BlocListener<HandlersCubit, HandlersState>(
         listenWhen: (a, b) => a.selectedOpen?.id != b.selectedOpen?.id,
-        listener: (context, state) => _value.select(state.selectedOpen?.id),
+        listener: (context, state) {
+          final open = state.selectedOpen;
+          _value.select(open?.id);
+          _deltas.select(open != null && open.deltas ? open.id : null);
+        },
         child: SplitPane(
           axis: Axis.horizontal,
           initialFractions: const [0.4, 0.6],

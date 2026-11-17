@@ -8,16 +8,20 @@ import 'package:crdt_lf_devtools_extension/src/application/documents/documents_c
 import 'package:crdt_lf_devtools_extension/src/bridge/crdt_lf_client.dart';
 import 'package:crdt_lf_devtools_extension/src/presentation/changes/change_detail.dart';
 import 'package:crdt_lf_devtools_extension/src/presentation/changes/change_log_list.dart';
+import 'package:crdt_lf_devtools_extension/src/presentation/widgets/change_link.dart';
 import 'package:devtools_app_shared/ui.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 /// The changes of the document [doc], and the detail of the selected one.
 class ChangesTab extends StatefulWidget {
-  const ChangesTab({required this.doc, super.key});
+  const ChangesTab({required this.doc, this.link, super.key});
 
   /// The tracked id of the document.
   final int doc;
+
+  /// Selects the change it asks for; `null` for none.
+  final ChangeLink? link;
 
   @override
   State<ChangesTab> createState() => _ChangesTabState();
@@ -29,11 +33,21 @@ class _ChangesTabState extends State<ChangesTab> {
   @override
   void initState() {
     super.initState();
-    _log = ChangeLogCubit(context.read<CrdtLfClient>(), widget.doc);
+    _log = ChangeLogCubit(
+      context.read<CrdtLfClient>(),
+      widget.doc,
+      selected: widget.link?.take(),
+    );
+    widget.link?.addListener(_onLink);
+  }
+
+  void _onLink() {
+    if (widget.link?.take() case final id?) _log.select(id);
   }
 
   @override
   void dispose() {
+    widget.link?.removeListener(_onLink);
     unawaited(_log.close());
     super.dispose();
   }

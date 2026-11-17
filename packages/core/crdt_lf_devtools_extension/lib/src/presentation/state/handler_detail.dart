@@ -3,6 +3,7 @@
 
 import 'dart:convert';
 
+import 'package:crdt_lf_devtools_extension/src/application/deltas/delta_watch_cubit.dart';
 import 'package:crdt_lf_devtools_extension/src/application/handlers/handler_value_cubit.dart';
 import 'package:crdt_lf_devtools_extension/src/application/handlers/handlers_cubit.dart';
 import 'package:crdt_lf_devtools_extension/src/application/load_status.dart';
@@ -29,6 +30,11 @@ class HandlerDetail extends StatelessWidget {
   /// The note shown for a closed handler.
   static const String closedNote =
       'The handler is not open in the app: its value cannot be read.';
+
+  /// The note under the Watch deltas toggle.
+  static const String watchNote =
+      'A watched handler applies remote changes when they arrive, not at the '
+      'next read.';
 
   /// The note shown for a deleted handler.
   static const String deletedNote = 'The handler was deleted.';
@@ -88,7 +94,11 @@ class _OpenDetail extends StatelessWidget {
         ('undoTracked', '${h.undoTracked}'),
         ('snapshotBytes', '${h.snapshotBytes ?? '-'}'),
       ],
-      children: const [_Note(HandlerDetail.cacheNote), _ValuePane()],
+      children: [
+        const _Note(HandlerDetail.cacheNote),
+        const _ValuePane(),
+        if (h.deltas) const _DeltaPane(),
+      ],
     );
   }
 }
@@ -134,6 +144,88 @@ class _ValuePane extends StatelessWidget {
             ),
           },
         ),
+      ],
+    );
+  }
+}
+
+class _DeltaPane extends StatelessWidget {
+  const _DeltaPane();
+
+  static const double _listHeight = 12 * defaultRowHeight;
+
+  @override
+  Widget build(BuildContext context) {
+    final cubit = context.watch<DeltaWatchCubit>();
+    final state = cubit.state;
+    final theme = Theme.of(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        AreaPaneHeader(
+          title: const Text('Deltas'),
+          roundedTopBorder: false,
+          actions: [
+            DevToolsToggleButton(
+              icon: Icons.visibility,
+              label: 'Watch deltas',
+              message: 'Watch the deltas of this handler',
+              isSelected: state.watching,
+              onPressed: () => cubit.setWatching(watching: !state.watching),
+            ),
+          ],
+        ),
+        const _Note(HandlerDetail.watchNote),
+        if (state.error case final error?) _Note('The call failed: $error'),
+        if (state.deltas.isNotEmpty)
+          SizedBox(
+            height: _listHeight,
+            child: ListView.builder(
+              itemCount: state.deltas.length,
+              itemExtent: defaultRowHeight,
+              itemBuilder: (context, i) {
+                final d = state.deltas[i];
+                return Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: densePadding),
+                  child: Row(
+                    children: [
+                      SizedBox(
+                        width: 50,
+                        child: Text('${d.seq}', style: theme.fixedFontStyle),
+                      ),
+                      SizedBox(
+                        width: 60,
+                        child: Text(d.type, style: theme.regularTextStyle),
+                      ),
+                      Expanded(
+                        child: Text(
+                          (d.type == 'reset' ? d.cause : d.delta) ?? '',
+                          style: theme.fixedFontStyle,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      SizedBox(
+                        width: 60,
+                        child: Text(switch (d.local) {
+                          true => 'local',
+                          false => 'remote',
+                          null => '',
+                        }, style: theme.subtleTextStyle),
+                      ),
+                      SizedBox(
+                        width: 120,
+                        child: Text(
+                          d.origin ?? '',
+                          style: theme.subtleTextStyle,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              },
+            ),
+          ),
       ],
     );
   }

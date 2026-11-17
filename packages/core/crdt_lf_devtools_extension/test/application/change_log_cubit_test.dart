@@ -109,6 +109,22 @@ void main() {
     expect('${cubit.state.operation?.payload}', contains('[text, b]'));
   });
 
+  test('a starting selection gets its operation after a sync', () async {
+    final doc = CRDTDocument(documentId: 'd');
+    CRDTTextHandler(doc, 'text').insert(0, 'a');
+    final id = (await client.documents()).single.id;
+    final cubit = ChangeLogCubit(
+      client,
+      id,
+      selected: doc.version.single,
+      delay: Duration.zero,
+    );
+    addTearDown(cubit.close);
+    await settle();
+    expect(cubit.state.selected?.change.id, doc.version.single);
+    expect(cubit.state.operationStatus, LoadStatus.loaded);
+  });
+
   test('a prune reloads the list and drops a pruned selection', () async {
     final doc = CRDTDocument(documentId: 'd');
     final text = CRDTTextHandler(doc, 'text')..insert(0, 'a');

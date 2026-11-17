@@ -1,0 +1,89 @@
+// Copyright 2025 Mattia Pispisa
+// SPDX-License-Identifier: MIT
+
+import 'dart:async';
+
+import 'package:bloc/bloc.dart';
+import 'package:crdt_lf_devtools_extension/src/bridge/crdt_lf_client.dart';
+import 'package:crdt_lf_devtools_extension/src/bridge/models/models.dart';
+import 'package:equatable/equatable.dart';
+
+part 'event_log_state.dart';
+
+/// The event log of the document [doc], newest first.
+///
+/// Recording is off until [setRecording] turns it on. [close] stops it in
+/// the app.
+class EventLogCubit extends Cubit<EventLogState> {
+  /// Set [recording] when the app already records [doc]: the cubit stops
+  /// it, so recording starts off.
+  EventLogCubit(this._client, this.doc, {bool recording = false})
+    : super(const EventLogState()) {
+    _events = _client.events.listen(_onEvent);
+    if (recording) unawaited(_stop());
+  }
+
+  /// The events kept; the oldest go first.
+  static const int maxEvents = 1000;
+
+  final CrdtLfClient _client;
+
+  /// The tracked id of the document.
+  final int doc;
+
+  late final StreamSubscription<CrdtLfEvent> _events;
+
+  // Set before the call: the app posts events before its answer arrives.
+  bool _wanted = false;
+
+  void _onEvent(CrdtLfEvent event) {
+    if (!_wanted || event is! DocumentLogEvent || event.doc != doc) return;
+    final events = [event, ...state.events.take(maxEvents - 1)];
+    final kept = events.any((e) => e.n == state.selectedN);
+    emit(state._copyWith(events: events, selectedN: kept ? null : () => null));
+  }
+
+  /// Starts or stops the event log in the app.
+  ///
+  /// A failed call keeps the previous state and sets the error.
+  Future<void> setRecording({required bool recording}) async {
+    _wanted = recording;
+    try {
+      final on =
+          recording
+              ? await _client.eventsStart(doc)
+              : await _client.eventsStop(doc);
+      if (isClosed) return;
+      emit(state._copyWith(recording: on, error: () => null));
+    } on Object catch (e) {
+      if (isClosed) return;
+      _wanted = state.recording;
+      emit(state._copyWith(error: () => '$e'));
+    }
+  }
+
+  /// Removes every event; recording goes on.
+  void clear() =>
+      emit(state._copyWith(events: const [], selectedN: () => null));
+
+  /// Selects the event number [n]; `null` clears the selection.
+  void select(int? n) {
+    if (n == state.selectedN) return;
+    emit(state._copyWith(selectedN: () => n));
+  }
+
+  Future<void> _stop() async {
+    try {
+      await _client.eventsStop(doc);
+    } on Object {
+      // The document can be gone: then the app already stopped the log.
+    }
+  }
+
+  @override
+  Future<void> close() async {
+    if (_wanted) unawaited(_stop());
+    await _events.cancel();
+    return super.close();
+  }
+}

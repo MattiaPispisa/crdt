@@ -3,15 +3,19 @@
 
 import 'dart:async';
 
+import 'package:crdt_lf/crdt_lf.dart';
 import 'package:crdt_lf_devtools_extension/src/application/connection/connection_cubit.dart';
 import 'package:crdt_lf_devtools_extension/src/application/documents/documents_cubit.dart';
+import 'package:crdt_lf_devtools_extension/src/application/events/event_log_cubit.dart';
 import 'package:crdt_lf_devtools_extension/src/bridge/crdt_lf_bridge.dart';
 import 'package:crdt_lf_devtools_extension/src/bridge/crdt_lf_client.dart';
 import 'package:crdt_lf_devtools_extension/src/presentation/changes/changes_tab.dart';
+import 'package:crdt_lf_devtools_extension/src/presentation/events/events_tab.dart';
 import 'package:crdt_lf_devtools_extension/src/presentation/header/document_header.dart';
 import 'package:crdt_lf_devtools_extension/src/presentation/state/state_tab.dart';
 import 'package:crdt_lf_devtools_extension/src/presentation/storage/storage_tab.dart';
 import 'package:crdt_lf_devtools_extension/src/presentation/time_travel/time_travel_tab.dart';
+import 'package:crdt_lf_devtools_extension/src/presentation/widgets/change_link.dart';
 import 'package:crdt_lf_devtools_extension/src/presentation/widgets/message.dart';
 import 'package:crdt_lf_devtools_extension/src/presentation/widgets/text_copier.dart';
 import 'package:devtools_app_shared/ui.dart';
@@ -144,47 +148,93 @@ class _DocumentView extends StatelessWidget {
 
   final DocumentsState state;
 
-  static const List<(String, int)> _tabs = [('Events', 14)];
-
   @override
   Widget build(BuildContext context) {
     return DefaultTabController(
-      length: _tabs.length + 4,
+      length: 5,
       child: Column(
         children: [
           DocumentHeader(state: state),
-          TabBar(
+          Expanded(
+            child: _DocumentTabs(
+              key: ValueKey(state.selectedId),
+              doc: state.selectedId!,
+              recording: state.selected?.recording ?? false,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// The tabs of one document; the event log lives here, so it keeps
+/// recording while another tab is shown.
+class _DocumentTabs extends StatefulWidget {
+  const _DocumentTabs({required this.doc, required this.recording, super.key});
+
+  final int doc;
+
+  final bool recording;
+
+  @override
+  State<_DocumentTabs> createState() => _DocumentTabsState();
+}
+
+class _DocumentTabsState extends State<_DocumentTabs> {
+  static const int _changesTab = 1;
+
+  late final EventLogCubit _events;
+
+  final ChangeLink _link = ChangeLink();
+
+  @override
+  void initState() {
+    super.initState();
+    _events = EventLogCubit(
+      context.read<CrdtLfClient>(),
+      widget.doc,
+      recording: widget.recording,
+    );
+  }
+
+  @override
+  void dispose() {
+    unawaited(_events.close());
+    _link.dispose();
+    super.dispose();
+  }
+
+  void _openChange(OperationId id) {
+    _link.open(id);
+    DefaultTabController.of(context).animateTo(_changesTab);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return BlocProvider.value(
+      value: _events,
+      child: Column(
+        children: [
+          const TabBar(
             isScrollable: true,
             tabAlignment: TabAlignment.start,
             tabs: [
-              const Tab(text: 'State'),
-              const Tab(text: 'Changes'),
-              const Tab(text: 'Time travel'),
-              const Tab(text: 'Storage'),
-              for (final (name, _) in _tabs) Tab(text: name),
+              Tab(text: 'State'),
+              Tab(text: 'Changes'),
+              Tab(text: 'Time travel'),
+              Tab(text: 'Storage'),
+              Tab(text: 'Events'),
             ],
           ),
           Expanded(
             child: TabBarView(
               children: [
-                StateTab(
-                  key: ValueKey(state.selectedId),
-                  doc: state.selectedId!,
-                ),
-                ChangesTab(
-                  key: ValueKey(state.selectedId),
-                  doc: state.selectedId!,
-                ),
-                TimeTravelTab(
-                  key: ValueKey(state.selectedId),
-                  doc: state.selectedId!,
-                ),
-                StorageTab(
-                  key: ValueKey(state.selectedId),
-                  doc: state.selectedId!,
-                ),
-                for (final (_, step) in _tabs)
-                  PaneMessage('Coming in step $step.'),
+                StateTab(doc: widget.doc),
+                ChangesTab(doc: widget.doc, link: _link),
+                TimeTravelTab(doc: widget.doc),
+                StorageTab(doc: widget.doc),
+                EventsTab(onChange: _openChange),
               ],
             ),
           ),

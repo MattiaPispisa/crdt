@@ -21,12 +21,15 @@ part 'change_log_state.dart';
 /// pruned them. A burst of events shares one sync, made after `delay`.
 /// The selection is kept across syncs while the change is loaded.
 class ChangeLogCubit extends Cubit<ChangeLogState> {
+  /// Starts with the change [selected]; the first sync drops it when the
+  /// mirror lacks it.
   ChangeLogCubit(
     this._client,
     this.doc, {
+    OperationId? selected,
     Duration delay = const Duration(milliseconds: 100),
   }) : _mirror = ChangeMirror(_client, doc),
-       super(const ChangeLogState()) {
+       super(ChangeLogState(selectedId: selected)) {
     _gate = ReloadGate(_load, delay: delay);
     _events = _client.events.listen(_onEvent);
     unawaited(refresh());
@@ -124,6 +127,7 @@ class ChangeLogCubit extends Cubit<ChangeLogState> {
       if (isClosed) return;
       final index = ChangeIndex(_mirror.entries);
       final kept = index.byId.containsKey(state.selectedId);
+      final pending = kept && state.selected == null;
       emit(
         state._copyWith(
           status: LoadStatus.loaded,
@@ -136,6 +140,7 @@ class ChangeLogCubit extends Cubit<ChangeLogState> {
           error: () => null,
         ),
       );
+      if (pending) unawaited(reloadOperation());
     } on Object catch (e) {
       if (isClosed) return;
       emit(state._copyWith(status: LoadStatus.failure, error: () => '$e'));
