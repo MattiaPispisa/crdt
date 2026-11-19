@@ -1,6 +1,6 @@
 name: crdt_lf_devtools_extension
 description: DevTools extension for crdt_lf package
-version: 0.0.2
+version: 0.1.0
 publish_to: none
 
 environment:
@@ -22,7 +22,7 @@ dependencies:
   equatable: ^2.0.7
 
   # extension for
-  crdt_lf: ">=4.0.0 <6.0.0"
+  crdt_lf: ^5.5.0
 dev_dependencies:
   flutter_test:
     sdk: flutter

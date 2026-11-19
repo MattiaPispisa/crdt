@@ -12,7 +12,9 @@ void main() {
     DevToolsExtension(
       child: CrdtLfScreen(
         bridge: VmServiceBridge(),
-        copier: TextCopier(extensionManager.copyToClipboard),
+        // A closure: `extensionManager` is set in the initState of
+        // `DevToolsExtension`, after `main` builds this tree.
+        copier: TextCopier((text) => extensionManager.copyToClipboard(text)),
       ),
     ),
   );
