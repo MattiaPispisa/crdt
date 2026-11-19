@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 import 'package:crdt_lf_devtools_extension/src/bridge/change_mirror.dart';
+import 'package:crdt_lf_devtools_extension/src/presentation/widgets/handler_names.dart';
 import 'package:crdt_lf_devtools_extension/src/presentation/widgets/peer_chip.dart';
 import 'package:devtools_app_shared/ui.dart';
 import 'package:flutter/material.dart';
@@ -71,16 +72,16 @@ class ChangeRow extends StatelessWidget {
           children: [
             if (graph case final graph?) graph,
             const SizedBox(width: densePadding),
-            SizedBox(
-              width: 110,
+            Expanded(
+              flex: 3,
               child: Text(
                 clockLabel(change.hlc.l, change.hlc.c),
                 style: theme.fixedFontStyle,
                 overflow: TextOverflow.ellipsis,
               ),
             ),
-            SizedBox(
-              width: 130,
+            Expanded(
+              flex: 3,
               child: Align(
                 alignment: Alignment.centerLeft,
                 child: PeerChip(change.author.toString(), local: local),
@@ -88,23 +89,32 @@ class ChangeRow extends StatelessWidget {
             ),
             const SizedBox(width: denseSpacing),
             Expanded(
+              flex: 4,
               child: Text(
-                entry.handlerId ?? '?',
+                switch (entry.handlerId) {
+                  final id? => HandlerNames.label(context, id),
+                  null => '?',
+                },
                 style: theme.fixedFontStyle,
                 overflow: TextOverflow.ellipsis,
               ),
             ),
             const SizedBox(width: densePadding),
-            SizedBox(
-              width: 60,
-              child: Text(kindLabel(entry.kind), style: theme.subtleTextStyle),
+            Expanded(
+              flex: 2,
+              child: Text(
+                kindLabel(entry.kind),
+                style: theme.subtleTextStyle,
+                overflow: TextOverflow.ellipsis,
+              ),
             ),
-            SizedBox(
-              width: 60,
+            Expanded(
+              flex: 2,
               child: Text(
                 '${entry.byteLength} B',
                 style: theme.subtleTextStyle,
                 textAlign: TextAlign.right,
+                overflow: TextOverflow.ellipsis,
               ),
             ),
             const SizedBox(width: densePadding),

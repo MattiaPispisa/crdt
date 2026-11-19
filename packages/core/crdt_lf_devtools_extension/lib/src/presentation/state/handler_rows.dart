@@ -61,11 +61,12 @@ final class DeletedRow extends HandlerRow {
 ///
 /// A root is an open handler that no open container lists. A child sits
 /// under each container that lists it, and a cycle stops at the first
-/// repeat. [filter] matches the id or the type, ignoring case; an open
-/// handler also stays when a descendant matches.
+/// repeat. [filter] matches the id, the debug name in [names] or the type,
+/// ignoring case; an open handler also stays when a descendant matches.
 List<HandlerRow> handlerRows(
   HandlerList list, {
   String filter = '',
+  Map<String, String> names = const {},
   bool closedExpanded = false,
   bool deletedExpanded = false,
 }) {
@@ -73,6 +74,7 @@ List<HandlerRow> handlerRows(
   bool matches(String id, String? type) =>
       needle.isEmpty ||
       id.toLowerCase().contains(needle) ||
+      (names[id]?.toLowerCase().contains(needle) ?? false) ||
       (type?.toLowerCase().contains(needle) ?? false);
 
   final open = _openRows(list.open, (h) => matches(h.id, h.type));

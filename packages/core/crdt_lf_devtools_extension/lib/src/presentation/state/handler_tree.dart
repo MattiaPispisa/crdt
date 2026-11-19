@@ -5,6 +5,7 @@ import 'package:crdt_lf_devtools_extension/src/application/handlers/handlers_cub
 import 'package:crdt_lf_devtools_extension/src/application/load_status.dart';
 import 'package:crdt_lf_devtools_extension/src/presentation/state/handler_rows.dart';
 import 'package:crdt_lf_devtools_extension/src/presentation/widgets/handler_icon.dart';
+import 'package:crdt_lf_devtools_extension/src/presentation/widgets/handler_names.dart';
 import 'package:crdt_lf_devtools_extension/src/presentation/widgets/keyboard_list.dart';
 import 'package:crdt_lf_devtools_extension/src/presentation/widgets/message.dart';
 import 'package:devtools_app_shared/ui.dart';
@@ -63,7 +64,7 @@ class _HandlerTreeState extends State<HandlerTree> {
           padding: const EdgeInsets.all(densePadding),
           child: DevToolsClearableTextField(
             controller: _filter,
-            hintText: 'Filter by id or type',
+            hintText: 'Filter by id, name or type',
           ),
         ),
         Expanded(
@@ -86,6 +87,7 @@ class _HandlerTreeState extends State<HandlerTree> {
               final rows = handlerRows(
                 handlers,
                 filter: _filter.text,
+                names: HandlerNames.of(context),
                 closedExpanded: _closedExpanded,
                 deletedExpanded: _deletedExpanded,
               );
@@ -169,7 +171,7 @@ class _HandlerTreeState extends State<HandlerTree> {
                 children: [
                   Flexible(
                     child: Text(
-                      row.id!,
+                      HandlerNames.label(context, row.id!),
                       style: theme.fixedFontStyle,
                       overflow: TextOverflow.ellipsis,
                     ),

@@ -4,6 +4,7 @@
 import 'package:crdt_lf/crdt_lf.dart';
 import 'package:crdt_lf_devtools_extension/src/bridge/change_mirror.dart';
 import 'package:crdt_lf_devtools_extension/src/presentation/changes/change_row.dart';
+import 'package:crdt_lf_devtools_extension/src/presentation/widgets/handler_names.dart';
 import 'package:crdt_lf_devtools_extension/src/presentation/widgets/peer_chip.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -58,6 +59,35 @@ void main() {
 
     await pump(local: false);
     expect(find.text(PeerChip.localLabel), findsNothing);
+    doc.dispose();
+  });
+
+  testWidgets('a narrow row shows the debug name and fits', (tester) async {
+    tester.view.physicalSize = const Size(320, 600);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final doc = CRDTDocument();
+    CRDTTextHandler(doc, 'notes').insert(0, 'hi');
+    final entry = MirrorEntry.decode(doc.exportChanges().single.toBytes());
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: HandlerNames(
+            names: const {'notes': 'title'},
+            child: ChangeRow(
+              entry: entry,
+              local: true,
+              selected: false,
+              onTap: () {},
+              graph: const SizedBox(width: 40),
+            ),
+          ),
+        ),
+      ),
+    );
+    expect(tester.takeException(), isNull);
+    expect(find.text('title'), findsOneWidget);
     doc.dispose();
   });
 }

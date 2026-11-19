@@ -16,7 +16,11 @@ void main() {
 
 class _Demo {
   _Demo()
-    : a = CRDTDocument(peerId: PeerId.generate(), documentId: 'demo'),
+    : a = CRDTDocument(
+        peerId: PeerId.generate(),
+        documentId: 'demo',
+        debugName: 'peer a',
+      ),
       b = CRDTDocument(peerId: PeerId.generate(), documentId: 'demo') {
     for (final doc in [a, b]) {
       _open(doc);
@@ -54,7 +58,10 @@ class _Demo {
       ..insert(0, 'Rich text')
       ..format(0, 4, 'bold', true);
 
-    final child = CRDTTextHandler(a, 'nested-text')..insert(0, 'nested');
+    final child =
+        CRDTTextHandler(a, 'nested-text')
+          ..insert(0, 'nested')
+          ..debugName = 'nested title';
     CRDTMapRefHandler(a, 'root').setRef('child', child);
 
     final gone = CRDTMapHandler<int>(a, 'gone', handlerType: 'int-map')

@@ -11,8 +11,8 @@ import 'package:crdt_lf/crdt_lf.dart';
 /// Lets two peers edit one text at the same time, and returns what each reads.
 (String, String) mergeTwoPeers() {
   // #docregion merge
-  final alice = CRDTDocument();
-  final bob = CRDTDocument();
+  final alice = CRDTDocument(debugName: 'alice');
+  final bob = CRDTDocument(debugName: 'bob');
 
   // The same handler id on both peers: it is the same text.
   final aliceText = CRDTFugueTextHandler(alice, 'note');

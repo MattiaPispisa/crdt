@@ -35,7 +35,7 @@ class PeerChip extends StatelessWidget {
         ),
         if (local) ...[
           const SizedBox(width: densePadding),
-          const RoundedLabel(labelText: localLabel),
+          const Flexible(child: RoundedLabel(labelText: localLabel)),
         ],
       ],
     );

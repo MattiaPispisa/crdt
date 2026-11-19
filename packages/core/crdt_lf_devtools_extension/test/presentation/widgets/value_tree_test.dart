@@ -1,6 +1,7 @@
 // Copyright 2025 Mattia Pispisa
 // SPDX-License-Identifier: MIT
 
+import 'package:crdt_lf_devtools_extension/src/presentation/widgets/handler_names.dart';
 import 'package:crdt_lf_devtools_extension/src/presentation/widgets/value_tree.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -10,10 +11,14 @@ void main() {
     WidgetTester tester,
     Object? node, {
     ValueChanged<String>? onRef,
+    Map<String, String> names = const {},
   }) => tester.pumpWidget(
     MaterialApp(
       home: Scaffold(
-        body: SingleChildScrollView(child: ValueTree(node, onRef: onRef)),
+        body: HandlerNames(
+          names: names,
+          child: SingleChildScrollView(child: ValueTree(node, onRef: onRef)),
+        ),
       ),
     ),
   );
@@ -89,7 +94,37 @@ void main() {
     }, onRef: (id) => tapped = id);
     await tester.tap(find.text('→ child'));
     expect(tapped, 'child');
-    expect(find.text('CRDTTextHandler'), findsOneWidget);
+    expect(find.text('(CRDTTextHandler)'), findsOneWidget);
+  });
+
+  testWidgets('a ref shows the debug name and wraps when narrow', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(300, 600);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    const id = 'd2907f93-d486-4b6d-a74b-7748d9e4f227';
+    await pump(
+      tester,
+      {
+        r'$t': 'map',
+        'length': 2,
+        'entries': [
+          [
+            'title',
+            {r'$t': 'ref', 'id': 'child', 'type': 'CRDTFugueTextHandler'},
+          ],
+          [
+            'paragraphs',
+            {r'$t': 'ref', 'id': id, 'type': 'CRDTMovableListRefHandler'},
+          ],
+        ],
+      },
+      names: const {'child': 'title text'},
+    );
+    expect(tester.takeException(), isNull);
+    expect(find.text('→ title text'), findsOneWidget);
+    expect(find.text('→ $id'), findsOneWidget);
   });
 
   testWidgets('a span with attributes and an embed', (tester) async {

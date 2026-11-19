@@ -9,6 +9,7 @@ import 'package:crdt_lf_devtools_extension/src/application/time_travel/time_trav
 import 'package:crdt_lf_devtools_extension/src/bridge/crdt_lf_client.dart';
 import 'package:crdt_lf_devtools_extension/src/presentation/changes/change_row.dart';
 import 'package:crdt_lf_devtools_extension/src/presentation/widgets/handler_icon.dart';
+import 'package:crdt_lf_devtools_extension/src/presentation/widgets/handler_names.dart';
 import 'package:crdt_lf_devtools_extension/src/presentation/widgets/keyboard_list.dart';
 import 'package:crdt_lf_devtools_extension/src/presentation/widgets/message.dart';
 import 'package:crdt_lf_devtools_extension/src/presentation/widgets/value_tree.dart';
@@ -216,7 +217,7 @@ class _HandlerList extends StatelessWidget {
                 const SizedBox(width: densePadding),
                 Flexible(
                   child: Text(
-                    handler.id,
+                    HandlerNames.label(context, handler.id),
                     style: theme.fixedFontStyle,
                     overflow: TextOverflow.ellipsis,
                   ),
@@ -253,10 +254,10 @@ class _ValuePane extends StatelessWidget {
       child: ListView(
         children: [
           AreaPaneHeader(
-            title: Text(
-              value == null ? handler : '$handler · at ${value.cursor}',
-              style: theme.fixedFontStyle,
-            ),
+            title: Text(switch (HandlerNames.label(context, handler)) {
+              final label when value == null => label,
+              final label => '$label · at ${value.cursor}',
+            }, style: theme.fixedFontStyle),
             roundedTopBorder: false,
             includeTopBorder: false,
           ),

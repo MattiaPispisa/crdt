@@ -16,6 +16,7 @@ import 'package:crdt_lf_devtools_extension/src/presentation/state/state_tab.dart
 import 'package:crdt_lf_devtools_extension/src/presentation/storage/storage_tab.dart';
 import 'package:crdt_lf_devtools_extension/src/presentation/time_travel/time_travel_tab.dart';
 import 'package:crdt_lf_devtools_extension/src/presentation/widgets/change_link.dart';
+import 'package:crdt_lf_devtools_extension/src/presentation/widgets/handler_names.dart';
 import 'package:crdt_lf_devtools_extension/src/presentation/widgets/message.dart';
 import 'package:crdt_lf_devtools_extension/src/presentation/widgets/text_copier.dart';
 import 'package:devtools_app_shared/ui.dart';
@@ -156,10 +157,13 @@ class _DocumentView extends StatelessWidget {
         children: [
           DocumentHeader(state: state),
           Expanded(
-            child: _DocumentTabs(
-              key: ValueKey(state.selectedId),
-              doc: state.selectedId!,
-              recording: state.selected?.recording ?? false,
+            child: HandlerNames(
+              names: state.selected?.handlerNames ?? const {},
+              child: _DocumentTabs(
+                key: ValueKey(state.selectedId),
+                doc: state.selectedId!,
+                recording: state.selected?.recording ?? false,
+              ),
             ),
           ),
         ],

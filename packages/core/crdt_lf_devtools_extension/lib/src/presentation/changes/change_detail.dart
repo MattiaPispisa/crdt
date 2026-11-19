@@ -8,6 +8,7 @@ import 'package:crdt_lf/crdt_lf.dart';
 import 'package:crdt_lf_devtools_extension/src/application/changes/change_log_cubit.dart';
 import 'package:crdt_lf_devtools_extension/src/application/load_status.dart';
 import 'package:crdt_lf_devtools_extension/src/presentation/changes/change_row.dart';
+import 'package:crdt_lf_devtools_extension/src/presentation/widgets/handler_names.dart';
 import 'package:crdt_lf_devtools_extension/src/presentation/widgets/message.dart';
 import 'package:crdt_lf_devtools_extension/src/presentation/widgets/peer_chip.dart';
 import 'package:crdt_lf_devtools_extension/src/presentation/widgets/text_copier.dart';
@@ -101,6 +102,8 @@ class ChangeDetail extends StatelessWidget {
               'handler',
               Text(entry.handlerId ?? '?', style: theme.fixedFontStyle),
             ),
+            if (HandlerNames.of(context)[entry.handlerId] case final name?)
+              ('debugName', Text(name, style: theme.fixedFontStyle)),
             (
               'handlerType',
               Text(entry.handlerType ?? '?', style: theme.fixedFontStyle),

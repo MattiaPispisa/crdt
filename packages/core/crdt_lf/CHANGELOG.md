@@ -4,6 +4,11 @@
 
 [compare to previous release](https://github.com/MattiaPispisa/crdt/compare/crdt_lf-v5.4.0...crdt_lf-v5.5.0)
 
+### Added
+
+- `CRDTDocument.debugName`, `Handler.debugName` and `setHandlerDebugName`: local labels that
+  DevTools shows and searches in place of the ids.
+
 ### Changed
 
 - The DevTools extension was rebuilt: state, changes with a DAG graph, time travel, storage and

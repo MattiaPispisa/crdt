@@ -42,6 +42,19 @@ one color in every tab, and the local peer has the label "me".
 
 An operation can only be decoded when its handler is open in the app.
 
+## Debug names
+
+Give a document or a handler a debug name, and every tab shows the name in
+place of the id. The State filter and the Changes handler filter also search
+by name. A debug name stays on this peer: it is never synced or stored.
+
+```dart
+final doc = CRDTDocument(debugName: 'notes');
+CRDTFugueTextHandler(doc, 'd2907f93-…')..debugName = 'title';
+// By id, also for a handler that is not open:
+doc.setHandlerDebugName('bd574c57-…', 'paragraphs');
+```
+
 ## Values and the handler cache
 
 Reading a value builds the cached state of that handler in the app, as a read

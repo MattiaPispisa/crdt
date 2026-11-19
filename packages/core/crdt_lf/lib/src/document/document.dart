@@ -54,7 +54,8 @@ abstract class BaseCRDTDocument {
   BaseCRDTDocument._(_HandlerRegistry registry)
       : _outbox = EventOutbox(),
         _registry = registry,
-        _cache = _CacheCoordinator(registry);
+        _cache = _CacheCoordinator(registry),
+        _handlerDebugNames = <String, String>{};
 
   bool _isDisposed = false;
 
@@ -63,6 +64,31 @@ abstract class BaseCRDTDocument {
   final _HandlerRegistry _registry;
 
   final _CacheCoordinator _cache;
+
+  final Map<String, String> _handlerDebugNames;
+
+  /// The debug name of the handler [handlerId]; `null` for none.
+  ///
+  /// {@template debug_name}
+  /// A debug name is a label for tools such as the DevTools extension. It
+  /// stays on this peer: it never goes into changes, snapshots or sync.
+  /// {@endtemplate}
+  String? handlerDebugName(String handlerId) => _handlerDebugNames[handlerId];
+
+  /// Sets the debug name of the handler [handlerId]; `null` removes it.
+  ///
+  /// Works by id, so the handler can be open, closed or deleted. See
+  /// [Handler.debugName].
+  void setHandlerDebugName(String handlerId, String? name) {
+    if (name == null) {
+      _handlerDebugNames.remove(handlerId);
+    } else {
+      _handlerDebugNames[handlerId] = name;
+    }
+    _debugNamesChanged();
+  }
+
+  void _debugNamesChanged() {}
 
   /// Who asked for the work running right now, stamped onto the delta events it
   /// produces; `null` outside any call that named one.
@@ -423,13 +449,16 @@ class CRDTDocument extends BaseCRDTDocument {
   ///   If not provided, defaults to [HybridLogicalClock.initialize] (clock
   ///   starting at zero). Use [HybridLogicalClock.now] to start from the
   ///   current physical time.
+  /// - [debugName]: see [CRDTDocument.debugName].
   ///
   /// {@macro document_example}
   CRDTDocument({
     PeerId? peerId,
     String? documentId,
     HybridLogicalClock? initialClock,
-  })  : _log = ChangeLog(),
+    String? debugName,
+  })  : _debugName = debugName,
+        _log = ChangeLog(),
         _documentId = documentId ?? generateUuid(),
         _clock = DocumentClock(
           peerId ?? PeerId.generate(),
@@ -448,6 +477,21 @@ class CRDTDocument extends BaseCRDTDocument {
     );
     DevToolsBridge._created(this);
   }
+
+  String? _debugName;
+
+  /// The debug name of this document; `null` for none.
+  ///
+  /// {@macro debug_name}
+  String? get debugName => _debugName;
+
+  set debugName(String? name) {
+    _debugName = name;
+    _debugNamesChanged();
+  }
+
+  @override
+  void _debugNamesChanged() => DevToolsBridge._renamed(this);
 
   final ChangeLog _log;
 

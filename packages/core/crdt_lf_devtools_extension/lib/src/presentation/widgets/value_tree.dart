@@ -1,6 +1,7 @@
 // Copyright 2025 Mattia Pispisa
 // SPDX-License-Identifier: MIT
 
+import 'package:crdt_lf_devtools_extension/src/presentation/widgets/handler_names.dart';
 import 'package:devtools_app_shared/ui.dart';
 import 'package:flutter/material.dart';
 
@@ -118,21 +119,21 @@ class _NodeViewState extends State<_NodeView> {
       case 'ref':
         final map = _map(node);
         final id = map['id']! as String;
-        return Row(
-          mainAxisSize: MainAxisSize.min,
+        return Wrap(
+          spacing: densePadding,
+          crossAxisAlignment: WrapCrossAlignment.center,
           children: [
             InkWell(
               onTap: widget.onRef == null ? null : () => widget.onRef!(id),
               child: Text(
-                '→ $id',
+                '→ ${HandlerNames.label(context, id)}',
                 style: fixed.copyWith(
                   color: theme.colorScheme.primary,
                   decoration: TextDecoration.underline,
                 ),
               ),
             ),
-            const SizedBox(width: densePadding),
-            Text('${map['type']}', style: subtle),
+            Text('(${map['type']})', style: subtle),
           ],
         );
       case 'span':
@@ -190,9 +191,10 @@ class _NodeViewState extends State<_NodeView> {
     }
   }
 
-  static String _inline(Object? node) => switch (node) {
+  String _inline(Object? node) => switch (node) {
     final String text => text,
-    {r'$t': 'ref', 'id': final String id} => '→ $id',
+    {r'$t': 'ref', 'id': final String id} =>
+      '→ ${HandlerNames.label(context, id)}',
     {r'$t': _} => '…',
     _ => '$node',
   };
@@ -229,7 +231,7 @@ class _NodeViewState extends State<_NodeView> {
                 _expanded ? Icons.expand_more : Icons.chevron_right,
                 size: defaultIconSize,
               ),
-              Text(title, style: theme.subtleTextStyle),
+              Flexible(child: Text(title, style: theme.subtleTextStyle)),
             ],
           ),
         ),

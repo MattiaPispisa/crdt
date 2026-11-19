@@ -51,6 +51,8 @@ void main() {
 
     final intro = addChapter(chaptersOf(phone.document), 'Intro');
     intro.body.insert(0, 'Once upon a time');
+    expect(intro.debugName, 'chapter "Intro"');
+    expect(intro.body.debugName, 'chapter "Intro" · body');
 
     await eventually(() => outlineOf(laptop).isNotEmpty);
     await eventually(

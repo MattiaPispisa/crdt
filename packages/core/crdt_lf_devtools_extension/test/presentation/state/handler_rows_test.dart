@@ -79,6 +79,22 @@ void main() {
     expect([for (final g in rows.whereType<GroupRow>()) g.count], [2, 1, 1]);
   });
 
+  test('the filter matches a debug name', () {
+    final list = HandlerList(
+      open: [_handler('a'), _handler('b')],
+      closed: const [],
+      deleted: const ['c'],
+    );
+    final rows = handlerRows(
+      list,
+      filter: 'TITLE',
+      names: const {'b': 'title', 'c': 'old title'},
+      deletedExpanded: true,
+    );
+    expect(_open(rows), ['b']);
+    expect(rows.whereType<DeletedRow>().map((r) => r.id), ['c']);
+  });
+
   test('closed and deleted are collapsed by default', () {
     const list = HandlerList(
       open: [],

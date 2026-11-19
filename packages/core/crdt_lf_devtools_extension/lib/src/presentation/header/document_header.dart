@@ -17,10 +17,10 @@ class DocumentHeader extends StatelessWidget {
 
   static String _short(String id) => id.length > 8 ? id.substring(0, 8) : id;
 
-  /// The selector text of [d]: its tracked id, and the first 8 characters
-  /// of its document id and of its peer id.
+  /// The selector text of [d]: its tracked id, its debug name or the first
+  /// 8 characters of its document id, and the first 8 of its peer id.
   static String label(DocumentSummary d) =>
-      '#${d.id} · ${_short(d.documentId)} · ${_short(d.peerId)}';
+      '#${d.id} · ${d.debugName ?? _short(d.documentId)} · ${_short(d.peerId)}';
 
   @override
   Widget build(BuildContext context) {

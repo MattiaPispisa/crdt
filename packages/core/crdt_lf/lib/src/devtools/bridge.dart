@@ -178,6 +178,12 @@ abstract final class DevToolsBridge {
     _schedule();
   }
 
+  static void _renamed(CRDTDocument doc) {
+    if (!_enabled) return;
+    if (_of(doc) == null) return;
+    _documentsMoved();
+  }
+
   static void _snapshotChanged(CRDTDocument doc) {
     if (!_enabled) return;
     if (!_hasReceiver) return;
@@ -413,6 +419,8 @@ abstract final class DevToolsBridge {
   static Map<String, Object?> _summary(_Tracked tracked, CRDTDocument doc) => {
         'id': tracked.id,
         'documentId': doc.documentId,
+        'debugName': doc.debugName,
+        'handlerNames': {...doc._handlerDebugNames},
         'peerId': doc.peerId.toString(),
         'hlc': doc.hlc.toString(),
         'changeCount': doc._log.changeCount,

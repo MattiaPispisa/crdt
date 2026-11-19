@@ -6,6 +6,7 @@ import 'package:crdt_lf_devtools_extension/src/application/changes/row_graph.dar
 import 'package:crdt_lf_devtools_extension/src/application/load_status.dart';
 import 'package:crdt_lf_devtools_extension/src/presentation/changes/change_row.dart';
 import 'package:crdt_lf_devtools_extension/src/presentation/changes/lane_graph_painter.dart';
+import 'package:crdt_lf_devtools_extension/src/presentation/widgets/handler_names.dart';
 import 'package:crdt_lf_devtools_extension/src/presentation/widgets/keyboard_list.dart';
 import 'package:crdt_lf_devtools_extension/src/presentation/widgets/message.dart';
 import 'package:crdt_lf_devtools_extension/src/presentation/widgets/peer_color.dart';
@@ -159,6 +160,7 @@ class _Filters extends StatelessWidget {
     final state = cubit.state;
     final filter = state.filter;
     final index = state.index;
+    final names = HandlerNames.of(context);
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: densePadding),
       child: Align(
@@ -180,7 +182,7 @@ class _Filters extends StatelessWidget {
                 value: filter.handler,
                 all: 'All handlers',
                 values: index.handlers,
-                label: (h) => h,
+                label: (h) => names[h] ?? h,
                 onChanged:
                     (v) => cubit.setFilter(filter.copyWith(handler: () => v)),
               ),

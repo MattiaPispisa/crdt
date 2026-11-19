@@ -61,6 +61,8 @@ void main() {
       expect(summary, {
         'id': summary['id'],
         'documentId': 'doc',
+        'debugName': null,
+        'handlerNames': <String, String>{},
         'peerId': peer.toString(),
         'hlc': doc.hlc.toString(),
         'changeCount': 2,
@@ -152,6 +154,20 @@ void main() {
         'snapshot': false,
         'pruned': false,
       });
+    });
+
+    test('a debug name shows in the summary and posts documents', () async {
+      final doc = CRDTDocument(debugName: 'notes');
+      CRDTTextHandler(doc, 'text').debugName = 'title';
+      expect(documents().single['debugName'], 'notes');
+      expect(documents().single['handlerNames'], {'text': 'title'});
+      await Future<void>.microtask(() {});
+      events.clear();
+
+      doc.debugName = 'renamed';
+      await Future<void>.microtask(() {});
+      expect(events.map((e) => e.$1), ['crdt_lf:devtools:documents']);
+      expect(documents().single['debugName'], 'renamed');
     });
 
     test('a prune increments pruneEpoch', () async {

@@ -10,6 +10,8 @@ class DocumentSummary extends Equatable {
     required this.id,
     required this.documentId,
     required this.peerId,
+    required this.debugName,
+    required this.handlerNames,
     required this.hlc,
     required this.changeCount,
     required this.handlerCount,
@@ -25,6 +27,8 @@ class DocumentSummary extends Equatable {
     id: json.integer('id'),
     documentId: json.string('documentId'),
     peerId: json.string('peerId'),
+    debugName: json.stringOrNull('debugName'),
+    handlerNames: json.stringMap('handlerNames'),
     hlc: json.string('hlc'),
     changeCount: json.integer('changeCount'),
     handlerCount: json.integer('handlerCount'),
@@ -41,6 +45,12 @@ class DocumentSummary extends Equatable {
   final String documentId;
 
   final String peerId;
+
+  /// `null` for none.
+  final String? debugName;
+
+  /// The debug names of the handlers, by id.
+  final Map<String, String> handlerNames;
 
   final String hlc;
 
@@ -65,6 +75,8 @@ class DocumentSummary extends Equatable {
     id,
     documentId,
     peerId,
+    debugName,
+    handlerNames,
     hlc,
     changeCount,
     handlerCount,

@@ -8,6 +8,7 @@ import 'package:crdt_lf_devtools_extension/src/application/handlers/handler_valu
 import 'package:crdt_lf_devtools_extension/src/application/handlers/handlers_cubit.dart';
 import 'package:crdt_lf_devtools_extension/src/application/load_status.dart';
 import 'package:crdt_lf_devtools_extension/src/bridge/models/models.dart';
+import 'package:crdt_lf_devtools_extension/src/presentation/widgets/handler_names.dart';
 import 'package:crdt_lf_devtools_extension/src/presentation/widgets/message.dart';
 import 'package:crdt_lf_devtools_extension/src/presentation/widgets/text_copier.dart';
 import 'package:crdt_lf_devtools_extension/src/presentation/widgets/value_tree.dart';
@@ -45,12 +46,14 @@ class HandlerDetail extends StatelessWidget {
     final open = state.selectedOpen;
     final closed = state.selectedClosed;
     final id = state.selectedId;
+    final names = HandlerNames.of(context);
     if (open != null) return _OpenDetail(open);
     if (closed != null) {
       return _Detail(
-        title: closed.id,
+        title: HandlerNames.label(context, closed.id),
         fields: [
           ('id', closed.id),
+          if (names[closed.id] case final name?) ('debugName', name),
           ('type', closed.type ?? 'unknown'),
           ('changeCount', '${closed.changeCount}'),
         ],
@@ -59,8 +62,11 @@ class HandlerDetail extends StatelessWidget {
     }
     if (id != null && state.selectedDeleted) {
       return _Detail(
-        title: id,
-        fields: [('id', id)],
+        title: HandlerNames.label(context, id),
+        fields: [
+          ('id', id),
+          if (names[id] case final name?) ('debugName', name),
+        ],
         children: const [_Note(deletedNote)],
       );
     }
@@ -76,10 +82,12 @@ class _OpenDetail extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final h = handler;
+    final name = HandlerNames.of(context)[h.id];
     return _Detail(
-      title: h.id,
+      title: name ?? h.id,
       fields: [
         ('id', h.id),
+        if (name != null) ('debugName', name),
         ('type', h.type),
         ('container', '${h.container}'),
         ('children', h.children.map((c) => c.id).join(', ')),
