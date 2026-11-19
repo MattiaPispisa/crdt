@@ -27,8 +27,12 @@ CRDTMapRefHandler addChapter(CRDTListRefHandler chapters, String title) {
       chapters.childRefs().length,
       CRDTMapRefHandler.spec,
     );
-    chapter.child('title', CRDTFugueTextHandler.spec).insert(0, title);
-    chapter.child('body', CRDTFugueTextHandler.spec);
+    final name = 'chapter "$title"';
+    chapter.debugName = name;
+    chapter.child('title', CRDTFugueTextHandler.spec)
+      ..debugName = '$name · title'
+      ..insert(0, title);
+    chapter.child('body', CRDTFugueTextHandler.spec).debugName = '$name · body';
     return chapter;
   });
 }

@@ -11,7 +11,7 @@ environment:
   flutter: ">=3.44.0"
 
 dependencies:
-  crdt_lf: ">=5.4.0 <6.0.0"
+  crdt_lf: ">=5.5.0 <6.0.0"
   crdt_lf_flutter: ^0.8.0
   crdt_lf_drift: ^0.3.2
   crdt_lf_hive: ^0.5.2

@@ -28,6 +28,29 @@ void main() {
   );
 
   group('CRDTFugueTextHandler', () {
+    test('operations expose their fields via toPayload', () {
+      final peer = PeerId.parse('37f1ec87-6ea5-430b-a627-a6b92b56a02d');
+      final doc = CRDTDocument(peerId: peer);
+      final text = CRDTFugueTextHandler(doc, 'text')
+        ..insert(0, 'ab')
+        ..update(0, 'c')
+        ..delete(1, 1);
+      final payloads = [for (final op in text.operations()) op.toPayload()];
+      final first = FugueElementID(peer, 0).toString();
+      final second = FugueElementID(peer, 1).toString();
+
+      expect(payloads[0], containsPair('leftOrigin', 'null'));
+      expect(payloads[0], containsPair('rightOrigin', 'null'));
+      expect(payloads[0]['items'], [
+        {'id': first, 'text': 'a'},
+        {'id': second, 'text': 'b'},
+      ]);
+      expect(payloads[1]['items'], [
+        {'id': first, 'text': 'c'},
+      ]);
+      expect(payloads[2]['items'], [second]);
+    });
+
     test('exposes a stable handlerType (minification-safe factory key)', () {
       final handler = CRDTFugueTextHandler(CRDTDocument(), 'text1');
       expect(handler.handlerType, 'CRDTFugueTextHandler');
