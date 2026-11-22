@@ -50,6 +50,37 @@ void main() {
       kept.dispose();
     });
 
+    test(
+      'drops a document collected without dispose, even when watched',
+      () async {
+        // A function, so no local of the test holds the document.
+        WeakReference<CRDTDocument> openAndDrop() {
+          final doc = CRDTDocument();
+          final text = CRDTTextHandler(doc, 'text')..insert(0, 'a');
+          expect(text.value, 'a');
+          final params = {'doc': '${trackedId(doc)}', 'handler': 'text'};
+          DevToolsBridge.call('watchStart', params);
+          DevToolsBridge.call('eventsStart', params);
+          DevToolsBridge.call('historyOpen', params);
+          return WeakReference(doc);
+        }
+
+        final dropped = openAndDrop();
+        await pumpEventQueue();
+        final stop = DateTime.now().add(const Duration(seconds: 20));
+        final garbage = <List<Object>>[];
+        while (dropped.target != null) {
+          if (DateTime.now().isAfter(stop)) fail('The document stays alive');
+          garbage.add(List<Object>.generate(30000, (_) => Object()));
+          if (garbage.length > 50) garbage.removeAt(0);
+          await Future<void>.delayed(Duration.zero);
+        }
+        await pumpEventQueue();
+        expect(documents(), isEmpty);
+      },
+      testOn: 'vm',
+    );
+
     test('summarizes a document', () {
       final peer = PeerId.parse('45ee6b65-b393-40b7-9755-8b66dc7d0518');
       final doc = CRDTDocument(peerId: peer, documentId: 'doc');
@@ -353,10 +384,32 @@ void main() {
         'revision': doc.revisionForHandler('text'),
         'value': {r'$t': 'string', 'length': 6, 'head': 'ab'},
       });
+      final revision = '${result['revision']}';
+      expect(
+        DevToolsBridge.call(
+          'handlerValue',
+          {'doc': id, 'handler': 'text', 'revision': revision},
+        ),
+        {
+          'id': 'text',
+          'type': result['type'],
+          'revision': result['revision'],
+          'unchanged': true,
+        },
+      );
+      (doc.handlerById('text')! as CRDTTextHandler).insert(0, 'z');
+      expect(
+        DevToolsBridge.call(
+          'handlerValue',
+          {'doc': id, 'handler': 'text', 'revision': revision},
+        ),
+        containsPair('value', 'zabcdef'),
+      );
 
       for (final params in [
         {'doc': id},
         {'doc': id, 'handler': 'missing'},
+        {'doc': id, 'handler': 'text', 'revision': 'x'},
         {'doc': id, 'handler': 'text', 'maxItems': 'x'},
         {'doc': id, 'handler': 'text', 'maxDepth': '-1'},
       ]) {
@@ -392,6 +445,7 @@ void main() {
       expect(first['changeCount'], 5);
       final held = decode(first);
       expect(held, hasLength(2));
+      text.insert(0, 'y');
 
       while (true) {
         final page = DevToolsBridge.call(
@@ -415,9 +469,20 @@ void main() {
       }
       a.importChanges(b.exportChanges());
 
-      final changes =
-          decode(DevToolsBridge.call('changes', {'doc': '${trackedId(a)}'}));
+      final id = '${trackedId(a)}';
+      final changes = decode(DevToolsBridge.call('changes', {'doc': id}));
       expect(changes, hasLength(6));
+      final paged = <Change>[];
+      while (true) {
+        final page = DevToolsBridge.call('changes', {
+          'doc': id,
+          'limit': '2',
+          if (paged.isNotEmpty) 'since': sinceOf(paged),
+        });
+        paged.addAll(decode(page));
+        if (page['done']! as bool) break;
+      }
+      expect(paged, changes);
       expect(changes, [...changes]..sort(compareChangeOrder));
       expect(changes.map((c) => c.author).toSet(), {a.peerId, b.peerId});
     });
@@ -782,7 +847,9 @@ void main() {
       expect(DevToolsBridge.call('watchStart', params), {'watching': true});
       DevToolsBridge.call('watchStart', params);
       await pumpEventQueue();
-      text.insert(1, 'b' * 3000);
+      // The cut at 2000 code units falls inside an emoji: it keeps the
+      // whole pair out.
+      text.insert(1, 'b${'😀' * 1000}');
       await pumpEventQueue();
 
       final deltas = posted('crdt_lf:devtools:delta');
@@ -809,7 +876,7 @@ void main() {
       expect(deltas[1], containsPair('author', doc.peerId.toString()));
       expect(deltas[1], containsPair('local', true));
       expect(deltas[1], containsPair('empty', false));
-      expect(deltas[1]['delta'], hasLength(2000));
+      expect(deltas[1]['delta'], hasLength(1999));
       expect(openHandler(doc, 'text')['watched'], isTrue);
 
       expect(DevToolsBridge.call('watchStop', params), {'watching': false});

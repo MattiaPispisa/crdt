@@ -78,11 +78,15 @@ void main() {
     expect(text.watched, isFalse);
     expect(handlers.deleted, ['gone']);
 
-    final value = await client.handlerValue(id, 'text', maxString: 1);
+    final value = (await client.handlerValue(id, 'text', maxString: 1))!;
     expect(value.id, 'text');
     expect(value.type, text.type);
     expect(value.value, {r'$t': 'string', 'length': 2, 'head': 'h'});
     expect((await client.handlers(id)).open.single.cache, HandlerCache.warm);
+    expect(
+      await client.handlerValue(id, 'text', revision: value.revision),
+      isNull,
+    );
   });
 
   test('a handler with changes and no instance is closed', () async {

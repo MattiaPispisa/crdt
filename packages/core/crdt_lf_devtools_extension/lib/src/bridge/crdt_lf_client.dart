@@ -50,23 +50,27 @@ class CrdtLfClient {
   Future<HandlerList> handlers(int doc) async =>
       HandlerList.fromJson(await bridge.call('handlers', _doc(doc)));
 
-  /// The value of the open [handler].
+  /// The value of the open [handler]; `null` when it is still at
+  /// [revision].
   ///
   /// This builds the handler cache in the app, as a read by the app does.
   /// The limits default to the ones of the app.
-  Future<HandlerValue> handlerValue(
+  Future<HandlerValue?> handlerValue(
     int doc,
     String handler, {
+    int? revision,
     int? maxItems,
     int? maxString,
     int? maxDepth,
-  }) async => HandlerValue.fromJson(
-    await bridge.call('handlerValue', {
+  }) async {
+    final json = await bridge.call('handlerValue', {
       ..._doc(doc),
       'handler': handler,
+      if (revision != null) 'revision': '$revision',
       ..._limits(maxItems, maxString, maxDepth),
-    }),
-  );
+    });
+    return json['unchanged'] == true ? null : HandlerValue.fromJson(json);
+  }
 
   /// The changes newer than [since], in replay order, at most [limit].
   ///

@@ -9,15 +9,30 @@ import 'package:crdt_lf_devtools_extension/src/application/handlers/handler_valu
 import 'package:crdt_lf_devtools_extension/src/application/load_status.dart';
 import 'package:crdt_lf_devtools_extension/src/bridge/crdt_lf_client.dart';
 import 'package:crdt_lf_devtools_extension/src/bridge/in_process_bridge.dart';
+import 'package:crdt_lf_devtools_extension/src/bridge/models/json.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+class _RecordingBridge extends InProcessBridge {
+  final List<Json> values = [];
+
+  @override
+  Future<Json> call(
+    String method, [
+    Map<String, String> params = const {},
+  ]) async {
+    final json = await super.call(method, params);
+    if (method == 'handlerValue') values.add(json);
+    return json;
+  }
+}
+
 void main() {
-  late InProcessBridge bridge;
+  late _RecordingBridge bridge;
   late CrdtLfClient client;
 
   setUp(() {
     DevToolsBridge.reset();
-    bridge = InProcessBridge();
+    bridge = _RecordingBridge();
     client = CrdtLfClient(bridge);
   });
 
@@ -45,6 +60,14 @@ void main() {
 
     text.insert(2, '!');
     await settle();
+    expect(cubit.state.value?.value, 'hi!');
+
+    // Another handler moved: the app skips the read of this one.
+    final calls = bridge.values.length;
+    CRDTTextHandler(doc, 'third').insert(0, 'y');
+    await settle();
+    expect(bridge.values, hasLength(calls + 1));
+    expect(bridge.values.last, containsPair('unchanged', true));
     expect(cubit.state.value?.value, 'hi!');
 
     cubit.select('other');

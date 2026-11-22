@@ -15,8 +15,9 @@ part 'handler_value_state.dart';
 /// The value of the selected open handler of the document [doc].
 ///
 /// It reloads on a `document` event of [doc] that moved its changes or its
-/// snapshot. Each load builds the handler cache in the app, as a read by
-/// the app does.
+/// snapshot. A load reads the value only when the revision of the handler
+/// moved, and then builds the handler cache in the app, as a read by the
+/// app does.
 class HandlerValueCubit extends Cubit<HandlerValueState> {
   HandlerValueCubit(
     this._client,
@@ -60,14 +61,19 @@ class HandlerValueCubit extends Cubit<HandlerValueState> {
   Future<void> _load() async {
     final handler = state.handler;
     if (handler == null) return;
+    final known = state.value;
     try {
-      final value = await _client.handlerValue(doc, handler);
+      final value = await _client.handlerValue(
+        doc,
+        handler,
+        revision: known?.revision,
+      );
       if (isClosed || state.handler != handler) return;
       emit(
         HandlerValueState(
           handler: handler,
           status: LoadStatus.loaded,
-          value: value,
+          value: value ?? known,
         ),
       );
     } on Object catch (e) {

@@ -35,7 +35,10 @@ abstract final class DevToolsBridge {
 
   static int _nextSession = 0;
 
-  static final Map<int, _Tracked> _byId = <int, _Tracked>{};
+  // Weak: a subscription or a session of a `_Tracked` can hold its document,
+  // so only the `Expando` below, keyed by that document, keeps it.
+  static final Map<int, WeakReference<_Tracked>> _byId =
+      <int, WeakReference<_Tracked>>{};
 
   static final Expando<_Tracked> _byDocument = Expando<_Tracked>();
 
@@ -61,7 +64,7 @@ abstract final class DevToolsBridge {
         return {
           'protocol': _protocol,
           'documents': [
-            for (final tracked in [..._byId.values])
+            for (final tracked in _tracked())
               if (_live(tracked) case final doc?) _summary(tracked, doc),
           ],
         };
@@ -83,10 +86,19 @@ abstract final class DevToolsBridge {
         if (handler == null) {
           throw ArgumentError.value(id, 'handler', 'Unknown handler');
         }
-        return {
+        final revision = doc.revisionForHandler(handler.id);
+        final head = {
           'id': handler.id,
           'type': handler.handlerType,
-          'revision': doc.revisionForHandler(handler.id),
+          'revision': revision,
+        };
+        // An equal revision is an equal value: skip the read and the encode.
+        if (params.containsKey('revision') &&
+            _intParam(params, 'revision') == revision) {
+          return {...head, 'unchanged': true};
+        }
+        return {
+          ...head,
           'value': encodeDevToolsValue(
             handler.value,
             maxItems: _intParam(params, 'maxItems', 200),
@@ -144,7 +156,7 @@ abstract final class DevToolsBridge {
   ///
   /// A document created before the call stays untracked.
   static void reset() {
-    for (final tracked in _byId.values) {
+    for (final tracked in _tracked()) {
       _finalizer.detach(tracked);
       tracked.close();
     }
@@ -157,7 +169,7 @@ abstract final class DevToolsBridge {
     // Weak, with a finalizer: a document dropped without `dispose` must not
     // stay in memory for the life of the isolate.
     final tracked = _Tracked(_nextId++, doc);
-    _byId[tracked.id] = tracked;
+    _byId[tracked.id] = WeakReference(tracked);
     _byDocument[doc] = tracked;
     _finalizer.attach(doc, tracked.id, detach: tracked);
     _registerExtension();
@@ -210,10 +222,8 @@ abstract final class DevToolsBridge {
   }
 
   static void _collected(int id) {
-    final tracked = _byId[id];
-    if (tracked != null) {
-      _forget(tracked);
-    }
+    _byId.remove(id)?.target?.close();
+    _documentsMoved();
   }
 
   static void _forget(_Tracked tracked) {
@@ -221,6 +231,11 @@ abstract final class DevToolsBridge {
     _byId.remove(tracked.id);
     _documentsMoved();
   }
+
+  static List<_Tracked> _tracked() => [
+        for (final reference in _byId.values)
+          if (reference.target case final tracked?) tracked,
+      ];
 
   static bool get _hasReceiver =>
       onEvent != null || developer.extensionStreamHasListener;
@@ -241,7 +256,7 @@ abstract final class DevToolsBridge {
     if (id == null) {
       throw ArgumentError.value(raw, 'doc', 'Expected a document id');
     }
-    final tracked = _byId[id];
+    final tracked = _byId[id]?.target;
     final doc = tracked == null ? null : _live(tracked);
     if (tracked == null || doc == null) {
       throw ArgumentError.value(raw, 'doc', 'Unknown document');
@@ -268,7 +283,7 @@ abstract final class DevToolsBridge {
       _documentsDirty = false;
       _post(_documentsEvent, {});
     }
-    for (final tracked in [..._byId.values]) {
+    for (final tracked in _tracked()) {
       if (!tracked.dirty) continue;
       final data = <String, Object?>{
         'id': tracked.id,
@@ -412,7 +427,7 @@ abstract final class DevToolsBridge {
       },
       'delta': text == null || text.length <= _maxDeltaText
           ? text
-          : text.substring(0, _maxDeltaText),
+          : text.substring(0, RuneOffsets.snap(text, _maxDeltaText)),
     };
   }
 
@@ -600,15 +615,42 @@ abstract final class DevToolsBridge {
     } else {
       since = VersionVector({});
     }
-    final changes = doc._log.exportChangesNewerThan(since)
-      ..sort(compareChangeOrder);
-    final page = changes.length > limit ? changes.sublist(0, limit) : changes;
+    final (page, done) = _page(tracked, doc, since, limit);
     return {
       'pruneEpoch': tracked.pruneEpoch,
       'changeCount': doc._log.changeCount,
-      'done': page.length == changes.length,
+      'done': done,
       'changes': [for (final change in page) base64Encode(change.toBytes())],
     };
+  }
+
+  static (List<Change>, bool) _page(
+    _Tracked tracked,
+    CRDTDocument doc,
+    VersionVector since,
+    int limit,
+  ) {
+    final count = doc._log.changeCount;
+    var pages = tracked.pages;
+    // Between two prunes the log only grows, so the count tells a stale copy.
+    if (pages == null ||
+        pages.changeCount != count ||
+        pages.pruneEpoch != tracked.pruneEpoch) {
+      final newer = doc._log.exportChangesNewerThan(since);
+      if (newer.length <= limit) {
+        tracked.pages = null;
+        return (newer..sort(compareChangeOrder), true);
+      }
+      // A caller pages through the whole log: sort it once, not per page.
+      pages = tracked.pages = _ChangePages(
+        doc._log.exportChanges()..sort(compareChangeOrder),
+        changeCount: count,
+        pruneEpoch: tracked.pruneEpoch,
+      );
+    }
+    final (page, done) = pages.after(since, limit);
+    if (done) tracked.pages = null;
+    return (page, done);
   }
 
   static Map<String, Object?> _operation(
@@ -764,6 +806,8 @@ final class _Tracked {
 
   int? historyId;
 
+  _ChangePages? pages;
+
   bool get dirty => changes || handlers || snapshot || pruned;
 
   void clearDirty() {
@@ -782,6 +826,7 @@ final class _Tracked {
     }
     deltas.clear();
     closeHistory();
+    pages = null;
   }
 
   void stopEvents() {
@@ -798,5 +843,59 @@ final class _Tracked {
     history?.dispose();
     history = null;
     historyId = null;
+  }
+}
+
+final class _ChangePages {
+  _ChangePages(
+    this._sorted, {
+    required this.changeCount,
+    required this.pruneEpoch,
+  }) : _firstByPeer = <PeerId, int>{} {
+    for (var i = 0; i < _sorted.length; i++) {
+      _firstByPeer.putIfAbsent(_sorted[i].id.peerId, () => i);
+    }
+  }
+
+  final List<Change> _sorted;
+
+  final Map<PeerId, int> _firstByPeer;
+
+  final int changeCount;
+
+  final int pruneEpoch;
+
+  (List<Change>, bool) after(VersionVector since, int limit) {
+    // The first change newer than `since` for its peer cannot come before
+    // this index.
+    var start = _sorted.length;
+    for (final MapEntry(key: peer, value: first) in _firstByPeer.entries) {
+      final clock = since[peer];
+      final from = clock == null ? first : _firstAfter(clock);
+      if (from < start) start = from;
+    }
+    final page = <Change>[];
+    for (var i = start; i < _sorted.length; i++) {
+      final change = _sorted[i];
+      final clock = since[change.id.peerId];
+      if (clock != null && change.hlc <= clock) continue;
+      if (page.length == limit) return (page, false);
+      page.add(change);
+    }
+    return (page, true);
+  }
+
+  int _firstAfter(HybridLogicalClock clock) {
+    var low = 0;
+    var high = _sorted.length;
+    while (low < high) {
+      final middle = (low + high) >> 1;
+      if (_sorted[middle].hlc <= clock) {
+        low = middle + 1;
+      } else {
+        high = middle;
+      }
+    }
+    return low;
   }
 }
