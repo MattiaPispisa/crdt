@@ -1,0 +1,98 @@
+---
+title: Can you trust it?
+description: The promise every package keeps, and the tests that check it in CI.
+---
+
+import NextSteps from '@site/src/components/NextSteps';
+import CoverageTable from '@site/src/components/PackageCoverage';
+
+# Can you trust it?
+
+A CRDT library makes one promise: peers that receive the same edits read the
+same data. The order of arrival, the delays and the time spent offline change
+nothing. This page shows how the packages check that promise. Each claim links
+to the tests that run in CI on every pull request that touches the package.
+
+## Coverage
+
+<CoverageTable />
+
+The badge is the coverage of the `main` branch, live from Codecov. The CI of a
+pull request fails when a package drops under its minimum.
+
+## Every handler keeps the same contract
+
+Every handler of `crdt_lf` runs one shared suite: the
+[handler conformance suite](https://github.com/MattiaPispisa/crdt/blob/main/packages/core/crdt_lf/test/handler/conformance/handler_conformance.dart).
+It makes random edits on several peers, with a fixed seed, and checks the same
+guarantees for text, lists, maps, sets, registers and aggregates:
+
+| Guarantee | Test |
+| --- | --- |
+| Two peers that sync read what a replay from scratch reads | `two peers syncing every round agree with a replay` |
+| Every causal arrival order gives the same value | `every causal arrival order gives the same value` |
+| A snapshot plus the changes after it reads as the whole history | `a snapshot plus the changes after it reads as the history` |
+| A peer reloaded from storage keeps converging | `edits after a reload converge with a full-history peer` |
+| Edits in a transaction leave the value the same edits leave one by one | `a walk in transactions leaves the value of the same walk` |
+| Time travel shows the value after each change | `each cursor reads the value recorded after that change` |
+| The deltas of two peers editing at once rebuild each value | `the deltas of two peers editing at once rebuild each value` |
+| Undo walks back every step, and redo walks forward again | `undo walks back every step, redo walks forward again` |
+
+### The suite is tested too
+
+A test that always passes proves nothing. So the suite has
+[a test of its own](https://github.com/MattiaPispisa/crdt/blob/main/packages/core/crdt_lf/test/handler/conformance/conformance_test.dart):
+it runs the suite against handlers broken on purpose, each one in a single
+way. One forgets its value in a snapshot, one keeps a stale cache, one claims
+an order it does not have. Each of them must fail the guarantees it
+breaks.
+
+## Storage and editors keep a contract too
+
+- Every storage adapter (Hive, SQLite, Drift) passes the
+  [persistence conformance suite](./connectors/persistence/build-your-own.mdx#check-it-against-the-conformance-suite):
+  changes and snapshots come back byte for byte, and every handler survives a
+  trip through the change log and through a snapshot.
+- Every editor binding (the Flutter text field, the rich text field, Quill)
+  passes the [editor conformance suite](./connectors/flutter/editors/index.mdx):
+  local edits reach the handler, remote edits show without moving the caret,
+  and a random stream of edits keeps the editor and the handler equal.
+
+Both suites are tested against broken implementations, like the handler suite.
+
+## On the VM and on the web
+
+The pure Dart packages run their tests twice: on the Dart VM, and
+in Chrome, compiled to JavaScript. A Flutter web app gets the behavior of a
+mobile one.
+
+## Code that runs
+
+Each [recipe](./recipes/index.mdx) is a complete program, and a test runs it in
+CI. The code on these pages and in the package READMEs comes from the
+recipes, so the code you copy compiles.
+
+## A release runs everything
+
+Publishing a package first runs the whole gate on every package: format,
+analyze, and the tests on the VM, in Flutter and in Chrome.
+
+<NextSteps
+  items={[
+    {
+      title: 'Two peers, one result',
+      to: '/docs/recipes/two-peers',
+      description: 'Two peers edit offline, then merge.',
+    },
+    {
+      title: 'Benchmarks',
+      to: '/docs/benchmarks',
+      description: 'How fast the hot paths are.',
+    },
+    {
+      title: 'Contributing',
+      to: '/docs/contributing',
+      description: 'The gate every change passes.',
+    },
+  ]}
+/>

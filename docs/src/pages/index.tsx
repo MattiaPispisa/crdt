@@ -7,6 +7,7 @@ import Layout from "@theme/Layout";
 import Heading from "@theme/Heading";
 import CodeBlock from "@theme/CodeBlock";
 
+import { CoverageBadges } from "../components/PackageCoverage";
 import styles from "./index.module.css";
 
 type Card = {
@@ -213,6 +214,51 @@ function Features() {
   );
 }
 
+const proofs = [
+  "Every handler passes one shared convergence suite, on random edits.",
+  "The suite is checked against handlers broken on purpose.",
+  "Tests run on the Dart VM and in Chrome.",
+  "Every recipe on this site is a program that CI runs.",
+];
+
+function Trust() {
+  return (
+    <section className={clsx(styles.section, styles.sectionAlt)}>
+      <div className={clsx("container", styles.trust)}>
+        <div>
+          <Heading as="h2">Built to be trusted</Heading>
+          <p>
+            Peers that receive the same edits read the same data, whatever the
+            order and however long they stayed offline. Every package checks
+            that promise in CI, and shows its coverage.
+          </p>
+          <div className={styles.heroButtons}>
+            <Link className="button button--primary" to="/docs/trust">
+              Can you trust it?
+            </Link>
+          </div>
+        </div>
+        <div className={styles.trustPanel}>
+          <ul className={styles.proofs}>
+            {proofs.map((proof) => (
+              <li key={proof}>{proof}</li>
+            ))}
+          </ul>
+          <CoverageBadges
+            only={[
+              "hlc_dart",
+              "crdt_lf",
+              "crdt_lf_persistence",
+              "crdt_socket_sync",
+              "crdt_lf_flutter",
+            ]}
+          />
+        </div>
+      </div>
+    </section>
+  );
+}
+
 function Demo() {
   const { siteConfig } = useDocusaurusContext();
   const greyhoundUrl = siteConfig.customFields?.greyhoundUrl as string;
@@ -318,6 +364,7 @@ export default function Home(): ReactNode {
       <Hero />
       <main>
         <Features />
+        <Trust />
         <section className={styles.section}>
           <div className="container">
             <Heading as="h2" className={styles.sectionTitle}>

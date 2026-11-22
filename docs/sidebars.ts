@@ -25,6 +25,7 @@ const sidebars: SidebarsConfig = {
   docs: [
     'introduction',
     'getting-started',
+    'trust',
     section('Recipes', 'recipes/index', [
       'recipes/two-peers',
       'recipes/persisted-note',

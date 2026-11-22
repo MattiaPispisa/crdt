@@ -2,6 +2,7 @@ import { themes as prismThemes } from 'prism-react-renderer';
 import type { Config } from '@docusaurus/types';
 import type * as Preset from '@docusaurus/preset-classic';
 
+import coveragePlugin from './plugins/package-coverage';
 import recipesPlugin from './plugins/recipes';
 
 // This runs in Node.js - Don't use client-side code here (browser APIs, JSX...)
@@ -65,6 +66,8 @@ const config: Config = {
   plugins: [
     // the recipes of crdt_lf_recipes, read from the repository
     recipesPlugin,
+    // the published packages and their CI coverage minimum, from main.yaml
+    coveragePlugin,
     // offline, client-side search
     'docusaurus-plugin-pagefind',
     [
