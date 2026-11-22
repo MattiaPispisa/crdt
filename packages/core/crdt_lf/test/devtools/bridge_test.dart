@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 import 'dart:convert';
+import 'dart:developer' as developer;
 import 'dart:typed_data';
 
 import 'package:crdt_lf/crdt_lf.dart';
@@ -850,8 +851,9 @@ void main() {
       DevToolsBridge.onEvent = null;
       text.insert(1, 'b');
       await pumpEventQueue();
-      expect(documents().single['recording'], isFalse);
-      expect(openHandler(doc, 'text')['watched'], isFalse);
+      final listened = developer.extensionStreamHasListener;
+      expect(documents().single['recording'], listened);
+      expect(openHandler(doc, 'text')['watched'], listened);
     });
   });
 }
