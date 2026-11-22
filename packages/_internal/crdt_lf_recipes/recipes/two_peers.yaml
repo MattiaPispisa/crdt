@@ -3,8 +3,8 @@
 id: two-peers
 title: Two peers, one result
 description: >-
-  Two documents edit one text at the same time, with no connection. They
-  exchange their changes and both read the same text.
+  Two documents write at the same spot of one text, with no connection. They
+  exchange their changes, and both read the same text with each insert whole.
 platforms: [Dart VM, Flutter native]
 # Shown as the install command: names only, `pub add` picks the versions.
 dependencies: [crdt_lf]
@@ -15,6 +15,8 @@ files:
     copyTo: packages/core/crdt_lf/example/main.dart
 test: packages/_internal/crdt_lf_recipes/test/two_peers_test.dart
 keyPoints:
+  - "Concurrent inserts at the same spot stay whole: the text never mixes their letters."
+  - "The peer ids decide which insert comes first. Every peer applies the same rule, so every peer reads the same text."
   - "Peers send changes: `exportChanges` on one side, `importChanges` on the other."
   - "Importing the same change twice does nothing, so a peer can send everything it has."
   - "Every peer creates the handler under the same id (`note`): that id is what makes it the same text."

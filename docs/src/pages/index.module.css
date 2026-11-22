@@ -62,6 +62,8 @@
 
 .heroCode {
   min-width: 0;
+  /* The snippet is a recipe region: smaller type keeps its lines unwrapped. */
+  --ifm-code-font-size: 88%;
   box-shadow: 0 18px 50px rgba(0, 0, 0, 0.12);
   border-radius: var(--ifm-code-border-radius);
 }

@@ -71,24 +71,26 @@ import 'package:crdt_lf/crdt_lf.dart';
 final alice = CRDTDocument();
 final bob = CRDTDocument();
 
-// The same handler id on both peers: it is the same text.
+// The same handler id: the same text.
 final aliceText = CRDTFugueTextHandler(alice, 'note');
 final bobText = CRDTFugueTextHandler(bob, 'note');
 
-aliceText.insert(0, 'Hello world');
-bob.importChanges(alice.exportChanges()); // Bob now reads "Hello world"
+aliceText.insert(0, 'Hello');
+bob.importChanges(alice.exportChanges());
 
-// Both edit at the same time, with no connection.
-aliceText.insert(0, 'Big ');
-bobText.insert(11, '!');
+// A conflict: both write after "Hello", offline.
+aliceText.insert(5, ' World');
+bobText.insert(5, ' Dart');
 
-// They meet again and exchange what the other is missing.
+// They meet again and exchange their changes.
 bob.importChanges(alice.exportChanges());
 alice.importChanges(bob.exportChanges());
 
+// Each insert stays whole: never "Hello WDoarrltd".
+// The peer ids pick which one comes first.
 stdout
-  ..writeln(aliceText.value) // Big Hello world!
-  ..writeln(bobText.value); // Big Hello world!
+  ..writeln(aliceText.value) // e.g. Hello World Dart
+  ..writeln(bobText.value); // the same as Alice
 ```
 <!-- /recipe -->
 

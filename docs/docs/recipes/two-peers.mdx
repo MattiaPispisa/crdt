@@ -8,7 +8,8 @@ import Recipe from '@site/src/components/Recipe';
 
 # Two peers, one result
 
-The smallest CRDT program: two peers, one text, two edits made at the same
-time with no connection, and one merged result on both sides.
+The smallest CRDT program with a conflict: two peers write at the same spot of
+one text, with no connection. After the merge both read the same text, and
+each insert is still whole.
 
 <Recipe id="two-peers" />

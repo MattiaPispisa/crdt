@@ -8,6 +8,7 @@ import Heading from "@theme/Heading";
 import CodeBlock from "@theme/CodeBlock";
 
 import { CoverageBadges } from "../components/PackageCoverage";
+import { recipeFile, useRecipe } from "../components/Recipe/data";
 import styles from "./index.module.css";
 
 type Card = {
@@ -116,20 +117,19 @@ const connectors: Card[] = [
   },
 ];
 
-const snippet = `final alice = CRDTDocument();
-final note = CRDTFugueTextHandler(alice, 'note');
-note.insert(0, 'Hello world');
-
-// Bob, on another device, offline until now.
-final bob = CRDTDocument();
-bob.importChanges(alice.exportChanges());
-
-print(CRDTFugueTextHandler(bob, 'note').value);
-// Hello world`;
+// The conflict of the two-peers recipe: code that CI compiles and runs.
+function useHeroSnippet(): string {
+  const merge = recipeFile(useRecipe("two-peers"), "main.dart").regions.merge;
+  if (merge === undefined) {
+    throw new Error('Recipe "two-peers", file "main.dart": no region "merge".');
+  }
+  return merge;
+}
 
 function Hero() {
   const { siteConfig } = useDocusaurusContext();
   const greyhoundUrl = siteConfig.customFields?.greyhoundUrl as string;
+  const snippet = useHeroSnippet();
   return (
     <header className={styles.hero}>
       <div className={clsx("container", styles.heroInner)}>
