@@ -1,0 +1,136 @@
+{
+  "id": "or-add-remove",
+  "kind": "set",
+  "peers": [
+    "Alice",
+    "Bob"
+  ],
+  "steps": [
+    {
+      "caption": "Alice tags the task \"urgent\".",
+      "actor": "Alice",
+      "label": "add \"urgent\"",
+      "online": true,
+      "values": {
+        "Alice": [
+          {
+            "text": "urgent",
+            "author": null
+          }
+        ],
+        "Bob": []
+      }
+    },
+    {
+      "caption": "They sync: Bob sees the tag too.",
+      "online": true,
+      "values": {
+        "Alice": [
+          {
+            "text": "urgent",
+            "author": null
+          }
+        ],
+        "Bob": [
+          {
+            "text": "urgent",
+            "author": null
+          }
+        ]
+      },
+      "received": {
+        "Alice": [],
+        "Bob": [
+          {
+            "from": "Alice",
+            "label": "add \"urgent\"",
+            "concurrent": false
+          }
+        ]
+      }
+    },
+    {
+      "caption": "Both go offline.",
+      "online": false,
+      "values": {
+        "Alice": [
+          {
+            "text": "urgent",
+            "author": null
+          }
+        ],
+        "Bob": [
+          {
+            "text": "urgent",
+            "author": null
+          }
+        ]
+      }
+    },
+    {
+      "caption": "Alice removes \"urgent\".",
+      "actor": "Alice",
+      "label": "remove \"urgent\"",
+      "online": false,
+      "values": {
+        "Alice": [],
+        "Bob": [
+          {
+            "text": "urgent",
+            "author": null
+          }
+        ]
+      }
+    },
+    {
+      "caption": "Bob adds \"urgent\" again: the deadline moved.",
+      "actor": "Bob",
+      "label": "add \"urgent\"",
+      "online": false,
+      "values": {
+        "Alice": [],
+        "Bob": [
+          {
+            "text": "urgent",
+            "author": null
+          }
+        ]
+      }
+    },
+    {
+      "caption": "They meet again, and each one receives the edit of the other.",
+      "online": true,
+      "values": {
+        "Alice": [
+          {
+            "text": "urgent",
+            "author": null
+          }
+        ],
+        "Bob": [
+          {
+            "text": "urgent",
+            "author": null
+          }
+        ]
+      },
+      "received": {
+        "Alice": [
+          {
+            "from": "Bob",
+            "label": "add \"urgent\"",
+            "concurrent": true
+          }
+        ],
+        "Bob": [
+          {
+            "from": "Alice",
+            "label": "remove \"urgent\"",
+            "concurrent": true
+          }
+        ]
+      },
+      "why": "The remove and the add are concurrent. The remove of Alice deletes only the tag she saw. The add of Bob made a new tag she never saw, so the add wins: \"urgent\" stays on both peers."
+    }
+  ]
+}

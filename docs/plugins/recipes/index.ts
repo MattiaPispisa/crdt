@@ -4,11 +4,16 @@ import yaml from 'js-yaml';
 import type { LoadContext, Plugin } from '@docusaurus/types';
 
 import { readRecipeSource } from './source';
-import type { Recipe, RecipeFile } from './types';
+import type { Recipe, RecipeFile, Trace } from './types';
 
 // The recipes are compiled and tested in this package: the site shows the
 // files as they are there, so a snippet on a page is code that CI runs.
 const recipesPackage = 'packages/_internal/crdt_lf_recipes';
+
+// The merge traces: JSON files a test of the same package writes and checks.
+const tracesFolder = path.join(recipesPackage, 'traces');
+
+type Content = { recipes: Recipe[]; traces: Trace[] };
 
 type Manifest = {
   id: string;
@@ -107,9 +112,10 @@ function checkVariants(recipes: Recipe[]): void {
   }
 }
 
-export default function recipesPlugin(context: LoadContext): Plugin<Recipe[]> {
+export default function recipesPlugin(context: LoadContext): Plugin<Content> {
   const repoRoot = path.resolve(context.siteDir, '..');
   const manifestsDir = path.join(repoRoot, recipesPackage, 'recipes');
+  const tracesDir = path.join(repoRoot, tracesFolder);
 
   return {
     name: 'recipes',
@@ -125,7 +131,11 @@ export default function recipesPlugin(context: LoadContext): Plugin<Recipe[]> {
           ) as Manifest;
           return manifest.files.map((file) => path.join(repoRoot, file.path));
         });
-      return [path.join(manifestsDir, '*.yaml'), ...files];
+      return [
+        path.join(manifestsDir, '*.yaml'),
+        path.join(tracesDir, '*.json'),
+        ...files,
+      ];
     },
 
     async loadContent() {
@@ -135,11 +145,19 @@ export default function recipesPlugin(context: LoadContext): Plugin<Recipe[]> {
         .sort()
         .map((name) => loadRecipe(repoRoot, path.join(manifestsDir, name)));
       checkVariants(recipes);
-      return recipes;
+      const traces = fs
+        .readdirSync(tracesDir)
+        .filter((name) => name.endsWith('.json'))
+        .sort()
+        .map(
+          (name) =>
+            JSON.parse(fs.readFileSync(path.join(tracesDir, name), 'utf8')) as Trace,
+        );
+      return { recipes, traces };
     },
 
     async contentLoaded({ content, actions }) {
-      actions.setGlobalData({ recipes: content });
+      actions.setGlobalData(content);
     },
   };
 }

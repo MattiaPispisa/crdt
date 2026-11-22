@@ -1,8 +1,8 @@
 import { usePluginData } from "@docusaurus/useGlobalData";
 
-import type { Recipe, RecipeFile } from "../../../plugins/recipes/types";
+import type { Recipe, RecipeFile, Trace } from "../../../plugins/recipes/types";
 
-export type { Recipe, RecipeFile };
+export type { Recipe, RecipeFile, Trace };
 
 const githubUrl = "https://github.com/MattiaPispisa/crdt";
 
@@ -29,6 +29,16 @@ export function useRecipe(id: string): Recipe {
     throw new Error(`No recipe "${id}" in crdt_lf_recipes/recipes.`);
   }
   return recipe;
+}
+
+/** The merge trace [id]; throws at build time when there is none. */
+export function useTrace(id: string): Trace {
+  const { traces } = usePluginData("recipes") as { traces: Trace[] };
+  const trace = traces.find((candidate) => candidate.id === id);
+  if (!trace) {
+    throw new Error(`No trace "${id}" in crdt_lf_recipes/traces.`);
+  }
+  return trace;
 }
 
 /** The query parameter that selects a variant on a recipe page. */

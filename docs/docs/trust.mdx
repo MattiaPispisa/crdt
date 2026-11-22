@@ -5,6 +5,7 @@ description: The promise every package keeps, and the tests that check it in CI.
 
 import NextSteps from '@site/src/components/NextSteps';
 import CoverageTable from '@site/src/components/PackageCoverage';
+import MergeTrace from '@site/src/components/MergeTrace';
 
 # Can you trust it?
 
@@ -19,6 +20,14 @@ to the tests that run in CI on every pull request that touches the package.
 
 The badge is the coverage of the `main` branch, live from Codecov. The CI of a
 pull request fails when a package drops under its minimum.
+
+## See a merge
+
+Two peers write at the same spot while offline. A test runs this scenario on
+real documents and fails if the engine ever gives other values, so what you see
+here is what the library does.
+
+<MergeTrace id="fugue-same-spot" />
 
 ## Every handler keeps the same contract
 

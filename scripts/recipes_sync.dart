@@ -24,7 +24,8 @@
 // The docs site reads the same regions in `docs/plugins/recipes/source.ts`:
 // the two parsers follow the same rules. Each run also checks that every
 // `<Recipe>` and `<RecipeSnippet>` of a page in `docs/docs` names a recipe, a
-// file and a region that exist: the site build fails on them too, but it runs
+// file and a region that exist, and every `<MergeTrace>` a trace of
+// `crdt_lf_recipes/traces`: the site build fails on them too, but it runs
 // only on a deploy.
 import 'dart:io' as io;
 
@@ -35,6 +36,7 @@ import 'logs.dart';
 import 'process.dart';
 
 const _recipesDir = 'packages/_internal/crdt_lf_recipes/recipes';
+const _tracesDir = 'packages/_internal/crdt_lf_recipes/traces';
 const _pagesDir = 'docs/docs';
 
 final _block = RegExp(
@@ -43,6 +45,7 @@ final _block = RegExp(
 );
 final _snippetTag = RegExp(r'<RecipeSnippet\b([^>]*)>', dotAll: true);
 final _recipeTag = RegExp(r'<Recipe\s+id="([^"]+)"');
+final _traceTag = RegExp(r'<MergeTrace\s+id="([^"]+)"');
 final _attribute = RegExp(r'(\w+)="([^"]*)"');
 final _marker = RegExp(r'^\s*//\s*#(docregion|enddocregion)\s+(\S+)\s*$');
 final _licenseLine = RegExp('^// (Copyright|SPDX-License-Identifier)');
@@ -222,8 +225,8 @@ _Recipes _loadRecipes(String root) {
   return _Recipes(recipes, copies);
 }
 
-/// Fails when a page of the docs site shows a recipe, a file or a region that
-/// does not exist.
+/// Fails when a page of the docs site shows a recipe, a file, a region or a
+/// trace that does not exist.
 void _checkPages(String root, Map<String, Map<String, _Source>> recipes) {
   final problems = <String>[];
   final pages = io.Directory(path.join(root, _pagesDir))
@@ -238,6 +241,13 @@ void _checkPages(String root, Map<String, Map<String, _Source>> recipes) {
     for (final match in _recipeTag.allMatches(text)) {
       if (!recipes.containsKey(match[1])) {
         problems.add('$name: no recipe "${match[1]}".');
+      }
+    }
+
+    for (final match in _traceTag.allMatches(text)) {
+      final trace = path.join(root, _tracesDir, '${match[1]}.json');
+      if (!io.File(trace).existsSync()) {
+        problems.add('$name: no trace "${match[1]}" in $_tracesDir.');
       }
     }
 

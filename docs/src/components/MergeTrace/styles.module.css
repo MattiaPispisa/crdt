@@ -1,0 +1,171 @@
+/* The peers keep their color in every trace: blue, then orange. */
+.trace {
+  --merge-trace-peer-1: #2a78d6;
+  --merge-trace-peer-2: #eb6834;
+  margin: 1.5rem 0 2rem;
+  padding: 1rem;
+  border: 1px solid var(--ifm-color-emphasis-300);
+  border-radius: 12px;
+  background: var(--ifm-background-surface-color);
+}
+
+[data-theme="dark"] .trace {
+  --merge-trace-peer-1: #3987e5;
+  --merge-trace-peer-2: #d95926;
+}
+
+.peers {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+  gap: 0.75rem;
+}
+
+.peer {
+  padding: 0.75rem 0.9rem;
+  border: 1px solid var(--ifm-color-emphasis-200);
+  border-radius: 10px;
+  transition: border-color 0.15s ease;
+}
+
+.acting {
+  border-color: var(--peer);
+  box-shadow: inset 0 0 0 1px var(--peer);
+}
+
+.peerHeader {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin-bottom: 0.6rem;
+}
+
+.swatch {
+  width: 0.7rem;
+  height: 0.7rem;
+  border-radius: 50%;
+  background: var(--peer);
+}
+
+.status {
+  margin-left: auto;
+  padding: 0 0.5rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  background: var(--ifm-color-emphasis-200);
+  color: var(--ifm-color-emphasis-800);
+}
+
+.offline {
+  background: transparent;
+  border: 1px dashed var(--ifm-color-emphasis-500);
+}
+
+.text {
+  display: inline-block;
+  padding: 0.3rem 0.5rem;
+  font-size: 1rem;
+  white-space: pre;
+}
+
+.authored {
+  border-bottom: 2px solid var(--peer);
+  background: color-mix(in srgb, var(--peer) 16%, transparent);
+}
+
+.items {
+  margin: 0;
+  padding-left: 1.4rem;
+}
+
+.set {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  padding: 0;
+  list-style: none;
+}
+
+.set li {
+  padding: 0.1rem 0.6rem;
+  border: 1px solid var(--ifm-color-emphasis-400);
+  border-radius: 999px;
+  font-size: 0.9rem;
+}
+
+.empty {
+  font-style: italic;
+  color: var(--ifm-color-emphasis-600);
+}
+
+.edit,
+.received {
+  margin: 0.6rem 0 0;
+  font-size: 0.85rem;
+  color: var(--ifm-color-emphasis-800);
+}
+
+.from {
+  color: var(--ifm-color-emphasis-600);
+}
+
+.tag {
+  margin-left: 0.4rem;
+  padding: 0 0.45rem;
+  border-radius: 999px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  background: var(--ifm-color-emphasis-200);
+  color: var(--ifm-color-emphasis-900);
+}
+
+.caption {
+  margin-top: 0.9rem;
+}
+
+.counter {
+  display: block;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ifm-color-emphasis-600);
+}
+
+.why {
+  margin: 0.6rem 0 0;
+  padding: 0.6rem 0.8rem;
+  border-left: 3px solid var(--ifm-color-primary);
+  border-radius: 0 8px 8px 0;
+  background: var(--ifm-color-emphasis-100);
+}
+
+.controls {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
+
+.dots {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.35rem;
+}
+
+.dot {
+  width: 0.65rem;
+  height: 0.65rem;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: var(--ifm-color-emphasis-300);
+  cursor: pointer;
+}
+
+.current {
+  background: var(--ifm-color-primary);
+}

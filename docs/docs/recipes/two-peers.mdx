@@ -4,6 +4,7 @@ sidebar_label: Two peers
 description: "Two documents edit the same text offline, then merge to the same result."
 ---
 
+import MergeTrace from '@site/src/components/MergeTrace';
 import Recipe from '@site/src/components/Recipe';
 
 # Two peers, one result
@@ -13,3 +14,10 @@ one text, with no connection. After the merge both read the same text, and
 each insert is still whole.
 
 <Recipe id="two-peers" />
+
+## The merge, step by step
+
+The same scenario, run by a test on two documents with fixed peer ids. Each
+color is the peer that wrote the text.
+
+<MergeTrace id="fugue-same-spot" />

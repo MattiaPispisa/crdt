@@ -1,0 +1,158 @@
+{
+  "id": "fugue-same-spot",
+  "kind": "text",
+  "peers": [
+    "Alice",
+    "Bob"
+  ],
+  "steps": [
+    {
+      "caption": "Alice writes \"Hello\".",
+      "actor": "Alice",
+      "label": "insert \"Hello\"",
+      "online": true,
+      "values": {
+        "Alice": [
+          {
+            "text": "Hello",
+            "author": "Alice"
+          }
+        ],
+        "Bob": []
+      }
+    },
+    {
+      "caption": "They sync: Bob reads \"Hello\" too.",
+      "online": true,
+      "values": {
+        "Alice": [
+          {
+            "text": "Hello",
+            "author": "Alice"
+          }
+        ],
+        "Bob": [
+          {
+            "text": "Hello",
+            "author": "Alice"
+          }
+        ]
+      },
+      "received": {
+        "Alice": [],
+        "Bob": [
+          {
+            "from": "Alice",
+            "label": "insert \"Hello\"",
+            "concurrent": false
+          }
+        ]
+      }
+    },
+    {
+      "caption": "Both go offline.",
+      "online": false,
+      "values": {
+        "Alice": [
+          {
+            "text": "Hello",
+            "author": "Alice"
+          }
+        ],
+        "Bob": [
+          {
+            "text": "Hello",
+            "author": "Alice"
+          }
+        ]
+      }
+    },
+    {
+      "caption": "Alice adds \" World\" at the end.",
+      "actor": "Alice",
+      "label": "insert \" World\" after \"Hello\"",
+      "online": false,
+      "values": {
+        "Alice": [
+          {
+            "text": "Hello World",
+            "author": "Alice"
+          }
+        ],
+        "Bob": [
+          {
+            "text": "Hello",
+            "author": "Alice"
+          }
+        ]
+      }
+    },
+    {
+      "caption": "Bob adds \" Dart\" at the same spot.",
+      "actor": "Bob",
+      "label": "insert \" Dart\" after \"Hello\"",
+      "online": false,
+      "values": {
+        "Alice": [
+          {
+            "text": "Hello World",
+            "author": "Alice"
+          }
+        ],
+        "Bob": [
+          {
+            "text": "Hello",
+            "author": "Alice"
+          },
+          {
+            "text": " Dart",
+            "author": "Bob"
+          }
+        ]
+      }
+    },
+    {
+      "caption": "They meet again, and each one receives the insert of the other.",
+      "online": true,
+      "values": {
+        "Alice": [
+          {
+            "text": "Hello World",
+            "author": "Alice"
+          },
+          {
+            "text": " Dart",
+            "author": "Bob"
+          }
+        ],
+        "Bob": [
+          {
+            "text": "Hello World",
+            "author": "Alice"
+          },
+          {
+            "text": " Dart",
+            "author": "Bob"
+          }
+        ]
+      },
+      "received": {
+        "Alice": [
+          {
+            "from": "Bob",
+            "label": "insert \" Dart\" after \"Hello\"",
+            "concurrent": true
+          }
+        ],
+        "Bob": [
+          {
+            "from": "Alice",
+            "label": "insert \" World\" after \"Hello\"",
+            "concurrent": true
+          }
+        ]
+      },
+      "why": "The two inserts are concurrent, at the same spot. Each one stays whole, and the peer ids pick the order: the id of Alice sorts first, so \" World\" comes first on both peers."
+    }
+  ]
+}

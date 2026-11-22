@@ -36,3 +36,40 @@ export type Recipe = {
    */
   variantOf: string | null;
 };
+
+/** A piece of a value, and the peer that wrote it, if the trace knows. */
+export type TraceToken = { text: string; author: string | null };
+
+/** An edit one peer received when the peers synced. */
+export type TraceReceived = {
+  from: string;
+  label: string;
+  /** Whether the edit was made with no knowledge of an edit of the receiver. */
+  concurrent: boolean;
+};
+
+/** One step of a merge trace: an edit, a disconnect or a sync. */
+export type TraceStep = {
+  caption: string;
+  /** The peer that made the edit; absent on a disconnect or a sync. */
+  actor?: string;
+  label?: string;
+  online: boolean;
+  /** What each peer reads after the step. */
+  values: Record<string, TraceToken[]>;
+  /** On a sync: the edits each peer received. */
+  received?: Record<string, TraceReceived[]>;
+  /** On a sync: the rule that decided the merge. */
+  why?: string;
+};
+
+/**
+ * A scenario run on real documents by a test of `crdt_lf_recipes`, which
+ * fails when the engine stops giving these values.
+ */
+export type Trace = {
+  id: string;
+  kind: 'text' | 'list' | 'set';
+  peers: string[];
+  steps: TraceStep[];
+};
