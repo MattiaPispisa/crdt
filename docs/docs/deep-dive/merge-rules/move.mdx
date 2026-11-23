@@ -23,8 +23,8 @@ An item has an **identity**, given once when it is inserted, and a
 **position**, an element of the Fugue tree. A move adds a new position at the
 destination, and points the identity at it. That pointer is a last-writer-wins
 register: the move with the [higher id](./index.mdx#same-changes-same-result)
-wins. The positions the identity
-no longer points at stay in the tree, hidden.
+wins. The positions the identity no longer points at stay in the tree,
+hidden.
 
 ```mermaid
 flowchart LR

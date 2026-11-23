@@ -18,7 +18,8 @@ link to the tests or the CI setup behind them.
 
 <CoverageTable />
 
-The badge is the coverage of the `main` branch, live from Codecov. The CI of a
+Each badge is the coverage of the package on the `main` branch, live from
+Codecov. The CI of a
 pull request fails when a package drops under its minimum, set in
 [`main.yaml`](https://github.com/MattiaPispisa/crdt/blob/main/.github/workflows/main.yaml).
 
@@ -64,8 +65,9 @@ breaks.
   trip through the change log and through a snapshot.
 - Every editor binding (the Flutter text field, the rich text field, Quill)
   passes the [editor conformance suite](./connectors/flutter/editors/index.mdx):
-  local edits reach the handler, remote edits show and the caret keeps its place in the text,
-  and a random stream of edits keeps the editor and the handler equal.
+  local edits reach the handler, remote edits show and the caret keeps its
+  place in the text, and a random stream of edits keeps the editor and the
+  handler equal.
 
 Both suites are tested against broken implementations, like the handler suite.
 
@@ -74,8 +76,7 @@ Both suites are tested against broken implementations, like the handler suite.
 The pure Dart packages also run their tests in Chrome, compiled to
 JavaScript ([`test_chrome`](https://github.com/MattiaPispisa/crdt/blob/main/melos.yaml)).
 The tests that need a real socket, SQLite, Drift or a subprocess run on the VM
-only. The
-Hive tests also run in the browser.
+only. The Hive tests also run in the browser.
 
 ## Code that runs
 
@@ -85,10 +86,10 @@ that checks it in CI. The recipe code these pages show, and the quick starts of
 the package READMEs, are copied from those files, so they compile against the
 current API.
 
-## A release runs everything
+## A release runs the tests
 
-Publishing a package first runs the whole gate: format, analyze, and the tests
-on the VM, in Flutter and in Chrome (the `pre` hook of
+Publishing a package first runs format, analyze, and the tests on the VM, in
+Flutter and in Chrome (the `pre` hook of
 [`melos.yaml`](https://github.com/MattiaPispisa/crdt/blob/main/melos.yaml)).
 
 <NextSteps

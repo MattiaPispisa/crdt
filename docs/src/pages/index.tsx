@@ -217,7 +217,7 @@ function Features() {
 const proofs = [
   "Every handler passes one shared convergence suite, on random edits.",
   "The suite is checked against handlers broken on purpose.",
-  "The pure Dart packages are also tested in Chrome.",
+  "Most pure Dart packages are also tested in Chrome.",
   "Every recipe on this site is checked by a test in CI.",
 ];
 
