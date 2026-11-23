@@ -10,7 +10,10 @@ typedef TraceToken = ({String text, String? author});
 
 /// Records what each peer reads while a scenario runs on real documents.
 final class Trace {
-  Trace({required this.kind, required this.peers, required this.read});
+  Trace({required this.kind, required this.peers, required this.read})
+    : _steps = [],
+      _edits = {},
+      _online = false;
 
   /// How the site draws a value: `text`, `list` or `set`.
   final String kind;
@@ -21,9 +24,9 @@ final class Trace {
   /// What a peer, named by its key in [peers], reads now, as tokens.
   final List<TraceToken> Function(String peer) read;
 
-  final List<Map<String, Object?>> _steps = [];
-  final Map<OperationId, ({String author, String label})> _edits = {};
-  bool _online = false;
+  final List<Map<String, Object?>> _steps;
+  final Map<OperationId, ({String author, String label})> _edits;
+  bool _online;
 
   /// Runs [run], an edit of [peer] that the site names [label].
   void edit(String peer, String label, String caption, void Function() run) {
