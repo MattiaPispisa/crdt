@@ -33,8 +33,8 @@ flowchart LR
 ```
 
 A run of typing is a chain of right children, so it stays in one piece. Two
-peers that insert after the same element give it two right children:
-siblings on the same side sort by element id, and the id starts with the peer
+peers that insert at the same spot give the same node two children on the same
+side: siblings on one side sort by element id, and the id starts with the peer
 id. A deleted element stays in the tree as a tombstone, so a concurrent insert
 still finds the neighbor it was written next to.
 

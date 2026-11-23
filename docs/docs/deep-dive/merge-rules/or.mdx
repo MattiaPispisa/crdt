@@ -15,8 +15,9 @@ import NextSteps from '@site/src/components/NextSteps';
 `CRDTORMapRefHandler` are **Observed-Removed** (OR) structures. When one peer
 removes a value and another adds it at the same time, the value stays on every
 peer. A remove takes away only what its peer had seen, so an edit made
-elsewhere is never lost by accident. Two concurrent `put` of the same map key
-keep one value, the one with the higher stamp.
+elsewhere is never lost by accident. Two concurrent puts of the same map key
+keep one value: the put with the higher id, which means the later
+[clock](../time-hlc.mdx), then the higher peer id.
 
 ## How it works
 

@@ -68,6 +68,7 @@ export type TraceStep = {
  * fails when the engine stops giving these values.
  */
 export type Trace = {
+  /** The name of the JSON file, without the extension. */
   id: string;
   kind: 'text' | 'list' | 'set';
   peers: string[];

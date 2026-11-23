@@ -11,8 +11,9 @@ import MergeTrace from '@site/src/components/MergeTrace';
 
 A CRDT library makes one promise: peers that receive the same edits read the
 same data. The order of arrival, the delays and the time spent offline change
-nothing. This page shows how the packages check that promise. Each claim links
-to the tests that run in CI on every pull request that touches the package.
+nothing. This page shows how the packages check that promise. Each section
+links to the tests or the CI setup that check it, on every pull request that
+touches the package.
 
 ## Coverage
 
@@ -33,19 +34,20 @@ here is what the library does.
 
 Every handler of `crdt_lf` runs one shared suite: the
 [handler conformance suite](https://github.com/MattiaPispisa/crdt/blob/main/packages/core/crdt_lf/test/handler/conformance/handler_conformance.dart).
-It makes random edits on several peers, with a fixed seed, and checks the same
-guarantees for text, lists, maps, sets, registers and aggregates:
+It makes random edits on several peers, with a fixed seed, and checks text,
+lists, maps, sets, registers and aggregates against the same guarantees. The
+last two rows apply to the handlers that publish deltas or support undo:
 
 | Guarantee | Test |
 | --- | --- |
 | Two peers that sync read what a replay from scratch reads | `two peers syncing every round agree with a replay` |
-| Every causal arrival order gives the same value | `every causal arrival order gives the same value` |
+| Random causal arrival orders give the same value | `every causal arrival order gives the same value` |
 | A snapshot plus the changes after it reads as the whole history | `a snapshot plus the changes after it reads as the history` |
 | A peer reloaded from storage keeps converging | `edits after a reload converge with a full-history peer` |
 | Edits in a transaction leave the value the same edits leave one by one | `a walk in transactions leaves the value of the same walk` |
 | Time travel shows the value after each change | `each cursor reads the value recorded after that change` |
-| The deltas of two peers editing at once rebuild each value | `the deltas of two peers editing at once rebuild each value` |
-| Undo walks back every step, and redo walks forward again | `undo walks back every step, redo walks forward again` |
+| With deltas: the deltas of two peers editing at once rebuild each value | `the deltas of two peers editing at once rebuild each value` |
+| With undo: undo walks back every step, and redo walks forward again | `undo walks back every step, redo walks forward again` |
 
 ### The suite is tested too
 
@@ -71,20 +73,23 @@ Both suites are tested against broken implementations, like the handler suite.
 
 ## On the VM and on the web
 
-The pure Dart packages run their tests twice: on the Dart VM, and
-in Chrome, compiled to JavaScript. A Flutter web app gets the behavior of a
-mobile one.
+The pure Dart packages also run their tests in Chrome, compiled to
+JavaScript ([`test_chrome`](https://github.com/MattiaPispisa/crdt/blob/main/melos.yaml)).
+The tests that need a real socket or a database run on the VM only.
 
 ## Code that runs
 
-Each [recipe](./recipes/index.mdx) is a complete program, and a test runs it in
-CI. The code on these pages and in the package READMEs comes from the
-recipes, so the code you copy compiles.
+Each [recipe](./recipes/index.mdx) has
+[a test](https://github.com/MattiaPispisa/crdt/tree/main/packages/_internal/crdt_lf_recipes/test)
+that checks it in CI. The recipe code these pages show, and the quick starts of
+the package READMEs, are copied from those files, so they compile against the
+current API.
 
 ## A release runs everything
 
 Publishing a package first runs the whole gate on every package: format,
-analyze, and the tests on the VM, in Flutter and in Chrome.
+analyze, and the tests on the VM, in Flutter and in Chrome (the `pre` hook of
+[`melos.yaml`](https://github.com/MattiaPispisa/crdt/blob/main/melos.yaml)).
 
 <NextSteps
   items={[

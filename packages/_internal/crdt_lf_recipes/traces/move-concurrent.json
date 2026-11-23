@@ -1,5 +1,4 @@
 {
-  "id": "move-concurrent",
   "kind": "list",
   "peers": [
     "Alice",
@@ -10,7 +9,7 @@
       "caption": "Alice writes three todos.",
       "actor": "Alice",
       "label": "insert three todos",
-      "online": true,
+      "online": false,
       "values": {
         "Alice": [
           {

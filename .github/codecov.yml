@@ -20,6 +20,9 @@ flags:
   crdt_lf:
     paths: [packages/core/crdt_lf]
     carryforward: true
+  crdt_lf_persistence:
+    paths: [packages/core/crdt_lf_persistence]
+    carryforward: true
   crdt_socket_sync:
     paths: [packages/core/crdt_socket_sync]
     carryforward: true

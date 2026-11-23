@@ -32,4 +32,25 @@ void main() {
       );
     });
   }
+
+  test('every file in traces/ has a scenario', () {
+    final stale =
+        Directory('traces').listSync().whereType<File>().where((file) {
+          final name = file.uri.pathSegments.last;
+          return !scenarios.containsKey(name.replaceFirst('.json', ''));
+        }).toList();
+    if (autoUpdateGoldenFiles) {
+      for (final file in stale) {
+        file.deleteSync();
+      }
+      return;
+    }
+    expect(
+      stale.map((file) => file.path),
+      isEmpty,
+      reason:
+          'delete them: fvm flutter test --update-goldens '
+          'test/traces_test.dart',
+    );
+  });
 }

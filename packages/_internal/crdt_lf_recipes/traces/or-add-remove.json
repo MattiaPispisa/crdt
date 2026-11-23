@@ -1,5 +1,4 @@
 {
-  "id": "or-add-remove",
   "kind": "set",
   "peers": [
     "Alice",
@@ -10,7 +9,7 @@
       "caption": "Alice tags the task \"urgent\".",
       "actor": "Alice",
       "label": "add \"urgent\"",
-      "online": true,
+      "online": false,
       "values": {
         "Alice": [
           {

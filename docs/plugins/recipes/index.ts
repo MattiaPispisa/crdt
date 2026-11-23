@@ -149,10 +149,13 @@ export default function recipesPlugin(context: LoadContext): Plugin<Content> {
         .readdirSync(tracesDir)
         .filter((name) => name.endsWith('.json'))
         .sort()
-        .map(
-          (name) =>
-            JSON.parse(fs.readFileSync(path.join(tracesDir, name), 'utf8')) as Trace,
-        );
+        // The file name is the id: the test names each file after its scenario.
+        .map((name) => ({
+          ...(JSON.parse(
+            fs.readFileSync(path.join(tracesDir, name), 'utf8'),
+          ) as Omit<Trace, 'id'>),
+          id: path.basename(name, '.json'),
+        }));
       return { recipes, traces };
     },
 

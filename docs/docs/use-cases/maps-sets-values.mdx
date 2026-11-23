@@ -35,7 +35,7 @@ add, so **the add wins**, and `urgent` stays. Nobody's edit is lost by accident.
 
 <MergeTrace id="or-add-remove" />
 
-How it works inside: [OR](../deep-dive/merge-rules/or.mdx).
+[OR](../deep-dive/merge-rules/or.mdx) explains how.
 
 ## OR-Set
 
@@ -75,7 +75,7 @@ print(scores.containsKey('ada')); // true
 
 - A `put` concurrent with a `remove` of the same key wins, like the OR-Set.
 - Two peers that `put` the same key at the same time converge on one value:
-  the write with the higher stamp.
+  the later write (see [OR](../deep-dive/merge-rules/or.mdx)).
 - Keys can be of any type with a `ValueCodec` (`keyCodec`, `valueCodec`).
 
 ## Last-writer-wins map

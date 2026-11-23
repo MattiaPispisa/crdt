@@ -1,5 +1,4 @@
 {
-  "id": "fugue-same-spot",
   "kind": "text",
   "peers": [
     "Alice",
@@ -10,7 +9,7 @@
       "caption": "Alice writes \"Hello\".",
       "actor": "Alice",
       "label": "insert \"Hello\"",
-      "online": true,
+      "online": false,
       "values": {
         "Alice": [
           {

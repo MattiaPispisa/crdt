@@ -65,11 +65,10 @@ todos.move(2, 0); // [Book flights, Buy milk, Call Ada]
 ```
 
 An item keeps its identity when it moves, so concurrent moves of the same item
-never duplicate it: the later move wins, and every peer picks the same one.
+never duplicate it. [Move](../deep-dive/merge-rules/move.mdx) explains which
+move wins.
 
 <MergeTrace id="move-concurrent" />
-
-How it works inside: [Move](../deep-dive/merge-rules/move.mdx).
 
 ## Reading a list
 

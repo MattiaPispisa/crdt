@@ -10,14 +10,7 @@ typedef TraceToken = ({String text, String? author});
 
 /// Records what each peer reads while a scenario runs on real documents.
 final class Trace {
-  Trace({
-    required this.id,
-    required this.kind,
-    required this.peers,
-    required this.read,
-  });
-
-  final String id;
+  Trace({required this.kind, required this.peers, required this.read});
 
   /// How the site draws a value: `text`, `list` or `set`.
   final String kind;
@@ -30,7 +23,7 @@ final class Trace {
 
   final List<Map<String, Object?>> _steps = [];
   final Map<OperationId, ({String author, String label})> _edits = {};
-  bool _online = true;
+  bool _online = false;
 
   /// Runs [run], an edit of [peer] that the site names [label].
   void edit(String peer, String label, String caption, void Function() run) {
@@ -84,12 +77,7 @@ final class Trace {
 
   /// The trace as the site reads it: stable, indented JSON.
   String encode() {
-    final json = {
-      'id': id,
-      'kind': kind,
-      'peers': peers.keys.toList(),
-      'steps': _steps,
-    };
+    final json = {'kind': kind, 'peers': peers.keys.toList(), 'steps': _steps};
     return '${const JsonEncoder.withIndent('  ').convert(json)}\n';
   }
 

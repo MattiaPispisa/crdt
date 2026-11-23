@@ -32,7 +32,6 @@ Future<Trace> _fugueSameSpot() async {
   };
   final trace =
       Trace(
-          id: 'fugue-same-spot',
           kind: 'text',
           peers: peers,
           read: (peer) => textTokens(texts[peer]!, _nameOf),
@@ -75,7 +74,6 @@ Future<Trace> _orAddRemove() async {
   };
   final trace =
       Trace(
-          id: 'or-add-remove',
           kind: 'set',
           peers: peers,
           read:
@@ -126,7 +124,6 @@ Future<Trace> _moveConcurrent() async {
   };
   final trace =
       Trace(
-          id: 'move-concurrent',
           kind: 'list',
           peers: peers,
           read:
