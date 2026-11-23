@@ -169,3 +169,9 @@
 .current {
   background: var(--ifm-color-primary);
 }
+
+.source {
+  margin: 0.75rem 0 0;
+  font-size: 0.8rem;
+  color: var(--ifm-color-emphasis-600);
+}

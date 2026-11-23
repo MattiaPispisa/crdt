@@ -24,8 +24,8 @@
 // The docs site reads the same regions in `docs/plugins/recipes/source.ts`:
 // the two parsers follow the same rules. Each run also checks that every
 // `<Recipe>` and `<RecipeSnippet>` of a page in `docs/docs` names a recipe, a
-// file and a region that exist, and every `<MergeTrace>` a trace of
-// `crdt_lf_recipes/traces`: the site build fails on them too, but it runs
+// file and a region that exist, and that every `<MergeTrace>` names a trace
+// in `crdt_lf_recipes/traces`: the site build fails on them too, but it runs
 // only on a deploy.
 import 'dart:io' as io;
 

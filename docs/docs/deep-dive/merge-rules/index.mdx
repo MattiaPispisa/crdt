@@ -27,9 +27,10 @@ Every peer reaches the same data because it does the same work on the same
 changes:
 
 - **One order for everyone.** Each change has an id: the
-  [hybrid logical clock](../time-hlc.mdx) plus the peer id. A handler
-  replays its history in that order, so every peer replays it the same way
-  (see [The state cache](../state-cache.mdx)).
+  [hybrid logical clock](../time-hlc.mdx) plus the peer id. One id is
+  higher than another when its clock is later, or, with the same clock, when
+  its peer id is higher. A handler replays its history in that order, so every
+  peer replays it the same way (see [The state cache](../state-cache.mdx)).
 - **One rule per kind of data.** When two edits are
   [concurrent](../documents-and-changes.mdx) (neither peer had seen the other
   edit), the handler decides what the pair becomes.
@@ -59,7 +60,7 @@ edits, in a shape a person expects:
 
 | Concurrent edits | What the merge keeps | Page |
 | --- | --- | --- |
-| inserts at the same spot of a text or a list | each run whole, in an order every peer shares | [Fugue](./fugue.mdx) |
+| inserts at the same spot of a Fugue text or list | each run whole, in an order every peer shares | [Fugue](./fugue.mdx) |
 | an add and a remove of the same value in a set or a map | the value: the add wins | [OR](./or.mdx) |
 | two moves of the same list item | one place for the item: the later move wins | [Move](./move.mdx) |
 
@@ -68,8 +69,7 @@ A register and a last-writer-wins map keep the later write: see
 
 ## Reading a merge trace
 
-Each page plays its rule on two peers, one step at a time. A test runs the
-same scenario on real documents, and fails when the engine gives other values.
+Each page plays its rule on two peers, one step at a time.
 
 - The color under a piece of text is the peer that wrote it.
 - **concurrent** marks a received edit made while the receiver edited too:

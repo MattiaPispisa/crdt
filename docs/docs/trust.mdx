@@ -24,9 +24,7 @@ pull request fails when a package drops under its minimum.
 
 ## See a merge
 
-Two peers write at the same spot while offline. A test runs this scenario on
-real documents and fails if the engine ever gives other values, so what you see
-here is what the library does.
+Two peers write at the same spot while offline:
 
 <MergeTrace id="fugue-same-spot" />
 
@@ -43,7 +41,7 @@ last two rows apply to the handlers that publish deltas or support undo:
 | Two peers that sync read what a replay from scratch reads | `two peers syncing every round agree with a replay` |
 | Random causal arrival orders give the same value | `every causal arrival order gives the same value` |
 | A snapshot plus the changes after it reads as the whole history | `a snapshot plus the changes after it reads as the history` |
-| A peer reloaded from storage keeps converging | `edits after a reload converge with a full-history peer` |
+| A peer reloaded from a snapshot keeps converging | `edits after a reload converge with a full-history peer` |
 | Edits in a transaction leave the value the same edits leave one by one | `a walk in transactions leaves the value of the same walk` |
 | Time travel shows the value after each change | `each cursor reads the value recorded after that change` |
 | With deltas: the deltas of two peers editing at once rebuild each value | `the deltas of two peers editing at once rebuild each value` |
@@ -75,7 +73,8 @@ Both suites are tested against broken implementations, like the handler suite.
 
 The pure Dart packages also run their tests in Chrome, compiled to
 JavaScript ([`test_chrome`](https://github.com/MattiaPispisa/crdt/blob/main/melos.yaml)).
-The tests that need a real socket or a database run on the VM only.
+The tests that need a real socket, SQLite or Drift run on the VM only. The
+Hive tests also run in the browser.
 
 ## Code that runs
 

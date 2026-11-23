@@ -16,8 +16,7 @@ import NextSteps from '@site/src/components/NextSteps';
 removes a value and another adds it at the same time, the value stays on every
 peer. A remove takes away only what its peer had seen, so an edit made
 elsewhere is never lost by accident. Two concurrent puts of the same map key
-keep one value: the put with the higher id, which means the later
-[clock](../time-hlc.mdx), then the higher peer id.
+keep one value: the put with the [higher id](./index.mdx#same-changes-same-result).
 
 ## How it works
 
@@ -35,17 +34,6 @@ sequenceDiagram
     A-->>B: sync
     B-->>A: sync
     Note over A,B: t2 is alive: {urgent}
-```
-
-```mermaid
-flowchart LR
-    U(["urgent"]) --- T1["t1: removed by Alice"]
-    U --- T2["t2: added by Bob, alive"]
-    T2 --> P["urgent is in the set"]
-    classDef alice stroke:#2a78d6,stroke-width:3px
-    classDef bob stroke:#eb6834,stroke-width:3px
-    class T1 alice
-    class T2 bob
 ```
 
 ## See it

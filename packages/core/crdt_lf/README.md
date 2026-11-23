@@ -87,10 +87,11 @@ bob.importChanges(alice.exportChanges());
 alice.importChanges(bob.exportChanges());
 
 // Each insert stays whole: never "Hello WDoarrltd".
-// The peer ids pick which one comes first.
+// The peer ids pick which one comes first, so both
+// print Hello World Dart, or both Hello Dart World.
 stdout
-  ..writeln(aliceText.value) // e.g. Hello World Dart
-  ..writeln(bobText.value); // the same as Alice
+  ..writeln(aliceText.value)
+  ..writeln(bobText.value);
 ```
 <!-- /recipe -->
 

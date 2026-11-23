@@ -11,8 +11,9 @@ import NextSteps from '@site/src/components/NextSteps';
 
 ## What the library does
 
-`CRDTFugueTextHandler`, `CRDTFugueRichTextHandler`, `CRDTFugueListHandler`
-and `CRDTFugueMovableListHandler` order their elements with Fugue. When two
+`CRDTFugueTextHandler`, `CRDTFugueRichTextHandler`, `CRDTFugueListHandler`,
+`CRDTFugueMovableListHandler`, `CRDTListRefHandler` and
+`CRDTMovableListRefHandler` order their elements with Fugue. When two
 peers insert at the same spot at the same time, the run of each peer stays
 whole: the letters of two sentences never mix. Every peer reads the two runs in
 the same order, and the peer ids decide which one comes first.
@@ -22,8 +23,8 @@ the same order, and the peer ids decide which one comes first.
 Each element is a node of a tree, and the sequence is the tree read in order:
 the left children, the node, then the right children. A new element becomes a
 **right child of its left neighbor**. When the right neighbor sits below the
-left one in the tree, it becomes a **left child of the right neighbor**
-instead.
+left one in the tree, the new element becomes a **left child of the right
+neighbor** instead.
 
 ```mermaid
 flowchart LR

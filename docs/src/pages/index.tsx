@@ -229,8 +229,9 @@ function Trust() {
           <Heading as="h2">Built to be trusted</Heading>
           <p>
             Peers that receive the same edits read the same data, whatever the
-            order and however long they stayed offline. Every package checks
-            that promise in CI, and shows its coverage.
+            order and however long they stayed offline. The handlers check that
+            promise on random edits, and every package is tested in CI and
+            shows its coverage.
           </p>
           <div className={styles.heroButtons}>
             <Link className="button button--primary" to="/docs/trust">

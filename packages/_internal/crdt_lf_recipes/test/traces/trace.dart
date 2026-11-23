@@ -53,21 +53,20 @@ final class Trace {
     for (final MapEntry(key: name, value: document) in peers.entries) {
       final own = _ids(document);
       final missing = byId.values.where((change) => !own.contains(change.id));
-      final labels = <String, Map<String, Object?>>{};
+      final edits = <String, Map<String, Object?>>{};
       for (final change in missing) {
         final edit = _edits[change.id]!;
         final ancestors = _ancestors(change.id, byId);
-        labels.putIfAbsent(
-          edit.label,
-          () => {
-            'from': edit.author,
-            'label': edit.label,
-            // The receiver holds a change this edit never saw.
-            'concurrent': own.any((id) => !ancestors.contains(id)),
-          },
+        final entry = edits.putIfAbsent(
+          '${edit.author}/${edit.label}',
+          () => {'from': edit.author, 'label': edit.label, 'concurrent': false},
         );
+        // The receiver holds a change this edit never saw.
+        if (own.any((id) => !ancestors.contains(id))) {
+          entry['concurrent'] = true;
+        }
       }
-      received[name] = labels.values.toList();
+      received[name] = edits.values.toList();
     }
     for (final document in peers.values) {
       document.importChanges(byId.values.toList());

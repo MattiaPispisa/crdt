@@ -78,7 +78,7 @@ function Peer({
         <p className={styles.edit}>✎ {step.label}</p>
       )}
       {received.map((edit) => (
-        <p key={edit.label} className={styles.received}>
+        <p key={`${edit.from}/${edit.label}`} className={styles.received}>
           ← {edit.label} <span className={styles.from}>from {edit.from}</span>
           {edit.concurrent && <span className={styles.tag}>concurrent</span>}
         </p>
@@ -146,6 +146,10 @@ export default function MergeTrace({ id }: { id: string }): ReactNode {
           Next →
         </button>
       </div>
+      <p className={styles.source}>
+        Recorded by a test on real documents. The test fails when the library
+        gives other values.
+      </p>
     </figure>
   );
 }

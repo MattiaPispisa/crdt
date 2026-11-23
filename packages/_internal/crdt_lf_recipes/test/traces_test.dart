@@ -37,7 +37,8 @@ void main() {
     final stale =
         Directory('traces').listSync().whereType<File>().where((file) {
           final name = file.uri.pathSegments.last;
-          return !scenarios.containsKey(name.replaceFirst('.json', ''));
+          return name.endsWith('.json') &&
+              !scenarios.containsKey(name.replaceFirst('.json', ''));
         }).toList();
     if (autoUpdateGoldenFiles) {
       for (final file in stale) {
