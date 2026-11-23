@@ -1042,5 +1042,34 @@ void main() {
       expect(posted('crdt_lf:devtools:event'), hasLength(1));
       expect(posted('crdt_lf:devtools:delta'), hasLength(1));
     });
+
+    test('a change ends a history session past its lease', () {
+      final doc = CRDTDocument();
+      final text = CRDTTextHandler(doc, 'text')..insert(0, 'a');
+      DevToolsBridge.lease = Duration.zero;
+      final session = historyOpen(doc)['session'];
+
+      // No receiver: a DevTools tab closed without its close call.
+      DevToolsBridge.onEvent = null;
+      text.insert(1, 'b');
+      DevToolsBridge.lease = const Duration(minutes: 1);
+      expect(
+        () => historyState(doc, session, 0),
+        throwsA(isA<ArgumentError>()),
+      );
+    });
+
+    test('a historyState renews the lease of its session', () async {
+      final doc = CRDTDocument();
+      CRDTTextHandler(doc, 'text').insert(0, 'a');
+      DevToolsBridge.lease = const Duration(seconds: 2);
+      final session = historyOpen(doc)['session'];
+      // Two waits of 1.2 s: the session holds only if the first call
+      // renewed it.
+      for (var i = 0; i < 2; i++) {
+        await Future<void>.delayed(const Duration(milliseconds: 1200));
+        expect(historyState(doc, session, 1)['value'], 'a');
+      }
+    });
   });
 }

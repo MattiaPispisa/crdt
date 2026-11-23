@@ -18,12 +18,16 @@ part 'time_travel_state.dart';
 /// session stays frozen: [TimeTravelState.newChanges] counts the changes
 /// the live document got since, and [reopen] takes them in.
 class TimeTravelCubit extends Cubit<TimeTravelState> {
+  /// While a session is open, the cubit renews its lease in the app every
+  /// [renewEvery].
   TimeTravelCubit(
     this._client,
     this.doc, {
     Duration delay = const Duration(milliseconds: 100),
     Duration valueDelay = const Duration(milliseconds: 50),
+    Duration renewEvery = const Duration(seconds: 10),
   }) : _mirror = ChangeMirror(_client, doc),
+       _renewEvery = renewEvery,
        super(const TimeTravelState()) {
     _openGate = ReloadGate(_open, delay: Duration.zero);
     _liveGate = ReloadGate(_syncLive, delay: delay);
@@ -46,6 +50,10 @@ class TimeTravelCubit extends Cubit<TimeTravelState> {
   late final ReloadGate _valueGate;
 
   late final StreamSubscription<CrdtLfEvent> _events;
+
+  final Duration _renewEvery;
+
+  Timer? _renewal;
 
   void _onEvent(CrdtLfEvent event) {
     if (event case DocumentMoved(
@@ -122,10 +130,26 @@ class TimeTravelCubit extends Cubit<TimeTravelState> {
           error: () => null,
         ),
       );
+      _renewal?.cancel();
+      _renewal = Timer.periodic(_renewEvery, (_) => unawaited(_renew()));
       unawaited(_valueGate.request());
     } on Object catch (e) {
       if (isClosed) return;
       emit(state._copyWith(status: LoadStatus.failure, error: () => '$e'));
+    }
+  }
+
+  Future<void> _renew() async {
+    final session = state.session;
+    if (session == null) return;
+    try {
+      await _client.historyState(
+        doc,
+        session: session.session,
+        cursor: state.cursor,
+      );
+    } on Object {
+      // The next tick tries again.
     }
   }
 
@@ -220,6 +244,7 @@ class TimeTravelCubit extends Cubit<TimeTravelState> {
 
   @override
   Future<void> close() async {
+    _renewal?.cancel();
     _openGate.dispose();
     _liveGate.dispose();
     _valueGate.dispose();

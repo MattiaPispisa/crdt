@@ -178,6 +178,32 @@ void main() {
     );
   });
 
+  test('renews the lease of its session while open', () async {
+    final lease = DevToolsBridge.lease;
+    DevToolsBridge.lease = const Duration(milliseconds: 200);
+    addTearDown(() => DevToolsBridge.lease = lease);
+    final doc = CRDTDocument(documentId: 'd');
+    CRDTTextHandler(doc, 'text').insert(0, 'a');
+    final id = (await client.documents()).single.id;
+    final cubit = TimeTravelCubit(
+      client,
+      id,
+      delay: Duration.zero,
+      valueDelay: Duration.zero,
+      renewEvery: const Duration(milliseconds: 50),
+    );
+    addTearDown(cubit.close);
+    await settle();
+
+    await Future<void>.delayed(const Duration(milliseconds: 400));
+    final state = await client.historyState(
+      id,
+      session: cubit.state.session!.session,
+      cursor: 1,
+    );
+    expect(state.cursor, 1);
+  });
+
   test('reports the progress of the first sync', () async {
     final doc = CRDTDocument(documentId: 'd');
     final text = CRDTTextHandler(doc, 'text');

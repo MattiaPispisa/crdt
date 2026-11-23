@@ -31,10 +31,12 @@ abstract final class DevToolsBridge {
   /// listener; `null` for none.
   static void Function(String kind, Map<String, Object?> data)? onEvent;
 
-  /// How long the event log or a delta watch runs after its last start.
+  /// How long the event log, a delta watch, a time travel session or a
+  /// paging of the changes lives after its last call.
   ///
-  /// A start of a running one renews it. The app stops it at the first event
-  /// after the lease ends.
+  /// A start of a running log or watch renews it, and so does a
+  /// `historyState` or `changes` call. The app ends the work at its next
+  /// event, call or change after the lease ends.
   static Duration lease = const Duration(seconds: 30);
 
   static int _nextId = 0;
@@ -49,6 +51,10 @@ abstract final class DevToolsBridge {
   static final Expando<_Tracked> _byDocument = Expando<_Tracked>();
 
   static final Finalizer<int> _finalizer = Finalizer<int>(_collected);
+
+  // The ids of the tracked documents with a history session or a paging.
+  // Ids, not `_Tracked`s: the session holds the document.
+  static final Set<int> _expiring = <int>{};
 
   static bool _registered = false;
 
@@ -65,6 +71,7 @@ abstract final class DevToolsBridge {
     String method,
     Map<String, String> params,
   ) {
+    _expireIdle();
     switch (method) {
       case 'documents':
         return {
@@ -167,6 +174,7 @@ abstract final class DevToolsBridge {
       tracked.close();
     }
     _byId.clear();
+    _expiring.clear();
     _documentsDirty = false;
   }
 
@@ -184,6 +192,9 @@ abstract final class DevToolsBridge {
 
   static void _changed(CRDTDocument doc) {
     if (!_enabled) return;
+    // Before the receiver check: a DevTools tab closed without its close
+    // call leaves no receiver.
+    _expireIdle();
     if (!_hasReceiver) return;
     _of(doc)?.changes = true;
     _schedule();
@@ -238,6 +249,14 @@ abstract final class DevToolsBridge {
     tracked.close();
     _byId.remove(tracked.id);
     _documentsMoved();
+  }
+
+  static void _expireIdle() {
+    if (_expiring.isEmpty) return;
+    _expiring.removeWhere((id) {
+      final tracked = _byId[id]?.target;
+      return tracked == null || !tracked.expireIdle();
+    });
   }
 
   static List<_Tracked> _tracked() => [
@@ -512,7 +531,9 @@ abstract final class DevToolsBridge {
     final id = _nextSession++;
     tracked
       ..history = session
-      ..historyId = id;
+      ..historyId = id
+      ..historyIdle.reset();
+    _expiring.add(tracked.id);
     return {
       'session': id,
       'length': session.length,
@@ -534,6 +555,7 @@ abstract final class DevToolsBridge {
     if (session == null || id != tracked.historyId) {
       throw ArgumentError.value(params['session'], 'session', 'Not open');
     }
+    tracked.historyIdle.reset();
     final cursor = _intParam(params, 'cursor');
     if (cursor > session.length) {
       throw ArgumentError.value(
@@ -679,7 +701,9 @@ abstract final class DevToolsBridge {
         changeCount: count,
         pruneEpoch: tracked.pruneEpoch,
       );
+      _expiring.add(tracked.id);
     }
+    pages.idle.reset();
     final (page, done) = pages.after(since, limit);
     if (done) tracked.pages = null;
     return (page, done);
@@ -811,7 +835,8 @@ abstract final class DevToolsBridge {
 final class _Tracked {
   _Tracked(this.id, CRDTDocument document)
       : document = WeakReference<CRDTDocument>(document),
-        deltas = <String, _Lease>{};
+        deltas = <String, _Lease>{},
+        historyIdle = Stopwatch()..start();
 
   final int id;
 
@@ -839,6 +864,8 @@ final class _Tracked {
 
   int? historyId;
 
+  final Stopwatch historyIdle;
+
   _ChangePages? pages;
 
   bool get dirty => changes || handlers || snapshot || pruned;
@@ -860,6 +887,19 @@ final class _Tracked {
     deltas.clear();
     closeHistory();
     pages = null;
+  }
+
+  /// Ends the history session and the paging idle for a whole lease, and
+  /// tells whether one of them is still open.
+  bool expireIdle() {
+    if (history != null && historyIdle.elapsed >= DevToolsBridge.lease) {
+      closeHistory();
+    }
+    if (pages case final pages?
+        when pages.idle.elapsed >= DevToolsBridge.lease) {
+      this.pages = null;
+    }
+    return history != null || pages != null;
   }
 
   void stopEvents() {
@@ -901,7 +941,8 @@ final class _ChangePages {
     this._sorted, {
     required this.changeCount,
     required this.pruneEpoch,
-  }) : _firstByPeer = <PeerId, int>{} {
+  })  : _firstByPeer = <PeerId, int>{},
+        idle = Stopwatch()..start() {
     for (var i = 0; i < _sorted.length; i++) {
       _firstByPeer.putIfAbsent(_sorted[i].id.peerId, () => i);
     }
@@ -914,6 +955,8 @@ final class _ChangePages {
   final int changeCount;
 
   final int pruneEpoch;
+
+  final Stopwatch idle;
 
   (List<Change>, bool) after(VersionVector since, int limit) {
     // The first change newer than `since` for its peer cannot come before

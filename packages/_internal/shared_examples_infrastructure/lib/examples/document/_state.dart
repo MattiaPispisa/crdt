@@ -262,7 +262,9 @@ class DocumentExampleState extends ExampleDocument<CRDTMovableListRefHandler> {
 
   /// The first characters of [text], for a debug name.
   static String _short(String text) =>
-      text.length > 20 ? '${text.substring(0, 20)}…' : text;
+      text.length > 20
+          ? '${text.substring(0, RuneOffsets.snap(text, 20))}…'
+          : text;
 
   CRDTRegisterHandler<bool> _newDoneFlag({required bool value}) =>
       document.handler(_doneSpec, _newId())..set(value);
