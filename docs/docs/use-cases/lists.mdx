@@ -3,6 +3,7 @@ title: Lists
 description: Ordered lists that merge without conflicts, with or without moves.
 ---
 
+import MergeTrace from '@site/src/components/MergeTrace';
 import NextSteps from '@site/src/components/NextSteps';
 
 # Lists
@@ -36,8 +37,9 @@ steps.delete(0, 1);
 print(steps.value); // [Add pasta, Wait 9 minutes]
 ```
 
-When two peers insert at the same spot at the same time, Fugue keeps the items
-of each peer together instead of mixing them. `update` overwrites an item in
+When two peers insert at the same spot at the same time,
+[Fugue](../deep-dive/merge-rules/fugue.mdx) keeps the items of each peer
+together instead of mixing them. `update` overwrites an item in
 place, so two peers updating the same item converge on one of the two values.
 
 Fugue lists also have **stable positions** (`stablePositionAt` /
@@ -63,9 +65,11 @@ todos.move(2, 0); // [Book flights, Buy milk, Call Ada]
 ```
 
 An item keeps its identity when it moves, so concurrent moves of the same item
-never duplicate it: one move wins, and every peer picks the same one. The
-algorithm follows
-[Moving Elements in List CRDTs](https://martin.kleppmann.com/2020/04/27/papoc-list-move.html).
+never duplicate it: the later move wins, and every peer picks the same one.
+
+<MergeTrace id="move-concurrent" />
+
+How it works inside: [Move](../deep-dive/merge-rules/move.mdx).
 
 ## Reading a list
 

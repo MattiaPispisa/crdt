@@ -4,6 +4,7 @@ description: A text that several peers type into at the same time, from the hand
 ---
 
 import Greyhound from '@site/src/components/Greyhound';
+import MergeTrace from '@site/src/components/MergeTrace';
 import NextSteps from '@site/src/components/NextSteps';
 
 # Collaborative text
@@ -37,12 +38,15 @@ print(note.length); // 11
 - `change(newText)` computes the difference from the current text and writes
   only that. Call it inside `doc.runInTransaction` to write it as one change.
 
-### Why Fugue
+### Two people typing at the same spot
 
-The Fugue algorithm keeps the text of two peers **apart** when they type at the
-same spot at the same time. Without it, two sentences typed at the same place
-can come out with their letters mixed, which nobody can read. Fugue keeps each
-run of typing contiguous.
+When two peers type at the same spot at the same time, each run of typing
+stays whole: the letters of two sentences never mix. Every peer reads the two
+runs in the same order.
+
+<MergeTrace id="fugue-same-spot" />
+
+How the order is chosen: [Fugue](../deep-dive/merge-rules/fugue.mdx).
 
 `CRDTTextHandler` is the simpler option: it orders concurrent edits by their
 clock alone. It is cheaper, but concurrent inserts at the same position can
