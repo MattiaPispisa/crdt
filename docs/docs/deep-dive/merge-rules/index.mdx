@@ -50,18 +50,18 @@ flowchart LR
     H --> B["Bob: Hello Dart"]
     A --> M{merge}
     B --> M
-    M -->|letters woven| X["Hello WDoarrltd<br/>converges, unreadable"]
+    M -->|letters woven| X["Hello W Doarrltd<br/>converges, unreadable"]
     M -->|runs kept whole| F["Hello World Dart<br/>converges, readable"]
 ```
 
-Both peers read `Hello WDoarrltd`, so they agree, and the text is still lost.
+Both peers read `Hello W Doarrltd`, so they agree, and the text is still lost.
 This is **interleaving**. Each rule in this section keeps the intent of both
 edits, in a shape a person expects:
 
 | Concurrent edits | What the merge keeps | Page |
 | --- | --- | --- |
 | inserts at the same spot of a Fugue text or list | each run whole, in an order every peer shares | [Fugue](./fugue.mdx) |
-| an add and a remove of the same value in a set or a map | the value: the add wins | [OR](./or.mdx) |
+| an add and a remove of the same value in a set, or key in a map | the value: the add wins | [OR](./or.mdx) |
 | two moves of the same list item | one place for the item: the later move wins | [Move](./move.mdx) |
 
 A register and a last-writer-wins map keep the later write: see

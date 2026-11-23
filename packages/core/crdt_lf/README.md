@@ -86,7 +86,7 @@ bobText.insert(5, ' Dart');
 bob.importChanges(alice.exportChanges());
 alice.importChanges(bob.exportChanges());
 
-// Each insert stays whole: never "Hello WDoarrltd".
+// Each insert stays whole: never "Hello W Doarrltd".
 // The peer ids pick which one comes first, so both
 // print Hello World Dart, or both Hello Dart World.
 stdout

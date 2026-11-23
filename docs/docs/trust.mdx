@@ -11,16 +11,16 @@ import MergeTrace from '@site/src/components/MergeTrace';
 
 A CRDT library makes one promise: peers that receive the same edits read the
 same data. The order of arrival, the delays and the time spent offline change
-nothing. This page shows how the packages check that promise. Each section
-links to the tests or the CI setup that check it, on every pull request that
-touches the package.
+nothing. This page shows how the packages check that promise. Most sections
+link to the tests or the CI setup behind them.
 
 ## Coverage
 
 <CoverageTable />
 
 The badge is the coverage of the `main` branch, live from Codecov. The CI of a
-pull request fails when a package drops under its minimum.
+pull request fails when a package drops under its minimum, set in
+[`main.yaml`](https://github.com/MattiaPispisa/crdt/blob/main/.github/workflows/main.yaml).
 
 ## See a merge
 
@@ -64,7 +64,7 @@ breaks.
   trip through the change log and through a snapshot.
 - Every editor binding (the Flutter text field, the rich text field, Quill)
   passes the [editor conformance suite](./connectors/flutter/editors/index.mdx):
-  local edits reach the handler, remote edits show without moving the caret,
+  local edits reach the handler, remote edits show and the caret keeps its place in the text,
   and a random stream of edits keeps the editor and the handler equal.
 
 Both suites are tested against broken implementations, like the handler suite.
@@ -73,21 +73,22 @@ Both suites are tested against broken implementations, like the handler suite.
 
 The pure Dart packages also run their tests in Chrome, compiled to
 JavaScript ([`test_chrome`](https://github.com/MattiaPispisa/crdt/blob/main/melos.yaml)).
-The tests that need a real socket, SQLite or Drift run on the VM only. The
+The tests that need a real socket, SQLite, Drift or a subprocess run on the VM
+only. The
 Hive tests also run in the browser.
 
 ## Code that runs
 
-Each [recipe](./recipes/index.mdx) has
-[a test](https://github.com/MattiaPispisa/crdt/tree/main/packages/_internal/crdt_lf_recipes/test)
+Each [recipe](./recipes/index.mdx) has a test, named in
+[its manifest](https://github.com/MattiaPispisa/crdt/tree/main/packages/_internal/crdt_lf_recipes/recipes),
 that checks it in CI. The recipe code these pages show, and the quick starts of
 the package READMEs, are copied from those files, so they compile against the
 current API.
 
 ## A release runs everything
 
-Publishing a package first runs the whole gate on every package: format,
-analyze, and the tests on the VM, in Flutter and in Chrome (the `pre` hook of
+Publishing a package first runs the whole gate: format, analyze, and the tests
+on the VM, in Flutter and in Chrome (the `pre` hook of
 [`melos.yaml`](https://github.com/MattiaPispisa/crdt/blob/main/melos.yaml)).
 
 <NextSteps

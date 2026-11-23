@@ -10,6 +10,8 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'traces/scenarios.dart';
 
+const _update = 'fvm flutter test --update-goldens test/traces_test.dart';
+
 void main() {
   for (final MapEntry(key: id, value: record) in scenarios.entries) {
     test('the "$id" trace matches traces/$id.json', () async {
@@ -23,13 +25,10 @@ void main() {
           ..writeAsStringSync(json);
         return;
       }
-      expect(
-        json,
-        file.readAsStringSync(),
-        reason:
-            'update it: fvm flutter test --update-goldens '
-            'test/traces_test.dart',
-      );
+      if (!file.existsSync()) {
+        fail('no traces/$id.json: $_update');
+      }
+      expect(json, file.readAsStringSync(), reason: 'update it: $_update');
     });
   }
 
@@ -49,9 +48,7 @@ void main() {
     expect(
       stale.map((file) => file.path),
       isEmpty,
-      reason:
-          'delete them: fvm flutter test --update-goldens '
-          'test/traces_test.dart',
+      reason: 'delete them: $_update',
     );
   });
 }

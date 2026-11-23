@@ -13,8 +13,8 @@ import NextSteps from '@site/src/components/NextSteps';
 
 `CRDTORSetHandler`, `CRDTORMapHandler`, `CRDTORSetRefHandler` and
 `CRDTORMapRefHandler` are **Observed-Removed** (OR) structures. When one peer
-removes a value and another adds it at the same time, the value stays on every
-peer. A remove takes away only what its peer had seen, so an edit made
+removes a value, or a map key, and another adds it at the same time, it stays
+on every peer. A remove takes away only what its peer had seen, so an edit made
 elsewhere is never lost by accident. Two concurrent puts of the same map key
 keep one value: the put with the [higher id](./index.mdx#same-changes-same-result).
 
