@@ -16,7 +16,14 @@ part 'delta_watch_state.dart';
 /// Watching is off until [setWatching] turns it on. A new selection and
 /// [close] stop the watch in the app.
 class DeltaWatchCubit extends Cubit<DeltaWatchState> {
-  DeltaWatchCubit(this._client, this.doc) : super(const DeltaWatchState()) {
+  /// While watching, the cubit renews the lease of the watch in the app
+  /// every [renewEvery].
+  DeltaWatchCubit(
+    this._client,
+    this.doc, {
+    Duration renewEvery = const Duration(seconds: 10),
+  }) : _renewEvery = renewEvery,
+       super(const DeltaWatchState()) {
     _events = _client.events.listen(_onEvent);
   }
 
@@ -29,6 +36,10 @@ class DeltaWatchCubit extends Cubit<DeltaWatchState> {
   final int doc;
 
   late final StreamSubscription<CrdtLfEvent> _events;
+
+  final Duration _renewEvery;
+
+  Timer? _renewal;
 
   // Set before the call: the app posts the initial reset before its answer
   // arrives.
@@ -51,6 +62,7 @@ class DeltaWatchCubit extends Cubit<DeltaWatchState> {
     final watched = _wanted;
     if (watched != null) unawaited(_stop(watched));
     _wanted = null;
+    _renewWhile(null);
     emit(DeltaWatchState(handler: handler));
   }
 
@@ -68,11 +80,28 @@ class DeltaWatchCubit extends Cubit<DeltaWatchState> {
               ? await _client.watchStart(doc, handler)
               : await _client.watchStop(doc, handler);
       if (isClosed || state.handler != handler) return;
+      _renewWhile(on ? handler : null);
       emit(state._copyWith(watching: on, error: () => null));
     } on Object catch (e) {
       if (isClosed || state.handler != handler) return;
       _wanted = state.watching ? handler : null;
       emit(state._copyWith(error: () => '$e'));
+    }
+  }
+
+  void _renewWhile(String? handler) {
+    _renewal?.cancel();
+    _renewal =
+        handler == null
+            ? null
+            : Timer.periodic(_renewEvery, (_) => unawaited(_renew(handler)));
+  }
+
+  Future<void> _renew(String handler) async {
+    try {
+      await _client.watchStart(doc, handler);
+    } on Object {
+      // The next tick tries again.
     }
   }
 
@@ -86,6 +115,7 @@ class DeltaWatchCubit extends Cubit<DeltaWatchState> {
 
   @override
   Future<void> close() async {
+    _renewal?.cancel();
     final watched = _wanted;
     if (watched != null) unawaited(_stop(watched));
     await _events.cancel();

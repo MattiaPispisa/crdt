@@ -27,6 +27,28 @@ void main() {
 
   Future<bool> recording() async => (await client.documents()).single.recording;
 
+  test('renews the lease of the log while recording', () async {
+    final lease = DevToolsBridge.lease;
+    DevToolsBridge.lease = const Duration(milliseconds: 200);
+    addTearDown(() => DevToolsBridge.lease = lease);
+    final doc = CRDTDocument();
+    final text = CRDTTextHandler(doc, 'text');
+    final id = (await client.documents()).single.id;
+    final cubit = EventLogCubit(
+      client,
+      id,
+      renewEvery: const Duration(milliseconds: 50),
+    );
+    addTearDown(cubit.close);
+
+    await cubit.setRecording(recording: true);
+    await Future<void>.delayed(const Duration(milliseconds: 400));
+    text.insert(0, 'a');
+    await pumpEventQueue();
+    expect(cubit.state.events, hasLength(1));
+    expect(await recording(), isTrue);
+  });
+
   test('records newest first, keeps the cap, clears and stops', () async {
     final doc = CRDTDocument();
     final text = CRDTTextHandler(doc, 'text');

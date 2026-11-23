@@ -31,6 +31,12 @@ abstract final class DevToolsBridge {
   /// listener; `null` for none.
   static void Function(String kind, Map<String, Object?> data)? onEvent;
 
+  /// How long the event log or a delta watch runs after its last start.
+  ///
+  /// A start of a running one renews it. The app stops it at the first event
+  /// after the lease ends.
+  static Duration lease = const Duration(seconds: 30);
+
   static int _nextId = 0;
 
   static int _nextSession = 0;
@@ -146,7 +152,7 @@ abstract final class DevToolsBridge {
         if (id == null) {
           throw ArgumentError.value(id, 'handler', 'Expected a handler id');
         }
-        tracked.stopWatch(id);
+        _stopWatch(tracked, id);
         return {'watching': false};
     }
     throw ArgumentError.value(method, 'method', 'Unknown method');
@@ -207,7 +213,9 @@ abstract final class DevToolsBridge {
     if (!_enabled) return;
     final tracked = _of(doc);
     if (tracked == null) return;
-    tracked.pruneEpoch++;
+    tracked
+      ..pruneEpoch += 1
+      ..pages = null;
     if (!_hasReceiver) return;
     tracked.pruned = true;
     _schedule();
@@ -328,16 +336,20 @@ abstract final class DevToolsBridge {
   }
 
   static void _eventsStart(_Tracked tracked, CRDTDocument doc) {
-    if (tracked.events != null) return;
-    tracked.events = doc.events.listen((event) {
-      // DevTools can close without a stop call: with no receiver left, the
-      // app must stop paying for the log. The delta watch does the same.
-      if (!_hasReceiver) {
-        tracked.stopEvents();
-        return;
-      }
-      _post(_eventEvent, _event(tracked, event));
-    });
+    if (tracked.events case final running?) {
+      running.renew();
+      return;
+    }
+    late final _Lease lease;
+    lease = tracked.events = _Lease(
+      doc.events.listen((event) {
+        if (!_hasReceiver || lease.expired) {
+          tracked.stopEvents();
+          return;
+        }
+        _post(_eventEvent, _event(tracked, event));
+      }),
+    );
   }
 
   static Map<String, Object?> _event(
@@ -391,17 +403,37 @@ abstract final class DevToolsBridge {
     if (handler is! DeltaProvider) {
       throw ArgumentError.value(id, 'handler', 'The handler has no deltas');
     }
-    if (tracked.deltas.containsKey(id)) return;
-    tracked.deltas[id] = (handler as DeltaProvider).watch().listen(
-      (update) {
-        if (!_hasReceiver) {
-          tracked.stopWatch(id);
-          return;
-        }
-        _post(_deltaEvent, _delta(tracked, id, update));
-      },
-      onDone: () => tracked.deltas.remove(id),
+    if (tracked.deltas[id] case final running?) {
+      running.renew();
+      return;
+    }
+    late final _Lease lease;
+    lease = tracked.deltas[id] = _Lease(
+      (handler as DeltaProvider).watch().listen(
+        (update) {
+          if (!_hasReceiver || lease.expired) {
+            _stopWatch(tracked, id);
+            return;
+          }
+          _post(_deltaEvent, _delta(tracked, id, update));
+        },
+        onDone: () {
+          if (tracked.deltas.remove(id) != null) _watchMoved(tracked);
+        },
+      ),
     );
+    _watchMoved(tracked);
+  }
+
+  static void _stopWatch(_Tracked tracked, String handler) {
+    if (tracked.stopWatch(handler)) _watchMoved(tracked);
+  }
+
+  // `watched` is part of the handler summary.
+  static void _watchMoved(_Tracked tracked) {
+    if (!_hasReceiver) return;
+    tracked.handlers = true;
+    _schedule();
   }
 
   static Map<String, Object?> _delta(
@@ -702,7 +734,8 @@ abstract final class DevToolsBridge {
     final open = doc._registry.publicView;
     final deleted = doc._deletions._deletedIds;
     final snapshot = doc._lastSnapshot;
-    final manifest = _HandlerRegistry.manifestOf(snapshot);
+    final manifest =
+        _orNull(() => _HandlerRegistry.manifestOf(snapshot)) ?? const {};
     final closed = <String>{
       ...SnapshotRecords.handlerIdsOf(snapshot),
       ...doc._log.handlerIds,
@@ -778,7 +811,7 @@ abstract final class DevToolsBridge {
 final class _Tracked {
   _Tracked(this.id, CRDTDocument document)
       : document = WeakReference<CRDTDocument>(document),
-        deltas = <String, StreamSubscription<Object?>>{};
+        deltas = <String, _Lease>{};
 
   final int id;
 
@@ -796,11 +829,11 @@ final class _Tracked {
 
   bool closed = false;
 
-  StreamSubscription<CRDTDocumentEvent>? events;
+  _Lease? events;
 
   int eventCount = 0;
 
-  final Map<String, StreamSubscription<Object?>> deltas;
+  final Map<String, _Lease> deltas;
 
   HistorySession? history;
 
@@ -821,8 +854,8 @@ final class _Tracked {
     closed = true;
     clearDirty();
     stopEvents();
-    for (final subscription in deltas.values) {
-      unawaited(subscription.cancel());
+    for (final lease in deltas.values) {
+      lease.cancel();
     }
     deltas.clear();
     closeHistory();
@@ -830,13 +863,14 @@ final class _Tracked {
   }
 
   void stopEvents() {
-    unawaited(events?.cancel());
+    events?.cancel();
     events = null;
   }
 
-  void stopWatch(String handler) {
-    final subscription = deltas.remove(handler);
-    if (subscription != null) unawaited(subscription.cancel());
+  bool stopWatch(String handler) {
+    final lease = deltas.remove(handler);
+    lease?.cancel();
+    return lease != null;
   }
 
   void closeHistory() {
@@ -844,6 +878,22 @@ final class _Tracked {
     history = null;
     historyId = null;
   }
+}
+
+// DevTools can close without a stop call, and an IDE listening to the VM
+// keeps `_hasReceiver` true: a lease the tool must renew ends the work.
+final class _Lease {
+  _Lease(this._subscription) : _since = Stopwatch()..start();
+
+  final StreamSubscription<Object?> _subscription;
+
+  final Stopwatch _since;
+
+  bool get expired => _since.elapsed >= DevToolsBridge.lease;
+
+  void renew() => _since.reset();
+
+  void cancel() => unawaited(_subscription.cancel());
 }
 
 final class _ChangePages {

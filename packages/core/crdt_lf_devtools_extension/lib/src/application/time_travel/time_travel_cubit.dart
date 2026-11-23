@@ -96,6 +96,7 @@ class TimeTravelCubit extends Cubit<TimeTravelState> {
       await _mirror.sync(
         onProgress: state.session == null ? _onProgress : null,
       );
+      if (isClosed) return;
       final info = await _client.historyOpen(doc);
       if (isClosed) return await _closeSession(info.session);
       var frozen = _seenBy(info.versionVector);

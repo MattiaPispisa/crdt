@@ -88,6 +88,11 @@ void main() {
     await settle(tester);
     expect(find.text(EventsTab.empty), findsOneWidget);
 
+    // Stopping cancels the lease renewal timer, which `testWidgets` checks.
+    await tester.tap(find.text('Record'));
+    await settle(tester);
+    expect(events.state.recording, isFalse);
+
     await tester.pumpWidget(const SizedBox());
     doc.dispose();
     await settle(tester);

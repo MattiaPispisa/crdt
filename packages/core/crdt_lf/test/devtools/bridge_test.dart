@@ -16,6 +16,7 @@ import '../helpers/pn_counter_handler.dart';
 void main() {
   group('DevToolsBridge', () {
     late List<(String, Map<String, Object?>)> events;
+    final lease = DevToolsBridge.lease;
 
     setUp(() {
       DevToolsBridge.reset();
@@ -25,6 +26,7 @@ void main() {
 
     tearDown(() {
       DevToolsBridge.onEvent = null;
+      DevToolsBridge.lease = lease;
       DevToolsBridge.reset();
     });
 
@@ -302,6 +304,23 @@ void main() {
         {'id': 'text', 'type': text.handlerType, 'changeCount': 0},
         {'id': 'root', 'type': 'CRDTMapRefHandler', 'changeCount': 0},
       ]);
+
+      final snapshot = source.snapshot!;
+      final broken = CRDTDocument()
+        ..importSnapshot(
+          Snapshot(
+            id: snapshot.id,
+            versionVector: snapshot.versionVector,
+            data: {
+              ...snapshot.data,
+              'crdt_lf/handler-manifest': Uint8List.fromList([0xFF]),
+            },
+          ),
+        );
+      expect(handlers(broken)['closed'], [
+        {'id': 'text', 'type': null, 'changeCount': 0},
+        {'id': 'root', 'type': null, 'changeCount': 0},
+      ]);
     });
 
     test('the cache is none before a read and warm after', () {
@@ -500,6 +519,40 @@ void main() {
         'changes': <String>[],
       });
     });
+
+    test(
+      'a prune releases the changes of a paging in progress',
+      () async {
+        final doc = CRDTDocument();
+        // A function, so no local of the test holds the change.
+        WeakReference<Change> pageAndPrune() {
+          final text = CRDTTextHandler(doc, 'text')
+            ..insert(0, 'a')
+            ..insert(0, 'b');
+          final first = DevToolsBridge.call(
+            'changes',
+            {'doc': '${trackedId(doc)}', 'limit': '1'},
+          );
+          expect(first['done'], isFalse);
+          final pruned = WeakReference(doc.exportChanges().first);
+          doc.takeSnapshot();
+          expect(text.value, 'ba');
+          return pruned;
+        }
+
+        final pruned = pageAndPrune();
+        final stop = DateTime.now().add(const Duration(seconds: 20));
+        final garbage = <List<Object>>[];
+        while (pruned.target != null) {
+          if (DateTime.now().isAfter(stop)) fail('The change stays alive');
+          garbage.add(List<Object>.generate(30000, (_) => Object()));
+          if (garbage.length > 50) garbage.removeAt(0);
+          await Future<void>.delayed(Duration.zero);
+        }
+        doc.dispose();
+      },
+      testOn: 'vm',
+    );
 
     test('changes and operation check their parameters', () {
       final doc = CRDTDocument();
@@ -879,11 +932,38 @@ void main() {
       expect(deltas[1]['delta'], hasLength(1999));
       expect(openHandler(doc, 'text')['watched'], isTrue);
 
+      events.clear();
       expect(DevToolsBridge.call('watchStop', params), {'watching': false});
       text.insert(0, 'c');
       await pumpEventQueue();
-      expect(posted('crdt_lf:devtools:delta'), hasLength(2));
+      expect(posted('crdt_lf:devtools:delta'), isEmpty);
       expect(openHandler(doc, 'text')['watched'], isFalse);
+    });
+
+    test('a watch start or stop posts a handlers move', () async {
+      final doc = CRDTDocument();
+      CRDTTextHandler(doc, 'text');
+      final id = trackedId(doc);
+      final params = {'doc': '$id', 'handler': 'text'};
+      await pumpEventQueue();
+
+      for (final method in ['watchStart', 'watchStop']) {
+        events.clear();
+        DevToolsBridge.call(method, params);
+        await pumpEventQueue();
+        expect(
+          posted('crdt_lf:devtools:document'),
+          [
+            {
+              'id': id,
+              'changes': false,
+              'handlers': true,
+              'snapshot': false,
+              'pruned': false,
+            },
+          ],
+        );
+      }
     });
 
     test('watch checks the handler', () {
@@ -921,6 +1001,46 @@ void main() {
       final listened = developer.extensionStreamHasListener;
       expect(documents().single['recording'], listened);
       expect(openHandler(doc, 'text')['watched'], listened);
+    });
+
+    test('the event log and a watch stop when their lease runs out', () async {
+      final doc = CRDTDocument();
+      final text = CRDTTextHandler(doc, 'text')..insert(0, 'a');
+      expect(text.value, 'a');
+      final id = trackedId(doc);
+      DevToolsBridge.lease = Duration.zero;
+      DevToolsBridge.call('eventsStart', {'doc': '$id'});
+      DevToolsBridge.call('watchStart', {'doc': '$id', 'handler': 'text'});
+      await pumpEventQueue();
+
+      events.clear();
+      text.insert(1, 'b');
+      await pumpEventQueue();
+      expect(posted('crdt_lf:devtools:event'), isEmpty);
+      expect(posted('crdt_lf:devtools:delta'), isEmpty);
+      expect(documents().single['recording'], isFalse);
+      expect(openHandler(doc, 'text')['watched'], isFalse);
+    });
+
+    test('a second start renews the lease', () async {
+      final doc = CRDTDocument();
+      final text = CRDTTextHandler(doc, 'text')..insert(0, 'a');
+      expect(text.value, 'a');
+      final params = {'doc': '${trackedId(doc)}', 'handler': 'text'};
+      DevToolsBridge.lease = const Duration(seconds: 2);
+      // Two waits of 1.2 s: the lease holds only if the second start
+      // renewed it.
+      for (var i = 0; i < 2; i++) {
+        DevToolsBridge.call('eventsStart', params);
+        DevToolsBridge.call('watchStart', params);
+        await Future<void>.delayed(const Duration(milliseconds: 1200));
+      }
+
+      events.clear();
+      text.insert(1, 'b');
+      await pumpEventQueue();
+      expect(posted('crdt_lf:devtools:event'), hasLength(1));
+      expect(posted('crdt_lf:devtools:delta'), hasLength(1));
     });
   });
 }

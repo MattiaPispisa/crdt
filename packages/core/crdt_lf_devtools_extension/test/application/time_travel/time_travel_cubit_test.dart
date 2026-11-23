@@ -1,6 +1,8 @@
 // Copyright 2025 Mattia Pispisa
 // SPDX-License-Identifier: MIT
 
+import 'dart:async';
+
 import 'package:crdt_lf/crdt_lf.dart';
 // The bridge is hidden from the public barrel on purpose.
 // ignore: implementation_imports
@@ -10,7 +12,29 @@ import 'package:crdt_lf_devtools_extension/src/application/time_travel/time_trav
 import 'package:crdt_lf_devtools_extension/src/bridge/crdt_lf_bridge.dart';
 import 'package:crdt_lf_devtools_extension/src/bridge/crdt_lf_client.dart';
 import 'package:crdt_lf_devtools_extension/src/bridge/in_process_bridge.dart';
+import 'package:crdt_lf_devtools_extension/src/bridge/models/json.dart';
 import 'package:flutter_test/flutter_test.dart';
+
+// Holds the first `changes` call until [release] completes.
+class _HeldBridge extends InProcessBridge {
+  _HeldBridge(this.release);
+
+  final Future<void> release;
+
+  bool _held = false;
+
+  @override
+  Future<Json> call(
+    String method, [
+    Map<String, String> params = const {},
+  ]) async {
+    if (method == 'changes' && !_held) {
+      _held = true;
+      await release;
+    }
+    return super.call(method, params);
+  }
+}
 
 void main() {
   late InProcessBridge bridge;
@@ -110,6 +134,35 @@ void main() {
     expect(cubit.state.cursor, 2);
     expect(cubit.state.handler, 'text');
     expect(cubit.state.value!.value, 'ab');
+  });
+
+  test('a cubit closed during its first sync opens no session', () async {
+    final doc = CRDTDocument(documentId: 'd');
+    CRDTTextHandler(doc, 'text').insert(0, 'a');
+    final release = Completer<void>();
+    final held = _HeldBridge(release.future);
+    addTearDown(held.dispose);
+    final heldClient = CrdtLfClient(held);
+    final id = (await heldClient.documents()).single.id;
+    final stale = TimeTravelCubit(heldClient, id);
+    await settle();
+    await stale.close();
+
+    final fresh = TimeTravelCubit(
+      heldClient,
+      id,
+      delay: Duration.zero,
+      valueDelay: Duration.zero,
+    );
+    addTearDown(fresh.close);
+    await settle();
+    release.complete();
+    await settle();
+
+    fresh.select('text');
+    await settle();
+    expect(fresh.state.valueStatus, LoadStatus.loaded);
+    expect(fresh.state.value!.value, 'a');
   });
 
   test('closes its session when closed', () async {

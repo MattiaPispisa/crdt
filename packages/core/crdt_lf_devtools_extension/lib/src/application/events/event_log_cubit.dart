@@ -16,9 +16,15 @@ part 'event_log_state.dart';
 /// the app.
 class EventLogCubit extends Cubit<EventLogState> {
   /// Set [recording] when the app already records [doc]: the cubit stops
-  /// it, so recording starts off.
-  EventLogCubit(this._client, this.doc, {bool recording = false})
-    : super(const EventLogState()) {
+  /// it, so recording starts off. While recording, the cubit renews the
+  /// lease of the log in the app every [renewEvery].
+  EventLogCubit(
+    this._client,
+    this.doc, {
+    bool recording = false,
+    Duration renewEvery = const Duration(seconds: 10),
+  }) : _renewEvery = renewEvery,
+       super(const EventLogState()) {
     _events = _client.events.listen(_onEvent);
     if (recording) unawaited(_stop());
   }
@@ -32,6 +38,10 @@ class EventLogCubit extends Cubit<EventLogState> {
   final int doc;
 
   late final StreamSubscription<CrdtLfEvent> _events;
+
+  final Duration _renewEvery;
+
+  Timer? _renewal;
 
   // Set before the call: the app posts events before its answer arrives.
   bool _wanted = false;
@@ -54,6 +64,7 @@ class EventLogCubit extends Cubit<EventLogState> {
               ? await _client.eventsStart(doc)
               : await _client.eventsStop(doc);
       if (isClosed) return;
+      _renewWhile(on: on);
       emit(state._copyWith(recording: on, error: () => null));
     } on Object catch (e) {
       if (isClosed) return;
@@ -72,6 +83,20 @@ class EventLogCubit extends Cubit<EventLogState> {
     emit(state._copyWith(selectedN: () => n));
   }
 
+  void _renewWhile({required bool on}) {
+    _renewal?.cancel();
+    _renewal =
+        on ? Timer.periodic(_renewEvery, (_) => unawaited(_renew())) : null;
+  }
+
+  Future<void> _renew() async {
+    try {
+      await _client.eventsStart(doc);
+    } on Object {
+      // The next tick tries again.
+    }
+  }
+
   Future<void> _stop() async {
     try {
       await _client.eventsStop(doc);
@@ -82,6 +107,7 @@ class EventLogCubit extends Cubit<EventLogState> {
 
   @override
   Future<void> close() async {
+    _renewal?.cancel();
     if (_wanted) unawaited(_stop());
     await _events.cancel();
     return super.close();
