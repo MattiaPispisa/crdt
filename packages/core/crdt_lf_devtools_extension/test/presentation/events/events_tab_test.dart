@@ -7,6 +7,7 @@ import 'package:crdt_lf/crdt_lf.dart';
 import 'package:crdt_lf/src/document/document.dart' show DevToolsBridge;
 import 'package:crdt_lf_devtools_extension/src/application/documents/documents_cubit.dart';
 import 'package:crdt_lf_devtools_extension/src/application/events/event_log_cubit.dart';
+import 'package:crdt_lf_devtools_extension/src/bridge/change_mirror.dart';
 import 'package:crdt_lf_devtools_extension/src/bridge/crdt_lf_client.dart';
 import 'package:crdt_lf_devtools_extension/src/bridge/in_process_bridge.dart';
 import 'package:crdt_lf_devtools_extension/src/presentation/changes/change_detail.dart';
@@ -58,7 +59,12 @@ void main() {
             child: Row(
               children: [
                 Expanded(child: EventsTab(onChange: link.open)),
-                Expanded(child: ChangesTab(doc: id, link: link)),
+                Expanded(
+                  child: ChangesTab(
+                    mirror: ChangeMirror(client, id),
+                    link: link,
+                  ),
+                ),
               ],
             ),
           ),

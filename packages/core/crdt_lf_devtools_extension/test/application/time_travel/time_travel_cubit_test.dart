@@ -9,6 +9,7 @@ import 'package:crdt_lf/crdt_lf.dart';
 import 'package:crdt_lf/src/document/document.dart' show DevToolsBridge;
 import 'package:crdt_lf_devtools_extension/src/application/load_status.dart';
 import 'package:crdt_lf_devtools_extension/src/application/time_travel/time_travel_cubit.dart';
+import 'package:crdt_lf_devtools_extension/src/bridge/change_mirror.dart';
 import 'package:crdt_lf_devtools_extension/src/bridge/crdt_lf_bridge.dart';
 import 'package:crdt_lf_devtools_extension/src/bridge/crdt_lf_client.dart';
 import 'package:crdt_lf_devtools_extension/src/bridge/in_process_bridge.dart';
@@ -61,8 +62,7 @@ void main() {
             .firstWhere((d) => d.documentId == doc.documentId)
             .id;
     final cubit = TimeTravelCubit(
-      client,
-      id,
+      ChangeMirror(client, id),
       delay: Duration.zero,
       valueDelay: Duration.zero,
     );
@@ -136,6 +136,28 @@ void main() {
     expect(cubit.state.value!.value, 'ab');
   });
 
+  test('counts an older remote change as new', () async {
+    final remote = CRDTDocument(
+      peerId: PeerId.parse('00000000-0000-4000-8000-000000000000'),
+    );
+    CRDTTextHandler(remote, 'remote').insert(0, 'r');
+    final doc = CRDTDocument(
+      documentId: 'd',
+      peerId: PeerId.parse('ffffffff-ffff-4fff-bfff-ffffffffffff'),
+    );
+    final text = CRDTTextHandler(doc, 'text')..insert(0, 'a');
+    final (_, cubit) = await open(doc);
+
+    // Sorts before the session's change, so it lands inside the mirror.
+    doc.importChanges(remote.exportChanges());
+    await settle();
+    expect(cubit.state.newChanges, 1);
+
+    text.insert(1, 'b');
+    await settle();
+    expect(cubit.state.newChanges, 2);
+  });
+
   test('a cubit closed during its first sync opens no session', () async {
     final doc = CRDTDocument(documentId: 'd');
     CRDTTextHandler(doc, 'text').insert(0, 'a');
@@ -144,13 +166,12 @@ void main() {
     addTearDown(held.dispose);
     final heldClient = CrdtLfClient(held);
     final id = (await heldClient.documents()).single.id;
-    final stale = TimeTravelCubit(heldClient, id);
+    final stale = TimeTravelCubit(ChangeMirror(heldClient, id));
     await settle();
     await stale.close();
 
     final fresh = TimeTravelCubit(
-      heldClient,
-      id,
+      ChangeMirror(heldClient, id),
       delay: Duration.zero,
       valueDelay: Duration.zero,
     );
@@ -186,8 +207,7 @@ void main() {
     CRDTTextHandler(doc, 'text').insert(0, 'a');
     final id = (await client.documents()).single.id;
     final cubit = TimeTravelCubit(
-      client,
-      id,
+      ChangeMirror(client, id),
       delay: Duration.zero,
       valueDelay: Duration.zero,
       renewEvery: const Duration(milliseconds: 50),
@@ -211,7 +231,7 @@ void main() {
       text.insert(0, 'x');
     }
     final id = (await client.documents()).single.id;
-    final cubit = TimeTravelCubit(client, id);
+    final cubit = TimeTravelCubit(ChangeMirror(client, id));
     addTearDown(cubit.close);
     final progress = <LoadProgress?>[];
     await for (final state in cubit.stream) {

@@ -66,4 +66,27 @@ void main() {
     cubit.select(-1);
     expect(cubit.state.selectedId, id);
   });
+
+  test('a change of another document waits for its selection', () async {
+    final a = CRDTDocument(documentId: 'a');
+    final b = CRDTDocument(documentId: 'b');
+    await settle();
+    final [first, second] = cubit.state.documents;
+    cubit.select(second.id);
+    await settle();
+
+    final text = CRDTTextHandler(a, 'text')..insert(0, 'x');
+    await settle();
+    expect(cubit.state.documents.first.changeCount, 0);
+
+    cubit.select(first.id);
+    await settle();
+    expect(cubit.state.selected?.changeCount, 1);
+    // The selected document moves: the summary of the other one stays.
+    CRDTTextHandler(b, 'text').insert(0, 'y');
+    text.insert(1, 'z');
+    await settle();
+    expect(cubit.state.selected?.changeCount, 2);
+    expect(cubit.state.documents.last.changeCount, 0);
+  });
 }

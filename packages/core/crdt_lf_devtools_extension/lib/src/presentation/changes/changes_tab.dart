@@ -5,7 +5,7 @@ import 'dart:async';
 
 import 'package:crdt_lf_devtools_extension/src/application/changes/change_log_cubit.dart';
 import 'package:crdt_lf_devtools_extension/src/application/documents/documents_cubit.dart';
-import 'package:crdt_lf_devtools_extension/src/bridge/crdt_lf_client.dart';
+import 'package:crdt_lf_devtools_extension/src/bridge/change_mirror.dart';
 import 'package:crdt_lf_devtools_extension/src/presentation/changes/change_detail.dart';
 import 'package:crdt_lf_devtools_extension/src/presentation/changes/change_log_list.dart';
 import 'package:crdt_lf_devtools_extension/src/presentation/widgets/change_link.dart';
@@ -13,12 +13,12 @@ import 'package:devtools_app_shared/ui.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
-/// The changes of the document [doc], and the detail of the selected one.
+/// The changes of the document of [mirror], and the detail of the selected
+/// one.
 class ChangesTab extends StatefulWidget {
-  const ChangesTab({required this.doc, this.link, super.key});
+  const ChangesTab({required this.mirror, this.link, super.key});
 
-  /// The tracked id of the document.
-  final int doc;
+  final ChangeMirror mirror;
 
   /// Selects the change it asks for; `null` for none.
   final ChangeLink? link;
@@ -33,11 +33,7 @@ class _ChangesTabState extends State<ChangesTab> {
   @override
   void initState() {
     super.initState();
-    _log = ChangeLogCubit(
-      context.read<CrdtLfClient>(),
-      widget.doc,
-      selected: widget.link?.take(),
-    );
+    _log = ChangeLogCubit(widget.mirror, selected: widget.link?.take());
     widget.link?.addListener(_onLink);
   }
 

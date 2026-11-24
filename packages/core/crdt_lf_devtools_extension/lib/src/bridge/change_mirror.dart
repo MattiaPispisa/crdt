@@ -71,18 +71,34 @@ class MirrorEntry extends Equatable {
   List<Object?> get props => [change.id, handlerId, handlerType, kind, stamped];
 }
 
+/// Where a reader of a [ChangeMirror] stopped; see [ChangeMirror.read].
+class MirrorMark {
+  const MirrorMark._(this._generation, this._length);
+
+  final int _generation;
+
+  final int _length;
+}
+
+/// What [ChangeMirror.read] returns.
+///
+/// `reset` is `true` when `entries` holds every entry of the mirror, and
+/// `false` when it holds only the entries added after the read mark.
+typedef MirrorRead = ({List<MirrorEntry> entries, bool reset, MirrorMark mark});
+
 /// A local copy of the changes of the document [doc], in replay order.
 ///
 /// It loads only what it misses, and loads again from scratch after a
 /// prune.
 class ChangeMirror {
-  ChangeMirror(this._client, this.doc, {this.pageSize = 1000})
+  ChangeMirror(this.client, this.doc, {this.pageSize = 1000})
     : _entries = <MirrorEntry>[],
       _ids = <OperationId>{},
       _latest = VersionVector({});
 
-  final CrdtLfClient _client;
+  final CrdtLfClient client;
 
+  /// The tracked id of the document.
   final int doc;
 
   final int pageSize;
@@ -97,9 +113,24 @@ class ChangeMirror {
 
   int _changeCount = 0;
 
+  int _generation = 0;
+
   Future<void> _queue = Future.value();
 
   List<MirrorEntry> get entries => List.unmodifiable(_entries);
+
+  /// The entries added after [mark], and the mark to read from next.
+  ///
+  /// With no [mark], after a prune, or when an entry landed before the
+  /// entries read at [mark], the read is a reset.
+  MirrorRead read([MirrorMark? mark]) {
+    final reset = mark == null || mark._generation != _generation;
+    return (
+      entries: reset ? entries : _entries.sublist(mark._length),
+      reset: reset,
+      mark: MirrorMark._(_generation, _entries.length),
+    );
+  }
 
   int get length => _entries.length;
 
@@ -122,7 +153,7 @@ class ChangeMirror {
 
   Future<void> _sync(void Function(int loaded, int total)? onProgress) async {
     while (true) {
-      final page = await _client.changes(doc, since: _latest, limit: pageSize);
+      final page = await client.changes(doc, since: _latest, limit: pageSize);
       if (_pruneEpoch != null && page.pruneEpoch != _pruneEpoch) {
         _clear();
         _pruneEpoch = page.pruneEpoch;
@@ -147,6 +178,7 @@ class ChangeMirror {
       _entries.add(entry);
       return;
     }
+    _generation++;
     var low = 0;
     var high = _entries.length;
     while (low < high) {
@@ -161,6 +193,7 @@ class ChangeMirror {
   }
 
   void _clear() {
+    _generation++;
     _entries.clear();
     _ids.clear();
     _latest = VersionVector({});

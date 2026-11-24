@@ -50,45 +50,12 @@ class ChangeFilter extends Equatable {
 /// The changes of one sync, with the lookups the tab needs.
 class ChangeIndex {
   /// Indexes [entries], given in replay order.
-  factory ChangeIndex(List<MirrorEntry> entries) {
-    final byId = <OperationId, MirrorEntry>{};
-    final dependents = <OperationId, List<OperationId>>{};
-    final authors = <String>{};
-    final handlers = <String>{};
-    final kinds = <int>{};
-    for (final entry in entries) {
-      final change = entry.change;
-      byId[change.id] = entry;
-      for (final dep in entry.deps) {
-        (dependents[dep] ??= []).add(change.id);
-      }
-      authors.add(change.author.toString());
-      if (entry.handlerId case final id?) handlers.add(id);
-      if (entry.kind case final kind?) kinds.add(kind);
-    }
-    final graph = LaneGraph([
-      for (final entry in entries)
-        (
-          author: entry.change.author.toString(),
-          depAuthors: [for (final d in entry.deps) d.peerId.toString()],
-        ),
-    ]);
-    return ChangeIndex._(
-      entries,
-      graph,
-      byId,
-      dependents,
-      authors.toList()..sort(),
-      handlers.toList()..sort(),
-      kinds.toList()..sort(),
-    );
-  }
+  factory ChangeIndex(List<MirrorEntry> entries) => empty.extend(entries);
 
   const ChangeIndex._(
-    this.entries,
+    this._tables,
+    this._length,
     this.graph,
-    this.byId,
-    this._dependents,
     this.authors,
     this.handlers,
     this.kinds,
@@ -96,24 +63,21 @@ class ChangeIndex {
 
   /// The index of no change.
   static const ChangeIndex empty = ChangeIndex._(
-    [],
+    null,
+    0,
     LaneGraph.empty,
-    {},
-    {},
     [],
     [],
     [],
   );
 
-  /// The changes, in replay order.
-  final List<MirrorEntry> entries;
+  // Shared with the indexes extended from this one, which only append.
+  final _IndexTables? _tables;
+
+  final int _length;
 
   /// The lane graph of [entries], one row each.
   final LaneGraph graph;
-
-  final Map<OperationId, MirrorEntry> byId;
-
-  final Map<OperationId, List<OperationId>> _dependents;
 
   /// The distinct authors, sorted.
   final List<String> authors;
@@ -124,8 +88,102 @@ class ChangeIndex {
   /// The distinct operation kinds, sorted.
   final List<int> kinds;
 
-  /// The loaded changes that list [id] as a dependency.
-  List<OperationId> dependentsOf(OperationId id) => _dependents[id] ?? const [];
+  /// The changes, in replay order.
+  List<MirrorEntry> get entries => switch (_tables) {
+    null => const [],
+    final tables => PrefixView(tables.entries, _length),
+  };
+
+  /// Whether this index holds the entries of [other] first, in its order.
+  bool startsWith(ChangeIndex other) =>
+      other._tables == null ||
+      (identical(_tables, other._tables) && other._length <= _length);
+
+  /// This index with [added] after its entries, in replay order; this index
+  /// stays as it is.
+  ChangeIndex extend(List<MirrorEntry> added) {
+    final tables = _tables;
+    if (tables != null && tables.entries.length != _length) {
+      return empty.extend([...entries, ...added]);
+    }
+    final next = tables ?? _IndexTables();
+    final grown = next.addAll(added);
+    return ChangeIndex._(
+      next,
+      next.entries.length,
+      graph.extend([
+        for (final entry in added)
+          (
+            author: entry.change.author.toString(),
+            depAuthors: [for (final d in entry.deps) d.peerId.toString()],
+          ),
+      ]),
+      grown.authors ? next.sorted(next.authors) : authors,
+      grown.handlers ? next.sorted(next.handlers) : handlers,
+      grown.kinds ? next.sorted(next.kinds) : kinds,
+    );
+  }
+
+  /// The change [id]; `null` when this index does not hold it.
+  MirrorEntry? entryOf(OperationId id) {
+    final at = _tables?.positions[id];
+    return at == null || at >= _length ? null : _tables!.entries[at];
+  }
+
+  /// The changes of this index that list [id] as a dependency.
+  List<OperationId> dependentsOf(OperationId id) {
+    final tables = _tables;
+    final dependents = tables?.dependents[id];
+    if (tables == null || dependents == null) return const [];
+    return [
+      for (final dependent in dependents)
+        if (tables.positions[dependent]! < _length) dependent,
+    ];
+  }
+}
+
+class _IndexTables {
+  _IndexTables()
+    : entries = <MirrorEntry>[],
+      positions = <OperationId, int>{},
+      dependents = <OperationId, List<OperationId>>{},
+      authors = <String>{},
+      handlers = <String>{},
+      kinds = <int>{};
+
+  final List<MirrorEntry> entries;
+
+  final Map<OperationId, int> positions;
+
+  final Map<OperationId, List<OperationId>> dependents;
+
+  final Set<String> authors;
+
+  final Set<String> handlers;
+
+  final Set<int> kinds;
+
+  /// Adds [added], and tells which of the sets got a new value.
+  ({bool authors, bool handlers, bool kinds}) addAll(List<MirrorEntry> added) {
+    var authors = false;
+    var handlers = false;
+    var kinds = false;
+    for (final entry in added) {
+      final change = entry.change;
+      positions[change.id] = entries.length;
+      entries.add(entry);
+      for (final dep in entry.deps) {
+        (dependents[dep] ??= []).add(change.id);
+      }
+      authors |= this.authors.add(change.author.toString());
+      if (entry.handlerId case final id?) handlers |= this.handlers.add(id);
+      if (entry.kind case final kind?) kinds |= this.kinds.add(kind);
+    }
+    return (authors: authors, handlers: handlers, kinds: kinds);
+  }
+
+  List<T> sorted<T extends Comparable<Object>>(Set<T> values) =>
+      List.unmodifiable(values.toList()..sort());
 }
 
 /// The change list of a document, its filters and the selected change.
@@ -178,7 +236,8 @@ class ChangeLogState {
   final String? error;
 
   /// The selected change; `null` when there is none or a prune dropped it.
-  MirrorEntry? get selected => index.byId[selectedId];
+  MirrorEntry? get selected =>
+      selectedId == null ? null : index.entryOf(selectedId!);
 
   ChangeLogState _copyWith({
     LoadStatus? status,

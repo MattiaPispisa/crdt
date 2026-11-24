@@ -102,7 +102,7 @@ void main() {
     final id = (await client.documents()).single.id;
     await client.eventsStart(id);
 
-    final stale = EventLogCubit(client, id, recording: true);
+    final stale = EventLogCubit(client, id);
     await pumpEventQueue();
     expect(await recording(), isFalse);
     await stale.close();

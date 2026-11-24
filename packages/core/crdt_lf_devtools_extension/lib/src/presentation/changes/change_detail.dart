@@ -221,7 +221,7 @@ class _Links extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         for (final id in ids)
-          if (state.index.byId.containsKey(id))
+          if (state.index.entryOf(id) != null)
             InkWell(
               onTap: () => cubit.select(id),
               child: Text(

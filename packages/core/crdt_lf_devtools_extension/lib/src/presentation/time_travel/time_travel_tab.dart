@@ -6,7 +6,7 @@ import 'dart:async';
 import 'package:crdt_lf_devtools_extension/src/application/documents/documents_cubit.dart';
 import 'package:crdt_lf_devtools_extension/src/application/load_status.dart';
 import 'package:crdt_lf_devtools_extension/src/application/time_travel/time_travel_cubit.dart';
-import 'package:crdt_lf_devtools_extension/src/bridge/crdt_lf_client.dart';
+import 'package:crdt_lf_devtools_extension/src/bridge/change_mirror.dart';
 import 'package:crdt_lf_devtools_extension/src/presentation/changes/change_row.dart';
 import 'package:crdt_lf_devtools_extension/src/presentation/widgets/handler_icon.dart';
 import 'package:crdt_lf_devtools_extension/src/presentation/widgets/handler_names.dart';
@@ -17,15 +17,14 @@ import 'package:devtools_app_shared/ui.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
-/// A time travel session over the document [doc]: a cursor over its
+/// A time travel session over the document of [mirror]: a cursor over its
 /// changes, and the value of the selected handler at the cursor.
 ///
 /// The session is open while the tab is shown.
 class TimeTravelTab extends StatefulWidget {
-  const TimeTravelTab({required this.doc, super.key});
+  const TimeTravelTab({required this.mirror, super.key});
 
-  /// The tracked id of the document.
-  final int doc;
+  final ChangeMirror mirror;
 
   /// The text shown at cursor 0.
   static const String start = 'No change applied.';
@@ -46,7 +45,7 @@ class _TimeTravelTabState extends State<TimeTravelTab> {
   @override
   void initState() {
     super.initState();
-    _travel = TimeTravelCubit(context.read<CrdtLfClient>(), widget.doc);
+    _travel = TimeTravelCubit(widget.mirror);
   }
 
   @override

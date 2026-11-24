@@ -12,7 +12,7 @@ import 'package:crdt_lf_devtools_extension/src/bridge/reload_gate.dart';
 
 part 'time_travel_state.dart';
 
-/// A time travel session over the document [doc].
+/// A time travel session over the document of a [ChangeMirror].
 ///
 /// It opens the session when created and closes it when closed. The
 /// session stays frozen: [TimeTravelState.newChanges] counts the changes
@@ -21,13 +21,11 @@ class TimeTravelCubit extends Cubit<TimeTravelState> {
   /// While a session is open, the cubit renews its lease in the app every
   /// [renewEvery].
   TimeTravelCubit(
-    this._client,
-    this.doc, {
+    this._mirror, {
     Duration delay = const Duration(milliseconds: 100),
     Duration valueDelay = const Duration(milliseconds: 50),
     Duration renewEvery = const Duration(seconds: 10),
-  }) : _mirror = ChangeMirror(_client, doc),
-       _renewEvery = renewEvery,
+  }) : _renewEvery = renewEvery,
        super(const TimeTravelState()) {
     _openGate = ReloadGate(_open, delay: Duration.zero);
     _liveGate = ReloadGate(_syncLive, delay: delay);
@@ -36,12 +34,12 @@ class TimeTravelCubit extends Cubit<TimeTravelState> {
     unawaited(reopen());
   }
 
-  final CrdtLfClient _client;
+  final ChangeMirror _mirror;
+
+  CrdtLfClient get _client => _mirror.client;
 
   /// The tracked id of the document.
-  final int doc;
-
-  final ChangeMirror _mirror;
+  int get doc => _mirror.doc;
 
   late final ReloadGate _openGate;
 
@@ -54,6 +52,11 @@ class TimeTravelCubit extends Cubit<TimeTravelState> {
   final Duration _renewEvery;
 
   Timer? _renewal;
+
+  // How many mirror entries the session holds, as of `_mark`.
+  int _seen = 0;
+
+  MirrorMark? _mark;
 
   void _onEvent(CrdtLfEvent event) {
     if (event case DocumentMoved(
@@ -107,13 +110,17 @@ class TimeTravelCubit extends Cubit<TimeTravelState> {
       if (isClosed) return;
       final info = await _client.historyOpen(doc);
       if (isClosed) return await _closeSession(info.session);
-      var frozen = _seenBy(info.versionVector);
+      var read = _mirror.read();
+      var frozen = _seenBy(read.entries, info.versionVector);
       // A change can land between the sync and the open.
       if (frozen.length != info.length) {
         await _mirror.sync();
         if (isClosed) return await _closeSession(info.session);
-        frozen = _seenBy(info.versionVector);
+        read = _mirror.read();
+        frozen = _seenBy(read.entries, info.versionVector);
       }
+      _mark = read.mark;
+      _seen = frozen.length;
       final handler = state.handler;
       final kept = info.handlers.any((h) => h.id == handler);
       emit(
@@ -168,8 +175,12 @@ class TimeTravelCubit extends Cubit<TimeTravelState> {
       return;
     }
     if (isClosed || state.session != session) return;
-    final seen = _seenBy(session.versionVector).length;
-    emit(state._copyWith(newChanges: _mirror.length - seen));
+    final read = _mirror.read(_mark);
+    _mark = read.mark;
+    // A peer's changes arrive in causal order, so an entry added after the
+    // mark is newer than the session.
+    if (read.reset) _seen = _seenBy(read.entries, session.versionVector).length;
+    emit(state._copyWith(newChanges: _mirror.length - _seen));
   }
 
   Future<void> _loadValue() async {
@@ -208,13 +219,16 @@ class TimeTravelCubit extends Cubit<TimeTravelState> {
     }
   }
 
-  List<MirrorEntry> _seenBy(Map<String, String> versionVector) {
+  static List<MirrorEntry> _seenBy(
+    List<MirrorEntry> entries,
+    Map<String, String> versionVector,
+  ) {
     final clocks = {
       for (final MapEntry(:key, :value) in versionVector.entries)
         key: _parseClock(value),
     };
     return [
-      for (final entry in _mirror.entries)
+      for (final entry in entries)
         if (clocks[entry.change.author.toString()] case (
           final l,
           final c,

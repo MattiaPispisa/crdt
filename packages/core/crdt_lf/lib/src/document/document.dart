@@ -19,6 +19,7 @@ import 'package:crdt_lf/src/snapshot/blob_version.dart';
 import 'package:crdt_lf/src/snapshot/records.dart';
 import 'package:crdt_lf/src/snapshot/snapshot_state.dart';
 import 'package:crdt_lf/src/transaction/transaction_manager.dart';
+import 'package:crdt_lf/src/utils/binary_search.dart';
 import 'package:crdt_lf/src/utils/bytes.dart';
 import 'package:crdt_lf/src/utils/fnv1a.dart';
 import 'package:crdt_lf/src/utils/uuid.dart';

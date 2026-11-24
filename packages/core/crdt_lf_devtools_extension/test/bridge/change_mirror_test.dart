@@ -70,6 +70,9 @@ void main() {
     final text = CRDTTextHandler(doc, 'text')..insert(0, 'a');
     final mirror = await mirrorOf(doc);
     await mirror.sync();
+    final first = mirror.read();
+    expect(first.reset, isTrue);
+    expect(first.entries, hasLength(1));
     text.insert(1, 'b');
 
     final pages = <int>[];
@@ -77,6 +80,10 @@ void main() {
 
     expect(pages, [2]);
     expect(idsOf(mirror), sortedIds(doc));
+    final next = mirror.read(first.mark);
+    expect(next.reset, isFalse);
+    expect([for (final e in next.entries) e.change.id], [sortedIds(doc).last]);
+    expect(mirror.read(next.mark).entries, isEmpty);
   });
 
   test('a remote change that sorts earlier lands at its place', () async {
@@ -90,12 +97,16 @@ void main() {
     CRDTTextHandler(local, 'local').insert(0, 'l');
     final mirror = await mirrorOf(local);
     await mirror.sync();
+    final mark = mirror.read().mark;
 
     local.importChanges(remote.exportChanges());
     await mirror.sync();
 
     expect(idsOf(mirror), sortedIds(local));
     expect(mirror.entries.first.change.author, remote.peerId);
+    final read = mirror.read(mark);
+    expect(read.reset, isTrue);
+    expect(read.entries, hasLength(2));
   });
 
   test('a prune reloads the mirror', () async {
@@ -104,10 +115,12 @@ void main() {
     final mirror = await mirrorOf(doc);
     await mirror.sync();
     expect(mirror.pruneEpoch, 0);
+    final mark = mirror.read().mark;
 
     doc.takeSnapshot();
     text.insert(1, 'b');
     await mirror.sync();
+    expect(mirror.read(mark).reset, isTrue);
 
     expect(mirror.pruneEpoch, 1);
     expect(idsOf(mirror), sortedIds(doc));

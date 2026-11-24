@@ -1,0 +1,86 @@
+// Copyright 2025 Mattia Pispisa
+// SPDX-License-Identifier: MIT
+
+import 'package:benchmark_infrastructure/benchmark_infrastructure.dart';
+import 'package:bloc/bloc.dart';
+import 'package:crdt_lf/crdt_lf.dart';
+import 'package:crdt_lf_devtools_extension/src/application/changes/change_log_cubit.dart';
+import 'package:crdt_lf_devtools_extension/src/application/time_travel/time_travel_cubit.dart';
+import 'package:crdt_lf_devtools_extension/src/bridge/change_mirror.dart';
+import 'package:flutter_test/flutter_test.dart';
+
+import '../common/fixture.dart';
+
+/// One edit of a document of [size] changes, until [cubit] shows it.
+abstract class LiveSyncBenchmark<C extends BlocBase<Object?>>
+    extends AsyncFixedCycleTimedBenchmark {
+  LiveSyncBenchmark(String what, this.size)
+    : super(
+        '$what, one edit on $size changes',
+        measuredCycles: 50,
+        setupPerBatch: false,
+      );
+
+  final int size;
+
+  late CRDTDocument _doc;
+
+  late Extension _extension;
+
+  late C cubit;
+
+  C create(Extension extension, int id);
+
+  @override
+  Future<void> setup() async {
+    resetBridge();
+    _doc = mapDocument(size);
+    _extension = Extension();
+    final id = await _extension.idOf(_doc);
+    cubit = create(_extension, id);
+    await settle();
+  }
+
+  @override
+  Future<void> run() async {
+    final next = cubit.stream.first;
+    edit(_doc);
+    await next;
+  }
+
+  @override
+  Future<void> teardown() async {
+    await cubit.close();
+    _extension.dispose();
+    _doc.dispose();
+    resetBridge();
+  }
+}
+
+class ChangeLogSyncBenchmark extends LiveSyncBenchmark<ChangeLogCubit> {
+  ChangeLogSyncBenchmark(int size) : super('Change log', size);
+
+  @override
+  ChangeLogCubit create(Extension extension, int id) =>
+      ChangeLogCubit(ChangeMirror(extension.client, id), delay: Duration.zero);
+}
+
+class TimeTravelSyncBenchmark extends LiveSyncBenchmark<TimeTravelCubit> {
+  TimeTravelSyncBenchmark(int size) : super('Time travel', size);
+
+  @override
+  TimeTravelCubit create(Extension extension, int id) => TimeTravelCubit(
+    ChangeMirror(extension.client, id),
+    delay: Duration.zero,
+    valueDelay: Duration.zero,
+  );
+}
+
+void main() {
+  test('change log', () async {
+    for (final size in [10000, 50000]) {
+      await ChangeLogSyncBenchmark(size).report();
+      await TimeTravelSyncBenchmark(size).report();
+    }
+  }, timeout: const Timeout(Duration(minutes: 20)));
+}

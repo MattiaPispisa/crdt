@@ -52,6 +52,7 @@ void main() {
     expect(summary.undoManagers, 1);
     expect(summary.recording, isFalse);
 
+    expect(await client.summary(summary.id), summary);
     final detail = await client.document(summary.id);
     expect(detail.summary, summary);
     expect(detail.undo.single.tracked, ['text']);

@@ -46,9 +46,17 @@ void main() {
         ['kept', 'disposed'],
       );
 
+      final id = '${trackedId(disposed)}';
+      final one = DevToolsBridge.call('documents', {'doc': id});
+      expect(one['documents'], [documents().last]);
+
       disposed.dispose();
       expect(documents().map((d) => d['documentId']), ['kept']);
       expect(DevToolsBridge.call('documents', {})['protocol'], 1);
+      expect(
+        () => DevToolsBridge.call('documents', {'doc': id}),
+        throwsArgumentError,
+      );
       kept.dispose();
     });
 
@@ -475,6 +483,35 @@ void main() {
         if (page['done']! as bool) break;
       }
       expect(held, doc.exportChanges().sorted());
+    });
+
+    test('changes pages on while older remote changes arrive', () {
+      final remote = CRDTDocument(peerId: PeerId.generate());
+      final remoteText = CRDTTextHandler(remote, 'text');
+      for (var i = 0; i < 3; i++) {
+        remoteText.insert(i, 'r');
+      }
+      final doc = CRDTDocument(peerId: PeerId.generate());
+      final text = CRDTTextHandler(doc, 'text');
+      for (var i = 0; i < 5; i++) {
+        text.insert(i, 'x');
+      }
+      final id = '${trackedId(doc)}';
+
+      final held = decode(
+        DevToolsBridge.call('changes', {'doc': id, 'limit': '2'}),
+      );
+      // Older than the held changes: they sort before them.
+      doc.importChanges(remote.exportChanges());
+      while (true) {
+        final page = DevToolsBridge.call(
+          'changes',
+          {'doc': id, 'limit': '2', 'since': sinceOf(held)},
+        );
+        held.addAll(decode(page));
+        if (page['done']! as bool) break;
+      }
+      expect(held..sort(compareChangeOrder), doc.exportChanges().sorted());
     });
 
     test('changes come in the replay order of two peers', () {

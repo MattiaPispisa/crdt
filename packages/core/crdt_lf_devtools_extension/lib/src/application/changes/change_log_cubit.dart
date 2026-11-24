@@ -5,6 +5,7 @@ import 'dart:async';
 
 import 'package:bloc/bloc.dart';
 import 'package:crdt_lf/crdt_lf.dart';
+import 'package:crdt_lf_devtools_extension/src/application/changes/list_views.dart';
 import 'package:crdt_lf_devtools_extension/src/application/changes/row_graph.dart';
 import 'package:crdt_lf_devtools_extension/src/application/load_status.dart';
 import 'package:crdt_lf_devtools_extension/src/bridge/change_mirror.dart';
@@ -15,36 +16,46 @@ import 'package:equatable/equatable.dart';
 
 part 'change_log_state.dart';
 
-/// The changes of the document [doc], kept in a [ChangeMirror].
+/// The changes of the document of a [ChangeMirror].
 ///
-/// It syncs on a `document` event of [doc] that moved its changes or
+/// It syncs on a `document` event of the document that moved its changes or
 /// pruned them. A burst of events shares one sync, made after `delay`.
 /// The selection is kept across syncs while the change is loaded.
 class ChangeLogCubit extends Cubit<ChangeLogState> {
   /// Starts with the change [selected]; the first sync drops it when the
   /// mirror lacks it.
   ChangeLogCubit(
-    this._client,
-    this.doc, {
+    this._mirror, {
     OperationId? selected,
     Duration delay = const Duration(milliseconds: 100),
-  }) : _mirror = ChangeMirror(_client, doc),
+  }) : _matched = <MirrorEntry>[],
        super(ChangeLogState(selectedId: selected)) {
     _gate = ReloadGate(_load, delay: delay);
     _events = _client.events.listen(_onEvent);
     unawaited(refresh());
   }
 
-  final CrdtLfClient _client;
+  final ChangeMirror _mirror;
+
+  CrdtLfClient get _client => _mirror.client;
 
   /// The tracked id of the document.
-  final int doc;
-
-  final ChangeMirror _mirror;
+  int get doc => _mirror.doc;
 
   late final ReloadGate _gate;
 
   late final StreamSubscription<CrdtLfEvent> _events;
+
+  // Where `state.index` stopped reading the mirror.
+  MirrorMark? _mark;
+
+  // The changes of `_matchedIndex` that pass `_matchedFilter`. Replaced, not
+  // cleared: the `visible` of an older state reads it.
+  List<MirrorEntry> _matched;
+
+  ChangeIndex _matchedIndex = ChangeIndex.empty;
+
+  ChangeFilter? _matchedFilter;
 
   void _onEvent(CrdtLfEvent event) {
     if (event case DocumentMoved(
@@ -127,8 +138,14 @@ class ChangeLogCubit extends Cubit<ChangeLogState> {
         onProgress: state.status == LoadStatus.initial ? _onProgress : null,
       );
       if (isClosed) return;
-      final index = ChangeIndex(_mirror.entries);
-      final kept = index.byId.containsKey(state.selectedId);
+      final read = _mirror.read(_mark);
+      _mark = read.mark;
+      final index =
+          read.reset
+              ? ChangeIndex(read.entries)
+              : state.index.extend(read.entries);
+      final selectedId = state.selectedId;
+      final kept = selectedId != null && index.entryOf(selectedId) != null;
       final pending = kept && state.selected == null;
       emit(
         state._copyWith(
@@ -154,16 +171,29 @@ class ChangeLogCubit extends Cubit<ChangeLogState> {
     emit(state._copyWith(progress: () => (loaded: loaded, total: total)));
   }
 
-  static List<MirrorEntry> _visible(
+  List<MirrorEntry> _visible(
     ChangeIndex index,
     ChangeFilter filter,
     bool newestFirst,
   ) {
-    final entries =
-        filter.isEmpty
-            ? index.entries
-            : index.entries.where(filter.matches).toList();
-    return newestFirst ? entries.reversed.toList() : entries;
+    final entries = filter.isEmpty ? index.entries : _matching(index, filter);
+    return newestFirst ? ReversedView(entries) : entries;
+  }
+
+  List<MirrorEntry> _matching(ChangeIndex index, ChangeFilter filter) {
+    var from = 0;
+    if (filter == _matchedFilter && index.startsWith(_matchedIndex)) {
+      from = _matchedIndex.entries.length;
+    } else {
+      _matched = <MirrorEntry>[];
+    }
+    final entries = index.entries;
+    for (var i = from; i < entries.length; i++) {
+      if (filter.matches(entries[i])) _matched.add(entries[i]);
+    }
+    _matchedIndex = index;
+    _matchedFilter = filter;
+    return PrefixView(_matched, _matched.length);
   }
 
   @override

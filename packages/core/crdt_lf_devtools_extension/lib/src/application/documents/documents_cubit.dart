@@ -14,15 +14,17 @@ part 'documents_state.dart';
 /// Lists the documents of the app, and keeps the selection across
 /// reloads.
 ///
-/// It reloads when the protocol becomes available and on the `documents`
-/// and `document` events. A burst of events shares one load, made after
-/// `delay`.
+/// It reloads the list when the protocol becomes available and on the
+/// `documents` events. It reloads the summary of the selected document on
+/// its `document` events and when it is selected. A burst of events shares
+/// one load, made after `delay`.
 class DocumentsCubit extends Cubit<DocumentsState> {
   DocumentsCubit(
     this._client, {
     Duration delay = const Duration(milliseconds: 100),
   }) : super(const DocumentsState()) {
     _gate = ReloadGate(_load, delay: delay);
+    _selectedGate = ReloadGate(_loadSelected, delay: delay);
     _events = _client.events.listen(_onEvent);
     _client.bridge.available.addListener(_onAvailable);
     _onAvailable();
@@ -32,10 +34,16 @@ class DocumentsCubit extends Cubit<DocumentsState> {
 
   late final ReloadGate _gate;
 
+  late final ReloadGate _selectedGate;
+
   late final StreamSubscription<CrdtLfEvent> _events;
 
   void _onEvent(CrdtLfEvent event) {
-    if (event is DocumentsMoved || event is DocumentMoved) unawaited(refresh());
+    if (event is DocumentsMoved) unawaited(refresh());
+    // The header shows the counters of the selected document only.
+    if (event is DocumentMoved && event.doc == state.selectedId) {
+      unawaited(_selectedGate.request());
+    }
   }
 
   void _onAvailable() {
@@ -51,7 +59,9 @@ class DocumentsCubit extends Cubit<DocumentsState> {
 
   /// Selects the document [id]; an unknown id is ignored.
   void select(int id) {
-    if (state.documents.every((d) => d.id != id)) return;
+    if (id == state.selectedId || state.documents.every((d) => d.id != id)) {
+      return;
+    }
     emit(
       DocumentsState(
         status: state.status,
@@ -60,6 +70,8 @@ class DocumentsCubit extends Cubit<DocumentsState> {
         error: state.error,
       ),
     );
+    // Now, not after the gate: the stored summary can be old.
+    unawaited(_loadSelected());
   }
 
   Future<void> _load() async {
@@ -87,9 +99,34 @@ class DocumentsCubit extends Cubit<DocumentsState> {
     }
   }
 
+  Future<void> _loadSelected() async {
+    final id = state.selectedId;
+    if (id == null) return;
+    final DocumentSummary fresh;
+    try {
+      fresh = await _client.summary(id);
+    } on Object {
+      // The document is gone: its `documents` event reloads the list.
+      return;
+    }
+    if (isClosed) return;
+    emit(
+      DocumentsState(
+        status: state.status,
+        documents: [
+          for (final d in state.documents)
+            if (d.id == fresh.id) fresh else d,
+        ],
+        selectedId: state.selectedId,
+        error: state.error,
+      ),
+    );
+  }
+
   @override
   Future<void> close() async {
     _gate.dispose();
+    _selectedGate.dispose();
     _client.bridge.available.removeListener(_onAvailable);
     await _events.cancel();
     return super.close();

@@ -7,6 +7,7 @@ import 'package:crdt_lf/crdt_lf.dart';
 import 'package:crdt_lf_devtools_extension/src/application/connection/connection_cubit.dart';
 import 'package:crdt_lf_devtools_extension/src/application/documents/documents_cubit.dart';
 import 'package:crdt_lf_devtools_extension/src/application/events/event_log_cubit.dart';
+import 'package:crdt_lf_devtools_extension/src/bridge/change_mirror.dart';
 import 'package:crdt_lf_devtools_extension/src/bridge/crdt_lf_bridge.dart';
 import 'package:crdt_lf_devtools_extension/src/bridge/crdt_lf_client.dart';
 import 'package:crdt_lf_devtools_extension/src/presentation/changes/changes_tab.dart';
@@ -162,7 +163,6 @@ class _DocumentView extends StatelessWidget {
               child: _DocumentTabs(
                 key: ValueKey(state.selectedId),
                 doc: state.selectedId!,
-                recording: state.selected?.recording ?? false,
               ),
             ),
           ),
@@ -172,14 +172,13 @@ class _DocumentView extends StatelessWidget {
   }
 }
 
-/// The tabs of one document; the event log lives here, so it keeps
-/// recording while another tab is shown.
+/// The tabs of one document. The event log and the change mirror live here:
+/// the log keeps recording, and the mirror keeps the loaded changes, while
+/// another tab is shown.
 class _DocumentTabs extends StatefulWidget {
-  const _DocumentTabs({required this.doc, required this.recording, super.key});
+  const _DocumentTabs({required this.doc, super.key});
 
   final int doc;
-
-  final bool recording;
 
   @override
   State<_DocumentTabs> createState() => _DocumentTabsState();
@@ -190,16 +189,16 @@ class _DocumentTabsState extends State<_DocumentTabs> {
 
   late final EventLogCubit _events;
 
+  late final ChangeMirror _mirror;
+
   final ChangeLink _link = ChangeLink();
 
   @override
   void initState() {
     super.initState();
-    _events = EventLogCubit(
-      context.read<CrdtLfClient>(),
-      widget.doc,
-      recording: widget.recording,
-    );
+    final client = context.read<CrdtLfClient>();
+    _events = EventLogCubit(client, widget.doc);
+    _mirror = ChangeMirror(client, widget.doc);
   }
 
   @override
@@ -235,8 +234,8 @@ class _DocumentTabsState extends State<_DocumentTabs> {
             child: TabBarView(
               children: [
                 StateTab(doc: widget.doc),
-                ChangesTab(doc: widget.doc, link: _link),
-                TimeTravelTab(doc: widget.doc),
+                ChangesTab(mirror: _mirror, link: _link),
+                TimeTravelTab(mirror: _mirror),
                 StorageTab(doc: widget.doc),
                 EventsTab(onChange: _openChange),
               ],

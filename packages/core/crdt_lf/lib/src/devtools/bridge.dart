@@ -50,6 +50,9 @@ abstract final class DevToolsBridge {
 
   static final Expando<_Tracked> _byDocument = Expando<_Tracked>();
 
+  // A snapshot never changes, and its size costs a whole encode.
+  static final Expando<int> _snapshotBytes = Expando<int>();
+
   static final Finalizer<int> _finalizer = Finalizer<int>(_collected);
 
   // The ids of the tracked documents with a history session or a paging.
@@ -74,11 +77,16 @@ abstract final class DevToolsBridge {
     _expireIdle();
     switch (method) {
       case 'documents':
+        final documents = params.containsKey('doc')
+            ? [_resolve(params)]
+            : [
+                for (final tracked in _tracked())
+                  if (_live(tracked) case final doc?) (tracked, doc),
+              ];
         return {
           'protocol': _protocol,
           'documents': [
-            for (final tracked in _tracked())
-              if (_live(tracked) case final doc?) _summary(tracked, doc),
+            for (final (tracked, doc) in documents) _summary(tracked, doc),
           ],
         };
       case 'document':
@@ -599,7 +607,7 @@ abstract final class DevToolsBridge {
     return {
       'id': snapshot.id,
       'versionVector': _versionVector(snapshot.versionVector),
-      'bytes': snapshot.toBytes().length,
+      'bytes': _snapshotBytes[snapshot] ??= snapshot.toBytes().length,
       'entries': [
         for (final MapEntry(:key, :value) in snapshot.data.entries)
           {
@@ -686,20 +694,22 @@ abstract final class DevToolsBridge {
   ) {
     final count = doc._log.changeCount;
     var pages = tracked.pages;
-    // Between two prunes the log only grows, so the count tells a stale copy.
-    if (pages == null ||
-        pages.changeCount != count ||
-        pages.pruneEpoch != tracked.pruneEpoch) {
+    // A prune drops the copy. Between two prunes the log only grows: the
+    // copy takes in what it misses.
+    if (pages != null &&
+        pages.changeCount != count &&
+        !pages.extend(doc._log, count)) {
+      pages = tracked.pages = null;
+    }
+    if (pages == null) {
       final newer = doc._log.exportChangesNewerThan(since);
       if (newer.length <= limit) {
-        tracked.pages = null;
         return (newer..sort(compareChangeOrder), true);
       }
       // A caller pages through the whole log: sort it once, not per page.
       pages = tracked.pages = _ChangePages(
         doc._log.exportChanges()..sort(compareChangeOrder),
         changeCount: count,
-        pruneEpoch: tracked.pruneEpoch,
       );
       _expiring.add(tracked.id);
     }
@@ -937,26 +947,69 @@ final class _Lease {
 }
 
 final class _ChangePages {
-  _ChangePages(
-    this._sorted, {
-    required this.changeCount,
-    required this.pruneEpoch,
-  })  : _firstByPeer = <PeerId, int>{},
+  _ChangePages(this._sorted, {required this.changeCount})
+      : _firstByPeer = <PeerId, int>{},
+        _latest = VersionVector({}),
         idle = Stopwatch()..start() {
-    for (var i = 0; i < _sorted.length; i++) {
-      _firstByPeer.putIfAbsent(_sorted[i].id.peerId, () => i);
-    }
+    _index(0);
   }
 
   final List<Change> _sorted;
 
   final Map<PeerId, int> _firstByPeer;
 
-  final int changeCount;
+  final VersionVector _latest;
 
-  final int pruneEpoch;
+  int changeCount;
 
   final Stopwatch idle;
+
+  void _index(int from) {
+    for (var i = from; i < _sorted.length; i++) {
+      final change = _sorted[i];
+      _firstByPeer.putIfAbsent(change.id.peerId, () => i);
+      _latest.update(change.id.peerId, change.hlc);
+    }
+  }
+
+  /// Takes in the changes [log] got since; `false` when they do not add up
+  /// to [count].
+  bool extend(ChangeLog log, int count) {
+    // A peer's changes reach the log in causal order, so the new ones are
+    // newer than `_latest`.
+    final added = log.exportChangesNewerThan(_latest)..sort(compareChangeOrder);
+    if (_sorted.length + added.length != count) return false;
+    changeCount = count;
+    if (added.isEmpty) return true;
+    final int from;
+    if (_sorted.isEmpty || compareChangeOrder(_sorted.last, added.first) < 0) {
+      from = _sorted.length;
+      _sorted.addAll(added);
+    } else {
+      from = _merge(added);
+    }
+    _index(from);
+    return true;
+  }
+
+  // Merges [added] into the copy and returns the first index it moved.
+  int _merge(List<Change> added) {
+    final first = _sorted.lowerBoundBy(added.first, compareChangeOrder);
+    final tail = _sorted.sublist(first);
+    _sorted.length = first;
+    var i = 0;
+    var j = 0;
+    while (i < tail.length && j < added.length) {
+      _sorted.add(
+        compareChangeOrder(tail[i], added[j]) < 0 ? tail[i++] : added[j++],
+      );
+    }
+    _sorted
+      ..addAll(tail.skip(i))
+      ..addAll(added.skip(j));
+    _firstByPeer.removeWhere((_, index) => index >= first);
+    return first;
+  }
 
   (List<Change>, bool) after(VersionVector since, int limit) {
     // The first change newer than `since` for its peer cannot come before
@@ -964,7 +1017,9 @@ final class _ChangePages {
     var start = _sorted.length;
     for (final MapEntry(key: peer, value: first) in _firstByPeer.entries) {
       final clock = since[peer];
-      final from = clock == null ? first : _firstAfter(clock);
+      final from = clock == null
+          ? first
+          : _sorted.lowerBoundBy(clock, (c, t) => c.hlc <= t ? -1 : 1);
       if (from < start) start = from;
     }
     final page = <Change>[];
@@ -976,19 +1031,5 @@ final class _ChangePages {
       page.add(change);
     }
     return (page, true);
-  }
-
-  int _firstAfter(HybridLogicalClock clock) {
-    var low = 0;
-    var high = _sorted.length;
-    while (low < high) {
-      final middle = (low + high) >> 1;
-      if (_sorted[middle].hlc <= clock) {
-        low = middle + 1;
-      } else {
-        high = middle;
-      }
-    }
-    return low;
   }
 }

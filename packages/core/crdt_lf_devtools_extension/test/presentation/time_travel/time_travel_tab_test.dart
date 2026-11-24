@@ -6,6 +6,7 @@ import 'package:crdt_lf/crdt_lf.dart';
 // ignore: implementation_imports
 import 'package:crdt_lf/src/document/document.dart' show DevToolsBridge;
 import 'package:crdt_lf_devtools_extension/src/application/documents/documents_cubit.dart';
+import 'package:crdt_lf_devtools_extension/src/bridge/change_mirror.dart';
 import 'package:crdt_lf_devtools_extension/src/bridge/crdt_lf_client.dart';
 import 'package:crdt_lf_devtools_extension/src/bridge/in_process_bridge.dart';
 import 'package:crdt_lf_devtools_extension/src/presentation/changes/change_row.dart';
@@ -49,7 +50,9 @@ void main() {
                   (context, state) =>
                       state.selectedId == null
                           ? const SizedBox()
-                          : TimeTravelTab(doc: state.selectedId!),
+                          : TimeTravelTab(
+                            mirror: ChangeMirror(client, state.selectedId!),
+                          ),
             ),
           ),
         ),

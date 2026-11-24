@@ -72,4 +72,25 @@ void main() {
     expect(graph.rows[3].active, [3]);
     expect(graph.rows[6].active, [5]);
   });
+
+  test('an extended graph is the graph of all its nodes', () {
+    final nodes = [
+      node('a'),
+      node('b'),
+      node('a', ['a', 'b']),
+      node('c', ['a']),
+      node('b', ['b', 'c']),
+    ];
+    final all = LaneGraph(nodes);
+    final base = LaneGraph(nodes.sublist(0, 2));
+    final extended = base.extend(nodes.sublist(2));
+    // A second extension of the same base must not see the first one.
+    final again = base.extend(nodes.sublist(2, 4));
+
+    expect(rowsOf(extended), rowsOf(all));
+    expect(extended.peers, all.peers);
+    expect(rowsOf(again), rowsOf(LaneGraph(nodes.sublist(0, 4))));
+    expect(rowsOf(base), rowsOf(LaneGraph(nodes.sublist(0, 2))));
+    expect(base.peers, ['a', 'b']);
+  });
 }

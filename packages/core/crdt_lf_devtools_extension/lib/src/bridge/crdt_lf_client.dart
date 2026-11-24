@@ -29,8 +29,16 @@ class CrdtLfClient {
   /// The live documents of the app.
   ///
   /// Throws a [BridgeCallException] when the app speaks another [protocol].
-  Future<List<DocumentSummary>> documents() async {
-    final json = await bridge.call('documents');
+  Future<List<DocumentSummary>> documents() => _documents(const {});
+
+  /// The summary of the live document [doc].
+  ///
+  /// Throws a [BridgeCallException] when the app speaks another [protocol].
+  Future<DocumentSummary> summary(int doc) async =>
+      (await _documents(_doc(doc))).single;
+
+  Future<List<DocumentSummary>> _documents(Map<String, String> params) async {
+    final json = await bridge.call('documents', params);
     final version = json.integer('protocol');
     if (version != protocol) {
       throw BridgeCallException(

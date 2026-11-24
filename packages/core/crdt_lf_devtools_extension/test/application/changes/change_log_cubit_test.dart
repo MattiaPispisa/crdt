@@ -7,9 +7,24 @@ import 'package:crdt_lf/crdt_lf.dart';
 import 'package:crdt_lf/src/document/document.dart' show DevToolsBridge;
 import 'package:crdt_lf_devtools_extension/src/application/changes/change_log_cubit.dart';
 import 'package:crdt_lf_devtools_extension/src/application/load_status.dart';
+import 'package:crdt_lf_devtools_extension/src/bridge/change_mirror.dart';
 import 'package:crdt_lf_devtools_extension/src/bridge/crdt_lf_client.dart';
 import 'package:crdt_lf_devtools_extension/src/bridge/in_process_bridge.dart';
+import 'package:crdt_lf_devtools_extension/src/bridge/models/json.dart';
 import 'package:flutter_test/flutter_test.dart';
+
+// Counts the changes the app sends.
+class _CountingBridge extends InProcessBridge {
+  int changes = 0;
+
+  @override
+  Future<Json> call(String method, [Map<String, String> params = const {}]) {
+    return super.call(method, params).then((json) {
+      if (method == 'changes') changes += (json['changes']! as List).length;
+      return json;
+    });
+  }
+}
 
 void main() {
   late InProcessBridge bridge;
@@ -35,7 +50,10 @@ void main() {
         (await client.documents())
             .firstWhere((d) => d.documentId == doc.documentId)
             .id;
-    final cubit = ChangeLogCubit(client, id, delay: Duration.zero);
+    final cubit = ChangeLogCubit(
+      ChangeMirror(client, id),
+      delay: Duration.zero,
+    );
     addTearDown(cubit.close);
     await settle();
     return cubit;
@@ -109,13 +127,105 @@ void main() {
     expect('${cubit.state.operation?.payload}', contains('[text, b]'));
   });
 
+  test('a sync leaves the index and the list of the state before', () async {
+    final doc = CRDTDocument(documentId: 'd');
+    final text = CRDTTextHandler(doc, 'text')..insert(0, 'a');
+    final cubit = await cubitOf(doc);
+    cubit.setFilter(const ChangeFilter(handler: 'text'));
+    final before = cubit.state;
+    final first = before.index.entries.single.change.id;
+
+    text.insert(1, 'b');
+    CRDTTextHandler(doc, 'other').insert(0, 'c');
+    await settle();
+
+    final replay = [for (final c in doc.exportChanges().sorted()) c.id];
+    expect(cubit.state.index.entries, hasLength(3));
+    expect(visibleIds(cubit), replay.sublist(0, 2).reversed);
+    expect(before.index.entries, hasLength(1));
+    expect(before.index.entryOf(replay[1]), isNull);
+    expect(before.index.dependentsOf(first), isEmpty);
+    expect(before.index.graph.rows, hasLength(1));
+    expect(before.visible.map((e) => e.change.id), [first]);
+  });
+
+  test('an older remote change lands at its place in the list', () async {
+    final remote = CRDTDocument(
+      peerId: PeerId.parse('00000000-0000-4000-8000-000000000000'),
+    );
+    CRDTTextHandler(remote, 'text').insert(0, 'r');
+    final doc = CRDTDocument(
+      documentId: 'd',
+      peerId: PeerId.parse('ffffffff-ffff-4fff-bfff-ffffffffffff'),
+    );
+    CRDTTextHandler(doc, 'text').insert(0, 'a');
+    final cubit = await cubitOf(doc);
+    cubit.setFilter(const ChangeFilter(handler: 'text'));
+
+    doc.importChanges(remote.exportChanges());
+    await settle();
+
+    final replay = [for (final c in doc.exportChanges().sorted()) c.id];
+    expect(replay.first.peerId, remote.peerId);
+    expect([for (final e in cubit.state.index.entries) e.change.id], replay);
+    expect(visibleIds(cubit), replay.reversed);
+    expect(cubit.state.index.authors, hasLength(2));
+  });
+
+  test('an index extended twice from one base keeps both lines', () {
+    final doc = CRDTDocument();
+    final text = CRDTTextHandler(doc, 'text');
+    for (var i = 0; i < 3; i++) {
+      text.insert(i, 'x');
+    }
+    final [a, b, c] = [
+      for (final change in doc.exportChanges().sorted())
+        MirrorEntry.decode(change.toBytes()),
+    ];
+    final base = ChangeIndex([a]);
+
+    final first = base.extend([b]);
+    final second = base.extend([c]);
+
+    expect(first.entries, [a, b]);
+    expect(second.entries, [a, c]);
+    expect(second.entryOf(b.change.id), isNull);
+    expect(second.dependentsOf(a.change.id), [
+      if (c.deps.contains(a.change.id)) c.change.id,
+    ]);
+    expect(second.startsWith(base), isFalse);
+    expect(first.startsWith(base), isTrue);
+  });
+
+  test('a second cubit on the same mirror loads no change again', () async {
+    final counting = _CountingBridge();
+    addTearDown(counting.dispose);
+    final client = CrdtLfClient(counting);
+    final doc = CRDTDocument(documentId: 'd');
+    final text = CRDTTextHandler(doc, 'text');
+    for (var i = 0; i < 1500; i++) {
+      text.insert(0, 'x');
+    }
+    final mirror = ChangeMirror(client, (await client.documents()).single.id);
+    final first = ChangeLogCubit(mirror, delay: Duration.zero);
+    await settle();
+    await first.close();
+    expect(counting.changes, 1500);
+
+    final second = ChangeLogCubit(mirror, delay: Duration.zero);
+    addTearDown(second.close);
+    await settle();
+
+    expect(second.state.index.entries, hasLength(1500));
+    expect(counting.changes, 1500);
+  });
+
   test('a starting selection gets its operation after a sync', () async {
     final doc = CRDTDocument(documentId: 'd');
     CRDTTextHandler(doc, 'text').insert(0, 'a');
     final id = (await client.documents()).single.id;
     final cubit = ChangeLogCubit(
-      client,
-      id,
+      ChangeMirror(client, id),
       selected: doc.version.single,
       delay: Duration.zero,
     );
@@ -146,7 +256,10 @@ void main() {
   });
 
   test('a failed sync reports the error', () async {
-    final cubit = ChangeLogCubit(client, 42, delay: Duration.zero);
+    final cubit = ChangeLogCubit(
+      ChangeMirror(client, 42),
+      delay: Duration.zero,
+    );
     addTearDown(cubit.close);
     await settle();
     expect(cubit.state.status, LoadStatus.failure);
@@ -160,7 +273,10 @@ void main() {
       text.insert(0, 'x');
     }
     final id = (await client.documents()).single.id;
-    final cubit = ChangeLogCubit(client, id, delay: Duration.zero);
+    final cubit = ChangeLogCubit(
+      ChangeMirror(client, id),
+      delay: Duration.zero,
+    );
     addTearDown(cubit.close);
     final progress = <LoadProgress?>[];
     await for (final state in cubit.stream) {
