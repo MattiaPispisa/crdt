@@ -49,6 +49,32 @@ void main() {
     expect(await recording(), isTrue);
   });
 
+  test('a lease that ran out marks the events as missed', () async {
+    final lease = DevToolsBridge.lease;
+    DevToolsBridge.lease = const Duration(milliseconds: 100);
+    addTearDown(() => DevToolsBridge.lease = lease);
+    final doc = CRDTDocument();
+    final text = CRDTTextHandler(doc, 'text');
+    final id = (await client.documents()).single.id;
+    final cubit = EventLogCubit(
+      client,
+      id,
+      renewEvery: const Duration(milliseconds: 300),
+    );
+    addTearDown(cubit.close);
+    await cubit.setRecording(recording: true);
+
+    await Future<void>.delayed(const Duration(milliseconds: 150));
+    // The first event after the lease: the app stops the log on it.
+    text.insert(0, 'a');
+    await Future<void>.delayed(const Duration(milliseconds: 300));
+    expect(cubit.state.missed, isTrue);
+    expect(await recording(), isTrue);
+
+    cubit.clear();
+    expect(cubit.state.missed, isFalse);
+  });
+
   test('records newest first, keeps the cap, clears and stops', () async {
     final doc = CRDTDocument();
     final text = CRDTTextHandler(doc, 'text');

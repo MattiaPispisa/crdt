@@ -18,7 +18,6 @@ class FirstSyncBenchmark extends AsyncFixedCycleTimedBenchmark {
         measuredCycles: 3,
         batches: 3,
         settleCycles: 1,
-        setupPerBatch: false,
       );
 
   final int size;
@@ -33,8 +32,13 @@ class FirstSyncBenchmark extends AsyncFixedCycleTimedBenchmark {
 
   late int _id;
 
+  bool _ready = false;
+
   @override
   Future<void> setup() async {
+    // Again before each batch: with edits, each sync grows the document.
+    if (_ready) await teardown();
+    _ready = true;
     resetBridge();
     _doc = mapDocument(size);
     _bridge = HookedBridge('changes', null);
@@ -48,6 +52,7 @@ class FirstSyncBenchmark extends AsyncFixedCycleTimedBenchmark {
 
   @override
   Future<void> teardown() async {
+    _ready = false;
     _extension.dispose();
     _doc.dispose();
     resetBridge();

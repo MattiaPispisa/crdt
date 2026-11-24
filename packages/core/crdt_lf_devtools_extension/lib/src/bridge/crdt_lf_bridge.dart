@@ -40,3 +40,9 @@ class BridgeCallException implements Exception {
   @override
   String toString() => 'BridgeCallException($method): $message';
 }
+
+/// The app has no time travel session with the id of a call: it ended it,
+/// or a newer one replaced it.
+class HistorySessionClosed extends BridgeCallException {
+  const HistorySessionClosed(super.method, super.message);
+}

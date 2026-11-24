@@ -22,6 +22,10 @@ class EventsTab extends StatelessWidget {
   static const String recordingNote =
       'While recording, the app builds one event per move of the document.';
 
+  /// The note shown when the app stopped the log for a while.
+  static const String missedNote =
+      'The app stopped the log for a while: some events are missing.';
+
   /// The text shown when the list is empty.
   static const String empty = 'No event yet. Turn on Record to start.';
 
@@ -60,6 +64,11 @@ class EventsTab extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: densePadding),
           child: Text(recordingNote, style: theme.subtleTextStyle),
         ),
+        if (state.missed)
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: densePadding),
+            child: Text(missedNote, style: theme.subtleTextStyle),
+          ),
         if (state.error case final error?)
           PaneMessage(
             'The call failed: $error',

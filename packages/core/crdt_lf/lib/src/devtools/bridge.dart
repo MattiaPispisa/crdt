@@ -74,7 +74,18 @@ abstract final class DevToolsBridge {
     String method,
     Map<String, String> params,
   ) {
-    _expireIdle();
+    try {
+      return _answer(method, params);
+    } finally {
+      // After the answer: a call on a session or a paging renews it first.
+      _expireIdle();
+    }
+  }
+
+  static Map<String, Object?> _answer(
+    String method,
+    Map<String, String> params,
+  ) {
     switch (method) {
       case 'documents':
         final documents = params.containsKey('doc')
@@ -98,8 +109,8 @@ abstract final class DevToolsBridge {
               _formats(doc.describeBuildCapabilities().byHandlerType),
         };
       case 'handlers':
-        final (_, doc) = _resolve(params);
-        return _handlers(doc);
+        final (tracked, doc) = _resolve(params);
+        return _handlers(tracked, doc);
       case 'handlerValue':
         final (_, doc) = _resolve(params);
         final id = params['handler'];
@@ -151,16 +162,14 @@ abstract final class DevToolsBridge {
         return _snapshot(doc);
       case 'eventsStart':
         final (tracked, doc) = _resolve(params);
-        _eventsStart(tracked, doc);
-        return {'recording': true};
+        return {'recording': true, 'renewed': _eventsStart(tracked, doc)};
       case 'eventsStop':
         final (tracked, _) = _resolve(params);
         tracked.stopEvents();
         return {'recording': false};
       case 'watchStart':
         final (tracked, doc) = _resolve(params);
-        _watchStart(tracked, doc, params);
-        return {'watching': true};
+        return {'watching': true, 'renewed': _watchStart(tracked, doc, params)};
       case 'watchStop':
         final (tracked, _) = _resolve(params);
         final id = params['handler'];
@@ -362,10 +371,11 @@ abstract final class DevToolsBridge {
     });
   }
 
-  static void _eventsStart(_Tracked tracked, CRDTDocument doc) {
+  // Whether the log was running.
+  static bool _eventsStart(_Tracked tracked, CRDTDocument doc) {
     if (tracked.events case final running?) {
       running.renew();
-      return;
+      return true;
     }
     late final _Lease lease;
     lease = tracked.events = _Lease(
@@ -377,6 +387,7 @@ abstract final class DevToolsBridge {
         _post(_eventEvent, _event(tracked, event));
       }),
     );
+    return false;
   }
 
   static Map<String, Object?> _event(
@@ -417,7 +428,8 @@ abstract final class DevToolsBridge {
     };
   }
 
-  static void _watchStart(
+  // Whether the watch was running.
+  static bool _watchStart(
     _Tracked tracked,
     CRDTDocument doc,
     Map<String, String> params,
@@ -432,7 +444,7 @@ abstract final class DevToolsBridge {
     }
     if (tracked.deltas[id] case final running?) {
       running.renew();
-      return;
+      return true;
     }
     late final _Lease lease;
     lease = tracked.deltas[id] = _Lease(
@@ -450,6 +462,7 @@ abstract final class DevToolsBridge {
       ),
     );
     _watchMoved(tracked);
+    return false;
   }
 
   static void _stopWatch(_Tracked tracked, String handler) {
@@ -707,8 +720,10 @@ abstract final class DevToolsBridge {
         return (newer..sort(compareChangeOrder), true);
       }
       // A caller pages through the whole log: sort it once, not per page.
+      // From the empty vector, `newer` already is the whole log.
+      final all = since.isEmpty ? newer : doc._log.exportChanges();
       pages = tracked.pages = _ChangePages(
-        doc._log.exportChanges()..sort(compareChangeOrder),
+        all..sort(compareChangeOrder),
         changeCount: count,
       );
       _expiring.add(tracked.id);
@@ -764,7 +779,7 @@ abstract final class DevToolsBridge {
     return result;
   }
 
-  static Map<String, Object?> _handlers(CRDTDocument doc) {
+  static Map<String, Object?> _handlers(_Tracked tracked, CRDTDocument doc) {
     final open = doc._registry.publicView;
     final deleted = doc._deletions._deletedIds;
     final snapshot = doc._lastSnapshot;
@@ -788,8 +803,7 @@ abstract final class DevToolsBridge {
         for (final id in closed)
           {
             'id': id,
-            'type': manifest[id] ??
-                _HandlerRegistry.typeIn(doc.changesForHandler(id)),
+            'type': manifest[id] ?? tracked.typeOf(doc, id),
             'changeCount': doc.changeCountForHandler(id),
           },
       ],
@@ -846,7 +860,8 @@ final class _Tracked {
   _Tracked(this.id, CRDTDocument document)
       : document = WeakReference<CRDTDocument>(document),
         deltas = <String, _Lease>{},
-        historyIdle = Stopwatch()..start();
+        historyIdle = Stopwatch()..start(),
+        _types = <String, String>{};
 
   final int id;
 
@@ -877,6 +892,17 @@ final class _Tracked {
   final Stopwatch historyIdle;
 
   _ChangePages? pages;
+
+  // A handler id keeps its type, and reading it copies the handler's changes.
+  final Map<String, String> _types;
+
+  /// The type the changes of the handler [id] name; `null` for none.
+  String? typeOf(CRDTDocument doc, String id) {
+    if (_types[id] case final type?) return type;
+    final type = _HandlerRegistry.typeIn(doc.changesForHandler(id));
+    if (type != null) _types[id] = type;
+    return type;
+  }
 
   bool get dirty => changes || handlers || snapshot || pruned;
 

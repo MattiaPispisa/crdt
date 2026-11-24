@@ -10,8 +10,9 @@ import 'package:flutter_test/flutter_test.dart';
 
 import '../common/fixture.dart';
 
-/// Leaves the [tab] for the State tab and comes back, on a document of
-/// [size] changes, until the tab shows its data again.
+/// Leaves the [tab] for the Events tab, which loads nothing, and comes
+/// back, on a document of [size] changes, until the tab shows its data
+/// again.
 class TabSwitchBenchmark extends AsyncFixedCycleTimedBenchmark {
   TabSwitchBenchmark(this.tester, this.tab, this.size)
     : super(
@@ -57,7 +58,7 @@ class TabSwitchBenchmark extends AsyncFixedCycleTimedBenchmark {
 
   @override
   Future<void> run() async {
-    await _open('State');
+    await _open('Events');
     await _open(tab);
   }
 

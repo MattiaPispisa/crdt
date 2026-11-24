@@ -9,6 +9,7 @@ class EventLogState extends Equatable {
     this.recording = false,
     this.events = const [],
     this.selectedN,
+    this.missed = false,
     this.error,
   });
 
@@ -19,6 +20,10 @@ class EventLogState extends Equatable {
 
   /// The `n` of the selected event; `null` for none.
   final int? selectedN;
+
+  /// Whether the app stopped the log for a while since the last
+  /// [EventLogCubit.clear]: the events of that time are missing.
+  final bool missed;
 
   /// The error of the last start or stop; `null` when it succeeded.
   final String? error;
@@ -35,14 +40,16 @@ class EventLogState extends Equatable {
     bool? recording,
     List<DocumentLogEvent>? events,
     int? Function()? selectedN,
+    bool? missed,
     String? Function()? error,
   }) => EventLogState(
     recording: recording ?? this.recording,
     events: events ?? this.events,
     selectedN: selectedN == null ? this.selectedN : selectedN(),
+    missed: missed ?? this.missed,
     error: error == null ? this.error : error(),
   );
 
   @override
-  List<Object?> get props => [recording, events, selectedN, error];
+  List<Object?> get props => [recording, events, selectedN, missed, error];
 }

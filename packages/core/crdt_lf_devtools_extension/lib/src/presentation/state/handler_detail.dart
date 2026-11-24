@@ -37,6 +37,10 @@ class HandlerDetail extends StatelessWidget {
       'A watched handler applies remote changes when they arrive, not at the '
       'next read.';
 
+  /// The note shown when the app stopped the watch for a while.
+  static const String missedNote =
+      'The app stopped the watch for a while: some deltas are missing.';
+
   /// The note shown for a deleted handler.
   static const String deletedNote = 'The handler was deleted.';
 
@@ -184,6 +188,7 @@ class _DeltaPane extends StatelessWidget {
           ],
         ),
         const _Note(HandlerDetail.watchNote),
+        if (state.missed) const _Note(HandlerDetail.missedNote),
         if (state.error case final error?)
           PaneMessage(
             'The call failed: $error',

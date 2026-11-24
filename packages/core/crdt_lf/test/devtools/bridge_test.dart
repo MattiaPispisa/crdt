@@ -860,7 +860,11 @@ void main() {
       final id = trackedId(doc);
       expect(
         DevToolsBridge.call('eventsStart', {'doc': '$id'}),
-        {'recording': true},
+        {'recording': true, 'renewed': false},
+      );
+      expect(
+        DevToolsBridge.call('eventsStart', {'doc': '$id'})['renewed'],
+        isTrue,
       );
       expect(documents().single['recording'], isTrue);
 
@@ -934,8 +938,11 @@ void main() {
       expect(text.value, 'a');
       final id = trackedId(doc);
       final params = {'doc': '$id', 'handler': 'text'};
-      expect(DevToolsBridge.call('watchStart', params), {'watching': true});
-      DevToolsBridge.call('watchStart', params);
+      expect(
+        DevToolsBridge.call('watchStart', params),
+        {'watching': true, 'renewed': false},
+      );
+      expect(DevToolsBridge.call('watchStart', params)['renewed'], isTrue);
       await pumpEventQueue();
       // The cut at 2000 code units falls inside an emoji: it keeps the
       // whole pair out.
@@ -1094,6 +1101,24 @@ void main() {
         () => historyState(doc, session, 0),
         throwsA(isA<ArgumentError>()),
       );
+    });
+
+    test('a historyState past the lease still renews its session', () async {
+      final doc = CRDTDocument();
+      CRDTTextHandler(doc, 'text').insert(0, 'a');
+      final params = {'doc': '${trackedId(doc)}'};
+      DevToolsBridge.lease = const Duration(milliseconds: 100);
+      final session = DevToolsBridge.call('historyOpen', params)['session'];
+      await Future<void>.delayed(const Duration(milliseconds: 200));
+
+      // No change and no call in between: this call is the first to come.
+      final state = DevToolsBridge.call('historyState', {
+        ...params,
+        'session': '$session',
+        'cursor': '1',
+        'handler': 'text',
+      });
+      expect(state['value'], 'a');
     });
 
     test('a historyState renews the lease of its session', () async {

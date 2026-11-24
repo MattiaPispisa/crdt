@@ -136,6 +136,45 @@ void main() {
     expect(cubit.state.value!.value, 'ab');
   });
 
+  test('a session the app ended opens again at the cursor', () async {
+    final doc = CRDTDocument(documentId: 'd');
+    CRDTTextHandler(doc, 'text')
+      ..insert(0, 'a')
+      ..insert(1, 'b');
+    final (id, cubit) = await open(doc);
+    cubit
+      ..select('text')
+      ..moveTo(1);
+    await settle();
+    final ended = cubit.state.session!.session;
+
+    await client.historyClose(id, ended);
+    cubit.moveTo(2);
+    await settle();
+    expect(cubit.state.session!.session, isNot(ended));
+    expect(cubit.state.cursor, 2);
+    expect(cubit.state.value!.value, 'ab');
+  });
+
+  test('a renewal that finds the session ended opens a new one', () async {
+    final doc = CRDTDocument(documentId: 'd');
+    CRDTTextHandler(doc, 'text').insert(0, 'a');
+    final id = (await client.documents()).single.id;
+    final cubit = TimeTravelCubit(
+      ChangeMirror(client, id),
+      delay: Duration.zero,
+      valueDelay: Duration.zero,
+      renewEvery: const Duration(milliseconds: 50),
+    );
+    addTearDown(cubit.close);
+    await settle();
+    final ended = cubit.state.session!.session;
+
+    await client.historyClose(id, ended);
+    await Future<void>.delayed(const Duration(milliseconds: 150));
+    expect(cubit.state.session!.session, isNot(ended));
+  });
+
   test('counts an older remote change as new', () async {
     final remote = CRDTDocument(
       peerId: PeerId.parse('00000000-0000-4000-8000-000000000000'),

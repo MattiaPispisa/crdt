@@ -9,6 +9,7 @@ class DeltaWatchState extends Equatable {
     this.handler,
     this.watching = false,
     this.deltas = const [],
+    this.missed = false,
     this.error,
   });
 
@@ -20,20 +21,26 @@ class DeltaWatchState extends Equatable {
   /// Newest first.
   final List<HandlerDeltaEvent> deltas;
 
+  /// Whether the app stopped the watch for a while since the selection: the
+  /// deltas of that time are missing.
+  final bool missed;
+
   /// The error of the last start or stop; `null` when it succeeded.
   final String? error;
 
   DeltaWatchState _copyWith({
     bool? watching,
     List<HandlerDeltaEvent>? deltas,
+    bool? missed,
     String? Function()? error,
   }) => DeltaWatchState(
     handler: handler,
     watching: watching ?? this.watching,
     deltas: deltas ?? this.deltas,
+    missed: missed ?? this.missed,
     error: error == null ? this.error : error(),
   );
 
   @override
-  List<Object?> get props => [handler, watching, deltas, error];
+  List<Object?> get props => [handler, watching, deltas, missed, error];
 }

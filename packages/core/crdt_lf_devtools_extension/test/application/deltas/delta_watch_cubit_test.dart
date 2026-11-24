@@ -53,6 +53,29 @@ void main() {
     expect(await watched(id, 'text'), isTrue);
   });
 
+  test('a lease that ran out marks the deltas as missed', () async {
+    final lease = DevToolsBridge.lease;
+    DevToolsBridge.lease = const Duration(milliseconds: 100);
+    addTearDown(() => DevToolsBridge.lease = lease);
+    final doc = CRDTDocument();
+    final text = CRDTTextHandler(doc, 'text')..insert(0, 'a');
+    final id = (await client.documents()).single.id;
+    final cubit = DeltaWatchCubit(
+      client,
+      id,
+      renewEvery: const Duration(milliseconds: 300),
+    )..select('text');
+    addTearDown(cubit.close);
+    await cubit.setWatching(watching: true);
+
+    await Future<void>.delayed(const Duration(milliseconds: 150));
+    // The first delta after the lease: the app stops the watch on it.
+    text.insert(1, 'b');
+    await Future<void>.delayed(const Duration(milliseconds: 300));
+    expect(cubit.state.missed, isTrue);
+    expect(await watched(id, 'text'), isTrue);
+  });
+
   test('watches one handler, newest first, and stops on select', () async {
     final doc = CRDTDocument();
     final text = CRDTTextHandler(doc, 'text')..insert(0, 'a');

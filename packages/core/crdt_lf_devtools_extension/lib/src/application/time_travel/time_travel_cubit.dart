@@ -6,6 +6,7 @@ import 'dart:async';
 import 'package:bloc/bloc.dart';
 import 'package:crdt_lf_devtools_extension/src/application/load_status.dart';
 import 'package:crdt_lf_devtools_extension/src/bridge/change_mirror.dart';
+import 'package:crdt_lf_devtools_extension/src/bridge/crdt_lf_bridge.dart';
 import 'package:crdt_lf_devtools_extension/src/bridge/crdt_lf_client.dart';
 import 'package:crdt_lf_devtools_extension/src/bridge/models/models.dart';
 import 'package:crdt_lf_devtools_extension/src/bridge/reload_gate.dart';
@@ -16,7 +17,8 @@ part 'time_travel_state.dart';
 ///
 /// It opens the session when created and closes it when closed. The
 /// session stays frozen: [TimeTravelState.newChanges] counts the changes
-/// the live document got since, and [reopen] takes them in.
+/// the live document got since, and [reopen] takes them in. When the app
+/// ends the session, the cubit opens a new one at the same cursor.
 class TimeTravelCubit extends Cubit<TimeTravelState> {
   /// While a session is open, the cubit renews its lease in the app every
   /// [renewEvery].
@@ -57,6 +59,9 @@ class TimeTravelCubit extends Cubit<TimeTravelState> {
   int _seen = 0;
 
   MirrorMark? _mark;
+
+  // The cursor the next session opens at; `null` for its last change.
+  int? _resumeAt;
 
   void _onEvent(CrdtLfEvent event) {
     if (event case DocumentMoved(
@@ -103,6 +108,8 @@ class TimeTravelCubit extends Cubit<TimeTravelState> {
   Future<void> reloadValue() => _valueGate.request();
 
   Future<void> _open() async {
+    final resumeAt = _resumeAt;
+    _resumeAt = null;
     try {
       await _mirror.sync(
         onProgress: state.session == null ? _onProgress : null,
@@ -128,7 +135,7 @@ class TimeTravelCubit extends Cubit<TimeTravelState> {
           status: LoadStatus.loaded,
           session: info,
           frozen: frozen,
-          cursor: info.length,
+          cursor: resumeAt?.clamp(0, info.length) ?? info.length,
           newChanges: _mirror.length - frozen.length,
           handler: kept ? null : () => null,
           valueStatus: LoadStatus.initial,
@@ -155,9 +162,18 @@ class TimeTravelCubit extends Cubit<TimeTravelState> {
         session: session.session,
         cursor: state.cursor,
       );
+    } on HistorySessionClosed {
+      _resume();
     } on Object {
       // The next tick tries again.
     }
+  }
+
+  // A lease that ran out (a paused app, a throttled tab) ends the session.
+  void _resume() {
+    if (isClosed) return;
+    _resumeAt = state.cursor;
+    unawaited(reopen());
   }
 
   void _onProgress(int loaded, int total) {
@@ -208,6 +224,9 @@ class TimeTravelCubit extends Cubit<TimeTravelState> {
           valueError: () => null,
         ),
       );
+    } on HistorySessionClosed {
+      if (isClosed || state.session != session) return;
+      _resume();
     } on Object catch (e) {
       if (moved()) return;
       emit(

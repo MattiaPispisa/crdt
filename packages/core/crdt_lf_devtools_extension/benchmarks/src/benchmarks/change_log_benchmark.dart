@@ -15,11 +15,7 @@ import '../common/fixture.dart';
 abstract class LiveSyncBenchmark<C extends BlocBase<Object?>>
     extends AsyncFixedCycleTimedBenchmark {
   LiveSyncBenchmark(String what, this.size)
-    : super(
-        '$what, one edit on $size changes',
-        measuredCycles: 50,
-        setupPerBatch: false,
-      );
+    : super('$what, one edit on $size changes', measuredCycles: 50);
 
   final int size;
 
@@ -29,10 +25,15 @@ abstract class LiveSyncBenchmark<C extends BlocBase<Object?>>
 
   late C cubit;
 
+  bool _ready = false;
+
   C create(Extension extension, int id);
 
   @override
   Future<void> setup() async {
+    // Again before each batch: the warm-up and each batch grow the document.
+    if (_ready) await teardown();
+    _ready = true;
     resetBridge();
     _doc = mapDocument(size);
     _extension = Extension();
@@ -50,6 +51,7 @@ abstract class LiveSyncBenchmark<C extends BlocBase<Object?>>
 
   @override
   Future<void> teardown() async {
+    _ready = false;
     await cubit.close();
     _extension.dispose();
     _doc.dispose();

@@ -18,7 +18,6 @@ class DocumentEditBenchmark extends AsyncFixedCycleTimedBenchmark {
         'Edit of ${selected ? 'the selected' : 'another'} document, '
         '$_documents documents',
         measuredCycles: 100,
-        setupPerBatch: false,
       );
 
   final bool selected;
@@ -31,8 +30,13 @@ class DocumentEditBenchmark extends AsyncFixedCycleTimedBenchmark {
 
   late CRDTDocument _edited;
 
+  bool _ready = false;
+
   @override
   Future<void> setup() async {
+    // Again before each batch: the warm-up and each batch grow the document.
+    if (_ready) await teardown();
+    _ready = true;
     resetBridge();
     _docs = [
       for (var i = 0; i < _documents; i++) mapDocument(100, documentId: 'd$i'),
@@ -59,6 +63,7 @@ class DocumentEditBenchmark extends AsyncFixedCycleTimedBenchmark {
 
   @override
   Future<void> teardown() async {
+    _ready = false;
     await _cubit.close();
     _extension.dispose();
     for (final doc in _docs) {

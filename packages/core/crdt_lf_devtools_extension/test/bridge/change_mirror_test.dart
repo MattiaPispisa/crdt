@@ -56,7 +56,6 @@ void main() {
 
     expect(progress, [(2, 5), (4, 5), (5, 5)]);
     expect(idsOf(mirror), sortedIds(doc));
-    expect(mirror.changeCount, 5);
     final entry = mirror.entries.first;
     expect(entry.handlerId, 'text');
     expect(entry.handlerType, text.handlerType);
@@ -114,7 +113,6 @@ void main() {
     final text = CRDTTextHandler(doc, 'text')..insert(0, 'a');
     final mirror = await mirrorOf(doc);
     await mirror.sync();
-    expect(mirror.pruneEpoch, 0);
     final mark = mirror.read().mark;
 
     doc.takeSnapshot();
@@ -122,7 +120,6 @@ void main() {
     await mirror.sync();
     expect(mirror.read(mark).reset, isTrue);
 
-    expect(mirror.pruneEpoch, 1);
     expect(idsOf(mirror), sortedIds(doc));
     expect(mirror.length, 1);
   });

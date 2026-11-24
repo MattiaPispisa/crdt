@@ -73,10 +73,14 @@ Two features cost the app work, so they start off:
   remote changes when they arrive, not at the next read.
 
 Both stop when you leave the document. When DevTools closes, the app stops
-them within 30 seconds.
+them at their first event after 30 seconds. The same happens when DevTools
+cannot reach the app for 30 seconds, for example while the app is paused at a
+breakpoint: the tab then says that some events or deltas are missing.
 
 The Time travel tab keeps a copy of the history in the app while it is open.
 When DevTools closes, the app drops it at its first change after 30 seconds.
+If the app drops it while the tab is open, the tab opens a new copy at the
+same position.
 
 ## Source
 

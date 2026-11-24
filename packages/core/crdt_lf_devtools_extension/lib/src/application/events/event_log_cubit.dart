@@ -57,13 +57,14 @@ class EventLogCubit extends Cubit<EventLogState> {
   Future<void> setRecording({required bool recording}) async {
     _wanted = recording;
     try {
-      final on =
-          recording
-              ? await _client.eventsStart(doc)
-              : await _client.eventsStop(doc);
+      if (recording) {
+        await _client.eventsStart(doc);
+      } else {
+        await _client.eventsStop(doc);
+      }
       if (isClosed) return;
-      _renewWhile(on: on);
-      emit(state._copyWith(recording: on, error: () => null));
+      _renewWhile(on: recording);
+      emit(state._copyWith(recording: recording, error: () => null));
     } on Object catch (e) {
       if (isClosed) return;
       _wanted = state.recording;
@@ -71,9 +72,11 @@ class EventLogCubit extends Cubit<EventLogState> {
     }
   }
 
-  /// Removes every event; recording goes on.
-  void clear() =>
-      emit(state._copyWith(events: const [], selectedN: () => null));
+  /// Removes every event, and forgets the time the app stopped the log;
+  /// recording goes on.
+  void clear() => emit(
+    state._copyWith(events: const [], selectedN: () => null, missed: false),
+  );
 
   /// Selects the event number [n]; `null` clears the selection.
   void select(int? n) {
@@ -89,7 +92,11 @@ class EventLogCubit extends Cubit<EventLogState> {
 
   Future<void> _renew() async {
     try {
-      await _client.eventsStart(doc);
+      final renewed = await _client.eventsStart(doc);
+      // The lease ran out before this renewal: the app stopped the log.
+      if (!renewed && !isClosed && _wanted) {
+        emit(state._copyWith(missed: true));
+      }
     } on Object {
       // The next tick tries again.
     }

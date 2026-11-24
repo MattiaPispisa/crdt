@@ -75,13 +75,14 @@ class DeltaWatchCubit extends Cubit<DeltaWatchState> {
     if (handler == null) return;
     _wanted = watching ? handler : null;
     try {
-      final on =
-          watching
-              ? await _client.watchStart(doc, handler)
-              : await _client.watchStop(doc, handler);
+      if (watching) {
+        await _client.watchStart(doc, handler);
+      } else {
+        await _client.watchStop(doc, handler);
+      }
       if (isClosed || state.handler != handler) return;
-      _renewWhile(on ? handler : null);
-      emit(state._copyWith(watching: on, error: () => null));
+      _renewWhile(watching ? handler : null);
+      emit(state._copyWith(watching: watching, error: () => null));
     } on Object catch (e) {
       if (isClosed || state.handler != handler) return;
       _wanted = state.watching ? handler : null;
@@ -99,7 +100,11 @@ class DeltaWatchCubit extends Cubit<DeltaWatchState> {
 
   Future<void> _renew(String handler) async {
     try {
-      await _client.watchStart(doc, handler);
+      final renewed = await _client.watchStart(doc, handler);
+      // The lease ran out before this renewal: the app stopped the watch.
+      if (!renewed && !isClosed && _wanted == handler) {
+        emit(state._copyWith(missed: true));
+      }
     } on Object {
       // The next tick tries again.
     }

@@ -164,7 +164,11 @@ void main() {
     await client.historyClose(id, session.session);
     await expectLater(
       client.historyState(id, session: session.session, cursor: 0),
-      throwsA(isA<BridgeCallException>()),
+      throwsA(isA<HistorySessionClosed>()),
+    );
+    await expectLater(
+      client.historyState(id, session: session.session, cursor: 0),
+      throwsA(isA<HistorySessionClosed>()),
     );
 
     expect((await client.snapshot(id)).snapshot, isNull);
@@ -185,7 +189,9 @@ void main() {
     final id = await trackedId(doc);
     expect(received.whereType<DocumentsMoved>(), isNotEmpty);
 
+    expect(await client.eventsStart(id), isFalse);
     expect(await client.eventsStart(id), isTrue);
+    expect(await client.watchStart(id, 'text'), isFalse);
     expect(await client.watchStart(id, 'text'), isTrue);
     expect((await client.documents()).single.recording, isTrue);
     await pumpEventQueue();
@@ -207,8 +213,8 @@ void main() {
     expect(delta.type, 'delta');
     expect(delta.local, isTrue);
 
-    expect(await client.eventsStop(id), isFalse);
-    expect(await client.watchStop(id, 'text'), isFalse);
+    await client.eventsStop(id);
+    await client.watchStop(id, 'text');
     received.clear();
     text.insert(1, 'b');
     await pumpEventQueue();

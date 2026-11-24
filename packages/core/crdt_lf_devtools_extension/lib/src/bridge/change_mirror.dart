@@ -111,8 +111,6 @@ class ChangeMirror {
 
   int? _pruneEpoch;
 
-  int _changeCount = 0;
-
   int _generation = 0;
 
   Future<void> _queue = Future.value();
@@ -134,12 +132,6 @@ class ChangeMirror {
 
   int get length => _entries.length;
 
-  /// The prune epoch of the last page; `null` before the first sync.
-  int? get pruneEpoch => _pruneEpoch;
-
-  /// The change count of the document at the last page.
-  int get changeCount => _changeCount;
-
   /// Loads the changes the mirror misses, page by page.
   ///
   /// [onProgress] gets the entries held and the document total after each
@@ -160,7 +152,6 @@ class ChangeMirror {
         continue;
       }
       _pruneEpoch = page.pruneEpoch;
-      _changeCount = page.changeCount;
       for (final bytes in page.changes) {
         _insert(MirrorEntry.decode(bytes));
       }

@@ -110,6 +110,8 @@ class CrdtLfClient {
 
   /// Moves the [session] to [cursor] and reads [handler] there; no value
   /// when [handler] is `null`.
+  ///
+  /// Throws a [HistorySessionClosed] when the app has no such session.
   Future<HistoryState> historyState(
     int doc, {
     required int session,
@@ -118,15 +120,23 @@ class CrdtLfClient {
     int? maxItems,
     int? maxString,
     int? maxDepth,
-  }) async => HistoryState.fromJson(
-    await bridge.call('historyState', {
-      ..._doc(doc),
-      'session': '$session',
-      'cursor': '$cursor',
-      if (handler != null) 'handler': handler,
-      ..._limits(maxItems, maxString, maxDepth),
-    }),
-  );
+  }) async {
+    final Json json;
+    try {
+      json = await bridge.call('historyState', {
+        ..._doc(doc),
+        'session': '$session',
+        'cursor': '$cursor',
+        if (handler != null) 'handler': handler,
+        ..._limits(maxItems, maxString, maxDepth),
+      });
+    } on BridgeCallException catch (e) {
+      // The app refuses an unknown session with this text.
+      if (!e.message.contains('Not open')) rethrow;
+      throw HistorySessionClosed(e.method, e.message);
+    }
+    return HistoryState.fromJson(json);
+  }
 
   /// Ends [session]; a stale one is a no-op.
   Future<void> historyClose(int doc, int session) =>
@@ -135,30 +145,29 @@ class CrdtLfClient {
   Future<SnapshotInfo> snapshot(int doc) async =>
       SnapshotInfo.fromJson(await bridge.call('snapshot', _doc(doc)));
 
-  /// Starts the event log of [doc] and returns `true`.
+  /// Starts the event log of [doc], or renews the one that runs; `true`
+  /// when one was running.
   ///
   /// The app then builds one event per move of the document.
   Future<bool> eventsStart(int doc) async =>
-      (await bridge.call('eventsStart', _doc(doc))).boolean('recording');
+      (await bridge.call('eventsStart', _doc(doc))).boolean('renewed');
 
-  /// Stops the event log of [doc] and returns `false`.
-  Future<bool> eventsStop(int doc) async =>
-      (await bridge.call('eventsStop', _doc(doc))).boolean('recording');
+  /// Stops the event log of [doc].
+  Future<void> eventsStop(int doc) => bridge.call('eventsStop', _doc(doc));
 
-  /// Watches the deltas of [handler] and returns `true`.
+  /// Watches the deltas of [handler], or renews the watch that runs; `true`
+  /// when one was running.
   ///
   /// A watched handler applies remote changes when they arrive, not at the
   /// next read.
   Future<bool> watchStart(int doc, String handler) async => (await bridge.call(
     'watchStart',
     {..._doc(doc), 'handler': handler},
-  )).boolean('watching');
+  )).boolean('renewed');
 
-  /// Stops the delta watch of [handler] and returns `false`.
-  Future<bool> watchStop(int doc, String handler) async => (await bridge.call(
-    'watchStop',
-    {..._doc(doc), 'handler': handler},
-  )).boolean('watching');
+  /// Stops the delta watch of [handler].
+  Future<void> watchStop(int doc, String handler) =>
+      bridge.call('watchStop', {..._doc(doc), 'handler': handler});
 
   static Map<String, String> _doc(int doc) => {'doc': '$doc'};
 
