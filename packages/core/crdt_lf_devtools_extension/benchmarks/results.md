@@ -22,14 +22,14 @@
 
 | Benchmark | RunTime (us) | RunTime (ms) | RunTime (s) |
 | --- | --- | --- | --- |
-| First sync of 10000 changes, idle app | 12483.6667 | 12.4837 | 0.012484 |
-| First sync of 10000 changes, one edit per page | 13508.0000 | 13.5080 | 0.013508 |
-| First sync of 10000 changes, a quiet peer | 12713.6667 | 12.7137 | 0.012714 |
-| Sync of 10000 older remote changes into 10000 changes | 28205.0000 | 28.2050 | 0.028205 |
-| First sync of 50000 changes, idle app | 65519.6667 | 65.5197 | 0.065520 |
-| First sync of 50000 changes, one edit per page | 70636.3333 | 70.6363 | 0.070636 |
-| First sync of 50000 changes, a quiet peer | 66619.3333 | 66.6193 | 0.066619 |
-| Sync of 10000 older remote changes into 50000 changes | 41317.0000 | 41.3170 | 0.041317 |
+| First sync of 10000 changes, idle app | 12679.0000 | 12.6790 | 0.012679 |
+| First sync of 10000 changes, one edit per page | 12655.3333 | 12.6553 | 0.012655 |
+| First sync of 10000 changes, a quiet peer | 12758.0000 | 12.7580 | 0.012758 |
+| Sync of 10000 older remote changes into 10000 changes | 13794.0000 | 13.7940 | 0.013794 |
+| First sync of 50000 changes, idle app | 62260.3333 | 62.2603 | 0.062260 |
+| First sync of 50000 changes, one edit per page | 66109.3333 | 66.1093 | 0.066109 |
+| First sync of 50000 changes, a quiet peer | 58985.6667 | 58.9857 | 0.058986 |
+| Sync of 10000 older remote changes into 50000 changes | 23834.0000 | 23.8340 | 0.023834 |
 
 ### documents_benchmark.dart
 

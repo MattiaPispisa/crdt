@@ -71,6 +71,12 @@ class _TimeTravelTabState extends State<TimeTravelTab> {
           return Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
+              // A reopen that failed before it opened keeps the session.
+              if (state.status == LoadStatus.failure)
+                MessageBanner(
+                  'The call failed: ${state.error}',
+                  onRetry: _travel.reopen,
+                ),
               _CursorBar(state),
               _CurrentChange(state),
               const Divider(height: 1),

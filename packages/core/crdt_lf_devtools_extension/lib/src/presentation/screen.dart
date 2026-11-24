@@ -20,7 +20,6 @@ import 'package:crdt_lf_devtools_extension/src/presentation/widgets/change_link.
 import 'package:crdt_lf_devtools_extension/src/presentation/widgets/handler_names.dart';
 import 'package:crdt_lf_devtools_extension/src/presentation/widgets/message.dart';
 import 'package:crdt_lf_devtools_extension/src/presentation/widgets/text_copier.dart';
-import 'package:devtools_app_shared/ui.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
@@ -91,7 +90,7 @@ class _CrdtLfScreenState extends State<CrdtLfScreen> {
         builder:
             (context, connection) => Column(
               children: [
-                if (connection.paused) const _PausedBanner(),
+                if (connection.paused) const MessageBanner(CrdtLfScreen.paused),
                 Expanded(child: _body(connection)),
               ],
             ),
@@ -110,37 +109,16 @@ class _CrdtLfScreenState extends State<CrdtLfScreen> {
       builder:
           (context, state) => switch (state.status) {
             DocumentsStatus.initial => const PaneMessage('Loading documents…'),
-            DocumentsStatus.failure => PaneMessage(
+            DocumentsStatus.failure when state.documents.isEmpty => PaneMessage(
               'The call failed: ${state.error}',
               onRetry: _documents.refresh,
             ),
             DocumentsStatus.loaded when state.documents.isEmpty =>
               const PaneMessage(CrdtLfScreen.noDocument),
-            DocumentsStatus.loaded => _DocumentView(state: state),
+            // A failed reload keeps the tabs: closing them would end the
+            // event log, the watch and the time travel session.
+            _ => _DocumentView(state: state),
           },
-    );
-  }
-}
-
-class _PausedBanner extends StatelessWidget {
-  const _PausedBanner();
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Container(
-      width: double.infinity,
-      color: theme.colorScheme.secondaryContainer,
-      padding: const EdgeInsets.symmetric(
-        horizontal: defaultSpacing,
-        vertical: densePadding,
-      ),
-      child: Text(
-        CrdtLfScreen.paused,
-        style: theme.regularTextStyle.copyWith(
-          color: theme.colorScheme.onSecondaryContainer,
-        ),
-      ),
     );
   }
 }
@@ -157,6 +135,11 @@ class _DocumentView extends StatelessWidget {
       child: Column(
         children: [
           DocumentHeader(state: state),
+          if (state.error case final error?)
+            MessageBanner(
+              'The call failed: $error',
+              onRetry: context.read<DocumentsCubit>().refresh,
+            ),
           Expanded(
             child: HandlerNames(
               names: state.selected?.handlerNames ?? const {},

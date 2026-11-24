@@ -638,10 +638,9 @@ abstract final class DevToolsBridge {
       ],
       'unfolded': _orNull(
         () => {
-          for (final id in SnapshotRecords.unfoldedEntriesOf(snapshot).keys)
-            id: _orNull(
-              () => SnapshotRecords.unfoldedChangesFor(snapshot, id)?.length,
-            ),
+          for (final MapEntry(key: id, value: entry)
+              in SnapshotRecords.unfoldedEntriesOf(snapshot).entries)
+            id: _orNull(() => SnapshotRecords.unfoldedCountOf(entry)),
         },
       ),
       'requirements': requirements == null
@@ -819,6 +818,13 @@ abstract final class DevToolsBridge {
     Handler<dynamic> handler,
   ) {
     final id = handler.id;
+    // Before `childRefs`, which reads the value of a container.
+    final cache = handler._cachedState == null
+        ? 'none'
+        : handler._cachedEpoch != doc._cache.epoch
+            ? 'stale'
+            : 'warm';
+    final pendingRemote = handler._pendingRemoteChanges?.length ?? 0;
     return {
       'id': id,
       'type': handler.handlerType,
@@ -832,12 +838,8 @@ abstract final class DevToolsBridge {
       ],
       'changeCount': doc.changeCountForHandler(id),
       'revision': doc.revisionForHandler(id),
-      'cache': handler._cachedState == null
-          ? 'none'
-          : handler._cachedEpoch != doc._cache.epoch
-              ? 'stale'
-              : 'warm',
-      'pendingRemote': handler._pendingRemoteChanges?.length ?? 0,
+      'cache': cache,
+      'pendingRemote': pendingRemote,
       'deltas': handler is DeltaProvider,
       'watched': handler.hasDeltaListeners,
       'deltaSeq': handler._deltaHub?.seq ?? 0,

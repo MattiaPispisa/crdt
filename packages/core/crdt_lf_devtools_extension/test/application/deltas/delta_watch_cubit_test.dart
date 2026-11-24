@@ -111,7 +111,11 @@ void main() {
     await Future<void>.delayed(const Duration(milliseconds: 150));
     // The first delta after the lease: the app stops the watch on it.
     text.insert(1, 'b');
-    await Future<void>.delayed(const Duration(milliseconds: 300));
+    // The next renewal finds the work stopped: wait for it, not for a
+    // fixed time.
+    for (var i = 0; i < 100 && !cubit.state.missed; i++) {
+      await Future<void>.delayed(const Duration(milliseconds: 30));
+    }
     expect(cubit.state.missed, isTrue);
     expect(await watched(id, 'text'), isTrue);
   });

@@ -15,6 +15,8 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import '../helpers/failing_bridge.dart';
+
 class _FakeBridge implements CrdtLfBridge {
   final ValueNotifier<bool> connectedValue = ValueNotifier(false);
   final ValueNotifier<bool> availableValue = ValueNotifier(false);
@@ -82,6 +84,31 @@ void main() {
     await tester.tap(find.text('Retry'));
     await settle(tester);
     expect(find.text(CrdtLfScreen.noDocument), findsOneWidget);
+  });
+
+  testWidgets('a failed reload keeps the tabs and shows the error', (
+    tester,
+  ) async {
+    final doc = CRDTDocument(documentId: 'document-id');
+    CRDTTextHandler(doc, 'text').insert(0, 'hi');
+    final bridge = FailingBridge();
+    await pumpScreen(tester, bridge);
+    expect(find.text('State'), findsOneWidget);
+
+    bridge.failing = 'documents';
+    final other = CRDTDocument(documentId: 'other');
+    await settle(tester);
+    expect(find.text('State'), findsOneWidget);
+    expect(find.textContaining('The call failed'), findsOneWidget);
+
+    bridge.failing = null;
+    await tester.tap(find.text('Retry'));
+    await settle(tester);
+    expect(find.textContaining('The call failed'), findsNothing);
+
+    await tester.pumpWidget(const SizedBox());
+    doc.dispose();
+    other.dispose();
   });
 
   testWidgets('the header of the selected document', (tester) async {

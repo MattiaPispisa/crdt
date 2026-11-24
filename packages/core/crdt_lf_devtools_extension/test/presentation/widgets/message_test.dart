@@ -23,6 +23,27 @@ void main() {
     expect(retries, 1);
   });
 
+  testWidgets('a banner shows a retry button only with onRetry', (
+    tester,
+  ) async {
+    var retries = 0;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: Column(
+            children: [
+              const MessageBanner('plain'),
+              MessageBanner('failed', onRetry: () => retries++),
+            ],
+          ),
+        ),
+      ),
+    );
+    expect(find.text('Retry'), findsOneWidget);
+    await tester.tap(find.text('Retry'));
+    expect(retries, 1);
+  });
+
   test('the loading line of the changes', () {
     expect(PaneMessage.loadingChanges(null).text, 'Loading changes…');
     expect(

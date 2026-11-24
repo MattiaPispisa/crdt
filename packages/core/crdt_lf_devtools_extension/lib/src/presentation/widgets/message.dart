@@ -50,3 +50,45 @@ class PaneMessage extends StatelessWidget {
     );
   }
 }
+
+/// A full-width line on a tinted band, with a retry button when [onRetry]
+/// is set.
+class MessageBanner extends StatelessWidget {
+  const MessageBanner(this.text, {this.onRetry, super.key});
+
+  final String text;
+
+  final VoidCallback? onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final retry = onRetry;
+    return Container(
+      width: double.infinity,
+      color: theme.colorScheme.secondaryContainer,
+      padding: const EdgeInsets.symmetric(
+        horizontal: defaultSpacing,
+        vertical: densePadding,
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              text,
+              style: theme.regularTextStyle.copyWith(
+                color: theme.colorScheme.onSecondaryContainer,
+              ),
+            ),
+          ),
+          if (retry != null)
+            DevToolsButton(
+              icon: Icons.refresh,
+              label: 'Retry',
+              onPressed: retry,
+            ),
+        ],
+      ),
+    );
+  }
+}

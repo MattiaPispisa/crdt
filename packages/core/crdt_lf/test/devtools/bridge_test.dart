@@ -263,7 +263,7 @@ void main() {
         {'id': 'text', 'type': text.handlerType},
       ]);
       expect(root['changeCount'], 1);
-      expect(root['cache'], 'warm');
+      expect(root['cache'], 'none');
 
       final child = openHandler(doc, 'text');
       expect(child, {
@@ -341,6 +341,18 @@ void main() {
       expect(openHandler(doc, 'text')['cache'], 'none');
       expect(text.value, 'a');
       expect(openHandler(doc, 'text')['cache'], 'warm');
+    });
+
+    test('a container shows the cache it had before the call', () {
+      final source = CRDTDocument();
+      final child = CRDTTextHandler(source, 'child')..insert(0, 'a');
+      CRDTMapRefHandler(source, 'root').setRef('slot', child);
+      final doc = CRDTDocument()..importChanges(source.exportChanges());
+      CRDTMapRefHandler(doc, 'root');
+
+      // The call reads the children, and so builds the cache, after.
+      expect(openHandler(doc, 'root')['cache'], 'none');
+      expect(openHandler(doc, 'root')['cache'], 'warm');
     });
 
     test('handlerValue encodes the value of each handler kind', () {

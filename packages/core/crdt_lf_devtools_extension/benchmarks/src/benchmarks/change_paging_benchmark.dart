@@ -112,13 +112,12 @@ class OlderBatchSyncBenchmark extends AsyncFixedCycleTimedBenchmark {
     _extension = Extension();
     _mirror = ChangeMirror(_extension.client, await _extension.idOf(_doc));
     await _mirror.sync();
+    // Out of the timed cycle: the app's import is not the mirror's work.
+    _doc.importChanges(_peer.exportChanges());
   }
 
   @override
-  Future<void> run() async {
-    _doc.importChanges(_peer.exportChanges());
-    await _mirror.sync();
-  }
+  Future<void> run() => _mirror.sync();
 
   @override
   Future<void> teardown() async {

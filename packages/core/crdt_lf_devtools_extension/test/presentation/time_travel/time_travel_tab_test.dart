@@ -1,11 +1,14 @@
 // Copyright 2025 Mattia Pispisa
 // SPDX-License-Identifier: MIT
 
+import 'dart:async';
+
 import 'package:crdt_lf/crdt_lf.dart';
 // The bridge is hidden from the public barrel on purpose.
 // ignore: implementation_imports
 import 'package:crdt_lf/src/document/document.dart' show DevToolsBridge;
 import 'package:crdt_lf_devtools_extension/src/application/documents/documents_cubit.dart';
+import 'package:crdt_lf_devtools_extension/src/application/time_travel/time_travel_cubit.dart';
 import 'package:crdt_lf_devtools_extension/src/bridge/change_mirror.dart';
 import 'package:crdt_lf_devtools_extension/src/bridge/crdt_lf_client.dart';
 import 'package:crdt_lf_devtools_extension/src/bridge/in_process_bridge.dart';
@@ -14,6 +17,8 @@ import 'package:crdt_lf_devtools_extension/src/presentation/time_travel/time_tra
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
+
+import '../../helpers/failing_bridge.dart';
 
 void main() {
   setUp(DevToolsBridge.reset);
@@ -24,15 +29,9 @@ void main() {
     await tester.pump();
   }
 
-  testWidgets('moves the cursor, shows the value and reopens', (tester) async {
+  Future<void> pumpTab(WidgetTester tester, InProcessBridge bridge) async {
     await tester.binding.setSurfaceSize(const Size(1600, 1000));
     addTearDown(() => tester.binding.setSurfaceSize(null));
-    final doc = CRDTDocument(documentId: 'd');
-    final text =
-        CRDTTextHandler(doc, 'text')
-          ..insert(0, 'a')
-          ..insert(1, 'b');
-    final bridge = InProcessBridge();
     addTearDown(bridge.dispose);
     final client = CrdtLfClient(bridge);
     final documents = DocumentsCubit(client);
@@ -60,6 +59,43 @@ void main() {
     );
     await settle(tester);
     await settle(tester);
+  }
+
+  testWidgets('a failed reopen keeps the session and shows the error', (
+    tester,
+  ) async {
+    final doc = CRDTDocument(documentId: 'd');
+    CRDTTextHandler(doc, 'text').insert(0, 'a');
+    final bridge = FailingBridge();
+    await pumpTab(tester, bridge);
+    expect(find.text('1 / 1'), findsOneWidget);
+
+    bridge.failing = 'changes';
+    // The reload gate runs on a timer: the pumps below let it fire.
+    unawaited(
+      tester.element(find.byType(Slider)).read<TimeTravelCubit>().reopen(),
+    );
+    await settle(tester);
+
+    expect(find.text('1 / 1'), findsOneWidget);
+    expect(find.textContaining('The call failed'), findsOneWidget);
+    bridge.failing = null;
+    await tester.tap(find.text('Retry'));
+    await settle(tester);
+    expect(find.textContaining('The call failed'), findsNothing);
+
+    doc.dispose();
+    await settle(tester);
+    await tester.pumpWidget(const SizedBox());
+  });
+
+  testWidgets('moves the cursor, shows the value and reopens', (tester) async {
+    final doc = CRDTDocument(documentId: 'd');
+    final text =
+        CRDTTextHandler(doc, 'text')
+          ..insert(0, 'a')
+          ..insert(1, 'b');
+    await pumpTab(tester, InProcessBridge());
 
     expect(find.text('2 / 2'), findsOneWidget);
     expect(find.byType(ChangeRow), findsOneWidget);

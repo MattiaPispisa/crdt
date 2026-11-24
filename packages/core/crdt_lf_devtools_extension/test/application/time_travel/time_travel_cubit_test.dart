@@ -26,15 +26,16 @@ class _HeldBridge extends InProcessBridge {
 
   final Future<void> release;
 
-  bool _held = false;
+  /// Whether the held call came.
+  bool held = false;
 
   @override
   Future<Json> call(
     String method, [
     Map<String, String> params = const {},
   ]) async {
-    if (method == this.method && !_held) {
-      _held = true;
+    if (method == this.method && !held) {
+      held = true;
       await release;
     }
     return super.call(method, params);
@@ -330,7 +331,9 @@ void main() {
     addTearDown(cubit.close);
     await settle();
     // The first renewal waits; the reopen ends the session it renews.
-    await Future<void>.delayed(const Duration(milliseconds: 80));
+    while (!held.held) {
+      await Future<void>.delayed(const Duration(milliseconds: 10));
+    }
     await cubit.reopen();
     await settle();
     final reopened = cubit.state.session!.session;
