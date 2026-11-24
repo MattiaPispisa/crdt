@@ -45,6 +45,10 @@ class DeltaWatchCubit extends Cubit<DeltaWatchState> {
   // arrives.
   String? _wanted;
 
+  // Moves on each start, stop and selection: an answer to an older one is
+  // stale.
+  int _request = 0;
+
   void _onEvent(CrdtLfEvent event) {
     if (event is! HandlerDeltaEvent ||
         event.doc != doc ||
@@ -59,6 +63,7 @@ class DeltaWatchCubit extends Cubit<DeltaWatchState> {
   /// no deltas.
   void select(String? handler) {
     if (handler == state.handler) return;
+    _request++;
     final watched = _wanted;
     if (watched != null) unawaited(_stop(watched));
     _wanted = null;
@@ -73,6 +78,7 @@ class DeltaWatchCubit extends Cubit<DeltaWatchState> {
   Future<void> setWatching({required bool watching}) async {
     final handler = state.handler;
     if (handler == null) return;
+    final request = ++_request;
     _wanted = watching ? handler : null;
     try {
       if (watching) {
@@ -80,11 +86,11 @@ class DeltaWatchCubit extends Cubit<DeltaWatchState> {
       } else {
         await _client.watchStop(doc, handler);
       }
-      if (isClosed || state.handler != handler) return;
+      if (isClosed || request != _request) return;
       _renewWhile(watching ? handler : null);
       emit(state._copyWith(watching: watching, error: () => null));
     } on Object catch (e) {
-      if (isClosed || state.handler != handler) return;
+      if (isClosed || request != _request) return;
       _wanted = state.watching ? handler : null;
       emit(state._copyWith(error: () => '$e'));
     }

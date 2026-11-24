@@ -163,7 +163,8 @@ class TimeTravelCubit extends Cubit<TimeTravelState> {
         cursor: state.cursor,
       );
     } on HistorySessionClosed {
-      _resume();
+      // A newer session can have replaced the one this tick renewed.
+      if (state.session == session) _resume();
     } on Object {
       // The next tick tries again.
     }

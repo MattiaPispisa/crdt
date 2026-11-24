@@ -13,9 +13,21 @@ import 'package:crdt_lf_devtools_extension/src/bridge/models/json.dart';
 
 /// A document whose map handler `map` holds [changes] keys, one change
 /// each.
-CRDTDocument mapDocument(int changes, {String? documentId}) {
+///
+/// With [quietPeer], one more change of another peer comes before them all.
+CRDTDocument mapDocument(
+  int changes, {
+  String? documentId,
+  bool quietPeer = false,
+}) {
   final doc = CRDTDocument(documentId: documentId);
   final map = CRDTMapHandler<int>(doc, 'map', handlerType: 'int map');
+  if (quietPeer) {
+    final peer = CRDTDocument();
+    CRDTMapHandler<int>(peer, 'map', handlerType: 'int map').set('quiet', 0);
+    doc.importChanges(peer.exportChanges());
+    peer.dispose();
+  }
   for (var i = 0; i < changes; i++) {
     map.set('k$i', i);
   }

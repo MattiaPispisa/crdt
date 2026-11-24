@@ -72,8 +72,9 @@ Two features cost the app work, so they start off:
 - **Watch deltas**, on a handler in the State tab: a watched handler applies
   remote changes when they arrive, not at the next read.
 
-Both stop when you leave the document. When DevTools closes, the app stops
-them at their first event after 30 seconds. The same happens when DevTools
+The event log stops when you leave the document. The delta watch also stops
+when you leave the State tab or select another handler. When DevTools closes,
+the app stops them at their first event after 30 seconds. The same happens when DevTools
 cannot reach the app for 30 seconds, for example while the app is paused at a
 breakpoint: the tab then says that some events or deltas are missing.
 

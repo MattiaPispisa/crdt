@@ -16,9 +16,11 @@ import 'package:crdt_lf_devtools_extension/src/bridge/in_process_bridge.dart';
 import 'package:crdt_lf_devtools_extension/src/bridge/models/json.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-// Holds the first `changes` call until [release] completes.
+// Holds the first [method] call until [release] completes.
 class _HeldBridge extends InProcessBridge {
-  _HeldBridge(this.release);
+  _HeldBridge(this.method, this.release);
+
+  final String method;
 
   final Future<void> release;
 
@@ -29,7 +31,7 @@ class _HeldBridge extends InProcessBridge {
     String method, [
     Map<String, String> params = const {},
   ]) async {
-    if (method == 'changes' && !_held) {
+    if (method == this.method && !_held) {
       _held = true;
       await release;
     }
@@ -142,23 +144,24 @@ void main() {
       ..insert(0, 'a')
       ..insert(1, 'b');
     final (id, cubit) = await open(doc);
-    cubit
-      ..select('text')
-      ..moveTo(1);
+    cubit.select('text');
     await settle();
     final ended = cubit.state.session!.session;
 
     await client.historyClose(id, ended);
-    cubit.moveTo(2);
+    // Below the end, where a plain reopen would put the cursor.
+    cubit.moveTo(1);
     await settle();
     expect(cubit.state.session!.session, isNot(ended));
-    expect(cubit.state.cursor, 2);
-    expect(cubit.state.value!.value, 'ab');
+    expect(cubit.state.cursor, 1);
+    expect(cubit.state.value!.value, 'a');
   });
 
   test('a renewal that finds the session ended opens a new one', () async {
     final doc = CRDTDocument(documentId: 'd');
-    CRDTTextHandler(doc, 'text').insert(0, 'a');
+    CRDTTextHandler(doc, 'text')
+      ..insert(0, 'a')
+      ..insert(1, 'b');
     final id = (await client.documents()).single.id;
     final cubit = TimeTravelCubit(
       ChangeMirror(client, id),
@@ -168,11 +171,40 @@ void main() {
     );
     addTearDown(cubit.close);
     await settle();
+    cubit.moveTo(1);
     final ended = cubit.state.session!.session;
 
     await client.historyClose(id, ended);
     await Future<void>.delayed(const Duration(milliseconds: 150));
     expect(cubit.state.session!.session, isNot(ended));
+    expect(cubit.state.cursor, 1);
+  });
+
+  test('a renewal answered after a reopen keeps the new session', () async {
+    final doc = CRDTDocument(documentId: 'd');
+    CRDTTextHandler(doc, 'text').insert(0, 'a');
+    final release = Completer<void>();
+    final held = _HeldBridge('historyState', release.future);
+    addTearDown(held.dispose);
+    final heldClient = CrdtLfClient(held);
+    final id = (await heldClient.documents()).single.id;
+    final cubit = TimeTravelCubit(
+      ChangeMirror(heldClient, id),
+      delay: Duration.zero,
+      valueDelay: Duration.zero,
+      renewEvery: const Duration(milliseconds: 50),
+    );
+    addTearDown(cubit.close);
+    await settle();
+    // The first renewal waits; the reopen ends the session it renews.
+    await Future<void>.delayed(const Duration(milliseconds: 80));
+    await cubit.reopen();
+    await settle();
+    final reopened = cubit.state.session!.session;
+
+    release.complete();
+    await settle();
+    expect(cubit.state.session!.session, reopened);
   });
 
   test('counts an older remote change as new', () async {
@@ -201,7 +233,7 @@ void main() {
     final doc = CRDTDocument(documentId: 'd');
     CRDTTextHandler(doc, 'text').insert(0, 'a');
     final release = Completer<void>();
-    final held = _HeldBridge(release.future);
+    final held = _HeldBridge('changes', release.future);
     addTearDown(held.dispose);
     final heldClient = CrdtLfClient(held);
     final id = (await heldClient.documents()).single.id;
@@ -243,7 +275,7 @@ void main() {
     DevToolsBridge.lease = const Duration(milliseconds: 200);
     addTearDown(() => DevToolsBridge.lease = lease);
     final doc = CRDTDocument(documentId: 'd');
-    CRDTTextHandler(doc, 'text').insert(0, 'a');
+    final text = CRDTTextHandler(doc, 'text')..insert(0, 'a');
     final id = (await client.documents()).single.id;
     final cubit = TimeTravelCubit(
       ChangeMirror(client, id),
@@ -253,8 +285,12 @@ void main() {
     );
     addTearDown(cubit.close);
     await settle();
+    final session = cubit.state.session!.session;
 
     await Future<void>.delayed(const Duration(milliseconds: 400));
+    // A change ends a session past its lease.
+    text.insert(1, 'b');
+    expect(cubit.state.session!.session, session);
     final state = await client.historyState(
       id,
       session: cubit.state.session!.session,

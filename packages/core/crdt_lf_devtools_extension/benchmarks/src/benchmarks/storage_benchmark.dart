@@ -7,10 +7,11 @@ import 'package:flutter_test/flutter_test.dart';
 
 import '../common/fixture.dart';
 
-/// The `snapshot` call the Storage tab makes on each `document` event, on
-/// a snapshot of [size] map keys.
+/// The `snapshot` call the Storage tab makes again on each `document`
+/// event, while the snapshot of [size] map keys stays the same.
 class SnapshotCallBenchmark extends AsyncTimedBenchmarkBase {
-  SnapshotCallBenchmark(this.size) : super('snapshot call, $size keys');
+  SnapshotCallBenchmark(this.size)
+    : super('Repeated snapshot call, $size keys');
 
   final int size;
 

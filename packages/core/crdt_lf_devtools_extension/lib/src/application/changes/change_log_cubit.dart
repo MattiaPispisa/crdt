@@ -188,8 +188,9 @@ class ChangeLogCubit extends Cubit<ChangeLogState> {
       _matched = <MirrorEntry>[];
     }
     final entries = index.entries;
+    final matches = filter.matcher();
     for (var i = from; i < entries.length; i++) {
-      if (filter.matches(entries[i])) _matched.add(entries[i]);
+      if (matches(entries[i])) _matched.add(entries[i]);
     }
     _matchedIndex = index;
     _matchedFilter = filter;

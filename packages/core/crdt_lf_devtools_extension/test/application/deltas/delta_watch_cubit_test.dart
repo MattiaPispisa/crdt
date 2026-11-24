@@ -53,6 +53,24 @@ void main() {
     expect(await watched(id, 'text'), isTrue);
   });
 
+  test('a start answered after the selection came back is dropped', () async {
+    final doc = CRDTDocument();
+    CRDTTextHandler(doc, 'text').insert(0, 'a');
+    CRDTTextHandler(doc, 'other').insert(0, 'b');
+    final id = (await client.documents()).single.id;
+    final cubit = DeltaWatchCubit(client, id)..select('text');
+    addTearDown(cubit.close);
+
+    final start = cubit.setWatching(watching: true);
+    cubit
+      ..select('other')
+      ..select('text');
+    await start;
+
+    expect(cubit.state.watching, isFalse);
+    expect(await watched(id, 'text'), isFalse);
+  });
+
   test('a lease that ran out marks the deltas as missed', () async {
     final lease = DevToolsBridge.lease;
     DevToolsBridge.lease = const Duration(milliseconds: 100);

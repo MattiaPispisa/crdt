@@ -20,15 +20,16 @@ class ChangeFilter extends Equatable {
   bool get isEmpty =>
       author == null && handler == null && kind == null && text.trim().isEmpty;
 
-  /// Whether [entry] passes every filter.
-  bool matches(MirrorEntry entry) {
-    final change = entry.change;
-    if (author != null && change.author.toString() != author) return false;
-    if (handler != null && entry.handlerId != handler) return false;
-    if (kind != null && entry.kind != kind) return false;
+  /// A test that tells whether an entry passes every filter; build it once
+  /// for many entries.
+  bool Function(MirrorEntry entry) matcher() {
+    final author = this.author == null ? null : PeerId.parse(this.author!);
     final needle = text.trim().toLowerCase();
-    return needle.isEmpty ||
-        change.id.toString().toLowerCase().contains(needle);
+    return (entry) =>
+        (author == null || entry.change.author == author) &&
+        (handler == null || entry.handlerId == handler) &&
+        (kind == null || entry.kind == kind) &&
+        (needle.isEmpty || entry.idText.contains(needle));
   }
 
   ChangeFilter copyWith({

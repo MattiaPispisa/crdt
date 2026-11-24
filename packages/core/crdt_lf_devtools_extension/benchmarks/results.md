@@ -1,3 +1,10 @@
+### change_filter_benchmark.dart
+
+| Benchmark | RunTime (us) | RunTime (ms) | RunTime (s) |
+| --- | --- | --- | --- |
+| Id filter on 10000 changes | 120.0500 | 0.1201 | 0.000120 |
+| Id filter on 50000 changes | 709.2000 | 0.7092 | 0.000709 |
+
 ### change_log_benchmark.dart
 
 | Benchmark | RunTime (us) | RunTime (ms) | RunTime (s) |
@@ -11,10 +18,12 @@
 
 | Benchmark | RunTime (us) | RunTime (ms) | RunTime (s) |
 | --- | --- | --- | --- |
-| First sync of 10000 changes, idle app | 13659.0000 | 13.6590 | 0.013659 |
-| First sync of 10000 changes, one edit per page | 12624.6667 | 12.6247 | 0.012625 |
-| First sync of 50000 changes, idle app | 70562.3333 | 70.5623 | 0.070562 |
-| First sync of 50000 changes, one edit per page | 72694.6667 | 72.6947 | 0.072695 |
+| First sync of 10000 changes, idle app | 13419.0000 | 13.4190 | 0.013419 |
+| First sync of 10000 changes, one edit per page | 13267.3333 | 13.2673 | 0.013267 |
+| First sync of 10000 changes, a quiet peer | 13192.3333 | 13.1923 | 0.013192 |
+| First sync of 50000 changes, idle app | 65385.6667 | 65.3857 | 0.065386 |
+| First sync of 50000 changes, one edit per page | 70608.3333 | 70.6083 | 0.070608 |
+| First sync of 50000 changes, a quiet peer | 64854.6667 | 64.8547 | 0.064855 |
 
 ### documents_benchmark.dart
 
@@ -27,15 +36,15 @@
 
 | Benchmark | RunTime (us) | RunTime (ms) | RunTime (s) |
 | --- | --- | --- | --- |
-| handlers call, a closed handler of 10000 changes | 10.1930 | 0.0102 | 0.000010 |
-| handlers call, a closed handler of 50000 changes | 10.1226 | 0.0101 | 0.000010 |
+| Repeated handlers call, a closed handler of 10000 changes | 9.7783 | 0.0098 | 0.000010 |
+| Repeated handlers call, a closed handler of 50000 changes | 9.6090 | 0.0096 | 0.000010 |
 
 ### storage_benchmark.dart
 
 | Benchmark | RunTime (us) | RunTime (ms) | RunTime (s) |
 | --- | --- | --- | --- |
-| snapshot call, 10000 keys | 14.3084 | 0.0143 | 0.000014 |
-| snapshot call, 100000 keys | 14.1892 | 0.0142 | 0.000014 |
+| Repeated snapshot call, 10000 keys | 14.0650 | 0.0141 | 0.000014 |
+| Repeated snapshot call, 100000 keys | 13.8442 | 0.0138 | 0.000014 |
 
 ### tab_switch_benchmark.dart
 

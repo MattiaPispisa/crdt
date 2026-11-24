@@ -7,11 +7,11 @@ import 'package:flutter_test/flutter_test.dart';
 
 import '../common/fixture.dart';
 
-/// The `handlers` call the State tab makes on each change burst, on a
-/// document with a closed handler of [size] changes and no snapshot.
+/// The `handlers` call the State tab makes again on each change burst, on
+/// a document with a closed handler of [size] changes and no snapshot.
 class HandlersCallBenchmark extends AsyncTimedBenchmarkBase {
   HandlersCallBenchmark(this.size)
-    : super('handlers call, a closed handler of $size changes');
+    : super('Repeated handlers call, a closed handler of $size changes');
 
   final int size;
 

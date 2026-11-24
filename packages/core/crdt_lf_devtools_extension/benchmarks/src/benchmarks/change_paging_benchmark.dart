@@ -8,13 +8,28 @@ import 'package:flutter_test/flutter_test.dart';
 
 import '../common/fixture.dart';
 
+/// What the app does while the extension pages.
+enum Load {
+  /// Nothing.
+  idle('idle app'),
+
+  /// One edit before each page.
+  editing('one edit per page'),
+
+  /// Nothing, and the document starts with one change of another peer.
+  quietPeer('a quiet peer');
+
+  const Load(this.label);
+
+  final String label;
+}
+
 /// A first sync of a [ChangeMirror] over a document of [size] changes, in
-/// pages of 1000. With [editing], the app adds a change before each page.
+/// pages of 1000, under [load].
 class FirstSyncBenchmark extends AsyncFixedCycleTimedBenchmark {
-  FirstSyncBenchmark(this.size, {required this.editing})
+  FirstSyncBenchmark(this.size, this.load)
     : super(
-        'First sync of $size changes, '
-        '${editing ? 'one edit per page' : 'idle app'}',
+        'First sync of $size changes, ${load.label}',
         measuredCycles: 3,
         batches: 3,
         settleCycles: 1,
@@ -22,7 +37,7 @@ class FirstSyncBenchmark extends AsyncFixedCycleTimedBenchmark {
 
   final int size;
 
-  final bool editing;
+  final Load load;
 
   late CRDTDocument _doc;
 
@@ -40,11 +55,11 @@ class FirstSyncBenchmark extends AsyncFixedCycleTimedBenchmark {
     if (_ready) await teardown();
     _ready = true;
     resetBridge();
-    _doc = mapDocument(size);
+    _doc = mapDocument(size, quietPeer: load == Load.quietPeer);
     _bridge = HookedBridge('changes', null);
     _extension = Extension(_bridge);
     _id = await _extension.idOf(_doc);
-    if (editing) _bridge.before = () => edit(_doc);
+    if (load == Load.editing) _bridge.before = () => edit(_doc);
   }
 
   @override
@@ -62,8 +77,8 @@ class FirstSyncBenchmark extends AsyncFixedCycleTimedBenchmark {
 void main() {
   test('change paging', () async {
     for (final size in [10000, 50000]) {
-      for (final editing in [false, true]) {
-        await FirstSyncBenchmark(size, editing: editing).report();
+      for (final load in Load.values) {
+        await FirstSyncBenchmark(size, load).report();
       }
     }
   }, timeout: const Timeout(Duration(minutes: 20)));

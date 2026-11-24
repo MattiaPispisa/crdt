@@ -10,7 +10,7 @@ import 'package:equatable/equatable.dart';
 
 /// One change of a [ChangeMirror], with its operation envelope.
 class MirrorEntry extends Equatable {
-  const MirrorEntry({
+  MirrorEntry({
     required this.change,
     required this.bytes,
     required this.deps,
@@ -56,6 +56,11 @@ class MirrorEntry extends Equatable {
   /// The dependencies of [change]. Read them here: [Change.deps] decodes
   /// them again on each call.
   final List<OperationId> deps;
+
+  /// The id of [change] in lower case, for the id filter.
+  ///
+  /// Built at the first read, so a load that filters nothing pays nothing.
+  late final String idText = change.id.toString().toLowerCase();
 
   final String? handlerId;
 

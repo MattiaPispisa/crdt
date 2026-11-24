@@ -974,7 +974,7 @@ final class _Lease {
 
 final class _ChangePages {
   _ChangePages(this._sorted, {required this.changeCount})
-      : _firstByPeer = <PeerId, int>{},
+      : _positions = <PeerId, List<int>>{},
         _latest = VersionVector({}),
         idle = Stopwatch()..start() {
     _index(0);
@@ -982,7 +982,8 @@ final class _ChangePages {
 
   final List<Change> _sorted;
 
-  final Map<PeerId, int> _firstByPeer;
+  // The indexes of the changes of each peer in `_sorted`, in order.
+  final Map<PeerId, List<int>> _positions;
 
   final VersionVector _latest;
 
@@ -991,9 +992,12 @@ final class _ChangePages {
   final Stopwatch idle;
 
   void _index(int from) {
+    for (final positions in _positions.values) {
+      positions.length = positions.lowerBoundBy(from, (p, f) => p - f);
+    }
     for (var i = from; i < _sorted.length; i++) {
       final change = _sorted[i];
-      _firstByPeer.putIfAbsent(change.id.peerId, () => i);
+      (_positions[change.id.peerId] ??= <int>[]).add(i);
       _latest.update(change.id.peerId, change.hlc);
     }
   }
@@ -1033,20 +1037,24 @@ final class _ChangePages {
     _sorted
       ..addAll(tail.skip(i))
       ..addAll(added.skip(j));
-    _firstByPeer.removeWhere((_, index) => index >= first);
     return first;
   }
 
   (List<Change>, bool) after(VersionVector since, int limit) {
-    // The first change newer than `since` for its peer cannot come before
-    // this index.
+    // The page starts at the first change some peer still has to send: a
+    // peer that stopped writing early must not hold every page back.
     var start = _sorted.length;
-    for (final MapEntry(key: peer, value: first) in _firstByPeer.entries) {
+    for (final MapEntry(key: peer, value: positions) in _positions.entries) {
       final clock = since[peer];
-      final from = clock == null
-          ? first
-          : _sorted.lowerBoundBy(clock, (c, t) => c.hlc <= t ? -1 : 1);
-      if (from < start) start = from;
+      final next = clock == null
+          ? 0
+          : positions.lowerBoundBy(
+              clock,
+              (at, t) => _sorted[at].hlc <= t ? -1 : 1,
+            );
+      if (next < positions.length && positions[next] < start) {
+        start = positions[next];
+      }
     }
     final page = <Change>[];
     for (var i = start; i < _sorted.length; i++) {

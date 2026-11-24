@@ -514,6 +514,32 @@ void main() {
       expect(held..sort(compareChangeOrder), doc.exportChanges().sorted());
     });
 
+    test('changes pages past a peer that stopped writing', () {
+      final quiet = CRDTDocument(peerId: PeerId.generate());
+      CRDTTextHandler(quiet, 'text').insert(0, 'q');
+      final doc = CRDTDocument(peerId: PeerId.generate())
+        ..importChanges(quiet.exportChanges());
+      final text = CRDTTextHandler(doc, 'text');
+      for (var i = 0; i < 5; i++) {
+        text.insert(0, 'x');
+      }
+      final id = '${trackedId(doc)}';
+
+      final paged = <Change>[];
+      while (true) {
+        final page = DevToolsBridge.call('changes', {
+          'doc': id,
+          'limit': '2',
+          if (paged.isNotEmpty) 'since': sinceOf(paged),
+        });
+        final changes = decode(page);
+        expect(changes, hasLength(lessThanOrEqualTo(2)));
+        paged.addAll(changes);
+        if (page['done']! as bool) break;
+      }
+      expect(paged, doc.exportChanges().sorted());
+    });
+
     test('changes come in the replay order of two peers', () {
       final a = CRDTDocument(peerId: PeerId.generate());
       final b = CRDTDocument(peerId: PeerId.generate());
@@ -1123,13 +1149,15 @@ void main() {
 
     test('a historyState renews the lease of its session', () async {
       final doc = CRDTDocument();
-      CRDTTextHandler(doc, 'text').insert(0, 'a');
+      final text = CRDTTextHandler(doc, 'text')..insert(0, 'a');
       DevToolsBridge.lease = const Duration(seconds: 2);
       final session = historyOpen(doc)['session'];
-      // Two waits of 1.2 s: the session holds only if the first call
-      // renewed it.
+      // Two waits of 1.2 s, each ended by a change, which ends a session
+      // past its lease: the session holds only if the first call renewed
+      // it.
       for (var i = 0; i < 2; i++) {
         await Future<void>.delayed(const Duration(milliseconds: 1200));
+        text.insert(text.value.length, 'b');
         expect(historyState(doc, session, 1)['value'], 'a');
       }
     });
