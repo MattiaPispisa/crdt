@@ -7,34 +7,17 @@ import 'package:crdt_lf/crdt_lf.dart';
 import 'package:crdt_lf/src/document/document.dart' show DevToolsBridge;
 import 'package:crdt_lf_devtools_extension/src/application/events/event_log_cubit.dart';
 import 'package:crdt_lf_devtools_extension/src/bridge/crdt_lf_client.dart';
-import 'package:crdt_lf_devtools_extension/src/bridge/in_process_bridge.dart';
-import 'package:crdt_lf_devtools_extension/src/bridge/models/json.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-// Answers [slow] calls 50 ms after the app ran them, as a busy VM service.
-class _SlowBridge extends InProcessBridge {
-  String? slow;
-
-  @override
-  Future<Json> call(
-    String method, [
-    Map<String, String> params = const {},
-  ]) async {
-    final answer = await super.call(method, params);
-    if (method == slow) {
-      await Future<void>.delayed(const Duration(milliseconds: 50));
-    }
-    return answer;
-  }
-}
+import '../../helpers/slow_bridge.dart';
 
 void main() {
-  late _SlowBridge bridge;
+  late SlowBridge bridge;
   late CrdtLfClient client;
 
   setUp(() {
     DevToolsBridge.reset();
-    bridge = _SlowBridge();
+    bridge = SlowBridge();
     client = CrdtLfClient(bridge);
   });
 

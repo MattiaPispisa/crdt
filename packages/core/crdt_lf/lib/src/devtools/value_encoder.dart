@@ -55,7 +55,7 @@ final class _ValueEncoder {
       case RichTextSpan():
         return {
           r'$t': 'span',
-          'text': value.text,
+          'text': encode(value.text, next),
           'attributes': encode(value.attributes, next),
           'embed': encode(value.embed, next),
         };

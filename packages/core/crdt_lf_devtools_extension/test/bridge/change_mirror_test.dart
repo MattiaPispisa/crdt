@@ -10,6 +10,8 @@ import 'package:crdt_lf_devtools_extension/src/bridge/crdt_lf_client.dart';
 import 'package:crdt_lf_devtools_extension/src/bridge/in_process_bridge.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import '../helpers/concurrent_peers.dart';
+
 void main() {
   late InProcessBridge bridge;
   late CrdtLfClient client;
@@ -34,7 +36,7 @@ void main() {
   }
 
   List<OperationId> idsOf(ChangeMirror mirror) => [
-    for (final entry in mirror.entries) entry.change.id,
+    for (final entry in mirror.read().entries) entry.change.id,
   ];
 
   List<OperationId> sortedIds(CRDTDocument doc) => [
@@ -56,7 +58,7 @@ void main() {
 
     expect(progress, [(2, 5), (4, 5), (5, 5)]);
     expect(idsOf(mirror), sortedIds(doc));
-    final entry = mirror.entries.first;
+    final entry = mirror.read().entries.first;
     expect(entry.handlerId, 'text');
     expect(entry.handlerType, text.handlerType);
     expect(entry.kind, isNotNull);
@@ -102,24 +104,14 @@ void main() {
     await mirror.sync();
 
     expect(idsOf(mirror), sortedIds(local));
-    expect(mirror.entries.first.change.author, remote.peerId);
+    expect(mirror.read().entries.first.change.author, remote.peerId);
     final read = mirror.read(mark);
     expect(read.from, 0);
     expect(read.entries, hasLength(2));
   });
 
   test('an older remote change keeps the entries before it', () async {
-    final local = CRDTDocument(
-      peerId: PeerId.parse('ffffffff-ffff-4fff-bfff-ffffffffffff'),
-    );
-    final remote = CRDTDocument(
-      peerId: PeerId.parse('00000000-0000-4000-8000-000000000000'),
-    );
-    final text = CRDTTextHandler(local, 'text')..insert(0, 'a');
-    // After the first local change, before the second one.
-    remote.importChanges(local.exportChanges());
-    CRDTTextHandler(remote, 'text').insert(1, 'r');
-    text.insert(1, 'b');
+    final (:local, :remote, text: _) = concurrentPeers();
     final mirror = await mirrorOf(local);
     await mirror.sync();
     final mark = mirror.read().mark;

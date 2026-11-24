@@ -60,8 +60,8 @@ class TimeTravelCubit extends Cubit<TimeTravelState> {
 
   MirrorMark? _mark;
 
-  // The cursor the next session opens at; `null` for its last change.
-  int? _resumeAt;
+  // Whether the next session opens at the cursor, not at its last change.
+  bool _keepCursor = false;
 
   // While a session opens, a call on the one it replaces fails on purpose.
   bool _opening = false;
@@ -111,8 +111,8 @@ class TimeTravelCubit extends Cubit<TimeTravelState> {
   Future<void> reloadValue() => _valueGate.request();
 
   Future<void> _open() async {
-    final resumeAt = _resumeAt;
-    _resumeAt = null;
+    final keepCursor = _keepCursor;
+    _keepCursor = false;
     _opening = true;
     try {
       await _mirror.sync(
@@ -139,7 +139,8 @@ class TimeTravelCubit extends Cubit<TimeTravelState> {
           status: LoadStatus.loaded,
           session: info,
           frozen: frozen,
-          cursor: resumeAt?.clamp(0, info.length) ?? info.length,
+          // The cursor now: the user can move it while the session opens.
+          cursor: keepCursor ? state.cursor.clamp(0, info.length) : info.length,
           newChanges: _mirror.length - frozen.length,
           handler: kept ? null : () => null,
           valueStatus: LoadStatus.initial,
@@ -179,7 +180,7 @@ class TimeTravelCubit extends Cubit<TimeTravelState> {
   // A newer session, open or opening, already replaced [ended].
   void _resume(HistorySessionInfo ended) {
     if (isClosed || _opening || state.session != ended) return;
-    _resumeAt = state.cursor;
+    _keepCursor = true;
     unawaited(reopen());
   }
 

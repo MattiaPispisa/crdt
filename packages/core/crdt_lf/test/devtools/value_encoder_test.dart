@@ -147,6 +147,14 @@ void main() {
       );
     });
 
+    test('cuts the text of a span longer than maxString', () {
+      expect(
+        (encodeDevToolsValue(RichTextSpan('abcdef', {}), maxString: 3)!
+            as Map)['text'],
+        {r'$t': 'string', 'length': 6, 'head': 'abc'},
+      );
+    });
+
     test('encodes bytes as their length and a hex head', () {
       expect(encodeDevToolsValue(Uint8List.fromList([0, 15, 255])), {
         r'$t': 'bytes',

@@ -218,13 +218,17 @@ class _Filters extends StatelessWidget {
     required String Function(T) label,
     required ValueChanged<T?> onChanged,
   }) => RoundedDropDownButton<T>(
-    value: values.contains(value) ? value : null,
+    value: value,
     isDense: true,
     onChanged: onChanged,
     items: [
       DropdownMenuItem<T>(child: Text(all)),
       for (final v in values)
         DropdownMenuItem<T>(value: v, child: Text(label(v))),
+      // A prune can take every change of the filtered value away: the
+      // filter still holds it, so the button shows it.
+      if (value != null && !values.contains(value))
+        DropdownMenuItem<T>(value: value, child: Text(label(value))),
     ],
   );
 }

@@ -18,9 +18,10 @@ import 'package:crdt_lf_devtools_extension/src/bridge/models/json.dart';
 CRDTDocument mapDocument(
   int changes, {
   String? documentId,
+  PeerId? peerId,
   bool quietPeer = false,
 }) {
-  final doc = CRDTDocument(documentId: documentId);
+  final doc = CRDTDocument(documentId: documentId, peerId: peerId);
   final map = CRDTMapHandler<int>(doc, 'map', handlerType: 'int map');
   if (quietPeer) {
     final peer = CRDTDocument();

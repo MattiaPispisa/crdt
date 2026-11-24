@@ -4,6 +4,7 @@
 import 'dart:async';
 
 import 'package:bloc/bloc.dart';
+import 'package:crdt_lf_devtools_extension/src/application/lease_renewal.dart';
 import 'package:crdt_lf_devtools_extension/src/bridge/crdt_lf_client.dart';
 import 'package:crdt_lf_devtools_extension/src/bridge/models/models.dart';
 import 'package:equatable/equatable.dart';
@@ -22,8 +23,8 @@ class DeltaWatchCubit extends Cubit<DeltaWatchState> {
     this._client,
     this.doc, {
     Duration renewEvery = const Duration(seconds: 10),
-  }) : _renewEvery = renewEvery,
-       super(const DeltaWatchState()) {
+  }) : super(const DeltaWatchState()) {
+    _renewal = LeaseRenewal(every: renewEvery, onMissed: _missed);
     _events = _client.events.listen(_onEvent);
   }
 
@@ -37,9 +38,7 @@ class DeltaWatchCubit extends Cubit<DeltaWatchState> {
 
   late final StreamSubscription<CrdtLfEvent> _events;
 
-  final Duration _renewEvery;
-
-  Timer? _renewal;
+  late final LeaseRenewal _renewal;
 
   // Set before the call: the app posts the initial reset before its answer
   // arrives.
@@ -67,7 +66,7 @@ class DeltaWatchCubit extends Cubit<DeltaWatchState> {
     final watched = _wanted;
     if (watched != null) unawaited(_stop(watched));
     _wanted = null;
-    _renewWhile(null);
+    _renewal.stop();
     emit(DeltaWatchState(handler: handler));
   }
 
@@ -81,7 +80,7 @@ class DeltaWatchCubit extends Cubit<DeltaWatchState> {
     final request = ++_request;
     _wanted = watching ? handler : null;
     // Before the stop: a renewal sent after it would start the watch again.
-    if (!watching) _renewWhile(null);
+    if (!watching) _renewal.stop();
     try {
       if (watching) {
         await _client.watchStart(doc, handler);
@@ -89,35 +88,22 @@ class DeltaWatchCubit extends Cubit<DeltaWatchState> {
         await _client.watchStop(doc, handler);
       }
       if (isClosed || request != _request) return;
-      _renewWhile(watching ? handler : null);
+      if (watching) _renewal.start(() => _renew(handler));
       emit(state._copyWith(watching: watching, error: () => null));
     } on Object catch (e) {
       if (isClosed || request != _request) return;
       _wanted = state.watching ? handler : null;
-      _renewWhile(_wanted);
+      if (state.watching) _renewal.start(() => _renew(handler));
       emit(state._copyWith(error: () => '$e'));
     }
   }
 
-  void _renewWhile(String? handler) {
-    _renewal?.cancel();
-    _renewal =
-        handler == null
-            ? null
-            : Timer.periodic(_renewEvery, (_) => unawaited(_renew(handler)));
-  }
+  Future<bool> _renew(String handler) async =>
+      _wanted != handler || await _client.watchStart(doc, handler);
 
-  Future<void> _renew(String handler) async {
-    if (_wanted != handler) return;
-    try {
-      final renewed = await _client.watchStart(doc, handler);
-      // The lease ran out before this renewal: the app stopped the watch.
-      if (!renewed && !isClosed && _wanted == handler) {
-        emit(state._copyWith(missed: true));
-      }
-    } on Object {
-      // The next tick tries again.
-    }
+  // The lease ran out before a renewal: the app stopped the watch.
+  void _missed() {
+    if (!isClosed && _wanted != null) emit(state._copyWith(missed: true));
   }
 
   Future<void> _stop(String handler) async {
@@ -130,7 +116,7 @@ class DeltaWatchCubit extends Cubit<DeltaWatchState> {
 
   @override
   Future<void> close() async {
-    _renewal?.cancel();
+    _renewal.stop();
     final watched = _wanted;
     if (watched != null) unawaited(_stop(watched));
     await _events.cancel();

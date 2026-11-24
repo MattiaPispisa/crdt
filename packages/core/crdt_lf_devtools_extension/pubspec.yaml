@@ -28,6 +28,7 @@ dev_dependencies:
     path: ../../_internal/benchmark_infrastructure
   flutter_test:
     sdk: flutter
+  hlc_dart: ^1.2.0
   ws_lint:
     path: ../../_internal/ws_lint
 

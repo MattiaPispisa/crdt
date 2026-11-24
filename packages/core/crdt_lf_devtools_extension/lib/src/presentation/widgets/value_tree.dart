@@ -143,7 +143,10 @@ class _NodeViewState extends State<_NodeView> {
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('"${map['text']}"', style: fixed),
+            if (map['text'] case final String text)
+              Text('"$text"', style: fixed)
+            else
+              _child(map['text']),
             if (_kind(attributes) == 'map')
               Wrap(
                 spacing: densePadding,

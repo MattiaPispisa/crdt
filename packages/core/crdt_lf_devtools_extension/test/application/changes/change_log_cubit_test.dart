@@ -13,6 +13,8 @@ import 'package:crdt_lf_devtools_extension/src/bridge/in_process_bridge.dart';
 import 'package:crdt_lf_devtools_extension/src/bridge/models/json.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import '../../helpers/concurrent_peers.dart';
+
 // Counts the changes the app sends.
 class _CountingBridge extends InProcessBridge {
   int changes = 0;
@@ -127,7 +129,7 @@ void main() {
     expect('${cubit.state.operation?.payload}', contains('[text, b]'));
   });
 
-  test('a sync leaves the index and the list of the state before', () async {
+  test('an append leaves the index and the list of the state before', () async {
     final doc = CRDTDocument(documentId: 'd');
     final text = CRDTTextHandler(doc, 'text')..insert(0, 'a');
     final cubit = await cubitOf(doc);
@@ -209,18 +211,7 @@ void main() {
   });
 
   test('an older remote change in the middle keeps the filter', () async {
-    final local = CRDTDocument(
-      documentId: 'd',
-      peerId: PeerId.parse('ffffffff-ffff-4fff-bfff-ffffffffffff'),
-    );
-    final remote = CRDTDocument(
-      peerId: PeerId.parse('00000000-0000-4000-8000-000000000000'),
-    );
-    final text = CRDTTextHandler(local, 'text')..insert(0, 'a');
-    // After the first local change, before the second one.
-    remote.importChanges(local.exportChanges());
-    CRDTTextHandler(remote, 'text').insert(1, 'r');
-    text.insert(1, 'b');
+    final (:local, :remote, :text) = concurrentPeers(documentId: 'd');
     final cubit = await cubitOf(local);
     cubit.setFilter(const ChangeFilter(handler: 'text'));
 
@@ -234,6 +225,36 @@ void main() {
     expect(visibleIds(cubit), replay.reversed);
     expect(cubit.state.index.graph.rows, hasLength(4));
     expect(cubit.state.index.authors, hasLength(2));
+  });
+
+  test('a filter set again after a sync in the middle sees it', () async {
+    final (:local, :remote, text: _) = concurrentPeers(documentId: 'd');
+    final cubit = await cubitOf(local);
+    cubit
+      ..setFilter(const ChangeFilter(handler: 'text'))
+      ..setFilter(const ChangeFilter());
+
+    local.importChanges(remote.exportChanges());
+    await settle();
+    cubit.setFilter(const ChangeFilter(handler: 'text'));
+
+    final replay = [for (final c in local.exportChanges().sorted()) c.id];
+    expect(visibleIds(cubit), replay.reversed);
+  });
+
+  test('a selection that a sync brings in the middle loads', () async {
+    final (:local, :remote, text: _) = concurrentPeers(documentId: 'd');
+    final cubit = await cubitOf(local);
+    final arriving = remote.exportChanges().single.id;
+    cubit.select(arriving);
+    await settle();
+    expect(cubit.state.selected, isNull);
+
+    local.importChanges(remote.exportChanges());
+    await settle();
+
+    expect(cubit.state.selected?.change.id, arriving);
+    expect(cubit.state.operationStatus, LoadStatus.loaded);
   });
 
   test('an index extended twice from one base keeps both lines', () {
@@ -257,8 +278,6 @@ void main() {
     expect(second.dependentsOf(a.change.id), [
       if (c.deps.contains(a.change.id)) c.change.id,
     ]);
-    expect(second.startsWith(base), isFalse);
-    expect(first.startsWith(base), isTrue);
   });
 
   test('a second cubit on the same mirror loads no change again', () async {

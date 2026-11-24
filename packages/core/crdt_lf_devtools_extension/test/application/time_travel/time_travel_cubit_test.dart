@@ -16,6 +16,8 @@ import 'package:crdt_lf_devtools_extension/src/bridge/in_process_bridge.dart';
 import 'package:crdt_lf_devtools_extension/src/bridge/models/json.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import '../../helpers/concurrent_peers.dart';
+
 // Holds the first [method] call until [release] completes.
 class _HeldBridge extends InProcessBridge {
   _HeldBridge(this.method, this.release);
@@ -209,6 +211,42 @@ void main() {
     expect(cubit.state.cursor, 1);
   });
 
+  test('a resume opens at the cursor the user moved to meanwhile', () async {
+    final doc = CRDTDocument(documentId: 'd');
+    CRDTTextHandler(doc, 'text')
+      ..insert(0, 'a')
+      ..insert(1, 'b')
+      ..insert(2, 'c');
+    final reopening = _ReopenBridge();
+    addTearDown(reopening.dispose);
+    final reopenClient = CrdtLfClient(reopening);
+    final id = (await reopenClient.documents()).single.id;
+    final cubit = TimeTravelCubit(
+      ChangeMirror(reopenClient, id),
+      delay: Duration.zero,
+      valueDelay: Duration.zero,
+    );
+    addTearDown(cubit.close);
+    cubit.select('text');
+    await settle();
+
+    // The app ends the session; the next value load starts a resume,
+    // whose open waits.
+    await reopenClient.historyClose(id, cubit.state.session!.session);
+    final hold = Completer<void>();
+    reopening.holdChanges = hold;
+    cubit.moveTo(1);
+    await settle();
+    cubit.moveTo(2);
+    await settle();
+    hold.complete();
+    await settle();
+
+    expect(reopening.opens, 2);
+    expect(cubit.state.cursor, 2);
+    expect(cubit.state.value!.value, 'ab');
+  });
+
   test('a renewal answered after a reopen keeps the new session', () async {
     final doc = CRDTDocument(documentId: 'd');
     CRDTTextHandler(doc, 'text').insert(0, 'a');
@@ -301,22 +339,13 @@ void main() {
   });
 
   test('counts an older remote change in the middle as new', () async {
-    final remote = CRDTDocument(
-      peerId: PeerId.parse('00000000-0000-4000-8000-000000000000'),
-    );
-    final doc = CRDTDocument(
-      documentId: 'd',
-      peerId: PeerId.parse('ffffffff-ffff-4fff-bfff-ffffffffffff'),
-    );
-    final text = CRDTTextHandler(doc, 'text')..insert(0, 'a');
-    // After the first local change, before the second one.
-    remote.importChanges(doc.exportChanges());
-    CRDTTextHandler(remote, 'text').insert(1, 'r');
-    text.insert(1, 'b');
+    final (local: doc, :remote, text: _) = concurrentPeers(documentId: 'd');
     final (_, cubit) = await open(doc);
 
     doc.importChanges(remote.exportChanges());
     await settle();
+    // In the middle, not at the end: the count must not rely on appends.
+    expect(doc.exportChanges().sorted()[1].author, remote.peerId);
     expect(cubit.state.newChanges, 1);
   });
 

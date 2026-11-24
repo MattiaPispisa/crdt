@@ -141,10 +141,13 @@ class ChangeLogCubit extends Cubit<ChangeLogState> {
       if (isClosed) return;
       final read = _mirror.read(_mark);
       _mark = read.mark;
-      final index = state.index.replaceFrom(read.from, read.entries);
+      // Before `replaceFrom`, which changes the tables the old index reads.
+      final wasLoaded = state.selected != null;
+      final previous = state.index;
+      final index = previous.replaceFrom(read.from, read.entries);
       final selectedId = state.selectedId;
       final kept = selectedId != null && index.entryOf(selectedId) != null;
-      final pending = kept && state.selected == null;
+      final pending = kept && !wasLoaded;
       emit(
         state._copyWith(
           status: LoadStatus.loaded,
@@ -153,7 +156,8 @@ class ChangeLogCubit extends Cubit<ChangeLogState> {
             index,
             state.filter,
             state.newestFirst,
-            kept: read.from,
+            previous: previous,
+            keep: read.from,
           ),
           selectedId: kept ? null : () => null,
           operationStatus: kept ? null : LoadStatus.initial,
@@ -174,28 +178,37 @@ class ChangeLogCubit extends Cubit<ChangeLogState> {
     emit(state._copyWith(progress: () => (loaded: loaded, total: total)));
   }
 
+  // [keep]: how many entries [index] took from [previous], the index of the
+  // state before; with no [previous], [index] is that index.
   List<MirrorEntry> _visible(
     ChangeIndex index,
     ChangeFilter filter,
     bool newestFirst, {
-    int? kept,
+    ChangeIndex? previous,
+    int? keep,
   }) {
     final entries =
         filter.isEmpty
             ? index.entries
-            : _matching(index, filter, kept ?? index.entries.length);
+            : _matching(
+              index,
+              filter,
+              previous ?? index,
+              keep ?? index.entries.length,
+            );
     return newestFirst ? ReversedView(entries) : entries;
   }
 
-  // [kept]: how many entries [index] took from the state before.
   List<MirrorEntry> _matching(
     ChangeIndex index,
     ChangeFilter filter,
-    int kept,
+    ChangeIndex previous,
+    int keep,
   ) {
     var from = 0;
-    if (filter == _matchedFilter && index.startsWith(_matchedIndex)) {
-      from = min(kept, _matchedIndex.entries.length);
+    // The cache follows the index only while each state builds it.
+    if (filter == _matchedFilter && identical(_matchedIndex, previous)) {
+      from = min(keep, previous.entries.length);
       final positions = index._tables?.positions ?? const {};
       while (_matched.isNotEmpty &&
           (positions[_matched.last.change.id] ?? from) >= from) {

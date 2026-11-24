@@ -152,6 +152,17 @@ void main() {
     expect(rich('"a.png"'), findsOneWidget);
   });
 
+  testWidgets('a span with a cut text', (tester) async {
+    await pump(tester, {
+      r'$t': 'span',
+      'text': {r'$t': 'string', 'length': 12, 'head': 'abc'},
+      'attributes': {r'$t': 'map', 'length': 0, 'entries': <Object?>[]},
+      'embed': null,
+    });
+    expect(rich('"abc'), findsOneWidget);
+    expect(find.text('… 9 more'), findsOneWidget);
+  });
+
   testWidgets('bytes', (tester) async {
     await pump(tester, {r'$t': 'bytes', 'length': 40, 'head': '00ff'});
     expect(find.text('bytes · length 40'), findsOneWidget);

@@ -14,13 +14,14 @@ import '../common/fixture.dart';
 /// One edit of a document of [size] changes, until [cubit] shows it.
 ///
 /// With [concurrent], a peer that edits at the same time sends one change
-/// too, older than the local edit: it lands before the end of the list.
+/// too. It lands one place before the end: it sorts after what the peer
+/// got, and before the local edit.
 abstract class LiveSyncBenchmark<C extends BlocBase<Object?>>
     extends AsyncFixedCycleTimedBenchmark {
   LiveSyncBenchmark(String what, this.size, {this.concurrent = false})
     : super(
         concurrent
-            ? '$what, one edit and an older remote one on $size changes'
+            ? '$what, one edit and a concurrent remote one on $size changes'
             : '$what, one edit on $size changes',
         measuredCycles: 50,
       );
@@ -31,7 +32,7 @@ abstract class LiveSyncBenchmark<C extends BlocBase<Object?>>
 
   late CRDTDocument _doc;
 
-  late CRDTDocument _peer;
+  CRDTDocument? _peer;
 
   late Extension _extension;
 
@@ -47,9 +48,19 @@ abstract class LiveSyncBenchmark<C extends BlocBase<Object?>>
     if (_ready) await teardown();
     _ready = true;
     resetBridge();
-    _doc = mapDocument(size);
-    _peer = CRDTDocument();
-    CRDTMapHandler<int>(_peer, 'map', handlerType: 'int map');
+    // The peer id sorts first: a remote change equal in clock to the local
+    // edit goes before it.
+    _doc = mapDocument(
+      size,
+      peerId: PeerId.parse('ffffffff-ffff-4fff-bfff-ffffffffffff'),
+    );
+    if (concurrent) {
+      final peer =
+          _peer = CRDTDocument(
+            peerId: PeerId.parse('00000000-0000-4000-8000-000000000000'),
+          )..importChanges(_doc.exportChanges());
+      CRDTMapHandler<int>(peer, 'map', handlerType: 'int map');
+    }
     _extension = Extension();
     final id = await _extension.idOf(_doc);
     cubit = create(_extension, id);
@@ -59,11 +70,14 @@ abstract class LiveSyncBenchmark<C extends BlocBase<Object?>>
   @override
   Future<void> run() async {
     final next = cubit.stream.first;
-    if (concurrent) {
-      final sent = _peer.getVersionVector();
-      edit(_peer);
+    if (_peer case final peer?) {
+      peer.importChanges(
+        _doc.exportChanges(fromVersionVector: peer.getVersionVector()),
+      );
+      final sent = peer.getVersionVector();
+      edit(peer);
       edit(_doc);
-      _doc.importChanges(_peer.exportChanges(fromVersionVector: sent));
+      _doc.importChanges(peer.exportChanges(fromVersionVector: sent));
     } else {
       edit(_doc);
     }
@@ -76,7 +90,8 @@ abstract class LiveSyncBenchmark<C extends BlocBase<Object?>>
     await cubit.close();
     _extension.dispose();
     _doc.dispose();
-    _peer.dispose();
+    _peer?.dispose();
+    _peer = null;
     resetBridge();
   }
 }

@@ -109,6 +109,25 @@ void main() {
     await tester.pumpWidget(const SizedBox());
   });
 
+  testWidgets('a filter on an author with no change left shows it', (
+    tester,
+  ) async {
+    final doc = CRDTDocument(documentId: 'd');
+    CRDTTextHandler(doc, 'text').insert(0, 'a');
+    await openTab(tester, []);
+    final gone = PeerId.generate().toString();
+
+    tester
+        .element(find.byType(ChangeLogList))
+        .read<ChangeLogCubit>()
+        .setFilter(ChangeFilter(author: gone));
+    await settle(tester);
+
+    expect(find.text(gone.substring(0, 8)), findsOneWidget);
+    expect(find.text('All authors'), findsNothing);
+    expect(find.text('No change matches.'), findsOneWidget);
+  });
+
   testWidgets('a closed handler and the snapshot row', (tester) async {
     final remote = CRDTDocument(documentId: 'd');
     CRDTTextHandler(remote, 'closed').insert(0, 'x');

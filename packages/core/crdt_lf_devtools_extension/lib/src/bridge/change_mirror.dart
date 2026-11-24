@@ -121,8 +121,6 @@ class ChangeMirror {
 
   Future<void> _queue = Future.value();
 
-  List<MirrorEntry> get entries => List.unmodifiable(_entries);
-
   /// What moved since [mark], and the mark to read from next.
   ///
   /// With no [mark], `from` is 0 and `entries` holds every entry.

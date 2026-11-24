@@ -4,6 +4,7 @@
 import 'dart:async';
 
 import 'package:bloc/bloc.dart';
+import 'package:crdt_lf_devtools_extension/src/application/lease_renewal.dart';
 import 'package:crdt_lf_devtools_extension/src/bridge/crdt_lf_client.dart';
 import 'package:crdt_lf_devtools_extension/src/bridge/models/models.dart';
 import 'package:equatable/equatable.dart';
@@ -21,8 +22,8 @@ class EventLogCubit extends Cubit<EventLogState> {
     this._client,
     this.doc, {
     Duration renewEvery = const Duration(seconds: 10),
-  }) : _renewEvery = renewEvery,
-       super(const EventLogState()) {
+  }) : super(const EventLogState()) {
+    _renewal = LeaseRenewal(every: renewEvery, onMissed: _missed);
     _events = _client.events.listen(_onEvent);
     unawaited(_stop());
   }
@@ -37,9 +38,7 @@ class EventLogCubit extends Cubit<EventLogState> {
 
   late final StreamSubscription<CrdtLfEvent> _events;
 
-  final Duration _renewEvery;
-
-  Timer? _renewal;
+  late final LeaseRenewal _renewal;
 
   // Set before the call: the app posts events before its answer arrives.
   bool _wanted = false;
@@ -57,7 +56,7 @@ class EventLogCubit extends Cubit<EventLogState> {
   Future<void> setRecording({required bool recording}) async {
     _wanted = recording;
     // Before the stop: a renewal sent after it would start the log again.
-    if (!recording) _renewWhile(on: false);
+    if (!recording) _renewal.stop();
     try {
       if (recording) {
         await _client.eventsStart(doc);
@@ -65,12 +64,12 @@ class EventLogCubit extends Cubit<EventLogState> {
         await _client.eventsStop(doc);
       }
       if (isClosed) return;
-      _renewWhile(on: recording);
+      if (recording) _renewal.start(_renew);
       emit(state._copyWith(recording: recording, error: () => null));
     } on Object catch (e) {
       if (isClosed) return;
       _wanted = state.recording;
-      _renewWhile(on: state.recording);
+      if (state.recording) _renewal.start(_renew);
       emit(state._copyWith(error: () => '$e'));
     }
   }
@@ -87,23 +86,11 @@ class EventLogCubit extends Cubit<EventLogState> {
     emit(state._copyWith(selectedN: () => n));
   }
 
-  void _renewWhile({required bool on}) {
-    _renewal?.cancel();
-    _renewal =
-        on ? Timer.periodic(_renewEvery, (_) => unawaited(_renew())) : null;
-  }
+  Future<bool> _renew() async => !_wanted || await _client.eventsStart(doc);
 
-  Future<void> _renew() async {
-    if (!_wanted) return;
-    try {
-      final renewed = await _client.eventsStart(doc);
-      // The lease ran out before this renewal: the app stopped the log.
-      if (!renewed && !isClosed && _wanted) {
-        emit(state._copyWith(missed: true));
-      }
-    } on Object {
-      // The next tick tries again.
-    }
+  // The lease ran out before a renewal: the app stopped the log.
+  void _missed() {
+    if (!isClosed && _wanted) emit(state._copyWith(missed: true));
   }
 
   Future<void> _stop() async {
@@ -116,7 +103,7 @@ class EventLogCubit extends Cubit<EventLogState> {
 
   @override
   Future<void> close() async {
-    _renewal?.cancel();
+    _renewal.stop();
     if (_wanted) unawaited(_stop());
     await _events.cancel();
     return super.close();

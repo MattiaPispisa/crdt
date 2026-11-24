@@ -9,14 +9,14 @@
 
 | Benchmark | RunTime (us) | RunTime (ms) | RunTime (s) |
 | --- | --- | --- | --- |
-| Change log, one edit on 10000 changes | 60.4800 | 0.0605 | 0.000060 |
-| Time travel, one edit on 10000 changes | 54.3800 | 0.0544 | 0.000054 |
-| Change log, one edit and an older remote one on 10000 changes | 65.1400 | 0.0651 | 0.000065 |
-| Time travel, one edit and an older remote one on 10000 changes | 62.1400 | 0.0621 | 0.000062 |
-| Change log, one edit on 50000 changes | 56.1400 | 0.0561 | 0.000056 |
-| Time travel, one edit on 50000 changes | 51.2000 | 0.0512 | 0.000051 |
-| Change log, one edit and an older remote one on 50000 changes | 65.8400 | 0.0658 | 0.000066 |
-| Time travel, one edit and an older remote one on 50000 changes | 61.9000 | 0.0619 | 0.000062 |
+| Change log, one edit on 10000 changes | 61.4800 | 0.0615 | 0.000061 |
+| Time travel, one edit on 10000 changes | 53.2800 | 0.0533 | 0.000053 |
+| Change log, one edit and a concurrent remote one on 10000 changes | 66.6200 | 0.0666 | 0.000067 |
+| Time travel, one edit and a concurrent remote one on 10000 changes | 64.3600 | 0.0644 | 0.000064 |
+| Change log, one edit on 50000 changes | 53.5200 | 0.0535 | 0.000054 |
+| Time travel, one edit on 50000 changes | 51.3000 | 0.0513 | 0.000051 |
+| Change log, one edit and a concurrent remote one on 50000 changes | 66.7400 | 0.0667 | 0.000067 |
+| Time travel, one edit and a concurrent remote one on 50000 changes | 64.6400 | 0.0646 | 0.000065 |
 
 ### change_paging_benchmark.dart
 

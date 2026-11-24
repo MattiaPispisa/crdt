@@ -95,12 +95,6 @@ class ChangeIndex {
     final tables => PrefixView(tables.entries, _length),
   };
 
-  /// Whether this index was built from [other], or from an index built
-  /// from it.
-  bool startsWith(ChangeIndex other) =>
-      other._tables == null ||
-      (identical(_tables, other._tables) && other._length <= _length);
-
   /// This index with [added] after its entries, in replay order; this index
   /// stays as it is.
   ChangeIndex extend(List<MirrorEntry> added) => replaceFrom(_length, added);

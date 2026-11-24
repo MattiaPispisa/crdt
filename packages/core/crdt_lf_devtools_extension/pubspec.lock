@@ -215,7 +215,7 @@ packages:
     source: sdk
     version: "0.0.0"
   hlc_dart:
-    dependency: "direct overridden"
+    dependency: "direct dev"
     description:
       path: "../hlc"
       relative: true
