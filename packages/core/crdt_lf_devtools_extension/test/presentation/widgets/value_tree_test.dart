@@ -45,13 +45,50 @@ void main() {
     await pump(tester, list(20));
     expect(find.text('f0: '), findsNWidgets(20));
 
-    await tester.pumpWidget(const SizedBox());
+    // The same tree, grown past the limit.
     await pump(tester, list(21));
     expect(find.text('f0: '), findsNothing);
     expect(find.text('map · 10 entries'), findsNWidgets(21));
     await tester.tap(find.text('map · 10 entries').first);
     await tester.pump();
     expect(find.text('f0: '), findsOneWidget);
+
+    // A tap holds over a new value.
+    await pump(tester, list(22));
+    expect(find.text('f0: '), findsOneWidget);
+  });
+
+  testWidgets('the rows of sets and objects count too', (tester) async {
+    Object set(int items) => {
+      r'$t': 'set',
+      'length': items,
+      'items': [for (var i = 0; i < items; i++) i],
+    };
+    for (final (value, title) in [
+      (
+        {
+          r'$t': 'set',
+          'length': 1,
+          'items': [set(201)],
+        },
+        'set · 201 items',
+      ),
+      (
+        {
+          r'$t': 'list',
+          'length': 1,
+          'items': [set(201)],
+        },
+        'set · 201 items',
+      ),
+      ({r'$t': 'object', 'type': 'Point', 'json': set(201)}, 'set · 201 items'),
+    ]) {
+      await tester.pumpWidget(const SizedBox());
+      await pump(tester, value);
+      expect(find.text(title), findsOneWidget);
+      // At most the row of the nested set itself.
+      expect(find.text('•: ').evaluate().length, lessThan(2));
+    }
   });
 
   testWidgets('scalars and the non-finite double', (tester) async {

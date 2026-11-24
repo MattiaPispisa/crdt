@@ -46,7 +46,8 @@ An operation can only be decoded when its handler is open in the app.
 
 Give a document or a handler a debug name, and every tab shows the name in
 place of the id. The State filter also searches by name, and the handler
-filter of the Changes tab lists the names. A debug name stays on this peer: it is never synced or stored.
+filter of the Changes tab lists the names. A debug name stays on this peer:
+it is never synced or stored.
 
 ```dart
 final doc = CRDTDocument(debugName: 'notes');
@@ -74,9 +75,10 @@ Two features cost the app work, so they start off:
 
 The event log stops when you leave the document. The delta watch also stops
 when you leave the State tab or select another handler. When DevTools closes,
-the app stops them at their first event after 30 seconds. The same happens when DevTools
-cannot reach the app for 30 seconds, for example while the app is paused at a
-breakpoint: the tab then says that some events or deltas are missing.
+the app stops them at their first event after 30 seconds. The same happens
+when DevTools cannot reach the app for 30 seconds, for example while the app
+is paused at a breakpoint: the tab then says that some events or deltas are
+missing.
 
 The Time travel tab keeps a copy of the history in the app while it is open.
 When DevTools closes, the app drops it at its first change after 30 seconds.

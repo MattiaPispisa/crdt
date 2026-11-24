@@ -17,6 +17,7 @@ import 'package:crdt_lf_devtools_extension/src/presentation/changes/change_log_l
 import 'package:crdt_lf_devtools_extension/src/presentation/changes/change_row.dart';
 import 'package:crdt_lf_devtools_extension/src/presentation/changes/changes_tab.dart';
 import 'package:crdt_lf_devtools_extension/src/presentation/changes/lane_graph_painter.dart';
+import 'package:crdt_lf_devtools_extension/src/presentation/widgets/handler_names.dart';
 import 'package:crdt_lf_devtools_extension/src/presentation/widgets/text_copier.dart';
 import 'package:devtools_app_shared/ui.dart';
 import 'package:flutter/material.dart';
@@ -33,7 +34,11 @@ void main() {
     await tester.pump();
   }
 
-  Future<void> openTab(WidgetTester tester, List<String> copied) async {
+  Future<void> openTab(
+    WidgetTester tester,
+    List<String> copied, {
+    Map<String, String> names = const {},
+  }) async {
     await tester.binding.setSurfaceSize(const Size(1600, 1000));
     addTearDown(() => tester.binding.setSurfaceSize(null));
     final bridge = InProcessBridge();
@@ -55,8 +60,11 @@ void main() {
                   (context, state) =>
                       state.selectedId == null
                           ? const SizedBox()
-                          : ChangesTab(
-                            mirror: ChangeMirror(client, state.selectedId!),
+                          : HandlerNames(
+                            names: names,
+                            child: ChangesTab(
+                              mirror: ChangeMirror(client, state.selectedId!),
+                            ),
                           ),
             ),
           ),
@@ -127,6 +135,22 @@ void main() {
     expect(find.text(gone.substring(0, 8)), findsOneWidget);
     expect(find.text('All authors'), findsNothing);
     expect(find.text('No change matches.'), findsOneWidget);
+  });
+
+  testWidgets('the handler filter lists the debug names', (tester) async {
+    final doc = CRDTDocument(documentId: 'd');
+    CRDTTextHandler(doc, 'text').insert(0, 'a');
+    await openTab(tester, [], names: {'text': 'title'});
+
+    await tester.tap(find.text('All handlers'));
+    await settle(tester);
+    expect(
+      find.descendant(
+        of: find.byType(DropdownMenuItem<String>),
+        matching: find.text('title'),
+      ),
+      findsWidgets,
+    );
   });
 
   testWidgets('a sync rebuilds the filters only for a new value', (

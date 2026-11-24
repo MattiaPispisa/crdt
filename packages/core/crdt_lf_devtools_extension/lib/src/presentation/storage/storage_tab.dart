@@ -92,91 +92,69 @@ class _StoragePage extends StatelessWidget {
     final unfolded = snapshot?.unfolded ?? const {};
     String label(String id) => HandlerNames.label(context, id);
     return SelectionArea(
-      child: ListView(
-        children: [
-          const _Section('Version'),
-          FieldTable([
-            ('frontiers', _mono(context, summary.frontiers.join(', '))),
-          ]),
+      // Slivers: a snapshot can hold thousands of entries, and the page is
+      // built again on each change of the document.
+      child: CustomScrollView(
+        slivers: [
+          _box(const _Section('Version')),
+          _box(FieldTable.texts([('frontiers', summary.frontiers.join(', '))])),
           _VersionVector(summary.versionVector, local: summary.peerId),
-          const _Section('Snapshot'),
+          _box(const _Section('Snapshot')),
           if (snapshot == null)
-            _Line(StorageTab.noSnapshot, style: theme.subtleTextStyle)
+            _box(_Line(StorageTab.noSnapshot, style: theme.subtleTextStyle))
           else ...[
-            FieldTable([
-              ('id', _SnapshotId(snapshot.id)),
-              ('bytes', _mono(context, '${snapshot.bytes}')),
-            ]),
+            _box(
+              FieldTable([
+                ('id', _SnapshotId(snapshot.id)),
+                ('bytes', _mono(context, '${snapshot.bytes}')),
+              ]),
+            ),
             _VersionVector(snapshot.versionVector, local: summary.peerId),
             _Entries(state.entriesBySize),
           ],
           if (unfolded.isNotEmpty) ...[
-            const _Section('Carried changes'),
-            _Table(
-              header: const ['handler', 'changes'],
-              rows: [
-                // A count is `null` when the app cannot read its record.
-                for (final MapEntry(:key, :value) in unfolded.entries)
-                  [
-                    _mono(context, label(key)),
-                    _mono(context, '${value ?? '?'}'),
-                  ],
-              ],
-            ),
+            _box(const _Section('Carried changes')),
+            _Unfolded(unfolded),
           ],
           if (info.deleted.isNotEmpty) ...[
-            const _Section('Deleted handlers'),
-            for (final id in info.deleted)
-              _Line(label(id), style: theme.fixedFontStyle),
+            _box(const _Section('Deleted handlers')),
+            _SliverTable(
+              flex: const [1],
+              count: info.deleted.length,
+              row: (i) => [_mono(context, label(info.deleted[i]))],
+            ),
           ],
-          const _Section('Formats'),
-          _Table(
-            header: const ['type', 'this build reads', 'the data needs'],
-            rows: [
-              for (final row in state.formats)
-                [
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Flexible(child: _mono(context, row.type)),
-                      if (row.missing) ...[
-                        const SizedBox(width: densePadding),
-                        Icon(
-                          Icons.warning_amber,
-                          size: defaultIconSize,
-                          color: theme.colorScheme.error,
-                        ),
-                        const SizedBox(width: densePadding),
-                        const RoundedLabel(labelText: StorageTab.missingLabel),
-                      ],
-                    ],
-                  ),
-                  _mono(context, row.reads ?? '-'),
-                  _mono(context, row.needs ?? '-'),
-                ],
-            ],
-          ),
-          const _Section('Undo managers'),
+          _box(const _Section('Formats')),
+          _box(_Formats(state.formats)),
+          _box(const _Section('Undo managers')),
           if (detail.undo.isEmpty)
-            _Line('None.', style: theme.subtleTextStyle)
+            _box(_Line('None.', style: theme.subtleTextStyle))
           else
             for (final (i, m) in detail.undo.indexed)
-              _Line(
-                '#$i · undo ${m.undoDepth} · redo ${m.redoDepth} · '
-                'tracked [${m.tracked.map(label).join(', ')}] · '
-                'limit ${m.stackLimit} · '
-                'capture ${m.captureTimeout.inMilliseconds} ms',
-                style: theme.fixedFontStyle,
+              _box(
+                _Line(
+                  '#$i · undo ${m.undoDepth} · redo ${m.redoDepth} · '
+                  'tracked [${m.tracked.map(label).join(', ')}] · '
+                  'limit ${m.stackLimit} · '
+                  'capture ${m.captureTimeout.inMilliseconds} ms',
+                  style: theme.fixedFontStyle,
+                ),
               ),
-          const SizedBox(height: defaultSpacing),
+          _box(const SizedBox(height: defaultSpacing)),
         ],
       ),
     );
   }
 }
 
-Widget _mono(BuildContext context, String text) =>
-    Text(text, style: Theme.of(context).fixedFontStyle);
+Widget _box(Widget child) => SliverToBoxAdapter(child: child);
+
+Widget _mono(BuildContext context, String text) => Text(
+  text,
+  maxLines: 1,
+  overflow: TextOverflow.ellipsis,
+  style: Theme.of(context).fixedFontStyle,
+);
 
 class _Section extends StatelessWidget {
   const _Section(this.title);
@@ -200,6 +178,166 @@ class _Line extends StatelessWidget {
     padding: const EdgeInsets.all(densePadding),
     child: Text(text, style: style),
   );
+}
+
+/// A lazy table: one row of [defaultRowHeight] per index of [row], under
+/// [header] when it has one.
+class _SliverTable extends StatelessWidget {
+  const _SliverTable({
+    required this.flex,
+    required this.count,
+    required this.row,
+    this.header,
+  });
+
+  final List<String>? header;
+
+  /// The relative width of each column.
+  final List<int> flex;
+
+  final int count;
+
+  final List<Widget> Function(int index) row;
+
+  @override
+  Widget build(BuildContext context) {
+    final subtle = Theme.of(context).subtleTextStyle;
+    final offset = header == null ? 0 : 1;
+    return SliverPadding(
+      padding: const EdgeInsets.all(densePadding),
+      sliver: SliverFixedExtentList.builder(
+        itemExtent: defaultRowHeight,
+        itemCount: count + offset,
+        itemBuilder: (context, i) {
+          final cells =
+              i < offset
+                  ? [for (final title in header!) Text(title, style: subtle)]
+                  : row(i - offset);
+          return Row(
+            children: [
+              for (final (column, cell) in cells.indexed)
+                Expanded(
+                  flex: flex[column],
+                  child: Padding(
+                    padding: const EdgeInsets.only(right: defaultSpacing),
+                    // A label keeps its own width.
+                    child: Align(alignment: Alignment.centerLeft, child: cell),
+                  ),
+                ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _VersionVector extends StatelessWidget {
+  const _VersionVector(this.vector, {required this.local});
+
+  final Map<String, String> vector;
+
+  final String local;
+
+  @override
+  Widget build(BuildContext context) {
+    final entries = vector.entries.toList();
+    return _SliverTable(
+      header: const ['peer', 'clock'],
+      flex: const [1, 2],
+      count: entries.length,
+      row: (i) {
+        final MapEntry(:key, :value) = entries[i];
+        return [PeerChip(key, local: key == local), _mono(context, value)];
+      },
+    );
+  }
+}
+
+class _Entries extends StatelessWidget {
+  const _Entries(this.entries);
+
+  final List<SnapshotEntry> entries;
+
+  @override
+  Widget build(BuildContext context) => _SliverTable(
+    header: const ['key', 'type', 'bytes', ''],
+    flex: const [4, 4, 1, 1],
+    count: entries.length,
+    row: (i) {
+      final e = entries[i];
+      return [
+        _mono(context, e.reserved ? e.key : HandlerNames.label(context, e.key)),
+        _mono(context, e.type ?? '-'),
+        _mono(context, '${e.bytes}'),
+        if (e.reserved)
+          const RoundedLabel(labelText: 'reserved')
+        else
+          const SizedBox(),
+      ];
+    },
+  );
+}
+
+class _Unfolded extends StatelessWidget {
+  const _Unfolded(this.counts);
+
+  final Map<String, int?> counts;
+
+  @override
+  Widget build(BuildContext context) {
+    final entries = counts.entries.toList();
+    return _SliverTable(
+      header: const ['handler', 'changes'],
+      flex: const [4, 1],
+      count: entries.length,
+      row: (i) {
+        final MapEntry(:key, :value) = entries[i];
+        return [
+          _mono(context, HandlerNames.label(context, key)),
+          // `null` when the app cannot read the record.
+          _mono(context, '${value ?? '?'}'),
+        ];
+      },
+    );
+  }
+}
+
+class _Formats extends StatelessWidget {
+  const _Formats(this.formats);
+
+  final List<FormatRow> formats;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return _Table(
+      header: const ['type', 'this build reads', 'the data needs'],
+      rows: [
+        for (final row in formats)
+          [
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Flexible(child: Text(row.type, style: theme.fixedFontStyle)),
+                if (row.missing) ...[
+                  const SizedBox(width: densePadding),
+                  Icon(
+                    Icons.warning_amber,
+                    size: defaultIconSize,
+                    color: theme.colorScheme.error,
+                  ),
+                  const SizedBox(width: densePadding),
+                  const RoundedLabel(labelText: StorageTab.missingLabel),
+                ],
+              ],
+            ),
+            Text(row.reads ?? '-', style: theme.fixedFontStyle),
+            Text(row.needs ?? '-', style: theme.fixedFontStyle),
+          ],
+      ],
+    );
+  }
 }
 
 class _Table extends StatelessWidget {
@@ -235,49 +373,6 @@ class _Table extends StatelessWidget {
     padding: const EdgeInsets.only(right: defaultSpacing, bottom: densePadding),
     // A table cell is as wide as its column: a label keeps its own width.
     child: Align(alignment: Alignment.centerLeft, child: child),
-  );
-}
-
-class _VersionVector extends StatelessWidget {
-  const _VersionVector(this.vector, {required this.local});
-
-  final Map<String, String> vector;
-
-  final String local;
-
-  @override
-  Widget build(BuildContext context) => _Table(
-    header: const ['peer', 'clock'],
-    rows: [
-      for (final MapEntry(:key, :value) in vector.entries)
-        [PeerChip(key, local: key == local), _mono(context, value)],
-    ],
-  );
-}
-
-class _Entries extends StatelessWidget {
-  const _Entries(this.entries);
-
-  final List<SnapshotEntry> entries;
-
-  @override
-  Widget build(BuildContext context) => _Table(
-    header: const ['key', 'type', 'bytes', ''],
-    rows: [
-      for (final e in entries)
-        [
-          _mono(
-            context,
-            e.reserved ? e.key : HandlerNames.label(context, e.key),
-          ),
-          _mono(context, e.type ?? '-'),
-          _mono(context, '${e.bytes}'),
-          if (e.reserved)
-            const RoundedLabel(labelText: 'reserved')
-          else
-            const SizedBox(),
-        ],
-    ],
   );
 }
 

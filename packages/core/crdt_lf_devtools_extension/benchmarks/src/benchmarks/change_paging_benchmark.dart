@@ -129,12 +129,12 @@ class OlderBatchSyncBenchmark extends AsyncFixedCycleTimedBenchmark {
   }
 }
 
-/// A sync of a [ChangeMirror] that holds [size] changes, after a
-/// `garbageCollect` that removes none of them.
+/// A `garbageCollect` that removes none of the [size] changes, and the sync
+/// of a [ChangeMirror] that holds them.
 class IdlePruneSyncBenchmark extends AsyncFixedCycleTimedBenchmark {
   IdlePruneSyncBenchmark(this.size)
     : super(
-        'Sync of $size changes after a prune that removes nothing',
+        'Prune that removes nothing and sync, $size changes',
         measuredCycles: 3,
         batches: 3,
         setupPerBatch: false,

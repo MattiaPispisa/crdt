@@ -41,6 +41,7 @@ void main() {
       'gone': 'old title',
       'list': 'numbers',
       'undo': 'body',
+      'crdt_lf/handler-manifest': 'not a handler',
     };
     final copied = <String>[];
     final bridge = InProcessBridge();
@@ -83,6 +84,13 @@ void main() {
 
     final snapshot = doc.takeSnapshot();
     await settle(tester);
+    // The entries, by name; a reserved key is not a handler.
+    expect(find.text('title'), findsOneWidget);
+    expect(find.text('me'), findsNWidgets(2));
+    expect(find.text('crdt_lf/handler-manifest'), findsOneWidget);
+    // The carried changes of the handler this build has no instance of.
+    expect(find.text('Carried changes'), findsOneWidget);
+    expect(find.text('numbers'), findsOneWidget);
     expect(find.text(StorageTab.noSnapshot), findsNothing);
     expect(find.text('reserved'), findsWidgets);
     expect(find.text('me'), findsNWidgets(2));
@@ -94,5 +102,32 @@ void main() {
     await settle(tester);
     await tester.pumpWidget(const SizedBox());
     await settle(tester);
+  });
+
+  testWidgets('builds only the entries on screen', (tester) async {
+    final doc = CRDTDocument(documentId: 'd');
+    for (var i = 0; i < 300; i++) {
+      CRDTTextHandler(doc, 'handler $i').insert(0, 'a');
+    }
+    doc.takeSnapshot();
+    final bridge = InProcessBridge();
+    addTearDown(bridge.dispose);
+    final client = CrdtLfClient(bridge);
+    final id = (await client.documents()).single.id;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: RepositoryProvider.value(
+            value: client,
+            child: StorageTab(doc: id),
+          ),
+        ),
+      ),
+    );
+    await settle(tester);
+
+    final rows = find.textContaining('handler ').evaluate().length;
+    expect(rows, inInclusiveRange(1, 100));
+    await tester.pumpWidget(const SizedBox());
   });
 }

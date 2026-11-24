@@ -22,7 +22,7 @@ class StorageCubit extends Cubit<StorageState> {
     this._client,
     this.doc, {
     Duration delay = const Duration(milliseconds: 100),
-  }) : super(const StorageState()) {
+  }) : super(StorageState()) {
     _gate = ReloadGate(_load, delay: delay);
     _events = _client.events.listen(_onEvent);
     unawaited(refresh());

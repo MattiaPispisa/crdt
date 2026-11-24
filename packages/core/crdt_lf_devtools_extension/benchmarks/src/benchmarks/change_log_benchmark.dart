@@ -8,14 +8,22 @@ import 'package:crdt_lf_devtools_extension/src/application/changes/change_log_cu
 import 'package:crdt_lf_devtools_extension/src/application/time_travel/time_travel_cubit.dart';
 import 'package:crdt_lf_devtools_extension/src/bridge/change_mirror.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:hlc_dart/hlc_dart.dart';
 
 import '../common/fixture.dart';
 
+final _local = PeerId.parse('ffffffff-ffff-4fff-bfff-ffffffffffff');
+
+final _remote = PeerId.parse('00000000-0000-4000-8000-000000000000');
+
+// One map entry set by another peer.
+final _payload = mapDocument(1).exportChanges().single.payloadBytes();
+
 /// One edit of a document of [size] changes, until [cubit] shows it.
 ///
-/// With [concurrent], a peer that edits at the same time sends one change
-/// too. It lands one place before the end: it sorts after what the peer
-/// got, and before the local edit. The work of the peer is not timed.
+/// With [concurrent], a change of another peer comes too. It lands one place
+/// before the end: it has the clock of the local edit, and its peer id sorts
+/// first.
 abstract class LiveSyncBenchmark<C extends BlocBase<Object?>>
     extends AsyncFixedCycleTimedBenchmark {
   LiveSyncBenchmark(String what, this.size, {this.concurrent = false})
@@ -32,9 +40,7 @@ abstract class LiveSyncBenchmark<C extends BlocBase<Object?>>
 
   late CRDTDocument _doc;
 
-  CRDTDocument? _peer;
-
-  List<Change> _incoming = const [];
+  Change? _incoming;
 
   late Extension _extension;
 
@@ -50,87 +56,63 @@ abstract class LiveSyncBenchmark<C extends BlocBase<Object?>>
     if (_ready) await teardown();
     _ready = true;
     resetBridge();
-    // The peer id sorts first: a remote change equal in clock to the local
-    // edit goes before it.
+    // An hour ahead of the wall clock, so the clock only counts.
     _doc = mapDocument(
       size,
-      peerId: PeerId.parse('ffffffff-ffff-4fff-bfff-ffffffffffff'),
+      peerId: _local,
+      initialClock: HybridLogicalClock(
+        l:
+            DateTime.now().millisecondsSinceEpoch +
+            const Duration(hours: 1).inMilliseconds,
+        c: 0,
+      ),
     );
-    if (concurrent) {
-      final peer =
-          _peer = CRDTDocument(
-            peerId: PeerId.parse('00000000-0000-4000-8000-000000000000'),
-          )..importChanges(_doc.exportChanges());
-      CRDTMapHandler<int>(peer, 'map', handlerType: 'int map');
-    }
     _extension = Extension();
     final id = await _extension.idOf(_doc);
     cubit = create(_extension, id);
     await settle();
   }
 
-  void _editPeer() {
-    final peer = _peer;
-    if (peer == null) return;
-    peer.importChanges(
-      _doc.exportChanges(fromVersionVector: peer.getVersionVector()),
+  @override
+  void prepareCycle() {
+    if (!concurrent) return;
+    _incoming = Change.fromPayloadBytes(
+      // The clock the local edit of the cycle gets.
+      id: OperationId(_remote, _doc.hlc..localEvent(0)),
+      deps: _doc.version,
+      author: _remote,
+      payloadBytes: _payload,
     );
-    final sent = peer.getVersionVector();
-    edit(peer);
-    _incoming = peer.exportChanges(fromVersionVector: sent);
   }
 
   @override
   Future<void> run() async {
     final next = cubit.stream.first;
     edit(_doc);
-    if (_incoming.isNotEmpty) _doc.importChanges(_incoming);
+    if (_incoming case final change?) _doc.importChanges([change]);
     await next;
-  }
-
-  // The base loop, with the edit of the peer outside the stopwatch.
-  @override
-  Future<double> measure() async {
-    try {
-      await setup();
-      final warmup = Stopwatch()..start();
-      while (warmup.elapsed < warmupDuration) {
-        _editPeer();
-        await run();
-      }
-      var best = double.infinity;
-      for (var batch = 0; batch < batches; batch++) {
-        await setup();
-        for (var cycle = 0; cycle < settleCycles; cycle++) {
-          _editPeer();
-          await run();
-        }
-        final timed = Stopwatch();
-        for (var cycle = 0; cycle < measuredCycles; cycle++) {
-          _editPeer();
-          timed.start();
-          await run();
-          timed.stop();
-        }
-        final perCycle = timed.elapsedMicroseconds / measuredCycles;
-        if (perCycle < best) best = perCycle;
-      }
-      return best;
-    } finally {
-      await teardown();
-    }
   }
 
   @override
   Future<void> teardown() async {
     _ready = false;
+    if (concurrent) _checkOrder();
     await cubit.close();
     _extension.dispose();
     _doc.dispose();
-    _peer?.dispose();
-    _peer = null;
-    _incoming = const [];
     resetBridge();
+  }
+
+  // A remote change that lands at the end would time a plain append.
+  void _checkOrder() {
+    final tail = _doc.exportChanges().sorted().reversed.take(
+      2 * measuredCycles,
+    );
+    for (final (i, change) in tail.indexed) {
+      if (change.author != (i.isEven ? _local : _remote)) {
+        throw StateError('The remote change is not one place before the end');
+      }
+    }
   }
 }
 

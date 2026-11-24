@@ -9,14 +9,14 @@
 
 | Benchmark | RunTime (us) | RunTime (ms) | RunTime (s) |
 | --- | --- | --- | --- |
-| Change log, one edit on 10000 changes | 63.8400 | 0.0638 | 0.000064 |
-| Time travel, one edit on 10000 changes | 56.8200 | 0.0568 | 0.000057 |
-| Change log, one edit and a concurrent remote one on 10000 changes | 61.3200 | 0.0613 | 0.000061 |
-| Time travel, one edit and a concurrent remote one on 10000 changes | 60.0600 | 0.0601 | 0.000060 |
-| Change log, one edit on 50000 changes | 56.6400 | 0.0566 | 0.000057 |
-| Time travel, one edit on 50000 changes | 54.7600 | 0.0548 | 0.000055 |
-| Change log, one edit and a concurrent remote one on 50000 changes | 61.0800 | 0.0611 | 0.000061 |
-| Time travel, one edit and a concurrent remote one on 50000 changes | 60.1000 | 0.0601 | 0.000060 |
+| Change log, one edit on 10000 changes | 63.8600 | 0.0639 | 0.000064 |
+| Time travel, one edit on 10000 changes | 57.1200 | 0.0571 | 0.000057 |
+| Change log, one edit and a concurrent remote one on 10000 changes | 61.7000 | 0.0617 | 0.000062 |
+| Time travel, one edit and a concurrent remote one on 10000 changes | 59.8400 | 0.0598 | 0.000060 |
+| Change log, one edit on 50000 changes | 58.2200 | 0.0582 | 0.000058 |
+| Time travel, one edit on 50000 changes | 57.0800 | 0.0571 | 0.000057 |
+| Change log, one edit and a concurrent remote one on 50000 changes | 65.4200 | 0.0654 | 0.000065 |
+| Time travel, one edit and a concurrent remote one on 50000 changes | 60.2600 | 0.0603 | 0.000060 |
 
 ### change_paging_benchmark.dart
 
@@ -37,9 +37,9 @@
 
 | Benchmark | RunTime (us) | RunTime (ms) | RunTime (s) |
 | --- | --- | --- | --- |
-| Edit with the Changes tab open, 10 handlers | 7184.6000 | 7.1846 | 0.007185 |
-| Edit with the Changes tab open, 1000 handlers | 4682.6000 | 4.6826 | 0.004683 |
-| Edit with the Changes tab open, 5000 handlers | 4183.0000 | 4.1830 | 0.004183 |
+| Edit with the Changes tab open, 10 handlers | 4746.2000 | 4.7462 | 0.004746 |
+| Edit with the Changes tab open, 1000 handlers | 3998.2000 | 3.9982 | 0.003998 |
+| Edit with the Changes tab open, 5000 handlers | 3971.3000 | 3.9713 | 0.003971 |
 
 ### documents_benchmark.dart
 
@@ -62,6 +62,14 @@
 | Repeated snapshot call, 10000 keys | 14.0650 | 0.0141 | 0.000014 |
 | Repeated snapshot call, 100000 keys | 13.8442 | 0.0138 | 0.000014 |
 
+### storage_tab_benchmark.dart
+
+| Benchmark | RunTime (us) | RunTime (ms) | RunTime (s) |
+| --- | --- | --- | --- |
+| Edit with the Storage tab open, 10 handlers | 1705.8000 | 1.7058 | 0.001706 |
+| Edit with the Storage tab open, 1000 handlers | 2868.2000 | 2.8682 | 0.002868 |
+| Edit with the Storage tab open, 5000 handlers | 5499.3000 | 5.4993 | 0.005499 |
+
 ### tab_switch_benchmark.dart
 
 | Benchmark | RunTime (us) | RunTime (ms) | RunTime (s) |
@@ -75,6 +83,8 @@
 
 | Benchmark | RunTime (us) | RunTime (ms) | RunTime (s) |
 | --- | --- | --- | --- |
-| Value change, 200 maps of 5 fields | 11561.8000 | 11.5618 | 0.011562 |
-| Value change, 200 maps of 20 fields | 10726.2000 | 10.7262 | 0.010726 |
+| Value change, 20 maps of 10 fields | 13705.0000 | 13.7050 | 0.013705 |
+| Value change, 200 maps of 5 fields | 9944.0000 | 9.9440 | 0.009944 |
+| Value change, 200 maps of 20 fields | 11656.2000 | 11.6562 | 0.011656 |
+| Value change, 20 maps of 200 fields, grown from 1 | 2797.8000 | 2.7978 | 0.002798 |
 

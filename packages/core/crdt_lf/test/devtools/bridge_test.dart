@@ -34,6 +34,11 @@ void main() {
         (DevToolsBridge.call('documents', {})['documents']! as List)
             .cast<Map<String, Object?>>();
 
+    List<Map<String, Object?>> posted(String kind) => [
+          for (final (k, data) in events)
+            if (k == kind) data,
+        ];
+
     int trackedId(CRDTDocument doc) =>
         documents().firstWhere((d) => d['documentId'] == doc.documentId)['id']!
             as int;
@@ -545,6 +550,10 @@ void main() {
       // The copy is built for a caller that already holds two changes.
       expect(page(all.sublist(0, 2)), all.sublist(2, 4));
       expect(page(const []), all.sublist(0, 2));
+      // The last page drops the copy.
+      expect(DevToolsBridge.held(doc).paging, isTrue);
+      expect(page(all.sublist(0, 4)), all.sublist(4));
+      expect(DevToolsBridge.held(doc).paging, isFalse);
     });
 
     test('changes pages past a peer that stopped writing', () {
@@ -602,16 +611,26 @@ void main() {
       expect(changes.map((c) => c.author).toSet(), {a.peerId, b.peerId});
     });
 
-    test('a prune that removes nothing keeps the epoch', () {
+    test('a prune that removes nothing keeps the epoch', () async {
       final doc = CRDTDocument();
-      final text = CRDTTextHandler(doc, 'text')..insert(0, 'a');
+      final text = CRDTFugueTextHandler(doc, 'text')..insert(0, 'a');
+      final undo = CRDTUndoManager(doc)..track(text);
       doc.takeSnapshot();
       final pruned = doc.getVersionVector();
       text.insert(1, 'b');
       expect(documents().single['pruneEpoch'], 1);
+      expect(undo.canUndo, isTrue);
+      await pumpEventQueue();
+      events.clear();
 
       doc.garbageCollect(pruned);
       expect(documents().single['pruneEpoch'], 1);
+      // It still drops the undo history, which the tool shows.
+      expect(undo.canUndo, isFalse);
+      await pumpEventQueue();
+      final event = posted('crdt_lf:devtools:document').single;
+      expect(event['pruned'], isFalse);
+      expect(event['handlers'], isTrue);
     });
 
     test('changes drops the pruned changes and moves pruneEpoch', () {
@@ -947,11 +966,6 @@ void main() {
       expect(snapshot['unfolded'], {'list': 1});
       expect(snapshot['requirements'], isNull);
     });
-
-    List<Map<String, Object?>> posted(String kind) => [
-          for (final (k, data) in events)
-            if (k == kind) data,
-        ];
 
     test('the event log reports writes, imports, snapshots and prunes',
         () async {

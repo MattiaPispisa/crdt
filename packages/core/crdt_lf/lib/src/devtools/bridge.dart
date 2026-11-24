@@ -468,9 +468,7 @@ abstract final class DevToolsBridge {
           }
           _post(_deltaEvent, _delta(tracked, id, update));
         },
-        onDone: () {
-          if (tracked.deltas.remove(id) != null) _watchMoved(tracked);
-        },
+        onDone: () => tracked.deltas.remove(id),
       ),
     );
     _watchMoved(tracked);

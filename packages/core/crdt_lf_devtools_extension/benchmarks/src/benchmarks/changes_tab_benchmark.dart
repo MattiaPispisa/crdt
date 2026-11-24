@@ -17,6 +17,9 @@ class ChangesTabEditBenchmark extends AsyncFixedCycleTimedBenchmark {
   ChangesTabEditBenchmark(this.tester, this.handlers)
     : super(
         'Edit with the Changes tab open, $handlers handlers',
+        // Long: the tab runs cold code for its first seconds, and only the
+        // first row would pay for it.
+        warmupDuration: const Duration(seconds: 4),
         measuredCycles: 10,
         batches: 3,
         setupPerBatch: false,

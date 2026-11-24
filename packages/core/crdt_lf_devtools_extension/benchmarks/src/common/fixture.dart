@@ -10,6 +10,7 @@ import 'package:crdt_lf/src/document/document.dart' show DevToolsBridge;
 import 'package:crdt_lf_devtools_extension/src/bridge/crdt_lf_client.dart';
 import 'package:crdt_lf_devtools_extension/src/bridge/in_process_bridge.dart';
 import 'package:crdt_lf_devtools_extension/src/bridge/models/json.dart';
+import 'package:hlc_dart/hlc_dart.dart';
 
 /// A document whose map handler `map` holds [changes] keys, one change
 /// each.
@@ -19,9 +20,14 @@ CRDTDocument mapDocument(
   int changes, {
   String? documentId,
   PeerId? peerId,
+  HybridLogicalClock? initialClock,
   bool quietPeer = false,
 }) {
-  final doc = CRDTDocument(documentId: documentId, peerId: peerId);
+  final doc = CRDTDocument(
+    documentId: documentId,
+    peerId: peerId,
+    initialClock: initialClock,
+  );
   final map = CRDTMapHandler<int>(doc, 'map', handlerType: 'int map');
   if (quietPeer) {
     final peer = CRDTDocument();

@@ -5,7 +5,7 @@ part of 'storage_cubit.dart';
 
 /// The `document` and `snapshot` answers of a document.
 class StorageState extends Equatable {
-  const StorageState({
+  StorageState({
     this.status = LoadStatus.initial,
     this.detail,
     this.snapshot,
@@ -24,9 +24,9 @@ class StorageState extends Equatable {
   final String? error;
 
   /// The snapshot entries, largest first.
-  List<SnapshotEntry> get entriesBySize =>
-      [...?snapshot?.snapshot?.entries]
-        ..sort((a, b) => b.bytes.compareTo(a.bytes));
+  late final List<SnapshotEntry> entriesBySize = [
+    ...?snapshot?.snapshot?.entries,
+  ]..sort((a, b) => b.bytes.compareTo(a.bytes));
 
   /// The formats the data needs, by handler type.
   ///

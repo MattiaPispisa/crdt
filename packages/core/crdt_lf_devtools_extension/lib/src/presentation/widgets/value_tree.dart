@@ -7,9 +7,10 @@ import 'package:flutter/material.dart';
 
 /// Draws a value node of the `crdt_lf` DevTools protocol.
 ///
-/// Collections and objects below [expandedDepth] start collapsed, and below
-/// the first level when they would show more than [maxExpandedRows] rows. A
-/// collection cut by the app ends with a "… n more" line.
+/// Collections and objects below [expandedDepth] are collapsed, and below
+/// the first level when they would show more than [maxExpandedRows] rows; a
+/// tap on one overrides it. A collection cut by the app ends with a
+/// "… n more" line.
 class ValueTree extends StatelessWidget {
   const ValueTree(this.node, {this.onRef, super.key});
 
@@ -18,10 +19,10 @@ class ValueTree extends StatelessWidget {
   /// Called with the handler id when a `ref` node is tapped.
   final ValueChanged<String>? onRef;
 
-  /// The depth from which nested nodes start collapsed.
+  /// The depth from which nested nodes are collapsed.
   static const int expandedDepth = 2;
 
-  /// The most rows of the second level that start expanded.
+  /// The most rows of the second level that are shown expanded.
   static const int maxExpandedRows = 200;
 
   @override
@@ -82,7 +83,10 @@ class _NodeView extends StatefulWidget {
 }
 
 class _NodeViewState extends State<_NodeView> {
-  late bool _expanded = widget.depth < widget.expandedDepth;
+  // What the user chose; `null` before the first tap.
+  bool? _toggled;
+
+  bool get _expanded => _toggled ?? widget.depth < widget.expandedDepth;
 
   Object? get node => widget.node;
 
@@ -259,7 +263,7 @@ class _NodeViewState extends State<_NodeView> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         InkWell(
-          onTap: () => setState(() => _expanded = !_expanded),
+          onTap: () => setState(() => _toggled = !_expanded),
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
