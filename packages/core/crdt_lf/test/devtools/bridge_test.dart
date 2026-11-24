@@ -822,6 +822,52 @@ void main() {
       );
     });
 
+    test('history opens on a manifest it cannot read', () {
+      final source = CRDTDocument();
+      final child = CRDTTextHandler(source, 'text')..insert(0, 'a');
+      CRDTMapRefHandler(source, 'root').setRef('slot', child);
+      final snapshot = source.takeSnapshot();
+      final doc = CRDTDocument()
+        ..importSnapshot(
+          Snapshot(
+            id: snapshot.id,
+            versionVector: snapshot.versionVector,
+            data: {
+              ...snapshot.data,
+              'crdt_lf/handler-manifest': Uint8List.fromList([0xFF]),
+            },
+          ),
+        );
+      final text = CRDTTextHandler(doc, 'text');
+
+      final open = historyOpen(doc);
+      expect(open['handlers'], [
+        {'id': 'text', 'type': text.handlerType},
+      ]);
+      expect(historyState(doc, open['session'], 0)['value'], 'a');
+    });
+
+    test('an undo manager posts what it moves', () async {
+      final doc = CRDTDocument();
+      final text = CRDTFugueTextHandler(doc, 'text')..insert(0, 'a');
+      Future<void> moves(void Function() act) async {
+        await pumpEventQueue();
+        events.clear();
+        act();
+        await pumpEventQueue();
+        final event = posted('crdt_lf:devtools:document').single;
+        expect(event['handlers'], isTrue);
+      }
+
+      late final CRDTUndoManager undo;
+      await moves(() => undo = CRDTUndoManager(doc));
+      await moves(() => undo.track(text));
+      text.insert(0, 'b');
+      await moves(undo.clear);
+      await moves(() => undo.untrack(text));
+      await moves(undo.dispose);
+    });
+
     test('every session before the newest one is replaced', () {
       final doc = CRDTDocument();
       CRDTTextHandler(doc, 'text').insert(0, 'a');

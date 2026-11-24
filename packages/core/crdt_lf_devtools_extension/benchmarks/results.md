@@ -26,12 +26,12 @@
 | First sync of 10000 changes, one edit per page | 13629.3333 | 13.6293 | 0.013629 |
 | First sync of 10000 changes, a quiet peer | 13015.6667 | 13.0157 | 0.013016 |
 | Sync of 10000 older remote changes into 10000 changes | 13972.0000 | 13.9720 | 0.013972 |
-| Sync of 10000 changes after a prune that removes nothing | 693.0000 | 0.6930 | 0.000693 |
+| Prune that removes nothing and sync, 10000 changes | 693.0000 | 0.6930 | 0.000693 |
 | First sync of 50000 changes, idle app | 66713.0000 | 66.7130 | 0.066713 |
 | First sync of 50000 changes, one edit per page | 72831.6667 | 72.8317 | 0.072832 |
 | First sync of 50000 changes, a quiet peer | 65838.0000 | 65.8380 | 0.065838 |
 | Sync of 10000 older remote changes into 50000 changes | 25521.0000 | 25.5210 | 0.025521 |
-| Sync of 50000 changes after a prune that removes nothing | 3359.6667 | 3.3597 | 0.003360 |
+| Prune that removes nothing and sync, 50000 changes | 3359.6667 | 3.3597 | 0.003360 |
 
 ### changes_tab_benchmark.dart
 

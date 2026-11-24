@@ -12,6 +12,7 @@ import 'package:crdt_lf_devtools_extension/src/presentation/storage/storage_tab.
 import 'package:crdt_lf_devtools_extension/src/presentation/widgets/handler_names.dart';
 import 'package:crdt_lf_devtools_extension/src/presentation/widgets/text_copier.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -90,6 +91,8 @@ void main() {
     expect(find.text('crdt_lf/handler-manifest'), findsOneWidget);
     // The carried changes of the handler this build has no instance of.
     expect(find.text('Carried changes'), findsOneWidget);
+    // The id behind a name.
+    expect(find.byTooltip('text'), findsOneWidget);
     expect(find.text('numbers'), findsOneWidget);
     expect(find.text(StorageTab.noSnapshot), findsNothing);
     expect(find.text('reserved'), findsWidgets);
@@ -102,6 +105,36 @@ void main() {
     await settle(tester);
     await tester.pumpWidget(const SizedBox());
     await settle(tester);
+  });
+
+  testWidgets('a narrow pane shows the whole byte counts', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(400, 1000));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final doc = CRDTDocument(documentId: 'd');
+    CRDTTextHandler(doc, 'text').insert(0, 'x' * 10000);
+    final snapshot = doc.takeSnapshot();
+    final bridge = InProcessBridge();
+    addTearDown(bridge.dispose);
+    final client = CrdtLfClient(bridge);
+    final id = (await client.documents()).single.id;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: RepositoryProvider.value(
+            value: client,
+            child: StorageTab(doc: id),
+          ),
+        ),
+      ),
+    );
+    await settle(tester);
+
+    final bytes = find.text('${snapshot.data['text']!.length}');
+    final paragraph = tester.renderObject<RenderParagraph>(
+      find.descendant(of: bytes, matching: find.byType(RichText)),
+    );
+    expect(paragraph.didExceedMaxLines, isFalse);
+    await tester.pumpWidget(const SizedBox());
   });
 
   testWidgets('builds only the entries on screen', (tester) async {

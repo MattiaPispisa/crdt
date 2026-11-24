@@ -154,7 +154,8 @@ class _CRDTStaticProxyDocument extends BaseCRDTDocument {
     if (open != null || _HandlerDeletions.isReserved(id)) {
       return open;
     }
-    final type = _types[id];
+    // The open ones first: `_types` needs a manifest this build can read.
+    final type = _openTypes[id] ?? _types[id];
     return type == null ? null : _registry.specs[type]?.create(this, id);
   }
 }

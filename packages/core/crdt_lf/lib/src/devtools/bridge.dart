@@ -559,6 +559,9 @@ abstract final class DevToolsBridge {
   ) {
     tracked.closeHistory();
     final session = doc.toTimeTravel();
+    final view = session._document;
+    // A manifest this build cannot read leaves the open handlers.
+    final types = _orNull(() => view._types) ?? view._openTypes;
     final id = _nextSession++;
     tracked
       ..history = session
@@ -571,7 +574,7 @@ abstract final class DevToolsBridge {
       'length': session.length,
       'versionVector': _versionVector(doc.getVersionVector()),
       'handlers': [
-        for (final entry in session._document._types.entries)
+        for (final entry in types.entries)
           if (!_isReservedKey(entry.key))
             {'id': entry.key, 'type': entry.value},
       ],

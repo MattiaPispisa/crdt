@@ -76,6 +76,13 @@ abstract class LiveSyncBenchmark<C extends BlocBase<Object?>>
   @override
   void prepareCycle() {
     if (!concurrent) return;
+    if (_incoming case final last?) {
+      // A remote change that lands at the end would time a plain append.
+      final local = _doc.version.where((id) => id.peerId == _local).single;
+      if (local.hlc != last.hlc) {
+        throw StateError('The remote change is not one place before the end');
+      }
+    }
     _incoming = Change.fromPayloadBytes(
       // The clock the local edit of the cycle gets.
       id: OperationId(_remote, _doc.hlc..localEvent(0)),
@@ -96,23 +103,11 @@ abstract class LiveSyncBenchmark<C extends BlocBase<Object?>>
   @override
   Future<void> teardown() async {
     _ready = false;
-    if (concurrent) _checkOrder();
+    _incoming = null;
     await cubit.close();
     _extension.dispose();
     _doc.dispose();
     resetBridge();
-  }
-
-  // A remote change that lands at the end would time a plain append.
-  void _checkOrder() {
-    final tail = _doc.exportChanges().sorted().reversed.take(
-      2 * measuredCycles,
-    );
-    for (final (i, change) in tail.indexed) {
-      if (change.author != (i.isEven ? _local : _remote)) {
-        throw StateError('The remote change is not one place before the end');
-      }
-    }
   }
 }
 

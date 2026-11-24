@@ -119,9 +119,9 @@ class _StoragePage extends StatelessWidget {
           if (info.deleted.isNotEmpty) ...[
             _box(const _Section('Deleted handlers')),
             _SliverTable(
-              flex: const [1],
+              widths: const [null],
               count: info.deleted.length,
-              row: (i) => [_mono(context, label(info.deleted[i]))],
+              row: (i) => [_handler(context, info.deleted[i])],
             ),
           ],
           _box(const _Section('Formats')),
@@ -149,12 +149,21 @@ class _StoragePage extends StatelessWidget {
 
 Widget _box(Widget child) => SliverToBoxAdapter(child: child);
 
-Widget _mono(BuildContext context, String text) => Text(
-  text,
-  maxLines: 1,
-  overflow: TextOverflow.ellipsis,
-  style: Theme.of(context).fixedFontStyle,
-);
+// One line, with the whole text (or [tooltip]) on hover.
+Widget _mono(BuildContext context, String text, {String? tooltip}) =>
+    DevToolsTooltip(
+      message: tooltip ?? text,
+      child: Text(
+        text,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: Theme.of(context).fixedFontStyle,
+      ),
+    );
+
+// A handler by its debug name, with its id on hover.
+Widget _handler(BuildContext context, String id) =>
+    _mono(context, HandlerNames.label(context, id), tooltip: id);
 
 class _Section extends StatelessWidget {
   const _Section(this.title);
@@ -184,7 +193,7 @@ class _Line extends StatelessWidget {
 /// [header] when it has one.
 class _SliverTable extends StatelessWidget {
   const _SliverTable({
-    required this.flex,
+    required this.widths,
     required this.count,
     required this.row,
     this.header,
@@ -192,8 +201,11 @@ class _SliverTable extends StatelessWidget {
 
   final List<String>? header;
 
-  /// The relative width of each column.
-  final List<int> flex;
+  /// The width of each column; `null` shares what is left.
+  final List<double?> widths;
+
+  /// The width of a column of numbers.
+  static const double number = 120;
 
   final int count;
 
@@ -216,20 +228,22 @@ class _SliverTable extends StatelessWidget {
           return Row(
             children: [
               for (final (column, cell) in cells.indexed)
-                Expanded(
-                  flex: flex[column],
-                  child: Padding(
-                    padding: const EdgeInsets.only(right: defaultSpacing),
-                    // A label keeps its own width.
-                    child: Align(alignment: Alignment.centerLeft, child: cell),
-                  ),
-                ),
+                if (widths[column] case final width?)
+                  SizedBox(width: width, child: _cell(cell))
+                else
+                  Expanded(child: _cell(cell)),
             ],
           );
         },
       ),
     );
   }
+
+  // A label keeps its own width.
+  static Widget _cell(Widget child) => Padding(
+    padding: const EdgeInsets.only(right: defaultSpacing),
+    child: Align(alignment: Alignment.centerLeft, child: child),
+  );
 }
 
 class _VersionVector extends StatelessWidget {
@@ -244,7 +258,7 @@ class _VersionVector extends StatelessWidget {
     final entries = vector.entries.toList();
     return _SliverTable(
       header: const ['peer', 'clock'],
-      flex: const [1, 2],
+      widths: const [null, null],
       count: entries.length,
       row: (i) {
         final MapEntry(:key, :value) = entries[i];
@@ -261,19 +275,18 @@ class _Entries extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => _SliverTable(
-    header: const ['key', 'type', 'bytes', ''],
-    flex: const [4, 4, 1, 1],
+    header: const ['key', 'type', 'bytes'],
+    widths: const [null, null, _SliverTable.number],
     count: entries.length,
     row: (i) {
       final e = entries[i];
       return [
-        _mono(context, e.reserved ? e.key : HandlerNames.label(context, e.key)),
-        _mono(context, e.type ?? '-'),
-        _mono(context, '${e.bytes}'),
+        if (e.reserved) _mono(context, e.key) else _handler(context, e.key),
         if (e.reserved)
           const RoundedLabel(labelText: 'reserved')
         else
-          const SizedBox(),
+          _mono(context, e.type ?? '-'),
+        _mono(context, '${e.bytes}'),
       ];
     },
   );
@@ -289,12 +302,12 @@ class _Unfolded extends StatelessWidget {
     final entries = counts.entries.toList();
     return _SliverTable(
       header: const ['handler', 'changes'],
-      flex: const [4, 1],
+      widths: const [null, _SliverTable.number],
       count: entries.length,
       row: (i) {
         final MapEntry(:key, :value) = entries[i];
         return [
-          _mono(context, HandlerNames.label(context, key)),
+          _handler(context, key),
           // `null` when the app cannot read the record.
           _mono(context, '${value ?? '?'}'),
         ];

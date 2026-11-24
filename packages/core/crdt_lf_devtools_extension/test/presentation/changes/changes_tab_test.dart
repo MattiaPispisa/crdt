@@ -137,6 +137,27 @@ void main() {
     expect(find.text('No change matches.'), findsOneWidget);
   });
 
+  testWidgets('a closed node of an operation stays with its change', (
+    tester,
+  ) async {
+    final doc = CRDTDocument(documentId: 'd');
+    CRDTFugueTextHandler(doc, 'text')
+      ..insert(0, 'a')
+      ..insert(1, 'b');
+    await openTab(tester, []);
+    final rows = find.byType(ChangeRow);
+    await tester.tap(rows.first);
+    await settle(tester);
+    expect(find.text('leftOrigin: '), findsOneWidget);
+    await tester.tap(find.textContaining('map · ').first);
+    await tester.pump();
+    expect(find.text('leftOrigin: '), findsNothing);
+
+    await tester.tap(rows.last);
+    await settle(tester);
+    expect(find.text('leftOrigin: '), findsOneWidget);
+  });
+
   testWidgets('the handler filter lists the debug names', (tester) async {
     final doc = CRDTDocument(documentId: 'd');
     CRDTTextHandler(doc, 'text').insert(0, 'a');

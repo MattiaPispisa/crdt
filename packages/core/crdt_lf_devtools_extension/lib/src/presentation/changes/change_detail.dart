@@ -171,7 +171,11 @@ class ChangeDetail extends StatelessWidget {
         closedNote,
         style: subtle,
       ),
-      LoadStatus.loaded => ValueTree(operation!.payload),
+      LoadStatus.loaded => ValueTree(
+        operation!.payload,
+        // The nodes the user closed belong to one change.
+        key: ValueKey(state.selectedId),
+      ),
     };
   }
 }
