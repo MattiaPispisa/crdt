@@ -9,27 +9,37 @@
 
 | Benchmark | RunTime (us) | RunTime (ms) | RunTime (s) |
 | --- | --- | --- | --- |
-| Change log, one edit on 10000 changes | 61.5800 | 0.0616 | 0.000062 |
-| Time travel, one edit on 10000 changes | 53.4800 | 0.0535 | 0.000053 |
-| Change log, one edit and a concurrent remote one on 10000 changes | 67.0600 | 0.0671 | 0.000067 |
-| Time travel, one edit and a concurrent remote one on 10000 changes | 65.4600 | 0.0655 | 0.000065 |
-| Change log, one edit on 50000 changes | 53.0400 | 0.0530 | 0.000053 |
-| Time travel, one edit on 50000 changes | 53.0600 | 0.0531 | 0.000053 |
-| Change log, one edit and a concurrent remote one on 50000 changes | 68.9800 | 0.0690 | 0.000069 |
-| Time travel, one edit and a concurrent remote one on 50000 changes | 66.6800 | 0.0667 | 0.000067 |
+| Change log, one edit on 10000 changes | 63.8400 | 0.0638 | 0.000064 |
+| Time travel, one edit on 10000 changes | 56.8200 | 0.0568 | 0.000057 |
+| Change log, one edit and a concurrent remote one on 10000 changes | 61.3200 | 0.0613 | 0.000061 |
+| Time travel, one edit and a concurrent remote one on 10000 changes | 60.0600 | 0.0601 | 0.000060 |
+| Change log, one edit on 50000 changes | 56.6400 | 0.0566 | 0.000057 |
+| Time travel, one edit on 50000 changes | 54.7600 | 0.0548 | 0.000055 |
+| Change log, one edit and a concurrent remote one on 50000 changes | 61.0800 | 0.0611 | 0.000061 |
+| Time travel, one edit and a concurrent remote one on 50000 changes | 60.1000 | 0.0601 | 0.000060 |
 
 ### change_paging_benchmark.dart
 
 | Benchmark | RunTime (us) | RunTime (ms) | RunTime (s) |
 | --- | --- | --- | --- |
-| First sync of 10000 changes, idle app | 12679.0000 | 12.6790 | 0.012679 |
-| First sync of 10000 changes, one edit per page | 12655.3333 | 12.6553 | 0.012655 |
-| First sync of 10000 changes, a quiet peer | 12758.0000 | 12.7580 | 0.012758 |
-| Sync of 10000 older remote changes into 10000 changes | 13794.0000 | 13.7940 | 0.013794 |
-| First sync of 50000 changes, idle app | 62260.3333 | 62.2603 | 0.062260 |
-| First sync of 50000 changes, one edit per page | 66109.3333 | 66.1093 | 0.066109 |
-| First sync of 50000 changes, a quiet peer | 58985.6667 | 58.9857 | 0.058986 |
-| Sync of 10000 older remote changes into 50000 changes | 23834.0000 | 23.8340 | 0.023834 |
+| First sync of 10000 changes, idle app | 13537.0000 | 13.5370 | 0.013537 |
+| First sync of 10000 changes, one edit per page | 13629.3333 | 13.6293 | 0.013629 |
+| First sync of 10000 changes, a quiet peer | 13015.6667 | 13.0157 | 0.013016 |
+| Sync of 10000 older remote changes into 10000 changes | 13972.0000 | 13.9720 | 0.013972 |
+| Sync of 10000 changes after a prune that removes nothing | 693.0000 | 0.6930 | 0.000693 |
+| First sync of 50000 changes, idle app | 66713.0000 | 66.7130 | 0.066713 |
+| First sync of 50000 changes, one edit per page | 72831.6667 | 72.8317 | 0.072832 |
+| First sync of 50000 changes, a quiet peer | 65838.0000 | 65.8380 | 0.065838 |
+| Sync of 10000 older remote changes into 50000 changes | 25521.0000 | 25.5210 | 0.025521 |
+| Sync of 50000 changes after a prune that removes nothing | 3359.6667 | 3.3597 | 0.003360 |
+
+### changes_tab_benchmark.dart
+
+| Benchmark | RunTime (us) | RunTime (ms) | RunTime (s) |
+| --- | --- | --- | --- |
+| Edit with the Changes tab open, 10 handlers | 7184.6000 | 7.1846 | 0.007185 |
+| Edit with the Changes tab open, 1000 handlers | 4682.6000 | 4.6826 | 0.004683 |
+| Edit with the Changes tab open, 5000 handlers | 4183.0000 | 4.1830 | 0.004183 |
 
 ### documents_benchmark.dart
 
@@ -56,8 +66,15 @@
 
 | Benchmark | RunTime (us) | RunTime (ms) | RunTime (s) |
 | --- | --- | --- | --- |
-| Back to the Changes tab, 10000 changes | 45353.0000 | 45.3530 | 0.045353 |
-| Back to the Time travel tab, 10000 changes | 21689.8000 | 21.6898 | 0.021690 |
-| Back to the Changes tab, 50000 changes | 46998.6000 | 46.9986 | 0.046999 |
-| Back to the Time travel tab, 50000 changes | 38511.4000 | 38.5114 | 0.038511 |
+| Back to the Changes tab, 10000 changes | 45106.4000 | 45.1064 | 0.045106 |
+| Back to the Time travel tab, 10000 changes | 20598.2000 | 20.5982 | 0.020598 |
+| Back to the Changes tab, 50000 changes | 60274.4000 | 60.2744 | 0.060274 |
+| Back to the Time travel tab, 50000 changes | 36903.4000 | 36.9034 | 0.036903 |
+
+### value_tree_benchmark.dart
+
+| Benchmark | RunTime (us) | RunTime (ms) | RunTime (s) |
+| --- | --- | --- | --- |
+| Value change, 200 maps of 5 fields | 11561.8000 | 11.5618 | 0.011562 |
+| Value change, 200 maps of 20 fields | 10726.2000 | 10.7262 | 0.010726 |
 

@@ -182,6 +182,18 @@ abstract final class DevToolsBridge {
     throw ArgumentError.value(method, 'method', 'Unknown method');
   }
 
+  /// What the bridge keeps in the app for [doc] on behalf of a client.
+  static ({bool history, bool paging, Set<String> watched}) held(
+    CRDTDocument doc,
+  ) {
+    final tracked = _of(doc);
+    return (
+      history: tracked?.history != null,
+      paging: tracked?.pages != null,
+      watched: {...?tracked?.deltas.keys},
+    );
+  }
+
   /// Forgets every tracked document.
   ///
   /// A document created before the call stays untracked.
@@ -547,14 +559,13 @@ abstract final class DevToolsBridge {
     _Tracked tracked,
     CRDTDocument doc,
   ) {
-    final replaced = tracked.historyId;
     tracked.closeHistory();
     final session = doc.toTimeTravel();
     final id = _nextSession++;
     tracked
       ..history = session
       ..historyId = id
-      ..replacedHistoryId = replaced
+      ..newestHistoryId = id
       ..historyIdle.reset();
     _expiring.add(tracked.id);
     return {
@@ -579,7 +590,7 @@ abstract final class DevToolsBridge {
       throw ArgumentError.value(
         params['session'],
         'session',
-        id == tracked.replacedHistoryId ? 'Replaced' : 'Not open',
+        id < tracked.newestHistoryId ? 'Replaced' : 'Not open',
       );
     }
     tracked.historyIdle.reset();
@@ -894,9 +905,9 @@ final class _Tracked {
 
   int? historyId;
 
-  // The session a `historyOpen` ended last: its client learns another
+  // Ids only grow, so a client that holds an older one learns that another
   // client took the document.
-  int? replacedHistoryId;
+  int newestHistoryId = -1;
 
   final Stopwatch historyIdle;
 

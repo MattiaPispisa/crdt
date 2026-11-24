@@ -7,7 +7,8 @@ import 'package:flutter/material.dart';
 
 /// Draws a value node of the `crdt_lf` DevTools protocol.
 ///
-/// Collections and objects below [expandedDepth] start collapsed. A
+/// Collections and objects below [expandedDepth] start collapsed, and below
+/// the first level when they would show more than [maxExpandedRows] rows. A
 /// collection cut by the app ends with a "… n more" line.
 class ValueTree extends StatelessWidget {
   const ValueTree(this.node, {this.onRef, super.key});
@@ -20,10 +21,35 @@ class ValueTree extends StatelessWidget {
   /// The depth from which nested nodes start collapsed.
   static const int expandedDepth = 2;
 
+  /// The most rows of the second level that start expanded.
+  static const int maxExpandedRows = 200;
+
   @override
-  Widget build(BuildContext context) =>
-      _NodeView(node: node, depth: 0, onRef: onRef);
+  Widget build(BuildContext context) => _NodeView(
+    node: node,
+    depth: 0,
+    expandedDepth: _expandedRows(node) > maxExpandedRows ? 1 : expandedDepth,
+    onRef: onRef,
+  );
+
+  static int _expandedRows(Object? node) {
+    var rows = 0;
+    for (final child in _children(node)) {
+      rows += _children(child).length;
+    }
+    return rows;
+  }
 }
+
+Iterable<Object?> _children(Object? node) => switch (_kind(node)) {
+  'list' || 'set' => _list(node, 'items'),
+  'map' => _list(
+    node,
+    'entries',
+  ).cast<List<Object?>>().map((entry) => entry[1]),
+  'object' => [if (_map(node)['json'] case final json?) json],
+  _ => const [],
+};
 
 String? _kind(Object? node) => switch (node) {
   {r'$t': final String kind} => kind,
@@ -39,12 +65,15 @@ class _NodeView extends StatefulWidget {
   const _NodeView({
     required this.node,
     required this.depth,
+    required this.expandedDepth,
     required this.onRef,
   });
 
   final Object? node;
 
   final int depth;
+
+  final int expandedDepth;
 
   final ValueChanged<String>? onRef;
 
@@ -53,12 +82,16 @@ class _NodeView extends StatefulWidget {
 }
 
 class _NodeViewState extends State<_NodeView> {
-  late bool _expanded = widget.depth < ValueTree.expandedDepth;
+  late bool _expanded = widget.depth < widget.expandedDepth;
 
   Object? get node => widget.node;
 
-  Widget _child(Object? node) =>
-      _NodeView(node: node, depth: widget.depth + 1, onRef: widget.onRef);
+  Widget _child(Object? node) => _NodeView(
+    node: node,
+    depth: widget.depth + 1,
+    expandedDepth: widget.expandedDepth,
+    onRef: widget.onRef,
+  );
 
   @override
   Widget build(BuildContext context) {

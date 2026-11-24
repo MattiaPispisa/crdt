@@ -156,10 +156,18 @@ class _Filters extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final cubit = context.watch<ChangeLogCubit>();
-    final state = cubit.state;
-    final filter = state.filter;
-    final index = state.index;
+    final cubit = context.read<ChangeLogCubit>();
+    // Not the whole state: a sync with no new author, handler or kind keeps
+    // these lists, and a menu builds every item.
+    final (filter, newestFirst, authors, handlers, kinds) = context.select(
+      (ChangeLogCubit c) => (
+        c.state.filter,
+        c.state.newestFirst,
+        c.state.index.authors,
+        c.state.index.handlers,
+        c.state.index.kinds,
+      ),
+    );
     final names = HandlerNames.of(context);
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: densePadding),
@@ -172,7 +180,7 @@ class _Filters extends StatelessWidget {
               _dropdown<String>(
                 value: filter.author,
                 all: 'All authors',
-                values: index.authors,
+                values: authors,
                 label: (a) => a.length > 8 ? a.substring(0, 8) : a,
                 onChanged:
                     (v) => cubit.setFilter(filter.copyWith(author: () => v)),
@@ -181,7 +189,7 @@ class _Filters extends StatelessWidget {
               _dropdown<String>(
                 value: filter.handler,
                 all: 'All handlers',
-                values: index.handlers,
+                values: handlers,
                 label: (h) => names[h] ?? h,
                 onChanged:
                     (v) => cubit.setFilter(filter.copyWith(handler: () => v)),
@@ -190,7 +198,7 @@ class _Filters extends StatelessWidget {
               _dropdown<int>(
                 value: filter.kind,
                 all: 'All kinds',
-                values: index.kinds,
+                values: kinds,
                 label: kindLabel,
                 onChanged:
                     (v) => cubit.setFilter(filter.copyWith(kind: () => v)),
@@ -200,9 +208,9 @@ class _Filters extends StatelessWidget {
                 icon: Icons.swap_vert,
                 label: 'Newest first',
                 message: 'Show the newest change first',
-                isSelected: state.newestFirst,
+                isSelected: newestFirst,
                 onPressed:
-                    () => cubit.setNewestFirst(newestFirst: !state.newestFirst),
+                    () => cubit.setNewestFirst(newestFirst: !newestFirst),
               ),
             ],
           ),

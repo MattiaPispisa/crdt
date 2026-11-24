@@ -19,6 +19,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+class _MissedCubit extends EventLogCubit {
+  _MissedCubit(super.client, super.doc);
+
+  void miss() => emit(const EventLogState(recording: true, missed: true));
+}
+
 void main() {
   setUp(DevToolsBridge.reset);
   tearDown(DevToolsBridge.reset);
@@ -27,6 +33,30 @@ void main() {
     await tester.pump(const Duration(milliseconds: 200));
     await tester.pump();
   }
+
+  testWidgets('the missed note clears with no event in the list', (
+    tester,
+  ) async {
+    final bridge = InProcessBridge();
+    addTearDown(bridge.dispose);
+    final events = _MissedCubit(CrdtLfClient(bridge), 0)..miss();
+    addTearDown(events.close);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: BlocProvider<EventLogCubit>.value(
+            value: events,
+            child: EventsTab(onChange: (_) {}),
+          ),
+        ),
+      ),
+    );
+    expect(find.text(EventsTab.missedNote), findsOneWidget);
+
+    await tester.tap(find.text('Clear'));
+    await settle(tester);
+    expect(find.text(EventsTab.missedNote), findsNothing);
+  });
 
   testWidgets('record, a row, its detail and a link to the change', (
     tester,

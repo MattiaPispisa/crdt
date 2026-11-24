@@ -18,6 +18,7 @@ import 'package:crdt_lf_devtools_extension/src/presentation/changes/change_row.d
 import 'package:crdt_lf_devtools_extension/src/presentation/changes/changes_tab.dart';
 import 'package:crdt_lf_devtools_extension/src/presentation/changes/lane_graph_painter.dart';
 import 'package:crdt_lf_devtools_extension/src/presentation/widgets/text_copier.dart';
+import 'package:devtools_app_shared/ui.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -126,6 +127,26 @@ void main() {
     expect(find.text(gone.substring(0, 8)), findsOneWidget);
     expect(find.text('All authors'), findsNothing);
     expect(find.text('No change matches.'), findsOneWidget);
+  });
+
+  testWidgets('a sync rebuilds the filters only for a new value', (
+    tester,
+  ) async {
+    final doc = CRDTDocument(documentId: 'd');
+    final text = CRDTTextHandler(doc, 'text')..insert(0, 'a');
+    await openTab(tester, []);
+    Widget menu() =>
+        tester.widget(find.byType(RoundedDropDownButton<String>).last);
+
+    final before = menu();
+    text.insert(1, 'b');
+    await settle(tester);
+    expect(find.byType(ChangeRow), findsNWidgets(2));
+    expect(menu(), same(before));
+
+    CRDTTextHandler(doc, 'other').insert(0, 'c');
+    await settle(tester);
+    expect(menu(), isNot(same(before)));
   });
 
   testWidgets('a closed handler and the snapshot row', (tester) async {

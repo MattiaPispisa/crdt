@@ -129,6 +129,54 @@ class OlderBatchSyncBenchmark extends AsyncFixedCycleTimedBenchmark {
   }
 }
 
+/// A sync of a [ChangeMirror] that holds [size] changes, after a
+/// `garbageCollect` that removes none of them.
+class IdlePruneSyncBenchmark extends AsyncFixedCycleTimedBenchmark {
+  IdlePruneSyncBenchmark(this.size)
+    : super(
+        'Sync of $size changes after a prune that removes nothing',
+        measuredCycles: 3,
+        batches: 3,
+        setupPerBatch: false,
+      );
+
+  final int size;
+
+  late CRDTDocument _doc;
+
+  late VersionVector _pruned;
+
+  late Extension _extension;
+
+  late ChangeMirror _mirror;
+
+  @override
+  Future<void> setup() async {
+    resetBridge();
+    _doc = mapDocument(1)..takeSnapshot();
+    _pruned = _doc.getVersionVector();
+    for (var i = 0; i < size; i++) {
+      edit(_doc);
+    }
+    _extension = Extension();
+    _mirror = ChangeMirror(_extension.client, await _extension.idOf(_doc));
+    await _mirror.sync();
+  }
+
+  @override
+  Future<void> run() async {
+    _doc.garbageCollect(_pruned);
+    await _mirror.sync();
+  }
+
+  @override
+  Future<void> teardown() async {
+    _extension.dispose();
+    _doc.dispose();
+    resetBridge();
+  }
+}
+
 void main() {
   test('change paging', () async {
     for (final size in [10000, 50000]) {
@@ -136,6 +184,7 @@ void main() {
         await FirstSyncBenchmark(size, load).report();
       }
       await OlderBatchSyncBenchmark(size, 10000).report();
+      await IdlePruneSyncBenchmark(size).report();
     }
   }, timeout: const Timeout(Duration(minutes: 20)));
 }

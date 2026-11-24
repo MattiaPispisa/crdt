@@ -8,6 +8,7 @@ import 'package:crdt_lf/crdt_lf.dart';
 import 'package:crdt_lf_devtools_extension/src/application/changes/change_log_cubit.dart';
 import 'package:crdt_lf_devtools_extension/src/application/load_status.dart';
 import 'package:crdt_lf_devtools_extension/src/presentation/changes/change_row.dart';
+import 'package:crdt_lf_devtools_extension/src/presentation/widgets/field_table.dart';
 import 'package:crdt_lf_devtools_extension/src/presentation/widgets/handler_names.dart';
 import 'package:crdt_lf_devtools_extension/src/presentation/widgets/message.dart';
 import 'package:crdt_lf_devtools_extension/src/presentation/widgets/peer_chip.dart';
@@ -73,7 +74,7 @@ class ChangeDetail extends StatelessWidget {
                 const RoundedLabel(labelText: frontierLabel),
             ],
           ),
-          _Fields([
+          FieldTable([
             ('id', Text('${change.id}', style: theme.fixedFontStyle)),
             (
               'clock',
@@ -172,36 +173,6 @@ class ChangeDetail extends StatelessWidget {
       ),
       LoadStatus.loaded => ValueTree(operation!.payload),
     };
-  }
-}
-
-class _Fields extends StatelessWidget {
-  const _Fields(this.fields);
-
-  final List<(String, Widget)> fields;
-
-  @override
-  Widget build(BuildContext context) {
-    final subtle = Theme.of(context).subtleTextStyle;
-    return Padding(
-      padding: const EdgeInsets.all(densePadding),
-      child: Table(
-        columnWidths: const {0: IntrinsicColumnWidth()},
-        defaultVerticalAlignment: TableCellVerticalAlignment.middle,
-        children: [
-          for (final (label, value) in fields)
-            TableRow(
-              children: [
-                Padding(
-                  padding: const EdgeInsets.only(right: defaultSpacing),
-                  child: Text(label, style: subtle),
-                ),
-                value,
-              ],
-            ),
-        ],
-      ),
-    );
   }
 }
 

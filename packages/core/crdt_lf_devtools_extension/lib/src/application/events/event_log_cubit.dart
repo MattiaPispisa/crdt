@@ -65,7 +65,13 @@ class EventLogCubit extends Cubit<EventLogState> {
       }
       if (isClosed) return;
       if (recording) _renewal.start(_renew);
-      emit(state._copyWith(recording: recording, error: () => null));
+      emit(
+        state._copyWith(
+          recording: recording,
+          missed: recording ? false : null,
+          error: () => null,
+        ),
+      );
     } on Object catch (e) {
       if (isClosed) return;
       _wanted = state.recording;

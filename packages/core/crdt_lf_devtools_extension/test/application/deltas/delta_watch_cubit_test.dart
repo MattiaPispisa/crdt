@@ -118,6 +118,11 @@ void main() {
     }
     expect(cubit.state.missed, isTrue);
     expect(await watched(id, 'text'), isTrue);
+
+    await cubit.setWatching(watching: false);
+    expect(cubit.state.missed, isTrue);
+    await cubit.setWatching(watching: true);
+    expect(cubit.state.missed, isFalse);
   });
 
   test('watches one handler, newest first, and stops on select', () async {

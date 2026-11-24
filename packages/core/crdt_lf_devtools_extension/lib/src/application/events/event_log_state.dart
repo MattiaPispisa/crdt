@@ -21,8 +21,8 @@ class EventLogState extends Equatable {
   /// The `n` of the selected event; `null` for none.
   final int? selectedN;
 
-  /// Whether the app stopped the log for a while since the last
-  /// [EventLogCubit.clear]: the events of that time are missing.
+  /// Whether the app stopped the log for a while since the recording
+  /// started or was cleared: the events of that time are missing.
   final bool missed;
 
   /// The error of the last start or stop; `null` when it succeeded.

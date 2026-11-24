@@ -4,8 +4,10 @@
 import 'package:crdt_lf/crdt_lf.dart';
 import 'package:crdt_lf_devtools_extension/src/application/events/event_log_cubit.dart';
 import 'package:crdt_lf_devtools_extension/src/bridge/models/models.dart';
+import 'package:crdt_lf_devtools_extension/src/presentation/widgets/field_table.dart';
 import 'package:crdt_lf_devtools_extension/src/presentation/widgets/keyboard_list.dart';
 import 'package:crdt_lf_devtools_extension/src/presentation/widgets/message.dart';
+import 'package:crdt_lf_devtools_extension/src/presentation/widgets/wall_time.dart';
 import 'package:devtools_app_shared/ui.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -53,7 +55,8 @@ class EventsTab extends StatelessWidget {
               DevToolsButton(
                 icon: Icons.block,
                 label: 'Clear',
-                onPressed: state.events.isEmpty ? null : cubit.clear,
+                onPressed:
+                    state.events.isEmpty && !state.missed ? null : cubit.clear,
               ),
               const SizedBox(width: denseSpacing),
               Text('${state.events.length}', style: theme.subtleTextStyle),
@@ -93,14 +96,6 @@ class EventsTab extends StatelessWidget {
   }
 }
 
-/// The local wall time `HH:mm:ss.SSS` of [time].
-String timeLabel(DateTime time) {
-  final t = time.toLocal();
-  String two(int n) => n.toString().padLeft(2, '0');
-  return '${two(t.hour)}:${two(t.minute)}:${two(t.second)}.'
-      '${t.millisecond.toString().padLeft(3, '0')}';
-}
-
 class _EventList extends StatelessWidget {
   const _EventList({required this.state});
 
@@ -136,7 +131,7 @@ class _EventList extends StatelessWidget {
                   SizedBox(
                     width: 100,
                     child: Text(
-                      timeLabel(event.time),
+                      wallTime(event.time),
                       style: theme.fixedFontStyle,
                     ),
                   ),
@@ -186,7 +181,7 @@ class _EventDetail extends StatelessWidget {
     final theme = Theme.of(context);
     final fields = [
       ('n', '${event.n}'),
-      ('time', timeLabel(event.time)),
+      ('time', wallTime(event.time)),
       ('type', event.type),
       ('source', event.source ?? '-'),
       ('reason', event.reason ?? '-'),
@@ -204,24 +199,7 @@ class _EventDetail extends StatelessWidget {
             roundedTopBorder: false,
             includeTopBorder: false,
           ),
-          Padding(
-            padding: const EdgeInsets.all(densePadding),
-            child: Table(
-              columnWidths: const {0: IntrinsicColumnWidth()},
-              children: [
-                for (final (label, value) in fields)
-                  TableRow(
-                    children: [
-                      Padding(
-                        padding: const EdgeInsets.only(right: defaultSpacing),
-                        child: Text(label, style: theme.subtleTextStyle),
-                      ),
-                      Text(value, style: theme.fixedFontStyle),
-                    ],
-                  ),
-              ],
-            ),
-          ),
+          FieldTable.texts(fields),
           if (event.ids.isNotEmpty) ...[
             AreaPaneHeader(
               title: Text(

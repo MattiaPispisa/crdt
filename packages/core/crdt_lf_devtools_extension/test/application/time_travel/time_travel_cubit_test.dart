@@ -287,6 +287,24 @@ void main() {
     expect(cubit.state.error, isNot(TimeTravelCubit.taken));
   });
 
+  test('a window that reopens keeps its session from an older one', () async {
+    final doc = CRDTDocument(documentId: 'd');
+    CRDTTextHandler(doc, 'text').insert(0, 'a');
+    final (_, first) = await open(doc);
+    final (_, second) = await open(doc);
+    await second.reopen();
+    await settle();
+    final session = second.state.session!.session;
+
+    first.select('text');
+    await settle();
+    expect(first.state.error, TimeTravelCubit.taken);
+    second.select('text');
+    await settle();
+    expect(second.state.session!.session, session);
+    expect(second.state.value!.value, 'a');
+  });
+
   test('a session another window takes is not taken back', () async {
     final doc = CRDTDocument(documentId: 'd');
     CRDTTextHandler(doc, 'text').insert(0, 'a');

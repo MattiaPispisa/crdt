@@ -20,7 +20,6 @@ class TabSwitchBenchmark extends AsyncFixedCycleTimedBenchmark {
         'Back to the $tab tab, $size changes',
         measuredCycles: 5,
         batches: 3,
-        settleCycles: 1,
         setupPerBatch: false,
       );
 

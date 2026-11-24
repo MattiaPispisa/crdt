@@ -25,6 +25,35 @@ void main() {
 
   Finder rich(String text) => find.textContaining(text, findRichText: true);
 
+  testWidgets('a value with many nested rows starts with one level', (
+    tester,
+  ) async {
+    Object list(int maps) => {
+      r'$t': 'list',
+      'length': maps,
+      'items': [
+        for (var i = 0; i < maps; i++)
+          {
+            r'$t': 'map',
+            'length': 10,
+            'entries': [
+              for (var f = 0; f < 10; f++) ['f$f', i],
+            ],
+          },
+      ],
+    };
+    await pump(tester, list(20));
+    expect(find.text('f0: '), findsNWidgets(20));
+
+    await tester.pumpWidget(const SizedBox());
+    await pump(tester, list(21));
+    expect(find.text('f0: '), findsNothing);
+    expect(find.text('map · 10 entries'), findsNWidgets(21));
+    await tester.tap(find.text('map · 10 entries').first);
+    await tester.pump();
+    expect(find.text('f0: '), findsOneWidget);
+  });
+
   testWidgets('scalars and the non-finite double', (tester) async {
     await pump(tester, 7);
     expect(find.text('7'), findsOneWidget);

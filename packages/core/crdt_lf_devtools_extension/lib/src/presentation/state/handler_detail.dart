@@ -8,6 +8,7 @@ import 'package:crdt_lf_devtools_extension/src/application/handlers/handler_valu
 import 'package:crdt_lf_devtools_extension/src/application/handlers/handlers_cubit.dart';
 import 'package:crdt_lf_devtools_extension/src/application/load_status.dart';
 import 'package:crdt_lf_devtools_extension/src/bridge/models/models.dart';
+import 'package:crdt_lf_devtools_extension/src/presentation/widgets/field_table.dart';
 import 'package:crdt_lf_devtools_extension/src/presentation/widgets/handler_names.dart';
 import 'package:crdt_lf_devtools_extension/src/presentation/widgets/message.dart';
 import 'package:crdt_lf_devtools_extension/src/presentation/widgets/text_copier.dart';
@@ -272,24 +273,7 @@ class _Detail extends StatelessWidget {
             roundedTopBorder: false,
             includeTopBorder: false,
           ),
-          Padding(
-            padding: const EdgeInsets.all(densePadding),
-            child: Table(
-              columnWidths: const {0: IntrinsicColumnWidth()},
-              children: [
-                for (final (label, value) in fields)
-                  TableRow(
-                    children: [
-                      Padding(
-                        padding: const EdgeInsets.only(right: defaultSpacing),
-                        child: Text(label, style: theme.subtleTextStyle),
-                      ),
-                      Text(value, style: theme.fixedFontStyle),
-                    ],
-                  ),
-              ],
-            ),
-          ),
+          FieldTable.texts(fields),
           ...children,
         ],
       ),

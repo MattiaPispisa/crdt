@@ -45,8 +45,8 @@ An operation can only be decoded when its handler is open in the app.
 ## Debug names
 
 Give a document or a handler a debug name, and every tab shows the name in
-place of the id. The State filter and the Changes handler filter also search
-by name. A debug name stays on this peer: it is never synced or stored.
+place of the id. The State filter also searches by name, and the handler
+filter of the Changes tab lists the names. A debug name stays on this peer: it is never synced or stored.
 
 ```dart
 final doc = CRDTDocument(debugName: 'notes');

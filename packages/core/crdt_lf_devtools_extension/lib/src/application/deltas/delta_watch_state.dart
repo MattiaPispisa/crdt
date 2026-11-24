@@ -21,7 +21,7 @@ class DeltaWatchState extends Equatable {
   /// Newest first.
   final List<HandlerDeltaEvent> deltas;
 
-  /// Whether the app stopped the watch for a while since the selection: the
+  /// Whether the app stopped the watch for a while since it started: the
   /// deltas of that time are missing.
   final bool missed;
 

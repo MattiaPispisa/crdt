@@ -89,7 +89,13 @@ class DeltaWatchCubit extends Cubit<DeltaWatchState> {
       }
       if (isClosed || request != _request) return;
       if (watching) _renewal.start(() => _renew(handler));
-      emit(state._copyWith(watching: watching, error: () => null));
+      emit(
+        state._copyWith(
+          watching: watching,
+          missed: watching ? false : null,
+          error: () => null,
+        ),
+      );
     } on Object catch (e) {
       if (isClosed || request != _request) return;
       _wanted = state.watching ? handler : null;

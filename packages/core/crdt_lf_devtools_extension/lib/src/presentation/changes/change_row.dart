@@ -4,6 +4,7 @@
 import 'package:crdt_lf_devtools_extension/src/bridge/change_mirror.dart';
 import 'package:crdt_lf_devtools_extension/src/presentation/widgets/handler_names.dart';
 import 'package:crdt_lf_devtools_extension/src/presentation/widgets/peer_chip.dart';
+import 'package:crdt_lf_devtools_extension/src/presentation/widgets/wall_time.dart';
 import 'package:devtools_app_shared/ui.dart';
 import 'package:flutter/material.dart';
 
@@ -15,11 +16,7 @@ const int _oneDay = 24 * 60 * 60 * 1000;
 /// A clock below one day is not a wall time, so it stays raw: `l.c`.
 String clockLabel(int l, int c) {
   if (l < _oneDay) return '$l.$c';
-  final t = DateTime.fromMillisecondsSinceEpoch(l);
-  String two(int n) => n.toString().padLeft(2, '0');
-  final time =
-      '${two(t.hour)}:${two(t.minute)}:${two(t.second)}.'
-      '${t.millisecond.toString().padLeft(3, '0')}';
+  final time = wallTime(DateTime.fromMillisecondsSinceEpoch(l));
   return c > 0 ? '$time +$c' : time;
 }
 

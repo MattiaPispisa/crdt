@@ -97,7 +97,9 @@ void main() {
     expect(cubit.state.missed, isTrue);
     expect(await recording(), isTrue);
 
-    cubit.clear();
+    await cubit.setRecording(recording: false);
+    expect(cubit.state.missed, isTrue);
+    await cubit.setRecording(recording: true);
     expect(cubit.state.missed, isFalse);
   });
 

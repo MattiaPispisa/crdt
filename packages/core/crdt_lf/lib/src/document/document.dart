@@ -1559,9 +1559,9 @@ class CRDTDocument extends BaseCRDTDocument {
 
   /// Prunes the DAG and the change store up to the given version.
   void _prune(VersionVector version) {
-    DevToolsBridge._pruned(this);
     _deletions.notePrune();
     final before = _log.frontiers;
+    final count = _log.changeCount;
     _log.prune(
       version,
       onPruned: _documentEvents.hasListener
@@ -1575,6 +1575,7 @@ class CRDTDocument extends BaseCRDTDocument {
               )
           : null,
     );
+    if (_log.changeCount != count) DevToolsBridge._pruned(this);
     // New frontiers: the caches were built on a history this document no
     // longer holds, so the next read rebuilds them from the snapshot.
     if (!setEquals(before, _log.frontiers)) {

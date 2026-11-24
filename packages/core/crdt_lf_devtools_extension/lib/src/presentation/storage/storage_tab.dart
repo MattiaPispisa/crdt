@@ -7,6 +7,8 @@ import 'package:crdt_lf_devtools_extension/src/application/load_status.dart';
 import 'package:crdt_lf_devtools_extension/src/application/storage/storage_cubit.dart';
 import 'package:crdt_lf_devtools_extension/src/bridge/crdt_lf_client.dart';
 import 'package:crdt_lf_devtools_extension/src/bridge/models/models.dart';
+import 'package:crdt_lf_devtools_extension/src/presentation/widgets/field_table.dart';
+import 'package:crdt_lf_devtools_extension/src/presentation/widgets/handler_names.dart';
 import 'package:crdt_lf_devtools_extension/src/presentation/widgets/message.dart';
 import 'package:crdt_lf_devtools_extension/src/presentation/widgets/peer_chip.dart';
 import 'package:crdt_lf_devtools_extension/src/presentation/widgets/text_copier.dart';
@@ -88,11 +90,12 @@ class _StoragePage extends StatelessWidget {
     final summary = detail.summary;
     final snapshot = info.snapshot;
     final unfolded = snapshot?.unfolded ?? const {};
+    String label(String id) => HandlerNames.label(context, id);
     return SelectionArea(
       child: ListView(
         children: [
           const _Section('Version'),
-          _Fields([
+          FieldTable([
             ('frontiers', _mono(context, summary.frontiers.join(', '))),
           ]),
           _VersionVector(summary.versionVector, local: summary.peerId),
@@ -100,7 +103,7 @@ class _StoragePage extends StatelessWidget {
           if (snapshot == null)
             _Line(StorageTab.noSnapshot, style: theme.subtleTextStyle)
           else ...[
-            _Fields([
+            FieldTable([
               ('id', _SnapshotId(snapshot.id)),
               ('bytes', _mono(context, '${snapshot.bytes}')),
             ]),
@@ -114,14 +117,17 @@ class _StoragePage extends StatelessWidget {
               rows: [
                 // A count is `null` when the app cannot read its record.
                 for (final MapEntry(:key, :value) in unfolded.entries)
-                  [_mono(context, key), _mono(context, '${value ?? '?'}')],
+                  [
+                    _mono(context, label(key)),
+                    _mono(context, '${value ?? '?'}'),
+                  ],
               ],
             ),
           ],
           if (info.deleted.isNotEmpty) ...[
             const _Section('Deleted handlers'),
             for (final id in info.deleted)
-              _Line(id, style: theme.fixedFontStyle),
+              _Line(label(id), style: theme.fixedFontStyle),
           ],
           const _Section('Formats'),
           _Table(
@@ -157,7 +163,7 @@ class _StoragePage extends StatelessWidget {
             for (final (i, m) in detail.undo.indexed)
               _Line(
                 '#$i · undo ${m.undoDepth} · redo ${m.redoDepth} · '
-                'tracked [${m.tracked.join(', ')}] · '
+                'tracked [${m.tracked.map(label).join(', ')}] · '
                 'limit ${m.stackLimit} · '
                 'capture ${m.captureTimeout.inMilliseconds} ms',
                 style: theme.fixedFontStyle,
@@ -194,36 +200,6 @@ class _Line extends StatelessWidget {
     padding: const EdgeInsets.all(densePadding),
     child: Text(text, style: style),
   );
-}
-
-class _Fields extends StatelessWidget {
-  const _Fields(this.fields);
-
-  final List<(String, Widget)> fields;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Padding(
-      padding: const EdgeInsets.all(densePadding),
-      child: Table(
-        columnWidths: const {0: IntrinsicColumnWidth()},
-        defaultVerticalAlignment: TableCellVerticalAlignment.middle,
-        children: [
-          for (final (label, value) in fields)
-            TableRow(
-              children: [
-                Padding(
-                  padding: const EdgeInsets.only(right: defaultSpacing),
-                  child: Text(label, style: theme.subtleTextStyle),
-                ),
-                value,
-              ],
-            ),
-        ],
-      ),
-    );
-  }
 }
 
 class _Table extends StatelessWidget {
@@ -290,7 +266,10 @@ class _Entries extends StatelessWidget {
     rows: [
       for (final e in entries)
         [
-          _mono(context, e.key),
+          _mono(
+            context,
+            e.reserved ? e.key : HandlerNames.label(context, e.key),
+          ),
           _mono(context, e.type ?? '-'),
           _mono(context, '${e.bytes}'),
           if (e.reserved)

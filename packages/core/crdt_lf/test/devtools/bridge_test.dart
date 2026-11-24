@@ -526,6 +526,27 @@ void main() {
       expect(held..sort(compareChangeOrder), doc.exportChanges().sorted());
     });
 
+    test('a paging in progress serves a caller that starts over', () {
+      final doc = CRDTDocument();
+      final text = CRDTTextHandler(doc, 'text');
+      for (var i = 0; i < 6; i++) {
+        text.insert(i, 'x');
+      }
+      final id = '${trackedId(doc)}';
+      final all = doc.exportChanges().sorted();
+      List<Change> page(List<Change> held) => decode(
+            DevToolsBridge.call('changes', {
+              'doc': id,
+              'limit': '2',
+              if (held.isNotEmpty) 'since': sinceOf(held),
+            }),
+          );
+
+      // The copy is built for a caller that already holds two changes.
+      expect(page(all.sublist(0, 2)), all.sublist(2, 4));
+      expect(page(const []), all.sublist(0, 2));
+    });
+
     test('changes pages past a peer that stopped writing', () {
       final quiet = CRDTDocument(peerId: PeerId.generate());
       CRDTTextHandler(quiet, 'text').insert(0, 'q');
@@ -579,6 +600,18 @@ void main() {
       expect(paged, changes);
       expect(changes, [...changes]..sort(compareChangeOrder));
       expect(changes.map((c) => c.author).toSet(), {a.peerId, b.peerId});
+    });
+
+    test('a prune that removes nothing keeps the epoch', () {
+      final doc = CRDTDocument();
+      final text = CRDTTextHandler(doc, 'text')..insert(0, 'a');
+      doc.takeSnapshot();
+      final pruned = doc.getVersionVector();
+      text.insert(1, 'b');
+      expect(documents().single['pruneEpoch'], 1);
+
+      doc.garbageCollect(pruned);
+      expect(documents().single['pruneEpoch'], 1);
     });
 
     test('changes drops the pruned changes and moves pruneEpoch', () {
@@ -724,6 +757,7 @@ void main() {
       expect(result, containsPair('payload', null));
       expect(result['error'], isA<String>());
     });
+
     Map<String, Object?> historyOpen(CRDTDocument doc) =>
         DevToolsBridge.call('historyOpen', {'doc': '${trackedId(doc)}'});
 
@@ -767,6 +801,29 @@ void main() {
         () => historyState(doc, session, 4),
         throwsA(isA<ArgumentError>()),
       );
+    });
+
+    test('every session before the newest one is replaced', () {
+      final doc = CRDTDocument();
+      CRDTTextHandler(doc, 'text').insert(0, 'a');
+      Matcher refuses(String message) => throwsA(
+            isA<ArgumentError>().having((e) => e.message, 'message', message),
+          );
+
+      final first = historyOpen(doc)['session'];
+      historyOpen(doc);
+      final third = historyOpen(doc)['session'];
+      expect(() => historyState(doc, first, 0), refuses('Replaced'));
+
+      // The other client closes, then opens again.
+      DevToolsBridge.call('historyClose', {
+        'doc': '${trackedId(doc)}',
+        'session': '$third',
+      });
+      expect(() => historyState(doc, third, 0), refuses('Not open'));
+      historyOpen(doc);
+      expect(() => historyState(doc, third, 0), refuses('Replaced'));
+      expect(() => historyState(doc, first, 0), refuses('Replaced'));
     });
 
     test('a second historyOpen or a historyClose ends the session', () {
@@ -864,6 +921,7 @@ void main() {
         isNotEmpty,
       );
     });
+
     test('snapshot counts unfolded changes and hides a broken record', () {
       final source = CRDTDocument();
       CRDTListHandler<int>(source, 'list', handlerType: 'int-list')
@@ -1129,20 +1187,87 @@ void main() {
       expect(posted('crdt_lf:devtools:delta'), hasLength(1));
     });
 
-    test('a change ends a history session past its lease', () {
+    Future<void> runOut() => Future<void>.delayed(DevToolsBridge.lease * 1.5);
+
+    test('a change or a call ends an idle session and an idle paging',
+        () async {
+      for (final end in <void Function(CRDTTextHandler)>[
+        (text) => text.insert(0, 'c'),
+        (_) => documents(),
+      ]) {
+        final doc = CRDTDocument();
+        final text = CRDTTextHandler(doc, 'text')
+          ..insert(0, 'a')
+          ..insert(0, 'b');
+        // On its own document: each one must end by itself.
+        final paged = CRDTDocument()..importChanges(doc.exportChanges());
+        final params = {'doc': '${trackedId(doc)}'};
+        final pagedParams = {'doc': '${trackedId(paged)}', 'limit': '1'};
+        DevToolsBridge.lease = const Duration(milliseconds: 300);
+        DevToolsBridge.call('historyOpen', params);
+        DevToolsBridge.call('changes', pagedParams);
+        // No receiver: a DevTools tab closed without its close call.
+        DevToolsBridge.onEvent = null;
+        await runOut();
+        expect(DevToolsBridge.held(doc).history, isTrue);
+        expect(DevToolsBridge.held(paged).paging, isTrue);
+
+        end(text);
+        expect(DevToolsBridge.held(doc).history, isFalse);
+        expect(DevToolsBridge.held(paged).paging, isFalse);
+      }
+    });
+
+    test('a session opens on a document older than the lease', () async {
+      final doc = CRDTDocument();
+      CRDTTextHandler(doc, 'text').insert(0, 'a');
+      final params = {'doc': '${trackedId(doc)}'};
+      DevToolsBridge.lease = const Duration(milliseconds: 300);
+      await runOut();
+
+      DevToolsBridge.call('historyOpen', params);
+      expect(DevToolsBridge.held(doc).history, isTrue);
+    });
+
+    test('a page renews the lease of its paging', () async {
+      final doc = CRDTDocument();
+      final text = CRDTTextHandler(doc, 'text');
+      for (var i = 0; i < 5; i++) {
+        text.insert(i, 'x');
+      }
+      final id = '${trackedId(doc)}';
+      DevToolsBridge.lease = const Duration(seconds: 2);
+      final held = <Change>[];
+      // Two waits of 1.2 s: the paging holds only if the second page
+      // renewed it.
+      for (var i = 0; i < 2; i++) {
+        held.addAll(
+          decode(
+            DevToolsBridge.call('changes', {
+              'doc': id,
+              'limit': '1',
+              if (held.isNotEmpty) 'since': sinceOf(held),
+            }),
+          ),
+        );
+        await Future<void>.delayed(const Duration(milliseconds: 1200));
+      }
+      documents();
+      expect(DevToolsBridge.held(doc).paging, isTrue);
+    });
+
+    test('a deleted handler leaves no watch', () async {
       final doc = CRDTDocument();
       final text = CRDTTextHandler(doc, 'text')..insert(0, 'a');
-      DevToolsBridge.lease = Duration.zero;
-      final session = historyOpen(doc)['session'];
-
-      // No receiver: a DevTools tab closed without its close call.
-      DevToolsBridge.onEvent = null;
-      text.insert(1, 'b');
-      DevToolsBridge.lease = const Duration(minutes: 1);
-      expect(
-        () => historyState(doc, session, 0),
-        throwsA(isA<ArgumentError>()),
+      DevToolsBridge.call(
+        'watchStart',
+        {'doc': '${trackedId(doc)}', 'handler': 'text'},
       );
+      expect(DevToolsBridge.held(doc).watched, {'text'});
+
+      doc.deleteHandler(text);
+      await pumpEventQueue();
+      expect(DevToolsBridge.held(doc).watched, isEmpty);
     });
 
     test('a historyState past the lease still renews its session', () async {

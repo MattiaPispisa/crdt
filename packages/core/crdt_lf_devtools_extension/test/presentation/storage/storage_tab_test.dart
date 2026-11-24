@@ -9,6 +9,7 @@ import 'package:crdt_lf_devtools_extension/src/application/documents/documents_c
 import 'package:crdt_lf_devtools_extension/src/bridge/crdt_lf_client.dart';
 import 'package:crdt_lf_devtools_extension/src/bridge/in_process_bridge.dart';
 import 'package:crdt_lf_devtools_extension/src/presentation/storage/storage_tab.dart';
+import 'package:crdt_lf_devtools_extension/src/presentation/widgets/handler_names.dart';
 import 'package:crdt_lf_devtools_extension/src/presentation/widgets/text_copier.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -35,6 +36,12 @@ void main() {
     final gone = CRDTTextHandler(doc, 'gone')..insert(0, 'b');
     doc.deleteHandler(gone);
     CRDTUndoManager(doc).track(CRDTFugueTextHandler(doc, 'undo'));
+    const names = {
+      'text': 'title',
+      'gone': 'old title',
+      'list': 'numbers',
+      'undo': 'body',
+    };
     final copied = <String>[];
     final bridge = InProcessBridge();
     addTearDown(bridge.dispose);
@@ -55,7 +62,10 @@ void main() {
                   (context, state) =>
                       state.selectedId == null
                           ? const SizedBox()
-                          : StorageTab(doc: state.selectedId!),
+                          : HandlerNames(
+                            names: names,
+                            child: StorageTab(doc: state.selectedId!),
+                          ),
             ),
           ),
         ),
@@ -66,9 +76,9 @@ void main() {
 
     expect(find.text(StorageTab.noSnapshot), findsOneWidget);
     expect(find.text('Deleted handlers'), findsOneWidget);
-    expect(find.text('gone'), findsOneWidget);
+    expect(find.text('old title'), findsOneWidget);
     expect(find.text('me'), findsOneWidget);
-    expect(find.textContaining('tracked [undo]'), findsOneWidget);
+    expect(find.textContaining('tracked [body]'), findsOneWidget);
     expect(find.text(StorageTab.missingLabel), findsNothing);
 
     final snapshot = doc.takeSnapshot();
