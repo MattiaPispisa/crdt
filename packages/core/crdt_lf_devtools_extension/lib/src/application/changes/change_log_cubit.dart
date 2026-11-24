@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 import 'dart:async';
+import 'dart:math';
 
 import 'package:bloc/bloc.dart';
 import 'package:crdt_lf/crdt_lf.dart';
@@ -49,8 +50,8 @@ class ChangeLogCubit extends Cubit<ChangeLogState> {
   // Where `state.index` stopped reading the mirror.
   MirrorMark? _mark;
 
-  // The changes of `_matchedIndex` that pass `_matchedFilter`. Replaced, not
-  // cleared: the `visible` of an older state reads it.
+  // The changes of `_matchedIndex` that pass `_matchedFilter`. Like the
+  // index tables, a sync changes it in place for the last state.
   List<MirrorEntry> _matched;
 
   ChangeIndex _matchedIndex = ChangeIndex.empty;
@@ -140,10 +141,7 @@ class ChangeLogCubit extends Cubit<ChangeLogState> {
       if (isClosed) return;
       final read = _mirror.read(_mark);
       _mark = read.mark;
-      final index =
-          read.reset
-              ? ChangeIndex(read.entries)
-              : state.index.extend(read.entries);
+      final index = state.index.replaceFrom(read.from, read.entries);
       final selectedId = state.selectedId;
       final kept = selectedId != null && index.entryOf(selectedId) != null;
       final pending = kept && state.selected == null;
@@ -151,7 +149,12 @@ class ChangeLogCubit extends Cubit<ChangeLogState> {
         state._copyWith(
           status: LoadStatus.loaded,
           index: index,
-          visible: _visible(index, state.filter, state.newestFirst),
+          visible: _visible(
+            index,
+            state.filter,
+            state.newestFirst,
+            kept: read.from,
+          ),
           selectedId: kept ? null : () => null,
           operationStatus: kept ? null : LoadStatus.initial,
           operation: kept ? null : () => null,
@@ -174,16 +177,30 @@ class ChangeLogCubit extends Cubit<ChangeLogState> {
   List<MirrorEntry> _visible(
     ChangeIndex index,
     ChangeFilter filter,
-    bool newestFirst,
-  ) {
-    final entries = filter.isEmpty ? index.entries : _matching(index, filter);
+    bool newestFirst, {
+    int? kept,
+  }) {
+    final entries =
+        filter.isEmpty
+            ? index.entries
+            : _matching(index, filter, kept ?? index.entries.length);
     return newestFirst ? ReversedView(entries) : entries;
   }
 
-  List<MirrorEntry> _matching(ChangeIndex index, ChangeFilter filter) {
+  // [kept]: how many entries [index] took from the state before.
+  List<MirrorEntry> _matching(
+    ChangeIndex index,
+    ChangeFilter filter,
+    int kept,
+  ) {
     var from = 0;
     if (filter == _matchedFilter && index.startsWith(_matchedIndex)) {
-      from = _matchedIndex.entries.length;
+      from = min(kept, _matchedIndex.entries.length);
+      final positions = index._tables?.positions ?? const {};
+      while (_matched.isNotEmpty &&
+          (positions[_matched.last.change.id] ?? from) >= from) {
+        _matched.removeLast();
+      }
     } else {
       _matched = <MirrorEntry>[];
     }

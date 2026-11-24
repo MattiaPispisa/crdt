@@ -70,7 +70,7 @@ void main() {
     final mirror = await mirrorOf(doc);
     await mirror.sync();
     final first = mirror.read();
-    expect(first.reset, isTrue);
+    expect(first.from, 0);
     expect(first.entries, hasLength(1));
     text.insert(1, 'b');
 
@@ -80,7 +80,7 @@ void main() {
     expect(pages, [2]);
     expect(idsOf(mirror), sortedIds(doc));
     final next = mirror.read(first.mark);
-    expect(next.reset, isFalse);
+    expect(next.from, 1);
     expect([for (final e in next.entries) e.change.id], [sortedIds(doc).last]);
     expect(mirror.read(next.mark).entries, isEmpty);
   });
@@ -104,8 +104,35 @@ void main() {
     expect(idsOf(mirror), sortedIds(local));
     expect(mirror.entries.first.change.author, remote.peerId);
     final read = mirror.read(mark);
-    expect(read.reset, isTrue);
+    expect(read.from, 0);
     expect(read.entries, hasLength(2));
+  });
+
+  test('an older remote change keeps the entries before it', () async {
+    final local = CRDTDocument(
+      peerId: PeerId.parse('ffffffff-ffff-4fff-bfff-ffffffffffff'),
+    );
+    final remote = CRDTDocument(
+      peerId: PeerId.parse('00000000-0000-4000-8000-000000000000'),
+    );
+    final text = CRDTTextHandler(local, 'text')..insert(0, 'a');
+    // After the first local change, before the second one.
+    remote.importChanges(local.exportChanges());
+    CRDTTextHandler(remote, 'text').insert(1, 'r');
+    text.insert(1, 'b');
+    final mirror = await mirrorOf(local);
+    await mirror.sync();
+    final mark = mirror.read().mark;
+
+    local.importChanges(remote.exportChanges());
+    await mirror.sync();
+
+    final read = mirror.read(mark);
+    expect(read.from, 1);
+    expect([
+      for (final e in read.entries) e.change.id,
+    ], sortedIds(local).sublist(1));
+    expect(read.entries.first.change.author, remote.peerId);
   });
 
   test('a prune reloads the mirror', () async {
@@ -118,7 +145,7 @@ void main() {
     doc.takeSnapshot();
     text.insert(1, 'b');
     await mirror.sync();
-    expect(mirror.read(mark).reset, isTrue);
+    expect(mirror.read(mark).from, 0);
 
     expect(idsOf(mirror), sortedIds(doc));
     expect(mirror.length, 1);

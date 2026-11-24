@@ -39,6 +39,35 @@ class _HeldBridge extends InProcessBridge {
   }
 }
 
+// Counts the `historyOpen` calls. Before the next one, it runs
+// [beforeOpen]; it holds the next `changes` call until [holdChanges]
+// completes.
+class _ReopenBridge extends InProcessBridge {
+  int opens = 0;
+
+  void Function()? beforeOpen;
+
+  Completer<void>? holdChanges;
+
+  @override
+  Future<Json> call(
+    String method, [
+    Map<String, String> params = const {},
+  ]) async {
+    if (method == 'historyOpen') {
+      opens++;
+      beforeOpen?.call();
+      beforeOpen = null;
+    }
+    if (method == 'changes' && holdChanges != null) {
+      final hold = holdChanges!;
+      holdChanges = null;
+      await hold.future;
+    }
+    return super.call(method, params);
+  }
+}
+
 void main() {
   late InProcessBridge bridge;
   late CrdtLfClient client;
@@ -207,6 +236,48 @@ void main() {
     expect(cubit.state.session!.session, reopened);
   });
 
+  test('a call on the session a reopen replaces resumes nothing', () async {
+    final doc = CRDTDocument(documentId: 'd');
+    final text =
+        CRDTTextHandler(doc, 'text')
+          ..insert(0, 'a')
+          ..insert(1, 'b')
+          ..insert(2, 'c');
+    final reopening = _ReopenBridge();
+    addTearDown(reopening.dispose);
+    final reopenClient = CrdtLfClient(reopening);
+    final id = (await reopenClient.documents()).single.id;
+    final cubit = TimeTravelCubit(
+      ChangeMirror(reopenClient, id),
+      delay: Duration.zero,
+      valueDelay: Duration.zero,
+    );
+    addTearDown(cubit.close);
+    cubit.select('text');
+    await settle();
+    cubit.moveTo(1);
+    await settle();
+
+    // A change between the sync and the open: the open syncs again, and
+    // that sync waits.
+    final hold = Completer<void>();
+    reopening.beforeOpen = () {
+      text.insert(3, 'd');
+      reopening.holdChanges = hold;
+    };
+    final reopen = cubit.reopen();
+    await settle();
+    // A value load on the replaced session, while the open waits.
+    cubit.moveTo(0);
+    await settle();
+    hold.complete();
+    await reopen;
+    await settle();
+
+    expect(reopening.opens, 2);
+    expect(cubit.state.cursor, 4);
+  });
+
   test('counts an older remote change as new', () async {
     final remote = CRDTDocument(
       peerId: PeerId.parse('00000000-0000-4000-8000-000000000000'),
@@ -227,6 +298,26 @@ void main() {
     text.insert(1, 'b');
     await settle();
     expect(cubit.state.newChanges, 2);
+  });
+
+  test('counts an older remote change in the middle as new', () async {
+    final remote = CRDTDocument(
+      peerId: PeerId.parse('00000000-0000-4000-8000-000000000000'),
+    );
+    final doc = CRDTDocument(
+      documentId: 'd',
+      peerId: PeerId.parse('ffffffff-ffff-4fff-bfff-ffffffffffff'),
+    );
+    final text = CRDTTextHandler(doc, 'text')..insert(0, 'a');
+    // After the first local change, before the second one.
+    remote.importChanges(doc.exportChanges());
+    CRDTTextHandler(remote, 'text').insert(1, 'r');
+    text.insert(1, 'b');
+    final (_, cubit) = await open(doc);
+
+    doc.importChanges(remote.exportChanges());
+    await settle();
+    expect(cubit.state.newChanges, 1);
   });
 
   test('a cubit closed during its first sync opens no session', () async {

@@ -5,9 +5,8 @@ part of 'time_travel_cubit.dart';
 
 /// A time travel session, its cursor and the value of the selected handler
 /// there.
-///
-/// It holds no value equality: comparing every change on each emit would
-/// cost more than a rebuild.
+// No value equality: comparing every change on each emit costs more than a
+// rebuild.
 class TimeTravelState {
   const TimeTravelState({
     this.status = LoadStatus.initial,

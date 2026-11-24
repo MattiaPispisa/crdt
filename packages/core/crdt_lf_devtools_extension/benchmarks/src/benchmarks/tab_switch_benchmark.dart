@@ -4,6 +4,7 @@
 import 'package:benchmark_infrastructure/benchmark_infrastructure.dart';
 import 'package:crdt_lf/crdt_lf.dart';
 import 'package:crdt_lf_devtools_extension/src/bridge/in_process_bridge.dart';
+import 'package:crdt_lf_devtools_extension/src/presentation/changes/change_row.dart';
 import 'package:crdt_lf_devtools_extension/src/presentation/screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -60,6 +61,12 @@ class TabSwitchBenchmark extends AsyncFixedCycleTimedBenchmark {
   Future<void> run() async {
     await _open('Events');
     await _open(tab);
+    // A failed or slower load must not pass as a fast one.
+    final loaded =
+        tab == 'Changes' ? find.byType(ChangeRow) : find.byType(Slider);
+    if (loaded.evaluate().isEmpty) {
+      throw StateError('The $tab tab shows no data');
+    }
   }
 
   @override

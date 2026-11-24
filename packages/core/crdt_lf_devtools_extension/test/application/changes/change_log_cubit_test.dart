@@ -172,6 +172,70 @@ void main() {
     expect(cubit.state.index.authors, hasLength(2));
   });
 
+  test('an index with its last entries replaced is the index of them', () {
+    final remote = CRDTDocument(peerId: PeerId.generate());
+    CRDTTextHandler(remote, 'other').insert(0, 'r');
+    final doc = CRDTDocument(peerId: PeerId.generate());
+    final text = CRDTTextHandler(doc, 'text');
+    for (var i = 0; i < 4; i++) {
+      text.insert(i, 'x');
+    }
+    final entriesOf = [
+      for (final change in doc.exportChanges().sorted())
+        MirrorEntry.decode(change.toBytes()),
+    ];
+    final remoteEntry = MirrorEntry.decode(
+      remote.exportChanges().single.toBytes(),
+    );
+    // The tail goes away with the author and the handler it brought.
+    final index = ChangeIndex([...entriesOf.take(2), remoteEntry]);
+    final added = entriesOf.sublist(2);
+
+    final replaced = index.replaceFrom(2, added);
+    final fresh = ChangeIndex(entriesOf);
+
+    expect(replaced.entries, fresh.entries);
+    expect(replaced.authors, fresh.authors);
+    expect(replaced.handlers, fresh.handlers);
+    expect(replaced.kinds, fresh.kinds);
+    expect(replaced.entryOf(remoteEntry.change.id), isNull);
+    for (final entry in entriesOf) {
+      expect(
+        replaced.dependentsOf(entry.change.id),
+        fresh.dependentsOf(entry.change.id),
+      );
+    }
+    expect(replaced.graph.rows, fresh.graph.rows);
+  });
+
+  test('an older remote change in the middle keeps the filter', () async {
+    final local = CRDTDocument(
+      documentId: 'd',
+      peerId: PeerId.parse('ffffffff-ffff-4fff-bfff-ffffffffffff'),
+    );
+    final remote = CRDTDocument(
+      peerId: PeerId.parse('00000000-0000-4000-8000-000000000000'),
+    );
+    final text = CRDTTextHandler(local, 'text')..insert(0, 'a');
+    // After the first local change, before the second one.
+    remote.importChanges(local.exportChanges());
+    CRDTTextHandler(remote, 'text').insert(1, 'r');
+    text.insert(1, 'b');
+    final cubit = await cubitOf(local);
+    cubit.setFilter(const ChangeFilter(handler: 'text'));
+
+    local.importChanges(remote.exportChanges());
+    text.insert(3, 'c');
+    await settle();
+
+    final replay = [for (final c in local.exportChanges().sorted()) c.id];
+    expect(replay[1].peerId, remote.peerId);
+    expect([for (final e in cubit.state.index.entries) e.change.id], replay);
+    expect(visibleIds(cubit), replay.reversed);
+    expect(cubit.state.index.graph.rows, hasLength(4));
+    expect(cubit.state.index.authors, hasLength(2));
+  });
+
   test('an index extended twice from one base keeps both lines', () {
     final doc = CRDTDocument();
     final text = CRDTTextHandler(doc, 'text');

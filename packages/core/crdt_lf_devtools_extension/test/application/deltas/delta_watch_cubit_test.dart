@@ -8,15 +8,33 @@ import 'package:crdt_lf/src/document/document.dart' show DevToolsBridge;
 import 'package:crdt_lf_devtools_extension/src/application/deltas/delta_watch_cubit.dart';
 import 'package:crdt_lf_devtools_extension/src/bridge/crdt_lf_client.dart';
 import 'package:crdt_lf_devtools_extension/src/bridge/in_process_bridge.dart';
+import 'package:crdt_lf_devtools_extension/src/bridge/models/json.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+// Answers [slow] calls 50 ms after the app ran them, as a busy VM service.
+class _SlowBridge extends InProcessBridge {
+  String? slow;
+
+  @override
+  Future<Json> call(
+    String method, [
+    Map<String, String> params = const {},
+  ]) async {
+    final answer = await super.call(method, params);
+    if (method == slow) {
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+    }
+    return answer;
+  }
+}
+
 void main() {
-  late InProcessBridge bridge;
+  late _SlowBridge bridge;
   late CrdtLfClient client;
 
   setUp(() {
     DevToolsBridge.reset();
-    bridge = InProcessBridge();
+    bridge = _SlowBridge();
     client = CrdtLfClient(bridge);
   });
 
@@ -29,6 +47,25 @@ void main() {
     final list = await client.handlers(doc);
     return list.open.firstWhere((h) => h.id == handler).watched;
   }
+
+  test('a renewal never starts the watch again after a stop', () async {
+    final doc = CRDTDocument();
+    CRDTTextHandler(doc, 'text').insert(0, 'a');
+    final id = (await client.documents()).single.id;
+    final cubit = DeltaWatchCubit(
+      client,
+      id,
+      renewEvery: const Duration(milliseconds: 10),
+    )..select('text');
+    addTearDown(cubit.close);
+    await cubit.setWatching(watching: true);
+    bridge.slow = 'watchStop';
+
+    await cubit.setWatching(watching: false);
+    await Future<void>.delayed(const Duration(milliseconds: 50));
+    expect(cubit.state.watching, isFalse);
+    expect(await watched(id, 'text'), isFalse);
+  });
 
   test('renews the lease of the watch while watching', () async {
     final lease = DevToolsBridge.lease;

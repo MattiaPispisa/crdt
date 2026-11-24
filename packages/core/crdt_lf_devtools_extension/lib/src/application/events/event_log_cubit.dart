@@ -56,6 +56,8 @@ class EventLogCubit extends Cubit<EventLogState> {
   /// A failed call keeps the previous state and sets the error.
   Future<void> setRecording({required bool recording}) async {
     _wanted = recording;
+    // Before the stop: a renewal sent after it would start the log again.
+    if (!recording) _renewWhile(on: false);
     try {
       if (recording) {
         await _client.eventsStart(doc);
@@ -68,6 +70,7 @@ class EventLogCubit extends Cubit<EventLogState> {
     } on Object catch (e) {
       if (isClosed) return;
       _wanted = state.recording;
+      _renewWhile(on: state.recording);
       emit(state._copyWith(error: () => '$e'));
     }
   }
@@ -91,6 +94,7 @@ class EventLogCubit extends Cubit<EventLogState> {
   }
 
   Future<void> _renew() async {
+    if (!_wanted) return;
     try {
       final renewed = await _client.eventsStart(doc);
       // The lease ran out before this renewal: the app stopped the log.

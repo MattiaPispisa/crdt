@@ -73,6 +73,32 @@ void main() {
     expect(graph.rows[6].active, [5]);
   });
 
+  test('a graph with its last rows replaced is the graph of its nodes', () {
+    final kept = [
+      node('a'),
+      node('b'),
+      node('a', ['a', 'b']),
+    ];
+    final graph = LaneGraph([
+      ...kept,
+      node('c', ['a']),
+      node('b', ['b', 'c']),
+    ]);
+    // `c` leaves with the rows it came in, and `d` takes its lane.
+    final added = [
+      node('d', ['a']),
+      node('b', ['b', 'd']),
+      node('a', ['a']),
+    ];
+
+    final replaced = graph.replaceFrom(kept.length, added);
+    final fresh = LaneGraph([...kept, ...added]);
+
+    expect(rowsOf(replaced), rowsOf(fresh));
+    expect(replaced.peers, fresh.peers);
+    expect(replaced.laneCount, fresh.laneCount);
+  });
+
   test('an extended graph is the graph of all its nodes', () {
     final nodes = [
       node('a'),

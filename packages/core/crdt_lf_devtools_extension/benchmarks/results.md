@@ -2,17 +2,21 @@
 
 | Benchmark | RunTime (us) | RunTime (ms) | RunTime (s) |
 | --- | --- | --- | --- |
-| Id filter on 10000 changes | 120.0500 | 0.1201 | 0.000120 |
-| Id filter on 50000 changes | 709.2000 | 0.7092 | 0.000709 |
+| Id filter on 10000 changes | 142.1000 | 0.1421 | 0.000142 |
+| Id filter on 50000 changes | 833.9000 | 0.8339 | 0.000834 |
 
 ### change_log_benchmark.dart
 
 | Benchmark | RunTime (us) | RunTime (ms) | RunTime (s) |
 | --- | --- | --- | --- |
-| Change log, one edit on 10000 changes | 64.7400 | 0.0647 | 0.000065 |
-| Time travel, one edit on 10000 changes | 57.0200 | 0.0570 | 0.000057 |
-| Change log, one edit on 50000 changes | 60.3000 | 0.0603 | 0.000060 |
-| Time travel, one edit on 50000 changes | 54.2200 | 0.0542 | 0.000054 |
+| Change log, one edit on 10000 changes | 60.4800 | 0.0605 | 0.000060 |
+| Time travel, one edit on 10000 changes | 54.3800 | 0.0544 | 0.000054 |
+| Change log, one edit and an older remote one on 10000 changes | 65.1400 | 0.0651 | 0.000065 |
+| Time travel, one edit and an older remote one on 10000 changes | 62.1400 | 0.0621 | 0.000062 |
+| Change log, one edit on 50000 changes | 56.1400 | 0.0561 | 0.000056 |
+| Time travel, one edit on 50000 changes | 51.2000 | 0.0512 | 0.000051 |
+| Change log, one edit and an older remote one on 50000 changes | 65.8400 | 0.0658 | 0.000066 |
+| Time travel, one edit and an older remote one on 50000 changes | 61.9000 | 0.0619 | 0.000062 |
 
 ### change_paging_benchmark.dart
 
@@ -50,8 +54,8 @@
 
 | Benchmark | RunTime (us) | RunTime (ms) | RunTime (s) |
 | --- | --- | --- | --- |
-| Back to the Changes tab, 10000 changes | 48110.0000 | 48.1100 | 0.048110 |
-| Back to the Time travel tab, 10000 changes | 21820.2000 | 21.8202 | 0.021820 |
-| Back to the Changes tab, 50000 changes | 49694.4000 | 49.6944 | 0.049694 |
-| Back to the Time travel tab, 50000 changes | 38038.0000 | 38.0380 | 0.038038 |
+| Back to the Changes tab, 10000 changes | 45353.0000 | 45.3530 | 0.045353 |
+| Back to the Time travel tab, 10000 changes | 21689.8000 | 21.6898 | 0.021690 |
+| Back to the Changes tab, 50000 changes | 46998.6000 | 46.9986 | 0.046999 |
+| Back to the Time travel tab, 50000 changes | 38511.4000 | 38.5114 | 0.038511 |
 

@@ -12,14 +12,26 @@ import 'package:flutter_test/flutter_test.dart';
 import '../common/fixture.dart';
 
 /// One edit of a document of [size] changes, until [cubit] shows it.
+///
+/// With [concurrent], a peer that edits at the same time sends one change
+/// too, older than the local edit: it lands before the end of the list.
 abstract class LiveSyncBenchmark<C extends BlocBase<Object?>>
     extends AsyncFixedCycleTimedBenchmark {
-  LiveSyncBenchmark(String what, this.size)
-    : super('$what, one edit on $size changes', measuredCycles: 50);
+  LiveSyncBenchmark(String what, this.size, {this.concurrent = false})
+    : super(
+        concurrent
+            ? '$what, one edit and an older remote one on $size changes'
+            : '$what, one edit on $size changes',
+        measuredCycles: 50,
+      );
 
   final int size;
 
+  final bool concurrent;
+
   late CRDTDocument _doc;
+
+  late CRDTDocument _peer;
 
   late Extension _extension;
 
@@ -36,6 +48,8 @@ abstract class LiveSyncBenchmark<C extends BlocBase<Object?>>
     _ready = true;
     resetBridge();
     _doc = mapDocument(size);
+    _peer = CRDTDocument();
+    CRDTMapHandler<int>(_peer, 'map', handlerType: 'int map');
     _extension = Extension();
     final id = await _extension.idOf(_doc);
     cubit = create(_extension, id);
@@ -45,7 +59,14 @@ abstract class LiveSyncBenchmark<C extends BlocBase<Object?>>
   @override
   Future<void> run() async {
     final next = cubit.stream.first;
-    edit(_doc);
+    if (concurrent) {
+      final sent = _peer.getVersionVector();
+      edit(_peer);
+      edit(_doc);
+      _doc.importChanges(_peer.exportChanges(fromVersionVector: sent));
+    } else {
+      edit(_doc);
+    }
     await next;
   }
 
@@ -55,12 +76,14 @@ abstract class LiveSyncBenchmark<C extends BlocBase<Object?>>
     await cubit.close();
     _extension.dispose();
     _doc.dispose();
+    _peer.dispose();
     resetBridge();
   }
 }
 
 class ChangeLogSyncBenchmark extends LiveSyncBenchmark<ChangeLogCubit> {
-  ChangeLogSyncBenchmark(int size) : super('Change log', size);
+  ChangeLogSyncBenchmark(int size, {super.concurrent})
+    : super('Change log', size);
 
   @override
   ChangeLogCubit create(Extension extension, int id) =>
@@ -68,7 +91,8 @@ class ChangeLogSyncBenchmark extends LiveSyncBenchmark<ChangeLogCubit> {
 }
 
 class TimeTravelSyncBenchmark extends LiveSyncBenchmark<TimeTravelCubit> {
-  TimeTravelSyncBenchmark(int size) : super('Time travel', size);
+  TimeTravelSyncBenchmark(int size, {super.concurrent})
+    : super('Time travel', size);
 
   @override
   TimeTravelCubit create(Extension extension, int id) => TimeTravelCubit(
@@ -81,8 +105,10 @@ class TimeTravelSyncBenchmark extends LiveSyncBenchmark<TimeTravelCubit> {
 void main() {
   test('change log', () async {
     for (final size in [10000, 50000]) {
-      await ChangeLogSyncBenchmark(size).report();
-      await TimeTravelSyncBenchmark(size).report();
+      for (final concurrent in [false, true]) {
+        await ChangeLogSyncBenchmark(size, concurrent: concurrent).report();
+        await TimeTravelSyncBenchmark(size, concurrent: concurrent).report();
+      }
     }
   }, timeout: const Timeout(Duration(minutes: 20)));
 }

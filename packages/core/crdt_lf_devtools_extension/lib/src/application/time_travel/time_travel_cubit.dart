@@ -63,6 +63,9 @@ class TimeTravelCubit extends Cubit<TimeTravelState> {
   // The cursor the next session opens at; `null` for its last change.
   int? _resumeAt;
 
+  // While a session opens, a call on the one it replaces fails on purpose.
+  bool _opening = false;
+
   void _onEvent(CrdtLfEvent event) {
     if (event case DocumentMoved(
       :final doc,
@@ -110,6 +113,7 @@ class TimeTravelCubit extends Cubit<TimeTravelState> {
   Future<void> _open() async {
     final resumeAt = _resumeAt;
     _resumeAt = null;
+    _opening = true;
     try {
       await _mirror.sync(
         onProgress: state.session == null ? _onProgress : null,
@@ -150,6 +154,8 @@ class TimeTravelCubit extends Cubit<TimeTravelState> {
     } on Object catch (e) {
       if (isClosed) return;
       emit(state._copyWith(status: LoadStatus.failure, error: () => '$e'));
+    } finally {
+      _opening = false;
     }
   }
 
@@ -163,16 +169,16 @@ class TimeTravelCubit extends Cubit<TimeTravelState> {
         cursor: state.cursor,
       );
     } on HistorySessionClosed {
-      // A newer session can have replaced the one this tick renewed.
-      if (state.session == session) _resume();
+      _resume(session);
     } on Object {
       // The next tick tries again.
     }
   }
 
   // A lease that ran out (a paused app, a throttled tab) ends the session.
-  void _resume() {
-    if (isClosed) return;
+  // A newer session, open or opening, already replaced [ended].
+  void _resume(HistorySessionInfo ended) {
+    if (isClosed || _opening || state.session != ended) return;
     _resumeAt = state.cursor;
     unawaited(reopen());
   }
@@ -194,9 +200,11 @@ class TimeTravelCubit extends Cubit<TimeTravelState> {
     if (isClosed || state.session != session) return;
     final read = _mirror.read(_mark);
     _mark = read.mark;
-    // A peer's changes arrive in causal order, so an entry added after the
-    // mark is newer than the session.
-    if (read.reset) _seen = _seenBy(read.entries, session.versionVector).length;
+    // A peer's changes arrive in causal order, so an entry new to the
+    // mirror is newer than the session: only a full read counts again.
+    if (read.from == 0) {
+      _seen = _seenBy(read.entries, session.versionVector).length;
+    }
     emit(state._copyWith(newChanges: _mirror.length - _seen));
   }
 
@@ -226,8 +234,7 @@ class TimeTravelCubit extends Cubit<TimeTravelState> {
         ),
       );
     } on HistorySessionClosed {
-      if (isClosed || state.session != session) return;
-      _resume();
+      _resume(session);
     } on Object catch (e) {
       if (moved()) return;
       emit(

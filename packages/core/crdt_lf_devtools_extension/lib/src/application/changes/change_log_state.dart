@@ -72,7 +72,7 @@ class ChangeIndex {
     [],
   );
 
-  // Shared with the indexes extended from this one, which only append.
+  // Shared with the indexes built from this one.
   final _IndexTables? _tables;
 
   final int _length;
@@ -95,33 +95,43 @@ class ChangeIndex {
     final tables => PrefixView(tables.entries, _length),
   };
 
-  /// Whether this index holds the entries of [other] first, in its order.
+  /// Whether this index was built from [other], or from an index built
+  /// from it.
   bool startsWith(ChangeIndex other) =>
       other._tables == null ||
       (identical(_tables, other._tables) && other._length <= _length);
 
   /// This index with [added] after its entries, in replay order; this index
   /// stays as it is.
-  ChangeIndex extend(List<MirrorEntry> added) {
+  ChangeIndex extend(List<MirrorEntry> added) => replaceFrom(_length, added);
+
+  /// This index with its entries from [from] on replaced by [added], in
+  /// replay order.
+  ///
+  /// Below its length, it can change the entries of this index and of the
+  /// indexes this one was built from: call it on the last index only.
+  ChangeIndex replaceFrom(int from, List<MirrorEntry> added) {
     final tables = _tables;
     if (tables != null && tables.entries.length != _length) {
-      return empty.extend([...entries, ...added]);
+      return empty.extend([...entries.take(from), ...added]);
     }
-    final next = tables ?? _IndexTables();
-    final grown = next.addAll(added);
+    final next =
+        (tables ?? _IndexTables())
+          ..truncate(from)
+          ..addAll(added);
     return ChangeIndex._(
       next,
       next.entries.length,
-      graph.extend([
+      graph.replaceFrom(from, [
         for (final entry in added)
           (
             author: entry.change.author.toString(),
             depAuthors: [for (final d in entry.deps) d.peerId.toString()],
           ),
       ]),
-      grown.authors ? next.sorted(next.authors) : authors,
-      grown.handlers ? next.sorted(next.handlers) : handlers,
-      grown.kinds ? next.sorted(next.kinds) : kinds,
+      next.authors.sortedOr(authors),
+      next.handlers.sortedOr(handlers),
+      next.kinds.sortedOr(kinds),
     );
   }
 
@@ -148,9 +158,9 @@ class _IndexTables {
     : entries = <MirrorEntry>[],
       positions = <OperationId, int>{},
       dependents = <OperationId, List<OperationId>>{},
-      authors = <String>{},
-      handlers = <String>{},
-      kinds = <int>{};
+      authors = _Counts<String>(),
+      handlers = _Counts<String>(),
+      kinds = _Counts<int>();
 
   final List<MirrorEntry> entries;
 
@@ -158,17 +168,13 @@ class _IndexTables {
 
   final Map<OperationId, List<OperationId>> dependents;
 
-  final Set<String> authors;
+  final _Counts<String> authors;
 
-  final Set<String> handlers;
+  final _Counts<String> handlers;
 
-  final Set<int> kinds;
+  final _Counts<int> kinds;
 
-  /// Adds [added], and tells which of the sets got a new value.
-  ({bool authors, bool handlers, bool kinds}) addAll(List<MirrorEntry> added) {
-    var authors = false;
-    var handlers = false;
-    var kinds = false;
+  void addAll(List<MirrorEntry> added) {
     for (final entry in added) {
       final change = entry.change;
       positions[change.id] = entries.length;
@@ -176,21 +182,68 @@ class _IndexTables {
       for (final dep in entry.deps) {
         (dependents[dep] ??= []).add(change.id);
       }
-      authors |= this.authors.add(change.author.toString());
-      if (entry.handlerId case final id?) handlers |= this.handlers.add(id);
-      if (entry.kind case final kind?) kinds |= this.kinds.add(kind);
+      authors.add(change.author.toString());
+      if (entry.handlerId case final id?) handlers.add(id);
+      if (entry.kind case final kind?) kinds.add(kind);
     }
-    return (authors: authors, handlers: handlers, kinds: kinds);
   }
 
-  List<T> sorted<T extends Comparable<Object>>(Set<T> values) =>
-      List.unmodifiable(values.toList()..sort());
+  /// Drops the entries from [from] on.
+  void truncate(int from) {
+    for (var i = entries.length - 1; i >= from; i--) {
+      final entry = entries[i];
+      final change = entry.change;
+      positions.remove(change.id);
+      // Last in, first out: a dropped entry is the last dependent of each
+      // of its dependencies.
+      for (final dep in entry.deps) {
+        final list = dependents[dep]!..removeLast();
+        if (list.isEmpty) dependents.remove(dep);
+      }
+      authors.remove(change.author.toString());
+      if (entry.handlerId case final id?) handlers.remove(id);
+      if (entry.kind case final kind?) kinds.remove(kind);
+    }
+    if (from < entries.length) entries.length = from;
+  }
+}
+
+// How many entries hold each value.
+class _Counts<T extends Comparable<Object>> {
+  _Counts() : _counts = <T, int>{};
+
+  final Map<T, int> _counts;
+
+  bool _moved = false;
+
+  void add(T value) {
+    final count = _counts[value] ?? 0;
+    _counts[value] = count + 1;
+    if (count == 0) _moved = true;
+  }
+
+  void remove(T value) {
+    final count = _counts[value]! - 1;
+    if (count == 0) {
+      _counts.remove(value);
+      _moved = true;
+    } else {
+      _counts[value] = count;
+    }
+  }
+
+  /// The values, sorted; [previous] when no value came or left since the
+  /// last call.
+  List<T> sortedOr(List<T> previous) {
+    if (!_moved) return previous;
+    _moved = false;
+    return List.unmodifiable(_counts.keys.toList()..sort());
+  }
 }
 
 /// The change list of a document, its filters and the selected change.
-///
-/// It holds no value equality: comparing every change on each emit would
-/// cost more than a rebuild.
+// No value equality: comparing every change on each emit costs more than a
+// rebuild.
 class ChangeLogState {
   const ChangeLogState({
     this.status = LoadStatus.initial,

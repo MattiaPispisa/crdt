@@ -64,7 +64,7 @@ class LaneGraph {
   /// The most lanes a graph draws.
   static const int maxLanes = 6;
 
-  // Shared with the graphs extended from this one, which only append.
+  // Shared with the graphs built from this one.
   final _Lanes? _lanes;
 
   final int _length;
@@ -77,18 +77,26 @@ class LaneGraph {
 
   /// This graph with [nodes] after its own, in replay order; this graph
   /// stays as it is.
-  LaneGraph extend(List<GraphNode> nodes) {
+  LaneGraph extend(List<GraphNode> nodes) => replaceFrom(_length, nodes);
+
+  /// This graph with its rows from [from] on replaced by [nodes], in replay
+  /// order.
+  ///
+  /// Below its length, it can change the rows of this graph and of the
+  /// graphs this one was built from: call it on the last graph only.
+  LaneGraph replaceFrom(int from, List<GraphNode> nodes) {
     var lanes = _lanes;
     if (lanes == null || lanes.lanes.length != _length) {
       lanes = _Lanes.copyOf(this);
     }
+    lanes.truncate(from);
     nodes.forEach(lanes.add);
     return LaneGraph._(
       lanes,
       lanes.lanes.length,
       lanes.peers.length,
-      List.unmodifiable(lanes.first),
-      List.unmodifiable(lanes.last),
+      List.unmodifiable([for (final rows in lanes.rowsByLane) rows.firstOr]),
+      List.unmodifiable([for (final rows in lanes.rowsByLane) rows.lastOr]),
     );
   }
 
@@ -148,28 +156,33 @@ class _Rows extends ListBase<RowGraph> {
 class _Lanes {
   _Lanes()
     : laneOf = <String, int>{},
+      firstRowOf = <String, int>{},
       peers = <String>[],
       lanes = <int>[],
       merges = <List<int>>[],
-      first = List<int>.filled(LaneGraph.maxLanes, -1),
-      last = List<int>.filled(LaneGraph.maxLanes, -1);
+      rowsByLane = [for (var i = 0; i < LaneGraph.maxLanes; i++) <int>[]];
 
   factory _Lanes.copyOf(LaneGraph graph) {
     final copy = _Lanes();
     final source = graph._lanes;
     if (source == null) return copy;
-    copy.peers.addAll(source.peers.take(graph._peerCount));
-    for (final peer in copy.peers) {
+    for (final peer in source.peers.take(graph._peerCount)) {
+      copy.peers.add(peer);
       copy.laneOf[peer] = source.laneOf[peer]!;
+      copy.firstRowOf[peer] = source.firstRowOf[peer]!;
     }
-    copy.lanes.addAll(source.lanes.take(graph._length));
-    copy.merges.addAll(source.merges.take(graph._length));
-    copy.first.setAll(0, graph._first);
-    copy.last.setAll(0, graph._last);
+    for (var row = 0; row < graph._length; row++) {
+      final lane = source.lanes[row];
+      copy.lanes.add(lane);
+      copy.merges.add(source.merges[row]);
+      copy.rowsByLane[lane].add(row);
+    }
     return copy;
   }
 
   final Map<String, int> laneOf;
+
+  final Map<String, int> firstRowOf;
 
   final List<String> peers;
 
@@ -177,16 +190,13 @@ class _Lanes {
 
   final List<List<int>> merges;
 
-  final List<int> first;
-
-  final List<int> last;
+  final List<List<int>> rowsByLane;
 
   void add(GraphNode node) {
     final row = lanes.length;
-    final lane = laneOf[node.author] ??= _newLane(node.author);
+    final lane = laneOf[node.author] ??= _newLane(node.author, row);
     lanes.add(lane);
-    if (first[lane] < 0) first[lane] = row;
-    last[lane] = row;
+    rowsByLane[lane].add(row);
     final from = <int>{
       for (final author in node.depAuthors)
         if (laneOf[author] case final l? when l != lane) l,
@@ -196,10 +206,35 @@ class _Lanes {
     );
   }
 
-  int _newLane(String author) {
+  /// Drops the rows from [from] on, and the authors they brought.
+  void truncate(int from) {
+    if (from >= lanes.length) return;
+    lanes.length = from;
+    merges.length = from;
+    for (final rows in rowsByLane) {
+      while (rows.isNotEmpty && rows.last >= from) {
+        rows.removeLast();
+      }
+    }
+    // An author's first row grows with its place in `peers`.
+    while (peers.isNotEmpty && firstRowOf[peers.last]! >= from) {
+      final peer = peers.removeLast();
+      laneOf.remove(peer);
+      firstRowOf.remove(peer);
+    }
+  }
+
+  int _newLane(String author, int row) {
     peers.add(author);
+    firstRowOf[author] = row;
     return peers.length < LaneGraph.maxLanes
         ? peers.length - 1
         : LaneGraph.maxLanes - 1;
   }
+}
+
+extension on List<int> {
+  int get firstOr => isEmpty ? -1 : first;
+
+  int get lastOr => isEmpty ? -1 : last;
 }

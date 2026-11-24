@@ -53,13 +53,12 @@ class MirrorEntry extends Equatable {
 
   final Uint8List bytes;
 
-  /// The dependencies of [change]. Read them here: [Change.deps] decodes
-  /// them again on each call.
+  /// The dependencies of [change].
+  // Kept: `Change.deps` decodes them again on each call.
   final List<OperationId> deps;
 
   /// The id of [change] in lower case, for the id filter.
-  ///
-  /// Built at the first read, so a load that filters nothing pays nothing.
+  // Late: a load that filters nothing builds no string.
   late final String idText = change.id.toString().toLowerCase();
 
   final String? handlerId;
@@ -78,18 +77,17 @@ class MirrorEntry extends Equatable {
 
 /// Where a reader of a [ChangeMirror] stopped; see [ChangeMirror.read].
 class MirrorMark {
-  const MirrorMark._(this._generation, this._length);
+  const MirrorMark._(this._rewrites, this._length);
 
-  final int _generation;
+  final int _rewrites;
 
   final int _length;
 }
 
 /// What [ChangeMirror.read] returns.
 ///
-/// `reset` is `true` when `entries` holds every entry of the mirror, and
-/// `false` when it holds only the entries added after the read mark.
-typedef MirrorRead = ({List<MirrorEntry> entries, bool reset, MirrorMark mark});
+/// The reader keeps its first `from` entries and puts `entries` after them.
+typedef MirrorRead = ({List<MirrorEntry> entries, int from, MirrorMark mark});
 
 /// A local copy of the changes of the document [doc], in replay order.
 ///
@@ -99,7 +97,8 @@ class ChangeMirror {
   ChangeMirror(this.client, this.doc, {this.pageSize = 1000})
     : _entries = <MirrorEntry>[],
       _ids = <OperationId>{},
-      _latest = VersionVector({});
+      _latest = VersionVector({}),
+      _rewrites = <int>[];
 
   final CrdtLfClient client;
 
@@ -116,22 +115,30 @@ class ChangeMirror {
 
   int? _pruneEpoch;
 
-  int _generation = 0;
+  // For each insert before the last entry and each prune, the first index
+  // it moved.
+  final List<int> _rewrites;
 
   Future<void> _queue = Future.value();
 
   List<MirrorEntry> get entries => List.unmodifiable(_entries);
 
-  /// The entries added after [mark], and the mark to read from next.
+  /// What moved since [mark], and the mark to read from next.
   ///
-  /// With no [mark], after a prune, or when an entry landed before the
-  /// entries read at [mark], the read is a reset.
+  /// With no [mark], `from` is 0 and `entries` holds every entry.
   MirrorRead read([MirrorMark? mark]) {
-    final reset = mark == null || mark._generation != _generation;
+    var from = mark?._length ?? 0;
+    for (
+      var i = mark?._rewrites ?? _rewrites.length;
+      i < _rewrites.length;
+      i++
+    ) {
+      if (_rewrites[i] < from) from = _rewrites[i];
+    }
     return (
-      entries: reset ? entries : _entries.sublist(mark._length),
-      reset: reset,
-      mark: MirrorMark._(_generation, _entries.length),
+      entries: _entries.sublist(from),
+      from: from,
+      mark: MirrorMark._(_rewrites.length, _entries.length),
     );
   }
 
@@ -174,7 +181,6 @@ class ChangeMirror {
       _entries.add(entry);
       return;
     }
-    _generation++;
     var low = 0;
     var high = _entries.length;
     while (low < high) {
@@ -186,10 +192,11 @@ class ChangeMirror {
       }
     }
     _entries.insert(low, entry);
+    _rewrites.add(low);
   }
 
   void _clear() {
-    _generation++;
+    _rewrites.add(0);
     _entries.clear();
     _ids.clear();
     _latest = VersionVector({});

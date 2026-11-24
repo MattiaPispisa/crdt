@@ -790,10 +790,7 @@ abstract final class DevToolsBridge {
       ...doc._log.handlerIds,
     }..removeWhere(
         (id) =>
-            open.containsKey(id) ||
-            deleted.contains(id) ||
-            SnapshotRecords.reservedKeys.contains(id) ||
-            _HandlerDeletions.isReserved(id),
+            open.containsKey(id) || deleted.contains(id) || _isReservedKey(id),
       );
     return {
       'open': [
