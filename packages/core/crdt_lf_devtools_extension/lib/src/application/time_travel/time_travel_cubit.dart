@@ -119,12 +119,13 @@ class TimeTravelCubit extends Cubit<TimeTravelState> {
     final keepCursor = _keepCursor;
     _keepCursor = false;
     _opening = true;
+    HistorySessionInfo? opened;
     try {
       await _mirror.sync(
         onProgress: state.session == null ? _onProgress : null,
       );
       if (isClosed) return;
-      final info = await _client.historyOpen(doc);
+      final info = opened = await _client.historyOpen(doc);
       if (isClosed) return await _closeSession(info.session);
       var read = _mirror.read();
       var frozen = _seenBy(read.entries, info.versionVector);
@@ -159,7 +160,19 @@ class TimeTravelCubit extends Cubit<TimeTravelState> {
       unawaited(_valueGate.request());
     } on Object catch (e) {
       if (isClosed) return;
-      emit(state._copyWith(status: LoadStatus.failure, error: () => '$e'));
+      if (opened == null) {
+        emit(state._copyWith(status: LoadStatus.failure, error: () => '$e'));
+        return;
+      }
+      // The new session replaced the one the state shows: drop both.
+      unawaited(_closeSession(opened.session));
+      _renewal?.cancel();
+      emit(
+        const TimeTravelState()._copyWith(
+          status: LoadStatus.failure,
+          error: () => '$e',
+        ),
+      );
     } finally {
       _opening = false;
     }

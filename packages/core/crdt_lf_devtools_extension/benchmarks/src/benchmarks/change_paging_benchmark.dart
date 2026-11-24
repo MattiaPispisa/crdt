@@ -74,12 +74,69 @@ class FirstSyncBenchmark extends AsyncFixedCycleTimedBenchmark {
   }
 }
 
+/// A sync of a [ChangeMirror] that holds [size] changes, after the app took
+/// in [batch] older changes of a peer back from offline.
+class OlderBatchSyncBenchmark extends AsyncFixedCycleTimedBenchmark {
+  OlderBatchSyncBenchmark(this.size, this.batch)
+    : super(
+        'Sync of $batch older remote changes into $size changes',
+        // One cycle per fresh setup: a second sync has nothing to take in.
+        warmupDuration: Duration.zero,
+        measuredCycles: 1,
+        batches: 3,
+        settleCycles: 0,
+      );
+
+  final int size;
+
+  final int batch;
+
+  late CRDTDocument _peer;
+
+  late CRDTDocument _doc;
+
+  late Extension _extension;
+
+  late ChangeMirror _mirror;
+
+  bool _ready = false;
+
+  @override
+  Future<void> setup() async {
+    if (_ready) await teardown();
+    _ready = true;
+    resetBridge();
+    // Written before the local changes: older than all of them.
+    _peer = mapDocument(batch);
+    _doc = mapDocument(size);
+    _extension = Extension();
+    _mirror = ChangeMirror(_extension.client, await _extension.idOf(_doc));
+    await _mirror.sync();
+  }
+
+  @override
+  Future<void> run() async {
+    _doc.importChanges(_peer.exportChanges());
+    await _mirror.sync();
+  }
+
+  @override
+  Future<void> teardown() async {
+    _ready = false;
+    _extension.dispose();
+    _doc.dispose();
+    _peer.dispose();
+    resetBridge();
+  }
+}
+
 void main() {
   test('change paging', () async {
     for (final size in [10000, 50000]) {
       for (final load in Load.values) {
         await FirstSyncBenchmark(size, load).report();
       }
+      await OlderBatchSyncBenchmark(size, 10000).report();
     }
   }, timeout: const Timeout(Duration(minutes: 20)));
 }

@@ -41,15 +41,19 @@ class _HeldBridge extends InProcessBridge {
   }
 }
 
-// Counts the `historyOpen` calls. Before the next one, it runs
-// [beforeOpen]; it holds the next `changes` call until [holdChanges]
-// completes.
+// Counts the `historyOpen` calls and keeps the closed sessions. Before the
+// next open, it runs [beforeOpen]; it holds the next `changes` call until
+// [holdChanges] completes, or fails it when [failChanges] is set.
 class _ReopenBridge extends InProcessBridge {
   int opens = 0;
+
+  final List<String> closed = [];
 
   void Function()? beforeOpen;
 
   Completer<void>? holdChanges;
+
+  bool failChanges = false;
 
   @override
   Future<Json> call(
@@ -60,6 +64,11 @@ class _ReopenBridge extends InProcessBridge {
       opens++;
       beforeOpen?.call();
       beforeOpen = null;
+    }
+    if (method == 'historyClose') closed.add(params['session']!);
+    if (method == 'changes' && failChanges) {
+      failChanges = false;
+      throw const BridgeCallException('changes', 'boom');
     }
     if (method == 'changes' && holdChanges != null) {
       final hold = holdChanges!;
@@ -245,6 +254,36 @@ void main() {
     expect(reopening.opens, 2);
     expect(cubit.state.cursor, 2);
     expect(cubit.state.value!.value, 'ab');
+  });
+
+  test('a reopen that fails after its open closes the new session', () async {
+    final doc = CRDTDocument(documentId: 'd');
+    final text = CRDTTextHandler(doc, 'text')..insert(0, 'a');
+    final reopening = _ReopenBridge();
+    addTearDown(reopening.dispose);
+    final reopenClient = CrdtLfClient(reopening);
+    final id = (await reopenClient.documents()).single.id;
+    final cubit = TimeTravelCubit(
+      ChangeMirror(reopenClient, id),
+      delay: Duration.zero,
+      valueDelay: Duration.zero,
+    );
+    addTearDown(cubit.close);
+    await settle();
+
+    // A change between the sync and the open: the second sync fails.
+    reopening.beforeOpen = () {
+      text.insert(1, 'b');
+      reopening.failChanges = true;
+    };
+    await cubit.reopen();
+    await settle();
+
+    expect(reopening.opens, 2);
+    expect(reopening.closed, hasLength(1));
+    expect(cubit.state.session, isNull);
+    expect(cubit.state.status, LoadStatus.failure);
+    expect(cubit.state.error, isNot(TimeTravelCubit.taken));
   });
 
   test('a session another window takes is not taken back', () async {

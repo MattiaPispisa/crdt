@@ -95,6 +95,42 @@ void main() {
     doc.dispose();
   });
 
+  testWidgets('the keys walk past a handler shared by two containers', (
+    tester,
+  ) async {
+    final doc = CRDTDocument(documentId: 'd');
+    final a = CRDTMapRefHandler(doc, 'a');
+    final b = CRDTMapRefHandler(doc, 'b');
+    final shared = CRDTTextHandler(doc, 'shared')..insert(0, 's');
+    CRDTTextHandler(doc, 'z').insert(0, 'z');
+    a.setRef('x', shared);
+    b.setRef('x', shared);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(body: CrdtLfScreen(bridge: InProcessBridge())),
+      ),
+    );
+    await settle(tester);
+    await settle(tester);
+    String? selected() =>
+        tester
+            .element(find.byType(HandlerTree))
+            .read<HandlersCubit>()
+            .state
+            .selectedId;
+
+    await tester.tap(find.text('a'));
+    final walked = <String?>[];
+    for (var i = 0; i < 4; i++) {
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+      walked.add(selected());
+    }
+    expect(walked, ['shared', 'b', 'shared', 'z']);
+
+    await tester.pumpWidget(const SizedBox());
+    doc.dispose();
+  });
+
   testWidgets('the delta watch of the selected handler', (tester) async {
     final doc = CRDTDocument(documentId: 'd');
     final text = CRDTTextHandler(doc, 'text')..insert(0, 'a');

@@ -31,6 +31,10 @@ class _HandlerTreeState extends State<HandlerTree> {
 
   bool _closedExpanded = false;
 
+  // The row last selected: a shared handler sits on several rows, and the
+  // keys move from the one the user is on.
+  int? _selectedRow;
+
   bool _deletedExpanded = false;
 
   @override
@@ -96,15 +100,21 @@ class _HandlerTreeState extends State<HandlerTree> {
               }
               return KeyboardList(
                 itemCount: rows.length,
-                itemBuilder: (context, i) => _row(context, rows[i], state),
+                itemBuilder: (context, i) => _row(context, rows, i, state),
                 selectedIndex: () {
                   final id = context.read<HandlersCubit>().state.selectedId;
-                  final i = rows.indexWhere((r) => r.id != null && r.id == id);
+                  if (id == null) return null;
+                  final last = _selectedRow;
+                  if (last != null &&
+                      last < rows.length &&
+                      rows[last].id == id) {
+                    return last;
+                  }
+                  final i = rows.indexWhere((r) => r.id == id);
                   return i < 0 ? null : i;
                 },
                 canSelect: (i) => rows[i] is! GroupRow,
-                onSelect:
-                    (i) => context.read<HandlersCubit>().select(rows[i].id),
+                onSelect: (i) => _select(rows, i),
               );
             },
           ),
@@ -113,7 +123,18 @@ class _HandlerTreeState extends State<HandlerTree> {
     );
   }
 
-  Widget _row(BuildContext context, HandlerRow row, HandlersState state) {
+  void _select(List<HandlerRow> rows, int i) {
+    _selectedRow = i;
+    context.read<HandlersCubit>().select(rows[i].id);
+  }
+
+  Widget _row(
+    BuildContext context,
+    List<HandlerRow> rows,
+    int index,
+    HandlersState state,
+  ) {
+    final row = rows[index];
     final theme = Theme.of(context);
     final subtle = theme.subtleTextStyle;
     if (row is GroupRow) {
@@ -160,7 +181,7 @@ class _HandlerTreeState extends State<HandlerTree> {
               ? theme.colorScheme.primary.withValues(alpha: 0.2)
               : Colors.transparent,
       child: InkWell(
-        onTap: () => context.read<HandlersCubit>().select(row.id),
+        onTap: () => _select(rows, index),
         child: Row(
           children: [
             SizedBox(width: depth * defaultSpacing),

@@ -115,8 +115,8 @@ class ChangeMirror {
 
   int? _pruneEpoch;
 
-  // For each insert before the last entry and each prune, the first index
-  // it moved.
+  // For each page merged before the last entry and each prune, the first
+  // index it moved.
   final List<int> _rewrites;
 
   Future<void> _queue = Future.value();
@@ -162,35 +162,61 @@ class ChangeMirror {
         continue;
       }
       _pruneEpoch = page.pruneEpoch;
-      for (final bytes in page.changes) {
-        _insert(MirrorEntry.decode(bytes));
-      }
+      _merge([
+        for (final bytes in page.changes)
+          if (MirrorEntry.decode(bytes) case final entry
+              when _ids.add(entry.change.id))
+            entry,
+      ]);
       onProgress?.call(_entries.length, page.changeCount);
       if (page.done) return;
     }
   }
 
-  void _insert(MirrorEntry entry) {
-    final change = entry.change;
-    if (!_ids.add(change.id)) return;
-    _latest.update(change.author, change.hlc);
+  // One pass per page: inserting older changes one by one shifts the tail
+  // each time.
+  void _merge(List<MirrorEntry> added) {
+    if (added.isEmpty) return;
+    assert(
+      [
+        for (var i = 1; i < added.length; i++)
+          compareChangeOrder(added[i - 1].change, added[i].change) < 0,
+      ].every((ordered) => ordered),
+      'The app sends a page in replay order',
+    );
+    for (final entry in added) {
+      _latest.update(entry.change.author, entry.change.hlc);
+    }
     if (_entries.isEmpty ||
-        compareChangeOrder(_entries.last.change, change) < 0) {
-      _entries.add(entry);
+        compareChangeOrder(_entries.last.change, added.first.change) < 0) {
+      _entries.addAll(added);
       return;
     }
-    var low = 0;
+    var first = 0;
     var high = _entries.length;
-    while (low < high) {
-      final mid = (low + high) >> 1;
-      if (compareChangeOrder(_entries[mid].change, change) < 0) {
-        low = mid + 1;
+    while (first < high) {
+      final mid = (first + high) >> 1;
+      if (compareChangeOrder(_entries[mid].change, added.first.change) < 0) {
+        first = mid + 1;
       } else {
         high = mid;
       }
     }
-    _entries.insert(low, entry);
-    _rewrites.add(low);
+    final tail = _entries.sublist(first);
+    _entries.length = first;
+    var i = 0;
+    var j = 0;
+    while (i < tail.length && j < added.length) {
+      _entries.add(
+        compareChangeOrder(tail[i].change, added[j].change) < 0
+            ? tail[i++]
+            : added[j++],
+      );
+    }
+    _entries
+      ..addAll(tail.skip(i))
+      ..addAll(added.skip(j));
+    _rewrites.add(first);
   }
 
   void _clear() {
